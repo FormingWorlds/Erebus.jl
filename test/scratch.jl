@@ -1,6 +1,8 @@
 using BenchmarkTools
 using TimerOutputs
 
+using HydrologyPlanetesimals
+
 const to = TimerOutput()
 
 

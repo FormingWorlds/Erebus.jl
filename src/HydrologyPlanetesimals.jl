@@ -7,6 +7,8 @@ using DocStringExtensions
 using Parameters
 using StaticArrays
 
+export StaticParameters, simulation_loop
+
 
 """"
 Static parameters: Grids, markers, switches, constants, etc. which remain
@@ -337,27 +339,6 @@ end
 
 
 """
-Calculate Euclidean distance between two point coordinates.
-
-$(SIGNATURES)
-
-# Details
-
-    - x1: x-coordinate of point 1 [m]
-    - y1: y-coordinate of point 1 [m]
-    - x2: x-coordinate of point 2 [m]
-    - y2: y-coordinate of point 2 [m]
-
-# Returns
-
-    - Euclidean distance between point 1 and point 2 [m]
-"""
-function distance(x1, y1, x2, y2)
-    return sqrt(abs2(x1-x2) + abs2(y1-y2))
-end
-
-
-"""
 Initialize markers according to model parameters
 
 $(SIGNATURES)
@@ -435,31 +416,47 @@ end
 
 
 """
-Compute static marker properties.  Runs once during initialization.
+Compute static marker properties which stay constant during simulation.
+Runs once during initialization.
 
 $(SIGNATURES)
 
 # Details 
 
     - m: marker counter of marker whose static properties are to be computed
-    - ma: arrays containing marker properties
     - sp: static simulation parameters
 
 # Returns
 
     - nothing
 """	
-function compute_static_marker_params!(
-    m::Int64,
-    ma::MarkerArrays,
+function compute_static_marker_properties!(
+    m,
+    tm,
+    rhototalm,
+    rhocptotalm,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    gggtotalm,
+    fricttotalm,
+    cohestotalm,
+    tenstotalm,
+    etafluidcur,
+    rhofluidcur,
+    hrsolidm,
     sp::StaticParameters
 )
-    # @unpack_MarkerArrays ma
-    @unpack tm, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, gggtotalm,
-        fricttotalm, cohestotalm, tenstotalm, etafluidcur, rhofluidcur = ma
-    @unpack rhosolidm, rhocpsolidm, etasolidm, ksolidm, gggsolidm,
-        frictsolidm, cohessolidm, tenssolidm, etafluidm, rhofluidm = sp
-    @unpack hrsolidm = dp
+    @unpack rhosolidm,
+    rhocpsolidm,
+    etasolidm,
+    ksolidm,
+    gggsolidm,
+    frictsolidm,
+    cohessolidm,
+    tenssolidm,
+    etafluidm,
+    rhofluidm = sp
 
     # static secondary marker properties
     if tm[m] < 3
@@ -474,7 +471,7 @@ function compute_static_marker_params!(
         ktotalm[m] = ksolidm[tm[m]]
     end
     # common for rocks and air
-    gggtotalm[m] = gggsolidm[tm[m]]
+    inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
     fricttotalm[m] = frictsolidm[tm[m]]
     cohestotalm[m] = cohessolidm[tm[m]]
     tenstotalm[m] = tenssolidm[tm[m]]
@@ -487,7 +484,7 @@ end
 
 """
 Compute dynamic marker properties.
-Runs every time step.
+Runs every simulation loop (i.e. time step).
 
 $(SIGNATURES)
 
@@ -502,15 +499,37 @@ $(SIGNATURES)
     - nothing
 """
 function compute_dynamic_marker_params!(
-    m::Int64, ma::MarkerArrays, sp::StaticParameters, dp::DynamicParameters
-    )
-    @unpack tm, tkm, phim, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm,
-         kphim = ma
-    @unpack rhosolidm, rhofluidm, rhocpsolidm, rhocpfluidm, tmiron, tmsilicate,
-        etamin, etasolidmm, etasolidm, etafluidmm, etafluidm, kphim0, phim0,
-        ksolidm, kfluidm  = sp
-    @unpack hrsolidm, hrfluidm = dp
-
+    m::Int64,
+    ma::MarkerArrays,
+    sp::StaticParameters,
+    dp::DynamicParameters
+)
+    # @unpack tm,
+        # tkm,
+        # phim,
+        # rhototalm,
+        # rhocptotalm,
+        # etatotalm,
+        # hrtotalm,
+        # ktotalm,
+        # kphim = ma
+    # @unpack hrsolidm, hrfluidm = dp
+    @unpack rhosolidm,
+        rhofluidm,
+        rhocpsolidm,
+        rhocpfluidm,
+        tmiron,
+        tmsilicate,
+        etamin,
+        etasolidmm,
+        etasolidm,
+        etafluidmm,
+        etafluidm,
+        kphim0,
+        phim0,
+        ksolidm,
+        kfluidm  = sp
+    
     if tm[m] < 3
         # rocks
         rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
@@ -536,6 +555,27 @@ function compute_dynamic_marker_params!(
     kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
 
     return nothing
+end
+
+
+"""
+Calculate Euclidean distance between two point coordinates.
+
+$(SIGNATURES)
+
+# Details
+
+    - x1: x-coordinate of point 1 [m]
+    - y1: y-coordinate of point 1 [m]
+    - x2: x-coordinate of point 2 [m]
+    - y2: y-coordinate of point 2 [m]
+
+# Returns
+
+    - Euclidean distance between point 1 and point 2 [m]
+"""
+function distance(x1, y1, x2, y2)
+    return sqrt(abs2(x1-x2) + abs2(y1-y2))
 end
 
 
@@ -1133,10 +1173,10 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # grid geometry
     # x: horizontal coordinates of basic grid points [m]
     # x = @SVector [j for j = 0:dx:xsize] # should work but doesn't
-    x = SVector{Nx,Float64}([j for j = 0:dx:xsize])
+    x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
     # y: vertical coordinates of basic grid points [m]
     # y = @SVector [i for i = 0:dy:ysize]
-    y = SVector{Ny,Float64}([j for j = 0:dy:ysize])
+    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
     # physical node properties
     # viscoplastic viscosity, Pa*s
     ETA = zeros(Float64, Ny, Nx)
@@ -1162,9 +1202,9 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # Vx nodes
     # grid geometry
     # xvx: horizontal coordinates of vx grid points [m]
-    xvx = SVector{Ny1,Float64}([j for j = 0:dx:xsize+dy])
+    xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
     # yvx: vertical coordinates of vx grid points [m]
-    yvx = SVector{Nx1,Float64}([i for i = -dy/2:dy:ysize+dy/2])
+    yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
     # physical node properties
     # density [kg/m^3]
     RHOX = zeros(Float64, Ny1, Nx1)
@@ -1188,9 +1228,9 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # Vy nodes
     # grid geometry
     # xvy: horizontal coordinates of vy grid points [m]
-    xvy = SVector{Nx1,Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
     # yvy: vertical coordinates of vy grid points [m]
-    yvy = SVector{Ny1,Float64}([i for i = 0:dy:ysize+dy])
+    yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
     # physical node properties
     # "density [kg/m^3]"
     RHOY = zeros(Float64, Ny1, Nx1)
@@ -1214,9 +1254,9 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # P nodes
     # grid geometry
     # xp: horizontal coordinates of p grid points [m]
-    xp = SVector{Nx1,Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
     # yp: vertical coordinates of p grid points [m]
-    yp = SVector{Ny1,Float64}([i for i = -dy/2:dy:ysize+dy/2])
+    yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
     # physical node properties
     # density [kg/m^3]
     RHO = zeros(Float64, Ny1, Nx1)
@@ -1281,21 +1321,51 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # -------------------------------------------------------------------------
     # set up markers
     # -------------------------------------------------------------------------
-    # marker arrays
+    # primary marker arrays: initialized at beginning
+    # horizontal marker coordinate [m]
     xm = zeros(Float64, marknum)
+    # vertical marker coordinate [m]
     ym = zeros(Float64, marknum)
+    # marker material type
     tm = zeros(Float64, marknum)
+    # marker temperature [K]
     tkm = zeros(Float64, marknum)
+    # marker σ′xx [Pa]
     sxxm = zeros(Float64, marknum)
+    # marker σxy [Pa]
     sxym = zeros(Float64, marknum)
+    # marker viscoplastic viscosity [Pa]
     etavpm = zeros(Float64, marknum)
+    # marker porosity ϕ
     phim = zeros(Float64, marknum)
-    # ...
+    # # secondary marker arrays: derived properties calculated during time steps
+    # # kphim
+    # kphim = zeros(Float64, marknum)
+    # # rhototalm
+    # rhototalm = zeros(Float64, marknum)
+    # # rhocptotalm
+    # rhocptotalm = zeros(Float64, marknum)
+    # # etatotalm
+    # etatotalm = zeros(Float64, marknum)
+    # # hrtotalm
+    # hrtotalm = zeros(Float64, marknum)
+    # # ktotalm
+    # ktotalm = zeros(Float64, marknum)
+    # # 1 / gggtotalm
+    # inv_gggtotalm = zeros(Float64, marknum)
+    # # fricttotalm
+    # fricttotalm = zeros(Float64, marknum)
+    # # cohestotalm
+    # cohestotalm = zeros(Float64, marknum)
+    # # tenstotalm
+    # tenstotalm = zeros(Float64, marknum)
+    # # etafluidcur
+    # etafluidcur = zeros(Float64, marknum)
+    # # rhofluidcur
+    # rhofluidcur = zeros(Float64, marknum)
+
     # define markers: coordinates, temperature, and material type    
     define_markers!(xm, ym, tm, tkm, phim, etavpm, sp)
-    # secondary marker properties
-    compute_static_marker_params!(m, ma, sp, dp)
-    compute_dynamic_marker_params!(m, ma, sp, dp)
 
 
     # -------------------------------------------------------------------------
@@ -1371,7 +1441,30 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
             # compute marker properties 
-            compute_dynamic_marker_params!(m, markers, sp, dp)
+            if tm[m] < 3
+                # rocks
+                rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+                rhocptotalm[m] = total(rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+                etatotalm[m] = etatotal_rock(
+                    tkm[m],
+                    tmsilicate,
+                    tmiron,
+                    etamin,
+                    etasolidm[tm[m]],
+                    etasolidmm[tm[m]],
+                    etafluidm[tm[m]],
+                    etafluidmm[tm[m]]
+                    )
+                hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+                ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+                
+            else
+                # air
+            
+            end
+            # common for rocks and air
+            kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
+            
 
             # interpolate marker properties to basic nodes
             i, j, weights = fix_weights(
