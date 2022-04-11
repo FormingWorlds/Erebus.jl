@@ -313,14 +313,15 @@ function define_markers!(
         # primary marker properties 
         rmark = distance(xm[m], ym[m], xcenter, ycenter)
         if rmark < rplanet
-            # planet
-            if rmark > rcrust
-                # crust
-                tm[m] = 2
-            else
-                # mantle
-                tm[m] = 1
-            end
+            # # planet
+            # if rmark > rcrust
+            #     # crust
+            #     tm[m] = 2
+            # else
+            #     # mantle
+            #     tm[m] = 1
+            # end
+            tm[m] = ifelse(rmark>rcrust, 2, 1)
             # temperature
             tkm[m] = 300
             # porosity
