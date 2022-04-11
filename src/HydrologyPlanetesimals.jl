@@ -6,11 +6,13 @@ using MAT
 using DocStringExtensions
 using Parameters
 using StaticArrays
+using TimerOutputs
 
-export StaticParameters, simulation_loop
+export run_simulation
 
+const to = TimerOutput()
 
-""""
+"""
 Static parameters: Grids, markers, switches, constants, etc. which remain
 constant throughout the simulation.
 
@@ -24,9 +26,9 @@ $(TYPEDFIELDS)
     hr_fe::Bool = true
     # model size, geometry, and resolution
     "horizontal model size [m]"
-    xsize::Float64 = 140000
+    xsize::Float64
     "vertical model size [m]"
-    ysize::Float64 = 140000
+    ysize::Float64
     "horizontal center of model"
     xcenter::Float64 = xsize / 2
     "vertical center of model"
@@ -81,9 +83,9 @@ $(TYPEDFIELDS)
     imax_p::Int64 = Ny
     # planetary parameters
     "planetary radius [m]"
-    rplanet::Int64 = 50000
+    rplanet::Int64
     "crust radius [m]"
-    rcrust::Int64 = 48000
+    rcrust::Int64
     "surface pressure [Pa]"
     psurface::Float64 = 1e+3
     # marker count and initial spacing
@@ -100,7 +102,7 @@ $(TYPEDFIELDS)
     "marker grid step in vertical direction"
     dym::Float64 = ysize / Nym
     "number of markers at start"
-    startmarknum::Int64 = Nxm * Nym
+    start_marknum::Int64 = Nxm * Nym
     # physical constants
     "gravitational constant [m^3*kg^-1*s^-2]"
     G::Float64 = 6.672e-11
@@ -108,43 +110,43 @@ $(TYPEDFIELDS)
     pscale::Float64 = 1e+23 / dx
     # materials properties:              planet      crust       space
     "solid Density [kg/m^3]"
-    rhosolidm::SVector{3, Float64}   = [ 3300.0    , 3300.0    ,    1.0    ]
+    rhosolidm::SVector{3, Float64}      = [ 3300.0    , 3300.0    ,    1.0    ]
     "fluid density [kg/m^3]"	
-    rhofluidm::SVector{3, Float64}   = [ 7000.0    , 7000.0    , 1000.0    ]
+    rhofluidm::SVector{3, Float64}      = [ 7000.0    , 7000.0    , 1000.0    ]
     "solid viscosity [Pa*s]"
-    etasolidm::SVector{3, Float64}   = [    1.0e+16,    1.0e+16,    1.0e+14]
+    etasolidm::SVector{3, Float64}      = [    1.0e+16,    1.0e+16,    1.0e+14]
     "molten solid viscosity [Pa*s]"
-    etasolidmm::SVector{3, Float64}  = [    1.0e+14,    1.0e+14,    1.0e+14]
+    etasolidmm::SVector{3, Float64}     = [    1.0e+14,    1.0e+14,    1.0e+14]
     "fluid viscosity [Pa*s]"
-    etafluidm::SVector{3, Float64}   = [    1.0e-02,    1.0e-02,    1.0e+12]
+    etafluidm::SVector{3, Float64}      = [    1.0e-02,    1.0e-02,    1.0e+12]
     "molten fluid viscosity [Pa*s]"
-    etafluidmm::SVector{3, Float64}  = [    1.0e-02,    1.0e-02,    1.0e+12]
+    etafluidmm::SVector{3, Float64}     = [    1.0e-02,    1.0e-02,    1.0e+12]
     "solid volumetric heat capacity [kg/m^3]"
-    rhocpsolidm::SVector{3, Float64} = [    3.3e+06,    3.3e+06,    3.0e+06]
+    rhocpsolidm::SVector{3, Float64}    = [    3.3e+06,    3.3e+06,    3.0e+06]
     "fluid volumetric heat capacity [kg/m^3]"
-    rhocpfluidm::SVector{3, Float64} = [    7.0e+06,    7.0e+06,    3.0e+06]
+    rhocpfluidm::SVector{3, Float64}    = [    7.0e+06,    7.0e+06,    3.0e+06]
     "solid thermal expansion [1/K]"
-    alphasolidm::SVector{3, Float64} = [    3.0e-05,    3.0e-05,    0.0    ]
+    alphasolidm::SVector{3, Float64}    = [    3.0e-05,    3.0e-05,    0.0    ]
     "fluid thermal expansion [1/K]"
-    alphafluidm::SVector{3, Float64} = [    5.0e-05,    5.0e-05,    0.0    ]
+    alphafluidm::SVector{3, Float64}    = [    5.0e-05,    5.0e-05,    0.0    ]
     "solid thermal conductivity [W/m/K]"
-    ksolidm::SVector{3, Float64}     = [    3.0    ,    3.0    , 3000.0    ]
+    ksolidm::SVector{3, Float64}        = [    3.0    ,    3.0    , 3000.0    ]
     "fluid thermal conductivity [W/m/K]"
-    kfluidm::SVector{3, Float64}     = [   50.0    ,   50.0    , 3000.0    ]
-    # "solid radiogenic heat production [W/m^3]"
-    # hrsolidm::Array{Float64}    = [    0.0    ,    0.0    ,    0.0    ]
-    # "fluid radiogenic heat production [W/m^3]"
-    # hrfluidm::Array{Float64}    = [    0.0    ,    0.0    ,    0.0    ]
+    kfluidm::SVector{3, Float64}        = [   50.0    ,   50.0    , 3000.0    ]
+    "solid radiogenic heat production [W/m^3]"
+    start_hrsolidm::SVector{3, Float64} = [    0.0    ,    0.0    ,    0.0    ]
+    "fluid radiogenic heat production [W/m^3]"
+    start_hrfluidm::SVector{3, Float64} = [    0.0    ,    0.0    ,    0.0    ]
     "solid shear modulus [Pa]"
-    gggsolidm::SVector{3, Float64}   = [    1.0e+10,    1.0e+10,    1.0e+10]
+    gggsolidm::SVector{3, Float64}      = [    1.0e+10,    1.0e+10,    1.0e+10]
     "solid friction coefficient"
-    frictsolidm::SVector{3, Float64} = [    0.6    ,    0.6    ,    0.0    ]
+    frictsolidm::SVector{3, Float64}    = [    0.6    ,    0.6    ,    0.0    ]
     "solid compressive strength [Pa]"
-    cohessolidm::SVector{3, Float64} = [    1.0e+08,    1.0e+08,    1.0e+08]
+    cohessolidm::SVector{3, Float64}    = [    1.0e+08,    1.0e+08,    1.0e+08]
     "solid tensile strength [Pa]"
-    tenssolidm ::SVector{3, Float64} = [    6.0e+07,    6.0e+07,    6.0e+07]
+    tenssolidm ::SVector{3, Float64}    = [    6.0e+07,    6.0e+07,    6.0e+07]
     "standard permeability [m^2]"
-    kphim0::SVector{3, Float64}      = [    1.0e-13,    1.0e-13,    1.0e-17]
+    kphim0::SVector{3, Float64}         = [    1.0e-13,    1.0e-13,    1.0e-17]
     "Coefficient to compute compaction viscosity from shear viscosity"
     etaphikoef::Float64 = 1e-4
     # 26Al decay
@@ -236,7 +238,7 @@ $(TYPEDFIELDS)
     "length of year [s]"
     yearlength::Float64 = 365.25 * 24 * 3600
     "Time sum (start) [s]"
-    starttime::Float64 = 1e6 * yearlength 
+    start_time::Float64 = 1e6 * yearlength 
     "Time sum (end) [s]"
     endtime::Float64 = 15 * 1000000 * yearlength
     "Lower viscosity cut-off [Pa s]"	
@@ -249,105 +251,31 @@ $(TYPEDFIELDS)
     visstep::Int64 = 1 
     "Tolerance level for yielding error()"
     yerrmax::Float64 = 1e+2 
-    "Yielding error of nodes"
-    YERRNOD::Array{Float64} = zeros(1, nplast) 
     "Weight for old viscosity"
     etawt::Float64 = 0 
     "max porosity ratio change per time step"
     dphimax::Float64 = 0.01
     "starting timestep"
-    startstep::Int64 = 1
+    start_step::Int64 = 1
     "number of timesteps to run"
     nsteps::Int64 = 30000 
 end
 
 
 """
-Marker properties: Fixed and calculated during timestepping
-
-$(TYPEDFIELDS)
-"""
-@with_kw struct MarkerArrays
-    # original marker properties 
-    "horizontal coordinates [m]"
-    xm::Vector{Float64}
-    "vertical coordinates [m]"
-    ym::Vector{Float64}
-    "material type"
-    tm::Vector{Int8}
-    "marker temperature [K]"
-    tkm::Vector{Float64}
-    "SIGMA'xx [Pa]"
-    sxxm::Vector{Float64}
-    "SIGMAxy [Pa]"
-    sxym::Vector{Float64}
-    "Visco-plastic viscosity [Pa]"
-    etavpm::Vector{Float64}
-    "Marker porosity"
-    phim::Vector{Float64}
-    # fixed marker properties used during timestepping calculations
-    # RMK: omitted, as only used once - reconsider?
-    # marker properties calculated during timestepping
-    "kphim"
-    kphim::Vector{Float64}
-    "rhototalm"
-    rhototalm::Vector{Float64}
-    "rhocptotalm"
-    rhocptotalm::Vector{Float64}
-    "etatotalm"
-    etatotalm::Vector{Float64}
-    "hrtotalm"
-    hrtotalm::Vector{Float64}
-    "ktotalm"
-    ktotalm::Vector{Float64}
-    "gggtotalm"
-    gggtotalm::Vector{Float64}
-    "fricttotalm"
-    fricttotalm::Vector{Float64}
-    "cohestotalm"
-    cohestotalm::Vector{Float64}
-    "tenstotalm"
-    tenstotalm::Vector{Float64}
-    "etafluidcur"
-    etafluidcur::Vector{Float64}
-    "rhofluidcur"
-    rhofluidcur::Vector{Float64}
-    "inner constructor"
-    MarkerArrays(marknum) = new(
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum),
-        zeros(marknum)
-    )
-end
-
-
-"""
-Initialize markers according to model parameters
+Define initial set of markers according to model parameters
 
 $(SIGNATURES)
 
 # Details
 
-    - ma: arrays containing marker properties
+    - xm: array of x coordinates of markers
+    - ym: array of y coordinates of markers
+    - tm: array of material type of markers
+    - tkm: array of temperature of markers 
+    - phim: array of porosity of markers
+    - etavpm: array of matrix viscosity of markers
     - sp: static simulation parameters
-    - dp: dynamic simulation parameters
 
 # Returns
 
@@ -411,149 +339,6 @@ function define_markers!(
             etavpm[m] = etasolidm[tm[m]]
         end
     end
-    return nothing
-end
-
-
-"""
-Compute static marker properties which stay constant during simulation.
-Runs once during initialization.
-
-$(SIGNATURES)
-
-# Details 
-
-    - m: marker counter of marker whose static properties are to be computed
-    - sp: static simulation parameters
-
-# Returns
-
-    - nothing
-"""	
-function compute_static_marker_properties!(
-    m,
-    tm,
-    rhototalm,
-    rhocptotalm,
-    etatotalm,
-    hrtotalm,
-    ktotalm,
-    gggtotalm,
-    fricttotalm,
-    cohestotalm,
-    tenstotalm,
-    etafluidcur,
-    rhofluidcur,
-    hrsolidm,
-    sp::StaticParameters
-)
-    @unpack rhosolidm,
-    rhocpsolidm,
-    etasolidm,
-    ksolidm,
-    gggsolidm,
-    frictsolidm,
-    cohessolidm,
-    tenssolidm,
-    etafluidm,
-    rhofluidm = sp
-
-    # static secondary marker properties
-    if tm[m] < 3
-        # rocks
-        # pass
-    else
-        # air
-        rhototalm[m] = rhosolidm[tm[m]]
-        rhocptotalm[m] = rhocpsolidm[tm[m]]
-        etatotalm[m] = etasolidm[tm[m]]
-        hrtotalm[m] = hrsolidm[tm[m]]
-        ktotalm[m] = ksolidm[tm[m]]
-    end
-    # common for rocks and air
-    inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
-    fricttotalm[m] = frictsolidm[tm[m]]
-    cohestotalm[m] = cohessolidm[tm[m]]
-    tenstotalm[m] = tenssolidm[tm[m]]
-    etafluidcur[m] = etafluidm[tm[m]]
-    rhofluidcur[m] = rhofluidm[tm[m]]
-
-    return nothing
-end
-
-
-"""
-Compute dynamic marker properties.
-Runs every simulation loop (i.e. time step).
-
-$(SIGNATURES)
-
-# Detail
-
-    - m: marker index of marker whose parameters are to be computed
-    - ma: marker arrays containing marker properties to be updated
-    - sp: static simulation parameters
-    - dp: dynamic simulation parameters
-
-# Returns
-    - nothing
-"""
-function compute_dynamic_marker_params!(
-    m::Int64,
-    ma::MarkerArrays,
-    sp::StaticParameters,
-    dp::DynamicParameters
-)
-    # @unpack tm,
-        # tkm,
-        # phim,
-        # rhototalm,
-        # rhocptotalm,
-        # etatotalm,
-        # hrtotalm,
-        # ktotalm,
-        # kphim = ma
-    # @unpack hrsolidm, hrfluidm = dp
-    @unpack rhosolidm,
-        rhofluidm,
-        rhocpsolidm,
-        rhocpfluidm,
-        tmiron,
-        tmsilicate,
-        etamin,
-        etasolidmm,
-        etasolidm,
-        etafluidmm,
-        etafluidm,
-        kphim0,
-        phim0,
-        ksolidm,
-        kfluidm  = sp
-    
-    if tm[m] < 3
-        # rocks
-        rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-        rhocptotalm[m] = total(rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-        etatotalm[m] = etatotal_rock(
-            tkm[m],
-            tmsilicate,
-            tmiron,
-            etamin,
-            etasolidm[tm[m]],
-            etasolidmm[tm[m]],
-            etafluidm[tm[m]],
-            etafluidmm[tm[m]]
-            )
-        hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-        ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
-        
-    else
-        # air
-    
-    end
-    # common for rocks and air
-    kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
-
     return nothing
 end
 
@@ -714,12 +499,19 @@ $(SIGNATURES)
     - hrsolidm: radiogenic heat production of 26Al [W/m^3]
     - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
 """
-function calculate_radioactive_heating(
-    sp::StaticParameters, dp::DynamicParameters
-    )
-    @unpack hr_al, f_al, ratio_al, E_al, tau_al, hr_fe, f_fe, ratio_fe, E_fe,
-        tau_fe, rhosolidm, rhofluidm = sp
-    @unpack timesum = dp
+function calculate_radioactive_heating(timesum, sp::StaticParameters)
+    @unpack hr_al,
+        f_al,
+        ratio_al,
+        E_al,
+        tau_al,
+        hr_fe,
+        f_fe,
+        ratio_fe,
+        E_fe,
+        tau_fe,
+        rhosolidm,
+        rhofluidm = sp
     #26Al: planet ✓, crust ✓, space ×
     if hr_al
         # 26Al radiogenic heat production [W/kg]
@@ -772,342 +564,46 @@ $(SIGNATURES)
         wtmi1j1: i+1, j+1 node]
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+@timeit to "fix_weights" begin
     @inbounds j = trunc(Int, (x - x_axis[1]) / dx) + 1
     @inbounds i = trunc(Int, (y - y_axis[1]) / dy) + 1
-    j = min(max(j, jmin), jmax)
-    i = min(max(i, imin), imax)
-    # ij = [SVector(i, j), SVector(i+1, j), SVector(i, j+1), SVector(i+1, j+1)]
-    @inbounds dxmj = x - x_axis[j]
-    @inbounds dymi = y - y_axis[i]
+    @inbounds dxmj = x - x_axis[min(max(j, jmin), jmax)]
+    @inbounds dymi = y - y_axis[min(max(i, imin), imax)]
     weights = SVector(
         (1.0-dymi/dy) * (1.0-dxmj/dx),
         (dymi/dy) * (1.0-dxmj/dx),
         (1.0-dymi/dy) * (dxmj/dx),
         (dymi/dy) * (dxmj/dx)
         )
+end
     return i, j, weights
 end
 
 
 """
-Interpolate marker properties to basic nodes.
-
-$(SIGNATURES)
+Interpolate a property to neareast four nodes on a given grid location
+using given bilinear interpolation weights.
 
 # Details
 
-    - m: index of marker whose properties are to be interpolated to nodes
-    - mrk: arrays containing all marker properties
-    - i: top node index of marker m on basic grid
-    - j: left node index of marker m on basic grid
-    - weights: bilinear interpolation weights to four neighbor nodes of marker m
-    - ETA0SUM: viscous viscosity array interpolated to basic nodes
-    - ETASUM: viscoplastic viscosity array interpolated to basic nodes
-    - GGGSUM: shear modulus array interpolated to basic nodes
-    - SXYSUM: σxy shear stress array interpolated to basic nodes
-    - COHSUM: copmressive strength array interpolated to basic nodes
-    - TENSUM: tensile strength array interpolated to basic nodes
-    - FRISUM: friction array interpolated to basic nodes
-    - WTSUM: weight array for bilinear interpolation to basic nodes
-
-# Returns
-
-    -nothing
+    - i: top (with reference to y) node index on y-grid axis
+    - j: left (with reference to x) node index on x-grid axis
+    - weights: vector of 4 bilinear interpolation weights to
+      nearest four grid nodes:
+        [wtmij  : i  , j   node,
+        wtmi1j : i+1, j   node,
+        wtmij1 : i  , j+1 node,
+        wtmi1j1: i+1, j+1 node]
+    - property: property to be interpolated to grid using weights
+    - grid: threaded grid array on which to interpolate property
 """
-function interpolate_basic_nodes!(
-    m,
-    mrk,
-    i,
-    j,
-    weights,
-    ETA0SUM,
-    ETASUM,
-    GGGSUM,
-    SXYSUM,
-    COHSUM,
-    TENSUM,
-    FRISUM,
-    WTSUM
-)
-    ETA0SUM[i, j, threadid()] += mrk.etatotalm[m] * weights[1]
-    ETA0SUM[i+1, j, threadid()] += mrk.etatotalm[m] * weights[2]
-    ETA0SUM[i, j+1, threadid()] += mrk.etatotalm[m] * weights[3]
-    ETA0SUM[i+1, j+1, threadid()] += mrk.etatotalm[m] * weights[4]
-
-    ETASUM[i, j, threadid()] += mrk.etavpm[m] * weights[1]
-    ETASUM[i+1, j, threadid()] += mrk.etavpm[m] * weights[2]
-    ETASUM[i, j+1, threadid()] += mrk.etavpm[m] * weights[3]
-    ETASUM[i+1, j+1, threadid()] += mrk.etavpm[m] * weights[4]
-
-    GGGSUM[i, j, threadid()] += inv(mrk.gggtotalm[m]) * weights[1]
-    GGGSUM[i+1, j, threadid()] += inv(mrk.gggtotalm[m]) * weights[2]
-    GGGSUM[i, j+1, threadid()] += inv(mrk.gggtotalm[m]) * weights[3]
-    GGGSUM[i+1, j+1, threadid()] += inv(mrk.gggtotalm[m]) * weights[4]
-
-    SXYSUM[i, j, threadid()] += mrk.sxym[m] * weights[1]
-    SXYSUM[i+1, j, threadid()] += mrk.sxym[m] * weights[2]
-    SXYSUM[i, j+1, threadid()] += mrk.sxym[m] * weights[3]
-    SXYSUM[i+1, j+1, threadid()] += mrk.sxym[m] * weights[4]
-
-    COHSUM[i, j, threadid()] += mrk.cohestotalm[m] * weights[1]
-    COHSUM[i+1, j, threadid()] += mrk.cohestotalm[m] * weights[2]
-    COHSUM[i, j+1, threadid()] += mrk.cohestotalm[m] * weights[3]
-    COHSUM[i+1, j+1, threadid()] += mrk.cohestotalm[m] * weights[4]
-
-    TENSUM[i, j, threadid()] += mrk.tenstotalm[m] * weights[1]
-    TENSUM[i+1, j, threadid()] += mrk.tenstotalm[m] * weights[2]
-    TENSUM[i, j+1, threadid()] += mrk.tenstotalm[m] * weights[3]
-    TENSUM[i+1, j+1, threadid()] += mrk.tenstotalm[m] * weights[4]
-
-    FRISUM[i, j, threadid()] += mrk.fricttotalm[m] * weights[1]
-    FRISUM[i+1, j, threadid()] += mrk.fricttotalm[m] * weights[2]
-    FRISUM[i, j+1, threadid()] += mrk.fricttotalm[m] * weights[3]
-    FRISUM[i+1, j+1, threadid()] += mrk.fricttotalm[m] * weights[4]
-
-    WTSUM[i, j, threadid()] += weights[1]
-    WTSUM[i+1, j, threadid()] += weights[2]
-    WTSUM[i, j+1, threadid()] += weights[3]
-    WTSUM[i+1, j+1, threadid()] += weights[4]
-
-    return nothing
+function interpolate!(i, j, weights, property, grid)
+@timeit to "interpolate!" begin
+    grid[i, j, threadid()] += property * weights[1]
+    grid[i+1, j, threadid()] += property * weights[2]
+    grid[i, j+1, threadid()] += property * weights[3]
+    grid[i+1, j+1, threadid()] += property * weights[4]
 end
-
-
-"""
-Interpolate marker properties to Vx nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - m: index of marker whose properties are to be interpolated to nodes
-    - mrk: arrays containing all marker properties
-    - i: top node index of marker m on Vx grid
-    - j: left node index of marker m on Vx grid
-    - weights: bilinear interpolation weights to four neighbor nodes of marker m
-    - RHOXSUM: density array interpolated to Vx nodes
-    - RHOFXSUM: fluid density array interpolated to Vx nodes
-    - KXSUM: thermal conductivity array interpolated to Vx nodes
-    - PHIXSUM: porosity array interpolated to Vx nodes
-    - RXSUM: ηfluid/kϕ array interpolated to Vx nodes
-    - WTXSUM: weight array for bilinear interpolation to Vx nodes
-
-# Returns
-
-    -nothing
-"""
-function interpolate_vx_nodes!(
-    m,
-    mrk,
-    i,
-    j,
-    weights,
-    RHOXSUM,
-    RHOFXSUM,
-    KXSUM,
-    PHIXSUM,
-    RXSUM,
-    WTXSUM
-)
-    RHOXSUM[i, j, threadid()] += mrk.rhototalm[m] * weights[1]
-    RHOXSUM[i+1, j, threadid()] += mrk.rhototalm[m] * weights[2]
-    RHOXSUM[i, j+1, threadid()] += mrk.rhototalm[m] * weights[3]
-    RHOXSUM[i+1, j+1, threadid()] += mrk.rhototalm[m] * weights[4]
-
-    RHOFXSUM[i, j, threadid()] += mrk.rhofluidcur[m] * weights[1]
-    RHOFXSUM[i+1, j, threadid()] += mrk.rhofluidcur[m] * weights[2]
-    RHOFXSUM[i, j+1, threadid()] += mrk.rhofluidcur[m] * weights[3]
-    RHOFXSUM[i+1, j+1, threadid()] += mrk.rhofluidcur[m] * weights[4]
-
-    KXSUM[i, j, threadid()] += mrk.ktotalm[m] * weights[1]
-    KXSUM[i+1, j, threadid()] += mrk.ktotalm[m] * weights[2]
-    KXSUM[i, j+1, threadid()] += mrk.ktotalm[m] * weights[3]
-    KXSUM[i+1, j+1, threadid()] += mrk.ktotalm[m] * weights[4]
-
-    PHIXSUM[i, j, threadid()] += mrk.phim[m] * weights[1]
-    PHIXSUM[i+1, j, threadid()] += mrk.phim[m] * weights[2]
-    PHIXSUM[i, j+1, threadid()] += mrk.phim[m] * weights[3]
-    PHIXSUM[i+1, j+1, threadid()] += mrk.phim[m] * weights[4]
-
-    RXSUM[i, j, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[1]
-    RXSUM[i+1, j, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[2]
-    RXSUM[i, j+1, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[3]
-    RXSUM[i+1, j+1, threadid()] += mrk.etafluidcur[m] /mrk.kphim[m] * weights[4]
-
-    WTXSUM[i, j, threadid()] += weights[1]
-    WTXSUM[i+1, j, threadid()] += weights[2]
-    WTXSUM[i, j+1, threadid()] += weights[3]
-    WTXSUM[i+1, j+1, threadid()] += weights[4]
-
-    return nothing 
-end
-
-
-"""
-Interpolate marker properties to Vy nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - m: index of marker whose properties are to be interpolated to nodes
-    - mrk: arrays containing all marker properties
-    - i: top node index of marker m on Vy grid
-    - j: left node index of marker m on Vy grid
-    - weights: bilinear interpolation weights to four neighbor nodes of marker m
-    - RHOYSUM: density array interpolated to Vy nodes
-    - RHOFYSUM: fluid density array interpolated to Vy nodes
-    - KYSUM: thermal conductivity array interpolated to Vy nodes
-    - PHIYSUM: porosity array interpolated to Vy nodes
-    - RYSUM: ηfluid/kϕ array interpolated to Vy nodes
-    - WTYSUM: weight array for bilinear interpolation to Vy nodes
-
-# Returns
-
-    -nothing
-"""
-function interpolate_vy_nodes!(
-    m,
-    mrk,
-    i,
-    j,
-    weights,
-    RHOYSUM,
-    RHOFYSUM,
-    KYSUM,
-    PHIYSUM,
-    RYSUM,
-    WTYSUM
-)
-    RHOYSUM[i, j, threadid()] += mrk.rhototalm[m] * weights[1]
-    RHOYSUM[i+1, j, threadid()] += mrk.rhototalm[m] * weights[2]
-    RHOYSUM[i, j+1, threadid()] += mrk.rhototalm[m] * weights[3]
-    RHOYSUM[i+1, j+1, threadid()] += mrk.rhototalm[m] * weights[4]
-
-    RHOFYSUM[i, j, threadid()] += mrk.rhofluidcur[m] * weights[1]
-    RHOFYSUM[i+1, j, threadid()] += mrk.rhofluidcur[m] * weights[2]
-    RHOFYSUM[i, j+1, threadid()] += mrk.rhofluidcur[m] * weights[3]
-    RHOFYSUM[i+1, j+1, threadid()] += mrk.rhofluidcur[m] * weights[4]
-
-    KYSUM[i, j, threadid()] += mrk.ktotalm[m] * weights[1]
-    KYSUM[i+1, j, threadid()] += mrk.ktotalm[m] * weights[2]
-    KYSUM[i, j+1, threadid()] += mrk.ktotalm[m] * weights[3]
-    KYSUM[i+1, j+1, threadid()] += mrk.ktotalm[m] * weights[4]
-
-    PHIYSUM[i, j, threadid()] += mrk.phim[m] * weights[1]
-    PHIYSUM[i+1, j, threadid()] += mrk.phim[m] * weights[2]
-    PHIYSUM[i, j+1, threadid()] += mrk.phim[m] * weights[3]
-    PHIYSUM[i+1, j+1, threadid()] += mrk.phim[m] * weights[4]
-
-    RYSUM[i, j, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[1]
-    RYSUM[i+1, j, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[2]
-    RYSUM[i, j+1, threadid()] += mrk.etafluidcur[m] / mrk.kphim[m] * weights[3]
-    RYSUM[i+1, j+1, threadid()] += mrk.etafluidcur[m] /mrk.kphim[m] * weights[4]
-
-    WTYSUM[i, j, threadid()] += weights[1]
-    WTYSUM[i+1, j, threadid()] += weights[2]
-    WTYSUM[i, j+1, threadid()] += weights[3]
-    WTYSUM[i+1, j+1, threadid()] += weights[4]
-
-    return nothing
-end
-
-
-"""
-Interpolate marker properties to P nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - m: index of marker whose properties are to be interpolated to nodes
-    - mrk: arrays containing all marker properties
-    - i: top node index of marker m on P grid
-    - j: left node index of marker m on P grid
-    - weights: bilinear interpolation weights to four neighbor nodes of marker m
-    - GGGPSUM: shear modulus array interpolated to P nodes
-    - SXXSUM: σ'xx array interpolated to P nodes
-    - RHOSUM: density array interpolated to P nodes
-    - RHOCPSUM: volumetric heat capacity array interpolated to P nodes
-    - ALPHASUM: thermal expansion array interpolated to P nodes
-    - ALPHAFSUM: fluid thermal expansion array interpolated to P nodes
-    - HRSUM: radioactive heating array interpolated to P nodes
-    - TKSUM: temperature array interpolated to P nodes
-    - PHISUM: porosity array interpolated to P nodes
-    - WTPSUM: weight array for bilinear interpolation to P nodes
-
-# Returns
-
-    -nothing
-"""
-function interpolate_p_nodes!(
-    m,
-    mrk,
-    i,
-    j,
-    weights,
-    GGGPSUM,
-    SXXSUM,
-    RHOSUM,
-    RHOCPSUM,
-    ALPHASUM,
-    ALPHAFSUM,
-    HRSUM,
-    TKSUM,
-    PHISUM,
-    WTPSUM
-)
-    GGGPSUM[i, j, threadid()] += 1.0 / mrk.gggtotalm[m] * weights[1]
-    GGGPSUM[i+1, j, threadid()] += 1.0 / mrk.gggtotalm[m] * weights[2]
-    GGGPSUM[i, j+1, threadid()] += 1.0 / mrk.gggtotalm[m] * weights[3]
-    GGGPSUM[i+1, j+1, threadid()] += 1.0 / mrk.gggtotalm[m] * weights[4]
-
-    SXXSUM[i, j, threadid()] += mrk.sxxm[m] * weights[1]
-    SXXSUM[i+1, j, threadid()] += mrk.sxxm[m] * weights[2]
-    SXXSUM[i, j+1, threadid()] += mrk.sxxm[m] * weights[3]
-    SXXSUM[i+1, j+1, threadid()] += mrk.sxxm[m] * weights[4]
-
-    RHOSUM[i, j, threadid()] += mrk.rhototalm[m] * weights[1]
-    RHOSUM[i+1, j, threadid()] += mrk.rhototalm[m] * weights[2]
-    RHOSUM[i, j+1, threadid()] += mrk.rhototalm[m] * weights[3]
-    RHOSUM[i+1, j+1, threadid()] += mrk.rhototalm[m] * weights[4]
-
-    RHOCPSUM[i, j, threadid()] += mrk.rhocptotalm[m] * weights[1]
-    RHOCPSUM[i+1, j, threadid()] += mrk.rhocptotalm[m] * weights[2]
-    RHOCPSUM[i, j+1, threadid()] += mrk.rhocptotalm[m] * weights[3]
-    RHOCPSUM[i+1, j+1, threadid()] += mrk.rhocptotalm[m] * weights[4]
-
-    ALPHASUM[i, j, threadid()] += mrk.alphasolidm[m] * weights[1]
-    ALPHASUM[i+1, j, threadid()] += mrk.alphasolidm[m] * weights[2]
-    ALPHASUM[i, j+1, threadid()] += mrk.alphasolidm[m] * weights[3]
-    ALPHASUM[i+1, j+1, threadid()] += mrk.alphasolidm[m] * weights[4]
-
-    ALPHAFSUM[i, j, threadid()] += mrk.alphafluidm[m] * weights[1]
-    ALPHAFSUM[i+1, j, threadid()] += mrk.alphafluidm[m] * weights[2]
-    ALPHAFSUM[i, j+1, threadid()] += mrk.alphafluidm[m] * weights[3]
-    ALPHAFSUM[i+1, j+1, threadid()] += mrk.alphafluidm[m] * weights[4]
-
-    HRSUM[i, j, threadid()] += mrk.hrtotalm[m] * weights[1]
-    HRSUM[i+1, j, threadid()] += mrk.hrtotalm[m] * weights[2]
-    HRSUM[i, j+1, threadid()] += mrk.hrtotalm[m] * weights[3]
-    HRSUM[i+1, j+1, threadid()] += mrk.hrtotalm[m] * weights[4]
-
-    TKSUM[i, j, threadid()] += mrk.tkm[m] * mrk.rhocptotalm[m] * weights[1]
-    TKSUM[i+1, j, threadid()] += mrk.tkm[m] * mrk.rhocptotalm[m] * weights[2]
-    TKSUM[i, j+1, threadid()] += mrk.tkm[m] * mrk.rhocptotalm[m] * weights[3]
-    TKSUM[i+1, j+1, threadid()] += mrk.tkm[m] * mrk.rhocptotalm[m] * weights[4]
-
-    PHISUM[i, j, threadid()] += mrk.phim[m] * weights[1]
-    PHISUM[i+1, j, threadid()] += mrk.phim[m] * weights[2]
-    PHISUM[i, j+1, threadid()] += mrk.phim[m] * weights[3]
-    PHISUM[i+1, j+1, threadid()] += mrk.phim[m] * weights[4]
-
-    WTPSUM[i, j, threadid()] += weights[1]
-    WTPSUM[i+1, j, threadid()] += weights[2]
-    WTPSUM[i, j+1, threadid()] += weights[3]
-    WTPSUM[i+1, j+1, threadid()] += weights[4]
-
-    return nothing
 end
 
 
@@ -1125,7 +621,7 @@ $(SIGNATURES)
     
     - nothing
 """
-function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
+function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # unpack static simulation parameters
     # -------------------------------------------------------------------------
@@ -1141,29 +637,56 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     imin_vy, imax_vy,
     jmin_p, jmax_p,
     imin_p, imax_p,
+    rhosolidm,
+    rhofluidm,
+    etasolidm,
+    etasolidmm,
+    etafluidm,
+    etafluidmm,
+    rhocpsolidm,
+    rhocpfluidm,
+    alphasolidm,
+    alphafluidm,
+    ksolidm,
+    kfluidm,
+    start_hrsolidm,
+    start_hrfluidm,
+    gggsolidm,
+    frictsolidm,
+    cohessolidm,
+    tenssolidm,
+    kphim0,
+    etaphikoef,
+    phim0,
+    tmsilicate,
+    tmiron,
+    etamin,
+    nplast,
     dtelastic,
-    startstep,
+    start_step,
     nsteps,
-    starttime, 
+    start_time, 
     endtime,
-    startmarknum = sp
+    start_marknum = sp
 
-    
+@timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters
     # -------------------------------------------------------------------------
     # timestep counter (current), init to startstep
-    timestep = startstep
+    timestep = start_step
     # computational timestep (current), init to dtelastic [s]
     dt = dtelastic
     # time sum (current), init to starttime [s]
-    timesum = starttime
+    timesum = start_time
     # current number of markers, init to startmarknum
-    marknum = startmarknum
-    # radiogenic heat production solid phase, init to zero
-    hrsolidm = SVector{3, Float64}(zeros(3))
-    # radiogenic heat production fluid phase, init to zero
-    hrfluidm = SVector{3, Float64}(zeros(3))
+    marknum = start_marknum
+    # radiogenic heat production solid phase
+    hrsolidm = start_hrsolidm
+    # radiogenic heat production fluid phase
+    hrfluidm = start_hrfluidm
+    # Yielding error of nodes
+    YERRNOD = zeros(Float64, nplast) 
    
 
     # -------------------------------------------------------------------------
@@ -1327,44 +850,18 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # vertical marker coordinate [m]
     ym = zeros(Float64, marknum)
     # marker material type
-    tm = zeros(Float64, marknum)
+    tm = zeros(Int8, marknum)
     # marker temperature [K]
     tkm = zeros(Float64, marknum)
     # marker σ′xx [Pa]
     sxxm = zeros(Float64, marknum)
     # marker σxy [Pa]
     sxym = zeros(Float64, marknum)
-    # marker viscoplastic viscosity [Pa]
-    etavpm = zeros(Float64, marknum)
     # marker porosity ϕ
     phim = zeros(Float64, marknum)
-    # # secondary marker arrays: derived properties calculated during time steps
-    # # kphim
-    # kphim = zeros(Float64, marknum)
-    # # rhototalm
-    # rhototalm = zeros(Float64, marknum)
-    # # rhocptotalm
-    # rhocptotalm = zeros(Float64, marknum)
-    # # etatotalm
-    # etatotalm = zeros(Float64, marknum)
-    # # hrtotalm
-    # hrtotalm = zeros(Float64, marknum)
-    # # ktotalm
-    # ktotalm = zeros(Float64, marknum)
-    # # 1 / gggtotalm
-    # inv_gggtotalm = zeros(Float64, marknum)
-    # # fricttotalm
-    # fricttotalm = zeros(Float64, marknum)
-    # # cohestotalm
-    # cohestotalm = zeros(Float64, marknum)
-    # # tenstotalm
-    # tenstotalm = zeros(Float64, marknum)
-    # # etafluidcur
-    # etafluidcur = zeros(Float64, marknum)
-    # # rhofluidcur
-    # rhofluidcur = zeros(Float64, marknum)
-
-    # define markers: coordinates, temperature, and material type    
+    # marker viscoplastic viscosity [Pa]
+    etavpm = zeros(Float64, marknum)
+    # define initial markers: coordinates, temperature, and material type    
     define_markers!(xm, ym, tm, tkm, phim, etavpm, sp)
 
 
@@ -1372,25 +869,25 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
     # set up of matrices for global gravity/thermal/hydromechanical solutions
     # -------------------------------------------------------------------------
     # hydromechanical solution: LHS coefficient matrix
-    L = SparseMatrixCSC{Float64, Int64}(Nx1*Ny1*6, Nx1*Ny1*6)
+    L = spzeros(Nx1*Ny1*6, Nx1*Ny1*6)
     # hydromechanical solution: RHS Vector
     R = zeros(Float64, Nx1*Ny1*6)
     # thermal solution: LHS coefficient matrix
-    LT = SparseMatrixCSC{Float64, Int64}(Nx1*Ny1, Nx1*Ny1)
+    LT = spzeros(Nx1*Ny1, Nx1*Ny1)
     # thermal solution: RHS Vector
     RT = zeros(Float64, Nx1*Ny1)
     # gravity solution: LHS coefficient matrix
-    LP = SparseMatrixCSC{Float64, Int64}(Nx1*Ny1, Nx1*Ny1)
+    LP = spzeros(Nx1*Ny1, Nx1*Ny1)
     # gravity solution: RHS Vector
     RP = zeros(Float64, Nx1*Ny1)
-
+end
 
     # -------------------------------------------------------------------------
     # iterate timesteps   
     # -------------------------------------------------------------------------
-    for timestep = startstep:1:100
+    for timestep = start_step:1:100
     # for timestep = startstep:1:nsteps
-
+@timeit to "set up interpolation arrays" begin
         # ---------------------------------------------------------------------
         # set up interpolation arrays
         # ---------------------------------------------------------------------
@@ -1428,24 +925,26 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
         TKSUM = zeros(Ny1, Nx1, nthreads())
         PHISUM = zeros(Ny1, Nx1, nthreads())
         WTPSUM = zeros(Ny1, Nx1, nthreads())
-
+end
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
         # ---------------------------------------------------------------------
-        hrsolidm, hrfluidm = calculate_radioactive_heating(sp, dp)
+        hrsolidm, hrfluidm = calculate_radioactive_heating(timesum, sp)
 
         
         # ---------------------------------------------------------------------
         # computer marker properties and interpolate to staggered grid nodes
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
-            # compute marker properties 
+@timeit to "compute marker properties" begin
+            # compute dynamic marker properties 
             if tm[m] < 3
                 # rocks
-                rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-                rhocptotalm[m] = total(rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-                etatotalm[m] = etatotal_rock(
+                rhototalm = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+                rhocptotalm = total(
+                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+                etatotalm = etatotal_rock(
                     tkm[m],
                     tmsilicate,
                     tmiron,
@@ -1455,21 +954,31 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
                     etafluidm[tm[m]],
                     etafluidmm[tm[m]]
                     )
-                hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-                ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
-                
+                hrtotalm = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+                ktotalm = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+
             else
                 # air
-            
+                rhototalm = rhosolidm[tm[m]]
+                rhocptotalm = rhocpsolidm[tm[m]]
+                etatotalm = etasolidm[tm[m]]
+                hrtotalm = hrsolidm[tm[m]]
+                ktotalm = ksolidm[tm[m]]
             end
             # common for rocks and air
-            kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
+            kphim = kphi(kphim0[tm[m]], phim0, phim[m])
+            gggtotalm = gggsolidm[tm[m]]
+            fricttotalm = frictsolidm[tm[m]]
+            cohestotalm = cohessolidm[tm[m]]
+            tenstotalm = tenssolidm[tm[m]]
+            etafluidcur = etafluidm[tm[m]]
+            rhofluidcur = rhofluidm[tm[m]]
+end
             
-
             # interpolate marker properties to basic nodes
             i, j, weights = fix_weights(
-                markers.xm[m],
-                markers.ym[m],
+                xm[m],
+                ym[m],
                 x,
                 y,
                 dx,
@@ -1479,26 +988,27 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
                 imin_basic,
                 imax_basic
             )
-            interpolate_basic_nodes!(
-                m,
-                markers,
-                i,
-                j,
-                weights,
-                ETA0SUM,
-                ETASUM,
-                GGGSUM,
-                SXYSUM,
-                COHSUM,
-                TENSUM,
-                FRISUM,
-                WTSUM
-            )
+            # ETA0SUM: viscous viscosity interpolated to basic nodes
+            interpolate!(i, j, weights, etatotalm, ETA0SUM)
+            # ETASUM: viscoplastic viscosity interpolated to basic nodes
+            interpolate!(i, j, weights, etavpm[m], ETASUM)
+            # GGGSUM: shear modulus interpolated to basic nodes
+            interpolate!(i, j, weights, inv(gggtotalm), GGGSUM)
+            # SXYSUM: σxy shear stress interpolated to basic nodes
+            interpolate!(i, j, weights, sxym[m], SXYSUM)
+            # COHSUM: compressive strength interpolated to basic nodes
+            interpolate!(i, j, weights, cohestotalm, COHSUM)
+            # TENSUM: tensile strength interpolated to basic nodes
+            interpolate!(i, j, weights, tenstotalm, TENSUM)
+            # FRISUM: friction  interpolated to basic nodes
+            interpolate!(i, j, weights, fricttotalm, FRISUM)
+            # WTSUM: weight array for bilinear interpolation to basic nodes
+            interpolate!(i, j, weights, 1.0, WTSUM)
 
-            # # interpolate marker properties to Vx nodes
+            # interpolate marker properties to Vx nodes
             i, j, weights = fix_weights(
-                markers.xm[m],
-                markers.ym[m],
+                xm[m],
+                ym[m],
                 xvx,
                 yvx,
                 dx,
@@ -1508,24 +1018,23 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
                 imin_vx,
                 imax_vx
             )
-            interpolate_vx_nodes!(
-                m,
-                markers,
-                i,
-                j,
-                weights,
-                RHOXSUM,
-                RHOFXSUM,
-                KXSUM,
-                PHIXSUM,
-                RXSUM,
-                WTXSUM
-            )
+            # RHOXSUM: density interpolated to Vx nodes
+            interpolate!(i, j, weights, rhototalm, RHOXSUM)
+            # RHOFXSUM: fluid density interpolated to Vx nodes
+            interpolate!(i, j, weights, rhofluidcur, RHOFXSUM)
+            # KXSUM: thermal conductivity interpolated to Vx nodes
+            interpolate!(i, j, weights, ktotalm, KXSUM)
+            # PHIXSUM: porosity interpolated to Vx nodes
+            interpolate!(i, j, weights, phim[m], PHIXSUM)
+            # RXSUM: ηfluid/kϕ interpolated to Vx nodes
+            interpolate!(i, j, weights, etafluidcur/kphim, RXSUM)
+            # WTXSUM: weight for bilinear interpolation to Vx nodes
+            interpolate!(i, j, weights, 1.0, WTXSUM)
 
             # interpolate marker properties to Vy nodes
             i, j, weights = fix_weights(
-                markers.xm[m],
-                markers.ym[m],
+                xm[m],
+                ym[m],
                 xvy,
                 yvy,
                 dx,
@@ -1535,24 +1044,23 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
                 imin_vy,
                 imax_vy
             )
-            interpolate_vy_nodes!(
-                m,
-                markers,
-                i,
-                j,
-                weights,
-                RHOYSUM,
-                RHOFYSUM,
-                KYSUM,
-                PHIYSUM,
-                RYSUM,
-                WTYSUM
-            )
-
+            # RHOYSUM: density interpolated to Vy nodes
+            interpolate!(i, j, weights, rhototalm, RHOYSUM)
+            # RHOFYSUM: fluid density interpolated to Vy nodes
+            interpolate!(i, j, weights, rhofluidcur, RHOFYSUM)
+            # KYSUM: thermal conductivity interpolated to Vy nodes
+            interpolate!(i, j, weights, ktotalm, KYSUM)
+            # PHIYSUM: porosity interpolated to Vy nodes
+            interpolate!(i, j, weights, phim[m], PHIYSUM)
+            # RYSUM: ηfluid/kϕ interpolated to Vy nodes
+            interpolate!(i, j, weights, etafluidcur/kphim, RYSUM)
+            # WTYSUM: weight for bilinear interpolation to Vy nodes
+            interpolate!(i, j, weights, 1.0, WTYSUM)
+            
             # interpolate marker properties to P nodes
             i, j, weights = fix_weights(
-                markers.xm[m],
-                markers.ym[m],
+                xm[m],
+                ym[m],
                 xp,
                 yp,
                 dx,
@@ -1562,26 +1070,27 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
                 imin_p,
                 imax_p
             )
-            interpolate_p_nodes!(
-                m,
-                markers,
-                i,
-                j,
-                weights,
-                GGGPSUM,
-                SXXSUM,
-                RHOSUM,
-                RHOCPSUM,
-                ALPHASUM,
-                ALPHAFSUM,
-                HRSUM,
-                TKSUM,
-                PHISUM,
-                WTPSUM
-            )
+            # GGGPSUM: shear modulus interpolated to P nodes
+            interpolate!(i, j, weights, inv(gggtotalm), GGGPSUM)
+            # SXXSUM: σ'xx interpolated to P nodes
+            interpolate!(i, j, weights, sxxm[m], SXXSUM)
+            # RHOSUM: density interpolated to P nodes
+            interpolate!(i, j, weights, rhototalm, RHOSUM)
+            # RHOCPSUM: volumetric heat capacity interpolated to P nodes
+            interpolate!(i, j, weights, rhocptotalm, RHOCPSUM)
+            # ALPHASUM: thermal expansion interpolated to P nodes
+            interpolate!(i, j, weights, alphasolidm[tm[m]], ALPHASUM)
+            # ALPHAFSUM: fluid thermal expansion interpolated to P nodes
+            interpolate!(i, j, weights, alphafluidm[tm[m]], ALPHAFSUM)
+            # HRSUM: radioactive heating interpolated to P nodes
+            interpolate!(i, j, weights, hrtotalm, HRSUM)
+            # TKSUM: temperature interpolated to P nodes
+            interpolate!(i, j, weights, tkm[m]*rhocptotalm, TKSUM)
+            # PHISUM: porosity interpolated to P nodes
+            interpolate!(i, j, weights, phim[m], PHISUM)
+            # WTPSUM: weight for bilinear interpolation to P nodes
+            interpolate!(i, j, weights, 1.0, WTPSUM)
         end
-
-
         # reduce interpolation arrays
         # ETA = reduce(+, WTPSUM, dims=3)
 
@@ -1795,5 +1304,49 @@ function simulation_loop(markers::MarkerArrays, sp::StaticParameters)
 
     end # for timestep = startstep:1:nsteps
 end # function simulation loop
+
+
+"""
+Runs the simulation with the given parameters.
+
+# Details
+
+    - xsize: size of the domain in horizontal x direction [m]
+    - ysize: size of the domain in vertical y direction [m]
+    - rplanet: radius of the planet [m]
+    - rcrust: radius of the crust [m]
+    - Nx: number of basic grid nodes in horizontal x direction
+    - Ny: number of basic grid nodes in vertical y direction
+    - Nxmc: initial number of markers per cell in horizontal x direction
+    - Nymc: initial number of markers per cell in vertical y direction
+
+# Returns
+
+    - exit code
+"""
+function run_simulation(
+    xsize=140000.0,
+    ysize=140000.0,
+    rplanet=50000.0,
+    rcrust=48000.0,
+    Nx=141,
+    Ny=141,
+    Nxmc=4,
+    Nymc=4
+)
+    reset_timer!(to)
+    sp = StaticParameters(
+        xsize=xsize,
+        ysize=ysize,
+        rplanet=rplanet,
+        rcrust=rcrust,
+        Nx=Nx,
+        Ny=Ny,
+        Nxmc=Nxmc,
+        Nymc=Nymc
+        )
+    simulation_loop(sp)
+    show(to)
+end
 
 end # module HydrologyPlanetesimals
