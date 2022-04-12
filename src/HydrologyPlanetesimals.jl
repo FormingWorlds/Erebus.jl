@@ -452,7 +452,7 @@ function compute_marker_properties!(
         kfluidm,
         kphim0,
         phim0 = sp
-@timeit to "compute_marker_properties!" begin
+# @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
         rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
@@ -474,9 +474,9 @@ function compute_marker_properties!(
     # kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
     etafluidcur_inv_kphim[m] = etafluidcur[m]/kphi(
         kphim0[tm[m]], phim0, phim[m])
-end
+# end # @timeit to "compute_marker_properties!"
     return nothing
-end
+end # function compute_marker_properties!
 
 
 """
@@ -662,7 +662,7 @@ $(SIGNATURES)
         wtmi1j1: i+1, j+1 node]
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-@timeit to "fix_weights" begin
+# @timeit to "fix_weights" begin
     @inbounds j = trunc(Int, (x - x_axis[1]) / dx) + 1
     @inbounds i = trunc(Int, (y - y_axis[1]) / dy) + 1
     @inbounds dxmj = x - x_axis[min(max(j, jmin), jmax)]
@@ -673,9 +673,9 @@ function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
         (1.0-dymi/dy) * (dxmj/dx),
         (dymi/dy) * (dxmj/dx)
         )
-end
+# end # @timeit to "fix_weights"
     return i, j, weights
-end
+end # function fix_weights
 
 
 """
@@ -696,13 +696,13 @@ using given bilinear interpolation weights.
     - grid: threaded grid array on which to interpolate property
 """
 function interpolate!(i, j, weights, property, grid)
-@timeit to "interpolate!" begin
+# @timeit to "interpolate!" begin
     grid[i, j, threadid()] += property * weights[1]
     grid[i+1, j, threadid()] += property * weights[2]
     grid[i, j+1, threadid()] += property * weights[3]
     grid[i+1, j+1, threadid()] += property * weights[4]
-end
-end
+# end # @timeit to "interpolate!"
+end # function interpolate!
 
 
 """
@@ -710,7 +710,7 @@ Compute properties of basic nodes based on interpolation arrays.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - ETA0SUM: ETA0 interpolation array
     - ETASUM: ETA interpolation array
@@ -752,8 +752,8 @@ function compute_basic_node_properties!(
     TEN,
     FRI
 )
-@timeit to "compute_basic_node_properties!" begin
-@timeit to "reduce" begin
+# @timeit to "compute_basic_node_properties!" begin
+# @timeit to "reduce" begin
     ETA0SUM = reduce(+, ETA0SUM, dims=3)[:, :, 1]
     ETASUM = reduce(+, ETASUM, dims=3)[:, :, 1]
     GGGSUM = reduce(+, GGGSUM, dims=3)[:, :, 1]
@@ -762,8 +762,8 @@ function compute_basic_node_properties!(
     TENSUM = reduce(+, TENSUM, dims=3)[:, :, 1]
     FRISUM = reduce(+, FRISUM, dims=3)[:, :, 1]
     WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
-end # @timeit to "reduce"
-@timeit to "compute" begin
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
     WTSUM[WTSUM .== 0.0] .= 1.0
     ETA0 .= ETA0SUM ./ WTSUM
     ETA .= ETASUM ./ WTSUM
@@ -773,8 +773,9 @@ end # @timeit to "reduce"
     COH .= COHSUM ./ WTSUM
     TEN .= TENSUM ./ WTSUM
     FRI .= FRISUM ./ WTSUM
-end # @timeit to "compute"
-end # @timeit to "compute_basic_node_properties!"
+# end # @timeit to "compute"
+# end # @timeit to "compute_basic_node_properties!"
+    return nothing
 end # function compute_basic_node_properties!
 
 
@@ -783,7 +784,7 @@ Compute properties of Vx nodes based on interpolation arrays.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - RHOXSUM: RHOX interpolation array
     - RHOFXSUM: RHOFX interpolation array
@@ -815,24 +816,25 @@ function compute_vx_node_properties!(
    PHIX,
    RX
 )
-@timeit to "compute_vx_node_properties!" begin
-@timeit to "reduce" begin
+# @timeit to "compute_vx_node_properties!" begin
+# @timeit to "reduce" begin
     RHOXSUM = reduce(+, RHOXSUM, dims=3)[:, :, 1]
     RHOFXSUM = reduce(+, RHOFXSUM, dims=3)[:, :, 1]
     KXSUM = reduce(+, KXSUM, dims=3)[:, :, 1]
     PHIXSUM = reduce(+, PHIXSUM, dims=3)[:, :, 1]
     RXSUM = reduce(+, RXSUM, dims=3)[:, :, 1]
     WTXSUM = reduce(+, WTXSUM, dims=3)[:, :, 1]    
-end # @timeit to "reduce"
-@timeit to "compute" begin
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
     WTXSUM[WTXSUM .== 0.0] .= 1.0
     RHOX .= RHOXSUM ./ WTXSUM
     RHOFX .= RHOFXSUM ./ WTXSUM
     KX .= KXSUM ./ WTXSUM
     PHIX .= PHIXSUM ./ WTXSUM
     RX .= RXSUM ./ WTXSUM
-end # @timeit to "compute"
-end # @timeit to "compute_vx_node_properties!"
+# end # @timeit to "compute"
+# end # @timeit to "compute_vx_node_properties!"
+    return nothing
 end # function compute_vx_node_properties!
 
 
@@ -841,7 +843,7 @@ Compute properties of Vy nodes based on interpolation arrays.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - RHOYSUM: RHOY interpolation array
     - RHOFYSUM: RHOFY interpolation array
@@ -873,24 +875,25 @@ function compute_vy_node_properties!(
    PHIY,
    RY
 )
-@timeit to "compute_vy_node_properties!" begin
-@timeit to "reduce" begin
+# @timeit to "compute_vy_node_properties!" begin
+# @timeit to "reduce" begin
     RHOYSUM = reduce(+, RHOYSUM, dims=3)[:, :, 1]
     RHOFYSUM = reduce(+, RHOFYSUM, dims=3)[:, :, 1]
     KYSUM = reduce(+, KYSUM, dims=3)[:, :, 1]
     PHIYSUM = reduce(+, PHIYSUM, dims=3)[:, :, 1]
     RYSUM = reduce(+, RYSUM, dims=3)[:, :, 1]
     WTYSUM = reduce(+, WTYSUM, dims=3)[:, :, 1]    
-end # @timeit to "reduce"
-@timeit to "compute" begin
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
     WTYSUM[WTYSUM .== 0.0] .= 1.0
     RHOY .= RHOYSUM ./ WTYSUM
     RHOFY .= RHOFYSUM ./ WTYSUM
     KY .= KYSUM ./ WTYSUM
     PHIY .= PHIYSUM ./ WTYSUM
     RY .= RYSUM ./ WTYSUM
-end # @timeit to "compute"
-end # @timeit to "compute_vy_node_properties!"
+# end # @timeit to "compute"
+# end # @timeit to "compute_vy_node_properties!"
+    return nothing
 end # function compute_vy_node_properties!
 
 
@@ -899,7 +902,7 @@ Compute properties of P nodes based on interpolation arrays.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - GGGPSUM: GGGP interpolation array
     - SXX0SUM: SXX0 interpolation array
@@ -949,8 +952,8 @@ function compute_p_node_properties!(
     BETTAPHI,
     tk1  
 )
-@timeit to "compute_p_node_properties!" begin
-@timeit to "reduce" begin
+# @timeit to "compute_p_node_properties!" begin
+# @timeit to "reduce" begin
     GGGPSUM = reduce(+, GGGPSUM, dims=3)[:, :, 1]
     SXXSUM = reduce(+, SXXSUM, dims=3)[:, :, 1]
     RHOSUM = reduce(+, RHOSUM, dims=3)[:, :, 1]
@@ -961,8 +964,8 @@ function compute_p_node_properties!(
     PHISUM = reduce(+, PHISUM, dims=3)[:, :, 1]
     TKSUM = reduce(+, TKSUM, dims=3)[:, :, 1]
     WTPSUM = reduce(+, WTPSUM, dims=3)[:, :, 1]
-end # @timeit to "reduce"
-@timeit to "compute" begin
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
     GGGP .= GGGPSUM .\ WTPSUM
     SXX0 .= SXXSUM ./ WTPSUM
     RHO .= RHOSUM ./ WTPSUM
@@ -973,9 +976,43 @@ end # @timeit to "reduce"
     PHI .= PHISUM ./ WTPSUM
     BETTAPHI .= GGGP .\ PHI
     tk1 .= TKSUM ./ RHOCPSUM
-end # @timeit to "compute"
-end # @timeit to "compute_p_node_properties!"
+# end # @timeit to "compute"
+# end # @timeit to "compute_p_node_properties!"
+    return nothing
 end # function compute_p_node_properties!
+
+
+"""
+Apply insulating boundary conditions to given array.
+
+
+[x x x x x x        [a a b c d d
+ x a b c d x         a a b c d d
+ x e f g h x   ->    e e f g h h
+ x x x x x x]        e e f g h h]
+ 
+# Details
+
+    - t: array to apply insulating boundary conditions to
+
+# Returns
+
+    - nothing
+"""
+function apply_insulating_boundary_conditions!(t)
+@timeit to "apply_insulating_boundary_conditions!" begin
+    Ny, Nx = size(t)
+    # upper boundary
+    t[1, 2:Nx-1] .= t[2, 2:Nx-1]
+    # lower boundary
+    t[Ny, 2:Nx-1] .= t[Ny-1, 2:Nx-1]
+    # left boundary
+    t[:, 1] .= t[:, 2]
+    # right boundary
+    t[:, Nx] .= t[:, Nx-1]
+end # @timeit to "apply_insulating_boundary_conditions!"
+    return nothing
+end
 
 
 """
@@ -983,7 +1020,7 @@ Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - markers: arrays containing all marker properties
     - sp: static simulation parameters
@@ -1040,7 +1077,7 @@ function simulation_loop(sp::StaticParameters)
     endtime,
     start_marknum = sp
 
-@timeit to "simulation_loop setup" begin
+# @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters
     # -------------------------------------------------------------------------
@@ -1306,7 +1343,7 @@ function simulation_loop(sp::StaticParameters)
     LP = spzeros(Nx1*Ny1, Nx1*Ny1)
     # gravity solution: RHS Vector
     RP = zeros(Float64, Nx1*Ny1)
-end
+# end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
     # iterate timesteps   
@@ -1318,7 +1355,7 @@ end
         barglyphs=BarGlyphs(
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:nsteps
-@timeit to "set up interpolation arrays" begin
+# @timeit to "set up interpolation arrays" begin
         # ---------------------------------------------------------------------
         # set up interpolation arrays
         # ---------------------------------------------------------------------
@@ -1356,7 +1393,7 @@ end
         PHISUM = zeros(Ny1, Nx1, nthreads())
         TKSUM = zeros(Ny1, Nx1, nthreads())
         WTPSUM = zeros(Ny1, Nx1, nthreads())
-end
+# end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
@@ -1591,11 +1628,10 @@ end
         )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # applying thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
-        # apply_thermal_bc(sp, dp, tk1)
+        apply_insulating_boundary_conditions!(tk1)
 
 
 # Wed 13        
