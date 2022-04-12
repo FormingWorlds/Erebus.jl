@@ -6,6 +6,7 @@ using MAT
 using DocStringExtensions
 using Parameters
 using StaticArrays
+using ProgressMeter
 using TimerOutputs
 
 export run_simulation
@@ -784,22 +785,17 @@ $(SIGNATURES)
 
 # Detail
 
-    - ETA0SUM: ETA0 interpolation array
-    - ETASUM: ETA interpolation array
-    - GGGSUM: GGG interpolation array
-    - SXYSUM: SXY interpolation array
-    - COHSUM: COH interpolation array
-    - TENSUM: TEN interpolation array
-    - FRISUM: FRI interpolation array
-    - WTSUM: WT interpolation array
-    - ETA0: ETA0 basic node array
-    - ETA: ETA basic node array
-    - YNY: YNY basic node array
-    - GGG: GGG basic node array
-    - SXY0: SXY basic node array
-    - COH: COH basic node array
-    - TEN: TEN basic node array
-    - FRI: FRI basic node array
+    - RHOXSUM: RHOX interpolation array
+    - RHOFXSUM: RHOFX interpolation array
+    - KXSUM: KX interpolation array
+    - PHIXSUM: PHIX interpolation array
+    - RXSUM: RX interpolation array
+    - WTXSUM: WTX interpolation array
+    - RHOX: RHOX Vx node array
+    - RHOFX: RHOFX Vx node array
+    - KX: KX Vx node array
+    - PHIX: PHIX Vx node array
+    - RX: RX Vx node array
 
 # Returns
 
@@ -838,6 +834,148 @@ end # @timeit to "reduce"
 end # @timeit to "compute"
 end # @timeit to "compute_vx_node_properties!"
 end # function compute_vx_node_properties!
+
+
+"""
+Compute properties of Vy nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Detail
+
+    - RHOYSUM: RHOY interpolation array
+    - RHOFYSUM: RHOFY interpolation array
+    - KYSUM: KY interpolation array
+    - PHIYSUM: PHIY interpolation array
+    - RYSUM: RY interpolation array
+    - WTYSUM: WTY interpolation array
+    - RHOY: RHOY Vy node array
+    - RHOFY: RHOFY Vy node array
+    - KY: KY Vy node array
+    - PHIY: PHIY Vy node array
+    - RY: RY Vy node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_vy_node_properties!(
+   RHOYSUM,
+   RHOFYSUM,
+   KYSUM,
+   PHIYSUM,
+   RYSUM,
+   WTYSUM,
+   RHOY,
+   RHOFY,
+   KY,
+   PHIY,
+   RY
+)
+@timeit to "compute_vy_node_properties!" begin
+@timeit to "reduce" begin
+    RHOYSUM = reduce(+, RHOYSUM, dims=3)[:, :, 1]
+    RHOFYSUM = reduce(+, RHOFYSUM, dims=3)[:, :, 1]
+    KYSUM = reduce(+, KYSUM, dims=3)[:, :, 1]
+    PHIYSUM = reduce(+, PHIYSUM, dims=3)[:, :, 1]
+    RYSUM = reduce(+, RYSUM, dims=3)[:, :, 1]
+    WTYSUM = reduce(+, WTYSUM, dims=3)[:, :, 1]    
+end # @timeit to "reduce"
+@timeit to "compute" begin
+    WTYSUM[WTYSUM .== 0.0] .= 1.0
+    RHOY .= RHOYSUM ./ WTYSUM
+    RHOFY .= RHOFYSUM ./ WTYSUM
+    KY .= KYSUM ./ WTYSUM
+    PHIY .= PHIYSUM ./ WTYSUM
+    RY .= RYSUM ./ WTYSUM
+end # @timeit to "compute"
+end # @timeit to "compute_vy_node_properties!"
+end # function compute_vy_node_properties!
+
+
+"""
+Compute properties of P nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Detail
+
+    - GGGPSUM: GGGP interpolation array
+    - SXX0SUM: SXX0 interpolation array
+    - RHOSUM: RHO interpolation array
+    - RHOCPSUM: RHOCP interpolation array
+    - ALPHASUM: ALPHA interpolation array
+    - ALPHAFSUM: ALPHAF interpolation array
+    - HRSUM: HR interpolation array
+    - PHISUM: PHI interpolation array
+    - TKSUM: TK interpolation array
+    - WTPSUM: WTP interpolation array
+    - GGGP: GGGP P node array
+    - SXX0: SXX0 P node array
+    - RHO: RHO P node array
+    - RHOCP: RHOCP P node array
+    - ALPHA: ALPHA P node array
+    - ALPHAF: ALPHAF P node array
+    - HR: HR P node array
+    - PHI: PHI P node array
+    - BETTAPHI: BETTAPHI P node array
+    - tk1: tk1 P node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_p_node_properties!(
+    GGGPSUM,
+    SXXSUM,
+    RHOSUM,
+    RHOCPSUM,
+    ALPHASUM,
+    ALPHAFSUM,
+    HRSUM,
+    PHISUM,
+    TKSUM,
+    WTPSUM,
+    GGGP,
+    SXX0,
+    RHO,
+    RHOCP,
+    ALPHA,
+    ALPHAF,
+    HR,
+    PHI,
+    BETTAPHI,
+    tk1  
+)
+@timeit to "compute_p_node_properties!" begin
+@timeit to "reduce" begin
+    GGGPSUM = reduce(+, GGGPSUM, dims=3)[:, :, 1]
+    SXXSUM = reduce(+, SXXSUM, dims=3)[:, :, 1]
+    RHOSUM = reduce(+, RHOSUM, dims=3)[:, :, 1]
+    RHOCPSUM = reduce(+, RHOCPSUM, dims=3)[:, :, 1]
+    ALPHASUM = reduce(+, ALPHASUM, dims=3)[:, :, 1]
+    ALPHAFSUM = reduce(+, ALPHAFSUM, dims=3)[:, :, 1]
+    HRSUM = reduce(+, HRSUM, dims=3)[:, :, 1]
+    PHISUM = reduce(+, PHISUM, dims=3)[:, :, 1]
+    TKSUM = reduce(+, TKSUM, dims=3)[:, :, 1]
+    WTPSUM = reduce(+, WTPSUM, dims=3)[:, :, 1]
+end # @timeit to "reduce"
+@timeit to "compute" begin
+    GGGP .= GGGPSUM .\ WTPSUM
+    SXX0 .= SXXSUM ./ WTPSUM
+    RHO .= RHOSUM ./ WTPSUM
+    RHOCP .= RHOCPSUM ./ WTPSUM
+    ALPHA .= ALPHASUM ./ WTPSUM
+    ALPHAF .= ALPHAFSUM ./ WTPSUM
+    HR .= HRSUM ./ WTPSUM
+    PHI .= PHISUM ./ WTPSUM
+    BETTAPHI .= GGGP .\ PHI
+    tk1 .= TKSUM ./ RHOCPSUM
+end # @timeit to "compute"
+end # @timeit to "compute_p_node_properties!"
+end # function compute_p_node_properties!
 
 
 """
@@ -1173,8 +1311,13 @@ end
     # -------------------------------------------------------------------------
     # iterate timesteps   
     # -------------------------------------------------------------------------
-    for timestep = start_step:1:100
-    # for timestep = startstep:1:nsteps
+    nsteps = 100 # <======= remove for production
+    p = Progress(
+        nsteps,
+        dt=0.5,
+        barglyphs=BarGlyphs(
+            '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
+    for timestep = start_step:1:nsteps
 @timeit to "set up interpolation arrays" begin
         # ---------------------------------------------------------------------
         # set up interpolation arrays
@@ -1210,8 +1353,8 @@ end
         ALPHASUM = zeros(Ny1, Nx1, nthreads())
         ALPHAFSUM = zeros(Ny1, Nx1, nthreads())
         HRSUM = zeros(Ny1, Nx1, nthreads())
-        TKSUM = zeros(Ny1, Nx1, nthreads())
         PHISUM = zeros(Ny1, Nx1, nthreads())
+        TKSUM = zeros(Ny1, Nx1, nthreads())
         WTPSUM = zeros(Ny1, Nx1, nthreads())
 end
 
@@ -1353,10 +1496,10 @@ end
             interpolate!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
             # HRSUM: radioactive heating interpolated to P nodes
             interpolate!(i, j, weights, hrtotalm[m], HRSUM)
-            # TKSUM: heat capacity interpolated to P nodes
-            interpolate!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
             # PHISUM: porosity interpolated to P nodes
             interpolate!(i, j, weights, phim[m], PHISUM)
+            # TKSUM: heat capacity interpolated to P nodes
+            interpolate!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
             # WTPSUM: weight for bilinear interpolation to P nodes
             interpolate!(i, j, weights, 1.0, WTPSUM)
         end
@@ -1403,18 +1546,49 @@ end
         )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of Vy nodes
         # ---------------------------------------------------------------------
-        # compute_properties_vy_nodes!(sp, dp, interp_arrays)
+        compute_vy_node_properties!(
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            RY
+        )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of P nodes
         # ---------------------------------------------------------------------
-        # compute_properties_p_nodes!(sp, dp, interp_arrays)
+        compute_p_node_properties!(
+            GGGPSUM,
+            SXXSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            PHISUM,
+            TKSUM,
+            WTPSUM,
+            GGGP,
+            SXX0,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            PHI,
+            BETTAPHI,
+            tk1  
+        )
 
 
 # Tue 12        
@@ -1621,9 +1795,10 @@ end
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------
-        if timestep % 20 == 0
-            println("timestep: ", timestep)
-        end
+        next!(p)
+        # if timestep % 20 == 0
+        #     println("timestep: ", timestep)
+        # end
 
         if timesum > endtime
             break
