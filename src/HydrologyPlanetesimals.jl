@@ -705,6 +705,79 @@ end
 
 
 """
+Compute properties of basic nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Detail
+
+    - ETA0SUM: ETA0 interpolation array
+    - ETASUM: ETA interpolation array
+    - GGGSUM: GGG interpolation array
+    - SXYSUM: SXY interpolation array
+    - COHSUM: COH interpolation array
+    - TENSUM: TEN interpolation array
+    - FRISUM: FRI interpolation array
+    - WTSUM: WT interpolation array
+    - ETA0: ETA0 basic node array
+    - ETA: ETA basic node array
+    - YNY: YNY basic node array
+    - GGG: GGG basic node array
+    - SXY0: SXY basic node array
+    - COH: COH basic node array
+    - TEN: TEN basic node array
+    - FRI: FRI basic node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_basic_node_properties!(
+    ETA0SUM,
+    ETASUM,
+    GGGSUM,
+    SXYSUM,
+    COHSUM,
+    TENSUM,
+    FRISUM,
+    WTSUM,
+    ETA0,
+    ETA,
+    YNY,
+    GGG,
+    SXY0,
+    COH,
+    TEN,
+    FRI
+)
+@timeit to "compute_basic_node_properties!" begin
+@timeit to "reduce" begin
+    ETA0SUM = reduce(+, ETA0SUM, dims=3)[:, :, 1]
+    ETASUM = reduce(+, ETASUM, dims=3)[:, :, 1]
+    GGGSUM = reduce(+, GGGSUM, dims=3)[:, :, 1]
+    SXYSUM = reduce(+, SXYSUM, dims=3)[:, :, 1]
+    COHSUM = reduce(+, COHSUM, dims=3)[:, :, 1]
+    TENSUM = reduce(+, TENSUM, dims=3)[:, :, 1]
+    FRISUM = reduce(+, FRISUM, dims=3)[:, :, 1]
+    WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
+end # @timeit to "reduce"
+@timeit to "compute" begin
+    WTSUM[WTSUM .== 0.0] .= 1.0
+    ETA0 .= ETA0SUM ./ WTSUM
+    ETA .= ETASUM ./ WTSUM
+    YNY[ETA .< ETA0] .= true
+    GGG .= GGGSUM .\ WTSUM
+    SXY0 .= SXYSUM ./ WTSUM
+    COH .= COHSUM ./ WTSUM
+    TEN .= TENSUM ./ WTSUM
+    FRI .= FRISUM ./ WTSUM
+end # @timeit to "compute"
+end # @timeit to "compute_basic_node_properties!"
+end # function compute_basic_node_properties!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -816,8 +889,8 @@ function simulation_loop(sp::StaticParameters)
     TEN = zeros(Float64, Ny, Nx)
     # friction
     FRI = zeros(Float64, Ny, Nx)
-    # plastic yielding mark, 1=yes,0=no
-    YNY = zeros(Int8, Ny, Nx)
+    # plastic yielding mark
+    YNY = zeros(Bool, Ny, Nx)
 
     # Vx nodes
     # grid geometry
@@ -1088,7 +1161,7 @@ end
         # ---------------------------------------------------------------------
         # computer marker properties and interpolate to staggered grid nodes
         # ---------------------------------------------------------------------
-        @threads for m = 1:1:marknum
+        @threads for m=1:1:marknum
             compute_marker_properties!(
                 m,
                 tm,
@@ -1224,15 +1297,29 @@ end
             # WTPSUM: weight for bilinear interpolation to P nodes
             interpolate!(i, j, weights, 1.0, WTPSUM)
         end
-        # reduce interpolation arrays
-        # ETA = reduce(+, WTPSUM, dims=3)
 
-
-# Tue 12
+        
         # ---------------------------------------------------------------------
         # compute physical properties of basic nodes
         # ---------------------------------------------------------------------
-        # compute_properties_basic_nodes!(sp, dp, interp_arrays)
+        compute_basic_node_properties!(
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            ETA0,
+            ETA,
+            YNY,
+            GGG,
+            SXY0,
+            COH,
+            TEN,
+            FRI 
+        )
 
 
 # Tue 12        
@@ -1263,34 +1350,34 @@ end
         # apply_thermal_bc(sp, dp, tk1)
 
 
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # compute gravity solution
         # ---------------------------------------------------------------------
         # compute_gravity_solution!(sp, dp, interp_arrays)
 
 
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # compute gravitational acceleration
         # ---------------------------------------------------------------------
         # compute_grav_accel!(sp, dp, interp_arrays)
 
 
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # probe increasing computational timestep
         # ---------------------------------------------------------------------
         # dt = min(dt*dtkoefup, dtelastic)
 
 
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # save initial viscosity, yielding nodes
         # ---------------------------------------------------------------------
 
 
-# Wed 13        
+# Thu 14        
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
