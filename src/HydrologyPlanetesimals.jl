@@ -147,6 +147,8 @@ $(TYPEDFIELDS)
     tenssolidm ::SVector{3, Float64}    = [    6.0e+07,    6.0e+07,    6.0e+07]
     "standard permeability [m^2]"
     kphim0::SVector{3, Float64}         = [    1.0e-13,    1.0e-13,    1.0e-17]
+    "initial temperature [K]"
+    tkm0::SVector{3, Float64}           = [  300.0    ,  300.0    ,  273.0    ]
     "Coefficient to compute compaction viscosity from shear viscosity"
     etaphikoef::Float64 = 1e-4
     # 26Al decay
@@ -272,9 +274,22 @@ $(SIGNATURES)
     - xm: array of x coordinates of markers
     - ym: array of y coordinates of markers
     - tm: array of material type of markers
-    - tkm: array of temperature of markers 
     - phim: array of porosity of markers
     - etavpm: array of matrix viscosity of markers
+    - rhototalm: array of total density of markers
+    - rhocptotalm: array of total volumetric heat capacity of markers
+    - etatotalm: array of total viscosity of markers
+    - hrtotalm: array of total radiogenic heat production of markers
+    - ktotalm: array of total thermal conductivity of markers
+    - etafluidcur: array of fluid viscosity of markers
+    - tkm: array of temperature of markers 
+    - inv_gggtotalm: array of inverse of total shear modulus of markers
+    - fricttotalm: array of total friction coefficient of markers
+    - cohestotalm: array of total compressive strength of markers
+    - tenstotalm: array of total tensile strength of markers
+    - rhofluidcur: array of fluid density of markers
+    - alphasolidcur: array of solid thermal expansion coefficient of markers
+    - alphafluidcur: array of fluid thermal expansion coefficient of markers
     - sp: static simulation parameters
 
 # Returns
@@ -285,9 +300,22 @@ function define_markers!(
     xm,
     ym,
     tm,
-    tkm,
     phim,
     etavpm,
+    rhototalm,
+    rhocptotalm,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    etafluidcur,
+    tkm,
+    inv_gggtotalm,
+    fricttotalm,
+    cohestotalm,
+    tenstotalm,
+    rhofluidcur,
+    alphasolidcur,
+    alphafluidcur,
     sp::StaticParameters
 )
     @unpack xsize,
@@ -300,9 +328,23 @@ function define_markers!(
     dym,
     rplanet,
     rcrust,
+    phim0,
     phimin,
     etasolidm,
-    phim0 = sp
+    rhosolidm,
+    rhocpsolidm,
+    etasolidm,
+    etafluidm,
+    tkm0,
+    gggsolidm,
+    frictsolidm,
+    cohessolidm,
+    tenssolidm,
+    rhofluidm,
+    start_hrsolidm,
+    alphasolidm,
+    alphafluidm,
+    ksolidm = sp
 
     for jm=1:1:Nxm, im=1:1:Nym
         # calculate marker counter
@@ -313,33 +355,125 @@ function define_markers!(
         # primary marker properties 
         rmark = distance(xm[m], ym[m], xcenter, ycenter)
         if rmark < rplanet
-            # # planet
-            # if rmark > rcrust
-            #     # crust
-            #     tm[m] = 2
-            # else
-            #     # mantle
-            #     tm[m] = 1
-            # end
+            # planet
             tm[m] = ifelse(rmark>rcrust, 2, 1)
-            # temperature
-            tkm[m] = 300
             # porosity
             phim[m] = phim0 * (1.0 + (rand()-0.5))
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # *exp(-28*phim[m])
         else
             # sticky space ("air") [to have internal free surface]
-            # space
             tm[m] = 3
-            # temperature
-            tkm[m] = 273
             # porosity
             phim[m] = phimin
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]]
+            # static properties for air markers
+            rhototalm[m] = rhosolidm[tm[m]]
+            rhocptotalm[m] = rhocpsolidm[tm[m]]
+            etatotalm[m] = etasolidm[tm[m]]
+            hrtotalm[m] = start_hrsolidm[tm[m]]
+            ktotalm[m] = ksolidm[tm[m]]           
+            etafluidcur[m] = etafluidm[tm[m]]
         end
+        # common initialisations for all marker types
+        tkm[m] = tkm0[tm[m]]
+        inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
+        fricttotalm[m] = frictsolidm[tm[m]]
+        cohestotalm[m] = cohessolidm[tm[m]]
+        tenstotalm[m] = tenssolidm[tm[m]]
+        rhofluidcur[m] = rhofluidm[tm[m]]
+        alphasolidcur[m] = alphasolidm[tm[m]]
+        alphafluidcur[m] = alphafluidm[tm[m]]
     end
+    return nothing
+end
+
+
+"""
+Computers properties of given marker and saves them to corresponding arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - tm: array of type of markers
+    - tkm: array of temperature of markers
+    - rhototalm: array of total density of markers
+    - rhocptotalm: array of total volumetric heat capacity of markers
+    - etasolidcur: array of solid viscosity of markers
+    - etafluidcur: array of fluid viscosity of markers
+    - etatotalm: array of total viscosity of markers
+    - hrtotalm: array of total radiogenic heat production of markers
+    - ktotalm: array of total thermal conductivity of markers
+    - tkm_rhocptotalm: array of total thermal energy of markers
+    - etafluidcur_inv_kphim: array of (fluid viscosity)/permeability of markers
+    - phim: array of porosity of markers
+    - hrsolidm: vector of radiogenic heat production of solid materials
+    - hrfluidm: vector of radiogenic heat production of fluid materials
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function compute_marker_properties!(
+    m,
+    tm,
+    tkm,
+    rhototalm,
+    rhocptotalm,
+    etasolidcur,
+    etafluidcur,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    tkm_rhocptotalm,
+    etafluidcur_inv_kphim,
+    hrsolidm,
+    hrfluidm,
+    phim,
+    sp::StaticParameters
+)
+    @unpack rhosolidm,
+        rhofluidm,
+        rhocpsolidm,
+        rhocpfluidm,
+        tmsilicate,
+        tmiron,
+        etamin,
+        etasolidm,
+        etasolidmm,
+        etafluidm,
+        etafluidmm,
+        ksolidm,
+        kfluidm,
+        kphim0,
+        phim0 = sp
+@timeit to "compute_marker_properties!" begin
+    if tm[m] < 3
+        # rocks
+        rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+        rhocptotalm[m] = total(
+            rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+        etasolidcur[m] = ifelse(
+            tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
+        etafluidcur[m] = ifelse(
+            tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
+        etatotalm[m] = max(etamin, etasolidcur[m], etafluidcur[m])
+        hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+        ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+    # else
+        # air
+        # pass  
+    end
+    # # common for rocks and air
+    tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]
+    # kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
+    etafluidcur_inv_kphim[m] = etafluidcur[m]/kphi(
+        kphim0[tm[m]], phim0, phim[m])
+end
     return nothing
 end
 
@@ -382,44 +516,6 @@ $(SIGNATURES)
 """
 function total(solid, fluid, phi)
     return solid * (1.0-phi) + fluid * phi
-end
-
-
-"""
-Compute temperature-dependent total viscosity for iron-containing silicate rock.
-
-$(SIGNATURES)
-
-# Details
-
-    - tk: temperature [K]
-    - tmsilicate: melting temperature of silicate in [K]
-    - tmiron: melting temperature of iron in K [K]
-    - etamin: minimum viscosity [Pa s]
-    - etasolidm: solid viscosity [Pa s]
-    - etasolidmm: molten solid viscosity [Pa s]
-    - etafluidm: fluid viscosity [Pa s]
-    - etafluidmm: molten fluid viscosity [Pa s]
-
-# Returns
-
-    - etatotal: temperature-dependent total viscosity [Pa s]
-"""	
-function etatotal_rock(
-    tk,
-    tmsilicate,
-    tmiron,
-    etamin,
-    etasolidm,
-    etasolidmm,
-    etafluidm,
-    etafluidmm
-    )
-    return max(
-        etamin,
-        tk > tmsilicate ? etasolidmm : etasolidm,
-        tk > tmiron ? etafluidmm : etafluidm
-        )
 end
 
 
@@ -862,9 +958,64 @@ function simulation_loop(sp::StaticParameters)
     phim = zeros(Float64, marknum)
     # marker viscoplastic viscosity [Pa]
     etavpm = zeros(Float64, marknum)
-    # define initial markers: coordinates, temperature, and material type    
-    define_markers!(xm, ym, tm, tkm, phim, etavpm, sp)
-
+    # marker total density
+    rhototalm = zeros(Float64, marknum)
+    # marker total volumetric heat capacity
+    rhocptotalm = zeros(Float64, marknum)
+    # marker solid viscosity
+    etasolidcur = zeros(Float64, marknum)
+    # marker fluid viscosity
+    etafluidcur = zeros(Float64, marknum)
+    # marker total viscosity
+    etatotalm = zeros(Float64, marknum)
+    # marker total radiogenic heat production
+    hrtotalm = zeros(Float64, marknum)
+    # marker total thermal conductivity
+    ktotalm = zeros(Float64, marknum)
+    # marker total thermal energy
+    tkm_rhocptotalm = zeros(Float64, marknum)
+    # marker fluid viscosity over permeability
+    etafluidcur_inv_kphim = zeros(Float64, marknum)
+    # marker temperature 
+    tkm = zeros(Float64, marknum)
+    # marker inverse of total shear modulus
+    inv_gggtotalm = zeros(Float64, marknum)
+    # marker total friction coefficient
+    fricttotalm = zeros(Float64, marknum)
+    # marker total compressive strength
+    cohestotalm = zeros(Float64, marknum)
+    # marker total tensile strength
+    tenstotalm = zeros(Float64, marknum)
+    # marker fluid density
+    rhofluidcur = zeros(Float64, marknum)
+    # marker solid thermal expansion coefficient
+    alphasolidcur = zeros(Float64, marknum)
+    # marker fluid thermal expansion coefficient
+    alphafluidcur = zeros(Float64, marknum)
+    
+    # define initial markers: coordinates, material type, and properties    
+    define_markers!(
+        xm,
+        ym,
+        tm,
+        phim,
+        etavpm,
+        rhototalm,
+        rhocptotalm,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        etafluidcur,
+        tkm,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur,
+        sp
+        )
 
     # -------------------------------------------------------------------------
     # set up of matrices for global gravity/thermal/hydromechanical solutions
@@ -938,44 +1089,25 @@ end
         # computer marker properties and interpolate to staggered grid nodes
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
-@timeit to "compute marker properties" begin
-            # compute dynamic marker properties 
-            if tm[m] < 3
-                # rocks
-                rhototalm = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-                rhocptotalm = total(
-                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-                etatotalm = etatotal_rock(
-                    tkm[m],
-                    tmsilicate,
-                    tmiron,
-                    etamin,
-                    etasolidm[tm[m]],
-                    etasolidmm[tm[m]],
-                    etafluidm[tm[m]],
-                    etafluidmm[tm[m]]
-                    )
-                hrtotalm = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-                ktotalm = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
-
-            else
-                # air
-                rhototalm = rhosolidm[tm[m]]
-                rhocptotalm = rhocpsolidm[tm[m]]
-                etatotalm = etasolidm[tm[m]]
-                hrtotalm = hrsolidm[tm[m]]
-                ktotalm = ksolidm[tm[m]]
-            end
-            # common for rocks and air
-            kphim = kphi(kphim0[tm[m]], phim0, phim[m])
-            gggtotalm = gggsolidm[tm[m]]
-            fricttotalm = frictsolidm[tm[m]]
-            cohestotalm = cohessolidm[tm[m]]
-            tenstotalm = tenssolidm[tm[m]]
-            etafluidcur = etafluidm[tm[m]]
-            rhofluidcur = rhofluidm[tm[m]]
-end
-            
+            compute_marker_properties!(
+                m,
+                tm,
+                tkm,
+                rhototalm,
+                rhocptotalm,
+                etasolidcur,
+                etafluidcur,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim,
+                hrsolidm,
+                hrfluidm,
+                phim,
+                sp
+            )
+                    
             # interpolate marker properties to basic nodes
             i, j, weights = fix_weights(
                 xm[m],
@@ -990,19 +1122,19 @@ end
                 imax_basic
             )
             # ETA0SUM: viscous viscosity interpolated to basic nodes
-            interpolate!(i, j, weights, etatotalm, ETA0SUM)
+            interpolate!(i, j, weights, etatotalm[m], ETA0SUM)
             # ETASUM: viscoplastic viscosity interpolated to basic nodes
             interpolate!(i, j, weights, etavpm[m], ETASUM)
             # GGGSUM: shear modulus interpolated to basic nodes
-            interpolate!(i, j, weights, inv(gggtotalm), GGGSUM)
+            interpolate!(i, j, weights, inv_gggtotalm[m], GGGSUM)
             # SXYSUM: σxy shear stress interpolated to basic nodes
             interpolate!(i, j, weights, sxym[m], SXYSUM)
             # COHSUM: compressive strength interpolated to basic nodes
-            interpolate!(i, j, weights, cohestotalm, COHSUM)
+            interpolate!(i, j, weights, cohestotalm[m], COHSUM)
             # TENSUM: tensile strength interpolated to basic nodes
-            interpolate!(i, j, weights, tenstotalm, TENSUM)
+            interpolate!(i, j, weights, tenstotalm[m], TENSUM)
             # FRISUM: friction  interpolated to basic nodes
-            interpolate!(i, j, weights, fricttotalm, FRISUM)
+            interpolate!(i, j, weights, fricttotalm[m], FRISUM)
             # WTSUM: weight array for bilinear interpolation to basic nodes
             interpolate!(i, j, weights, 1.0, WTSUM)
 
@@ -1020,15 +1152,15 @@ end
                 imax_vx
             )
             # RHOXSUM: density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhototalm, RHOXSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOXSUM)
             # RHOFXSUM: fluid density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhofluidcur, RHOFXSUM)
+            interpolate!(i, j, weights, rhofluidcur[m], RHOFXSUM)
             # KXSUM: thermal conductivity interpolated to Vx nodes
-            interpolate!(i, j, weights, ktotalm, KXSUM)
+            interpolate!(i, j, weights, ktotalm[m], KXSUM)
             # PHIXSUM: porosity interpolated to Vx nodes
             interpolate!(i, j, weights, phim[m], PHIXSUM)
             # RXSUM: ηfluid/kϕ interpolated to Vx nodes
-            interpolate!(i, j, weights, etafluidcur/kphim, RXSUM)
+            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
             # WTXSUM: weight for bilinear interpolation to Vx nodes
             interpolate!(i, j, weights, 1.0, WTXSUM)
 
@@ -1046,15 +1178,15 @@ end
                 imax_vy
             )
             # RHOYSUM: density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhototalm, RHOYSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOYSUM)
             # RHOFYSUM: fluid density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhofluidcur, RHOFYSUM)
+            interpolate!(i, j, weights, rhofluidcur[m], RHOFYSUM)
             # KYSUM: thermal conductivity interpolated to Vy nodes
-            interpolate!(i, j, weights, ktotalm, KYSUM)
+            interpolate!(i, j, weights, ktotalm[m], KYSUM)
             # PHIYSUM: porosity interpolated to Vy nodes
             interpolate!(i, j, weights, phim[m], PHIYSUM)
             # RYSUM: ηfluid/kϕ interpolated to Vy nodes
-            interpolate!(i, j, weights, etafluidcur/kphim, RYSUM)
+            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
             # WTYSUM: weight for bilinear interpolation to Vy nodes
             interpolate!(i, j, weights, 1.0, WTYSUM)
             
@@ -1072,21 +1204,21 @@ end
                 imax_p
             )
             # GGGPSUM: shear modulus interpolated to P nodes
-            interpolate!(i, j, weights, inv(gggtotalm), GGGPSUM)
+            interpolate!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
             # SXXSUM: σ'xx interpolated to P nodes
             interpolate!(i, j, weights, sxxm[m], SXXSUM)
             # RHOSUM: density interpolated to P nodes
-            interpolate!(i, j, weights, rhototalm, RHOSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOSUM)
             # RHOCPSUM: volumetric heat capacity interpolated to P nodes
-            interpolate!(i, j, weights, rhocptotalm, RHOCPSUM)
+            interpolate!(i, j, weights, rhocptotalm[m], RHOCPSUM)
             # ALPHASUM: thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphasolidm[tm[m]], ALPHASUM)
+            interpolate!(i, j, weights, alphasolidcur[m], ALPHASUM)
             # ALPHAFSUM: fluid thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphafluidm[tm[m]], ALPHAFSUM)
+            interpolate!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
             # HRSUM: radioactive heating interpolated to P nodes
-            interpolate!(i, j, weights, hrtotalm, HRSUM)
-            # TKSUM: temperature interpolated to P nodes
-            interpolate!(i, j, weights, tkm[m]*rhocptotalm, TKSUM)
+            interpolate!(i, j, weights, hrtotalm[m], HRSUM)
+            # TKSUM: heat capacity interpolated to P nodes
+            interpolate!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
             # PHISUM: porosity interpolated to P nodes
             interpolate!(i, j, weights, phim[m], PHISUM)
             # WTPSUM: weight for bilinear interpolation to P nodes
