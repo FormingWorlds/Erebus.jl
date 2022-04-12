@@ -778,6 +778,69 @@ end # function compute_basic_node_properties!
 
 
 """
+Compute properties of Vx nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Detail
+
+    - ETA0SUM: ETA0 interpolation array
+    - ETASUM: ETA interpolation array
+    - GGGSUM: GGG interpolation array
+    - SXYSUM: SXY interpolation array
+    - COHSUM: COH interpolation array
+    - TENSUM: TEN interpolation array
+    - FRISUM: FRI interpolation array
+    - WTSUM: WT interpolation array
+    - ETA0: ETA0 basic node array
+    - ETA: ETA basic node array
+    - YNY: YNY basic node array
+    - GGG: GGG basic node array
+    - SXY0: SXY basic node array
+    - COH: COH basic node array
+    - TEN: TEN basic node array
+    - FRI: FRI basic node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_vx_node_properties!(
+   RHOXSUM,
+   RHOFXSUM,
+   KXSUM,
+   PHIXSUM,
+   RXSUM,
+   WTXSUM,
+   RHOX,
+   RHOFX,
+   KX,
+   PHIX,
+   RX
+)
+@timeit to "compute_vx_node_properties!" begin
+@timeit to "reduce" begin
+    RHOXSUM = reduce(+, RHOXSUM, dims=3)[:, :, 1]
+    RHOFXSUM = reduce(+, RHOFXSUM, dims=3)[:, :, 1]
+    KXSUM = reduce(+, KXSUM, dims=3)[:, :, 1]
+    PHIXSUM = reduce(+, PHIXSUM, dims=3)[:, :, 1]
+    RXSUM = reduce(+, RXSUM, dims=3)[:, :, 1]
+    WTXSUM = reduce(+, WTXSUM, dims=3)[:, :, 1]    
+end # @timeit to "reduce"
+@timeit to "compute" begin
+    WTXSUM[WTXSUM .== 0.0] .= 1.0
+    RHOX .= RHOXSUM ./ WTXSUM
+    RHOFX .= RHOFXSUM ./ WTXSUM
+    KX .= KXSUM ./ WTXSUM
+    PHIX .= PHIXSUM ./ WTXSUM
+    RX .= RXSUM ./ WTXSUM
+end # @timeit to "compute"
+end # @timeit to "compute_vx_node_properties!"
+end # function compute_vx_node_properties!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -1322,11 +1385,22 @@ end
         )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of Vx nodes
         # ---------------------------------------------------------------------
-        # compute_properties_vx_nodes!(sp, dp, interp_arrays)
+        compute_vx_node_properties!(
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            RX
+        )
 
 
 # Tue 12        
