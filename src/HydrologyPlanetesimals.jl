@@ -2,6 +2,7 @@ module HydrologyPlanetesimals
 
 using Base.Threads
 using SparseArrays
+using ExtendableSparse
 using MAT
 using DocStringExtensions
 using Parameters
@@ -1016,6 +1017,83 @@ end
 
 
 """
+Compute gravity solution in P nodes to obtain
+gravitational accelerations gx for Vx nodes, gy for Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    -
+
+# Returns
+
+- nothing
+"""
+function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+@timeit to "compute_gravity_solution!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        xcenter,
+        ycenter,
+        dx,
+        dy,
+        G = sp
+    # iterate over P nodes
+    for j=1:1:Nx1, i=1:1:Ny1 
+        # define global index in algebraic space
+        gk = (j-1) * Ny1 + i
+        # decide if external / boundary points
+        if i==1 ||
+            i==Ny1 ||
+            j==1 ||
+            j==Nx1 ||
+            distance(xp[j], yp[i], xcenter, ycenter) > xcenter/2
+            # boundary condition: ϕ = 0
+            updateindex!(LP, +, 1.0, gk, gk)
+            RP[gk] = 0.0
+        else
+            # internal points: temperature equation
+            # ∂²ϕ/∂x² + ∂²ϕ/∂y² = 2/3⋅4Gπρ
+            #
+            #           ϕ₂
+            #           |
+            #           |
+            #    ϕ₁-----ϕ₃-----ϕ₅
+            #           |
+            #           |
+            #           ϕ₄
+            #
+            # density gradients
+            dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+            dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+            # fill system of equations
+            # LHS
+            updateindex!(LP, +, 1.0/dx^2, gk, gk-Ny1) # ϕ₁
+            updateindex!(LP, +, 1.0/dy^2, gk, gk-1) # ϕ₂
+            updateindex!(LP, +, -2.0/dx^2 -2.0/dy^2, gk, gk) # ϕ₃
+            updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # ϕ₄
+            updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # ϕ₅
+            # RHS
+            RP[gk] = -2.0/3.0 * 4.0 * G * pi * RHO[i, j]
+        end
+    end
+    # solve system of equations
+    SP = LP \ RP
+    # reshape solution vector to 2D array
+    ϕ = reshape(SP, Ny1, Nx1)
+    # gx = -∂ϕ/∂x
+    gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
+    # gy = -∂ϕ/∂y
+    gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
+end # @timeit to "compute_gravity_solution!"
+    return nothing
+end # function compute_gravity_solution!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -1332,17 +1410,19 @@ function simulation_loop(sp::StaticParameters)
     # set up of matrices for global gravity/thermal/hydromechanical solutions
     # -------------------------------------------------------------------------
     # hydromechanical solution: LHS coefficient matrix
-    L = spzeros(Nx1*Ny1*6, Nx1*Ny1*6)
-    # hydromechanical solution: RHS Vector
+    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # hydromechanical solution: RHS vector
     R = zeros(Float64, Nx1*Ny1*6)
     # thermal solution: LHS coefficient matrix
-    LT = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # thermal solution: RHS Vector
+    LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # thermal solution: RHS vector
     RT = zeros(Float64, Nx1*Ny1)
     # gravity solution: LHS coefficient matrix
-    LP = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # gravity solution: RHS Vector
+    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # gravity solution: RHS vector
     RP = zeros(Float64, Nx1*Ny1)
+    # gravity solution: solution matrix
+    SP = zeros(Float64, Nx1*Ny1)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
@@ -1629,23 +1709,16 @@ function simulation_loop(sp::StaticParameters)
 
 
         # ---------------------------------------------------------------------
-        # # applying thermal boundary conditions for interpolated temperature
+        # applying thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
 
-# Wed 13        
         # ---------------------------------------------------------------------
-        # # compute gravity solution
+        # compute gravity solution
+        # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        # compute_gravity_solution!(sp, dp, interp_arrays)
-
-
-# Wed 13        
-        # ---------------------------------------------------------------------
-        # # compute gravitational acceleration
-        # ---------------------------------------------------------------------
-        # compute_grav_accel!(sp, dp, interp_arrays)
+        compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
 
 
 # Wed 13        

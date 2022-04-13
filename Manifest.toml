@@ -61,6 +61,12 @@ git-tree-sha1 = "56559bbef6ca5ea0c0818fa5c90320398a6fbf8d"
 uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
 version = "0.1.8"
 
+[[deps.ExtendableSparse]]
+deps = ["DocStringExtensions", "LinearAlgebra", "Printf", "Requires", "SparseArrays", "SuiteSparse", "Test"]
+git-tree-sha1 = "eb3393e4de326349a4b5bccd9b17ed1029a2d0ca"
+uuid = "95c220a8-a1cf-11e9-0c77-dbfce5f500b3"
+version = "0.6.7"
+
 [[deps.HDF5]]
 deps = ["Compat", "HDF5_jll", "Libdl", "Mmap", "Random", "Requires"]
 git-tree-sha1 = "cdd249512de03cbf8370365a0a08b9a24955dca9"
@@ -213,6 +219,10 @@ version = "1.4.3"
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.SuiteSparse]]
+deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
+uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
 [[deps.TOML]]
 deps = ["Dates"]

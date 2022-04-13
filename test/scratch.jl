@@ -108,3 +108,15 @@ function apply_insulating_boundary_conditions!(t)
         return nothing
     end
     
+
+
+
+    function si()
+        A = zeros(Float64, 10^6)
+        for j=1:1000
+            @simd for i=1:1000
+                A[i] = i + j
+            end
+        end
+        return A
+    end
