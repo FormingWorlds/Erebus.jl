@@ -2,10 +2,12 @@ module HydrologyPlanetesimals
 
 using Base.Threads
 using SparseArrays
+using ExtendableSparse
 using MAT
 using DocStringExtensions
 using Parameters
 using StaticArrays
+using ProgressMeter
 using TimerOutputs
 
 export run_simulation
@@ -26,17 +28,17 @@ $(TYPEDFIELDS)
     hr_fe::Bool = true
     # model size, geometry, and resolution
     "horizontal model size [m]"
-    xsize::Float64
+    xsize::Float64 = 140_000.0
     "vertical model size [m]"
-    ysize::Float64
+    ysize::Float64 = 140_000.0
     "horizontal center of model"
     xcenter::Float64 = xsize / 2
     "vertical center of model"
     ycenter::Float64 = ysize / 2  
     "basic grid resolution in x direction (horizontal)"
-    Nx::Int 
+    Nx::Int64 = 141
     "basic grid resolution in y direction (vertical)"	
-    Ny::Int
+    Ny::Int64 = 141
     "Vx, Vy, P grid resolution in x direction (horizontal)"
     Nx1::Int64 = Nx + 1
     "Vx/Vy/P grid resolution in y direction (vertical)"
@@ -83,16 +85,16 @@ $(TYPEDFIELDS)
     imax_p::Int64 = Ny
     # planetary parameters
     "planetary radius [m]"
-    rplanet::Int64
+    rplanet::Float64 = 50_000.0
     "crust radius [m]"
-    rcrust::Int64
+    rcrust::Float64 = 48_000.0
     "surface pressure [Pa]"
     psurface::Float64 = 1e+3
     # marker count and initial spacing
     "number of markers per cell in horizontal direction"
-    Nxmc::Int
+    Nxmc::Int64 = 4
     "number of markers per cell in vertical direction"
-    Nymc::Int
+    Nymc::Int64 = 4
     "marker grid resolution in horizontal direction"
     Nxm::Int64 = (Nx - 1) * Nxmc
     "marker grid resolution in vertical direction"
@@ -147,6 +149,8 @@ $(TYPEDFIELDS)
     tenssolidm ::SVector{3, Float64}    = [    6.0e+07,    6.0e+07,    6.0e+07]
     "standard permeability [m^2]"
     kphim0::SVector{3, Float64}         = [    1.0e-13,    1.0e-13,    1.0e-17]
+    "initial temperature [K]"
+    tkm0::SVector{3, Float64}           = [  300.0    ,  300.0    ,  273.0    ]
     "Coefficient to compute compaction viscosity from shear viscosity"
     etaphikoef::Float64 = 1e-4
     # 26Al decay
@@ -272,9 +276,22 @@ $(SIGNATURES)
     - xm: array of x coordinates of markers
     - ym: array of y coordinates of markers
     - tm: array of material type of markers
-    - tkm: array of temperature of markers 
     - phim: array of porosity of markers
     - etavpm: array of matrix viscosity of markers
+    - rhototalm: array of total density of markers
+    - rhocptotalm: array of total volumetric heat capacity of markers
+    - etatotalm: array of total viscosity of markers
+    - hrtotalm: array of total radiogenic heat production of markers
+    - ktotalm: array of total thermal conductivity of markers
+    - etafluidcur: array of fluid viscosity of markers
+    - tkm: array of temperature of markers 
+    - inv_gggtotalm: array of inverse of total shear modulus of markers
+    - fricttotalm: array of total friction coefficient of markers
+    - cohestotalm: array of total compressive strength of markers
+    - tenstotalm: array of total tensile strength of markers
+    - rhofluidcur: array of fluid density of markers
+    - alphasolidcur: array of solid thermal expansion coefficient of markers
+    - alphafluidcur: array of fluid thermal expansion coefficient of markers
     - sp: static simulation parameters
 
 # Returns
@@ -285,9 +302,22 @@ function define_markers!(
     xm,
     ym,
     tm,
-    tkm,
     phim,
     etavpm,
+    rhototalm,
+    rhocptotalm,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    etafluidcur,
+    tkm,
+    inv_gggtotalm,
+    fricttotalm,
+    cohestotalm,
+    tenstotalm,
+    rhofluidcur,
+    alphasolidcur,
+    alphafluidcur,
     sp::StaticParameters
 )
     @unpack xsize,
@@ -300,9 +330,23 @@ function define_markers!(
     dym,
     rplanet,
     rcrust,
+    phim0,
     phimin,
     etasolidm,
-    phim0 = sp
+    rhosolidm,
+    rhocpsolidm,
+    etasolidm,
+    etafluidm,
+    tkm0,
+    gggsolidm,
+    frictsolidm,
+    cohessolidm,
+    tenssolidm,
+    rhofluidm,
+    start_hrsolidm,
+    alphasolidm,
+    alphafluidm,
+    ksolidm = sp
 
     for jm=1:1:Nxm, im=1:1:Nym
         # calculate marker counter
@@ -313,35 +357,127 @@ function define_markers!(
         # primary marker properties 
         rmark = distance(xm[m], ym[m], xcenter, ycenter)
         if rmark < rplanet
-            # # planet
-            # if rmark > rcrust
-            #     # crust
-            #     tm[m] = 2
-            # else
-            #     # mantle
-            #     tm[m] = 1
-            # end
+            # planet
             tm[m] = ifelse(rmark>rcrust, 2, 1)
-            # temperature
-            tkm[m] = 300
             # porosity
             phim[m] = phim0 * (1.0 + (rand()-0.5))
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # *exp(-28*phim[m])
         else
             # sticky space ("air") [to have internal free surface]
-            # space
             tm[m] = 3
-            # temperature
-            tkm[m] = 273
             # porosity
             phim[m] = phimin
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]]
+            # static properties for air markers
+            rhototalm[m] = rhosolidm[tm[m]]
+            rhocptotalm[m] = rhocpsolidm[tm[m]]
+            etatotalm[m] = etasolidm[tm[m]]
+            hrtotalm[m] = start_hrsolidm[tm[m]]
+            ktotalm[m] = ksolidm[tm[m]]           
+            etafluidcur[m] = etafluidm[tm[m]]
         end
+        # common initialisations for all marker types
+        tkm[m] = tkm0[tm[m]]
+        inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
+        fricttotalm[m] = frictsolidm[tm[m]]
+        cohestotalm[m] = cohessolidm[tm[m]]
+        tenstotalm[m] = tenssolidm[tm[m]]
+        rhofluidcur[m] = rhofluidm[tm[m]]
+        alphasolidcur[m] = alphasolidm[tm[m]]
+        alphafluidcur[m] = alphafluidm[tm[m]]
     end
     return nothing
 end
+
+
+"""
+Computers properties of given marker and saves them to corresponding arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - tm: array of type of markers
+    - tkm: array of temperature of markers
+    - rhototalm: array of total density of markers
+    - rhocptotalm: array of total volumetric heat capacity of markers
+    - etasolidcur: array of solid viscosity of markers
+    - etafluidcur: array of fluid viscosity of markers
+    - etatotalm: array of total viscosity of markers
+    - hrtotalm: array of total radiogenic heat production of markers
+    - ktotalm: array of total thermal conductivity of markers
+    - tkm_rhocptotalm: array of total thermal energy of markers
+    - etafluidcur_inv_kphim: array of (fluid viscosity)/permeability of markers
+    - phim: array of porosity of markers
+    - hrsolidm: vector of radiogenic heat production of solid materials
+    - hrfluidm: vector of radiogenic heat production of fluid materials
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function compute_marker_properties!(
+    m,
+    tm,
+    tkm,
+    rhototalm,
+    rhocptotalm,
+    etasolidcur,
+    etafluidcur,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    tkm_rhocptotalm,
+    etafluidcur_inv_kphim,
+    hrsolidm,
+    hrfluidm,
+    phim,
+    sp::StaticParameters
+)
+    @unpack rhosolidm,
+        rhofluidm,
+        rhocpsolidm,
+        rhocpfluidm,
+        tmsilicate,
+        tmiron,
+        etamin,
+        etasolidm,
+        etasolidmm,
+        etafluidm,
+        etafluidmm,
+        ksolidm,
+        kfluidm,
+        kphim0,
+        phim0 = sp
+# @timeit to "compute_marker_properties!" begin
+    if tm[m] < 3
+        # rocks
+        rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+        rhocptotalm[m] = total(
+            rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+        etasolidcur[m] = ifelse(
+            tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
+        etafluidcur[m] = ifelse(
+            tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
+        etatotalm[m] = max(etamin, etasolidcur[m], etafluidcur[m])
+        hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+        ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+    # else
+        # air
+        # pass  
+    end
+    # # common for rocks and air
+    tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]
+    # kphim[m] = kphi(kphim0[tm[m]], phim0, phim[m])
+    etafluidcur_inv_kphim[m] = etafluidcur[m]/kphi(
+        kphim0[tm[m]], phim0, phim[m])
+# end # @timeit to "compute_marker_properties!"
+    return nothing
+end # function compute_marker_properties!
 
 
 """
@@ -386,44 +522,6 @@ end
 
 
 """
-Compute temperature-dependent total viscosity for iron-containing silicate rock.
-
-$(SIGNATURES)
-
-# Details
-
-    - tk: temperature [K]
-    - tmsilicate: melting temperature of silicate in [K]
-    - tmiron: melting temperature of iron in K [K]
-    - etamin: minimum viscosity [Pa s]
-    - etasolidm: solid viscosity [Pa s]
-    - etasolidmm: molten solid viscosity [Pa s]
-    - etafluidm: fluid viscosity [Pa s]
-    - etafluidmm: molten fluid viscosity [Pa s]
-
-# Returns
-
-    - etatotal: temperature-dependent total viscosity [Pa s]
-"""	
-function etatotal_rock(
-    tk,
-    tmsilicate,
-    tmiron,
-    etamin,
-    etasolidm,
-    etasolidmm,
-    etafluidm,
-    etafluidmm
-    )
-    return max(
-        etamin,
-        tk > tmsilicate ? etasolidmm : etasolidm,
-        tk > tmiron ? etafluidmm : etafluidm
-        )
-end
-
-
-"""
 Compute total thermal conductivity of two-phase material.
 
 $(SIGNATURES)
@@ -439,9 +537,9 @@ $(SIGNATURES)
     - ktotal: total thermal conductivity of mixed phase [W/m/K]
 """
 function ktotal(ksolid, kfluid, phi)
-    return (ksolid * kfluid/2 + ((ksolid * (3*phi-2)
+    return ((ksolid * kfluid/2 + ((ksolid * (3*phi-2)
                                  + kfluid * (1.0-3.0*phi))^2)/16)^0.5
-            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4
+            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4)
 end
 
 
@@ -520,7 +618,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Solid phase 26Al radiogenic heat production [W/m^3]
         hrsolidm = @SVector [Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
     else
-        hrsolidm = @SVector [0.0, 0.0, 0.0]
+        hrsolidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end    
     #60Fe: planet ✓, crust ×, space ×
     if hr_fe
@@ -529,7 +627,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Fluid phase 60Fe radiogenic heat production [W/m^3]
         hrfluidm = @SVector [Q_fe*rhofluidm[1], 0.0, 0.0]
     else
-        hrfluidm = @SVector [0.0, 0.0, 0.0]
+        hrfluidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end
     return hrsolidm, hrfluidm
 end
@@ -565,20 +663,22 @@ $(SIGNATURES)
         wtmi1j1: i+1, j+1 node]
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-@timeit to "fix_weights" begin
-    @inbounds j = trunc(Int, (x - x_axis[1]) / dx) + 1
-    @inbounds i = trunc(Int, (y - y_axis[1]) / dy) + 1
-    @inbounds dxmj = x - x_axis[min(max(j, jmin), jmax)]
-    @inbounds dymi = y - y_axis[min(max(i, imin), imax)]
+# @timeit to "fix_weights" begin
+    @inbounds begin
+    j = min(max(trunc(Int, (x-x_axis[1])/dx)+1, jmin), jmax)
+    i = min(max(trunc(Int, (y-y_axis[1])/dy)+1, imin), imax)
+    dxmj = x - x_axis[j]
+    dymi = y - y_axis[i]
+    end # @inbounds
     weights = SVector(
         (1.0-dymi/dy) * (1.0-dxmj/dx),
         (dymi/dy) * (1.0-dxmj/dx),
         (1.0-dymi/dy) * (dxmj/dx),
         (dymi/dy) * (dxmj/dx)
-        )
-end
+    )
+# end # @timeit to "fix_weights"
     return i, j, weights
-end
+end # function fix_weights
 
 
 """
@@ -599,13 +699,399 @@ using given bilinear interpolation weights.
     - grid: threaded grid array on which to interpolate property
 """
 function interpolate!(i, j, weights, property, grid)
-@timeit to "interpolate!" begin
+# @timeit to "interpolate!" begin
     grid[i, j, threadid()] += property * weights[1]
     grid[i+1, j, threadid()] += property * weights[2]
     grid[i, j+1, threadid()] += property * weights[3]
     grid[i+1, j+1, threadid()] += property * weights[4]
+# end # @timeit to "interpolate!"
+end # function interpolate!
+
+
+"""
+Compute properties of basic nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - ETA0SUM: ETA0 interpolation array
+    - ETASUM: ETA interpolation array
+    - GGGSUM: GGG interpolation array
+    - SXYSUM: SXY interpolation array
+    - COHSUM: COH interpolation array
+    - TENSUM: TEN interpolation array
+    - FRISUM: FRI interpolation array
+    - WTSUM: WT interpolation array
+    - ETA0: ETA0 basic node array
+    - ETA: ETA basic node array
+    - YNY: YNY basic node array
+    - GGG: GGG basic node array
+    - SXY0: SXY basic node array
+    - COH: COH basic node array
+    - TEN: TEN basic node array
+    - FRI: FRI basic node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_basic_node_properties!(
+    ETA0SUM,
+    ETASUM,
+    GGGSUM,
+    SXYSUM,
+    COHSUM,
+    TENSUM,
+    FRISUM,
+    WTSUM,
+    ETA0,
+    ETA,
+    YNY,
+    GGG,
+    SXY0,
+    COH,
+    TEN,
+    FRI
+)
+# @timeit to "compute_basic_node_properties!" begin
+# @timeit to "reduce" begin
+    ETA0SUM = reduce(+, ETA0SUM, dims=3)[:, :, 1]
+    ETASUM = reduce(+, ETASUM, dims=3)[:, :, 1]
+    GGGSUM = reduce(+, GGGSUM, dims=3)[:, :, 1]
+    SXYSUM = reduce(+, SXYSUM, dims=3)[:, :, 1]
+    COHSUM = reduce(+, COHSUM, dims=3)[:, :, 1]
+    TENSUM = reduce(+, TENSUM, dims=3)[:, :, 1]
+    FRISUM = reduce(+, FRISUM, dims=3)[:, :, 1]
+    WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
+    WTSUM[WTSUM .== 0.0] .= 1.0
+    ETA0 .= ETA0SUM ./ WTSUM
+    ETA .= ETASUM ./ WTSUM
+    YNY[ETA .< ETA0] .= true
+    GGG .= GGGSUM .\ WTSUM
+    SXY0 .= SXYSUM ./ WTSUM
+    COH .= COHSUM ./ WTSUM
+    TEN .= TENSUM ./ WTSUM
+    FRI .= FRISUM ./ WTSUM
+# end # @timeit to "compute"
+# end # @timeit to "compute_basic_node_properties!"
+    return nothing
+end # function compute_basic_node_properties!
+
+
+"""
+Compute properties of Vx nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - RHOXSUM: RHOX interpolation array
+    - RHOFXSUM: RHOFX interpolation array
+    - KXSUM: KX interpolation array
+    - PHIXSUM: PHIX interpolation array
+    - RXSUM: RX interpolation array
+    - WTXSUM: WTX interpolation array
+    - RHOX: RHOX Vx node array
+    - RHOFX: RHOFX Vx node array
+    - KX: KX Vx node array
+    - PHIX: PHIX Vx node array
+    - RX: RX Vx node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_vx_node_properties!(
+   RHOXSUM,
+   RHOFXSUM,
+   KXSUM,
+   PHIXSUM,
+   RXSUM,
+   WTXSUM,
+   RHOX,
+   RHOFX,
+   KX,
+   PHIX,
+   RX
+)
+# @timeit to "compute_vx_node_properties!" begin
+# @timeit to "reduce" begin
+    RHOXSUM = reduce(+, RHOXSUM, dims=3)[:, :, 1]
+    RHOFXSUM = reduce(+, RHOFXSUM, dims=3)[:, :, 1]
+    KXSUM = reduce(+, KXSUM, dims=3)[:, :, 1]
+    PHIXSUM = reduce(+, PHIXSUM, dims=3)[:, :, 1]
+    RXSUM = reduce(+, RXSUM, dims=3)[:, :, 1]
+    WTXSUM = reduce(+, WTXSUM, dims=3)[:, :, 1]    
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
+    WTXSUM[WTXSUM .== 0.0] .= 1.0
+    RHOX .= RHOXSUM ./ WTXSUM
+    RHOFX .= RHOFXSUM ./ WTXSUM
+    KX .= KXSUM ./ WTXSUM
+    PHIX .= PHIXSUM ./ WTXSUM
+    RX .= RXSUM ./ WTXSUM
+# end # @timeit to "compute"
+# end # @timeit to "compute_vx_node_properties!"
+    return nothing
+end # function compute_vx_node_properties!
+
+
+"""
+Compute properties of Vy nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - RHOYSUM: RHOY interpolation array
+    - RHOFYSUM: RHOFY interpolation array
+    - KYSUM: KY interpolation array
+    - PHIYSUM: PHIY interpolation array
+    - RYSUM: RY interpolation array
+    - WTYSUM: WTY interpolation array
+    - RHOY: RHOY Vy node array
+    - RHOFY: RHOFY Vy node array
+    - KY: KY Vy node array
+    - PHIY: PHIY Vy node array
+    - RY: RY Vy node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_vy_node_properties!(
+   RHOYSUM,
+   RHOFYSUM,
+   KYSUM,
+   PHIYSUM,
+   RYSUM,
+   WTYSUM,
+   RHOY,
+   RHOFY,
+   KY,
+   PHIY,
+   RY
+)
+# @timeit to "compute_vy_node_properties!" begin
+# @timeit to "reduce" begin
+    RHOYSUM = reduce(+, RHOYSUM, dims=3)[:, :, 1]
+    RHOFYSUM = reduce(+, RHOFYSUM, dims=3)[:, :, 1]
+    KYSUM = reduce(+, KYSUM, dims=3)[:, :, 1]
+    PHIYSUM = reduce(+, PHIYSUM, dims=3)[:, :, 1]
+    RYSUM = reduce(+, RYSUM, dims=3)[:, :, 1]
+    WTYSUM = reduce(+, WTYSUM, dims=3)[:, :, 1]    
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
+    WTYSUM[WTYSUM .== 0.0] .= 1.0
+    RHOY .= RHOYSUM ./ WTYSUM
+    RHOFY .= RHOFYSUM ./ WTYSUM
+    KY .= KYSUM ./ WTYSUM
+    PHIY .= PHIYSUM ./ WTYSUM
+    RY .= RYSUM ./ WTYSUM
+# end # @timeit to "compute"
+# end # @timeit to "compute_vy_node_properties!"
+    return nothing
+end # function compute_vy_node_properties!
+
+
+"""
+Compute properties of P nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - GGGPSUM: GGGP interpolation array
+    - SXX0SUM: SXX0 interpolation array
+    - RHOSUM: RHO interpolation array
+    - RHOCPSUM: RHOCP interpolation array
+    - ALPHASUM: ALPHA interpolation array
+    - ALPHAFSUM: ALPHAF interpolation array
+    - HRSUM: HR interpolation array
+    - PHISUM: PHI interpolation array
+    - TKSUM: TK interpolation array
+    - WTPSUM: WTP interpolation array
+    - GGGP: GGGP P node array
+    - SXX0: SXX0 P node array
+    - RHO: RHO P node array
+    - RHOCP: RHOCP P node array
+    - ALPHA: ALPHA P node array
+    - ALPHAF: ALPHAF P node array
+    - HR: HR P node array
+    - PHI: PHI P node array
+    - BETTAPHI: BETTAPHI P node array
+    - tk1: tk1 P node array
+
+# Returns
+
+    - nothing
+
+"""
+function compute_p_node_properties!(
+    GGGPSUM,
+    SXXSUM,
+    RHOSUM,
+    RHOCPSUM,
+    ALPHASUM,
+    ALPHAFSUM,
+    HRSUM,
+    PHISUM,
+    TKSUM,
+    WTPSUM,
+    GGGP,
+    SXX0,
+    RHO,
+    RHOCP,
+    ALPHA,
+    ALPHAF,
+    HR,
+    PHI,
+    BETTAPHI,
+    tk1  
+)
+# @timeit to "compute_p_node_properties!" begin
+# @timeit to "reduce" begin
+    GGGPSUM = reduce(+, GGGPSUM, dims=3)[:, :, 1]
+    SXXSUM = reduce(+, SXXSUM, dims=3)[:, :, 1]
+    RHOSUM = reduce(+, RHOSUM, dims=3)[:, :, 1]
+    RHOCPSUM = reduce(+, RHOCPSUM, dims=3)[:, :, 1]
+    ALPHASUM = reduce(+, ALPHASUM, dims=3)[:, :, 1]
+    ALPHAFSUM = reduce(+, ALPHAFSUM, dims=3)[:, :, 1]
+    HRSUM = reduce(+, HRSUM, dims=3)[:, :, 1]
+    PHISUM = reduce(+, PHISUM, dims=3)[:, :, 1]
+    TKSUM = reduce(+, TKSUM, dims=3)[:, :, 1]
+    WTPSUM = reduce(+, WTPSUM, dims=3)[:, :, 1]
+# end # @timeit to "reduce"
+# @timeit to "compute" begin
+    GGGP .= GGGPSUM .\ WTPSUM
+    SXX0 .= SXXSUM ./ WTPSUM
+    RHO .= RHOSUM ./ WTPSUM
+    RHOCP .= RHOCPSUM ./ WTPSUM
+    ALPHA .= ALPHASUM ./ WTPSUM
+    ALPHAF .= ALPHAFSUM ./ WTPSUM
+    HR .= HRSUM ./ WTPSUM
+    PHI .= PHISUM ./ WTPSUM
+    BETTAPHI .= GGGP .\ PHI
+    tk1 .= TKSUM ./ RHOCPSUM
+# end # @timeit to "compute"
+# end # @timeit to "compute_p_node_properties!"
+    return nothing
+end # function compute_p_node_properties!
+
+
+"""
+Apply insulating boundary conditions to given array.
+
+
+[x x x x x x        [a a b c d d
+ x a b c d x         a a b c d d
+ x e f g h x   ->    e e f g h h
+ x x x x x x]        e e f g h h]
+ 
+# Details
+
+    - t: array to apply insulating boundary conditions to
+
+# Returns
+
+    - nothing
+"""
+function apply_insulating_boundary_conditions!(t)
+@timeit to "apply_insulating_boundary_conditions!" begin
+    Ny, Nx = size(t)
+    # upper boundary
+    t[1, 2:Nx-1] .= t[2, 2:Nx-1]
+    # lower boundary
+    t[Ny, 2:Nx-1] .= t[Ny-1, 2:Nx-1]
+    # left boundary
+    t[:, 1] .= t[:, 2]
+    # right boundary
+    t[:, Nx] .= t[:, Nx-1]
+end # @timeit to "apply_insulating_boundary_conditions!"
+    return nothing
 end
-end
+
+
+"""
+Compute gravity solution in P nodes to obtain
+gravitational accelerations gx for Vx nodes, gy for Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    -
+
+# Returns
+
+- nothing
+"""
+function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+@timeit to "compute_gravity_solution!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        xcenter,
+        ycenter,
+        dx,
+        dy,
+        G = sp
+    # iterate over P nodes
+    for j=1:1:Nx1, i=1:1:Ny1 
+        # define global index in algebraic space
+        gk = (j-1) * Ny1 + i
+        # decide if external / boundary points
+        if i==1 ||
+            i==Ny1 ||
+            j==1 ||
+            j==Nx1 ||
+            distance(xp[j], yp[i], xcenter, ycenter) > xcenter/2
+            # boundary condition: ϕ = 0
+            updateindex!(LP, +, 1.0, gk, gk)
+            RP[gk] = 0.0
+        else
+            # internal points: 2D Poisson equation: gravitational potential Φ
+            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
+            #
+            #           Φ₂
+            #           |
+            #           |
+            #    Φ₁-----Φ₃-----Φ₅
+            #           |
+            #           |
+            #           Φ₄
+            #
+            # density gradients
+            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+            # fill system of equations: LHS (11.11)
+            updateindex!(LP, +, 1.0/dx^2, gk, gk-Ny1) # Φ₁
+            updateindex!(LP, +, 1.0/dy^2, gk, gk-1) # Φ₂
+            updateindex!(LP, +, -2.0/dx^2 -2.0/dy^2, gk, gk) # Φ₃
+            updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # Φ₄
+            updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # Φ₅
+            # fill system of equations: RHS (11.11)
+            RP[gk] = -4.0 * 2.0/3.0 * π * G * RHO[i, j]
+        end
+    end
+    # solve system of equations
+    SP = LP \ RP
+    # reshape solution vector to 2D array
+    ϕ = reshape(SP, Ny1, Nx1)
+    # gx = -∂ϕ/∂x (11.12)
+    gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
+    # gy = -∂ϕ/∂y (11.13)   
+    gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
+end # @timeit to "compute_gravity_solution!"
+    return nothing
+end # function compute_gravity_solution!
 
 
 """
@@ -613,7 +1099,7 @@ Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
 
-# Detail
+# Details
 
     - markers: arrays containing all marker properties
     - sp: static simulation parameters
@@ -670,7 +1156,7 @@ function simulation_loop(sp::StaticParameters)
     endtime,
     start_marknum = sp
 
-@timeit to "simulation_loop setup" begin
+# @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters
     # -------------------------------------------------------------------------
@@ -720,8 +1206,8 @@ function simulation_loop(sp::StaticParameters)
     TEN = zeros(Float64, Ny, Nx)
     # friction
     FRI = zeros(Float64, Ny, Nx)
-    # plastic yielding mark, 1=yes,0=no
-    YNY = zeros(Int8, Ny, Nx)
+    # plastic yielding mark
+    YNY = zeros(Bool, Ny, Nx)
 
     # Vx nodes
     # grid geometry
@@ -862,33 +1348,95 @@ function simulation_loop(sp::StaticParameters)
     phim = zeros(Float64, marknum)
     # marker viscoplastic viscosity [Pa]
     etavpm = zeros(Float64, marknum)
-    # define initial markers: coordinates, temperature, and material type    
-    define_markers!(xm, ym, tm, tkm, phim, etavpm, sp)
-
+    # marker total density
+    rhototalm = zeros(Float64, marknum)
+    # marker total volumetric heat capacity
+    rhocptotalm = zeros(Float64, marknum)
+    # marker solid viscosity
+    etasolidcur = zeros(Float64, marknum)
+    # marker fluid viscosity
+    etafluidcur = zeros(Float64, marknum)
+    # marker total viscosity
+    etatotalm = zeros(Float64, marknum)
+    # marker total radiogenic heat production
+    hrtotalm = zeros(Float64, marknum)
+    # marker total thermal conductivity
+    ktotalm = zeros(Float64, marknum)
+    # marker total thermal energy
+    tkm_rhocptotalm = zeros(Float64, marknum)
+    # marker fluid viscosity over permeability
+    etafluidcur_inv_kphim = zeros(Float64, marknum)
+    # marker temperature 
+    tkm = zeros(Float64, marknum)
+    # marker inverse of total shear modulus
+    inv_gggtotalm = zeros(Float64, marknum)
+    # marker total friction coefficient
+    fricttotalm = zeros(Float64, marknum)
+    # marker total compressive strength
+    cohestotalm = zeros(Float64, marknum)
+    # marker total tensile strength
+    tenstotalm = zeros(Float64, marknum)
+    # marker fluid density
+    rhofluidcur = zeros(Float64, marknum)
+    # marker solid thermal expansion coefficient
+    alphasolidcur = zeros(Float64, marknum)
+    # marker fluid thermal expansion coefficient
+    alphafluidcur = zeros(Float64, marknum)
+    
+    # define initial markers: coordinates, material type, and properties    
+    define_markers!(
+        xm,
+        ym,
+        tm,
+        phim,
+        etavpm,
+        rhototalm,
+        rhocptotalm,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        etafluidcur,
+        tkm,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur,
+        sp
+        )
 
     # -------------------------------------------------------------------------
     # set up of matrices for global gravity/thermal/hydromechanical solutions
     # -------------------------------------------------------------------------
     # hydromechanical solution: LHS coefficient matrix
-    L = spzeros(Nx1*Ny1*6, Nx1*Ny1*6)
-    # hydromechanical solution: RHS Vector
+    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # hydromechanical solution: RHS vector
     R = zeros(Float64, Nx1*Ny1*6)
     # thermal solution: LHS coefficient matrix
-    LT = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # thermal solution: RHS Vector
+    LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # thermal solution: RHS vector
     RT = zeros(Float64, Nx1*Ny1)
     # gravity solution: LHS coefficient matrix
-    LP = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # gravity solution: RHS Vector
+    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # gravity solution: RHS vector
     RP = zeros(Float64, Nx1*Ny1)
-end
+    # gravity solution: solution matrix
+    SP = zeros(Float64, Nx1*Ny1)
+# end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
     # iterate timesteps   
     # -------------------------------------------------------------------------
-    for timestep = start_step:1:100
-    # for timestep = startstep:1:nsteps
-@timeit to "set up interpolation arrays" begin
+    nsteps = 100 # <======= remove for production
+    p = Progress(
+        nsteps,
+        dt=0.5,
+        barglyphs=BarGlyphs(
+            '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
+    for timestep = start_step:1:nsteps
+# @timeit to "set up interpolation arrays" begin
         # ---------------------------------------------------------------------
         # set up interpolation arrays
         # ---------------------------------------------------------------------
@@ -923,10 +1471,10 @@ end
         ALPHASUM = zeros(Ny1, Nx1, nthreads())
         ALPHAFSUM = zeros(Ny1, Nx1, nthreads())
         HRSUM = zeros(Ny1, Nx1, nthreads())
-        TKSUM = zeros(Ny1, Nx1, nthreads())
         PHISUM = zeros(Ny1, Nx1, nthreads())
+        TKSUM = zeros(Ny1, Nx1, nthreads())
         WTPSUM = zeros(Ny1, Nx1, nthreads())
-end
+# end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
@@ -937,45 +1485,26 @@ end
         # ---------------------------------------------------------------------
         # computer marker properties and interpolate to staggered grid nodes
         # ---------------------------------------------------------------------
-        @threads for m = 1:1:marknum
-@timeit to "compute marker properties" begin
-            # compute dynamic marker properties 
-            if tm[m] < 3
-                # rocks
-                rhototalm = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-                rhocptotalm = total(
-                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-                etatotalm = etatotal_rock(
-                    tkm[m],
-                    tmsilicate,
-                    tmiron,
-                    etamin,
-                    etasolidm[tm[m]],
-                    etasolidmm[tm[m]],
-                    etafluidm[tm[m]],
-                    etafluidmm[tm[m]]
-                    )
-                hrtotalm = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-                ktotalm = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
-
-            else
-                # air
-                rhototalm = rhosolidm[tm[m]]
-                rhocptotalm = rhocpsolidm[tm[m]]
-                etatotalm = etasolidm[tm[m]]
-                hrtotalm = hrsolidm[tm[m]]
-                ktotalm = ksolidm[tm[m]]
-            end
-            # common for rocks and air
-            kphim = kphi(kphim0[tm[m]], phim0, phim[m])
-            gggtotalm = gggsolidm[tm[m]]
-            fricttotalm = frictsolidm[tm[m]]
-            cohestotalm = cohessolidm[tm[m]]
-            tenstotalm = tenssolidm[tm[m]]
-            etafluidcur = etafluidm[tm[m]]
-            rhofluidcur = rhofluidm[tm[m]]
-end
-            
+        @threads for m=1:1:marknum
+            compute_marker_properties!(
+                m,
+                tm,
+                tkm,
+                rhototalm,
+                rhocptotalm,
+                etasolidcur,
+                etafluidcur,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim,
+                hrsolidm,
+                hrfluidm,
+                phim,
+                sp
+            )
+                    
             # interpolate marker properties to basic nodes
             i, j, weights = fix_weights(
                 xm[m],
@@ -990,19 +1519,19 @@ end
                 imax_basic
             )
             # ETA0SUM: viscous viscosity interpolated to basic nodes
-            interpolate!(i, j, weights, etatotalm, ETA0SUM)
+            interpolate!(i, j, weights, etatotalm[m], ETA0SUM)
             # ETASUM: viscoplastic viscosity interpolated to basic nodes
             interpolate!(i, j, weights, etavpm[m], ETASUM)
             # GGGSUM: shear modulus interpolated to basic nodes
-            interpolate!(i, j, weights, inv(gggtotalm), GGGSUM)
+            interpolate!(i, j, weights, inv_gggtotalm[m], GGGSUM)
             # SXYSUM: σxy shear stress interpolated to basic nodes
             interpolate!(i, j, weights, sxym[m], SXYSUM)
             # COHSUM: compressive strength interpolated to basic nodes
-            interpolate!(i, j, weights, cohestotalm, COHSUM)
+            interpolate!(i, j, weights, cohestotalm[m], COHSUM)
             # TENSUM: tensile strength interpolated to basic nodes
-            interpolate!(i, j, weights, tenstotalm, TENSUM)
+            interpolate!(i, j, weights, tenstotalm[m], TENSUM)
             # FRISUM: friction  interpolated to basic nodes
-            interpolate!(i, j, weights, fricttotalm, FRISUM)
+            interpolate!(i, j, weights, fricttotalm[m], FRISUM)
             # WTSUM: weight array for bilinear interpolation to basic nodes
             interpolate!(i, j, weights, 1.0, WTSUM)
 
@@ -1020,15 +1549,15 @@ end
                 imax_vx
             )
             # RHOXSUM: density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhototalm, RHOXSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOXSUM)
             # RHOFXSUM: fluid density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhofluidcur, RHOFXSUM)
+            interpolate!(i, j, weights, rhofluidcur[m], RHOFXSUM)
             # KXSUM: thermal conductivity interpolated to Vx nodes
-            interpolate!(i, j, weights, ktotalm, KXSUM)
+            interpolate!(i, j, weights, ktotalm[m], KXSUM)
             # PHIXSUM: porosity interpolated to Vx nodes
             interpolate!(i, j, weights, phim[m], PHIXSUM)
             # RXSUM: ηfluid/kϕ interpolated to Vx nodes
-            interpolate!(i, j, weights, etafluidcur/kphim, RXSUM)
+            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
             # WTXSUM: weight for bilinear interpolation to Vx nodes
             interpolate!(i, j, weights, 1.0, WTXSUM)
 
@@ -1046,15 +1575,15 @@ end
                 imax_vy
             )
             # RHOYSUM: density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhototalm, RHOYSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOYSUM)
             # RHOFYSUM: fluid density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhofluidcur, RHOFYSUM)
+            interpolate!(i, j, weights, rhofluidcur[m], RHOFYSUM)
             # KYSUM: thermal conductivity interpolated to Vy nodes
-            interpolate!(i, j, weights, ktotalm, KYSUM)
+            interpolate!(i, j, weights, ktotalm[m], KYSUM)
             # PHIYSUM: porosity interpolated to Vy nodes
             interpolate!(i, j, weights, phim[m], PHIYSUM)
             # RYSUM: ηfluid/kϕ interpolated to Vy nodes
-            interpolate!(i, j, weights, etafluidcur/kphim, RYSUM)
+            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
             # WTYSUM: weight for bilinear interpolation to Vy nodes
             interpolate!(i, j, weights, 1.0, WTYSUM)
             
@@ -1072,93 +1601,141 @@ end
                 imax_p
             )
             # GGGPSUM: shear modulus interpolated to P nodes
-            interpolate!(i, j, weights, inv(gggtotalm), GGGPSUM)
+            interpolate!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
             # SXXSUM: σ'xx interpolated to P nodes
             interpolate!(i, j, weights, sxxm[m], SXXSUM)
             # RHOSUM: density interpolated to P nodes
-            interpolate!(i, j, weights, rhototalm, RHOSUM)
+            interpolate!(i, j, weights, rhototalm[m], RHOSUM)
             # RHOCPSUM: volumetric heat capacity interpolated to P nodes
-            interpolate!(i, j, weights, rhocptotalm, RHOCPSUM)
+            interpolate!(i, j, weights, rhocptotalm[m], RHOCPSUM)
             # ALPHASUM: thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphasolidm[tm[m]], ALPHASUM)
+            interpolate!(i, j, weights, alphasolidcur[m], ALPHASUM)
             # ALPHAFSUM: fluid thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphafluidm[tm[m]], ALPHAFSUM)
+            interpolate!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
             # HRSUM: radioactive heating interpolated to P nodes
-            interpolate!(i, j, weights, hrtotalm, HRSUM)
-            # TKSUM: temperature interpolated to P nodes
-            interpolate!(i, j, weights, tkm[m]*rhocptotalm, TKSUM)
+            interpolate!(i, j, weights, hrtotalm[m], HRSUM)
             # PHISUM: porosity interpolated to P nodes
             interpolate!(i, j, weights, phim[m], PHISUM)
+            # TKSUM: heat capacity interpolated to P nodes
+            interpolate!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
             # WTPSUM: weight for bilinear interpolation to P nodes
             interpolate!(i, j, weights, 1.0, WTPSUM)
         end
-        # reduce interpolation arrays
-        # ETA = reduce(+, WTPSUM, dims=3)
 
-
-# Tue 12
+        
         # ---------------------------------------------------------------------
         # compute physical properties of basic nodes
         # ---------------------------------------------------------------------
-        # compute_properties_basic_nodes!(sp, dp, interp_arrays)
+        compute_basic_node_properties!(
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            ETA0,
+            ETA,
+            YNY,
+            GGG,
+            SXY0,
+            COH,
+            TEN,
+            FRI 
+        )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of Vx nodes
         # ---------------------------------------------------------------------
-        # compute_properties_vx_nodes!(sp, dp, interp_arrays)
+        compute_vx_node_properties!(
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            RX
+        )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of Vy nodes
         # ---------------------------------------------------------------------
-        # compute_properties_vy_nodes!(sp, dp, interp_arrays)
+        compute_vy_node_properties!(
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            RY
+        )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
         # # compute physical properties of P nodes
         # ---------------------------------------------------------------------
-        # compute_properties_p_nodes!(sp, dp, interp_arrays)
+        compute_p_node_properties!(
+            GGGPSUM,
+            SXXSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            PHISUM,
+            TKSUM,
+            WTPSUM,
+            GGGP,
+            SXX0,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            PHI,
+            BETTAPHI,
+            tk1  
+        )
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
-        # # applying thermal boundary conditions for interpolated temperature
+        # applying thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
-        # apply_thermal_bc(sp, dp, tk1)
+        apply_insulating_boundary_conditions!(tk1)
 
 
-# Tue 12        
         # ---------------------------------------------------------------------
-        # # compute gravity solution
+        # compute gravity solution
+        # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        # compute_gravity_solution!(sp, dp, interp_arrays)
+        compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
 
 
-# Tue 12        
-        # ---------------------------------------------------------------------
-        # # compute gravitational acceleration
-        # ---------------------------------------------------------------------
-        # compute_grav_accel!(sp, dp, interp_arrays)
-
-
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # probe increasing computational timestep
         # ---------------------------------------------------------------------
         # dt = min(dt*dtkoefup, dtelastic)
 
 
-# Tue 12        
+# Wed 13        
         # ---------------------------------------------------------------------
         # # save initial viscosity, yielding nodes
         # ---------------------------------------------------------------------
 
 
-# Wed 13        
+# Thu 14        
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
@@ -1328,9 +1905,10 @@ end
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------
-        if timestep % 20 == 0
-            println("timestep: ", timestep)
-        end
+        next!(p)
+        # if timestep % 20 == 0
+        #     println("timestep: ", timestep)
+        # end
 
         if timesum > endtime
             break
@@ -1359,10 +1937,10 @@ Runs the simulation with the given parameters.
     - exit code
 """
 function run_simulation(
-    xsize=140000.0,
-    ysize=140000.0,
-    rplanet=50000.0,
-    rcrust=48000.0,
+    xsize=140_000.0,
+    ysize=140_000.0,
+    rplanet=50_000.0,
+    rcrust=48_000.0,
     Nx=141,
     Ny=141,
     Nxmc=4,
