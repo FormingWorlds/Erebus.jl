@@ -563,19 +563,18 @@ function kphi(kphim0, phim, phim0)
 end
 
 
-@doc raw"""
-    $(FUNCTIONNAME)(f, ratio, E, tau, time)   
+"""
 Compute radiogenic heat production of isotope mixture.
 
 $(SIGNATURES)
 
 # Details
 
-    - `f`: fraction of radioactive matter [atoms/kg]
-    - `ratio`: initial ratio of radioactive to non-radioactive isotopes
-    - `E`: heat energy [J]
-    - `tau`: exp decay mean lifetime ``\tau=\frac{t_{1/2}}{\log{2}}`` [s]
-    - `time`: time elapsed since start of radioactive decay [s]
+    - f: fraction of radioactive matter [atoms/kg]
+    - ratio: initial ratio of radioactive to non-radioactive isotopes
+    - E: heat energy [J]
+    - tau: exp decay mean lifetime ``\\tau=\\frac{t_{1/2}}{\\log{2}}`` [s]
+    - time: time elapsed since start of radioactive decay [s]
 
 # Returns
 
@@ -587,18 +586,18 @@ end
 
 
 """
-    $(FUNCTIONNAME)(timesum, sp)
 Compute radiogenic heat production of 26Al and 60Fe isotopes.
 
 $(SIGNATURES)
 
 # Details
-    - `timesum`: time elapsed since initial conditions at start of simulation
-    - `sp`: static simulation parameters
+    - timesum: time elapsed since initial conditions at start of simulation
+    - sp: static simulation parameters
 
 # Returns
-    - `hrsolidm`: radiogenic heat production of 26Al [W/m^3]
-    - `hrfluidm`: radiogenic heat production of 60Fe [W/m^3]
+
+    - hrsolidm: radiogenic heat production of 26Al [W/m^3]
+    - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
 """
 function calculate_radioactive_heating(timesum, sp::StaticParameters)
     @unpack hr_al,
