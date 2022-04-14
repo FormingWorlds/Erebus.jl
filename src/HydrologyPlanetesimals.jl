@@ -537,9 +537,9 @@ $(SIGNATURES)
     - ktotal: total thermal conductivity of mixed phase [W/m/K]
 """
 function ktotal(ksolid, kfluid, phi)
-    return (ksolid * kfluid/2 + ((ksolid * (3*phi-2)
+    return ((ksolid * kfluid/2 + ((ksolid * (3*phi-2)
                                  + kfluid * (1.0-3.0*phi))^2)/16)^0.5
-            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4
+            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4)
 end
 
 
@@ -1055,38 +1055,37 @@ function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
             updateindex!(LP, +, 1.0, gk, gk)
             RP[gk] = 0.0
         else
-            # internal points: temperature equation
-            # ∂²ϕ/∂x² + ∂²ϕ/∂y² = 2/3⋅4Gπρ
+            # internal points: 2D Poisson equation: gravitational potential Φ
+            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
             #
-            #           ϕ₂
+            #           Φ₂
             #           |
             #           |
-            #    ϕ₁-----ϕ₃-----ϕ₅
+            #    Φ₁-----Φ₃-----Φ₅
             #           |
             #           |
-            #           ϕ₄
+            #           Φ₄
             #
             # density gradients
-            dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
-            dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
-            # fill system of equations
-            # LHS
-            updateindex!(LP, +, 1.0/dx^2, gk, gk-Ny1) # ϕ₁
-            updateindex!(LP, +, 1.0/dy^2, gk, gk-1) # ϕ₂
-            updateindex!(LP, +, -2.0/dx^2 -2.0/dy^2, gk, gk) # ϕ₃
-            updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # ϕ₄
-            updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # ϕ₅
-            # RHS
-            RP[gk] = -2.0/3.0 * 4.0 * G * pi * RHO[i, j]
+            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+            # fill system of equations: LHS (11.11)
+            updateindex!(LP, +, 1.0/dx^2, gk, gk-Ny1) # Φ₁
+            updateindex!(LP, +, 1.0/dy^2, gk, gk-1) # Φ₂
+            updateindex!(LP, +, -2.0/dx^2 -2.0/dy^2, gk, gk) # Φ₃
+            updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # Φ₄
+            updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # Φ₅
+            # fill system of equations: RHS (11.11)
+            RP[gk] = -4.0 * 2.0/3.0 * π * G * RHO[i, j]
         end
     end
     # solve system of equations
     SP = LP \ RP
     # reshape solution vector to 2D array
     ϕ = reshape(SP, Ny1, Nx1)
-    # gx = -∂ϕ/∂x
+    # gx = -∂ϕ/∂x (11.12)
     gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
-    # gy = -∂ϕ/∂y
+    # gy = -∂ϕ/∂y (11.13)   
     gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
 end # @timeit to "compute_gravity_solution!"
     return nothing
