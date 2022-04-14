@@ -28,17 +28,17 @@ $(TYPEDFIELDS)
     hr_fe::Bool = true
     # model size, geometry, and resolution
     "horizontal model size [m]"
-    xsize::Float64
+    xsize::Float64 = 140_000.0
     "vertical model size [m]"
-    ysize::Float64
+    ysize::Float64 = 140_000.0
     "horizontal center of model"
     xcenter::Float64 = xsize / 2
     "vertical center of model"
     ycenter::Float64 = ysize / 2  
     "basic grid resolution in x direction (horizontal)"
-    Nx::Int 
+    Nx::Int64 = 141
     "basic grid resolution in y direction (vertical)"	
-    Ny::Int
+    Ny::Int64 = 141
     "Vx, Vy, P grid resolution in x direction (horizontal)"
     Nx1::Int64 = Nx + 1
     "Vx/Vy/P grid resolution in y direction (vertical)"
@@ -85,16 +85,16 @@ $(TYPEDFIELDS)
     imax_p::Int64 = Ny
     # planetary parameters
     "planetary radius [m]"
-    rplanet::Int64
+    rplanet::Float64 = 50_000.0
     "crust radius [m]"
-    rcrust::Int64
+    rcrust::Float64 = 48_000.0
     "surface pressure [Pa]"
     psurface::Float64 = 1e+3
     # marker count and initial spacing
     "number of markers per cell in horizontal direction"
-    Nxmc::Int
+    Nxmc::Int64 = 4
     "number of markers per cell in vertical direction"
-    Nymc::Int
+    Nymc::Int64 = 4
     "marker grid resolution in horizontal direction"
     Nxm::Int64 = (Nx - 1) * Nxmc
     "marker grid resolution in vertical direction"
@@ -618,7 +618,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Solid phase 26Al radiogenic heat production [W/m^3]
         hrsolidm = @SVector [Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
     else
-        hrsolidm = @SVector [0.0, 0.0, 0.0]
+        hrsolidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end    
     #60Fe: planet ✓, crust ×, space ×
     if hr_fe
@@ -627,7 +627,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Fluid phase 60Fe radiogenic heat production [W/m^3]
         hrfluidm = @SVector [Q_fe*rhofluidm[1], 0.0, 0.0]
     else
-        hrfluidm = @SVector [0.0, 0.0, 0.0]
+        hrfluidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end
     return hrsolidm, hrfluidm
 end
@@ -1935,10 +1935,10 @@ Runs the simulation with the given parameters.
     - exit code
 """
 function run_simulation(
-    xsize=140000.0,
-    ysize=140000.0,
-    rplanet=50000.0,
-    rcrust=48000.0,
+    xsize=140_000.0,
+    ysize=140_000.0,
+    rplanet=50_000.0,
+    rcrust=48_000.0,
     Nx=141,
     Ny=141,
     Nxmc=4,
