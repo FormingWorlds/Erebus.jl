@@ -664,16 +664,18 @@ $(SIGNATURES)
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # @timeit to "fix_weights" begin
-    @inbounds j = trunc(Int, (x - x_axis[1]) / dx) + 1
-    @inbounds i = trunc(Int, (y - y_axis[1]) / dy) + 1
-    @inbounds dxmj = x - x_axis[min(max(j, jmin), jmax)]
-    @inbounds dymi = y - y_axis[min(max(i, imin), imax)]
+    @inbounds begin
+    j = min(max(trunc(Int, (x-x_axis[1])/dx)+1, jmin), jmax)
+    i = min(max(trunc(Int, (y-y_axis[1])/dy)+1, imin), imax)
+    dxmj = x - x_axis[j]
+    dymi = y - y_axis[i]
+    end # @inbounds
     weights = SVector(
         (1.0-dymi/dy) * (1.0-dxmj/dx),
         (dymi/dy) * (1.0-dxmj/dx),
         (1.0-dymi/dy) * (dxmj/dx),
         (dymi/dy) * (dxmj/dx)
-        )
+    )
 # end # @timeit to "fix_weights"
     return i, j, weights
 end # function fix_weights

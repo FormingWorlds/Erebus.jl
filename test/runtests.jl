@@ -71,9 +71,230 @@ using StaticArrays
             1000., sp3) == (v, w)
     end
 
-    # @testset "fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)" begin
+    @testset "fix_weights(x,y,x_axis,y_axis,dx,dy,jmin,jmax,imin,imax)" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        # from madcph.m, line 38ff
+        # Basic nodes
+        x=0:dx:xsize
+        y=0:dy:ysize
+        # Vx-Nodes
+        xvx=0:dx:xsize+dy
+        yvx=-dy/2:dy:ysize+dy/2
+        # Vy-nodes
+        xvy=-dx/2:dx:xsize+dx/2
+        yvy=0:dy:ysize+dy
+        # P-Nodes
+        xp=-dx/2:dx:xsize+dx/2
+        yp=-dy/2:dy:ysize+dy/2
 
-    #     # sp = HydrologyPlanetesimals.StaticParameters()
-    # end
+        @testset "basic nodes" begin
+        # from madcph.m, line 373ff
+        jmin, jmax = sp.jmin_basic, sp.jmax_basic
+        imin, imax = sp.imin_basic, sp.imax_basic
+        function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
+            j=trunc(Int, (xm-x_axis[1])/dx)+1;
+            i=trunc(Int, (ym-y_axis[1])/dy)+1;
+            if j<1
+                j=1
+            elseif j>Nx-1 
+                j=Nx-1
+            end
+            if i<1 
+                i=1
+            elseif i>Ny-1
+                i=Ny-1
+            end
+            dxmj=xm-x[j];
+            dymi=ym-y[i];
+            wtmij=(1-dxmj/dx)*(1-dymi/dy);
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy);
+            wtmi1j1=(dxmj/dx)*(dymi/dy);
+            return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
+        end
+        # top left
+        xm = -x[1]
+        ym = -y[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, x, y, dx, dy, jmin, jmax, imin, imax) == fix_basic(
+            xm, ym, x, y, dx, dy)
+        # bottom left
+        xm = x[1]
+        ym = y[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, x, y, dx, dy, jmin, jmax, imin, imax) == fix_basic(
+            xm, ym, x, y, dx, dy)
+        # top right
+        xm = x[end]
+        ym = y[1]
+        j=trunc(Int, (xm-x[1])/dx)+1;
+        i=trunc(Int, (ym-y[1])/dy)+1;
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, x, y, dx, dy, jmin, jmax, imin, imax) == fix_basic(
+            xm, ym, x, y, dx, dy)
+        # bottom right
+        xm = x[end]
+        ym = y[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, x, y, dx, dy, jmin, jmax, imin, imax) == fix_basic(
+            xm, ym, x, y, dx, dy)
+        end # testset "basic nodes"
+
+        @testset "Vx nodes" begin
+        # from madcph.m, line 434ff
+        jmin, jmax = sp.jmin_vx, sp.jmax_vx
+        imin, imax = sp.imin_vx, sp.imax_vx
+        function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
+            j=trunc(Int, (xm-x_axis[1])/dx)+1;
+            i=trunc(Int, (ym-y_axis[1])/dy)+1;
+            if j<1
+                j=1
+            elseif j>Nx-1 
+                j=Nx-1
+            end
+            if i<1 
+                i=1
+            elseif i>Ny
+                i=Ny
+            end
+            dxmj=xm-xvx[j];
+            dymi=ym-yvx[i];
+            wtmij=(1-dxmj/dx)*(1-dymi/dy);
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy);
+            wtmi1j1=(dxmj/dx)*(dymi/dy);
+            return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
+        end
+        # top left
+        xm = -xvx[1]
+        ym = -yvx[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvx, yvx, dx, dy, jmin, jmax, imin, imax) == fix_vx(
+            xm, ym, xvx, yvx, dx, dy)
+        # bottom left
+        xm = xvx[1]
+        ym = yvx[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvx, yvx, dx, dy, jmin, jmax, imin, imax) == fix_vx(
+            xm, ym, xvx, yvx, dx, dy)
+        # top right
+        xm = xvx[end]
+        ym = yvx[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvx, yvx, dx, dy, jmin, jmax, imin, imax) == fix_vx(
+            xm, ym, xvx, yvx, dx, dy)
+        # bottom right
+        xm = xvx[end]
+        ym = yvx[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvx, yvx, dx, dy, jmin, jmax, imin, imax) == fix_vx(
+            xm, ym, xvx, yvx, dx, dy)
+        end # testset "Vx nodes"
+
+        @testset "Vy nodes" begin
+        # from madcph.m, line 484ff
+        jmin, jmax = sp.jmin_vy, sp.jmax_vy
+        imin, imax = sp.imin_vy, sp.imax_vy
+        function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
+            j=trunc(Int, (xm-x_axis[1])/dx)+1;
+            i=trunc(Int, (ym-y_axis[1])/dy)+1;
+            if j<1
+                j=1
+            elseif j>Nx 
+                j=Nx
+            end
+            if i<1 
+                i=1
+            elseif i>Ny-1
+                i=Ny-1
+            end
+            dxmj=xm-xvy[j];
+            dymi=ym-yvy[i];
+            wtmij=(1-dxmj/dx)*(1-dymi/dy);
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy);
+            wtmi1j1=(dxmj/dx)*(dymi/dy);
+            return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
+        end
+        # top left
+        xm = -xvy[1]
+        ym = -yvy[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvy, yvy, dx, dy, jmin, jmax, imin, imax) == fix_vy(
+            xm, ym, xvy, yvy, dx, dy)
+        # bottom left
+        xm = xvy[1]
+        ym = yvy[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvy, yvy, dx, dy, jmin, jmax, imin, imax) == fix_vy(
+            xm, ym, xvy, yvy, dx, dy)
+        # top right
+        xm = xvy[end]
+        ym = yvy[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvy, yvy, dx, dy, jmin, jmax, imin, imax) == fix_vy(
+            xm, ym, xvy, yvy, dx, dy)
+        # bottom right
+        xm = xvy[end]
+        ym = yvy[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xvy, yvy, dx, dy, jmin, jmax, imin, imax) == fix_vy(
+            xm, ym, xvy, yvy, dx, dy)
+        end # testset "Vy nodes"
+    
+        @testset "P nodes" begin
+        # from madcph.m, line 538ff
+        jmin, jmax = sp.jmin_p, sp.jmax_p
+        imin, imax = sp.imin_p, sp.imax_p
+        function fix_p(xm, ym, x_axis, y_axis, dx, dy)
+            j=trunc(Int, (xm-x_axis[1])/dx)+1;
+            i=trunc(Int, (ym-y_axis[1])/dy)+1;
+            if j<1
+                j=1
+            elseif j>Nx 
+                j=Nx
+            end
+            if i<1 
+                i=1
+            elseif i>Ny
+                i=Ny
+            end
+            dxmj=xm-xp[j];
+            dymi=ym-yp[i];
+            wtmij=(1-dxmj/dx)*(1-dymi/dy);
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy);
+            wtmi1j1=(dxmj/dx)*(dymi/dy);
+            return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
+        end
+        # top left
+        xm = -xp[1]
+        ym = -yp[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xp, yp, dx, dy, jmin, jmax, imin, imax) == fix_p(
+            xm, ym, xp, yp, dx, dy)
+        # bottom left
+        xm = xp[1]
+        ym = yp[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xp, yp, dx, dy, jmin, jmax, imin, imax) == fix_p(
+            xm, ym, xp, yp, dx, dy)
+        # top right
+        xm = xp[end]
+        ym = yp[1]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xp, yp, dx, dy, jmin, jmax, imin, imax) == fix_p(
+            xm, ym, xp, yp, dx, dy)
+        # bottom right
+        xm = xp[end]
+        ym = yp[end]
+        @test HydrologyPlanetesimals.fix_weights(
+            xm, ym, xp, yp, dx, dy, jmin, jmax, imin, imax) == fix_p(
+            xm, ym, xp, yp, dx, dy)
+        end # testset "P nodes"    
+    end
    
 end
