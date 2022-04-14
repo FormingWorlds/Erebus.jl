@@ -2,6 +2,7 @@ module HydrologyPlanetesimals
 
 using Base.Threads
 using SparseArrays
+using ExtendableSparse
 using MAT
 using DocStringExtensions
 using Parameters
@@ -27,17 +28,17 @@ $(TYPEDFIELDS)
     hr_fe::Bool = true
     # model size, geometry, and resolution
     "horizontal model size [m]"
-    xsize::Float64
+    xsize::Float64 = 140_000.0
     "vertical model size [m]"
-    ysize::Float64
+    ysize::Float64 = 140_000.0
     "horizontal center of model"
     xcenter::Float64 = xsize / 2
     "vertical center of model"
     ycenter::Float64 = ysize / 2  
     "basic grid resolution in x direction (horizontal)"
-    Nx::Int 
+    Nx::Int64 = 141
     "basic grid resolution in y direction (vertical)"	
-    Ny::Int
+    Ny::Int64 = 141
     "Vx, Vy, P grid resolution in x direction (horizontal)"
     Nx1::Int64 = Nx + 1
     "Vx/Vy/P grid resolution in y direction (vertical)"
@@ -84,16 +85,16 @@ $(TYPEDFIELDS)
     imax_p::Int64 = Ny
     # planetary parameters
     "planetary radius [m]"
-    rplanet::Int64
+    rplanet::Float64 = 50_000.0
     "crust radius [m]"
-    rcrust::Int64
+    rcrust::Float64 = 48_000.0
     "surface pressure [Pa]"
     psurface::Float64 = 1e+3
     # marker count and initial spacing
     "number of markers per cell in horizontal direction"
-    Nxmc::Int
+    Nxmc::Int64 = 4
     "number of markers per cell in vertical direction"
-    Nymc::Int
+    Nymc::Int64 = 4
     "marker grid resolution in horizontal direction"
     Nxm::Int64 = (Nx - 1) * Nxmc
     "marker grid resolution in vertical direction"
@@ -536,9 +537,9 @@ $(SIGNATURES)
     - ktotal: total thermal conductivity of mixed phase [W/m/K]
 """
 function ktotal(ksolid, kfluid, phi)
-    return (ksolid * kfluid/2 + ((ksolid * (3*phi-2)
+    return ((ksolid * kfluid/2 + ((ksolid * (3*phi-2)
                                  + kfluid * (1.0-3.0*phi))^2)/16)^0.5
-            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4
+            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4)
 end
 
 
@@ -617,7 +618,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Solid phase 26Al radiogenic heat production [W/m^3]
         hrsolidm = @SVector [Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
     else
-        hrsolidm = @SVector [0.0, 0.0, 0.0]
+        hrsolidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end    
     #60Fe: planet ✓, crust ×, space ×
     if hr_fe
@@ -626,7 +627,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         # Fluid phase 60Fe radiogenic heat production [W/m^3]
         hrfluidm = @SVector [Q_fe*rhofluidm[1], 0.0, 0.0]
     else
-        hrfluidm = @SVector [0.0, 0.0, 0.0]
+        hrfluidm = @SVector zeros(3)#[0.0, 0.0, 0.0]
     end
     return hrsolidm, hrfluidm
 end
@@ -663,16 +664,18 @@ $(SIGNATURES)
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # @timeit to "fix_weights" begin
-    @inbounds j = trunc(Int, (x - x_axis[1]) / dx) + 1
-    @inbounds i = trunc(Int, (y - y_axis[1]) / dy) + 1
-    @inbounds dxmj = x - x_axis[min(max(j, jmin), jmax)]
-    @inbounds dymi = y - y_axis[min(max(i, imin), imax)]
+    @inbounds begin
+    j = min(max(trunc(Int, (x-x_axis[1])/dx)+1, jmin), jmax)
+    i = min(max(trunc(Int, (y-y_axis[1])/dy)+1, imin), imax)
+    dxmj = x - x_axis[j]
+    dymi = y - y_axis[i]
+    end # @inbounds
     weights = SVector(
         (1.0-dymi/dy) * (1.0-dxmj/dx),
         (dymi/dy) * (1.0-dxmj/dx),
         (1.0-dymi/dy) * (dxmj/dx),
         (dymi/dy) * (dxmj/dx)
-        )
+    )
 # end # @timeit to "fix_weights"
     return i, j, weights
 end # function fix_weights
@@ -1016,6 +1019,82 @@ end
 
 
 """
+Compute gravity solution in P nodes to obtain
+gravitational accelerations gx for Vx nodes, gy for Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    -
+
+# Returns
+
+- nothing
+"""
+function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+@timeit to "compute_gravity_solution!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        xcenter,
+        ycenter,
+        dx,
+        dy,
+        G = sp
+    # iterate over P nodes
+    for j=1:1:Nx1, i=1:1:Ny1 
+        # define global index in algebraic space
+        gk = (j-1) * Ny1 + i
+        # decide if external / boundary points
+        if i==1 ||
+            i==Ny1 ||
+            j==1 ||
+            j==Nx1 ||
+            distance(xp[j], yp[i], xcenter, ycenter) > xcenter/2
+            # boundary condition: ϕ = 0
+            updateindex!(LP, +, 1.0, gk, gk)
+            RP[gk] = 0.0
+        else
+            # internal points: 2D Poisson equation: gravitational potential Φ
+            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
+            #
+            #           Φ₂
+            #           |
+            #           |
+            #    Φ₁-----Φ₃-----Φ₅
+            #           |
+            #           |
+            #           Φ₄
+            #
+            # density gradients
+            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+            # fill system of equations: LHS (11.11)
+            updateindex!(LP, +, 1.0/dx^2, gk, gk-Ny1) # Φ₁
+            updateindex!(LP, +, 1.0/dy^2, gk, gk-1) # Φ₂
+            updateindex!(LP, +, -2.0/dx^2 -2.0/dy^2, gk, gk) # Φ₃
+            updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # Φ₄
+            updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # Φ₅
+            # fill system of equations: RHS (11.11)
+            RP[gk] = -4.0 * 2.0/3.0 * π * G * RHO[i, j]
+        end
+    end
+    # solve system of equations
+    SP = LP \ RP
+    # reshape solution vector to 2D array
+    ϕ = reshape(SP, Ny1, Nx1)
+    # gx = -∂ϕ/∂x (11.12)
+    gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
+    # gy = -∂ϕ/∂y (11.13)   
+    gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
+end # @timeit to "compute_gravity_solution!"
+    return nothing
+end # function compute_gravity_solution!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -1332,17 +1411,19 @@ function simulation_loop(sp::StaticParameters)
     # set up of matrices for global gravity/thermal/hydromechanical solutions
     # -------------------------------------------------------------------------
     # hydromechanical solution: LHS coefficient matrix
-    L = spzeros(Nx1*Ny1*6, Nx1*Ny1*6)
-    # hydromechanical solution: RHS Vector
+    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # hydromechanical solution: RHS vector
     R = zeros(Float64, Nx1*Ny1*6)
     # thermal solution: LHS coefficient matrix
-    LT = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # thermal solution: RHS Vector
+    LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # thermal solution: RHS vector
     RT = zeros(Float64, Nx1*Ny1)
     # gravity solution: LHS coefficient matrix
-    LP = spzeros(Nx1*Ny1, Nx1*Ny1)
-    # gravity solution: RHS Vector
+    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # gravity solution: RHS vector
     RP = zeros(Float64, Nx1*Ny1)
+    # gravity solution: solution matrix
+    SP = zeros(Float64, Nx1*Ny1)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
@@ -1629,23 +1710,16 @@ function simulation_loop(sp::StaticParameters)
 
 
         # ---------------------------------------------------------------------
-        # # applying thermal boundary conditions for interpolated temperature
+        # applying thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
 
-# Wed 13        
         # ---------------------------------------------------------------------
-        # # compute gravity solution
+        # compute gravity solution
+        # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        # compute_gravity_solution!(sp, dp, interp_arrays)
-
-
-# Wed 13        
-        # ---------------------------------------------------------------------
-        # # compute gravitational acceleration
-        # ---------------------------------------------------------------------
-        # compute_grav_accel!(sp, dp, interp_arrays)
+        compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
 
 
 # Wed 13        
@@ -1863,10 +1937,10 @@ Runs the simulation with the given parameters.
     - exit code
 """
 function run_simulation(
-    xsize=140000.0,
-    ysize=140000.0,
-    rplanet=50000.0,
-    rcrust=48000.0,
+    xsize=140_000.0,
+    ysize=140_000.0,
+    rplanet=50_000.0,
+    rcrust=48_000.0,
     Nx=141,
     Ny=141,
     Nxmc=4,
