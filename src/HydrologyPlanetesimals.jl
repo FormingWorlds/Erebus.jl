@@ -563,7 +563,7 @@ function kphi(kphim0, phim, phim0)
 end
 
 
-"""
+@doc raw"""
     $(FUNCTIONNAME)(f, ratio, E, tau, time)   
 Compute radiogenic heat production of isotope mixture.
 
@@ -574,7 +574,7 @@ $(SIGNATURES)
     - `f`: fraction of radioactive matter [atoms/kg]
     - `ratio`: initial ratio of radioactive to non-radioactive isotopes
     - `E`: heat energy [J]
-    - `tau`: exp decay mean lifetime $\tau=\frac{t_{1/2}}{\log{2}}$ [s]
+    - `tau`: exp decay mean lifetime ``\tau=\frac{t_{1/2}}{\log{2}}`` [s]
     - `time`: time elapsed since start of radioactive decay [s]
 
 # Returns
