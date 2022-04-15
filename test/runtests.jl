@@ -660,6 +660,7 @@ using Test
     @testset "compute node properties" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
         dx, dy = sp.dx, sp.dy
         xsize, ysize = sp.xsize, sp.ysize
         # from madcph.m, line 38ff
