@@ -726,12 +726,12 @@ $(SIGNATURES)
     - WTSUM: WT interpolation array
     - ETA0: ETA0 basic node array
     - ETA: ETA basic node array
-    - YNY: YNY basic node array
     - GGG: GGG basic node array
     - SXY0: SXY basic node array
     - COH: COH basic node array
     - TEN: TEN basic node array
     - FRI: FRI basic node array
+    - YNY: YNY basic node array
 
 # Returns
 
@@ -749,12 +749,12 @@ function compute_basic_node_properties!(
     WTSUM,
     ETA0,
     ETA,
-    YNY,
     GGG,
     SXY0,
     COH,
     TEN,
-    FRI
+    FRI,
+    YNY
 )
 # @timeit to "compute_basic_node_properties!" begin
 # @timeit to "reduce" begin
@@ -768,11 +768,13 @@ function compute_basic_node_properties!(
     WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    WTSUM[WTSUM .== 0.0] .= 1.0
+    WTSUM[WTSUM .<= 0.0] .= Inf
     ETA0 .= ETA0SUM ./ WTSUM
     ETA .= ETASUM ./ WTSUM
     YNY[ETA .< ETA0] .= true
     GGG .= GGGSUM .\ WTSUM
+    GGG[GGG .== Inf] .= 0.0
+    GGG[GGG .== -Inf] .= 0.0
     SXY0 .= SXYSUM ./ WTSUM
     COH .= COHSUM ./ WTSUM
     TEN .= TENSUM ./ WTSUM
@@ -830,7 +832,7 @@ function compute_vx_node_properties!(
     WTXSUM = reduce(+, WTXSUM, dims=3)[:, :, 1]    
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    WTXSUM[WTXSUM .== 0.0] .= 1.0
+    WTXSUM[WTXSUM .<= 0.0] .= Inf
     RHOX .= RHOXSUM ./ WTXSUM
     RHOFX .= RHOFXSUM ./ WTXSUM
     KX .= KXSUM ./ WTXSUM
@@ -994,7 +996,7 @@ Apply insulating boundary conditions to given array.
  x a b c d x         a a b c d d
 
  x e f g h x   ->    e e f g h h
- 
+
  x x x x x x]        e e f g h h]
  
 # Details
@@ -1116,48 +1118,48 @@ function simulation_loop(sp::StaticParameters)
     # unpack static simulation parameters
     # -------------------------------------------------------------------------
     @unpack xsize, ysize,
-    Nx, Ny,
-    Nx1, Ny1,
-    dx, dy,
-    jmin_basic, jmax_basic,
-    imin_basic, imax_basic,
-    jmin_vx, jmax_vx,
-    imin_vx, imax_vx,
-    jmin_vy, jmax_vy,
-    imin_vy, imax_vy,
-    jmin_p, jmax_p,
-    imin_p, imax_p,
-    rhosolidm,
-    rhofluidm,
-    etasolidm,
-    etasolidmm,
-    etafluidm,
-    etafluidmm,
-    rhocpsolidm,
-    rhocpfluidm,
-    alphasolidm,
-    alphafluidm,
-    ksolidm,
-    kfluidm,
-    start_hrsolidm,
-    start_hrfluidm,
-    gggsolidm,
-    frictsolidm,
-    cohessolidm,
-    tenssolidm,
-    kphim0,
-    etaphikoef,
-    phim0,
-    tmsilicate,
-    tmiron,
-    etamin,
-    nplast,
-    dtelastic,
-    start_step,
-    nsteps,
-    start_time, 
-    endtime,
-    start_marknum = sp
+        Nx, Ny,
+        Nx1, Ny1,
+        dx, dy,
+        jmin_basic, jmax_basic,
+        imin_basic, imax_basic,
+        jmin_vx, jmax_vx,
+        imin_vx, imax_vx,
+        jmin_vy, jmax_vy,
+        imin_vy, imax_vy,
+        jmin_p, jmax_p,
+        imin_p, imax_p,
+        rhosolidm,
+        rhofluidm,
+        etasolidm,
+        etasolidmm,
+        etafluidm,
+        etafluidmm,
+        rhocpsolidm,
+        rhocpfluidm,
+        alphasolidm,
+        alphafluidm,
+        ksolidm,
+        kfluidm,
+        start_hrsolidm,
+        start_hrfluidm,
+        gggsolidm,
+        frictsolidm,
+        cohessolidm,
+        tenssolidm,
+        kphim0,
+        etaphikoef,
+        phim0,
+        tmsilicate,
+        tmiron,
+        etamin,
+        nplast,
+        dtelastic,
+        start_step,
+        nsteps,
+        start_time, 
+        endtime,
+        start_marknum = sp
 
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
@@ -1191,10 +1193,10 @@ function simulation_loop(sp::StaticParameters)
     # y = @SVector [i for i = 0:dy:ysize]
     y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
     # physical node properties
-    # viscoplastic viscosity, Pa*s
-    ETA = zeros(Float64, Ny, Nx)
     # viscous viscosity, Pa*s
     ETA0 = zeros(Float64, Ny, Nx)
+    # viscoplastic viscosity, Pa*s
+    ETA = zeros(Float64, Ny, Nx)
     # shear modulus, Pa
     GGG = zeros(Float64, Ny, Nx)
     # epsilonxy, 1/s
@@ -1640,12 +1642,12 @@ function simulation_loop(sp::StaticParameters)
             WTSUM,
             ETA0,
             ETA,
-            YNY,
             GGG,
             SXY0,
             COH,
             TEN,
-            FRI 
+            FRI,
+            YNY
         )
 
 
