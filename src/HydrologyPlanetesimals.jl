@@ -1,13 +1,13 @@
 module HydrologyPlanetesimals
 
 using Base.Threads
-using SparseArrays
+using DocStringExtensions
 using ExtendableSparse
 using MAT
-using DocStringExtensions
 using Parameters
-using StaticArrays
 using ProgressMeter
+using SparseArrays
+using StaticArrays
 using TimerOutputs
 
 export run_simulation
@@ -989,10 +989,12 @@ end # function compute_p_node_properties!
 """
 Apply insulating boundary conditions to given array.
 
-
 [x x x x x x        [a a b c d d
+
  x a b c d x         a a b c d d
+
  x e f g h x   ->    e e f g h h
+ 
  x x x x x x]        e e f g h h]
  
 # Details
@@ -1723,20 +1725,20 @@ function simulation_loop(sp::StaticParameters)
         compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
 
 
-# Wed 13        
+# Fri 15       
         # ---------------------------------------------------------------------
         # # probe increasing computational timestep
         # ---------------------------------------------------------------------
         # dt = min(dt*dtkoefup, dtelastic)
 
 
-# Wed 13        
+# Fri 15        
         # ---------------------------------------------------------------------
         # # save initial viscosity, yielding nodes
         # ---------------------------------------------------------------------
 
 
-# Thu 14        
+# Fri 15/Sat 16/Mon 18        
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
@@ -1745,7 +1747,7 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Thu 14
+# Tue 19
         # ---------------------------------------------------------------------
         # # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
@@ -1754,7 +1756,7 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Thu 14
+# Tue 19
         # ---------------------------------------------------------------------
         # # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
@@ -1763,14 +1765,14 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Thu 14
+# Tue 19
         # ---------------------------------------------------------------------
         # # compute DSXXsubgrid, DSXYsubgrid
         # ---------------------------------------------------------------------
         # compute_dsxx_dsxy_subgrids!(sp, dp, interp_arrays)
 
 
-# Thu 14
+# Tue 19
         # ---------------------------------------------------------------------
         # # interpolate DSXX, DSXY to markers
         # ---------------------------------------------------------------------
@@ -1778,27 +1780,27 @@ function simulation_loop(sp::StaticParameters)
         #     # ~50 lines MATLAB 
         # end
 
-# Fri 15
+# Tue 19
         # ---------------------------------------------------------------------
         # # compute shear heating HS in P nodes
         # ---------------------------------------------------------------------
         # compute_HS_p_nodes!(sp, dp, interp_arrays)
 
 
-# Fri 15
+# Tue 19
         # ---------------------------------------------------------------------
         # # compute adiabatic heating HA in P nodes
         # ---------------------------------------------------------------------
         # compute_HA_p_nodes!(sp, dp, interp_arrays)
 
 
-# Fri 15
+# Wed 20
         # ---------------------------------------------------------------------
         # # perform thermal iterations
         # ---------------------------------------------------------------------
         # # ~100 lines MATLAB
 
-# Sat 16
+# Thu 21
         # ---------------------------------------------------------------------
         # # apply subgrid temperature diffusion on markers
         # ---------------------------------------------------------------------
@@ -1807,7 +1809,7 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Sat 16
+# Thu 21
         # ---------------------------------------------------------------------
         # ---------------------------------------------------------------------
         # # compute DTsubgrid
@@ -1815,7 +1817,7 @@ function simulation_loop(sp::StaticParameters)
         # compute_DT_subgrid!(sp, dp, interp_arrays)
 
 
-# Sat 16
+# Thu 21
         # ---------------------------------------------------------------------
         # ---------------------------------------------------------------------
         # # interpolate DT to markers
@@ -1825,7 +1827,7 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Sat 16
+# Fri 22
         # ---------------------------------------------------------------------
         # ---------------------------------------------------------------------
         # # update porosity on markers
@@ -1835,28 +1837,28 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Mon 18
+# Fri 22
         # ---------------------------------------------------------------------
         # # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         # compute_v_fluid_p_nodes(sp, dp, interp_arrays)
 
 
-# Mon 18
+# Sat 22
         # ---------------------------------------------------------------------
         # # compute velocity in P nodes
         # ---------------------------------------------------------------------
         # compute_v_p_nodes!(sp, dp, interp_arrays)
 
 
-# Mon 18
+# Sat 22
         # ---------------------------------------------------------------------
         # # compute rotation rate in basic nodes
         # ---------------------------------------------------------------------
         # compute_ω_basic_nodes!(sp, dp, interp_arrays)
 
 
-# Tue 19
+# Mon 24
         # ---------------------------------------------------------------------
         # # move markers with RK4
         # ---------------------------------------------------------------------
@@ -1865,19 +1867,19 @@ function simulation_loop(sp::StaticParameters)
         # end
 
 
-# Wed 20
+# Tue 25
         # ---------------------------------------------------------------------
         # # backtrack P nodes: Ptotal with RK4
         # ---------------------------------------------------------------------
 
 
-# Thu 21
+# Wed 26
         # ---------------------------------------------------------------------
         # # backtrack P nodes: Pfluid with RK1/2/3
         # ---------------------------------------------------------------------
 
 
-# Fri 22
+# Thu 27
         # ---------------------------------------------------------------------
         # # replenish sparse areas with additional markers
         # ---------------------------------------------------------------------
@@ -1885,24 +1887,24 @@ function simulation_loop(sp::StaticParameters)
         #     # ~100 lines MATLAB
         # end
 
-
+# Fri 28
         # ---------------------------------------------------------------------
         # # update timesum
         # ---------------------------------------------------------------------
 
-
+# Fri 28
         # ---------------------------------------------------------------------
         # # save data for analysis and visualization
         # ---------------------------------------------------------------------
 
-
+# Fri 28
         # ---------------------------------------------------------------------
         # # save old stresses - RMK: not used anywhere in code ?
         # ---------------------------------------------------------------------
         # # sxxm00 = sxxm 
         # # sxym00 = sxym    
 
-
+# Fri 28
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------

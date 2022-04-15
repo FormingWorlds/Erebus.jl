@@ -295,6 +295,38 @@ using StaticArrays
             xm, ym, xp, yp, dx, dy, jmin, jmax, imin, imax) == fix_p(
             xm, ym, xp, yp, dx, dy)
         end # testset "P nodes"    
-    end
+    end # testset "fix_weights"
    
+    @testset "interpolate!(i,j,weights,property,grid)" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        jmin, jmax = sp.jmin_basic, sp.jmax_basic
+        imin, imax = sp.imin_basic, sp.imax_basic
+        x=0:dx:xsize
+        y=0:dy:ysize    
+        xm = -x[1]
+        ym = -y[1]
+        # sample interpolation array
+        grid = zeros(Ny, Nx, Base.Threads.nthreads())
+        property_1 = rand()
+        property_2 = rand()
+        i, j, weights = HydrologyPlanetesimals.fix_weights(
+            xm, ym, x, y, dx, dy, jmin, jmax, imin, imax)
+        # interpolate 1
+        HydrologyPlanetesimals.interpolate!(i, j, weights, property_1, grid)
+        # check
+        @test grid[i, j] == property_1 * weights[1]
+        @test grid[i+1, j] == property_1 * weights[2]
+        @test grid[i, j+1] == property_1 * weights[3]
+        @test grid[i+1, j+1] == property_1 * weights[4]
+        # interpolate 2
+        HydrologyPlanetesimals.interpolate!(i, j, weights, property_2, grid)
+        # check
+        @test grid[i, j] == (property_1 + property_2)  * weights[1]
+        @test grid[i+1, j] == (property_1 + property_2) * weights[2]
+        @test grid[i, j+1] == (property_1 + property_2) * weights[3]
+        @test grid[i+1, j+1] == (property_1 + property_2) * weights[4]
+    end # testset "interpolate!"
 end
