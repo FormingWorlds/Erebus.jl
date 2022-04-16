@@ -1,6 +1,6 @@
 # HydrologyPlanetesimals
 
-[![CI](https://github.com/BeatHubmann/HydrologyPlanetesimals.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/BeatHubmann/HydrologyPlanetesimals.jl/actions/workflows/CI.yml)
+[![CI](https://github.com/BeatHubmann/HydrologyPlanetesimals.jl/workflows/CI/badge.svg?branch=main)](https://github.com/BeatHubmann/HydrologyPlanetesimals.jl/actions/workflows/CI.yml)
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://BeatHubmann.github.io/HydrologyPlanetesimals.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://BeatHubmann.github.io/HydrologyPlanetesimals.jl/dev)
 [![Coverage](https://codecov.io/gh/BeatHubmann/HydrologyPlanetesimals.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/BeatHubmann/HydrologyPlanetesimals.jl)
