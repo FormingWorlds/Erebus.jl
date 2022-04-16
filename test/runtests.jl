@@ -1,3 +1,4 @@
+using ExtendableSparse
 using HydrologyPlanetesimals
 using Parameters
 using StaticArrays
@@ -1322,4 +1323,120 @@ using Test
             @test t[:, j] == t[:, j-1]
         end
     end # testset "apply_insulating_boundary_conditions!()"
+
+    @testset "compute_gravity_solution!()" begin
+        xsize = 35_000.0
+        ysize = 35_000.0
+        rplanet = 12_500.0
+        rcrust = 12_000.0
+        Nx = 35
+        Ny = 35
+        sp = HydrologyPlanetesimals.StaticParameters(
+            xsize=xsize,
+            ysize=ysize,
+            rplanet=rplanet,
+            rcrust=rcrust,
+            Nx=Nx,
+            Ny=Ny
+        )
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        G = sp.G
+        # P nodes
+        xp=-dx/2:dx:xsize+dx/2
+        yp=-dy/2:dy:ysize+dy/2
+        LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+        RP = zeros(Float64, Nx1*Ny1)
+        gx = zeros(Float64, Ny1, Nx1)
+        gy = zeros(Float64, Ny1, Nx1)
+        LP_ver = zeros(Nx1*Ny1, Nx1*Ny1)
+        RP_ver = zeros(Float64, Nx1*Ny1)
+        FI_ver = zeros(Float64, Ny1, Nx1)
+        gx_ver = zeros(Float64, Ny1, Nx1)
+        gy_ver = zeros(Float64, Ny1, Nx1)
+        # simulate density field RHO
+        RHO = rand(1:0.1:7000, Ny1, Nx1)
+        # compute gravity solution
+        HydrologyPlanetesimals.compute_gravity_solution!(
+            LP,
+            RP,
+            RHO,
+            xp,
+            yp,
+            gx,
+            gy,
+            sp
+        )
+        # verification, from madcph.m, lines 680ff
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Define global index in algebraic space
+                gk=(j-1)*Ny1+i
+                # Distance from the model centre
+                rnode=((xp[j]-xsize/2)^2+(yp[i]-ysize/2)^2)^0.5
+                # External points
+                if rnode>xsize/2 || i==1 || i==Ny1 || j==1 || j==Nx1
+                    # Boundary Condition
+                    # PHI=0
+                    LP_ver[gk,gk]=1; # Left part
+                    RP_ver[gk]=0; # Right part
+                else
+                    # Internal points: Temperature eq.
+                    # d2PHI/dx^2+d2PHI/dy^2=2/3*4*G*pi*RHO
+                    #          PHI2
+                    #           |
+                    #           |
+                    #  PHI1----PHI3----PHI5
+                    #           |
+                    #           |
+                    #          PHI4
+                    #
+                    # Density gradients
+                    dRHOdx=(RHO[i,j+1]-RHO[i,j-1])/2/dx
+                    dRHOdy=(RHO[i+1,j]-RHO[i-1,j])/2/dy
+                    # Left part
+                    LP_ver[gk,gk-Ny1]=1/dx^2; # PHI1
+                    LP_ver[gk,gk-1]=1/dy^2; # PHI2
+                    LP_ver[gk,gk]=-2/dx^2-2/dy^2; # PHI3
+                    LP_ver[gk,gk+1]=1/dy^2; # PHI4
+                    LP_ver[gk,gk+Ny1]=1/dx^2; # PHI5
+                    # Right part
+                    RP_ver[gk]=2/3*4*G*pi*RHO[i,j]
+                end
+            end
+        end
+        # Solving matrixes
+        SP_ver=LP_ver\RP_ver # Obtaining algebraic vector of solutions SP[]
+        # Reload solutions SP[] to geometrical array PHI[]
+        # Going through all grid points
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Compute global index
+                gk=(j-1)*Ny1+i
+                # Reload solution
+                FI_ver[i,j]=SP_ver[gk]
+            end
+        end
+        # Compute gravity acceleration
+        # gx
+        for j=1:1:Nx
+            for i=1:1:Ny1
+                # gx=-dPHI/dx
+                gx_ver[i,j]=-(FI_ver[i,j+1]-FI_ver[i,j])/dx
+            end
+        end
+        # gy
+        for j=1:1:Nx1
+            for i=1:1:Ny
+                # gy=-dPHI/dy
+                gy_ver[i,j]=-(FI_ver[i+1,j]-FI_ver[i,j])/dy
+            end
+        end
+        # test
+        for j=1:1:Nx, i=1:1:Ny
+            @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-6
+            @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-6
+        end
+    end # testset "compute_gravity_solution!()"
 end

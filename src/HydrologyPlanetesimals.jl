@@ -1052,11 +1052,13 @@ function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
         # decide if external / boundary points
-        if i==1 ||
+        if (
+            i==1 ||
             i==Ny1 ||
             j==1 ||
             j==Nx1 ||
-            distance(xp[j], yp[i], xcenter, ycenter) > xcenter/2
+            distance(xp[j], yp[i], xcenter, ycenter) > xcenter
+        )
             # boundary condition: ϕ = 0
             updateindex!(LP, +, 1.0, gk, gk)
             RP[gk] = 0.0
@@ -1082,11 +1084,11 @@ function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
             updateindex!(LP, +, 1.0/dy^2, gk, gk+1) # Φ₄
             updateindex!(LP, +, 1.0/dx^2, gk, gk+Ny1) # Φ₅
             # fill system of equations: RHS (11.11)
-            RP[gk] = -4.0 * 2.0/3.0 * π * G * RHO[i, j]
+            RP[gk] = 4.0 * 2.0/3.0 * π * G * RHO[i, j]
         end
     end
     # solve system of equations
-    SP = LP \ RP
+    SP = LP \ RP # implicit: flush!(LP)
     # reshape solution vector to 2D array
     ϕ = reshape(SP, Ny1, Nx1)
     # gx = -∂ϕ/∂x (11.12)
