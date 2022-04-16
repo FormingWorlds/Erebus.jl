@@ -768,17 +768,14 @@ function compute_basic_node_properties!(
     WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    WTSUM[WTSUM .<= 0.0] .= Inf
-    ETA0 .= ETA0SUM ./ WTSUM
-    ETA .= ETASUM ./ WTSUM
-    YNY[ETA .< ETA0] .= true
-    GGG .= GGGSUM .\ WTSUM
-    GGG[GGG .== Inf] .= 0.0
-    GGG[GGG .== -Inf] .= 0.0
-    SXY0 .= SXYSUM ./ WTSUM
-    COH .= COHSUM ./ WTSUM
-    TEN .= TENSUM ./ WTSUM
-    FRI .= FRISUM ./ WTSUM
+    ETA0[WTSUM.>0.0] .= ETA0SUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
+    ETA[WTSUM.>0.0] .= ETASUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
+    YNY[ETA.<ETA0] .= true
+    GGG[WTSUM.>0.0] .= GGGSUM[WTSUM.>0.0] .\ WTSUM[WTSUM.>0.0]
+    SXY0[WTSUM.>0.0] .= SXYSUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
+    COH[WTSUM.>0.0] .= COHSUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
+    TEN[WTSUM.>0.0] .= TENSUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
+    FRI[WTSUM.>0.0] .= FRISUM[WTSUM.>0.0] ./ WTSUM[WTSUM.>0.0]
 # end # @timeit to "compute"
 # end # @timeit to "compute_basic_node_properties!"
     return nothing
@@ -891,7 +888,7 @@ function compute_vy_node_properties!(
     WTYSUM = reduce(+, WTYSUM, dims=3)[:, :, 1]    
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    WTYSUM[WTYSUM .== 0.0] .= 1.0
+    WTYSUM[WTYSUM .<= 0.0] .= Inf
     RHOY .= RHOYSUM ./ WTYSUM
     RHOFY .= RHOFYSUM ./ WTYSUM
     KY .= KYSUM ./ WTYSUM
@@ -937,51 +934,51 @@ $(SIGNATURES)
 
 """
 function compute_p_node_properties!(
-    GGGPSUM,
-    SXXSUM,
     RHOSUM,
     RHOCPSUM,
     ALPHASUM,
     ALPHAFSUM,
     HRSUM,
-    PHISUM,
+    GGGPSUM,
+    SXXSUM,
     TKSUM,
+    PHISUM,
     WTPSUM,
-    GGGP,
-    SXX0,
     RHO,
     RHOCP,
     ALPHA,
     ALPHAF,
     HR,
+    GGGP,
+    SXX0,
+    tk1,  
     PHI,
-    BETTAPHI,
-    tk1  
+    BETTAPHI
 )
 # @timeit to "compute_p_node_properties!" begin
 # @timeit to "reduce" begin
-    GGGPSUM = reduce(+, GGGPSUM, dims=3)[:, :, 1]
-    SXXSUM = reduce(+, SXXSUM, dims=3)[:, :, 1]
     RHOSUM = reduce(+, RHOSUM, dims=3)[:, :, 1]
     RHOCPSUM = reduce(+, RHOCPSUM, dims=3)[:, :, 1]
     ALPHASUM = reduce(+, ALPHASUM, dims=3)[:, :, 1]
     ALPHAFSUM = reduce(+, ALPHAFSUM, dims=3)[:, :, 1]
     HRSUM = reduce(+, HRSUM, dims=3)[:, :, 1]
-    PHISUM = reduce(+, PHISUM, dims=3)[:, :, 1]
+    GGGPSUM = reduce(+, GGGPSUM, dims=3)[:, :, 1]
+    SXXSUM = reduce(+, SXXSUM, dims=3)[:, :, 1]
     TKSUM = reduce(+, TKSUM, dims=3)[:, :, 1]
+    PHISUM = reduce(+, PHISUM, dims=3)[:, :, 1]
     WTPSUM = reduce(+, WTPSUM, dims=3)[:, :, 1]
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    GGGP .= GGGPSUM .\ WTPSUM
-    SXX0 .= SXXSUM ./ WTPSUM
-    RHO .= RHOSUM ./ WTPSUM
-    RHOCP .= RHOCPSUM ./ WTPSUM
-    ALPHA .= ALPHASUM ./ WTPSUM
-    ALPHAF .= ALPHAFSUM ./ WTPSUM
-    HR .= HRSUM ./ WTPSUM
-    PHI .= PHISUM ./ WTPSUM
-    BETTAPHI .= GGGP .\ PHI
-    tk1 .= TKSUM ./ RHOCPSUM
+    RHO[WTPSUM.>0.0] .= RHOSUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    RHOCP[WTPSUM.>0.0] .= RHOCPSUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    ALPHA[WTPSUM.>0.0] .= ALPHASUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    ALPHAF[WTPSUM.>0.0] .= ALPHAFSUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    HR[WTPSUM.>0.0] .= HRSUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    GGGP[WTPSUM.>0.0] .= GGGPSUM[WTPSUM.>0.0] .\ WTPSUM[WTPSUM.>0.0]
+    SXX0[WTPSUM.>0.0] .= SXXSUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    tk1[WTPSUM.>0.0] .= TKSUM[WTPSUM.>0.0] ./ RHOCPSUM[WTPSUM.>0.0]
+    PHI[WTPSUM.>0.0] .= PHISUM[WTPSUM.>0.0] ./ WTPSUM[WTPSUM.>0.0]
+    BETTAPHI[WTPSUM.>0.0] .= GGGP[WTPSUM.>0.0] .\ PHI[WTPSUM.>0.0]
 # end # @timeit to "compute"
 # end # @timeit to "compute_p_node_properties!"
     return nothing
@@ -1469,15 +1466,15 @@ function simulation_loop(sp::StaticParameters)
         RYSUM = zeros(Ny1, Nx1, nthreads())
         WTYSUM = zeros(Ny1, Nx1, nthreads())
         # P Nodes
-        GGGPSUM = zeros(Ny1, Nx1, nthreads())
-        SXXSUM = zeros(Ny1, Nx1, nthreads())
         RHOSUM = zeros(Ny1, Nx1, nthreads())
         RHOCPSUM = zeros(Ny1, Nx1, nthreads())
         ALPHASUM = zeros(Ny1, Nx1, nthreads())
         ALPHAFSUM = zeros(Ny1, Nx1, nthreads())
         HRSUM = zeros(Ny1, Nx1, nthreads())
-        PHISUM = zeros(Ny1, Nx1, nthreads())
+        GGGPSUM = zeros(Ny1, Nx1, nthreads())
+        SXXSUM = zeros(Ny1, Nx1, nthreads())
         TKSUM = zeros(Ny1, Nx1, nthreads())
+        PHISUM = zeros(Ny1, Nx1, nthreads())
         WTPSUM = zeros(Ny1, Nx1, nthreads())
 # end # @timeit to "set up interpolation arrays" 
 
@@ -1691,26 +1688,26 @@ function simulation_loop(sp::StaticParameters)
         # # compute physical properties of P nodes
         # ---------------------------------------------------------------------
         compute_p_node_properties!(
-            GGGPSUM,
-            SXXSUM,
             RHOSUM,
             RHOCPSUM,
             ALPHASUM,
             ALPHAFSUM,
             HRSUM,
-            PHISUM,
+            GGGPSUM,
+            SXXSUM,
             TKSUM,
+            PHISUM,
             WTPSUM,
-            GGGP,
-            SXX0,
             RHO,
             RHOCP,
             ALPHA,
             ALPHAF,
             HR,
+            GGGP,
+            SXX0,
+            tk1,  
             PHI,
-            BETTAPHI,
-            tk1  
+            BETTAPHI
         )
 
 

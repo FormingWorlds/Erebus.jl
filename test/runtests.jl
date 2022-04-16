@@ -978,11 +978,336 @@ using Test
         end # testset "compute_vx_node_properties!"
 
         @testset "compute_vy_node_properties!()" begin
-            
+            jmin, jmax = sp.jmin_vy, sp.jmax_vy
+            imin, imax = sp.imin_vy, sp.imax_vy
+            RHOYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOFYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            KYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            PHIYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            WTYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOY = zeros(Float64, Ny1, Nx1)
+            RHOFY = zeros(Float64, Ny1, Nx1)
+            KY = zeros(Float64, Ny1, Nx1)
+            PHIY = zeros(Float64, Ny1, Nx1)
+            RY = zeros(Float64, Ny1, Nx1)
+            RHOYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOFYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            KYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            PHIYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            WTYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOY_ver = zeros(Float64, Ny1, Nx1)
+            RHOFY_ver = zeros(Float64, Ny1, Nx1)
+            KY_ver = zeros(Float64, Ny1, Nx1)
+            PHIY_ver = zeros(Float64, Ny1, Nx1)
+            RY_ver = zeros(Float64, Ny1, Nx1)
+            # simulate markers
+            xm = rand(-xvy[1]:0.1:xvy[end]+dx, num_markers)
+            ym = rand(-yvy[1]:0.1:yvy[end]+dy, num_markers)
+            property = rand(5, num_markers)
+            # calculate grid properties
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m], ym[m], xvy, yvy, dx, dy, jmin, jmax, imin, imax)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[1, m], RHOYSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[2, m], RHOFYSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[3, m], KYSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[4, m], PHIYSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[5, m], RYSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, 1.0, WTYSUM)
+            end
+            HydrologyPlanetesimals.compute_vy_node_properties!(
+                RHOYSUM,
+                RHOFYSUM,
+                KYSUM,
+                PHIYSUM,
+                RYSUM,
+                WTYSUM,
+                RHOY,
+                RHOFY,
+                KY,
+                PHIY,
+                RY
+            )
+            # verification properties, from madcph.m, lines 486ff, 636ff
+            for m=1:1:num_markers
+                j=trunc(Int, (xm[m]-xvy[1])/dx)+1
+                i=trunc(Int, (ym[m]-yvy[1])/dy)+1
+                if j<1 
+                    j=1
+                elseif j>Nx 
+                    j=Nx
+                end
+                if i<1 
+                    i=1
+                elseif i>Ny-1 
+                    i=Ny-1
+                end
+                # Compute distances
+                dxmj=xm[m]-xvy[j]
+                dymi=ym[m]-yvy[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                # i;j Node
+                RHOYSUM_ver[i,j]=RHOYSUM_ver[i,j]+property[1, m]*wtmij
+                RHOFYSUM_ver[i,j]=RHOFYSUM_ver[i,j]+property[2, m]*wtmij
+                KYSUM_ver[i,j]=KYSUM_ver[i,j]+property[3, m]*wtmij
+                PHIYSUM_ver[i,j]=PHIYSUM_ver[i,j]+property[4, m]*wtmij
+                RYSUM_ver[i,j]=RYSUM_ver[i,j]+property[5, m]*wtmij
+                WTYSUM_ver[i,j]=WTYSUM_ver[i,j]+wtmij
+                # i+1;j Node
+                RHOYSUM_ver[i+1,j]=RHOYSUM_ver[i+1,j]+property[1, m]*wtmi1j
+                RHOFYSUM_ver[i+1,j]=RHOFYSUM_ver[i+1,j]+property[2, m]*wtmi1j
+                KYSUM_ver[i+1,j]=KYSUM_ver[i+1,j]+property[3, m]*wtmi1j
+                PHIYSUM_ver[i+1,j]=PHIYSUM_ver[i+1,j]+property[4, m]*wtmi1j
+                RYSUM_ver[i+1,j]=RYSUM_ver[i+1,j]+property[5, m]*wtmi1j
+                WTYSUM_ver[i+1,j]=WTYSUM_ver[i+1,j]+wtmi1j
+                # i;j+1 Node
+                RHOYSUM_ver[i,j+1]=RHOYSUM_ver[i,j+1]+property[1, m]*wtmij1
+                RHOFYSUM_ver[i,j+1]=RHOFYSUM_ver[i,j+1]+property[2, m]*wtmij1
+                KYSUM_ver[i,j+1]=KYSUM_ver[i,j+1]+property[3, m]*wtmij1
+                PHIYSUM_ver[i,j+1]=PHIYSUM_ver[i,j+1]+property[4, m]*wtmij1
+                RYSUM_ver[i,j+1]=RYSUM_ver[i,j+1]+property[5, m]*wtmij1
+                WTYSUM_ver[i,j+1]=WTYSUM_ver[i,j+1]+wtmij1
+                # i+1;j+1 Node
+                RHOYSUM_ver[i+1,j+1]=RHOYSUM_ver[i+1,j+1]+property[1, m]*wtmi1j1
+                RHOFYSUM_ver[i+1,j+1]=RHOFYSUM_ver[i+1,j+1]+property[2, m]*wtmi1j1
+                KYSUM_ver[i+1,j+1]=KYSUM_ver[i+1,j+1]+property[3, m]*wtmi1j1
+                PHIYSUM_ver[i+1,j+1]=PHIYSUM_ver[i+1,j+1]+property[4, m]*wtmi1j1
+                RYSUM_ver[i+1,j+1]=RYSUM_ver[i+1,j+1]+property[5, m]*wtmi1j1
+                WTYSUM_ver[i+1,j+1]=WTYSUM_ver[i+1,j+1]+wtmi1j1
+            end
+            for j=1:1:Nx1
+                for i=1:1:Ny1
+                    if WTYSUM_ver[i,j]>0 
+                        RHOY_ver[i,j]=RHOYSUM_ver[i,j]/WTYSUM_ver[i,j]
+                        RHOFY_ver[i,j]=RHOFYSUM_ver[i,j]/WTYSUM_ver[i,j]
+                        KY_ver[i,j]=KYSUM_ver[i,j]/WTYSUM_ver[i,j]
+                        PHIY_ver[i,j]=PHIYSUM_ver[i,j]/WTYSUM_ver[i,j]
+                        RY_ver[i,j]=RYSUM_ver[i,j]/WTYSUM_ver[i,j]
+                    end
+                end
+            end
+            #test
+            for j=1:1:Nx1, i=1:1:Ny1
+                @test RHOY[i,j] == RHOY_ver[i,j]
+                @test RHOFY[i,j] == RHOFY_ver[i,j]
+                @test KY[i,j] == KY_ver[i,j]
+                @test PHIY[i,j] == PHIY_ver[i,j]
+                @test RY[i,j] == RY_ver[i,j]
+            end
         end # testset "compute_vy_node_properties!"
 
         @testset "compute_p_node_properties!()" begin
-            
+            jmin, jmax = sp.jmin_p, sp.jmax_p
+            imin, imax = sp.imin_p, sp.imax_p
+            RHOSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            ALPHASUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            ALPHAFSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            HRSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            GGGPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            SXXSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            PHISUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            WTPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHO = zeros(Float64, Ny1, Nx1)
+            RHOCP = zeros(Float64, Ny1, Nx1)
+            ALPHA = zeros(Float64, Ny1, Nx1)
+            ALPHAF = zeros(Float64, Ny1, Nx1)
+            HR = zeros(Float64, Ny1, Nx1)
+            GGGP = zeros(Float64, Ny1, Nx1)
+            SXX0 = zeros(Float64, Ny1, Nx1)
+            tk1 = zeros(Float64, Ny1, Nx1)
+            PHI = zeros(Float64, Ny1, Nx1)
+            BETTAPHI = zeros(Float64, Ny1, Nx1)
+            RHOSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOCPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            ALPHASUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            ALPHAFSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            HRSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            GGGPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            SXXSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            TKSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            PHISUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            WTPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHO_ver = zeros(Float64, Ny1, Nx1)
+            RHOCP_ver = zeros(Float64, Ny1, Nx1)
+            ALPHA_ver = zeros(Float64, Ny1, Nx1)
+            ALPHAF_ver = zeros(Float64, Ny1, Nx1)
+            HR_ver = zeros(Float64, Ny1, Nx1)
+            GGGP_ver = zeros(Float64, Ny1, Nx1)
+            SXX0_ver = zeros(Float64, Ny1, Nx1)
+            tk1_ver = zeros(Float64, Ny1, Nx1)
+            PHI_ver = zeros(Float64, Ny1, Nx1)
+            BETTAPHI_ver = zeros(Float64, Ny1, Nx1)
+            # simulate markers
+            xm = rand(-xp[1]:0.1:xp[end]+dx, num_markers)
+            ym = rand(-yp[1]:0.1:yp[end]+dy, num_markers)
+            property = rand(9, num_markers)
+            # calculate grid properties
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m], ym[m], xp, yp, dx, dy, jmin, jmax, imin, imax)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[1, m], RHOSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[2, m], RHOCPSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[3, m], ALPHASUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[4, m], ALPHAFSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[5, m], HRSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, inv(property[6, m]), GGGPSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[7, m], SXXSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[2, m] * property[8, m], TKSUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, property[9, m], PHISUM)
+                HydrologyPlanetesimals.interpolate!(
+                    i, j, weights, 1.0, WTPSUM)
+            end
+            HydrologyPlanetesimals.compute_p_node_properties!(
+                RHOSUM,
+                RHOCPSUM,
+                ALPHASUM,
+                ALPHAFSUM,
+                HRSUM,
+                GGGPSUM,
+                SXXSUM,
+                TKSUM,
+                PHISUM,
+                WTPSUM,
+                RHO,
+                RHOCP,
+                ALPHA,
+                ALPHAF,
+                HR,
+                GGGP,
+                SXX0,
+                tk1,
+                PHI,
+                BETTAPHI
+            )
+            # verification properties, from madcph.m, lines 538ff, 648ff
+            for m=1:1:num_markers
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1 
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1 
+                    i=1
+                elseif i>Ny 
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                # i;j Node
+                GGGPSUM_ver[i,j]=GGGPSUM_ver[i,j]+1/property[6, m]*wtmij
+                SXXSUM_ver[i,j]=SXXSUM_ver[i,j]+property[7, m]*wtmij
+                RHOSUM_ver[i,j]=RHOSUM_ver[i,j]+property[1, m]*wtmij
+                RHOCPSUM_ver[i,j]=RHOCPSUM_ver[i,j]+property[2, m]*wtmij
+                ALPHASUM_ver[i,j]=ALPHASUM_ver[i,j]+property[3, m]*wtmij
+                ALPHAFSUM_ver[i,j]=ALPHAFSUM_ver[i,j]+property[4, m]*wtmij
+                HRSUM_ver[i,j]=HRSUM_ver[i,j]+property[5, m]*wtmij
+                TKSUM_ver[i,j]=TKSUM_ver[i,j]+property[8, m]*
+                    property[2, m]*wtmij
+                PHISUM_ver[i,j]=PHISUM_ver[i,j]+property[9, m]*wtmij
+                WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij
+                # i+1;j Node
+                GGGPSUM_ver[i+1,j]=GGGPSUM_ver[i+1,j]+1/property[6, m]*wtmi1j
+                SXXSUM_ver[i+1,j]=SXXSUM_ver[i+1,j]+property[7, m]*wtmi1j
+                RHOSUM_ver[i+1,j]=RHOSUM_ver[i+1,j]+property[1, m]*wtmi1j
+                RHOCPSUM_ver[i+1,j]=RHOCPSUM_ver[i+1,j]+property[2, m]*wtmi1j
+                ALPHASUM_ver[i+1,j]=ALPHASUM_ver[i+1,j]+property[3, m]*wtmi1j
+                ALPHAFSUM_ver[i+1,j]=ALPHAFSUM_ver[i+1,j]+property[4, m]*wtmi1j
+                HRSUM_ver[i+1,j]=HRSUM_ver[i+1,j]+property[5, m]*wtmi1j
+                TKSUM_ver[i+1,j]=TKSUM_ver[i+1,j]+property[8, m]*
+                    property[2, m]*wtmi1j
+                PHISUM_ver[i+1,j]=PHISUM_ver[i+1,j]+property[9, m]*wtmi1j
+                WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j
+                # i;j+1 Node
+                GGGPSUM_ver[i,j+1]=GGGPSUM_ver[i,j+1]+1/property[6, m]*wtmij1
+                SXXSUM_ver[i,j+1]=SXXSUM_ver[i,j+1]+property[7, m]*wtmij1
+                RHOSUM_ver[i,j+1]=RHOSUM_ver[i,j+1]+property[1, m]*wtmij1
+                RHOCPSUM_ver[i,j+1]=RHOCPSUM_ver[i,j+1]+property[2, m]*wtmij1
+                ALPHASUM_ver[i,j+1]=ALPHASUM_ver[i,j+1]+property[3, m]*wtmij1
+                ALPHAFSUM_ver[i,j+1]=ALPHAFSUM_ver[i,j+1]+property[4, m]*wtmij1
+                HRSUM_ver[i,j+1]=HRSUM_ver[i,j+1]+property[5, m]*wtmij1
+                TKSUM_ver[i,j+1]=TKSUM_ver[i,j+1]+property[8, m]*
+                    property[2, m]*wtmij1
+                PHISUM_ver[i,j+1]=PHISUM_ver[i,j+1]+property[9, m]*wtmij1
+                WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1
+                # i+1;j+1 Node
+                GGGPSUM_ver[i+1,j+1]=GGGPSUM_ver[i+1,j+1]+1/property[6, m]*
+                    wtmi1j1
+                SXXSUM_ver[i+1,j+1]=SXXSUM_ver[i+1,j+1]+property[7, m]*wtmi1j1
+                RHOSUM_ver[i+1,j+1]=RHOSUM_ver[i+1,j+1]+property[1, m]*wtmi1j1
+                RHOCPSUM_ver[i+1,j+1]=RHOCPSUM_ver[i+1,j+1]+
+                    property[2, m]*wtmi1j1
+                ALPHASUM_ver[i+1,j+1]=ALPHASUM_ver[i+1,j+1]+
+                    property[3, m]*wtmi1j1
+                ALPHAFSUM_ver[i+1,j+1]=ALPHAFSUM_ver[i+1,j+1]+
+                    property[4, m]*wtmi1j1
+                HRSUM_ver[i+1,j+1]=HRSUM_ver[i+1,j+1]+property[5, m]*wtmi1j1
+                TKSUM_ver[i+1,j+1]=TKSUM_ver[i+1,j+1]+property[8, m]*
+                    property[2, m]*wtmi1j1
+                PHISUM_ver[i+1,j+1]=PHISUM_ver[i+1,j+1]+property[9, m]*wtmi1j1
+                WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1
+            end
+            for j=1:1:Nx1
+                for i=1:1:Ny1
+                    if WTPSUM_ver[i,j]>0
+                        GGGP_ver[i,j]=1/(GGGPSUM_ver[i,j]/WTPSUM_ver[i,j])
+                        SXX0_ver[i,j]=SXXSUM_ver[i,j]/WTPSUM_ver[i,j]
+                        RHO_ver[i,j]=RHOSUM_ver[i,j]/WTPSUM_ver[i,j]
+                        RHOCP_ver[i,j]=RHOCPSUM_ver[i,j]/WTPSUM_ver[i,j]
+                        ALPHA_ver[i,j]=ALPHASUM_ver[i,j]/WTPSUM_ver[i,j]
+                        ALPHAF_ver[i,j]=ALPHAFSUM_ver[i,j]/WTPSUM_ver[i,j]
+                        HR_ver[i,j]=HRSUM_ver[i,j]/WTPSUM_ver[i,j]
+                        PHI_ver[i,j]=PHISUM_ver[i,j]/WTPSUM_ver[i,j]
+                        BETTAPHI_ver[i,j]=1/GGGP_ver[i,j]*PHI_ver[i,j]
+                        tk1_ver[i,j]=TKSUM_ver[i,j]/RHOCPSUM_ver[i,j]
+                    end
+                end
+            end
+            # test
+            for j=1:1:Nx, i=1:1:Ny
+                @test RHO[i, j] == RHO_ver[i, j]
+                @test RHOCP[i, j] == RHOCP_ver[i, j]
+                @test ALPHA[i, j] == ALPHA_ver[i, j]
+                @test ALPHAF[i, j] == ALPHAF_ver[i, j]
+                @test HR[i, j] == HR_ver[i, j]
+                @test GGGP[i, j] ≈ GGGP_ver[i, j]
+                @test SXX0[i, j] == SXX0_ver[i, j]
+                @test tk1[i, j] == tk1_ver[i, j]
+                @test PHI[i, j] == PHI_ver[i, j]
+                @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j]
+            end
         end # testset "compute_p_node_properties!
     end # testset "compute node properties" 
 end
