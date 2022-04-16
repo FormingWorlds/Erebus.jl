@@ -1007,14 +1007,16 @@ Apply insulating boundary conditions to given array.
 function apply_insulating_boundary_conditions!(t)
 @timeit to "apply_insulating_boundary_conditions!" begin
     Ny, Nx = size(t)
-    # upper boundary
-    t[1, 2:Nx-1] .= t[2, 2:Nx-1]
-    # lower boundary
-    t[Ny, 2:Nx-1] .= t[Ny-1, 2:Nx-1]
-    # left boundary
-    t[:, 1] .= t[:, 2]
-    # right boundary
-    t[:, Nx] .= t[:, Nx-1]
+    if Ny>2 && Nx>2
+        # upper boundary
+        t[1, 2:Nx-1] .= t[2, 2:Nx-1]
+        # lower boundary
+        t[Ny, 2:Nx-1] .= t[Ny-1, 2:Nx-1]
+        # left boundary
+        t[:, 1] .= t[:, 2]
+        # right boundary
+        t[:, Nx] .= t[:, Nx-1]
+    end
 end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end

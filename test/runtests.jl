@@ -5,7 +5,7 @@ using Test
 
 @testset verbose = true "HydrologyPlanetesimals.jl" begin
 
-    @testset "staggered grid" begin
+    @testset "staggered grid setup" begin
         xsize=140_000.0
         ysize=140_000.0
         rplanet=50_000.0
@@ -105,7 +105,7 @@ using Test
         @test yvy == collect(yvy_ver)
         @test xp == collect(xp_ver)
         @test yp == collect(yp_ver)
-    end # testset "staggered grid"
+    end # testset "staggered grid setup"
 
     @testset "distance()" begin
         @test HydrologyPlanetesimals.distance(0, 0, 0, 0) == 0
@@ -124,7 +124,7 @@ using Test
             @test HydrologyPlanetesimals.distance(
                 x[:, i]..., y[:, i]...) ≈ sqrt(sum((x[:, i] - y[:, i]).^2))
         end
-    end
+    end # testset "distance()"
 
     @testset "total()" begin
         @test HydrologyPlanetesimals.total(0, 0, 0) == 0
@@ -132,19 +132,19 @@ using Test
         @test HydrologyPlanetesimals.total(0, 1, 0) == 0
         @test HydrologyPlanetesimals.total(0, 0, 1) == 0
         @test HydrologyPlanetesimals.total(1, 2, 0.5) == 1.5
-    end
+    end # testset "total()"
 
     @testset "ktotal()" begin
         # from madcph.m, line 1761
         ktotalm(ksolidm, kfluid, phim)=(ksolidm*kfluid/2+((ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2)/16)^0.5-(ksolidm*(3*phim-2)+ kfluid*(1-3*phim))/4
         @test HydrologyPlanetesimals.ktotal(1., 2., 3.) == ktotalm(1., 2., 3.)
-    end
+    end # testset "ktotal()"
 
     @testset "kphi()" begin
         # from madcph.m, line 333
         kphim(kphim0, phim, phim0)=kphim0*(phim/phim0)^3/((1-phim)/(1-phim0))^2
         @test HydrologyPlanetesimals.kphi(1., 2., 3.) == kphim(1., 2., 3.)
-    end
+    end # testset "kphi()"
 
     @testset "Q_radiogenic()" begin
         # from madcph.m, line 276
@@ -153,7 +153,7 @@ using Test
             1., 2., 3., 4., 5.)
         @test HydrologyPlanetesimals.Q_radiogenic(1., 2., 3., 4., 0.) == Q(
             1., 2., 3., 4., 0.)
-    end
+    end # testset "Q_radiogenic()"
 
     @testset "calculate_radioactive_heating()" begin
         hr_al = false
@@ -180,7 +180,7 @@ using Test
         w = @SVector [Q_fe * sp2.rhofluidm[1], 0., 0.]
         @test HydrologyPlanetesimals.calculate_radioactive_heating(
             1000., sp3) == (v, w)
-    end
+    end # testset "calculate_radioactive_heating()"
 
     @testset "fix_weights() elementary" begin
         sp = HydrologyPlanetesimals.StaticParameters()
@@ -629,7 +629,7 @@ using Test
         end # testset "P nodes"    
     end # testset "fix_weights() advanced"
    
-    @testset "interpolate!(i,j,weights,property,grid)" begin
+    @testset "interpolate!()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
         dx, dy = sp.dx, sp.dy
@@ -655,7 +655,7 @@ using Test
             @test grid[i, j+1] == property[m] * weights[3]
             @test grid[i+1, j+1] == property[m] * weights[4]
         end
-    end # testset "interpolate!"
+    end # testset "interpolate!()"
 
     @testset "compute node properties" begin
         sp = HydrologyPlanetesimals.StaticParameters()
@@ -843,7 +843,7 @@ using Test
                 @test FRI[i, j] == FRI_ver[i, j]
                 @test YNY[i, j] == YNY_ver[i, j]
             end
-        end # testset "compute_basic_node_properties!"
+        end # testset "compute_basic_node_properties!()"
 
         @testset "compute_vx_node_properties!()" begin
             jmin, jmax = sp.jmin_vx, sp.jmax_vx
@@ -975,7 +975,7 @@ using Test
                 @test PHIX[i, j] == PHIX_ver[i, j]
                 @test RX[i, j] == RX_ver[i, j]
             end
-        end # testset "compute_vx_node_properties!"
+        end # testset "compute_vx_node_properties!()"
 
         @testset "compute_vy_node_properties!()" begin
             jmin, jmax = sp.jmin_vy, sp.jmax_vy
@@ -1107,7 +1107,7 @@ using Test
                 @test PHIY[i,j] == PHIY_ver[i,j]
                 @test RY[i,j] == RY_ver[i,j]
             end
-        end # testset "compute_vy_node_properties!"
+        end # testset "compute_vy_node_properties!()"
 
         @testset "compute_p_node_properties!()" begin
             jmin, jmax = sp.jmin_p, sp.jmax_p
@@ -1308,6 +1308,18 @@ using Test
                 @test PHI[i, j] == PHI_ver[i, j]
                 @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j]
             end
-        end # testset "compute_p_node_properties!
+        end # testset "compute_p_node_properties!()"
     end # testset "compute node properties" 
+
+    @testset "apply_insulating_boundary_conditions!()" begin
+        max_size = 10
+        for j=3:1:max_size, i=3:1:max_size
+            t = rand(i, j)
+            HydrologyPlanetesimals.apply_insulating_boundary_conditions!(t)
+            @test t[1, 2:j-1] == t[2, 2:j-1]
+            @test t[i, 2:j-1] == t[i-1, 2:j-1]
+            @test t[:, 1] == t[:, 2]
+            @test t[:, j] == t[:, j-1]
+        end
+    end # testset "apply_insulating_boundary_conditions!()"
 end
