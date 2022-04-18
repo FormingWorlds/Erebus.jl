@@ -1440,4 +1440,39 @@ using Test
             @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-6
         end
     end # testset "compute_gravity_solution!()"
+
+    @testset "recompute_bulk_viscosity!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1 
+        etaphikoef = sp.etaphikoef
+        ETAP = zeros(Ny1, Nx1)
+        ETAPHI = zeros(Ny1, Nx1)
+        ETAP_ver = zeros(Ny1, Nx1)
+        ETAPHI_ver = zeros(Ny1, Nx1)
+        # simulate data
+        ETA = rand(Ny, Nx)
+        PHI = rand(Ny1, Nx1)
+        # compute bulk viscosity
+        HydrologyPlanetesimals.recompute_bulk_viscosity!(
+            ETA,
+            ETAP,
+            ETAPHI,
+            PHI,
+            etaphikoef
+        )
+        # verification, from madcph.m, lines 771ff
+        for i=2:1:Ny
+            for j=2:1:Nx
+                ETAP_ver[i,j]=1/((1/ETA[i-1,j-1]+1/ETA[i,j-1]+1/ETA[i-1,j]+1/ETA[i,j])/4)
+                ETAPHI_ver[i,j]=etaphikoef*ETAP_ver[i,j]/PHI[i,j]
+            end
+        end       
+        # test
+        for j=1:1:Nx, i=1:1:Ny
+            @test ETAP[i, j] ≈ ETAP_ver[i, j] rtol=1e-6
+            @test ETAPHI[i, j] ≈ ETAPHI_ver[i, j] rtol=1e-6
+        end
+    end # testset "recompute_bulk_viscosity!()"
 end
+

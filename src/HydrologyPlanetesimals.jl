@@ -1038,7 +1038,7 @@ $(SIGNATURES)
 """
 # function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
 function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
-@timeit to "compute_gravity_solution!" begin
+# @timeit to "compute_gravity_solution!" begin
     @unpack Nx,
         Ny,
         Nx1,
@@ -1051,7 +1051,7 @@ function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
     # fresh LHS sparse coefficient matrix
     LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # iterate over P nodes
-    @timeit to "build system" begin
+    # @timeit to "build system" begin
     for j=1:1:Nx1, i=1:1:Ny1
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
@@ -1091,24 +1091,158 @@ function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
             RP[gk] = 4.0 * 2.0/3.0 * π * G * RHO[i, j]
         end
     end
-    end # @timeit to "build system"
-    @timeit to "solve system" begin
+    # end # @timeit to "build system"
+    # @timeit to "solve system" begin
     # solve system of equations
     SP .= LP \ RP # implicit: flush!(LP)
-    end # @timeit to "solve system"
+    # end # @timeit to "solve system"
     # reshape solution vector to 2D array
-    @timeit to "reshape solution" begin
+    # @timeit to "reshape solution" begin
     ϕ = reshape(SP, Ny1, Nx1)
-    end # @timeit to "reshape solution"
-    @timeit to "compute accelerations" begin
+    # end # @timeit to "reshape solution"
+    # @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
     gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
     gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
-    end # @timeit to "compute accelerations"
-end # @timeit to "compute_gravity_solution!"
+    # end # @timeit to "compute accelerations"
+# end # @timeit to "compute_gravity_solution!"
     return nothing
 end # function compute_gravity_solution!
+
+
+"""
+Compute hydromechanical solution to obtain 
+
+# Details 
+
+    - ETAP: viscosity at P nodes 
+    - ETAPHI: bulk viscosity at P nodes
+    - BETTAPHI: bulk compresibility at P nodes
+    - PHI: porosity at P nodes
+    - SXX0: σxx₀′ at P nodes
+    - SXY0: σxy₀′ at basic nodes
+    - vx: solid Vx-velocity at Vx nodes
+    - vy: solid Vy-velocity at Vy nodes
+    - pr: total pressure at P nodes
+    - qxD: qx Darcy flux at Vx nodes
+    - qyD: qy Darcy flux at Vy nodes
+    - pf: fluid pressure at P nodes
+    - sp: simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function compute_hydromechanical_solution!(
+    ETAP,
+    ETAPHI,
+    BETTAPHI,
+    PHI,
+    SXX0,
+    SXY0,
+    vx,
+    vy,
+    pr,
+    qxD,
+    qyD,
+    pf,
+    sp
+)
+# @timeit to "compute_hydromechanical_solution!" begin
+    @unpack Nx1,
+        Ny1,
+        dx,
+        dy,
+        etaphikoef = sp
+    # recompute bulk viscosity at internal P nodes
+    recompute_bulk_viscosity!(ETAP, ETAPHI, BETTAPHI, PHI, etaphikoef)
+# end # @timeit to "compute_hydromechanical_solution!"
+    return nothing
+end
+
+
+"""
+Recompute bulk viscosity at P nodes.
+
+# Details
+
+    - ETA: viscoplastic viscosity at basic nodes
+    - ETAP: viscosity at P Nodes
+    - ETAPHI: bulk viscosity at P Nodes
+    - PHI: porosity at P Nodes
+    - etaphikoef: coefficient: shear viscosity -> compaction viscosity
+
+# Returns
+
+    - nothing
+"""
+function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
+@timeit to "recompute_bulk_viscosity!" begin    
+    @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
+        inv(ETA[1:end-1, 1:end-1]) +
+        inv(ETA[2:end, 1:end-1]) +
+        inv(ETA[1:end-1, 2:end]) +
+        inv(ETA[2:end, 2:end])
+    )
+    @. ETAPHI = etaphikoef * ETAP / PHI
+end # @timeit to "recompute_bulk_viscosity!"
+    return nothing
+end
+
+
+"""
+Perform plastic iterations on nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - timestep: current time step
+    - ETA
+    - ETAP
+    - ETAPHI
+
+
+    - sp: simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function perform_plastic_iterations!(
+    timestep,
+    sp
+)
+# @timeit to "perform_plastic_iterations!" begin
+    @unpack Nx1,
+        Ny1,
+        nplast = sp
+    # no elastic compaction on first timestep
+    if timestep == 1
+        BETTAPHI .= 0.0
+    end
+    # perform plastic iterations on nodes
+    for iplast=1:1:nplast
+        compute_hydromechanical_solution!(
+            ETAP,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            SXX0,
+            SXY0,
+            vx,
+            vy,
+            pr,
+            qxD,
+            qyD,
+            pf,
+            sp
+        )
+    end
+# end # @timeit to "perform_plastic_iterations!"
+    return nothing
+end
 
 
 """
@@ -1216,7 +1350,7 @@ function simulation_loop(sp::StaticParameters)
     GGG = zeros(Float64, Ny, Nx)
     # epsilonxy, 1/s
     EXY = zeros(Float64, Ny, Nx)
-    # sigma0xy, 1/s
+    # σxy₀ (sigma0xy), 1/s
     SXY0 = zeros(Float64, Ny, Nx)
     # rotation rate, 1/s
     WYX = zeros(Float64, Ny, Nx)
@@ -1310,9 +1444,9 @@ function simulation_loop(sp::StaticParameters)
     GGGP = zeros(Float64, Ny1, Nx1)
     # EPSILONxx [1/s]
     EXX = zeros(Float64, Ny1, Nx1)
-    # SIGMA'xx [1/s]
+    # σ′ (SIGMA'xx) [1/s]
     SXX = zeros(Float64, Ny1, Nx1)
-    # SIGMA0'xx [1/s]
+    # σ₀′ (SIGMA0'xx) [1/s]
     SXX0 = zeros(Float64, Ny1, Nx1)
     # old temperature [K]
     tk1 = zeros(Float64, Ny1, Nx1)
