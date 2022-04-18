@@ -1346,7 +1346,8 @@ using Test
         # P nodes
         xp=-dx/2:dx:xsize+dx/2
         yp=-dy/2:dy:ysize+dy/2
-        LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+        # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+        SP = zeros(Float64, Nx1*Ny1)
         RP = zeros(Float64, Nx1*Ny1)
         gx = zeros(Float64, Ny1, Nx1)
         gy = zeros(Float64, Ny1, Nx1)
@@ -1359,7 +1360,7 @@ using Test
         RHO = rand(1:0.1:7000, Ny1, Nx1)
         # compute gravity solution
         HydrologyPlanetesimals.compute_gravity_solution!(
-            LP,
+            SP,
             RP,
             RHO,
             xp,

@@ -1005,7 +1005,7 @@ Apply insulating boundary conditions to given array.
     - nothing
 """
 function apply_insulating_boundary_conditions!(t)
-@timeit to "apply_insulating_boundary_conditions!" begin
+# @timeit to "apply_insulating_boundary_conditions!" begin
     Ny, Nx = size(t)
     if Ny>2 && Nx>2
         # upper boundary
@@ -1017,7 +1017,7 @@ function apply_insulating_boundary_conditions!(t)
         # right boundary
         t[:, Nx] .= t[:, Nx-1]
     end
-end # @timeit to "apply_insulating_boundary_conditions!"
+# end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end
 
@@ -1036,7 +1036,8 @@ $(SIGNATURES)
 
 - nothing
 """
-function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+# function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
 @timeit to "compute_gravity_solution!" begin
     @unpack Nx,
         Ny,
@@ -1047,8 +1048,11 @@ function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
         dx,
         dy,
         G = sp
+    # fresh LHS sparse coefficient matrix
+    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # iterate over P nodes
-    for j=1:1:Nx1, i=1:1:Ny1 
+    @timeit to "build system" begin
+    for j=1:1:Nx1, i=1:1:Ny1
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
         # decide if external / boundary points
@@ -1087,14 +1091,21 @@ function compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
             RP[gk] = 4.0 * 2.0/3.0 * π * G * RHO[i, j]
         end
     end
+    end # @timeit to "build system"
+    @timeit to "solve system" begin
     # solve system of equations
-    SP = LP \ RP # implicit: flush!(LP)
+    SP .= LP \ RP # implicit: flush!(LP)
+    end # @timeit to "solve system"
     # reshape solution vector to 2D array
+    @timeit to "reshape solution" begin
     ϕ = reshape(SP, Ny1, Nx1)
+    end # @timeit to "reshape solution"
+    @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
     gx[:, 1:Nx] .= -diff(ϕ, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
     gy[1:Ny, :] .= -diff(ϕ, dims=1) ./ dy
+    end # @timeit to "compute accelerations"
 end # @timeit to "compute_gravity_solution!"
     return nothing
 end # function compute_gravity_solution!
@@ -1156,6 +1167,8 @@ function simulation_loop(sp::StaticParameters)
         etamin,
         nplast,
         dtelastic,
+        dtkoef,
+        dtkoefup,
         start_step,
         nsteps,
         start_time, 
@@ -1180,7 +1193,6 @@ function simulation_loop(sp::StaticParameters)
     hrfluidm = start_hrfluidm
     # Yielding error of nodes
     YERRNOD = zeros(Float64, nplast) 
-   
 
     # -------------------------------------------------------------------------
     # set up staggered grid
@@ -1198,6 +1210,8 @@ function simulation_loop(sp::StaticParameters)
     ETA0 = zeros(Float64, Ny, Nx)
     # viscoplastic viscosity, Pa*s
     ETA = zeros(Float64, Ny, Nx)
+    # initial viscoplastic viscosity, Pa*s
+    ETA00 = zeros(Float64, Ny, Nx)
     # shear modulus, Pa
     GGG = zeros(Float64, Ny, Nx)
     # epsilonxy, 1/s
@@ -1212,8 +1226,10 @@ function simulation_loop(sp::StaticParameters)
     TEN = zeros(Float64, Ny, Nx)
     # friction
     FRI = zeros(Float64, Ny, Nx)
-    # plastic yielding mark
+    # plastic yielding node property
     YNY = zeros(Bool, Ny, Nx)
+    # initial plastic yielding node property
+    YNY00 = zeros(Bool, Ny, Nx)
 
     # Vx nodes
     # grid geometry
@@ -1333,7 +1349,6 @@ function simulation_loop(sp::StaticParameters)
     # gravity potential [J/kg]
     FI = zeros(Float64, Ny1, Nx1)
 
-
     # -------------------------------------------------------------------------
     # set up markers
     # -------------------------------------------------------------------------
@@ -1425,10 +1440,10 @@ function simulation_loop(sp::StaticParameters)
     # thermal solution: RHS vector
     RT = zeros(Float64, Nx1*Ny1)
     # gravity solution: LHS coefficient matrix
-    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # gravity solution: RHS vector
     RP = zeros(Float64, Nx1*Ny1)
-    # gravity solution: solution matrix
+    # gravity solution: solution vector (->matrix)
     SP = zeros(Float64, Nx1*Ny1)
 # end # @timeit to "simulation_loop setup"
 
@@ -1487,7 +1502,6 @@ function simulation_loop(sp::StaticParameters)
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(timesum, sp)
 
-        
         # ---------------------------------------------------------------------
         # computer marker properties and interpolate to staggered grid nodes
         # ---------------------------------------------------------------------
@@ -1628,7 +1642,6 @@ function simulation_loop(sp::StaticParameters)
             interpolate!(i, j, weights, 1.0, WTPSUM)
         end
 
-        
         # ---------------------------------------------------------------------
         # compute physical properties of basic nodes
         # ---------------------------------------------------------------------
@@ -1651,9 +1664,8 @@ function simulation_loop(sp::StaticParameters)
             YNY
         )
 
-
         # ---------------------------------------------------------------------
-        # # compute physical properties of Vx nodes
+        # compute physical properties of Vx nodes
         # ---------------------------------------------------------------------
         compute_vx_node_properties!(
             RHOXSUM,
@@ -1669,9 +1681,8 @@ function simulation_loop(sp::StaticParameters)
             RX
         )
 
-
         # ---------------------------------------------------------------------
-        # # compute physical properties of Vy nodes
+        # compute physical properties of Vy nodes
         # ---------------------------------------------------------------------
         compute_vy_node_properties!(
             RHOYSUM,
@@ -1689,7 +1700,7 @@ function simulation_loop(sp::StaticParameters)
 
 
         # ---------------------------------------------------------------------
-        # # compute physical properties of P nodes
+        # compute physical properties of P nodes
         # ---------------------------------------------------------------------
         compute_p_node_properties!(
             RHOSUM,
@@ -1714,32 +1725,28 @@ function simulation_loop(sp::StaticParameters)
             BETTAPHI
         )
 
-
         # ---------------------------------------------------------------------
         # applying thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
-
         # ---------------------------------------------------------------------
         # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+        # compute_gravity_solution!(LP, RP, RHO, xp, yp, gx, gy, sp)
+        compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
 
-
-# Fri 15       
         # ---------------------------------------------------------------------
         # # probe increasing computational timestep
         # ---------------------------------------------------------------------
-        # dt = min(dt*dtkoefup, dtelastic)
+        dt = min(dt*dtkoefup, dtelastic)
 
-
-# Fri 15        
         # ---------------------------------------------------------------------
         # # save initial viscosity, yielding nodes
         # ---------------------------------------------------------------------
-
+        ETA00, ETA = ETA, ETA00
+        YNY00, YNY = YNY, YNY00
 
 # Fri 15/Sat 16/Mon 18        
         # ---------------------------------------------------------------------
