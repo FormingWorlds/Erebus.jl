@@ -1116,6 +1116,7 @@ Compute hydromechanical solution to obtain
 
 # Details 
 
+    - ETA: viscoplastic viscosity at basic nodes
     - ETAP: viscosity at P nodes 
     - ETAPHI: bulk viscosity at P nodes
     - BETTAPHI: bulk compresibility at P nodes
@@ -1135,6 +1136,7 @@ Compute hydromechanical solution to obtain
     - nothing
 """
 function compute_hydromechanical_solution!(
+    ETA,
     ETAP,
     ETAPHI,
     BETTAPHI,
@@ -1149,15 +1151,105 @@ function compute_hydromechanical_solution!(
     pf,
     sp
 )
-# @timeit to "compute_hydromechanical_solution!" begin
-    @unpack Nx1,
+@timeit to "compute_hydromechanical_solution!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
         Ny1,
         dx,
         dy,
+        vxleft,
+        vxright,
+        vytop,
+        vybottom,
+        bctop,
+        bcbottom,
         etaphikoef = sp
-    # recompute bulk viscosity at internal P nodes
-    recompute_bulk_viscosity!(ETAP, ETAPHI, BETTAPHI, PHI, etaphikoef)
-# end # @timeit to "compute_hydromechanical_solution!"
+    # recompute (interpolate) bulk viscosity at P nodes
+    recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
+    # setup LSE for hydromechanical Solution
+@timeit to "setup LSE" begin
+    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    R = zeros(Nx1*Ny1*6)
+    S = zeros(Nx1*Ny1*6)
+end # @timeit to "setup LSE"
+
+
+
+@timeit to "build system" begin
+    # compose LSE for Stokes & continuity equations
+    for j=1:1:Nx1, i=1:1:Ny1
+        # define global indices in algebraic space
+        kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
+        kvy = kvx + 1 # Vy solid
+        kpm = kvx + 2 # P total
+        kqx = kvx + 3 # qx Darcy
+        kqy = kvx + 4 # qy Darcy
+        kpf = kvx + 5 # P fluid
+        # Vx equation
+        if i == 1 ||
+            i == Ny1 ||
+            j == 1 ||
+            j == Nx1 ||
+            j == Nx
+            # Vx equation external points: boundary conditions
+            # all locations: ghost unknowns vₓ₃=0 -> 1.0⋅vx(i,j)=0.0
+            updateindex!(L, +, 1.0, kvx, kvx)
+            # R[kvx] = 0.0 # already done with initialization
+            # left boundary
+            if j == 1 
+                R[kvx] = vxleft
+            end
+            # right boundary
+            if j == Nx 
+                R[kvx] = vxright
+            end
+            # top boundary
+            if i==1 && 1<j<Nx
+                updateindex!(L, +, 1.0, kvx, kvx+6)
+            end
+            # bottom boundary
+            if i==Ny1 && 1<j<Nx
+                updateindex!(L, +, 1.0, kvx, kvx-6)
+            end
+        else
+            # Vx equation internal points: x-Stokes
+            #
+            #                       gvx-6
+            #                        vx2
+            #                         |
+            #             gvy-6   ETA(i-1,j) gvy+6⋅Ny1-6
+            #              vy1    GGG(i-1,j)   vy3
+            #                     SXY0(i,j)
+            #                        ETA1
+            #                         b1                       
+            #                         |
+            #             GGGP(i,j)   |    GGGP(i,j+1)
+            #             ETAP(i,j)   |    ETAP(i,j+1) 
+            #   gvx-6⋅Ny1 SSX0(i,j)  gvx   SSX0(i,j+1) gvx+6⋅Ny1
+            #     vx1-------P1-------vx3-------P2-------vx5
+            #               gp        |      gp+3*Ny_
+            #                         |
+            #                         |
+            #              gvy     ETA(i,j)  gvy+6⋅Ny1
+            #              vy2     GGG(i,j)    vy4
+            #                      SXY0(i,j)
+            #                        ETA2
+            #                         b2
+            #                         |
+            #                       gvx+6
+            #                        vx4
+            #
+            # computational viscosity
+
+
+
+
+        end # Vx equation
+    end # for j=1:1:Nx1, i=1:1:Ny1
+end # @timeit to "build system"
+
+end # @timeit to "compute_hydromechanical_solution!"
     return nothing
 end
 
@@ -1211,10 +1303,23 @@ $(SIGNATURES)
     - nothing
 """
 function perform_plastic_iterations!(
+    ETA,
+    ETAP,
+    ETAPHI,
+    BETTAPHI,
+    PHI,
+    SXX0,
+    SXY0,
+    vx,
+    vy,
+    pr,
+    qxD,
+    qyD,
+    pf,
     timestep,
     sp
 )
-# @timeit to "perform_plastic_iterations!" begin
+@timeit to "perform_plastic_iterations!" begin
     @unpack Nx1,
         Ny1,
         nplast = sp
@@ -1225,6 +1330,7 @@ function perform_plastic_iterations!(
     # perform plastic iterations on nodes
     for iplast=1:1:nplast
         compute_hydromechanical_solution!(
+            ETA,
             ETAP,
             ETAPHI,
             BETTAPHI,
@@ -1240,7 +1346,7 @@ function perform_plastic_iterations!(
             sp
         )
     end
-# end # @timeit to "perform_plastic_iterations!"
+end # @timeit to "perform_plastic_iterations!"
     return nothing
 end
 
@@ -1566,7 +1672,7 @@ function simulation_loop(sp::StaticParameters)
     # set up of matrices for global gravity/thermal/hydromechanical solutions
     # -------------------------------------------------------------------------
     # hydromechanical solution: LHS coefficient matrix
-    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # hydromechanical solution: RHS vector
     R = zeros(Float64, Nx1*Ny1*6)
     # thermal solution: LHS coefficient matrix
@@ -1886,6 +1992,22 @@ function simulation_loop(sp::StaticParameters)
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
+        perform_plastic_iterations!(
+            ETA,
+            ETAP,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            SXX0,
+            SXY0,
+            vx,
+            vy,
+            pr,
+            qxD,
+            qyD,
+            pf,
+            timestep,
+            sp)
         # for iplast = 1:1:nplast
         #     # ~600 lines MATLAB
         # end
