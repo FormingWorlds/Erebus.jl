@@ -1177,6 +1177,15 @@ end # @timeit to "setup LSE"
 
 
 @timeit to "build system" begin
+    # computational viscosity
+    ETAcomp = @view @. ETA*GGG*dt / (GGG*dt + ETA)
+    ETAPcomp = @view @. ETAP*GGGP*dt / (GGGP*dt + ETAP)
+    # previous stresses
+    SXYcomp = @view @. SXY0*ETA / (GGG*dt + ETA)
+    SXXcomp = @view @. SXX0*ETAP / (GGGP*dt + ETAP)
+    # density gradients
+    dRHOdx = @view @. (RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) / 2 / dx
+    dRHOdy = @view @. (RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) / 2 / dy
     # compose LSE for Stokes & continuity equations
     for j=1:1:Nx1, i=1:1:Ny1
         # define global indices in algebraic space
@@ -1193,7 +1202,7 @@ end # @timeit to "setup LSE"
             j == Nx1 ||
             j == Nx
             # Vx equation external points: boundary conditions
-            # all locations: ghost unknowns vₓ₃=0 -> 1.0⋅vx(i,j)=0.0
+            # all locations: ghost unknowns vₓ₃=0 -> 1.0⋅Vx[i,j]=0.0
             updateindex!(L, +, 1.0, kvx, kvx)
             # R[kvx] = 0.0 # already done with initialization
             # left boundary
@@ -1215,37 +1224,99 @@ end # @timeit to "setup LSE"
         else
             # Vx equation internal points: x-Stokes
             #
-            #                       gvx-6
-            #                        vx2
+            #                       kvx-6
+            #                        Vx₂
             #                         |
-            #             gvy-6   ETA(i-1,j) gvy+6⋅Ny1-6
-            #              vy1    GGG(i-1,j)   vy3
+            #             kvy-6   ETA(i-1,j) kvy+6⋅Ny1-6
+            #              Vy₁    GGG(i-1,j)   Vy₃
             #                     SXY0(i,j)
-            #                        ETA1
-            #                         b1                       
+            #                        ETA₁ (ETAcomp)
+            #                       basic₁                       
             #                         |
             #             GGGP(i,j)   |    GGGP(i,j+1)
             #             ETAP(i,j)   |    ETAP(i,j+1) 
-            #   gvx-6⋅Ny1 SSX0(i,j)  gvx   SSX0(i,j+1) gvx+6⋅Ny1
-            #     vx1-------P1-------vx3-------P2-------vx5
-            #               gp        |      gp+3*Ny_
+            #   kvx-6⋅Ny1 SSX0(i,j)  kvx   SSX0(i,j+1) kvx+6⋅Ny1
+            #     Vx₁-------P₁-------Vx₃-------P₂-------Vx₅
+            #              kpm        |     kpm+6⋅Ny1
+            #             ETAPcomp    |    ETAPcomp    
             #                         |
-            #                         |
-            #              gvy     ETA(i,j)  gvy+6⋅Ny1
-            #              vy2     GGG(i,j)    vy4
+            #              kvy     ETA(i,j)  kvy+6⋅Ny1
+            #              Vy₂     GGG(i,j)    Vy₄
             #                      SXY0(i,j)
-            #                        ETA2
-            #                         b2
+            #                        ETA₂ (ETAcomp)
+            #                       basic₂
             #                         |
-            #                       gvx+6
-            #                        vx4
+            #                       kvx+6
+            #                        Vx₄
             #
-            # computational viscosity
-
-
-
-
+            updateindex!(L, +, ETAPcomp[i, j]/dx^2, kvx, kvx-Ny1*6) # Vx₁
+            updateindex!(L, +, ETAcomp[i-1, j]/dy^2, kvx, kvx-6) # Vx₂
+            updateindex!(
+                L,
+                +,
+                (
+                    -(ETAPcomp[i, j]+ETAPcomp[i, j+1])/dx^2
+                    -(ETAcomp[i-1, j]+ETAcomp[i,j])/dy^2
+                    -dRHOdx[i, j]*gx[i, j]*dt
+                ),
+                kvx,
+                kvx
+            ) # Vx₃
+            updateindex!(L, +, ETAcomp[i, j]/dy^2, kvx, kxk+6) # Vx₄
+            updateindex!(L, +, ETAPcomp[i, j+1]/dx^2, kvx, kvx+Ny1*6) # Vx₅
+            updateindex!(
+                L,
+                +,
+                (
+                    ETAPcomp[i, j]/dx/dy
+                    -ETAcomp[i, j]/dx/dy 
+                    -dRHOdy[i, j]*gx[i, j]*dt/4
+                ),
+                kvx,
+                kvy
+            ) # Vy₂
+            updateindex!(
+                L,
+                +,
+                (
+                    -ETAPcomp[i, j+1]/dx/dy
+                    +ETAcomp[i, j]/dx/dy
+                    -dRHOdy[i, j]*gx[i, j]*dt/4
+                ),
+                kvx,
+                kvy+6*Ny1
+            ) # Vy₄
+            updateindex!(
+                L,
+                +,
+                (
+                    -ETAPcomp[i, j]/dx/dy
+                    +ETAcomp[i-1, j]/dx/dy
+                    -dRHOdx[i, j]*gy[i, j]*dt/4
+                ),
+                kvx,
+                kvy-6
+            ) # Vy₁
+            updateindex!(
+                L,
+                +,
+                (
+                    ETAPcomp[i, j+1]/dx/dy
+                    -ETAcomp[i-1, j]/dx/dy
+                    -dRHOdx[i, j]*gy[i, j]*dt/4
+                ),
+                kvx,
+                kvy+6*Ny1-6
+            ) # Vy₃
+            updateindex!(L, +, pscale/dx, kvx, kpm) # P₁
+            updateindex!(L, +, -pscale/dx, kvx, kpm+Ny1*6) # P₂
+            R[kvx] = (
+                -RHOX[i, j]*gx[i, j]
+                -(SXYcomp[i, j]- SXYcomp[i-1, j])/dy
+                -(SXXcomp[i, j+1]-SXXcomp[i, j])/dx
+            ) # RHS
         end # Vx equation
+
     end # for j=1:1:Nx1, i=1:1:Ny1
 end # @timeit to "build system"
 
