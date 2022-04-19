@@ -1510,6 +1510,7 @@ using Test
         # LSE
         L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
         R = zeros(Nx1*Ny1*6)
+        S = zeros(Nx1*Ny1*6)
         # assemble hydromechanical LSE
         # assemble_hydromechanical_lse!(
         #     ETAcomp,
