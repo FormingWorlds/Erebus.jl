@@ -1474,5 +1474,71 @@ using Test
             @test ETAPHI[i, j] ≈ ETAPHI_ver[i, j] rtol=1e-6
         end
     end # testset "recompute_bulk_viscosity!()"
+
+    @testset "assemble_hydromechanical_lse()" begin
+        xsize = 35_000.0
+        ysize = 35_000.0
+        rplanet = 12_500.0
+        rcrust = 12_000.0
+        Nx = 35
+        Ny = 35
+        sp = HydrologyPlanetesimals.StaticParameters(
+            xsize=xsize,
+            ysize=ysize,
+            rplanet=rplanet,
+            rcrust=rcrust,
+            Nx=Nx,
+            Ny=Ny
+        )
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        vxleft = sp.vxleft
+        vxright = sp.vxright
+        vytop = sp.vytop
+        vybottom = sp.vybottom
+        bctop = sp.bctop
+        bcbottom = sp.bcbottom
+        bcftop = sp.bcftop
+        bcfbottom = sp.bcfbottom
+        bcfleft = sp.bcfleft
+        bcfright = sp.bcfright
+        pscale  = sp.pscale
+        etaphikoef = sp.etaphikoef
+        # simulating data
+
+        # LSE
+        L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+        R = zeros(Nx1*Ny1*6)
+        # assemble hydromechanical LSE
+        # assemble_hydromechanical_lse!(
+        #     ETAcomp,
+        #     ETAPcomp,
+        #     SXYcomp,
+        #     SXXcomp,
+        #     SYYcomp,
+        #     dRHOXdx,
+        #     dRHOXdy,
+        #     dRHOYdx,
+        #     dRHOYdy,
+        #     RHOX,
+        #     RHOY,
+        #     ETAPHI,
+        #     BETTAPHI,
+        #     PHI,
+        #     gx,
+        #     gy,
+        #     pr0,
+        #     pf0,
+        #     L,
+        #     R,
+        #     sp
+        # )
+        # verification
+        # from madcph.m, lines 779ff
+
+        # test
+        
+    end # testset "assemble_hydromechanical_lse()"
 end
 
