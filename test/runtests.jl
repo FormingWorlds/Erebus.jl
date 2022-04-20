@@ -1475,7 +1475,7 @@ using Test
         end
     end # testset "recompute_bulk_viscosity!()"
 
-    @testset "compute_viscosities_stresses_density_gradients()" begin
+    @testset "get_viscosities_stresses_density_gradients()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         dx, dy, dt = sp.dx, sp.dy, sp.dtelastic
         Nx, Ny = sp.Nx, sp.Ny
@@ -1587,7 +1587,7 @@ using Test
                 @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-6     
             end       
         end
-    end # testset "compute_viscosities_stresses_density_gradients()"
+    end # testset "get_viscosities_stresses_density_gradients()"
 
     @testset "assemble_hydromechanical_lse()" begin
         xsize = 35_000.0
