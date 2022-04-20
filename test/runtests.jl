@@ -1964,5 +1964,66 @@ using Test
             @test R[i] ≈ R_ver[i] rtol=1e-6
         end
     end # testset "assemble_hydromechanical_lse()"
+
+    @testset "process_hydromechanical_solution!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        pscale = sp.pscale
+        # simulate data
+        S = rand(Nx1*Ny1*6)
+        vx = zeros(Ny1, Nx1)
+        vy = zeros(Ny1, Nx1)
+        pr = zeros(Ny1, Nx1)
+        qxD = zeros(Ny1, Nx1)
+        qyD = zeros(Ny1, Nx1)
+        pf = zeros(Ny1, Nx1)
+        vx_ver = zeros(Ny1, Nx1)
+        vy_ver = zeros(Ny1, Nx1)
+        pr_ver = zeros(Ny1, Nx1)
+        qxD_ver = zeros(Ny1, Nx1)
+        qyD_ver = zeros(Ny1, Nx1)
+        pf_ver = zeros(Ny1, Nx1)
+        # process solution
+        HydrologyPlanetesimals.process_hydromechanical_solution!(
+            S,
+            vx,
+            vy,
+            pr,
+            qxD,
+            qyD,
+            pf,
+            pscale,
+            Nx1,
+            Ny1
+        )
+        # verification, from madcph.m, line 1058ff
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Define global indexes in algebraic space
+                kvx=((j-1)*Ny1+i-1)*6+1; # Vx solid
+                kvy=kvx+1; # Vy solid
+                kpm=kvx+2; # Ptotal
+                kqx=kvx+3; # qx Darcy
+                kqy=kvx+4; # qy Darcy
+                kpf=kvx+5; # P fluid
+                # Reload solution
+                vx_ver[i,j]=S[kvx]
+                vy_ver[i,j]=S[kvy]
+                pr_ver[i,j]=S[kpm]*pscale
+                qxD_ver[i,j]=S[kqx]
+                qyD_ver[i,j]=S[kqy]
+                pf_ver[i,j]=S[kpf]*pscale
+            end
+        end
+        # test
+        for j=1:1:Nx1, i=1:1:Ny1
+            @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-6
+            @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-6
+            @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-6
+            @test qxD[i, j] ≈ qxD_ver[i, j] rtol=1e-6
+            @test qyD[i, j] ≈ qyD_ver[i, j] rtol=1e-6
+            @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-6
+        end
+    end # testset "process_hydromechanical_solution!()"
 end
 

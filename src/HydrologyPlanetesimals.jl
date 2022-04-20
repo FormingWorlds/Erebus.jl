@@ -1683,6 +1683,53 @@ end # function assemble_hydromechanical_lse!
 
 
 """
+Process hydromechanical solution vector to output physical observables.
+
+$(SIGNATURES)
+
+# Details
+
+    - S: hydromechanical solution vector
+    - vx: solid velocity at Vx nodes
+    - vy: solid velocity at Vy nodes
+    - pr: total pressure at P nodes
+    - qxD: qx-Darcy flux at Vx nodes
+    - qyD: qy-Darcy flux at Vy nodes
+    - pf: fluid pressure at P nodes
+    - pscale: scaled pressure
+    - Nx1: number of Vx/Vy/P nodes in horizontal x-direction
+    - Ny1: number of Vx/Vy/P nodes in vertical y-direction
+
+# Returns
+
+    - nothing
+"""
+function process_hydromechanical_solution!(
+    S,
+    vx,
+    vy,
+    pr,
+    qxD,
+    qyD,
+    pf,
+    pscale,
+    Nx1,
+    Ny1
+)
+@timeit to "process_hydromechanical_solution!()" begin
+    S = reshape(S, (:, Ny1, Nx1))
+    vx .= S[1, :, :]
+    vy .= S[2, :, :]
+    pr .= S[3, :, :] .* pscale
+    qxD .= S[4, :, :]
+    qyD .= S[5, :, :]
+    pf .= S[6, :, :] .* pscale
+end # @timeit to "process_hydromechanical_solution!()"
+    return nothing
+end # function process_hydromechanical_solution!
+
+
+"""
 Compute hydromechanical solution.
 
 $(SIGNATURES)
@@ -1800,6 +1847,10 @@ end # @timeit to "setup LSE"
         dRHOYdy,
         RHOX,
         RHOY,
+        RHOFX,
+        RHOFY,
+        RX,
+        RY,
         ETAPHI,
         BETTAPHI,
         PHI,
@@ -1807,6 +1858,7 @@ end # @timeit to "setup LSE"
         gy,
         pr0,
         pf0,
+        dt,
         L,
         R,
         sp
@@ -1819,10 +1871,10 @@ end # @timeit to "solve system"
     S = reshape(S, (:, Ny1, Nx1))
     vx .= S[1, :, :]
     vy .= S[2, :, :]
-    pr .= S[3, :, :]
+    pr .= S[3, :, :] .* pscale
     qxD .= S[4, :, :]
     qyD .= S[5, :, :]
-    pf .= S[6, :, :]
+    pf .= S[6, :, :] .* pscale
 end # @timeit to "reshape solution"
 @timeit to "compute Dln[(1-ϕ)/ϕ]/Dt" begin
     
