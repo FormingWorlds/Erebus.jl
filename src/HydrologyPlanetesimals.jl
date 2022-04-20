@@ -1226,6 +1226,10 @@ $(SIGNATURES)
     - dRHOYdy: total density gradient in y direction at Vy nodes
     - RHOX: total density at Vx nodes
     - RHOY: total density at Vy nodes
+    - RHOFX: fluid density at Vx nodes
+    - RHOFY: fluid density at Vy nodes
+    - RX: ηfluid/Kϕ at Vx nodes
+    - RY: ηfluid/Kϕ at Vy nodes
     - ETAPHI: bulk viscosity at P nodes
     - BETTAPHI: bulk compressibility at P nodes
     - PHI: porosity at P nodes
@@ -1233,6 +1237,7 @@ $(SIGNATURES)
     - gy: y gravitational acceleration at Vy nodes
     - pr0: previous total pressure at P nodes
     - pf0: previous fluid pressure at P nodes
+    - dt: time step
     - L: ExtendableSparse matrix to store LHS coefficients
     - R: vector to store RHS coefficients
     - sp: simulation parameters
@@ -1253,6 +1258,10 @@ function assemble_hydromechanical_lse!(
     dRHOYdy,
     RHOX,
     RHOY,
+    RHOFX,
+    RHOFY,
+    RX,
+    RY,
     ETAPHI,
     BETTAPHI,
     PHI,
@@ -1260,6 +1269,7 @@ function assemble_hydromechanical_lse!(
     gy,
     pr0,
     pf0,
+    dt,
     L,
     R,
     sp
@@ -1277,11 +1287,14 @@ function assemble_hydromechanical_lse!(
         vybottom,
         bctop,
         bcbottom,
+        bcleft,
+        bcright,
         bcftop,
         bcfbottom,
         bcfleft,
         bcfright,
         pscale,
+        psurface,
         etaphikoef = sp
     for j=1:1:Nx1, i=1:1:Ny1
         # define global indices in algebraic space
@@ -1354,7 +1367,7 @@ function assemble_hydromechanical_lse!(
                 kvx,
                 kvx
             ) # Vx₃
-            updateindex!(L, +, ETAcomp[i, j]/dy^2, kvx, kxk+6) # Vx₄
+            updateindex!(L, +, ETAcomp[i, j]/dy^2, kvx, kvx+6) # Vx₄
             updateindex!(L, +, ETAPcomp[i, j+1]/dx^2, kvx, kvx+6*Ny1) # Vx₅
             updateindex!(
                 L,

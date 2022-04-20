@@ -1613,66 +1613,356 @@ using Test
         vybottom = sp.vybottom
         bctop = sp.bctop
         bcbottom = sp.bcbottom
+        bcleft = sp.bcleft
+        bcright = sp.bcright
         bcftop = sp.bcftop
         bcfbottom = sp.bcfbottom
         bcfleft = sp.bcfleft
         bcfright = sp.bcfright
         pscale  = sp.pscale
+        psurface = sp.psurface
         etaphikoef = sp.etaphikoef
-        # simulating data
-        ETAcomp = zeros()
-        #     ETAPcomp,
-        #     SXYcomp,
-        #     SXXcomp,
-        #     SYYcomp,
-        #     dRHOXdx,
-        #     dRHOXdy,
-        #     dRHOYdx,
-        #     dRHOYdy,
-        #     RHOX,
-        #     RHOY,
-        #     ETAPHI,
-        #     BETTAPHI,
-        #     PHI,
-        #     gx,
-        #     gy,
-        #     pr0,
-        #     pf0,
-
-
+        dt = sp.dtelastic
+        # simulate data
+        ETA = rand(Ny, Nx)
+        ETAP = rand(Ny1, Nx1)
+        GGG = rand(Ny, Nx)
+        GGGP = rand(Ny1, Nx1)
+        SXY0 = rand(Ny, Nx)
+        SXX0 = rand(Ny, Nx)
+        RHOX = rand(Ny1, Nx1)
+        RHOY = rand(Ny1, Nx1)
+        RHOFX = rand(Ny1, Nx1)
+        RHOFY = rand(Ny1, Nx1)
+        RX = rand(Ny1, Nx1)
+        RY = rand(Ny1, Nx1)
+        ETAPHI = rand(Ny1, Nx1)
+        BETTAPHI = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        gx = rand(Ny1, Nx1)
+        gy = rand(Ny1, Nx1) 
+        pr0 = rand(Ny1, Nx1)
+        pf0 = rand(Ny1, Nx1)
+        ETAcomp = zeros(Ny, Nx)
+        ETAPcomp = zeros(Ny1, Nx1)
+        SXYcomp = zeros(Ny, Nx)
+        SXXcomp = zeros(Ny, Nx)
+        SYYcomp = zeros(Ny, Nx)
+        dRHOXdx = zeros(Ny1, Nx1)
+        dRHOXdy = zeros(Ny1, Nx1)
+        dRHOYdx = zeros(Ny1, Nx1)
+        dRHOYdy = zeros(Ny1, Nx1)
         # LSE
         L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
         R = zeros(Nx1*Ny1*6)
-        S = zeros(Nx1*Ny1*6)
+        L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
+        R_ver = zeros(Nx1*Ny1*6)
         # assemble hydromechanical LSE
-        # assemble_hydromechanical_lse!(
-        #     ETAcomp,
-        #     ETAPcomp,
-        #     SXYcomp,
-        #     SXXcomp,
-        #     SYYcomp,
-        #     dRHOXdx,
-        #     dRHOXdy,
-        #     dRHOYdx,
-        #     dRHOYdy,
-        #     RHOX,
-        #     RHOY,
-        #     ETAPHI,
-        #     BETTAPHI,
-        #     PHI,
-        #     gx,
-        #     gy,
-        #     pr0,
-        #     pf0,
-        #     L,
-        #     R,
-        #     sp
-        # )
+        HydrologyPlanetesimals.assemble_hydromechanical_lse!(
+            ETAcomp,
+            ETAPcomp,
+            SXYcomp,
+            SXXcomp,
+            SYYcomp,
+            dRHOXdx,
+            dRHOXdy,
+            dRHOYdx,
+            dRHOYdy,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            dt,
+            L,
+            R,
+            sp
+        )
         # verification
         # from madcph.m, lines 779ff
+        # Hydro-Mechanical Solution
+        # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Define global indexes in algebraic space
+                kvx=((j-1)*Ny1+i-1)*6+1; # Vx solid
+                kvy=kvx+1; # Vy solid
+                kpm=kvx+2; # Ptotal
+                kqx=kvx+3; # qx Darcy
+                kqy=kvx+4; # qy Darcy
+                kpf=kvx+5; # P fluid
+                
+                # Vx equation External points
+                if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+                    # Boundary Condition 
+                    # Ghost unknowns 1*Vx=0
+                    if j==Nx1
+                        L_ver[kvx,kvx]=1; # Left part
+                        R_ver[kvx]=0; # Right part
+                    end
+                    # Left Boundary
+                    if j==1
+                        L_ver[kvx,kvx]=1; # Left part
+                        R_ver[kvx]=vxleft; # Right part
+                    end
+                    # Right Boundary
+                    if j==Nx 
+                        L_ver[kvx,kvx]=1; # Left part
+                        R_ver[kvx]=vxright; # Right part
+                    end
+                    # Top boundary
+                    if i==1 && j>1 && j<Nx
+                        L_ver[kvx,kvx]=1; # Left part
+                        L_ver[kvx,kvx+6]=bctop; # Left part
+                        R_ver[kvx]=0; # Right part
+                    end
+                    # Top boundary
+                    if i==Ny1 && j>1 && j<Nx
+                        L_ver[kvx,kvx]=1; # Left part
+                        L_ver[kvx,kvx-6]=bcbottom; # Left part
+                        R_ver[kvx]=0; # Right part
+                    end
+                else
+                # Internal points: x-Stokes eq.
+                #            Vx2
+                #             |
+                #        Vy1  |  Vy3
+                #             |
+                #     Vx1-P1-Vx3-P2-Vx5
+                #             |
+                #        Vy2  |  Vy4
+                #             |
+                #            Vx4
+                #
+                # Computational viscosity
+                ETA1=ETA[i-1,j]*GGG[i-1,j]*dt/(GGG[i-1,j]*dt+ETA[i-1,j])
+                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
+                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
+                ETAP2=ETAP[i,j+1]*GGGP[i,j+1]*dt/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                # Old stresses
+                SXY1=SXY0[i-1,j]*ETA[i-1,j]/(GGG[i-1,j]*dt+ETA[i-1,j])
+                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
+                SXX1=SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
+                SXX2=SXX0[i,j+1]*ETAP[i,j+1]/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                # Density gradients
+                dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
+                dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
+                # Left part
+                L_ver[kvx,kvx-Ny1*6]=ETAP1/dx^2; # Vx1
+                L_ver[kvx,kvx-6]=ETA1/dy^2; # Vx2
+                L_ver[kvx,kvx]=-(ETAP1+ETAP2)/dx^2-  (ETA1+ETA2)/dy^2-  dRHOdx*gx[i,j]*dt; # Vx3
+                L_ver[kvx,kvx+6]=ETA2/dy^2; # Vx4
+                L_ver[kvx,kvx+Ny1*6]=ETAP2/dx^2; # Vx5
+                L_ver[kvx,kvy]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy2
+                L_ver[kvx,kvy+Ny1*6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy4
+                L_ver[kvx,kvy-6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy1
+                L_ver[kvx,kvy+Ny1*6-6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy3
+                L_ver[kvx,kpm]=pscale/dx; # P1
+                L_ver[kvx,kpm+Ny1*6]=-pscale/dx; # P2
+                # Right part
+                R_ver[kvx]=-RHOX[i,j]*gx[i,j]-(SXY2-SXY1)/dy-(SXX2-SXX1)/dx
+                end
+                
+                # Vy equation External points
+                if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
+                    # Boundary Condition
+                    # Ghost unknowns 1*Vx=0
+                    if i==Ny1
+                        L_ver[kvy,kvy]=1; # Left part
+                        R_ver[kvy]=0; # Right part
+                    end
+                    # Top boundary
+                    if i==1
+                        L_ver[kvy,kvy]=1; # Left part
+                        R_ver[kvy]=vytop; # Right part
+                    end
+                    # Bottom boundary
+                    if i==Ny
+                        L_ver[kvy,kvy]=1; # Left part
+                        R_ver[kvy]=vybottom; # Right part
+                    end
+                    # Left boundary
+                    if j==1 && i>1 && i<Ny
+                        L_ver[kvy,kvy]=1; # Left part
+                        L_ver[kvy,kvy+6*Ny1]=bcleft; # Left part
+                        R_ver[kvy]=0; # Right part
+                    end
+                    # Right boundary
+                    if j==Nx1 && i>1 && i<Ny
+                        L_ver[kvy,kvy]=1; # Left part
+                        L_ver[kvy,kvy-6*Ny1]=bcright; # Left part
+                        R_ver[kvy]=0; # Right part
+                    end
+                else
+                # Internal points: y-Stokes eq.
+                #            Vy2
+                #             |
+                #         Vx1 P1 Vx3
+                #             |
+                #     Vy1----Vy3----Vy5
+                #             |
+                #         Vx2 P2 Vx4
+                #             |
+                #            Vy4
+                #
+                # Computational viscosity
+                ETA1=ETA[i,j-1]*GGG[i,j-1]*dt/(GGG[i,j-1]*dt+ETA[i,j-1])
+                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
+                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
+                ETAP2=ETAP[i+1,j]*GGGP[i+1,j]*dt/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                # Old stresses
+                SXY1=SXY0[i,j-1]*ETA[i,j-1]/(GGG[i,j-1]*dt+ETA[i,j-1])
+                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
+                SYY1=-SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
+                SYY2=-SXX0[i+1,j]*ETAP[i+1,j]/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                # Density gradients
+                dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
+                dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
+                # Left part
+                L_ver[kvy,kvy-Ny1*6]=ETA1/dx^2; # Vy1
+                L_ver[kvy,kvy-6]=ETAP1/dy^2; # Vy2
+                L_ver[kvy,kvy]=-(ETAP1+ETAP2)/dy^2-  (ETA1+ETA2)/dx^2-  dRHOdy*gy[i,j]*dt; # Vy3
+                L_ver[kvy,kvy+6]=ETAP2/dy^2; # Vy4
+                L_ver[kvy,kvy+Ny1*6]=ETA2/dx^2; # Vy5
+                L_ver[kvy,kvx]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx3
+                L_ver[kvy,kvx+6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx4
+                L_ver[kvy,kvx-Ny1*6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx1
+                L_ver[kvy,kvx+6-Ny1*6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx2
+                L_ver[kvy,kpm]=pscale/dy; # P1
+                L_ver[kvy,kpm+6]=-pscale/dy; # P2
+                
+                # Right part
+                R_ver[kvy]=-RHOY[i,j]*gy[i,j]-(SXY2-SXY1)/dx-(SYY2-SYY1)/dy
+                end
+                
+                # P equation External points
+                if i==1 || j==1 || i==Ny1 || j==Nx1
+                    # Boundary Condition
+                    # 1*P=0
+                    L_ver[kpm,kpm]=1; # Left part
+                    R_ver[kpm]=0; # Right part
+                else
+                # Internal points: continuity eq.
+                # dVx/dx+dVy/dy=0
+                #            Vy1
+                #             |
+                #        Vx1--P--Vx2
+                #             |
+                #            Vy2
+                #
+                # Left part
+                L_ver[kpm,kvx-Ny1*6]=-1/dx; # Vx1
+                L_ver[kpm,kvx]=1/dx; # Vx2
+                L_ver[kpm,kvy-6]=-1/dy; # Vy1
+                L_ver[kpm,kvy]=1/dy; # Vy2
+                L_ver[kpm,kpm]= pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
+                L_ver[kpm,kpf]=-pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
+                # Right part
+                R_ver[kpm]=(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
+                end
 
+                # qxDarcy equation External points
+                if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+                    # Boundary Condition
+                    # 1*qx=0
+                    L_ver[kqx,kqx]=1; # Left part
+                    R_ver[kqx]=0; # Right part
+                    # Top boundary
+                    if i==1 && j>1 && j<Nx
+                        L_ver[kqx,kqx+6]=bcftop; # Left part
+                    end
+                    # Bottom boundary
+                    if i==Ny1 && j>1 && j<Nx
+                        L_ver[kqx,kqx-6]=bcfbottom; # Left part
+                    end
+                else
+                # Internal points: x-Darcy eq.
+                # Rx*qxDarcy+dP/dx=RHOfluid*gx
+                #     P1-qxD-P2
+                # Left part
+                L_ver[kqx,kqx]=RX[i,j]; # qxD
+                L_ver[kqx,kpf]=-pscale/dx; # P1
+                L_ver[kqx,kpf+Ny1*6]=pscale/dx; # P2
+                # Right part
+                R_ver[kqx]=RHOFX[i,j]*gx[i,j]
+                end
+                
+                # qyDarcy equation External points
+                if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
+                    # Boundary Condition
+                    # 1*Vy=0
+                    L_ver[kqy,kqy]=1; # Left part
+                    R_ver[kqy]=0; # Right part
+                    # Left boundary
+                    if j==1 && i>1 && i<Ny
+                        L_ver[kqy,kqy+6*Ny1]=bcfleft; # Left part
+                    end
+                    # Right boundary
+                    if j==Nx1 && i>1 && i<Ny
+                        L_ver[kqy,kqy-6*Ny1]=bcfright; # Left part
+                    end
+                else
+                # Internal points: y-Stokes eq.
+                # Internal points: x-Darcy eq.
+                # Rx*qxDarcy+dP/dx=RHOfluid*gx
+                #      P1
+                #      |
+                #     qxD
+                #      |
+                #      P2
+                # Left part
+                L_ver[kqy,kqy]=RY[i,j]; # qxD
+                L_ver[kqy,kpf]=-pscale/dy; # P1
+                L_ver[kqy,kpf+6]=pscale/dy; # P
+                # Right part
+                R_ver[kqy]=RHOFY[i,j]*gy[i,j]
+                end
+                
+                # Pfluid equation External points
+                if i==1 || j==1 || i==Ny1 || j==Nx1 || (i==2 && j==2)
+                    # Boundary Condition
+                    # 1*Pfluid=0
+                    L_ver[kpf,kpf]=1; # Left part
+                    R_ver[kpf]=0; # Right part
+                    # Real BC
+                    if i==2 && j==2
+                        L_ver[kpf,kpf]=1*pscale; #Left part
+                        R_ver[kpf]=psurface; # Right part
+                    end
+                else
+                # Internal points: continuity eq.
+                # dqxD/dx+dqyD/dy-(Ptotal-Pfluid)/ETHAphi=0
+                #            qyD1
+                #              |
+                #        qxD1--P--qxD2
+                #              |
+                #            qyD2
+                #
+                # Left part
+                L_ver[kpf,kqx-Ny1*6]=-1/dx; # qxD1
+                L_ver[kpf,kqx]=1/dx; # qxD2
+                L_ver[kpf,kqy-6]=-1/dy; # qyD1
+                L_ver[kpf,kqy]=1/dy; # qyD2
+                L_ver[kpf,kpm]=-pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
+                L_ver[kpf,kpf]= pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
+                # Right part
+                R_ver[kpf]=-(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
+                end
+            end
+        end
         # test
-        
+        for j=1:1:Nx1*6, i=1:1:Ny1*6
+            @test L[i, j] ≈ L_ver[i, j] rtol=1e-6
+            @test R[i] ≈ R_ver[i] rtol=1e-6
+        end
     end # testset "assemble_hydromechanical_lse()"
 end
 
