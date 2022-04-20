@@ -1118,6 +1118,95 @@ function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy, sp)
 end # function compute_gravity_solution!
 
 
+"""
+Compute viscosities, stresses, and density gradients
+for hydromechanical solver.
+
+$(SIGNATURES)
+
+# Details
+
+## In
+
+    - ETA: viscoplastic viscosity at basic nodes
+    - ETAP: viscosity at P nodes
+    - GGG: shear modulus at basic nodes
+    - GGGP: shear modulus at P nodes
+    - SXY0: σ₀xy XY stress at basic nodes
+    - SXX0: σ₀′xx XX stress at P nodes
+    - RHOX: density at Vx nodes
+    - RHOY: density at Vy nodes
+    - dx: horizontal grid spacing
+    - dy: vertical grid spacing
+    - dt: time step
+    - Nx: number of horizontal basic grid points
+    - Ny: number of vertical basic grid points
+    - Nx1: number of horizontal Vx/Vy/P grid points
+    - Ny1: number of vertical Vx/Vy/P grid points
+
+## Out 
+
+    - ETAcomp: computational viscosity at basic nodes
+    - ETAPcomp: computational viscosity at P nodes
+    - SXYcomp: previous XY stresses at basic nodes
+    - SXXcomp: previous XX stresses at P nodes
+    - SYYcomp: previous YY stresses at P nodes
+    - dRHOXdx: density gradient at Vx nodes in x direction
+    - dRHOXdy: density gradient at Vx nodes in y direction
+    - dRHOYdx: density gradient at Vy nodes in x direction
+    - dRHOYdy: density gradient at Vy nodes in y direction
+
+# Returns
+
+    - nothing
+"""
+function get_viscosities_stresses_density_gradients!(
+    ETA,
+    ETAP,
+    GGG,
+    GGGP,
+    SXY0,
+    SXX0,
+    RHOX,
+    RHOY,
+    dx,
+    dy,
+    dt,
+    Nx,
+    Ny,
+    Nx1,
+    Ny1,
+    ETAcomp,
+    ETAPcomp,
+    SXYcomp,
+    SXXcomp,
+    SYYcomp,
+    dRHOXdx,
+    dRHOXdy,
+    dRHOYdx,
+    dRHOYdy
+)
+@timeit to "get_viscosities_stresses_density_gradients!()" begin
+    # computational viscosity
+    @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
+    @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
+    # previous stresses
+    @views @. SXYcomp = SXY0*ETA / (GGG*dt + ETA)
+    @views @. SXXcomp = (
+        SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
+    )
+    @views @. SYYcomp = (
+        -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
+    )
+    # density gradients
+    @views @. dRHOXdx[:, 2:Nx] = (RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) / 2 / dx
+    @views @. dRHOXdy[2:Ny, :] = (RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) / 2 / dy
+    @views @. dRHOYdx[:, 2:Nx] = (RHOY[:, 3:Nx1]-RHOY[:, 1:Nx1-2]) / 2 / dx
+    @views @. dRHOYdy[2:Ny, :] = (RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) / 2 / dy
+    return nothing
+end # @timeit to "get_viscosities_stresses_density_gradients!()"
+end # function get_viscosities_stresses_density_gradients!
+
 
 """
 Assemble hydromechanical system of equations.
@@ -1238,7 +1327,7 @@ function assemble_hydromechanical_lse!(
             #                         |
             #             GGGP(i,j)   |    GGGP(i,j+1)
             #             ETAP(i,j)   |    ETAP(i,j+1) 
-            #   kvx-6⋅Ny1 SSX0(i,j)  kvx   SSX0(i,j+1) kvx+6⋅Ny1
+            #   kvx-6⋅Ny1 SXX0(i,j)  kvx   SXX0(i,j+1) kvx+6⋅Ny1
             #     Vx₁-------P₁-------Vx₃-------P₂-------Vx₅
             #              kpm        |     kpm+6⋅Ny1
             #             ETAPcomp    |    ETAPcomp    
@@ -1648,20 +1737,43 @@ function compute_hydromechanical_solution!(
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     R = zeros(Nx1*Ny1*6)
     S = zeros(Nx1*Ny1*6)
+    ETAcomp = zeros(Ny, Nx)
+    ETAPcomp = zeros(Ny1, Nx1)
+    SXYcomp = zeros(Ny, Nx)
+    SXXcomp = zeros(Ny, Nx)
+    SYYcomp = zeros(Ny, Nx)
+    dRHOXdx = zeros(Ny1, Nx1)
+    dRHOXdy = zeros(Ny1, Nx1)
+    dRHOYdx = zeros(Ny1, Nx1)
+    dRHOYdy = zeros(Ny1, Nx1)
 end # @timeit to "setup LSE"
 @timeit to "build system" begin
-    # computational viscosity
-    @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
-    @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
-    # previous stresses
-    @views @. SXYcomp = SXY0*ETA / (GGG*dt + ETA)
-    @views @. SXXcomp = SXX0*ETAP / (GGGP*dt + ETAP)
-    @views @. SYYcomp = -SXX0*ETAP / (GGGP*dt + ETAP)
-    # density gradients
-    @views @. dRHOXdx[:, 2:Nx] = (RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) / 2 / dx
-    @views @. dRHOXdy[2:Ny, :] = (RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) / 2 / dy
-    @views @. dRHOYdx[:, 2:Nx] = (RHOY[:, 3:Nx1]-RHOY[:, 1:Nx1-2]) / 2 / dx
-    @views @. dRHOYdy[2:Ny, :] = (RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) / 2 / dy
+    get_viscosities_stresses_density_gradients!(
+        ETA,
+        ETAP,
+        GGG,
+        GGGP,
+        SXY0,
+        SXX0,
+        RHOX,
+        RHOY,
+        dx,
+        dy,
+        dt,
+        Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        ETAcomp,
+        ETAPcomp,
+        SXYcomp,
+        SXXcomp,
+        SYYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy
+    )
     # compose LSE for Stokes & continuity equations
     assemble_hydromechanical_lse!(
         ETAcomp,

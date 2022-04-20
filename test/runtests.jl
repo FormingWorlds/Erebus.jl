@@ -1475,6 +1475,120 @@ using Test
         end
     end # testset "recompute_bulk_viscosity!()"
 
+    @testset "compute_viscosities_stresses_density_gradients()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        dx, dy, dt = sp.dx, sp.dy, sp.dtelastic
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        # simulate data
+        ETA = rand(Ny, Nx)
+        ETAP = rand(Ny1, Nx1)
+        GGG = rand(Ny, Nx)
+        GGGP = rand(Ny1, Nx1)
+        SXY0 = rand(Ny, Nx)
+        SXX0 = rand(Ny, Nx)
+        RHOX = rand(Ny1, Nx1)
+        RHOY = rand(Ny1, Nx1)
+        ETAcomp = zeros(Ny, Nx)
+        ETAPcomp = zeros(Ny1, Nx1)
+        SXYcomp = zeros(Ny, Nx)
+        SXXcomp = zeros(Ny, Nx)
+        SYYcomp = zeros(Ny, Nx)
+        dRHOXdx = zeros(Ny1, Nx1)
+        dRHOXdy = zeros(Ny1, Nx1)
+        dRHOYdx = zeros(Ny1, Nx1)
+        dRHOYdy = zeros(Ny1, Nx1)
+        # compute viscosities, stresses, density gradients
+        HydrologyPlanetesimals.get_viscosities_stresses_density_gradients!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            dx,
+            dy,
+            dt,
+            Nx,
+            Ny,
+            Nx1,
+            Ny1,
+            ETAcomp,
+            ETAPcomp,
+            SXYcomp,
+            SXXcomp,
+            SYYcomp,
+            dRHOXdx,
+            dRHOXdy,
+            dRHOYdx,
+            dRHOYdy
+        )
+        # verification, from madcph.m, lines 832ff, 905ff
+        for j=1:1:Nx, i=1:1:Ny
+            # x-Stokes
+            if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+                # pass: external points
+            else
+                # x-Stokes internal points
+                # Computational viscosity
+                ETA1=ETA[i-1,j]*GGG[i-1,j]*dt/(GGG[i-1,j]*dt+ETA[i-1,j])
+                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
+                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
+                ETAP2=ETAP[i,j+1]*GGGP[i,j+1]*dt/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                # Old stresses
+                SXY1=SXY0[i-1,j]*ETA[i-1,j]/(GGG[i-1,j]*dt+ETA[i-1,j])
+                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
+                SXX1=SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
+                SXX2=SXX0[i,j+1]*ETAP[i,j+1]/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                # Density gradients
+                dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
+                dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
+                # test
+                @test ETAcomp[i-1, j] ≈ ETA1 rtol=1e-6
+                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-6
+                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-6
+                @test ETAPcomp[i, j+1] ≈ ETAP2 rtol=1e-6
+                @test SXYcomp[i-1, j] ≈ SXY1 rtol=1e-6
+                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-6
+                @test SXXcomp[i, j] ≈ SXX1 rtol=1e-6
+                @test SXXcomp[i, j+1] ≈ SXX2 rtol=1e-6
+                @test dRHOXdx[i, j] ≈ dRHOdx rtol=1e-6
+                @test dRHOXdy[i, j] ≈ dRHOdy rtol=1e-6        
+            end
+            # y-Stokes
+            if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
+                # pass: external points
+            else
+                # Computational viscosity
+                ETA1=ETA[i,j-1]*GGG[i,j-1]*dt/(GGG[i,j-1]*dt+ETA[i,j-1])
+                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
+                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
+                ETAP2=ETAP[i+1,j]*GGGP[i+1,j]*dt/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                # Old stresses
+                SXY1=SXY0[i,j-1]*ETA[i,j-1]/(GGG[i,j-1]*dt+ETA[i,j-1])
+                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
+                SYY1=-SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
+                SYY2=-SXX0[i+1,j]*ETAP[i+1,j]/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                # Density gradients
+                dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
+                dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
+                # test
+                @test ETAcomp[i, j-1] ≈ ETA1 rtol=1e-6
+                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-6
+                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-6
+                @test ETAPcomp[i+1, j] ≈ ETAP2 rtol=1e-6
+                @test SXYcomp[i, j-1] ≈ SXY1 rtol=1e-6
+                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-6
+                @test SYYcomp[i, j] ≈ SYY1 rtol=1e-6
+                @test SYYcomp[i+1, j] ≈ SYY2 rtol=1e-6
+                @test dRHOYdx[i, j] ≈ dRHOdx rtol=1e-6
+                @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-6     
+            end       
+        end
+    end # testset "compute_viscosities_stresses_density_gradients()"
+
     @testset "assemble_hydromechanical_lse()" begin
         xsize = 35_000.0
         ysize = 35_000.0
@@ -1506,6 +1620,25 @@ using Test
         pscale  = sp.pscale
         etaphikoef = sp.etaphikoef
         # simulating data
+        ETAcomp = zeros()
+        #     ETAPcomp,
+        #     SXYcomp,
+        #     SXXcomp,
+        #     SYYcomp,
+        #     dRHOXdx,
+        #     dRHOXdy,
+        #     dRHOYdx,
+        #     dRHOYdy,
+        #     RHOX,
+        #     RHOY,
+        #     ETAPHI,
+        #     BETTAPHI,
+        #     PHI,
+        #     gx,
+        #     gy,
+        #     pr0,
+        #     pf0,
+
 
         # LSE
         L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
