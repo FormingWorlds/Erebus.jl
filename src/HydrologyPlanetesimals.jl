@@ -1759,6 +1759,44 @@ end
 
 
 """
+Compute porosity coefficient Aϕ = Dln[(1-ϕ)/ϕ]/Dt
+
+$(SIGNATURES)
+
+# Details
+
+## In
+
+    - ETAPHI: bulk viscosity at P Nodes
+    - BETTAPHI: bulk compressibility at P nodes
+    - PHI: porosity at P Nodes
+    - pr: total pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - pr0: previous step total pressure at P nodes
+    - pf0: previous step fluid pressure at P nodes
+    - dt: time step
+
+## Out
+
+    - APHI: porosity coefficient at P nodes
+
+# Returns
+
+    - aphimax: maximum absolute porosity coefficient
+"""
+function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
+@timeit to "compute_Aϕ!()" begin
+    # reset APHI
+    APHI .= 0.0
+    @views @. APHI = (
+        ((pr-pf)/ETAPHI + ((pr-pr0)-(pf-pf0))/dt*BETTAPHI) / (1-PHI) / PHI
+    )
+    return maximum(abs, APHI)
+end # @timeit to "compute_Aϕ!()"
+end # function compute_Aϕ!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)

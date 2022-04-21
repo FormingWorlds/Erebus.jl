@@ -2025,5 +2025,48 @@ using Test
             @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-6
         end
     end # testset "process_hydromechanical_solution!()"
+
+    @testset "compute_Aϕ!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dt = sp.dtelastic
+        # simulate data
+        APHI = rand(Ny1, Nx1)
+        APHI_ver = rand(Ny1, Nx1)
+        ETAPHI = rand(Ny1, Nx1)
+        BETTAPHI = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        pr = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        pr0 = rand(Ny1, Nx1)
+        pf0 = rand(Ny1, Nx1)
+        # compute Aϕ
+        aphimax = HydrologyPlanetesimals.compute_Aϕ!(
+            APHI,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            pr,
+            pf,
+            pr0,
+            pf0,
+            dt
+        )
+        # verification, from madcph.m, line 1078ff
+        APHI_ver = zeros(Ny1, Nx1)
+        aphimax_ver=0
+        for j=2:1:Nx
+            for i=2:1:Ny
+                APHI_ver[i,j]=((pr[i,j]-pf[i,j])/ETAPHI[i,j]+  ((pr[i,j]-pr0[i,j])-(pf[i,j]-pf0[i,j]))/dt*BETTAPHI[i,j])/(1-PHI[i,j])/PHI[i,j]
+                aphimax_ver=max(aphimax_ver,abs(APHI_ver[i,j]))
+            end
+        end
+        # test
+        for j=2:1:Nx, i=2:1:Ny
+            @test APHI[i, j] ≈ APHI_ver[i, j] rtol=1e-6
+        end
+        @test aphimax ≈ aphimax_ver rtol=1e-6
+    end # testset "compute_Aϕ!()"
 end
 
