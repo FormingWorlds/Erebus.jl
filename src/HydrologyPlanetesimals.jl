@@ -1730,168 +1730,6 @@ end # function process_hydromechanical_solution!
 
 
 """
-Compute hydromechanical solution.
-
-$(SIGNATURES)
-
-# Details 
-
-    - ETA: viscoplastic viscosity at basic nodes
-    - ETAP: viscosity at P nodes 
-    - ETAPHI: bulk viscosity at P nodes
-    - BETTAPHI: bulk compresibility at P nodes
-    - PHI: porosity at P nodes
-    - SXX0: σxx₀′ at P nodes
-    - SXY0: σxy₀′ at basic nodes
-    - vx: solid Vx-velocity at Vx nodes
-    - vy: solid Vy-velocity at Vy nodes
-    - pr: total pressure at P nodes
-    - qxD: qx Darcy flux at Vx nodes
-    - qyD: qy Darcy flux at Vy nodes
-    - pf: fluid pressure at P nodes
-    - sp: simulation parameters
-
-# Returns
-
-    - nothing
-"""
-function compute_hydromechanical_solution!(
-    ETA,
-    ETAP,
-    ETAPHI,
-    BETTAPHI,
-    PHI,
-    SXX0,
-    SXY0,
-    vx,
-    vy,
-    pr,
-    qxD,
-    qyD,
-    pf,
-    sp
-)
-@timeit to "compute_hydromechanical_solution!" begin
-    @unpack Nx,
-        Ny,
-        Nx1,
-        Ny1,
-        dx,
-        dy,
-        vxleft,
-        vxright,
-        vytop,
-        vybottom,
-        bctop,
-        bcbottom,
-        bcftop,
-        bcfbottom,
-        bcfleft,
-        bcfright,
-        pscale,
-        etaphikoef = sp
-    # recompute (interpolate) bulk viscosity at P nodes
-    recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-    # setup LSE for hydromechanical Solution
-@timeit to "setup LSE" begin
-    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
-    R = zeros(Nx1*Ny1*6)
-    S = zeros(Nx1*Ny1*6)
-    ETAcomp = zeros(Ny, Nx)
-    ETAPcomp = zeros(Ny1, Nx1)
-    SXYcomp = zeros(Ny, Nx)
-    SXXcomp = zeros(Ny, Nx)
-    SYYcomp = zeros(Ny, Nx)
-    dRHOXdx = zeros(Ny1, Nx1)
-    dRHOXdy = zeros(Ny1, Nx1)
-    dRHOYdx = zeros(Ny1, Nx1)
-    dRHOYdy = zeros(Ny1, Nx1)
-end # @timeit to "setup LSE"
-@timeit to "build system" begin
-    get_viscosities_stresses_density_gradients!(
-        ETA,
-        ETAP,
-        GGG,
-        GGGP,
-        SXY0,
-        SXX0,
-        RHOX,
-        RHOY,
-        dx,
-        dy,
-        dt,
-        Nx,
-        Ny,
-        Nx1,
-        Ny1,
-        ETAcomp,
-        ETAPcomp,
-        SXYcomp,
-        SXXcomp,
-        SYYcomp,
-        dRHOXdx,
-        dRHOXdy,
-        dRHOYdx,
-        dRHOYdy
-    )
-    # compose LSE for Stokes & continuity equations
-    assemble_hydromechanical_lse!(
-        ETAcomp,
-        ETAPcomp,
-        SXYcomp,
-        SXXcomp,
-        SYYcomp,
-        dRHOXdx,
-        dRHOXdy,
-        dRHOYdx,
-        dRHOYdy,
-        RHOX,
-        RHOY,
-        RHOFX,
-        RHOFY,
-        RX,
-        RY,
-        ETAPHI,
-        BETTAPHI,
-        PHI,
-        gx,
-        gy,
-        pr0,
-        pf0,
-        dt,
-        L,
-        R,
-        sp
-    )
-end # @timeit to "build system"
-@timeit to "solve system" begin
-    S = L \ R
-end # @timeit to "solve system"
-@timeit to "reshape solution" begin
-    S = reshape(S, (:, Ny1, Nx1))
-    vx .= S[1, :, :]
-    vy .= S[2, :, :]
-    pr .= S[3, :, :] .* pscale
-    qxD .= S[4, :, :]
-    qyD .= S[5, :, :]
-    pf .= S[6, :, :] .* pscale
-end # @timeit to "reshape solution"
-@timeit to "compute Dln[(1-ϕ)/ϕ]/Dt" begin
-    
-
-end # @timeit to "compute Dln[(1-ϕ)/ϕ]/Dt"
-@timeit to "compute fluid velocity" begin
-    
-end # @timeit to "compute fluid velocity"
-@timeit to "define displacement timestep dtm" begin
-
-end # @timeit to "compute timestep"
-end # @timeit to "compute_hydromechanical_solution!"
-    return nothing
-end
-
-
-"""
 Recompute bulk viscosity at P nodes.
 
 # Details
@@ -1916,74 +1754,6 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
     )
     @. ETAPHI = etaphikoef * ETAP / PHI
 end # @timeit to "recompute_bulk_viscosity!"
-    return nothing
-end
-
-
-"""
-Perform plastic iterations on nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - timestep: current time step
-    - ETA
-    - ETAP
-    - ETAPHI
-
-
-    - sp: simulation parameters
-
-# Returns
-
-    - nothing
-"""
-function perform_plastic_iterations!(
-    ETA,
-    ETAP,
-    ETAPHI,
-    BETTAPHI,
-    PHI,
-    SXX0,
-    SXY0,
-    vx,
-    vy,
-    pr,
-    qxD,
-    qyD,
-    pf,
-    timestep,
-    sp
-)
-@timeit to "perform_plastic_iterations!" begin
-    @unpack Nx1,
-        Ny1,
-        nplast = sp
-    # no elastic compaction on first timestep
-    if timestep == 1
-        BETTAPHI .= 0.0
-    end
-    # perform plastic iterations on nodes
-    for iplast=1:1:nplast
-        compute_hydromechanical_solution!(
-            ETA,
-            ETAP,
-            ETAPHI,
-            BETTAPHI,
-            PHI,
-            SXX0,
-            SXY0,
-            vx,
-            vy,
-            pr,
-            qxD,
-            qyD,
-            pf,
-            sp
-        )
-    end
-end # @timeit to "perform_plastic_iterations!"
     return nothing
 end
 
@@ -2629,28 +2399,110 @@ function simulation_loop(sp::StaticParameters)
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
-        perform_plastic_iterations!(
-            ETA,
-            ETAP,
-            ETAPHI,
-            BETTAPHI,
-            PHI,
-            SXX0,
-            SXY0,
-            vx,
-            vy,
-            pr,
-            qxD,
-            qyD,
-            pf,
-            timestep,
-            sp)
         # 768-1316
-        # for iplast = 1:1:nplast
-        #     # ~600 lines MATLAB
-        # end
+        if timestep == 1
+            # no elastic compaction during first timestep
+            BETTAPHI .= 0.0
+        end
+        # perform plastic iterations
+        for iplast=1:1:nplast
+            # recompute bulk viscosity at pressure nodes
+            recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
+            # compute computational viscosities, stresses, and density gradients
+            get_viscosities_stresses_density_gradients!(
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                SXY0,
+                SXX0,
+                RHOX,
+                RHOY,
+                dx,
+                dy,
+                dt,
+                Nx,
+                Ny,
+                Nx1,
+                Ny1,
+                ETAcomp,
+                ETAPcomp,
+                SXYcomp,
+                SXXcomp,
+                SYYcomp,
+                dRHOXdx,
+                dRHOXdy,
+                dRHOYdx,
+                dRHOYdy
+            )
+            # assemble hydromechanical system of equations
+            assemble_hydromechanical_lse!(
+                ETAcomp,
+                ETAPcomp,
+                SXYcomp,
+                SXXcomp,
+                SYYcomp,
+                dRHOXdx,
+                dRHOXdy,
+                dRHOYdx,
+                dRHOYdy,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                gx,
+                gy,
+                pr0,
+                pf0,
+                dt,
+                L,
+                R,
+                sp
+            )
+            # solve hydromechanical system of equations
+@timeit to "solve system" begin
+            S = L \ R
+end # @timeit to "solve system"
+            # obtain hydromechanical observables from solution
+            process_hydromechanical_solution!(
+                S,
+                vx,
+                vy,
+                pr,
+                qxD,
+                qyD,
+                pf,
+                pscale,
+                Nx1,
+                Ny1
+            )
+            # compute Dln[(1-PHI)/PHI]/Dt
 
 
+    
+
+
+
+            # compute fluid velocities
+
+    
+
+    
+            # define displacement timestep dtm
+
+
+
+        
+            
+
+
+
+        end # for iplast=1:1:nplast
 # Thu 21
         # ---------------------------------------------------------------------
         # # interpolate updated viscoplastic viscosity to markers
