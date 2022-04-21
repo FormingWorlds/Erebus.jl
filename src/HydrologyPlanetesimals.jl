@@ -1856,6 +1856,55 @@ end # function compute_fluid_velocities!
 
 
 """
+Compute displacement time step.
+
+$(SIGNATURES)
+
+# Details
+
+    - vx: solid vx velocity at Vx nodes
+    - vy: solid vy velocity at Vy nodes
+    - vxf: fluid vx velocity at Vx nodes
+    - vyf: fluid vy velocity at Vy nodes
+    - dt: current time step
+    - dx: x-grid horizontal spacing
+    - dy: y-grid vertical spacing
+    - dxymax: maximum allowed grid spacing movement of markers per time step
+    - aphimax: maximum observed porosity coefficient
+    - dphimax: maximum allowed porosity ratio change per time step
+   
+# Returns
+
+    - dtm: displacement time step
+"""
+function compute_displacement_timestep(
+    vx,
+    vy,
+    vxf,
+    vyf,
+    dt,
+    dx,
+    dy,
+    dxymax,
+    aphimax,
+    dphimax
+)
+@timeit to "compute_displacement_timestep()" begin
+    maxvx = maximum(abs, vx)
+    maxvy = maximum(abs, vy)
+    maxvxf = maximum(abs, vxf)
+    maxvyf = maximum(abs, vyf)    
+    dtm = ifelse(dt*maxvx > dxymax*dx, dxymax*dx/maxvx, dt)
+    dtm = ifelse(dtm*maxvy > dxymax*dy, dxymax*dy/maxvy, dtm)
+    dtm = ifelse(dtm*maxvxf > dxymax*dx, dphimax*dx/maxvxf, dtm)
+    dtm = ifelse(dtm*maxvyf > dxymax*dy, dphimax*dy/maxvyf, dtm)
+    dtm = ifelse(dtm*aphimax > dphimax, dphimax/aphimax, dtm)
+end # @timeit to "compute_displacement_timestep()"
+    return dtm
+end # function compute_displacement_timestep
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -2603,11 +2652,18 @@ end # @timeit to "solve system"
                 sp
             )
             # define displacement timestep dtm
-
-
-
-        
-            
+            dtm = compute_displacement_timestep(
+                vx,
+                vy,
+                vxf,
+                vyf,
+                dt,
+                dx,
+                dy,
+                dxymax,
+                aphimax,
+                dphimax
+            )
 
 
 

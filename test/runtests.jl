@@ -2131,5 +2131,58 @@ using Test
             @test vyf[i, j] ≈ vyf_ver[i, j] rtol=1e-6
         end
     end # testset "compute_fluid_velocity!()"
+
+    @testset "compute_displacement_timestep()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dt = sp.dtelastic
+        dx, dy = sp.dx, sp.dy
+        dxymax, dphimax = sp.dxymax, sp.dphimax        
+        # simulate data
+        aphimax = rand()
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        vxf = rand(Ny1, Nx1)
+        vyf = rand(Ny1, Nx1)
+        # compute displacement timestep
+        dtm = HydrologyPlanetesimals.compute_displacement_timestep(
+            vx,
+            vy,
+            vxf,
+            vyf,
+            dt,
+            dx,
+            dy,
+            dxymax,
+            aphimax,
+            dphimax
+        )
+        # verification, from madcph.m, line 1117ff
+        dtm_ver=dt
+        maxvx=maximum(abs.(vx))
+        maxvy=maximum(abs.(vy))
+        if dtm_ver*maxvx>dxymax*dx
+            dtm_ver=dxymax*dx/maxvx
+        end
+        if dtm_ver*maxvy>dxymax*dy
+            dtm_ver=dxymax*dy/maxvy
+        end
+        # Fluid velocity
+        maxvxf=maximum(abs.(vxf))
+        maxvyf=maximum(abs.(vyf))
+        if dtm_ver*maxvxf>dxymax*dx
+            dtm_ver=dxymax*dx/maxvxf
+        end
+        if dtm_ver*maxvyf>dxymax*dy
+            dtm_ver=dxymax*dy/maxvyf
+        end
+        # Porosity change
+        if aphimax*dtm_ver>dphimax
+            dtm_ver=dphimax/aphimax
+        end
+        # test
+        @test dtm ≈ dtm_ver rtol=1e-6
+    end # testset "compute_displacement_timestep()"
 end
 
