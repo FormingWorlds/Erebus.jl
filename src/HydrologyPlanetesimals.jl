@@ -1797,6 +1797,65 @@ end # function compute_Aϕ!
 
 
 """
+Compute current fluid velocity.
+
+$(SIGNATURES)
+
+# Details
+
+## In
+
+    - PHIX: porosity at Vx nodes
+    - PHIY: porosity at Vy nodes
+    - qxD: qx-Darcy flux at Vx nodes
+    - qyD: qy-Darcy flux at Vy nodes
+    - vx: solid velocity at Vx nodes
+    - vy: solid velocity at Vy nodes
+    - sp: simulation parameters
+
+## Out 
+
+    - vxf: fluid vx velocity at Vx nodes
+    - vyf: fluid vy velocity at Vy nodes
+
+# Returns
+
+    - nothing
+"""
+function compute_fluid_velocities!(
+    PHIX,
+    PHIY,
+    qxD,
+    qyD,
+    vx,
+    vy,
+    vxf,
+    vyf,
+    sp
+)
+@timeit to "compute_fluid_velocities!()" begin
+    @unpack Nx, Ny, Nx1, Ny1, bcftop, bcfbottom, bcfleft, bcfright = sp
+    # vx velocity
+    @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
+    # top boundary
+    vxf[1, :] = -bcftop  * vxf[2, :]
+    # bottom boundary
+    vxf[Ny1, :] = -bcfbottom * vxf[Ny, :]
+    # vy velocity
+    @. vyf[1:Ny, 2:Nx] = qyD[1:Ny, 2:Nx] / PHIY[1:Ny, 2:Nx]
+    # left boundary
+    vyf[:, 1] = -bcfleft * vyf[:, 2]
+    # right boundary
+    vyf[:, Nx1] = -bcfright * vyf[:, Nx]
+    # adding solid velocity
+    vxf .+= vx
+    vyf .+= vy
+end # @timeit to "compute_fluid_velocities!()"
+    return nothing
+end # function compute_fluid_velocities!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -2135,7 +2194,7 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # iterate timesteps   
     # -------------------------------------------------------------------------
-    nsteps = 100 # <======= remove for production
+    nsteps = 10 # <======= remove for production
     p = Progress(
         nsteps,
         dt=0.5,
@@ -2519,18 +2578,30 @@ end # @timeit to "solve system"
                 Nx1,
                 Ny1
             )
-            # compute Dln[(1-PHI)/PHI]/Dt
-
-
-    
-
-
-
+            # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
+            aphimax = compute_Aϕ!(
+                APHI,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                pr,
+                pf,
+                pr0,
+                pf0,
+                dt
+            )
             # compute fluid velocities
-
-    
-
-    
+            compute_fluid_velocities!(
+                PHIX,
+                PHIY,
+                qxD,
+                qyD,
+                vx,
+                vy,
+                vxf,
+                vyf,
+                sp
+            )
             # define displacement timestep dtm
 
 

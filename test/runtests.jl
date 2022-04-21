@@ -2068,5 +2068,68 @@ using Test
         end
         @test aphimax ≈ aphimax_ver rtol=1e-6
     end # testset "compute_Aϕ!()"
+
+    @testset "compute_fluid_velocity!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        bcftop, bcfbottom = sp.bcftop, sp.bcfbottom
+        bcfleft, bcfright = sp.bcfleft, sp.bcfright
+        # simulate data
+        PHIX = rand(Ny1, Nx1)
+        PHIY = rand(Ny1, Nx1)
+        qxD = rand(Ny1, Nx1)
+        qyD = rand(Ny1, Nx1)
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        vxf = zeros(Ny1, Nx1)
+        vyf = zeros(Ny1, Nx1)
+        vxf_ver = zeros(Ny1, Nx1)
+        vyf_ver = zeros(Ny1, Nx1)
+        # compute fluid velocities
+        HydrologyPlanetesimals.compute_fluid_velocities!(
+            PHIX,
+            PHIY,
+            qxD,
+            qyD,
+            vx,
+            vy,
+            vxf,
+            vyf,
+            sp
+        )
+        # verification, from madcph.m line 1090ff
+        for j=1:1:Nx
+            for i=2:1:Ny
+                vxf_ver[i,j]=qxD[i,j]/PHIX[i,j]
+            end
+        end
+        # Apply BC
+        # Top
+        vxf_ver[1,:]= -bcftop*vxf_ver[2,:];    
+        # Bottom
+        vxf_ver[Ny1,:]= -bcfbottom*vxf_ver[Ny,:];    
+        # Vy fluid
+        for j=2:1:Nx
+            for i=1:1:Ny
+                vyf_ver[i,j]=qyD[i,j]/PHIY[i,j]
+            end
+        end
+        # Apply BC
+        # Left
+        vyf_ver[:,1]= -bcfleft*vyf_ver[:,2];    
+        # Right
+        vyf_ver[:, Nx1]= -bcfright*vyf_ver[:, Nx];     
+        # Add solid velocity
+        # vxf0=vxf; vxf=vxf+vx
+        vxf_ver.=vxf_ver.+vx
+        # vyf0=vyf; vyf=vyf+vy
+        vyf_ver.=vyf_ver.+vy
+        # test
+        for j=1:1:Nx1, i=1:1:Ny1
+            @test vxf[i, j] ≈ vxf_ver[i, j] rtol=1e-6
+            @test vyf[i, j] ≈ vyf_ver[i, j] rtol=1e-6
+        end
+    end # testset "compute_fluid_velocity!()"
 end
 
