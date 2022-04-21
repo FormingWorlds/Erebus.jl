@@ -2184,5 +2184,98 @@ using Test
         # test
         @test dtm ≈ dtm_ver rtol=1e-6
     end # testset "compute_displacement_timestep()"
+
+    @testset "compute_stress_strainrate!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dtm = sp.dtelastic
+        dx, dy = sp.dx, sp.dy
+        # simulate data
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        ETA = rand(Ny, Nx)
+        GGG = rand(Ny, Nx)
+        ETAP = rand(Ny1, Nx1)
+        GGGP = rand(Ny1, Nx1)
+        SXX0 = rand(Ny1, Nx1)
+        SXY0 = rand(Ny, Nx)
+        EXY = rand(Ny, Nx)
+        SXY = rand(Ny, Nx)
+        DSXY = rand(Ny, Nx)
+        EXX = rand(Ny1, Nx1)
+        SXX = rand(Ny1, Nx1)
+        DSXX = rand(Ny1, Nx1)
+        EII = zeros(Ny1, Nx1)
+        SII = zeros(Ny1, Nx1)
+        # compute stress, strainrate
+        HydrologyPlanetesimals.compute_stress_strainrate!(
+            vx,
+            vy,
+            ETA,
+            GGG,
+            ETAP,
+            GGGP,
+            SXX0,
+            SXY0,
+            EXX,
+            EXY,
+            SXX,
+            SXY,
+            DSXX,
+            DSXY,
+            EII,
+            SII,
+            dtm,
+            sp
+        )
+        # verification, from madcph.m, line 1144ff
+        EXY_ver = zeros(Ny, Nx); # Strain rate EPSILONxy, 1/s
+        SXY_ver = zeros(Ny, Nx); # Stress SIGMAxy, Pa
+        DSXY_ver = zeros(Ny, Nx); # Stress change SIGMAxy, Pa
+        for j=1:1:Nx
+            for i=1:1:Ny
+                # EXY;SXY; DSXY
+                EXY_ver[i,j]=0.5*((vx[i+1,j]-vx[i,j])/dy+(vy[i,j+1]-vy[i,j])/dx)
+                SXY_ver[i,j]=2*ETA[i,j]*EXY_ver[i,j]*GGG[i,j]*dtm/(GGG[i,j]*dtm+ETA[i,j])+SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dtm+ETA[i,j])
+                DSXY_ver[i,j]=SXY_ver[i,j]-SXY0[i,j]
+            end
+        end
+        # Compute EPSILONxx; SIGMA'xx in pressure nodes
+        EXX_ver = zeros(Ny1, Nx1); # Strain rate EPSILONxx, 1/s
+        EII_ver = zeros(Ny1, Nx1); # Second strain rate invariant, 1/s
+        SXX_ver = zeros(Ny1, Nx1); # Stress SIGMA'xx, Pa
+        SII_ver = zeros(Ny1, Nx1); # Second stress invariant, Pa
+        DSXX_ver = zeros(Ny1, Nx1); # Stress change SIGMA'xx, Pa
+        DIVV_ver = zeros(Ny1, Nx1); # div[v]
+        for j=2:1:Nx
+            for i=2:1:Ny
+                # DIVV
+                DIVV_ver[i,j]=(vx[i,j]-vx[i,j-1])/dx+(vy[i,j]-vy[i-1,j])/dy
+                # EXX
+                EXX_ver[i,j]=((vx[i,j]-vx[i,j-1])/dx-(vy[i,j]-vy[i-1,j])/dy)/2
+                # SXX
+                SXX_ver[i,j]=2*ETAP[i,j]*EXX_ver[i,j]*GGGP[i,j]*dtm/(GGGP[i,j]*dtm+ETAP[i,j])+SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dtm+ETAP[i,j])
+                DSXX_ver[i,j]=SXX_ver[i,j]-SXX0[i,j]
+                # EII
+                EII_ver[i,j]=(EXX_ver[i,j]^2+((EXY_ver[i,j]+EXY_ver[i-1,j]+EXY_ver[i,j-1]+EXY_ver[i-1,j-1])/4)^2)^0.5
+                # SII
+                SII_ver[i,j]=(SXX_ver[i,j]^2+((SXY_ver[i,j]+SXY_ver[i-1,j]+SXY_ver[i,j-1]+SXY_ver[i-1,j-1])/4)^2)^0.5
+            end
+        end
+        # test
+        for j=1:1:Nx, i=1:1:Ny
+            @test EXY[i,j] ≈ EXY_ver[i,j] rtol=1e-6
+            @test SXY[i,j] ≈ SXY_ver[i,j] rtol=1e-6
+            @test DSXY[i,j] ≈ DSXY_ver[i,j] rtol=1e-6
+        end
+        for j=2:1:Nx, i=2:1:Ny
+            @test EXX[i,j] ≈ EXX_ver[i,j] rtol=1e-6
+            @test SXX[i,j] ≈ SXX_ver[i,j] rtol=1e-6
+            # @test DSXX[i,j] ≈ DSXX_ver[i,j] rtol=1e-6
+            @test EII[i,j] ≈ EII_ver[i,j] rtol=1e-6
+            @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-6
+        end
+    end # testset "compute_stress_strainrate!()"
 end
 

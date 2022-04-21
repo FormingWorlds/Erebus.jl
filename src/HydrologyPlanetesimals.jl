@@ -1905,6 +1905,101 @@ end # function compute_displacement_timestep
 
 
 """
+Compute stress, stress change, and strain rate components.
+
+$(SIGNATURES)
+
+# Details
+
+## In
+    - vx: solid vx velocity at Vx nodes
+    - vy: solid vy velocity at Vy nodes
+    - ETA: viscosity at basic nodes
+    - GGG: shear modulus at basic nodes
+    - ETAP: viscosity at P nodes
+    - GGGP: shear modulus at P nodes
+    - SXX0: previous time step σ₀′xx at P nodes
+    - SXY0: previous time step σ₀xy at basic nodes
+    - dtm: displacement time step
+    - sp: simulation parameters 
+
+## Out
+
+    - EXX: ϵxx at P nodes
+    - EXY: ϵxy at basic nodes
+    - SXX: σ′xx P nodes
+    - SXY: σxy at basic nodes
+    - DSXX: stress change Δσ′xx at P nodes
+    - DSXY: stress change Δσxy at basic nodes
+    - EII: second strain rate invariant ϵᴵᴵ at P nodes
+    - SII: second stress invariant σᴵᴵ at P nodes
+
+# Returns
+    
+        - nothing
+"""
+function compute_stress_strainrate!(
+    vx,
+    vy,
+    ETA,
+    GGG,
+    ETAP,
+    GGGP,
+    SXX0,
+    SXY0,
+    EXX,
+    EXY,
+    SXX,
+    SXY,
+    DSXX,
+    DSXY,
+    EII,
+    SII,
+    dtm,
+    sp
+)
+@timeit to "compute_stress_strainrate!()" begin
+    @unpack Nx, Ny, Nx1, Ny1, dx, dy = sp
+    # ϵxy, σxy, Δσxy at basic nodes
+    EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
+    @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
+    @. DSXY = SXY - SXY0
+    # ϵxx, σ′xx at P nodes
+    # @. DIVV[2:end, 2:end] = 
+    #     diff(vx, dims=2)[2:end, :]/dx + diff(vy, dims=1)[:, 2:end]/dy
+    EXX[2:Ny1, 2:Nx1] .= ( 
+        0.5 .* (
+            diff(vx, dims=2)[2:Ny1, :]./dx .- diff(vy, dims=1)[:, 2:Nx1]./dy
+        )
+    )
+    @. SXX = 2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP) + SXX0*ETAP/(GGGP*dtm+ETAP)
+    @. DSXX = SXX - SXX0
+    @. EII[2:Ny, 2:Nx] = sqrt(
+        EXX[2:Ny, 2:Nx]^2 + (
+            (
+                EXY[2:Ny, 2:Nx]
+                +EXY[1:Ny-1,2:Nx]
+                +EXY[2:Ny,1:Nx-1]
+                +EXY[1:Ny-1,1:Nx-1]
+            )/4.0
+        )^2
+    )
+    @. SII[2:Ny, 2:Nx] = sqrt(
+        SXX[2:Ny, 2:Nx]^2 + (
+            (
+                SXY[2:Ny, 2:Nx]
+                +SXY[1:Ny-1,2:Nx]
+                +SXY[2:Ny,1:Nx-1]
+                +SXY[1:Ny-1,1:Nx-1]
+            )/4.0
+        )^2
+    )
+end # @timeit to "compute_stress_strainrate!()"
+    return nothing
+end # function compute_stress_strainrate!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
