@@ -2373,5 +2373,146 @@ using Test
             @test R[i] == max(A[i], B[i], 0.0)
         end
     end # testset "positive_max()"
+
+    @testset "compute_nodal_adjustment!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(
+            etamin=0.2,
+            etamax=0.4
+        )
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dt = sp.dtelastic
+        nplast = sp.nplast
+        etamin, etamax = sp.etamin, sp.etamax
+        etawt = 0.5
+        iplast = 1
+        # simulate data
+        ETA = rand(Ny, Nx)
+        ETA0 = rand(Ny, Nx)
+        ETA5 = zeros(Ny, Nx)
+        GGG = rand(Ny, Nx)
+        SXX = rand(Ny1, Nx1)
+        SXY = rand(Ny, Nx)
+        pr = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        COH = rand(Ny, Nx)
+        TEN = rand(Ny, Nx)
+        FRI = rand(Ny, Nx)
+        SIIB = zeros(Ny, Nx)
+        siiel = zeros(Ny, Nx)
+        prB = zeros(Ny, Nx)
+        pfB = zeros(Ny, Nx)
+        syieldc = zeros(Ny, Nx)
+        syieldt = zeros(Ny, Nx)
+        syield = zeros(Ny, Nx)
+        etapl = zeros(Ny, Nx)
+        YNY = zeros(Bool, Ny, Nx)
+        YNY5 = zeros(Bool, Ny, Nx)
+        DSY = rand(Ny, Nx)
+        DDD = rand(Ny, Nx)
+        YNPL = zeros(Bool, Ny, Nx)
+        YERRNOD = zeros(nplast)
+        YERRNOD_ver = zeros(nplast)
+        # compute nodal adjustment
+        HydrologyPlanetesimals.compute_nodal_adjustment!(
+            ETA,
+            ETA0,
+            ETA5,
+            GGG,
+            SXX,
+            SXY,
+            pr,
+            pf,
+            COH,
+            TEN,
+            FRI,
+            SIIB,
+            siiel,
+            prB,
+            pfB,
+            syieldc,
+            syieldt,
+            syield,
+            etapl,
+            YNY,
+            YNY5,
+            YERRNOD,
+            DSY,
+            YNPL,
+            DDD,
+            dt,
+            iplast,
+            etawt,
+            sp
+        )
+        # verification, from madcph.m, line 1232ff
+        ETA5_ver=copy(ETA0)
+        YNY5_ver = zeros(Ny, Nx)
+        DSY_ver = zeros(Ny, Nx)
+        ynpl=0
+        ddd=0
+        for i=1:1:Ny
+            for j=1:1:Nx
+                # Compute second stress invariant
+                SIIB_ver=(SXY[i,j]^2+((SXX[i,j]+SXX[i+1,j]+SXX[i,j+1]+SXX[i+1,j+1])/4)^2)^0.5
+                # Compute second invariant for a purely elastic stress build-up
+                siiel_ver=SIIB_ver*(GGG[i,j]*dt+ETA[i,j])/ETA[i,j]
+                # Compute total & fluid pressure
+                prB_ver=(pr[i,j]+pr[i+1,j]+pr[i,j+1]+pr[i+1,j+1])/4
+                pfB_ver=(pf[i,j]+pf[i+1,j]+pf[i,j+1]+pf[i+1,j+1])/4
+                # Compute yielding stress
+                syieldc_ver=COH[i,j]+FRI[i,j]*(prB_ver-pfB_ver); # Confined fracture
+                syieldt_ver=TEN[i,j]+(prB_ver-pfB_ver); # Tensile fracture
+                syield_ver=max(syieldt_ver,syieldc_ver,0); # Non-negative strength requirement
+                # Update error for old yielding nodes
+                ynn=0
+                if(YNY[i,j]>0)
+                    ynn=1
+                    DSY_ver[i,j]=SIIB_ver-syield_ver
+                    ddd=ddd+DSY_ver[i,j]^2
+                    ynpl=ynpl+1
+                end
+                # Correcting viscosity for yielding
+                if syield_ver<siiel_ver
+                    # New viscosity for the basic node
+                    etapl_ver=dt*GGG[i,j]*syield_ver/(siiel_ver-syield_ver)
+                    if etapl_ver<ETA0[i,j]
+                        # Recompute nodal visocity
+                        ETA5_ver[i,j]=etapl_ver^(1-etawt)*ETA[i,j]^etawt
+                        # Mark yielding nodes
+                        YNY5_ver[i,j]=1
+                        # Apply viscosity cutoff values
+                        if ETA5_ver[i,j]<etamin
+                            ETA5_ver[i,j]=etamin
+                        elseif ETA5_ver[i,j]>etamax
+                            ETA5_ver[i,j]=etamax
+                        end
+                        # Update Error for new yielding nodes
+                        if ynn==0
+                            DSY_ver[i,j]=SIIB_ver-syield_ver
+                            ddd=ddd+DSY_ver[i,j]^2
+                            ynpl=ynpl+1
+                        end
+                    else
+                        ETA5_ver[i,j]=ETA0[i,j]
+                        YNY5_ver[i,j]=0
+                    end
+                else
+                    ETA5_ver[i,j]=ETA0[i,j]
+                    YNY5_ver[i,j]=0
+                end
+            end
+        end
+        # Compute yielding error for markers
+        if(ynpl>0)
+            YERRNOD_ver[iplast]=(ddd/ynpl)^0.5
+        end
+        # test
+        for j=1:1:Nx, i=1:1:Ny
+            @test ETA5[i, j] ≈ ETA5_ver[i, j] rtol=1e-6
+            @test YNY5[i, j] == YNY5_ver[i, j]
+        end
+        @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-6
+    end # testset "compute_nodal_adjustment!()"
 end
 

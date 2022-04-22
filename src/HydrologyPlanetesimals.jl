@@ -2097,10 +2097,43 @@ function compute_nodal_adjustment!(
     ETA,
     ETA0,
     ETA5,
-    ETA00,
-    YNY
+    GGG,
+    SXX,
+    SXY,
+    pr,
+    pf,
+    COH,
+    TEN,
+    FRI,
+    SIIB,
+    siiel,
+    prB,
+    pfB,
+    syieldc,
+    syieldt,
+    syield,
+    etapl,
+    YNY,
+    YNY5,
+    YERRNOD,
+    DSY,
+    YNPL,
+    DDD,
+    dt,
+    iplast,
+    etawt,
+    sp
 )
 @timeit to "compute_nodal_adjustment!()" begin
+    @unpack Nx, Ny, Nx1, Ny1, etamin, etamax = sp
+    # reset / setup
+    @. begin
+    ETA5 = copy(ETA0)
+    YNY5 = 0
+    DSY = 0.0
+    YNPL = 0
+    DDD = 0.0
+    end
     # second stress invariant at basic nodes
     @views @. SIIB = sqrt(
         SXY^2 + (
@@ -2113,11 +2146,11 @@ function compute_nodal_adjustment!(
         )^2
     )
     # second invariant for purely elastic stress buildup at basic nodes
-    @views @. siiel = SIIB * (GGG*dt+ETA)/ETA
+    @views @. siiel = SIIB * (GGG*dt+ETA) / ETA
     # interpolate total and fluid pressure at basic nodes
     @views @. prB = 0.25 * (
         pr[1:Ny, 1:Nx] + pr[2:Ny1, 1:Nx] + pr[1:Ny, 2:Nx1] + pr[2:Ny1, 2:Nx1]
-    )
+    )   
     @views @. pfB = 0.25 * (
         pf[1:Ny, 1:Nx] + pf[2:Ny1, 1:Nx] + pf[1:Ny, 2:Nx1] + pf[2:Ny1, 2:Nx1]
     )
@@ -2125,10 +2158,36 @@ function compute_nodal_adjustment!(
     @views @. syieldc = COH + FRI * (prB-pfB)
     # yielding stress: tensile fracture
     @views @. syieldt = TEN + (prB-pfB)
-
-
+    # non-negative maximum yielding stress
+    positive_max!(syieldc, syieldt, syield)
+    # update error for previous yielding nodes
+    @views @. DSY[YNY>0] = SIIB[YNY>0] - syield[YNY>0]
+    @views @. DDD[YNY>0] += DSY[YNY>0]^2
+    @views @. YNPL[YNY>0] .= 1
+    # new viscosity for basic nodes
+    @views @. etapl = dt * GGG * syield / (siiel-syield)
+    # correcting viscosity for yielding
+    # recompute nodal viscosity, apply min/max viscosity cutoffs
+    @views @. ETA5[syield<siiel && etapl<ETA0] = (
+        etapl[syield<siiel && etapl<ETA0]^(1.0-etawt)
+        * ETA[syield<siiel && etapl<ETA0]^etawt
+    )
+    @views @. ETA5[syield<siiel && etapl<ETA0 && ETA5>etamax] = etamax
+    @views @. ETA5[syield<siiel && etapl<ETA0 && ETA5<etamin] = etamin
+    # mark yielding nodes
+    @views @. YNY5[syield<siiel && etapl<ETA0] = 1
+    # update error for new yielding nodes
+    @views @. DSY[syield<siiel && etapl<ETA0 && YNPL==0] = (
+        SIIB[syield<siiel && etapl<ETA0 && YNPL==0]
+         -syield[syield<siiel && etapl<ETA0 && YNPL==0]
+    )
+    @views @. DDD[syield<siiel && etapl<ETA0 && YNPL==0] +=  
+        DSY[syield<siiel && etapl<ETA0 && YNPL==0]^2
+    @views @. YNPL[syield<siiel && etapl<ETA0 && YNPL==0] = 1
+    if sum(YNPL) > 0
+        YERRNOD[iplast] = sqrt(sum(DDD)/sum(YNPL))
+    end
 end # @timeit to "compute_nodal_adjustment!()
-    return ynpl
 end # function compute_nodal_adjustment!
 
 
@@ -2234,7 +2293,7 @@ function simulation_loop(sp::StaticParameters)
     hrsolidm = start_hrsolidm
     # radiogenic heat production fluid phase
     hrfluidm = start_hrfluidm
-    # Yielding error of nodes
+    # Nodes yielding error vector of plastic iterations
     YERRNOD = zeros(Float64, nplast) 
 
     # -------------------------------------------------------------------------
@@ -2270,9 +2329,9 @@ function simulation_loop(sp::StaticParameters)
     # friction
     FRI = zeros(Float64, Ny, Nx)
     # plastic yielding node property
-    YNY = zeros(Bool, Ny, Nx)
+    YNY = falses(Ny, Nx)
     # initial plastic yielding node property
-    YNY00 = zeros(Bool, Ny, Nx)
+    YNY00 = falses(Ny, Nx)
 
     # Vx nodes
     # grid geometry
