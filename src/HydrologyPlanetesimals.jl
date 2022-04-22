@@ -2069,6 +2069,92 @@ end # @timeit to "symmetrize_p_node_observables!()"
 
 
 """
+Compute nodal adjustment and return yielding error.
+
+$(SIGNATURES)
+
+# Details
+
+    - ETA
+    - ETA0
+    - ETA5
+    - ETA00
+    - GGG
+    - SXX
+    - COH
+    - FRI
+    - TEN
+    - YNY
+    - pr
+    - pf
+    
+
+# Returns
+
+    - ynpl: yielding error node count
+"""
+function compute_nodal_adjustment!(
+    ETA,
+    ETA0,
+    ETA5,
+    ETA00,
+    YNY
+)
+@timeit to "compute_nodal_adjustment!()" begin
+    # second stress invariant at basic nodes
+    @views @. SIIB = sqrt(
+        SXY^2 + (
+            0.25 * (
+                SXX[1:Ny, 1:Nx]
+                +SXX[2:Ny1, 1:Nx]
+                +SXX[1:Ny, 2:Nx1]
+                +SXX[2:Ny1, 2:Nx1]
+            )
+        )^2
+    )
+    # second invariant for purely elastic stress buildup at basic nodes
+    @views @. siiel = SIIB * (GGG*dt+ETA)/ETA
+    # interpolate total and fluid pressure at basic nodes
+    @views @. prB = 0.25 * (
+        pr[1:Ny, 1:Nx] + pr[2:Ny1, 1:Nx] + pr[1:Ny, 2:Nx1] + pr[2:Ny1, 2:Nx1]
+    )
+    @views @. pfB = 0.25 * (
+        pf[1:Ny, 1:Nx] + pf[2:Ny1, 1:Nx] + pf[1:Ny, 2:Nx1] + pf[2:Ny1, 2:Nx1]
+    )
+    # yielding stress: confined fracture
+    @views @. syieldc = COH + FRI * (prB-pfB)
+    # yielding stress: tensile fracture
+    @views @. syieldt = TEN + (prB-pfB)
+
+
+end # @timeit to "compute_nodal_adjustment!()
+    return ynpl
+end # function compute_nodal_adjustment!
+
+
+"""
+Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.
+
+$(SIGNATURES)
+
+# Details
+
+    - A: first array
+    - B: second array
+    - C: result array
+
+# Returns
+
+    - nothing
+"""
+function positive_max!(A, B, C)
+    @inbounds for i in eachindex(A)
+        C[i] = max(0, ifelse(A[i] > B[i], A[i], B[i]))
+    end
+end # function positive_max
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -2863,15 +2949,23 @@ end # @timeit to "solve system"
             )
             # symmetrize P node observables
             symmetrize_p_node_observables!(
+                SXX,
                 APHI,
-                ETAPHI,
-                BETTAPHI,
                 PHI,
                 pr,
                 pf,
-                pr0,
-                pf0,
-                dt
+                ps,
+                Nx,
+                Ny,
+                Nx1,
+                Ny1
+            )
+            # save nodal stress changes - RMK: not required in code
+            # DSXX0 = copy(DSXX)
+            # DSXY0 = copy(DSXY)
+            # nodal adjustment
+            compute_nodal_adjustment(
+                
             )
 
 

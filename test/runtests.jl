@@ -2360,5 +2360,18 @@ using Test
         @test pf[:, Nx1] == pf_ver[:, Nx1]
         @test ps == ps_ver
     end # testset "symmetrize_p_node_observables!()"
+
+    @testset "positive_max()" begin
+        # simulate data
+        A = rand(-100:0.1:100, 1000, 1000)
+        B = rand(-100:0.1:100, 1000, 1000)
+        R = zeros(1000, 1000)
+        # compute positive max
+        HydrologyPlanetesimals.positive_max!(A, B, R)
+        # test
+        for i in eachindex(R)
+            @test R[i] == max(A[i], B[i], 0.0)
+        end
+    end # testset "positive_max()"
 end
 
