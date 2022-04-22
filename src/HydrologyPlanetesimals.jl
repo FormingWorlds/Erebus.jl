@@ -2001,6 +2001,74 @@ end # function compute_stress_strainrate!
 
 
 """
+Apply symmetry to P node observables.
+
+$(SIGNATURES)
+
+# Details
+
+    - SXX: σ′xx at P nodes
+    - APHI: Aϕ = Dln[(1-ϕ)/ϕ]/Dt at P nodes
+    - PHI: porosity at P nodes
+    - pr: total pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - ps: solid pressure at P nodes
+    - Nx: number of basic nodes in horizontal x direction
+    - Ny: number of basic nodes in vertical y direction
+    - Nx1: number of Vx/Vy/P nodes in horizontal x direction
+    - Ny1: number of Vx/Vy/P nodes in vertical y direction
+
+# Returns
+
+    - nothing
+"""
+function symmetrize_p_node_observables!(
+    SXX,
+    APHI,
+    PHI,
+    pr,
+    pf,
+    ps,
+    Nx,
+    Ny,
+    Nx1,
+    Ny1
+)
+@timeit to "symmetrize_p_node_observables!()" begin
+    # top boundary
+    @. begin
+    SXX[1, 2:Nx] = SXX[2, 2:Nx]
+    APHI[1, 2:Nx] = APHI[2, 2:Nx]    
+    PHI[1, 2:Nx] = PHI[2, 2:Nx]    
+    pr[1, 2:Nx] = pr[2, 2:Nx]    
+    pf[1, 2:Nx] = pf[2, 2:Nx]    
+    # bottom boundary
+    SXX[Ny1, 2:Nx] = SXX[Ny, 2:Nx]
+    APHI[Ny1, 2:Nx] = APHI[Ny, 2:Nx]    
+    PHI[Ny1, 2:Nx] = PHI[Ny, 2:Nx]    
+    pr[Ny1, 2:Nx] = pr[Ny, 2:Nx]    
+    pf[Ny1, 2:Nx] = pf[Ny, 2:Nx]    
+    # left boundary
+    SXX[:, 1] = SXX[:, 2]
+    APHI[:, 1] = APHI[:, 2]    
+    PHI[:, 1] = PHI[:, 2]    
+    pr[:, 1] = pr[:, 2]    
+    pf[:, 1] = pf[:, 2]    
+    # right boundary
+    SXX[:, Nx1] = SXX[:, Nx]
+    APHI[:, Nx1] = APHI[:, Nx]    
+    PHI[:, Nx1] = PHI[:, Nx]    
+    pr[:, Nx1] = pr[:, Nx]    
+    pf[:, Nx1] = pf[:, Nx]
+    # solid pressure
+    ps = (pr-pf*PHI) / (1-PHI)
+    end
+end # @timeit to "symmetrize_p_node_observables!()"
+    return nothing
+    end # function symmetrize_p_node_observables!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -2760,6 +2828,52 @@ end # @timeit to "solve system"
                 aphimax,
                 dphimax
             )
+            # compute stresses, stress changes and strain rate components
+            compute_stress_strainrate!(
+                vx,
+                vy,
+                ETA,
+                GGG,
+                ETAP,
+                GGGP,
+                SXX0,
+                SXY0,
+                EXX,
+                EXY,
+                SXX,
+                SXY,
+                DSXX,
+                DSXY,
+                EII,
+                SII,
+                dtm,
+                sp
+            )
+            # recompute Dln[(1-PHI)/PHI]/Dt
+            aphimax = compute_Aϕ!(
+                APHI,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                pr,
+                pf,
+                pr0,
+                pf0,
+                dt
+            )
+            # symmetrize P node observables
+            symmetrize_p_node_observables!(
+                APHI,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                pr,
+                pf,
+                pr0,
+                pf0,
+                dt
+            )
+
 
 
 

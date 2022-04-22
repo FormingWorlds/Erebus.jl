@@ -2277,5 +2277,88 @@ using Test
             @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-6
         end
     end # testset "compute_stress_strainrate!()"
+
+    @testset "symmetrize_p_node_observables!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        # simulate data
+        SXX = rand(Ny1, Nx1)
+        APHI = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        pr = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        ps = zeros(Ny1, Nx1)
+        SXX_ver = copy(SXX)
+        APHI_ver = copy(APHI)
+        PHI_ver = copy(PHI)
+        pr_ver = copy(pr)
+        pf_ver = copy(pf)
+        ps_ver = zeros(Ny1, Nx1)
+        # symmetrize p node variables
+        HydrologyPlanetesimals.symmetrize_p_node_observables!(
+            SXX,
+            APHI,
+            PHI,
+            pr,
+            pf,
+            ps,
+            Nx,
+            Ny,
+            Nx1,
+            Ny1
+        )
+        # verification, from madcph.m, line 1196ff
+        # Apply Symmetry to Pressure nodes
+        # External P-nodes: symmetry
+        # Top
+        SXX_ver[1,2:Nx]=SXX_ver[2,2:Nx]
+        APHI_ver[1,2:Nx]=APHI_ver[2,2:Nx];    
+        PHI_ver[1,2:Nx]=PHI_ver[2,2:Nx];    
+        pr_ver[1,2:Nx]=pr_ver[2,2:Nx];    
+        pf_ver[1,2:Nx]=pf_ver[2,2:Nx];    
+        # Bottom
+        SXX_ver[Ny1,2:Nx]=SXX_ver[Ny,2:Nx]
+        APHI_ver[Ny1,2:Nx]=APHI_ver[Ny,2:Nx];    
+        PHI_ver[Ny1,2:Nx]=PHI_ver[Ny,2:Nx];    
+        pr_ver[Ny1,2:Nx]=pr_ver[Ny,2:Nx];    
+        pf_ver[Ny1,2:Nx]=pf_ver[Ny,2:Nx];    
+        # Left
+        SXX_ver[:,1]=SXX_ver[:,2]
+        APHI_ver[:,1]=APHI_ver[:,2];    
+        PHI_ver[:,1]=PHI_ver[:,2];    
+        pr_ver[:,1]=pr_ver[:,2];    
+        pf_ver[:,1]=pf_ver[:,2];    
+        # Right
+        SXX_ver[:, Nx1]=SXX_ver[:, Nx]
+        APHI_ver[:, Nx1]=APHI_ver[:, Nx];    
+        PHI_ver[:, Nx1]=PHI_ver[:, Nx];    
+        pr_ver[:, Nx1]=pr_ver[:, Nx];    
+        pf_ver[:, Nx1]=pf_ver[:, Nx]; 
+        # Compute solid pressure
+        ps_ver=(pr_ver .- pf_ver.*PHI_ver)./(1 .- PHI_ver)
+        # test
+        @test SXX[1, 2:Nx] == SXX_ver[1, 2:Nx]
+        @test APHI[1, 2:Nx] == APHI_ver[1, 2:Nx]
+        @test PHI[1, 2:Nx] == PHI_ver[1, 2:Nx]
+        @test pr[1, 2:Nx] == pr_ver[1, 2:Nx]
+        @test pf[1, 2:Nx] == pf_ver[1, 2:Nx]
+        @test SXX[Ny1, 2:Nx] == SXX_ver[Ny1, 2:Nx]
+        @test APHI[Ny1, 2:Nx] == APHI_ver[Ny1, 2:Nx]
+        @test PHI[Ny1, 2:Nx] == PHI_ver[Ny1, 2:Nx]
+        @test pr[Ny1, 2:Nx] == pr_ver[Ny1, 2:Nx]
+        @test pf[Ny1, 2:Nx] == pf_ver[Ny1, 2:Nx]
+        @test SXX[:, 1] == SXX_ver[:, 1]
+        @test APHI[:, 1] == APHI_ver[:, 1]
+        @test PHI[:, 1] == PHI_ver[:, 1]
+        @test pr[:, 1] == pr_ver[:, 1]
+        @test pf[:, 1] == pf_ver[:, 1]
+        @test SXX[:, Nx1] == SXX_ver[:, Nx1]
+        @test APHI[:, Nx1] == APHI_ver[:, Nx1]
+        @test PHI[:, Nx1] == PHI_ver[:, Nx1]
+        @test pr[:, Nx1] == pr_ver[:, Nx1]
+        @test pf[:, Nx1] == pf_ver[:, Nx1]
+        @test ps == ps_ver
+    end # testset "symmetrize_p_node_observables!()"
 end
 
