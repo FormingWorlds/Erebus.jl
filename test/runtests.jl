@@ -26,6 +26,52 @@ using Test
         @test YERRNOD == zeros(sp.nplast)
     end # testset "setup_dynamic_simulation_parameters()"
 
+    @testset "setup_staggered_grid_geometry()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        # set up staggered grid geometry
+        x,
+        y,
+        xvx,
+        yvx,
+        xvy,
+        yvy,
+        xp,
+        yp = HydrologyPlanetesimals.setup_staggered_grid_geometry(sp)
+        # verification, from madcph.m line 38ff
+        # Basic nodes
+        x_ver=0:dx:xsize; # Horizontal coordinates of basic grid points, m
+        y_ver=0:dy:ysize; # Vertical coordinates of basic grid points, m
+        # Vx-Nodes
+        xvx_ver=0:dx:xsize+dy; # Horizontal coordinates of vx grid points, m
+        yvx_ver=-dy/2:dy:ysize+dy/2; # Vertical coordinates of vx grid points, m
+        # Vy-nodes
+        xvy_ver=-dx/2:dx:xsize+dx/2; # Horizontal coordinates of vy grid points, m
+        yvy_ver=0:dy:ysize+dy; # Vertical coordinates of vy grid points, m
+        # P-Nodes
+        xp_ver=-dx/2:dx:xsize+dx/2; # Horizontal coordinates of P grid points, m
+        yp_ver=-dy/2:dy:ysize+dy/2; # Vertical coordinates of P grid points, m
+        # test
+        @test x == x_ver
+        @test y == y_ver
+        @test xvx == xvx_ver
+        @test yvx == yvx_ver
+        @test xvy == xvy_ver
+        @test yvy == yvy_ver
+        @test xp == xp_ver
+        @test yp == yp_ver
+        @test length(x) == Nx
+        @test length(y) == Ny
+        @test length(xvx) == Nx1
+        @test length(yvx) == Ny1
+        @test length(xvy) == Nx1
+        @test length(yvy) == Ny1
+        @test length(xp) == Nx1
+        @test length(yp) == Ny1
+    end # testset "setup_staggered_grid_geometry()"
 
     @testset "staggered grid setup" begin
         xsize=140_000.0

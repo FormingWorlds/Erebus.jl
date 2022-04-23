@@ -307,8 +307,53 @@ function setup_dynamic_simulation_parameters(sp)
      # nodes yielding error vector of plastic iterations
      YERRNOD = zeros(Float64, nplast) 
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
-end
+end # function setup_dynamic_simulation_parameters()
 
+
+"""
+Set up staggered grid geometry with basic, Vx, Vy, and P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns
+
+    - x:
+    - y:
+    - xvx:
+    - yvx:
+    - xvy:
+    - yvy:
+    - xp:
+    - yp:
+"""
+function setup_staggered_grid_geometry(sp)
+    @unpack Nx, Ny, Nx1, Ny1, dx, dy, xsize, ysize = sp
+    # basic nodes
+    # x: horizontal coordinates of basic grid points [m]
+    x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
+    # y: vertical coordinates of basic grid points [m]
+    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
+    # Vx nodes
+    # xvx: horizontal coordinates of vx grid points [m]
+    xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
+    # yvx: vertical coordinates of vx grid points [m]
+    yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+    # Vy nodes
+    # xvy: horizontal coordinates of vy grid points [m]
+    xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    # yvy: vertical coordinates of vy grid points [m]
+    yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
+    # P nodes
+    # xp: horizontal coordinates of p grid points [m]
+    xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    # yp: vertical coordinates of p grid points [m]
+    yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+    return x, y, xvx, yvx, xvy, yvy, xp, yp
+end # function setup_staggered_grid()
 
 """
 Define initial set of markers according to model parameters
@@ -2440,6 +2485,11 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # set up staggered grid
     # -------------------------------------------------------------------------
+    x, y, xvx, yvx, xvy, yvy, xp, yp = setup_staggered_grid_geometry(sp)
+
+
+
+
     # basic nodes
     # grid geometry
     # x: horizontal coordinates of basic grid points [m]
