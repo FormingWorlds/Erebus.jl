@@ -277,8 +277,8 @@ $(SIGNATURES)
 # Returns
 
     - timestep: simulation starting time step count
-    - dt: simulation initial computational time step 
-    - timesum: simulation starting time
+    - dt: simulation initial computational time step [s]
+    - timesum: simulation starting time [s]
     - marknum: initial number of markers
     - hrsolidm: initial radiogenic heat production solid phase
     - hrfluidm: initial radiogenic heat production fluid phase
@@ -321,36 +321,36 @@ $(SIGNATURES)
 
 # Returns
 
-    - x:
-    - y:
-    - xvx:
-    - yvx:
-    - xvy:
-    - yvy:
-    - xp:
-    - yp:
+	- x: horizontal coordinates of basic grid points [m]
+	- y: vertical coordinates of basic grid points [m]
+	- xvx: horizontal coordinates of vx grid points [m]
+	- yvx: vertical coordinates of vx grid points [m]
+	- xvy: horizontal coordinates of vy grid points [m]
+	- yvy: vertical coordinates of vy grid points [m]
+	- xp: horizontal coordinates of p grid points [m]
+	- yp: vertical coordinates of p grid points [m]
 """
 function setup_staggered_grid_geometry(sp)
     @unpack Nx, Ny, Nx1, Ny1, dx, dy, xsize, ysize = sp
     # basic nodes
-    # x: horizontal coordinates of basic grid points [m]
+    # horizontal coordinates of basic grid points [m]
     x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
-    # y: vertical coordinates of basic grid points [m]
+    # vertical coordinates of basic grid points [m]
     y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
     # Vx nodes
-    # xvx: horizontal coordinates of vx grid points [m]
+    # horizontal coordinates of vx grid points [m]
     xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
-    # yvx: vertical coordinates of vx grid points [m]
+    # vertical coordinates of vx grid points [m]
     yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
     # Vy nodes
-    # xvy: horizontal coordinates of vy grid points [m]
+    # horizontal coordinates of vy grid points [m]
     xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # yvy: vertical coordinates of vy grid points [m]
+    # vertical coordinates of vy grid points [m]
     yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
     # P nodes
-    # xp: horizontal coordinates of p grid points [m]
+    # horizontal coordinates of p grid points [m]
     xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # yp: vertical coordinates of p grid points [m]
+    # vertical coordinates of p grid points [m]
     yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
     return x, y, xvx, yvx, xvy, yvy, xp, yp
 end # function setup_staggered_grid()
@@ -367,8 +367,64 @@ $(SIGNATURES)
     - randomized: fill in random values for grid properties instead of zeros
 
 # Returns
-
-    - 
+    - ETA : viscoplastic viscosity at basic nodes [Pa*s]
+    - ETA0 : viscous viscosity at basic nodes [Pa*s]
+    - GGG : shear modulus at basic nodes [Pa]
+    - EXY : ϵxy at basic nodes [1/s]
+    - SXY : σxy at basic nodes [1/s]
+    - SXY0 : σ₀xy at basic nodes [1/s]
+    - wyx : rotation rate at basic nodes [1/s]
+    - COH : compressive strength at basic nodes [Pa]
+    - TEN : tensile strength at basic nodes [Pa]
+    - FRI : friction at basic nodes
+    - YNY : plastic yielding node property at basic nodes
+    - RHOX : density at Vx nodes [kg/m^3]
+    - RHOFX : fluid density  at Vx nodes [kg/m^3]
+    - KX : thermal conductivity  at Vx nodes [W/m/K]
+    - PHIX : porosity at Vx nodes
+    - vx : solid vx-velocity at Vx nodes [m/s]
+    - vxf : fluid vx-velocity at Vx nodes [m/s]
+    - RX : etafluid/kphi ratio at Vx nodes [m^2]
+    - qxD : qx-darcy flux at Vx nodes [m/s]
+    - gx : gx-gravity at Vx nodes [m/s^2]
+    - RHOY : density at Vx nodes [kg/m^3]
+    - RHOFY : fluid density at Vx nodes [kg/m^3]
+    - KY : thermal conductivity at Vx nodes [W/m/K]
+    - PHIY : porosity at Vx nodes
+    - vy : solid vy-velocity at Vx nodes [m/s]
+    - vyf : fluid vy-velocity at Vx nodes [m/s]
+    - RY : etafluid/kphi ratio at Vx nodes [m^2]
+    - qyD : qy-Darcy flux at Vx nodes [m/s]
+    - gy : gy-gravity at Vx nodes [m/s^2]
+    - RHO : density at P nodes [kg/m^3]
+    - RHOCP : volumetric heat capacity at P nodes [J/m^3/K]
+    - ALPHA : thermal expansion at P nodes [J/m^3/K]
+    - ALPHAF : fluid thermal expansion at P nodes [J/m^3/K]
+    - HR : radioactive heating at P nodes [W/m^3]
+    - HA : adiabatic heating at P nodes [W/m^3]
+    - HS : shear heating at P nodes [W/m^3]
+    - ETAP : viscosity at P nodes [Pa*s]
+    - GGGP : shear modulus at P nodes [Pa]
+    - EXX : ϵxx at P nodes [1/s]
+    - SXX : σ′xx at P nodes [1/s]
+    - SXX0 : σ₀′xx at P nodes [1/s]
+    - tk1 : previous temperature at P nodes [K]
+    - tk2 : next temperature at P nodes [K]
+    - vxp : solid vx in pressure nodes at P nodes [m/s]
+    - vyp : solid vy in pressure nodes at P nodes [m/s]
+    - vxpf : fluid vx in pressure nodes at P nodes [m/s]
+    - vypf : fluid vy in pressure nodes at P nodes [m/s]
+    - pr : total pressure at P nodes [Pa]
+    - pf : fluid pressure at P nodes [Pa]
+    - ps : solid pressure at P nodes [Pa]
+    - pr0 : previous total pressure at P nodes [Pa]
+    - pf0 : previous fluid pressure at P nodes [Pa]
+    - ps0 : previous solid pressure at P nodes [Pa]
+    - ETAPHI : bulk viscosity at P nodes [Pa*s]
+    - BETTAPHI : bulk compresibility at P nodes [Pa*s]
+    - PHI : porosity at P nodes
+    - APHI : Dlnat P nodes [(1-ϕ)/ϕ]/Dt
+    - FI : gravity potential at P nodes [J/kg]
 """
 function setup_staggered_grid_properties(sp; randomized=false)
     @unpack Nx, Ny, Nx1, Ny1 = sp
@@ -553,6 +609,152 @@ function setup_staggered_grid_properties(sp; randomized=false)
         FI
     )
 end # function setup_staggered_grid_properties()
+
+
+"""
+Set up additional helper staggered grid properties to facilitate computations.
+
+$(SIGNATURES)
+
+# Details
+
+    -
+
+# Returns
+
+    -
+"""
+function setup_staggered_grid_properties_helpers(sp) 
+    
+    
+end # function setup_staggered_grid_properties_helpers()
+
+
+"""
+Set up geodesic and physical properties of the set of markers.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+    - randomized: fill in random values for grid properties instead of zeros
+
+# Returns
+
+    - xm : horizontal marker coordinate [m]
+    - ym : vertical marker coordinate [m]
+    - tm : marker material type
+    - tkm : marker temperature [K]
+    - sxxm : marker σ′xx [Pa]
+    - sxym : marker σxy [Pa]
+    - etavpm : marker viscoplastic viscosity [Pa]
+    - phim : marker porosity
+"""
+function setup_marker_properties(sp; randomized=false)
+    @unpack start_marknum, dx, dy, xsize, ysize = sp
+    marknum = start_marknum
+    # horizontal marker coordinate [m]
+    xm = randomized ? rand(-dx:0.1:xsize+dx, marknum) : zeros(marknum)
+    # vertical marker coordinate [m]
+    ym = randomized ? rand(-dy:0.1:ysize+dy, marknum) : zeros(marknum)
+    # marker material type
+    tm = randomized ? rand(1:3, marknum) : zeros(Int, marknum)
+    # marker temperature [K]
+    tkm = randomized ? rand(273:300, marknum) : zeros(marknum)
+    # marker σ′xx [Pa]
+    sxxm = randomized ? rand(marknum) : zeros(marknum)
+    # marker σxy [Pa]
+    sxym = randomized ? rand(marknum) : zeros(marknum)
+    # marker viscoplastic viscosity [Pa]
+    etavpm = randomized ? rand(marknum) : zeros(marknum)
+    # marker porosity
+    phim = randomized ? rand(marknum) : zeros(marknum)
+    return xm, ym, tm, tkm, sxxm, sxym, etavpm, phim
+end # function setup_marker_properties()
+
+
+"""
+Set up additional helper marker properties to facility comptuations.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+    - randomized: fill in random values for grid properties instead of zeros
+
+# Returns
+
+    - rhototalm: marker total density
+    - rhocptotalm : marker total volumetric heat capacity
+    - etasolidcur: marker solid viscosity
+    - etafluidcur: marker fluid viscosity
+    - etatotalm: marker total viscosity
+    - hrtotalm: marker total radiogenic heat production
+    - ktotalm: marker total thermal conductivity
+    - tkm_rhocptotalm: marker total thermal energy
+    - etafluidcur_inv_kphim: marker fluid viscosity over permeability
+    - inv_gggtotalm: marker inverse of total shear modulus
+    - fricttotalm: marker total friction coefficient
+    - cohestotalm: marker total compressive strength
+    - tenstotalm: marker total tensile strength
+    - rhofluidcur: marker fluid density
+    - alphasolidcur: marker solid thermal expansion coefficient
+    - alphafluidcur: marker fluid thermal expansion coefficient
+"""
+function setup_marker_properties_helpers(sp)
+    # marker total density
+    rhototalm = zeros(marknum)
+    # marker total volumetric heat capacity
+    rhocptotalm = zeros(marknum)
+    # marker solid viscosity
+    etasolidcur = zeros(marknum)
+    # marker fluid viscosity
+    etafluidcur = zeros(marknum)
+    # marker total viscosity
+    etatotalm = zeros(marknum)
+    # marker total radiogenic heat production
+    hrtotalm = zeros(marknum)
+    # marker total thermal conductivity
+    ktotalm = zeros(marknum)
+    # marker total thermal energy
+    tkm_rhocptotalm = zeros(marknum)
+    # marker fluid viscosity over permeability
+    etafluidcur_inv_kphim = zeros(marknum)
+    # marker inverse of total shear modulus
+    inv_gggtotalm = zeros(marknum)
+    # marker total friction coefficient
+    fricttotalm = zeros(marknum)
+    # marker total compressive strength
+    cohestotalm = zeros(marknum)
+    # marker total tensile strength
+    tenstotalm = zeros(marknum)
+    # marker fluid density
+    rhofluidcur = zeros(marknum)
+    # marker solid thermal expansion coefficient
+    alphasolidcur = zeros(marknum)
+    # marker fluid thermal expansion coefficient
+    alphafluidcur = zeros(marknum)
+    return (
+        rhototalm,
+        rhocptotalm,
+        etasolidcur,
+        etafluidcur,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur
+    )
+end # function setup_marker_properties_helpers()
 
 
 """
@@ -826,9 +1028,13 @@ $(SIGNATURES)
     - ktotal: total thermal conductivity of mixed phase [W/m/K]
 """
 function ktotal(ksolid, kfluid, phi)
-    return ((ksolid * kfluid/2 + ((ksolid * (3*phi-2)
-                                 + kfluid * (1.0-3.0*phi))^2)/16)^0.5
-            - (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))/4)
+    return (
+        sqrt(
+            ksolid * kfluid/2
+            + ((ksolid*(3*phi-2) + kfluid*(1.0-3.0*phi))^2)/16
+        )
+        -0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
+    )
 end
 
 
@@ -2750,59 +2956,25 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # set up markers
     # -------------------------------------------------------------------------
-    # primary marker arrays: initialized at beginning
-    # horizontal marker coordinate [m]
-    xm = zeros(Float64, marknum)
-    # vertical marker coordinate [m]
-    ym = zeros(Float64, marknum)
-    # marker material type
-    tm = zeros(Int8, marknum)
-    # marker temperature [K]
-    tkm = zeros(Float64, marknum)
-    # marker σ′xx [Pa]
-    sxxm = zeros(Float64, marknum)
-    # marker σxy [Pa]
-    sxym = zeros(Float64, marknum)
-    # marker porosity ϕ
-    phim = zeros(Float64, marknum)
-    # marker viscoplastic viscosity [Pa]
-    etavpm = zeros(Float64, marknum)
-    # marker total density
-    rhototalm = zeros(Float64, marknum)
-    # marker total volumetric heat capacity
-    rhocptotalm = zeros(Float64, marknum)
-    # marker solid viscosity
-    etasolidcur = zeros(Float64, marknum)
-    # marker fluid viscosity
-    etafluidcur = zeros(Float64, marknum)
-    # marker total viscosity
-    etatotalm = zeros(Float64, marknum)
-    # marker total radiogenic heat production
-    hrtotalm = zeros(Float64, marknum)
-    # marker total thermal conductivity
-    ktotalm = zeros(Float64, marknum)
-    # marker total thermal energy
-    tkm_rhocptotalm = zeros(Float64, marknum)
-    # marker fluid viscosity over permeability
-    etafluidcur_inv_kphim = zeros(Float64, marknum)
-    # marker temperature 
-    tkm = zeros(Float64, marknum)
-    # marker inverse of total shear modulus
-    inv_gggtotalm = zeros(Float64, marknum)
-    # marker total friction coefficient
-    fricttotalm = zeros(Float64, marknum)
-    # marker total compressive strength
-    cohestotalm = zeros(Float64, marknum)
-    # marker total tensile strength
-    tenstotalm = zeros(Float64, marknum)
-    # marker fluid density
-    rhofluidcur = zeros(Float64, marknum)
-    # marker solid thermal expansion coefficient
-    alphasolidcur = zeros(Float64, marknum)
-    # marker fluid thermal expansion coefficient
-    alphafluidcur = zeros(Float64, marknum)
-    
-    # define initial markers: coordinates, material type, and properties    
+    xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(sp)
+    (
+        rhototalm,
+        rhocptotalm,
+        etasolidcur,
+        etafluidcur,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur
+    ) = setup_marker_properties_helpers(sp)
     define_markers!(
         xm,
         ym,

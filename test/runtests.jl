@@ -269,107 +269,61 @@ using Test
         @test FI == FI_ver
     end # testset "setup_staggered_grid_properties()"
 
-    @testset "staggered grid setup" begin
-        xsize=140_000.0
-        ysize=140_000.0
-        rplanet=50_000.0
-        rcrust=48_000.0
-        Nx=141
-        Ny=141
-        Nxmc=4
-        Nymc=4
-        sp = HydrologyPlanetesimals.StaticParameters(
-            xsize=xsize,
-            ysize=ysize,
-            rplanet=rplanet,
-            rcrust=rcrust,
-            Nx=Nx,
-            Ny=Ny,
-            Nxmc=Nxmc,
-            Nymc=Nymc
-        )
-        function setup(sp)
-            @unpack xsize, ysize,
-                Nx, Ny,
-                Nx1, Ny1,
-                dx, dy,
-                jmin_basic, jmax_basic,
-                imin_basic, imax_basic,
-                jmin_vx, jmax_vx,
-                imin_vx, imax_vx,
-                jmin_vy, jmax_vy,
-                imin_vy, imax_vy,
-                jmin_p, jmax_p,
-                imin_p, imax_p,
-                rhosolidm,
-                rhofluidm,
-                etasolidm,
-                etasolidmm,
-                etafluidm,
-                etafluidmm,
-                rhocpsolidm,
-                rhocpfluidm,
-                alphasolidm,
-                alphafluidm,
-                ksolidm,
-                kfluidm,
-                start_hrsolidm,
-                start_hrfluidm,
-                gggsolidm,
-                frictsolidm,
-                cohessolidm,
-                tenssolidm,
-                kphim0,
-                etaphikoef,
-                phim0,
-                tmsilicate,
-                tmiron,
-                etamin,
-                nplast,
-                dtelastic,
-                start_step,
-                nsteps,
-                start_time, 
-                endtime,
-                start_marknum = sp
-            x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
-            y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
-            xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
-            yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-            xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-            yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
-            xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-            yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-            return x, y, xvx, yvx, xvy, yvy, xp, yp
-        end
-        x, y, xvx, yvx, xvy, yvy, xp, yp = setup(sp)
-        # verification, from madcph.m lines 24ff
-        xsize=140000
-        ysize=140000
-        Nx=141
-        Ny=141
-        Nx1=Nx+1
-        Ny1=Ny+1
-        dx=xsize/(Nx-1)
-        dy=ysize/(Ny-1)
-        x_ver=0:dx:xsize
-        y_ver=0:dy:ysize
-        xvx_ver=0:dx:xsize+dy
-        yvx_ver=-dy/2:dy:ysize+dy/2
-        xvy_ver=-dx/2:dx:xsize+dx/2
-        yvy_ver=0:dy:ysize+dy
-        xp_ver=-dx/2:dx:xsize+dx/2
-        yp_ver=-dy/2:dy:ysize+dy/2
+    @testset "setup_marker_properties()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        xsize, ysize = sp.xsize, sp.ysize
+        Nxmc, Nymc = sp.Nxmc, sp.Nymc
+        Nxm, Nym = sp.Nxm, sp.Nym
+        dxm, dym = sp.dxm, sp.dym
+        marknum = sp.start_marknum
+        # setup marker properties
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim
+        ) = HydrologyPlanetesimals.setup_marker_properties(sp)
+        # verification, from madcph.m line 115ff
+        Nxmc_ver = 4; # Number of markers per cell in horizontal direction
+        Nymc_ver = 4; # Number of markers per cell in vertical direction
+        Nxm_ver = (Nx-1)*Nxmc; # Marker grid resolution in horizontal direction
+        Nym_ver = (Ny-1)*Nymc; # Marker grid resolution in vertical direction
+        dxm_ver = xsize/Nxm; # Marker grid step in horizontal direction,m
+        dym_ver = ysize/Nym; # Marker grid step in vertical direction,m
+        marknum_ver = Nxm*Nym; # Number of markers
+        xm_ver = zeros(marknum); # Horizontal coordinates, m
+        ym_ver = zeros(marknum); # Vertical coordinates, m
+        tm_ver = zeros(marknum); # Material type
+        tkm_ver = zeros(marknum); # Marker temperature, K
+        sxxm_ver = zeros(marknum); # SIGMA'xx, Pa
+        sxym_ver = zeros(marknum); # SIGMAxy, Pa
+        etavpm_ver = zeros(marknum); # Visco-plastic viscosity, Pa
+        phim_ver = zeros(marknum); # Marker porosity
         # test
-        @test x == collect(x_ver)
-        @test y == collect(y_ver)
-        @test xvx == collect(xvx_ver)
-        @test yvx == collect(yvx_ver)
-        @test xvy == collect(xvy_ver)
-        @test yvy == collect(yvy_ver)
-        @test xp == collect(xp_ver)
-        @test yp == collect(yp_ver)
-    end # testset "staggered grid setup"
+        @test Nxmc == Nxmc_ver
+        @test Nymc == Nymc_ver
+        @test Nxm == Nxm_ver
+        @test Nym == Nym_ver
+        @test dxm == dxm_ver
+        @test dym == dym_ver
+        @test marknum == marknum_ver
+        @test xm == xm_ver
+        @test ym == ym_ver
+        @test tm == tm_ver
+        @test tkm == tkm_ver
+        @test sxxm == sxxm_ver
+        @test sxym == sxym_ver
+        @test etavpm == etavpm_ver
+        @test phim == phim_ver
+    end # testset "setup_marker_properties()"
+    
+    @testset "define_markers!()" begin
+        
+    end # testset "define_markers()"
 
     @testset "distance()" begin
         @test HydrologyPlanetesimals.distance(0, 0, 0, 0) == 0
