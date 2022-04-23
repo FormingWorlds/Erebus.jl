@@ -688,8 +688,8 @@ using given bilinear interpolation weights.
 
 # Details
 
-    - i: top (with reference to y) node index on y-grid axis
-    - j: left (with reference to x) node index on x-grid axis
+    - i: top (with reference to y) node index on vertical y-grid axis
+    - j: left (with reference to x) node index on horizontal x-grid axis
     - weights: vector of 4 bilinear interpolation weights to
       nearest four grid nodes:
         [wtmij  : i  , j   node,
@@ -698,6 +698,10 @@ using given bilinear interpolation weights.
         wtmi1j1: i+1, j+1 node]
     - property: property to be interpolated to grid using weights
     - grid: threaded grid array on which to interpolate property
+
+# Returns
+
+    - nothing
 """
 function interpolate_to_grid!(i, j, weights, property, grid)
 # @timeit to "interpolate_to_grid!" begin
@@ -706,7 +710,38 @@ function interpolate_to_grid!(i, j, weights, property, grid)
     grid[i, j+1, threadid()] += property * weights[3]
     grid[i+1, j+1, threadid()] += property * weights[4]
 # end # @timeit to "interpolate_to_grid!"
+    return nothing
 end # function interpolate_to_grid!
+
+
+"""
+Interpolate a property from nearest the four nodes on a given grid to a marker.
+
+# Details
+    - m: number of marker to interpolate to
+    - i: top (with reference to y) node index on vertical y-grid axis
+    - j: left (with reference to x) node index on horizontal x-grid axis
+    - weights: vector of 4 bilinear interpolation weights to
+    nearest four grid nodes:
+        [wtmij  : i  , j   node,
+        wtmi1j : i+1, j   node,
+        wtmij1 : i  , j+1 node,
+        wtmi1j1: i+1, j+1 node]
+    - marker_property: marker property array into which to interpolate
+    - property_grid: grid whose property is to be interpolated to marker
+    - m: marker 
+"""
+function interpolate_to_marker!(m, i, j, weights, marker_property, grid)
+@timeit to "interpolate_to_marker!()" begin
+    marker_property[m] = (
+        grid[i, j] * weights[1]
+        + grid[i+1, j] * weights[2]
+        + grid[i, j+1] * weights[3]
+        + grid[i+1, j+1] * weights[4]
+    )
+end # @timeit to "interpolate_to_marker!()"
+    return nothing
+end # function interpolate_to_marker
 
 
 """
@@ -2597,7 +2632,7 @@ function simulation_loop(sp::StaticParameters)
         alphasolidcur,
         alphafluidcur,
         sp
-        )
+    )
 
     # -------------------------------------------------------------------------
     # set up of matrices for global gravity/thermal/hydromechanical solutions

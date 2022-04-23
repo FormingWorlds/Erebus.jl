@@ -658,6 +658,40 @@ using Test
         end
     end # testset "interpolate_to_grid!()"
 
+    @testset "interpolate_to_marker!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        xsize, ysize = sp.xsize, sp.ysize
+        jmin, jmax = sp.jmin_basic, sp.jmax_basic
+        imin, imax = sp.imin_basic, sp.imax_basic
+        x=0:dx:xsize
+        y=0:dy:ysize
+        num_markers = 10_000
+        xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
+        ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
+        tm = rand(1:3, num_markers)
+        
+
+        etavpm = zeros(num_markers)
+        etavpm_ver = zeros(num_markers)
+
+        # interpolate to markers     
+        for m=1:1:num_markers
+
+
+            # interpolate_to_marker!(m, i, j, weights, marker_property, grid)
+        end
+        # verification
+
+        # test
+
+
+    end # testset "interpolate_to_marker!()"
+
+
+
     @testset "compute node properties" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
