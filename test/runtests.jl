@@ -2516,5 +2516,53 @@ using Test
         @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-6
         @test complete == (ynpl==0 || iplast==nplast || YERRNOD[iplast]<yerrmax)
     end # testset "compute_nodal_adjustment!()"
+
+    @testset "finalize_plastic_iteration_pass!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        dt = sp.dtelastic
+        dtkoef = sp.dtkoef
+        dtstep = sp.dtstep
+        iplast = 1
+        # simulate data
+        ETA = zeros(Ny, Nx)
+        ETA5 = rand(Ny, Nx)
+        ETA00 = rand(Ny, Nx)
+        YNY = zeros(Bool, Ny, Nx)
+        YNY5 = rand(Bool, Ny, Nx)
+        YNY00 = rand(Bool, Ny, Nx)
+        ETA_ver = zeros(Ny, Nx)
+        YNY_ver = zeros(Bool, Ny, Nx)
+        dt_ver = sp.dtelastic
+        # finalize_plastic_iteration_pass
+        dt = HydrologyPlanetesimals.finalize_plastic_iteration_pass!(
+            ETA,
+            ETA5,
+            ETA00,
+            YNY,
+            YNY5,
+            YNY00,
+            dt,
+            dtkoef,
+            dtstep,
+            iplast
+        )
+        # verification, from madcph.m, line 1301ff
+        if trunc(Int, iplast/dtstep)*dtstep==iplast
+            # Decrease timestep
+            dt_ver=dt_ver/dtkoef
+            # Reset old viscoplastic viscosity
+            ETA_ver=ETA00
+            YNY_ver=YNY00
+        else
+            # Use new viscoplastic viscosity
+            ETA_ver=ETA5
+            YNY_ver=YNY5
+        end
+        # test
+        @test dt == dt_ver
+        @test ETA == ETA_ver
+        @test YNY == YNY_ver
+    end # testset "finalize_plastic_iteration_pass!()"
 end
 

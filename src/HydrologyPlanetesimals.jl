@@ -2230,6 +2230,58 @@ end # function positive_max
 
 
 """
+Decide next pass plastic iteration time step, viscoplastic viscosity,
+and basic node yielding status.
+
+$(SIGNATURES)
+
+# Details:
+
+    - ETA: viscoplastic viscosity at basic nodes
+    - ETA5: plastic iterations viscoplastic viscosity at basic nodes
+    - ETA00: previous time step viscoplastic viscosity at basic nodes
+    - YNY: plastic yielding status at basic nodes 
+    - YNY5: plastic iterations plastic yielding status at basic nodes
+    - YNY00: previous time step plastic yielding status at basic nodes
+    - dt: current time step
+    - dtkoef: coefficient by which to decrease computational time step
+    - dtstep: minimum of plastic iterations before adjusting time step
+    - iplast: current plastic iteration counter
+
+# Returns
+
+    - dt: adjusted next time step
+
+"""
+function finalize_plastic_iteration_pass!(
+    ETA,
+    ETA5,
+    ETA00,
+    YNY,
+    YNY5,
+    YNY00,
+    dt,
+    dtkoef,
+    dtstep,
+    iplast
+)
+@timeit to "finalize_plastic_iteration_pass!()" begin
+    if iplast % dtstep == 0
+        # dtstep plastic iterations performed without reaching targets:
+        # decrease time step and reset to previous viscoplastic viscosity
+        dt /= dtkoef
+        ETA .= copy(ETA00)
+        YNY .= copy(YNY00)
+    else
+        # perform next plastic iteration pass with new viscoplastic viscosity
+        ETA .= copy(ETA5)
+        YNY .= copy(YNY5)
+    return dt
+end # @timeit to "finalize_plastic_iteration_pass!()"
+    end # function finalize_plastic_iteration_pass
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -3039,7 +3091,7 @@ end # @timeit to "solve system"
             # DSXX0 = copy(DSXX)
             # DSXY0 = copy(DSXY)
             # nodal adjustment
-            compute_nodal_adjustment(
+            if compute_nodal_adjustment(
                 ETA,
                 ETA0,
                 ETA5,
@@ -3067,14 +3119,27 @@ end # @timeit to "solve system"
                 DDD,
                 dt,
                 iplast,
-                etawt,
                 sp
             )
-
-
-
-
+                # exit plastic iterations loop    
+                break 
+            else
+                # prepare next pass of plastic iteration 
+                dt = finalize_plastic_iteration_pass!(
+                    ETA,
+                    ETA5,
+                    ETA00,
+                    YNY,
+                    YNY5,
+                    YNY00,
+                    dt,
+                    dtkoef,
+                    dtstep,
+                    iplast
+                )
+            end
         end # for iplast=1:1:nplast
+
 # Thu 21
         # ---------------------------------------------------------------------
         # # interpolate updated viscoplastic viscosity to markers
