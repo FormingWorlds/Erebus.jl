@@ -6,6 +6,27 @@ using Test
 
 @testset verbose = true "HydrologyPlanetesimals.jl" begin
 
+    @testset "setup_dynamic_simulation_parameters()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        # set up dynamic simulation parameters
+        timestep,
+        dt,
+        timesum,
+        marknum,
+        hrsolidm,
+        hrfluidm,
+        YERRNOD = HydrologyPlanetesimals.setup_dynamic_simulation_parameters(sp)
+        # verification & test
+        @test timestep == sp.start_step
+        @test dt == sp.dtelastic
+        @test timesum == sp.start_time
+        @test marknum == sp.start_marknum
+        @test hrsolidm == sp.start_hrsolidm
+        @test hrfluidm == sp.start_hrfluidm
+        @test YERRNOD == zeros(sp.nplast)
+    end # testset "setup_dynamic_simulation_parameters()"
+
+
     @testset "staggered grid setup" begin
         xsize=140_000.0
         ysize=140_000.0
@@ -80,7 +101,7 @@ using Test
             return x, y, xvx, yvx, xvy, yvy, xp, yp
         end
         x, y, xvx, yvx, xvy, yvy, xp, yp = setup(sp)
-        # from madcph.m lines 24ff
+        # verification, from madcph.m lines 24ff
         xsize=140000
         ysize=140000
         Nx=141
@@ -97,7 +118,7 @@ using Test
         yvy_ver=0:dy:ysize+dy
         xp_ver=-dx/2:dx:xsize+dx/2
         yp_ver=-dy/2:dy:ysize+dy/2
-        # tests
+        # test
         @test x == collect(x_ver)
         @test y == collect(y_ver)
         @test xvx == collect(xvx_ver)

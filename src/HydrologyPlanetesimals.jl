@@ -267,6 +267,50 @@ end
 
 
 """
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns
+
+    - timestep: simulation starting time step count
+    - dt: simulation initial computational time step 
+    - timesum: simulation starting time
+    - marknum: initial number of markers
+    - hrsolidm: initial radiogenic heat production solid phase
+    - hrfluidm: initial radiogenic heat production fluid phase
+    - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
+"""
+function setup_dynamic_simulation_parameters(sp)
+    @unpack start_step,
+        dtelastic,
+        start_time,
+        start_marknum,
+        start_hrsolidm,
+        start_hrfluidm,
+        nplast = sp
+     # timestep counter (current), init to startstep
+     timestep = start_step
+     # computational timestep (current), init to dtelastic [s]
+     dt = dtelastic
+     # time sum (current), init to starttime [s]
+     timesum = start_time
+     # current number of markers, init to startmarknum
+     marknum = start_marknum
+     # radiogenic heat production solid phase
+     hrsolidm = start_hrsolidm
+     # radiogenic heat production fluid phase
+     hrfluidm = start_hrfluidm
+     # nodes yielding error vector of plastic iterations
+     YERRNOD = zeros(Float64, nplast) 
+    return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
+end
+
+
+"""
 Define initial set of markers according to model parameters
 
 $(SIGNATURES)
@@ -2131,7 +2175,7 @@ $(SIGNATURES)
     - etapl: stress-based viscoplastic viscosity at basic nodes 
     - YNY: plastic yielding status at basic nodes 
     - YNY5: plastic iterations plastic yielding status at basic nodes
-    - YERRNOD: vector of summary yielding error of nodes over plastic iterations
+    - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
     - DSY: (SIIB-syield) at basic nodes
     - YNPL: plastic iterations plastic yielding status at basic nodes
     - DDD: plastic iterations (SIIB-syield)² at basic nodes
@@ -2385,21 +2429,14 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters
     # -------------------------------------------------------------------------
-    # timestep counter (current), init to startstep
-    timestep = start_step
-    # computational timestep (current), init to dtelastic [s]
-    dt = dtelastic
-    # time sum (current), init to starttime [s]
-    timesum = start_time
-    # current number of markers, init to startmarknum
-    marknum = start_marknum
-    # radiogenic heat production solid phase
-    hrsolidm = start_hrsolidm
-    # radiogenic heat production fluid phase
-    hrfluidm = start_hrfluidm
-    # Nodes yielding error vector of plastic iterations
-    YERRNOD = zeros(Float64, nplast) 
-
+    timestep,
+    dt,
+    timesum,
+    marknum,
+    hrsolidm,
+    hrfluidm,
+    YERRNOD = setup_dynamic_simulation_parameters(sp)
+    
     # -------------------------------------------------------------------------
     # set up staggered grid
     # -------------------------------------------------------------------------
