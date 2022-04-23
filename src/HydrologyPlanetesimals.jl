@@ -2069,29 +2069,44 @@ end # @timeit to "symmetrize_p_node_observables!()"
 
 
 """
-Compute nodal adjustment and return yielding error.
+Compute nodal adjustment and return plastic iterations completeness status.
 
 $(SIGNATURES)
 
 # Details
 
-    - ETA
-    - ETA0
-    - ETA5
-    - ETA00
-    - GGG
-    - SXX
-    - COH
-    - FRI
-    - TEN
-    - YNY
-    - pr
-    - pf
-    
+    - ETA: viscoplastic viscosity at basic nodes
+    - ETA0: previous time step viscoplastic viscosity at basic nodes
+    - ETA5: plastic iterations viscoplastic viscosity at basic nodes
+    - GGG: shear modulus at basic nodes
+    - SXX: σ′xx at P nodes
+    - SXY: σxy at basic nodes
+    - pr: total pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - COH: compressive strength at basic nodes 
+    - TEN: tensile strength at basic nodes 
+    - FRI: friction at basic nodes
+    - SIIB: second stress invariant at basic nodes
+    - siiel: second invariant for purely elastic stress buildup at basic nodes 
+    - prB: interpolated total pressure at basic nodes 
+    - pfB: interpolated fluid pressure at basic nodes 
+    - syieldc: confined fractures yielding stress at basic nodes 
+    - syieldt: tensile fractures yielding stress at basic nodes 
+    - syield: non-negative maximum yielding stress at basic nodes
+    - etapl: stress-based viscoplastic viscosity at basic nodes 
+    - YNY: plastic yielding status at basic nodes 
+    - YNY5: plastic iterations plastic yielding status at basic nodes
+    - YERRNOD: vector of summary yielding error of nodes over plastic iterations
+    - DSY: (SIIB-syield) at basic nodes
+    - YNPL: plastic iterations plastic yielding status at basic nodes
+    - DDD: plastic iterations (SIIB-syield)² at basic nodes
+    - dt: time set
+    - iplast: plastic iteration step 
+    - sp: static simulation parameters
 
 # Returns
 
-    - ynpl: yielding error node count
+    - plastic_iterations_complete: true if plastic iterations complete
 """
 function compute_nodal_adjustment!(
     ETA,
@@ -2121,11 +2136,10 @@ function compute_nodal_adjustment!(
     DDD,
     dt,
     iplast,
-    etawt,
     sp
 )
 @timeit to "compute_nodal_adjustment!()" begin
-    @unpack Nx, Ny, Nx1, Ny1, etamin, etamax = sp
+    @unpack Nx, Ny, Nx1, Ny1, etamin, etamax, etawt, yerrmax, nplast = sp
     # reset / setup
     @. begin
     ETA5 = copy(ETA0)
@@ -2187,6 +2201,8 @@ function compute_nodal_adjustment!(
     if sum(YNPL) > 0
         YERRNOD[iplast] = sqrt(sum(DDD)/sum(YNPL))
     end
+    # return plastic iteration completeness
+    return sum(YNPL)==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
 end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
@@ -3024,7 +3040,35 @@ end # @timeit to "solve system"
             # DSXY0 = copy(DSXY)
             # nodal adjustment
             compute_nodal_adjustment(
-                
+                ETA,
+                ETA0,
+                ETA5,
+                GGG,
+                SXX,
+                SXY,
+                pr,
+                pf,
+                COH,
+                TEN,
+                FRI,
+                SIIB,
+                siiel,
+                prB,
+                pfB,
+                syieldc,
+                syieldt,
+                syield,
+                etapl,
+                YNY,
+                YNY5,
+                YERRNOD,
+                DSY,
+                YNPL,
+                DDD,
+                dt,
+                iplast,
+                etawt,
+                sp
             )
 
 

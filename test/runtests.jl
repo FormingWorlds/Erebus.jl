@@ -2377,14 +2377,16 @@ using Test
     @testset "compute_nodal_adjustment!()" begin
         sp = HydrologyPlanetesimals.StaticParameters(
             etamin=0.2,
-            etamax=0.4
+            etamax=0.4,
+            etawt=0.5,
+            nplast=1
         )
         Nx, Ny = sp.Nx, sp.Ny
         Nx1, Ny1 = sp.Nx1, sp.Ny1
         dt = sp.dtelastic
         nplast = sp.nplast
-        etamin, etamax = sp.etamin, sp.etamax
-        etawt = 0.5
+        yerrmax = sp.yerrmax
+        etamin, etamax, etawt = sp.etamin, sp.etamax, sp.etawt
         iplast = 1
         # simulate data
         ETA = rand(Ny, Nx)
@@ -2414,7 +2416,7 @@ using Test
         YERRNOD = zeros(nplast)
         YERRNOD_ver = zeros(nplast)
         # compute nodal adjustment
-        HydrologyPlanetesimals.compute_nodal_adjustment!(
+        complete = HydrologyPlanetesimals.compute_nodal_adjustment!(
             ETA,
             ETA0,
             ETA5,
@@ -2442,7 +2444,6 @@ using Test
             DDD,
             dt,
             iplast,
-            etawt,
             sp
         )
         # verification, from madcph.m, line 1232ff
@@ -2513,6 +2514,7 @@ using Test
             @test YNY5[i, j] == YNY5_ver[i, j]
         end
         @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-6
+        @test complete == (ynpl==0 || iplast==nplast || YERRNOD[iplast]<yerrmax)
     end # testset "compute_nodal_adjustment!()"
 end
 
