@@ -355,6 +355,206 @@ function setup_staggered_grid_geometry(sp)
     return x, y, xvx, yvx, xvy, yvy, xp, yp
 end # function setup_staggered_grid()
 
+
+"""
+Set up staggered grid properties for basic, Vx, Vy, and P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+    - randomized: fill in random values for grid properties instead of zeros
+
+# Returns
+
+    - 
+"""
+function setup_staggered_grid_properties(sp; randomized=false)
+    @unpack Nx, Ny, Nx1, Ny1 = sp
+    # basic nodes
+    # viscoplastic viscosity [Pa*s]
+    ETA = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # viscous viscosity [Pa*s]
+    ETA0 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # shear modulus [Pa]
+    GGG = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # epsilonxy [1/s]
+    EXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # σxy [1/s]
+    SXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # σ₀xy [1/s]
+    SXY0 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # rotation rate [1/s]
+    wyx = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # compressive strength [Pa]
+    COH = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # tensile strength [Pa]
+    TEN = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # friction
+    FRI = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # plastic yielding node property
+    YNY = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    # Vx nodes
+    # density [kg/m^3]
+    RHOX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid density [kg/m^3]
+    RHOFX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # thermal conductivity [W/m/K]
+    KX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # porosity
+    PHIX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # solid vx-velocity [m/s]
+    vx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid vx-velocity [m/s]
+    vxf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # etafluid/kphi ratio [m^2]
+    RX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # qx-darcy flux [m/s]
+    qxD = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # gx-gravity [m/s^2]
+    gx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # Vy nodes
+    # density [kg/m^3]
+    RHOY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid density [kg/m^3]
+    RHOFY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # thermal conductivity [W/m/K]
+    KY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # porosity
+    PHIY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # solid vy-velocity [m/s]
+    vy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid vy-velocity [m/s]
+    vyf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # etafluid/kphi ratio [m^2]
+    RY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # qy-Darcy flux [m/s]
+    qyD = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # gy-gravity [m/s^2]
+    gy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # P nodes
+    # density [kg/m^3]
+    RHO = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # volumetric heat capacity [J/m^3/K]
+    RHOCP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # thermal expansion [J/m^3/K]
+    ALPHA = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid thermal expansion [J/m^3/K]
+    ALPHAF = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # radioactive heating [W/m^3]
+    HR = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # adiabatic heating [W/m^3]
+    HA = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # shear heating [W/m^3]
+    HS = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # viscosity [Pa*s]
+    ETAP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # shear modulus [Pa]
+    GGGP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # EPSILONxx [1/s]
+    EXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # σ′xx [1/s]
+    SXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # σ₀′ (SIGMA0'xx) [1/s]
+    SXX0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous temperature [K]
+    tk1 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # next temperature [K]
+    tk2 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # solid vx in pressure nodes [m/s]
+    vxp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # solid vy in pressure nodes [m/s]
+    vyp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid vx in pressure nodes [m/s]
+    vxpf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid vy in pressure nodes [m/s]
+    vypf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # total pressure [Pa]
+    pr = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # fluid pressure [Pa]
+    pf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # solid pressure [Pa]
+    ps = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous total pressure [Pa]
+    pr0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous fluid pressure [Pa]
+    pf0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous solid pressure [Pa]
+    ps0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # bulk viscosity [Pa*s]
+    ETAPHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # bulk compresibility [Pa*s]
+    BETTAPHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # porosity
+    PHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # Dln[(1-ϕ)/ϕ]/Dt
+    APHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # gravity potential [J/kg]
+    FI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    return (
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETTAPHI,
+        PHI,
+        APHI,
+        FI
+    )
+end # function setup_staggered_grid_properties()
+
+
 """
 Define initial set of markers according to model parameters
 
@@ -407,7 +607,7 @@ function define_markers!(
     rhofluidcur,
     alphasolidcur,
     alphafluidcur,
-    sp::StaticParameters
+    sp
 )
     @unpack xsize,
     ysize,
@@ -2486,161 +2686,66 @@ function simulation_loop(sp::StaticParameters)
     # set up staggered grid
     # -------------------------------------------------------------------------
     x, y, xvx, yvx, xvy, yvy, xp, yp = setup_staggered_grid_geometry(sp)
-
-
-
-
-    # basic nodes
-    # grid geometry
-    # x: horizontal coordinates of basic grid points [m]
-    # x = @SVector [j for j = 0:dx:xsize] # should work but doesn't
-    x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
-    # y: vertical coordinates of basic grid points [m]
-    # y = @SVector [i for i = 0:dy:ysize]
-    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
-    # physical node properties
-    # viscous viscosity, Pa*s
-    ETA0 = zeros(Float64, Ny, Nx)
-    # viscoplastic viscosity, Pa*s
-    ETA = zeros(Float64, Ny, Nx)
-    # initial viscoplastic viscosity, Pa*s
-    ETA00 = zeros(Float64, Ny, Nx)
-    # shear modulus, Pa
-    GGG = zeros(Float64, Ny, Nx)
-    # epsilonxy, 1/s
-    EXY = zeros(Float64, Ny, Nx)
-    # σxy₀ (sigma0xy), 1/s
-    SXY0 = zeros(Float64, Ny, Nx)
-    # rotation rate, 1/s
-    WYX = zeros(Float64, Ny, Nx)
-    # compressive strength, Pa
-    COH = zeros(Float64, Ny, Nx)
-    # tensile strength, Pa
-    TEN = zeros(Float64, Ny, Nx)
-    # friction
-    FRI = zeros(Float64, Ny, Nx)
-    # plastic yielding node property
-    YNY = falses(Ny, Nx)
-    # initial plastic yielding node property
-    YNY00 = falses(Ny, Nx)
-
-    # Vx nodes
-    # grid geometry
-    # xvx: horizontal coordinates of vx grid points [m]
-    xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
-    # yvx: vertical coordinates of vx grid points [m]
-    yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-    # physical node properties
-    # density [kg/m^3]
-    RHOX = zeros(Float64, Ny1, Nx1)
-    # fluid density [kg/m^3]
-    RHOFX = zeros(Float64, Ny1, Nx1)
-    # thermal conductivity [W/m/K]
-    KX = zeros(Float64, Ny1, Nx1)
-    # porosity
-    PHIX = zeros(Float64, Ny1, Nx1)
-    # solid vx-velocity [m/s]
-    vx = zeros(Float64, Ny1, Nx1)
-    # fluid vx-velocity [m/s]
-    vxf = zeros(Float64, Ny1, Nx1)
-    # etafluid/kphi ratio [m^2]
-    RX = zeros(Float64, Ny1, Nx1)
-    # qx-darcy flux [m/s]
-    qxD = zeros(Float64, Ny1, Nx1)
-    # gx-gravity [m/s^2]
-    gx = zeros(Float64, Ny1, Nx1)
-
-    # Vy nodes
-    # grid geometry
-    # xvy: horizontal coordinates of vy grid points [m]
-    xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # yvy: vertical coordinates of vy grid points [m]
-    yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
-    # physical node properties
-    # "density [kg/m^3]"
-    RHOY = zeros(Float64, Ny1, Nx1)
-    # "fluid density [kg/m^3]"
-    RHOFY = zeros(Float64, Ny1, Nx1)
-    # "thermal conductivity [W/m/K]"
-    KY = zeros(Float64, Ny1, Nx1)
-    # "porosity"
-    PHIY = zeros(Float64, Ny1, Nx1)
-    # "solid vy-velocity [m/s]"
-    vy = zeros(Float64, Ny1, Nx1)
-    # "fluid vy-velocity [m/s]"
-    vyf = zeros(Float64, Ny1, Nx1)
-    # "etafluid/kphi ratio [m^2]"
-    RY = zeros(Float64, Ny1, Nx1)
-    # "qy-darcy flux [m/s]"
-    qyD = zeros(Float64, Ny1, Nx1)
-    # "gy-gravity [m/s^2]"
-    gy = zeros(Float64, Ny1, Nx1)
-
-    # P nodes
-    # grid geometry
-    # xp: horizontal coordinates of p grid points [m]
-    xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # yp: vertical coordinates of p grid points [m]
-    yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-    # physical node properties
-    # density [kg/m^3]
-    RHO = zeros(Float64, Ny1, Nx1)
-    # volumetric heat capacity [J/m^3/K]
-    RHOCP = zeros(Float64, Ny1, Nx1)
-    # thermal expansion [J/m^3/K]
-    ALPHA = zeros(Float64, Ny1, Nx1)
-    # fluid thermal expansion [J/m^3/K]
-    ALPHAF = zeros(Float64, Ny1, Nx1)
-    # radioactive heating [W/m^3]
-    HR = zeros(Float64, Ny1, Nx1)
-    # adiabatic heating [W/m^3]
-    HA = zeros(Float64, Ny1, Nx1)
-    # shear heating [W/m^3]
-    HS = zeros(Float64, Ny1, Nx1)
-    # viscosity [Pa*s]
-    ETAP = zeros(Float64, Ny1, Nx1)
-    # shear modulus [Pa]
-    GGGP = zeros(Float64, Ny1, Nx1)
-    # EPSILONxx [1/s]
-    EXX = zeros(Float64, Ny1, Nx1)
-    # σ′ (SIGMA'xx) [1/s]
-    SXX = zeros(Float64, Ny1, Nx1)
-    # σ₀′ (SIGMA0'xx) [1/s]
-    SXX0 = zeros(Float64, Ny1, Nx1)
-    # old temperature [K]
-    tk1 = zeros(Float64, Ny1, Nx1)
-    # new temperature [K]
-    tk2 = zeros(Float64, Ny1, Nx1)
-    # solid Vx in pressure nodes [m/s]
-    vxp = zeros(Float64, Ny1, Nx1)
-    # solid Vy in pressure nodes [m/s]
-    vyp = zeros(Float64, Ny1, Nx1)
-    # fluid Vx in pressure nodes [m/s]
-    vxpf = zeros(Float64, Ny1, Nx1)
-    # fluid Vy in pressure nodes [m/s]
-    vypf = zeros(Float64, Ny1, Nx1)
-    # total pressure [Pa]
-    pr = zeros(Float64, Ny1, Nx1)
-    # fluid pressure [Pa]
-    pf = zeros(Float64, Ny1, Nx1)
-    # solid pressure [Pa]
-    ps = zeros(Float64, Ny1, Nx1)
-    # old total pressure [Pa]
-    pr0 = zeros(Float64, Ny1, Nx1)
-    # old fluid pressure [Pa]
-    pf0 = zeros(Float64, Ny1, Nx1)
-    # old solid pressure [Pa]
-    ps0 = zeros(Float64, Ny1, Nx1)
-    # bulk viscosity [Pa*s]
-    ETAPHI = zeros(Float64, Ny1, Nx1)
-    # bulk compresibility [Pa*s]
-    BETTAPHI = zeros(Float64, Ny1, Nx1)
-    # porosity
-    PHI = zeros(Float64, Ny1, Nx1)
-    # Dln[(1-PHI)/PHI]/Dt
-    APHI = zeros(Float64, Ny1, Nx1)
-    # gravity potential [J/kg]
-    FI = zeros(Float64, Ny1, Nx1)
+    (
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETTAPHI,
+        PHI,
+        APHI,
+        FI
+    ) = setup_staggered_grid_properties(sp)
 
     # -------------------------------------------------------------------------
     # set up markers
