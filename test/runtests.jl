@@ -630,7 +630,7 @@ using Test
         end # testset "P nodes"    
     end # testset "fix_weights() advanced"
    
-    @testset "interpolate!()" begin
+    @testset "interpolate_to_grid!()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
         dx, dy = sp.dx, sp.dy
@@ -649,14 +649,14 @@ using Test
             grid = zeros(Ny, Nx, Base.Threads.nthreads())
             i, j, weights = HydrologyPlanetesimals.fix_weights(
                 xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
-            HydrologyPlanetesimals.interpolate!(
+            HydrologyPlanetesimals.interpolate_to_grid!(
                 i, j, weights, property[m], grid)
             @test grid[i, j] == property[m] * weights[1] 
             @test grid[i+1, j] == property[m] * weights[2]
             @test grid[i, j+1] == property[m] * weights[3]
             @test grid[i+1, j+1] == property[m] * weights[4]
         end
-    end # testset "interpolate!()"
+    end # testset "interpolate_to_grid!()"
 
     @testset "compute node properties" begin
         sp = HydrologyPlanetesimals.StaticParameters()
@@ -722,21 +722,21 @@ using Test
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[1, m], ETA0SUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[2, m], ETASUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, inv(property[3, m]), GGGSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[4, m], SXYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[5, m], COHSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[6, m], TENSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[7, m], FRISUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, 1.0, WTSUM)
             end
             HydrologyPlanetesimals.compute_basic_node_properties!(
@@ -879,17 +879,17 @@ using Test
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xvx, yvx, dx, dy, jmin, jmax, imin, imax)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[1, m], RHOXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[2, m], RHOFXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[3, m], KXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[4, m], PHIXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[5, m], RXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, 1.0, WTXSUM)
             end
             HydrologyPlanetesimals.compute_vx_node_properties!(
@@ -1011,17 +1011,17 @@ using Test
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xvy, yvy, dx, dy, jmin, jmax, imin, imax)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[1, m], RHOYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[2, m], RHOFYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[3, m], KYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[4, m], PHIYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[5, m], RYSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, 1.0, WTYSUM)
             end
             HydrologyPlanetesimals.compute_vy_node_properties!(
@@ -1161,25 +1161,25 @@ using Test
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xp, yp, dx, dy, jmin, jmax, imin, imax)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[1, m], RHOSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[2, m], RHOCPSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[3, m], ALPHASUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[4, m], ALPHAFSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[5, m], HRSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, inv(property[6, m]), GGGPSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[7, m], SXXSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[2, m] * property[8, m], TKSUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, property[9, m], PHISUM)
-                HydrologyPlanetesimals.interpolate!(
+                HydrologyPlanetesimals.interpolate_to_grid!(
                     i, j, weights, 1.0, WTPSUM)
             end
             HydrologyPlanetesimals.compute_p_node_properties!(

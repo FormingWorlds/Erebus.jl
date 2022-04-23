@@ -393,7 +393,7 @@ end
 
 
 """
-Computers properties of given marker and saves them to corresponding arrays.
+Compute properties of given marker and save them to corresponding arrays.
 
 $(SIGNATURES)
 
@@ -699,14 +699,14 @@ using given bilinear interpolation weights.
     - property: property to be interpolated to grid using weights
     - grid: threaded grid array on which to interpolate property
 """
-function interpolate!(i, j, weights, property, grid)
-# @timeit to "interpolate!" begin
+function interpolate_to_grid!(i, j, weights, property, grid)
+# @timeit to "interpolate_to_grid!" begin
     grid[i, j, threadid()] += property * weights[1]
     grid[i+1, j, threadid()] += property * weights[2]
     grid[i, j+1, threadid()] += property * weights[3]
     grid[i+1, j+1, threadid()] += property * weights[4]
-# end # @timeit to "interpolate!"
-end # function interpolate!
+# end # @timeit to "interpolate_to_grid!"
+end # function interpolate_to_grid!
 
 
 """
@@ -2276,6 +2276,7 @@ function finalize_plastic_iteration_pass!(
         # perform next plastic iteration pass with new viscoplastic viscosity
         ETA .= copy(ETA5)
         YNY .= copy(YNY5)
+    end
     return dt
 end # @timeit to "finalize_plastic_iteration_pass!()"
     end # function finalize_plastic_iteration_pass
@@ -2709,21 +2710,21 @@ function simulation_loop(sp::StaticParameters)
                 imax_basic
             )
             # ETA0SUM: viscous viscosity interpolated to basic nodes
-            interpolate!(i, j, weights, etatotalm[m], ETA0SUM)
+            interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
             # ETASUM: viscoplastic viscosity interpolated to basic nodes
-            interpolate!(i, j, weights, etavpm[m], ETASUM)
+            interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM)
             # GGGSUM: shear modulus interpolated to basic nodes
-            interpolate!(i, j, weights, inv_gggtotalm[m], GGGSUM)
+            interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
             # SXYSUM: σxy shear stress interpolated to basic nodes
-            interpolate!(i, j, weights, sxym[m], SXYSUM)
+            interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM)
             # COHSUM: compressive strength interpolated to basic nodes
-            interpolate!(i, j, weights, cohestotalm[m], COHSUM)
+            interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
             # TENSUM: tensile strength interpolated to basic nodes
-            interpolate!(i, j, weights, tenstotalm[m], TENSUM)
+            interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
             # FRISUM: friction  interpolated to basic nodes
-            interpolate!(i, j, weights, fricttotalm[m], FRISUM)
+            interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
             # WTSUM: weight array for bilinear interpolation to basic nodes
-            interpolate!(i, j, weights, 1.0, WTSUM)
+            interpolate_to_grid!(i, j, weights, 1.0, WTSUM)
 
             # interpolate marker properties to Vx nodes
             i, j, weights = fix_weights(
@@ -2739,17 +2740,17 @@ function simulation_loop(sp::StaticParameters)
                 imax_vx
             )
             # RHOXSUM: density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhototalm[m], RHOXSUM)
+            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
             # RHOFXSUM: fluid density interpolated to Vx nodes
-            interpolate!(i, j, weights, rhofluidcur[m], RHOFXSUM)
+            interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
             # KXSUM: thermal conductivity interpolated to Vx nodes
-            interpolate!(i, j, weights, ktotalm[m], KXSUM)
+            interpolate_to_grid!(i, j, weights, ktotalm[m], KXSUM)
             # PHIXSUM: porosity interpolated to Vx nodes
-            interpolate!(i, j, weights, phim[m], PHIXSUM)
+            interpolate_to_grid!(i, j, weights, phim[m], PHIXSUM)
             # RXSUM: ηfluid/kϕ interpolated to Vx nodes
-            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
+            interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
             # WTXSUM: weight for bilinear interpolation to Vx nodes
-            interpolate!(i, j, weights, 1.0, WTXSUM)
+            interpolate_to_grid!(i, j, weights, 1.0, WTXSUM)
 
             # interpolate marker properties to Vy nodes
             i, j, weights = fix_weights(
@@ -2765,17 +2766,17 @@ function simulation_loop(sp::StaticParameters)
                 imax_vy
             )
             # RHOYSUM: density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhototalm[m], RHOYSUM)
+            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
             # RHOFYSUM: fluid density interpolated to Vy nodes
-            interpolate!(i, j, weights, rhofluidcur[m], RHOFYSUM)
+            interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
             # KYSUM: thermal conductivity interpolated to Vy nodes
-            interpolate!(i, j, weights, ktotalm[m], KYSUM)
+            interpolate_to_grid!(i, j, weights, ktotalm[m], KYSUM)
             # PHIYSUM: porosity interpolated to Vy nodes
-            interpolate!(i, j, weights, phim[m], PHIYSUM)
+            interpolate_to_grid!(i, j, weights, phim[m], PHIYSUM)
             # RYSUM: ηfluid/kϕ interpolated to Vy nodes
-            interpolate!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
+            interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
             # WTYSUM: weight for bilinear interpolation to Vy nodes
-            interpolate!(i, j, weights, 1.0, WTYSUM)
+            interpolate_to_grid!(i, j, weights, 1.0, WTYSUM)
             
             # interpolate marker properties to P nodes
             i, j, weights = fix_weights(
@@ -2791,25 +2792,25 @@ function simulation_loop(sp::StaticParameters)
                 imax_p
             )
             # GGGPSUM: shear modulus interpolated to P nodes
-            interpolate!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
+            interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
             # SXXSUM: σ'xx interpolated to P nodes
-            interpolate!(i, j, weights, sxxm[m], SXXSUM)
+            interpolate_to_grid!(i, j, weights, sxxm[m], SXXSUM)
             # RHOSUM: density interpolated to P nodes
-            interpolate!(i, j, weights, rhototalm[m], RHOSUM)
+            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
             # RHOCPSUM: volumetric heat capacity interpolated to P nodes
-            interpolate!(i, j, weights, rhocptotalm[m], RHOCPSUM)
+            interpolate_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
             # ALPHASUM: thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphasolidcur[m], ALPHASUM)
+            interpolate_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
             # ALPHAFSUM: fluid thermal expansion interpolated to P nodes
-            interpolate!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
+            interpolate_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
             # HRSUM: radioactive heating interpolated to P nodes
-            interpolate!(i, j, weights, hrtotalm[m], HRSUM)
+            interpolate_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
             # PHISUM: porosity interpolated to P nodes
-            interpolate!(i, j, weights, phim[m], PHISUM)
+            interpolate_to_grid!(i, j, weights, phim[m], PHISUM)
             # TKSUM: heat capacity interpolated to P nodes
-            interpolate!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
+            interpolate_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
             # WTPSUM: weight for bilinear interpolation to P nodes
-            interpolate!(i, j, weights, 1.0, WTPSUM)
+            interpolate_to_grid!(i, j, weights, 1.0, WTPSUM)
         end
 
         # ---------------------------------------------------------------------
