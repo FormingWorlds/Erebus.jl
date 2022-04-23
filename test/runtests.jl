@@ -271,6 +271,7 @@ using Test
 
     @testset "setup_marker_properties()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
         xsize, ysize = sp.xsize, sp.ysize
         Nxmc, Nymc = sp.Nxmc, sp.Nymc
         Nxm, Nym = sp.Nxm, sp.Nym
