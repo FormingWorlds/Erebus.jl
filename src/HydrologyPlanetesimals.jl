@@ -703,39 +703,41 @@ $(SIGNATURES)
     - alphasolidcur: marker solid thermal expansion coefficient
     - alphafluidcur: marker fluid thermal expansion coefficient
 """
-function setup_marker_properties_helpers(sp)
+function setup_marker_properties_helpers(sp; randomized=false)
+    @unpack start_marknum = sp
+    marknum = start_marknum
     # marker total density
-    rhototalm = zeros(marknum)
+    rhototalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total volumetric heat capacity
-    rhocptotalm = zeros(marknum)
+    rhocptotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker solid viscosity
-    etasolidcur = zeros(marknum)
+    etasolidcur = randomized ? rand(marknum) : zeros(marknum)
     # marker fluid viscosity
-    etafluidcur = zeros(marknum)
+    etafluidcur = randomized ? rand(marknum) : zeros(marknum)
     # marker total viscosity
-    etatotalm = zeros(marknum)
+    etatotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total radiogenic heat production
-    hrtotalm = zeros(marknum)
+    hrtotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total thermal conductivity
-    ktotalm = zeros(marknum)
+    ktotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total thermal energy
-    tkm_rhocptotalm = zeros(marknum)
+    tkm_rhocptotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker fluid viscosity over permeability
-    etafluidcur_inv_kphim = zeros(marknum)
+    etafluidcur_inv_kphim = randomized ? rand(marknum) : zeros(marknum)
     # marker inverse of total shear modulus
-    inv_gggtotalm = zeros(marknum)
+    inv_gggtotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total friction coefficient
-    fricttotalm = zeros(marknum)
+    fricttotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total compressive strength
-    cohestotalm = zeros(marknum)
+    cohestotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total tensile strength
-    tenstotalm = zeros(marknum)
+    tenstotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker fluid density
-    rhofluidcur = zeros(marknum)
+    rhofluidcur = randomized ? rand(marknum) : zeros(marknum)
     # marker solid thermal expansion coefficient
-    alphasolidcur = zeros(marknum)
+    alphasolidcur = randomized ? rand(marknum) : zeros(marknum)
     # marker fluid thermal expansion coefficient
-    alphafluidcur = zeros(marknum)
+    alphafluidcur = randomized ? rand(marknum) : zeros(marknum)
     return (
         rhototalm,
         rhocptotalm,
