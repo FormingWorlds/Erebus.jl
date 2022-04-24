@@ -696,7 +696,7 @@ using Test
     end # testset "total()"
 
     @testset "ktotal()" begin
-        # from madcph.m, line 1761
+        # verification, from madcph.m, line 1761
         ktotalm_ver(ksolidm, kfluid, phim) = (
             ksolidm*kfluid/2+(
                 (ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2
@@ -707,13 +707,13 @@ using Test
     end # testset "ktotal()"
 
     @testset "kphi()" begin
-        # from madcph.m, line 333
+        # verification, from madcph.m, line 333
         kphim(kphim0, phim, phim0)=kphim0*(phim/phim0)^3/((1-phim)/(1-phim0))^2
         @test HydrologyPlanetesimals.kphi(1., 2., 3.) == kphim(1., 2., 3.)
     end # testset "kphi()"
 
     @testset "Q_radiogenic()" begin
-        # from madcph.m, line 276
+        # verification, from madcph.m, line 276
         Q(f, ratio, E, tau, timesum)=f*ratio*E*exp(-timesum/tau)/tau
         @test HydrologyPlanetesimals.Q_radiogenic(1., 2., 3., 4., 5.) == Q(
             1., 2., 3., 4., 5.)
@@ -753,7 +753,7 @@ using Test
         Nx, Ny = sp.Nx, sp.Ny
         dx, dy = sp.dx, sp.dy
         xsize, ysize = sp.xsize, sp.ysize
-        # from madcph.m, line 38ff
+        # verification, from madcph.m, line 38ff
         # Basic nodes
         x=0:dx:xsize
         y=0:dy:ysize
@@ -768,7 +768,7 @@ using Test
         yp=-dy/2:dy:ysize+dy/2
 
         @testset "basic nodes" begin
-        # from madcph.m, line 373ff
+        # verification, from madcph.m, line 373ff
         jmin, jmax = sp.jmin_basic, sp.jmax_basic
         imin, imax = sp.imin_basic, sp.imax_basic
         function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
@@ -821,7 +821,7 @@ using Test
         end # testset "basic nodes"
 
         @testset "Vx nodes" begin
-        # from madcph.m, line 434ff
+        # verification, from madcph.m, line 434ff
         jmin, jmax = sp.jmin_vx, sp.jmax_vx
         imin, imax = sp.imin_vx, sp.imax_vx
         function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
@@ -872,7 +872,7 @@ using Test
         end # testset "Vx nodes"
 
         @testset "Vy nodes" begin
-        # from madcph.m, line 484ff
+        # verification, from madcph.m, line 484ff
         jmin, jmax = sp.jmin_vy, sp.jmax_vy
         imin, imax = sp.imin_vy, sp.imax_vy
         function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
@@ -923,7 +923,7 @@ using Test
         end # testset "Vy nodes"
     
         @testset "P nodes" begin
-        # from madcph.m, line 538ff
+        # verification, from madcph.m, line 538ff
         jmin, jmax = sp.jmin_p, sp.jmax_p
         imin, imax = sp.imin_p, sp.imax_p
         function fix_p(xm, ym, x_axis, y_axis, dx, dy)
@@ -979,7 +979,7 @@ using Test
         Nx, Ny = sp.Nx, sp.Ny
         dx, dy = sp.dx, sp.dy
         xsize, ysize = sp.xsize, sp.ysize
-        # from madcph.m, line 38ff
+        # verification, from madcph.m, line 38ff
         # basic nodes
         x=0:dx:xsize
         y=0:dy:ysize
@@ -995,7 +995,7 @@ using Test
         # simulating markers
         num_markers = 10_000
         @testset "basic nodes" begin
-            # from madcph.m, line 373ff
+            # verification, from madcph.m, line 373ff
             jmin, jmax = sp.jmin_basic, sp.jmax_basic
             imin, imax = sp.imin_basic, sp.imax_basic
             function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
@@ -1037,7 +1037,6 @@ using Test
                 )
                 i_ver, j_ver, weights_ver = fix_basic(
                     xm[m], ym[m], x, y, dx, dy)
-                @debug "fix_weights basic" i i_ver j j_ver weights weights_ver
                 @test i == i_ver
                 @test j == j_ver
                 @test weights == weights_ver
@@ -1045,7 +1044,7 @@ using Test
         end # testset "basic nodes"
         
         @testset "Vx nodes" begin
-            # from madcph.m, line 434ff
+            # verification, from madcph.m, line 434ff
             jmin, jmax = sp.jmin_vx, sp.jmax_vx
             imin, imax = sp.imin_vx, sp.imax_vx
             function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
@@ -1095,7 +1094,7 @@ using Test
         end # testset "Vx nodes"
 
         @testset "Vy nodes" begin
-            # from madcph.m, line 484ff
+            # verification, from madcph.m, line 484ff
             jmin, jmax = sp.jmin_vy, sp.jmax_vy
             imin, imax = sp.imin_vy, sp.imax_vy
             function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
@@ -1137,7 +1136,6 @@ using Test
                 )
                 i_ver, j_ver, weights_ver = fix_vy(
                     xm[m], ym[m], xvy, yvy, dx, dy)
-                @debug "fix_weights Vy" i i_ver j j_ver weights weights_ver
                 @test i == i_ver
                 @test j == j_ver
                 @test weights == weights_ver
@@ -1145,7 +1143,7 @@ using Test
         end # testset "Vy nodes"
     
         @testset "P nodes" begin
-            # from madcph.m, line 538ff
+            # verification, from madcph.m, line 538ff
             jmin, jmax = sp.jmin_p, sp.jmax_p
             imin, imax = sp.imin_p, sp.imax_p
             function fix_p(xm, ym, x_axis, y_axis, dx, dy)
@@ -1187,7 +1185,6 @@ using Test
                 )
                 i_ver, j_ver, weights_ver = fix_p(
                     xm[m], ym[m], xp, yp, dx, dy)
-                @debug "fix_weights P" xm[m] ym[m] i i_ver j j_ver
                 @test i == i_ver
                 @test j == j_ver
                 @test weights == weights_ver
@@ -1236,26 +1233,22 @@ using Test
         num_markers = 10_000
         xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
         ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-        tm = rand(1:3, num_markers)
-        
-
-        etavpm = zeros(num_markers)
-        etavpm_ver = zeros(num_markers)
-
-        # interpolate to markers     
+        property = zeros(num_markers)
+        grid = rand(Ny, Nx)
+        # interpolate to markers & test
         for m=1:1:num_markers
-
-
-            # interpolate_to_marker!(m, i, j, weights, marker_property, grid)
+            i, j, weights = HydrologyPlanetesimals.fix_weights(
+                xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
+            HydrologyPlanetesimals.interpolate_to_marker!(
+                m, i, j, weights, property, grid)
+            @test property[m] == (
+                grid[i, j] * weights[1]
+                + grid[i+1, j] * weights[2]
+                + grid[i, j+1] * weights[3]
+                + grid[i+1, j+1] * weights[4]
+            )
         end
-        # verification
-
-        # test
-
-
     end # testset "interpolate_to_marker!()"
-
-
 
     @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
@@ -1263,7 +1256,7 @@ using Test
         Nx1, Ny1 = sp.Nx1, sp.Ny1
         dx, dy = sp.dx, sp.dy
         xsize, ysize = sp.xsize, sp.ysize
-        # from madcph.m, line 38ff
+        # verification, from madcph.m, line 38ff
         # basic nodes
         x=0:dx:xsize
         y=0:dy:ysize
@@ -2286,7 +2279,7 @@ using Test
             sp
         )
         # verification
-        # from madcph.m, lines 779ff
+        # verification, from madcph.m, lines 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
         for j=1:1:Nx1
