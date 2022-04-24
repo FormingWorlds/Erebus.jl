@@ -859,6 +859,8 @@ $(SIGNATURES)
     - alphasolidcur: array of solid thermal expansion coefficient of markers
     - alphafluidcur: array of fluid thermal expansion coefficient of markers
     - sp: static simulation parameters
+    - randomized: uniformly random-distribute marker x/y positions within cells
+                  and randomly set initial marker porosity 
 
 # Returns
 
@@ -884,7 +886,8 @@ function define_markers!(
     rhofluidcur,
     alphasolidcur,
     alphafluidcur,
-    sp
+    sp;
+    randomized=true
 )
     @unpack xsize,
     ysize,
@@ -918,15 +921,23 @@ function define_markers!(
         # calculate marker counter
         m = (jm-1) * Nym + im
         # define marker coordinates
-        xm[m] = dxm/2 + (jm-1) * dxm + (rand()-0.5) * dxm
-        ym[m] = dym/2 + (im-1) * dym + (rand()-0.5) * dym
+        xm[m] = dxm/2 + (jm-1) * dxm 
+        ym[m] = dym/2 + (im-1) * dym 
+        # random marker position within cell
+        if randomized
+            xm[m] += (rand()-0.5) * dxm
+            ym[m] += (rand()-0.5) * dym
+        end
         # primary marker properties 
         rmark = distance(xm[m], ym[m], xcenter, ycenter)
         if rmark < rplanet
             # planet
             tm[m] = ifelse(rmark>rcrust, 2, 1)
             # porosity
-            phim[m] = phim0 * (1.0 + (rand()-0.5))
+            phim[m] = phim0
+            if randomized
+                phim[m] += phim0 * (rand()-0.5)
+            end
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # *exp(-28*phim[m])
         else
@@ -1002,7 +1013,7 @@ function compute_marker_properties!(
     hrsolidm,
     hrfluidm,
     phim,
-    sp::StaticParameters
+    sp
 )
     @unpack rhosolidm,
         rhofluidm,

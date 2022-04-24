@@ -342,7 +342,7 @@ using Test
         marknum_ver = Nxm*Nym; # Number of markers
         xm_ver = zeros(marknum); # Horizontal coordinates, m
         ym_ver = zeros(marknum); # Vertical coordinates, m
-        tm_ver = zeros(marknum); # Material type
+        tm_ver = zeros(Int, marknum); # Material type
         tkm_ver = zeros(marknum); # Marker temperature, K
         sxxm_ver = zeros(marknum); # SIGMA'xx, Pa
         sxym_ver = zeros(marknum); # SIGMAxy, Pa
@@ -407,9 +407,196 @@ using Test
         @test alphafluidcur == zeros(Float64, marknum)
     end # testset "setup_marker_properties_helpers()"
     
-    @testset "define_markers!()" begin
-        
-    end # testset "define_markers()"
+    @testset "define_markers!() & compute_marker_properties!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nxm, Nym = sp.Nxm, sp.Nym
+        dxm, dym = sp.dxm, sp.dym
+        xsize, ysize = sp.xsize, sp.ysize
+        rplanet, rcrust = sp.rplanet, sp.rcrust
+        etasolidm = sp.etasolidm
+        psurface = sp.psurface
+        phim0, phimin = sp.phim0, sp.phimin
+        marknum = sp.start_marknum
+        start_hrsolidm, start_hrfluidm = sp.start_hrsolidm, sp.start_hrfluidm
+        hrsolidm, hrfluidm = sp.start_hrsolidm, sp.start_hrfluidm
+        gggsolidm = sp.gggsolidm
+        frictsolidm = sp.frictsolidm
+        cohessolidm = sp.cohessolidm
+        tenssolidm = sp.tenssolidm
+        alphasolidm = sp.alphasolidm
+        alphafluidm = sp.alphafluidm
+        rhosolidm = sp.rhosolidm
+        rhofluidm = sp.rhofluidm
+        rhocpsolidm = sp.rhocpsolidm
+        rhocpfluidm = sp.rhocpfluidm
+        tmsilicate = sp.tmsilicate
+        tmiron = sp.tmiron
+        etamin = sp.etamin
+        etasolidm = sp.etasolidm
+        etasolidmm = sp.etasolidmm
+        etafluidm = sp.etafluidm
+        etafluidmm = sp.etafluidmm
+        ksolidm = sp.ksolidm
+        kfluidm = sp.kfluidm
+        kphim0 = sp.kphim0
+        phim0 = sp.phim0
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim
+        ) = HydrologyPlanetesimals.setup_marker_properties(sp)
+        (
+            rhototalm,
+            rhocptotalm,
+            etasolidcur,
+            etafluidcur,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(sp)
+        xm_ver = zeros(marknum)
+        ym_ver = zeros(marknum)
+        tm_ver = zeros(Int, marknum)
+        tkm_ver = zeros(marknum)
+        phim_ver = zeros(marknum)
+        etavpm_ver = zeros(marknum)
+        # define markers
+        HydrologyPlanetesimals.define_markers!(
+            xm,
+            ym,
+            tm,
+            phim,
+            etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            etafluidcur,
+            tkm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            sp,
+            randomized=false
+        )
+        for m=1:1:marknum
+            HydrologyPlanetesimals.compute_marker_properties!(
+                m,
+                tm,
+                tkm,
+                rhototalm,
+                rhocptotalm,
+                etasolidcur,
+                etafluidcur,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim,
+                hrsolidm,
+                hrfluidm,
+                phim,
+                sp
+            )
+        end
+        # verification, from madcph.m, line 180ff
+        m=1; # Marker counter
+        for jm=1:1:Nxm
+            for im=1:1:Nym
+                # Define marker coordinates
+                xm_ver[m]=dxm/2+(jm-1)*dxm # +(rand-0.5)*dxm;
+                ym_ver[m]=dym/2+(im-1)*dym # +(rand-0.5)*dym;
+                # Marker properties
+                rmark=((xm_ver[m]-xsize/2)^2+(ym_ver[m]-ysize/2)^2)^0.5;
+                if(rmark<rplanet)
+                    # Planet
+                    tm_ver[m]=1; # mantle
+                    if(rmark>rcrust) 
+                        tm_ver[m]=2; # crust
+                    end
+                    tkm_ver[m]=300; # Temperature
+                    phim_ver[m]=phim0 # *(1+1.0*(rand-0.5)); # Porosity
+                    etavpm_ver[m]=etasolidm[tm_ver[m]];#*exp(-28*phim_ver[m]); % Matrix viscosity
+                else
+                    # Sticky space (to have internal free surface)
+                    tm_ver[m]=3; # Material type
+                    tkm_ver[m]=273; # Temperature
+                    phim_ver[m]=phimin; # Porosity
+                    etavpm_ver[m]=etasolidm[tm_ver[m]]; # Matrix viscosity
+                end
+                # Update marker counter
+                m=m+1;
+            end
+        end
+        # test
+        for m=1:1:marknum
+            # define_markers()!
+            @test xm[m] == xm_ver[m]
+            @test ym[m] == ym_ver[m]
+            @test tm[m] == tm_ver[m]
+            @test tkm[m] == tkm_ver[m]
+            @test phim[m] == phim_ver[m]
+            @test etavpm[m] == etavpm_ver[m]
+            # compute_marker_properties()!
+            # for air type markers
+            if tm[m] == 3
+                @test rhototalm[m] == rhosolidm[tm[m]]
+                @test rhocptotalm[m] == rhocpsolidm[tm[m]]
+                @test etatotalm[m] == etasolidm[tm[m]]
+                @test hrtotalm[m] == start_hrsolidm[tm[m]]
+                @test ktotalm[m] == ksolidm[tm[m]]           
+                @test etafluidcur[m] == etafluidm[tm[m]]
+            # for rock type markers
+            elseif tm[m] < 3
+                @test rhototalm[m] == HydrologyPlanetesimals.total(
+                    rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+                @test rhocptotalm[m] == HydrologyPlanetesimals.total(
+                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+                @test etasolidcur[m] == ifelse(
+                    tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
+                @test etafluidcur[m] == ifelse(
+                    tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
+                @test etatotalm[m] == max(
+                    etamin, etasolidcur[m], etafluidcur[m])
+                @test hrtotalm[m] == HydrologyPlanetesimals.total(
+                    hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+                @test ktotalm[m] == HydrologyPlanetesimals.ktotal(
+                    ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+            end
+            # for all markers
+            @test inv_gggtotalm[m] == inv(gggsolidm[tm[m]])
+            @test fricttotalm[m] == frictsolidm[tm[m]]
+            @test cohestotalm[m] == cohessolidm[tm[m]]
+            @test tenstotalm[m] == tenssolidm[tm[m]]
+            @test rhofluidcur[m] == rhofluidm[tm[m]]
+            # @test alphasolidcur[m] == alphasolidm[tm[m]]
+            @test alphafluidcur[m] == alphafluidm[tm[m]]
+            @test tkm_rhocptotalm[m] == tkm[m] * rhocptotalm[m]
+            @test etafluidcur_inv_kphim[m] == (
+                etafluidcur[m] / HydrologyPlanetesimals.kphi(
+                    kphim0[tm[m]], phim0, phim[m])
+            )
+        end
+    end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "distance()" begin
         @test HydrologyPlanetesimals.distance(0, 0, 0, 0) == 0
@@ -440,8 +627,13 @@ using Test
 
     @testset "ktotal()" begin
         # from madcph.m, line 1761
-        ktotalm(ksolidm, kfluid, phim)=(ksolidm*kfluid/2+((ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2)/16)^0.5-(ksolidm*(3*phim-2)+ kfluid*(1-3*phim))/4
-        @test HydrologyPlanetesimals.ktotal(1., 2., 3.) == ktotalm(1., 2., 3.)
+        ktotalm_ver(ksolidm, kfluid, phim) = (
+            ksolidm*kfluid/2+(
+                (ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2
+                )/16
+            )^0.5 - (ksolidm*(3*phim-2)+ kfluid*(1-3*phim))/4
+        @test HydrologyPlanetesimals.ktotal(1., 2., 3.) == ktotalm_ver(
+            1., 2., 3.)
     end # testset "ktotal()"
 
     @testset "kphi()" begin
