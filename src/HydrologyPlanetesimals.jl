@@ -267,6 +267,7 @@ end
 
 
 """
+Set up and initialize dynamic simulation parameters.
 
 $(SIGNATURES)
 
@@ -379,8 +380,8 @@ $(SIGNATURES)
     - FRI : friction at basic nodes
     - YNY : plastic yielding node property at basic nodes
     - RHOX : density at Vx nodes [kg/m^3]
-    - RHOFX : fluid density  at Vx nodes [kg/m^3]
-    - KX : thermal conductivity  at Vx nodes [W/m/K]
+    - RHOFX : fluid density at Vx nodes [kg/m^3]
+    - KX : thermal conductivity at Vx nodes [W/m/K]
     - PHIX : porosity at Vx nodes
     - vx : solid vx-velocity at Vx nodes [m/s]
     - vxf : fluid vx-velocity at Vx nodes [m/s]
@@ -1058,6 +1059,118 @@ end # function compute_marker_properties!
 
 
 """
+Set up properties to be interpolated from markers to staggered grid.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns
+
+    - ETA0SUM: interpolation of ETA0 at basic nodes
+    - ETASUM: interpolation of ETA at basic nodes
+    - GGGSUM: interpolation of GGG at basic nodes
+    - SXYSUM: interpolation of SXY at basic nodes
+    - COHSUM: interpolation of COH at basic nodes
+    - TENSUM: interpolation of TEN at basic nodes
+    - FRISUM: interpolation of FRI at basic nodes
+    - WTSUM: interpolation weights at basic nodes
+    - RHOXSUM: interpolation of RHOX at Vx nodes
+    - RHOFXSUM: interpolation of RHOFX at Vx nodes
+    - KXSUM: interpolation of KX at Vx nodes
+    - PHIXSUM: interpolation of PHIX at Vx nodes
+    - RXSUM: interpolation of RX at Vx nodes
+    - WTXSUM: interpolation weights at Vx nodes
+    - RHOYSUM: interpolation of RHOY at Vy nodes
+    - RHOFYSUM: interpolation of RHOFY at Vy nodes
+    - KYSUM: interpolation of KY at Vy nodes
+    - PHIYSUM: interpolation of PHIX at Vy nodes
+    - RYSUM: interpolation of RY at Vy nodes
+    - WTYSUM: interpolation weights at Vy nodes
+    - RHOSUM: interpolation of RHO at P nodes
+    - RHOCPSUM: interpolation of RHOCP at P nodes
+    - ALPHASUM: interpolation of ALPHA at P nodes
+    - ALPHAFSUM: interpolation of ALPHAF at P nodes
+    - HRSUM: interpolation of HR at P nodes
+    - GGGPSUM: interpolation of GGGP at P nodes
+    - SXXSUM: interpolation of SXX at P nodes
+    - TKSUM: interpolation of TK at P nodes
+    - PHISUM: interpolation of PHI at P nodes
+    - WTPSUM: interpolation weights at P nodes
+"""
+function setup_interpolated_properties(sp)
+    @unpack Nx, Ny, Nx1, Ny1 = sp
+    # basic nodes
+    ETA0SUM = zeros(Ny, Nx, nthreads())
+    ETASUM = zeros(Ny, Nx, nthreads())
+    GGGSUM = zeros(Ny, Nx, nthreads())
+    SXYSUM = zeros(Ny, Nx, nthreads())
+    COHSUM = zeros(Ny, Nx, nthreads())
+    TENSUM = zeros(Ny, Nx, nthreads())
+    FRISUM = zeros(Ny, Nx, nthreads())
+    WTSUM = zeros(Ny, Nx, nthreads())
+    # Vx nodes
+    RHOXSUM = zeros(Ny1, Nx1, nthreads())
+    RHOFXSUM = zeros(Ny1, Nx1, nthreads())
+    KXSUM = zeros(Ny1, Nx1, nthreads())
+    PHIXSUM = zeros(Ny1, Nx1, nthreads())
+    RXSUM = zeros(Ny1, Nx1, nthreads())
+    WTXSUM = zeros(Ny1, Nx1, nthreads())
+    # Vy nodes
+    RHOYSUM = zeros(Ny1, Nx1, nthreads())
+    RHOFYSUM = zeros(Ny1, Nx1, nthreads())
+    KYSUM = zeros(Ny1, Nx1, nthreads())
+    PHIYSUM = zeros(Ny1, Nx1, nthreads())
+    RYSUM = zeros(Ny1, Nx1, nthreads())
+    WTYSUM = zeros(Ny1, Nx1, nthreads())
+    # P Nodes
+    RHOSUM = zeros(Ny1, Nx1, nthreads())
+    RHOCPSUM = zeros(Ny1, Nx1, nthreads())
+    ALPHASUM = zeros(Ny1, Nx1, nthreads())
+    ALPHAFSUM = zeros(Ny1, Nx1, nthreads())
+    HRSUM = zeros(Ny1, Nx1, nthreads())
+    GGGPSUM = zeros(Ny1, Nx1, nthreads())
+    SXXSUM = zeros(Ny1, Nx1, nthreads())
+    TKSUM = zeros(Ny1, Nx1, nthreads())
+    PHISUM = zeros(Ny1, Nx1, nthreads())
+    WTPSUM = zeros(Ny1, Nx1, nthreads())
+    return (
+        ETA0SUM,
+        ETASUM,
+        GGGSUM,
+        SXYSUM,
+        COHSUM,
+        TENSUM,
+        FRISUM,
+        WTSUM,
+        RHOXSUM,
+        RHOFXSUM,
+        KXSUM,
+        PHIXSUM,
+        RXSUM,
+        WTXSUM,
+        RHOYSUM,
+        RHOFYSUM,
+        KYSUM,
+        PHIYSUM,
+        RYSUM,
+        WTYSUM,
+        RHOSUM,
+        RHOCPSUM,
+        ALPHASUM,
+        ALPHAFSUM,
+        HRSUM,
+        GGGPSUM,
+        SXXSUM,
+        TKSUM,
+        PHISUM,
+        WTPSUM
+    )
+end
+
+"""
 Calculate Euclidean distance between two point coordinates.
 
 $(SIGNATURES)
@@ -1117,7 +1230,7 @@ function ktotal(ksolid, kfluid, phi)
     return (
         sqrt(
             ksolid * kfluid/2
-            + ((ksolid*(3*phi-2) + kfluid*(1.0-3.0*phi))^2)/16
+            + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)/16.0
         )
         -0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
     )
@@ -1602,16 +1715,14 @@ end # function compute_p_node_properties!
 
 
 """
-Apply insulating boundary conditions to given array.
+Apply insulating boundary conditions to given array:
 
-[x x x x x x        [a a b c d d
+[x x x x x x; x a b c d x; x e f g h x; x x x x x x]
 
- x a b c d x         a a b c d d
+becomes
 
- x e f g h x   ->    e e f g h h
-
- x x x x x x]        e e f g h h]
- 
+[a a b c d d; a a b c d d; e e f g h h; e e f g h h]
+     
 # Details
 
     - t: array to apply insulating boundary conditions to
@@ -3125,7 +3236,7 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # iterate timesteps   
     # -------------------------------------------------------------------------
-    nsteps = 10 # <======= remove for production
+    nsteps = 10 # <======= RMK: remove for production
     p = Progress(
         nsteps,
         dt=0.5,
@@ -3136,40 +3247,38 @@ function simulation_loop(sp::StaticParameters)
         # ---------------------------------------------------------------------
         # set up interpolation arrays
         # ---------------------------------------------------------------------
-        # basic nodes
-        ETA0SUM = zeros(Ny, Nx, nthreads())
-        ETASUM = zeros(Ny, Nx, nthreads())
-        GGGSUM = zeros(Ny, Nx, nthreads())
-        SXYSUM = zeros(Ny, Nx, nthreads())
-        COHSUM = zeros(Ny, Nx, nthreads())
-        TENSUM = zeros(Ny, Nx, nthreads())
-        FRISUM = zeros(Ny, Nx, nthreads())
-        WTSUM = zeros(Ny, Nx, nthreads())
-        # Vx nodes
-        RHOXSUM = zeros(Ny1, Nx1, nthreads())
-        RHOFXSUM = zeros(Ny1, Nx1, nthreads())
-        KXSUM = zeros(Ny1, Nx1, nthreads())
-        PHIXSUM = zeros(Ny1, Nx1, nthreads())
-        RXSUM = zeros(Ny1, Nx1, nthreads())
-        WTXSUM = zeros(Ny1, Nx1, nthreads())
-        # Vy nodes
-        RHOYSUM = zeros(Ny1, Nx1, nthreads())
-        RHOFYSUM = zeros(Ny1, Nx1, nthreads())
-        KYSUM = zeros(Ny1, Nx1, nthreads())
-        PHIYSUM = zeros(Ny1, Nx1, nthreads())
-        RYSUM = zeros(Ny1, Nx1, nthreads())
-        WTYSUM = zeros(Ny1, Nx1, nthreads())
-        # P Nodes
-        RHOSUM = zeros(Ny1, Nx1, nthreads())
-        RHOCPSUM = zeros(Ny1, Nx1, nthreads())
-        ALPHASUM = zeros(Ny1, Nx1, nthreads())
-        ALPHAFSUM = zeros(Ny1, Nx1, nthreads())
-        HRSUM = zeros(Ny1, Nx1, nthreads())
-        GGGPSUM = zeros(Ny1, Nx1, nthreads())
-        SXXSUM = zeros(Ny1, Nx1, nthreads())
-        TKSUM = zeros(Ny1, Nx1, nthreads())
-        PHISUM = zeros(Ny1, Nx1, nthreads())
-        WTPSUM = zeros(Ny1, Nx1, nthreads())
+        (
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM
+        ) = setup_interpolated_properties(sp)
 # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------

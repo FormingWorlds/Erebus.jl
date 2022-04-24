@@ -313,6 +313,76 @@ using Test
         @test DSXX == zeros(Float64, Ny1, Nx1)
     end # testset "setup_staggered_grid_properties_helpers()"
 
+    @testset "setup_interpolated_properties()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        # setup interpolated grid properties
+        (
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM
+        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        # verification and test
+        @test ETA0SUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test ETASUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test GGGSUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test SXYSUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test COHSUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test TENSUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test FRISUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test WTSUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
+        @test RHOXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RHOFXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test KXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test PHIXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test WTXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RHOYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RHOFYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test KYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test PHIYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test WTYSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RHOSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test RHOCPSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test ALPHASUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test ALPHAFSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test HRSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test GGGPSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test SXXSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test TKSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test PHISUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+        @test WTPSUM == zeros(Float64, Ny1, Nx1, Base.Threads.nthreads())
+    end # testset "setup_interpolated_properties()"
+
     @testset "setup_marker_properties()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
@@ -1187,7 +1257,7 @@ using Test
 
 
 
-    @testset "compute node properties" begin
+    @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
         Nx1, Ny1 = sp.Nx1, sp.Ny1
