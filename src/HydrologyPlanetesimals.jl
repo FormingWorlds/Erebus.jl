@@ -618,15 +618,88 @@ $(SIGNATURES)
 
 # Details
 
-    -
+    - sp: static simulation parameters
+    - randomized: fill in random values for grid properties instead of zeros
 
 # Returns
 
-    -
+    - ETA5: plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
+    - ETA00: previous viscous viscosity at basic nodes [Pa⋅s]
+    - YNY5: plastic iterations plastic yielding node property at basic nodes
+    - YNY00: previous plastic yielding node property at basic nodes
+    - DSXY: stress change Δσxy at basic nodes [Pa]
+    - ETAcomp: computational viscosity at basic nodes
+    - SXYcomp: computational previous XY stress at basic nodes
+    - dRHOXdx: total density gradient in x direction at Vx nodes
+    - dRHOXdy: total density gradient in y direction at Vx nodes
+    - dRHOYdx: total density gradient in x direction at Vy nodes
+    - dRHOYdy: total density gradient in y direction at Vy nodes
+    - ETAPcomp: computational viscosity at P nodes
+    - SXXcomp: computational previous XX stress at P nodes
+    - SYYcomp: computational previous YY stress at P nodes
+    - EII :second strain rate invariant at P nodes [1/s]
+    - SII :second stress invariant at P nodes [Pa]
+    - DSXX :stress change Δσ′xx at P nodes [Pa]
 """
-function setup_staggered_grid_properties_helpers(sp) 
-    
-    
+function setup_staggered_grid_properties_helpers(sp; randomized=false)
+    @unpack Nx, Ny, Nx1, Ny1 = sp
+    # basic nodes
+    # plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
+    ETA5 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # previous viscous viscosity at basic nodes [Pa⋅s]
+    ETA00 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # plastic iterations plastic yielding node property at basic nodes
+    YNY5 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    # previous plastic yielding node property at basic nodes
+    YNY00 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    # stress change Δσxy at basic nodes [Pa]
+    DSXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # computational viscosity at basic nodes
+    ETAcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # computational previous xy stress at basic nodes
+    SXYcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # Vx nodes
+    # total density gradient in x direction at Vx nodes
+    dRHOXdx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # total density gradient in y direction at Vx nodes
+    dRHOXdy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # Vy nodes
+    # total density gradient in x direction at Vy nodes
+    dRHOYdx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # total density gradient in y direction at Vy nodes
+    dRHOYdy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # P nodes
+    # computational viscosity at P nodes
+    ETAPcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # computational previous xx stress at P nodes
+    SXXcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # computational previous yy stress at P nodes
+    SYYcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # second strain rate invariant at P nodes [1/s]
+    EII = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # second stress invariant at P nodes [Pa]
+    SII = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # stress change Δσ′xx at P nodes [Pa]
+    DSXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    return (
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        DSXY,
+        ETAcomp,
+        SXYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy,
+        ETAPcomp,
+        SXXcomp,
+        SYYcomp,
+        EII,
+        SII,
+        DSXX
+    )
 end # function setup_staggered_grid_properties_helpers()
 
 
@@ -2821,7 +2894,6 @@ $(SIGNATURES)
 
 # Details
 
-    - markers: arrays containing all marker properties
     - sp: static simulation parameters
 
 # Returns
@@ -2954,6 +3026,26 @@ function simulation_loop(sp::StaticParameters)
         APHI,
         FI
     ) = setup_staggered_grid_properties(sp)
+    (
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        DSXY,
+        ETAcomp,
+        SXYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy,
+        ETAPcomp,
+        SXXcomp,
+        SYYcomp,
+        EII,
+        SII,
+        DSXX
+    ) = setup_staggered_grid_properties_helpers(sp)
+
 
     # -------------------------------------------------------------------------
     # set up markers

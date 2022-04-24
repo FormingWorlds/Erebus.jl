@@ -269,6 +269,50 @@ using Test
         @test FI == FI_ver
     end # testset "setup_staggered_grid_properties()"
 
+    @testset "setup_staggered_grid_properties_helpers()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        # setup staggered grid properties helpers
+        (
+            ETA5,
+            ETA00,
+            YNY5,
+            YNY00,
+            DSXY,
+            ETAcomp,
+            SXYcomp,
+            dRHOXdx,
+            dRHOXdy,
+            dRHOYdx,
+            dRHOYdy,
+            ETAPcomp,
+            SXXcomp,
+            SYYcomp,
+            EII,
+            SII,
+            DSXX
+        ) = HydrologyPlanetesimals.setup_staggered_grid_properties_helpers(sp)
+        # test
+        @test ETA5 == zeros(Float64, Ny, Nx)
+        @test ETA00 == zeros(Float64, Ny, Nx)
+        @test YNY5 == zeros(Bool, Ny, Nx)
+        @test YNY00 == zeros(Bool, Ny, Nx)
+        @test DSXY == zeros(Float64, Ny, Nx)
+        @test ETAcomp == zeros(Float64, Ny, Nx)
+        @test SXYcomp == zeros(Float64, Ny, Nx)
+        @test dRHOXdx == zeros(Float64, Ny1, Nx1)
+        @test dRHOXdy == zeros(Float64, Ny1, Nx1)
+        @test dRHOYdx == zeros(Float64, Ny1, Nx1)
+        @test dRHOYdy == zeros(Float64, Ny1, Nx1)
+        @test ETAPcomp == zeros(Float64, Ny1, Nx1)
+        @test SXXcomp == zeros(Float64, Ny1, Nx1)
+        @test SYYcomp == zeros(Float64, Ny1, Nx1)
+        @test EII == zeros(Float64, Ny1, Nx1)
+        @test SII == zeros(Float64, Ny1, Nx1)
+        @test DSXX == zeros(Float64, Ny1, Nx1)
+    end # testset "setup_staggered_grid_properties_helpers()"
+
     @testset "setup_marker_properties()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
@@ -321,6 +365,47 @@ using Test
         @test etavpm == etavpm_ver
         @test phim == phim_ver
     end # testset "setup_marker_properties()"
+
+    @testset "setup_marker_properties_helpers()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        marknum = sp.start_marknum
+        # setup marker properties
+        (
+            rhototalm,
+            rhocptotalm,
+            etasolidcur,
+            etafluidcur,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(sp)
+        # test
+        @test rhocptotalm == zeros(Float64, marknum)
+        @test rhocptotalm == zeros(Float64, marknum)
+        @test etasolidcur == zeros(Float64, marknum)
+        @test etafluidcur == zeros(Float64, marknum)
+        @test etatotalm == zeros(Float64, marknum)
+        @test hrtotalm == zeros(Float64, marknum)
+        @test ktotalm == zeros(Float64, marknum)
+        @test tkm_rhocptotalm == zeros(Float64, marknum)
+        @test etafluidcur_inv_kphim == zeros(Float64, marknum)
+        @test inv_gggtotalm == zeros(Float64, marknum)
+        @test fricttotalm == zeros(Float64, marknum)
+        @test cohestotalm == zeros(Float64, marknum)
+        @test tenstotalm == zeros(Float64, marknum)
+        @test rhofluidcur == zeros(Float64, marknum)
+        @test alphasolidcur == zeros(Float64, marknum)
+        @test alphafluidcur == zeros(Float64, marknum)
+    end # testset "setup_marker_properties_helpers()"
     
     @testset "define_markers!()" begin
         
