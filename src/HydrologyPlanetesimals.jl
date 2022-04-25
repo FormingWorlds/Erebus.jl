@@ -1918,13 +1918,16 @@ function get_viscosities_stresses_density_gradients!(
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
     # previous stresses
-    @views @. SXYcomp = SXY0*ETA / (GGG*dt + ETA)
-    @views @. SXXcomp = (
-        SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
-    )
-    @views @. SYYcomp = (
-        -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
-    )
+    @views @. SXYcomp = SXY0*ETA / (GGG*dt+ETA)
+    @views @. SXXcomp = SXX0*ETAP / (GGGP*dt+ETAP)
+    @views @. SYYcomp = -SXX0*ETAP / (GGGP*dt+ETAP)
+    # for erroneously undersized (Ny, Nx) SSX0, SSX
+    # @views @. SXXcomp = (
+        # SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
+    # )
+    # @views @. SYYcomp = (
+        # -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
+    # )
     # density gradients
     @views @. dRHOXdx[:, 2:Nx] = (RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) / 2 / dx
     @views @. dRHOXdy[2:Ny, :] = (RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) / 2 / dy
