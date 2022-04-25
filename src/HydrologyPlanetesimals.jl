@@ -1957,9 +1957,40 @@ function setup_hydromechanical_lse(sp)
     @unpack Nx1, Ny1 = sp
     L = ExtendableSparseMatrix(Ny1*Nx1*6, Ny1*Nx1*6)
     R = zeros(Ny1*Nx1*6)
-    S = zeros(Ny1*Nx1*6)
+    S = Vector{Float64}(undef, Ny1*Nx1*6)
     return L, R, S
 end
+
+
+"""
+Set up thermal linear system of equations structures.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns 
+
+    _ LT: thermal linear system of equations: LHS coefficient matrix
+    - RT: thermal linear system of equations: RHS vector
+    - ST: thermal linear system of equations: solution vector
+"""
+function setup_thermal_lse(sp)
+    @unpack Nx1, Ny1 = sp
+    LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+    RT = zeros(Ny1*Nx1)
+    ST = Vector{Float64}(undef, Ny1*Nx1)
+    return LT, RT, ST
+end
+
+
+
+
+LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+RT = zeros(Float64, Nx1*Ny1)
+
 
 
 """
@@ -3247,12 +3278,11 @@ function simulation_loop(sp::StaticParameters)
     # hydromechanical solver
     L, R, S = setup_hydromechanical_lse(sp)
     # thermal solver
-    LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-    RT = zeros(Float64, Nx1*Ny1)
+    LT, RT, ST = setup_thermal_lse(sp)
     # gravity solver
     # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # gravity solution: RHS vector
-    RP = zeros(Float64, Nx1*Ny1)
+    RP = zeros(Float64, 1Nx1*Ny1)
     # gravity solution: solution vector (->matrix)
     SP = zeros(Float64, Nx1*Ny1)
 # end # @timeit to "simulation_loop setup"

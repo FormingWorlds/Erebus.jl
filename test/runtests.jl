@@ -2195,6 +2195,20 @@ using Test
         @test size(S) == (Nx1*Ny1*6,)
     end
 
+    @testset "setup_thermal_lse()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx1, Ny1 = sp.Nx1, sp.Ny1        
+        # setup thermal LSE
+        LT, RT, ST = HydrologyPlanetesimals.setup_thermal_lse(sp)
+        # test
+        @test typeof(LT) == ExtendableSparseMatrix{Float64, Int64}
+        @test size(LT) == (Nx1*Ny1, Nx1*Ny1)
+        @test typeof(RT) == Vector{Float64}
+        @test size(RT) == (Nx1*Ny1,)
+        @test typeof(ST) == Vector{Float64}
+        @test size(ST) == (Nx1*Ny1,)
+    end
+    
     @testset "assemble_hydromechanical_lse()" begin
         xsize = 35_000.0
         ysize = 35_000.0
