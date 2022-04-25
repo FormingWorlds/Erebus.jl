@@ -1986,13 +1986,6 @@ function setup_thermal_lse(sp)
 end
 
 
-
-
-LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-RT = zeros(Float64, Nx1*Ny1)
-
-
-
 """
 Assemble hydromechanical system of equations.
 
