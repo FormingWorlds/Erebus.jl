@@ -1985,6 +1985,29 @@ function setup_thermal_lse(sp)
     return LT, RT, ST
 end
 
+"""
+Set up gravitational linear system of equations structures.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns 
+
+    _ LP: gravitational linear system of equations: LHS coefficient matrix
+    - RP: gravitational linear system of equations: RHS vector
+    - SP: gravitational linear system of equations: solution vector
+"""
+function setup_gravitational_lse(sp)
+    @unpack Nx1, Ny1 = sp
+    LP = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+    RP = zeros(Ny1*Nx1)
+    SP = Vector{Float64}(undef, Ny1*Nx1)
+    return LP, RP, SP
+end
+
 
 """
 Assemble hydromechanical system of equations.
@@ -3272,12 +3295,8 @@ function simulation_loop(sp::StaticParameters)
     L, R, S = setup_hydromechanical_lse(sp)
     # thermal solver
     LT, RT, ST = setup_thermal_lse(sp)
-    # gravity solver
-    # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-    # gravity solution: RHS vector
-    RP = zeros(Float64, 1Nx1*Ny1)
-    # gravity solution: solution vector (->matrix)
-    SP = zeros(Float64, Nx1*Ny1)
+    # gravitational solver
+    LP, RP, SP= setup_gravitational_lse(sp)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
@@ -3990,6 +4009,8 @@ end # function simulation loop
 
 """
 Runs the simulation with the given parameters.
+
+$(SIGNATURES)
 
 # Details
 

@@ -2199,7 +2199,21 @@ using Test
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx1, Ny1 = sp.Nx1, sp.Ny1        
         # setup thermal LSE
-        LT, RT, ST = HydrologyPlanetesimals.setup_thermal_lse(sp)
+        LP, RP, SP = HydrologyPlanetesimals.setup_thermal_lse(sp)
+        # test
+        @test typeof(LP) == ExtendableSparseMatrix{Float64, Int64}
+        @test size(LP) == (Nx1*Ny1, Nx1*Ny1)
+        @test typeof(RP) == Vector{Float64}
+        @test size(RP) == (Nx1*Ny1,)
+        @test typeof(SP) == Vector{Float64}
+        @test size(SP) == (Nx1*Ny1,)
+    end
+    
+    @testset "setup_gravitational_lse()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx1, Ny1 = sp.Nx1, sp.Ny1        
+        # setup gravitational LSE
+        LT, RT, ST = HydrologyPlanetesimals.setup_gravitational_lse(sp)
         # test
         @test typeof(LT) == ExtendableSparseMatrix{Float64, Int64}
         @test size(LT) == (Nx1*Ny1, Nx1*Ny1)
