@@ -2181,6 +2181,20 @@ using Test
         end
     end # testset "get_viscosities_stresses_density_gradients()"
 
+    @testset "setup_hydromechanical_lse()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx1, Ny1 = sp.Nx1, sp.Ny1        
+        # setup hydromechanical LSE
+        L, R, S = HydrologyPlanetesimals.setup_hydromechanical_lse(sp)
+        # test
+        @test typeof(L) == ExtendableSparseMatrix{Float64, Int64}
+        @test size(L) == (Nx1*Ny1*6, Nx1*Ny1*6)
+        @test typeof(R) == Vector{Float64}
+        @test size(R) == (Nx1*Ny1*6,)
+        @test typeof(S) == Vector{Float64}
+        @test size(S) == (Nx1*Ny1*6,)
+    end
+
     @testset "assemble_hydromechanical_lse()" begin
         xsize = 35_000.0
         ysize = 35_000.0

@@ -1939,6 +1939,30 @@ end # function get_viscosities_stresses_density_gradients!
 
 
 """
+Set up hydromechanical linear system of equations structures.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns 
+
+    _ L: hydromechanical linear system of equations: LHS coefficient matrix    
+    - R: hydromechanical linear system of equations: RHS vector
+    - S: hydromechanical linear system of equations: solution vector
+"""
+function setup_hydromechanical_lse(sp)
+    @unpack Nx1, Ny1 = sp
+    L = ExtendableSparseMatrix(Ny1*Nx1*6, Ny1*Nx1*6)
+    R = zeros(Ny1*Nx1*6)
+    S = zeros(Ny1*Nx1*6)
+    return L, R, S
+end
+
+
+"""
 Assemble hydromechanical system of equations.
 
 $(SIGNATURES)
@@ -3218,17 +3242,14 @@ function simulation_loop(sp::StaticParameters)
     )
 
     # -------------------------------------------------------------------------
-    # set up of matrices for global gravity/thermal/hydromechanical solutions
+    # set up of matrices for global gravity/thermal/hydromechanical solvers
     # -------------------------------------------------------------------------
-    # hydromechanical solution: LHS coefficient matrix
-    # L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
-    # hydromechanical solution: RHS vector
-    R = zeros(Float64, Nx1*Ny1*6)
-    # thermal solution: LHS coefficient matrix
+    # hydromechanical solver
+    L, R, S = setup_hydromechanical_lse(sp)
+    # thermal solver
     LT = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-    # thermal solution: RHS vector
     RT = zeros(Float64, Nx1*Ny1)
-    # gravity solution: LHS coefficient matrix
+    # gravity solver
     # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # gravity solution: RHS vector
     RP = zeros(Float64, Nx1*Ny1)
