@@ -1557,6 +1557,73 @@ end
 
 
 """
+Interpolate selected marker properties to Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xmm: marker's x-position [m]
+    - ymm: marker's y-position [m]
+    - rhototalm: total density of markers
+    - rhofluidcur: fluid density of markers
+    - ktotalm: total thermal conductivity of markers
+    - phim: porosity of markers
+    - etafluidcur_inv_kphim: fluid viscosity over permeability of markers
+    - RHOYSUM: density interpolated to Vy nodes
+    - RHOFYSUM: fluid density interpolated to Vy nodes
+    - KYSUM: thermal conductivity interpolated to Vy nodes
+    - PHIYSUM: porosity interpolated to Vy nodes
+    - RYSUM: ηfluid/kϕ interpolated to Vy nodes
+    - WTYSUM: weight for bilinear interpolation to Vy nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function marker_to_vy_nodes!(
+    m,
+    xmm,
+    ymm,
+    rhototalm,
+    rhofluidcur,
+    ktotalm,
+    phim,
+    etafluidcur_inv_kphim,
+    RHOYSUM,
+    RHOFYSUM,
+    KYSUM,
+    PHIYSUM,
+    RYSUM,
+    WTYSUM,
+    sp
+)
+    @unpack dx, dy, xvy, yvy, jmin_vy, jmax_vy, imin_vy, imax_vy = sp
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xvy,
+        yvy,
+        dx,
+        dy,
+        jmin_vy,
+        jmax_vy,
+        imin_vy,
+        imax_vy
+    )
+    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
+    interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
+    interpolate_to_grid!(i, j, weights, ktotalm[m], KYSUM)
+    interpolate_to_grid!(i, j, weights, phim[m], PHIYSUM)
+    interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
+    interpolate_to_grid!(i, j, weights, 1.0, WTYSUM)
+    return nothing
+end
+
+
+"""
 Compute properties of basic nodes based on interpolation arrays.
 
 $(SIGNATURES)
@@ -3519,56 +3586,42 @@ function simulation_loop(sp::StaticParameters)
                 sp
             )
             # interpolate marker properties to Vx nodes
-            i, j, weights = fix_weights(
-                xm[m],
-                ym[m],
-                xvx,
-                yvx,
-                dx,
-                dy,
-                jmin_vx,
-                jmax_vx,
-                imin_vx,
-                imax_vx
+            marker_to_vx_nodes!(
+                m,
+                xmm,
+                ymm,
+                rhototalm,
+                rhofluidcur,
+                ktotalm,
+                phim,
+                etafluidcur_inv_kphim,
+                RHOXSUM,
+                RHOFXSUM,
+                KXSUM,
+                PHIXSUM,
+                RXSUM,
+                WTXSUM,
+                sp
             )
-            # RHOXSUM: density interpolated to Vx nodes
-            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
-            # RHOFXSUM: fluid density interpolated to Vx nodes
-            interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
-            # KXSUM: thermal conductivity interpolated to Vx nodes
-            interpolate_to_grid!(i, j, weights, ktotalm[m], KXSUM)
-            # PHIXSUM: porosity interpolated to Vx nodes
-            interpolate_to_grid!(i, j, weights, phim[m], PHIXSUM)
-            # RXSUM: ηfluid/kϕ interpolated to Vx nodes
-            interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
-            # WTXSUM: weight for bilinear interpolation to Vx nodes
-            interpolate_to_grid!(i, j, weights, 1.0, WTXSUM)
 
             # interpolate marker properties to Vy nodes
-            i, j, weights = fix_weights(
-                xm[m],
-                ym[m],
-                xvy,
-                yvy,
-                dx,
-                dy,
-                jmin_vy,
-                jmax_vy,
-                imin_vy,
-                imax_vy
+            marker_to_vy_nodes!(
+                m,
+                xmm,
+                ymm,
+                rhototalm,
+                rhofluidcur,
+                ktotalm,
+                phim,
+                etafluidcur_inv_kphim,
+                RHOYSUM,
+                RHOFYSUM,
+                KYSUM,
+                PHIYSUM,
+                RYSUM,
+                WTYSUM,
+                sp
             )
-            # RHOYSUM: density interpolated to Vy nodes
-            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
-            # RHOFYSUM: fluid density interpolated to Vy nodes
-            interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
-            # KYSUM: thermal conductivity interpolated to Vy nodes
-            interpolate_to_grid!(i, j, weights, ktotalm[m], KYSUM)
-            # PHIYSUM: porosity interpolated to Vy nodes
-            interpolate_to_grid!(i, j, weights, phim[m], PHIYSUM)
-            # RYSUM: ηfluid/kϕ interpolated to Vy nodes
-            interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
-            # WTYSUM: weight for bilinear interpolation to Vy nodes
-            interpolate_to_grid!(i, j, weights, 1.0, WTYSUM)
             
             # interpolate marker properties to P nodes
             i, j, weights = fix_weights(
@@ -3660,7 +3713,6 @@ function simulation_loop(sp::StaticParameters)
             PHIY,
             RY
         )
-
 
         # ---------------------------------------------------------------------
         # compute physical properties of P nodes

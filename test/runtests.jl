@@ -1524,6 +1524,136 @@ using Test
         @test WTXSUM == WTXSUM_ver
     end # testset "marker_to_vx_nodes!()"
 
+    @testset "marker_to_vy_nodes!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        xvy, yvy = sp.xvy, sp.yvy
+        dx, dy = sp.dx, sp.dy
+        jmin_vy, jmax_vy = sp.jmin_vy, sp.jmax_vy
+        imin_vy, imax_vy = sp.imin_vy, sp.imax_vy
+        marknum = sp.start_marknum
+        (
+            xm,
+            ym,
+            _,
+            _,
+            _,
+            _,
+            _,
+            phim
+        ) = HydrologyPlanetesimals.setup_marker_properties(
+            sp, randomized=true)
+        (
+            rhototalm,
+            _,
+            _,
+            _,
+            etatotalm,
+            _,
+            ktotalm,
+            _,
+            etafluidcur_inv_kphim,
+            _,
+            _,
+            _,
+            _,
+            rhofluidcur,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
+            sp, randomized=true)
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        RHOYSUM_ver = zero(RHOYSUM)
+        RHOFYSUM_ver = zero(RHOFYSUM)
+        KYSUM_ver = zero(KYSUM)
+        PHIYSUM_ver = zero(PHIYSUM)
+        RYSUM_ver = zero(RYSUM)
+        WTYSUM_ver = zero(WTYSUM)
+        # interpolate markers to Vy nodes
+        for m=1:1:marknum
+            HydrologyPlanetesimals.marker_to_vy_nodes!(
+                m,
+                xm[m],
+                ym[m],
+                rhototalm,
+                rhofluidcur,
+                ktotalm,
+                phim,
+                etafluidcur_inv_kphim,
+                RHOYSUM,
+                RHOFYSUM,
+                KYSUM,
+                PHIYSUM,
+                RYSUM,
+                WTYSUM,
+                sp
+            )
+        end
+        # verification
+        for m=1:1:marknum
+            i, j, weights = HydrologyPlanetesimals.fix_weights(
+                xm[m],
+                ym[m],
+                xvy,
+                yvy,
+                dx,
+                dy,
+                jmin_vy,
+                jmax_vy,
+                imin_vy,
+                imax_vy
+            )
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhototalm[m], RHOYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhofluidcur[m], RHOFYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, ktotalm[m], KYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, phim[m], PHIYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, etafluidcur_inv_kphim[m], RYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, 1.0, WTYSUM_ver)
+        end
+        # test
+        @test RHOYSUM == RHOYSUM_ver
+        @test RHOFYSUM == RHOFYSUM_ver
+        @test KYSUM == KYSUM_ver
+        @test PHIYSUM == PHIYSUM_ver
+        @test RYSUM == RYSUM_ver
+        @test WTYSUM == WTYSUM_ver
+    end # testset "marker_to_vy_nodes!()"
 
     @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
