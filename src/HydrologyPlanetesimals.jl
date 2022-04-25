@@ -1490,6 +1490,73 @@ end
 
 
 """
+Interpolate selected marker properties to Vx nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xmm: marker's x-position [m]
+    - ymm: marker's y-position [m]
+    - rhototalm: total density of markers
+    - rhofluidcur: fluid density of markers
+    - ktotalm: total thermal conductivity of markers
+    - phim: porosity of markers
+    - etafluidcur_inv_kphim: fluid viscosity over permeability of markers
+    - RHOXSUM: density interpolated to Vx nodes
+    - RHOFXSUM: fluid density interpolated to Vx nodes
+    - KXSUM: thermal conductivity interpolated to Vx nodes
+    - PHIXSUM: porosity interpolated to Vx nodes
+    - RXSUM: ηfluid/kϕ interpolated to Vx nodes
+    - WTXSUM: weight for bilinear interpolation to Vx nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function marker_to_vx_nodes!(
+    m,
+    xmm,
+    ymm,
+    rhototalm,
+    rhofluidcur,
+    ktotalm,
+    phim,
+    etafluidcur_inv_kphim,
+    RHOXSUM,
+    RHOFXSUM,
+    KXSUM,
+    PHIXSUM,
+    RXSUM,
+    WTXSUM,
+    sp
+)
+    @unpack dx, dy, xvx, yvx, jmin_vx, jmax_vx, imin_vx, imax_vx = sp
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xvx,
+        yvx,
+        dx,
+        dy,
+        jmin_vx,
+        jmax_vx,
+        imin_vx,
+        imax_vx
+    )
+    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
+    interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
+    interpolate_to_grid!(i, j, weights, ktotalm[m], KXSUM)
+    interpolate_to_grid!(i, j, weights, phim[m], PHIXSUM)
+    interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
+    interpolate_to_grid!(i, j, weights, 1.0, WTXSUM)
+    return nothing
+end
+
+
+"""
 Compute properties of basic nodes based on interpolation arrays.
 
 $(SIGNATURES)

@@ -1365,22 +1365,22 @@ using Test
                 imin_basic,
                 imax_basic
             )
-            # ETA0SUM: viscous viscosity interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM_ver)
-            # ETASUM: viscoplastic viscosity interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM_ver)
-            # GGGSUM: shear modulus interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM_ver)
-            # SXYSUM: σxy shear stress interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM_ver)
-            # COHSUM: compressive strength interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM_ver)
-            # TENSUM: tensile strength interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM_ver)
-            # FRISUM: friction  interpolated to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM_ver)
-            # WTSUM: weight array for bilinear interpolation to basic nodes
-            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, 1.0, WTSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, etatotalm[m], ETA0SUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, etavpm[m], ETASUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, inv_gggtotalm[m], GGGSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, sxym[m], SXYSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, cohestotalm[m], COHSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, tenstotalm[m], TENSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, fricttotalm[m], FRISUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, 1.0, WTSUM_ver)
         end
         # test
         @test ETA0SUM == ETA0SUM_ver
@@ -1392,6 +1392,138 @@ using Test
         @test FRISUM == FRISUM_ver
         @test WTSUM == WTSUM_ver
     end # testset "marker_to_basic_nodes!()"
+
+    @testset "marker_to_vx_nodes!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        xvx, yvx = sp.xvx, sp.yvx
+        dx, dy = sp.dx, sp.dy
+        jmin_vx, jmax_vx = sp.jmin_vx, sp.jmax_vx
+        imin_vx, imax_vx = sp.imin_vx, sp.imax_vx
+        marknum = sp.start_marknum
+        (
+            xm,
+            ym,
+            _,
+            _,
+            _,
+            _,
+            _,
+            phim
+        ) = HydrologyPlanetesimals.setup_marker_properties(
+            sp, randomized=true)
+        (
+            rhototalm,
+            _,
+            _,
+            _,
+            etatotalm,
+            _,
+            ktotalm,
+            _,
+            etafluidcur_inv_kphim,
+            _,
+            _,
+            _,
+            _,
+            rhofluidcur,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
+            sp, randomized=true)
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        RHOXSUM_ver = zero(RHOXSUM)
+        RHOFXSUM_ver = zero(RHOFXSUM)
+        KXSUM_ver = zero(KXSUM)
+        PHIXSUM_ver = zero(PHIXSUM)
+        RXSUM_ver = zero(RXSUM)
+        WTXSUM_ver = zero(WTXSUM)
+        # interpolate markers to Vx nodes
+        for m=1:1:marknum
+            HydrologyPlanetesimals.marker_to_vx_nodes!(
+                m,
+                xm[m],
+                ym[m],
+                rhototalm,
+                rhofluidcur,
+                ktotalm,
+                phim,
+                etafluidcur_inv_kphim,
+                RHOXSUM,
+                RHOFXSUM,
+                KXSUM,
+                PHIXSUM,
+                RXSUM,
+                WTXSUM,
+                sp
+            )
+        end
+        # verification
+        for m=1:1:marknum
+            i, j, weights = HydrologyPlanetesimals.fix_weights(
+                xm[m],
+                ym[m],
+                xvx,
+                yvx,
+                dx,
+                dy,
+                jmin_vx,
+                jmax_vx,
+                imin_vx,
+                imax_vx
+            )
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhototalm[m], RHOXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhofluidcur[m], RHOFXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, ktotalm[m], KXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, phim[m], PHIXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, etafluidcur_inv_kphim[m], RXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, 1.0, WTXSUM_ver)
+        end
+        # test
+        @test RHOXSUM == RHOXSUM_ver
+        @test RHOFXSUM == RHOFXSUM_ver
+        @test KXSUM == KXSUM_ver
+        @test PHIXSUM == PHIXSUM_ver
+        @test RXSUM == RXSUM_ver
+        @test WTXSUM == WTXSUM_ver
+    end # testset "marker_to_vx_nodes!()"
+
 
     @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
