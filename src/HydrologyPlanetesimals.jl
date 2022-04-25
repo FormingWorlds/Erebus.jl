@@ -1420,24 +1420,22 @@ $(SIGNATURES)
 # Details
 
     - m: marker number
-    - xm: markers x-position [m]
-    - ym: markers y-position [m]
-    - x: x-grid reference axis array [m]
-    - y: y-grid reference axis array [m]
-    - etatotalm: 
-    - etavpm: 
-    - inv_gggtotalm: 
-    - sxym: 
-    - cohestotalm: 
-    - tenstotalm: 
-    - fricttotalm: 
+    - xmm: marker's x-position [m]
+    - ymm: marker's y-position [m]
+    - etatotalm: total viscosity of markers
+    - etavpm: matrix viscosity of markers
+    - inv_gggtotalm: inverse of total shear modulus of markers
+    - sxym: marker σxy [Pa]
+    - cohestotalm: total compressive strength of markers
+    - tenstotalm: total tensile strength of markers 
+    - fricttotalm: total friction coefficient of markers
     - ETA0SUM: viscous viscosity interpolated to basic nodes
     - ETASUM: viscoplastic viscosity interpolated to basic nodes
     - GGGSUM: shear modulus interpolated to basic nodes
     - SXYSUM: σxy shear stress interpolated to basic nodes 
     - COHSUM: compressive strength interpolated to basic nodes
     - TENSUM: tensile strength interpolated to basic nodes
-    - FRISUM: friction  interpolated to basic nodes 
+    - FRISUM: friction interpolated to basic nodes 
     - WTSUM: weight array for bilinear interpolation to basic nodes
     - sp: static simulation parameters
 
@@ -1447,10 +1445,8 @@ $(SIGNATURES)
 """
 function marker_to_basic_nodes!(
     m,
-    xm,
-    ym,
-    x,
-    y,
+    xmm,
+    ymm,
     etatotalm,
     etavpm,
     inv_gggtotalm,
@@ -1468,10 +1464,10 @@ function marker_to_basic_nodes!(
     WTSUM,
     sp
 )
-    @unpack dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic = sp
+    @unpack dx, dy, x, y, jmin_basic, jmax_basic, imin_basic, imax_basic = sp
     i, j, weights = fix_weights(
-        xm[m],
-        ym[m],
+        xmm,
+        ymm,
         x,
         y,
         dx,
@@ -3432,38 +3428,29 @@ function simulation_loop(sp::StaticParameters)
                 hrfluidm,
                 phim,
                 sp
-            )
-                    
+            )              
             # interpolate marker properties to basic nodes
-            i, j, weights = fix_weights(
+            marker_to_basic_nodes!(
+                m,
                 xm[m],
                 ym[m],
-                x,
-                y,
-                dx,
-                dy,
-                jmin_basic,
-                jmax_basic,
-                imin_basic,
-                imax_basic
+                etatotalm,
+                etavpm,
+                inv_gggtotalm,
+                sxym,
+                cohestotalm,
+                tenstotalm,
+                fricttotalm,
+                ETA0SUM,
+                ETASUM,
+                GGGSUM,
+                SXYSUM,
+                COHSUM,
+                TENSUM,
+                FRISUM,
+                WTSUM,
+                sp
             )
-            # ETA0SUM: viscous viscosity interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
-            # ETASUM: viscoplastic viscosity interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM)
-            # GGGSUM: shear modulus interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
-            # SXYSUM: σxy shear stress interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM)
-            # COHSUM: compressive strength interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
-            # TENSUM: tensile strength interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
-            # FRISUM: friction  interpolated to basic nodes
-            interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
-            # WTSUM: weight array for bilinear interpolation to basic nodes
-            interpolate_to_grid!(i, j, weights, 1.0, WTSUM)
-
             # interpolate marker properties to Vx nodes
             i, j, weights = fix_weights(
                 xm[m],

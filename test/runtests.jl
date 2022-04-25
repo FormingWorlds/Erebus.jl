@@ -1250,6 +1250,149 @@ using Test
         end
     end # testset "interpolate_to_marker!()"
 
+    @testset "marker_to_basic_nodes!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        x, y = sp.x, sp.y
+        dx, dy = sp.dx, sp.dy
+        jmin_basic, jmax_basic = sp.jmin_basic, sp.jmax_basic
+        imin_basic, imax_basic = sp.imin_basic, sp.imax_basic
+        marknum = sp.start_marknum
+        (
+            xm,
+            ym,
+            _,
+            _,
+            _,
+            sxym,
+            etavpm,
+            _
+        ) = HydrologyPlanetesimals.setup_marker_properties(
+            sp, randomized=true)
+        (
+            rhototalm,
+            rhocptotalm,
+            _,
+            _,
+            etatotalm,
+            _,
+            _,
+            _,
+            _,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            _,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
+            sp, randomized=true)
+        (
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _
+        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ETA0SUM_ver = zero(ETA0SUM)
+        ETASUM_ver = zero(ETASUM)
+        GGGSUM_ver = zero(GGGSUM)
+        SXYSUM_ver = zero(SXYSUM)
+        COHSUM_ver = zero(COHSUM)
+        TENSUM_ver = zero(TENSUM)
+        FRISUM_ver = zero(FRISUM)
+        WTSUM_ver = zero(WTSUM)
+        # interpolate markers to basic nodes
+        for m=1:1:marknum
+            HydrologyPlanetesimals.marker_to_basic_nodes!(
+                m,
+                xm[m],
+                ym[m],
+                etatotalm,
+                etavpm,
+                inv_gggtotalm,
+                sxym,
+                cohestotalm,
+                tenstotalm,
+                fricttotalm,
+                ETA0SUM,
+                ETASUM,
+                GGGSUM,
+                SXYSUM,
+                COHSUM,
+                TENSUM,
+                FRISUM,
+                WTSUM,
+                sp
+            ) 
+        end
+        # verification
+        for m=1:1:marknum
+            i, j, weights = HydrologyPlanetesimals.fix_weights(
+                xm[m],
+                ym[m],
+                x,
+                y,
+                dx,
+                dy,
+                jmin_basic,
+                jmax_basic,
+                imin_basic,
+                imax_basic
+            )
+            # ETA0SUM: viscous viscosity interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM_ver)
+            # ETASUM: viscoplastic viscosity interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM_ver)
+            # GGGSUM: shear modulus interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM_ver)
+            # SXYSUM: σxy shear stress interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM_ver)
+            # COHSUM: compressive strength interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM_ver)
+            # TENSUM: tensile strength interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM_ver)
+            # FRISUM: friction  interpolated to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM_ver)
+            # WTSUM: weight array for bilinear interpolation to basic nodes
+            HydrologyPlanetesimals.interpolate_to_grid!(i, j, weights, 1.0, WTSUM_ver)
+        end
+        # test
+        @test ETA0SUM == ETA0SUM_ver
+        @test ETASUM == ETASUM_ver
+        @test GGGSUM == GGGSUM_ver
+        @test SXYSUM == SXYSUM_ver
+        @test COHSUM == COHSUM_ver
+        @test TENSUM == TENSUM_ver
+        @test FRISUM == FRISUM_ver
+        @test WTSUM == WTSUM_ver
+    end # testset "marker_to_basic_nodes!()"
+
     @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny
