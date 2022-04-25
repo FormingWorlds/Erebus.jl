@@ -33,14 +33,14 @@ using Test
         dx, dy = sp.dx, sp.dy
         xsize, ysize = sp.xsize, sp.ysize
         # set up staggered grid geometry
-        x,
-        y,
-        xvx,
-        yvx,
-        xvy,
-        yvy,
-        xp,
-        yp = HydrologyPlanetesimals.setup_staggered_grid_geometry(sp)
+        x = sp.x
+        y = sp.y
+        xvx = sp.xvx
+        yvx = sp.xvy
+        xvy = sp.xvy
+        yvy = sp.yvy
+        xp = sp.xp
+        yp = sp.yp
         # verification, from madcph.m line 38ff
         # Basic nodes
         x_ver=0:dx:xsize; # Horizontal coordinates of basic grid points, m

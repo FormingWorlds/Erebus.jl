@@ -47,6 +47,26 @@ $(TYPEDFIELDS)
     dx::Float64 = xsize / (Nx-1)
     "vertical grid step [m]"
     dy::Float64 = ysize / (Ny-1)
+    # basic nodes
+    "horizontal coordinates of basic grid points [m]"
+    x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
+    "vertical coordinates of basic grid points [m]"
+    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
+    # Vx nodes
+    "horizontal coordinates of vx grid points [m]"
+    xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
+    "vertical coordinates of vx grid points [m]"
+    yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+    # Vy nodes
+    "horizontal coordinates of vy grid points [m]"
+    xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    "vertical coordinates of vy grid points [m]"
+    yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
+    # P nodes
+    "horizontal coordinates of p grid points [m]"
+    xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+    "vertical coordinates of p grid points [m]"
+    yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
     # basic grid min/max assignables indices
     "minimum assignable basic grid index in x direction"
     jmin_basic::Int64 = 1
@@ -309,53 +329,7 @@ function setup_dynamic_simulation_parameters(sp)
      YERRNOD = zeros(Float64, nplast) 
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
-
-
-"""
-Set up staggered grid geometry with basic, Vx, Vy, and P nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - sp: static simulation parameters
-
-# Returns
-
-	- x: horizontal coordinates of basic grid points [m]
-	- y: vertical coordinates of basic grid points [m]
-	- xvx: horizontal coordinates of vx grid points [m]
-	- yvx: vertical coordinates of vx grid points [m]
-	- xvy: horizontal coordinates of vy grid points [m]
-	- yvy: vertical coordinates of vy grid points [m]
-	- xp: horizontal coordinates of p grid points [m]
-	- yp: vertical coordinates of p grid points [m]
-"""
-function setup_staggered_grid_geometry(sp)
-    @unpack Nx, Ny, Nx1, Ny1, dx, dy, xsize, ysize = sp
-    # basic nodes
-    # horizontal coordinates of basic grid points [m]
-    x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
-    # vertical coordinates of basic grid points [m]
-    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
-    # Vx nodes
-    # horizontal coordinates of vx grid points [m]
-    xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
-    # vertical coordinates of vx grid points [m]
-    yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-    # Vy nodes
-    # horizontal coordinates of vy grid points [m]
-    xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # vertical coordinates of vy grid points [m]
-    yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
-    # P nodes
-    # horizontal coordinates of p grid points [m]
-    xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # vertical coordinates of p grid points [m]
-    yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-    return x, y, xvx, yvx, xvy, yvy, xp, yp
-end # function setup_staggered_grid()
-
+ 
 
 """
 Set up staggered grid properties for basic, Vx, Vy, and P nodes.
@@ -1436,6 +1410,87 @@ function interpolate_to_marker!(m, i, j, weights, marker_property, grid)
 end # @timeit to "interpolate_to_marker!()"
     return nothing
 end # function interpolate_to_marker
+
+
+"""
+Interpolate selected marker properties to basic nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xm: markers x-position [m]
+    - ym: markers y-position [m]
+    - x: x-grid reference axis array [m]
+    - y: y-grid reference axis array [m]
+    - etatotalm: 
+    - etavpm: 
+    - inv_gggtotalm: 
+    - sxym: 
+    - cohestotalm: 
+    - tenstotalm: 
+    - fricttotalm: 
+    - ETA0SUM: viscous viscosity interpolated to basic nodes
+    - ETASUM: viscoplastic viscosity interpolated to basic nodes
+    - GGGSUM: shear modulus interpolated to basic nodes
+    - SXYSUM: σxy shear stress interpolated to basic nodes 
+    - COHSUM: compressive strength interpolated to basic nodes
+    - TENSUM: tensile strength interpolated to basic nodes
+    - FRISUM: friction  interpolated to basic nodes 
+    - WTSUM: weight array for bilinear interpolation to basic nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function marker_to_basic_nodes!(
+    m,
+    xm,
+    ym,
+    x,
+    y,
+    etatotalm,
+    etavpm,
+    inv_gggtotalm,
+    sxym,
+    cohestotalm,
+    tenstotalm,
+    fricttotalm,
+    ETA0SUM,
+    ETASUM,
+    GGGSUM,
+    SXYSUM,
+    COHSUM,
+    TENSUM,
+    FRISUM,
+    WTSUM,
+    sp
+)
+    @unpack dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic = sp
+    i, j, weights = fix_weights(
+        xm[m],
+        ym[m],
+        x,
+        y,
+        dx,
+        dy,
+        jmin_basic,
+        jmax_basic,
+        imin_basic,
+        imax_basic
+    )
+    interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
+    interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM)
+    interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
+    interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM)
+    interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
+    interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
+    interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
+    interpolate_to_grid!(i, j, weights, 1.0, WTSUM)
+    return nothing
+end
 
 
 """
@@ -3104,6 +3159,10 @@ function simulation_loop(sp::StaticParameters)
         Nx, Ny,
         Nx1, Ny1,
         dx, dy,
+        x, y,
+        xvx, yvx,
+        xvy, yvy,
+        xp, yp,
         jmin_basic, jmax_basic,
         imin_basic, imax_basic,
         jmin_vx, jmax_vx,
