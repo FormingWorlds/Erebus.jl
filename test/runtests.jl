@@ -1655,6 +1655,153 @@ using Test
         @test WTYSUM == WTYSUM_ver
     end # testset "marker_to_vy_nodes!()"
 
+    @testset "marker_to_P_nodes!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        xp, yp = sp.xp, sp.yp
+        dx, dy = sp.dx, sp.dy
+        jmin_p, jmax_p = sp.jmin_p, sp.jmax_p
+        imin_p, imax_p = sp.imin_p, sp.imax_p
+        marknum = sp.start_marknum
+        (
+            xm,
+            ym,
+            _,
+            _,
+            sxxm,
+            _,
+            _,
+            phim
+        ) = HydrologyPlanetesimals.setup_marker_properties(
+            sp, randomized=true)
+        (
+            rhototalm,
+            rhocptotalm,
+            _,
+            _,
+            _,
+            hrtotalm,
+            _,
+            tkm_rhocptotalm,
+            _,
+            inv_gggtotalm,
+            _,
+            _,
+            _,
+            _,
+            alphasolidcur,
+            alphafluidcur
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
+            sp, randomized=true)
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            GGGPSUM,
+            SXXSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            PHISUM,
+            TKSUM,
+            WTPSUM
+        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        GGGPSUM_ver = zero(GGGPSUM)
+        SXXSUM_ver = zero(SXXSUM)
+        RHOSUM_ver = zero(RHOSUM)
+        RHOCPSUM_ver = zero(RHOCPSUM)
+        ALPHASUM_ver = zero(ALPHASUM)
+        ALPHAFSUM_ver = zero(ALPHAFSUM)
+        HRSUM_ver = zero(HRSUM)
+        PHISUM_ver = zero(PHISUM)
+        TKSUM_ver = zero(TKSUM)
+        WTPSUM_ver = zero(WTPSUM)
+        # interpolate markers to P nodes
+        for m=1:1:marknum
+            HydrologyPlanetesimals.marker_to_p_nodes!(
+                m,
+                xm[m],
+                ym[m],
+                inv_gggtotalm,
+                sxxm,
+                rhototalm,
+                rhocptotalm,
+                alphasolidcur,
+                alphafluidcur,
+                hrtotalm,
+                phim,
+                tkm_rhocptotalm,
+                GGGPSUM,
+                SXXSUM,
+                RHOSUM,
+                RHOCPSUM,
+                ALPHASUM,
+                ALPHAFSUM,
+                HRSUM,
+                PHISUM,
+                TKSUM,
+                WTPSUM,
+                sp
+            )
+        end
+        # verification
+        for m=1:1:marknum
+            i, j, weights = HydrologyPlanetesimals.fix_weights(
+                xm[m],
+                ym[m],
+                xp,
+                yp,
+                dx,
+                dy,
+                jmin_p,
+                jmax_p,
+                imin_p,
+                imax_p
+            )
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, inv_gggtotalm[m], GGGPSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, sxxm[m], SXXSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhototalm[m], RHOSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, rhocptotalm[m], RHOCPSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, alphafluidcur[m], ALPHAFSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, hrtotalm[m], HRSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, phim[m], PHISUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, tkm_rhocptotalm[m], TKSUM_ver)
+            HydrologyPlanetesimals.interpolate_to_grid!(
+                i, j, weights, 1.0, WTPSUM_ver)
+        end
+        # test
+
+        @test WTPSUM == WTPSUM_ver
+    end # testset "marker_to_p_nodes!()"
+
+
+
     @testset "compute node properties: basic, Vx, Vy, P" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nx, Ny = sp.Nx, sp.Ny

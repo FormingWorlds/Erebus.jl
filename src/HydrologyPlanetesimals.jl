@@ -734,22 +734,22 @@ $(SIGNATURES)
 
 # Returns
 
-    - rhototalm: marker total density
-    - rhocptotalm : marker total volumetric heat capacity
-    - etasolidcur: marker solid viscosity
-    - etafluidcur: marker fluid viscosity
-    - etatotalm: marker total viscosity
-    - hrtotalm: marker total radiogenic heat production
-    - ktotalm: marker total thermal conductivity
-    - tkm_rhocptotalm: marker total thermal energy
-    - etafluidcur_inv_kphim: marker fluid viscosity over permeability
-    - inv_gggtotalm: marker inverse of total shear modulus
-    - fricttotalm: marker total friction coefficient
-    - cohestotalm: marker total compressive strength
-    - tenstotalm: marker total tensile strength
-    - rhofluidcur: marker fluid density
-    - alphasolidcur: marker solid thermal expansion coefficient
-    - alphafluidcur: marker fluid thermal expansion coefficient
+    - rhototalm: total density of markers
+    - rhocptotalm : total volumetric heat capacity of markers
+    - etasolidcur: solid viscosity of markers
+    - etafluidcur: fluid viscosity of markers
+    - etatotalm: total viscosity of markers
+    - hrtotalm: total radiogenic heat production of markers
+    - ktotalm: total thermal conductivity of markers
+    - tkm_rhocptotalm: total thermal energy of markers
+    - etafluidcur_inv_kphim: fluid viscosity over permeability of markers
+    - inv_gggtotalm: inverse of total shear modulus of markers
+    - fricttotalm: total friction coefficient of markers
+    - cohestotalm: total compressive strength of markers
+    - tenstotalm: total tensile strength of markers
+    - rhofluidcur: fluid density of markers
+    - alphasolidcur: solid thermal expansion coefficient of markers
+    - alphafluidcur: fluid thermal expansion coefficient of markers
 """
 function setup_marker_properties_helpers(sp; randomized=false)
     @unpack start_marknum = sp
@@ -814,25 +814,25 @@ $(SIGNATURES)
 
 # Details
 
-    - xm: array of x coordinates of markers
-    - ym: array of y coordinates of markers
-    - tm: array of material type of markers
-    - phim: array of porosity of markers
-    - etavpm: array of matrix viscosity of markers
-    - rhototalm: array of total density of markers
-    - rhocptotalm: array of total volumetric heat capacity of markers
-    - etatotalm: array of total viscosity of markers
-    - hrtotalm: array of total radiogenic heat production of markers
-    - ktotalm: array of total thermal conductivity of markers
-    - etafluidcur: array of fluid viscosity of markers
-    - tkm: array of temperature of markers 
-    - inv_gggtotalm: array of inverse of total shear modulus of markers
-    - fricttotalm: array of total friction coefficient of markers
-    - cohestotalm: array of total compressive strength of markers
-    - tenstotalm: array of total tensile strength of markers
-    - rhofluidcur: array of fluid density of markers
-    - alphasolidcur: array of solid thermal expansion coefficient of markers
-    - alphafluidcur: array of fluid thermal expansion coefficient of markers
+    - xm: x coordinates of markers
+    - ym: y coordinates of markers
+    - tm: material type of markers
+    - phim: porosity of markers
+    - etavpm: matrix viscosity of markers
+    - rhototalm: total density of markers
+    - rhocptotalm: total volumetric heat capacity of markers
+    - etatotalm: total viscosity of markers
+    - hrtotalm: total radiogenic heat production of markers
+    - ktotalm: total thermal conductivity of markers
+    - etafluidcur: fluid viscosity of markers
+    - tkm: temperature of markers 
+    - inv_gggtotalm: inverse of total shear modulus of markers
+    - fricttotalm: total friction coefficient of markers
+    - cohestotalm: total compressive strength of markers
+    - tenstotalm: total tensile strength of markers
+    - rhofluidcur: fluid density of markers
+    - alphasolidcur: solid thermal expansion coefficient of markers
+    - alphafluidcur: fluid thermal expansion coefficient of markers
     - sp: static simulation parameters
     - randomized: uniformly random-distribute marker x/y positions within cells
                   and randomly set initial marker porosity 
@@ -1619,6 +1619,93 @@ function marker_to_vy_nodes!(
     interpolate_to_grid!(i, j, weights, phim[m], PHIYSUM)
     interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
     interpolate_to_grid!(i, j, weights, 1.0, WTYSUM)
+    return nothing
+end
+
+
+"""
+Interpolate selected marker properties to P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xmm: marker x-position [m]
+    - ymm: marker y-position [m]
+	- inv_gggtotalm: inverse of total shear modulus of markers
+	- sxxm: marker σ′xx [Pa]
+	- rhototalm: total density of markers
+	- rhocptotalm: total volumetric heat capacity of markers 
+	- alphasolidcur: solid thermal expansion coefficient of markers 
+	- alphafluidcur: fluid thermal expansion coefficient of markers
+	- hrtotalm: total radiogenic heat production of markers
+	- phim:  marker porosity
+	- tkm_rhocptotalm: total thermal energy of markers
+    - GGGPSUM: shear modulus interpolated to P nodes
+    - SXXSUM: σ'xx interpolated to P nodes
+    - RHOSUM: density interpolated to P nodes
+    - RHOCPSUM: volumetric heat capacity interpolated to P nodes
+    - ALPHASUM: thermal expansion interpolated to P nodes
+    - ALPHAFSUM: fluid thermal expansion interpolated to P nodes
+    - HRSUM: radioactive heating interpolated to P nodes
+    - PHISUM: porosity interpolated to P nodes
+    - TKSUM: heat capacity interpolated to P nodes
+    - WTPSUM: weight for bilinear interpolation to P nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function marker_to_p_nodes!(
+    m,
+    xmm,
+    ymm,
+    inv_gggtotalm,
+    sxxm,
+    rhototalm,
+    rhocptotalm,
+    alphasolidcur,
+    alphafluidcur,
+    hrtotalm,
+    phim,
+    tkm_rhocptotalm,
+    GGGPSUM,
+    SXXSUM,
+    RHOSUM,
+    RHOCPSUM,
+    ALPHASUM,
+    ALPHAFSUM,
+    HRSUM,
+    PHISUM,
+    TKSUM,
+    WTPSUM,
+    sp
+)
+    @unpack dx, dy, xp, yp, jmin_p, jmax_p, imin_p, imax_p = sp
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xp,
+        yp,
+        dx,
+        dy,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p
+    )
+    interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
+    interpolate_to_grid!(i, j, weights, sxxm[m], SXXSUM)
+    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
+    interpolate_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
+    interpolate_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
+    interpolate_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
+    interpolate_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
+    interpolate_to_grid!(i, j, weights, phim[m], PHISUM)
+    interpolate_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
+    interpolate_to_grid!(i, j, weights, 1.0, WTPSUM)
     return nothing
 end
 
@@ -3603,7 +3690,6 @@ function simulation_loop(sp::StaticParameters)
                 WTXSUM,
                 sp
             )
-
             # interpolate marker properties to Vy nodes
             marker_to_vy_nodes!(
                 m,
@@ -3621,42 +3707,34 @@ function simulation_loop(sp::StaticParameters)
                 RYSUM,
                 WTYSUM,
                 sp
-            )
-            
+            )     
             # interpolate marker properties to P nodes
-            i, j, weights = fix_weights(
-                xm[m],
-                ym[m],
-                xp,
-                yp,
-                dx,
-                dy,
-                jmin_p,
-                jmax_p,
-                imin_p,
-                imax_p
+            marker_to_p_nodes!(
+                m,
+                xmm,
+                ymm,
+                inv_gggtotalm,
+                sxxm,
+                rhototalm,
+                rhocptotalm,
+                alphasolidcur,
+                alphafluidcur,
+                hrtotalm,
+                phim,
+                tkm_rhocptotalm,
+                GGGPSUM,
+                SXXSUM,
+                RHOSUM,
+                RHOCPSUM,
+                ALPHASUM,
+                ALPHAFSUM,
+                HRSUM,
+                PHISUM,
+                TKSUM,
+                WTPSUM,
+                sp
             )
-            # GGGPSUM: shear modulus interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
-            # SXXSUM: σ'xx interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, sxxm[m], SXXSUM)
-            # RHOSUM: density interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
-            # RHOCPSUM: volumetric heat capacity interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
-            # ALPHASUM: thermal expansion interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
-            # ALPHAFSUM: fluid thermal expansion interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
-            # HRSUM: radioactive heating interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
-            # PHISUM: porosity interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, phim[m], PHISUM)
-            # TKSUM: heat capacity interpolated to P nodes
-            interpolate_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
-            # WTPSUM: weight for bilinear interpolation to P nodes
-            interpolate_to_grid!(i, j, weights, 1.0, WTPSUM)
-        end
+        end # @threads for m=1:1:marknum
 
         # ---------------------------------------------------------------------
         # compute physical properties of basic nodes
