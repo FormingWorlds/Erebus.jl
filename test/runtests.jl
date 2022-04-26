@@ -77,9 +77,6 @@ using Test
         sp = HydrologyPlanetesimals.StaticParameters() 
         Nx, Ny = sp.Nx, sp.Ny
         Nx1, Ny1 = sp.Nx1, sp.Ny1
-
-
-
         # set up staggered grid properties
         (
             ETA,
@@ -279,6 +276,7 @@ using Test
             ETA00,
             YNY5,
             YNY00,
+            YNY_inv_ETA,
             DSXY,
             ETAcomp,
             SXYcomp,
@@ -298,6 +296,7 @@ using Test
         @test ETA00 == zeros(Float64, Ny, Nx)
         @test YNY5 == zeros(Bool, Ny, Nx)
         @test YNY00 == zeros(Bool, Ny, Nx)
+        @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
         @test DSXY == zeros(Float64, Ny, Nx)
         @test ETAcomp == zeros(Float64, Ny, Nx)
         @test SXYcomp == zeros(Float64, Ny, Nx)
@@ -668,6 +667,85 @@ using Test
         end
     end # testset "define_markers!() & compute_marker_properties!()"
 
+    @testset "update_marker_viscosity!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        Nx, Ny = sp.Nx, sp.Ny
+        dx, dy = sp.dx, sp.dy
+        x, y = sp.x, sp.y
+        etasolidm, etasolidmm = sp.etasolidm, sp.etasolidmm
+        etafluidm, etafluidmm = sp.etafluidm, sp.etafluidmm
+        tmsilicate, tmiron = sp.tmsilicate, sp.tmiron
+        marknum = sp.start_marknum
+        xm = rand(-dx:0.1:x[end]+dx, marknum)
+        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        tm = rand(1:3, marknum)
+        tkm = rand(sp.tmiron-100:0.1:sp.tmsilicate+100, marknum)
+        etatotalm = [etasolidm[tm[m]] for m in 1:1:marknum]
+        ETA = rand(Ny, Nx)
+        YNY = rand(Bool, Ny, Nx)
+        YNY_inv_ETA = YNY ./ ETA
+        etavpm = zeros(marknum)
+        etavpm_ver = zero(etavpm)
+        # update marker Viscosity
+        for m=1:1:marknum
+            HydrologyPlanetesimals.update_marker_viscosity!(
+                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA, sp)
+        end
+        # verification, from madcph.m, line 1321ff
+        for m=1:1:marknum
+            # Interpolation viscosity from basic nodes
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xm[m]-x[1])/dx)+1
+            i=trunc(Int, (ym[m]-y[1])/dy)+1
+            if j<1
+                j=1
+            elseif j>Nx-1
+                j=Nx-1
+            end
+            if i<1
+                i=1
+            elseif i>Ny-1
+                i=Ny-1
+            end
+            # Compute distances
+            dxmj=xm[m]-x[j]
+            dymi=ym[m]-y[i]
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy)
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy)
+            wtmi1j1=(dxmj/dx)*(dymi/dy)
+            # Matrix viscosity
+            if tm[m]<3
+                # Rocks
+                etasolidcur_ver=etasolidm[tm[m]]
+                if tkm[m]>tmsilicate
+                    etasolidcur_ver=etasolidmm[tm[m]]
+                end
+                etatotalm_ver=etasolidcur_ver;#*exp(-28*phim[m])
+            else
+                # Sticky air
+                etatotalm_ver=etasolidm[tm[m]]
+            end
+            if YNY[i,j]>0 || YNY[i+1,j]>0 || YNY[i,j+1]>0 || YNY[i+1,j+1]>0
+        #         etavpm[m]=ETA[i,j]*wtmij+ETA[i+1,j]*wtmi1j+...
+        #                 ETA[i,j+1]*wtmij1+ETA[i+1,j+1]*wtmi1j1
+        #         etavpm[m]=1/(1/ETA[i,j]*wtmij+1/ETA[i+1,j]*wtmi1j+...
+        #                 1/ETA[i,j+1]*wtmij1+1/ETA[i+1,j+1]*wtmi1j1)
+                etavpm_ver[m]=1/(YNY[i,j]/ETA[i,j]*wtmij+YNY[i+1,j]/ETA[i+1,j]*wtmi1j+ YNY[i,j+1]/ETA[i,j+1]*wtmij1+YNY[i+1,j+1]/ETA[i+1,j+1]*wtmi1j1)
+                if etavpm_ver[m]>=etatotalm_ver
+                    etavpm_ver[m]=etatotalm_ver
+                end
+            else
+                etavpm_ver[m]=etatotalm_ver
+            end
+        end
+        # test
+        for m=1:1:marknum
+            @test etavpm[m] == etavpm_ver[m]
+        end
+    end # testset "update_marker_viscosity!()"
+
     @testset "distance()" begin
         @test HydrologyPlanetesimals.distance(0, 0, 0, 0) == 0
         @test HydrologyPlanetesimals.distance(1, 0, 0, 0) == 1
@@ -711,6 +789,31 @@ using Test
         kphim(kphim0, phim, phim0)=kphim0*(phim/phim0)^3/((1-phim)/(1-phim0))^2
         @test HydrologyPlanetesimals.kphi(1., 2., 3.) == kphim(1., 2., 3.)
     end # testset "kphi()"
+
+    @testset "etatotal_rocks()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        etasolidm = sp.etasolidm
+        etasolidmm = sp.etasolidmm
+        etafluidm = sp.etafluidm
+        etafluidmm = sp.etafluidmm
+        etamin = sp.etamin
+        tmin = min(sp.tmiron, sp.tmsilicate) - 10
+        tmid = min(sp.tmiron, sp.tmsilicate) + 0.5*abs(sp.tmiron-sp.tmsilicate)
+        tmax = max(sp.tmiron, sp.tmsilicate) + 10
+        for type in 1:2
+            @test HydrologyPlanetesimals.etatotal_rocks(tmin, type, sp) == max(
+                etamin, etasolidm[type], etafluidm[type])
+            if sp.tmiron <= sp.tmsilicate
+                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type, sp) ==
+                max(etamin, etasolidm[type], etafluidmm[type])
+            else
+                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type, sp) ==
+                max(etamin, etasolidmm[type], etafluidm[type])
+            end
+            @test HydrologyPlanetesimals.etatotal_rocks(tmax, type, sp) == max(
+                etamin, etasolidmm[type], etafluidmm[type])
+        end
+    end # testset "etatotal_rocks()"
 
     @testset "Q_radiogenic()" begin
         # verification, from madcph.m, line 276
@@ -3717,8 +3820,10 @@ using Test
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = rand(Bool, Ny, Nx)
         YNY00 = rand(Bool, Ny, Nx)
+        YNY_inv_ETA = zeros(Ny, Nx)
         ETA_ver = zeros(Ny, Nx)
         YNY_ver = zeros(Bool, Ny, Nx)
+        YNY_inv_ETA_ver = zeros(Ny, Nx)
         dt_ver = sp.dtelastic
         # finalize_plastic_iteration_pass
         dt = HydrologyPlanetesimals.finalize_plastic_iteration_pass!(
@@ -3728,6 +3833,7 @@ using Test
             YNY,
             YNY5,
             YNY00,
+            YNY_inv_ETA,
             dt,
             dtkoef,
             dtstep,
@@ -3745,10 +3851,12 @@ using Test
             ETA_ver=ETA5
             YNY_ver=YNY5
         end
+        YNY_inv_ETA_ver.=YNY_ver./ETA_ver
         # test
         @test dt == dt_ver
         @test ETA == ETA_ver
         @test YNY == YNY_ver
+        @test YNY_inv_ETA == YNY_inv_ETA_ver
     end # testset "finalize_plastic_iteration_pass!()"
 end
 

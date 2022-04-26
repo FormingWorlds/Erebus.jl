@@ -627,6 +627,8 @@ function setup_staggered_grid_properties_helpers(sp; randomized=false)
     YNY5 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # previous plastic yielding node property at basic nodes
     YNY00 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    # inverse viscoplastic viscosity at yielding basic nodes [1/(Pa⋅s)]
+    YNY_inv_ETA = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # stress change Δσxy at basic nodes [Pa]
     DSXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # computational viscosity at basic nodes
@@ -661,6 +663,7 @@ function setup_staggered_grid_properties_helpers(sp; randomized=false)
         ETA00,
         YNY5,
         YNY00,
+        YNY_inv_ETA,
         DSXY,
         ETAcomp,
         SXYcomp,
@@ -952,18 +955,18 @@ $(SIGNATURES)
 # Details
 
     - m: marker number
-    - tm: array of type of markers
-    - tkm: array of temperature of markers
-    - rhototalm: array of total density of markers
-    - rhocptotalm: array of total volumetric heat capacity of markers
-    - etasolidcur: array of solid viscosity of markers
-    - etafluidcur: array of fluid viscosity of markers
-    - etatotalm: array of total viscosity of markers
-    - hrtotalm: array of total radiogenic heat production of markers
-    - ktotalm: array of total thermal conductivity of markers
-    - tkm_rhocptotalm: array of total thermal energy of markers
-    - etafluidcur_inv_kphim: array of (fluid viscosity)/permeability of markers
-    - phim: array of porosity of markers
+    - tm: type of markers
+    - tkm: temperature of markers
+    - rhototalm: total density of markers
+    - rhocptotalm: total volumetric heat capacity of markers
+    - etasolidcur: solid viscosity of markers
+    - etafluidcur: fluid viscosity of markers
+    - etatotalm: total viscosity of markers
+    - hrtotalm: total radiogenic heat production of markers
+    - ktotalm: total thermal conductivity of markers
+    - tkm_rhocptotalm: total thermal energy of markers
+    - etafluidcur_inv_kphim: (fluid viscosity)/permeability of markers
+    - phim: porosity of markers
     - hrsolidm: vector of radiogenic heat production of solid materials
     - hrfluidm: vector of radiogenic heat production of fluid materials
     - sp: static simulation parameters
@@ -1030,6 +1033,63 @@ function compute_marker_properties!(
 # end # @timeit to "compute_marker_properties!"
     return nothing
 end # function compute_marker_properties!
+
+"""
+Update marker viscoplastic viscosity based on basic node yielding status and
+marker temperature- and material-based viscosity.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xm: x-coordinates of markers
+    - ym: y-coordinates of markers
+    - tm: type of markers
+    - tkm: temperature of markers
+    - etatotalm: total viscosity of markers
+    - etavpm: matrix viscosity of markers
+    - YNY: plastic yielding node property at basic nodes
+    - YNY_inv_ETA: inverse viscoplastic viscosity at yielding basic nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    -nothing
+"""
+function update_marker_viscosity!(
+    m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA, sp)
+@timeit to "update_marker_viscosity!" begin
+    @unpack x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic = sp
+    i, j, weights = fix_weights(
+        xm[m],
+        ym[m],
+        x,
+        y,
+        dx,
+        dy,
+        jmin_basic,
+        jmax_basic,
+        imin_basic,
+        imax_basic
+    )
+    if tm[m] < 3
+        # rocks: update etatotalm[m] based on current marker temperature
+        etatotalm[m] = etatotal_rocks(tkm[m], tm[m], sp)
+    # else
+        # air: constant etatotalm[m] as initialized
+        # pass
+    end
+    if YNY[i,j] || YNY[i+1,j] || YNY[i,j+1] || YNY[i+1,j+1]
+        interpolate_to_marker!(m, i, j, weights, etavpm, YNY_inv_ETA)
+        etavpm[m] = inv(etavpm[m])
+        etavpm[m] = ifelse(etavpm[m]>etatotalm[m], etatotalm[m], etavpm[m])
+    else
+        etavpm[m] = etatotalm[m]
+    end
+end # @timeit to "update_marker_viscosity!"
+    return nothing
+end
 
 
 """
@@ -1250,6 +1310,37 @@ $(SIGNATURES)
 """
 function Q_radiogenic(f, ratio, E, tau, time)
     return f * ratio * E * exp(-time/tau) / tau
+end
+
+
+"""
+Compute total rocky marker viscosity based on temperature and material type.
+
+$(SIGNATURES)
+
+# Details
+
+    - tkmm: marker temperature [K]
+    - tmm: marker type [1, 2]
+    - sp: simulation parameters
+
+# Returns
+    
+    - etatotal: rocky marker temperature-dependent total viscosity 
+"""
+function etatotal_rocks(tkmm, tmm, sp)
+    @unpack tmsilicate,
+        tmiron,
+        etasolidm,
+        etasolidmm,
+        etafluidm,
+        etafluidmm,
+        etamin = sp
+    @inbounds etasolidcur = ifelse(
+        tkmm>tmsilicate, etasolidmm[tmm], etasolidm[tmm])
+    @inbounds etafluidcur = ifelse(
+        tkmm>tmiron, etafluidmm[tmm], etafluidm[tmm])
+    return max(etamin, etasolidcur, etafluidcur)
 end
 
 
@@ -3316,6 +3407,7 @@ $(SIGNATURES)
     - YNY: plastic yielding status at basic nodes 
     - YNY5: plastic iterations plastic yielding status at basic nodes
     - YNY00: previous time step plastic yielding status at basic nodes
+    - YNY_inv_ETA: inverse of plastic viscosity at yielding basic nodes
     - dt: current time step
     - dtkoef: coefficient by which to decrease computational time step
     - dtstep: minimum of plastic iterations before adjusting time step
@@ -3333,6 +3425,7 @@ function finalize_plastic_iteration_pass!(
     YNY,
     YNY5,
     YNY00,
+    YNY_inv_ETA,
     dt,
     dtkoef,
     dtstep,
@@ -3350,9 +3443,44 @@ function finalize_plastic_iteration_pass!(
         ETA .= copy(ETA5)
         YNY .= copy(YNY5)
     end
+    @views @. YNY_inv_ETA = YNY / ETA
     return dt
 end # @timeit to "finalize_plastic_iteration_pass!()"
     end # function finalize_plastic_iteration_pass
+
+"""
+Apply basic and P subgrid stress diffusion to markers.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xm: marker x-coordinates
+    - ym: marker y-coordinates
+    - sxxm: 
+    - sxym:
+    - SXX0:
+    - SXY0: 
+    - sp: static simulation parameters  
+
+# Returns
+    
+    - nothing
+"""
+function apply_marker_subgrid_stress_diffusion!(
+    m, xm, ym, sxxm, sxym, SXX0, SXY0, sp)
+@timeit to "apply_marker_subgrid_stress_diffusion!" begin
+    
+end # @timeit to "apply_marker_subgrid_stress_diffusion!"
+    return nothing
+    end # function apply_marker_subgrid_stress_diffusion!
+
+"""
+
+"""
+end
+
 
 
 """
@@ -3420,6 +3548,7 @@ function simulation_loop(sp::StaticParameters)
         nsteps,
         start_time, 
         endtime,
+        dsubgrids,
         start_marknum = sp
 
 # @timeit to "simulation_loop setup" begin
@@ -3503,6 +3632,7 @@ function simulation_loop(sp::StaticParameters)
         ETA00,
         YNY5,
         YNY00,
+        YNY_inv_ETA,
         DSXY,
         ETAcomp,
         SXYcomp,
@@ -3841,7 +3971,6 @@ function simulation_loop(sp::StaticParameters)
         ETA00, ETA = ETA, ETA00
         YNY00, YNY = YNY, YNY00
 
-# Mon 18/Tue 19/Wed 20       
         # ---------------------------------------------------------------------
         # # perform plastic iterations
         # ---------------------------------------------------------------------
@@ -4055,6 +4184,7 @@ end # @timeit to "solve system"
                     YNY,
                     YNY5,
                     YNY00,
+                    YNY_inv_ETA,
                     dt,
                     dtkoef,
                     dtstep,
@@ -4063,25 +4193,23 @@ end # @timeit to "solve system"
             end
         end # for iplast=1:1:nplast
 
-# Mon 25
         # ---------------------------------------------------------------------
         # # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
-        # 1320-1369
-        for m = 1:1:marknum
-                
+        @threads for m = 1:1:marknum
+            update_marker_viscosity!(
+                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA, sp)
         end
 
-
-# Mon 25
         # ---------------------------------------------------------------------
         # # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
-        # 1374-1467
-        # for m = 1:1:marknum
-        #     # ~100 lines MATLAB 
-        # end
-
+        if dsubgrids > 0
+            @threads for m = 1:1:marknum
+                apply_marker_subgrid_stress_diffusion!(
+                    m, xm, ym, sxxm, sxym, SXX0, SXY0, sp)
+            end
+        end
 
 # Mon 25
         # ---------------------------------------------------------------------
