@@ -773,6 +773,13 @@ using Test
         @test HydrologyPlanetesimals.total(1, 2, 0.5) == 1.5
     end # testset "total()"
 
+    @testset "grid_vector()" begin
+        grid = rand(10, 10)
+        @test HydrologyPlanetesimals.grid_vector(1, 1, grid) == @SVector [
+            grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]
+        ]
+    end # testset "grid_vector()"
+
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
         ktotalm_ver(ksolidm, kfluid, phim) = (

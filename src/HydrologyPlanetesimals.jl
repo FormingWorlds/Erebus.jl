@@ -1246,6 +1246,29 @@ end
 
 
 """
+Get a 4-vector of values from grid in row-major order.
+
+$(SIGNATURES)
+
+# Details
+
+    - i: top left grid node column index
+    - j: top left grid node row index
+    - grid: data from which to build Vector
+
+# Returns
+
+    -grid_vector: 4-vector of values
+    [grid[i, j], grid[i+1, j], grid[i, j+1], grid[i+1, j+1]]
+"""
+function grid_vector(i, j, grid)
+    return @inbounds @SVector [
+        grid[i, j], grid[i+1, j], grid[i, j+1], grid[i+1, j+1]
+    ]
+end
+
+
+"""
 Compute total thermal conductivity of two-phase material.
 
 $(SIGNATURES)
