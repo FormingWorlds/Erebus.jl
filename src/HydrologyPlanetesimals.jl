@@ -3471,16 +3471,24 @@ $(SIGNATURES)
 function apply_marker_subgrid_stress_diffusion!(
     m, xm, ym, sxxm, sxym, SXX0, SXY0, sp)
 @timeit to "apply_marker_subgrid_stress_diffusion!" begin
-    
+    @unpack dx,
+        dy,
+        x,
+        y,
+        jmin_basic,
+        jmax_basic,
+        imin_basic,
+        imax_basic,
+        xp,
+        yp,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p = sp
+
 end # @timeit to "apply_marker_subgrid_stress_diffusion!"
     return nothing
-    end # function apply_marker_subgrid_stress_diffusion!
-
-"""
-
-"""
-end
-
+end # function apply_marker_subgrid_stress_diffusion!
 
 
 """
