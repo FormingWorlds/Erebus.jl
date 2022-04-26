@@ -4,7 +4,7 @@ using Parameters
 using StaticArrays
 using Test
 
-@testset verbose = true "HydrologyPlanetesimals.jl" begin
+@testset verbose=true "HydrologyPlanetesimals.jl" begin
 
     @testset "setup_dynamic_simulation_parameters()" begin
         sp = HydrologyPlanetesimals.StaticParameters()

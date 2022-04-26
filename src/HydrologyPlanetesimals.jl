@@ -4068,9 +4068,9 @@ end # @timeit to "solve system"
         # # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
         # 1320-1369
-        # for m = 1:1:marknum
-        #     # ~50 lines MATLAB 
-        # end
+        for m = 1:1:marknum
+                
+        end
 
 
 # Mon 25
