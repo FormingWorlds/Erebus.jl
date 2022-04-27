@@ -2963,6 +2963,7 @@ $(SIGNATURES)
     - pr0: previous step total pressure at P nodes
     - pf0: previous step fluid pressure at P nodes
     - dt: time step
+    - sp: static simulation parameters
 
 ## Out
 
@@ -2972,12 +2973,16 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
+function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt, sp)
 @timeit to "compute_Aϕ!()" begin
+    @unpack Nx, Ny = sp
     # reset APHI
     APHI .= 0.0
-    @views @. APHI = (
-        ((pr-pf)/ETAPHI + ((pr-pr0)-(pf-pf0))/dt*BETTAPHI) / (1-PHI) / PHI
+    @views @. APHI[2:Ny, 2:Nx] = (
+        ((pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])/ETAPHI[2:Ny, 2:Nx]
+        + (
+            (pr[2:Ny, 2:Nx]-pr0[2:Ny, 2:Nx])-(pf[2:Ny, 2:Nx]-pf0[2:Ny, 2:Nx])
+        )/dt*BETTAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
     )
     return maximum(abs, APHI)
 end # @timeit to "compute_Aϕ!()"
@@ -3588,13 +3593,20 @@ function apply_subgrid_stress_diffusion!(
         interpolate_to_grid!(i_basic, j_basic, weights_basic, δσxy₀, SXYSUM)
         interpolate_to_grid!(i_basic, j_basic, weights_basic, 1.0, WTSUM)
     end
+    # reduce interpolation arrays
+    SXXSUM = reduce(+, SXXSUM, dims=3)
+    WTPSUM = reduce(+, WTPSUM, dims=3)
+    SXYSUM = reduce(+, SXYSUM, dims=3)
+    WTSUM = reduce(+, WTSUM, dims=3)
+
     # compute DSXXsubgrid and update DSXX at inner P nodes
-    @views @. DSXX[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0] -= (
-        SXXSUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0] /
-        WTPSUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0]
+    @views @. DSXX[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx, 1]>0.0] -= (
+        SXXSUM[2:Ny, 2:Nx, 1][WTPSUM[2:Ny, 2:Nx, 1]>0.0] /
+        WTPSUM[2:Ny, 2:Nx, 1][WTPSUM[2:Ny, 2:Nx, 1]>0.0]
     )
     # compute DSXYsubgrid and update DSXY at all basic nodes
-    @views @. DSXY[WTSUM>0.0] -= SXYSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    @views @. DSXY[WTSUM[:, :, 1]>0.0] -= SXYSUM[:, :, 1][WTSUM[:, :, 1]>0.0] /
+        WTSUM[:, :, 1][WTSUM[:, :, 1]>0.0]
 end # @timeit to "apply_subgrid_stress_diffusion!"
     return nothing
 end # function apply_subgrid_stress_diffusion!
@@ -4242,7 +4254,8 @@ end # @timeit to "solve system"
                 pf,
                 pr0,
                 pf0,
-                dt
+                dt,
+                sp
             )
             # compute fluid velocities
             compute_fluid_velocities!(
@@ -4300,7 +4313,8 @@ end # @timeit to "solve system"
                 pf,
                 pr0,
                 pf0,
-                dt
+                dt,
+                sp
             )
             # symmetrize P node observables
             symmetrize_p_node_observables!(

@@ -1323,10 +1323,14 @@ using Test
                 xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
             HydrologyPlanetesimals.interpolate_to_grid!(
                 i, j, weights, property[m], grid)
-            @test grid[i, j] == property[m] * weights[1] 
-            @test grid[i+1, j] == property[m] * weights[2]
-            @test grid[i, j+1] == property[m] * weights[3]
-            @test grid[i+1, j+1] == property[m] * weights[4]
+            @test grid[i, j, Base.Threads.threadid()] ==
+                property[m] * weights[1] 
+            @test grid[i+1, j, Base.Threads.threadid()] ==
+                property[m] * weights[2]
+            @test grid[i, j+1, Base.Threads.threadid()] ==
+                property[m] * weights[3]
+            @test grid[i+1, j+1, Base.Threads.threadid()] ==
+                property[m] * weights[4]
         end
     end # testset "interpolate_to_grid!()"
 
@@ -1952,14 +1956,14 @@ using Test
             TEN = zeros(Float64, Ny, Nx)
             FRI = zeros(Float64, Ny, Nx)
             YNY = zeros(Bool, Ny, Nx)
-            ETA0SUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            ETASUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            GGGSUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            SXYSUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            COHSUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            TENSUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            FRISUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
-            WTSUM_ver = zeros(Ny, Nx, Base.Threads.nthreads())
+            ETA0SUM_ver = zeros(Ny, Nx)
+            ETASUM_ver = zeros(Ny, Nx)
+            GGGSUM_ver = zeros(Ny, Nx)
+            SXYSUM_ver = zeros(Ny, Nx)
+            COHSUM_ver = zeros(Ny, Nx)
+            TENSUM_ver = zeros(Ny, Nx)
+            FRISUM_ver = zeros(Ny, Nx)
+            WTSUM_ver = zeros(Ny, Nx)
             ETA0_ver = zeros(Float64, Ny, Nx)
             ETA_ver = zeros(Float64, Ny, Nx)
             GGG_ver = zeros(Float64, Ny, Nx)
@@ -1973,7 +1977,7 @@ using Test
             ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
             property = rand(7, num_markers)
             # calculate grid properties
-            for m=1:1:num_markers
+            Base.Threads.@threads for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_to_grid!(
@@ -2089,14 +2093,14 @@ using Test
             end 
             # test
             for j=1:1:Nx, i=1:1:Ny
-                @test ETA0[i, j] == ETA0_ver[i, j]
-                @test ETA[i, j] == ETA_ver[i, j]
-                @test GGG[i, j] ≈ GGG_ver[i, j]
-                @test SXY0[i, j] == SXY0_ver[i, j]
-                @test COH[i, j] == COH_ver[i, j]
-                @test TEN[i, j] == TEN_ver[i, j]
-                @test FRI[i, j] == FRI_ver[i, j]
-                @test YNY[i, j] == YNY_ver[i, j]
+                @test ETA0[i, j] ≈ ETA0_ver[i, j] atol=1e-6
+                @test ETA[i, j] ≈ ETA_ver[i, j] atol=1e-6
+                @test GGG[i, j] ≈ GGG_ver[i, j] atol=1e-6
+                @test SXY0[i, j] ≈ SXY0_ver[i, j] atol=1e-6
+                @test COH[i, j] ≈ COH_ver[i, j] atol=1e-6
+                @test TEN[i, j] ≈ TEN_ver[i, j] atol=1e-6
+                @test FRI[i, j] ≈ FRI_ver[i, j] atol=1e-6
+                @test YNY[i, j] ≈ YNY_ver[i, j] atol=1e-6
             end
         end # testset "compute_basic_node_properties!()"
 
@@ -2224,11 +2228,11 @@ using Test
             end
             # test
             for j=1:1:Nx1, i=1:1:Ny1
-                @test RHOX[i, j] == RHOX_ver[i, j]
-                @test RHOFX[i, j] == RHOFX_ver[i, j]
-                @test KX[i, j] == KX_ver[i, j]
-                @test PHIX[i, j] == PHIX_ver[i, j]
-                @test RX[i, j] == RX_ver[i, j]
+                @test RHOX[i, j] ≈ RHOX_ver[i, j] atol=1e-6
+                @test RHOFX[i, j] ≈ RHOFX_ver[i, j] atol=1e-6
+                @test KX[i, j] ≈ KX_ver[i, j] atol=1e-6
+                @test PHIX[i, j] ≈ PHIX_ver[i, j] atol=1e-6
+                @test RX[i, j] ≈ RX_ver[i, j] atol=1e-6
             end
         end # testset "compute_vx_node_properties!()"
 
@@ -2246,12 +2250,12 @@ using Test
             KY = zeros(Float64, Ny1, Nx1)
             PHIY = zeros(Float64, Ny1, Nx1)
             RY = zeros(Float64, Ny1, Nx1)
-            RHOYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            RHOFYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            KYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            PHIYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            RYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            WTYSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOYSUM_ver = zeros(Ny1, Nx1)
+            RHOFYSUM_ver = zeros(Ny1, Nx1)
+            KYSUM_ver = zeros(Ny1, Nx1)
+            PHIYSUM_ver = zeros(Ny1, Nx1)
+            RYSUM_ver = zeros(Ny1, Nx1)
+            WTYSUM_ver = zeros(Ny1, Nx1)
             RHOY_ver = zeros(Float64, Ny1, Nx1)
             RHOFY_ver = zeros(Float64, Ny1, Nx1)
             KY_ver = zeros(Float64, Ny1, Nx1)
@@ -2356,11 +2360,11 @@ using Test
             end
             #test
             for j=1:1:Nx1, i=1:1:Ny1
-                @test RHOY[i,j] == RHOY_ver[i,j]
-                @test RHOFY[i,j] == RHOFY_ver[i,j]
-                @test KY[i,j] == KY_ver[i,j]
-                @test PHIY[i,j] == PHIY_ver[i,j]
-                @test RY[i,j] == RY_ver[i,j]
+                @test RHOY[i,j] ≈ RHOY_ver[i,j] atol=1e-6
+                @test RHOFY[i,j] ≈ RHOFY_ver[i,j] atol=1e-6
+                @test KY[i,j] ≈ KY_ver[i,j] atol=1e-6
+                @test PHIY[i,j] ≈ PHIY_ver[i,j] atol=1e-6
+                @test RY[i,j] ≈ RY_ver[i,j] atol=1e-6
             end
         end # testset "compute_vy_node_properties!()"
 
@@ -2387,16 +2391,16 @@ using Test
             tk1 = zeros(Float64, Ny1, Nx1)
             PHI = zeros(Float64, Ny1, Nx1)
             BETTAPHI = zeros(Float64, Ny1, Nx1)
-            RHOSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            RHOCPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            ALPHASUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            ALPHAFSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            HRSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            GGGPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            SXXSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            TKSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            PHISUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
-            WTPSUM_ver = zeros(Ny1, Nx1, Base.Threads.nthreads())
+            RHOSUM_ver = zeros(Ny1, Nx1)
+            RHOCPSUM_ver = zeros(Ny1, Nx1)
+            ALPHASUM_ver = zeros(Ny1, Nx1)
+            ALPHAFSUM_ver = zeros(Ny1, Nx1)
+            HRSUM_ver = zeros(Ny1, Nx1)
+            GGGPSUM_ver = zeros(Ny1, Nx1)
+            SXXSUM_ver = zeros(Ny1, Nx1)
+            TKSUM_ver = zeros(Ny1, Nx1)
+            PHISUM_ver = zeros(Ny1, Nx1)
+            WTPSUM_ver = zeros(Ny1, Nx1)
             RHO_ver = zeros(Float64, Ny1, Nx1)
             RHOCP_ver = zeros(Float64, Ny1, Nx1)
             ALPHA_ver = zeros(Float64, Ny1, Nx1)
@@ -2552,16 +2556,16 @@ using Test
             end
             # test
             for j=1:1:Nx, i=1:1:Ny
-                @test RHO[i, j] == RHO_ver[i, j]
-                @test RHOCP[i, j] == RHOCP_ver[i, j]
-                @test ALPHA[i, j] == ALPHA_ver[i, j]
-                @test ALPHAF[i, j] == ALPHAF_ver[i, j]
-                @test HR[i, j] == HR_ver[i, j]
-                @test GGGP[i, j] ≈ GGGP_ver[i, j]
-                @test SXX0[i, j] == SXX0_ver[i, j]
-                @test tk1[i, j] == tk1_ver[i, j]
-                @test PHI[i, j] == PHI_ver[i, j]
-                @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j]
+                @test RHO[i, j] ≈ RHO_ver[i, j] atol=1e-6
+                @test RHOCP[i, j] ≈ RHOCP_ver[i, j] atol=1e-6
+                @test ALPHA[i, j] ≈ ALPHA_ver[i, j] atol=1e-6
+                @test ALPHAF[i, j] ≈ ALPHAF_ver[i, j] atol=1e-6
+                @test HR[i, j] ≈ HR_ver[i, j] atol=1e-6
+                @test GGGP[i, j] ≈ GGGP_ver[i, j] atol=1e-6
+                @test SXX0[i, j] ≈ SXX0_ver[i, j] atol=1e-6
+                @test tk1[i, j] ≈ tk1_ver[i, j] atol=1e-6
+                @test PHI[i, j] ≈ PHI_ver[i, j] atol=1e-6
+                @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j] atol=1e-6
             end
         end # testset "compute_p_node_properties!()"
     end # testset "compute node properties" 
@@ -3347,7 +3351,8 @@ using Test
             pf,
             pr0,
             pf0,
-            dt
+            dt,
+            sp
         )
         # verification, from madcph.m, line 1078ff
         APHI_ver = zeros(Ny1, Nx1)
@@ -3890,10 +3895,10 @@ using Test
         SXY0 = rand(Ny, Nx)
         DSXX = rand(Ny1, Nx1)
         DSXY = rand(Ny, Nx)
-        SXXSUM = rand(Ny1, Nx1)
-        SXYSUM = rand(Ny, Nx)
-        WTPSUM = rand(Ny1, Nx1)
-        WTSUM = rand(Ny, Nx)
+        SXXSUM = rand(Ny1, Nx1, Base.Threads.nthreads())
+        SXYSUM = rand(Ny, Nx, Base.Threads.nthreads())
+        WTPSUM = rand(Ny1, Nx1, Base.Threads.nthreads())
+        WTSUM = rand(Ny, Nx, Base.Threads.nthreads())
         sxxm_ver = copy(sxxm)
         sxym_ver = copy(sxym)
         DSXX_ver = copy(DSXX)
