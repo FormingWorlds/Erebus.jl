@@ -2268,7 +2268,7 @@ $(SIGNATURES)
     - GGG: shear modulus at basic nodes
     - GGGP: shear modulus at P nodes
     - SXY0: σ₀xy XY stress at basic nodes
-    - SXX0: σ₀′xx XX stress at P nodes
+    - SXX0:σ₀xy XY stress at basic nodes
     - RHOX: density at Vx nodes
     - RHOY: density at Vy nodes
     - dx: horizontal grid spacing
@@ -2944,9 +2944,9 @@ Recompute bulk viscosity at P nodes.
 # Details
 
     - ETA: viscoplastic viscosity at basic nodes
-    - ETAP: viscosity at P Nodes
-    - ETAPHI: bulk viscosity at P Nodes
-    - PHI: porosity at P Nodes
+    - ETAP: viscosity at P nodes
+    - ETAPHI: bulk viscosity at P nodes
+    - PHI: porosity at P nodes
     - etaphikoef: coefficient: shear viscosity -> compaction viscosity
 
 # Returns
@@ -3707,6 +3707,68 @@ end # function update_marker_stress!
 
 
 """
+Compute shear heating based on basic (temperature) and P grids.
+
+$(SIGNATURES)
+
+# Details
+
+    - HS: shear heating
+    - ETA: viscoplastic viscosity at basic nodes
+    - SXY: σ₀xy XY stress at basic nodes
+    - ETAP: viscosity at P nodes
+    - SXX: σ₀xy XY stress at basic nodes
+    - RX: ηfluid/Kϕ at Vx nodes
+    - RY: ηfluid/Kϕ at Vy nodes
+    - qxD: qx-Darcy flux at Vx nodes
+    - qyD: qy-Darcy flux at Vy nodes
+    - PHI: porosity at P nodes
+    - ETAPHI: bulk viscosity at P nodes
+    - pr: total pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function compute_shear_heating!(
+    HS, SXYEXY, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf, sp)
+# @timeit to "compute_shear_heating!" begin
+    @unpack Nx, Ny, Nx1, Ny1 = sp
+    # average SXY⋅EXY
+    @inbounds begin
+    @views @. SXYEXY[2:Ny, 2:Nx] = 0.25 * (
+        SXY[1:Ny-1, 1:Nx-1]^2/ETA[1:Ny-1, 1:Nx-1]
+        + SXY[2:Ny, 1:Nx-1]^2/ETA[2:Ny, 1:Nx-1]
+        + SXY[1:Ny-1, 2:Nx]^2/ETA[1:Ny-1, 2:Nx]
+        + SXY[2:Ny, 2:Nx]^2/ETA[2:Ny, 2:Nx]
+    )
+    # compute shear heating HS
+    @views @. HS[2:Ny, 2:Nx] = (
+        SXX[2:Ny, 2:Nx]^2 / ETAP[2:Ny, 2:Nx]
+        + SXYEXY[2:Ny, 2:Nx]
+        + (
+            (pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])^2
+            / (1-PHI[2:Ny, 2:Nx])
+            / ETAPHI[2:Ny, 2:Nx]
+        )
+        + 0.5 * (
+            RX[2:Ny, 1:Nx-1] * qxD[2:Ny, 1:Nx-1]^2
+            + RX[2:Ny, 2:Nx] * qxD[2:Ny, 2:Nx]^2
+        )
+        + 0.5 * (
+            RY[1:Ny-1, 2:Nx] * qyD[1:Ny-1, 2:Nx]^2
+            + RY[2:Ny, 2:Nx] * qyD[2:Ny, 2:Nx]^2
+        )
+    )
+    end # @inbounds
+# end # @timeit to "compute_shear_heating!" 
+    return nothing
+end # function compute_shear_heating!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -4455,13 +4517,26 @@ end # @timeit to "solve system"
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum, sp)
 
         # ---------------------------------------------------------------------
-        # # compute shear heating HS in P nodes
+        # compute shear heating HS in P nodes
         # ---------------------------------------------------------------------
-        # 1551-1563
-        # compute_HS_p_nodes!(sp, dp, interp_arrays)
+        compute_shear_heating!(
+            HS,
+            SXYEXY,
+            ETA,
+            SXY,
+            ETAP,
+            SXX,
+            RX,
+            RY,
+            qxD,
+            qyD,
+            PHI,
+            ETAPHI,
+            pr,
+            pf,
+            sp
+        )
 
-
-# Tue 26
         # ---------------------------------------------------------------------
         # # compute adiabatic heating HA in P nodes
         # ---------------------------------------------------------------------

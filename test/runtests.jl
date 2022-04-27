@@ -4156,5 +4156,55 @@ using Test
         @test sxxm ≈ sxxm_ver atol=1e-6
         @test sxym ≈ sxym_ver atol=1e-6
     end # testset "update_marker_stress!()"
+
+    @testset "compute_shear_heating!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        HS = zeros(Ny1, Nx1)
+        SXYEXY = zeros(Ny, Nx)
+        ETA = rand(Ny, Nx)
+        SXY = rand(Ny, Nx)
+        ETAP = rand(Ny1, Nx1)
+        SXX = rand(Ny1, Nx1)
+        RX = rand(Ny1, Nx1)
+        RY = rand(Ny1, Nx1)
+        qxD = rand(Ny1, Nx1)
+        qyD = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        ETAPHI = rand(Ny1, Nx1)
+        pr = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        # compute shear compute shear heating
+        HydrologyPlanetesimals.compute_shear_heating!(
+            HS,
+            SXYEXY,
+            ETA,
+            SXY,
+            ETAP,
+            SXX,
+            RX,
+            RY,
+            qxD,
+            qyD,
+            PHI,
+            ETAPHI,
+            pr,
+            pf,
+            sp
+        )
+        # verification, from madcph.m, line 1551ff
+        HS_ver = zeros(Ny1, Nx1); # Adiabatic heating, W/m^3
+        for j=2:1:Nx
+            for i=2:1:Ny
+                # Average SXY*EXY
+                SXYEXY_ver=(SXY[i,j]^2/ETA[i,j]+SXY[i-1,j]^2/ETA[i-1,j]+ SXY[i,j-1]^2/ETA[i,j-1]+SXY[i-1,j-1]^2/ETA[i-1,j-1])/4
+                # HS
+                HS_ver[i,j]=SXX[i,j]^2/ETAP[i,j]+SXYEXY_ver+ (pr[i,j]-pf[i,j])^2/(1-PHI[i,j])/ETAPHI[i,j]+ (RX[i,j-1]*qxD[i,j-1]^2+RX[i,j]*qxD[i,j]^2)/2+ (RY[i-1,j]*qyD[i-1,j]^2+RY[i,j]*qyD[i,j]^2)/2
+            end
+        end
+        # test
+        @test HS ≈ HS_ver atol=1e-6
+    end # testset "compute_shear_heating!()"
 end
 
