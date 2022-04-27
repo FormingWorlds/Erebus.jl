@@ -3,6 +3,7 @@ module HydrologyPlanetesimals
 using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
+using LinearAlgebra
 using MAT
 using Parameters
 using ProgressMeter
@@ -3471,29 +3472,156 @@ function finalize_plastic_iteration_pass!(
 end # @timeit to "finalize_plastic_iteration_pass!()"
     end # function finalize_plastic_iteration_pass
 
+
 """
-Apply basic and P subgrid stress diffusion to markers.
+Apply xy (basic grid) and xx (P grid) subgrid stress diffusion to markers.
 
 $(SIGNATURES)
 
 # Details
 
-    - m: marker number
+    - marknum: total number of markers in use
     - xm: marker x-coordinates
     - ym: marker y-coordinates
-    - sxxm: 
-    - sxym:
-    - SXX0:
-    - SXY0: 
+    - tm: marker type
+    - inv_gggtotalm: inverse of total shear modulus of markers
+    - sxxm: marker σ′xx [Pa]
+    - sxym: marker σxy [Pa]
+    - SXX0: σ₀′xx at P nodes [1/s]
+    - SXY0: σ₀xy at basic nodes [1/s]
+    - DSXX: stress change Δσ′xx at P nodes
+    - DSXY: stress change Δσxy at basic nodes
+    - SXXSUM: interpolation of SXX at P nodes
+    - SXYSUM: interpolation of SXY at basic nodes
+    - WTPSUM: interpolation weights at P nodes
+    - WTSUM: interpolation weights at basic nodes
+    - dtm: displacement time step 
     - sp: static simulation parameters  
 
 # Returns
     
     - nothing
 """
-function apply_marker_subgrid_stress_diffusion!(
-    m, xm, ym, sxxm, sxym, SXX0, SXY0, sp)
-@timeit to "apply_marker_subgrid_stress_diffusion!" begin
+function apply_subgrid_stress_diffusion!(
+    marknum,
+    xm,
+    ym,
+    tm,
+    inv_gggtotalm,
+    sxxm,
+    sxym,
+    SXX0,
+    SXY0,
+    DSXX,
+    DSXY,
+    SXXSUM,
+    SXYSUM,
+    WTPSUM,
+    WTSUM,
+    dtm,
+    sp
+)
+@timeit to "apply_subgrid_stress_diffusion!" begin
+    @unpack Nx,
+        Ny,
+        dx,
+        dy,
+        x,
+        y,
+        jmin_basic,
+        jmax_basic,
+        imin_basic,
+        imax_basic,
+        xp,
+        yp,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p,
+        dsubgrids = sp
+    # only perform subgrid stress diffusion if enabled by dsubgrids > 0
+    if dsubgrids == 0.0
+        return
+    end 
+    # fix etam[tm[m]] RMK: It's a temporary fix, not yet implemented in source
+    etam = @SVector ones(3)
+    # reset interpolation arrays
+    SXXSUM .= 0.0
+    WTPSUM .= 0.0
+    SXYSUM .= 0.0
+    WTSUM .= 0.0
+    # iterate over markers
+    @threads for m=1:1:marknum
+        i_p, j_p, weights_p = fix_weights(
+            xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+        i_basic, j_basic, weights_basic = fix_weights(
+            xm[m],
+            ym[m],
+            x,
+            y,
+            dx,
+            dy,
+            jmin_basic,
+            jmax_basic,
+            imin_basic,
+            imax_basic
+        )
+        # σ₀′xx at P nodes
+        # compute marker-node σ′xx difference
+        δσxxm₀ = sxxm[m] - dot(grid_vector(i_p, j_p, SXX0), weights_p)
+        # time-relax σ′xx difference
+        δσxxm₀ *= (exp(-dsubgrids*dtm/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0) 
+        # correct marker stress
+        sxxm[m] += δσxxm₀
+        # update subgrid diffusion on P nodes
+        interpolate_to_grid!(i_p, j_p, weights_p, δσxxm₀, SXXSUM)
+        interpolate_to_grid!(i_p, j_p, weights_p, 1.0, WTPSUM)
+        # σ₀xy at basic nodes
+        # compute marker-node σxy difference
+        δσxy₀ = sxym[m] - dot(
+            grid_vector(i_basic, j_basic, SXY0), weights_basic)
+        # time-relax σxy difference
+        δσxy₀ *= (exp(-dsubgrids*dtm/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0)
+        # correct marker stress
+        sxym[m] += δσxy₀
+        # update subgrid diffusion on basic nodes
+        interpolate_to_grid!(i_basic, j_basic, weights_basic, δσxy₀, SXYSUM)
+        interpolate_to_grid!(i_basic, j_basic, weights_basic, 1.0, WTSUM)
+    end
+    # compute DSXXsubgrid and update DSXX at inner P nodes
+    @views @. DSXX[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0] -= (
+        SXXSUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0] /
+        WTPSUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx]>0.0]
+    )
+    # compute DSXYsubgrid and update DSXY at all basic nodes
+    @views @. DSXY[WTSUM>0.0] -= SXYSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+end # @timeit to "apply_subgrid_stress_diffusion!"
+    return nothing
+end # function apply_subgrid_stress_diffusion!
+
+
+"""
+Update marker stress based on xy (basic grid) and xx (P grid) stress changes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xm: x-coordinates of markers
+    - ym: y-coordinates of markers
+    - sxxm:
+    - sxym:
+    - DSXX:
+    - DSXY:
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function update_marker_stress!(m, xm, ym, sxxm, sxym, DSXX, DSXY, sp)
+@timeit to "update_marker_stress!" begin
     @unpack dx,
         dy,
         x,
@@ -3507,11 +3635,28 @@ function apply_marker_subgrid_stress_diffusion!(
         jmin_p,
         jmax_p,
         imin_p,
-        imax_p = sp
-
-end # @timeit to "apply_marker_subgrid_stress_diffusion!"
+        imax_p,
+        dsubgrids = sp
+    i_p, j_p, weights_p = fix_weights(
+        xm[m], ym[m], xp, yp, dx, dy, jmin_p+1, jmax_p-1, imin_p+1, imax_p-1)
+    i_basic, j_basic, weights_basic = fix_weights(
+        xm[m],
+        ym[m],
+        x,
+        y,
+        dx,
+        dy,
+        jmin_basic,
+        jmax_basic,
+        imin_basic,
+        imax_basic
+    )
+    # interpolate updated DSXX, DSXY back to markers
+    interpolate_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
+    interpolate_to_marker!(m, i_basic, j_basic, weigths_basic, sxym, DSXY)
+end # @timeit to "update_marker_stress!"
     return nothing
-end # function apply_marker_subgrid_stress_diffusion!
+end # function update_marker_stress!
 
 
 """
@@ -4235,31 +4380,31 @@ end # @timeit to "solve system"
         # ---------------------------------------------------------------------
         # # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
-        if dsubgrids > 0
-            @threads for m = 1:1:marknum
-                apply_marker_subgrid_stress_diffusion!(
-                    m, xm, ym, sxxm, sxym, SXX0, SXY0, sp)
-            end
-        end
+        apply_subgrid_stress_diffusion!(
+            marknum,
+            xm,
+            ym,
+            tm,
+            inv_gggtotalm,
+            sxxm,
+            sxym,
+            SXX0,
+            SXY0,
+            DSXX,
+            DSXY,
+            SXXSUM,
+            SXYSUM,
+            WTPSUM,
+            WTSUM,
+            dtm,
+            sp
+        )
 
-# Mon 25
         # ---------------------------------------------------------------------
-        # # compute DSXXsubgrid, DSXYsubgrid
+        # interpolate DSXX, DSXY to markers
         # ---------------------------------------------------------------------
-        # 1471-1492
-        # compute_dsxx_dsxy_subgrids!(sp, dp, interp_arrays)
+        update_marker_stress!()
 
-
-# Mon 25
-        # ---------------------------------------------------------------------
-        # # interpolate DSXX, DSXY to markers
-        # ---------------------------------------------------------------------
-        # 1495-1547
-        # for m = 1:1:marknum
-        #     # ~50 lines MATLAB 
-        # end
-
-# Mon 25
         # ---------------------------------------------------------------------
         # # compute shear heating HS in P nodes
         # ---------------------------------------------------------------------

@@ -3865,5 +3865,182 @@ using Test
         @test YNY == YNY_ver
         @test YNY_inv_ETA == YNY_inv_ETA_ver
     end # testset "finalize_plastic_iteration_pass!()"
+
+    @testset "apply_subgrid_stress_diffusion!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(
+            Nxmc=1, Nymc=1, dsubgrids=0.5, dtelastic=0.5)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        marknum = sp.start_marknum
+        x, y = sp.x, sp.y
+        xp, yp = sp.xp, sp.yp
+        dx, dy = sp.dx, sp.dy
+        dtm = sp.dtelastic
+        dsubgrids = sp.dsubgrids
+        etam = @SVector ones(3)
+        # simulate markers
+        xm = rand(-dx:0.1:x[end]+dx, marknum)
+        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        tm = rand(1:3, marknum)
+        gggm = rand(3)
+        inv_gggtotalm = inv.([gggm[tm[m]] for m in 1:marknum])
+        sxxm = rand(marknum)
+        sxym = rand(marknum)
+        SXX0 = rand(Ny1, Nx1)
+        SXY0 = rand(Ny, Nx)
+        DSXX = rand(Ny1, Nx1)
+        DSXY = rand(Ny, Nx)
+        SXXSUM = rand(Ny1, Nx1)
+        SXYSUM = rand(Ny, Nx)
+        WTPSUM = rand(Ny1, Nx1)
+        WTSUM = rand(Ny, Nx)
+        sxxm_ver = copy(sxxm)
+        sxym_ver = copy(sxym)
+        DSXX_ver = copy(DSXX)
+        DSXY_ver = copy(DSXY)
+        # apply subgrid stress diffusion
+        HydrologyPlanetesimals.apply_subgrid_stress_diffusion!(
+            marknum,
+            xm,
+            ym,
+            tm,
+            inv_gggtotalm,
+            sxxm,
+            sxym,
+            SXX0,
+            SXY0,
+            DSXX,
+            DSXY,
+            SXXSUM,
+            SXYSUM,
+            WTPSUM,
+            WTSUM,
+            dtm,
+            sp
+        )
+        # verification, from madcph.m, line 1374ff
+        # Apply subgrid stress diffusion to markers
+        if(dsubgrids>0)
+        SXYSUM_ver = zeros(Ny, Nx)
+        WTSUM_ver = zeros(Ny, Nx)
+        SXXSUM_ver = zeros(Ny1, Nx1)
+        WTPSUM_ver = zeros(Ny1, Nx1)
+        for m=1:1:marknum
+            # SIGMA'xx
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xm[m]-xp[1])/dx)+1
+            i=trunc(Int, (ym[m]-yp[1])/dy)+1
+            if j<1
+                j=1
+            elseif j>Nx
+                j=Nx
+            end
+            if i<1
+                i=1
+            elseif i>Ny
+                i=Ny
+            end
+            # Compute distances
+            dxmj=xm[m]-xp[j]
+            dymi=ym[m]-yp[i]
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy)
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy)
+            wtmi1j1=(dxmj/dx)*(dymi/dy)
+            # Compute marker-node SIGMA'xx difference
+            dsxxm0=sxxm_ver[m]-(SXX0[i,j]*wtmij+SXX0[i+1,j]*wtmi1j+ SXX0[i,j+1]*wtmij1+SXX0[i+1,j+1]*wtmi1j1)
+            # Relax stress difference
+            dsxxm1=dsxxm0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
+            # Correct marker stress
+            ddsxxm_ver=dsxxm1-dsxxm0
+            sxxm_ver[m]=sxxm_ver[m]+ddsxxm_ver
+            # Update subgrid diffusion on nodes
+            # i;j Node
+            SXXSUM_ver[i,j]=SXXSUM_ver[i,j]+ddsxxm_ver*wtmij
+            WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij
+            # i+1;j Node
+            SXXSUM_ver[i+1,j]=SXXSUM_ver[i+1,j]+ddsxxm_ver*wtmi1j
+            WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j
+            # i;j+1 Node
+            SXXSUM_ver[i,j+1]=SXXSUM_ver[i,j+1]+ddsxxm_ver*wtmij1
+            WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1
+            # i+1;j+1 Node
+            SXXSUM_ver[i+1,j+1]=SXXSUM_ver[i+1,j+1]+ddsxxm_ver*wtmi1j1
+            WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1
+            # SIGMAxy
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xm[m]-x[1])/dx)+1
+            i=trunc(Int, (ym[m]-y[1])/dy)+1
+            if j<1
+                j=1
+            elseif j>Nx-1
+                j=Nx-1
+            end
+            if i<1
+                i=1
+            elseif i>Ny-1
+                i=Ny-1
+            end
+            # Compute distances
+            dxmj=xm[m]-x[j]
+            dymi=ym[m]-y[i]
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy)
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy)
+            wtmi1j1=(dxmj/dx)*(dymi/dy)
+            # Compute marker-node SIGMAxy difference
+            dsxym0=sxym_ver[m]-(SXY0[i,j]*wtmij+SXY0[i+1,j]*wtmi1j+  SXY0[i,j+1]*wtmij1+SXY0[i+1,j+1]*wtmi1j1)
+            # Relax stress difference
+            dsxym1=dsxym0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
+            # Correct marker stress
+            ddsxym_ver=dsxym1-dsxym0
+            sxym_ver[m]=sxym_ver[m]+ddsxym_ver
+            # Update subgrid diffusion on nodes
+            # i;j Node
+            SXYSUM_ver[i,j]=SXYSUM_ver[i,j]+ddsxym_ver*wtmij
+            WTSUM_ver[i,j]=WTSUM_ver[i,j]+wtmij
+            # i+1;j Node
+            SXYSUM_ver[i+1,j]=SXYSUM_ver[i+1,j]+ddsxym_ver*wtmi1j
+            WTSUM_ver[i+1,j]=WTSUM_ver[i+1,j]+wtmi1j
+            # i;j+1 Node
+            SXYSUM_ver[i,j+1]=SXYSUM_ver[i,j+1]+ddsxym_ver*wtmij1
+            WTSUM_ver[i,j+1]=WTSUM_ver[i,j+1]+wtmij1
+            # i+1;j+1 Node
+            SXYSUM_ver[i+1,j+1]=SXYSUM_ver[i+1,j+1]+ddsxym_ver*wtmi1j1
+            WTSUM_ver[i+1,j+1]=WTSUM_ver[i+1,j+1]+wtmi1j1
+        end
+        # Compute DSXXsubgrid_ver
+        DSXXsubgrid_ver = zeros(Ny1, Nx1)
+        # P-nodes
+        for j=2:1:Nx
+            for i=2:1:Ny
+                if(WTPSUM_ver[i,j]>0)
+                    DSXXsubgrid_ver[i,j]=SXXSUM_ver[i,j]/WTPSUM_ver[i,j]
+                end
+            end
+        end
+        # Correct DSXX_ver
+        DSXX_ver=DSXX_ver-DSXXsubgrid_ver
+        # Compute DSXYsubgrid_ver
+        DSXYsubgrid_ver = zeros(Ny, Nx)
+        # Basic nodes
+        for j=1:1:Nx
+            for i=1:1:Ny
+                if(WTSUM_ver[i,j]>0)
+                    DSXYsubgrid_ver[i,j]=SXYSUM_ver[i,j]/WTSUM_ver[i,j]
+                end
+            end
+        end
+        # Correct DSXY_ver
+        DSXY_ver=DSXY_ver-DSXYsubgrid_ver
+        end
+    # test
+    @test sxxm ≈ sxxm_ver atol=1e-6
+    @test sxym ≈ sxym_ver atol=1e-6
+    @test DSXX ≈ DSXX_ver atol=1e-6
+    @test DSXY ≈ DSXY_ver atol=1e-6
+    end # testset "apply_subgrid_stress_diffusion!()"
 end
 
