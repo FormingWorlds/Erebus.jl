@@ -1486,15 +1486,15 @@ using given bilinear interpolation weights.
 
     - nothing
 """
-function interpolate_to_grid!(i, j, weights, property, grid)
-# @timeit to "interpolate_to_grid!" begin
+function interpolate_add_to_grid!(i, j, weights, property, grid)
+# @timeit to "interpolate_add_to_grid!" begin
     grid[i, j, threadid()] += property * weights[1]
     grid[i+1, j, threadid()] += property * weights[2]
     grid[i, j+1, threadid()] += property * weights[3]
     grid[i+1, j+1, threadid()] += property * weights[4]
-# end # @timeit to "interpolate_to_grid!"
+# end # @timeit to "interpolate_add_to_grid!"
     return nothing
-end # function interpolate_to_grid!
+end # function interpolate_add_to_grid!
 
 
 """
@@ -1515,16 +1515,37 @@ Interpolate a property from nearest the four nodes on a given grid to a marker.
     - m: marker 
 """
 function interpolate_to_marker!(m, i, j, weights, marker_property, grid)
-@timeit to "interpolate_to_marker!()" begin
-    marker_property[m] = (
-        grid[i, j] * weights[1]
-        + grid[i+1, j] * weights[2]
-        + grid[i, j+1] * weights[3]
-        + grid[i+1, j+1] * weights[4]
-    )
-end # @timeit to "interpolate_to_marker!()"
+# @timeit to "interpolate_to_marker!()" begin
+    @inbounds marker_property[m] = dot(grid_vector(i, j, grid), weights)
+# end # @timeit to "interpolate_to_marker!()"
     return nothing
 end # function interpolate_to_marker
+
+
+"""
+Interpolate a property from nearest the four nodes on a given grid to a marker
+and add it to the markers property.
+
+# Details
+    - m: number of marker to interpolate to
+    - i: top (with reference to y) node index on vertical y-grid axis
+    - j: left (with reference to x) node index on horizontal x-grid axis
+    - weights: vector of 4 bilinear interpolation weights to
+    nearest four grid nodes:
+        [wtmij  : i  , j   node,
+        wtmi1j : i+1, j   node,
+        wtmij1 : i  , j+1 node,
+        wtmi1j1: i+1, j+1 node]
+    - marker_property: marker property array into which to interpolate and add
+    - property_grid: grid whose property is to be interpolated to marker
+    - m: marker 
+"""
+function interpolate_add_to_marker!(m, i, j, weights, marker_property, grid)
+# @timeit to "interpolate_add_to_marker!()" begin
+    @inbounds marker_property[m] += dot(grid_vector(i, j, grid), weights)
+# end # @timeit to "interpolate_add_to_marker!()"
+    return nothing
+end # function interpolate_add_to_marker
 
 
 """
@@ -1592,14 +1613,14 @@ function marker_to_basic_nodes!(
         imin_basic,
         imax_basic
     )
-    interpolate_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
-    interpolate_to_grid!(i, j, weights, etavpm[m], ETASUM)
-    interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
-    interpolate_to_grid!(i, j, weights, sxym[m], SXYSUM)
-    interpolate_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
-    interpolate_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
-    interpolate_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
-    interpolate_to_grid!(i, j, weights, 1.0, WTSUM)
+    interpolate_add_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
+    interpolate_add_to_grid!(i, j, weights, etavpm[m], ETASUM)
+    interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
+    interpolate_add_to_grid!(i, j, weights, sxym[m], SXYSUM)
+    interpolate_add_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
+    interpolate_add_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
+    interpolate_add_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
+    interpolate_add_to_grid!(i, j, weights, 1.0, WTSUM)
     return nothing
 end
 
@@ -1661,12 +1682,12 @@ function marker_to_vx_nodes!(
         imin_vx,
         imax_vx
     )
-    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
-    interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
-    interpolate_to_grid!(i, j, weights, ktotalm[m], KXSUM)
-    interpolate_to_grid!(i, j, weights, phim[m], PHIXSUM)
-    interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
-    interpolate_to_grid!(i, j, weights, 1.0, WTXSUM)
+    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
+    interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
+    interpolate_add_to_grid!(i, j, weights, ktotalm[m], KXSUM)
+    interpolate_add_to_grid!(i, j, weights, phim[m], PHIXSUM)
+    interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
+    interpolate_add_to_grid!(i, j, weights, 1.0, WTXSUM)
     return nothing
 end
 
@@ -1728,12 +1749,12 @@ function marker_to_vy_nodes!(
         imin_vy,
         imax_vy
     )
-    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
-    interpolate_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
-    interpolate_to_grid!(i, j, weights, ktotalm[m], KYSUM)
-    interpolate_to_grid!(i, j, weights, phim[m], PHIYSUM)
-    interpolate_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
-    interpolate_to_grid!(i, j, weights, 1.0, WTYSUM)
+    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
+    interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
+    interpolate_add_to_grid!(i, j, weights, ktotalm[m], KYSUM)
+    interpolate_add_to_grid!(i, j, weights, phim[m], PHIYSUM)
+    interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
+    interpolate_add_to_grid!(i, j, weights, 1.0, WTYSUM)
     return nothing
 end
 
@@ -1811,16 +1832,16 @@ function marker_to_p_nodes!(
         imin_p,
         imax_p
     )
-    interpolate_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
-    interpolate_to_grid!(i, j, weights, sxxm[m], SXXSUM)
-    interpolate_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
-    interpolate_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
-    interpolate_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
-    interpolate_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
-    interpolate_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
-    interpolate_to_grid!(i, j, weights, phim[m], PHISUM)
-    interpolate_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
-    interpolate_to_grid!(i, j, weights, 1.0, WTPSUM)
+    interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
+    interpolate_add_to_grid!(i, j, weights, sxxm[m], SXXSUM)
+    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
+    interpolate_add_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
+    interpolate_add_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
+    interpolate_add_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
+    interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
+    interpolate_add_to_grid!(i, j, weights, phim[m], PHISUM)
+    interpolate_add_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
+    interpolate_add_to_grid!(i, j, weights, 1.0, WTPSUM)
     return nothing
 end
 
@@ -3485,7 +3506,6 @@ $(SIGNATURES)
 
 # Details
 
-    - marknum: total number of markers in use
     - xm: marker x-coordinates
     - ym: marker y-coordinates
     - tm: marker type
@@ -3500,7 +3520,8 @@ $(SIGNATURES)
     - SXYSUM: interpolation of SXY at basic nodes
     - WTPSUM: interpolation weights at P nodes
     - WTSUM: interpolation weights at basic nodes
-    - dtm: displacement time step 
+    - dtm: displacement time step
+    - marknum: total number of markers in use
     - sp: static simulation parameters  
 
 # Returns
@@ -3508,7 +3529,6 @@ $(SIGNATURES)
     - nothing
 """
 function apply_subgrid_stress_diffusion!(
-    marknum,
     xm,
     ym,
     tm,
@@ -3524,6 +3544,7 @@ function apply_subgrid_stress_diffusion!(
     WTPSUM,
     WTSUM,
     dtm,
+    marknum,
     sp
 )
 @timeit to "apply_subgrid_stress_diffusion!" begin
@@ -3579,8 +3600,8 @@ function apply_subgrid_stress_diffusion!(
         # correct marker stress
         sxxm[m] += δσxxm₀
         # update subgrid diffusion on P nodes
-        interpolate_to_grid!(i_p, j_p, weights_p, δσxxm₀, SXXSUM)
-        interpolate_to_grid!(i_p, j_p, weights_p, 1.0, WTPSUM)
+        interpolate_add_to_grid!(i_p, j_p, weights_p, δσxxm₀, SXXSUM)
+        interpolate_add_to_grid!(i_p, j_p, weights_p, 1.0, WTPSUM)
         # σ₀xy at basic nodes
         # compute marker-node σxy difference
         δσxy₀ = sxym[m] - dot(
@@ -3590,8 +3611,8 @@ function apply_subgrid_stress_diffusion!(
         # correct marker stress
         sxym[m] += δσxy₀
         # update subgrid diffusion on basic nodes
-        interpolate_to_grid!(i_basic, j_basic, weights_basic, δσxy₀, SXYSUM)
-        interpolate_to_grid!(i_basic, j_basic, weights_basic, 1.0, WTSUM)
+        interpolate_add_to_grid!(i_basic, j_basic, weights_basic, δσxy₀, SXYSUM)
+        interpolate_add_to_grid!(i_basic, j_basic, weights_basic, 1.0, WTSUM)
     end
     # reduce interpolation arrays
     SXXSUM = reduce(+, SXXSUM, dims=3)
@@ -3622,17 +3643,18 @@ $(SIGNATURES)
     - m: marker number
     - xm: x-coordinates of markers
     - ym: y-coordinates of markers
-    - sxxm:
-    - sxym:
-    - DSXX:
-    - DSXY:
+    - sxxm: marker σ′xx [Pa]
+    - sxym: marker σxy [Pa]
+    - DSXX: stress change Δσ′xx at P nodes
+    - DSXY: stress change Δσxy at basic nodes
+    - marknum: total number of markers in use
     - sp: static simulation parameters
 
 # Returns
 
     - nothing
 """
-function update_marker_stress!(m, xm, ym, sxxm, sxym, DSXX, DSXY, sp)
+function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum, sp)
 @timeit to "update_marker_stress!" begin
     @unpack dx,
         dy,
@@ -3649,23 +3671,36 @@ function update_marker_stress!(m, xm, ym, sxxm, sxym, DSXX, DSXY, sp)
         imin_p,
         imax_p,
         dsubgrids = sp
-    i_p, j_p, weights_p = fix_weights(
-        xm[m], ym[m], xp, yp, dx, dy, jmin_p+1, jmax_p-1, imin_p+1, imax_p-1)
-    i_basic, j_basic, weights_basic = fix_weights(
-        xm[m],
-        ym[m],
-        x,
-        y,
-        dx,
-        dy,
-        jmin_basic,
-        jmax_basic,
-        imin_basic,
-        imax_basic
-    )
+    @threads for m=1:1:marknum    
+        i_p, j_p, weights_p = fix_weights(
+            xm[m],
+            ym[m],
+            xp,
+            yp,
+            dx,
+            dy,
+            jmin_p+1,
+            jmax_p-1,
+            imin_p+1,
+            imax_p-1
+        )
+        i_basic, j_basic, weights_basic = fix_weights(
+            xm[m],
+            ym[m],
+            x,
+            y,
+            dx,
+            dy,
+            jmin_basic,
+            jmax_basic,
+            imin_basic,
+            imax_basic
+        )
     # interpolate updated DSXX, DSXY back to markers
-    interpolate_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
-    interpolate_to_marker!(m, i_basic, j_basic, weigths_basic, sxym, DSXY)
+        interpolate_add_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
+        interpolate_add_to_marker!(
+            m, i_basic, j_basic, weights_basic, sxym, DSXY)
+    end
 end # @timeit to "update_marker_stress!"
     return nothing
 end # function update_marker_stress!
@@ -4395,7 +4430,6 @@ end # @timeit to "solve system"
         # # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
         apply_subgrid_stress_diffusion!(
-            marknum,
             xm,
             ym,
             tm,
@@ -4411,13 +4445,14 @@ end # @timeit to "solve system"
             WTPSUM,
             WTSUM,
             dtm,
+            marknum,
             sp
         )
 
         # ---------------------------------------------------------------------
         # interpolate DSXX, DSXY to markers
         # ---------------------------------------------------------------------
-        update_marker_stress!()
+        update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum, sp)
 
         # ---------------------------------------------------------------------
         # # compute shear heating HS in P nodes
