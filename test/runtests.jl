@@ -4206,5 +4206,70 @@ using Test
         # test
         @test HS ≈ HS_ver atol=1e-6
     end # testset "compute_shear_heating!()"
+
+    @testset "compute_adiabatic_heating!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        HA = zeros(Ny1, Nx1)
+        tk1 = rand(Ny1, Nx1)
+        ALPHA = rand(Ny1, Nx1)
+        ALPHAF = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        vxf = rand(Ny1, Nx1)
+        vyf = rand(Ny1, Nx1)
+        ps = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        HA_ver = zero(HA)
+        # compute adiabatic heating
+        HydrologyPlanetesimals.compute_adiabatic_heating!(
+            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
+        # verification, from madcph.m, line 1573ff
+        for j=2:1:Nx
+            for i=2:1:Ny
+                # HA
+                # Indirect calculation of dpdt
+                # Average vy; vx; vxf; vyf
+                VXP=(vx[i,j]+vx[i,j-1])/2
+                VYP=(vy[i,j]+vy[i-1,j])/2
+                VXFP=(vxf[i,j]+vxf[i,j-1])/2
+                VYFP=(vyf[i,j]+vyf[i-1,j])/2
+                # Evaluate DPsolid/Dt with upwind differences
+                if VXP<0
+                    dpsdx=(ps[i,j]-ps[i,j-1])/dx
+                else
+                    dpsdx=(ps[i,j+1]-ps[i,j])/dx
+                end
+                if VYP<0
+                    dpsdy=(ps[i,j]-ps[i-1,j])/dy
+                else
+                    dpsdy=(ps[i+1,j]-ps[i,j])/dy
+                end
+                dpsdt=VXP*dpsdx+VYP*dpsdy
+                # Evaluate DPfluid/Dt with upwind differences
+                if VXFP>0
+                    dpfdx=(pf[i,j]-pf[i,j-1])/dx
+                else
+                    dpfdx=(pf[i,j+1]-pf[i,j])/dx
+                end
+                if VYFP>0
+                    dpfdy=(pf[i,j]-pf[i-1,j])/dy
+                else
+                    dpfdy=(pf[i+1,j]-pf[i,j])/dy
+                end
+                dpfdt=VXFP*dpsdx+VYFP*dpsdy
+        #         # Direct calculation of dpdt
+        #         dpsdt=(ps[i,j]-ps0[i,j])/dt
+        #         dpfdt=(pf[i,j]-pf0[i,j])/dt
+                # HA
+                HA_ver[i,j]=(1-PHI[i,j])*tk1[i,j]*ALPHA[i,j]*dpsdt+ PHI[i,j]*tk1[i,j]*ALPHAF[i,j]*dpfdt
+            end
+        end
+        # test
+        @test HA ≈ HA_ver atol=1e-6
+    end # testset "compute_adiabatic_heating!()"
 end
 

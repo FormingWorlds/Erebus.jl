@@ -3769,6 +3769,115 @@ end # function compute_shear_heating!
 
 
 """
+Compute adiabatic heating based on basic (temperature) and P grids.
+
+$(SIGNATURES)
+
+# Details
+
+    - HA: adiabatic heating at P nodes
+    - tk1: previous temperature at P nodes
+    - ALPHA: thermal expansion coefficient at P nodes
+    - ALPHAF: fluid thermal expansion coefficient at P nodes
+    - PHI: porosity at P nodes
+    - vx: solid vx-velocity at Vx nodes
+    - vy: solid vy-velocity at Vy nodes
+    - vxf: fluid vx-velocity at Vx nodes
+    - vyf: fluid vy-velocity at Vy nodes
+    - ps: solid pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function compute_adiabatic_heating!(
+    HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
+# @timeit to "compute_adiabatic_heating!" begin
+    @unpack Nx, Ny, Nx1, Ny1, dx, dy = sp
+    for j=2:1:Nx, i=2:1:Ny
+        # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
+        # average vy, vx, vxf, vyf
+        VXP = 0.5 * (vx[i, j]+vx[i, j-1])
+        VYP = 0.5 * (vy[i, j]+vy[i-1, j])
+        VXFP = 0.5 * (vxf[i, j]+vxf[i, j-1])
+        VYFP = 0.5 * (vyf[i, j]+vyf[i-1, j])
+        # evaluate DPsolid/Dt with upwind differences
+        if VXP < 0.0
+            dpsdx = (ps[i,j]-ps[i,j-1]) / dx
+        else
+            dpsdx = (ps[i,j+1]-ps[i,j]) / dx
+        end
+        if VYP < 0.0
+            dpsdy = (ps[i,j]-ps[i-1,j]) / dy
+        else
+            dpsdy = (ps[i+1,j]-ps[i,j]) / dy
+        end
+        dpsdt = VXP*dpsdx + VYP*dpsdy
+        # evaluate DPfluid/Dt with upwind differences
+        if VXFP > 0.0
+            dpfdx = (pf[i,j]-pf[i,j-1]) / dx
+        else
+            dpfdx = (pf[i,j+1]-pf[i,j]) / dx
+        end
+        if VYFP > 0.0
+            dpfdy = (pf[i,j]-pf[i-1,j]) / dy
+        else
+            dpfdy = (pf[i+1,j]-pf[i,j]) / dy
+        end
+        dpfdt = VXFP*dpsdx + VYFP*dpsdy
+        # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
+        HA[i, j] = (
+            (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
+            + PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
+        )
+    end
+# end # @timeit to "compute_adiabatic_heating!"
+end # function compute_adiabatic_heating!
+
+# RMK: vectorized version below: untested, but slower anyway
+# function compute_adiabatic_heating!(
+#     HA, VXP, VYP, VXFP, VYFP, ∂ps∂xₗ, ∂ps∂xᵣ, ∂ps∂yₗ, ∂ps∂yᵣ, ∂pf∂xₗ, ∂pf∂xᵣ, ∂pf∂yₗ, ∂pf∂yᵣ, dpsdx,dpsdy, dpfdx, dpfdy, dpsdt, dpfdt, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
+# # @timeit to "compute_adiabatic_heating!" begin
+#     @unpack Nx, Ny, Nx1, Ny1, dx, dy = sp
+#     # indirect calculation of ∂p∂t
+#     # average vx, vy, vxf, vyf
+#     @views @. VXP[2:Ny, 2:Nx] = 0.5 * (vx[2:Ny, 2:Nx] + vx[2:Ny, 1:Nx-1])
+#     @views @. VYP[2:Ny, 2:Nx] = 0.5 * (vy[2:Ny, 2:Nx] + vy[1:Ny-1, 2:Nx])
+#     @views @. VXFP[2:Ny, 2:Nx] = 0.5 * (vxf[2:Ny, 2:Nx] + vxf[2:Ny, 1:Nx-1])
+#     @views @. VYFP[2:Ny, 2:Nx] = 0.5 * (vyf[2:Ny, 2:Nx] + vyf[1:Ny-1, 2:Nx])
+#     # left and right upwind ∂p∂x, ∂p∂y, ∂pf∂x, ∂pf∂y
+#     @views @. ∂ps∂xₗ[2:Ny, 2:Nx] = (ps[2:Ny, 2:Nx]-ps[2:Ny, 1:Nx-1]) / dx
+#     @views @. ∂ps∂xᵣ[2:Ny, 2:Nx] = (ps[2:Ny, 3:Nx1]-ps[2:Ny, 2:Nx]) / dx
+#     @views @. ∂ps∂yₗ[2:Ny, 2:Nx] = (ps[2:Ny, 2:Nx]-ps[1:Ny-1, 2:Nx]) / dy
+#     @views @. ∂ps∂yᵣ[2:Ny, 2:Nx] = (ps[3:Ny1, 2:Nx]-ps[2:Ny, 2:Nx]) / dy
+#     @views @. ∂pf∂xₗ[2:Ny, 2:Nx] = (pf[2:Ny, 2:Nx]-pf[2:Ny, 1:Nx-1]) / dx
+#     @views @. ∂pf∂xᵣ[2:Ny, 2:Nx] = (pf[2:Ny, 3:Nx1]-pf[2:Ny, 2:Nx]) / dx
+#     @views @. ∂pf∂yₗ[2:Ny, 2:Nx] = (pf[2:Ny, 2:Nx]-pf[1:Ny-1, 2:Nx]) / dy
+#     @views @. ∂pf∂yᵣ[2:Ny, 2:Nx] = (pf[3:Ny1, 2:Nx]-pf[2:Ny, 2:Nx]) / dy
+#     # evaluate DPsolid/Dt, DPfluid/Dt
+#     @views @. dpsdx = ∂ps∂xₗ
+#     @views @. dpsdx[2:Ny, 2:Nx][VXP[2:Ny, 2:Nx]>=0] = ∂ps∂xᵣ[2:Ny, 2:Nx][VXP[2:Ny, 2:Nx]>=0]
+#     @views @. dpsdy = ∂ps∂yₗ
+#     @views @. dpsdy[2:Ny, 2:Nx][VYP[2:Ny, 2:Nx]>=0] = ∂ps∂yᵣ[2:Ny, 2:Nx][VYP[2:Ny, 2:Nx]>=0]
+#     @views @. dpsdt = VXP*dpsdx + VYP*dpsdy
+#     @views @. dpfdx = ∂pf∂xₗ
+#     @views @. dpfdx[2:Ny, 2:Nx][VXFP[2:Ny, 2:Nx]<=0] = ∂pf∂xᵣ[2:Ny, 2:Nx][VXFP[2:Ny, 2:Nx]<=0]
+#     @views @. dpfdy = ∂pf∂yₗ
+#     @views @. dpfdy[2:Ny, 2:Nx][VYFP[2:Ny, 2:Nx]<=0] = ∂pf∂yᵣ[2:Ny, 2:Nx][VYFP[2:Ny, 2:Nx]<=0]
+#     @views @. dpfdt = VXFP*dpfdx + VYFP*dpfdy
+#     # compute adiabatic heating HA
+#     @views @. HA[2:Ny, 2:Nx] = (
+#         (1-PHI[2:Ny, 2:Nx])*tk1[2:Ny, 2:Nx]*ALPHA[2:Ny, 2:Nx]*dpsdt[2:Ny, 2:Nx]
+#         + PHI[2:Ny, 2:Nx]*tk1[2:Ny, 2:Nx]*ALPHAF[2:Ny, 2:Nx] * dpfdt[2:Ny, 2:Nx]
+#     )    
+# # end # @timeit to "compute_adiabatic_heating!"
+#     return nothing
+# end # function compute_adiabatic_heating!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -4540,11 +4649,15 @@ end # @timeit to "solve system"
         # ---------------------------------------------------------------------
         # # compute adiabatic heating HA in P nodes
         # ---------------------------------------------------------------------
-        # 1567-1614
-        # compute_HA_p_nodes!(sp, dp, interp_arrays)
+        if timestep==1
+            # no pressure changes for the first timestep
+            pr0 .= pr
+            pf0 .= pf
+            ps0 .= pf
+        end
+        compute_adiabatic_heating!(
+            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
 
-
-# Tue 26
         # ---------------------------------------------------------------------
         # # perform thermal iterations
         # ---------------------------------------------------------------------
