@@ -3796,43 +3796,45 @@ function compute_adiabatic_heating!(
     HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
 # @timeit to "compute_adiabatic_heating!" begin
     @unpack Nx, Ny, Nx1, Ny1, dx, dy = sp
-    for j=2:1:Nx, i=2:1:Ny
-        # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
-        # average vy, vx, vxf, vyf
-        VXP = 0.5 * (vx[i, j]+vx[i, j-1])
-        VYP = 0.5 * (vy[i, j]+vy[i-1, j])
-        VXFP = 0.5 * (vxf[i, j]+vxf[i, j-1])
-        VYFP = 0.5 * (vyf[i, j]+vyf[i-1, j])
-        # evaluate DPsolid/Dt with upwind differences
-        if VXP < 0.0
-            dpsdx = (ps[i,j]-ps[i,j-1]) / dx
-        else
-            dpsdx = (ps[i,j+1]-ps[i,j]) / dx
+    @inbounds begin
+        for j=2:1:Nx, i=2:1:Ny
+            # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
+            # average vy, vx, vxf, vyf
+            VXP = 0.5 * (vx[i, j]+vx[i, j-1])
+            VYP = 0.5 * (vy[i, j]+vy[i-1, j])
+            VXFP = 0.5 * (vxf[i, j]+vxf[i, j-1])
+            VYFP = 0.5 * (vyf[i, j]+vyf[i-1, j])
+            # evaluate DPsolid/Dt with upwind differences
+            if VXP < 0.0
+                dpsdx = (ps[i,j]-ps[i,j-1]) / dx
+            else
+                dpsdx = (ps[i,j+1]-ps[i,j]) / dx
+            end
+            if VYP < 0.0
+                dpsdy = (ps[i,j]-ps[i-1,j]) / dy
+            else
+                dpsdy = (ps[i+1,j]-ps[i,j]) / dy
+            end
+            dpsdt = VXP*dpsdx + VYP*dpsdy
+            # evaluate DPfluid/Dt with upwind differences
+            if VXFP > 0.0
+                dpfdx = (pf[i,j]-pf[i,j-1]) / dx
+            else
+                dpfdx = (pf[i,j+1]-pf[i,j]) / dx
+            end
+            if VYFP > 0.0
+                dpfdy = (pf[i,j]-pf[i-1,j]) / dy
+            else
+                dpfdy = (pf[i+1,j]-pf[i,j]) / dy
+            end
+            dpfdt = VXFP*dpsdx + VYFP*dpsdy
+            # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
+            HA[i, j] = (
+                (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
+                + PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
+            )
         end
-        if VYP < 0.0
-            dpsdy = (ps[i,j]-ps[i-1,j]) / dy
-        else
-            dpsdy = (ps[i+1,j]-ps[i,j]) / dy
-        end
-        dpsdt = VXP*dpsdx + VYP*dpsdy
-        # evaluate DPfluid/Dt with upwind differences
-        if VXFP > 0.0
-            dpfdx = (pf[i,j]-pf[i,j-1]) / dx
-        else
-            dpfdx = (pf[i,j+1]-pf[i,j]) / dx
-        end
-        if VYFP > 0.0
-            dpfdy = (pf[i,j]-pf[i-1,j]) / dy
-        else
-            dpfdy = (pf[i+1,j]-pf[i,j]) / dy
-        end
-        dpfdt = VXFP*dpsdx + VYFP*dpsdy
-        # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
-        HA[i, j] = (
-            (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
-            + PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
-        )
-    end
+    end # @inbounds
 # end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
 
@@ -3875,6 +3877,8 @@ end # function compute_adiabatic_heating!
 # # end # @timeit to "compute_adiabatic_heating!"
 #     return nothing
 # end # function compute_adiabatic_heating!
+
+
 
 
 """
