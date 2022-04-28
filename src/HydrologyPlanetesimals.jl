@@ -4813,16 +4813,9 @@ end # @timeit to "solve system"
             pf0 .= pf
             ps0 .= pf
         end
-        compute_adiabatic_heating!(
-            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
+        perform_thermal_iterations!(
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, dtm, sp)
 
-        # ---------------------------------------------------------------------
-        # # perform thermal iterations
-        # ---------------------------------------------------------------------
-        # 1618-1725
-        # # ~100 lines MATLAB
-
-#Tue 26 
         # ---------------------------------------------------------------------
         # # apply subgrid temperature diffusion on markers
         # ---------------------------------------------------------------------
