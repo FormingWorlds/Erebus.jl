@@ -384,7 +384,7 @@ $(SIGNATURES)
     - EXX : ϵxx at P nodes [1/s]
     - SXX : σ′xx at P nodes [1/s]
     - SXX0 : σ₀′xx at P nodes [1/s]
-    - tk1 : previous temperature at P nodes [K]
+    - tk1 : current temperature at P nodes [K]
     - tk2 : next temperature at P nodes [K]
     - vxp : solid vx in pressure nodes at P nodes [m/s]
     - vyp : solid vy in pressure nodes at P nodes [m/s]
@@ -490,7 +490,7 @@ function setup_staggered_grid_properties(sp; randomized=false)
     SXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # σ₀′ (SIGMA0'xx) [1/s]
     SXX0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
-    # previous temperature [K]
+    # current temperature [K]
     tk1 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # next temperature [K]
     tk2 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
@@ -565,7 +565,7 @@ function setup_staggered_grid_properties(sp; randomized=false)
         GGGP,
         EXX,
         SXX,
-        SXX0,
+        SXX0,       
         tk1,
         tk2,
         vxp,
@@ -616,6 +616,7 @@ $(SIGNATURES)
     - EII :second strain rate invariant at P nodes [1/s]
     - SII :second stress invariant at P nodes [Pa]
     - DSXX :stress change Δσ′xx at P nodes [Pa]
+    - tk0: previous temperature at P nodes [K]
 """
 function setup_staggered_grid_properties_helpers(sp; randomized=false)
     @unpack Nx, Ny, Nx1, Ny1 = sp
@@ -659,6 +660,8 @@ function setup_staggered_grid_properties_helpers(sp; randomized=false)
     SII = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # stress change Δσ′xx at P nodes [Pa]
     DSXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous temperature at P nodes [K]
+    tk0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     return (
         ETA5,
         ETA00,
@@ -677,7 +680,8 @@ function setup_staggered_grid_properties_helpers(sp; randomized=false)
         SYYcomp,
         EII,
         SII,
-        DSXX
+        DSXX,
+        tk0
     )
 end # function setup_staggered_grid_properties_helpers()
 
@@ -3879,6 +3883,155 @@ end # function compute_adiabatic_heating!
 # end # function compute_adiabatic_heating!
 
 
+"""
+Perform thermal iterations to time step thermal field at P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - tk0: previous temperature at P nodes 
+	- tk1: current temperature at P nodes
+	- tk2: next temperature at P nodes 
+	- DT: calculated temperature difference at P nodes 
+	- DT0: previous calculated temperature difference at P nodes
+	- RHOCP: volumetric heat capacity at P nodes  
+	- KX: thermal conductivity at Vx nodes
+	- KY: thermal conductivity at Vy nodes 
+	- HR: radioactive heating at P nodes
+	- HA: adiabatic heating at P nodes 
+	- HS: shear heating at P nodes 
+	- dtm: displacement time step
+	- sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function perform_thermal_iterations!(
+    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, dtm, sp)
+# @timeit to "assemble_hydromechanical_lse!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        dx,
+        dy,
+        DTmax = sp
+    # set up thermal iterations
+    @. tk0 = tk1
+    dtt = dtm
+    dttsum = 0.0
+    titer = 1
+    RT = zeros(Ny1*Nx1)
+    ST = zeros(Ny1*Nx1)
+    # perform thermal iterations until reaching time limit
+    while dttsum < dtm
+        # reset LSE 
+        LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+        @. RT = 0.0
+        # compose global thermal matrix LT and coefficient vector RT
+        for j=1:1:Nx1, i=1:1:Ny1
+            # define global index in algebraic space
+            gk = (j-1)*Ny1 + i
+            # External points
+            if i==1 || i==Ny1 || j==1 || j==Nx1
+                # thermal equation external points: boundary conditions
+                # all locations: ghost unknowns T₃=0 -> 1.0⋅T[i,j]=0.0
+                updateindex!(LT, +, 1.0, gk, gk)
+                # R[gk] = 0.0 # already done with initialization
+                # left boundary: ∂T/∂x=0
+                if j == 1
+                    updateindex!(LT, +, -1.0, gk, gk+Ny1)
+                end
+                # right boundary: ∂T/∂x=0
+                if j == Nx1
+                    updateindex!(LT, +, -1.0, gk, gk-Ny1)
+                end
+                # top inner boundary: ∂T/∂y=0
+                if i==1 && 1<j<Nx1 
+                    updateindex!(LT, +, -1.0, gk, gk+1)
+                end
+                # bottom inner boundary: ∂T/∂y=0
+                if i==Ny1 && 1<j<Nx1 
+                    updateindex!(LT, +, -1.0, gk, gk-1)
+                end
+            else
+                # internal points: 2D thermal equation (conservative formulation)
+                # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ
+                #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ (eq 10.9) 
+                # in case of purely advective heat transport: ∂T/∂t+⃗v⋅∇T = 0
+                #
+                #                      gk-1
+                #                        T₂
+                #                        |
+                #                       i-1,j
+                #                       Ky₁
+                #                       qy₁
+                #                        |
+                #         gk-Ny1 i,j-1  gk     i,j  gk+Ny1
+                #           T₁----Kx₁----T₃----Kx₂----T₅
+                #                 qx₁    |     qx₂
+                #                       i,j
+                #                       Ky₂
+                #                       qy₂
+                #                        |
+                #                      gk+1
+                #                        T₄
+                #
+                # extract thermal conductivities
+                Kx₁ = KX[i, j-1] 
+                Kx₂ = KX[i, j]
+                Ky₁ = KY[i-1, j]
+                Ky₂ = KY[i, j]
+                # fill system of equations: LHS (10.9)
+                updateindex!(LT, +, -Kx₁/dx^2, gk, gk-Ny1) # T₁
+                updateindex!(LT, +, -Ky₁/dy^2, gk, gk-1) # T₂
+                updateindex!(LT, +, (
+                    RHOCP[i, j]/dtt
+                    + (Kx₁+Kx₂)/dx^2
+                    + (Ky₁+Ky₂)/dy^2),
+                    gk,
+                    gk
+                ) # T₃
+                updateindex!(LT, +, -Ky₂/dy^2, gk, gk+1) # T₄
+                updateindex!(LT, +, -Kx₂/dx^2, gk, gk+Ny1) # T₅
+                # fill system of equations: RHS (10.9)
+                RT[gk] = (
+                    RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
+
+            end
+        end
+        # solve system of equations
+        ST .= LT \ RT # implicit: flush!(LT)
+        # reshape solution vector to 2D array
+        tk2 .= reshape(ST, Ny1, Nx1)
+        # compute ΔT
+        @. DT = tk2 - tk1
+        if titer == 1
+            # during first thermal iteration pass:
+            # apply thermal timestepping stability condition
+            maxDTcurrent = maximum(abs, DT)
+            if maxDTcurrent > DTmax
+                dtt *= DTmax / maxDTcurrent
+            else
+                dttsum += dtt
+            end
+        else
+            # second+ thermal iteration passes:
+            # update dttsum and adjust timestep
+            dttsum += dtt
+            dtt = min(dtt, dtm-dttsum)
+        end
+        # increase thermal iteration counter
+        titer += 1
+    end
+    # finalize overall temperature change and advance temperature field
+    @. DT = tk2 - tk0
+    @. DT0 = DT
+# end # @timeit to "perform_thermal_iterations!"
+    return nothing
+end # function perform_thermal_iterations!
 
 
 """
@@ -4651,7 +4804,8 @@ end # @timeit to "solve system"
         )
 
         # ---------------------------------------------------------------------
-        # # compute adiabatic heating HA in P nodes
+        # compute adiabatic heating HA in P nodes
+        # perform thermal iterations
         # ---------------------------------------------------------------------
         if timestep==1
             # no pressure changes for the first timestep

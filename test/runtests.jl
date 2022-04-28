@@ -289,7 +289,8 @@ using Test
             SYYcomp,
             EII,
             SII,
-            DSXX
+            DSXX,
+            tk0
         ) = HydrologyPlanetesimals.setup_staggered_grid_properties_helpers(sp)
         # test
         @test ETA5 == zeros(Float64, Ny, Nx)
@@ -310,6 +311,7 @@ using Test
         @test EII == zeros(Float64, Ny1, Nx1)
         @test SII == zeros(Float64, Ny1, Nx1)
         @test DSXX == zeros(Float64, Ny1, Nx1)
+        @test tk0 == zeros(Float64, Ny1, Nx1)
     end # testset "setup_staggered_grid_properties_helpers()"
 
     @testset "setup_interpolated_properties()" begin
@@ -4208,7 +4210,7 @@ using Test
     end # testset "compute_shear_heating!()"
 
     @testset "compute_adiabatic_heating!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
+        sp = HydrologyPlanetesimals.StaticParameters(Nx=20, Ny=20)
         Nx, Ny = sp.Nx, sp.Ny
         Nx1, Ny1 = sp.Nx1, sp.Ny1
         dx, dy = sp.dx, sp.dy
@@ -4271,5 +4273,143 @@ using Test
         # test
         @test HA ≈ HA_ver atol=1e-6
     end # testset "compute_adiabatic_heating!()"
+
+    @testset "perform_thermal_iterations!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nx=4, Ny=4)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        DTmax = sp.DTmax
+        dtm = 0.0001
+        tk0 = rand(Ny1, Nx1)
+        tk1 = rand(Ny1, Nx1)
+        tk2 = rand(Ny1, Nx1)
+        RHOCP = rand(Ny1, Nx1)
+        KX = rand(Ny1, Nx1)
+        KY = rand(Ny1, Nx1)
+        HR = rand(Ny1, Nx1)
+        HA = rand(Ny1, Nx1)
+        HS = rand(Ny1, Nx1)
+        DT = zeros(Ny1, Nx1)
+        DT0 = zeros(Ny1, Nx1)
+        DT_ver = zeros(Ny1, Nx1)
+        DT0_ver = zeros(Ny1, Nx1)
+        tk0_ver = copy(tk0)
+        tk1_ver = copy(tk1)
+        tk2_ver = copy(tk2)
+        # perform thermal iterations
+        HydrologyPlanetesimals.perform_thermal_iterations!(
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, dtm, sp)
+        # verification, from madcph.m, line 1618ff
+        LT = zeros(Ny1*Nx1, Ny1*Nx1)
+        RT = zeros(Ny1*Nx1)
+        ST = zeros(Ny1*Nx1)
+        tk0_ver=tk1_ver
+        dtt=dtm
+        dttsum=0
+        titer=1
+        while dttsum<dtm
+        # Composing global matrixes LT[], RT[]
+        # Going through all points of the 2D grid &
+        # composing respective equations
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Define global index in algebraic space
+                gk=(j-1)*Ny1+i
+                # External points
+                if i==1 || i==Ny1 || j==1 || j==Nx1
+                    # Boundary Condition
+                    # Top BC: T=273
+                    if i==1 && j>1 && j<Nx1
+                        LT[gk,gk]=1; # Left part
+                        LT[gk,gk+1]=-1; # Left part
+                        RT[gk]=0; # Right part
+                    end
+                    # Bottom BC: T=1500
+                    if i==Ny1 && j>1 && j<Nx1
+                        LT[gk,gk]=1; # Left part
+                        LT[gk,gk-1]=-1; # Left part
+                        RT[gk]=0; # Right part
+                    end
+                    # Left BC: dT/dx=0
+                    if j==1
+                        LT[gk,gk]=1; # Left part
+                        LT[gk,gk+Ny1]=-1; # Left part
+                        RT[gk]=0; # Right part
+                    end
+                    # Right BC: dT/dx=0
+                    if j==Nx1
+                        LT[gk,gk]=1; # Left part
+                        LT[gk,gk-Ny1]=-1; # Left part
+                        RT[gk]=0; # Right part
+                    end
+                else
+                # Internal points: Temperature eq.
+                # RHO*CP*dT/dt=-dqx/dx-dqy/dy+Hr+Hs+Ha
+                #          Tdt2
+                #           |
+                #          Ky1
+                #           |
+                #Tdt1-Kx1-T03;Tdt3-Kx2-Tdt5
+                #           |
+                #          Ky2
+                #           |
+                #          Tdt4
+                #
+                # Left part
+                Kx1=KX[i,j-1]; 
+                Kx2=KX[i,j]; 
+                Ky1=KY[i-1,j]; 
+                Ky2=KY[i,j]; 
+                LT[gk,gk-Ny1]=-Kx1/dx^2; # T1
+                LT[gk,gk-1]=-Ky1/dy^2; # FI2
+                LT[gk,gk]=RHOCP[i,j]/dtt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
+                LT[gk,gk+1]=-Ky2/dy^2; # FI4
+                LT[gk,gk+Ny1]=-Kx2/dx^2; # FI5
+                # Right part
+                RT[gk]=RHOCP[i,j]/dtt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]
+                end
+            end
+        end
+        # Solving matrixes
+        ST=LT\RT; # Obtaining algebraic vector of solutions ST[]
+        # Reload solutions ST[] to geometrical array Tdt[]
+        # Going through all grid points
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Compute global index
+                gk=(j-1)*Ny1+i
+                # Reload solution
+                tk2_ver[i,j]=ST[gk]
+            end
+        end
+        # Compute DT
+        DT_ver=tk2_ver-tk1_ver
+        titer
+        dtt
+        if titer==1
+            # Apply thermal timestepping condition
+            maxDTcurrent=maximum(abs, DT_ver)
+            if maxDTcurrent>DTmax 
+                dtt=dtt/maxDTcurrent*DTmax
+            else
+                dttsum=dttsum+dtt; # Update dttsum
+            end
+        else
+            dttsum=dttsum+dtt; # Update dttsum
+            # Adjust timestep
+            if dtt>dtm-dttsum
+                dtt=dtm-dttsum
+            end
+        end
+        titer=titer+1; # Update iteration counter
+        end
+        # Compute/save overall temperature changes
+        DT_ver=tk2_ver-tk0_ver
+        DT0_ver=DT_ver
+        # test
+        @test DT ≈ DT_ver atol=1e-6
+        @test DT0 ≈ DT0_ver atol=1e-6
+    end # testset "perform_thermal_iterations!()"
 end
 

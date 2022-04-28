@@ -186,3 +186,19 @@ dpfdx = zeros(142,142)
 dpfdy = zeros(142,142)
 dpsdt = zeros(142,142)
 dpfdt = zeros(142,142)
+
+sp = HydrologyPlanetesimals.StaticParameters()
+Nx, Ny, Nx1, Ny1 = sp.Nx, sp.Ny, sp.Nx1, sp.Ny1
+tk0 = rand(Ny1, Nx1)
+tk1 = rand(Ny1, Nx1)
+tk2 = rand(Ny1, Nx1)
+DT = rand(Ny1, Nx1)
+DT0 = rand(Ny1, Nx1)
+RHOCP = rand(Ny1, Nx1)
+KX = rand(Ny1, Nx1)
+KY = rand(Ny1, Nx1)
+HR = rand(Ny1, Nx1)
+HA = rand(Ny1, Nx1)
+HS = rand(Ny1, Nx1)
+dtm = 1.0
+
