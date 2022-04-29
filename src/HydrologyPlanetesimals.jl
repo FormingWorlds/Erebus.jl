@@ -3666,7 +3666,6 @@ $(SIGNATURES)
 
 # Details
 
-    - m: marker number
     - xm: x-coordinates of markers
     - ym: y-coordinates of markers
     - sxxm: marker σ′xx [Pa]
@@ -3695,8 +3694,7 @@ function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum, sp)
         jmin_p,
         jmax_p,
         imin_p,
-        imax_p,
-        dsubgrids = sp
+        imax_p = sp
     @threads for m=1:1:marknum    
         i_p, j_p, weights_p = fix_weights(
             xm[m],
@@ -4122,7 +4120,6 @@ function apply_subgrid_temperature_diffusion!(
             ktotalm = ksolidm[tm[m]]
         end
         # time-relax δtkm difference
-        @info "orig" m δtkm
         δtkm *= (
             exp(-dsubgridt*ktotalm*dtm/rhocptotalm*(2.0/dx^2+2.0/dy^2)) - 1.0)
         # correct marker temperature
@@ -4146,37 +4143,53 @@ end # function apply_subgrid_temperature_diffusion!
 
 
 """
-Update marker temperature based on P grid temperature changes
+Update marker temperature based on P grid temperature changes.
 
 $(SIGNATURES)
 
 # Details
 
-    - xm:
-    - ym:
-    - tkm:
-    - tk1:
-    - marknum:
+    - xm: x-coordinates of markers
+    - ym: y-coordinates of markers
+    - tkm: marker temperature
+    - DT: temperature change at P nodes
+    - tk2: next temperature at P nodes
+    - timestep: current time step
+    - marknum: total number of markers in use
     - sp: static simulation parameters
 
 # Returns
 
     - nothing
 # """
-# function update_marker_temperature!(xm, ym, tkm, tk1, marknum, sp)
-# # @timeit to "update_marker_temperature!" begin
-#     @unpack dx,
-#         dy,
-#        = sp
-#     @threads for m=1:1:marknum
-#         i, j, weights = fix_weights(
-#         xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
-
-
-
+function update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum, sp)
+# @timeit to "update_marker_temperature!" begin
+    @unpack dx,
+        dy,
+        xp,
+        yp,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p = sp
+    if timestep == 1
+        # interpolate tk2 to markers instead of DT for first time step        
+        @threads for m=1:1:marknum
+            @inbounds i, j, weights = fix_weights(
+                xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+            interpolate_to_marker!(m, i, j, weights, tkm, tk2)
+        end
+    else
+        # interpolate and apply DT to markers for subsequent time steps
+        @threads for m=1:1:marknum
+            @inbounds i, j, weights = fix_weights(
+                xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+            interpolate_add_to_marker!(m, i, j, weights, tkm, DT)
+        end
+    end
 # end # @timeit to "update_marker_temperature!"
-#     return nothing
-# end # function update_marker_temperature!
+    return nothing
+end # function update_marker_temperature!
 
 
 """

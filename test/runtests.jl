@@ -4424,7 +4424,7 @@ using Test
     end # testset "perform_thermal_iterations!()"
 
     @testset "apply_subgrid_temperature_diffusion!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nx=5,Ny=5,
+        sp = HydrologyPlanetesimals.StaticParameters(
             Nxmc=1, Nymc=1, dsubgridt=0.5)
         Nx, Ny = sp.Nx, sp.Ny
         Nx1, Ny1 = sp.Nx1, sp.Ny1
@@ -4526,5 +4526,59 @@ using Test
         @test tkm ≈ tkm_ver atol=1e-6
         @test DT ≈ DT_ver atol=1e-6
     end # testset "apply_subgrid_temperature_diffusion!()"
+
+    @testset "update_marker_temperature!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        marknum = sp.start_marknum
+        x, y = sp.x, sp.y
+        xp, yp = sp.xp, sp.yp
+        dx, dy = sp.dx, sp.dy
+        # simulate markers
+        xm = rand(-dx:0.1:x[end]+dx, marknum)
+        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        DT = rand(Ny1, Nx1)
+        tk2 = rand(Ny1, Nx1)
+        for timestep = 1:2
+            tkm = rand(marknum)
+            tkm_ver = copy(tkm)
+            # update marker temperature
+            HydrologyPlanetesimals.update_marker_temperature!(
+                xm, ym, tkm, DT, tk2, timestep, marknum, sp)
+            # verification, from madcph.m, line 1805ff 
+            for m=1:1:marknum
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1
+                    i=1
+                elseif i>Ny
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                tkm_ver[m]=tkm_ver[m]+DT[i,j]*wtmij+DT[i+1,j]*wtmi1j+ DT[i,j+1]*wtmij1+DT[i+1,j+1]*wtmi1j1
+                # Interpolate tk2 at 1st timestep
+                if timestep==1
+                    tkm_ver[m]=tk2[i,j]*wtmij+tk2[i+1,j]*wtmi1j+ tk2[i,j+1]*wtmij1+tk2[i+1,j+1]*wtmi1j1
+                end
+            end
+            # test
+            @test tkm ≈ tkm_ver atol=1e-6
+        end # for timestep = 1:2
+    end # testset "update_marker_temperature!()"
 end
 

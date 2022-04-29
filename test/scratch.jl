@@ -231,3 +231,18 @@ tk1 = rand(Ny1, Nx1)
 DT = rand(Ny1, Nx1)
 TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
 RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+
+
+
+sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+    Nx, Ny = sp.Nx, sp.Ny
+    Nx1, Ny1 = sp.Nx1, sp.Ny1
+    marknum = sp.start_marknum
+    x, y = sp.x, sp.y
+    xp, yp = sp.xp, sp.yp
+    dx, dy = sp.dx, sp.dy
+    # simulate markers
+    xm = rand(-dx:0.1:x[end]+dx, marknum)
+    ym = rand(-dy:0.1:y[end]+dy, marknum)
+    DT = rand(Ny1, Nx1)
+    tk2 = rand(Ny1, Nx1)
