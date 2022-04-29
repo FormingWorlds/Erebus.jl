@@ -4351,6 +4351,36 @@ end # function compute_velocities!
 
 
 """
+Compute rotatation rate in basic nodes based on velocity derivatives
+at Vx and Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - vx: solid vx-velocity at Vx nodes
+    - vy: solid vy-velocity at Vy nodes
+    - wyx: rotation rate at basic nodes
+
+# Returns
+
+    - nothing
+"""
+function compute_rotation_rate!(vx, vy, wyx, sp)
+@timeit to "compute_rotation_rate!" begin
+    @unpack Nx, Ny, dx, dy = sp
+    # compute rotation rate ωyx=1/2[∂Vy/∂x-∂Vx/∂y] at basic nodes
+    for j=1:1:Nx, i=1:1:Ny
+        @inbounds wyx[i, j] = 0.5 * (
+        (vy[i, j+1]-vy[i, j])/dx - (vx[i+1, j]-vx[i, j])/dy
+        )
+    end
+end # @timeit to "compute_rotation_rate!"
+    return nothing
+end # function compute_rotation_rate!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -5133,67 +5163,45 @@ end # @timeit to "solve system"
             tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, dtm, sp)
 
         # ---------------------------------------------------------------------
-        # # apply subgrid temperature diffusion on markers
+        # apply subgrid temperature diffusion on markers
+        # compute DTsubgrid
         # ---------------------------------------------------------------------
-        # 1729-1786
-        # for m = 1:1:marknum
-        #     # ~50 lines MATLAB
-        # end
+        apply_subgrid_temperature_diffusion!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            phim,
+            tk1,
+            DT,
+            TKSUM,
+            RHOCPSUM,
+            dtm,
+            marknum,
+            sp
+        )
 
-
-# Tue 26
         # ---------------------------------------------------------------------
-        # # compute DTsubgrid
+        # interpolate DT to markers
         # ---------------------------------------------------------------------
-        # 1787-1799
-        # compute_DT_subgrid!(sp, dp, interp_arrays)
+        update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum, sp)
 
-
-# Tue 26
         # ---------------------------------------------------------------------
-        # # interpolate DT to markers
+        # update porosity on markers
         # ---------------------------------------------------------------------
-        # 1803-1833
-        # for m = 1:1:marknum
-        #     # ~30 lines MATLAB
-        # end
+        update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum, sp)
 
-
-# Tue 26
         # ---------------------------------------------------------------------
-        # # update porosity on markers
+        # compute velocity in P nodes
+        # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
-        # 1838-1873
-        # for m = 1:1:marknum
-        #     # ~30 lines MATLAB
-        # end
+        compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
 
-
-# Wed 27
         # ---------------------------------------------------------------------
-        # # compute fluid velocity in P nodes including boundary conditions
+        # compute rotation rate in basic nodes
         # ---------------------------------------------------------------------
-        # 1877-1905
-        # compute_v_fluid_p_nodes(sp, dp, interp_arrays)
+        compute_rotation_rate!(vx, vy, wyx, sp)
 
-
-# Wed 27
-        # ---------------------------------------------------------------------
-        # # compute velocity in P nodes
-        # ---------------------------------------------------------------------
-        # 1909-1937
-        # compute_v_p_nodes!(sp, dp, interp_arrays)
-
-
-# Wed 27
-        # ---------------------------------------------------------------------
-        # # compute rotation rate in basic nodes
-        # ---------------------------------------------------------------------
-        # 1940-1944
-        # compute_ω_basic_nodes!(sp, dp, interp_arrays)
-
-
-# Thu 28
         # ---------------------------------------------------------------------
         # # move markers with RK4
         # ---------------------------------------------------------------------
@@ -5202,20 +5210,16 @@ end # @timeit to "solve system"
         #     # ~300 lines MATLAB
         # end
 
-
-# Fri 29
         # ---------------------------------------------------------------------
         # # backtrack P nodes: Ptotal with RK4
         # ---------------------------------------------------------------------
         # 2231-2360
 
-# Fri 29
         # ---------------------------------------------------------------------
         # # backtrack P nodes: Pfluid with RK1/2/3
         # ---------------------------------------------------------------------
         # 2364-2487
 
-# Sat 30
         # ---------------------------------------------------------------------
         # # replenish sparse areas with additional markers
         # ---------------------------------------------------------------------
@@ -5224,24 +5228,20 @@ end # @timeit to "solve system"
         #     # ~100 lines MATLAB
         # end
 
-# Sat 30
         # ---------------------------------------------------------------------
         # # update timesum
         # ---------------------------------------------------------------------
 
-# Sat 30
         # ---------------------------------------------------------------------
         # # save data for analysis and visualization
         # ---------------------------------------------------------------------
 
-# Sat 30
         # ---------------------------------------------------------------------
         # # save old stresses - RMK: not used anywhere in code ?
         # ---------------------------------------------------------------------
         # # sxxm00 = sxxm 
         # # sxym00 = sxym    
 
-# Sat 30
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------

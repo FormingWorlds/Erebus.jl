@@ -258,4 +258,5 @@ sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
     vyp = zeros(Ny1, Nx1)
     vxpf = zeros(Ny1, Nx1)
     vypf = zeros(Ny1, Nx1)
+    wyx = zeros(Ny1, Nx1)
     

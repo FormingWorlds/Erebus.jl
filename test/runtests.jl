@@ -4737,5 +4737,27 @@ using Test
         @test vypf ≈ vypf_ver atol=1e-6
     end # testset "compute_velocities!()"
 
+    @testset "compute_rotation_rate!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        wyx = zeros(Ny, Nx)
+        wyx_ver = zero(wyx)
+        # compute rotation rate
+        HydrologyPlanetesimals.compute_rotation_rate!(vx, vy, wyx, sp)
+        # verification, from madcph.m, line 1942ff:
+        # Compute rotation rate wyx=1/2[dVy/dx-dVx/dy] for basic nodes
+        for i=1:1:Ny
+            for j=1:1:Nx
+                wyx_ver[i,j]=0.5*((vy[i,j+1]-vy[i,j])/dx-(vx[i+1,j]-vx[i,j])/dy)
+            end
+        end
+        # test
+        @test wyx ≈ wyx_ver atol=1e-6
+    end # testset "compute_rotation_rate!()"
+
 end
 
