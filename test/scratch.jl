@@ -246,3 +246,16 @@ sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
     ym = rand(-dy:0.1:y[end]+dy, marknum)
     DT = rand(Ny1, Nx1)
     tk2 = rand(Ny1, Nx1)
+    APHI = rand(Ny1, Nx1)
+
+
+    sp = HydrologyPlanetesimals.StaticParameters()
+    vx = rand(Ny1, Nx1)
+    vy = rand(Ny1, Nx1)
+    vxf = rand(Ny1, Nx1)
+    vyf = rand(Ny1, Nx1)
+    vxp = zeros(Ny1, Nx1)
+    vyp = zeros(Ny1, Nx1)
+    vxpf = zeros(Ny1, Nx1)
+    vypf = zeros(Ny1, Nx1)
+    

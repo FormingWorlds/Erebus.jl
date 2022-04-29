@@ -4193,6 +4193,164 @@ end # function update_marker_temperature!
 
 
 """
+Update marker porosity based on Dln[(1-ϕ)/ϕ]/Dt at P grid.
+
+$(SIGNATURES)
+
+# Details
+
+    - xm: x-coordinates of markers
+    - ym: y-coordinates of markers
+    - tm: marker type
+    - phim: marker porosity
+    - APHI: Dln[(1-ϕ)/ϕ]/Dt at P nodes
+    - dtm: displacement time step
+    - marknum: total number of markers in use
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+# """
+function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum, sp)
+# @timeit to "update_marker_porosity!" begin
+    @unpack dx,
+        dy,
+        xp,
+        yp,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p,
+        phimin,
+        phimax = sp
+    # interpolate and apply DT to markers for subsequent time steps
+    @inbounds begin
+        @threads for m=1:1:marknum
+            if tm[m] < 3
+                # rocks
+                i, j, weights = fix_weights(
+                    xm[m],
+                    ym[m],
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                # compute Dln[(1-ϕ)/ϕ]/Dt at marker
+                aphim = dot(grid_vector(i, j, APHI), weights)
+                # update marker porosity
+                phim[m] = max(
+                    phimin,
+                    min(
+                        phimax,
+                        phim[m]/((1-phim[m])*exp(aphim*dtm)+phim[m])
+                    )
+                )
+            end
+        end
+    end # @inbounds
+# end # @timeit to "update_marker_porosity!"
+    return nothing
+end # function update_marker_porosity!
+
+
+""" 
+Compute solid velocities, fluid velocities at P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - vx: solid vx-velocity at Vx nodes
+    - vy: solid vy-velocity at Vy nodes
+    - vxf: fluid vx-velocity at Vx nodes
+    - vyf: fluid vy-velocity at Vy nodes
+    - vxp: solid vx-velocity at P nodes
+    - vyp: solid vy-velocity at P nodes
+    - vxpf: fluid vx-velocity at P nodes
+    - vypf: fluid vy-velocity at P nodes
+
+# Returns
+
+    - nothing
+"""
+function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
+@timeit to "compute_velocities!" begin
+    @unpack Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        dx,
+        dy,
+        bctop,
+        bcbottom,
+        bcleft,
+        bcright,
+        bcftop,
+        bcfbottom,
+        bcfleft,
+        bcfright,
+        vxleft,
+        vxright,
+        vytop,
+        vybottom = sp
+    @inbounds begin
+        # compute solid velocities at P nodes
+        for j=2:1:Nx, i=2:1:Ny
+            vxp[i, j] = 0.5 * (vx[i, j] + vx[i, j-1]) 
+            vyp[i, j] = 0.5 * (vy[i, j] + vy[i-1, j])
+            vxpf[i, j] = 0.5 * (vxf[i, j] + vxf[i, j-1]) 
+            vypf[i, j] = 0.5 * (vyf[i, j] + vyf[i-1, j])
+        end
+        # apply boundary conditions
+        # vxp
+        # top: free slip
+        @views @. vxp[1, 2:Nx-1] =- bctop * vxp[2, 2:Nx-1]    
+        # bottom: free slip
+        @views @. vxp[Ny1, 2:Nx-1] =- bcbottom * vxp[Ny, 2:Nx-1]    
+        # left
+        @views @. vxp[:, 1] = 2.0*vxleft - vxp[:, 2]
+        # right
+        @views @. vxp[:, Nx1] = 2.0*vxright - vxp[:, Nx]
+        # vyp
+        # left: free slip
+        @views @. vyp[2:Ny-1, 1] =- bcleft * vyp[2:Ny-1, 2]    
+        # right: free slip
+        @views @. vyp[2:Ny-1, Nx1] =- bcright * vyp[2:Ny-1, Nx]
+        # top
+        @views @. vyp[1, :] = 2.0*vytop - vyp[2, :]
+        # bottom
+        @views @. vyp[Ny1, :] = 2.0*vybottom - vyp[Ny, :]
+        # vxpf
+        # top: free slip
+        @views @. vxpf[1, 2:Nx-1] =- bcftop * vxpf[2, 2:Nx-1]    
+        # bottom: free slip
+        @views @. vxpf[Ny1, 2:Nx-1] =- bcfbottom * vxpf[Ny, 2:Nx-1]    
+        # left
+        @views @. vxpf[:,1] = 2.0*vxleft - vxpf[:, 2]
+        # right
+        @views @. vxpf[:, Nx1] = 2.0*vxright - vxpf[:, Nx]
+        # vypf
+        # left: free slip
+        @views @. vypf[2:Ny-1, 1] =- bcfleft * vypf[2:Ny-1, 2]    
+        # right: free slip
+        @views @. vypf[2:Ny-1, Nx1] =- bcfright * vypf[2:Ny-1, Nx]
+        # top
+        @views @. vypf[1, :] = 2.0*vytop - vypf[2, :]
+        # bottom
+        @views @. vypf[Ny1,:] = 2.0*vybottom - vypf[Ny, :]
+    end # @inbounds
+end # @timeit to "compute_velocities!"
+    return nothing
+end # function compute_velocities!
+
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)

@@ -4580,5 +4580,162 @@ using Test
             @test tkm ≈ tkm_ver atol=1e-6
         end # for timestep = 1:2
     end # testset "update_marker_temperature!()"
+
+    @testset "update_marker_porosity!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        marknum = sp.start_marknum
+        x, y = sp.x, sp.y
+        xp, yp = sp.xp, sp.yp
+        dx, dy = sp.dx, sp.dy
+        dtm = sp.dtelastic
+        phimin, phimax = sp.phimin, sp.phimax
+        # simulate markers
+        xm = rand(-dx:0.1:x[end]+dx, marknum)
+        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        tm = rand(1:3, marknum)
+        APHI = rand(Ny1, Nx1)
+        phim = rand(marknum)
+        phim_ver = copy(phim)
+        # update marker porosity
+        HydrologyPlanetesimals. update_marker_porosity!(
+            xm, ym, tm, phim, APHI, dtm, marknum, sp)
+        # verification, from madcph.m, line 1805ff 
+        for m=1:1:marknum
+            if tm[m]<3
+                # Interpolate APHI
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1
+                    i=1
+                elseif i>Ny
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Compute Dln[(1-PHI)/PHI]/Dt
+                aphim=APHI[i,j]*wtmij+APHI[i+1,j]*wtmi1j+ APHI[i,j+1]*wtmij1+APHI[i+1,j+1]*wtmi1j1
+                # Change Porosity
+                phim_ver[m]=phim_ver[m]/((1-phim_ver[m])*exp(aphim*dtm)+phim_ver[m])
+                if phim_ver[m]<phimin
+                    phim_ver[m]=phimin
+                elseif phim_ver[m]>phimax
+                    phim_ver[m]=phimax
+                end
+            end
+        end
+        # test
+        @test phim ≈ phim_ver atol=1e-6
+    end # testset "update_marker_porosity!()"
+    
+    @testset "compute_velocities!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        bctop, bcbottom = sp.bctop, sp.bcbottom
+        bcleft, bcright = sp.bcleft, sp.bcright
+        bcftop, bcfbottom = sp.bcftop, sp.bcfbottom
+        bcfleft, bcfright = sp.bcfleft, sp.bcfright
+        vxleft, vxright = sp.vxleft, sp.vxright
+        vytop, vybottom = sp.vytop, sp.vybottom
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        vxf = rand(Ny1, Nx1)
+        vyf = rand(Ny1, Nx1)
+        vxp = zeros(Ny1, Nx1)
+        vyp = zeros(Ny1, Nx1)
+        vxpf = zeros(Ny1, Nx1)
+        vypf = zeros(Ny1, Nx1)
+        vxp_ver = zero(vxp)
+        vyp_ver = zero(vyp)
+        vxpf_ver = zero(vxpf)
+        vypf_ver = zero(vypf)
+        # compute velocities
+        HydrologyPlanetesimals.compute_velocities!(
+            vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
+        # verification, from madcph.m, line 1879ff:
+        # Compute fluid velocity in pressure nodes
+        # vxpf
+        for j=2:1:Nx
+            for i=2:1:Ny
+                vxpf_ver[i,j]=(vxf[i,j]+vxf[i,j-1])/2
+            end
+        end
+        # Apply BC
+        # Top
+        @. vxpf_ver[1,2:Nx-1]=-bcftop*vxpf_ver[2,2:Nx-1];    
+        # Bottom
+        @. vxpf_ver[Ny1,2:Nx-1]=-bcfbottom*vxpf_ver[Ny,2:Nx-1];    
+        # Left
+        @. vxpf_ver[:,1]=2*vxleft-vxpf_ver[:,2]
+        # Right
+        @. vxpf_ver[:, Nx1]=2*vxright-vxpf_ver[:, Nx]
+        # vypf
+        for j=2:1:Nx
+            for i=2:1:Ny
+                vypf_ver[i,j]=(vyf[i,j]+vyf[i-1,j])/2
+            end
+        end    
+        # Apply BC
+        # Left
+        @. vypf_ver[2:Ny-1,1]=-bcfleft*vypf_ver[2:Ny-1,2];    
+        # Right
+        @. vypf_ver[2:Ny-1, Nx1]=-bcfright*vypf_ver[2:Ny-1, Nx]; # Free slip    
+        # Top
+        @. vypf_ver[1,:]=2*vytop-vypf_ver[2,:]
+        # Bottom
+        @. vypf_ver[Ny1,:]=2*vybottom-vypf_ver[Ny,:]
+        # Compute velocity in pressure nodes
+        # vx
+        for j=2:1:Nx
+            for i=2:1:Ny
+                vxp_ver[i,j]=(vx[i,j]+vx[i,j-1])/2
+            end
+        end
+        # Apply BC
+        # Top
+        @. vxp_ver[1,2:Nx-1]=-bctop*vxp_ver[2,2:Nx-1];    
+        # Bottom
+        @. vxp_ver[Ny1,2:Nx-1]=-bcbottom*vxp_ver[Ny,2:Nx-1];    
+        # Left
+        @. vxp_ver[:,1]=2*vxleft-vxp_ver[:,2]
+        # Right
+        @. vxp_ver[:, Nx1]=2*vxright-vxp_ver[:, Nx]
+        # vy
+        for j=2:1:Nx
+            for i=2:1:Ny
+                vyp_ver[i,j]=(vy[i,j]+vy[i-1,j])/2
+            end
+        end    
+        # Apply BC
+        # Left
+        @. vyp_ver[2:Ny-1,1]=-bcleft*vyp_ver[2:Ny-1,2];    
+        # Right
+        @. vyp_ver[2:Ny-1, Nx1]=-bcright*vyp_ver[2:Ny-1, Nx]; # Free slip    
+        # Top
+        @. vyp_ver[1,:]=2*vytop-vyp_ver[2,:]
+        # Bottom
+        @. vyp_ver[Ny1,:]=2*vybottom-vyp_ver[Ny,:]
+        # test
+        @test vxp ≈ vxp_ver atol=1e-6
+        @test vyp ≈ vyp_ver atol=1e-6
+        @test vxpf ≈ vxpf_ver atol=1e-6
+        @test vypf ≈ vypf_ver atol=1e-6
+    end # testset "compute_velocities!()"
+
 end
 
