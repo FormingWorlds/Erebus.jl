@@ -1239,14 +1239,14 @@ $(SIGNATURES)
 
     - fluid: fluid properties
     - solid: solid properties
-    - phi: fraction of fluid
+    - ϕ: porosity (fraction of fluid)
 
 # Returns
 
     - total: computed total property
 """
-function total(solid, fluid, phi)
-    return solid * (1.0-phi) + fluid * phi
+function total(solid, fluid, ϕ)
+    return solid*(1.0-ϕ) + fluid*ϕ
 end
 
 
@@ -1467,6 +1467,28 @@ function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # end # @timeit to "fix_weights"
     return i, j, weights
 end # function fix_weights
+
+
+"""
+Reduce a 3D (i, j, k) along its third (k) axis by addition and write the result
+into (i, j, 1) without reallocating the array's memory.
+
+$(SIGNATURES)
+
+# Details
+
+    - A: 3D array [i, j, k]
+
+# Returns
+
+    - nothing
+"""
+function reduce_add_3darray!(A)
+    for k in 2:size(A, 3), j in 1:size(A, 2), i in 1:size(A, 1)
+        @inbounds A[i, j, 1] += A[i, j, k]
+    end
+    return nothing
+end
 
 
 """
@@ -3571,7 +3593,7 @@ function apply_subgrid_stress_diffusion!(
         dsubgrids = sp
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
-        return
+        return nothing
     end 
     # fix etam[tm[m]] RMK: It's a temporary fix, not yet implemented in source
     etam = @SVector ones(3)
@@ -4032,6 +4054,129 @@ function perform_thermal_iterations!(
 # end # @timeit to "perform_thermal_iterations!"
     return nothing
 end # function perform_thermal_iterations!
+
+
+"""
+Apply subgrid temperature diffusion to markers.
+
+$(SIGNATURES)
+
+# Details
+
+    - xm: marker x-coordinates 
+	- ym: marker y-coordinates
+	- tm: marker type
+	- tkm: marker temperature
+    - phim: marker porosity
+    - tk1: current temperature at P nodes
+	- DT: temperature change at P nodes
+	- TKSUM: interpolation of TK at P nodes 
+	- RHOCPSUM: interpolation of RHOCP at P nodes
+    - dtm: displacement time step
+	- marknum: total number of markers in use
+	- sp: static simulation parameters
+
+# Returns
+
+    - nothing
+"""
+function apply_subgrid_temperature_diffusion!(
+    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum, sp)
+# @timeit to "apply_subgrid_temperature_diffusion!" begin
+    @unpack Nx1,
+        Ny1,
+        dx,
+        dy,
+        xp,
+        yp,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p,
+        dsubgridt,
+        rhocpsolidm,
+        rhocpfluidm,
+        ksolidm,
+        kfluidm = sp
+    # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
+    if dsubgridt == 0.0
+        return nothing
+    end
+    # reset interpolation arrays
+    TKSUM .= 0.0
+    RHOCPSUM .= 0.0
+    # iterate over markers
+    @threads for m=1:1:marknum
+        i, j, weights = fix_weights(
+            xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+        # compute marker-node temperature difference
+        δtkm = tkm[m] - dot(grid_vector(i, j, tk1), weights)
+        # compute marker properties
+        if tm[m] < 3
+            # rocks
+            rhocptotalm = total(rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+            ktotalm = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+        else
+            # sticky air
+            rhocptotalm = rhocpsolidm[tm[m]]
+            ktotalm = ksolidm[tm[m]]
+        end
+        # time-relax δtkm difference
+        @info "orig" m δtkm
+        δtkm *= (
+            exp(-dsubgridt*ktotalm*dtm/rhocptotalm*(2.0/dx^2+2.0/dy^2)) - 1.0)
+        # correct marker temperature
+        tkm[m] += δtkm
+        # update subgrid diffusion on P nodes
+        interpolate_add_to_grid!(i, j, weights, δtkm*rhocptotalm, TKSUM)
+        interpolate_add_to_grid!(i, j, weights, rhocptotalm, RHOCPSUM)
+    end
+    # reduce interpolation arrays
+    reduce_add_3darray!(TKSUM)
+    reduce_add_3darray!(RHOCPSUM)
+    # compute DTsubgrid=TKSUM/RHOCPSUM and update temperature field at P nodes
+    for j=1:1:Nx1, i=1:1:Ny1
+        if RHOCPSUM[i, j, 1] > 0.0
+            DT[i, j] -= TKSUM[i, j, 1] / RHOCPSUM[i, j, 1]
+        end
+    end
+# end # @timeit to "apply_subgrid_temperature_diffusion!"
+    return nothing
+end # function apply_subgrid_temperature_diffusion! 
+
+
+"""
+Update marker temperature based on P grid temperature changes
+
+$(SIGNATURES)
+
+# Details
+
+    - xm:
+    - ym:
+    - tkm:
+    - tk1:
+    - marknum:
+    - sp: static simulation parameters
+
+# Returns
+
+    - nothing
+# """
+# function update_marker_temperature!(xm, ym, tkm, tk1, marknum, sp)
+# # @timeit to "update_marker_temperature!" begin
+#     @unpack dx,
+#         dy,
+#        = sp
+#     @threads for m=1:1:marknum
+#         i, j, weights = fix_weights(
+#         xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+
+
+
+# end # @timeit to "update_marker_temperature!"
+#     return nothing
+# end # function update_marker_temperature!
 
 
 """

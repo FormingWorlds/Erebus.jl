@@ -1303,6 +1303,17 @@ using Test
             end
         end # testset "P nodes"    
     end # testset "fix_weights() advanced"
+
+    @testset "reduce_add_3darray!()" begin
+        A = rand(100, 100, 10)
+        A_ver = copy(A)
+        # reduce-sum A along third axis
+        HydrologyPlanetesimals.reduce_add_3darray!(A)
+        # verification
+        A_ver = reduce(+, A_ver, dims=3)
+        # test
+        @test A[:, :, 1] ≈ A_ver atol=1e-6
+    end # testset "reduce_add_3darray!"
    
     @testset "interpolate_add_to_grid!()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
@@ -4411,5 +4422,109 @@ using Test
         @test DT ≈ DT_ver atol=1e-6
         @test DT0 ≈ DT0_ver atol=1e-6
     end # testset "perform_thermal_iterations!()"
+
+    @testset "apply_subgrid_temperature_diffusion!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(Nx=5,Ny=5,
+            Nxmc=1, Nymc=1, dsubgridt=0.5)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        x, y = sp.x, sp.y
+        xp, yp = sp.xp, sp.yp
+        dx, dy = sp.dx, sp.dy
+        rhocpsolidm, rhocpfluidm = sp.rhocpsolidm, sp.rhocpfluidm
+        ksolidm, kfluidm = sp.ksolidm, sp.kfluidm
+        marknum = sp.start_marknum
+        dtm = sp.dtelastic
+        dsubgridt = sp.dsubgridt
+        # simulate markers
+        xm = rand(-dx:0.1:x[end]+dx, marknum)
+        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        tm = rand(1:3, marknum)
+        tkm = rand(marknum)
+        phim = rand(marknum)
+        tk1 = rand(Ny1, Nx1)
+        DT = rand(Ny1, Nx1)
+        TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+        RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
+        tkm_ver = copy(tkm)
+        DT_ver = copy(DT)
+        # apply subgrid stress diffusion
+        HydrologyPlanetesimals.apply_subgrid_temperature_diffusion!(
+            xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum, sp)
+        # verification, from madcph.m, line 1731ff
+        # Apply subgrid stress diffusion to markers
+        if dsubgridt>0
+            TKSUM_ver = zeros(Ny1, Nx1)
+            RHOCPSUM_ver = zeros(Ny1, Nx1)
+            for m=1:1:marknum
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1
+                    i=1
+                elseif i>Ny
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Compute marker-node T difference
+                dtkm0=tkm_ver[m]-(tk1[i,j]*wtmij+tk1[i+1,j]*wtmi1j+ tk1[i,j+1]*wtmij1+tk1[i+1,j+1]*wtmi1j1)
+                # Compute marker parameters
+                if tm[m]<3
+                    # Rocks
+                    rhocptotalm=rhocpsolidm[tm[m]]*(1-phim[m])+rhocpfluidm[tm[m]]*phim[m]
+                    ktotalm=(ksolidm[tm[m]]*kfluidm[tm[m]]/2+((ksolidm[tm[m]]*(3*phim[m]-2)+ kfluidm[tm[m]]*(1-3*phim[m]))^2)/16)^0.5-(ksolidm[tm[m]]*(3*phim[m]-2)+ kfluidm[tm[m]]*(1-3*phim[m]))/4
+                else
+                    # Sticky air
+                    rhocptotalm=rhocpsolidm[tm[m]]
+                    ktotalm=ksolidm[tm[m]]
+                end    # Relax temperature difference
+                dtkm1=dtkm0*exp(-dsubgridt*ktotalm*dtm/rhocptotalm*(2/dx^2+2/dy^2))
+                # Correct marker temperature
+                ddtkm=dtkm1-dtkm0
+                # @info "ver" m dtkm0 ddtkm
+                tkm_ver[m]=tkm_ver[m]+ddtkm
+                # Update subgrid diffusion on nodes
+                # i;j Node
+                TKSUM_ver[i,j]=TKSUM_ver[i,j]+ddtkm*rhocptotalm*wtmij
+                RHOCPSUM_ver[i,j]=RHOCPSUM_ver[i,j]+rhocptotalm*wtmij
+                # i+1;j Node
+                TKSUM_ver[i+1,j]=TKSUM_ver[i+1,j]+ddtkm*rhocptotalm*wtmi1j
+                RHOCPSUM_ver[i+1,j]=RHOCPSUM_ver[i+1,j]+rhocptotalm*wtmi1j
+                # i;j+1 Node
+                TKSUM_ver[i,j+1]=TKSUM_ver[i,j+1]+ddtkm*rhocptotalm*wtmij1
+                RHOCPSUM_ver[i,j+1]=RHOCPSUM_ver[i,j+1]+rhocptotalm*wtmij1
+                # i+1;j+1 Node
+                TKSUM_ver[i+1,j+1]=TKSUM_ver[i+1,j+1]+ddtkm*rhocptotalm*wtmi1j1
+                RHOCPSUM_ver[i+1,j+1]=RHOCPSUM_ver[i+1,j+1]+rhocptotalm*wtmi1j1
+            end
+            # Compute DTsubgrid
+            DTsubgrid = zeros(Ny1, Nx1)
+            # P-nodes
+            for j=1:1:Nx1
+                for i=1:1:Ny1
+                    if RHOCPSUM_ver[i,j]>0
+                        DTsubgrid[i,j]=TKSUM_ver[i,j]/RHOCPSUM_ver[i,j]
+                    end
+                end
+            end
+            # Correct DT
+            DT_ver=DT_ver-DTsubgrid
+        end
+        # test
+        @test tkm ≈ tkm_ver atol=1e-6
+        @test DT ≈ DT_ver atol=1e-6
+    end # testset "apply_subgrid_temperature_diffusion!()"
 end
 
