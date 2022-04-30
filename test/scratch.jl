@@ -260,3 +260,48 @@ sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
     vypf = zeros(Ny1, Nx1)
     wyx = zeros(Ny1, Nx1)
     
+    function fix1(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+        # @timeit to "fix_weights" begin
+            @inbounds begin
+            j = min(max(trunc(Int, (x-x_axis[1])/dx)+1, jmin), jmax)
+            i = min(max(trunc(Int, (y-y_axis[1])/dy)+1, imin), imax)
+            dxmj = x - x_axis[j]
+            dymi = y - y_axis[i]
+            end # @inbounds
+            weights = SVector(
+                (1.0-dymi/dy) * (1.0-dxmj/dx),
+                (dymi/dy) * (1.0-dxmj/dx),
+                (1.0-dymi/dy) * (dxmj/dx),
+                (dymi/dy) * (dxmj/dx)
+            )
+        # end # @timeit to "fix_weights"
+            return i, j, weights
+        end # function fix_weights
+
+        function fix2(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+            # @timeit to "fix_weights" begin
+                @inbounds begin
+                j = trunc(Int, (x-x_axis[1])/dx)+1
+                if j < jmin
+                    j = jmin
+                elseif j > jmax
+                    j = jmax
+                end
+                i = trunc(Int, (y-y_axis[1])/dy)+1
+                if i < imin
+                    i = imin
+                elseif i > imax
+                    i = imax
+                end
+                dxmj = x - x_axis[j]
+                dymi = y - y_axis[i]
+                end # @inbounds
+                weights = SVector(
+                    (1.0-dymi/dy) * (1.0-dxmj/dx),
+                    (dymi/dy) * (1.0-dxmj/dx),
+                    (1.0-dymi/dy) * (dxmj/dx),
+                    (dymi/dy) * (dxmj/dx)
+                )
+            # end # @timeit to "fix_weights"
+                return i, j, weights
+            end # function fix_weights

@@ -237,6 +237,11 @@ $(TYPEDFIELDS)
     vytop::Float64 = - strainrate * ysize / 2
     "y extension/shortening velocity bottom"
     vybottom::Float64 = strainrate * ysize / 2
+    # Runge-Kutta integration parameters
+    "bⱼ Butcher coefficients for RK4"
+    brk4::SVector{4, Float64} = [1/6, 2/6, 2/6, 1/6]
+    "cⱼ Butcher coefficients for RK4"
+    crk4::SVector{3, Float64} = [0.5, 0.5, 1.0] 
     # timestepping parameters
     "mat filename"
     nname::String = "madcph_"
@@ -1452,21 +1457,63 @@ $(SIGNATURES)
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # @timeit to "fix_weights" begin
-    @inbounds begin
-    j = min(max(trunc(Int, (x-x_axis[1])/dx)+1, jmin), jmax)
-    i = min(max(trunc(Int, (y-y_axis[1])/dy)+1, imin), imax)
-    dxmj = x - x_axis[j]
-    dymi = y - y_axis[i]
-    end # @inbounds
-    weights = SVector(
-        (1.0-dymi/dy) * (1.0-dxmj/dx),
-        (dymi/dy) * (1.0-dxmj/dx),
-        (1.0-dymi/dy) * (dxmj/dx),
-        (dymi/dy) * (dxmj/dx)
-    )
-# end # @timeit to "fix_weights"
-    return i, j, weights
+    i, j, dxmj, dymi = fix_distances(
+        x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+    return i, j, SVector(
+            (1.0-dymi/dy) * (1.0-dxmj/dx),
+            (dymi/dy) * (1.0-dxmj/dx),
+            (1.0-dymi/dy) * (dxmj/dx),
+            (dymi/dy) * (dxmj/dx)
+        ) 
 end # function fix_weights
+
+
+"""
+Compute top and left grid nodes indices (i, j) and x- and y-distances to that 
+grid node (i, j) for given (x, y) position and grid axes.
+
+$(SIGNATURES)
+
+# Details
+
+    - x: x-position [m]
+    - y: y-position [m]
+    - x_axis: x-grid reference axis array [m]
+    - y_axis: y-grid reference axis array [m]
+    - dx: x-grid axis mesh width [m]
+    - dy: y-grid axis mesh width [m]
+    - jmin: minimum assignable index on x-grid axis (basic/Vx/Vy/P)
+    - jmax: maximum assignable index on x-grid axis (basic/Vx/Vy/P)
+    - imin: minimum assignable index on y-grid axis (basic/Vx/Vy/P)
+    - imax: maximum assignable index on y-grid axis (basic/Vx/Vy/P)
+
+# Returns
+    - i: top (with reference to y) node index on y-grid axis
+    - j: left (with reference to x) node index on x-grid axis
+    - dxmj: x-distance from (x, y) point to (i, j) node
+    - dymi: y-distance from (x, y) point to (i, j) node
+"""
+function fix_distances(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+# @timeit to "fix_distances" begin
+    @inbounds begin
+        j = unsafe_trunc(Int, (x-x_axis[1])/dx) + 1
+        i = unsafe_trunc(Int, (y-y_axis[1])/dy) + 1
+        if j < jmin
+            j = jmin
+        elseif j > jmax
+            j = jmax
+        end
+        if i < imin
+            i = imin
+        elseif i > imax
+            i = imax
+        end
+        dxmj = x - x_axis[j]
+        dymi = y - y_axis[i]
+    end # @inbounds
+    return i, j, dxmj, dymi
+# end # @timeit to "fix_distances"
+end # function fix_distances
 
 
 """
@@ -4378,6 +4425,88 @@ function compute_rotation_rate!(vx, vy, wyx, sp)
 end # @timeit to "compute_rotation_rate!"
     return nothing
 end # function compute_rotation_rate!
+
+
+# """
+# Integrate given velocity on given grid using the classic Runge–Kutta method RK4.
+
+# $(SIGNATURES)
+
+# # Details
+
+#     - vx: x-velocity field to be integrated
+#     - x: (marker) x-position [m]
+#     - y: (marker) y-position [m]
+#     - x_axis: x-grid reference axis array [m]
+#     - y_axis: y-grid reference axis array [m]
+#     - jmin: minimum assignable index on x-grid axis (basic/Vx/Vy/P)
+#     - jmax: maximum assignable index on x-grid axis (basic/Vx/Vy/P)
+#     - imin: minimum assignable index on y-grid axis (basic/Vx/Vy/P)
+#     - imax: maximum assignable index on y-grid axis (basic/Vx/Vy/P) 
+#     - sp: static simulation parameters
+
+# # Returns
+
+#     - vrk4: integrated velocity
+# """
+# function velocity_x_rk4(
+#     vx, x, y, x_axis, y_axis, jmin, jmax, imin, imax, sp)
+#     @unpack Nx, Ny, dx, dy, brk4, crk4 = sp
+# # @timeit to "velocity_rk4" 
+#     # setup RK4 scheme
+#     xrk4 = @MVector [x, 0.0, 0.0, 0.0] # RK4 x coordinate positions A, B, C, D
+#     vxrk4 = @MVector zeros(4) # RK4 velocities va, vb, vc, vd
+#     # compute Runge-Kutta steps
+#     for rk=1:1:4
+#         @inbounds j = unsafe_trunc(Int, (xrk[rk]-x_axis[1])/dx) + 1
+#         @inbounds i = unsafe_trunc(Int, (ym[m]-yvx[1])/dy) + 1
+#         if j < jmin
+#             j = jmin
+#         elseif j > jmax
+#             j=Nx-1
+#         end
+#         if i < imin
+#             i = imin
+#         elseif i > imax
+#             i = imax
+#         end
+#         # compute distances
+#         @inbounds dxmj = x - x_axis[j]
+#         @inbounds dymi = y - y_axis[i]
+#         # compute weights
+#         # compute vx velocity for the top and bottom of current cell
+#         @inbounds vxm13 = vx[i, j] * (1-dxmj/dx) + vx[i, j+1] * dxmj/dx
+#         @inbounds vxm24 = vx[i+1, j] * (1-dxmj/dx) + vx[i+1, j+1] * dxmj/dx
+#         # compute second order vx corrections
+#         if dxmj/dx >=0.5
+#             # x is in right part of current cell, but not at right border
+#             if j < Nx-1
+#                 @inbounds vxm13 += 0.5 * ((dxmj/dx-0.5)^2) * (
+#                     vx[i, j]-2*vx[i, j+1]+vx[i, j+2])
+#                 @inbounds vxm24 += 0.5 * ((dxmj/dx-0.5)^2) * (
+#                     vx[i+1, j]-2*vx[i+1, j+1]+vx[i+1, j+2])
+#             end
+#         else
+#             # x is in left part of current cell, but not at left border
+#             if j>1 
+#                 @inbounds vxm13 += 0.5 * ((dxmj/dx-0.5)^2) * (
+#                     vx[i, j-1]-2*vx[i, j]+vx[i, j+1])
+#                 @inbounds vxm24 += 0.5 * ((dxmj/dx-0.5)^2) * (
+#                     vx[i+1,j-1]-2*vx[i+1,j]+vx[i+1,j+1])
+#             end
+#         end
+#         # compute current RK step vx
+#         @inbounds vxrk4[rk] = (1-dymi/dy)*vxm13 + (dymi/dy)*vxm24
+#         # calculate next RK step x position if not at final RK step
+#         if rk < 4
+#             @inbounds xrk4[rk+1] = xrk4[1] + crk4[rk]*dt*vxrk4[rk]
+#         end
+
+
+    
+# # end # @timeit to "velocity_rk4"
+#     return vrk4
+# end # function velocity_rk4
 
 
 """
