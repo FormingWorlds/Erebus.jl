@@ -2,7 +2,7 @@
 # using SparseArrays
 # using MAT
 # using DocStringExtensions
-# using Parameters
+using Parameters
 # using StaticArrays
 # using BenchmarkTools
 # using TimerOutputs
@@ -212,7 +212,7 @@ end
 
 
 sp = HydrologyPlanetesimals.StaticParameters(
-    Nxmc=1, Nymc=1, dsubgridt=0.5)
+    Nxmc=4, Nymc=4, dsubgridt=0.5)
 Nx, Ny = sp.Nx, sp.Ny
 Nx1, Ny1 = sp.Nx1, sp.Ny1
 x, y = sp.x, sp.y
@@ -234,31 +234,37 @@ RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
 
 
 
-sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-    Nx, Ny = sp.Nx, sp.Ny
-    Nx1, Ny1 = sp.Nx1, sp.Ny1
-    marknum = sp.start_marknum
-    x, y = sp.x, sp.y
-    xp, yp = sp.xp, sp.yp
-    dx, dy = sp.dx, sp.dy
-    # simulate markers
-    xm = rand(-dx:0.1:x[end]+dx, marknum)
-    ym = rand(-dy:0.1:y[end]+dy, marknum)
-    DT = rand(Ny1, Nx1)
-    tk2 = rand(Ny1, Nx1)
-    APHI = rand(Ny1, Nx1)
+sp = HydrologyPlanetesimals.StaticParameters(
+    Nxmc=4, Nymc=4, dtelastic=0.9)
+Nx, Ny = sp.Nx, sp.Ny
+Nx1, Ny1 = sp.Nx1, sp.Ny1
+marknum = sp.start_marknum
+x, y = sp.x, sp.y
+xp, yp = sp.xp, sp.yp
+dx, dy = sp.dx, sp.dy
+# simulate markers
+xm = rand(-dx:0.1:x[end]+dx, marknum)
+ym = rand(-dy:0.1:y[end]+dy, marknum)
+sxym = rand(marknum)
+sxxm = rand(marknum)
+tkm = rand(marknum)
+phim = rand(marknum)
+tm = rand(1:3, marknum)
+DT = rand(Ny1, Nx1)
+tk2 = rand(Ny1, Nx1)
+wyx = rand(Ny, Nx)
+dtm = sp.dtelastic
+APHI = rand(Ny1, Nx1)
 
 
-    sp = HydrologyPlanetesimals.StaticParameters()
-    vx = rand(Ny1, Nx1)
-    vy = rand(Ny1, Nx1)
-    vxf = rand(Ny1, Nx1)
-    vyf = rand(Ny1, Nx1)
-    vxp = zeros(Ny1, Nx1)
-    vyp = zeros(Ny1, Nx1)
-    vxpf = zeros(Ny1, Nx1)
-    vypf = zeros(Ny1, Nx1)
-    wyx = zeros(Ny1, Nx1)
+vx = rand(Ny1, Nx1)
+vy = rand(Ny1, Nx1)
+vxf = rand(Ny1, Nx1)
+vyf = rand(Ny1, Nx1)
+vxp = zeros(Ny1, Nx1)
+vyp = zeros(Ny1, Nx1)
+vxpf = zeros(Ny1, Nx1)
+vypf = zeros(Ny1, Nx1)
     
     function fix1(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
         # @timeit to "fix_weights" begin
@@ -305,3 +311,329 @@ sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
             # end # @timeit to "fix_weights"
                 return i, j, weights
             end # function fix_weights
+
+function rk4(
+    xm_ver,
+    ym_ver,
+    tm,
+    tkm_ver,
+    phim,
+    sxym_ver,
+    sxxm_ver,
+    vx,
+    vy,
+    vxf,
+    vyf,
+    wyx,
+    tk2,
+    marknum,
+    dtm,
+    sp
+)
+@unpack Nx,
+Ny,
+dx,
+dy,
+x,
+y,
+xvx,
+yvx,
+xvy,
+yvy,
+xp,
+yp,
+jmin_basic,
+jmax_basic,
+imin_basic,
+imax_basic,
+jmin_vx,
+jmax_vx,
+imin_vx,
+imax_vx,
+jmin_vy,
+jmax_vy,
+imin_vy,
+imax_vy,
+jmin_p,
+jmax_p,
+imin_p,
+imax_p,
+brk4,
+crk4,
+rhocpsolidm,
+rhocpfluidm = sp
+vxm = zeros(4,1)
+vym = zeros(4,1)
+for m=1:1:marknum
+    # Interpolate solid temperature for the initial marker location
+    # Define i;j indexes for the upper left node
+    j=trunc(Int, (xm_ver[m]-xp[1])/dx)+1
+    i=trunc(Int, (ym_ver[m]-yp[1])/dy)+1
+    if j<1
+        j=1
+    elseif j>Nx
+        j=Nx
+    end
+    if i<1
+        i=1
+    elseif i>Ny
+        i=Ny
+    end
+    # Compute distances
+    dxmj=xm_ver[m]-xp[j]
+    dymi=ym_ver[m]-yp[i]
+    # Compute weights
+    wtmij=(1-dxmj/dx)*(1-dymi/dy)
+    wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+    wtmij1=(dxmj/dx)*(1-dymi/dy)
+    wtmi1j1=(dxmj/dx)*(dymi/dy)
+    # Compute Tsolid
+    tksm0=tk2[i,j]*wtmij+tk2[i+1,j]*wtmi1j+ tk2[i,j+1]*wtmij1+tk2[i+1,j+1]*wtmi1j1;     
+    # Interpolate local rotation rate
+    # Define i;j indexes for the upper left node
+    j=trunc(Int, (xm_ver[m]-x[1])/dx)+1
+    i=trunc(Int, (ym_ver[m]-y[1])/dy)+1
+    if j<1
+        j=1
+    elseif j>Nx-1
+        j=Nx-1
+    end
+    if i<1
+        i=1
+    elseif i>Ny-1
+        i=Ny-1
+    end
+    # Compute distances
+    dxmj=xm_ver[m]-x[j]
+    dymi=ym_ver[m]-y[i]
+    # Compute weights
+    wtmij=(1-dxmj/dx)*(1-dymi/dy)
+    wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+    wtmij1=(dxmj/dx)*(1-dymi/dy)
+    wtmi1j1=(dxmj/dx)*(dymi/dy)
+    # Compute vx velocity
+    omegam=wyx[i,j]*wtmij+wyx[i+1,j]*wtmi1j+ wyx[i,j+1]*wtmij1+wyx[i+1,j+1]*wtmi1j1
+    # Analytical stress rotation using SIGMA"xx=-SIGMA"yy
+    THETA=dtm*omegam; # Incremental rotation angle()
+    sxxmnew=sxxm_ver[m]*cos(THETA)^2-sxxm_ver[m]*sin(THETA)^2-sxym_ver[m]*sin(2*THETA)
+    sxymnew=sxxm_ver[m]*sin(2*THETA)+sxym_ver[m]*cos(2*THETA)
+    sxxm_ver[m]=sxxmnew; sxym_ver[m]=sxymnew;    
+    
+    # Save initial marker coordinates
+    xA=xm_ver[m]
+    yA=ym_ver[m]
+    for rk=1:1:4
+        # Interpolate vx
+        # Define i;j indexes for the upper left node
+        j=trunc(Int, (xm_ver[m]-xvx[1])/dx)+1
+        i=trunc(Int, (ym_ver[m]-yvx[1])/dy)+1
+        if j<1
+            j=1
+        elseif j>Nx-1 
+            j=Nx-1
+        end
+        if i<1
+            i=1
+        elseif i>Ny
+            i=Ny
+        end
+        # Compute distances
+        dxmj=xm_ver[m]-xvx[j]
+        dymi=ym_ver[m]-yvx[i]
+        # Compute weights
+        # Compute vx velocity for the top & bottom of the cell()
+        vxm13=vx[i,j]*(1-dxmj/dx)+vx[i,j+1]*dxmj/dx
+        vxm24=vx[i+1,j]*(1-dxmj/dx)+vx[i+1,j+1]*dxmj/dx
+        # Compute correction
+        if dxmj/dx>=0.5
+            if j<Nx-1
+                vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vx[i,j]-2*vx[i,j+1]+vx[i,j+2])
+                vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vx[i+1,j]-2*vx[i+1,j+1]+vx[i+1,j+2])
+            end
+        else
+            if j>1
+                vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vx[i,j-1]-2*vx[i,j]+vx[i,j+1])
+                vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vx[i+1,j-1]-2*vx[i+1,j]+vx[i+1,j+1])
+            end
+        end
+        # Compute vx
+        vxm[rk]=(1-dymi/dy)*vxm13+(dymi/dy)*vxm24
+        
+        # Interpolate vy
+        # Define i;j indexes for the upper left node
+        j=trunc(Int, (xm_ver[m]-xvy[1])/dx)+1
+        i=trunc(Int, (ym_ver[m]-yvy[1])/dy)+1
+        if j<1
+            j=1
+        elseif j>Nx
+            j=Nx
+        end
+        if i<1
+            i=1
+        elseif i>Ny-1
+            i=Ny-1
+        end
+        # Compute distances
+        dxmj=xm_ver[m]-xvy[j]
+        dymi=ym_ver[m]-yvy[i]
+        # Compute weights
+        # Compute vy velocity for the left & right of the cell()
+        vym12=vy[i,j]*(1-dymi/dy)+vy[i+1,j]*dymi/dy
+        vym34=vy[i,j+1]*(1-dymi/dy)+vy[i+1,j+1]*dymi/dy
+        # Compute correction
+        if dymi/dy>=0.5
+            if i<Ny-1
+                vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vy[i,j]-2*vy[i+1,j]+vy[i+2,j])
+                vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vy[i,j+1]-2*vy[i+1,j+1]+vy[i+2,j+1])
+            end      
+        else
+            if i>1
+                vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vy[i-1,j]-2*vy[i,j]+vy[i+1,j])
+                vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vy[i-1,j+1]-2*vy[i,j+1]+vy[i+1,j+1])
+            end
+        end
+        # Compute vy
+        vym[rk]=(1-dxmj/dx)*vym12+(dxmj/dx)*vym34
+        
+        # Change coordinates to obtain B;C;D points
+        if rk==1 || rk==2
+           xm_ver[m]=xA+dtm/2*vxm[rk]
+           ym_ver[m]=yA+dtm/2*vym[rk]
+        elseif rk==3
+           xm_ver[m]=xA+dtm*vxm[rk]
+           ym_ver[m]=yA+dtm*vym[rk]
+        end
+    end
+    # Restore initial coordinates
+    xm_ver[m]=xA
+    ym_ver[m]=yA
+    # Compute effective velocity
+    vxmeff=1/6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+    vymeff=1/6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+    # Move markers
+    xm_ver[m]=xm_ver[m]+dtm*vxmeff
+    ym_ver[m]=ym_ver[m]+dtm*vymeff
+    
+    # Backtracing markers with fluid velocity
+    xcur=xm_ver[m]
+    ycur=ym_ver[m]
+    xA=xcur
+    yA=ycur
+    for rk=1:1:4
+        # Interpolate vx
+        # Define i;j indexes for the upper left node
+        j=trunc(Int, (xcur-xvx[1])/dx)+1
+        i=trunc(Int, (ycur-yvx[1])/dy)+1
+        if j<1
+            j=1
+        elseif j>Nx-1
+            j=Nx-1
+        end
+        if i<1
+            i=1
+        elseif i>Ny
+            i=Ny
+        end
+        # Compute distances
+        dxmj=xcur-xvx[j]
+        dymi=ycur-yvx[i]
+        # Compute weights
+        # Compute vx velocity for the top & bottom of the cell()
+        vxm13=vxf[i,j]*(1-dxmj/dx)+vxf[i,j+1]*dxmj/dx
+        vxm24=vxf[i+1,j]*(1-dxmj/dx)+vxf[i+1,j+1]*dxmj/dx
+        # Compute correction
+        if dxmj/dx>=0.5
+            if j<Nx-1
+                vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vxf[i,j]-2*vxf[i,j+1]+vxf[i,j+2])
+                vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vxf[i+1,j]-2*vxf[i+1,j+1]+vxf[i+1,j+2])
+            end
+        else
+            if j>1
+                vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vxf[i,j-1]-2*vxf[i,j]+vxf[i,j+1])
+                vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vxf[i+1,j-1]-2*vxf[i+1,j]+vxf[i+1,j+1])
+            end
+        end
+        # Compute vx
+        vxm[rk]=(1-dymi/dy)*vxm13+(dymi/dy)*vxm24
+        
+        # Interpolate vy
+        # Define i;j indexes for the upper left node
+        j=trunc(Int, (xcur-xvy[1])/dx)+1
+        i=trunc(Int, (ycur-yvy[1])/dy)+1
+        if j<1
+            j=1
+        elseif j>Nx
+            j=Nx
+        end
+        if i<1
+            i=1
+        elseif  i>Ny-1
+            i=Ny-1
+        end
+        # Compute distances
+        dxmj=xcur-xvy[j]
+        dymi=ycur-yvy[i]
+        # Compute weights
+        # Compute vy velocity for the left & right of the cell()
+        vym12=vyf[i,j]*(1-dymi/dy)+vyf[i+1,j]*dymi/dy
+        vym34=vyf[i,j+1]*(1-dymi/dy)+vyf[i+1,j+1]*dymi/dy
+        # Compute correction
+        if dymi/dy>=0.5
+            if i<Ny-1
+                vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vyf[i,j]-2*vyf[i+1,j]+vyf[i+2,j])
+                vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vyf[i,j+1]-2*vyf[i+1,j+1]+vyf[i+2,j+1])
+            end      
+        else
+            if i>1
+                vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vyf[i-1,j]-2*vyf[i,j]+vyf[i+1,j])
+                vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vyf[i-1,j+1]-2*vyf[i,j+1]+vyf[i+1,j+1])
+            end
+        end
+        # Compute vy
+        vym[rk]=(1-dxmj/dx)*vym12+(dxmj/dx)*vym34
+        
+        # Change coordinates to obtain B;C;D points
+        if rk==1 || rk==2
+            xcur=xA-dtm/2*vxm[rk]
+            ycur=yA-dtm/2*vym[rk]
+        elseif  rk==3
+            xcur=xA-dtm*vxm[rk]
+            ycur=yA-dtm*vym[rk]
+        end
+    end
+    # Compute effective velocity
+    vxmeff=1/6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+    vymeff=1/6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+    # Trace the node backward
+    xcur=xA-dtm*vxmeff
+    ycur=yA-dtm*vymeff
+    # Interpolate fluid temperature
+    # Define i;j indexes for the upper left node
+    j=trunc(Int, (xcur-xp[1])/dx)+1
+    i=trunc(Int, (ycur-yp[1])/dy)+1
+    if j<1
+        j=1
+    elseif j>Nx
+        j=Nx
+    end
+    if i<1
+        i=1
+    elseif i>Ny
+        i=Ny
+    end
+    # Compute distances
+    dxmj=xcur-xp[j]
+    dymi=ycur-yp[i]
+    # Compute weights
+    wtmij=(1-dxmj/dx)*(1-dymi/dy)
+    wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+    wtmij1=(dxmj/dx)*(1-dymi/dy)
+    wtmi1j1=(dxmj/dx)*(dymi/dy)
+    # Compute nodal Tfluid
+    tkfm0=tk2[i,j]*wtmij+tk2[i+1,j]*wtmi1j+ tk2[i,j+1]*wtmij1+tk2[i+1,j+1]*wtmi1j1
+    # Compute Tfluid-Tsolid for the marker
+    dtkfsm=tkfm0-tksm0
+    # Correct marker temperature
+    tkm_ver[m]=((1-phim[m])*tkm_ver[m]*rhocpsolidm[tm[m]]+ phim[m]*(tkm_ver[m]+dtkfsm)*rhocpfluidm[tm[m]])/ ((1-phim[m])*rhocpsolidm[tm[m]]+phim[m]*rhocpfluidm[tm[m]])
+end  # end of marker loop
+end
