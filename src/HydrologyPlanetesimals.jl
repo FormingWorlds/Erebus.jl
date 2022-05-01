@@ -132,6 +132,15 @@ $(TYPEDFIELDS)
     mdis_init = 1.0e30
     "number of markers at start"
     start_marknum::Int64 = Nxm * Nym
+    # marker grid min/max assignables indices
+    "minimum assignable marker grid index in x direction"
+    jmin_m::Int64 = 1
+    "minimum assignable marker grid index in y direction"
+    imin_m::Int64 = 1
+    "maximum assignable marker grid index in x direction"
+    jmax_m::Int64 = Nxm - 1
+    "maximum assignable marker grid index in y direction"
+    imax_m::Int64 = Nym - 1
     # physical constants
     "gravitational constant [m^3*kg^-1*s^-2]"
     G::Float64 = 6.672e-11
@@ -1527,24 +1536,55 @@ $(SIGNATURES)
 function fix_distances(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # @timeit to "fix_distances" begin
     @inbounds begin
-        j = unsafe_trunc(Int, (x-x_axis[1])/dx) + 1
-        i = unsafe_trunc(Int, (y-y_axis[1])/dy) + 1
-        if j < jmin
-            j = jmin
-        elseif j > jmax
-            j = jmax
-        end
-        if i < imin
-            i = imin
-        elseif i > imax
-            i = imax
-        end
+        i, j = fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
         dxmj = x - x_axis[j]
         dymi = y - y_axis[i]
     end # @inbounds
     return i, j, dxmj, dymi
 # end # @timeit to "fix_distances"
 end # function fix_distances
+
+
+"""
+Compute top and left grid nodes indices (i, j) and x- and y-distances to that 
+grid node (i, j) for given (x, y) position and grid axes.
+
+$(SIGNATURES)
+
+# Details
+
+    - x: x-position [m]
+    - y: y-position [m]
+    - x_axis: x-grid reference axis array [m]
+    - y_axis: y-grid reference axis array [m]
+    - dx: x-grid axis mesh width [m]
+    - dy: y-grid axis mesh width [m]
+    - jmin: minimum assignable index on x-grid axis (basic/Vx/Vy/P)
+    - jmax: maximum assignable index on x-grid axis (basic/Vx/Vy/P)
+    - imin: minimum assignable index on y-grid axis (basic/Vx/Vy/P)
+    - imax: maximum assignable index on y-grid axis (basic/Vx/Vy/P)
+
+# Returns
+    - i: top (with reference to y) node index on y-grid axis
+    - j: left (with reference to x) node index on x-grid axis
+"""
+function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
+# @timeit to "fix" begin
+    j = unsafe_trunc(Int, (x-x_axis[1])/dx) + 1
+    i = unsafe_trunc(Int, (y-y_axis[1])/dy) + 1
+    if j < jmin
+        j = jmin
+    elseif j > jmax
+        j = jmax
+    end
+    if i < imin
+        i = imin
+    elseif i > imax
+        i = imax
+    end
+    return i, j
+# end # @timeit to "fix"
+end # function fix
 
 
 """
@@ -5070,6 +5110,157 @@ function backtrace_pressures_rk4!(
 # end # timeit to "backtrace_pressures_rk4!"
     return nothing
 end # function backtrace_pressures_rk4!
+
+
+"""
+Update marker geometry helper properties given a marker number and nearby
+marker grid point.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - i: vertical index of marker grid point
+    - j: horizontal index of marker grid point
+    - xm: x-position of markers
+    - ym: y-position of markers
+    - xxm: x-position of marker grid points
+    - yym: y-position of marker grid points
+    - tm: type of markers
+    - phim: porosity of markers
+    - mdis: minimum distance of marker launch anchor points to nearest marker
+    - mnum: number of marker nearest to marker launch anchor positions
+    - mtyp: type of marker nearest to marker launch anchor positions
+    - mpor: porosity of marker nearest to marker launch anchor positions
+
+# Returns
+
+    - nothing
+"""
+function update_marker_geometry_helpers!(
+    m, i, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+    dismij = distance(xm[m], ym[m], xxm[j], yym[i])
+    if dismij < mdis[i, j]
+        mdis[i, j] = dismij
+        mnum[i, j] = m
+        mtyp[i, j] = tm[m]
+        mpor[i, j] = phim[m]
+    end
+end
+
+
+"""
+Add markers to populate currently sparsely filled grid areas.
+
+$(SIGNATURES)
+
+# Details
+
+    - xm: 
+	- ym: 
+	- tm: 
+	- tkm: 
+	- phim: 
+	- sxxm: 
+	- sxym: 
+	- etavpm: 
+	- mdis: 
+	- mnum: 
+	- mtyp: 
+	- mpor:
+    - marknum: total number of markers in use 
+	- sp: 
+
+# Returns
+
+    - marknumnew: updated total number of markers in use
+"""
+function replenish_markers!(
+    xm,
+	ym,
+	tm,
+	tkm,
+	phim,
+	sxxm,
+	sxym,
+	etavpm,
+	mdis,
+	mnum,
+	mtyp,
+	mpor,
+	marknum,
+    sp
+)
+# @timeit to "replenish_markers!" begin
+    @unpack Nxmc, Nymc, dx, dy, xxm, yym, jmin_m, jmax_m, imin_m, imax_m = sp
+    @threads for m=1:1:marknum
+        i, j = fix(
+            xm[m],
+            ym[m],
+            xxm,
+            yym,
+            dx,
+            dy,
+            jmin_m,
+            jmax_m,
+            imin_m,
+            imax_m
+        )
+        update_marker_geometry_helpers!(
+            m, i, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+        update_marker_geometry_helpers!(
+            m, i+1, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+        update_marker_geometry_helpers!(
+            m, i, j+1, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+        update_marker_geometry_helpers!(
+            m, i+1, j+1, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+    end # m marker loop
+    dii = 5 * Nymc
+    djj = 5 * Nxmc
+    for j=1:1:Nxm, i=1:1:Nym
+        if mnum[i, j] == 0
+            for jj=max(j-djj, 1):1:min(j+djj, Nxm)
+                @threads for ii=max(i-dii, 1):1:min(i+dii, Nym)
+                    if mnum[ii, jj] > 0
+                        m = mnum[ii, jj]
+                        update_marker_geometry_helpers!(
+                            m,
+                            ii,
+                            jj,
+                            xm,
+                            ym,
+                            xxm,
+                            yym,
+                            tm,
+                            phim,
+                            mdis,
+                            mnum,
+                            mtyp,
+                            mpor
+                        )
+                    end
+                end
+            end 
+            # add new marker            
+            if mnum[i, j] < 0
+                marknum += 1
+                xm[marknum] = xxm[j] + (rand()-0.5)*dxm
+                ym[marknum] = yym[i] + (rand()-0.5)*dym
+                # copy marker properties
+                m = -mnum[i,j]         # CHECK ALL OF THIS vvvvvvvv
+                tm[marknum] = tm[m]
+                tkm[marknum] = tkm[m]
+                phim[marknum] = phim[m]
+                sxxm[marknum] = sxxm[m]
+                sxym[marknum] = sxym[m]
+                etavpm[marknum] = etavpm[m]
+            end
+        end
+    end    
+# end # timeit to "replenish_markers!"
+    return marknum
+end # function replenish_markers!
 
 
 """

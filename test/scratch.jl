@@ -644,3 +644,34 @@ for m=1:1:marknum
     tkm_ver[m]=((1-phim[m])*tkm_ver[m]*rhocpsolidm[tm[m]]+ phim[m]*(tkm_ver[m]+dtkfsm)*rhocpfluidm[tm[m]])/ ((1-phim[m])*rhocpsolidm[tm[m]]+phim[m]*rhocpfluidm[tm[m]])
 end  # end of marker loop
 end
+
+
+
+
+
+sp = HydrologyPlanetesimals.StaticParameters()
+Nx, Ny = sp.Nx, sp.Ny
+Nx1, Ny1 = sp.Nx1, sp.Ny1
+Nxm, Nym = sp.Nxm, sp.Nym
+marknum = sp.start_marknum
+x, y = sp.x, sp.y
+xp, yp = sp.xp, sp.yp
+xvx, yvx = sp.xvx, sp.yvx
+xvy, yvy = sp.xvy, sp.yvy
+xxm, yym = sp.xxm, sp.yym
+dx, dy = sp.dx, sp.dy
+jmin_m, jmax_m = sp.jmin_m, sp.jmax_m
+imin_m, imax_m = sp.imin_m, sp.imax_m
+# simulate markers
+xm = rand(-dx:0.1:x[end]+dx, marknum)
+ym = rand(-dy:0.1:y[end]+dy, marknum)
+sxym = rand(marknum)
+sxxm = rand(marknum)
+tkm = rand(marknum)
+phim = rand(marknum)
+sxxm = rand(marknum)
+sxym = rand(marknum)
+etavpm = rand(marknum)
+phim = rand(marknum)
+tm = rand(1:3, marknum)
+mdis, mnum, mtyp, mpor = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
