@@ -52,7 +52,7 @@ $(TYPEDFIELDS)
     "horizontal coordinates of basic grid points [m]"
     x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
     "vertical coordinates of basic grid points [m]"
-    y = SVector{Ny, Float64}([j for j = 0:dy:ysize])
+    y = SVector{Ny, Float64}([i for i = 0:dy:ysize])
     # Vx nodes
     "horizontal coordinates of vx grid points [m]"
     xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
@@ -66,10 +66,8 @@ $(TYPEDFIELDS)
     # P nodes
     "horizontal coordinates of p grid points [m]"
     xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
-    # xp = Vector{Float64}([j for j = -dx/2:dx:xsize+dx/2])
     "vertical coordinates of p grid points [m]"
     yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
-    # yp = Vector{Float64}([i for i = -dy/2:dy:ysize+dy/2])
     # basic grid min/max assignables indices
     "minimum assignable basic grid index in x direction"
     jmin_basic::Int64 = 1
@@ -126,6 +124,12 @@ $(TYPEDFIELDS)
     dxm::Float64 = xsize / Nxm
     "marker grid step in vertical direction"
     dym::Float64 = ysize / Nym
+    "horizontal coordinates of marker grid/launch anchor points [m]"
+    xxm = SVector{Nxm, Float64}([j for j = dxm/2:dxm:xsize-dxm/2])
+    "vertical coordinates of marker grid/launch anchor points [m]"
+    yym = SVector{Nym, Float64}([i for i = dym/2:dym:ysize-dym/2])
+    "initialization distance of nearest marker to launch anchor point [m]"
+    mdis_init = 1.0e30
     "number of markers at start"
     start_marknum::Int64 = Nxm * Nym
     # physical constants
@@ -820,6 +824,31 @@ function setup_marker_properties_helpers(sp; randomized=false)
         alphafluidcur
     )
 end # function setup_marker_properties_helpers()
+
+"""
+Set up additional marker geometry helpers to facilitate marker handling.
+
+$(SIGNATURES)
+
+# Details
+
+    - sp: static simulation parameters
+
+# Returns
+
+    - mdis: minimum distance of marker launch anchor points to nearest marker
+    - mnum: number of marker nearest to marker launch anchor positions
+    - mtyp: type of marker nearest to marker launch anchor positions
+    - mpor: porosity of marker nearest to marker launch anchor positions
+"""
+function setup_marker_geometry_helpers(sp)
+    @unpack Nxm, Nym, mdis_init = sp
+    mdis = fill(mdis_init, Nym, Nxm)
+    mnum = zeros(Int, Nym, Nxm)
+    mtyp = zeros(Int, Nym, Nxm)
+    mpor = zeros(Nym, Nxm)
+    return mdis, mnum, mtyp, mpor 
+end
 
 
 """
@@ -5212,6 +5241,7 @@ function simulation_loop(sp::StaticParameters)
     # -------------------------------------------------------------------------
     # set up markers
     # -------------------------------------------------------------------------
+    mdis, mnum, mtyp, mpor = setup_marker_geometry_helpers(sp)
     xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(sp)
     (
         rhototalm,

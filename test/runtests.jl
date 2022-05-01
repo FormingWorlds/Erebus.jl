@@ -477,6 +477,31 @@ using Test
         @test alphasolidcur == zeros(Float64, marknum)
         @test alphafluidcur == zeros(Float64, marknum)
     end # testset "setup_marker_properties_helpers()"
+
+    @testset " setup_marker_geometry_helpers()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        Nxm, Nym = sp.Nxm, sp.Nym
+        mdis_init = sp.mdis_init
+        xsize, ysize = sp.xsize, sp.ysize
+        dxm, dym = sp.dxm, sp.dym
+        # setup marker geometry helpers
+        (
+            mdis,
+            mnum,
+            mtyp,
+            mpor
+         ) = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
+        # test
+        @test typeof(mdis) == Matrix{Float64}
+        @test size(mdis) == (Nym, Nxm)
+        @test rand(mdis) == mdis_init
+        @test typeof(mnum) == Matrix{Int}
+        @test size(mnum) == (Nym, Nxm)
+        @test typeof(mtyp) == Matrix{Int}
+        @test size(mtyp) == (Nym, Nxm)
+        @test typeof(mpor) == Matrix{Float64}
+        @test size(mpor) == (Nym, Nxm)
+    end # testset " setup_marker_geometry_helpers()"
     
     @testset "define_markers!() & compute_marker_properties!()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
