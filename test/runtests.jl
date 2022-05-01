@@ -5094,5 +5094,294 @@ using Test
         @test sxxm ≈ sxxm_ver atol=1e-6
     end # testset "move_markers_rk4!()"
 
+    @testset "backtrace_pressures_rk4!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters(
+            Nxmc=1, Nymc=1, dtelastic=0.9)
+        Nx, Ny = sp.Nx, sp.Ny
+        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dx, dy = sp.dx, sp.dy
+        dtm = sp.dtelastic
+        x, y = sp.x, sp.y
+        xvx, xvy = sp.xvx, sp.xvy
+        yvx, yvy = sp.yvx, sp.yvy
+        xp, yp = sp.xp, sp.yp
+        vx = rand(Ny1, Nx1)
+        vy = rand(Ny1, Nx1)
+        vxf = rand(Ny1, Nx1)
+        vyf = rand(Ny1, Nx1)
+        pr = rand(Ny1, Nx1)
+        pf = rand(Ny1, Nx1)
+        ps = rand(Ny1, Nx1)
+        pr0 = rand(Ny1, Nx1)
+        pf0 = rand(Ny1, Nx1)
+        ps0 = rand(Ny1, Nx1)
+        pr_ver = copy(pr)
+        pf_ver = copy(pf)
+        ps_ver = copy(ps)
+        pr0_ver = copy(pr0)
+        pf0_ver = copy(pf0)
+        ps0_ver = copy(ps0)
+        # backtrace pressures using RK4
+        HydrologyPlanetesimals.backtrace_pressures_rk4!(
+            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm, sp)
+        # verification, from madcph.p, line 2363ff
+        vxm = zeros(4,1)
+        vym = zeros(4,1)
+        pr0_ver=pr_ver
+        ps0_ver=ps_ver
+        for jj=2:1:Nx
+        for ii=2:1:Ny
+            # Save initial nodal coordinates
+            xcur=xp[jj]
+            ycur=yp[ii]
+            xA=xcur
+            yA=ycur
+            for rk=1:1:4
+                # Interpolate vx
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xcur-xvx[1])/dx)+1
+                i=trunc(Int, (ycur-yvx[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx-1
+                    j=Nx-1
+                end
+                if i<1
+                    i=1
+                elseif i>Ny
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xcur-xvx[j]
+                dymi=ycur-yvx[i]
+                # Compute weights
+                # Compute vx velocity for the top & bottom of the cell()
+                vxm13=vx[i,j]*(1-dxmj/dx)+vx[i,j+1]*dxmj/dx
+                vxm24=vx[i+1,j]*(1-dxmj/dx)+vx[i+1,j+1]*dxmj/dx
+                # Compute correction
+                if dxmj/dx>=0.5
+                    if j<Nx-1
+                        vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vx[i,j]-2*vx[i,j+1]+vx[i,j+2])
+                        vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vx[i+1,j]-2*vx[i+1,j+1]+vx[i+1,j+2])
+                    end
+                else
+                    if j>1
+                        vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vx[i,j-1]-2*vx[i,j]+vx[i,j+1])
+                        vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vx[i+1,j-1]-2*vx[i+1,j]+vx[i+1,j+1])
+                    end
+                end
+                # Compute vx
+                vxm[rk]=(1-dymi/dy)*vxm13+(dymi/dy)*vxm24
+                
+                # Interpolate vy
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xcur-xvy[1])/dx)+1
+                i=trunc(Int, (ycur-yvy[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1
+                    i=1
+                elseif i>Ny-1
+                    i=Ny-1
+                end
+                # Compute distances
+                dxmj=xcur-xvy[j]
+                dymi=ycur-yvy[i]
+                # Compute weights
+                # Compute vy velocity for the left & right of the cell()
+                vym12=vy[i,j]*(1-dymi/dy)+vy[i+1,j]*dymi/dy
+                vym34=vy[i,j+1]*(1-dymi/dy)+vy[i+1,j+1]*dymi/dy
+                # Compute correction
+                if dymi/dy>=0.5
+                    if i<Ny-1
+                        vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vy[i,j]-2*vy[i+1,j]+vy[i+2,j])
+                        vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vy[i,j+1]-2*vy[i+1,j+1]+vy[i+2,j+1])
+                    end      
+                else
+                    if i>1
+                        vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vy[i-1,j]-2*vy[i,j]+vy[i+1,j])
+                        vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vy[i-1,j+1]-2*vy[i,j+1]+vy[i+1,j+1])
+                    end
+                end
+                # Compute vy
+                vym[rk]=(1-dxmj/dx)*vym12+(dxmj/dx)*vym34
+                
+                # Change coordinates to obtain B;C;D points
+                if rk==1 || rk==2
+                    xcur=xA-dtm/2*vxm[rk]
+                    ycur=yA-dtm/2*vym[rk]
+                elseif rk==3
+                    xcur=xA-dtm*vxm[rk]
+                    ycur=yA-dtm*vym[rk]
+                end
+            end
+            # Compute effective velocity
+            vxmeff=1/6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+            vymeff=1/6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+            # Trace the node backward
+            xcur=xA-dtm*vxmeff
+            ycur=yA-dtm*vymeff
+            # Interpolate nodal property
+            # SIGMA'xx; P
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xcur-xp[1])/dx)+1
+            i=trunc(Int, (ycur-yp[1])/dy)+1
+            if j<1
+                j=1
+            elseif j>Nx
+                j=Nx
+            end
+            if i<1
+                i=1
+            elseif i>Ny
+                i=Ny
+            end
+            # Compute distances
+            dxmj=xcur-xp[j]
+            dymi=ycur-yp[i]
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy)
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy)
+            wtmi1j1=(dxmj/dx)*(dymi/dy)
+            # Compute nodal total pressure
+            pr0_ver[ii,jj]=pr_ver[i,j]*wtmij+pr_ver[i+1,j]*wtmi1j+ pr_ver[i,j+1]*wtmij1+pr_ver[i+1,j+1]*wtmi1j1
+            ps0_ver[ii,jj]=ps_ver[i,j]*wtmij+ps_ver[i+1,j]*wtmi1j+ ps_ver[i,j+1]*wtmij1+ps_ver[i+1,j+1]*wtmi1j1
+        end
+        end
+
+        # Backtracing Pressure nodes: Pfluid
+        pf0_ver=pf_ver
+        for jj=2:1:Nx
+        for ii=2:1:Ny
+            # Save initial nodal coordinates
+            xcur=xp[jj]
+            ycur=yp[ii]
+            xA=xcur
+            yA=ycur
+            for rk=1:1:4
+                # Interpolate vx
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xcur-xvx[1])/dx)+1
+                i=trunc(Int, (ycur-yvx[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx-1
+                    j=Nx-1
+                end
+                if i<1
+                    i=1
+                elseif i>Ny
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xcur-xvx[j]
+                dymi=ycur-yvx[i]
+                # Compute weights
+                # Compute vx velocity for the top & bottom of the cell()
+                vxm13=vxf[i,j]*(1-dxmj/dx)+vxf[i,j+1]*dxmj/dx
+                vxm24=vxf[i+1,j]*(1-dxmj/dx)+vxf[i+1,j+1]*dxmj/dx
+                # Compute correction
+                if dxmj/dx>=0.5
+                    if j<Nx-1
+                        vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vxf[i,j]-2*vxf[i,j+1]+vxf[i,j+2])
+                        vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vxf[i+1,j]-2*vxf[i+1,j+1]+vxf[i+1,j+2])
+                    end
+                else
+                    if j>1
+                        vxm13=vxm13+1/2*((dxmj/dx-0.5)^2)*(vxf[i,j-1]-2*vxf[i,j]+vxf[i,j+1])
+                        vxm24=vxm24+1/2*((dxmj/dx-0.5)^2)*(vxf[i+1,j-1]-2*vxf[i+1,j]+vxf[i+1,j+1])
+                    end
+                end
+                # Compute vx
+                vxm[rk]=(1-dymi/dy)*vxm13+(dymi/dy)*vxm24
+                
+                # Interpolate vy
+                # Define i;j indexes for the upper left node
+                j=trunc(Int, (xcur-xvy[1])/dx)+1
+                i=trunc(Int, (ycur-yvy[1])/dy)+1
+                if j<1
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1
+                    i=1
+                elseif i>Ny-1
+                    i=Ny-1
+                end
+                # Compute distances
+                dxmj=xcur-xvy[j]
+                dymi=ycur-yvy[i]
+                # Compute weights
+                # Compute vy velocity for the left & right of the cell()
+                vym12=vyf[i,j]*(1-dymi/dy)+vyf[i+1,j]*dymi/dy
+                vym34=vyf[i,j+1]*(1-dymi/dy)+vyf[i+1,j+1]*dymi/dy
+                # Compute correction
+                if dymi/dy>=0.5
+                    if i<Ny-1
+                        vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vyf[i,j]-2*vyf[i+1,j]+vyf[i+2,j])
+                        vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vyf[i,j+1]-2*vyf[i+1,j+1]+vyf[i+2,j+1])
+                    end      
+                else
+                    if i>1
+                        vym12=vym12+1/2*((dymi/dy-0.5)^2)*(vyf[i-1,j]-2*vyf[i,j]+vyf[i+1,j])
+                        vym34=vym34+1/2*((dymi/dy-0.5)^2)*(vyf[i-1,j+1]-2*vyf[i,j+1]+vyf[i+1,j+1])
+                    end
+                end
+                # Compute vy
+                vym[rk]=(1-dxmj/dx)*vym12+(dxmj/dx)*vym34
+                
+                # Change coordinates to obtain B;C;D points
+                if rk==1 || rk==2
+                    xcur=xA-dtm/2*vxm[rk]
+                    ycur=yA-dtm/2*vym[rk]
+                elseif rk==3
+                    xcur=xA-dtm*vxm[rk]
+                    ycur=yA-dtm*vym[rk]
+                end
+            end
+
+            # Compute effective velocity
+            vxmeff=1/6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+            vymeff=1/6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+            # Trace the node backward
+            xcur=xA-dtm*vxmeff
+            ycur=yA-dtm*vymeff
+            # Interpolate nodal property
+            # SIGMA'xx; P
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xcur-xp[1])/dx)+1
+            i=trunc(Int, (ycur-yp[1])/dy)+1
+            if j<1
+                j=1
+            elseif j>Nx
+                j=Nx
+            end
+            if i<1
+                i=1
+            elseif i>Ny
+                i=Ny
+            end
+            # Compute distances
+            dxmj=xcur-xp[j]
+            dymi=ycur-yp[i]
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy)
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy)
+            wtmi1j1=(dxmj/dx)*(dymi/dy)
+            # Compute nodal total pressure
+            pf0_ver[ii,jj]=pf_ver[i,j]*wtmij+pf_ver[i+1,j]*wtmi1j+ pf_ver[i,j+1]*wtmij1+pf_ver[i+1,j+1]*wtmi1j1
+        end
+        end
+        # test
+        @test pr0 ≈ pr0_ver atol=1e-4
+        @test ps0 ≈ ps0_ver atol=1e-4 
+        @test pf0 ≈ pf0_ver atol=1e-4
+    end # testset "backtrace_pressures_rk4!()"
 end
 

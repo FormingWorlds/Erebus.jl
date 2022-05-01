@@ -4,7 +4,7 @@
 # using DocStringExtensions
 using Parameters
 # using StaticArrays
-# using BenchmarkTools
+using BenchmarkTools
 # using TimerOutputs
 
 using HydrologyPlanetesimals
@@ -235,12 +235,14 @@ RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
 
 
 sp = HydrologyPlanetesimals.StaticParameters(
-    Nxmc=4, Nymc=4, dtelastic=0.9)
+    Nxmc=1, Nymc=1, dtelastic=0.9)
 Nx, Ny = sp.Nx, sp.Ny
 Nx1, Ny1 = sp.Nx1, sp.Ny1
 marknum = sp.start_marknum
 x, y = sp.x, sp.y
 xp, yp = sp.xp, sp.yp
+xvx, yvx = sp.xvx, sp.yvx
+xvy, yvy = sp.xvy, sp.yvy
 dx, dy = sp.dx, sp.dy
 # simulate markers
 xm = rand(-dx:0.1:x[end]+dx, marknum)
@@ -255,7 +257,12 @@ tk2 = rand(Ny1, Nx1)
 wyx = rand(Ny, Nx)
 dtm = sp.dtelastic
 APHI = rand(Ny1, Nx1)
-
+pr = rand(Ny1, Nx1)
+pf = rand(Ny1, Nx1)
+ps = rand(Ny1, Nx1)
+pr0 = rand(Ny1, Nx1)
+pf0 = rand(Ny1, Nx1)
+ps0 = rand(Ny1, Nx1)
 
 vx = rand(Ny1, Nx1)
 vy = rand(Ny1, Nx1)
