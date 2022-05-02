@@ -478,7 +478,7 @@ using Test
         @test alphafluidcur == zeros(Float64, marknum)
     end # testset "setup_marker_properties_helpers()"
 
-    @testset " setup_marker_geometry_helpers()" begin
+    @testset "setup_marker_geometry_helpers()" begin
         sp = HydrologyPlanetesimals.StaticParameters()
         Nxm, Nym = sp.Nxm, sp.Nym
         mdis_init = sp.mdis_init
@@ -488,8 +488,8 @@ using Test
         (
             mdis,
             mnum,
-            mtyp,
-            mpor
+            # mtyp,
+            # mpor
          ) = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
         # test
         @test typeof(mdis) == Matrix{Float64}
@@ -497,10 +497,10 @@ using Test
         @test rand(mdis) == mdis_init
         @test typeof(mnum) == Matrix{Int}
         @test size(mnum) == (Nym, Nxm)
-        @test typeof(mtyp) == Matrix{Int}
-        @test size(mtyp) == (Nym, Nxm)
-        @test typeof(mpor) == Matrix{Float64}
-        @test size(mpor) == (Nym, Nxm)
+        # @test typeof(mtyp) == Matrix{Int}
+        # @test size(mtyp) == (Nym, Nxm)
+        # @test typeof(mpor) == Matrix{Float64}
+        # @test size(mpor) == (Nym, Nxm)
     end # testset " setup_marker_geometry_helpers()"
     
     @testset "define_markers!() & compute_marker_properties!()" begin
@@ -5408,5 +5408,170 @@ using Test
         @test ps0 ≈ ps0_ver atol=1e-4 
         @test pf0 ≈ pf0_ver atol=1e-4
     end # testset "backtrace_pressures_rk4!()"
+
+    @testset "replenish_markers!()" begin
+        sp = HydrologyPlanetesimals.StaticParameters()
+        marknum = sp.start_marknum
+        x, y = sp.x, sp.y
+        xsize, ysize = sp.xsize, sp.ysize
+        dx, dy = sp.dx, sp.dy
+        dxm, dym = sp.dxm, sp.dym
+        Nxm, Nym = sp.Nxm, sp.Nym
+        Nxmc, Nymc = sp.Nxmc, sp.Nymc
+        xm = rand(-dx:0.1:x[end]/2, marknum)
+        ym = rand(-dy:0.1:y[end]/2, marknum)
+        tm = rand(1:3, marknum)
+        tkm = rand(marknum)
+        sxxm = rand(marknum)
+        sxym = rand(marknum)
+        phim = rand(marknum)
+        etavpm = rand(marknum)
+        mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
+        xm_ver = copy(xm)
+        ym_ver = copy(ym)
+        tm_ver = copy(tm)
+        tkm_ver = copy(tkm)
+        sxxm_ver = copy(sxxm)
+        sxym_ver = copy(sxym)
+        phim_ver = copy(phim)
+        etavpm_ver = copy(etavpm)
+        # replenish_markers
+        HydrologyPlanetesimals.replenish_markers!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            phim,
+            sxxm,
+            sxym,
+            etavpm,
+            mdis,
+            mnum,
+            randomized=false
+        )
+        # verification, from madcph.m, line 2491ff
+        # Add markers to empty areas
+        marknumold=marknum
+        mdis_ver=1e30.*ones(Nym, Nxm)
+        mnum_ver = zeros(Int, Nym, Nxm)
+        mtyp = zeros(Int, Nym, Nxm)
+        mpor = zeros(Nym, Nxm)
+        xxm=dxm/2:dxm:xsize-dxm/2
+        yym=dym/2:dym:ysize-dym/2
+        for m=1:1:marknum
+            # Check markers with the nearest nodes
+            # Define i;j indexes for the upper left node
+            j=trunc(Int, (xm_ver[m]-xxm[1])/dxm)+1
+            i=trunc(Int, (ym_ver[m]-yym[1])/dym)+1
+            if j<1
+                j=1
+            elseif j>Nxm-1
+                j=Nxm-1
+            end
+            if i<1
+                i=1
+            elseif i>Nym-1
+                i=Nym-1
+            end
+            # Check nodes
+            # i;j Node
+            # Compute distance
+            dxmj=xm_ver[m]-xxm[j]
+            dymi=ym_ver[m]-yym[i]
+            dismij=(dxmj^2+dymi^2)^0.5
+            if dismij<mdis_ver[i,j]
+                mdis_ver[i,j]=dismij
+                mnum_ver[i,j]=m
+                mtyp[i,j]=tm_ver[m]
+                mpor[i,j]=phim[m]
+            end
+            # i+1;j Node
+            # Compute distance
+            dxmj=xm_ver[m]-xxm[j]
+            dymi=ym_ver[m]-yym[i+1]
+            dismi1j=(dxmj^2+dymi^2)^0.5
+            if dismi1j<mdis_ver[i+1,j]
+                mdis_ver[i+1,j]=dismi1j
+                mnum_ver[i+1,j]=m
+                mtyp[i+1,j]=tm_ver[m]
+                mpor[i+1,j]=phim[m]
+            end
+            # i;j+1 Node
+            # Compute distance
+            dxmj=xm_ver[m]-xxm[j+1]
+            dymi=ym_ver[m]-yym[i]
+            dismij1=(dxmj^2+dymi^2)^0.5
+            if dismij1<mdis_ver[i,j+1]
+                mdis_ver[i,j+1]=dismij1
+                mnum_ver[i,j+1]=m
+                mtyp[i,j+1]=tm_ver[m]
+                mpor[i,j+1]=phim[m]
+            end
+            # i+1;j+1 Node
+            # Compute distance
+            dxmj=xm_ver[m]-xxm[j+1]
+            dymi=ym_ver[m]-yym[i+1]
+            dismi1j1=(dxmj^2+dymi^2)^0.5
+            if dismi1j1<mdis_ver[i+1,j+1]
+                mdis_ver[i+1,j+1]=dismi1j1
+                mnum_ver[i+1,j+1]=m
+                mtyp[i+1,j+1]=tm_ver[m]
+                mpor[i+1,j+1]=phim[m]
+            end
+        end
+        dii=5*Nxmc
+        djj=5*Nymc
+        for j=1:1:Nxm
+            for i=1:1:Nym
+                if mnum_ver[i,j]==0
+                    # Serch surrounding nodes
+                    for jj=j-djj:1:j+djj
+                        for ii=i-dii:1:i+dii
+                            if ii>=1 && ii<=Nym && jj>=1 && jj<=Nxm && mnum_ver[ii,jj]>0
+                                # Compute distance
+                                m=mnum_ver[ii,jj]
+                                dxmj=xm_ver[m]-xxm[j]
+                                dymi=ym_ver[m]-yym[i]
+                                dismij=(dxmj^2+dymi^2)^0.5
+                                if dismij<mdis_ver[i,j]
+                                    mdis_ver[i,j]=dismij
+                                    mnum_ver[i,j]=-m
+                                    mtyp[i,j]=-tm_ver[m]
+                                    mpor[i,j]=phim[m]
+                                end
+                            end
+                        end
+                    end
+                    # Add New marker
+                    if mnum_ver[i,j]<0
+                        # Add marker number
+                        marknum=marknum+1
+                        # Assign marker coordinates
+                        push!(xm_ver,xxm[j])#+(rand()-0.5)*dxm)
+                        push!(ym_ver,yym[i])#+(rand()-0.5)*dym)
+                        # Copy marker properties
+                        m=-mnum_ver[i,j]
+                        push!(tm_ver,tm[m]); # Material type()
+                        push!(tkm_ver,tkm[m]); # Temperature
+                        push!(phim_ver,phim[m]); # Porosity
+                        push!(sxxm_ver,sxxm[m]); # SIGMA'xx, Pa
+                        push!(sxym_ver,sxym[m]); # SIGMAxy, Pa
+                        push!(etavpm_ver,etavpm[m]); # Visco-plastic viscosity, Pa
+                    end
+                end
+            end
+        end           
+        marknumnew=marknum
+        # test
+        @test length(xm) == length(xm_ver)
+        @test length(ym) == length(ym_ver)
+        @test tm == tm_ver
+        @test tkm == tkm_ver
+        @test phim == phim_ver
+        @test sxxm == sxxm_ver
+        @test sxym == sxym_ver
+        @test etavpm == etavpm_ver        
+    end # testset "replenish_markers!()"
+
 end
 

@@ -13,7 +13,9 @@ using TimerOutputs
 
 export run_simulation
 
+include("constants.jl")
 const to = TimerOutput()
+
 
 """
 Static parameters: Grids, markers, switches, constants, etc. which remain
@@ -335,22 +337,39 @@ function setup_dynamic_simulation_parameters(sp)
         start_hrfluidm,
         nplast = sp
      # timestep counter (current), init to startstep
-     timestep = start_step
+     timestep::Int64 = start_step
      # computational timestep (current), init to dtelastic [s]
-     dt = dtelastic
+     dt::Float64 = dtelastic
      # time sum (current), init to starttime [s]
-     timesum = start_time
+     timesum::Float64 = start_time
      # current number of markers, init to startmarknum
-     marknum = start_marknum
+     marknum::Int64 = start_marknum
      # radiogenic heat production solid phase
-     hrsolidm = start_hrsolidm
+     hrsolidm::SVector{3, Float64} = start_hrsolidm
      # radiogenic heat production fluid phase
-     hrfluidm = start_hrfluidm
+     hrfluidm::SVector{3, Float64} = start_hrfluidm
      # nodes yielding error vector of plastic iterations
-     YERRNOD = zeros(Float64, nplast) 
+     YERRNOD::Vector{Float64} = zeros(Float64, nplast) 
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
  
+function setup_dynamic_simulation_parameters()
+     # timestep counter (current), init to startstep
+     timestep::Int64 = start_step
+     # computational timestep (current), init to dtelastic [s]
+     dt::Float64 = dtelastic
+     # time sum (current), init to starttime [s]
+     timesum::Float64 = start_time
+     # current number of markers, init to startmarknum
+     marknum::Int64 = start_marknum
+     # radiogenic heat production solid phase
+     hrsolidm::SVector{3, Float64} = start_hrsolidm
+     # radiogenic heat production fluid phase
+     hrfluidm::SVector{3, Float64} = start_hrfluidm
+     # nodes yielding error vector of plastic iterations
+     YERRNOD::Vector{Float64} = zeros(Float64, nplast) 
+    return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
+end # function setup_dynamic_simulation_parameters()
 
 """
 Set up staggered grid properties for basic, Vx, Vy, and P nodes.
@@ -606,6 +625,188 @@ function setup_staggered_grid_properties(sp; randomized=false)
     )
 end # function setup_staggered_grid_properties()
 
+# function setup_staggered_grid_properties(; randomized=false)
+#     # basic nodes
+#     # viscoplastic viscosity [Pa*s]
+#     ETA = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # viscous viscosity [Pa*s]
+#     ETA0 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # shear modulus [Pa]
+#     GGG = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # epsilonxy [1/s]
+#     EXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # σxy [1/s]
+#     SXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # σ₀xy [1/s]
+#     SXY0 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # rotation rate [1/s]
+#     wyx = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # compressive strength [Pa]
+#     COH = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # tensile strength [Pa]
+#     TEN = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # friction
+#     FRI = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # plastic yielding node property
+#     YNY = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+#     # Vx nodes
+#     # density [kg/m^3]
+#     RHOX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid density [kg/m^3]
+#     RHOFX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # thermal conductivity [W/m/K]
+#     KX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # porosity
+#     PHIX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # solid vx-velocity [m/s]
+#     vx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid vx-velocity [m/s]
+#     vxf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # etafluid/kphi ratio [m^2]
+#     RX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # qx-darcy flux [m/s]
+#     qxD = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # gx-gravity [m/s^2]
+#     gx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # Vy nodes
+#     # density [kg/m^3]
+#     RHOY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid density [kg/m^3]
+#     RHOFY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # thermal conductivity [W/m/K]
+#     KY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # porosity
+#     PHIY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # solid vy-velocity [m/s]
+#     vy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid vy-velocity [m/s]
+#     vyf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # etafluid/kphi ratio [m^2]
+#     RY = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # qy-Darcy flux [m/s]
+#     qyD = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # gy-gravity [m/s^2]
+#     gy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # P nodes
+#     # density [kg/m^3]
+#     RHO = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # volumetric heat capacity [J/m^3/K]
+#     RHOCP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # thermal expansion [J/m^3/K]
+#     ALPHA = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid thermal expansion [J/m^3/K]
+#     ALPHAF = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # radioactive heating [W/m^3]
+#     HR = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # adiabatic heating [W/m^3]
+#     HA = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # shear heating [W/m^3]
+#     HS = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # viscosity [Pa*s]
+#     ETAP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # shear modulus [Pa]
+#     GGGP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # EPSILONxx [1/s]
+#     EXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # σ′xx [1/s]
+#     SXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # σ₀′ (SIGMA0'xx) [1/s]
+#     SXX0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # current temperature [K]
+#     tk1 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # next temperature [K]
+#     tk2 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # solid vx in pressure nodes [m/s]
+#     vxp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # solid vy in pressure nodes [m/s]
+#     vyp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid vx in pressure nodes [m/s]
+#     vxpf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid vy in pressure nodes [m/s]
+#     vypf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # total pressure [Pa]
+#     pr = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # fluid pressure [Pa]
+#     pf = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # solid pressure [Pa]
+#     ps = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # previous total pressure [Pa]
+#     pr0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # previous fluid pressure [Pa]
+#     pf0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # previous solid pressure [Pa]
+#     ps0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # bulk viscosity [Pa*s]
+#     ETAPHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # bulk compresibility [Pa*s]
+#     BETTAPHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # porosity
+#     PHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # Dln[(1-ϕ)/ϕ]/Dt
+#     APHI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # gravity potential [J/kg]
+#     FI = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     return (
+#         ETA,
+#         ETA0,
+#         GGG,
+#         EXY,
+#         SXY,
+#         SXY0,
+#         wyx,
+#         COH,
+#         TEN,
+#         FRI,
+#         YNY,
+#         RHOX,
+#         RHOFX,
+#         KX,
+#         PHIX,
+#         vx,
+#         vxf,
+#         RX,
+#         qxD,
+#         gx,
+#         RHOY,
+#         RHOFY,
+#         KY,
+#         PHIY,
+#         vy,
+#         vyf,
+#         RY,
+#         qyD,
+#         gy,
+#         RHO,
+#         RHOCP,
+#         ALPHA,
+#         ALPHAF,
+#         HR,
+#         HA,
+#         HS,
+#         ETAP,
+#         GGGP,
+#         EXX,
+#         SXX,
+#         SXX0,       
+#         tk1,
+#         tk2,
+#         vxp,
+#         vyp,
+#         vxpf,
+#         vypf,
+#         pr,
+#         pf,
+#         ps,
+#         pr0,
+#         pf0,
+#         ps0,
+#         ETAPHI,
+#         BETTAPHI,
+#         PHI,
+#         APHI,
+#         FI
+#     )
+# end # function setup_staggered_grid_properties()
 
 """
 Set up additional helper staggered grid properties to facilitate computations.
@@ -705,6 +906,72 @@ function setup_staggered_grid_properties_helpers(sp; randomized=false)
     )
 end # function setup_staggered_grid_properties_helpers()
 
+# function setup_staggered_grid_properties_helpers(;randomized=false)
+#     # basic nodes
+#     # plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
+#     ETA5 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # previous viscous viscosity at basic nodes [Pa⋅s]
+#     ETA00 = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # plastic iterations plastic yielding node property at basic nodes
+#     YNY5 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+#     # previous plastic yielding node property at basic nodes
+#     YNY00 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+#     # inverse viscoplastic viscosity at yielding basic nodes [1/(Pa⋅s)]
+#     YNY_inv_ETA = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+#     # stress change Δσxy at basic nodes [Pa]
+#     DSXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # computational viscosity at basic nodes
+#     ETAcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # computational previous xy stress at basic nodes
+#     SXYcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+#     # Vx nodes
+#     # total density gradient in x direction at Vx nodes
+#     dRHOXdx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # total density gradient in y direction at Vx nodes
+#     dRHOXdy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # Vy nodes
+#     # total density gradient in x direction at Vy nodes
+#     dRHOYdx = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # total density gradient in y direction at Vy nodes
+#     dRHOYdy = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # P nodes
+#     # computational viscosity at P nodes
+#     ETAPcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # computational previous xx stress at P nodes
+#     SXXcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # computational previous yy stress at P nodes
+#     SYYcomp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # second strain rate invariant at P nodes [1/s]
+#     EII = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # second stress invariant at P nodes [Pa]
+#     SII = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # stress change Δσ′xx at P nodes [Pa]
+#     DSXX = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     # previous temperature at P nodes [K]
+#     tk0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+#     return (
+#         ETA5,
+#         ETA00,
+#         YNY5,
+#         YNY00,
+#         YNY_inv_ETA,
+#         DSXY,
+#         ETAcomp,
+#         SXYcomp,
+#         dRHOXdx,
+#         dRHOXdy,
+#         dRHOYdx,
+#         dRHOYdy,
+#         ETAPcomp,
+#         SXXcomp,
+#         SYYcomp,
+#         EII,
+#         SII,
+#         DSXX,
+#         tk0
+#     )
+# end # function setup_staggered_grid_properties_helpers()
+
 
 """
 Set up geodesic and physical properties of the set of markers.
@@ -748,6 +1015,26 @@ function setup_marker_properties(sp; randomized=false)
     phim = randomized ? rand(marknum) : zeros(marknum)
     return xm, ym, tm, tkm, sxxm, sxym, etavpm, phim
 end # function setup_marker_properties()
+
+# function setup_marker_properties(marknum; randomized=false)
+#     # horizontal marker coordinate [m]
+#     xm = randomized ? rand(-dx:0.1:xsize+dx, marknum) : zeros(marknum)
+#     # vertical marker coordinate [m]
+#     ym = randomized ? rand(-dy:0.1:ysize+dy, marknum) : zeros(marknum)
+#     # marker material type
+#     tm = randomized ? rand(1:3, marknum) : zeros(Int, marknum)
+#     # marker temperature [K]
+#     tkm = randomized ? rand(273:300, marknum) : zeros(marknum)
+#     # marker σ′xx [Pa]
+#     sxxm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker σxy [Pa]
+#     sxym = randomized ? rand(marknum) : zeros(marknum)
+#     # marker viscoplastic viscosity [Pa]
+#     etavpm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker porosity
+#     phim = randomized ? rand(marknum) : zeros(marknum)
+#     return xm, ym, tm, tkm, sxxm, sxym, etavpm, phim
+# end # function setup_marker_properties()
 
 
 """
@@ -834,6 +1121,59 @@ function setup_marker_properties_helpers(sp; randomized=false)
     )
 end # function setup_marker_properties_helpers()
 
+# function setup_marker_properties_helpers(marknum; randomized=false)
+#     # marker total density
+#     rhototalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total volumetric heat capacity
+#     rhocptotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker solid viscosity
+#     etasolidcur = randomized ? rand(marknum) : zeros(marknum)
+#     # marker fluid viscosity
+#     etafluidcur = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total viscosity
+#     etatotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total radiogenic heat production
+#     hrtotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total thermal conductivity
+#     ktotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total thermal energy
+#     tkm_rhocptotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker fluid viscosity over permeability
+#     etafluidcur_inv_kphim = randomized ? rand(marknum) : zeros(marknum)
+#     # marker inverse of total shear modulus
+#     inv_gggtotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total friction coefficient
+#     fricttotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total compressive strength
+#     cohestotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker total tensile strength
+#     tenstotalm = randomized ? rand(marknum) : zeros(marknum)
+#     # marker fluid density
+#     rhofluidcur = randomized ? rand(marknum) : zeros(marknum)
+#     # marker solid thermal expansion coefficient
+#     alphasolidcur = randomized ? rand(marknum) : zeros(marknum)
+#     # marker fluid thermal expansion coefficient
+#     alphafluidcur = randomized ? rand(marknum) : zeros(marknum)
+#     return (
+#         rhototalm,
+#         rhocptotalm,
+#         etasolidcur,
+#         etafluidcur,
+#         etatotalm,
+#         hrtotalm,
+#         ktotalm,
+#         tkm_rhocptotalm,
+#         etafluidcur_inv_kphim,
+#         inv_gggtotalm,
+#         fricttotalm,
+#         cohestotalm,
+#         tenstotalm,
+#         rhofluidcur,
+#         alphasolidcur,
+#         alphafluidcur
+#     )
+# end # function setup_marker_properties_helpers()
+
 """
 Set up additional marker geometry helpers to facilitate marker handling.
 
@@ -847,16 +1187,24 @@ $(SIGNATURES)
 
     - mdis: minimum distance of marker launch anchor points to nearest marker
     - mnum: number of marker nearest to marker launch anchor positions
-    - mtyp: type of marker nearest to marker launch anchor positions
-    - mpor: porosity of marker nearest to marker launch anchor positions
+    # - mtyp: type of marker nearest to marker launch anchor positions
+    # - mpor: porosity of marker nearest to marker launch anchor positions
 """
 function setup_marker_geometry_helpers(sp)
     @unpack Nxm, Nym, mdis_init = sp
     mdis = fill(mdis_init, Nym, Nxm)
     mnum = zeros(Int, Nym, Nxm)
-    mtyp = zeros(Int, Nym, Nxm)
-    mpor = zeros(Nym, Nxm)
-    return mdis, mnum, mtyp, mpor 
+    # mtyp = zeros(Int, Nym, Nxm)
+    # mpor = zeros(Nym, Nxm)
+    return mdis, mnum#, mtyp, mpor 
+end
+
+function setup_marker_geometry_helpers()
+    mdis = fill(mdis_init, Nym, Nxm)
+    mnum = zeros(Int, Nym, Nxm)
+    # mtyp = zeros(Int, Nym, Nxm)
+    # mpor = zeros(Nym, Nxm)
+    return mdis, mnum#, mtyp, mpor 
 end
 
 
@@ -1586,6 +1934,21 @@ function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # end # @timeit to "fix"
 end # function fix
 
+function fix(x, y, x_axis, y_axis, jmin, jmax, imin, imax)
+    j = unsafe_trunc(Int, (x-x_axis[1])/dx) + 1
+    i = unsafe_trunc(Int, (y-y_axis[1])/dy) + 1
+    if j < jmin
+        j = jmin
+    elseif j > jmax
+        j = jmax
+    end
+    if i < imin
+        i = imin
+    elseif i > imax
+        i = imax
+    end
+    return i, j
+end
 
 """
 Reduce a 3D (i, j, k) along its third (k) axis by addition and write the result
@@ -4889,7 +5252,7 @@ function backtrace_pressures_rk4!(
     #     @inbounds xrk4[1] = xp[jj]
     #     @inbounds yrk4[1] = yp[ii]
         for jj=2:1:Nx
-            @threads for ii=2:1:Ny
+            for ii=2:1:Ny
         # setup RK4 scheme
         xrk4 = @MVector [xp[jj], 0.0, 0.0, 0.0]
         yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
@@ -5113,40 +5476,47 @@ end # function backtrace_pressures_rk4!
 
 
 """
-Update marker geometry helper properties given a marker number and nearby
-marker grid point.
+Update marker population geometry status given a marker number and 
+nearest top/left marker grid point.
 
 $(SIGNATURES)
 
 # Details
 
     - m: marker number
-    - i: vertical index of marker grid point
-    - j: horizontal index of marker grid point
-    - xm: x-position of markers
-    - ym: y-position of markers
-    - xxm: x-position of marker grid points
-    - yym: y-position of marker grid points
-    - tm: type of markers
-    - phim: porosity of markers
+    - i: vertical index of top/left marker grid point
+    - j: horizontal index of top/left marker grid point
+    - xm: horizontal x-position of markers
+	- ym: vertical y-position of markers
     - mdis: minimum distance of marker launch anchor points to nearest marker
     - mnum: number of marker nearest to marker launch anchor positions
-    - mtyp: type of marker nearest to marker launch anchor positions
-    - mpor: porosity of marker nearest to marker launch anchor positions
 
 # Returns
 
     - nothing
 """
-function update_marker_geometry_helpers!(
-    m, i, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
+function update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
     dismij = distance(xm[m], ym[m], xxm[j], yym[i])
+    dismi1j = distance(xm[m], ym[m], xxm[j], yym[i+1])
+    dismij1 = distance(xm[m], ym[m], xxm[j+1], yym[i])
+    dismi1j1 = distance(xm[m], ym[m], xxm[j+1], yym[i+1])
     if dismij < mdis[i, j]
         mdis[i, j] = dismij
         mnum[i, j] = m
-        mtyp[i, j] = tm[m]
-        mpor[i, j] = phim[m]
     end
+    if dismi1j < mdis[i+1, j]
+        mdis[i+1, j] = dismi1j
+        mnum[i+1, j] = m
+    end
+    if dismij1 < mdis[i, j+1]
+        mdis[i, j+1] = dismij1
+        mnum[i, j+1] = m
+    end
+    if dismi1j1 < mdis[i+1, j+1]
+        mdis[i+1, j+1] = dismi1j1
+        mnum[i+1, j+1] = m
+    end
+    return nothing
 end
 
 
@@ -5157,109 +5527,75 @@ $(SIGNATURES)
 
 # Details
 
-    - xm: 
-	- ym: 
-	- tm: 
-	- tkm: 
-	- phim: 
-	- sxxm: 
-	- sxym: 
-	- etavpm: 
-	- mdis: 
-	- mnum: 
-	- mtyp: 
-	- mpor:
-    - marknum: total number of markers in use 
-	- sp: 
+    - xm: horizontal x-position of markers
+	- ym: vertical y-position of markers
+	- tm: type of markers
+	- tkm: temperature of markers 
+	- phim: porosity of markers 
+	- sxxm: marker σ′xx of markers
+	- sxym: σxy of markers
+	- etavpm: viscoplastic viscosity  
+	- mdis: minimum distance of marker launch anchor points to nearest marker 
+	- mnum: number of marker nearest to marker launch anchor positions
 
 # Returns
 
-    - marknumnew: updated total number of markers in use
+    - nothing
 """
 function replenish_markers!(
-    xm,
-	ym,
-	tm,
-	tkm,
-	phim,
-	sxxm,
-	sxym,
-	etavpm,
-	mdis,
-	mnum,
-	mtyp,
-	mpor,
-	marknum,
-    sp
-)
+    xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum; randomized=true)
 # @timeit to "replenish_markers!" begin
-    @unpack Nxmc, Nymc, dx, dy, xxm, yym, jmin_m, jmax_m, imin_m, imax_m = sp
-    @threads for m=1:1:marknum
+    # reset marker population geometry tracker
+    mdis .= mdis_init
+    mnum .= 0
+    # establish marker distribution
+    for m=1:1:length(xm)
         i, j = fix(
-            xm[m],
-            ym[m],
-            xxm,
-            yym,
-            dx,
-            dy,
-            jmin_m,
-            jmax_m,
-            imin_m,
-            imax_m
-        )
-        update_marker_geometry_helpers!(
-            m, i, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
-        update_marker_geometry_helpers!(
-            m, i+1, j, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
-        update_marker_geometry_helpers!(
-            m, i, j+1, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
-        update_marker_geometry_helpers!(
-            m, i+1, j+1, xm, ym, xxm, yym, tm, phim, mdis, mnum, mtyp, mpor)
-    end # m marker loop
+            xm[m], ym[m], xxm, yym, dxm, dym, jmin_m, jmax_m, imin_m, imax_m)
+        update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
+    end
     dii = 5 * Nymc
     djj = 5 * Nxmc
     for j=1:1:Nxm, i=1:1:Nym
         if mnum[i, j] == 0
             for jj=max(j-djj, 1):1:min(j+djj, Nxm)
-                @threads for ii=max(i-dii, 1):1:min(i+dii, Nym)
+                for ii=max(i-dii, 1):1:min(i+dii, Nym)
                     if mnum[ii, jj] > 0
                         m = mnum[ii, jj]
-                        update_marker_geometry_helpers!(
-                            m,
-                            ii,
-                            jj,
-                            xm,
-                            ym,
-                            xxm,
-                            yym,
-                            tm,
-                            phim,
-                            mdis,
-                            mnum,
-                            mtyp,
-                            mpor
-                        )
+                        dismij = distance(xm[m], ym[m], xxm[j], yym[i])
+                        if dismij < mdis[i, j]
+                            mdis[i, j] = dismij
+                            mnum[i, j] = -m
+                        end
                     end
                 end
             end 
             # add new marker            
             if mnum[i, j] < 0
-                marknum += 1
-                xm[marknum] = xxm[j] + (rand()-0.5)*dxm
-                ym[marknum] = yym[i] + (rand()-0.5)*dym
+                # add marker
+                if randomized 
+                    # production runs
+                    push!(xm, xxm[j] + (rand()-0.5)*dxm)
+                    push!(ym, yym[i] + (rand()-0.5)*dym)
+                else
+                    # for testing
+                    push!(xm, xxm[j])
+                    push!(ym, yym[i])
+                end
                 # copy marker properties
-                m = -mnum[i,j]         # CHECK ALL OF THIS vvvvvvvv
-                tm[marknum] = tm[m]
-                tkm[marknum] = tkm[m]
-                phim[marknum] = phim[m]
-                sxxm[marknum] = sxxm[m]
-                sxym[marknum] = sxym[m]
-                etavpm[marknum] = etavpm[m]
+                m = -mnum[i,j]
+                push!(tm, tm[m])
+                push!(tkm, tkm[m])
+                push!(phim, phim[m])
+                push!(sxxm, sxxm[m])
+                push!(sxym, sxym[m])
+                push!(etavpm, etavpm[m])
             end
         end
     end    
+    return nothing
+    # return length(xm)
 # end # timeit to "replenish_markers!"
-    return marknum
 end # function replenish_markers!
 
 

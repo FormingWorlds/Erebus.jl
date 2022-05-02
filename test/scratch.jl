@@ -3,7 +3,7 @@
 # using MAT
 # using DocStringExtensions
 using Parameters
-# using StaticArrays
+using StaticArrays
 using BenchmarkTools
 # using TimerOutputs
 
@@ -665,6 +665,10 @@ imin_m, imax_m = sp.imin_m, sp.imax_m
 # simulate markers
 xm = rand(-dx:0.1:x[end]+dx, marknum)
 ym = rand(-dy:0.1:y[end]+dy, marknum)
+xm2 = rand(-dx:0.1:x[end]/2, marknum)
+ym2 = rand(-dy:0.1:y[end]/2, marknum)
+
+tm = rand(1:3, marknum)
 sxym = rand(marknum)
 sxxm = rand(marknum)
 tkm = rand(marknum)
@@ -673,5 +677,98 @@ sxxm = rand(marknum)
 sxym = rand(marknum)
 etavpm = rand(marknum)
 phim = rand(marknum)
-tm = rand(1:3, marknum)
-mdis, mnum, mtyp, mpor = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
+mdis, mnum, mtyp, mpor = HydrologyPlanetesimals.setup_marker_geometry_helpers()
+
+
+function δy(i, j, grid)
+    return grid[i, j] - 2.0*grid[i+1, j] + grid[i+2, j]
+end
+
+function loop(result)
+    # for xpjj in SVector{140}(xp[2:1:Nx]), ypii in SVector{140}(yp[2:1:Ny])
+    # for xpjj in xp[2:1:Nx], ypii in yp[2:1:Ny]
+        # ypii = xpjj
+    
+        # for ypii in SVector{140}(yp[2:1:Ny])
+    for jj=2:1:Nx, ii=2:1:Ny
+    # setup RK4 scheme
+    result = 0.0
+    # xrk4 = [xp[jj], 0.0, 0.0, 0.0]
+    # yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
+    # RK4 velocities va, vb, vc, vd
+    # vxrk4 = @MVector zeros(4)
+    # vyrk4 = @MVector zeros(4)
+    # backtrace P node using RK4 scheme on solid velocity
+    for rk=1:1:4
+#         # interpolate vx
+
+        i, j, dxmj, dymi = HydrologyPlanetesimals.fix_distances(
+            # xpjj,
+            # ypii,
+            xp[jj],
+            yp[ii],
+            # xrk4[rk],
+            # yrk4[rk],
+            xvx,
+            yvx,
+            dx,
+            dy,
+            jmin_vx,
+            jmax_vx,
+            imin_vx,
+            imax_vx
+        )
+        rr[ii,jj] = dxmj+dymi
+        # result += dxmj+dymi
+    end
+# end
+end
+return result
+end
+
+
+function loop2(t)
+    result = 0.0
+    for m=1:1:marknum
+    # for jj=2:1:Nx
+    #     for ii=2:1:Ny
+        # # setup RK4 scheme
+        # xrk4 = [xp[jj], 0.0, 0.0, 0.0]
+        # yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
+        # RK4 velocities va, vb, vc, vd
+        # vxrk4 = @MVector zeros(4)
+        # vyrk4 = @MVector zeros(4)
+        # backtrace P node using RK4 scheme on solid velocity
+        for rk=1:1:4
+    #         # interpolate vx
+    
+    
+            result += rhocpsolidm[t[m]] 
+        end
+    end
+    return result
+    end
+
+    function loop3(t)
+        result = 0.0
+        for m=1:1:marknum::Int64
+        # for m=1:1:marknum
+        # for jj=2:1:Nx
+        #     for ii=2:1:Ny
+            # # setup RK4 scheme
+            # xrk4 = [xp[jj], 0.0, 0.0, 0.0]
+            # yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
+            # RK4 velocities va, vb, vc, vd
+            # vxrk4 = @MVector zeros(4)
+            # vyrk4 = @MVector zeros(4)
+            # backtrace P node using RK4 scheme on solid velocity
+            for rk=1:1:4
+        #         # interpolate vx
+        
+        
+                result += t[m]
+            end
+        end
+        return result
+        end
+    
