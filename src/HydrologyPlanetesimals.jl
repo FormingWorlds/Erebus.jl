@@ -3,8 +3,8 @@ module HydrologyPlanetesimals
 using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
+using JLD2
 using LinearAlgebra
-using MAT
 using Parameters
 using ProgressMeter
 using SparseArrays
@@ -4871,19 +4871,19 @@ $(SIGNATURES)
 
     - xm: x-coordinate of markers
     - ym: y-coordinate of markers
-    - tm: 
-    - tkm: 
-    - phim: 
-    - sxym: 
-    - sxxm: 
-    - vx: 
-    - vy: 
-    - vxf: 
-    - vyf: 
-    - wyx: 
-    - tk2: 
-    - marknum: 
-    - dtm: 
+    - tm: type of markers 
+    - tkm: temperature of markers
+    - phim: porosity of markers  
+    - sxxm: marker σ′xx
+    - sxym: marker σxy
+    - vx: solid vx-velocity at Vx nodes
+    - vy: solid vy-velocity at Vy nodes
+    - vxf: fluid vx-velocity at Vx nodes
+    - vyf: fluid vy-velocity at Vy nodes
+    - wyx: rotation rate at basic nodes
+    - tk2: next temperature at P nodes
+    - marknum: number of markers in use
+    - dtm: displacement time step
     - sp: static simulation parameters
 
 # Returns
@@ -5540,7 +5540,7 @@ $(SIGNATURES)
 
 # Returns
 
-    - nothing
+    - marknum: updated number of markers in use
 """
 function replenish_markers!(
     xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum; randomized=true)
@@ -5593,10 +5593,162 @@ function replenish_markers!(
             end
         end
     end    
-    return nothing
-    # return length(xm)
+    return length(xm)
 # end # timeit to "replenish_markers!"
 end # function replenish_markers!
+
+
+"""
+Save simulation state to JLD2 output file named after current timestep.
+
+$(SIGNATURES)
+
+# Details
+
+    - timestep: current time step number
+    - dt: time step
+    - dtm: displacement time step 
+    - timesum: total simulation time
+    - marknum: number of markers
+
+# Returns
+
+    - nothing
+"""
+function save_data(timestep, dt, dtm, timesum, marknum)
+    filename = "output_" * lpad(timestep, 5, "0") * ".jld2"
+    jldsave(
+        filename;
+        timestep,
+        dt,
+        dtm,
+        timesum,
+        marknum,
+        dsubgrids,
+        dsubgridt,
+        Nx,
+        Ny,
+        Nx1,
+        Ny1,
+        Nxm,
+        Nym,
+        dx,
+        dy,
+        dxm,
+        dym,
+        x,
+        y,
+        xvx,
+        yvx,
+        xvy,
+        yvy,
+        xp,
+        yp,
+        xxm,
+        yym,
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETTAPHI,
+        PHI,
+        APHI,
+        FI,
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        YNY_inv_ETA,
+        DSXY,
+        ETAcomp,
+        SXYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy,
+        ETAPcomp,
+        SXXcomp,
+        SYYcomp,
+        EII,
+        SII,
+        DSXX,
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        rhototalm,
+        rhocptotalm,
+        etasolidcur,
+        etafluidcur,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur
+    )
+    return nothing
+end
 
 
 """
@@ -6452,39 +6604,42 @@ end # @timeit to "solve system"
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm, sp)
 
         # ---------------------------------------------------------------------
-        # # replenish sparse areas with additional markers
+        # replenish sparse areas with additional markers
         # ---------------------------------------------------------------------
-        # 2489-2604
-        # for m = 1:1:marknum
-        #     # ~100 lines MATLAB
-        # end
+        replenish_markers!(
+            xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum)
 
         # ---------------------------------------------------------------------
-        # # update timesum
+        # update timesum
         # ---------------------------------------------------------------------
+        timesum += dtm
 
         # ---------------------------------------------------------------------
-        # # save data for analysis and visualization
+        #  save data for analysis and visualization
         # ---------------------------------------------------------------------
+        if timestep % savematstep == 0
+            save_data(timestep, dt, dtm, timesum, marknum)
+        end
+        # ---------------------------------------------------------------------
+        #  save old stresses - RMK: not used anywhere in code ?
+        # ---------------------------------------------------------------------
+        #  sxxm00 = sxxm 
+        #  sxym00 = sxym    
 
         # ---------------------------------------------------------------------
-        # # save old stresses - RMK: not used anywhere in code ?
+        # report progress
         # ---------------------------------------------------------------------
-        # # sxxm00 = sxxm 
-        # # sxym00 = sxym    
+        next!(p) # progress bar
+        if timestep % 20 == 0
+            println("timestep: ", timestep)
+        end
 
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------
-        next!(p)
-        # if timestep % 20 == 0
-        #     println("timestep: ", timestep)
-        # end
-
         if timesum > endtime
             break
         end
-
     end # for timestep = startstep:1:nsteps
 end # function simulation loop
 
