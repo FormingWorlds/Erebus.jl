@@ -5,9 +5,9 @@ using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
-using Parameters
+# using Parameters
 using ProgressMeter
-using SparseArrays
+# using SparseArrays
 using StaticArrays
 using TimerOutputs
 
@@ -1877,7 +1877,7 @@ function update_marker_viscosity!(
     )
     if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
-        etatotalm[m] = etatotal_rocks(tkm[m], tm[m], sp)
+        etatotalm[m] = etatotal_rocks(tkm[m], tm[m])
     # else
         # air: constant etatotalm[m] as initialized
         # pass
@@ -2288,7 +2288,7 @@ $(SIGNATURES)
     
     - etatotal: rocky marker temperature-dependent total viscosity 
 """
-function etatotal_rocks(tkmm, tmm, sp)
+function etatotal_rocks(tkmm, tmm)
     @inbounds etasolidcur = ifelse(
         tkmm>tmsilicate, etasolidmm[tmm], etasolidm[tmm])
     @inbounds etafluidcur = ifelse(
@@ -2352,6 +2352,8 @@ $(SIGNATURES)
 
 # Details
 
+    - al: true if radioactive isotope 26Al is present
+    - fe: true if radioactive isotope 60Fe is present
     - timesum: time elapsed since initial conditions at start of simulation
 
 # Returns
@@ -2359,9 +2361,9 @@ $(SIGNATURES)
     - hrsolidm: radiogenic heat production of 26Al [W/m^3]
     - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
 """
-function calculate_radioactive_heating(timesum, sp::StaticParameters)
+function calculate_radioactive_heating(al, fe, timesum)
     #26Al: planet ✓, crust ✓, space ×
-    if hr_al
+    if al
         # 26Al radiogenic heat production [W/kg]
         Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum)
         # Solid phase 26Al radiogenic heat production [W/m^3]
@@ -2370,7 +2372,7 @@ function calculate_radioactive_heating(timesum, sp::StaticParameters)
         hrsolidm = @SVector zeros(3)
     end    
     #60Fe: planet ✓, crust ×, space ×
-    if hr_fe
+    if fe
         # 60Fe radiogenic heat production [W/kg]
         Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum)
         # Fluid phase 60Fe radiogenic heat production [W/m^3]
@@ -3262,14 +3264,28 @@ function compute_basic_node_properties!(
     # WTSUM = reduce(+, WTSUM, dims=3)[:, :, 1]
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    @views @. ETA0[WTSUM>0.0] = ETA0SUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
-    @views @. ETA[WTSUM>0.0] = ETASUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
-    @views @. YNY[ETA<ETA0] = true
-    @views @. GGG[WTSUM>0.0] = GGGSUM[WTSUM>0.0] \ WTSUM[WTSUM>0.0]
-    @views @. SXY0[WTSUM>0.0] = SXYSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
-    @views @. COH[WTSUM>0.0] = COHSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
-    @views @. TEN[WTSUM>0.0] = TENSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
-    @views @. FRI[WTSUM>0.0] = FRISUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    for j=1:1:Nx, i=1:1:Ny
+        if WTSUM[i, j, 1] > 0.0 
+            ETA0[i, j, 1] = ETA0SUM[i, j, 1] / WTSUM[i, j, 1]
+            ETA[i, j, 1] = ETASUM[i, j, 1] / WTSUM[i, j, 1]
+            if ETA[i, j, 1] < ETA0[i, j, 1]
+                YNY[i, j] = true
+            end
+            GGG[i, j, 1] = GGGSUM[i, j, 1] \ WTSUM[i, j, 1]
+            SXY0[i, j, 1] = SXYSUM[i, j, 1] / WTSUM[i, j, 1]
+            COH[i, j, 1] = COHSUM[i, j, 1] / WTSUM[i, j, 1]
+            TEN[i, j, 1] = TENSUM[i, j, 1] / WTSUM[i, j, 1]
+            FRI[i, j, 1] = FRISUM[i, j, 1] / WTSUM[i, j, 1]
+        end
+    end 
+    # @views @. ETA0[WTSUM>0.0] = ETA0SUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    # @views @. ETA[WTSUM>0.0] = ETASUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    # @views @. YNY[ETA<ETA0] = true
+    # @views @. GGG[WTSUM>0.0] = GGGSUM[WTSUM>0.0] \ WTSUM[WTSUM>0.0]
+    # @views @. SXY0[WTSUM>0.0] = SXYSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    # @views @. COH[WTSUM>0.0] = COHSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    # @views @. TEN[WTSUM>0.0] = TENSUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
+    # @views @. FRI[WTSUM>0.0] = FRISUM[WTSUM>0.0] / WTSUM[WTSUM>0.0]
 # end # @timeit to "compute"
 # end # @timeit to "compute_basic_node_properties!"
     return nothing
@@ -3328,12 +3344,21 @@ function compute_vx_node_properties!(
     # WTXSUM = reduce(+, WTXSUM, dims=3)[:, :, 1]    
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    @views @. WTXSUM[WTXSUM <= 0.0] = Inf
-    @views @. RHOX = RHOXSUM / WTXSUM
-    @views @. RHOFX = RHOFXSUM / WTXSUM
-    @views @. KX = KXSUM / WTXSUM
-    @views @. PHIX = PHIXSUM / WTXSUM
-    @views @. RX = RXSUM / WTXSUM
+    for j=1:1:Nx1, i=1:1:Ny1
+        if WTXSUM[i, j, 1] > 0.0 
+            RHOX[i, j, 1] = RHOXSUM[i, j, 1] / WTXSUM[i, j, 1]
+            RHOFX[i, j, 1] = RHOFXSUM[i, j, 1] / WTXSUM[i, j, 1]
+            KX[i, j, 1] = KXSUM[i, j, 1] / WTXSUM[i, j, 1]
+            PHIX[i, j, 1] = PHIXSUM[i, j, 1] / WTXSUM[i, j, 1]
+            RX[i, j, 1] = RXSUM[i, j, 1] / WTXSUM[i, j, 1]
+        end
+    end
+    # @views @. WTXSUM[WTXSUM <= 0.0] = Inf
+    # @views @. RHOX = RHOXSUM / WTXSUM
+    # @views @. RHOFX = RHOFXSUM / WTXSUM
+    # @views @. KX = KXSUM / WTXSUM
+    # @views @. PHIX = PHIXSUM / WTXSUM
+    # @views @. RX = RXSUM / WTXSUM
 # end # @timeit to "compute"
 # end # @timeit to "compute_vx_node_properties!"
     return nothing
@@ -3393,12 +3418,21 @@ function compute_vy_node_properties!(
     # WTYSUM = reduce(+, WTYSUM, dims=3)[:, :, 1]    
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    @views @. WTYSUM[WTYSUM <= 00] = Inf
-    @views @. RHOY = RHOYSUM / WTYSUM
-    @views @. RHOFY = RHOFYSUM / WTYSUM
-    @views @. KY = KYSUM / WTYSUM
-    @views @. PHIY = PHIYSUM / WTYSUM
-    @views @. RY = RYSUM / WTYSUM
+    for j=1:1:Nx1, i=1:1:Ny1
+        if WTYSUM[i, j, 1] > 0.0 
+            RHOY[i, j, 1] = RHOYSUM[i, j, 1] / WTYSUM[i, j, 1]
+            RHOFY[i, j, 1] = RHOFYSUM[i, j, 1] / WTYSUM[i, j, 1]
+            KY[i, j, 1] = KYSUM[i, j, 1] / WTYSUM[i, j, 1]
+            PHIY[i, j, 1] = PHIYSUM[i, j, 1] / WTYSUM[i, j, 1]
+            RY[i, j, 1] = RYSUM[i, j, 1] / WTYSUM[i, j, 1]
+        end
+    end
+    # @views @. WTYSUM[WTYSUM <= 0.0] = Inf
+    # @views @. RHOY = RHOYSUM / WTYSUM
+    # @views @. RHOFY = RHOFYSUM / WTYSUM
+    # @views @. KY = KYSUM / WTYSUM
+    # @views @. PHIY = PHIYSUM / WTYSUM
+    # @views @. RY = RYSUM / WTYSUM
 # end # @timeit to "compute"
 # end # @timeit to "compute_vy_node_properties!"
     return nothing
@@ -3484,16 +3518,30 @@ function compute_p_node_properties!(
     # WTPSUM = reduce(+, WTPSUM, dims=3)[:, :, 1]
 # end # @timeit to "reduce"
 # @timeit to "compute" begin
-    @views @. RHO[WTPSUM>0.0] = RHOSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. RHOCP[WTPSUM>0.0] = RHOCPSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. ALPHA[WTPSUM>0.0] = ALPHASUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. ALPHAF[WTPSUM>0.0] = ALPHAFSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. HR[WTPSUM>0.0] = HRSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. GGGP[WTPSUM>0.0] = GGGPSUM[WTPSUM>0.0] \ WTPSUM[WTPSUM>0.0]
-    @views @. SXX0[WTPSUM>0.0] = SXXSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. tk1[WTPSUM>0.0] = TKSUM[WTPSUM>0.0] / RHOCPSUM[WTPSUM>0.0]
-    @views @. PHI[WTPSUM>0.0] = PHISUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
-    @views @. BETTAPHI[WTPSUM>0.0] = GGGP[WTPSUM>0.0] \ PHI[WTPSUM>0.0]
+    for j=1:1:Nx1, i=1:1:Ny1
+        if WTPSUM[i, j, 1] > 0.0
+            RHO[i, j, 1] = RHOSUM[i, j, 1] / WTPSUM[i, j, 1]
+            RHOCP[i, j, 1] = RHOCPSUM[i, j, 1] / WTPSUM[i, j, 1]
+            ALPHA[i, j, 1] = ALPHASUM[i, j, 1] / WTPSUM[i, j, 1]
+            ALPHAF[i, j, 1] = ALPHAFSUM[i, j, 1] / WTPSUM[i, j, 1]
+            HR[i, j, 1] = HRSUM[i, j, 1] / WTPSUM[i, j, 1]
+            GGGP[i, j, 1] = GGGPSUM[i, j, 1] \ WTPSUM[i, j, 1]
+            SXX0[i, j, 1] = SXXSUM[i, j, 1] / WTPSUM[i, j, 1]
+            tk1[i, j, 1] = TKSUM[i, j, 1] / RHOCPSUM[i, j, 1]
+            PHI[i, j, 1] = PHISUM[i, j, 1] / WTPSUM[i, j, 1]
+            BETTAPHI[i, j, 1] = GGGP[i, j, 1] \ PHI[i, j, 1]
+        end
+    end
+    # @views @. RHO[WTPSUM>0.0] = RHOSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. RHOCP[WTPSUM>0.0] = RHOCPSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. ALPHA[WTPSUM>0.0] = ALPHASUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. ALPHAF[WTPSUM>0.0] = ALPHAFSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. HR[WTPSUM>0.0] = HRSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. GGGP[WTPSUM>0.0] = GGGPSUM[WTPSUM>0.0] \ WTPSUM[WTPSUM>0.0]
+    # @views @. SXX0[WTPSUM>0.0] = SXXSUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. tk1[WTPSUM>0.0] = TKSUM[WTPSUM>0.0] / RHOCPSUM[WTPSUM>0.0]
+    # @views @. PHI[WTPSUM>0.0] = PHISUM[WTPSUM>0.0] / WTPSUM[WTPSUM>0.0]
+    # @views @. BETTAPHI[WTPSUM>0.0] = GGGP[WTPSUM>0.0] \ PHI[WTPSUM>0.0]
 # end # @timeit to "compute"
 # end # @timeit to "compute_p_node_properties!"
     return nothing
@@ -3639,8 +3687,7 @@ $(SIGNATURES)
     - SP: solution vector
     - RP: right hand side vector
     - RHO: density at P nodes
-    - xp: horizontal position of P nodes 
-    - yp: vertical position of P nodes
+    - FI: gravity potential at P nodes
     - gx: x gravitational acceleration at Vx nodes
     - gy: y gravitational acceleration at Vy nodes
 
@@ -3648,7 +3695,7 @@ $(SIGNATURES)
 
 - nothing
 """
-function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy)
+function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
 # @timeit to "compute_gravity_solution!" begin
     # fresh LHS sparse coefficient matrix
     LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
@@ -3700,13 +3747,13 @@ function compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy)
     # end # @timeit to "solve system"
     # reshape solution vector to 2D array
     # @timeit to "reshape solution" begin
-    ϕ = reshape(SP, Ny1, Nx1)
+    FI .= reshape(SP, Ny1, Nx1)
     # end # @timeit to "reshape solution"
     # @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
-    @views @. gx[:, 1:Nx] = -diff(ϕ, dims=2) / dx
+    gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
-    @views @. gy[1:Ny, :] = -diff(ϕ, dims=1) / dy
+    gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
     # end # @timeit to "compute accelerations"
 # end # @timeit to "compute_gravity_solution!"
     return nothing
@@ -4414,6 +4461,8 @@ $(SIGNATURES)
 
 # Details
 
+    - Nx: number of basic grid points in x-direction
+    - Ny: number of basic grid points in y-direction
     - ETAcomp: computational viscosity at basic nodes
     - ETAPcomp: computational viscosity at P nodes
     - SXYcomp: computational previous XY stress at basic nodes
@@ -4437,14 +4486,15 @@ $(SIGNATURES)
     - pr0: previous total pressure at P nodes
     - pf0: previous fluid pressure at P nodes
     - dt: time step
-    - L: ExtendableSparse matrix to store LHS coefficients
     - R: vector to store RHS coefficients
 
 # Returns
 
-    - nothing
+    - L: LHS coefficient matrix
 """
 function assemble_hydromechanical_lse!(
+    Nx,
+    Ny,
     ETAcomp,
     ETAPcomp,
     SXYcomp,
@@ -4468,10 +4518,12 @@ function assemble_hydromechanical_lse!(
     pr0,
     pf0,
     dt,
-    L,
     R
 )
 @timeit to "assemble_hydromechanical_lse()" begin
+    Nx1, Ny1 = Nx+1, Ny+1
+    # fresh LHS sparse coefficient matrix
+    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     for j=1:1:Nx1, i=1:1:Ny1
         # define global indices in algebraic space
         kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
@@ -4854,7 +4906,7 @@ function assemble_hydromechanical_lse!(
     end # for j=1:1:Nx1, i=1:1:Ny1
     flush!(L) # finalize CSC matrix
 end # @timeit to "assemble_hydromechanical_lse()"
-    return nothing
+    return L
 end # function assemble_hydromechanical_lse!
 
 """
@@ -5324,26 +5376,20 @@ function compute_stress_strainrate!(
 )
 @timeit to "compute_stress_strainrate!()" begin
     # ϵxy, σxy, Δσxy at basic nodes
-    @views @. EXY =(
-        0.5.*(diff(vx, dims=1)[:, 1:Nx]/dy
-        + diff(vy, dims=2)[1:Ny, :]/dx)
-    )
-    @views @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
-    @views @. DSXY = SXY - SXY0
+    EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
+    @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
+    @. DSXY = SXY - SXY0
     # ϵxx, σ′xx at P nodes
     # @. DIVV[2:end, 2:end] = 
     #     diff(vx, dims=2)[2:end, :]/dx + diff(vy, dims=1)[:, 2:end]/dy
-    @views @. EXX[2:Ny1, 2:Nx1] = ( 
-        0.5 * (
-            diff(vx, dims=2)[2:Ny1, :]/dx - diff(vy, dims=1)[:, 2:Nx1]/dy
+    EXX[2:Ny1, 2:Nx1] .= ( 
+        0.5 .* (
+            diff(vx, dims=2)[2:Ny1, :]./dx .- diff(vy, dims=1)[:, 2:Nx1]./dy
         )
     )
-    @views @. SXX = (
-        2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP)
-        + SXX0*ETAP/(GGGP*dtm+ETAP)
-    )
-    @views @. DSXX = SXX - SXX0
-    @views @. EII[2:Ny, 2:Nx] = sqrt(
+    @. SXX = 2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP) + SXX0*ETAP/(GGGP*dtm+ETAP)
+    @. DSXX = SXX - SXX0
+    @. EII[2:Ny, 2:Nx] = sqrt(
         EXX[2:Ny, 2:Nx]^2 + (
             (
                 EXY[2:Ny, 2:Nx]
@@ -5353,7 +5399,7 @@ function compute_stress_strainrate!(
             )/4.0
         )^2
     )
-    @views @. SII[2:Ny, 2:Nx] = sqrt(
+    @. SII[2:Ny, 2:Nx] = sqrt(
         SXX[2:Ny, 2:Nx]^2 + (
             (
                 SXY[2:Ny, 2:Nx]
@@ -6636,7 +6682,7 @@ $(SIGNATURES)
 """
 function perform_thermal_iterations!(
     tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
-# @timeit to "assemble_hydromechanical_lse!" begin
+# @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
     @. tk0 = tk1
     dtt = dtm
@@ -7118,95 +7164,96 @@ function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
     return nothing
 end # function update_marker_porosity!
 
-""" 
-Compute solid velocities, fluid velocities at P nodes.
+# """ 
+# Compute solid velocities, fluid velocities at P nodes.
 
-$(SIGNATURES)
+# $(SIGNATURES)
 
-# Details
+# # Details
 
-    - vx: solid vx-velocity at Vx nodes
-    - vy: solid vy-velocity at Vy nodes
-    - vxf: fluid vx-velocity at Vx nodes
-    - vyf: fluid vy-velocity at Vy nodes
-    - vxp: solid vx-velocity at P nodes
-    - vyp: solid vy-velocity at P nodes
-    - vxpf: fluid vx-velocity at P nodes
-    - vypf: fluid vy-velocity at P nodes
+#     - vx: solid vx-velocity at Vx nodes
+#     - vy: solid vy-velocity at Vy nodes
+#     - vxf: fluid vx-velocity at Vx nodes
+#     - vyf: fluid vy-velocity at Vy nodes
+#     - vxp: solid vx-velocity at P nodes
+#     - vyp: solid vy-velocity at P nodes
+#     - vxpf: fluid vx-velocity at P nodes
+#     - vypf: fluid vy-velocity at P nodes
+#     - sp: static simulation parameters
 
-# Returns
+# # Returns
 
-    - nothing
-"""
-function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
-@timeit to "compute_velocities!" begin
-    @unpack Nx,
-        Ny,
-        Nx1,
-        Ny1,
-        dx,
-        dy,
-        bctop,
-        bcbottom,
-        bcleft,
-        bcright,
-        bcftop,
-        bcfbottom,
-        bcfleft,
-        bcfright,
-        vxleft,
-        vxright,
-        vytop,
-        vybottom = sp
-    @inbounds begin
-        # compute solid velocities at P nodes
-        for j=2:1:Nx, i=2:1:Ny
-            vxp[i, j] = 0.5 * (vx[i, j] + vx[i, j-1]) 
-            vyp[i, j] = 0.5 * (vy[i, j] + vy[i-1, j])
-            vxpf[i, j] = 0.5 * (vxf[i, j] + vxf[i, j-1]) 
-            vypf[i, j] = 0.5 * (vyf[i, j] + vyf[i-1, j])
-        end
-        # apply boundary conditions
-        # vxp
-        # top: free slip
-        @views @. vxp[1, 2:Nx-1] =- bctop * vxp[2, 2:Nx-1]    
-        # bottom: free slip
-        @views @. vxp[Ny1, 2:Nx-1] =- bcbottom * vxp[Ny, 2:Nx-1]    
-        # left
-        @views @. vxp[:, 1] = 2.0*vxleft - vxp[:, 2]
-        # right
-        @views @. vxp[:, Nx1] = 2.0*vxright - vxp[:, Nx]
-        # vyp
-        # left: free slip
-        @views @. vyp[2:Ny-1, 1] =- bcleft * vyp[2:Ny-1, 2]    
-        # right: free slip
-        @views @. vyp[2:Ny-1, Nx1] =- bcright * vyp[2:Ny-1, Nx]
-        # top
-        @views @. vyp[1, :] = 2.0*vytop - vyp[2, :]
-        # bottom
-        @views @. vyp[Ny1, :] = 2.0*vybottom - vyp[Ny, :]
-        # vxpf
-        # top: free slip
-        @views @. vxpf[1, 2:Nx-1] =- bcftop * vxpf[2, 2:Nx-1]    
-        # bottom: free slip
-        @views @. vxpf[Ny1, 2:Nx-1] =- bcfbottom * vxpf[Ny, 2:Nx-1]    
-        # left
-        @views @. vxpf[:,1] = 2.0*vxleft - vxpf[:, 2]
-        # right
-        @views @. vxpf[:, Nx1] = 2.0*vxright - vxpf[:, Nx]
-        # vypf
-        # left: free slip
-        @views @. vypf[2:Ny-1, 1] =- bcfleft * vypf[2:Ny-1, 2]    
-        # right: free slip
-        @views @. vypf[2:Ny-1, Nx1] =- bcfright * vypf[2:Ny-1, Nx]
-        # top
-        @views @. vypf[1, :] = 2.0*vytop - vypf[2, :]
-        # bottom
-        @views @. vypf[Ny1,:] = 2.0*vybottom - vypf[Ny, :]
-    end # @inbounds
-end # @timeit to "compute_velocities!"
-    return nothing
-end # function compute_velocities!
+#     - nothing
+# """
+# function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
+# @timeit to "compute_velocities!" begin
+#     @unpack Nx,
+#         Ny,
+#         Nx1,
+#         Ny1,
+#         dx,
+#         dy,
+#         bctop,
+#         bcbottom,
+#         bcleft,
+#         bcright,
+#         bcftop,
+#         bcfbottom,
+#         bcfleft,
+#         bcfright,
+#         vxleft,
+#         vxright,
+#         vytop,
+#         vybottom = sp
+#     @inbounds begin
+#         # compute solid velocities at P nodes
+#         for j=2:1:Nx, i=2:1:Ny
+#             vxp[i, j] = 0.5 * (vx[i, j] + vx[i, j-1]) 
+#             vyp[i, j] = 0.5 * (vy[i, j] + vy[i-1, j])
+#             vxpf[i, j] = 0.5 * (vxf[i, j] + vxf[i, j-1]) 
+#             vypf[i, j] = 0.5 * (vyf[i, j] + vyf[i-1, j])
+#         end
+#         # apply boundary conditions
+#         # vxp
+#         # top: free slip
+#         @views @. vxp[1, 2:Nx-1] =- bctop * vxp[2, 2:Nx-1]    
+#         # bottom: free slip
+#         @views @. vxp[Ny1, 2:Nx-1] =- bcbottom * vxp[Ny, 2:Nx-1]    
+#         # left
+#         @views @. vxp[:, 1] = 2.0*vxleft - vxp[:, 2]
+#         # right
+#         @views @. vxp[:, Nx1] = 2.0*vxright - vxp[:, Nx]
+#         # vyp
+#         # left: free slip
+#         @views @. vyp[2:Ny-1, 1] =- bcleft * vyp[2:Ny-1, 2]    
+#         # right: free slip
+#         @views @. vyp[2:Ny-1, Nx1] =- bcright * vyp[2:Ny-1, Nx]
+#         # top
+#         @views @. vyp[1, :] = 2.0*vytop - vyp[2, :]
+#         # bottom
+#         @views @. vyp[Ny1, :] = 2.0*vybottom - vyp[Ny, :]
+#         # vxpf
+#         # top: free slip
+#         @views @. vxpf[1, 2:Nx-1] =- bcftop * vxpf[2, 2:Nx-1]    
+#         # bottom: free slip
+#         @views @. vxpf[Ny1, 2:Nx-1] =- bcfbottom * vxpf[Ny, 2:Nx-1]    
+#         # left
+#         @views @. vxpf[:,1] = 2.0*vxleft - vxpf[:, 2]
+#         # right
+#         @views @. vxpf[:, Nx1] = 2.0*vxright - vxpf[:, Nx]
+#         # vypf
+#         # left: free slip
+#         @views @. vypf[2:Ny-1, 1] =- bcfleft * vypf[2:Ny-1, 2]    
+#         # right: free slip
+#         @views @. vypf[2:Ny-1, Nx1] =- bcfright * vypf[2:Ny-1, Nx]
+#         # top
+#         @views @. vypf[1, :] = 2.0*vytop - vypf[2, :]
+#         # bottom
+#         @views @. vypf[Ny1,:] = 2.0*vybottom - vypf[Ny, :]
+#     end # @inbounds
+# end # @timeit to "compute_velocities!"
+#     return nothing
+# end # function compute_velocities!
 
 """ 
 Compute solid velocities, fluid velocities at P nodes.
@@ -8888,7 +8935,7 @@ function simulation_loop()
     # set up markers
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
-    xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties()
+    xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(marknum)
     (
         rhototalm,
         rhocptotalm,
@@ -8991,7 +9038,8 @@ function simulation_loop()
         # ---------------------------------------------------------------------
         # calculate radioactive heating
         # ---------------------------------------------------------------------
-        hrsolidm, hrfluidm = calculate_radioactive_heating(timesum)
+        hrsolidm, hrfluidm = calculate_radioactive_heating(
+            hr_al, hr_fe, timesum)
 
         # ---------------------------------------------------------------------
         # computer marker properties and interpolate to staggered grid nodes
@@ -9187,7 +9235,7 @@ function simulation_loop()
         # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        compute_gravity_solution!(SP, RP, RHO, xp, yp, gx, gy)
+        compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
 
         # ---------------------------------------------------------------------
         # # probe increasing computational timestep
@@ -9241,6 +9289,8 @@ function simulation_loop()
             )
             # assemble hydromechanical system of equations
             assemble_hydromechanical_lse!(
+                Nx,
+                Ny,
                 ETAcomp,
                 ETAPcomp,
                 SXYcomp,
@@ -9264,7 +9314,6 @@ function simulation_loop()
                 pr0,
                 pf0,
                 dt,
-                L,
                 R
             )
             # solve hydromechanical system of equations
