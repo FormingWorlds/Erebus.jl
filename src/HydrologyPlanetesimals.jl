@@ -1,5 +1,6 @@
 module HydrologyPlanetesimals
 
+using ArgParse
 using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
@@ -4557,6 +4558,7 @@ $(SIGNATURES)
 
 # Details
 
+    - output_path: absolute path to output directory
     - timestep: current time step number
     - dt: time step
     - dtm: displacement time step 
@@ -4567,10 +4569,10 @@ $(SIGNATURES)
 
     - nothing
 """
-function save_data(timestep, dt, dtm, timesum, marknum)
-    filename = "output_" * lpad(timestep, 5, "0") * ".jld2"
+function save_data(output_path, timestep, dt, dtm, timesum, marknum)
+    fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     jldsave(
-        filename;
+        fid;
         timestep,
         dt,
         dtm,
@@ -4709,13 +4711,13 @@ $(SIGNATURES)
 
 # Details
 
-    - nothing
+    - output_path: Absolute path where to save simulation output files
 
 # Returns
     
     - nothing
 """
-function simulation_loop()
+function simulation_loop(output_path)
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters
@@ -4834,7 +4836,7 @@ function simulation_loop()
         rhofluidcur,
         alphasolidcur,
         alphafluidcur
-    ) = setup_marker_properties_helpers(sp)
+    ) = setup_marker_properties_helpers()
     define_markers!(
         xm,
         ym,
@@ -5498,7 +5500,7 @@ end # @timeit to "solve system"
         #  save data for analysis and visualization
         # ---------------------------------------------------------------------
         if timestep % savematstep == 0
-            save_data(timestep, dt, dtm, timesum, marknum)
+            save_data(output_path, timestep, dt, dtm, timesum, marknum)
         end
         # ---------------------------------------------------------------------
         #  save old stresses - RMK: not used anywhere in code ?
@@ -5525,6 +5527,33 @@ end # function simulation loop
 
 
 """
+Parse command line arguments and feed them to the main function.
+
+$(SIGNATURES)
+
+# Details:
+    
+    - nothing
+
+# Returns
+
+    - parsed_args: parsed command line arguments
+"""
+function parse_commandline()
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "output_path"
+            help = "output path for simulation data"
+            required = true
+        "--show_timer"
+            help = "show timing results?"
+            default = false
+    end
+    return parse_args(s)
+end
+
+
+"""
 Runs the simulation with the given parameters.
 
 $(SIGNATURES)
@@ -5537,9 +5566,13 @@ $(SIGNATURES)
 
     - nothing 
 """
-function run_simulation(show_timer=false)
+function run_simulation()
+    parsed_args = parse_commandline()
+    output_path = parsed_args["output_path"]
+    show_timer = parsed_args["show_timer"]
+    mkpath(output_path)
     reset_timer!(to)
-    simulation_loop()
+    simulation_loop(output_path)
     if show_timer
         show(to)
     end
