@@ -234,10 +234,8 @@
  # cⱼ Butcher coefficients for RK4
  const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
  # timestepping parameters
- # mat filename
- const nname = "madcph_"
- # .mat storage periodicity
- const savematstep = 50
+ # output storage periodicity
+ const savematstep = 10
  # Maximal computational timestep [s]
  const dtelastic = 1e+11 
  # Coefficient to decrease computational timestep

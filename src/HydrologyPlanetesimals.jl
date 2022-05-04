@@ -320,6 +320,17 @@ $(SIGNATURES)
     - YNY5: plastic iterations plastic yielding node property at basic nodes
     - YNY00: previous plastic yielding node property at basic nodes
     - DSXY: stress change Δσxy at basic nodes [Pa]
+    - DSY: (SIIB-syield) at basic nodes
+    - YNPL: plastic iterations plastic yielding status at basic nodes
+    - DDD: plastic iterations (SIIB-syield)² at basic nodes
+    - SIIB: second stress invariant at basic nodes
+    - siiel: second invariant for purely elastic stress buildup at basic nodes
+    - prB: interpolated total pressure at basic nodes 
+    - pfB: interpolated fluid pressure at basic nodes 
+    - syieldc: confined fractures yielding stress at basic nodes 
+    - syieldt: tensile fractures yielding stress at basic nodes 
+    - syield: non-negative maximum yielding stress at basic nodes
+    - etapl: stress-based viscoplastic viscosity at basic nodes 
     - ETAcomp: computational viscosity at basic nodes
     - SXYcomp: computational previous XY stress at basic nodes
     - dRHOXdx: total density gradient in x direction at Vx nodes
@@ -345,9 +356,31 @@ function setup_staggered_grid_properties_helpers(;randomized=false)
     # previous plastic yielding node property at basic nodes
     YNY00 = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # inverse viscoplastic viscosity at yielding basic nodes [1/(Pa⋅s)]
-    YNY_inv_ETA = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    YNY_inv_ETA = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # stress change Δσxy at basic nodes [Pa]
     DSXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # (SIIB-syield) at basic nodes
+    DSY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # plastic iterations plastic yielding status at basic nodes
+    YNPL = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    # plastic iterations (SIIB-syield)² at basic nodes 
+    DDD = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # second stress invariant at basic nodes
+    SIIB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # second invariant for purely elastic stress buildup at basic nodes  
+    siiel = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # interpolated total pressure at basic nodes 
+    prB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # interpolated fluid pressure at basic nodes
+    pfB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # confined fractures yielding stress at basic nodes 
+    syieldc = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # tensile fractures yielding stress at basic nodes 
+    syieldt = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # non-negative maximum yielding stress at basic nodes 
+    syield = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
+    # stress-based viscoplastic viscosity at basic nodes 
+    etapl = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # computational viscosity at basic nodes
     ETAcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # computational previous xy stress at basic nodes
@@ -384,6 +417,17 @@ function setup_staggered_grid_properties_helpers(;randomized=false)
         YNY00,
         YNY_inv_ETA,
         DSXY,
+        DSY,
+        YNPL,
+        DDD,
+        SIIB,
+        siiel,
+        prB,
+        pfB,
+        syieldc,
+        syieldt,
+        syield,
+        etapl,
         ETAcomp,
         SXYcomp,
         dRHOXdx,
@@ -741,7 +785,7 @@ $(SIGNATURES)
 """
 function update_marker_viscosity!(
     m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
-@timeit to "update_marker_viscosity!" begin
+# @timeit to "update_marker_viscosity!" begin
     i, j, weights = fix_weights(
         xm[m],
         ym[m],
@@ -768,7 +812,7 @@ function update_marker_viscosity!(
     else
         etavpm[m] = etatotalm[m]
     end
-end # @timeit to "update_marker_viscosity!"
+# end # @timeit to "update_marker_viscosity!"
     return nothing
 end
 
@@ -2050,7 +2094,7 @@ function get_viscosities_stresses_density_gradients!(
     dRHOYdx,
     dRHOYdy
 )
-@timeit to "get_viscosities_stresses_density_gradients!()" begin
+# @timeit to "get_viscosities_stresses_density_gradients!()" begin
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
@@ -2071,7 +2115,7 @@ function get_viscosities_stresses_density_gradients!(
     @views @. dRHOYdx[:, 2:Nx] = (RHOY[:, 3:Nx1]-RHOY[:, 1:Nx1-2]) / 2 / dx
     @views @. dRHOYdy[2:Ny, :] = (RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) / 2 / dy
     return nothing
-end # @timeit to "get_viscosities_stresses_density_gradients!()"
+# end # @timeit to "get_viscosities_stresses_density_gradients!()"
 end # function get_viscosities_stresses_density_gradients!
 
 """
@@ -2200,7 +2244,7 @@ function assemble_hydromechanical_lse!(
     dt,
     R
 )
-@timeit to "assemble_hydromechanical_lse()" begin
+# @timeit to "assemble_hydromechanical_lse()" begin
     Nx1, Ny1 = Nx+1, Ny+1
     # fresh LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
@@ -2585,7 +2629,7 @@ function assemble_hydromechanical_lse!(
         end # Ptotal/Pfluid equation
     end # for j=1:1:Nx1, i=1:1:Ny1
     flush!(L) # finalize CSC matrix
-end # @timeit to "assemble_hydromechanical_lse()"
+# end # @timeit to "assemble_hydromechanical_lse()"
     return L
 end # function assemble_hydromechanical_lse!
 
@@ -2623,7 +2667,7 @@ function process_hydromechanical_solution!(
     Nx1,
     Ny1
 )
-@timeit to "process_hydromechanical_solution!()" begin
+# @timeit to "process_hydromechanical_solution!()" begin
     S_mat = reshape(S, (:, Ny1, Nx1))
     @views @. vx = S_mat[1, :, :]
     @views @. vy = S_mat[2, :, :]
@@ -2631,7 +2675,7 @@ function process_hydromechanical_solution!(
     @views @. qxD = S_mat[4, :, :]
     @views @. qyD = S_mat[5, :, :]
     @views @. pf = S_mat[6, :, :] .* pscale
-end # @timeit to "process_hydromechanical_solution!()"
+# end # @timeit to "process_hydromechanical_solution!()"
     return nothing
 end # function process_hydromechanical_solution!
 
@@ -2651,7 +2695,7 @@ Recompute bulk viscosity at P nodes.
     - nothing
 """
 function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-@timeit to "recompute_bulk_viscosity!" begin    
+# @timeit to "recompute_bulk_viscosity!" begin    
     @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
         inv(ETA[1:end-1, 1:end-1]) +
         inv(ETA[2:end, 1:end-1]) +
@@ -2659,7 +2703,7 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
         inv(ETA[2:end, 2:end])
     )
     @views @. ETAPHI = etaphikoef * ETAP / PHI
-end # @timeit to "recompute_bulk_viscosity!"
+# end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
 
@@ -2690,7 +2734,7 @@ $(SIGNATURES)
     - aphimax: maximum absolute porosity coefficient
 """
 function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
-@timeit to "compute_Aϕ!()" begin
+# @timeit to "compute_Aϕ!()" begin
     # reset APHI
     APHI .= 0.0
     @views @. APHI[2:Ny, 2:Nx] = (
@@ -2700,7 +2744,7 @@ function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
         )/dt*BETTAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
     )
     return maximum(abs, APHI)
-end # @timeit to "compute_Aϕ!()"
+# end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
 
 """
@@ -2738,7 +2782,7 @@ function compute_fluid_velocities!(
     vxf,
     vyf
 )
-@timeit to "compute_fluid_velocities!()" begin
+# @timeit to "compute_fluid_velocities!()" begin
     # vx velocity
     @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
     # top boundary
@@ -2754,7 +2798,7 @@ function compute_fluid_velocities!(
     # adding solid velocity
     @views @. vxf += vx
     @views @. vyf += vy
-end # @timeit to "compute_fluid_velocities!()"
+# end # @timeit to "compute_fluid_velocities!()"
     return nothing
 end # function compute_fluid_velocities!
 
@@ -2792,7 +2836,7 @@ function compute_displacement_timestep(
     aphimax,
     dphimax
 )
-@timeit to "compute_displacement_timestep()" begin
+# @timeit to "compute_displacement_timestep()" begin
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
     maxvxf = maximum(abs, vxf)
@@ -2802,7 +2846,7 @@ function compute_displacement_timestep(
     dtm = ifelse(dtm*maxvxf > dxymax*dx, dphimax*dx/maxvxf, dtm)
     dtm = ifelse(dtm*maxvyf > dxymax*dy, dphimax*dy/maxvyf, dtm)
     dtm = ifelse(dtm*aphimax > dphimax, dphimax/aphimax, dtm)
-end # @timeit to "compute_displacement_timestep()"
+# end # @timeit to "compute_displacement_timestep()"
     return dtm
 end # function compute_displacement_timestep
 
@@ -2859,7 +2903,7 @@ function compute_stress_strainrate!(
     SII,
     dtm
 )
-@timeit to "compute_stress_strainrate!()" begin
+# @timeit to "compute_stress_strainrate!()" begin
     # ϵxy, σxy, Δσxy at basic nodes
     EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
     @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
@@ -2894,7 +2938,7 @@ function compute_stress_strainrate!(
             )/4.0
         )^2
     )
-end # @timeit to "compute_stress_strainrate!()"
+# end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
 
@@ -2932,7 +2976,7 @@ function symmetrize_p_node_observables!(
     Nx1,
     Ny1
 )
-@timeit to "symmetrize_p_node_observables!()" begin
+# @timeit to "symmetrize_p_node_observables!()" begin
     # top boundary
     @views @. begin
     SXX[1, 2:Nx] = SXX[2, 2:Nx]
@@ -2961,7 +3005,7 @@ function symmetrize_p_node_observables!(
     # solid pressure
     ps = (pr-pf*PHI) / (1-PHI)
     end
-end # @timeit to "symmetrize_p_node_observables!()"
+# end # @timeit to "symmetrize_p_node_observables!()"
     return nothing
     end # function symmetrize_p_node_observables!
 
@@ -3033,15 +3077,13 @@ function compute_nodal_adjustment!(
     dt,
     iplast
 )
-@timeit to "compute_nodal_adjustment!()" begin
+# @timeit to "compute_nodal_adjustment!()" begin
     # reset / setup
-    @. begin
-    ETA5 = copy(ETA0)
-    YNY5 = 0
-    DSY = 0.0
-    YNPL = 0
-    DDD = 0.0
-    end
+    ETA5 .= copy(ETA0)
+    YNY5 .= 0
+    DSY .= 0.0
+    YNPL .= 0
+    DDD .= 0.0
     # second stress invariant at basic nodes
     @views @. SIIB = sqrt(
         SXY^2 + (
@@ -3096,8 +3138,9 @@ function compute_nodal_adjustment!(
         YERRNOD[iplast] = sqrt(sum(DDD)/sum(YNPL))
     end
     # return plastic iteration completeness
+    @info "compute_nodal_adjustment" sum(YNPL) YERRNOD[iplast] iplast
     return sum(YNPL)==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
-end # @timeit to "compute_nodal_adjustment!()
+# end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
 """
@@ -3158,7 +3201,7 @@ function finalize_plastic_iteration_pass!(
     dtstep,
     iplast
 )
-@timeit to "finalize_plastic_iteration_pass!()" begin
+# @timeit to "finalize_plastic_iteration_pass!()" begin
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
@@ -3172,7 +3215,7 @@ function finalize_plastic_iteration_pass!(
     end
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
-end # @timeit to "finalize_plastic_iteration_pass!()"
+# end # @timeit to "finalize_plastic_iteration_pass!()"
     end # function finalize_plastic_iteration_pass
 
 """
@@ -3221,7 +3264,7 @@ function apply_subgrid_stress_diffusion!(
     dtm,
     marknum
 )
-@timeit to "apply_subgrid_stress_diffusion!" begin
+# @timeit to "apply_subgrid_stress_diffusion!" begin
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
         return nothing
@@ -3285,7 +3328,7 @@ function apply_subgrid_stress_diffusion!(
     # compute DSXYsubgrid and update DSXY at all basic nodes
     @views @. DSXY[WTSUM[:, :, 1]>0.0] -= SXYSUM[:, :, 1][WTSUM[:, :, 1]>0.0] /
         WTSUM[:, :, 1][WTSUM[:, :, 1]>0.0]
-end # @timeit to "apply_subgrid_stress_diffusion!"
+# end # @timeit to "apply_subgrid_stress_diffusion!"
     return nothing
 end # function apply_subgrid_stress_diffusion!
 
@@ -3309,7 +3352,7 @@ $(SIGNATURES)
     - nothing
 """
 function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
-@timeit to "update_marker_stress!" begin
+# @timeit to "update_marker_stress!" begin
     @threads for m=1:1:marknum    
         i_p, j_p, weights_p = fix_weights(
             xm[m],
@@ -3340,7 +3383,7 @@ function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
         interpolate_add_to_marker!(
             m, i_basic, j_basic, weights_basic, sxym, DSXY)
     end
-end # @timeit to "update_marker_stress!"
+# end # @timeit to "update_marker_stress!"
     return nothing
 end # function update_marker_stress!
 
@@ -3800,7 +3843,7 @@ $(SIGNATURES)
     - nothing
 """
 function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
-@timeit to "compute_velocities!" begin
+# @timeit to "compute_velocities!" begin
     @inbounds begin
         # compute solid velocities at P nodes
         for j=2:1:Nx, i=2:1:Ny
@@ -3847,7 +3890,7 @@ function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
         # bottom
         @views @. vypf[Ny1,:] = 2.0*vybottom - vypf[Ny, :]
     end # @inbounds
-end # @timeit to "compute_velocities!"
+# end # @timeit to "compute_velocities!"
     return nothing
 end # function compute_velocities!
 
@@ -3868,14 +3911,14 @@ $(SIGNATURES)
     - nothing
 """
 function compute_rotation_rate!(vx, vy, wyx)
-@timeit to "compute_rotation_rate!" begin
+# @timeit to "compute_rotation_rate!" begin
     # compute rotation rate ωyx=1/2[∂Vy/∂x-∂Vx/∂y] at basic nodes
     for j=1:1:Nx, i=1:1:Ny
         @inbounds wyx[i, j] = 0.5 * (
         (vy[i, j+1]-vy[i, j])/dx - (vx[i+1, j]-vx[i, j])/dy
         )
     end
-end # @timeit to "compute_rotation_rate!"
+# end # @timeit to "compute_rotation_rate!"
     return nothing
 end # function compute_rotation_rate!
 
@@ -4426,7 +4469,7 @@ function backtrace_pressures_rk4!(
         @inbounds pf0[ii, jj] = dot(grid_vector(i, j, pf), weights)
     end # ii fluid pressure loop
     end # jj fluid pressure loop
-# end # timeit to "backtrace_pressures_rk4!"
+# end # @timeit to "backtrace_pressures_rk4!"
     return nothing
 end # function backtrace_pressures_rk4!
 
@@ -4548,7 +4591,7 @@ function replenish_markers!(
         end
     end    
     return length(xm)
-# end # timeit to "replenish_markers!"
+# end # @timeit to "replenish_markers!"
 end # function replenish_markers!
 
 """
@@ -4720,7 +4763,7 @@ $(SIGNATURES)
 function simulation_loop(output_path)
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
-    # set up dynamic simulation parameters from given static parameters
+    @info "set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
     timestep,
     dt,
@@ -4731,7 +4774,7 @@ function simulation_loop(output_path)
     YERRNOD = setup_dynamic_simulation_parameters()
     
     # -------------------------------------------------------------------------
-    # set up staggered grid
+    @info "set up staggered grid"
     # -------------------------------------------------------------------------
     (
         ETA,
@@ -4800,6 +4843,17 @@ function simulation_loop(output_path)
         YNY00,
         YNY_inv_ETA,
         DSXY,
+        DSY,
+        YNPL,
+        DDD,
+        SIIB,
+        siiel,
+        prB,
+        pfB,
+        syieldc,
+        syieldt,
+        syield,
+        etapl,
         ETAcomp,
         SXYcomp,
         dRHOXdx,
@@ -4815,7 +4869,7 @@ function simulation_loop(output_path)
     ) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
-    # set up markers
+    @info "set up markers"
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
     xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(marknum)
@@ -4836,7 +4890,7 @@ function simulation_loop(output_path)
         rhofluidcur,
         alphasolidcur,
         alphafluidcur
-    ) = setup_marker_properties_helpers()
+    ) = setup_marker_properties_helpers(marknum)
     define_markers!(
         xm,
         ym,
@@ -4860,7 +4914,7 @@ function simulation_loop(output_path)
     )
 
     # -------------------------------------------------------------------------
-    # set up of matrices for global gravity/thermal/hydromechanical solvers
+    @info "set up of matrices for global grav/thermal/hydromechanical solvers"
     # -------------------------------------------------------------------------
     # hydromechanical solver
     R, S = setup_hydromechanical_lse()
@@ -4871,7 +4925,7 @@ function simulation_loop(output_path)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
-    # iterate timesteps   
+    @info "iterate timesteps"
     # -------------------------------------------------------------------------
     nsteps = 10 # <======= RMK: remove for production
     p = Progress(
@@ -4881,8 +4935,9 @@ function simulation_loop(output_path)
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:nsteps
 # @timeit to "set up interpolation arrays" begin
+        @info "timestep" timestep
         # ---------------------------------------------------------------------
-        # set up interpolation arrays
+        @info "set up interpolation arrays"
         # ---------------------------------------------------------------------
         (
             ETA0SUM,
@@ -4919,13 +4974,13 @@ function simulation_loop(output_path)
 # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
-        # calculate radioactive heating
+        @info "calculate radioactive heating"
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(
             hr_al, hr_fe, timesum)
 
         # ---------------------------------------------------------------------
-        # computer marker properties and interpolate to staggered grid nodes
+        @info "compute marker properties and interpolate to staggered grid"
         # ---------------------------------------------------------------------
         @threads for m=1:1:marknum
             compute_marker_properties!(
@@ -4969,8 +5024,8 @@ function simulation_loop(output_path)
             # interpolate marker properties to Vx nodes
             marker_to_vx_nodes!(
                 m,
-                xmm,
-                ymm,
+                xm[m],
+                ym[m],
                 rhototalm,
                 rhofluidcur,
                 ktotalm,
@@ -4986,8 +5041,8 @@ function simulation_loop(output_path)
             # interpolate marker properties to Vy nodes
             marker_to_vy_nodes!(
                 m,
-                xmm,
-                ymm,
+                xm[m],
+                ym[m],
                 rhototalm,
                 rhofluidcur,
                 ktotalm,
@@ -5003,8 +5058,8 @@ function simulation_loop(output_path)
             # interpolate marker properties to P nodes
             marker_to_p_nodes!(
                 m,
-                xmm,
-                ymm,
+                xm[m],
+                ym[m],
                 inv_gggtotalm,
                 sxxm,
                 rhototalm,
@@ -5028,7 +5083,7 @@ function simulation_loop(output_path)
         end # @threads for m=1:1:marknum
 
         # ---------------------------------------------------------------------
-        # compute physical properties of basic nodes
+        @info "compute physical properties of basic nodes"
         # ---------------------------------------------------------------------
         compute_basic_node_properties!(
             ETA0SUM,
@@ -5050,7 +5105,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        # compute physical properties of Vx nodes
+        @info "compute physical properties of Vx nodes"
         # ---------------------------------------------------------------------
         compute_vx_node_properties!(
             RHOXSUM,
@@ -5067,7 +5122,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        # compute physical properties of Vy nodes
+        @info "compute physical properties of Vy nodes"
         # ---------------------------------------------------------------------
         compute_vy_node_properties!(
             RHOYSUM,
@@ -5084,7 +5139,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        # compute physical properties of P nodes
+        @info "compute physical properties of P nodes"
         # ---------------------------------------------------------------------
         compute_p_node_properties!(
             RHOSUM,
@@ -5110,30 +5165,32 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        # applying thermal boundary conditions for interpolated temperature
+        @info "apply thermal boundary conditions for interpolated temperature"
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
         # ---------------------------------------------------------------------
-        # compute gravity solution
+        @info "compute gravity solution"
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
         compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
 
         # ---------------------------------------------------------------------
-        # # probe increasing computational timestep
+        @info "probe increasing computational timestep"
         # ---------------------------------------------------------------------
         dt = min(dt*dtkoefup, dtelastic)
 
         # ---------------------------------------------------------------------
-        # # save initial viscosity, yielding nodes
+        @info "save initial viscosity, yielding nodes"
         # ---------------------------------------------------------------------
-        ETA00, ETA = ETA, ETA00
-        YNY00, YNY = YNY, YNY00
+        # ETA00, ETA = ETA, ETA00
+        # YNY00, YNY = YNY, YNY00
+        ETA00 = copy(ETA)
+        YNY00 = copy(YNY)
         # RMK check this!
 
         # ---------------------------------------------------------------------
-        # # perform plastic iterations
+        @info "perform plastic iterations"
         # ---------------------------------------------------------------------
         if timestep == 1
             # no elastic compaction during first timestep
@@ -5141,6 +5198,7 @@ function simulation_loop(output_path)
         end
         # perform plastic iterations
         for iplast=1:1:nplast
+            @info "plastic iteration" iplast
             # recompute bulk viscosity at pressure nodes
             recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
             # compute computational viscosities, stresses, and density gradients
@@ -5171,7 +5229,7 @@ function simulation_loop(output_path)
                 dRHOYdy
             )
             # assemble hydromechanical system of equations
-            assemble_hydromechanical_lse!(
+            L = assemble_hydromechanical_lse!(
                 Nx,
                 Ny,
                 ETAcomp,
@@ -5200,9 +5258,9 @@ function simulation_loop(output_path)
                 R
             )
             # solve hydromechanical system of equations
-@timeit to "solve system" begin
+# @timeit to "solve system" begin
             S = L \ R
-end # @timeit to "solve system"
+# end # @timeit to "solve system"
             # obtain hydromechanical observables from solution
             process_hydromechanical_solution!(
                 S,
@@ -5301,7 +5359,7 @@ end # @timeit to "solve system"
             # DSXX0 = copy(DSXX)
             # DSXY0 = copy(DSXY)
             # nodal adjustment
-            if compute_nodal_adjustment(
+            if compute_nodal_adjustment!(
                 ETA,
                 ETA0,
                 ETA5,
@@ -5351,7 +5409,7 @@ end # @timeit to "solve system"
         end # for iplast=1:1:nplast
 
         # ---------------------------------------------------------------------
-        # # interpolate updated viscoplastic viscosity to markers
+        @info "interpolate updated viscoplastic viscosity to markers"
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
             update_marker_viscosity!(
@@ -5359,7 +5417,7 @@ end # @timeit to "solve system"
         end
 
         # ---------------------------------------------------------------------
-        # # apply subgrid stress diffusion to markers
+        @info "apply subgrid stress diffusion to markers"
         # ---------------------------------------------------------------------
         apply_subgrid_stress_diffusion!(
             xm,
@@ -5381,12 +5439,12 @@ end # @timeit to "solve system"
         )
 
         # ---------------------------------------------------------------------
-        # interpolate DSXX, DSXY to markers
+        @info "interpolate DSXX, DSXY to markers"
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
         # ---------------------------------------------------------------------
-        # compute shear heating HS in P nodes
+        @info "compute shear heating HS in P nodes"
         # ---------------------------------------------------------------------
         compute_shear_heating!(
             HS,
@@ -5407,7 +5465,7 @@ end # @timeit to "solve system"
 
         # ---------------------------------------------------------------------
         # compute adiabatic heating HA in P nodes
-        # perform thermal iterations
+        @info "perform thermal iterations"
         # ---------------------------------------------------------------------
         if timestep==1
             # no pressure changes for the first timestep
@@ -5419,7 +5477,7 @@ end # @timeit to "solve system"
             tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
 
         # ---------------------------------------------------------------------
-        # apply subgrid temperature diffusion on markers
+        @info "apply subgrid temperature diffusion on markers"
         # compute DTsubgrid
         # ---------------------------------------------------------------------
         apply_subgrid_temperature_diffusion!(
@@ -5437,28 +5495,28 @@ end # @timeit to "solve system"
         )
 
         # ---------------------------------------------------------------------
-        # interpolate DT to markers
+        @info "interpolate DT to markers"
         # ---------------------------------------------------------------------
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
         # ---------------------------------------------------------------------
-        # update porosity on markers
+        @info "update porosity on markers"
         # ---------------------------------------------------------------------
         update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
 
         # ---------------------------------------------------------------------
-        # compute velocity in P nodes
+        @info "compute velocity in P nodes"
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
 
         # ---------------------------------------------------------------------
-        # compute rotation rate in basic nodes
+        @info "compute rotation rate in basic nodes"
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
 
         # ---------------------------------------------------------------------
-        # move markers with RK4
+        @info "move markers with RK4"
         # ---------------------------------------------------------------------
         move_markers_rk4!(
             xm,
@@ -5479,22 +5537,23 @@ end # @timeit to "solve system"
         )
 
         # ---------------------------------------------------------------------
-        # backtrack P nodes: Ptotal with RK4
+        @info "backtrack P nodes: Ptotal with RK4"
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
         backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 
         # ---------------------------------------------------------------------
-        # replenish sparse areas with additional markers
+        @info "replenish sparse areas with additional markers"
         # ---------------------------------------------------------------------
         replenish_markers!(
             xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum)
 
         # ---------------------------------------------------------------------
-        # update timesum
+        @info "update timesum"
         # ---------------------------------------------------------------------
         timesum += dtm
+        @info "timesum" timesum
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization

@@ -258,6 +258,17 @@ include("../src/constants.jl")
             YNY00,
             YNY_inv_ETA,
             DSXY,
+            DSY,
+            YNPL,
+            DDD,
+            SIIB,
+            siiel,
+            prB,
+            pfB,
+            syieldc,
+            syieldt,
+            syield,
+            etapl,
             ETAcomp,
             SXYcomp,
             dRHOXdx,
@@ -279,6 +290,17 @@ include("../src/constants.jl")
         @test YNY00 == zeros(Bool, Ny, Nx)
         @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
         @test DSXY == zeros(Float64, Ny, Nx)
+        @test DSY == zeros(Float64, Ny, Nx)
+        @test YNPL == zeros(Float64, Ny, Nx)
+        @test DDD == zeros(Float64, Ny, Nx)
+        @test SIIB == zeros(Float64, Ny, Nx)
+        @test siiel == zeros(Float64, Ny, Nx)
+        @test prB == zeros(Float64, Ny, Nx)
+        @test pfB == zeros(Float64, Ny, Nx)
+        @test syieldc == zeros(Float64, Ny, Nx)
+        @test syieldt == zeros(Float64, Ny, Nx)
+        @test syield == zeros(Float64, Ny, Nx)
+        @test etapl == zeros(Float64, Ny, Nx)
         @test ETAcomp == zeros(Float64, Ny, Nx)
         @test SXYcomp == zeros(Float64, Ny, Nx)
         @test dRHOXdx == zeros(Float64, Ny1, Nx1)
