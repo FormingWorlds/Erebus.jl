@@ -9,10 +9,12 @@ using LinearAlgebra
 using ProgressMeter
 using StaticArrays
 using TimerOutputs
+using UnicodePlots
 
 export run_simulation
 
-include("constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 const to = TimerOutput()
 
 """
@@ -105,6 +107,8 @@ $(SIGNATURES)
     - SXX0 : σ₀′xx at P nodes [1/s]
     - tk1 : current temperature at P nodes [K]
     - tk2 : next temperature at P nodes [K]
+    - DT: temperature difference at P nodes [K]
+    - DT0: previous temperature difference at P nodes [K]
     - vxp : solid vx in pressure nodes at P nodes [m/s]
     - vyp : solid vy in pressure nodes at P nodes [m/s]
     - vxpf : fluid vx in pressure nodes at P nodes [m/s]
@@ -212,6 +216,10 @@ function setup_staggered_grid_properties(; randomized=false)
     tk1 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # next temperature [K]
     tk2 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # temperature difference at P nodes [K]
+    DT = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # previous temperature difference at P nodes [K]
+    DT0 = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vx in pressure nodes [m/s]
     vxp = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vy in pressure nodes [m/s]
@@ -286,6 +294,8 @@ function setup_staggered_grid_properties(; randomized=false)
         SXX0,       
         tk1,
         tk2,
+        DT,
+        DT0,
         vxp,
         vyp,
         vxpf,
@@ -361,26 +371,6 @@ function setup_staggered_grid_properties_helpers(;randomized=false)
     DSXY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # (SIIB-syield) at basic nodes
     DSY = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # plastic iterations plastic yielding status at basic nodes
-    YNPL = randomized ? rand(Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
-    # plastic iterations (SIIB-syield)² at basic nodes 
-    DDD = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # second stress invariant at basic nodes
-    SIIB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # second invariant for purely elastic stress buildup at basic nodes  
-    siiel = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # interpolated total pressure at basic nodes 
-    prB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # interpolated fluid pressure at basic nodes
-    pfB = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # confined fractures yielding stress at basic nodes 
-    syieldc = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # tensile fractures yielding stress at basic nodes 
-    syieldt = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # non-negative maximum yielding stress at basic nodes 
-    syield = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
-    # stress-based viscoplastic viscosity at basic nodes 
-    etapl = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # computational viscosity at basic nodes
     ETAcomp = randomized ? rand(Ny, Nx) : zeros(Ny, Nx)
     # computational previous xy stress at basic nodes
@@ -418,16 +408,6 @@ function setup_staggered_grid_properties_helpers(;randomized=false)
         YNY_inv_ETA,
         DSXY,
         DSY,
-        YNPL,
-        DDD,
-        SIIB,
-        siiel,
-        prB,
-        pfB,
-        syieldc,
-        syieldt,
-        syield,
-        etapl,
         ETAcomp,
         SXYcomp,
         dRHOXdx,
@@ -967,7 +947,8 @@ function total(solid, fluid, ϕ)
 end
 
 """
-Get a 4-vector of values from grid in row-major order.
+Get a 4-vector of values from a grid 4-stencil anchored at (i, j) in 
+column-major order.
 
 $(SIGNATURES)
 
@@ -979,8 +960,8 @@ $(SIGNATURES)
 
 # Returns
 
-    -grid_vector: 4-vector of values
-    [grid[i, j], grid[i+1, j], grid[i, j+1], grid[i+1, j+1]]
+    - grid_vector: 4-vector of values
+        [grid[i, j], grid[i+1, j], grid[i, j+1], grid[i+1, j+1]]
 """
 function grid_vector(i, j, grid)
     @inbounds return @SVector [
@@ -988,6 +969,25 @@ function grid_vector(i, j, grid)
     ]
 end
 
+"""
+Get the arithmetic average of values from a grid 4-stencil anchored at (i, j).
+
+$(SIGNATURES)
+
+# Details
+
+    - i: top left grid node column index
+    - j: top left grid node row index
+    - grid: data from which to get the average value
+
+# Returns
+
+    - grid_average: (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1]) / 4
+"""
+function grid_average(i, j, grid)
+    @inbounds return 0.25 * (
+        grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
+end
 
 """
 Compute total thermal conductivity of two-phase material.
@@ -2044,13 +2044,7 @@ $(SIGNATURES)
     - SXX0:σ₀xy XY stress at basic nodes
     - RHOX: density at Vx nodes
     - RHOY: density at Vy nodes
-    - dx: horizontal grid spacing
-    - dy: vertical grid spacing
     - dt: time step
-    - Nx: number of horizontal basic grid points
-    - Ny: number of vertical basic grid points
-    - Nx1: number of horizontal Vx/Vy/P grid points
-    - Ny1: number of vertical Vx/Vy/P grid points
 
 ## Out 
 
@@ -2077,13 +2071,7 @@ function get_viscosities_stresses_density_gradients!(
     SXX0,
     RHOX,
     RHOY,
-    dx,
-    dy,
     dt,
-    Nx,
-    Ny,
-    Nx1,
-    Ny1,
     ETAcomp,
     ETAPcomp,
     SXYcomp,
@@ -2185,8 +2173,6 @@ $(SIGNATURES)
 
 # Details
 
-    - Nx: number of basic grid points in x-direction
-    - Ny: number of basic grid points in y-direction
     - ETAcomp: computational viscosity at basic nodes
     - ETAPcomp: computational viscosity at P nodes
     - SXYcomp: computational previous XY stress at basic nodes
@@ -2217,8 +2203,6 @@ $(SIGNATURES)
     - L: LHS coefficient matrix
 """
 function assemble_hydromechanical_lse!(
-    Nx,
-    Ny,
     ETAcomp,
     ETAPcomp,
     SXYcomp,
@@ -2246,8 +2230,10 @@ function assemble_hydromechanical_lse!(
 )
 # @timeit to "assemble_hydromechanical_lse()" begin
     Nx1, Ny1 = Nx+1, Ny+1
-    # fresh LHS sparse coefficient matrix
+    # initiate LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # reset RHS coefficient vector
+    R .= 0.0
     for j=1:1:Nx1, i=1:1:Ny1
         # define global indices in algebraic space
         kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
@@ -2647,9 +2633,6 @@ $(SIGNATURES)
     - qxD: qx-Darcy flux at Vx nodes
     - qyD: qy-Darcy flux at Vy nodes
     - pf: fluid pressure at P nodes
-    - pscale: scaled pressure
-    - Nx1: number of Vx/Vy/P nodes in horizontal x-direction
-    - Ny1: number of Vx/Vy/P nodes in vertical y-direction
 
 # Returns
 
@@ -2662,10 +2645,7 @@ function process_hydromechanical_solution!(
     pr,
     qxD,
     qyD,
-    pf,
-    pscale,
-    Nx1,
-    Ny1
+    pf
 )
 # @timeit to "process_hydromechanical_solution!()" begin
     S_mat = reshape(S, (:, Ny1, Nx1))
@@ -2814,8 +2794,6 @@ $(SIGNATURES)
     - vxf: fluid vx velocity at Vx nodes
     - vyf: fluid vy velocity at Vy nodes
     - dt: current time step
-    - dx: x-grid horizontal spacing
-    - dy: y-grid vertical spacing
     - dxymax: maximum allowed grid spacing movement of markers per time step
     - aphimax: maximum observed porosity coefficient
     - dphimax: maximum allowed porosity ratio change per time step
@@ -2830,8 +2808,6 @@ function compute_displacement_timestep(
     vxf,
     vyf,
     dt,
-    dx,
-    dy,
     dxymax,
     aphimax,
     dphimax
@@ -2955,10 +2931,6 @@ $(SIGNATURES)
     - pr: total pressure at P nodes
     - pf: fluid pressure at P nodes
     - ps: solid pressure at P nodes
-    - Nx: number of basic nodes in horizontal x direction
-    - Ny: number of basic nodes in vertical y direction
-    - Nx1: number of Vx/Vy/P nodes in horizontal x direction
-    - Ny1: number of Vx/Vy/P nodes in vertical y direction
 
 # Returns
 
@@ -2970,11 +2942,7 @@ function symmetrize_p_node_observables!(
     PHI,
     pr,
     pf,
-    ps,
-    Nx,
-    Ny,
-    Nx1,
-    Ny1
+    ps
 )
 # @timeit to "symmetrize_p_node_observables!()" begin
     # top boundary
@@ -3027,20 +2995,10 @@ $(SIGNATURES)
     - COH: compressive strength at basic nodes 
     - TEN: tensile strength at basic nodes 
     - FRI: friction at basic nodes
-    - SIIB: second stress invariant at basic nodes
-    - siiel: second invariant for purely elastic stress buildup at basic nodes 
-    - prB: interpolated total pressure at basic nodes 
-    - pfB: interpolated fluid pressure at basic nodes 
-    - syieldc: confined fractures yielding stress at basic nodes 
-    - syieldt: tensile fractures yielding stress at basic nodes 
-    - syield: non-negative maximum yielding stress at basic nodes
-    - etapl: stress-based viscoplastic viscosity at basic nodes 
     - YNY: plastic yielding status at basic nodes 
     - YNY5: plastic iterations plastic yielding status at basic nodes
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
     - DSY: (SIIB-syield) at basic nodes
-    - YNPL: plastic iterations plastic yielding status at basic nodes
-    - DDD: plastic iterations (SIIB-syield)² at basic nodes
     - dt: time set
     - iplast: plastic iteration step 
 
@@ -3060,20 +3018,10 @@ function compute_nodal_adjustment!(
     COH,
     TEN,
     FRI,
-    SIIB,
-    siiel,
-    prB,
-    pfB,
-    syieldc,
-    syieldt,
-    syield,
-    etapl,
     YNY,
     YNY5,
     YERRNOD,
     DSY,
-    YNPL,
-    DDD,
     dt,
     iplast
 )
@@ -3082,64 +3030,60 @@ function compute_nodal_adjustment!(
     ETA5 .= copy(ETA0)
     YNY5 .= 0
     DSY .= 0.0
-    YNPL .= 0
-    DDD .= 0.0
-    # second stress invariant at basic nodes
-    @views @. SIIB = sqrt(
-        SXY^2 + (
-            0.25 * (
-                SXX[1:Ny, 1:Nx]
-                +SXX[2:Ny1, 1:Nx]
-                +SXX[1:Ny, 2:Nx1]
-                +SXX[2:Ny1, 2:Nx1]
-            )
-        )^2
-    )
-    # second invariant for purely elastic stress buildup at basic nodes
-    @views @. siiel = SIIB * (GGG*dt+ETA) / ETA
-    # interpolate total and fluid pressure at basic nodes
-    @views @. prB = 0.25 * (
-        pr[1:Ny, 1:Nx] + pr[2:Ny1, 1:Nx] + pr[1:Ny, 2:Nx1] + pr[2:Ny1, 2:Nx1]
-    )   
-    @views @. pfB = 0.25 * (
-        pf[1:Ny, 1:Nx] + pf[2:Ny1, 1:Nx] + pf[1:Ny, 2:Nx1] + pf[2:Ny1, 2:Nx1]
-    )
-    # yielding stress: confined fracture
-    @views @. syieldc = COH + FRI * (prB-pfB)
-    # yielding stress: tensile fracture
-    @views @. syieldt = TEN + (prB-pfB)
-    # non-negative maximum yielding stress
-    positive_max!(syieldc, syieldt, syield)
-    # update error for previous yielding nodes
-    @views @. DSY[YNY>0] = SIIB[YNY>0] - syield[YNY>0]
-    @views @. DDD[YNY>0] += DSY[YNY>0]^2
-    @views @. YNPL[YNY>0] .= 1
-    # new viscosity for basic nodes
-    @views @. etapl = dt * GGG * syield / (siiel-syield)
-    # correcting viscosity for yielding
-    # recompute nodal viscosity, apply min/max viscosity cutoffs
-    @views @. ETA5[syield<siiel && etapl<ETA0] = (
-        etapl[syield<siiel && etapl<ETA0]^(1.0-etawt)
-        * ETA[syield<siiel && etapl<ETA0]^etawt
-    )
-    @views @. ETA5[syield<siiel && etapl<ETA0 && ETA5>etamax] = etamax
-    @views @. ETA5[syield<siiel && etapl<ETA0 && ETA5<etamin] = etamin
-    # mark yielding nodes
-    @views @. YNY5[syield<siiel && etapl<ETA0] = 1
-    # update error for new yielding nodes
-    @views @. DSY[syield<siiel && etapl<ETA0 && YNPL==0] = (
-        SIIB[syield<siiel && etapl<ETA0 && YNPL==0]
-         -syield[syield<siiel && etapl<ETA0 && YNPL==0]
-    )
-    @views @. DDD[syield<siiel && etapl<ETA0 && YNPL==0] +=  
-        DSY[syield<siiel && etapl<ETA0 && YNPL==0]^2
-    @views @. YNPL[syield<siiel && etapl<ETA0 && YNPL==0] = 1
-    if sum(YNPL) > 0
-        YERRNOD[iplast] = sqrt(sum(DDD)/sum(YNPL))
+    ynpl = 0
+    ddd = 0.0
+    @inbounds begin
+    for j=1:1:Nx, i=1:1:Ny
+        # second stress invariant at basic nodes
+        SIIB = sqrt(SXY[i, j]^2 + grid_average(i, j, SXX)^2) 
+        # second invariant for purely elastic stress buildup at basic nodes
+        siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
+        # interpolate total and fluid pressure at basic nodes
+        prB = grid_average(i, j, pr)
+        pfB = grid_average(i, j, pf)
+        # yielding stress: confined fracture
+        syieldc = COH[i, j] + FRI[i, j] * (prB-pfB)
+        # yielding stress: tensile fracture
+        syieldt = TEN[i, j] + (prB-pfB)
+        # non-negative yielding stress requirement
+        syield = max(min(syieldc, syieldt), 0.0)
+        # update error for previous yielding nodes
+        ynn = false
+        if YNY[i, j] > 0
+            DSY[i, j] = SIIB - syield
+            ddd += DSY[i, j]^2
+            ynpl += 1
+        end
+        # correcting viscosity for yielding
+        if syield < siiel
+            # update viscosity for basic node
+            etapl = dt * GGG[i,j]*syield/(siiel-syield)
+            if etapl < ETA0[i, j]
+                # recompute nodal viscosity, apply min/max viscosity cutoffs
+                ETA5[i, j] = etapl^(1.0-etawt) * ETA[i, j]^etawt
+                if ETA5[i, j] > etamax
+                    ETA5[i, j] = etamax
+                    elseif ETA5[i, j] < etamin
+                        ETA5[i, j] = etamin
+                end
+                # mark yielding nodes
+                YNY5[i, j] = 1
+                # update error for new yielding nodes
+                if ynn == false
+                    DSY[i, j] = SIIB - syield
+                    ddd += DSY[i, j]^2
+                    ynpl += 1
+                end  
+            end
+        end
+    end
+    if ynpl > 0
+        YERRNOD[iplast] = sqrt(ddd/ynpl)
     end
     # return plastic iteration completeness
-    @info "compute_nodal_adjustment" sum(YNPL) YERRNOD[iplast] iplast
-    return sum(YNPL)==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
+    # @info "compute_nodal_adjustment" ynpl YERRNOD[iplast] iplast
+    return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
+    end # @inbounds
 # end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
@@ -3180,8 +3124,6 @@ $(SIGNATURES)
     - YNY00: previous time step plastic yielding status at basic nodes
     - YNY_inv_ETA: inverse of plastic viscosity at yielding basic nodes
     - dt: current time step
-    - dtkoef: coefficient by which to decrease computational time step
-    - dtstep: minimum of plastic iterations before adjusting time step
     - iplast: current plastic iteration counter
 
 # Returns
@@ -3197,8 +3139,6 @@ function finalize_plastic_iteration_pass!(
     YNY00,
     YNY_inv_ETA,
     dt,
-    dtkoef,
-    dtstep,
     iplast
 )
 # @timeit to "finalize_plastic_iteration_pass!()" begin
@@ -3413,35 +3353,21 @@ $(SIGNATURES)
     - nothing
 """
 function compute_shear_heating!(
-    HS, SXYEXY, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf)
+    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf)
 # @timeit to "compute_shear_heating!" begin
-    # average SXY⋅EXY
-    @inbounds begin
-    @views @. SXYEXY[2:Ny, 2:Nx] = 0.25 * (
-        SXY[1:Ny-1, 1:Nx-1]^2/ETA[1:Ny-1, 1:Nx-1]
-        + SXY[2:Ny, 1:Nx-1]^2/ETA[2:Ny, 1:Nx-1]
-        + SXY[1:Ny-1, 2:Nx]^2/ETA[1:Ny-1, 2:Nx]
-        + SXY[2:Ny, 2:Nx]^2/ETA[2:Ny, 2:Nx]
-    )
-    # compute shear heating HS
-    @views @. HS[2:Ny, 2:Nx] = (
-        SXX[2:Ny, 2:Nx]^2 / ETAP[2:Ny, 2:Nx]
-        + SXYEXY[2:Ny, 2:Nx]
-        + (
-            (pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])^2
-            / (1-PHI[2:Ny, 2:Nx])
-            / ETAPHI[2:Ny, 2:Nx]
+    for j=2:1:Nx, i=2:1:Ny
+        # average SXY⋅EXY
+        SXYEXY = 0.25 * sum(
+            grid_vector(i-1, j-1, SXY).^2 ./ grid_vector(i-1, j-1, ETA))
+        # compute shear heating HS
+        @inbounds HS[i, j] = (
+            SXX[i, j]^2 / ETAP[i,j]
+            + SXYEXY
+            + (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j]
+            + 0.5 * (RX[i, j-1]*qxD[i, j-1]^2 + RX[i, j]*qxD[i, j]^2)
+            + 0.5 * (RY[i-1, j]*qyD[i-1, j]^2 + RY[i, j]*qyD[i, j]^2)
         )
-        + 0.5 * (
-            RX[2:Ny, 1:Nx-1] * qxD[2:Ny, 1:Nx-1]^2
-            + RX[2:Ny, 2:Nx] * qxD[2:Ny, 2:Nx]^2
-        )
-        + 0.5 * (
-            RY[1:Ny-1, 2:Nx] * qyD[1:Ny-1, 2:Nx]^2
-            + RY[2:Ny, 2:Nx] * qyD[2:Ny, 2:Nx]^2
-        )
-    )
-    end # @inbounds
+    end
 # end # @timeit to "compute_shear_heating!" 
     return nothing
 end # function compute_shear_heating!
@@ -4607,12 +4533,120 @@ $(SIGNATURES)
     - dtm: displacement time step 
     - timesum: total simulation time
     - marknum: number of markers
+    - ETA... : simulation state variables
 
 # Returns
 
     - nothing
 """
-function save_data(output_path, timestep, dt, dtm, timesum, marknum)
+function save_state(
+    output_path,
+    timestep,
+    dt,
+    dtm,
+    timesum,
+    marknum,
+    ETA,
+    ETA0,
+    GGG,
+    EXY,
+    SXY,
+    SXY0,
+    wyx,
+    COH,
+    TEN,
+    FRI,
+    YNY,
+    RHOX,
+    RHOFX,
+    KX,
+    PHIX,
+    vx,
+    vxf,
+    RX,
+    qxD,
+    gx,
+    RHOY,
+    RHOFY,
+    KY,
+    PHIY,
+    vy,
+    vyf,
+    RY,
+    qyD,
+    gy,
+    RHO,
+    RHOCP,
+    ALPHA,
+    ALPHAF,
+    HR,
+    HA,
+    HS,
+    ETAP,
+    GGGP,
+    EXX,
+    SXX,
+    SXX0,
+    tk1,
+    tk2,
+    vxp,
+    vyp,
+    vxpf,
+    vypf,
+    pr,
+    pf,
+    ps,
+    pr0,
+    pf0,
+    ps0,
+    ETAPHI,
+    BETTAPHI,
+    PHI,
+    APHI,
+    FI,
+    ETA5,
+    ETA00,
+    YNY5,
+    YNY00,
+    YNY_inv_ETA,
+    DSXY,
+    ETAcomp,
+    SXYcomp,
+    dRHOXdx,
+    dRHOXdy,
+    dRHOYdx,
+    dRHOYdy,
+    ETAPcomp,
+    SXXcomp,
+    SYYcomp,
+    EII,
+    SII,
+    DSXX,
+    xm,
+    ym,
+    tm,
+    tkm,
+    sxxm,
+    sxym,
+    etavpm,
+    phim,
+    rhototalm,
+    rhocptotalm,
+    etasolidcur,
+    etafluidcur,
+    etatotalm,
+    hrtotalm,
+    ktotalm,
+    tkm_rhocptotalm,
+    etafluidcur_inv_kphim,
+    inv_gggtotalm,
+    fricttotalm,
+    cohestotalm,
+    tenstotalm,
+    rhofluidcur,
+    alphasolidcur,
+    alphafluidcur
+    )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     jldsave(
         fid;
@@ -4820,6 +4854,8 @@ function simulation_loop(output_path)
         SXX0,
         tk1,
         tk2,
+        DT,
+        DT0,
         vxp,
         vyp,
         vxpf,
@@ -4844,16 +4880,6 @@ function simulation_loop(output_path)
         YNY_inv_ETA,
         DSXY,
         DSY,
-        YNPL,
-        DDD,
-        SIIB,
-        siiel,
-        prB,
-        pfB,
-        syieldc,
-        syieldt,
-        syield,
-        etapl,
         ETAcomp,
         SXYcomp,
         dRHOXdx,
@@ -4865,7 +4891,8 @@ function simulation_loop(output_path)
         SYYcomp,
         EII,
         SII,
-        DSXX
+        DSXX,
+        tk0
     ) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
@@ -4904,6 +4931,121 @@ function simulation_loop(output_path)
         ktotalm,
         etafluidcur,
         tkm,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur
+    )
+
+    # show initial markers
+    plt = scatterplot(
+        xm, ym, marker=:+, color=tm, xlim=(x[1], x[end]), ylim=(y[1], y[end]))
+    savefig(plt, output_path * "/initial_markers.png")
+
+    # save initial state
+    save_state(
+        output_path,
+        0,
+        dt,
+        0,
+        timesum,
+        marknum,
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETTAPHI,
+        PHI,
+        APHI,
+        FI,
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        YNY_inv_ETA,
+        DSXY,
+        ETAcomp,
+        SXYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy,
+        ETAPcomp,
+        SXXcomp,
+        SYYcomp,
+        EII,
+        SII,
+        DSXX,
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        rhototalm,
+        rhocptotalm,
+        etasolidcur,
+        etafluidcur,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
         inv_gggtotalm,
         fricttotalm,
         cohestotalm,
@@ -5189,6 +5331,115 @@ function simulation_loop(output_path)
         YNY00 = copy(YNY)
         # RMK check this!
 
+        save_state(
+        output_path,
+        timestep,
+        dt,
+        0,
+        timesum,
+        marknum,
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETTAPHI,
+        PHI,
+        APHI,
+        FI,
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        YNY_inv_ETA,
+        DSXY,
+        ETAcomp,
+        SXYcomp,
+        dRHOXdx,
+        dRHOXdy,
+        dRHOYdx,
+        dRHOYdy,
+        ETAPcomp,
+        SXXcomp,
+        SYYcomp,
+        EII,
+        SII,
+        DSXX,
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        rhototalm,
+        rhocptotalm,
+        etasolidcur,
+        etafluidcur,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur
+    )
+
         # ---------------------------------------------------------------------
         @info "perform plastic iterations"
         # ---------------------------------------------------------------------
@@ -5197,6 +5448,8 @@ function simulation_loop(output_path)
             BETTAPHI .= 0.0
         end
         # perform plastic iterations
+        # initialize dtm
+        dtm = 0.0
         for iplast=1:1:nplast
             @info "plastic iteration" iplast
             # recompute bulk viscosity at pressure nodes
@@ -5211,13 +5464,7 @@ function simulation_loop(output_path)
                 SXX0,
                 RHOX,
                 RHOY,
-                dx,
-                dy,
                 dt,
-                Nx,
-                Ny,
-                Nx1,
-                Ny1,
                 ETAcomp,
                 ETAPcomp,
                 SXYcomp,
@@ -5230,8 +5477,6 @@ function simulation_loop(output_path)
             )
             # assemble hydromechanical system of equations
             L = assemble_hydromechanical_lse!(
-                Nx,
-                Ny,
                 ETAcomp,
                 ETAPcomp,
                 SXYcomp,
@@ -5269,10 +5514,19 @@ function simulation_loop(output_path)
                 pr,
                 qxD,
                 qyD,
-                pf,
-                pscale,
-                Nx1,
-                Ny1
+                pf
+            )
+            L_dense = collect(L)
+            jldsave(output_path*"hydromechanical.jld2";
+                L_dense,
+                R,
+                S,
+                vx,
+                vy,
+                pr,
+                qxD,
+                qyD,
+                pf
             )
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
@@ -5304,8 +5558,6 @@ function simulation_loop(output_path)
                 vxf,
                 vyf,
                 dt,
-                dx,
-                dy,
                 dxymax,
                 aphimax,
                 dphimax
@@ -5349,11 +5601,7 @@ function simulation_loop(output_path)
                 PHI,
                 pr,
                 pf,
-                ps,
-                Nx,
-                Ny,
-                Nx1,
-                Ny1
+                ps
             )
             # save nodal stress changes - RMK: not required in code
             # DSXX0 = copy(DSXX)
@@ -5371,20 +5619,10 @@ function simulation_loop(output_path)
                 COH,
                 TEN,
                 FRI,
-                SIIB,
-                siiel,
-                prB,
-                pfB,
-                syieldc,
-                syieldt,
-                syield,
-                etapl,
                 YNY,
                 YNY5,
                 YERRNOD,
                 DSY,
-                YNPL,
-                DDD,
                 dt,
                 iplast
             )
@@ -5401,8 +5639,6 @@ function simulation_loop(output_path)
                     YNY00,
                     YNY_inv_ETA,
                     dt,
-                    dtkoef,
-                    dtstep,
                     iplast
                 )
             end
@@ -5448,7 +5684,6 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         compute_shear_heating!(
             HS,
-            SXYEXY,
             ETA,
             SXY,
             ETAP,
@@ -5559,7 +5794,114 @@ function simulation_loop(output_path)
         #  save data for analysis and visualization
         # ---------------------------------------------------------------------
         if timestep % savematstep == 0
-            save_data(output_path, timestep, dt, dtm, timesum, marknum)
+            save_state(
+                output_path,
+                timestep,
+                dt,
+                dtm,
+                timesum,
+                marknum,
+                ETA,
+                ETA0,
+                GGG,
+                EXY,
+                SXY,
+                SXY0,
+                wyx,
+                COH,
+                TEN,
+                FRI,
+                YNY,
+                RHOX,
+                RHOFX,
+                KX,
+                PHIX,
+                vx,
+                vxf,
+                RX,
+                qxD,
+                gx,
+                RHOY,
+                RHOFY,
+                KY,
+                PHIY,
+                vy,
+                vyf,
+                RY,
+                qyD,
+                gy,
+                RHO,
+                RHOCP,
+                ALPHA,
+                ALPHAF,
+                HR,
+                HA,
+                HS,
+                ETAP,
+                GGGP,
+                EXX,
+                SXX,
+                SXX0,
+                tk1,
+                tk2,
+                vxp,
+                vyp,
+                vxpf,
+                vypf,
+                pr,
+                pf,
+                ps,
+                pr0,
+                pf0,
+                ps0,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                APHI,
+                FI,
+                ETA5,
+                ETA00,
+                YNY5,
+                YNY00,
+                YNY_inv_ETA,
+                DSXY,
+                ETAcomp,
+                SXYcomp,
+                dRHOXdx,
+                dRHOXdy,
+                dRHOYdx,
+                dRHOYdy,
+                ETAPcomp,
+                SXXcomp,
+                SYYcomp,
+                EII,
+                SII,
+                DSXX,
+                xm,
+                ym,
+                tm,
+                tkm,
+                sxxm,
+                sxym,
+                etavpm,
+                phim,
+                rhototalm,
+                rhocptotalm,
+                etasolidcur,
+                etafluidcur,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim,
+                inv_gggtotalm,
+                fricttotalm,
+                cohestotalm,
+                tenstotalm,
+                rhofluidcur,
+                alphasolidcur,
+                alphafluidcur
+            )
         end
         # ---------------------------------------------------------------------
         #  save old stresses - RMK: not used anywhere in code ?

@@ -3,19 +3,21 @@ using HydrologyPlanetesimals
 using StaticArrays
 using Test
 
-include("../src/constants.jl")
+include("../src/test_constants.jl")
 
 @testset verbose=true "HydrologyPlanetesimals.jl" begin
 
     @testset "setup_dynamic_simulation_parameters()" begin
         # set up dynamic simulation parameters
-        timestep,
-        dt,
-        timesum,
-        marknum,
-        hrsolidm,
-        hrfluidm,
-        YERRNOD = HydrologyPlanetesimals.setup_dynamic_simulation_parameters()
+        (
+            timestep,
+            dt,
+            timesum,
+            marknum,
+            hrsolidm,
+            hrfluidm,
+            YERRNOD
+        ) = HydrologyPlanetesimals.setup_dynamic_simulation_parameters()
         # verification & test
         @test timestep == start_step
         @test dt == dtelastic
@@ -105,6 +107,8 @@ include("../src/constants.jl")
             SXX0,
             tk1,
             tk2,
+            DT,
+            DT0,
             vxp,
             vyp,
             vxpf,
@@ -173,6 +177,8 @@ include("../src/constants.jl")
         SXX0_ver = zeros(Ny1,Nx1) # SIGMA0'xx, 1/s
         tk1_ver = zeros(Ny1,Nx1) # Old temperature, K
         tk2_ver = zeros(Ny1,Nx1) # New temperature, K
+        DT_ver = zeros(Ny1,Nx1) # temperature difference, K
+        DT0_ver = zeros(Ny1,Nx1) # previous temperature difference, K
         vxp_ver = zeros(Ny1,Nx1) # Solid Vx in pressure nodes, m/s
         vyp_ver = zeros(Ny1,Nx1) # Solid Vy in pressure nodes, m/s
         vxpf_ver = zeros(Ny1,Nx1) # Fluid Vx in pressure nodes, m/s
@@ -232,6 +238,8 @@ include("../src/constants.jl")
         @test SXX0 == SXX0_ver
         @test tk1 == tk1_ver
         @test tk2 == tk2_ver
+        @test DT == DT_ver
+        @test DT0 == DT0_ver
         @test vxp == vxp_ver
         @test vyp == vyp_ver
         @test vxpf == vxpf_ver
@@ -259,16 +267,6 @@ include("../src/constants.jl")
             YNY_inv_ETA,
             DSXY,
             DSY,
-            YNPL,
-            DDD,
-            SIIB,
-            siiel,
-            prB,
-            pfB,
-            syieldc,
-            syieldt,
-            syield,
-            etapl,
             ETAcomp,
             SXYcomp,
             dRHOXdx,
@@ -291,16 +289,6 @@ include("../src/constants.jl")
         @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
         @test DSXY == zeros(Float64, Ny, Nx)
         @test DSY == zeros(Float64, Ny, Nx)
-        @test YNPL == zeros(Float64, Ny, Nx)
-        @test DDD == zeros(Float64, Ny, Nx)
-        @test SIIB == zeros(Float64, Ny, Nx)
-        @test siiel == zeros(Float64, Ny, Nx)
-        @test prB == zeros(Float64, Ny, Nx)
-        @test pfB == zeros(Float64, Ny, Nx)
-        @test syieldc == zeros(Float64, Ny, Nx)
-        @test syieldt == zeros(Float64, Ny, Nx)
-        @test syield == zeros(Float64, Ny, Nx)
-        @test etapl == zeros(Float64, Ny, Nx)
         @test ETAcomp == zeros(Float64, Ny, Nx)
         @test SXYcomp == zeros(Float64, Ny, Nx)
         @test dRHOXdx == zeros(Float64, Ny1, Nx1)
@@ -748,6 +736,12 @@ include("../src/constants.jl")
             grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]
         ]
     end # testset "grid_vector()"
+
+    @testset "grid_average()" begin
+        grid = rand(10, 10)
+        @test HydrologyPlanetesimals.grid_average(1, 1, grid) == 0.25 * (
+            grid[1, 1] + grid[2, 1] + grid[1, 2] + grid[2, 2])
+    end # testset "grid_average()"
 
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
@@ -2635,13 +2629,7 @@ include("../src/constants.jl")
             SXX0,
             RHOX,
             RHOY,
-            dx,
-            dy,
             dt,
-            Nx,
-            Ny,
-            Nx1,
-            Ny1,
             ETAcomp,
             ETAPcomp,
             SXYcomp,
@@ -2755,44 +2743,40 @@ include("../src/constants.jl")
     @testset "assemble_hydromechanical_lse()" begin
         dt = dtelastic
         # simulate data
-        NNx, NNy = 20, 20
-        NNx1, NNy1 = NNx+1, NNy+1
-        ETA = rand(NNy, NNx)
-        ETAP = rand(NNy1, NNx1)
-        GGG = rand(NNy, NNx)
-        GGGP = rand(NNy1, NNx1)
-        SXY0 = rand(NNy, NNx)
-        SXX0 = rand(NNy, NNx)
-        RHOX = rand(NNy1, NNx1)
-        RHOY = rand(NNy1, NNx1)
-        RHOFX = rand(NNy1, NNx1)
-        RHOFY = rand(NNy1, NNx1)
-        RX = rand(NNy1, NNx1)
-        RY = rand(NNy1, NNx1)
-        ETAPHI = rand(NNy1, NNx1)
-        BETTAPHI = rand(NNy1, NNx1)
-        PHI = rand(NNy1, NNx1)
-        gx = rand(NNy1, NNx1)
-        gy = rand(NNy1, NNx1) 
-        pr0 = rand(NNy1, NNx1)
-        pf0 = rand(NNy1, NNx1)
-        ETAcomp = zeros(NNy, NNx)
-        ETAPcomp = zeros(NNy1, NNx1)
-        SXYcomp = zeros(NNy, NNx)
-        SXXcomp = zeros(NNy, NNx)
-        SYYcomp = zeros(NNy, NNx)
-        dRHOXdx = zeros(NNy1, NNx1)
-        dRHOXdy = zeros(NNy1, NNx1)
-        dRHOYdx = zeros(NNy1, NNx1)
-        dRHOYdy = zeros(NNy1, NNx1)
+        ETA = rand(Ny, Nx)
+        ETAP = rand(Ny1, Nx1)
+        GGG = rand(Ny, Nx)
+        GGGP = rand(Ny1, Nx1)
+        SXY0 = rand(Ny, Nx)
+        SXX0 = rand(Ny, Nx)
+        RHOX = rand(Ny1, Nx1)
+        RHOY = rand(Ny1, Nx1)
+        RHOFX = rand(Ny1, Nx1)
+        RHOFY = rand(Ny1, Nx1)
+        RX = rand(Ny1, Nx1)
+        RY = rand(Ny1, Nx1)
+        ETAPHI = rand(Ny1, Nx1)
+        BETTAPHI = rand(Ny1, Nx1)
+        PHI = rand(Ny1, Nx1)
+        gx = rand(Ny1, Nx1)
+        gy = rand(Ny1, Nx1) 
+        pr0 = rand(Ny1, Nx1)
+        pf0 = rand(Ny1, Nx1)
+        ETAcomp = zeros(Ny, Nx)
+        ETAPcomp = zeros(Ny1, Nx1)
+        SXYcomp = zeros(Ny, Nx)
+        SXXcomp = zeros(Ny, Nx)
+        SYYcomp = zeros(Ny, Nx)
+        dRHOXdx = zeros(Ny1, Nx1)
+        dRHOXdy = zeros(Ny1, Nx1)
+        dRHOYdx = zeros(Ny1, Nx1)
+        dRHOYdy = zeros(Ny1, Nx1)
         # LSE
-        R = zeros(NNx1*NNy1*6)
-        L_ver = zeros(NNx1*NNy1*6, Nx1*Ny1*6)
-        R_ver = zeros(NNx1*NNy1*6)
+        R = zeros(Nx1*Ny1*6)
+        L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
+        R_ver = zeros(Nx1*Ny1*6)
         # assemble hydromechanical LSE
         L = HydrologyPlanetesimals.assemble_hydromechanical_lse!(
-            NNx,
-            NNy,
             ETAcomp,
             ETAPcomp,
             SXYcomp,
@@ -2821,10 +2805,10 @@ include("../src/constants.jl")
         # verification, from madcph.m, lines 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
-        for j=1:1:NNx1
-            for i=1:1:NNy1
+        for j=1:1:Nx1
+            for i=1:1:Ny1
                 # Define global indexes in algebraic space
-                kvx=((j-1)*NNy1+i-1)*6+1; # Vx solid
+                kvx=((j-1)*Ny1+i-1)*6+1; # Vx solid
                 kvy=kvx+1; # Vy solid
                 kpm=kvx+2; # Ptotal
                 kqx=kvx+3; # qx Darcy
@@ -2832,10 +2816,10 @@ include("../src/constants.jl")
                 kpf=kvx+5; # P fluid
                 
                 # Vx equation External points
-                if i==1 || i==NNy1 || j==1 || j==NNx || j==NNx1
+                if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
                     # Boundary Condition 
                     # Ghost unknowns 1*Vx=0
-                    if j==NNx1
+                    if j==Nx1
                         L_ver[kvx,kvx]=1; # Left part
                         R_ver[kvx]=0; # Right part
                     end
@@ -2845,18 +2829,18 @@ include("../src/constants.jl")
                         R_ver[kvx]=vxleft; # Right part
                     end
                     # Right Boundary
-                    if j==NNx 
+                    if j==Nx 
                         L_ver[kvx,kvx]=1; # Left part
                         R_ver[kvx]=vxright; # Right part
                     end
                     # Top boundary
-                    if i==1 && j>1 && j<NNx
+                    if i==1 && j>1 && j<Nx
                         L_ver[kvx,kvx]=1; # Left part
                         L_ver[kvx,kvx+6]=bctop; # Left part
                         R_ver[kvx]=0; # Right part
                     end
                     # Top boundary
-                    if i==NNy1 && j>1 && j<NNx
+                    if i==Ny1 && j>1 && j<Nx
                         L_ver[kvx,kvx]=1; # Left part
                         L_ver[kvx,kvx-6]=bcbottom; # Left part
                         R_ver[kvx]=0; # Right part
@@ -2887,26 +2871,26 @@ include("../src/constants.jl")
                 dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
                 dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
                 # Left part
-                L_ver[kvx,kvx-NNy1*6]=ETAP1/dx^2; # Vx1
+                L_ver[kvx,kvx-Ny1*6]=ETAP1/dx^2; # Vx1
                 L_ver[kvx,kvx-6]=ETA1/dy^2; # Vx2
                 L_ver[kvx,kvx]=-(ETAP1+ETAP2)/dx^2-  (ETA1+ETA2)/dy^2-  dRHOdx*gx[i,j]*dt; # Vx3
                 L_ver[kvx,kvx+6]=ETA2/dy^2; # Vx4
-                L_ver[kvx,kvx+NNy1*6]=ETAP2/dx^2; # Vx5
+                L_ver[kvx,kvx+Ny1*6]=ETAP2/dx^2; # Vx5
                 L_ver[kvx,kvy]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy2
-                L_ver[kvx,kvy+NNy1*6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy4
+                L_ver[kvx,kvy+Ny1*6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy4
                 L_ver[kvx,kvy-6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy1
-                L_ver[kvx,kvy+NNy1*6-6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy3
+                L_ver[kvx,kvy+Ny1*6-6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy3
                 L_ver[kvx,kpm]=pscale/dx; # P1
-                L_ver[kvx,kpm+NNy1*6]=-pscale/dx; # P2
+                L_ver[kvx,kpm+Ny1*6]=-pscale/dx; # P2
                 # Right part
                 R_ver[kvx]=-RHOX[i,j]*gx[i,j]-(SXY2-SXY1)/dy-(SXX2-SXX1)/dx
                 end
                 
                 # Vy equation External points
-                if j==1 || j==NNx1 || i==1 || i==NNy || i==NNy1
+                if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
                     # Boundary Condition
                     # Ghost unknowns 1*Vx=0
-                    if i==NNy1
+                    if i==Ny1
                         L_ver[kvy,kvy]=1; # Left part
                         R_ver[kvy]=0; # Right part
                     end
@@ -2916,20 +2900,20 @@ include("../src/constants.jl")
                         R_ver[kvy]=vytop; # Right part
                     end
                     # Bottom boundary
-                    if i==NNy
+                    if i==Ny
                         L_ver[kvy,kvy]=1; # Left part
                         R_ver[kvy]=vybottom; # Right part
                     end
                     # Left boundary
-                    if j==1 && i>1 && i<NNy
+                    if j==1 && i>1 && i<Ny
                         L_ver[kvy,kvy]=1; # Left part
-                        L_ver[kvy,kvy+6*NNy1]=bcleft; # Left part
+                        L_ver[kvy,kvy+6*Ny1]=bcleft; # Left part
                         R_ver[kvy]=0; # Right part
                     end
                     # Right boundary
-                    if j==NNx1 && i>1 && i<NNy
+                    if j==Nx1 && i>1 && i<Ny
                         L_ver[kvy,kvy]=1; # Left part
-                        L_ver[kvy,kvy-6*NNy1]=bcright; # Left part
+                        L_ver[kvy,kvy-6*Ny1]=bcright; # Left part
                         R_ver[kvy]=0; # Right part
                     end
                 else
@@ -2958,15 +2942,15 @@ include("../src/constants.jl")
                 dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
                 dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
                 # Left part
-                L_ver[kvy,kvy-NNy1*6]=ETA1/dx^2; # Vy1
+                L_ver[kvy,kvy-Ny1*6]=ETA1/dx^2; # Vy1
                 L_ver[kvy,kvy-6]=ETAP1/dy^2; # Vy2
                 L_ver[kvy,kvy]=-(ETAP1+ETAP2)/dy^2-  (ETA1+ETA2)/dx^2-  dRHOdy*gy[i,j]*dt; # Vy3
                 L_ver[kvy,kvy+6]=ETAP2/dy^2; # Vy4
-                L_ver[kvy,kvy+NNy1*6]=ETA2/dx^2; # Vy5
+                L_ver[kvy,kvy+Ny1*6]=ETA2/dx^2; # Vy5
                 L_ver[kvy,kvx]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx3
                 L_ver[kvy,kvx+6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx4
-                L_ver[kvy,kvx-NNy1*6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx1
-                L_ver[kvy,kvx+6-NNy1*6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx2
+                L_ver[kvy,kvx-Ny1*6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx1
+                L_ver[kvy,kvx+6-Ny1*6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx2
                 L_ver[kvy,kpm]=pscale/dy; # P1
                 L_ver[kvy,kpm+6]=-pscale/dy; # P2
                 
@@ -2975,7 +2959,7 @@ include("../src/constants.jl")
                 end
                 
                 # P equation External points
-                if i==1 || j==1 || i==NNy1 || j==NNx1
+                if i==1 || j==1 || i==Ny1 || j==Nx1
                     # Boundary Condition
                     # 1*P=0
                     L_ver[kpm,kpm]=1; # Left part
@@ -2990,7 +2974,7 @@ include("../src/constants.jl")
                 #            Vy2
                 #
                 # Left part
-                L_ver[kpm,kvx-NNy1*6]=-1/dx; # Vx1
+                L_ver[kpm,kvx-Ny1*6]=-1/dx; # Vx1
                 L_ver[kpm,kvx]=1/dx; # Vx2
                 L_ver[kpm,kvy-6]=-1/dy; # Vy1
                 L_ver[kpm,kvy]=1/dy; # Vy2
@@ -3001,17 +2985,17 @@ include("../src/constants.jl")
                 end
 
                 # qxDarcy equation External points
-                if i==1 || i==NNy1 || j==1 || j==NNx || j==NNx1
+                if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
                     # Boundary Condition
                     # 1*qx=0
                     L_ver[kqx,kqx]=1; # Left part
                     R_ver[kqx]=0; # Right part
                     # Top boundary
-                    if i==1 && j>1 && j<NNx
+                    if i==1 && j>1 && j<Nx
                         L_ver[kqx,kqx+6]=bcftop; # Left part
                     end
                     # Bottom boundary
-                    if i==NNy1 && j>1 && j<NNx
+                    if i==Ny1 && j>1 && j<Nx
                         L_ver[kqx,kqx-6]=bcfbottom; # Left part
                     end
                 else
@@ -3021,24 +3005,24 @@ include("../src/constants.jl")
                 # Left part
                 L_ver[kqx,kqx]=RX[i,j]; # qxD
                 L_ver[kqx,kpf]=-pscale/dx; # P1
-                L_ver[kqx,kpf+NNy1*6]=pscale/dx; # P2
+                L_ver[kqx,kpf+Ny1*6]=pscale/dx; # P2
                 # Right part
                 R_ver[kqx]=RHOFX[i,j]*gx[i,j]
                 end
                 
                 # qyDarcy equation External points
-                if j==1 || j==NNx1 || i==1 || i==NNy || i==NNy1
+                if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
                     # Boundary Condition
                     # 1*Vy=0
                     L_ver[kqy,kqy]=1; # Left part
                     R_ver[kqy]=0; # Right part
                     # Left boundary
-                    if j==1 && i>1 && i<NNy
-                        L_ver[kqy,kqy+6*NNy1]=bcfleft; # Left part
+                    if j==1 && i>1 && i<Ny
+                        L_ver[kqy,kqy+6*Ny1]=bcfleft; # Left part
                     end
                     # Right boundary
-                    if j==NNx1 && i>1 && i<NNy
-                        L_ver[kqy,kqy-6*NNy1]=bcfright; # Left part
+                    if j==Nx1 && i>1 && i<Ny
+                        L_ver[kqy,kqy-6*Ny1]=bcfright; # Left part
                     end
                 else
                 # Internal points: y-Stokes eq.
@@ -3058,7 +3042,7 @@ include("../src/constants.jl")
                 end
                 
                 # Pfluid equation External points
-                if i==1 || j==1 || i==NNy1 || j==NNx1 || (i==2 && j==2)
+                if i==1 || j==1 || i==Ny1 || j==Nx1 || (i==2 && j==2)
                     # Boundary Condition
                     # 1*Pfluid=0
                     L_ver[kpf,kpf]=1; # Left part
@@ -3078,7 +3062,7 @@ include("../src/constants.jl")
                 #            qyD2
                 #
                 # Left part
-                L_ver[kpf,kqx-NNy1*6]=-1/dx; # qxD1
+                L_ver[kpf,kqx-Ny1*6]=-1/dx; # qxD1
                 L_ver[kpf,kqx]=1/dx; # qxD2
                 L_ver[kpf,kqy-6]=-1/dy; # qyD1
                 L_ver[kpf,kqy]=1/dy; # qyD2
@@ -3090,7 +3074,7 @@ include("../src/constants.jl")
             end
         end
         # test
-        for j=1:1:NNx1*6, i=1:1:NNy1*6
+        for j=1:1:Nx1*6, i=1:1:Ny1*6
             @test L[i, j] ≈ L_ver[i, j] rtol=1e-6
             @test R[i] ≈ R_ver[i] rtol=1e-6
         end
@@ -3119,10 +3103,7 @@ include("../src/constants.jl")
             pr,
             qxD,
             qyD,
-            pf,
-            pscale,
-            Nx1,
-            Ny1
+            pf
         )
         # verification, from madcph.m, line 1058ff
         for j=1:1:Nx1
@@ -3266,8 +3247,6 @@ include("../src/constants.jl")
             vxf,
             vyf,
             dt,
-            dx,
-            dy,
             dxymax,
             aphimax,
             dphimax
@@ -3408,11 +3387,7 @@ include("../src/constants.jl")
             PHI,
             pr,
             pf,
-            ps,
-            Nx,
-            Ny,
-            Nx1,
-            Ny1
+            ps
         )
         # verification, from madcph.m, line 1196ff
         # Apply Symmetry to Pressure nodes
@@ -3495,19 +3470,9 @@ include("../src/constants.jl")
         COH = rand(Ny, Nx)
         TEN = rand(Ny, Nx)
         FRI = rand(Ny, Nx)
-        SIIB = zeros(Ny, Nx)
-        siiel = zeros(Ny, Nx)
-        prB = zeros(Ny, Nx)
-        pfB = zeros(Ny, Nx)
-        syieldc = zeros(Ny, Nx)
-        syieldt = zeros(Ny, Nx)
-        syield = zeros(Ny, Nx)
-        etapl = zeros(Ny, Nx)
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = zeros(Bool, Ny, Nx)
         DSY = rand(Ny, Nx)
-        DDD = rand(Ny, Nx)
-        YNPL = zeros(Bool, Ny, Nx)
         YERRNOD = zeros(nplast)
         YERRNOD_ver = zeros(nplast)
         # compute nodal adjustment
@@ -3523,26 +3488,16 @@ include("../src/constants.jl")
             COH,
             TEN,
             FRI,
-            SIIB,
-            siiel,
-            prB,
-            pfB,
-            syieldc,
-            syieldt,
-            syield,
-            etapl,
             YNY,
             YNY5,
             YERRNOD,
             DSY,
-            YNPL,
-            DDD,
             dt,
             iplast
         )
         # verification, from madcph.m, line 1232ff
         ETA5_ver=copy(ETA0)
-        YNY5_ver = zeros(Ny, Nx)
+        YNY5_ver = zeros(Bool, Ny, Nx)
         DSY_ver = zeros(Ny, Nx)
         ynpl=0
         ddd=0
@@ -3558,7 +3513,7 @@ include("../src/constants.jl")
                 # Compute yielding stress
                 syieldc_ver=COH[i,j]+FRI[i,j]*(prB_ver-pfB_ver); # Confined fracture
                 syieldt_ver=TEN[i,j]+(prB_ver-pfB_ver); # Tensile fracture
-                syield_ver=max(syieldt_ver,syieldc_ver,0); # Non-negative strength requirement
+                syield_ver=max(min(syieldt_ver,syieldc_ver),0); # Non-negative strength requirement
                 # Update error for old yielding nodes
                 ynn=0
                 if(YNY[i,j]>0)
@@ -3634,8 +3589,6 @@ include("../src/constants.jl")
             YNY00,
             YNY_inv_ETA,
             dt,
-            dtkoef,
-            dtstep,
             iplast
         )
         # verification, from madcph.m, line 1301ff
@@ -3899,7 +3852,6 @@ include("../src/constants.jl")
 
     @testset "compute_shear_heating!()" begin
         HS = zeros(Ny1, Nx1)
-        SXYEXY = zeros(Ny, Nx)
         ETA = rand(Ny, Nx)
         SXY = rand(Ny, Nx)
         ETAP = rand(Ny1, Nx1)
@@ -3915,7 +3867,6 @@ include("../src/constants.jl")
         # compute shear compute shear heating
         HydrologyPlanetesimals.compute_shear_heating!(
             HS,
-            SXYEXY,
             ETA,
             SXY,
             ETAP,

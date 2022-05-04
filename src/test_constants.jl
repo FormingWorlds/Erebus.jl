@@ -5,17 +5,17 @@
  const hr_fe = true
  # model size, geometry, and resolution
  # horizontal model size [m]
- const xsize = 140_000.0
+ const xsize = 14_000.0
  # vertical model size [m]
- const ysize = 140_000.0
+ const ysize = 14_000.0
  # horizontal center of model
  const xcenter = xsize / 2
  # vertical center of model
  const ycenter = ysize / 2  
  # basic grid resolution in x direction (horizontal)
- const Nx = 141
+ const Nx = 15
  # basic grid resolution in y direction (vertical)	
- const Ny = 141
+ const Ny = 15
  # Vx, Vy, P grid resolution in x direction (horizontal)
  const Nx1 = Nx + 1
  # Vx/Vy/P grid resolution in y direction (vertical)
@@ -90,9 +90,9 @@
  const imax_p = Ny
  # planetary parameters
  # planetary radius [m]
- const rplanet = 50_000.0
+ const rplanet = 5_000.0
  # crust radius [m]
- const rcrust = 48_000.0
+ const rcrust = 4_800.0
  # surface pressure [Pa]
  const psurface = 1e+3
  # marker count and initial spacing
