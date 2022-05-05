@@ -267,15 +267,6 @@ include("../src/test_constants.jl")
             YNY_inv_ETA,
             DSXY,
             DSY,
-            ETAcomp,
-            SXYcomp,
-            dRHOXdx,
-            dRHOXdy,
-            dRHOYdx,
-            dRHOYdy,
-            ETAPcomp,
-            SXXcomp,
-            SYYcomp,
             EII,
             SII,
             DSXX,
@@ -289,15 +280,6 @@ include("../src/test_constants.jl")
         @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
         @test DSXY == zeros(Float64, Ny, Nx)
         @test DSY == zeros(Float64, Ny, Nx)
-        @test ETAcomp == zeros(Float64, Ny, Nx)
-        @test SXYcomp == zeros(Float64, Ny, Nx)
-        @test dRHOXdx == zeros(Float64, Ny1, Nx1)
-        @test dRHOXdy == zeros(Float64, Ny1, Nx1)
-        @test dRHOYdx == zeros(Float64, Ny1, Nx1)
-        @test dRHOYdy == zeros(Float64, Ny1, Nx1)
-        @test ETAPcomp == zeros(Float64, Ny1, Nx1)
-        @test SXXcomp == zeros(Float64, Ny1, Nx1)
-        @test SYYcomp == zeros(Float64, Ny1, Nx1)
         @test EII == zeros(Float64, Ny1, Nx1)
         @test SII == zeros(Float64, Ny1, Nx1)
         @test DSXX == zeros(Float64, Ny1, Nx1)
@@ -430,6 +412,7 @@ include("../src/test_constants.jl")
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
+            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -448,6 +431,7 @@ include("../src/test_constants.jl")
         @test hrtotalm == zeros(Float64, marknum)
         @test ktotalm == zeros(Float64, marknum)
         @test tkm_rhocptotalm == zeros(Float64, marknum)
+        @test kphim == zeros(Float64, marknum)
         @test etafluidcur_inv_kphim == zeros(Float64, marknum)
         @test inv_gggtotalm == zeros(Float64, marknum)
         @test fricttotalm == zeros(Float64, marknum)
@@ -496,6 +480,7 @@ include("../src/test_constants.jl")
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
+            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -511,6 +496,19 @@ include("../src/test_constants.jl")
         tkm_ver = zeros(marknum)
         phim_ver = zeros(marknum)
         etavpm_ver = zeros(marknum)
+        kphim_ver = zeros(marknum)
+        rhototalm_ver = zeros(marknum)
+        rhocptotalm_ver = zeros(marknum)
+        etasolidcur_ver = zeros(marknum)
+        hrtotalm_ver = zeros(marknum)
+        ktotalm_ver = zeros(marknum)
+        gggtotalm_ver = zeros(marknum)
+        fricttotalm_ver = zeros(marknum)
+        cohestotalm_ver = zeros(marknum)
+        tenstotalm_ver = zeros(marknum)
+        etafluidcur_ver = zeros(marknum)
+        rhofluidcur_ver = zeros(marknum)
+        etatotalm_ver = zeros(marknum)
         # define markers
         HydrologyPlanetesimals.define_markers!(
             xm,
@@ -547,6 +545,7 @@ include("../src/test_constants.jl")
                 hrtotalm,
                 ktotalm,
                 tkm_rhocptotalm,
+                kphim,
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
@@ -582,55 +581,72 @@ include("../src/test_constants.jl")
                 m=m+1;
             end
         end
-        # test
-        for m=1:1:marknum
-            # define_markers()!
-            @test xm[m] == xm_ver[m]
-            @test ym[m] == ym_ver[m]
-            @test tm[m] == tm_ver[m]
-            @test tkm[m] == tkm_ver[m]
-            @test phim[m] == phim_ver[m]
-            @test etavpm[m] == etavpm_ver[m]
-            # compute_marker_properties()!
-            # for air type markers
-            if tm[m] == 3
-                @test rhototalm[m] == rhosolidm[tm[m]]
-                @test rhocptotalm[m] == rhocpsolidm[tm[m]]
-                @test etatotalm[m] == etasolidm[tm[m]]
-                @test hrtotalm[m] == start_hrsolidm[tm[m]]
-                @test ktotalm[m] == ksolidm[tm[m]]           
-                @test etafluidcur[m] == etafluidm[tm[m]]
-            # for rock type markers
-            elseif tm[m] < 3
-                @test rhototalm[m] == HydrologyPlanetesimals.total(
-                    rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-                @test rhocptotalm[m] == HydrologyPlanetesimals.total(
-                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-                @test etasolidcur[m] == ifelse(
-                    tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
-                @test etafluidcur[m] == ifelse(
-                    tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
-                @test etatotalm[m] == max(
-                    etamin, etasolidcur[m], etafluidcur[m])
-                @test hrtotalm[m] == HydrologyPlanetesimals.total(
-                    hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-                @test ktotalm[m] == HydrologyPlanetesimals.ktotal(
-                    ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+        # verification, from madcph.m, line 327ff
+        for m = 1:1:marknum
+            # Compute marker parameters
+            if tm[m]<3
+                # Rocksgv:
+                kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
+                rhototalm_ver[m] = rhosolidm[tm_ver[m]]*(1-phim_ver[m])+rhofluidm[tm_ver[m]]*phim_ver[m]
+                rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]*(1-phim_ver[m])+rhocpfluidm[tm_ver[m]]*phim_ver[m]
+                etasolidcur_ver[m] = etasolidm[tm_ver[m]]
+                if tkm_ver[m]>tmsilicate
+                    etasolidcur_ver[m] = etasolidmm[tm_ver[m]]
+                end
+                hrtotalm_ver[m] = hrsolidm[tm_ver[m]]*(1-phim_ver[m])+hrfluidm[tm_ver[m]]*phim_ver[m]
+                ktotalm_ver[m] = (ksolidm[tm_ver[m]]*kfluidm[tm_ver[m]]/2+((ksolidm[tm[m]]*(3*phim_ver[m]-2)+
+                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))^2)/16)^0.5-(ksolidm[tm_ver[m]]*(3*phim_ver[m]-2)+
+                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))/4
+                gggtotalm_ver[m] = gggsolidm[tm_ver[m]]
+                fricttotalm_ver[m] = frictsolidm[tm_ver[m]]
+                cohestotalm_ver[m] = cohessolidm[tm_ver[m]]
+                tenstotalm_ver[m] = tenssolidm[tm_ver[m]]
+                etafluidcur_ver[m] = etafluidm[tm_ver[m]]
+                rhofluidcur_ver[m] = rhofluidm[tm_ver[m]]
+                if tkm_ver[m]>tmiron
+                    etafluidcur_ver[m] = etafluidmm[tm_ver[m]]
+                end
+                etatotalm_ver[m] = max(etamin,etafluidcur_ver[m],etasolidcur_ver[m])#*exp(-28*phim_ver[m])));
+            else
+                # Sticky air
+                kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
+                rhototalm_ver[m] = rhosolidm[tm_ver[m]]
+                rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]
+                etatotalm_ver[m] = etasolidm[tm_ver[m]]
+                hrtotalm_ver[m] = hrsolidm[tm_ver[m]]
+                ktotalm_ver[m] = ksolidm[tm_ver[m]]
+                gggtotalm_ver[m] = gggsolidm[tm_ver[m]]
+                fricttotalm_ver[m] = frictsolidm[tm_ver[m]]
+                cohestotalm_ver[m] = cohessolidm[tm_ver[m]]
+                tenstotalm_ver[m] = tenssolidm[tm_ver[m]]
+                rhofluidcur_ver[m] = rhofluidm[tm_ver[m]]
+                etafluidcur_ver[m] = etafluidm[tm_ver[m]]
             end
-            # for all markers
-            @test inv_gggtotalm[m] == inv(gggsolidm[tm[m]])
-            @test fricttotalm[m] == frictsolidm[tm[m]]
-            @test cohestotalm[m] == cohessolidm[tm[m]]
-            @test tenstotalm[m] == tenssolidm[tm[m]]
-            @test rhofluidcur[m] == rhofluidm[tm[m]]
-            # @test alphasolidcur[m] == alphasolidm[tm[m]]
-            @test alphafluidcur[m] == alphafluidm[tm[m]]
-            @test tkm_rhocptotalm[m] == tkm[m] * rhocptotalm[m]
-            @test etafluidcur_inv_kphim[m] == (
-                etafluidcur[m] / HydrologyPlanetesimals.kphi(
-                    kphim0[tm[m]], phim0, phim[m])
-            )
         end
+        # test
+        @test xm  == xm_ver
+        @test ym  == ym_ver
+        @test tm  == tm_ver
+        @test tkm  == tkm_ver
+        @test phim  == phim_ver
+        @test etavpm  == etavpm_ver
+        @test kphim == kphim_ver
+        @test rhototalm == rhototalm_ver
+        @test rhocptotalm == rhocptotalm_ver
+        @test etasolidcur == etasolidcur_ver
+        @test hrtotalm == hrtotalm_ver
+        @test ktotalm == ktotalm_ver
+        @test inv_gggtotalm == inv.(gggtotalm_ver)
+        @test fricttotalm == fricttotalm_ver
+        @test cohestotalm == cohestotalm_ver
+        @test tenstotalm == tenstotalm_ver
+        @test etafluidcur == etafluidcur_ver
+        @test rhofluidcur == rhofluidcur_ver
+        @test etatotalm == etatotalm_ver
+        # test calculated properties
+        @test tkm_rhocptotalm ≈ tkm_ver .* rhocptotalm_ver 
+        @test etafluidcur_inv_kphim ≈ etafluidcur_ver ./ kphim_ver
+  
     end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "update_marker_viscosity!()" begin
@@ -745,19 +761,22 @@ include("../src/test_constants.jl")
 
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
-        ktotalm_ver(ksolidm, kfluid, phim) = (
-            ksolidm*kfluid/2+(
-                (ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2
-                )/16
-            )^0.5 - (ksolidm*(3*phim-2)+ kfluid*(1-3*phim))/4
-        @test HydrologyPlanetesimals.ktotal(1., 2., 3.) == ktotalm_ver(
-            1., 2., 3.)
+        for i=1:10
+            ksolid, kfluid, phi = rand(3)
+            @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) == (
+                ksolid*kfluid/2+((ksolid*(3*phi-2)+kfluid*(1-3*phi))^2)/16
+                )^0.5-(ksolid*(3*phi-2)+kfluid*(1-3*phi))/4
+        end
     end # testset "ktotal()"
 
     @testset "kphi()" begin
         # verification, from madcph.m, line 333
-        kphim(kphim0, phim, phim0)=kphim0*(phim/phim0)^3/((1-phim)/(1-phim0))^2
-        @test HydrologyPlanetesimals.kphi(1., 2., 3.) == kphim(1., 2., 3.)
+        for i=1:10
+            kphim0m, phimm = rand(2)
+            @test HydrologyPlanetesimals.kphi(kphim0m, phimm) == (
+                kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
+            )
+        end
     end # testset "kphi()"
 
     @testset "etatotal_rocks()" begin
@@ -2762,30 +2781,18 @@ include("../src/test_constants.jl")
         gy = rand(Ny1, Nx1) 
         pr0 = rand(Ny1, Nx1)
         pf0 = rand(Ny1, Nx1)
-        ETAcomp = zeros(Ny, Nx)
-        ETAPcomp = zeros(Ny1, Nx1)
-        SXYcomp = zeros(Ny, Nx)
-        SXXcomp = zeros(Ny, Nx)
-        SYYcomp = zeros(Ny, Nx)
-        dRHOXdx = zeros(Ny1, Nx1)
-        dRHOXdy = zeros(Ny1, Nx1)
-        dRHOYdx = zeros(Ny1, Nx1)
-        dRHOYdy = zeros(Ny1, Nx1)
         # LSE
         R = zeros(Nx1*Ny1*6)
         L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
         R_ver = zeros(Nx1*Ny1*6)
         # assemble hydromechanical LSE
         L = HydrologyPlanetesimals.assemble_hydromechanical_lse!(
-            ETAcomp,
-            ETAPcomp,
-            SXYcomp,
-            SXXcomp,
-            SYYcomp,
-            dRHOXdx,
-            dRHOXdy,
-            dRHOYdx,
-            dRHOYdy,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
             RHOX,
             RHOY,
             RHOFX,

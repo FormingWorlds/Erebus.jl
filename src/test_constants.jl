@@ -130,12 +130,12 @@
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- const pscale = 1e+23 / dx
+ const pscale = 1.0e+23 / dx
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
  # fluid density [kg/m^3]	
- const rhofluidm = SVector{3, Float64}(    [7000.0    , 7000.0    , 1000.0    ])
+ const rhofluidm = SVector{3, Float64}(    [7000.0    , 7000.0    ,    1.0    ])
  # solid viscosity [Pa*s]
  const etasolidm = SVector{3, Float64}(    [   1.0e+16,    1.0e+16,    1.0e+14])
  # molten solid viscosity [Pa*s]
