@@ -286,4 +286,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const nsteps = 30000 
+ const nsteps = 20
+#  const nsteps = 30000 

@@ -11,11 +11,11 @@ using StaticArrays
 using TimerOutputs
 using UnicodePlots
 
+BLAS.set_num_threads(4)
+const to = TimerOutput()
 export run_simulation
-
 # include("constants.jl")
 include("test_constants.jl")
-const to = TimerOutput()
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -5486,7 +5486,6 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
     @info "iterate timesteps"
     # -------------------------------------------------------------------------
-    nsteps = 10 # <======= RMK: remove for production
     p = Progress(
         nsteps,
         dt=0.5,
@@ -5884,37 +5883,37 @@ function simulation_loop(output_path)
             #     dRHOYdx,
             #     dRHOYdy
             # )
-            if timestep == 1 && iplast == 1
-                jldsave(
-                    output_path*"pre_lse.jld2";
-                    ETA,
-                    ETAP,
-                    GGG,
-                    GGGP,
-                    SXY0,
-                    SXX0,
-                    RHOX,
-                    RHOY,
-                    RHOFX,
-                    RHOFY,
-                    RX,
-                    RY,
-                    ETAPHI,
-                    BETTAPHI,
-                    PHI,
-                    gx,
-                    gy,
-                    pr0,
-                    pf0,
-                    dt,
-                    xm,
-                    ym,
-                    tm,
-                    tkm,
-                    phim,
-                    etavpm
-                )
-            end
+            # if timestep == 1 && iplast == 1
+            #     jldsave(
+            #         output_path*"pre_lse.jld2";
+            #         ETA,
+            #         ETAP,
+            #         GGG,
+            #         GGGP,
+            #         SXY0,
+            #         SXX0,
+            #         RHOX,
+            #         RHOY,
+            #         RHOFX,
+            #         RHOFY,
+            #         RX,
+            #         RY,
+            #         ETAPHI,
+            #         BETTAPHI,
+            #         PHI,
+            #         gx,
+            #         gy,
+            #         pr0,
+            #         pf0,
+            #         dt,
+            #         xm,
+            #         ym,
+            #         tm,
+            #         tkm,
+            #         phim,
+            #         etavpm
+            #     )
+            # end
             # assemble hydromechanical system of equations
             L = assemble_hydromechanical_lse!(
                 ETA,
@@ -5953,20 +5952,20 @@ function simulation_loop(output_path)
                 qyD,
                 pf
             )
-            if timestep == 1 && iplast ==1
-                L_dense = collect(L)
-                jldsave(output_path*"post_lse.jld2";
-                    L_dense,
-                    R,
-                    S,
-                    vx,
-                    vy,
-                    pr,
-                    qxD,
-                    qyD,
-                    pf
-                )
-            end
+            # if timestep == 1 && iplast ==1
+            #     L_dense = collect(L)
+            #     jldsave(output_path*"post_lse.jld2";
+            #         L_dense,
+            #         R,
+            #         S,
+            #         vx,
+            #         vy,
+            #         pr,
+            #         qxD,
+            #         qyD,
+            #         pf
+            #     )
+            # end
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
                 APHI,
@@ -6218,16 +6217,17 @@ function simulation_loop(output_path)
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 
         # ---------------------------------------------------------------------
-        @info "replenish sparse areas with additional markers"
+        # info "replenish sparse areas with additional markers"
         # ---------------------------------------------------------------------
         replenish_markers!(
             xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum)
+        @info "replenish sparse areas with additional markers" marknum
 
         # ---------------------------------------------------------------------
-        @info "update timesum"
+        # update timesum
         # ---------------------------------------------------------------------
         timesum += dtm
-        @info "timesum" timesum
+        @info "update timesum" timesum
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -6340,12 +6340,9 @@ function simulation_loop(output_path)
         #  sxym00 = sxym    
 
         # ---------------------------------------------------------------------
-        # report progress
+        # update progress
         # ---------------------------------------------------------------------
         next!(p) # progress bar
-        if timestep % 20 == 0
-            println("timestep: ", timestep)
-        end
 
         # ---------------------------------------------------------------------
         # finish timestep
@@ -6403,7 +6400,10 @@ function run_simulation()
     show_timer = parsed_args["show_timer"]
     mkpath(output_path)
     reset_timer!(to)
+    t1 = time_ns()
     simulation_loop(output_path)
+    t2 = time_ns()
+    println((t2-t1) * 1e-9)
     if show_timer
         show(to)
     end

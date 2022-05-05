@@ -228,7 +228,7 @@
  const bcfbottom = -1
  # extension/shortening velocities
  # shortening strain rate
- const strainrate = 0e-13
+ const strainrate = 0.0e-13
  # x extension/shortening velocity left
  const vxleft = strainrate * xsize / 2
  # x extension/shortening velocity right
@@ -286,4 +286,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const nsteps = 30000 
+ const nsteps = 20
+#  const nsteps = 30000 
