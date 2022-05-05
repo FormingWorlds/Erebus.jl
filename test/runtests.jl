@@ -2809,6 +2809,7 @@ include("../src/test_constants.jl")
             dt,
             R
         )
+        L = collect(L)
         # verification, from madcph.m, lines 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations

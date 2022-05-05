@@ -2529,7 +2529,7 @@ function assemble_hydromechanical_lse!(
             # LHS coefficient matrix
             updateindex!(L, +, RX[i, j], kqx, kqx) # qxD
             updateindex!(L, +, -pscale/dx, kqx, kpf) # P₁
-            updateindex!(L, +, pscale/dx, kqx, kqx+6*Ny1) # P₂
+            updateindex!(L, +, pscale/dx, kqx, kpf+6*Ny1) # P₂
             # RHS coefficient vector
             R[kqx] = RHOFX[i, j] * gx[i, j]
         end # qxDarcy equation
