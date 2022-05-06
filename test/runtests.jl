@@ -1,5 +1,6 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
+using LinearAlgebra
 using StaticArrays
 using Test
 

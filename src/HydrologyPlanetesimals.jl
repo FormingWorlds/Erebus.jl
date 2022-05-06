@@ -14,8 +14,8 @@ using UnicodePlots
 BLAS.set_num_threads(4)
 const to = TimerOutput()
 export run_simulation
-include("constants.jl")
-# include("test_constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -741,7 +741,7 @@ function update_marker_viscosity!(
         # air: constant etatotalm[m] as initialized
         # pass
     end
-    if YNY[i,j] || YNY[i+1,j] || YNY[i,j+1] || YNY[i+1,j+1]
+    if any(grid_vector(i, j, YNY))
         interpolate_to_marker!(m, i, j, weights, etavpm, YNY_inv_ETA)
         etavpm[m] = inv(etavpm[m])
         etavpm[m] = ifelse(etavpm[m]>etatotalm[m], etatotalm[m], etavpm[m])
@@ -941,8 +941,7 @@ $(SIGNATURES)
     - grid_average: (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1]) / 4
 """
 function grid_average(i, j, grid)
-    @inbounds return 0.25 * (
-        grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
+    return sum(grid_vector(i, j, grid)) / length(grid_vector(i, j, grid))
 end
 
 """
@@ -1921,6 +1920,8 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
 # @timeit to "compute_gravity_solution!" begin
     # fresh LHS sparse coefficient matrix
     LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # reset RHS coefficient vector
+    RP .= 0.0
     # iterate over P nodes
     # @timeit to "build system" begin
     for j=1:1:Nx1, i=1:1:Ny1
@@ -1936,7 +1937,7 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
         )
             # boundary condition: ϕ = 0
             updateindex!(LP, +, 1.0, gk, gk)
-            RP[gk] = 0.0
+            # RP[gk] = 0.0 # already done at initialization
         else
             # internal points: 2D Poisson equation: gravitational potential Φ
             # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
@@ -2076,7 +2077,8 @@ $(SIGNATURES)
     - S: hydromechanical linear system of equations: solution vector
 """
 function setup_hydromechanical_lse()
-    R = zeros(Ny1*Nx1*6)
+    # R = zeros(Ny1*Nx1*6)
+    R = Vector{Float64}(undef, Ny1*Nx1*6)
     S = Vector{Float64}(undef, Ny1*Nx1*6)
     return R, S
 end
@@ -2096,7 +2098,8 @@ $(SIGNATURES)
     - ST: thermal linear system of equations: solution vector
 """
 function setup_thermal_lse()
-    RT = zeros(Ny1*Nx1)
+    # RT = zeros(Ny1*Nx1)
+    RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
     return RT, ST
 end
@@ -2116,7 +2119,8 @@ $(SIGNATURES)
     - SP: gravitational linear system of equations: solution vector
 """
 function setup_gravitational_lse()
-    RP = zeros(Ny1*Nx1)
+    # RP = zeros(Ny1*Nx1)
+    RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
     return RP, SP
 end
@@ -3474,9 +3478,10 @@ function perform_thermal_iterations!(
     titer = 1
     # perform thermal iterations until reaching time limit
     while dttsum < dtm
-        # reset LSE 
+        # fresh LHS coefficient matrix
         LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
-        @. RT = 0.0
+        # reset RHS coefficient vector
+        RT .= 0.0
         # compose global thermal matrix LT and coefficient vector RT
         for j=1:1:Nx1, i=1:1:Ny1
             # define global index in algebraic space
@@ -3607,9 +3612,9 @@ function apply_subgrid_temperature_diffusion!(
     xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
 # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
-    if dsubgridt == 0.0
-        return nothing
-    end
+    # if dsubgridt == 0.0
+    #     return nothing
+    # end
     # reset interpolation arrays
     TKSUM .= 0.0
     RHOCPSUM .= 0.0
@@ -5419,58 +5424,6 @@ function simulation_loop(output_path)
             @info "plastic iteration" iplast
             # recompute bulk viscosity at pressure nodes
             recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-            # # compute computational viscosities, stresses, and density gradients
-            # get_viscosities_stresses_density_gradients!(
-            #     ETA,
-            #     ETAP,
-            #     GGG,
-            #     GGGP,
-            #     SXY0,
-            #     SXX0,
-            #     RHOX,
-            #     RHOY,
-            #     dt,
-            #     ETAcomp,
-            #     ETAPcomp,
-            #     SXYcomp,
-            #     SXXcomp,
-            #     SYYcomp,
-            #     dRHOXdx,
-            #     dRHOXdy,
-            #     dRHOYdx,
-            #     dRHOYdy
-            # )
-            # if timestep == 1 && iplast == 1
-            #     jldsave(
-            #         output_path*"pre_lse.jld2";
-            #         ETA,
-            #         ETAP,
-            #         GGG,
-            #         GGGP,
-            #         SXY0,
-            #         SXX0,
-            #         RHOX,
-            #         RHOY,
-            #         RHOFX,
-            #         RHOFY,
-            #         RX,
-            #         RY,
-            #         ETAPHI,
-            #         BETTAPHI,
-            #         PHI,
-            #         gx,
-            #         gy,
-            #         pr0,
-            #         pf0,
-            #         dt,
-            #         xm,
-            #         ym,
-            #         tm,
-            #         tkm,
-            #         phim,
-            #         etavpm
-            #     )
-            # end
             # assemble hydromechanical system of equations
             L = assemble_hydromechanical_lse!(
                 ETA,
@@ -5509,20 +5462,20 @@ function simulation_loop(output_path)
                 qyD,
                 pf
             )
-            # if timestep == 1 && iplast ==1
-            #     L_dense = collect(L)
-            #     jldsave(output_path*"post_lse"*str(timestep)*".jld2";
-            #         L_dense,
-            #         R,
-            #         S,
-            #         vx,
-            #         vy,
-            #         pr,
-            #         qxD,
-            #         qyD,
-            #         pf
-            #     )
-            # end
+            if random_markers && iplast ==1
+                L_dense = collect(L)
+                jldsave(output_path*"post_lse_"*str(timestep)*".jld2";
+                    L_dense,
+                    R,
+                    S,
+                    vx,
+                    vy,
+                    pr,
+                    qxD,
+                    qyD,
+                    pf
+                )
+            end
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
                 APHI,

@@ -1,8 +1,7 @@
-# using Base.Threads
+using Base.Threads
 # using SparseArrays
 # using MAT
 # using DocStringExtensions
-using Parameters
 using StaticArrays
 using BenchmarkTools
 # using TimerOutputs
@@ -231,7 +230,7 @@ tk1 = rand(Ny1, Nx1)
 DT = rand(Ny1, Nx1)
 TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
 RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
-
+dtm = 0.9
 
 
 sp = HydrologyPlanetesimals.StaticParameters(
@@ -677,6 +676,9 @@ sxxm = rand(marknum)
 sxym = rand(marknum)
 etavpm = rand(marknum)
 phim = rand(marknum)
+tk1 = rand(marknum)
+TKSUM = zeros(Ny1, Nx1, nthreads())
+RHOCPSUM = zeros(Ny1, Nx1, nthreads())
 mdis, mnum, mtyp, mpor = HydrologyPlanetesimals.setup_marker_geometry_helpers()
 
 
