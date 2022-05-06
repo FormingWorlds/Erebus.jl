@@ -14,8 +14,8 @@ using UnicodePlots
 BLAS.set_num_threads(4)
 const to = TimerOutput()
 export run_simulation
-# include("constants.jl")
-include("test_constants.jl")
+include("constants.jl")
+# include("test_constants.jl")
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -573,8 +573,7 @@ function define_markers!(
     rhofluidcur,
     alphasolidcur,
     alphafluidcur;
-    # randomized=true
-    randomized=false
+    randomized=random_markers
 )
     for jm=1:1:Nxm, im=1:1:Nym
         # calculate marker counter
@@ -2618,459 +2617,6 @@ function assemble_hydromechanical_lse!(
     return L
 end # function assemble_hydromechanical_lse!
 
-# """
-# Assemble hydromechanical system of equations.
-
-# $(SIGNATURES)
-
-# # Details
-
-#     - ETAcomp: computational viscosity at basic nodes
-#     - ETAPcomp: computational viscosity at P nodes
-#     - SXYcomp: computational previous XY stress at basic nodes
-#     - SXXcomp: computational previous XX stress at P nodes
-#     - SYYcomp: computational previous YY stress at P nodes
-#     - dRHOXdx: total density gradient in x direction at Vx nodes
-#     - dRHOXdy: total density gradient in y direction at Vx nodes
-#     - dRHOYdx: total density gradient in x direction at Vy nodes
-#     - dRHOYdy: total density gradient in y direction at Vy nodes
-#     - RHOX: total density at Vx nodes
-#     - RHOY: total density at Vy nodes
-#     - RHOFX: fluid density at Vx nodes
-#     - RHOFY: fluid density at Vy nodes
-#     - RX: ηfluid/Kϕ at Vx nodes
-#     - RY: ηfluid/Kϕ at Vy nodes
-#     - ETAPHI: bulk viscosity at P nodes
-#     - BETTAPHI: bulk compressibility at P nodes
-#     - PHI: porosity at P nodes
-#     - gx: x gravitational acceleration at Vx nodes
-#     - gy: y gravitational acceleration at Vy nodes
-#     - pr0: previous total pressure at P nodes
-#     - pf0: previous fluid pressure at P nodes
-#     - dt: time step
-#     - R: vector to store RHS coefficients
-
-# # Returns
-
-#     - L: LHS coefficient matrix
-# """
-# function assemble_hydromechanical_lse!(
-#     ETAcomp,
-#     ETAPcomp,
-#     SXYcomp,
-#     SXXcomp,
-#     SYYcomp,
-#     dRHOXdx,
-#     dRHOXdy,
-#     dRHOYdx,
-#     dRHOYdy,
-#     RHOX,
-#     RHOY,
-#     RHOFX,
-#     RHOFY,
-#     RX,
-#     RY,
-#     ETAPHI,
-#     BETTAPHI,
-#     PHI,
-#     gx,
-#     gy,
-#     pr0,
-#     pf0,
-#     dt,
-#     R
-# )
-# # @timeit to "assemble_hydromechanical_lse()" begin
-#     Nx1, Ny1 = Nx+1, Ny+1
-#     # initiate LHS sparse coefficient matrix
-#     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
-#     # reset RHS coefficient vector
-#     R .= 0.0
-#     for j=1:1:Nx1, i=1:1:Ny1
-#         # define global indices in algebraic space
-#         kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
-#         kvy = kvx + 1 # Vy solid
-#         kpm = kvx + 2 # P total
-#         kqx = kvx + 3 # qx Darcy
-#         kqy = kvx + 4 # qy Darcy
-#         kpf = kvx + 5 # P fluid
-#         # Vx equation
-#         if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
-#             # Vx equation external points: boundary conditions
-#             # all locations: ghost unknowns Vx₃=0 -> 1.0⋅Vx[i,j]=0.0
-#             updateindex!(L, +, 1.0, kvx, kvx)
-#             # R[kvx] = 0.0 # already done with initialization
-#             # left boundary
-#             if j == 1 
-#                 R[kvx] = vxleft
-#             end
-#             # right boundary
-#             if j == Nx 
-#                 R[kvx] = vxright
-#             end
-#             # top boundary
-#             if i==1 && 1<j<Nx
-#                 updateindex!(L, +, bctop, kvx, kvx+6)
-#             end
-#             # bottom boundary
-#             if i==Ny1 && 1<j<Nx
-#                 updateindex!(L, +, bcbottom, kvx, kvx-6)
-#             end
-#         else
-#             # Vx equation internal points: x-Stokes
-#             #
-#             #                       kvx-6
-#             #                        Vx₂
-#             #                         |
-#             #             kvy-6   ETA(i-1,j) kvy+6⋅Ny1-6
-#             #              Vy₁    GGG(i-1,j)   Vy₃
-#             #                    SXY0(i-1,j)
-#             #                        ETA₁ (ETAcomp)
-#             #                       basic₁                       
-#             #                         |
-#             #             GGGP(i,j)   |    GGGP(i,j+1)
-#             #             ETAP(i,j)   |    ETAP(i,j+1) 
-#             #   kvx-6⋅Ny1 SXX0(i,j)  kvx   SXX0(i,j+1) kvx+6⋅Ny1
-#             #     Vx₁-------P₁-------Vx₃-------P₂-------Vx₅
-#             #              kpm        |     kpm+6⋅Ny1
-#             #             ETAPcomp    |    ETAPcomp    
-#             #                         |
-#             #              kvy     ETA(i,j)  kvy+6⋅Ny1
-#             #              Vy₂     GGG(i,j)    Vy₄
-#             #                     SXY0(i,j)
-#             #                        ETA₂ (ETAcomp)
-#             #                       basic₂
-#             #                         |
-#             #                       kvx+6
-#             #                        Vx₄
-#             #
-#             updateindex!(L, +, ETAPcomp[i, j]/dx^2, kvx, kvx-6*Ny1) # Vx₁
-#             updateindex!(L, +, ETAcomp[i-1, j]/dy^2, kvx, kvx-6) # Vx₂
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -(ETAPcomp[i, j]+ETAPcomp[i, j+1])/dx^2
-#                     -(ETAcomp[i-1, j]+ETAcomp[i,j])/dy^2
-#                     -dRHOXdx[i, j]*gx[i, j]*dt
-#                 ),
-#                 kvx,
-#                 kvx
-#             ) # Vx₃
-#             updateindex!(L, +, ETAcomp[i, j]/dy^2, kvx, kvx+6) # Vx₄
-#             updateindex!(L, +, ETAPcomp[i, j+1]/dx^2, kvx, kvx+6*Ny1) # Vx₅
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     ETAPcomp[i, j]/dx/dy
-#                     -ETAcomp[i, j]/dx/dy 
-#                     -dRHOXdy[i, j]*gx[i, j]*dt/4
-#                 ),
-#                 kvx,
-#                 kvy
-#             ) # Vy₂
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -ETAPcomp[i, j+1]/dx/dy
-#                     +ETAcomp[i, j]/dx/dy
-#                     -dRHOXdy[i, j]*gx[i, j]*dt/4
-#                 ),
-#                 kvx,
-#                 kvy+6*Ny1
-#             ) # Vy₄
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -ETAPcomp[i, j]/dx/dy
-#                     +ETAcomp[i-1, j]/dx/dy
-#                     -dRHOXdx[i, j]*gy[i, j]*dt/4
-#                 ),
-#                 kvx,
-#                 kvy-6
-#             ) # Vy₁
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     ETAPcomp[i, j+1]/dx/dy
-#                     -ETAcomp[i-1, j]/dx/dy
-#                     -dRHOXdx[i, j]*gy[i, j]*dt/4
-#                 ),
-#                 kvx,
-#                 kvy+6*Ny1-6
-#             ) # Vy₃
-#             updateindex!(L, +, pscale/dx, kvx, kpm) # P₁
-#             updateindex!(L, +, -pscale/dx, kvx, kpm+6*Ny1) # P₂
-#             R[kvx] = (
-#                 -RHOX[i, j]*gx[i, j]
-#                 -(SXYcomp[i, j]- SXYcomp[i-1, j])/dy
-#                 -(SXXcomp[i, j+1]-SXXcomp[i, j])/dx
-#             ) # RHS
-#         end # Vx equation
-#         # Vy equation
-#         if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
-#             # Vy equation external points: boundary conditions
-#             # all locations: ghost unknowns Vy₃=0 -> 1.0⋅Vy[i,j]=0.0
-#             updateindex!(L, +, 1.0, kvy, kvy)
-#             # R[kvy] = 0.0 # already done with initialization
-#             # top boundary
-#             if i == 1 
-#                 R[kvy] = vytop
-#             end
-#             # bottom boundary
-#             if i == Ny 
-#                 R[kvy] = vybottom
-#             end
-#             # left boundary
-#             if j==1 && 1<i<Ny
-#                 updateindex!(L, +, bcleft, kvy, kvy+6*Ny1)
-#             end
-#             # right boundary
-#             if j==Nx1 && 1<i<Ny
-#                 updateindex!(L, +, bcright, kvy, kvy-6*Ny1)
-#             end
-#         else
-#             # Vy equation internal points: y-Stokes
-#             #
-#             #                       kvy-6
-#             #                        Vy₂
-#             #                         |
-#             #                      SYY0(i,j)
-#             #                      ETAP(i,j)
-#             #           kvx-6⋅Ny1  GGGP(i,j)   kvx
-#             #              Vx₁        P₁       Vx₃
-#             #                        kpm 
-#             #                         |       
-#             #   kvy-6⋅Ny1 ETA(i,j-1) kvy     ETA(i,j)  kvy+6⋅Ny1
-#             #     Vy₁------ETA₁------Vv₃ ------ETA₂-------Vy₅
-#             #             GGG(i,j-1)  |      GGG(i,j)     
-#             #            SXY0(i,j-1) kpm+6  SXY0(i,j)
-#             #                         P₂
-#             #        kvx-6⋅Ny1+6  ETAP(i+1,j)  kvx+6
-#             #              Vx₂    GGGP(i+1,j)  Vx₄
-#             #                     SYY0(i+1,j)
-#             #                         |
-#             #                       kvy+6
-#             #                        Vy₄
-#             #
-#             updateindex!(L, +, ETAcomp[i, j-1]/dx^2, kvy, kvy-6*Ny1) # Vy₁
-#             updateindex!(L, +, ETAPcomp[i, j]/dy^2, kvy, kvy-6) # Vy₂
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -(ETAPcomp[i, j]+ETAPcomp[i+1, j])/dy^2
-#                     -(ETAcomp[i, j-1]+ETAcomp[i,j])/dx^2
-#                     -dRHOYdy[i, j]*gy[i, j]*dt
-#                 ),
-#                 kvy,
-#                 kvy
-#             ) # Vy₃
-#             updateindex!(L, +, ETAPcomp[i+1, j]/dy^2, kvy, kvy+6) # Vy₄
-#             updateindex!(L, +, ETAcomp[i, j]/dx^2, kvy, kvy+6*Ny1) # Vy₅
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     ETAPcomp[i, j]/dx/dy
-#                     -ETAcomp[i, j]/dx/dy
-#                     -dRHOYdx[i, j]*gy[i, j]*dt/4
-#                 ),
-#                 kvy,
-#                 kvx
-#             ) # Vx₃
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -ETAPcomp[i+1, j]/dx/dy
-#                     +ETAcomp[i, j]/dx/dy
-#                     -dRHOYdx[i, j]*gy[i, j]*dt/4
-#                 ),
-#                 kvy,
-#                 kvx+6
-#             ) # Vx₄
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     -ETAPcomp[i, j]/dx/dy
-#                     +ETAcomp[i, j-1]/dx/dy
-#                     -dRHOYdy[i, j]*gx[i, j]*dt/4
-#                 ),
-#                 kvy,
-#                 kvx-6*Ny1
-#             ) # Vx₁
-#             updateindex!(
-#                 L,
-#                 +,
-#                 (
-#                     ETAPcomp[i+1, j]/dx/dy
-#                     -ETAcomp[i, j-1]/dx/dy
-#                     -dRHOYdy[i, j]*gx[i, j]*dt/4
-#                 ),
-#                 kvy,
-#                 kvx-6*Ny1+6
-#             ) # Vx₂
-#             updateindex!(L, +, pscale/dy, kvy, kpm) # P₁
-#             updateindex!(L, +, -pscale/dy, kvy, kpm+6) # P₂
-#             R[kvy] = (
-#                 -RHOY[i, j]*gy[i, j]
-#                 -(SYYcomp[i+1, j]-SYYcomp[i, j])/dy
-#                 -(SXYcomp[i, j]-SXYcomp[i, j-1])/dx
-#             ) # RHS
-#         end # Vy equation
-#         # P equation
-#         if i==1 || i==Ny1 || j==1 || j==Nx1
-#             # P equation external points: boundary conditions
-#             # all locations: ghost unknowns P=0 -> 1.0⋅P[i,j]=0.0
-#             updateindex!(L, +, 1.0, kpm, kpm)
-#             # R[kpm] = 0.0 # already done with initialization
-#         else
-#             # P equation internal points: continuity equation: ∂Vx/∂x+∂Vy/∂y=0
-#             #
-#             #                 kvy-6
-#             #                  Vy₁
-#             #                   |
-#             #                   |
-#             #      kvx-6⋅Ny1   kpm       kvx
-#             #        Vx₁--------P--------Vx₂
-#             #                   |
-#             #                   |
-#             #                  kvy
-#             #                  Vy₂
-#             #
-#             updateindex!(L, +, -1.0/dx, kpm, kvx-6*Ny1) # Vx₁
-#             updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
-#             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
-#             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
-#             updateindex!(
-#                 L,
-#                 +,
-#                 pscale/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
-#                 kpm,
-#                 kpm
-#             ) # P: Ptotal
-#             updateindex!(
-#                 L,
-#                 +,
-#                 -pscale/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
-#                 kpm,
-#                 kpf
-#             ) # P: Pfluid
-#             R[kpm] = (pr0[i,j]-pf0[i,j]) / (1-PHI[i,j]) * BETTAPHI[i,j]/dt
-#         end # P equation
-#         # qxDarcy equation
-#         if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
-#             # qxDarcy equation external points: boundary conditions
-#             # all locations: ghost unknowns qyD = 0 -> 1.0⋅qxD[i, j] = 0.0
-#             updateindex!(L, +, 1.0, kqx, kqx)
-#             # R[kqx] = 0.0 # already done with initialization
-#             # top boundary
-#             if i==1 && 1<j<Nx
-#                 updateindex!(L, +, bcftop, kqx, kqx+6)
-#             end
-#             # bottom boundary
-#             if i==Ny1 && 1<j<Nx
-#                 updateindex!(L, +, bcfbottom, kqx, kqx-6)
-#             end
-#         else
-#             # qxDarcy equation internal points: x-Darcy equation:
-#             # ηfluid/kᵩx⋅qxDarcy + ∂P/∂x = ρfluid⋅gx
-#             #
-#             #        P₁--------qxD--------P₂
-#             #       kpf        kqx     kpf+6⋅Ny1
-#             #
-#             updateindex!(L, +, RX[i, j], kqx, kqx) # qxD
-#             updateindex!(L, +, -pscale/dx, kqx, kpf) # P₁
-#             updateindex!(L, +, pscale/dx, kqx, kqx+6*Ny1) # P₂
-#             R[kqx] = RHOFX[i, j] * gx[i, j]
-#         end # qxDarcy equation
-#         # qyDarcy equation
-#         if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
-#             # qyDarcy equation external points: boundary conditions
-#             # all locations: ghost unknowns qyD = 0 -> 1.0⋅qyD[i, j] = 0.0
-#             updateindex!(L, +, 1.0, kqy, kqy)
-#             # R[kqy] = 0.0 # already done with initialization
-#             # left boundary
-#             if j==1 && 1<i<Ny
-#                 updateindex!(L, +, bcfleft, kqy, kqy+6*Ny1)
-#             end
-#             # right boundary
-#             if j==Nx1 && 1<i<Ny
-#                 updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
-#             end 
-#         else
-#             # qyDarcy equation internal points: y-Darcy equation:
-#             # ηfluid/kᵩy⋅qyDarcy + ∂P/∂y = ρfluid⋅gy
-#             #
-#             #                  P₁
-#             #                 kpf
-#             #                  |
-#             #                 qyD
-#             #                 kqy
-#             #                  |
-#             #                  P₂
-#             #                kpf+6
-#             #
-#             updateindex!(L, +, RY[i, j], kqy, kqy) # qyD
-#             updateindex!(L, +, -pscale/dy, kqy, kpf) # P₁
-#             updateindex!(L, +, pscale/dy, kqy, kpf+6) # P₂
-#             R[kqy] = RHOFY[i, j] * gy[i, j]
-#         end # qyDarcy equation
-#         # Ptotal/Pfluid equation 
-#         if i==1 || i==Ny1 || j==1 || j==Nx1
-#             # Ptotal/Pfluid equation external points: boundary conditions
-#             # all locations: ghost unknowns P = 0 -> 1.0⋅P[i, j] = 0.0
-#             updateindex!(L, +, 1.0, kpf, kpf)
-#             # R[kpf] = 0.0 # already done with initialization
-#         elseif i==j==2
-#             # Ptotal/Pfluid real pressure boundary condition 'anchor'
-#             updateindex!(L, +, pscale, kpf, kpf)
-#             R[kpf] = psurface
-#         else
-#             # Ptotal/Pfluid equation internal points: continuity equation:
-#             # ∂qxD/∂x + ∂qyD/∂y - (Ptotal-Pfluid)/ηϕ = 0.0
-#             #
-#             #                 qyD₁
-#             #                kqy-6
-#             #                  |
-#             #       qxD₁-------P-------qxD₂
-#             #    kqx-6⋅Ny1    kpf      kqx
-#             #                  |
-#             #                 qyD₂
-#             #                 kqy
-#             #
-#             updateindex!(L, +, -1.0/dx, kpf, kqx-6*Ny1) # qxD₁
-#             updateindex!(L, +, 1.0/dx, kpf, kqx) # qxD₂
-#             updateindex!(L, +, -1.0/dy, kpf, kqy-6) # qyD₁
-#             updateindex!(L, +, 1.0/dy, kpf, kqy) # qyD₂
-#             updateindex!(
-#                 L,
-#                 +,
-#                 -pscale/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
-#                  kpf,
-#                  kpm
-#             ) # Ptotal
-#             updateindex!(
-#                 L,
-#                 +,
-#                 pscale/(1-PHI[i, j]) * (inv(ETAPHI[i, j])-BETTAPHI[i, j]/dt),
-#                 kpf,
-#                 kpf
-#             ) # Pfluid
-#             R[kpf] = -(pr0[i, j]-pf0[i, j]) / (1-PHI[i, j]) * BETTAPHI[i, j]/dt
-#         end # Ptotal/Pfluid equation
-#     end # for j=1:1:Nx1, i=1:1:Ny1
-#     flush!(L) # finalize CSC matrix
-# # end # @timeit to "assemble_hydromechanical_lse()"
-#     return L
-# end # function assemble_hydromechanical_lse!
-
 """
 Process hydromechanical solution vector to output physical observables.
 
@@ -4918,7 +4464,18 @@ $(SIGNATURES)
     - marknum: updated number of markers in use
 """
 function replenish_markers!(
-    xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum; randomized=true)
+    xm,
+    ym,
+    tm,
+    tkm,
+    phim,
+    sxxm,
+    sxym,
+    etavpm,
+    mdis,
+    mnum;
+    randomized=random_markers
+)
 # @timeit to "replenish_markers!" begin
     # reset marker population geometry tracker
     mdis .= mdis_init
@@ -5366,10 +4923,10 @@ function simulation_loop(output_path)
         alphafluidcur
     )
 
-    # show initial markers
-    plt = scatterplot(
-        xm, ym, marker=:+, color=tm, xlim=(x[1], x[end]), ylim=(y[1], y[end]))
-    savefig(plt, output_path * "/initial_markers.png")
+    # plot initial markers
+    # plt = scatterplot(
+    #     xm, ym, marker=:+, color=tm, xlim=(x[1], x[end]), ylim=(y[1], y[end]))
+    # savefig(plt, output_path * "/initial_markers.png")
 
     # save initial state
     save_state(
@@ -5487,11 +5044,11 @@ function simulation_loop(output_path)
     @info "iterate timesteps"
     # -------------------------------------------------------------------------
     p = Progress(
-        nsteps,
+        n_steps,
         dt=0.5,
         barglyphs=BarGlyphs(
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
-    for timestep = start_step:1:nsteps
+    for timestep = start_step:1:n_steps
 # @timeit to "set up interpolation arrays" begin
         @info "timestep" timestep
         # ---------------------------------------------------------------------
@@ -5954,7 +5511,7 @@ function simulation_loop(output_path)
             )
             # if timestep == 1 && iplast ==1
             #     L_dense = collect(L)
-            #     jldsave(output_path*"post_lse.jld2";
+            #     jldsave(output_path*"post_lse"*str(timestep)*".jld2";
             #         L_dense,
             #         R,
             #         S,
@@ -6350,7 +5907,7 @@ function simulation_loop(output_path)
         if timesum > endtime
             break
         end
-    end # for timestep = startstep:1:nsteps
+    end # for timestep = startstep:1:n_steps
 end # function simulation loop
 
 

@@ -126,6 +126,8 @@
  const jmax_m = Nxm - 1
  # maximum assignable marker grid index in y direction
  const imax_m = Nym - 1
+ # marker randomized positions and porosity for testing
+ const random_markers = false
  # physical constants
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
@@ -286,5 +288,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const nsteps = 20
+ const n_steps = 20
 #  const nsteps = 30000 
