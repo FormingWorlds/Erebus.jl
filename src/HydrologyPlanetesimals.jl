@@ -686,7 +686,7 @@ function compute_marker_properties!(
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
     # else
-        # air
+        # sticky air
         # pass  
     end
     # # common for rocks and air
@@ -3641,9 +3641,9 @@ function apply_subgrid_temperature_diffusion!(
     xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
 # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
-    # if dsubgridt == 0.0
-    #     return nothing
-    # end
+    if dsubgridt == 0.0
+        return nothing
+    end
     # reset interpolation arrays
     TKSUM .= 0.0
     RHOCPSUM .= 0.0

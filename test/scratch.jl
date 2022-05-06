@@ -669,6 +669,14 @@ dx, dy = sp.dx, sp.dy
 jmin_m, jmax_m = sp.jmin_m, sp.jmax_m
 imin_m, imax_m = sp.imin_m, sp.imax_m
 # simulate markers
+Nx, Ny = 140, 140
+Nx1, Ny1 = Nx+1, Ny+1
+dx, dy = 1000, 1000
+x = 0:dx:140_000
+y = 0:dy:140_000
+Nxmc, Nymc = 4,4
+dtm = 0.9
+dsubgridt = 0.9
 marknum = Nx*Ny*Nxmc*Nymc
 xm = rand(-dx:0.1:x[end]+dx, marknum)
 ym = rand(-dy:0.1:y[end]+dy, marknum)
@@ -685,9 +693,12 @@ sxym = rand(marknum)
 etavpm = rand(marknum)
 phim = rand(marknum)
 tk1 = rand(marknum)
+ktotalm = rand(marknum)
+rhocptotalm = rand(marknum)
+DT = zeros(Ny1, Nx1)
 TKSUM = zeros(Ny1, Nx1, nthreads())
 RHOCPSUM = zeros(Ny1, Nx1, nthreads())
-mdis, mnum, mtyp, mpor = HydrologyPlanetesimals.setup_marker_geometry_helpers()
+mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers()
 
 
 function δy(i, j, grid)
