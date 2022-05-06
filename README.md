@@ -13,3 +13,17 @@ Julia package to simulate the hydrology in planetesimals[^1].
 A MSc project at ETH Zurich under the supervision of Taras Gerya (ETHZ) and [Tim Lichtenberg](https://github.com/timlichtenberg) (Oxford).
 
 [^1]: Based on: Gerya, T. (2019). Introduction to Numerical Geodynamic Modelling (2nd ed.). Cambridge: Cambridge University Press, [doi:10.1017/9781316534243](https://doi.org/10.1017/9781316534243).
+
+## Usage
+
+### Installation
+
+At the Julia prompt, add with ```using Pkg; pkg"add https://github.com/BeatHubmann/HydrologyPlanetesimals.jl"```.
+
+### Parameters
+
+Adjust the simulation parameters in ```src/constants.jl``` if necessary.
+
+### Running the simulation
+
+Launch with ```julia -O3 --math-mode=fast launch.jl /PATH/TO/OUTPUT/```.
