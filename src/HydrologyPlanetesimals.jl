@@ -3112,7 +3112,7 @@ function compute_nodal_adjustment!(
         YERRNOD[iplast] = sqrt(ddd/ynpl)
     end
     # return plastic iteration completeness
-    # @info "compute_nodal_adjustment" ynpl YERRNOD[iplast] iplast
+    ##@info "compute_nodal_adjustment" ynpl YERRNOD[iplast] iplast
     return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
 # end # @timeit to "compute_nodal_adjustment!()
@@ -4819,7 +4819,7 @@ $(SIGNATURES)
 function simulation_loop(output_path)
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
-    @info "set up dynamic simulation parameters from given static parameters"
+   #@info "set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
     timestep,
     dt,
@@ -4830,7 +4830,7 @@ function simulation_loop(output_path)
     YERRNOD = setup_dynamic_simulation_parameters()
     
     # -------------------------------------------------------------------------
-    @info "set up staggered grid"
+   #@info "set up staggered grid"
     # -------------------------------------------------------------------------
     (
         ETA,
@@ -4909,7 +4909,7 @@ function simulation_loop(output_path)
     ) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
-    @info "set up markers"
+   #@info "set up markers"
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
     xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(marknum)
@@ -5061,7 +5061,7 @@ function simulation_loop(output_path)
     )
 
     # -------------------------------------------------------------------------
-    @info "set up of matrices for global grav/thermal/hydromechanical solvers"
+   #@info "set up of matrices for global grav/thermal/hydromechanical solvers"
     # -------------------------------------------------------------------------
     # hydromechanical solver
     R, S = setup_hydromechanical_lse()
@@ -5072,7 +5072,7 @@ function simulation_loop(output_path)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
-    @info "iterate timesteps"
+   #@info "iterate timesteps"
     # -------------------------------------------------------------------------
     p = Progress(
         n_steps,
@@ -5081,9 +5081,9 @@ function simulation_loop(output_path)
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:n_steps
 # @timeit to "set up interpolation arrays" begin
-        @info "timestep" timestep
+       #@info "timestep" timestep
         # ---------------------------------------------------------------------
-        @info "set up interpolation arrays"
+       #@info "set up interpolation arrays"
         # ---------------------------------------------------------------------
         (
             ETA0SUM,
@@ -5120,13 +5120,13 @@ function simulation_loop(output_path)
 # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
-        @info "calculate radioactive heating"
+       #@info "calculate radioactive heating"
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(
             hr_al, hr_fe, timesum)
 
         # ---------------------------------------------------------------------
-        @info "compute marker properties and interpolate to staggered grid"
+       #@info "compute marker properties and interpolate to staggered grid"
         # ---------------------------------------------------------------------
         @threads for m=1:1:marknum
             compute_marker_properties!(
@@ -5230,7 +5230,7 @@ function simulation_loop(output_path)
         end # @threads for m=1:1:marknum
 
         # ---------------------------------------------------------------------
-        @info "compute physical properties of basic nodes"
+       #@info "compute physical properties of basic nodes"
         # ---------------------------------------------------------------------
         compute_basic_node_properties!(
             ETA0SUM,
@@ -5252,7 +5252,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "compute physical properties of Vx nodes"
+       #@info "compute physical properties of Vx nodes"
         # ---------------------------------------------------------------------
         compute_vx_node_properties!(
             RHOXSUM,
@@ -5269,7 +5269,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "compute physical properties of Vy nodes"
+       #@info "compute physical properties of Vy nodes"
         # ---------------------------------------------------------------------
         compute_vy_node_properties!(
             RHOYSUM,
@@ -5286,7 +5286,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "compute physical properties of P nodes"
+       #@info "compute physical properties of P nodes"
         # ---------------------------------------------------------------------
         compute_p_node_properties!(
             RHOSUM,
@@ -5312,23 +5312,23 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "apply thermal boundary conditions for interpolated temperature"
+       #@info "apply thermal boundary conditions for interpolated temperature"
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
         # ---------------------------------------------------------------------
-        @info "compute gravity solution"
+       #@info "compute gravity solution"
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
         compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
 
         # ---------------------------------------------------------------------
-        @info "probe increasing computational timestep"
+       #@info "probe increasing computational timestep"
         # ---------------------------------------------------------------------
         dt = min(dt*dtkoefup, dtelastic)
 
         # ---------------------------------------------------------------------
-        @info "save initial viscosity, yielding nodes"
+       #@info "save initial viscosity, yielding nodes"
         # ---------------------------------------------------------------------
         # ETA00, ETA = ETA, ETA00
         # YNY00, YNY = YNY, YNY00
@@ -5437,7 +5437,7 @@ function simulation_loop(output_path)
     )
 
         # ---------------------------------------------------------------------
-        @info "perform plastic iterations"
+       #@info "perform plastic iterations"
         # ---------------------------------------------------------------------
         if timestep == 1
             # no elastic compaction during first timestep
@@ -5447,7 +5447,7 @@ function simulation_loop(output_path)
         # initialize dtm
         dtm = 0.0
         for iplast=1:1:nplast
-            @info "plastic iteration" iplast
+           #@info "plastic iteration" iplast
             # recompute bulk viscosity at pressure nodes
             recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
             # assemble hydromechanical system of equations
@@ -5488,20 +5488,20 @@ function simulation_loop(output_path)
                 qyD,
                 pf
             )
-            if random_markers && iplast ==1
-                L_dense = collect(L)
-                jldsave(output_path*"post_lse_"*str(timestep)*".jld2";
-                    L_dense,
-                    R,
-                    S,
-                    vx,
-                    vy,
-                    pr,
-                    qxD,
-                    qyD,
-                    pf
-                )
-            end
+            # if random_markers && iplast ==1
+            #     L_dense = collect(L)
+            #     jldsave(output_path*"post_lse_"*string(timestep)*".jld2";
+            #         L_dense,
+            #         R,
+            #         S,
+            #         vx,
+            #         vy,
+            #         pr,
+            #         qxD,
+            #         qyD,
+            #         pf
+            #     )
+            # end
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
                 APHI,
@@ -5619,7 +5619,7 @@ function simulation_loop(output_path)
         end # for iplast=1:1:nplast
 
         # ---------------------------------------------------------------------
-        @info "interpolate updated viscoplastic viscosity to markers"
+       #@info "interpolate updated viscoplastic viscosity to markers"
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
             update_marker_viscosity!(
@@ -5627,7 +5627,7 @@ function simulation_loop(output_path)
         end
 
         # ---------------------------------------------------------------------
-        @info "apply subgrid stress diffusion to markers"
+       #@info "apply subgrid stress diffusion to markers"
         # ---------------------------------------------------------------------
         apply_subgrid_stress_diffusion!(
             xm,
@@ -5649,12 +5649,12 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "interpolate DSXX, DSXY to markers"
+       #@info "interpolate DSXX, DSXY to markers"
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
         # ---------------------------------------------------------------------
-        @info "compute shear heating HS in P nodes"
+       #@info "compute shear heating HS in P nodes"
         # ---------------------------------------------------------------------
         compute_shear_heating!(
             HS,
@@ -5674,7 +5674,7 @@ function simulation_loop(output_path)
 
         # ---------------------------------------------------------------------
         # compute adiabatic heating HA in P nodes
-        @info "perform thermal iterations"
+       #@info "perform thermal iterations"
         # ---------------------------------------------------------------------
         if timestep==1
             # no pressure changes for the first timestep
@@ -5686,7 +5686,7 @@ function simulation_loop(output_path)
             tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
 
         # ---------------------------------------------------------------------
-        @info "apply subgrid temperature diffusion on markers"
+       #@info "apply subgrid temperature diffusion on markers"
         # compute DTsubgrid
         # ---------------------------------------------------------------------
         apply_subgrid_temperature_diffusion!(
@@ -5704,28 +5704,28 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "interpolate DT to markers"
+       #@info "interpolate DT to markers"
         # ---------------------------------------------------------------------
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
         # ---------------------------------------------------------------------
-        @info "update porosity on markers"
+       #@info "update porosity on markers"
         # ---------------------------------------------------------------------
         update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
 
         # ---------------------------------------------------------------------
-        @info "compute velocity in P nodes"
+       #@info "compute velocity in P nodes"
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
 
         # ---------------------------------------------------------------------
-        @info "compute rotation rate in basic nodes"
+       #@info "compute rotation rate in basic nodes"
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
 
         # ---------------------------------------------------------------------
-        @info "move markers with RK4"
+       #@info "move markers with RK4"
         # ---------------------------------------------------------------------
         move_markers_rk4!(
             xm,
@@ -5746,7 +5746,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        @info "backtrack P nodes: Ptotal with RK4"
+       #@info "backtrack P nodes: Ptotal with RK4"
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
         backtrace_pressures_rk4!(
@@ -5757,13 +5757,13 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         replenish_markers!(
             xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum)
-        @info "replenish sparse areas with additional markers" marknum
+       #@info "replenish sparse areas with additional markers" marknum
 
         # ---------------------------------------------------------------------
         # update timesum
         # ---------------------------------------------------------------------
         timesum += dtm
-        @info "update timesum" timesum
+       #@info "update timesum" timesum
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -5939,7 +5939,7 @@ function run_simulation()
     t1 = time_ns()
     simulation_loop(output_path)
     t2 = time_ns()
-    println((t2-t1) * 1e-9)
+    println("total run time [s]: " * string((t2-t1) * 1e-9))
     if show_timer
         show(to)
     end
