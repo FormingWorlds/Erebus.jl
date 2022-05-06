@@ -244,6 +244,13 @@ xvx, yvx = sp.xvx, sp.yvx
 xvy, yvy = sp.xvy, sp.yvy
 dx, dy = sp.dx, sp.dy
 # simulate markers
+x = 0:1000:140000
+y = 0:1000:140000
+dx,dy = 1000,1000
+Nx, Ny = 140, 140
+Nx1, Ny1 = Nx+1, Ny+1
+Nxmc, Nymc =4,4
+marknum = Nx*Ny*Nxmc*Nymc
 xm = rand(-dx:0.1:x[end]+dx, marknum)
 ym = rand(-dy:0.1:y[end]+dy, marknum)
 sxym = rand(marknum)
@@ -254,7 +261,7 @@ tm = rand(1:3, marknum)
 DT = rand(Ny1, Nx1)
 tk2 = rand(Ny1, Nx1)
 wyx = rand(Ny, Nx)
-dtm = sp.dtelastic
+dtm = dtelastic
 APHI = rand(Ny1, Nx1)
 pr = rand(Ny1, Nx1)
 pf = rand(Ny1, Nx1)
@@ -662,6 +669,7 @@ dx, dy = sp.dx, sp.dy
 jmin_m, jmax_m = sp.jmin_m, sp.jmax_m
 imin_m, imax_m = sp.imin_m, sp.imax_m
 # simulate markers
+marknum = Nx*Ny*Nxmc*Nymc
 xm = rand(-dx:0.1:x[end]+dx, marknum)
 ym = rand(-dy:0.1:y[end]+dy, marknum)
 xm2 = rand(-dx:0.1:x[end]/2, marknum)
@@ -774,3 +782,30 @@ function loop2(t)
         return result
         end
     
+
+        function add_vrk4(vrk4, v, rk)
+            if rk == 1
+                return vrk4 + @SVector [v, 0.0, 0.0, 0.0]
+            elseif rk == 2
+                return vrk4 + @SVector [0.0, v, 0.0, 0.0]
+            elseif rk == 3
+                return vrk4 + @SVector [0.0, 0.0, v, 0.0]
+            elseif rk == 4
+                return vrk4 + @SVector [0.0, 0.0, 0.0, v]
+            else
+                return vrk4
+            end
+        end
+
+        function test_add_vrk4(vrk4, v)
+            for rk=1:1:4
+                vrk4 = add_vrk4(vrk4, v, rk)
+            end
+            return vrk4
+        end
+
+
+    function ∂vx∂x(dxmj, i, j, grid)
+        ∂vx∂x₁₃ = grid[i, j-1] - 2.0*grid[i, j] + grid[i, j+1]
+        ∂vx∂x₂₄ = grid[i+1, j-1] - 2.0*grid[i+1, j] + grid[i+1, j+1]
+    end

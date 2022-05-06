@@ -945,6 +945,35 @@ function grid_average(i, j, grid)
 end
 
 """
+Add a RK4 stage velocity to the RK4 velocity vector.
+
+$(SIGNATURES)
+
+# Details:
+
+    - vrk4: current RK4 velocity vector
+    - v: RK4 velocity of stage `rk` to be added to velocity vector
+    - rk: RK4 stage number
+
+# Returns
+
+    - vrk4: updated RK4 velocity vector
+"""
+function add_vrk4(vrk4, v, rk)
+    if rk == 1
+        return vrk4 + @SVector [v, 0.0, 0.0, 0.0]
+    elseif rk == 2
+        return vrk4 + @SVector [0.0, v, 0.0, 0.0]
+    elseif rk == 3
+        return vrk4 + @SVector [0.0, 0.0, v, 0.0]
+    elseif rk == 4
+        return vrk4 + @SVector [0.0, 0.0, 0.0, v]
+    else
+        return vrk4
+    end
+end
+
+"""
 Compute total thermal conductivity of two-phase material.
 
 $(SIGNATURES)
@@ -3897,243 +3926,248 @@ function move_markers_rk4!(
 	dtm
 )
 # @timeit to "move_markers_rk4!" begin
-    # @threads for m=1:1:marknum        
-    for m=1:1:marknum        
-        i, j, weights = fix_weights(
-            xm[m],
-            ym[m],
-            xp,
-            yp,
-            dx,
-            dy,
-            jmin_p,
-            jmax_p,
-            imin_p,
-            imax_p
-        )
-        # interpolate local solid temperature from P grid
-        tkms₀ = dot(grid_vector(i, j, tk2), weights)
-        i, j, weights = fix_weights(
-            xm[m],
-            ym[m],
-            x,
-            y,
-            dx,
-            dy,
-            jmin_basic,
-            jmax_basic,
-            imin_basic,
-            imax_basic
-        )
-        # interpolate local rotation rate from basic grid
-        ωm = dot(grid_vector(i, j, wyx), weights)
-        # incremental rotation angle
-        θ = dtm * ωm
-        # compute analytic stress rotation using σ′′xx = -σ′′yy
-        @inbounds sxxm₁ = sxxm[m]*cos(θ)^2 - sxxm[m]*sin(θ)^2-sxym[m]*sin(2.0*θ)
-        @inbounds sxym₁ = sxxm[m]*sin(2.0*θ) + sxym[m]*cos(2.0*θ)
-        # update stresses
-        @inbounds sxxm[m] = sxxm₁
-        @inbounds sxym[m] = sxym₁
-        # setup RK4 scheme 
-        # RK4 coordinate positions A, B, C, D
-        @inbounds xmrk4 = @MVector [xm[m], 0.0, 0.0, 0.0]
-        @inbounds ymrk4 = @MVector [ym[m], 0.0, 0.0, 0.0]
-        # RK4 velocities va, vb, vc, vd
-        vxrk4 = @MVector zeros(4)
-        vyrk4 = @MVector zeros(4)
-        # advance marker using RK4 scheme on solid velocity
-        for rk=1:1:4
-            # interpolate vx
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xmrk4[rk],
-                ymrk4[rk],
-                xvx,
-                yvx,
+    @inbounds begin
+        for m=1:1:marknum
+            xmm = xmrk4 = xm[m]
+            ymm = ymrk4 = ym[m]        
+            i, j, weights = fix_weights(
+                xmrk4,
+                ymrk4,
+                xp,
+                yp,
                 dx,
                 dy,
-                jmin_vx,
-                jmax_vx,
-                imin_vx,
-                imax_vx
+                jmin_p,
+                jmax_p,
+                imin_p,
+                imax_p
             )
-            # compute vx velocity for left and right of current cell
-            @inbounds vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j+1]*dxmj/dx
-            @inbounds vxm₂₄ = vx[i+1, j]*(1.0-dxmj/dx) + vx[i+1, j+1]*dxmj/dx
-            # compute second order vx velocity corrections
-            if dxmj/dx >= 0.5 
-                # in right half of cell but not at right edge of grid
-                if j < Nx-1
-                    @inbounds vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i, j] - 2.0*vx[i, j+1] + vx[i, j+2])
-                    @inbounds vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i+1, j] - 2.0*vx[i+1, j+1] + vx[i+1, j+2])
-                end
-            else
-                # in left half of cell but not at left edge of grid
-                if j > 1
-                    @inbounds vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i, j-1] - 2.0*vx[i, j] + vx[i, j+1])
-                    @inbounds vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i+1, j-1] - 2.0*vx[i+1, j] + vx[i+1, j+1])
-                end
-            end
-            # compute current RK step vx
-            @inbounds vxrk4[rk] = vxm₁₃*(1.0-dymi/dy) + vxm₂₄*dymi/dy
-            # interpolate vy
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xmrk4[rk],
-                ymrk4[rk],
-                xvy,
-                yvy,
+            # interpolate local solid temperature from P grid
+            tkms₀ = dot(grid_vector(i, j, tk2), weights)
+            i, j, weights = fix_weights(
+                xmrk4,
+                ymrk4,
+                x,
+                y,
                 dx,
                 dy,
-                jmin_vy,
-                jmax_vy,
-                imin_vy,
-                imax_vy
+                jmin_basic,
+                jmax_basic,
+                imin_basic,
+                imax_basic
             )
-            # compute vy velocity for top and bottom of current cell
-            @inbounds vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i+1, j]*dymi/dy
-            @inbounds vym₃₄ = vy[i, j+1]*(1.0-dymi/dy) + vy[i+1, j+1]*dymi/dy
-            # compute second order vy velocity corrections
-            if dymi/dy >= 0.5
-                # in bottom half of cell but not at bottom edge of grid
-                if i < Ny-1
-                    @inbounds vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i, j] - 2.0*vy[i+1, j] + vy[i+2, j])
-                    @inbounds vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i, j+1] - 2.0*vy[i+1, j+1] + vy[i+2, j+1])
-                end      
-            else
-                # in top half of cell but not at top edge of grid
-                if i > 1
-                    @inbounds vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i-1, j] - 2.0*vy[i, j] + vy[i+1, j])
-                    @inbounds vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i-1, j+1] - 2.0*vy[i, j+1] + vy[i+1, j+1])
+            # interpolate local rotation rate from basic grid
+            ωm = dot(grid_vector(i, j, wyx), weights)
+            # incremental rotation angle
+            θ = dtm * ωm
+            # compute analytic stress rotation using σ′′xx = -σ′′yy
+            sxxm₁ = sxxm[m]*cos(θ)^2 - sxxm[m]*sin(θ)^2-sxym[m]*sin(2.0*θ)
+            sxym₁ = sxxm[m]*sin(2.0*θ) + sxym[m]*cos(2.0*θ)
+            # update stresses
+            sxxm[m] = sxxm₁
+            sxym[m] = sxym₁
+            # setup RK4 scheme 
+            # RK4 coordinate positions A, B, C, D
+            # RK4 velocities va, vb, vc, vd
+            vxrk4 = @SVector zeros(4)
+            vyrk4 = @SVector zeros(4)
+            # advance marker using RK4 scheme on solid velocity
+            for rk=1:1:4
+                # interpolate vx
+                i, j, dxmj, dymi = fix_distances(
+                    xmrk4,
+                    ymrk4,
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                # compute vx velocity for left and right of current cell
+                vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j+1]*dxmj/dx
+                vxm₂₄ = vx[i+1, j]*(1.0-dxmj/dx) + vx[i+1, j+1]*dxmj/dx
+                # compute second order vx velocity corrections
+                if dxmj/dx >= 0.5 
+                    # in right half of cell but not at right edge of grid
+                    if j < Nx-1
+                        vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vx[i, j] - 2.0*vx[i, j+1] + vx[i, j+2])
+                        vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vx[i+1, j] - 2.0*vx[i+1, j+1] + vx[i+1, j+2])
+                    end
+                else
+                    # in left half of cell but not at left edge of grid
+                    if j > 1
+                        vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vx[i, j-1] - 2.0*vx[i, j] + vx[i, j+1])
+                        vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vx[i+1, j-1] - 2.0*vx[i+1, j] + vx[i+1, j+1])
+                    end
                 end
-            end
-            # compute current RK step vy
-            @inbounds vyrk4[rk] = vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx
-            # calculate next RK step x and y positions if not at final step
-            if rk < 4
-                @inbounds xmrk4[rk+1] = xmrk4[1] + dtm*crk4[rk]*vxrk4[rk]
-                @inbounds ymrk4[rk+1] = ymrk4[1] + dtm*crk4[rk]*vyrk4[rk]
-            end
-        end # RK4 solid velocity loop
-        # advance marker using RK4 solid velocity
-        @inbounds xm[m] += dtm * dot(brk4, vxrk4)
-        @inbounds ym[m] += dtm * dot(brk4, vyrk4)
-        # reset RK4 scheme for fluid velocity backtracing
-        @inbounds xmrk4[1] = xm[m]
-        @inbounds ymrk4[1] = ym[m]
-        # backtrack marker using RK4 scheme on fluid velocity
-        for rk=1:1:4
-            # interpolate vxf
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xmrk4[rk],
-                ymrk4[rk],
-                xvx,
-                yvx,
+                # compute current RK step vx
+                vxrk4 = add_vrk4(vxrk4, vxm₁₃*(1.0-dymi/dy) + vxm₂₄*dymi/dy, rk)
+                # interpolate vy
+                i, j, dxmj, dymi = fix_distances(
+                    xmrk4,
+                    ymrk4,
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                # compute vy velocity for top and bottom of current cell
+                vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i+1, j]*dymi/dy
+                vym₃₄ = vy[i, j+1]*(1.0-dymi/dy) + vy[i+1, j+1]*dymi/dy
+                # compute second order vy velocity corrections
+                if dymi/dy >= 0.5
+                    # in bottom half of cell but not at bottom edge of grid
+                    if i < Ny-1
+                        vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vy[i, j] - 2.0*vy[i+1, j] + vy[i+2, j])
+                        vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vy[i, j+1] - 2.0*vy[i+1, j+1] + vy[i+2, j+1])
+                    end      
+                else
+                    # in top half of cell but not at top edge of grid
+                    if i > 1
+                        vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vy[i-1, j] - 2.0*vy[i, j] + vy[i+1, j])
+                        vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vy[i-1, j+1] - 2.0*vy[i, j+1] + vy[i+1, j+1])
+                    end
+                end
+                # compute current RK step vy
+                vyrk4 = add_vrk4(vyrk4, vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx, rk)
+                # calculate next RK step x and y positions if not at final step
+                if rk < 4
+                    xmrk4 = xmm + dtm*crk4[rk]*vxrk4[rk]
+                    ymrk4 = ymm + dtm*crk4[rk]*vyrk4[rk]
+                end
+            end # RK4 solid velocity loop
+            # advance marker using RK4 solid velocity
+            xm[m] += dtm * dot(brk4, vxrk4)
+            ym[m] += dtm * dot(brk4, vyrk4)
+            # reset RK4 scheme for fluid velocity backtracing
+            xmm = xmrk4 = xm[m]
+            ymm = ymrk4 = ym[m]      
+            vxrk4 = @SVector zeros(4)
+            vyrk4 = @SVector zeros(4)
+            # backtrack marker using RK4 scheme on fluid velocity
+            for rk=1:1:4
+                # interpolate vxf
+                i, j, dxmj, dymi = fix_distances(
+                    xmrk4,
+                    ymrk4,
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                # compute vxf velocity for left and right of current cell
+                vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j+1]*dxmj/dx
+                vxfm₂₄ = vxf[i+1, j]*(1.0-dxmj/dx) + vxf[i+1, j+1]*dxmj/dx
+                # compute second order vxf velocity corrections
+                if dxmj/dx >= 0.5 
+                    # in right half of cell but not at right edge of grid
+                    if j < Nx-1
+                        vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i, j] - 2.0*vxf[i, j+1] + vxf[i, j+2])
+                        vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i+1, j] - 2.0*vxf[i+1, j+1] + vxf[i+1, j+2])
+                    end
+                else
+                    # in left half of cell but not at left edge of grid
+                    if j > 1
+                        vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
+                        vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
+                    end
+                end
+                # compute current RK step vxf
+                vxrk4 = add_vrk4(
+                    vxrk4, vxfm₁₃*(1.0-dymi/dy) + vxfm₂₄*dymi/dy, rk)
+                # interpolate vyf
+                i, j, dxmj, dymi = fix_distances(
+                    xmrk4,
+                    ymrk4,
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                # compute vyf velocity for top and bottom of current cell
+                vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i+1, j]*dymi/dy
+                vyfm₃₄ = vyf[i, j+1]*(1.0-dymi/dy) + vyf[i+1, j+1]*dymi/dy
+                # compute second order vyf velocity corrections
+                if dymi/dy >= 0.5
+                    # in bottom half of cell but not at bottom edge of grid
+                    if i < Ny-1
+                        vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i, j] - 2.0*vyf[i+1, j] + vyf[i+2, j])
+                        vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i, j+1] - 2.0*vyf[i+1, j+1] + vyf[i+2, j+1])
+                    end
+                else
+                    # in top half of cell but not at top edge of grid
+                    if i > 1
+                        vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i-1, j] - 2.0*vyf[i, j] + vyf[i+1, j])
+                        vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i-1, j+1] - 2.0*vyf[i, j+1] + vyf[i+1, j+1])
+                    end
+                end
+                # compute current RK step vyf
+                vyrk4 = add_vrk4(
+                    vyrk4, vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx, rk)
+                # calculate next RK step x and y positions if not at final step
+                if rk < 4
+                    xmrk4 = xmm - dtm*crk4[rk]*vxrk4[rk]
+                    ymrk4 = ymm - dtm*crk4[rk]*vyrk4[rk]
+                end
+            end # RK4 fluid velocity loop
+            # backtrace marker using RK4 fluid velocity
+            xmrk4 = xmm - dtm*dot(brk4, vxrk4)
+            ymrk4 = ymm - dtm*dot(brk4, vyrk4)
+            # interpolate fluid temperature at backtraced marker position
+            i, j, weights = fix_weights(
+                xmrk4,
+                ymrk4,
+                xp,
+                yp,
                 dx,
                 dy,
-                jmin_vx,
-                jmax_vx,
-                imin_vx,
-                imax_vx
+                jmin_p,
+                jmax_p,
+                imin_p,
+                imax_p,
             )
-            # compute vxf velocity for left and right of current cell
-            @inbounds vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j+1]*dxmj/dx
-            @inbounds vxfm₂₄ = vxf[i+1, j]*(1.0-dxmj/dx) + vxf[i+1, j+1]*dxmj/dx
-            # compute second order vxf velocity corrections
-            if dxmj/dx >= 0.5 
-                # in right half of cell but not at right edge of grid
-                if j < Nx-1
-                    @inbounds vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i, j] - 2.0*vxf[i, j+1] + vxf[i, j+2])
-                    @inbounds vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i+1, j] - 2.0*vxf[i+1, j+1] + vxf[i+1, j+2])
-                end
-            else
-                # in left half of cell but not at left edge of grid
-                if j > 1
-                    @inbounds vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
-                    @inbounds vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
-                end
-            end
-            # compute current RK step vxf
-            @inbounds vxrk4[rk] = vxfm₁₃*(1.0-dymi/dy) + vxfm₂₄*dymi/dy
-            # interpolate vyf
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xmrk4[rk],
-                ymrk4[rk],
-                xvy,
-                yvy,
-                dx,
-                dy,
-                jmin_vy,
-                jmax_vy,
-                imin_vy,
-                imax_vy
-            )
-            # compute vyf velocity for top and bottom of current cell
-            @inbounds vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i+1, j]*dymi/dy
-            @inbounds vyfm₃₄ = vyf[i, j+1]*(1.0-dymi/dy) + vyf[i+1, j+1]*dymi/dy
-            # compute second order vyf velocity corrections
-            if dymi/dy >= 0.5
-                # in bottom half of cell but not at bottom edge of grid
-                if i < Ny-1
-                    @inbounds vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i, j] - 2.0*vyf[i+1, j] + vyf[i+2, j])
-                    @inbounds vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i, j+1] - 2.0*vyf[i+1, j+1] + vyf[i+2, j+1])
-                end
-            else
-                # in top half of cell but not at top edge of grid
-                if i > 1
-                    @inbounds vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i-1, j] - 2.0*vyf[i, j] + vyf[i+1, j])
-                    @inbounds vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i-1, j+1] - 2.0*vyf[i, j+1] + vyf[i+1, j+1])
-                end
-            end
-            # compute current RK step vyf
-            @inbounds vyrk4[rk] = vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx
-            # calculate next RK step x and y positions if not at final step
-            if rk < 4
-                @inbounds xmrk4[rk+1] = xmrk4[1] - dtm*crk4[rk]*vxrk4[rk]
-                @inbounds ymrk4[rk+1] = ymrk4[1] - dtm*crk4[rk]*vyrk4[rk]
-            end
-        end # RK4 fluid velocity loop
-        # backtrace marker using RK4 fluid velocity
-        @inbounds xmrk4[1] -= dtm * dot(brk4, vxrk4)
-        @inbounds ymrk4[1] -= dtm * dot(brk4, vyrk4)
-        # interpolate fluid temperature at backtraced marker position
-        i, j, weights = fix_weights(
-            xmrk4[1],
-            ymrk4[1],
-            xp,
-            yp,
-            dx,
-            dy,
-            jmin_p,
-            jmax_p,
-            imin_p,
-            imax_p,
-        )
-        # interpolate backtraced local fluid temperature from P grid
-        tkmf₀ = dot(grid_vector(i, j, tk2), weights)
-        # compute marker fluid-solid temperature difference
-        δtkmfs = tkmf₀ - tkms₀
-        # correct marker temperature
-        @inbounds tkm[m] = (
-            (1.0-phim[m])*tkm[m]*rhocpsolidm[tm[m]]
-                + phim[m]*(tkm[m]+δtkmfs)*rhocpfluidm[tm[m]]
-        ) / ((1-phim[m])*rhocpsolidm[tm[m]] + phim[m]*rhocpfluidm[tm[m]])
-    end # marker loop
+            # interpolate backtraced local fluid temperature from P grid
+            tkmf₀ = dot(grid_vector(i, j, tk2), weights)
+            # compute marker fluid-solid temperature difference
+            δtkmfs = tkmf₀ - tkms₀
+            # correct marker temperature
+            tkm[m] = (
+                (1.0-phim[m])*tkm[m]*rhocpsolidm[tm[m]]
+                    + phim[m]*(tkm[m]+δtkmfs)*rhocpfluidm[tm[m]]
+            ) / ((1-phim[m])*rhocpsolidm[tm[m]] + phim[m]*rhocpfluidm[tm[m]])
+        end # marker loop
+    end # @inbounds
 # end # timeit to "move_markers_rk4!"
     return nothing
 end # function move_markers_rk4!
@@ -4165,239 +4199,231 @@ $(SIGNATURES)
 function backtrace_pressures_rk4!(
    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 # @timeit to "backtrace_pressures_rk4!" begin
-    # advance pressure generations
-    pr0 .= pr
-    ps0 .= ps
-    pf0 .= pf
-    # # setup RK4 scheme
-    # xrk4 = @MVector zeros(4)
-    # yrk4 = @MVector zeros(4)
-    # # RK4 velocities va, vb, vc, vd
-    # vxrk4 = @MVector zeros(4)
-    # vyrk4 = @MVector zeros(4)
-    # # backtrace P nodes: total and solid pressure
-    # for jj=2:1:Nx, ii=2:1:Ny
-    #     @inbounds xrk4[1] = xp[jj]
-    #     @inbounds yrk4[1] = yp[ii]
+    @inbounds begin
+        # advance pressure generations
+        pr0 .= pr
+        ps0 .= ps
+        pf0 .= pf
+        # backtrace P nodes: total and solid pressure
         for jj=2:1:Nx
             for ii=2:1:Ny
-        # setup RK4 scheme
-        xrk4 = @MVector [xp[jj], 0.0, 0.0, 0.0]
-        yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
-        # RK4 velocities va, vb, vc, vd
-        vxrk4 = @MVector zeros(4)
-        vyrk4 = @MVector zeros(4)
-        # backtrace P node using RK4 scheme on solid velocity
-        for rk=1:1:4
-            # interpolate vx
-            i, j, dxmj, dymi = fix_distances(
-                xrk4[rk],
-                yrk4[rk],
-                xvx,
-                yvx,
+                xpjj = xrk4 = xp[jj]
+                ypii = yrk4 = yp[ii]
+                # setup RK4 scheme
+                # RK4 velocities va, vb, vc, vd
+                vxrk4 = @SVector zeros(4)
+                vyrk4 = @SVector zeros(4)
+                # backtrace P node using RK4 scheme on solid velocity
+                for rk=1:1:4
+                    # interpolate vx
+                    i, j, dxmj, dymi = fix_distances(
+                        xrk4,
+                        yrk4,
+                        xvx,
+                        yvx,
+                        dx,
+                        dy,
+                        jmin_vx,
+                        jmax_vx,
+                        imin_vx,
+                        imax_vx
+                    )
+                    # compute vx velocity for left and right of current cell
+                    vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j+1]*dxmj/dx
+                    vxm₂₄ = vx[i+1, j]*(1.0-dxmj/dx) + vx[i+1, j+1]*dxmj/dx
+                    # compute second order vx velocity corrections
+                    if dxmj/dx >= 0.5 
+                        # in right half of cell but not at right edge of grid
+                        if j < Nx-1
+                            vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                                vx[i, j] - 2.0*vx[i, j+1] + vx[i, j+2])
+                            vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                                vx[i+1, j] - 2.0*vx[i+1, j+1] + vx[i+1, j+2])
+                        end
+                    else
+                        # in left half of cell but not at left edge of grid
+                        if j > 1
+                            vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                                vx[i, j-1] - 2.0*vx[i, j] + vx[i, j+1])
+                            vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                                vx[i+1, j-1] - 2.0*vx[i+1, j] + vx[i+1, j+1])
+                        end
+                    end
+                    # compute current RK step vx
+                    vxrk4 = add_vrk4(
+                        vxrk4, vxm₁₃*(1.0-dymi/dy) + vxm₂₄*dymi/dy, rk)
+                    # interpolate vy
+                    i, j, dxmj, dymi = fix_distances(
+                        xrk4,
+                        yrk4,
+                        xvy,
+                        yvy,
+                        dx,
+                        dy,
+                        jmin_vy,
+                        jmax_vy,
+                        imin_vy,
+                        imax_vy
+                    )
+                    # compute vy velocity for top and bottom of current cell
+                    vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i+1, j]*dymi/dy
+                    vym₃₄ = vy[i, j+1]*(1.0-dymi/dy) + vy[i+1, j+1]*dymi/dy
+                    # compute second order vy velocity corrections
+                    if dymi/dy >= 0.5
+                        # in bottom half of cell but not at bottom edge of grid
+                        if i < Ny-1
+                            vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                                vy[i, j] - 2.0*vy[i+1, j] + vy[i+2, j])
+                            vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                                vy[i, j+1] - 2.0*vy[i+1, j+1] + vy[i+2, j+1])
+                        end      
+                    else
+                        # in top half of cell but not at top edge of grid
+                        if i > 1
+                            vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                                vy[i-1, j] - 2.0*vy[i, j] + vy[i+1, j])
+                            vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                                vy[i-1, j+1] - 2.0*vy[i, j+1] + vy[i+1, j+1])
+                        end
+                    end
+                    # compute current RK step vy
+                    vyrk4 = add_vrk4(
+                        vyrk4, vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx, rk)
+                    # calculate next RK step x and y positions if not at final 
+                    if rk < 4
+                        xrk4 = xpjj - dtm*crk4[rk]*vxrk4[rk]
+                        yrk4 = ypii - dtm*crk4[rk]*vyrk4[rk]
+                    end
+                end # RK4 solid velocity loop
+                # backtrace P node using RK4 solid velocity
+                xrk4 = xpjj - dtm*dot(brk4, vxrk4)
+                yrk4 = ypii - dtm*dot(brk4, vyrk4)
+                # interpolate total and solid pressure at backtraced P nodes
+                i, j, weights = fix_weights(
+                    xrk4,
+                    yrk4,
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                pr0[ii, jj] = dot(grid_vector(i, j, pr), weights)
+                ps0[ii, jj] = dot(grid_vector(i, j, ps), weights)
+            end # ii total and solid pressure loop
+        end # jj total and solid pressure loop
+        # backtrace P nodes: fluid pressure
+        for jj=2:1:Nx, ii=2:1:Ny
+            xpjj = xrk4 = xp[jj]
+            ypii = yrk4 = yp[ii]
+            # setup RK4 scheme
+            # RK4 velocities va, vb, vc, vd
+            vxrk4 = @SVector zeros(4)
+            vyrk4 = @SVector zeros(4)
+            # backtrace P node using RK4 scheme on fluid velocity
+            for rk=1:1:4
+                # interpolate vxf
+                i, j, dxmj, dymi = fix_distances(
+                    xrk4,
+                    yrk4,
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                # compute vxf velocity for left and right of current cell
+                vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j+1]*dxmj/dx
+                vxfm₂₄ = vxf[i+1, j]*(1.0-dxmj/dx) + vxf[i+1, j+1]*dxmj/dx
+                # compute second order vxf velocity corrections
+                if dxmj/dx >= 0.5 
+                    # in right half of cell but not at right edge of grid
+                    if j < Nx-1
+                        vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i, j] - 2.0*vxf[i, j+1] + vxf[i, j+2])
+                        vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i+1, j] - 2.0*vxf[i+1, j+1] + vxf[i+1, j+2])
+                    end
+                else
+                    # in left half of cell but not at left edge of grid
+                    if j > 1
+                        vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
+                        vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
+                            vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
+                    end
+                end
+                # compute current RK step vxf
+                vxrk4 = add_vrk4(
+                    vxrk4, vxfm₁₃*(1.0-dymi/dy) + vxfm₂₄*dymi/dy, rk) 
+                # interpolate vyf
+                @inbounds i, j, dxmj, dymi = fix_distances(
+                    xrk4,
+                    yrk4,
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                # compute vyf velocity for top and bottom of current cell
+                vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i+1, j]*dymi/dy
+                vyfm₃₄ = vyf[i, j+1]*(1.0-dymi/dy) + vyf[i+1, j+1]*dymi/dy
+                # compute second order vyf velocity corrections
+                if dymi/dy >= 0.5
+                    # in bottom half of cell but not at bottom edge of grid
+                    if i < Ny-1
+                        vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i, j] - 2.0*vyf[i+1, j] + vyf[i+2, j])
+                        vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i, j+1] - 2.0*vyf[i+1, j+1] + vyf[i+2, j+1])
+                    end
+                else
+                    # in top half of cell but not at top edge of grid
+                    if i > 1
+                        vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i-1, j] - 2.0*vyf[i, j] + vyf[i+1, j])
+                        vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
+                            vyf[i-1, j+1] - 2.0*vyf[i, j+1] + vyf[i+1, j+1])
+                    end
+                end
+                # compute current RK step vyf
+                vyrk4 = add_vrk4(
+                    vyrk4, vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx, rk) 
+                # calculate next RK step x and y positions if not at final 
+                if rk < 4
+                    xrk4 = xpjj - dtm*crk4[rk]*vxrk4[rk]
+                    yrk4 = ypii - dtm*crk4[rk]*vyrk4[rk]
+                end
+            end # RK4 fluid velocity loop
+            # backtrace P node using RK4 fluid velocity
+            xrk4 = xpjj - dtm * dot(brk4, vxrk4)
+            yrk4 = ypii - dtm * dot(brk4, vyrk4)
+            # interpolate fluid pressure at backtraced P nodes
+            i, j, weights = fix_weights(
+                xrk4,
+                yrk4,
+                xp,
+                yp,
                 dx,
                 dy,
-                jmin_vx,
-                jmax_vx,
-                imin_vx,
-                imax_vx
+                jmin_p,
+                jmax_p,
+                imin_p,
+                imax_p
             )
-            # compute vx velocity for left and right of current cell
-            @inbounds vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j+1]*dxmj/dx
-            @inbounds vxm₂₄ = vx[i+1, j]*(1.0-dxmj/dx) + vx[i+1, j+1]*dxmj/dx
-            # compute second order vx velocity corrections
-            if dxmj/dx >= 0.5 
-                # in right half of cell but not at right edge of grid
-                if j < Nx-1
-                    @inbounds vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i, j] - 2.0*vx[i, j+1] + vx[i, j+2])
-                    @inbounds vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i+1, j] - 2.0*vx[i+1, j+1] + vx[i+1, j+2])
-                end
-            else
-                # in left half of cell but not at left edge of grid
-                if j > 1
-                    @inbounds vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i, j-1] - 2.0*vx[i, j] + vx[i, j+1])
-                    @inbounds vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vx[i+1, j-1] - 2.0*vx[i+1, j] + vx[i+1, j+1])
-                end
-            end
-            # compute current RK step vx
-            @inbounds vxrk4[rk] = vxm₁₃*(1.0-dymi/dy) + vxm₂₄*dymi/dy
-            # interpolate vy
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xrk4[rk],
-                yrk4[rk],
-                xvy,
-                yvy,
-                dx,
-                dy,
-                jmin_vy,
-                jmax_vy,
-                imin_vy,
-                imax_vy
-            )
-            # compute vy velocity for top and bottom of current cell
-            @inbounds vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i+1, j]*dymi/dy
-            @inbounds vym₃₄ = vy[i, j+1]*(1.0-dymi/dy) + vy[i+1, j+1]*dymi/dy
-            # compute second order vy velocity corrections
-            if dymi/dy >= 0.5
-                # in bottom half of cell but not at bottom edge of grid
-                if i < Ny-1
-                    @inbounds vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i, j] - 2.0*vy[i+1, j] + vy[i+2, j])
-                    @inbounds vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i, j+1] - 2.0*vy[i+1, j+1] + vy[i+2, j+1])
-                end      
-            else
-                # in top half of cell but not at top edge of grid
-                if i > 1
-                    @inbounds vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i-1, j] - 2.0*vy[i, j] + vy[i+1, j])
-                    @inbounds vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vy[i-1, j+1] - 2.0*vy[i, j+1] + vy[i+1, j+1])
-                end
-            end
-            # compute current RK step vy
-            @inbounds vyrk4[rk] = vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx
-            # calculate next RK step x and y positions if not at final step
-            if rk < 4
-                @inbounds xrk4[rk+1] = xrk4[1] - dtm*crk4[rk]*vxrk4[rk]
-                @inbounds yrk4[rk+1] = yrk4[1] - dtm*crk4[rk]*vyrk4[rk]
-            end
-        end # RK4 solid velocity loop
-        # backtrace P node using RK4 solid velocity
-        @inbounds xrk4[1] -= dtm * dot(brk4, vxrk4)
-        @inbounds yrk4[1] -= dtm * dot(brk4, vyrk4)
-        # interpolate total and solid pressure at backtraced P nodes
-        @inbounds i, j, weights = fix_weights(
-            xrk4[1],
-            yrk4[1],
-            xp,
-            yp,
-            dx,
-            dy,
-            jmin_p,
-            jmax_p,
-            imin_p,
-            imax_p
-        )
-        @inbounds pr0[ii, jj] = dot(grid_vector(i, j, pr), weights)
-        @inbounds ps0[ii, jj] = dot(grid_vector(i, j, ps), weights)
-    end # ii total and solid pressure loop
-    end # jj total and solid pressure loop
-    # backtrace P nodes: fluid pressure
-    # for jj=2:1:Nx, ii=2:1:Ny
-    #     xrk4[1] = xp[ii]
-    #     yrk4[1] = yp[jj]
-    for jj=2:1:Nx
-        @threads for ii=2:1:Ny
-        # setup RK4 scheme
-        xrk4 = @MVector [xp[jj], 0.0, 0.0, 0.0]
-        yrk4 = @MVector [yp[ii], 0.0, 0.0, 0.0]
-        # RK4 velocities va, vb, vc, vd
-        vxrk4 = @MVector zeros(4)
-        vyrk4 = @MVector zeros(4)
-        # backtrace P node using RK4 scheme on fluid velocity
-        for rk=1:1:4
-            # interpolate vxf
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xrk4[rk],
-                yrk4[rk],
-                xvx,
-                yvx,
-                dx,
-                dy,
-                jmin_vx,
-                jmax_vx,
-                imin_vx,
-                imax_vx
-            )
-            # compute vxf velocity for left and right of current cell
-            @inbounds vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j+1]*dxmj/dx
-            @inbounds vxfm₂₄ = vxf[i+1, j]*(1.0-dxmj/dx) + vxf[i+1, j+1]*dxmj/dx
-            # compute second order vxf velocity corrections
-            if dxmj/dx >= 0.5 
-                # in right half of cell but not at right edge of grid
-                if j < Nx-1
-                    @inbounds vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i, j] - 2.0*vxf[i, j+1] + vxf[i, j+2])
-                    @inbounds vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i+1, j] - 2.0*vxf[i+1, j+1] + vxf[i+1, j+2])
-                end
-            else
-                # in left half of cell but not at left edge of grid
-                if j > 1
-                    @inbounds vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
-                    @inbounds vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-                        vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
-                end
-            end
-            # compute current RK step vxf
-            @inbounds vxrk4[rk] = vxfm₁₃*(1.0-dymi/dy) + vxfm₂₄*dymi/dy
-            # interpolate vyf
-            @inbounds i, j, dxmj, dymi = fix_distances(
-                xrk4[rk],
-                yrk4[rk],
-                xvy,
-                yvy,
-                dx,
-                dy,
-                jmin_vy,
-                jmax_vy,
-                imin_vy,
-                imax_vy
-            )
-            # compute vyf velocity for top and bottom of current cell
-            @inbounds vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i+1, j]*dymi/dy
-            @inbounds vyfm₃₄ = vyf[i, j+1]*(1.0-dymi/dy) + vyf[i+1, j+1]*dymi/dy
-            # compute second order vyf velocity corrections
-            if dymi/dy >= 0.5
-                # in bottom half of cell but not at bottom edge of grid
-                if i < Ny-1
-                    @inbounds vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i, j] - 2.0*vyf[i+1, j] + vyf[i+2, j])
-                    @inbounds vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i, j+1] - 2.0*vyf[i+1, j+1] + vyf[i+2, j+1])
-                end
-            else
-                # in top half of cell but not at top edge of grid
-                if i > 1
-                    @inbounds vyfm₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i-1, j] - 2.0*vyf[i, j] + vyf[i+1, j])
-                    @inbounds vyfm₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-                        vyf[i-1, j+1] - 2.0*vyf[i, j+1] + vyf[i+1, j+1])
-                end
-            end
-            # compute current RK step vyf
-            @inbounds vyrk4[rk] = vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx
-            # calculate next RK step x and y positions if not at final step
-            if rk < 4
-                @inbounds xrk4[rk+1] = xrk4[1] - dtm*crk4[rk]*vxrk4[rk]
-                @inbounds yrk4[rk+1] = yrk4[1] - dtm*crk4[rk]*vyrk4[rk]
-            end
-        end # RK4 fluid velocity loop
-        # backtrace P node using RK4 fluid velocity
-        @inbounds xrk4[1] -= dtm * dot(brk4, vxrk4)
-        @inbounds yrk4[1] -= dtm * dot(brk4, vyrk4)
-        # interpolate fluid pressure at backtraced P nodes
-        @inbounds i, j, weights = fix_weights(
-            xrk4[1],
-            yrk4[1],
-            xp,
-            yp,
-            dx,
-            dy,
-            jmin_p,
-            jmax_p,
-            imin_p,
-            imax_p
-        )
-        @inbounds pf0[ii, jj] = dot(grid_vector(i, j, pf), weights)
-    end # ii fluid pressure loop
-    end # jj fluid pressure loop
+            pf0[ii, jj] = dot(grid_vector(i, j, pf), weights)
+        end # jj, ii fluid pressure loop
+    end # @inbounds
 # end # @timeit to "backtrace_pressures_rk4!"
     return nothing
 end # function backtrace_pressures_rk4!

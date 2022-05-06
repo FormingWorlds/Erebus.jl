@@ -760,6 +760,15 @@ include("../src/test_constants.jl")
             grid[1, 1] + grid[2, 1] + grid[1, 2] + grid[2, 2])
     end # testset "grid_average()"
 
+    @testset "add_vrk4()" begin
+        vrk4 = @SVector zeros(4)
+        v = rand()
+        for rk=1:4
+            vrk4 = HydrologyPlanetesimals.add_vrk4(vrk4, v, rk)
+        end
+        @test vrk4 == @SVector [v, v, v, v]
+    end # testset "add_vrk4()"
+
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
         for i=1:10
