@@ -26,6 +26,7 @@ Parameters = "0.12"
 ProgressMeter = "1"
 StaticArrays = "1"
 TimerOutputs = "0.5"
+UnicodePlots = "2"
 julia = "1.7.2"
 
 [extras]
