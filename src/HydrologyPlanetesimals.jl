@@ -84,15 +84,15 @@ $(SIGNATURES)
     - RX : etafluid/kphi ratio at Vx nodes [m^2]
     - qxD : qx-darcy flux at Vx nodes [m/s]
     - gx : gx-gravity at Vx nodes [m/s^2]
-    - RHOY : density at Vx nodes [kg/m^3]
-    - RHOFY : fluid density at Vx nodes [kg/m^3]
-    - KY : thermal conductivity at Vx nodes [W/m/K]
-    - PHIY : porosity at Vx nodes
-    - vy : solid vy-velocity at Vx nodes [m/s]
-    - vyf : fluid vy-velocity at Vx nodes [m/s]
-    - RY : etafluid/kphi ratio at Vx nodes [m^2]
-    - qyD : qy-Darcy flux at Vx nodes [m/s]
-    - gy : gy-gravity at Vx nodes [m/s^2]
+    - RHOY : density at Vy nodes [kg/m^3]
+    - RHOFY : fluid density at Vy nodes [kg/m^3]
+    - KY : thermal conductivity at Vy nodes [W/m/K]
+    - PHIY : porosity at Vy nodes
+    - vy : solid vy-velocity at Vy nodes [m/s]
+    - vyf : fluid vy-velocity at Vy nodes [m/s]
+    - RY : etafluid/kphi ratio at Vy nodes [m^2]
+    - qyD : qy-Darcy flux at Vy nodes [m/s]
+    - gy : gy-gravity at Vy nodes [m/s^2]
     - RHO : density at P nodes [kg/m^3]
     - RHOCP : volumetric heat capacity at P nodes [J/m^3/K]
     - ALPHA : thermal expansion at P nodes [J/m^3/K]
@@ -5924,7 +5924,7 @@ $(SIGNATURES)
 
 # Details
 
-    - show_timer: show the measured times spent in respective sections 
+    - nothing
 
 # Returns
 

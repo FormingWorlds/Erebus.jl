@@ -26,4 +26,8 @@ Adjust the simulation parameters in ```src/constants.jl``` if necessary.
 
 ### Running the simulation
 
-Launch with ```julia -O3 --math-mode=fast launch.jl /PATH/TO/OUTPUT/```.
+Launch with ```julia -O3 --math-mode=fast launch.jl /PATH/TO/OUTPUT```.
+
+### Plotting results
+
+Launch with ```julia plots.jl /PATH/TO/OUTPUT```; ```.mp4``` files are stored in same directory.

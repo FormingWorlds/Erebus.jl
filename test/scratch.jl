@@ -820,3 +820,124 @@ function loop2(t)
         ∂vx∂x₁₃ = grid[i, j-1] - 2.0*grid[i, j] + grid[i, j+1]
         ∂vx∂x₂₄ = grid[i+1, j-1] - 2.0*grid[i+1, j] + grid[i+1, j+1]
     end
+
+
+
+using DifferentialEquations, Plots
+
+function lorenz(du,u,p,t)
+    du[1] = p[1]*(u[2]-u[1])
+    du[2] = u[1]*(p[2]-u[3]) - u[2]
+    du[3] = u[1]*u[2] - p[3]*u[3]
+end
+
+u0 = [1., 5., 10.]
+tspan = (0., 100.)
+p = (10.0,28.0,8/3)
+prob = ODEProblem(lorenz, u0, tspan,p)
+sol = solve(prob);
+
+t = range(sol.prob.tspan...; length=10^4+1)
+X, Y, Z = ((t -> sol(t)[i]).(t) for i in 1:3)
+xlim, ylim, zlim = extrema.((X, Y, Z));
+
+gr(fmt = :png)
+anim = @animate for i in 1:100:length(X)
+    @views x, y, z = X[1:i], Y[1:i], Z[1:i]
+    A = plot(x, y, z; label="", lw=0.5, xlim, ylim, zlim)
+    B = plot(x, y; label="", lw=0.2, title="x, y", titlefontsize=8, xlim=xlim, ylim=ylim)
+    C = plot(x, z; label="", lw=0.2, title="x, y", titlefontsize=8, xlim=xlim, ylim=zlim)
+    # D = plot(y, z; label="", lw=0.2, title="x, y", titlefontsize=8, xlim=ylim, ylim=zlim)
+    D = heatmap(rand(100,100))
+    layout = @layout [
+        a{0.7h}
+        [b c d]
+    ]
+    plot(A, B, C, D; layout, size=(640, 640))
+end
+gif(anim, "lorenz2.gif")
+
+
+using LinearAlgebra
+using Plots
+gr(fmt = :png)
+
+function arrow_!(x, y, u, v; lar=0.1, lc=:black, linewidth=1.0, la=1.0)
+    v1, v2 = normalize([u; v]), normalize([-v; u])
+    v3 = normalize(3*v1 + v2) * norm((u, v)) * lar
+    v4 = normalize(3*v1 - v2) * norm((u, v)) * lar
+    plot!([x, x+u], [y, y+v], lc=lc, la=la)
+    plot!([x+u, x+u-v4[1]], [y+v, y+v-v4[2]], lc=lc, linewidth=linewidth, la=la)
+    plot!([x+u, x+u-v3[1]], [y+v, y+v-v3[2]], lc=lc, linewidth=linewidth, la=la)
+end
+
+N = 30;
+xx, yy = 1 .+ 2* rand(N), 1 .+ 2*rand(N);  # points
+r, θ = rand(N), LinRange(0,2π,N)
+u, v = r .* cos.(θ), r .* sin.(θ)    # arrows 
+
+# plot points and arrows with 10% head sizes
+scatter(xx, yy, mc=:red, ms=2.5, ratio=1, ma=0.5, legend=false)
+for (x,y,u,v) in zip(xx,yy,u,v)
+    display(arrow_!(x, y, u, v; as=0.1, lc=:blue, la=1))
+end
+
+
+meshgrid(x, y) = (repeat(x, outer=length(y)), repeat(y, inner=length(x)))
+
+function custom_quiver(
+    x, y; quiver=(u, v), mc=:black, ms=2.5, ma=0.5, lar=0.1, lc=:black, linewidth=1.0, la=1.0)
+    scatter(x, y, mc=mc, ms=ms, ma=ma, legend=false)
+    for (x, y, u, v) in zip(x, y, vec(u'), vec(v'))
+        display(arrow_!(x, y, u, v; lar=lar, lc=lc, linewidth=linewidth, la=la))
+    end
+end
+
+function f(x, y)
+    return x, y
+end
+
+
+using AbstractPlotting, Makie
+using ImageFiltering, LinearAlgebra
+
+x = range(-2, stop = 2, length = 21)
+y = x
+z = x .* exp.(-x .^ 2 .- (y') .^ 2)
+scene = Makie.contour(x, y, z, levels = 10, linewidth = 3)
+u, v = ImageFiltering.imgradients(z, KernelFactors.ando3)
+n = vec(norm.(Vec2f0.(u,v)))
+Makie.arrows!(x, y, u, v, arrowsize = n, arrowcolor = n)
+
+
+using GLMakie
+
+function mandelbrot(x, y)
+    z = c = x + y*im
+    for i in 1:30.0; abs(z) > 2 && return i; z = z^2 + c; end; 0
+end
+
+x = LinRange(-2, 1, 200)
+y = LinRange(-1.1, 1.1, 200)
+matrix = mandelbrot.(x, y')
+fig, ax, hm = heatmap(x, y, matrix)
+
+N = 50
+xmin = LinRange(-2.0, -0.72, N)
+xmax = LinRange(1, -0.6, N)
+ymin = LinRange(-1.1, -0.51, N)
+ymax = LinRange(1, -0.42, N)
+
+# we use `record` to show the resulting video in the docs.
+# If one doesn't need to record a video, a normal loop works as well.
+# Just don't forget to call `display(fig)` before the loop
+# and without record, one needs to insert a yield to yield to the render task
+record(fig, "heatmap_mandelbrot.mp4", 1:7:N) do i
+    _x = LinRange(xmin[i], xmax[i], 200)
+    _y = LinRange(ymin[i], ymax[i], 200)
+    hm[1] = _x # update x coordinates
+    hm[2] = _y # update y coordinates
+    hm[3] = mandelbrot.(_x, _y') # update data
+    autolimits!(ax) # update limits
+    # yield() -> not required with record
+end
