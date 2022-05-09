@@ -1,46 +1,35 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
-using Parameters
+using LinearAlgebra
 using StaticArrays
 using Test
+
+include("../src/test_constants.jl")
 
 @testset verbose=true "HydrologyPlanetesimals.jl" begin
 
     @testset "setup_dynamic_simulation_parameters()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
         # set up dynamic simulation parameters
-        timestep,
-        dt,
-        timesum,
-        marknum,
-        hrsolidm,
-        hrfluidm,
-        YERRNOD = HydrologyPlanetesimals.setup_dynamic_simulation_parameters(sp)
+        (
+            timestep,
+            dt,
+            timesum,
+            marknum,
+            hrsolidm,
+            hrfluidm,
+            YERRNOD
+        ) = HydrologyPlanetesimals.setup_dynamic_simulation_parameters()
         # verification & test
-        @test timestep == sp.start_step
-        @test dt == sp.dtelastic
-        @test timesum == sp.start_time
-        @test marknum == sp.start_marknum
-        @test hrsolidm == sp.start_hrsolidm
-        @test hrfluidm == sp.start_hrfluidm
-        @test YERRNOD == zeros(sp.nplast)
+        @test timestep == start_step
+        @test dt == dtelastic
+        @test timesum == start_time
+        @test marknum == start_marknum
+        @test hrsolidm == start_hrsolidm
+        @test hrfluidm == start_hrfluidm
+        @test YERRNOD == zeros(nplast)
     end # testset "setup_dynamic_simulation_parameters()"
 
     @testset "setup_staggered_grid_geometry()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        # set up staggered grid geometry
-        x = sp.x
-        y = sp.y
-        xvx = sp.xvx
-        yvx = sp.xvy
-        xvy = sp.xvy
-        yvy = sp.yvy
-        xp = sp.xp
-        yp = sp.yp
         # verification, from madcph.m line 38ff
         # Basic nodes
         x_ver=0:dx:xsize; # Horizontal coordinates of basic grid points, m
@@ -74,9 +63,6 @@ using Test
     end # testset "setup_staggered_grid_geometry()"
     
     @testset "setup_staggered_grid_properties()" begin 
-        sp = HydrologyPlanetesimals.StaticParameters() 
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
         # set up staggered grid properties
         (
             ETA,
@@ -122,6 +108,8 @@ using Test
             SXX0,
             tk1,
             tk2,
+            DT,
+            DT0,
             vxp,
             vyp,
             vxpf,
@@ -137,7 +125,7 @@ using Test
             PHI,
             APHI,
             FI
-        ) = HydrologyPlanetesimals.setup_staggered_grid_properties(sp)
+        ) = HydrologyPlanetesimals.setup_staggered_grid_properties()
         # verification, from madcph.m line 51ff
         # Basic nodes
         ETA_ver = zeros(Ny,Nx) # Viscoplastic Viscosity, Pa*s
@@ -190,6 +178,8 @@ using Test
         SXX0_ver = zeros(Ny1,Nx1) # SIGMA0'xx, 1/s
         tk1_ver = zeros(Ny1,Nx1) # Old temperature, K
         tk2_ver = zeros(Ny1,Nx1) # New temperature, K
+        DT_ver = zeros(Ny1,Nx1) # temperature difference, K
+        DT0_ver = zeros(Ny1,Nx1) # previous temperature difference, K
         vxp_ver = zeros(Ny1,Nx1) # Solid Vx in pressure nodes, m/s
         vyp_ver = zeros(Ny1,Nx1) # Solid Vy in pressure nodes, m/s
         vxpf_ver = zeros(Ny1,Nx1) # Fluid Vx in pressure nodes, m/s
@@ -249,6 +239,8 @@ using Test
         @test SXX0 == SXX0_ver
         @test tk1 == tk1_ver
         @test tk2 == tk2_ver
+        @test DT == DT_ver
+        @test DT0 == DT0_ver
         @test vxp == vxp_ver
         @test vyp == vyp_ver
         @test vxpf == vxpf_ver
@@ -267,9 +259,6 @@ using Test
     end # testset "setup_staggered_grid_properties()"
 
     @testset "setup_staggered_grid_properties_helpers()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
         # setup staggered grid properties helpers
         (
             ETA5,
@@ -278,20 +267,12 @@ using Test
             YNY00,
             YNY_inv_ETA,
             DSXY,
-            ETAcomp,
-            SXYcomp,
-            dRHOXdx,
-            dRHOXdy,
-            dRHOYdx,
-            dRHOYdy,
-            ETAPcomp,
-            SXXcomp,
-            SYYcomp,
+            DSY,
             EII,
             SII,
             DSXX,
             tk0
-        ) = HydrologyPlanetesimals.setup_staggered_grid_properties_helpers(sp)
+        ) = HydrologyPlanetesimals.setup_staggered_grid_properties_helpers()
         # test
         @test ETA5 == zeros(Float64, Ny, Nx)
         @test ETA00 == zeros(Float64, Ny, Nx)
@@ -299,25 +280,14 @@ using Test
         @test YNY00 == zeros(Bool, Ny, Nx)
         @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
         @test DSXY == zeros(Float64, Ny, Nx)
-        @test ETAcomp == zeros(Float64, Ny, Nx)
-        @test SXYcomp == zeros(Float64, Ny, Nx)
-        @test dRHOXdx == zeros(Float64, Ny1, Nx1)
-        @test dRHOXdy == zeros(Float64, Ny1, Nx1)
-        @test dRHOYdx == zeros(Float64, Ny1, Nx1)
-        @test dRHOYdy == zeros(Float64, Ny1, Nx1)
-        @test ETAPcomp == zeros(Float64, Ny1, Nx1)
-        @test SXXcomp == zeros(Float64, Ny1, Nx1)
-        @test SYYcomp == zeros(Float64, Ny1, Nx1)
+        @test DSY == zeros(Float64, Ny, Nx)
         @test EII == zeros(Float64, Ny1, Nx1)
         @test SII == zeros(Float64, Ny1, Nx1)
         @test DSXX == zeros(Float64, Ny1, Nx1)
         @test tk0 == zeros(Float64, Ny1, Nx1)
     end # testset "setup_staggered_grid_properties_helpers()"
-
+   
     @testset "setup_interpolated_properties()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
         # setup interpolated grid properties
         (
             ETA0SUM,
@@ -350,7 +320,7 @@ using Test
             TKSUM,
             PHISUM,
             WTPSUM
-        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
         # verification and test
         @test ETA0SUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
         @test ETASUM == zeros(Float64, Ny, Nx, Base.Threads.nthreads())
@@ -385,13 +355,7 @@ using Test
     end # testset "setup_interpolated_properties()"
 
     @testset "setup_marker_properties()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        xsize, ysize = sp.xsize, sp.ysize
-        Nxmc, Nymc = sp.Nxmc, sp.Nymc
-        Nxm, Nym = sp.Nxm, sp.Nym
-        dxm, dym = sp.dxm, sp.dym
-        marknum = sp.start_marknum
+        marknum = start_marknum
         # setup marker properties
         (
             xm,
@@ -402,8 +366,8 @@ using Test
             sxym,
             etavpm,
             phim
-        ) = HydrologyPlanetesimals.setup_marker_properties(sp)
-        # verification, from madcph.m line 115ff
+        ) = HydrologyPlanetesimals.setup_marker_properties(marknum)
+        # verification, from madcph.m, line 115ff
         Nxmc_ver = 4; # Number of markers per cell in horizontal direction
         Nymc_ver = 4; # Number of markers per cell in vertical direction
         Nxm_ver = (Nx-1)*Nxmc; # Marker grid resolution in horizontal direction
@@ -436,10 +400,9 @@ using Test
         @test etavpm == etavpm_ver
         @test phim == phim_ver
     end # testset "setup_marker_properties()"
-
+    
     @testset "setup_marker_properties_helpers()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        marknum = sp.start_marknum
+        marknum = start_marknum
         # setup marker properties
         (
             rhototalm,
@@ -450,6 +413,7 @@ using Test
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
+            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -458,7 +422,7 @@ using Test
             rhofluidcur,
             alphasolidcur,
             alphafluidcur
-        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(sp)
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(marknum)
         # test
         @test rhocptotalm == zeros(Float64, marknum)
         @test rhocptotalm == zeros(Float64, marknum)
@@ -468,6 +432,7 @@ using Test
         @test hrtotalm == zeros(Float64, marknum)
         @test ktotalm == zeros(Float64, marknum)
         @test tkm_rhocptotalm == zeros(Float64, marknum)
+        @test kphim == zeros(Float64, marknum)
         @test etafluidcur_inv_kphim == zeros(Float64, marknum)
         @test inv_gggtotalm == zeros(Float64, marknum)
         @test fricttotalm == zeros(Float64, marknum)
@@ -479,63 +444,24 @@ using Test
     end # testset "setup_marker_properties_helpers()"
 
     @testset "setup_marker_geometry_helpers()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nxm, Nym = sp.Nxm, sp.Nym
-        mdis_init = sp.mdis_init
-        xsize, ysize = sp.xsize, sp.ysize
-        dxm, dym = sp.dxm, sp.dym
         # setup marker geometry helpers
         (
             mdis,
             mnum,
             # mtyp,
             # mpor
-         ) = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
+         ) = HydrologyPlanetesimals.setup_marker_geometry_helpers()
         # test
         @test typeof(mdis) == Matrix{Float64}
         @test size(mdis) == (Nym, Nxm)
         @test rand(mdis) == mdis_init
         @test typeof(mnum) == Matrix{Int}
         @test size(mnum) == (Nym, Nxm)
-        # @test typeof(mtyp) == Matrix{Int}
-        # @test size(mtyp) == (Nym, Nxm)
-        # @test typeof(mpor) == Matrix{Float64}
-        # @test size(mpor) == (Nym, Nxm)
     end # testset " setup_marker_geometry_helpers()"
     
     @testset "define_markers!() & compute_marker_properties!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nxm, Nym = sp.Nxm, sp.Nym
-        dxm, dym = sp.dxm, sp.dym
-        xsize, ysize = sp.xsize, sp.ysize
-        rplanet, rcrust = sp.rplanet, sp.rcrust
-        etasolidm = sp.etasolidm
-        psurface = sp.psurface
-        phim0, phimin = sp.phim0, sp.phimin
-        marknum = sp.start_marknum
-        start_hrsolidm, start_hrfluidm = sp.start_hrsolidm, sp.start_hrfluidm
-        hrsolidm, hrfluidm = sp.start_hrsolidm, sp.start_hrfluidm
-        gggsolidm = sp.gggsolidm
-        frictsolidm = sp.frictsolidm
-        cohessolidm = sp.cohessolidm
-        tenssolidm = sp.tenssolidm
-        alphasolidm = sp.alphasolidm
-        alphafluidm = sp.alphafluidm
-        rhosolidm = sp.rhosolidm
-        rhofluidm = sp.rhofluidm
-        rhocpsolidm = sp.rhocpsolidm
-        rhocpfluidm = sp.rhocpfluidm
-        tmsilicate = sp.tmsilicate
-        tmiron = sp.tmiron
-        etamin = sp.etamin
-        etasolidm = sp.etasolidm
-        etasolidmm = sp.etasolidmm
-        etafluidm = sp.etafluidm
-        etafluidmm = sp.etafluidmm
-        ksolidm = sp.ksolidm
-        kfluidm = sp.kfluidm
-        kphim0 = sp.kphim0
-        phim0 = sp.phim0
+        marknum = start_marknum
+        hrsolidm, hrfluidm = start_hrsolidm, start_hrfluidm
         (
             xm,
             ym,
@@ -545,7 +471,7 @@ using Test
             sxym,
             etavpm,
             phim
-        ) = HydrologyPlanetesimals.setup_marker_properties(sp)
+        ) = HydrologyPlanetesimals.setup_marker_properties(marknum)
         (
             rhototalm,
             rhocptotalm,
@@ -555,6 +481,7 @@ using Test
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
+            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -563,13 +490,26 @@ using Test
             rhofluidcur,
             alphasolidcur,
             alphafluidcur
-        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(sp)
+        ) = HydrologyPlanetesimals.setup_marker_properties_helpers(marknum)
         xm_ver = zeros(marknum)
         ym_ver = zeros(marknum)
         tm_ver = zeros(Int, marknum)
         tkm_ver = zeros(marknum)
         phim_ver = zeros(marknum)
         etavpm_ver = zeros(marknum)
+        kphim_ver = zeros(marknum)
+        rhototalm_ver = zeros(marknum)
+        rhocptotalm_ver = zeros(marknum)
+        etasolidcur_ver = zeros(marknum)
+        hrtotalm_ver = zeros(marknum)
+        ktotalm_ver = zeros(marknum)
+        gggtotalm_ver = zeros(marknum)
+        fricttotalm_ver = zeros(marknum)
+        cohestotalm_ver = zeros(marknum)
+        tenstotalm_ver = zeros(marknum)
+        etafluidcur_ver = zeros(marknum)
+        rhofluidcur_ver = zeros(marknum)
+        etatotalm_ver = zeros(marknum)
         # define markers
         HydrologyPlanetesimals.define_markers!(
             xm,
@@ -591,7 +531,6 @@ using Test
             rhofluidcur,
             alphasolidcur,
             alphafluidcur,
-            sp,
             randomized=false
         )
         for m=1:1:marknum
@@ -607,11 +546,11 @@ using Test
                 hrtotalm,
                 ktotalm,
                 tkm_rhocptotalm,
+                kphim,
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
-                phim,
-                sp
+                phim
             )
         end
         # verification, from madcph.m, line 180ff
@@ -643,70 +582,80 @@ using Test
                 m=m+1;
             end
         end
-        # test
-        for m=1:1:marknum
-            # define_markers()!
-            @test xm[m] == xm_ver[m]
-            @test ym[m] == ym_ver[m]
-            @test tm[m] == tm_ver[m]
-            @test tkm[m] == tkm_ver[m]
-            @test phim[m] == phim_ver[m]
-            @test etavpm[m] == etavpm_ver[m]
-            # compute_marker_properties()!
-            # for air type markers
-            if tm[m] == 3
-                @test rhototalm[m] == rhosolidm[tm[m]]
-                @test rhocptotalm[m] == rhocpsolidm[tm[m]]
-                @test etatotalm[m] == etasolidm[tm[m]]
-                @test hrtotalm[m] == start_hrsolidm[tm[m]]
-                @test ktotalm[m] == ksolidm[tm[m]]           
-                @test etafluidcur[m] == etafluidm[tm[m]]
-            # for rock type markers
-            elseif tm[m] < 3
-                @test rhototalm[m] == HydrologyPlanetesimals.total(
-                    rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
-                @test rhocptotalm[m] == HydrologyPlanetesimals.total(
-                    rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-                @test etasolidcur[m] == ifelse(
-                    tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
-                @test etafluidcur[m] == ifelse(
-                    tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
-                @test etatotalm[m] == max(
-                    etamin, etasolidcur[m], etafluidcur[m])
-                @test hrtotalm[m] == HydrologyPlanetesimals.total(
-                    hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-                @test ktotalm[m] == HydrologyPlanetesimals.ktotal(
-                    ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+        # verification, from madcph.m, line 327ff
+        for m = 1:1:marknum
+            # Compute marker parameters
+            if tm[m]<3
+                # Rocksgv:
+                kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
+                rhototalm_ver[m] = rhosolidm[tm_ver[m]]*(1-phim_ver[m])+rhofluidm[tm_ver[m]]*phim_ver[m]
+                rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]*(1-phim_ver[m])+rhocpfluidm[tm_ver[m]]*phim_ver[m]
+                etasolidcur_ver[m] = etasolidm[tm_ver[m]]
+                if tkm_ver[m]>tmsilicate
+                    etasolidcur_ver[m] = etasolidmm[tm_ver[m]]
+                end
+                hrtotalm_ver[m] = hrsolidm[tm_ver[m]]*(1-phim_ver[m])+hrfluidm[tm_ver[m]]*phim_ver[m]
+                ktotalm_ver[m] = (ksolidm[tm_ver[m]]*kfluidm[tm_ver[m]]/2+((ksolidm[tm[m]]*(3*phim_ver[m]-2)+
+                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))^2)/16)^0.5-(ksolidm[tm_ver[m]]*(3*phim_ver[m]-2)+
+                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))/4
+                gggtotalm_ver[m] = gggsolidm[tm_ver[m]]
+                fricttotalm_ver[m] = frictsolidm[tm_ver[m]]
+                cohestotalm_ver[m] = cohessolidm[tm_ver[m]]
+                tenstotalm_ver[m] = tenssolidm[tm_ver[m]]
+                etafluidcur_ver[m] = etafluidm[tm_ver[m]]
+                rhofluidcur_ver[m] = rhofluidm[tm_ver[m]]
+                if tkm_ver[m]>tmiron
+                    etafluidcur_ver[m] = etafluidmm[tm_ver[m]]
+                end
+                etatotalm_ver[m] = max(etamin,etafluidcur_ver[m],etasolidcur_ver[m])#*exp(-28*phim_ver[m])));
+            else
+                # Sticky air
+                kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
+                rhototalm_ver[m] = rhosolidm[tm_ver[m]]
+                rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]
+                etatotalm_ver[m] = etasolidm[tm_ver[m]]
+                hrtotalm_ver[m] = hrsolidm[tm_ver[m]]
+                ktotalm_ver[m] = ksolidm[tm_ver[m]]
+                gggtotalm_ver[m] = gggsolidm[tm_ver[m]]
+                fricttotalm_ver[m] = frictsolidm[tm_ver[m]]
+                cohestotalm_ver[m] = cohessolidm[tm_ver[m]]
+                tenstotalm_ver[m] = tenssolidm[tm_ver[m]]
+                rhofluidcur_ver[m] = rhofluidm[tm_ver[m]]
+                etafluidcur_ver[m] = etafluidm[tm_ver[m]]
             end
-            # for all markers
-            @test inv_gggtotalm[m] == inv(gggsolidm[tm[m]])
-            @test fricttotalm[m] == frictsolidm[tm[m]]
-            @test cohestotalm[m] == cohessolidm[tm[m]]
-            @test tenstotalm[m] == tenssolidm[tm[m]]
-            @test rhofluidcur[m] == rhofluidm[tm[m]]
-            # @test alphasolidcur[m] == alphasolidm[tm[m]]
-            @test alphafluidcur[m] == alphafluidm[tm[m]]
-            @test tkm_rhocptotalm[m] == tkm[m] * rhocptotalm[m]
-            @test etafluidcur_inv_kphim[m] == (
-                etafluidcur[m] / HydrologyPlanetesimals.kphi(
-                    kphim0[tm[m]], phim0, phim[m])
-            )
         end
+        # test
+        @test xm  == xm_ver
+        @test ym  == ym_ver
+        @test tm  == tm_ver
+        @test tkm  == tkm_ver
+        @test phim  == phim_ver
+        @test etavpm  == etavpm_ver
+        @test kphim == kphim_ver
+        @test rhototalm == rhototalm_ver
+        @test rhocptotalm == rhocptotalm_ver
+        @test etasolidcur == etasolidcur_ver
+        @test hrtotalm == hrtotalm_ver
+        @test ktotalm == ktotalm_ver
+        @test inv_gggtotalm == inv.(gggtotalm_ver)
+        @test fricttotalm == fricttotalm_ver
+        @test cohestotalm == cohestotalm_ver
+        @test tenstotalm == tenstotalm_ver
+        @test etafluidcur == etafluidcur_ver
+        @test rhofluidcur == rhofluidcur_ver
+        @test etatotalm == etatotalm_ver
+        # test calculated properties
+        @test tkm_rhocptotalm ≈ tkm_ver .* rhocptotalm_ver 
+        @test etafluidcur_inv_kphim ≈ etafluidcur_ver ./ kphim_ver
+  
     end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "update_marker_viscosity!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        Nx, Ny = sp.Nx, sp.Ny
-        dx, dy = sp.dx, sp.dy
-        x, y = sp.x, sp.y
-        etasolidm, etasolidmm = sp.etasolidm, sp.etasolidmm
-        etafluidm, etafluidmm = sp.etafluidm, sp.etafluidmm
-        tmsilicate, tmiron = sp.tmsilicate, sp.tmiron
-        marknum = sp.start_marknum
+        marknum = start_marknum
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
         tm = rand(1:3, marknum)
-        tkm = rand(sp.tmiron-100:0.1:sp.tmsilicate+100, marknum)
+        tkm = rand(tmiron-100:0.1:tmsilicate+100, marknum)
         etatotalm = [etasolidm[tm[m]] for m in 1:1:marknum]
         ETA = rand(Ny, Nx)
         YNY = rand(Bool, Ny, Nx)
@@ -716,7 +665,7 @@ using Test
         # update marker Viscosity
         for m=1:1:marknum
             HydrologyPlanetesimals.update_marker_viscosity!(
-                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA, sp)
+                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
         end
         # verification, from madcph.m, line 1321ff
         for m=1:1:marknum
@@ -768,9 +717,7 @@ using Test
             end
         end
         # test
-        for m=1:1:marknum
-            @test etavpm[m] ≈ etavpm_ver[m] atol=1e-6
-        end
+        @test etavpm ≈ etavpm_ver atol=1e-6
     end # testset "update_marker_viscosity!()"
 
     @testset "distance()" begin
@@ -784,11 +731,11 @@ using Test
         @test HydrologyPlanetesimals.distance(-1, -1, 1, 1) ≈ sqrt(8)
         # random tests
         num_samples = 100
-        x = rand(0:0.001:1000, 2, num_samples)
-        y = rand(0:0.001:1000, 2, num_samples)
+        xx = rand(0:0.001:1000, 2, num_samples)
+        yy = rand(0:0.001:1000, 2, num_samples)
         for i in 1:num_samples
             @test HydrologyPlanetesimals.distance(
-                x[:, i]..., y[:, i]...) ≈ sqrt(sum((x[:, i] - y[:, i]).^2))
+                xx[:, i]..., yy[:, i]...) ≈ sqrt(sum((xx[:, i] - yy[:, i]).^2))
         end
     end # testset "distance()"
 
@@ -807,44 +754,56 @@ using Test
         ]
     end # testset "grid_vector()"
 
+    @testset "grid_average()" begin
+        grid = rand(10, 10)
+        @test HydrologyPlanetesimals.grid_average(1, 1, grid) == 0.25 * (
+            grid[1, 1] + grid[2, 1] + grid[1, 2] + grid[2, 2])
+    end # testset "grid_average()"
+
+    @testset "add_vrk4()" begin
+        vrk4 = @SVector zeros(4)
+        v = rand()
+        for rk=1:4
+            vrk4 = HydrologyPlanetesimals.add_vrk4(vrk4, v, rk)
+        end
+        @test vrk4 == @SVector [v, v, v, v]
+    end # testset "add_vrk4()"
+
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
-        ktotalm_ver(ksolidm, kfluid, phim) = (
-            ksolidm*kfluid/2+(
-                (ksolidm*(3*phim-2)+kfluid*(1-3*phim))^2
-                )/16
-            )^0.5 - (ksolidm*(3*phim-2)+ kfluid*(1-3*phim))/4
-        @test HydrologyPlanetesimals.ktotal(1., 2., 3.) == ktotalm_ver(
-            1., 2., 3.)
+        for i=1:10
+            ksolid, kfluid, phi = rand(3)
+            @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) == (
+                ksolid*kfluid/2+((ksolid*(3*phi-2)+kfluid*(1-3*phi))^2)/16
+                )^0.5-(ksolid*(3*phi-2)+kfluid*(1-3*phi))/4
+        end
     end # testset "ktotal()"
 
     @testset "kphi()" begin
         # verification, from madcph.m, line 333
-        kphim(kphim0, phim, phim0)=kphim0*(phim/phim0)^3/((1-phim)/(1-phim0))^2
-        @test HydrologyPlanetesimals.kphi(1., 2., 3.) == kphim(1., 2., 3.)
+        for i=1:10
+            kphim0m, phimm = rand(2)
+            @test HydrologyPlanetesimals.kphi(kphim0m, phimm) == (
+                kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
+            )
+        end
     end # testset "kphi()"
 
     @testset "etatotal_rocks()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        etasolidm = sp.etasolidm
-        etasolidmm = sp.etasolidmm
-        etafluidm = sp.etafluidm
-        etafluidmm = sp.etafluidmm
-        etamin = sp.etamin
-        tmin = min(sp.tmiron, sp.tmsilicate) - 10
-        tmid = min(sp.tmiron, sp.tmsilicate) + 0.5*abs(sp.tmiron-sp.tmsilicate)
-        tmax = max(sp.tmiron, sp.tmsilicate) + 10
+        tmin = min(tmiron, tmsilicate) - 10
+        tmid = min(tmiron, tmsilicate) + 0.5*abs(tmiron-tmsilicate)
+        tmax = max(tmiron, tmsilicate) + 10
         for type in 1:2
-            @test HydrologyPlanetesimals.etatotal_rocks(tmin, type, sp) == max(
+            @test HydrologyPlanetesimals.etatotal_rocks(tmin, type) == max(
                 etamin, etasolidm[type], etafluidm[type])
-            if sp.tmiron <= sp.tmsilicate
-                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type, sp) ==
+            if tmiron <= tmsilicate
+                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type) ==
                 max(etamin, etasolidm[type], etafluidmm[type])
             else
-                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type, sp) ==
+                @test HydrologyPlanetesimals.etatotal_rocks(tmid, type) ==
                 max(etamin, etasolidmm[type], etafluidm[type])
             end
-            @test HydrologyPlanetesimals.etatotal_rocks(tmax, type, sp) == max(
+            @test HydrologyPlanetesimals.etatotal_rocks(tmax, type) == max(
                 etamin, etasolidmm[type], etafluidmm[type])
         end
     end # testset "etatotal_rocks()"
@@ -859,55 +818,34 @@ using Test
     end # testset "Q_radiogenic()"
 
     @testset "calculate_radioactive_heating()" begin
-        hr_al = false
-        hr_fe = false
+        al = false
+        fe = false
         v = @SVector [0., 0., 0.]
-        sp = HydrologyPlanetesimals.StaticParameters(hr_al=hr_al, hr_fe=hr_fe)
         @test HydrologyPlanetesimals.calculate_radioactive_heating(
-            1000., sp) == (v, v)
+            al, fe, 1000.) == (v, v)
 
-        hr_al = true
-        hr_fe = false        
-        sp2 = HydrologyPlanetesimals.StaticParameters(hr_al=hr_al, hr_fe=hr_fe)
+        al = true
+        fe = false        
         Q_al = HydrologyPlanetesimals.Q_radiogenic(
-            sp2.f_al, sp2.ratio_al, sp2.E_al, sp2.tau_al, 1000.)
-        u = @SVector [Q_al * sp2.rhosolidm[1], Q_al * sp2.rhosolidm[2], 0.]
+            f_al, ratio_al, E_al, tau_al, 1000.)
+        u = @SVector [Q_al * rhosolidm[1], Q_al * rhosolidm[2], 0.]
         @test HydrologyPlanetesimals.calculate_radioactive_heating(
-            1000., sp2) == (u, v)
+            al, fe, 1000.) == (u, v)
 
-        hr_al = false
-        hr_fe = true
-        sp3 = HydrologyPlanetesimals.StaticParameters(hr_al=hr_al, hr_fe=hr_fe)
+        al = false
+        fe = true
         Q_fe = HydrologyPlanetesimals.Q_radiogenic(
-            sp3.f_fe, sp3.ratio_fe, sp3.E_fe, sp3.tau_fe, 1000.)
-        w = @SVector [Q_fe * sp2.rhofluidm[1], 0., 0.]
+            f_fe, ratio_fe, E_fe, tau_fe, 1000.)
+        w = @SVector [Q_fe * rhofluidm[1], 0., 0.]
         @test HydrologyPlanetesimals.calculate_radioactive_heating(
-            1000., sp3) == (v, w)
+            al, fe, 1000.) == (v, w)
     end # testset "calculate_radioactive_heating()"
 
     @testset "fix_weights() elementary" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        # verification, from madcph.m, line 38ff
-        # Basic nodes
-        x=0:dx:xsize
-        y=0:dy:ysize
-        # Vx-Nodes
-        xvx=0:dx:xsize+dy
-        yvx=-dy/2:dy:ysize+dy/2
-        # Vy-nodes
-        xvy=-dx/2:dx:xsize+dx/2
-        yvy=0:dy:ysize+dy
-        # P-Nodes
-        xp=-dx/2:dx:xsize+dx/2
-        yp=-dy/2:dy:ysize+dy/2
-
         @testset "basic nodes" begin
         # verification, from madcph.m, line 373ff
-        jmin, jmax = sp.jmin_basic, sp.jmax_basic
-        imin, imax = sp.imin_basic, sp.imax_basic
+        jmin, jmax = jmin_basic, jmax_basic
+        imin, imax = imin_basic, imax_basic
         function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
             j=trunc(Int, (xm-x_axis[1])/dx)+1;
             i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -959,8 +897,8 @@ using Test
 
         @testset "Vx nodes" begin
         # verification, from madcph.m, line 434ff
-        jmin, jmax = sp.jmin_vx, sp.jmax_vx
-        imin, imax = sp.imin_vx, sp.imax_vx
+        jmin, jmax = jmin_vx, jmax_vx
+        imin, imax = imin_vx, imax_vx
         function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
             j=trunc(Int, (xm-x_axis[1])/dx)+1;
             i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1010,8 +948,8 @@ using Test
 
         @testset "Vy nodes" begin
         # verification, from madcph.m, line 484ff
-        jmin, jmax = sp.jmin_vy, sp.jmax_vy
-        imin, imax = sp.imin_vy, sp.imax_vy
+        jmin, jmax = jmin_vy, jmax_vy
+        imin, imax = imin_vy, imax_vy
         function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
             j=trunc(Int, (xm-x_axis[1])/dx)+1;
             i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1061,8 +999,8 @@ using Test
     
         @testset "P nodes" begin
         # verification, from madcph.m, line 538ff
-        jmin, jmax = sp.jmin_p, sp.jmax_p
-        imin, imax = sp.imin_p, sp.imax_p
+        jmin, jmax = jmin_p, jmax_p
+        imin, imax = imin_p, imax_p
         function fix_p(xm, ym, x_axis, y_axis, dx, dy)
             j=trunc(Int, (xm-x_axis[1])/dx)+1;
             i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1112,29 +1050,12 @@ using Test
     end # testset "fix_weights() elementary"
 
     @testset "fix_weights() advanced" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        # verification, from madcph.m, line 38ff
-        # basic nodes
-        x=0:dx:xsize
-        y=0:dy:ysize
-        # Vx nodes
-        xvx=0:dx:xsize+dy
-        yvx=-dy/2:dy:ysize+dy/2
-        # Vy nodes
-        xvy=-dx/2:dx:xsize+dx/2
-        yvy=0:dy:ysize+dy
-        # P Nodes
-        xp=-dx/2:dx:xsize+dx/2
-        yp=-dy/2:dy:ysize+dy/2
         # simulating markers
         num_markers = 10_000
         @testset "basic nodes" begin
             # verification, from madcph.m, line 373ff
-            jmin, jmax = sp.jmin_basic, sp.jmax_basic
-            imin, imax = sp.imin_basic, sp.imax_basic
+            jmin, jmax = jmin_basic, jmax_basic
+            imin, imax = imin_basic, imax_basic
             function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
                 j=trunc(Int, (xm-x_axis[1])/dx)+1;
                 i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1179,11 +1100,10 @@ using Test
                 @test weights == weights_ver
             end
         end # testset "basic nodes"
-        
         @testset "Vx nodes" begin
             # verification, from madcph.m, line 434ff
-            jmin, jmax = sp.jmin_vx, sp.jmax_vx
-            imin, imax = sp.imin_vx, sp.imax_vx
+            jmin, jmax = jmin_vx, jmax_vx
+            imin, imax = imin_vx, imax_vx
             function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
                 j=trunc(Int, (xm-x_axis[1])/dx)+1;
                 i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1229,11 +1149,10 @@ using Test
                 @test weights == weights_ver
             end
         end # testset "Vx nodes"
-
         @testset "Vy nodes" begin
             # verification, from madcph.m, line 484ff
-            jmin, jmax = sp.jmin_vy, sp.jmax_vy
-            imin, imax = sp.imin_vy, sp.imax_vy
+            jmin, jmax = jmin_vy, jmax_vy
+            imin, imax = imin_vy, imax_vy
             function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
                 j=trunc(Int, (xm-x_axis[1])/dx)+1;
                 i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1278,11 +1197,10 @@ using Test
                 @test weights == weights_ver
             end
         end # testset "Vy nodes"
-    
         @testset "P nodes" begin
             # verification, from madcph.m, line 538ff
-            jmin, jmax = sp.jmin_p, sp.jmax_p
-            imin, imax = sp.imin_p, sp.imax_p
+            jmin, jmax = jmin_p, jmax_p
+            imin, imax = imin_p, imax_p
             function fix_p(xm, ym, x_axis, y_axis, dx, dy)
                 j=trunc(Int, (xm-x_axis[1])/dx)+1;
                 i=trunc(Int, (ym-y_axis[1])/dy)+1;
@@ -1339,16 +1257,10 @@ using Test
         # test
         @test A[:, :, 1] ≈ A_ver atol=1e-6
     end # testset "reduce_add_3darray!"
-   
+
     @testset "interpolate_add_to_grid!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        jmin, jmax = sp.jmin_basic, sp.jmax_basic
-        imin, imax = sp.imin_basic, sp.imax_basic
-        x=0:dx:xsize
-        y=0:dy:ysize
+        jmin, jmax = jmin_basic, jmax_basic
+        imin, imax = imin_basic, imax_basic
         # simulate markers
         num_markers = 10_000
         xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
@@ -1370,18 +1282,11 @@ using Test
             @test grid[i+1, j+1, Base.Threads.threadid()] ==
                 property[m] * weights[4]
         end
-    end # testset "interpolate_add_to_grid!()"
+    end # testset "interpolate_add_to_grid
 
     @testset "interpolate_to_marker!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        jmin, jmax = sp.jmin_basic, sp.jmax_basic
-        imin, imax = sp.imin_basic, sp.imax_basic
-        x=0:dx:xsize
-        y=0:dy:ysize
+        jmin, jmax = jmin_basic, jmax_basic
+        imin, imax = imin_basic, imax_basic
         num_markers = 10_000
         xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
         ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
@@ -1403,15 +1308,8 @@ using Test
     end # testset "interpolate_to_marker!()"
 
     @testset "interpolate_add_to_marker!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        jmin, jmax = sp.jmin_basic, sp.jmax_basic
-        imin, imax = sp.imin_basic, sp.imax_basic
-        x=0:dx:xsize
-        y=0:dy:ysize
+        jmin, jmax = jmin_basic, jmax_basic
+        imin, imax = imin_basic, imax_basic
         num_markers = 10_000
         xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
         ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
@@ -1433,14 +1331,8 @@ using Test
         end
     end # testset "interpolate_add_to_marker!()"
 
-
     @testset "marker_to_basic_nodes!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        x, y = sp.x, sp.y
-        dx, dy = sp.dx, sp.dy
-        jmin_basic, jmax_basic = sp.jmin_basic, sp.jmax_basic
-        imin_basic, imax_basic = sp.imin_basic, sp.imax_basic
-        marknum = sp.start_marknum
+        marknum = start_marknum
         (
             xm,
             ym,
@@ -1451,7 +1343,7 @@ using Test
             etavpm,
             _
         ) = HydrologyPlanetesimals.setup_marker_properties(
-            sp, randomized=true)
+            marknum,randomized=true)
         (
             rhototalm,
             rhocptotalm,
@@ -1470,7 +1362,7 @@ using Test
             _,
             _
         ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             ETA0SUM,
             ETASUM,
@@ -1502,7 +1394,7 @@ using Test
             _,
             _,
             _
-        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
         ETA0SUM_ver = zero(ETA0SUM)
         ETASUM_ver = zero(ETASUM)
         GGGSUM_ver = zero(GGGSUM)
@@ -1531,8 +1423,7 @@ using Test
                 COHSUM,
                 TENSUM,
                 FRISUM,
-                WTSUM,
-                sp
+                WTSUM
             ) 
         end
         # verification
@@ -1578,12 +1469,7 @@ using Test
     end # testset "marker_to_basic_nodes!()"
 
     @testset "marker_to_vx_nodes!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        xvx, yvx = sp.xvx, sp.yvx
-        dx, dy = sp.dx, sp.dy
-        jmin_vx, jmax_vx = sp.jmin_vx, sp.jmax_vx
-        imin_vx, imax_vx = sp.imin_vx, sp.imax_vx
-        marknum = sp.start_marknum
+        marknum = start_marknum
         (
             xm,
             ym,
@@ -1594,7 +1480,7 @@ using Test
             _,
             phim
         ) = HydrologyPlanetesimals.setup_marker_properties(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             rhototalm,
             _,
@@ -1613,7 +1499,7 @@ using Test
             _,
             _
         ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             _,
             _,
@@ -1645,7 +1531,7 @@ using Test
             _,
             _,
             _
-        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
         RHOXSUM_ver = zero(RHOXSUM)
         RHOFXSUM_ver = zero(RHOFXSUM)
         KXSUM_ver = zero(KXSUM)
@@ -1668,8 +1554,7 @@ using Test
                 KXSUM,
                 PHIXSUM,
                 RXSUM,
-                WTXSUM,
-                sp
+                WTXSUM
             )
         end
         # verification
@@ -1709,12 +1594,7 @@ using Test
     end # testset "marker_to_vx_nodes!()"
 
     @testset "marker_to_vy_nodes!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        xvy, yvy = sp.xvy, sp.yvy
-        dx, dy = sp.dx, sp.dy
-        jmin_vy, jmax_vy = sp.jmin_vy, sp.jmax_vy
-        imin_vy, imax_vy = sp.imin_vy, sp.imax_vy
-        marknum = sp.start_marknum
+        marknum = start_marknum
         (
             xm,
             ym,
@@ -1725,7 +1605,7 @@ using Test
             _,
             phim
         ) = HydrologyPlanetesimals.setup_marker_properties(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             rhototalm,
             _,
@@ -1744,7 +1624,7 @@ using Test
             _,
             _
         ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             _,
             _,
@@ -1776,7 +1656,7 @@ using Test
             _,
             _,
             _
-        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
         RHOYSUM_ver = zero(RHOYSUM)
         RHOFYSUM_ver = zero(RHOFYSUM)
         KYSUM_ver = zero(KYSUM)
@@ -1799,8 +1679,7 @@ using Test
                 KYSUM,
                 PHIYSUM,
                 RYSUM,
-                WTYSUM,
-                sp
+                WTYSUM
             )
         end
         # verification
@@ -1840,12 +1719,7 @@ using Test
     end # testset "marker_to_vy_nodes!()"
 
     @testset "marker_to_P_nodes!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
-        jmin_p, jmax_p = sp.jmin_p, sp.jmax_p
-        imin_p, imax_p = sp.imin_p, sp.imax_p
-        marknum = sp.start_marknum
+        marknum = start_marknum
         (
             xm,
             ym,
@@ -1856,7 +1730,7 @@ using Test
             _,
             phim
         ) = HydrologyPlanetesimals.setup_marker_properties(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             rhototalm,
             rhocptotalm,
@@ -1875,7 +1749,7 @@ using Test
             alphasolidcur,
             alphafluidcur
         ) = HydrologyPlanetesimals.setup_marker_properties_helpers(
-            sp, randomized=true)
+            marknum, randomized=true)
         (
             _,
             _,
@@ -1907,7 +1781,7 @@ using Test
             PHISUM,
             TKSUM,
             WTPSUM
-        ) = HydrologyPlanetesimals.setup_interpolated_properties(sp)
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
         GGGPSUM_ver = zero(GGGPSUM)
         SXXSUM_ver = zero(SXXSUM)
         RHOSUM_ver = zero(RHOSUM)
@@ -1942,8 +1816,7 @@ using Test
                 HRSUM,
                 PHISUM,
                 TKSUM,
-                WTPSUM,
-                sp
+                WTPSUM
             )
         end
         # verification
@@ -1980,36 +1853,15 @@ using Test
                 i, j, weights, 1.0, WTPSUM_ver)
         end
         # test
-
         @test WTPSUM == WTPSUM_ver
     end # testset "marker_to_p_nodes!()"
 
-
-
     @testset "compute node properties: basic, Vx, Vy, P" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        # verification, from madcph.m, line 38ff
-        # basic nodes
-        x=0:dx:xsize
-        y=0:dy:ysize
-        # Vx nodes
-        xvx=0:dx:xsize+dy
-        yvx=-dy/2:dy:ysize+dy/2
-        # Vy nodes
-        xvy=-dx/2:dx:xsize+dx/2
-        yvy=0:dy:ysize+dy
-        # P Nodes
-        xp=-dx/2:dx:xsize+dx/2
-        yp=-dy/2:dy:ysize+dy/2
         # simulating markers
         num_markers = 10_000
         @testset "compute_basic_node_properties!()" begin    
-            jmin, jmax = sp.jmin_basic, sp.jmax_basic
-            imin, imax = sp.imin_basic, sp.imax_basic
+            jmin, jmax = jmin_basic, jmax_basic
+            imin, imax = imin_basic, imax_basic
             ETA0SUM = zeros(Ny, Nx, Base.Threads.nthreads())
             ETASUM = zeros(Ny, Nx, Base.Threads.nthreads())
             GGGSUM = zeros(Ny, Nx, Base.Threads.nthreads())
@@ -2175,8 +2027,8 @@ using Test
         end # testset "compute_basic_node_properties!()"
 
         @testset "compute_vx_node_properties!()" begin
-            jmin, jmax = sp.jmin_vx, sp.jmax_vx
-            imin, imax = sp.imin_vx, sp.imax_vx 
+            jmin, jmax = jmin_vx, jmax_vx
+            imin, imax = imin_vx, imax_vx 
             RHOXSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             RHOFXSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             KXSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
@@ -2307,8 +2159,8 @@ using Test
         end # testset "compute_vx_node_properties!()"
 
         @testset "compute_vy_node_properties!()" begin
-            jmin, jmax = sp.jmin_vy, sp.jmax_vy
-            imin, imax = sp.imin_vy, sp.imax_vy
+            jmin, jmax = jmin_vy, jmax_vy
+            imin, imax = imin_vy, imax_vy
             RHOYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             RHOFYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             KYSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
@@ -2439,8 +2291,8 @@ using Test
         end # testset "compute_vy_node_properties!()"
 
         @testset "compute_p_node_properties!()" begin
-            jmin, jmax = sp.jmin_p, sp.jmax_p
-            imin, imax = sp.imin_p, sp.imax_p
+            jmin, jmax = jmin_p, jmax_p
+            imin, imax = imin_p, imax_p
             RHOSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
             ALPHASUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
@@ -2653,30 +2505,9 @@ using Test
     end # testset "apply_insulating_boundary_conditions!()"
 
     @testset "compute_gravity_solution!()" begin
-        xsize = 35_000.0
-        ysize = 35_000.0
-        rplanet = 12_500.0
-        rcrust = 12_000.0
-        Nx = 35
-        Ny = 35
-        sp = HydrologyPlanetesimals.StaticParameters(
-            xsize=xsize,
-            ysize=ysize,
-            rplanet=rplanet,
-            rcrust=rcrust,
-            Nx=Nx,
-            Ny=Ny
-        )
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        G = sp.G
-        # P nodes
-        xp=-dx/2:dx:xsize+dx/2
-        yp=-dy/2:dy:ysize+dy/2
-        # LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
         SP = zeros(Float64, Nx1*Ny1)
         RP = zeros(Float64, Nx1*Ny1)
+        FI = zeros(Float64, Ny1, Nx1)
         gx = zeros(Float64, Ny1, Nx1)
         gy = zeros(Float64, Ny1, Nx1)
         LP_ver = zeros(Nx1*Ny1, Nx1*Ny1)
@@ -2691,11 +2522,9 @@ using Test
             SP,
             RP,
             RHO,
-            xp,
-            yp,
+            FI,
             gx,
-            gy,
-            sp
+            gy
         )
         # verification, from madcph.m, lines 680ff
         for j=1:1:Nx1
@@ -2770,10 +2599,6 @@ using Test
     end # testset "compute_gravity_solution!()"
 
     @testset "recompute_bulk_viscosity!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1 
-        etaphikoef = sp.etaphikoef
         ETAP = zeros(Ny1, Nx1)
         ETAPHI = zeros(Ny1, Nx1)
         ETAP_ver = zeros(Ny1, Nx1)
@@ -2804,10 +2629,7 @@ using Test
     end # testset "recompute_bulk_viscosity!()"
 
     @testset "get_viscosities_stresses_density_gradients()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        dx, dy, dt = sp.dx, sp.dy, sp.dtelastic
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
+        dt = dtelastic
         # simulate data
         ETA = rand(Ny, Nx)
         ETAP = rand(Ny1, Nx1)
@@ -2836,13 +2658,7 @@ using Test
             SXX0,
             RHOX,
             RHOY,
-            dx,
-            dy,
             dt,
-            Nx,
-            Ny,
-            Nx1,
-            Ny1,
             ETAcomp,
             ETAPcomp,
             SXYcomp,
@@ -2918,13 +2734,11 @@ using Test
     end # testset "get_viscosities_stresses_density_gradients()"
 
     @testset "setup_hydromechanical_lse()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx1, Ny1 = sp.Nx1, sp.Ny1        
         # setup hydromechanical LSE
-        L, R, S = HydrologyPlanetesimals.setup_hydromechanical_lse(sp)
+        R, S = HydrologyPlanetesimals.setup_hydromechanical_lse()
         # test
-        @test typeof(L) == ExtendableSparseMatrix{Float64, Int64}
-        @test size(L) == (Nx1*Ny1*6, Nx1*Ny1*6)
+        # @test typeof(L) == ExtendableSparseMatrix{Float64, Int64}
+        # @test size(L) == (Nx1*Ny1*6, Nx1*Ny1*6)
         @test typeof(R) == Vector{Float64}
         @test size(R) == (Nx1*Ny1*6,)
         @test typeof(S) == Vector{Float64}
@@ -2932,13 +2746,11 @@ using Test
     end
 
     @testset "setup_thermal_lse()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx1, Ny1 = sp.Nx1, sp.Ny1        
         # setup thermal LSE
-        LP, RP, SP = HydrologyPlanetesimals.setup_thermal_lse(sp)
+        RP, SP = HydrologyPlanetesimals.setup_thermal_lse()
         # test
-        @test typeof(LP) == ExtendableSparseMatrix{Float64, Int64}
-        @test size(LP) == (Nx1*Ny1, Nx1*Ny1)
+        # @test typeof(LP) == ExtendableSparseMatrix{Float64, Int64}
+        # @test size(LP) == (Nx1*Ny1, Nx1*Ny1)
         @test typeof(RP) == Vector{Float64}
         @test size(RP) == (Nx1*Ny1,)
         @test typeof(SP) == Vector{Float64}
@@ -2946,13 +2758,11 @@ using Test
     end
     
     @testset "setup_gravitational_lse()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx1, Ny1 = sp.Nx1, sp.Ny1        
         # setup gravitational LSE
-        LT, RT, ST = HydrologyPlanetesimals.setup_gravitational_lse(sp)
+        RT, ST = HydrologyPlanetesimals.setup_gravitational_lse()
         # test
-        @test typeof(LT) == ExtendableSparseMatrix{Float64, Int64}
-        @test size(LT) == (Nx1*Ny1, Nx1*Ny1)
+        # @test typeof(LT) == ExtendableSparseMatrix{Float64, Int64}
+        # @test size(LT) == (Nx1*Ny1, Nx1*Ny1)
         @test typeof(RT) == Vector{Float64}
         @test size(RT) == (Nx1*Ny1,)
         @test typeof(ST) == Vector{Float64}
@@ -2960,39 +2770,7 @@ using Test
     end
     
     @testset "assemble_hydromechanical_lse()" begin
-        xsize = 35_000.0
-        ysize = 35_000.0
-        rplanet = 12_500.0
-        rcrust = 12_000.0
-        Nx = 35
-        Ny = 35
-        sp = HydrologyPlanetesimals.StaticParameters(
-            xsize=xsize,
-            ysize=ysize,
-            rplanet=rplanet,
-            rcrust=rcrust,
-            Nx=Nx,
-            Ny=Ny
-        )
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        xsize, ysize = sp.xsize, sp.ysize
-        vxleft = sp.vxleft
-        vxright = sp.vxright
-        vytop = sp.vytop
-        vybottom = sp.vybottom
-        bctop = sp.bctop
-        bcbottom = sp.bcbottom
-        bcleft = sp.bcleft
-        bcright = sp.bcright
-        bcftop = sp.bcftop
-        bcfbottom = sp.bcfbottom
-        bcfleft = sp.bcfleft
-        bcfright = sp.bcfright
-        pscale  = sp.pscale
-        psurface = sp.psurface
-        etaphikoef = sp.etaphikoef
-        dt = sp.dtelastic
+        dt = dtelastic
         # simulate data
         ETA = rand(Ny, Nx)
         ETAP = rand(Ny1, Nx1)
@@ -3013,31 +2791,18 @@ using Test
         gy = rand(Ny1, Nx1) 
         pr0 = rand(Ny1, Nx1)
         pf0 = rand(Ny1, Nx1)
-        ETAcomp = zeros(Ny, Nx)
-        ETAPcomp = zeros(Ny1, Nx1)
-        SXYcomp = zeros(Ny, Nx)
-        SXXcomp = zeros(Ny, Nx)
-        SYYcomp = zeros(Ny, Nx)
-        dRHOXdx = zeros(Ny1, Nx1)
-        dRHOXdy = zeros(Ny1, Nx1)
-        dRHOYdx = zeros(Ny1, Nx1)
-        dRHOYdy = zeros(Ny1, Nx1)
         # LSE
-        L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
         R = zeros(Nx1*Ny1*6)
         L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
         R_ver = zeros(Nx1*Ny1*6)
         # assemble hydromechanical LSE
-        HydrologyPlanetesimals.assemble_hydromechanical_lse!(
-            ETAcomp,
-            ETAPcomp,
-            SXYcomp,
-            SXXcomp,
-            SYYcomp,
-            dRHOXdx,
-            dRHOXdy,
-            dRHOYdx,
-            dRHOYdy,
+        L = HydrologyPlanetesimals.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
             RHOX,
             RHOY,
             RHOFX,
@@ -3052,11 +2817,9 @@ using Test
             pr0,
             pf0,
             dt,
-            L,
-            R,
-            sp
+            R
         )
-        # verification
+        L = collect(L)
         # verification, from madcph.m, lines 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
@@ -3336,9 +3099,6 @@ using Test
     end # testset "assemble_hydromechanical_lse()"
 
     @testset "process_hydromechanical_solution!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        pscale = sp.pscale
         # simulate data
         S = rand(Nx1*Ny1*6)
         vx = zeros(Ny1, Nx1)
@@ -3361,10 +3121,7 @@ using Test
             pr,
             qxD,
             qyD,
-            pf,
-            pscale,
-            Nx1,
-            Ny1
+            pf
         )
         # verification, from madcph.m, line 1058ff
         for j=1:1:Nx1
@@ -3397,10 +3154,7 @@ using Test
     end # testset "process_hydromechanical_solution!()"
 
     @testset "compute_Aϕ!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dt = sp.dtelastic
+        dt = dtelastic
         # simulate data
         APHI = rand(Ny1, Nx1)
         APHI_ver = rand(Ny1, Nx1)
@@ -3421,8 +3175,7 @@ using Test
             pf,
             pr0,
             pf0,
-            dt,
-            sp
+            dt
         )
         # verification, from madcph.m, line 1078ff
         APHI_ver = zeros(Ny1, Nx1)
@@ -3441,11 +3194,6 @@ using Test
     end # testset "compute_Aϕ!()"
 
     @testset "compute_fluid_velocity!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        bcftop, bcfbottom = sp.bcftop, sp.bcfbottom
-        bcfleft, bcfright = sp.bcfleft, sp.bcfright
         # simulate data
         PHIX = rand(Ny1, Nx1)
         PHIY = rand(Ny1, Nx1)
@@ -3466,8 +3214,7 @@ using Test
             vx,
             vy,
             vxf,
-            vyf,
-            sp
+            vyf
         )
         # verification, from madcph.m line 1090ff
         for j=1:1:Nx
@@ -3504,12 +3251,7 @@ using Test
     end # testset "compute_fluid_velocity!()"
 
     @testset "compute_displacement_timestep()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dt = sp.dtelastic
-        dx, dy = sp.dx, sp.dy
-        dxymax, dphimax = sp.dxymax, sp.dphimax        
+        dt = dtelastic
         # simulate data
         aphimax = rand()
         vx = rand(Ny1, Nx1)
@@ -3523,8 +3265,6 @@ using Test
             vxf,
             vyf,
             dt,
-            dx,
-            dy,
             dxymax,
             aphimax,
             dphimax
@@ -3557,11 +3297,7 @@ using Test
     end # testset "compute_displacement_timestep()"
 
     @testset "compute_stress_strainrate!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dtm = sp.dtelastic
-        dx, dy = sp.dx, sp.dy
+        dtm = dtelastic
         # simulate data
         vx = rand(Ny1, Nx1)
         vy = rand(Ny1, Nx1)
@@ -3597,8 +3333,7 @@ using Test
             DSXY,
             EII,
             SII,
-            dtm,
-            sp
+            dtm
         )
         # verification, from madcph.m, line 1144ff
         EXY_ver = zeros(Ny, Nx); # Strain rate EPSILONxy, 1/s
@@ -3650,9 +3385,6 @@ using Test
     end # testset "compute_stress_strainrate!()"
 
     @testset "symmetrize_p_node_observables!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
         # simulate data
         SXX = rand(Ny1, Nx1)
         APHI = rand(Ny1, Nx1)
@@ -3673,11 +3405,7 @@ using Test
             PHI,
             pr,
             pf,
-            ps,
-            Nx,
-            Ny,
-            Nx1,
-            Ny1
+            ps
         )
         # verification, from madcph.m, line 1196ff
         # Apply Symmetry to Pressure nodes
@@ -3746,18 +3474,7 @@ using Test
     end # testset "positive_max()"
 
     @testset "compute_nodal_adjustment!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(
-            etamin=0.2,
-            etamax=0.4,
-            etawt=0.5,
-            nplast=1
-        )
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dt = sp.dtelastic
-        nplast = sp.nplast
-        yerrmax = sp.yerrmax
-        etamin, etamax, etawt = sp.etamin, sp.etamax, sp.etawt
+        dt = dtelastic
         iplast = 1
         # simulate data
         ETA = rand(Ny, Nx)
@@ -3771,19 +3488,9 @@ using Test
         COH = rand(Ny, Nx)
         TEN = rand(Ny, Nx)
         FRI = rand(Ny, Nx)
-        SIIB = zeros(Ny, Nx)
-        siiel = zeros(Ny, Nx)
-        prB = zeros(Ny, Nx)
-        pfB = zeros(Ny, Nx)
-        syieldc = zeros(Ny, Nx)
-        syieldt = zeros(Ny, Nx)
-        syield = zeros(Ny, Nx)
-        etapl = zeros(Ny, Nx)
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = zeros(Bool, Ny, Nx)
         DSY = rand(Ny, Nx)
-        DDD = rand(Ny, Nx)
-        YNPL = zeros(Bool, Ny, Nx)
         YERRNOD = zeros(nplast)
         YERRNOD_ver = zeros(nplast)
         # compute nodal adjustment
@@ -3799,27 +3506,16 @@ using Test
             COH,
             TEN,
             FRI,
-            SIIB,
-            siiel,
-            prB,
-            pfB,
-            syieldc,
-            syieldt,
-            syield,
-            etapl,
             YNY,
             YNY5,
             YERRNOD,
             DSY,
-            YNPL,
-            DDD,
             dt,
-            iplast,
-            sp
+            iplast
         )
         # verification, from madcph.m, line 1232ff
         ETA5_ver=copy(ETA0)
-        YNY5_ver = zeros(Ny, Nx)
+        YNY5_ver = zeros(Bool, Ny, Nx)
         DSY_ver = zeros(Ny, Nx)
         ynpl=0
         ddd=0
@@ -3835,7 +3531,7 @@ using Test
                 # Compute yielding stress
                 syieldc_ver=COH[i,j]+FRI[i,j]*(prB_ver-pfB_ver); # Confined fracture
                 syieldt_ver=TEN[i,j]+(prB_ver-pfB_ver); # Tensile fracture
-                syield_ver=max(syieldt_ver,syieldc_ver,0); # Non-negative strength requirement
+                syield_ver=max(min(syieldt_ver,syieldc_ver),0); # Non-negative strength requirement
                 # Update error for old yielding nodes
                 ynn=0
                 if(YNY[i,j]>0)
@@ -3880,20 +3576,14 @@ using Test
             YERRNOD_ver[iplast]=(ddd/ynpl)^0.5
         end
         # test
-        for j=1:1:Nx, i=1:1:Ny
-            @test ETA5[i, j] ≈ ETA5_ver[i, j] rtol=1e-6
-            @test YNY5[i, j] == YNY5_ver[i, j]
-        end
+        @test ETA5 ≈ ETA5_ver rtol=1e-6
+        @test YNY5 == YNY5_ver
         @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-6
         @test complete == (ynpl==0 || iplast==nplast || YERRNOD[iplast]<yerrmax)
     end # testset "compute_nodal_adjustment!()"
 
     @testset "finalize_plastic_iteration_pass!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        dt = sp.dtelastic
-        dtkoef = sp.dtkoef
-        dtstep = sp.dtstep
+        dt = dtelastic
         iplast = 1
         # simulate data
         ETA = zeros(Ny, Nx)
@@ -3906,7 +3596,7 @@ using Test
         ETA_ver = zeros(Ny, Nx)
         YNY_ver = zeros(Bool, Ny, Nx)
         YNY_inv_ETA_ver = zeros(Ny, Nx)
-        dt_ver = sp.dtelastic
+        dt_ver = dtelastic
         # finalize_plastic_iteration_pass
         dt = HydrologyPlanetesimals.finalize_plastic_iteration_pass!(
             ETA,
@@ -3917,8 +3607,6 @@ using Test
             YNY00,
             YNY_inv_ETA,
             dt,
-            dtkoef,
-            dtstep,
             iplast
         )
         # verification, from madcph.m, line 1301ff
@@ -3942,16 +3630,8 @@ using Test
     end # testset "finalize_plastic_iteration_pass!()"
 
     @testset "apply_subgrid_stress_diffusion!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(
-            Nxmc=1, Nymc=1, dsubgrids=0.5, dtelastic=0.5)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        marknum = sp.start_marknum
-        x, y = sp.x, sp.y
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
-        dtm = sp.dtelastic
-        dsubgrids = sp.dsubgrids
+        marknum = start_marknum
+        dtm = dtelastic
         etam = @SVector ones(3)
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
@@ -3990,8 +3670,7 @@ using Test
             WTPSUM,
             WTSUM,
             dtm,
-            marknum,
-            sp
+            marknum
         )
         # verification, from madcph.m, line 1374ff
         # Apply subgrid stress diffusion to markers
@@ -4119,13 +3798,7 @@ using Test
     end # testset "apply_subgrid_stress_diffusion!()"
 
     @testset "update_marker_stress!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        marknum = sp.start_marknum
-        x, y = sp.x, sp.y
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
+        marknum = start_marknum
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
@@ -4137,7 +3810,7 @@ using Test
         sxym_ver = copy(sxym)
         # update marker stress
         HydrologyPlanetesimals.update_marker_stress!(
-            xm, ym, sxxm, sxym, DSXX, DSXY, marknum, sp)
+            xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
         # verification, from madcph.m, line 1495ff
         for m=1:1:marknum
             # SIGMA'xx
@@ -4196,11 +3869,7 @@ using Test
     end # testset "update_marker_stress!()"
 
     @testset "compute_shear_heating!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
         HS = zeros(Ny1, Nx1)
-        SXYEXY = zeros(Ny, Nx)
         ETA = rand(Ny, Nx)
         SXY = rand(Ny, Nx)
         ETAP = rand(Ny1, Nx1)
@@ -4216,7 +3885,6 @@ using Test
         # compute shear compute shear heating
         HydrologyPlanetesimals.compute_shear_heating!(
             HS,
-            SXYEXY,
             ETA,
             SXY,
             ETAP,
@@ -4228,8 +3896,7 @@ using Test
             PHI,
             ETAPHI,
             pr,
-            pf,
-            sp
+            pf
         )
         # verification, from madcph.m, line 1551ff
         HS_ver = zeros(Ny1, Nx1); # Adiabatic heating, W/m^3
@@ -4246,10 +3913,6 @@ using Test
     end # testset "compute_shear_heating!()"
 
     @testset "compute_adiabatic_heating!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nx=20, Ny=20)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
         HA = zeros(Ny1, Nx1)
         tk1 = rand(Ny1, Nx1)
         ALPHA = rand(Ny1, Nx1)
@@ -4264,7 +3927,7 @@ using Test
         HA_ver = zero(HA)
         # compute adiabatic heating
         HydrologyPlanetesimals.compute_adiabatic_heating!(
-            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf, sp)
+            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
         # verification, from madcph.m, line 1573ff
         for j=2:1:Nx
             for i=2:1:Ny
@@ -4311,11 +3974,6 @@ using Test
     end # testset "compute_adiabatic_heating!()"
 
     @testset "perform_thermal_iterations!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nx=4, Ny=4)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        DTmax = sp.DTmax
         dtm = 0.0001
         tk0 = rand(Ny1, Nx1)
         tk1 = rand(Ny1, Nx1)
@@ -4333,9 +3991,11 @@ using Test
         tk0_ver = copy(tk0)
         tk1_ver = copy(tk1)
         tk2_ver = copy(tk2)
+        RT = zeros(Ny1*Nx1)
+        ST = zeros(Ny1*Nx1)
         # perform thermal iterations
         HydrologyPlanetesimals.perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, dtm, sp)
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
         # verification, from madcph.m, line 1618ff
         LT = zeros(Ny1*Nx1, Ny1*Nx1)
         RT = zeros(Ny1*Nx1)
@@ -4449,18 +4109,8 @@ using Test
     end # testset "perform_thermal_iterations!()"
 
     @testset "apply_subgrid_temperature_diffusion!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(
-            Nxmc=1, Nymc=1, dsubgridt=0.5)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        x, y = sp.x, sp.y
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
-        rhocpsolidm, rhocpfluidm = sp.rhocpsolidm, sp.rhocpfluidm
-        ksolidm, kfluidm = sp.ksolidm, sp.kfluidm
-        marknum = sp.start_marknum
-        dtm = sp.dtelastic
-        dsubgridt = sp.dsubgridt
+        marknum = start_marknum
+        dtm = dtelastic
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
@@ -4475,7 +4125,7 @@ using Test
         DT_ver = copy(DT)
         # apply subgrid stress diffusion
         HydrologyPlanetesimals.apply_subgrid_temperature_diffusion!(
-            xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum, sp)
+            xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
         # verification, from madcph.m, line 1731ff
         # Apply subgrid stress diffusion to markers
         if dsubgridt>0
@@ -4518,7 +4168,6 @@ using Test
                 dtkm1=dtkm0*exp(-dsubgridt*ktotalm*dtm/rhocptotalm*(2/dx^2+2/dy^2))
                 # Correct marker temperature
                 ddtkm=dtkm1-dtkm0
-                # @info "ver" m dtkm0 ddtkm
                 tkm_ver[m]=tkm_ver[m]+ddtkm
                 # Update subgrid diffusion on nodes
                 # i;j Node
@@ -4553,13 +4202,7 @@ using Test
     end # testset "apply_subgrid_temperature_diffusion!()"
 
     @testset "update_marker_temperature!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        marknum = sp.start_marknum
-        x, y = sp.x, sp.y
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
+        marknum = start_marknum
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
@@ -4570,7 +4213,7 @@ using Test
             tkm_ver = copy(tkm)
             # update marker temperature
             HydrologyPlanetesimals.update_marker_temperature!(
-                xm, ym, tkm, DT, tk2, timestep, marknum, sp)
+                xm, ym, tkm, DT, tk2, timestep, marknum)
             # verification, from madcph.m, line 1805ff 
             for m=1:1:marknum
                 # Define i;j indexes for the upper left node
@@ -4607,15 +4250,8 @@ using Test
     end # testset "update_marker_temperature!()"
 
     @testset "update_marker_porosity!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(Nxmc=1, Nymc=1)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        marknum = sp.start_marknum
-        x, y = sp.x, sp.y
-        xp, yp = sp.xp, sp.yp
-        dx, dy = sp.dx, sp.dy
-        dtm = sp.dtelastic
-        phimin, phimax = sp.phimin, sp.phimax
+        marknum = start_marknum
+        dtm = dtelastic
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
@@ -4625,7 +4261,7 @@ using Test
         phim_ver = copy(phim)
         # update marker porosity
         HydrologyPlanetesimals. update_marker_porosity!(
-            xm, ym, tm, phim, APHI, dtm, marknum, sp)
+            xm, ym, tm, phim, APHI, dtm, marknum)
         # verification, from madcph.m, line 1805ff 
         for m=1:1:marknum
             if tm[m]<3
@@ -4667,16 +4303,6 @@ using Test
     end # testset "update_marker_porosity!()"
     
     @testset "compute_velocities!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        bctop, bcbottom = sp.bctop, sp.bcbottom
-        bcleft, bcright = sp.bcleft, sp.bcright
-        bcftop, bcfbottom = sp.bcftop, sp.bcfbottom
-        bcfleft, bcfright = sp.bcfleft, sp.bcfright
-        vxleft, vxright = sp.vxleft, sp.vxright
-        vytop, vybottom = sp.vytop, sp.vybottom
         vx = rand(Ny1, Nx1)
         vy = rand(Ny1, Nx1)
         vxf = rand(Ny1, Nx1)
@@ -4691,7 +4317,7 @@ using Test
         vypf_ver = zero(vypf)
         # compute velocities
         HydrologyPlanetesimals.compute_velocities!(
-            vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf, sp)
+            vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
         # verification, from madcph.m, line 1879ff:
         # Compute fluid velocity in pressure nodes
         # vxpf
@@ -4763,16 +4389,12 @@ using Test
     end # testset "compute_velocities!()"
 
     @testset "compute_rotation_rate!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
         vx = rand(Ny1, Nx1)
         vy = rand(Ny1, Nx1)
         wyx = zeros(Ny, Nx)
         wyx_ver = zero(wyx)
         # compute rotation rate
-        HydrologyPlanetesimals.compute_rotation_rate!(vx, vy, wyx, sp)
+        HydrologyPlanetesimals.compute_rotation_rate!(vx, vy, wyx)
         # verification, from madcph.m, line 1942ff:
         # Compute rotation rate wyx=1/2[dVy/dx-dVx/dy] for basic nodes
         for i=1:1:Ny
@@ -4785,24 +4407,14 @@ using Test
     end # testset "compute_rotation_rate!()"
 
     @testset "move_markers_rk4!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(
-            Nxmc=1, Nymc=1, dtelastic=0.9)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        marknum = sp.start_marknum
-        dtm = sp.dtelastic
-        rhocpsolidm, rhocpfluidm = sp.rhocpsolidm, sp.rhocpfluidm
-        x, y = sp.x, sp.y
-        xvx, xvy = sp.xvx, sp.xvy
-        yvx, yvy = sp.yvx, sp.yvy
-        xp, yp = sp.xp, sp.yp
+        marknum = start_marknum
+        dtm = 0.9
         # simulate markers
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
         tm = rand(1:3, marknum)
         tkm = rand(263:0.1:310, marknum)
-        phim = rand(sp.phimin:1e-4:sp.phimax, marknum)
+        phim = rand(phimin:1e-4:phimax, marknum)
         sxym = rand(marknum)
         sxxm = rand(marknum)
         vx = rand(Ny1, Nx1)
@@ -4832,8 +4444,7 @@ using Test
             wyx,
             tk2,
             marknum,
-            dtm,
-            sp
+            dtm
         )
         # verification, from madcph.m, line 1947ff:
         # Move markers with 4th order Runge-Kutta
@@ -5120,16 +4731,6 @@ using Test
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters(
-            Nxmc=1, Nymc=1, dtelastic=0.9)
-        Nx, Ny = sp.Nx, sp.Ny
-        Nx1, Ny1 = sp.Nx1, sp.Ny1
-        dx, dy = sp.dx, sp.dy
-        dtm = sp.dtelastic
-        x, y = sp.x, sp.y
-        xvx, xvy = sp.xvx, sp.xvy
-        yvx, yvy = sp.yvx, sp.yvy
-        xp, yp = sp.xp, sp.yp
         vx = rand(Ny1, Nx1)
         vy = rand(Ny1, Nx1)
         vxf = rand(Ny1, Nx1)
@@ -5146,9 +4747,10 @@ using Test
         pr0_ver = copy(pr0)
         pf0_ver = copy(pf0)
         ps0_ver = copy(ps0)
+        dtm = 0.9
         # backtrace pressures using RK4
         HydrologyPlanetesimals.backtrace_pressures_rk4!(
-            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm, sp)
+            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
         # verification, from madcph.p, line 2363ff
         vxm = zeros(4,1)
         vym = zeros(4,1)
@@ -5410,14 +5012,7 @@ using Test
     end # testset "backtrace_pressures_rk4!()"
 
     @testset "replenish_markers!()" begin
-        sp = HydrologyPlanetesimals.StaticParameters()
-        marknum = sp.start_marknum
-        x, y = sp.x, sp.y
-        xsize, ysize = sp.xsize, sp.ysize
-        dx, dy = sp.dx, sp.dy
-        dxm, dym = sp.dxm, sp.dym
-        Nxm, Nym = sp.Nxm, sp.Nym
-        Nxmc, Nymc = sp.Nxmc, sp.Nymc
+        marknum = start_marknum
         xm = rand(-dx:0.1:x[end]/2, marknum)
         ym = rand(-dy:0.1:y[end]/2, marknum)
         tm = rand(1:3, marknum)
@@ -5426,7 +5021,7 @@ using Test
         sxym = rand(marknum)
         phim = rand(marknum)
         etavpm = rand(marknum)
-        mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers(sp)
+        mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers()
         xm_ver = copy(xm)
         ym_ver = copy(ym)
         tm_ver = copy(tm)
@@ -5456,8 +5051,6 @@ using Test
         mnum_ver = zeros(Int, Nym, Nxm)
         mtyp = zeros(Int, Nym, Nxm)
         mpor = zeros(Nym, Nxm)
-        xxm=dxm/2:dxm:xsize-dxm/2
-        yym=dym/2:dym:ysize-dym/2
         for m=1:1:marknum
             # Check markers with the nearest nodes
             # Define i;j indexes for the upper left node
@@ -5574,4 +5167,3 @@ using Test
     end # testset "replenish_markers!()"
 
 end
-

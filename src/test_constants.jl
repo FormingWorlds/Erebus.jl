@@ -5,17 +5,17 @@
  const hr_fe = true
  # model size, geometry, and resolution
  # horizontal model size [m]
- const xsize = 140_000.0
+ const xsize = 14_000.0
  # vertical model size [m]
- const ysize = 140_000.0
+ const ysize = 14_000.0
  # horizontal center of model
  const xcenter = xsize / 2
  # vertical center of model
  const ycenter = ysize / 2  
  # basic grid resolution in x direction (horizontal)
- const Nx = 141
+ const Nx = 15
  # basic grid resolution in y direction (vertical)	
- const Ny = 141
+ const Ny = 15
  # Vx, Vy, P grid resolution in x direction (horizontal)
  const Nx1 = Nx + 1
  # Vx/Vy/P grid resolution in y direction (vertical)
@@ -90,9 +90,9 @@
  const imax_p = Ny
  # planetary parameters
  # planetary radius [m]
- const rplanet = 50_000.0
+ const rplanet = 5_000.0
  # crust radius [m]
- const rcrust = 48_000.0
+ const rcrust = 4_800.0
  # surface pressure [Pa]
  const psurface = 1e+3
  # marker count and initial spacing
@@ -127,7 +127,7 @@
  # maximum assignable marker grid index in y direction
  const imax_m = Nym - 1
  # marker randomized positions and porosity for testing
- const random_markers = false
+ const random_markers = true
  # physical constants
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
@@ -230,7 +230,7 @@
  const bcfbottom = -1
  # extension/shortening velocities
  # shortening strain rate
- const strainrate = 0.0e-13
+ const strainrate = 0e-13
  # x extension/shortening velocity left
  const vxleft = strainrate * xsize / 2
  # x extension/shortening velocity right
