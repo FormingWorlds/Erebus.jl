@@ -1,5 +1,6 @@
 module HydrologyPlanetesimals
 
+# using Dates
 using ArgParse
 using Base.Threads
 using DocStringExtensions
@@ -434,7 +435,6 @@ $(SIGNATURES)
     - hrtotalm: total radiogenic heat production of markers
     - ktotalm: total thermal conductivity of markers
     - tkm_rhocptotalm: total thermal energy of markers
-    - kphim: permeability of markers
     - etafluidcur_inv_kphim: fluid viscosity over permeability of markers
     - inv_gggtotalm: inverse of total shear modulus of markers
     - fricttotalm: total friction coefficient of markers
@@ -461,8 +461,6 @@ function setup_marker_properties_helpers(marknum; randomized=false)
     ktotalm = randomized ? rand(marknum) : zeros(marknum)
     # marker total thermal energy
     tkm_rhocptotalm = randomized ? rand(marknum) : zeros(marknum)
-    # marker permeability
-    kphim = randomized ? rand(marknum) : zeros(marknum)
     # marker fluid viscosity over permeability
     etafluidcur_inv_kphim = randomized ? rand(marknum) : zeros(marknum)
     # marker inverse of total shear modulus
@@ -488,7 +486,6 @@ function setup_marker_properties_helpers(marknum; randomized=false)
         hrtotalm,
         ktotalm,
         tkm_rhocptotalm,
-        kphim,
         etafluidcur_inv_kphim,
         inv_gggtotalm,
         fricttotalm,
@@ -644,7 +641,6 @@ $(SIGNATURES)
     - hrtotalm: total radiogenic heat production of markers
     - ktotalm: total thermal conductivity of markers
     - tkm_rhocptotalm: total thermal energy of markers
-    - kphim: permeability of markers
     - etafluidcur_inv_kphim: (fluid viscosity)/permeability of markers
     - hrsolidm: vector of radiogenic heat production of solid materials
     - hrfluidm: vector of radiogenic heat production of fluid materials
@@ -666,7 +662,6 @@ function compute_marker_properties!(
     hrtotalm,
     ktotalm,
     tkm_rhocptotalm,
-    kphim,
     etafluidcur_inv_kphim,
     hrsolidm,
     hrfluidm,
@@ -691,8 +686,10 @@ function compute_marker_properties!(
     end
     # # common for rocks and air
     tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]
-    kphim[m] = kphi(kphim0[tm[m]], phim[m])
-    etafluidcur_inv_kphim[m] = etafluidcur[m]/kphim[m]
+    # kphim[m] = kphi(kphim0[tm[m]], phim[m])
+    # etafluidcur_inv_kphim[m] = etafluidcur[m] * inv(kphim[m])
+    etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(
+        kphim0[tm[m]], phim[m], etafluidcur[m])
 # end # @timeit to "compute_marker_properties!"
     return nothing
 end # function compute_marker_properties!
@@ -941,7 +938,7 @@ $(SIGNATURES)
     - grid_average: (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1]) / 4
 """
 function grid_average(i, j, grid)
-    return sum(grid_vector(i, j, grid)) / length(grid_vector(i, j, grid))
+    return sum(grid_vector(i, j, grid)) * inv(length(grid_vector(i, j, grid)))
 end
 
 """
@@ -992,7 +989,7 @@ function ktotal(ksolid, kfluid, phi)
     return (
         sqrt(
             ksolid * kfluid/2
-            + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)/16.0
+            + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)*inv(16.0)
         )
         -0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
     )
@@ -1000,21 +997,43 @@ end
 
 
 """
-Compute iron porosity-dependent permeability.
+Compute porosity-dependent permeability (eqn 16.64 in Gerya (2019)).
 
 $(SIGNATURES)
 
 # Details
 
-    - kphim0m: standard permeability of marker type [m^2]
+    - kphim0m: standard (reference) permeability (of marker type) [m^2]
     - phimm: actual (marker) porosity
 
 # Returns
 
-    - kphim: iron porosity-dependent permeability [m^2]
+    - kphim: empirical porosity-dependent permeability [m^2]
 """
 function kphi(kphim0m, phimm)
-    return kphim0m * (phimm/phim0)^3 / ((1.0-phimm)/(1.0-phim0))^2
+    # phim0 is a global constant defined independent of material type
+    return kphim0m * (phimm*inv(phim0))^3.0 * ((1.0-phimm)*inv(1.0-phim0))^-2.0
+end
+
+"""
+Compute inverse of porosity-dependent permeability (eqn 16.64 in Gerya (2019)) 
+times current fluid viscosity.
+
+$(SIGNATURES)
+
+# Details
+
+    - kϕᵣ: reference permeability [m^2]
+    - ϕ: current porosity
+    - ηᶠcur: current fluid viscosity [Pa s]
+
+# Returns
+
+    - etafluidcur_inv_kphi: inverse empirical porosity-dependent permeability 
+                            times current fluid viscosity
+"""
+function ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)
+    return ηᶠcur * inv(kϕᵣ) * (phim0*inv(ϕ))^3.0 * ((1.0-ϕ)*inv(1.0-phim0))^2.0
 end
 
 """
@@ -1035,7 +1054,7 @@ $(SIGNATURES)
     - Q: radiogenic heat production [W/kg]
 """
 function Q_radiogenic(f, ratio, E, tau, time)
-    return f * ratio * E * exp(-time/tau) / tau
+    return f * ratio * E * exp(-time*inv(tau)) * inv(tau)
 end
 
 """
@@ -1132,10 +1151,10 @@ function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
     i, j, dxmj, dymi = fix_distances(
         x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
     return i, j, SVector(
-            (1.0-dymi/dy) * (1.0-dxmj/dx),
-            (dymi/dy) * (1.0-dxmj/dx),
-            (1.0-dymi/dy) * (dxmj/dx),
-            (dymi/dy) * (dxmj/dx)
+            (1.0-dymi*inv(dy)) * (1.0-dxmj*inv(dx)),
+            (dymi*inv(dy)) * (1.0-dxmj*inv(dx)),
+            (1.0-dymi*inv(dy)) * (dxmj*inv(dx)),
+            (dymi*inv(dy)) * (dxmj*inv(dx))
         ) 
 end # function fix_weights
 
@@ -1663,16 +1682,16 @@ function compute_basic_node_properties!(
 # @timeit to "compute" begin
     for j=1:1:Nx, i=1:1:Ny
         if WTSUM[i, j, 1] > 0.0 
-            ETA0[i, j, 1] = ETA0SUM[i, j, 1] / WTSUM[i, j, 1]
-            ETA[i, j, 1] = ETASUM[i, j, 1] / WTSUM[i, j, 1]
+            ETA0[i, j, 1] = ETA0SUM[i, j, 1] * inv(WTSUM[i, j, 1])
+            ETA[i, j, 1] = ETASUM[i, j, 1] * inv(WTSUM[i, j, 1])
             if ETA[i, j, 1] < ETA0[i, j, 1]
                 YNY[i, j] = true
             end
-            GGG[i, j, 1] = GGGSUM[i, j, 1] \ WTSUM[i, j, 1]
-            SXY0[i, j, 1] = SXYSUM[i, j, 1] / WTSUM[i, j, 1]
-            COH[i, j, 1] = COHSUM[i, j, 1] / WTSUM[i, j, 1]
-            TEN[i, j, 1] = TENSUM[i, j, 1] / WTSUM[i, j, 1]
-            FRI[i, j, 1] = FRISUM[i, j, 1] / WTSUM[i, j, 1]
+            GGG[i, j, 1] = inv(GGGSUM[i, j, 1]) * WTSUM[i, j, 1]
+            SXY0[i, j, 1] = SXYSUM[i, j, 1] * inv(WTSUM[i, j, 1])
+            COH[i, j, 1] = COHSUM[i, j, 1] * inv(WTSUM[i, j, 1])
+            TEN[i, j, 1] = TENSUM[i, j, 1] * inv(WTSUM[i, j, 1])
+            FRI[i, j, 1] = FRISUM[i, j, 1] * inv(WTSUM[i, j, 1])
         end
     end 
 # end # @timeit to "compute"
@@ -1729,11 +1748,11 @@ function compute_vx_node_properties!(
 # @timeit to "compute" begin
     for j=1:1:Nx1, i=1:1:Ny1
         if WTXSUM[i, j, 1] > 0.0 
-            RHOX[i, j, 1] = RHOXSUM[i, j, 1] / WTXSUM[i, j, 1]
-            RHOFX[i, j, 1] = RHOFXSUM[i, j, 1] / WTXSUM[i, j, 1]
-            KX[i, j, 1] = KXSUM[i, j, 1] / WTXSUM[i, j, 1]
-            PHIX[i, j, 1] = PHIXSUM[i, j, 1] / WTXSUM[i, j, 1]
-            RX[i, j, 1] = RXSUM[i, j, 1] / WTXSUM[i, j, 1]
+            RHOX[i, j, 1] = RHOXSUM[i, j, 1] * inv(WTXSUM[i, j, 1])
+            RHOFX[i, j, 1] = RHOFXSUM[i, j, 1] * inv(WTXSUM[i, j, 1])
+            KX[i, j, 1] = KXSUM[i, j, 1] * inv(WTXSUM[i, j, 1])
+            PHIX[i, j, 1] = PHIXSUM[i, j, 1] * inv(WTXSUM[i, j, 1])
+            RX[i, j, 1] = RXSUM[i, j, 1] * inv(WTXSUM[i, j, 1])
         end
     end
 # end # @timeit to "compute"
@@ -1791,11 +1810,11 @@ function compute_vy_node_properties!(
 # @timeit to "compute" begin
     for j=1:1:Nx1, i=1:1:Ny1
         if WTYSUM[i, j, 1] > 0.0 
-            RHOY[i, j, 1] = RHOYSUM[i, j, 1] / WTYSUM[i, j, 1]
-            RHOFY[i, j, 1] = RHOFYSUM[i, j, 1] / WTYSUM[i, j, 1]
-            KY[i, j, 1] = KYSUM[i, j, 1] / WTYSUM[i, j, 1]
-            PHIY[i, j, 1] = PHIYSUM[i, j, 1] / WTYSUM[i, j, 1]
-            RY[i, j, 1] = RYSUM[i, j, 1] / WTYSUM[i, j, 1]
+            RHOY[i, j, 1] = RHOYSUM[i, j, 1] * inv(WTYSUM[i, j, 1])
+            RHOFY[i, j, 1] = RHOFYSUM[i, j, 1] * inv(WTYSUM[i, j, 1])
+            KY[i, j, 1] = KYSUM[i, j, 1] * inv(WTYSUM[i, j, 1])
+            PHIY[i, j, 1] = PHIYSUM[i, j, 1] * inv(WTYSUM[i, j, 1])
+            RY[i, j, 1] = RYSUM[i, j, 1] * inv(WTYSUM[i, j, 1])
         end
     end
 # end # @timeit to "compute"
@@ -1875,16 +1894,16 @@ function compute_p_node_properties!(
 # @timeit to "compute" begin
     for j=1:1:Nx1, i=1:1:Ny1
         if WTPSUM[i, j, 1] > 0.0
-            RHO[i, j, 1] = RHOSUM[i, j, 1] / WTPSUM[i, j, 1]
-            RHOCP[i, j, 1] = RHOCPSUM[i, j, 1] / WTPSUM[i, j, 1]
-            ALPHA[i, j, 1] = ALPHASUM[i, j, 1] / WTPSUM[i, j, 1]
-            ALPHAF[i, j, 1] = ALPHAFSUM[i, j, 1] / WTPSUM[i, j, 1]
-            HR[i, j, 1] = HRSUM[i, j, 1] / WTPSUM[i, j, 1]
-            GGGP[i, j, 1] = GGGPSUM[i, j, 1] \ WTPSUM[i, j, 1]
-            SXX0[i, j, 1] = SXXSUM[i, j, 1] / WTPSUM[i, j, 1]
-            tk1[i, j, 1] = TKSUM[i, j, 1] / RHOCPSUM[i, j, 1]
-            PHI[i, j, 1] = PHISUM[i, j, 1] / WTPSUM[i, j, 1]
-            BETTAPHI[i, j, 1] = GGGP[i, j, 1] \ PHI[i, j, 1]
+            RHO[i, j, 1] = RHOSUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            RHOCP[i, j, 1] = RHOCPSUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            ALPHA[i, j, 1] = ALPHASUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            ALPHAF[i, j, 1] = ALPHAFSUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            HR[i, j, 1] = HRSUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            GGGP[i, j, 1] = inv(GGGPSUM[i, j, 1]) * WTPSUM[i, j, 1]
+            SXX0[i, j, 1] = SXXSUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            tk1[i, j, 1] = TKSUM[i, j, 1] * inv(RHOCPSUM[i, j, 1])
+            PHI[i, j, 1] = PHISUM[i, j, 1] * inv(WTPSUM[i, j, 1])
+            BETTAPHI[i, j, 1] = inv(GGGP[i, j, 1]) * PHI[i, j, 1]
         end
     end
 # end # @timeit to "compute"
@@ -2560,8 +2579,8 @@ function assemble_hydromechanical_lse!(
             #
             # LHS coefficient matrix
             updateindex!(L, +, RX[i, j], kqx, kqx) # qxD
-            updateindex!(L, +, -pscale/dx, kqx, kpf) # P₁
-            updateindex!(L, +, pscale/dx, kqx, kpf+6*Ny1) # P₂
+            updateindex!(L, +, -pscale*inv(dx), kqx, kpf) # P₁
+            updateindex!(L, +, pscale*inv(dx), kqx, kpf+6*Ny1) # P₂
             # RHS coefficient vector
             R[kqx] = RHOFX[i, j] * gx[i, j]
         end # qxDarcy equation
@@ -2594,8 +2613,8 @@ function assemble_hydromechanical_lse!(
             #
             # LHS coefficient matrix
             updateindex!(L, +, RY[i, j], kqy, kqy) # qyD
-            updateindex!(L, +, -pscale/dy, kqy, kpf) # P₁
-            updateindex!(L, +, pscale/dy, kqy, kpf+6) # P₂
+            updateindex!(L, +, -pscale*inv(dy), kqy, kpf) # P₁
+            updateindex!(L, +, pscale*inv(dy), kqy, kpf+6) # P₂
             # RHS coefficient vector
             R[kqy] = RHOFY[i, j] * gy[i, j]
         end # qyDarcy equation
@@ -2713,7 +2732,7 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
         inv(ETA[1:end-1, 2:end]) +
         inv(ETA[2:end, 2:end])
     )
-    @views @. ETAPHI = etaphikoef * ETAP / PHI
+    @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
 # end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
@@ -2911,40 +2930,70 @@ function compute_stress_strainrate!(
     dtm
 )
 # @timeit to "compute_stress_strainrate!()" begin
-    # ϵxy, σxy, Δσxy at basic nodes
-    EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
-    @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
-    @. DSXY = SXY - SXY0
-    # ϵxx, σ′xx at P nodes
-    # @. DIVV[2:end, 2:end] = 
-    #     diff(vx, dims=2)[2:end, :]/dx + diff(vy, dims=1)[:, 2:end]/dy
-    EXX[2:Ny1, 2:Nx1] .= ( 
-        0.5 .* (
-            diff(vx, dims=2)[2:Ny1, :]./dx .- diff(vy, dims=1)[:, 2:Nx1]./dy
-        )
-    )
-    @. SXX = 2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP) + SXX0*ETAP/(GGGP*dtm+ETAP)
-    @. DSXX = SXX - SXX0
-    @. EII[2:Ny, 2:Nx] = sqrt(
-        EXX[2:Ny, 2:Nx]^2 + (
-            (
-                EXY[2:Ny, 2:Nx]
-                +EXY[1:Ny-1,2:Nx]
-                +EXY[2:Ny,1:Nx-1]
-                +EXY[1:Ny-1,1:Nx-1]
-            )/4.0
-        )^2
-    )
-    @. SII[2:Ny, 2:Nx] = sqrt(
-        SXX[2:Ny, 2:Nx]^2 + (
-            (
-                SXY[2:Ny, 2:Nx]
-                +SXY[1:Ny-1,2:Nx]
-                +SXY[2:Ny,1:Nx-1]
-                +SXY[1:Ny-1,1:Nx-1]
-            )/4.0
-        )^2
-    )
+        # ϵxy, σxy, Δσxy at basic nodes
+        for j=1:1:Nx, i=1:1:Ny
+            EXY[i, j] = 0.5 * (
+                (vx[i+1, j]-vx[i, j]) / dy
+                +(vy[i, j+1]-vy[i, j])/dx
+            )
+            SXY[i,j] = (
+                2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dtm / (
+                    GGG[i, j]*dtm+ETA[i, j]
+                )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dtm+ETA[i, j])
+            )
+            DSXY[i, j] = SXY[i, j] - SXY0[i, j]
+        end
+        # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
+        for j=2:1:Nx, i=2:1:Ny
+            EXX[i, j]= 0.5 *(
+                (vx[i, j]-vx[i, j-1]) / dx
+                -(vy[i, j]-vy[i-1, j]) / dy
+            )
+            SXX[i, j] = (
+                2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dtm / (
+                    GGGP[i, j]*dtm+ETAP[i, j]
+                ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dtm+ETAP[i, j])
+            )
+            DSXX[i, j] = SXX[i, j] - SXX0[i, j]
+            EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
+            SII[i, j] = sqrt(SXX[i, j]^2 + grid_average(i-1, j-1, SXY)^2)
+        end
+        
+    # # ϵxy, σxy, Δσxy at basic nodes
+    # EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
+    # @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
+    # @. DSXY = SXY - SXY0
+    # # ϵxx, σ′xx at P nodes
+    # # @. DIVV[2:end, 2:end] = 
+    # #     diff(vx, dims=2)[2:end, :]/dx + diff(vy, dims=1)[:, 2:end]/dy
+    # EXX[2:Ny1, 2:Nx1] .= ( 
+    #     0.5 .* (
+    #         diff(vx, dims=2)[2:Ny1, :]./dx .- diff(vy, dims=1)[:, 2:Nx1]./dy
+    #     )
+    # )
+    # @. SXX = 2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP) + SXX0*ETAP/(GGGP*dtm+ETAP)
+    # @. DSXX = SXX - SXX0
+    # @. EII[2:Ny, 2:Nx] = sqrt(
+    #     EXX[2:Ny, 2:Nx]^2 + (
+    #         (
+    #             EXY[2:Ny, 2:Nx]
+    #             +EXY[1:Ny-1,2:Nx]
+    #             +EXY[2:Ny,1:Nx-1]
+    #             +EXY[1:Ny-1,1:Nx-1]
+    #         )/4.0
+    #     )^2
+    # )
+    # @. SII[2:Ny, 2:Nx] = sqrt(
+    #     SXX[2:Ny, 2:Nx]^2 + (
+    #         (
+    #             SXY[2:Ny, 2:Nx]
+    #             +SXY[1:Ny-1,2:Nx]
+    #             +SXY[2:Ny,1:Nx-1]
+    #             +SXY[1:Ny-1,1:Nx-1]
+    #         )/4.0
+    #     )^2
+    # )
+
 # end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
@@ -3112,7 +3161,6 @@ function compute_nodal_adjustment!(
         YERRNOD[iplast] = sqrt(ddd/ynpl)
     end
     # return plastic iteration completeness
-    ##@info "compute_nodal_adjustment" ynpl YERRNOD[iplast] iplast
     return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
 # end # @timeit to "compute_nodal_adjustment!()
@@ -3332,10 +3380,10 @@ function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
             yp,
             dx,
             dy,
-            jmin_p+1,
-            jmax_p-1,
-            imin_p+1,
-            imax_p-1
+            2,
+            Nx-1,
+            2,
+            Ny-1
         )
         i_basic, j_basic, weights_basic = fix_weights(
             xm[m],
@@ -3344,10 +3392,10 @@ function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
             y,
             dx,
             dy,
-            jmin_basic,
-            jmax_basic,
-            imin_basic,
-            imax_basic
+            1,
+            Nx-1,
+            1,
+            Ny-1
         )
     # interpolate updated DSXX, DSXY back to markers
         interpolate_add_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
@@ -3580,7 +3628,6 @@ function perform_thermal_iterations!(
                 # fill system of equations: RHS (10.9)
                 RT[gk] = (
                     RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
-
             end
         end
         # solve system of equations
@@ -3604,6 +3651,17 @@ function perform_thermal_iterations!(
             dttsum += dtt
             dtt = min(dtt, dtm-dttsum)
         end
+
+        # @info "M_1726"
+        # output_path = "/Users/z7717/Desktop/test/"
+        # LT_d = collect(LT)
+        # if titer == 1 
+        #     jldsave(
+        #         output_path*"M_1726_"*string(now())*"_titer_"*string(titer)*".jld2";
+        #         tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
+        #     )
+        # end
+
         # increase thermal iteration counter
         titer += 1
     end
@@ -4922,7 +4980,6 @@ function simulation_loop(output_path)
         hrtotalm,
         ktotalm,
         tkm_rhocptotalm,
-        kphim,
         etafluidcur_inv_kphim,
         inv_gggtotalm,
         fricttotalm,
@@ -5074,9 +5131,12 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
    #@info "iterate timesteps"
     # -------------------------------------------------------------------------
+    generate_showvalues(timestep, timesum) = () -> [
+        (:timestep, timestep), (:timesum_Ma, timesum/yearlength*1e-6)]
     p = Progress(
-        n_steps,
-        dt=0.5,
+        n_steps;
+        showspeed=true,
+        dt=1.0,
         barglyphs=BarGlyphs(
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:n_steps
@@ -5141,7 +5201,6 @@ function simulation_loop(output_path)
                 hrtotalm,
                 ktotalm,
                 tkm_rhocptotalm,
-                kphim,
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
@@ -5316,6 +5375,48 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
+        # @info "M_680"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_680_"*string(timestep)*".jld2";
+        #         ETA0,
+        #         ETA,
+        #         YNY,
+        #         GGG,
+        #         SXY0,
+        #         COH,
+        #         TEN,
+        #         FRI,
+        #         RHOX,
+        #         RHOFX,
+        #         KX,
+        #         PHIX,
+        #         RX,
+        #         RHOY,
+        #         RHOFY,
+        #         KY,
+        #         PHIY,
+        #         RY,
+        #         GGGP,
+        #         SXX0,
+        #         RHO,
+        #         RHOCP,
+        #         ALPHA,
+        #         ALPHAF,
+        #         HR,
+        #         PHI,
+        #         BETTAPHI,
+        #         tk1,
+        #         xm,
+        #         ym,
+        #         tm,
+        #         phim,
+        #         sxxm,
+        #         sxym,
+        #         etafluidcur,
+        #         etafluidcur_inv_kphim
+        #     )
+        # end
+
         # ---------------------------------------------------------------------
        #@info "compute gravity solution"
         # compute gravitational acceleration
@@ -5334,107 +5435,22 @@ function simulation_loop(output_path)
         # YNY00, YNY = YNY, YNY00
         ETA00 = copy(ETA)
         YNY00 = copy(YNY)
-        # RMK check this!
 
-        save_state(
-        output_path,
-        timestep,
-        dt,
-        0,
-        timesum,
-        marknum,
-        ETA,
-        ETA0,
-        GGG,
-        EXY,
-        SXY,
-        SXY0,
-        wyx,
-        COH,
-        TEN,
-        FRI,
-        YNY,
-        RHOX,
-        RHOFX,
-        KX,
-        PHIX,
-        vx,
-        vxf,
-        RX,
-        qxD,
-        gx,
-        RHOY,
-        RHOFY,
-        KY,
-        PHIY,
-        vy,
-        vyf,
-        RY,
-        qyD,
-        gy,
-        RHO,
-        RHOCP,
-        ALPHA,
-        ALPHAF,
-        HR,
-        HA,
-        HS,
-        ETAP,
-        GGGP,
-        EXX,
-        SXX,
-        SXX0,
-        tk1,
-        tk2,
-        vxp,
-        vyp,
-        vxpf,
-        vypf,
-        pr,
-        pf,
-        ps,
-        pr0,
-        pf0,
-        ps0,
-        ETAPHI,
-        BETTAPHI,
-        PHI,
-        APHI,
-        FI,
-        ETA5,
-        ETA00,
-        YNY5,
-        YNY00,
-        YNY_inv_ETA,
-        DSXY,
-        EII,
-        SII,
-        DSXX,
-        xm,
-        ym,
-        tm,
-        tkm,
-        sxxm,
-        sxym,
-        etavpm,
-        phim,
-        rhototalm,
-        rhocptotalm,
-        etasolidcur,
-        etafluidcur,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm_rhocptotalm,
-        etafluidcur_inv_kphim,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur
-    )
+        # @info "M_765"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_765_"*string(timestep)*".jld2";
+        #         SP,
+        #         FI,
+        #         gx,
+        #         gy,
+        #         dt,
+        #         dtelastic,
+        #         ETA,
+        #         ETA00,
+        #         YNY,
+        #         YNY00
+        #     )
+        # end
 
         # ---------------------------------------------------------------------
        #@info "perform plastic iterations"
@@ -5488,10 +5504,12 @@ function simulation_loop(output_path)
                 qyD,
                 pf
             )
-            # if random_markers && iplast ==1
-            #     L_dense = collect(L)
-            #     jldsave(output_path*"post_lse_"*string(timestep)*".jld2";
-            #         L_dense,
+
+            # @info "M_1078"
+            # if timestep <= 2
+            #     L_d = collect(L)
+            #     jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+            #         L_d,
             #         R,
             #         S,
             #         vx,
@@ -5502,6 +5520,7 @@ function simulation_loop(output_path)
             #         pf
             #     )
             # end
+
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
                 APHI,
@@ -5514,6 +5533,14 @@ function simulation_loop(output_path)
                 pf0,
                 dt
             )
+
+            # @info "M_1090"
+            # if timestep <= 2
+            #     jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
+            #         APHI
+            #     )
+            # end
+
             # compute fluid velocities
             compute_fluid_velocities!(
                 PHIX,
@@ -5536,6 +5563,17 @@ function simulation_loop(output_path)
                 aphimax,
                 dphimax
             )
+
+            # @info "M_1144"
+            # if timestep <= 2
+            #     jldsave(output_path*"M_1144_"*string(timestep)*".jld2";
+            #         vxf,
+            #         vyf,
+            #         dtm
+            #     )
+            # end
+
+
             # compute stresses, stress changes and strain rate components
             compute_stress_strainrate!(
                 vx,
@@ -5556,6 +5594,29 @@ function simulation_loop(output_path)
                 SII,
                 dtm
             )
+
+            # @info "M_1184"
+            # if timestep <= 2
+            #     jldsave(output_path*"M_1184_"*string(timestep)*".jld2";
+            #         EXY,
+            #         SXY,
+            #         DSXY,
+            #         EXX,
+            #         SXX,
+            #         DSXX,
+            #         EII,
+            #         SII,
+            #         ETAP,
+            #         GGGP,
+            #         SXX0,
+            #         ETA,
+            #         GGG,
+            #         SXY0,
+            #         vx,
+            #         vy
+            #     )
+            # end
+
             # recompute Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
                 APHI,
@@ -5580,6 +5641,18 @@ function simulation_loop(output_path)
             # save nodal stress changes - RMK: not required in code
             # DSXX0 = copy(DSXX)
             # DSXY0 = copy(DSXY)
+            # @info "M_1232"
+            # if timestep <= 2
+            #     jldsave(output_path*"M_1232_"*string(timestep)*".jld2";
+            #     SXX,
+            #     APHI,
+            #     PHI,
+            #     pr,
+            #     pf,
+            #     ps
+            #     )
+            # end
+            
             # nodal adjustment
             if compute_nodal_adjustment!(
                 ETA,
@@ -5617,6 +5690,19 @@ function simulation_loop(output_path)
                 )
             end
         end # for iplast=1:1:nplast
+        # @info "M_1325"
+        #     if timestep <= 2
+        #         jldsave(output_path*"M_1325_"*string(timestep)*".jld2";
+        #             ETA,
+        #             ETA5,
+        #             ETA00,
+        #             YNY,
+        #             YNY5,
+        #             YNY00,
+        #             YERRNOD,
+        #             dt
+        #         )
+        #     end
 
         # ---------------------------------------------------------------------
        #@info "interpolate updated viscoplastic viscosity to markers"
@@ -5625,7 +5711,15 @@ function simulation_loop(output_path)
             update_marker_viscosity!(
                 m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
         end
-
+        # @info "M_1378"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1378_"*string(timestep)*".jld2";
+        #         xm,
+        #         ym,
+        #         tm,
+        #         etavpm
+        #     )
+        # end
         # ---------------------------------------------------------------------
        #@info "apply subgrid stress diffusion to markers"
         # ---------------------------------------------------------------------
@@ -5647,12 +5741,26 @@ function simulation_loop(output_path)
             dtm,
             marknum
         )
+        # @info "M_1499"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1499_"*string(timestep)*".jld2";
+        #         DSXX,
+        #         DSXY,
+        #     )
+        # end
 
         # ---------------------------------------------------------------------
        #@info "interpolate DSXX, DSXY to markers"
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
+        # @info "M_1555"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1555_"*string(timestep)*".jld2";
+        #         sxxm,
+        #         sxym
+        #     )
+        # end
         # ---------------------------------------------------------------------
        #@info "compute shear heating HS in P nodes"
         # ---------------------------------------------------------------------
@@ -5671,10 +5779,23 @@ function simulation_loop(output_path)
             pr,
             pf
         )
-
+    
         # ---------------------------------------------------------------------
         # compute adiabatic heating HA in P nodes
-       #@info "perform thermal iterations"
+        # ---------------------------------------------------------------------
+        compute_adiabatic_heating!(
+            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
+
+        # @info "M_1622"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1622_"*string(timestep)*".jld2";
+        #         HS,
+        #         HA
+        #     )
+        # end
+
+        # ---------------------------------------------------------------------
+        # @info "perform thermal iterations"
         # ---------------------------------------------------------------------
         if timestep==1
             # no pressure changes for the first timestep
@@ -5682,9 +5803,21 @@ function simulation_loop(output_path)
             pf0 .= pf
             ps0 .= pf
         end
+        
         perform_thermal_iterations!(
             tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
 
+       
+        # @info "M_1733"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1733_"*string(timestep)*".jld2";
+        #         tk2,
+        #         tk1,
+        #         DT,
+        #         DT0
+        #     )
+        # end
+        
         # ---------------------------------------------------------------------
        #@info "apply subgrid temperature diffusion on markers"
         # compute DTsubgrid
@@ -5703,15 +5836,34 @@ function simulation_loop(output_path)
             marknum
         )
 
+        # @info "M_1807"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1807_"*string(timestep)*".jld2";
+        #         DT
+        #     )
+        # end
+
         # ---------------------------------------------------------------------
        #@info "interpolate DT to markers"
         # ---------------------------------------------------------------------
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
+        # @info "M_1842"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1842_"*string(timestep)*".jld2";
+        #         tkm
+        #     )
+        # end
         # ---------------------------------------------------------------------
        #@info "update porosity on markers"
         # ---------------------------------------------------------------------
         update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
+        # @info "M_1881"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1881_"*string(timestep)*".jld2";
+        #         phim
+        #     )
+        # end
 
         # ---------------------------------------------------------------------
        #@info "compute velocity in P nodes"
@@ -5719,10 +5871,26 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
 
+        # @info "M_1944" 
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1944_"*string(timestep)*".jld2";
+        #         vxp,
+        #         vyp,
+        #         vxpf,
+        #         vypf
+        #     )
+        # end
+
         # ---------------------------------------------------------------------
        #@info "compute rotation rate in basic nodes"
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
+        # @info "M_1951"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_1951_"*string(timestep)*".jld2";
+        #         wyx
+        #     )
+        # end
 
         # ---------------------------------------------------------------------
        #@info "move markers with RK4"
@@ -5745,6 +5913,15 @@ function simulation_loop(output_path)
             dtm
         )
 
+        # @info "M_2235"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_2235_"*string(timestep)*".jld2";
+        #         xm,
+        #         ym,
+        #         sxxm,
+        #         sxym
+        #     )
+        # end
         # ---------------------------------------------------------------------
        #@info "backtrack P nodes: Ptotal with RK4"
         # backtrack P nodes: Pfluid with RK4
@@ -5752,18 +5929,55 @@ function simulation_loop(output_path)
         backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 
+        # @info "M_2494"
+        # if timestep <= 2
+        #     jldsave(output_path*"M_2494_"*string(timestep)*".jld2";
+        #         pr0,
+        #         ps0,
+        #         pf0
+        #     )
+        # end
         # ---------------------------------------------------------------------
         # info "replenish sparse areas with additional markers"
         # ---------------------------------------------------------------------
         replenish_markers!(
-            xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, mdis, mnum)
+            xm,
+            ym,
+            tm,
+            tkm,
+            phim,
+            sxxm,
+            sxym,
+            etavpm,
+            mdis,
+            mnum,
+            randomized=random_markers
+        )
        #@info "replenish sparse areas with additional markers" marknum
+
+     
 
         # ---------------------------------------------------------------------
         # update timesum
         # ---------------------------------------------------------------------
         timesum += dtm
        #@info "update timesum" timesum
+    #    @info "M_2616"
+    #     if timestep <= 2
+    #         jldsave(output_path*"M_2616_"*string(timestep)*".jld2";
+    #             xm,
+    #             ym,
+    #             tm,
+    #             tkm,
+    #             phim,
+    #             sxxm,
+    #             sxym,
+    #             etavpm,
+    #             marknum,
+    #             dt,
+    #             timesum
+    #         )
+    #     end
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -5878,7 +6092,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         # update progress
         # ---------------------------------------------------------------------
-        next!(p) # progress bar
+        next!(p; showvalues = generate_showvalues(timestep, timesum))
 
         # ---------------------------------------------------------------------
         # finish timestep

@@ -239,7 +239,7 @@ function plot_results(input_path)
         @views ETAPHI_ = ETAPHI[:, :, i]
         @views RHO_ = RHO[:, :, i]
         A = heatmap(x, y, log10.(ETA_); title="log₁₀(ETA)", aspect_ratio=:equal, cmap=:jet, xticks=xticks_b, yticks=yticks_b, xlim=xlim_b, ylim=ylim_b)
-        quiver!(X, Y, quiver=(vxp_[10:20:Nx1, 10:20:Ny1], vyp_[10:20:Nx1, 10:20:Ny1]))
+        # quiver!(X, Y, quiver=(vxp_[10:20:Nx1, 10:20:Ny1], vyp_[10:20:Nx1, 10:20:Ny1]))
         B = heatmap(xp, yp, pr_; title="pr", aspect_ratio=:equal, cmap=:jet, xticks=xticks_p, yticks=yticks_p, xlim=xlim_p, ylim=ylim_p)
         C = heatmap(xp, yp, vxp_; title="vxp", aspect_ratio=:equal, cmap=:jet, xticks=xticks_p, yticks=yticks_p, xlim=xlim_p, ylim=ylim_p)
         D = heatmap(xp, yp, vyp_; title="vyp", aspect_ratio=:equal, cmap=:jet, xticks=xticks_p, yticks=yticks_p, xlim=xlim_p, ylim=ylim_p)

@@ -127,12 +127,12 @@
  # maximum assignable marker grid index in y direction
  const imax_m = Nym - 1
  # marker randomized positions and porosity for testing
- const random_markers = true
+ const random_markers = false
  # physical constants
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- const pscale = 1.0e+23 / dx
+ const pscale = 1.0e+23 * inv(dx)
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
@@ -230,7 +230,7 @@
  const bcfbottom = -1
  # extension/shortening velocities
  # shortening strain rate
- const strainrate = 0e-13
+ const strainrate = 0.0e-13
  # x extension/shortening velocity left
  const vxleft = strainrate * xsize / 2
  # x extension/shortening velocity right
@@ -246,7 +246,7 @@
  const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
  # timestepping parameters
  # output storage periodicity
- const savematstep = 10
+ const savematstep = 1
  # Maximal computational timestep [s]
  const dtelastic = 1e+11 
  # Coefficient to decrease computational timestep

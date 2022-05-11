@@ -127,12 +127,12 @@
  # maximum assignable marker grid index in y direction
  const imax_m = Nym - 1
  # marker randomized positions and porosity for testing
- const random_markers = false
+ const random_markers = true
  # physical constants
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- const pscale = 1.0e+23 / dx
+ const pscale = 1.0e+23 * inv(dx)
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
@@ -288,5 +288,4 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const n_steps = 50
-#  const nsteps = 30000 
+ const n_steps = 30000 

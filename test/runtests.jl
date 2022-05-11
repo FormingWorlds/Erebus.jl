@@ -413,7 +413,6 @@ include("../src/test_constants.jl")
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
-            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -432,7 +431,6 @@ include("../src/test_constants.jl")
         @test hrtotalm == zeros(Float64, marknum)
         @test ktotalm == zeros(Float64, marknum)
         @test tkm_rhocptotalm == zeros(Float64, marknum)
-        @test kphim == zeros(Float64, marknum)
         @test etafluidcur_inv_kphim == zeros(Float64, marknum)
         @test inv_gggtotalm == zeros(Float64, marknum)
         @test fricttotalm == zeros(Float64, marknum)
@@ -481,7 +479,6 @@ include("../src/test_constants.jl")
             hrtotalm,
             ktotalm,
             tkm_rhocptotalm,
-            kphim,
             etafluidcur_inv_kphim,
             inv_gggtotalm,
             fricttotalm,
@@ -497,7 +494,6 @@ include("../src/test_constants.jl")
         tkm_ver = zeros(marknum)
         phim_ver = zeros(marknum)
         etavpm_ver = zeros(marknum)
-        kphim_ver = zeros(marknum)
         rhototalm_ver = zeros(marknum)
         rhocptotalm_ver = zeros(marknum)
         etasolidcur_ver = zeros(marknum)
@@ -508,6 +504,7 @@ include("../src/test_constants.jl")
         cohestotalm_ver = zeros(marknum)
         tenstotalm_ver = zeros(marknum)
         etafluidcur_ver = zeros(marknum)
+        kphim_ver = zeros(marknum)
         rhofluidcur_ver = zeros(marknum)
         etatotalm_ver = zeros(marknum)
         # define markers
@@ -546,7 +543,6 @@ include("../src/test_constants.jl")
                 hrtotalm,
                 ktotalm,
                 tkm_rhocptotalm,
-                kphim,
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
@@ -631,7 +627,6 @@ include("../src/test_constants.jl")
         @test tkm  == tkm_ver
         @test phim  == phim_ver
         @test etavpm  == etavpm_ver
-        @test kphim == kphim_ver
         @test rhototalm == rhototalm_ver
         @test rhocptotalm == rhocptotalm_ver
         @test etasolidcur == etasolidcur_ver
@@ -783,11 +778,20 @@ include("../src/test_constants.jl")
         # verification, from madcph.m, line 333
         for i=1:10
             kphim0m, phimm = rand(2)
-            @test HydrologyPlanetesimals.kphi(kphim0m, phimm) == (
+            @test HydrologyPlanetesimals.kphi(kphim0m, phimm) ≈ (
                 kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
-            )
+            ) atol=1e-6
         end
     end # testset "kphi()"
+
+    @testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)" begin
+        for i=1:10
+            kϕᵣ, ϕ, ηᶠcur = rand(3)
+            @test HydrologyPlanetesimals.ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur) ≈ (
+                ηᶠcur*inv(kϕᵣ*(ϕ/phim0)^3/((1-ϕ)/(1-phim0))^2)
+            ) atol=1e-6
+        end
+    end # testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)"
 
     @testset "etatotal_rocks()" begin
         tmin = min(tmiron, tmsilicate) - 10
@@ -1097,7 +1101,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], x, y, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights == weights_ver
+                @test weights ≈ weights_ver atol=1e-6
             end
         end # testset "basic nodes"
         @testset "Vx nodes" begin
@@ -1146,7 +1150,7 @@ include("../src/test_constants.jl")
                 @debug "fix_weights Vx" i i_ver j j_ver weights weights_ver
                 @test i == i_ver
                 @test j == j_ver
-                @test weights == weights_ver
+                @test weights ≈ weights_ver atol=1e-6
             end
         end # testset "Vx nodes"
         @testset "Vy nodes" begin
@@ -1194,7 +1198,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], xvy, yvy, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights == weights_ver
+                @test weights ≈ weights_ver atol=1e-6
             end
         end # testset "Vy nodes"
         @testset "P nodes" begin
@@ -1242,7 +1246,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], xp, yp, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights == weights_ver
+                @test weights ≈ weights_ver atol=1e-6
             end
         end # testset "P nodes"    
     end # testset "fix_weights() advanced"
