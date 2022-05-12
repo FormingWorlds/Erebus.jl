@@ -13,7 +13,7 @@ using TimerOutputs
 using UnicodePlots
 
 BLAS.set_num_threads(4)
-const to = TimerOutput()
+# const to = TimerOutput()
 export run_simulation
 # include("constants.jl")
 include("test_constants.jl")
@@ -5132,7 +5132,10 @@ function simulation_loop(output_path)
    #@info "iterate timesteps"
     # -------------------------------------------------------------------------
     generate_showvalues(timestep, timesum) = () -> [
-        (:timestep, timestep), (:timesum_Ma, timesum/yearlength*1e-6)]
+        (:timestep, timestep),
+        (:timesum_Ma, timesum/yearlength*1e-6),
+        (:to_go_Ma, (endtime-timesum)/yearlength*1e-6)
+    ]
     p = Progress(
         n_steps;
         showspeed=true,
@@ -6149,7 +6152,9 @@ function run_simulation()
     output_path = parsed_args["output_path"]
     show_timer = parsed_args["show_timer"]
     mkpath(output_path)
-    reset_timer!(to)
+    if show_timer
+        reset_timer!(to)
+    end
     t1 = time_ns()
     simulation_loop(output_path)
     t2 = time_ns()

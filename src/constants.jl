@@ -13,9 +13,9 @@
  # vertical center of model
  const ycenter = ysize / 2  
  # basic grid resolution in x direction (horizontal)
- const Nx = 141
+ const Nx = 71#141
  # basic grid resolution in y direction (vertical)	
- const Ny = 141
+ const Ny = 71#141
  # Vx, Vy, P grid resolution in x direction (horizontal)
  const Nx1 = Nx + 1
  # Vx/Vy/P grid resolution in y direction (vertical)
@@ -268,9 +268,9 @@
  # length of year [s]
  const yearlength = 365.25 * 24 * 3600
  # Time sum (start) [s]
- const start_time = 1e6 * yearlength 
+ const start_time = 1.0e6 * yearlength 
  # Time sum (end) [s]
- const endtime = 15 * 1000000 * yearlength
+ const endtime = 15.0e6 * yearlength
  # Lower viscosity cut-off [Pa s]	
  const etamin = 1e+12 
  # Upper viscosity cut-off [Pa s]
@@ -288,4 +288,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const n_steps = 30000 
+ const n_steps = 5000 
+#  const n_steps = 30000 
