@@ -13,6 +13,7 @@ include("../src/test_constants.jl")
         (
             timestep,
             dt,
+            dtm,
             timesum,
             marknum,
             hrsolidm,
@@ -22,6 +23,7 @@ include("../src/test_constants.jl")
         # verification & test
         @test timestep == start_step
         @test dt == dtelastic
+        @test dtm == dt
         @test timesum == start_time
         @test marknum == start_marknum
         @test hrsolidm == start_hrsolidm
@@ -407,8 +409,6 @@ include("../src/test_constants.jl")
         (
             rhototalm,
             rhocptotalm,
-            etasolidcur,
-            etafluidcur,
             etatotalm,
             hrtotalm,
             ktotalm,
@@ -425,8 +425,6 @@ include("../src/test_constants.jl")
         # test
         @test rhocptotalm == zeros(Float64, marknum)
         @test rhocptotalm == zeros(Float64, marknum)
-        @test etasolidcur == zeros(Float64, marknum)
-        @test etafluidcur == zeros(Float64, marknum)
         @test etatotalm == zeros(Float64, marknum)
         @test hrtotalm == zeros(Float64, marknum)
         @test ktotalm == zeros(Float64, marknum)
@@ -473,8 +471,6 @@ include("../src/test_constants.jl")
         (
             rhototalm,
             rhocptotalm,
-            etasolidcur,
-            etafluidcur,
             etatotalm,
             hrtotalm,
             ktotalm,
@@ -496,13 +492,13 @@ include("../src/test_constants.jl")
         etavpm_ver = zeros(marknum)
         rhototalm_ver = zeros(marknum)
         rhocptotalm_ver = zeros(marknum)
-        etasolidcur_ver = zeros(marknum)
         hrtotalm_ver = zeros(marknum)
         ktotalm_ver = zeros(marknum)
         gggtotalm_ver = zeros(marknum)
         fricttotalm_ver = zeros(marknum)
         cohestotalm_ver = zeros(marknum)
         tenstotalm_ver = zeros(marknum)
+        etasolidcur_ver = zeros(marknum)
         etafluidcur_ver = zeros(marknum)
         kphim_ver = zeros(marknum)
         rhofluidcur_ver = zeros(marknum)
@@ -519,7 +515,6 @@ include("../src/test_constants.jl")
             etatotalm,
             hrtotalm,
             ktotalm,
-            etafluidcur,
             tkm,
             inv_gggtotalm,
             fricttotalm,
@@ -537,8 +532,6 @@ include("../src/test_constants.jl")
                 tkm,
                 rhototalm,
                 rhocptotalm,
-                etasolidcur,
-                etafluidcur,
                 etatotalm,
                 hrtotalm,
                 ktotalm,
@@ -629,14 +622,12 @@ include("../src/test_constants.jl")
         @test etavpm  == etavpm_ver
         @test rhototalm == rhototalm_ver
         @test rhocptotalm == rhocptotalm_ver
-        @test etasolidcur == etasolidcur_ver
         @test hrtotalm == hrtotalm_ver
         @test ktotalm == ktotalm_ver
         @test inv_gggtotalm == inv.(gggtotalm_ver)
         @test fricttotalm == fricttotalm_ver
         @test cohestotalm == cohestotalm_ver
         @test tenstotalm == tenstotalm_ver
-        @test etafluidcur == etafluidcur_ver
         @test rhofluidcur == rhofluidcur_ver
         @test etatotalm == etatotalm_ver
         # test calculated properties
@@ -1351,8 +1342,6 @@ include("../src/test_constants.jl")
         (
             rhototalm,
             rhocptotalm,
-            _,
-            _,
             etatotalm,
             _,
             _,
@@ -1488,8 +1477,6 @@ include("../src/test_constants.jl")
         (
             rhototalm,
             _,
-            _,
-            _,
             etatotalm,
             _,
             ktotalm,
@@ -1612,8 +1599,6 @@ include("../src/test_constants.jl")
             marknum, randomized=true)
         (
             rhototalm,
-            _,
-            _,
             _,
             etatotalm,
             _,
@@ -1738,8 +1723,6 @@ include("../src/test_constants.jl")
         (
             rhototalm,
             rhocptotalm,
-            _,
-            _,
             _,
             hrtotalm,
             _,
@@ -2902,8 +2885,8 @@ include("../src/test_constants.jl")
                 L_ver[kvx,kvy+Ny1*6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy4
                 L_ver[kvx,kvy-6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy1
                 L_ver[kvx,kvy+Ny1*6-6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy3
-                L_ver[kvx,kpm]=pscale/dx; # P1
-                L_ver[kvx,kpm+Ny1*6]=-pscale/dx; # P2
+                L_ver[kvx,kpm]=Kcont/dx; # P1
+                L_ver[kvx,kpm+Ny1*6]=-Kcont/dx; # P2
                 # Right part
                 R_ver[kvx]=-RHOX[i,j]*gx[i,j]-(SXY2-SXY1)/dy-(SXX2-SXX1)/dx
                 end
@@ -2973,8 +2956,8 @@ include("../src/test_constants.jl")
                 L_ver[kvy,kvx+6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx4
                 L_ver[kvy,kvx-Ny1*6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx1
                 L_ver[kvy,kvx+6-Ny1*6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx2
-                L_ver[kvy,kpm]=pscale/dy; # P1
-                L_ver[kvy,kpm+6]=-pscale/dy; # P2
+                L_ver[kvy,kpm]=Kcont/dy; # P1
+                L_ver[kvy,kpm+6]=-Kcont/dy; # P2
                 
                 # Right part
                 R_ver[kvy]=-RHOY[i,j]*gy[i,j]-(SXY2-SXY1)/dx-(SYY2-SYY1)/dy
@@ -3000,8 +2983,8 @@ include("../src/test_constants.jl")
                 L_ver[kpm,kvx]=1/dx; # Vx2
                 L_ver[kpm,kvy-6]=-1/dy; # Vy1
                 L_ver[kpm,kvy]=1/dy; # Vy2
-                L_ver[kpm,kpm]= pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
-                L_ver[kpm,kpf]=-pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
+                L_ver[kpm,kpm]= Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
+                L_ver[kpm,kpf]=-Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
                 # Right part
                 R_ver[kpm]=(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
                 end
@@ -3026,8 +3009,8 @@ include("../src/test_constants.jl")
                 #     P1-qxD-P2
                 # Left part
                 L_ver[kqx,kqx]=RX[i,j]; # qxD
-                L_ver[kqx,kpf]=-pscale/dx; # P1
-                L_ver[kqx,kpf+Ny1*6]=pscale/dx; # P2
+                L_ver[kqx,kpf]=-Kcont/dx; # P1
+                L_ver[kqx,kpf+Ny1*6]=Kcont/dx; # P2
                 # Right part
                 R_ver[kqx]=RHOFX[i,j]*gx[i,j]
                 end
@@ -3057,8 +3040,8 @@ include("../src/test_constants.jl")
                 #      P2
                 # Left part
                 L_ver[kqy,kqy]=RY[i,j]; # qxD
-                L_ver[kqy,kpf]=-pscale/dy; # P1
-                L_ver[kqy,kpf+6]=pscale/dy; # P
+                L_ver[kqy,kpf]=-Kcont/dy; # P1
+                L_ver[kqy,kpf+6]=Kcont/dy; # P
                 # Right part
                 R_ver[kqy]=RHOFY[i,j]*gy[i,j]
                 end
@@ -3071,7 +3054,7 @@ include("../src/test_constants.jl")
                     R_ver[kpf]=0; # Right part
                     # Real BC
                     if i==2 && j==2
-                        L_ver[kpf,kpf]=1*pscale; #Left part
+                        L_ver[kpf,kpf]=1*Kcont; #Left part
                         R_ver[kpf]=psurface; # Right part
                     end
                 else
@@ -3088,8 +3071,8 @@ include("../src/test_constants.jl")
                 L_ver[kpf,kqx]=1/dx; # qxD2
                 L_ver[kpf,kqy-6]=-1/dy; # qyD1
                 L_ver[kpf,kqy]=1/dy; # qyD2
-                L_ver[kpf,kpm]=-pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
-                L_ver[kpf,kpf]= pscale/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
+                L_ver[kpf,kpm]=-Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
+                L_ver[kpf,kpf]= Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
                 # Right part
                 R_ver[kpf]=-(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
                 end
@@ -3140,17 +3123,19 @@ include("../src/test_constants.jl")
                 # Reload solution
                 vx_ver[i,j]=S[kvx]
                 vy_ver[i,j]=S[kvy]
-                pr_ver[i,j]=S[kpm]*pscale
+                pr_ver[i,j]=S[kpm]*Kcont
                 qxD_ver[i,j]=S[kqx]
                 qyD_ver[i,j]=S[kqy]
-                pf_ver[i,j]=S[kpf]*pscale
+                pf_ver[i,j]=S[kpf]*Kcont
             end
         end
         # test
         for j=1:1:Nx1, i=1:1:Ny1
             @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-6
             @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-6
-            @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-6
+            if !(i==j==2) # exclude real boundary condition anchor point
+                @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-6
+            end
             @test qxD[i, j] ≈ qxD_ver[i, j] rtol=1e-6
             @test qyD[i, j] ≈ qyD_ver[i, j] rtol=1e-6
             @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-6
@@ -3269,9 +3254,7 @@ include("../src/test_constants.jl")
             vxf,
             vyf,
             dt,
-            dxymax,
-            aphimax,
-            dphimax
+            aphimax
         )
         # verification, from madcph.m, line 1117ff
         dtm_ver=dt
@@ -3979,6 +3962,7 @@ include("../src/test_constants.jl")
 
     @testset "perform_thermal_iterations!()" begin
         dtm = 0.0001
+        ts = 1
         tk0 = rand(Ny1, Nx1)
         tk1 = rand(Ny1, Nx1)
         tk2 = rand(Ny1, Nx1)
@@ -3999,7 +3983,7 @@ include("../src/test_constants.jl")
         ST = zeros(Ny1*Nx1)
         # perform thermal iterations
         HydrologyPlanetesimals.perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm)
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm, ts)
         # verification, from madcph.m, line 1618ff
         LT = zeros(Ny1*Nx1, Ny1*Nx1)
         RT = zeros(Ny1*Nx1)
@@ -5025,6 +5009,20 @@ include("../src/test_constants.jl")
         sxym = rand(marknum)
         phim = rand(marknum)
         etavpm = rand(marknum)
+        rhototalm = rand(marknum)
+        rhocptotalm = rand(marknum)
+        etatotalm = rand(marknum)
+        hrtotalm = rand(marknum)
+        ktotalm = rand(marknum)
+        inv_gggtotalm = rand(marknum)
+        fricttotalm = rand(marknum)
+        cohestotalm = rand(marknum)
+        tenstotalm = rand(marknum)
+        rhofluidcur = rand(marknum)
+        alphasolidcur = rand(marknum)
+        alphafluidcur = rand(marknum)
+        tkm_rhocptotalm = rand(marknum)
+        etafluidcur_inv_kphim = rand(marknum) 
         mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers()
         xm_ver = copy(xm)
         ym_ver = copy(ym)
@@ -5035,7 +5033,7 @@ include("../src/test_constants.jl")
         phim_ver = copy(phim)
         etavpm_ver = copy(etavpm)
         # replenish_markers
-        HydrologyPlanetesimals.replenish_markers!(
+        marknum_new = HydrologyPlanetesimals.replenish_markers!(
             xm,
             ym,
             tm,
@@ -5044,10 +5042,25 @@ include("../src/test_constants.jl")
             sxxm,
             sxym,
             etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
             mdis,
-            mnum,
+            mnum;
             randomized=false
         )
+        @show marknum marknum_new
         # verification, from madcph.m, line 2491ff
         # Add markers to empty areas
         marknumold=marknum
@@ -5158,10 +5171,11 @@ include("../src/test_constants.jl")
                 end
             end
         end           
-        marknumnew=marknum
+        marknum_new_ver=marknum
         # test
         @test length(xm) == length(xm_ver)
         @test length(ym) == length(ym_ver)
+        @test marknum_new == marknum_new_ver
         @test tm == tm_ver
         @test tkm == tkm_ver
         @test phim == phim_ver

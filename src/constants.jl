@@ -3,6 +3,13 @@
  const hr_al = true
  # radioactive heating from 60Fe active	
  const hr_fe = true
+# planetary parameters
+ # planetary radius [m]
+ const rplanet = 50_000.0
+ # crust radius [m]
+ const rcrust = 48_000.0
+ # surface pressure [Pa]
+ const psurface = 1.0e+3
  # model size, geometry, and resolution
  # horizontal model size [m]
  const xsize = 140_000.0
@@ -88,13 +95,6 @@
  const jmax_p = Nx
  # maximum assignable P grid index in y direction
  const imax_p = Ny
- # planetary parameters
- # planetary radius [m]
- const rplanet = 50_000.0
- # crust radius [m]
- const rcrust = 48_000.0
- # surface pressure [Pa]
- const psurface = 1e+3
  # marker count and initial spacing
  # number of markers per cell in horizontal direction
  const Nxmc = 4
@@ -132,7 +132,9 @@
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- const pscale = 1.0e+23 * inv(dx)
+ # const pscale = 1.0e+23 * inv(dx)
+ # pressure scaling coefficient (eqn 7.19-7.21 in Gerya(2019))
+ const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
@@ -288,5 +290,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const n_steps = 5000 
+ const n_steps = 1000 
 #  const n_steps = 30000 
