@@ -33,32 +33,32 @@
  const dy = ysize / (Ny-1)
  # basic nodes
  # horizontal coordinates of basic grid points [m]
-#  const x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
- const x = [j for j = 0:dx:xsize]
+ const x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
+#  const x = [j for j = 0:dx:xsize]
  # vertical coordinates of basic grid points [m]
-#  const y = SVector{Ny, Float64}([i for i = 0:dy:ysize])
- const y = [i for i = 0:dy:ysize]
+ const y = SVector{Ny, Float64}([i for i = 0:dy:ysize])
+#  const y = [i for i = 0:dy:ysize]
  # Vx nodes
  # horizontal coordinates of vx grid points [m]
-#  const xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
- const xvx = [j for j = 0:dx:xsize+dy]
+ const xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
+#  const xvx = [j for j = 0:dx:xsize+dy]
  # vertical coordinates of vx grid points [m]
-#  const yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
- const yvx = [i for i = -dy/2:dy:ysize+dy/2]
+ const yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+#  const yvx = [i for i = -dy/2:dy:ysize+dy/2]
  # Vy nodes
  # horizontal coordinates of vy grid points [m]
-#  const xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
- const xvy = [j for j = -dx/2:dx:xsize+dx/2]
+ const xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+#  const xvy = [j for j = -dx/2:dx:xsize+dx/2]
  # vertical coordinates of vy grid points [m]
-#  const yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
- const yvy = [i for i = 0:dy:ysize+dy]
+ const yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
+#  const yvy = [i for i = 0:dy:ysize+dy]
  # P nodes
  # horizontal coordinates of p grid points [m]
-#  const xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
- const xp = [j for j = -dx/2:dx:xsize+dx/2]
+ const xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+#  const xp = [j for j = -dx/2:dx:xsize+dx/2]
  # vertical coordinates of p grid points [m]
-#  const yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
- const yp = [i for i = -dy/2:dy:ysize+dy/2]
+ const yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+#  const yp = [i for i = -dy/2:dy:ysize+dy/2]
  # basic grid min/max assignables indices
  # minimum assignable basic grid index in x direction
  const jmin_basic = 1
@@ -109,10 +109,11 @@
  # marker grid step in vertical direction
  const dym = ysize / Nym
  # horizontal coordinates of marker grid/launch anchor points [m]
-#  const xxm = SVector{Nxm, Float64}([j for j = dxm/2:dxm:xsize-dxm/2])
- const xxm = [j for j = dxm/2:dxm:xsize-dxm/2]
- # vertical coordinates of marker grid/launch anchor points [m]
- const yym = [i for i = dym/2:dym:ysize-dym/2]
+ const xxm = SVector{Nxm, Float64}([j for j = dxm/2:dxm:xsize-dxm/2])
+#  const xxm = [j for j = dxm/2:dxm:xsize-dxm/2]
+#  vertical coordinates of marker grid/launch anchor points [m]
+ const yym = SVector{Nxm, Float64}([i for i = dym/2:dym:ysize-dym/2])
+#  const yym = [i for i = dym/2:dym:ysize-dym/2]
  # initialization distance of nearest marker to launch anchor point [m]
  const mdis_init = 1.0e30
  # number of markers at start
@@ -290,5 +291,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const n_steps = 1000 
-#  const n_steps = 30000 
+#  const n_steps = 1000 
+ const n_steps = 30000 
