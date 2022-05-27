@@ -111,7 +111,7 @@
  # horizontal coordinates of marker grid/launch anchor points [m]
  const xxm = SVector{Nxm, Float64}([j for j = dxm/2:dxm:xsize-dxm/2])
 #  const xxm = [j for j = dxm/2:dxm:xsize-dxm/2]
-#  vertical coordinates of marker grid/launch anchor points [m]
+ # vertical coordinates of marker grid/launch anchor points [m]
  const yym = SVector{Nxm, Float64}([i for i = dym/2:dym:ysize-dym/2])
 #  const yym = [i for i = dym/2:dym:ysize-dym/2]
  # initialization distance of nearest marker to launch anchor point [m]
@@ -133,9 +133,10 @@
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- # const pscale = 1.0e+23 * inv(dx)
+#  const pscale = 1.0e+23 * inv(dx)
  # pressure scaling coefficient (eqn 7.19-7.21 in Gerya(2019))
- const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
+#  const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
+ const Kcont = 1.0e20
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
@@ -291,5 +292,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
-#  const n_steps = 1000 
+#  const n_steps = 100
  const n_steps = 30000 

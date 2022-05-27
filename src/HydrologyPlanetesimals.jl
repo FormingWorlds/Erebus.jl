@@ -14,8 +14,8 @@ using UnicodePlots
 
 const to = TimerOutput()
 export run_simulation
-include("constants.jl")
-# include("test_constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -2754,7 +2754,7 @@ function process_hydromechanical_solution!(
     @views @. vy = S_mat[2, :, :]
     @views @. pr = S_mat[3, :, :] .* Kcont
     # enforce pr[2, 2] fulfills the real pressure boundary condition post-solve
-    pr[2, 2] = psurface
+    # pr[2, 2] = psurface
     @views @. qxD = S_mat[4, :, :]
     @views @. qyD = S_mat[5, :, :]
     @views @. pf = S_mat[6, :, :] .* Kcont
@@ -5514,51 +5514,51 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
-        # @info "M_680"
-        # jldsave(output_path*"M_680_"*string(timestep)*".jld2";
-        #     ETA0,
-        #     ETA,
-        #     YNY,
-        #     GGG,
-        #     SXY0,
-        #     COH,
-        #     TEN,
-        #     FRI,
-        #     RHOX,
-        #     RHOFX,
-        #     KX,
-        #     PHIX,
-        #     RX,
-        #     RHOY,
-        #     RHOFY,
-        #     KY,
-        #     PHIY,
-        #     RY,
-        #     GGGP,
-        #     SXX0,
-        #     RHO,
-        #     RHOCP,
-        #     ALPHA,
-        #     ALPHAF,
-        #     HR,
-        #     PHI,
-        #     BETTAPHI,
-        #     tk1,
-        #     xm,
-        #     ym,
-        #     tm,
-        #     phim,
-        #     sxxm,
-        #     sxym,
-        #     etafluidcur_inv_kphim,
-        #     ktotalm,
-        #     KXSUM,
-        #     KYSUM,
-        #     TKSUM,
-        #     WTXSUM,
-        #     WTYSUM,
-        #     WTPSUM
-        # )
+        @info "M_680"
+        jldsave(output_path*"M_680_"*string(timestep)*".jld2";
+            ETA0,
+            ETA,
+            YNY,
+            GGG,
+            SXY0,
+            COH,
+            TEN,
+            FRI,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            RX,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            RY,
+            GGGP,
+            SXX0,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            PHI,
+            BETTAPHI,
+            tk1,
+            xm,
+            ym,
+            tm,
+            phim,
+            sxxm,
+            sxym,
+            etafluidcur_inv_kphim,
+            ktotalm,
+            KXSUM,
+            KYSUM,
+            TKSUM,
+            WTXSUM,
+            WTYSUM,
+            WTPSUM
+        )
 
         # ---------------------------------------------------------------------
        #@info "compute gravity solution"
@@ -5577,21 +5577,21 @@ function simulation_loop(output_path)
         ETA00 .= ETA
         YNY00 .= YNY
 
-        # @info "M_765"
-        # if timestep <=10
-        #     jldsave(output_path*"M_765_"*string(timestep)*".jld2";
-        #         SP,
-        #         FI,
-        #         gx,
-        #         gy,
-        #         dt,
-        #         dtelastic,
-        #         ETA,
-        #         ETA00,
-        #         YNY,
-        #         YNY00
-        #     )
-        # end
+        @info "M_765"
+        if timestep <=10
+            jldsave(output_path*"M_765_"*string(timestep)*".jld2";
+                SP,
+                FI,
+                gx,
+                gy,
+                dt,
+                dtelastic,
+                ETA,
+                ETA00,
+                YNY,
+                YNY00
+            )
+        end
 
         # ---------------------------------------------------------------------
        #@info "perform plastic iterations"
@@ -5644,21 +5644,26 @@ function simulation_loop(output_path)
                 pf
             )
 
-            # @info "M_1078"
-            # if timestep <=10
-            #     L_d = collect(L)
-            #     jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-            #         L_d,
-            #         R,
-            #         S,
-            #         vx,
-            #         vy,
-            #         pr,
-            #         qxD,
-            #         qyD,
-            #         pf
-            #     )
-            # end
+            @info "M_1078"
+            if timestep <=10
+                L_d = collect(L)
+                jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+                    L_d,
+                    R,
+                    S,
+                    vx,
+                    vy,
+                    qxD,
+                    qyD,
+                    pr,
+                    pf,
+                    pr0,
+                    pf0,
+                    ETAP,
+                    ETAPHI,
+                    BETTAPHI
+                )
+            end
 
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
             aphimax = compute_Aϕ!(
@@ -5674,19 +5679,19 @@ function simulation_loop(output_path)
             )
             # @show aphimax
 
-            # @info "M_1090"
-            # jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
-            #     APHI,
-            #     pr,
-            #     pr0,
-            #     pf,
-            #     pf0,
-            #     PHI,
-            #     ETAPHI,
-            #     BETTAPHI,
-            #     dt,
-            #     aphimax
-            # )
+            @info "M_1090"
+            jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
+                APHI,
+                pr,
+                pr0,
+                pf,
+                pf0,
+                PHI,
+                ETAPHI,
+                BETTAPHI,
+                dt,
+                aphimax
+            )
 
             # compute fluid velocities
             compute_fluid_velocities!(

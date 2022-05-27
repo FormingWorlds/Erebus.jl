@@ -133,9 +133,10 @@
  # gravitational constant [m^3*kg^-1*s^-2]
  const G = 6.672e-11
  # scaled pressure    
- # const pscale = 1.0e+23 * inv(dx)
+#  const pscale = 1.0e+23 * inv(dx)
  # pressure scaling coefficient (eqn 7.19-7.21 in Gerya(2019))
- const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
+#  const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
+ const Kcont = 1.0e20
  # materials properties:              planet      crust       space
  # solid Density [kg/m^3]
  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
@@ -249,7 +250,7 @@
  const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
  # timestepping parameters
  # output storage periodicity
- const savematstep = 1
+ const savematstep = 10
  # Maximal computational timestep [s]
  const dtelastic = 1e+11 
  # Coefficient to decrease computational timestep
@@ -291,5 +292,5 @@
  # starting timestep
  const start_step = 1
  # number of timesteps to run
- const n_steps = 100
-#  const nsteps = 30000 
+#  const n_steps = 100
+ const n_steps = 30000 
