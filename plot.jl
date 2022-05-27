@@ -94,8 +94,7 @@ function plot_results(input_path)
     Ny = file["Ny"]
     Nx1 = file["Nx1"]
     Ny1 = file["Ny1"]
-    marknum = file["marknum"]
-
+ 
     x = file["x"]
     y = file["y"]
     xvx = file["xvx"]
@@ -140,6 +139,11 @@ function plot_results(input_path)
     qyD = Array{Float64}(undef, Ny1, Nx1, n_steps)
     RX = Array{Float64}(undef, Ny1, Nx1, n_steps)
     ETAPHI = Array{Float64}(undef, Ny1, Nx1, n_steps)
+    timestep = Array{Float64}(undef, n_steps)
+    dtm = Array{Float64}(undef, n_steps)
+    timesum = Array{Float64}(undef, n_steps)
+    timesum_Ga = Array{Float64}(undef, n_steps)
+    marknum = Array{Float64}(undef, n_steps)
 
     # xm = Array{Float64}(undef, marknum, n_steps)
     # ym = Array{Float64}(undef, marknum, n_steps)
@@ -168,6 +172,12 @@ function plot_results(input_path)
             qyD[:,:,i] = file["qyD"]
             RX[:,:,i] = file["RX"]
             ETAPHI[:,:,i] = file["ETAPHI"]
+            timestep[i] = file["timestep"]
+            dtm[i] = file["dtm"]
+            timesum[i] = file["timesum"]
+            timesum_Ga[i] = timesum[i] / (365.25 * 24 * 3600) *1e-9
+            marknum[i] = file["marknum"]
+
             # xm[:, i] = file["xm"]
             # ym[:, i] = file["ym"]
             # tm[:, i] = file["tm"]
@@ -215,7 +225,8 @@ function plot_results(input_path)
             [d e f]
             [g h i]
         ]
-        plot(A, B, C, D, E, F, G, H, I; layout, size=(1920, 1920)) 
+        plot( A, B, C, D, E, F, G, H, I; layout, size=(1920, 1920),
+        plot_title="t_Ga=$(timesum_Ga[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
     end
     gif(anim_1, input_path*"/HydrologyPlanetesimals_1.mp4")        
 
@@ -263,7 +274,8 @@ function plot_results(input_path)
             [m n o p]
         ]
         plot(
-            A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P; layout, size=(1920, 1920)) 
+            A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P; layout, size=(1920, 1920),
+            plot_title="t_Ga=$(timesum_Ga[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
     end
     gif(anim_2, input_path*"/HydrologyPlanetesimals_2.mp4")   
 end

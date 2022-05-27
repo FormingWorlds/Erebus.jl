@@ -1886,7 +1886,7 @@ include("../src/test_constants.jl")
             ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
             property = rand(7, num_markers)
             # calculate grid properties
-            Base.Threads.@threads for m=1:1:num_markers
+            for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
@@ -2759,25 +2759,25 @@ include("../src/test_constants.jl")
     @testset "assemble_hydromechanical_lse()" begin
         dt = dtelastic
         # simulate data
-        ETA = rand(Ny, Nx)
-        ETAP = rand(Ny1, Nx1)
-        GGG = rand(Ny, Nx)
-        GGGP = rand(Ny1, Nx1)
-        SXY0 = rand(Ny, Nx)
-        SXX0 = rand(Ny, Nx)
-        RHOX = rand(Ny1, Nx1)
-        RHOY = rand(Ny1, Nx1)
-        RHOFX = rand(Ny1, Nx1)
-        RHOFY = rand(Ny1, Nx1)
-        RX = rand(Ny1, Nx1)
-        RY = rand(Ny1, Nx1)
-        ETAPHI = rand(Ny1, Nx1)
-        BETTAPHI = rand(Ny1, Nx1)
-        PHI = rand(Ny1, Nx1)
-        gx = rand(Ny1, Nx1)
-        gy = rand(Ny1, Nx1) 
-        pr0 = rand(Ny1, Nx1)
-        pf0 = rand(Ny1, Nx1)
+        ETA = rand(Ny, Nx) * 1e16
+        ETAP = rand(Ny1, Nx1) * 1e16
+        GGG = rand(Ny, Nx) * 1e10
+        GGGP = rand(Ny1, Nx1) * 1e10
+        SXY0 = rand(Ny, Nx) * 1e4
+        SXX0 = rand(Ny, Nx) * 1e4
+        RHOX = rand(Ny1, Nx1) * 1e4
+        RHOY = rand(Ny1, Nx1) * 1e4
+        RHOFX = rand(Ny1, Nx1) * 1e4
+        RHOFY = rand(Ny1, Nx1) * 1e4
+        RX = rand(Ny1, Nx1) * 1e39
+        RY = rand(Ny1, Nx1) * 1e39
+        ETAPHI = rand(Ny1, Nx1) * 1e15
+        BETTAPHI = rand(Ny1, Nx1) * 1e-10 
+        PHI = rand(Ny1, Nx1) * 1.0
+        gx = rand(Ny1, Nx1) * 1.0
+        gy = rand(Ny1, Nx1) * 1.0
+        pr0 = rand(Ny1, Nx1) * 1e5
+        pf0 = rand(Ny1, Nx1) * 1e5
         # LSE
         R = zeros(Nx1*Ny1*6)
         L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
@@ -3444,7 +3444,7 @@ include("../src/test_constants.jl")
         @test PHI[:, Nx1] == PHI_ver[:, Nx1]
         @test pr[:, Nx1] == pr_ver[:, Nx1]
         @test pf[:, Nx1] == pf_ver[:, Nx1]
-        @test ps == ps_ver
+        @test ps ≈ ps_ver atol=1e-6
     end # testset "symmetrize_p_node_observables!()"
 
     @testset "positive_max()" begin
