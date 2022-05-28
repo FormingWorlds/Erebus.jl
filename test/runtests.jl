@@ -1884,7 +1884,7 @@ include("../src/test_constants.jl")
             # simulate markers
             xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
             ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-            property = rand(7, num_markers)
+            property = rand(7, num_markers)*1e6
             # calculate grid properties
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2041,7 +2041,7 @@ include("../src/test_constants.jl")
             # simulate markers
             xm = rand(-xvx[1]:0.1:xvx[end]+dx, num_markers)
             ym = rand(-yvx[1]:0.1:yvx[end]+dy, num_markers)
-            property = rand(5, num_markers)
+            property = rand(5, num_markers)*1e6
             # calculate grid properties
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2173,7 +2173,7 @@ include("../src/test_constants.jl")
             # simulate markers
             xm = rand(-xvy[1]:0.1:xvy[end]+dx, num_markers)
             ym = rand(-yvy[1]:0.1:yvy[end]+dy, num_markers)
-            property = rand(5, num_markers)
+            property = rand(5, num_markers)*1e6
             # calculate grid properties
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2323,7 +2323,7 @@ include("../src/test_constants.jl")
             # simulate markers
             xm = rand(-xp[1]:0.1:xp[end]+dx, num_markers)
             ym = rand(-yp[1]:0.1:yp[end]+dy, num_markers)
-            property = rand(9, num_markers)
+            property = rand(9, num_markers)*1e6
             # calculate grid properties
             for m=1:1:num_markers
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -3080,14 +3080,14 @@ include("../src/test_constants.jl")
         end
         # test
         for j=1:1:Nx1*6, i=1:1:Ny1*6
-            @test L[i, j] ≈ L_ver[i, j] rtol=1e-6
-            @test R[i] ≈ R_ver[i] rtol=1e-6
+            @test L[i, j] ≈ L_ver[i, j] rtol=1e-9
+            @test R[i] ≈ R_ver[i] rtol=1e-9
         end
     end # testset "assemble_hydromechanical_lse()"
 
     @testset "process_hydromechanical_solution!()" begin
         # simulate data
-        S = rand(Nx1*Ny1*6)
+        S = rand(Nx1*Ny1*6) * 2e-10 .- 1e-10
         vx = zeros(Ny1, Nx1)
         vy = zeros(Ny1, Nx1)
         pr = zeros(Ny1, Nx1)
@@ -3131,14 +3131,14 @@ include("../src/test_constants.jl")
         end
         # test
         for j=1:1:Nx1, i=1:1:Ny1
-            @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-6
-            @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-6
-            if !(i==j==2) # exclude real boundary condition anchor point
-                @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-6
-            end
-            @test qxD[i, j] ≈ qxD_ver[i, j] rtol=1e-6
-            @test qyD[i, j] ≈ qyD_ver[i, j] rtol=1e-6
-            @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-6
+            @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-9
+            @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-9
+            # if !(i==j==2) # exclude real boundary condition anchor point
+                @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-9
+            # end
+            @test qxD[i, j] ≈ qxD_ver[i, j] rtol=1e-9
+            @test qyD[i, j] ≈ qyD_ver[i, j] rtol=1e-9
+            @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-9
         end
     end # testset "process_hydromechanical_solution!()"
 
@@ -3147,13 +3147,13 @@ include("../src/test_constants.jl")
         # simulate data
         APHI = rand(Ny1, Nx1)
         APHI_ver = rand(Ny1, Nx1)
-        ETAPHI = rand(Ny1, Nx1)
-        BETTAPHI = rand(Ny1, Nx1)
+        ETAPHI = rand(Ny1, Nx1) * 1e15
+        BETTAPHI = rand(Ny1, Nx1) * 1e-10
         PHI = rand(Ny1, Nx1)
-        pr = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
-        pr0 = rand(Ny1, Nx1)
-        pf0 = rand(Ny1, Nx1)
+        pr = rand(Ny1, Nx1) * 1e4
+        pf = rand(Ny1, Nx1) * 1e4
+        pr0 = rand(Ny1, Nx1) * 1e4
+        pf0 = rand(Ny1, Nx1) * 1e4
         # compute Aϕ
         aphimax = HydrologyPlanetesimals.compute_Aϕ!(
             APHI,
@@ -5060,7 +5060,6 @@ include("../src/test_constants.jl")
             mnum;
             randomized=false
         )
-        @show marknum marknum_new
         # verification, from madcph.m, line 2491ff
         # Add markers to empty areas
         marknumold=marknum
