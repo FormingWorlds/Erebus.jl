@@ -733,6 +733,14 @@ include("../src/test_constants.jl")
         @test HydrologyPlanetesimals.total(1, 2, 0.5) == 1.5
     end # testset "total()"
 
+    @testset "dot4()" begin
+        for i=1:1:10
+            v1 = rand(4)
+            v2 = rand(4)
+            @test HydrologyPlanetesimals.dot4(v1, v2) ≈ sum(v1.*v2) rtol=1e-9
+        end
+    end
+
     @testset "grid_vector()" begin
         grid = rand(10, 10)
         @test HydrologyPlanetesimals.grid_vector(1, 1, grid) == @SVector [
@@ -4969,39 +4977,50 @@ include("../src/test_constants.jl")
             tkm_ver[m]=((1-phim[m])*tkm_ver[m]*rhocpsolidm[tm[m]]+ phim[m]*(tkm_ver[m]+dtkfsm)*rhocpfluidm[tm[m]])/ ((1-phim[m])*rhocpsolidm[tm[m]]+phim[m]*rhocpfluidm[tm[m]])
         end  # end of marker loop
         # test
-        @test xm ≈ xm_ver rtol=1e-9
-        @test ym ≈ ym_ver rtol=1e-9
-        @test tkm ≈ tkm_ver rtol=1e-1
-        @test sxym ≈ sxym_ver rtol=1e-9            
-        @test sxxm ≈ sxxm_ver rtol=1e-9
+        for m=1:1:marknum
+            @test xm[m] ≈ xm_ver[m] rtol=1e-9
+            @test ym[m] ≈ ym_ver[m] rtol=1e-9
+            @test tkm[m] ≈ tkm_ver[m] rtol=1e-1
+            @test sxym[m] ≈ sxym_ver[m] rtol=1e-9            
+            @test sxxm[m] ≈ sxxm_ver[m] rtol=1e-9
+        end
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!()" begin
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        vxf = rand(Ny1, Nx1)
-        vyf = rand(Ny1, Nx1)
-        pr = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
-        ps = rand(Ny1, Nx1)
-        pr0 = rand(Ny1, Nx1)
-        pf0 = rand(Ny1, Nx1)
-        ps0 = rand(Ny1, Nx1)
-        pr_ver = copy(pr)
-        pf_ver = copy(pf)
-        ps_ver = copy(ps)
-        pr0_ver = copy(pr0)
-        pf0_ver = copy(pf0)
-        ps0_ver = copy(ps0)
+        vx = rand(Ny1, Nx1) * 1e-9
+        vy = rand(Ny1, Nx1) * 1e-9
+        vxf = rand(Ny1, Nx1) * 1e-9
+        vyf = rand(Ny1, Nx1) * 1e-9
+        pr = rand(Ny1, Nx1) * 1e6
+        pf = rand(Ny1, Nx1) * 1e6
+        ps = rand(Ny1, Nx1) * 1e6
+        pr0 = rand(Ny1, Nx1) * 1e6
+        pf0 = rand(Ny1, Nx1) * 1e6
+        ps0 = rand(Ny1, Nx1) * 1e6
+        pr_ver = deepcopy(pr)
+        pf_ver = deepcopy(pf)
+        ps_ver = deepcopy(ps)
+        pr0_ver = deepcopy(pr0)
+        pf0_ver = deepcopy(pf0)
+        ps0_ver = deepcopy(ps0)
         dtm = 0.9
+        ps_backtrace_x_ver = zeros(Ny1, Nx1)
+        ps_backtrace_y_ver = zeros(Ny1, Nx1)
+        pf_backtrace_x_ver = zeros(Ny1, Nx1)
+        pf_backtrace_y_ver = zeros(Ny1, Nx1)
         # backtrace pressures using RK4
+        # ps_backtrace_x,
+        # ps_backtrace_y,
+        # pf_backtrace_x,
+        # pf_backtrace_y = HydrologyPlanetesimals.backtrace_pressures_rk4!(
+        #     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
+        # verification, from madcph.p, line 2363ff
         HydrologyPlanetesimals.backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
-        # verification, from madcph.p, line 2363ff
         vxm = zeros(4,1)
         vym = zeros(4,1)
-        pr0_ver=pr_ver
-        ps0_ver=ps_ver
+        pr0_ver=deepcopy(pr_ver)
+        ps0_ver=deepcopy(ps_ver)
         for jj=2:1:Nx
         for ii=2:1:Ny
             # Save initial nodal coordinates
@@ -5097,6 +5116,8 @@ include("../src/test_constants.jl")
             # Trace the node backward
             xcur=xA-dtm*vxmeff
             ycur=yA-dtm*vymeff
+            ps_backtrace_x_ver[ii,jj]=xcur
+            ps_backtrace_y_ver[ii,jj]=ycur
             # Interpolate nodal property
             # SIGMA'xx; P
             # Define i;j indexes for the upper left node
@@ -5224,6 +5245,8 @@ include("../src/test_constants.jl")
             # Trace the node backward
             xcur=xA-dtm*vxmeff
             ycur=yA-dtm*vymeff
+            pf_backtrace_x_ver[ii,jj]=xcur
+            pf_backtrace_y_ver[ii,jj]=ycur
             # Interpolate nodal property
             # SIGMA'xx; P
             # Define i;j indexes for the upper left node
@@ -5253,9 +5276,13 @@ include("../src/test_constants.jl")
         end
         # test
         for jj=2:1:Nx, ii=2:1:Ny
-            @test pr0[jj, ii] ≈ pr0_ver[jj, ii] rtol=1e-4
-            @test ps0[jj, ii] ≈ ps0_ver[jj, ii] rtol=1e-4 
-            @test pf0[jj, ii] ≈ pf0_ver[jj, ii] rtol=1e-4
+            @test pr0[ii, jj] ≈ pr0_ver[ii, jj] rtol=1e-6
+            @test ps0[ii, jj] ≈ ps0_ver[ii, jj] rtol=1e-6 
+            @test pf0[ii, jj] ≈ pf0_ver[ii, jj] rtol=1e-6
+            # @test ps_backtrace_x[ii, jj] ≈ ps_backtrace_x_ver[ii, jj] rtol=1e-9
+            # @test ps_backtrace_y[ii, jj] ≈ ps_backtrace_y_ver[ii, jj] rtol=1e-9
+            # @test pf_backtrace_x[ii, jj] ≈ pf_backtrace_x_ver[ii, jj] rtol=1e-9
+            # @test pf_backtrace_y[ii, jj] ≈ pf_backtrace_y_ver[ii, jj] rtol=1e-9
         end
     end # testset "backtrace_pressures_rk4!()"
 

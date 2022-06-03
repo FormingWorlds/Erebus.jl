@@ -5,7 +5,6 @@ using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
-using LinearAlgebra
 using Pardiso
 using ProgressMeter
 using SparseArrays
@@ -1021,6 +1020,24 @@ function grid_vector(i, j, grid)
 end
 
 """
+Compute inner product of two 4-vectors.
+
+$(SIGNATURES)
+
+# Details
+
+    - v1: first 4-vector
+    - v2: second 4-vector
+
+# Returns
+
+    - inner product of v1 and v2
+"""
+function dot4(v1, v2)
+    @inbounds return v1[1]*v2[1] + v1[2]*v2[2] + v1[3]*v2[3] + v1[4]*v2[4]
+end
+
+"""
 Get the arithmetic average of values from a grid 4-stencil anchored at (i, j).
 
 $(SIGNATURES)
@@ -1250,10 +1267,10 @@ function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
     i, j, dxmj, dymi = fix_distances(
         x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
     return i, j, SVector(
-            (1.0-dymi*inv(dy)) * (1.0-dxmj*inv(dx)),
-            (dymi*inv(dy)) * (1.0-dxmj*inv(dx)),
-            (1.0-dymi*inv(dy)) * (dxmj*inv(dx)),
-            (dymi*inv(dy)) * (dxmj*inv(dx))
+            (1.0-dymi/dy) * (1.0-dxmj/dx),
+            (dymi/dy) * (1.0-dxmj/dx),
+            (1.0-dymi/dy) * (dxmj/dx),
+            (dymi/dy) * (dxmj/dx)
         ) 
 end # function fix_weights
 
@@ -1406,7 +1423,7 @@ Interpolate a property from nearest the four nodes on a given grid to a marker.
 """
 function interpolate_to_marker!(m, i, j, weights, marker_property, grid)
 # @timeit to "interpolate_to_marker!()" begin
-    @inbounds marker_property[m] = dot(grid_vector(i, j, grid), weights)
+    @inbounds marker_property[m] = dot4(grid_vector(i, j, grid), weights)
 # end # @timeit to "interpolate_to_marker!()"
     return nothing
 end # function interpolate_to_marker
@@ -1433,7 +1450,7 @@ and add it to the markers property.
 """
 function interpolate_add_to_marker!(m, i, j, weights, marker_property, grid)
 # @timeit to "interpolate_add_to_marker!()" begin
-    @inbounds marker_property[m] += dot(grid_vector(i, j, grid), weights)
+    @inbounds marker_property[m] += dot4(grid_vector(i, j, grid), weights)
 # end # @timeit to "interpolate_add_to_marker!()"
     return nothing
 end # function interpolate_add_to_marker
@@ -3393,7 +3410,7 @@ function apply_subgrid_stress_diffusion!(
         )
         # σ₀′xx at P nodes
         # compute marker-node σ′xx difference
-        @inbounds δσxxm₀ = sxxm[m] - dot(grid_vector(i_p, j_p, SXX0), weights_p)
+        @inbounds δσxxm₀ = sxxm[m] - dot4(grid_vector(i_p, j_p, SXX0), weights_p)
         # time-relax σ′xx difference
         @inbounds δσxxm₀ *= (
             exp(-dsubgrids*dtm/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0) 
@@ -3404,7 +3421,7 @@ function apply_subgrid_stress_diffusion!(
         interpolate_add_to_grid!(i_p, j_p, weights_p, 1.0, WTPSUM)
         # σ₀xy at basic nodes
         # compute marker-node σxy difference
-        @inbounds δσxy₀ = sxym[m] - dot(
+        @inbounds δσxy₀ = sxym[m] - dot4(
             grid_vector(i_basic, j_basic, SXY0), weights_basic)
         # time-relax σxy difference
         @inbounds δσxy₀ *= (
@@ -3783,7 +3800,7 @@ function apply_subgrid_temperature_diffusion!(
         @inbounds i, j, weights = fix_weights(
             xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
         # compute marker-node temperature difference
-        @inbounds δtkm = tkm[m] - dot(grid_vector(i, j, tk1), weights)
+        @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
         # compute marker properties
         @inbounds if tm[m] < 3
             # rocks
@@ -3896,7 +3913,7 @@ function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
                     imax_p
                 )
                 # compute Dln[(1-ϕ)/ϕ]/Dt at marker
-                aphim = dot(grid_vector(i, j, APHI), weights)
+                aphim = dot4(grid_vector(i, j, APHI), weights)
                 # update marker porosity
                 phim[m] = max(
                     phimin,
@@ -4075,7 +4092,7 @@ function move_markers_rk4!(
                 imax_p
             )
             # interpolate local solid temperature from P grid
-            tkms₀ = dot(grid_vector(i, j, tk2), weights)
+            tkms₀ = dot4(grid_vector(i, j, tk2), weights)
             i, j, weights = fix_weights(
                 xmrk4,
                 ymrk4,
@@ -4089,7 +4106,7 @@ function move_markers_rk4!(
                 imax_basic
             )
             # interpolate local rotation rate from basic grid
-            ωm = dot(grid_vector(i, j, wyx), weights)
+            ωm = dot4(grid_vector(i, j, wyx), weights)
             # incremental rotation angle
             θ = dtm * ωm
             # compute analytic stress rotation using σ′′xx = -σ′′yy
@@ -4184,8 +4201,8 @@ function move_markers_rk4!(
                 end
             end # RK4 solid velocity loop
             # advance marker using RK4 solid velocity
-            xm[m] += dtm * dot(brk4, vxrk4)
-            ym[m] += dtm * dot(brk4, vyrk4)
+            xm[m] += dtm * dot4(brk4, vxrk4)
+            ym[m] += dtm * dot4(brk4, vyrk4)
             # reset RK4 scheme for fluid velocity backtracing
             xmm = xmrk4 = xm[m]
             ymm = ymrk4 = ym[m]      
@@ -4274,8 +4291,8 @@ function move_markers_rk4!(
                 end
             end # RK4 fluid velocity loop
             # backtrace marker using RK4 fluid velocity
-            xmrk4 = xmm - dtm*dot(brk4, vxrk4)
-            ymrk4 = ymm - dtm*dot(brk4, vyrk4)
+            xmrk4 = xmm - dtm*dot4(brk4, vxrk4)
+            ymrk4 = ymm - dtm*dot4(brk4, vyrk4)
             # interpolate fluid temperature at backtraced marker position
             i, j, weights = fix_weights(
                 xmrk4,
@@ -4290,7 +4307,7 @@ function move_markers_rk4!(
                 imax_p,
             )
             # interpolate backtraced local fluid temperature from P grid
-            tkmf₀ = dot(grid_vector(i, j, tk2), weights)
+            tkmf₀ = dot4(grid_vector(i, j, tk2), weights)
             # compute marker fluid-solid temperature difference
             δtkmfs = tkmf₀ - tkms₀
             # correct marker temperature
@@ -4332,6 +4349,10 @@ function backtrace_pressures_rk4!(
    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 # @timeit to "backtrace_pressures_rk4!" begin
     @inbounds begin
+        ps_backtrace_x = zeros(Ny1, Nx1)
+        ps_backtrace_y = zeros(Ny1, Nx1)
+        pf_backtrace_x = zeros(Ny1, Nx1)
+        pf_backtrace_y = zeros(Ny1, Nx1)
         # advance pressure generation
         pr0 .= pr
         ps0 .= ps
@@ -4427,8 +4448,10 @@ function backtrace_pressures_rk4!(
                 end
             end # RK4 solid velocity loop
             # backtrace P node using RK4 solid velocity
-            xrk4 = xpjj - dtm*dot(brk4, vxrk4)
-            yrk4 = ypii - dtm*dot(brk4, vyrk4)
+            xrk4 = xpjj - dtm*dot4(brk4, vxrk4)
+            yrk4 = ypii - dtm*dot4(brk4, vyrk4)
+            ps_backtrace_x[ii, jj] = xrk4
+            ps_backtrace_y[ii, jj] = yrk4
             # interpolate total and solid pressure at backtraced P nodes
             i, j, weights = fix_weights(
                 xrk4,
@@ -4442,8 +4465,8 @@ function backtrace_pressures_rk4!(
                 imin_p,
                 imax_p
             )
-            pr0[ii, jj] = dot(grid_vector(i, j, pr), weights)
-            ps0[ii, jj] = dot(grid_vector(i, j, ps), weights)
+            pr0[ii, jj] = dot4(grid_vector(i, j, pr), weights)
+            ps0[ii, jj] = dot4(grid_vector(i, j, ps), weights)
         end # jj, ii total and solid pressure loop
         # backtrace P nodes: fluid pressure
         for jj=2:1:Nx, ii=2:1:Ny
@@ -4536,8 +4559,10 @@ function backtrace_pressures_rk4!(
                 end
             end # RK4 fluid velocity loop
             # backtrace P node using RK4 fluid velocity
-            xrk4 = xpjj - dtm * dot(brk4, vxrk4)
-            yrk4 = ypii - dtm * dot(brk4, vyrk4)
+            xrk4 = xpjj - dtm * dot4(brk4, vxrk4)
+            yrk4 = ypii - dtm * dot4(brk4, vyrk4)
+            pf_backtrace_x[ii, jj] = xrk4
+            pf_backtrace_y[ii, jj] = yrk4
             # interpolate fluid pressure at backtraced P nodes
             i, j, weights = fix_weights(
                 xrk4,
@@ -4551,10 +4576,11 @@ function backtrace_pressures_rk4!(
                 imin_p,
                 imax_p
             )
-            pf0[ii, jj] = dot(grid_vector(i, j, pf), weights)
+            pf0[ii, jj] = dot4(grid_vector(i, j, pf), weights)
         end # jj, ii fluid pressure loop
     end # @inbounds
 # end # @timeit to "backtrace_pressures_rk4!"
+    # return ps_backtrace_x, ps_backtrace_y, pf_backtrace_x, pf_backtrace_y
     return nothing
 end # function backtrace_pressures_rk4!
 
@@ -5692,21 +5718,36 @@ function simulation_loop(output_path)
             @info "M_1078"
             # L_d = collect(L)
             jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-                # L_d,
+                Kcont,
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                SXY0,
+                SXX0,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                gx,
+                gy,
+                pr0,
+                pf0,
+                dt,
                 R,
+                #L_d,
                 S,
                 vx,
                 vy,
                 qxD,
                 qyD,
                 pr,
-                pf,
-                pr0,
-                pf0,
-                ETAP,
-                ETAPHI,
-                BETTAPHI,
-                Kcont
+                pf
             )
 
             # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
