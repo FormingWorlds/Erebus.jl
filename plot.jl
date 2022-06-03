@@ -142,7 +142,7 @@ function plot_results(input_path)
     timestep = Array{Float64}(undef, n_steps)
     dtm = Array{Float64}(undef, n_steps)
     timesum = Array{Float64}(undef, n_steps)
-    timesum_Ga = Array{Float64}(undef, n_steps)
+    timesum_Ma = Array{Float64}(undef, n_steps)
     marknum = Array{Float64}(undef, n_steps)
 
     # xm = Array{Float64}(undef, marknum, n_steps)
@@ -175,7 +175,7 @@ function plot_results(input_path)
             timestep[i] = file["timestep"]
             dtm[i] = file["dtm"]
             timesum[i] = file["timesum"]
-            timesum_Ga[i] = timesum[i] / (365.25 * 24 * 3600) *1e-9
+            timesum_Ma[i] = timesum[i] / (365.25 * 24 * 3600) *1e-6
             marknum[i] = file["marknum"]
 
             # xm[:, i] = file["xm"]
@@ -226,7 +226,7 @@ function plot_results(input_path)
             [g h i]
         ]
         plot( A, B, C, D, E, F, G, H, I; layout, size=(1920, 1920),
-        plot_title="t_Ga=$(timesum_Ga[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
+        plot_title="t_Ma=$(timesum_Ma[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
     end
     gif(anim_1, input_path*"/HydrologyPlanetesimals_1.mp4")        
 
@@ -275,7 +275,7 @@ function plot_results(input_path)
         ]
         plot(
             A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P; layout, size=(1920, 1920),
-            plot_title="t_Ga=$(timesum_Ga[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
+            plot_title="t_Ma=$(timesum_Ma[i]), dtm=$(dtm[i]), step=$(timestep[i]), marknum=$(marknum[i])") 
     end
     gif(anim_2, input_path*"/HydrologyPlanetesimals_2.mp4")   
 end

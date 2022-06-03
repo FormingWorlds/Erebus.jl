@@ -1,16 +1,16 @@
 module HydrologyPlanetesimals
 
-using MKL
 using ArgParse
 using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
+using Pardiso
 using ProgressMeter
+using SparseArrays
 using StaticArrays
 using TimerOutputs
-using UnicodePlots
 
 const to = TimerOutput()
 export run_simulation
@@ -2224,6 +2224,28 @@ function setup_gravitational_lse()
     return RP, SP
 end
 
+"""
+Initialize `iparm` parameters of Pardiso MKL solver.
+
+$(SIGNATURES)
+
+# Details
+
+    - ps: Instance of pardiso solver
+    - iparms: dictionary of iparm parameters
+
+# Returns
+
+    - nothing
+"""
+function initialize_pardiso!(pardiso_solver, iparms)
+    set_msglvl!(pardiso_solver, Pardiso.MESSAGE_LEVEL_OFF)
+    set_matrixtype!(pardiso_solver, Pardiso.REAL_NONSYM)
+    set_nprocs!(pardiso_solver, parse(Int32, ENV["OMP_NUM_THREADS"]))
+    for (i, v) in iparms
+        set_iparm!(pardiso_solver, i+1, v)
+    end
+end
 
 """
 Assemble hydromechanical system of equations.
@@ -2675,10 +2697,10 @@ function assemble_hydromechanical_lse!(
             # all locations: ghost unknowns P = 0 -> 1.0⋅P[i, j] = 0.0
             updateindex!(L, +, 1.0, kpf, kpf)
             # R[kpf] = 0.0 # already done with initialization
-        elseif i==j==2
+        # elseif i==j==2
             # Ptotal/Pfluid real pressure boundary condition 'anchor'
-            updateindex!(L, +, Kcont, kpf, kpf)
-            R[kpf] = psurface
+            # updateindex!(L, +, Kcont, kpf, kpf)
+            # R[kpf] = psurface
         else
             # Ptotal/Pfluid equation internal points: continuity equation:
             # ∂qxD/∂x + ∂qyD/∂y - (Ptotal-Pfluid)/ηϕ = 0.0
@@ -2700,14 +2722,14 @@ function assemble_hydromechanical_lse!(
             updateindex!(
                 L,
                 +,
-                -Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
+                -Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETTAPHI[i, j]/dt),
                  kpf,
                  kpm
             ) # Ptotal
             updateindex!(
                 L,
                 +,
-                Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])-BETTAPHI[i, j]/dt),
+                Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETTAPHI[i, j]/dt),
                 kpf,
                 kpf
             ) # Pfluid
@@ -2753,11 +2775,12 @@ function process_hydromechanical_solution!(
     @views @. vx = S_mat[1, :, :]
     @views @. vy = S_mat[2, :, :]
     @views @. pr = S_mat[3, :, :] .* Kcont
-    # enforce pr[2, 2] fulfills the real pressure boundary condition post-solve
-    # pr[2, 2] = psurface
     @views @. qxD = S_mat[4, :, :]
     @views @. qyD = S_mat[5, :, :]
     @views @. pf = S_mat[6, :, :] .* Kcont
+    Δp = 0.25 * (pf[2, 2]+pf[2, Nx]+pf[Ny, 2]+pf[Ny, Nx]) - psurface
+    pr .-= Δp
+    pf .-= Δp
 # end # @timeit to "process_hydromechanical_solution!()"
     return nothing
 end # function process_hydromechanical_solution!
@@ -2825,8 +2848,8 @@ function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
             (pr[2:Ny, 2:Nx]-pr0[2:Ny, 2:Nx])-(pf[2:Ny, 2:Nx]-pf0[2:Ny, 2:Nx])
         )/dt*BETTAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
     )
-    # return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
-    return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
+    return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
+    # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
 # end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
 
@@ -5261,6 +5284,12 @@ function simulation_loop(output_path)
     RT, ST = setup_thermal_lse()
     # gravitational solver
     RP, SP= setup_gravitational_lse()
+    # Pardiso MKL solver
+    if use_pardiso
+        pardiso_solver = MKLPardisoSolver()
+        initialize_pardiso!(pardiso_solver, iparms)
+    end
+
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
@@ -5514,51 +5543,51 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
-        @info "M_680"
-        jldsave(output_path*"M_680_"*string(timestep)*".jld2";
-            ETA0,
-            ETA,
-            YNY,
-            GGG,
-            SXY0,
-            COH,
-            TEN,
-            FRI,
-            RHOX,
-            RHOFX,
-            KX,
-            PHIX,
-            RX,
-            RHOY,
-            RHOFY,
-            KY,
-            PHIY,
-            RY,
-            GGGP,
-            SXX0,
-            RHO,
-            RHOCP,
-            ALPHA,
-            ALPHAF,
-            HR,
-            PHI,
-            BETTAPHI,
-            tk1,
-            xm,
-            ym,
-            tm,
-            phim,
-            sxxm,
-            sxym,
-            etafluidcur_inv_kphim,
-            ktotalm,
-            KXSUM,
-            KYSUM,
-            TKSUM,
-            WTXSUM,
-            WTYSUM,
-            WTPSUM
-        )
+        # @info "M_680"
+        # jldsave(output_path*"M_680_"*string(timestep)*".jld2";
+        #     ETA0,
+        #     ETA,
+        #     YNY,
+        #     GGG,
+        #     SXY0,
+        #     COH,
+        #     TEN,
+        #     FRI,
+        #     RHOX,
+        #     RHOFX,
+        #     KX,
+        #     PHIX,
+        #     RX,
+        #     RHOY,
+        #     RHOFY,
+        #     KY,
+        #     PHIY,
+        #     RY,
+        #     GGGP,
+        #     SXX0,
+        #     RHO,
+        #     RHOCP,
+        #     ALPHA,
+        #     ALPHAF,
+        #     HR,
+        #     PHI,
+        #     BETTAPHI,
+        #     tk1,
+        #     xm,
+        #     ym,
+        #     tm,
+        #     phim,
+        #     sxxm,
+        #     sxym,
+        #     etafluidcur_inv_kphim,
+        #     ktotalm,
+        #     KXSUM,
+        #     KYSUM,
+        #     TKSUM,
+        #     WTXSUM,
+        #     WTYSUM,
+        #     WTPSUM
+        # )
 
         # ---------------------------------------------------------------------
        #@info "compute gravity solution"
@@ -5589,7 +5618,8 @@ function simulation_loop(output_path)
                 ETA,
                 ETA00,
                 YNY,
-                YNY00
+                YNY00,
+                RHO
             )
         end
 
@@ -5630,9 +5660,24 @@ function simulation_loop(output_path)
                 R
             )
             # solve hydromechanical system of equations
-# @timeit to "solve system" begin
-            S = L \ R
+# @timeit to "solve hydromechanical system" begin
+            if use_pardiso
+                # S = solve(pardiso_solver, L.cscmatrix, R)
+                set_phase!(
+                    pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
+                pardiso(
+                    pardiso_solver,
+                    S,
+                    get_matrix(pardiso_solver, L.cscmatrix, :N),
+                    R
+                )
+                set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
+                pardiso(pardiso_solver, S, L.cscmatrix, R)
+            else
+                S = L \ R
+            end
 # end # @timeit to "solve system"
+
             # obtain hydromechanical observables from solution
             process_hydromechanical_solution!(
                 S,
@@ -5645,9 +5690,9 @@ function simulation_loop(output_path)
             )
 
             @info "M_1078"
-            L_d = collect(L)
+            # L_d = collect(L)
             jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-                L_d,
+                # L_d,
                 R,
                 S,
                 vx,
@@ -5678,19 +5723,19 @@ function simulation_loop(output_path)
             )
             # @show aphimax
 
-            @info "M_1090"
-            jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
-                APHI,
-                pr,
-                pr0,
-                pf,
-                pf0,
-                PHI,
-                ETAPHI,
-                BETTAPHI,
-                dt,
-                aphimax
-            )
+            # @info "M_1090"
+            # jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
+            #     APHI,
+            #     pr,
+            #     pr0,
+            #     pf,
+            #     pf0,
+            #     PHI,
+            #     ETAPHI,
+            #     BETTAPHI,
+            #     dt,
+            #     aphimax
+            # )
 
             # compute fluid velocities
             compute_fluid_velocities!(
@@ -6287,6 +6332,7 @@ function parse_commandline()
             required = true
         "--show_timer"
             help = "show timing results?"
+            arg_type = Bool
             default = false
     end
     return parse_args(s)

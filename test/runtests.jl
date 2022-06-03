@@ -703,7 +703,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        @test etavpm ≈ etavpm_ver atol=1e-6
+        @test etavpm ≈ etavpm_ver rtol=1e-9
     end # testset "update_marker_viscosity!()"
 
     @testset "distance()" begin
@@ -771,7 +771,7 @@ include("../src/test_constants.jl")
             kphim0m, phimm = rand(2)
             @test HydrologyPlanetesimals.kphi(kphim0m, phimm) ≈ (
                 kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
-            ) atol=1e-6
+            ) rtol=1e-9
         end
     end # testset "kphi()"
 
@@ -780,7 +780,7 @@ include("../src/test_constants.jl")
             kϕᵣ, ϕ, ηᶠcur = rand(3)
             @test HydrologyPlanetesimals.ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur) ≈ (
                 ηᶠcur*inv(kϕᵣ*(ϕ/phim0)^3/((1-ϕ)/(1-phim0))^2)
-            ) atol=1e-6
+            ) rtol=1e-9
         end
     end # testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)"
 
@@ -1092,7 +1092,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], x, y, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights ≈ weights_ver atol=1e-6
+                @test weights ≈ weights_ver rtol=1e-9
             end
         end # testset "basic nodes"
         @testset "Vx nodes" begin
@@ -1141,7 +1141,7 @@ include("../src/test_constants.jl")
                 @debug "fix_weights Vx" i i_ver j j_ver weights weights_ver
                 @test i == i_ver
                 @test j == j_ver
-                @test weights ≈ weights_ver atol=1e-6
+                @test weights ≈ weights_ver rtol=1e-9
             end
         end # testset "Vx nodes"
         @testset "Vy nodes" begin
@@ -1189,7 +1189,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], xvy, yvy, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights ≈ weights_ver atol=1e-6
+                @test weights ≈ weights_ver rtol=1e-9
             end
         end # testset "Vy nodes"
         @testset "P nodes" begin
@@ -1237,7 +1237,7 @@ include("../src/test_constants.jl")
                     xm[m], ym[m], xp, yp, dx, dy)
                 @test i == i_ver
                 @test j == j_ver
-                @test weights ≈ weights_ver atol=1e-6
+                @test weights ≈ weights_ver rtol=1e-9
             end
         end # testset "P nodes"    
     end # testset "fix_weights() advanced"
@@ -1250,7 +1250,7 @@ include("../src/test_constants.jl")
         # verification
         A_ver = reduce(+, A_ver, dims=3)
         # test
-        @test A[:, :, 1] ≈ A_ver atol=1e-6
+        @test A[:, :, 1] ≈ A_ver rtol=1e-9
     end # testset "reduce_add_3darray!"
 
     @testset "interpolate_add_to_grid!()" begin
@@ -1263,19 +1263,15 @@ include("../src/test_constants.jl")
         property = rand(num_markers)
         # sample interpolation array
         for m=1:1:num_markers
-            grid = zeros(Ny, Nx, Base.Threads.nthreads())
+            grid = zeros(Ny, Nx)
             i, j, weights = HydrologyPlanetesimals.fix_weights(
                 xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
             HydrologyPlanetesimals.interpolate_add_to_grid!(
                 i, j, weights, property[m], grid)
-            @test grid[i, j, Base.Threads.threadid()] ==
-                property[m] * weights[1] 
-            @test grid[i+1, j, Base.Threads.threadid()] ==
-                property[m] * weights[2]
-            @test grid[i, j+1, Base.Threads.threadid()] ==
-                property[m] * weights[3]
-            @test grid[i+1, j+1, Base.Threads.threadid()] ==
-                property[m] * weights[4]
+            @test grid[i, j] == property[m] * weights[1] 
+            @test grid[i+1, j] == property[m] * weights[2]
+            @test grid[i, j+1] == property[m] * weights[3]
+            @test grid[i+1, j+1] == property[m] * weights[4]
         end
     end # testset "interpolate_add_to_grid
 
@@ -1298,7 +1294,7 @@ include("../src/test_constants.jl")
                 + grid[i+1, j] * weights[2]
                 + grid[i, j+1] * weights[3]
                 + grid[i+1, j+1] * weights[4]
-            ) atol=1e-6
+            ) rtol=1e-9
         end
     end # testset "interpolate_to_marker!()"
 
@@ -1322,7 +1318,7 @@ include("../src/test_constants.jl")
                 + grid[i+1, j] * weights[2]
                 + grid[i, j+1] * weights[3]
                 + grid[i+1, j+1] * weights[4]
-            ) atol=1e-6
+            ) rtol=1e-9
         end
     end # testset "interpolate_add_to_marker!()"
 
@@ -2002,14 +1998,14 @@ include("../src/test_constants.jl")
             end 
             # test
             for j=1:1:Nx, i=1:1:Ny
-                @test ETA0[i, j] ≈ ETA0_ver[i, j] atol=1e-6
-                @test ETA[i, j] ≈ ETA_ver[i, j] atol=1e-6
-                @test GGG[i, j] ≈ GGG_ver[i, j] atol=1e-6
-                @test SXY0[i, j] ≈ SXY0_ver[i, j] atol=1e-6
-                @test COH[i, j] ≈ COH_ver[i, j] atol=1e-6
-                @test TEN[i, j] ≈ TEN_ver[i, j] atol=1e-6
-                @test FRI[i, j] ≈ FRI_ver[i, j] atol=1e-6
-                @test YNY[i, j] ≈ YNY_ver[i, j] atol=1e-6
+                @test ETA0[i, j] ≈ ETA0_ver[i, j] rtol=1e-9
+                @test ETA[i, j] ≈ ETA_ver[i, j] rtol=1e-9
+                @test GGG[i, j] ≈ GGG_ver[i, j] rtol=1e-9
+                @test SXY0[i, j] ≈ SXY0_ver[i, j] rtol=1e-9
+                @test COH[i, j] ≈ COH_ver[i, j] rtol=1e-9
+                @test TEN[i, j] ≈ TEN_ver[i, j] rtol=1e-9
+                @test FRI[i, j] ≈ FRI_ver[i, j] rtol=1e-9
+                @test YNY[i, j] ≈ YNY_ver[i, j] rtol=1e-9
             end
         end # testset "compute_basic_node_properties!()"
 
@@ -2137,11 +2133,11 @@ include("../src/test_constants.jl")
             end
             # test
             for j=1:1:Nx1, i=1:1:Ny1
-                @test RHOX[i, j] ≈ RHOX_ver[i, j] atol=1e-6
-                @test RHOFX[i, j] ≈ RHOFX_ver[i, j] atol=1e-6
-                @test KX[i, j] ≈ KX_ver[i, j] atol=1e-6
-                @test PHIX[i, j] ≈ PHIX_ver[i, j] atol=1e-6
-                @test RX[i, j] ≈ RX_ver[i, j] atol=1e-6
+                @test RHOX[i, j] ≈ RHOX_ver[i, j] rtol=1e-9
+                @test RHOFX[i, j] ≈ RHOFX_ver[i, j] rtol=1e-9
+                @test KX[i, j] ≈ KX_ver[i, j] rtol=1e-9
+                @test PHIX[i, j] ≈ PHIX_ver[i, j] rtol=1e-9
+                @test RX[i, j] ≈ RX_ver[i, j] rtol=1e-9
             end
         end # testset "compute_vx_node_properties!()"
 
@@ -2269,11 +2265,11 @@ include("../src/test_constants.jl")
             end
             #test
             for j=1:1:Nx1, i=1:1:Ny1
-                @test RHOY[i,j] ≈ RHOY_ver[i,j] atol=1e-6
-                @test RHOFY[i,j] ≈ RHOFY_ver[i,j] atol=1e-6
-                @test KY[i,j] ≈ KY_ver[i,j] atol=1e-6
-                @test PHIY[i,j] ≈ PHIY_ver[i,j] atol=1e-6
-                @test RY[i,j] ≈ RY_ver[i,j] atol=1e-6
+                @test RHOY[i,j] ≈ RHOY_ver[i,j] rtol=1e-9
+                @test RHOFY[i,j] ≈ RHOFY_ver[i,j] rtol=1e-9
+                @test KY[i,j] ≈ KY_ver[i,j] rtol=1e-9
+                @test PHIY[i,j] ≈ PHIY_ver[i,j] rtol=1e-9
+                @test RY[i,j] ≈ RY_ver[i,j] rtol=1e-9
             end
         end # testset "compute_vy_node_properties!()"
 
@@ -2465,16 +2461,16 @@ include("../src/test_constants.jl")
             end
             # test
             for j=1:1:Nx, i=1:1:Ny
-                @test RHO[i, j] ≈ RHO_ver[i, j] atol=1e-6
-                @test RHOCP[i, j] ≈ RHOCP_ver[i, j] atol=1e-6
-                @test ALPHA[i, j] ≈ ALPHA_ver[i, j] atol=1e-6
-                @test ALPHAF[i, j] ≈ ALPHAF_ver[i, j] atol=1e-6
-                @test HR[i, j] ≈ HR_ver[i, j] atol=1e-6
-                @test GGGP[i, j] ≈ GGGP_ver[i, j] atol=1e-6
-                @test SXX0[i, j] ≈ SXX0_ver[i, j] atol=1e-6
-                @test tk1[i, j] ≈ tk1_ver[i, j] atol=1e-6
-                @test PHI[i, j] ≈ PHI_ver[i, j] atol=1e-6
-                @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j] atol=1e-6
+                @test RHO[i, j] ≈ RHO_ver[i, j] rtol=1e-9
+                @test RHOCP[i, j] ≈ RHOCP_ver[i, j] rtol=1e-9
+                @test ALPHA[i, j] ≈ ALPHA_ver[i, j] rtol=1e-9
+                @test ALPHAF[i, j] ≈ ALPHAF_ver[i, j] rtol=1e-9
+                @test HR[i, j] ≈ HR_ver[i, j] rtol=1e-9
+                @test GGGP[i, j] ≈ GGGP_ver[i, j] rtol=1e-9
+                @test SXX0[i, j] ≈ SXX0_ver[i, j] rtol=1e-9
+                @test tk1[i, j] ≈ tk1_ver[i, j] rtol=1e-9
+                @test PHI[i, j] ≈ PHI_ver[i, j] rtol=1e-9
+                @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j] rtol=1e-9
             end
         end # testset "compute_p_node_properties!()"
     end # testset "compute node properties" 
@@ -2503,7 +2499,7 @@ include("../src/test_constants.jl")
         gx_ver = zeros(Float64, Ny1, Nx1)
         gy_ver = zeros(Float64, Ny1, Nx1)
         # simulate density field RHO
-        RHO = rand(1:0.1:7000, Ny1, Nx1)
+        RHO = rand(Ny1, Nx1) * 7e3
         # compute gravity solution
         HydrologyPlanetesimals.compute_gravity_solution!(
             SP,
@@ -2580,8 +2576,8 @@ include("../src/test_constants.jl")
         end
         # test
         for j=1:1:Nx, i=1:1:Ny
-            @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-6
-            @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-6
+            @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-9
+            @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-9
         end
     end # testset "compute_gravity_solution!()"
 
@@ -2610,8 +2606,8 @@ include("../src/test_constants.jl")
         end       
         # test
         for j=1:1:Nx, i=1:1:Ny
-            @test ETAP[i, j] ≈ ETAP_ver[i, j] rtol=1e-6
-            @test ETAPHI[i, j] ≈ ETAPHI_ver[i, j] rtol=1e-6
+            @test ETAP[i, j] ≈ ETAP_ver[i, j] rtol=1e-9
+            @test ETAPHI[i, j] ≈ ETAPHI_ver[i, j] rtol=1e-9
         end
     end # testset "recompute_bulk_viscosity!()"
 
@@ -2677,16 +2673,16 @@ include("../src/test_constants.jl")
                 dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
                 dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
                 # test
-                @test ETAcomp[i-1, j] ≈ ETA1 rtol=1e-6
-                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-6
-                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-6
-                @test ETAPcomp[i, j+1] ≈ ETAP2 rtol=1e-6
-                @test SXYcomp[i-1, j] ≈ SXY1 rtol=1e-6
-                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-6
-                @test SXXcomp[i, j] ≈ SXX1 rtol=1e-6
-                @test SXXcomp[i, j+1] ≈ SXX2 rtol=1e-6
-                @test dRHOXdx[i, j] ≈ dRHOdx rtol=1e-6
-                @test dRHOXdy[i, j] ≈ dRHOdy rtol=1e-6        
+                @test ETAcomp[i-1, j] ≈ ETA1 rtol=1e-9
+                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-9
+                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-9
+                @test ETAPcomp[i, j+1] ≈ ETAP2 rtol=1e-9
+                @test SXYcomp[i-1, j] ≈ SXY1 rtol=1e-9
+                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-9
+                @test SXXcomp[i, j] ≈ SXX1 rtol=1e-9
+                @test SXXcomp[i, j+1] ≈ SXX2 rtol=1e-9
+                @test dRHOXdx[i, j] ≈ dRHOdx rtol=1e-9
+                @test dRHOXdy[i, j] ≈ dRHOdy rtol=1e-9        
             end
             # y-Stokes
             if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
@@ -2706,16 +2702,16 @@ include("../src/test_constants.jl")
                 dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
                 dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
                 # test
-                @test ETAcomp[i, j-1] ≈ ETA1 rtol=1e-6
-                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-6
-                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-6
-                @test ETAPcomp[i+1, j] ≈ ETAP2 rtol=1e-6
-                @test SXYcomp[i, j-1] ≈ SXY1 rtol=1e-6
-                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-6
-                @test SYYcomp[i, j] ≈ SYY1 rtol=1e-6
-                @test SYYcomp[i+1, j] ≈ SYY2 rtol=1e-6
-                @test dRHOYdx[i, j] ≈ dRHOdx rtol=1e-6
-                @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-6     
+                @test ETAcomp[i, j-1] ≈ ETA1 rtol=1e-9
+                @test ETAcomp[i, j] ≈ ETA2 rtol=1e-9
+                @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-9
+                @test ETAPcomp[i+1, j] ≈ ETAP2 rtol=1e-9
+                @test SXYcomp[i, j-1] ≈ SXY1 rtol=1e-9
+                @test SXYcomp[i, j] ≈ SXY2 rtol=1e-9
+                @test SYYcomp[i, j] ≈ SYY1 rtol=1e-9
+                @test SYYcomp[i+1, j] ≈ SYY2 rtol=1e-9
+                @test dRHOYdx[i, j] ≈ dRHOdx rtol=1e-9
+                @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-9     
             end       
         end
     end # testset "get_viscosities_stresses_density_gradients()"
@@ -3047,7 +3043,7 @@ include("../src/test_constants.jl")
                 end
                 
                 # Pfluid equation External points
-                if i==1 || j==1 || i==Ny1 || j==Nx1 || (i==2 && j==2)
+                if i==1 || j==1 || i==Ny1 || j==Nx1# || (i==2 && j==2)
                     # Boundary Condition
                     # 1*Pfluid=0
                     L_ver[kpf,kpf]=1; # Left part
@@ -3079,7 +3075,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        for j=1:1:Nx1*6, i=1:1:Ny1*6
+        for j=1:1:Nx1*Ny1*6, i=1:1:Nx1*Ny1*6
             @test L[i, j] ≈ L_ver[i, j] rtol=1e-9
             @test R[i] ≈ R_ver[i] rtol=1e-9
         end
@@ -3129,13 +3125,14 @@ include("../src/test_constants.jl")
                 pf_ver[i,j]=S[kpf]*Kcont
             end
         end
+        pavr=(pf_ver[2,2]+pf_ver[2,Nx]+pf_ver[Ny,2]+pf_ver[Ny,Nx])/4;
+        @. pr_ver=pr_ver-pavr+psurface;
+        @. pf_ver=pf_ver-pavr+psurface;
         # test
         for j=1:1:Nx1, i=1:1:Ny1
             @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-9
             @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-9
-            # if !(i==j==2) # exclude real boundary condition anchor point
-                @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-9
-            # end
+            @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-9
             @test qxD[i, j] ≈ qxD_ver[i, j] rtol=1e-9
             @test qyD[i, j] ≈ qyD_ver[i, j] rtol=1e-9
             @test pf[i, j] ≈ pf_ver[i, j] rtol=1e-9
@@ -3177,9 +3174,9 @@ include("../src/test_constants.jl")
         end
         # test
         for j=2:1:Nx, i=2:1:Ny
-            @test APHI[i, j] ≈ APHI_ver[i, j] rtol=1e-6
+            @test APHI[i, j] ≈ APHI_ver[i, j] rtol=1e-9
         end
-        @test aphimax ≈ aphimax_ver rtol=1e-6
+        @test aphimax ≈ aphimax_ver rtol=1e-9
     end # testset "compute_Aϕ!()"
 
     @testset "compute_fluid_velocity!()" begin
@@ -3234,8 +3231,8 @@ include("../src/test_constants.jl")
         vyf_ver.=vyf_ver.+vy
         # test
         for j=1:1:Nx1, i=1:1:Ny1
-            @test vxf[i, j] ≈ vxf_ver[i, j] rtol=1e-6
-            @test vyf[i, j] ≈ vyf_ver[i, j] rtol=1e-6
+            @test vxf[i, j] ≈ vxf_ver[i, j] rtol=1e-9
+            @test vyf[i, j] ≈ vyf_ver[i, j] rtol=1e-9
         end
     end # testset "compute_fluid_velocity!()"
 
@@ -3280,7 +3277,7 @@ include("../src/test_constants.jl")
             dtm_ver=dphimax/aphimax
         end
         # test
-        @test dtm ≈ dtm_ver rtol=1e-6
+        @test dtm ≈ dtm_ver rtol=1e-9
     end # testset "compute_displacement_timestep()"
 
     @testset "compute_stress_strainrate!()" begin
@@ -3358,16 +3355,16 @@ include("../src/test_constants.jl")
         end
         # test
         for j=1:1:Nx, i=1:1:Ny
-            @test EXY[i,j] ≈ EXY_ver[i,j] rtol=1e-6
-            @test SXY[i,j] ≈ SXY_ver[i,j] rtol=1e-6
-            @test DSXY[i,j] ≈ DSXY_ver[i,j] rtol=1e-6
+            @test EXY[i,j] ≈ EXY_ver[i,j] rtol=1e-9
+            @test SXY[i,j] ≈ SXY_ver[i,j] rtol=1e-9
+            @test DSXY[i,j] ≈ DSXY_ver[i,j] rtol=1e-9
         end
         for j=2:1:Nx, i=2:1:Ny
-            @test EXX[i,j] ≈ EXX_ver[i,j] rtol=1e-6
-            @test SXX[i,j] ≈ SXX_ver[i,j] rtol=1e-6
-            # @test DSXX[i,j] ≈ DSXX_ver[i,j] rtol=1e-6
-            @test EII[i,j] ≈ EII_ver[i,j] rtol=1e-6
-            @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-6
+            @test EXX[i,j] ≈ EXX_ver[i,j] rtol=1e-9
+            @test SXX[i,j] ≈ SXX_ver[i,j] rtol=1e-9
+            # @test DSXX[i,j] ≈ DSXX_ver[i,j] rtol=1e-9
+            @test EII[i,j] ≈ EII_ver[i,j] rtol=1e-9
+            @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-9
         end
     end # testset "compute_stress_strainrate!()"
 
@@ -3444,7 +3441,7 @@ include("../src/test_constants.jl")
         @test PHI[:, Nx1] == PHI_ver[:, Nx1]
         @test pr[:, Nx1] == pr_ver[:, Nx1]
         @test pf[:, Nx1] == pf_ver[:, Nx1]
-        @test ps ≈ ps_ver atol=1e-6
+        @test ps ≈ ps_ver rtol=1e-9
     end # testset "symmetrize_p_node_observables!()"
 
     @testset "positive_max()" begin
@@ -3563,9 +3560,9 @@ include("../src/test_constants.jl")
             YERRNOD_ver[iplast]=(ddd/ynpl)^0.5
         end
         # test
-        @test ETA5 ≈ ETA5_ver rtol=1e-6
+        @test ETA5 ≈ ETA5_ver rtol=1e-9
         @test YNY5 == YNY5_ver
-        @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-6
+        @test YERRNOD[iplast] ≈ YERRNOD_ver[iplast] rtol=1e-9
         @test complete == (ynpl==0 || iplast==nplast || YERRNOD[iplast]<yerrmax)
     end # testset "compute_nodal_adjustment!()"
 
@@ -3778,10 +3775,10 @@ include("../src/test_constants.jl")
         DSXY_ver=DSXY_ver-DSXYsubgrid_ver
         end
     # test
-    @test sxxm ≈ sxxm_ver atol=1e-6
-    @test sxym ≈ sxym_ver atol=1e-6
-    @test DSXX ≈ DSXX_ver atol=1e-6
-    @test DSXY ≈ DSXY_ver atol=1e-6
+    @test sxxm ≈ sxxm_ver rtol=1e-9
+    @test sxym ≈ sxym_ver rtol=1e-9
+    @test DSXX ≈ DSXX_ver rtol=1e-9
+    @test DSXY ≈ DSXY_ver rtol=1e-9
     end # testset "apply_subgrid_stress_diffusion!()"
 
     @testset "update_marker_stress!()" begin
@@ -3851,8 +3848,8 @@ include("../src/test_constants.jl")
             sxym_ver[m]=sxym_ver[m]+(DSXY[i,j]*wtmij+DSXY[i+1,j]*wtmi1j+ DSXY[i,j+1]*wtmij1+DSXY[i+1,j+1]*wtmi1j1)
         end
         # test
-        @test sxxm ≈ sxxm_ver atol=1e-6
-        @test sxym ≈ sxym_ver atol=1e-6
+        @test sxxm ≈ sxxm_ver rtol=1e-9
+        @test sxym ≈ sxym_ver rtol=1e-9
     end # testset "update_marker_stress!()"
 
     @testset "compute_shear_heating!()" begin
@@ -3896,7 +3893,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        @test HS ≈ HS_ver atol=1e-6
+        @test HS ≈ HS_ver rtol=1e-9
     end # testset "compute_shear_heating!()"
 
     @testset "compute_adiabatic_heating!()" begin
@@ -3957,7 +3954,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        @test HA ≈ HA_ver atol=1e-6
+        @test HA ≈ HA_ver rtol=1e-9
     end # testset "compute_adiabatic_heating!()"
 
     @testset "perform_thermal_iterations!()" begin
@@ -4092,8 +4089,8 @@ include("../src/test_constants.jl")
         DT_ver=tk2_ver-tk0_ver
         DT0_ver=DT_ver
         # test
-        @test DT ≈ DT_ver atol=1e-6
-        @test DT0 ≈ DT0_ver atol=1e-6
+        @test DT ≈ DT_ver rtol=1e-9
+        @test DT0 ≈ DT0_ver rtol=1e-9
     end # testset "perform_thermal_iterations!()"
 
     @testset "apply_subgrid_temperature_diffusion!()" begin
@@ -4185,8 +4182,8 @@ include("../src/test_constants.jl")
             DT_ver=DT_ver-DTsubgrid
         end
         # test
-        @test tkm ≈ tkm_ver atol=1e-6
-        @test DT ≈ DT_ver atol=1e-6
+        @test tkm ≈ tkm_ver rtol=1e-9
+        @test DT ≈ DT_ver rtol=1e-9
     end # testset "apply_subgrid_temperature_diffusion!()"
 
     @testset "update_marker_temperature!()" begin
@@ -4233,7 +4230,7 @@ include("../src/test_constants.jl")
                 end
             end
             # test
-            @test tkm ≈ tkm_ver atol=1e-6
+            @test tkm ≈ tkm_ver rtol=1e-9
         end # for timestep = 1:2
     end # testset "update_marker_temperature!()"
 
@@ -4287,7 +4284,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        @test phim ≈ phim_ver atol=1e-6
+        @test phim ≈ phim_ver rtol=1e-9
     end # testset "update_marker_porosity!()"
     
     @testset "compute_velocities!()" begin
@@ -4370,10 +4367,10 @@ include("../src/test_constants.jl")
         # Bottom
         @. vyp_ver[Ny1,:]=2*vybottom-vyp_ver[Ny,:]
         # test
-        @test vxp ≈ vxp_ver atol=1e-6
-        @test vyp ≈ vyp_ver atol=1e-6
-        @test vxpf ≈ vxpf_ver atol=1e-6
-        @test vypf ≈ vypf_ver atol=1e-6
+        @test vxp ≈ vxp_ver rtol=1e-9
+        @test vyp ≈ vyp_ver rtol=1e-9
+        @test vxpf ≈ vxpf_ver rtol=1e-9
+        @test vypf ≈ vypf_ver rtol=1e-9
     end # testset "compute_velocities!()"
 
     @testset "compute_rotation_rate!()" begin
@@ -4391,7 +4388,7 @@ include("../src/test_constants.jl")
             end
         end
         # test
-        @test wyx ≈ wyx_ver atol=1e-6
+        @test wyx ≈ wyx_ver rtol=1e-9
     end # testset "compute_rotation_rate!()"
 
     @testset "move_markers_rk4!()" begin
@@ -4711,11 +4708,11 @@ include("../src/test_constants.jl")
             tkm_ver[m]=((1-phim[m])*tkm_ver[m]*rhocpsolidm[tm[m]]+ phim[m]*(tkm_ver[m]+dtkfsm)*rhocpfluidm[tm[m]])/ ((1-phim[m])*rhocpsolidm[tm[m]]+phim[m]*rhocpfluidm[tm[m]])
         end  # end of marker loop
         # test
-        @test xm ≈ xm_ver atol=1e-6
-        @test ym ≈ ym_ver atol=1e-6
-        @test tkm ≈ tkm_ver atol=1e-1
-        @test sxym ≈ sxym_ver atol=1e-6            
-        @test sxxm ≈ sxxm_ver atol=1e-6
+        @test xm ≈ xm_ver rtol=1e-9
+        @test ym ≈ ym_ver rtol=1e-9
+        @test tkm ≈ tkm_ver rtol=1e-1
+        @test sxym ≈ sxym_ver rtol=1e-9            
+        @test sxxm ≈ sxxm_ver rtol=1e-9
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!()" begin
@@ -4994,9 +4991,9 @@ include("../src/test_constants.jl")
         end
         end
         # test
-        @test pr0 ≈ pr0_ver atol=1e-4
-        @test ps0 ≈ ps0_ver atol=1e-4 
-        @test pf0 ≈ pf0_ver atol=1e-4
+        @test pr0 ≈ pr0_ver rtol=1e-4
+        @test ps0 ≈ ps0_ver rtol=1e-4 
+        @test pf0 ≈ pf0_ver rtol=1e-4
     end # testset "backtrace_pressures_rk4!()"
 
     @testset "replenish_markers!()" begin
