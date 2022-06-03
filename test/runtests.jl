@@ -1,6 +1,5 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
-using LinearAlgebra
 using StaticArrays
 using Test
 
@@ -1514,7 +1513,7 @@ include("../src/test_constants.jl")
 
     @testset "reduce_add_3darray!()" begin
         A = rand(100, 100, 10)
-        A_ver = copy(A)
+        A_ver = deepcopy(A)
         # reduce-sum A along third axis
         HydrologyPlanetesimals.reduce_add_3darray!(A)
         # verification
@@ -1575,7 +1574,7 @@ include("../src/test_constants.jl")
         xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
         ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
         property = rand(num_markers)
-        property_ver = copy(property)
+        property_ver = deepcopy(property)
         grid = rand(Ny, Nx)
         # interpolate to markers, verification, and test
         for m=1:1:num_markers
@@ -3645,11 +3644,11 @@ include("../src/test_constants.jl")
         pr = rand(Ny1, Nx1)
         pf = rand(Ny1, Nx1)
         ps = zeros(Ny1, Nx1)
-        SXX_ver = copy(SXX)
-        APHI_ver = copy(APHI)
-        PHI_ver = copy(PHI)
-        pr_ver = copy(pr)
-        pf_ver = copy(pf)
+        SXX_ver = deepcopy(SXX)
+        APHI_ver = deepcopy(APHI)
+        PHI_ver = deepcopy(PHI)
+        pr_ver = deepcopy(pr)
+        pf_ver = deepcopy(pf)
         ps_ver = zeros(Ny1, Nx1)
         # symmetrize p node variables
         HydrologyPlanetesimals.symmetrize_p_node_observables!(
@@ -3902,10 +3901,10 @@ include("../src/test_constants.jl")
         SXYSUM = rand(Ny, Nx, Base.Threads.nthreads())
         WTPSUM = rand(Ny1, Nx1, Base.Threads.nthreads())
         WTSUM = rand(Ny, Nx, Base.Threads.nthreads())
-        sxxm_ver = copy(sxxm)
-        sxym_ver = copy(sxym)
-        DSXX_ver = copy(DSXX)
-        DSXY_ver = copy(DSXY)
+        sxxm_ver = deepcopy(sxxm)
+        sxym_ver = deepcopy(sxym)
+        DSXX_ver = deepcopy(DSXX)
+        DSXY_ver = deepcopy(DSXY)
         # apply subgrid stress diffusion
         HydrologyPlanetesimals.apply_subgrid_stress_diffusion!(
             xm,
@@ -4059,8 +4058,8 @@ include("../src/test_constants.jl")
         sxym = rand(marknum)
         DSXX = rand(Ny1, Nx1)
         DSXY = rand(Ny, Nx)
-        sxxm_ver = copy(sxxm)
-        sxym_ver = copy(sxym)
+        sxxm_ver = deepcopy(sxxm)
+        sxym_ver = deepcopy(sxym)
         # update marker stress
         HydrologyPlanetesimals.update_marker_stress!(
             xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
@@ -4242,9 +4241,9 @@ include("../src/test_constants.jl")
         DT0 = zeros(Ny1, Nx1)
         DT_ver = zeros(Ny1, Nx1)
         DT0_ver = zeros(Ny1, Nx1)
-        tk0_ver = copy(tk0)
-        tk1_ver = copy(tk1)
-        tk2_ver = copy(tk2)
+        tk0_ver = deepcopy(tk0)
+        tk1_ver = deepcopy(tk1)
+        tk2_ver = deepcopy(tk2)
         RT = zeros(Ny1*Nx1)
         ST = zeros(Ny1*Nx1)
         # perform thermal iterations
@@ -4375,8 +4374,8 @@ include("../src/test_constants.jl")
         DT = rand(Ny1, Nx1)
         TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
         RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
-        tkm_ver = copy(tkm)
-        DT_ver = copy(DT)
+        tkm_ver = deepcopy(tkm)
+        DT_ver = deepcopy(DT)
         # apply subgrid stress diffusion
         HydrologyPlanetesimals.apply_subgrid_temperature_diffusion!(
             xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
@@ -4464,7 +4463,7 @@ include("../src/test_constants.jl")
         tk2 = rand(Ny1, Nx1)
         for timestep = 1:2
             tkm = rand(marknum)
-            tkm_ver = copy(tkm)
+            tkm_ver = deepcopy(tkm)
             # update marker temperature
             HydrologyPlanetesimals.update_marker_temperature!(
                 xm, ym, tkm, DT, tk2, timestep, marknum)
@@ -4512,7 +4511,7 @@ include("../src/test_constants.jl")
         tm = rand(1:3, marknum)
         APHI = rand(Ny1, Nx1)
         phim = rand(marknum)
-        phim_ver = copy(phim)
+        phim_ver = deepcopy(phim)
         # update marker porosity
         HydrologyPlanetesimals. update_marker_porosity!(
             xm, ym, tm, phim, APHI, dtm, marknum)
@@ -4677,11 +4676,11 @@ include("../src/test_constants.jl")
         vyf = rand(Ny1, Nx1)
         tk2 = rand(263:0.1:310, Ny1, Nx1)
         wyx = rand(Ny, Nx)
-        xm_ver = copy(xm)
-        ym_ver = copy(ym)
-        tkm_ver = copy(tkm)
-        sxym_ver = copy(sxym)
-        sxxm_ver = copy(sxxm)
+        xm_ver = deepcopy(xm)
+        ym_ver = deepcopy(ym)
+        tkm_ver = deepcopy(tkm)
+        sxym_ver = deepcopy(sxym)
+        sxxm_ver = deepcopy(sxxm)
         # move markers with RK4
         HydrologyPlanetesimals.move_markers_rk4!(
             xm,
@@ -5311,14 +5310,14 @@ include("../src/test_constants.jl")
         tkm_rhocptotalm = rand(marknum)
         etafluidcur_inv_kphim = rand(marknum) 
         mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers()
-        xm_ver = copy(xm)
-        ym_ver = copy(ym)
-        tm_ver = copy(tm)
-        tkm_ver = copy(tkm)
-        sxxm_ver = copy(sxxm)
-        sxym_ver = copy(sxym)
-        phim_ver = copy(phim)
-        etavpm_ver = copy(etavpm)
+        xm_ver = deepcopy(xm)
+        ym_ver = deepcopy(ym)
+        tm_ver = deepcopy(tm)
+        tkm_ver = deepcopy(tkm)
+        sxxm_ver = deepcopy(sxxm)
+        sxym_ver = deepcopy(sxym)
+        phim_ver = deepcopy(phim)
+        etavpm_ver = deepcopy(etavpm)
         # replenish_markers
         marknum_new = HydrologyPlanetesimals.replenish_markers!(
             xm,
