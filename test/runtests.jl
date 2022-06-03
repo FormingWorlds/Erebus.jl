@@ -836,6 +836,268 @@ include("../src/test_constants.jl")
             al, fe, 1000.) == (v, w)
     end # testset "calculate_radioactive_heating()"
 
+    @testset "fix()" begin
+        @testset "basic nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j = HydrologyPlanetesimals.fix(
+                    xx,
+                    yy,
+                    x,
+                    y,
+                    dx,
+                    dy,
+                    jmin_basic,
+                    jmax_basic,
+                    imin_basic,
+                    imax_basic
+                )
+                # verification, from madcph.m, line 395ff
+                j_ver=trunc(Int, (xx-x[1])/dx)+1
+                i_ver=trunc(Int, (yy-y[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                @test i == i_ver
+                @test j == j_ver
+            end  
+        end
+        @testset "Vx nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j = HydrologyPlanetesimals.fix(
+                    xx,
+                    yy,
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                # verification, from madcph.m, line 455ff
+                j_ver=trunc(Int, (xx-xvx[1])/dx)+1
+                i_ver=trunc(Int, (yy-yvx[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                @test i == i_ver
+                @test j == j_ver 
+            end
+        end
+        @testset "Vy nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j = HydrologyPlanetesimals.fix(
+                    xx,
+                    yy,
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                # verification, from madcph.m, line 506ff
+                j_ver=trunc(Int, (xx-xvy[1])/dx)+1
+                i_ver=trunc(Int, (yy-yvy[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                @test i == i_ver
+                @test j == j_ver     
+            end
+        end
+        @testset "P nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j = HydrologyPlanetesimals.fix(
+                    xx,
+                    yy,
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                # verification, from madcph.m, line 558ff
+                j_ver=trunc(Int, (xx-xp[1])/dx)+1
+                i_ver=trunc(Int, (yy-yp[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                @test i == i_ver
+                @test j == j_ver     
+            end
+        end
+    end # testset "fix"
+
+    @testset "fix_distances()" begin
+        @testset "basic nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j, dxmj, dymi = HydrologyPlanetesimals.fix_distances(
+                    xx,
+                    yy,
+                    x,
+                    y,
+                    dx,
+                    dy,
+                    jmin_basic,
+                    jmax_basic,
+                    imin_basic,
+                    imax_basic
+                )
+                # verification, from madcph.m, line 395ff
+                j_ver=trunc(Int, (xx-x[1])/dx)+1
+                i_ver=trunc(Int, (yy-y[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                dxmj_ver=xx-x[j_ver]
+                dymi_ver=yy-y[i_ver]
+                @test dxmj == dxmj_ver
+                @test dymi == dymi_ver
+            end  
+        end
+        @testset "Vx nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j, dxmj, dymi = HydrologyPlanetesimals.fix_distances(
+                    xx,
+                    yy,
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                # verification, from madcph.m, line 455ff
+                j_ver=trunc(Int, (xx-xvx[1])/dx)+1
+                i_ver=trunc(Int, (yy-yvx[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                dxmj_ver=xx-xvx[j_ver]
+                dymi_ver=yy-yvx[i_ver]
+                @test dxmj == dxmj_ver
+                @test dymi == dymi_ver
+            end
+        end
+        @testset "Vy nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j, dxmj, dymi = HydrologyPlanetesimals.fix_distances(
+                    xx,
+                    yy,
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                # verification, from madcph.m, line 506ff
+                j_ver=trunc(Int, (xx-xvy[1])/dx)+1
+                i_ver=trunc(Int, (yy-yvy[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                dxmj_ver=xx-xvy[j_ver]
+                dymi_ver=yy-yvy[i_ver]
+                @test dxmj == dxmj_ver
+                @test dymi == dymi_ver 
+            end
+        end
+        @testset "P nodes" begin
+            for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
+                i, j, dxmj, dymi = HydrologyPlanetesimals.fix_distances(
+                    xx,
+                    yy,
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                # verification, from madcph.m, line 558ff
+                j_ver=trunc(Int, (xx-xp[1])/dx)+1
+                i_ver=trunc(Int, (yy-yp[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                dxmj_ver=xx-xp[j_ver]
+                dymi_ver=yy-yp[i_ver]
+                @test dxmj == dxmj_ver
+                @test dymi == dymi_ver   
+            end
+        end
+    end # testset "fix_distances"
+
     @testset "fix_weights() elementary" begin
         @testset "basic nodes" begin
         # verification, from madcph.m, line 373ff
@@ -3362,7 +3624,6 @@ include("../src/test_constants.jl")
         for j=2:1:Nx, i=2:1:Ny
             @test EXX[i,j] ≈ EXX_ver[i,j] rtol=1e-9
             @test SXX[i,j] ≈ SXX_ver[i,j] rtol=1e-9
-            # @test DSXX[i,j] ≈ DSXX_ver[i,j] rtol=1e-9
             @test EII[i,j] ≈ EII_ver[i,j] rtol=1e-9
             @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-9
         end
@@ -4991,9 +5252,11 @@ include("../src/test_constants.jl")
         end
         end
         # test
-        @test pr0 ≈ pr0_ver rtol=1e-4
-        @test ps0 ≈ ps0_ver rtol=1e-4 
-        @test pf0 ≈ pf0_ver rtol=1e-4
+        for jj=2:1:Nx, ii=2:1:Ny
+            @test pr0[jj, ii] ≈ pr0_ver[jj, ii] rtol=1e-4
+            @test ps0[jj, ii] ≈ ps0_ver[jj, ii] rtol=1e-4 
+            @test pf0[jj, ii] ≈ pf0_ver[jj, ii] rtol=1e-4
+        end
     end # testset "backtrace_pressures_rk4!()"
 
     @testset "replenish_markers!()" begin
