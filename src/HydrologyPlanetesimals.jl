@@ -888,7 +888,7 @@ $(SIGNATURES)
 
     - nothing
 """
-function reset_interpolated_properties(
+function reset_interpolated_properties!(
     ETA0SUM,
     ETASUM,
     GGGSUM,
@@ -921,39 +921,39 @@ function reset_interpolated_properties(
     WTPSUM
 )
         # basic nodes
-        ETA0SUM .= 0.0
-        ETASUM .= 0.0
-        GGGSUM .= 0.0
-        SXYSUM .= 0.0
-        COHSUM .= 0.0
-        TENSUM .= 0.0
-        FRISUM .= 0.0
-        WTSUM .= 0.0
+        ETA0SUM .= zero(0.0)
+        ETASUM .= zero(0.0)
+        GGGSUM .= zero(0.0)
+        SXYSUM .= zero(0.0)
+        COHSUM .= zero(0.0)
+        TENSUM .= zero(0.0)
+        FRISUM .= zero(0.0)
+        WTSUM .= zero(0.0)
         # Vx nodes
-        RHOXSUM .= 0.0
-        RHOFXSUM .= 0.0
-        KXSUM .= 0.0
-        PHIXSUM .= 0.0
-        RXSUM .= 0.0
-        WTXSUM .= 0.0
+        RHOXSUM .= zero(0.0)
+        RHOFXSUM .= zero(0.0)
+        KXSUM .= zero(0.0)
+        PHIXSUM .= zero(0.0)
+        RXSUM .= zero(0.0)
+        WTXSUM .= zero(0.0)
         # Vy nodes
-        RHOYSUM .= 0.0
-        RHOFYSUM .= 0.0
-        KYSUM .= 0.0
-        PHIYSUM .= 0.0
-        RYSUM .= 0.0
-        WTYSUM .= 0.0
+        RHOYSUM .= zero(0.0)
+        RHOFYSUM .= zero(0.0)
+        KYSUM .= zero(0.0)
+        PHIYSUM .= zero(0.0)
+        RYSUM .= zero(0.0)
+        WTYSUM .= zero(0.0)
         # P Nodes
-        RHOSUM .= 0.0
-        RHOCPSUM .= 0.0
-        ALPHASUM .= 0.0
-        ALPHAFSUM .= 0.0
-        HRSUM .= 0.0
-        GGGPSUM .= 0.0
-        SXXSUM .= 0.0
-        TKSUM .= 0.0
-        PHISUM .= 0.0
-        WTPSUM .= 0.0
+        RHOSUM .= zero(0.0)
+        RHOCPSUM .= zero(0.0)
+        ALPHASUM .= zero(0.0)
+        ALPHAFSUM .= zero(0.0)
+        HRSUM .= zero(0.0)
+        GGGPSUM .= zero(0.0)
+        SXXSUM .= zero(0.0)
+        TKSUM .= zero(0.0)
+        PHISUM .= zero(0.0)
+        WTPSUM .= zero(0.0)
     return nothing
 end
 
@@ -1524,7 +1524,7 @@ function marker_to_basic_nodes!(
     interpolate_add_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
     interpolate_add_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
     interpolate_add_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
-    interpolate_add_to_grid!(i, j, weights, 1.0, WTSUM)
+    interpolate_add_to_grid!(i, j, weights, one(1.0), WTSUM)
     return nothing
 end
 
@@ -1587,7 +1587,7 @@ function marker_to_vx_nodes!(
     interpolate_add_to_grid!(i, j, weights, ktotalm[m], KXSUM)
     interpolate_add_to_grid!(i, j, weights, phim[m], PHIXSUM)
     interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
-    interpolate_add_to_grid!(i, j, weights, 1.0, WTXSUM)
+    interpolate_add_to_grid!(i, j, weights, one(1.0), WTXSUM)
     return nothing
 end
 
@@ -1650,7 +1650,7 @@ function marker_to_vy_nodes!(
     interpolate_add_to_grid!(i, j, weights, ktotalm[m], KYSUM)
     interpolate_add_to_grid!(i, j, weights, phim[m], PHIYSUM)
     interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
-    interpolate_add_to_grid!(i, j, weights, 1.0, WTYSUM)
+    interpolate_add_to_grid!(i, j, weights, one(1.0), WTYSUM)
     return nothing
 end
 
@@ -1733,7 +1733,7 @@ function marker_to_p_nodes!(
     interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
     interpolate_add_to_grid!(i, j, weights, phim[m], PHISUM)
     interpolate_add_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
-    interpolate_add_to_grid!(i, j, weights, 1.0, WTPSUM)
+    interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
     return nothing
 end
 
@@ -5341,7 +5341,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
        #@info "reset interpolation arrays"
         # ---------------------------------------------------------------------
-        reset_interpolated_properties(
+        reset_interpolated_properties!(
             ETA0SUM,
             ETASUM,
             GGGSUM,
@@ -5372,7 +5372,7 @@ function simulation_loop(output_path)
             TKSUM,
             PHISUM,
             WTPSUM
-        ) = setup_interpolated_properties()
+        )
 # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
@@ -5569,52 +5569,75 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
-        # @info "M_680"
-        # jldsave(output_path*"M_680_"*string(timestep)*".jld2";
-        #     ETA0,
-        #     ETA,
-        #     YNY,
-        #     GGG,
-        #     SXY0,
-        #     COH,
-        #     TEN,
-        #     FRI,
-        #     RHOX,
-        #     RHOFX,
-        #     KX,
-        #     PHIX,
-        #     RX,
-        #     RHOY,
-        #     RHOFY,
-        #     KY,
-        #     PHIY,
-        #     RY,
-        #     GGGP,
-        #     SXX0,
-        #     RHO,
-        #     RHOCP,
-        #     ALPHA,
-        #     ALPHAF,
-        #     HR,
-        #     PHI,
-        #     BETTAPHI,
-        #     tk1,
-        #     xm,
-        #     ym,
-        #     tm,
-        #     phim,
-        #     sxxm,
-        #     sxym,
-        #     etafluidcur_inv_kphim,
-        #     ktotalm,
-        #     KXSUM,
-        #     KYSUM,
-        #     TKSUM,
-        #     WTXSUM,
-        #     WTYSUM,
-        #     WTPSUM
-        # )
-
+        @info "M_680"
+        jldsave(output_path*"M_680_"*string(timestep)*".jld2";
+            ETA0,
+            ETA,
+            YNY,
+            GGG,
+            SXY0,
+            COH,
+            TEN,
+            FRI,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            RX,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            RY,
+            GGGP,
+            SXX0,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            PHI,
+            BETTAPHI,
+            tk1,
+            xm,
+            ym,
+            tm,
+            phim,
+            sxxm,
+            sxym,
+            etafluidcur_inv_kphim,
+            ktotalm,
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM
+        )
         # ---------------------------------------------------------------------
        #@info "compute gravity solution"
         # compute gravitational acceleration
@@ -5645,7 +5668,9 @@ function simulation_loop(output_path)
                 ETA00,
                 YNY,
                 YNY00,
-                RHO
+                RHO,
+                RX,
+                RY
             )
         end
 
@@ -5943,10 +5968,10 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
        #@info "interpolate updated viscoplastic viscosity to markers"
         # ---------------------------------------------------------------------
-        @threads for m = 1:1:marknum
-            update_marker_viscosity!(
-                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
-        end
+        # @threads for m = 1:1:marknum
+        #     update_marker_viscosity!(
+        #         m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
+        # end
         # @info "M_1378"
         # if timestep <=10
         #     jldsave(output_path*"M_1378_"*string(timestep)*".jld2";
@@ -5988,7 +6013,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
        #@info "interpolate DSXX, DSXY to markers"
         # ---------------------------------------------------------------------
-        update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
+        # update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
         # @info "M_1555"
         # if timestep <=10
@@ -6082,7 +6107,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
        #@info "interpolate DT to markers"
         # ---------------------------------------------------------------------
-        update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
+        # update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
         # @info "M_1842"
         # if timestep <=10
@@ -6093,7 +6118,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
        #@info "update porosity on markers"
         # ---------------------------------------------------------------------
-        update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
+        # update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
         # @info "M_1881"
         # if timestep <=10
         #     jldsave(output_path*"M_1881_"*string(timestep)*".jld2";
@@ -6162,8 +6187,8 @@ function simulation_loop(output_path)
        #@info "backtrack P nodes: Ptotal with RK4"
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
-        backtrace_pressures_rk4!(
-            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
+        # backtrace_pressures_rk4!(
+        #     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
 
         # @info "M_2494"
         # if timestep <=10

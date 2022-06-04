@@ -355,6 +355,133 @@ include("../src/test_constants.jl")
         @test WTPSUM == zeros(Float64, Ny1, Nx1)
     end # testset "setup_interpolated_properties()"
 
+    @testset "reset_interpolated_properties!()" begin
+        (
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM
+        ) = HydrologyPlanetesimals.setup_interpolated_properties()
+        ETA0SUM[1, 1] = one(1.0)
+        ETASUM[1, 1] = one(1.0)
+        GGGSUM[1, 1] = one(1.0)
+        SXYSUM[1, 1] = one(1.0)
+        COHSUM[1, 1] = one(1.0)
+        TENSUM[1, 1] = one(1.0)
+        FRISUM[1, 1] = one(1.0)
+        WTSUM[1, 1] = one(1.0)
+        RHOXSUM[1, 1] = one(1.0)
+        RHOFXSUM[1, 1] = one(1.0)
+        KXSUM[1, 1] = one(1.0)
+        PHIXSUM[1, 1] = one(1.0)
+        RXSUM[1, 1] = one(1.0)
+        WTXSUM[1, 1] = one(1.0)
+        RHOYSUM[1, 1] = one(1.0)
+        RHOFYSUM[1, 1] = one(1.0)
+        KYSUM[1, 1] = one(1.0)
+        PHIYSUM[1, 1] = one(1.0)
+        RYSUM[1, 1] = one(1.0)
+        WTYSUM[1, 1] = one(1.0)
+        RHOSUM[1, 1] = one(1.0)
+        RHOCPSUM[1, 1] = one(1.0)
+        ALPHASUM[1, 1] = one(1.0)
+        ALPHAFSUM[1, 1] = one(1.0)
+        HRSUM[1, 1] = one(1.0)
+        GGGPSUM[1, 1] = one(1.0)
+        SXXSUM[1, 1] = one(1.0)
+        TKSUM[1, 1] = one(1.0)
+        PHISUM[1, 1] = one(1.0)
+        WTPSUM[1, 1] = one(1.0)
+        HydrologyPlanetesimals.reset_interpolated_properties!(
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM
+        )
+        @test ETA0SUM == zeros(Float64, Ny, Nx)
+        @test ETASUM == zeros(Float64, Ny, Nx)
+        @test GGGSUM == zeros(Float64, Ny, Nx)
+        @test SXYSUM == zeros(Float64, Ny, Nx)
+        @test COHSUM == zeros(Float64, Ny, Nx)
+        @test TENSUM == zeros(Float64, Ny, Nx)
+        @test FRISUM == zeros(Float64, Ny, Nx)
+        @test WTSUM == zeros(Float64, Ny, Nx)
+        @test RHOXSUM == zeros(Float64, Ny1, Nx1)
+        @test RHOFXSUM == zeros(Float64, Ny1, Nx1)
+        @test KXSUM == zeros(Float64, Ny1, Nx1)
+        @test PHIXSUM == zeros(Float64, Ny1, Nx1)
+        @test RXSUM == zeros(Float64, Ny1, Nx1)
+        @test WTXSUM == zeros(Float64, Ny1, Nx1)
+        @test RHOYSUM == zeros(Float64, Ny1, Nx1)
+        @test RHOFYSUM == zeros(Float64, Ny1, Nx1)
+        @test KYSUM == zeros(Float64, Ny1, Nx1)
+        @test PHIYSUM == zeros(Float64, Ny1, Nx1)
+        @test RYSUM == zeros(Float64, Ny1, Nx1)
+        @test WTYSUM == zeros(Float64, Ny1, Nx1)
+        @test RHOSUM == zeros(Float64, Ny1, Nx1)
+        @test RHOCPSUM == zeros(Float64, Ny1, Nx1)
+        @test ALPHASUM == zeros(Float64, Ny1, Nx1)
+        @test ALPHAFSUM == zeros(Float64, Ny1, Nx1)
+        @test HRSUM == zeros(Float64, Ny1, Nx1)
+        @test GGGPSUM == zeros(Float64, Ny1, Nx1)
+        @test SXXSUM == zeros(Float64, Ny1, Nx1)
+        @test TKSUM == zeros(Float64, Ny1, Nx1)
+        @test PHISUM == zeros(Float64, Ny1, Nx1)
+        @test WTPSUM == zeros(Float64, Ny1, Nx1)
+    end # testset "reset_interpolated_properties!()"
+
     @testset "setup_marker_properties()" begin
         marknum = start_marknum
         # setup marker properties
@@ -673,7 +800,7 @@ include("../src/test_constants.jl")
             dymi=ym[m]-y[i]
             # Compute weights
             wtmij=(1-dxmj/dx)*(1-dymi/dy)
-            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmi1j=(1-dxmj/dx)*(dymi/dy)    
             wtmij1=(dxmj/dx)*(1-dymi/dy)
             wtmi1j1=(dxmj/dx)*(dymi/dy)
             # Matrix viscosity
@@ -1523,24 +1650,262 @@ include("../src/test_constants.jl")
     end # testset "reduce_add_3darray!"
 
     @testset "interpolate_add_to_grid!()" begin
-        jmin, jmax = jmin_basic, jmax_basic
-        imin, imax = imin_basic, imax_basic
         # simulate markers
-        num_markers = 10_000
-        xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
-        ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
+        num_markers = start_marknum + 10_000
+        xm = zeros(num_markers)
+        ym = zeros(num_markers)
+        for jm=1:1:Nxm, im=1:1:Nym
+            # calculate marker counter
+            m = (jm-1) * Nym + im
+            # define marker coordinates
+            xm[m] = dxm/2 + (jm-1) * dxm 
+            ym[m] = dym/2 + (im-1) * dym
+        end
+        xm[start_marknum+1:end] = rand(-dx:0.1:xsize+dx, 10_000)
+        ym[start_marknum+1:end] = rand(-dy:0.1:ysize+dy, 10_000)
         property = rand(num_markers)
-        # sample interpolation array
-        for m=1:1:num_markers
-            grid = zeros(Ny, Nx)
-            i, j, weights = HydrologyPlanetesimals.fix_weights(
-                xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
-            HydrologyPlanetesimals.interpolate_add_to_grid!(
-                i, j, weights, property[m], grid)
-            @test grid[i, j] == property[m] * weights[1] 
-            @test grid[i+1, j] == property[m] * weights[2]
-            @test grid[i, j+1] == property[m] * weights[3]
-            @test grid[i+1, j+1] == property[m] * weights[4]
+        @testset "basic nodes" begin
+            # sample interpolation array
+            gridsum = zeros(Ny, Nx)
+            weightsum = zeros(Ny, Nx)
+            weightsum_2 = zeros(Ny, Nx)
+            gridsum_ver = zeros(Ny, Nx)
+            weightsum_ver = zeros(Ny, Nx)
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m],
+                    ym[m],
+                    x,
+                    y,
+                    dx,
+                    dy,
+                    jmin_basic,
+                    jmax_basic,
+                    imin_basic,
+                    imax_basic
+                )
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[m], gridsum)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, one(1.0), weightsum)
+                # verification
+                j_ver=trunc(Int, (xm[m]-x[1])/dx)+1
+                i_ver=trunc(Int, (ym[m]-y[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                # Compute distances
+                dxmj=xm[m]-x[j_ver]
+                dymi=ym[m]-y[i_ver]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                gridsum_ver[i_ver,j_ver] += property[m]*wtmij
+                weightsum_ver[i_ver,j_ver] += wtmij
+                gridsum_ver[i_ver+1,j_ver] += property[m]*wtmi1j
+                weightsum_ver[i_ver+1,j_ver] += wtmi1j
+                gridsum_ver[i_ver,j_ver+1] += property[m]*wtmij1
+                weightsum_ver[i_ver,j_ver+1] += wtmij1
+                gridsum_ver[i_ver+1,j_ver+1] += property[m]*wtmi1j1
+                weightsum_ver[i_ver+1,j_ver+1] += wtmi1j1
+                if weightsum[i,j]!=weightsum_ver[i,j]
+                   @show m i j i_ver j_ver weights wtmij wtmi1j wtmij1 wtmi1j1 weightsum[i, j] weightsum_2[i,j] weightsum_ver[i, j] weightsum[i+1,j] weightsum_ver[i+1,j]  weightsum[i,j+1] weightsum_ver[i,j+1]  weightsum[i+1,j+1] weightsum_ver[i+1,j+1] gridsum[i,j] gridsum_ver[i,j] gridsum[i+1,j] gridsum_ver[i+1,j] gridsum[i,j+1] gridsum_ver[i,j+1] gridsum[i+1,j+1] gridsum_ver[i+1,j+1]
+                end
+            end
+            # Test
+            for i=1:1:Nx, j=1:1:Ny
+                @test gridsum[i,j] ≈ gridsum_ver[i,j] rtol=1e-9
+                @test weightsum[i,j] ≈ weightsum_ver[i,j] rtol=1e-9
+            end
+        end
+        @testset "Vx nodes" begin
+            # sample interpolation array
+            gridsum = zeros(Ny1, Nx1)
+            weightsum = zeros(Ny1, Nx1)
+            gridsum_ver = zeros(Ny1, Nx1)
+            weightsum_ver = zeros(Ny1, Nx1)
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m],
+                    ym[m],
+                    xvx,
+                    yvx,
+                    dx,
+                    dy,
+                    jmin_vx,
+                    jmax_vx,
+                    imin_vx,
+                    imax_vx
+                )
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[m], gridsum)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, one(1.0), weightsum)
+                # verification
+                j_ver=trunc(Int, (xm[m]-xvx[1])/dx)+1
+                i_ver=trunc(Int, (ym[m]-yvx[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx-1
+                    j_ver=Nx-1
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xvx[j]
+                dymi=ym[m]-yvx[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                gridsum_ver[i_ver,j_ver] += property[m]*wtmij
+                weightsum_ver[i_ver,j_ver] += wtmij
+                gridsum_ver[i_ver+1,j_ver] += property[m]*wtmi1j
+                weightsum_ver[i_ver+1,j_ver] += wtmi1j
+                gridsum_ver[i_ver,j_ver+1] += property[m]*wtmij1
+                weightsum_ver[i_ver,j_ver+1] += wtmij1
+                gridsum_ver[i_ver+1,j_ver+1] += property[m]*wtmi1j1
+                weightsum_ver[i_ver+1,j_ver+1] += wtmi1j1
+            end
+            # Test
+            for i=1:1:Nx1, j=1:1:Ny1
+                @test gridsum[i,j] ≈ gridsum_ver[i,j] rtol=1e-9
+                @test weightsum[i,j] ≈ weightsum_ver[i,j] rtol=1e-9
+            end
+        end
+        @testset "Vy nodes" begin
+            # sample interpolation array
+            gridsum = zeros(Ny1, Nx1)
+            weightsum = zeros(Ny1, Nx1)
+            gridsum_ver = zeros(Ny1, Nx1)
+            weightsum_ver = zeros(Ny1, Nx1)
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m],
+                    ym[m],
+                    xvy,
+                    yvy,
+                    dx,
+                    dy,
+                    jmin_vy,
+                    jmax_vy,
+                    imin_vy,
+                    imax_vy
+                )
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[m], gridsum)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, one(1.0), weightsum)
+                # verification
+                j_ver=trunc(Int, (xm[m]-xvy[1])/dx)+1
+                i_ver=trunc(Int, (ym[m]-yvy[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny-1
+                    i_ver=Ny-1
+                end
+                # Compute distances
+                dxmj=xm[m]-xvy[j_ver]
+                dymi=ym[m]-yvy[i_ver]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                gridsum_ver[i_ver,j_ver] += property[m]*wtmij
+                weightsum_ver[i_ver,j_ver] += wtmij
+                gridsum_ver[i_ver+1,j_ver] += property[m]*wtmi1j
+                weightsum_ver[i_ver+1,j_ver] += wtmi1j
+                gridsum_ver[i_ver,j_ver+1] += property[m]*wtmij1
+                weightsum_ver[i_ver,j_ver+1] += wtmij1
+                gridsum_ver[i_ver+1,j_ver+1] += property[m]*wtmi1j1
+                weightsum_ver[i_ver+1,j_ver+1] += wtmi1j1
+            end
+            # Test
+            for i=1:1:Nx1, j=1:1:Ny1
+                @test gridsum[i,j] ≈ gridsum_ver[i,j] rtol=1e-9
+                @test weightsum[i,j] ≈ weightsum_ver[i,j] rtol=1e-9
+            end
+        end
+        @testset "P nodes" begin
+            # sample interpolation array
+            gridsum = zeros(Ny1, Nx1)
+            weightsum = zeros(Ny1, Nx1)
+            gridsum_ver = zeros(Ny1, Nx1)
+            weightsum_ver = zeros(Ny1, Nx1)
+            for m=1:1:num_markers
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m],
+                    ym[m],
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[m], gridsum)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, one(1.0), weightsum)
+                # verification
+                j_ver=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i_ver=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j_ver<1
+                    j_ver=1
+                elseif j_ver>Nx
+                    j_ver=Nx
+                end
+                if i_ver<1
+                    i_ver=1
+                elseif i_ver>Ny
+                    i_ver=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j_ver]
+                dymi=ym[m]-yp[i_ver]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update properties
+                gridsum_ver[i_ver,j_ver] += property[m]*wtmij
+                weightsum_ver[i_ver,j_ver] += wtmij
+                gridsum_ver[i_ver+1,j_ver] += property[m]*wtmi1j
+                weightsum_ver[i_ver+1,j_ver] += wtmi1j
+                gridsum_ver[i_ver,j_ver+1] += property[m]*wtmij1
+                weightsum_ver[i_ver,j_ver+1] += wtmij1
+                gridsum_ver[i_ver+1,j_ver+1] += property[m]*wtmi1j1
+                weightsum_ver[i_ver+1,j_ver+1] += wtmi1j1
+            end
+            # Test
+            for i=1:1:Nx1, j=1:1:Ny1
+                @test gridsum[i,j] ≈ gridsum_ver[i,j] rtol=1e-9
+                @test weightsum[i,j] ≈ weightsum_ver[i,j] rtol=1e-9
+            end
         end
     end # testset "interpolate_add_to_grid
 
