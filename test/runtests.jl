@@ -4,6 +4,7 @@ using StaticArrays
 using Test
 
 include("../src/test_constants.jl")
+# include("../src/constants.jl")
 
 @testset verbose=true "HydrologyPlanetesimals.jl" begin
 
@@ -838,16 +839,17 @@ include("../src/test_constants.jl")
         @test HydrologyPlanetesimals.distance(0, 1, 0, 0) == 1
         @test HydrologyPlanetesimals.distance(0, 0, 1, 0) == 1
         @test HydrologyPlanetesimals.distance(0, 0, 0, 1) == 1
-        @test HydrologyPlanetesimals.distance(0, 0, 1, 1) ≈ sqrt(2)
-        @test HydrologyPlanetesimals.distance(1, 1, 0, 0) ≈ sqrt(2)
-        @test HydrologyPlanetesimals.distance(-1, -1, 1, 1) ≈ sqrt(8)
+        @test HydrologyPlanetesimals.distance(0, 0, 1, 1) ≈ sqrt(2) rtol=1e-9
+        @test HydrologyPlanetesimals.distance(1, 1, 0, 0) ≈ sqrt(2) rtol=1e-9
+        @test HydrologyPlanetesimals.distance(-1, -1, 1, 1) ≈ sqrt(8) rtol=1e-9
         # random tests
-        num_samples = 100
-        xx = rand(0:0.001:1000, 2, num_samples)
-        yy = rand(0:0.001:1000, 2, num_samples)
+        num_samples = 1000
+        p1 = rand(0:0.001:1000, 2, num_samples)
+        p2 = rand(0:0.001:1000, 2, num_samples)
         for i in 1:num_samples
             @test HydrologyPlanetesimals.distance(
-                xx[:, i]..., yy[:, i]...) ≈ sqrt(sum((xx[:, i] - yy[:, i]).^2))
+                p1[:, i]..., p2[:, i]...) ≈ (
+                    (p1[1, i]-p2[1, i])^2+(p1[2, i]-p2[2, i])^2)^0.5 rtol=1e-9
         end
     end # testset "distance()"
 
@@ -857,10 +859,14 @@ include("../src/test_constants.jl")
         @test HydrologyPlanetesimals.total(0, 1, 0) == 0
         @test HydrologyPlanetesimals.total(0, 0, 1) == 0
         @test HydrologyPlanetesimals.total(1, 2, 0.5) == 1.5
+        for i=1:1:1000
+            s, f, ϕ = rand(3)
+            @test HydrologyPlanetesimals.total(s, f, ϕ) ≈ s*(1-ϕ)+f*ϕ rtol=1e-9
+        end
     end # testset "total()"
 
     @testset "dot4()" begin
-        for i=1:1:10
+        for i=1:1:1000
             v1 = rand(4)
             v2 = rand(4)
             @test HydrologyPlanetesimals.dot4(v1, v2) ≈ sum(v1.*v2) rtol=1e-9
@@ -891,17 +897,17 @@ include("../src/test_constants.jl")
 
     @testset "ktotal()" begin
         # verification, from madcph.m, line 1761
-        for i=1:10
+        for i=1:1000
             ksolid, kfluid, phi = rand(3)
-            @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) == (
+            @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) ≈ (
                 ksolid*kfluid/2+((ksolid*(3*phi-2)+kfluid*(1-3*phi))^2)/16
-                )^0.5-(ksolid*(3*phi-2)+kfluid*(1-3*phi))/4
+                )^0.5-(ksolid*(3*phi-2)+kfluid*(1-3*phi))/4 rtol=1e-9
         end
     end # testset "ktotal()"
 
     @testset "kphi()" begin
         # verification, from madcph.m, line 333
-        for i=1:10
+        for i=1:1000
             kphim0m, phimm = rand(2)
             @test HydrologyPlanetesimals.kphi(kphim0m, phimm) ≈ (
                 kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
@@ -910,7 +916,7 @@ include("../src/test_constants.jl")
     end # testset "kphi()"
 
     @testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)" begin
-        for i=1:10
+        for i=1:1000
             kϕᵣ, ϕ, ηᶠcur = rand(3)
             @test HydrologyPlanetesimals.ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur) ≈ (
                 ηᶠcur*inv(kϕᵣ*(ϕ/phim0)^3/((1-ϕ)/(1-phim0))^2)
@@ -1442,7 +1448,7 @@ include("../src/test_constants.jl")
 
     @testset "fix_weights() advanced" begin
         # simulating markers
-        num_markers = 10_000
+        marknum = 10_000
         @testset "basic nodes" begin
             # verification, from madcph.m, line 373ff
             jmin, jmax = jmin_basic, jmax_basic
@@ -1469,9 +1475,9 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
-            ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-            for m in 1:num_markers
+            xm = rand(-x[1]:0.1:x[end]+dx, marknum)
+            ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+            for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1517,9 +1523,9 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xvx[1]:0.1:xvx[end]+dx, num_markers)
-            ym = rand(-yvx[1]:0.1:yvx[end]+dy, num_markers)
-            for m in 1:num_markers
+            xm = rand(-xvx[1]:0.1:xvx[end]+dx, marknum)
+            ym = rand(-yvx[1]:0.1:yvx[end]+dy, marknum)
+            for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1566,9 +1572,9 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xvy[1]:0.1:xvy[end]+dx, num_markers)
-            ym = rand(-yvy[1]:0.1:yvy[end]+dy, num_markers)
-            for m in 1:num_markers
+            xm = rand(-xvy[1]:0.1:xvy[end]+dx, marknum)
+            ym = rand(-yvy[1]:0.1:yvy[end]+dy, marknum)
+            for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1614,9 +1620,9 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, num_markers)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, num_markers)
-            for m in 1:num_markers
+            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
+            for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1651,9 +1657,9 @@ include("../src/test_constants.jl")
 
     @testset "interpolate_add_to_grid!()" begin
         # simulate markers
-        num_markers = start_marknum + 10_000
-        xm = zeros(num_markers)
-        ym = zeros(num_markers)
+        marknum = start_marknum + 10_000
+        xm = zeros(marknum)
+        ym = zeros(marknum)
         for jm=1:1:Nxm, im=1:1:Nym
             # calculate marker counter
             m = (jm-1) * Nym + im
@@ -1663,7 +1669,7 @@ include("../src/test_constants.jl")
         end
         xm[start_marknum+1:end] = rand(-dx:0.1:xsize+dx, 10_000)
         ym[start_marknum+1:end] = rand(-dy:0.1:ysize+dy, 10_000)
-        property = rand(num_markers)
+        property = rand(marknum)
         @testset "basic nodes" begin
             # sample interpolation array
             gridsum = zeros(Ny, Nx)
@@ -1671,7 +1677,7 @@ include("../src/test_constants.jl")
             weightsum_2 = zeros(Ny, Nx)
             gridsum_ver = zeros(Ny, Nx)
             weightsum_ver = zeros(Ny, Nx)
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1733,7 +1739,7 @@ include("../src/test_constants.jl")
             weightsum = zeros(Ny1, Nx1)
             gridsum_ver = zeros(Ny1, Nx1)
             weightsum_ver = zeros(Ny1, Nx1)
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1793,7 +1799,7 @@ include("../src/test_constants.jl")
             weightsum = zeros(Ny1, Nx1)
             gridsum_ver = zeros(Ny1, Nx1)
             weightsum_ver = zeros(Ny1, Nx1)
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1853,7 +1859,7 @@ include("../src/test_constants.jl")
             weightsum = zeros(Ny1, Nx1)
             gridsum_ver = zeros(Ny1, Nx1)
             weightsum_ver = zeros(Ny1, Nx1)
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
                     ym[m],
@@ -1912,13 +1918,13 @@ include("../src/test_constants.jl")
     @testset "interpolate_to_marker!()" begin
         jmin, jmax = jmin_basic, jmax_basic
         imin, imax = imin_basic, imax_basic
-        num_markers = 10_000
-        xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
-        ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-        property = zeros(num_markers)
+        marknum = 10_000
+        xm = rand(-x[1]:0.1:x[end]+dx, marknum)
+        ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+        property = zeros(marknum)
         grid = rand(Ny, Nx)
         # interpolate to markers & test
-        for m=1:1:num_markers
+        for m=1:1:marknum
             i, j, weights = HydrologyPlanetesimals.fix_weights(
                 xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
             HydrologyPlanetesimals.interpolate_to_marker!(
@@ -1935,14 +1941,14 @@ include("../src/test_constants.jl")
     @testset "interpolate_add_to_marker!()" begin
         jmin, jmax = jmin_basic, jmax_basic
         imin, imax = imin_basic, imax_basic
-        num_markers = 10_000
-        xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
-        ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-        property = rand(num_markers)
+        marknum = 10_000
+        xm = rand(-x[1]:0.1:x[end]+dx, marknum)
+        ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+        property = rand(marknum)
         property_ver = deepcopy(property)
         grid = rand(Ny, Nx)
         # interpolate to markers, verification, and test
-        for m=1:1:num_markers
+        for m=1:1:marknum
             i, j, weights = HydrologyPlanetesimals.fix_weights(
                 xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
             HydrologyPlanetesimals.interpolate_add_to_marker!(
@@ -2475,7 +2481,7 @@ include("../src/test_constants.jl")
 
     @testset "compute node properties: basic, Vx, Vy, P" begin
         # simulating markers
-        num_markers = 10_000
+        marknum = 10_000
         @testset "compute_basic_node_properties!()" begin    
             jmin, jmax = jmin_basic, jmax_basic
             imin, imax = imin_basic, imax_basic
@@ -2512,11 +2518,11 @@ include("../src/test_constants.jl")
             FRI_ver = zeros(Float64, Ny, Nx)
             YNY_ver = zeros(Bool, Ny, Nx)
             # simulate markers
-            xm = rand(-x[1]:0.1:x[end]+dx, num_markers)
-            ym = rand(-y[1]:0.1:y[end]+dy, num_markers)
-            property = rand(7, num_markers)*1e6
+            xm = rand(-x[1]:0.1:x[end]+dx, marknum)
+            ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+            property = rand(7, marknum)*1e6
             # calculate grid properties
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], x, y, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
@@ -2555,7 +2561,7 @@ include("../src/test_constants.jl")
                 YNY
             )
             # verification properties, from madcph.m, lines 373ff, 606ff
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 j=trunc(Int, (xm[m]-x[1])/dx)+1
                 i=trunc(Int, (ym[m]-y[1])/dy)+1
                 if j<1
@@ -2669,11 +2675,11 @@ include("../src/test_constants.jl")
             PHIX_ver = zeros(Float64, Ny1, Nx1)
             RX_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xvx[1]:0.1:xvx[end]+dx, num_markers)
-            ym = rand(-yvx[1]:0.1:yvx[end]+dy, num_markers)
-            property = rand(5, num_markers)*1e6
+            xm = rand(-xvx[1]:0.1:xvx[end]+dx, marknum)
+            ym = rand(-yvx[1]:0.1:yvx[end]+dy, marknum)
+            property = rand(5, marknum)*1e6
             # calculate grid properties
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xvx, yvx, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
@@ -2703,7 +2709,7 @@ include("../src/test_constants.jl")
                 RX
             )
             # verification properties, from madcph.m, lines 434ff, 624ff
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvx[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvx[1])/dy)+1
                 if j<1
@@ -2801,11 +2807,11 @@ include("../src/test_constants.jl")
             PHIY_ver = zeros(Float64, Ny1, Nx1)
             RY_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xvy[1]:0.1:xvy[end]+dx, num_markers)
-            ym = rand(-yvy[1]:0.1:yvy[end]+dy, num_markers)
-            property = rand(5, num_markers)*1e6
+            xm = rand(-xvy[1]:0.1:xvy[end]+dx, marknum)
+            ym = rand(-yvy[1]:0.1:yvy[end]+dy, marknum)
+            property = rand(5, marknum)*1e6
             # calculate grid properties
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xvy, yvy, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
@@ -2835,7 +2841,7 @@ include("../src/test_constants.jl")
                 RY
             )
             # verification properties, from madcph.m, lines 486ff, 636ff
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvy[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvy[1])/dy)+1
                 if j<1 
@@ -2951,11 +2957,11 @@ include("../src/test_constants.jl")
             PHI_ver = zeros(Float64, Ny1, Nx1)
             BETTAPHI_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, num_markers)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, num_markers)
-            property = rand(9, num_markers)*1e6
+            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
+            property = rand(9, marknum)*1e6
             # calculate grid properties
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m], ym[m], xp, yp, dx, dy, jmin, jmax, imin, imax)
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
@@ -3002,7 +3008,7 @@ include("../src/test_constants.jl")
                 BETTAPHI
             )
             # verification properties, from madcph.m, lines 538ff, 648ff
-            for m=1:1:num_markers
+            for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
                 i=trunc(Int, (ym[m]-yp[1])/dy)+1
                 if j<1 
@@ -3677,7 +3683,7 @@ include("../src/test_constants.jl")
                 end
                 
                 # Pfluid equation External points
-                if i==1 || j==1 || i==Ny1 || j==Nx1# || (i==2 && j==2)
+                if i==1 || j==1 || i==Ny1 || j==Nx1 || (i==2 && j==2)
                     # Boundary Condition
                     # 1*Pfluid=0
                     L_ver[kpf,kpf]=1; # Left part
@@ -3759,9 +3765,9 @@ include("../src/test_constants.jl")
                 pf_ver[i,j]=S[kpf]*Kcont
             end
         end
-        pavr=(pf_ver[2,2]+pf_ver[2,Nx]+pf_ver[Ny,2]+pf_ver[Ny,Nx])/4;
-        @. pr_ver=pr_ver-pavr+psurface;
-        @. pf_ver=pf_ver-pavr+psurface;
+        # pavr=(pf_ver[2,2]+pf_ver[2,Nx]+pf_ver[Ny,2]+pf_ver[Ny,Nx])/4;
+        # @. pr_ver=pr_ver-pavr+psurface;
+        # @. pf_ver=pf_ver-pavr+psurface;
         # test
         for j=1:1:Nx1, i=1:1:Ny1
             @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-9
@@ -4079,9 +4085,9 @@ include("../src/test_constants.jl")
 
     @testset "positive_max()" begin
         # simulate data
-        A = rand(-100:0.1:100, 1000, 1000)
-        B = rand(-100:0.1:100, 1000, 1000)
-        R = zeros(1000, 1000)
+        A = rand(-100:0.1:100, 100, 100)
+        B = rand(-100:0.1:100, 100, 100)
+        R = zeros(100, 100)
         # compute positive max
         HydrologyPlanetesimals.positive_max!(A, B, R)
         # test
@@ -4618,7 +4624,7 @@ include("../src/test_constants.jl")
         LT = zeros(Ny1*Nx1, Ny1*Nx1)
         RT = zeros(Ny1*Nx1)
         ST = zeros(Ny1*Nx1)
-        tk0_ver=tk1_ver
+        tk0_ver.=tk1_ver
         dtt=dtm
         dttsum=0
         titer=1
@@ -5025,11 +5031,17 @@ include("../src/test_constants.jl")
     end # testset "compute_rotation_rate!()"
 
     @testset "move_markers_rk4!()" begin
-        marknum = start_marknum
         dtm = 0.9
-        # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
+        marknum = start_marknum + 10_000
+        xm = zeros(marknum)
+        ym = zeros(marknum)
+        for jm=1:1:Nxm, im=1:1:Nym
+            # calculate marker counter
+            m = (jm-1) * Nym + im
+            # define marker coordinates
+            xm[m] = dxm/2 + (jm-1) * dxm 
+            ym[m] = dym/2 + (im-1) * dym
+        end
         tm = rand(1:3, marknum)
         tkm = rand(263:0.1:310, marknum)
         phim = rand(phimin:1e-4:phimax, marknum)
@@ -5341,23 +5353,45 @@ include("../src/test_constants.jl")
             tkm_ver[m]=((1-phim[m])*tkm_ver[m]*rhocpsolidm[tm[m]]+ phim[m]*(tkm_ver[m]+dtkfsm)*rhocpfluidm[tm[m]])/ ((1-phim[m])*rhocpsolidm[tm[m]]+phim[m]*rhocpfluidm[tm[m]])
         end  # end of marker loop
         # test
-        for m=1:1:marknum
-            @test xm[m] ≈ xm_ver[m] rtol=1e-9
-            @test ym[m] ≈ ym_ver[m] rtol=1e-9
-            @test tkm[m] ≈ tkm_ver[m] rtol=1e-1
-            @test sxym[m] ≈ sxym_ver[m] rtol=1e-9            
-            @test sxxm[m] ≈ sxxm_ver[m] rtol=1e-9
+
+        @testset "xm" begin
+            for m=1:1:marknum
+                @test xm[m] ≈ xm_ver[m] rtol=1e-12
+            end   
+        end
+        @testset "ym" begin
+            for m=1:1:marknum
+                @test ym[m] ≈ ym_ver[m] rtol=1e-12
+            end    
+        end
+        @testset "tkm" begin
+            for m=1:1:marknum
+                @test tkm[m] ≈ tkm_ver[m] rtol=1e-5
+            end    
+        end
+        @testset "sxym" begin
+            for m=1:1:marknum
+                @test sxym[m] == sxym_ver[m] 
+            end    
+        end
+        @testset "sxxm" begin
+            for m=1:1:marknum
+                @test sxxm[m] == sxxm_ver[m] 
+            end    
         end
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!()" begin
-        vx = rand(Ny1, Nx1) * 1e-9
-        vy = rand(Ny1, Nx1) * 1e-9
-        vxf = rand(Ny1, Nx1) * 1e-9
-        vyf = rand(Ny1, Nx1) * 1e-9
+        vx = rand(Ny1, Nx1) * 2e-9 .- 1e-9
+        vy = rand(Ny1, Nx1) * 2e-9 .- 1e-9
+        vxf = rand(Ny1, Nx1) * 2e-9 .- 1e-9
+        vyf = rand(Ny1, Nx1) * 2e-9 .- 1e-9
         pr = rand(Ny1, Nx1) * 1e6
+        # pr = ones(Ny1, Nx1) * 1e6
         pf = rand(Ny1, Nx1) * 1e6
+        # pf = ones(Ny1, Nx1) * 1e6
         ps = rand(Ny1, Nx1) * 1e6
+        # ps = ones(Ny1, Nx1) * 1e6
         pr0 = rand(Ny1, Nx1) * 1e6
         pf0 = rand(Ny1, Nx1) * 1e6
         ps0 = rand(Ny1, Nx1) * 1e6
@@ -5368,16 +5402,6 @@ include("../src/test_constants.jl")
         pf0_ver = deepcopy(pf0)
         ps0_ver = deepcopy(ps0)
         dtm = 0.9
-        ps_backtrace_x_ver = zeros(Ny1, Nx1)
-        ps_backtrace_y_ver = zeros(Ny1, Nx1)
-        pf_backtrace_x_ver = zeros(Ny1, Nx1)
-        pf_backtrace_y_ver = zeros(Ny1, Nx1)
-        # backtrace pressures using RK4
-        # ps_backtrace_x,
-        # ps_backtrace_y,
-        # pf_backtrace_x,
-        # pf_backtrace_y = HydrologyPlanetesimals.backtrace_pressures_rk4!(
-        #     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
         # verification, from madcph.p, line 2363ff
         HydrologyPlanetesimals.backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
@@ -5480,10 +5504,7 @@ include("../src/test_constants.jl")
             # Trace the node backward
             xcur=xA-dtm*vxmeff
             ycur=yA-dtm*vymeff
-            ps_backtrace_x_ver[ii,jj]=xcur
-            ps_backtrace_y_ver[ii,jj]=ycur
             # Interpolate nodal property
-            # SIGMA'xx; P
             # Define i;j indexes for the upper left node
             j=trunc(Int, (xcur-xp[1])/dx)+1
             i=trunc(Int, (ycur-yp[1])/dy)+1
@@ -5512,7 +5533,7 @@ include("../src/test_constants.jl")
         end
 
         # Backtracing Pressure nodes: Pfluid
-        pf0_ver=pf_ver
+        pf0_ver=deepcopy(pf_ver)
         for jj=2:1:Nx
         for ii=2:1:Ny
             # Save initial nodal coordinates
@@ -5609,8 +5630,6 @@ include("../src/test_constants.jl")
             # Trace the node backward
             xcur=xA-dtm*vxmeff
             ycur=yA-dtm*vymeff
-            pf_backtrace_x_ver[ii,jj]=xcur
-            pf_backtrace_y_ver[ii,jj]=ycur
             # Interpolate nodal property
             # SIGMA'xx; P
             # Define i;j indexes for the upper left node
@@ -5640,13 +5659,9 @@ include("../src/test_constants.jl")
         end
         # test
         for jj=2:1:Nx, ii=2:1:Ny
-            @test pr0[ii, jj] ≈ pr0_ver[ii, jj] rtol=1e-6
-            @test ps0[ii, jj] ≈ ps0_ver[ii, jj] rtol=1e-6 
-            @test pf0[ii, jj] ≈ pf0_ver[ii, jj] rtol=1e-6
-            # @test ps_backtrace_x[ii, jj] ≈ ps_backtrace_x_ver[ii, jj] rtol=1e-9
-            # @test ps_backtrace_y[ii, jj] ≈ ps_backtrace_y_ver[ii, jj] rtol=1e-9
-            # @test pf_backtrace_x[ii, jj] ≈ pf_backtrace_x_ver[ii, jj] rtol=1e-9
-            # @test pf_backtrace_y[ii, jj] ≈ pf_backtrace_y_ver[ii, jj] rtol=1e-9
+            @test pr0[ii, jj] ≈ pr0_ver[ii, jj] rtol=1e-9
+            @test ps0[ii, jj] ≈ ps0_ver[ii, jj] rtol=1e-9 
+            @test pf0[ii, jj] ≈ pf0_ver[ii, jj] rtol=1e-9
         end
     end # testset "backtrace_pressures_rk4!()"
 

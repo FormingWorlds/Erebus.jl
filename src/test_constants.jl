@@ -406,8 +406,8 @@ const iparms = Dict([
     (18, -1), # in/out: report the number of FLOPs to factor matrix A
     (19, 0), # out: report CG/CGS diagnostics, iterations
     (20, 0), # in: pivoting for symmetric indefinite matrices
-    (21, 0), # out: intertia: number of positive eigenvalues
-    (22, 0), # out: intertia: number of negative eigenvalues
+    (21, 0), # out: inertia: number of positive eigenvalues
+    (22, 0), # out: inertia: number of negative eigenvalues
     (23, 10), # in: parallel factorization control, REQ: iparm[10]==iparm[12]==0
     (24, 0), # in: parallel forward/backward solve control
     (25, 0), # reserved, set to zero

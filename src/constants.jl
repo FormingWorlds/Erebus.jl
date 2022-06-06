@@ -332,7 +332,7 @@ const vytop = - strainrate * ysize / 2
 const vybottom = strainrate * ysize / 2
 # Runge-Kutta integration parameters
 # bⱼ Butcher coefficients for RK4
-const brk4 = SVector{4, Float64}([1/6, 2/6, 2/6, 1/6])
+const brk4 = SVector{4, Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
 # cⱼ Butcher coefficients for RK4
 const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
 # timestepping parameters
@@ -381,7 +381,7 @@ const start_step = 1
 # number of timesteps to run
  const n_steps = 10#30_000 
 # using MKL Pardiso solver
-const use_pardiso = true
+const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ATTN: zero-indexed as in docs:
 # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
 const iparms = Dict([
@@ -406,8 +406,8 @@ const iparms = Dict([
     (18, -1), # in/out: report the number of FLOPs to factor matrix A
     (19, 0), # out: report CG/CGS diagnostics, iterations
     (20, 0), # in: pivoting for symmetric indefinite matrices
-    (21, 0), # out: intertia: number of positive eigenvalues
-    (22, 0), # out: intertia: number of negative eigenvalues
+    (21, 0), # out: inertia: number of positive eigenvalues
+    (22, 0), # out: inertia: number of negative eigenvalues
     (23, 10), # in: parallel factorization control, REQ: iparm[10]==iparm[12]==0
     (24, 0), # in: parallel forward/backward solve control
     (25, 0), # reserved, set to zero
