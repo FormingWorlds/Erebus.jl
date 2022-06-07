@@ -5,7 +5,7 @@ using Base.Threads
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
-using Pardiso
+using LinearAlgebra
 using ProgressMeter
 using SparseArrays
 using StaticArrays
@@ -15,6 +15,12 @@ const to = TimerOutput()
 export run_simulation
 # include("constants.jl")
 include("test_constants.jl")
+
+if use_pardiso
+    using Pardiso
+else
+    using MKL
+end
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -3020,6 +3026,17 @@ function compute_fluid_velocities!(
     # adding solid velocity
     @views @. vxf += vx
     @views @. vyf += vy
+
+     # for j=1:1:Nx, i=2:1:Ny
+    #     vxf[i, j] = qxD[i, j]*inv(PHIX[i,j]) + vx[i, j]
+    # end
+    # @views @. vxf[1, :] = -bcftop*vxf[2, :]    
+    # @views @. vxf[Ny1, :] = -bcfbottom*vxf[Ny, :]
+    # for j=2:1:Nx, i=1:1:Ny
+    #     vyf[i,j] = qyD[i,j]*inv(PHIY[i,j]) + vy[i,j]
+    # end
+    # @views @. vyf[:, 1] = -bcfleft*vyf[:, 2]    
+    # @views @. vyf[:, Nx1] = -bcfright*vyf[:, Nx]     
 # end # @timeit to "compute_fluid_velocities!()"
     return nothing
 end # function compute_fluid_velocities!
@@ -5357,7 +5374,7 @@ function simulation_loop(output_path)
     YERRNOD = setup_dynamic_simulation_parameters()
 
     @info "Simulation layout" Nx Ny xsize ysize rplanet rcrust marknum
-    @info "Solver" use_pardiso
+    @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
     
     # -------------------------------------------------------------------------
    #@info "set up staggered grid"

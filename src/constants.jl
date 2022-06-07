@@ -128,7 +128,7 @@ const jmax_m = Nxm - 1
 # maximum assignable marker grid index in y direction
 const imax_m = Nym - 1
 # marker randomized positions and porosity for testing
-const random_markers = false
+const random_markers = true
 # physical constants
 # gravitational constant [m^3*kg^-1*s^-2]
 const G = 6.672e-11
@@ -379,7 +379,7 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # number of timesteps to run
- const n_steps = 10#30_000 
+ const n_steps = 30_000 
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ATTN: zero-indexed as in docs:

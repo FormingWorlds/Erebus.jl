@@ -3913,7 +3913,7 @@ include("../src/test_constants.jl")
         @test aphimax ≈ aphimax_ver rtol=1e-9
     end # testset "compute_Aϕ!()"
 
-    @testset "compute_fluid_velocity!()" begin
+    @testset "compute_fluid_velocities!()" begin
         # simulate data
         PHIX = rand(Ny1, Nx1)
         PHIY = rand(Ny1, Nx1)
