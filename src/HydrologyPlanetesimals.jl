@@ -2098,6 +2098,105 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
     return nothing
 end # function compute_gravity_solution!
 
+
+"""
+Assemble the LHS sparse coefficient matrix and fill RHS coefficient vector
+of the Poisson equation to be solved for the gravitational potential Φ.
+
+$(SIGNATURES)
+
+# Details
+
+    - RHO: density at P nodes
+    - RP: right hand side coefficient vector
+
+# Returns
+
+    - LP: LHS sparse coefficient matrix
+
+"""
+function assemble_gravitational_lse(RHO, RP)
+    # @timeit to "assemble_gravitational_lse" begin
+        # fresh LHS sparse coefficient matrix
+        LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+        # reset RHS coefficient vector
+        RP .= 0.0
+        # iterate over P nodes
+        # @timeit to "build system" begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            # define global index in algebraic space
+            gk = (j-1) * Ny1 + i
+            # decide if external / boundary points
+            if (
+                i==1 ||
+                i==Ny1 ||
+                j==1 ||
+                j==Nx1 ||
+                distance(xp[j], yp[i], xcenter, ycenter) > xcenter
+            )
+                # boundary condition: ϕ = 0
+                updateindex!(LP, +, 1.0, gk, gk)
+                # RP[gk] = 0.0 # already done at initialization
+            else
+                # internal points: 2D Poisson equation: gravitational potential Φ
+                # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
+                #
+                #           Φ₂
+                #           |
+                #           |
+                #    Φ₁-----Φ₃-----Φ₅
+                #           |
+                #           |
+                #           Φ₄
+                #
+                # density gradients
+                # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+                # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+                # fill system of equations: LHS (11.11)
+                updateindex!(LP, +, inv(dx^2), gk, gk-Ny1) # Φ₁
+                updateindex!(LP, +, inv(dy^2), gk, gk-1) # Φ₂
+                updateindex!(LP, +, -2.0*(inv(dx^2)+inv(dy^2)), gk, gk) # Φ₃
+                updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
+                updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
+                # fill system of equations: RHS (11.11)
+                RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
+            end
+        end
+        # end # @timeit to "build system"
+    # end # @timeit to "assemble_gravitational_lse"
+    return LP
+    end
+
+"""
+Process gravitational potential solution vector to output physical observables.
+
+$(SIGNATURES)
+
+# Details
+
+    - FI: gravitational potential
+    - gx: x-component of gravitational acceleration
+    - gy: y-component of gravitational acceleration
+
+# Returns
+
+    - nothing
+"""
+function process_gravitational_solution!(SP, FI, gx, gy)
+# @timeit to "process gravitational solution" begin
+    # @timeit to "reshape solution" begin
+    FI .= reshape(SP, Ny1, Nx1)
+    # end # @timeit to "reshape solution"
+    # @timeit to "compute accelerations" begin
+    # gx = -∂ϕ/∂x (11.12)
+    gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
+    # gy = -∂ϕ/∂y (11.13)   
+    gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
+    # end # @timeit to "compute accelerations"
+# end # @timeit to "process gravitational solution"
+    return nothing
+end
+
 """
 Compute viscosities, stresses, and density gradients
 for hydromechanical solver.
@@ -5862,7 +5961,12 @@ function simulation_loop(output_path)
        #@info "compute gravity solution"
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
+        # compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
+        LP = assemble_gravitational_lse(RHO, RP)
+        # @timeit to "solve gravitational LSE" begin
+        SP .= LP \ RP
+        # end # @timeit to "solve gravitational LSE"
+        process_gravitational_solution!(SP, FI, gx, gy)
 
         # ---------------------------------------------------------------------
        #@info "probe increasing computational timestep"
@@ -6000,49 +6104,49 @@ function simulation_loop(output_path)
                 vyf
             )
 
-            @info "M_1078"
-            # L_d = collect(L)
-            jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-                xm,
-                ym,
-                tk0,
-                tk1,
-                tk2,
-                DT,
-                APHI,
-                vxf,
-                vyf,
-                Kcont,
-                ETA,
-                ETAP,
-                GGG,
-                GGGP,
-                SXY0,
-                SXX0,
-                RHOX,
-                RHOY,
-                RHOFX,
-                RHOFY,
-                RX,
-                RY,
-                ETAPHI,
-                BETTAPHI,
-                PHI,
-                gx,
-                gy,
-                pr0,
-                pf0,
-                dt,
-                R,
-                #L_d,
-                S,
-                vx,
-                vy,
-                qxD,
-                qyD,
-                pr,
-                pf
-            )
+            # @info "M_1078"
+            # # L_d = collect(L)
+            # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+            #     xm,
+            #     ym,
+            #     tk0,
+            #     tk1,
+            #     tk2,
+            #     DT,
+            #     APHI,
+            #     vxf,
+            #     vyf,
+            #     Kcont,
+            #     ETA,
+            #     ETAP,
+            #     GGG,
+            #     GGGP,
+            #     SXY0,
+            #     SXX0,
+            #     RHOX,
+            #     RHOY,
+            #     RHOFX,
+            #     RHOFY,
+            #     RX,
+            #     RY,
+            #     ETAPHI,
+            #     BETTAPHI,
+            #     PHI,
+            #     gx,
+            #     gy,
+            #     pr0,
+            #     pf0,
+            #     dt,
+            #     R,
+            #     #L_d,
+            #     S,
+            #     vx,
+            #     vy,
+            #     qxD,
+            #     qyD,
+            #     pr,
+            #     pf
+            # )
 
             # define displacement timestep dtm
             dtm = compute_displacement_timestep(

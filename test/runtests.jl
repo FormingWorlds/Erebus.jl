@@ -3216,10 +3216,104 @@ include("../src/test_constants.jl")
         end
         # test
         for j=1:1:Nx, i=1:1:Ny
+            @test FI[i, j] ≈ FI_ver[i, j] rtol=1e-9
             @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-9
             @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-9
         end
     end # testset "compute_gravity_solution!()"
+
+    @testset "assemble_gravitational_lse()" begin
+        RP = rand(Float64, Nx1*Ny1)
+        RP_ver = deepcopy(RP)
+        LP_ver = zeros(Nx1*Ny1, Nx1*Ny1)
+        # simulate density field RHO
+        RHO = rand(Ny1, Nx1) * 7e3
+        LP = HydrologyPlanetesimals.assemble_gravitational_lse(RHO, RP)
+        # verification, from madcph.m, lines 680ff
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Define global index in algebraic space
+                gk=(j-1)*Ny1+i
+                # Distance from the model centre
+                rnode=((xp[j]-xsize/2)^2+(yp[i]-ysize/2)^2)^0.5
+                # External points
+                if rnode>xsize/2 || i==1 || i==Ny1 || j==1 || j==Nx1
+                    # Boundary Condition
+                    # PHI=0
+                    LP_ver[gk,gk]=1; # Left part
+                    RP_ver[gk]=0; # Right part
+                else
+                    # Internal points: Temperature eq.
+                    # d2PHI/dx^2+d2PHI/dy^2=2/3*4*G*pi*RHO
+                    #          PHI2
+                    #           |
+                    #           |
+                    #  PHI1----PHI3----PHI5
+                    #           |
+                    #           |
+                    #          PHI4
+                    #
+                    # Density gradients
+                    dRHOdx=(RHO[i,j+1]-RHO[i,j-1])/2/dx
+                    dRHOdy=(RHO[i+1,j]-RHO[i-1,j])/2/dy
+                    # Left part
+                    LP_ver[gk,gk-Ny1]=1/dx^2; # PHI1
+                    LP_ver[gk,gk-1]=1/dy^2; # PHI2
+                    LP_ver[gk,gk]=-2/dx^2-2/dy^2; # PHI3
+                    LP_ver[gk,gk+1]=1/dy^2; # PHI4
+                    LP_ver[gk,gk+Ny1]=1/dx^2; # PHI5
+                    # Right part
+                    RP_ver[gk]=2/3*4*G*pi*RHO[i,j]
+                end
+            end
+        end
+        # test
+        for j=1:1:Nx1*Ny1, i=1:1:Ny1*Nx1
+            @test LP[i, j] ≈ LP_ver[i, j] rtol=1e-12
+            @test RP[i] ≈ RP_ver[i] rtol=1e-12
+        end
+    end # testset "assemble_gravitational_lse()"
+
+    @testset "process_gravitational_solution" begin
+        SP = rand(Float64, Nx1*Ny1)
+        FI = zeros(Float64, Ny1, Nx1)
+        gx = zeros(Float64, Ny1, Nx1)
+        gy = zeros(Float64, Ny1, Nx1)
+        FI_ver = zeros(Float64, Ny1, Nx1)
+        gx_ver = zeros(Float64, Ny1, Nx1)
+        gy_ver = zeros(Float64, Ny1, Nx1)
+        HydrologyPlanetesimals.process_gravitational_solution!(SP, FI, gx, gy)
+        # verification, from madcph.m, lines 680ff
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                # Compute global index
+                gk=(j-1)*Ny1+i
+                # Reload solution
+                FI_ver[i,j]=SP[gk]
+            end
+        end
+        # Compute gravity acceleration
+        # gx
+        for j=1:1:Nx
+            for i=1:1:Ny1
+                # gx=-dPHI/dx
+                gx_ver[i,j]=-(FI_ver[i,j+1]-FI_ver[i,j])/dx
+            end
+        end
+        # gy
+        for j=1:1:Nx1
+            for i=1:1:Ny
+                # gy=-dPHI/dy
+                gy_ver[i,j]=-(FI_ver[i+1,j]-FI_ver[i,j])/dy
+            end
+        end
+        # test
+        for j=1:1:Nx, i=1:1:Ny
+            @test FI[i, j] ≈ FI_ver[i, j] rtol=1e-9
+            @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-9
+            @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-9
+        end
+    end # testset "process_gravitational_solution"
 
     @testset "recompute_bulk_viscosity!()" begin
         ETAP = zeros(Ny1, Nx1)
