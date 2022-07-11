@@ -13,8 +13,8 @@ using TimerOutputs
 
 const to = TimerOutput()
 export run_simulation
-# include("constants.jl")
-include("test_constants.jl")
+include("constants.jl")
+# include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
@@ -665,9 +665,9 @@ function compute_marker_properties!(
         rhocptotalm[m] = total(
             rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
         etasolidcur = ifelse(
-            tkm[m]>tmsilicate, etasolidmm[tm[m]], etasolidm[tm[m]])
+            tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
         etafluidcur = ifelse(
-            tkm[m]>tmiron, etafluidmm[tm[m]], etafluidm[tm[m]])
+            tkm[m]>tmfluidphase, etafluidmm[tm[m]], etafluidm[tm[m]])
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
@@ -1194,9 +1194,9 @@ $(SIGNATURES)
 """
 function etatotal_rocks(tkmm, tmm)
     @inbounds etasolidcur = ifelse(
-        tkmm>tmsilicate, etasolidmm[tmm], etasolidm[tmm])
+        tkmm>tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
     @inbounds etafluidcur = ifelse(
-        tkmm>tmiron, etafluidmm[tmm], etafluidm[tmm])
+        tkmm>tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
     return max(etamin, etasolidcur, etafluidcur)
 end
 
@@ -5233,6 +5233,15 @@ function save_state(
         marknum,
         dsubgrids,
         dsubgridt,
+        hr_al,
+        hr_fe,
+        rplanet,
+        rcrust,
+        psurface,
+        xsize,
+        ysize,
+        xcenter,
+        ycenter,  
         Nx,
         Ny,
         Nx1,

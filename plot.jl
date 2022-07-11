@@ -72,7 +72,7 @@ function colorbar_properties(grid, n_ticks=5)
 end
 
 """
-Plot results from `.jld2` simulation output files.
+Create movies of results from `.jld2` simulation output files.
 
 $(SIGNATURES)
 
@@ -84,17 +84,16 @@ $(SIGNATURES)
 
     - nothing
 """
-function plot_results(input_path)
+function movie_results(input_path)
     files = filter!(
         x -> isfile(x) && endswith(x, ".jld2"), readdir(input_path, join=true))
     n_steps = length(files)
+
     file = jldopen(files[end], "r")
-    
     Nx = file["Nx"]
     Ny = file["Ny"]
     Nx1 = file["Nx1"]
     Ny1 = file["Ny1"]
- 
     x = file["x"]
     y = file["y"]
     xvx = file["xvx"]
@@ -105,6 +104,7 @@ function plot_results(input_path)
     yp = file["yp"]
     xxm = file["xxm"]
     yym = file["yym"]
+    close(file)
 
     n_ticks = 4
     xlim_b, ylim_b = extrema.((x, y))
@@ -144,6 +144,7 @@ function plot_results(input_path)
     timesum = Array{Float64}(undef, n_steps)
     timesum_Ma = Array{Float64}(undef, n_steps)
     marknum = Array{Float64}(undef, n_steps)
+    max_T = Array{Float64}(undef, n_steps)
 
     # xm = Array{Float64}(undef, marknum, n_steps)
     # ym = Array{Float64}(undef, marknum, n_steps)
@@ -175,9 +176,9 @@ function plot_results(input_path)
             timestep[i] = file["timestep"]
             dtm[i] = file["dtm"]
             timesum[i] = file["timesum"]
-            timesum_Ma[i] = timesum[i] / (365.25 * 24 * 3600) *1e-6
+            timesum_Ma[i] = timesum[i] / (365.25 * 24 * 3600) * 1e-6
             marknum[i] = file["marknum"]
-
+            # max_T[i] = maximum(tk2[:,:,i])
             # xm[:, i] = file["xm"]
             # ym[:, i] = file["ym"]
             # tm[:, i] = file["tm"]
@@ -187,6 +188,7 @@ function plot_results(input_path)
     gmag = Array{Float64}(undef, Ny1, Nx1, n_steps)
     @views @. gmag[2:Ny, 2:Nx, :] = sqrt((0.5 * (gx[2:Ny, 2:Nx, :] + gx[2:Ny, 1:Nx-1, :]))^2 + (0.5 * (gy[2:Ny, 2:Nx, :] + gy[1:Ny-1, 2:Nx, :]))^2)
 
+    
     # limits_pr, cbarticks_pr = colorbar_properties(pr)
     
     gr(fmt = :png)
@@ -230,7 +232,7 @@ function plot_results(input_path)
     end
     gif(anim_1, input_path*"/HydrologyPlanetesimals_1.mp4")        
 
-    X, Y = meshgrid(xp[10:20:Nx1], yp[10:20:Ny1])
+    # X, Y = meshgrid(xp[10:20:Nx1], yp[10:20:Ny1])
 
     anim_2 = @animate for i in 1:n_steps
         @views ETA_ = ETA[:, :, i]
@@ -322,7 +324,7 @@ function main()
     if !isdir(input_path)
         throw(ArgumentError("input_path must be a valid directory"))
     end
-    plot_results(input_path)
+    movie_results(input_path)
 end
 
 main()
