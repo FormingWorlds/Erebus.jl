@@ -1,13 +1,13 @@
 # radioactive switches
-# radioactive heating from 26Al active
+# solid phase radioactive heating from 26Al active
 const hr_al = true
-# radioactive heating from 60Fe active	
-const hr_fe = true
+# fluid phase radioactive heating from 60Fe active	
+const hr_fe = false
 # planetary parameters
 # planetary radius [m]
 const rplanet = 5_000.0
 # crust radius [m]
-const rcrust = 4_000.0
+const rcrust = 4_800.0
 # surface pressure [Pa]
 const psurface = 1.0e+3
 # model size, geometry, and resolution
@@ -128,9 +128,9 @@ const jmax_m = Nxm - 1
 # maximum assignable marker grid index in y direction
 const imax_m = Nym - 1
 # marker randomized positions and porosity for testing
-const random_markers = false
+const random_markers = true
 # physical constants
-# gravitational constant [m^3*kg^-1*s^-2]
+# gravitational constant [m³*kg⁻¹*s⁻²]
 const G = 6.672e-11
 # scaled pressure    
 # const pscale = 1.0e+23 * inv(dx)
@@ -139,10 +139,10 @@ const G = 6.672e-11
 const Kcont = 1.0e20
 # ------------------------------------------------------------------------------
 # materials properties:                       planet      crust       space
-# all identical except fluid density -------------------------------------------
-#  # solid Density [kg/m^3]
+# all phases identical except fluid density ------------------------------------
+#  # solid Density [kg/m³]
 #  const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
-#  # fluid density [kg/m^3]	
+#  # fluid density [kg/m³]	
 #  const rhofluidm = SVector{3, Float64}(    [7000.0    , 7000.0    ,    1.0    ])
 #  # solid viscosity [Pa*s]
 #  const etasolidm = SVector{3, Float64}(    [   1.0e+16,    1.0e+16,    1.0e+16])
@@ -152,9 +152,9 @@ const Kcont = 1.0e20
 #  const etafluidm = SVector{3, Float64}(    [   1.0e-02,    1.0e-02,    1.0e-02])
 #  # molten fluid viscosity [Pa*s]
 #  const etafluidmm = SVector{3, Float64}(   [   1.0e-02,    1.0e-02,    1.0e-02])
-#  # solid volumetric heat capacity [kg/m^3]
+#  # solid volumetric heat capacity [kg/m³]
 #  const rhocpsolidm = SVector{3, Float64}(  [   3.3e+06,    3.3e+06,    3.3e+06])
-#  # fluid volumetric heat capacity [kg/m^3]
+#  # fluid volumetric heat capacity [kg/m³]
 #  const rhocpfluidm = SVector{3, Float64}(  [   7.0e+06,    7.0e+06,    7.0e+06])
 #  # solid thermal expansion [1/K]
 #  const alphasolidm = SVector{3, Float64}(  [   3.0e-05,    3.0e-05,    3.0e-05])
@@ -164,9 +164,9 @@ const Kcont = 1.0e20
 #  const ksolidm = SVector{3, Float64}(      [   3.0    ,    3.0    ,    3.0    ])
 #  # fluid thermal conductivity [W/m/K]
 #  const kfluidm = SVector{3, Float64}(      [  50.0    ,   50.0    ,   50.0    ])
-#  # solid radiogenic heat production [W/m^3]
+#  # solid radiogenic heat production [W/m³]
 #  const start_hrsolidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
-#  # fluid radiogenic heat production [W/m^3]
+#  # fluid radiogenic heat production [W/m³]
 #  const start_hrfluidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
 #  # solid shear modulus [Pa]
 #  const gggsolidm = SVector{3, Float64}(    [   1.0e+10,    1.0e+10,    1.0e+10])
@@ -180,10 +180,10 @@ const Kcont = 1.0e20
 #  const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-13])
 #  # initial temperature [K]
 #  const tkm0 = SVector{3, Float64}(         [ 300.0    ,  300.0    ,  300.0    ])
-# fluid Fe ---------------------------------------------------------------------
-# # solid Density [kg/m^3]
+# fluid phase Fe ---------------------------------------------------------------
+# # solid Density [kg/m³]
 # const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
-# # fluid density [kg/m^3]	
+# # fluid density [kg/m³]	
 # const rhofluidm = SVector{3, Float64}(    [7000.0    , 7000.0    ,    1.0    ])
 # # solid viscosity [Pa*s]
 # const etasolidm = SVector{3, Float64}(    [   1.0e+16,    1.0e+16,    1.0e+14])
@@ -193,9 +193,9 @@ const Kcont = 1.0e20
 # const etafluidm = SVector{3, Float64}(    [   1.0e-02,    1.0e-02,    1.0e+12])
 # # molten fluid viscosity [Pa*s]
 # const etafluidmm = SVector{3, Float64}(   [   1.0e-02,    1.0e-02,    1.0e+12])
-# # solid volumetric heat capacity [kg/m^3]
+# # solid volumetric heat capacity [kg/m³]
 # const rhocpsolidm = SVector{3, Float64}(  [   3.3e+06,    3.3e+06,    3.0e+06])
-# # fluid volumetric heat capacity [kg/m^3]
+# # fluid volumetric heat capacity [kg/m³]
 # const rhocpfluidm = SVector{3, Float64}(  [   7.0e+06,    7.0e+06,    3.0e+06])
 # # solid thermal expansion [1/K]
 # const alphasolidm = SVector{3, Float64}(  [   3.0e-05,    3.0e-05,    0.0    ])
@@ -205,9 +205,9 @@ const Kcont = 1.0e20
 # const ksolidm = SVector{3, Float64}(      [   3.0    ,    3.0    , 3000.0    ])
 # # fluid thermal conductivity [W/m/K]
 # const kfluidm = SVector{3, Float64}(      [  50.0    ,   50.0    , 3000.0    ])
-# # solid radiogenic heat production [W/m^3]
+# # solid radiogenic heat production [W/m³]
 # const start_hrsolidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
-# # fluid radiogenic heat production [W/m^3]
+# # fluid radiogenic heat production [W/m³]
 # const start_hrfluidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
 # # solid shear modulus [Pa]
 # const gggsolidm = SVector{3, Float64}(    [   1.0e+10,    1.0e+10,    1.0e+10])
@@ -223,22 +223,65 @@ const Kcont = 1.0e20
 # const tkm0 = SVector{3, Float64}(         [ 300.0    ,  300.0    ,  273.0    ])
 # # Coefficient to compute compaction viscosity from shear viscosity
 # const etaphikoef = 1e-4
-# fluid H₂O -------------------------------------------------------------------
-# solid Density [kg/m^3]
+# fluid phase H₂O --------------------------------------------------------------
+# solid Density [kg/m³]
+# const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
+# # fluid density [kg/m³]	
+# const rhofluidm = SVector{3, Float64}(    [1000.0    , 1000.0    ,    1.0    ])
+# # solid viscosity [Pa*s]
+# const etasolidm = SVector{3, Float64}(    [   1.0e+19,    1.0e+19,    1.0e+16])
+# # molten solid viscosity [Pa*s]
+# const etasolidmm = SVector{3, Float64}(   [   1.0e+19,    1.0e+19,    1.0e+16])
+# # fluid viscosity [Pa*s]
+# const etafluidm = SVector{3, Float64}(    [   1.0e-02,    1.0e-02,    1.0e+12])
+# # molten fluid viscosity [Pa*s]
+# const etafluidmm = SVector{3, Float64}(   [   1.0e-02,    1.0e-02,    1.0e+12])
+# # solid volumetric heat capacity [kg/m³]
+# const rhocpsolidm = SVector{3, Float64}(  [   3.3e+06,    3.3e+06,    3.0e+06])
+# # fluid volumetric heat capacity [kg/m³]
+# const rhocpfluidm = SVector{3, Float64}(  [   1.0e+06,    1.0e+06,    3.0e+06])
+# # solid thermal expansion [1/K]
+# const alphasolidm = SVector{3, Float64}(  [   3.0e-05,    3.0e-05,    0.0    ])
+# # fluid thermal expansion [1/K]
+# const alphafluidm = SVector{3, Float64}(  [   5.0e-05,    5.0e-05,    0.0    ])
+# # solid thermal conductivity [W/m/K]
+# const ksolidm = SVector{3, Float64}(      [   3.0    ,    3.0    , 3000.0    ])
+# # fluid thermal conductivity [W/m/K]
+# const kfluidm = SVector{3, Float64}(      [  50.0    ,   50.0    , 3000.0    ])
+# # solid radiogenic heat production [W/m³]
+# const start_hrsolidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
+# # fluid radiogenic heat production [W/m³]
+# const start_hrfluidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
+# # solid shear modulus [Pa]
+# const gggsolidm = SVector{3, Float64}(    [   1.0e+10,    1.0e+10,    1.0e+10])
+# # solid friction coefficient
+# const frictsolidm = SVector{3, Float64}(  [   0.6    ,    0.6    ,    0.0    ])
+# # solid compressive strength [Pa]
+# const cohessolidm = SVector{3, Float64}(  [   1.0e+08,    1.0e+08,    1.0e+08])
+# # solid tensile strength [Pa]
+# const tenssolidm  = SVector{3, Float64}(  [   6.0e+07,    6.0e+07,    6.0e+07])
+# # standard permeability [m^2]
+# const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
+# # initial temperature [K]
+# const tkm0 = SVector{3, Float64}(         [ 300.0    ,  300.0    ,  273.0    ])
+# # Coefficient to compute compaction viscosity from shear viscosity
+# const etaphikoef = 1
+# planetesimals: fluid phase H₂O -----------------------------------------------
+# solid density [kg/m³]
 const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
-# fluid density [kg/m^3]	
+# fluid density [kg/m³]	
 const rhofluidm = SVector{3, Float64}(    [1000.0    , 1000.0    ,    1.0    ])
 # solid viscosity [Pa*s]
 const etasolidm = SVector{3, Float64}(    [   1.0e+19,    1.0e+19,    1.0e+16])
 # molten solid viscosity [Pa*s]
 const etasolidmm = SVector{3, Float64}(   [   1.0e+19,    1.0e+19,    1.0e+16])
 # fluid viscosity [Pa*s]
-const etafluidm = SVector{3, Float64}(    [   1.0e-02,    1.0e-02,    1.0e+12])
+const etafluidm = SVector{3, Float64}(    [   1.0e+12,    1.0e+12,    1.0e-03])
 # molten fluid viscosity [Pa*s]
-const etafluidmm = SVector{3, Float64}(   [   1.0e-02,    1.0e-02,    1.0e+12])
-# solid volumetric heat capacity [kg/m^3]
+const etafluidmm = SVector{3, Float64}(   [   1.0e-03,    1.0e-03,    1.0e-03])
+# solid volumetric heat capacity [kg/m³]
 const rhocpsolidm = SVector{3, Float64}(  [   3.3e+06,    3.3e+06,    3.0e+06])
-# fluid volumetric heat capacity [kg/m^3]
+# fluid volumetric heat capacity [kg/m³]
 const rhocpfluidm = SVector{3, Float64}(  [   1.0e+06,    1.0e+06,    3.0e+06])
 # solid thermal expansion [1/K]
 const alphasolidm = SVector{3, Float64}(  [   3.0e-05,    3.0e-05,    0.0    ])
@@ -248,9 +291,9 @@ const alphafluidm = SVector{3, Float64}(  [   5.0e-05,    5.0e-05,    0.0    ])
 const ksolidm = SVector{3, Float64}(      [   3.0    ,    3.0    , 3000.0    ])
 # fluid thermal conductivity [W/m/K]
 const kfluidm = SVector{3, Float64}(      [  50.0    ,   50.0    , 3000.0    ])
-# solid radiogenic heat production [W/m^3]
+# solid radiogenic heat production [W/m³]
 const start_hrsolidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
-# fluid radiogenic heat production [W/m^3]
+# fluid radiogenic heat production [W/m³]
 const start_hrfluidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
 # solid shear modulus [Pa]
 const gggsolidm = SVector{3, Float64}(    [   1.0e+10,    1.0e+10,    1.0e+10])
@@ -263,13 +306,13 @@ const tenssolidm  = SVector{3, Float64}(  [   6.0e+07,    6.0e+07,    6.0e+07])
 # standard permeability [m^2]
 const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
 # initial temperature [K]
-const tkm0 = SVector{3, Float64}(         [ 300.0    ,  300.0    ,  273.0    ])
+const tkm0 = SVector{3, Float64}(         [ 170.0    ,  170.0    ,  170.0    ])
 # Coefficient to compute compaction viscosity from shear viscosity
 const etaphikoef = 1
 # ------------------------------------------------------------------------------
 # 26Al decay
 # 26Al half life [s]
-const t_half_al = 717000 * 31540000
+const t_half_al = 717_000 * 31_540_000
 # 26Al decay constant
 const tau_al = t_half_al / log(2)
 # initial ratio of 26Al and 27Al isotopes
@@ -280,27 +323,56 @@ const E_al = 5.0470e-13
 const f_al = 1.9e23
 # 60Fe decay
 # 60Fe half life [s]	
-const t_half_fe = 2620000 * 31540000
+const t_half_fe = 2_620_000 * 31_540_000
 # 60Fe decay constant
 const tau_fe = t_half_fe / log(2)
 # initial ratio of 60Fe and 56Fe isotopes	
-const ratio_fe = 1e-6
+const ratio_fe = 1.0e-6
 # E 60Fe [J]	
 const E_fe = 4.34e-13
 # 60Fe atoms/kg	
 const f_fe = 1.957e24
 # melting temperatures
-# silicate melting temperature [K]
-const tmsilicate = 1e+6
-# iron melting temperature [K]
-const tmiron = 1273 
+# solid phase (typically silicate) melting temperature [K]
+const tmsolidphase = 1.0e+6
+# fluid phase (typically H₂O or Fe) melting temperature [K]
+const tmfluidphase = 273.0
 # porosities
 # standard Fe fraction [porosity]
 const phim0 = 0.2
 # min porosity	
-const phimin = 1e-4
+const phimin = 1.0e-4
 # max porosity
-const phimax = 1 - phimin            
+const phimax = 1.0 - phimin            
+# thermodynamic parameters: silicate dehydration reaction Wˢ = Dˢ + H₂O
+# molar gas constant [JK⁻¹mol⁻¹]
+const R = 8.314#46261815324
+# molar mass of water [kg/mol]
+const MH₂O = 0.018
+# molar mass of dry silicate [kg/mol]
+const MD = 0.120
+# density of dry silicate [kg/m³]
+const ρDˢ = 3300.0
+# density of wet silicate [kg/m³]
+const ρWˢ = 2600.0
+# density of liquid water [kg/m³]
+const ρH₂Oᶠ = 1000.0
+# molar volume of dry solid [m³/mol]
+const VDˢ = MD / ρDˢ
+# molar volume of wet solid [m³/mol]
+const VWˢ = (MD+MH₂O) / ρWˢ
+# molar volume of liquid water [m³/mol]
+const VH₂Oᶠ = MH₂O / ρH₂Oᶠ
+# enthalpy change for dehydration of the wet silicate [J/mol]
+const ΔHWD = 40000.0
+# entropy change for dehydration of the wet silicate [J/K/mol]
+const ΔSWD = 60.0
+# volume change for dehydration of the wet silicate [J/Pa/mol]
+const ΔVWD = VDˢ + VH₂Oᶠ - VWˢ
+# timescale to complete dehydration reaction [s]
+const Δtreaction = 1.0e+10
+# coefficient of pressure from previous hydrothermomechanical iteration
+const pfcoeff = 0.5
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1
@@ -332,7 +404,7 @@ const vytop = - strainrate * ysize / 2
 const vybottom = strainrate * ysize / 2
 # Runge-Kutta integration parameters
 # bⱼ Butcher coefficients for RK4
-const brk4 = SVector{4, Float64}([1/6, 2/6, 2/6, 1/6])
+const brk4 = SVector{4, Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
 # cⱼ Butcher coefficients for RK4
 const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
 # timestepping parameters
@@ -359,7 +431,7 @@ const dsubgrids = 0
 # length of year [s]
 const yearlength = 365.25 * 24 * 3600
 # Time sum (start) [s]
-const start_time = 1.0e6 * yearlength 
+const start_time = 2.25e6 * yearlength 
 # Time sum (end) [s]
 const endtime = 15.0e6 * yearlength
 # Lower viscosity cut-off [Pa s]	
@@ -367,22 +439,22 @@ const etamin = 1e+12
 # Upper viscosity cut-off [Pa s]
 const etamax = 1e+23 
 # Number of plastic iterations
-const nplast = 100000
+const nplast = 100_000
 # Periodicity of visualization
 const visstep = 1 
 # Tolerance level for yielding error()
 const yerrmax = 1e+2 
 # Weight for old viscosity
-const etawt = 0 
+const etawt = 0.0
 # max porosity ratio change per time step
 const dphimax = 0.01
 # starting timestep
 const start_step = 1
-# number of timesteps to run
-const n_steps = 10
+# maximum number of timesteps to run
+const n_steps = 100 
 # using MKL Pardiso solver
 const use_pardiso = false
-# MKL Pardiso solver IPARM control parameters -> ATTN: zero-indexed as in docs:
+# MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
 # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
 const iparms = Dict([
     (0, 1), # in: do not use default

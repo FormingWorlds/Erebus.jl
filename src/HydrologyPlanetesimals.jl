@@ -13,8 +13,8 @@ using TimerOutputs
 
 const to = TimerOutput()
 export run_simulation
-include("constants.jl")
-# include("test_constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
@@ -1026,7 +1026,7 @@ function grid_vector(i, j, grid)
 end
 
 """
-Compute inner product of two 4-vectors.
+Compute inner product of two 4-vectors of reals.
 
 $(SIGNATURES)
 
@@ -1059,7 +1059,8 @@ $(SIGNATURES)
     - grid_average: (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1]) / 4
 """
 function grid_average(i, j, grid)
-    return sum(grid_vector(i, j, grid)) * inv(length(grid_vector(i, j, grid)))
+    # return sum(grid_vector(i, j, grid)) * inv(length(grid_vector(i, j, grid)))
+    return 0.25 * (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
 end
 
 """
@@ -1791,20 +1792,22 @@ function compute_basic_node_properties!(
     YNY
 )
 # @timeit to "compute_basic_node_properties!" begin
-    for j=1:1:Nx, i=1:1:Ny
-        if WTSUM[i, j] > 0.0 
-            ETA0[i, j] = ETA0SUM[i, j] * inv(WTSUM[i, j])
-            ETA[i, j] = ETASUM[i, j] * inv(WTSUM[i, j])
-            if ETA[i, j] < ETA0[i, j]
-                YNY[i, j] = true
+    @inbounds begin
+        for j=1:1:Nx, i=1:1:Ny
+            if WTSUM[i, j] > 0.0 
+                ETA0[i, j] = ETA0SUM[i, j] * inv(WTSUM[i, j])
+                ETA[i, j] = ETASUM[i, j] * inv(WTSUM[i, j])
+                if ETA[i, j] < ETA0[i, j]
+                    YNY[i, j] = true
+                end
+                GGG[i, j] = inv(GGGSUM[i, j]) * WTSUM[i, j]
+                SXY0[i, j] = SXYSUM[i, j] * inv(WTSUM[i, j])
+                COH[i, j] = COHSUM[i, j] * inv(WTSUM[i, j])
+                TEN[i, j] = TENSUM[i, j] * inv(WTSUM[i, j])
+                FRI[i, j] = FRISUM[i, j] * inv(WTSUM[i, j])
             end
-            GGG[i, j] = inv(GGGSUM[i, j]) * WTSUM[i, j]
-            SXY0[i, j] = SXYSUM[i, j] * inv(WTSUM[i, j])
-            COH[i, j] = COHSUM[i, j] * inv(WTSUM[i, j])
-            TEN[i, j] = TENSUM[i, j] * inv(WTSUM[i, j])
-            FRI[i, j] = FRISUM[i, j] * inv(WTSUM[i, j])
-        end
-    end 
+        end 
+    end # @inbounds
 # end # @timeit to "compute_basic_node_properties!"
     return nothing
 end # function compute_basic_node_properties!
@@ -1847,15 +1850,17 @@ function compute_vx_node_properties!(
    RX
 )
 # @timeit to "compute_vx_node_properties!" begin
-    for j=1:1:Nx1, i=1:1:Ny1
-        if WTXSUM[i, j] > 0.0 
-            RHOX[i, j] = RHOXSUM[i, j] * inv(WTXSUM[i, j])
-            RHOFX[i, j] = RHOFXSUM[i, j] * inv(WTXSUM[i, j])
-            KX[i, j] = KXSUM[i, j] * inv(WTXSUM[i, j])
-            PHIX[i, j] = PHIXSUM[i, j] * inv(WTXSUM[i, j])
-            RX[i, j] = RXSUM[i, j] * inv(WTXSUM[i, j])
+    @inbounds begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            if WTXSUM[i, j] > 0.0 
+                RHOX[i, j] = RHOXSUM[i, j] * inv(WTXSUM[i, j])
+                RHOFX[i, j] = RHOFXSUM[i, j] * inv(WTXSUM[i, j])
+                KX[i, j] = KXSUM[i, j] * inv(WTXSUM[i, j])
+                PHIX[i, j] = PHIXSUM[i, j] * inv(WTXSUM[i, j])
+                RX[i, j] = RXSUM[i, j] * inv(WTXSUM[i, j])
+            end
         end
-    end
+    end # @inbounds
 # end # @timeit to "compute_vx_node_properties!"
     return nothing
 end # function compute_vx_node_properties!
@@ -1898,15 +1903,17 @@ function compute_vy_node_properties!(
    RY
 )
 # @timeit to "compute_vy_node_properties!" begin
-    for j=1:1:Nx1, i=1:1:Ny1
-        if WTYSUM[i, j] > 0.0 
-            RHOY[i, j] = RHOYSUM[i, j] * inv(WTYSUM[i, j])
-            RHOFY[i, j] = RHOFYSUM[i, j] * inv(WTYSUM[i, j])
-            KY[i, j] = KYSUM[i, j] * inv(WTYSUM[i, j])
-            PHIY[i, j] = PHIYSUM[i, j] * inv(WTYSUM[i, j])
-            RY[i, j] = RYSUM[i, j] * inv(WTYSUM[i, j])
+    @inbounds begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            if WTYSUM[i, j] > 0.0 
+                RHOY[i, j] = RHOYSUM[i, j] * inv(WTYSUM[i, j])
+                RHOFY[i, j] = RHOFYSUM[i, j] * inv(WTYSUM[i, j])
+                KY[i, j] = KYSUM[i, j] * inv(WTYSUM[i, j])
+                PHIY[i, j] = PHIYSUM[i, j] * inv(WTYSUM[i, j])
+                RY[i, j] = RYSUM[i, j] * inv(WTYSUM[i, j])
+            end
         end
-    end
+    end # @inbounds
 # end # @timeit to "compute_vy_node_properties!"
     return nothing
 end # function compute_vy_node_properties!
@@ -1967,23 +1974,56 @@ function compute_p_node_properties!(
     BETTAPHI
 )
 # @timeit to "compute_p_node_properties!" begin
-    for j=1:1:Nx1, i=1:1:Ny1
-        if WTPSUM[i, j] > 0.0
-            RHO[i, j] = RHOSUM[i, j] * inv(WTPSUM[i, j])
-            RHOCP[i, j] = RHOCPSUM[i, j] * inv(WTPSUM[i, j])
-            ALPHA[i, j] = ALPHASUM[i, j] * inv(WTPSUM[i, j])
-            ALPHAF[i, j] = ALPHAFSUM[i, j] * inv(WTPSUM[i, j])
-            HR[i, j] = HRSUM[i, j] * inv(WTPSUM[i, j])
-            GGGP[i, j] = inv(GGGPSUM[i, j]) * WTPSUM[i, j]
-            SXX0[i, j] = SXXSUM[i, j] * inv(WTPSUM[i, j])
-            tk1[i, j] = TKSUM[i, j] * inv(RHOCPSUM[i, j])
-            PHI[i, j] = PHISUM[i, j] * inv(WTPSUM[i, j])
-            BETTAPHI[i, j] = inv(GGGP[i, j]) * PHI[i, j]
+    @inbounds begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            if WTPSUM[i, j] > 0.0
+                RHO[i, j] = RHOSUM[i, j] * inv(WTPSUM[i, j])
+                RHOCP[i, j] = RHOCPSUM[i, j] * inv(WTPSUM[i, j])
+                ALPHA[i, j] = ALPHASUM[i, j] * inv(WTPSUM[i, j])
+                ALPHAF[i, j] = ALPHAFSUM[i, j] * inv(WTPSUM[i, j])
+                HR[i, j] = HRSUM[i, j] * inv(WTPSUM[i, j])
+                GGGP[i, j] = inv(GGGPSUM[i, j]) * WTPSUM[i, j]
+                SXX0[i, j] = SXXSUM[i, j] * inv(WTPSUM[i, j])
+                tk1[i, j] = TKSUM[i, j] * inv(RHOCPSUM[i, j])
+                PHI[i, j] = PHISUM[i, j] * inv(WTPSUM[i, j])
+                BETTAPHI[i, j] = inv(GGGP[i, j]) * PHI[i, j]
+            end
         end
-    end
+    end # @inbounds
 # end # @timeit to "compute_p_node_properties!"
     return nothing
 end # function compute_p_node_properties!
+
+"""
+Compute thermodynamic properties of P nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - DMPSUM: DMP interpolation array
+    - DHPSUM: DHP interpolation array
+    - WTPSUM: WTP interpolation array
+
+# Returns
+
+    - nothing
+"""
+function compute_thermodynamic_properties!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+# @timeit to "compute_thermodynamic_properties!" begin
+    @inbounds begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            if WTPSUM[i, j] > 0.0 
+                DMP[i, j] = DMPSUM[i, j] * inv(WTPSUM[i, j])
+                DHP[i, j] = DHPSUM[i, j] * inv(WTPSUM[i, j])
+            else
+                DMP[i, j] = DHP[i, j] = zero(0.0)
+            end
+        end 
+    end # @inbounds
+# end # @timeit to "compute_thermodynamic_properties!"
+    return nothing
+end # function compute_thermodynamic_properties!
 
 """
 Apply insulating boundary conditions to given array:
@@ -2018,6 +2058,243 @@ function apply_insulating_boundary_conditions!(t)
 # end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end
+
+"""
+Compute molar Gibbs free energy for single dehydration reaction
+Wsilicate = Dsilicate + H₂O (16.144)
+
+$(SIGNATURES)
+
+# Details
+
+    - T: temperature
+    - pf: fluid pressure
+    - XDsolid: molar fraction of dry solid
+    - XWsolid: molar fraction of wet solid
+    - Δt: timestep size
+
+# Returns
+
+    - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
+"""
+function compute_gibbs_free_energy(T, pf, XDsolid, XWsolid, Δt)
+# @timeit to "compute_gibbs_free_energy" begin
+    # compute ΔG for dehydration reaction (16.145)
+    ΔGWD = ΔHWD - T*ΔSWD + pf*ΔVWD + R*T*log(XDsolid/XWsolid)
+    # compute incomplete reaction for short timestep Δt < Δtreaction
+    if Δt < Δtreaction
+        ΔGWD = ΔGWD₀ * (1.0 - Δt/Δtreaction)
+    else
+        # Δt ≥ Δtreaction
+        ΔGWD = zero(0.0)    
+    end
+    return ΔGWD
+# end # @timeit to "compute_gibbs_free_energy"
+end # function compute_gibbs_free_energy
+
+"""
+Compute relative enthalpy of system for single dehydration reaction
+Wsilicate = Dsilicate + H₂O (16.144).
+
+$(SIGNATURES)
+
+# Details
+
+    - T: temperature
+    - pf: fluid pressure
+    - XDsolid: molar fraction of dry solid
+    - XWsolid: molar fraction of wet solid
+    - Δt: timestep size
+
+# Returns
+
+    - Hᵗ: relative enthalpy of system for single dehydration reaction (16.163)
+"""
+function compute_relative_enthalpy(Xsolid, XWsolid)
+     return -Xsolid * XWsolid * ΔHWD / (MD+MH₂O)
+end # function compute_relative_enthalpy
+
+"""
+Compute dehydration reaction constant (16.151).
+
+$(SIGNATURES)
+
+# Details
+
+    - T: temperature
+    - pf: fluid pressure
+    - ΔGWD: Gibbs free energy for dehydration reaction
+
+# Returns
+
+    - KWD: dehydration reaction constant (16.151)
+"""
+function compute_reaction_constant(T, pf, ΔGWD)
+    # compute reaction constant (16.151)
+    return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (R*T))
+end # function compute_reaction_constant
+
+
+"""
+Perform hydrothermomechanical iterations to time step thermal field at P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - DMP: mass transfer term at P nodes
+    - DHP: enthalpy transfer term at P nodes
+    - DMPSUM: interpolation of DMP (mass transfer term) at P nodes
+    - DHPSUM: interpolation of DHP (enthalpy transfer term) at P nodes
+    - WTPSUM: interpolation weights at P nodes 
+    - xm: x-coordinate of markers
+    - ym: y-coordinate of markers
+    - tm: type of markers
+    - pf: fluid pressure at P nodes
+    - tk2: next temperature at P nodes 
+    - pfm0: previous marker fluid pressure
+    - XWsolidm0: previous marker wet silicate (solid) volume fraction
+    - XWsolidm: current marker wet silicate (solid) volume fraction
+    - phim: current marker porosity
+    - phinewm: new marker porosity
+    - marknum: current total number of markers
+
+# Returns
+
+    - nothing
+"""
+function perform_htm_iterations!(
+    DMP,
+    DHP,
+    DMPSUM,
+    DHPSUM,
+    WTPSUM,
+    tm,
+    pf,
+    tk2,
+    XWˢm₀,
+    XWˢm,
+    phim,
+    phinewm,
+    pfm₀,
+    marknum,
+    Δt,
+    timestep
+)
+# @timeit to "perform_htm_iterations!" begin
+    for titer=1:1:titermax
+        # reset interpolation arrays
+        DMPSUM .= zero(0.0)
+        DHPSUM .= zero(0.0)
+        WTPSUM .= zero(0.0)
+        # iterate over markers
+        @inbounds begin
+            for m=1:1:marknum
+                # for 
+                if tm[m] < 3
+                    # for rocks only
+                    i, j, weights = fix_weights(
+                        xm[m],
+                        ym[m],
+                        xp,
+                        yp,
+                        dx,
+                        dy,
+                        jmin_p,
+                        jmax_p,
+                        imin_p,
+                        imax_p
+                    )
+                    # interpolate temperature from P nodes
+                    tknm = dot4(grid_vector(i, j, tk2), weights)
+                    # interpolate non-negative fluid pressure from P nodes
+                    pfnm = max(zero(0.0), dot4(grid_vector(i, j, pf), weights))
+                    # factor in previous iteration marker fluid pressure
+                    if titer > 2
+                        pfnm = pfnm*(1.0-pfcoeff) + pfm0[m]*pfcoeff
+                    end
+                    # store current marker fluid pressure for next iteration
+                    pfm₀[m] = pfnm
+                    # compute bulk composition of solid and fluid system:
+                    # compute previous dry solid molar fraction (16.146)
+                    XDˢm₀ = 1.0 - XWˢm₀[m]
+                    # compute previous fluid molar fraction (16.164)
+                    Xᶠ₀=phim[m]*(XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ) / (
+                        (1.0-phim[m])*VH₂Oᶠ +
+                        phim[m] * (XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ)
+                    )
+                    # compute previous equilibrium solid molar fraction (16.150)
+                    Xˢ₀ = 1.0 - Xᶠ₀
+                    # compute previous water molar fraction (16.147)
+                    XH₂Oᵗ = (XWˢm₀[m]*Xˢ₀ + Xᶠ₀) / (1.0 + XWˢm₀[m]*Xˢ₀)
+                    # compute dry solid molar fraction (16.149)
+                    XDᵗ = 1.0 - XH₂Oᵗ
+                    # compute previous solid density (16.161)
+                    ρˢ₀ = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢ₀ + VWˢ*XWˢm₀[m])
+                    # compute previous fluid density (16.162)
+                    ρᶠ₀ = ρH₂Oᶠ
+                    # compute previous relative enthalpy of the system (16.163)
+                    Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
+                    # compute previous ΔG for dehydration reaction (16.165a/b)
+                    ΔGWD₀ = compute_gibbs_free_energy(
+                        tknm, pfnm, XDˢm₀, XWˢm₀[m], dt)
+                    # compute dehydration reaction constant (16.151)
+                    KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
+                    # compute reacted wet solid molar fraction (16.152)
+                    XWˢm₁ = inv(KWD + 1.0)
+                    # compute reacted dry solid molar fraction (16.153)
+                    XDˢm₁ = 1.0 - XWˢm₁
+                    # compute reacted total solid molar fraction (16.154)
+                    Xˢ₁ = XDᵗ / (1.0 - XDᵗ*XWˢm₁)
+                    # compute reacted fluid molar fraction (16.155)
+                    Xᶠ₁ = 1.0 - Xˢ₁
+                    # only process fluid-bearing rocks
+                    if 0.0 < Xᶠ₁ < 1.0
+                        # compute reacted equilibrium porosity (16.156)
+                        ϕ₁ = Xᶠ₁*VH₂Oᶠ / (Xᶠ₁*VH₂Oᶠ + Xˢ₁*(XWˢm₁*VWˢ+XDˢm₁*VDˢ))
+                        # compute equilibrium solid density (16.161)
+                        ρˢ₁ = (MD + MH₂O*XWˢm₁) / (VDˢ*XDˢm₁ + VWˢ*XWˢm₁)
+                        # compute equilibrium fluid density (16.162)
+                        ρᶠ₁ = ρH₂Oᶠ
+                        # compute equilibrium relative enthalpy of the system
+                        # (16.163)
+                        Hᵗ₁ = compute_relative_enthalpy(Xˢ₁, XWˢm₁)
+                        # compute enthalpy change
+                        ΔHᵗ = Hᵗ₁ - Hᵗ₀
+                        # compute previous-to-reacted-equilibrium volume ratio
+                        # (16.106)
+                        RV = (ρˢ₁*(1.0-ϕ₁) + ρᶠ₁*ϕ₁) / (
+                            ρˢ₀*(1.0-phim[m]) + ρᶠ₀*phim[m])
+                        # compute mass transfer rate (16.103)
+                        Γmass = (ρˢ₀*RV*(1.0-phim[m]) - ρˢ₁*(1.0-ϕ₁)) / Δt
+                        # compute mass transfer term (16.112e)
+                        ΔMm = (1.0-RV) / Δt
+                        # compute enthalpy transfer/latent heating term (16.113)
+                        ΔHm = Γmass * ΔHᵗ
+                        # update wet solid (melt) molar fraction
+                        XWˢm[m]=XWˢm₁
+                        # update porosity
+                        phinewm[m] = ϕ₁
+                        # backload properties during first timestep
+                        if timestep==1
+                            XWˢm₀[m] = XWˢm[m]
+                            phim[m] = phinewm[m]
+                        end
+                        # interpolate mass, enthalpy transfer terms to P nodes
+                        interpolate_add_to_grid!(i, j, weights, ΔMm, DMPSUM)
+                        interpolate_add_to_grid!(i, j, weights, ΔHm, DHPSUM)
+                        interpolate_add_to_grid!(
+                            i, j, weights, one(1.0), WTPSUM)
+                    end
+                end # if tm[m] < 3
+            end # for m=1:1:marknum
+            # compute thermodynamic properties at P nodes
+            compute_thermodynamic_properties!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+        end # @inbounds
+    end # for titer=1:1:titermax
+    return nothing
+# end # @timeit to "perform_htm_iterations!"
+end # function perform_htm_iterations!
 
 """
 Compute gravity solution in P nodes to obtain
@@ -2126,7 +2403,7 @@ function assemble_gravitational_lse(RHO, RP)
         # fresh LHS sparse coefficient matrix
         LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
         # reset RHS coefficient vector
-        RP .= 0.0
+        RP .= zero(0.0)
         # iterate over P nodes
         # @timeit to "build system" begin
         for j=1:1:Nx1, i=1:1:Ny1
@@ -2171,7 +2448,7 @@ function assemble_gravitational_lse(RHO, RP)
         # end # @timeit to "build system"
     # end # @timeit to "assemble_gravitational_lse"
     return LP
-    end
+end
 
 """
 Process gravitational potential solution vector to output physical observables.
@@ -4035,7 +4312,7 @@ function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
                     phimin,
                     min(
                         phimax,
-                        phim[m]/((1-phim[m])*exp(aphim*dtm)+phim[m])
+                        phim[m] / ((1.0-phim[m])*exp(aphim*dtm) + phim[m])
                     )
                 )
             end
