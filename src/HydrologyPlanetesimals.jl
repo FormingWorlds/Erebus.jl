@@ -1060,7 +1060,8 @@ $(SIGNATURES)
 """
 function grid_average(i, j, grid)
     # return sum(grid_vector(i, j, grid)) * inv(length(grid_vector(i, j, grid)))
-    return 0.25 * (grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
+    @inbounds return 0.25 * (
+        grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
 end
 
 """
@@ -1342,8 +1343,8 @@ $(SIGNATURES)
 """
 function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 # @timeit to "fix" begin
-    j = unsafe_trunc(Int, (x-x_axis[1])*inv(dx)) + 1
-    i = unsafe_trunc(Int, (y-y_axis[1])*inv(dy)) + 1
+    @inbounds j = unsafe_trunc(Int, (x-x_axis[1])*inv(dx)) + 1
+    @inbounds i = unsafe_trunc(Int, (y-y_axis[1])*inv(dy)) + 1
     if j < jmin
         j = jmin
     elseif j > jmax
@@ -1524,14 +1525,16 @@ function marker_to_basic_nodes!(
         imin_basic,
         imax_basic
     )
-    interpolate_add_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
-    interpolate_add_to_grid!(i, j, weights, etavpm[m], ETASUM)
-    interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
-    interpolate_add_to_grid!(i, j, weights, sxym[m], SXYSUM)
-    interpolate_add_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
-    interpolate_add_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
-    interpolate_add_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
-    interpolate_add_to_grid!(i, j, weights, one(1.0), WTSUM)
+    @inbounds begin
+        interpolate_add_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
+        interpolate_add_to_grid!(i, j, weights, etavpm[m], ETASUM)
+        interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGSUM)
+        interpolate_add_to_grid!(i, j, weights, sxym[m], SXYSUM)
+        interpolate_add_to_grid!(i, j, weights, cohestotalm[m], COHSUM)
+        interpolate_add_to_grid!(i, j, weights, tenstotalm[m], TENSUM)
+        interpolate_add_to_grid!(i, j, weights, fricttotalm[m], FRISUM)
+        interpolate_add_to_grid!(i, j, weights, one(1.0), WTSUM)
+    end # @inbounds
     return nothing
 end
 
@@ -1589,12 +1592,14 @@ function marker_to_vx_nodes!(
         imin_vx,
         imax_vx
     )
-    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
-    interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
-    interpolate_add_to_grid!(i, j, weights, ktotalm[m], KXSUM)
-    interpolate_add_to_grid!(i, j, weights, phim[m], PHIXSUM)
-    interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
-    interpolate_add_to_grid!(i, j, weights, one(1.0), WTXSUM)
+    @inbounds begin
+        interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
+        interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFXSUM)
+        interpolate_add_to_grid!(i, j, weights, ktotalm[m], KXSUM)
+        interpolate_add_to_grid!(i, j, weights, phim[m], PHIXSUM)
+        interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RXSUM)
+        interpolate_add_to_grid!(i, j, weights, one(1.0), WTXSUM)
+    end # @inbounds
     return nothing
 end
 
@@ -1652,12 +1657,14 @@ function marker_to_vy_nodes!(
         imin_vy,
         imax_vy
     )
-    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
-    interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
-    interpolate_add_to_grid!(i, j, weights, ktotalm[m], KYSUM)
-    interpolate_add_to_grid!(i, j, weights, phim[m], PHIYSUM)
-    interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
-    interpolate_add_to_grid!(i, j, weights, one(1.0), WTYSUM)
+    @inbounds begin
+        interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
+        interpolate_add_to_grid!(i, j, weights, rhofluidcur[m], RHOFYSUM)
+        interpolate_add_to_grid!(i, j, weights, ktotalm[m], KYSUM)
+        interpolate_add_to_grid!(i, j, weights, phim[m], PHIYSUM)
+        interpolate_add_to_grid!(i, j, weights, etafluidcur_inv_kphim[m], RYSUM)
+        interpolate_add_to_grid!(i, j, weights, one(1.0), WTYSUM)
+    end # @inbounds
     return nothing
 end
 
@@ -1731,16 +1738,18 @@ function marker_to_p_nodes!(
         imin_p,
         imax_p
     )
-    interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
-    interpolate_add_to_grid!(i, j, weights, sxxm[m], SXXSUM)
-    interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
-    interpolate_add_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
-    interpolate_add_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
-    interpolate_add_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
-    interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
-    interpolate_add_to_grid!(i, j, weights, phim[m], PHISUM)
-    interpolate_add_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
-    interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
+    @inbounds begin
+        interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
+        interpolate_add_to_grid!(i, j, weights, sxxm[m], SXXSUM)
+        interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOSUM)
+        interpolate_add_to_grid!(i, j, weights, rhocptotalm[m], RHOCPSUM)
+        interpolate_add_to_grid!(i, j, weights, alphasolidcur[m], ALPHASUM)
+        interpolate_add_to_grid!(i, j, weights, alphafluidcur[m], ALPHAFSUM)
+        interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
+        interpolate_add_to_grid!(i, j, weights, phim[m], PHISUM)
+        interpolate_add_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
+        interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
+    end # @inbounds
     return nothing
 end
 
@@ -2046,14 +2055,16 @@ function apply_insulating_boundary_conditions!(t)
 # @timeit to "apply_insulating_boundary_conditions!" begin
     Nyy, Nxx = size(t)
     if Nyy>2 && Nxx>2
-        # upper boundary
-        @views @. t[1, 2:Nxx-1] = t[2, 2:Nxx-1]
-        # lower boundary
-        @views @. t[Nyy, 2:Nxx-1] = t[Nyy-1, 2:Nxx-1]
-        # left boundary
-        @views @. t[:, 1] = t[:, 2]
-        # right boundary
-        @views @. t[:, Nxx] = t[:, Nxx-1]
+        @inbounds begin
+            # upper boundary
+            @views @. t[1, 2:Nxx-1] = t[2, 2:Nxx-1]
+            # lower boundary
+            @views @. t[Nyy, 2:Nxx-1] = t[Nyy-1, 2:Nxx-1]
+            # left boundary
+            @views @. t[:, 1] = t[:, 2]
+            # right boundary
+            @views @. t[:, Nxx] = t[:, Nxx-1]
+        end # @inbounds
     end
 # end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
@@ -2327,7 +2338,7 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
         # decide if external / boundary points
-        if (
+        @inbounds if (
             i==1 ||
             i==Ny1 ||
             j==1 ||
@@ -2359,7 +2370,7 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
             updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
             updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
             # fill system of equations: RHS (11.11)
-            RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
+            @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
         end
     end
     # end # @timeit to "build system"
@@ -2373,9 +2384,9 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
     # end # @timeit to "reshape solution"
     # @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
-    gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
+    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
-    gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
+    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
     # end # @timeit to "compute accelerations"
 # end # @timeit to "compute_gravity_solution!"
     return nothing
@@ -2410,7 +2421,7 @@ function assemble_gravitational_lse(RHO, RP)
             # define global index in algebraic space
             gk = (j-1) * Ny1 + i
             # decide if external / boundary points
-            if (
+            @inbounds if (
                 i==1 ||
                 i==Ny1 ||
                 j==1 ||
@@ -2442,7 +2453,7 @@ function assemble_gravitational_lse(RHO, RP)
                 updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
                 updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
                 # fill system of equations: RHS (11.11)
-                RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
+                @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
             end
         end
         # end # @timeit to "build system"
@@ -2472,9 +2483,9 @@ function process_gravitational_solution!(SP, FI, gx, gy)
     # end # @timeit to "reshape solution"
     # @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
-    gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
+    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
-    gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
+    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
     # end # @timeit to "compute accelerations"
 # end # @timeit to "process gravitational solution"
     return nothing
@@ -2552,10 +2563,12 @@ function get_viscosities_stresses_density_gradients!(
         # -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
     # )
     # density gradients
+    @inbounds begin
     @views @. dRHOXdx[:, 2:Nx] = 0.5*(RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) * inv(dx)
     @views @. dRHOXdy[2:Ny, :] = 0.5*(RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) * inv(dy)
     @views @. dRHOYdx[:, 2:Nx] = 0.5*(RHOY[:, 3:Nx1]-RHOY[:, 1:Nx1-2]) * inv(dx)
     @views @. dRHOYdy[2:Ny, :] = 0.5*(RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) * inv(dy)
+    end # @inbounds
     return nothing
 # end # @timeit to "get_viscosities_stresses_density_gradients!()"
 end # function get_viscosities_stresses_density_gradients!
@@ -2708,6 +2721,7 @@ function assemble_hydromechanical_lse!(
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # reset RHS coefficient vector
     R .= 0.0
+    @inbounds begin
     for j=1:1:Nx1, i=1:1:Ny1
         # define global indices in algebraic space
         kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
@@ -3136,6 +3150,7 @@ function assemble_hydromechanical_lse!(
             R[kpf] = -(pr0[i, j]-pf0[i, j]) / (1-PHI[i, j]) * BETTAPHI[i, j]/dt
         end # Ptotal/Pfluid equation
     end # for j=1:1:Nx1, i=1:1:Ny1
+    end # @inbounds 
     flush!(L) # finalize CSC matrix
 # end # @timeit to "assemble_hydromechanical_lse()"
     return L
@@ -3171,12 +3186,14 @@ function process_hydromechanical_solution!(
 )
 # @timeit to "process_hydromechanical_solution!()" begin
     S_mat = reshape(S, (:, Ny1, Nx1))
-    @views @. vx = S_mat[1, :, :]
-    @views @. vy = S_mat[2, :, :]
-    @views @. pr = S_mat[3, :, :] .* Kcont
-    @views @. qxD = S_mat[4, :, :]
-    @views @. qyD = S_mat[5, :, :]
-    @views @. pf = S_mat[6, :, :] .* Kcont
+    @inbounds begin
+        @views @. vx = S_mat[1, :, :]
+        @views @. vy = S_mat[2, :, :]
+        @views @. pr = S_mat[3, :, :] .* Kcont
+        @views @. qxD = S_mat[4, :, :]
+        @views @. qyD = S_mat[5, :, :]
+        @views @. pf = S_mat[6, :, :] .* Kcont
+    end # @inbounds
     # Δp = 0.25 * (pf[2, 2]+pf[2, Nx]+pf[Ny, 2]+pf[Ny, Nx]) - psurface
     # pr .-= Δp
     # pf .-= Δp
@@ -3200,14 +3217,16 @@ Recompute bulk viscosity at P nodes.
     - nothing
 """
 function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-# @timeit to "recompute_bulk_viscosity!" begin    
-    @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
-        inv(ETA[1:end-1, 1:end-1]) +
-        inv(ETA[2:end, 1:end-1]) +
-        inv(ETA[1:end-1, 2:end]) +
-        inv(ETA[2:end, 2:end])
-    )
-    @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
+# @timeit to "recompute_bulk_viscosity!" begin
+    @inbounds begin  
+        @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
+            inv(ETA[1:end-1, 1:end-1]) +
+            inv(ETA[2:end, 1:end-1]) +
+            inv(ETA[1:end-1, 2:end]) +
+            inv(ETA[2:end, 2:end])
+        )
+        @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
+    end # @inbounds
 # end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
@@ -3241,6 +3260,7 @@ $(SIGNATURES)
 function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
 # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
+    @inbounds begin
     @views @. APHI[2:Ny, 2:Nx] = (
         ((pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])/ETAPHI[2:Ny, 2:Nx]
         + (
@@ -3248,6 +3268,7 @@ function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
         )/dt*BETTAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
     )
     return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
+    end # @inbounds
     # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
 # end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
@@ -3288,21 +3309,23 @@ function compute_fluid_velocities!(
     vyf
 )
 # @timeit to "compute_fluid_velocities!()" begin
-    # vx velocity
-    @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
-    # top boundary
-    @views @. vxf[1, :] = -bcftop  * vxf[2, :]
-    # bottom boundary
-    @views @. vxf[Ny1, :] = -bcfbottom * vxf[Ny, :]
-    # vy velocity
-    @views @. vyf[1:Ny, 2:Nx] = qyD[1:Ny, 2:Nx] / PHIY[1:Ny, 2:Nx]
-    # left boundary
-    @views @. vyf[:, 1] = -bcfleft * vyf[:, 2]
-    # right boundary
-    @views @. vyf[:, Nx1] = -bcfright * vyf[:, Nx]
-    # adding solid velocity
-    @views @. vxf += vx
-    @views @. vyf += vy
+    @inbounds begin
+        # vx velocity
+        @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
+        # top boundary
+        @views @. vxf[1, :] = -bcftop  * vxf[2, :]
+        # bottom boundary
+        @views @. vxf[Ny1, :] = -bcfbottom * vxf[Ny, :]
+        # vy velocity
+        @views @. vyf[1:Ny, 2:Nx] = qyD[1:Ny, 2:Nx] / PHIY[1:Ny, 2:Nx]
+        # left boundary
+        @views @. vyf[:, 1] = -bcfleft * vyf[:, 2]
+        # right boundary
+        @views @. vyf[:, Nx1] = -bcfright * vyf[:, Nx]
+        # adding solid velocity
+        @views @. vxf += vx
+        @views @. vyf += vy
+    end # @inbounds
 
      # for j=1:1:Nx, i=2:1:Ny
     #     vxf[i, j] = qxD[i, j]*inv(PHIX[i,j]) + vx[i, j]
@@ -3420,35 +3443,36 @@ function compute_stress_strainrate!(
     dtm
 )
 # @timeit to "compute_stress_strainrate!()" begin
-        # ϵxy, σxy, Δσxy at basic nodes
-        for j=1:1:Nx, i=1:1:Ny
-            EXY[i, j] = 0.5 * (
-                (vx[i+1, j]-vx[i, j]) / dy
-                +(vy[i, j+1]-vy[i, j])/dx
-            )
-            SXY[i,j] = (
-                2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dtm / (
-                    GGG[i, j]*dtm+ETA[i, j]
-                )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dtm+ETA[i, j])
-            )
-            DSXY[i, j] = SXY[i, j] - SXY0[i, j]
-        end
-        # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
-        for j=2:1:Nx, i=2:1:Ny
-            EXX[i, j]= 0.5 *(
-                (vx[i, j]-vx[i, j-1]) / dx
-                -(vy[i, j]-vy[i-1, j]) / dy
-            )
-            SXX[i, j] = (
-                2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dtm / (
-                    GGGP[i, j]*dtm+ETAP[i, j]
-                ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dtm+ETAP[i, j])
-            )
-            DSXX[i, j] = SXX[i, j] - SXX0[i, j]
-            EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
-            SII[i, j] = sqrt(SXX[i, j]^2 + grid_average(i-1, j-1, SXY)^2)
-        end
-        
+        @inbounds begin
+            # ϵxy, σxy, Δσxy at basic nodes
+            for j=1:1:Nx, i=1:1:Ny
+                EXY[i, j] = 0.5 * (
+                    (vx[i+1, j]-vx[i, j]) / dy
+                    +(vy[i, j+1]-vy[i, j])/dx
+                )
+                SXY[i,j] = (
+                    2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dtm / (
+                        GGG[i, j]*dtm+ETA[i, j]
+                    )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dtm+ETA[i, j])
+                )
+                DSXY[i, j] = SXY[i, j] - SXY0[i, j]
+            end
+            # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
+            for j=2:1:Nx, i=2:1:Ny
+                EXX[i, j]= 0.5 *(
+                    (vx[i, j]-vx[i, j-1]) / dx
+                    -(vy[i, j]-vy[i-1, j]) / dy
+                )
+                SXX[i, j] = (
+                    2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dtm / (
+                        GGGP[i, j]*dtm+ETAP[i, j]
+                    ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dtm+ETAP[i, j])
+                )
+                DSXX[i, j] = SXX[i, j] - SXX0[i, j]
+                EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
+                SII[i, j] = sqrt(SXX[i, j]^2 + grid_average(i-1, j-1, SXY)^2)
+            end
+        end # @inbounds        
     # # ϵxy, σxy, Δσxy at basic nodes
     # EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
     # @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
@@ -3483,7 +3507,6 @@ function compute_stress_strainrate!(
     #         )/4.0
     #     )^2
     # )
-
 # end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
@@ -3516,32 +3539,32 @@ function symmetrize_p_node_observables!(
 )
 # @timeit to "symmetrize_p_node_observables!()" begin
     # top boundary
-    @views @. begin
-    SXX[1, 2:Nx] = SXX[2, 2:Nx]
-    APHI[1, 2:Nx] = APHI[2, 2:Nx]    
-    PHI[1, 2:Nx] = PHI[2, 2:Nx]    
-    pr[1, 2:Nx] = pr[2, 2:Nx]    
-    pf[1, 2:Nx] = pf[2, 2:Nx]    
-    # bottom boundary
-    SXX[Ny1, 2:Nx] = SXX[Ny, 2:Nx]
-    APHI[Ny1, 2:Nx] = APHI[Ny, 2:Nx]    
-    PHI[Ny1, 2:Nx] = PHI[Ny, 2:Nx]    
-    pr[Ny1, 2:Nx] = pr[Ny, 2:Nx]    
-    pf[Ny1, 2:Nx] = pf[Ny, 2:Nx]    
-    # left boundary
-    SXX[:, 1] = SXX[:, 2]
-    APHI[:, 1] = APHI[:, 2]    
-    PHI[:, 1] = PHI[:, 2]    
-    pr[:, 1] = pr[:, 2]    
-    pf[:, 1] = pf[:, 2]    
-    # right boundary
-    SXX[:, Nx1] = SXX[:, Nx]
-    APHI[:, Nx1] = APHI[:, Nx]    
-    PHI[:, Nx1] = PHI[:, Nx]    
-    pr[:, Nx1] = pr[:, Nx]    
-    pf[:, Nx1] = pf[:, Nx]
-    # solid pressure
-    ps = (pr-pf*PHI) * inv(1-PHI)
+    @inbounds @views @. begin
+        SXX[1, 2:Nx] = SXX[2, 2:Nx]
+        APHI[1, 2:Nx] = APHI[2, 2:Nx]    
+        PHI[1, 2:Nx] = PHI[2, 2:Nx]    
+        pr[1, 2:Nx] = pr[2, 2:Nx]    
+        pf[1, 2:Nx] = pf[2, 2:Nx]    
+        # bottom boundary
+        SXX[Ny1, 2:Nx] = SXX[Ny, 2:Nx]
+        APHI[Ny1, 2:Nx] = APHI[Ny, 2:Nx]    
+        PHI[Ny1, 2:Nx] = PHI[Ny, 2:Nx]    
+        pr[Ny1, 2:Nx] = pr[Ny, 2:Nx]    
+        pf[Ny1, 2:Nx] = pf[Ny, 2:Nx]    
+        # left boundary
+        SXX[:, 1] = SXX[:, 2]
+        APHI[:, 1] = APHI[:, 2]    
+        PHI[:, 1] = PHI[:, 2]    
+        pr[:, 1] = pr[:, 2]    
+        pf[:, 1] = pf[:, 2]    
+        # right boundary
+        SXX[:, Nx1] = SXX[:, Nx]
+        APHI[:, Nx1] = APHI[:, Nx]    
+        PHI[:, Nx1] = PHI[:, Nx]    
+        pr[:, Nx1] = pr[:, Nx]    
+        pf[:, Nx1] = pf[:, Nx]
+        # solid pressure
+        ps = (pr-pf*PHI) * inv(1-PHI)
     end
 # end # @timeit to "symmetrize_p_node_observables!()"
     return nothing
@@ -4047,6 +4070,7 @@ function perform_thermal_iterations!(
         # reset RHS coefficient vector
         RT .= 0.0
         # compose global thermal matrix LT and coefficient vector RT
+        @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             # define global index in algebraic space
             gk = (j-1)*Ny1 + i
@@ -4115,6 +4139,7 @@ function perform_thermal_iterations!(
                     RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
             end
         end
+        end # @inbounds
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
         # reshape solution vector to 2D array
