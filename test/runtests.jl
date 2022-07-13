@@ -494,7 +494,11 @@ include("../src/test_constants.jl")
             sxxm,
             sxym,
             etavpm,
-            phim
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0
         ) = HydrologyPlanetesimals.setup_marker_properties(marknum)
         # verification, from madcph.m, line 115ff
         Nxmc_ver = 4; # Number of markers per cell in horizontal direction
@@ -512,6 +516,10 @@ include("../src/test_constants.jl")
         sxym_ver = zeros(marknum); # SIGMAxy, Pa
         etavpm_ver = zeros(marknum); # Visco-plastic viscosity, Pa
         phim_ver = zeros(marknum); # Marker porosity
+        phinewm_ver = zeros(marknum); # reacted Marker porosity
+        pfm0_ver = zeros(marknum); # previous marker fluid pressure
+        XWsolidm_ver = zeros(marknum); # marker melt molar fraction
+        XWsolidm0_ver = zeros(marknum); # previous marker melt molar fraction
         # test
         @test Nxmc == Nxmc_ver
         @test Nymc == Nymc_ver
@@ -528,6 +536,10 @@ include("../src/test_constants.jl")
         @test sxym == sxym_ver
         @test etavpm == etavpm_ver
         @test phim == phim_ver
+        @test phinewm == phinewm_ver
+        @test pfm0 == pfm0_ver
+        @test XWsolidm == XWsolidm_ver
+        @test XWsolidm0 == XWsolidm0_ver
     end # testset "setup_marker_properties()"
     
     @testset "setup_marker_properties_helpers()" begin

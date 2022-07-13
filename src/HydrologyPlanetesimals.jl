@@ -419,7 +419,28 @@ function setup_marker_properties(marknum; randomized=false)
     etavpm = randomized ? rand(marknum) : zeros(marknum)
     # marker porosity
     phim = randomized ? rand(marknum) : zeros(marknum)
-    return xm, ym, tm, tkm, sxxm, sxym, etavpm, phim
+    # reacted marker porosity
+    phinewm = randomized ? rand(marknum) : zeros(marknum)
+    # previous marker fluid pressure
+    pfm0 = randomized ? rand(marknum) : zeros(marknum)
+    # marker melt molar fraction
+    XWsolidm = randomized ? rand(marknum) : zeros(marknum)
+    # previous marker melt molar fraction
+    XWsolidm0 = randomized ? rand(marknum) : zeros(marknum)
+    return (
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        phinewm,
+        pfm0,
+        XWsolidm,
+        XWsolidm0
+    )
 end # function setup_marker_properties()
 
 """
@@ -5770,7 +5791,20 @@ function simulation_loop(output_path)
    #@info "set up markers"
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
-    xm, ym, tm, tkm, sxxm, sxym, etavpm, phim = setup_marker_properties(marknum)
+    (
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        phinewm,
+        pfm0,
+        XWsolidm,
+        XWsolidm0
+    ) = setup_marker_properties(marknum)
     (
         rhototalm,
         rhocptotalm,
