@@ -1011,11 +1011,32 @@ include("../src/test_constants.jl")
     end # testset "compute_gibbs_free_energy()"
 
     @testset "compute_relative_enthalpy()" begin
-
+        dHWD = ΔHWD
+        MH2O = MH₂O
+        Xsolid0 = rand()
+        XWsolidm0 = rand(1)
+        m = 1
+        Hᵗ₀ = HydrologyPlanetesimals.compute_relative_enthalpy(
+            Xsolid0, XWsolidm0[m])
+        # verification, from i2visHTM_hydration.m, lines 612ff
+        # Compute old relative ehthalpy of the system
+        Htotal0=-Xsolid0*XWsolidm0[m]*dHWD/(MD+MH2O);
+        # test
+        @test Hᵗ₀ ≈ Htotal0 rtol=1e-9
     end # testset "compute_relative_enthalpy()"
 
     @testset "compute_reaction_constant()" begin
-            
+        dHWD = ΔHWD
+        dSWD = ΔSWD
+        dVWD = ΔVWD
+        ΔGWD = dGWD = rand()
+        tknm, pfnm = rand(2)
+        KWD = HydrologyPlanetesimals.compute_reaction_constant(
+            tknm, pfnm, dGWD)
+        # verification, from i2visHTM_hydration.m, lines 623ff
+        KWD_ver=exp(-(dHWD-tknm*dSWD+dVWD*pfnm-dGWD)/8.314/tknm);
+        # test
+        @test KWD ≈ KWD_ver rtol=1e-9
     end # testset "compute_reaction_constant()"
 
     @testset "fix()" begin

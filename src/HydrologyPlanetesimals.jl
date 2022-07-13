@@ -2081,11 +2081,11 @@ function compute_gibbs_free_energy(T, pf, XDsolid, XWsolid, Δt)
 # @timeit to "compute_gibbs_free_energy" begin
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtreaction
-        # compute ΔG for dehydration reaction (16.145)
+        # compute ΔG for dehydration reaction (16.145), (16.165b)
         ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + R*T*log(XDsolid/XWsolid)) * (
             1.0 - Δt/Δtreaction)
     else
-        # Δt ≥ Δtreaction
+        # Δt ≥ Δtreaction (16.165a)
         ΔGWD = zero(0.0)    
     end
     return ΔGWD
