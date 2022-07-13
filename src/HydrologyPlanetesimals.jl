@@ -129,7 +129,7 @@ $(SIGNATURES)
     - ETAPHI : bulk viscosity at P nodes [Pa*s]
     - BETTAPHI : bulk compresibility at P nodes [Pa*s]
     - PHI : porosity at P nodes
-    - APHI : Dlnat P nodes [(1-ϕ)/ϕ]/Dt
+    - APHI : Dln at P nodes [(1-ϕ)/ϕ]/Dt
     - FI : gravity potential at P nodes [J/kg]
 """
 function setup_staggered_grid_properties(; randomized=false)
@@ -561,6 +561,7 @@ $(SIGNATURES)
     - rhofluidcur: fluid density of markers
     - alphasolidcur: solid thermal expansion coefficient of markers
     - alphafluidcur: fluid thermal expansion coefficient of markers
+    - XWsolidm0: previous wet solid molar fraction of markers
     - randomized: uniformly random-distribute marker x/y positions within cells
                   and randomly set initial marker porosity 
 
@@ -586,7 +587,8 @@ function define_markers!(
     tenstotalm,
     rhofluidcur,
     alphasolidcur,
-    alphafluidcur;
+    alphafluidcur,
+    XWsolidm0;
     randomized=random_markers
 )
     for jm=1:1:Nxm, im=1:1:Nym
@@ -612,6 +614,8 @@ function define_markers!(
             end
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # *exp(-28*phim[m])
+            # wet solid molar fraction
+            XWsolidm0[m] = XWsolidm_init[tm[m]]
         else
             # sticky space ("air") [to have internal free surface]
             tm[m] = 3
@@ -682,6 +686,7 @@ function compute_marker_properties!(
 # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
+        # ∇ rhosolidm, rhofluidm now dependent on molar fractions, i2visHTM_hydration.m lines 270ff
         rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
         rhocptotalm[m] = total(
             rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
@@ -689,6 +694,7 @@ function compute_marker_properties!(
             tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
         etafluidcur = ifelse(
             tkm[m]>tmfluidphase, etafluidmm[tm[m]], etafluidm[tm[m]])
+        # ∇ etatotalm? ref i2visHTM_hydration.m line 280
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
@@ -696,7 +702,7 @@ function compute_marker_properties!(
         # sticky air
         etafluidcur = etafluidm[tm[m]]
     end
-    # # common for rocks and air
+    # common for rocks and air
     tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]
     # kphim[m] = kphi(kphim0[tm[m]], phim[m])
     # etafluidcur_inv_kphim[m] = etafluidcur[m] * inv(kphim[m])
@@ -5839,7 +5845,8 @@ function simulation_loop(output_path)
         tenstotalm,
         rhofluidcur,
         alphasolidcur,
-        alphafluidcur
+        alphafluidcur,
+        XWsolidm0,
     )
 
     # plot initial markers
