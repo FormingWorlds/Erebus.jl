@@ -684,13 +684,13 @@ include("../src/test_constants.jl")
                     if(rmark>rcrust) 
                         tm_ver[m]=2; # crust
                     end
-                    tkm_ver[m]=300; # Temperature
+                    tkm_ver[m]=tkm0[tm_ver[m]]; # Temperature
                     phim_ver[m]=phim0 # *(1+1.0*(rand-0.5)); # Porosity
                     etavpm_ver[m]=etasolidm[tm_ver[m]];#*exp(-28*phim_ver[m]); % Matrix viscosity
                 else
                     # Sticky space (to have internal free surface)
                     tm_ver[m]=3; # Material type
-                    tkm_ver[m]=273; # Temperature
+                    tkm_ver[m]=tkm0[tm_ver[m]]; # Temperature
                     phim_ver[m]=phimin; # Porosity
                     etavpm_ver[m]=etasolidm[tm_ver[m]]; # Matrix viscosity
                 end
@@ -702,12 +702,12 @@ include("../src/test_constants.jl")
         for m = 1:1:marknum
             # Compute marker parameters
             if tm[m]<3
-                # Rocksgv:
+                # rocks
                 kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
                 rhototalm_ver[m] = rhosolidm[tm_ver[m]]*(1-phim_ver[m])+rhofluidm[tm_ver[m]]*phim_ver[m]
                 rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]*(1-phim_ver[m])+rhocpfluidm[tm_ver[m]]*phim_ver[m]
                 etasolidcur_ver[m] = etasolidm[tm_ver[m]]
-                if tkm_ver[m]>tmsilicate
+                if tkm_ver[m]>tmsolidphase
                     etasolidcur_ver[m] = etasolidmm[tm_ver[m]]
                 end
                 hrtotalm_ver[m] = hrsolidm[tm_ver[m]]*(1-phim_ver[m])+hrfluidm[tm_ver[m]]*phim_ver[m]
@@ -720,7 +720,7 @@ include("../src/test_constants.jl")
                 tenstotalm_ver[m] = tenssolidm[tm_ver[m]]
                 etafluidcur_ver[m] = etafluidm[tm_ver[m]]
                 rhofluidcur_ver[m] = rhofluidm[tm_ver[m]]
-                if tkm_ver[m]>tmiron
+                if tkm_ver[m]>tmfluidphase
                     etafluidcur_ver[m] = etafluidmm[tm_ver[m]]
                 end
                 etatotalm_ver[m] = max(etamin,etafluidcur_ver[m],etasolidcur_ver[m])#*exp(-28*phim_ver[m])));
@@ -768,7 +768,7 @@ include("../src/test_constants.jl")
         xm = rand(-dx:0.1:x[end]+dx, marknum)
         ym = rand(-dy:0.1:y[end]+dy, marknum)
         tm = rand(1:3, marknum)
-        tkm = rand(tmiron-100:0.1:tmsilicate+100, marknum)
+        tkm = rand(tmfluidphase-100:0.1:tmsolidphase+100, marknum)
         etatotalm = [etasolidm[tm[m]] for m in 1:1:marknum]
         ETA = rand(Ny, Nx)
         YNY = rand(Bool, Ny, Nx)
@@ -808,7 +808,7 @@ include("../src/test_constants.jl")
             if tm[m]<3
                 # Rocks
                 etasolidcur_ver=etasolidm[tm[m]]
-                if tkm[m]>tmsilicate
+                if tkm[m]>tmsolidphase
                     etasolidcur_ver=etasolidmm[tm[m]]
                 end
                 etatotalm_ver=etasolidcur_ver;#*exp(-28*phim[m])
@@ -925,13 +925,13 @@ include("../src/test_constants.jl")
     end # testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)"
 
     @testset "etatotal_rocks()" begin
-        tmin = min(tmiron, tmsilicate) - 10
-        tmid = min(tmiron, tmsilicate) + 0.5*abs(tmiron-tmsilicate)
-        tmax = max(tmiron, tmsilicate) + 10
+        tmin = min(tmfluidphase, tmsolidphase) - 10
+        tmid = min(tmfluidphase, tmsolidphase) + 0.5*abs(tmfluidphase-tmsolidphase)
+        tmax = max(tmfluidphase, tmsolidphase) + 10
         for type in 1:2
             @test HydrologyPlanetesimals.etatotal_rocks(tmin, type) == max(
                 etamin, etasolidm[type], etafluidm[type])
-            if tmiron <= tmsilicate
+            if tmfluidphase <= tmsolidphase
                 @test HydrologyPlanetesimals.etatotal_rocks(tmid, type) ==
                 max(etamin, etasolidm[type], etafluidmm[type])
             else

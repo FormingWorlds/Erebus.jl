@@ -2219,7 +2219,7 @@ function perform_htm_iterations!(
                     # compute previous dry solid molar fraction (16.146)
                     XDˢm₀ = 1.0 - XWˢm₀[m]
                     # compute previous fluid molar fraction (16.164)
-                    Xᶠ₀=phim[m]*(XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ) / (
+                    Xᶠ₀ = phim[m]*(XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ) / (
                         (1.0-phim[m])*VH₂Oᶠ +
                         phim[m] * (XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ)
                     )
