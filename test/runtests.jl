@@ -976,6 +976,48 @@ include("../src/test_constants.jl")
             al, fe, 1000.) == (v, w)
     end # testset "calculate_radioactive_heating()"
 
+    @testset "compute_gibbs_free_energy()" begin
+        dHWD = ΔHWD
+        dSWD = ΔSWD
+        dVWD = ΔVWD
+        Δt₁ = dt1 = 0.5 * Δtreaction
+        Δt₂ = dt2 = 1.5 * Δtreaction
+        dtreaction = Δtreaction
+        m = 1
+        XWsolidm0 = rand(1)
+        tknm, pfnm, XDsolidm0 = rand(3)
+        ΔGWD₁ = HydrologyPlanetesimals.compute_gibbs_free_energy(
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁)
+        ΔGWD₂ = HydrologyPlanetesimals.compute_gibbs_free_energy(
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂)
+        # verification, from i2visHTM_hydration.m, lines 614ff
+        # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
+        dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(XDsolidm0/XWsolidm0[m]);
+        # Compute incomplete reaction for too short timestep
+        dGWD1=0;
+        if dt1<dtreaction
+            dGWD1=dGWD0*(1-dt1/dtreaction);
+        end
+        # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
+        dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(XDsolidm0/XWsolidm0[m]);
+        # Compute incomplete reaction for too short timestep
+        dGWD2=0;
+        if dt2<dtreaction
+            dGWD2=dGWD0*(1-dt2/dtreaction);
+        end
+        # test
+        @test ΔGWD₁ ≈ dGWD1 rtol=1e-9
+        @test ΔGWD₂ ≈ dGWD2 rtol=1e-9
+    end # testset "compute_gibbs_free_energy()"
+
+    @testset "compute_relative_enthalpy()" begin
+
+    end # testset "compute_relative_enthalpy()"
+
+    @testset "compute_reaction_constant()" begin
+            
+    end # testset "compute_reaction_constant()"
+
     @testset "fix()" begin
         @testset "basic nodes" begin
             for yy=-dy:(dy/3):ysize+dy, xx=-dx:(dx/3):xsize+dx
@@ -2479,7 +2521,7 @@ include("../src/test_constants.jl")
         @test WTPSUM == WTPSUM_ver
     end # testset "marker_to_p_nodes!()"
 
-    @testset "compute node properties: basic, Vx, Vy, P" begin
+    @testset "compute node properties: basic, Vx, Vy, P, thermodynamic" begin
         # simulating markers
         marknum = 10_000
         @testset "compute_basic_node_properties!()" begin    
@@ -3100,7 +3142,7 @@ include("../src/test_constants.jl")
                 end
             end
             # test
-            for j=1:1:Nx, i=1:1:Ny
+            for j=1:1:Nx1, i=1:1:Ny1
                 @test RHO[i, j] ≈ RHO_ver[i, j] rtol=1e-9
                 @test RHOCP[i, j] ≈ RHOCP_ver[i, j] rtol=1e-9
                 @test ALPHA[i, j] ≈ ALPHA_ver[i, j] rtol=1e-9
@@ -3113,6 +3155,97 @@ include("../src/test_constants.jl")
                 @test BETTAPHI[i, j] ≈ BETTAPHI_ver[i, j] rtol=1e-9
             end
         end # testset "compute_p_node_properties!()"
+
+        @testset "compute_thermodynamic_properties!()" begin
+            jmin, jmax = jmin_p, jmax_p
+            imin, imax = imin_p, imax_p
+            DMPSUM = zeros(Ny1, Nx1)
+            DHPSUM = zeros(Ny1, Nx1)
+            WTPSUM = zeros(Ny1, Nx1)
+            DMP = rand(Ny1, Nx1)
+            DHP = rand(Ny1, Nx1)
+            DMPSUM_ver = zeros(Ny1, Nx1)
+            DHPSUM_ver = zeros(Ny1, Nx1)
+            WTPSUM_ver = zeros(Ny1, Nx1)
+            DMP_ver = copy(DMP)
+            DHP_ver = copy(DHP)
+            # simulate markers
+            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
+            property = rand(2, marknum)*1e3
+            # calculate grid properties
+            for m=1:1:marknum
+                i, j, weights = HydrologyPlanetesimals.fix_weights(
+                    xm[m], ym[m], xp, yp, dx, dy, jmin, jmax, imin, imax)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[1, m], DMPSUM)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, property[2, m], DHPSUM)
+                HydrologyPlanetesimals.interpolate_add_to_grid!(
+                    i, j, weights, one(1.0), WTPSUM)
+            end
+            HydrologyPlanetesimals.compute_thermodynamic_properties!(
+               DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+            # verification properties, from i2visHTM_hydration.m, lines 566f, 669ff,  
+            for m=1:1:marknum
+                DMm = property[1, m]
+                DHm = property[2, m]
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1 
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1 
+                    i=1
+                elseif i>Ny 
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Interpolation to pressure nodes 
+                # Update subgrid diffusion on nodes
+                # i,j Node
+                DMPSUM_ver[i,j]=DMPSUM_ver[i,j]+DMm*wtmij;
+                DHPSUM_ver[i,j]=DHPSUM_ver[i,j]+DHm*wtmij;
+                WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij;
+                # i+1,j Node
+                DMPSUM_ver[i+1,j]=DMPSUM_ver[i+1,j]+DMm*wtmi1j;
+                DHPSUM_ver[i+1,j]=DHPSUM_ver[i+1,j]+DHm*wtmi1j;
+                WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j;
+                # i,j+1 Node
+                DMPSUM_ver[i,j+1]=DMPSUM_ver[i,j+1]+DMm*wtmij1;
+                DHPSUM_ver[i,j+1]=DHPSUM_ver[i,j+1]+DHm*wtmij1;
+                WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1;
+                # i+1,j+1 Node
+                DMPSUM_ver[i+1,j+1]=DMPSUM_ver[i+1,j+1]+DMm*wtmi1j1;
+                DHPSUM_ver[i+1,j+1]=DHPSUM_ver[i+1,j+1]+DHm*wtmi1j1;
+                WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1;
+            end
+            # P-nodes
+            DMP_ver=zeros(Ny1,Nx1);
+            DHP_ver=zeros(Ny1,Nx1);
+            for j=1:1:Nx1
+                for i=1:1:Ny1
+                    if WTPSUM_ver[i,j]>0
+                        DMP_ver[i,j]=DMPSUM[i,j]/WTPSUM_ver[i,j];
+                        DHP_ver[i,j]=DHPSUM[i,j]/WTPSUM_ver[i,j];
+                    end
+                end
+            end
+            # test
+            for j=1:1:Nx1, i=1:1:Ny1
+                @test DMP[i, j] ≈ DMP_ver[i, j] rtol=1e-9
+                @test DHP[i, j] ≈ DHP_ver[i, j] rtol=1e-9
+            end
+        end # testset "compute_thermodynamic_properties!()"
     end # testset "compute node properties" 
 
     @testset "apply_insulating_boundary_conditions!()" begin
