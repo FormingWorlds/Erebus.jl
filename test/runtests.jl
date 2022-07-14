@@ -605,7 +605,11 @@ include("../src/test_constants.jl")
             sxxm,
             sxym,
             etavpm,
-            phim
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0
         ) = HydrologyPlanetesimals.setup_marker_properties(marknum)
         (
             rhototalm,
@@ -662,6 +666,7 @@ include("../src/test_constants.jl")
             rhofluidcur,
             alphasolidcur,
             alphafluidcur,
+            XWsolidm0,
             randomized=false
         )
         for m=1:1:marknum

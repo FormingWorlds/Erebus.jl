@@ -307,7 +307,9 @@ const tenssolidm  = SVector{3, Float64}(  [   6.0e+07,    6.0e+07,    6.0e+07])
 const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
 # initial temperature [K]
 const tkm0 = SVector{3, Float64}(         [ 170.0    ,  170.0    ,  170.0    ])
-# Coefficient to compute compaction viscosity from shear viscosity
+# initial wet solid molar fraction
+const XWsolidm_init = SVector{3, Float64}([   0.5    ,    0.5    ,    NaN    ])
+# coefficient to compute compaction viscosity from shear viscosity
 const etaphikoef = 1
 # ------------------------------------------------------------------------------
 # 26Al decay
@@ -451,7 +453,7 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 100 
+const n_steps = 30_000 
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:

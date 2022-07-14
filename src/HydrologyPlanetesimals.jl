@@ -5846,7 +5846,7 @@ function simulation_loop(output_path)
         rhofluidcur,
         alphasolidcur,
         alphafluidcur,
-        XWsolidm0,
+        XWsolidm0
     )
 
     # plot initial markers
