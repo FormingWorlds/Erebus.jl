@@ -126,9 +126,12 @@ include("../src/test_constants.jl")
             BETTAPHI,
             PHI,
             APHI,
-            FI
+            FI,
+            DMP,
+            DHP,
+            XWS
         ) = HydrologyPlanetesimals.setup_staggered_grid_properties()
-        # verification, from madcph.m line 51ff
+        # verification, from madcph.m line 51ff, i2visHTM_hydration.m line 691, 692, 1587
         # Basic nodes
         ETA_ver = zeros(Ny,Nx) # Viscoplastic Viscosity, Pa*s
         ETA0_ver = zeros(Ny,Nx) # Viscous Viscosity, Pa*s
@@ -197,6 +200,9 @@ include("../src/test_constants.jl")
         PHI_ver = zeros(Ny1,Nx1) # porosity
         APHI_ver = zeros(Ny1,Nx1) # Dln((1-PHI)/PHI)/Dt
         FI_ver = zeros(Ny1,Nx1) # Gravity potential, J/kg
+        DMP_ver = zeros(Ny1,Nx1)
+        DHP_ver = zeros(Ny1,Nx1)
+        XWS_ver = zeros(Ny1,Nx1)
         # test
         @test ETA == ETA_ver
         @test ETA0 == ETA0_ver
@@ -258,6 +264,9 @@ include("../src/test_constants.jl")
         @test PHI == PHI_ver
         @test APHI == APHI_ver
         @test FI == FI_ver
+        @test DMP == DMP_ver
+        @test DHP == DHP_ver
+        @test XWS == XWS_ver
     end # testset "setup_staggered_grid_properties()"
 
     @testset "setup_staggered_grid_properties_helpers()" begin
@@ -321,6 +330,9 @@ include("../src/test_constants.jl")
             SXXSUM,
             TKSUM,
             PHISUM,
+            DMPSUM,
+            DHPSUM,
+            XWSSUM,
             WTPSUM
         ) = HydrologyPlanetesimals.setup_interpolated_properties()
         # verification and test
@@ -353,6 +365,9 @@ include("../src/test_constants.jl")
         @test SXXSUM == zeros(Float64, Ny1, Nx1)
         @test TKSUM == zeros(Float64, Ny1, Nx1)
         @test PHISUM == zeros(Float64, Ny1, Nx1)
+        @test DMPSUM == zeros(Float64, Ny1, Nx1)
+        @test DHPSUM == zeros(Float64, Ny1, Nx1)
+        @test XWSSUM == zeros(Float64, Ny1, Nx1)
         @test WTPSUM == zeros(Float64, Ny1, Nx1)
     end # testset "setup_interpolated_properties()"
 
@@ -3194,7 +3209,7 @@ include("../src/test_constants.jl")
             end
         end # testset "compute_p_node_properties!()"
 
-        @testset "compute_thermodynamic_properties!()" begin
+        @testset "compute_thermodynamic_xfer!()" begin
             jmin, jmax = jmin_p, jmax_p
             imin, imax = imin_p, imax_p
             DMPSUM = zeros(Ny1, Nx1)
@@ -3222,7 +3237,7 @@ include("../src/test_constants.jl")
                 HydrologyPlanetesimals.interpolate_add_to_grid!(
                     i, j, weights, one(1.0), WTPSUM)
             end
-            HydrologyPlanetesimals.compute_thermodynamic_properties!(
+            HydrologyPlanetesimals.compute_thermodynamic_xfer!(
                DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
             # verification properties, from i2visHTM_hydration.m, lines 566f, 669ff,  
             for m=1:1:marknum
@@ -3283,7 +3298,78 @@ include("../src/test_constants.jl")
                 @test DMP[i, j] ≈ DMP_ver[i, j] rtol=1e-9
                 @test DHP[i, j] ≈ DHP_ver[i, j] rtol=1e-9
             end
-        end # testset "compute_thermodynamic_properties!()"
+        end # testset "compute_thermodynamic_xfer!()"
+
+        @testset "molarfraction_marker_to_p_nodes! & compute_thermodynamic_xfer!()" begin
+            jmin, jmax = jmin_p, jmax_p
+            imin, imax = imin_p, imax_p
+            XWSSUM = zeros(Ny1, Nx1)
+            WTPSUM = zeros(Ny1, Nx1)
+            XWS = rand(Ny1, Nx1)
+            XWSSUM_ver = zeros(Ny1, Nx1)
+            WTPSUM_ver = zeros(Ny1, Nx1)
+            XWS_ver = copy(XWS)
+            # simulate markers
+            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
+            XWsolidm0 = rand(marknum)
+            # calculate grid properties
+            for m=1:1:marknum
+                HydrologyPlanetesimals.molarfraction_marker_to_p_nodes!(
+                    m, xm[m], ym[m], XWsolidm0, XWSSUM, WTPSUM)
+            end
+            HydrologyPlanetesimals.compute_molarfraction!(
+            XWSSUM, WTPSUM, XWS)
+            # verification properties, from i2visHTM_hydration.m, lines 1547ff
+            for m=1:1:marknum
+                j=trunc(Int, (xm[m]-xp[1])/dx)+1
+                i=trunc(Int, (ym[m]-yp[1])/dy)+1
+                if j<1 
+                    j=1
+                elseif j>Nx
+                    j=Nx
+                end
+                if i<1 
+                    i=1
+                elseif i>Ny 
+                    i=Ny
+                end
+                # Compute distances
+                dxmj=xm[m]-xp[j]
+                dymi=ym[m]-yp[i]
+                # Compute weights
+                wtmij=(1-dxmj/dx)*(1-dymi/dy)
+                wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+                wtmij1=(dxmj/dx)*(1-dymi/dy)
+                wtmi1j1=(dxmj/dx)*(dymi/dy)
+                # Update fluid composition on nodes
+                # i,j Node
+                XWSSUM_ver[i,j]=XWSSUM_ver[i,j]+XWsolidm0[m]*wtmij;
+                WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij;
+                # i+1,j Node
+                XWSSUM_ver[i+1,j]=XWSSUM_ver[i+1,j]+XWsolidm0[m]*wtmi1j;
+                WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j;
+                # i,j+1 Node
+                XWSSUM_ver[i,j+1]=XWSSUM_ver[i,j+1]+XWsolidm0[m]*wtmij1;
+                WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1;
+                # i+1,j+1 Node
+                XWSSUM_ver[i+1,j+1]=XWSSUM_ver[i+1,j+1]+XWsolidm0[m]*wtmi1j1;
+                WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1;
+            end
+            # P-nodes
+            XWS_ver=zeros(Ny1,Nx1);
+            for j=1:1:Nx1
+                for i=1:1:Ny1
+                    if WTPSUM_ver[i,j]>0
+                        XWS_ver[i,j]=XWSSUM_ver[i,j]/WTPSUM_ver[i,j];
+                    end
+                end
+            end
+            # test
+            for j=1:1:Nx1, i=1:1:Ny1
+                @test XWS[i, j] ≈ XWS_ver[i, j] rtol=1e-9
+            end
+        end # testset "compute_molarfraction!()"
     end # testset "compute node properties" 
 
     @testset "apply_insulating_boundary_conditions!()" begin

@@ -131,6 +131,9 @@ $(SIGNATURES)
     - PHI : porosity at P nodes
     - APHI : Dln at P nodes [(1-ϕ)/ϕ]/Dt
     - FI : gravity potential at P nodes [J/kg]
+    - DMP: mass transfer term at P nodes
+    - DHP: enthalpy transfer/latent heating term at P nodes
+    - XWS: wet solid fraction at P nodes
 """
 function setup_staggered_grid_properties(; randomized=false)
     # basic nodes
@@ -257,6 +260,12 @@ function setup_staggered_grid_properties(; randomized=false)
     APHI = randomized ? rand(Ny1, Nx1)*2e-12.-1e-12 : zeros(Ny1, Nx1)
     # gravity potential [J/kg]
     FI = randomized ? rand(Ny1, Nx1)*2e2.=1e2 : zeros(Ny1, Nx1)
+    # mass transfer term
+    DMP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # enthalpy transfer/latent heating term
+    DHP = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
+    # wet solid fraction
+    XWS = randomized ? rand(Ny1, Nx1) : zeros(Ny1, Nx1)
     return (
         ETA,
         ETA0,
@@ -317,7 +326,10 @@ function setup_staggered_grid_properties(; randomized=false)
         BETTAPHI,
         PHI,
         APHI,
-        FI
+        FI,
+        DMP,
+        DHP,
+        XWS
     )
 end # function setup_staggered_grid_properties()
 
@@ -808,6 +820,9 @@ $(SIGNATURES)
     - SXXSUM: interpolation of SXX at P nodes
     - TKSUM: interpolation of TK at P nodes
     - PHISUM: interpolation of PHI at P nodes
+    - DMPSUM: interpolation of DMP at P nodes
+    - DHPSUM: interpolation of DHP at P nodes
+    - XWSSUM: interpolation of XWS at P nodes
     - WTPSUM: interpolation weights at P nodes
 """
 function setup_interpolated_properties()
@@ -844,6 +859,9 @@ function setup_interpolated_properties()
     SXXSUM = zeros(Ny1, Nx1)
     TKSUM = zeros(Ny1, Nx1)
     PHISUM = zeros(Ny1, Nx1)
+    DMPSUM = zeros(Ny1, Nx1)
+    DHPSUM = zeros(Ny1, Nx1)
+    XWSSUM = zeros(Ny1, Nx1)
     WTPSUM = zeros(Ny1, Nx1)
     return (
         ETA0SUM,
@@ -875,6 +893,9 @@ function setup_interpolated_properties()
         SXXSUM,
         TKSUM,
         PHISUM,
+        DMPSUM,
+        DHPSUM,
+        XWSSUM,
         WTPSUM
     )
 end
@@ -1780,6 +1801,54 @@ function marker_to_p_nodes!(
     return nothing
 end
 
+
+
+
+"""
+Interpolate marker wet silicate (solid) fraction to P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - m: marker number
+    - xmm: marker x-position [m]
+    - ymm: marker y-position [m]
+    - XWsolidm0: previous marker wet silicate (solid) fraction
+    - XWSSUM: wet silicate (solid) fraction interpolated to P nodes
+    - WTPSUM: weight for bilinear interpolation to P nodes
+
+# Returns
+
+    - nothing
+"""
+function molarfraction_marker_to_p_nodes!(
+    m,
+    xmm,
+    ymm,
+    XWsolidm0,
+    XWSSUM,
+    WTPSUM
+)
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xp,
+        yp,
+        dx,
+        dy,
+        jmin_p,
+        jmax_p,
+        imin_p,
+        imax_p
+    )
+    @inbounds begin
+        interpolate_add_to_grid!(i, j, weights, XWsolidm0[m], XWSSUM)
+        interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
+    end # @inbounds
+    return nothing
+end
+
 """
 Compute properties of basic nodes based on interpolation arrays.
 
@@ -2031,7 +2100,7 @@ function compute_p_node_properties!(
 end # function compute_p_node_properties!
 
 """
-Compute thermodynamic properties of P nodes based on interpolation arrays.
+Compute thermodynamic properties at P nodes based on interpolation arrays.
 
 $(SIGNATURES)
 
@@ -2040,13 +2109,15 @@ $(SIGNATURES)
     - DMPSUM: DMP interpolation array
     - DHPSUM: DHP interpolation array
     - WTPSUM: WTP interpolation array
+    - DMP: mass transfer term at P nodes
+    - DHP: enthalpy transfer/latent heating term at P nodes
 
 # Returns
 
     - nothing
 """
-function compute_thermodynamic_properties!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
-# @timeit to "compute_thermodynamic_properties!" begin
+function compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+# @timeit to "compute_thermodynamic_xfer!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTPSUM[i, j] > 0.0 
@@ -2057,9 +2128,39 @@ function compute_thermodynamic_properties!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
             end
         end 
     end # @inbounds
-# end # @timeit to "compute_thermodynamic_properties!"
+# end # @timeit to "compute_thermodynamic_xfer!"
     return nothing
-end # function compute_thermodynamic_properties!
+end # function compute_thermodynamic_xfer!
+
+"""
+Compute wet solid molar fraction at P nodes based on interpolation arrays.
+
+$(SIGNATURES)
+
+# Details
+
+    - XWSSUM: XWX interpolation array
+    - WTPSUM: WTP interpolation array
+    - XWS: wet solid molar fraction at P nodes
+
+# Returns
+
+    - nothing
+"""
+function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
+# @timeit to "compute_molarfraction!" begin
+    @inbounds begin
+        for j=1:1:Nx1, i=1:1:Ny1
+            if WTPSUM[i, j] > 0.0 
+                XWS[i, j] = XWSSUM[i, j] * inv(WTPSUM[i, j])
+            else
+                XWS[i, j] = zero(0.0)
+            end
+        end 
+    end # @inbounds
+# end # @timeit to "compute_molarfraction!"
+    return nothing
+end # function compute_molarfraction!
 
 """
 Apply insulating boundary conditions to given array:
@@ -2181,7 +2282,7 @@ $(SIGNATURES)
 # Details
 
     - DMP: mass transfer term at P nodes
-    - DHP: enthalpy transfer term at P nodes
+    - DHP: enthalpy transfer/latent heating term at P nodes
     - DMPSUM: interpolation of DMP (mass transfer term) at P nodes
     - DHPSUM: interpolation of DHP (enthalpy transfer term) at P nodes
     - WTPSUM: interpolation weights at P nodes 
@@ -2191,8 +2292,8 @@ $(SIGNATURES)
     - pf: fluid pressure at P nodes
     - tk2: next temperature at P nodes 
     - pfm0: previous marker fluid pressure
-    - XWsolidm0: previous marker wet silicate (solid) volume fraction
-    - XWsolidm: current marker wet silicate (solid) volume fraction
+    - XWsolidm0: previous marker wet silicate (solid) fraction
+    - XWsolidm: current marker wet silicate (solid) fraction
     - phim: current marker porosity
     - phinewm: new marker porosity
     - marknum: current total number of markers
@@ -2327,7 +2428,7 @@ function perform_htm_iterations!(
                 end # if tm[m] < 3
             end # for m=1:1:marknum
             # compute thermodynamic properties at P nodes
-            compute_thermodynamic_properties!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+            compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
         end # @inbounds
     end # for titer=1:1:titermax
     return nothing
@@ -5777,7 +5878,10 @@ function simulation_loop(output_path)
         BETTAPHI,
         PHI,
         APHI,
-        FI
+        FI,
+        DMP,
+        DHP,
+        XWS
     ) = setup_staggered_grid_properties()
     (
         ETA5,
@@ -5986,6 +6090,9 @@ function simulation_loop(output_path)
         SXXSUM,
         TKSUM,
         PHISUM,
+        DMPSUM,
+        DHPSUM,
+        XWSSUM,
         WTPSUM
     ) = setup_interpolated_properties()
 
@@ -6089,7 +6196,7 @@ function simulation_loop(output_path)
                 phim
             )              
             # interpolate marker properties to basic nodes
-            marker_to_basic_nodes!(
+            @inbounds marker_to_basic_nodes!(
                 m,
                 xm[m],
                 ym[m],
@@ -6110,7 +6217,7 @@ function simulation_loop(output_path)
                 WTSUM
             )
             # interpolate marker properties to Vx nodes
-            marker_to_vx_nodes!(
+            @inbounds marker_to_vx_nodes!(
                 m,
                 xm[m],
                 ym[m],
@@ -6127,7 +6234,7 @@ function simulation_loop(output_path)
                 WTXSUM
             )
             # interpolate marker properties to Vy nodes
-            marker_to_vy_nodes!(
+            @inbounds marker_to_vy_nodes!(
                 m,
                 xm[m],
                 ym[m],
@@ -6144,7 +6251,7 @@ function simulation_loop(output_path)
                 WTYSUM
             )     
             # interpolate marker properties to P nodes
-            marker_to_p_nodes!(
+            @inbounds marker_to_p_nodes!(
                 m,
                 xm[m],
                 ym[m],
