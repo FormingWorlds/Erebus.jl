@@ -308,9 +308,11 @@ const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
 # initial temperature [K]
 const tkm0 = SVector{3, Float64}(         [ 170.0    ,  170.0    ,  170.0    ])
 # initial wet solid molar fraction
-const XWsolidm_init = SVector{3, Float64}([   0.5    ,    0.5    ,    NaN    ])
+const XWsolidm_init = SVector{3, Float64}([   0.0    ,    0.0    ,    NaN    ])
 # coefficient to compute compaction viscosity from shear viscosity
 const etaphikoef = 1
+# melt-weakening coefficient (16.67)
+const αη = 28.0
 # ------------------------------------------------------------------------------
 # 26Al decay
 # 26Al half life [s]

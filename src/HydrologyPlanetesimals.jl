@@ -625,7 +625,7 @@ function define_markers!(
                 phim[m] += phim0 * (rand()-0.5)
             end
             # matrix viscosity
-            etavpm[m] = etasolidm[tm[m]] # *exp(-28*phim[m])
+            etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
             # wet solid molar fraction
             XWsolidm0[m] = XWsolidm_init[tm[m]]
         else
@@ -763,7 +763,7 @@ function update_marker_viscosity!(
     )
     @inbounds if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
-        @inbounds etatotalm[m] = etatotal_rocks(tkm[m], tm[m])
+        @inbounds etatotalm[m] = etatotal_rocks(tkm[m], tm[m]) # * exp(-αη*phim[m]) # ∇! CHANGE!!!
     # else
         # air: constant etatotalm[m]=etasolidm[tm[m]] as initialized
         # pass
