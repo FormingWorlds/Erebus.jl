@@ -4291,13 +4291,14 @@ function perform_thermal_iterations!(
             dtt = min(dtt, dtm-dttsum)
         end
 
-        # @info "M_1726"
+        @info "M_1726"
         # output_path = "/Users/z7717/Desktop/test/"
-        # LT_d = collect(LT)
-        # jldsave(
-        #     output_path*"M_1726_"*string(timestep)*"_"*string(titer)*".jld2";
-        #     tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
-        # )
+        output_path = "C:\\Users\\ich\\outTest\\"
+        LT_d = collect(LT)
+        jldsave(
+            output_path*"M_1726_"*string(timestep)*"_"*string(titer)*".jld2";
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
+        )
 
         # increase thermal iteration counter
         titer += 1
