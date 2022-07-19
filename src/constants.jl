@@ -128,7 +128,8 @@ const jmax_m = Nxm - 1
 # maximum assignable marker grid index in y direction
 const imax_m = Nym - 1
 # marker randomized positions and porosity for testing
-const random_markers = true
+# const random_markers = true
+const random_markers = false
 # physical constants
 # gravitational constant [m³*kg⁻¹*s⁻²]
 const G = 6.672e-11
@@ -350,7 +351,7 @@ const phimin = 1.0e-4
 const phimax = 1.0 - phimin            
 # thermodynamic parameters: silicate dehydration reaction Wˢ = Dˢ + H₂O
 # molar gas constant [JK⁻¹mol⁻¹]
-const R = 8.314#46261815324
+const RG = 8.314#46261815324
 # molar mass of water [kg/mol]
 const MH₂O = 0.018
 # molar mass of dry silicate [kg/mol]
@@ -455,7 +456,8 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 30_000 
+# const n_steps = 30_000 
+const n_steps = 10 
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:

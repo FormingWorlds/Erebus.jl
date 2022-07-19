@@ -350,7 +350,7 @@ const phimin = 1.0e-4
 const phimax = 1.0 - phimin            
 # thermodynamic parameters: silicate dehydration reaction Wˢ = Dˢ + H₂O
 # molar gas constant [JK⁻¹mol⁻¹]
-const R = 8.314#46261815324
+const RG = 8.314#46261815324
 # molar mass of water [kg/mol]
 const MH₂O = 0.018
 # molar mass of dry silicate [kg/mol]
