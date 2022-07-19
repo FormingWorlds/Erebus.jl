@@ -13,8 +13,8 @@ using TimerOutputs
 
 const to = TimerOutput()
 export run_simulation
-# include("constants.jl")
-include("test_constants.jl")
+include("constants.jl")
+# include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
