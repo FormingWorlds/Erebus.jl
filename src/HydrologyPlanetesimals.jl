@@ -4291,14 +4291,14 @@ function perform_thermal_iterations!(
             dtt = min(dtt, dtm-dttsum)
         end
 
-        @info "M_1726"
-        # output_path = "/Users/z7717/Desktop/test/"
-        output_path = "C:\\Users\\ich\\outTest\\"
-        LT_d = collect(LT)
-        jldsave(
-            output_path*"M_1726_"*string(timestep)*"_"*string(titer)*".jld2";
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
-        )
+        # @info "M_1726"
+        # # output_path = "/Users/z7717/Desktop/test/"
+        # output_path = "C:\\Users\\ich\\outTest\\"
+        # LT_d = collect(LT)
+        # jldsave(
+        #     output_path*"M_1726_"*string(timestep)*"_"*string(titer)*".jld2";
+        #     tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
+        # )
 
         # increase thermal iteration counter
         titer += 1
@@ -6582,49 +6582,49 @@ function simulation_loop(output_path)
                 vyf
             )
 
-            @info "M_1078"
-            # L_d = collect(L)
-            jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-                xm,
-                ym,
-                tk0,
-                tk1,
-                tk2,
-                DT,
-                APHI,
-                vxf,
-                vyf,
-                Kcont,
-                ETA,
-                ETAP,
-                GGG,
-                GGGP,
-                SXY0,
-                SXX0,
-                RHOX,
-                RHOY,
-                RHOFX,
-                RHOFY,
-                RX,
-                RY,
-                ETAPHI,
-                BETTAPHI,
-                PHI,
-                gx,
-                gy,
-                pr0,
-                pf0,
-                dt,
-                R,
-                #L_d,
-                S,
-                vx,
-                vy,
-                qxD,
-                qyD,
-                pr,
-                pf
-            )
+            # @info "M_1078"
+            # # L_d = collect(L)
+            # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+            #     xm,
+            #     ym,
+            #     tk0,
+            #     tk1,
+            #     tk2,
+            #     DT,
+            #     APHI,
+            #     vxf,
+            #     vyf,
+            #     Kcont,
+            #     ETA,
+            #     ETAP,
+            #     GGG,
+            #     GGGP,
+            #     SXY0,
+            #     SXX0,
+            #     RHOX,
+            #     RHOY,
+            #     RHOFX,
+            #     RHOFY,
+            #     RX,
+            #     RY,
+            #     ETAPHI,
+            #     BETTAPHI,
+            #     PHI,
+            #     gx,
+            #     gy,
+            #     pr0,
+            #     pf0,
+            #     dt,
+            #     R,
+            #     #L_d,
+            #     S,
+            #     vx,
+            #     vy,
+            #     qxD,
+            #     qyD,
+            #     pr,
+            #     pf
+            # )
 
             # define displacement timestep dtm
             dtm = compute_displacement_timestep(
