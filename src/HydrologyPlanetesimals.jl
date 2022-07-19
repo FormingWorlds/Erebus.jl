@@ -20,6 +20,7 @@ if use_pardiso
     using Pardiso
 else
     using MKL
+    BLAS.set_num_threads(parse(Int32, ENV["OMP_NUM_THREADS"]))
 end
 
 """
@@ -2221,7 +2222,7 @@ function compute_gibbs_free_energy(T, pf, XDsolid, XWsolid, Δt)
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtreaction
         # compute ΔG for dehydration reaction (16.145), (16.165b)
-        ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + R*T*log(XDsolid/XWsolid)) * (
+        ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + RG*T*log(XDsolid/XWsolid)) * (
             1.0 - Δt/Δtreaction)
     else
         # Δt ≥ Δtreaction (16.165a)
@@ -2270,7 +2271,7 @@ $(SIGNATURES)
 """
 function compute_reaction_constant(T, pf, ΔGWD)
     # compute reaction constant (16.151)
-    return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (R*T))
+    return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (RG*T))
 end # function compute_reaction_constant
 
 
@@ -6580,49 +6581,49 @@ function simulation_loop(output_path)
                 vyf
             )
 
-            # @info "M_1078"
-            # # L_d = collect(L)
-            # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-            #     xm,
-            #     ym,
-            #     tk0,
-            #     tk1,
-            #     tk2,
-            #     DT,
-            #     APHI,
-            #     vxf,
-            #     vyf,
-            #     Kcont,
-            #     ETA,
-            #     ETAP,
-            #     GGG,
-            #     GGGP,
-            #     SXY0,
-            #     SXX0,
-            #     RHOX,
-            #     RHOY,
-            #     RHOFX,
-            #     RHOFY,
-            #     RX,
-            #     RY,
-            #     ETAPHI,
-            #     BETTAPHI,
-            #     PHI,
-            #     gx,
-            #     gy,
-            #     pr0,
-            #     pf0,
-            #     dt,
-            #     R,
-            #     #L_d,
-            #     S,
-            #     vx,
-            #     vy,
-            #     qxD,
-            #     qyD,
-            #     pr,
-            #     pf
-            # )
+            @info "M_1078"
+            # L_d = collect(L)
+            jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+                xm,
+                ym,
+                tk0,
+                tk1,
+                tk2,
+                DT,
+                APHI,
+                vxf,
+                vyf,
+                Kcont,
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                SXY0,
+                SXX0,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETTAPHI,
+                PHI,
+                gx,
+                gy,
+                pr0,
+                pf0,
+                dt,
+                R,
+                #L_d,
+                S,
+                vx,
+                vy,
+                qxD,
+                qyD,
+                pr,
+                pf
+            )
 
             # define displacement timestep dtm
             dtm = compute_displacement_timestep(
