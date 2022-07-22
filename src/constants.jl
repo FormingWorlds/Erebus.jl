@@ -456,8 +456,7 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-# const n_steps = 30_000 
-const n_steps = 10 
+const n_steps = 30_000 
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:

@@ -13,14 +13,14 @@ using TimerOutputs
 
 const to = TimerOutput()
 export run_simulation
-include("constants.jl")
-# include("test_constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
 else
     using MKL
-    BLAS.set_num_threads(parse(Int32, ENV["OMP_NUM_THREADS"]))
+    BLAS.set_num_threads(4)
 end
 
 """

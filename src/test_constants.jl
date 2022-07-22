@@ -128,7 +128,8 @@ const jmax_m = Nxm - 1
 # maximum assignable marker grid index in y direction
 const imax_m = Nym - 1
 # marker randomized positions and porosity for testing
-const random_markers = true
+# const random_markers = true
+const random_markers = false
 # physical constants
 # gravitational constant [m³*kg⁻¹*s⁻²]
 const G = 6.672e-11
@@ -180,7 +181,7 @@ const Kcont = 1.0e20
 #  const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-13])
 #  # initial temperature [K]
 #  const tkm0 = SVector{3, Float64}(         [ 300.0    ,  300.0    ,  300.0    ])
-# fluid phase Fe ---------------------------------------------------------------
+# fluid phase Fe [base case] ---------------------------------------------------
 # # solid Density [kg/m³]
 # const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
 # # fluid density [kg/m³]	
@@ -427,11 +428,11 @@ const dxymax = 0.05
 # Weight of averaged velocity for moving markers
 const vpratio = 1 / 3 
 # Max temperature change per time step [K]
-const DTmax = 20 
+const DTmax = 20.0 
 # Subgrid temperature diffusion parameter
-const dsubgridt = 0 
+const dsubgridt = 0.0
 # Subgrid stress diffusion parameter
-const dsubgrids = 0
+const dsubgrids = 0.0
 # length of year [s]
 const yearlength = 365.25 * 24 * 3600
 # Time sum (start) [s]
@@ -455,7 +456,7 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 30_000 
+const n_steps = 30 
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
