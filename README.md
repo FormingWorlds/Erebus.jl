@@ -26,7 +26,7 @@ Adjust the simulation parameters in ```src/constants.jl``` if necessary.
 
 ### Running the simulation
 
-Launch with ```julia -O3 --math-mode=fast launch.jl /PATH/TO/OUTPUT/```.
+Launch with ```julia -O3 --t4 launch.jl /PATH/TO/OUTPUT/```.
 
 ### Plotting results
 
