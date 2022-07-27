@@ -1409,7 +1409,7 @@ function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
 end # function fix
 
 """
-Reduce a 3D (i, j, k) along its third (k) axis by addition and write the result
+Reduce a 3D (i, j, k) array along its third (k) axis by addition and write the result
 into (i, j, 1) without reallocating the array's memory.
 
 $(SIGNATURES)
@@ -1423,7 +1423,10 @@ $(SIGNATURES)
     - nothing
 """
 function reduce_add_3darray!(A)
-    for k in 2:size(A, 3), j in 1:size(A, 2), i in 1:size(A, 1)
+    ii = axes(A, 1)
+    ij = axes(A, 2)
+    ik = axes(A, 3)
+    for k in ik[(begin+1):end], j in ij, i in ii 
         @inbounds A[i, j, 1] += A[i, j, k]
     end
     return nothing

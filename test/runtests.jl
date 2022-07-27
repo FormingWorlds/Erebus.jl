@@ -5717,7 +5717,7 @@ include("../src/test_constants.jl")
         end
         @testset "tkm" begin
             for m=1:1:marknum
-                @test tkm[m] ≈ tkm_ver[m] rtol=1e-5
+                @test tkm[m] ≈ tkm_ver[m] rtol=1e-4
             end    
         end
         @testset "sxym" begin
