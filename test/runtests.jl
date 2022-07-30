@@ -32,7 +32,7 @@ include("../src/test_constants.jl")
     end # testset "setup_dynamic_simulation_parameters()"
 
     @testset "setup_staggered_grid_geometry()" begin
-        # verification, from madcph.m line 38ff
+        # verification, from HTM-planetary.m line 38ff
         # Basic nodes
         x_ver=0:dx:xsize; # Horizontal coordinates of basic grid points, m
         y_ver=0:dy:ysize; # Vertical coordinates of basic grid points, m
@@ -131,7 +131,7 @@ include("../src/test_constants.jl")
             DHP,
             XWS
         ) = HydrologyPlanetesimals.setup_staggered_grid_properties()
-        # verification, from madcph.m line 51ff, i2visHTM_hydration.m line 691, 692, 1587
+        # verification, from HTM-planetary.m line 51ff, i2visHTM_hydration.m line 691, 692, 1587
         # Basic nodes
         ETA_ver = zeros(Ny,Nx) # Viscoplastic Viscosity, Pa*s
         ETA0_ver = zeros(Ny,Nx) # Viscous Viscosity, Pa*s
@@ -515,7 +515,7 @@ include("../src/test_constants.jl")
             XWsolidm,
             XWsolidm0
         ) = HydrologyPlanetesimals.setup_marker_properties(marknum)
-        # verification, from madcph.m, line 115ff
+        # verification, from HTM-planetary.m, line 115ff
         Nxmc_ver = 4; # Number of markers per cell in horizontal direction
         Nymc_ver = 4; # Number of markers per cell in vertical direction
         Nxm_ver = (Nx-1)*Nxmc; # Marker grid resolution in horizontal direction
@@ -701,7 +701,7 @@ include("../src/test_constants.jl")
                 phim
             )
         end
-        # verification, from madcph.m, line 180ff
+        # verification, from HTM-planetary.m, line 180ff
         m=1; # Marker counter
         for jm=1:1:Nxm
             for im=1:1:Nym
@@ -730,7 +730,7 @@ include("../src/test_constants.jl")
                 m=m+1;
             end
         end
-        # verification, from madcph.m, line 327ff
+        # verification, from HTM-planetary.m, line 327ff
         for m = 1:1:marknum
             # Compute marker parameters
             if tm[m]<3
@@ -812,7 +812,7 @@ include("../src/test_constants.jl")
             HydrologyPlanetesimals.update_marker_viscosity!(
                 m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
         end
-        # verification, from madcph.m, line 1321ff
+        # verification, from HTM-planetary.m, line 1321ff
         for m=1:1:marknum
             # Interpolation viscosity from basic nodes
             # Define i;j indexes for the upper left node
@@ -928,7 +928,7 @@ include("../src/test_constants.jl")
     end # testset "add_vrk4()"
 
     @testset "ktotal()" begin
-        # verification, from madcph.m, line 1761
+        # verification, from HTM-planetary.m, line 1761
         for i=1:1000
             ksolid, kfluid, phi = rand(3)
             @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) ≈ (
@@ -938,7 +938,7 @@ include("../src/test_constants.jl")
     end # testset "ktotal()"
 
     @testset "kphi()" begin
-        # verification, from madcph.m, line 333
+        # verification, from HTM-planetary.m, line 333
         for i=1:1000
             kphim0m, phimm = rand(2)
             @test HydrologyPlanetesimals.kphi(kphim0m, phimm) ≈ (
@@ -976,7 +976,7 @@ include("../src/test_constants.jl")
     end # testset "etatotal_rocks()"
 
     @testset "Q_radiogenic()" begin
-        # verification, from madcph.m, line 276
+        # verification, from HTM-planetary.m, line 276
         Q(f, ratio, E, tau, timesum)=f*ratio*E*exp(-timesum/tau)/tau
         @test HydrologyPlanetesimals.Q_radiogenic(1., 2., 3., 4., 5.) == Q(
             1., 2., 3., 4., 5.)
@@ -1086,7 +1086,7 @@ include("../src/test_constants.jl")
                     imin_basic,
                     imax_basic
                 )
-                # verification, from madcph.m, line 395ff
+                # verification, from HTM-planetary.m, line 395ff
                 j_ver=trunc(Int, (xx-x[1])/dx)+1
                 i_ver=trunc(Int, (yy-y[1])/dy)+1
                 if j_ver<1
@@ -1117,7 +1117,7 @@ include("../src/test_constants.jl")
                     imin_vx,
                     imax_vx
                 )
-                # verification, from madcph.m, line 455ff
+                # verification, from HTM-planetary.m, line 455ff
                 j_ver=trunc(Int, (xx-xvx[1])/dx)+1
                 i_ver=trunc(Int, (yy-yvx[1])/dy)+1
                 if j_ver<1
@@ -1148,7 +1148,7 @@ include("../src/test_constants.jl")
                     imin_vy,
                     imax_vy
                 )
-                # verification, from madcph.m, line 506ff
+                # verification, from HTM-planetary.m, line 506ff
                 j_ver=trunc(Int, (xx-xvy[1])/dx)+1
                 i_ver=trunc(Int, (yy-yvy[1])/dy)+1
                 if j_ver<1
@@ -1179,7 +1179,7 @@ include("../src/test_constants.jl")
                     imin_p,
                     imax_p
                 )
-                # verification, from madcph.m, line 558ff
+                # verification, from HTM-planetary.m, line 558ff
                 j_ver=trunc(Int, (xx-xp[1])/dx)+1
                 i_ver=trunc(Int, (yy-yp[1])/dy)+1
                 if j_ver<1
@@ -1213,7 +1213,7 @@ include("../src/test_constants.jl")
                     imin_basic,
                     imax_basic
                 )
-                # verification, from madcph.m, line 395ff
+                # verification, from HTM-planetary.m, line 395ff
                 j_ver=trunc(Int, (xx-x[1])/dx)+1
                 i_ver=trunc(Int, (yy-y[1])/dy)+1
                 if j_ver<1
@@ -1246,7 +1246,7 @@ include("../src/test_constants.jl")
                     imin_vx,
                     imax_vx
                 )
-                # verification, from madcph.m, line 455ff
+                # verification, from HTM-planetary.m, line 455ff
                 j_ver=trunc(Int, (xx-xvx[1])/dx)+1
                 i_ver=trunc(Int, (yy-yvx[1])/dy)+1
                 if j_ver<1
@@ -1279,7 +1279,7 @@ include("../src/test_constants.jl")
                     imin_vy,
                     imax_vy
                 )
-                # verification, from madcph.m, line 506ff
+                # verification, from HTM-planetary.m, line 506ff
                 j_ver=trunc(Int, (xx-xvy[1])/dx)+1
                 i_ver=trunc(Int, (yy-yvy[1])/dy)+1
                 if j_ver<1
@@ -1312,7 +1312,7 @@ include("../src/test_constants.jl")
                     imin_p,
                     imax_p
                 )
-                # verification, from madcph.m, line 558ff
+                # verification, from HTM-planetary.m, line 558ff
                 j_ver=trunc(Int, (xx-xp[1])/dx)+1
                 i_ver=trunc(Int, (yy-yp[1])/dy)+1
                 if j_ver<1
@@ -1335,7 +1335,7 @@ include("../src/test_constants.jl")
 
     @testset "fix_weights() elementary" begin
         @testset "basic nodes" begin
-        # verification, from madcph.m, line 373ff
+        # verification, from HTM-planetary.m, line 373ff
         jmin, jmax = jmin_basic, jmax_basic
         imin, imax = imin_basic, imax_basic
         function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
@@ -1388,7 +1388,7 @@ include("../src/test_constants.jl")
         end # testset "basic nodes"
 
         @testset "Vx nodes" begin
-        # verification, from madcph.m, line 434ff
+        # verification, from HTM-planetary.m, line 434ff
         jmin, jmax = jmin_vx, jmax_vx
         imin, imax = imin_vx, imax_vx
         function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
@@ -1439,7 +1439,7 @@ include("../src/test_constants.jl")
         end # testset "Vx nodes"
 
         @testset "Vy nodes" begin
-        # verification, from madcph.m, line 484ff
+        # verification, from HTM-planetary.m, line 484ff
         jmin, jmax = jmin_vy, jmax_vy
         imin, imax = imin_vy, imax_vy
         function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
@@ -1490,7 +1490,7 @@ include("../src/test_constants.jl")
         end # testset "Vy nodes"
     
         @testset "P nodes" begin
-        # verification, from madcph.m, line 538ff
+        # verification, from HTM-planetary.m, line 538ff
         jmin, jmax = jmin_p, jmax_p
         imin, imax = imin_p, imax_p
         function fix_p(xm, ym, x_axis, y_axis, dx, dy)
@@ -1545,7 +1545,7 @@ include("../src/test_constants.jl")
         # simulating markers
         marknum = 10_000
         @testset "basic nodes" begin
-            # verification, from madcph.m, line 373ff
+            # verification, from HTM-planetary.m, line 373ff
             jmin, jmax = jmin_basic, jmax_basic
             imin, imax = imin_basic, imax_basic
             function fix_basic(xm, ym, x_axis, y_axis, dx, dy)
@@ -1593,7 +1593,7 @@ include("../src/test_constants.jl")
             end
         end # testset "basic nodes"
         @testset "Vx nodes" begin
-            # verification, from madcph.m, line 434ff
+            # verification, from HTM-planetary.m, line 434ff
             jmin, jmax = jmin_vx, jmax_vx
             imin, imax = imin_vx, imax_vx
             function fix_vx(xm, ym, x_axis, y_axis, dx, dy)
@@ -1642,7 +1642,7 @@ include("../src/test_constants.jl")
             end
         end # testset "Vx nodes"
         @testset "Vy nodes" begin
-            # verification, from madcph.m, line 484ff
+            # verification, from HTM-planetary.m, line 484ff
             jmin, jmax = jmin_vy, jmax_vy
             imin, imax = imin_vy, imax_vy
             function fix_vy(xm, ym, x_axis, y_axis, dx, dy)
@@ -1690,7 +1690,7 @@ include("../src/test_constants.jl")
             end
         end # testset "Vy nodes"
         @testset "P nodes" begin
-            # verification, from madcph.m, line 538ff
+            # verification, from HTM-planetary.m, line 538ff
             jmin, jmax = jmin_p, jmax_p
             imin, imax = imin_p, imax_p
             function fix_p(xm, ym, x_axis, y_axis, dx, dy)
@@ -2655,7 +2655,7 @@ include("../src/test_constants.jl")
                 FRI,
                 YNY
             )
-            # verification properties, from madcph.m, lines 373ff, 606ff
+            # verification properties, from HTM-planetary.m, lines 373ff, 606ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-x[1])/dx)+1
                 i=trunc(Int, (ym[m]-y[1])/dy)+1
@@ -2803,7 +2803,7 @@ include("../src/test_constants.jl")
                 PHIX,
                 RX
             )
-            # verification properties, from madcph.m, lines 434ff, 624ff
+            # verification properties, from HTM-planetary.m, lines 434ff, 624ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvx[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvx[1])/dy)+1
@@ -2935,7 +2935,7 @@ include("../src/test_constants.jl")
                 PHIY,
                 RY
             )
-            # verification properties, from madcph.m, lines 486ff, 636ff
+            # verification properties, from HTM-planetary.m, lines 486ff, 636ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvy[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvy[1])/dy)+1
@@ -3102,7 +3102,7 @@ include("../src/test_constants.jl")
                 PHI,
                 BETTAPHI
             )
-            # verification properties, from madcph.m, lines 538ff, 648ff
+            # verification properties, from HTM-planetary.m, lines 538ff, 648ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
                 i=trunc(Int, (ym[m]-yp[1])/dy)+1
@@ -3406,7 +3406,7 @@ include("../src/test_constants.jl")
             gx,
             gy
         )
-        # verification, from madcph.m, lines 680ff
+        # verification, from HTM-planetary.m, lines 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Define global index in algebraic space
@@ -3486,7 +3486,7 @@ include("../src/test_constants.jl")
         # simulate density field RHO
         RHO = rand(Ny1, Nx1) * 7e3
         LP = HydrologyPlanetesimals.assemble_gravitational_lse(RHO, RP)
-        # verification, from madcph.m, lines 680ff
+        # verification, from HTM-planetary.m, lines 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Define global index in algebraic space
@@ -3540,7 +3540,7 @@ include("../src/test_constants.jl")
         gx_ver = zeros(Float64, Ny1, Nx1)
         gy_ver = zeros(Float64, Ny1, Nx1)
         HydrologyPlanetesimals.process_gravitational_solution!(SP, FI, gx, gy)
-        # verification, from madcph.m, lines 680ff
+        # verification, from HTM-planetary.m, lines 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Compute global index
@@ -3588,7 +3588,7 @@ include("../src/test_constants.jl")
             PHI,
             etaphikoef
         )
-        # verification, from madcph.m, lines 771ff
+        # verification, from HTM-planetary.m, lines 771ff
         for i=2:1:Ny
             for j=2:1:Nx
                 ETAP_ver[i,j]=1/((1/ETA[i-1,j-1]+1/ETA[i,j-1]+1/ETA[i-1,j]+1/ETA[i,j])/4)
@@ -3643,7 +3643,7 @@ include("../src/test_constants.jl")
             dRHOYdx,
             dRHOYdy
         )
-        # verification, from madcph.m, lines 832ff, 905ff
+        # verification, from HTM-planetary.m, lines 832ff, 905ff
         for j=1:1:Nx, i=1:1:Ny
             # x-Stokes
             if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
@@ -3794,7 +3794,7 @@ include("../src/test_constants.jl")
             R
         )
         L = collect(L)
-        # verification, from madcph.m, lines 779ff
+        # verification, from HTM-planetary.m, lines 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
         for j=1:1:Nx1
@@ -4097,7 +4097,7 @@ include("../src/test_constants.jl")
             qyD,
             pf
         )
-        # verification, from madcph.m, line 1058ff
+        # verification, from HTM-planetary.m, line 1058ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Define global indexes in algebraic space
@@ -4154,7 +4154,7 @@ include("../src/test_constants.jl")
             pf0,
             dt
         )
-        # verification, from madcph.m, line 1078ff
+        # verification, from HTM-planetary.m, line 1078ff
         APHI_ver = zeros(Ny1, Nx1)
         aphimax_ver=0
         for j=2:1:Nx
@@ -4193,7 +4193,7 @@ include("../src/test_constants.jl")
             vxf,
             vyf
         )
-        # verification, from madcph.m line 1090ff
+        # verification, from HTM-planetary.m line 1090ff
         for j=1:1:Nx
             for i=2:1:Ny
                 vxf_ver[i,j]=qxD[i,j]/PHIX[i,j]
@@ -4244,7 +4244,7 @@ include("../src/test_constants.jl")
             dt,
             aphimax
         )
-        # verification, from madcph.m, line 1117ff
+        # verification, from HTM-planetary.m, line 1117ff
         dtm_ver=dt
         maxvx=maximum(abs.(vx))
         maxvy=maximum(abs.(vy))
@@ -4310,7 +4310,7 @@ include("../src/test_constants.jl")
             SII,
             dtm
         )
-        # verification, from madcph.m, line 1144ff
+        # verification, from HTM-planetary.m, line 1144ff
         EXY_ver = zeros(Ny, Nx); # Strain rate EPSILONxy, 1/s
         SXY_ver = zeros(Ny, Nx); # Stress SIGMAxy, Pa
         DSXY_ver = zeros(Ny, Nx); # Stress change SIGMAxy, Pa
@@ -4381,7 +4381,7 @@ include("../src/test_constants.jl")
             pf,
             ps
         )
-        # verification, from madcph.m, line 1196ff
+        # verification, from HTM-planetary.m, line 1196ff
         # Apply Symmetry to Pressure nodes
         # External P-nodes: symmetry
         # Top
@@ -4487,7 +4487,7 @@ include("../src/test_constants.jl")
             dt,
             iplast
         )
-        # verification, from madcph.m, line 1232ff
+        # verification, from HTM-planetary.m, line 1232ff
         ETA5_ver=copy(ETA0)
         YNY5_ver = zeros(Bool, Ny, Nx)
         DSY_ver = zeros(Ny, Nx)
@@ -4583,7 +4583,7 @@ include("../src/test_constants.jl")
             dt,
             iplast
         )
-        # verification, from madcph.m, line 1301ff
+        # verification, from HTM-planetary.m, line 1301ff
         if trunc(Int, iplast/dtstep)*dtstep==iplast
             # Decrease timestep
             dt_ver=dt_ver/dtkoef
@@ -4646,7 +4646,7 @@ include("../src/test_constants.jl")
             dtm,
             marknum
         )
-        # verification, from madcph.m, line 1374ff
+        # verification, from HTM-planetary.m, line 1374ff
         # Apply subgrid stress diffusion to markers
         if(dsubgrids>0)
         SXYSUM_ver = zeros(Ny, Nx)
@@ -4785,7 +4785,7 @@ include("../src/test_constants.jl")
         # update marker stress
         HydrologyPlanetesimals.update_marker_stress!(
             xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
-        # verification, from madcph.m, line 1495ff
+        # verification, from HTM-planetary.m, line 1495ff
         for m=1:1:marknum
             # SIGMA'xx
             # Define i;j indexes for the upper left node
@@ -4872,7 +4872,7 @@ include("../src/test_constants.jl")
             pr,
             pf
         )
-        # verification, from madcph.m, line 1551ff
+        # verification, from HTM-planetary.m, line 1551ff
         HS_ver = zeros(Ny1, Nx1); # Adiabatic heating, W/m^3
         for j=2:1:Nx
             for i=2:1:Ny
@@ -4902,7 +4902,7 @@ include("../src/test_constants.jl")
         # compute adiabatic heating
         HydrologyPlanetesimals.compute_adiabatic_heating!(
             HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
-        # verification, from madcph.m, line 1573ff
+        # verification, from HTM-planetary.m, line 1573ff
         for j=2:1:Nx
             for i=2:1:Ny
                 # HA
@@ -4971,7 +4971,7 @@ include("../src/test_constants.jl")
         # perform thermal iterations
         HydrologyPlanetesimals.perform_thermal_iterations!(
             tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm, ts)
-        # verification, from madcph.m, line 1618ff
+        # verification, from HTM-planetary.m, line 1618ff
         LT = zeros(Ny1*Nx1, Ny1*Nx1)
         RT = zeros(Ny1*Nx1)
         ST = zeros(Ny1*Nx1)
@@ -5101,7 +5101,7 @@ include("../src/test_constants.jl")
         # apply subgrid stress diffusion
         HydrologyPlanetesimals.apply_subgrid_temperature_diffusion!(
             xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
-        # verification, from madcph.m, line 1731ff
+        # verification, from HTM-planetary.m, line 1731ff
         # Apply subgrid stress diffusion to markers
         if dsubgridt>0
             TKSUM_ver = zeros(Ny1, Nx1)
@@ -5189,7 +5189,7 @@ include("../src/test_constants.jl")
             # update marker temperature
             HydrologyPlanetesimals.update_marker_temperature!(
                 xm, ym, tkm, DT, tk2, timestep, marknum)
-            # verification, from madcph.m, line 1805ff 
+            # verification, from HTM-planetary.m, line 1805ff 
             for m=1:1:marknum
                 # Define i;j indexes for the upper left node
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
@@ -5237,7 +5237,7 @@ include("../src/test_constants.jl")
         # update marker porosity
         HydrologyPlanetesimals. update_marker_porosity!(
             xm, ym, tm, phim, APHI, dtm, marknum)
-        # verification, from madcph.m, line 1805ff 
+        # verification, from HTM-planetary.m, line 1805ff 
         for m=1:1:marknum
             if tm[m]<3
                 # Interpolate APHI
@@ -5293,7 +5293,7 @@ include("../src/test_constants.jl")
         # compute velocities
         HydrologyPlanetesimals.compute_velocities!(
             vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
-        # verification, from madcph.m, line 1879ff:
+        # verification, from HTM-planetary.m, line 1879ff:
         # Compute fluid velocity in pressure nodes
         # vxpf
         for j=2:1:Nx
@@ -5370,7 +5370,7 @@ include("../src/test_constants.jl")
         wyx_ver = zero(wyx)
         # compute rotation rate
         HydrologyPlanetesimals.compute_rotation_rate!(vx, vy, wyx)
-        # verification, from madcph.m, line 1942ff:
+        # verification, from HTM-planetary.m, line 1942ff:
         # Compute rotation rate wyx=1/2[dVy/dx-dVx/dy] for basic nodes
         for i=1:1:Ny
             for j=1:1:Nx
@@ -5427,7 +5427,7 @@ include("../src/test_constants.jl")
             marknum,
             dtm
         )
-        # verification, from madcph.m, line 1947ff:
+        # verification, from HTM-planetary.m, line 1947ff:
         # Move markers with 4th order Runge-Kutta
         vxm = zeros(4,1)
         vym = zeros(4,1)
@@ -6077,7 +6077,7 @@ include("../src/test_constants.jl")
             mnum;
             randomized=false
         )
-        # verification, from madcph.m, line 2491ff
+        # verification, from HTM-planetary.m, line 2491ff
         # Add markers to empty areas
         marknumold=marknum
         mdis_ver=1e30.*ones(Nym, Nxm)
