@@ -457,6 +457,8 @@ const dphimax = 0.01
 const start_step = 1
 # maximum number of timesteps to run
 const n_steps = 30 
+# random number generator seed
+const seed = 42
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:

@@ -6,7 +6,9 @@ using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
+using LinearSolve
 using ProgressMeter
+using Random
 using SparseArrays
 using StaticArrays
 using TimerOutputs
@@ -15,7 +17,7 @@ const to = TimerOutput()
 export run_simulation
 # include("constants.jl")
 include("test_constants.jl")
-
+const rgen = MersenneTwister(seed)
 if use_pardiso
     using Pardiso
 else

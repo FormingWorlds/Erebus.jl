@@ -1,10 +1,12 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
+using Random
 using StaticArrays
 using Test
 
 include("../src/test_constants.jl")
 # include("../src/constants.jl")
+const rgen = MersenneTwister(seed)
 
 @testset verbose=true "HydrologyPlanetesimals.jl" begin
 
@@ -604,7 +606,7 @@ include("../src/test_constants.jl")
         # test
         @test typeof(mdis) == Matrix{Float64}
         @test size(mdis) == (Nym, Nxm)
-        @test rand(mdis) == mdis_init
+        @test rand(rgen, mdis) == mdis_init
         @test typeof(mnum) == Matrix{Int}
         @test size(mnum) == (Nym, Nxm)
     end # testset " setup_marker_geometry_helpers()"
@@ -797,13 +799,13 @@ include("../src/test_constants.jl")
 
     @testset "update_marker_viscosity!()" begin
         marknum = start_marknum
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        tm = rand(1:3, marknum)
-        tkm = rand(tmfluidphase-100:0.1:tmsolidphase+100, marknum)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        tkm = rand(rgen, tmfluidphase-100:0.1:tmsolidphase+100, marknum)
         etatotalm = [etasolidm[tm[m]] for m in 1:1:marknum]
-        ETA = rand(Ny, Nx)
-        YNY = rand(Bool, Ny, Nx)
+        ETA = rand(rgen, Ny, Nx)
+        YNY = rand(rgen, Bool, Ny, Nx)
         YNY_inv_ETA = YNY ./ ETA
         etavpm = zeros(marknum)
         etavpm_ver = zero(etavpm)
@@ -876,8 +878,8 @@ include("../src/test_constants.jl")
         @test HydrologyPlanetesimals.distance(-1, -1, 1, 1) ≈ sqrt(8) rtol=1e-9
         # random tests
         num_samples = 1000
-        p1 = rand(0:0.001:1000, 2, num_samples)
-        p2 = rand(0:0.001:1000, 2, num_samples)
+        p1 = rand(rgen, 0:0.001:1000, 2, num_samples)
+        p2 = rand(rgen, 0:0.001:1000, 2, num_samples)
         for i in 1:num_samples
             @test HydrologyPlanetesimals.distance(
                 p1[:, i]..., p2[:, i]...) ≈ (
@@ -892,35 +894,35 @@ include("../src/test_constants.jl")
         @test HydrologyPlanetesimals.total(0, 0, 1) == 0
         @test HydrologyPlanetesimals.total(1, 2, 0.5) == 1.5
         for i=1:1:1000
-            s, f, ϕ = rand(3)
+            s, f, ϕ = rand(rgen, 3)
             @test HydrologyPlanetesimals.total(s, f, ϕ) ≈ s*(1-ϕ)+f*ϕ rtol=1e-9
         end
     end # testset "total()"
 
     @testset "dot4()" begin
         for i=1:1:1000
-            v1 = rand(4)
-            v2 = rand(4)
+            v1 = rand(rgen, 4)
+            v2 = rand(rgen, 4)
             @test HydrologyPlanetesimals.dot4(v1, v2) ≈ sum(v1.*v2) rtol=1e-9
         end
     end
 
     @testset "grid_vector()" begin
-        grid = rand(10, 10)
+        grid = rand(rgen, 10, 10)
         @test HydrologyPlanetesimals.grid_vector(1, 1, grid) == @SVector [
             grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]
         ]
     end # testset "grid_vector()"
 
     @testset "grid_average()" begin
-        grid = rand(10, 10)
+        grid = rand(rgen, 10, 10)
         @test HydrologyPlanetesimals.grid_average(1, 1, grid) == 0.25 * (
             grid[1, 1] + grid[2, 1] + grid[1, 2] + grid[2, 2])
     end # testset "grid_average()"
 
     @testset "add_vrk4()" begin
         vrk4 = @SVector zeros(4)
-        v = rand()
+        v = rand(rgen)
         for rk=1:4
             vrk4 = HydrologyPlanetesimals.add_vrk4(vrk4, v, rk)
         end
@@ -930,7 +932,7 @@ include("../src/test_constants.jl")
     @testset "ktotal()" begin
         # verification, from HTM-planetary.m, line 1761
         for i=1:1000
-            ksolid, kfluid, phi = rand(3)
+            ksolid, kfluid, phi = rand(rgen, 3)
             @test HydrologyPlanetesimals.ktotal(ksolid, kfluid, phi) ≈ (
                 ksolid*kfluid/2+((ksolid*(3*phi-2)+kfluid*(1-3*phi))^2)/16
                 )^0.5-(ksolid*(3*phi-2)+kfluid*(1-3*phi))/4 rtol=1e-9
@@ -940,7 +942,7 @@ include("../src/test_constants.jl")
     @testset "kphi()" begin
         # verification, from HTM-planetary.m, line 333
         for i=1:1000
-            kphim0m, phimm = rand(2)
+            kphim0m, phimm = rand(rgen, 2)
             @test HydrologyPlanetesimals.kphi(kphim0m, phimm) ≈ (
                 kphim0m*(phimm/phim0)^3/((1-phimm)/(1-phim0))^2
             ) rtol=1e-9
@@ -949,7 +951,7 @@ include("../src/test_constants.jl")
 
     @testset "ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)" begin
         for i=1:1000
-            kϕᵣ, ϕ, ηᶠcur = rand(3)
+            kϕᵣ, ϕ, ηᶠcur = rand(rgen, 3)
             @test HydrologyPlanetesimals.ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur) ≈ (
                 ηᶠcur*inv(kϕᵣ*(ϕ/phim0)^3/((1-ϕ)/(1-phim0))^2)
             ) rtol=1e-9
@@ -1016,8 +1018,8 @@ include("../src/test_constants.jl")
         Δt₂ = dt2 = 1.5 * Δtreaction
         dtreaction = Δtreaction
         m = 1
-        XWsolidm0 = rand(1)
-        tknm, pfnm, XDsolidm0 = rand(3)
+        XWsolidm0 = rand(rgen, 1)
+        tknm, pfnm, XDsolidm0 = rand(rgen, 3)
         ΔGWD₁ = HydrologyPlanetesimals.compute_gibbs_free_energy(
             tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁)
         ΔGWD₂ = HydrologyPlanetesimals.compute_gibbs_free_energy(
@@ -1045,8 +1047,8 @@ include("../src/test_constants.jl")
     @testset "compute_relative_enthalpy()" begin
         dHWD = ΔHWD
         MH2O = MH₂O
-        Xsolid0 = rand()
-        XWsolidm0 = rand(1)
+        Xsolid0 = rand(rgen)
+        XWsolidm0 = rand(rgen, 1)
         m = 1
         Hᵗ₀ = HydrologyPlanetesimals.compute_relative_enthalpy(
             Xsolid0, XWsolidm0[m])
@@ -1061,8 +1063,8 @@ include("../src/test_constants.jl")
         dHWD = ΔHWD
         dSWD = ΔSWD
         dVWD = ΔVWD
-        ΔGWD = dGWD = rand()
-        tknm, pfnm = rand(2)
+        ΔGWD = dGWD = rand(rgen)
+        tknm, pfnm = rand(rgen, 2)
         KWD = HydrologyPlanetesimals.compute_reaction_constant(
             tknm, pfnm, dGWD)
         # verification, from i2visHTM_hydration.m, lines 623ff
@@ -1570,8 +1572,8 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-x[1]:0.1:x[end]+dx, marknum)
-            ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+            xm = rand(rgen, -x[1]:0.1:x[end]+dx, marknum)
+            ym = rand(rgen, -y[1]:0.1:y[end]+dy, marknum)
             for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
@@ -1618,8 +1620,8 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xvx[1]:0.1:xvx[end]+dx, marknum)
-            ym = rand(-yvx[1]:0.1:yvx[end]+dy, marknum)
+            xm = rand(rgen, -xvx[1]:0.1:xvx[end]+dx, marknum)
+            ym = rand(rgen, -yvx[1]:0.1:yvx[end]+dy, marknum)
             for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
@@ -1667,8 +1669,8 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xvy[1]:0.1:xvy[end]+dx, marknum)
-            ym = rand(-yvy[1]:0.1:yvy[end]+dy, marknum)
+            xm = rand(rgen, -xvy[1]:0.1:xvy[end]+dx, marknum)
+            ym = rand(rgen, -yvy[1]:0.1:yvy[end]+dy, marknum)
             for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
@@ -1715,8 +1717,8 @@ include("../src/test_constants.jl")
                 return i, j, @SVector [wtmij, wtmi1j, wtmij1, wtmi1j1]
             end
             # simulating markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
+            xm = rand(rgen, -xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(rgen, -yp[1]:0.1:yp[end]+dy, marknum)
             for m in 1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
                     xm[m],
@@ -1740,7 +1742,7 @@ include("../src/test_constants.jl")
     end # testset "fix_weights() advanced"
 
     @testset "reduce_add_3darray!()" begin
-        A = rand(100, 100, 10)
+        A = rand(rgen, 100, 100, 10)
         A_ver = deepcopy(A)
         # reduce-sum A along third axis
         HydrologyPlanetesimals.reduce_add_3darray!(A)
@@ -1762,9 +1764,9 @@ include("../src/test_constants.jl")
             xm[m] = dxm/2 + (jm-1) * dxm 
             ym[m] = dym/2 + (im-1) * dym
         end
-        xm[start_marknum+1:end] = rand(-dx:0.1:xsize+dx, 10_000)
-        ym[start_marknum+1:end] = rand(-dy:0.1:ysize+dy, 10_000)
-        property = rand(marknum)
+        xm[start_marknum+1:end] = rand(rgen, -dx:0.1:xsize+dx, 10_000)
+        ym[start_marknum+1:end] = rand(rgen, -dy:0.1:ysize+dy, 10_000)
+        property = rand(rgen, marknum)
         @testset "basic nodes" begin
             # sample interpolation array
             gridsum = zeros(Ny, Nx)
@@ -2014,10 +2016,10 @@ include("../src/test_constants.jl")
         jmin, jmax = jmin_basic, jmax_basic
         imin, imax = imin_basic, imax_basic
         marknum = 10_000
-        xm = rand(-x[1]:0.1:x[end]+dx, marknum)
-        ym = rand(-y[1]:0.1:y[end]+dy, marknum)
+        xm = rand(rgen, -x[1]:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -y[1]:0.1:y[end]+dy, marknum)
         property = zeros(marknum)
-        grid = rand(Ny, Nx)
+        grid = rand(rgen, Ny, Nx)
         # interpolate to markers & test
         for m=1:1:marknum
             i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2037,11 +2039,11 @@ include("../src/test_constants.jl")
         jmin, jmax = jmin_basic, jmax_basic
         imin, imax = imin_basic, imax_basic
         marknum = 10_000
-        xm = rand(-x[1]:0.1:x[end]+dx, marknum)
-        ym = rand(-y[1]:0.1:y[end]+dy, marknum)
-        property = rand(marknum)
+        xm = rand(rgen, -x[1]:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -y[1]:0.1:y[end]+dy, marknum)
+        property = rand(rgen, marknum)
         property_ver = deepcopy(property)
-        grid = rand(Ny, Nx)
+        grid = rand(rgen, Ny, Nx)
         # interpolate to markers, verification, and test
         for m=1:1:marknum
             i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2613,9 +2615,9 @@ include("../src/test_constants.jl")
             FRI_ver = zeros(Float64, Ny, Nx)
             YNY_ver = zeros(Bool, Ny, Nx)
             # simulate markers
-            xm = rand(-x[1]:0.1:x[end]+dx, marknum)
-            ym = rand(-y[1]:0.1:y[end]+dy, marknum)
-            property = rand(7, marknum)*1e6
+            xm = rand(rgen, -x[1]:0.1:x[end]+dx, marknum)
+            ym = rand(rgen, -y[1]:0.1:y[end]+dy, marknum)
+            property = rand(rgen, 7, marknum)*1e6
             # calculate grid properties
             for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2770,9 +2772,9 @@ include("../src/test_constants.jl")
             PHIX_ver = zeros(Float64, Ny1, Nx1)
             RX_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xvx[1]:0.1:xvx[end]+dx, marknum)
-            ym = rand(-yvx[1]:0.1:yvx[end]+dy, marknum)
-            property = rand(5, marknum)*1e6
+            xm = rand(rgen, -xvx[1]:0.1:xvx[end]+dx, marknum)
+            ym = rand(rgen, -yvx[1]:0.1:yvx[end]+dy, marknum)
+            property = rand(rgen, 5, marknum)*1e6
             # calculate grid properties
             for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -2902,9 +2904,9 @@ include("../src/test_constants.jl")
             PHIY_ver = zeros(Float64, Ny1, Nx1)
             RY_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xvy[1]:0.1:xvy[end]+dx, marknum)
-            ym = rand(-yvy[1]:0.1:yvy[end]+dy, marknum)
-            property = rand(5, marknum)*1e6
+            xm = rand(rgen, -xvy[1]:0.1:xvy[end]+dx, marknum)
+            ym = rand(rgen, -yvy[1]:0.1:yvy[end]+dy, marknum)
+            property = rand(rgen, 5, marknum)*1e6
             # calculate grid properties
             for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -3052,9 +3054,9 @@ include("../src/test_constants.jl")
             PHI_ver = zeros(Float64, Ny1, Nx1)
             BETTAPHI_ver = zeros(Float64, Ny1, Nx1)
             # simulate markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
-            property = rand(9, marknum)*1e6
+            xm = rand(rgen, -xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(rgen, -yp[1]:0.1:yp[end]+dy, marknum)
+            property = rand(rgen, 9, marknum)*1e6
             # calculate grid properties
             for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -3215,17 +3217,17 @@ include("../src/test_constants.jl")
             DMPSUM = zeros(Ny1, Nx1)
             DHPSUM = zeros(Ny1, Nx1)
             WTPSUM = zeros(Ny1, Nx1)
-            DMP = rand(Ny1, Nx1)
-            DHP = rand(Ny1, Nx1)
+            DMP = rand(rgen, Ny1, Nx1)
+            DHP = rand(rgen, Ny1, Nx1)
             DMPSUM_ver = zeros(Ny1, Nx1)
             DHPSUM_ver = zeros(Ny1, Nx1)
             WTPSUM_ver = zeros(Ny1, Nx1)
             DMP_ver = copy(DMP)
             DHP_ver = copy(DHP)
             # simulate markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
-            property = rand(2, marknum)*1e3
+            xm = rand(rgen, -xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(rgen, -yp[1]:0.1:yp[end]+dy, marknum)
+            property = rand(rgen, 2, marknum)*1e3
             # calculate grid properties
             for m=1:1:marknum
                 i, j, weights = HydrologyPlanetesimals.fix_weights(
@@ -3305,14 +3307,14 @@ include("../src/test_constants.jl")
             imin, imax = imin_p, imax_p
             XWSSUM = zeros(Ny1, Nx1)
             WTPSUM = zeros(Ny1, Nx1)
-            XWS = rand(Ny1, Nx1)
+            XWS = rand(rgen, Ny1, Nx1)
             XWSSUM_ver = zeros(Ny1, Nx1)
             WTPSUM_ver = zeros(Ny1, Nx1)
             XWS_ver = copy(XWS)
             # simulate markers
-            xm = rand(-xp[1]:0.1:xp[end]+dx, marknum)
-            ym = rand(-yp[1]:0.1:yp[end]+dy, marknum)
-            XWsolidm0 = rand(marknum)
+            xm = rand(rgen, -xp[1]:0.1:xp[end]+dx, marknum)
+            ym = rand(rgen, -yp[1]:0.1:yp[end]+dy, marknum)
+            XWsolidm0 = rand(rgen, marknum)
             # calculate grid properties
             for m=1:1:marknum
                 HydrologyPlanetesimals.molarfraction_marker_to_p_nodes!(
@@ -3375,7 +3377,7 @@ include("../src/test_constants.jl")
     @testset "apply_insulating_boundary_conditions!()" begin
         max_size = 10
         for j=3:1:max_size, i=3:1:max_size
-            t = rand(i, j)
+            t = rand(rgen, i, j)
             HydrologyPlanetesimals.apply_insulating_boundary_conditions!(t)
             @test t[1, 2:j-1] == t[2, 2:j-1]
             @test t[i, 2:j-1] == t[i-1, 2:j-1]
@@ -3396,7 +3398,7 @@ include("../src/test_constants.jl")
         gx_ver = zeros(Float64, Ny1, Nx1)
         gy_ver = zeros(Float64, Ny1, Nx1)
         # simulate density field RHO
-        RHO = rand(Ny1, Nx1) * 7e3
+        RHO = rand(rgen, Ny1, Nx1) * 7e3
         # compute gravity solution
         HydrologyPlanetesimals.compute_gravity_solution!(
             SP,
@@ -3480,11 +3482,11 @@ include("../src/test_constants.jl")
     end # testset "compute_gravity_solution!()"
 
     @testset "assemble_gravitational_lse()" begin
-        RP = rand(Float64, Nx1*Ny1)
+        RP = rand(rgen, Nx1*Ny1)
         RP_ver = deepcopy(RP)
         LP_ver = zeros(Nx1*Ny1, Nx1*Ny1)
         # simulate density field RHO
-        RHO = rand(Ny1, Nx1) * 7e3
+        RHO = rand(rgen, Ny1, Nx1) * 7e3
         LP = HydrologyPlanetesimals.assemble_gravitational_lse(RHO, RP)
         # verification, from HTM-planetary.m, lines 680ff
         for j=1:1:Nx1
@@ -3532,7 +3534,7 @@ include("../src/test_constants.jl")
     end # testset "assemble_gravitational_lse()"
 
     @testset "process_gravitational_solution" begin
-        SP = rand(Float64, Nx1*Ny1)
+        SP = rand(rgen, Nx1*Ny1)
         FI = zeros(Float64, Ny1, Nx1)
         gx = zeros(Float64, Ny1, Nx1)
         gy = zeros(Float64, Ny1, Nx1)
@@ -3578,8 +3580,8 @@ include("../src/test_constants.jl")
         ETAP_ver = zeros(Ny1, Nx1)
         ETAPHI_ver = zeros(Ny1, Nx1)
         # simulate data
-        ETA = rand(Ny, Nx)
-        PHI = rand(Ny1, Nx1)
+        ETA = rand(rgen, Ny, Nx)
+        PHI = rand(rgen, Ny1, Nx1)
         # compute bulk viscosity
         HydrologyPlanetesimals.recompute_bulk_viscosity!(
             ETA,
@@ -3605,14 +3607,14 @@ include("../src/test_constants.jl")
     @testset "get_viscosities_stresses_density_gradients()" begin
         dt = dtelastic
         # simulate data
-        ETA = rand(Ny, Nx)
-        ETAP = rand(Ny1, Nx1)
-        GGG = rand(Ny, Nx)
-        GGGP = rand(Ny1, Nx1)
-        SXY0 = rand(Ny, Nx)
-        SXX0 = rand(Ny1, Nx1)
-        RHOX = rand(Ny1, Nx1)
-        RHOY = rand(Ny1, Nx1)
+        ETA = rand(rgen, Ny, Nx)
+        ETAP = rand(rgen, Ny1, Nx1)
+        GGG = rand(rgen, Ny, Nx)
+        GGGP = rand(rgen, Ny1, Nx1)
+        SXY0 = rand(rgen, Ny, Nx)
+        SXX0 = rand(rgen, Ny1, Nx1)
+        RHOX = rand(rgen, Ny1, Nx1)
+        RHOY = rand(rgen, Ny1, Nx1)
         ETAcomp = zeros(Ny, Nx)
         ETAPcomp = zeros(Ny1, Nx1)
         SXYcomp = zeros(Ny, Nx)
@@ -3746,25 +3748,25 @@ include("../src/test_constants.jl")
     @testset "assemble_hydromechanical_lse()" begin
         dt = dtelastic
         # simulate data
-        ETA = rand(Ny, Nx) * 1e16
-        ETAP = rand(Ny1, Nx1) * 1e16
-        GGG = rand(Ny, Nx) * 1e10
-        GGGP = rand(Ny1, Nx1) * 1e10
-        SXY0 = rand(Ny, Nx) * 1e4
-        SXX0 = rand(Ny, Nx) * 1e4
-        RHOX = rand(Ny1, Nx1) * 1e4
-        RHOY = rand(Ny1, Nx1) * 1e4
-        RHOFX = rand(Ny1, Nx1) * 1e4
-        RHOFY = rand(Ny1, Nx1) * 1e4
-        RX = rand(Ny1, Nx1) * 1e39
-        RY = rand(Ny1, Nx1) * 1e39
-        ETAPHI = rand(Ny1, Nx1) * 1e15
-        BETTAPHI = rand(Ny1, Nx1) * 1e-10 
-        PHI = rand(Ny1, Nx1) * 1.0
-        gx = rand(Ny1, Nx1) * 1.0
-        gy = rand(Ny1, Nx1) * 1.0
-        pr0 = rand(Ny1, Nx1) * 1e5
-        pf0 = rand(Ny1, Nx1) * 1e5
+        ETA = rand(rgen, Ny, Nx) * 1e16
+        ETAP = rand(rgen, Ny1, Nx1) * 1e16
+        GGG = rand(rgen, Ny, Nx) * 1e10
+        GGGP = rand(rgen, Ny1, Nx1) * 1e10
+        SXY0 = rand(rgen, Ny, Nx) * 1e4
+        SXX0 = rand(rgen, Ny, Nx) * 1e4
+        RHOX = rand(rgen, Ny1, Nx1) * 1e4
+        RHOY = rand(rgen, Ny1, Nx1) * 1e4
+        RHOFX = rand(rgen, Ny1, Nx1) * 1e4
+        RHOFY = rand(rgen, Ny1, Nx1) * 1e4
+        RX = rand(rgen, Ny1, Nx1) * 1e39
+        RY = rand(rgen, Ny1, Nx1) * 1e39
+        ETAPHI = rand(rgen, Ny1, Nx1) * 1e15
+        BETTAPHI = rand(rgen, Ny1, Nx1) * 1e-10 
+        PHI = rand(rgen, Ny1, Nx1) * 1.0
+        gx = rand(rgen, Ny1, Nx1) * 1.0
+        gy = rand(rgen, Ny1, Nx1) * 1.0
+        pr0 = rand(rgen, Ny1, Nx1) * 1e5
+        pf0 = rand(rgen, Ny1, Nx1) * 1e5
         # LSE
         R = zeros(Nx1*Ny1*6)
         L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
@@ -4074,7 +4076,7 @@ include("../src/test_constants.jl")
 
     @testset "process_hydromechanical_solution!()" begin
         # simulate data
-        S = rand(Nx1*Ny1*6) * 2e-10 .- 1e-10
+        S = rand(rgen, Nx1*Ny1*6) * 2e-10 .- 1e-10
         vx = zeros(Ny1, Nx1)
         vy = zeros(Ny1, Nx1)
         pr = zeros(Ny1, Nx1)
@@ -4133,15 +4135,15 @@ include("../src/test_constants.jl")
     @testset "compute_Aϕ!()" begin
         dt = dtelastic
         # simulate data
-        APHI = rand(Ny1, Nx1)
-        APHI_ver = rand(Ny1, Nx1)
-        ETAPHI = rand(Ny1, Nx1) * 1e15
-        BETTAPHI = rand(Ny1, Nx1) * 1e-10
-        PHI = rand(Ny1, Nx1)
-        pr = rand(Ny1, Nx1) * 1e4
-        pf = rand(Ny1, Nx1) * 1e4
-        pr0 = rand(Ny1, Nx1) * 1e4
-        pf0 = rand(Ny1, Nx1) * 1e4
+        APHI = rand(rgen, Ny1, Nx1)
+        APHI_ver = rand(rgen, Ny1, Nx1)
+        ETAPHI = rand(rgen, Ny1, Nx1) * 1e15
+        BETTAPHI = rand(rgen, Ny1, Nx1) * 1e-10
+        PHI = rand(rgen, Ny1, Nx1)
+        pr = rand(rgen, Ny1, Nx1) * 1e4
+        pf = rand(rgen, Ny1, Nx1) * 1e4
+        pr0 = rand(rgen, Ny1, Nx1) * 1e4
+        pf0 = rand(rgen, Ny1, Nx1) * 1e4
         # compute Aϕ
         aphimax = HydrologyPlanetesimals.compute_Aϕ!(
             APHI,
@@ -4172,12 +4174,12 @@ include("../src/test_constants.jl")
 
     @testset "compute_fluid_velocities!()" begin
         # simulate data
-        PHIX = rand(Ny1, Nx1)
-        PHIY = rand(Ny1, Nx1)
-        qxD = rand(Ny1, Nx1)
-        qyD = rand(Ny1, Nx1)
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
+        PHIX = rand(rgen, Ny1, Nx1)
+        PHIY = rand(rgen, Ny1, Nx1)
+        qxD = rand(rgen, Ny1, Nx1)
+        qyD = rand(rgen, Ny1, Nx1)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
         vxf = zeros(Ny1, Nx1)
         vyf = zeros(Ny1, Nx1)
         vxf_ver = zeros(Ny1, Nx1)
@@ -4230,11 +4232,11 @@ include("../src/test_constants.jl")
     @testset "compute_displacement_timestep()" begin
         dt = dtelastic
         # simulate data
-        aphimax = rand()
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        vxf = rand(Ny1, Nx1)
-        vyf = rand(Ny1, Nx1)
+        aphimax = rand(rgen)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
+        vxf = rand(rgen, Ny1, Nx1)
+        vyf = rand(rgen, Ny1, Nx1)
         # compute displacement timestep
         dtm = HydrologyPlanetesimals.compute_displacement_timestep(
             vx,
@@ -4274,20 +4276,20 @@ include("../src/test_constants.jl")
     @testset "compute_stress_strainrate!()" begin
         dtm = dtelastic
         # simulate data
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        ETA = rand(Ny, Nx)
-        GGG = rand(Ny, Nx)
-        ETAP = rand(Ny1, Nx1)
-        GGGP = rand(Ny1, Nx1)
-        SXX0 = rand(Ny1, Nx1)
-        SXY0 = rand(Ny, Nx)
-        EXY = rand(Ny, Nx)
-        SXY = rand(Ny, Nx)
-        DSXY = rand(Ny, Nx)
-        EXX = rand(Ny1, Nx1)
-        SXX = rand(Ny1, Nx1)
-        DSXX = rand(Ny1, Nx1)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
+        ETA = rand(rgen, Ny, Nx)
+        GGG = rand(rgen, Ny, Nx)
+        ETAP = rand(rgen, Ny1, Nx1)
+        GGGP = rand(rgen, Ny1, Nx1)
+        SXX0 = rand(rgen, Ny1, Nx1)
+        SXY0 = rand(rgen, Ny, Nx)
+        EXY = rand(rgen, Ny, Nx)
+        SXY = rand(rgen, Ny, Nx)
+        DSXY = rand(rgen, Ny, Nx)
+        EXX = rand(rgen, Ny1, Nx1)
+        SXX = rand(rgen, Ny1, Nx1)
+        DSXX = rand(rgen, Ny1, Nx1)
         EII = zeros(Ny1, Nx1)
         SII = zeros(Ny1, Nx1)
         # compute stress, strainrate
@@ -4360,11 +4362,11 @@ include("../src/test_constants.jl")
 
     @testset "symmetrize_p_node_observables!()" begin
         # simulate data
-        SXX = rand(Ny1, Nx1)
-        APHI = rand(Ny1, Nx1)
-        PHI = rand(Ny1, Nx1)
-        pr = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
+        SXX = rand(rgen, Ny1, Nx1)
+        APHI = rand(rgen, Ny1, Nx1)
+        PHI = rand(rgen, Ny1, Nx1)
+        pr = rand(rgen, Ny1, Nx1)
+        pf = rand(rgen, Ny1, Nx1)
         ps = zeros(Ny1, Nx1)
         SXX_ver = deepcopy(SXX)
         APHI_ver = deepcopy(APHI)
@@ -4436,8 +4438,8 @@ include("../src/test_constants.jl")
 
     @testset "positive_max()" begin
         # simulate data
-        A = rand(-100:0.1:100, 100, 100)
-        B = rand(-100:0.1:100, 100, 100)
+        A = rand(rgen, -100:0.1:100, 100, 100)
+        B = rand(rgen, -100:0.1:100, 100, 100)
         R = zeros(100, 100)
         # compute positive max
         HydrologyPlanetesimals.positive_max!(A, B, R)
@@ -4451,20 +4453,20 @@ include("../src/test_constants.jl")
         dt = dtelastic
         iplast = 1
         # simulate data
-        ETA = rand(Ny, Nx)
-        ETA0 = rand(Ny, Nx)
+        ETA = rand(rgen, Ny, Nx)
+        ETA0 = rand(rgen, Ny, Nx)
         ETA5 = zeros(Ny, Nx)
-        GGG = rand(Ny, Nx)
-        SXX = rand(Ny1, Nx1)
-        SXY = rand(Ny, Nx)
-        pr = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
-        COH = rand(Ny, Nx)
-        TEN = rand(Ny, Nx)
-        FRI = rand(Ny, Nx)
+        GGG = rand(rgen, Ny, Nx)
+        SXX = rand(rgen, Ny1, Nx1)
+        SXY = rand(rgen, Ny, Nx)
+        pr = rand(rgen, Ny1, Nx1)
+        pf = rand(rgen, Ny1, Nx1)
+        COH = rand(rgen, Ny, Nx)
+        TEN = rand(rgen, Ny, Nx)
+        FRI = rand(rgen, Ny, Nx)
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = zeros(Bool, Ny, Nx)
-        DSY = rand(Ny, Nx)
+        DSY = rand(rgen, Ny, Nx)
         YERRNOD = zeros(nplast)
         YERRNOD_ver = zeros(nplast)
         # compute nodal adjustment
@@ -4561,11 +4563,11 @@ include("../src/test_constants.jl")
         iplast = 1
         # simulate data
         ETA = zeros(Ny, Nx)
-        ETA5 = rand(Ny, Nx)
-        ETA00 = rand(Ny, Nx)
+        ETA5 = rand(rgen, Ny, Nx)
+        ETA00 = rand(rgen, Ny, Nx)
         YNY = zeros(Bool, Ny, Nx)
-        YNY5 = rand(Bool, Ny, Nx)
-        YNY00 = rand(Bool, Ny, Nx)
+        YNY5 = rand(rgen, Bool, Ny, Nx)
+        YNY00 = rand(rgen, Bool, Ny, Nx)
         YNY_inv_ETA = zeros(Ny, Nx)
         ETA_ver = zeros(Ny, Nx)
         YNY_ver = zeros(Bool, Ny, Nx)
@@ -4608,21 +4610,21 @@ include("../src/test_constants.jl")
         dtm = dtelastic
         etam = @SVector ones(3)
         # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        tm = rand(1:3, marknum)
-        gggm = rand(3)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        gggm = rand(rgen, 3)
         inv_gggtotalm = inv.([gggm[tm[m]] for m in 1:marknum])
-        sxxm = rand(marknum)
-        sxym = rand(marknum)
-        SXX0 = rand(Ny1, Nx1)
-        SXY0 = rand(Ny, Nx)
-        DSXX = rand(Ny1, Nx1)
-        DSXY = rand(Ny, Nx)
-        SXXSUM = rand(Ny1, Nx1, Base.Threads.nthreads())
-        SXYSUM = rand(Ny, Nx, Base.Threads.nthreads())
-        WTPSUM = rand(Ny1, Nx1, Base.Threads.nthreads())
-        WTSUM = rand(Ny, Nx, Base.Threads.nthreads())
+        sxxm = rand(rgen, marknum)
+        sxym = rand(rgen, marknum)
+        SXX0 = rand(rgen, Ny1, Nx1)
+        SXY0 = rand(rgen, Ny, Nx)
+        DSXX = rand(rgen, Ny1, Nx1)
+        DSXY = rand(rgen, Ny, Nx)
+        SXXSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
+        SXYSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
+        WTPSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
+        WTSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
         sxxm_ver = deepcopy(sxxm)
         sxym_ver = deepcopy(sxym)
         DSXX_ver = deepcopy(DSXX)
@@ -4774,12 +4776,12 @@ include("../src/test_constants.jl")
     @testset "update_marker_stress!()" begin
         marknum = start_marknum
         # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        sxxm = rand(marknum)
-        sxym = rand(marknum)
-        DSXX = rand(Ny1, Nx1)
-        DSXY = rand(Ny, Nx)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        sxxm = rand(rgen, marknum)
+        sxym = rand(rgen, marknum)
+        DSXX = rand(rgen, Ny1, Nx1)
+        DSXY = rand(rgen, Ny, Nx)
         sxxm_ver = deepcopy(sxxm)
         sxym_ver = deepcopy(sxym)
         # update marker stress
@@ -4844,18 +4846,18 @@ include("../src/test_constants.jl")
 
     @testset "compute_shear_heating!()" begin
         HS = zeros(Ny1, Nx1)
-        ETA = rand(Ny, Nx)
-        SXY = rand(Ny, Nx)
-        ETAP = rand(Ny1, Nx1)
-        SXX = rand(Ny1, Nx1)
-        RX = rand(Ny1, Nx1)
-        RY = rand(Ny1, Nx1)
-        qxD = rand(Ny1, Nx1)
-        qyD = rand(Ny1, Nx1)
-        PHI = rand(Ny1, Nx1)
-        ETAPHI = rand(Ny1, Nx1)
-        pr = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
+        ETA = rand(rgen, Ny, Nx)
+        SXY = rand(rgen, Ny, Nx)
+        ETAP = rand(rgen, Ny1, Nx1)
+        SXX = rand(rgen, Ny1, Nx1)
+        RX = rand(rgen, Ny1, Nx1)
+        RY = rand(rgen, Ny1, Nx1)
+        qxD = rand(rgen, Ny1, Nx1)
+        qyD = rand(rgen, Ny1, Nx1)
+        PHI = rand(rgen, Ny1, Nx1)
+        ETAPHI = rand(rgen, Ny1, Nx1)
+        pr = rand(rgen, Ny1, Nx1)
+        pf = rand(rgen, Ny1, Nx1)
         # compute shear compute shear heating
         HydrologyPlanetesimals.compute_shear_heating!(
             HS,
@@ -4888,16 +4890,16 @@ include("../src/test_constants.jl")
 
     @testset "compute_adiabatic_heating!()" begin
         HA = zeros(Ny1, Nx1)
-        tk1 = rand(Ny1, Nx1)
-        ALPHA = rand(Ny1, Nx1)
-        ALPHAF = rand(Ny1, Nx1)
-        PHI = rand(Ny1, Nx1)
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        vxf = rand(Ny1, Nx1)
-        vyf = rand(Ny1, Nx1)
-        ps = rand(Ny1, Nx1)
-        pf = rand(Ny1, Nx1)
+        tk1 = rand(rgen, Ny1, Nx1)
+        ALPHA = rand(rgen, Ny1, Nx1)
+        ALPHAF = rand(rgen, Ny1, Nx1)
+        PHI = rand(rgen, Ny1, Nx1)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
+        vxf = rand(rgen, Ny1, Nx1)
+        vyf = rand(rgen, Ny1, Nx1)
+        ps = rand(rgen, Ny1, Nx1)
+        pf = rand(rgen, Ny1, Nx1)
         HA_ver = zero(HA)
         # compute adiabatic heating
         HydrologyPlanetesimals.compute_adiabatic_heating!(
@@ -4950,15 +4952,15 @@ include("../src/test_constants.jl")
     @testset "perform_thermal_iterations!()" begin
         dtm = 0.0001
         ts = 1
-        tk0 = rand(Ny1, Nx1)
-        tk1 = rand(Ny1, Nx1)
-        tk2 = rand(Ny1, Nx1)
-        RHOCP = rand(Ny1, Nx1)
-        KX = rand(Ny1, Nx1)
-        KY = rand(Ny1, Nx1)
-        HR = rand(Ny1, Nx1)
-        HA = rand(Ny1, Nx1)
-        HS = rand(Ny1, Nx1)
+        tk0 = rand(rgen, Ny1, Nx1)
+        tk1 = rand(rgen, Ny1, Nx1)
+        tk2 = rand(rgen, Ny1, Nx1)
+        RHOCP = rand(rgen, Ny1, Nx1)
+        KX = rand(rgen, Ny1, Nx1)
+        KY = rand(rgen, Ny1, Nx1)
+        HR = rand(rgen, Ny1, Nx1)
+        HA = rand(rgen, Ny1, Nx1)
+        HS = rand(rgen, Ny1, Nx1)
         DT = zeros(Ny1, Nx1)
         DT0 = zeros(Ny1, Nx1)
         DT_ver = zeros(Ny1, Nx1)
@@ -5087,13 +5089,13 @@ include("../src/test_constants.jl")
         marknum = start_marknum
         dtm = dtelastic
         # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        tm = rand(1:3, marknum)
-        tkm = rand(marknum)
-        phim = rand(marknum)
-        tk1 = rand(Ny1, Nx1)
-        DT = rand(Ny1, Nx1)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        tkm = rand(rgen, marknum)
+        phim = rand(rgen, marknum)
+        tk1 = rand(rgen, Ny1, Nx1)
+        DT = rand(rgen, Ny1, Nx1)
         TKSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
         RHOCPSUM = zeros(Ny1, Nx1, Base.Threads.nthreads())
         tkm_ver = deepcopy(tkm)
@@ -5179,12 +5181,12 @@ include("../src/test_constants.jl")
     @testset "update_marker_temperature!()" begin
         marknum = start_marknum
         # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        DT = rand(Ny1, Nx1)
-        tk2 = rand(Ny1, Nx1)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        DT = rand(rgen, Ny1, Nx1)
+        tk2 = rand(rgen, Ny1, Nx1)
         for timestep = 1:2
-            tkm = rand(marknum)
+            tkm = rand(rgen, marknum)
             tkm_ver = deepcopy(tkm)
             # update marker temperature
             HydrologyPlanetesimals.update_marker_temperature!(
@@ -5228,11 +5230,11 @@ include("../src/test_constants.jl")
         marknum = start_marknum
         dtm = dtelastic
         # simulate markers
-        xm = rand(-dx:0.1:x[end]+dx, marknum)
-        ym = rand(-dy:0.1:y[end]+dy, marknum)
-        tm = rand(1:3, marknum)
-        APHI = rand(Ny1, Nx1)
-        phim = rand(marknum)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        APHI = rand(rgen, Ny1, Nx1)
+        phim = rand(rgen, marknum)
         phim_ver = deepcopy(phim)
         # update marker porosity
         HydrologyPlanetesimals. update_marker_porosity!(
@@ -5278,10 +5280,10 @@ include("../src/test_constants.jl")
     end # testset "update_marker_porosity!()"
     
     @testset "compute_velocities!()" begin
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        vxf = rand(Ny1, Nx1)
-        vyf = rand(Ny1, Nx1)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
+        vxf = rand(rgen, Ny1, Nx1)
+        vyf = rand(rgen, Ny1, Nx1)
         vxp = zeros(Ny1, Nx1)
         vyp = zeros(Ny1, Nx1)
         vxpf = zeros(Ny1, Nx1)
@@ -5364,8 +5366,8 @@ include("../src/test_constants.jl")
     end # testset "compute_velocities!()"
 
     @testset "compute_rotation_rate!()" begin
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
         wyx = zeros(Ny, Nx)
         wyx_ver = zero(wyx)
         # compute rotation rate
@@ -5393,17 +5395,17 @@ include("../src/test_constants.jl")
             xm[m] = dxm/2 + (jm-1) * dxm 
             ym[m] = dym/2 + (im-1) * dym
         end
-        tm = rand(1:3, marknum)
-        tkm = rand(263:0.1:310, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        tkm = rand(rgen, 263:0.1:310, marknum)
         phim = rand(phimin:1e-4:phimax, marknum)
-        sxym = rand(marknum)
-        sxxm = rand(marknum)
-        vx = rand(Ny1, Nx1)
-        vy = rand(Ny1, Nx1)
-        vxf = rand(Ny1, Nx1)
-        vyf = rand(Ny1, Nx1)
-        tk2 = rand(263:0.1:310, Ny1, Nx1)
-        wyx = rand(Ny, Nx)
+        sxym = rand(rgen, marknum)
+        sxxm = rand(rgen, marknum)
+        vx = rand(rgen, Ny1, Nx1)
+        vy = rand(rgen, Ny1, Nx1)
+        vxf = rand(rgen, Ny1, Nx1)
+        vyf = rand(rgen, Ny1, Nx1)
+        tk2 = rand(rgen, 263:0.1:310, Ny1, Nx1)
+        wyx = rand(rgen, Ny, Nx)
         xm_ver = deepcopy(xm)
         ym_ver = deepcopy(ym)
         tkm_ver = deepcopy(tkm)
@@ -5733,19 +5735,19 @@ include("../src/test_constants.jl")
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!()" begin
-        vx = rand(Ny1, Nx1) * 2e-9 .- 1e-9
-        vy = rand(Ny1, Nx1) * 2e-9 .- 1e-9
-        vxf = rand(Ny1, Nx1) * 2e-9 .- 1e-9
-        vyf = rand(Ny1, Nx1) * 2e-9 .- 1e-9
-        pr = rand(Ny1, Nx1) * 1e6
+        vx = rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9
+        vy = rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9
+        vxf = rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9
+        vyf = rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9
+        pr = rand(rgen, Ny1, Nx1) * 1e6
         # pr = ones(Ny1, Nx1) * 1e6
-        pf = rand(Ny1, Nx1) * 1e6
+        pf = rand(rgen, Ny1, Nx1) * 1e6
         # pf = ones(Ny1, Nx1) * 1e6
-        ps = rand(Ny1, Nx1) * 1e6
+        ps = rand(rgen, Ny1, Nx1) * 1e6
         # ps = ones(Ny1, Nx1) * 1e6
-        pr0 = rand(Ny1, Nx1) * 1e6
-        pf0 = rand(Ny1, Nx1) * 1e6
-        ps0 = rand(Ny1, Nx1) * 1e6
+        pr0 = rand(rgen, Ny1, Nx1) * 1e6
+        pf0 = rand(rgen, Ny1, Nx1) * 1e6
+        ps0 = rand(rgen, Ny1, Nx1) * 1e6
         pr_ver = deepcopy(pr)
         pf_ver = deepcopy(pf)
         ps_ver = deepcopy(ps)
@@ -6018,28 +6020,28 @@ include("../src/test_constants.jl")
 
     @testset "replenish_markers!()" begin
         marknum = start_marknum
-        xm = rand(-dx:0.1:x[end]/2, marknum)
-        ym = rand(-dy:0.1:y[end]/2, marknum)
-        tm = rand(1:3, marknum)
-        tkm = rand(marknum)
-        sxxm = rand(marknum)
-        sxym = rand(marknum)
-        phim = rand(marknum)
-        etavpm = rand(marknum)
-        rhototalm = rand(marknum)
-        rhocptotalm = rand(marknum)
-        etatotalm = rand(marknum)
-        hrtotalm = rand(marknum)
-        ktotalm = rand(marknum)
-        inv_gggtotalm = rand(marknum)
-        fricttotalm = rand(marknum)
-        cohestotalm = rand(marknum)
-        tenstotalm = rand(marknum)
-        rhofluidcur = rand(marknum)
-        alphasolidcur = rand(marknum)
-        alphafluidcur = rand(marknum)
-        tkm_rhocptotalm = rand(marknum)
-        etafluidcur_inv_kphim = rand(marknum) 
+        xm = rand(rgen, -dx:0.1:x[end]/2, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]/2, marknum)
+        tm = rand(rgen, 1:3, marknum)
+        tkm = rand(rgen, marknum)
+        sxxm = rand(rgen, marknum)
+        sxym = rand(rgen, marknum)
+        phim = rand(rgen, marknum)
+        etavpm = rand(rgen, marknum)
+        rhototalm = rand(rgen, marknum)
+        rhocptotalm = rand(rgen, marknum)
+        etatotalm = rand(rgen, marknum)
+        hrtotalm = rand(rgen, marknum)
+        ktotalm = rand(rgen, marknum)
+        inv_gggtotalm = rand(rgen, marknum)
+        fricttotalm = rand(rgen, marknum)
+        cohestotalm = rand(rgen, marknum)
+        tenstotalm = rand(rgen, marknum)
+        rhofluidcur = rand(rgen, marknum)
+        alphasolidcur = rand(rgen, marknum)
+        alphafluidcur = rand(rgen, marknum)
+        tkm_rhocptotalm = rand(rgen, marknum)
+        etafluidcur_inv_kphim = rand(rgen, marknum) 
         mdis, mnum = HydrologyPlanetesimals.setup_marker_geometry_helpers()
         xm_ver = deepcopy(xm)
         ym_ver = deepcopy(ym)
@@ -6173,8 +6175,8 @@ include("../src/test_constants.jl")
                         # Add marker number
                         marknum=marknum+1
                         # Assign marker coordinates
-                        push!(xm_ver,xxm[j])#+(rand()-0.5)*dxm)
-                        push!(ym_ver,yym[i])#+(rand()-0.5)*dym)
+                        push!(xm_ver,xxm[j])#+(rand(rgen)-0.5)*dxm)
+                        push!(ym_ver,yym[i])#+(rand(rgen)-0.5)*dym)
                         # Copy marker properties
                         m=-mnum_ver[i,j]
                         push!(tm_ver,tm[m]); # Material type()
