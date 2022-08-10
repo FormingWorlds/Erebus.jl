@@ -1,5 +1,6 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
+using LinearSolve
 using Random
 using StaticArrays
 using Test
