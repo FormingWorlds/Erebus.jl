@@ -1,0 +1,5 @@
+┌ Info: a test message
+└ @ Main REPL[9]:1
+┌ Info: start time
+│   Dates.now() = 2022-08-10T13:34:59.266
+└ @ Main REPL[13]:1

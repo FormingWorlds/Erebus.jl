@@ -1,6 +1,5 @@
 using ExtendableSparse
 using HydrologyPlanetesimals
-using LinearSolve
 using Random
 using StaticArrays
 using Test
@@ -500,6 +499,17 @@ const rgen = MersenneTwister(seed)
         @test PHISUM == zeros(Float64, Ny1, Nx1)
         @test WTPSUM == zeros(Float64, Ny1, Nx1)
     end # testset "reset_interpolated_properties!()"
+
+    @testset "reset_interpolated_properties!()" begin
+        DMPSUM = rand(rgen, Ny1, Nx1)
+        DHPSUM = rand(rgen, Ny1, Nx1)
+        WTPSUM = rand(rgen, Ny1, Nx1)
+        HydrologyPlanetesimals.reset_thermochemical_properties!(
+            DMPSUM, DHPSUM, WTPSUM)
+        @test DMPSUM == zeros(Float64, Ny1, Nx1)
+        @test DHPSUM == zeros(Float64, Ny1, Nx1)
+        @test WTPSUM == zeros(Float64, Ny1, Nx1)
+    end # testset "reset_thermochemical_properties!()"
 
     @testset "setup_marker_properties()" begin
         marknum = start_marknum
@@ -3386,6 +3396,210 @@ const rgen = MersenneTwister(seed)
             @test t[:, j] == t[:, j-1]
         end
     end # testset "apply_insulating_boundary_conditions!()"
+
+    @testset "perform_thermochemical_reaction!()" begin
+        marknum = start_marknum
+        DMP = rand(rgen, Ny1, Nx1)
+        DHP = rand(rgen, Ny1, Nx1)
+        DMPSUM = rand(rgen, Ny1, Nx1)
+        DHPSUM = rand(rgen, Ny1, Nx1)
+        WTPSUM = rand(rgen, Ny1, Nx1)
+        pf = rand(rgen, 2700:0.1:3300, Ny1, Nx1)
+        tk2 = rand(rgen, 263:0.1:310, Ny1, Nx1)
+        tm = rand(rgen, 1:3, marknum)
+        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+        XWˢm₀ = rand(rgen, marknum)
+        XWˢm = rand(rgen, marknum)
+        phim = rand(rgen, marknum)
+        phinewm = rand(rgen, marknum)
+        pfm₀ = rand(rgen, 2700:0.1:3300, marknum)
+        Δt = 0.9 * Δtreaction
+        timestep = 1
+        titer = 3
+        DMP_ver = copy(DMP)
+        DHP_ver = copy(DHP)
+        DMPSUM_ver = copy(DMPSUM)
+        DHPSUM_ver = copy(DHPSUM)
+        WTPSUM_ver = copy(WTPSUM)
+        phim_ver = copy(phim)
+        phinewm_ver = copy(phinewm)
+        pfm₀_ver = copy(pfm₀)
+        XWˢm₀_ver = copy(XWˢm₀)
+        XWˢm_ver = copy(XWˢm)
+        dt = Δt
+        dtreaction = Δtreaction
+        VDsolid = VDˢ
+        VWsolid = VWˢ
+        dHWD = ΔHWD
+        dSWD = ΔSWD
+        dVWD = ΔVWD
+        rhoH2Ofluid = ρH₂Oᶠ
+        VH2Ofluid = VH₂Oᶠ
+        MH2O = MH₂O
+        HydrologyPlanetesimals.perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XWˢm₀,
+            XWˢm,
+            phim,
+            phinewm,
+            pfm₀,
+            marknum,
+            Δt,
+            timestep,
+            titer
+        )
+        # verification, from HTM-hydration.m, lines 558ff
+        # Compute mass transfer rate
+        DMPSUM_ver=zeros(Ny1,Nx1);
+        DHPSUM_ver=zeros(Ny1,Nx1);
+        WTPSUM_ver=zeros(Ny1,Nx1);
+        for m=1:1:marknum
+        if tm[m]< (4-1)
+            # Rocks
+            # Interpolate fluid pressure and temperature to the marker
+            # Define [i,j] indexes for the upper left node
+            j=trunc(Int, (xm[m]-xp[1])/dx)+1;
+            i=trunc(Int, (ym[m]-yp[1])/dy)+1;
+            if j<1
+                j=1;
+            elseif j>Nx
+                j=Nx;
+            end
+            if i<1
+                i=1;
+            elseif i>Ny
+                i=Ny;
+            end
+            # Compute distances
+            dxmj=xm[m]-xp[j];
+            dymi=ym[m]-yp[i];
+            # Compute weights
+            wtmij=(1-dxmj/dx)*(1-dymi/dy);
+            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+            wtmij1=(dxmj/dx)*(1-dymi/dy);
+            wtmi1j1=(dxmj/dx)*(dymi/dy);
+            # Interpolate nodal fluid pressure and temperature to the marker
+            pfnm=pf[i,j]*wtmij+pf[i+1,j]*wtmi1j+pf[i,j+1]*wtmij1+pf[i+1,j+1]*wtmi1j1;
+            tknm=tk2[i,j]*wtmij+tk2[i+1,j]*wtmi1j+tk2[i,j+1]*wtmij1+tk2[i+1,j+1]*wtmi1j1;
+            pfnm=max(pfnm,0);
+            # Use pressure from the previous iteration
+            if titer>2
+                pfnm=pfnm*(1-pfcoeff)+pfm₀_ver[m]*pfcoeff;
+            end
+            pfm₀_ver[m]=pfnm;
+            # Thermodynamic computations
+            # Compute bulk composition of the solid+fluid system
+            XDsolidm0=1-XWˢm₀_ver[m];
+            Xfluid0=phim_ver[m]*(XWˢm₀_ver[m]*VWsolid+XDsolidm0*VDsolid)/(
+                (1-phim_ver[m])*VH2Ofluid+ phim_ver[m]*(
+                    XWˢm₀_ver[m]*VWsolid+XDsolidm0*VDsolid));
+            Xsolid0=1-Xfluid0;
+            XH2Ototal=(XWˢm₀_ver[m]*Xsolid0+Xfluid0)/(1+XWˢm₀_ver[m]*Xsolid0);
+            XDtotal=1-XH2Ototal;
+            # Compute old density of the solid and fluid
+            rhosolid0=(MD+MH2O*XWˢm₀_ver[m])/(
+                VWsolid*XWˢm₀_ver[m]+VDsolid*XDsolidm0);
+            rhofluid0=rhoH2Ofluid;
+            # Compute old relative ehthalpy of the system
+            Htotal0=-Xsolid0*XWˢm₀_ver[m]*dHWD/(MD+MH2O);
+            # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
+            dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(
+                XDsolidm0/XWˢm₀_ver[m]);
+            # Compute incomplete reaction for too short timestep
+            dGWD=0;
+            if dt<dtreaction
+                dGWD=dGWD0*(1-dt/dtreaction);
+            end
+
+            # Compute equilibrium compositions and fluid fraction
+            # Dehydration reaction: Wsilicate=Dsilicate+H2O
+            KWD=exp(-(dHWD-tknm*dSWD+dVWD*pfnm-dGWD)/8.314/tknm);
+            # Solid composition
+            XWsolidm1=1/(KWD+1);
+            XDsolidm1=1-XWsolidm1;
+            # Fluid, Solid molar fraction
+            Xsolid1=XDtotal/(1-XDtotal*XWsolidm1);
+            Xfluid1=1-Xsolid1;
+            # Process fluid-bearing rocks only 
+            if Xfluid1>0 && Xfluid1<1 
+                # Compute equilibrium Porosity
+                phinew1=Xfluid1*VH2Ofluid/(
+                    Xfluid1*VH2Ofluid+Xsolid1*(
+                        XWsolidm1*VWsolid+XDsolidm1*VDsolid));
+                # Compute equilibrium density of the solid and fluid
+                rhosolid=(MD+MH2O*XWsolidm1)/(
+                    VWsolid*XWsolidm1+VDsolid*XDsolidm1);
+                rhofluid=rhoH2Ofluid;
+                # Compute equilibrium relative ehthalpy of the system
+                Htotal1=-Xsolid1*XWsolidm1*dHWD/(MD+MH2O);
+                # Compute ehthalpy change
+                dHtotal=Htotal1-Htotal0;
+                # Compute old/equilibrium volume ratio
+                RV=(rhosolid*(1-phinew1)+rhofluid*phinew1)/(
+                    rhosolid0*(1-phim_ver[m])+rhofluid0*phim_ver[m]);
+                # Compute mass transfer rate
+                Gmass=(rhosolid0*RV*(1-phim_ver[m])-rhosolid*(1-phinew1))/dt;
+                DMm=(1-RV)/dt;
+                # Compute enthalpy transfer term
+                DHm=Gmass*dHtotal;
+                # Save new composition and melt fraction
+                XWˢm_ver[m]=XWsolidm1; # solid composition
+                phinewm_ver[m]=phinew1; # porosity
+                # Reset properties at the first timestep
+                if timestep==1
+                    XWˢm₀_ver[m]=XWˢm_ver[m];
+                    phim_ver[m]=phinewm_ver[m];
+                end
+                # Interpolation to pressure nodes 
+                # Update subgrid diffusion on nodes
+                # [i,j] Node
+                DMPSUM_ver[i,j]=DMPSUM_ver[i,j]+DMm*wtmij;
+                DHPSUM_ver[i,j]=DHPSUM_ver[i,j]+DHm*wtmij;
+                WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij;
+                # i+1,j Node
+                DMPSUM_ver[i+1,j]=DMPSUM_ver[i+1,j]+DMm*wtmi1j;
+                DHPSUM_ver[i+1,j]=DHPSUM_ver[i+1,j]+DHm*wtmi1j;
+                WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j;
+                # [i,j]+1 Node
+                DMPSUM_ver[i,j+1]=DMPSUM_ver[i,j+1]+DMm*wtmij1;
+                DHPSUM_ver[i,j+1]=DHPSUM_ver[i,j+1]+DHm*wtmij1;
+                WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1;
+                # i+1,j+1 Node
+                DMPSUM_ver[i+1,j+1]=DMPSUM_ver[i+1,j+1]+DMm*wtmi1j1;
+                DHPSUM_ver[i+1,j+1]=DHPSUM_ver[i+1,j+1]+DHm*wtmi1j1;
+                WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1;
+            end
+        end
+        end
+        # P-nodes
+        DMP_ver=zeros(Ny1,Nx1)
+        DHP_ver=zeros(Ny1,Nx1);
+        for j=1:1:Nx1
+            for i=1:1:Ny1
+                if WTPSUM_ver[i,j]>0
+                    DMP_ver[i,j]=DMPSUM_ver[i,j]/WTPSUM_ver[i,j];
+                    DHP_ver[i,j]=DHPSUM_ver[i,j]/WTPSUM_ver[i,j];
+                end
+            end
+        end
+        # testing
+        @test DMP ≈ DMP_ver rtol=1e-9
+        @test DHP ≈ DHP_ver rtol=1e-9
+        @test pfm₀ ≈ pfm₀_ver rtol=1e-9
+        @test XWˢm₀ ≈ XWˢm₀_ver rtol=1e-9
+        @test phim ≈ phim_ver rtol=1e-9
+        @test phinewm ≈ phinewm_ver rtol=1e-9
+    end # testset "perform_thermochemical_reaction!()"
 
     @testset "compute_gravity_solution!()" begin
         SP = zeros(Float64, Nx1*Ny1)

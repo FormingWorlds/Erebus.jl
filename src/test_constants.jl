@@ -416,11 +416,13 @@ const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
 # output storage periodicity
 const savematstep = 10
 # Maximal computational timestep [s]
-const dtelastic = 1e+11 
+const dtmax = 1e+11 
+# Maximal hydromechanical/plastic timestep [s]
+const dtelastic = dtmax
 # Coefficient to decrease computational timestep
-const dtkoef = 2 
+const dtcoefdn = 0.5 
 # Coefficient to increase computational timestep
-const dtkoefup = 1.1 
+const dtcoefup = 1.1 
 # Number of iterations before changing computational timestep
 const dtstep = 200 
 # Max marker movement per time step [grid steps]
@@ -443,8 +445,10 @@ const endtime = 15.0e6 * yearlength
 const etamin = 1e+12 
 # Upper viscosity cut-off [Pa s]
 const etamax = 1e+23 
-# Number of plastic iterations
+# Maximum number of plastic iterations
 const nplast = 100_000
+# Maximum number of global iterations
+const titermax = 10_000
 # Periodicity of visualization
 const visstep = 1 
 # Tolerance level for yielding error()
@@ -456,7 +460,7 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 30 
+const n_steps = 10 
 # random number generator seed
 const seed = 42
 # using MKL Pardiso solver

@@ -2,28 +2,33 @@ module HydrologyPlanetesimals
 
 using ArgParse
 using Base.Threads
+using Dates
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
-using LinearSolve
+# using LinearSolve
+using Logging
 using ProgressMeter
 using Random
 using SparseArrays
 using StaticArrays
 using TimerOutputs
 
-const to = TimerOutput()
 export run_simulation
+
 # include("constants.jl")
 include("test_constants.jl")
-const rgen = MersenneTwister(seed)
+
 if use_pardiso
     using Pardiso
 else
     using MKL
     BLAS.set_num_threads(4)
 end
+
+const to = TimerOutput()
+const rgen = MersenneTwister(seed)
 
 """
 Set up and initialize dynamic simulation parameters.
@@ -47,8 +52,8 @@ $(SIGNATURES)
 function setup_dynamic_simulation_parameters()
      # timestep counter (current), init to startstep
      timestep::Int64 = start_step
-     # computational timestep (current), init to dtelastic [s]
-     dt::Float64 = dtelastic
+     # computational timestep (current), init to dtmax [s]
+     dt::Float64 = dtmax
      # displacement timestep (current), init to dt [s]
      dtm::Float64 = dt
      # time sum (current), init to starttime [s]
@@ -1010,6 +1015,33 @@ function reset_interpolated_properties!(
         SXXSUM .= zero(0.0)
         TKSUM .= zero(0.0)
         PHISUM .= zero(0.0)
+        WTPSUM .= zero(0.0)
+    return nothing
+end
+
+"""
+Reset thermochemical properties to be interpolated to staggered grid.
+
+$(SIGNATURES)
+
+# Details   
+
+    - DMPSUM: interpolation of DMP at P nodes
+    - DHPSUM: interpolation of DHP at P nodes
+    - WTPSUM: interpolation weights at P nodes
+    
+# Returns
+
+    - nothing
+"""
+function reset_thermochemical_properties!(
+    DMPSUM,
+    DHPSUM,
+    WTPSUM
+)
+        # P Nodes
+        DMPSUM .= zero(0.0)
+        DHPSUM .= zero(0.0)
         WTPSUM .= zero(0.0)
     return nothing
 end
@@ -2292,31 +2324,36 @@ $(SIGNATURES)
     - DMPSUM: interpolation of DMP (mass transfer term) at P nodes
     - DHPSUM: interpolation of DHP (enthalpy transfer term) at P nodes
     - WTPSUM: interpolation weights at P nodes 
-    - xm: x-coordinate of markers
-    - ym: y-coordinate of markers
-    - tm: type of markers
     - pf: fluid pressure at P nodes
     - tk2: next temperature at P nodes 
-    - pfm0: previous marker fluid pressure
-    - XWsolidm0: previous marker wet silicate (solid) fraction
-    - XWsolidm: current marker wet silicate (solid) fraction
+    - tm: type of markers
+    - xm: x-coordinate of markers
+    - ym: y-coordinate of markers
+    - XWˢm₀: previous marker wet silicate (solid) fraction
+    - XWˢm: current marker wet silicate (solid) fraction
     - phim: current marker porosity
     - phinewm: new marker porosity
+    - pfm₀: previous marker fluid pressure
     - marknum: current total number of markers
+    - Δt: current time step length
+    - timestep: current time step
+    - titer: current thermochemical iteration number
 
 # Returns
 
     - nothing
 """
-function perform_htm_iterations!(
+function perform_thermochemical_reaction!(
     DMP,
     DHP,
     DMPSUM,
     DHPSUM,
     WTPSUM,
-    tm,
     pf,
     tk2,
+    tm,
+    xm,
+    ym,
     XWˢm₀,
     XWˢm,
     phim,
@@ -2324,122 +2361,118 @@ function perform_htm_iterations!(
     pfm₀,
     marknum,
     Δt,
-    timestep
+    timestep,
+    titer
 )
-# @timeit to "perform_htm_iterations!" begin
-    for titer=1:1:titermax
-        # reset interpolation arrays
-        DMPSUM .= zero(0.0)
-        DHPSUM .= zero(0.0)
-        WTPSUM .= zero(0.0)
-        # iterate over markers
-        @inbounds begin
-            for m=1:1:marknum
-                # for 
-                if tm[m] < 3
-                    # for rocks only
-                    i, j, weights = fix_weights(
-                        xm[m],
-                        ym[m],
-                        xp,
-                        yp,
-                        dx,
-                        dy,
-                        jmin_p,
-                        jmax_p,
-                        imin_p,
-                        imax_p
-                    )
-                    # interpolate temperature from P nodes
-                    tknm = dot4(grid_vector(i, j, tk2), weights)
-                    # interpolate non-negative fluid pressure from P nodes
-                    pfnm = max(zero(0.0), dot4(grid_vector(i, j, pf), weights))
-                    # factor in previous iteration marker fluid pressure
-                    if titer > 2
-                        pfnm = pfnm*(1.0-pfcoeff) + pfm0[m]*pfcoeff
+# @timeit to "perform_thermochemical_reaction!" begin
+    # reset interpolation arrays
+    reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM)
+    # iterate over markers
+    @inbounds begin
+        for m=1:1:marknum
+            # for 
+            if tm[m] < 3
+                # for rocks only
+                i, j, weights = fix_weights(
+                    xm[m],
+                    ym[m],
+                    xp,
+                    yp,
+                    dx,
+                    dy,
+                    jmin_p,
+                    jmax_p,
+                    imin_p,
+                    imax_p
+                )
+                # interpolate temperature from P nodes
+                tknm = dot4(grid_vector(i, j, tk2), weights)
+                # interpolate non-negative fluid pressure from P nodes
+                pfnm = max(zero(0.0), dot4(grid_vector(i, j, pf), weights))
+                # factor in previous iteration marker fluid pressure
+                if titer > 2
+                    pfnm = pfnm*(1.0-pfcoeff) + pfm₀[m]*pfcoeff
+                end
+                # store current marker fluid pressure for next iteration
+                pfm₀[m] = pfnm
+                # compute bulk composition of solid and fluid system:
+                # compute previous dry solid molar fraction (16.146)
+                XDˢm₀ = 1.0 - XWˢm₀[m]
+                # compute previous fluid molar fraction (16.164)
+                Xᶠ₀ = phim[m]*(XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ) / (
+                    (1.0-phim[m])*VH₂Oᶠ +
+                    phim[m] * (XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ)
+                )
+                # compute previous equilibrium solid molar fraction (16.150)
+                Xˢ₀ = 1.0 - Xᶠ₀
+                # compute previous water molar fraction (16.147)
+                XH₂Oᵗ = (XWˢm₀[m]*Xˢ₀ + Xᶠ₀) / (1.0 + XWˢm₀[m]*Xˢ₀)
+                # compute dry solid molar fraction (16.149)
+                XDᵗ = 1.0 - XH₂Oᵗ
+                # compute previous solid density (16.161)
+                ρˢ₀ = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀ + VWˢ*XWˢm₀[m])
+                # compute previous fluid density (16.162)
+                ρᶠ₀ = ρH₂Oᶠ
+                # compute previous relative enthalpy of the system (16.163)
+                Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
+                # compute previous ΔG for dehydration reaction (16.165a/b)
+                ΔGWD₀ = compute_gibbs_free_energy(
+                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt)
+                # compute dehydration reaction constant (16.151)
+                KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
+                # compute reacted wet solid molar fraction (16.152)
+                XWˢm₁ = inv(KWD + 1.0)
+                # compute reacted dry solid molar fraction (16.153)
+                XDˢm₁ = 1.0 - XWˢm₁
+                # compute reacted total solid molar fraction (16.154)
+                Xˢ₁ = XDᵗ / (1.0 - XDᵗ*XWˢm₁)
+                # compute reacted fluid molar fraction (16.155)
+                Xᶠ₁ = 1.0 - Xˢ₁
+                # only process fluid-bearing rocks
+                if 0.0 < Xᶠ₁ < 1.0
+                    # compute reacted equilibrium porosity (16.156)
+                    ϕ₁ = Xᶠ₁*VH₂Oᶠ / (Xᶠ₁*VH₂Oᶠ + Xˢ₁*(XWˢm₁*VWˢ+XDˢm₁*VDˢ))
+                    # compute equilibrium solid density (16.161)
+                    ρˢ₁ = (MD + MH₂O*XWˢm₁) / (VDˢ*XDˢm₁ + VWˢ*XWˢm₁)
+                    # compute equilibrium fluid density (16.162)
+                    ρᶠ₁ = ρH₂Oᶠ
+                    # compute equilibrium relative enthalpy of the system
+                    # (16.163)
+                    Hᵗ₁ = compute_relative_enthalpy(Xˢ₁, XWˢm₁)
+                    # compute enthalpy change
+                    ΔHᵗ = Hᵗ₁ - Hᵗ₀
+                    # compute previous-to-reacted-equilibrium volume ratio
+                    # (16.106)
+                    RV = (ρˢ₁*(1.0-ϕ₁) + ρᶠ₁*ϕ₁) / (
+                        ρˢ₀*(1.0-phim[m]) + ρᶠ₀*phim[m])
+                    # compute mass transfer rate (16.103)
+                    Γmass = (ρˢ₀*RV*(1.0-phim[m]) - ρˢ₁*(1.0-ϕ₁)) / Δt
+                    # compute mass transfer term (16.112e)
+                    ΔMm = (1.0-RV) / Δt
+                    # compute enthalpy transfer/latent heating term (16.113)
+                    ΔHm = Γmass * ΔHᵗ
+                    # update wet solid (melt) molar fraction
+                    XWˢm[m]=XWˢm₁
+                    # update porosity
+                    phinewm[m] = ϕ₁
+                    # backload properties during first timestep
+                    if timestep==1
+                        XWˢm₀[m] = XWˢm[m]
+                        phim[m] = phinewm[m]
                     end
-                    # store current marker fluid pressure for next iteration
-                    pfm₀[m] = pfnm
-                    # compute bulk composition of solid and fluid system:
-                    # compute previous dry solid molar fraction (16.146)
-                    XDˢm₀ = 1.0 - XWˢm₀[m]
-                    # compute previous fluid molar fraction (16.164)
-                    Xᶠ₀ = phim[m]*(XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ) / (
-                        (1.0-phim[m])*VH₂Oᶠ +
-                        phim[m] * (XWˢ₀[m]*VWˢ + XDˢ₀*VDˢ)
-                    )
-                    # compute previous equilibrium solid molar fraction (16.150)
-                    Xˢ₀ = 1.0 - Xᶠ₀
-                    # compute previous water molar fraction (16.147)
-                    XH₂Oᵗ = (XWˢm₀[m]*Xˢ₀ + Xᶠ₀) / (1.0 + XWˢm₀[m]*Xˢ₀)
-                    # compute dry solid molar fraction (16.149)
-                    XDᵗ = 1.0 - XH₂Oᵗ
-                    # compute previous solid density (16.161)
-                    ρˢ₀ = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢ₀ + VWˢ*XWˢm₀[m])
-                    # compute previous fluid density (16.162)
-                    ρᶠ₀ = ρH₂Oᶠ
-                    # compute previous relative enthalpy of the system (16.163)
-                    Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
-                    # compute previous ΔG for dehydration reaction (16.165a/b)
-                    ΔGWD₀ = compute_gibbs_free_energy(
-                        tknm, pfnm, XDˢm₀, XWˢm₀[m], dt)
-                    # compute dehydration reaction constant (16.151)
-                    KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
-                    # compute reacted wet solid molar fraction (16.152)
-                    XWˢm₁ = inv(KWD + 1.0)
-                    # compute reacted dry solid molar fraction (16.153)
-                    XDˢm₁ = 1.0 - XWˢm₁
-                    # compute reacted total solid molar fraction (16.154)
-                    Xˢ₁ = XDᵗ / (1.0 - XDᵗ*XWˢm₁)
-                    # compute reacted fluid molar fraction (16.155)
-                    Xᶠ₁ = 1.0 - Xˢ₁
-                    # only process fluid-bearing rocks
-                    if 0.0 < Xᶠ₁ < 1.0
-                        # compute reacted equilibrium porosity (16.156)
-                        ϕ₁ = Xᶠ₁*VH₂Oᶠ / (Xᶠ₁*VH₂Oᶠ + Xˢ₁*(XWˢm₁*VWˢ+XDˢm₁*VDˢ))
-                        # compute equilibrium solid density (16.161)
-                        ρˢ₁ = (MD + MH₂O*XWˢm₁) / (VDˢ*XDˢm₁ + VWˢ*XWˢm₁)
-                        # compute equilibrium fluid density (16.162)
-                        ρᶠ₁ = ρH₂Oᶠ
-                        # compute equilibrium relative enthalpy of the system
-                        # (16.163)
-                        Hᵗ₁ = compute_relative_enthalpy(Xˢ₁, XWˢm₁)
-                        # compute enthalpy change
-                        ΔHᵗ = Hᵗ₁ - Hᵗ₀
-                        # compute previous-to-reacted-equilibrium volume ratio
-                        # (16.106)
-                        RV = (ρˢ₁*(1.0-ϕ₁) + ρᶠ₁*ϕ₁) / (
-                            ρˢ₀*(1.0-phim[m]) + ρᶠ₀*phim[m])
-                        # compute mass transfer rate (16.103)
-                        Γmass = (ρˢ₀*RV*(1.0-phim[m]) - ρˢ₁*(1.0-ϕ₁)) / Δt
-                        # compute mass transfer term (16.112e)
-                        ΔMm = (1.0-RV) / Δt
-                        # compute enthalpy transfer/latent heating term (16.113)
-                        ΔHm = Γmass * ΔHᵗ
-                        # update wet solid (melt) molar fraction
-                        XWˢm[m]=XWˢm₁
-                        # update porosity
-                        phinewm[m] = ϕ₁
-                        # backload properties during first timestep
-                        if timestep==1
-                            XWˢm₀[m] = XWˢm[m]
-                            phim[m] = phinewm[m]
-                        end
-                        # interpolate mass, enthalpy transfer terms to P nodes
-                        interpolate_add_to_grid!(i, j, weights, ΔMm, DMPSUM)
-                        interpolate_add_to_grid!(i, j, weights, ΔHm, DHPSUM)
-                        interpolate_add_to_grid!(
-                            i, j, weights, one(1.0), WTPSUM)
-                    end
-                end # if tm[m] < 3
-            end # for m=1:1:marknum
-            # compute thermodynamic properties at P nodes
-            compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
-        end # @inbounds
-    end # for titer=1:1:titermax
+                    # interpolate mass, enthalpy transfer terms to P nodes
+                    interpolate_add_to_grid!(i, j, weights, ΔMm, DMPSUM)
+                    interpolate_add_to_grid!(i, j, weights, ΔHm, DHPSUM)
+                    interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
+                end
+            end # if tm[m] < 3
+        end # for m=1:1:marknum
+        # compute thermodynamic properties at P nodes
+        compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
+    end # @inbounds
     return nothing
-# end # @timeit to "perform_htm_iterations!"
-end # function perform_htm_iterations!
+# end # @timeit to "perform_thermochemical_reaction!"
+end # function perform_thermochemical_reaction!
 
 """
 Compute gravity solution in P nodes to obtain
@@ -3870,7 +3903,7 @@ function finalize_plastic_iteration_pass!(
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
-        dt /= dtkoef
+        dt *= dtcoefdn
         ETA .= ETA00
         YNY .= YNY00
     else
@@ -5807,7 +5840,7 @@ $(SIGNATURES)
 function simulation_loop(output_path)
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
-   #@info "set up dynamic simulation parameters from given static parameters"
+    # set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
     timestep,
     dt,
@@ -5822,7 +5855,7 @@ function simulation_loop(output_path)
     @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
     
     # -------------------------------------------------------------------------
-   #@info "set up staggered grid"
+    # set up staggered grid"
     # -------------------------------------------------------------------------
     (
         ETA,
@@ -5904,7 +5937,7 @@ function simulation_loop(output_path)
     ) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
-   #@info "set up markers"
+    # set up markers"
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
     (
@@ -6064,7 +6097,7 @@ function simulation_loop(output_path)
     )
 
     # ---------------------------------------------------------------------
-    #@info "set up interpolation arrays"
+     # set up interpolation arrays"
     # ---------------------------------------------------------------------
     (
         ETA0SUM,
@@ -6103,7 +6136,7 @@ function simulation_loop(output_path)
     ) = setup_interpolated_properties()
 
     # -------------------------------------------------------------------------
-   #@info "set up of matrices for global grav/thermal/hydromechanical solvers"
+    # set up of matrices for global grav/thermal/hydromechanical solvers"
     # -------------------------------------------------------------------------
     # hydromechanical solver
     R, S = setup_hydromechanical_lse()
@@ -6122,7 +6155,7 @@ function simulation_loop(output_path)
 # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
-   #@info "iterate timesteps"
+    # iterate timesteps"
     # -------------------------------------------------------------------------
     generate_showvalues(timestep, marknum, dt, dtm, timesum) = () -> [
         (:timestep, timestep),
@@ -6140,9 +6173,8 @@ function simulation_loop(output_path)
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:n_steps
 # @timeit to "set up interpolation arrays" begin
-       #@info "timestep" timestep
         # ---------------------------------------------------------------------
-       #@info "reset interpolation arrays"
+        # reset interpolation arrays
         # ---------------------------------------------------------------------
         reset_interpolated_properties!(
             ETA0SUM,
@@ -6179,13 +6211,13 @@ function simulation_loop(output_path)
 # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
-       #@info "calculate radioactive heating"
+        # calculate radioactive heating
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(
             hr_al, hr_fe, timesum)
 
         # ---------------------------------------------------------------------
-       #@info "compute marker properties and interpolate to staggered grid"
+        # compute marker properties and interpolate to staggered grid
         # ---------------------------------------------------------------------
         for m=1:1:marknum
             compute_marker_properties!(
@@ -6286,7 +6318,7 @@ function simulation_loop(output_path)
         end # for m=1:1:marknum
 
         # ---------------------------------------------------------------------
-       #@info "compute physical properties of basic nodes"
+        # compute physical properties of basic nodes
         # ---------------------------------------------------------------------
         compute_basic_node_properties!(
             ETA0SUM,
@@ -6308,7 +6340,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-       #@info "compute physical properties of Vx nodes"
+        # compute physical properties of Vx nodes
         # ---------------------------------------------------------------------
         compute_vx_node_properties!(
             RHOXSUM,
@@ -6325,7 +6357,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-       #@info "compute physical properties of Vy nodes"
+        # compute physical properties of Vy nodes
         # ---------------------------------------------------------------------
         compute_vy_node_properties!(
             RHOYSUM,
@@ -6342,7 +6374,7 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-       #@info "compute physical properties of P nodes"
+        # compute physical properties of P nodes
         # ---------------------------------------------------------------------
         compute_p_node_properties!(
             RHOSUM,
@@ -6368,439 +6400,297 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-       #@info "apply thermal boundary conditions for interpolated temperature"
+        # apply thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
 
-        # @info "M_680"
-        # jldsave(output_path*"M_680_"*string(timestep)*".jld2";
-        #     ETA0,
-        #     ETA,
-        #     YNY,
-        #     GGG,
-        #     SXY0,
-        #     COH,
-        #     TEN,
-        #     FRI,
-        #     RHOX,
-        #     RHOFX,
-        #     KX,
-        #     PHIX,
-        #     RX,
-        #     RHOY,
-        #     RHOFY,
-        #     KY,
-        #     PHIY,
-        #     RY,
-        #     GGGP,
-        #     SXX0,
-        #     RHO,
-        #     RHOCP,
-        #     ALPHA,
-        #     ALPHAF,
-        #     HR,
-        #     PHI,
-        #     BETTAPHI,
-        #     tk1,
-        #     xm,
-        #     ym,
-        #     tm,
-        #     phim,
-        #     sxxm,
-        #     sxym,
-        #     etafluidcur_inv_kphim,
-        #     ktotalm,
-        #     ETA0SUM,
-        #     ETASUM,
-        #     GGGSUM,
-        #     SXYSUM,
-        #     COHSUM,
-        #     TENSUM,
-        #     FRISUM,
-        #     WTSUM,
-        #     RHOXSUM,
-        #     RHOFXSUM,
-        #     KXSUM,
-        #     PHIXSUM,
-        #     RXSUM,
-        #     WTXSUM,
-        #     RHOYSUM,
-        #     RHOFYSUM,
-        #     KYSUM,
-        #     PHIYSUM,
-        #     RYSUM,
-        #     WTYSUM,
-        #     RHOSUM,
-        #     RHOCPSUM,
-        #     ALPHASUM,
-        #     ALPHAFSUM,
-        #     HRSUM,
-        #     GGGPSUM,
-        #     SXXSUM,
-        #     TKSUM,
-        #     PHISUM,
-        #     WTPSUM
-        # )
         # ---------------------------------------------------------------------
-       #@info "compute gravity solution"
+        # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        # compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
         LP = assemble_gravitational_lse(RHO, RP)
         # @timeit to "solve gravitational LSE" begin
-        SP .= LP \ RP
+        SP = LP \ RP
         # end # @timeit to "solve gravitational LSE"
         process_gravitational_solution!(SP, FI, gx, gy)
 
         # ---------------------------------------------------------------------
-       #@info "probe increasing computational timestep"
+        # probe increasing computational timestep
         # ---------------------------------------------------------------------
-        dt = min(dt*dtkoefup, dtelastic)
+        dt = min(dt*dtcoefup, dtmax)
 
         # ---------------------------------------------------------------------
-       #@info "save initial viscosity, yielding nodes"
+        # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
-        ETA00 .= ETA
-        YNY00 .= YNY
+        for titer=1:1:titermax
 
-        # @info "M_765"
-        # if timestep <=10
-        #     jldsave(output_path*"M_765_"*string(timestep)*".jld2";
-        #         SP,
-        #         FI,
-        #         gx,
-        #         gy,
-        #         dt,
-        #         dtelastic,
-        #         ETA,
-        #         ETA00,
-        #         YNY,
-        #         YNY00,
-        #         RHO,
-        #         RX,
-        #         RY
-        #     )
-        # end
-
-        # ---------------------------------------------------------------------
-       #@info "perform plastic iterations"
-        # ---------------------------------------------------------------------
-        if timestep == 1
-            # no elastic compaction during first timestep
-            BETTAPHI .= 0.0
-        end
-        # perform plastic iterations
-        for iplast=1:1:nplast
-           #@info "plastic iteration" iplast
-            # recompute bulk viscosity at pressure nodes
-            recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-            # assemble hydromechanical system of equations
-            L = assemble_hydromechanical_lse!(
-                ETA,
-                ETAP,
-                GGG,
-                GGGP,
-                SXY0,
-                SXX0,
-                RHOX,
-                RHOY,
-                RHOFX,
-                RHOFY,
-                RX,
-                RY,
-                ETAPHI,
-                BETTAPHI,
-                PHI,
-                gx,
-                gy,
-                pr0,
-                pf0,
-                dt,
-                R
+            # perform thermochemical reaction
+            perform_thermochemical_reaction!(
+                DMP,
+                DHP,
+                DMPSUM,
+                DHPSUM,
+                WTPSUM,
+                pf,
+                tk2,
+                tm,
+                xm,
+                ym,
+                XWˢm₀,
+                XWˢm,
+                phim,
+                phinewm,
+                pfm₀,
+                marknum,
+                Δt,
+                timestep,
+                titer
             )
-            # solve hydromechanical system of equations
-# @timeit to "solve hydromechanical system" begin
-            if use_pardiso
-                # S = solve(pardiso_solver, L.cscmatrix, R)
-                set_phase!(
-                    pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
-                pardiso(
-                    pardiso_solver,
-                    S,
-                    get_matrix(pardiso_solver, L.cscmatrix, :N),
+
+            # save initial viscosity, yielding nodes
+            ETA00 .= ETA
+            YNY00 .= YNY
+
+            # -----------------------------------------------------------------
+            # perform hydromechanical/plastic iterations (inner iteration loop)
+            # -----------------------------------------------------------------
+            if timestep == 1
+                # no elastic compaction during first timestep
+                BETTAPHI .= 0.0
+            end
+            # perform plastic iterations
+            for iplast=1:1:titermax
+                # recompute bulk viscosity at pressure nodes
+                recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
+                # assemble hydromechanical system of equations
+                L = assemble_hydromechanical_lxse!(
+                    ETA,
+                    ETAP,
+                    GGG,
+                    GGGP,
+                    SXY0,
+                    SXX0,
+                    RHOX,
+                    RHOY,
+                    RHOFX,
+                    RHOFY,
+                    RX,
+                    RY,
+                    ETAPHI,
+                    BETTAPHI,
+                    PHI,
+                    gx,
+                    gy,
+                    pr0,
+                    pf0,
+                    dt,
                     R
                 )
-                set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
-                pardiso(pardiso_solver, S, L.cscmatrix, R)
-            else
-                # lu!(F, L)
-                # S = F \ R
-                S = L \ R
-            end
-# end # @timeit to "solve system"
+                # solve hydromechanical system of equations
+    # @timeit to "solve hydromechanical system" begin
+                if use_pardiso
+                    # S = solve(pardiso_solver, L.cscmatrix, R)
+                    set_phase!(
+                        pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
+                    pardiso(
+                        pardiso_solver,
+                        S,
+                        get_matrix(pardiso_solver, L.cscmatrix, :N),
+                        R
+                    )
+                    set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
+                    pardiso(pardiso_solver, S, L.cscmatrix, R)
+                else
+                    # lu!(F, L)
+                    # S = F \ R
+                    S = L \ R
+                end
+    # end # @timeit to "solve system"
 
-            # obtain hydromechanical observables from solution
-            process_hydromechanical_solution!(
-                S,
-                vx,
-                vy,
-                pr,
-                qxD,
-                qyD,
-                pf
-            )
+                # obtain hydromechanical observables from solution
+                process_hydromechanical_solution!(
+                    S,
+                    vx,
+                    vy,
+                    pr,
+                    qxD,
+                    qyD,
+                    pf
+                )
 
-            # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
-            aphimax = compute_Aϕ!(
-                APHI,
-                ETAPHI,
-                BETTAPHI,
-                PHI,
-                pr,
-                pf,
-                pr0,
-                pf0,
-                dt
-            )
-            # @show aphimax
+                # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
+                aphimax = compute_Aϕ!(
+                    APHI,
+                    ETAPHI,
+                    BETTAPHI,
+                    PHI,
+                    pr,
+                    pf,
+                    pr0,
+                    pf0,
+                    dt
+                )
 
-            # @info "M_1090"
-            # jldsave(output_path*"M_1090_"*string(timestep)*".jld2";
-            #     APHI,
-            #     pr,
-            #     pr0,
-            #     pf,
-            #     pf0,
-            #     PHI,
-            #     ETAPHI,
-            #     BETTAPHI,
-            #     dt,
-            #     aphimax
-            # )
+                # compute fluid velocities
+                compute_fluid_velocities!(
+                    PHIX,
+                    PHIY,
+                    qxD,
+                    qyD,
+                    vx,
+                    vy,
+                    vxf,
+                    vyf
+                )
 
-            # compute fluid velocities
-            compute_fluid_velocities!(
-                PHIX,
-                PHIY,
-                qxD,
-                qyD,
-                vx,
-                vy,
-                vxf,
-                vyf
-            )
+                # @info "M_1078"
+                # # L_d = collect(L)
+                # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
+                #     xm,
+                #     ym,
+                #     tk0,
+                #     tk1,
+                #     tk2,
+                #     DT,
+                #     APHI,
+                #     vxf,
+                #     vyf,
+                #     Kcont,
+                #     ETA,
+                #     ETAP,
+                #     GGG,
+                #     GGGP,
+                #     SXY0,
+                #     SXX0,
+                #     RHOX,
+                #     RHOY,
+                #     RHOFX,
+                #     RHOFY,
+                #     RX,
+                #     RY,
+                #     ETAPHI,
+                #     BETTAPHI,
+                #     PHI,
+                #     gx,
+                #     gy,
+                #     pr0,
+                #     pf0,
+                #     dt,
+                #     R,
+                #     #L_d,
+                #     S,
+                #     vx,
+                #     vy,
+                #     qxD,
+                #     qyD,
+                #     pr,
+                #     pf
+                # )
 
-            # @info "M_1078"
-            # # L_d = collect(L)
-            # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-            #     xm,
-            #     ym,
-            #     tk0,
-            #     tk1,
-            #     tk2,
-            #     DT,
-            #     APHI,
-            #     vxf,
-            #     vyf,
-            #     Kcont,
-            #     ETA,
-            #     ETAP,
-            #     GGG,
-            #     GGGP,
-            #     SXY0,
-            #     SXX0,
-            #     RHOX,
-            #     RHOY,
-            #     RHOFX,
-            #     RHOFY,
-            #     RX,
-            #     RY,
-            #     ETAPHI,
-            #     BETTAPHI,
-            #     PHI,
-            #     gx,
-            #     gy,
-            #     pr0,
-            #     pf0,
-            #     dt,
-            #     R,
-            #     #L_d,
-            #     S,
-            #     vx,
-            #     vy,
-            #     qxD,
-            #     qyD,
-            #     pr,
-            #     pf
-            # )
+                # define displacement timestep dtm
+                dtm = compute_displacement_timestep(
+                    vx,
+                    vy,
+                    vxf,
+                    vyf,
+                    dt,
+                    aphimax
+                )
 
-            # define displacement timestep dtm
-            dtm = compute_displacement_timestep(
-                vx,
-                vy,
-                vxf,
-                vyf,
-                dt,
-                aphimax
-            )
-
-            # @info "M_1144"
-            # if timestep <=10
-            #     jldsave(output_path*"M_1144_"*string(timestep)*".jld2";
-            #         vxf,
-            #         vyf,
-            #         dtm
-            #     )
-            # end
-
-
-            # compute stresses, stress changes and strain rate components
-            compute_stress_strainrate!(
-                vx,
-                vy,
-                ETA,
-                GGG,
-                ETAP,
-                GGGP,
-                SXX0,
-                SXY0,
-                EXX,
-                EXY,
-                SXX,
-                SXY,
-                DSXX,
-                DSXY,
-                EII,
-                SII,
-                dtm
-            )
-
-            # @info "M_1184"
-            # if timestep <=10
-            #     jldsave(output_path*"M_1184_"*string(timestep)*".jld2";
-            #         EXY,
-            #         SXY,
-            #         DSXY,
-            #         EXX,
-            #         SXX,
-            #         DSXX,
-            #         EII,
-            #         SII,
-            #         ETAP,
-            #         GGGP,
-            #         SXX0,
-            #         ETA,
-            #         GGG,
-            #         SXY0,
-            #         vx,
-            #         vy
-            #     )
-            # end
-
-            # recompute Dln[(1-PHI)/PHI]/Dt
-            _ = compute_Aϕ!(
-                APHI,
-                ETAPHI,
-                BETTAPHI,
-                PHI,
-                pr,
-                pf,
-                pr0,
-                pf0,
-                dt
-            )
-            # symmetrize P node observables
-            symmetrize_p_node_observables!(
-                SXX,
-                APHI,
-                PHI,
-                pr,
-                pf,
-                ps
-            )
-            # save nodal stress changes - RMK: not required in code
-            # DSXX0 = copy(DSXX)
-            # DSXY0 = copy(DSXY)
-            # @info "M_1232"
-            # jldsave(
-            #     output_path*"M_1232_"*string(timestep)*".jld2";
-            #     SXX,
-            #     APHI,
-            #     PHI,
-            #     pr,
-            #     pf,
-            #     ps
-            # )
-            
-            # nodal adjustment
-            if compute_nodal_adjustment!(
-                ETA,
-                ETA0,
-                ETA5,
-                GGG,
-                SXX,
-                SXY,
-                pr,
-                pf,
-                COH,
-                TEN,
-                FRI,
-                YNY,
-                YNY5,
-                YERRNOD,
-                DSY,
-                dt,
-                iplast
-            )
-                # exit plastic iterations loop    
-                break 
-            else
-                # prepare next pass of plastic iteration 
-                dt = finalize_plastic_iteration_pass!(
+                # compute stresses, stress changes and strain rate components
+                compute_stress_strainrate!(
+                    vx,
+                    vy,
                     ETA,
+                    GGG,
+                    ETAP,
+                    GGGP,
+                    SXX0,
+                    SXY0,
+                    EXX,
+                    EXY,
+                    SXX,
+                    SXY,
+                    DSXX,
+                    DSXY,
+                    EII,
+                    SII,
+                    dtm
+                )
+
+                # recompute Dln[(1-PHI)/PHI]/Dt
+                _ = compute_Aϕ!(
+                    APHI,
+                    ETAPHI,
+                    BETTAPHI,
+                    PHI,
+                    pr,
+                    pf,
+                    pr0,
+                    pf0,
+                    dt
+                )
+                # symmetrize P node observables
+                symmetrize_p_node_observables!(
+                    SXX,
+                    APHI,
+                    PHI,
+                    pr,
+                    pf,
+                    ps
+                )
+                # save nodal stress changes - RMK: not required in code
+                # DSXX0 = copy(DSXX)
+                # DSXY0 = copy(DSXY)
+                
+                # nodal adjustment
+                if compute_nodal_adjustment!(
+                    ETA,
+                    ETA0,
                     ETA5,
-                    ETA00,
+                    GGG,
+                    SXX,
+                    SXY,
+                    pr,
+                    pf,
+                    COH,
+                    TEN,
+                    FRI,
                     YNY,
                     YNY5,
-                    YNY00,
-                    YNY_inv_ETA,
+                    YERRNOD,
+                    DSY,
                     dt,
                     iplast
                 )
-            end
-        end # for iplast=1:1:nplast
-        # @info "M_1325"
-        #     if timestep <=10
-        #         jldsave(output_path*"M_1325_"*string(timestep)*".jld2";
-        #             ETA,
-        #             ETA5,
-        #             ETA00,
-        #             YNY,
-        #             YNY5,
-        #             YNY00,
-        #             YERRNOD,
-        #             dt
-        #         )
-        #     end
-
+                    # exit plastic iterations loop    
+                    break 
+                else
+                    # prepare next pass of plastic iteration 
+                    dt = finalize_plastic_iteration_pass!(
+                        ETA,
+                        ETA5,
+                        ETA00,
+                        YNY,
+                        YNY5,
+                        YNY00,
+                        YNY_inv_ETA,
+                        dt,
+                        iplast
+                    )
+                end
+            end # for iplast=1:1:nplast
+        end
         # ---------------------------------------------------------------------
-       #@info "interpolate updated viscoplastic viscosity to markers"
+        # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
         @threads for m = 1:1:marknum
             update_marker_viscosity!(
                 m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
         end
-        # @info "M_1378"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1378_"*string(timestep)*".jld2";
-        #         xm,
-        #         ym,
-        #         tm,
-        #         etavpm
-        #     )
-        # end
+        
         # ---------------------------------------------------------------------
-       #@info "apply subgrid stress diffusion to markers"
+        # apply subgrid stress diffusion to markers"
         # ---------------------------------------------------------------------
         apply_subgrid_stress_diffusion!(
             xm,
@@ -6829,7 +6719,7 @@ function simulation_loop(output_path)
         # end
 
         # ---------------------------------------------------------------------
-       #@info "interpolate DSXX, DSXY to markers"
+        # interpolate DSXX, DSXY to markers"
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
@@ -6841,7 +6731,7 @@ function simulation_loop(output_path)
         #     )
         # end
         # ---------------------------------------------------------------------
-       #@info "compute shear heating HS in P nodes"
+        # compute shear heating HS in P nodes"
         # ---------------------------------------------------------------------
         compute_shear_heating!(
             HS,
@@ -6898,7 +6788,7 @@ function simulation_loop(output_path)
         # end
         
         # ---------------------------------------------------------------------
-       #@info "apply subgrid temperature diffusion on markers"
+        # apply subgrid temperature diffusion on markers"
         # compute DTsubgrid
         # ---------------------------------------------------------------------
         apply_subgrid_temperature_diffusion!(
@@ -6923,7 +6813,7 @@ function simulation_loop(output_path)
         # end
 
         # ---------------------------------------------------------------------
-       #@info "interpolate DT to markers"
+        # interpolate DT to markers"
         # ---------------------------------------------------------------------
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
@@ -6934,7 +6824,7 @@ function simulation_loop(output_path)
         #     )
         # end
         # ---------------------------------------------------------------------
-       #@info "update porosity on markers"
+        # update porosity on markers"
         # ---------------------------------------------------------------------
         update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
         # @info "M_1881"
@@ -6945,7 +6835,7 @@ function simulation_loop(output_path)
         # end
 
         # ---------------------------------------------------------------------
-       #@info "compute velocity in P nodes"
+        # compute velocity in P nodes"
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
@@ -6961,7 +6851,7 @@ function simulation_loop(output_path)
         # end
 
         # ---------------------------------------------------------------------
-       #@info "compute rotation rate in basic nodes"
+        # compute rotation rate in basic nodes"
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
         # @info "M_1951"
@@ -6972,7 +6862,7 @@ function simulation_loop(output_path)
         # end
 
         # ---------------------------------------------------------------------
-       #@info "move markers with RK4"
+        # move markers with RK4"
         # ---------------------------------------------------------------------
         move_markers_rk4!(
             xm,
@@ -7002,7 +6892,7 @@ function simulation_loop(output_path)
         #     )
         # end
         # ---------------------------------------------------------------------
-       #@info "backtrack P nodes: Ptotal with RK4"
+        # backtrack P nodes: Ptotal with RK4"
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
         # pr0 .= pr
@@ -7246,16 +7136,26 @@ function run_simulation()
     output_path = parsed_args["output_path"]
     show_timer = parsed_args["show_timer"]
     mkpath(output_path)
+    io = open(output_path * "simulation_run.log", "w+")
+    logger = SimpleLogger(io)
+    global_logger(logger)
     if show_timer
         reset_timer!(to)
     end
-    t1 = time_ns()
+    @info "HydrologyPlanetesimals simulation run"
+    @info "System information" Sys.isapple() Sys.islinux() Sys.iswindows() Sys.cpu_info()
+    @info "results written to" output_path
+    t1 = now()
+    @info "start time" t1
     simulation_loop(output_path)
-    t2 = time_ns()
-    println("total run time [s]: " * string((t2-t1) * 1e-9))
+    t2 = now()
+    @info "end time" t2
+    @info "total run time" Dates.canonicalize(
+        Dates.CompoundPeriod(t2-t1))
     if show_timer
         show(to)
     end
+    close(io)
 end
 
 end # module HydrologyPlanetesimals
