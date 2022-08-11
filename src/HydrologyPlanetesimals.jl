@@ -1047,6 +1047,23 @@ function reset_thermochemical_properties!(
 end
 
 """
+Convert seconds to Ma (millions of years).
+
+$(SIGNATURES)
+
+# Details
+
+    - s: period in seconds
+
+# Returns
+
+    - Ma: period in millions of years
+"""
+function s_to_Ma(s)
+    return s / (yearlength * 1e6)
+end
+
+"""
 Calculate Euclidean distance between two point coordinates.
 
 $(SIGNATURES)
@@ -2576,8 +2593,8 @@ $(SIGNATURES)
     - LP: LHS sparse coefficient matrix
 
 """
-function assemble_gravitational_lse(RHO, RP)
-    # @timeit to "assemble_gravitational_lse" begin
+function assemble_gravitational_lse!(RHO, RP)
+    # @timeit to "assemble_gravitational_lse!" begin
         # fresh LHS sparse coefficient matrix
         LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
         # reset RHS coefficient vector
@@ -2624,7 +2641,7 @@ function assemble_gravitational_lse(RHO, RP)
             end
         end
         # end # @timeit to "build system"
-    # end # @timeit to "assemble_gravitational_lse"
+    # end # @timeit to "assemble_gravitational_lse!"
     return LP
 end
 
@@ -2852,6 +2869,7 @@ $(SIGNATURES)
     - gy: y gravitational acceleration at Vy nodes
     - pr0: previous total pressure at P nodes
     - pf0: previous fluid pressure at P nodes
+    - DMP: mass transfer term at P nodes
     - dt: time step
     - R: vector to store RHS coefficients
 
@@ -2879,6 +2897,7 @@ function assemble_hydromechanical_lse!(
     gy,
     pr0,
     pf0,
+    DMP,
     dt,
     R
 )
@@ -3206,7 +3225,11 @@ function assemble_hydromechanical_lse!(
                 kpf
             ) # P: Pfluid
             # RHS coefficient vector
-            R[kpm] = (pr0[i,j]-pf0[i,j]) / (1-PHI[i,j]) * BETTAPHI[i,j]/dt
+            R[kpm] = (
+                (pr0[i,j]-pf0[i,j]) / (1-PHI[i,j])
+                * BETTAPHI[i,j]/dt
+                + DMP[i, j]
+            )
         end # P equation
         # qxDarcy equation
         if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
@@ -4195,48 +4218,36 @@ function compute_adiabatic_heating!(
 end # function compute_adiabatic_heating!
 
 """
-Perform thermal iterations to time step thermal field at P nodes.
+Assemble the LHS sparse coefficient matrix and fill RHS coefficient vector
+of the energy conservation (heat) equation.
 
 $(SIGNATURES)
 
 # Details
 
-    - tk0: previous temperature at P nodes 
 	- tk1: current temperature at P nodes
-	- tk2: next temperature at P nodes 
-	- DT: calculated temperature difference at P nodes 
-	- DT0: previous calculated temperature difference at P nodes
 	- RHOCP: volumetric heat capacity at P nodes  
 	- KX: thermal conductivity at Vx nodes
 	- KY: thermal conductivity at Vy nodes 
 	- HR: radioactive heating at P nodes
 	- HA: adiabatic heating at P nodes 
 	- HS: shear heating at P nodes
+    - DHP: latent heating (HL) at P nodes
     - RT: thermal RHS coefficient vector
-    - ST: thermal solution vector
-	- dtm: displacement time step
-    - timestep: current time step
+	- dt: current time step length
 
 # Returns
 
-    - nothing
+    - LT: LHS sparse coefficient matrix
 """
-function perform_thermal_iterations!(
-    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm, timestep)
-# @timeit to "perform_thermal_iterations!" begin
-    # set up thermal iterations
-    tk0 .= tk1
-    dtt = dtm
-    dttsum = 0.0
-    titer = 1
-    # perform thermal iterations until reaching time limit
-    while dttsum < dtm
-        # fresh LHS coefficient matrix
-        LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
-        # reset RHS coefficient vector
-        RT .= 0.0
-        # compose global thermal matrix LT and coefficient vector RT
-        @inbounds begin
+function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
+# @timeit to "assemble_thermal_lse!" begin
+    # fresh LHS coefficient matrix
+    LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+    # reset RHS coefficient vector
+    RT .= zero(0.0)
+    # compose global thermal matrix LT and coefficient vector RT
+    @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             # define global index in algebraic space
             gk = (j-1)*Ny1 + i
@@ -4264,8 +4275,8 @@ function perform_thermal_iterations!(
                 end
             else
                 # internal points: 2D thermal equation (conservative formulation)
-                # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ
-                #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ (eq 10.9) 
+                # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ + Hₗ
+                #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ + Hₗ (16.54, 16.97) 
                 # in case of purely advective heat transport: ∂T/∂t+⃗v⋅∇T = 0
                 #
                 #                      gk-1
@@ -4290,22 +4301,145 @@ function perform_thermal_iterations!(
                 Kx₂ = KX[i, j]
                 Ky₁ = KY[i-1, j]
                 Ky₂ = KY[i, j]
-                # fill system of equations: LHS (10.9)
+                # fill system of equations: LHS
                 updateindex!(LT, +, -Kx₁*inv(dx^2), gk, gk-Ny1) # T₁
                 updateindex!(LT, +, -Ky₁*inv(dy^2), gk, gk-1) # T₂
                 updateindex!(LT, +, (
-                    RHOCP[i, j]/dtt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)),
+                    RHOCP[i, j]/dt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)),
                     gk,
                     gk
                 ) # T₃
                 updateindex!(LT, +, -Ky₂*inv(dy^2), gk, gk+1) # T₄
                 updateindex!(LT, +, -Kx₂*inv(dx^2), gk, gk+Ny1) # T₅
-                # fill system of equations: RHS (10.9)
+                # fill system of equations: RHS
                 RT[gk] = (
-                    RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
+                    RHOCP[i, j]/dt*tk1[i, j]
+                    + HR[i, j]
+                    + HA[i, j]
+                    + HS[i, j]
+                    + DHP[i, j]
+                )
             end
         end
-        end # @inbounds
+    end # @inbounds
+    flush!(LT) # finalize CSC matrix
+# end # @timeit to "assemble_thermal_lse!"
+    return LT
+end # function assemble_thermal_lse!
+
+"""
+Perform thermal iterations to time step thermal field at P nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - tk0: previous temperature at P nodes 
+	- tk1: current temperature at P nodes
+	- tk2: next temperature at P nodes 
+	- DT: calculated temperature difference at P nodes 
+	- DT0: previous calculated temperature difference at P nodes
+	- RHOCP: volumetric heat capacity at P nodes  
+	- KX: thermal conductivity at Vx nodes
+	- KY: thermal conductivity at Vy nodes 
+	- HR: radioactive heating at P nodes
+	- HA: adiabatic heating at P nodes 
+	- HS: shear heating at P nodes
+    - DHP: latent heating (HL) at P nodes
+    - RT: thermal RHS coefficient vector
+    - ST: thermal solution vector
+	- dtm: displacement time step
+
+# Returns
+
+    - nothing
+"""
+function perform_thermal_iterations!(
+    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dtm)
+# @timeit to "perform_thermal_iterations!" begin
+    # set up thermal iterations
+    tk0 .= tk1
+    dtt = dtm
+    dttsum = 0.0
+    titer = 1
+    # perform thermal iterations until reaching time limit
+    while dttsum < dtm
+        # fresh LHS coefficient matrix
+        LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt)
+        # LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+        # # reset RHS coefficient vector
+        # RT .= 0.0
+        # # compose global thermal matrix LT and coefficient vector RT
+        # @inbounds begin
+        # for j=1:1:Nx1, i=1:1:Ny1
+        #     # define global index in algebraic space
+        #     gk = (j-1)*Ny1 + i
+        #     # External points
+        #     if i==1 || i==Ny1 || j==1 || j==Nx1
+        #         # thermal equation external points: boundary conditions
+        #         # all locations: ghost unknowns T₃=0 -> 1.0⋅T[i,j]=0.0
+        #         updateindex!(LT, +, 1.0, gk, gk)
+        #         # R[gk] = 0.0 # already done with initialization
+        #         # left boundary: ∂T/∂x=0
+        #         if j == 1
+        #             updateindex!(LT, +, -1.0, gk, gk+Ny1)
+        #         end
+        #         # right boundary: ∂T/∂x=0
+        #         if j == Nx1
+        #             updateindex!(LT, +, -1.0, gk, gk-Ny1)
+        #         end
+        #         # top inner boundary: ∂T/∂y=0
+        #         if i==1 && 1<j<Nx1 
+        #             updateindex!(LT, +, -1.0, gk, gk+1)
+        #         end
+        #         # bottom inner boundary: ∂T/∂y=0
+        #         if i==Ny1 && 1<j<Nx1 
+        #             updateindex!(LT, +, -1.0, gk, gk-1)
+        #         end
+        #     else
+        #         # internal points: 2D thermal equation (conservative formulation)
+        #         # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ
+        #         #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ (eq 10.9) 
+        #         # in case of purely advective heat transport: ∂T/∂t+⃗v⋅∇T = 0
+        #         #
+        #         #                      gk-1
+        #         #                        T₂
+        #         #                        |
+        #         #                       i-1,j
+        #         #                       Ky₁
+        #         #                       qy₁
+        #         #                        |
+        #         #         gk-Ny1 i,j-1  gk     i,j  gk+Ny1
+        #         #           T₁----Kx₁----T₃----Kx₂----T₅
+        #         #                 qx₁    |     qx₂
+        #         #                       i,j
+        #         #                       Ky₂
+        #         #                       qy₂
+        #         #                        |
+        #         #                      gk+1
+        #         #                        T₄
+        #         #
+        #         # extract thermal conductivities
+        #         Kx₁ = KX[i, j-1] 
+        #         Kx₂ = KX[i, j]
+        #         Ky₁ = KY[i-1, j]
+        #         Ky₂ = KY[i, j]
+        #         # fill system of equations: LHS (10.9)
+        #         updateindex!(LT, +, -Kx₁*inv(dx^2), gk, gk-Ny1) # T₁
+        #         updateindex!(LT, +, -Ky₁*inv(dy^2), gk, gk-1) # T₂
+        #         updateindex!(LT, +, (
+        #             RHOCP[i, j]/dtt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)),
+        #             gk,
+        #             gk
+        #         ) # T₃
+        #         updateindex!(LT, +, -Ky₂*inv(dy^2), gk, gk+1) # T₄
+        #         updateindex!(LT, +, -Kx₂*inv(dx^2), gk, gk+Ny1) # T₅
+        #         # fill system of equations: RHS (10.9)
+        #         RT[gk] = (
+        #             RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
+        #     end
+        # end
+        # end # @inbounds
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
         # reshape solution vector to 2D array
@@ -4327,16 +4461,6 @@ function perform_thermal_iterations!(
             dttsum += dtt
             dtt = min(dtt, dtm-dttsum)
         end
-
-        # @info "M_1726"
-        # # output_path = "/Users/z7717/Desktop/test/"
-        # output_path = "C:\\Users\\ich\\outTest\\"
-        # LT_d = collect(LT)
-        # jldsave(
-        #     output_path*"M_1726_"*string(timestep)*"_"*string(titer)*".jld2";
-        #     tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, LT_d, RT, ST, dtm, dtt
-        # )
-
         # increase thermal iteration counter
         titer += 1
     end
@@ -5669,6 +5793,8 @@ function save_state(
     EII,
     SII,
     DSXX,
+    DMP,
+    DHP,
     xm,
     ym,
     tm,
@@ -5798,6 +5924,8 @@ function save_state(
         EII,
         SII,
         DSXX,
+        DMP,
+        DHP,
         xm,
         ym,
         tm,
@@ -5992,11 +6120,6 @@ function simulation_loop(output_path)
         XWsolidm0
     )
 
-    # plot initial markers
-    # plt = scatterplot(
-    #     xm, ym, marker=:+, color=tm, xlim=(x[1], x[end]), ylim=(y[1], y[end]))
-    # savefig(plt, output_path * "/initial_markers.png")
-
     # save initial state
     save_state(
         output_path,
@@ -6072,6 +6195,8 @@ function simulation_loop(output_path)
         EII,
         SII,
         DSXX,
+        DMP,
+        DHP,
         xm,
         ym,
         tm,
@@ -6157,13 +6282,12 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
     # iterate timesteps"
     # -------------------------------------------------------------------------
-    generate_showvalues(timestep, marknum, dt, dtm, timesum) = () -> [
+    generate_showvalues(timestep, marknum, dt, timesum) = () -> [
         (:timestep, timestep),
         (:marknum, marknum),
         (:dt_s, dt),
-        (:dtm_s, dtm),
-        (:timesum_Ma, timesum/yearlength*1e-6),
-        (:to_go_Ma, (endtime-timesum)/yearlength*1e-6)
+        (:timesum_Ma, s_to_Ma(timesum)),
+        (:to_go_Ma, s_to_Ma(endtime-timesum))
     ]
     p = Progress(
         n_steps;
@@ -6173,6 +6297,7 @@ function simulation_loop(output_path)
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:n_steps
 # @timeit to "set up interpolation arrays" begin
+        timestep_begin = now()
         # ---------------------------------------------------------------------
         # reset interpolation arrays
         # ---------------------------------------------------------------------
@@ -6408,7 +6533,7 @@ function simulation_loop(output_path)
         # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        LP = assemble_gravitational_lse(RHO, RP)
+        LP = assemble_gravitational_lse!(RHO, RP)
         # @timeit to "solve gravitational LSE" begin
         SP = LP \ RP
         # end # @timeit to "solve gravitational LSE"
@@ -6436,13 +6561,13 @@ function simulation_loop(output_path)
                 tm,
                 xm,
                 ym,
-                XWˢm₀,
-                XWˢm,
+                XWsolidm0,
+                XWsolidm,
                 phim,
                 phinewm,
-                pfm₀,
+                pfm0,
                 marknum,
-                Δt,
+                dt,
                 timestep,
                 titer
             )
@@ -6460,10 +6585,12 @@ function simulation_loop(output_path)
             end
             # perform plastic iterations
             for iplast=1:1:titermax
+                @info(
+                    "thermochemical/hydromechanical iterations: $titer/$iplast")
                 # recompute bulk viscosity at pressure nodes
                 recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
                 # assemble hydromechanical system of equations
-                L = assemble_hydromechanical_lxse!(
+                L = assemble_hydromechanical_lse!(
                     ETA,
                     ETAP,
                     GGG,
@@ -6483,6 +6610,7 @@ function simulation_loop(output_path)
                     gy,
                     pr0,
                     pf0,
+                    DMP,
                     dt,
                     R
                 )
@@ -6587,8 +6715,9 @@ function simulation_loop(output_path)
                 #     pf
                 # )
 
-                # define displacement timestep dtm
-                dtm = compute_displacement_timestep(
+                # adapt timestep for displacement
+                @info "timestep before displacement adaptation: $dt"
+                dt = compute_displacement_timestep(
                     vx,
                     vy,
                     vxf,
@@ -6596,6 +6725,7 @@ function simulation_loop(output_path)
                     dt,
                     aphimax
                 )
+                @info "timestep after displacement adaptation: $dt"
 
                 # compute stresses, stress changes and strain rate components
                 compute_stress_strainrate!(
@@ -6615,7 +6745,7 @@ function simulation_loop(output_path)
                     DSXY,
                     EII,
                     SII,
-                    dtm
+                    dt
                 )
 
                 # recompute Dln[(1-PHI)/PHI]/Dt
@@ -6681,6 +6811,7 @@ function simulation_loop(output_path)
                 end
             end # for iplast=1:1:nplast
         end
+
         # ---------------------------------------------------------------------
         # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
@@ -6690,7 +6821,7 @@ function simulation_loop(output_path)
         end
         
         # ---------------------------------------------------------------------
-        # apply subgrid stress diffusion to markers"
+        # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
         apply_subgrid_stress_diffusion!(
             xm,
@@ -6710,28 +6841,14 @@ function simulation_loop(output_path)
             dtm,
             marknum
         )
-        # @info "M_1499"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1499_"*string(timestep)*".jld2";
-        #         DSXX,
-        #         DSXY,
-        #     )
-        # end
 
         # ---------------------------------------------------------------------
-        # interpolate DSXX, DSXY to markers"
+        # interpolate DSXX, DSXY to markers
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
-        # @info "M_1555"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1555_"*string(timestep)*".jld2";
-        #         sxxm,
-        #         sxym
-        #     )
-        # end
         # ---------------------------------------------------------------------
-        # compute shear heating HS in P nodes"
+        # compute shear heating HS in P nodes
         # ---------------------------------------------------------------------
         compute_shear_heating!(
             HS,
@@ -6755,14 +6872,6 @@ function simulation_loop(output_path)
         compute_adiabatic_heating!(
             HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
 
-        # @info "M_1622"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1622_"*string(timestep)*".jld2";
-        #         HS,
-        #         HA
-        #     )
-        # end
-
         # ---------------------------------------------------------------------
         # @info "perform thermal iterations"
         # ---------------------------------------------------------------------
@@ -6774,21 +6883,10 @@ function simulation_loop(output_path)
         end
         
         perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm, timestep)
-
+            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt)
        
-        # @info "M_1733"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1733_"*string(timestep)*".jld2";
-        #         tk2,
-        #         tk1,
-        #         DT,
-        #         DT0
-        #     )
-        # end
-        
         # ---------------------------------------------------------------------
-        # apply subgrid temperature diffusion on markers"
+        # apply subgrid temperature diffusion on markers
         # compute DTsubgrid
         # ---------------------------------------------------------------------
         apply_subgrid_temperature_diffusion!(
@@ -6805,64 +6903,29 @@ function simulation_loop(output_path)
             marknum
         )
 
-        # @info "M_1807"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1807_"*string(timestep)*".jld2";
-        #         DT
-        #     )
-        # end
-
         # ---------------------------------------------------------------------
-        # interpolate DT to markers"
+        # interpolate DT to markers
         # ---------------------------------------------------------------------
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
-        # @info "M_1842"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1842_"*string(timestep)*".jld2";
-        #         tkm
-        #     )
-        # end
         # ---------------------------------------------------------------------
-        # update porosity on markers"
+        # update porosity on markers
         # ---------------------------------------------------------------------
         update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
-        # @info "M_1881"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1881_"*string(timestep)*".jld2";
-        #         phim
-        #     )
-        # end
 
         # ---------------------------------------------------------------------
-        # compute velocity in P nodes"
+        # compute velocity in P nodes
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
 
-        # @info "M_1944" 
-        # if timestep <=10
-        #     jldsave(output_path*"M_1944_"*string(timestep)*".jld2";
-        #         vxp,
-        #         vyp,
-        #         vxpf,
-        #         vypf
-        #     )
-        # end
-
         # ---------------------------------------------------------------------
-        # compute rotation rate in basic nodes"
+        # compute rotation rate in basic nodes
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
-        # @info "M_1951"
-        # if timestep <=10
-        #     jldsave(output_path*"M_1951_"*string(timestep)*".jld2";
-        #         wyx
-        #     )
-        # end
-
+        
         # ---------------------------------------------------------------------
-        # move markers with RK4"
+        # move markers with RK4
         # ---------------------------------------------------------------------
         move_markers_rk4!(
             xm,
@@ -6879,41 +6942,21 @@ function simulation_loop(output_path)
             wyx,
             tk2,
             marknum,
-            dtm
+            dt
         )
 
-        # @info "M_2235"
-        # if timestep <=10
-        #     jldsave(output_path*"M_2235_"*string(timestep)*".jld2";
-        #         xm,
-        #         ym,
-        #         sxxm,
-        #         sxym
-        #     )
-        # end
         # ---------------------------------------------------------------------
-        # backtrack P nodes: Ptotal with RK4"
+        # backtrack P nodes: Ptotal with RK4
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
         # pr0 .= pr
         # ps0 .= ps
         # pf0 .= pf
         backtrace_pressures_rk4!(
-            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
+            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
 
-        # @info "M_2494"
-        # if timestep <=10
-        #     jldsave(output_path*"M_2494_"*string(timestep)*".jld2";
-        #         pr,
-        #         ps,
-        #         pf,
-        #         pr0,
-        #         ps0,
-        #         pf0
-        #     )
-        # end
         # ---------------------------------------------------------------------
-        # info "replenish sparse areas with additional markers"
+        # replenish sparse areas with additional markers
         # ---------------------------------------------------------------------
         marknum = replenish_markers!(
             xm,
@@ -6946,25 +6989,11 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         # update timesum
         # ---------------------------------------------------------------------
-        timesum += dtm
-       #@info "update timesum" timesum
-    #    @info "M_2616"
-    #     if timestep <=10
-    #         jldsave(output_path*"M_2616_"*string(timestep)*".jld2";
-    #             xm,
-    #             ym,
-    #             tm,
-    #             tkm,
-    #             phim,
-    #             sxxm,
-    #             sxym,
-    #             etavpm,
-    #             marknum,
-    #             dt,
-    #             dtm,
-    #             timesum
-    #         )
-    #     end
+        timesum += dt
+        timestep_end = now() 
+        @info "time step duration" Dates.canonicalize(
+            Dates.CompoundPeriod(timestep_end-timestep_begin)) 
+        @info "total time [Ma]" s_to_Ma(timesum)
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -7044,6 +7073,8 @@ function simulation_loop(output_path)
                 EII,
                 SII,
                 DSXX,
+                DMP,
+                DHP,
                 xm,
                 ym,
                 tm,
@@ -7078,7 +7109,7 @@ function simulation_loop(output_path)
         # update progress
         # ---------------------------------------------------------------------
         next!(p; showvalues = generate_showvalues(
-            timestep, marknum, dt, dtm, timesum))
+            timestep, marknum, dt, timesum))
 
         # ---------------------------------------------------------------------
         # finish timestep
@@ -7088,7 +7119,6 @@ function simulation_loop(output_path)
         end
     end # for timestep = startstep:1:n_steps
 end # function simulation loop
-
 
 """
 Parse command line arguments and feed them to the main function.

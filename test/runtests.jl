@@ -878,6 +878,14 @@ const rgen = MersenneTwister(seed)
         @test etavpm ≈ etavpm_ver rtol=1e-9
     end # testset "update_marker_viscosity!()"
 
+    @testset "s_to_Ma()" begin
+        for _=1:1:10
+            s = rand(rgen, Int)
+            Ma = HydrologyPlanetesimals.s_to_Ma(s)
+            @test Ma ≈ s * 1e-6 / yearlength rtol=1e-9
+        end
+    end # testset "s_to_Ma()"
+
     @testset "distance()" begin
         @test HydrologyPlanetesimals.distance(0, 0, 0, 0) == 0
         @test HydrologyPlanetesimals.distance(1, 0, 0, 0) == 1
@@ -3696,13 +3704,13 @@ const rgen = MersenneTwister(seed)
         end
     end # testset "compute_gravity_solution!()"
 
-    @testset "assemble_gravitational_lse()" begin
+    @testset "assemble_gravitational_lse()!" begin
         RP = rand(rgen, Nx1*Ny1)
         RP_ver = deepcopy(RP)
         LP_ver = zeros(Nx1*Ny1, Nx1*Ny1)
         # simulate density field RHO
         RHO = rand(rgen, Ny1, Nx1) * 7e3
-        LP = HydrologyPlanetesimals.assemble_gravitational_lse(RHO, RP)
+        LP = HydrologyPlanetesimals.assemble_gravitational_lse!(RHO, RP)
         # verification, from HTM-planetary.m, lines 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
@@ -3746,7 +3754,7 @@ const rgen = MersenneTwister(seed)
             @test LP[i, j] ≈ LP_ver[i, j] rtol=1e-12
             @test RP[i] ≈ RP_ver[i] rtol=1e-12
         end
-    end # testset "assemble_gravitational_lse()"
+    end # testset "assemble_gravitational_lse!()"
 
     @testset "process_gravitational_solution" begin
         SP = rand(rgen, Nx1*Ny1)
@@ -3982,6 +3990,7 @@ const rgen = MersenneTwister(seed)
         gy = rand(rgen, Ny1, Nx1) * 1.0
         pr0 = rand(rgen, Ny1, Nx1) * 1e5
         pf0 = rand(rgen, Ny1, Nx1) * 1e5
+        DMP = rand(rgen, Ny1, Nx1) * 1e5
         # LSE
         R = zeros(Nx1*Ny1*6)
         L_ver = zeros(Nx1*Ny1*6, Nx1*Ny1*6)
@@ -4007,6 +4016,7 @@ const rgen = MersenneTwister(seed)
             gy,
             pr0,
             pf0,
+            DMP,
             dt,
             R
         )
@@ -4190,7 +4200,7 @@ const rgen = MersenneTwister(seed)
                 L_ver[kpm,kpm]= Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
                 L_ver[kpm,kpf]=-Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
                 # Right part
-                R_ver[kpm]=(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
+                R_ver[kpm]=(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt+DMP[i,j]
                 end
 
                 # qxDarcy equation External points
@@ -4820,173 +4830,172 @@ const rgen = MersenneTwister(seed)
         @test YNY_inv_ETA == YNY_inv_ETA_ver
     end # testset "finalize_plastic_iteration_pass!()"
 
-    @testset "apply_subgrid_stress_diffusion!()" begin
-        marknum = start_marknum
-        dtm = dtelastic
-        etam = @SVector ones(3)
-        # simulate markers
-        xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
-        ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
-        tm = rand(rgen, 1:3, marknum)
-        gggm = rand(rgen, 3)
-        inv_gggtotalm = inv.([gggm[tm[m]] for m in 1:marknum])
-        sxxm = rand(rgen, marknum)
-        sxym = rand(rgen, marknum)
-        SXX0 = rand(rgen, Ny1, Nx1)
-        SXY0 = rand(rgen, Ny, Nx)
-        DSXX = rand(rgen, Ny1, Nx1)
-        DSXY = rand(rgen, Ny, Nx)
-        SXXSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
-        SXYSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
-        WTPSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
-        WTSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
-        sxxm_ver = deepcopy(sxxm)
-        sxym_ver = deepcopy(sxym)
-        DSXX_ver = deepcopy(DSXX)
-        DSXY_ver = deepcopy(DSXY)
-        # apply subgrid stress diffusion
-        HydrologyPlanetesimals.apply_subgrid_stress_diffusion!(
-            xm,
-            ym,
-            tm,
-            inv_gggtotalm,
-            sxxm,
-            sxym,
-            SXX0,
-            SXY0,
-            DSXX,
-            DSXY,
-            SXXSUM,
-            SXYSUM,
-            WTPSUM,
-            WTSUM,
-            dtm,
-            marknum
-        )
-        # verification, from HTM-planetary.m, line 1374ff
-        # Apply subgrid stress diffusion to markers
-        if(dsubgrids>0)
-        SXYSUM_ver = zeros(Ny, Nx)
-        WTSUM_ver = zeros(Ny, Nx)
-        SXXSUM_ver = zeros(Ny1, Nx1)
-        WTPSUM_ver = zeros(Ny1, Nx1)
-        for m=1:1:marknum
-            # SIGMA'xx
-            # Define i;j indexes for the upper left node
-            j=trunc(Int, (xm[m]-xp[1])/dx)+1
-            i=trunc(Int, (ym[m]-yp[1])/dy)+1
-            if j<1
-                j=1
-            elseif j>Nx
-                j=Nx
-            end
-            if i<1
-                i=1
-            elseif i>Ny
-                i=Ny
-            end
-            # Compute distances
-            dxmj=xm[m]-xp[j]
-            dymi=ym[m]-yp[i]
-            # Compute weights
-            wtmij=(1-dxmj/dx)*(1-dymi/dy)
-            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
-            wtmij1=(dxmj/dx)*(1-dymi/dy)
-            wtmi1j1=(dxmj/dx)*(dymi/dy)
-            # Compute marker-node SIGMA'xx difference
-            dsxxm0=sxxm_ver[m]-(SXX0[i,j]*wtmij+SXX0[i+1,j]*wtmi1j+ SXX0[i,j+1]*wtmij1+SXX0[i+1,j+1]*wtmi1j1)
-            # Relax stress difference
-            dsxxm1=dsxxm0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
-            # Correct marker stress
-            ddsxxm_ver=dsxxm1-dsxxm0
-            sxxm_ver[m]=sxxm_ver[m]+ddsxxm_ver
-            # Update subgrid diffusion on nodes
-            # i;j Node
-            SXXSUM_ver[i,j]=SXXSUM_ver[i,j]+ddsxxm_ver*wtmij
-            WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij
-            # i+1;j Node
-            SXXSUM_ver[i+1,j]=SXXSUM_ver[i+1,j]+ddsxxm_ver*wtmi1j
-            WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j
-            # i;j+1 Node
-            SXXSUM_ver[i,j+1]=SXXSUM_ver[i,j+1]+ddsxxm_ver*wtmij1
-            WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1
-            # i+1;j+1 Node
-            SXXSUM_ver[i+1,j+1]=SXXSUM_ver[i+1,j+1]+ddsxxm_ver*wtmi1j1
-            WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1
-            # SIGMAxy
-            # Define i;j indexes for the upper left node
-            j=trunc(Int, (xm[m]-x[1])/dx)+1
-            i=trunc(Int, (ym[m]-y[1])/dy)+1
-            if j<1
-                j=1
-            elseif j>Nx-1
-                j=Nx-1
-            end
-            if i<1
-                i=1
-            elseif i>Ny-1
-                i=Ny-1
-            end
-            # Compute distances
-            dxmj=xm[m]-x[j]
-            dymi=ym[m]-y[i]
-            # Compute weights
-            wtmij=(1-dxmj/dx)*(1-dymi/dy)
-            wtmi1j=(1-dxmj/dx)*(dymi/dy);    
-            wtmij1=(dxmj/dx)*(1-dymi/dy)
-            wtmi1j1=(dxmj/dx)*(dymi/dy)
-            # Compute marker-node SIGMAxy difference
-            dsxym0=sxym_ver[m]-(SXY0[i,j]*wtmij+SXY0[i+1,j]*wtmi1j+  SXY0[i,j+1]*wtmij1+SXY0[i+1,j+1]*wtmi1j1)
-            # Relax stress difference
-            dsxym1=dsxym0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
-            # Correct marker stress
-            ddsxym_ver=dsxym1-dsxym0
-            sxym_ver[m]=sxym_ver[m]+ddsxym_ver
-            # Update subgrid diffusion on nodes
-            # i;j Node
-            SXYSUM_ver[i,j]=SXYSUM_ver[i,j]+ddsxym_ver*wtmij
-            WTSUM_ver[i,j]=WTSUM_ver[i,j]+wtmij
-            # i+1;j Node
-            SXYSUM_ver[i+1,j]=SXYSUM_ver[i+1,j]+ddsxym_ver*wtmi1j
-            WTSUM_ver[i+1,j]=WTSUM_ver[i+1,j]+wtmi1j
-            # i;j+1 Node
-            SXYSUM_ver[i,j+1]=SXYSUM_ver[i,j+1]+ddsxym_ver*wtmij1
-            WTSUM_ver[i,j+1]=WTSUM_ver[i,j+1]+wtmij1
-            # i+1;j+1 Node
-            SXYSUM_ver[i+1,j+1]=SXYSUM_ver[i+1,j+1]+ddsxym_ver*wtmi1j1
-            WTSUM_ver[i+1,j+1]=WTSUM_ver[i+1,j+1]+wtmi1j1
-        end
-        # Compute DSXXsubgrid_ver
-        DSXXsubgrid_ver = zeros(Ny1, Nx1)
-        # P-nodes
-        for j=2:1:Nx
-            for i=2:1:Ny
-                if(WTPSUM_ver[i,j]>0)
-                    DSXXsubgrid_ver[i,j]=SXXSUM_ver[i,j]/WTPSUM_ver[i,j]
-                end
-            end
-        end
-        # Correct DSXX_ver
-        DSXX_ver=DSXX_ver-DSXXsubgrid_ver
-        # Compute DSXYsubgrid_ver
-        DSXYsubgrid_ver = zeros(Ny, Nx)
-        # Basic nodes
-        for j=1:1:Nx
-            for i=1:1:Ny
-                if(WTSUM_ver[i,j]>0)
-                    DSXYsubgrid_ver[i,j]=SXYSUM_ver[i,j]/WTSUM_ver[i,j]
-                end
-            end
-        end
-        # Correct DSXY_ver
-        DSXY_ver=DSXY_ver-DSXYsubgrid_ver
-        end
-    # test
-    @test sxxm ≈ sxxm_ver rtol=1e-9
-    @test sxym ≈ sxym_ver rtol=1e-9
-    @test DSXX ≈ DSXX_ver rtol=1e-9
-    @test DSXY ≈ DSXY_ver rtol=1e-9
-    end # testset "apply_subgrid_stress_diffusion!()"
+    # @testset "apply_subgrid_stress_diffusion!()" begin
+    #     marknum = start_marknum
+    #     dtm = dtelastic
+    #     etam = @SVector ones(3)
+    #     # simulate markers
+    #     xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
+    #     ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
+    #     tm = rand(rgen, 1:3, marknum)
+    #     gggm = rand(rgen, 3)
+    #     inv_gggtotalm = inv.([gggm[tm[m]] for m in 1:marknum])
+    #     sxxm = rand(rgen, marknum)
+    #     sxym = rand(rgen, marknum)
+    #     SXX0 = rand(rgen, Ny1, Nx1)
+    #     SXY0 = rand(rgen, Ny, Nx)
+    #     DSXX = rand(rgen, Ny1, Nx1)
+    #     DSXY = rand(rgen, Ny, Nx)
+    #     SXXSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
+    #     SXYSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
+    #     WTPSUM = rand(rgen, Ny1, Nx1, Base.Threads.nthreads())
+    #     WTSUM = rand(rgen, Ny, Nx, Base.Threads.nthreads())
+    #     sxxm_ver = deepcopy(sxxm)
+    #     sxym_ver = deepcopy(sxym)
+    #     DSXX_ver = deepcopy(DSXX)
+    #     DSXY_ver = deepcopy(DSXY)
+    #     # apply subgrid stress diffusion
+    #     HydrologyPlanetesimals.apply_subgrid_stress_diffusion!(
+    #         xm,
+    #         ym,
+    #         tm,
+    #         inv_gggtotalm,
+    #         sxxm,
+    #         sxym,
+    #         SXX0,
+    #         SXY0,
+    #         DSXX,
+    #         DSXY,
+    #         SXXSUM,
+    #         SXYSUM,
+    #         WTPSUM,
+    #         WTSUM,
+    #         dtm,
+    #         marknum
+    #     )
+    #     # verification, from HTM-planetary.m, line 1374ff
+    #     # Apply subgrid stress diffusion to markers
+    #     if(dsubgrids>0)
+    #     SXYSUM_ver = zeros(Ny, Nx)
+    #     WTSUM_ver = zeros(Ny, Nx)
+    #     SXXSUM_ver = zeros(Ny1, Nx1)
+    #     WTPSUM_ver = zeros(Ny1, Nx1)
+    #     for m=1:1:marknum
+    #         # SIGMA'xx
+    #         # Define i;j indexes for the upper left node
+    #         j=trunc(Int, (xm[m]-xp[1])/dx)+1
+    #         i=trunc(Int, (ym[m]-yp[1])/dy)+1
+    #         if j<1
+    #             j=1
+    #         elseif j>Nx
+    #             j=Nx
+    #         end
+    #         if i<1
+    #             i=1
+    #         elseif i>Ny
+    #             i=Ny
+    #         end
+    #         # Compute distances
+    #         dxmj=xm[m]-xp[j]
+    #         dymi=ym[m]-yp[i]
+    #         # Compute weights
+    #         wtmij=(1-dxmj/dx)*(1-dymi/dy)
+    #         wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+    #         wtmij1=(dxmj/dx)*(1-dymi/dy)
+    #         wtmi1j1=(dxmj/dx)*(dymi/dy)
+    #         # Compute marker-node SIGMA'xx difference
+    #         dsxxm0=sxxm_ver[m]-(SXX0[i,j]*wtmij+SXX0[i+1,j]*wtmi1j+ SXX0[i,j+1]*wtmij1+SXX0[i+1,j+1]*wtmi1j1)
+    #         # Relax stress difference
+    #         dsxxm1=dsxxm0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
+    #         # Correct marker stress
+    #         ddsxxm_ver=dsxxm1-dsxxm0
+    #         sxxm_ver[m]=sxxm_ver[m]+ddsxxm_ver
+    #         # Update subgrid diffusion on nodes
+    #         # i;j Node
+    #         SXXSUM_ver[i,j]=SXXSUM_ver[i,j]+ddsxxm_ver*wtmij
+    #         WTPSUM_ver[i,j]=WTPSUM_ver[i,j]+wtmij
+    #         # i+1;j Node
+    #         SXXSUM_ver[i+1,j]=SXXSUM_ver[i+1,j]+ddsxxm_ver*wtmi1j
+    #         WTPSUM_ver[i+1,j]=WTPSUM_ver[i+1,j]+wtmi1j
+    #         # i;j+1 Node
+    #         SXXSUM_ver[i,j+1]=SXXSUM_ver[i,j+1]+ddsxxm_ver*wtmij1
+    #         WTPSUM_ver[i,j+1]=WTPSUM_ver[i,j+1]+wtmij1
+    #         # i+1;j+1 Node
+    #         SXXSUM_ver[i+1,j+1]=SXXSUM_ver[i+1,j+1]+ddsxxm_ver*wtmi1j1
+    #         WTPSUM_ver[i+1,j+1]=WTPSUM_ver[i+1,j+1]+wtmi1j1
+    #         # SIGMAxy
+    #         # Define i;j indexes for the upper left node
+    #         j=trunc(Int, (xm[m]-x[1])/dx)+1
+    #         i=trunc(Int, (ym[m]-y[1])/dy)+1
+    #         if j<1
+    #             j=1
+    #         elseif j>Nx-1
+    #             j=Nx-1
+    #         end
+    #         if i<1
+    #             i=1
+    #         elseif i>Ny-1
+    #             i=Ny-1
+    #         end
+    #         # Compute distances
+    #         dxmj=xm[m]-x[j]
+    #         dymi=ym[m]-y[i]
+    #         # Compute weights
+    #         wtmij=(1-dxmj/dx)*(1-dymi/dy)
+    #         wtmi1j=(1-dxmj/dx)*(dymi/dy);    
+    #         wtmij1=(dxmj/dx)*(1-dymi/dy)
+    #         wtmi1j1=(dxmj/dx)*(dymi/dy)
+    #         # Compute marker-node SIGMAxy difference
+    #         dsxym0=sxym_ver[m]-(SXY0[i,j]*wtmij+SXY0[i+1,j]*wtmi1j+  SXY0[i,j+1]*wtmij1+SXY0[i+1,j+1]*wtmi1j1)
+    #         # Relax stress difference
+    #         dsxym1=dsxym0*exp(-dsubgrids*dtm/(etam[tm[m]]/gggm[tm[m]]))
+    #         # Correct marker stress
+    #         ddsxym_ver=dsxym1-dsxym0
+    #         sxym_ver[m]=sxym_ver[m]+ddsxym_ver
+    #         # Update subgrid diffusion on nodes
+    #         # i;j Node
+    #         SXYSUM_ver[i,j]=SXYSUM_ver[i,j]+ddsxym_ver*wtmij
+    #         WTSUM_ver[i,j]=WTSUM_ver[i,j]+wtmij
+    #         # i+1;j Node
+    #         SXYSUM_ver[i+1,j]=SXYSUM_ver[i+1,j]+ddsxym_ver*wtmi1j
+    #         WTSUM_ver[i+1,j]=WTSUM_ver[i+1,j]+wtmi1j
+    #         # i;j+1 Node
+    #         SXYSUM_ver[i,j+1]=SXYSUM_ver[i,j+1]+ddsxym_ver*wtmij1
+    #         WTSUM_ver[i,j+1]=WTSUM_ver[i,j+1]+wtmij1
+    #         # i+1;j+1 Node
+    #         SXYSUM_ver[i+1,j+1]=SXYSUM_ver[i+1,j+1]+ddsxym_ver*wtmi1j1
+    #         WTSUM_ver[i+1,j+1]=WTSUM_ver[i+1,j+1]+wtmi1j1
+    #     end
+    #     # Compute DSXXsubgrid_ver
+    #     DSXXsubgrid_ver = zeros(Ny1, Nx1)
+    #     # P-nodes
+    #     for j=2:1:Nx
+    #         for i=2:1:Ny
+    #             if(WTPSUM_ver[i,j]>0)
+    #                 DSXXsubgrid_ver[i,j]=SXXSUM_ver[i,j]/WTPSUM_ver[i,j]
+    #             end
+    #         end
+    #     end
+    #     # Correct DSXX_ver
+    #     DSXX_ver=DSXX_ver-DSXXsubgrid_ver
+    #     # Compute DSXYsubgrid_ver
+    #     DSXYsubgrid_ver = zeros(Ny, Nx)
+    #     # Basic nodes
+    #     for j=1:1:Nx
+    #         for i=1:1:Ny
+    #             if(WTSUM_ver[i,j]>0)
+    #                 DSXYsubgrid_ver[i,j]=SXYSUM_ver[i,j]/WTSUM_ver[i,j]
+    #             end
+    #         end
+    #     end
+    #     # Correct DSXY_ver
+    #     DSXY_ver=DSXY_ver-DSXYsubgrid_ver
+    #     # test
+    #     @test sxxm ≈ sxxm_ver rtol=1e-9
+    #     @test sxym ≈ sxym_ver rtol=1e-9
+    #     @test DSXX ≈ DSXX_ver rtol=1e-9
+    #     @test DSXY ≈ DSXY_ver rtol=1e-9
+    # end # testset "apply_subgrid_stress_diffusion!()"
 
     @testset "update_marker_stress!()" begin
         marknum = start_marknum
@@ -5164,39 +5173,22 @@ const rgen = MersenneTwister(seed)
         @test HA ≈ HA_ver rtol=1e-9
     end # testset "compute_adiabatic_heating!()"
 
-    @testset "perform_thermal_iterations!()" begin
-        dtm = 0.0001
-        ts = 1
-        tk0 = rand(rgen, Ny1, Nx1)
+    @testset "assemble_thermal_lse!" begin
+        dt = rand(rgen)
         tk1 = rand(rgen, Ny1, Nx1)
-        tk2 = rand(rgen, Ny1, Nx1)
         RHOCP = rand(rgen, Ny1, Nx1)
         KX = rand(rgen, Ny1, Nx1)
         KY = rand(rgen, Ny1, Nx1)
         HR = rand(rgen, Ny1, Nx1)
         HA = rand(rgen, Ny1, Nx1)
         HS = rand(rgen, Ny1, Nx1)
-        DT = zeros(Ny1, Nx1)
-        DT0 = zeros(Ny1, Nx1)
-        DT_ver = zeros(Ny1, Nx1)
-        DT0_ver = zeros(Ny1, Nx1)
-        tk0_ver = deepcopy(tk0)
-        tk1_ver = deepcopy(tk1)
-        tk2_ver = deepcopy(tk2)
-        RT = zeros(Ny1*Nx1)
-        ST = zeros(Ny1*Nx1)
-        # perform thermal iterations
-        HydrologyPlanetesimals.perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, RT, ST, dtm, ts)
+        DHP = rand(rgen, Ny1, Nx1)
+        RT = rand(rgen, Ny1*Nx1)
+        LT = HydrologyPlanetesimals.assemble_thermal_lse!(
+            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
         # verification, from HTM-planetary.m, line 1618ff
-        LT = zeros(Ny1*Nx1, Ny1*Nx1)
-        RT = zeros(Ny1*Nx1)
-        ST = zeros(Ny1*Nx1)
-        tk0_ver.=tk1_ver
-        dtt=dtm
-        dttsum=0
-        titer=1
-        while dttsum<dtm
+        LT_ver = zeros(Ny1*Nx1, Ny1*Nx1)
+        RT_ver = zeros(Ny1*Nx1)
         # Composing global matrixes LT[], RT[]
         # Going through all points of the 2D grid &
         # composing respective equations
@@ -5209,27 +5201,27 @@ const rgen = MersenneTwister(seed)
                     # Boundary Condition
                     # Top BC: T=273
                     if i==1 && j>1 && j<Nx1
-                        LT[gk,gk]=1; # Left part
-                        LT[gk,gk+1]=-1; # Left part
-                        RT[gk]=0; # Right part
+                        LT_ver[gk,gk]=1; # Left part
+                        LT_ver[gk,gk+1]=-1; # Left part
+                        RT_ver[gk]=0; # Right part
                     end
                     # Bottom BC: T=1500
                     if i==Ny1 && j>1 && j<Nx1
-                        LT[gk,gk]=1; # Left part
-                        LT[gk,gk-1]=-1; # Left part
-                        RT[gk]=0; # Right part
+                        LT_ver[gk,gk]=1; # Left part
+                        LT_ver[gk,gk-1]=-1; # Left part
+                        RT_ver[gk]=0; # Right part
                     end
                     # Left BC: dT/dx=0
                     if j==1
-                        LT[gk,gk]=1; # Left part
-                        LT[gk,gk+Ny1]=-1; # Left part
-                        RT[gk]=0; # Right part
+                        LT_ver[gk,gk]=1; # Left part
+                        LT_ver[gk,gk+Ny1]=-1; # Left part
+                        RT_ver[gk]=0; # Right part
                     end
                     # Right BC: dT/dx=0
                     if j==Nx1
-                        LT[gk,gk]=1; # Left part
-                        LT[gk,gk-Ny1]=-1; # Left part
-                        RT[gk]=0; # Right part
+                        LT_ver[gk,gk]=1; # Left part
+                        LT_ver[gk,gk-Ny1]=-1; # Left part
+                        RT_ver[gk]=0; # Right part
                     end
                 else
                 # Internal points: Temperature eq.
@@ -5249,56 +5241,157 @@ const rgen = MersenneTwister(seed)
                 Kx2=KX[i,j]; 
                 Ky1=KY[i-1,j]; 
                 Ky2=KY[i,j]; 
-                LT[gk,gk-Ny1]=-Kx1/dx^2; # T1
-                LT[gk,gk-1]=-Ky1/dy^2; # FI2
-                LT[gk,gk]=RHOCP[i,j]/dtt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
-                LT[gk,gk+1]=-Ky2/dy^2; # FI4
-                LT[gk,gk+Ny1]=-Kx2/dx^2; # FI5
+                LT_ver[gk,gk-Ny1]=-Kx1/dx^2; # T1
+                LT_ver[gk,gk-1]=-Ky1/dy^2; # FI2
+                LT_ver[gk,gk]=RHOCP[i,j]/dt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
+                LT_ver[gk,gk+1]=-Ky2/dy^2; # FI4
+                LT_ver[gk,gk+Ny1]=-Kx2/dx^2; # FI5
                 # Right part
-                RT[gk]=RHOCP[i,j]/dtt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]
+                RT_ver[gk]=RHOCP[i,j]/dt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]+DHP[i,j]
                 end
             end
         end
-        # Solving matrixes
-        ST=LT\RT; # Obtaining algebraic vector of solutions ST[]
-        # Reload solutions ST[] to geometrical array Tdt[]
-        # Going through all grid points
-        for j=1:1:Nx1
-            for i=1:1:Ny1
-                # Compute global index
-                gk=(j-1)*Ny1+i
-                # Reload solution
-                tk2_ver[i,j]=ST[gk]
-            end
-        end
-        # Compute DT
-        DT_ver=tk2_ver-tk1_ver
-        titer
-        dtt
-        if titer==1
-            # Apply thermal timestepping condition
-            maxDTcurrent=maximum(abs, DT_ver)
-            if maxDTcurrent>DTmax 
-                dtt=dtt/maxDTcurrent*DTmax
-            else
-                dttsum=dttsum+dtt; # Update dttsum
-            end
-        else
-            dttsum=dttsum+dtt; # Update dttsum
-            # Adjust timestep
-            if dtt>dtm-dttsum
-                dtt=dtm-dttsum
-            end
-        end
-        titer=titer+1; # Update iteration counter
-        end
-        # Compute/save overall temperature changes
-        DT_ver=tk2_ver-tk0_ver
-        DT0_ver=DT_ver
-        # test
-        @test DT ≈ DT_ver rtol=1e-9
-        @test DT0 ≈ DT0_ver rtol=1e-9
-    end # testset "perform_thermal_iterations!()"
+        # testing 
+        @test LT ≈ LT_ver rtol=1e-9
+        @test RT ≈ RT_ver rtol=1e-9
+    end # testset "assemble_thermal_lse!"
+
+    # @testset "perform_thermal_iterations!()" begin
+    #     dtm = 0.0001
+    #     tk0 = rand(rgen, Ny1, Nx1)
+    #     tk1 = rand(rgen, Ny1, Nx1)
+    #     tk2 = rand(rgen, Ny1, Nx1)
+    #     RHOCP = rand(rgen, Ny1, Nx1)
+    #     KX = rand(rgen, Ny1, Nx1)
+    #     KY = rand(rgen, Ny1, Nx1)
+    #     HR = rand(rgen, Ny1, Nx1)
+    #     HA = rand(rgen, Ny1, Nx1)
+    #     HS = rand(rgen, Ny1, Nx1)
+    #     DHP = rand(rgen, Ny1, Nx1)
+    #     DT = zeros(Ny1, Nx1)
+    #     DT0 = zeros(Ny1, Nx1)
+    #     DT_ver = zeros(Ny1, Nx1)
+    #     DT0_ver = zeros(Ny1, Nx1)
+    #     tk0_ver = deepcopy(tk0)
+    #     tk1_ver = deepcopy(tk1)
+    #     tk2_ver = deepcopy(tk2)
+    #     RT = zeros(Ny1*Nx1)
+    #     ST = zeros(Ny1*Nx1)
+    #     # perform thermal iterations
+    #     HydrologyPlanetesimals.perform_thermal_iterations!(
+    #         tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dtm)
+    #     # verification, from HTM-planetary.m, line 1618ff
+    #     LT = zeros(Ny1*Nx1, Ny1*Nx1)
+    #     RT = zeros(Ny1*Nx1)
+    #     ST = zeros(Ny1*Nx1)
+    #     tk0_ver.=tk1_ver
+    #     dtt=dtm
+    #     dttsum=0
+    #     titer=1
+    #     while dttsum<dtm
+    #     # Composing global matrixes LT[], RT[]
+    #     # Going through all points of the 2D grid &
+    #     # composing respective equations
+    #     for j=1:1:Nx1
+    #         for i=1:1:Ny1
+    #             # Define global index in algebraic space
+    #             gk=(j-1)*Ny1+i
+    #             # External points
+    #             if i==1 || i==Ny1 || j==1 || j==Nx1
+    #                 # Boundary Condition
+    #                 # Top BC: T=273
+    #                 if i==1 && j>1 && j<Nx1
+    #                     LT[gk,gk]=1; # Left part
+    #                     LT[gk,gk+1]=-1; # Left part
+    #                     RT[gk]=0; # Right part
+    #                 end
+    #                 # Bottom BC: T=1500
+    #                 if i==Ny1 && j>1 && j<Nx1
+    #                     LT[gk,gk]=1; # Left part
+    #                     LT[gk,gk-1]=-1; # Left part
+    #                     RT[gk]=0; # Right part
+    #                 end
+    #                 # Left BC: dT/dx=0
+    #                 if j==1
+    #                     LT[gk,gk]=1; # Left part
+    #                     LT[gk,gk+Ny1]=-1; # Left part
+    #                     RT[gk]=0; # Right part
+    #                 end
+    #                 # Right BC: dT/dx=0
+    #                 if j==Nx1
+    #                     LT[gk,gk]=1; # Left part
+    #                     LT[gk,gk-Ny1]=-1; # Left part
+    #                     RT[gk]=0; # Right part
+    #                 end
+    #             else
+    #             # Internal points: Temperature eq.
+    #             # RHO*CP*dT/dt=-dqx/dx-dqy/dy+Hr+Hs+Ha
+    #             #          Tdt2
+    #             #           |
+    #             #          Ky1
+    #             #           |
+    #             #Tdt1-Kx1-T03;Tdt3-Kx2-Tdt5
+    #             #           |
+    #             #          Ky2
+    #             #           |
+    #             #          Tdt4
+    #             #
+    #             # Left part
+    #             Kx1=KX[i,j-1]; 
+    #             Kx2=KX[i,j]; 
+    #             Ky1=KY[i-1,j]; 
+    #             Ky2=KY[i,j]; 
+    #             LT[gk,gk-Ny1]=-Kx1/dx^2; # T1
+    #             LT[gk,gk-1]=-Ky1/dy^2; # FI2
+    #             LT[gk,gk]=RHOCP[i,j]/dtt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
+    #             LT[gk,gk+1]=-Ky2/dy^2; # FI4
+    #             LT[gk,gk+Ny1]=-Kx2/dx^2; # FI5
+    #             # Right part
+    #             RT[gk]=RHOCP[i,j]/dtt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]+DHP[i,j]
+    #             end
+    #             end
+    #         end
+    #     end
+    #     # Solving matrixes
+    #     ST=LT\RT; # Obtaining algebraic vector of solutions ST[]
+    #     # Reload solutions ST[] to geometrical array Tdt[]
+    #     # Going through all grid points
+    #     for j=1:1:Nx1
+    #         for i=1:1:Ny1
+    #             # Compute global index
+    #             gk=(j-1)*Ny1+i
+    #             # Reload solution
+    #             tk2_ver[i,j]=ST[gk]
+    #         end
+    #     end
+    #     # Compute DT
+    #     DT_ver=tk2_ver-tk1_ver
+    #     titer
+    #     dtt
+    #     if titer==1
+    #         # Apply thermal timestepping condition
+    #         maxDTcurrent=maximum(abs, DT_ver)
+    #         if maxDTcurrent>DTmax 
+    #             dtt=dtt/maxDTcurrent*DTmax
+    #         else
+    #             dttsum=dttsum+dtt; # Update dttsum
+    #         end
+    #     else
+    #         dttsum=dttsum+dtt; # Update dttsum
+    #         # Adjust timestep
+    #         if dtt>dtm-dttsum
+    #             dtt=dtm-dttsum
+    #         end
+    #     end
+    #     titer=titer+1; # Update iteration counter
+    #     end
+    #     # Compute/save overall temperature changes
+    #     DT_ver=tk2_ver-tk0_ver
+    #     DT0_ver=DT_ver
+    #     # test
+    #     @test DT ≈ DT_ver rtol=1e-9
+    #     @test DT0 ≈ DT0_ver rtol=1e-9
+    # end # testset "perform_thermal_iterations!()"
 
     @testset "apply_subgrid_temperature_diffusion!()" begin
         marknum = start_marknum
