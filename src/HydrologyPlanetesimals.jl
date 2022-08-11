@@ -2902,7 +2902,7 @@ function assemble_hydromechanical_lse!(
     R
 )
 # @timeit to "assemble_hydromechanical_lse()" begin
-    # initiate LHS sparse coefficient matrix
+    # initialize LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # reset RHS coefficient vector
     R .= 0.0
@@ -3937,7 +3937,7 @@ function finalize_plastic_iteration_pass!(
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
 # end # @timeit to "finalize_plastic_iteration_pass!()"
-    end # function finalize_plastic_iteration_pass
+end # function finalize_plastic_iteration_pass
 
 """
 Apply xy (basic grid) and xx (P grid) subgrid stress diffusion to markers.
@@ -6633,7 +6633,7 @@ function simulation_loop(output_path)
                     # S = F \ R
                     S = L \ R
                 end
-    # end # @timeit to "solve system"
+    # end # @timeit to "solve hydromechanical system"
 
                 # obtain hydromechanical observables from solution
                 process_hydromechanical_solution!(
@@ -6810,7 +6810,69 @@ function simulation_loop(output_path)
                     )
                 end
             end # for iplast=1:1:nplast
+
+            # ------------------------------------------------------------------
+            # compute shear heating HS in P nodes
+            # ------------------------------------------------------------------
+            compute_shear_heating!(
+                HS,
+                ETA,
+                SXY,
+                ETAP,
+                SXX,
+                RX,
+                RY,
+                qxD,
+                qyD,
+                PHI,
+                ETAPHI,
+                pr,
+                pf
+            )
+        
+            # ------------------------------------------------------------------
+            # compute adiabatic heating HA in P nodes
+            # ------------------------------------------------------------------
+            compute_adiabatic_heating!(
+                HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
+
+            # ------------------------------------------------------------------
+            # solve temperature equation
+            # ------------------------------------------------------------------
+            # assemble thermal system of equations 
+            LT = assemble_thermal_lse!(
+                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
+            # solve thermal system of equations
+            ST = LT \ RT
+            # reshape solution vector to 2D array
+            tk2 .= reshape(ST, Ny1, Nx1)
+            # compute ΔT
+            @. DT = tk2 - tk1
+            # during first thermal iteration pass:
+            # apply thermal timestepping stability condition
+            if titer == 1
+                maxDTcurrent = maximum(abs, DT)
+                if maxDTcurrent > DTmax
+                    dt *= (DTmax * inv(maxDTcurrent))
+                end
+            end
+            # stop thermochemical iterations
+            pferrcur = maximum(abs, pf-pf0)
+            DMPmax = maximum(abs, DMP)
+            @info(
+                "timestep $timestep: end of thermochemical iteration $titer",
+                pferrcur,
+                DMPmax
+            )
+            if pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
+                break
+            end                
         end
+
+        # ---------------------------------------------------------------------
+        # advance temperature generation
+        # ---------------------------------------------------------------------
+        DT0 .= DT
 
         # ---------------------------------------------------------------------
         # interpolate updated viscoplastic viscosity to markers
@@ -6847,44 +6909,6 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
-        # ---------------------------------------------------------------------
-        # compute shear heating HS in P nodes
-        # ---------------------------------------------------------------------
-        compute_shear_heating!(
-            HS,
-            ETA,
-            SXY,
-            ETAP,
-            SXX,
-            RX,
-            RY,
-            qxD,
-            qyD,
-            PHI,
-            ETAPHI,
-            pr,
-            pf
-        )
-    
-        # ---------------------------------------------------------------------
-        # compute adiabatic heating HA in P nodes
-        # ---------------------------------------------------------------------
-        compute_adiabatic_heating!(
-            HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
-
-        # ---------------------------------------------------------------------
-        # @info "perform thermal iterations"
-        # ---------------------------------------------------------------------
-        if timestep==1
-            # no pressure changes for the first timestep
-            pr0 .= pr
-            pf0 .= pf
-            ps0 .= pf
-        end
-        
-        perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt)
-       
         # ---------------------------------------------------------------------
         # apply subgrid temperature diffusion on markers
         # compute DTsubgrid

@@ -378,6 +378,8 @@ const ΔVWD = VDˢ + VH₂Oᶠ - VWˢ
 const Δtreaction = 1.0e+10
 # coefficient of pressure from previous hydrothermomechanical iteration
 const pfcoeff = 0.5
+# error limit to exit thermochemical iterations
+const pferrmax = 1.0e+5
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1
