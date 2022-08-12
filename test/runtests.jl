@@ -1043,7 +1043,7 @@ const rgen = MersenneTwister(seed)
             tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁)
         ΔGWD₂ = HydrologyPlanetesimals.compute_gibbs_free_energy(
             tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂)
-        # verification, from i2visHTM_hydration.m, lines 614ff
+        # verification, from i2visHTM_hydration.m, line 614ff
         # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
         dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(XDsolidm0/XWsolidm0[m]);
         # Compute incomplete reaction for too short timestep
@@ -1071,7 +1071,7 @@ const rgen = MersenneTwister(seed)
         m = 1
         Hᵗ₀ = HydrologyPlanetesimals.compute_relative_enthalpy(
             Xsolid0, XWsolidm0[m])
-        # verification, from i2visHTM_hydration.m, lines 612ff
+        # verification, from i2visHTM_hydration.m, line 612ff
         # Compute old relative ehthalpy of the system
         Htotal0=-Xsolid0*XWsolidm0[m]*dHWD/(MD+MH2O);
         # test
@@ -1086,7 +1086,7 @@ const rgen = MersenneTwister(seed)
         tknm, pfnm = rand(rgen, 2)
         KWD = HydrologyPlanetesimals.compute_reaction_constant(
             tknm, pfnm, dGWD)
-        # verification, from i2visHTM_hydration.m, lines 623ff
+        # verification, from i2visHTM_hydration.m, line 623ff
         KWD_ver=exp(-(dHWD-tknm*dSWD+dVWD*pfnm-dGWD)/8.314/tknm);
         # test
         @test KWD ≈ KWD_ver rtol=1e-9
@@ -2676,7 +2676,7 @@ const rgen = MersenneTwister(seed)
                 FRI,
                 YNY
             )
-            # verification properties, from HTM-planetary.m, lines 373ff, 606ff
+            # verification properties, from HTM-planetary.m, line 373ff, 606ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-x[1])/dx)+1
                 i=trunc(Int, (ym[m]-y[1])/dy)+1
@@ -2824,7 +2824,7 @@ const rgen = MersenneTwister(seed)
                 PHIX,
                 RX
             )
-            # verification properties, from HTM-planetary.m, lines 434ff, 624ff
+            # verification properties, from HTM-planetary.m, line 434ff, 624ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvx[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvx[1])/dy)+1
@@ -2956,7 +2956,7 @@ const rgen = MersenneTwister(seed)
                 PHIY,
                 RY
             )
-            # verification properties, from HTM-planetary.m, lines 486ff, 636ff
+            # verification properties, from HTM-planetary.m, line 486ff, 636ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xvy[1])/dx)+1
                 i=trunc(Int, (ym[m]-yvy[1])/dy)+1
@@ -3123,7 +3123,7 @@ const rgen = MersenneTwister(seed)
                 PHI,
                 BETTAPHI
             )
-            # verification properties, from HTM-planetary.m, lines 538ff, 648ff
+            # verification properties, from HTM-planetary.m, line 538ff, 648ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
                 i=trunc(Int, (ym[m]-yp[1])/dy)+1
@@ -3260,7 +3260,7 @@ const rgen = MersenneTwister(seed)
             end
             HydrologyPlanetesimals.compute_thermodynamic_xfer!(
                DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
-            # verification properties, from i2visHTM_hydration.m, lines 566f, 669ff,  
+            # verification properties, from i2visHTM_hydration.m, line 566f, 669ff,  
             for m=1:1:marknum
                 DMm = property[1, m]
                 DHm = property[2, m]
@@ -3341,7 +3341,7 @@ const rgen = MersenneTwister(seed)
             end
             HydrologyPlanetesimals.compute_molarfraction!(
             XWSSUM, WTPSUM, XWS)
-            # verification properties, from i2visHTM_hydration.m, lines 1547ff
+            # verification properties, from i2visHTM_hydration.m, line 1547ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
                 i=trunc(Int, (ym[m]-yp[1])/dy)+1
@@ -3466,7 +3466,7 @@ const rgen = MersenneTwister(seed)
             timestep,
             titer
         )
-        # verification, from HTM-hydration.m, lines 558ff
+        # verification, from HTM-hydration.m, line 558ff
         # Compute mass transfer rate
         DMPSUM_ver=zeros(Ny1,Nx1);
         DHPSUM_ver=zeros(Ny1,Nx1);
@@ -3631,7 +3631,7 @@ const rgen = MersenneTwister(seed)
             gx,
             gy
         )
-        # verification, from HTM-planetary.m, lines 680ff
+        # verification, from HTM-planetary.m, line 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Define global index in algebraic space
@@ -3711,7 +3711,7 @@ const rgen = MersenneTwister(seed)
         # simulate density field RHO
         RHO = rand(rgen, Ny1, Nx1) * 7e3
         LP = HydrologyPlanetesimals.assemble_gravitational_lse!(RHO, RP)
-        # verification, from HTM-planetary.m, lines 680ff
+        # verification, from HTM-planetary.m, line 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Define global index in algebraic space
@@ -3765,7 +3765,7 @@ const rgen = MersenneTwister(seed)
         gx_ver = zeros(Float64, Ny1, Nx1)
         gy_ver = zeros(Float64, Ny1, Nx1)
         HydrologyPlanetesimals.process_gravitational_solution!(SP, FI, gx, gy)
-        # verification, from HTM-planetary.m, lines 680ff
+        # verification, from HTM-planetary.m, line 680ff
         for j=1:1:Nx1
             for i=1:1:Ny1
                 # Compute global index
@@ -3813,7 +3813,7 @@ const rgen = MersenneTwister(seed)
             PHI,
             etaphikoef
         )
-        # verification, from HTM-planetary.m, lines 771ff
+        # verification, from HTM-planetary.m, line 771ff
         for i=2:1:Ny
             for j=2:1:Nx
                 ETAP_ver[i,j]=1/((1/ETA[i-1,j-1]+1/ETA[i,j-1]+1/ETA[i-1,j]+1/ETA[i,j])/4)
@@ -3868,7 +3868,7 @@ const rgen = MersenneTwister(seed)
             dRHOYdx,
             dRHOYdy
         )
-        # verification, from HTM-planetary.m, lines 832ff, 905ff
+        # verification, from HTM-planetary.m, line 832ff, 905ff
         for j=1:1:Nx, i=1:1:Ny
             # x-Stokes
             if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
@@ -4021,7 +4021,7 @@ const rgen = MersenneTwister(seed)
             R
         )
         L = collect(L)
-        # verification, from HTM-planetary.m, lines 779ff
+        # verification, from HTM-planetary.m, line 779ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
         for j=1:1:Nx1
@@ -4829,6 +4829,53 @@ const rgen = MersenneTwister(seed)
         @test YNY == YNY_ver
         @test YNY_inv_ETA == YNY_inv_ETA_ver
     end # testset "finalize_plastic_iteration_pass!()"
+
+    @testset "finalize_thermochemical_iteration_pass()" begin
+        DT_small = rand(rgen, Ny1, Nx1)
+        DT_large = rand(rgen, Ny1, Nx1) .* DTmax .* 2.0
+        for DT in [DT_small, DT_large]
+            dt = HydrologyPlanetesimals.finalize_thermochemical_iteration_pass(
+                DT,
+                dtmax
+            )
+            # verification, from HTM-hydration.m, line 1230ff
+            dt_ver = dtmax
+            maxDTcurrent=maximum(abs, DT);
+            if maxDTcurrent>DTmax 
+                dt_ver=dtmax/maxDTcurrent*DTmax;
+            end
+            # test
+            @test dt ≈ dt_ver rtol=1e-9
+        end
+    end # testset "finalize_thermochemical_iteration_pass()"
+
+    @testset "compute_thermochemical_iteration_outcome" begin
+        pf_small = rand(rgen, Ny1, Nx1)
+        pf_large = rand(rgen, Ny1, Nx1) .* pferrmax .* 2.0
+        pf0 = rand(rgen, Ny1, Nx1)
+        DMP_small = rand(rgen, Ny1, Nx1) .* 2.0 .- 1.0
+        DMP_zero = zeros(Ny1, Nx1)
+        titers = collect(1:1:3)
+        for titer in titers, pf in [pf_small, pf_large], DMP in [
+            DMP_small, DMP_zero]
+            outcome = HydrologyPlanetesimals.compute_thermochemical_iteration_outcome(
+                DMP,
+                pf,
+                pf0,
+                titer
+            )
+            # verification, from HTM-hydration.m, line 1385ff
+            pferrcur=maximum(abs, pf-pf0);
+            DMPmax=maximum(abs, DMP);
+            if pferrcur<pferrmax && (titer>2 || DMPmax<=0)
+                outcome_ver = true;
+            else 
+                outcome_ver = false;
+            end
+            # test
+           @test outcome == outcome_ver
+        end 
+    end # testset "compute_thermochemical_iteration_outcome"
 
     # @testset "apply_subgrid_stress_diffusion!()" begin
     #     marknum = start_marknum

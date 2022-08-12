@@ -7,7 +7,7 @@ using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
-# using LinearSolve
+using LinearSolve
 using Logging
 using ProgressMeter
 using Random
@@ -3940,6 +3940,52 @@ function finalize_plastic_iteration_pass!(
 end # function finalize_plastic_iteration_pass
 
 """
+Decide next pass thermochemical iteration time step.
+
+$(SIGNATURES)
+
+# Details:
+
+    - DT: temperature difference between current and previous time step
+    - dt: current time step duration
+
+# Returns
+
+    - dt: adjusted next time step
+"""
+function finalize_thermochemical_iteration_pass(DT, dt)
+    maxDTcurrent = maximum(abs, DT)
+    if maxDTcurrent > DTmax
+        dt *= (DTmax * inv(maxDTcurrent))
+    end
+    return dt
+end # function finalize_thermochemical_iteration_pass
+
+"""
+Assess outcome of thermochemical iteration and return thermochemical iterations
+completeness status.
+
+$(SIGNATURES)
+
+# Details:
+
+    - DMP: mass transfer term at P nodes
+    - pf: fluid pressure at P nodes
+    - pf0: previous time step fluid pressure at P nodes
+    - titer: current thermochemical iteration counter
+
+# Returns
+
+    - dt: adjusted next time step
+"""
+function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
+    pferrcur = maximum(abs, pf-pf0)
+    DMPmax = maximum(abs, DMP)
+    @info "thermochemical iteration $titer" pferrcur DMPmax
+    return pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
+end # function compute_thermochemical_iteration_outcome
+
+"""
 Apply xy (basic grid) and xx (P grid) subgrid stress diffusion to markers.
 
 $(SIGNATURES)
@@ -5283,16 +5329,16 @@ $(SIGNATURES)
 
 # Details
 
-    - pr:
-    - pr0:
-    - ps:
-    - ps0:
-    - pf:
-    - pf0:
-    - vx: 
-    - vy: 
-    - vxf: 
-    - vyf:
+    - pr: total pressure at P nodes
+    - pr0: previous time step total pressure at P nodes
+    - ps: solid pressure at P nodes
+    - ps0: previous time step solid pressure at P nodes
+    - pf: fluid pressure at P nodes
+    - pf0: previous time step fluid pressure at P nodes
+    - vx: solid vx-velocity at Vx nodes
+    - vy: solid vy-velocity at Vy nodes 
+    - vxf: fluid vx-velocity at Vx nodes 
+    - vyf: fluid vy-velocity at Vy nodes
 
 # Returns
 
@@ -6716,7 +6762,7 @@ function simulation_loop(output_path)
                 # )
 
                 # adapt timestep for displacement
-                @info "timestep before displacement adaptation: $dt"
+                @info "dt before displacement limitation: $dt s"
                 dt = compute_displacement_timestep(
                     vx,
                     vy,
@@ -6725,7 +6771,7 @@ function simulation_loop(output_path)
                     dt,
                     aphimax
                 )
-                @info "timestep after displacement adaptation: $dt"
+                @info "dt after displacement limitation: $dt s"
 
                 # compute stresses, stress changes and strain rate components
                 compute_stress_strainrate!(
@@ -6829,6 +6875,15 @@ function simulation_loop(output_path)
                 pr,
                 pf
             )
+            
+            # ------------------------------------------------------------------
+            # no pressure changes for the first time step
+            # ------------------------------------------------------------------
+            if timestep == 1
+                pr0 .= pr
+                pf0 .= pf
+                ps0 .= ps
+            end
         
             # ------------------------------------------------------------------
             # compute adiabatic heating HA in P nodes
@@ -6848,26 +6903,17 @@ function simulation_loop(output_path)
             tk2 .= reshape(ST, Ny1, Nx1)
             # compute ΔT
             @. DT = tk2 - tk1
-            # during first thermal iteration pass:
-            # apply thermal timestepping stability condition
-            if titer == 1
-                maxDTcurrent = maximum(abs, DT)
-                if maxDTcurrent > DTmax
-                    dt *= (DTmax * inv(maxDTcurrent))
-                end
-            end
-            # stop thermochemical iterations
-            pferrcur = maximum(abs, pf-pf0)
-            DMPmax = maximum(abs, DMP)
-            @info(
-                "timestep $timestep: end of thermochemical iteration $titer",
-                pferrcur,
-                DMPmax
-            )
-            if pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
+            # evaluate iteration outcome
+            if compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
+                # exit thermochemical iterations loop
                 break
-            end                
-        end
+            else
+                # prepare next pass of thermochemical iteration
+                @info "dt before thermal stability condition: $dt s"
+                dt = finalize_thermochemical_iteration_pass(DT, dt)
+                @info "dt after thermal stability condition: $dt s"
+            end
+        end # for titer=1:1:ntiter
 
         # ---------------------------------------------------------------------
         # advance temperature generation
