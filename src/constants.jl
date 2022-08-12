@@ -462,8 +462,8 @@ const dphimax = 0.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 10 
-# const n_steps = 30_000 
+# const n_steps = 10 
+const n_steps = 30_000 
 # random number generator seed
 const seed = 42
 # using MKL Pardiso solver
