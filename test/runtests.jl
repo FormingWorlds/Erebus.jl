@@ -15,7 +15,6 @@ const rgen = MersenneTwister(seed)
         (
             timestep,
             dt,
-            dtm,
             timesum,
             marknum,
             hrsolidm,
@@ -24,8 +23,7 @@ const rgen = MersenneTwister(seed)
         ) = HydrologyPlanetesimals.setup_dynamic_simulation_parameters()
         # verification & test
         @test timestep == start_step
-        @test dt == dtelastic
-        @test dtm == dt
+        @test dt == dt_longest
         @test timesum == start_time
         @test marknum == start_marknum
         @test hrsolidm == start_hrsolidm
@@ -624,6 +622,7 @@ const rgen = MersenneTwister(seed)
     
     @testset "define_markers!() & compute_marker_properties!()" begin
         marknum = start_marknum
+        mode = marker_property_mode
         hrsolidm, hrfluidm = start_hrsolidm, start_hrfluidm
         (
             xm,
@@ -674,6 +673,11 @@ const rgen = MersenneTwister(seed)
         kphim_ver = zeros(marknum)
         rhofluidcur_ver = zeros(marknum)
         etatotalm_ver = zeros(marknum)
+        XWsolidm0_ver = zeros(marknum)
+        MH2O = MH₂O
+        VDsolid = VDˢ
+        VWsolid = VWˢ
+        rhoH2Ofluid = ρH₂Oᶠ
         # define markers
         HydrologyPlanetesimals.define_markers!(
             xm,
@@ -711,10 +715,13 @@ const rgen = MersenneTwister(seed)
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
-                phim
+                phim,
+                XWsolidm0,
+                mode
             )
         end
-        # verification, from HTM-planetary.m, line 180ff
+        # verification, from HTM-planetary.m, line 180ff;
+        # HTM-hydration.m, line 154ff
         m=1; # Marker counter
         for jm=1:1:Nxm
             for im=1:1:Nym
@@ -732,6 +739,7 @@ const rgen = MersenneTwister(seed)
                     tkm_ver[m]=tkm0[tm_ver[m]]; # Temperature
                     phim_ver[m]=phim0 # *(1+1.0*(rand-0.5)); # Porosity
                     etavpm_ver[m]=etasolidm[tm_ver[m]];#*exp(-28*phim_ver[m]); % Matrix viscosity
+                    XWsolidm0_ver[m] = XWsolidm_init[tm_ver[m]]
                 else
                     # Sticky space (to have internal free surface)
                     tm_ver[m]=3; # Material type
@@ -744,21 +752,38 @@ const rgen = MersenneTwister(seed)
             end
         end
         # verification, from HTM-planetary.m, line 327ff
+        # HTM-hydration.m, line 269ff
         for m = 1:1:marknum
             # Compute marker parameters
             if tm[m]<3
+                rhocpfluidm_ver = HydrologyPlanetesimals.compute_rhocpfluidm(
+                    tkm[m], mode)
+                ksolidm_ver = HydrologyPlanetesimals.compute_ksolidm(
+                    tkm[m], mode)
+                kfluidm_ver = HydrologyPlanetesimals.compute_kfluidm(
+                    tkm[m], mode)
                 # rocks
-                kphim_ver[m] = kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/((1-phim_ver[m])/(1-phim0))^2 #Permeability
-                rhototalm_ver[m] = rhosolidm[tm_ver[m]]*(1-phim_ver[m])+rhofluidm[tm_ver[m]]*phim_ver[m]
-                rhocptotalm_ver[m] = rhocpsolidm[tm_ver[m]]*(1-phim_ver[m])+rhocpfluidm[tm_ver[m]]*phim_ver[m]
+                # Compute density of solid and fluid
+                XDsolidm0=1-XWsolidm0_ver[m];
+                rhosolidm0=(MD+MH2O*XWsolidm0_ver[m])/(
+                    VWsolid*XWsolidm0_ver[m]+VDsolid*XDsolidm0)
+                rhofluidm0=rhoH2Ofluid
+                kphim_ver[m] = (
+                    kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/(
+                        (1-phim_ver[m])/(1-phim0))^2
+                ) #Permeability
+                rhototalm_ver[m] = (rhosolidm0*(1-phim_ver[m])
+                    +rhofluidm0*phim_ver[m])
+                rhocptotalm_ver[m] = (rhocpsolidm[tm_ver[m]]*(1-phim_ver[m])
+                    +rhocpfluidm_ver*phim_ver[m])
                 etasolidcur_ver[m] = etasolidm[tm_ver[m]]
                 if tkm_ver[m]>tmsolidphase
                     etasolidcur_ver[m] = etasolidmm[tm_ver[m]]
                 end
                 hrtotalm_ver[m] = hrsolidm[tm_ver[m]]*(1-phim_ver[m])+hrfluidm[tm_ver[m]]*phim_ver[m]
-                ktotalm_ver[m] = (ksolidm[tm_ver[m]]*kfluidm[tm_ver[m]]/2+((ksolidm[tm[m]]*(3*phim_ver[m]-2)+
-                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))^2)/16)^0.5-(ksolidm[tm_ver[m]]*(3*phim_ver[m]-2)+
-                    kfluidm[tm_ver[m]]*(1-3*phim_ver[m]))/4
+                ktotalm_ver[m] = (ksolidm_ver*kfluidm_ver/2+((ksolidm_ver*(3*phim_ver[m]-2)+
+                    kfluidm_ver*(1-3*phim_ver[m]))^2)/16)^0.5-(ksolidm_ver*(3*phim_ver[m]-2)+
+                    kfluidm_ver*(1-3*phim_ver[m]))/4
                 gggtotalm_ver[m] = gggsolidm[tm_ver[m]]
                 fricttotalm_ver[m] = frictsolidm[tm_ver[m]]
                 cohestotalm_ver[m] = cohessolidm[tm_ver[m]]
@@ -1033,16 +1058,18 @@ const rgen = MersenneTwister(seed)
         dHWD = ΔHWD
         dSWD = ΔSWD
         dVWD = ΔVWD
-        Δt₁ = dt1 = 0.5 * Δtreaction
-        Δt₂ = dt2 = 1.5 * Δtreaction
-        dtreaction = Δtreaction
         m = 1
+        phi = rand(rgen)
         XWsolidm0 = rand(rgen, 1)
         tknm, pfnm, XDsolidm0 = rand(rgen, 3)
+        Δtr = dtreaction = HydrologyPlanetesimals.compute_Δtreaction(
+            tknm, phi, reaction_rate_coeff_mode)
+        Δt₁ = dt1 = 0.5 * Δtr
+        Δt₂ = dt2 = 1.5 * Δtr    
         ΔGWD₁ = HydrologyPlanetesimals.compute_gibbs_free_energy(
-            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁)
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁, phi)
         ΔGWD₂ = HydrologyPlanetesimals.compute_gibbs_free_energy(
-            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂)
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂, phi)
         # verification, from i2visHTM_hydration.m, line 614ff
         # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
         dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(XDsolidm0/XWsolidm0[m]);
@@ -3335,12 +3362,8 @@ const rgen = MersenneTwister(seed)
             ym = rand(rgen, -yp[1]:0.1:yp[end]+dy, marknum)
             XWsolidm0 = rand(rgen, marknum)
             # calculate grid properties
-            for m=1:1:marknum
-                HydrologyPlanetesimals.molarfraction_marker_to_p_nodes!(
-                    m, xm[m], ym[m], XWsolidm0, XWSSUM, WTPSUM)
-            end
-            HydrologyPlanetesimals.compute_molarfraction!(
-            XWSSUM, WTPSUM, XWS)
+            HydrologyPlanetesimals.update_p_nodes_melt_composition!(
+                xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)   
             # verification properties, from i2visHTM_hydration.m, line 1547ff
             for m=1:1:marknum
                 j=trunc(Int, (xm[m]-xp[1])/dx)+1
@@ -3393,6 +3416,77 @@ const rgen = MersenneTwister(seed)
         end # testset "compute_molarfraction!()"
     end # testset "compute node properties" 
 
+    @testset "compute_rhocpfluidm()" begin
+        Ts = [170.0, tmfluidphase-10.0, tmfluidphase-3.0, tmfluidphase, tmfluidphase+3.0, tmfluidphase+10.0, 370.0, 470.0]
+        # verification
+        function rhocpfluidm_Hobbs(T)
+            if T >= 410
+                return ρH₂Oᶠ * (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3) 
+            elseif 410 > T >= tmfluidphase+5
+                return ρH₂Oᶠ * 4200
+            elseif tmfluidphase+5 > T >= tmfluidphase
+                return ρH₂Oᶠ * (4200.0 + 0.1Lᶠ)
+            elseif tmfluidphase > T >= tmfluidphase-5
+                return ρH₂Oᶠ * (7.67T + 0.1Lᶠ)
+            elseif tmfluidphase-5 > T
+                return ρH₂Oᶠ * 7.67T
+            end
+        end
+        # test
+        for T in Ts
+            @test HydrologyPlanetesimals.compute_rhocpfluidm(
+                T, 1) ≈ rhocpfluidm_Hobbs(T) rtol=1e-9
+            @test HydrologyPlanetesimals.compute_rhocpfluidm(
+                T, 9) ≈ rhocpfluidm[1] rtol=1e-9
+        end
+    end # testset "compute_rhocpfluidm()"
+
+    @testset "compute_ksolidm()" begin
+        Ts = [170.0, tmfluidphase-10.0, tmfluidphase-3.0, tmfluidphase, tmfluidphase+3.0, tmfluidphase+10.0, 370.0, 470.0]
+        # test
+        for T in Ts
+            @test HydrologyPlanetesimals.compute_ksolidm(
+                T, 1) ≈ 0.73 + 1293.0/(T+77.0) rtol=1e-9
+            @test HydrologyPlanetesimals.compute_ksolidm(
+                T, 9) ≈ ksolidm[1] rtol=1e-9
+        end
+    end # testset "compute_ksolidm()"
+
+    @testset "compute_kfluidm()" begin
+        Ts = [170.0, tmfluidphase-10.0, tmfluidphase-3.0, tmfluidphase, tmfluidphase+3.0, tmfluidphase+10.0, 370.0, 470.0]
+        # verification
+        function kfluidm_Hobbs(T)
+            if T >= 410
+                return -0.142 + 4.12e-3T - 5.01e-6T^2
+            elseif 410 > T >= tmfluidphase
+                return -0.581 + 6.34e-3T - 7.93e-6T^2
+            elseif tmfluidphase > T
+                return  0.465 + 488.0/T
+            end
+        end
+        # test
+        for T in Ts
+            @test HydrologyPlanetesimals.compute_kfluidm(
+                T, 1) ≈ kfluidm_Hobbs(T) rtol=1e-9
+            @test HydrologyPlanetesimals.compute_kfluidm(
+                T, 9) ≈ kfluidm[1] rtol=1e-9
+        end
+    end # testset "compute_kfluidm()"
+
+    @testset "compute_Δtreaction()" begin
+        Ts = [170.0, tmfluidphase-10.0, tmfluidphase-3.0, tmfluidphase, tmfluidphase+3.0, tmfluidphase+10.0, 370.0, 470.0]
+        ϕ = rand(rgen)
+        # test
+        for T in Ts
+            @test HydrologyPlanetesimals.compute_Δtreaction(
+                T, ϕ, 1) ≈ -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
+            @test HydrologyPlanetesimals.compute_Δtreaction(
+                T, ϕ, 2) ≈ -log_completion_rate / (A_B*ϕ) * 2.0^(-(T-c_B)/b_B)
+            @test HydrologyPlanetesimals.compute_Δtreaction(
+                T, ϕ, 9) ≈ Δtreaction
+        end
+    end # testset "compute_Δtreaction()"
+
     @testset "apply_insulating_boundary_conditions!()" begin
         max_size = 10
         for j=3:1:max_size, i=3:1:max_size
@@ -3422,7 +3516,7 @@ const rgen = MersenneTwister(seed)
         phim = rand(rgen, marknum)
         phinewm = rand(rgen, marknum)
         pfm₀ = rand(rgen, 2700:0.1:3300, marknum)
-        Δt = 0.9 * Δtreaction
+        dt = Δt = 0.9 * Δtreaction
         timestep = 1
         titer = 3
         DMP_ver = copy(DMP)
@@ -3435,8 +3529,6 @@ const rgen = MersenneTwister(seed)
         pfm₀_ver = copy(pfm₀)
         XWˢm₀_ver = copy(XWˢm₀)
         XWˢm_ver = copy(XWˢm)
-        dt = Δt
-        dtreaction = Δtreaction
         VDsolid = VDˢ
         VWsolid = VWˢ
         dHWD = ΔHWD
@@ -3445,6 +3537,7 @@ const rgen = MersenneTwister(seed)
         rhoH2Ofluid = ρH₂Oᶠ
         VH2Ofluid = VH₂Oᶠ
         MH2O = MH₂O
+        mode = reaction_rate_coeff_mode
         HydrologyPlanetesimals.perform_thermochemical_reaction!(
             DMP,
             DHP,
@@ -3505,6 +3598,7 @@ const rgen = MersenneTwister(seed)
                 pfnm=pfnm*(1-pfcoeff)+pfm₀_ver[m]*pfcoeff;
             end
             pfm₀_ver[m]=pfnm;
+            #
             # Thermodynamic computations
             # Compute bulk composition of the solid+fluid system
             XDsolidm0=1-XWˢm₀_ver[m];
@@ -3525,6 +3619,8 @@ const rgen = MersenneTwister(seed)
                 XDsolidm0/XWˢm₀_ver[m]);
             # Compute incomplete reaction for too short timestep
             dGWD=0;
+            dtreaction = HydrologyPlanetesimals.compute_Δtreaction(
+                tknm, phim_ver[m], mode)
             if dt<dtreaction
                 dGWD=dGWD0*(1-dt/dtreaction);
             end
@@ -3601,12 +3697,12 @@ const rgen = MersenneTwister(seed)
             end
         end
         # testing
-        @test DMP ≈ DMP_ver rtol=1e-9
-        @test DHP ≈ DHP_ver rtol=1e-9
-        @test pfm₀ ≈ pfm₀_ver rtol=1e-9
-        @test XWˢm₀ ≈ XWˢm₀_ver rtol=1e-9
-        @test phim ≈ phim_ver rtol=1e-9
-        @test phinewm ≈ phinewm_ver rtol=1e-9
+        @test DMP ≈ DMP_ver rtol=1e-6
+        @test DHP ≈ DHP_ver rtol=1e-6
+        @test pfm₀ ≈ pfm₀_ver rtol=1e-6
+        @test XWˢm₀ ≈ XWˢm₀_ver rtol=1e-6
+        @test phim ≈ phim_ver rtol=1e-6
+        @test phinewm ≈ phinewm_ver rtol=1e-6
     end # testset "perform_thermochemical_reaction!()"
 
     @testset "compute_gravity_solution!()" begin
@@ -3750,10 +3846,12 @@ const rgen = MersenneTwister(seed)
             end
         end
         # test
-        for j=1:1:Nx1*Ny1, i=1:1:Ny1*Nx1
-            @test LP[i, j] ≈ LP_ver[i, j] rtol=1e-12
-            @test RP[i] ≈ RP_ver[i] rtol=1e-12
-        end
+        # for j=1:1:Nx1*Ny1, i=1:1:Ny1*Nx1
+        #     @test LP[i, j] ≈ LP_ver[i, j] rtol=1e-12
+        #     @test RP[i] ≈ RP_ver[i] rtol=1e-12
+        # end
+        @test LP ≈ LP_ver rtol=1e-12
+        @test RP ≈ RP_ver rtol=1e-12
     end # testset "assemble_gravitational_lse!()"
 
     @testset "process_gravitational_solution" begin
@@ -3828,7 +3926,7 @@ const rgen = MersenneTwister(seed)
     end # testset "recompute_bulk_viscosity!()"
 
     @testset "get_viscosities_stresses_density_gradients()" begin
-        dt = dtelastic
+        dt = dt_longest
         # simulate data
         ETA = rand(rgen, Ny, Nx)
         ETAP = rand(rgen, Ny1, Nx1)
@@ -3969,7 +4067,7 @@ const rgen = MersenneTwister(seed)
     end
     
     @testset "assemble_hydromechanical_lse()" begin
-        dt = dtelastic
+        dt = dt_longest
         # simulate data
         ETA = rand(rgen, Ny, Nx) * 1e16
         ETAP = rand(rgen, Ny1, Nx1) * 1e16
@@ -4021,7 +4119,8 @@ const rgen = MersenneTwister(seed)
             R
         )
         L = collect(L)
-        # verification, from HTM-planetary.m, line 779ff
+        # verification, from HTM-planetary.m, line 779ff;
+        # HTM-hydration.m, line 707ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
         for j=1:1:Nx1
@@ -4178,11 +4277,25 @@ const rgen = MersenneTwister(seed)
                 end
                 
                 # P equation External points
-                if i==1 || j==1 || i==Ny1 || j==Nx1
+                if (i==1 || j==1 || i==Ny1 || j==Nx1
+                    || (i==2 && j>=2 && j<=Nx)
+                    || (i==Ny && j>=2 && j<=Nx)
+                    || (j==2 && i>=2 && i<=Ny)
+                    || (j==Nx && i>=2 && i<=Ny)
+                )
                     # Boundary Condition
                     # 1*P=0
                     L_ver[kpm,kpm]=1; # Left part
                     R_ver[kpm]=0; # Right part
+                    # Real BC
+                    if ((i==2 && j>=2 && j<=Nx)
+                        || (i==Ny && j>=2 && j<=Nx)
+                        || (j==2 && i>=2 && i<=Ny)
+                        || (j==Nx && i>=2 && i<=Ny)
+                    )
+                        L_ver[kpm,kpm]=1*Kcont; # Left part
+                        R_ver[kpm]=psurface; # Right part
+                    end
                 else
                 # Internal points: continuity eq.
                 # dVx/dx+dVy/dy=0
@@ -4261,13 +4374,22 @@ const rgen = MersenneTwister(seed)
                 end
                 
                 # Pfluid equation External points
-                if i==1 || j==1 || i==Ny1 || j==Nx1 || (i==2 && j==2)
+                if (i==1 || j==1 || i==Ny1 || j==Nx1
+                    || (i==2 && j>=2 && j<=Nx)
+                    || (i==Ny && j>=2 && j<=Nx)
+                    || (j==2 && i>=2 && i<=Ny)
+                    || (j==Nx && i>=2 && i<=Ny)
+                )
                     # Boundary Condition
                     # 1*Pfluid=0
                     L_ver[kpf,kpf]=1; # Left part
                     R_ver[kpf]=0; # Right part
                     # Real BC
-                    if i==2 && j==2
+                    if ((i==2 && j>=2 && j<=Nx)
+                        || (i==Ny && j>=2 && j<=Nx)
+                        || (j==2 && i>2 && i<Ny)
+                        || (j==Nx && i>2 && i<Ny)
+                    )
                         L_ver[kpf,kpf]=1*Kcont; #Left part
                         R_ver[kpf]=psurface; # Right part
                     end
@@ -4293,10 +4415,12 @@ const rgen = MersenneTwister(seed)
             end
         end
         # test
-        for j=1:1:Nx1*Ny1*6, i=1:1:Nx1*Ny1*6
-            @test L[i, j] ≈ L_ver[i, j] rtol=1e-9
-            @test R[i] ≈ R_ver[i] rtol=1e-9
-        end
+        # for j=1:1:Nx1*Ny1*6, i=1:1:Nx1*Ny1*6
+        #     @test L[i, j] ≈ L_ver[i, j] rtol=1e-9
+            # @test R[i] ≈ R_ver[i] rtol=1e-9
+        # end
+        @test L ≈ L_ver rtol=1e-9
+        @test R ≈ R_ver rtol=1e-9
     end # testset "assemble_hydromechanical_lse()"
 
     @testset "process_hydromechanical_solution!()" begin
@@ -4358,7 +4482,7 @@ const rgen = MersenneTwister(seed)
     end # testset "process_hydromechanical_solution!()"
 
     @testset "compute_Aϕ!()" begin
-        dt = dtelastic
+        dt = dt_longest
         # simulate data
         APHI = rand(rgen, Ny1, Nx1)
         APHI_ver = rand(rgen, Ny1, Nx1)
@@ -4455,7 +4579,7 @@ const rgen = MersenneTwister(seed)
     end # testset "compute_fluid_velocity!()"
 
     @testset "compute_displacement_timestep()" begin
-        dt = dtelastic
+        dt = dt_longest
         # simulate data
         aphimax = rand(rgen)
         vx = rand(rgen, Ny1, Nx1)
@@ -4499,7 +4623,7 @@ const rgen = MersenneTwister(seed)
     end # testset "compute_displacement_timestep()"
 
     @testset "compute_stress_strainrate!()" begin
-        dtm = dtelastic
+        dtm = dt_longest
         # simulate data
         vx = rand(rgen, Ny1, Nx1)
         vy = rand(rgen, Ny1, Nx1)
@@ -4675,7 +4799,7 @@ const rgen = MersenneTwister(seed)
     end # testset "positive_max()"
 
     @testset "compute_nodal_adjustment!()" begin
-        dt = dtelastic
+        dt = dt_longest
         iplast = 1
         # simulate data
         ETA = rand(rgen, Ny, Nx)
@@ -4784,7 +4908,7 @@ const rgen = MersenneTwister(seed)
     end # testset "compute_nodal_adjustment!()"
 
     @testset "finalize_plastic_iteration_pass!()" begin
-        dt = dtelastic
+        dt = dt_longest
         iplast = 1
         # simulate data
         ETA = zeros(Ny, Nx)
@@ -4797,7 +4921,7 @@ const rgen = MersenneTwister(seed)
         ETA_ver = zeros(Ny, Nx)
         YNY_ver = zeros(Bool, Ny, Nx)
         YNY_inv_ETA_ver = zeros(Ny, Nx)
-        dt_ver = dtelastic
+        dt_ver = dt_longest
         # finalize_plastic_iteration_pass
         dt = HydrologyPlanetesimals.finalize_plastic_iteration_pass!(
             ETA,
@@ -4833,16 +4957,20 @@ const rgen = MersenneTwister(seed)
     @testset "finalize_thermochemical_iteration_pass()" begin
         DT_small = rand(rgen, Ny1, Nx1)
         DT_large = rand(rgen, Ny1, Nx1) .* DTmax .* 2.0
-        for DT in [DT_small, DT_large]
+        titers = collect(1:1:3)
+        for DT in [DT_small, DT_large], titer in titers
+            maxDTcurrent = maximum(abs, DT)
             dt = HydrologyPlanetesimals.finalize_thermochemical_iteration_pass(
-                DT,
-                dtmax
+                maxDTcurrent,
+                dt_longest,
+                titer
             )
             # verification, from HTM-hydration.m, line 1230ff
-            dt_ver = dtmax
-            maxDTcurrent=maximum(abs, DT);
-            if maxDTcurrent>DTmax 
-                dt_ver=dtmax/maxDTcurrent*DTmax;
+            dt_ver = dt_longest
+            if titer==1
+                if maxDTcurrent>DTmax 
+                    dt_ver=dt_ver/maxDTcurrent*DTmax;
+                end
             end
             # test
             @test dt ≈ dt_ver rtol=1e-9
@@ -4879,7 +5007,7 @@ const rgen = MersenneTwister(seed)
 
     @testset "apply_subgrid_stress_diffusion!()" begin
         marknum = start_marknum
-        dtm = dtelastic
+        dtm = dt_longest
         etam = @SVector ones(3)
         # simulate markers
         xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
@@ -5304,146 +5432,9 @@ const rgen = MersenneTwister(seed)
         @test RT ≈ RT_ver rtol=1e-9
     end # testset "assemble_thermal_lse!"
 
-    # @testset "perform_thermal_iterations!()" begin
-    #     dtm = 0.0001
-    #     tk0 = rand(rgen, Ny1, Nx1)
-    #     tk1 = rand(rgen, Ny1, Nx1)
-    #     tk2 = rand(rgen, Ny1, Nx1)
-    #     RHOCP = rand(rgen, Ny1, Nx1)
-    #     KX = rand(rgen, Ny1, Nx1)
-    #     KY = rand(rgen, Ny1, Nx1)
-    #     HR = rand(rgen, Ny1, Nx1)
-    #     HA = rand(rgen, Ny1, Nx1)
-    #     HS = rand(rgen, Ny1, Nx1)
-    #     DHP = rand(rgen, Ny1, Nx1)
-    #     DT = zeros(Ny1, Nx1)
-    #     DT0 = zeros(Ny1, Nx1)
-    #     DT_ver = zeros(Ny1, Nx1)
-    #     DT0_ver = zeros(Ny1, Nx1)
-    #     tk0_ver = deepcopy(tk0)
-    #     tk1_ver = deepcopy(tk1)
-    #     tk2_ver = deepcopy(tk2)
-    #     RT = zeros(Ny1*Nx1)
-    #     ST = zeros(Ny1*Nx1)
-    #     # perform thermal iterations
-    #     HydrologyPlanetesimals.perform_thermal_iterations!(
-    #         tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dtm)
-    #     # verification, from HTM-planetary.m, line 1618ff
-    #     LT = zeros(Ny1*Nx1, Ny1*Nx1)
-    #     RT = zeros(Ny1*Nx1)
-    #     ST = zeros(Ny1*Nx1)
-    #     tk0_ver.=tk1_ver
-    #     dtt=dtm
-    #     dttsum=0
-    #     titer=1
-    #     while dttsum<dtm
-    #     # Composing global matrixes LT[], RT[]
-    #     # Going through all points of the 2D grid &
-    #     # composing respective equations
-    #     for j=1:1:Nx1
-    #         for i=1:1:Ny1
-    #             # Define global index in algebraic space
-    #             gk=(j-1)*Ny1+i
-    #             # External points
-    #             if i==1 || i==Ny1 || j==1 || j==Nx1
-    #                 # Boundary Condition
-    #                 # Top BC: T=273
-    #                 if i==1 && j>1 && j<Nx1
-    #                     LT[gk,gk]=1; # Left part
-    #                     LT[gk,gk+1]=-1; # Left part
-    #                     RT[gk]=0; # Right part
-    #                 end
-    #                 # Bottom BC: T=1500
-    #                 if i==Ny1 && j>1 && j<Nx1
-    #                     LT[gk,gk]=1; # Left part
-    #                     LT[gk,gk-1]=-1; # Left part
-    #                     RT[gk]=0; # Right part
-    #                 end
-    #                 # Left BC: dT/dx=0
-    #                 if j==1
-    #                     LT[gk,gk]=1; # Left part
-    #                     LT[gk,gk+Ny1]=-1; # Left part
-    #                     RT[gk]=0; # Right part
-    #                 end
-    #                 # Right BC: dT/dx=0
-    #                 if j==Nx1
-    #                     LT[gk,gk]=1; # Left part
-    #                     LT[gk,gk-Ny1]=-1; # Left part
-    #                     RT[gk]=0; # Right part
-    #                 end
-    #             else
-    #             # Internal points: Temperature eq.
-    #             # RHO*CP*dT/dt=-dqx/dx-dqy/dy+Hr+Hs+Ha
-    #             #          Tdt2
-    #             #           |
-    #             #          Ky1
-    #             #           |
-    #             #Tdt1-Kx1-T03;Tdt3-Kx2-Tdt5
-    #             #           |
-    #             #          Ky2
-    #             #           |
-    #             #          Tdt4
-    #             #
-    #             # Left part
-    #             Kx1=KX[i,j-1]; 
-    #             Kx2=KX[i,j]; 
-    #             Ky1=KY[i-1,j]; 
-    #             Ky2=KY[i,j]; 
-    #             LT[gk,gk-Ny1]=-Kx1/dx^2; # T1
-    #             LT[gk,gk-1]=-Ky1/dy^2; # FI2
-    #             LT[gk,gk]=RHOCP[i,j]/dtt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
-    #             LT[gk,gk+1]=-Ky2/dy^2; # FI4
-    #             LT[gk,gk+Ny1]=-Kx2/dx^2; # FI5
-    #             # Right part
-    #             RT[gk]=RHOCP[i,j]/dtt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]+DHP[i,j]
-    #             end
-    #             end
-    #         end
-    #     end
-    #     # Solving matrixes
-    #     ST=LT\RT; # Obtaining algebraic vector of solutions ST[]
-    #     # Reload solutions ST[] to geometrical array Tdt[]
-    #     # Going through all grid points
-    #     for j=1:1:Nx1
-    #         for i=1:1:Ny1
-    #             # Compute global index
-    #             gk=(j-1)*Ny1+i
-    #             # Reload solution
-    #             tk2_ver[i,j]=ST[gk]
-    #         end
-    #     end
-    #     # Compute DT
-    #     DT_ver=tk2_ver-tk1_ver
-    #     titer
-    #     dtt
-    #     if titer==1
-    #         # Apply thermal timestepping condition
-    #         maxDTcurrent=maximum(abs, DT_ver)
-    #         if maxDTcurrent>DTmax 
-    #             dtt=dtt/maxDTcurrent*DTmax
-    #         else
-    #             dttsum=dttsum+dtt; # Update dttsum
-    #         end
-    #     else
-    #         dttsum=dttsum+dtt; # Update dttsum
-    #         # Adjust timestep
-    #         if dtt>dtm-dttsum
-    #             dtt=dtm-dttsum
-    #         end
-    #     end
-    #     titer=titer+1; # Update iteration counter
-    #     end
-    #     # Compute/save overall temperature changes
-    #     DT_ver=tk2_ver-tk0_ver
-    #     DT0_ver=DT_ver
-    #     # test
-    #     @test DT ≈ DT_ver rtol=1e-9
-    #     @test DT0 ≈ DT0_ver rtol=1e-9
-    # end # testset "perform_thermal_iterations!()"
-
     @testset "apply_subgrid_temperature_diffusion!()" begin
         marknum = start_marknum
-        dtm = dtelastic
+        dtm = dt_longest
         # simulate markers
         xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
         ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
@@ -5584,7 +5575,7 @@ const rgen = MersenneTwister(seed)
 
     @testset "update_marker_porosity!()" begin
         marknum = start_marknum
-        dtm = dtelastic
+        dtm = dt_longest
         # simulate markers
         xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
         ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
@@ -6384,6 +6375,10 @@ const rgen = MersenneTwister(seed)
         sxym = rand(rgen, marknum)
         phim = rand(rgen, marknum)
         etavpm = rand(rgen, marknum)
+        phinewm = rand(rgen, marknum)
+        pfm0 = rand(rgen, marknum)
+        XWsolidm = rand(rgen, marknum)
+        XWsolidm0 = rand(rgen, marknum)
         rhototalm = rand(rgen, marknum)
         rhocptotalm = rand(rgen, marknum)
         etatotalm = rand(rgen, marknum)
@@ -6407,6 +6402,10 @@ const rgen = MersenneTwister(seed)
         sxym_ver = deepcopy(sxym)
         phim_ver = deepcopy(phim)
         etavpm_ver = deepcopy(etavpm)
+        phinewm_ver = deepcopy(phinewm)
+        pfm0_ver = deepcopy(pfm0)
+        XWsolidm_ver = deepcopy(XWsolidm)
+        XWsolidm0_ver = deepcopy(XWsolidm0)
         # replenish_markers
         marknum_new = HydrologyPlanetesimals.replenish_markers!(
             xm,
@@ -6417,6 +6416,10 @@ const rgen = MersenneTwister(seed)
             sxxm,
             sxym,
             etavpm,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
             rhototalm,
             rhocptotalm,
             etatotalm,
@@ -6541,6 +6544,10 @@ const rgen = MersenneTwister(seed)
                         push!(sxxm_ver,sxxm[m]); # SIGMA'xx, Pa
                         push!(sxym_ver,sxym[m]); # SIGMAxy, Pa
                         push!(etavpm_ver,etavpm[m]); # Visco-plastic viscosity, Pa
+                        push!(phinewm_ver, phinewm[m]); # New porosity
+                        push!(pfm0_ver, pfm0[m]); # pfm0
+                        push!(XWsolidm_ver, XWsolidm[m]); # XMsolid
+                        push!(XWsolidm0_ver, XWsolidm0[m]); # XMsolidnew
                     end
                 end
             end
@@ -6556,6 +6563,10 @@ const rgen = MersenneTwister(seed)
         @test sxxm == sxxm_ver
         @test sxym == sxym_ver
         @test etavpm == etavpm_ver        
+        @test phinewm == phinewm_ver
+        @test pfm0 == pfm0_ver
+        @test XWsolidm == XWsolidm_ver
+        @test XWsolidm0 == XWsolidm0_ver
     end # testset "replenish_markers!()"
 
 end

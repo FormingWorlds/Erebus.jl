@@ -52,10 +52,8 @@ $(SIGNATURES)
 function setup_dynamic_simulation_parameters()
      # timestep counter (current), init to startstep
      timestep::Int64 = start_step
-     # computational timestep (current), init to dtmax [s]
-     dt::Float64 = dtmax
-     # displacement timestep (current), init to dt [s]
-     dtm::Float64 = dt
+     # computational timestep (current), init to dt_longest [s]
+     dt::Float64 = dt_longest
      # time sum (current), init to starttime [s]
      timesum::Float64 = start_time
      # current number of markers, init to startmarknum
@@ -66,7 +64,7 @@ function setup_dynamic_simulation_parameters()
      hrfluidm::SVector{3, Float64} = start_hrfluidm
      # nodes yielding error vector of plastic iterations
      YERRNOD::Vector{Float64} = zeros(Float64, nplast) 
-    return timestep, dt, dtm, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
+    return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
 
 """
@@ -636,6 +634,9 @@ function define_markers!(
             etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
             # wet solid molar fraction
             XWsolidm0[m] = XWsolidm_init[tm[m]]
+            if randomized
+                XWsolidm0[m] += XWsolidm_init[tm[m]] * (rand(rgen)-0.5)
+            end
         else
             # sticky space ("air") [to have internal free surface]
             tm[m] = 3
@@ -683,6 +684,10 @@ $(SIGNATURES)
     - hrsolidm: vector of radiogenic heat production of solid materials
     - hrfluidm: vector of radiogenic heat production of fluid materials
     - phim: porosity of markers
+    - XWˢm₀: previous wet solid molar fraction of markers
+    - mode: marker property computation mode
+        - 1: dynamic
+        - 2: constant parameter 
 
 # Returns
 
@@ -701,23 +706,30 @@ function compute_marker_properties!(
     etafluidcur_inv_kphim,
     hrsolidm,
     hrfluidm,
-    phim
+    phim,
+    XWˢm₀,
+    mode
 )
 # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
-        # ∇ rhosolidm, rhofluidm now dependent on molar fractions, i2visHTM_hydration.m lines 270ff
-        rhototalm[m] = total(rhosolidm[tm[m]], rhofluidm[tm[m]], phim[m])
+        XDˢm₀ = 1.0 - XWˢm₀[m]
+        rhosolidm0 = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀+ VWˢ*XWˢm₀[m]) # (16.161)
+        rhofluidm0 = ρH₂Oᶠ # (16.162)
+        rhototalm[m] = total(rhosolidm0, rhofluidm0, phim[m])
         rhocptotalm[m] = total(
-            rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
+            rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
         etasolidcur = ifelse(
             tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
         etafluidcur = ifelse(
             tkm[m]>tmfluidphase, etafluidmm[tm[m]], etafluidm[tm[m]])
-        # ∇ etatotalm? ref i2visHTM_hydration.m line 280
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-        ktotalm[m] = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+        ktotalm[m] = ktotal(
+            compute_ksolidm(tkm[m], mode),
+            compute_kfluidm(tkm[m], mode),
+            phim[m]
+        )
     else
         # sticky air
         etafluidcur = etafluidm[tm[m]]
@@ -1856,9 +1868,6 @@ function marker_to_p_nodes!(
     return nothing
 end
 
-
-
-
 """
 Interpolate marker wet silicate (solid) fraction to P nodes.
 
@@ -1869,8 +1878,8 @@ $(SIGNATURES)
     - m: marker number
     - xmm: marker x-position [m]
     - ymm: marker y-position [m]
-    - XWsolidm0: previous marker wet silicate (solid) fraction
-    - XWSSUM: wet silicate (solid) fraction interpolated to P nodes
+    - XWsolidm0: previous marker wet silicate (solid) molar fraction
+    - XWSSUM: wet silicate (solid) molar fraction interpolated to P nodes
     - WTPSUM: weight for bilinear interpolation to P nodes
 
 # Returns
@@ -1901,6 +1910,37 @@ function molarfraction_marker_to_p_nodes!(
         interpolate_add_to_grid!(i, j, weights, XWsolidm0[m], XWSSUM)
         interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
     end # @inbounds
+    return nothing
+end
+
+"""
+Compute P nodes wet silicate (solid) fraction from markers.
+
+$(SIGNATURES)
+
+# Details
+
+    - xm: x-coordinate of markers
+    - ym: y-coordinate of markers
+    - XWsolidm0: previous marker wet silicate (solid) molar fraction
+    - XWS: wet silicate (solid) molar fraction at P nodes
+    - XWSSUM: wet silicate (solid) molar fraction interpolated to P nodes
+    - WTPSUM: weight for bilinear interpolation to P nodes
+    - marknum: current total number of markers in use
+
+# Returns
+
+    - nothing
+"""
+function update_p_nodes_melt_composition!(
+    xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
+    XWSSUM .= zero(0.0)
+    WTPSUM .= zero(0.0)
+    for m=1:1:marknum
+        molarfraction_marker_to_p_nodes!(
+            m, xm[m], ym[m], XWsolidm0, XWSSUM, WTPSUM)
+    end
+    compute_molarfraction!(XWSSUM, WTPSUM, XWS)
     return nothing
 end
 
@@ -2218,6 +2258,156 @@ function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
 end # function compute_molarfraction!
 
 """
+Compute volumetric isobaric heat capacity of H₂O (fluid phase)
+based on temperature.
+
+$(SIGNATURES)
+
+# Details
+    
+        - T: temperature [K]
+        - mode:
+            - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974)
+            - 2: constant parameter rhocpfluidm
+
+# Returns
+    
+        - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
+"""
+function compute_rhocpfluidm(T, mode)
+    if mode == 1 
+        ρᶠCₚᶠ = ρH₂Oᶠ
+        if T < tmfluidphase-5.0
+            ρᶠCₚᶠ *= 7.67T 
+        elseif T < tmfluidphase
+            ρᶠCₚᶠ *= (7.67T + 0.1Lᶠ)
+        elseif T < tmfluidphase+5.0
+            ρᶠCₚᶠ *= (4200.0 + 0.1Lᶠ)
+        elseif T < 410.0
+            ρᶠCₚᶠ *= 4200.0
+        else
+            ρᶠCₚᶠ *= (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3) 
+        end
+    elseif mode == 9
+        @inbounds ρᶠCₚᶠ = rhocpfluidm[1]
+    else
+        throw("unknown mode $mode") 
+    end
+    return ρᶠCₚᶠ
+end # function compute_rhocpfluidm
+
+"""
+Compute thermal conductivity of silicate (solid phase) based on temperature.
+
+$(SIGNATURES)
+
+# Details
+    
+        - T: temperature [K]
+        - mode:
+            - 1: dynamic, based on (Gerya, 2019)
+            - 9: constant parameter ksolidm
+
+# Returns
+    
+        - kᶠ: thermal conductivity of solid
+"""
+function compute_ksolidm(T, mode)
+    if mode == 1
+        kˢ = 0.73 + 1293.0/(T+77.0)
+    elseif mode == 9
+        @inbounds kˢ = ksolidm[1]
+    else
+        throw("unknown mode $mode") 
+    end
+    return kˢ
+end # function compute_ksolidm
+
+"""
+Compute thermal conductivity of H₂O (fluid phase) based on temperature.
+
+$(SIGNATURES)
+
+# Details
+    
+        - T: temperature [K]
+        - mode:
+            - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
+                 Grimm & Mcsween, 1989; Bland & Travis, 2017)
+            - 9: constant parameter ksolidm
+
+# Returns
+    
+        - kᶠ: thermal conductivity of fluid
+"""
+function compute_kfluidm(T, mode)
+    if mode == 1
+        if T < tmfluidphase
+            kᶠ = 0.465 + 488.0/T
+        elseif T < 410
+            kᶠ = -0.581 + 6.34e-3T - 7.93e-6T^2
+        else
+            kᶠ = -0.142 + 4.12e-3T - 5.01e-6T^2
+        end
+    elseif mode == 9
+        @inbounds kᶠ = kfluidm[1]
+    else
+        throw("unknown mode $mode") 
+    end
+    return kᶠ
+end # function compute_kfluidm
+
+"""
+Compute dehydration reaction time Δtreaction based on temperature and porosity 
+according to selected method:
+
+$(SIGNATURES)
+
+# Details
+
+    - T: temperature
+    - ϕ: porosity
+    - mode:
+        - 1: Gaussian form reaction rate coefficient, based on (Martin & Fyfe,
+             1970; Emmanuel & Berkowitz, 2006; Iyer et al., 2012). 
+        - 2: pseudo-Arrhenius form reaction rate coefficient, based on
+             (Bland & Travis, 2017).
+        - 9: constant parameter Δtreaction
+    
+# Returns
+
+    - Δtreaction: dehydration reaction time
+"""
+function compute_Δtreaction(T, ϕ, mode)
+    if mode == 1
+        Δtr = -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
+    elseif mode == 2
+        Δtr = -log_completion_rate / (A_B*ϕ) * 2.0^(-(T-c_B)/b_B)
+    elseif mode == 9
+        Δtr = Δtreaction
+    else
+        throw("unknown mode $mode")
+    end
+    return Δtr
+end # function compute_dtreaction
+
+"""
+Compute solid phase thermal conductivity for given temperature and method.
+
+$(SIGNATURES)
+
+# Details
+- T: temperature
+- method:
+    - 1:
+    - 2:
+
+# Returns
+
+- dtreaction
+"""
+
+"""
 Apply insulating boundary conditions to given array:
 
 [x x x x x x; x a b c d x; x e f g h x; x x x x x x]
@@ -2263,25 +2453,28 @@ $(SIGNATURES)
 
     - T: temperature
     - pf: fluid pressure
-    - XDsolid: molar fraction of dry solid
-    - XWsolid: molar fraction of wet solid
+    - XDˢ: molar fraction of dry solid
+    - XWˢ: molar fraction of wet solid
     - Δt: timestep size
+    - ϕ: porosity
 
 # Returns
 
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
-function compute_gibbs_free_energy(T, pf, XDsolid, XWsolid, Δt)
+function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, ϕ)
 # @timeit to "compute_gibbs_free_energy" begin
+    # compute Δtreaction
+    Δtr = compute_Δtreaction(T, ϕ, reaction_rate_coeff_mode)
     # compute incomplete reaction for short timestep Δt < Δtreaction
-    if Δt < Δtreaction
+    if Δt < Δtr
         # compute ΔG for dehydration reaction (16.145), (16.165b)
-        ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + RG*T*log(XDsolid/XWsolid)) * (
-            1.0 - Δt/Δtreaction)
+        ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + RG*T*log(XDˢ/XWˢ)) * (1.0 - Δt/Δtr)
     else
         # Δt ≥ Δtreaction (16.165a)
         ΔGWD = zero(0.0)    
     end
+    # @info "Δtreaction(T=$T, ϕ=$ϕ)=$Δtr s; ΔGWD=$ΔGWD J/mol"
     return ΔGWD
 # end # @timeit to "compute_gibbs_free_energy"
 end # function compute_gibbs_free_energy
@@ -2349,7 +2542,7 @@ $(SIGNATURES)
     - XWˢm₀: previous marker wet silicate (solid) fraction
     - XWˢm: current marker wet silicate (solid) fraction
     - phim: current marker porosity
-    - phinewm: new marker porosity
+    - phinewm: next generation marker porosity
     - pfm₀: previous marker fluid pressure
     - marknum: current total number of markers
     - Δt: current time step length
@@ -2434,7 +2627,7 @@ function perform_thermochemical_reaction!(
                 Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
                 # compute previous ΔG for dehydration reaction (16.165a/b)
                 ΔGWD₀ = compute_gibbs_free_energy(
-                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt)
+                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt, phim[m]) 
                 # compute dehydration reaction constant (16.151)
                 KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
                 # compute reacted wet solid molar fraction (16.152)
@@ -2487,6 +2680,8 @@ function perform_thermochemical_reaction!(
         # compute thermodynamic properties at P nodes
         compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
     end # @inbounds
+    @info "min/max mass transfer term" extrema(DMP)
+    @info "min/max enthalpy transfer term" extrema(DHP)
     return nothing
 # end # @timeit to "perform_thermochemical_reaction!"
 end # function perform_thermochemical_reaction!
@@ -3191,6 +3386,16 @@ function assemble_hydromechanical_lse!(
             # all locations: ghost unknowns P=0 -> 1.0⋅P[i,j]=0.0
             updateindex!(L, +, 1.0, kpm, kpm)
             # R[kpm] = 0.0 # already done with initialization
+        # elseif i==j==2
+        elseif (
+            (i==2 && 2<=j<=Nx)
+            || (j==2 && 2<i<Ny)
+            || (i==Ny && 2<=j<=Nx)
+            || (j==Nx && 2<i<Ny)
+        )
+            # Ptotal/Pfluid real pressure boundary condition 'anchor'
+            updateindex!(L, +, Kcont, kpm, kpm)
+            R[kpm] = psurface
         else
             # P equation internal points: continuity equation: ∂Vx/∂x+∂Vy/∂y=0
             #
@@ -3299,7 +3504,13 @@ function assemble_hydromechanical_lse!(
             # all locations: ghost unknowns P = 0 -> 1.0⋅P[i, j] = 0.0
             updateindex!(L, +, 1.0, kpf, kpf)
             # R[kpf] = 0.0 # already done with initialization
-        elseif i==j==2
+        # elseif i==j==2
+        elseif (
+            (i==2 && 2<=j<=Nx)
+            || (j==2 && 2<i<Ny)
+            || (i==Ny && 2<=j<=Nx)
+            || (j==Nx && 2<i<Ny)
+        )
             # Ptotal/Pfluid real pressure boundary condition 'anchor'
             updateindex!(L, +, Kcont, kpf, kpf)
             R[kpf] = psurface
@@ -3531,7 +3742,7 @@ function compute_fluid_velocities!(
 end # function compute_fluid_velocities!
 
 """
-Compute displacement time step.
+Compute velocity-/displacement-limited time step.
 
 $(SIGNATURES)
 
@@ -3542,13 +3753,11 @@ $(SIGNATURES)
     - vxf: fluid vx velocity at Vx nodes
     - vyf: fluid vy velocity at Vy nodes
     - dt: current time step
-    - dxymax: maximum allowed grid spacing movement of markers per time step
     - aphimax: maximum observed porosity coefficient
-    - dphimax: maximum allowed porosity ratio change per time step
    
 # Returns
 
-    - dtm: displacement time step
+    - dt: displacement time step
 """
 function compute_displacement_timestep(
     vx,
@@ -3563,19 +3772,19 @@ function compute_displacement_timestep(
     maxvy = maximum(abs, vy)
     maxvxf = maximum(abs, vxf)
     maxvyf = maximum(abs, vyf)    
-    dtm = dt    
-    dtm = ifelse(dtm*maxvx > dxymax*dx, dxymax*dx*inv(maxvx), dtm)
-    # @info "dtm vx" dtm
-    dtm = ifelse(dtm*maxvy > dxymax*dy, dxymax*dy*inv(maxvy), dtm)
-    # @info "dtm vy" dtm
-    dtm = ifelse(dtm*maxvxf > dxymax*dx, dxymax*dx*inv(maxvxf), dtm)
-    # @info "dtm vxf" dtm
-    dtm = ifelse(dtm*maxvyf > dxymax*dy, dxymax*dy*inv(maxvyf), dtm)
-    # @info "dtm vyf" dtm
-    dtm = ifelse(dtm*aphimax > dphimax, dphimax*inv(aphimax), dtm)
-    # @info "dtm aphimax" dtm
+    @info "dt before velocity limitations = $dt s"
+    dt = ifelse(dt*maxvx > dxymax*dx, dxymax*dx*inv(maxvx), dt)
+    @info "dt after vx limitation = $dt s"
+    dt = ifelse(dt*maxvy > dxymax*dy, dxymax*dy*inv(maxvy), dt)
+    @info "dt after vy limitation = $dt s"
+    dt = ifelse(dt*maxvxf > dxymax*dx, dxymax*dx*inv(maxvxf), dt)
+    @info "dt after vxf limitation = $dt s"
+    dt = ifelse(dt*maxvyf > dxymax*dy, dxymax*dy*inv(maxvyf), dt)
+    @info "dt after vyf limitation = $dt s"
+    dt = ifelse(dt*aphimax > dphimax, dphimax*inv(aphimax), dt)
+    @info "dt after aphimax limitation = $dt s"
 # end # @timeit to "compute_displacement_timestep()"
-    return dtm
+    return dt
 end # function compute_displacement_timestep
 
 """
@@ -3595,7 +3804,7 @@ $(SIGNATURES)
     - GGGP: shear modulus at P nodes
     - SXX0: previous time step σ₀′xx at P nodes
     - SXY0: previous time step σ₀xy at basic nodes
-    - dtm: displacement time step
+    - dt: computational time step
 
 ## Out
 
@@ -3629,7 +3838,7 @@ function compute_stress_strainrate!(
     DSXY,
     EII,
     SII,
-    dtm
+    dt
 )
 # @timeit to "compute_stress_strainrate!()" begin
         @inbounds begin
@@ -3640,9 +3849,9 @@ function compute_stress_strainrate!(
                     +(vy[i, j+1]-vy[i, j])/dx
                 )
                 SXY[i,j] = (
-                    2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dtm / (
-                        GGG[i, j]*dtm+ETA[i, j]
-                    )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dtm+ETA[i, j])
+                    2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dt / (
+                        GGG[i, j]*dt+ETA[i, j]
+                    )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dt+ETA[i, j])
                 )
                 DSXY[i, j] = SXY[i, j] - SXY0[i, j]
             end
@@ -3653,9 +3862,9 @@ function compute_stress_strainrate!(
                     -(vy[i, j]-vy[i-1, j]) / dy
                 )
                 SXX[i, j] = (
-                    2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dtm / (
-                        GGGP[i, j]*dtm+ETAP[i, j]
-                    ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dtm+ETAP[i, j])
+                    2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dt / (
+                        GGGP[i, j]*dt+ETAP[i, j]
+                    ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dt+ETAP[i, j])
                 )
                 DSXX[i, j] = SXX[i, j] - SXX0[i, j]
                 EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
@@ -3664,7 +3873,7 @@ function compute_stress_strainrate!(
         end # @inbounds        
     # # ϵxy, σxy, Δσxy at basic nodes
     # EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
-    # @. SXY = 2*ETA*EXY*GGG*dtm/(GGG*dtm+ETA) + SXY0*ETA/(GGG*dtm+ETA)
+    # @. SXY = 2*ETA*EXY*GGG*dt/(GGG*dt+ETA) + SXY0*ETA/(GGG*dt+ETA)
     # @. DSXY = SXY - SXY0
     # # ϵxx, σ′xx at P nodes
     # # @. DIVV[2:end, 2:end] = 
@@ -3674,7 +3883,7 @@ function compute_stress_strainrate!(
     #         diff(vx, dims=2)[2:Ny1, :]./dx .- diff(vy, dims=1)[:, 2:Nx1]./dy
     #     )
     # )
-    # @. SXX = 2.0*ETAP*EXX*GGGP*dtm/(GGGP*dtm+ETAP) + SXX0*ETAP/(GGGP*dtm+ETAP)
+    # @. SXX = 2.0*ETAP*EXX*GGGP*dt/(GGGP*dt+ETAP) + SXX0*ETAP/(GGGP*dt+ETAP)
     # @. DSXX = SXX - SXX0
     # @. EII[2:Ny, 2:Nx] = sqrt(
     #     EXX[2:Ny, 2:Nx]^2 + (
@@ -3863,6 +4072,7 @@ function compute_nodal_adjustment!(
         YERRNOD[iplast] = sqrt(ddd/ynpl)
     end
     # return plastic iteration completeness
+    @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
     return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
 # end # @timeit to "compute_nodal_adjustment!()
@@ -3927,6 +4137,7 @@ function finalize_plastic_iteration_pass!(
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
         dt *= dtcoefdn
+        @info "reducing dt due to plastic iteration limit: dt=$dt s"
         ETA .= ETA00
         YNY .= YNY00
     else
@@ -3946,17 +4157,21 @@ $(SIGNATURES)
 
 # Details:
 
-    - DT: temperature difference between current and previous time step
+    - maxDTcurrent: maximum temperature difference between current and
+                    previous time step
     - dt: current time step duration
+    - titer: current thermochemical iteration counter
 
 # Returns
 
     - dt: adjusted next time step
 """
-function finalize_thermochemical_iteration_pass(DT, dt)
-    maxDTcurrent = maximum(abs, DT)
-    if maxDTcurrent > DTmax
-        dt *= (DTmax * inv(maxDTcurrent))
+function finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
+    if titer == 1
+        if maxDTcurrent > DTmax
+            dt *= (DTmax * inv(maxDTcurrent))
+            @info "titer 1: reducing dt due to maxDT: dt=$dt s"
+        end
     end
     return dt
 end # function finalize_thermochemical_iteration_pass
@@ -3981,7 +4196,7 @@ $(SIGNATURES)
 function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
     pferrcur = maximum(abs, pf-pf0)
     DMPmax = maximum(abs, DMP)
-    @info "thermochemical iteration $titer" pferrcur DMPmax
+    @info "end thermochemical iter $titer" pferrcur DMPmax
     return pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
 end # function compute_thermochemical_iteration_outcome
 
@@ -4006,7 +4221,7 @@ $(SIGNATURES)
     - SXYSUM: interpolation of SXY at basic nodes
     - WTPSUM: interpolation weights at P nodes
     - WTSUM: interpolation weights at basic nodes
-    - dtm: displacement time step
+    - dt: computational time step
     - marknum: total number of markers in use
 
 # Returns
@@ -4028,7 +4243,7 @@ function apply_subgrid_stress_diffusion!(
     SXYSUM,
     WTPSUM,
     WTSUM,
-    dtm,
+    dt,
     marknum
 )
 # @timeit to "apply_subgrid_stress_diffusion!" begin
@@ -4064,7 +4279,7 @@ function apply_subgrid_stress_diffusion!(
         @inbounds δσxxm₀ = sxxm[m] - dot4(grid_vector(i_p, j_p, SXX0), weights_p)
         # time-relax σ′xx difference
         @inbounds δσxxm₀ *= (
-            exp(-dsubgrids*dtm/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0) 
+            exp(-dsubgrids*dt/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0) 
         # correct marker stress
         @inbounds sxxm[m] += δσxxm₀
         # update subgrid diffusion on P nodes
@@ -4076,7 +4291,7 @@ function apply_subgrid_stress_diffusion!(
             grid_vector(i_basic, j_basic, SXY0), weights_basic)
         # time-relax σxy difference
         @inbounds δσxy₀ *= (
-            exp(-dsubgrids*dtm/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0)
+            exp(-dsubgrids*dt/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0)
         # correct marker stress
         @inbounds sxym[m] += δσxy₀
         # update subgrid diffusion on basic nodes
@@ -4394,22 +4609,22 @@ $(SIGNATURES)
     - DHP: latent heating (HL) at P nodes
     - RT: thermal RHS coefficient vector
     - ST: thermal solution vector
-	- dtm: displacement time step
+	- dt: computational time step
 
 # Returns
 
     - nothing
 """
 function perform_thermal_iterations!(
-    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dtm)
+    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt)
 # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
     tk0 .= tk1
-    dtt = dtm
+    dtt = dt
     dttsum = 0.0
     titer = 1
     # perform thermal iterations until reaching time limit
-    while dttsum < dtm
+    while dttsum < dt
         # fresh LHS coefficient matrix
         LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt)
         # LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
@@ -4505,7 +4720,7 @@ function perform_thermal_iterations!(
             # second+ thermal iteration passes:
             # update dttsum and adjust timestep
             dttsum += dtt
-            dtt = min(dtt, dtm-dttsum)
+            dtt = min(dtt, dt-dttsum)
         end
         # increase thermal iteration counter
         titer += 1
@@ -4533,7 +4748,7 @@ $(SIGNATURES)
 	- DT: temperature change at P nodes
 	- TKSUM: interpolation of TK at P nodes 
 	- RHOCPSUM: interpolation of RHOCP at P nodes
-    - dtm: displacement time step
+    - dt: computational time step
 	- marknum: total number of markers in use
 
 # Returns
@@ -4541,7 +4756,7 @@ $(SIGNATURES)
     - nothing
 """
 function apply_subgrid_temperature_diffusion!(
-    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
+    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dt, marknum)
 # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
@@ -4570,7 +4785,7 @@ function apply_subgrid_temperature_diffusion!(
         # time-relax δtkm difference
         δtkm *= (
             exp(
-                -dsubgridt*ktotalm*dtm/rhocptotalm*( 2.0*(inv(dx^2)+inv(dy^2)))
+                -dsubgridt*ktotalm*dt/rhocptotalm*( 2.0*(inv(dx^2)+inv(dy^2)))
             ) - 1.0
         )
         # correct marker temperature
@@ -4630,7 +4845,7 @@ function update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 end # function update_marker_temperature!
 
 """
-Update marker porosity based on Dln[(1-ϕ)/ϕ]/Dt at P grid.
+Update marker porosity for compaction based on Dln[(1-ϕ)/ϕ]/Dt at P grid.
 
 $(SIGNATURES)
 
@@ -4641,16 +4856,16 @@ $(SIGNATURES)
     - tm: marker type
     - phim: marker porosity
     - APHI: Dln[(1-ϕ)/ϕ]/Dt at P nodes
-    - dtm: displacement time step
+    - dt: computational time step
     - marknum: total number of markers in use
 
 # Returns
 
     - nothing
 # """
-function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
+function update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
 # @timeit to "update_marker_porosity!" begin
-    # interpolate and apply DT to markers for subsequent time steps
+    # update porosity for compaction
     @inbounds begin
         @threads for m=1:1:marknum
             if tm[m] < 3
@@ -4674,7 +4889,7 @@ function update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
                     phimin,
                     min(
                         phimax,
-                        phim[m] / ((1.0-phim[m])*exp(aphim*dtm) + phim[m])
+                        phim[m] / ((1.0-phim[m])*exp(aphim*dt) + phim[m])
                     )
                 )
             end
@@ -4806,7 +5021,7 @@ $(SIGNATURES)
     - wyx: rotation rate at basic nodes
     - tk2: next temperature at P nodes
     - marknum: number of markers in use
-    - dtm: displacement time step
+    - dt: computational time step
 
 # Returns
 
@@ -4827,7 +5042,7 @@ function move_markers_rk4!(
 	wyx,
 	tk2,
 	marknum,
-	dtm
+	dt
 )
 # @timeit to "move_markers_rk4!" begin
     @inbounds begin
@@ -4863,7 +5078,7 @@ function move_markers_rk4!(
             # interpolate local rotation rate from basic grid
             ωm = dot4(grid_vector(i, j, wyx), weights)
             # incremental rotation angle
-            θ = dtm * ωm
+            θ = dt * ωm
             # compute analytic stress rotation using σ′′xx = -σ′′yy
             sxxm₁ = sxxm[m]*cos(θ)^2 - sxxm[m]*sin(θ)^2-sxym[m]*sin(2.0*θ)
             sxym₁ = sxxm[m]*sin(2.0*θ) + sxym[m]*cos(2.0*θ)
@@ -4951,13 +5166,13 @@ function move_markers_rk4!(
                 vyrk4 = add_vrk4(vyrk4, vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx, rk)
                 # calculate next RK step x and y positions if not at final step
                 if rk < 4
-                    xmrk4 = xmm + dtm*crk4[rk]*vxrk4[rk]
-                    ymrk4 = ymm + dtm*crk4[rk]*vyrk4[rk]
+                    xmrk4 = xmm + dt*crk4[rk]*vxrk4[rk]
+                    ymrk4 = ymm + dt*crk4[rk]*vyrk4[rk]
                 end
             end # RK4 solid velocity loop
             # advance marker using RK4 solid velocity
-            xm[m] += dtm * dot4(brk4, vxrk4)
-            ym[m] += dtm * dot4(brk4, vyrk4)
+            xm[m] += dt * dot4(brk4, vxrk4)
+            ym[m] += dt * dot4(brk4, vyrk4)
             # reset RK4 scheme for fluid velocity backtracing
             xmm = xmrk4 = xm[m]
             ymm = ymrk4 = ym[m]      
@@ -5041,13 +5256,13 @@ function move_markers_rk4!(
                     vyrk4, vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx, rk)
                 # calculate next RK step x and y positions if not at final step
                 if rk < 4
-                    xmrk4 = xmm - dtm*crk4[rk]*vxrk4[rk]
-                    ymrk4 = ymm - dtm*crk4[rk]*vyrk4[rk]
+                    xmrk4 = xmm - dt*crk4[rk]*vxrk4[rk]
+                    ymrk4 = ymm - dt*crk4[rk]*vyrk4[rk]
                 end
             end # RK4 fluid velocity loop
             # backtrace marker using RK4 fluid velocity
-            xmrk4 = xmm - dtm*dot4(brk4, vxrk4)
-            ymrk4 = ymm - dtm*dot4(brk4, vyrk4)
+            xmrk4 = xmm - dt*dot4(brk4, vxrk4)
+            ymrk4 = ymm - dt*dot4(brk4, vyrk4)
             # interpolate fluid temperature at backtraced marker position
             i, j, weights = fix_weights(
                 xmrk4,
@@ -5109,7 +5324,7 @@ function move_markers_rk4!(
     #         # interpolate local rotation rate from basic grid
     #         ωm = dot4(grid_vector(i, j, wyx), weights)
     #         # incremental rotation angle
-    #         θ = dtm * ωm
+    #         θ = dt * ωm
     #         # compute analytic stress rotation using σ′′xx = -σ′′yy
     #         sxxm₁ = sxxm[m]*cos(θ)^2 - sxxm[m]*sin(θ)^2-sxym[m]*sin(2.0*θ)
     #         sxym₁ = sxxm[m]*sin(2.0*θ) + sxym[m]*cos(2.0*θ)
@@ -5192,16 +5407,16 @@ function move_markers_rk4!(
     #             vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
     #             # calculate next RK step x and y positions if not at final step
     #             if rk==1 || rk==2
-    #                 xcur = xA + 0.5*dtm*vxm[rk]
-    #                 ycur = yA + 0.5*dtm*vym[rk]
+    #                 xcur = xA + 0.5*dt*vxm[rk]
+    #                 ycur = yA + 0.5*dt*vym[rk]
     #              elseif rk==3
-    #                 xcur = xA + dtm*vxm[rk]
-    #                 ycur = yA + dtm*vym[rk]
+    #                 xcur = xA + dt*vxm[rk]
+    #                 ycur = yA + dt*vym[rk]
     #              end
     #         end # RK4 solid velocity loop
     #         # advance marker using RK4 solid velocity
-    #         xm[m] += dtm*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-    #         ym[m] += dtm*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+    #         xm[m] += dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+    #         ym[m] += dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
     #         # reset RK4 scheme for fluid velocity backtracing
     #         xA = xcur = xm[m]
     #         yA = ycur = ym[m]        
@@ -5281,16 +5496,16 @@ function move_markers_rk4!(
     #             vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
     #             # calculate next RK step x and y positions if not at final step
     #             if rk==1 || rk==2
-    #                 xcur = xA - 0.5*dtm*vxm[rk]
-    #                 ycur = yA - 0.5*dtm*vym[rk]
+    #                 xcur = xA - 0.5*dt*vxm[rk]
+    #                 ycur = yA - 0.5*dt*vym[rk]
     #             elseif  rk==3
-    #                 xcur = xA - dtm*vxm[rk]
-    #                 ycur = yA - dtm*vym[rk]
+    #                 xcur = xA - dt*vxm[rk]
+    #                 ycur = yA - dt*vym[rk]
     #             end
     #         end # RK4 fluid velocity loop
     #         # backtrace marker using RK4 fluid velocity
-    #         xcur = xA - dtm*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-    #         ycur = yA - dtm*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+    #         xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+    #         ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
     #         # interpolate fluid temperature at backtraced marker position
     #         i, j, weights = fix_weights(
     #             xcur,
@@ -5339,13 +5554,14 @@ $(SIGNATURES)
     - vy: solid vy-velocity at Vy nodes 
     - vxf: fluid vx-velocity at Vx nodes 
     - vyf: fluid vy-velocity at Vy nodes
+    - dt: computational time step
 
 # Returns
 
     - nothing
 """
 function backtrace_pressures_rk4!(
-    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dtm)
+    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
 # @timeit to "backtrace_pressures_rk4!"
     @inbounds begin
         # setup RK4 scheme
@@ -5427,16 +5643,16 @@ function backtrace_pressures_rk4!(
                 vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
                 # calculate next RK step x and y positions if not at final 
                 if rk==1 || rk==2
-                    xcur=xA - 0.5*dtm*vxm[rk]
-                    ycur=yA - 0.5*dtm*vym[rk]
+                    xcur=xA - 0.5*dt*vxm[rk]
+                    ycur=yA - 0.5*dt*vym[rk]
                 elseif rk==3
-                    xcur = xA - dtm*vxm[rk]
-                    ycur = yA - dtm*vym[rk]
+                    xcur = xA - dt*vxm[rk]
+                    ycur = yA - dt*vym[rk]
                 end
             end
             # compute effective velocity using RK4
-            xcur = xA - dtm*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-            ycur = yA - dtm*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+            xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+            ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
             i, j, weights = fix_weights(
                 xcur,
                 ycur,
@@ -5529,16 +5745,16 @@ function backtrace_pressures_rk4!(
                 vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
                 # calculate next RK step x and y positions if not at final 
                 if rk==1 || rk==2
-                    xcur = xA - 0.5*dtm*vxm[rk]
-                    ycur = yA - 0.5*dtm*vym[rk]
+                    xcur = xA - 0.5*dt*vxm[rk]
+                    ycur = yA - 0.5*dt*vym[rk]
                 elseif rk==3
-                    xcur = xA - dtm*vxm[rk]
-                    ycur = yA - dtm*vym[rk]
+                    xcur = xA - dt*vxm[rk]
+                    ycur = yA - dt*vym[rk]
                 end
             end
             # compute effective velocity using RK4
-            xcur = xA - dtm*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-            ycur = yA - dtm*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
+            xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
+            ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
             i, j, weights = fix_weights(
                 xcur,
                 ycur,
@@ -5619,6 +5835,10 @@ $(SIGNATURES)
 	- sxxm: marker σ′xx of markers
 	- sxym: σxy of markers
 	- etavpm: viscoplastic viscosity of markers
+    - phinewm: reacted porosity of markers
+    - pfm0: previous fluid pressure of markers
+    - XWsolidm: melt molar fraction of markers
+    - XWsolidm0: previous melt molar fraction of markers
     - rhototalm: total density of markers
     - rhocptotalm : total volumetric heat capacity of markers
     - etatotalm: total viscosity of markers
@@ -5649,6 +5869,10 @@ function replenish_markers!(
     sxxm,
     sxym,
     etavpm,
+    phinewm,
+    pfm0,
+    XWsolidm,
+    XWsolidm0,
     rhototalm,
     rhocptotalm,
     etatotalm,
@@ -5724,6 +5948,10 @@ function replenish_markers!(
                     push!(sxxm, sxxm[m])
                     push!(sxym, sxym[m])
                     push!(etavpm, etavpm[m])
+                    push!(phinewm, phinewm[m])
+                    push!(pfm0, pfm0[m])
+                    push!(XWsolidm, XWsolidm[m])
+                    push!(XWsolidm0, XWsolidm0[m])
                     push!(rhototalm, rhototalm[m])
                     push!(rhocptotalm, rhocptotalm[m])
                     push!(etatotalm, etatotalm[m])
@@ -5756,7 +5984,6 @@ $(SIGNATURES)
     - output_path: absolute path to output directory
     - timestep: current time step number
     - dt: time step
-    - dtm: displacement time step 
     - timesum: total simulation time
     - marknum: number of markers
     - ETA... : simulation state variables
@@ -5769,7 +5996,6 @@ function save_state(
     output_path,
     timestep,
     dt,
-    dtm,
     timesum,
     marknum,
     ETA,
@@ -5841,6 +6067,8 @@ function save_state(
     DSXX,
     DMP,
     DHP,
+    XWS,
+    XWsolidm0,
     xm,
     ym,
     tm,
@@ -5869,7 +6097,6 @@ function save_state(
         fid;
         timestep,
         dt,
-        dtm,
         timesum,
         marknum,
         dsubgrids,
@@ -5972,6 +6199,8 @@ function save_state(
         DSXX,
         DMP,
         DHP,
+        XWS,
+        XWsolidm0,
         xm,
         ym,
         tm,
@@ -6018,14 +6247,73 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
     timestep,
     dt,
-    dtm,
     timesum,
     marknum,
     hrsolidm,
     hrfluidm,
     YERRNOD = setup_dynamic_simulation_parameters()
 
-    @info "Simulation layout" Nx Ny xsize ysize rplanet rcrust marknum
+    @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
+    @info(
+        "Parameters",
+        random_markers,
+        marker_property_mode,
+        hr_al,
+        hr_fe,
+        reaction_active,
+        reaction_rate_coeff_mode,
+        log_completion_rate,
+        t_half_al,
+        ratio_al,
+        E_al,
+        f_al,
+        t_half_fe,
+        ratio_fe,
+        E_fe,
+        f_fe,
+        rhosolidm,
+        rhofluidm,
+        etasolidm,
+        etasolidmm,
+        etafluidm,
+        etafluidmm,
+        rhocpsolidm,
+        rhocpfluidm,
+        alphasolidm,
+        alphafluidm,
+        ksolidm,
+        kfluidm,
+        gggsolidm,
+        frictsolidm,
+        cohessolidm,
+        tenssolidm,
+        kphim0,
+        tkm0,
+        XWsolidm_init,
+        etaphikoef,
+        αη,
+        tmsolidphase,
+        tmfluidphase,
+        phim0,
+        phimin,
+        phimax,
+        ΔHWD,
+        ΔSWD,
+        ΔVWD,
+        Δtreaction,
+        pfcoeff,
+        pferrmax,
+        start_time,
+        start_step,
+        endtime,
+        dsubgrids,
+        dsubgridt,
+        dt_longest,
+        dphimax,
+        dxymax,
+        vpratio,
+        seed
+    )
     @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
     
     # -------------------------------------------------------------------------
@@ -6165,13 +6453,15 @@ function simulation_loop(output_path)
         alphafluidcur,
         XWsolidm0
     )
+    # copy thermodynamic marker properties to next generation for initial setup
+    XWsolidm .= XWsolidm0
+    phinewm .= phim
 
     # save initial state
     save_state(
         output_path,
         0,
         dt,
-        0,
         timesum,
         marknum,
         ETA,
@@ -6243,6 +6533,8 @@ function simulation_loop(output_path)
         DSXX,
         DMP,
         DHP,
+        XWS,
+        XWsolidm0,
         xm,
         ym,
         tm,
@@ -6328,9 +6620,10 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
     # iterate timesteps"
     # -------------------------------------------------------------------------
-    generate_showvalues(timestep, marknum, dt, timesum) = () -> [
+    generate_showvalues(timestep, marknum, maxT, dt, timesum) = () -> [
         (:timestep, timestep),
         (:marknum, marknum),
+        (:maxT_K, maxT),
         (:dt_s, dt),
         (:timesum_Ma, s_to_Ma(timesum)),
         (:to_go_Ma, s_to_Ma(endtime-timesum))
@@ -6404,7 +6697,9 @@ function simulation_loop(output_path)
                 etafluidcur_inv_kphim,
                 hrsolidm,
                 hrfluidm,
-                phim
+                phim,
+                XWsolidm0,
+                marker_property_mode
             )              
             # interpolate marker properties to basic nodes
             @inbounds marker_to_basic_nodes!(
@@ -6588,51 +6883,59 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         # probe increasing computational timestep
         # ---------------------------------------------------------------------
-        dt = min(dt*dtcoefup, dtmax)
+        dt = min(dt*dtcoefup, dt_longest)
+        @info "\n\n ********** begin timestep $timestep - dt = $dt s **********"
 
         # ---------------------------------------------------------------------
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
         for titer=1:1:titermax
-
             # perform thermochemical reaction
-            perform_thermochemical_reaction!(
-                DMP,
-                DHP,
-                DMPSUM,
-                DHPSUM,
-                WTPSUM,
-                pf,
-                tk2,
-                tm,
-                xm,
-                ym,
-                XWsolidm0,
-                XWsolidm,
-                phim,
-                phinewm,
-                pfm0,
-                marknum,
-                dt,
-                timestep,
-                titer
-            )
+            if reaction_active
+                perform_thermochemical_reaction!(
+                    DMP,
+                    DHP,
+                    DMPSUM,
+                    DHPSUM,
+                    WTPSUM,
+                    pf,
+                    tk2,
+                    tm,
+                    xm,
+                    ym,
+                    XWsolidm0,
+                    XWsolidm,
+                    phim,
+                    phinewm,
+                    pfm0,
+                    marknum,
+                    dt,
+                    timestep,
+                    titer
+                )
+            end
 
-            # save initial viscosity, yielding nodes
-            ETA00 .= ETA
-            YNY00 .= YNY
 
             # -----------------------------------------------------------------
             # perform hydromechanical/plastic iterations (inner iteration loop)
             # -----------------------------------------------------------------
+
+            # save initial viscosity, yielding nodes
+            ETA00 .= ETA
+            YNY00 .= YNY
             if timestep == 1
                 # no elastic compaction during first timestep
                 BETTAPHI .= 0.0
             end
+
+            # advance pressure generation inside thermochemical iteration
+            pr0 .= pr
+            pf0 .= pf
+
             # perform plastic iterations
             for iplast=1:1:titermax
                 @info(
-                    "thermochemical/hydromechanical iterations: $titer/$iplast")
+                    "thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
                 recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
                 # assemble hydromechanical system of equations
@@ -6762,7 +7065,6 @@ function simulation_loop(output_path)
                 # )
 
                 # adapt timestep for displacement
-                @info "dt before displacement limitation: $dt s"
                 dt = compute_displacement_timestep(
                     vx,
                     vy,
@@ -6771,7 +7073,6 @@ function simulation_loop(output_path)
                     dt,
                     aphimax
                 )
-                @info "dt after displacement limitation: $dt s"
 
                 # compute stresses, stress changes and strain rate components
                 compute_stress_strainrate!(
@@ -6816,8 +7117,8 @@ function simulation_loop(output_path)
                     ps
                 )
                 # save nodal stress changes - RMK: not required in code
-                # DSXX0 = copy(DSXX)
-                # DSXY0 = copy(DSXY)
+                # DSXX0 .= DSXX
+                # DSXY0 .= DSXY
                 
                 # nodal adjustment
                 if compute_nodal_adjustment!(
@@ -6903,15 +7204,14 @@ function simulation_loop(output_path)
             tk2 .= reshape(ST, Ny1, Nx1)
             # compute ΔT
             @. DT = tk2 - tk1
+            maxDTcurrent = maximum(abs, DT)
+            @info "max DT = $maxDTcurrent K"
+            # prepare next pass of thermochemical iteration
+            dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
             # evaluate iteration outcome
             if compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
                 # exit thermochemical iterations loop
                 break
-            else
-                # prepare next pass of thermochemical iteration
-                @info "dt before thermal stability condition: $dt s"
-                dt = finalize_thermochemical_iteration_pass(DT, dt)
-                @info "dt after thermal stability condition: $dt s"
             end
         end # for titer=1:1:ntiter
 
@@ -6946,7 +7246,7 @@ function simulation_loop(output_path)
             SXYSUM,
             WTPSUM,
             WTSUM,
-            dtm,
+            dt,
             marknum
         )
 
@@ -6956,7 +7256,7 @@ function simulation_loop(output_path)
         update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
 
         # ---------------------------------------------------------------------
-        # apply subgrid temperature diffusion on markers
+        # apply subgrid temperature diffusion on markers,
         # compute DTsubgrid
         # ---------------------------------------------------------------------
         apply_subgrid_temperature_diffusion!(
@@ -6969,7 +7269,7 @@ function simulation_loop(output_path)
             DT,
             TKSUM,
             RHOCPSUM,
-            dtm,
+            dt,
             marknum
         )
 
@@ -6979,12 +7279,23 @@ function simulation_loop(output_path)
         update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
 
         # ---------------------------------------------------------------------
-        # update porosity on markers
+        # advance marker melt composition and porosity generation,
+        # update porosity on markers for compaction,
+        # update next marker porosity generation
         # ---------------------------------------------------------------------
-        update_marker_porosity!(xm, ym, tm, phim, APHI, dtm, marknum)
+        XWsolidm0 .= XWsolidm
+        phim .= phinewm
+        update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
+        phinewm .= phim
 
         # ---------------------------------------------------------------------
-        # compute velocity in P nodes
+        # interpolate melt composition from markers to P nodes
+        # --------------------------------------------------------------------- 
+        update_p_nodes_melt_composition!(
+            xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
+
+        # ---------------------------------------------------------------------
+        # compute velocity in P nodes,
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
         compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
@@ -7016,12 +7327,9 @@ function simulation_loop(output_path)
         )
 
         # ---------------------------------------------------------------------
-        # backtrack P nodes: Ptotal with RK4
+        # backtrack P nodes: Ptotal with RK4,
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
-        # pr0 .= pr
-        # ps0 .= ps
-        # pf0 .= pf
         backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
 
@@ -7037,6 +7345,10 @@ function simulation_loop(output_path)
             sxxm,
             sxym,
             etavpm,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
             rhototalm,
             rhocptotalm,
             etatotalm,
@@ -7061,9 +7373,6 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         timesum += dt
         timestep_end = now() 
-        @info "time step duration" Dates.canonicalize(
-            Dates.CompoundPeriod(timestep_end-timestep_begin)) 
-        @info "total time [Ma]" s_to_Ma(timesum)
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -7073,7 +7382,6 @@ function simulation_loop(output_path)
                 output_path,
                 timestep,
                 dt,
-                dtm,
                 timesum,
                 marknum,
                 ETA,
@@ -7145,6 +7453,8 @@ function simulation_loop(output_path)
                 DSXX,
                 DMP,
                 DHP,
+                XWS,
+                XWsolidm0,
                 xm,
                 ym,
                 tm,
@@ -7170,16 +7480,25 @@ function simulation_loop(output_path)
             )
         end
         # ---------------------------------------------------------------------
-        #  save old stresses - RMK: not used anywhere in code ?
+        #  save old stresses - RMK: not used anywhere in code
         # ---------------------------------------------------------------------
         #  sxxm00 = sxxm 
         #  sxym00 = sxym    
 
         # ---------------------------------------------------------------------
-        # update progress
+        # update progress indicators
         # ---------------------------------------------------------------------
+        maxT = maximum(tk2)
+        @info "timestep $timestep computed in $(
+            Dates.canonicalize(
+                Dates.CompoundPeriod(timestep_end-timestep_begin)
+            )
+        )"
+        @info "total time = $(s_to_Ma(timesum)) Ma"
+        @info "markers in use = $marknum"
+        @info "max T = $maxT K"
         next!(p; showvalues = generate_showvalues(
-            timestep, marknum, dt, timesum))
+            timestep, marknum, maxT, dt, timesum))
 
         # ---------------------------------------------------------------------
         # finish timestep
@@ -7217,7 +7536,6 @@ function parse_commandline()
     return parse_args(s)
 end
 
-
 """
 Runs the simulation with the given parameters.
 
@@ -7236,22 +7554,22 @@ function run_simulation()
     output_path = parsed_args["output_path"]
     show_timer = parsed_args["show_timer"]
     mkpath(output_path)
-    io = open(output_path * "simulation_run.log", "w+")
+    io = open(output_path * "HydrologyPlanetesimals_run.log", "w+")
     logger = SimpleLogger(io)
     global_logger(logger)
     if show_timer
         reset_timer!(to)
     end
-    @info "HydrologyPlanetesimals simulation run"
-    @info "System information" Sys.isapple() Sys.islinux() Sys.iswindows() Sys.cpu_info()
-    @info "results written to" output_path
+    @info "=========== HydrologyPlanetesimals simulation run ==========="
+    @info "system information: Apple=$(Sys.isapple()) Linux=$(Sys.islinux()) Win=$(Sys.iswindows())" Sys.cpu_info()
+    @info "writing results to $output_path"
     t1 = now()
-    @info "start time" t1
+    @info "start time = $t1"
     simulation_loop(output_path)
     t2 = now()
-    @info "end time" t2
-    @info "total run time" Dates.canonicalize(
-        Dates.CompoundPeriod(t2-t1))
+    @info "end time = $t2"
+    @info "total run time = $(Dates.canonicalize(
+        Dates.CompoundPeriod(t2-t1)))"
     if show_timer
         show(to)
     end
