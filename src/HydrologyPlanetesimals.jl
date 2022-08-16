@@ -7,7 +7,6 @@ using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
-using LinearSolve
 using Logging
 using ProgressMeter
 using Random

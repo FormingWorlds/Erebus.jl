@@ -20,11 +20,9 @@ const xcenter = xsize / 2
 # vertical center of model
 const ycenter = ysize / 2  
 # basic grid resolution in x direction (horizontal)
-const Nx = 71
-# const Nx = 141
+const Nx = 15
 # basic grid resolution in y direction (vertical)	
-const Ny = 71
-# const Ny = 141
+const Ny = 15
 # Vx, Vy, P grid resolution in x direction (horizontal)
 const Nx1 = Nx + 1
 # Vx/Vy/P grid resolution in y direction (vertical)
