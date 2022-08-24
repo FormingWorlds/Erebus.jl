@@ -678,6 +678,7 @@ const rgen = MersenneTwister(seed)
         VDsolid = VDˢ
         VWsolid = VWˢ
         rhoH2Ofluid = ρH₂Oᶠ
+        rhoH2Ofluidice = ρH₂Oᶠⁱ
         # define markers
         HydrologyPlanetesimals.define_markers!(
             xm,
@@ -767,7 +768,11 @@ const rgen = MersenneTwister(seed)
                 XDsolidm0=1-XWsolidm0_ver[m];
                 rhosolidm0=(MD+MH2O*XWsolidm0_ver[m])/(
                     VWsolid*XWsolidm0_ver[m]+VDsolid*XDsolidm0)
-                rhofluidm0=rhoH2Ofluid
+                if tkm[m] > tmfluidphase
+                    rhofluidm0=rhoH2Ofluid
+                else
+                    rhofluidm0=rhoH2Ofluidice
+                end
                 kphim_ver[m] = (
                     kphim0[tm_ver[m]]*(phim_ver[m]/phim0)^3/(
                         (1-phim_ver[m])/(1-phim0))^2
@@ -1067,9 +1072,9 @@ const rgen = MersenneTwister(seed)
         Δt₁ = dt1 = 0.5 * Δtr
         Δt₂ = dt2 = 1.5 * Δtr    
         ΔGWD₁ = HydrologyPlanetesimals.compute_gibbs_free_energy(
-            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁, phi)
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₁, Δtr)
         ΔGWD₂ = HydrologyPlanetesimals.compute_gibbs_free_energy(
-            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂, phi)
+            tknm, pfnm, XDsolidm0, XWsolidm0[m], Δt₂, Δtr)
         # verification, from i2visHTM_hydration.m, line 614ff
         # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
         dGWD0=dHWD-tknm*dSWD+dVWD*pfnm+8.314*tknm*log(XDsolidm0/XWsolidm0[m]);
@@ -3427,9 +3432,9 @@ const rgen = MersenneTwister(seed)
             elseif tmfluidphase+5 > T >= tmfluidphase
                 return ρH₂Oᶠ * (4200.0 + 0.1Lᶠ)
             elseif tmfluidphase > T >= tmfluidphase-5
-                return ρH₂Oᶠ * (7.67T + 0.1Lᶠ)
+                return ρH₂Oᶠⁱ * (7.67T + 0.1Lᶠ)
             elseif tmfluidphase-5 > T
-                return ρH₂Oᶠ * 7.67T
+                return ρH₂Oᶠⁱ * 7.67T
             end
         end
         # test
@@ -3481,7 +3486,12 @@ const rgen = MersenneTwister(seed)
             @test HydrologyPlanetesimals.compute_Δtreaction(
                 T, ϕ, 1) ≈ -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
             @test HydrologyPlanetesimals.compute_Δtreaction(
-                T, ϕ, 2) ≈ -log_completion_rate / (A_B*ϕ) * 2.0^(-(T-c_B)/b_B)
+                T, ϕ, 2) ≈ -log_completion_rate / (Sxo_B*ϕ) * 2.0^(
+                    -(T-To_B)/Tscl_B)
+            @test HydrologyPlanetesimals.compute_Δtreaction(
+                T, ϕ, 3) ≈ -log_completion_rate / (
+                    Sxo_T*ϕ*exp(Ea_T/RG*(1/To_T-1/T))
+                )
             @test HydrologyPlanetesimals.compute_Δtreaction(
                 T, ϕ, 9) ≈ Δtreaction
         end
@@ -3535,7 +3545,9 @@ const rgen = MersenneTwister(seed)
         dSWD = ΔSWD
         dVWD = ΔVWD
         rhoH2Ofluid = ρH₂Oᶠ
+        rhoH2Ofluidice = ρH₂Oᶠⁱ
         VH2Ofluid = VH₂Oᶠ
+        VH2Ofluidice = VH₂Oᶠⁱ
         MH2O = MH₂O
         mode = reaction_rate_coeff_mode
         HydrologyPlanetesimals.perform_thermochemical_reaction!(
@@ -3598,12 +3610,17 @@ const rgen = MersenneTwister(seed)
                 pfnm=pfnm*(1-pfcoeff)+pfm₀_ver[m]*pfcoeff;
             end
             pfm₀_ver[m]=pfnm;
+            if tknm>tmfluidphase
+                VH2O = VH2Ofluid;
+            else
+                VH2O = VH2Ofluidice;
+            end
             #
             # Thermodynamic computations
             # Compute bulk composition of the solid+fluid system
             XDsolidm0=1-XWˢm₀_ver[m];
             Xfluid0=phim_ver[m]*(XWˢm₀_ver[m]*VWsolid+XDsolidm0*VDsolid)/(
-                (1-phim_ver[m])*VH2Ofluid+ phim_ver[m]*(
+                (1-phim_ver[m])*VH2O+ phim_ver[m]*(
                     XWˢm₀_ver[m]*VWsolid+XDsolidm0*VDsolid));
             Xsolid0=1-Xfluid0;
             XH2Ototal=(XWˢm₀_ver[m]*Xsolid0+Xfluid0)/(1+XWˢm₀_ver[m]*Xsolid0);
@@ -3611,7 +3628,11 @@ const rgen = MersenneTwister(seed)
             # Compute old density of the solid and fluid
             rhosolid0=(MD+MH2O*XWˢm₀_ver[m])/(
                 VWsolid*XWˢm₀_ver[m]+VDsolid*XDsolidm0);
-            rhofluid0=rhoH2Ofluid;
+            if tknm>tmfluidphase
+                rhofluid=rhoH2Ofluid;
+            else
+                rhofluid=rhoH2Ofluidice;
+            end
             # Compute old relative ehthalpy of the system
             Htotal0=-Xsolid0*XWˢm₀_ver[m]*dHWD/(MD+MH2O);
             # Compute old dG for dehydration reaction: Wsilicate=Dsilicate+H2O
@@ -3637,13 +3658,17 @@ const rgen = MersenneTwister(seed)
             # Process fluid-bearing rocks only 
             if Xfluid1>0 && Xfluid1<1 
                 # Compute equilibrium Porosity
-                phinew1=Xfluid1*VH2Ofluid/(
-                    Xfluid1*VH2Ofluid+Xsolid1*(
+                phinew1=Xfluid1*VH2O/(
+                    Xfluid1*VH2O+Xsolid1*(
                         XWsolidm1*VWsolid+XDsolidm1*VDsolid));
                 # Compute equilibrium density of the solid and fluid
                 rhosolid=(MD+MH2O*XWsolidm1)/(
                     VWsolid*XWsolidm1+VDsolid*XDsolidm1);
-                rhofluid=rhoH2Ofluid;
+                if tknm>tmfluidphase
+                    rhofluid0=rhoH2Ofluid;
+                else
+                    rhofluid0=rhoH2Ofluidice;
+                end
                 # Compute equilibrium relative ehthalpy of the system
                 Htotal1=-Xsolid1*XWsolidm1*dHWD/(MD+MH2O);
                 # Compute ehthalpy change
@@ -5435,6 +5460,7 @@ const rgen = MersenneTwister(seed)
     @testset "apply_subgrid_temperature_diffusion!()" begin
         marknum = start_marknum
         dtm = dt_longest
+        mode = 2
         # simulate markers
         xm = rand(rgen, -dx:0.1:x[end]+dx, marknum)
         ym = rand(rgen, -dy:0.1:y[end]+dy, marknum)
@@ -5449,7 +5475,7 @@ const rgen = MersenneTwister(seed)
         DT_ver = deepcopy(DT)
         # apply subgrid stress diffusion
         HydrologyPlanetesimals.apply_subgrid_temperature_diffusion!(
-            xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum)
+            xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dtm, marknum, mode)
         # verification, from HTM-planetary.m, line 1731ff
         # Apply subgrid stress diffusion to markers
         if dsubgridt>0
@@ -5733,6 +5759,7 @@ const rgen = MersenneTwister(seed)
     @testset "move_markers_rk4!()" begin
         dtm = 0.9
         marknum = start_marknum + 10_000
+        mode = marker_property_mode
         xm = zeros(marknum)
         ym = zeros(marknum)
         for jm=1:1:Nxm, im=1:1:Nym
@@ -5774,7 +5801,8 @@ const rgen = MersenneTwister(seed)
             wyx,
             tk2,
             marknum,
-            dtm
+            dtm,
+            mode
         )
         # verification, from HTM-planetary.m, line 1947ff:
         # Move markers with 4th order Runge-Kutta
