@@ -22,12 +22,13 @@ At the Julia prompt, add with ```using Pkg; pkg"add https://github.com/BeatHubma
 
 ### Parameters
 
-Adjust the simulation parameters in ```src/constants.jl``` if necessary.
+Adjust the simulation parameters in ```src/constants.jl``` if necessary. A set of parameters suitable for unit testing is given at ```src/test_constants.jl```.
 
 ### Running the simulation
 
-Launch with ```julia -O3 --t4 launch.jl /PATH/TO/OUTPUT/```.
+Launch with ```julia -O3 --tauto launch.jl /PATH/TO/OUTPUT/```.
 
 ### Plotting results
 
-Launch with ```julia plots.jl /PATH/TO/OUTPUT/```; ```.mp4``` files are stored in same directory.
+Generate plots with ```julia generate_plots.jl /PATH/TO/OUTPUT/```; ```.pdf``` plot files are stored in same directory as output.
+Generate animations with ```julia generate_animations.jl /PATH/TO/OUTPUT/```; ```.mp4``` animation files are stored in same directory as output.
