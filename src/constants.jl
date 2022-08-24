@@ -240,19 +240,23 @@ const MD = 0.120
 const ρDˢ = 3300.0
 # density of wet silicate [kg/m³]
 const ρWˢ = 2600.0
-# density of liquid water [kg/m³]
+# density of fluid (liquid H₂O) [kg/m³]
 const ρH₂Oᶠ = 1000.0
+# density of fluid ice (frozen H₂O) [kg/m³]
+const ρH₂Oᶠⁱ = 917.0
 # molar volume of dry solid [m³/mol]
 const VDˢ = MD / ρDˢ
 # molar volume of wet solid [m³/mol]
 const VWˢ = (MD+MH₂O) / ρWˢ
-# molar volume of liquid water [m³/mol]
+# molar volume of fluid (liquid H₂O) [m³/mol]
 const VH₂Oᶠ = MH₂O / ρH₂Oᶠ
+# molar volume of fluid ice (frozen H₂O) [m³/mol]
+const VH₂Oᶠⁱ = MH₂O / ρH₂Oᶠⁱ
 # enthalpy change for dehydration of the wet silicate [J/mol]
 const ΔHWD = 40000.0
 # entropy change for dehydration of the wet silicate [J/K/mol]
 const ΔSWD = 60.0
-# volume change for dehydration of the wet silicate [J/Pa/mol]
+# volume change for dehydration of the wet silicate [m³/mol]
 const ΔVWD = VDˢ + VH₂Oᶠ - VWˢ
 # coefficient of pressure from previous hydrothermomechanical iteration
 const pfcoeff = 0.5
@@ -265,14 +269,17 @@ const Δtreaction = 1.0e+10
 # log reaction completion rate ln(ρend/ρstart)
 const log_completion_rate = log(0.01)
 # reaction constant mode (1: [Martin & Fyfe, 1970; Emmanuel & Berkowitz, 2006;
-# Iyer et al., 2012], 2: [Bland & Travis, 2012], 9: constant Δtreaction)
+# Iyer et al., 2012], 2: [Bland & Travis, 2017], 9: constant Δtreaction)
 const reaction_rate_coeff_mode = 1
 # reaction constant parameters mode 1 [Iyer et al., 2012]
 # (A: kinetic coefficient, b: kinetic coefficient, c: kinetic coefficient)
 A_I = 1.0e-11; b_I = 2.5e-4; c_I = 543.0
-# reaction constant parameters mode 2 [Bland & Travis, 2012]
-# (A: reaction rate at ref T, b: empirical scaling factor, c: reaction ref T)
-A_B = 2.0e-11; b_B = 10.0 ; c_B = 293.0
+# reaction constant parameters mode 2 [Bland & Travis, 2017]
+# (Sxo_B: reaction rate at ref T, Tscl_B: empirical scaling factor, To_B: reaction ref T)
+Sxo_B = 2.0e-11; Tscl_B = 10.0 ; To_B = 293.0
+# reaction constant parameters mode 3 [Travis et al., 2018]
+# (Sxo_T: reaction rate at ref T, To_T: reaction ref T, Ea_T: reaction activation energy)
+Sxo_T = 2.0e-11; To_T = 293.0; Ea_T = 63.8e3    
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1

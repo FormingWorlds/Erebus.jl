@@ -685,8 +685,9 @@ $(SIGNATURES)
     - phim: porosity of markers
     - XWˢm₀: previous wet solid molar fraction of markers
     - mode: marker property computation mode
-        - 1: dynamic
-        - 2: constant parameter 
+        - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
+             Travis and Schubert, 2005)
+        - 2: constant parameter rhocpfluidm
 
 # Returns
 
@@ -714,7 +715,8 @@ function compute_marker_properties!(
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
         rhosolidm0 = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀+ VWˢ*XWˢm₀[m]) # (16.161)
-        rhofluidm0 = ρH₂Oᶠ # (16.162)
+        rhofluidm0 = ifelse(
+            tkm[m]>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ) # (16.162)
         rhototalm[m] = total(rhosolidm0, rhofluidm0, phim[m])
         rhocptotalm[m] = total(
             rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
@@ -2265,8 +2267,9 @@ $(SIGNATURES)
 # Details
     
         - T: temperature [K]
-        - mode:
-            - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974)
+        - mode: marker property computation mode
+            - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
+                 Travis and Schubert, 2005)
             - 2: constant parameter rhocpfluidm
 
 # Returns
@@ -2275,17 +2278,16 @@ $(SIGNATURES)
 """
 function compute_rhocpfluidm(T, mode)
     if mode == 1 
-        ρᶠCₚᶠ = ρH₂Oᶠ
         if T < tmfluidphase-5.0
-            ρᶠCₚᶠ *= 7.67T 
+            ρᶠCₚᶠ = ρH₂Oᶠⁱ * 7.67T 
         elseif T < tmfluidphase
-            ρᶠCₚᶠ *= (7.67T + 0.1Lᶠ)
+            ρᶠCₚᶠ = ρH₂Oᶠⁱ * (7.67T + 0.1Lᶠ)
         elseif T < tmfluidphase+5.0
-            ρᶠCₚᶠ *= (4200.0 + 0.1Lᶠ)
+            ρᶠCₚᶠ = ρH₂Oᶠ * (4200.0 + 0.1Lᶠ)
         elseif T < 410.0
-            ρᶠCₚᶠ *= 4200.0
+            ρᶠCₚᶠ = ρH₂Oᶠ * 4200.0
         else
-            ρᶠCₚᶠ *= (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3) 
+            ρᶠCₚᶠ = ρH₂Oᶠ * (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3) 
         end
     elseif mode == 9
         @inbounds ρᶠCₚᶠ = rhocpfluidm[1]
@@ -2371,6 +2373,7 @@ $(SIGNATURES)
              1970; Emmanuel & Berkowitz, 2006; Iyer et al., 2012). 
         - 2: pseudo-Arrhenius form reaction rate coefficient, based on
              (Bland & Travis, 2017).
+        - 3: Arrhenius form reaction coefficent, based on (Travis et al., 2018).
         - 9: constant parameter Δtreaction
     
 # Returns
@@ -2381,7 +2384,9 @@ function compute_Δtreaction(T, ϕ, mode)
     if mode == 1
         Δtr = -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
     elseif mode == 2
-        Δtr = -log_completion_rate / (A_B*ϕ) * 2.0^(-(T-c_B)/b_B)
+        Δtr = -log_completion_rate / (Sxo_B*ϕ) * 2.0^((To_B-T)/Tscl_B)
+    elseif mode == 3
+        Δtr = -log_completion_rate / (Sxo_B*ϕ) * exp(Ea_T / RG * (1.0/T - 1.0/To_T))
     elseif mode == 9
         Δtr = Δtreaction
     else
@@ -2455,16 +2460,14 @@ $(SIGNATURES)
     - XDˢ: molar fraction of dry solid
     - XWˢ: molar fraction of wet solid
     - Δt: timestep size
-    - ϕ: porosity
+    - Δtr: total reaction time Δtreaction
 
 # Returns
 
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
-function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, ϕ)
+function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr)
 # @timeit to "compute_gibbs_free_energy" begin
-    # compute Δtreaction
-    Δtr = compute_Δtreaction(T, ϕ, reaction_rate_coeff_mode)
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtr
         # compute ΔG for dehydration reaction (16.145), (16.165b)
@@ -2473,7 +2476,6 @@ function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, ϕ)
         # Δt ≥ Δtreaction (16.165a)
         ΔGWD = zero(0.0)    
     end
-    # @info "Δtreaction(T=$T, ϕ=$ϕ)=$Δtr s; ΔGWD=$ΔGWD J/mol"
     return ΔGWD
 # end # @timeit to "compute_gibbs_free_energy"
 end # function compute_gibbs_free_energy
@@ -2607,9 +2609,11 @@ function perform_thermochemical_reaction!(
                 # compute bulk composition of solid and fluid system:
                 # compute previous dry solid molar fraction (16.146)
                 XDˢm₀ = 1.0 - XWˢm₀[m]
+                # get fluid molar volume
+                VH₂O = ifelse(tknm>tmfluidphase, VH₂Oᶠ, VH₂Oᶠⁱ)
                 # compute previous fluid molar fraction (16.164)
                 Xᶠ₀ = phim[m]*(XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ) / (
-                    (1.0-phim[m])*VH₂Oᶠ +
+                    (1.0-phim[m])*VH₂O +
                     phim[m] * (XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ)
                 )
                 # compute previous equilibrium solid molar fraction (16.150)
@@ -2621,12 +2625,15 @@ function perform_thermochemical_reaction!(
                 # compute previous solid density (16.161)
                 ρˢ₀ = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀ + VWˢ*XWˢm₀[m])
                 # compute previous fluid density (16.162)
-                ρᶠ₀ = ρH₂Oᶠ
+                ρᶠ₀ = ifelse(tknm>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ)
+                # compute Δtreaction
+                Δtr = compute_Δtreaction(
+                    tknm, phim[m], reaction_rate_coeff_mode)
                 # compute previous relative enthalpy of the system (16.163)
                 Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
                 # compute previous ΔG for dehydration reaction (16.165a/b)
                 ΔGWD₀ = compute_gibbs_free_energy(
-                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt, phim[m]) 
+                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt, Δtr) 
                 # compute dehydration reaction constant (16.151)
                 KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
                 # compute reacted wet solid molar fraction (16.152)
@@ -2640,11 +2647,11 @@ function perform_thermochemical_reaction!(
                 # only process fluid-bearing rocks
                 if 0.0 < Xᶠ₁ < 1.0
                     # compute reacted equilibrium porosity (16.156)
-                    ϕ₁ = Xᶠ₁*VH₂Oᶠ / (Xᶠ₁*VH₂Oᶠ + Xˢ₁*(XWˢm₁*VWˢ+XDˢm₁*VDˢ))
+                    ϕ₁ = Xᶠ₁*VH₂O / (Xᶠ₁*VH₂O + Xˢ₁*(XWˢm₁*VWˢ+XDˢm₁*VDˢ))
                     # compute equilibrium solid density (16.161)
                     ρˢ₁ = (MD + MH₂O*XWˢm₁) / (VDˢ*XDˢm₁ + VWˢ*XWˢm₁)
                     # compute equilibrium fluid density (16.162)
-                    ρᶠ₁ = ρH₂Oᶠ
+                    ρᶠ₁ = ifelse(tknm>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ)
                     # compute equilibrium relative enthalpy of the system
                     # (16.163)
                     Hᵗ₁ = compute_relative_enthalpy(Xˢ₁, XWˢm₁)
@@ -4626,80 +4633,6 @@ function perform_thermal_iterations!(
     while dttsum < dt
         # fresh LHS coefficient matrix
         LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt)
-        # LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
-        # # reset RHS coefficient vector
-        # RT .= 0.0
-        # # compose global thermal matrix LT and coefficient vector RT
-        # @inbounds begin
-        # for j=1:1:Nx1, i=1:1:Ny1
-        #     # define global index in algebraic space
-        #     gk = (j-1)*Ny1 + i
-        #     # External points
-        #     if i==1 || i==Ny1 || j==1 || j==Nx1
-        #         # thermal equation external points: boundary conditions
-        #         # all locations: ghost unknowns T₃=0 -> 1.0⋅T[i,j]=0.0
-        #         updateindex!(LT, +, 1.0, gk, gk)
-        #         # R[gk] = 0.0 # already done with initialization
-        #         # left boundary: ∂T/∂x=0
-        #         if j == 1
-        #             updateindex!(LT, +, -1.0, gk, gk+Ny1)
-        #         end
-        #         # right boundary: ∂T/∂x=0
-        #         if j == Nx1
-        #             updateindex!(LT, +, -1.0, gk, gk-Ny1)
-        #         end
-        #         # top inner boundary: ∂T/∂y=0
-        #         if i==1 && 1<j<Nx1 
-        #             updateindex!(LT, +, -1.0, gk, gk+1)
-        #         end
-        #         # bottom inner boundary: ∂T/∂y=0
-        #         if i==Ny1 && 1<j<Nx1 
-        #             updateindex!(LT, +, -1.0, gk, gk-1)
-        #         end
-        #     else
-        #         # internal points: 2D thermal equation (conservative formulation)
-        #         # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ
-        #         #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ (eq 10.9) 
-        #         # in case of purely advective heat transport: ∂T/∂t+⃗v⋅∇T = 0
-        #         #
-        #         #                      gk-1
-        #         #                        T₂
-        #         #                        |
-        #         #                       i-1,j
-        #         #                       Ky₁
-        #         #                       qy₁
-        #         #                        |
-        #         #         gk-Ny1 i,j-1  gk     i,j  gk+Ny1
-        #         #           T₁----Kx₁----T₃----Kx₂----T₅
-        #         #                 qx₁    |     qx₂
-        #         #                       i,j
-        #         #                       Ky₂
-        #         #                       qy₂
-        #         #                        |
-        #         #                      gk+1
-        #         #                        T₄
-        #         #
-        #         # extract thermal conductivities
-        #         Kx₁ = KX[i, j-1] 
-        #         Kx₂ = KX[i, j]
-        #         Ky₁ = KY[i-1, j]
-        #         Ky₂ = KY[i, j]
-        #         # fill system of equations: LHS (10.9)
-        #         updateindex!(LT, +, -Kx₁*inv(dx^2), gk, gk-Ny1) # T₁
-        #         updateindex!(LT, +, -Ky₁*inv(dy^2), gk, gk-1) # T₂
-        #         updateindex!(LT, +, (
-        #             RHOCP[i, j]/dtt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)),
-        #             gk,
-        #             gk
-        #         ) # T₃
-        #         updateindex!(LT, +, -Ky₂*inv(dy^2), gk, gk+1) # T₄
-        #         updateindex!(LT, +, -Kx₂*inv(dx^2), gk, gk+Ny1) # T₅
-        #         # fill system of equations: RHS (10.9)
-        #         RT[gk] = (
-        #             RHOCP[i, j]/dtt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j])
-        #     end
-        # end
-        # end # @inbounds
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
         # reshape solution vector to 2D array
@@ -4749,13 +4682,17 @@ $(SIGNATURES)
 	- RHOCPSUM: interpolation of RHOCP at P nodes
     - dt: computational time step
 	- marknum: total number of markers in use
+    - mode: marker property computation mode
+        - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
+             Travis and Schubert, 2005)
+        - 2: constant parameter rhocpfluidm
 
 # Returns
 
     - nothing
 """
 function apply_subgrid_temperature_diffusion!(
-    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dt, marknum)
+    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dt, marknum, mode)
 # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
@@ -4774,8 +4711,12 @@ function apply_subgrid_temperature_diffusion!(
         @inbounds if tm[m] < 3
             # rocks
             @inbounds rhocptotalm = total(
-                rhocpsolidm[tm[m]], rhocpfluidm[tm[m]], phim[m])
-            @inbounds ktotalm = ktotal(ksolidm[tm[m]], kfluidm[tm[m]], phim[m])
+                rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
+            @inbounds ktotalm[m] = ktotal(
+                compute_ksolidm(tkm[m], mode),
+                compute_kfluidm(tkm[m], mode),
+                phim[m]
+            )
         else
             # sticky air
             @inbounds rhocptotalm = rhocpsolidm[tm[m]]
@@ -5021,6 +4962,10 @@ $(SIGNATURES)
     - tk2: next temperature at P nodes
     - marknum: number of markers in use
     - dt: computational time step
+    - mode: marker property computation mode
+        - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
+             Travis and Schubert, 2005)
+        - 2: constant parameter rhocpfluidm
 
 # Returns
 
@@ -5041,7 +4986,8 @@ function move_markers_rk4!(
 	wyx,
 	tk2,
 	marknum,
-	dt
+	dt,
+    mode
 )
 # @timeit to "move_markers_rk4!" begin
     @inbounds begin
@@ -5280,256 +5226,16 @@ function move_markers_rk4!(
             # compute marker fluid-solid temperature difference
             δtkfsm = tkfm₀ - tksm₀
             # correct marker temperature
+            
             tkm[m] = (
                 (1.0-phim[m])*tkm[m]*rhocpsolidm[tm[m]]
-                    + phim[m]*(tkm[m]+δtkfsm)*rhocpfluidm[tm[m]]
-            ) / ((1-phim[m])*rhocpsolidm[tm[m]] + phim[m]*rhocpfluidm[tm[m]])
+                    + phim[m]*(tkm[m]+δtkfsm)*compute_rhocpfluidm(tkm[m], mode)
+            ) / (
+                (1.0-phim[m])*rhocpsolidm[tm[m]]
+                + phim[m]*compute_rhocpfluidm(tkm[m], mode)
+            )
         end # marker loop
-    end # @inbounds
-
-    # @inbounds begin
-    #     # setup RK4 scheme 
-    #     vxm = zeros(4)
-    #     vym = zeros(4)
-    #     for m=1:1:marknum
-    #         xA = xcur = xm[m]
-    #         yA = ycur = ym[m]        
-    #         i, j, weights = fix_weights(
-    #             xcur,
-    #             ycur,
-    #             xp,
-    #             yp,
-    #             dx,
-    #             dy,
-    #             jmin_p,
-    #             jmax_p,
-    #             imin_p,
-    #             imax_p
-    #         )
-    #         # interpolate local solid temperature from P grid
-    #         tksm₀ = dot4(grid_vector(i, j, tk2), weights)
-    #         i, j, weights = fix_weights(
-    #             xcur,
-    #             ycur,
-    #             x,
-    #             y,
-    #             dx,
-    #             dy,
-    #             jmin_basic,
-    #             jmax_basic,
-    #             imin_basic,
-    #             imax_basic
-    #         )
-    #         # interpolate local rotation rate from basic grid
-    #         ωm = dot4(grid_vector(i, j, wyx), weights)
-    #         # incremental rotation angle
-    #         θ = dt * ωm
-    #         # compute analytic stress rotation using σ′′xx = -σ′′yy
-    #         sxxm₁ = sxxm[m]*cos(θ)^2 - sxxm[m]*sin(θ)^2-sxym[m]*sin(2.0*θ)
-    #         sxym₁ = sxxm[m]*sin(2.0*θ) + sxym[m]*cos(2.0*θ)
-    #         # update stresses
-    #         sxxm[m] = sxxm₁
-    #         sxym[m] = sxym₁
-    #         # advance marker using RK4 scheme on solid velocity
-    #         for rk=1:1:4
-    #             # interpolate vx
-    #             i, j, dxmj, dymi = fix_distances(
-    #                 xcur,
-    #                 ycur,
-    #                 xvx,
-    #                 yvx,
-    #                 dx,
-    #                 dy,
-    #                 jmin_vx,
-    #                 jmax_vx,
-    #                 imin_vx,
-    #                 imax_vx
-    #             )
-    #             # compute vx velocity for left and right of current cell
-    #             vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j+1]*dxmj/dx
-    #             vxm₂₄ = vx[i+1, j]*(1.0-dxmj/dx) + vx[i+1, j+1]*dxmj/dx
-    #             # compute second order vx velocity corrections
-    #             if dxmj/dx >= 0.5 
-    #                 # in right half of cell but not at right edge of grid
-    #                 if j < Nx-1
-    #                     vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vx[i, j] - 2.0*vx[i, j+1] + vx[i, j+2])
-    #                     vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vx[i+1, j] - 2.0*vx[i+1, j+1] + vx[i+1, j+2])
-    #                 end
-    #             else
-    #                 # in left half of cell but not at left edge of grid
-    #                 if j > 1
-    #                     vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vx[i, j-1] - 2.0*vx[i, j] + vx[i, j+1])
-    #                     vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vx[i+1, j-1] - 2.0*vx[i+1, j] + vx[i+1, j+1])
-    #                 end
-    #             end
-    #             # compute current RK step vx
-    #             vxm[rk] = (1.0-dymi/dy)*vxm₁₃ + (dymi/dy)*vxm₂₄
-    #             # interpolate vy
-    #             i, j, dxmj, dymi = fix_distances(
-    #                 xcur,
-    #                 ycur,
-    #                 xvy,
-    #                 yvy,
-    #                 dx,
-    #                 dy,
-    #                 jmin_vy,
-    #                 jmax_vy,
-    #                 imin_vy,
-    #                 imax_vy
-    #             )
-    #             # compute vy velocity for top and bottom of current cell
-    #             vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i+1, j]*dymi/dy
-    #             vym₃₄ = vy[i, j+1]*(1.0-dymi/dy) + vy[i+1, j+1]*dymi/dy
-    #             # compute second order vy velocity corrections
-    #             if dymi/dy >= 0.5
-    #                 # in bottom half of cell but not at bottom edge of grid
-    #                 if i < Ny-1
-    #                     vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vy[i, j] - 2.0*vy[i+1, j] + vy[i+2, j])
-    #                     vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vy[i, j+1] - 2.0*vy[i+1, j+1] + vy[i+2, j+1])
-    #                 end      
-    #             else
-    #                 # in top half of cell but not at top edge of grid
-    #                 if i > 1
-    #                     vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vy[i-1, j] - 2.0*vy[i, j] + vy[i+1, j])
-    #                     vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vy[i-1, j+1] - 2.0*vy[i, j+1] + vy[i+1, j+1])
-    #                 end
-    #             end
-    #             # compute current RK step vy
-    #             vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
-    #             # calculate next RK step x and y positions if not at final step
-    #             if rk==1 || rk==2
-    #                 xcur = xA + 0.5*dt*vxm[rk]
-    #                 ycur = yA + 0.5*dt*vym[rk]
-    #              elseif rk==3
-    #                 xcur = xA + dt*vxm[rk]
-    #                 ycur = yA + dt*vym[rk]
-    #              end
-    #         end # RK4 solid velocity loop
-    #         # advance marker using RK4 solid velocity
-    #         xm[m] += dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-    #         ym[m] += dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
-    #         # reset RK4 scheme for fluid velocity backtracing
-    #         xA = xcur = xm[m]
-    #         yA = ycur = ym[m]        
-    #         # backtrack marker using RK4 scheme on fluid velocity
-    #         for rk=1:1:4
-    #             # interpolate vxf
-    #             i, j, dxmj, dymi = fix_distances(
-    #                 xcur,
-    #                 ycur,
-    #                 xvx,
-    #                 yvx,
-    #                 dx,
-    #                 dy,
-    #                 jmin_vx,
-    #                 jmax_vx,
-    #                 imin_vx,
-    #                 imax_vx
-    #             )
-    #             # compute vxf velocity for left and right of current cell
-    #             vxm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j+1]*dxmj/dx
-    #             vxm₂₄ = vxf[i+1, j]*(1.0-dxmj/dx) + vxf[i+1, j+1]*dxmj/dx
-    #             # compute second order vxf velocity corrections
-    #             if dxmj/dx >= 0.5 
-    #                 # in right half of cell but not at right edge of grid
-    #                 if j < Nx-1
-    #                     vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vxf[i, j] - 2.0*vxf[i, j+1] + vxf[i, j+2])
-    #                     vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vxf[i+1, j] - 2.0*vxf[i+1, j+1] + vxf[i+1, j+2])
-    #                 end
-    #             else
-    #                 # in left half of cell but not at left edge of grid
-    #                 if j > 1
-    #                     vxm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
-    #                     vxm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
-    #                         vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
-    #                 end
-    #             end
-    #             # compute current RK step vxf
-    #             vxm[rk] = (1.0-dymi/dy)*vxm₁₃ + (dymi/dy)*vxm₂₄
-    #             # interpolate vyf
-    #             i, j, dxmj, dymi = fix_distances(
-    #                 xcur,
-    #                 ycur,
-    #                 xvy,
-    #                 yvy,
-    #                 dx,
-    #                 dy,
-    #                 jmin_vy,
-    #                 jmax_vy,
-    #                 imin_vy,
-    #                 imax_vy
-    #             )
-    #             # compute vyf velocity for top and bottom of current cell
-    #             vym₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i+1, j]*dymi/dy
-    #             vym₃₄ = vyf[i, j+1]*(1.0-dymi/dy) + vyf[i+1, j+1]*dymi/dy
-    #             # compute second order vyf velocity corrections
-    #             if dymi/dy >= 0.5
-    #                 # in bottom half of cell but not at bottom edge of grid
-    #                 if i < Ny-1
-    #                     vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vyf[i, j] - 2.0*vyf[i+1, j] + vyf[i+2, j])
-    #                     vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vyf[i, j+1] - 2.0*vyf[i+1, j+1] + vyf[i+2, j+1])
-    #                 end
-    #             else
-    #                 # in top half of cell but not at top edge of grid
-    #                 if i > 1
-    #                     vym₁₂ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vyf[i-1, j] - 2.0*vyf[i, j] + vyf[i+1, j])
-    #                     vym₃₄ += 0.5*((dymi/dy-0.5)^2) * (
-    #                         vyf[i-1, j+1] - 2.0*vyf[i, j+1] + vyf[i+1, j+1])
-    #                 end
-    #             end
-    #             # compute current RK step vyf
-    #             vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
-    #             # calculate next RK step x and y positions if not at final step
-    #             if rk==1 || rk==2
-    #                 xcur = xA - 0.5*dt*vxm[rk]
-    #                 ycur = yA - 0.5*dt*vym[rk]
-    #             elseif  rk==3
-    #                 xcur = xA - dt*vxm[rk]
-    #                 ycur = yA - dt*vym[rk]
-    #             end
-    #         end # RK4 fluid velocity loop
-    #         # backtrace marker using RK4 fluid velocity
-    #         xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
-    #         ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
-    #         # interpolate fluid temperature at backtraced marker position
-    #         i, j, weights = fix_weights(
-    #             xcur,
-    #             ycur,
-    #             xp,
-    #             yp,
-    #             dx,
-    #             dy,
-    #             jmin_p,
-    #             jmax_p,
-    #             imin_p,
-    #             imax_p,
-    #         )
-    #         # interpolate backtraced local fluid temperature from P grid
-    #         tkfm₀ = dot4(grid_vector(i, j, tk2), weights)
-    #         # compute marker fluid-solid temperature difference
-    #         δtkfsm = tkfm₀ - tksm₀
-    #         # correct marker temperature
-    #         tkm[m] = (
-    #             (1.0-phim[m])*tkm[m]*rhocpsolidm[tm[m]]
-    #                 + phim[m]*(tkm[m]+δtkfsm)*rhocpfluidm[tm[m]]
-    #         ) / ((1-phim[m])*rhocpsolidm[tm[m]] + phim[m]*rhocpfluidm[tm[m]])
-    #     end # marker loop
-    # end # @inbounds
-   
+    end # @inbounds   
 # end # timeit to "move_markers_rk4!"
     return nothing
 end # function move_markers_rk4!
@@ -6096,6 +5802,7 @@ function save_state(
         fid;
         timestep,
         dt,
+        Δtreaction,
         timesum,
         marknum,
         phim0,
@@ -6918,7 +6625,6 @@ function simulation_loop(output_path)
                 )
             end
 
-
             # -----------------------------------------------------------------
             # perform hydromechanical/plastic iterations (inner iteration loop)
             # -----------------------------------------------------------------
@@ -7273,7 +6979,8 @@ function simulation_loop(output_path)
             TKSUM,
             RHOCPSUM,
             dt,
-            marknum
+            marknum,
+            marker_property_mode
         )
 
         # ---------------------------------------------------------------------
@@ -7326,7 +7033,8 @@ function simulation_loop(output_path)
             wyx,
             tk2,
             marknum,
-            dt
+            dt,
+            marker_property_mode
         )
 
         # ---------------------------------------------------------------------
