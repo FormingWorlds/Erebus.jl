@@ -26,9 +26,11 @@ Adjust the simulation parameters in ```src/constants.jl``` if necessary. A set o
 
 ### Running the simulation
 
-Launch with ```julia -O3 --tauto launch.jl /PATH/TO/OUTPUT/```.
+Launch with ```julia -O3 --tauto launch.jl /PATH/TO/OUTPUT/```. All intermediate data is written into HDF-5 compatible ```.jld2``` files in the output directory for further analysis and plotting.
+
+Relevant simulation progress and used parameters are written to the log file ```HydrologyPlanetesimals_run.log``` in the output directory.
 
 ### Plotting results
 
-Generate plots with ```julia generate_plots.jl /PATH/TO/OUTPUT/```; ```.pdf``` plot files are stored in same directory as output.
-Generate animations with ```julia generate_animations.jl /PATH/TO/OUTPUT/```; ```.mp4``` animation files are stored in same directory as output.
+Generate plots with ```julia generate_plots.jl /PATH/TO/OUTPUT/```; ```.pdf``` plot files are stored in same directory as the simulation output.
+Generate animations with ```julia generate_animations.jl /PATH/TO/OUTPUT/```; ```.mp4``` animation files are stored in same directory as the simulation output.
