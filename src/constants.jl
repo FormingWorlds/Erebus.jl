@@ -5,30 +5,30 @@ const hr_al = true
 const hr_fe = false
 # planetary parameters
 # planetary radius [m]
-# const rplanet = 25_000.0
-const rplanet = 50_000.0
+const rplanet = 25_000.0
+# const rplanet = 50_000.0
 # crust radius [m]
-# const rcrust = 24_000.0
-const rcrust = 48_000.0
+const rcrust = 24_000.0
+# const rcrust = 48_000.0
 # surface pressure [Pa]
 const psurface = 1.0e+3
 # model size, geometry, and resolution
 # horizontal model size [m]
-# const xsize = 70_000.0
-const xsize = 140_000.0
+const xsize = 70_000.0
+# const xsize = 140_000.0
 # vertical model size [m]
-# const ysize = 70_000.0
-const ysize = 140_000.0
+const ysize = 70_000.0
+# const ysize = 140_000.0
 # horizontal center of model
 const xcenter = xsize / 2
 # vertical center of model
 const ycenter = ysize / 2  
 # basic grid resolution in x direction (horizontal)
-# const Nx = 71
-const Nx = 141
+const Nx = 71
+# const Nx = 141
 # basic grid resolution in y direction (vertical)	
-# const Ny = 71
-const Ny = 141
+const Ny = 71
+# const Ny = 141
 # Vx, Vy, P grid resolution in x direction (horizontal)
 const Nx1 = Nx + 1
 # Vx/Vy/P grid resolution in y direction (vertical)
@@ -264,13 +264,14 @@ const pfcoeff = 0.5
 const pferrmax = 1.0e+5
 # reaction activation switch
 const reaction_active = true
-# timescale to complete dehydration reaction [s]
+# time to run dehydration reaction to completion [s]
+# const Δtreaction = 1.0e+12
 const Δtreaction = 1.0e+10
 # log reaction completion rate ln(ρend/ρstart)
 const log_completion_rate = log(0.01)
 # reaction constant mode (1: [Martin & Fyfe, 1970; Emmanuel & Berkowitz, 2006;
-# Iyer et al., 2012], 2: [Bland & Travis, 2017], 9: constant Δtreaction)
-const reaction_rate_coeff_mode = 1
+# Iyer et al., 2012], 2: [Bland & Travis, 2017], 3: [Travis et al., 2018], 9: constant Δtreaction)
+const reaction_rate_coeff_mode = 9
 # reaction constant parameters mode 1 [Iyer et al., 2012]
 # (A: kinetic coefficient, b: kinetic coefficient, c: kinetic coefficient)
 A_I = 1.0e-11; b_I = 2.5e-4; c_I = 543.0

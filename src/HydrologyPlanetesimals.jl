@@ -93,7 +93,7 @@ $(SIGNATURES)
     - PHIX : porosity at Vx nodes
     - vx : solid vx-velocity at Vx nodes [m/s]
     - vxf : fluid vx-velocity at Vx nodes [m/s]
-    - RX : etafluid/kphi ratio at Vx nodes [m^2]
+    - RX : etafluid/kphi ratio at Vx nodes [kg m⁻³s⁻¹]
     - qxD : qx-darcy flux at Vx nodes [m/s]
     - gx : gx-gravity at Vx nodes [m/s^2]
     - RHOY : density at Vy nodes [kg/m^3]
@@ -102,7 +102,7 @@ $(SIGNATURES)
     - PHIY : porosity at Vy nodes
     - vy : solid vy-velocity at Vy nodes [m/s]
     - vyf : fluid vy-velocity at Vy nodes [m/s]
-    - RY : etafluid/kphi ratio at Vy nodes [m^2]
+    - RY : etafluid/kphi ratio at Vy nodes [kg m⁻³s⁻¹]
     - qyD : qy-Darcy flux at Vy nodes [m/s]
     - gy : gy-gravity at Vy nodes [m/s^2]
     - RHO : density at P nodes [kg/m^3]
@@ -132,7 +132,7 @@ $(SIGNATURES)
     - pf0 : previous fluid pressure at P nodes [Pa]
     - ps0 : previous solid pressure at P nodes [Pa]
     - ETAPHI : bulk viscosity at P nodes [Pa*s]
-    - BETTAPHI : bulk compresibility at P nodes [Pa*s]
+    - BETAPHI : bulk compresibility at P nodes [Pa*s]
     - PHI : porosity at P nodes
     - APHI : Dln at P nodes [(1-ϕ)/ϕ]/Dt
     - FI : gravity potential at P nodes [J/kg]
@@ -177,7 +177,7 @@ function setup_staggered_grid_properties(; randomized=false)
     vx = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
     # fluid vx-velocity [m/s]
     vxf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
-    # etafluid/kphi ratio [m^2]
+    # etafluid/kphi ratio [kg m⁻³s⁻¹]
     RX = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qx-darcy flux [m/s]
     qxD = randomized ? rand(rgen, Ny1, Nx1)*2e-10.-1e-10 : zeros(Ny1, Nx1)
@@ -196,7 +196,7 @@ function setup_staggered_grid_properties(; randomized=false)
     vy = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
     # fluid vy-velocity [m/s]
     vyf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
-    # etafluid/kphi ratio [m^2]
+    # etafluid/kphi ratio [kg m⁻³s⁻¹]
     RY = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qy-Darcy flux [m/s]
     qyD = randomized ? rand(rgen, Ny1, Nx1)*2e-10.-1e-10 : zeros(Ny1, Nx1)
@@ -257,8 +257,8 @@ function setup_staggered_grid_properties(; randomized=false)
     ps0 = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # bulk viscosity [Pa*s]
     ETAPHI = randomized ? rand(rgen, Ny1, Nx1)*1e14 : zeros(Ny1, Nx1)
-    # bulk compresibility [Pa*s]
-    BETTAPHI = randomized ? rand(rgen, Ny1, Nx1)*1e-10 : zeros(Ny1, Nx1)
+    # bulk compressibility [Pa*s]
+    BETAPHI = randomized ? rand(rgen, Ny1, Nx1)*1e-10 : zeros(Ny1, Nx1)
     # porosity
     PHI = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # Dln[(1-ϕ)/ϕ]/Dt
@@ -328,7 +328,7 @@ function setup_staggered_grid_properties(; randomized=false)
         pf0,
         ps0,
         ETAPHI,
-        BETTAPHI,
+        BETAPHI,
         PHI,
         APHI,
         FI,
@@ -2144,7 +2144,7 @@ $(SIGNATURES)
     - ALPHAF: ALPHAF P node array
     - HR: HR P node array
     - PHI: PHI P node array
-    - BETTAPHI: BETTAPHI P node array
+    - BETAPHI: BETAPHI P node array
     - tk1: tk1 P node array
 
 # Returns
@@ -2172,7 +2172,7 @@ function compute_p_node_properties!(
     SXX0,
     tk1,  
     PHI,
-    BETTAPHI
+    BETAPHI
 )
 # @timeit to "compute_p_node_properties!" begin
     @inbounds begin
@@ -2187,7 +2187,7 @@ function compute_p_node_properties!(
                 SXX0[i, j] = SXXSUM[i, j] * inv(WTPSUM[i, j])
                 tk1[i, j] = TKSUM[i, j] * inv(RHOCPSUM[i, j])
                 PHI[i, j] = PHISUM[i, j] * inv(WTPSUM[i, j])
-                BETTAPHI[i, j] = inv(GGGP[i, j]) * PHI[i, j]
+                BETAPHI[i, j] = inv(GGGP[i, j]) * PHI[i, j]
             end
         end
     end # @inbounds
@@ -3064,7 +3064,7 @@ $(SIGNATURES)
     - RX: ηfluid/Kϕ at Vx nodes
     - RY: ηfluid/Kϕ at Vy nodes
     - ETAPHI: bulk viscosity at P nodes
-    - BETTAPHI: bulk compressibility at P nodes
+    - BETAPHI: bulk compressibility at P nodes
     - PHI: porosity at P nodes
     - gx: x gravitational acceleration at Vx nodes
     - gy: y gravitational acceleration at Vy nodes
@@ -3092,7 +3092,7 @@ function assemble_hydromechanical_lse!(
     RX,
     RY,
     ETAPHI,
-    BETTAPHI,
+    BETAPHI,
     PHI,
     gx,
     gy,
@@ -3424,21 +3424,21 @@ function assemble_hydromechanical_lse!(
             updateindex!(
                 L,
                 +,
-                Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
+                Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETAPHI[i, j]/dt),
                 kpm,
                 kpm
             ) # P: Ptotal
             updateindex!(
                 L,
                 +,
-                -Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETTAPHI[i, j]/dt),
+                -Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETAPHI[i, j]/dt),
                 kpm,
                 kpf
             ) # P: Pfluid
             # RHS coefficient vector
             R[kpm] = (
                 (pr0[i,j]-pf0[i,j]) / (1-PHI[i,j])
-                * BETTAPHI[i,j]/dt
+                * BETAPHI[i,j]/dt
                 + DMP[i, j]
             )
         end # P equation
@@ -3541,19 +3541,19 @@ function assemble_hydromechanical_lse!(
             updateindex!(
                 L,
                 +,
-                -Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETTAPHI[i, j]/dt),
+                -Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETAPHI[i, j]/dt),
                  kpf,
                  kpm
             ) # Ptotal
             updateindex!(
                 L,
                 +,
-                Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETTAPHI[i, j]/dt),
+                Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETAPHI[i, j]/dt),
                 kpf,
                 kpf
             ) # Pfluid
             # RHS coefficient vector
-            R[kpf] = -(pr0[i, j]-pf0[i, j]) / (1-PHI[i, j]) * BETTAPHI[i, j]/dt
+            R[kpf] = -(pr0[i, j]-pf0[i, j]) / (1-PHI[i, j]) * BETAPHI[i, j]/dt
         end # Ptotal/Pfluid equation
     end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
@@ -3647,7 +3647,7 @@ $(SIGNATURES)
 ## In
 
     - ETAPHI: bulk viscosity at P Nodes
-    - BETTAPHI: bulk compressibility at P nodes
+    - BETAPHI: bulk compressibility at P nodes
     - PHI: porosity at P Nodes
     - pr: total pressure at P nodes
     - pf: fluid pressure at P nodes
@@ -3663,7 +3663,7 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
+function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt)
 # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
@@ -3671,7 +3671,7 @@ function compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
         ((pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])/ETAPHI[2:Ny, 2:Nx]
         + (
             (pr[2:Ny, 2:Nx]-pr0[2:Ny, 2:Nx])-(pf[2:Ny, 2:Nx]-pf0[2:Ny, 2:Nx])
-        )/dt*BETTAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
+        )/dt*BETAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
     )
     return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
     end # @inbounds
@@ -5757,7 +5757,7 @@ function save_state(
     pf0,
     ps0,
     ETAPHI,
-    BETTAPHI,
+    BETAPHI,
     PHI,
     APHI,
     FI,
@@ -5894,7 +5894,7 @@ function save_state(
         pf0,
         ps0,
         ETAPHI,
-        BETTAPHI,
+        BETAPHI,
         PHI,
         APHI,
         FI,
@@ -6086,7 +6086,7 @@ function simulation_loop(output_path)
         pf0,
         ps0,
         ETAPHI,
-        BETTAPHI,
+        BETAPHI,
         PHI,
         APHI,
         FI,
@@ -6228,7 +6228,7 @@ function simulation_loop(output_path)
         pf0,
         ps0,
         ETAPHI,
-        BETTAPHI,
+        BETAPHI,
         PHI,
         APHI,
         FI,
@@ -6572,7 +6572,7 @@ function simulation_loop(output_path)
             SXX0,
             tk1,  
             PHI,
-            BETTAPHI
+            BETAPHI
         )
 
         # ---------------------------------------------------------------------
@@ -6634,7 +6634,7 @@ function simulation_loop(output_path)
             YNY00 .= YNY
             if timestep == 1
                 # no elastic compaction during first timestep
-                BETTAPHI .= 0.0
+                BETAPHI .= 0.0
             end
 
             # advance pressure generation inside thermochemical iteration
@@ -6662,7 +6662,7 @@ function simulation_loop(output_path)
                     RX,
                     RY,
                     ETAPHI,
-                    BETTAPHI,
+                    BETAPHI,
                     PHI,
                     gx,
                     gy,
@@ -6708,7 +6708,7 @@ function simulation_loop(output_path)
                 aphimax = compute_Aϕ!(
                     APHI,
                     ETAPHI,
-                    BETTAPHI,
+                    BETAPHI,
                     PHI,
                     pr,
                     pf,
@@ -6755,7 +6755,7 @@ function simulation_loop(output_path)
                 #     RX,
                 #     RY,
                 #     ETAPHI,
-                #     BETTAPHI,
+                #     BETAPHI,
                 #     PHI,
                 #     gx,
                 #     gy,
@@ -6808,7 +6808,7 @@ function simulation_loop(output_path)
                 _ = compute_Aϕ!(
                     APHI,
                     ETAPHI,
-                    BETTAPHI,
+                    BETAPHI,
                     PHI,
                     pr,
                     pf,
@@ -7149,7 +7149,7 @@ function simulation_loop(output_path)
                 pf0,
                 ps0,
                 ETAPHI,
-                BETTAPHI,
+                BETAPHI,
                 PHI,
                 APHI,
                 FI,

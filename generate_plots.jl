@@ -170,7 +170,10 @@ function vrad(vx, vy)
         y = round(Int, ycenter + r*cos(ϕ))
         x = round(Int, xcenter + r*sin(ϕ))
         if 1<=y<=ysize && 1<=x<=xsize
-            vrad[y, x] = sqrt((vx[y, x]*sin(ϕ))^2 + (vy[y, x]*cos(ϕ))^2)
+            # vrad[y, x] = sqrt((vx[y, x]*sin(ϕ))^2 + (vy[y, x]*cos(ϕ))^2)
+            dx = x - xcenter
+            dy = y - ycenter
+            vrad[y, x] = (dx*vx[y, x] + dy*vy[y, x]) / sqrt(dx^2 + dy^2)
         end
     end
     return vrad
@@ -304,7 +307,6 @@ function generate_plots(input_path)
     ratio_al = file["ratio_al"]
     XWsolidm_init = file["XWsolidm_init"]
     close(file)
-
     radius_max = trunc(Int, min(rplanet/dx, rplanet/dy))
     radius_range = collect(1:1:radius_max)
     n_ticks = 4

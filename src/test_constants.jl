@@ -258,7 +258,7 @@ const pfcoeff = 0.5
 const pferrmax = 1.0e+5
 # reaction activation switch
 const reaction_active = true
-# timescale to complete dehydration reaction [s]
+# time to run dehydration reaction to completion [s]
 const Δtreaction = 1.0e+10
 # log reaction completion rate ln(ρend/ρstart)
 const log_completion_rate = log(0.01)
