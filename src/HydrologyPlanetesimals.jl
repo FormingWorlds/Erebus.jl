@@ -5803,6 +5803,8 @@ function save_state(
         timestep,
         dt,
         Δtreaction,
+        reaction_rate_coeff_mode,
+        marker_property_mode,
         timesum,
         marknum,
         phim0,
@@ -6729,50 +6731,6 @@ function simulation_loop(output_path)
                     vyf
                 )
 
-                # @info "M_1078"
-                # # L_d = collect(L)
-                # jldsave(output_path*"M_1078_"*string(timestep)*".jld2";
-                #     xm,
-                #     ym,
-                #     tk0,
-                #     tk1,
-                #     tk2,
-                #     DT,
-                #     APHI,
-                #     vxf,
-                #     vyf,
-                #     Kcont,
-                #     ETA,
-                #     ETAP,
-                #     GGG,
-                #     GGGP,
-                #     SXY0,
-                #     SXX0,
-                #     RHOX,
-                #     RHOY,
-                #     RHOFX,
-                #     RHOFY,
-                #     RX,
-                #     RY,
-                #     ETAPHI,
-                #     BETAPHI,
-                #     PHI,
-                #     gx,
-                #     gy,
-                #     pr0,
-                #     pf0,
-                #     dt,
-                #     R,
-                #     #L_d,
-                #     S,
-                #     vx,
-                #     vy,
-                #     qxD,
-                #     qyD,
-                #     pr,
-                #     pf
-                # )
-
                 # adapt timestep for displacement
                 dt = compute_displacement_timestep(
                     vx,
@@ -6825,7 +6783,7 @@ function simulation_loop(output_path)
                     pf,
                     ps
                 )
-                # save nodal stress changes - RMK: not required in code
+                # consider saving nodal stress changes - RMK: not required
                 # DSXX0 .= DSXX
                 # DSXY0 .= DSXY
                 

@@ -131,17 +131,18 @@ $(SIGNATURES)
 """
 function ravg(f, r)
     ysize, xsize = size(f)
-    ycenter = trunc(Int, ysize / 2)
-    xcenter = trunc(Int, xsize / 2)
+    ycenter = round(Int, ysize / 2)
+    xcenter = round(Int, xsize / 2)
     r = min(r, ycenter, xcenter, ysize-ycenter, xsize-xcenter)
     circle = zeros(Bool, ysize, xsize)
-    for θ = 0:0.01:2π
-        @inbounds circle[
-            round(Int, ycenter + r*cos(θ)),
-            round(Int, xcenter + r*sin(θ))
-        ] = true
-        @inbounds return mean(f[circle])
+    for ϕ = 0:0.01:2π
+        y = round(Int, ycenter + r*cos(ϕ))
+        x = round(Int, xcenter + r*sin(ϕ))
+        if 1<=y<=ysize && 1<=x<=xsize
+            @inbounds circle[y, x] = true
+        end
     end
+    @inbounds return mean(f[circle])
 end
 
 """
@@ -163,17 +164,17 @@ function vrad(vx, vy)
     @assert size(vx) == size(vy)
     ysize, xsize = size(vx)
     vrad = zero(vx)
-    ycenter = trunc(Int, ysize / 2)
-    xcenter = trunc(Int, xsize / 2)
+    ycenter = round(Int, ysize / 2)
+    xcenter = round(Int, xsize / 2)
     r_max = max(round(Int, xsize/2), round(Int, ysize/2)) * sqrt(2.0)
     for ϕ = 0.0:0.01:2π, r = 1:1:r_max
         y = round(Int, ycenter + r*cos(ϕ))
         x = round(Int, xcenter + r*sin(ϕ))
         if 1<=y<=ysize && 1<=x<=xsize
-            # vrad[y, x] = sqrt((vx[y, x]*sin(ϕ))^2 + (vy[y, x]*cos(ϕ))^2)
             dx = x - xcenter
             dy = y - ycenter
-            vrad[y, x] = (dx*vx[y, x] + dy*vy[y, x]) / sqrt(dx^2 + dy^2)
+            @inbounds vrad[y, x] = (
+                dx*vx[y, x] + dy*vy[y, x]) / sqrt(dx^2 + dy^2)
         end
     end
     return vrad
@@ -190,7 +191,7 @@ $(SIGNATURES)
     - field: 2D array containing the scalar field to be plotted
     - vmin: minimum value of the colorbar
     - vmax: maximum value of the colorbar
-    - t: time step of the field [Ma]
+    - t: time step of the field [Myr]
     - cmap: color map to use
     - fontsize: font size of the labels
     - hide_labels: switch to hide heatmap axis labels
@@ -211,7 +212,7 @@ function plot_field(
     else
         ax.set_xlabel("x [km]", fontsize=fontsize)
         ax.set_ylabel("y [km]", fontsize=fontsize)
-        ax.set_title("t = $(sprint(f3p, t)) Ma", fontsize=fontsize)
+        ax.set_title("t = $(sprint(f3p, t)) Myr", fontsize=fontsize)
     end
     return im
 end
@@ -266,6 +267,36 @@ function get_markers_in_radius(xm, ym, rmin, rmax, xcenter, ycenter)
 end
 
 """
+Return boolean mask indicating which grid points are within a given radius of a
+circular planet.
+
+$(SIGNATURES)
+
+# Details
+
+    - xsize: number of grid points in x-direction
+    - ysize: number of grid points in y-direction
+    - dx: grid spacing in x-direction [m]
+    - dy: grid spacing in y-direction [m]
+    - r: radius of the planet [m]
+    - xcenter: x-coordinate of the center of the planet [m]
+    - ycenter: y-coordinate of the center of the planet [m]
+
+# Returns
+
+    - mask: boolean mask indicating which grid points are within the planet
+"""
+function get_planet_mask(xsize, ysize, dx, dy, r, xcenter, ycenter)
+    mask = zeros(Bool, ysize, xsize)
+    for y = 1:ysize, x = 1:xsize
+        Δx = x*dx - xcenter
+        Δy = y*dy - ycenter
+        mask[y, x] = sqrt(Δx^2 + Δy^2) <= r
+    end
+    return mask
+end
+
+"""
 Create set of plots from results stored in `.jld2` simulation output files.
 
 $(SIGNATURES)
@@ -306,10 +337,18 @@ function generate_plots(input_path)
     phim0 = file["phim0"]
     ratio_al = file["ratio_al"]
     XWsolidm_init = file["XWsolidm_init"]
+    rrcoef = file["reaction_rate_coeff_mode"]
+    mkrprop = file["marker_property_mode"]
+
     close(file)
+
     radius_max = trunc(Int, min(rplanet/dx, rplanet/dy))
     radius_range = collect(1:1:radius_max)
     n_ticks = 4
+
+    planet_NxNy = zeros(Ny, Nx)
+    planet_Nx1Ny1 = zeros(Ny1, Nx1)
+
 
     xlim_b, ylim_b = extrema.((x, y))
     xlim_vx, ylim_vx = extrema.((xvx, yvx))
@@ -350,7 +389,7 @@ function generate_plots(input_path)
     timestep = Array{Float64}(undef, n_steps)
     dt = Array{Float64}(undef, n_steps)
     timesum = Array{Float64}(undef, n_steps)
-    timesum_Ma = Array{Float64}(undef, n_steps)
+    timesum_Myr = Array{Float64}(undef, n_steps)
     marknum = Array{Int}(undef, n_steps)
     max_T = Array{Float64}(undef, n_steps)
 
@@ -391,7 +430,7 @@ function generate_plots(input_path)
             timestep[i] = file["timestep"]
             dt[i] = file["dt"]
             timesum[i] = file["timesum"]
-            timesum_Ma[i] = timesum[i] / (365.25 * 24 * 3600) * 1e-6
+            timesum_Myr[i] = timesum[i] / (365.25 * 24 * 3600) * 1e-6
             max_T[i] = maximum(tk2[:,:,i])
             marknum[i] = file["marknum"]
             xm[1:marknum[i], i] = file["xm"]
@@ -403,117 +442,253 @@ function generate_plots(input_path)
         end
     end
 
+# -----------------------------------------------------------------------------
+    planet_NxNy = get_planet_mask(Nx, Ny, dx, dy, rplanet, xcenter, ycenter)
+    planet_Nx1Ny1 = get_planet_mask(Nx1, Ny1, dx, dy, rplanet, xcenter, ycenter)
+    inner_f = 0.1
+    outer_f = 0.9
+# -----------------------------------------------------------------------------
+
     @info "plotting t vs max T"
     fig, ax = plt.subplots()
-    ax.plot(timesum_Ma[2:end], max_T[2:end])
-    ax.set_xlabel("time [Ma]")
+    ax.plot(timesum_Myr[2:end], max_T[2:end])
+    ax.set_xlabel("time [Myr]")
     ax.set_ylabel("max T [K]")
     ax.set_title("Maximum temperature")
-    fig.savefig(input_path*"/fig_t_maxT-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_t_maxT-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
-    @info "plotting t vs Δρ"
-    inner_r = round(Int, 0.1*length(radius_range))
-    outer_r = round(Int, 0.9*length(radius_range))
+    @info "plotting t vs Δρ"    
+    inner_r = round(Int, inner_f*length(radius_range))
+    outer_r = round(Int, outer_f*length(radius_range))
     fig, ax = plt.subplots()
-    Δρ = zero(timesum_Ma)
+    Δρ = zero(timesum_Myr)
     for i in 1:1:n_steps
         Δρ[i] = abs(ravg(RHO[:, :, i], inner_r) - ravg(RHO[:, :, i], outer_r))
     end
-    ax.plot(timesum_Ma[2:end], Δρ[2:end])
-    ax.set_xlabel("time [Ma]")
+    ax.plot(timesum_Myr[2:end], Δρ[2:end])
+    ax.set_xlabel("time [Myr]")
     ax.set_ylabel("Δρ [kg/m³]")
-    ax.set_title("Density contrast 0.1R - 0.9R") 
-    fig.savefig(input_path*"/fig_t_deltaRho-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    ax.set_title("Density contrast $(inner_f)R vs. $(outer_f)R") 
+    fig.savefig(input_path*"/fig_t_deltaRho-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting t vs T, Δρ"
-    inner_r = round(Int, 0.1*length(radius_range))
-    outer_r = round(Int, 0.9*length(radius_range))
+    inner_r = round(Int, inner_f*length(radius_range))
+    outer_r = round(Int, outer_f*length(radius_range))
     fig, ax1 = plt.subplots()
     color = "tab:blue"
-    ax1.plot(timesum_Ma[2:end], Δρ[2:end], color=color)
-    ax1.set_xlabel("time [Ma]")
+    ax1.plot(timesum_Myr[2:end], Δρ[2:end], color=color)
+    ax1.set_xlabel("time [Myr]")
     ax1.set_ylabel("Δρ [kg/m³]", color=color)
-    ax1.set_title("Maximum temperature and density contrast 0.1R - 0.9R") 
+    ax1.set_title(
+        "Maximum temperature and density contrast $(inner_f)R vs. $(outer_f)R") 
     ax2 = ax1.twinx()
     color = "tab:red"
-    ax2.plot(timesum_Ma[2:end], max_T[2:end], color=color)
+    ax2.plot(timesum_Myr[2:end], max_T[2:end], color=color)
     ax2.set_ylabel("max T [K]", color=color)
     fig.tight_layout()
-    fig.savefig(input_path*"/fig_t_deltaRho-maxT-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_t_deltaRho-maxT-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting t vs mean T"
     fig, ax = plt.subplots()
-    mean_T = reshape(mean(tk2, dims=(1, 2)), n_steps)
-    ax.plot(timesum_Ma[2:end], mean_T[2:end])
-    ax.set_xlabel("time [Ma]")
+    mean_T = reshape(mean(tk2[planet_Nx1Ny1, :], dims=1), n_steps)
+    ax.plot(timesum_Myr[2:end], mean_T[2:end])
+    ax.set_xlabel("time [Myr]")
     ax.set_ylabel("mean T [K]")
-    ax.set_title("Mean temperature")
-    fig.savefig(input_path*"/fig_t_meanT-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    ax.set_title("Mean planetesimal temperature")
+    fig.savefig(input_path*"/fig_t_meanT-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    plt.close()
+
+    @info "plotting t vs mean XWS"
+    fig, ax = plt.subplots()
+    mean_XWS = reshape(mean(XWS[planet_Nx1Ny1, :], dims=1), n_steps)
+    ax.plot(timesum_Myr[2:end], mean_XWS[2:end])
+    ax.set_xlabel("time [Myr]")
+    ax.set_ylabel("mean XWˢ")
+    ax.set_title("Mean planetesimal wet silicate molar fraction in solid")
+    fig.savefig(input_path*"/fig_t_meanXWS-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    plt.close()
+
+    @info "plotting t vs mean XWˢ, mean T"
+    fig, ax1 = plt.subplots()
+    color = "tab:blue"
+    ax1.plot(timesum_Myr[2:end], mean_XWS[2:end], color=color)
+    ax1.set_xlabel("time [Myr]")
+    ax1.set_ylabel("mean XWˢ", color=color)
+    ax1.set_title(
+        "Mean planetesimal wet silicate molar fraction in solid and temperature") 
+    ax2 = ax1.twinx()
+    color = "tab:red"
+    ax2.plot(timesum_Myr[2:end], mean_T[2:end], color=color)
+    ax2.set_ylabel("mean T [K]", color=color)
+    fig.tight_layout()
+    fig.savefig(input_path*"/fig_t_meanXWSmeanT-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 # -----------------------------------------------------------------------------
-    n_ages = 4
-    idx_ages = trunc.(Int, range(20, n_steps, n_ages))
+    n_ages = [3, 3]
+    boundary_f = 0.2
+    end_lower = round(Int, boundary_f*n_steps)
+    begin_upper = round(Int, (1.0-boundary_f)*n_steps/n_ages[2]) + end_lower
+    start_idx = 2 
+    idx_ages = round.(
+        Int, vcat(
+            collect(range(start_idx, end_lower, n_ages[1])),
+            collect(range(begin_upper, n_steps, n_ages[2]))
+            )
+    )
+    n_ages_tr = [4, 2]
+    boundary_f_tr = 0.1
+    end_lower_tr = round(Int, boundary_f_tr*n_steps)
+    begin_upper_tr = (
+        round(Int, (1.0-boundary_f_tr)*n_steps/n_ages_tr[2]) + end_lower_tr
+    )
+    start_idx_tr = 2 
+    idx_ages_tr = round.(
+        Int, vcat(
+            collect(range(start_idx_tr, end_lower_tr, n_ages_tr[1])),
+            collect(range(begin_upper_tr, n_steps, n_ages_tr[2]))
+            )
+    )
 # -----------------------------------------------------------------------------
     @info "plotting mean T vs radius"
     fig, ax = plt.subplots()
     for idx in idx_ages
-        age = timesum_Ma[idx]
+        age = timesum_Myr[idx]
         mean_T = ravg.(Ref(tk2[:, :, idx]), radius_range)
-        ax.plot(mean_T, radius_range, label="$(sprint(f3p, age)) Ma")
+        ax.plot(mean_T, radius_range, label="$(sprint(f3p, age)) Myr")
     end
     ax.set_xlabel("mean T [K]")
     ax.set_ylabel("radius [km]")
     ax.set_title("Mean temperature")
     ax.legend()
-    fig.savefig(input_path*"/fig_meanT_radius-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_meanT_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting mean ρ vs radius"
     fig, ax = plt.subplots()
     for idx in idx_ages
-        age = timesum_Ma[idx]
+        age = timesum_Myr[idx]
         mean_ρ = ravg.(Ref(RHO[:, :, idx]), radius_range)
-        ax.plot(mean_ρ, radius_range, label="$(sprint(f3p, age)) Ma")
+        ax.plot(mean_ρ, radius_range, label="$(sprint(f3p, age)) Myr")
     end
     ax.set_xlabel("mean density [kg/m³]")
     ax.set_ylabel("radius [km]")
     ax.set_title("Mean density")
     ax.legend()
-    fig.savefig(input_path*"/fig_meanRho_radius-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
+    fig.savefig(input_path*"/fig_meanRho_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
+    plt.close()
+
+    @info "plotting mean XWˢ vs radius"
+    fig, ax = plt.subplots()
+    for idx in idx_ages
+        age = timesum_Myr[idx]
+        mean_XWˢ = ravg.(Ref(XWS[:, :, idx]), radius_range)
+        ax.plot(mean_XWˢ, radius_range, label="$(sprint(f3p, age)) Myr")
+    end
+    ax.set_xlabel("mean XWˢ")
+    ax.set_ylabel("radius [km]")
+    ax.set_title("Mean wet silicate molar fraction in solid")
+    ax.legend()
+    fig.savefig(input_path*"/fig_meanXWS_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
+    plt.close()
+
+    @info "plotting mean ΔMP vs radius"
+    fig, ax = plt.subplots()
+    for idx in idx_ages_tr
+        age = timesum_Myr[idx]
+        mean_DMP = ravg.(Ref(DMP[:, :, idx]), radius_range)
+        ax.plot(mean_DMP, radius_range, label="$(sprint(f3p, age)) Myr")
+    end
+    ax.set_xlabel("mean ΔMP [s⁻¹]")
+    ax.set_ylabel("radius [km]")
+    ax.set_title("Mean mass transfer term")
+    ax.legend()
+    fig.savefig(input_path*"/fig_meanDMP_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
+    plt.close()
+    
+    @info "plotting mean porosity vs radius"
+    fig, ax = plt.subplots()
+    for idx in idx_ages_tr
+        age = timesum_Myr[idx]
+        mean_ϕ = ravg.(Ref(PHI[:, :, idx]), radius_range)
+        ax.plot(mean_ϕ, radius_range, label="$(sprint(f3p, age)) Myr")
+    end
+    ax.set_xlabel("mean porosity")
+    ax.set_ylabel("radius [km]")
+    ax.set_title("Mean porosity")
+    ax.legend()
+    fig.savefig(input_path*"/fig_meanPHI_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
+    plt.close()
+
+    @info "plotting mean ΔHP vs radius"
+    fig, ax = plt.subplots()
+    for idx in idx_ages_tr
+        age = timesum_Myr[idx]
+        mean_DHP = ravg.(Ref(DHP[:, :, idx]), radius_range)
+        ax.plot(mean_DHP, radius_range, label="$(sprint(f3p, age)) Myr")
+    end
+    ax.set_xlabel("mean ΔHP [Wm⁻³]")
+    ax.set_ylabel("radius [km]")
+    ax.set_title("Mean enthalpy transfer term")
+    ax.legend()
+    fig.savefig(input_path*"/fig_meanDHP_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf") 
     plt.close()
 
     @info "plotting radial Darcy velocity vs radius"
     fig, ax = plt.subplots()
     for idx in idx_ages
-        age = timesum_Ma[idx]
+        age = timesum_Myr[idx]
         rad_qD = ravg.(Ref(vrad(qxD[:, :, idx], qyD[:, :, idx])), radius_range)
-        ax.plot(rad_qD, radius_range, label="$(sprint(f3p, age)) Ma")
+        ax.plot(rad_qD, radius_range, label="$(sprint(f3p, age)) Myr")
     end
     ax.set_xlabel("radial Darcy velocity [m/s]")
     ax.set_ylabel("radius [km]")
     ax.set_title("Mean radial Darcy velocity")
     ax.legend()
-    fig.savefig(input_path*"/fig_radialDarcyvel_radius-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_radialDarcyvel_radius-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 # -----------------------------------------------------------------------------
     # cm = plt.get_cmap(:inferno)
     cm = plt.get_cmap(:plasma)
-    t_idxs = round.(Int, LinRange(2, n_steps, 9))
+    # t_idxs = round.(Int, LinRange(2, n_steps, 9))
+    n_ages = [5, 4] # must total 9
+    boundary_f = 0.2
+    end_lower = round(Int, boundary_f*n_steps)
+    begin_upper = round(Int, (1 - boundary_f)*n_steps/n_ages[2]) + end_lower
+    start_idx = 2 
+    t_idxs = round.(
+        Int, vcat(
+            collect(range(start_idx, end_lower, n_ages[1])),
+            collect(range(begin_upper, n_steps, n_ages[2]))
+            )
+    )
+    n_ages_tr = [6, 3] # must total 9
+    boundary_f_tr = 0.15
+    end_lower_tr = round(Int, boundary_f_tr*n_steps)
+    begin_upper_tr = (
+        round(Int, (1 - boundary_f_tr)*n_steps/n_ages_tr[2]) + end_lower_tr
+    )
+    start_idx_tr = 2 
+    t_idxs_tr = round.(
+        Int, vcat(
+            collect(range(start_idx_tr, end_lower_tr, n_ages_tr[1])),
+            collect(range(begin_upper_tr, n_steps, n_ages_tr[2]))
+            )
+    )
 # -----------------------------------------------------------------------------
     @info "plotting density panel"    
     fig, axs = plt.subplots(3, 3, figsize=(8, 8), constrained_layout=true)
     vmin, vmax = extrema(RHO[:, :, t_idxs])
     im = nothing
     for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs)
-        im = plot_field(ax, RHO[:, :, i], vmin, vmax, timesum_Ma[i], cm)
+        im = plot_field(ax, RHO[:, :, i], vmin, vmax, timesum_Myr[i], cm)
     end
     cbar = fig.colorbar(im, ax=axs, shrink=0.6)
     cbar.set_label("ρ [kg/m³]", fontsize=10)
     fig.suptitle("Density")
-    fig.savefig(input_path*"/fig_rho_panel-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_rho_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting temperature panel"        
@@ -521,12 +696,12 @@ function generate_plots(input_path)
     vmin, vmax = extrema(tk2[:, :, t_idxs])
     im = nothing
     for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs)
-        im = plot_field(ax, tk2[:, :, i], vmin, vmax, timesum_Ma[i], cm)
+        im = plot_field(ax, tk2[:, :, i], vmin, vmax, timesum_Myr[i], cm)
     end
     cbar = fig.colorbar(im, ax=axs, shrink=0.6)
     cbar.set_label("T [K]", fontsize=10)
     fig.suptitle("Temperature")
-    fig.savefig(input_path*"/fig_T_panel-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_T_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting porosity panel"    
@@ -534,12 +709,12 @@ function generate_plots(input_path)
     vmin, vmax = extrema(PHI[:, :, t_idxs])
     im = nothing
     for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs)
-        im = plot_field(ax, PHI[:, :, i], vmin, vmax, timesum_Ma[i], cm)
+        im = plot_field(ax, PHI[:, :, i], vmin, vmax, timesum_Myr[i], cm)
     end
     cbar = fig.colorbar(im, ax=axs, shrink=0.6)
     cbar.set_label("ϕ", fontsize=10)
     fig.suptitle("Porosity")
-    fig.savefig(input_path*"/fig_phi_panel-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_phi_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
     @info "plotting wet silicate panel"        
@@ -547,12 +722,38 @@ function generate_plots(input_path)
     vmin, vmax = extrema(XWS[:, :, t_idxs])
     im = nothing
     for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs)
-        im = plot_field(ax, XWS[:, :, i], vmin, vmax, timesum_Ma[i], cm)
+        im = plot_field(ax, XWS[:, :, i], vmin, vmax, timesum_Myr[i], cm)
     end
     cbar = fig.colorbar(im, ax=axs, shrink=0.6)
     cbar.set_label("XWˢ", fontsize=10)
     fig.suptitle("Wet silicate molar fraction in solid")
-    fig.savefig(input_path*"/fig_XWS_panel-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    fig.savefig(input_path*"/fig_XWS_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    plt.close()
+
+    @info "plotting ΔMP panel"        
+    fig, axs = plt.subplots(3, 3, figsize=(8, 8), constrained_layout=true)
+    vmin, vmax = extrema(DMP[:, :, t_idxs_tr])
+    im = nothing
+    for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs_tr)
+        im = plot_field(ax, DMP[:, :, i], vmin, vmax, timesum_Myr[i], cm)
+    end
+    cbar = fig.colorbar(im, ax=axs, shrink=0.6)
+    cbar.set_label("ΔMP [s⁻¹]", fontsize=10)
+    fig.suptitle("Mass transfer term")
+    fig.savefig(input_path*"/fig_DMP_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+    plt.close()
+
+    @info "plotting ΔHP panel"        
+    fig, axs = plt.subplots(3, 3, figsize=(8, 8), constrained_layout=true)
+    vmin, vmax = extrema(DHP[:, :, t_idxs_tr])
+    im = nothing
+    for (ax, i) in zip(vcat(permutedims(axs)...), t_idxs_tr)
+        im = plot_field(ax, DHP[:, :, i], vmin, vmax, timesum_Myr[i], cm)
+    end
+    cbar = fig.colorbar(im, ax=axs, shrink=0.6)
+    cbar.set_label("ΔHP [Wm⁻³]", fontsize=10)
+    fig.suptitle("Enthalpy transfer term")
+    fig.savefig(input_path*"/fig_DHP_panel-rrcoef=$(rrcoef)-phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
     plt.close()
 
 # -----------------------------------------------------------------------------
@@ -562,7 +763,7 @@ function generate_plots(input_path)
     angle_step = 5
     t_begin = 1
     t_end = n_steps
-    rs = [0.3, 0.6, 0.9] .* rplanet
+    rs = [0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] .* rplanet
     for r in rs
         rmin = r - marker_radius_margin
         rmax = r + marker_radius_margin
@@ -576,78 +777,88 @@ function generate_plots(input_path)
             ϕ_markers = findall(
                 (ϕ-1 .<= azimuths[:, 1] .< ϕ+1) .& (rmin .< radii[:, 1] .<= rmax))
             end
+            if length(ϕ_markers) == 0
+                ϕ_markers = findall(
+                    (ϕ-1 .<= azimuths[:, 1] .< ϕ+1) .& (
+                        rmin-marker_radius_margin .< radii[:, 1] .<= rmax+marker_radius_margin)
+                    )
+            end
             selection[i] = sample(rgen, ϕ_markers)
         end
-        # X, Y = repeat(angles, inner=(1, size(timesum_Ma[t_begin:t_end], 1))), repeat(
-        #     timesum_Ma[t_begin:t_end], inner=(1, size(angles, 1)))'
+        # X, Y = repeat(angles, inner=(1, size(timesum_Myr[t_begin:t_end], 1))), repeat(
+        #     timesum_Myr[t_begin:t_end], inner=(1, size(angles, 1)))'
 
     # -------------------------------------------------------------------------
         @info "plotting marker porosity at r=$(r)m"
         fig = plt.figure(figsize=(12, 8), dpi=300)
         ax = fig.gca(projection="3d")
         im = ax.contour3D(
-            angles, timesum_Ma[t_begin:t_end]', phim[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
+            angles, timesum_Myr[t_begin:t_end]', phim[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
         ax.set_ylim(reverse(ax.get_ylim()))
         ax.view_init(elev=30.0, azim=-50.0)
         ax.set_xlabel("azimuth [°]")
-        ax.set_ylabel("time [Ma]")
+        ax.set_ylabel("time [Myr]")
         ax.set_zlabel("porosity")
+        ax.set_title("Marker porosity evolution starting at R=$(r)m") 
         cbar = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.2)
         cbar.set_label("porosity", fontsize=10)
         cbar.set_alpha(1.0)
         cbar.draw_all()
-        fig.savefig(input_path*"/fig_marker_phi-r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+        fig.savefig(input_path*"/fig_marker_phi-rrcoef=$(rrcoef)_r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
         plt.close()
 
         @info "plotting marker temperature at r=$(r)m"
         fig = plt.figure(figsize=(12, 8), dpi=300)
         ax = fig.gca(projection="3d")
         im = ax.contour3D(
-            angles, timesum_Ma[t_begin:t_end]', tkm[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
+            angles, timesum_Myr[t_begin:t_end]', tkm[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
         ax.set_ylim(reverse(ax.get_ylim()))
         ax.view_init(elev=30.0, azim=-50.0)
         ax.set_xlabel("azimuth [°]")
-        ax.set_ylabel("time [Ma]")
+        ax.set_ylabel("time [Myr]")
         ax.set_zlabel("temperature [K]")
+        ax.set_title("Marker temperature evolution starting at R=$(r)m") 
         cbar = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.2)
         cbar.set_label("temperature [K]", fontsize=10)
         cbar.set_alpha(1.0)
         cbar.draw_all()
-        fig.savefig(input_path*"/fig_marker_T-r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+        fig.savefig(input_path*"/fig_marker_T-rrcoef=$(rrcoef)_r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
         plt.close()
 
         @info "plotting marker radius at r=$(r)m"
         fig = plt.figure(figsize=(12, 8), dpi=300)
         ax = fig.gca(projection="3d")
         im = ax.contour3D(
-            angles, timesum_Ma[t_begin:t_end]', radii[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
+            angles, timesum_Myr[t_begin:t_end]', radii[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
         ax.set_ylim(reverse(ax.get_ylim()))
         ax.view_init(elev=30.0, azim=-50.0)
         ax.set_xlabel("azimuth [°]")
-        ax.set_ylabel("time [Ma]")
+        ax.set_ylabel("time [Myr]")
         ax.set_zlabel("radius [m]")
+        ax.set_title("Marker radius evolution starting at R=$(r)m") 
         cbar = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.1)
         cbar.set_label("radius [m]", fontsize=10)
         cbar.set_alpha(1.0)
         cbar.draw_all()
-        fig.savefig(input_path*"/fig_marker_r-r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+        fig.savefig(input_path*"/fig_marker_r-rrcoef=$(rrcoef)_r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
         plt.close()
 
         @info "plotting marker XWˢ at r=$(r)m"
         fig = plt.figure(figsize=(12, 8), dpi=300)
         ax = fig.gca(projection="3d")
         im = ax.contour3D(
-            angles, timesum_Ma[t_begin:t_end]', XWsolidm0[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
+            angles, timesum_Myr[t_begin:t_end]', XWsolidm0[selection, :]', levels, cmap=cm, alpha=0.5, antialiased=true)
         ax.set_ylim(reverse(ax.get_ylim()))
         ax.view_init(elev=30.0, azim=-50.0)
         ax.set_xlabel("azimuth [°]")
-        ax.set_ylabel("time [Ma]")
+        ax.set_ylabel("time [Myr]")
         ax.set_zlabel("XWˢ")
+        ax.set_title("Marker wet solid molar fraction evolution starting at R=$(r)m") 
         cbar = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.1)
         cbar.set_label("XWˢ", fontsize=10)
         cbar.set_alpha(1.0)
         cbar.draw_all()
-        fig.savefig(input_path*"/fig_marker_XWS-r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
+        fig.savefig(input_path*"/fig_marker_XWS-rrcoef=$(rrcoef)_r=$(r)_phim0=$(phim0)_ratioAl26=$(ratio_al)_XWsolid0=$(XWsolidm_init[1]).pdf")
         plt.close()
     end
 end
