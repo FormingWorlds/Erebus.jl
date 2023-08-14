@@ -4,22 +4,30 @@ using Documenter
 using Erebus
 
 makedocs(
-    sitename = "Erebus.jl",
     modules = [Erebus],
-    authors="Beat Hubmann",
-    repo="https://github.com/FormingWorlds/Erebus.jl/blob/{commit}{path}#{line}",
-    format = Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-    ),
-    pages=[
-        "Home" => "index.md",
-    ],
+    sitename = "Erebus.jl",
 )
 
-deploydocs(;
-    repo="github.com/FormingWorlds/Erebus.jl",
-    devbranch="main",
+deploydocs(
+    repo="github.com/FormingWorlds/Erebus.jl.git",
 )
+
+#     sitename = "Erebus.jl",
+#     modules = [Erebus],
+#     authors="Beat Hubmann",
+#     repo="https://github.com/FormingWorlds/Erebus.jl/blob/{commit}{path}#{line}",
+#     format = Documenter.HTML(;
+#         prettyurls=get(ENV, "CI", "false") == "true",
+#     ),
+#     pages=[
+#         "Home" => "index.md",
+#     ],
+# )
+# 
+# deploydocs(;
+#     repo="github.com/FormingWorlds/Erebus.jl",
+#     devbranch="main",
+# )
 
 # Documenter can also automatically deploy documentation to gh-pages.
 # See "Hosting Documentation" and deploydocs() in the Documenter manual
