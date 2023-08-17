@@ -13,16 +13,20 @@ const psurface = 1.0e+3
 # model size, geometry, and resolution
 # horizontal model size [m]
 const xsize = 14_000.0
+# const xsize = 140_000.0
 # vertical model size [m]
 const ysize = 14_000.0
+# const ysize = 140_000.0
 # horizontal center of model
 const xcenter = xsize / 2
 # vertical center of model
 const ycenter = ysize / 2  
 # basic grid resolution in x direction (horizontal)
 const Nx = 15
+# const Nx = 141
 # basic grid resolution in y direction (vertical)	
 const Ny = 15
+# const Ny = 141
 # Vx, Vy, P grid resolution in x direction (horizontal)
 const Nx1 = Nx + 1
 # Vx/Vy/P grid resolution in y direction (vertical)
@@ -355,8 +359,9 @@ const dphimax = 100.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-# const n_steps = 10 
-const n_steps = 30_000 
+const n_steps = 10 
+# const n_steps = 100 
+# const n_steps = 30_000 
 # random number generator seed
 const seed = 42
 # using MKL Pardiso solver

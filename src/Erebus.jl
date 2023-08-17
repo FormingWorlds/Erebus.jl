@@ -7,6 +7,7 @@ using DocStringExtensions
 using ExtendableSparse
 using JLD2
 using LinearAlgebra
+using LinearSolve
 using Logging
 using ProgressMeter
 using Random
@@ -21,9 +22,9 @@ include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
-else
-    using MKL
-    BLAS.set_num_threads(4)
+# else
+    # using MKL
+    # BLAS.set_num_threads(4)
 end
 
 const to = TimerOutput()
@@ -710,7 +711,7 @@ function compute_marker_properties!(
     XWˢm₀,
     mode
 )
-# @timeit to "compute_marker_properties!" begin
+@timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
@@ -741,7 +742,7 @@ function compute_marker_properties!(
     # etafluidcur_inv_kphim[m] = etafluidcur[m] * inv(kphim[m])
     etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(
         kphim0[tm[m]], phim[m], etafluidcur)
-# end # @timeit to "compute_marker_properties!"
+end # @timeit to "compute_marker_properties!"
     return nothing
 end # function compute_marker_properties!
 
@@ -769,7 +770,6 @@ $(SIGNATURES)
 """
 function update_marker_viscosity!(
     m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
-# @timeit to "update_marker_viscosity!" begin
     @inbounds i, j, weights = fix_weights(
         xm[m],
         ym[m],
@@ -797,7 +797,6 @@ function update_marker_viscosity!(
     else
         @inbounds etavpm[m] = etatotalm[m]
     end
-# end # @timeit to "update_marker_viscosity!"
     return nothing
 end
 
@@ -1384,7 +1383,6 @@ $(SIGNATURES)
         wtmi1j1: i+1, j+1 node]
 """
 function fix_weights(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-# @timeit to "fix_weights" begin
     i, j, dxmj, dymi = fix_distances(
         x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
     return i, j, SVector(
@@ -1421,14 +1419,12 @@ $(SIGNATURES)
     - dymi: y-distance from (x, y) point to (i, j) node
 """
 function fix_distances(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-# @timeit to "fix_distances" begin
     @inbounds begin
         i, j = fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
         dxmj = x - x_axis[j]
         dymi = y - y_axis[i]
     end # @inbounds
     return i, j, dxmj, dymi
-# end # @timeit to "fix_distances"
 end # function fix_distances
 
 """
@@ -1455,7 +1451,6 @@ $(SIGNATURES)
     - j: left (with reference to x) node index on x-grid axis
 """
 function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-# @timeit to "fix" begin
     @inbounds j = unsafe_trunc(Int, (x-x_axis[1])*inv(dx)) + 1
     @inbounds i = unsafe_trunc(Int, (y-y_axis[1])*inv(dy)) + 1
     if j < jmin
@@ -1469,7 +1464,6 @@ function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
         i = imax
     end
     return i, j
-# end # @timeit to "fix"
 end # function fix
 
 """
@@ -1518,12 +1512,12 @@ using given bilinear interpolation weights.
     - nothing
 """
 function interpolate_add_to_grid!(i, j, weights, property, grid)
-# @timeit to "interpolate_add_to_grid!" begin
+@timeit to "interpolate_add_to_grid!" begin
     @inbounds grid[i, j] += property * weights[1]
     @inbounds grid[i+1, j] += property * weights[2]
     @inbounds grid[i, j+1] += property * weights[3]
     @inbounds grid[i+1, j+1] += property * weights[4]
-# end # @timeit to "interpolate_add_to_grid!"
+end # @timeit to "interpolate_add_to_grid!"
     return nothing
 end # function interpolate_add_to_grid!
 
@@ -1546,9 +1540,7 @@ Interpolate a property from nearest the four nodes on a given grid to a marker.
     - m: marker 
 """
 function interpolate_to_marker!(m, i, j, weights, marker_property, grid)
-# @timeit to "interpolate_to_marker!()" begin
     @inbounds marker_property[m] = dot4(grid_vector(i, j, grid), weights)
-# end # @timeit to "interpolate_to_marker!()"
     return nothing
 end # function interpolate_to_marker
 
@@ -1573,9 +1565,7 @@ and add it to the markers property.
     - m: marker 
 """
 function interpolate_add_to_marker!(m, i, j, weights, marker_property, grid)
-# @timeit to "interpolate_add_to_marker!()" begin
     @inbounds marker_property[m] += dot4(grid_vector(i, j, grid), weights)
-# end # @timeit to "interpolate_add_to_marker!()"
     return nothing
 end # function interpolate_add_to_marker
 
@@ -1992,7 +1982,7 @@ function compute_basic_node_properties!(
     FRI,
     YNY
 )
-# @timeit to "compute_basic_node_properties!" begin
+@timeit to "compute_basic_node_properties!" begin
     @inbounds begin
         for j=1:1:Nx, i=1:1:Ny
             if WTSUM[i, j] > 0.0 
@@ -2009,7 +1999,7 @@ function compute_basic_node_properties!(
             end
         end 
     end # @inbounds
-# end # @timeit to "compute_basic_node_properties!"
+end # @timeit to "compute_basic_node_properties!"
     return nothing
 end # function compute_basic_node_properties!
 
@@ -2050,7 +2040,7 @@ function compute_vx_node_properties!(
    PHIX,
    RX
 )
-# @timeit to "compute_vx_node_properties!" begin
+@timeit to "compute_vx_node_properties!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTXSUM[i, j] > 0.0 
@@ -2062,7 +2052,7 @@ function compute_vx_node_properties!(
             end
         end
     end # @inbounds
-# end # @timeit to "compute_vx_node_properties!"
+end # @timeit to "compute_vx_node_properties!"
     return nothing
 end # function compute_vx_node_properties!
 
@@ -2103,7 +2093,7 @@ function compute_vy_node_properties!(
    PHIY,
    RY
 )
-# @timeit to "compute_vy_node_properties!" begin
+@timeit to "compute_vy_node_properties!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTYSUM[i, j] > 0.0 
@@ -2115,7 +2105,7 @@ function compute_vy_node_properties!(
             end
         end
     end # @inbounds
-# end # @timeit to "compute_vy_node_properties!"
+end # @timeit to "compute_vy_node_properties!"
     return nothing
 end # function compute_vy_node_properties!
 
@@ -2174,7 +2164,7 @@ function compute_p_node_properties!(
     PHI,
     BETAPHI
 )
-# @timeit to "compute_p_node_properties!" begin
+@timeit to "compute_p_node_properties!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTPSUM[i, j] > 0.0
@@ -2191,7 +2181,7 @@ function compute_p_node_properties!(
             end
         end
     end # @inbounds
-# end # @timeit to "compute_p_node_properties!"
+end # @timeit to "compute_p_node_properties!"
     return nothing
 end # function compute_p_node_properties!
 
@@ -2213,7 +2203,7 @@ $(SIGNATURES)
     - nothing
 """
 function compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
-# @timeit to "compute_thermodynamic_xfer!" begin
+@timeit to "compute_thermodynamic_xfer!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTPSUM[i, j] > 0.0 
@@ -2224,7 +2214,7 @@ function compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
             end
         end 
     end # @inbounds
-# end # @timeit to "compute_thermodynamic_xfer!"
+end # @timeit to "compute_thermodynamic_xfer!"
     return nothing
 end # function compute_thermodynamic_xfer!
 
@@ -2244,7 +2234,7 @@ $(SIGNATURES)
     - nothing
 """
 function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
-# @timeit to "compute_molarfraction!" begin
+@timeit to "compute_molarfraction!" begin
     @inbounds begin
         for j=1:1:Nx1, i=1:1:Ny1
             if WTPSUM[i, j] > 0.0 
@@ -2254,7 +2244,7 @@ function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
             end
         end 
     end # @inbounds
-# end # @timeit to "compute_molarfraction!"
+end # @timeit to "compute_molarfraction!"
     return nothing
 end # function compute_molarfraction!
 
@@ -2277,6 +2267,7 @@ $(SIGNATURES)
         - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
 """
 function compute_rhocpfluidm(T, mode)
+@timeit to "compute_rhocpfluidm" begin
     if mode == 1 
         if T < tmfluidphase-5.0
             ρᶠCₚᶠ = ρH₂Oᶠⁱ * 7.67T 
@@ -2294,6 +2285,7 @@ function compute_rhocpfluidm(T, mode)
     else
         throw("unknown mode $mode") 
     end
+end # @timeit to "compute_rhocpfluidm"
     return ρᶠCₚᶠ
 end # function compute_rhocpfluidm
 
@@ -2314,6 +2306,7 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of solid
 """
 function compute_ksolidm(T, mode)
+@timeit to "compute_ksolidm" begin
     if mode == 1
         kˢ = 0.73 + 1293.0/(T+77.0)
     elseif mode == 9
@@ -2321,6 +2314,7 @@ function compute_ksolidm(T, mode)
     else
         throw("unknown mode $mode") 
     end
+end # @timeit to "compute_ksolidm"
     return kˢ
 end # function compute_ksolidm
 
@@ -2342,6 +2336,7 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of fluid
 """
 function compute_kfluidm(T, mode)
+@timeit to "compute_kfluidm" begin
     if mode == 1
         if T < tmfluidphase
             kᶠ = 0.465 + 488.0/T
@@ -2355,6 +2350,7 @@ function compute_kfluidm(T, mode)
     else
         throw("unknown mode $mode") 
     end
+end # @timeit to "compute_kfluidm"
     return kᶠ
 end # function compute_kfluidm
 
@@ -2381,6 +2377,7 @@ $(SIGNATURES)
     - Δtreaction: dehydration reaction time
 """
 function compute_Δtreaction(T, ϕ, mode)
+@timeit to "compute_Δtreaction" begin
     if mode == 1
         Δtr = -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
     elseif mode == 2
@@ -2392,6 +2389,7 @@ function compute_Δtreaction(T, ϕ, mode)
     else
         throw("unknown mode $mode")
     end
+end # @timeit to "compute_Δtreaction"
     return Δtr
 end # function compute_dtreaction
 
@@ -2429,7 +2427,7 @@ becomes
     - nothing
 """
 function apply_insulating_boundary_conditions!(t)
-# @timeit to "apply_insulating_boundary_conditions!" begin
+@timeit to "apply_insulating_boundary_conditions!" begin
     Nyy, Nxx = size(t)
     if Nyy>2 && Nxx>2
         @inbounds begin
@@ -2443,7 +2441,7 @@ function apply_insulating_boundary_conditions!(t)
             @views @. t[:, Nxx] = t[:, Nxx-1]
         end # @inbounds
     end
-# end # @timeit to "apply_insulating_boundary_conditions!"
+end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end
 
@@ -2467,7 +2465,7 @@ $(SIGNATURES)
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
 function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr)
-# @timeit to "compute_gibbs_free_energy" begin
+@timeit to "compute_gibbs_free_energy" begin
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtr
         # compute ΔG for dehydration reaction (16.145), (16.165b)
@@ -2476,8 +2474,8 @@ function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr)
         # Δt ≥ Δtreaction (16.165a)
         ΔGWD = zero(0.0)    
     end
+end # @timeit to "compute_gibbs_free_energy"
     return ΔGWD
-# end # @timeit to "compute_gibbs_free_energy"
 end # function compute_gibbs_free_energy
 
 """
@@ -2499,7 +2497,7 @@ $(SIGNATURES)
     - Hᵗ: relative enthalpy of system for single dehydration reaction (16.163)
 """
 function compute_relative_enthalpy(Xsolid, XWsolid)
-     return -Xsolid * XWsolid * ΔHWD / (MD+MH₂O)
+    @timeit to "compute_relative_enthalpy" return -Xsolid * XWsolid * ΔHWD / (MD+MH₂O)
 end # function compute_relative_enthalpy
 
 """
@@ -2519,7 +2517,7 @@ $(SIGNATURES)
 """
 function compute_reaction_constant(T, pf, ΔGWD)
     # compute reaction constant (16.151)
-    return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (RG*T))
+    @timeit to "compute_reaction_constant" return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (RG*T))
 end # function compute_reaction_constant
 
 
@@ -2575,7 +2573,7 @@ function perform_thermochemical_reaction!(
     timestep,
     titer
 )
-# @timeit to "perform_thermochemical_reaction!" begin
+@timeit to "perform_thermochemical_reaction!" begin
     # reset interpolation arrays
     reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM)
     # iterate over markers
@@ -2688,8 +2686,8 @@ function perform_thermochemical_reaction!(
     end # @inbounds
     @info "min/max mass transfer term" extrema(DMP)
     @info "min/max enthalpy transfer term" extrema(DHP)
+end # @timeit to "perform_thermochemical_reaction!"
     return nothing
-# end # @timeit to "perform_thermochemical_reaction!"
 end # function perform_thermochemical_reaction!
 
 """
@@ -2712,13 +2710,13 @@ $(SIGNATURES)
 - nothing
 """
 function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
-# @timeit to "compute_gravity_solution!" begin
+@timeit to "compute_gravity_solution!" begin
     # fresh LHS sparse coefficient matrix
-    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    @timeit to "set up sparse matrix" LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # reset RHS coefficient vector
     RP .= 0.0
     # iterate over P nodes
-    # @timeit to "build system" begin
+    @timeit to "build system" begin
     for j=1:1:Nx1, i=1:1:Ny1
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
@@ -2758,22 +2756,22 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
             @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
         end
     end
-    # end # @timeit to "build system"
-    # @timeit to "solve system" begin
+    end # @timeit to "build system"
+    @timeit to "solve system" begin
     # solve system of equations
     SP .= LP \ RP # implicit: flush!(LP)
-    # end # @timeit to "solve system"
+    end # @timeit to "solve system"
     # reshape solution vector to 2D array
-    # @timeit to "reshape solution" begin
+    @timeit to "reshape solution" begin
     FI .= reshape(SP, Ny1, Nx1)
-    # end # @timeit to "reshape solution"
-    # @timeit to "compute accelerations" begin
+    end # @timeit to "reshape solution"
+    @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
     @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
     @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-    # end # @timeit to "compute accelerations"
-# end # @timeit to "compute_gravity_solution!"
+    end # @timeit to "compute accelerations"
+end # @timeit to "compute_gravity_solution!"
     return nothing
 end # function compute_gravity_solution!
 
@@ -2795,13 +2793,13 @@ $(SIGNATURES)
 
 """
 function assemble_gravitational_lse!(RHO, RP)
-    # @timeit to "assemble_gravitational_lse!" begin
+    @timeit to "assemble_gravitational_lse!" begin
         # fresh LHS sparse coefficient matrix
-        LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+        @timeit to "setup sparse LHS" LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
         # reset RHS coefficient vector
-        RP .= zero(0.0)
+        @timeit to "reset RHS" RP .= zero(0.0)
         # iterate over P nodes
-        # @timeit to "build system" begin
+        @timeit to "build system" begin
         for j=1:1:Nx1, i=1:1:Ny1
             # define global index in algebraic space
             gk = (j-1) * Ny1 + i
@@ -2841,8 +2839,8 @@ function assemble_gravitational_lse!(RHO, RP)
                 @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
             end
         end
-        # end # @timeit to "build system"
-    # end # @timeit to "assemble_gravitational_lse!"
+        end # @timeit to "build system"
+    end # @timeit to "assemble_gravitational_lse!"
     return LP
 end
 
@@ -2862,17 +2860,17 @@ $(SIGNATURES)
     - nothing
 """
 function process_gravitational_solution!(SP, FI, gx, gy)
-# @timeit to "process gravitational solution" begin
-    # @timeit to "reshape solution" begin
+@timeit to "process gravitational solution" begin
+    @timeit to "reshape solution" begin
     FI .= reshape(SP, Ny1, Nx1)
-    # end # @timeit to "reshape solution"
-    # @timeit to "compute accelerations" begin
+    end # @timeit to "reshape solution"
+    @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
     @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
     @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-    # end # @timeit to "compute accelerations"
-# end # @timeit to "process gravitational solution"
+    end # @timeit to "compute accelerations"
+end # @timeit to "process gravitational solution"
     return nothing
 end
 
@@ -2932,7 +2930,7 @@ function get_viscosities_stresses_density_gradients!(
     dRHOYdx,
     dRHOYdy
 )
-# @timeit to "get_viscosities_stresses_density_gradients!()" begin
+@timeit to "get_viscosities_stresses_density_gradients!()" begin
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
@@ -2955,7 +2953,7 @@ function get_viscosities_stresses_density_gradients!(
     @views @. dRHOYdy[2:Ny, :] = 0.5*(RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) * inv(dy)
     end # @inbounds
     return nothing
-# end # @timeit to "get_viscosities_stresses_density_gradients!()"
+end # @timeit to "get_viscosities_stresses_density_gradients!()"
 end # function get_viscosities_stresses_density_gradients!
 
 """
@@ -2973,9 +2971,11 @@ $(SIGNATURES)
     - S: hydromechanical linear system of equations: solution vector
 """
 function setup_hydromechanical_lse()
+@timeit to "setup_hydromechanical_lse()" begin
     # R = zeros(Ny1*Nx1*6)
     R = Vector{Float64}(undef, Ny1*Nx1*6)
     S = Vector{Float64}(undef, Ny1*Nx1*6)
+end # @timeit to "setup_hydromechanical_lse()"
     return R, S
 end
 
@@ -2994,9 +2994,11 @@ $(SIGNATURES)
     - ST: thermal linear system of equations: solution vector
 """
 function setup_thermal_lse()
+@timeit to "setup_thermal_lse()" begin
     # RT = zeros(Ny1*Nx1)
     RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
+end # @timeit to "setup_thermal_lse()"
     return RT, ST
 end
 
@@ -3015,9 +3017,11 @@ $(SIGNATURES)
     - SP: gravitational linear system of equations: solution vector
 """
 function setup_gravitational_lse()
+@timeit to "setup_gravitational_lse()" begin
     # RP = zeros(Ny1*Nx1)
     RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
+end # @timeit to "setup_gravitational_lse()"
     return RP, SP
 end
 
@@ -3102,7 +3106,7 @@ function assemble_hydromechanical_lse!(
     dt,
     R
 )
-# @timeit to "assemble_hydromechanical_lse()" begin
+@timeit to "assemble_hydromechanical_lse()" begin
     # initialize LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # reset RHS coefficient vector
@@ -3558,7 +3562,7 @@ function assemble_hydromechanical_lse!(
     end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
     flush!(L) # finalize CSC matrix
-# end # @timeit to "assemble_hydromechanical_lse()"
+end # @timeit to "assemble_hydromechanical_lse()"
     return L
 end # function assemble_hydromechanical_lse!
 
@@ -3590,7 +3594,7 @@ function process_hydromechanical_solution!(
     qyD,
     pf
 )
-# @timeit to "process_hydromechanical_solution!()" begin
+@timeit to "process_hydromechanical_solution!()" begin
     S_mat = reshape(S, (:, Ny1, Nx1))
     @inbounds begin
         @views @. vx = S_mat[1, :, :]
@@ -3603,7 +3607,7 @@ function process_hydromechanical_solution!(
     # Δp = 0.25 * (pf[2, 2]+pf[2, Nx]+pf[Ny, 2]+pf[Ny, Nx]) - psurface
     # pr .-= Δp
     # pf .-= Δp
-# end # @timeit to "process_hydromechanical_solution!()"
+end # @timeit to "process_hydromechanical_solution!()"
     return nothing
 end # function process_hydromechanical_solution!
 
@@ -3623,7 +3627,7 @@ Recompute bulk viscosity at P nodes.
     - nothing
 """
 function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-# @timeit to "recompute_bulk_viscosity!" begin
+@timeit to "recompute_bulk_viscosity!" begin
     @inbounds begin  
         @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
             inv(ETA[1:end-1, 1:end-1]) +
@@ -3633,7 +3637,7 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
         )
         @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
     end # @inbounds
-# end # @timeit to "recompute_bulk_viscosity!"
+end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
 
@@ -3664,7 +3668,7 @@ $(SIGNATURES)
     - aphimax: maximum absolute porosity coefficient
 """
 function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt)
-# @timeit to "compute_Aϕ!()" begin
+@timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
     @views @. APHI[2:Ny, 2:Nx] = (
@@ -3676,7 +3680,7 @@ function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt)
     return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
     end # @inbounds
     # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
-# end # @timeit to "compute_Aϕ!()"
+end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
 
 """
@@ -3714,7 +3718,7 @@ function compute_fluid_velocities!(
     vxf,
     vyf
 )
-# @timeit to "compute_fluid_velocities!()" begin
+@timeit to "compute_fluid_velocities!()" begin
     @inbounds begin
         # vx velocity
         @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
@@ -3743,7 +3747,7 @@ function compute_fluid_velocities!(
     # end
     # @views @. vyf[:, 1] = -bcfleft*vyf[:, 2]    
     # @views @. vyf[:, Nx1] = -bcfright*vyf[:, Nx]     
-# end # @timeit to "compute_fluid_velocities!()"
+end # @timeit to "compute_fluid_velocities!()"
     return nothing
 end # function compute_fluid_velocities!
 
@@ -3773,7 +3777,7 @@ function compute_displacement_timestep(
     dt,
     aphimax
 )
-# @timeit to "compute_displacement_timestep()" begin
+@timeit to "compute_displacement_timestep()" begin
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
     maxvxf = maximum(abs, vxf)
@@ -3789,7 +3793,7 @@ function compute_displacement_timestep(
     @info "dt after vyf limitation = $dt s"
     dt = ifelse(dt*aphimax > dphimax, dphimax*inv(aphimax), dt)
     @info "dt after aphimax limitation = $dt s"
-# end # @timeit to "compute_displacement_timestep()"
+end # @timeit to "compute_displacement_timestep()"
     return dt
 end # function compute_displacement_timestep
 
@@ -3846,7 +3850,7 @@ function compute_stress_strainrate!(
     SII,
     dt
 )
-# @timeit to "compute_stress_strainrate!()" begin
+@timeit to "compute_stress_strainrate!()" begin
         @inbounds begin
             # ϵxy, σxy, Δσxy at basic nodes
             for j=1:1:Nx, i=1:1:Ny
@@ -3911,7 +3915,7 @@ function compute_stress_strainrate!(
     #         )/4.0
     #     )^2
     # )
-# end # @timeit to "compute_stress_strainrate!()"
+end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
 
@@ -3941,7 +3945,7 @@ function symmetrize_p_node_observables!(
     pf,
     ps
 )
-# @timeit to "symmetrize_p_node_observables!()" begin
+@timeit to "symmetrize_p_node_observables!()" begin
     # top boundary
     @inbounds @views @. begin
         SXX[1, 2:Nx] = SXX[2, 2:Nx]
@@ -3970,7 +3974,7 @@ function symmetrize_p_node_observables!(
         # solid pressure
         ps = (pr-pf*PHI) * inv(1-PHI)
     end
-# end # @timeit to "symmetrize_p_node_observables!()"
+end # @timeit to "symmetrize_p_node_observables!()"
     return nothing
     end # function symmetrize_p_node_observables!
 
@@ -4022,7 +4026,7 @@ function compute_nodal_adjustment!(
     dt,
     iplast
 )
-# @timeit to "compute_nodal_adjustment!()" begin
+@timeit to "compute_nodal_adjustment!()" begin
     # reset / setup
     ETA5 .= ETA0
     YNY5 .= 0
@@ -4081,7 +4085,7 @@ function compute_nodal_adjustment!(
     @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
     return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
-# end # @timeit to "compute_nodal_adjustment!()
+end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
 """
@@ -4100,9 +4104,12 @@ $(SIGNATURES)
     - nothing
 """
 function positive_max!(A, B, C)
+@timeit to "positive_max!()" begin
     @inbounds for i in eachindex(A)
         C[i] = max(0, ifelse(A[i] > B[i], A[i], B[i]))
     end
+end # @timeit to "positive_max!()"
+    return nothing
 end # function positive_max
 
 """
@@ -4138,7 +4145,7 @@ function finalize_plastic_iteration_pass!(
     dt,
     iplast
 )
-# @timeit to "finalize_plastic_iteration_pass!()" begin
+@timeit to "finalize_plastic_iteration_pass!()" begin
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
@@ -4153,7 +4160,7 @@ function finalize_plastic_iteration_pass!(
     end
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
-# end # @timeit to "finalize_plastic_iteration_pass!()"
+end # @timeit to "finalize_plastic_iteration_pass!()"
 end # function finalize_plastic_iteration_pass
 
 """
@@ -4173,12 +4180,14 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
+@timeit to "finalize_thermochemical_iteration_pass" begin
     if titer == 1
         if maxDTcurrent > DTmax
             dt *= (DTmax * inv(maxDTcurrent))
             @info "titer 1: reducing dt due to maxDT: dt=$dt s"
         end
     end
+end # @timeit to "finalize_thermochemical_iteration_pass"
     return dt
 end # function finalize_thermochemical_iteration_pass
 
@@ -4200,10 +4209,12 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
+@timeit to "compute_thermochemical_iteration_outcome" begin
     pferrcur = maximum(abs, pf-pf0)
     DMPmax = maximum(abs, DMP)
     @info "end thermochemical iter $titer" pferrcur DMPmax
     return pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
+end # @timeit to "compute_thermochemical_iteration_outcome"
 end # function compute_thermochemical_iteration_outcome
 
 """
@@ -4252,7 +4263,7 @@ function apply_subgrid_stress_diffusion!(
     dt,
     marknum
 )
-# @timeit to "apply_subgrid_stress_diffusion!" begin
+@timeit to "apply_subgrid_stress_diffusion!" begin
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
         return nothing
@@ -4312,7 +4323,7 @@ function apply_subgrid_stress_diffusion!(
     # compute DSXYsubgrid and update DSXY at all basic nodes
     @views @. DSXY[WTSUM[:, :]>0.0] -= SXYSUM[:, :][WTSUM[:, :]>0.0] /
         WTSUM[:, :][WTSUM[:, :]>0.0]
-# end # @timeit to "apply_subgrid_stress_diffusion!"
+end # @timeit to "apply_subgrid_stress_diffusion!"
     return nothing
 end # function apply_subgrid_stress_diffusion!
 
@@ -4336,7 +4347,7 @@ $(SIGNATURES)
     - nothing
 """
 function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
-# @timeit to "update_marker_stress!" begin
+@timeit to "update_marker_stress!" begin
     @threads for m=1:1:marknum    
         @inbounds i_p, j_p, weights_p = fix_weights(
             xm[m],
@@ -4367,7 +4378,7 @@ function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
         interpolate_add_to_marker!(
             m, i_basic, j_basic, weights_basic, sxym, DSXY)
     end
-# end # @timeit to "update_marker_stress!"
+end # @timeit to "update_marker_stress!"
     return nothing
 end # function update_marker_stress!
 
@@ -4398,13 +4409,13 @@ $(SIGNATURES)
 """
 function compute_shear_heating!(
     HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf)
-# @timeit to "compute_shear_heating!" begin
+@timeit to "compute_shear_heating!" begin
     for j=2:1:Nx, i=2:1:Ny
         # average SXY⋅EXY
-        SXYEXY = 0.25 * sum(
+        @timeit to "average SXY⋅EXY" SXYEXY = 0.25 * sum(
             grid_vector(i-1, j-1, SXY).^2 ./ grid_vector(i-1, j-1, ETA))
         # compute shear heating HS
-        @inbounds HS[i, j] = (
+        @timeit to "compute shear heating HS" @inbounds HS[i, j] = (
             SXX[i, j]^2 / ETAP[i,j]
             + SXYEXY
             + (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j]
@@ -4412,7 +4423,7 @@ function compute_shear_heating!(
             + 0.5 * (RY[i-1, j]*qyD[i-1, j]^2 + RY[i, j]*qyD[i, j]^2)
         )
     end
-# end # @timeit to "compute_shear_heating!" 
+end # @timeit to "compute_shear_heating!" 
     return nothing
 end # function compute_shear_heating!
 
@@ -4441,7 +4452,7 @@ $(SIGNATURES)
 """
 function compute_adiabatic_heating!(
     HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
-# @timeit to "compute_adiabatic_heating!" begin
+@timeit to "compute_adiabatic_heating!" begin
     @inbounds begin
         for j=2:1:Nx, i=2:1:Ny
             # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
@@ -4481,7 +4492,7 @@ function compute_adiabatic_heating!(
             )
         end
     end # @inbounds
-# end # @timeit to "compute_adiabatic_heating!"
+end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
 
 """
@@ -4508,7 +4519,7 @@ $(SIGNATURES)
     - LT: LHS sparse coefficient matrix
 """
 function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
-# @timeit to "assemble_thermal_lse!" begin
+@timeit to "assemble_thermal_lse!" begin
     # fresh LHS coefficient matrix
     LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
     # reset RHS coefficient vector
@@ -4590,7 +4601,7 @@ function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
         end
     end # @inbounds
     flush!(LT) # finalize CSC matrix
-# end # @timeit to "assemble_thermal_lse!"
+end # @timeit to "assemble_thermal_lse!"
     return LT
 end # function assemble_thermal_lse!
 
@@ -4623,7 +4634,7 @@ $(SIGNATURES)
 """
 function perform_thermal_iterations!(
     tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt)
-# @timeit to "perform_thermal_iterations!" begin
+@timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
     tk0 .= tk1
     dtt = dt
@@ -4660,7 +4671,7 @@ function perform_thermal_iterations!(
     # finalize overall temperature change and advance temperature field
     DT .= tk2 .- tk0
     DT0 .= DT
-# end # @timeit to "perform_thermal_iterations!"
+end # @timeit to "perform_thermal_iterations!"
     return nothing
 end # function perform_thermal_iterations!
 
@@ -4693,7 +4704,7 @@ $(SIGNATURES)
 """
 function apply_subgrid_temperature_diffusion!(
     xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dt, marknum, mode)
-# @timeit to "apply_subgrid_temperature_diffusion!" begin
+@timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
         return nothing
@@ -4740,7 +4751,7 @@ function apply_subgrid_temperature_diffusion!(
             DT[i, j] -= TKSUM[i, j] / RHOCPSUM[i, j]
         end
     end
-# end # @timeit to "apply_subgrid_temperature_diffusion!"
+end # @timeit to "apply_subgrid_temperature_diffusion!"
     return nothing
 end # function apply_subgrid_temperature_diffusion! 
 
@@ -4764,7 +4775,7 @@ $(SIGNATURES)
     - nothing
 # """
 function update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
-# @timeit to "update_marker_temperature!" begin
+@timeit to "update_marker_temperature!" begin
     if timestep == 1
         # interpolate tk2 to markers instead of DT for first time step        
         @threads for m=1:1:marknum
@@ -4780,7 +4791,7 @@ function update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
             interpolate_add_to_marker!(m, i, j, weights, tkm, DT)
         end
     end
-# end # @timeit to "update_marker_temperature!"
+end # @timeit to "update_marker_temperature!"
     return nothing
 end # function update_marker_temperature!
 
@@ -4804,7 +4815,7 @@ $(SIGNATURES)
     - nothing
 # """
 function update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
-# @timeit to "update_marker_porosity!" begin
+@timeit to "update_marker_porosity!" begin
     # update porosity for compaction
     @inbounds begin
         @threads for m=1:1:marknum
@@ -4835,7 +4846,7 @@ function update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
             end
         end
     end # @inbounds
-# end # @timeit to "update_marker_porosity!"
+end # @timeit to "update_marker_porosity!"
     return nothing
 end # function update_marker_porosity!
 
@@ -4860,7 +4871,7 @@ $(SIGNATURES)
     - nothing
 """
 function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
-# @timeit to "compute_velocities!" begin
+@timeit to "compute_velocities!" begin
     @inbounds begin
         # compute solid velocities at P nodes
         for j=2:1:Nx, i=2:1:Ny
@@ -4907,7 +4918,7 @@ function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
         # bottom
         @views @. vypf[Ny1,:] = 2.0*vybottom - vypf[Ny, :]
     end # @inbounds
-# end # @timeit to "compute_velocities!"
+end # @timeit to "compute_velocities!"
     return nothing
 end # function compute_velocities!
 
@@ -4928,14 +4939,14 @@ $(SIGNATURES)
     - nothing
 """
 function compute_rotation_rate!(vx, vy, wyx)
-# @timeit to "compute_rotation_rate!" begin
+@timeit to "compute_rotation_rate!" begin
     # compute rotation rate ωyx=1/2[∂Vy/∂x-∂Vx/∂y] at basic nodes
     for j=1:1:Nx, i=1:1:Ny
         @inbounds wyx[i, j] = 0.5 * (
         (vy[i, j+1]-vy[i, j])*inv(dx) - (vx[i+1, j]-vx[i, j])*inv(dy)
         )
     end
-# end # @timeit to "compute_rotation_rate!"
+end # @timeit to "compute_rotation_rate!"
     return nothing
 end # function compute_rotation_rate!
 
@@ -4989,7 +5000,7 @@ function move_markers_rk4!(
 	dt,
     mode
 )
-# @timeit to "move_markers_rk4!" begin
+@timeit to "move_markers_rk4!" begin
     @inbounds begin
         for m=1:1:marknum
             xmm = xmrk4 = xm[m]
@@ -5236,7 +5247,7 @@ function move_markers_rk4!(
             )
         end # marker loop
     end # @inbounds   
-# end # timeit to "move_markers_rk4!"
+end # timeit to "move_markers_rk4!"
     return nothing
 end # function move_markers_rk4!
 
@@ -5267,7 +5278,7 @@ $(SIGNATURES)
 """
 function backtrace_pressures_rk4!(
     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
-# @timeit to "backtrace_pressures_rk4!"
+@timeit to "backtrace_pressures_rk4!" begin
     @inbounds begin
         # setup RK4 scheme
         vxm = zeros(4)
@@ -5475,7 +5486,7 @@ function backtrace_pressures_rk4!(
             pf0[ii,jj] = dot4(grid_vector(i, j, pf), weights)
         end
     end # inbounds
-# end # @timeit to "backtrace_pressures_rk4!"
+end # @timeit to "backtrace_pressures_rk4!"
     return nothing
 end # function backtrace_pressures_rk4!
 
@@ -5500,6 +5511,7 @@ $(SIGNATURES)
     - nothing
 """
 function update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
+@timeit to "update_marker_population_geometry!" begin
     @inbounds begin
         dismij = distance(xm[m], ym[m], xxm[j], yym[i])
         dismi1j = distance(xm[m], ym[m], xxm[j], yym[i+1])
@@ -5522,6 +5534,7 @@ function update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
             mnum[i+1, j+1] = m
         end
     end # @inbounds
+end # @timeit to "update_marker_population_geometry!"
     return nothing
 end
 
@@ -5596,7 +5609,7 @@ function replenish_markers!(
     mnum;
     randomized=random_markers
 )
-# @timeit to "replenish_markers!" begin
+@timeit to "replenish_markers!" begin
     # reset marker population geometry tracker
     mdis .= mdis_init
     mnum .= 0
@@ -5676,7 +5689,7 @@ function replenish_markers!(
         end  
     end # @inbounds  
     return length(xm)
-# end # @timeit to "replenish_markers!"
+end # @timeit to "replenish_markers!"
 end # function replenish_markers!
 
 """
@@ -5797,6 +5810,7 @@ function save_state(
     alphasolidcur,
     alphafluidcur
     )
+@timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     jldsave(
         fid;
@@ -5936,6 +5950,7 @@ function save_state(
         alphasolidcur,
         alphafluidcur
     )
+end # @timeit to "save_state"
     return nothing
 end
 
@@ -5953,7 +5968,7 @@ $(SIGNATURES)
     - nothing
 """
 function simulation_loop(output_path)
-# @timeit to "simulation_loop setup" begin
+@timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
@@ -6327,7 +6342,7 @@ function simulation_loop(output_path)
     #     F = lu(fdrand(Nx1*Ny1*6, 1, 1, matrixtype=ExtendableSparseMatrix))
     end
 
-# end # @timeit to "simulation_loop setup"
+end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
     # iterate timesteps"
@@ -6347,7 +6362,7 @@ function simulation_loop(output_path)
         barglyphs=BarGlyphs(
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
     for timestep = start_step:1:n_steps
-# @timeit to "set up interpolation arrays" begin
+@timeit to "set up interpolation arrays" begin
         timestep_begin = now()
         # ---------------------------------------------------------------------
         # reset interpolation arrays
@@ -6384,7 +6399,7 @@ function simulation_loop(output_path)
             PHISUM,
             WTPSUM
         )
-# end # @timeit to "set up interpolation arrays" 
+end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
@@ -6587,9 +6602,9 @@ function simulation_loop(output_path)
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
         LP = assemble_gravitational_lse!(RHO, RP)
-        # @timeit to "solve gravitational LSE" begin
+    @timeit to "solve gravitational LSE" begin
         SP = LP \ RP
-        # end # @timeit to "solve gravitational LSE"
+    end # @timeit to "solve gravitational LSE"
         process_gravitational_solution!(SP, FI, gx, gy)
 
         # ---------------------------------------------------------------------
@@ -6602,6 +6617,7 @@ function simulation_loop(output_path)
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
         for titer=1:1:titermax
+    @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
             if reaction_active
                 perform_thermochemical_reaction!(
@@ -6632,19 +6648,24 @@ function simulation_loop(output_path)
             # -----------------------------------------------------------------
 
             # save initial viscosity, yielding nodes
+    @timeit to "save initial viscosity, yielding nodes" begin
             ETA00 .= ETA
             YNY00 .= YNY
             if timestep == 1
                 # no elastic compaction during first timestep
                 BETAPHI .= 0.0
             end
+    end # @timeit to "save initial viscosity, yielding nodes"
 
+    @timeit to "advance pressure generation" begin
             # advance pressure generation inside thermochemical iteration
             pr0 .= pr
             pf0 .= pf
+    end # @timeit to "advance pressure generation"
 
             # perform plastic iterations
             for iplast=1:1:titermax
+    @timeit to "plastic iteration (inner)" begin
                 @info(
                     "thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
@@ -6675,7 +6696,7 @@ function simulation_loop(output_path)
                     R
                 )
                 # solve hydromechanical system of equations
-    # @timeit to "solve hydromechanical system" begin
+    @timeit to "solve hydromechanical system" begin
                 if use_pardiso
                     # S = solve(pardiso_solver, L.cscmatrix, R)
                     set_phase!(
@@ -6693,7 +6714,7 @@ function simulation_loop(output_path)
                     # S = F \ R
                     S = L \ R
                 end
-    # end # @timeit to "solve hydromechanical system"
+    end # @timeit to "solve hydromechanical system"
 
                 # obtain hydromechanical observables from solution
                 process_hydromechanical_solution!(
@@ -6823,6 +6844,7 @@ function simulation_loop(output_path)
                         iplast
                     )
                 end
+    end # timeit to "plastic iteration"
             end # for iplast=1:1:nplast
 
             # ------------------------------------------------------------------
@@ -6866,7 +6888,7 @@ function simulation_loop(output_path)
             LT = assemble_thermal_lse!(
                 tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
             # solve thermal system of equations
-            ST = LT \ RT
+            @timeit to "solve thermal system" ST = LT \ RT
             # reshape solution vector to 2D array
             tk2 .= reshape(ST, Ny1, Nx1)
             # compute ΔT
@@ -6880,6 +6902,7 @@ function simulation_loop(output_path)
                 # exit thermochemical iterations loop
                 break
             end
+    end # @timeit to "thermochemical iteration (outer)"
         end # for titer=1:1:ntiter
 
         # ---------------------------------------------------------------------
