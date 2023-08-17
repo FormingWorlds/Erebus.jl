@@ -6696,6 +6696,7 @@ end # @timeit to "set up interpolation arrays"
                     R
                 )
                 # solve hydromechanical system of equations
+                @info "starting hydro-mechanical solver $titer-$iplast"
     @timeit to "solve hydromechanical system" begin
                 if use_pardiso
                     # S = solve(pardiso_solver, L.cscmatrix, R)
@@ -6713,9 +6714,11 @@ end # @timeit to "set up interpolation arrays"
                     # lu!(F, L)
                     # S = F \ R
                     S = L \ R
+                    # prob = LinearProblem(L, R)
+                    # S = solve(prob)
                 end
     end # @timeit to "solve hydromechanical system"
-
+                @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
                 process_hydromechanical_solution!(
                     S,
