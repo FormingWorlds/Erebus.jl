@@ -1,5 +1,5 @@
-using ExtendableSparse
 using Erebus
+using ExtendableSparse
 using Random
 using StaticArrays
 using Test
