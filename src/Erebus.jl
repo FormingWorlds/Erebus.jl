@@ -6334,6 +6334,7 @@ function simulation_loop(output_path)
     # -------------------------------------------------------------------------
     # hydromechanical solver
     R, S = setup_hydromechanical_lse()
+    hydromech_sol = nothing
     # thermal solver
     RT, ST = setup_thermal_lse()
     # gravitational solver
@@ -6715,11 +6716,22 @@ function simulation_loop(output_path)
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
                     pardiso(pardiso_solver, S, L.cscmatrix, R)
                 else
-                    # lu!(F, L)
-                    # S = F \ R
-                    S = L \ R
-                    # prob = LinearProblem(L, R)
-                    # S = solve(prob)
+                    # S = L \ R
+                    if timestep == 1 && iplast == 1
+                        s1 = rand(Ny1*Nx1*6)
+                        hydromech_prob = LinearProblem(
+                            L, R; u0 = s1, alias_A = true, alias_b = true)
+                        hydromech_cache = init(
+                            hydromech_prob,
+                            UMFPACKFactorization(reuse_symbolic=true);
+                            cache_kwargs...
+                        )
+                    else
+                        hydromech_cache = LinearSolve.set_A(hydromech_sol.cache, L)
+                        hydromech_cache = LinearSolve.set_b(hydromech_sol.cache, R)
+                    end
+                    hydromech_sol = solve(hydromech_cache)
+                    # @info "SOL CHECK" norm(S-hydromech_sol.u)
                 end
 #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"

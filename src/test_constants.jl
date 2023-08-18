@@ -364,6 +364,9 @@ const n_steps = 10
 # const n_steps = 30_000 
 # random number generator seed
 const seed = 42
+# iterative solver keyword arguments
+const cache_kwargs = (
+    ; verbose = true, abstol = 1e-8, reltol = 1e-8, maxiter = 30)
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
