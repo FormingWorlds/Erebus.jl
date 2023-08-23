@@ -368,7 +368,7 @@ const n_steps = 10
 # random number generator seed
 const seed = 42
 # using MKL Pardiso solver
-const use_pardiso = true
+const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
 # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
 const iparms_dict = Dict([

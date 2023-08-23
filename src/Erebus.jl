@@ -17,8 +17,8 @@ using TimerOutputs
 
 export run_simulation
 
-include("constants.jl")
-# include("test_constants.jl")
+# include("constants.jl")
+include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
@@ -6705,9 +6705,7 @@ function simulation_loop(output_path)
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
 #     @timeit to "solve hydromechanical system" begin
-                SS = L \ R
                 if use_pardiso
-                    S = Pardiso.solve(pardiso_solver, L, R)
                     set_phase!(
                         pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
                     pardiso(
@@ -6717,44 +6715,40 @@ function simulation_loop(output_path)
                         R
                     )
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
-                    # pardiso(pardiso_solver, S, L.cscmatrix, R)
-                    pardiso(pardiso_solver)
-                # else
-                    # S = L \ R
+                    pardiso(pardiso_solver, S, L, R)
+                else
+                    if timestep == 1 && iplast == 1
+                        hydromech_prob = LinearProblem(
+                            L,
+                            R;
+                            u0 = rand(Ny1*Nx1*6),
+                            alias_A = true,
+                            alias_b = true
+                            )
+                        # if use_pardiso
+                        #     hydromech_cache = init(
+                        #         hydromech_prob,
+                        #         MKLPardisoIterate();
+                        #         # MKLPardisoFactorize();
+                        #         cache_kwargs...
+                        #         )
+                        #     @info hydromech_cache.cacheval.iparm 
+                        # else
+                        hydromech_cache = init(
+                            hydromech_prob,
+                            UMFPACKFactorization();
+                            cache_kwargs...
+                            )
+                        # end
+                    else
+                        hydromech_cache = hydromech_sol.cache
+                        hydromech_cache.b = R
+                        hydromech_cache.A = L
+                    end
+                    Pl = ILU0Preconditioner(L)
+                    hydromech_sol = LinearSolve.solve(hydromech_cache, Pl = Pl)
+                    S = hydromech_sol.u
                 end
-                # if timestep == 1 && iplast == 1
-                #     hydromech_prob = LinearProblem(
-                #         L,
-                #         R;
-                #         u0 = rand(Ny1*Nx1*6),
-                #         alias_A = true,
-                #         alias_b = true
-                #         )
-                #     if use_pardiso
-                #         hydromech_cache = init(
-                #             hydromech_prob,
-                #             MKLPardisoIterate();
-                #             # MKLPardisoFactorize();
-                #             cache_kwargs...
-                #             )
-                #         @info hydromech_cache.cacheval.iparm 
-                #     else
-                #         hydromech_cache = init(
-                #             hydromech_prob,
-                #             UMFPACKFactorization();
-                #             cache_kwargs...
-                #             )
-                #     end
-                # else
-                #     hydromech_cache = hydromech_sol.cache
-                #     hydromech_cache.b = R
-                #     hydromech_cache.A = L
-                # end
-                # # Pl = ILU0Preconditioner(L)
-                # hydromech_sol = LinearSolve.solve(hydromech_cache)
-                @info "SOL CHECK" norm(SS-S)
-                # S = hydromech_sol.u
-                # end
 #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
