@@ -22,13 +22,15 @@ include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
+    algo = MKLPardisoFactorize(nprocs = 4)
 else
     if Sys.isapple()
         using AppleAccelerate
     else
         using MKL
-        BLAS.set_num_threads(4)
     end
+    algo = UMFPACKFactorization(;reuse_symbolic=true, check_pattern=true)
+    BLAS.set_num_threads(4)
 end
 
 const to = TimerOutput()
@@ -6716,22 +6718,21 @@ function simulation_loop(output_path)
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
                     pardiso(pardiso_solver, S, L.cscmatrix, R)
                 else
-                    # S = L \ R
+                    S = L \ R
                     if timestep == 1 && iplast == 1
                         s1 = rand(Ny1*Nx1*6)
                         hydromech_prob = LinearProblem(
                             L, R; u0 = s1, alias_A = true, alias_b = true)
                         hydromech_cache = init(
-                            hydromech_prob,
-                            UMFPACKFactorization(reuse_symbolic=true);
-                            cache_kwargs...
-                        )
+                            hydromech_prob, algo; cache_kwargs...)
                     else
-                        hydromech_cache = LinearSolve.set_A(hydromech_sol.cache, L)
-                        hydromech_cache = LinearSolve.set_b(hydromech_sol.cache, R)
+                        hydromech_cache = hydromech_sol.cache
+                        hydromech_cache.b = R
+                        hydromech_cache.A = L
                     end
                     hydromech_sol = solve(hydromech_cache)
-                    # @info "SOL CHECK" norm(S-hydromech_sol.u)
+                    @info "SOL CHECK" norm(S-hydromech_sol.u)
+                    S = hydromech_sol.u
                 end
 #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
