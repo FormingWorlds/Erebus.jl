@@ -17,19 +17,17 @@ using TimerOutputs
 
 export run_simulation
 
-# include("constants.jl")
-include("test_constants.jl")
+include("constants.jl")
+# include("test_constants.jl")
 
 if use_pardiso
     using Pardiso
-    algo = MKLPardisoFactorize(nprocs = 4)
 else
     if Sys.isapple()
         using AppleAccelerate
     else
         using MKL
     end
-    algo = UMFPACKFactorization(;reuse_symbolic=true, check_pattern=true)
     BLAS.set_num_threads(4)
 end
 
@@ -3039,19 +3037,20 @@ $(SIGNATURES)
 # Details
 
     - ps: Instance of pardiso solver
-    - iparms: dictionary of iparm parameters
+    - iparms_dict: dictionary of iparm parameters
 
 # Returns
 
     - nothing
 """
-function initialize_pardiso!(pardiso_solver, iparms)
+function initialize_pardiso!(pardiso_solver, iparms_dict)
     set_msglvl!(pardiso_solver, Pardiso.MESSAGE_LEVEL_OFF)
     set_matrixtype!(pardiso_solver, Pardiso.REAL_NONSYM)
-    set_nprocs!(pardiso_solver, parse(Int32, ENV["OMP_NUM_THREADS"]))
-    for (i, v) in iparms
+    set_nprocs!(pardiso_solver, cache_kwargs.nprocs)
+    for (i, v) in iparms_dict
         set_iparm!(pardiso_solver, i+1, v)
     end
+    set_phase!(pardiso_solver, Pardiso.ANALYSIS)
 end
 
 """
@@ -3569,7 +3568,8 @@ function assemble_hydromechanical_lse!(
     end # @inbounds 
     flush!(L) # finalize CSC matrix
 # end # @timeit to "assemble_hydromechanical_lse()"
-    return L
+    # return L
+    return L.cscmatrix
 end # function assemble_hydromechanical_lse!
 
 """
@@ -6340,11 +6340,11 @@ function simulation_loop(output_path)
     # thermal solver
     RT, ST = setup_thermal_lse()
     # gravitational solver
-    RP, SP= setup_gravitational_lse()
+    RP, SP = setup_gravitational_lse()
     # Pardiso MKL solver
     if use_pardiso
-        pardiso_solver = MKLPardisoSolver()
-        initialize_pardiso!(pardiso_solver, iparms)
+        pardiso_solver = Pardiso.MKLPardisoSolver()
+        initialize_pardiso!(pardiso_solver, iparms_dict)
     # else
     #     F = lu(fdrand(Nx1*Ny1*6, 1, 1, matrixtype=ExtendableSparseMatrix))
     end
@@ -6705,35 +6705,56 @@ function simulation_loop(output_path)
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
 #     @timeit to "solve hydromechanical system" begin
+                SS = L \ R
                 if use_pardiso
-                    # S = solve(pardiso_solver, L.cscmatrix, R)
+                    S = Pardiso.solve(pardiso_solver, L, R)
                     set_phase!(
                         pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
                     pardiso(
                         pardiso_solver,
                         S,
-                        get_matrix(pardiso_solver, L.cscmatrix, :N),
+                        get_matrix(pardiso_solver, L, :N),
                         R
                     )
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
-                    pardiso(pardiso_solver, S, L.cscmatrix, R)
-                else
-                    S = L \ R
-                    if timestep == 1 && iplast == 1
-                        s1 = rand(Ny1*Nx1*6)
-                        hydromech_prob = LinearProblem(
-                            L, R; u0 = s1, alias_A = true, alias_b = true)
-                        hydromech_cache = init(
-                            hydromech_prob, algo; cache_kwargs...)
-                    else
-                        hydromech_cache = hydromech_sol.cache
-                        hydromech_cache.b = R
-                        hydromech_cache.A = L
-                    end
-                    hydromech_sol = solve(hydromech_cache)
-                    @info "SOL CHECK" norm(S-hydromech_sol.u)
-                    S = hydromech_sol.u
+                    # pardiso(pardiso_solver, S, L.cscmatrix, R)
+                    pardiso(pardiso_solver)
+                # else
+                    # S = L \ R
                 end
+                # if timestep == 1 && iplast == 1
+                #     hydromech_prob = LinearProblem(
+                #         L,
+                #         R;
+                #         u0 = rand(Ny1*Nx1*6),
+                #         alias_A = true,
+                #         alias_b = true
+                #         )
+                #     if use_pardiso
+                #         hydromech_cache = init(
+                #             hydromech_prob,
+                #             MKLPardisoIterate();
+                #             # MKLPardisoFactorize();
+                #             cache_kwargs...
+                #             )
+                #         @info hydromech_cache.cacheval.iparm 
+                #     else
+                #         hydromech_cache = init(
+                #             hydromech_prob,
+                #             UMFPACKFactorization();
+                #             cache_kwargs...
+                #             )
+                #     end
+                # else
+                #     hydromech_cache = hydromech_sol.cache
+                #     hydromech_cache.b = R
+                #     hydromech_cache.A = L
+                # end
+                # # Pl = ILU0Preconditioner(L)
+                # hydromech_sol = LinearSolve.solve(hydromech_cache)
+                @info "SOL CHECK" norm(SS-S)
+                # S = hydromech_sol.u
+                # end
 #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
