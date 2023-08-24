@@ -364,14 +364,11 @@ const n_steps = 10
 # const n_steps = 30_000 
 # random number generator seed
 const seed = 42
-# iterative solver keyword arguments
-const cache_kwargs = (
-    ; verbose = true, abstol = 1e-8, reltol = 1e-8, maxiter = 30)
 # using MKL Pardiso solver
 const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
 # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
-const iparms = Dict([
+const iparms_dict = Dict([
     (0, 1), # in: do not use default
     (1, 2), # in: nested dissection from METIS
     (2, 0), # in: reserved, set to zero
@@ -437,3 +434,15 @@ const iparms = Dict([
     (62, 0), # out: size of the minimum OOC memory for factorization and sol 
     (63, 0), # reserved, set to zero 
 ])
+# MKL Pardiso solver IPARM control parameters formatted for LinearSolve.jl
+const iparms = collect(
+    (key + 1, iparms_dict[key]) for key in sort!(collect(keys(iparms_dict))))
+# LinearSolve.jl solver keyword arguments
+const cache_kwargs = (;
+    nprocs = 4,
+    verbose = true,
+    abstol = 1e-8,
+    reltol = 1e-8,
+    maxiter = 30,
+    iparm = iparms,
+    )
