@@ -14,7 +14,7 @@
 - [License](#license)
 
 ## Introduction
-`Erebus.jl` is a Julia package developed for computational hydrology simulations in planetesimals. The package is designed to model fluid flow in planetesimals, accounting for various factors such as planetesimal composition, mineralogical and hydrodynamic properties, temperature curves, reaction equations, and other relevant parameters[1].
+`Erebus.jl` is a Julia package developed for computational hydrology simulations in planetesimals. The package is designed to model fluid flow in planetesimals, accounting for various factors such as planetesimal composition, mineralogical and hydrodynamic properties, temperature curves, reaction equations, and other relevant parameters[^1][^2].
 
 ## Installation
 To install `Erebus.jl`, you need to have Julia installed on your system. You can add the package using Julia's package manager. Here's how to do it:
@@ -32,7 +32,7 @@ using Erebus
 
 # Your code here
 ```
-
+7
 Please refer to the documentation for detailed information on the functions and features provided by `Erebus.jl`.
 
 ## Contributing
@@ -42,4 +42,5 @@ Contributions to `Erebus.jl` are welcome. If you find a bug or have an idea for 
 `Erebus.jl` is licensed under the Apache 2.0 license. Please see the `LICENSE` file for more details.
 
 Citations:
-[1] https://github.com/
+[^1]: https://doi.org/10.5281/zenodo.7058229
+[^2]: https://doi.org/10.1017/9781316534243
