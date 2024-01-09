@@ -1,4 +1,4 @@
-# Erebus
+# Erebus.jl
 
 [![Build Status](https://github.com/formingworlds/Erebus.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/formingworlds/Erebus.jl/actions/workflows/CI.yml?query=branch%3Amain)
 <!-- [![Stable Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://formingworlds.github.io/Erebus.jl/stable) -->
