@@ -26,7 +26,7 @@ else
     if Sys.isapple()
         using AppleAccelerate
     else
-        using MKL
+        # using MKL
     end
 end
 
