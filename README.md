@@ -30,7 +30,11 @@ Pkg.add(url="https://github.com/FormingWorlds/Erebus.jl.git")
 Modify the simulation parameters in [```src/constants.jl```](src/constants.jl) as needed. For automated unit/CI testing, refer to [```src/test_constants.jl```](src/test_constants.jl). For production simulation runs, start with the parameters in [```src/prod_constants.jl```](src/prod_constants.jl).
 
 ### Complete simulation runs
-Initiate a simulation run with ```julia -O3 --tauto launch.jl /PATH/TO/OUTPUT/```. The `-O3` and `--tauto` flags are used for optimization and automatic threading respectively. All intermediate simulation data is written into HDF-5 compatible ```.jld2``` files in the output directory for later analysis and plotting. The log file ```Erebus_run.log``` in the output directory contains relevant simulation progress and parameters.
+Initiate a simulation run from the terminal as follows:
+```
+julia -O3 --tauto launch.jl /PATH/TO/OUTPUT/
+```
+The `-O3` and `--tauto` flags are used for optimization and automatic threading respectively. All intermediate simulation data is written into HDF-5 compatible ```.jld2``` files in the output directory for later analysis and plotting. The log file ```Erebus_run.log``` in the output directory contains relevant simulation progress and parameters.
 
 ### Manual operations and experiments
 After installation, you can import and manually use the package in your Julia scripts as follows:
@@ -45,7 +49,16 @@ Refer to the linked documentation for detailed information on the internal funct
 
 ### Plotting results
 
-Use the helper script ```generate_plots.jl``` to generate plots by typing ```julia generate_plots.jl /PATH/TO/OUTPUT/```. The resulting ```.pdf``` plot files are stored in the same directory as the simulation output. Generate animations using the helper script ```generate_animations.jl``` with the command ```julia generate_animations.jl /PATH/TO/OUTPUT/```. The resulting ```.mp4``` animation files are stored in the same directory as the simulation output.
+Use the helper script ```generate_plots.jl``` to generate plots by typing:
+```
+julia generate_plots.jl /PATH/TO/OUTPUT/
+```
+
+The resulting ```.pdf``` plot files are stored in the same directory as the simulation output. Generate animations using the helper script ```generate_animations.jl``` with the command:
+```
+julia generate_animations.jl /PATH/TO/OUTPUT/
+```
+The resulting ```.mp4``` animation files are stored in the same directory as the simulation output.
 
 Note: These helper scripts are independent of the ```Erebus.jl``` package and are provided as-is. They have their own dependencies which need to be fulfilled manually based on your Julia installation.
 
