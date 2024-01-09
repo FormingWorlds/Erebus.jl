@@ -5,30 +5,28 @@ const hr_al = true
 const hr_fe = false
 # planetary parameters
 # planetary radius [m]
-# const rplanet = 25_000.0
-const rplanet = 50_000.0
+const rplanet = 5_000.0
 # crust radius [m]
-# const rcrust = 24_000.0
-const rcrust = 48_000.0
+const rcrust = 4_800.0
 # surface pressure [Pa]
 const psurface = 1.0e+3
 # model size, geometry, and resolution
 # horizontal model size [m]
-# const xsize = 70_000.0
-const xsize = 140_000.0
+const xsize = 14_000.0
+# const xsize = 140_000.0
 # vertical model size [m]
-# const ysize = 70_000.0
-const ysize = 140_000.0
+const ysize = 14_000.0
+# const ysize = 140_000.0
 # horizontal center of model
 const xcenter = xsize / 2
 # vertical center of model
 const ycenter = ysize / 2  
 # basic grid resolution in x direction (horizontal)
-# const Nx = 71
-const Nx = 141
+const Nx = 15
+# const Nx = 141
 # basic grid resolution in y direction (vertical)	
-# const Ny = 71
-const Ny = 141
+const Ny = 15
+# const Ny = 141
 # Vx, Vy, P grid resolution in x direction (horizontal)
 const Nx1 = Nx + 1
 # Vx/Vy/P grid resolution in y direction (vertical)
@@ -187,7 +185,7 @@ const tkm0 = SVector{3, Float64}(         [ 170.0    ,  170.0    ,  170.0    ])
 # initial wet solid molar fraction
 const XWsolidm_init = SVector{3, Float64}([   0.50   ,    0.50   ,    NaN    ])
 # marker property mode (1: dynamic calculations, 9: static parameters)
-const marker_property_mode = 1
+const marker_property_mode = 9
 # coefficient to compute compaction viscosity from shear viscosity
 const etaphikoef = 1
 # melt-weakening coefficient (16.67)
@@ -266,11 +264,10 @@ const pferrmax = 1.0e+5
 const reaction_active = true
 # time to run dehydration reaction to completion [s]
 const Δtreaction = 1.0e+10
-# const Δtreaction = 1.0e+12
 # log reaction completion rate ln(ρend/ρstart)
 const log_completion_rate = log(0.01)
 # reaction constant mode (1: [Martin & Fyfe, 1970; Emmanuel & Berkowitz, 2006;
-# Iyer et al., 2012], 2: [Bland & Travis, 2017], 3: [Travis et al., 2018], 9: constant Δtreaction)
+# Iyer et al., 2012], 2: [Bland & Travis, 2017], 9: constant Δtreaction)
 const reaction_rate_coeff_mode = 1
 # reaction constant parameters mode 1 [Iyer et al., 2012]
 # (A: kinetic coefficient, b: kinetic coefficient, c: kinetic coefficient)
@@ -281,7 +278,6 @@ Sxo_B = 2.0e-11; Tscl_B = 10.0 ; To_B = 293.0
 # reaction constant parameters mode 3 [Travis et al., 2018]
 # (Sxo_T: reaction rate at ref T, To_T: reaction ref T, Ea_T: reaction activation energy)
 Sxo_T = 2.0e-11; To_T = 293.0; Ea_T = 63.8e3    
-# Sxo_T = 2.0e-11; To_T = 543.0; Ea_T = 63.8e3    
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1
@@ -364,6 +360,7 @@ const dphimax = 100.01
 const start_step = 1
 # maximum number of timesteps to run
 const n_steps = 10 
+# const n_steps = 100 
 # const n_steps = 30_000 
 # random number generator seed
 const seed = 42
@@ -381,7 +378,7 @@ const iparms_dict = Dict([
     (6, 0), # out: number of iterative refinement steps performed
     (7, 20), # in: maximum number of iterative refinement steps
     (8, 0), # in: tolerance level for relative residual, only with iparm[23]=1
-    (9, 12), # in: pivoting perturbation
+    (9, 13), # in: pivoting perturbation
     (10, 1), # in: scaling vectors
     (11, 1), # in: solve AX=B (no transpose, conjugate transpose): CSC matrix
     (12, 1), # in: improved accuracy using (non-)symmetric weighted matching
@@ -442,7 +439,7 @@ const iparms = collect(
     (key + 1, iparms_dict[key]) for key in sort!(collect(keys(iparms_dict))))
 # LinearSolve.jl solver keyword arguments
 const cache_kwargs = (;
-    nprocs = 16,
+    nprocs = 4,
     verbose = true,
     abstol = 1e-8,
     reltol = 1e-8,
