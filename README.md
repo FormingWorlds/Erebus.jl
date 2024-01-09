@@ -45,7 +45,7 @@ using Erebus
 # Your code here
 ```
 
-Refer to the linked documentation for detailed information on the internal functions and features provided by `Erebus.jl`.
+Refer to the [linked documentation](https://formingworlds.github.io/Erebus.jl/dev) for detailed information on the internal module functions and features provided by `Erebus.jl`.
 
 ### Plotting results
 
