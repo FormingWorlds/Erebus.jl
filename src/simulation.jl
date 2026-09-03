@@ -1056,7 +1056,9 @@ function simulation_loop(output_path)
                     pf0,
                     DMP,
                     dt,
-                    R
+                    R;
+                    betasolid = betasolid,
+                    betafluid = betafluid
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1100,7 +1102,8 @@ function simulation_loop(output_path)
                     pf,
                     pr0,
                     pf0,
-                    dt
+                    dt;
+                    betasolid = betasolid
                 )
 
                 # compute fluid velocities
@@ -1156,7 +1159,8 @@ function simulation_loop(output_path)
                     pf,
                     pr0,
                     pf0,
-                    dt
+                    dt;
+                    betasolid = betasolid
                 )
                 # symmetrize P node observables
                 symmetrize_p_node_observables!(

@@ -575,7 +575,7 @@
                 else
                     dpfdy=(pf[i+1,j]-pf[i,j])/dy
                 end
-                dpfdt=VXFP*dpsdx+VYFP*dpsdy
+                dpfdt=VXFP*dpfdx+VYFP*dpfdy
         #         # Direct calculation of dpdt
         #         dpsdt=(ps[i,j]-ps0[i,j])/dt
         #         dpfdt=(pf[i,j]-pf0[i,j])/dt
@@ -613,9 +613,12 @@
         denom = num + phi * (betafluid - betasolid)
         @test ksk ≈ num / denom rtol=1e-12
 
-        # Robustness: zero or negative compressibility guard
-        @test Erebus.compute_biot_willis_coefficient(0.0, betasolid) == 1.0
+        # Robustness: zero or negative compressibility bounds
+        @test Erebus.compute_biot_willis_coefficient(0.0, betasolid) == 0.0
+        @test Erebus.compute_biot_willis_coefficient(bd, 0.0) == 1.0
+        @test Erebus.compute_biot_willis_coefficient(0.0, 0.0) == 1.0
         @test Erebus.compute_skempton_coefficient(0.0, phi, betasolid, betafluid) == 1.0
+        @test Erebus.compute_skempton_coefficient(bd, phi, 0.0, 0.0) == 1.0
     end # testset "poroelastic constitutive relations"
 
 end

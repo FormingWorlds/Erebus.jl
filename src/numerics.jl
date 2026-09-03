@@ -737,8 +737,8 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
             # Drained compressibility and Biot-Willis coefficient
-            betadrained = (BETAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
-            kbw = betadrained > 0.0 ? (1.0 - betasolid / betadrained) : 1.0
+            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
 
             # LHS coefficient matrix
             updateindex!(
@@ -858,10 +858,9 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
             updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
             # Drained compressibility, Biot-Willis and Skempton coefficients
-            betadrained = (BETAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
-            kbw = betadrained > 0.0 ? (1.0 - betasolid / betadrained) : 1.0
-            denom_sk = (betadrained - betasolid) + PHI[i, j] * (betafluid - betasolid)
-            ksk = (denom_sk > 0.0 && (betadrained - betasolid) > 0.0) ? (betadrained - betasolid) / denom_sk : 1.0
+            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
 
             # LHS coefficient matrix
             updateindex!(
@@ -990,13 +989,13 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt; betasolid = betasolid, betafluid = betafluid)
+function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt; betasolid = betasolid)
 # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
     for j = 2:Nx, i = 2:Ny
-        betadrained = (BETAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
-        kbw = betadrained > 0.0 ? (1.0 - betasolid / betadrained) : 1.0
+        betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+        kbw = compute_biot_willis_coefficient(betadrained, betasolid)
         compaction = (
             (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j]))
             + betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
@@ -1368,9 +1367,10 @@ function compute_nodal_adjustment!(
         # interpolate total and fluid pressure at basic nodes
         prB = grid_average(i, j, pr)
         pfB = grid_average(i, j, pf)
-        # yielding stress: confined fracture
+        # Yielding stress: confined and tensile fracture.
+        # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
+        # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).
         syieldc = COH[i, j] + FRI[i, j] * (prB-pfB)
-        # yielding stress: tensile fracture
         syieldt = TEN[i, j] + (prB-pfB)
         # non-negative yielding stress requirement
         syield = max(min(syieldc, syieldt), 0.0)

@@ -711,7 +711,7 @@ function compute_adiabatic_heating!(
             else
                 dpfdy = (pf[i+1, j]-pf[i, j]) * inv(dy)
             end
-            dpfdt = VXFP*dpsdx + VYFP*dpsdy
+            dpfdt = VXFP*dpfdx + VYFP*dpfdy
             # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
             HA[i, j] = (
                 (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
@@ -731,8 +731,8 @@ $(SIGNATURES)
 
     β_d = (β_ϕ + β_s) / (1 - ϕ)
 
-where β_ϕ is pore compressibility, β_s is solid matrix compressibility [1/Pa],
-and ϕ is porosity.
+where β_ϕ is pore compressibility [1/Pa], β_s is solid matrix compressibility [1/Pa],
+and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya (2019).
 
 # Arguments
 
@@ -745,7 +745,10 @@ and ϕ is porosity.
     - betadrained: drained bulk compressibility β_d [1/Pa]
 """
 function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real)
-    return (betaphi + betasolid) / (1.0 - phi)
+    bphi = max(betaphi, 0.0)
+    bsolid = max(betasolid, 0.0)
+    phi_eff = clamp(phi, 0.0, 0.9999)
+    return (bphi + bsolid) / (1.0 - phi_eff)
 end
 
 """
@@ -758,6 +761,8 @@ $(SIGNATURES)
     K_BW = 1 - β_s / β_d
 
 For an incompressible solid matrix (β_s = 0), K_BW = 1.
+For intact zero-porosity rock (β_d → β_s), K_BW → 0.
+Physical bounds: K_BW ∈ [0, 1]. References: Biot (1941), Wang (2000).
 
 # Arguments
 
@@ -769,10 +774,13 @@ For an incompressible solid matrix (β_s = 0), K_BW = 1.
     - kbw: Biot-Willis coefficient K_BW [-]
 """
 function compute_biot_willis_coefficient(betadrained::Real, betasolid::Real)
-    if betadrained <= 0.0
+    if betasolid <= 0.0
         return 1.0
     end
-    return 1.0 - betasolid / betadrained
+    if betadrained <= betasolid
+        return 0.0
+    end
+    return clamp(1.0 - betasolid / betadrained, 0.0, 1.0)
 end
 
 """
@@ -785,6 +793,7 @@ $(SIGNATURES)
     B = (β_d - β_s) / (β_d - β_s + ϕ * (β_f - β_s))
 
 For incompressible constituents (β_s = 0, β_f = 0), B = 1.
+Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Detournay & Cheng (1993).
 
 # Arguments
 
@@ -798,11 +807,17 @@ For incompressible constituents (β_s = 0, β_f = 0), B = 1.
     - ksk: Skempton coefficient B [-]
 """
 function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real)
-    num = betadrained - betasolid
-    denom = num + phi * (betafluid - betasolid)
+    if betasolid <= 0.0 && betafluid <= 0.0
+        return 1.0
+    end
+    bsolid = max(betasolid, 0.0)
+    bfluid = max(betafluid, 0.0)
+    phi_eff = clamp(phi, 0.0, 0.9999)
+    num = betadrained - bsolid
+    denom = num + phi_eff * (bfluid - bsolid)
     if denom <= 0.0 || num <= 0.0
         return 1.0
     end
-    return num / denom
+    return clamp(num / denom, 0.0, 1.0)
 end
 
