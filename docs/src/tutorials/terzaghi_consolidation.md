@@ -6,7 +6,7 @@ This tutorial presents the 1D Terzaghi analytical consolidation benchmark used t
 
 ## Physical Problem Description
 
-Consider a one-dimensional porous column of height $H$ saturated with pore fluid. At time $t = 0$, an initial excess pore fluid pressure $p_0$ exists throughout the column. The top and bottom boundaries ($y = 0$ and $y = H$) are free-draining anchors held at reference surface pressure ($p_f = 0$).
+Consider a one-dimensional porous column of height $H$ saturated with pore fluid. At time $t = 0$, an initial excess pore fluid pressure $p_0$ exists throughout the column. The top and bottom boundaries ($y = 0$ and $y = H$) are free-draining anchors held at reference surface pressure ($p_f = p_{\text{surface}} = 1000\text{ Pa}$).
 
 Under these boundary conditions, excess pore fluid pressure dissipates symmetrically over time as fluid flows toward both draining boundaries, causing progressive volumetric compaction of the solid matrix.
 
@@ -14,7 +14,7 @@ Under these boundary conditions, excess pore fluid pressure dissipates symmetric
 
 ## Analytical Fourier Series Solution
 
-The one-dimensional poroelastic diffusion equation governing excess pore pressure $p_f(y, t)$ is:
+The one-dimensional poroelastic diffusion equation governing excess pore pressure $p_f(y, t) - p_{\text{surface}}$ is:
 
 $$\frac{\partial p_f}{\partial t} = c_v \frac{\partial^2 p_f}{\partial y^2}$$
 
@@ -35,7 +35,7 @@ $$c_v = \frac{k_\phi}{\eta_f S}, \quad S = \frac{\beta_d K_{\text{BW}}}{B}$$
 
 For two-way drainage over column thickness $H$, the analytical solution expressed as a Fourier series is:
 
-$$p_f(y, t) = \sum_{m=0}^{\infty} \frac{4 p_0}{M} \sin\left(\frac{M y}{H}\right) \exp\left(-M^2 \frac{c_v t}{H^2}\right)$$
+$$p_f(y, t) = p_{\text{surface}} + \sum_{m=0}^{\infty} \frac{4 (p_0 - p_{\text{surface}})}{M} \sin\left(\frac{M y}{H}\right) \exp\left(-M^2 \frac{c_v t}{H^2}\right)$$
 
 where $y$ is the coordinate measured from the lower draining boundary, and:
 
@@ -53,17 +53,17 @@ using LinearAlgebra
 using StaticArrays
 
 # Analytical Fourier series evaluation for two-way drainage
-function analytical_2drain(y, t, H_col, c_coeff, p0; nterms=100)
+function analytical_2drain(y, t, H_col, c_coeff, p0, psurf=1000.0; nterms=100)
     val = 0.0
     for m = 0:nterms
         M = (2m + 1) * π
-        val += (4.0 * p0 / M) * sin(M * y / H_col) * exp(-M^2 * c_coeff * t / H_col^2)
+        val += (4.0 * (p0 - psurf) / M) * sin(M * y / H_col) * exp(-M^2 * c_coeff * t / H_col^2)
     end
-    return val
+    return val + psurf
 end
 
 # Physical parameters matching test/test_numerics.jl
-H = 1200.0           # Column height between draining anchors [m]
+H = 13000.0          # Column height between draining anchors: (Ny - 2) * dy [m]
 k_perm = 1.0e-13     # Permeability [m^2]
 eta_f = 1.0e-3       # Water viscosity [Pa s]
 beta_s = 2.5e-11     # Solid compressibility [1/Pa]
@@ -71,6 +71,7 @@ beta_f = 4.0e-10     # Fluid compressibility [1/Pa]
 G_p = 1.0e10         # Elastic shear modulus [Pa]
 phi_0 = 0.1          # Porosity [-]
 p0 = 1.0e6           # Initial excess pore pressure [Pa]
+p_surf = 1000.0      # Reference surface pressure [Pa]
 
 # Compute poroelastic coefficients
 beta_phi = phi_0 / G_p

@@ -8,7 +8,7 @@ This page summarizes the benchmarks and tests used to ensure numerical accuracy 
 
 The primary verification test for the coupled Stokes-Darcy formulation is the one-dimensional Terzaghi consolidation problem.
 
-- **Setup**: Saturated porous column of height $H$ with draining boundary anchors ($P_f = 0$) subjected to excess pore pressure dissipation.
+- **Setup**: Saturated porous column of height $H$ with draining boundary anchors ($P_f = p_{\text{surface}} = 1000\text{ Pa}$) subjected to excess pore pressure dissipation.
 - **Analytical Solution**: Fourier series representation of two-way pore pressure dissipation over dimensionless time factor $T_v = c_v t / H^2$.
 - **Result**: The numerical pore pressure field computed by the monolithic solver matches the analytical Fourier series solution at all column depths with a relative error $< 3.5\%$. See the [Terzaghi Consolidation Tutorial](../tutorials/terzaghi_consolidation.md) for the full derivation and code.
 
@@ -23,12 +23,13 @@ The primary verification test for the coupled Stokes-Darcy formulation is the on
 The constitutive poroelastic functions in `src/physics.jl` are verified against physical asymptotic limits:
 
 1. **Incompressible Solid Skeleton ($\beta_s \to 0$)**:
-   $$\lim_{\beta_s \to 0} K_{\text{BW}} = 1, \quad \lim_{\beta_s \to 0} B = \frac{\beta_\phi}{\beta_\phi + \phi \beta_f}$$
+   $$\lim_{\beta_s \to 0} K_{\text{BW}} = 1, \quad \lim_{\beta_s \to 0} B = \frac{\beta_\phi}{\beta_\phi + \phi(1 - \phi)\beta_f}$$
    Verified over porosity values $\phi \in [\phi_{\text{min}}, \phi_{\text{max}}]$.
 
 2. **Incompressible Pore Fluid ($\beta_f \to 0$)**:
    As fluid compressibility approaches zero, Skempton coefficient $B$ approaches its undrained upper bound:
-   $$\lim_{\beta_f \to 0} B = \frac{\beta_d - \beta_s}{\beta_d - (1 - \phi)\beta_s} \approx 1$$
+   $$\lim_{\beta_f \to 0} B = \min\left(1, \frac{\beta_d - \beta_s}{\beta_d - (1 + \phi)\beta_s}\right) = 1$$
+   where the code clamps the theoretical ratio to $[0, 1]$ to enforce the physical upper bound.
 
 3. **Porosity Bounding Guarantees**:
    Constitutive routines clamp porosity to $[\phi_{\text{min}}, \phi_{\text{max}}]$ to prevent singular division when $\phi \to 0$ or $\phi \to 1$.

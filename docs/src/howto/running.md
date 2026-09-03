@@ -19,7 +19,7 @@ julia --project=. -e 'using Erebus; run_simulation("configs/default.toml")'
 Alternatively, invoke the CLI script directly with command-line arguments:
 
 ```bash
-julia --project=. src/simulation.jl configs/default.toml
+julia --project=. launch.jl configs/default.toml
 ```
 
 ### Overriding the Output Directory
@@ -33,7 +33,7 @@ julia --project=. -e 'using Erebus; simulation_loop("configs/default.toml", outp
 Via CLI flags:
 
 ```bash
-julia --project=. src/simulation.jl configs/default.toml --output_path custom_run_01
+julia --project=. launch.jl configs/default.toml --output_path custom_run_01
 ```
 
 ### Displaying Solver Timers
@@ -41,7 +41,7 @@ julia --project=. src/simulation.jl configs/default.toml --output_path custom_ru
 To print detailed performance diagnostics at the end of the simulation:
 
 ```bash
-julia --project=. src/simulation.jl configs/default.toml --show_timer true
+julia --project=. launch.jl configs/default.toml --show_timer true
 ```
 
 ---

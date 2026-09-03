@@ -33,7 +33,7 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 ## `[time]`
 
 > [!NOTE]
-> `TimeConfig` defines `yearlength = 31557600.0` s (Julian year: $365.25 \times 86400\text{ s}$). Default `start_time = 7.0965e13` s and `endtime = 4.731e14` s reflect canonical Solar System cosmochemistry using standard decimal years ($3.154 \times 10^7\text{ s}$).
+> `TimeConfig` defines `yearlength = 31557600.0` s (Julian year: $365.25 \times 86400\text{ s}$). Default `start_time = 7.10046e13` s ($2.25\text{ Ma}$) and `endtime = 4.73364e14` s ($15.0\text{ Ma}$) reflect canonical CAI formation timing in the early Solar System.
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
@@ -43,11 +43,11 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
 | `dxymax` | `Float64` | `0.05` | grid units | Maximum marker displacement per timestep | $> 0$ |
-| `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting between grid and markers (1/3) | $\in [0, 1]$ |
+| `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting parameter | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
 | `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
-| `start_time` | `Float64` | `7.0965e+13` | s | Simulation start time after CAIs (2.25 Ma) | $\ge 0$ |
-| `endtime` | `Float64` | `4.731e+14` | s | Total simulation end time (15 Ma) | $> \text{start\_time}$ |
+| `start_time` | `Float64` | `7.10046e+13` | s | Simulation start time after CAIs (2.25 Ma) | $\ge 0$ |
+| `endtime` | `Float64` | `4.73364e+14` | s | Total simulation end time (15 Ma) | $> \text{start\_time}$ |
 | `start_step` | `Int` | `1` | - | Initial timestep counter index | $\ge 1$ |
 | `n_steps` | `Int` | `10` | - | Total number of computational timesteps | $\ge 1$ |
 

@@ -9,15 +9,24 @@ In this tutorial, you will execute a fast 2-step simulation of a porous planetes
 View the contents of `configs/test_quick.toml`:
 
 ```toml
+[grid]
+xsize = 14000.0
+ysize = 14000.0
+Nx = 15
+Ny = 15
+
 [time]
-n_steps = 2
 dt_initial = 1.0e+11
 dt_longest = 1.0e+11
+n_steps = 2
+
+[poroelasticity]
+betasolid = 2.5e-11
+betafluid = 4.0e-10
 
 [output]
 output_dir = "output_test"
 savematstep = 2
-visstep = 1
 ```
 
 This configuration runs 2 timesteps of $1.0 \times 10^{11}\text{ s}$ each ($\approx 3,170\text{ years}$ per step), using the standard $15 \times 15$ staggered grid with $3,136$ markers.
@@ -63,10 +72,10 @@ Check that the checkpoint was generated in `output_test`:
 ```julia
 using JLD2
 
-# Open the checkpoint
-data = jldopen("output_test/step_2.jld2", "r")
+# Open the checkpoint file (named output_<timestep:05d>.jld2)
+data = jldopen("output_test/output_00002.jld2", "r")
 println("Saved keys: ", keys(data))
-println("Max temperature: ", maximum(data["tk"]), " K")
+println("Max temperature: ", maximum(data["tk1"]), " K")
 println("Solid velocity vx range: ", extrema(data["vx"]), " m/s")
 close(data)
 ```

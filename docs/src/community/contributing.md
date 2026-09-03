@@ -28,7 +28,7 @@ Contributions to `Erebus.jl` are welcome. This guide outlines development practi
    ```bash
    julia --project=. -e 'using Pkg; Pkg.test()'
    ```
-   All tests across `Geometry`, `Physics`, `Particles`, `Numerics`, `Config`, and `Integration` must pass.
+   All tests across `Geometry`, `Physics`, `Particles`, `Numerics`, `Config`, `Simulation`, and `Integration` must pass.
 
 5. **Pull Requests**:
    Submit your pull request against the `main` branch with a concise description of what changed, why, and how it was verified.

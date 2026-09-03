@@ -6,20 +6,22 @@
 
 ## Output File Structure
 
-Output files are stored in the directory configured under `[output]` (`output_dir = "output"`). At each checkpoint interval (`savematstep`), a file named `step_<timestep>.jld2` is written.
+Output files are stored in the directory configured under `[output]` (`output_dir = "output"`). At each checkpoint interval (`savematstep`), a file named `output_<timestep:05d>.jld2` is written (for example, `output_00010.jld2`).
 
 Each file contains the primary staggered grid and marker fields:
-- `pr`: Total solid pressure array on P nodes [Pa]
+- `pr`: Total mixture pressure array on P nodes [Pa]
 - `pf`: Fluid pore pressure array on P nodes [Pa]
 - `vx`: Horizontal solid velocity on staggered Vx nodes [m/s]
 - `vy`: Vertical solid velocity on staggered Vy nodes [m/s]
 - `qxD`: Horizontal Darcy fluid flux on staggered Vx nodes [m/s]
 - `qyD`: Vertical Darcy fluid flux on staggered Vy nodes [m/s]
-- `tk`: Temperature array on P nodes [K]
-- `phi`: Porosity field on P nodes [-]
-- `sxx`, `syy`, `sxy`: Deviatoric stress components [Pa]
+- `tk1`: Temperature array on grid nodes [K]
+- `PHI`: Porosity field on P nodes [-]
+- `SXX`: Deviatoric normal stress on basic nodes [Pa] (with $\sigma_{yy}' = -\sigma_{xx}'$)
+- `SXY`: Deviatoric shear stress on shear nodes [Pa]
 - `timesum`: Total elapsed physical time [s]
 - `dt`: Current computational timestep [s]
+- `marknum`: Number of active Lagrangian markers in domain [-]
 
 ---
 
@@ -31,14 +33,14 @@ To read and inspect variables from a saved checkpoint:
 using JLD2
 
 # Open checkpoint file
-file_path = "output/step_10.jld2"
+file_path = "output/output_00010.jld2"
 data = jldopen(file_path, "r")
 
 # Read fields
 pr = data["pr"]
 pf = data["pf"]
-temperature = data["tk"]
-porosity = data["phi"]
+temperature = data["tk1"]
+porosity = data["PHI"]
 timesum = data["timesum"]
 
 close(data)
@@ -57,7 +59,7 @@ Terzaghi effective pressure $P_{\text{eff}} = P_t - P_f$ determines matrix compa
 ```julia
 using JLD2
 
-data = jldopen("output/step_10.jld2", "r")
+data = jldopen("output/output_00010.jld2", "r")
 pr = data["pr"]
 pf = data["pf"]
 close(data)

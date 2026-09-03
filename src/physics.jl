@@ -47,7 +47,7 @@ $(SIGNATURES)
 
     - ksolid: solid thermal conductivity [W/m/K]
     - kfluid: fluid thermal conductivity [W/m/K]
-    - phi: fraction of solid
+    - phi: porosity (fraction of fluid)
 
 # Returns
 

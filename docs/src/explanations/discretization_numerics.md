@@ -27,17 +27,17 @@ This page explains the numerical algorithms and spatial discretization technique
 
 ## The Marker-in-Cell (MIC) Method
 
-Material properties, temperature, hydration state, and porosity are carried on millions of Lagrangian markers that advect through the Eulerian grid:
+Material properties, temperature, hydration state, and porosity are carried on thousands of Lagrangian markers that advect through the Eulerian grid:
 
 1. **Marker to Grid Interpolation**:
    Marker properties are projected onto adjacent staggered grid nodes using 4-point bilinear weighting:
    $$w_{ij} = \left(1 - \frac{|\Delta x|}{\Delta x_{\text{cell}}}\right) \left(1 - \frac{|\Delta y|}{\Delta y_{\text{cell}}}\right)$$
 
 2. **Subgrid Diffusion**:
-   To prevent unphysical short-wavelength oscillations, subgrid diffusion damping is applied to temperature and stress before interpolation.
+   Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
 
 3. **Marker Advection**:
-   Markers move with the solid velocity field using a 4th-order Runge-Kutta scheme (`move_markers_rk4!`). Marker velocity is weighted between interpolated staggered velocities and local nodal velocities (`vpratio = 1/3`).
+   Markers move with the solid velocity field using a 4th-order Runge-Kutta scheme (`move_markers_rk4!`) with 2nd-order continuity-based parabolic spatial velocity corrections.
 
 ---
 
@@ -73,5 +73,5 @@ Because effective viscosities $\eta(\dot{\varepsilon}_{\text{II}}, P_{\text{eff}
 ## Boundary Conditions
 
 - **Mechanical**: Free-slip solid boundary conditions on the outer domain boundaries.
-- **Hydraulic**: Draining ($P_f = 0$) pore pressure boundary conditions on outer walls.
+- **Hydraulic**: Draining ($P_f = p_{\text{surface}} = 1000\text{ Pa}$) pore pressure boundary anchors on outer walls.
 - **Sticky Air Layer**: The domain includes a low-density, low-viscosity buffer layer representing open space above the planetesimal surface, allowing the free surface of the planetesimal to deform naturally.

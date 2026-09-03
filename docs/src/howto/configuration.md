@@ -46,14 +46,14 @@ dtstep = 200               # Iteration interval before increasing timestep
 dxymax = 0.05              # Maximum marker displacement per timestep [grid units]
 vpratio = 0.333333333333   # Marker velocity weighting (staggered vs node)
 DTmax = 20.0               # Maximum temperature change per step [K]
-start_time = 7.0965e+13    # Initial time [s] (e.g. 2.25 Ma after CAIs)
-endtime = 4.731e+14        # Final simulation time [s] (e.g. 15 Ma)
+start_time = 7.10046e+13   # Initial time [s] (e.g. 2.25 Ma after CAIs)
+endtime = 4.73364e+14       # Final simulation time [s] (e.g. 15 Ma)
 start_step = 1             # Starting step counter
 n_steps = 10               # Total timesteps to compute
 ```
 
 ### 4. `[solver]`
-Controls the Picard iteration loop, yielding tolerances, and sparse matrix solver backend.
+Controls the Picard iteration loop, yielding tolerances, and sparse matrix solver.
 
 ```toml
 [solver]

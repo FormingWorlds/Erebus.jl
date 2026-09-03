@@ -65,7 +65,7 @@ $(SIGNATURES)
     - pf0 : previous fluid pressure at P nodes [Pa]
     - ps0 : previous solid pressure at P nodes [Pa]
     - ETAPHI : bulk viscosity at P nodes [Pa*s]
-    - BETAPHI : bulk compresibility at P nodes [Pa*s]
+    - BETAPHI : bulk compresibility at P nodes [1/Pa]
     - PHI : porosity at P nodes
     - APHI : Dln at P nodes [(1-ϕ)/ϕ]/Dt
     - FI : gravity potential at P nodes [J/kg]
