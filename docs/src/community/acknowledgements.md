@@ -22,8 +22,8 @@ Research and software development at the Forming Worlds Lab are supported by:
 
 | Funding Organization | Award / Project | Reference |
 |:---|:---|:---|
-| European Research Council (ERC) | Starting Grant *MagmaWorlds* | PI: Tim Lichtenberg |
-| Dutch Research Council (NWO) | Consortium Grant *PRELIFE* | Grant no. PXRUC21696 |
+| European Research Council (ERC) | Starting Grant *MagmaWorlds* | Grant agreement no. 101219807 |
+| Dutch Research Council (NWO) | NWA Consortium Grant *PRELIFE* | Grant no. NWA.1630.23.013 |
 | The Branco Weiss Foundation | Society in Science Fellowship | ETH Zürich |
 | Alfred P. Sloan Foundation | AEThER Collaboration | Grant no. G-2025-25284 |
 | NASA NExSS Coordination Network | Alien Earths | Grant no. 80NSSC21K0593 |
