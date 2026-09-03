@@ -163,7 +163,10 @@ $(SIGNATURES)
     - hrsolidm: radiogenic heat production of 26Al [W/m^3]
     - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
 """
-function calculate_radioactive_heating(al, fe, timesum)
+function calculate_radioactive_heating(al, fe, timesum;
+                                       ratio_al = ratio_al, E_al = E_al, f_al = f_al, tau_al = tau_al,
+                                       ratio_fe = ratio_fe, E_fe = E_fe, f_fe = f_fe, tau_fe = tau_fe,
+                                       rhosolidm = rhosolidm, rhofluidm = rhofluidm)
     #26Al: planet ✓, crust ✓, space ×
     if al
         # 26Al radiogenic heat production [W/kg]

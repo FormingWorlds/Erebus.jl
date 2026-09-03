@@ -355,6 +355,16 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     phimax_val = cfg.poroelasticity.phimax
     dt_longest_val = cfg.time.dt_longest
     dtcoefup_val = cfg.time.dtcoefup
+    hr_al_val = cfg.thermodynamics.hr_al
+    hr_fe_val = cfg.thermodynamics.hr_fe
+    ratio_al_val = cfg.thermodynamics.ratio_al
+    ratio_fe_val = cfg.thermodynamics.ratio_fe
+    E_al_val = cfg.thermodynamics.E_al
+    f_al_val = cfg.thermodynamics.f_al
+    tau_al_val = cfg.thermodynamics.t_half_al / log(2.0)
+    E_fe_val = cfg.thermodynamics.E_fe
+    f_fe_val = cfg.thermodynamics.f_fe
+    tau_fe_val = cfg.thermodynamics.t_half_fe / log(2.0)
 
     @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
     @info(
@@ -782,7 +792,16 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
         # calculate radioactive heating
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(
-            hr_al, hr_fe, timesum)
+            hr_al_val, hr_fe_val, timesum;
+            ratio_al = ratio_al_val,
+            E_al = E_al_val,
+            f_al = f_al_val,
+            tau_al = tau_al_val,
+            ratio_fe = ratio_fe_val,
+            E_fe = E_fe_val,
+            f_fe = f_fe_val,
+            tau_fe = tau_fe_val
+        )
 
         # ---------------------------------------------------------------------
         # compute marker properties and interpolate to staggered grid
@@ -1180,7 +1199,9 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                     pr0,
                     pf0,
                     dt;
-                    betasolid = cur_betasolid
+                    betasolid = cur_betasolid,
+                    phimin = phimin_val,
+                    phimax = phimax_val
                 )
                 # symmetrize P node observables
                 symmetrize_p_node_observables!(
@@ -1363,7 +1384,8 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
         # ---------------------------------------------------------------------
         XWsolidm0 .= XWsolidm
         phim .= phinewm
-        update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
+        update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum;
+                                phimin = phimin_val, phimax = phimax_val)
         phinewm .= phim
 
         # ---------------------------------------------------------------------

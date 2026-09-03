@@ -203,4 +203,29 @@ using TOML
             rm(tmp_path, force=true)
         end
     end
+
+    @testset "materials and thermodynamics validation" begin
+        # Zero or negative shear modulus
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(materials = MaterialConfig(gggsolidm = SVector{3, Float64}([0.0, 1e10, 1e10])))
+        )
+        # Negative conductivity
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(materials = MaterialConfig(ksolidm = SVector{3, Float64}([-3.0, 3.0, 3000.0])))
+        )
+        # Invalid radiogenic half-life
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics = ThermalConfig(t_half_al = -1.0))
+        )
+        # Material modification away from compiled constants
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(materials = MaterialConfig(rhosolidm = SVector{3, Float64}([4000.0, 3300.0, 1.0])))
+        )
+        # Radiogenic heating calculation keyword arguments and toggling
+        hr_sol_on, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
+        @test hr_sol_on[1] > 0.0
+        hr_sol_off, _ = Erebus.calculate_radioactive_heating(false, false, 0.0)
+        @test all(hr_sol_off .== 0.0)
+    end
 end
+

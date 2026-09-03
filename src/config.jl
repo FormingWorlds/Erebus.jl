@@ -239,12 +239,48 @@ function validate_config(cfg::SimulationConfig)
     0.0 <= cfg.thermodynamics.ratio_fe <= 1.0 || throw(ArgumentError("ratio_fe must be in [0, 1], got $(cfg.thermodynamics.ratio_fe)"))
     cfg.thermodynamics.tmfluidphase < cfg.thermodynamics.tmsolidphase || throw(ArgumentError("tmfluidphase ($(cfg.thermodynamics.tmfluidphase)) must be < tmsolidphase ($(cfg.thermodynamics.tmsolidphase))"))
     cfg.thermodynamics.Lᶠ > 0.0 || throw(ArgumentError("Lᶠ must be > 0, got $(cfg.thermodynamics.Lᶠ)"))
+    cfg.thermodynamics.E_al > 0.0 && isfinite(cfg.thermodynamics.E_al) || throw(ArgumentError("E_al must be > 0 and finite"))
+    cfg.thermodynamics.f_al > 0.0 && isfinite(cfg.thermodynamics.f_al) || throw(ArgumentError("f_al must be > 0 and finite"))
+    cfg.thermodynamics.t_half_al > 0.0 && isfinite(cfg.thermodynamics.t_half_al) || throw(ArgumentError("t_half_al must be > 0 and finite"))
+    cfg.thermodynamics.E_fe > 0.0 && isfinite(cfg.thermodynamics.E_fe) || throw(ArgumentError("E_fe must be > 0 and finite"))
+    cfg.thermodynamics.f_fe > 0.0 && isfinite(cfg.thermodynamics.f_fe) || throw(ArgumentError("f_fe must be > 0 and finite"))
+    cfg.thermodynamics.t_half_fe > 0.0 && isfinite(cfg.thermodynamics.t_half_fe) || throw(ArgumentError("t_half_fe must be > 0 and finite"))
 
-    # Materials checks
-    all(cfg.materials.rhosolidm .> 0.0) || throw(ArgumentError("rhosolidm elements must be > 0"))
-    all(cfg.materials.rhofluidm .> 0.0) || throw(ArgumentError("rhofluidm elements must be > 0"))
-    all(cfg.materials.etasolidm .> 0.0) || throw(ArgumentError("etasolidm elements must be > 0"))
-    all(cfg.materials.etafluidm .> 0.0) || throw(ArgumentError("etafluidm elements must be > 0"))
+    # Materials checks: all 18 property arrays must be positive/non-negative and finite
+    for (arr, name, strictly_pos) in [
+        (cfg.materials.rhosolidm, "rhosolidm", true),
+        (cfg.materials.rhofluidm, "rhofluidm", true),
+        (cfg.materials.etasolidm, "etasolidm", true),
+        (cfg.materials.etasolidmm, "etasolidmm", true),
+        (cfg.materials.etafluidm, "etafluidm", true),
+        (cfg.materials.etafluidmm, "etafluidmm", true),
+        (cfg.materials.rhocpsolidm, "rhocpsolidm", true),
+        (cfg.materials.rhocpfluidm, "rhocpfluidm", true),
+        (cfg.materials.alphasolidm, "alphasolidm", false),
+        (cfg.materials.alphafluidm, "alphafluidm", false),
+        (cfg.materials.ksolidm, "ksolidm", true),
+        (cfg.materials.kfluidm, "kfluidm", true),
+        (cfg.materials.gggsolidm, "gggsolidm", true),
+        (cfg.materials.frictsolidm, "frictsolidm", false),
+        (cfg.materials.cohessolidm, "cohessolidm", true),
+        (cfg.materials.tenssolidm, "tenssolidm", true),
+        (cfg.materials.kphim0, "kphim0", true),
+        (cfg.materials.tkm0, "tkm0", true),
+    ]
+        all(isfinite, arr) || throw(ArgumentError("$name elements must be finite"))
+        if strictly_pos
+            all(x -> x > 0.0, arr) || throw(ArgumentError("$name elements must be > 0"))
+        else
+            all(x -> x >= 0.0, arr) || throw(ArgumentError("$name elements must be >= 0"))
+        end
+    end
+
+    if cfg.materials.rhosolidm != rhosolidm || cfg.materials.rhofluidm != rhofluidm ||
+       cfg.materials.etasolidm != etasolidm || cfg.materials.etasolidmm != etasolidmm ||
+       cfg.materials.etafluidm != etafluidm || cfg.materials.etafluidmm != etafluidmm ||
+       cfg.materials.ksolidm != ksolidm || cfg.materials.kfluidm != kfluidm
+        throw(ArgumentError("Overriding [materials] arrays at runtime is not supported because marker property assignment uses compiled constants. Recompilation is required to modify material properties."))
+    end
 
     return nothing
 end
