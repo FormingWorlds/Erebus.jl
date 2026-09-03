@@ -101,6 +101,8 @@ Specifies material phase properties on the 3-phase staggered grid:
 - Index 2: Porous silicate crust / rock (`rcrust < rmark < rplanet`)
 - Index 3: Sticky air / space (`rmark >= rplanet`)
 
+*Note: In the current release, eight material arrays (`rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, `kfluidm`) and radii (`rplanet`, `rcrust`) are locked to compiled constants in `src/constants.jl`. Modifying them requires recompilation. The other 10 material arrays can be configured freely in TOML.*
+
 ```toml
 [materials]
 rhosolidm = [3300.0, 3300.0, 1.0]

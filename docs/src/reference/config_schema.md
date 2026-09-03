@@ -6,21 +6,24 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 ## `[grid]`
 
-| Parameter | Type | Default | Units | Description | Bounds |
+> [!NOTE]
+> In the current release, grid resolution and domain dimensions are compiled into static array stencils. `validate_config` asserts that `xsize`, `ysize`, `Nx`, and `Ny` equal the compiled values in `src/constants.jl`.
+
+| Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `xsize` | `Float64` | `14000.0` | m | Total horizontal domain size | $> 0$ |
-| `ysize` | `Float64` | `14000.0` | m | Total vertical domain size | $> 0$ |
-| `Nx` | `Int` | `15` | - | Number of basic grid points in x | $\ge 3$ |
-| `Ny` | `Int` | `15` | - | Number of basic grid points in y | $\ge 3$ |
+| `xsize` | `Float64` | `14000.0` | m | Total horizontal domain size | Must match compiled constant |
+| `ysize` | `Float64` | `14000.0` | m | Total vertical domain size | Must match compiled constant |
+| `Nx` | `Int` | `15` | - | Number of basic grid points in x | Must match compiled constant |
+| `Ny` | `Int` | `15` | - | Number of basic grid points in y | Must match compiled constant |
 
 ---
 
 ## `[geometry]`
 
-| Parameter | Type | Default | Units | Description | Bounds |
+| Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `rplanet` | `Float64` | `5000.0` | m | Outer radius of the planetesimal | $> 0$ |
-| `rcrust` | `Float64` | `4800.0` | m | Boundary radius between core/mantle and crust | $0 < r_{\text{crust}} \le r_{\text{planet}}$ |
+| `rplanet` | `Float64` | `5000.0` | m | Outer radius of the planetesimal | Must match compiled constant |
+| `rcrust` | `Float64` | `4800.0` | m | Boundary radius between core/mantle and crust | Must match compiled constant |
 | `xcenter` | `Float64` | `7000.0` | m | Horizontal position of planetesimal center | $\in [0, \text{xsize}]$ |
 | `ycenter` | `Float64` | `7000.0` | m | Vertical position of planetesimal center | $\in [0, \text{ysize}]$ |
 | `psurface` | `Float64` | `1.0e+3` | Pa | Surface pressure anchor | $\ge 0$ |
@@ -28,6 +31,9 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 ---
 
 ## `[time]`
+
+> [!NOTE]
+> `TimeConfig` defines `yearlength = 31557600.0` s (Julian year: $365.25 \times 86400\text{ s}$). Default `start_time = 7.0965e13` s and `endtime = 4.731e14` s reflect canonical Solar System cosmochemistry using standard decimal years ($3.154 \times 10^7\text{ s}$).
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
@@ -37,8 +43,9 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
 | `dxymax` | `Float64` | `0.05` | grid units | Maximum marker displacement per timestep | $> 0$ |
-| `vpratio` | `Float64` | `0.3333` | - | Velocity weighting between grid and markers | $\in [0, 1]$ |
+| `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting between grid and markers (1/3) | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
+| `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
 | `start_time` | `Float64` | `7.0965e+13` | s | Simulation start time after CAIs (2.25 Ma) | $\ge 0$ |
 | `endtime` | `Float64` | `4.731e+14` | s | Total simulation end time (15 Ma) | $> \text{start\_time}$ |
 | `start_step` | `Int` | `1` | - | Initial timestep counter index | $\ge 1$ |
@@ -99,26 +106,29 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 3-element vectors representing `[Index 1: Core, Index 2: Crust, Index 3: Sticky Air]`.
 
-| Parameter | Type | Default | Units | Description |
-|:---|:---|:---|:---|:---|
-| `rhosolidm` | `SVector{3}` | `[3300.0, 3300.0, 1.0]` | $\text{kg/m}^3$ | Solid matrix density |
-| `rhofluidm` | `SVector{3}` | `[1000.0, 1000.0, 1.0]` | $\text{kg/m}^3$ | Pore fluid density |
-| `etasolidm` | `SVector{3}` | `[1.0e19, 1.0e19, 1.0e16]` | Pa s | Solid reference shear viscosity |
-| `etasolidmm` | `SVector{3}` | `[1.0e19, 1.0e19, 1.0e16]` | Pa s | Molten solid shear viscosity |
-| `etafluidm` | `SVector{3}` | `[1.0e12, 1.0e12, 1.0e-3]` | Pa s | Unmelted fluid phase viscosity |
-| `etafluidmm` | `SVector{3}` | `[1.0e-3, 1.0e-3, 1.0e-3]` | Pa s | Liquid water dynamic viscosity |
-| `rhocpsolidm` | `SVector{3}` | `[3.3e6, 3.3e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Volumetric solid heat capacity |
-| `rhocpfluidm` | `SVector{3}` | `[1.0e6, 1.0e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Volumetric fluid heat capacity |
-| `alphasolidm` | `SVector{3}` | `[3.0e-5, 3.0e-5, 0.0]` | $1/\text{K}$ | Solid thermal expansion |
-| `alphafluidm` | `SVector{3}` | `[5.0e-5, 5.0e-5, 0.0]` | $1/\text{K}$ | Fluid thermal expansion |
-| `ksolidm` | `SVector{3}` | `[3.0, 3.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Solid thermal conductivity |
-| `kfluidm` | `SVector{3}` | `[50.0, 50.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Fluid thermal conductivity |
-| `gggsolidm` | `SVector{3}` | `[1.0e10, 1.0e10, 1.0e10]` | Pa | Solid shear elastic modulus |
-| `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Internal friction coefficient |
-| `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Cohesion |
-| `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Tensile strength |
-| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Reference permeability |
-| `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Initial temperature |
+> [!WARNING]
+> Eight material arrays are compiled into numerical stencils and cannot be modified without recompiling: `rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, and `kfluidm`. `validate_config` throws an `ArgumentError` if custom values differ from `src/constants.jl`. The remaining ten arrays can be modified freely.
+
+| Parameter | Type | Default | Units | Status | Bounds | Description |
+|:---|:---|:---|:---|:---|:---|:---|
+| `rhosolidm` | `SVector{3}` | `[3300.0, 3300.0, 1.0]` | $\text{kg/m}^3$ | Compiled Constant | All $> 0$ | Solid matrix density |
+| `rhofluidm` | `SVector{3}` | `[1000.0, 1000.0, 1.0]` | $\text{kg/m}^3$ | Compiled Constant | All $> 0$ | Pore fluid density |
+| `etasolidm` | `SVector{3}` | `[1.0e19, 1.0e19, 1.0e16]` | Pa s | Compiled Constant | All $> 0$ | Solid reference shear viscosity |
+| `etasolidmm` | `SVector{3}` | `[1.0e19, 1.0e19, 1.0e16]` | Pa s | Compiled Constant | All $> 0$ | Molten solid shear viscosity |
+| `etafluidm` | `SVector{3}` | `[1.0e12, 1.0e12, 1.0e-3]` | Pa s | Compiled Constant | All $> 0$ | Unmelted fluid phase viscosity |
+| `etafluidmm` | `SVector{3}` | `[1.0e-3, 1.0e-3, 1.0e-3]` | Pa s | Compiled Constant | All $> 0$ | Liquid water dynamic viscosity |
+| `ksolidm` | `SVector{3}` | `[3.0, 3.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Compiled Constant | All $> 0$ | Solid thermal conductivity |
+| `kfluidm` | `SVector{3}` | `[50.0, 50.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Compiled Constant | All $> 0$ | Fluid thermal conductivity |
+| `rhocpsolidm` | `SVector{3}` | `[3.3e6, 3.3e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Configurable | All $> 0$ | Volumetric solid heat capacity |
+| `rhocpfluidm` | `SVector{3}` | `[1.0e6, 1.0e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Configurable | All $> 0$ | Volumetric fluid heat capacity |
+| `alphasolidm` | `SVector{3}` | `[3.0e-5, 3.0e-5, 0.0]` | $1/\text{K}$ | Configurable | All $\ge 0$ | Solid thermal expansion |
+| `alphafluidm` | `SVector{3}` | `[5.0e-5, 5.0e-5, 0.0]` | $1/\text{K}$ | Configurable | All $\ge 0$ | Fluid thermal expansion |
+| `gggsolidm` | `SVector{3}` | `[1.0e10, 1.0e10, 1.0e10]` | Pa | Configurable | All $> 0$ | Solid shear elastic modulus |
+| `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Configurable | All $\ge 0$ | Internal friction coefficient |
+| `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Configurable | All $> 0$ | Cohesion |
+| `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Configurable | All $> 0$ | Tensile strength |
+| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Configurable | All $> 0$ | Reference permeability |
+| `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Configurable | All $> 0$ | Initial temperature |
 
 ---
 

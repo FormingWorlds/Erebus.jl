@@ -10,7 +10,7 @@ The primary verification test for the coupled Stokes-Darcy formulation is the on
 
 - **Setup**: A saturated porous column subjected to instantaneous compressive surface load with a free-draining top surface ($P_f = 0$) and impermeable base.
 - **Analytical Solution**: Fourier series representation of pore pressure dissipation over dimensionless time factor $T_v = c_v t / h^2$.
-- **Result**: The numerical pore pressure field computed by the monolithic solver matches the analytical Fourier series solution across all column depths with a relative error $< 3.3\%$. See the [Terzaghi Consolidation Tutorial](../tutorials/terzaghi_consolidation.md) for the full derivation and code.
+- **Result**: The numerical pore pressure field computed by the monolithic solver matches the analytical Fourier series solution across all column depths with a relative error $< 3.5\%$. See the [Terzaghi Consolidation Tutorial](../tutorials/terzaghi_consolidation.md) for the full derivation and code.
 
 ---
 
@@ -33,14 +33,14 @@ The constitutive poroelastic functions in `src/physics.jl` are verified against 
 
 ## 3. Matrix Block Consistency Tests
 
-The individual coupling sub-blocks in `assemble_hydromechanical_lse!` are tested independently:
-- **Solid continuity diagonal ($L[P_t, P_t]$)**: Matches $-(1 - K_{\text{BW}}) / (\Delta t / \beta_s)$.
-- **Fluid continuity cross-term ($L[P_f, P_t]$)**: Matches $K_{\text{BW}} / \Delta t$.
-- **Fluid continuity diagonal ($L[P_f, P_f]$)**: Matches $-\beta_{\text{fluid,eff}} / \Delta t$.
+The individual coupling sub-blocks in `assemble_hydromechanical_lse!` are tested independently against theoretical values:
+- **Solid continuity diagonal ($L[P_t, P_t]$)**: Matches $+K_{\text{cont}} \left(\frac{1}{(1-\phi)\eta_\phi} + \frac{\beta_d}{\Delta t}\right)$.
+- **Poroelastic cross-coupling ($L[P_t, P_f] = L[P_f, P_t]$)**: Matches $-K_{\text{cont}} \left(\frac{1}{(1-\phi)\eta_\phi} + \frac{\beta_d K_{\text{BW}}}{\Delta t}\right)$.
+- **Fluid continuity diagonal ($L[P_f, P_f]$)**: Matches $+K_{\text{cont}} \left(\frac{1}{(1-\phi)\eta_\phi} + \frac{\beta_d K_{\text{BW}}}{B \Delta t}\right)$.
 
 ---
 
 ## 4. Radiogenic Energy and Mass Conservation
 
-- **Radioactive Decay Kinetics**: Exponential decay of $^{26}\text{Al}$ and $^{60}\text{Fe}$ is verified against analytical integration $\int_0^t Q(t') dt'$, demonstrating exact conservation of energy release.
+- **Radioactive Decay Kinetics**: Exponential decay of $^{26}\text{Al}$ and $^{60}\text{Fe}$ is verified against analytical integration $\int_0^t Q(t') dt'$ to confirm exact conservation of energy release.
 - **Dehydration Mass Balance**: Fluid released from decomposing hydrated silicates matches matrix mass loss ($DMP$).
