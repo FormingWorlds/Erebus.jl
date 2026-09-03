@@ -414,7 +414,9 @@ function assemble_hydromechanical_lse!(
     pf0,
     DMP,
     dt,
-    R
+    R;
+    betasolid = betasolid,
+    betafluid = betafluid
 )
 # @timeit to "assemble_hydromechanical_lse()" begin
     # initialize LHS sparse coefficient matrix
@@ -734,25 +736,29 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
+            # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
+            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
+
             # LHS coefficient matrix
             updateindex!(
                 L,
                 +,
-                Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETAPHI[i, j]/dt),
+                Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
                 kpm,
                 kpm
             ) # P: Ptotal
             updateindex!(
                 L,
                 +,
-                -Kcont/(1-PHI[i, j]) * (inv(ETAPHI[i, j])+BETAPHI[i, j]/dt),
+                -Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
                 kpm,
                 kpf
             ) # P: Pfluid
             # RHS coefficient vector
             R[kpm] = (
-                (pr0[i,j]-pf0[i,j]) / (1-PHI[i,j])
-                * BETAPHI[i,j]/dt
+                betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt
                 + DMP[i, j]
             )
         end # P equation
@@ -852,22 +858,24 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, inv(dx), kpf, kqx) # qxD₂
             updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
             updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
+
+            # LHS coefficient matrix
             updateindex!(
                 L,
                 +,
-                -Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETAPHI[i, j]/dt),
+                -Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
                  kpf,
                  kpm
             ) # Ptotal
             updateindex!(
                 L,
                 +,
-                Kcont/(1.0-PHI[i, j]) * (1.0/ETAPHI[i, j]+BETAPHI[i, j]/dt),
+                Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / ksk / dt),
                 kpf,
                 kpf
             ) # Pfluid
             # RHS coefficient vector
-            R[kpf] = -(pr0[i, j]-pf0[i, j]) / (1-PHI[i, j]) * BETAPHI[i, j]/dt
+            R[kpf] = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
         end # Ptotal/Pfluid equation
     end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
@@ -978,17 +986,20 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt)
+function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt; betasolid = betasolid)
 # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
-    @views @. APHI[2:Ny, 2:Nx] = (
-        ((pr[2:Ny, 2:Nx]-pf[2:Ny, 2:Nx])/ETAPHI[2:Ny, 2:Nx]
-        + (
-            (pr[2:Ny, 2:Nx]-pr0[2:Ny, 2:Nx])-(pf[2:Ny, 2:Nx]-pf0[2:Ny, 2:Nx])
-        )/dt*BETAPHI[2:Ny, 2:Nx]) / (1-PHI[2:Ny, 2:Nx]) / PHI[2:Ny, 2:Nx]
-    )
-    return maximum(abs, APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
+    for j = 2:Nx, i = 2:Ny
+        betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+        kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+        compaction = (
+            (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j]))
+            + betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
+        )
+        APHI[i, j] = compaction / PHI[i, j]
+    end
+    return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
     end # @inbounds
     # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
 # end # @timeit to "compute_Aϕ!()"
@@ -1353,9 +1364,10 @@ function compute_nodal_adjustment!(
         # interpolate total and fluid pressure at basic nodes
         prB = grid_average(i, j, pr)
         pfB = grid_average(i, j, pf)
-        # yielding stress: confined fracture
+        # Yielding stress: confined and tensile fracture.
+        # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
+        # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).
         syieldc = COH[i, j] + FRI[i, j] * (prB-pfB)
-        # yielding stress: tensile fracture
         syieldt = TEN[i, j] + (prB-pfB)
         # non-negative yielding stress requirement
         syield = max(min(syieldc, syieldt), 0.0)

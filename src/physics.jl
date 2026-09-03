@@ -711,7 +711,7 @@ function compute_adiabatic_heating!(
             else
                 dpfdy = (pf[i+1, j]-pf[i, j]) * inv(dy)
             end
-            dpfdt = VXFP*dpsdx + VYFP*dpsdy
+            dpfdt = VXFP*dpfdx + VYFP*dpfdy
             # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
             HA[i, j] = (
                 (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
@@ -721,3 +721,103 @@ function compute_adiabatic_heating!(
     end # @inbounds
 # end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
+
+"""
+Compute drained bulk compressibility of a porous medium.
+
+$(SIGNATURES)
+
+# Details
+
+    β_d = (β_ϕ + β_s) / (1 - ϕ)
+
+where β_ϕ is pore compressibility [1/Pa], β_s is solid matrix compressibility [1/Pa],
+and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya (2019).
+
+# Arguments
+
+    - betaphi: pore compressibility β_ϕ [1/Pa]
+    - phi: porosity ϕ [-]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+
+# Returns
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+"""
+function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real)
+    bphi = max(betaphi, 0.0)
+    bsolid = max(betasolid, 0.0)
+    phi_eff = clamp(phi, phimin, phimax)
+    return (bphi + bsolid) / (1.0 - phi_eff)
+end
+
+"""
+Compute Biot-Willis coefficient for poroelastic coupling.
+
+$(SIGNATURES)
+
+# Details
+
+    K_BW = 1 - β_s / β_d
+
+For an incompressible solid matrix (β_s = 0), K_BW = 1.
+For intact zero-porosity rock (β_d → β_s), K_BW → 0.
+Physical bounds: K_BW ∈ [0, 1]. References: Biot (1941), Wang (2000).
+
+# Arguments
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+
+# Returns
+
+    - kbw: Biot-Willis coefficient K_BW [-]
+"""
+function compute_biot_willis_coefficient(betadrained::Real, betasolid::Real)
+    if betasolid <= 0.0
+        return 1.0
+    end
+    if betadrained <= betasolid
+        return 0.0
+    end
+    return clamp(1.0 - betasolid / betadrained, 0.0, 1.0)
+end
+
+"""
+Compute Skempton coefficient B for pore pressure response to mean stress.
+
+$(SIGNATURES)
+
+# Details
+
+    B = (β_d - β_s) / (β_d - β_s + ϕ * (β_f - β_s))
+
+For incompressible constituents (β_s = 0, β_f = 0), B = 1.
+Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Detournay & Cheng (1993).
+
+# Arguments
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+    - phi: porosity ϕ [-]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+    - betafluid: pore fluid compressibility β_f [1/Pa]
+
+# Returns
+
+    - ksk: Skempton coefficient B [-]
+"""
+function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real)
+    if betasolid <= 0.0 && betafluid <= 0.0
+        return 1.0
+    end
+    bsolid = max(betasolid, 0.0)
+    bfluid = max(betafluid, 0.0)
+    phi_eff = clamp(phi, phimin, phimax)
+    num = betadrained - bsolid
+    denom = num + phi_eff * (bfluid - bsolid)
+    if denom <= 0.0 || num <= 0.0
+        return 1.0
+    end
+    return clamp(num / denom, 0.0, 1.0)
+end
+

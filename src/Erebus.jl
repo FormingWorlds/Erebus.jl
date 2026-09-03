@@ -54,12 +54,14 @@ module Physics
                      calculate_radioactive_heating, compute_rhocpfluidm, compute_ksolidm, compute_kfluidm,
                      compute_Δtreaction, compute_gibbs_free_energy, compute_relative_enthalpy,
                      compute_reaction_constant, compute_thermodynamic_xfer!, perform_thermochemical_reaction!,
-                     compute_shear_heating!, compute_adiabatic_heating!
+                     compute_shear_heating!, compute_adiabatic_heating!,
+                     compute_drained_compressibility, compute_biot_willis_coefficient, compute_skempton_coefficient
     export distance, total, ktotal, kphi, ηᶠcur_inv_kᵠ, Q_radiogenic, etatotal_rocks,
            calculate_radioactive_heating, compute_rhocpfluidm, compute_ksolidm, compute_kfluidm,
            compute_Δtreaction, compute_gibbs_free_energy, compute_relative_enthalpy,
            compute_reaction_constant, compute_thermodynamic_xfer!, perform_thermochemical_reaction!,
-           compute_shear_heating!, compute_adiabatic_heating!
+           compute_shear_heating!, compute_adiabatic_heating!,
+           compute_drained_compressibility, compute_biot_willis_coefficient, compute_skempton_coefficient
 end
 
 module Particles

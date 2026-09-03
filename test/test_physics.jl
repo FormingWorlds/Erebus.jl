@@ -575,7 +575,7 @@
                 else
                     dpfdy=(pf[i+1,j]-pf[i,j])/dy
                 end
-                dpfdt=VXFP*dpsdx+VYFP*dpsdy
+                dpfdt=VXFP*dpfdx+VYFP*dpfdy
         #         # Direct calculation of dpdt
         #         dpsdt=(ps[i,j]-ps0[i,j])/dt
         #         dpfdt=(pf[i,j]-pf0[i,j])/dt
@@ -586,5 +586,42 @@
         # test
         @test HA ≈ HA_ver rtol=1e-9
     end # testset "compute_adiabatic_heating!()"
+
+    @testset "poroelastic constitutive relations" begin
+        # Incompressible baseline limits
+        betaphi = 1.0e-11
+        phi = 0.1
+        bd0 = Erebus.compute_drained_compressibility(betaphi, phi, 0.0)
+        @test bd0 ≈ betaphi / (1.0 - phi) rtol=1e-12
+        @test Erebus.compute_biot_willis_coefficient(bd0, 0.0) == 1.0
+        @test Erebus.compute_skempton_coefficient(bd0, phi, 0.0, 0.0) == 1.0
+
+        # Physical rock and fluid values
+        betasolid = 2.5e-11 # silicate matrix [1/Pa]
+        betafluid = 4.0e-10 # liquid water [1/Pa]
+        bd = Erebus.compute_drained_compressibility(betaphi, phi, betasolid)
+        @test bd ≈ (betaphi + betasolid) / (1.0 - phi) rtol=1e-12
+        @test bd > betasolid
+
+        kbw = Erebus.compute_biot_willis_coefficient(bd, betasolid)
+        @test 0.0 < kbw < 1.0
+        @test kbw ≈ 1.0 - betasolid / bd rtol=1e-12
+
+        ksk = Erebus.compute_skempton_coefficient(bd, phi, betasolid, betafluid)
+        @test 0.0 < ksk < 1.0
+        num = bd - betasolid
+        denom = num + phi * (betafluid - betasolid)
+        @test ksk ≈ num / denom rtol=1e-12
+
+        # Parameter sweep across full production porosity range and first-step betaphi = 0.0
+        for p in [phimin, 0.01, 0.1, 0.5, phimax], bp in [0.0, 1.0e-11, 1.0e-10]
+            bd_sweep = Erebus.compute_drained_compressibility(bp, p, betasolid)
+            @test bd_sweep >= betasolid
+            kbw_sweep = Erebus.compute_biot_willis_coefficient(bd_sweep, betasolid)
+            @test 0.0 <= kbw_sweep <= 1.0
+            ksk_sweep = Erebus.compute_skempton_coefficient(bd_sweep, p, betasolid, betafluid)
+            @test 0.0 <= ksk_sweep <= 1.0
+        end
+    end # testset "poroelastic constitutive relations"
 
 end

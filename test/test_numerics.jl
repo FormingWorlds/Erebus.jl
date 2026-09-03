@@ -808,11 +808,34 @@
                 aphimax_ver=max(aphimax_ver,abs(APHI_ver[i,j]))
             end
         end
-        # test
+        # test incompressible baseline
         for j=2:1:Nx, i=2:1:Ny
             @test APHI[i, j] ≈ APHI_ver[i, j] rtol=1e-9
         end
         @test aphimax ≈ aphimax_ver rtol=1e-9
+
+        # Test poroelastic compaction with nonzero betasolid
+        betasolid = 2.5e-11
+        aphimax_poro = Erebus.compute_Aϕ!(
+            APHI,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            pr,
+            pf,
+            pr0,
+            pf0,
+            dt;
+            betasolid = betasolid
+        )
+        for j=2:1:Nx, i=2:1:Ny
+            bd = (BETTAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
+            kbw = 1.0 - betasolid / bd
+            comp = (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
+                   bd * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
+            @test APHI[i, j] ≈ (comp / PHI[i, j]) rtol=1e-9
+        end
+        @test aphimax_poro != aphimax
     end # testset "compute_Aϕ!()"
 
     @testset "compute_fluid_velocities!()" begin
@@ -1381,5 +1404,161 @@
         @test LT ≈ LT_ver rtol=1e-9
         @test RT ≈ RT_ver rtol=1e-9
     end # testset "assemble_thermal_lse!"
+
+    @testset "poroelastic hydromechanical coupling" begin
+        Ny, Nx = Erebus.Ny, Erebus.Nx
+        Ny1, Nx1 = Erebus.Ny1, Erebus.Nx1
+        dt = 10.0
+
+        ETA = fill(1e22, Ny, Nx)
+        ETAP = fill(1e22, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(1e-3 / 1e-13, Ny1, Nx1)
+        RY = fill(1e-3 / 1e-13, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        ETAPHI = fill(1e22 / 0.1, Ny1, Nx1)
+        BETAPHI = fill(0.1 / 1e10, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = zeros(Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = fill(1e6, Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        R = zeros(Nx1*Ny1*6)
+
+        betasolid = 2.5e-11
+        betafluid = 4.0e-10
+        L = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            betasolid=betasolid, betafluid=betafluid
+        )
+
+        # Independent theoretical coefficients (calculated without calling solver functions)
+        bd_th = (0.1 / 1e10 + betasolid) / (1.0 - 0.1)
+        kbw_th = 1.0 - betasolid / bd_th
+        ksk_th = (bd_th - betasolid) / ((bd_th - betasolid) + 0.1 * (betafluid - betasolid))
+        C_expected = -Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th * kbw_th / dt)
+        D_pm_expected = Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th / dt)
+        D_pf_expected = Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th * kbw_th / ksk_th / dt)
+
+        # Verify each matrix block independently against theoretical values
+        for j = 4:Nx-2, i = 4:Ny-2
+            kvx = ((j-1)*Ny1 + i-1) * 6 + 1
+            kpm = kvx + 2
+            kpf = kvx + 5
+            @test L[kpm, kpf] ≈ C_expected rtol=1e-10
+            @test L[kpf, kpm] ≈ C_expected rtol=1e-10
+            @test L[kpm, kpm] ≈ D_pm_expected rtol=1e-10
+            @test L[kpf, kpf] ≈ D_pf_expected rtol=1e-10
+        end
+
+        # Verify solution solvability and finiteness
+        prob = LinearProblem(L, R)
+        sol = solve(prob, UMFPACKFactorization())
+        @test !any(isnan, sol.u)
+        @test !any(isinf, sol.u)
+    end # testset "poroelastic hydromechanical coupling"
+
+    @testset "Terzaghi 1D consolidation numerical simulation verification" begin
+        Ny, Nx = Erebus.Ny, Erebus.Nx
+        Ny1, Nx1 = Erebus.Ny1, Erebus.Nx1
+        dy = Erebus.dy
+
+        # Height between draining boundary anchors i=2 and i=Ny
+        H = (Ny - 2) * dy
+        k_perm = 1e-13
+        eta_f = 1e-3
+        betasolid = 2.5e-11
+        betafluid = 4.0e-10
+        G_p = 1e10
+        phi_0 = 0.1
+        beta_phi = phi_0 / G_p
+
+        bd = Erebus.compute_drained_compressibility(beta_phi, phi_0, betasolid)
+        kbw = Erebus.compute_biot_willis_coefficient(bd, betasolid)
+        ksk = Erebus.compute_skempton_coefficient(bd, phi_0, betasolid, betafluid)
+        S = bd * kbw / ksk
+        c_v = k_perm / (eta_f * S)
+
+        u0 = 1.0e6
+        dt = 2.0e5 # Timestep [s]
+
+        ETA = fill(1e25, Ny, Nx)
+        ETAP = fill(1e25, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(eta_f / k_perm, Ny1, Nx1)
+        RY = fill(eta_f / k_perm, Ny1, Nx1)
+        PHI = fill(phi_0, Ny1, Nx1)
+        ETAPHI = fill(1e25, Ny1, Nx1)
+        BETAPHI = fill(beta_phi, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = zeros(Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = fill(u0, Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        R = zeros(Nx1*Ny1*6)
+
+        vx = zeros(Ny1, Nx1)
+        vy = zeros(Ny1, Nx1)
+        pr = zeros(Ny1, Nx1)
+        qxD = zeros(Ny1, Nx1)
+        qyD = zeros(Ny1, Nx1)
+        pf = zeros(Ny1, Nx1)
+
+        nsteps = 3
+        t_total = nsteps * dt
+
+        # Step Erebus numerical solver forward in time
+        for step = 1:nsteps
+            R .= 0.0
+            L = Erebus.assemble_hydromechanical_lse!(
+                ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+                RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+                ETAPHI, BETAPHI, PHI, gx, gy,
+                pr0, pf0, DMP, dt, R;
+                betasolid=betasolid, betafluid=betafluid
+            )
+            prob = LinearProblem(L, R)
+            sol = solve(prob, UMFPACKFactorization())
+            Erebus.process_hydromechanical_solution!(sol.u, vx, vy, pr, qxD, qyD, pf)
+            pf0 .= pf
+        end
+
+        # Analytical 1D consolidation Fourier series solution
+        function analytical_2drain(y, t, H_col, c_coeff, p0; nterms=100)
+            val = 0.0
+            for m = 0:nterms
+                M = (2m + 1) * pi
+                val += (4.0 * p0 / M) * sin(M * y / H_col) * exp(-M^2 * c_coeff * t / H_col^2)
+            end
+            return val
+        end
+
+        # Verify numerical solution against analytical solution across column depth
+        # Account for psurface boundary condition at draining anchors
+        for i = 3:Ny-1
+            y = (i - 2) * dy
+            u_ana = analytical_2drain(y, t_total, H, c_v, u0 - psurface) + psurface
+            u_num = pf[i, 8]
+            rel_err = abs(u_num - u_ana) / u0
+            @test rel_err < 0.035
+        end
+    end # testset "Terzaghi 1D consolidation numerical simulation verification"
 
 end

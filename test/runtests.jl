@@ -1,6 +1,7 @@
 using Erebus
 using ExtendableSparse
 using JLD2
+using LinearSolve
 using Random
 using StaticArrays
 using Test
