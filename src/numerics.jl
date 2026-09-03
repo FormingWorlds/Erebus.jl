@@ -736,7 +736,7 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
-            # Precompute poroelastic coefficients once per interior cell
+            # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
             betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
             kbw = compute_biot_willis_coefficient(betadrained, betasolid)
             ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
