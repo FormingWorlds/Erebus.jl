@@ -13,30 +13,32 @@ In the creeping-flow limit (negligible inertia, $\text{Re} \ll 1$), momentum con
 
 $$\frac{\partial \sigma_{ij}'}{\partial x_j} - \frac{\partial P_t}{\partial x_i} + \rho_{\text{total}} g_i = 0$$
 
-where:
-- $\sigma_{ij}'$ is the deviatoric stress tensor of the solid matrix [$\text{Pa}$]
-- $P_t$ is the total mechanical pressure [$\text{Pa}$]
-- $\rho_{\text{total}} = (1 - \phi) \rho_s + \phi \rho_f$ is the mixture bulk density [$\text{kg/m}^3$]
-- $g_i$ is the gravitational acceleration vector [$\text{m/s}^2$]
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $\sigma_{ij}'$ | Deviatoric stress tensor of the solid matrix | $\text{Pa}$ |
+| $P_t$ | Total mechanical mixture pressure | $\text{Pa}$ |
+| $\rho_{\text{total}}$ | Bulk mixture density: $(1 - \phi)\rho_s + \phi\rho_f$ | $\text{kg/m}^3$ |
+| $g_i$ | Gravitational acceleration vector | $\text{m/s}^2$ |
 
 ### 2. Solid Mass Continuity
 Conservation of solid mass accounting for volumetric compaction is:
 
 $$\nabla \cdot \mathbf{v}_s = - \frac{D \ln(1 - \phi)}{Dt}$$
 
-where $\mathbf{v}_s$ is the solid matrix velocity [$\text{m/s}$], $\phi$ is the porosity [-], and $D/Dt = \partial/\partial t + \mathbf{v}_s \cdot \nabla$ represents the material derivative following the solid skeleton.
+where $\mathbf{v}_s$ is solid matrix velocity [$\text{m/s}$], $\phi$ is porosity [-], and $D/Dt$ is the material derivative.
 
 ### 3. Darcy Pore Fluid Flux
 Percolation of the pore fluid relative to the solid matrix follows Darcy's law:
 
 $$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f \mathbf{g}\right)$$
 
-where:
-- $\mathbf{q}_D = \phi (\mathbf{v}_f - \mathbf{v}_s)$ is the Darcy fluid discharge flux [$\text{m/s}$]
-- $k_\phi$ is the porosity-dependent permeability [$\text{m}^2$]
-- $\eta_f$ is the dynamic fluid viscosity [$\text{Pa}\cdot\text{s}$]
-- $P_f$ is the pore fluid pressure [$\text{Pa}$]
-- $\rho_f$ is the pore fluid density [$\text{kg/m}^3$]
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $\mathbf{q}_D$ | Darcy fluid discharge flux: $\phi (\mathbf{v}_f - \mathbf{v}_s)$ | $\text{m/s}$ |
+| $k_\phi$ | Porosity-dependent permeability | $\text{m}^2$ |
+| $\eta_f$ | Dynamic fluid viscosity | $\text{Pa}\cdot\text{s}$ |
+| $P_f$ | Pore fluid pressure | $\text{Pa}$ |
+| $\rho_f$ | Pore fluid density | $\text{kg/m}^3$ |
 
 ### 4. Coupled Fluid Mass Continuity
 Conservation of pore fluid mass with fluid compressibility is:
@@ -100,13 +102,14 @@ Heat transport across the planetesimal is governed by the energy conservation eq
 
 $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q_{\text{radiogenic}} + Q_{\text{adiabatic}} + Q_{\text{shear}} + \text{DHP}$$
 
-where:
-- $c_p$ is the specific heat capacity [$\text{J}/(\text{kg}\cdot\text{K})$], with water ice melting latent heat ($L^f$) modeled as an effective heat capacity peak near $273\text{ K}$
-- $k$ is the thermal conductivity [$\text{W}/(\text{m}\cdot\text{K})$]
-- $Q_{\text{adiabatic}}$ is adiabatic compression/decompression heating [$\text{W/m}^3$]
-- $Q_{\text{shear}}$ is viscous shear and compaction dissipation [$\text{W/m}^3$]
-- $\text{DHP}$ is the mineral dehydration reaction enthalpy transfer rate [$\text{W/m}^3$]
-- $Q_{\text{radiogenic}}$ is the total radiogenic heat production rate [$\text{W/m}^3$].
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $c_p$ | Specific heat capacity (with melting latent heat buffer) | $\text{J}/(\text{kg}\cdot\text{K})$ |
+| $k$ | Bulk thermal conductivity | $\text{W}/(\text{m}\cdot\text{K})$ |
+| $Q_{\text{adiabatic}}$ | Adiabatic compression/decompression heating | $\text{W/m}^3$ |
+| $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
+| $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |
+| $Q_{\text{radiogenic}}$ | Total radiogenic heat production rate: $Q_{\text{al}} + Q_{\text{fe}}$ | $\text{W/m}^3$ |
 
 ### Radiogenic Decay Kinetics
 Volumetric heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay is computed with the decay rate constant $\lambda = 1/\tau = \ln(2)/t_{1/2}$:

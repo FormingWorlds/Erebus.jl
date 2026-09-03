@@ -8,9 +8,13 @@ This page summarizes the benchmarks and tests used to ensure numerical accuracy 
 
 The primary verification test for the coupled Stokes-Darcy formulation is the one-dimensional Terzaghi consolidation problem.
 
-- **Setup**: A saturated porous column subjected to instantaneous compressive surface load with a free-draining top surface ($P_f = 0$) and impermeable base.
-- **Analytical Solution**: Fourier series representation of pore pressure dissipation over dimensionless time factor $T_v = c_v t / h^2$.
-- **Result**: The numerical pore pressure field computed by the monolithic solver matches the analytical Fourier series solution across all column depths with a relative error $< 3.5\%$. See the [Terzaghi Consolidation Tutorial](../tutorials/terzaghi_consolidation.md) for the full derivation and code.
+- **Setup**: Saturated porous column of height $H$ with draining boundary anchors ($P_f = 0$) subjected to excess pore pressure dissipation.
+- **Analytical Solution**: Fourier series representation of two-way pore pressure dissipation over dimensionless time factor $T_v = c_v t / H^2$.
+- **Result**: The numerical pore pressure field computed by the monolithic solver matches the analytical Fourier series solution at all column depths with a relative error $< 3.5\%$. See the [Terzaghi Consolidation Tutorial](../tutorials/terzaghi_consolidation.md) for the full derivation and code.
+
+![1D Terzaghi Consolidation Benchmark Verification](../assets/terzaghi_benchmark.png)
+
+*Figure 1: Benchmark verification of the coupled Stokes-Darcy solver against the analytical 1D Terzaghi consolidation solution. (a) Pore fluid pressure dissipation along column height $y \in [0, H]$ at three successive timesteps, comparing the analytical Fourier series (dashed curves) with Erebus numerical results (dots). (b) Pointwise relative error $|p_f^{\text{num}} - p_f^{\text{ana}}| / p_0$ showing that numerical discretization error remains strictly below $3.5\%$ throughout the column.*
 
 ---
 
@@ -20,7 +24,7 @@ The constitutive poroelastic functions in `src/physics.jl` are verified against 
 
 1. **Incompressible Solid Skeleton ($\beta_s \to 0$)**:
    $$\lim_{\beta_s \to 0} K_{\text{BW}} = 1, \quad \lim_{\beta_s \to 0} B = \frac{\beta_\phi}{\beta_\phi + \phi \beta_f}$$
-   Verified across porosity values $\phi \in [\phi_{\text{min}}, \phi_{\text{max}}]$.
+   Verified over porosity values $\phi \in [\phi_{\text{min}}, \phi_{\text{max}}]$.
 
 2. **Incompressible Pore Fluid ($\beta_f \to 0$)**:
    As fluid compressibility approaches zero, Skempton coefficient $B$ approaches its undrained upper bound:
@@ -28,6 +32,10 @@ The constitutive poroelastic functions in `src/physics.jl` are verified against 
 
 3. **Porosity Bounding Guarantees**:
    Constitutive routines clamp porosity to $[\phi_{\text{min}}, \phi_{\text{max}}]$ to prevent singular division when $\phi \to 0$ or $\phi \to 1$.
+
+![Poroelastic Constitutive Limits Verification](../assets/poroelastic_verification.png)
+
+*Figure 2: Theoretical behavior of derived poroelastic coefficients in Erebus. (a) Biot-Willis coefficient $K_{\text{BW}}$ as a function of porosity $\phi$ for varied solid grain compressibility $\beta_s$ to confirm asymptotic convergence toward unity ($K_{\text{BW}} \equiv 1$) in the incompressible solid grain limit. (b) Skempton pore pressure coefficient $B$ as a function of fluid compressibility $\beta_f$ for representative porosity values to display undrained response transitions.*
 
 ---
 

@@ -4,6 +4,12 @@
 
 ---
 
+## Code Attribution and Development History
+
+The major first version of the code was developed by Beat Hubmann (ETH Zürich / University of Groningen).
+
+---
+
 ## Scientific and Numerical Lineage
 
 The numerical methodology for coupled Stokes-Darcy flow and Marker-in-Cell advection is rooted in the modeling frameworks developed by Taras Gerya (ETH Zürich) and described in *Introduction to Numerical Geodynamic Modelling* (Cambridge University Press).

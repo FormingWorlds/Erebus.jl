@@ -22,15 +22,16 @@ where the consolidation coefficient $c_v$ is defined via the poroelastic storage
 
 $$c_v = \frac{k_\phi}{\eta_f S}, \quad S = \frac{\beta_d K_{\text{BW}}}{B}$$
 
-Here:
-- $k_\phi$ is the matrix permeability [$\text{m}^2$]
-- $\eta_f$ is the dynamic fluid viscosity [$\text{Pa}\cdot\text{s}$]
-- $\beta_d = (\beta_\phi + \beta_s) / (1 - \phi)$ is the drained matrix compressibility [$\text{Pa}^{-1}$]
-- $\beta_\phi = \phi / G$ is the pore compliance from shear modulus $G$ [$\text{Pa}$]
-- $\beta_s$ is the solid grain compressibility [$\text{Pa}^{-1}$]
-- $\beta_f$ is the pore fluid compressibility [$\text{Pa}^{-1}$]
-- $K_{\text{BW}} = 1 - \beta_s / \beta_d$ is the Biot-Willis coefficient [-]
-- $B = (\beta_d - \beta_s) / (\beta_d - \beta_s + \phi(\beta_f - \beta_s))$ is the Skempton coefficient [-]
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $k_\phi$ | Matrix permeability | $\text{m}^2$ |
+| $\eta_f$ | Dynamic fluid viscosity | $\text{Pa}\cdot\text{s}$ |
+| $\beta_d$ | Drained matrix compressibility: $(\beta_\phi + \beta_s) / (1 - \phi)$ | $\text{Pa}^{-1}$ |
+| $\beta_\phi$ | Elastic pore compliance: $\phi / G$ | $\text{Pa}^{-1}$ |
+| $\beta_s$ | Solid grain compressibility | $\text{Pa}^{-1}$ |
+| $\beta_f$ | Pore fluid compressibility | $\text{Pa}^{-1}$ |
+| $K_{\text{BW}}$ | Biot-Willis coupling coefficient: $1 - \beta_s / \beta_d$ | - |
+| $B$ | Skempton pore pressure coefficient | - |
 
 For two-way drainage over column thickness $H$, the analytical solution expressed as a Fourier series is:
 
@@ -82,4 +83,12 @@ c_v = k_perm / (eta_f * S)
 println("Consolidation coefficient cv: ", c_v, " m^2/s")
 ```
 
-When comparing the numerical solution of `assemble_hydromechanical_lse!` against the analytical Fourier series, the relative error across all depths remains below $3.5\%$, confirming that the coupled continuity and momentum equations correctly capture poroelastic consolidation.
+When comparing the numerical solution of `assemble_hydromechanical_lse!` against the analytical Fourier series, the relative error at all depths remains below $3.5\%$, confirming that the coupled continuity and momentum equations correctly capture poroelastic consolidation.
+
+---
+
+## Benchmark Verification Results
+
+![Terzaghi Benchmark Verification](../assets/terzaghi_benchmark.png)
+
+*Figure 1: Numerical verification of the coupled Stokes-Darcy formulation against the analytical 1D Terzaghi consolidation benchmark. (a) Excess pore pressure dissipation profiles along column height $y \in [0, H]$ at three successive timesteps, comparing analytical Fourier series curves (dashed lines) with Erebus numerical solver solutions (dots). (b) Pointwise relative error $|p_f^{\text{num}} - p_f^{\text{ana}}| / p_0$ confirming that discretization errors remain strictly below the $3.5\%$ verification threshold throughout the column.*
