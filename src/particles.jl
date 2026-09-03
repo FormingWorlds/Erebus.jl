@@ -2694,7 +2694,8 @@ $(SIGNATURES)
 
     - nothing
 # """
-function update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum)
+function update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum;
+                                phimin = phimin, phimax = phimax)
 # @timeit to "update_marker_porosity!" begin
     # update porosity for compaction
     @inbounds begin

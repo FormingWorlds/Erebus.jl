@@ -33,4 +33,21 @@
             rm(output_dir, recursive=true, force=true)
         end
     end
+
+    @testset "simulation_loop() execution with TOML config" begin
+        output_dir = mktempdir()
+        try
+            quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+            cfg = load_config(quick_toml)
+            Erebus.simulation_loop(cfg; output_path = output_dir)
+            files = readdir(output_dir)
+            @test "output_00000.jld2" in files
+            @test "output_00002.jld2" in files
+            data2 = JLD2.load(joinpath(output_dir, "output_00002.jld2"))
+            @test data2["timestep"] == 2
+            @test !any(isnan, data2["tk2"])
+        finally
+            rm(output_dir, recursive=true, force=true)
+        end
+    end
 end

@@ -1,0 +1,19 @@
+# Quick 2-step test configuration for integration and parameter exploration tests
+[grid]
+xsize = 14000.0
+ysize = 14000.0
+Nx = 15
+Ny = 15
+
+[time]
+dt_initial = 1.0e+11
+dt_longest = 1.0e+11
+n_steps = 2
+
+[poroelasticity]
+betasolid = 2.5e-11
+betafluid = 4.0e-10
+
+[output]
+output_dir = "output_test"
+savematstep = 2

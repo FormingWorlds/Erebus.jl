@@ -11,6 +11,7 @@ include("../src/test_constants.jl")
 const rgen = MersenneTwister(seed)
 
 @testset verbose=true "Erebus.jl" begin
+    include("test_config.jl")
     include("test_geometry.jl")
     include("test_physics.jl")
     include("test_particles.jl")
