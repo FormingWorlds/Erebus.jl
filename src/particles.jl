@@ -1863,7 +1863,7 @@ function move_markers_rk4!(
                     # in left half of cell but not at left edge of grid
                     if j > 1
                         vxfm₁₃ += 0.5*((dxmj/dx-0.5)^2) * (
-                            vxf[i, j-1] - 2.0*vx[i, j] + vxf[i, j+1])
+                            vxf[i, j-1] - 2.0*vxf[i, j] + vxf[i, j+1])
                         vxfm₂₄ += 0.5*((dxmj/dx-0.5)^2) * (
                             vxf[i+1, j-1] - 2.0*vxf[i+1, j] + vxf[i+1, j+1])
                     end
