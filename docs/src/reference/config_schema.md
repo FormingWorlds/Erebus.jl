@@ -100,6 +100,10 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `Lᶠ` | `Float64` | `333.55e+3` | J/kg | Latent heat of melting for water ice | $> 0$ |
 | `phim0` | `Float64` | `0.2` | - | Standard reference porosity | $\in (0, 1)$ |
 | `thermal_buoyancy` | `Bool` | `true` | - | Enable temperature-dependent fluid thermal buoyancy in Darcy flow | `true` / `false` |
+| `fluid_viscosity_mode` | `Symbol` | `:arrhenius` | - | Pore fluid viscosity calculation mode | `:arrhenius` / `:constant` |
+| `fluid_viscosity_Ea` | `Float64` | `15.0e+3` | J/mol | Activation energy for fluid viscous flow | $\ge 0$ |
+| `fluid_viscosity_T0` | `Float64` | `293.15` | K | Reference temperature for fluid viscosity | $> 0$ |
+| `fluid_viscosity_eta0` | `Float64` | `1.0e-3` | Pa s | Reference liquid water viscosity at T0 | $> 0$ |
 
 ---
 

@@ -854,10 +854,84 @@ at extreme temperatures.
 """
 function compute_rhofluid(T::Real, rho0::Real, alpha::Real, T0::Real;
                           thermal_buoyancy::Bool = true)
-    if isnan(T) || !isfinite(T) || !thermal_buoyancy || alpha <= 0.0 || T <= T0
+    if !isfinite(T) || !thermal_buoyancy || alpha <= 0.0 || T <= T0
         return Float64(rho0)
     end
     factor = max(0.1, 1.0 - alpha * (T - T0))
     return isnan(factor) ? Float64(rho0) : Float64(rho0 * factor)
 end
+
+"""
+    compute_fluid_viscosity(T::Real, tm::Integer;
+                            mode::Symbol = :arrhenius,
+                            eta0::Real = 1.0e-3,
+                            eta_ice::Real = 1.0e12,
+                            eta_air::Real = 1.0e-3,
+                            Ea::Real = 15.0e3,
+                            T0::Real = 293.15,
+                            tmfluidphase::Real = 273.0,
+                            etamin::Real = 1.0e-5,
+                            etamax::Real = 1.0e12)
+
+Compute temperature-dependent dynamic fluid viscosity η_f(T) [Pa s].
+
+For sticky air markers (`tm >= 3`), returns `eta_air`.
+For sub-freezing rock markers (`T <= tmfluidphase`), returns `eta_ice`.
+For non-finite or corrupt temperatures (`!isfinite(T)`), returns `eta_ice` to prevent runaway mobility.
+For liquid fluid markers (`T > tmfluidphase`):
+  - `:constant` mode: returns `eta0`.
+  - `:arrhenius` mode:
+      η_f(T) = η_0 * exp((E_a / R) * (1/T - 1/T_0))
+    clamped to [etamin, etamax].
+
+# Arguments
+
+    - T: temperature [K]
+    - tm: material type index (1: core, 2: crust, 3: sticky air)
+    - mode: `:arrhenius` or `:constant` (default: `:arrhenius`)
+    - eta0: reference liquid fluid viscosity at T0 [Pa s]
+    - eta_ice: sub-freezing ice viscosity [Pa s]
+    - eta_air: sticky air fluid viscosity [Pa s]
+    - Ea: activation energy for fluid viscous flow [J/mol]
+    - T0: reference temperature [K]
+    - tmfluidphase: melting temperature [K]
+    - etamin: minimum viscosity floor [Pa s]
+    - etamax: maximum viscosity ceiling [Pa s]
+
+# Returns
+
+    - etafluid: dynamic fluid viscosity [Pa s]
+"""
+function compute_fluid_viscosity(T::Real, tm::Integer;
+                                mode::Symbol = :arrhenius,
+                                eta0::Real = 1.0e-3,
+                                eta_ice::Real = 1.0e12,
+                                eta_air::Real = 1.0e-3,
+                                Ea::Real = 15.0e3,
+                                T0::Real = 293.15,
+                                tmfluidphase::Real = 273.0,
+                                etamin::Real = 1.0e-5,
+                                etamax::Real = 1.0e12)
+    if tm >= 3
+        return Float64(eta_air)
+    end
+    if !isfinite(T)
+        return Float64(eta_ice)
+    end
+    if T <= tmfluidphase
+        return Float64(eta_ice)
+    end
+    if mode === :constant || Ea <= 0.0
+        return Float64(eta0)
+    elseif mode === :arrhenius
+        # Universal gas constant R [J/(mol K)]
+        R_gas = 8.31446261815324
+        log_ratio = (Ea / R_gas) * (inv(T) - inv(T0))
+        val = eta0 * exp(log_ratio)
+        return clamp(val, Float64(etamin), Float64(etamax))
+    else
+        throw(ArgumentError("Unknown fluid viscosity mode: $mode (expected :arrhenius or :constant)"))
+    end
+end
+
 

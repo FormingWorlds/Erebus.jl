@@ -109,6 +109,10 @@ Base.@kwdef struct ThermalConfig
     Lᶠ::Float64 = 333.55e3
     phim0::Float64 = 0.2
     thermal_buoyancy::Bool = true
+    fluid_viscosity_mode::Symbol = :arrhenius
+    fluid_viscosity_Ea::Float64 = 15.0e3
+    fluid_viscosity_T0::Float64 = 293.15
+    fluid_viscosity_eta0::Float64 = 1.0e-3
 end
 
 """
@@ -246,6 +250,10 @@ function validate_config(cfg::SimulationConfig)
     cfg.thermodynamics.E_fe > 0.0 && isfinite(cfg.thermodynamics.E_fe) || throw(ArgumentError("E_fe must be > 0 and finite"))
     cfg.thermodynamics.f_fe > 0.0 && isfinite(cfg.thermodynamics.f_fe) || throw(ArgumentError("f_fe must be > 0 and finite"))
     cfg.thermodynamics.t_half_fe > 0.0 && isfinite(cfg.thermodynamics.t_half_fe) || throw(ArgumentError("t_half_fe must be > 0 and finite"))
+    cfg.thermodynamics.fluid_viscosity_mode in Set([:arrhenius, :constant]) || throw(ArgumentError("fluid_viscosity_mode must be :arrhenius or :constant, got $(cfg.thermodynamics.fluid_viscosity_mode)"))
+    cfg.thermodynamics.fluid_viscosity_Ea >= 0.0 && isfinite(cfg.thermodynamics.fluid_viscosity_Ea) || throw(ArgumentError("fluid_viscosity_Ea must be >= 0 and finite"))
+    cfg.thermodynamics.fluid_viscosity_T0 > 0.0 && isfinite(cfg.thermodynamics.fluid_viscosity_T0) || throw(ArgumentError("fluid_viscosity_T0 must be > 0 and finite"))
+    cfg.thermodynamics.fluid_viscosity_eta0 > 0.0 && isfinite(cfg.thermodynamics.fluid_viscosity_eta0) || throw(ArgumentError("fluid_viscosity_eta0 must be > 0 and finite"))
 
     # Materials checks: all 18 property arrays must be positive/non-negative and finite
     for (arr, name, strictly_pos) in [
@@ -311,6 +319,8 @@ function _dict_to_struct(::Type{T}, d::Dict{String, Any}, defaults::T) where {T}
                 kwargs[fname] = SVector{expected_len, eltype(ftype)}(val)
             elseif ftype <: Real && !(val isa ftype)
                 kwargs[fname] = convert(ftype, val)
+            elseif ftype === Symbol && val isa AbstractString
+                kwargs[fname] = Symbol(val)
             else
                 kwargs[fname] = val
             end
@@ -393,6 +403,8 @@ function _struct_to_dict(s)
         val = getfield(s, fname)
         if val isa SVector
             d[String(fname)] = collect(val)
+        elseif val isa Symbol
+            d[String(fname)] = String(val)
         else
             d[String(fname)] = val
         end

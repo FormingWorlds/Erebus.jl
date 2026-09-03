@@ -578,6 +578,42 @@
         @test rhof_test[1] == 917.0
         @test rhof_test[2] == 1000.0
         @test rhof_test[3] == 1.0
+
+        # Fluid viscosity tests with compute_marker_properties!
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                fluid_viscosity_mode = :arrhenius,
+                fluid_viscosity_Ea = 15.0e3,
+                fluid_viscosity_T0 = 293.15,
+                fluid_viscosity_eta0 = 1.0e-3,
+                tmfluidphase_val = 273.0
+            )
+        end
+        # Marker 1 (T = 200 K): frozen, eta_fluid = 1e12
+        expected_kphi_1 = Erebus.kphi(kphim0[tm_test[1]], phi_test[1])
+        @test eta_inv_k_test[1] ≈ 1.0e12 / expected_kphi_1 rtol=1e-12
+
+        # Marker 2 (T = 373 K): hot fluid with Arrhenius viscosity decrease
+        expected_eta_2 = Erebus.compute_fluid_viscosity(373.0, 2; mode=:arrhenius, Ea=15.0e3, T0=293.15, eta0=1.0e-3, tmfluidphase=273.0)
+        expected_kphi_2 = Erebus.kphi(kphim0[tm_test[2]], phi_test[2])
+        @test eta_inv_k_test[2] ≈ expected_eta_2 / expected_kphi_2 rtol=1e-12
+        @test expected_eta_2 < 1.0e-3
+
+        # Mode :constant
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                fluid_viscosity_mode = :constant,
+                fluid_viscosity_eta0 = 1.0e-3,
+                tmfluidphase_val = 273.0
+            )
+        end
+        @test eta_inv_k_test[2] ≈ 1.0e-3 / expected_kphi_2 rtol=1e-12
     end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "update_marker_viscosity!()" begin

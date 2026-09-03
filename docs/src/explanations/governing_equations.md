@@ -44,7 +44,13 @@ Fluid density incorporates volumetric thermal expansion $\alpha_f$ [$\text{K}^{-
 
 $$\rho_f(T) = \rho_{f0} \max\left(0.1, 1.0 - \alpha_f (T - T_{\text{melt}})\right) \quad (T > T_{\text{melt}})$$
 
-The temperature gradient creates buoyancy forces $(\rho_f(T) - \rho_{f0})\mathbf{g}$ that drive hydrothermal convection through permeable silicate crust. Note that thermal expansion is applied to the pore fluid density $\rho_f(T)$ to drive relative Darcy percolation; solid grain density $\rho_s$ remains compositionally dependent on hydration state $X_W^s$.
+The temperature gradient creates buoyancy forces $(\rho_f(T) - \rho_{f0})\mathbf{g}$ that drive hydrothermal convection through permeable silicate crust. Fluid density is referenced to the melting point $T_{\text{melt}} = 273.0\text{ K}$ ($\rho_{f0} = 1000\text{ kg/m}^3$), while thermal expansion is applied to the pore fluid density $\rho_f(T)$ to drive relative Darcy percolation; solid grain density $\rho_s$ remains compositionally dependent on hydration state $X_W^s$.
+
+Dynamic fluid viscosity $\eta_f(T)$ decreases with temperature following an Arrhenius relation for liquid water:
+
+$$\eta_f(T) = \begin{cases} \eta_{\text{ice}} & T \le T_{\text{melt}} \\ \max\left(\eta_{\text{min}}, \min\left(\eta_{\text{max}}, \eta_{f0} \exp\left[\frac{E_a}{R} \left(\frac{1}{T} - \frac{1}{T_0}\right)\right]\right)\right) & T > T_{\text{melt}} \end{cases}$$
+
+where viscosity is referenced to $T_0 = 293.15\text{ K}$ ($20^\circ\text{C}$, $\eta_{f0} = 1.0\times 10^{-3}\text{ Pa}\cdot\text{s}$) with activation energy $E_a = 15.0\text{ kJ/mol}$ and gas constant $R$. This relation reproduces liquid water viscosity within $12\%$ across $273\text{--}373\text{ K}$ and provides an effective approximation across the liquid hydrothermal range ($273\text{--}600\text{ K}$), where fluid mobility $k_\phi / \eta_f(T)$ increases by a factor of $5\times\text{--}20\times$ (clamped to a maximum factor of $\eta_{f0}/\eta_{\text{min}} = 100\times$).
 
 ### 4. Coupled Fluid Mass Continuity
 Conservation of pore fluid mass with fluid compressibility is:

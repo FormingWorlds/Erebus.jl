@@ -659,4 +659,39 @@
         @test buoyancy_force ≈ expected_buoyancy rtol=1e-12
     end
 
+    @testset "temperature-dependent fluid viscosity and compute_fluid_viscosity()" begin
+        # Sub-freezing ice viscosity
+        @test Erebus.compute_fluid_viscosity(200.0, 1) == 1.0e12
+        @test Erebus.compute_fluid_viscosity(273.0, 2) == 1.0e12
+
+        # Sticky air
+        @test Erebus.compute_fluid_viscosity(300.0, 3) == 1.0e-3
+        @test Erebus.compute_fluid_viscosity(100.0, 3) == 1.0e-3
+
+        # Reference temperature T0 = 293.15 K -> eta0 = 1.0e-3 Pa s
+        @test Erebus.compute_fluid_viscosity(293.15, 2) ≈ 1.0e-3 rtol=1e-12
+
+        # Boiling water T = 373.15 K -> drops by factor ~3.7
+        eta_373 = Erebus.compute_fluid_viscosity(373.15, 2; Ea = 15.0e3, T0 = 293.15, eta0 = 1.0e-3)
+        @test 2.5e-4 < eta_373 < 3.0e-4
+
+        # Supercritical hydrothermal fluid T = 600 K -> drops below 1e-4 Pa s
+        eta_600 = Erebus.compute_fluid_viscosity(600.0, 2; Ea = 15.0e3, T0 = 293.15, eta0 = 1.0e-3)
+        @test 3.0e-5 < eta_600 < 1.0e-4
+        @test eta_600 < eta_373 < 1.0e-3
+
+        # Mode :constant
+        @test Erebus.compute_fluid_viscosity(500.0, 2; mode = :constant) == 1.0e-3
+
+        # Clamp against extreme temperatures
+        @test Erebus.compute_fluid_viscosity(10000.0, 2; etamin = 1.0e-5) == 1.0e-5
+
+        # NaN / non-finite handling (safe fallback to ice viscosity)
+        @test Erebus.compute_fluid_viscosity(NaN, 2) == 1.0e12
+        @test Erebus.compute_fluid_viscosity(Inf, 2) == 1.0e12
+
+        # Invalid mode throws ArgumentError
+        @test_throws ArgumentError Erebus.compute_fluid_viscosity(300.0, 2; mode = :bogus)
+    end
+
 end

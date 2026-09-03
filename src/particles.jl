@@ -312,7 +312,11 @@ function compute_marker_properties!(
     rhofluidcur = nothing;
     thermal_buoyancy::Bool = true,
     alphafluid = nothing,
-    tmfluidphase_val::Real = tmfluidphase
+    tmfluidphase_val::Real = tmfluidphase,
+    fluid_viscosity_mode::Symbol = :arrhenius,
+    fluid_viscosity_Ea::Real = 15.0e3,
+    fluid_viscosity_T0::Real = 293.15,
+    fluid_viscosity_eta0::Real = 1.0e-3
 )
 # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
@@ -333,8 +337,16 @@ function compute_marker_properties!(
             rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
         etasolidcur = ifelse(
             tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
-        etafluidcur = ifelse(
-            tkm[m]>tmfluidphase, etafluidmm[tm[m]], etafluidm[tm[m]])
+        etafluidcur = compute_fluid_viscosity(
+            tkm[m], tm[m];
+            mode = fluid_viscosity_mode,
+            eta0 = fluid_viscosity_eta0,
+            eta_ice = etafluidm[tm[m]],
+            eta_air = etafluidm[tm[m]],
+            Ea = fluid_viscosity_Ea,
+            T0 = fluid_viscosity_T0,
+            tmfluidphase = tmfluidphase_val
+        )
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         ktotalm[m] = ktotal(
