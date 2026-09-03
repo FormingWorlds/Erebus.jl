@@ -20,5 +20,6 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1038/s41550-018-0688-5](https://doi.org/10.1038/s41550-018-0688-5)  
   *Radionuclide heating budgets, dehydration kinetics, and volatile evolution in early Solar System planetesimals.*
 
-- **Lichtenberg, T., Bower, D. J., Hammond, M., Boukrouche, R., Sanan, P., Tsai, S.-M., & Pierrehumbert, R. T. (2021)**. Vertically resolved magma ocean-protoatmosphere evolution: setting the stage for primary atmospheres. *Journal of Geophysical Research: Planets*, 126(2), e2020JE006711.  
-  [https://doi.org/10.1029/2020JE006711](https://doi.org/10.1029/2020JE006711)
+- **Lichtenberg, T., Drążkowska, J., Schönbächler, M., Golabek, G. J., & Hands, T. O. (2021)**. Bifurcation of planetary building blocks during Solar System formation. *Science*, 371(6527), 365-370.  
+  [https://doi.org/10.1126/science.abb3091](https://doi.org/10.1126/science.abb3091)  
+  *Planetesimal formation timing, internal heating, and spatial separation of volatile reservoirs in the early Solar System.*
