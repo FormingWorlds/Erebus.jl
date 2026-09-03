@@ -18,9 +18,16 @@ The numerical methodology for coupled Stokes-Darcy flow and Marker-in-Cell advec
 
 ## Support and Funding
 
-Development of planetesimal evolution models at the Forming Worlds Lab is supported by research grants from:
-- University of Groningen, Kapteyn Astronomical Institute
-- European research initiatives in planetary formation and evolution
+Research and software development at the Forming Worlds Lab are supported by:
+
+| Funding Organization | Award / Project | Reference |
+|:---|:---|:---|
+| European Research Council (ERC) | Starting Grant *MagmaWorlds* | PI: Tim Lichtenberg |
+| Dutch Research Council (NWO) | Consortium Grant *PRELIFE* | Grant no. PXRUC21696 |
+| The Branco Weiss Foundation | Society in Science Fellowship | ETH Zürich |
+| Alfred P. Sloan Foundation | AEThER Collaboration | Grant no. G-2025-25284 |
+| NASA NExSS Coordination Network | Alien Earths | Grant no. 80NSSC21K0593 |
+| University of Groningen | Faculty Research Support | Kapteyn Astronomical Institute |
 
 ---
 
