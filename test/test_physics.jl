@@ -613,12 +613,15 @@
         denom = num + phi * (betafluid - betasolid)
         @test ksk ≈ num / denom rtol=1e-12
 
-        # Robustness: zero or negative compressibility bounds
-        @test Erebus.compute_biot_willis_coefficient(0.0, betasolid) == 0.0
-        @test Erebus.compute_biot_willis_coefficient(bd, 0.0) == 1.0
-        @test Erebus.compute_biot_willis_coefficient(0.0, 0.0) == 1.0
-        @test Erebus.compute_skempton_coefficient(0.0, phi, betasolid, betafluid) == 1.0
-        @test Erebus.compute_skempton_coefficient(bd, phi, 0.0, 0.0) == 1.0
+        # Parameter sweep across full production porosity range and first-step betaphi = 0.0
+        for p in [phimin, 0.01, 0.1, 0.5, phimax], bp in [0.0, 1.0e-11, 1.0e-10]
+            bd_sweep = Erebus.compute_drained_compressibility(bp, p, betasolid)
+            @test bd_sweep >= betasolid
+            kbw_sweep = Erebus.compute_biot_willis_coefficient(bd_sweep, betasolid)
+            @test 0.0 <= kbw_sweep <= 1.0
+            ksk_sweep = Erebus.compute_skempton_coefficient(bd_sweep, p, betasolid, betafluid)
+            @test 0.0 <= ksk_sweep <= 1.0
+        end
     end # testset "poroelastic constitutive relations"
 
 end

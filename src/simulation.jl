@@ -1014,6 +1014,8 @@ function simulation_loop(output_path)
 #     @timeit to "save initial viscosity, yielding nodes" begin
             ETA00 .= ETA
             YNY00 .= YNY
+            cur_betasolid = timestep == 1 ? 0.0 : betasolid
+            cur_betafluid = timestep == 1 ? 0.0 : betafluid
             if timestep == 1
                 # no elastic compaction during first timestep
                 BETAPHI .= 0.0
@@ -1057,8 +1059,8 @@ function simulation_loop(output_path)
                     DMP,
                     dt,
                     R;
-                    betasolid = betasolid,
-                    betafluid = betafluid
+                    betasolid = cur_betasolid,
+                    betafluid = cur_betafluid
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1103,7 +1105,7 @@ function simulation_loop(output_path)
                     pr0,
                     pf0,
                     dt;
-                    betasolid = betasolid
+                    betasolid = cur_betasolid
                 )
 
                 # compute fluid velocities
@@ -1160,7 +1162,7 @@ function simulation_loop(output_path)
                     pr0,
                     pf0,
                     dt;
-                    betasolid = betasolid
+                    betasolid = cur_betasolid
                 )
                 # symmetrize P node observables
                 symmetrize_p_node_observables!(

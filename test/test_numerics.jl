@@ -1551,12 +1551,13 @@
         end
 
         # Verify numerical solution against analytical solution across column depth
+        # Account for psurface boundary condition at draining anchors
         for i = 3:Ny-1
             y = (i - 2) * dy
-            u_ana = analytical_2drain(y, t_total, H, c_v, u0)
+            u_ana = analytical_2drain(y, t_total, H, c_v, u0 - psurface) + psurface
             u_num = pf[i, 8]
             rel_err = abs(u_num - u_ana) / u0
-            @test rel_err < 0.05
+            @test rel_err < 0.035
         end
     end # testset "Terzaghi 1D consolidation numerical simulation verification"
 

@@ -736,9 +736,10 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
-            # Drained compressibility and Biot-Willis coefficient
+            # Precompute poroelastic coefficients once per interior cell
             betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
             kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
 
             # LHS coefficient matrix
             updateindex!(
@@ -857,10 +858,6 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, inv(dx), kpf, kqx) # qxD₂
             updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
             updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
-            # Drained compressibility, Biot-Willis and Skempton coefficients
-            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
-            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
-            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
 
             # LHS coefficient matrix
             updateindex!(

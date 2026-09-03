@@ -747,7 +747,7 @@ and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya
 function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real)
     bphi = max(betaphi, 0.0)
     bsolid = max(betasolid, 0.0)
-    phi_eff = clamp(phi, 0.0, 0.9999)
+    phi_eff = clamp(phi, phimin, phimax)
     return (bphi + bsolid) / (1.0 - phi_eff)
 end
 
@@ -812,7 +812,7 @@ function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::R
     end
     bsolid = max(betasolid, 0.0)
     bfluid = max(betafluid, 0.0)
-    phi_eff = clamp(phi, 0.0, 0.9999)
+    phi_eff = clamp(phi, phimin, phimax)
     num = betadrained - bsolid
     denom = num + phi_eff * (bfluid - bsolid)
     if denom <= 0.0 || num <= 0.0
