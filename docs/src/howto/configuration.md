@@ -93,6 +93,7 @@ tmsolidphase = 1416.0  # Silicate solidus melting temperature [K]
 tmfluidphase = 273.0   # H2O ice melting temperature [K]
 Lᶠ = 333.55e+3         # Latent heat of melting for water ice [J/kg]
 phim0 = 0.2            # Standard reference porosity [-]
+thermal_buoyancy = true # Enable Darcy thermal buoyancy
 ```
 
 ### 7. `[materials]`

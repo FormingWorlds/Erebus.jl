@@ -624,4 +624,39 @@
         end
     end # testset "poroelastic constitutive relations"
 
+    @testset "thermal buoyancy and compute_rhofluid()" begin
+        rho0 = 1000.0
+        alpha = 2.0e-4
+        T0 = 273.15
+
+        # Sub-freezing / baseline: no thermal expansion
+        @test Erebus.compute_rhofluid(250.0, rho0, alpha, T0) == rho0
+        @test Erebus.compute_rhofluid(T0, rho0, alpha, T0) == rho0
+
+        # When thermal_buoyancy = false, always returns rho0
+        @test Erebus.compute_rhofluid(500.0, rho0, alpha, T0; thermal_buoyancy=false) == rho0
+
+        # Positive thermal expansion for T > T0
+        T1 = 373.15 # ΔT = 100 K
+        expected_rho1 = rho0 * (1.0 - alpha * 100.0) # 1000 * (1 - 0.02) = 980.0
+        @test Erebus.compute_rhofluid(T1, rho0, alpha, T0) ≈ expected_rho1 rtol=1e-12
+        @test Erebus.compute_rhofluid(T1, rho0, alpha, T0) < rho0
+
+        # Extreme temperature clamping (clamped to 0.1 * rho0)
+        T_extreme = 10000.0
+        @test Erebus.compute_rhofluid(T_extreme, rho0, alpha, T0) == 0.1 * rho0
+
+        # Zero or negative alpha
+        @test Erebus.compute_rhofluid(400.0, rho0, 0.0, T0) == rho0
+        @test Erebus.compute_rhofluid(400.0, rho0, -1e-4, T0) == rho0
+
+        # Verification of thermal buoyancy driving force: Δρ = -ρ0 * α * ΔT
+        g = 9.81
+        delta_T = 50.0 # K
+        rho_hot = Erebus.compute_rhofluid(T0 + delta_T, rho0, alpha, T0)
+        buoyancy_force = (rho0 - rho_hot) * g
+        expected_buoyancy = rho0 * alpha * delta_T * g
+        @test buoyancy_force ≈ expected_buoyancy rtol=1e-12
+    end
+
 end

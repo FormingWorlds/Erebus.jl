@@ -99,6 +99,7 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `tmfluidphase` | `Float64` | `273.0` | K | Water ice melting temperature | $> 0$ |
 | `Lᶠ` | `Float64` | `333.55e+3` | J/kg | Latent heat of melting for water ice | $> 0$ |
 | `phim0` | `Float64` | `0.2` | - | Standard reference porosity | $\in (0, 1)$ |
+| `thermal_buoyancy` | `Bool` | `true` | - | Enable temperature-dependent fluid thermal buoyancy in Darcy flow | `true` / `false` |
 
 ---
 

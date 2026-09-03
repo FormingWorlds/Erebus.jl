@@ -308,15 +308,26 @@ function compute_marker_properties!(
     hrfluidm,
     phim,
     XWˢm₀,
-    mode
+    mode,
+    rhofluidcur = nothing;
+    thermal_buoyancy::Bool = true,
+    alphafluid = nothing,
+    tmfluidphase_val::Real = tmfluidphase
 )
 # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
         rhosolidm0 = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀+ VWˢ*XWˢm₀[m]) # (16.161)
+        alpha_val = alphafluid === nothing ? alphafluidm[tm[m]] : (alphafluid isa Real ? alphafluid : alphafluid[tm[m]])
         rhofluidm0 = ifelse(
-            tkm[m]>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ) # (16.162)
+            tkm[m] > tmfluidphase_val,
+            compute_rhofluid(tkm[m], ρH₂Oᶠ, alpha_val, tmfluidphase_val; thermal_buoyancy=thermal_buoyancy),
+            ρH₂Oᶠⁱ
+        ) # (16.162)
+        if rhofluidcur !== nothing
+            rhofluidcur[m] = rhofluidm0
+        end
         rhototalm[m] = total(rhosolidm0, rhofluidm0, phim[m])
         rhocptotalm[m] = total(
             rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
@@ -334,6 +345,9 @@ function compute_marker_properties!(
     else
         # sticky air
         etafluidcur = etafluidm[tm[m]]
+        if rhofluidcur !== nothing
+            rhofluidcur[m] = rhofluidm[tm[m]]
+        end
     end
     # common for rocks and air
     tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]

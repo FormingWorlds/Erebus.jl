@@ -108,6 +108,7 @@ Base.@kwdef struct ThermalConfig
     tmfluidphase::Float64 = 273.0
     Lᶠ::Float64 = 333.55e3
     phim0::Float64 = 0.2
+    thermal_buoyancy::Bool = true
 end
 
 """

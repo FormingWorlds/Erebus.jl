@@ -533,10 +533,51 @@
         @test tenstotalm == tenstotalm_ver
         @test rhofluidcur == rhofluidcur_ver
         @test etatotalm == etatotalm_ver
-        # test calculated properties
         @test tkm_rhocptotalm ≈ tkm_ver .* rhocptotalm_ver 
         @test etafluidcur_inv_kphim ≈ etafluidcur_ver ./ kphim_ver
   
+        # Test compute_marker_properties! with rhofluidcur integration
+        rhof_test = zeros(3)
+        tm_test = [1, 2, 3] # core (cold ice), crust (hot water), sticky air
+        tk_test = [200.0, 373.0, 300.0]
+        rhotot_test = zeros(3)
+        rhocptot_test = zeros(3)
+        etatot_test = zeros(3)
+        hrtot_test = zeros(3)
+        ktot_test = zeros(3)
+        tkm_rhocptot_test = zeros(3)
+        eta_inv_k_test = zeros(3)
+        phi_test = [0.1, 0.1, 1.0]
+        xw_test = [0.0, 0.0, 0.0]
+
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                thermal_buoyancy = true, alphafluid = 2.0e-4, tmfluidphase_val = 273.0
+            )
+        end
+        # Sub-freezing marker (T = 200 K <= 273 K) -> ice density
+        @test rhof_test[1] == 917.0
+        # Hot rock marker (T = 373 K > 273 K, ΔT = 100 K) -> thermal expansion
+        expected_hot_rhof = 1000.0 * (1.0 - 2.0e-4 * 100.0) # 980.0 kg/m³
+        @test rhof_test[2] ≈ expected_hot_rhof rtol=1e-12
+        # Sticky air marker -> sticky air fluid density
+        @test rhof_test[3] == 1.0
+
+        # With thermal_buoyancy = false
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                thermal_buoyancy = false, alphafluid = 2.0e-4, tmfluidphase_val = 273.0
+            )
+        end
+        @test rhof_test[1] == 917.0
+        @test rhof_test[2] == 1000.0
+        @test rhof_test[3] == 1.0
     end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "update_marker_viscosity!()" begin

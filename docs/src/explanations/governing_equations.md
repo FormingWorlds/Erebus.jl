@@ -27,10 +27,10 @@ $$\nabla \cdot \mathbf{v}_s = - \frac{D \ln(1 - \phi)}{Dt}$$
 
 where $\mathbf{v}_s$ is solid matrix velocity [$\text{m/s}$], $\phi$ is porosity [-], and $D/Dt$ is the material derivative.
 
-### 3. Darcy Pore Fluid Flux
-Percolation of the pore fluid relative to the solid matrix follows Darcy's law:
+### 3. Darcy Pore Fluid Flux and Thermal Buoyancy
+Percolation of pore fluid relative to the solid matrix follows Darcy's law:
 
-$$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f \mathbf{g}\right)$$
+$$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f(T) \mathbf{g}\right)$$
 
 | Symbol | Description | Units |
 |:---|:---|:---|
@@ -38,7 +38,13 @@ $$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f \mathbf{g}\ri
 | $k_\phi$ | Porosity-dependent permeability | $\text{m}^2$ |
 | $\eta_f$ | Dynamic fluid viscosity | $\text{Pa}\cdot\text{s}$ |
 | $P_f$ | Pore fluid pressure | $\text{Pa}$ |
-| $\rho_f$ | Pore fluid density | $\text{kg/m}^3$ |
+| $\rho_f(T)$ | Temperature-dependent pore fluid density | $\text{kg/m}^3$ |
+
+Fluid density incorporates volumetric thermal expansion $\alpha_f$ [$\text{K}^{-1}$] above the reference melting temperature $T_{\text{melt}}$:
+
+$$\rho_f(T) = \rho_{f0} \max\left(0.1, 1.0 - \alpha_f (T - T_{\text{melt}})\right) \quad (T > T_{\text{melt}})$$
+
+The temperature gradient creates buoyancy forces $(\rho_f(T) - \rho_{f0})\mathbf{g}$ that drive hydrothermal convection through permeable silicate crust. Note that thermal expansion is applied to the pore fluid density $\rho_f(T)$ to drive relative Darcy percolation; solid grain density $\rho_s$ remains compositionally dependent on hydration state $X_W^s$.
 
 ### 4. Coupled Fluid Mass Continuity
 Conservation of pore fluid mass with fluid compressibility is:

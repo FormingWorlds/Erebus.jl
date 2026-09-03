@@ -365,6 +365,9 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     E_fe_val = cfg.thermodynamics.E_fe
     f_fe_val = cfg.thermodynamics.f_fe
     tau_fe_val = cfg.thermodynamics.t_half_fe / log(2.0)
+    thermal_buoyancy_val = cfg.thermodynamics.thermal_buoyancy
+    tmfluidphase_val = cfg.thermodynamics.tmfluidphase
+    alphafluid_val = cfg.materials.alphafluidm
 
     @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
     @info(
@@ -822,7 +825,11 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                 hrfluidm,
                 phim,
                 XWsolidm0,
-                marker_property_mode
+                marker_property_mode,
+                rhofluidcur;
+                thermal_buoyancy = thermal_buoyancy_val,
+                alphafluid = alphafluid_val,
+                tmfluidphase_val = tmfluidphase_val
             )              
             # interpolate marker properties to basic nodes
             @inbounds marker_to_basic_nodes!(

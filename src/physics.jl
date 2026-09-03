@@ -830,3 +830,34 @@ function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::R
     return clamp(num / denom, 0.0, 1.0)
 end
 
+"""
+    compute_rhofluid(T::Real, rho0::Real, alpha::Real, T0::Real; thermal_buoyancy::Bool = true)
+
+Compute temperature-dependent pore fluid density with volumetric thermal expansion:
+    ρ_f(T) = ρ_{f0} * max(0.1, 1.0 - α_f * (T - T_0))   for T > T_0
+
+When `thermal_buoyancy = false`, returns reference density `rho0` unmodified.
+Density is clamped to a lower bound of `0.1 * rho0` to prevent unphysical negative values
+at extreme temperatures.
+
+# Arguments
+
+    - T: temperature [K]
+    - rho0: reference fluid density at T0 [kg/m³]
+    - alpha: fluid volumetric thermal expansion coefficient α_f [1/K]
+    - T0: reference temperature [K]
+    - thermal_buoyancy: toggle thermal expansion (default: true)
+
+# Returns
+
+    - rhof: temperature-dependent fluid density [kg/m³]
+"""
+function compute_rhofluid(T::Real, rho0::Real, alpha::Real, T0::Real;
+                          thermal_buoyancy::Bool = true)
+    if isnan(T) || !isfinite(T) || !thermal_buoyancy || alpha <= 0.0 || T <= T0
+        return Float64(rho0)
+    end
+    factor = max(0.1, 1.0 - alpha * (T - T0))
+    return isnan(factor) ? Float64(rho0) : Float64(rho0 * factor)
+end
+
