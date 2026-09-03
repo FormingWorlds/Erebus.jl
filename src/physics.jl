@@ -721,3 +721,88 @@ function compute_adiabatic_heating!(
     end # @inbounds
 # end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
+
+"""
+Compute drained bulk compressibility of a porous medium.
+
+$(SIGNATURES)
+
+# Details
+
+    β_d = (β_ϕ + β_s) / (1 - ϕ)
+
+where β_ϕ is pore compressibility, β_s is solid matrix compressibility [1/Pa],
+and ϕ is porosity.
+
+# Arguments
+
+    - betaphi: pore compressibility β_ϕ [1/Pa]
+    - phi: porosity ϕ [-]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+
+# Returns
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+"""
+function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real)
+    return (betaphi + betasolid) / (1.0 - phi)
+end
+
+"""
+Compute Biot-Willis coefficient for poroelastic coupling.
+
+$(SIGNATURES)
+
+# Details
+
+    K_BW = 1 - β_s / β_d
+
+For an incompressible solid matrix (β_s = 0), K_BW = 1.
+
+# Arguments
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+
+# Returns
+
+    - kbw: Biot-Willis coefficient K_BW [-]
+"""
+function compute_biot_willis_coefficient(betadrained::Real, betasolid::Real)
+    if betadrained <= 0.0
+        return 1.0
+    end
+    return 1.0 - betasolid / betadrained
+end
+
+"""
+Compute Skempton coefficient B for pore pressure response to mean stress.
+
+$(SIGNATURES)
+
+# Details
+
+    B = (β_d - β_s) / (β_d - β_s + ϕ * (β_f - β_s))
+
+For incompressible constituents (β_s = 0, β_f = 0), B = 1.
+
+# Arguments
+
+    - betadrained: drained bulk compressibility β_d [1/Pa]
+    - phi: porosity ϕ [-]
+    - betasolid: solid matrix compressibility β_s [1/Pa]
+    - betafluid: pore fluid compressibility β_f [1/Pa]
+
+# Returns
+
+    - ksk: Skempton coefficient B [-]
+"""
+function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real)
+    num = betadrained - betasolid
+    denom = num + phi * (betafluid - betasolid)
+    if denom <= 0.0 || num <= 0.0
+        return 1.0
+    end
+    return num / denom
+end
+

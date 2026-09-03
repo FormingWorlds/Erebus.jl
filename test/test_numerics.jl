@@ -1382,4 +1382,104 @@
         @test RT ≈ RT_ver rtol=1e-9
     end # testset "assemble_thermal_lse!"
 
+    @testset "poroelastic hydromechanical coupling" begin
+        Ny, Nx = Erebus.Ny, Erebus.Nx
+        Ny1, Nx1 = Erebus.Ny1, Erebus.Nx1
+        dt = 10.0
+
+        ETA = fill(1e22, Ny, Nx)
+        ETAP = fill(1e22, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(1e-3 / 1e-13, Ny1, Nx1)
+        RY = fill(1e-3 / 1e-13, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        ETAPHI = fill(1e22 / 0.1, Ny1, Nx1)
+        BETAPHI = fill(0.1 / 1e10, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = zeros(Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = fill(1e6, Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        R = zeros(Nx1*Ny1*6)
+
+        betasolid = 2.5e-11
+        betafluid = 4.0e-10
+        L = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            betasolid=betasolid, betafluid=betafluid
+        )
+
+        # Verify Biot reciprocal cross-coupling symmetry on interior nodes
+        for j = 4:Nx-2, i = 4:Ny-2
+            kvx = ((j-1)*Ny1 + i-1) * 6 + 1
+            kpm = kvx + 2
+            kpf = kvx + 5
+            val_pf_in_pt = L[kpm, kpf]
+            val_pt_in_pf = L[kpf, kpm]
+            @test val_pf_in_pt < 0.0
+            @test val_pf_in_pt ≈ val_pt_in_pf rtol=1e-10
+        end
+
+        # Verify solution solvability and finiteness
+        prob = LinearProblem(L, R)
+        sol = solve(prob, UMFPACKFactorization())
+        @test !any(isnan, sol.u)
+        @test !any(isinf, sol.u)
+    end # testset "poroelastic hydromechanical coupling"
+
+    @testset "Terzaghi 1D consolidation analytical limit" begin
+        # Soil / rock column poroelastic parameters
+        H = 1000.0
+        k_perm = 1e-13
+        eta_f = 1e-3
+        beta_s = 2.5e-11
+        beta_f = 4.0e-10
+        G_p = 1e10
+        phi = 0.1
+
+        beta_phi = phi / G_p
+        beta_d = Erebus.compute_drained_compressibility(beta_phi, phi, beta_s)
+        kbw = Erebus.compute_biot_willis_coefficient(beta_d, beta_s)
+        ksk = Erebus.compute_skempton_coefficient(beta_d, phi, beta_s, beta_f)
+        S = beta_d * kbw / ksk
+        c_v = k_perm / (eta_f * S)
+
+        # Analytical dissipation profile
+        function terzaghi_u(y, t, u0; nterms=80)
+            Tv = c_v * t / H^2
+            u = 0.0
+            for m = 0:nterms
+                M = (2m + 1) * pi / 2
+                u += (2.0 * u0 / M) * sin(M * y / H) * exp(-M^2 * Tv)
+            end
+            return u
+        end
+
+        u0 = 1.0e6
+        # At t = 0+, surface is drained (u=0) while deep column retains initial pressure
+        @test terzaghi_u(0.0, 1.0, u0) ≈ 0.0 atol=1e-6
+        @test terzaghi_u(H, 1.0, u0) ≈ u0 rtol=1e-2
+
+        # At intermediate dimensionless time Tv = 0.2
+        t_mid = 0.2 * H^2 / c_v
+        u_base_mid = terzaghi_u(H, t_mid, u0)
+        # Degree of consolidation at base should be partially dissipated
+        @test 0.5 * u0 < u_base_mid < 0.95 * u0
+
+        # At long time Tv = 2.0, excess pore pressure fully dissipates
+        t_long = 2.0 * H^2 / c_v
+        u_base_long = terzaghi_u(H, t_long, u0)
+        @test u_base_long < 0.02 * u0
+    end # testset "Terzaghi 1D consolidation analytical limit"
+
 end

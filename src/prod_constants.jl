@@ -180,6 +180,10 @@ const frictsolidm = SVector{3, Float64}(  [   0.6    ,    0.6    ,    0.0    ])
 const cohessolidm = SVector{3, Float64}(  [   1.0e+08,    1.0e+08,    1.0e+08])
 # solid tensile strength [Pa]
 const tenssolidm  = SVector{3, Float64}(  [   6.0e+07,    6.0e+07,    6.0e+07])
+# solid matrix compressibility [1/Pa]
+const betasolid = 2.5e-11
+# fluid compressibility [1/Pa]
+const betafluid = 4.0e-10
 # standard permeability [m^2]
 const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
 # initial temperature [K]
