@@ -35,13 +35,13 @@ $(SIGNATURES)
     - hrfluidm: initial radiogenic heat production fluid phase
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
 """
-function setup_dynamic_simulation_parameters()
+function setup_dynamic_simulation_parameters(cfg::SimulationConfig = default_config())
      # timestep counter (current), init to startstep
-     timestep::Int64 = start_step
+     timestep::Int64 = cfg.time.start_step
      # computational timestep (current), init to dt_longest [s]
-     dt::Float64 = dt_longest
+     dt::Float64 = cfg.time.dt_longest
      # time sum (current), init to starttime [s]
-     timesum::Float64 = start_time
+     timesum::Float64 = cfg.time.start_time
      # current number of markers, init to startmarknum
      marknum::Int64 = start_marknum
      # radiogenic heat production solid phase
@@ -49,7 +49,7 @@ function setup_dynamic_simulation_parameters()
      # radiogenic heat production fluid phase
      hrfluidm::SVector{3, Float64} = start_hrfluidm
      # nodes yielding error vector of plastic iterations
-     YERRNOD::Vector{Float64} = zeros(Float64, nplast) 
+     YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.nplast) 
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
 
@@ -328,7 +328,7 @@ $(SIGNATURES)
     
     - nothing
 """
-function simulation_loop(output_path)
+function simulation_loop(cfg::SimulationConfig = default_config(); output_path::String = cfg.output.output_dir)
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
@@ -340,7 +340,21 @@ function simulation_loop(output_path)
     marknum,
     hrsolidm,
     hrfluidm,
-    YERRNOD = setup_dynamic_simulation_parameters()
+    YERRNOD = setup_dynamic_simulation_parameters(cfg)
+
+    # Extract dynamic simulation control parameters from cfg
+    n_steps_val = cfg.time.n_steps
+    start_step_val = cfg.time.start_step
+    savematstep_val = cfg.output.savematstep
+    titermax_val = cfg.solver.titermax
+    use_pardiso_val = cfg.solver.use_pardiso
+    etaphikoef_val = cfg.solver.etaphikoef
+    betasolid_val = cfg.poroelasticity.betasolid
+    betafluid_val = cfg.poroelasticity.betafluid
+    phimin_val = cfg.poroelasticity.phimin
+    phimax_val = cfg.poroelasticity.phimax
+    dt_longest_val = cfg.time.dt_longest
+    dtcoefup_val = cfg.time.dtcoefup
 
     @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
     @info(
@@ -719,12 +733,12 @@ function simulation_loop(output_path)
         (:to_go_Ma, s_to_Ma(endtime-timesum))
     ]
     p = Progress(
-        n_steps;
+        n_steps_val;
         showspeed=true,
         dt=0.5,
         barglyphs=BarGlyphs(
             '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
-    for timestep = start_step:1:n_steps
+    for timestep = start_step_val:1:n_steps_val
 # @timeit to "set up interpolation arrays" begin
         timestep_begin = now()
         # ---------------------------------------------------------------------
@@ -973,13 +987,13 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         # probe increasing computational timestep
         # ---------------------------------------------------------------------
-        dt = min(dt*dtcoefup, dt_longest)
+        dt = min(dt*dtcoefup_val, dt_longest_val)
         @info "\n\n ********** begin timestep $timestep - dt = $dt s **********"
 
         # ---------------------------------------------------------------------
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
-        for titer=1:1:titermax
+        for titer=1:1:titermax_val
 #     @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
             if reaction_active
@@ -1014,8 +1028,8 @@ function simulation_loop(output_path)
 #     @timeit to "save initial viscosity, yielding nodes" begin
             ETA00 .= ETA
             YNY00 .= YNY
-            cur_betasolid = timestep == 1 ? 0.0 : betasolid
-            cur_betafluid = timestep == 1 ? 0.0 : betafluid
+            cur_betasolid = timestep == 1 ? 0.0 : betasolid_val
+            cur_betafluid = timestep == 1 ? 0.0 : betafluid_val
             if timestep == 1
                 # no elastic compaction during first timestep
                 BETAPHI .= 0.0
@@ -1029,12 +1043,12 @@ function simulation_loop(output_path)
 #     end # @timeit to "advance pressure generation"
 
             # perform plastic iterations
-            for iplast=1:1:titermax
+            for iplast=1:1:titermax_val
 #     @timeit to "plastic iteration (inner)" begin
                 @info(
                     "thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
-                recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
+                recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
                 # assemble hydromechanical system of equations
                 L = assemble_hydromechanical_lse!(
                     ETA,
@@ -1060,12 +1074,14 @@ function simulation_loop(output_path)
                     dt,
                     R;
                     betasolid = cur_betasolid,
-                    betafluid = cur_betafluid
+                    betafluid = cur_betafluid,
+                    phimin = phimin_val,
+                    phimax = phimax_val
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
 #     @timeit to "solve hydromechanical system" begin
-                if use_pardiso
+                if use_pardiso_val
                     set_phase!(
                         pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
                     pardiso(
@@ -1105,7 +1121,9 @@ function simulation_loop(output_path)
                     pr0,
                     pf0,
                     dt;
-                    betasolid = cur_betasolid
+                    betasolid = cur_betasolid,
+                    phimin = phimin_val,
+                    phimax = phimax_val
                 )
 
                 # compute fluid velocities
@@ -1438,7 +1456,7 @@ function simulation_loop(output_path)
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
         # ---------------------------------------------------------------------
-        if timestep % savematstep == 0
+        if timestep % savematstep_val == 0
             save_state(
                 output_path,
                 timestep,
@@ -1571,6 +1589,26 @@ function simulation_loop(output_path)
 end # function simulation loop
 
 """
+Simulation loop overload for path or configuration file input.
+
+$(SIGNATURES)
+
+# Arguments
+- `path_or_dir`: Path to `.toml` configuration file, or output directory path.
+- `output_path`: Optional output path override.
+"""
+function simulation_loop(path_or_dir::String; output_path::String = "")
+    if endswith(path_or_dir, ".toml")
+        cfg = load_config(path_or_dir)
+        actual_output = isempty(output_path) ? cfg.output.output_dir : output_path
+        return simulation_loop(cfg; output_path = actual_output)
+    else
+        actual_output = isempty(output_path) ? path_or_dir : output_path
+        return simulation_loop(default_config(); output_path = actual_output)
+    end
+end
+
+"""
 Parse command line arguments and feed them to the main function.
 
 $(SIGNATURES)
@@ -1586,9 +1624,12 @@ $(SIGNATURES)
 function parse_commandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
-        "output_path"
-            help = "output path for simulation data"
-            required = true
+        "config_or_output"
+            help = "path to TOML configuration file (.toml) or output directory"
+            default = "output"
+        "--output_path", "-o"
+            help = "output path for simulation data (overrides config output_dir if provided)"
+            default = ""
         "--show_timer"
             help = "show timing results?"
             arg_type = Bool
@@ -1610,12 +1651,41 @@ $(SIGNATURES)
 
     - nothing 
 """
-function run_simulation()
-    parsed_args = parse_commandline()
-    output_path = parsed_args["output_path"]
-    show_timer = parsed_args["show_timer"]
-    mkpath(output_path)
-    io = open(output_path * "Erebus_run.log", "w+")
+function run_simulation(config_or_output::AbstractString = "")
+    if isempty(config_or_output)
+        parsed_args = parse_commandline()
+        target = parsed_args["config_or_output"]
+        cli_output = parsed_args["output_path"]
+        show_timer = parsed_args["show_timer"]
+    else
+        target = config_or_output
+        cli_output = ""
+        show_timer = false
+    end
+
+    cfg = if endswith(target, ".toml")
+        load_config(target)
+    elseif !isempty(target)
+        def = default_config()
+        SimulationConfig(
+            grid = def.grid,
+            geometry = def.geometry,
+            time = def.time,
+            solver = def.solver,
+            poroelasticity = def.poroelasticity,
+            thermodynamics = def.thermodynamics,
+            materials = def.materials,
+            output = OutputConfig(output_dir = target)
+        )
+    else
+        default_config()
+    end
+
+    actual_output = isempty(cli_output) ? cfg.output.output_dir : cli_output
+    actual_output = endswith(actual_output, "/") ? actual_output : actual_output * "/"
+    mkpath(actual_output)
+
+    io = open(actual_output * "Erebus_run.log", "w+")
     logger = SimpleLogger(io)
     global_logger(logger)
     if show_timer
@@ -1623,10 +1693,10 @@ function run_simulation()
     end
     @info "=========== Erebus simulation run ==========="
     @info "system information: Apple=$(Sys.isapple()) Linux=$(Sys.islinux()) Win=$(Sys.iswindows())" Sys.cpu_info()
-    @info "writing results to $output_path"
+    @info "writing results to $actual_output"
     t1 = now()
     @info "start time = $t1"
-    simulation_loop(output_path)
+    simulation_loop(cfg; output_path = actual_output)
     t2 = now()
     @info "end time = $t2"
     @info "total run time = $(Dates.canonicalize(

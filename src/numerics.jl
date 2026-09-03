@@ -416,7 +416,9 @@ function assemble_hydromechanical_lse!(
     dt,
     R;
     betasolid = betasolid,
-    betafluid = betafluid
+    betafluid = betafluid,
+    phimin = phimin,
+    phimax = phimax
 )
 # @timeit to "assemble_hydromechanical_lse()" begin
     # initialize LHS sparse coefficient matrix
@@ -737,9 +739,9 @@ function assemble_hydromechanical_lse!(
             updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
             updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
             # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
-            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax)
             kbw = compute_biot_willis_coefficient(betadrained, betasolid)
-            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid)
+            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid; phimin=phimin, phimax=phimax)
 
             # LHS coefficient matrix
             updateindex!(
@@ -986,12 +988,13 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt; betasolid = betasolid)
+function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt;
+                     betasolid = betasolid, phimin = phimin, phimax = phimax)
 # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
     for j = 2:Nx, i = 2:Ny
-        betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid)
+        betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax)
         kbw = compute_biot_willis_coefficient(betadrained, betasolid)
         compaction = (
             (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j]))

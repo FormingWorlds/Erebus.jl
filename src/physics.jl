@@ -739,12 +739,15 @@ and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya
     - betaphi: pore compressibility β_ϕ [1/Pa]
     - phi: porosity ϕ [-]
     - betasolid: solid matrix compressibility β_s [1/Pa]
+    - phimin: minimum porosity limit
+    - phimax: maximum porosity limit
 
 # Returns
 
     - betadrained: drained bulk compressibility β_d [1/Pa]
 """
-function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real)
+function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real;
+                                         phimin::Real = phimin, phimax::Real = phimax)
     bphi = max(betaphi, 0.0)
     bsolid = max(betasolid, 0.0)
     phi_eff = clamp(phi, phimin, phimax)
@@ -793,7 +796,7 @@ $(SIGNATURES)
     B = (β_d - β_s) / (β_d - β_s + ϕ * (β_f - β_s))
 
 For incompressible constituents (β_s = 0, β_f = 0), B = 1.
-Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Detournay & Cheng (1993).
+Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Rice & Cleary (1976).
 
 # Arguments
 
@@ -801,12 +804,15 @@ Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Detournay & Cheng (1
     - phi: porosity ϕ [-]
     - betasolid: solid matrix compressibility β_s [1/Pa]
     - betafluid: pore fluid compressibility β_f [1/Pa]
+    - phimin: minimum porosity limit
+    - phimax: maximum porosity limit
 
 # Returns
 
     - ksk: Skempton coefficient B [-]
 """
-function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real)
+function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real;
+                                      phimin::Real = phimin, phimax::Real = phimax)
     if betasolid <= 0.0 && betafluid <= 0.0
         return 1.0
     end

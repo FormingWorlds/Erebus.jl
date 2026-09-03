@@ -14,8 +14,12 @@ using Random
 using SparseArrays
 using StaticArrays
 using TimerOutputs
+using TOML
 
 export run_simulation
+export Config, GridConfig, GeometryConfig, TimeConfig, SolverConfig,
+       PoroelasticConfig, ThermalConfig, MaterialConfig, OutputConfig,
+       SimulationConfig, default_config, load_config, validate_config, save_config
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -35,6 +39,7 @@ const to = TimerOutput()
 const rgen = MersenneTwister(seed)
 
 # Core modular components
+include("config.jl")
 include("geometry.jl")
 include("physics.jl")
 include("particles.jl")
@@ -119,6 +124,15 @@ module Simulation
                      parse_commandline, run_simulation
     export s_to_Ma, setup_dynamic_simulation_parameters, save_state, simulation_loop,
            parse_commandline, run_simulation
+end
+
+module Config
+    import ..Erebus: GridConfig, GeometryConfig, TimeConfig, SolverConfig,
+                     PoroelasticConfig, ThermalConfig, MaterialConfig, OutputConfig,
+                     SimulationConfig, default_config, load_config, validate_config, save_config
+    export GridConfig, GeometryConfig, TimeConfig, SolverConfig,
+           PoroelasticConfig, ThermalConfig, MaterialConfig, OutputConfig,
+           SimulationConfig, default_config, load_config, validate_config, save_config
 end
 
 end # module Erebus
