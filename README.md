@@ -89,14 +89,17 @@ julia --project launch.jl configs/hydrothermal_benchmark.toml -o output_hydrothe
 Helper scripts in `scripts/` produce publication-ready figures and animations from output files:
 
 ```bash
-# Generate comprehensive multi-panel diagnostic plots
-julia --project scripts/generate_plots.jl output_hydrothermal/
-
-# Generate time-evolution MP4 animations
-julia --project scripts/generate_animations.jl output_hydrothermal/
+# Export benchmark simulation data to JSON
+julia --project scripts/export_hydrothermal_data.jl output_hydrothermal/
 
 # Generate the 4-panel hydrothermal circulation benchmark figure
-python scripts/generate_hydrothermal_benchmark.py output_hydrothermal/benchmark_plot_data.json
+python3 scripts/generate_hydrothermal_benchmark.py output_hydrothermal/benchmark_plot_data.json
+
+# Generate comprehensive multi-panel diagnostic plots (requires PyPlot and StatsBase)
+julia scripts/generate_plots.jl output_hydrothermal/
+
+# Generate time-evolution MP4 animations
+julia scripts/generate_animations.jl output_hydrothermal/
 ```
 
 ---
@@ -147,7 +150,7 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
    ```bash
    julia --project=. test/runtests.jl
    ```
-3. Open a pull request against `main`. Continuous Integration verifies formatting, test execution, and documentation builds on Julia 1.10 and 1.11.
+3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.10 and 1.11, and enforces formatting and documentation builds on Julia 1.10.
 
 ---
 
@@ -155,9 +158,10 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
 
 If you use `Erebus.jl` in your research, please cite:
 
-- Hubmann, B. (2022). *Hydrology of Planetesimals*. Master's thesis / Technical Report, ETH Zurich. [DOI: 10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229).
+- Hubmann, B. (2022). *Hydrology of Planetesimals*. Technical report, ETH Zurich. [DOI: 10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229).
 - Gerya, T. (2019). *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press. [DOI: 10.1017/9781316534243](https://doi.org/10.1017/9781316534243).
 - Lichtenberg, T., et al. (2021). *Bifurcation of planetary building blocks during Solar System formation*. Science, 371(6527), 365-370. [DOI: 10.1126/science.abb3091](https://doi.org/10.1126/science.abb3091).
+
 
 ### Acknowledgements
 

@@ -19,9 +19,16 @@ Contributions to `Erebus.jl` are welcome. This guide outlines development practi
    ```
 
 3. **Code Style**:
-   - Follow standard Julia conventions: 4 spaces indentation, lowercase module/function names, PascalCase types.
+   - Follow the [BlueStyle](https://github.com/invenia/BlueStyle) code formatting convention.
+   - Format code using `JuliaFormatter.jl` before submitting:
+     ```julia
+     using JuliaFormatter
+     format(".", BlueStyle())
+     ```
+   - Continuous Integration automatically validates BlueStyle formatting on every pull request.
    - Use `DocStringExtensions` for docstrings with `$(SIGNATURES)` and `$(FIELDS)`.
    - Prefer type annotations and `StaticArrays` for performance-critical inner loops.
+
 
 4. **Testing**:
    Run the test suite before submitting:
