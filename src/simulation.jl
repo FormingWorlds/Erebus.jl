@@ -787,16 +787,23 @@ function simulation_loop(
     # hydromechanical solver
     R, S = setup_hydromechanical_lse(coords)
     hydromech_sol = nothing
+    L_hydromech = ExtendableSparseMatrix(
+        coords.Nx1 * coords.Ny1 * 6, coords.Nx1 * coords.Ny1 * 6
+    )
+    hydromech_cache = nothing
     # thermal solver
     RT, ST = setup_thermal_lse(coords)
+    LT_thermal = ExtendableSparseMatrix(coords.Ny1 * coords.Nx1, coords.Ny1 * coords.Nx1)
+    thermal_cache = nothing
     # gravitational solver
     RP, SP = setup_gravitational_lse(coords)
+    # precompute gravitational Poisson operator (invariant across timesteps)
+    LP = assemble_gravitational_lse!(zeros(coords.Ny1, coords.Nx1), RP; coords=coords)
+    F_grav = lu(LP.cscmatrix)
     # Pardiso MKL solver
     if use_pardiso
         pardiso_solver = Pardiso.MKLPardisoSolver()
         initialize_pardiso!(pardiso_solver, iparms_dict)
-        # else
-        #     F = lu(fdrand(Nx1*Ny1*6, 1, 1, matrixtype=ExtendableSparseMatrix))
     end
 
     # end # @timeit to "simulation_loop setup"
@@ -1213,9 +1220,9 @@ function simulation_loop(
         # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        LP = assemble_gravitational_lse!(RHO, RP; coords=coords)
+        assemble_gravitational_rhs!(RHO, RP; coords=coords)
         #     @timeit to "solve gravitational LSE" begin
-        SP = LP \ RP
+        SP = F_grav \ RP
         #     end # @timeit to "solve gravitational LSE"
         process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
 
@@ -1324,6 +1331,7 @@ function simulation_loop(
                     kappa_frac=kappa_frac_val,
                     gamma_frac=gamma_frac_val,
                     k_frac_max=k_frac_max_val,
+                    L=L_hydromech,
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1334,10 +1342,22 @@ function simulation_loop(
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
                     pardiso(pardiso_solver, S, L, R)
                 else
-                    hydromech_prob = LinearProblem(L, R)
-                    hydromech_sol = LinearSolve.solve(
-                        hydromech_prob, UMFPACKFactorization()
-                    )
+                    if hydromech_cache === nothing
+                        hydromech_prob = LinearProblem(L, R)
+                        hydromech_cache = init(
+                            hydromech_prob, UMFPACKFactorization(; reuse_symbolic=true)
+                        )
+                    else
+                        hydromech_cache.A = L
+                        hydromech_cache.b = R
+                    end
+                    hydromech_sol = solve!(hydromech_cache)
+                    if !LinearSolve.SciMLBase.successful_retcode(hydromech_sol) ||
+                        !all(isfinite, hydromech_sol.u)
+                        error(
+                            "Hydromechanical solver failed: retcode=$(hydromech_sol.retcode), finite=$(all(isfinite, hydromech_sol.u))",
+                        )
+                    end
                     S = hydromech_sol.u
                 end
                 #     end # @timeit to "solve hydromechanical system"
@@ -1509,10 +1529,26 @@ function simulation_loop(
             # ------------------------------------------------------------------
             # assemble thermal system of equations 
             LT = assemble_thermal_lse!(
-                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=coords
+                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=coords, LT=LT_thermal
             )
             # solve thermal system of equations
-            ST = LT \ RT
+            if thermal_cache === nothing
+                thermal_prob = LinearProblem(LT.cscmatrix, RT)
+                thermal_cache = init(
+                    thermal_prob, UMFPACKFactorization(; reuse_symbolic=true)
+                )
+            else
+                thermal_cache.A = LT.cscmatrix
+                thermal_cache.b = RT
+            end
+            thermal_sol = solve!(thermal_cache)
+            if !LinearSolve.SciMLBase.successful_retcode(thermal_sol) ||
+                !all(isfinite, thermal_sol.u)
+                error(
+                    "Thermal solver failed: retcode=$(thermal_sol.retcode), finite=$(all(isfinite, thermal_sol.u))",
+                )
+            end
+            ST = thermal_sol.u
             # reshape solution vector to 2D array
             tk2 .= reshape(ST, coords.Ny1, coords.Nx1)
             # compute ΔT
