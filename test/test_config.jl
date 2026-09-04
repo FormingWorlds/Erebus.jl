@@ -89,22 +89,61 @@ using TOML
         # Valid baseline
         @test validate_config(default_config()) === nothing
 
-        # Compiled grid constraints (dynamic grid resizing requires recompilation)
+        # Dynamic grid resolutions are valid
+        @test validate_config(
+            SimulationConfig(grid=GridConfig(Nx=15, Ny=15, xsize=140000.0, ysize=140000.0))
+        ) === nothing
+        @test validate_config(
+            SimulationConfig(grid=GridConfig(Nx=65, Ny=65, xsize=140000.0, ysize=140000.0))
+        ) === nothing
+
+        # Invalid grid constraints
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=15, Ny=33, xsize=140000.0, ysize=140000.0))
+            SimulationConfig(grid=GridConfig(Nx=2, Ny=33, xsize=140000.0, ysize=140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=33, Ny=15, xsize=140000.0, ysize=140000.0))
+            SimulationConfig(grid=GridConfig(Nx=33, Ny=1, xsize=140000.0, ysize=140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=50000.0, ysize=140000.0))
+            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=-50000.0, ysize=140000.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=140000.0, ysize=0.0))
         )
 
-        # Compiled geometry constraints
+        # Planet exceeding domain boundary (centered)
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
+                geometry=GeometryConfig(
+                    rplanet=50000.0,
+                    rcrust=50000.0,
+                    xcenter=40000.0,
+                    ycenter=40000.0,
+                    psurface=1e3,
+                ),
+            ),
+        )
+
+        # Planet exceeding domain boundary (off-center placement)
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
+                geometry=GeometryConfig(
+                    rplanet=30000.0,
+                    rcrust=30000.0,
+                    xcenter=5000.0,
+                    ycenter=40000.0,
+                    psurface=1e3,
+                ),
+            ),
+        )
+
+        # Crust radius exceeding planet radius
         @test_throws ArgumentError validate_config(
             SimulationConfig(
                 geometry=GeometryConfig(
-                    rplanet=60000.0,
+                    rplanet=40000.0,
                     rcrust=50000.0,
                     xcenter=70000.0,
                     ycenter=70000.0,

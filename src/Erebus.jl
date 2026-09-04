@@ -30,7 +30,14 @@ export Config,
     default_config,
     load_config,
     validate_config,
-    save_config
+    save_config,
+    GridCoordinates,
+    default_grid_coordinates,
+    compute_adaptive_timestep,
+    ThreadInterpolationBuffers,
+    allocate_thread_interpolation_buffers,
+    reset_thread_buffers!,
+    reduce_thread_buffers!
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -51,6 +58,7 @@ const rgen = MersenneTwister(seed)
 
 # Core modular components
 include("config.jl")
+include("coordinates.jl")
 include("geometry.jl")
 include("physics.jl")
 include("particles.jl")
@@ -170,7 +178,11 @@ module Particles
         update_marker_stress!,
         apply_subgrid_temperature_diffusion!,
         update_marker_temperature!,
-        update_marker_porosity!
+        update_marker_porosity!,
+        ThreadInterpolationBuffers,
+        allocate_thread_interpolation_buffers,
+        reset_thread_buffers!,
+        reduce_thread_buffers!
     export setup_marker_properties,
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
@@ -209,7 +221,11 @@ module Particles
         update_marker_stress!,
         apply_subgrid_temperature_diffusion!,
         update_marker_temperature!,
-        update_marker_porosity!
+        update_marker_porosity!,
+        ThreadInterpolationBuffers,
+        allocate_thread_interpolation_buffers,
+        reset_thread_buffers!,
+        reduce_thread_buffers!
 end
 
 module Numerics
@@ -228,6 +244,7 @@ module Numerics
         compute_Aϕ!,
         compute_fluid_velocities!,
         compute_displacement_timestep,
+        compute_adaptive_timestep,
         compute_stress_strainrate!,
         symmetrize_p_node_observables!,
         compute_nodal_adjustment!,
@@ -251,6 +268,7 @@ module Numerics
         compute_Aϕ!,
         compute_fluid_velocities!,
         compute_displacement_timestep,
+        compute_adaptive_timestep,
         compute_stress_strainrate!,
         symmetrize_p_node_observables!,
         compute_nodal_adjustment!,

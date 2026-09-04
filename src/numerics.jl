@@ -13,13 +13,15 @@ $(SIGNATURES)
     - RP: gravitational linear system of equations: RHS vector
     - SP: gravitational linear system of equations: solution vector
 """
-function setup_gravitational_lse()
+function setup_gravitational_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
     # @timeit to "setup_gravitational_lse()" begin
-    # RP = zeros(Ny1*Nx1)
     RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
     # end # @timeit to "setup_gravitational_lse()"
     return RP, SP
+end
+function setup_gravitational_lse(coords::GridCoordinates)
+    return setup_gravitational_lse(coords.Nx1, coords.Ny1)
 end
 
 """
@@ -36,13 +38,15 @@ $(SIGNATURES)
     - R: hydromechanical linear system of equations: RHS vector
     - S: hydromechanical linear system of equations: solution vector
 """
-function setup_hydromechanical_lse()
+function setup_hydromechanical_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
     # @timeit to "setup_hydromechanical_lse()" begin
-    # R = zeros(Ny1*Nx1*6)
     R = Vector{Float64}(undef, Ny1*Nx1*6)
     S = Vector{Float64}(undef, Ny1*Nx1*6)
     # end # @timeit to "setup_hydromechanical_lse()"
     return R, S
+end
+function setup_hydromechanical_lse(coords::GridCoordinates)
+    return setup_hydromechanical_lse(coords.Nx1, coords.Ny1)
 end
 
 """
@@ -59,14 +63,14 @@ $(SIGNATURES)
     - RT: thermal linear system of equations: RHS vector
     - ST: thermal linear system of equations: solution vector
 """
-function setup_thermal_lse()
+function setup_thermal_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
     # @timeit to "setup_thermal_lse()" begin
-    # RT = zeros(Ny1*Nx1)
     RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
     # end # @timeit to "setup_thermal_lse()"
     return RT, ST
 end
+setup_thermal_lse(coords::GridCoordinates) = setup_thermal_lse(coords.Nx1, coords.Ny1)
 
 """
 Initialize `iparm` parameters of Pardiso MKL solver.
@@ -146,8 +150,15 @@ function get_viscosities_stresses_density_gradients!(
     dRHOXdx,
     dRHOXdy,
     dRHOYdx,
-    dRHOYdy,
+    dRHOYdy;
+    coords=nothing,
 )
+    Ny1, Nx1 = size(RHOX)
+    Nx_val = Nx1 - 1
+    Ny_val = Ny1 - 1
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+
     # @timeit to "get_viscosities_stresses_density_gradients!()" begin
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
@@ -165,10 +176,14 @@ function get_viscosities_stresses_density_gradients!(
     # )
     # density gradients
     @inbounds begin
-        @views @. dRHOXdx[:, 2:Nx] = 0.5 * (RHOX[:, 3:Nx1]-RHOX[:, 1:(Nx1 - 2)]) * inv(dx)
-        @views @. dRHOXdy[2:Ny, :] = 0.5 * (RHOX[3:Ny1, :]-RHOX[1:(Ny1 - 2), :]) * inv(dy)
-        @views @. dRHOYdx[:, 2:Nx] = 0.5 * (RHOY[:, 3:Nx1]-RHOY[:, 1:(Nx1 - 2)]) * inv(dx)
-        @views @. dRHOYdy[2:Ny, :] = 0.5 * (RHOY[3:Ny1, :]-RHOY[1:(Ny1 - 2), :]) * inv(dy)
+        @views @. dRHOXdx[:, 2:Nx_val] =
+            0.5 * (RHOX[:, 3:Nx1]-RHOX[:, 1:(Nx1 - 2)]) * inv(dx_val)
+        @views @. dRHOXdy[2:Ny_val, :] =
+            0.5 * (RHOX[3:Ny1, :]-RHOX[1:(Ny1 - 2), :]) * inv(dy_val)
+        @views @. dRHOYdx[:, 2:Nx_val] =
+            0.5 * (RHOY[:, 3:Nx1]-RHOY[:, 1:(Nx1 - 2)]) * inv(dx_val)
+        @views @. dRHOYdy[2:Ny_val, :] =
+            0.5 * (RHOY[3:Ny1, :]-RHOY[1:(Ny1 - 2), :]) * inv(dy_val)
     end # @inbounds
     return nothing
     # end # @timeit to "get_viscosities_stresses_density_gradients!()"
@@ -190,14 +205,20 @@ $(SIGNATURES)
     - LP: LHS sparse coefficient matrix
 
 """
-function assemble_gravitational_lse!(RHO, RP)
-    #     @timeit to "assemble_gravitational_lse!" begin
+function assemble_gravitational_lse!(RHO, RP; coords=nothing)
+    Ny1, Nx1 = size(RHO)
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    xc_val = coords === nothing ? xcenter : coords.xcenter
+    yc_val = coords === nothing ? ycenter : coords.ycenter
+
     # fresh LHS sparse coefficient matrix
     LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # reset RHS coefficient vector
     RP .= zero(0.0)
     # iterate over P nodes
-    #         @timeit to "build system" begin
     for j in 1:1:Nx1, i in 1:1:Ny1
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
@@ -207,38 +228,20 @@ function assemble_gravitational_lse!(RHO, RP)
             i==Ny1 ||
             j==1 ||
             j==Nx1 ||
-            distance(xp[j], yp[i], xcenter, ycenter) > xcenter
+            distance(xp_val[j], yp_val[i], xc_val, yc_val) > min(xc_val, yc_val)
         )
             # boundary condition: ϕ = 0
             updateindex!(LP, +, 1.0, gk, gk)
-            # RP[gk] = 0.0 # already done at initialization
         else
             # internal points: 2D Poisson equation: gravitational potential Φ
-            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
-            #
-            #           Φ₂
-            #           |
-            #           |
-            #    Φ₁-----Φ₃-----Φ₅
-            #           |
-            #           |
-            #           Φ₄
-            #
-            # density gradients
-            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
-            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
-            # fill system of equations: LHS (11.11)
-            updateindex!(LP, +, inv(dx^2), gk, gk-Ny1) # Φ₁
-            updateindex!(LP, +, inv(dy^2), gk, gk-1) # Φ₂
-            updateindex!(LP, +, -2.0*(inv(dx^2)+inv(dy^2)), gk, gk) # Φ₃
-            updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
-            updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
-            # fill system of equations: RHS (11.11)
+            updateindex!(LP, +, inv(dx_val^2), gk, gk-Ny1) # Φ₁
+            updateindex!(LP, +, inv(dy_val^2), gk, gk-1) # Φ₂
+            updateindex!(LP, +, -2.0*(inv(dx_val^2)+inv(dy_val^2)), gk, gk) # Φ₃
+            updateindex!(LP, +, inv(dy_val^2), gk, gk+1) # Φ₄
+            updateindex!(LP, +, inv(dx_val^2), gk, gk+Ny1) # Φ₅
             @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
         end
     end
-    #         end # @timeit to "build system"
-    #     end # @timeit to "assemble_gravitational_lse!"
     return LP
 end
 
@@ -257,18 +260,15 @@ $(SIGNATURES)
 
     - nothing
 """
-function process_gravitational_solution!(SP, FI, gx, gy)
-    # @timeit to "process gravitational solution" begin
-    #     @timeit to "reshape solution" begin
+function process_gravitational_solution!(SP, FI, gx, gy; coords=nothing)
+    Ny1, Nx1 = size(FI)
+    Nx_val = Nx1 - 1
+    Ny_val = Ny1 - 1
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
     FI .= reshape(SP, Ny1, Nx1)
-    #     end # @timeit to "reshape solution"
-    #     @timeit to "compute accelerations" begin
-    # gx = -∂ϕ/∂x (11.12)
-    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
-    # gy = -∂ϕ/∂y (11.13)   
-    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-    #     end # @timeit to "compute accelerations"
-    # end # @timeit to "process gravitational solution"
+    @inbounds gx[:, 1:Nx_val] .= -diff(FI, dims=2) ./ dx_val
+    @inbounds gy[1:Ny_val, :] .= -diff(FI, dims=1) ./ dy_val
     return nothing
 end
 
@@ -291,69 +291,10 @@ $(SIGNATURES)
 
 - nothing
 """
-function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
-    # @timeit to "compute_gravity_solution!" begin
-    # fresh LHS sparse coefficient matrix
-    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-    # reset RHS coefficient vector
-    RP .= 0.0
-    # iterate over P nodes
-    # @timeit to "build system" begin
-    for j in 1:1:Nx1, i in 1:1:Ny1
-        # define global index in algebraic space
-        gk = (j-1) * Ny1 + i
-        # decide if external / boundary points
-        @inbounds if (
-            i==1 ||
-            i==Ny1 ||
-            j==1 ||
-            j==Nx1 ||
-            distance(xp[j], yp[i], xcenter, ycenter) > xcenter
-        )
-            # boundary condition: ϕ = 0
-            updateindex!(LP, +, 1.0, gk, gk)
-            # RP[gk] = 0.0 # already done at initialization
-        else
-            # internal points: 2D Poisson equation: gravitational potential Φ
-            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
-            #
-            #           Φ₂
-            #           |
-            #           |
-            #    Φ₁-----Φ₃-----Φ₅
-            #           |
-            #           |
-            #           Φ₄
-            #
-            # density gradients
-            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
-            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
-            # fill system of equations: LHS (11.11)
-            updateindex!(LP, +, inv(dx^2), gk, gk-Ny1) # Φ₁
-            updateindex!(LP, +, inv(dy^2), gk, gk-1) # Φ₂
-            updateindex!(LP, +, -2.0*(inv(dx^2)+inv(dy^2)), gk, gk) # Φ₃
-            updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
-            updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
-            # fill system of equations: RHS (11.11)
-            @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
-        end
-    end
-    #     end # @timeit to "build system"
-    #     @timeit to "solve system" begin
-    # solve system of equations
-    SP .= LP \ RP # implicit: flush!(LP)
-    #     end # @timeit to "solve system"
-    # reshape solution vector to 2D array
-    #     @timeit to "reshape solution" begin
-    FI .= reshape(SP, Ny1, Nx1)
-    #     end # @timeit to "reshape solution"
-    #     @timeit to "compute accelerations" begin
-    # gx = -∂ϕ/∂x (11.12)
-    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
-    # gy = -∂ϕ/∂y (11.13)   
-    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-    #     end # @timeit to "compute accelerations"
-    # end # @timeit to "compute_gravity_solution!"
+function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy; coords=nothing)
+    LP = assemble_gravitational_lse!(RHO, RP; coords=coords)
+    SP .= LP \ RP
+    process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
     return nothing
 end # function compute_gravity_solution!
 
@@ -427,8 +368,14 @@ function assemble_hydromechanical_lse!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    coords=nothing,
 )
-    # @timeit to "assemble_hydromechanical_lse()" begin
+    Ny1, Nx1 = size(ETAP)
+    Nx_val = Nx1 - 1
+    Ny_val = Ny1 - 1
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+
     # initialize LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # reset RHS coefficient vector
@@ -443,7 +390,7 @@ function assemble_hydromechanical_lse!(
             kqy = kvx + 4 # qy Darcy
             kpf = kvx + 5 # P fluid
             # Vx equation
-            if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+            if i==1 || i==Ny1 || j==1 || j==Nx_val || j==Nx1
                 # Vx equation external points: boundary conditions
                 # all locations: ghost unknowns Vx₃=0 -> 1.0⋅Vx[i,j]=0.0
                 updateindex!(L, +, 1.0, kvx, kvx)
@@ -453,15 +400,15 @@ function assemble_hydromechanical_lse!(
                     R[kvx] = vxleft
                 end
                 # right boundary
-                if j == Nx
+                if j == Nx_val
                     R[kvx] = vxright
                 end
                 # top boundary
-                if i==1 && 1<j<Nx
+                if i==1 && 1<j<Nx_val
                     updateindex!(L, +, bctop, kvx, kvx+6)
                 end
                 # bottom boundary
-                if i==Ny1 && 1<j<Nx
+                if i==Ny1 && 1<j<Nx_val
                     updateindex!(L, +, bcbottom, kvx, kvx-6)
                 end
             else
@@ -509,29 +456,29 @@ function assemble_hydromechanical_lse!(
                 SXX₂ =
                     SXX0[i, j + 1] * ETAP[i, j + 1] / (GGGP[i, j + 1]*dt + ETAP[i, j + 1])
                 # density gradients
-                ∂RHO∂x = 0.5 * (RHOX[i, j + 1] - RHOX[i, j - 1]) * inv(dx)
-                ∂RHO∂y = 0.5 * (RHOX[i + 1, j] - RHOX[i - 1, j]) * inv(dy)
+                ∂RHO∂x = 0.5 * (RHOX[i, j + 1] - RHOX[i, j - 1]) * inv(dx_val)
+                ∂RHO∂y = 0.5 * (RHOX[i + 1, j] - RHOX[i - 1, j]) * inv(dy_val)
                 # LHS coefficient matrix
-                updateindex!(L, +, ETAP₁/dx^2, kvx, kvx-6*Ny1) # Vx₁
-                updateindex!(L, +, ETA₁/dy^2, kvx, kvx-6) # Vx₂
+                updateindex!(L, +, ETAP₁/dx_val^2, kvx, kvx-6*Ny1) # Vx₁
+                updateindex!(L, +, ETA₁/dy_val^2, kvx, kvx-6) # Vx₂
                 updateindex!(
                     L,
                     +,
                     (
-                        -(ETAP₁+ETAP₂) * inv(dx^2) - (ETA₁+ETA₂) * inv(dy^2) -
+                        -(ETAP₁+ETAP₂) * inv(dx_val^2) - (ETA₁+ETA₂) * inv(dy_val^2) -
                         ∂RHO∂x * gx[i, j] * dt
                     ),
                     kvx,
                     kvx,
                 ) # Vx₃
-                updateindex!(L, +, ETA₂/dy^2, kvx, kvx+6) # Vx₄
-                updateindex!(L, +, ETAP₂/dx^2, kvx, kvx+6*Ny1) # Vx₅
+                updateindex!(L, +, ETA₂/dy_val^2, kvx, kvx+6) # Vx₄
+                updateindex!(L, +, ETAP₂/dx_val^2, kvx, kvx+6*Ny1) # Vx₅
                 updateindex!(
                     L,
                     +,
                     (
-                        ETAP₁ * inv(dx) * inv(dy) - ETA₂ * inv(dx) * inv(dy) -
-                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                        ETAP₁ * inv(dx_val) * inv(dy_val) -
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
                     ),
                     kvx,
                     kvy,
@@ -540,8 +487,8 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        -ETAP₂ * inv(dx) * inv(dy) + ETA₂ * inv(dx) * inv(dy) -
-                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                        -ETAP₂ * inv(dx_val) * inv(dy_val) +
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
                     ),
                     kvx,
                     kvy+6*Ny1,
@@ -550,8 +497,8 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        -ETAP₁ * inv(dx) * inv(dy) + ETA₁ * inv(dx) * inv(dy) -
-                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                        -ETAP₁ * inv(dx_val) * inv(dy_val) +
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
                     ),
                     kvx,
                     kvy-6,
@@ -560,21 +507,22 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        ETAP₂ * inv(dx) * inv(dy) - ETA₁ * inv(dx) * inv(dy) -
-                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                        ETAP₂ * inv(dx_val) * inv(dy_val) -
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
                     ),
                     kvx,
                     kvy+6*Ny1-6,
                 ) # Vy₃
-                updateindex!(L, +, Kcont*inv(dx), kvx, kpm) # P₁
-                updateindex!(L, +, -Kcont*inv(dx), kvx, kpm+6*Ny1) # P₂
+                updateindex!(L, +, Kcont*inv(dx_val), kvx, kpm) # P₁
+                updateindex!(L, +, -Kcont*inv(dx_val), kvx, kpm+6*Ny1) # P₂
                 # RHS coefficient vector
                 R[kvx] = (
-                    -RHOX[i, j] * gx[i, j] - (SXY₂-SXY₁) * inv(dy) - (SXX₂-SXX₁) * inv(dx)
+                    -RHOX[i, j] * gx[i, j] - (SXY₂-SXY₁) * inv(dy_val) -
+                    (SXX₂-SXX₁) * inv(dx_val)
                 )
             end # Vx equation
             # Vy equation
-            if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
+            if i==1 || i==Ny_val || i==Ny1 || j==1 || j==Nx1
                 # Vy equation external points: boundary conditions
                 # all locations: ghost unknowns Vy₃=0 -> 1.0⋅Vy[i,j]=0.0
                 updateindex!(L, +, 1.0, kvy, kvy)
@@ -584,15 +532,15 @@ function assemble_hydromechanical_lse!(
                     R[kvy] = vytop
                 end
                 # bottom boundary
-                if i == Ny
+                if i == Ny_val
                     R[kvy] = vybottom
                 end
                 # left boundary
-                if j==1 && 1<i<Ny
+                if j==1 && 1<i<Ny_val
                     updateindex!(L, +, bcleft, kvy, kvy+6*Ny1)
                 end
                 # right boundary
-                if j==Nx1 && 1<i<Ny
+                if j==Nx1 && 1<i<Ny_val
                     updateindex!(L, +, bcright, kvy, kvy-6*Ny1)
                 end
             else
@@ -639,29 +587,29 @@ function assemble_hydromechanical_lse!(
                 SYY₂ =
                     -SXX0[i + 1, j] * ETAP[i + 1, j] / (GGGP[i + 1, j]*dt + ETAP[i + 1, j])
                 # density gradients
-                ∂RHO∂x = 0.5 * (RHOY[i, j + 1]-RHOY[i, j - 1]) / dx
-                ∂RHO∂y = 0.5 * (RHOY[i + 1, j]-RHOY[i - 1, j]) / dy
+                ∂RHO∂x = 0.5 * (RHOY[i, j + 1]-RHOY[i, j - 1]) / dx_val
+                ∂RHO∂y = 0.5 * (RHOY[i + 1, j]-RHOY[i - 1, j]) / dy_val
                 # LHS coefficient matrix
-                updateindex!(L, +, ETA₁/dx^2, kvy, kvy-6*Ny1) # Vy₁
-                updateindex!(L, +, ETAP₁/dy^2, kvy, kvy-6) # Vy₂
+                updateindex!(L, +, ETA₁/dx_val^2, kvy, kvy-6*Ny1) # Vy₁
+                updateindex!(L, +, ETAP₁/dy_val^2, kvy, kvy-6) # Vy₂
                 updateindex!(
                     L,
                     +,
                     (
-                        -(ETAP₁+ETAP₂) * inv(dy^2) - (ETA₁+ETA₂) * inv(dx^2) -
+                        -(ETAP₁+ETAP₂) * inv(dy_val^2) - (ETA₁+ETA₂) * inv(dx_val^2) -
                         ∂RHO∂y * gy[i, j] * dt
                     ),
                     kvy,
                     kvy,
                 ) # Vy₃
-                updateindex!(L, +, ETAP₂ * inv(dy^2), kvy, kvy+6) # Vy₄
-                updateindex!(L, +, ETA₂ * inv(dx^2), kvy, kvy+6*Ny1) # Vy₅
+                updateindex!(L, +, ETAP₂ * inv(dy_val^2), kvy, kvy+6) # Vy₄
+                updateindex!(L, +, ETA₂ * inv(dx_val^2), kvy, kvy+6*Ny1) # Vy₅
                 updateindex!(
                     L,
                     +,
                     (
-                        ETAP₁ * inv(dx) * inv(dy) - ETA₂ * inv(dx) * inv(dy) -
-                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                        ETAP₁ * inv(dx_val) * inv(dy_val) -
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
                     ),
                     kvy,
                     kvx,
@@ -670,8 +618,8 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        -ETAP₂ * inv(dx) * inv(dy) + ETA₂ * inv(dx) * inv(dy) -
-                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                        -ETAP₂ * inv(dx_val) * inv(dy_val) +
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
                     ),
                     kvy,
                     kvx+6,
@@ -680,8 +628,8 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        -ETAP₁ * inv(dx) * inv(dy) + ETA₁ * inv(dx) * inv(dy) -
-                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                        -ETAP₁ * inv(dx_val) * inv(dy_val) +
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
                     ),
                     kvy,
                     kvx-6*Ny1,
@@ -690,16 +638,17 @@ function assemble_hydromechanical_lse!(
                     L,
                     +,
                     (
-                        ETAP₂ * inv(dx) * inv(dy) - ETA₁ * inv(dx) * inv(dy) -
-                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                        ETAP₂ * inv(dx_val) * inv(dy_val) -
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
                     ),
                     kvy,
                     kvx+6-6*Ny1,
                 ) # Vx₂
-                updateindex!(L, +, Kcont*inv(dy), kvy, kpm) # P₁
-                updateindex!(L, +, -Kcont*inv(dy), kvy, kpm+6) # P₂
+                updateindex!(L, +, Kcont*inv(dy_val), kvy, kpm) # P₁
+                updateindex!(L, +, -Kcont*inv(dy_val), kvy, kpm+6) # P₂
                 R[kvy] = (
-                    -RHOY[i, j] * gy[i, j] - (SXY₂-SXY₁) * inv(dx) - (SYY₂-SYY₁) * inv(dy)
+                    -RHOY[i, j] * gy[i, j] - (SXY₂-SXY₁) * inv(dx_val) -
+                    (SYY₂-SYY₁) * inv(dy_val)
                 ) # RHS
             end # Vy equation
             # P equation
@@ -710,10 +659,10 @@ function assemble_hydromechanical_lse!(
                 # R[kpm] = 0.0 # already done with initialization
                 # elseif i==j==2
             elseif (
-                (i==2 && 2<=j<=Nx) ||
-                (j==2 && 2<i<Ny) ||
-                (i==Ny && 2<=j<=Nx) ||
-                (j==Nx && 2<i<Ny)
+                (i==2 && 2<=j<=Nx_val) ||
+                (j==2 && 2<i<Ny_val) ||
+                (i==Ny_val && 2<=j<=Nx_val) ||
+                (j==Nx_val && 2<i<Ny_val)
             )
                 # Ptotal/Pfluid real pressure boundary condition 'anchor'
                 updateindex!(L, +, Kcont, kpm, kpm)
@@ -732,10 +681,10 @@ function assemble_hydromechanical_lse!(
                 #                  kvy
                 #                  Vy₂
                 #
-                updateindex!(L, +, -1.0/dx, kpm, kvx-6*Ny1) # Vx₁
-                updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
-                updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
-                updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
+                updateindex!(L, +, -1.0/dx_val, kpm, kvx-6*Ny1) # Vx₁
+                updateindex!(L, +, 1.0/dx_val, kpm, kvx) # Vx₂
+                updateindex!(L, +, -1.0/dy_val, kpm, kvy-6) # Vy₁
+                updateindex!(L, +, 1.0/dy_val, kpm, kvy) # Vy₂
                 # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
                 betadrained = compute_drained_compressibility(
                     BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -770,17 +719,17 @@ function assemble_hydromechanical_lse!(
                 R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
             end # P equation
             # qxDarcy equation
-            if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+            if i==1 || i==Ny1 || j==1 || j==Nx_val || j==Nx1
                 # qxDarcy equation external points: boundary conditions
                 # all locations: ghost unknowns qyD = 0 -> 1.0⋅qxD[i, j] = 0.0
                 updateindex!(L, +, 1.0, kqx, kqx)
                 # R[kqx] = 0.0 # already done with initialization
                 # top boundary
-                if i==1 && 1<j<Nx
+                if i==1 && 1<j<Nx_val
                     updateindex!(L, +, bcftop, kqx, kqx+6)
                 end
                 # bottom boundary
-                if i==Ny1 && 1<j<Nx
+                if i==Ny1 && 1<j<Nx_val
                     updateindex!(L, +, bcfbottom, kqx, kqx-6)
                 end
             else
@@ -820,23 +769,23 @@ function assemble_hydromechanical_lse!(
                     end
                 end
                 updateindex!(L, +, rx_val, kqx, kqx) # qxD
-                updateindex!(L, +, -Kcont*inv(dx), kqx, kpf) # P₁
-                updateindex!(L, +, Kcont*inv(dx), kqx, kpf+6*Ny1) # P₂
+                updateindex!(L, +, -Kcont*inv(dx_val), kqx, kpf) # P₁
+                updateindex!(L, +, Kcont*inv(dx_val), kqx, kpf+6*Ny1) # P₂
                 # RHS coefficient vector
                 R[kqx] = RHOFX[i, j] * gx[i, j]
             end # qxDarcy equation
             # qyDarcy equation
-            if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
+            if i==1 || i==Ny_val || i==Ny1 || j==1 || j==Nx1
                 # qyDarcy equation external points: boundary conditions
                 # all locations: ghost unknowns qyD = 0 -> 1.0⋅qyD[i, j] = 0.0
                 updateindex!(L, +, 1.0, kqy, kqy)
                 # R[kqy] = 0.0 # already done with initialization
                 # left boundary
-                if j==1 && 1<i<Ny
+                if j==1 && 1<i<Ny_val
                     updateindex!(L, +, bcfleft, kqy, kqy+6*Ny1)
                 end
                 # right boundary
-                if j==Nx1 && 1<i<Ny
+                if j==Nx1 && 1<i<Ny_val
                     updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
                 end
             else
@@ -882,8 +831,8 @@ function assemble_hydromechanical_lse!(
                     end
                 end
                 updateindex!(L, +, ry_val, kqy, kqy) # qyD
-                updateindex!(L, +, -Kcont*inv(dy), kqy, kpf) # P₁
-                updateindex!(L, +, Kcont*inv(dy), kqy, kpf+6) # P₂
+                updateindex!(L, +, -Kcont*inv(dy_val), kqy, kpf) # P₁
+                updateindex!(L, +, Kcont*inv(dy_val), kqy, kpf+6) # P₂
                 # RHS coefficient vector
                 R[kqy] = RHOFY[i, j] * gy[i, j]
             end # qyDarcy equation
@@ -895,10 +844,10 @@ function assemble_hydromechanical_lse!(
                 # R[kpf] = 0.0 # already done with initialization
                 # elseif i==j==2
             elseif (
-                (i==2 && 2<=j<=Nx) ||
-                (j==2 && 2<i<Ny) ||
-                (i==Ny && 2<=j<=Nx) ||
-                (j==Nx && 2<i<Ny)
+                (i==2 && 2<=j<=Nx_val) ||
+                (j==2 && 2<i<Ny_val) ||
+                (i==Ny_val && 2<=j<=Nx_val) ||
+                (j==Nx_val && 2<i<Ny_val)
             )
                 # Ptotal/Pfluid real pressure boundary condition 'anchor'
                 updateindex!(L, +, Kcont, kpf, kpf)
@@ -917,10 +866,10 @@ function assemble_hydromechanical_lse!(
                 #                 kqy
                 #
                 # LHS coefficient matrix
-                updateindex!(L, +, -inv(dx), kpf, kqx-6*Ny1) # qxD₁
-                updateindex!(L, +, inv(dx), kpf, kqx) # qxD₂
-                updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
-                updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
+                updateindex!(L, +, -inv(dx_val), kpf, kqx-6*Ny1) # qxD₁
+                updateindex!(L, +, inv(dx_val), kpf, kqx) # qxD₂
+                updateindex!(L, +, -inv(dy_val), kpf, kqy-6) # qyD₁
+                updateindex!(L, +, inv(dy_val), kpf, kqy) # qyD₂
 
                 # LHS coefficient matrix
                 updateindex!(
@@ -969,8 +918,9 @@ $(SIGNATURES)
 
     - nothing
 """
-function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf)
+function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf; coords=nothing)
     # @timeit to "process_hydromechanical_solution!()" begin
+    Ny1, Nx1 = size(vx)
     S_mat = reshape(S, (:, Ny1, Nx1))
     @inbounds begin
         @views @. vx = S_mat[1, :, :]
@@ -1054,12 +1004,16 @@ function compute_Aϕ!(
     pr0,
     pf0,
     dt;
+    coords=nothing,
     betasolid=betasolid,
     phimin=phimin,
     phimax=phimax,
 )
     # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
+    Ny1, Nx1 = size(APHI)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
     @inbounds begin
         for j in 2:Nx, i in 2:Ny
             betadrained = compute_drained_compressibility(
@@ -1103,8 +1057,11 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf)
+function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coords=nothing)
     # @timeit to "compute_fluid_velocities!()" begin
+    Ny1, Nx1 = size(vxf)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
     @inbounds begin
         # vx velocity
         @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
@@ -1155,26 +1112,92 @@ $(SIGNATURES)
 
     - dt: displacement time step
 """
-function compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
-    # @timeit to "compute_displacement_timestep()" begin
+function compute_displacement_timestep(
+    vx,
+    vy,
+    vxf,
+    vyf,
+    dt,
+    aphimax;
+    coords=nothing,
+    dx_val=coords === nothing ? dx : coords.dx,
+    dy_val=coords === nothing ? dy : coords.dy,
+    dxymax_val=dxymax,
+    dphimax_val=dphimax,
+)
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
     maxvxf = maximum(abs, vxf)
     maxvyf = maximum(abs, vyf)
     @info "dt before velocity limitations = $dt s"
-    dt = ifelse(dt*maxvx > dxymax*dx, dxymax*dx*inv(maxvx), dt)
+    dt = ifelse(dt*maxvx > dxymax_val*dx_val, dxymax_val*dx_val*inv(maxvx), dt)
     @info "dt after vx limitation = $dt s"
-    dt = ifelse(dt*maxvy > dxymax*dy, dxymax*dy*inv(maxvy), dt)
+    dt = ifelse(dt*maxvy > dxymax_val*dy_val, dxymax_val*dy_val*inv(maxvy), dt)
     @info "dt after vy limitation = $dt s"
-    dt = ifelse(dt*maxvxf > dxymax*dx, dxymax*dx*inv(maxvxf), dt)
+    dt = ifelse(dt*maxvxf > dxymax_val*dx_val, dxymax_val*dx_val*inv(maxvxf), dt)
     @info "dt after vxf limitation = $dt s"
-    dt = ifelse(dt*maxvyf > dxymax*dy, dxymax*dy*inv(maxvyf), dt)
+    dt = ifelse(dt*maxvyf > dxymax_val*dy_val, dxymax_val*dy_val*inv(maxvyf), dt)
     @info "dt after vyf limitation = $dt s"
-    dt = ifelse(dt*aphimax > dphimax, dphimax*inv(aphimax), dt)
+    dt = ifelse(dt*aphimax > dphimax_val, dphimax_val*inv(aphimax), dt)
     @info "dt after aphimax limitation = $dt s"
-    # end # @timeit to "compute_displacement_timestep()"
     return dt
 end # function compute_displacement_timestep
+
+"""
+    compute_adaptive_timestep(
+        vx, vy, vxf, vyf, dt, aphimax;
+        coords=nothing,
+        dx_val=coords === nothing ? dx : coords.dx,
+        dy_val=coords === nothing ? dy : coords.dy,
+        dxymax_val=dxymax,
+        dphimax_val=dphimax,
+        maxDTcurrent=0.0,
+        DTmax_val=DTmax,
+        dt_longest_val=dt_longest,
+        dt_min=1.0,
+    )
+
+Compute multi-criterion adaptive timestep constrained by velocity CFL, porosity compaction,
+thermal variation, and stability bounds.
+"""
+function compute_adaptive_timestep(
+    vx,
+    vy,
+    vxf,
+    vyf,
+    dt,
+    aphimax;
+    coords=nothing,
+    dx_val=coords === nothing ? dx : coords.dx,
+    dy_val=coords === nothing ? dy : coords.dy,
+    dxymax_val=dxymax,
+    dphimax_val=dphimax,
+    dt_ref=nothing,
+    maxDTcurrent=0.0,
+    DTmax_val=DTmax,
+    dt_longest_val=dt_longest,
+    dt_min=1.0,
+)
+    dt_cand = compute_displacement_timestep(
+        vx,
+        vy,
+        vxf,
+        vyf,
+        dt,
+        aphimax;
+        coords=coords,
+        dx_val=dx_val,
+        dy_val=dy_val,
+        dxymax_val=dxymax_val,
+        dphimax_val=dphimax_val,
+    )
+    ref_dt = dt_ref === nothing ? dt : dt_ref
+    if maxDTcurrent > DTmax_val && maxDTcurrent > 0.0
+        dt_cand = min(dt_cand, ref_dt * (DTmax_val * inv(maxDTcurrent)))
+    end
+    dt_cand = clamp(dt_cand, dt_min, dt_longest_val)
+    return dt_cand
+end
 
 """
 Compute stress, stress change, and strain rate components.
@@ -1211,13 +1234,34 @@ $(SIGNATURES)
         - nothing
 """
 function compute_stress_strainrate!(
-    vx, vy, ETA, GGG, ETAP, GGGP, SXX0, SXY0, EXX, EXY, SXX, SXY, DSXX, DSXY, EII, SII, dt
+    vx,
+    vy,
+    ETA,
+    GGG,
+    ETAP,
+    GGGP,
+    SXX0,
+    SXY0,
+    EXX,
+    EXY,
+    SXX,
+    SXY,
+    DSXX,
+    DSXY,
+    EII,
+    SII,
+    dt;
+    coords=nothing,
 )
     # @timeit to "compute_stress_strainrate!()" begin
+    Ny, Nx = size(EXY)
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
     @inbounds begin
         # ϵxy, σxy, Δσxy at basic nodes
         for j in 1:1:Nx, i in 1:1:Ny
-            EXY[i, j] = 0.5 * ((vx[i + 1, j]-vx[i, j]) / dy + (vy[i, j + 1]-vy[i, j])/dx)
+            EXY[i, j] =
+                0.5 * ((vx[i + 1, j]-vx[i, j]) / dy_val + (vy[i, j + 1]-vy[i, j])/dx_val)
             SXY[i, j] = (
                 2*ETA[i, j]*EXY[i, j]*GGG[i, j]*dt / (GGG[i, j]*dt+ETA[i, j]) +
                 SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dt+ETA[i, j])
@@ -1226,7 +1270,8 @@ function compute_stress_strainrate!(
         end
         # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
         for j in 2:1:Nx, i in 2:1:Ny
-            EXX[i, j] = 0.5 * ((vx[i, j]-vx[i, j - 1]) / dx - (vy[i, j]-vy[i - 1, j]) / dy)
+            EXX[i, j] =
+                0.5 * ((vx[i, j]-vx[i, j - 1]) / dx_val - (vy[i, j]-vy[i - 1, j]) / dy_val)
             SXX[i, j] = (
                 2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dt / (GGGP[i, j]*dt+ETAP[i, j]) +
                 SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dt+ETAP[i, j])
@@ -1294,6 +1339,9 @@ $(SIGNATURES)
 """
 function symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
     # @timeit to "symmetrize_p_node_observables!()" begin
+    Ny1, Nx1 = size(SXX)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
     # top boundary
     @inbounds @views @. begin
         SXX[1, 2:Nx] = SXX[2, 2:Nx]
@@ -1376,6 +1424,7 @@ function compute_nodal_adjustment!(
 )
     # @timeit to "compute_nodal_adjustment!()" begin
     # reset / setup
+    Ny, Nx = size(ETA)
     ETA5 .= ETA0
     YNY5 .= 0
     DSY .= 0.0
@@ -1527,8 +1576,10 @@ $(SIGNATURES)
 
     - LT: LHS sparse coefficient matrix
 """
-function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
-    # @timeit to "assemble_thermal_lse!" begin
+function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=nothing)
+    Ny1, Nx1 = size(tk1)
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
     # fresh LHS coefficient matrix
     LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
     # reset RHS coefficient vector
@@ -1562,40 +1613,23 @@ function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
                 end
             else
                 # internal points: 2D thermal equation (conservative formulation)
-                # ρCₚ∂/∂t = k∇²T + Hᵣ + Hₛ + Hₐ + Hₗ
-                #         = -∂qᵢ/∂xᵢ + Hᵣ + Hₛ + Hₐ + Hₗ (16.54, 16.97) 
-                # in case of purely advective heat transport: ∂T/∂t+⃗v⋅∇T = 0
-                #
-                #                      gk-1
-                #                        T₂
-                #                        |
-                #                       i-1,j
-                #                       Ky₁
-                #                       qy₁
-                #                        |
-                #         gk-Ny1 i,j-1  gk     i,j  gk+Ny1
-                #           T₁----Kx₁----T₃----Kx₂----T₅
-                #                 qx₁    |     qx₂
-                #                       i,j
-                #                       Ky₂
-                #                       qy₂
-                #                        |
-                #                      gk+1
-                #                        T₄
-                #
                 # extract thermal conductivities
                 Kx₁ = KX[i, j - 1]
                 Kx₂ = KX[i, j]
                 Ky₁ = KY[i - 1, j]
                 Ky₂ = KY[i, j]
                 # fill system of equations: LHS
-                updateindex!(LT, +, -Kx₁*inv(dx^2), gk, gk-Ny1) # T₁
-                updateindex!(LT, +, -Ky₁*inv(dy^2), gk, gk-1) # T₂
+                updateindex!(LT, +, -Kx₁*inv(dx_val^2), gk, gk-Ny1) # T₁
+                updateindex!(LT, +, -Ky₁*inv(dy_val^2), gk, gk-1) # T₂
                 updateindex!(
-                    LT, +, (RHOCP[i, j]/dt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)), gk, gk
+                    LT,
+                    +,
+                    (RHOCP[i, j]/dt + (Kx₁+Kx₂)*inv(dx_val^2) + (Ky₁+Ky₂)*inv(dy_val^2)),
+                    gk,
+                    gk,
                 ) # T₃
-                updateindex!(LT, +, -Ky₂*inv(dy^2), gk, gk+1) # T₄
-                updateindex!(LT, +, -Kx₂*inv(dx^2), gk, gk+Ny1) # T₅
+                updateindex!(LT, +, -Ky₂*inv(dy_val^2), gk, gk+1) # T₄
+                updateindex!(LT, +, -Kx₂*inv(dx_val^2), gk, gk+Ny1) # T₅
                 # fill system of equations: RHS
                 RT[gk] = (
                     RHOCP[i, j]/dt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j] + DHP[i, j]
@@ -1604,7 +1638,6 @@ function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
         end
     end # @inbounds
     flush!(LT) # finalize CSC matrix
-    # end # @timeit to "assemble_thermal_lse!"
     return LT
 end # function assemble_thermal_lse!
 
@@ -1636,10 +1669,11 @@ $(SIGNATURES)
     - nothing
 """
 function perform_thermal_iterations!(
-    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt
+    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt; coords=nothing
 )
     # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
+    Ny1, Nx1 = size(tk1)
     tk0 .= tk1
     dtt = dt
     dttsum = 0.0
@@ -1647,7 +1681,9 @@ function perform_thermal_iterations!(
     # perform thermal iterations until reaching time limit
     while dttsum < dt
         # fresh LHS coefficient matrix
-        LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt)
+        LT = assemble_thermal_lse!(
+            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt; coords=coords
+        )
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
         # reshape solution vector to 2D array

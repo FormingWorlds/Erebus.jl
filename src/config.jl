@@ -195,27 +195,13 @@ $(SIGNATURES)
 - `ArgumentError` if any configuration parameter violates physical bounds or compiled grid constraints.
 """
 function validate_config(cfg::SimulationConfig)
-    # Grid checks: must be valid dimensions and match compile-time stencils
+    # Grid checks: must be valid dimensions and domain bounds
     cfg.grid.Nx >= 3 || throw(ArgumentError("Grid Nx must be >= 3, got $(cfg.grid.Nx)"))
     cfg.grid.Ny >= 3 || throw(ArgumentError("Grid Ny must be >= 3, got $(cfg.grid.Ny)"))
     cfg.grid.xsize > 0.0 ||
         throw(ArgumentError("Domain xsize must be > 0, got $(cfg.grid.xsize)"))
     cfg.grid.ysize > 0.0 ||
         throw(ArgumentError("Domain ysize must be > 0, got $(cfg.grid.ysize)"))
-    if cfg.grid.Nx != Nx || cfg.grid.Ny != Ny
-        throw(
-            ArgumentError(
-                "Configured grid size ($(cfg.grid.Nx)x$(cfg.grid.Ny)) does not match compiled grid size ($(Nx)x$(Ny)). Changing grid resolution requires updating constants and recompiling.",
-            ),
-        )
-    end
-    if cfg.grid.xsize != xsize || cfg.grid.ysize != ysize
-        throw(
-            ArgumentError(
-                "Configured domain size ($(cfg.grid.xsize)x$(cfg.grid.ysize)) does not match compiled domain size ($(xsize)x$(ysize)).",
-            ),
-        )
-    end
 
     # Geometry checks
     cfg.geometry.rplanet > 0.0 ||
@@ -224,13 +210,23 @@ function validate_config(cfg::SimulationConfig)
         throw(ArgumentError("Crust radius must be > 0, got $(cfg.geometry.rcrust)"))
     cfg.geometry.rcrust <= cfg.geometry.rplanet ||
         throw(ArgumentError("Crust radius must be <= planet radius"))
-    if cfg.geometry.rplanet != rplanet || cfg.geometry.rcrust != rcrust
-        throw(
-            ArgumentError(
-                "Configured geometry (rplanet=$(cfg.geometry.rplanet), rcrust=$(cfg.geometry.rcrust)) does not match compiled geometry (rplanet=$rplanet, rcrust=$rcrust).",
-            ),
-        )
-    end
+    min_dist_to_boundary = min(
+        cfg.geometry.xcenter,
+        cfg.grid.xsize - cfg.geometry.xcenter,
+        cfg.geometry.ycenter,
+        cfg.grid.ysize - cfg.geometry.ycenter,
+    )
+    (
+        cfg.geometry.xcenter > 0.0 &&
+        cfg.geometry.xcenter < cfg.grid.xsize &&
+        cfg.geometry.ycenter > 0.0 &&
+        cfg.geometry.ycenter < cfg.grid.ysize &&
+        cfg.geometry.rplanet <= min_dist_to_boundary
+    ) || throw(
+        ArgumentError(
+            "Planet of radius $(cfg.geometry.rplanet) at ($(cfg.geometry.xcenter), $(cfg.geometry.ycenter)) must fit entirely within domain [0, $(cfg.grid.xsize)] x [0, $(cfg.grid.ysize)]",
+        ),
+    )
 
     # Time checks
     cfg.time.dt_initial > 0.0 ||

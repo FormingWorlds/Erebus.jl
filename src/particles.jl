@@ -19,11 +19,25 @@ $(SIGNATURES)
     - etavpm : marker viscoplastic viscosity [Pa]
     - phim : marker porosity
 """
-function setup_marker_properties(marknum; randomized=false)
+function setup_marker_properties(
+    marknum; randomized=false, coords::Union{Nothing,GridCoordinates}=nothing
+)
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    xsize_val = coords === nothing ? xsize : coords.xsize
+    ysize_val = coords === nothing ? ysize : coords.ysize
     # horizontal marker coordinate [m]
-    xm = randomized ? rand(rgen, (-dx):0.1:(xsize + dx), marknum) : zeros(marknum)
+    xm = if randomized
+        rand(rgen, (-dx_val):0.1:(xsize_val + dx_val), marknum)
+    else
+        zeros(marknum)
+    end
     # vertical marker coordinate [m]
-    ym = randomized ? rand(rgen, (-dy):0.1:(ysize + dy), marknum) : zeros(marknum)
+    ym = if randomized
+        rand(rgen, (-dy_val):0.1:(ysize_val + dy_val), marknum)
+    else
+        zeros(marknum)
+    end
     # marker material type
     tm = randomized ? rand(rgen, 1:3, marknum) : zeros(Int, marknum)
     # marker temperature [K]
@@ -46,6 +60,10 @@ function setup_marker_properties(marknum; randomized=false)
     XWsolidm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
     return (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0)
 end # function setup_marker_properties()
+
+function setup_marker_properties(marknum, coords::GridCoordinates; randomized=false)
+    return setup_marker_properties(marknum; randomized=randomized, coords=coords)
+end
 
 """
 Set up additional helper marker properties to facility comptuations.
@@ -134,10 +152,13 @@ $(SIGNATURES)
     - mdis: minimum distance of marker launch anchor points to nearest marker
     - mnum: number of marker nearest to marker launch anchor positions
 """
-function setup_marker_geometry_helpers()
+function setup_marker_geometry_helpers(Nxm::Int=Nxm, Nym::Int=Nym)
     mdis = fill(mdis_init, Nym, Nxm)
     mnum = zeros(Int, Nym, Nxm)
     return mdis, mnum
+end
+function setup_marker_geometry_helpers(coords::GridCoordinates)
+    return setup_marker_geometry_helpers(coords.Nxm, coords.Nym)
 end
 
 """
@@ -194,23 +215,32 @@ function define_markers!(
     alphafluidcur,
     XWsolidm0;
     randomized=random_markers,
+    coords=nothing,
+    xcenter_val=xcenter,
+    ycenter_val=ycenter,
+    rplanet_val=rplanet,
+    rcrust_val=rcrust,
 )
-    for jm in 1:1:Nxm, im in 1:1:Nym
+    Nxm_val = coords === nothing ? Nxm : coords.Nxm
+    Nym_val = coords === nothing ? Nym : coords.Nym
+    dxm_val = coords === nothing ? dxm : coords.dxm
+    dym_val = coords === nothing ? dym : coords.dym
+    for jm in 1:1:Nxm_val, im in 1:1:Nym_val
         # calculate marker counter
-        m = (jm-1) * Nym + im
+        m = (jm-1) * Nym_val + im
         # define marker coordinates
-        xm[m] = dxm/2 + (jm-1) * dxm
-        ym[m] = dym/2 + (im-1) * dym
+        xm[m] = dxm_val/2 + (jm-1) * dxm_val
+        ym[m] = dym_val/2 + (im-1) * dym_val
         # random marker position within cell
         if randomized
-            xm[m] += (rand(rgen)-0.5) * dxm
-            ym[m] += (rand(rgen)-0.5) * dym
+            xm[m] += (rand(rgen)-0.5) * dxm_val
+            ym[m] += (rand(rgen)-0.5) * dym_val
         end
         # primary marker properties 
-        rmark = distance(xm[m], ym[m], xcenter, ycenter)
-        if rmark < rplanet
+        rmark = distance(xm[m], ym[m], xcenter_val, ycenter_val)
+        if rmark < rplanet_val
             # planet
-            tm[m] = ifelse(rmark>rcrust, 2, 1)
+            tm[m] = ifelse(rmark>rcrust_val, 2, 1)
             # porosity
             phim[m] = phim0
             if randomized
@@ -388,9 +418,37 @@ $(SIGNATURES)
 
     -nothing
 """
-function update_marker_viscosity!(m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
+function update_marker_viscosity!(
+    m,
+    xm,
+    ym,
+    tm,
+    tkm,
+    etatotalm,
+    etavpm,
+    YNY,
+    YNY_inv_ETA;
+    coords::Union{Nothing,GridCoordinates}=nothing,
+)
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
+    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
+    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
+    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
     @inbounds i, j, weights = fix_weights(
-        xm[m], ym[m], x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic
+        xm[m],
+        ym[m],
+        x_val,
+        y_val,
+        dx_val,
+        dy_val,
+        jmin_basic_val,
+        jmax_basic_val,
+        imin_basic_val,
+        imax_basic_val,
     )
     @inbounds if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
@@ -454,7 +512,9 @@ $(SIGNATURES)
     - XWSSUM: interpolation of XWS at P nodes
     - WTPSUM: interpolation weights at P nodes
 """
-function setup_interpolated_properties()
+function setup_interpolated_properties(Nx::Int=Nx, Ny::Int=Ny)
+    Nx1 = Nx + 1
+    Ny1 = Ny + 1
     # basic nodes
     ETA0SUM = zeros(Ny, Nx)
     ETASUM = zeros(Ny, Nx)
@@ -527,6 +587,207 @@ function setup_interpolated_properties()
         XWSSUM,
         WTPSUM,
     )
+end
+function setup_interpolated_properties(coords::GridCoordinates)
+    return setup_interpolated_properties(coords.Nx, coords.Ny)
+end
+
+"""
+Per-thread buffers for thread-safe parallel marker interpolation.
+"""
+struct ThreadInterpolationBuffers
+    ETA0SUM::Matrix{Float64}
+    ETASUM::Matrix{Float64}
+    GGGSUM::Matrix{Float64}
+    SXYSUM::Matrix{Float64}
+    COHSUM::Matrix{Float64}
+    TENSUM::Matrix{Float64}
+    FRISUM::Matrix{Float64}
+    WTSUM::Matrix{Float64}
+    RHOXSUM::Matrix{Float64}
+    RHOFXSUM::Matrix{Float64}
+    KXSUM::Matrix{Float64}
+    PHIXSUM::Matrix{Float64}
+    RXSUM::Matrix{Float64}
+    WTXSUM::Matrix{Float64}
+    RHOYSUM::Matrix{Float64}
+    RHOFYSUM::Matrix{Float64}
+    KYSUM::Matrix{Float64}
+    PHIYSUM::Matrix{Float64}
+    RYSUM::Matrix{Float64}
+    WTYSUM::Matrix{Float64}
+    RHOSUM::Matrix{Float64}
+    RHOCPSUM::Matrix{Float64}
+    ALPHASUM::Matrix{Float64}
+    ALPHAFSUM::Matrix{Float64}
+    HRSUM::Matrix{Float64}
+    GGGPSUM::Matrix{Float64}
+    SXXSUM::Matrix{Float64}
+    TKSUM::Matrix{Float64}
+    PHISUM::Matrix{Float64}
+    WTPSUM::Matrix{Float64}
+end
+
+"""
+Allocate a vector of per-thread interpolation buffers.
+"""
+function allocate_thread_interpolation_buffers(
+    nthreads::Int=max(Threads.nthreads(), Threads.maxthreadid()), Nx::Int=Nx, Ny::Int=Ny
+)
+    Nx1 = Nx + 1
+    Ny1 = Ny + 1
+    return [
+        ThreadInterpolationBuffers(
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny, Nx),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+        ) for _ in 1:nthreads
+    ]
+end
+function allocate_thread_interpolation_buffers(nthreads::Int, coords::GridCoordinates)
+    return allocate_thread_interpolation_buffers(nthreads, coords.Nx, coords.Ny)
+end
+function allocate_thread_interpolation_buffers(coords::GridCoordinates)
+    return allocate_thread_interpolation_buffers(
+        max(Threads.nthreads(), Threads.maxthreadid()), coords.Nx, coords.Ny
+    )
+end
+
+"""
+Reset all per-thread interpolation buffers to zero.
+"""
+function reset_thread_buffers!(buffers::Vector{ThreadInterpolationBuffers})
+    Threads.@threads for b in buffers
+        b.ETA0SUM .= 0.0
+        b.ETASUM .= 0.0
+        b.GGGSUM .= 0.0
+        b.SXYSUM .= 0.0
+        b.COHSUM .= 0.0
+        b.TENSUM .= 0.0
+        b.FRISUM .= 0.0
+        b.WTSUM .= 0.0
+        b.RHOXSUM .= 0.0
+        b.RHOFXSUM .= 0.0
+        b.KXSUM .= 0.0
+        b.PHIXSUM .= 0.0
+        b.RXSUM .= 0.0
+        b.WTXSUM .= 0.0
+        b.RHOYSUM .= 0.0
+        b.RHOFYSUM .= 0.0
+        b.KYSUM .= 0.0
+        b.PHIYSUM .= 0.0
+        b.RYSUM .= 0.0
+        b.WTYSUM .= 0.0
+        b.RHOSUM .= 0.0
+        b.RHOCPSUM .= 0.0
+        b.ALPHASUM .= 0.0
+        b.ALPHAFSUM .= 0.0
+        b.HRSUM .= 0.0
+        b.GGGPSUM .= 0.0
+        b.SXXSUM .= 0.0
+        b.TKSUM .= 0.0
+        b.PHISUM .= 0.0
+        b.WTPSUM .= 0.0
+    end
+    return nothing
+end
+
+"""
+Reduce (accumulate) per-thread interpolation buffers into the master grid arrays.
+"""
+function reduce_thread_buffers!(
+    ETA0SUM,
+    ETASUM,
+    GGGSUM,
+    SXYSUM,
+    COHSUM,
+    TENSUM,
+    FRISUM,
+    WTSUM,
+    RHOXSUM,
+    RHOFXSUM,
+    KXSUM,
+    PHIXSUM,
+    RXSUM,
+    WTXSUM,
+    RHOYSUM,
+    RHOFYSUM,
+    KYSUM,
+    PHIYSUM,
+    RYSUM,
+    WTYSUM,
+    RHOSUM,
+    RHOCPSUM,
+    ALPHASUM,
+    ALPHAFSUM,
+    HRSUM,
+    GGGPSUM,
+    SXXSUM,
+    TKSUM,
+    PHISUM,
+    WTPSUM,
+    buffers::Vector{ThreadInterpolationBuffers},
+)
+    for b in buffers
+        ETA0SUM .+= b.ETA0SUM
+        ETASUM .+= b.ETASUM
+        GGGSUM .+= b.GGGSUM
+        SXYSUM .+= b.SXYSUM
+        COHSUM .+= b.COHSUM
+        TENSUM .+= b.TENSUM
+        FRISUM .+= b.FRISUM
+        WTSUM .+= b.WTSUM
+        RHOXSUM .+= b.RHOXSUM
+        RHOFXSUM .+= b.RHOFXSUM
+        KXSUM .+= b.KXSUM
+        PHIXSUM .+= b.PHIXSUM
+        RXSUM .+= b.RXSUM
+        WTXSUM .+= b.WTXSUM
+        RHOYSUM .+= b.RHOYSUM
+        RHOFYSUM .+= b.RHOFYSUM
+        KYSUM .+= b.KYSUM
+        PHIYSUM .+= b.PHIYSUM
+        RYSUM .+= b.RYSUM
+        WTYSUM .+= b.WTYSUM
+        RHOSUM .+= b.RHOSUM
+        RHOCPSUM .+= b.RHOCPSUM
+        ALPHASUM .+= b.ALPHASUM
+        ALPHAFSUM .+= b.ALPHAFSUM
+        HRSUM .+= b.HRSUM
+        GGGPSUM .+= b.GGGPSUM
+        SXXSUM .+= b.SXXSUM
+        TKSUM .+= b.TKSUM
+        PHISUM .+= b.PHISUM
+        WTPSUM .+= b.WTPSUM
+    end
+    return nothing
 end
 
 """
@@ -927,10 +1188,28 @@ function marker_to_basic_nodes!(
     COHSUM,
     TENSUM,
     FRISUM,
-    WTSUM,
+    WTSUM;
+    coords=nothing,
 )
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
+    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
+    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
+    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
     i, j, weights = fix_weights(
-        xmm, ymm, x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic
+        xmm,
+        ymm,
+        x_val,
+        y_val,
+        dx_val,
+        dy_val,
+        jmin_basic_val,
+        jmax_basic_val,
+        imin_basic_val,
+        imax_basic_val,
     )
     @inbounds begin
         interpolate_add_to_grid!(i, j, weights, etatotalm[m], ETA0SUM)
@@ -985,10 +1264,28 @@ function marker_to_vx_nodes!(
     KXSUM,
     PHIXSUM,
     RXSUM,
-    WTXSUM,
+    WTXSUM;
+    coords=nothing,
 )
+    xvx_val = coords === nothing ? xvx : coords.xvx
+    yvx_val = coords === nothing ? yvx : coords.yvx
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
+    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
+    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
+    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
     i, j, weights = fix_weights(
-        xmm, ymm, xvx, yvx, dx, dy, jmin_vx, jmax_vx, imin_vx, imax_vx
+        xmm,
+        ymm,
+        xvx_val,
+        yvx_val,
+        dx_val,
+        dy_val,
+        jmin_vx_val,
+        jmax_vx_val,
+        imin_vx_val,
+        imax_vx_val,
     )
     @inbounds begin
         interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOXSUM)
@@ -1041,10 +1338,28 @@ function marker_to_vy_nodes!(
     KYSUM,
     PHIYSUM,
     RYSUM,
-    WTYSUM,
+    WTYSUM;
+    coords=nothing,
 )
+    xvy_val = coords === nothing ? xvy : coords.xvy
+    yvy_val = coords === nothing ? yvy : coords.yvy
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
+    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
+    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
+    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
     i, j, weights = fix_weights(
-        xmm, ymm, xvy, yvy, dx, dy, jmin_vy, jmax_vy, imin_vy, imax_vy
+        xmm,
+        ymm,
+        xvy_val,
+        yvy_val,
+        dx_val,
+        dy_val,
+        jmin_vy_val,
+        jmax_vy_val,
+        imin_vy_val,
+        imax_vy_val,
     )
     @inbounds begin
         interpolate_add_to_grid!(i, j, weights, rhototalm[m], RHOYSUM)
@@ -1113,9 +1428,29 @@ function marker_to_p_nodes!(
     HRSUM,
     PHISUM,
     TKSUM,
-    WTPSUM,
+    WTPSUM;
+    coords=nothing,
 )
-    i, j, weights = fix_weights(xmm, ymm, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xp_val,
+        yp_val,
+        dx_val,
+        dy_val,
+        jmin_p_val,
+        jmax_p_val,
+        imin_p_val,
+        imax_p_val,
+    )
     @inbounds begin
         interpolate_add_to_grid!(i, j, weights, inv_gggtotalm[m], GGGPSUM)
         interpolate_add_to_grid!(i, j, weights, sxxm[m], SXXSUM)
@@ -1149,8 +1484,29 @@ $(SIGNATURES)
 
     - nothing
 """
-function molarfraction_marker_to_p_nodes!(m, xmm, ymm, XWsolidm0, XWSSUM, WTPSUM)
-    i, j, weights = fix_weights(xmm, ymm, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p)
+function molarfraction_marker_to_p_nodes!(
+    m, xmm, ymm, XWsolidm0, XWSSUM, WTPSUM; coords=nothing
+)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    i, j, weights = fix_weights(
+        xmm,
+        ymm,
+        xp_val,
+        yp_val,
+        dx_val,
+        dy_val,
+        jmin_p_val,
+        jmax_p_val,
+        imin_p_val,
+        imax_p_val,
+    )
     @inbounds begin
         interpolate_add_to_grid!(i, j, weights, XWsolidm0[m], XWSSUM)
         interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
@@ -1177,11 +1533,15 @@ $(SIGNATURES)
 
     - nothing
 """
-function update_p_nodes_melt_composition!(xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
+function update_p_nodes_melt_composition!(
+    xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum; coords=nothing
+)
     XWSSUM .= zero(0.0)
     WTPSUM .= zero(0.0)
     for m in 1:1:marknum
-        molarfraction_marker_to_p_nodes!(m, xm[m], ym[m], XWsolidm0, XWSSUM, WTPSUM)
+        molarfraction_marker_to_p_nodes!(
+            m, xm[m], ym[m], XWsolidm0, XWSSUM, WTPSUM; coords=coords
+        )
     end
     compute_molarfraction!(XWSSUM, WTPSUM, XWS)
     return nothing
@@ -1235,6 +1595,7 @@ function compute_basic_node_properties!(
     YNY,
 )
     # @timeit to "compute_basic_node_properties!" begin
+    Ny, Nx = size(WTSUM)
     @inbounds begin
         for j in 1:1:Nx, i in 1:1:Ny
             if WTSUM[i, j] > 0.0
@@ -1283,6 +1644,7 @@ function compute_vx_node_properties!(
     RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOX, RHOFX, KX, PHIX, RX
 )
     # @timeit to "compute_vx_node_properties!" begin
+    Ny1, Nx1 = size(WTXSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             if WTXSUM[i, j] > 0.0
@@ -1326,6 +1688,7 @@ function compute_vy_node_properties!(
     RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOY, RHOFY, KY, PHIY, RY
 )
     # @timeit to "compute_vy_node_properties!" begin
+    Ny1, Nx1 = size(WTYSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             if WTYSUM[i, j] > 0.0
@@ -1397,6 +1760,7 @@ function compute_p_node_properties!(
     BETAPHI,
 )
     # @timeit to "compute_p_node_properties!" begin
+    Ny1, Nx1 = size(WTPSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             if WTPSUM[i, j] > 0.0
@@ -1434,6 +1798,7 @@ $(SIGNATURES)
 """
 function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
     # @timeit to "compute_molarfraction!" begin
+    Ny1, Nx1 = size(WTPSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             if WTPSUM[i, j] > 0.0
@@ -1496,8 +1861,11 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
+function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=nothing)
     # @timeit to "compute_velocities!" begin
+    Ny1, Nx1 = size(vxp)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
     @inbounds begin
         # compute solid velocities at P nodes
         for j in 2:1:Nx, i in 2:1:Ny
@@ -1564,12 +1932,15 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_rotation_rate!(vx, vy, wyx)
+function compute_rotation_rate!(vx, vy, wyx; coords=nothing)
     # @timeit to "compute_rotation_rate!" begin
-    # compute rotation rate ωyx=1/2[∂Vy/∂x-∂Vx/∂y] at basic nodes
+    Ny, Nx = size(wyx)
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
     for j in 1:1:Nx, i in 1:1:Ny
         @inbounds wyx[i, j] =
-            0.5 * ((vy[i, j + 1]-vy[i, j])*inv(dx) - (vx[i + 1, j]-vx[i, j])*inv(dy))
+            0.5 *
+            ((vy[i, j + 1]-vy[i, j])*inv(dx_val) - (vx[i + 1, j]-vx[i, j])*inv(dy_val))
     end
     # end # @timeit to "compute_rotation_rate!"
     return nothing
@@ -1608,20 +1979,83 @@ $(SIGNATURES)
     - nothing
 """
 function move_markers_rk4!(
-    xm, ym, tm, tkm, phim, sxym, sxxm, vx, vy, vxf, vyf, wyx, tk2, marknum, dt, mode
+    xm,
+    ym,
+    tm,
+    tkm,
+    phim,
+    sxym,
+    sxxm,
+    vx,
+    vy,
+    vxf,
+    vyf,
+    wyx,
+    tk2,
+    marknum,
+    dt,
+    mode;
+    coords=nothing,
 )
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    xvx_val = coords === nothing ? xvx : coords.xvx
+    yvx_val = coords === nothing ? yvx : coords.yvx
+    xvy_val = coords === nothing ? xvy : coords.xvy
+    yvy_val = coords === nothing ? yvy : coords.yvy
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
+    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
+    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
+    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
+    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
+    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
+    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
+    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
+    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
+    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
+    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
+    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
+    Nx_val = coords === nothing ? Nx : coords.Nx
+    Ny_val = coords === nothing ? Ny : coords.Ny
+
     # @timeit to "move_markers_rk4!" begin
     @inbounds begin
-        for m in 1:1:marknum
+        Threads.@threads :static for m in 1:1:marknum
             xmm = xmrk4 = xm[m]
             ymm = ymrk4 = ym[m]
             i, j, weights = fix_weights(
-                xmrk4, ymrk4, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xmrk4,
+                ymrk4,
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             # interpolate local solid temperature from P grid
             tksm₀ = dot4(grid_vector(i, j, tk2), weights)
             i, j, weights = fix_weights(
-                xmrk4, ymrk4, x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic
+                xmrk4,
+                ymrk4,
+                x_val,
+                y_val,
+                dx_val,
+                dy_val,
+                jmin_basic_val,
+                jmax_basic_val,
+                imin_basic_val,
+                imax_basic_val,
             )
             # interpolate local rotation rate from basic grid
             ωm = dot4(grid_vector(i, j, wyx), weights)
@@ -1642,22 +2076,31 @@ function move_markers_rk4!(
             for rk in 1:1:4
                 # interpolate vx
                 i, j, dxmj, dymi = fix_distances(
-                    xmrk4, ymrk4, xvx, yvx, dx, dy, jmin_vx, jmax_vx, imin_vx, imax_vx
+                    xmrk4,
+                    ymrk4,
+                    xvx_val,
+                    yvx_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vx_val,
+                    jmax_vx_val,
+                    imin_vx_val,
+                    imax_vx_val,
                 )
                 # compute vx velocity for left and right of current cell
-                vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j + 1]*dxmj/dx
-                vxm₂₄ = vx[i + 1, j]*(1.0-dxmj/dx) + vx[i + 1, j + 1]*dxmj/dx
+                vxm₁₃ = vx[i, j]*(1.0-dxmj/dx_val) + vx[i, j + 1]*dxmj/dx_val
+                vxm₂₄ = vx[i + 1, j]*(1.0-dxmj/dx_val) + vx[i + 1, j + 1]*dxmj/dx_val
                 # compute second order vx velocity corrections
-                if dxmj/dx >= 0.5
+                if dxmj/dx_val >= 0.5
                     # in right half of cell but not at right edge of grid
-                    if j < Nx-1
+                    if j < Nx_val-1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i, j] - 2.0*vx[i, j + 1] + vx[i, j + 2])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i + 1, j] - 2.0*vx[i + 1, j + 1] + vx[i + 1, j + 2])
                     end
                 else
@@ -1665,34 +2108,43 @@ function move_markers_rk4!(
                     if j > 1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i, j - 1] - 2.0*vx[i, j] + vx[i, j + 1])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i + 1, j - 1] - 2.0*vx[i + 1, j] + vx[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vx
-                vxrk4 = add_vrk4(vxrk4, vxm₁₃*(1.0-dymi/dy) + vxm₂₄*dymi/dy, rk)
+                vxrk4 = add_vrk4(vxrk4, vxm₁₃*(1.0-dymi/dy_val) + vxm₂₄*dymi/dy_val, rk)
                 # interpolate vy
                 i, j, dxmj, dymi = fix_distances(
-                    xmrk4, ymrk4, xvy, yvy, dx, dy, jmin_vy, jmax_vy, imin_vy, imax_vy
+                    xmrk4,
+                    ymrk4,
+                    xvy_val,
+                    yvy_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vy_val,
+                    jmax_vy_val,
+                    imin_vy_val,
+                    imax_vy_val,
                 )
                 # compute vy velocity for top and bottom of current cell
-                vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i + 1, j]*dymi/dy
-                vym₃₄ = vy[i, j + 1]*(1.0-dymi/dy) + vy[i + 1, j + 1]*dymi/dy
+                vym₁₂ = vy[i, j]*(1.0-dymi/dy_val) + vy[i + 1, j]*dymi/dy_val
+                vym₃₄ = vy[i, j + 1]*(1.0-dymi/dy_val) + vy[i + 1, j + 1]*dymi/dy_val
                 # compute second order vy velocity corrections
-                if dymi/dy >= 0.5
+                if dymi/dy_val >= 0.5
                     # in bottom half of cell but not at bottom edge of grid
-                    if i < Ny-1
+                    if i < Ny_val-1
                         vym₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i, j] - 2.0*vy[i + 1, j] + vy[i + 2, j])
                         vym₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i, j + 1] - 2.0*vy[i + 1, j + 1] + vy[i + 2, j + 1])
                     end
                 else
@@ -1700,16 +2152,16 @@ function move_markers_rk4!(
                     if i > 1
                         vym₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i - 1, j] - 2.0*vy[i, j] + vy[i + 1, j])
                         vym₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i - 1, j + 1] - 2.0*vy[i, j + 1] + vy[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vy
-                vyrk4 = add_vrk4(vyrk4, vym₁₂*(1.0-dxmj/dx) + vym₃₄*dxmj/dx, rk)
+                vyrk4 = add_vrk4(vyrk4, vym₁₂*(1.0-dxmj/dx_val) + vym₃₄*dxmj/dx_val, rk)
                 # calculate next RK step x and y positions if not at final step
                 if rk < 4
                     xmrk4 = xmm + dt*crk4[rk]*vxrk4[rk]
@@ -1728,22 +2180,31 @@ function move_markers_rk4!(
             for rk in 1:1:4
                 # interpolate vxf
                 i, j, dxmj, dymi = fix_distances(
-                    xmrk4, ymrk4, xvx, yvx, dx, dy, jmin_vx, jmax_vx, imin_vx, imax_vx
+                    xmrk4,
+                    ymrk4,
+                    xvx_val,
+                    yvx_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vx_val,
+                    jmax_vx_val,
+                    imin_vx_val,
+                    imax_vx_val,
                 )
                 # compute vxf velocity for left and right of current cell
-                vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j + 1]*dxmj/dx
-                vxfm₂₄ = vxf[i + 1, j]*(1.0-dxmj/dx) + vxf[i + 1, j + 1]*dxmj/dx
+                vxfm₁₃ = vxf[i, j]*(1.0-dxmj/dx_val) + vxf[i, j + 1]*dxmj/dx_val
+                vxfm₂₄ = vxf[i + 1, j]*(1.0-dxmj/dx_val) + vxf[i + 1, j + 1]*dxmj/dx_val
                 # compute second order vxf velocity corrections
-                if dxmj/dx >= 0.5
+                if dxmj/dx_val >= 0.5
                     # in right half of cell but not at right edge of grid
-                    if j < Nx-1
+                    if j < Nx_val-1
                         vxfm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i, j] - 2.0*vxf[i, j + 1] + vxf[i, j + 2])
                         vxfm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i + 1, j] - 2.0*vxf[i + 1, j + 1] + vxf[i + 1, j + 2])
                     end
                 else
@@ -1751,34 +2212,43 @@ function move_markers_rk4!(
                     if j > 1
                         vxfm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i, j - 1] - 2.0*vxf[i, j] + vxf[i, j + 1])
                         vxfm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i + 1, j - 1] - 2.0*vxf[i + 1, j] + vxf[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vxf
-                vxrk4 = add_vrk4(vxrk4, vxfm₁₃*(1.0-dymi/dy) + vxfm₂₄*dymi/dy, rk)
+                vxrk4 = add_vrk4(vxrk4, vxfm₁₃*(1.0-dymi/dy_val) + vxfm₂₄*dymi/dy_val, rk)
                 # interpolate vyf
                 i, j, dxmj, dymi = fix_distances(
-                    xmrk4, ymrk4, xvy, yvy, dx, dy, jmin_vy, jmax_vy, imin_vy, imax_vy
+                    xmrk4,
+                    ymrk4,
+                    xvy_val,
+                    yvy_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vy_val,
+                    jmax_vy_val,
+                    imin_vy_val,
+                    imax_vy_val,
                 )
                 # compute vyf velocity for top and bottom of current cell
-                vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i + 1, j]*dymi/dy
-                vyfm₃₄ = vyf[i, j + 1]*(1.0-dymi/dy) + vyf[i + 1, j + 1]*dymi/dy
+                vyfm₁₂ = vyf[i, j]*(1.0-dymi/dy_val) + vyf[i + 1, j]*dymi/dy_val
+                vyfm₃₄ = vyf[i, j + 1]*(1.0-dymi/dy_val) + vyf[i + 1, j + 1]*dymi/dy_val
                 # compute second order vyf velocity corrections
-                if dymi/dy >= 0.5
+                if dymi/dy_val >= 0.5
                     # in bottom half of cell but not at bottom edge of grid
-                    if i < Ny-1
+                    if i < Ny_val-1
                         vyfm₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i, j] - 2.0*vyf[i + 1, j] + vyf[i + 2, j])
                         vyfm₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i, j + 1] - 2.0*vyf[i + 1, j + 1] + vyf[i + 2, j + 1])
                     end
                 else
@@ -1786,16 +2256,16 @@ function move_markers_rk4!(
                     if i > 1
                         vyfm₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i - 1, j] - 2.0*vyf[i, j] + vyf[i + 1, j])
                         vyfm₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i - 1, j + 1] - 2.0*vyf[i, j + 1] + vyf[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vyf
-                vyrk4 = add_vrk4(vyrk4, vyfm₁₂*(1.0-dxmj/dx) + vyfm₃₄*dxmj/dx, rk)
+                vyrk4 = add_vrk4(vyrk4, vyfm₁₂*(1.0-dxmj/dx_val) + vyfm₃₄*dxmj/dx_val, rk)
                 # calculate next RK step x and y positions if not at final step
                 if rk < 4
                     xmrk4 = xmm - dt*crk4[rk]*vxrk4[rk]
@@ -1807,7 +2277,16 @@ function move_markers_rk4!(
             ymrk4 = ymm - dt*dot4(brk4, vyrk4)
             # interpolate fluid temperature at backtraced marker position
             i, j, weights = fix_weights(
-                xmrk4, ymrk4, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xmrk4,
+                ymrk4,
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             # interpolate backtraced local fluid temperature from P grid
             tkfm₀ = dot4(grid_vector(i, j, tk2), weights)
@@ -1854,8 +2333,33 @@ $(SIGNATURES)
 
     - nothing
 """
-function backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
+function backtrace_pressures_rk4!(
+    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=nothing
+)
     # @timeit to "backtrace_pressures_rk4!" begin
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    xvx_val = coords === nothing ? xvx : coords.xvx
+    yvx_val = coords === nothing ? yvx : coords.yvx
+    xvy_val = coords === nothing ? xvy : coords.xvy
+    yvy_val = coords === nothing ? yvy : coords.yvy
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
+    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
+    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
+    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
+    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
+    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
+    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
+    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
+    Nx_val = coords === nothing ? Nx : coords.Nx
+    Ny_val = coords === nothing ? Ny : coords.Ny
+
     @inbounds begin
         # setup RK4 scheme
         vxm = zeros(4)
@@ -1864,74 +2368,92 @@ function backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, d
         pr0 .= pr
         ps0 .= ps
         # backtrace P nodes: total and solid pressure
-        for jj in 2:1:Nx, ii in 2:1:Ny
-            xA = xcur = xp[jj]
-            yA = ycur = yp[ii]
+        for jj in 2:1:Nx_val, ii in 2:1:Ny_val
+            xA = xcur = xp_val[jj]
+            yA = ycur = yp_val[ii]
             for rk in 1:1:4
                 # interpolate vx
                 i, j, dxmj, dymi = fix_distances(
-                    xcur, ycur, xvx, yvx, dx, dy, jmin_vx, jmax_vx, imin_vx, imax_vx
+                    xcur,
+                    ycur,
+                    xvx_val,
+                    yvx_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vx_val,
+                    jmax_vx_val,
+                    imin_vx_val,
+                    imax_vx_val,
                 )
                 # compute vx velocity for left and right of current cell
-                vxm₁₃ = vx[i, j]*(1.0-dxmj/dx) + vx[i, j + 1]*dxmj/dx
-                vxm₂₄ = vx[i + 1, j]*(1.0-dxmj/dx) + vx[i + 1, j + 1]*dxmj/dx
+                vxm₁₃ = vx[i, j]*(1.0-dxmj/dx_val) + vx[i, j + 1]*dxmj/dx_val
+                vxm₂₄ = vx[i + 1, j]*(1.0-dxmj/dx_val) + vx[i + 1, j + 1]*dxmj/dx_val
                 # compute second order vx velocity corrections
-                if dxmj/dx >= 0.5
-                    if j < Nx-1
+                if dxmj/dx_val >= 0.5
+                    if j < Nx_val-1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i, j] - 2.0*vx[i, j + 1] + vx[i, j + 2])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i + 1, j] - 2.0*vx[i + 1, j + 1] + vx[i + 1, j + 2])
                     end
                 else
                     if j > 1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i, j - 1] - 2.0*vx[i, j] + vx[i, j + 1])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vx[i + 1, j - 1] - 2.0*vx[i + 1, j] + vx[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vx
-                vxm[rk] = (1.0-dymi/dy)*vxm₁₃ + (dymi/dy)*vxm₂₄
+                vxm[rk] = (1.0-dymi/dy_val)*vxm₁₃ + (dymi/dy_val)*vxm₂₄
                 # interpolate vy
                 i, j, dxmj, dymi = fix_distances(
-                    xcur, ycur, xvy, yvy, dx, dy, jmin_vy, jmax_vy, imin_vy, imax_vy
+                    xcur,
+                    ycur,
+                    xvy_val,
+                    yvy_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vy_val,
+                    jmax_vy_val,
+                    imin_vy_val,
+                    imax_vy_val,
                 )
                 # compute vy velocity for left and right of current cell
-                vym₁₂ = vy[i, j]*(1.0-dymi/dy) + vy[i + 1, j]*dymi/dy
-                vym₃₄ = vy[i, j + 1]*(1.0-dymi/dy) + vy[i + 1, j + 1]*dymi/dy
+                vym₁₂ = vy[i, j]*(1.0-dymi/dy_val) + vy[i + 1, j]*dymi/dy_val
+                vym₃₄ = vy[i, j + 1]*(1.0-dymi/dy_val) + vy[i + 1, j + 1]*dymi/dy_val
                 # compute second order vy velocity corrections
-                if dymi/dy >= 0.5
-                    if i < Ny-1
+                if dymi/dy_val >= 0.5
+                    if i < Ny_val-1
                         vym₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i, j] - 2.0*vy[i + 1, j] + vy[i + 2, j])
                         vym₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vy[i, j + 1] - 2.0*vy[i + 1, j + 1] + vy[i + 2, j + 1])
                     end
                 else
                     if i > 1
-                        vym₁₂=vym₁₂+1/2*((dymi/dy-0.5)^2)*(
+                        vym₁₂=vym₁₂+1/2*((dymi/dy_val-0.5)^2)*(
                             vy[i - 1, j]-2*vy[i, j]+vy[i + 1, j]
                         )
-                        vym₃₄=vym₃₄+1/2*((dymi/dy-0.5)^2)*(
+                        vym₃₄=vym₃₄+1/2*((dymi/dy_val-0.5)^2)*(
                             vy[i - 1, j + 1]-2*vy[i, j + 1]+vy[i + 1, j + 1]
                         )
                     end
                 end
                 # compute current RK step vy
-                vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
+                vym[rk] = (1.0-dxmj/dx_val)*vym₁₂ + (dxmj/dx_val)*vym₃₄
                 # calculate next RK step x and y positions if not at final 
                 if rk==1 || rk==2
                     xcur=xA - 0.5*dt*vxm[rk]
@@ -1945,84 +2467,111 @@ function backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, d
             xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
             ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
             i, j, weights = fix_weights(
-                xcur, ycur, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xcur,
+                ycur,
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             pr0[ii, jj] = dot4(grid_vector(i, j, pr), weights)
             ps0[ii, jj] = dot4(grid_vector(i, j, ps), weights)
         end # jj, ii total and solid pressure loop
         # backtrace P nodes: fluid pressure
         pf0 .= pf
-        for jj in 2:1:Nx, ii in 2:1:Ny
+        for jj in 2:1:Nx_val, ii in 2:1:Ny_val
             # Save initial nodal coordinates
-            xA = xcur = xp[jj]
-            yA = ycur = yp[ii]
+            xA = xcur = xp_val[jj]
+            yA = ycur = yp_val[ii]
             for rk in 1:1:4
                 # interpolate vx
                 i, j, dxmj, dymi = fix_distances(
-                    xcur, ycur, xvx, yvx, dx, dy, jmin_vx, jmax_vx, imin_vx, imax_vx
+                    xcur,
+                    ycur,
+                    xvx_val,
+                    yvx_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vx_val,
+                    jmax_vx_val,
+                    imin_vx_val,
+                    imax_vx_val,
                 )
                 # compute vx velocity for left and right of current cell
-                vxm₁₃ = vxf[i, j]*(1.0-dxmj/dx) + vxf[i, j + 1]*dxmj/dx
-                vxm₂₄ = vxf[i + 1, j]*(1.0-dxmj/dx) + vxf[i + 1, j + 1]*dxmj/dx
+                vxm₁₃ = vxf[i, j]*(1.0-dxmj/dx_val) + vxf[i, j + 1]*dxmj/dx_val
+                vxm₂₄ = vxf[i + 1, j]*(1.0-dxmj/dx_val) + vxf[i + 1, j + 1]*dxmj/dx_val
                 # compute second order vx velocity corrections
-                if dxmj/dx>=0.5
-                    if j < Nx-1
+                if dxmj/dx_val>=0.5
+                    if j < Nx_val-1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i, j] - 2.0*vxf[i, j + 1] + vxf[i, j + 2])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i + 1, j] - 2.0*vxf[i + 1, j + 1] + vxf[i + 1, j + 2])
                     end
                 else
                     if j > 1
                         vxm₁₃ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i, j - 1] - 2.0*vxf[i, j] + vxf[i, j + 1])
                         vxm₂₄ +=
                             0.5 *
-                            ((dxmj/dx-0.5)^2) *
+                            ((dxmj/dx_val-0.5)^2) *
                             (vxf[i + 1, j - 1] - 2.0*vxf[i + 1, j] + vxf[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vx
-                vxm[rk] = (1.0-dymi/dy)*vxm₁₃ + (dymi/dy)*vxm₂₄
+                vxm[rk] = (1.0-dymi/dy_val)*vxm₁₃ + (dymi/dy_val)*vxm₂₄
                 # interpolate vy
                 i, j, dxmj, dymi = fix_distances(
-                    xcur, ycur, xvy, yvy, dx, dy, jmin_vy, jmax_vy, imin_vy, imax_vy
+                    xcur,
+                    ycur,
+                    xvy_val,
+                    yvy_val,
+                    dx_val,
+                    dy_val,
+                    jmin_vy_val,
+                    jmax_vy_val,
+                    imin_vy_val,
+                    imax_vy_val,
                 )
                 # compute vy velocity for top and bottom of current cell
-                vym₁₂ = vyf[i, j]*(1.0-dymi/dy) + vyf[i + 1, j]*dymi/dy
-                vym₃₄ = vyf[i, j + 1]*(1.0-dymi/dy) + vyf[i + 1, j + 1]*dymi/dy
+                vym₁₂ = vyf[i, j]*(1.0-dymi/dy_val) + vyf[i + 1, j]*dymi/dy_val
+                vym₃₄ = vyf[i, j + 1]*(1.0-dymi/dy_val) + vyf[i + 1, j + 1]*dymi/dy_val
                 # compute second order vy velocity corrections
-                if dymi/dy >= 0.5
-                    if i < Ny-1
+                if dymi/dy_val >= 0.5
+                    if i < Ny_val-1
                         vym₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i, j] - 2.0*vyf[i + 1, j] + vyf[i + 2, j])
                         vym₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i, j + 1] - 2.0*vyf[i + 1, j + 1] + vyf[i + 2, j + 1])
                     end
                 else
                     if i > 1
                         vym₁₂ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i - 1, j] - 2.0*vyf[i, j] + vyf[i + 1, j])
                         vym₃₄ +=
                             0.5 *
-                            ((dymi/dy-0.5)^2) *
+                            ((dymi/dy_val-0.5)^2) *
                             (vyf[i - 1, j + 1] - 2.0*vyf[i, j + 1] + vyf[i + 1, j + 1])
                     end
                 end
                 # compute current RK step vy
-                vym[rk] = (1.0-dxmj/dx)*vym₁₂ + (dxmj/dx)*vym₃₄
+                vym[rk] = (1.0-dxmj/dx_val)*vym₁₂ + (dxmj/dx_val)*vym₃₄
                 # calculate next RK step x and y positions if not at final 
                 if rk==1 || rk==2
                     xcur = xA - 0.5*dt*vxm[rk]
@@ -2036,7 +2585,16 @@ function backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, d
             xcur = xA - dt*1//6*(vxm[1]+2*vxm[2]+2*vxm[3]+vxm[4])
             ycur = yA - dt*1//6*(vym[1]+2*vym[2]+2*vym[3]+vym[4])
             i, j, weights = fix_weights(
-                xcur, ycur, xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xcur,
+                ycur,
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             pf0[ii, jj] = dot4(grid_vector(i, j, pf), weights)
         end
@@ -2065,13 +2623,15 @@ $(SIGNATURES)
 
     - nothing
 """
-function update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
+function update_marker_population_geometry!(
+    m, i, j, xm, ym, mdis, mnum, xxm_axis=xxm, yym_axis=yym
+)
     # @timeit to "update_marker_population_geometry!" begin
     @inbounds begin
-        dismij = distance(xm[m], ym[m], xxm[j], yym[i])
-        dismi1j = distance(xm[m], ym[m], xxm[j], yym[i + 1])
-        dismij1 = distance(xm[m], ym[m], xxm[j + 1], yym[i])
-        dismi1j1 = distance(xm[m], ym[m], xxm[j + 1], yym[i + 1])
+        dismij = distance(xm[m], ym[m], xxm_axis[j], yym_axis[i])
+        dismi1j = distance(xm[m], ym[m], xxm_axis[j], yym_axis[i + 1])
+        dismij1 = distance(xm[m], ym[m], xxm_axis[j + 1], yym_axis[i])
+        dismi1j1 = distance(xm[m], ym[m], xxm_axis[j + 1], yym_axis[i + 1])
         if dismij < mdis[i, j]
             mdis[i, j] = dismij
             mnum[i, j] = m
@@ -2163,26 +2723,51 @@ function replenish_markers!(
     mdis,
     mnum;
     randomized=random_markers,
+    coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # @timeit to "replenish_markers!" begin
+    Nym_val, Nxm_val = size(mnum)
+    xxm_val = coords === nothing ? xxm : coords.xxm
+    yym_val = coords === nothing ? yym : coords.yym
+    dxm_val = coords === nothing ? dxm : coords.dxm
+    dym_val = coords === nothing ? dym : coords.dym
+    jmin_m_val = coords === nothing ? jmin_m : coords.jmin_m
+    jmax_m_val = coords === nothing ? jmax_m : coords.jmax_m
+    imin_m_val = coords === nothing ? imin_m : coords.imin_m
+    imax_m_val = coords === nothing ? imax_m : coords.imax_m
+    Nxmc_val = coords === nothing ? Nxmc : coords.Nxmc
+    Nymc_val = coords === nothing ? Nymc : coords.Nymc
     # reset marker population geometry tracker
     mdis .= mdis_init
     mnum .= 0
     # establish marker distribution
     @inbounds begin
         for m in 1:1:length(xm)
-            i, j = fix(xm[m], ym[m], xxm, yym, dxm, dym, jmin_m, jmax_m, imin_m, imax_m)
-            update_marker_population_geometry!(m, i, j, xm, ym, mdis, mnum)
+            i, j = fix(
+                xm[m],
+                ym[m],
+                xxm_val,
+                yym_val,
+                dxm_val,
+                dym_val,
+                jmin_m_val,
+                jmax_m_val,
+                imin_m_val,
+                imax_m_val,
+            )
+            update_marker_population_geometry!(
+                m, i, j, xm, ym, mdis, mnum, xxm_val, yym_val
+            )
         end
-        dii = 5 * Nymc
-        djj = 5 * Nxmc
-        for j in 1:1:Nxm, i in 1:1:Nym
+        dii = 5 * Nymc_val
+        djj = 5 * Nxmc_val
+        for j in 1:1:Nxm_val, i in 1:1:Nym_val
             if mnum[i, j] == 0
-                for jj in max(j - djj, 1):1:min(j + djj, Nxm)
-                    for ii in max(i - dii, 1):1:min(i + dii, Nym)
+                for jj in max(j - djj, 1):1:min(j + djj, Nxm_val)
+                    for ii in max(i - dii, 1):1:min(i + dii, Nym_val)
                         if mnum[ii, jj] > 0
                             m = mnum[ii, jj]
-                            dismij = distance(xm[m], ym[m], xxm[j], yym[i])
+                            dismij = distance(xm[m], ym[m], xxm_val[j], yym_val[i])
                             if dismij < mdis[i, j]
                                 mdis[i, j] = dismij
                                 mnum[i, j] = -m
@@ -2195,12 +2780,12 @@ function replenish_markers!(
                     # add marker
                     if randomized
                         # production runs
-                        push!(xm, xxm[j] + (rand(rgen)-0.5)*dxm)
-                        push!(ym, yym[i] + (rand(rgen)-0.5)*dym)
+                        push!(xm, xxm_val[j] + (rand(rgen)-0.5)*dxm_val)
+                        push!(ym, yym_val[i] + (rand(rgen)-0.5)*dym_val)
                     else
                         # for testing
-                        push!(xm, xxm[j])
-                        push!(ym, yym[i])
+                        push!(xm, xxm_val[j])
+                        push!(ym, yym_val[i])
                     end
                     # copy marker properties
                     m = -mnum[i, j]
@@ -2280,13 +2865,29 @@ function apply_subgrid_stress_diffusion!(
     WTPSUM,
     WTSUM,
     dt,
-    marknum,
+    marknum;
+    coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # @timeit to "apply_subgrid_stress_diffusion!" begin
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
         return nothing
     end
+    Ny, Nx = size(SXYSUM)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
+    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
+    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
+    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
     # fix etam[tm[m]] RMK: It's a temporary fix, not yet implemented in source
     etam = @SVector ones(3)
     # reset interpolation arrays
@@ -2297,10 +2898,28 @@ function apply_subgrid_stress_diffusion!(
     # iterate over markers
     for m in 1:1:marknum
         @inbounds i_p, j_p, weights_p = fix_weights(
-            xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+            xm[m],
+            ym[m],
+            xp_val,
+            yp_val,
+            dx_val,
+            dy_val,
+            jmin_p_val,
+            jmax_p_val,
+            imin_p_val,
+            imax_p_val,
         )
         @inbounds i_basic, j_basic, weights_basic = fix_weights(
-            xm[m], ym[m], x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic
+            xm[m],
+            ym[m],
+            x_val,
+            y_val,
+            dx_val,
+            dy_val,
+            jmin_basic_val,
+            jmax_basic_val,
+            imin_basic_val,
+            imax_basic_val,
         )
         # σ₀′xx at P nodes
         # compute marker-node σ′xx difference
@@ -2354,14 +2973,23 @@ $(SIGNATURES)
 
     - nothing
 """
-function update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
+function update_marker_stress!(
+    xm, ym, sxxm, sxym, DSXX, DSXY, marknum; coords::Union{Nothing,GridCoordinates}=nothing
+)
     # @timeit to "update_marker_stress!" begin
-    @threads for m in 1:1:marknum
+    Ny, Nx = size(DSXY)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    @threads :static for m in 1:1:marknum
         @inbounds i_p, j_p, weights_p = fix_weights(
-            xm[m], ym[m], xp, yp, dx, dy, 2, Nx-1, 2, Ny-1
+            xm[m], ym[m], xp_val, yp_val, dx_val, dy_val, 2, Nx-1, 2, Ny-1
         )
         @inbounds i_basic, j_basic, weights_basic = fix_weights(
-            xm[m], ym[m], x, y, dx, dy, 1, Nx-1, 1, Ny-1
+            xm[m], ym[m], x_val, y_val, dx_val, dy_val, 1, Nx-1, 1, Ny-1
         )
         # interpolate updated DSXX, DSXY back to markers
         interpolate_add_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
@@ -2399,20 +3027,50 @@ $(SIGNATURES)
     - nothing
 """
 function apply_subgrid_temperature_diffusion!(
-    xm, ym, tm, tkm, phim, tk1, DT, TKSUM, RHOCPSUM, dt, marknum, mode
+    xm,
+    ym,
+    tm,
+    tkm,
+    phim,
+    tk1,
+    DT,
+    TKSUM,
+    RHOCPSUM,
+    dt,
+    marknum,
+    mode;
+    coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
         return nothing
     end
+    Ny1, Nx1 = size(RHOCPSUM)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
     # reset interpolation arrays
     TKSUM .= 0.0
     RHOCPSUM .= 0.0
     # iterate over markers
     for m in 1:1:marknum
         @inbounds i, j, weights = fix_weights(
-            xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+            xm[m],
+            ym[m],
+            xp_val,
+            yp_val,
+            dx_val,
+            dy_val,
+            jmin_p_val,
+            jmax_p_val,
+            imin_p_val,
+            imax_p_val,
         )
         # compute marker-node temperature difference
         @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
@@ -2431,7 +3089,9 @@ function apply_subgrid_temperature_diffusion!(
             @inbounds ktotalm = ksolidm[tm[m]]
         end
         # time-relax δtkm difference
-        δtkm *= (exp(-dsubgridt*ktotalm*dt/rhocptotalm*(2.0*(inv(dx^2)+inv(dy^2)))) - 1.0)
+        δtkm *= (
+            exp(-dsubgridt*ktotalm*dt/rhocptotalm*(2.0*(inv(dx_val^2)+inv(dy_val^2)))) - 1.0
+        )
         # correct marker temperature
         @inbounds tkm[m] += δtkm
         # update subgrid diffusion on P nodes
@@ -2467,21 +3127,49 @@ $(SIGNATURES)
 
     - nothing
 # """
-function update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
+function update_marker_temperature!(
+    xm, ym, tkm, DT, tk2, timestep, marknum; coords::Union{Nothing,GridCoordinates}=nothing
+)
     # @timeit to "update_marker_temperature!" begin
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
     if timestep == 1
         # interpolate tk2 to markers instead of DT for first time step        
-        @threads for m in 1:1:marknum
+        @threads :static for m in 1:1:marknum
             @inbounds i, j, weights = fix_weights(
-                xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             interpolate_to_marker!(m, i, j, weights, tkm, tk2)
         end
     else
         # interpolate and apply DT to markers for subsequent time steps
-        @threads for m in 1:1:marknum
+        @threads :static for m in 1:1:marknum
             @inbounds i, j, weights = fix_weights(
-                xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
             interpolate_add_to_marker!(m, i, j, weights, tkm, DT)
         end
@@ -2510,16 +3198,42 @@ $(SIGNATURES)
     - nothing
 # """
 function update_marker_porosity!(
-    xm, ym, tm, phim, APHI, dt, marknum; phimin=phimin, phimax=phimax
+    xm,
+    ym,
+    tm,
+    phim,
+    APHI,
+    dt,
+    marknum;
+    phimin=phimin,
+    phimax=phimax,
+    coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # @timeit to "update_marker_porosity!" begin
     # update porosity for compaction
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
     @inbounds begin
-        @threads for m in 1:1:marknum
+        @threads :static for m in 1:1:marknum
             if tm[m] < 3
                 # rocks
                 i, j, weights = fix_weights(
-                    xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                    xm[m],
+                    ym[m],
+                    xp_val,
+                    yp_val,
+                    dx_val,
+                    dy_val,
+                    jmin_p_val,
+                    jmax_p_val,
+                    imin_p_val,
+                    imax_p_val,
                 )
                 # compute Dln[(1-ϕ)/ϕ]/Dt at marker
                 aphim = dot4(grid_vector(i, j, APHI), weights)
