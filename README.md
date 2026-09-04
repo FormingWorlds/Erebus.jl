@@ -161,9 +161,8 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
 
 If you use `Erebus.jl` in your research, please cite:
 
-- Hubmann, B. (2022). *Hydrology of Planetesimals*. Technical report, ETH Zurich. [DOI: 10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229).
+- Hubmann, B. (2022). *Hydrology of Planetesimals*. Master's thesis, ETH Zurich. [DOI: 10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229).
 - Gerya, T. (2019). *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press. [DOI: 10.1017/9781316534243](https://doi.org/10.1017/9781316534243).
-- Lichtenberg, T., et al. (2021). *Bifurcation of planetary building blocks during Solar System formation*. Science, 371(6527), 365-370. [DOI: 10.1126/science.abb3091](https://doi.org/10.1126/science.abb3091).
 
 ### Acknowledgements
 
