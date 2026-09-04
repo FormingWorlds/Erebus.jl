@@ -39,7 +39,7 @@
         try
             quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
             cfg = load_config(quick_toml)
-            Erebus.simulation_loop(cfg; output_path = output_dir)
+            Erebus.simulation_loop(cfg; output_path=output_dir)
             files = readdir(output_dir)
             @test "output_00000.jld2" in files
             @test "output_00002.jld2" in files
@@ -58,29 +58,29 @@
             cfg = load_config(bench_toml)
             # Run 2 steps for integration testing
             cfg_test = SimulationConfig(
-                grid = cfg.grid,
-                geometry = cfg.geometry,
-                time = TimeConfig(
-                    dt_initial = cfg.time.dt_initial,
-                    dt_longest = cfg.time.dt_longest,
-                    dtcoefdn = cfg.time.dtcoefdn,
-                    dtcoefup = cfg.time.dtcoefup,
-                    dtstep = cfg.time.dtstep,
-                    dxymax = cfg.time.dxymax,
-                    vpratio = cfg.time.vpratio,
-                    DTmax = cfg.time.DTmax,
-                    start_time = cfg.time.start_time,
-                    endtime = cfg.time.endtime,
-                    start_step = 1,
-                    n_steps = 2
+                grid=cfg.grid,
+                geometry=cfg.geometry,
+                time=TimeConfig(
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                    dtcoefdn=cfg.time.dtcoefdn,
+                    dtcoefup=cfg.time.dtcoefup,
+                    dtstep=cfg.time.dtstep,
+                    dxymax=cfg.time.dxymax,
+                    vpratio=cfg.time.vpratio,
+                    DTmax=cfg.time.DTmax,
+                    start_time=cfg.time.start_time,
+                    endtime=cfg.time.endtime,
+                    start_step=1,
+                    n_steps=2,
                 ),
-                solver = cfg.solver,
-                poroelasticity = cfg.poroelasticity,
-                thermodynamics = cfg.thermodynamics,
-                materials = cfg.materials,
-                output = OutputConfig(output_dir = output_dir, savematstep = 2)
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                materials=cfg.materials,
+                output=OutputConfig(output_dir=output_dir, savematstep=2),
             )
-            Erebus.simulation_loop(cfg_test; output_path = output_dir)
+            Erebus.simulation_loop(cfg_test; output_path=output_dir)
 
             files = readdir(output_dir)
             @test "output_00000.jld2" in files
@@ -99,12 +99,12 @@
             @test !any(isinf, data2["qyD"])
 
             # Check thermal conductivity fields are strictly positive on physical interior
-            @test all(data2["KX"][2:end-1, 2:end-1] .> 0.0)
-            @test all(data2["KY"][2:end-1, 2:end-1] .> 0.0)
+            @test all(data2["KX"][2:(end - 1), 2:(end - 1)] .> 0.0)
+            @test all(data2["KY"][2:(end - 1), 2:(end - 1)] .> 0.0)
 
             # Check fluid drag ratio fields are strictly positive on physical interior
-            @test all(data2["RX"][2:end-1, 2:end-1] .> 0.0)
-            @test all(data2["RY"][2:end-1, 2:end-1] .> 0.0)
+            @test all(data2["RX"][2:(end - 1), 2:(end - 1)] .> 0.0)
+            @test all(data2["RY"][2:(end - 1), 2:(end - 1)] .> 0.0)
         finally
             rm(output_dir, recursive=true, force=true)
         end
@@ -119,46 +119,46 @@
 
             # 1. Run 3 steps continuously in dir_orig, saving every step
             cfg_orig = SimulationConfig(
-                grid = cfg.grid,
-                geometry = cfg.geometry,
-                time = TimeConfig(
-                    dt_initial = cfg.time.dt_initial,
-                    dt_longest = cfg.time.dt_longest,
-                    start_step = 1,
-                    n_steps = 3
+                grid=cfg.grid,
+                geometry=cfg.geometry,
+                time=TimeConfig(
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                    start_step=1,
+                    n_steps=3,
                 ),
-                solver = cfg.solver,
-                poroelasticity = cfg.poroelasticity,
-                thermodynamics = cfg.thermodynamics,
-                materials = cfg.materials,
-                output = OutputConfig(output_dir = dir_orig, savematstep = 1)
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                materials=cfg.materials,
+                output=OutputConfig(output_dir=dir_orig, savematstep=1),
             )
-            Erebus.simulation_loop(cfg_orig; output_path = dir_orig)
+            Erebus.simulation_loop(cfg_orig; output_path=dir_orig)
 
             # 2. Resume from step 2 checkpoint in dir_resume and run to step 3
             ckpt2_path = joinpath(dir_orig, "output_00002.jld2")
             @test isfile(ckpt2_path)
 
             cfg_resume = SimulationConfig(
-                grid = cfg.grid,
-                geometry = cfg.geometry,
-                time = TimeConfig(
-                    dt_initial = cfg.time.dt_initial,
-                    dt_longest = cfg.time.dt_longest,
-                    start_step = 1,
-                    n_steps = 3
+                grid=cfg.grid,
+                geometry=cfg.geometry,
+                time=TimeConfig(
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                    start_step=1,
+                    n_steps=3,
                 ),
-                solver = cfg.solver,
-                poroelasticity = cfg.poroelasticity,
-                thermodynamics = cfg.thermodynamics,
-                materials = cfg.materials,
-                output = OutputConfig(
-                    output_dir = dir_resume,
-                    savematstep = 1,
-                    restart_from = ckpt2_path
-                )
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                materials=cfg.materials,
+                output=OutputConfig(
+                    output_dir=dir_resume, savematstep=1, restart_from=ckpt2_path
+                ),
             )
-            Erebus.simulation_loop(cfg_resume; output_path = dir_resume, restart_from = ckpt2_path)
+            Erebus.simulation_loop(
+                cfg_resume; output_path=dir_resume, restart_from=ckpt2_path
+            )
 
             @test isfile(joinpath(dir_resume, "output_00003.jld2"))
             data_orig = load_state(joinpath(dir_orig, "output_00003.jld2"))

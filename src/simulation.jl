@@ -35,21 +35,21 @@ $(SIGNATURES)
     - hrfluidm: initial radiogenic heat production fluid phase
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
 """
-function setup_dynamic_simulation_parameters(cfg::SimulationConfig = default_config())
-     # timestep counter (current), init to startstep
-     timestep::Int64 = cfg.time.start_step
-     # computational timestep (current), init to dt_longest [s]
-     dt::Float64 = cfg.time.dt_longest
-     # time sum (current), init to starttime [s]
-     timesum::Float64 = cfg.time.start_time
-     # current number of markers, init to startmarknum
-     marknum::Int64 = start_marknum
-     # radiogenic heat production solid phase
-     hrsolidm::SVector{3, Float64} = start_hrsolidm
-     # radiogenic heat production fluid phase
-     hrfluidm::SVector{3, Float64} = start_hrfluidm
-     # nodes yielding error vector of plastic iterations
-     YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.nplast) 
+function setup_dynamic_simulation_parameters(cfg::SimulationConfig=default_config())
+    # timestep counter (current), init to startstep
+    timestep::Int64 = cfg.time.start_step
+    # computational timestep (current), init to dt_longest [s]
+    dt::Float64 = cfg.time.dt_longest
+    # time sum (current), init to starttime [s]
+    timesum::Float64 = cfg.time.start_time
+    # current number of markers, init to startmarknum
+    marknum::Int64 = start_marknum
+    # radiogenic heat production solid phase
+    hrsolidm::SVector{3,Float64} = start_hrsolidm
+    # radiogenic heat production fluid phase
+    hrfluidm::SVector{3,Float64} = start_hrfluidm
+    # nodes yielding error vector of plastic iterations
+    YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.nplast)
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
 
@@ -169,9 +169,9 @@ function save_state(
     tenstotalm,
     rhofluidcur,
     alphasolidcur,
-    alphafluidcur
-    )
-# @timeit to "save_state" begin
+    alphafluidcur,
+)
+    # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     jldsave(
         fid;
@@ -196,7 +196,7 @@ function save_state(
         xsize,
         ysize,
         xcenter,
-        ycenter,  
+        ycenter,
         Nx,
         Ny,
         Nx1,
@@ -309,9 +309,9 @@ function save_state(
         tenstotalm,
         rhofluidcur,
         alphasolidcur,
-        alphafluidcur
+        alphafluidcur,
     )
-# end # @timeit to "save_state"
+    # end # @timeit to "save_state"
     return nothing
 end
 
@@ -329,7 +329,8 @@ $(SIGNATURES)
     - checkpoint_data: dictionary containing saved state arrays and progression parameters
 """
 function load_state(checkpoint_path::AbstractString)
-    isfile(checkpoint_path) || throw(ArgumentError("Checkpoint file does not exist: $checkpoint_path"))
+    isfile(checkpoint_path) ||
+        throw(ArgumentError("Checkpoint file does not exist: $checkpoint_path"))
     return JLD2.load(checkpoint_path)
 end
 
@@ -348,23 +349,19 @@ $(SIGNATURES)
     - nothing
 """
 function simulation_loop(
-    cfg::SimulationConfig = default_config();
-    output_path::String = cfg.output.output_dir,
-    restart_from::AbstractString = cfg.output.restart_from
+    cfg::SimulationConfig=default_config();
+    output_path::String=cfg.output.output_dir,
+    restart_from::AbstractString=cfg.output.restart_from,
 )
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
     isdir(output_path) || mkpath(output_path)
-# @timeit to "simulation_loop setup" begin
+    # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
-    timestep,
-    dt,
-    timesum,
-    marknum,
-    hrsolidm,
-    hrfluidm,
-    YERRNOD = setup_dynamic_simulation_parameters(cfg)
+    timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD = setup_dynamic_simulation_parameters(
+        cfg
+    )
 
     # Extract dynamic simulation control parameters from cfg
     n_steps_val = cfg.time.n_steps
@@ -463,88 +460,12 @@ function simulation_loop(
         seed
     )
     @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
-    
+
     # -------------------------------------------------------------------------
     # set up staggered grid"
     # -------------------------------------------------------------------------
-    (
-        ETA,
-        ETA0,
-        GGG,
-        EXY,
-        SXY,
-        SXY0,
-        wyx,
-        COH,
-        TEN,
-        FRI,
-        YNY,
-        RHOX,
-        RHOFX,
-        KX,
-        PHIX,
-        vx,
-        vxf,
-        RX,
-        qxD,
-        gx,
-        RHOY,
-        RHOFY,
-        KY,
-        PHIY,
-        vy,
-        vyf,
-        RY,
-        qyD,
-        gy,
-        RHO,
-        RHOCP,
-        ALPHA,
-        ALPHAF,
-        HR,
-        HA,
-        HS,
-        ETAP,
-        GGGP,
-        EXX,
-        SXX,
-        SXX0,
-        tk1,
-        tk2,
-        DT,
-        DT0,
-        vxp,
-        vyp,
-        vxpf,
-        vypf,
-        pr,
-        pf,
-        ps,
-        pr0,
-        pf0,
-        ps0,
-        ETAPHI,
-        BETAPHI,
-        PHI,
-        APHI,
-        FI,
-        DMP,
-        DHP,
-        XWS
-    ) = setup_staggered_grid_properties()
-    (
-        ETA5,
-        ETA00,
-        YNY5,
-        YNY00,
-        YNY_inv_ETA,
-        DSXY,
-        DSY,
-        EII,
-        SII,
-        DSXX,
-        tk0
-    ) = setup_staggered_grid_properties_helpers()
+    (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties()
+    (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
     # set up markers and state (from checkpoint or fresh definition)
@@ -562,36 +483,12 @@ function simulation_loop(
             @warn "Restart checkpoint timestep ($(ckpt["timestep"])) >= target n_steps ($n_steps_val). No timesteps will be executed."
         end
 
-        (
-            xm,
-            ym,
-            tm,
-            tkm,
-            sxxm,
-            sxym,
-            etavpm,
-            phim,
-            phinewm,
-            pfm0,
-            XWsolidm,
-            XWsolidm0
-        ) = setup_marker_properties(marknum)
-        (
-            rhototalm,
-            rhocptotalm,
-            etatotalm,
-            hrtotalm,
-            ktotalm,
-            tkm_rhocptotalm,
-            etafluidcur_inv_kphim,
-            inv_gggtotalm,
-            fricttotalm,
-            cohestotalm,
-            tenstotalm,
-            rhofluidcur,
-            alphasolidcur,
-            alphafluidcur
-        ) = setup_marker_properties_helpers(marknum)
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
+            marknum
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            marknum
+        )
 
         # Restore staggered grid arrays
         ETA .= ckpt["ETA"]
@@ -680,36 +577,12 @@ function simulation_loop(
         XWsolidm .= XWsolidm0
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
-        (
-            xm,
-            ym,
-            tm,
-            tkm,
-            sxxm,
-            sxym,
-            etavpm,
-            phim,
-            phinewm,
-            pfm0,
-            XWsolidm,
-            XWsolidm0
-        ) = setup_marker_properties(marknum)
-        (
-            rhototalm,
-            rhocptotalm,
-            etatotalm,
-            hrtotalm,
-            ktotalm,
-            tkm_rhocptotalm,
-            etafluidcur_inv_kphim,
-            inv_gggtotalm,
-            fricttotalm,
-            cohestotalm,
-            tenstotalm,
-            rhofluidcur,
-            alphasolidcur,
-            alphafluidcur
-        ) = setup_marker_properties_helpers(marknum)
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
+            marknum
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            marknum
+        )
         define_markers!(
             xm,
             ym,
@@ -729,7 +602,7 @@ function simulation_loop(
             rhofluidcur,
             alphasolidcur,
             alphafluidcur,
-            XWsolidm0
+            XWsolidm0,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -834,48 +707,14 @@ function simulation_loop(
             tenstotalm,
             rhofluidcur,
             alphasolidcur,
-            alphafluidcur
+            alphafluidcur,
         )
     end
 
     # ---------------------------------------------------------------------
-     # set up interpolation arrays"
+    # set up interpolation arrays"
     # ---------------------------------------------------------------------
-    (
-        ETA0SUM,
-        ETASUM,
-        GGGSUM,
-        SXYSUM,
-        COHSUM,
-        TENSUM,
-        FRISUM,
-        WTSUM,
-        RHOXSUM,
-        RHOFXSUM,
-        KXSUM,
-        PHIXSUM,
-        RXSUM,
-        WTXSUM,
-        RHOYSUM,
-        RHOFYSUM,
-        KYSUM,
-        PHIYSUM,
-        RYSUM,
-        WTYSUM,
-        RHOSUM,
-        RHOCPSUM,
-        ALPHASUM,
-        ALPHAFSUM,
-        HRSUM,
-        GGGPSUM,
-        SXXSUM,
-        TKSUM,
-        PHISUM,
-        DMPSUM,
-        DHPSUM,
-        XWSSUM,
-        WTPSUM
-    ) = setup_interpolated_properties()
+    (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties()
 
     # -------------------------------------------------------------------------
     # set up of matrices for global grav/thermal/hydromechanical solvers"
@@ -891,31 +730,33 @@ function simulation_loop(
     if use_pardiso
         pardiso_solver = Pardiso.MKLPardisoSolver()
         initialize_pardiso!(pardiso_solver, iparms_dict)
-    # else
-    #     F = lu(fdrand(Nx1*Ny1*6, 1, 1, matrixtype=ExtendableSparseMatrix))
+        # else
+        #     F = lu(fdrand(Nx1*Ny1*6, 1, 1, matrixtype=ExtendableSparseMatrix))
     end
 
-# end # @timeit to "simulation_loop setup"
+    # end # @timeit to "simulation_loop setup"
 
     # -------------------------------------------------------------------------
     # iterate timesteps"
     # -------------------------------------------------------------------------
-    generate_showvalues(timestep, marknum, maxT, dt, timesum) = () -> [
-        (:timestep, timestep),
-        (:marknum, marknum),
-        (:maxT_K, maxT),
-        (:dt_s, dt),
-        (:timesum_Ma, s_to_Ma(timesum)),
-        (:to_go_Ma, s_to_Ma(endtime-timesum))
-    ]
+    generate_showvalues(timestep, marknum, maxT, dt, timesum) =
+        () -> [
+            (:timestep, timestep),
+            (:marknum, marknum),
+            (:maxT_K, maxT),
+            (:dt_s, dt),
+            (:timesum_Ma, s_to_Ma(timesum)),
+            (:to_go_Ma, s_to_Ma(endtime-timesum)),
+        ]
     p = Progress(
         n_steps_val;
         showspeed=true,
         dt=0.5,
-        barglyphs=BarGlyphs(
-            '|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',), barlen=10)
-    for timestep = start_step_val:1:n_steps_val
-# @timeit to "set up interpolation arrays" begin
+        barglyphs=BarGlyphs('|', '█', ['▁', '▂', '▃', '▄', '▅', '▆', '▇'], ' ', '|'),
+        barlen=10,
+    )
+    for timestep in start_step_val:1:n_steps_val
+        # @timeit to "set up interpolation arrays" begin
         timestep_begin = now()
         # ---------------------------------------------------------------------
         # reset interpolation arrays
@@ -950,29 +791,31 @@ function simulation_loop(
             SXXSUM,
             TKSUM,
             PHISUM,
-            WTPSUM
+            WTPSUM,
         )
-# end # @timeit to "set up interpolation arrays" 
+        # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
         # ---------------------------------------------------------------------
         hrsolidm, hrfluidm = calculate_radioactive_heating(
-            hr_al_val, hr_fe_val, timesum;
-            ratio_al = ratio_al_val,
-            E_al = E_al_val,
-            f_al = f_al_val,
-            tau_al = tau_al_val,
-            ratio_fe = ratio_fe_val,
-            E_fe = E_fe_val,
-            f_fe = f_fe_val,
-            tau_fe = tau_fe_val
+            hr_al_val,
+            hr_fe_val,
+            timesum;
+            ratio_al=ratio_al_val,
+            E_al=E_al_val,
+            f_al=f_al_val,
+            tau_al=tau_al_val,
+            ratio_fe=ratio_fe_val,
+            E_fe=E_fe_val,
+            f_fe=f_fe_val,
+            tau_fe=tau_fe_val,
         )
 
         # ---------------------------------------------------------------------
         # compute marker properties and interpolate to staggered grid
         # ---------------------------------------------------------------------
-        for m=1:1:marknum
+        for m in 1:1:marknum
             compute_marker_properties!(
                 m,
                 tm,
@@ -990,14 +833,14 @@ function simulation_loop(
                 XWsolidm0,
                 marker_property_mode,
                 rhofluidcur;
-                thermal_buoyancy = thermal_buoyancy_val,
-                alphafluid = alphafluid_val,
-                tmfluidphase_val = tmfluidphase_val,
-                fluid_viscosity_mode = fluid_viscosity_mode_val,
-                fluid_viscosity_Ea = fluid_viscosity_Ea_val,
-                fluid_viscosity_T0 = fluid_viscosity_T0_val,
-                fluid_viscosity_eta0 = fluid_viscosity_eta0_val
-            )              
+                thermal_buoyancy=thermal_buoyancy_val,
+                alphafluid=alphafluid_val,
+                tmfluidphase_val=tmfluidphase_val,
+                fluid_viscosity_mode=fluid_viscosity_mode_val,
+                fluid_viscosity_Ea=fluid_viscosity_Ea_val,
+                fluid_viscosity_T0=fluid_viscosity_T0_val,
+                fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+            )
             # interpolate marker properties to basic nodes
             @inbounds marker_to_basic_nodes!(
                 m,
@@ -1017,7 +860,7 @@ function simulation_loop(
                 COHSUM,
                 TENSUM,
                 FRISUM,
-                WTSUM
+                WTSUM,
             )
             # interpolate marker properties to Vx nodes
             @inbounds marker_to_vx_nodes!(
@@ -1034,7 +877,7 @@ function simulation_loop(
                 KXSUM,
                 PHIXSUM,
                 RXSUM,
-                WTXSUM
+                WTXSUM,
             )
             # interpolate marker properties to Vy nodes
             @inbounds marker_to_vy_nodes!(
@@ -1051,8 +894,8 @@ function simulation_loop(
                 KYSUM,
                 PHIYSUM,
                 RYSUM,
-                WTYSUM
-            )     
+                WTYSUM,
+            )
             # interpolate marker properties to P nodes
             @inbounds marker_to_p_nodes!(
                 m,
@@ -1076,7 +919,7 @@ function simulation_loop(
                 HRSUM,
                 PHISUM,
                 TKSUM,
-                WTPSUM
+                WTPSUM,
             )
         end # for m=1:1:marknum
 
@@ -1099,41 +942,21 @@ function simulation_loop(
             COH,
             TEN,
             FRI,
-            YNY
+            YNY,
         )
 
         # ---------------------------------------------------------------------
         # compute physical properties of Vx nodes
         # ---------------------------------------------------------------------
         compute_vx_node_properties!(
-            RHOXSUM,
-            RHOFXSUM,
-            KXSUM,
-            PHIXSUM,
-            RXSUM,
-            WTXSUM,
-            RHOX,
-            RHOFX,
-            KX,
-            PHIX,
-            RX
+            RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOX, RHOFX, KX, PHIX, RX
         )
 
         # ---------------------------------------------------------------------
         # compute physical properties of Vy nodes
         # ---------------------------------------------------------------------
         compute_vy_node_properties!(
-            RHOYSUM,
-            RHOFYSUM,
-            KYSUM,
-            PHIYSUM,
-            RYSUM,
-            WTYSUM,
-            RHOY,
-            RHOFY,
-            KY,
-            PHIY,
-            RY
+            RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOY, RHOFY, KY, PHIY, RY
         )
 
         # ---------------------------------------------------------------------
@@ -1157,9 +980,9 @@ function simulation_loop(
             HR,
             GGGP,
             SXX0,
-            tk1,  
+            tk1,
             PHI,
-            BETAPHI
+            BETAPHI,
         )
 
         # ---------------------------------------------------------------------
@@ -1172,9 +995,9 @@ function simulation_loop(
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
         LP = assemble_gravitational_lse!(RHO, RP)
-#     @timeit to "solve gravitational LSE" begin
+        #     @timeit to "solve gravitational LSE" begin
         SP = LP \ RP
-#     end # @timeit to "solve gravitational LSE"
+        #     end # @timeit to "solve gravitational LSE"
         process_gravitational_solution!(SP, FI, gx, gy)
 
         # ---------------------------------------------------------------------
@@ -1186,8 +1009,8 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
-        for titer=1:1:titermax_val
-#     @timeit to "thermochemical iteration (outer)" begin
+        for titer in 1:1:titermax_val
+            #     @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
             if reaction_active
                 perform_thermochemical_reaction!(
@@ -1209,7 +1032,7 @@ function simulation_loop(
                     marknum,
                     dt,
                     timestep,
-                    titer
+                    titer,
                 )
             end
 
@@ -1218,7 +1041,7 @@ function simulation_loop(
             # -----------------------------------------------------------------
 
             # save initial viscosity, yielding nodes
-#     @timeit to "save initial viscosity, yielding nodes" begin
+            #     @timeit to "save initial viscosity, yielding nodes" begin
             ETA00 .= ETA
             YNY00 .= YNY
             cur_betasolid = timestep == 1 ? 0.0 : betasolid_val
@@ -1227,19 +1050,18 @@ function simulation_loop(
                 # no elastic compaction during first timestep
                 BETAPHI .= 0.0
             end
-#     end # @timeit to "save initial viscosity, yielding nodes"
+            #     end # @timeit to "save initial viscosity, yielding nodes"
 
-#     @timeit to "advance pressure generation" begin
+            #     @timeit to "advance pressure generation" begin
             # advance pressure generation inside thermochemical iteration
             pr0 .= pr
             pf0 .= pf
-#     end # @timeit to "advance pressure generation"
+            #     end # @timeit to "advance pressure generation"
 
             # perform plastic iterations
-            for iplast=1:1:titermax_val
-#     @timeit to "plastic iteration (inner)" begin
-                @info(
-                    "thermochemical iter $titer - hydromechanical iter $iplast")
+            for iplast in 1:1:titermax_val
+                #     @timeit to "plastic iteration (inner)" begin
+                @info("thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
                 recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
                 # assemble hydromechanical system of equations
@@ -1266,51 +1088,39 @@ function simulation_loop(
                     DMP,
                     dt,
                     R;
-                    betasolid = cur_betasolid,
-                    betafluid = cur_betafluid,
-                    phimin = phimin_val,
-                    phimax = phimax_val,
-                    hydrofracture = hydrofracture_val,
-                    pr = pr,
-                    pf = pf,
-                    TEN = TEN,
-                    KX = KX,
-                    KY = KY,
-                    kappa_frac = kappa_frac_val,
-                    gamma_frac = gamma_frac_val,
-                    k_frac_max = k_frac_max_val
+                    betasolid=cur_betasolid,
+                    betafluid=cur_betafluid,
+                    phimin=phimin_val,
+                    phimax=phimax_val,
+                    hydrofracture=hydrofracture_val,
+                    pr=pr,
+                    pf=pf,
+                    TEN=TEN,
+                    KX=KX,
+                    KY=KY,
+                    kappa_frac=kappa_frac_val,
+                    gamma_frac=gamma_frac_val,
+                    k_frac_max=k_frac_max_val,
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
-#     @timeit to "solve hydromechanical system" begin
+                #     @timeit to "solve hydromechanical system" begin
                 if use_pardiso_val
-                    set_phase!(
-                        pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
-                    pardiso(
-                        pardiso_solver,
-                        S,
-                        get_matrix(pardiso_solver, L, :N),
-                        R
-                    )
+                    set_phase!(pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
+                    pardiso(pardiso_solver, S, get_matrix(pardiso_solver, L, :N), R)
                     set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
                     pardiso(pardiso_solver, S, L, R)
                 else
                     hydromech_prob = LinearProblem(L, R)
-                    hydromech_sol = LinearSolve.solve(hydromech_prob, UMFPACKFactorization())
+                    hydromech_sol = LinearSolve.solve(
+                        hydromech_prob, UMFPACKFactorization()
+                    )
                     S = hydromech_sol.u
                 end
-#     end # @timeit to "solve hydromechanical system"
+                #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
-                process_hydromechanical_solution!(
-                    S,
-                    vx,
-                    vy,
-                    pr,
-                    qxD,
-                    qyD,
-                    pf
-                )
+                process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf)
 
                 # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
                 aphimax = compute_Aϕ!(
@@ -1323,32 +1133,16 @@ function simulation_loop(
                     pr0,
                     pf0,
                     dt;
-                    betasolid = cur_betasolid,
-                    phimin = phimin_val,
-                    phimax = phimax_val
+                    betasolid=cur_betasolid,
+                    phimin=phimin_val,
+                    phimax=phimax_val,
                 )
 
                 # compute fluid velocities
-                compute_fluid_velocities!(
-                    PHIX,
-                    PHIY,
-                    qxD,
-                    qyD,
-                    vx,
-                    vy,
-                    vxf,
-                    vyf
-                )
+                compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf)
 
                 # adapt timestep for displacement
-                dt = compute_displacement_timestep(
-                    vx,
-                    vy,
-                    vxf,
-                    vyf,
-                    dt,
-                    aphimax
-                )
+                dt = compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
 
                 # compute stresses, stress changes and strain rate components
                 compute_stress_strainrate!(
@@ -1368,7 +1162,7 @@ function simulation_loop(
                     DSXY,
                     EII,
                     SII,
-                    dt
+                    dt,
                 )
 
                 # recompute Dln[(1-PHI)/PHI]/Dt
@@ -1382,23 +1176,16 @@ function simulation_loop(
                     pr0,
                     pf0,
                     dt;
-                    betasolid = cur_betasolid,
-                    phimin = phimin_val,
-                    phimax = phimax_val
+                    betasolid=cur_betasolid,
+                    phimin=phimin_val,
+                    phimax=phimax_val,
                 )
                 # symmetrize P node observables
-                symmetrize_p_node_observables!(
-                    SXX,
-                    APHI,
-                    PHI,
-                    pr,
-                    pf,
-                    ps
-                )
+                symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
                 # consider saving nodal stress changes - RMK: not required
                 # DSXX0 .= DSXX
                 # DSXY0 .= DSXY
-                
+
                 # nodal adjustment
                 if compute_nodal_adjustment!(
                     ETA,
@@ -1417,25 +1204,17 @@ function simulation_loop(
                     YERRNOD,
                     DSY,
                     dt,
-                    iplast
+                    iplast,
                 )
                     # exit plastic iterations loop    
-                    break 
+                    break
                 else
                     # prepare next pass of plastic iteration 
                     dt = finalize_plastic_iteration_pass!(
-                        ETA,
-                        ETA5,
-                        ETA00,
-                        YNY,
-                        YNY5,
-                        YNY00,
-                        YNY_inv_ETA,
-                        dt,
-                        iplast
+                        ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
                     )
                 end
-    # end # @timeit to "plastic iteration"
+                # end # @timeit to "plastic iteration"
             end # for iplast=1:1:nplast
 
             # ------------------------------------------------------------------
@@ -1455,15 +1234,15 @@ function simulation_loop(
                 ETAPHI,
                 pr,
                 pf;
-                hydrofracture = hydrofracture_val,
-                TEN = TEN,
-                KX = KX,
-                KY = KY,
-                kappa_frac = kappa_frac_val,
-                gamma_frac = gamma_frac_val,
-                k_frac_max = k_frac_max_val
+                hydrofracture=hydrofracture_val,
+                TEN=TEN,
+                KX=KX,
+                KY=KY,
+                kappa_frac=kappa_frac_val,
+                gamma_frac=gamma_frac_val,
+                k_frac_max=k_frac_max_val,
             )
-            
+
             # ------------------------------------------------------------------
             # no pressure changes for the first time step
             # ------------------------------------------------------------------
@@ -1472,19 +1251,19 @@ function simulation_loop(
                 pf0 .= pf
                 ps0 .= ps
             end
-        
+
             # ------------------------------------------------------------------
             # compute adiabatic heating HA in P nodes
             # ------------------------------------------------------------------
             compute_adiabatic_heating!(
-                HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
+                HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf
+            )
 
             # ------------------------------------------------------------------
             # solve temperature equation
             # ------------------------------------------------------------------
             # assemble thermal system of equations 
-            LT = assemble_thermal_lse!(
-                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
+            LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
             # solve thermal system of equations
             ST = LT \ RT
             # reshape solution vector to 2D array
@@ -1500,7 +1279,7 @@ function simulation_loop(
                 # exit thermochemical iterations loop
                 break
             end
-#     end # @timeit to "thermochemical iteration (outer)"
+            #     end # @timeit to "thermochemical iteration (outer)"
         end # for titer=1:1:ntiter
 
         # ---------------------------------------------------------------------
@@ -1511,11 +1290,12 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
-        @threads for m = 1:1:marknum
+        @threads for m in 1:1:marknum
             update_marker_viscosity!(
-                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA)
+                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA
+            )
         end
-        
+
         # ---------------------------------------------------------------------
         # apply subgrid stress diffusion to markers
         # ---------------------------------------------------------------------
@@ -1535,7 +1315,7 @@ function simulation_loop(
             WTPSUM,
             WTSUM,
             dt,
-            marknum
+            marknum,
         )
 
         # ---------------------------------------------------------------------
@@ -1559,7 +1339,7 @@ function simulation_loop(
             RHOCPSUM,
             dt,
             marknum,
-            marker_property_mode
+            marker_property_mode,
         )
 
         # ---------------------------------------------------------------------
@@ -1574,15 +1354,15 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         XWsolidm0 .= XWsolidm
         phim .= phinewm
-        update_marker_porosity!(xm, ym, tm, phim, APHI, dt, marknum;
-                                phimin = phimin_val, phimax = phimax_val)
+        update_marker_porosity!(
+            xm, ym, tm, phim, APHI, dt, marknum; phimin=phimin_val, phimax=phimax_val
+        )
         phinewm .= phim
 
         # ---------------------------------------------------------------------
         # interpolate melt composition from markers to P nodes
         # --------------------------------------------------------------------- 
-        update_p_nodes_melt_composition!(
-            xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
+        update_p_nodes_melt_composition!(xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
 
         # ---------------------------------------------------------------------
         # compute velocity in P nodes,
@@ -1594,7 +1374,7 @@ function simulation_loop(
         # compute rotation rate in basic nodes
         # ---------------------------------------------------------------------
         compute_rotation_rate!(vx, vy, wyx)
-        
+
         # ---------------------------------------------------------------------
         # move markers with RK4
         # ---------------------------------------------------------------------
@@ -1614,15 +1394,14 @@ function simulation_loop(
             tk2,
             marknum,
             dt,
-            marker_property_mode
+            marker_property_mode,
         )
 
         # ---------------------------------------------------------------------
         # backtrack P nodes: Ptotal with RK4,
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
-        backtrace_pressures_rk4!(
-            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
+        backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
 
         # ---------------------------------------------------------------------
         # replenish sparse areas with additional markers
@@ -1656,14 +1435,14 @@ function simulation_loop(
             etafluidcur_inv_kphim,
             mdis,
             mnum;
-            randomized=random_markers
+            randomized=random_markers,
         )
 
         # ---------------------------------------------------------------------
         # update timesum
         # ---------------------------------------------------------------------
         timesum += dt
-        timestep_end = now() 
+        timestep_end = now()
 
         # ---------------------------------------------------------------------
         #  save data for analysis and visualization
@@ -1767,7 +1546,7 @@ function simulation_loop(
                 tenstotalm,
                 rhofluidcur,
                 alphasolidcur,
-                alphafluidcur
+                alphafluidcur,
             )
         end
         # ---------------------------------------------------------------------
@@ -1788,8 +1567,7 @@ function simulation_loop(
         @info "total time = $(s_to_Ma(timesum)) Ma"
         @info "markers in use = $marknum"
         @info "max T = $maxT K"
-        next!(p; showvalues = generate_showvalues(
-            timestep, marknum, maxT, dt, timesum))
+        next!(p; showvalues=generate_showvalues(timestep, marknum, maxT, dt, timesum))
 
         # ---------------------------------------------------------------------
         # finish timestep
@@ -1809,14 +1587,14 @@ $(SIGNATURES)
 - `path_or_dir`: Path to `.toml` configuration file, or output directory path.
 - `output_path`: Optional output path override.
 """
-function simulation_loop(path_or_dir::String; output_path::String = "")
+function simulation_loop(path_or_dir::String; output_path::String="")
     if endswith(path_or_dir, ".toml")
         cfg = load_config(path_or_dir)
         actual_output = isempty(output_path) ? cfg.output.output_dir : output_path
-        return simulation_loop(cfg; output_path = actual_output)
+        return simulation_loop(cfg; output_path=actual_output)
     else
         actual_output = isempty(output_path) ? path_or_dir : output_path
-        return simulation_loop(default_config(); output_path = actual_output)
+        return simulation_loop(default_config(); output_path=actual_output)
     end
 end
 
@@ -1837,18 +1615,18 @@ function parse_commandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
         "config_or_output"
-            help = "path to TOML configuration file (.toml) or output directory"
-            default = "output"
+        help = "path to TOML configuration file (.toml) or output directory"
+        default = "output"
         "--output_path", "-o"
-            help = "output path for simulation data (overrides config output_dir if provided)"
-            default = ""
+        help = "output path for simulation data (overrides config output_dir if provided)"
+        default = ""
         "--restart", "-r"
-            help = "path to JLD2 checkpoint file to resume from"
-            default = ""
+        help = "path to JLD2 checkpoint file to resume from"
+        default = ""
         "--show_timer"
-            help = "show timing results?"
-            arg_type = Bool
-            default = false
+        help = "show timing results?"
+        arg_type = Bool
+        default = false
     end
     return parse_args(s)
 end
@@ -1866,7 +1644,7 @@ $(SIGNATURES)
 
     - nothing 
 """
-function run_simulation(config_or_output::AbstractString = "")
+function run_simulation(config_or_output::AbstractString="")
     if isempty(config_or_output)
         parsed_args = parse_commandline()
         target = parsed_args["config_or_output"]
@@ -1884,35 +1662,35 @@ function run_simulation(config_or_output::AbstractString = "")
         load_config(target)
     elseif !isempty(target)
         def = default_config()
-        SimulationConfig(
-            grid = def.grid,
-            geometry = def.geometry,
-            time = def.time,
-            solver = def.solver,
-            poroelasticity = def.poroelasticity,
-            thermodynamics = def.thermodynamics,
-            materials = def.materials,
-            output = OutputConfig(output_dir = target)
+        SimulationConfig(;
+            grid=def.grid,
+            geometry=def.geometry,
+            time=def.time,
+            solver=def.solver,
+            poroelasticity=def.poroelasticity,
+            thermodynamics=def.thermodynamics,
+            materials=def.materials,
+            output=OutputConfig(; output_dir=target),
         )
     else
         default_config()
     end
 
     if !isempty(cli_restart)
-        cfg = SimulationConfig(
-            grid = cfg.grid,
-            geometry = cfg.geometry,
-            time = cfg.time,
-            solver = cfg.solver,
-            poroelasticity = cfg.poroelasticity,
-            thermodynamics = cfg.thermodynamics,
-            materials = cfg.materials,
-            output = OutputConfig(
-                output_dir = cfg.output.output_dir,
-                savematstep = cfg.output.savematstep,
-                visstep = cfg.output.visstep,
-                restart_from = cli_restart
-            )
+        cfg = SimulationConfig(;
+            grid=cfg.grid,
+            geometry=cfg.geometry,
+            time=cfg.time,
+            solver=cfg.solver,
+            poroelasticity=cfg.poroelasticity,
+            thermodynamics=cfg.thermodynamics,
+            materials=cfg.materials,
+            output=OutputConfig(;
+                output_dir=cfg.output.output_dir,
+                savematstep=cfg.output.savematstep,
+                visstep=cfg.output.visstep,
+                restart_from=cli_restart,
+            ),
         )
     end
 
@@ -1931,7 +1709,7 @@ function run_simulation(config_or_output::AbstractString = "")
     @info "writing results to $actual_output"
     t1 = now()
     @info "start time = $t1"
-    simulation_loop(cfg; output_path = actual_output, restart_from = cfg.output.restart_from)
+    simulation_loop(cfg; output_path=actual_output, restart_from=cfg.output.restart_from)
     t2 = now()
     @info "end time = $t2"
     @info "total run time = $(Dates.canonicalize(
@@ -1939,7 +1717,7 @@ function run_simulation(config_or_output::AbstractString = "")
     if show_timer
         show(to)
     end
-    close(io)
+    return close(io)
 end
 
 """
@@ -1947,8 +1725,10 @@ end
 
 Execute a simulation using a pre-loaded `SimulationConfig` object.
 """
-function run_simulation(cfg::SimulationConfig; restart_from::AbstractString = "", output_path::AbstractString = "")
+function run_simulation(
+    cfg::SimulationConfig; restart_from::AbstractString="", output_path::AbstractString=""
+)
     actual_restart = isempty(restart_from) ? cfg.output.restart_from : restart_from
     actual_output = isempty(output_path) ? cfg.output.output_dir : output_path
-    simulation_loop(cfg; output_path = actual_output, restart_from = actual_restart)
+    return simulation_loop(cfg; output_path=actual_output, restart_from=actual_restart)
 end
