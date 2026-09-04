@@ -13,6 +13,8 @@ const rgen = MersenneTwister(seed)
 @testset verbose=true "Erebus.jl" begin
     include("test_config.jl")
     include("test_geometry.jl")
+    include("test_dynamic_grid.jl")
+    include("test_threading.jl")
     include("test_physics.jl")
     include("test_particles.jl")
     include("test_numerics.jl")

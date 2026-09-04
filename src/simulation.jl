@@ -35,7 +35,9 @@ $(SIGNATURES)
     - hrfluidm: initial radiogenic heat production fluid phase
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
 """
-function setup_dynamic_simulation_parameters(cfg::SimulationConfig=default_config())
+function setup_dynamic_simulation_parameters(
+    cfg::SimulationConfig=default_config(); coords::Union{Nothing,GridCoordinates}=nothing
+)
     # timestep counter (current), init to startstep
     timestep::Int64 = cfg.time.start_step
     # computational timestep (current), init to dt_longest [s]
@@ -43,7 +45,7 @@ function setup_dynamic_simulation_parameters(cfg::SimulationConfig=default_confi
     # time sum (current), init to starttime [s]
     timesum::Float64 = cfg.time.start_time
     # current number of markers, init to startmarknum
-    marknum::Int64 = start_marknum
+    marknum::Int64 = coords === nothing ? start_marknum : coords.start_marknum
     # radiogenic heat production solid phase
     hrsolidm::SVector{3,Float64} = start_hrsolidm
     # radiogenic heat production fluid phase
@@ -169,10 +171,35 @@ function save_state(
     tenstotalm,
     rhofluidcur,
     alphasolidcur,
-    alphafluidcur,
+    alphafluidcur;
+    coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
+    Nx_val = coords === nothing ? Nx : coords.Nx
+    Ny_val = coords === nothing ? Ny : coords.Ny
+    Nx1_val = coords === nothing ? Nx1 : coords.Nx1
+    Ny1_val = coords === nothing ? Ny1 : coords.Ny1
+    Nxm_val = coords === nothing ? Nxm : coords.Nxm
+    Nym_val = coords === nothing ? Nym : coords.Nym
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    dxm_val = coords === nothing ? dxm : coords.dxm
+    dym_val = coords === nothing ? dym : coords.dym
+    x_val = coords === nothing ? x : coords.x
+    y_val = coords === nothing ? y : coords.y
+    xvx_val = coords === nothing ? xvx : coords.xvx
+    yvx_val = coords === nothing ? yvx : coords.yvx
+    xvy_val = coords === nothing ? xvy : coords.xvy
+    yvy_val = coords === nothing ? yvy : coords.yvy
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    xxm_val = coords === nothing ? xxm : coords.xxm
+    yym_val = coords === nothing ? yym : coords.yym
+    xsize_val = coords === nothing ? xsize : coords.xsize
+    ysize_val = coords === nothing ? ysize : coords.ysize
+    xcenter_val = coords === nothing ? xcenter : coords.xcenter
+    ycenter_val = coords === nothing ? ycenter : coords.ycenter
     jldsave(
         fid;
         timestep,
@@ -193,30 +220,30 @@ function save_state(
         rplanet,
         rcrust,
         psurface,
-        xsize,
-        ysize,
-        xcenter,
-        ycenter,
-        Nx,
-        Ny,
-        Nx1,
-        Ny1,
-        Nxm,
-        Nym,
-        dx,
-        dy,
-        dxm,
-        dym,
-        x,
-        y,
-        xvx,
-        yvx,
-        xvy,
-        yvy,
-        xp,
-        yp,
-        xxm,
-        yym,
+        xsize=xsize_val,
+        ysize=ysize_val,
+        xcenter=xcenter_val,
+        ycenter=ycenter_val,
+        Nx=Nx_val,
+        Ny=Ny_val,
+        Nx1=Nx1_val,
+        Ny1=Ny1_val,
+        Nxm=Nxm_val,
+        Nym=Nym_val,
+        dx=dx_val,
+        dy=dy_val,
+        dxm=dxm_val,
+        dym=dym_val,
+        x=x_val,
+        y=y_val,
+        xvx=xvx_val,
+        yvx=yvx_val,
+        xvy=xvy_val,
+        yvy=yvy_val,
+        xp=xp_val,
+        yp=yp_val,
+        xxm=xxm_val,
+        yym=yym_val,
         ETA,
         ETA0,
         GGG,
@@ -355,12 +382,13 @@ function simulation_loop(
 )
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
     isdir(output_path) || mkpath(output_path)
-    # @timeit to "simulation_loop setup" begin
+    coords = GridCoordinates(cfg.grid)
+
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters"
     # -------------------------------------------------------------------------
     timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD = setup_dynamic_simulation_parameters(
-        cfg
+        cfg; coords=coords
     )
 
     # Extract dynamic simulation control parameters from cfg
@@ -397,8 +425,19 @@ function simulation_loop(
     fluid_viscosity_Ea_val = cfg.thermodynamics.fluid_viscosity_Ea
     fluid_viscosity_T0_val = cfg.thermodynamics.fluid_viscosity_T0
     fluid_viscosity_eta0_val = cfg.thermodynamics.fluid_viscosity_eta0
+    rplanet_val = cfg.geometry.rplanet
+    rcrust_val = cfg.geometry.rcrust
+    xcenter_val = cfg.geometry.xcenter
+    ycenter_val = cfg.geometry.ycenter
+    psurface_val = cfg.geometry.psurface
 
-    @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
+    nthreads = Threads.nthreads()
+    use_threading = nthreads > 1
+    num_buffers = nthreads
+    thread_buffers =
+        use_threading ? allocate_thread_interpolation_buffers(num_buffers, coords) : nothing
+
+    @info "Simulation layout" coords.Nx coords.Ny coords.xsize coords.dx coords.dy coords.ysize rplanet_val rcrust_val marknum nthreads
     @info(
         "Parameters",
         random_markers,
@@ -464,16 +503,34 @@ function simulation_loop(
     # -------------------------------------------------------------------------
     # set up staggered grid"
     # -------------------------------------------------------------------------
-    (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties()
-    (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers()
+    (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties(
+        coords
+    )
+    (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers(
+        coords
+    )
 
     # -------------------------------------------------------------------------
     # set up markers and state (from checkpoint or fresh definition)
     # -------------------------------------------------------------------------
-    mdis, mnum = setup_marker_geometry_helpers()
+    mdis, mnum = setup_marker_geometry_helpers(coords)
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
+        if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
+            (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
+                DimensionMismatch(
+                    "Checkpoint grid size ($(ckpt["Nx"])x$(ckpt["Ny"])) does not match current simulation grid size ($(coords.Nx)x$(coords.Ny))",
+                ),
+            )
+        end
+        if haskey(ckpt, "xsize") && haskey(ckpt, "ysize")
+            (ckpt["xsize"] == coords.xsize && ckpt["ysize"] == coords.ysize) || throw(
+                DimensionMismatch(
+                    "Checkpoint domain size ($(ckpt["xsize"])x$(ckpt["ysize"])) does not match current simulation domain size ($(coords.xsize)x$(coords.ysize))",
+                ),
+            )
+        end
         start_step_val = ckpt["timestep"] + 1
         dt = ckpt["dt"]
         timesum = ckpt["timesum"]
@@ -484,7 +541,7 @@ function simulation_loop(
         end
 
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
-            marknum
+            marknum, coords
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
             marknum
@@ -578,7 +635,7 @@ function simulation_loop(
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
-            marknum
+            marknum, coords
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
             marknum
@@ -602,7 +659,12 @@ function simulation_loop(
             rhofluidcur,
             alphasolidcur,
             alphafluidcur,
-            XWsolidm0,
+            XWsolidm0;
+            coords=coords,
+            xcenter_val=xcenter_val,
+            ycenter_val=ycenter_val,
+            rplanet_val=rplanet_val,
+            rcrust_val=rcrust_val,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -707,25 +769,28 @@ function simulation_loop(
             tenstotalm,
             rhofluidcur,
             alphasolidcur,
-            alphafluidcur,
+            alphafluidcur;
+            coords=coords,
         )
     end
 
     # ---------------------------------------------------------------------
     # set up interpolation arrays"
     # ---------------------------------------------------------------------
-    (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties()
+    (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties(
+        coords
+    )
 
     # -------------------------------------------------------------------------
     # set up of matrices for global grav/thermal/hydromechanical solvers"
     # -------------------------------------------------------------------------
     # hydromechanical solver
-    R, S = setup_hydromechanical_lse()
+    R, S = setup_hydromechanical_lse(coords)
     hydromech_sol = nothing
     # thermal solver
-    RT, ST = setup_thermal_lse()
+    RT, ST = setup_thermal_lse(coords)
     # gravitational solver
-    RP, SP = setup_gravitational_lse()
+    RP, SP = setup_gravitational_lse(coords)
     # Pardiso MKL solver
     if use_pardiso
         pardiso_solver = Pardiso.MKLPardisoSolver()
@@ -815,44 +880,122 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # compute marker properties and interpolate to staggered grid
         # ---------------------------------------------------------------------
-        for m in 1:1:marknum
-            compute_marker_properties!(
-                m,
-                tm,
-                tkm,
-                rhototalm,
-                rhocptotalm,
-                etatotalm,
-                hrtotalm,
-                ktotalm,
-                tkm_rhocptotalm,
-                etafluidcur_inv_kphim,
-                hrsolidm,
-                hrfluidm,
-                phim,
-                XWsolidm0,
-                marker_property_mode,
-                rhofluidcur;
-                thermal_buoyancy=thermal_buoyancy_val,
-                alphafluid=alphafluid_val,
-                tmfluidphase_val=tmfluidphase_val,
-                fluid_viscosity_mode=fluid_viscosity_mode_val,
-                fluid_viscosity_Ea=fluid_viscosity_Ea_val,
-                fluid_viscosity_T0=fluid_viscosity_T0_val,
-                fluid_viscosity_eta0=fluid_viscosity_eta0_val,
-            )
-            # interpolate marker properties to basic nodes
-            @inbounds marker_to_basic_nodes!(
-                m,
-                xm[m],
-                ym[m],
-                etatotalm,
-                etavpm,
-                inv_gggtotalm,
-                sxym,
-                cohestotalm,
-                tenstotalm,
-                fricttotalm,
+        if use_threading
+            reset_thread_buffers!(thread_buffers)
+            nchunks = length(thread_buffers)
+            Threads.@threads :static for c in 1:nchunks
+                buf = thread_buffers[c]
+                lo = (c - 1) * div(marknum, nchunks) + 1
+                hi = c == nchunks ? marknum : c * div(marknum, nchunks)
+                for m in lo:hi
+                    compute_marker_properties!(
+                        m,
+                        tm,
+                        tkm,
+                        rhototalm,
+                        rhocptotalm,
+                        etatotalm,
+                        hrtotalm,
+                        ktotalm,
+                        tkm_rhocptotalm,
+                        etafluidcur_inv_kphim,
+                        hrsolidm,
+                        hrfluidm,
+                        phim,
+                        XWsolidm0,
+                        marker_property_mode,
+                        rhofluidcur;
+                        thermal_buoyancy=thermal_buoyancy_val,
+                        alphafluid=alphafluid_val,
+                        tmfluidphase_val=tmfluidphase_val,
+                        fluid_viscosity_mode=fluid_viscosity_mode_val,
+                        fluid_viscosity_Ea=fluid_viscosity_Ea_val,
+                        fluid_viscosity_T0=fluid_viscosity_T0_val,
+                        fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+                    )
+                    @inbounds marker_to_basic_nodes!(
+                        m,
+                        xm[m],
+                        ym[m],
+                        etatotalm,
+                        etavpm,
+                        inv_gggtotalm,
+                        sxym,
+                        cohestotalm,
+                        tenstotalm,
+                        fricttotalm,
+                        buf.ETA0SUM,
+                        buf.ETASUM,
+                        buf.GGGSUM,
+                        buf.SXYSUM,
+                        buf.COHSUM,
+                        buf.TENSUM,
+                        buf.FRISUM,
+                        buf.WTSUM;
+                        coords=coords,
+                    )
+                    @inbounds marker_to_vx_nodes!(
+                        m,
+                        xm[m],
+                        ym[m],
+                        rhototalm,
+                        rhofluidcur,
+                        ktotalm,
+                        phim,
+                        etafluidcur_inv_kphim,
+                        buf.RHOXSUM,
+                        buf.RHOFXSUM,
+                        buf.KXSUM,
+                        buf.PHIXSUM,
+                        buf.RXSUM,
+                        buf.WTXSUM;
+                        coords=coords,
+                    )
+                    @inbounds marker_to_vy_nodes!(
+                        m,
+                        xm[m],
+                        ym[m],
+                        rhototalm,
+                        rhofluidcur,
+                        ktotalm,
+                        phim,
+                        etafluidcur_inv_kphim,
+                        buf.RHOYSUM,
+                        buf.RHOFYSUM,
+                        buf.KYSUM,
+                        buf.PHIYSUM,
+                        buf.RYSUM,
+                        buf.WTYSUM;
+                        coords=coords,
+                    )
+                    @inbounds marker_to_p_nodes!(
+                        m,
+                        xm[m],
+                        ym[m],
+                        inv_gggtotalm,
+                        sxxm,
+                        rhototalm,
+                        rhocptotalm,
+                        alphasolidcur,
+                        alphafluidcur,
+                        hrtotalm,
+                        phim,
+                        tkm_rhocptotalm,
+                        buf.GGGPSUM,
+                        buf.SXXSUM,
+                        buf.RHOSUM,
+                        buf.RHOCPSUM,
+                        buf.ALPHASUM,
+                        buf.ALPHAFSUM,
+                        buf.HRSUM,
+                        buf.PHISUM,
+                        buf.TKSUM,
+                        buf.WTPSUM;
+                        coords=coords,
+                    )
+                end
+            end
+            reduce_thread_buffers!(
                 ETA0SUM,
                 ETASUM,
                 GGGSUM,
@@ -861,67 +1004,143 @@ function simulation_loop(
                 TENSUM,
                 FRISUM,
                 WTSUM,
-            )
-            # interpolate marker properties to Vx nodes
-            @inbounds marker_to_vx_nodes!(
-                m,
-                xm[m],
-                ym[m],
-                rhototalm,
-                rhofluidcur,
-                ktotalm,
-                phim,
-                etafluidcur_inv_kphim,
                 RHOXSUM,
                 RHOFXSUM,
                 KXSUM,
                 PHIXSUM,
                 RXSUM,
                 WTXSUM,
-            )
-            # interpolate marker properties to Vy nodes
-            @inbounds marker_to_vy_nodes!(
-                m,
-                xm[m],
-                ym[m],
-                rhototalm,
-                rhofluidcur,
-                ktotalm,
-                phim,
-                etafluidcur_inv_kphim,
                 RHOYSUM,
                 RHOFYSUM,
                 KYSUM,
                 PHIYSUM,
                 RYSUM,
                 WTYSUM,
-            )
-            # interpolate marker properties to P nodes
-            @inbounds marker_to_p_nodes!(
-                m,
-                xm[m],
-                ym[m],
-                inv_gggtotalm,
-                sxxm,
-                rhototalm,
-                rhocptotalm,
-                alphasolidcur,
-                alphafluidcur,
-                hrtotalm,
-                phim,
-                tkm_rhocptotalm,
-                GGGPSUM,
-                SXXSUM,
                 RHOSUM,
                 RHOCPSUM,
                 ALPHASUM,
                 ALPHAFSUM,
                 HRSUM,
-                PHISUM,
+                GGGPSUM,
+                SXXSUM,
                 TKSUM,
+                PHISUM,
                 WTPSUM,
+                thread_buffers,
             )
-        end # for m=1:1:marknum
+        else
+            for m in 1:1:marknum
+                compute_marker_properties!(
+                    m,
+                    tm,
+                    tkm,
+                    rhototalm,
+                    rhocptotalm,
+                    etatotalm,
+                    hrtotalm,
+                    ktotalm,
+                    tkm_rhocptotalm,
+                    etafluidcur_inv_kphim,
+                    hrsolidm,
+                    hrfluidm,
+                    phim,
+                    XWsolidm0,
+                    marker_property_mode,
+                    rhofluidcur;
+                    thermal_buoyancy=thermal_buoyancy_val,
+                    alphafluid=alphafluid_val,
+                    tmfluidphase_val=tmfluidphase_val,
+                    fluid_viscosity_mode=fluid_viscosity_mode_val,
+                    fluid_viscosity_Ea=fluid_viscosity_Ea_val,
+                    fluid_viscosity_T0=fluid_viscosity_T0_val,
+                    fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+                )
+                # interpolate marker properties to basic nodes
+                @inbounds marker_to_basic_nodes!(
+                    m,
+                    xm[m],
+                    ym[m],
+                    etatotalm,
+                    etavpm,
+                    inv_gggtotalm,
+                    sxym,
+                    cohestotalm,
+                    tenstotalm,
+                    fricttotalm,
+                    ETA0SUM,
+                    ETASUM,
+                    GGGSUM,
+                    SXYSUM,
+                    COHSUM,
+                    TENSUM,
+                    FRISUM,
+                    WTSUM;
+                    coords=coords,
+                )
+                # interpolate marker properties to Vx nodes
+                @inbounds marker_to_vx_nodes!(
+                    m,
+                    xm[m],
+                    ym[m],
+                    rhototalm,
+                    rhofluidcur,
+                    ktotalm,
+                    phim,
+                    etafluidcur_inv_kphim,
+                    RHOXSUM,
+                    RHOFXSUM,
+                    KXSUM,
+                    PHIXSUM,
+                    RXSUM,
+                    WTXSUM;
+                    coords=coords,
+                )
+                # interpolate marker properties to Vy nodes
+                @inbounds marker_to_vy_nodes!(
+                    m,
+                    xm[m],
+                    ym[m],
+                    rhototalm,
+                    rhofluidcur,
+                    ktotalm,
+                    phim,
+                    etafluidcur_inv_kphim,
+                    RHOYSUM,
+                    RHOFYSUM,
+                    KYSUM,
+                    PHIYSUM,
+                    RYSUM,
+                    WTYSUM;
+                    coords=coords,
+                )
+                # interpolate marker properties to P nodes
+                @inbounds marker_to_p_nodes!(
+                    m,
+                    xm[m],
+                    ym[m],
+                    inv_gggtotalm,
+                    sxxm,
+                    rhototalm,
+                    rhocptotalm,
+                    alphasolidcur,
+                    alphafluidcur,
+                    hrtotalm,
+                    phim,
+                    tkm_rhocptotalm,
+                    GGGPSUM,
+                    SXXSUM,
+                    RHOSUM,
+                    RHOCPSUM,
+                    ALPHASUM,
+                    ALPHAFSUM,
+                    HRSUM,
+                    PHISUM,
+                    TKSUM,
+                    WTPSUM;
+                    coords=coords,
+                )
+            end # for m=1:1:marknum
+        end
 
         # ---------------------------------------------------------------------
         # compute physical properties of basic nodes
@@ -994,16 +1213,18 @@ function simulation_loop(
         # compute gravity solution
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
-        LP = assemble_gravitational_lse!(RHO, RP)
+        LP = assemble_gravitational_lse!(RHO, RP; coords=coords)
         #     @timeit to "solve gravitational LSE" begin
         SP = LP \ RP
         #     end # @timeit to "solve gravitational LSE"
-        process_gravitational_solution!(SP, FI, gx, gy)
+        process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
 
         # ---------------------------------------------------------------------
         # probe increasing computational timestep
         # ---------------------------------------------------------------------
         dt = min(dt*dtcoefup_val, dt_longest_val)
+        dt_step_initial = dt
+        maxDTcurrent = maximum(abs, DT0)
         @info "\n\n ********** begin timestep $timestep - dt = $dt s **********"
 
         # ---------------------------------------------------------------------
@@ -1032,7 +1253,8 @@ function simulation_loop(
                     marknum,
                     dt,
                     timestep,
-                    titer,
+                    titer;
+                    coords=coords,
                 )
             end
 
@@ -1088,6 +1310,7 @@ function simulation_loop(
                     DMP,
                     dt,
                     R;
+                    coords=coords,
                     betasolid=cur_betasolid,
                     betafluid=cur_betafluid,
                     phimin=phimin_val,
@@ -1120,7 +1343,9 @@ function simulation_loop(
                 #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
-                process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf)
+                process_hydromechanical_solution!(
+                    S, vx, vy, pr, qxD, qyD, pf; coords=coords
+                )
 
                 # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
                 aphimax = compute_Aϕ!(
@@ -1133,16 +1358,33 @@ function simulation_loop(
                     pr0,
                     pf0,
                     dt;
+                    coords=coords,
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
                 )
 
                 # compute fluid velocities
-                compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf)
+                compute_fluid_velocities!(
+                    PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coords=coords
+                )
 
-                # adapt timestep for displacement
-                dt = compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
+                # adapt timestep for displacement and multiple criteria
+                dt = compute_adaptive_timestep(
+                    vx,
+                    vy,
+                    vxf,
+                    vyf,
+                    dt,
+                    aphimax;
+                    coords=coords,
+                    dxymax_val=dxymax,
+                    dphimax_val=dphimax,
+                    dt_ref=dt_step_initial,
+                    maxDTcurrent=maxDTcurrent,
+                    DTmax_val=DTmax,
+                    dt_longest_val=dt_longest_val,
+                )
 
                 # compute stresses, stress changes and strain rate components
                 compute_stress_strainrate!(
@@ -1162,7 +1404,8 @@ function simulation_loop(
                     DSXY,
                     EII,
                     SII,
-                    dt,
+                    dt;
+                    coords=coords,
                 )
 
                 # recompute Dln[(1-PHI)/PHI]/Dt
@@ -1176,6 +1419,7 @@ function simulation_loop(
                     pr0,
                     pf0,
                     dt;
+                    coords=coords,
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
@@ -1241,6 +1485,7 @@ function simulation_loop(
                 kappa_frac=kappa_frac_val,
                 gamma_frac=gamma_frac_val,
                 k_frac_max=k_frac_max_val,
+                coords=coords,
             )
 
             # ------------------------------------------------------------------
@@ -1256,18 +1501,20 @@ function simulation_loop(
             # compute adiabatic heating HA in P nodes
             # ------------------------------------------------------------------
             compute_adiabatic_heating!(
-                HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf
+                HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf; coords=coords
             )
 
             # ------------------------------------------------------------------
             # solve temperature equation
             # ------------------------------------------------------------------
             # assemble thermal system of equations 
-            LT = assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
+            LT = assemble_thermal_lse!(
+                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=coords
+            )
             # solve thermal system of equations
             ST = LT \ RT
             # reshape solution vector to 2D array
-            tk2 .= reshape(ST, Ny1, Nx1)
+            tk2 .= reshape(ST, coords.Ny1, coords.Nx1)
             # compute ΔT
             @. DT = tk2 - tk1
             maxDTcurrent = maximum(abs, DT)
@@ -1290,9 +1537,9 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # interpolate updated viscoplastic viscosity to markers
         # ---------------------------------------------------------------------
-        @threads for m in 1:1:marknum
+        @threads :static for m in 1:1:marknum
             update_marker_viscosity!(
-                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA
+                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA; coords=coords
             )
         end
 
@@ -1315,13 +1562,14 @@ function simulation_loop(
             WTPSUM,
             WTSUM,
             dt,
-            marknum,
+            marknum;
+            coords=coords,
         )
 
         # ---------------------------------------------------------------------
         # interpolate DSXX, DSXY to markers
         # ---------------------------------------------------------------------
-        update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum)
+        update_marker_stress!(xm, ym, sxxm, sxym, DSXX, DSXY, marknum; coords=coords)
 
         # ---------------------------------------------------------------------
         # apply subgrid temperature diffusion on markers,
@@ -1339,13 +1587,14 @@ function simulation_loop(
             RHOCPSUM,
             dt,
             marknum,
-            marker_property_mode,
+            marker_property_mode;
+            coords=coords,
         )
 
         # ---------------------------------------------------------------------
         # interpolate DT to markers
         # ---------------------------------------------------------------------
-        update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum)
+        update_marker_temperature!(xm, ym, tkm, DT, tk2, timestep, marknum; coords=coords)
 
         # ---------------------------------------------------------------------
         # advance marker melt composition and porosity generation,
@@ -1355,25 +1604,36 @@ function simulation_loop(
         XWsolidm0 .= XWsolidm
         phim .= phinewm
         update_marker_porosity!(
-            xm, ym, tm, phim, APHI, dt, marknum; phimin=phimin_val, phimax=phimax_val
+            xm,
+            ym,
+            tm,
+            phim,
+            APHI,
+            dt,
+            marknum;
+            phimin=phimin_val,
+            phimax=phimax_val,
+            coords=coords,
         )
         phinewm .= phim
 
         # ---------------------------------------------------------------------
         # interpolate melt composition from markers to P nodes
         # --------------------------------------------------------------------- 
-        update_p_nodes_melt_composition!(xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum)
+        update_p_nodes_melt_composition!(
+            xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum; coords=coords
+        )
 
         # ---------------------------------------------------------------------
         # compute velocity in P nodes,
         # compute fluid velocity in P nodes including boundary conditions
         # ---------------------------------------------------------------------
-        compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf)
+        compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=coords)
 
         # ---------------------------------------------------------------------
         # compute rotation rate in basic nodes
         # ---------------------------------------------------------------------
-        compute_rotation_rate!(vx, vy, wyx)
+        compute_rotation_rate!(vx, vy, wyx; coords=coords)
 
         # ---------------------------------------------------------------------
         # move markers with RK4
@@ -1394,14 +1654,17 @@ function simulation_loop(
             tk2,
             marknum,
             dt,
-            marker_property_mode,
+            marker_property_mode;
+            coords=coords,
         )
 
         # ---------------------------------------------------------------------
         # backtrack P nodes: Ptotal with RK4,
         # backtrack P nodes: Pfluid with RK4
         # ---------------------------------------------------------------------
-        backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt)
+        backtrace_pressures_rk4!(
+            pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords
+        )
 
         # ---------------------------------------------------------------------
         # replenish sparse areas with additional markers
@@ -1436,6 +1699,7 @@ function simulation_loop(
             mdis,
             mnum;
             randomized=random_markers,
+            coords=coords,
         )
 
         # ---------------------------------------------------------------------
@@ -1546,7 +1810,8 @@ function simulation_loop(
                 tenstotalm,
                 rhofluidcur,
                 alphasolidcur,
-                alphafluidcur,
+                alphafluidcur;
+                coords=coords,
             )
         end
         # ---------------------------------------------------------------------

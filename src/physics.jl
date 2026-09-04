@@ -433,6 +433,7 @@ $(SIGNATURES)
 """
 function compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
     # @timeit to "compute_thermodynamic_xfer!" begin
+    Ny1, Nx1 = size(DMP)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             if WTPSUM[i, j] > 0.0
@@ -497,11 +498,20 @@ function perform_thermochemical_reaction!(
     marknum,
     Δt,
     timestep,
-    titer,
+    titer;
+    coords=nothing,
 )
     # @timeit to "perform_thermochemical_reaction!" begin
     # reset interpolation arrays
     reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
+    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
+    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
+    imin_p_val = coords === nothing ? imin_p : coords.imin_p
+    imax_p_val = coords === nothing ? imax_p : coords.imax_p
     # iterate over markers
     @inbounds begin
         for m in 1:1:marknum
@@ -509,7 +519,16 @@ function perform_thermochemical_reaction!(
             if tm[m] < 3
                 # for rocks only
                 i, j, weights = fix_weights(
-                    xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
+                    xm[m],
+                    ym[m],
+                    xp_val,
+                    yp_val,
+                    dx_val,
+                    dy_val,
+                    jmin_p_val,
+                    jmax_p_val,
+                    imin_p_val,
+                    imax_p_val,
                 )
                 # interpolate temperature from P nodes
                 tknm = dot4(grid_vector(i, j, tk2), weights)
@@ -649,8 +668,12 @@ function compute_shear_heating!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    coords=nothing,
 )
     # @timeit to "compute_shear_heating!" begin
+    Ny1, Nx1 = size(HS)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
     for j in 2:1:Nx, i in 2:1:Ny
         # average SXY⋅EXY
         SXYEXY = 0.25 * sum(grid_vector(i-1, j-1, SXY) .^ 2 ./ grid_vector(i-1, j-1, ETA))
@@ -779,8 +802,15 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_adiabatic_heating!(HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
+function compute_adiabatic_heating!(
+    HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf; coords=nothing
+)
     # @timeit to "compute_adiabatic_heating!" begin
+    Ny1, Nx1 = size(HA)
+    Nx = Nx1 - 1
+    Ny = Ny1 - 1
+    dx_val = coords === nothing ? dx : coords.dx
+    dy_val = coords === nothing ? dy : coords.dy
     @inbounds begin
         for j in 2:1:Nx, i in 2:1:Ny
             # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
@@ -791,26 +821,26 @@ function compute_adiabatic_heating!(HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vy
             VYFP = 0.5 * (vyf[i, j]+vyf[i - 1, j])
             # evaluate DPsolid/Dt with upwind differences
             if VXP < 0.0
-                dpsdx = (ps[i, j]-ps[i, j - 1]) * inv(dx)
+                dpsdx = (ps[i, j]-ps[i, j - 1]) * inv(dx_val)
             else
-                dpsdx = (ps[i, j + 1]-ps[i, j]) * inv(dx)
+                dpsdx = (ps[i, j + 1]-ps[i, j]) * inv(dx_val)
             end
             if VYP < 0.0
-                dpsdy = (ps[i, j]-ps[i - 1, j]) * inv(dy)
+                dpsdy = (ps[i, j]-ps[i - 1, j]) * inv(dy_val)
             else
-                dpsdy = (ps[i + 1, j]-ps[i, j]) * inv(dy)
+                dpsdy = (ps[i + 1, j]-ps[i, j]) * inv(dy_val)
             end
             dpsdt = VXP*dpsdx + VYP*dpsdy
             # evaluate DPfluid/Dt with upwind differences
             if VXFP > 0.0
-                dpfdx = (pf[i, j]-pf[i, j - 1]) * inv(dx)
+                dpfdx = (pf[i, j]-pf[i, j - 1]) * inv(dx_val)
             else
-                dpfdx = (pf[i, j + 1]-pf[i, j]) * inv(dx)
+                dpfdx = (pf[i, j + 1]-pf[i, j]) * inv(dx_val)
             end
             if VYFP > 0.0
-                dpfdy = (pf[i, j]-pf[i - 1, j]) * inv(dy)
+                dpfdy = (pf[i, j]-pf[i - 1, j]) * inv(dy_val)
             else
-                dpfdy = (pf[i + 1, j]-pf[i, j]) * inv(dy)
+                dpfdy = (pf[i + 1, j]-pf[i, j]) * inv(dy_val)
             end
             dpfdt = VXFP*dpfdx + VYFP*dpfdy
             # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)

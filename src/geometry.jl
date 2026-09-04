@@ -73,7 +73,9 @@ $(SIGNATURES)
     - DHP: enthalpy transfer/latent heating term at P nodes
     - XWS: wet solid fraction at P nodes
 """
-function setup_staggered_grid_properties(; randomized=false)
+function setup_staggered_grid_properties(Nx::Int=Nx, Ny::Int=Ny; randomized=false)
+    Nx1 = Nx + 1
+    Ny1 = Ny + 1
     # basic nodes
     # viscoplastic viscosity [Pa*s]
     ETA = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
@@ -271,6 +273,10 @@ function setup_staggered_grid_properties(; randomized=false)
     )
 end # function setup_staggered_grid_properties()
 
+function setup_staggered_grid_properties(coords::GridCoordinates; randomized=false)
+    return setup_staggered_grid_properties(coords.Nx, coords.Ny; randomized=randomized)
+end
+
 """
 Set up additional helper staggered grid properties to facilitate computations.
 
@@ -293,7 +299,9 @@ $(SIGNATURES)
     - DSXX :stress change Δσ′xx at P nodes [Pa]
     - tk0: previous temperature at P nodes [K]
 """
-function setup_staggered_grid_properties_helpers(; randomized=false)
+function setup_staggered_grid_properties_helpers(Nx::Int=Nx, Ny::Int=Ny; randomized=false)
+    Nx1 = Nx + 1
+    Ny1 = Ny + 1
     # basic nodes
     # plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
     ETA5 = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
@@ -319,6 +327,12 @@ function setup_staggered_grid_properties_helpers(; randomized=false)
     tk0 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
     return (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0)
 end # function setup_staggered_grid_properties_helpers()
+
+function setup_staggered_grid_properties_helpers(coords::GridCoordinates; randomized=false)
+    return setup_staggered_grid_properties_helpers(
+        coords.Nx, coords.Ny; randomized=randomized
+    )
+end
 
 """
 Get a 4-vector of values from a grid 4-stencil anchored at (i, j) in 
