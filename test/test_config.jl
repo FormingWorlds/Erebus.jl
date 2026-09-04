@@ -23,24 +23,24 @@ using TOML
         @test cfg.solver.use_pardiso == false
 
         # Material arrays must match constants.jl element-by-element
-        @test cfg.materials.rhosolidm == SVector{3, Float64}([3300.0, 3300.0, 1.0])
-        @test cfg.materials.rhofluidm == SVector{3, Float64}([1000.0, 1000.0, 1.0])
-        @test cfg.materials.etasolidm == SVector{3, Float64}([1.0e+19, 1.0e+19, 1.0e+16])
-        @test cfg.materials.etasolidmm == SVector{3, Float64}([1.0e+19, 1.0e+19, 1.0e+16])
-        @test cfg.materials.etafluidm == SVector{3, Float64}([1.0e+12, 1.0e+12, 1.0e-03])
-        @test cfg.materials.etafluidmm == SVector{3, Float64}([1.0e-03, 1.0e-03, 1.0e-03])
-        @test cfg.materials.rhocpsolidm == SVector{3, Float64}([3.3e+06, 3.3e+06, 3.0e+06])
-        @test cfg.materials.rhocpfluidm == SVector{3, Float64}([1.0e+06, 1.0e+06, 3.0e+06])
-        @test cfg.materials.alphasolidm == SVector{3, Float64}([3.0e-05, 3.0e-05, 0.0])
-        @test cfg.materials.alphafluidm == SVector{3, Float64}([5.0e-05, 5.0e-05, 0.0])
-        @test cfg.materials.ksolidm == SVector{3, Float64}([3.0, 3.0, 3000.0])
-        @test cfg.materials.kfluidm == SVector{3, Float64}([50.0, 50.0, 3000.0])
-        @test cfg.materials.gggsolidm == SVector{3, Float64}([1.0e+10, 1.0e+10, 1.0e+10])
-        @test cfg.materials.frictsolidm == SVector{3, Float64}([0.6, 0.6, 0.0])
-        @test cfg.materials.cohessolidm == SVector{3, Float64}([1.0e+08, 1.0e+08, 1.0e+08])
-        @test cfg.materials.tenssolidm == SVector{3, Float64}([6.0e+07, 6.0e+07, 6.0e+07])
-        @test cfg.materials.kphim0 == SVector{3, Float64}([1.0e-13, 1.0e-13, 1.0e-17])
-        @test cfg.materials.tkm0 == SVector{3, Float64}([170.0, 170.0, 170.0])
+        @test cfg.materials.rhosolidm == SVector{3,Float64}([3300.0, 3300.0, 1.0])
+        @test cfg.materials.rhofluidm == SVector{3,Float64}([1000.0, 1000.0, 1.0])
+        @test cfg.materials.etasolidm == SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
+        @test cfg.materials.etasolidmm == SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
+        @test cfg.materials.etafluidm == SVector{3,Float64}([1.0e+12, 1.0e+12, 1.0e-03])
+        @test cfg.materials.etafluidmm == SVector{3,Float64}([1.0e-03, 1.0e-03, 1.0e-03])
+        @test cfg.materials.rhocpsolidm == SVector{3,Float64}([3.3e+06, 3.3e+06, 3.0e+06])
+        @test cfg.materials.rhocpfluidm == SVector{3,Float64}([1.0e+06, 1.0e+06, 3.0e+06])
+        @test cfg.materials.alphasolidm == SVector{3,Float64}([3.0e-05, 3.0e-05, 0.0])
+        @test cfg.materials.alphafluidm == SVector{3,Float64}([5.0e-05, 5.0e-05, 0.0])
+        @test cfg.materials.ksolidm == SVector{3,Float64}([3.0, 3.0, 3000.0])
+        @test cfg.materials.kfluidm == SVector{3,Float64}([50.0, 50.0, 3000.0])
+        @test cfg.materials.gggsolidm == SVector{3,Float64}([1.0e+10, 1.0e+10, 1.0e+10])
+        @test cfg.materials.frictsolidm == SVector{3,Float64}([0.6, 0.6, 0.0])
+        @test cfg.materials.cohessolidm == SVector{3,Float64}([1.0e+08, 1.0e+08, 1.0e+08])
+        @test cfg.materials.tenssolidm == SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
+        @test cfg.materials.kphim0 == SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
+        @test cfg.materials.tkm0 == SVector{3,Float64}([170.0, 170.0, 170.0])
     end
 
     @testset "load_config() from file" begin
@@ -51,7 +51,7 @@ using TOML
         @test cfg_def.grid.xsize == 140000.0
         @test cfg_def.poroelasticity.betasolid == 2.5e-11
         @test cfg_def.poroelasticity.betafluid == 4.0e-10
-        @test cfg_def.materials.ksolidm == SVector{3, Float64}([3.0, 3.0, 3000.0])
+        @test cfg_def.materials.ksolidm == SVector{3,Float64}([3.0, 3.0, 3000.0])
 
         # Quick test TOML file
         quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
@@ -91,73 +91,147 @@ using TOML
 
         # Compiled grid constraints (dynamic grid resizing requires recompilation)
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 15, Ny = 33, xsize = 140000.0, ysize = 140000.0))
+            SimulationConfig(grid=GridConfig(Nx=15, Ny=33, xsize=140000.0, ysize=140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 33, Ny = 15, xsize = 140000.0, ysize = 140000.0))
+            SimulationConfig(grid=GridConfig(Nx=33, Ny=15, xsize=140000.0, ysize=140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 33, Ny = 33, xsize = 50000.0, ysize = 140000.0))
+            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=50000.0, ysize=140000.0))
         )
 
         # Compiled geometry constraints
         @test_throws ArgumentError validate_config(
-            SimulationConfig(geometry = GeometryConfig(rplanet = 60000.0, rcrust = 50000.0, xcenter = 70000.0, ycenter = 70000.0, psurface = 1e3))
+            SimulationConfig(
+                geometry=GeometryConfig(
+                    rplanet=60000.0,
+                    rcrust=50000.0,
+                    xcenter=70000.0,
+                    ycenter=70000.0,
+                    psurface=1e3,
+                ),
+            ),
         )
 
         # Invalid poroelastic parameters
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(betasolid = -1.0e-11, betafluid = 4e-10, phimin = 1e-4, phimax = 0.9999))
+            SimulationConfig(
+                poroelasticity=PoroelasticConfig(
+                    betasolid=-1.0e-11, betafluid=4e-10, phimin=1e-4, phimax=0.9999
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(betasolid = 2.5e-11, betafluid = -4e-10, phimin = 1e-4, phimax = 0.9999))
+            SimulationConfig(
+                poroelasticity=PoroelasticConfig(
+                    betasolid=2.5e-11, betafluid=-4e-10, phimin=1e-4, phimax=0.9999
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(betasolid = 2.5e-11, betafluid = 4e-10, phimin = 0.9, phimax = 0.1))
+            SimulationConfig(
+                poroelasticity=PoroelasticConfig(
+                    betasolid=2.5e-11, betafluid=4e-10, phimin=0.9, phimax=0.1
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(betasolid = 2.5e-11, betafluid = 4e-10, phimin = -0.1, phimax = 0.9))
+            SimulationConfig(
+                poroelasticity=PoroelasticConfig(
+                    betasolid=2.5e-11, betafluid=4e-10, phimin=-0.1, phimax=0.9
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(kappa_frac = -1.0))
+            SimulationConfig(poroelasticity=PoroelasticConfig(kappa_frac=-1.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(gamma_frac = 0.0))
+            SimulationConfig(poroelasticity=PoroelasticConfig(gamma_frac=0.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity = PoroelasticConfig(k_frac_max = -1.0e-9))
+            SimulationConfig(poroelasticity=PoroelasticConfig(k_frac_max=-1.0e-9))
         )
 
         # Invalid time parameters
         @test_throws ArgumentError validate_config(
-            SimulationConfig(time = TimeConfig(dt_initial = -1.0, dt_longest = 1e11, dtcoefdn = 0.5, dtcoefup = 1.2, dtstep = 200, dxymax = 0.05, vpratio = 0.33, DTmax = 20.0, yearlength = 3.15e7, start_time = 0.0, endtime = 1e12, start_step = 1, n_steps = 10))
+            SimulationConfig(
+                time=TimeConfig(
+                    dt_initial=-1.0,
+                    dt_longest=1e11,
+                    dtcoefdn=0.5,
+                    dtcoefup=1.2,
+                    dtstep=200,
+                    dxymax=0.05,
+                    vpratio=0.33,
+                    DTmax=20.0,
+                    yearlength=3.15e7,
+                    start_time=0.0,
+                    endtime=1e12,
+                    start_step=1,
+                    n_steps=10,
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(time = TimeConfig(dt_initial = 1e11, dt_longest = 1e10, dtcoefdn = 0.5, dtcoefup = 1.2, dtstep = 200, dxymax = 0.05, vpratio = 0.33, DTmax = 20.0, yearlength = 3.15e7, start_time = 0.0, endtime = 1e12, start_step = 1, n_steps = 10))
+            SimulationConfig(
+                time=TimeConfig(
+                    dt_initial=1e11,
+                    dt_longest=1e10,
+                    dtcoefdn=0.5,
+                    dtcoefup=1.2,
+                    dtstep=200,
+                    dxymax=0.05,
+                    vpratio=0.33,
+                    DTmax=20.0,
+                    yearlength=3.15e7,
+                    start_time=0.0,
+                    endtime=1e12,
+                    start_step=1,
+                    n_steps=10,
+                ),
+            ),
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(time = TimeConfig(dt_initial = 1e11, dt_longest = 1e11, dtcoefdn = 0.5, dtcoefup = 1.2, dtstep = 200, dxymax = 0.05, vpratio = 0.33, DTmax = 20.0, yearlength = 3.15e7, start_time = 0.0, endtime = 1e12, start_step = 1, n_steps = 0))
+            SimulationConfig(
+                time=TimeConfig(
+                    dt_initial=1e11,
+                    dt_longest=1e11,
+                    dtcoefdn=0.5,
+                    dtcoefup=1.2,
+                    dtstep=200,
+                    dxymax=0.05,
+                    vpratio=0.33,
+                    DTmax=20.0,
+                    yearlength=3.15e7,
+                    start_time=0.0,
+                    endtime=1e12,
+                    start_step=1,
+                    n_steps=0,
+                ),
+            ),
         )
 
         # Invalid solver parameters: titermax must be <= nplast to prevent plastic array overflow
         @test_throws ArgumentError validate_config(
-            SimulationConfig(solver = SolverConfig(titermax = 200_000, nplast = 100_000))
+            SimulationConfig(solver=SolverConfig(titermax=200_000, nplast=100_000))
         )
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @test_throws ArgumentError validate_config(
-            SimulationConfig(output = OutputConfig(savematstep = 0, visstep = 1))
+            SimulationConfig(output=OutputConfig(savematstep=0, visstep=1))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(output = OutputConfig(savematstep = 10, visstep = 0))
+            SimulationConfig(output=OutputConfig(savematstep=10, visstep=0))
         )
 
         # Invalid thermodynamics
         @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics = ThermalConfig(ratio_al = -0.1))
+            SimulationConfig(thermodynamics=ThermalConfig(ratio_al=-0.1))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics = ThermalConfig(tmfluidphase = 1500.0, tmsolidphase = 1400.0))
+            SimulationConfig(
+                thermodynamics=ThermalConfig(tmfluidphase=1500.0, tmsolidphase=1400.0)
+            ),
         )
     end
 
@@ -186,9 +260,25 @@ using TOML
 
     @testset "save_config() roundtrip serialization" begin
         cfg_orig = SimulationConfig(
-            poroelasticity = PoroelasticConfig(betasolid = 3.0e-11, betafluid = 5.0e-10, phimin = 2e-4, phimax = 0.99),
-            time = TimeConfig(dt_initial = 5e10, dt_longest = 5e10, dtcoefdn = 0.5, dtcoefup = 1.2, dtstep = 200, dxymax = 0.05, vpratio = 0.33, DTmax = 20.0, yearlength = 3.15e7, start_time = 0.0, endtime = 1e12, start_step = 1, n_steps = 4),
-            output = OutputConfig(output_dir = "test_roundtrip", savematstep = 2, visstep = 1)
+            poroelasticity=PoroelasticConfig(
+                betasolid=3.0e-11, betafluid=5.0e-10, phimin=2e-4, phimax=0.99
+            ),
+            time=TimeConfig(
+                dt_initial=5e10,
+                dt_longest=5e10,
+                dtcoefdn=0.5,
+                dtcoefup=1.2,
+                dtstep=200,
+                dxymax=0.05,
+                vpratio=0.33,
+                DTmax=20.0,
+                yearlength=3.15e7,
+                start_time=0.0,
+                endtime=1e12,
+                start_step=1,
+                n_steps=4,
+            ),
+            output=OutputConfig(output_dir="test_roundtrip", savematstep=2, visstep=1),
         )
 
         tmp_path = tempname() * ".toml"
@@ -216,19 +306,27 @@ using TOML
     @testset "materials and thermodynamics validation" begin
         # Zero or negative shear modulus
         @test_throws ArgumentError validate_config(
-            SimulationConfig(materials = MaterialConfig(gggsolidm = SVector{3, Float64}([0.0, 1e10, 1e10])))
+            SimulationConfig(
+                materials=MaterialConfig(gggsolidm=SVector{3,Float64}([0.0, 1e10, 1e10]))
+            ),
         )
         # Negative conductivity
         @test_throws ArgumentError validate_config(
-            SimulationConfig(materials = MaterialConfig(ksolidm = SVector{3, Float64}([-3.0, 3.0, 3000.0])))
+            SimulationConfig(
+                materials=MaterialConfig(ksolidm=SVector{3,Float64}([-3.0, 3.0, 3000.0]))
+            ),
         )
         # Invalid radiogenic half-life
         @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics = ThermalConfig(t_half_al = -1.0))
+            SimulationConfig(thermodynamics=ThermalConfig(t_half_al=-1.0))
         )
         # Material modification away from compiled constants
         @test_throws ArgumentError validate_config(
-            SimulationConfig(materials = MaterialConfig(rhosolidm = SVector{3, Float64}([4000.0, 3300.0, 1.0])))
+            SimulationConfig(
+                materials=MaterialConfig(
+                    rhosolidm=SVector{3,Float64}([4000.0, 3300.0, 1.0])
+                ),
+            ),
         )
         # Radiogenic heating calculation keyword arguments and toggling
         hr_sol_on, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
@@ -240,18 +338,19 @@ using TOML
     @testset "output restart_from validation" begin
         # Non-existent checkpoint file
         @test_throws ArgumentError validate_config(
-            SimulationConfig(output = OutputConfig(restart_from = "nonexistent_checkpoint.jld2"))
+            SimulationConfig(
+                output=OutputConfig(restart_from="nonexistent_checkpoint.jld2")
+            ),
         )
         # Non-.jld2 extension
         tmp_txt = tempname() * ".txt"
         touch(tmp_txt)
         try
             @test_throws ArgumentError validate_config(
-                SimulationConfig(output = OutputConfig(restart_from = tmp_txt))
+                SimulationConfig(output=OutputConfig(restart_from=tmp_txt))
             )
         finally
             rm(tmp_txt, force=true)
         end
     end
 end
-

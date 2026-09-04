@@ -14,11 +14,11 @@ $(SIGNATURES)
     - SP: gravitational linear system of equations: solution vector
 """
 function setup_gravitational_lse()
-# @timeit to "setup_gravitational_lse()" begin
+    # @timeit to "setup_gravitational_lse()" begin
     # RP = zeros(Ny1*Nx1)
     RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
-# end # @timeit to "setup_gravitational_lse()"
+    # end # @timeit to "setup_gravitational_lse()"
     return RP, SP
 end
 
@@ -37,11 +37,11 @@ $(SIGNATURES)
     - S: hydromechanical linear system of equations: solution vector
 """
 function setup_hydromechanical_lse()
-# @timeit to "setup_hydromechanical_lse()" begin
+    # @timeit to "setup_hydromechanical_lse()" begin
     # R = zeros(Ny1*Nx1*6)
     R = Vector{Float64}(undef, Ny1*Nx1*6)
     S = Vector{Float64}(undef, Ny1*Nx1*6)
-# end # @timeit to "setup_hydromechanical_lse()"
+    # end # @timeit to "setup_hydromechanical_lse()"
     return R, S
 end
 
@@ -60,11 +60,11 @@ $(SIGNATURES)
     - ST: thermal linear system of equations: solution vector
 """
 function setup_thermal_lse()
-# @timeit to "setup_thermal_lse()" begin
+    # @timeit to "setup_thermal_lse()" begin
     # RT = zeros(Ny1*Nx1)
     RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
-# end # @timeit to "setup_thermal_lse()"
+    # end # @timeit to "setup_thermal_lse()"
     return RT, ST
 end
 
@@ -89,7 +89,7 @@ function initialize_pardiso!(pardiso_solver, iparms_dict)
     for (i, v) in iparms_dict
         set_iparm!(pardiso_solver, i+1, v)
     end
-    set_phase!(pardiso_solver, Pardiso.ANALYSIS)
+    return set_phase!(pardiso_solver, Pardiso.ANALYSIS)
 end
 
 """
@@ -146,9 +146,9 @@ function get_viscosities_stresses_density_gradients!(
     dRHOXdx,
     dRHOXdy,
     dRHOYdx,
-    dRHOYdy
+    dRHOYdy,
 )
-# @timeit to "get_viscosities_stresses_density_gradients!()" begin
+    # @timeit to "get_viscosities_stresses_density_gradients!()" begin
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
@@ -158,22 +158,21 @@ function get_viscosities_stresses_density_gradients!(
     @views @. SYYcomp = -SXX0*ETAP / (GGGP*dt+ETAP)
     # for erroneously undersized (Ny, Nx) SSX0, SSX
     # @views @. SXXcomp = (
-        # SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
+    # SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
     # )
     # @views @. SYYcomp = (
-        # -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
+    # -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
     # )
     # density gradients
     @inbounds begin
-    @views @. dRHOXdx[:, 2:Nx] = 0.5*(RHOX[:, 3:Nx1]-RHOX[:, 1:Nx1-2]) * inv(dx)
-    @views @. dRHOXdy[2:Ny, :] = 0.5*(RHOX[3:Ny1, :]-RHOX[1:Ny1-2, :]) * inv(dy)
-    @views @. dRHOYdx[:, 2:Nx] = 0.5*(RHOY[:, 3:Nx1]-RHOY[:, 1:Nx1-2]) * inv(dx)
-    @views @. dRHOYdy[2:Ny, :] = 0.5*(RHOY[3:Ny1, :]-RHOY[1:Ny1-2, :]) * inv(dy)
+        @views @. dRHOXdx[:, 2:Nx] = 0.5 * (RHOX[:, 3:Nx1]-RHOX[:, 1:(Nx1 - 2)]) * inv(dx)
+        @views @. dRHOXdy[2:Ny, :] = 0.5 * (RHOX[3:Ny1, :]-RHOX[1:(Ny1 - 2), :]) * inv(dy)
+        @views @. dRHOYdx[:, 2:Nx] = 0.5 * (RHOY[:, 3:Nx1]-RHOY[:, 1:(Nx1 - 2)]) * inv(dx)
+        @views @. dRHOYdy[2:Ny, :] = 0.5 * (RHOY[3:Ny1, :]-RHOY[1:(Ny1 - 2), :]) * inv(dy)
     end # @inbounds
     return nothing
-# end # @timeit to "get_viscosities_stresses_density_gradients!()"
+    # end # @timeit to "get_viscosities_stresses_density_gradients!()"
 end # function get_viscosities_stresses_density_gradients!
-
 
 """
 Assemble the LHS sparse coefficient matrix and fill RHS coefficient vector
@@ -192,115 +191,14 @@ $(SIGNATURES)
 
 """
 function assemble_gravitational_lse!(RHO, RP)
-#     @timeit to "assemble_gravitational_lse!" begin
-        # fresh LHS sparse coefficient matrix
-        LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
-        # reset RHS coefficient vector
-        RP .= zero(0.0)
-        # iterate over P nodes
-#         @timeit to "build system" begin
-        for j=1:1:Nx1, i=1:1:Ny1
-            # define global index in algebraic space
-            gk = (j-1) * Ny1 + i
-            # decide if external / boundary points
-            @inbounds if (
-                i==1 ||
-                i==Ny1 ||
-                j==1 ||
-                j==Nx1 ||
-                distance(xp[j], yp[i], xcenter, ycenter) > xcenter
-            )
-                # boundary condition: ϕ = 0
-                updateindex!(LP, +, 1.0, gk, gk)
-                # RP[gk] = 0.0 # already done at initialization
-            else
-                # internal points: 2D Poisson equation: gravitational potential Φ
-                # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
-                #
-                #           Φ₂
-                #           |
-                #           |
-                #    Φ₁-----Φ₃-----Φ₅
-                #           |
-                #           |
-                #           Φ₄
-                #
-                # density gradients
-                # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
-                # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
-                # fill system of equations: LHS (11.11)
-                updateindex!(LP, +, inv(dx^2), gk, gk-Ny1) # Φ₁
-                updateindex!(LP, +, inv(dy^2), gk, gk-1) # Φ₂
-                updateindex!(LP, +, -2.0*(inv(dx^2)+inv(dy^2)), gk, gk) # Φ₃
-                updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
-                updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
-                # fill system of equations: RHS (11.11)
-                @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
-            end
-        end
-#         end # @timeit to "build system"
-#     end # @timeit to "assemble_gravitational_lse!"
-    return LP
-end
-
-"""
-Process gravitational potential solution vector to output physical observables.
-
-$(SIGNATURES)
-
-# Details
-
-    - FI: gravitational potential
-    - gx: x-component of gravitational acceleration
-    - gy: y-component of gravitational acceleration
-
-# Returns
-
-    - nothing
-"""
-function process_gravitational_solution!(SP, FI, gx, gy)
-# @timeit to "process gravitational solution" begin
-#     @timeit to "reshape solution" begin
-    FI .= reshape(SP, Ny1, Nx1)
-#     end # @timeit to "reshape solution"
-#     @timeit to "compute accelerations" begin
-    # gx = -∂ϕ/∂x (11.12)
-    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
-    # gy = -∂ϕ/∂y (11.13)   
-    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-#     end # @timeit to "compute accelerations"
-# end # @timeit to "process gravitational solution"
-    return nothing
-end
-
-"""
-Compute gravity solution in P nodes to obtain
-gravitational accelerations gx for Vx nodes, gy for Vy nodes.
-
-$(SIGNATURES)
-
-# Details
-
-    - SP: solution vector
-    - RP: right hand side vector
-    - RHO: density at P nodes
-    - FI: gravity potential at P nodes
-    - gx: x gravitational acceleration at Vx nodes
-    - gy: y gravitational acceleration at Vy nodes
-
-# Returns
-
-- nothing
-"""
-function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
-# @timeit to "compute_gravity_solution!" begin
+    #     @timeit to "assemble_gravitational_lse!" begin
     # fresh LHS sparse coefficient matrix
     LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
     # reset RHS coefficient vector
-    RP .= 0.0
+    RP .= zero(0.0)
     # iterate over P nodes
-    # @timeit to "build system" begin
-    for j=1:1:Nx1, i=1:1:Ny1
+    #         @timeit to "build system" begin
+    for j in 1:1:Nx1, i in 1:1:Ny1
         # define global index in algebraic space
         gk = (j-1) * Ny1 + i
         # decide if external / boundary points
@@ -339,22 +237,123 @@ function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
             @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
         end
     end
-#     end # @timeit to "build system"
-#     @timeit to "solve system" begin
-    # solve system of equations
-    SP .= LP \ RP # implicit: flush!(LP)
-#     end # @timeit to "solve system"
-    # reshape solution vector to 2D array
-#     @timeit to "reshape solution" begin
+    #         end # @timeit to "build system"
+    #     end # @timeit to "assemble_gravitational_lse!"
+    return LP
+end
+
+"""
+Process gravitational potential solution vector to output physical observables.
+
+$(SIGNATURES)
+
+# Details
+
+    - FI: gravitational potential
+    - gx: x-component of gravitational acceleration
+    - gy: y-component of gravitational acceleration
+
+# Returns
+
+    - nothing
+"""
+function process_gravitational_solution!(SP, FI, gx, gy)
+    # @timeit to "process gravitational solution" begin
+    #     @timeit to "reshape solution" begin
     FI .= reshape(SP, Ny1, Nx1)
-#     end # @timeit to "reshape solution"
-#     @timeit to "compute accelerations" begin
+    #     end # @timeit to "reshape solution"
+    #     @timeit to "compute accelerations" begin
     # gx = -∂ϕ/∂x (11.12)
     @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
     # gy = -∂ϕ/∂y (11.13)   
     @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
-#     end # @timeit to "compute accelerations"
-# end # @timeit to "compute_gravity_solution!"
+    #     end # @timeit to "compute accelerations"
+    # end # @timeit to "process gravitational solution"
+    return nothing
+end
+
+"""
+Compute gravity solution in P nodes to obtain
+gravitational accelerations gx for Vx nodes, gy for Vy nodes.
+
+$(SIGNATURES)
+
+# Details
+
+    - SP: solution vector
+    - RP: right hand side vector
+    - RHO: density at P nodes
+    - FI: gravity potential at P nodes
+    - gx: x gravitational acceleration at Vx nodes
+    - gy: y gravitational acceleration at Vy nodes
+
+# Returns
+
+- nothing
+"""
+function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
+    # @timeit to "compute_gravity_solution!" begin
+    # fresh LHS sparse coefficient matrix
+    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    # reset RHS coefficient vector
+    RP .= 0.0
+    # iterate over P nodes
+    # @timeit to "build system" begin
+    for j in 1:1:Nx1, i in 1:1:Ny1
+        # define global index in algebraic space
+        gk = (j-1) * Ny1 + i
+        # decide if external / boundary points
+        @inbounds if (
+            i==1 ||
+            i==Ny1 ||
+            j==1 ||
+            j==Nx1 ||
+            distance(xp[j], yp[i], xcenter, ycenter) > xcenter
+        )
+            # boundary condition: ϕ = 0
+            updateindex!(LP, +, 1.0, gk, gk)
+            # RP[gk] = 0.0 # already done at initialization
+        else
+            # internal points: 2D Poisson equation: gravitational potential Φ
+            # ∂²Φ/∂x² + ∂²Φ/∂y² = 4KπGρ with K=2/3 for spherical 2D (11.10)
+            #
+            #           Φ₂
+            #           |
+            #           |
+            #    Φ₁-----Φ₃-----Φ₅
+            #           |
+            #           |
+            #           Φ₄
+            #
+            # density gradients
+            # dRHOdx = (RHO[i, j+1]-RHO[i, j-1]) / 2 / dx
+            # dRHOdy = (RHO[i+1, j]-RHO[i-1, j]) / 2 / dy
+            # fill system of equations: LHS (11.11)
+            updateindex!(LP, +, inv(dx^2), gk, gk-Ny1) # Φ₁
+            updateindex!(LP, +, inv(dy^2), gk, gk-1) # Φ₂
+            updateindex!(LP, +, -2.0*(inv(dx^2)+inv(dy^2)), gk, gk) # Φ₃
+            updateindex!(LP, +, inv(dy^2), gk, gk+1) # Φ₄
+            updateindex!(LP, +, inv(dx^2), gk, gk+Ny1) # Φ₅
+            # fill system of equations: RHS (11.11)
+            @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
+        end
+    end
+    #     end # @timeit to "build system"
+    #     @timeit to "solve system" begin
+    # solve system of equations
+    SP .= LP \ RP # implicit: flush!(LP)
+    #     end # @timeit to "solve system"
+    # reshape solution vector to 2D array
+    #     @timeit to "reshape solution" begin
+    FI .= reshape(SP, Ny1, Nx1)
+    #     end # @timeit to "reshape solution"
+    #     @timeit to "compute accelerations" begin
+    # gx = -∂ϕ/∂x (11.12)
+    @inbounds gx[:, 1:Nx] .= -diff(FI, dims=2) ./ dx
+    # gy = -∂ϕ/∂y (11.13)   
+    @inbounds gy[1:Ny, :] .= -diff(FI, dims=1) ./ dy
+    #     end # @timeit to "compute accelerations"
+    # end # @timeit to "compute_gravity_solution!"
     return nothing
 end # function compute_gravity_solution!
 
@@ -415,511 +414,538 @@ function assemble_hydromechanical_lse!(
     DMP,
     dt,
     R;
-    betasolid = betasolid,
-    betafluid = betafluid,
-    phimin = phimin,
-    phimax = phimax,
-    hydrofracture::Bool = false,
-    pr = nothing,
-    pf = nothing,
-    TEN = nothing,
-    KX = nothing,
-    KY = nothing,
-    kappa_frac::Real = 1.0e3,
-    gamma_frac::Real = 1.0,
-    k_frac_max::Real = 1.0e-9
+    betasolid=betasolid,
+    betafluid=betafluid,
+    phimin=phimin,
+    phimax=phimax,
+    hydrofracture::Bool=false,
+    pr=nothing,
+    pf=nothing,
+    TEN=nothing,
+    KX=nothing,
+    KY=nothing,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
 )
-# @timeit to "assemble_hydromechanical_lse()" begin
+    # @timeit to "assemble_hydromechanical_lse()" begin
     # initialize LHS sparse coefficient matrix
     L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
     # reset RHS coefficient vector
     R .= 0.0
     @inbounds begin
-    for j=1:1:Nx1, i=1:1:Ny1
-        # define global indices in algebraic space
-        kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
-        kvy = kvx + 1 # Vy solid
-        kpm = kvx + 2 # P total
-        kqx = kvx + 3 # qx Darcy
-        kqy = kvx + 4 # qy Darcy
-        kpf = kvx + 5 # P fluid
-        # Vx equation
-        if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
-            # Vx equation external points: boundary conditions
-            # all locations: ghost unknowns Vx₃=0 -> 1.0⋅Vx[i,j]=0.0
-            updateindex!(L, +, 1.0, kvx, kvx)
-            # R[kvx] = 0.0 # already done with initialization
-            # left boundary
-            if j == 1 
-                R[kvx] = vxleft
-            end
-            # right boundary
-            if j == Nx 
-                R[kvx] = vxright
-            end
-            # top boundary
-            if i==1 && 1<j<Nx
-                updateindex!(L, +, bctop, kvx, kvx+6)
-            end
-            # bottom boundary
-            if i==Ny1 && 1<j<Nx
-                updateindex!(L, +, bcbottom, kvx, kvx-6)
-            end
-        else
-            # Vx equation internal points: x-Stokes
-            #
-            #                           kvx-6
-            #                            Vx₂
-            #                             |
-            #               kvy-6     ETA(i-1,j)   kvy+6⋅Ny1-6
-            #                Vy₁      GGG(i-1,j)     Vy₃
-            #                 *       SXY0(i-1,j)     *
-            #                           basic₁
-            #                            ETA₁                       
-            #                            SXY₁
-            #               ETAP(i,j)     |      ETAP(i,j+1)
-            #               GGGP(i,j)     |      GGGP(i,j+1) 
-            #   kvx-6⋅Ny1   SXX0(i,j)    kvx     SXX0(i,j+1)  kvx+6⋅Ny1
-            #     Vx₁---------P₁---------Vx₃---------P₂---------Vx₅
-            #                kpm          |        kpm+6⋅Ny1
-            #               ETAP₁         |        ETAP₂
-            #               SXX₁          |        SXX₂
-            #                          ETA(i,j) 
-            #                kvy       GGG(i,j)     kvy+6⋅Ny1
-            #                Vy₂       SXY0(i,j)      Vy₄
-            #                 *        basic₂          * 
-            #                            ETA₂ 
-            #                            SXY₂
-            #                             |
-            #                           kvx+6
-            #                            Vx₄
-            #                             *
-            #
-            # computational viscosity
-            ETA₁ = ETA[i-1, j] * GGG[i-1, j]*dt / (GGG[i-1, j]*dt + ETA[i-1, j])
-            ETA₂ = ETA[i, j] * GGG[i, j]*dt / (GGG[i, j]*dt + ETA[i, j])
-            ETAP₁ = ETAP[i, j] * GGGP[i, j]*dt / (GGGP[i, j]*dt + ETAP[i, j])
-            ETAP₂ = ETAP[i, j+1] * GGGP[i, j+1]*dt / (
-                GGGP[i, j+1]*dt + ETAP[i, j+1])
-            # previous stresses
-            SXY₁ = SXY0[i-1, j]* ETA[i-1, j] / (GGG[i-1, j]*dt + ETA[i-1, j])
-            SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j]*dt + ETA[i, j])
-            SXX₁ = SXX0[i, j] * ETAP[i, j] / (GGGP[i, j]*dt + ETAP[i, j])
-            SXX₂ = SXX0[i, j+1] * ETAP[i, j+1] / (
-                GGGP[i, j+1]*dt + ETAP[i, j+1])
-            # density gradients
-            ∂RHO∂x = 0.5 * (RHOX[i, j+1] - RHOX[i, j-1]) * inv(dx)
-            ∂RHO∂y = 0.5 * (RHOX[i+1, j] - RHOX[i-1, j]) * inv(dy)
-            # LHS coefficient matrix
-            updateindex!(L, +, ETAP₁/dx^2, kvx, kvx-6*Ny1) # Vx₁
-            updateindex!(L, +, ETA₁/dy^2, kvx, kvx-6) # Vx₂
-            updateindex!(
-                L,
-                +,
-                (
-                    -(ETAP₁+ETAP₂) * inv(dx^2)
-                    -(ETA₁+ETA₂) * inv(dy^2)
-                    -∂RHO∂x * gx[i, j] * dt
-                ),
-                kvx,
-                kvx
-            ) # Vx₃
-            updateindex!(L, +, ETA₂/dy^2, kvx, kvx+6) # Vx₄
-            updateindex!(L, +, ETAP₂/dx^2, kvx, kvx+6*Ny1) # Vx₅
-            updateindex!(
-                L,
-                +,
-                (
-                    ETAP₁ * inv(dx) * inv(dy)
-                    -ETA₂ * inv(dx) * inv(dy)
-                    -∂RHO∂y * gx[i, j] * dt * 0.25
-                ),
-                kvx,
-                kvy
-            ) # Vy₂
-            updateindex!(
-                L,
-                +,
-                (
-                    -ETAP₂ * inv(dx) * inv(dy)
-                    +ETA₂ * inv(dx) * inv(dy)
-                    -∂RHO∂y * gx[i, j] * dt * 0.25
-                ),
-                kvx,
-                kvy+6*Ny1
-            ) # Vy₄
-            updateindex!(
-                L,
-                +,
-                (
-                    -ETAP₁ * inv(dx) * inv(dy)
-                    +ETA₁ * inv(dx) * inv(dy)
-                    -∂RHO∂y * gx[i, j] * dt * 0.25
-                ),
-                kvx,
-                kvy-6
-            ) # Vy₁
-            updateindex!(
-                L,
-                +,
-                (
-                    ETAP₂ * inv(dx) * inv(dy)
-                    -ETA₁ * inv(dx) * inv(dy)
-                    -∂RHO∂y * gx[i, j] * dt * 0.25
-                ),
-                kvx,
-                kvy+6*Ny1-6
-            ) # Vy₃
-            updateindex!(L, +, Kcont*inv(dx), kvx, kpm) # P₁
-            updateindex!(L, +, -Kcont*inv(dx), kvx, kpm+6*Ny1) # P₂
-            # RHS coefficient vector
-            R[kvx] = (
-                -RHOX[i, j] * gx[i, j]
-                -(SXY₂-SXY₁) * inv(dy)
-                -(SXX₂-SXX₁) * inv(dx)
-            )
-        end # Vx equation
-        # Vy equation
-        if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
-            # Vy equation external points: boundary conditions
-            # all locations: ghost unknowns Vy₃=0 -> 1.0⋅Vy[i,j]=0.0
-            updateindex!(L, +, 1.0, kvy, kvy)
-            # R[kvy] = 0.0 # already done with initialization
-            # top boundary
-            if i == 1 
-                R[kvy] = vytop
-            end
-            # bottom boundary
-            if i == Ny 
-                R[kvy] = vybottom
-            end
-            # left boundary
-            if j==1 && 1<i<Ny
-                updateindex!(L, +, bcleft, kvy, kvy+6*Ny1)
-            end
-            # right boundary
-            if j==Nx1 && 1<i<Ny
-                updateindex!(L, +, bcright, kvy, kvy-6*Ny1)
-            end
-        else
-            # Vy equation internal points: y-Stokes
-            #
-            #                           kvy-6
-            #                            Vy₂
-            #                             |
-            #                          ETAP(i,j)
-            #                          GGGP(i,j)
-            #             kvx-6⋅Ny1    SXX0(i,j)     kvx
-            #                Vx₁          P₁         Vx₃
-            #                 *         ETAP₁         *
-            #                            SYY₁
-            #               ETA(i,j-1)   kpm       ETA(i,j)
-            #               GGG(i,j-1)    |        GGG(i,j)
-            #   kvy-6⋅Ny1   SXY0(i,j-1)  kvy       SXY0(i,j)  kvy+6⋅Ny1
-            #     Vy₁-------basic₁-------Vv₃-------basic₂-------Vy₅
-            #               ETA₁          |        ETA₂     
-            #               SXY₁          |        SXY₂
-            #                            kpm+6
-            #                         ETAP(i+1,j)
-            #                         GGGP(i+1,j)
-            #          kvx-6⋅Ny1+6    SXX0(i+1,j)   kvx+6
-            #                Vx₂          P₂        Vx₄
-            #                 *         ETAP₂        *  
-            #                            SYY₂
-            #                             |
-            #                           kvy+6
-            #                            Vy₄
-            #
-            # computational viscosity
-            ETA₁ = ETA[i, j-1] * GGG[i, j-1]*dt / (GGG[i, j-1]*dt + ETA[i, j-1])
-            ETA₂ = ETA[i, j] * GGG[i, j]*dt / (GGG[i, j]*dt + ETA[i, j])
-            ETAP₁ = ETAP[i, j] * GGGP[i, j]*dt / (GGGP[i, j]*dt + ETAP[i, j])
-            ETAP₂ = ETAP[i+1, j] * GGGP[i+1, j]*dt / (
-                GGGP[i+1, j]*dt + ETAP[i+1, j])
-            # previous stresses
-            SXY₁ = SXY0[i, j-1] * ETA[i, j-1] / (GGG[i, j-1]*dt + ETA[i, j-1])
-            SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j]*dt + ETA[i, j])
-            SYY₁ = -SXX0[i, j] * ETAP[i, j] / (GGGP[i, j]*dt + ETAP[i, j])
-            SYY₂ = -SXX0[i+1, j] * ETAP[i+1, j] / (
-                GGGP[i+1, j]*dt + ETAP[i+1, j])
-            # density gradients
-            ∂RHO∂x = 0.5 * (RHOY[i, j+1]-RHOY[i, j-1]) / dx
-            ∂RHO∂y = 0.5 * (RHOY[i+1, j]-RHOY[i-1, j]) / dy
-            # LHS coefficient matrix
-            updateindex!(L, +, ETA₁/dx^2, kvy, kvy-6*Ny1) # Vy₁
-            updateindex!(L, +, ETAP₁/dy^2, kvy, kvy-6) # Vy₂
-            updateindex!(
-                L,
-                +,
-                (
-                    -(ETAP₁+ETAP₂) * inv(dy^2)
-                    -(ETA₁+ETA₂) * inv(dx^2)
-                    -∂RHO∂y * gy[i, j] * dt
-                ),
-                kvy,
-                kvy
-            ) # Vy₃
-            updateindex!(L, +, ETAP₂ * inv(dy^2), kvy, kvy+6) # Vy₄
-            updateindex!(L, +, ETA₂ * inv(dx^2), kvy, kvy+6*Ny1) # Vy₅
-            updateindex!(
-                L,
-                +,
-                (
-                    ETAP₁ * inv(dx) * inv(dy)
-                    -ETA₂ * inv(dx) * inv(dy)
-                    -∂RHO∂x * gy[i, j] * dt * 0.25
-                ),
-                kvy,
-                kvx
-            ) # Vx₃
-            updateindex!(
-                L,
-                +,
-                (
-                    -ETAP₂ * inv(dx) * inv(dy)
-                    +ETA₂ * inv(dx) * inv(dy)
-                    -∂RHO∂x * gy[i, j] * dt * 0.25
-                ),
-                kvy,
-                kvx+6
-            ) # Vx₄
-            updateindex!(
-                L,
-                +,
-                (
-                    -ETAP₁ * inv(dx) * inv(dy)
-                    +ETA₁ * inv(dx) * inv(dy)
-                    -∂RHO∂x * gy[i, j] * dt * 0.25
-                ),
-                kvy,
-                kvx-6*Ny1
-            ) # Vx₁
-            updateindex!(
-                L,
-                +,
-                (
-                    ETAP₂ * inv(dx) * inv(dy)
-                    -ETA₁ * inv(dx) * inv(dy)
-                    -∂RHO∂x * gy[i, j] * dt * 0.25
-                ),
-                kvy,
-                kvx+6-6*Ny1
-            ) # Vx₂
-            updateindex!(L, +, Kcont*inv(dy), kvy, kpm) # P₁
-            updateindex!(L, +, -Kcont*inv(dy), kvy, kpm+6) # P₂
-            R[kvy] = (
-                -RHOY[i, j] * gy[i, j]
-                -(SXY₂-SXY₁) * inv(dx)
-                -(SYY₂-SYY₁) * inv(dy)
-            ) # RHS
-        end # Vy equation
-        # P equation
-        if i==1 || i==Ny1 || j==1 || j==Nx1
-            # P equation external points: boundary conditions
-            # all locations: ghost unknowns P=0 -> 1.0⋅P[i,j]=0.0
-            updateindex!(L, +, 1.0, kpm, kpm)
-            # R[kpm] = 0.0 # already done with initialization
-        # elseif i==j==2
-        elseif (
-            (i==2 && 2<=j<=Nx)
-            || (j==2 && 2<i<Ny)
-            || (i==Ny && 2<=j<=Nx)
-            || (j==Nx && 2<i<Ny)
-        )
-            # Ptotal/Pfluid real pressure boundary condition 'anchor'
-            updateindex!(L, +, Kcont, kpm, kpm)
-            R[kpm] = psurface
-        else
-            # P equation internal points: continuity equation: ∂Vx/∂x+∂Vy/∂y=0
-            #
-            #                 kvy-6
-            #                  Vy₁
-            #                   |
-            #                   |
-            #      kvx-6⋅Ny1   kpm       kvx
-            #        Vx₁--------P--------Vx₂
-            #                   |
-            #                   |
-            #                  kvy
-            #                  Vy₂
-            #
-            updateindex!(L, +, -1.0/dx, kpm, kvx-6*Ny1) # Vx₁
-            updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
-            updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
-            updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
-            # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
-            betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax)
-            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
-            ksk = compute_skempton_coefficient(betadrained, PHI[i, j], betasolid, betafluid; phimin=phimin, phimax=phimax)
-
-            # LHS coefficient matrix
-            updateindex!(
-                L,
-                +,
-                Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
-                kpm,
-                kpm
-            ) # P: Ptotal
-            updateindex!(
-                L,
-                +,
-                -Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
-                kpm,
-                kpf
-            ) # P: Pfluid
-            # RHS coefficient vector
-            R[kpm] = (
-                betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt
-                + DMP[i, j]
-            )
-        end # P equation
-        # qxDarcy equation
-        if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
-            # qxDarcy equation external points: boundary conditions
-            # all locations: ghost unknowns qyD = 0 -> 1.0⋅qxD[i, j] = 0.0
-            updateindex!(L, +, 1.0, kqx, kqx)
-            # R[kqx] = 0.0 # already done with initialization
-            # top boundary
-            if i==1 && 1<j<Nx
-                updateindex!(L, +, bcftop, kqx, kqx+6)
-            end
-            # bottom boundary
-            if i==Ny1 && 1<j<Nx
-                updateindex!(L, +, bcfbottom, kqx, kqx-6)
-            end
-        else
-            # qxDarcy equation internal points: x-Darcy equation:
-            # ηfluid/kᵩx⋅qxDarcy + ∂P/∂x = ρfluid⋅gx
-            #
-            #        P₁--------qxD--------P₂
-            #       kpf        kqx     kpf+6⋅Ny1
-            #
-            # LHS coefficient matrix
-            rx_val = RX[i, j]
-            if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                Peff_x = 0.5 * (pr[i, j] + pr[i, j+1] - pf[i, j] - pf[i, j+1])
-                sigma_t_x = 0.5 * (TEN[i, j] + TEN[i-1, j])
-                kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
-                if kphi_x > 0.0
-                    keff_x = compute_hydrofracture_permeability(kphi_x, Peff_x, sigma_t_x; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
-                    rx_val = RX[i, j] * (kphi_x / keff_x)
-                else
-                    ffrac_x = compute_hydrofracture_factor(Peff_x, sigma_t_x; active=true, kappa_frac=kappa_frac, gamma=gamma_frac)
-                    rx_floor = 1.0e-5 / k_frac_max
-                    rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+        for j in 1:1:Nx1, i in 1:1:Ny1
+            # define global indices in algebraic space
+            kvx = ((j-1)*Ny1 + i-1) * 6 + 1 # Vx solid
+            kvy = kvx + 1 # Vy solid
+            kpm = kvx + 2 # P total
+            kqx = kvx + 3 # qx Darcy
+            kqy = kvx + 4 # qy Darcy
+            kpf = kvx + 5 # P fluid
+            # Vx equation
+            if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+                # Vx equation external points: boundary conditions
+                # all locations: ghost unknowns Vx₃=0 -> 1.0⋅Vx[i,j]=0.0
+                updateindex!(L, +, 1.0, kvx, kvx)
+                # R[kvx] = 0.0 # already done with initialization
+                # left boundary
+                if j == 1
+                    R[kvx] = vxleft
                 end
-            end
-            updateindex!(L, +, rx_val, kqx, kqx) # qxD
-            updateindex!(L, +, -Kcont*inv(dx), kqx, kpf) # P₁
-            updateindex!(L, +, Kcont*inv(dx), kqx, kpf+6*Ny1) # P₂
-            # RHS coefficient vector
-            R[kqx] = RHOFX[i, j] * gx[i, j]
-        end # qxDarcy equation
-        # qyDarcy equation
-        if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
-            # qyDarcy equation external points: boundary conditions
-            # all locations: ghost unknowns qyD = 0 -> 1.0⋅qyD[i, j] = 0.0
-            updateindex!(L, +, 1.0, kqy, kqy)
-            # R[kqy] = 0.0 # already done with initialization
-            # left boundary
-            if j==1 && 1<i<Ny
-                updateindex!(L, +, bcfleft, kqy, kqy+6*Ny1)
-            end
-            # right boundary
-            if j==Nx1 && 1<i<Ny
-                updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
-            end 
-        else
-            # qyDarcy equation internal points: y-Darcy equation:
-            # ηfluid/kᵩy⋅qyDarcy + ∂P/∂y = ρfluid⋅gy
-            #
-            #                  P₁
-            #                 kpf
-            #                  |
-            #                 qyD
-            #                 kqy
-            #                  |
-            #                  P₂
-            #                kpf+6
-            #
-            # LHS coefficient matrix
-            ry_val = RY[i, j]
-            if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                Peff_y = 0.5 * (pr[i, j] + pr[i+1, j] - pf[i, j] - pf[i+1, j])
-                sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j-1])
-                kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
-                if kphi_y > 0.0
-                    keff_y = compute_hydrofracture_permeability(kphi_y, Peff_y, sigma_t_y; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
-                    ry_val = RY[i, j] * (kphi_y / keff_y)
-                else
-                    ffrac_y = compute_hydrofracture_factor(Peff_y, sigma_t_y; active=true, kappa_frac=kappa_frac, gamma=gamma_frac)
-                    ry_floor = 1.0e-5 / k_frac_max
-                    ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+                # right boundary
+                if j == Nx
+                    R[kvx] = vxright
                 end
-            end
-            updateindex!(L, +, ry_val, kqy, kqy) # qyD
-            updateindex!(L, +, -Kcont*inv(dy), kqy, kpf) # P₁
-            updateindex!(L, +, Kcont*inv(dy), kqy, kpf+6) # P₂
-            # RHS coefficient vector
-            R[kqy] = RHOFY[i, j] * gy[i, j]
-        end # qyDarcy equation
-        # Ptotal/Pfluid equation 
-        if i==1 || i==Ny1 || j==1 || j==Nx1
-            # Ptotal/Pfluid equation external points: boundary conditions
-            # all locations: ghost unknowns P = 0 -> 1.0⋅P[i, j] = 0.0
-            updateindex!(L, +, 1.0, kpf, kpf)
-            # R[kpf] = 0.0 # already done with initialization
-        # elseif i==j==2
-        elseif (
-            (i==2 && 2<=j<=Nx)
-            || (j==2 && 2<i<Ny)
-            || (i==Ny && 2<=j<=Nx)
-            || (j==Nx && 2<i<Ny)
-        )
-            # Ptotal/Pfluid real pressure boundary condition 'anchor'
-            updateindex!(L, +, Kcont, kpf, kpf)
-            R[kpf] = psurface
-        else
-            # Ptotal/Pfluid equation internal points: continuity equation:
-            # ∂qxD/∂x + ∂qyD/∂y - (Ptotal-Pfluid)/ηϕ = 0.0
-            #
-            #                 qyD₁
-            #                kqy-6
-            #                  |
-            #       qxD₁-------P-------qxD₂
-            #    kqx-6⋅Ny1    kpf      kqx
-            #                  |
-            #                 qyD₂
-            #                 kqy
-            #
-            # LHS coefficient matrix
-            updateindex!(L, +, -inv(dx), kpf, kqx-6*Ny1) # qxD₁
-            updateindex!(L, +, inv(dx), kpf, kqx) # qxD₂
-            updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
-            updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
+                # top boundary
+                if i==1 && 1<j<Nx
+                    updateindex!(L, +, bctop, kvx, kvx+6)
+                end
+                # bottom boundary
+                if i==Ny1 && 1<j<Nx
+                    updateindex!(L, +, bcbottom, kvx, kvx-6)
+                end
+            else
+                # Vx equation internal points: x-Stokes
+                #
+                #                           kvx-6
+                #                            Vx₂
+                #                             |
+                #               kvy-6     ETA(i-1,j)   kvy+6⋅Ny1-6
+                #                Vy₁      GGG(i-1,j)     Vy₃
+                #                 *       SXY0(i-1,j)     *
+                #                           basic₁
+                #                            ETA₁                       
+                #                            SXY₁
+                #               ETAP(i,j)     |      ETAP(i,j+1)
+                #               GGGP(i,j)     |      GGGP(i,j+1) 
+                #   kvx-6⋅Ny1   SXX0(i,j)    kvx     SXX0(i,j+1)  kvx+6⋅Ny1
+                #     Vx₁---------P₁---------Vx₃---------P₂---------Vx₅
+                #                kpm          |        kpm+6⋅Ny1
+                #               ETAP₁         |        ETAP₂
+                #               SXX₁          |        SXX₂
+                #                          ETA(i,j) 
+                #                kvy       GGG(i,j)     kvy+6⋅Ny1
+                #                Vy₂       SXY0(i,j)      Vy₄
+                #                 *        basic₂          * 
+                #                            ETA₂ 
+                #                            SXY₂
+                #                             |
+                #                           kvx+6
+                #                            Vx₄
+                #                             *
+                #
+                # computational viscosity
+                ETA₁ =
+                    ETA[i - 1, j] * GGG[i - 1, j] * dt / (GGG[i - 1, j]*dt + ETA[i - 1, j])
+                ETA₂ = ETA[i, j] * GGG[i, j] * dt / (GGG[i, j]*dt + ETA[i, j])
+                ETAP₁ = ETAP[i, j] * GGGP[i, j] * dt / (GGGP[i, j]*dt + ETAP[i, j])
+                ETAP₂ =
+                    ETAP[i, j + 1] * GGGP[i, j + 1] * dt /
+                    (GGGP[i, j + 1]*dt + ETAP[i, j + 1])
+                # previous stresses
+                SXY₁ = SXY0[i - 1, j] * ETA[i - 1, j] / (GGG[i - 1, j]*dt + ETA[i - 1, j])
+                SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j]*dt + ETA[i, j])
+                SXX₁ = SXX0[i, j] * ETAP[i, j] / (GGGP[i, j]*dt + ETAP[i, j])
+                SXX₂ =
+                    SXX0[i, j + 1] * ETAP[i, j + 1] / (GGGP[i, j + 1]*dt + ETAP[i, j + 1])
+                # density gradients
+                ∂RHO∂x = 0.5 * (RHOX[i, j + 1] - RHOX[i, j - 1]) * inv(dx)
+                ∂RHO∂y = 0.5 * (RHOX[i + 1, j] - RHOX[i - 1, j]) * inv(dy)
+                # LHS coefficient matrix
+                updateindex!(L, +, ETAP₁/dx^2, kvx, kvx-6*Ny1) # Vx₁
+                updateindex!(L, +, ETA₁/dy^2, kvx, kvx-6) # Vx₂
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -(ETAP₁+ETAP₂) * inv(dx^2) - (ETA₁+ETA₂) * inv(dy^2) -
+                        ∂RHO∂x * gx[i, j] * dt
+                    ),
+                    kvx,
+                    kvx,
+                ) # Vx₃
+                updateindex!(L, +, ETA₂/dy^2, kvx, kvx+6) # Vx₄
+                updateindex!(L, +, ETAP₂/dx^2, kvx, kvx+6*Ny1) # Vx₅
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₁ * inv(dx) * inv(dy) - ETA₂ * inv(dx) * inv(dy) -
+                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy,
+                ) # Vy₂
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₂ * inv(dx) * inv(dy) + ETA₂ * inv(dx) * inv(dy) -
+                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy+6*Ny1,
+                ) # Vy₄
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₁ * inv(dx) * inv(dy) + ETA₁ * inv(dx) * inv(dy) -
+                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy-6,
+                ) # Vy₁
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₂ * inv(dx) * inv(dy) - ETA₁ * inv(dx) * inv(dy) -
+                        ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy+6*Ny1-6,
+                ) # Vy₃
+                updateindex!(L, +, Kcont*inv(dx), kvx, kpm) # P₁
+                updateindex!(L, +, -Kcont*inv(dx), kvx, kpm+6*Ny1) # P₂
+                # RHS coefficient vector
+                R[kvx] = (
+                    -RHOX[i, j] * gx[i, j] - (SXY₂-SXY₁) * inv(dy) - (SXX₂-SXX₁) * inv(dx)
+                )
+            end # Vx equation
+            # Vy equation
+            if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
+                # Vy equation external points: boundary conditions
+                # all locations: ghost unknowns Vy₃=0 -> 1.0⋅Vy[i,j]=0.0
+                updateindex!(L, +, 1.0, kvy, kvy)
+                # R[kvy] = 0.0 # already done with initialization
+                # top boundary
+                if i == 1
+                    R[kvy] = vytop
+                end
+                # bottom boundary
+                if i == Ny
+                    R[kvy] = vybottom
+                end
+                # left boundary
+                if j==1 && 1<i<Ny
+                    updateindex!(L, +, bcleft, kvy, kvy+6*Ny1)
+                end
+                # right boundary
+                if j==Nx1 && 1<i<Ny
+                    updateindex!(L, +, bcright, kvy, kvy-6*Ny1)
+                end
+            else
+                # Vy equation internal points: y-Stokes
+                #
+                #                           kvy-6
+                #                            Vy₂
+                #                             |
+                #                          ETAP(i,j)
+                #                          GGGP(i,j)
+                #             kvx-6⋅Ny1    SXX0(i,j)     kvx
+                #                Vx₁          P₁         Vx₃
+                #                 *         ETAP₁         *
+                #                            SYY₁
+                #               ETA(i,j-1)   kpm       ETA(i,j)
+                #               GGG(i,j-1)    |        GGG(i,j)
+                #   kvy-6⋅Ny1   SXY0(i,j-1)  kvy       SXY0(i,j)  kvy+6⋅Ny1
+                #     Vy₁-------basic₁-------Vv₃-------basic₂-------Vy₅
+                #               ETA₁          |        ETA₂     
+                #               SXY₁          |        SXY₂
+                #                            kpm+6
+                #                         ETAP(i+1,j)
+                #                         GGGP(i+1,j)
+                #          kvx-6⋅Ny1+6    SXX0(i+1,j)   kvx+6
+                #                Vx₂          P₂        Vx₄
+                #                 *         ETAP₂        *  
+                #                            SYY₂
+                #                             |
+                #                           kvy+6
+                #                            Vy₄
+                #
+                # computational viscosity
+                ETA₁ =
+                    ETA[i, j - 1] * GGG[i, j - 1] * dt / (GGG[i, j - 1]*dt + ETA[i, j - 1])
+                ETA₂ = ETA[i, j] * GGG[i, j] * dt / (GGG[i, j]*dt + ETA[i, j])
+                ETAP₁ = ETAP[i, j] * GGGP[i, j] * dt / (GGGP[i, j]*dt + ETAP[i, j])
+                ETAP₂ =
+                    ETAP[i + 1, j] * GGGP[i + 1, j] * dt /
+                    (GGGP[i + 1, j]*dt + ETAP[i + 1, j])
+                # previous stresses
+                SXY₁ = SXY0[i, j - 1] * ETA[i, j - 1] / (GGG[i, j - 1]*dt + ETA[i, j - 1])
+                SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j]*dt + ETA[i, j])
+                SYY₁ = -SXX0[i, j] * ETAP[i, j] / (GGGP[i, j]*dt + ETAP[i, j])
+                SYY₂ =
+                    -SXX0[i + 1, j] * ETAP[i + 1, j] / (GGGP[i + 1, j]*dt + ETAP[i + 1, j])
+                # density gradients
+                ∂RHO∂x = 0.5 * (RHOY[i, j + 1]-RHOY[i, j - 1]) / dx
+                ∂RHO∂y = 0.5 * (RHOY[i + 1, j]-RHOY[i - 1, j]) / dy
+                # LHS coefficient matrix
+                updateindex!(L, +, ETA₁/dx^2, kvy, kvy-6*Ny1) # Vy₁
+                updateindex!(L, +, ETAP₁/dy^2, kvy, kvy-6) # Vy₂
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -(ETAP₁+ETAP₂) * inv(dy^2) - (ETA₁+ETA₂) * inv(dx^2) -
+                        ∂RHO∂y * gy[i, j] * dt
+                    ),
+                    kvy,
+                    kvy,
+                ) # Vy₃
+                updateindex!(L, +, ETAP₂ * inv(dy^2), kvy, kvy+6) # Vy₄
+                updateindex!(L, +, ETA₂ * inv(dx^2), kvy, kvy+6*Ny1) # Vy₅
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₁ * inv(dx) * inv(dy) - ETA₂ * inv(dx) * inv(dy) -
+                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx,
+                ) # Vx₃
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₂ * inv(dx) * inv(dy) + ETA₂ * inv(dx) * inv(dy) -
+                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx+6,
+                ) # Vx₄
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₁ * inv(dx) * inv(dy) + ETA₁ * inv(dx) * inv(dy) -
+                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx-6*Ny1,
+                ) # Vx₁
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₂ * inv(dx) * inv(dy) - ETA₁ * inv(dx) * inv(dy) -
+                        ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx+6-6*Ny1,
+                ) # Vx₂
+                updateindex!(L, +, Kcont*inv(dy), kvy, kpm) # P₁
+                updateindex!(L, +, -Kcont*inv(dy), kvy, kpm+6) # P₂
+                R[kvy] = (
+                    -RHOY[i, j] * gy[i, j] - (SXY₂-SXY₁) * inv(dx) - (SYY₂-SYY₁) * inv(dy)
+                ) # RHS
+            end # Vy equation
+            # P equation
+            if i==1 || i==Ny1 || j==1 || j==Nx1
+                # P equation external points: boundary conditions
+                # all locations: ghost unknowns P=0 -> 1.0⋅P[i,j]=0.0
+                updateindex!(L, +, 1.0, kpm, kpm)
+                # R[kpm] = 0.0 # already done with initialization
+                # elseif i==j==2
+            elseif (
+                (i==2 && 2<=j<=Nx) ||
+                (j==2 && 2<i<Ny) ||
+                (i==Ny && 2<=j<=Nx) ||
+                (j==Nx && 2<i<Ny)
+            )
+                # Ptotal/Pfluid real pressure boundary condition 'anchor'
+                updateindex!(L, +, Kcont, kpm, kpm)
+                R[kpm] = psurface
+            else
+                # P equation internal points: continuity equation: ∂Vx/∂x+∂Vy/∂y=0
+                #
+                #                 kvy-6
+                #                  Vy₁
+                #                   |
+                #                   |
+                #      kvx-6⋅Ny1   kpm       kvx
+                #        Vx₁--------P--------Vx₂
+                #                   |
+                #                   |
+                #                  kvy
+                #                  Vy₂
+                #
+                updateindex!(L, +, -1.0/dx, kpm, kvx-6*Ny1) # Vx₁
+                updateindex!(L, +, 1.0/dx, kpm, kvx) # Vx₂
+                updateindex!(L, +, -1.0/dy, kpm, kvy-6) # Vy₁
+                updateindex!(L, +, 1.0/dy, kpm, kvy) # Vy₂
+                # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
+                betadrained = compute_drained_compressibility(
+                    BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+                )
+                kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+                ksk = compute_skempton_coefficient(
+                    betadrained,
+                    PHI[i, j],
+                    betasolid,
+                    betafluid;
+                    phimin=phimin,
+                    phimax=phimax,
+                )
 
-            # LHS coefficient matrix
-            updateindex!(
-                L,
-                +,
-                -Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
-                 kpf,
-                 kpm
-            ) # Ptotal
-            updateindex!(
-                L,
-                +,
-                Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / ksk / dt),
-                kpf,
-                kpf
-            ) # Pfluid
-            # RHS coefficient vector
-            R[kpf] = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
-        end # Ptotal/Pfluid equation
-    end # for j=1:1:Nx1, i=1:1:Ny1
+                # LHS coefficient matrix
+                updateindex!(
+                    L,
+                    +,
+                    Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
+                    kpm,
+                    kpm,
+                ) # P: Ptotal
+                updateindex!(
+                    L,
+                    +,
+                    -Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                    kpm,
+                    kpf,
+                ) # P: Pfluid
+                # RHS coefficient vector
+                R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+            end # P equation
+            # qxDarcy equation
+            if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
+                # qxDarcy equation external points: boundary conditions
+                # all locations: ghost unknowns qyD = 0 -> 1.0⋅qxD[i, j] = 0.0
+                updateindex!(L, +, 1.0, kqx, kqx)
+                # R[kqx] = 0.0 # already done with initialization
+                # top boundary
+                if i==1 && 1<j<Nx
+                    updateindex!(L, +, bcftop, kqx, kqx+6)
+                end
+                # bottom boundary
+                if i==Ny1 && 1<j<Nx
+                    updateindex!(L, +, bcfbottom, kqx, kqx-6)
+                end
+            else
+                # qxDarcy equation internal points: x-Darcy equation:
+                # ηfluid/kᵩx⋅qxDarcy + ∂P/∂x = ρfluid⋅gx
+                #
+                #        P₁--------qxD--------P₂
+                #       kpf        kqx     kpf+6⋅Ny1
+                #
+                # LHS coefficient matrix
+                rx_val = RX[i, j]
+                if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                    Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
+                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                    kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
+                    if kphi_x > 0.0
+                        keff_x = compute_hydrofracture_permeability(
+                            kphi_x,
+                            Peff_x,
+                            sigma_t_x;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            kmax=k_frac_max,
+                        )
+                        rx_val = RX[i, j] * (kphi_x / keff_x)
+                    else
+                        ffrac_x = compute_hydrofracture_factor(
+                            Peff_x,
+                            sigma_t_x;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                        )
+                        rx_floor = 1.0e-5 / k_frac_max
+                        rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+                    end
+                end
+                updateindex!(L, +, rx_val, kqx, kqx) # qxD
+                updateindex!(L, +, -Kcont*inv(dx), kqx, kpf) # P₁
+                updateindex!(L, +, Kcont*inv(dx), kqx, kpf+6*Ny1) # P₂
+                # RHS coefficient vector
+                R[kqx] = RHOFX[i, j] * gx[i, j]
+            end # qxDarcy equation
+            # qyDarcy equation
+            if i==1 || i==Ny || i==Ny1 || j==1 || j==Nx1
+                # qyDarcy equation external points: boundary conditions
+                # all locations: ghost unknowns qyD = 0 -> 1.0⋅qyD[i, j] = 0.0
+                updateindex!(L, +, 1.0, kqy, kqy)
+                # R[kqy] = 0.0 # already done with initialization
+                # left boundary
+                if j==1 && 1<i<Ny
+                    updateindex!(L, +, bcfleft, kqy, kqy+6*Ny1)
+                end
+                # right boundary
+                if j==Nx1 && 1<i<Ny
+                    updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
+                end
+            else
+                # qyDarcy equation internal points: y-Darcy equation:
+                # ηfluid/kᵩy⋅qyDarcy + ∂P/∂y = ρfluid⋅gy
+                #
+                #                  P₁
+                #                 kpf
+                #                  |
+                #                 qyD
+                #                 kqy
+                #                  |
+                #                  P₂
+                #                kpf+6
+                #
+                # LHS coefficient matrix
+                ry_val = RY[i, j]
+                if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                    Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
+                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                    kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
+                    if kphi_y > 0.0
+                        keff_y = compute_hydrofracture_permeability(
+                            kphi_y,
+                            Peff_y,
+                            sigma_t_y;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            kmax=k_frac_max,
+                        )
+                        ry_val = RY[i, j] * (kphi_y / keff_y)
+                    else
+                        ffrac_y = compute_hydrofracture_factor(
+                            Peff_y,
+                            sigma_t_y;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                        )
+                        ry_floor = 1.0e-5 / k_frac_max
+                        ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+                    end
+                end
+                updateindex!(L, +, ry_val, kqy, kqy) # qyD
+                updateindex!(L, +, -Kcont*inv(dy), kqy, kpf) # P₁
+                updateindex!(L, +, Kcont*inv(dy), kqy, kpf+6) # P₂
+                # RHS coefficient vector
+                R[kqy] = RHOFY[i, j] * gy[i, j]
+            end # qyDarcy equation
+            # Ptotal/Pfluid equation 
+            if i==1 || i==Ny1 || j==1 || j==Nx1
+                # Ptotal/Pfluid equation external points: boundary conditions
+                # all locations: ghost unknowns P = 0 -> 1.0⋅P[i, j] = 0.0
+                updateindex!(L, +, 1.0, kpf, kpf)
+                # R[kpf] = 0.0 # already done with initialization
+                # elseif i==j==2
+            elseif (
+                (i==2 && 2<=j<=Nx) ||
+                (j==2 && 2<i<Ny) ||
+                (i==Ny && 2<=j<=Nx) ||
+                (j==Nx && 2<i<Ny)
+            )
+                # Ptotal/Pfluid real pressure boundary condition 'anchor'
+                updateindex!(L, +, Kcont, kpf, kpf)
+                R[kpf] = psurface
+            else
+                # Ptotal/Pfluid equation internal points: continuity equation:
+                # ∂qxD/∂x + ∂qyD/∂y - (Ptotal-Pfluid)/ηϕ = 0.0
+                #
+                #                 qyD₁
+                #                kqy-6
+                #                  |
+                #       qxD₁-------P-------qxD₂
+                #    kqx-6⋅Ny1    kpf      kqx
+                #                  |
+                #                 qyD₂
+                #                 kqy
+                #
+                # LHS coefficient matrix
+                updateindex!(L, +, -inv(dx), kpf, kqx-6*Ny1) # qxD₁
+                updateindex!(L, +, inv(dx), kpf, kqx) # qxD₂
+                updateindex!(L, +, -inv(dy), kpf, kqy-6) # qyD₁
+                updateindex!(L, +, inv(dy), kpf, kqy) # qyD₂
+
+                # LHS coefficient matrix
+                updateindex!(
+                    L,
+                    +,
+                    -Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                    kpf,
+                    kpm,
+                ) # Ptotal
+                updateindex!(
+                    L,
+                    +,
+                    Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / ksk / dt),
+                    kpf,
+                    kpf,
+                ) # Pfluid
+                # RHS coefficient vector
+                R[kpf] = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
+            end # Ptotal/Pfluid equation
+        end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
     flush!(L) # finalize CSC matrix
-# end # @timeit to "assemble_hydromechanical_lse()"
+    # end # @timeit to "assemble_hydromechanical_lse()"
     # return L
     return L.cscmatrix
 end # function assemble_hydromechanical_lse!
@@ -943,16 +969,8 @@ $(SIGNATURES)
 
     - nothing
 """
-function process_hydromechanical_solution!(
-    S,
-    vx,
-    vy,
-    pr,
-    qxD,
-    qyD,
-    pf
-)
-# @timeit to "process_hydromechanical_solution!()" begin
+function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf)
+    # @timeit to "process_hydromechanical_solution!()" begin
     S_mat = reshape(S, (:, Ny1, Nx1))
     @inbounds begin
         @views @. vx = S_mat[1, :, :]
@@ -965,7 +983,7 @@ function process_hydromechanical_solution!(
     # Δp = 0.25 * (pf[2, 2]+pf[2, Nx]+pf[Ny, 2]+pf[Ny, Nx]) - psurface
     # pr .-= Δp
     # pf .-= Δp
-# end # @timeit to "process_hydromechanical_solution!()"
+    # end # @timeit to "process_hydromechanical_solution!()"
     return nothing
 end # function process_hydromechanical_solution!
 
@@ -985,17 +1003,18 @@ Recompute bulk viscosity at P nodes.
     - nothing
 """
 function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-# @timeit to "recompute_bulk_viscosity!" begin
-    @inbounds begin  
-        @views @. ETAP[2:end-1, 2:end-1] = 4.0 / (
-            inv(ETA[1:end-1, 1:end-1]) +
-            inv(ETA[2:end, 1:end-1]) +
-            inv(ETA[1:end-1, 2:end]) +
-            inv(ETA[2:end, 2:end])
-        )
+    # @timeit to "recompute_bulk_viscosity!" begin
+    @inbounds begin
+        @views @. ETAP[2:(end - 1), 2:(end - 1)] =
+            4.0 / (
+                inv(ETA[1:(end - 1), 1:(end - 1)]) +
+                inv(ETA[2:end, 1:(end - 1)]) +
+                inv(ETA[1:(end - 1), 2:end]) +
+                inv(ETA[2:end, 2:end])
+            )
         @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
     end # @inbounds
-# end # @timeit to "recompute_bulk_viscosity!"
+    # end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
 
@@ -1025,24 +1044,38 @@ $(SIGNATURES)
 
     - aphimax: maximum absolute porosity coefficient
 """
-function compute_Aϕ!(APHI, ETAPHI, BETAPHI, PHI, pr, pf, pr0, pf0, dt;
-                     betasolid = betasolid, phimin = phimin, phimax = phimax)
-# @timeit to "compute_Aϕ!()" begin
+function compute_Aϕ!(
+    APHI,
+    ETAPHI,
+    BETAPHI,
+    PHI,
+    pr,
+    pf,
+    pr0,
+    pf0,
+    dt;
+    betasolid=betasolid,
+    phimin=phimin,
+    phimax=phimax,
+)
+    # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     @inbounds begin
-    for j = 2:Nx, i = 2:Ny
-        betadrained = compute_drained_compressibility(BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax)
-        kbw = compute_biot_willis_coefficient(betadrained, betasolid)
-        compaction = (
-            (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j]))
-            + betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
-        )
-        APHI[i, j] = compaction / PHI[i, j]
-    end
-    return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
+        for j in 2:Nx, i in 2:Ny
+            betadrained = compute_drained_compressibility(
+                BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+            )
+            kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+            compaction = (
+                (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
+                betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
+            )
+            APHI[i, j] = compaction / PHI[i, j]
+        end
+        return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
     end # @inbounds
     # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
-# end # @timeit to "compute_Aϕ!()"
+    # end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
 
 """
@@ -1070,22 +1103,13 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_fluid_velocities!(
-    PHIX,
-    PHIY,
-    qxD,
-    qyD,
-    vx,
-    vy,
-    vxf,
-    vyf
-)
-# @timeit to "compute_fluid_velocities!()" begin
+function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf)
+    # @timeit to "compute_fluid_velocities!()" begin
     @inbounds begin
         # vx velocity
         @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
         # top boundary
-        @views @. vxf[1, :] = -bcftop  * vxf[2, :]
+        @views @. vxf[1, :] = -bcftop * vxf[2, :]
         # bottom boundary
         @views @. vxf[Ny1, :] = -bcfbottom * vxf[Ny, :]
         # vy velocity
@@ -1099,7 +1123,7 @@ function compute_fluid_velocities!(
         @views @. vyf += vy
     end # @inbounds
 
-     # for j=1:1:Nx, i=2:1:Ny
+    # for j=1:1:Nx, i=2:1:Ny
     #     vxf[i, j] = qxD[i, j]*inv(PHIX[i,j]) + vx[i, j]
     # end
     # @views @. vxf[1, :] = -bcftop*vxf[2, :]    
@@ -1109,7 +1133,7 @@ function compute_fluid_velocities!(
     # end
     # @views @. vyf[:, 1] = -bcfleft*vyf[:, 2]    
     # @views @. vyf[:, Nx1] = -bcfright*vyf[:, Nx]     
-# end # @timeit to "compute_fluid_velocities!()"
+    # end # @timeit to "compute_fluid_velocities!()"
     return nothing
 end # function compute_fluid_velocities!
 
@@ -1131,19 +1155,12 @@ $(SIGNATURES)
 
     - dt: displacement time step
 """
-function compute_displacement_timestep(
-    vx,
-    vy,
-    vxf,
-    vyf,
-    dt,
-    aphimax
-)
-# @timeit to "compute_displacement_timestep()" begin
+function compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
+    # @timeit to "compute_displacement_timestep()" begin
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
     maxvxf = maximum(abs, vxf)
-    maxvyf = maximum(abs, vyf)    
+    maxvyf = maximum(abs, vyf)
     @info "dt before velocity limitations = $dt s"
     dt = ifelse(dt*maxvx > dxymax*dx, dxymax*dx*inv(maxvx), dt)
     @info "dt after vx limitation = $dt s"
@@ -1155,7 +1172,7 @@ function compute_displacement_timestep(
     @info "dt after vyf limitation = $dt s"
     dt = ifelse(dt*aphimax > dphimax, dphimax*inv(aphimax), dt)
     @info "dt after aphimax limitation = $dt s"
-# end # @timeit to "compute_displacement_timestep()"
+    # end # @timeit to "compute_displacement_timestep()"
     return dt
 end # function compute_displacement_timestep
 
@@ -1194,55 +1211,31 @@ $(SIGNATURES)
         - nothing
 """
 function compute_stress_strainrate!(
-    vx,
-    vy,
-    ETA,
-    GGG,
-    ETAP,
-    GGGP,
-    SXX0,
-    SXY0,
-    EXX,
-    EXY,
-    SXX,
-    SXY,
-    DSXX,
-    DSXY,
-    EII,
-    SII,
-    dt
+    vx, vy, ETA, GGG, ETAP, GGGP, SXX0, SXY0, EXX, EXY, SXX, SXY, DSXX, DSXY, EII, SII, dt
 )
-# @timeit to "compute_stress_strainrate!()" begin
-        @inbounds begin
-            # ϵxy, σxy, Δσxy at basic nodes
-            for j=1:1:Nx, i=1:1:Ny
-                EXY[i, j] = 0.5 * (
-                    (vx[i+1, j]-vx[i, j]) / dy
-                    +(vy[i, j+1]-vy[i, j])/dx
-                )
-                SXY[i,j] = (
-                    2*ETA[i, j]*EXY[i, j]*GGG[i,j]*dt / (
-                        GGG[i, j]*dt+ETA[i, j]
-                    )  + SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dt+ETA[i, j])
-                )
-                DSXY[i, j] = SXY[i, j] - SXY0[i, j]
-            end
-            # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
-            for j=2:1:Nx, i=2:1:Ny
-                EXX[i, j]= 0.5 *(
-                    (vx[i, j]-vx[i, j-1]) / dx
-                    -(vy[i, j]-vy[i-1, j]) / dy
-                )
-                SXX[i, j] = (
-                    2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dt / (
-                        GGGP[i, j]*dt+ETAP[i, j]
-                    ) + SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dt+ETAP[i, j])
-                )
-                DSXX[i, j] = SXX[i, j] - SXX0[i, j]
-                EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
-                SII[i, j] = sqrt(SXX[i, j]^2 + grid_average(i-1, j-1, SXY)^2)
-            end
-        end # @inbounds        
+    # @timeit to "compute_stress_strainrate!()" begin
+    @inbounds begin
+        # ϵxy, σxy, Δσxy at basic nodes
+        for j in 1:1:Nx, i in 1:1:Ny
+            EXY[i, j] = 0.5 * ((vx[i + 1, j]-vx[i, j]) / dy + (vy[i, j + 1]-vy[i, j])/dx)
+            SXY[i, j] = (
+                2*ETA[i, j]*EXY[i, j]*GGG[i, j]*dt / (GGG[i, j]*dt+ETA[i, j]) +
+                SXY0[i, j]*ETA[i, j] / (GGG[i, j]*dt+ETA[i, j])
+            )
+            DSXY[i, j] = SXY[i, j] - SXY0[i, j]
+        end
+        # ϵxx, σ′xx, Δσ'xx and Eᴵᴵ, Sᴵᴵ at P nodes
+        for j in 2:1:Nx, i in 2:1:Ny
+            EXX[i, j] = 0.5 * ((vx[i, j]-vx[i, j - 1]) / dx - (vy[i, j]-vy[i - 1, j]) / dy)
+            SXX[i, j] = (
+                2*ETAP[i, j]*EXX[i, j]*GGGP[i, j]*dt / (GGGP[i, j]*dt+ETAP[i, j]) +
+                SXX0[i, j]*ETAP[i, j] / (GGGP[i, j]*dt+ETAP[i, j])
+            )
+            DSXX[i, j] = SXX[i, j] - SXX0[i, j]
+            EII[i, j] = sqrt(EXX[i, j]^2 + grid_average(i-1, j-1, EXY)^2)
+            SII[i, j] = sqrt(SXX[i, j]^2 + grid_average(i-1, j-1, SXY)^2)
+        end
+    end # @inbounds        
     # # ϵxy, σxy, Δσxy at basic nodes
     # EXY .= 0.5.*(diff(vx, dims=1)[:, 1:Nx]./dy .+ diff(vy, dims=2)[1:Ny, :]./dx)
     # @. SXY = 2*ETA*EXY*GGG*dt/(GGG*dt+ETA) + SXY0*ETA/(GGG*dt+ETA)
@@ -1277,7 +1270,7 @@ function compute_stress_strainrate!(
     #         )/4.0
     #     )^2
     # )
-# end # @timeit to "compute_stress_strainrate!()"
+    # end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
 
@@ -1299,46 +1292,39 @@ $(SIGNATURES)
 
     - nothing
 """
-function symmetrize_p_node_observables!(
-    SXX,
-    APHI,
-    PHI,
-    pr,
-    pf,
-    ps
-)
-# @timeit to "symmetrize_p_node_observables!()" begin
+function symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
+    # @timeit to "symmetrize_p_node_observables!()" begin
     # top boundary
     @inbounds @views @. begin
         SXX[1, 2:Nx] = SXX[2, 2:Nx]
-        APHI[1, 2:Nx] = APHI[2, 2:Nx]    
-        PHI[1, 2:Nx] = PHI[2, 2:Nx]    
-        pr[1, 2:Nx] = pr[2, 2:Nx]    
-        pf[1, 2:Nx] = pf[2, 2:Nx]    
+        APHI[1, 2:Nx] = APHI[2, 2:Nx]
+        PHI[1, 2:Nx] = PHI[2, 2:Nx]
+        pr[1, 2:Nx] = pr[2, 2:Nx]
+        pf[1, 2:Nx] = pf[2, 2:Nx]
         # bottom boundary
         SXX[Ny1, 2:Nx] = SXX[Ny, 2:Nx]
-        APHI[Ny1, 2:Nx] = APHI[Ny, 2:Nx]    
-        PHI[Ny1, 2:Nx] = PHI[Ny, 2:Nx]    
-        pr[Ny1, 2:Nx] = pr[Ny, 2:Nx]    
-        pf[Ny1, 2:Nx] = pf[Ny, 2:Nx]    
+        APHI[Ny1, 2:Nx] = APHI[Ny, 2:Nx]
+        PHI[Ny1, 2:Nx] = PHI[Ny, 2:Nx]
+        pr[Ny1, 2:Nx] = pr[Ny, 2:Nx]
+        pf[Ny1, 2:Nx] = pf[Ny, 2:Nx]
         # left boundary
         SXX[:, 1] = SXX[:, 2]
-        APHI[:, 1] = APHI[:, 2]    
-        PHI[:, 1] = PHI[:, 2]    
-        pr[:, 1] = pr[:, 2]    
-        pf[:, 1] = pf[:, 2]    
+        APHI[:, 1] = APHI[:, 2]
+        PHI[:, 1] = PHI[:, 2]
+        pr[:, 1] = pr[:, 2]
+        pf[:, 1] = pf[:, 2]
         # right boundary
         SXX[:, Nx1] = SXX[:, Nx]
-        APHI[:, Nx1] = APHI[:, Nx]    
-        PHI[:, Nx1] = PHI[:, Nx]    
-        pr[:, Nx1] = pr[:, Nx]    
+        APHI[:, Nx1] = APHI[:, Nx]
+        PHI[:, Nx1] = PHI[:, Nx]
+        pr[:, Nx1] = pr[:, Nx]
         pf[:, Nx1] = pf[:, Nx]
         # solid pressure
         ps = (pr-pf*PHI) * inv(1-PHI)
     end
-# end # @timeit to "symmetrize_p_node_observables!()"
+    # end # @timeit to "symmetrize_p_node_observables!()"
     return nothing
-    end # function symmetrize_p_node_observables!
+end # function symmetrize_p_node_observables!
 
 """
 Compute nodal adjustment and return plastic iterations completeness status.
@@ -1386,9 +1372,9 @@ function compute_nodal_adjustment!(
     YERRNOD,
     DSY,
     dt,
-    iplast
+    iplast,
 )
-# @timeit to "compute_nodal_adjustment!()" begin
+    # @timeit to "compute_nodal_adjustment!()" begin
     # reset / setup
     ETA5 .= ETA0
     YNY5 .= 0
@@ -1396,59 +1382,59 @@ function compute_nodal_adjustment!(
     ynpl = 0
     ddd = 0.0
     @inbounds begin
-    for j=1:1:Nx, i=1:1:Ny
-        # second stress invariant at basic nodes
-        SIIB = sqrt(SXY[i, j]^2 + grid_average(i, j, SXX)^2) 
-        # second invariant for purely elastic stress buildup at basic nodes
-        siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
-        # interpolate total and fluid pressure at basic nodes
-        prB = grid_average(i, j, pr)
-        pfB = grid_average(i, j, pf)
-        # Yielding stress: confined and tensile fracture.
-        # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
-        # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).
-        syieldc = COH[i, j] + FRI[i, j] * (prB-pfB)
-        syieldt = TEN[i, j] + (prB-pfB)
-        # non-negative yielding stress requirement
-        syield = max(min(syieldc, syieldt), 0.0)
-        # update error for previous yielding nodes
-        ynn = false
-        if YNY[i, j] > 0
-            DSY[i, j] = SIIB - syield
-            ddd += DSY[i, j]^2
-            ynpl += 1
-        end
-        # correcting viscosity for yielding
-        if syield < siiel
-            # update viscosity for basic node
-            etapl = dt * GGG[i,j]*syield/(siiel-syield)
-            if etapl < ETA0[i, j]
-                # recompute nodal viscosity, apply min/max viscosity cutoffs
-                ETA5[i, j] = etapl^(1.0-etawt) * ETA[i, j]^etawt
-                if ETA5[i, j] > etamax
-                    ETA5[i, j] = etamax
+        for j in 1:1:Nx, i in 1:1:Ny
+            # second stress invariant at basic nodes
+            SIIB = sqrt(SXY[i, j]^2 + grid_average(i, j, SXX)^2)
+            # second invariant for purely elastic stress buildup at basic nodes
+            siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
+            # interpolate total and fluid pressure at basic nodes
+            prB = grid_average(i, j, pr)
+            pfB = grid_average(i, j, pf)
+            # Yielding stress: confined and tensile fracture.
+            # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
+            # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).
+            syieldc = COH[i, j] + FRI[i, j] * (prB-pfB)
+            syieldt = TEN[i, j] + (prB-pfB)
+            # non-negative yielding stress requirement
+            syield = max(min(syieldc, syieldt), 0.0)
+            # update error for previous yielding nodes
+            ynn = false
+            if YNY[i, j] > 0
+                DSY[i, j] = SIIB - syield
+                ddd += DSY[i, j]^2
+                ynpl += 1
+            end
+            # correcting viscosity for yielding
+            if syield < siiel
+                # update viscosity for basic node
+                etapl = dt * GGG[i, j] * syield/(siiel-syield)
+                if etapl < ETA0[i, j]
+                    # recompute nodal viscosity, apply min/max viscosity cutoffs
+                    ETA5[i, j] = etapl^(1.0-etawt) * ETA[i, j]^etawt
+                    if ETA5[i, j] > etamax
+                        ETA5[i, j] = etamax
                     elseif ETA5[i, j] < etamin
                         ETA5[i, j] = etamin
+                    end
+                    # mark yielding nodes
+                    YNY5[i, j] = 1
+                    # update error for new yielding nodes
+                    if ynn == false
+                        DSY[i, j] = SIIB - syield
+                        ddd += DSY[i, j]^2
+                        ynpl += 1
+                    end
                 end
-                # mark yielding nodes
-                YNY5[i, j] = 1
-                # update error for new yielding nodes
-                if ynn == false
-                    DSY[i, j] = SIIB - syield
-                    ddd += DSY[i, j]^2
-                    ynpl += 1
-                end  
             end
         end
-    end
-    if ynpl > 0
-        YERRNOD[iplast] = sqrt(ddd/ynpl)
-    end
-    # return plastic iteration completeness
-    @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
-    return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
+        if ynpl > 0
+            YERRNOD[iplast] = sqrt(ddd/ynpl)
+        end
+        # return plastic iteration completeness
+        @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
+        return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
-# end # @timeit to "compute_nodal_adjustment!()
+    # end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
 """
@@ -1467,11 +1453,11 @@ $(SIGNATURES)
     - nothing
 """
 function positive_max!(A, B, C)
-# @timeit to "positive_max!()" begin
+    # @timeit to "positive_max!()" begin
     @inbounds for i in eachindex(A)
         C[i] = max(0, ifelse(A[i] > B[i], A[i], B[i]))
     end
-# end # @timeit to "positive_max!()"
+    # end # @timeit to "positive_max!()"
     return nothing
 end # function positive_max
 
@@ -1498,17 +1484,9 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_plastic_iteration_pass!(
-    ETA,
-    ETA5,
-    ETA00,
-    YNY,
-    YNY5,
-    YNY00,
-    YNY_inv_ETA,
-    dt,
-    iplast
+    ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
 )
-# @timeit to "finalize_plastic_iteration_pass!()" begin
+    # @timeit to "finalize_plastic_iteration_pass!()" begin
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
@@ -1523,7 +1501,7 @@ function finalize_plastic_iteration_pass!(
     end
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
-# end # @timeit to "finalize_plastic_iteration_pass!()"
+    # end # @timeit to "finalize_plastic_iteration_pass!()"
 end # function finalize_plastic_iteration_pass
 
 """
@@ -1550,14 +1528,14 @@ $(SIGNATURES)
     - LT: LHS sparse coefficient matrix
 """
 function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
-# @timeit to "assemble_thermal_lse!" begin
+    # @timeit to "assemble_thermal_lse!" begin
     # fresh LHS coefficient matrix
     LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
     # reset RHS coefficient vector
     RT .= zero(0.0)
     # compose global thermal matrix LT and coefficient vector RT
     @inbounds begin
-        for j=1:1:Nx1, i=1:1:Ny1
+        for j in 1:1:Nx1, i in 1:1:Ny1
             # define global index in algebraic space
             gk = (j-1)*Ny1 + i
             # External points
@@ -1575,11 +1553,11 @@ function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
                     updateindex!(LT, +, -1.0, gk, gk-Ny1)
                 end
                 # top inner boundary: ∂T/∂y=0
-                if i==1 && 1<j<Nx1 
+                if i==1 && 1<j<Nx1
                     updateindex!(LT, +, -1.0, gk, gk+1)
                 end
                 # bottom inner boundary: ∂T/∂y=0
-                if i==Ny1 && 1<j<Nx1 
+                if i==Ny1 && 1<j<Nx1
                     updateindex!(LT, +, -1.0, gk, gk-1)
                 end
             else
@@ -1606,33 +1584,27 @@ function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
                 #                        T₄
                 #
                 # extract thermal conductivities
-                Kx₁ = KX[i, j-1] 
+                Kx₁ = KX[i, j - 1]
                 Kx₂ = KX[i, j]
-                Ky₁ = KY[i-1, j]
+                Ky₁ = KY[i - 1, j]
                 Ky₂ = KY[i, j]
                 # fill system of equations: LHS
                 updateindex!(LT, +, -Kx₁*inv(dx^2), gk, gk-Ny1) # T₁
                 updateindex!(LT, +, -Ky₁*inv(dy^2), gk, gk-1) # T₂
-                updateindex!(LT, +, (
-                    RHOCP[i, j]/dt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)),
-                    gk,
-                    gk
+                updateindex!(
+                    LT, +, (RHOCP[i, j]/dt+(Kx₁+Kx₂)*inv(dx^2)+(Ky₁+Ky₂)*inv(dy^2)), gk, gk
                 ) # T₃
                 updateindex!(LT, +, -Ky₂*inv(dy^2), gk, gk+1) # T₄
                 updateindex!(LT, +, -Kx₂*inv(dx^2), gk, gk+Ny1) # T₅
                 # fill system of equations: RHS
                 RT[gk] = (
-                    RHOCP[i, j]/dt*tk1[i, j]
-                    + HR[i, j]
-                    + HA[i, j]
-                    + HS[i, j]
-                    + DHP[i, j]
+                    RHOCP[i, j]/dt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j] + DHP[i, j]
                 )
             end
         end
     end # @inbounds
     flush!(LT) # finalize CSC matrix
-# end # @timeit to "assemble_thermal_lse!"
+    # end # @timeit to "assemble_thermal_lse!"
     return LT
 end # function assemble_thermal_lse!
 
@@ -1664,8 +1636,9 @@ $(SIGNATURES)
     - nothing
 """
 function perform_thermal_iterations!(
-    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt)
-# @timeit to "perform_thermal_iterations!" begin
+    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt
+)
+    # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
     tk0 .= tk1
     dtt = dt
@@ -1702,7 +1675,7 @@ function perform_thermal_iterations!(
     # finalize overall temperature change and advance temperature field
     DT .= tk2 .- tk0
     DT0 .= DT
-# end # @timeit to "perform_thermal_iterations!"
+    # end # @timeit to "perform_thermal_iterations!"
     return nothing
 end # function perform_thermal_iterations!
 
@@ -1723,14 +1696,14 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
-# @timeit to "finalize_thermochemical_iteration_pass" begin
+    # @timeit to "finalize_thermochemical_iteration_pass" begin
     if titer == 1
         if maxDTcurrent > DTmax
             dt *= (DTmax * inv(maxDTcurrent))
             @info "titer 1: reducing dt due to maxDT: dt=$dt s"
         end
     end
-# end # @timeit to "finalize_thermochemical_iteration_pass"
+    # end # @timeit to "finalize_thermochemical_iteration_pass"
     return dt
 end # function finalize_thermochemical_iteration_pass
 
@@ -1752,10 +1725,10 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
-# @timeit to "compute_thermochemical_iteration_outcome" begin
+    # @timeit to "compute_thermochemical_iteration_outcome" begin
     pferrcur = maximum(abs, pf-pf0)
     DMPmax = maximum(abs, DMP)
     @info "end thermochemical iter $titer" pferrcur DMPmax
     return pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
-# end # @timeit to "compute_thermochemical_iteration_outcome"
+    # end # @timeit to "compute_thermochemical_iteration_outcome"
 end # function compute_thermochemical_iteration_outcome

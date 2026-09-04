@@ -82,13 +82,13 @@ function setup_staggered_grid_properties(; randomized=false)
     # shear modulus [Pa]
     GGG = randomized ? rand(rgen, Ny, Nx)*1e10 : zeros(Ny, Nx)
     # epsilonxy [1/s]
-    EXY = randomized ? rand(rgen, Ny, Nx)*2e-13.-1e-13 : zeros(Ny, Nx)
+    EXY = randomized ? rand(rgen, Ny, Nx)*2e-13 .- 1e-13 : zeros(Ny, Nx)
     # σxy [1/s]
     SXY = randomized ? rand(rgen, Ny, Nx)*1e4 : zeros(Ny, Nx)
     # σ₀xy [1/s]
     SXY0 = randomized ? rand(rgen, Ny, Nx)*1e4 : zeros(Ny, Nx)
     # rotation rate [1/s]
-    wyx = randomized ? rand(rgen, Ny, Nx)*2e-14.-1e-14 : zeros(Ny, Nx)
+    wyx = randomized ? rand(rgen, Ny, Nx)*2e-14 .- 1e-14 : zeros(Ny, Nx)
     # compressive strength [Pa]
     COH = randomized ? rand(rgen, Ny, Nx)*1e8 : zeros(Ny, Nx)
     # tensile strength [Pa]
@@ -107,15 +107,15 @@ function setup_staggered_grid_properties(; randomized=false)
     # porosity
     PHIX = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vx-velocity [m/s]
-    vx = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vx = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vx-velocity [m/s]
-    vxf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vxf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # etafluid/kphi ratio [kg m⁻³s⁻¹]
     RX = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qx-darcy flux [m/s]
-    qxD = randomized ? rand(rgen, Ny1, Nx1)*2e-10.-1e-10 : zeros(Ny1, Nx1)
+    qxD = randomized ? rand(rgen, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
     # gx-gravity [m/s^2]
-    gx = randomized ? rand(rgen, Ny1, Nx1)*2e-1.-1e-1 : zeros(Ny1, Nx1)
+    gx = randomized ? rand(rgen, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
     # Vy nodes
     # density [kg/m^3]
     RHOY = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
@@ -126,15 +126,15 @@ function setup_staggered_grid_properties(; randomized=false)
     # porosity
     PHIY = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vy-velocity [m/s]
-    vy = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vy = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vy-velocity [m/s]
-    vyf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vyf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # etafluid/kphi ratio [kg m⁻³s⁻¹]
     RY = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qy-Darcy flux [m/s]
-    qyD = randomized ? rand(rgen, Ny1, Nx1)*2e-10.-1e-10 : zeros(Ny1, Nx1)
+    qyD = randomized ? rand(rgen, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
     # gy-gravity [m/s^2]
-    gy = randomized ? rand(rgen, Ny1, Nx1)*2e-1.-1e-1 : zeros(Ny1, Nx1)
+    gy = randomized ? rand(rgen, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
     # P nodes
     # density [kg/m^3]
     RHO = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
@@ -155,7 +155,7 @@ function setup_staggered_grid_properties(; randomized=false)
     # shear modulus [Pa]
     GGGP = randomized ? rand(rgen, Ny1, Nx1)*1e10 : zeros(Ny1, Nx1)
     # EPSILONxx [1/s]
-    EXX = randomized ? rand(rgen, Ny1, Nx1)*2e-12.-1e-12 : zeros(Ny1, Nx1)
+    EXX = randomized ? rand(rgen, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # σ′xx [1/s]
     SXX = randomized ? rand(rgen, Ny1, Nx1)*2e3-1e3 : zeros(Ny1, Nx1)
     # σ₀′ (SIGMA0'xx) [1/s]
@@ -165,17 +165,17 @@ function setup_staggered_grid_properties(; randomized=false)
     # next temperature [K]
     tk2 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
     # temperature difference at P nodes [K]
-    DT = randomized ? rand(rgen, Ny1, Nx1)*2e2.-1e2 : zeros(Ny1, Nx1)
+    DT = randomized ? rand(rgen, Ny1, Nx1)*2e2 .- 1e2 : zeros(Ny1, Nx1)
     # previous temperature difference at P nodes [K]
-    DT0 = randomized ? rand(rgen, Ny1, Nx1)*2e2.-1e2 : zeros(Ny1, Nx1)
+    DT0 = randomized ? rand(rgen, Ny1, Nx1)*2e2 .- 1e2 : zeros(Ny1, Nx1)
     # solid vx in pressure nodes [m/s]
-    vxp = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vxp = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # solid vy in pressure nodes [m/s]
-    vyp = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vyp = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vx in pressure nodes [m/s]
-    vxpf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vxpf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vy in pressure nodes [m/s]
-    vypf = randomized ? rand(rgen, Ny1, Nx1)*2e-9.-1e-9 : zeros(Ny1, Nx1)
+    vypf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # total pressure [Pa]
     pr = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # fluid pressure [Pa]
@@ -195,7 +195,7 @@ function setup_staggered_grid_properties(; randomized=false)
     # porosity
     PHI = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # Dln[(1-ϕ)/ϕ]/Dt
-    APHI = randomized ? rand(rgen, Ny1, Nx1)*2e-12.-1e-12 : zeros(Ny1, Nx1)
+    APHI = randomized ? rand(rgen, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # gravity potential [J/kg]
     FI = randomized ? rand(rgen, Ny1, Nx1)*2e2.=1e2 : zeros(Ny1, Nx1)
     # mass transfer term
@@ -245,7 +245,7 @@ function setup_staggered_grid_properties(; randomized=false)
         GGGP,
         EXX,
         SXX,
-        SXX0,       
+        SXX0,
         tk1,
         tk2,
         DT,
@@ -267,7 +267,7 @@ function setup_staggered_grid_properties(; randomized=false)
         FI,
         DMP,
         DHP,
-        XWS
+        XWS,
     )
 end # function setup_staggered_grid_properties()
 
@@ -293,7 +293,7 @@ $(SIGNATURES)
     - DSXX :stress change Δσ′xx at P nodes [Pa]
     - tk0: previous temperature at P nodes [K]
 """
-function setup_staggered_grid_properties_helpers(;randomized=false)
+function setup_staggered_grid_properties_helpers(; randomized=false)
     # basic nodes
     # plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
     ETA5 = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
@@ -306,30 +306,18 @@ function setup_staggered_grid_properties_helpers(;randomized=false)
     # inverse viscoplastic viscosity at yielding basic nodes [1/(Pa⋅s)]
     YNY_inv_ETA = randomized ? rand(rgen, Ny, Nx)*1e-16 : zeros(Ny, Nx)
     # stress change Δσxy at basic nodes [Pa]
-    DSXY = randomized ? rand(rgen, Ny, Nx)*2e3.-1e3 : zeros(Ny, Nx)
+    DSXY = randomized ? rand(rgen, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
     # (SIIB-syield) at basic nodes
-    DSY = randomized ? rand(rgen, Ny, Nx)*2e3.-1e3 : zeros(Ny, Nx)
+    DSY = randomized ? rand(rgen, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
     # second strain rate invariant at P nodes [1/s]
     EII = randomized ? rand(rgen, Ny1, Nx1)*1e-12 : zeros(Ny1, Nx1)
     # second stress invariant at P nodes [Pa]
     SII = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
     # stress change Δσ′xx at P nodes [Pa]
-    DSXX = randomized ? rand(rgen, Ny1, Nx1)*2e3.-1e3 : zeros(Ny1, Nx1)
+    DSXX = randomized ? rand(rgen, Ny1, Nx1)*2e3 .- 1e3 : zeros(Ny1, Nx1)
     # previous temperature at P nodes [K]
     tk0 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
-    return (
-        ETA5,
-        ETA00,
-        YNY5,
-        YNY00,
-        YNY_inv_ETA,
-        DSXY,
-        DSY,
-        EII,
-        SII,
-        DSXX,
-        tk0
-    )
+    return (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0)
 end # function setup_staggered_grid_properties_helpers()
 
 """
@@ -351,7 +339,7 @@ $(SIGNATURES)
 """
 function grid_vector(i, j, grid)
     @inbounds return @SVector [
-        grid[i, j], grid[i+1, j], grid[i, j+1], grid[i+1, j+1]
+        grid[i, j], grid[i + 1, j], grid[i, j + 1], grid[i + 1, j + 1]
     ]
 end
 
@@ -390,8 +378,7 @@ $(SIGNATURES)
 """
 function grid_average(i, j, grid)
     # return sum(grid_vector(i, j, grid)) * inv(length(grid_vector(i, j, grid)))
-    @inbounds return 0.25 * (
-        grid[i, j]+grid[i+1, j]+grid[i, j+1]+grid[i+1, j+1])
+    @inbounds return 0.25 * (grid[i, j]+grid[i + 1, j]+grid[i, j + 1]+grid[i + 1, j + 1])
 end
 
 """
@@ -428,20 +415,20 @@ becomes
     - nothing
 """
 function apply_insulating_boundary_conditions!(t)
-# @timeit to "apply_insulating_boundary_conditions!" begin
+    # @timeit to "apply_insulating_boundary_conditions!" begin
     Nyy, Nxx = size(t)
     if Nyy>2 && Nxx>2
         @inbounds begin
             # upper boundary
-            @views @. t[1, 2:Nxx-1] = t[2, 2:Nxx-1]
+            @views @. t[1, 2:(Nxx - 1)] = t[2, 2:(Nxx - 1)]
             # lower boundary
-            @views @. t[Nyy, 2:Nxx-1] = t[Nyy-1, 2:Nxx-1]
+            @views @. t[Nyy, 2:(Nxx - 1)] = t[Nyy - 1, 2:(Nxx - 1)]
             # left boundary
             @views @. t[:, 1] = t[:, 2]
             # right boundary
-            @views @. t[:, Nxx] = t[:, Nxx-1]
+            @views @. t[:, Nxx] = t[:, Nxx - 1]
         end # @inbounds
     end
-# end # @timeit to "apply_insulating_boundary_conditions!"
+    # end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end

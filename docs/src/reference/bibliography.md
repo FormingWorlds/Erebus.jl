@@ -6,6 +6,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Primary References
 
+- **Hubmann, B. (2022)**. *Hydrology of Planetesimals*. Master's thesis, ETH Zurich.  
+  [https://doi.org/10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229)  
+  *Original development and numerical implementation of two-phase hydrothermal circulation in planetesimals.*
+
 - **Gerya, T. (2019)**. *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press.  
   [https://doi.org/10.1017/9781316534243](https://doi.org/10.1017/9781316534243)  
   *Foundational reference for the staggered-grid finite-difference formulation, Marker-in-Cell (MIC) advection, and coupled two-phase fluid-matrix percolation.*

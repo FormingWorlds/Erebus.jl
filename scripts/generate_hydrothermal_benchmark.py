@@ -15,11 +15,17 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+import sys
 
 # Path resolution
-data_path = os.path.join(os.path.dirname(__file__), '..', 'output_hydrothermal', 'benchmark_plot_data.json')
+if len(sys.argv) > 1 and sys.argv[1].strip():
+    data_path = sys.argv[1]
+else:
+    data_path = os.path.join(os.path.dirname(__file__), "..", "output_hydrothermal", "benchmark_plot_data.json")
+
 if not os.path.isfile(data_path):
     raise FileNotFoundError(f"Exported data file not found: {data_path}. Run export_hydrothermal_data.jl first.")
+
 
 with open(data_path, 'r') as f:
     data = json.load(f)

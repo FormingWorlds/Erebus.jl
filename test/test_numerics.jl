@@ -13,17 +13,10 @@
         # simulate density field RHO
         RHO = rand(rgen, Ny1, Nx1) * 7e3
         # compute gravity solution
-        Erebus.compute_gravity_solution!(
-            SP,
-            RP,
-            RHO,
-            FI,
-            gx,
-            gy
-        )
+        Erebus.compute_gravity_solution!(SP, RP, RHO, FI, gx, gy)
         # verification, from HTM-planetary.m, line 680ff
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Define global index in algebraic space
                 gk=(j-1)*Ny1+i
                 # Distance from the model centre
@@ -32,8 +25,8 @@
                 if rnode>xsize/2 || i==1 || i==Ny1 || j==1 || j==Nx1
                     # Boundary Condition
                     # PHI=0
-                    LP_ver[gk,gk]=1; # Left part
-                    RP_ver[gk]=0; # Right part
+                    LP_ver[gk, gk]=1 # Left part
+                    RP_ver[gk]=0 # Right part
                 else
                     # Internal points: Temperature eq.
                     # d2PHI/dx^2+d2PHI/dy^2=2/3*4*G*pi*RHO
@@ -46,16 +39,16 @@
                     #          PHI4
                     #
                     # Density gradients
-                    dRHOdx=(RHO[i,j+1]-RHO[i,j-1])/2/dx
-                    dRHOdy=(RHO[i+1,j]-RHO[i-1,j])/2/dy
+                    dRHOdx=(RHO[i, j + 1]-RHO[i, j - 1])/2/dx
+                    dRHOdy=(RHO[i + 1, j]-RHO[i - 1, j])/2/dy
                     # Left part
-                    LP_ver[gk,gk-Ny1]=1/dx^2; # PHI1
-                    LP_ver[gk,gk-1]=1/dy^2; # PHI2
-                    LP_ver[gk,gk]=-2/dx^2-2/dy^2; # PHI3
-                    LP_ver[gk,gk+1]=1/dy^2; # PHI4
-                    LP_ver[gk,gk+Ny1]=1/dx^2; # PHI5
+                    LP_ver[gk, gk - Ny1]=1/dx^2 # PHI1
+                    LP_ver[gk, gk - 1]=1/dy^2 # PHI2
+                    LP_ver[gk, gk]=-2/dx^2-2/dy^2 # PHI3
+                    LP_ver[gk, gk + 1]=1/dy^2 # PHI4
+                    LP_ver[gk, gk + Ny1]=1/dx^2 # PHI5
                     # Right part
-                    RP_ver[gk]=2/3*4*G*pi*RHO[i,j]
+                    RP_ver[gk]=2/3*4*G*pi*RHO[i, j]
                 end
             end
         end
@@ -63,31 +56,31 @@
         SP_ver=LP_ver\RP_ver # Obtaining algebraic vector of solutions SP[]
         # Reload solutions SP[] to geometrical array PHI[]
         # Going through all grid points
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Compute global index
                 gk=(j-1)*Ny1+i
                 # Reload solution
-                FI_ver[i,j]=SP_ver[gk]
+                FI_ver[i, j]=SP_ver[gk]
             end
         end
         # Compute gravity acceleration
         # gx
-        for j=1:1:Nx
-            for i=1:1:Ny1
+        for j in 1:1:Nx
+            for i in 1:1:Ny1
                 # gx=-dPHI/dx
-                gx_ver[i,j]=-(FI_ver[i,j+1]-FI_ver[i,j])/dx
+                gx_ver[i, j]=-(FI_ver[i, j + 1]-FI_ver[i, j])/dx
             end
         end
         # gy
-        for j=1:1:Nx1
-            for i=1:1:Ny
+        for j in 1:1:Nx1
+            for i in 1:1:Ny
                 # gy=-dPHI/dy
-                gy_ver[i,j]=-(FI_ver[i+1,j]-FI_ver[i,j])/dy
+                gy_ver[i, j]=-(FI_ver[i + 1, j]-FI_ver[i, j])/dy
             end
         end
         # test
-        for j=1:1:Nx, i=1:1:Ny
+        for j in 1:1:Nx, i in 1:1:Ny
             @test FI[i, j] ≈ FI_ver[i, j] rtol=1e-9
             @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-9
             @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-9
@@ -102,8 +95,8 @@
         RHO = rand(rgen, Ny1, Nx1) * 7e3
         LP = Erebus.assemble_gravitational_lse!(RHO, RP)
         # verification, from HTM-planetary.m, line 680ff
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Define global index in algebraic space
                 gk=(j-1)*Ny1+i
                 # Distance from the model centre
@@ -112,8 +105,8 @@
                 if rnode>xsize/2 || i==1 || i==Ny1 || j==1 || j==Nx1
                     # Boundary Condition
                     # PHI=0
-                    LP_ver[gk,gk]=1; # Left part
-                    RP_ver[gk]=0; # Right part
+                    LP_ver[gk, gk]=1 # Left part
+                    RP_ver[gk]=0 # Right part
                 else
                     # Internal points: Temperature eq.
                     # d2PHI/dx^2+d2PHI/dy^2=2/3*4*G*pi*RHO
@@ -126,16 +119,16 @@
                     #          PHI4
                     #
                     # Density gradients
-                    dRHOdx=(RHO[i,j+1]-RHO[i,j-1])/2/dx
-                    dRHOdy=(RHO[i+1,j]-RHO[i-1,j])/2/dy
+                    dRHOdx=(RHO[i, j + 1]-RHO[i, j - 1])/2/dx
+                    dRHOdy=(RHO[i + 1, j]-RHO[i - 1, j])/2/dy
                     # Left part
-                    LP_ver[gk,gk-Ny1]=1/dx^2; # PHI1
-                    LP_ver[gk,gk-1]=1/dy^2; # PHI2
-                    LP_ver[gk,gk]=-2/dx^2-2/dy^2; # PHI3
-                    LP_ver[gk,gk+1]=1/dy^2; # PHI4
-                    LP_ver[gk,gk+Ny1]=1/dx^2; # PHI5
+                    LP_ver[gk, gk - Ny1]=1/dx^2 # PHI1
+                    LP_ver[gk, gk - 1]=1/dy^2 # PHI2
+                    LP_ver[gk, gk]=-2/dx^2-2/dy^2 # PHI3
+                    LP_ver[gk, gk + 1]=1/dy^2 # PHI4
+                    LP_ver[gk, gk + Ny1]=1/dx^2 # PHI5
                     # Right part
-                    RP_ver[gk]=2/3*4*G*pi*RHO[i,j]
+                    RP_ver[gk]=2/3*4*G*pi*RHO[i, j]
                 end
             end
         end
@@ -158,31 +151,31 @@
         gy_ver = zeros(Float64, Ny1, Nx1)
         Erebus.process_gravitational_solution!(SP, FI, gx, gy)
         # verification, from HTM-planetary.m, line 680ff
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Compute global index
                 gk=(j-1)*Ny1+i
                 # Reload solution
-                FI_ver[i,j]=SP[gk]
+                FI_ver[i, j]=SP[gk]
             end
         end
         # Compute gravity acceleration
         # gx
-        for j=1:1:Nx
-            for i=1:1:Ny1
+        for j in 1:1:Nx
+            for i in 1:1:Ny1
                 # gx=-dPHI/dx
-                gx_ver[i,j]=-(FI_ver[i,j+1]-FI_ver[i,j])/dx
+                gx_ver[i, j]=-(FI_ver[i, j + 1]-FI_ver[i, j])/dx
             end
         end
         # gy
-        for j=1:1:Nx1
-            for i=1:1:Ny
+        for j in 1:1:Nx1
+            for i in 1:1:Ny
                 # gy=-dPHI/dy
-                gy_ver[i,j]=-(FI_ver[i+1,j]-FI_ver[i,j])/dy
+                gy_ver[i, j]=-(FI_ver[i + 1, j]-FI_ver[i, j])/dy
             end
         end
         # test
-        for j=1:1:Nx, i=1:1:Ny
+        for j in 1:1:Nx, i in 1:1:Ny
             @test FI[i, j] ≈ FI_ver[i, j] rtol=1e-9
             @test gx[i, j] ≈ gx_ver[i, j] rtol=1e-9
             @test gy[i, j] ≈ gy_ver[i, j] rtol=1e-9
@@ -198,22 +191,18 @@
         ETA = rand(rgen, Ny, Nx)
         PHI = rand(rgen, Ny1, Nx1)
         # compute bulk viscosity
-        Erebus.recompute_bulk_viscosity!(
-            ETA,
-            ETAP,
-            ETAPHI,
-            PHI,
-            etaphikoef
-        )
+        Erebus.recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
         # verification, from HTM-planetary.m, line 771ff
-        for i=2:1:Ny
-            for j=2:1:Nx
-                ETAP_ver[i,j]=1/((1/ETA[i-1,j-1]+1/ETA[i,j-1]+1/ETA[i-1,j]+1/ETA[i,j])/4)
-                ETAPHI_ver[i,j]=etaphikoef*ETAP_ver[i,j]/PHI[i,j]
+        for i in 2:1:Ny
+            for j in 2:1:Nx
+                ETAP_ver[i, j]=1/(
+                    (1/ETA[i - 1, j - 1]+1/ETA[i, j - 1]+1/ETA[i - 1, j]+1/ETA[i, j])/4
+                )
+                ETAPHI_ver[i, j]=etaphikoef*ETAP_ver[i, j]/PHI[i, j]
             end
-        end       
+        end
         # test
-        for j=1:1:Nx, i=1:1:Ny
+        for j in 1:1:Nx, i in 1:1:Ny
             @test ETAP[i, j] ≈ ETAP_ver[i, j] rtol=1e-9
             @test ETAPHI[i, j] ≈ ETAPHI_ver[i, j] rtol=1e-9
         end
@@ -258,69 +247,69 @@
             dRHOXdx,
             dRHOXdy,
             dRHOYdx,
-            dRHOYdy
+            dRHOYdy,
         )
         # verification, from HTM-planetary.m, line 832ff, 905ff
-        for j=1:1:Nx, i=1:1:Ny
+        for j in 1:1:Nx, i in 1:1:Ny
             # x-Stokes
             if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
                 # pass: external points
             else
                 # x-Stokes internal points
                 # Computational viscosity
-                ETA1=ETA[i-1,j]*GGG[i-1,j]*dt/(GGG[i-1,j]*dt+ETA[i-1,j])
-                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
-                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
-                ETAP2=ETAP[i,j+1]*GGGP[i,j+1]*dt/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                ETA1=ETA[i - 1, j]*GGG[i - 1, j]*dt/(GGG[i - 1, j]*dt+ETA[i - 1, j])
+                ETA2=ETA[i, j]*GGG[i, j]*dt/(GGG[i, j]*dt+ETA[i, j])
+                ETAP1=ETAP[i, j]*GGGP[i, j]*dt/(GGGP[i, j]*dt+ETAP[i, j])
+                ETAP2=ETAP[i, j + 1]*GGGP[i, j + 1]*dt/(GGGP[i, j + 1]*dt+ETAP[i, j + 1])
                 # Old stresses
-                SXY1=SXY0[i-1,j]*ETA[i-1,j]/(GGG[i-1,j]*dt+ETA[i-1,j])
-                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
-                SXX1=SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
-                SXX2=SXX0[i,j+1]*ETAP[i,j+1]/(GGGP[i,j+1]*dt+ETAP[i,j+1])
+                SXY1=SXY0[i - 1, j]*ETA[i - 1, j]/(GGG[i - 1, j]*dt+ETA[i - 1, j])
+                SXY2=SXY0[i, j]*ETA[i, j]/(GGG[i, j]*dt+ETA[i, j])
+                SXX1=SXX0[i, j]*ETAP[i, j]/(GGGP[i, j]*dt+ETAP[i, j])
+                SXX2=SXX0[i, j + 1]*ETAP[i, j + 1]/(GGGP[i, j + 1]*dt+ETAP[i, j + 1])
                 # Density gradients
-                dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
-                dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
+                dRHOdx=(RHOX[i, j + 1]-RHOX[i, j - 1])/2/dx
+                dRHOdy=(RHOX[i + 1, j]-RHOX[i - 1, j])/2/dy
                 # test
-                @test ETAcomp[i-1, j] ≈ ETA1 rtol=1e-9
+                @test ETAcomp[i - 1, j] ≈ ETA1 rtol=1e-9
                 @test ETAcomp[i, j] ≈ ETA2 rtol=1e-9
                 @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-9
-                @test ETAPcomp[i, j+1] ≈ ETAP2 rtol=1e-9
-                @test SXYcomp[i-1, j] ≈ SXY1 rtol=1e-9
+                @test ETAPcomp[i, j + 1] ≈ ETAP2 rtol=1e-9
+                @test SXYcomp[i - 1, j] ≈ SXY1 rtol=1e-9
                 @test SXYcomp[i, j] ≈ SXY2 rtol=1e-9
                 @test SXXcomp[i, j] ≈ SXX1 rtol=1e-9
-                @test SXXcomp[i, j+1] ≈ SXX2 rtol=1e-9
+                @test SXXcomp[i, j + 1] ≈ SXX2 rtol=1e-9
                 @test dRHOXdx[i, j] ≈ dRHOdx rtol=1e-9
-                @test dRHOXdy[i, j] ≈ dRHOdy rtol=1e-9        
+                @test dRHOXdy[i, j] ≈ dRHOdy rtol=1e-9
             end
             # y-Stokes
             if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
                 # pass: external points
             else
                 # Computational viscosity
-                ETA1=ETA[i,j-1]*GGG[i,j-1]*dt/(GGG[i,j-1]*dt+ETA[i,j-1])
-                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
-                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
-                ETAP2=ETAP[i+1,j]*GGGP[i+1,j]*dt/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                ETA1=ETA[i, j - 1]*GGG[i, j - 1]*dt/(GGG[i, j - 1]*dt+ETA[i, j - 1])
+                ETA2=ETA[i, j]*GGG[i, j]*dt/(GGG[i, j]*dt+ETA[i, j])
+                ETAP1=ETAP[i, j]*GGGP[i, j]*dt/(GGGP[i, j]*dt+ETAP[i, j])
+                ETAP2=ETAP[i + 1, j]*GGGP[i + 1, j]*dt/(GGGP[i + 1, j]*dt+ETAP[i + 1, j])
                 # Old stresses
-                SXY1=SXY0[i,j-1]*ETA[i,j-1]/(GGG[i,j-1]*dt+ETA[i,j-1])
-                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
-                SYY1=-SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
-                SYY2=-SXX0[i+1,j]*ETAP[i+1,j]/(GGGP[i+1,j]*dt+ETAP[i+1,j])
+                SXY1=SXY0[i, j - 1]*ETA[i, j - 1]/(GGG[i, j - 1]*dt+ETA[i, j - 1])
+                SXY2=SXY0[i, j]*ETA[i, j]/(GGG[i, j]*dt+ETA[i, j])
+                SYY1=-SXX0[i, j]*ETAP[i, j]/(GGGP[i, j]*dt+ETAP[i, j])
+                SYY2=-SXX0[i + 1, j]*ETAP[i + 1, j]/(GGGP[i + 1, j]*dt+ETAP[i + 1, j])
                 # Density gradients
-                dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
-                dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
+                dRHOdx=(RHOY[i, j + 1]-RHOY[i, j - 1])/2/dx
+                dRHOdy=(RHOY[i + 1, j]-RHOY[i - 1, j])/2/dy
                 # test
-                @test ETAcomp[i, j-1] ≈ ETA1 rtol=1e-9
+                @test ETAcomp[i, j - 1] ≈ ETA1 rtol=1e-9
                 @test ETAcomp[i, j] ≈ ETA2 rtol=1e-9
                 @test ETAPcomp[i, j] ≈ ETAP1 rtol=1e-9
-                @test ETAPcomp[i+1, j] ≈ ETAP2 rtol=1e-9
-                @test SXYcomp[i, j-1] ≈ SXY1 rtol=1e-9
+                @test ETAPcomp[i + 1, j] ≈ ETAP2 rtol=1e-9
+                @test SXYcomp[i, j - 1] ≈ SXY1 rtol=1e-9
                 @test SXYcomp[i, j] ≈ SXY2 rtol=1e-9
                 @test SYYcomp[i, j] ≈ SYY1 rtol=1e-9
-                @test SYYcomp[i+1, j] ≈ SYY2 rtol=1e-9
+                @test SYYcomp[i + 1, j] ≈ SYY2 rtol=1e-9
                 @test dRHOYdx[i, j] ≈ dRHOdx rtol=1e-9
-                @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-9     
-            end       
+                @test dRHOYdy[i, j] ≈ dRHOdy rtol=1e-9
+            end
         end
     end # testset "get_viscosities_stresses_density_gradients()"
 
@@ -347,7 +336,7 @@
         @test typeof(SP) == Vector{Float64}
         @test size(SP) == (Nx1*Ny1,)
     end
-    
+
     @testset "setup_gravitational_lse()" begin
         # setup gravitational LSE
         RT, ST = Erebus.setup_gravitational_lse()
@@ -359,7 +348,7 @@
         @test typeof(ST) == Vector{Float64}
         @test size(ST) == (Nx1*Ny1,)
     end
-    
+
     @testset "assemble_hydromechanical_lse()" begin
         dt = dt_longest
         # simulate data
@@ -376,7 +365,7 @@
         RX = rand(rgen, Ny1, Nx1) * 1e39
         RY = rand(rgen, Ny1, Nx1) * 1e39
         ETAPHI = rand(rgen, Ny1, Nx1) * 1e15
-        BETTAPHI = rand(rgen, Ny1, Nx1) * 1e-10 
+        BETTAPHI = rand(rgen, Ny1, Nx1) * 1e-10
         PHI = rand(rgen, Ny1, Nx1) * 1.0
         gx = rand(rgen, Ny1, Nx1) * 1.0
         gy = rand(rgen, Ny1, Nx1) * 1.0
@@ -410,308 +399,326 @@
             pf0,
             DMP,
             dt,
-            R
+            R,
         )
         L = collect(L)
         # verification, from HTM-planetary.m, line 779ff;
         # HTM-hydration.m, line 707ff
         # Hydro-Mechanical Solution
         # Composing global matrixes L_ver[], R_ver[] for Stokes & continuity equations
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Define global indexes in algebraic space
-                kvx=((j-1)*Ny1+i-1)*6+1; # Vx solid
-                kvy=kvx+1; # Vy solid
-                kpm=kvx+2; # Ptotal
-                kqx=kvx+3; # qx Darcy
-                kqy=kvx+4; # qy Darcy
-                kpf=kvx+5; # P fluid
-                
+                kvx=((j-1)*Ny1+i-1)*6+1 # Vx solid
+                kvy=kvx+1 # Vy solid
+                kpm=kvx+2 # Ptotal
+                kqx=kvx+3 # qx Darcy
+                kqy=kvx+4 # qy Darcy
+                kpf=kvx+5 # P fluid
+
                 # Vx equation External points
                 if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
                     # Boundary Condition 
                     # Ghost unknowns 1*Vx=0
                     if j==Nx1
-                        L_ver[kvx,kvx]=1; # Left part
-                        R_ver[kvx]=0; # Right part
+                        L_ver[kvx, kvx]=1 # Left part
+                        R_ver[kvx]=0 # Right part
                     end
                     # Left Boundary
                     if j==1
-                        L_ver[kvx,kvx]=1; # Left part
-                        R_ver[kvx]=vxleft; # Right part
+                        L_ver[kvx, kvx]=1 # Left part
+                        R_ver[kvx]=vxleft # Right part
                     end
                     # Right Boundary
-                    if j==Nx 
-                        L_ver[kvx,kvx]=1; # Left part
-                        R_ver[kvx]=vxright; # Right part
+                    if j==Nx
+                        L_ver[kvx, kvx]=1 # Left part
+                        R_ver[kvx]=vxright # Right part
                     end
                     # Top boundary
                     if i==1 && j>1 && j<Nx
-                        L_ver[kvx,kvx]=1; # Left part
-                        L_ver[kvx,kvx+6]=bctop; # Left part
-                        R_ver[kvx]=0; # Right part
+                        L_ver[kvx, kvx]=1 # Left part
+                        L_ver[kvx, kvx + 6]=bctop # Left part
+                        R_ver[kvx]=0 # Right part
                     end
                     # Top boundary
                     if i==Ny1 && j>1 && j<Nx
-                        L_ver[kvx,kvx]=1; # Left part
-                        L_ver[kvx,kvx-6]=bcbottom; # Left part
-                        R_ver[kvx]=0; # Right part
+                        L_ver[kvx, kvx]=1 # Left part
+                        L_ver[kvx, kvx - 6]=bcbottom # Left part
+                        R_ver[kvx]=0 # Right part
                     end
                 else
-                # Internal points: x-Stokes eq.
-                #            Vx2
-                #             |
-                #        Vy1  |  Vy3
-                #             |
-                #     Vx1-P1-Vx3-P2-Vx5
-                #             |
-                #        Vy2  |  Vy4
-                #             |
-                #            Vx4
-                #
-                # Computational viscosity
-                ETA1=ETA[i-1,j]*GGG[i-1,j]*dt/(GGG[i-1,j]*dt+ETA[i-1,j])
-                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
-                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
-                ETAP2=ETAP[i,j+1]*GGGP[i,j+1]*dt/(GGGP[i,j+1]*dt+ETAP[i,j+1])
-                # Old stresses
-                SXY1=SXY0[i-1,j]*ETA[i-1,j]/(GGG[i-1,j]*dt+ETA[i-1,j])
-                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
-                SXX1=SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
-                SXX2=SXX0[i,j+1]*ETAP[i,j+1]/(GGGP[i,j+1]*dt+ETAP[i,j+1])
-                # Density gradients
-                dRHOdx=(RHOX[i,j+1]-RHOX[i,j-1])/2/dx
-                dRHOdy=(RHOX[i+1,j]-RHOX[i-1,j])/2/dy
-                # Left part
-                L_ver[kvx,kvx-Ny1*6]=ETAP1/dx^2; # Vx1
-                L_ver[kvx,kvx-6]=ETA1/dy^2; # Vx2
-                L_ver[kvx,kvx]=-(ETAP1+ETAP2)/dx^2-  (ETA1+ETA2)/dy^2-  dRHOdx*gx[i,j]*dt; # Vx3
-                L_ver[kvx,kvx+6]=ETA2/dy^2; # Vx4
-                L_ver[kvx,kvx+Ny1*6]=ETAP2/dx^2; # Vx5
-                L_ver[kvx,kvy]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy2
-                L_ver[kvx,kvy+Ny1*6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy4
-                L_ver[kvx,kvy-6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy1
-                L_ver[kvx,kvy+Ny1*6-6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i,j]*dt/4;  # Vy3
-                L_ver[kvx,kpm]=Kcont/dx; # P1
-                L_ver[kvx,kpm+Ny1*6]=-Kcont/dx; # P2
-                # Right part
-                R_ver[kvx]=-RHOX[i,j]*gx[i,j]-(SXY2-SXY1)/dy-(SXX2-SXX1)/dx
+                    # Internal points: x-Stokes eq.
+                    #            Vx2
+                    #             |
+                    #        Vy1  |  Vy3
+                    #             |
+                    #     Vx1-P1-Vx3-P2-Vx5
+                    #             |
+                    #        Vy2  |  Vy4
+                    #             |
+                    #            Vx4
+                    #
+                    # Computational viscosity
+                    ETA1=ETA[i - 1, j]*GGG[i - 1, j]*dt/(GGG[i - 1, j]*dt+ETA[i - 1, j])
+                    ETA2=ETA[i, j]*GGG[i, j]*dt/(GGG[i, j]*dt+ETA[i, j])
+                    ETAP1=ETAP[i, j]*GGGP[i, j]*dt/(GGGP[i, j]*dt+ETAP[i, j])
+                    ETAP2=ETAP[i, j + 1]*GGGP[i, j + 1]*dt/(
+                        GGGP[i, j + 1]*dt+ETAP[i, j + 1]
+                    )
+                    # Old stresses
+                    SXY1=SXY0[i - 1, j]*ETA[i - 1, j]/(GGG[i - 1, j]*dt+ETA[i - 1, j])
+                    SXY2=SXY0[i, j]*ETA[i, j]/(GGG[i, j]*dt+ETA[i, j])
+                    SXX1=SXX0[i, j]*ETAP[i, j]/(GGGP[i, j]*dt+ETAP[i, j])
+                    SXX2=SXX0[i, j + 1]*ETAP[i, j + 1]/(GGGP[i, j + 1]*dt+ETAP[i, j + 1])
+                    # Density gradients
+                    dRHOdx=(RHOX[i, j + 1]-RHOX[i, j - 1])/2/dx
+                    dRHOdy=(RHOX[i + 1, j]-RHOX[i - 1, j])/2/dy
+                    # Left part
+                    L_ver[kvx, kvx - Ny1 * 6]=ETAP1/dx^2 # Vx1
+                    L_ver[kvx, kvx - 6]=ETA1/dy^2 # Vx2
+                    L_ver[kvx, kvx]=-(ETAP1+ETAP2)/dx^2 - (ETA1+ETA2)/dy^2 -
+                                    dRHOdx*gx[i, j]*dt # Vx3
+                    L_ver[kvx, kvx + 6]=ETA2/dy^2 # Vx4
+                    L_ver[kvx, kvx + Ny1 * 6]=ETAP2/dx^2 # Vx5
+                    L_ver[kvx, kvy]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdy*gx[i, j]*dt/4  # Vy2
+                    L_ver[kvx, kvy + Ny1 * 6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdy*gx[i, j]*dt/4  # Vy4
+                    L_ver[kvx, kvy - 6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdy*gx[i, j]*dt/4  # Vy1
+                    L_ver[kvx, kvy + Ny1 * 6 - 6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdy*gx[i, j]*dt/4  # Vy3
+                    L_ver[kvx, kpm]=Kcont/dx # P1
+                    L_ver[kvx, kpm + Ny1 * 6]=-Kcont/dx # P2
+                    # Right part
+                    R_ver[kvx]=-RHOX[i, j]*gx[i, j]-(SXY2-SXY1)/dy-(SXX2-SXX1)/dx
                 end
-                
+
                 # Vy equation External points
                 if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
                     # Boundary Condition
                     # Ghost unknowns 1*Vx=0
                     if i==Ny1
-                        L_ver[kvy,kvy]=1; # Left part
-                        R_ver[kvy]=0; # Right part
+                        L_ver[kvy, kvy]=1 # Left part
+                        R_ver[kvy]=0 # Right part
                     end
                     # Top boundary
                     if i==1
-                        L_ver[kvy,kvy]=1; # Left part
-                        R_ver[kvy]=vytop; # Right part
+                        L_ver[kvy, kvy]=1 # Left part
+                        R_ver[kvy]=vytop # Right part
                     end
                     # Bottom boundary
                     if i==Ny
-                        L_ver[kvy,kvy]=1; # Left part
-                        R_ver[kvy]=vybottom; # Right part
+                        L_ver[kvy, kvy]=1 # Left part
+                        R_ver[kvy]=vybottom # Right part
                     end
                     # Left boundary
                     if j==1 && i>1 && i<Ny
-                        L_ver[kvy,kvy]=1; # Left part
-                        L_ver[kvy,kvy+6*Ny1]=bcleft; # Left part
-                        R_ver[kvy]=0; # Right part
+                        L_ver[kvy, kvy]=1 # Left part
+                        L_ver[kvy, kvy + 6 * Ny1]=bcleft # Left part
+                        R_ver[kvy]=0 # Right part
                     end
                     # Right boundary
                     if j==Nx1 && i>1 && i<Ny
-                        L_ver[kvy,kvy]=1; # Left part
-                        L_ver[kvy,kvy-6*Ny1]=bcright; # Left part
-                        R_ver[kvy]=0; # Right part
+                        L_ver[kvy, kvy]=1 # Left part
+                        L_ver[kvy, kvy - 6 * Ny1]=bcright # Left part
+                        R_ver[kvy]=0 # Right part
                     end
                 else
-                # Internal points: y-Stokes eq.
-                #            Vy2
-                #             |
-                #         Vx1 P1 Vx3
-                #             |
-                #     Vy1----Vy3----Vy5
-                #             |
-                #         Vx2 P2 Vx4
-                #             |
-                #            Vy4
-                #
-                # Computational viscosity
-                ETA1=ETA[i,j-1]*GGG[i,j-1]*dt/(GGG[i,j-1]*dt+ETA[i,j-1])
-                ETA2=ETA[i,j]*GGG[i,j]*dt/(GGG[i,j]*dt+ETA[i,j])
-                ETAP1=ETAP[i,j]*GGGP[i,j]*dt/(GGGP[i,j]*dt+ETAP[i,j])
-                ETAP2=ETAP[i+1,j]*GGGP[i+1,j]*dt/(GGGP[i+1,j]*dt+ETAP[i+1,j])
-                # Old stresses
-                SXY1=SXY0[i,j-1]*ETA[i,j-1]/(GGG[i,j-1]*dt+ETA[i,j-1])
-                SXY2=SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dt+ETA[i,j])
-                SYY1=-SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dt+ETAP[i,j])
-                SYY2=-SXX0[i+1,j]*ETAP[i+1,j]/(GGGP[i+1,j]*dt+ETAP[i+1,j])
-                # Density gradients
-                dRHOdx=(RHOY[i,j+1]-RHOY[i,j-1])/2/dx
-                dRHOdy=(RHOY[i+1,j]-RHOY[i-1,j])/2/dy
-                # Left part
-                L_ver[kvy,kvy-Ny1*6]=ETA1/dx^2; # Vy1
-                L_ver[kvy,kvy-6]=ETAP1/dy^2; # Vy2
-                L_ver[kvy,kvy]=-(ETAP1+ETAP2)/dy^2-  (ETA1+ETA2)/dx^2-  dRHOdy*gy[i,j]*dt; # Vy3
-                L_ver[kvy,kvy+6]=ETAP2/dy^2; # Vy4
-                L_ver[kvy,kvy+Ny1*6]=ETA2/dx^2; # Vy5
-                L_ver[kvy,kvx]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx3
-                L_ver[kvy,kvx+6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx4
-                L_ver[kvy,kvx-Ny1*6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx1
-                L_ver[kvy,kvx+6-Ny1*6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i,j]*dt/4; #Vx2
-                L_ver[kvy,kpm]=Kcont/dy; # P1
-                L_ver[kvy,kpm+6]=-Kcont/dy; # P2
-                
-                # Right part
-                R_ver[kvy]=-RHOY[i,j]*gy[i,j]-(SXY2-SXY1)/dx-(SYY2-SYY1)/dy
+                    # Internal points: y-Stokes eq.
+                    #            Vy2
+                    #             |
+                    #         Vx1 P1 Vx3
+                    #             |
+                    #     Vy1----Vy3----Vy5
+                    #             |
+                    #         Vx2 P2 Vx4
+                    #             |
+                    #            Vy4
+                    #
+                    # Computational viscosity
+                    ETA1=ETA[i, j - 1]*GGG[i, j - 1]*dt/(GGG[i, j - 1]*dt+ETA[i, j - 1])
+                    ETA2=ETA[i, j]*GGG[i, j]*dt/(GGG[i, j]*dt+ETA[i, j])
+                    ETAP1=ETAP[i, j]*GGGP[i, j]*dt/(GGGP[i, j]*dt+ETAP[i, j])
+                    ETAP2=ETAP[i + 1, j]*GGGP[i + 1, j]*dt/(
+                        GGGP[i + 1, j]*dt+ETAP[i + 1, j]
+                    )
+                    # Old stresses
+                    SXY1=SXY0[i, j - 1]*ETA[i, j - 1]/(GGG[i, j - 1]*dt+ETA[i, j - 1])
+                    SXY2=SXY0[i, j]*ETA[i, j]/(GGG[i, j]*dt+ETA[i, j])
+                    SYY1=-SXX0[i, j]*ETAP[i, j]/(GGGP[i, j]*dt+ETAP[i, j])
+                    SYY2=-SXX0[i + 1, j]*ETAP[i + 1, j]/(GGGP[i + 1, j]*dt+ETAP[i + 1, j])
+                    # Density gradients
+                    dRHOdx=(RHOY[i, j + 1]-RHOY[i, j - 1])/2/dx
+                    dRHOdy=(RHOY[i + 1, j]-RHOY[i - 1, j])/2/dy
+                    # Left part
+                    L_ver[kvy, kvy - Ny1 * 6]=ETA1/dx^2 # Vy1
+                    L_ver[kvy, kvy - 6]=ETAP1/dy^2 # Vy2
+                    L_ver[kvy, kvy]=-(ETAP1+ETAP2)/dy^2 - (ETA1+ETA2)/dx^2 -
+                                    dRHOdy*gy[i, j]*dt # Vy3
+                    L_ver[kvy, kvy + 6]=ETAP2/dy^2 # Vy4
+                    L_ver[kvy, kvy + Ny1 * 6]=ETA2/dx^2 # Vy5
+                    L_ver[kvy, kvx]=ETAP1/dx/dy-ETA2/dx/dy-dRHOdx*gy[i, j]*dt/4 #Vx3
+                    L_ver[kvy, kvx + 6]=-ETAP2/dx/dy+ETA2/dx/dy-dRHOdx*gy[i, j]*dt/4 #Vx4
+                    L_ver[kvy, kvx - Ny1 * 6]=-ETAP1/dx/dy+ETA1/dx/dy-dRHOdx*gy[i, j]*dt/4 #Vx1
+                    L_ver[kvy, kvx + 6 - Ny1 * 6]=ETAP2/dx/dy-ETA1/dx/dy-dRHOdx*gy[i, j]*dt/4 #Vx2
+                    L_ver[kvy, kpm]=Kcont/dy # P1
+                    L_ver[kvy, kpm + 6]=-Kcont/dy # P2
+
+                    # Right part
+                    R_ver[kvy]=-RHOY[i, j]*gy[i, j]-(SXY2-SXY1)/dx-(SYY2-SYY1)/dy
                 end
-                
+
                 # P equation External points
-                if (i==1 || j==1 || i==Ny1 || j==Nx1
-                    || (i==2 && j>=2 && j<=Nx)
-                    || (i==Ny && j>=2 && j<=Nx)
-                    || (j==2 && i>=2 && i<=Ny)
-                    || (j==Nx && i>=2 && i<=Ny)
+                if (
+                    i==1 ||
+                    j==1 ||
+                    i==Ny1 ||
+                    j==Nx1 ||
+                    (i==2 && j>=2 && j<=Nx) ||
+                    (i==Ny && j>=2 && j<=Nx) ||
+                    (j==2 && i>=2 && i<=Ny) ||
+                    (j==Nx && i>=2 && i<=Ny)
                 )
                     # Boundary Condition
                     # 1*P=0
-                    L_ver[kpm,kpm]=1; # Left part
-                    R_ver[kpm]=0; # Right part
+                    L_ver[kpm, kpm]=1 # Left part
+                    R_ver[kpm]=0 # Right part
                     # Real BC
-                    if ((i==2 && j>=2 && j<=Nx)
-                        || (i==Ny && j>=2 && j<=Nx)
-                        || (j==2 && i>=2 && i<=Ny)
-                        || (j==Nx && i>=2 && i<=Ny)
+                    if (
+                        (i==2 && j>=2 && j<=Nx) ||
+                        (i==Ny && j>=2 && j<=Nx) ||
+                        (j==2 && i>=2 && i<=Ny) ||
+                        (j==Nx && i>=2 && i<=Ny)
                     )
-                        L_ver[kpm,kpm]=1*Kcont; # Left part
-                        R_ver[kpm]=psurface; # Right part
+                        L_ver[kpm, kpm]=1*Kcont # Left part
+                        R_ver[kpm]=psurface # Right part
                     end
                 else
-                # Internal points: continuity eq.
-                # dVx/dx+dVy/dy=0
-                #            Vy1
-                #             |
-                #        Vx1--P--Vx2
-                #             |
-                #            Vy2
-                #
-                # Left part
-                L_ver[kpm,kvx-Ny1*6]=-1/dx; # Vx1
-                L_ver[kpm,kvx]=1/dx; # Vx2
-                L_ver[kpm,kvy-6]=-1/dy; # Vy1
-                L_ver[kpm,kvy]=1/dy; # Vy2
-                L_ver[kpm,kpm]= Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
-                L_ver[kpm,kpf]=-Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
-                # Right part
-                R_ver[kpm]=(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt+DMP[i,j]
+                    # Internal points: continuity eq.
+                    # dVx/dx+dVy/dy=0
+                    #            Vy1
+                    #             |
+                    #        Vx1--P--Vx2
+                    #             |
+                    #            Vy2
+                    #
+                    # Left part
+                    L_ver[kpm, kvx - Ny1 * 6]=-1/dx # Vx1
+                    L_ver[kpm, kvx]=1/dx # Vx2
+                    L_ver[kpm, kvy - 6]=-1/dy # Vy1
+                    L_ver[kpm, kvy]=1/dy # Vy2
+                    L_ver[kpm, kpm] = Kcont/(1-PHI[i, j])*(1/ETAPHI[i, j]+BETTAPHI[i, j]/dt) # Ptotal
+                    L_ver[kpm, kpf]=-Kcont/(1-PHI[i, j])*(1/ETAPHI[i, j]+BETTAPHI[i, j]/dt) # Pfluid
+                    # Right part
+                    R_ver[kpm]=(pr0[i, j]-pf0[i, j])/(1-PHI[i, j])*BETTAPHI[i, j]/dt+DMP[
+                        i, j
+                    ]
                 end
 
                 # qxDarcy equation External points
                 if i==1 || i==Ny1 || j==1 || j==Nx || j==Nx1
                     # Boundary Condition
                     # 1*qx=0
-                    L_ver[kqx,kqx]=1; # Left part
-                    R_ver[kqx]=0; # Right part
+                    L_ver[kqx, kqx]=1 # Left part
+                    R_ver[kqx]=0 # Right part
                     # Top boundary
                     if i==1 && j>1 && j<Nx
-                        L_ver[kqx,kqx+6]=bcftop; # Left part
+                        L_ver[kqx, kqx + 6]=bcftop # Left part
                     end
                     # Bottom boundary
                     if i==Ny1 && j>1 && j<Nx
-                        L_ver[kqx,kqx-6]=bcfbottom; # Left part
+                        L_ver[kqx, kqx - 6]=bcfbottom # Left part
                     end
                 else
-                # Internal points: x-Darcy eq.
-                # Rx*qxDarcy+dP/dx=RHOfluid*gx
-                #     P1-qxD-P2
-                # Left part
-                L_ver[kqx,kqx]=RX[i,j]; # qxD
-                L_ver[kqx,kpf]=-Kcont/dx; # P1
-                L_ver[kqx,kpf+Ny1*6]=Kcont/dx; # P2
-                # Right part
-                R_ver[kqx]=RHOFX[i,j]*gx[i,j]
+                    # Internal points: x-Darcy eq.
+                    # Rx*qxDarcy+dP/dx=RHOfluid*gx
+                    #     P1-qxD-P2
+                    # Left part
+                    L_ver[kqx, kqx]=RX[i, j] # qxD
+                    L_ver[kqx, kpf]=-Kcont/dx # P1
+                    L_ver[kqx, kpf + Ny1 * 6]=Kcont/dx # P2
+                    # Right part
+                    R_ver[kqx]=RHOFX[i, j]*gx[i, j]
                 end
-                
+
                 # qyDarcy equation External points
                 if j==1 || j==Nx1 || i==1 || i==Ny || i==Ny1
                     # Boundary Condition
                     # 1*Vy=0
-                    L_ver[kqy,kqy]=1; # Left part
-                    R_ver[kqy]=0; # Right part
+                    L_ver[kqy, kqy]=1 # Left part
+                    R_ver[kqy]=0 # Right part
                     # Left boundary
                     if j==1 && i>1 && i<Ny
-                        L_ver[kqy,kqy+6*Ny1]=bcfleft; # Left part
+                        L_ver[kqy, kqy + 6 * Ny1]=bcfleft # Left part
                     end
                     # Right boundary
                     if j==Nx1 && i>1 && i<Ny
-                        L_ver[kqy,kqy-6*Ny1]=bcfright; # Left part
+                        L_ver[kqy, kqy - 6 * Ny1]=bcfright # Left part
                     end
                 else
-                # Internal points: y-Stokes eq.
-                # Internal points: x-Darcy eq.
-                # Rx*qxDarcy+dP/dx=RHOfluid*gx
-                #      P1
-                #      |
-                #     qxD
-                #      |
-                #      P2
-                # Left part
-                L_ver[kqy,kqy]=RY[i,j]; # qxD
-                L_ver[kqy,kpf]=-Kcont/dy; # P1
-                L_ver[kqy,kpf+6]=Kcont/dy; # P
-                # Right part
-                R_ver[kqy]=RHOFY[i,j]*gy[i,j]
+                    # Internal points: y-Stokes eq.
+                    # Internal points: x-Darcy eq.
+                    # Rx*qxDarcy+dP/dx=RHOfluid*gx
+                    #      P1
+                    #      |
+                    #     qxD
+                    #      |
+                    #      P2
+                    # Left part
+                    L_ver[kqy, kqy]=RY[i, j] # qxD
+                    L_ver[kqy, kpf]=-Kcont/dy # P1
+                    L_ver[kqy, kpf + 6]=Kcont/dy # P
+                    # Right part
+                    R_ver[kqy]=RHOFY[i, j]*gy[i, j]
                 end
-                
+
                 # Pfluid equation External points
-                if (i==1 || j==1 || i==Ny1 || j==Nx1
-                    || (i==2 && j>=2 && j<=Nx)
-                    || (i==Ny && j>=2 && j<=Nx)
-                    || (j==2 && i>=2 && i<=Ny)
-                    || (j==Nx && i>=2 && i<=Ny)
+                if (
+                    i==1 ||
+                    j==1 ||
+                    i==Ny1 ||
+                    j==Nx1 ||
+                    (i==2 && j>=2 && j<=Nx) ||
+                    (i==Ny && j>=2 && j<=Nx) ||
+                    (j==2 && i>=2 && i<=Ny) ||
+                    (j==Nx && i>=2 && i<=Ny)
                 )
                     # Boundary Condition
                     # 1*Pfluid=0
-                    L_ver[kpf,kpf]=1; # Left part
-                    R_ver[kpf]=0; # Right part
+                    L_ver[kpf, kpf]=1 # Left part
+                    R_ver[kpf]=0 # Right part
                     # Real BC
-                    if ((i==2 && j>=2 && j<=Nx)
-                        || (i==Ny && j>=2 && j<=Nx)
-                        || (j==2 && i>2 && i<Ny)
-                        || (j==Nx && i>2 && i<Ny)
+                    if (
+                        (i==2 && j>=2 && j<=Nx) ||
+                        (i==Ny && j>=2 && j<=Nx) ||
+                        (j==2 && i>2 && i<Ny) ||
+                        (j==Nx && i>2 && i<Ny)
                     )
-                        L_ver[kpf,kpf]=1*Kcont; #Left part
-                        R_ver[kpf]=psurface; # Right part
+                        L_ver[kpf, kpf]=1*Kcont #Left part
+                        R_ver[kpf]=psurface # Right part
                     end
                 else
-                # Internal points: continuity eq.
-                # dqxD/dx+dqyD/dy-(Ptotal-Pfluid)/ETHAphi=0
-                #            qyD1
-                #              |
-                #        qxD1--P--qxD2
-                #              |
-                #            qyD2
-                #
-                # Left part
-                L_ver[kpf,kqx-Ny1*6]=-1/dx; # qxD1
-                L_ver[kpf,kqx]=1/dx; # qxD2
-                L_ver[kpf,kqy-6]=-1/dy; # qyD1
-                L_ver[kpf,kqy]=1/dy; # qyD2
-                L_ver[kpf,kpm]=-Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Ptotal
-                L_ver[kpf,kpf]= Kcont/(1-PHI[i,j])*(1/ETAPHI[i,j]+BETTAPHI[i,j]/dt); # Pfluid
-                # Right part
-                R_ver[kpf]=-(pr0[i,j]-pf0[i,j])/(1-PHI[i,j])*BETTAPHI[i,j]/dt
+                    # Internal points: continuity eq.
+                    # dqxD/dx+dqyD/dy-(Ptotal-Pfluid)/ETHAphi=0
+                    #            qyD1
+                    #              |
+                    #        qxD1--P--qxD2
+                    #              |
+                    #            qyD2
+                    #
+                    # Left part
+                    L_ver[kpf, kqx - Ny1 * 6]=-1/dx # qxD1
+                    L_ver[kpf, kqx]=1/dx # qxD2
+                    L_ver[kpf, kqy - 6]=-1/dy # qyD1
+                    L_ver[kpf, kqy]=1/dy # qyD2
+                    L_ver[kpf, kpm]=-Kcont/(1-PHI[i, j])*(1/ETAPHI[i, j]+BETTAPHI[i, j]/dt) # Ptotal
+                    L_ver[kpf, kpf] = Kcont/(1-PHI[i, j])*(1/ETAPHI[i, j]+BETTAPHI[i, j]/dt) # Pfluid
+                    # Right part
+                    R_ver[kpf]=-(pr0[i, j]-pf0[i, j])/(1-PHI[i, j])*BETTAPHI[i, j]/dt
                 end
             end
         end
         # test
         # for j=1:1:Nx1*Ny1*6, i=1:1:Nx1*Ny1*6
         #     @test L[i, j] ≈ L_ver[i, j] rtol=1e-9
-            # @test R[i] ≈ R_ver[i] rtol=1e-9
+        # @test R[i] ≈ R_ver[i] rtol=1e-9
         # end
         @test L ≈ L_ver rtol=1e-9
         @test R ≈ R_ver rtol=1e-9
@@ -733,39 +740,31 @@
         qyD_ver = zeros(Ny1, Nx1)
         pf_ver = zeros(Ny1, Nx1)
         # process solution
-        Erebus.process_hydromechanical_solution!(
-            S,
-            vx,
-            vy,
-            pr,
-            qxD,
-            qyD,
-            pf
-        )
+        Erebus.process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf)
         # verification, from HTM-planetary.m, line 1058ff
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Define global indexes in algebraic space
-                kvx=((j-1)*Ny1+i-1)*6+1; # Vx solid
-                kvy=kvx+1; # Vy solid
-                kpm=kvx+2; # Ptotal
-                kqx=kvx+3; # qx Darcy
-                kqy=kvx+4; # qy Darcy
-                kpf=kvx+5; # P fluid
+                kvx=((j-1)*Ny1+i-1)*6+1 # Vx solid
+                kvy=kvx+1 # Vy solid
+                kpm=kvx+2 # Ptotal
+                kqx=kvx+3 # qx Darcy
+                kqy=kvx+4 # qy Darcy
+                kpf=kvx+5 # P fluid
                 # Reload solution
-                vx_ver[i,j]=S[kvx]
-                vy_ver[i,j]=S[kvy]
-                pr_ver[i,j]=S[kpm]*Kcont
-                qxD_ver[i,j]=S[kqx]
-                qyD_ver[i,j]=S[kqy]
-                pf_ver[i,j]=S[kpf]*Kcont
+                vx_ver[i, j]=S[kvx]
+                vy_ver[i, j]=S[kvy]
+                pr_ver[i, j]=S[kpm]*Kcont
+                qxD_ver[i, j]=S[kqx]
+                qyD_ver[i, j]=S[kqy]
+                pf_ver[i, j]=S[kpf]*Kcont
             end
         end
         # pavr=(pf_ver[2,2]+pf_ver[2,Nx]+pf_ver[Ny,2]+pf_ver[Ny,Nx])/4;
         # @. pr_ver=pr_ver-pavr+psurface;
         # @. pf_ver=pf_ver-pavr+psurface;
         # test
-        for j=1:1:Nx1, i=1:1:Ny1
+        for j in 1:1:Nx1, i in 1:1:Ny1
             @test vx[i, j] ≈ vx_ver[i, j] rtol=1e-9
             @test vy[i, j] ≈ vy_ver[i, j] rtol=1e-9
             @test pr[i, j] ≈ pr_ver[i, j] rtol=1e-9
@@ -788,28 +787,21 @@
         pr0 = rand(rgen, Ny1, Nx1) * 1e4
         pf0 = rand(rgen, Ny1, Nx1) * 1e4
         # compute Aϕ
-        aphimax = Erebus.compute_Aϕ!(
-            APHI,
-            ETAPHI,
-            BETTAPHI,
-            PHI,
-            pr,
-            pf,
-            pr0,
-            pf0,
-            dt
-        )
+        aphimax = Erebus.compute_Aϕ!(APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt)
         # verification, from HTM-planetary.m, line 1078ff
         APHI_ver = zeros(Ny1, Nx1)
         aphimax_ver=0
-        for j=2:1:Nx
-            for i=2:1:Ny
-                APHI_ver[i,j]=((pr[i,j]-pf[i,j])/ETAPHI[i,j]+  ((pr[i,j]-pr0[i,j])-(pf[i,j]-pf0[i,j]))/dt*BETTAPHI[i,j])/(1-PHI[i,j])/PHI[i,j]
-                aphimax_ver=max(aphimax_ver,abs(APHI_ver[i,j]))
+        for j in 2:1:Nx
+            for i in 2:1:Ny
+                APHI_ver[i, j]=(
+                    (pr[i, j]-pf[i, j])/ETAPHI[i, j] +
+                    ((pr[i, j]-pr0[i, j])-(pf[i, j]-pf0[i, j]))/dt*BETTAPHI[i, j]
+                )/(1-PHI[i, j])/PHI[i, j]
+                aphimax_ver=max(aphimax_ver, abs(APHI_ver[i, j]))
             end
         end
         # test incompressible baseline
-        for j=2:1:Nx, i=2:1:Ny
+        for j in 2:1:Nx, i in 2:1:Ny
             @test APHI[i, j] ≈ APHI_ver[i, j] rtol=1e-9
         end
         @test aphimax ≈ aphimax_ver rtol=1e-9
@@ -817,22 +809,14 @@
         # Test poroelastic compaction with nonzero betasolid
         betasolid = 2.5e-11
         aphimax_poro = Erebus.compute_Aϕ!(
-            APHI,
-            ETAPHI,
-            BETTAPHI,
-            PHI,
-            pr,
-            pf,
-            pr0,
-            pf0,
-            dt;
-            betasolid = betasolid
+            APHI, ETAPHI, BETTAPHI, PHI, pr, pf, pr0, pf0, dt; betasolid=betasolid
         )
-        for j=2:1:Nx, i=2:1:Ny
+        for j in 2:1:Nx, i in 2:1:Ny
             bd = (BETTAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
             kbw = 1.0 - betasolid / bd
-            comp = (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
-                   bd * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
+            comp =
+                (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
+                bd * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
             @test APHI[i, j] ≈ (comp / PHI[i, j]) rtol=1e-9
         end
         @test aphimax_poro != aphimax
@@ -851,45 +835,36 @@
         vxf_ver = zeros(Ny1, Nx1)
         vyf_ver = zeros(Ny1, Nx1)
         # compute fluid velocities
-        Erebus.compute_fluid_velocities!(
-            PHIX,
-            PHIY,
-            qxD,
-            qyD,
-            vx,
-            vy,
-            vxf,
-            vyf
-        )
+        Erebus.compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf)
         # verification, from HTM-planetary.m line 1090ff
-        for j=1:1:Nx
-            for i=2:1:Ny
-                vxf_ver[i,j]=qxD[i,j]/PHIX[i,j]
+        for j in 1:1:Nx
+            for i in 2:1:Ny
+                vxf_ver[i, j]=qxD[i, j]/PHIX[i, j]
             end
         end
         # Apply BC
         # Top
-        vxf_ver[1,:]= -bcftop*vxf_ver[2,:];    
+        vxf_ver[1, :] = -bcftop*vxf_ver[2, :]
         # Bottom
-        vxf_ver[Ny1,:]= -bcfbottom*vxf_ver[Ny,:];    
+        vxf_ver[Ny1, :] = -bcfbottom*vxf_ver[Ny, :]
         # Vy fluid
-        for j=2:1:Nx
-            for i=1:1:Ny
-                vyf_ver[i,j]=qyD[i,j]/PHIY[i,j]
+        for j in 2:1:Nx
+            for i in 1:1:Ny
+                vyf_ver[i, j]=qyD[i, j]/PHIY[i, j]
             end
         end
         # Apply BC
         # Left
-        vyf_ver[:,1]= -bcfleft*vyf_ver[:,2];    
+        vyf_ver[:, 1] = -bcfleft*vyf_ver[:, 2]
         # Right
-        vyf_ver[:, Nx1]= -bcfright*vyf_ver[:, Nx];     
+        vyf_ver[:, Nx1] = -bcfright*vyf_ver[:, Nx]
         # Add solid velocity
         # vxf0=vxf; vxf=vxf+vx
-        vxf_ver.=vxf_ver.+vx
+        vxf_ver.=vxf_ver .+ vx
         # vyf0=vyf; vyf=vyf+vy
-        vyf_ver.=vyf_ver.+vy
+        vyf_ver.=vyf_ver .+ vy
         # test
-        for j=1:1:Nx1, i=1:1:Ny1
+        for j in 1:1:Nx1, i in 1:1:Ny1
             @test vxf[i, j] ≈ vxf_ver[i, j] rtol=1e-9
             @test vyf[i, j] ≈ vyf_ver[i, j] rtol=1e-9
         end
@@ -904,14 +879,7 @@
         vxf = rand(rgen, Ny1, Nx1)
         vyf = rand(rgen, Ny1, Nx1)
         # compute displacement timestep
-        dtm = Erebus.compute_displacement_timestep(
-            vx,
-            vy,
-            vxf,
-            vyf,
-            dt,
-            aphimax
-        )
+        dtm = Erebus.compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
         # verification, from HTM-planetary.m, line 1117ff
         dtm_ver=dt
         maxvx=maximum(abs.(vx))
@@ -976,53 +944,73 @@
             DSXY,
             EII,
             SII,
-            dtm
+            dtm,
         )
         # verification, from HTM-planetary.m, line 1144ff
-        EXY_ver = zeros(Ny, Nx); # Strain rate EPSILONxy, 1/s
-        SXY_ver = zeros(Ny, Nx); # Stress SIGMAxy, Pa
-        DSXY_ver = zeros(Ny, Nx); # Stress change SIGMAxy, Pa
-        for j=1:1:Nx
-            for i=1:1:Ny
+        EXY_ver = zeros(Ny, Nx) # Strain rate EPSILONxy, 1/s
+        SXY_ver = zeros(Ny, Nx) # Stress SIGMAxy, Pa
+        DSXY_ver = zeros(Ny, Nx) # Stress change SIGMAxy, Pa
+        for j in 1:1:Nx
+            for i in 1:1:Ny
                 # EXY;SXY; DSXY
-                EXY_ver[i,j]=0.5*((vx[i+1,j]-vx[i,j])/dy+(vy[i,j+1]-vy[i,j])/dx)
-                SXY_ver[i,j]=2*ETA[i,j]*EXY_ver[i,j]*GGG[i,j]*dtm/(GGG[i,j]*dtm+ETA[i,j])+SXY0[i,j]*ETA[i,j]/(GGG[i,j]*dtm+ETA[i,j])
-                DSXY_ver[i,j]=SXY_ver[i,j]-SXY0[i,j]
+                EXY_ver[i, j]=0.5*((vx[i + 1, j]-vx[i, j])/dy+(vy[i, j + 1]-vy[i, j])/dx)
+                SXY_ver[i, j]=2*ETA[i, j]*EXY_ver[i, j]*GGG[i, j]*dtm/(
+                    GGG[i, j]*dtm+ETA[i, j]
+                )+SXY0[i, j]*ETA[i, j]/(GGG[i, j]*dtm+ETA[i, j])
+                DSXY_ver[i, j]=SXY_ver[i, j]-SXY0[i, j]
             end
         end
         # Compute EPSILONxx; SIGMA'xx in pressure nodes
-        EXX_ver = zeros(Ny1, Nx1); # Strain rate EPSILONxx, 1/s
-        EII_ver = zeros(Ny1, Nx1); # Second strain rate invariant, 1/s
-        SXX_ver = zeros(Ny1, Nx1); # Stress SIGMA'xx, Pa
-        SII_ver = zeros(Ny1, Nx1); # Second stress invariant, Pa
-        DSXX_ver = zeros(Ny1, Nx1); # Stress change SIGMA'xx, Pa
-        DIVV_ver = zeros(Ny1, Nx1); # div[v]
-        for j=2:1:Nx
-            for i=2:1:Ny
+        EXX_ver = zeros(Ny1, Nx1) # Strain rate EPSILONxx, 1/s
+        EII_ver = zeros(Ny1, Nx1) # Second strain rate invariant, 1/s
+        SXX_ver = zeros(Ny1, Nx1) # Stress SIGMA'xx, Pa
+        SII_ver = zeros(Ny1, Nx1) # Second stress invariant, Pa
+        DSXX_ver = zeros(Ny1, Nx1) # Stress change SIGMA'xx, Pa
+        DIVV_ver = zeros(Ny1, Nx1) # div[v]
+        for j in 2:1:Nx
+            for i in 2:1:Ny
                 # DIVV
-                DIVV_ver[i,j]=(vx[i,j]-vx[i,j-1])/dx+(vy[i,j]-vy[i-1,j])/dy
+                DIVV_ver[i, j]=(vx[i, j]-vx[i, j - 1])/dx+(vy[i, j]-vy[i - 1, j])/dy
                 # EXX
-                EXX_ver[i,j]=((vx[i,j]-vx[i,j-1])/dx-(vy[i,j]-vy[i-1,j])/dy)/2
+                EXX_ver[i, j]=((vx[i, j]-vx[i, j - 1])/dx-(vy[i, j]-vy[i - 1, j])/dy)/2
                 # SXX
-                SXX_ver[i,j]=2*ETAP[i,j]*EXX_ver[i,j]*GGGP[i,j]*dtm/(GGGP[i,j]*dtm+ETAP[i,j])+SXX0[i,j]*ETAP[i,j]/(GGGP[i,j]*dtm+ETAP[i,j])
-                DSXX_ver[i,j]=SXX_ver[i,j]-SXX0[i,j]
+                SXX_ver[i, j]=2*ETAP[i, j]*EXX_ver[i, j]*GGGP[i, j]*dtm/(
+                    GGGP[i, j]*dtm+ETAP[i, j]
+                )+SXX0[i, j]*ETAP[i, j]/(GGGP[i, j]*dtm+ETAP[i, j])
+                DSXX_ver[i, j]=SXX_ver[i, j]-SXX0[i, j]
                 # EII
-                EII_ver[i,j]=(EXX_ver[i,j]^2+((EXY_ver[i,j]+EXY_ver[i-1,j]+EXY_ver[i,j-1]+EXY_ver[i-1,j-1])/4)^2)^0.5
+                EII_ver[i, j]=(
+                    EXX_ver[i, j]^2+(
+                        (
+                            EXY_ver[i, j]+EXY_ver[i - 1, j]+EXY_ver[i, j - 1]+EXY_ver[
+                                i - 1, j - 1
+                            ]
+                        )/4
+                    )^2
+                )^0.5
                 # SII
-                SII_ver[i,j]=(SXX_ver[i,j]^2+((SXY_ver[i,j]+SXY_ver[i-1,j]+SXY_ver[i,j-1]+SXY_ver[i-1,j-1])/4)^2)^0.5
+                SII_ver[i, j]=(
+                    SXX_ver[i, j]^2+(
+                        (
+                            SXY_ver[i, j]+SXY_ver[i - 1, j]+SXY_ver[i, j - 1]+SXY_ver[
+                                i - 1, j - 1
+                            ]
+                        )/4
+                    )^2
+                )^0.5
             end
         end
         # test
-        for j=1:1:Nx, i=1:1:Ny
-            @test EXY[i,j] ≈ EXY_ver[i,j] rtol=1e-9
-            @test SXY[i,j] ≈ SXY_ver[i,j] rtol=1e-9
-            @test DSXY[i,j] ≈ DSXY_ver[i,j] rtol=1e-9
+        for j in 1:1:Nx, i in 1:1:Ny
+            @test EXY[i, j] ≈ EXY_ver[i, j] rtol=1e-9
+            @test SXY[i, j] ≈ SXY_ver[i, j] rtol=1e-9
+            @test DSXY[i, j] ≈ DSXY_ver[i, j] rtol=1e-9
         end
-        for j=2:1:Nx, i=2:1:Ny
-            @test EXX[i,j] ≈ EXX_ver[i,j] rtol=1e-9
-            @test SXX[i,j] ≈ SXX_ver[i,j] rtol=1e-9
-            @test EII[i,j] ≈ EII_ver[i,j] rtol=1e-9
-            @test SII[i,j] ≈ SII_ver[i,j] rtol=1e-9
+        for j in 2:1:Nx, i in 2:1:Ny
+            @test EXX[i, j] ≈ EXX_ver[i, j] rtol=1e-9
+            @test SXX[i, j] ≈ SXX_ver[i, j] rtol=1e-9
+            @test EII[i, j] ≈ EII_ver[i, j] rtol=1e-9
+            @test SII[i, j] ≈ SII_ver[i, j] rtol=1e-9
         end
     end # testset "compute_stress_strainrate!()"
 
@@ -1041,43 +1029,36 @@
         pf_ver = deepcopy(pf)
         ps_ver = zeros(Ny1, Nx1)
         # symmetrize p node variables
-        Erebus.symmetrize_p_node_observables!(
-            SXX,
-            APHI,
-            PHI,
-            pr,
-            pf,
-            ps
-        )
+        Erebus.symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
         # verification, from HTM-planetary.m, line 1196ff
         # Apply Symmetry to Pressure nodes
         # External P-nodes: symmetry
         # Top
-        SXX_ver[1,2:Nx]=SXX_ver[2,2:Nx]
-        APHI_ver[1,2:Nx]=APHI_ver[2,2:Nx];    
-        PHI_ver[1,2:Nx]=PHI_ver[2,2:Nx];    
-        pr_ver[1,2:Nx]=pr_ver[2,2:Nx];    
-        pf_ver[1,2:Nx]=pf_ver[2,2:Nx];    
+        SXX_ver[1, 2:Nx]=SXX_ver[2, 2:Nx]
+        APHI_ver[1, 2:Nx]=APHI_ver[2, 2:Nx]
+        PHI_ver[1, 2:Nx]=PHI_ver[2, 2:Nx]
+        pr_ver[1, 2:Nx]=pr_ver[2, 2:Nx]
+        pf_ver[1, 2:Nx]=pf_ver[2, 2:Nx]
         # Bottom
-        SXX_ver[Ny1,2:Nx]=SXX_ver[Ny,2:Nx]
-        APHI_ver[Ny1,2:Nx]=APHI_ver[Ny,2:Nx];    
-        PHI_ver[Ny1,2:Nx]=PHI_ver[Ny,2:Nx];    
-        pr_ver[Ny1,2:Nx]=pr_ver[Ny,2:Nx];    
-        pf_ver[Ny1,2:Nx]=pf_ver[Ny,2:Nx];    
+        SXX_ver[Ny1, 2:Nx]=SXX_ver[Ny, 2:Nx]
+        APHI_ver[Ny1, 2:Nx]=APHI_ver[Ny, 2:Nx]
+        PHI_ver[Ny1, 2:Nx]=PHI_ver[Ny, 2:Nx]
+        pr_ver[Ny1, 2:Nx]=pr_ver[Ny, 2:Nx]
+        pf_ver[Ny1, 2:Nx]=pf_ver[Ny, 2:Nx]
         # Left
-        SXX_ver[:,1]=SXX_ver[:,2]
-        APHI_ver[:,1]=APHI_ver[:,2];    
-        PHI_ver[:,1]=PHI_ver[:,2];    
-        pr_ver[:,1]=pr_ver[:,2];    
-        pf_ver[:,1]=pf_ver[:,2];    
+        SXX_ver[:, 1]=SXX_ver[:, 2]
+        APHI_ver[:, 1]=APHI_ver[:, 2]
+        PHI_ver[:, 1]=PHI_ver[:, 2]
+        pr_ver[:, 1]=pr_ver[:, 2]
+        pf_ver[:, 1]=pf_ver[:, 2]
         # Right
         SXX_ver[:, Nx1]=SXX_ver[:, Nx]
-        APHI_ver[:, Nx1]=APHI_ver[:, Nx];    
-        PHI_ver[:, Nx1]=PHI_ver[:, Nx];    
-        pr_ver[:, Nx1]=pr_ver[:, Nx];    
-        pf_ver[:, Nx1]=pf_ver[:, Nx]; 
+        APHI_ver[:, Nx1]=APHI_ver[:, Nx]
+        PHI_ver[:, Nx1]=PHI_ver[:, Nx]
+        pr_ver[:, Nx1]=pr_ver[:, Nx]
+        pf_ver[:, Nx1]=pf_ver[:, Nx]
         # Compute solid pressure
-        ps_ver=(pr_ver .- pf_ver.*PHI_ver)./(1 .- PHI_ver)
+        ps_ver=(pr_ver .- pf_ver .* PHI_ver) ./ (1 .- PHI_ver)
         # test
         @test SXX[1, 2:Nx] == SXX_ver[1, 2:Nx]
         @test APHI[1, 2:Nx] == APHI_ver[1, 2:Nx]
@@ -1153,7 +1134,7 @@
             YERRNOD,
             DSY,
             dt,
-            iplast
+            iplast,
         )
         # verification, from HTM-planetary.m, line 1232ff
         ETA5_ver=copy(ETA0)
@@ -1161,60 +1142,64 @@
         DSY_ver = zeros(Ny, Nx)
         ynpl=0
         ddd=0
-        for i=1:1:Ny
-            for j=1:1:Nx
+        for i in 1:1:Ny
+            for j in 1:1:Nx
                 # Compute second stress invariant
-                SIIB_ver=(SXY[i,j]^2+((SXX[i,j]+SXX[i+1,j]+SXX[i,j+1]+SXX[i+1,j+1])/4)^2)^0.5
+                SIIB_ver=(
+                    SXY[i, j]^2+(
+                        (SXX[i, j]+SXX[i + 1, j]+SXX[i, j + 1]+SXX[i + 1, j + 1])/4
+                    )^2
+                )^0.5
                 # Compute second invariant for a purely elastic stress build-up
-                siiel_ver=SIIB_ver*(GGG[i,j]*dt+ETA[i,j])/ETA[i,j]
+                siiel_ver=SIIB_ver*(GGG[i, j]*dt+ETA[i, j])/ETA[i, j]
                 # Compute total & fluid pressure
-                prB_ver=(pr[i,j]+pr[i+1,j]+pr[i,j+1]+pr[i+1,j+1])/4
-                pfB_ver=(pf[i,j]+pf[i+1,j]+pf[i,j+1]+pf[i+1,j+1])/4
+                prB_ver=(pr[i, j]+pr[i + 1, j]+pr[i, j + 1]+pr[i + 1, j + 1])/4
+                pfB_ver=(pf[i, j]+pf[i + 1, j]+pf[i, j + 1]+pf[i + 1, j + 1])/4
                 # Compute yielding stress
-                syieldc_ver=COH[i,j]+FRI[i,j]*(prB_ver-pfB_ver); # Confined fracture
-                syieldt_ver=TEN[i,j]+(prB_ver-pfB_ver); # Tensile fracture
-                syield_ver=max(min(syieldt_ver,syieldc_ver),0); # Non-negative strength requirement
+                syieldc_ver=COH[i, j]+FRI[i, j]*(prB_ver-pfB_ver) # Confined fracture
+                syieldt_ver=TEN[i, j]+(prB_ver-pfB_ver) # Tensile fracture
+                syield_ver=max(min(syieldt_ver, syieldc_ver), 0) # Non-negative strength requirement
                 # Update error for old yielding nodes
                 ynn=0
-                if(YNY[i,j]>0)
+                if (YNY[i, j]>0)
                     ynn=1
-                    DSY_ver[i,j]=SIIB_ver-syield_ver
-                    ddd=ddd+DSY_ver[i,j]^2
+                    DSY_ver[i, j]=SIIB_ver-syield_ver
+                    ddd=ddd+DSY_ver[i, j]^2
                     ynpl=ynpl+1
                 end
                 # Correcting viscosity for yielding
                 if syield_ver<siiel_ver
                     # New viscosity for the basic node
-                    etapl_ver=dt*GGG[i,j]*syield_ver/(siiel_ver-syield_ver)
-                    if etapl_ver<ETA0[i,j]
+                    etapl_ver=dt*GGG[i, j]*syield_ver/(siiel_ver-syield_ver)
+                    if etapl_ver<ETA0[i, j]
                         # Recompute nodal visocity
-                        ETA5_ver[i,j]=etapl_ver^(1-etawt)*ETA[i,j]^etawt
+                        ETA5_ver[i, j]=etapl_ver^(1-etawt)*ETA[i, j]^etawt
                         # Mark yielding nodes
-                        YNY5_ver[i,j]=1
+                        YNY5_ver[i, j]=1
                         # Apply viscosity cutoff values
-                        if ETA5_ver[i,j]<etamin
-                            ETA5_ver[i,j]=etamin
-                        elseif ETA5_ver[i,j]>etamax
-                            ETA5_ver[i,j]=etamax
+                        if ETA5_ver[i, j]<etamin
+                            ETA5_ver[i, j]=etamin
+                        elseif ETA5_ver[i, j]>etamax
+                            ETA5_ver[i, j]=etamax
                         end
                         # Update Error for new yielding nodes
                         if ynn==0
-                            DSY_ver[i,j]=SIIB_ver-syield_ver
-                            ddd=ddd+DSY_ver[i,j]^2
+                            DSY_ver[i, j]=SIIB_ver-syield_ver
+                            ddd=ddd+DSY_ver[i, j]^2
                             ynpl=ynpl+1
                         end
                     else
-                        ETA5_ver[i,j]=ETA0[i,j]
-                        YNY5_ver[i,j]=0
+                        ETA5_ver[i, j]=ETA0[i, j]
+                        YNY5_ver[i, j]=0
                     end
                 else
-                    ETA5_ver[i,j]=ETA0[i,j]
-                    YNY5_ver[i,j]=0
+                    ETA5_ver[i, j]=ETA0[i, j]
+                    YNY5_ver[i, j]=0
                 end
             end
         end
         # Compute yielding error for markers
-        if(ynpl>0)
+        if (ynpl>0)
             YERRNOD_ver[iplast]=(ddd/ynpl)^0.5
         end
         # test
@@ -1241,15 +1226,7 @@
         dt_ver = dt_longest
         # finalize_plastic_iteration_pass
         dt = Erebus.finalize_plastic_iteration_pass!(
-            ETA,
-            ETA5,
-            ETA00,
-            YNY,
-            YNY5,
-            YNY00,
-            YNY_inv_ETA,
-            dt,
-            iplast
+            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
         )
         # verification, from HTM-planetary.m, line 1301ff
         if trunc(Int, iplast/dtstep)*dtstep==iplast
@@ -1263,7 +1240,7 @@
             ETA_ver=ETA5
             YNY_ver=YNY5
         end
-        YNY_inv_ETA_ver.=YNY_ver./ETA_ver
+        YNY_inv_ETA_ver.=YNY_ver ./ ETA_ver
         # test
         @test dt == dt_ver
         @test ETA == ETA_ver
@@ -1278,15 +1255,13 @@
         for DT in [DT_small, DT_large], titer in titers
             maxDTcurrent = maximum(abs, DT)
             dt = Erebus.finalize_thermochemical_iteration_pass(
-                maxDTcurrent,
-                dt_longest,
-                titer
+                maxDTcurrent, dt_longest, titer
             )
             # verification, from HTM-hydration.m, line 1230ff
             dt_ver = dt_longest
             if titer==1
-                if maxDTcurrent>DTmax 
-                    dt_ver=dt_ver/maxDTcurrent*DTmax;
+                if maxDTcurrent>DTmax
+                    dt_ver=dt_ver/maxDTcurrent*DTmax
                 end
             end
             # test
@@ -1301,25 +1276,19 @@
         DMP_small = rand(rgen, Ny1, Nx1) .* 2.0 .- 1.0
         DMP_zero = zeros(Ny1, Nx1)
         titers = collect(1:1:3)
-        for titer in titers, pf in [pf_small, pf_large], DMP in [
-            DMP_small, DMP_zero]
-            outcome = Erebus.compute_thermochemical_iteration_outcome(
-                DMP,
-                pf,
-                pf0,
-                titer
-            )
+        for titer in titers, pf in [pf_small, pf_large], DMP in [DMP_small, DMP_zero]
+            outcome = Erebus.compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
             # verification, from HTM-hydration.m, line 1385ff
-            pferrcur=maximum(abs, pf-pf0);
-            DMPmax=maximum(abs, DMP);
+            pferrcur=maximum(abs, pf-pf0)
+            DMPmax=maximum(abs, DMP)
             if pferrcur<pferrmax && (titer>2 || DMPmax<=0)
-                outcome_ver = true;
-            else 
-                outcome_ver = false;
+                outcome_ver = true
+            else
+                outcome_ver = false
             end
             # test
-           @test outcome == outcome_ver
-        end 
+            @test outcome == outcome_ver
+        end
     end # testset "compute_thermochemical_iteration_outcome"
 
     @testset "assemble_thermal_lse!" begin
@@ -1333,16 +1302,15 @@
         HS = rand(rgen, Ny1, Nx1)
         DHP = rand(rgen, Ny1, Nx1)
         RT = rand(rgen, Ny1*Nx1)
-        LT = Erebus.assemble_thermal_lse!(
-            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
+        LT = Erebus.assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt)
         # verification, from HTM-planetary.m, line 1618ff
         LT_ver = zeros(Ny1*Nx1, Ny1*Nx1)
         RT_ver = zeros(Ny1*Nx1)
         # Composing global matrixes LT[], RT[]
         # Going through all points of the 2D grid &
         # composing respective equations
-        for j=1:1:Nx1
-            for i=1:1:Ny1
+        for j in 1:1:Nx1
+            for i in 1:1:Ny1
                 # Define global index in algebraic space
                 gk=(j-1)*Ny1+i
                 # External points
@@ -1350,53 +1318,53 @@
                     # Boundary Condition
                     # Top BC: T=273
                     if i==1 && j>1 && j<Nx1
-                        LT_ver[gk,gk]=1; # Left part
-                        LT_ver[gk,gk+1]=-1; # Left part
-                        RT_ver[gk]=0; # Right part
+                        LT_ver[gk, gk]=1 # Left part
+                        LT_ver[gk, gk + 1]=-1 # Left part
+                        RT_ver[gk]=0 # Right part
                     end
                     # Bottom BC: T=1500
                     if i==Ny1 && j>1 && j<Nx1
-                        LT_ver[gk,gk]=1; # Left part
-                        LT_ver[gk,gk-1]=-1; # Left part
-                        RT_ver[gk]=0; # Right part
+                        LT_ver[gk, gk]=1 # Left part
+                        LT_ver[gk, gk - 1]=-1 # Left part
+                        RT_ver[gk]=0 # Right part
                     end
                     # Left BC: dT/dx=0
                     if j==1
-                        LT_ver[gk,gk]=1; # Left part
-                        LT_ver[gk,gk+Ny1]=-1; # Left part
-                        RT_ver[gk]=0; # Right part
+                        LT_ver[gk, gk]=1 # Left part
+                        LT_ver[gk, gk + Ny1]=-1 # Left part
+                        RT_ver[gk]=0 # Right part
                     end
                     # Right BC: dT/dx=0
                     if j==Nx1
-                        LT_ver[gk,gk]=1; # Left part
-                        LT_ver[gk,gk-Ny1]=-1; # Left part
-                        RT_ver[gk]=0; # Right part
+                        LT_ver[gk, gk]=1 # Left part
+                        LT_ver[gk, gk - Ny1]=-1 # Left part
+                        RT_ver[gk]=0 # Right part
                     end
                 else
-                # Internal points: Temperature eq.
-                # RHO*CP*dT/dt=-dqx/dx-dqy/dy+Hr+Hs+Ha
-                #          Tdt2
-                #           |
-                #          Ky1
-                #           |
-                #Tdt1-Kx1-T03;Tdt3-Kx2-Tdt5
-                #           |
-                #          Ky2
-                #           |
-                #          Tdt4
-                #
-                # Left part
-                Kx1=KX[i,j-1]; 
-                Kx2=KX[i,j]; 
-                Ky1=KY[i-1,j]; 
-                Ky2=KY[i,j]; 
-                LT_ver[gk,gk-Ny1]=-Kx1/dx^2; # T1
-                LT_ver[gk,gk-1]=-Ky1/dy^2; # FI2
-                LT_ver[gk,gk]=RHOCP[i,j]/dt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2; # FI3
-                LT_ver[gk,gk+1]=-Ky2/dy^2; # FI4
-                LT_ver[gk,gk+Ny1]=-Kx2/dx^2; # FI5
-                # Right part
-                RT_ver[gk]=RHOCP[i,j]/dt*tk1[i,j]+HR[i,j]+HA[i,j]+HS[i,j]+DHP[i,j]
+                    # Internal points: Temperature eq.
+                    # RHO*CP*dT/dt=-dqx/dx-dqy/dy+Hr+Hs+Ha
+                    #          Tdt2
+                    #           |
+                    #          Ky1
+                    #           |
+                    #Tdt1-Kx1-T03;Tdt3-Kx2-Tdt5
+                    #           |
+                    #          Ky2
+                    #           |
+                    #          Tdt4
+                    #
+                    # Left part
+                    Kx1=KX[i, j - 1]
+                    Kx2=KX[i, j]
+                    Ky1=KY[i - 1, j]
+                    Ky2=KY[i, j]
+                    LT_ver[gk, gk - Ny1]=-Kx1/dx^2 # T1
+                    LT_ver[gk, gk - 1]=-Ky1/dy^2 # FI2
+                    LT_ver[gk, gk]=RHOCP[i, j]/dt+(Kx1+Kx2)/dx^2+(Ky1+Ky2)/dy^2 # FI3
+                    LT_ver[gk, gk + 1]=-Ky2/dy^2 # FI4
+                    LT_ver[gk, gk + Ny1]=-Kx2/dx^2 # FI5
+                    # Right part
+                    RT_ver[gk]=RHOCP[i, j]/dt*tk1[i, j]+HR[i, j]+HA[i, j]+HS[i, j]+DHP[i, j]
                 end
             end
         end
@@ -1435,11 +1403,30 @@
         betasolid = 2.5e-11
         betafluid = 4.0e-10
         L = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R;
-            betasolid=betasolid, betafluid=betafluid
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            betasolid=betasolid,
+            betafluid=betafluid,
         )
 
         # Independent theoretical coefficients (calculated without calling solver functions)
@@ -1448,10 +1435,11 @@
         ksk_th = (bd_th - betasolid) / ((bd_th - betasolid) + 0.1 * (betafluid - betasolid))
         C_expected = -Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th * kbw_th / dt)
         D_pm_expected = Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th / dt)
-        D_pf_expected = Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th * kbw_th / ksk_th / dt)
+        D_pf_expected =
+            Kcont * (inv(1e22 / 0.1) / (1.0 - 0.1) + bd_th * kbw_th / ksk_th / dt)
 
         # Verify each matrix block independently against theoretical values
-        for j = 4:Nx-2, i = 4:Ny-2
+        for j in 4:(Nx - 2), i in 4:(Ny - 2)
             kvx = ((j-1)*Ny1 + i-1) * 6 + 1
             kpm = kvx + 2
             kpf = kvx + 5
@@ -1525,14 +1513,33 @@
         t_total = nsteps * dt
 
         # Step Erebus numerical solver forward in time
-        for step = 1:nsteps
+        for step in 1:nsteps
             R .= 0.0
             L = Erebus.assemble_hydromechanical_lse!(
-                ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-                RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-                ETAPHI, BETAPHI, PHI, gx, gy,
-                pr0, pf0, DMP, dt, R;
-                betasolid=betasolid, betafluid=betafluid
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                SXY0,
+                SXX0,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETAPHI,
+                PHI,
+                gx,
+                gy,
+                pr0,
+                pf0,
+                DMP,
+                dt,
+                R;
+                betasolid=betasolid,
+                betafluid=betafluid,
             )
             prob = LinearProblem(L, R)
             sol = solve(prob, UMFPACKFactorization())
@@ -1543,9 +1550,10 @@
         # Analytical 1D consolidation Fourier series solution
         function analytical_2drain(y, t, H_col, c_coeff, p0; nterms=100)
             val = 0.0
-            for m = 0:nterms
+            for m in 0:nterms
                 M = (2m + 1) * pi
-                val += (4.0 * p0 / M) * sin(M * y / H_col) * exp(-M^2 * c_coeff * t / H_col^2)
+                val +=
+                    (4.0 * p0 / M) * sin(M * y / H_col) * exp(-M^2 * c_coeff * t / H_col^2)
             end
             return val
         end
@@ -1553,7 +1561,7 @@
         # Verify numerical solution against analytical solution across column depth
         # Account for psurface boundary condition at draining anchors
         mid_col = div(Nx1, 2)
-        for i = 3:Ny-1
+        for i in 3:(Ny - 1)
             y = (i - 2) * dy
             u_ana = analytical_2drain(y, t_total, H, c_v, u0 - psurface) + psurface
             u_num = pf[i, mid_col]
@@ -1599,21 +1607,64 @@
         TEN = fill(sigma_t_val, Ny, Nx)
 
         L_base = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R;
-            hydrofracture=false
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            hydrofracture=false,
         )
 
         pf_intact = fill(5.0e6, Ny1, Nx1)
         L_intact = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R;
-            hydrofracture=true, pr=pr, pf=pf_intact, TEN=TEN,
-            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            hydrofracture=true,
+            pr=pr,
+            pf=pf_intact,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
         )
         i_test, j_test = 5, 5
         kqx = ((j_test - 1)*Ny1 + i_test - 1) * 6 + 4
@@ -1623,12 +1674,37 @@
 
         pf_frac = fill(2.0e7, Ny1, Nx1)
         L_frac = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R;
-            hydrofracture=true, pr=pr, pf=pf_frac, TEN=TEN,
-            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            hydrofracture=true,
+            pr=pr,
+            pf=pf_frac,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
         )
         expected_keff = k_perm * 101.0
         expected_rx = RX[i_test, j_test] * (k_perm / expected_keff)
@@ -1638,12 +1714,37 @@
 
         pf_extreme = fill(2.0e8, Ny1, Nx1)
         L_extreme = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R;
-            hydrofracture=true, pr=pr, pf=pf_extreme, TEN=TEN,
-            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            hydrofracture=true,
+            pr=pr,
+            pf=pf_extreme,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
         )
         expected_ceiling_rx = eta_f / k_frac_max
         @test L_extreme[kqx, kqx] ≈ expected_ceiling_rx rtol=1e-12
@@ -1656,12 +1757,48 @@
         qxD_test = fill(1e-6, Ny1, Nx1)
         qyD_test = fill(1e-6, Ny1, Nx1)
         Erebus.compute_shear_heating!(
-            HS_intact, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD_test, qyD_test, PHI, ETAPHI, pr, pf_intact;
-            hydrofracture=true, TEN=TEN, KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+            HS_intact,
+            ETA,
+            SXY_test,
+            ETAP,
+            SXX_test,
+            RX,
+            RY,
+            qxD_test,
+            qyD_test,
+            PHI,
+            ETAPHI,
+            pr,
+            pf_intact;
+            hydrofracture=true,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
         )
         Erebus.compute_shear_heating!(
-            HS_frac, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD_test, qyD_test, PHI, ETAPHI, pr, pf_frac;
-            hydrofracture=true, TEN=TEN, KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+            HS_frac,
+            ETA,
+            SXY_test,
+            ETAP,
+            SXX_test,
+            RX,
+            RY,
+            qxD_test,
+            qyD_test,
+            PHI,
+            ETAPHI,
+            pr,
+            pf_frac;
+            hydrofracture=true,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
         )
         @test HS_frac[5, 5] < HS_intact[5, 5]
     end # testset "assemble_hydromechanical_lse!() dynamic hydrofracture integration"
@@ -1700,22 +1837,58 @@
         RHOFX_const = fill(rho0_f, Ny1, Nx1)
         RHOFY_const = fill(rho0_f, Ny1, Nx1)
         Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX_const, RHOFY_const, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R_const
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX_const,
+            RHOFY_const,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_const,
         )
 
         rho_f_hot = rho0_f * (1.0 - alpha_f * delta_T)
         RHOFX_buoy = copy(RHOFX_const)
         RHOFY_buoy = copy(RHOFY_const)
-        RHOFY_buoy[Ny-2, 5] = rho_f_hot
+        RHOFY_buoy[Ny - 2, 5] = rho_f_hot
 
         Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
-            RHOX, RHOY, RHOFX_buoy, RHOFY_buoy, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy,
-            pr0, pf0, DMP, dt, R_buoy
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX_buoy,
+            RHOFY_buoy,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_buoy,
         )
 
         kqy_test = ((5 - 1)*Ny1 + (Ny-2) - 1) * 6 + 5
@@ -1724,5 +1897,4 @@
         @test delta_R ≈ expected_delta_R rtol=1e-12
         @test delta_R ≈ (rho0_f * alpha_f * delta_T * g_accel) rtol=1e-12
     end # testset "assemble_hydromechanical_lse!() Darcy thermal buoyancy integration"
-
 end

@@ -33,4 +33,4 @@ Research and software development at the Forming Worlds Lab are supported by:
 
 ## License
 
-`Erebus.jl` is open-source software licensed under the MIT License.
+`Erebus.jl` is open-source software licensed under the Apache License 2.0.

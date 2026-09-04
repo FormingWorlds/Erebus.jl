@@ -56,13 +56,10 @@ $(SIGNATURES)
 function ktotal(ksolid, kfluid, phi)
     return (
         sqrt(
-            ksolid * kfluid/2
-            + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)*inv(16.0)
-        )
-        -0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
+            ksolid * kfluid/2 + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)*inv(16.0)
+        ) - 0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
     )
 end
-
 
 """
 Compute porosity-dependent permeability (eqn 16.64 in Gerya (2019)).
@@ -140,10 +137,8 @@ $(SIGNATURES)
     - etatotal: rocky marker temperature-dependent total viscosity 
 """
 function etatotal_rocks(tkmm, tmm)
-    @inbounds etasolidcur = ifelse(
-        tkmm>tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
-    @inbounds etafluidcur = ifelse(
-        tkmm>tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
+    @inbounds etasolidcur = ifelse(tkmm>tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
+    @inbounds etafluidcur = ifelse(tkmm>tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
     return max(etamin, etasolidcur, etafluidcur)
 end
 
@@ -163,20 +158,30 @@ $(SIGNATURES)
     - hrsolidm: radiogenic heat production of 26Al [W/m^3]
     - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
 """
-function calculate_radioactive_heating(al, fe, timesum;
-                                       ratio_al = ratio_al, E_al = E_al, f_al = f_al, tau_al = tau_al,
-                                       ratio_fe = ratio_fe, E_fe = E_fe, f_fe = f_fe, tau_fe = tau_fe,
-                                       rhosolidm = rhosolidm, rhofluidm = rhofluidm)
+function calculate_radioactive_heating(
+    al,
+    fe,
+    timesum;
+    ratio_al=ratio_al,
+    E_al=E_al,
+    f_al=f_al,
+    tau_al=tau_al,
+    ratio_fe=ratio_fe,
+    E_fe=E_fe,
+    f_fe=f_fe,
+    tau_fe=tau_fe,
+    rhosolidm=rhosolidm,
+    rhofluidm=rhofluidm,
+)
     #26Al: planet ✓, crust ✓, space ×
     if al
         # 26Al radiogenic heat production [W/kg]
         Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum)
         # Solid phase 26Al radiogenic heat production [W/m^3]
-        @inbounds hrsolidm = @SVector [
-            Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
+        @inbounds hrsolidm = @SVector [Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
     else
         hrsolidm = @SVector zeros(3)
-    end    
+    end
     #60Fe: planet ✓, crust ×, space ×
     if fe
         # 60Fe radiogenic heat production [W/kg]
@@ -208,10 +213,10 @@ $(SIGNATURES)
         - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
 """
 function compute_rhocpfluidm(T, mode)
-# @timeit to "compute_rhocpfluidm" begin
-    if mode == 1 
+    # @timeit to "compute_rhocpfluidm" begin
+    if mode == 1
         if T < tmfluidphase-5.0
-            ρᶠCₚᶠ = ρH₂Oᶠⁱ * 7.67T 
+            ρᶠCₚᶠ = ρH₂Oᶠⁱ * 7.67T
         elseif T < tmfluidphase
             ρᶠCₚᶠ = ρH₂Oᶠⁱ * (7.67T + 0.1Lᶠ)
         elseif T < tmfluidphase+5.0
@@ -219,14 +224,14 @@ function compute_rhocpfluidm(T, mode)
         elseif T < 410.0
             ρᶠCₚᶠ = ρH₂Oᶠ * 4200.0
         else
-            ρᶠCₚᶠ = ρH₂Oᶠ * (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3) 
+            ρᶠCₚᶠ = ρH₂Oᶠ * (-4.67e4 + 333T - 0.731T^2 + 5.4e-4T^3)
         end
     elseif mode == 9
         @inbounds ρᶠCₚᶠ = rhocpfluidm[1]
     else
-        throw("unknown mode $mode") 
+        throw("unknown mode $mode")
     end
-# end # @timeit to "compute_rhocpfluidm"
+    # end # @timeit to "compute_rhocpfluidm"
     return ρᶠCₚᶠ
 end # function compute_rhocpfluidm
 
@@ -247,15 +252,15 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of solid
 """
 function compute_ksolidm(T, mode)
-# @timeit to "compute_ksolidm" begin
+    # @timeit to "compute_ksolidm" begin
     if mode == 1
         kˢ = 0.73 + 1293.0/(T+77.0)
     elseif mode == 9
         @inbounds kˢ = ksolidm[1]
     else
-        throw("unknown mode $mode") 
+        throw("unknown mode $mode")
     end
-# end # @timeit to "compute_ksolidm"
+    # end # @timeit to "compute_ksolidm"
     return kˢ
 end # function compute_ksolidm
 
@@ -277,7 +282,7 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of fluid
 """
 function compute_kfluidm(T, mode)
-# @timeit to "compute_kfluidm" begin
+    # @timeit to "compute_kfluidm" begin
     if mode == 1
         if T < tmfluidphase
             kᶠ = 0.465 + 488.0/T
@@ -289,9 +294,9 @@ function compute_kfluidm(T, mode)
     elseif mode == 9
         @inbounds kᶠ = kfluidm[1]
     else
-        throw("unknown mode $mode") 
+        throw("unknown mode $mode")
     end
-# end # @timeit to "compute_kfluidm"
+    # end # @timeit to "compute_kfluidm"
     return kᶠ
 end # function compute_kfluidm
 
@@ -318,7 +323,7 @@ $(SIGNATURES)
     - Δtreaction: dehydration reaction time
 """
 function compute_Δtreaction(T, ϕ, mode)
-# @timeit to "compute_Δtreaction" begin
+    # @timeit to "compute_Δtreaction" begin
     if mode == 1
         Δtr = -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
     elseif mode == 2
@@ -330,7 +335,7 @@ function compute_Δtreaction(T, ϕ, mode)
     else
         throw("unknown mode $mode")
     end
-# end # @timeit to "compute_Δtreaction"
+    # end # @timeit to "compute_Δtreaction"
     return Δtr
 end # function compute_dtreaction
 
@@ -354,17 +359,17 @@ $(SIGNATURES)
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
 function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr)
-# @timeit to "compute_gibbs_free_energy" begin
+    # @timeit to "compute_gibbs_free_energy" begin
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtr
         # compute ΔG for dehydration reaction (16.145), (16.165b)
         ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + RG*T*log(XDˢ/XWˢ)) * (1.0 - Δt/Δtr)
     else
         # Δt ≥ Δtreaction (16.165a)
-        ΔGWD = zero(0.0)    
+        ΔGWD = zero(0.0)
     end
     return ΔGWD
-# end # @timeit to "compute_gibbs_free_energy"
+    # end # @timeit to "compute_gibbs_free_energy"
 end # function compute_gibbs_free_energy
 
 """
@@ -427,21 +432,20 @@ $(SIGNATURES)
     - nothing
 """
 function compute_thermodynamic_xfer!(DMPSUM, DHPSUM, WTPSUM, DMP, DHP)
-# @timeit to "compute_thermodynamic_xfer!" begin
+    # @timeit to "compute_thermodynamic_xfer!" begin
     @inbounds begin
-        for j=1:1:Nx1, i=1:1:Ny1
-            if WTPSUM[i, j] > 0.0 
+        for j in 1:1:Nx1, i in 1:1:Ny1
+            if WTPSUM[i, j] > 0.0
                 DMP[i, j] = DMPSUM[i, j] * inv(WTPSUM[i, j])
                 DHP[i, j] = DHPSUM[i, j] * inv(WTPSUM[i, j])
             else
                 DMP[i, j] = DHP[i, j] = zero(0.0)
             end
-        end 
+        end
     end # @inbounds
-# end # @timeit to "compute_thermodynamic_xfer!"
+    # end # @timeit to "compute_thermodynamic_xfer!"
     return nothing
 end # function compute_thermodynamic_xfer!
-
 
 """
 Perform hydrothermomechanical iterations to time step thermal field at P nodes.
@@ -493,28 +497,19 @@ function perform_thermochemical_reaction!(
     marknum,
     Δt,
     timestep,
-    titer
+    titer,
 )
-# @timeit to "perform_thermochemical_reaction!" begin
+    # @timeit to "perform_thermochemical_reaction!" begin
     # reset interpolation arrays
     reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM)
     # iterate over markers
     @inbounds begin
-        for m=1:1:marknum
+        for m in 1:1:marknum
             # for 
             if tm[m] < 3
                 # for rocks only
                 i, j, weights = fix_weights(
-                    xm[m],
-                    ym[m],
-                    xp,
-                    yp,
-                    dx,
-                    dy,
-                    jmin_p,
-                    jmax_p,
-                    imin_p,
-                    imax_p
+                    xm[m], ym[m], xp, yp, dx, dy, jmin_p, jmax_p, imin_p, imax_p
                 )
                 # interpolate temperature from P nodes
                 tknm = dot4(grid_vector(i, j, tk2), weights)
@@ -532,10 +527,9 @@ function perform_thermochemical_reaction!(
                 # get fluid molar volume
                 VH₂O = ifelse(tknm>tmfluidphase, VH₂Oᶠ, VH₂Oᶠⁱ)
                 # compute previous fluid molar fraction (16.164)
-                Xᶠ₀ = phim[m]*(XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ) / (
-                    (1.0-phim[m])*VH₂O +
-                    phim[m] * (XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ)
-                )
+                Xᶠ₀ =
+                    phim[m]*(XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ) /
+                    ((1.0-phim[m])*VH₂O + phim[m] * (XWˢm₀[m]*VWˢ + XDˢm₀*VDˢ))
                 # compute previous equilibrium solid molar fraction (16.150)
                 Xˢ₀ = 1.0 - Xᶠ₀
                 # compute previous water molar fraction (16.147)
@@ -547,13 +541,11 @@ function perform_thermochemical_reaction!(
                 # compute previous fluid density (16.162)
                 ρᶠ₀ = ifelse(tknm>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ)
                 # compute Δtreaction
-                Δtr = compute_Δtreaction(
-                    tknm, phim[m], reaction_rate_coeff_mode)
+                Δtr = compute_Δtreaction(tknm, phim[m], reaction_rate_coeff_mode)
                 # compute previous relative enthalpy of the system (16.163)
                 Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀[m])
                 # compute previous ΔG for dehydration reaction (16.165a/b)
-                ΔGWD₀ = compute_gibbs_free_energy(
-                    tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt, Δtr) 
+                ΔGWD₀ = compute_gibbs_free_energy(tknm, pfnm, XDˢm₀, XWˢm₀[m], Δt, Δtr)
                 # compute dehydration reaction constant (16.151)
                 KWD = compute_reaction_constant(tknm, pfnm, ΔGWD₀)
                 # compute reacted wet solid molar fraction (16.152)
@@ -579,8 +571,7 @@ function perform_thermochemical_reaction!(
                     ΔHᵗ = Hᵗ₁ - Hᵗ₀
                     # compute previous-to-reacted-equilibrium volume ratio
                     # (16.106)
-                    RV = (ρˢ₁*(1.0-ϕ₁) + ρᶠ₁*ϕ₁) / (
-                        ρˢ₀*(1.0-phim[m]) + ρᶠ₀*phim[m])
+                    RV = (ρˢ₁*(1.0-ϕ₁) + ρᶠ₁*ϕ₁) / (ρˢ₀*(1.0-phim[m]) + ρᶠ₀*phim[m])
                     # compute mass transfer rate (16.103)
                     Γmass = (ρˢ₀*RV*(1.0-phim[m]) - ρˢ₁*(1.0-ϕ₁)) / Δt
                     # compute mass transfer term (16.112e)
@@ -609,7 +600,7 @@ function perform_thermochemical_reaction!(
     @info "min/max mass transfer term" extrema(DMP)
     @info "min/max enthalpy transfer term" extrema(DHP)
     return nothing
-# end # @timeit to "perform_thermochemical_reaction!"
+    # end # @timeit to "perform_thermochemical_reaction!"
 end # function perform_thermochemical_reaction!
 
 """
@@ -638,79 +629,130 @@ $(SIGNATURES)
     - nothing
 """
 function compute_shear_heating!(
-    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf;
-    hydrofracture::Bool = false,
-    TEN = nothing,
-    KX = nothing,
-    KY = nothing,
-    kappa_frac::Real = 1.0e3,
-    gamma_frac::Real = 1.0,
-    k_frac_max::Real = 1.0e-9
+    HS,
+    ETA,
+    SXY,
+    ETAP,
+    SXX,
+    RX,
+    RY,
+    qxD,
+    qyD,
+    PHI,
+    ETAPHI,
+    pr,
+    pf;
+    hydrofracture::Bool=false,
+    TEN=nothing,
+    KX=nothing,
+    KY=nothing,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
 )
-# @timeit to "compute_shear_heating!" begin
-    for j=2:1:Nx, i=2:1:Ny
+    # @timeit to "compute_shear_heating!" begin
+    for j in 2:1:Nx, i in 2:1:Ny
         # average SXY⋅EXY
-        SXYEXY = 0.25 * sum(
-            grid_vector(i-1, j-1, SXY).^2 ./ grid_vector(i-1, j-1, ETA))
-        rx_jm1 = RX[i, j-1]
+        SXYEXY = 0.25 * sum(grid_vector(i-1, j-1, SXY) .^ 2 ./ grid_vector(i-1, j-1, ETA))
+        rx_jm1 = RX[i, j - 1]
         rx_j = RX[i, j]
-        ry_im1 = RY[i-1, j]
+        ry_im1 = RY[i - 1, j]
         ry_i = RY[i, j]
         if hydrofracture && TEN !== nothing
-            Peff_x1 = 0.5 * (pr[i, j-1] + pr[i, j] - pf[i, j-1] - pf[i, j])
-            sigma_tx1 = 0.5 * (TEN[i, j-1] + TEN[i-1, j-1])
-            kphi_x1 = (KX !== nothing) ? KX[i, j-1] : 0.0
+            Peff_x1 = 0.5 * (pr[i, j - 1] + pr[i, j] - pf[i, j - 1] - pf[i, j])
+            sigma_tx1 = 0.5 * (TEN[i, j - 1] + TEN[i - 1, j - 1])
+            kphi_x1 = (KX !== nothing) ? KX[i, j - 1] : 0.0
             if kphi_x1 > 0.0
-                keff_x1 = compute_hydrofracture_permeability(kphi_x1, Peff_x1, sigma_tx1; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
-                rx_jm1 = RX[i, j-1] * (kphi_x1 / keff_x1)
+                keff_x1 = compute_hydrofracture_permeability(
+                    kphi_x1,
+                    Peff_x1,
+                    sigma_tx1;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                )
+                rx_jm1 = RX[i, j - 1] * (kphi_x1 / keff_x1)
             else
-                fx1 = compute_hydrofracture_factor(Peff_x1, sigma_tx1; kappa_frac=kappa_frac, gamma=gamma_frac)
-                rx_jm1 = max(RX[i, j-1] / fx1, 1.0e-5 / k_frac_max)
+                fx1 = compute_hydrofracture_factor(
+                    Peff_x1, sigma_tx1; kappa_frac=kappa_frac, gamma=gamma_frac
+                )
+                rx_jm1 = max(RX[i, j - 1] / fx1, 1.0e-5 / k_frac_max)
             end
 
-            Peff_x2 = 0.5 * (pr[i, j] + pr[i, j+1] - pf[i, j] - pf[i, j+1])
-            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i-1, j])
+            Peff_x2 = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
+            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i - 1, j])
             kphi_x2 = (KX !== nothing) ? KX[i, j] : 0.0
             if kphi_x2 > 0.0
-                keff_x2 = compute_hydrofracture_permeability(kphi_x2, Peff_x2, sigma_tx2; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                keff_x2 = compute_hydrofracture_permeability(
+                    kphi_x2,
+                    Peff_x2,
+                    sigma_tx2;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                )
                 rx_j = RX[i, j] * (kphi_x2 / keff_x2)
             else
-                fx2 = compute_hydrofracture_factor(Peff_x2, sigma_tx2; kappa_frac=kappa_frac, gamma=gamma_frac)
+                fx2 = compute_hydrofracture_factor(
+                    Peff_x2, sigma_tx2; kappa_frac=kappa_frac, gamma=gamma_frac
+                )
                 rx_j = max(RX[i, j] / fx2, 1.0e-5 / k_frac_max)
             end
 
-            Peff_y1 = 0.5 * (pr[i-1, j] + pr[i, j] - pf[i-1, j] - pf[i, j])
-            sigma_ty1 = 0.5 * (TEN[i-1, j] + TEN[i-1, j-1])
-            kphi_y1 = (KY !== nothing) ? KY[i-1, j] : 0.0
+            Peff_y1 = 0.5 * (pr[i - 1, j] + pr[i, j] - pf[i - 1, j] - pf[i, j])
+            sigma_ty1 = 0.5 * (TEN[i - 1, j] + TEN[i - 1, j - 1])
+            kphi_y1 = (KY !== nothing) ? KY[i - 1, j] : 0.0
             if kphi_y1 > 0.0
-                keff_y1 = compute_hydrofracture_permeability(kphi_y1, Peff_y1, sigma_ty1; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
-                ry_im1 = RY[i-1, j] * (kphi_y1 / keff_y1)
+                keff_y1 = compute_hydrofracture_permeability(
+                    kphi_y1,
+                    Peff_y1,
+                    sigma_ty1;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                )
+                ry_im1 = RY[i - 1, j] * (kphi_y1 / keff_y1)
             else
-                fy1 = compute_hydrofracture_factor(Peff_y1, sigma_ty1; kappa_frac=kappa_frac, gamma=gamma_frac)
-                ry_im1 = max(RY[i-1, j] / fy1, 1.0e-5 / k_frac_max)
+                fy1 = compute_hydrofracture_factor(
+                    Peff_y1, sigma_ty1; kappa_frac=kappa_frac, gamma=gamma_frac
+                )
+                ry_im1 = max(RY[i - 1, j] / fy1, 1.0e-5 / k_frac_max)
             end
 
-            Peff_y2 = 0.5 * (pr[i, j] + pr[i+1, j] - pf[i, j] - pf[i+1, j])
-            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j-1])
+            Peff_y2 = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
+            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j - 1])
             kphi_y2 = (KY !== nothing) ? KY[i, j] : 0.0
             if kphi_y2 > 0.0
-                keff_y2 = compute_hydrofracture_permeability(kphi_y2, Peff_y2, sigma_ty2; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                keff_y2 = compute_hydrofracture_permeability(
+                    kphi_y2,
+                    Peff_y2,
+                    sigma_ty2;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                )
                 ry_i = RY[i, j] * (kphi_y2 / keff_y2)
             else
-                fy2 = compute_hydrofracture_factor(Peff_y2, sigma_ty2; kappa_frac=kappa_frac, gamma=gamma_frac)
+                fy2 = compute_hydrofracture_factor(
+                    Peff_y2, sigma_ty2; kappa_frac=kappa_frac, gamma=gamma_frac
+                )
                 ry_i = max(RY[i, j] / fy2, 1.0e-5 / k_frac_max)
             end
         end
         # compute shear heating HS
         @inbounds HS[i, j] = (
-            SXX[i, j]^2 / ETAP[i,j]
-            + SXYEXY
-            + (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j]
-            + 0.5 * (rx_jm1*qxD[i, j-1]^2 + rx_j*qxD[i, j]^2)
-            + 0.5 * (ry_im1*qyD[i-1, j]^2 + ry_i*qyD[i, j]^2)
+            SXX[i, j]^2 / ETAP[i, j] +
+            SXYEXY +
+            (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j] +
+            0.5 * (rx_jm1*qxD[i, j - 1]^2 + rx_j*qxD[i, j]^2) +
+            0.5 * (ry_im1*qyD[i - 1, j]^2 + ry_i*qyD[i, j]^2)
         )
     end
-# end # @timeit to "compute_shear_heating!" 
+    # end # @timeit to "compute_shear_heating!" 
     return nothing
 end # function compute_shear_heating!
 
@@ -737,49 +779,48 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_adiabatic_heating!(
-    HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
-# @timeit to "compute_adiabatic_heating!" begin
+function compute_adiabatic_heating!(HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf)
+    # @timeit to "compute_adiabatic_heating!" begin
     @inbounds begin
-        for j=2:1:Nx, i=2:1:Ny
+        for j in 2:1:Nx, i in 2:1:Ny
             # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
             # average vy, vx, vxf, vyf
-            VXP = 0.5 * (vx[i, j]+vx[i, j-1])
-            VYP = 0.5 * (vy[i, j]+vy[i-1, j])
-            VXFP = 0.5 * (vxf[i, j]+vxf[i, j-1])
-            VYFP = 0.5 * (vyf[i, j]+vyf[i-1, j])
+            VXP = 0.5 * (vx[i, j]+vx[i, j - 1])
+            VYP = 0.5 * (vy[i, j]+vy[i - 1, j])
+            VXFP = 0.5 * (vxf[i, j]+vxf[i, j - 1])
+            VYFP = 0.5 * (vyf[i, j]+vyf[i - 1, j])
             # evaluate DPsolid/Dt with upwind differences
             if VXP < 0.0
-                dpsdx = (ps[i, j]-ps[i, j-1]) * inv(dx)
+                dpsdx = (ps[i, j]-ps[i, j - 1]) * inv(dx)
             else
-                dpsdx = (ps[i, j+1]-ps[i, j]) * inv(dx)
+                dpsdx = (ps[i, j + 1]-ps[i, j]) * inv(dx)
             end
             if VYP < 0.0
-                dpsdy = (ps[i, j]-ps[i-1, j]) * inv(dy)
+                dpsdy = (ps[i, j]-ps[i - 1, j]) * inv(dy)
             else
-                dpsdy = (ps[i+1, j]-ps[i, j]) * inv(dy)
+                dpsdy = (ps[i + 1, j]-ps[i, j]) * inv(dy)
             end
             dpsdt = VXP*dpsdx + VYP*dpsdy
             # evaluate DPfluid/Dt with upwind differences
             if VXFP > 0.0
-                dpfdx = (pf[i, j]-pf[i, j-1]) * inv(dx)
+                dpfdx = (pf[i, j]-pf[i, j - 1]) * inv(dx)
             else
-                dpfdx = (pf[i, j+1]-pf[i, j]) * inv(dx)
+                dpfdx = (pf[i, j + 1]-pf[i, j]) * inv(dx)
             end
             if VYFP > 0.0
-                dpfdy = (pf[i, j]-pf[i-1, j]) * inv(dy)
+                dpfdy = (pf[i, j]-pf[i - 1, j]) * inv(dy)
             else
-                dpfdy = (pf[i+1, j]-pf[i, j]) * inv(dy)
+                dpfdy = (pf[i + 1, j]-pf[i, j]) * inv(dy)
             end
             dpfdt = VXFP*dpfdx + VYFP*dpfdy
             # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
             HA[i, j] = (
-                (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt
-                + PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
+                (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt +
+                PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
             )
         end
     end # @inbounds
-# end # @timeit to "compute_adiabatic_heating!"
+    # end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
 
 """
@@ -806,8 +847,9 @@ and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya
 
     - betadrained: drained bulk compressibility β_d [1/Pa]
 """
-function compute_drained_compressibility(betaphi::Real, phi::Real, betasolid::Real;
-                                         phimin::Real = phimin, phimax::Real = phimax)
+function compute_drained_compressibility(
+    betaphi::Real, phi::Real, betasolid::Real; phimin::Real=phimin, phimax::Real=phimax
+)
     bphi = max(betaphi, 0.0)
     bsolid = max(betasolid, 0.0)
     phi_eff = clamp(phi, phimin, phimax)
@@ -871,8 +913,14 @@ Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Rice & Cleary (1976)
 
     - ksk: Skempton coefficient B [-]
 """
-function compute_skempton_coefficient(betadrained::Real, phi::Real, betasolid::Real, betafluid::Real;
-                                      phimin::Real = phimin, phimax::Real = phimax)
+function compute_skempton_coefficient(
+    betadrained::Real,
+    phi::Real,
+    betasolid::Real,
+    betafluid::Real;
+    phimin::Real=phimin,
+    phimax::Real=phimax,
+)
     if betasolid <= 0.0 && betafluid <= 0.0
         return 1.0
     end
@@ -909,8 +957,9 @@ at extreme temperatures.
 
     - rhof: temperature-dependent fluid density [kg/m³]
 """
-function compute_rhofluid(T::Real, rho0::Real, alpha::Real, T0::Real;
-                          thermal_buoyancy::Bool = true)
+function compute_rhofluid(
+    T::Real, rho0::Real, alpha::Real, T0::Real; thermal_buoyancy::Bool=true
+)
     if !isfinite(T) || !thermal_buoyancy || alpha <= 0.0 || T <= T0
         return Float64(rho0)
     end
@@ -959,16 +1008,19 @@ For liquid fluid markers (`T > tmfluidphase`):
 
     - etafluid: dynamic fluid viscosity [Pa s]
 """
-function compute_fluid_viscosity(T::Real, tm::Integer;
-                                mode::Symbol = :arrhenius,
-                                eta0::Real = 1.0e-3,
-                                eta_ice::Real = 1.0e12,
-                                eta_air::Real = 1.0e-3,
-                                Ea::Real = 15.0e3,
-                                T0::Real = 293.15,
-                                tmfluidphase::Real = 273.0,
-                                etamin::Real = 1.0e-5,
-                                etamax::Real = 1.0e12)
+function compute_fluid_viscosity(
+    T::Real,
+    tm::Integer;
+    mode::Symbol=:arrhenius,
+    eta0::Real=1.0e-3,
+    eta_ice::Real=1.0e12,
+    eta_air::Real=1.0e-3,
+    Ea::Real=15.0e3,
+    T0::Real=293.15,
+    tmfluidphase::Real=273.0,
+    etamin::Real=1.0e-5,
+    etamax::Real=1.0e12,
+)
     if tm >= 3
         return Float64(eta_air)
     end
@@ -987,7 +1039,11 @@ function compute_fluid_viscosity(T::Real, tm::Integer;
         val = eta0 * exp(log_ratio)
         return clamp(val, Float64(etamin), Float64(etamax))
     else
-        throw(ArgumentError("Unknown fluid viscosity mode: $mode (expected :arrhenius or :constant)"))
+        throw(
+            ArgumentError(
+                "Unknown fluid viscosity mode: $mode (expected :arrhenius or :constant)"
+            ),
+        )
     end
 end
 
@@ -1008,11 +1064,14 @@ fractures open and increase effective permeability:
 
 clamped to [1.0, max_factor].
 """
-function compute_hydrofracture_factor(Peff::Real, sigma_t::Real;
-                                      active::Bool = true,
-                                      kappa_frac::Real = 1.0e3,
-                                      gamma::Real = 1.0,
-                                      max_factor::Real = Inf)
+function compute_hydrofracture_factor(
+    Peff::Real,
+    sigma_t::Real;
+    active::Bool=true,
+    kappa_frac::Real=1.0e3,
+    gamma::Real=1.0,
+    max_factor::Real=Inf,
+)
     if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0
         return 1.0
     end
@@ -1054,17 +1113,21 @@ tensile microcracks open and enhance permeability according to:
 # Returns
 - `k_eff`: effective permeability [m²]
 """
-function compute_hydrofracture_permeability(kphi::Real, Peff::Real, sigma_t::Real;
-                                           active::Bool = true,
-                                           kappa_frac::Real = 1.0e3,
-                                           gamma::Real = 1.0,
-                                           kmax::Real = 1.0e-9)
+function compute_hydrofracture_permeability(
+    kphi::Real,
+    Peff::Real,
+    sigma_t::Real;
+    active::Bool=true,
+    kappa_frac::Real=1.0e3,
+    gamma::Real=1.0,
+    kmax::Real=1.0e-9,
+)
     if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0 || kphi <= 0.0
         return Float64(kphi)
     end
-    factor = compute_hydrofracture_factor(Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma)
+    factor = compute_hydrofracture_factor(
+        Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma
+    )
     k_enhanced = kphi * factor
     return clamp(Float64(k_enhanced), Float64(kphi), Float64(kmax))
 end
-
-

@@ -18,7 +18,7 @@ const ysize = 140_000.0
 # horizontal center of model
 const xcenter = xsize / 2
 # vertical center of model
-const ycenter = ysize / 2  
+const ycenter = ysize / 2
 # basic grid resolution in x direction (horizontal)
 const Nx = 33
 # const Nx = 141
@@ -35,31 +35,31 @@ const dx = xsize / (Nx-1)
 const dy = ysize / (Ny-1)
 # basic nodes
 # horizontal coordinates of basic grid points [m]
-const x = SVector{Nx, Float64}([j for j = 0:dx:xsize])
+const x = SVector{Nx,Float64}([j for j in 0:dx:xsize])
 #  const x = [j for j = 0:dx:xsize]
 # vertical coordinates of basic grid points [m]
-const y = SVector{Ny, Float64}([i for i = 0:dy:ysize])
+const y = SVector{Ny,Float64}([i for i in 0:dy:ysize])
 #  const y = [i for i = 0:dy:ysize]
 # Vx nodes
 # horizontal coordinates of vx grid points [m]
-const xvx = SVector{Ny1, Float64}([j for j = 0:dx:xsize+dy])
+const xvx = SVector{Ny1,Float64}([j for j in 0:dx:(xsize + dy)])
 #  const xvx = [j for j = 0:dx:xsize+dy]
 # vertical coordinates of vx grid points [m]
-const yvx = SVector{Nx1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+const yvx = SVector{Nx1,Float64}([i for i in (-dy / 2):dy:(ysize + dy / 2)])
 #  const yvx = [i for i = -dy/2:dy:ysize+dy/2]
 # Vy nodes
 # horizontal coordinates of vy grid points [m]
-const xvy = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+const xvy = SVector{Nx1,Float64}([j for j in (-dx / 2):dx:(xsize + dx / 2)])
 #  const xvy = [j for j = -dx/2:dx:xsize+dx/2]
 # vertical coordinates of vy grid points [m]
-const yvy = SVector{Ny1, Float64}([i for i = 0:dy:ysize+dy])
+const yvy = SVector{Ny1,Float64}([i for i in 0:dy:(ysize + dy)])
 #  const yvy = [i for i = 0:dy:ysize+dy]
 # P nodes
 # horizontal coordinates of p grid points [m]
-const xp = SVector{Nx1, Float64}([j for j = -dx/2:dx:xsize+dx/2])
+const xp = SVector{Nx1,Float64}([j for j in (-dx / 2):dx:(xsize + dx / 2)])
 #  const xp = [j for j = -dx/2:dx:xsize+dx/2]
 # vertical coordinates of p grid points [m]
-const yp = SVector{Ny1, Float64}([i for i = -dy/2:dy:ysize+dy/2])
+const yp = SVector{Ny1,Float64}([i for i in (-dy / 2):dy:(ysize + dy / 2)])
 #  const yp = [i for i = -dy/2:dy:ysize+dy/2]
 # basic grid min/max assignables indices
 # minimum assignable basic grid index in x direction
@@ -111,10 +111,10 @@ const dxm = xsize / Nxm
 # marker grid step in vertical direction
 const dym = ysize / Nym
 # horizontal coordinates of marker grid/launch anchor points [m]
-const xxm = SVector{Nxm, Float64}([j for j = dxm/2:dxm:xsize-dxm/2])
+const xxm = SVector{Nxm,Float64}([j for j in (dxm / 2):dxm:(xsize - dxm / 2)])
 #  const xxm = [j for j = dxm/2:dxm:xsize-dxm/2]
 # vertical coordinates of marker grid/launch anchor points [m]
-const yym = SVector{Nxm, Float64}([i for i = dym/2:dym:ysize-dym/2])
+const yym = SVector{Nxm,Float64}([i for i in (dym / 2):dym:(ysize - dym / 2)])
 #  const yym = [i for i = dym/2:dym:ysize-dym/2]
 # initialization distance of nearest marker to launch anchor point [m]
 const mdis_init = 1.0e30
@@ -141,51 +141,51 @@ const G = 6.672e-11
 const Kcont = 1.0e20
 # planetesimals: fluid phase H₂O -----------------------------------------------
 # solid density [kg/m³]
-const rhosolidm = SVector{3, Float64}(    [3300.0    , 3300.0    ,    1.0    ])
+const rhosolidm = SVector{3,Float64}([3300.0, 3300.0, 1.0])
 # fluid density [kg/m³]	
-const rhofluidm = SVector{3, Float64}(    [1000.0    , 1000.0    ,    1.0    ])
+const rhofluidm = SVector{3,Float64}([1000.0, 1000.0, 1.0])
 # solid viscosity [Pa*s]
-const etasolidm = SVector{3, Float64}(    [   1.0e+19,    1.0e+19,    1.0e+16])
+const etasolidm = SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
 # molten solid viscosity [Pa*s]
-const etasolidmm = SVector{3, Float64}(   [   1.0e+19,    1.0e+19,    1.0e+16])
+const etasolidmm = SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
 # fluid viscosity [Pa*s]
-const etafluidm = SVector{3, Float64}(    [   1.0e+12,    1.0e+12,    1.0e-03])
+const etafluidm = SVector{3,Float64}([1.0e+12, 1.0e+12, 1.0e-03])
 # molten fluid viscosity [Pa*s]
-const etafluidmm = SVector{3, Float64}(   [   1.0e-03,    1.0e-03,    1.0e-03])
+const etafluidmm = SVector{3,Float64}([1.0e-03, 1.0e-03, 1.0e-03])
 # solid volumetric heat capacity [kg/m³]
-const rhocpsolidm = SVector{3, Float64}(  [   3.3e+06,    3.3e+06,    3.0e+06])
+const rhocpsolidm = SVector{3,Float64}([3.3e+06, 3.3e+06, 3.0e+06])
 # fluid volumetric heat capacity [kg/m³]
-const rhocpfluidm = SVector{3, Float64}(  [   1.0e+06,    1.0e+06,    3.0e+06])
+const rhocpfluidm = SVector{3,Float64}([1.0e+06, 1.0e+06, 3.0e+06])
 # solid thermal expansion [1/K]
-const alphasolidm = SVector{3, Float64}(  [   3.0e-05,    3.0e-05,    0.0    ])
+const alphasolidm = SVector{3,Float64}([3.0e-05, 3.0e-05, 0.0])
 # fluid thermal expansion [1/K]
-const alphafluidm = SVector{3, Float64}(  [   5.0e-05,    5.0e-05,    0.0    ])
+const alphafluidm = SVector{3,Float64}([5.0e-05, 5.0e-05, 0.0])
 # solid thermal conductivity [W/m/K]
-const ksolidm = SVector{3, Float64}(      [   3.0    ,    3.0    , 3000.0    ])
+const ksolidm = SVector{3,Float64}([3.0, 3.0, 3000.0])
 # fluid thermal conductivity [W/m/K]
-const kfluidm = SVector{3, Float64}(      [  50.0    ,   50.0    , 3000.0    ])
+const kfluidm = SVector{3,Float64}([50.0, 50.0, 3000.0])
 # solid radiogenic heat production [W/m³]
-const start_hrsolidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
+const start_hrsolidm = SVector{3,Float64}([0.0, 0.0, 0.0])
 # fluid radiogenic heat production [W/m³]
-const start_hrfluidm = SVector{3,Float64}([   0.0    ,    0.0    ,    0.0    ])
+const start_hrfluidm = SVector{3,Float64}([0.0, 0.0, 0.0])
 # solid shear modulus [Pa]
-const gggsolidm = SVector{3, Float64}(    [   1.0e+10,    1.0e+10,    1.0e+10])
+const gggsolidm = SVector{3,Float64}([1.0e+10, 1.0e+10, 1.0e+10])
 # solid friction coefficient
-const frictsolidm = SVector{3, Float64}(  [   0.6    ,    0.6    ,    0.0    ])
+const frictsolidm = SVector{3,Float64}([0.6, 0.6, 0.0])
 # solid compressive strength [Pa]
-const cohessolidm = SVector{3, Float64}(  [   1.0e+08,    1.0e+08,    1.0e+08])
+const cohessolidm = SVector{3,Float64}([1.0e+08, 1.0e+08, 1.0e+08])
 # solid tensile strength [Pa]
-const tenssolidm  = SVector{3, Float64}(  [   6.0e+07,    6.0e+07,    6.0e+07])
+const tenssolidm = SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
 # solid matrix compressibility [1/Pa] (zero for baseline MATLAB tests)
 const betasolid = 0.0
 # fluid compressibility [1/Pa] (zero for baseline MATLAB tests)
 const betafluid = 0.0
 # standard permeability [m^2]
-const kphim0 = SVector{3, Float64}(       [   1.0e-13,    1.0e-13,    1.0e-17])
+const kphim0 = SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
 # initial temperature [K]
-const tkm0 = SVector{3, Float64}(         [ 170.0    ,  170.0    ,  170.0    ])
+const tkm0 = SVector{3,Float64}([170.0, 170.0, 170.0])
 # initial wet solid molar fraction
-const XWsolidm_init = SVector{3, Float64}([   0.50   ,    0.50   ,    NaN    ])
+const XWsolidm_init = SVector{3,Float64}([0.50, 0.50, NaN])
 # marker property mode (1: dynamic calculations, 9: static parameters)
 const marker_property_mode = 9
 # coefficient to compute compaction viscosity from shear viscosity
@@ -228,7 +228,7 @@ const phim0 = 0.2
 # min porosity	
 const phimin = 1.0e-4
 # max porosity
-const phimax = 1.0 - phimin            
+const phimax = 1.0 - phimin
 # thermodynamic parameters: silicate dehydration reaction Wˢ = Dˢ + H₂O
 # molar gas constant [JK⁻¹mol⁻¹]
 const RG = 8.314#46261815324
@@ -273,13 +273,19 @@ const log_completion_rate = log(0.01)
 const reaction_rate_coeff_mode = 1
 # reaction constant parameters mode 1 [Iyer et al., 2012]
 # (A: kinetic coefficient, b: kinetic coefficient, c: kinetic coefficient)
-A_I = 1.0e-11; b_I = 2.5e-4; c_I = 543.0
+A_I = 1.0e-11;
+b_I = 2.5e-4;
+c_I = 543.0
 # reaction constant parameters mode 2 [Bland & Travis, 2017]
 # (Sxo_B: reaction rate at ref T, Tscl_B: empirical scaling factor, To_B: reaction ref T)
-Sxo_B = 2.0e-11; Tscl_B = 10.0 ; To_B = 293.0
+Sxo_B = 2.0e-11;
+Tscl_B = 10.0;
+To_B = 293.0
 # reaction constant parameters mode 3 [Travis et al., 2018]
 # (Sxo_T: reaction rate at ref T, To_T: reaction ref T, Ea_T: reaction activation energy)
-Sxo_T = 2.0e-11; To_T = 293.0; Ea_T = 63.8e3    
+Sxo_T = 2.0e-11;
+To_T = 293.0;
+Ea_T = 63.8e3
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1
@@ -304,33 +310,33 @@ const strainrate = 0.0e-13
 # x extension/shortening velocity left
 const vxleft = strainrate * xsize / 2
 # x extension/shortening velocity right
-const vxright= -strainrate * xsize / 2
+const vxright = -strainrate * xsize / 2
 # y extension/shortening velocity top
 const vytop = - strainrate * ysize / 2
 # y extension/shortening velocity bottom
 const vybottom = strainrate * ysize / 2
 # Runge-Kutta integration parameters
 # bⱼ Butcher coefficients for RK4
-const brk4 = SVector{4, Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
+const brk4 = SVector{4,Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
 # cⱼ Butcher coefficients for RK4
-const crk4 = SVector{3, Float64}([0.5, 0.5, 1.0])
+const crk4 = SVector{3,Float64}([0.5, 0.5, 1.0])
 # timestepping parameters
 # output storage periodicity
 const savematstep = 10
 # longest allowed computational timestep [s]
-const dt_longest = 1.0e+11 
+const dt_longest = 1.0e+11
 # coefficient to decrease computational timestep
-const dtcoefdn = 0.5 
+const dtcoefdn = 0.5
 # coefficient to increase computational timestep
-const dtcoefup = 1.2 
+const dtcoefup = 1.2
 # number of iterations before changing computational timestep
-const dtstep = 200 
+const dtstep = 200
 # max marker movement per time step [grid steps]
-const dxymax = 0.05 
+const dxymax = 0.05
 # weight of averaged velocity for moving markers
-const vpratio = 1 / 3 
+const vpratio = 1 / 3
 # max temperature change per time step [K]
-const DTmax = 20.0 
+const DTmax = 20.0
 # subgrid temperature diffusion parameter
 const dsubgridt = 0.0
 # subgrid stress diffusion parameter
@@ -338,21 +344,21 @@ const dsubgrids = 0.0
 # length of year [s]
 const yearlength = 365.25 * 24 * 3600
 # time sum (start) [s]
-const start_time = 2.25e6 * yearlength 
+const start_time = 2.25e6 * yearlength
 # time sum (end) [s]
 const endtime = 15.0e6 * yearlength
 # lower viscosity cut-off [Pa s]	
-const etamin = 1e+12 
+const etamin = 1e+12
 # upper viscosity cut-off [Pa s]
-const etamax = 1e+23 
+const etamax = 1e+23
 # maximum number of plastic iterations
 const nplast = 100_000
 # maximum number of global iterations
 const titermax = 10_000
 # periodicity of visualization
-const visstep = 1 
+const visstep = 1
 # tolerance level for yielding error()
-const yerrmax = 1e+2 
+const yerrmax = 1e+2
 # weight for old viscosity
 const etawt = 0.0
 # max porosity ratio change per time step
@@ -361,7 +367,7 @@ const dphimax = 100.01
 # starting timestep
 const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 10 
+const n_steps = 10
 # const n_steps = 100 
 # const n_steps = 30_000 
 # random number generator seed
@@ -438,13 +444,9 @@ const iparms_dict = Dict([
 ])
 # MKL Pardiso solver IPARM control parameters formatted for LinearSolve.jl
 const iparms = collect(
-    (key + 1, iparms_dict[key]) for key in sort!(collect(keys(iparms_dict))))
+    (key + 1, iparms_dict[key]) for key in sort!(collect(keys(iparms_dict)))
+)
 # LinearSolve.jl solver keyword arguments
 const cache_kwargs = (;
-    nprocs = 4,
-    verbose = true,
-    abstol = 1e-8,
-    reltol = 1e-8,
-    maxiter = 30,
-    iparm = iparms,
-    )
+    nprocs=4, verbose=true, abstol=1e-8, reltol=1e-8, maxiter=30, iparm=iparms
+)

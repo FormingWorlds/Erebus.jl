@@ -9,7 +9,15 @@ using Printf
 
 function export_data()
     output_dir = length(ARGS) >= 1 ? ARGS[1] : "output_hydrothermal"
-    files = sort(filter(f -> startswith(f, "output_") && endswith(f, ".jld2") && f != "output_00000.jld2", readdir(output_dir)))
+    files = sort(
+        filter(
+            f ->
+                startswith(f, "output_") &&
+                endswith(f, ".jld2") &&
+                f != "output_00000.jld2",
+            readdir(output_dir),
+        ),
+    )
     if isempty(files)
         error("No output checkpoint files found in $output_dir")
     end
@@ -48,7 +56,7 @@ function export_data()
 
         # 2D tk (Ny1 x Nx1)
         println(io, "  \"tk\": [")
-        for i = 1:size(tk, 1)
+        for i in 1:size(tk, 1)
             row_str = join(tk[i, :], ", ")
             comma = i < size(tk, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
@@ -57,7 +65,7 @@ function export_data()
 
         # 2D pr (Ny1 x Nx1)
         println(io, "  \"pr\": [")
-        for i = 1:size(pr, 1)
+        for i in 1:size(pr, 1)
             row_str = join(pr[i, :], ", ")
             comma = i < size(pr, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
@@ -66,7 +74,7 @@ function export_data()
 
         # 2D pf (Ny1 x Nx1)
         println(io, "  \"pf\": [")
-        for i = 1:size(pf, 1)
+        for i in 1:size(pf, 1)
             row_str = join(pf[i, :], ", ")
             comma = i < size(pf, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
@@ -75,7 +83,7 @@ function export_data()
 
         # 2D qx (Ny1 x Nx1)
         println(io, "  \"qxD\": [")
-        for i = 1:size(qx, 1)
+        for i in 1:size(qx, 1)
             row_str = join(qx[i, :], ", ")
             comma = i < size(qx, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
@@ -84,7 +92,7 @@ function export_data()
 
         # 2D qy (Ny1 x Nx1)
         println(io, "  \"qyD\": [")
-        for i = 1:size(qy, 1)
+        for i in 1:size(qy, 1)
             row_str = join(qy[i, :], ", ")
             comma = i < size(qy, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
@@ -93,16 +101,16 @@ function export_data()
 
         # 2D peff (Ny1 x Nx1)
         println(io, "  \"peff\": [")
-        for i = 1:size(peff, 1)
+        for i in 1:size(peff, 1)
             row_str = join(peff[i, :], ", ")
             comma = i < size(peff, 1) ? "," : ""
             println(io, "    [", row_str, "]", comma)
         end
         println(io, "  ]")
 
-        println(io, "}")
+        return println(io, "}")
     end
-    println("Exported JSON data to $json_path")
+    return println("Exported JSON data to $json_path")
 end
 
 export_data()
