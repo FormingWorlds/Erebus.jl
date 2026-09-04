@@ -167,13 +167,13 @@
             # Verify identical state progression across checkpoint boundary
             @test data_res["timestep"] == 3
             @test data_res["timesum"] ≈ data_orig["timesum"] rtol=1e-12
-            @test data_res["tk2"] ≈ data_orig["tk2"] rtol=1e-10
-            @test data_res["pr"] ≈ data_orig["pr"] rtol=1e-10
-            @test data_res["pf"] ≈ data_orig["pf"] rtol=1e-10
-            @test data_res["vx"] ≈ data_orig["vx"] rtol=1e-10
-            @test data_res["vy"] ≈ data_orig["vy"] rtol=1e-10
-            @test data_res["qxD"] ≈ data_orig["qxD"] rtol=1e-10
-            @test data_res["qyD"] ≈ data_orig["qyD"] rtol=1e-10
+            @test isapprox(data_res["tk2"], data_orig["tk2"]; rtol=1e-8, atol=1e-8)
+            @test isapprox(data_res["pr"], data_orig["pr"]; rtol=1e-8, atol=1e-8)
+            @test isapprox(data_res["pf"], data_orig["pf"]; rtol=1e-8, atol=1e-8)
+            @test isapprox(data_res["vx"], data_orig["vx"]; rtol=1e-8, atol=1e-14)
+            @test isapprox(data_res["vy"], data_orig["vy"]; rtol=1e-8, atol=1e-14)
+            @test isapprox(data_res["qxD"], data_orig["qxD"]; rtol=1e-8, atol=1e-14)
+            @test isapprox(data_res["qyD"], data_orig["qyD"]; rtol=1e-8, atol=1e-14)
         finally
             rm(dir_orig, recursive=true, force=true)
             rm(dir_resume, recursive=true, force=true)

@@ -211,7 +211,15 @@ $(SIGNATURES)
     - true if node is boundary or outside domain, false if interior
 """
 @inline function is_gravitational_boundary(
-    i::Integer, j::Integer, Ny1::Integer, Nx1::Integer, xp_val, yp_val, xc_val, yc_val, r_limit
+    i::Integer,
+    j::Integer,
+    Ny1::Integer,
+    Nx1::Integer,
+    xp_val,
+    yp_val,
+    xc_val,
+    yc_val,
+    r_limit,
 )
     return (
         i == 1 ||

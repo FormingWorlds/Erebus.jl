@@ -14,13 +14,39 @@ using Test
     @testset "Gravitational Poisson pre-factorization equivalence" begin
         # Test unified boundary predicate
         r_limit = min(coords.xcenter, coords.ycenter)
-        @test is_gravitational_boundary(1, 1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit)
-        @test is_gravitational_boundary(Ny1, 1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit)
-        @test is_gravitational_boundary(1, Nx1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit)
-        @test is_gravitational_boundary(Ny1, Nx1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit)
+        @test is_gravitational_boundary(
+            1, 1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit
+        )
+        @test is_gravitational_boundary(
+            Ny1, 1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit
+        )
+        @test is_gravitational_boundary(
+            1, Nx1, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit
+        )
+        @test is_gravitational_boundary(
+            Ny1,
+            Nx1,
+            Ny1,
+            Nx1,
+            coords.xp,
+            coords.yp,
+            coords.xcenter,
+            coords.ycenter,
+            r_limit,
+        )
         # Center node must be internal
         mid_y, mid_x = Ny1 ÷ 2, Nx1 ÷ 2
-        @test !is_gravitational_boundary(mid_y, mid_x, Ny1, Nx1, coords.xp, coords.yp, coords.xcenter, coords.ycenter, r_limit)
+        @test !is_gravitational_boundary(
+            mid_y,
+            mid_x,
+            Ny1,
+            Nx1,
+            coords.xp,
+            coords.yp,
+            coords.xcenter,
+            coords.ycenter,
+            r_limit,
+        )
 
         # Verify LP matrix invariance to density field
         RHO_zero = zeros(Ny1, Nx1)
@@ -94,16 +120,59 @@ using Test
 
         R_fresh = zeros(Nx1 * Ny1 * 6)
         L_fresh = assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R_fresh; coords=coords
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_fresh;
+            coords=coords,
         )
 
         # In-place assembly with pre-allocated buffer
         L_buf = ExtendableSparseMatrix(Nx1 * Ny1 * 6, Nx1 * Ny1 * 6)
         R_buf = zeros(Nx1 * Ny1 * 6)
         L_reused = assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R_buf; coords=coords, L=L_buf
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_buf;
+            coords=coords,
+            L=L_buf,
         )
         @test L_reused == L_fresh
         @test R_buf == R_fresh
@@ -112,13 +181,56 @@ using Test
         ETA .+= 5e19
         R_fresh2 = zeros(Nx1 * Ny1 * 6)
         L_fresh2 = assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R_fresh2; coords=coords
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_fresh2;
+            coords=coords,
         )
         R_buf2 = zeros(Nx1 * Ny1 * 6)
         L_reused2 = assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R_buf2; coords=coords, L=L_buf
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_buf2;
+            coords=coords,
+            L=L_buf,
         )
         @test L_reused2 == L_fresh2
         @test R_buf2 == R_fresh2
@@ -189,8 +301,30 @@ using Test
         L_buf = ExtendableSparseMatrix(Nx1 * Ny1 * 6, Nx1 * Ny1 * 6)
         R = zeros(Nx1 * Ny1 * 6)
         L = assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-            ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R; coords=coords, L=L_buf
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            coords=coords,
+            L=L_buf,
         )
 
         prob = LinearProblem(L, R)
@@ -206,8 +340,30 @@ using Test
         for iter in 2:4
             ETA .+= 1e19 * iter
             assemble_hydromechanical_lse!(
-                ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY, RX, RY,
-                ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R; coords=coords, L=L_buf
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                SXY0,
+                SXX0,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETAPHI,
+                PHI,
+                gx,
+                gy,
+                pr0,
+                pf0,
+                DMP,
+                dt,
+                R;
+                coords=coords,
+                L=L_buf,
             )
             cache.A = L
             cache.b = R
