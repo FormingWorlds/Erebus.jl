@@ -10,10 +10,10 @@ View the contents of `configs/test_quick.toml`:
 
 ```toml
 [grid]
-xsize = 14000.0
-ysize = 14000.0
-Nx = 15
-Ny = 15
+xsize = 140000.0
+ysize = 140000.0
+Nx = 33
+Ny = 33
 
 [time]
 dt_initial = 1.0e+11
@@ -29,7 +29,7 @@ output_dir = "output_test"
 savematstep = 2
 ```
 
-This configuration runs 2 timesteps of $1.0 \times 10^{11}\text{ s}$ each ($\approx 3,170\text{ years}$ per step), using the standard $15 \times 15$ staggered grid with $3,136$ markers.
+This configuration runs 2 timesteps of $1.0 \times 10^{11}\text{ s}$ each ($\approx 3,170\text{ years}$ per step), using the standard $33 \times 33$ staggered grid with $16,384$ markers.
 
 ---
 
@@ -50,7 +50,7 @@ simulation_loop(cfg)
 The solver outputs information about each iteration:
 
 ```text
-[ Info: Simulation layout Nx = 15 Ny = 15 xsize = 14000.0 ysize = 14000.0 marknum = 3136
+[ Info: Simulation layout Nx = 33 Ny = 33 xsize = 140000.0 ysize = 140000.0 marknum = 16384
 [ Info: ********** begin timestep 1 - dt = 1.0e11 s **********
 [ Info: thermochemical iter 1 - hydromechanical iter 1
 [ Info: starting hydro-mechanical solver 1-1

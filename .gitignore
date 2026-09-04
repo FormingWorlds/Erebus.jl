@@ -832,4 +832,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/julia,python,rust,rust-analyzer,linux,macos,windows,vim,emacs,visualstudiocode,latex,tex
+# Simulation output directories
+output/
+output_*/
+*.jld2

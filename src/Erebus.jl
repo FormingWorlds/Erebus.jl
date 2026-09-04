@@ -16,7 +16,7 @@ using StaticArrays
 using TimerOutputs
 using TOML
 
-export run_simulation
+export run_simulation, load_state
 export Config, GridConfig, GeometryConfig, TimeConfig, SolverConfig,
        PoroelasticConfig, ThermalConfig, MaterialConfig, OutputConfig,
        SimulationConfig, default_config, load_config, validate_config, save_config
@@ -124,9 +124,9 @@ module Numerics
 end
 
 module Simulation
-    import ..Erebus: s_to_Ma, setup_dynamic_simulation_parameters, save_state, simulation_loop,
+    import ..Erebus: s_to_Ma, setup_dynamic_simulation_parameters, save_state, load_state, simulation_loop,
                      parse_commandline, run_simulation
-    export s_to_Ma, setup_dynamic_simulation_parameters, save_state, simulation_loop,
+    export s_to_Ma, setup_dynamic_simulation_parameters, save_state, load_state, simulation_loop,
            parse_commandline, run_simulation
 end
 

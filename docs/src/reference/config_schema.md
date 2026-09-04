@@ -11,10 +11,10 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 | Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `xsize` | `Float64` | `14000.0` | m | Total horizontal domain size | Must match compiled constant |
-| `ysize` | `Float64` | `14000.0` | m | Total vertical domain size | Must match compiled constant |
-| `Nx` | `Int` | `15` | - | Number of basic grid points in x | Must match compiled constant |
-| `Ny` | `Int` | `15` | - | Number of basic grid points in y | Must match compiled constant |
+| `xsize` | `Float64` | `140000.0` | m | Total horizontal domain size | Must match compiled constant |
+| `ysize` | `Float64` | `140000.0` | m | Total vertical domain size | Must match compiled constant |
+| `Nx` | `Int` | `33` | - | Number of basic grid points in x | Must match compiled constant |
+| `Ny` | `Int` | `33` | - | Number of basic grid points in y | Must match compiled constant |
 
 ---
 
@@ -22,10 +22,10 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 | Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `rplanet` | `Float64` | `5000.0` | m | Outer radius of the planetesimal | Must match compiled constant |
-| `rcrust` | `Float64` | `4800.0` | m | Boundary radius between core/mantle and crust | Must match compiled constant |
-| `xcenter` | `Float64` | `7000.0` | m | Horizontal position of planetesimal center | $\in [0, \text{xsize}]$ |
-| `ycenter` | `Float64` | `7000.0` | m | Vertical position of planetesimal center | $\in [0, \text{ysize}]$ |
+| `rplanet` | `Float64` | `50000.0` | m | Outer radius of the planetesimal | Must match compiled constant |
+| `rcrust` | `Float64` | `50000.0` | m | Boundary radius between core/mantle and crust | Must match compiled constant |
+| `xcenter` | `Float64` | `70000.0` | m | Horizontal position of planetesimal center | $\in [0, \text{xsize}]$ |
+| `ycenter` | `Float64` | `70000.0` | m | Vertical position of planetesimal center | $\in [0, \text{ysize}]$ |
 | `psurface` | `Float64` | `1.0e+3` | Pa | Surface pressure anchor | $\ge 0$ |
 
 ---
