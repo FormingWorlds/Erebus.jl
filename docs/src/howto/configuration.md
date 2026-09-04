@@ -78,6 +78,10 @@ betasolid = 2.5e-11   # Solid silicate matrix compressibility [1/Pa]
 betafluid = 4.0e-10   # Pore fluid (water) compressibility [1/Pa]
 phimin = 1.0e-4       # Minimum porosity threshold floor [-]
 phimax = 0.9999       # Maximum porosity threshold ceiling [-]
+hydrofracture = false # Enable dynamic hydrofracturing enhancement (default: false)
+kappa_frac = 1.0e+3   # Permeability multiplier factor [-]
+gamma_frac = 1.0      # Overpressure scaling exponent [-]
+k_frac_max = 1.0e-9   # Permeability ceiling [m^2]
 ```
 
 ### 6. `[thermodynamics]`
@@ -93,6 +97,11 @@ tmsolidphase = 1416.0  # Silicate solidus melting temperature [K]
 tmfluidphase = 273.0   # H2O ice melting temperature [K]
 Lᶠ = 333.55e+3         # Latent heat of melting for water ice [J/kg]
 phim0 = 0.2            # Standard reference porosity [-]
+thermal_buoyancy = true # Enable Darcy thermal buoyancy
+fluid_viscosity_mode = "arrhenius" # Viscosity mode: "arrhenius" or "constant"
+fluid_viscosity_Ea = 15.0e+3       # Activation energy [J/mol]
+fluid_viscosity_T0 = 293.15        # Reference temperature [K]
+fluid_viscosity_eta0 = 1.0e-3      # Reference viscosity at T0 [Pa s]
 ```
 
 ### 7. `[materials]`

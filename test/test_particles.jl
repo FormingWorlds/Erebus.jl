@@ -533,10 +533,87 @@
         @test tenstotalm == tenstotalm_ver
         @test rhofluidcur == rhofluidcur_ver
         @test etatotalm == etatotalm_ver
-        # test calculated properties
         @test tkm_rhocptotalm ≈ tkm_ver .* rhocptotalm_ver 
         @test etafluidcur_inv_kphim ≈ etafluidcur_ver ./ kphim_ver
   
+        # Test compute_marker_properties! with rhofluidcur integration
+        rhof_test = zeros(3)
+        tm_test = [1, 2, 3] # core (cold ice), crust (hot water), sticky air
+        tk_test = [200.0, 373.0, 300.0]
+        rhotot_test = zeros(3)
+        rhocptot_test = zeros(3)
+        etatot_test = zeros(3)
+        hrtot_test = zeros(3)
+        ktot_test = zeros(3)
+        tkm_rhocptot_test = zeros(3)
+        eta_inv_k_test = zeros(3)
+        phi_test = [0.1, 0.1, 1.0]
+        xw_test = [0.0, 0.0, 0.0]
+
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                thermal_buoyancy = true, alphafluid = 2.0e-4, tmfluidphase_val = 273.0
+            )
+        end
+        # Sub-freezing marker (T = 200 K <= 273 K) -> ice density
+        @test rhof_test[1] == 917.0
+        # Hot rock marker (T = 373 K > 273 K, ΔT = 100 K) -> thermal expansion
+        expected_hot_rhof = 1000.0 * (1.0 - 2.0e-4 * 100.0) # 980.0 kg/m³
+        @test rhof_test[2] ≈ expected_hot_rhof rtol=1e-12
+        # Sticky air marker -> sticky air fluid density
+        @test rhof_test[3] == 1.0
+
+        # With thermal_buoyancy = false
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                thermal_buoyancy = false, alphafluid = 2.0e-4, tmfluidphase_val = 273.0
+            )
+        end
+        @test rhof_test[1] == 917.0
+        @test rhof_test[2] == 1000.0
+        @test rhof_test[3] == 1.0
+
+        # Fluid viscosity tests with compute_marker_properties!
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                fluid_viscosity_mode = :arrhenius,
+                fluid_viscosity_Ea = 15.0e3,
+                fluid_viscosity_T0 = 293.15,
+                fluid_viscosity_eta0 = 1.0e-3,
+                tmfluidphase_val = 273.0
+            )
+        end
+        # Marker 1 (T = 200 K): frozen, eta_fluid = 1e12
+        expected_kphi_1 = Erebus.kphi(kphim0[tm_test[1]], phi_test[1])
+        @test eta_inv_k_test[1] ≈ 1.0e12 / expected_kphi_1 rtol=1e-12
+
+        # Marker 2 (T = 373 K): hot fluid with Arrhenius viscosity decrease
+        expected_eta_2 = Erebus.compute_fluid_viscosity(373.0, 2; mode=:arrhenius, Ea=15.0e3, T0=293.15, eta0=1.0e-3, tmfluidphase=273.0)
+        expected_kphi_2 = Erebus.kphi(kphim0[tm_test[2]], phi_test[2])
+        @test eta_inv_k_test[2] ≈ expected_eta_2 / expected_kphi_2 rtol=1e-12
+        @test expected_eta_2 < 1.0e-3
+
+        # Mode :constant
+        for idx in 1:3
+            Erebus.compute_marker_properties!(
+                idx, tm_test, tk_test, rhotot_test, rhocptot_test, etatot_test,
+                hrtot_test, ktot_test, tkm_rhocptot_test, eta_inv_k_test,
+                hrsolidm, hrfluidm, phi_test, xw_test, mode, rhof_test;
+                fluid_viscosity_mode = :constant,
+                fluid_viscosity_eta0 = 1.0e-3,
+                tmfluidphase_val = 273.0
+            )
+        end
+        @test eta_inv_k_test[2] ≈ 1.0e-3 / expected_kphi_2 rtol=1e-12
     end # testset "define_markers!() & compute_marker_properties!()"
 
     @testset "update_marker_viscosity!()" begin

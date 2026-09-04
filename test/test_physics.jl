@@ -624,4 +624,117 @@
         end
     end # testset "poroelastic constitutive relations"
 
+    @testset "thermal buoyancy and compute_rhofluid()" begin
+        rho0 = 1000.0
+        alpha = 2.0e-4
+        T0 = 273.15
+
+        # Sub-freezing / baseline: no thermal expansion
+        @test Erebus.compute_rhofluid(250.0, rho0, alpha, T0) == rho0
+        @test Erebus.compute_rhofluid(T0, rho0, alpha, T0) == rho0
+
+        # When thermal_buoyancy = false, always returns rho0
+        @test Erebus.compute_rhofluid(500.0, rho0, alpha, T0; thermal_buoyancy=false) == rho0
+
+        # Positive thermal expansion for T > T0
+        T1 = 373.15 # ΔT = 100 K
+        expected_rho1 = rho0 * (1.0 - alpha * 100.0) # 1000 * (1 - 0.02) = 980.0
+        @test Erebus.compute_rhofluid(T1, rho0, alpha, T0) ≈ expected_rho1 rtol=1e-12
+        @test Erebus.compute_rhofluid(T1, rho0, alpha, T0) < rho0
+
+        # Extreme temperature clamping (clamped to 0.1 * rho0)
+        T_extreme = 10000.0
+        @test Erebus.compute_rhofluid(T_extreme, rho0, alpha, T0) == 0.1 * rho0
+
+        # Zero or negative alpha
+        @test Erebus.compute_rhofluid(400.0, rho0, 0.0, T0) == rho0
+        @test Erebus.compute_rhofluid(400.0, rho0, -1e-4, T0) == rho0
+
+        # Verification of thermal buoyancy driving force: Δρ = -ρ0 * α * ΔT
+        g = 9.81
+        delta_T = 50.0 # K
+        rho_hot = Erebus.compute_rhofluid(T0 + delta_T, rho0, alpha, T0)
+        buoyancy_force = (rho0 - rho_hot) * g
+        expected_buoyancy = rho0 * alpha * delta_T * g
+        @test buoyancy_force ≈ expected_buoyancy rtol=1e-12
+    end
+
+    @testset "temperature-dependent fluid viscosity and compute_fluid_viscosity()" begin
+        # Sub-freezing ice viscosity
+        @test Erebus.compute_fluid_viscosity(200.0, 1) == 1.0e12
+        @test Erebus.compute_fluid_viscosity(273.0, 2) == 1.0e12
+
+        # Sticky air
+        @test Erebus.compute_fluid_viscosity(300.0, 3) == 1.0e-3
+        @test Erebus.compute_fluid_viscosity(100.0, 3) == 1.0e-3
+
+        # Reference temperature T0 = 293.15 K -> eta0 = 1.0e-3 Pa s
+        @test Erebus.compute_fluid_viscosity(293.15, 2) ≈ 1.0e-3 rtol=1e-12
+
+        # Boiling water T = 373.15 K -> drops by factor ~3.7
+        eta_373 = Erebus.compute_fluid_viscosity(373.15, 2; Ea = 15.0e3, T0 = 293.15, eta0 = 1.0e-3)
+        @test 2.5e-4 < eta_373 < 3.0e-4
+
+        # Supercritical hydrothermal fluid T = 600 K -> drops below 1e-4 Pa s
+        eta_600 = Erebus.compute_fluid_viscosity(600.0, 2; Ea = 15.0e3, T0 = 293.15, eta0 = 1.0e-3)
+        @test 3.0e-5 < eta_600 < 1.0e-4
+        @test eta_600 < eta_373 < 1.0e-3
+
+        # Mode :constant
+        @test Erebus.compute_fluid_viscosity(500.0, 2; mode = :constant) == 1.0e-3
+
+        # Clamp against extreme temperatures
+        @test Erebus.compute_fluid_viscosity(10000.0, 2; etamin = 1.0e-5) == 1.0e-5
+
+        # NaN / non-finite handling (safe fallback to ice viscosity)
+        @test Erebus.compute_fluid_viscosity(NaN, 2) == 1.0e12
+        @test Erebus.compute_fluid_viscosity(Inf, 2) == 1.0e12
+
+        # Invalid mode throws ArgumentError
+        @test_throws ArgumentError Erebus.compute_fluid_viscosity(300.0, 2; mode = :bogus)
+    end
+
+    @testset "dynamic hydrofracturing and compute_hydrofracture_permeability()" begin
+        k0 = 1.0e-15 # m²
+        sigma_t = 1.0e7 # 10 MPa
+        kappa_frac = 1.0e3
+
+        # Case 1: Compressive / sub-tensile regime (Peff = 5 MPa > -10 MPa) -> no hydrofracture
+        Peff_comp = 5.0e6
+        @test Erebus.compute_hydrofracture_factor(Peff_comp, sigma_t; kappa_frac=kappa_frac) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_comp, sigma_t; kappa_frac=kappa_frac) == k0
+
+        # Case 2: Exact tensile limit (Peff = -10 MPa) -> overpressure = 0 -> factor = 1.0
+        Peff_limit = -1.0e7
+        @test Erebus.compute_hydrofracture_factor(Peff_limit, sigma_t; kappa_frac=kappa_frac) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_limit, sigma_t; kappa_frac=kappa_frac) == k0
+
+        # Case 3: Overpressured regime (Peff = -20 MPa, overpressure = 10 MPa = 1.0 * sigma_t)
+        # factor = 1.0 + 1000.0 * (1.0)^1.0 = 1001.0
+        Peff_over = -2.0e7
+        expected_factor = 1.0 + kappa_frac * 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, sigma_t; kappa_frac=kappa_frac) ≈ expected_factor rtol=1e-12
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_over, sigma_t; kappa_frac=kappa_frac) ≈ k0 * expected_factor rtol=1e-12
+
+        # Case 4: Power-law scaling with gamma = 2.0
+        # normalized overpressure = 2.0 (Peff = -30 MPa)
+        # factor = 1.0 + 1000.0 * (2.0)^2.0 = 4001.0
+        Peff_over2 = -3.0e7
+        @test Erebus.compute_hydrofracture_factor(Peff_over2, sigma_t; kappa_frac=kappa_frac, gamma=2.0) ≈ 4001.0 rtol=1e-12
+
+        # Case 5: Inactive (active=false)
+        @test Erebus.compute_hydrofracture_factor(Peff_over, sigma_t; active=false) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_over, sigma_t; active=false) == k0
+
+        # Case 6: Permeability ceiling (kmax)
+        kmax = 1.0e-13
+        @test Erebus.compute_hydrofracture_permeability(k0, -1.0e8, sigma_t; kappa_frac=kappa_frac, kmax=kmax) == kmax
+
+        # Case 7: Non-finite / corrupt inputs
+        @test Erebus.compute_hydrofracture_factor(NaN, sigma_t) == 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, NaN) == 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, -1.0e7) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, NaN, sigma_t) == k0
+    end
+
 end

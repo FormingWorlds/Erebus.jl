@@ -308,22 +308,45 @@ function compute_marker_properties!(
     hrfluidm,
     phim,
     XWˢm₀,
-    mode
+    mode,
+    rhofluidcur = nothing;
+    thermal_buoyancy::Bool = true,
+    alphafluid = nothing,
+    tmfluidphase_val::Real = tmfluidphase,
+    fluid_viscosity_mode::Symbol = :arrhenius,
+    fluid_viscosity_Ea::Real = 15.0e3,
+    fluid_viscosity_T0::Real = 293.15,
+    fluid_viscosity_eta0::Real = 1.0e-3
 )
 # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
         rhosolidm0 = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀+ VWˢ*XWˢm₀[m]) # (16.161)
+        alpha_val = alphafluid === nothing ? alphafluidm[tm[m]] : (alphafluid isa Real ? alphafluid : alphafluid[tm[m]])
         rhofluidm0 = ifelse(
-            tkm[m]>tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ) # (16.162)
+            tkm[m] > tmfluidphase_val,
+            compute_rhofluid(tkm[m], ρH₂Oᶠ, alpha_val, tmfluidphase_val; thermal_buoyancy=thermal_buoyancy),
+            ρH₂Oᶠⁱ
+        ) # (16.162)
+        if rhofluidcur !== nothing
+            rhofluidcur[m] = rhofluidm0
+        end
         rhototalm[m] = total(rhosolidm0, rhofluidm0, phim[m])
         rhocptotalm[m] = total(
             rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m])
         etasolidcur = ifelse(
             tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
-        etafluidcur = ifelse(
-            tkm[m]>tmfluidphase, etafluidmm[tm[m]], etafluidm[tm[m]])
+        etafluidcur = compute_fluid_viscosity(
+            tkm[m], tm[m];
+            mode = fluid_viscosity_mode,
+            eta0 = fluid_viscosity_eta0,
+            eta_ice = etafluidm[tm[m]],
+            eta_air = etafluidm[tm[m]],
+            Ea = fluid_viscosity_Ea,
+            T0 = fluid_viscosity_T0,
+            tmfluidphase = tmfluidphase_val
+        )
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         ktotalm[m] = ktotal(
@@ -334,6 +357,9 @@ function compute_marker_properties!(
     else
         # sticky air
         etafluidcur = etafluidm[tm[m]]
+        if rhofluidcur !== nothing
+            rhofluidcur[m] = rhofluidm[tm[m]]
+        end
     end
     # common for rocks and air
     tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]

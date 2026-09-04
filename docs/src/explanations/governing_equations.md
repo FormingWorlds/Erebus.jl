@@ -27,10 +27,10 @@ $$\nabla \cdot \mathbf{v}_s = - \frac{D \ln(1 - \phi)}{Dt}$$
 
 where $\mathbf{v}_s$ is solid matrix velocity [$\text{m/s}$], $\phi$ is porosity [-], and $D/Dt$ is the material derivative.
 
-### 3. Darcy Pore Fluid Flux
-Percolation of the pore fluid relative to the solid matrix follows Darcy's law:
+### 3. Darcy Pore Fluid Flux and Thermal Buoyancy
+Percolation of pore fluid relative to the solid matrix follows Darcy's law:
 
-$$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f \mathbf{g}\right)$$
+$$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f(T) \mathbf{g}\right)$$
 
 | Symbol | Description | Units |
 |:---|:---|:---|
@@ -38,7 +38,25 @@ $$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f \mathbf{g}\ri
 | $k_\phi$ | Porosity-dependent permeability | $\text{m}^2$ |
 | $\eta_f$ | Dynamic fluid viscosity | $\text{Pa}\cdot\text{s}$ |
 | $P_f$ | Pore fluid pressure | $\text{Pa}$ |
-| $\rho_f$ | Pore fluid density | $\text{kg/m}^3$ |
+| $\rho_f(T)$ | Temperature-dependent pore fluid density | $\text{kg/m}^3$ |
+
+Fluid density incorporates volumetric thermal expansion $\alpha_f$ [$\text{K}^{-1}$] above the reference melting temperature $T_{\text{melt}}$:
+
+$$\rho_f(T) = \rho_{f0} \max\left(0.1, 1.0 - \alpha_f (T - T_{\text{melt}})\right) \quad (T > T_{\text{melt}})$$
+
+The temperature gradient creates buoyancy forces $(\rho_f(T) - \rho_{f0})\mathbf{g}$ that drive hydrothermal convection through permeable silicate crust. Fluid density is referenced to the melting point $T_{\text{melt}} = 273.0\text{ K}$ ($\rho_{f0} = 1000\text{ kg/m}^3$), while thermal expansion is applied to the pore fluid density $\rho_f(T)$ to drive relative Darcy percolation; solid grain density $\rho_s$ remains compositionally dependent on hydration state $X_W^s$. The code default $\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$ provides an effective conservative baseline; users modeling pure liquid water can configure ambient ($2\times 10^{-4}\text{ K}^{-1}$) or hydrothermal ($5\times 10^{-4}\text{ K}^{-1}$) expansion via TOML inputs.
+
+Dynamic fluid viscosity $\eta_f(T)$ decreases with temperature following an Arrhenius relation for liquid water:
+
+$$\eta_f(T) = \begin{cases} \eta_{\text{ice}} & T \le T_{\text{melt}} \\ \max\left(\eta_{\text{min}}, \min\left(\eta_{\text{max}}, \eta_{f0} \exp\left[\frac{E_a}{R} \left(\frac{1}{T} - \frac{1}{T_0}\right)\right]\right)\right) & T > T_{\text{melt}} \end{cases}$$
+
+where viscosity is referenced to $T_0 = 293.15\text{ K}$ ($20^\circ\text{C}$, $\eta_{f0} = 1.0\times 10^{-3}\text{ Pa}\cdot\text{s}$) with activation energy $E_a = 15.0\text{ kJ/mol}$ and gas constant $R$. This relation reproduces liquid water viscosity within about $13\%$ across $273\text{ to }373\text{ K}$ and provides an effective approximation across the liquid hydrothermal range ($273\text{ to }600\text{ K}$), where fluid mobility $k_\phi / \eta_f(T)$ increases by a factor of $5\times\text{ to }24\times$ (clamped to a maximum factor of $\eta_{f0}/\eta_{\text{min}} = 100\times$). Above water's critical point ($T > 647\text{ K}$), pore fluid transitions into the supercritical regime, where low-viscosity vapor mobility is represented by the numerical floor $\eta_{\text{min}} = 10^{-5}\text{ Pa}\cdot\text{s}$.
+
+When internal devolatilization or thermal expansion generates fluid overpressures, pore fluid pressure $P_f$ can exceed total confining pressure $P_t$ plus rock tensile strength $\sigma_t$ (Terzaghi effective pressure $P_{\text{eff}} = P_t - P_f \le -\sigma_t$). In this tensile failure regime, macroscopic hydraulic fractures open, enhancing permeability:
+
+$$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \left(\frac{\max(0, -P_{\text{eff}} - \sigma_t)}{\sigma_t}\right)^\gamma\right], k_{\text{max}}\right)$$
+
+where $\kappa_{\text{frac}} = 10^3$ is the default enhancement multiplier, $\gamma = 1.0$ is the scaling exponent, and $k_{\text{max}} = 10^{-9}\text{ m}^2$ is the permeability ceiling. This dynamic venting relieves local overpressures and routes hydrothermal fluids toward the planetesimal surface.
 
 ### 4. Coupled Fluid Mass Continuity
 Conservation of pore fluid mass with fluid compressibility is:

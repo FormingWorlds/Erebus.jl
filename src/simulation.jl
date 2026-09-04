@@ -353,6 +353,10 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     betafluid_val = cfg.poroelasticity.betafluid
     phimin_val = cfg.poroelasticity.phimin
     phimax_val = cfg.poroelasticity.phimax
+    hydrofracture_val = cfg.poroelasticity.hydrofracture
+    kappa_frac_val = cfg.poroelasticity.kappa_frac
+    gamma_frac_val = cfg.poroelasticity.gamma_frac
+    k_frac_max_val = cfg.poroelasticity.k_frac_max
     dt_longest_val = cfg.time.dt_longest
     dtcoefup_val = cfg.time.dtcoefup
     hr_al_val = cfg.thermodynamics.hr_al
@@ -365,6 +369,13 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     E_fe_val = cfg.thermodynamics.E_fe
     f_fe_val = cfg.thermodynamics.f_fe
     tau_fe_val = cfg.thermodynamics.t_half_fe / log(2.0)
+    thermal_buoyancy_val = cfg.thermodynamics.thermal_buoyancy
+    tmfluidphase_val = cfg.thermodynamics.tmfluidphase
+    alphafluid_val = cfg.materials.alphafluidm
+    fluid_viscosity_mode_val = cfg.thermodynamics.fluid_viscosity_mode
+    fluid_viscosity_Ea_val = cfg.thermodynamics.fluid_viscosity_Ea
+    fluid_viscosity_T0_val = cfg.thermodynamics.fluid_viscosity_T0
+    fluid_viscosity_eta0_val = cfg.thermodynamics.fluid_viscosity_eta0
 
     @info "Simulation layout" Nx Ny xsize dx dy ysize rplanet rcrust marknum
     @info(
@@ -822,7 +833,15 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                 hrfluidm,
                 phim,
                 XWsolidm0,
-                marker_property_mode
+                marker_property_mode,
+                rhofluidcur;
+                thermal_buoyancy = thermal_buoyancy_val,
+                alphafluid = alphafluid_val,
+                tmfluidphase_val = tmfluidphase_val,
+                fluid_viscosity_mode = fluid_viscosity_mode_val,
+                fluid_viscosity_Ea = fluid_viscosity_Ea_val,
+                fluid_viscosity_T0 = fluid_viscosity_T0_val,
+                fluid_viscosity_eta0 = fluid_viscosity_eta0_val
             )              
             # interpolate marker properties to basic nodes
             @inbounds marker_to_basic_nodes!(
@@ -1095,7 +1114,16 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                     betasolid = cur_betasolid,
                     betafluid = cur_betafluid,
                     phimin = phimin_val,
-                    phimax = phimax_val
+                    phimax = phimax_val,
+                    hydrofracture = hydrofracture_val,
+                    pr = pr,
+                    pf = pf,
+                    TEN = TEN,
+                    KX = KX,
+                    KY = KY,
+                    kappa_frac = kappa_frac_val,
+                    gamma_frac = gamma_frac_val,
+                    k_frac_max = k_frac_max_val
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1271,7 +1299,14 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                 PHI,
                 ETAPHI,
                 pr,
-                pf
+                pf;
+                hydrofracture = hydrofracture_val,
+                TEN = TEN,
+                KX = KX,
+                KY = KY,
+                kappa_frac = kappa_frac_val,
+                gamma_frac = gamma_frac_val,
+                k_frac_max = k_frac_max_val
             )
             
             # ------------------------------------------------------------------

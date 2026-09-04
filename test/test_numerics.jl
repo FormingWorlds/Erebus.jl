@@ -1561,4 +1561,167 @@
         end
     end # testset "Terzaghi 1D consolidation numerical simulation verification"
 
+    @testset "assemble_hydromechanical_lse!() dynamic hydrofracture integration" begin
+        eta_f = 1.0e-3
+        k_perm = 1.0e-12
+        k_frac_max = 1.0e-9
+        kappa_frac = 100.0
+        gamma_frac = 1.0
+        sigma_t_val = 5.0e6
+
+        ETA = fill(1e22, Ny, Nx)
+        ETAP = fill(1e22, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(eta_f / k_perm, Ny1, Nx1)
+        RY = fill(eta_f / k_perm, Ny1, Nx1)
+        KX = fill(k_perm, Ny1, Nx1)
+        KY = fill(k_perm, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        ETAPHI = fill(1e25, Ny1, Nx1)
+        BETAPHI = fill(1e-10, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = zeros(Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = zeros(Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        dt = 1e8
+        R = zeros(Nx1*Ny1*6)
+
+        pr = fill(1.0e7, Ny1, Nx1)
+        TEN = fill(sigma_t_val, Ny, Nx)
+
+        L_base = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            hydrofracture=false
+        )
+
+        pf_intact = fill(5.0e6, Ny1, Nx1)
+        L_intact = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            hydrofracture=true, pr=pr, pf=pf_intact, TEN=TEN,
+            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+        )
+        i_test, j_test = 5, 5
+        kqx = ((j_test - 1)*Ny1 + i_test - 1) * 6 + 4
+        kqy = kqx + 1
+        @test L_intact[kqx, kqx] ≈ L_base[kqx, kqx]
+        @test L_intact[kqy, kqy] ≈ L_base[kqy, kqy]
+
+        pf_frac = fill(2.0e7, Ny1, Nx1)
+        L_frac = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            hydrofracture=true, pr=pr, pf=pf_frac, TEN=TEN,
+            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+        )
+        expected_keff = k_perm * 101.0
+        expected_rx = RX[i_test, j_test] * (k_perm / expected_keff)
+        @test L_frac[kqx, kqx] < L_base[kqx, kqx]
+        @test L_frac[kqx, kqx] ≈ expected_rx rtol=1e-12
+        @test L_frac[kqy, kqy] ≈ expected_rx rtol=1e-12
+
+        pf_extreme = fill(2.0e8, Ny1, Nx1)
+        L_extreme = Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX, RHOFY, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R;
+            hydrofracture=true, pr=pr, pf=pf_extreme, TEN=TEN,
+            KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+        )
+        expected_ceiling_rx = eta_f / k_frac_max
+        @test L_extreme[kqx, kqx] ≈ expected_ceiling_rx rtol=1e-12
+        @test L_extreme[kqy, kqy] ≈ expected_ceiling_rx rtol=1e-12
+
+        HS_intact = zeros(Ny, Nx)
+        HS_frac = zeros(Ny, Nx)
+        SXY_test = fill(1e5, Ny, Nx)
+        SXX_test = fill(1e5, Ny1, Nx1)
+        qxD_test = fill(1e-6, Ny1, Nx1)
+        qyD_test = fill(1e-6, Ny1, Nx1)
+        Erebus.compute_shear_heating!(
+            HS_intact, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD_test, qyD_test, PHI, ETAPHI, pr, pf_intact;
+            hydrofracture=true, TEN=TEN, KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+        )
+        Erebus.compute_shear_heating!(
+            HS_frac, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD_test, qyD_test, PHI, ETAPHI, pr, pf_frac;
+            hydrofracture=true, TEN=TEN, KX=KX, KY=KY, kappa_frac=kappa_frac, gamma_frac=gamma_frac, k_frac_max=k_frac_max
+        )
+        @test HS_frac[5, 5] < HS_intact[5, 5]
+    end # testset "assemble_hydromechanical_lse!() dynamic hydrofracture integration"
+
+    @testset "assemble_hydromechanical_lse!() Darcy thermal buoyancy integration" begin
+        g_accel = 10.0
+        rho0_f = 1000.0
+        alpha_f = 2.0e-4
+        delta_T = 50.0
+        eta_f = 1.0e-3
+        k_perm = 1.0e-13
+
+        ETA = fill(1e22, Ny, Nx)
+        ETAP = fill(1e22, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        ETAPHI = fill(1e25, Ny1, Nx1)
+        BETAPHI = fill(1e-10, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = fill(g_accel, Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = zeros(Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        dt = 1e8
+        R_const = zeros(Nx1*Ny1*6)
+        R_buoy = zeros(Nx1*Ny1*6)
+
+        RX = fill(eta_f / k_perm, Ny1, Nx1)
+        RY = fill(eta_f / k_perm, Ny1, Nx1)
+
+        RHOFX_const = fill(rho0_f, Ny1, Nx1)
+        RHOFY_const = fill(rho0_f, Ny1, Nx1)
+        Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX_const, RHOFY_const, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R_const
+        )
+
+        rho_f_hot = rho0_f * (1.0 - alpha_f * delta_T)
+        RHOFX_buoy = copy(RHOFX_const)
+        RHOFY_buoy = copy(RHOFY_const)
+        RHOFY_buoy[Ny-2, 5] = rho_f_hot
+
+        Erebus.assemble_hydromechanical_lse!(
+            ETA, ETAP, GGG, GGGP, SXY0, SXX0,
+            RHOX, RHOY, RHOFX_buoy, RHOFY_buoy, RX, RY,
+            ETAPHI, BETAPHI, PHI, gx, gy,
+            pr0, pf0, DMP, dt, R_buoy
+        )
+
+        kqy_test = ((5 - 1)*Ny1 + (Ny-2) - 1) * 6 + 5
+        delta_R = R_const[kqy_test] - R_buoy[kqy_test]
+        expected_delta_R = (rho0_f - rho_f_hot) * g_accel
+        @test delta_R ≈ expected_delta_R rtol=1e-12
+        @test delta_R ≈ (rho0_f * alpha_f * delta_T * g_accel) rtol=1e-12
+    end # testset "assemble_hydromechanical_lse!() Darcy thermal buoyancy integration"
+
 end
