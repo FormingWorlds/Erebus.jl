@@ -638,19 +638,50 @@ $(SIGNATURES)
     - nothing
 """
 function compute_shear_heating!(
-    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf)
+    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf;
+    hydrofracture::Bool = false,
+    TEN = nothing,
+    kappa_frac::Real = 1.0e3,
+    gamma_frac::Real = 1.0,
+    k_frac_max::Real = 1.0e-9
+)
 # @timeit to "compute_shear_heating!" begin
     for j=2:1:Nx, i=2:1:Ny
         # average SXY⋅EXY
         SXYEXY = 0.25 * sum(
             grid_vector(i-1, j-1, SXY).^2 ./ grid_vector(i-1, j-1, ETA))
+        rx_jm1 = RX[i, j-1]
+        rx_j = RX[i, j]
+        ry_im1 = RY[i-1, j]
+        ry_i = RY[i, j]
+        if hydrofracture && TEN !== nothing
+            Peff_x1 = 0.5 * (pr[i, j-1] + pr[i, j] - pf[i, j-1] - pf[i, j])
+            sigma_tx1 = 0.5 * (TEN[i, j-1] + TEN[i-1, j-1])
+            fx1 = compute_hydrofracture_factor(Peff_x1, sigma_tx1; kappa_frac=kappa_frac, gamma=gamma_frac)
+            rx_jm1 = max(RX[i, j-1] / fx1, 1.0e-5 / k_frac_max)
+
+            Peff_x2 = 0.5 * (pr[i, j] + pr[i, j+1] - pf[i, j] - pf[i, j+1])
+            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i-1, j])
+            fx2 = compute_hydrofracture_factor(Peff_x2, sigma_tx2; kappa_frac=kappa_frac, gamma=gamma_frac)
+            rx_j = max(RX[i, j] / fx2, 1.0e-5 / k_frac_max)
+
+            Peff_y1 = 0.5 * (pr[i-1, j] + pr[i, j] - pf[i-1, j] - pf[i, j])
+            sigma_ty1 = 0.5 * (TEN[i-1, j] + TEN[i-1, j-1])
+            fy1 = compute_hydrofracture_factor(Peff_y1, sigma_ty1; kappa_frac=kappa_frac, gamma=gamma_frac)
+            ry_im1 = max(RY[i-1, j] / fy1, 1.0e-5 / k_frac_max)
+
+            Peff_y2 = 0.5 * (pr[i, j] + pr[i+1, j] - pf[i, j] - pf[i+1, j])
+            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j-1])
+            fy2 = compute_hydrofracture_factor(Peff_y2, sigma_ty2; kappa_frac=kappa_frac, gamma=gamma_frac)
+            ry_i = max(RY[i, j] / fy2, 1.0e-5 / k_frac_max)
+        end
         # compute shear heating HS
         @inbounds HS[i, j] = (
             SXX[i, j]^2 / ETAP[i,j]
             + SXYEXY
             + (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j]
-            + 0.5 * (RX[i, j-1]*qxD[i, j-1]^2 + RX[i, j]*qxD[i, j]^2)
-            + 0.5 * (RY[i-1, j]*qyD[i-1, j]^2 + RY[i, j]*qyD[i, j]^2)
+            + 0.5 * (rx_jm1*qxD[i, j-1]^2 + rx_j*qxD[i, j]^2)
+            + 0.5 * (ry_im1*qyD[i-1, j]^2 + ry_i*qyD[i, j]^2)
         )
     end
 # end # @timeit to "compute_shear_heating!" 
@@ -932,6 +963,82 @@ function compute_fluid_viscosity(T::Real, tm::Integer;
     else
         throw(ArgumentError("Unknown fluid viscosity mode: $mode (expected :arrhenius or :constant)"))
     end
+end
+
+"""
+    compute_hydrofracture_factor(Peff::Real, sigma_t::Real;
+                                 active::Bool = true,
+                                 kappa_frac::Real = 1.0e3,
+                                 gamma::Real = 1.0,
+                                 max_factor::Real = Inf)
+
+Compute dimensionless permeability enhancement factor from dynamic hydrofracturing.
+
+When pore fluid pressure exceeds total confining pressure plus tensile strength
+(Terzaghi effective pressure Peff = Pt - Pf <= -sigma_t), hydraulic tensile
+fractures open and increase effective permeability:
+
+    factor = 1.0 + kappa_frac * ((-Peff - sigma_t) / sigma_t)^gamma
+
+clamped to [1.0, max_factor].
+"""
+function compute_hydrofracture_factor(Peff::Real, sigma_t::Real;
+                                      active::Bool = true,
+                                      kappa_frac::Real = 1.0e3,
+                                      gamma::Real = 1.0,
+                                      max_factor::Real = Inf)
+    if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0
+        return 1.0
+    end
+    overpressure = -Peff - sigma_t
+    if overpressure <= 0.0
+        return 1.0
+    end
+    norm_overpressure = overpressure / sigma_t
+    factor = 1.0 + kappa_frac * (norm_overpressure ^ gamma)
+    return clamp(Float64(factor), 1.0, Float64(max_factor))
+end
+
+"""
+    compute_hydrofracture_permeability(kphi::Real, Peff::Real, sigma_t::Real;
+                                       active::Bool = true,
+                                       kappa_frac::Real = 1.0e3,
+                                       gamma::Real = 1.0,
+                                       kmax::Real = 1.0e-9)
+
+Compute effective permeability k_eff [m²] with dynamic hydrofracturing enhancement.
+
+When pore fluid pressure exceeds total confining pressure plus rock tensile strength:
+
+    Peff = Pt - Pf <= -sigma_t
+
+tensile microcracks open and enhance permeability according to:
+
+    k_eff = min(kphi * compute_hydrofracture_factor(Peff, sigma_t; active, kappa_frac, gamma), kmax)
+
+# Arguments
+- `kphi`: baseline matrix permeability [m²]
+- `Peff`: Terzaghi effective pressure Pt - Pf [Pa]
+- `sigma_t`: rock tensile strength [Pa]
+- `active`: enable hydrofracture enhancement (default: true)
+- `kappa_frac`: dimensionless enhancement multiplier (default: 1.0e3)
+- `gamma`: power-law exponent (default: 1.0)
+- `kmax`: maximum permeability ceiling [m²] (default: 1.0e-9)
+
+# Returns
+- `k_eff`: effective permeability [m²]
+"""
+function compute_hydrofracture_permeability(kphi::Real, Peff::Real, sigma_t::Real;
+                                           active::Bool = true,
+                                           kappa_frac::Real = 1.0e3,
+                                           gamma::Real = 1.0,
+                                           kmax::Real = 1.0e-9)
+    if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0 || kphi <= 0.0
+        return Float64(kphi)
+    end
+    factor = compute_hydrofracture_factor(Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma)
+    k_enhanced = kphi * factor
+    return clamp(Float64(k_enhanced), Float64(kphi), Float64(kmax))
 end
 
 

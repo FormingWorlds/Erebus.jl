@@ -86,6 +86,10 @@ Base.@kwdef struct PoroelasticConfig
     betafluid::Float64 = 0.0
     phimin::Float64 = 1.0e-4
     phimax::Float64 = 0.9999
+    hydrofracture::Bool = false
+    kappa_frac::Float64 = 1.0e3
+    gamma_frac::Float64 = 1.0
+    k_frac_max::Float64 = 1.0e-9
 end
 
 """
@@ -226,6 +230,9 @@ function validate_config(cfg::SimulationConfig)
     0.0 < cfg.poroelasticity.phimin < cfg.poroelasticity.phimax < 1.0 || throw(
         ArgumentError("Porosity bounds must satisfy 0 < phimin < phimax < 1, got phimin=$(cfg.poroelasticity.phimin), phimax=$(cfg.poroelasticity.phimax)")
     )
+    cfg.poroelasticity.kappa_frac >= 0.0 && isfinite(cfg.poroelasticity.kappa_frac) || throw(ArgumentError("kappa_frac must be >= 0 and finite, got $(cfg.poroelasticity.kappa_frac)"))
+    cfg.poroelasticity.gamma_frac > 0.0 && isfinite(cfg.poroelasticity.gamma_frac) || throw(ArgumentError("gamma_frac must be > 0 and finite, got $(cfg.poroelasticity.gamma_frac)"))
+    cfg.poroelasticity.k_frac_max > 0.0 && isfinite(cfg.poroelasticity.k_frac_max) || throw(ArgumentError("k_frac_max must be > 0 and finite, got $(cfg.poroelasticity.k_frac_max)"))
 
     # Solver checks
     cfg.solver.titermax >= 1 || throw(ArgumentError("titermax must be >= 1, got $(cfg.solver.titermax)"))

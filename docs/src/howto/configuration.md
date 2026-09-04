@@ -78,6 +78,10 @@ betasolid = 2.5e-11   # Solid silicate matrix compressibility [1/Pa]
 betafluid = 4.0e-10   # Pore fluid (water) compressibility [1/Pa]
 phimin = 1.0e-4       # Minimum porosity threshold floor [-]
 phimax = 0.9999       # Maximum porosity threshold ceiling [-]
+hydrofracture = true  # Enable dynamic hydrofracturing enhancement
+kappa_frac = 1.0e+3   # Permeability multiplier factor [-]
+gamma_frac = 1.0      # Overpressure scaling exponent [-]
+k_frac_max = 1.0e-9   # Permeability ceiling [m^2]
 ```
 
 ### 6. `[thermodynamics]`

@@ -85,3 +85,21 @@ This single-activation energy relation closely tracks experimental liquid water 
 ![Temperature-Dependent Fluid Viscosity Benchmarking](../assets/fluid_viscosity_temperature.png)
 
 *Figure 4: Benchmarking of temperature-dependent pore fluid viscosity $\eta_f(T)$ in Erebus. (a) Dynamic fluid viscosity across $T \in [270, 700]\text{ K}$ on a logarithmic scale, comparing the default Arrhenius model ($E_a = 15.0\text{ kJ/mol}$, blue curve) against experimental liquid water measurements from IAPWS/NIST standards (red circles). (b) Hydrothermal Darcy mobility enhancement factor $\eta_{f0} / \eta_f(T)$ illustrating the $5\times\text{--}20\times$ increase in fluid percolation speed as interior temperatures rise across liquid hydrothermal conditions.*
+
+---
+
+## 7. Dynamic Hydrofracture Permeability Verification
+
+The dynamic hydrofracture formulation enhances Darcy permeability when pore fluid pressure exceeds total confining pressure plus the rock tensile strength:
+
+$$P_{\text{eff}} = P_t - P_f \le -\sigma_t$$
+
+The effective permeability scaling:
+
+$$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \left(\frac{\max(0, -P_{\text{eff}} - \sigma_t)}{\sigma_t}\right)^\gamma\right], k_{\text{max}}\right)$$
+
+is verified across intact and fractured regimes:
+
+![Dynamic Hydrofracturing Verification](../assets/hydrofracture_verification.png)
+
+*Figure 5: Verification of dynamic hydrofracturing permeability enhancement in Erebus. (a) Effective permeability $k_\phi^{\text{eff}}$ as a function of Terzaghi effective stress $P_{\text{eff}} = P_t - P_f$ across compressive ($P_{\text{eff}} > 0$), intact tensile ($-\sigma_t < P_{\text{eff}} \le 0$), and hydrofractured ($P_{\text{eff}} \le -\sigma_t$) regimes for representative matrix permeabilities ($k_0 \in [10^{-16}, 10^{-14}]\text{ m}^2$) at tensile strength $\sigma_t = 10\text{ MPa}$. (b) Permeability enhancement factor $k_{\text{eff}} / k_0$ as a function of normalized overpressure for scaling exponents $\gamma \in \{0.5, 1.0, 2.0\}$ at $\kappa_{\text{frac}} = 10^3$.*

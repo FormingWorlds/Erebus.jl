@@ -353,6 +353,10 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     betafluid_val = cfg.poroelasticity.betafluid
     phimin_val = cfg.poroelasticity.phimin
     phimax_val = cfg.poroelasticity.phimax
+    hydrofracture_val = cfg.poroelasticity.hydrofracture
+    kappa_frac_val = cfg.poroelasticity.kappa_frac
+    gamma_frac_val = cfg.poroelasticity.gamma_frac
+    k_frac_max_val = cfg.poroelasticity.k_frac_max
     dt_longest_val = cfg.time.dt_longest
     dtcoefup_val = cfg.time.dtcoefup
     hr_al_val = cfg.thermodynamics.hr_al
@@ -1110,7 +1114,14 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                     betasolid = cur_betasolid,
                     betafluid = cur_betafluid,
                     phimin = phimin_val,
-                    phimax = phimax_val
+                    phimax = phimax_val,
+                    hydrofracture = hydrofracture_val,
+                    pr = pr,
+                    pf = pf,
+                    TEN = TEN,
+                    kappa_frac = kappa_frac_val,
+                    gamma_frac = gamma_frac_val,
+                    k_frac_max = k_frac_max_val
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1286,7 +1297,12 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                 PHI,
                 ETAPHI,
                 pr,
-                pf
+                pf;
+                hydrofracture = hydrofracture_val,
+                TEN = TEN,
+                kappa_frac = kappa_frac_val,
+                gamma_frac = gamma_frac_val,
+                k_frac_max = k_frac_max_val
             )
             
             # ------------------------------------------------------------------

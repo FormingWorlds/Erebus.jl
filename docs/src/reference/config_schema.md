@@ -78,6 +78,10 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `betafluid` | `Float64` | `0.0` | $\text{Pa}^{-1}$ | Pore fluid compressibility (production: `4.0e-10`) | $\ge 0$ |
 | `phimin` | `Float64` | `1.0e-4` | - | Minimum porosity floor threshold | $0 < \phi_{\text{min}} < \phi_{\text{max}}$ |
 | `phimax` | `Float64` | `0.9999` | - | Maximum porosity ceiling threshold | $\phi_{\text{min}} < \phi_{\text{max}} < 1$ |
+| `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false` |
+| `kappa_frac` | `Float64` | `1.0e+3` | - | Dimensionless hydrofracture permeability multiplier | $\ge 0$ |
+| `gamma_frac` | `Float64` | `1.0` | - | Power-law exponent for overpressure scaling | $> 0$ |
+| `k_frac_max` | `Float64` | `1.0e-9` | $\text{m}^2$ | Maximum fractured permeability ceiling | $> 0$ |
 
 ---
 

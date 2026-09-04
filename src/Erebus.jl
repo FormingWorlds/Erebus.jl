@@ -61,14 +61,16 @@ module Physics
                      compute_reaction_constant, compute_thermodynamic_xfer!, perform_thermochemical_reaction!,
                      compute_shear_heating!, compute_adiabatic_heating!,
                      compute_drained_compressibility, compute_biot_willis_coefficient, compute_skempton_coefficient,
-                     compute_rhofluid, compute_fluid_viscosity
+                     compute_rhofluid, compute_fluid_viscosity,
+                     compute_hydrofracture_factor, compute_hydrofracture_permeability
     export distance, total, ktotal, kphi, ηᶠcur_inv_kᵠ, Q_radiogenic, etatotal_rocks,
            calculate_radioactive_heating, compute_rhocpfluidm, compute_ksolidm, compute_kfluidm,
            compute_Δtreaction, compute_gibbs_free_energy, compute_relative_enthalpy,
            compute_reaction_constant, compute_thermodynamic_xfer!, perform_thermochemical_reaction!,
            compute_shear_heating!, compute_adiabatic_heating!,
            compute_drained_compressibility, compute_biot_willis_coefficient, compute_skempton_coefficient,
-           compute_rhofluid, compute_fluid_viscosity
+           compute_rhofluid, compute_fluid_viscosity,
+           compute_hydrofracture_factor, compute_hydrofracture_permeability
 end
 
 module Particles

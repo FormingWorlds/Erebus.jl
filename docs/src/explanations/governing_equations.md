@@ -52,6 +52,12 @@ $$\eta_f(T) = \begin{cases} \eta_{\text{ice}} & T \le T_{\text{melt}} \\ \max\le
 
 where viscosity is referenced to $T_0 = 293.15\text{ K}$ ($20^\circ\text{C}$, $\eta_{f0} = 1.0\times 10^{-3}\text{ Pa}\cdot\text{s}$) with activation energy $E_a = 15.0\text{ kJ/mol}$ and gas constant $R$. This relation reproduces liquid water viscosity within $12\%$ across $273\text{--}373\text{ K}$ and provides an effective approximation across the liquid hydrothermal range ($273\text{--}600\text{ K}$), where fluid mobility $k_\phi / \eta_f(T)$ increases by a factor of $5\times\text{--}20\times$ (clamped to a maximum factor of $\eta_{f0}/\eta_{\text{min}} = 100\times$).
 
+When internal devolatilization or thermal expansion generates fluid overpressures, pore fluid pressure $P_f$ can exceed total confining pressure $P_t$ plus rock tensile strength $\sigma_t$ (Terzaghi effective pressure $P_{\text{eff}} = P_t - P_f \le -\sigma_t$). In this tensile failure regime, macroscopic hydraulic fractures open, enhancing permeability:
+
+$$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \left(\frac{\max(0, -P_{\text{eff}} - \sigma_t)}{\sigma_t}\right)^\gamma\right], k_{\text{max}}\right)$$
+
+where $\kappa_{\text{frac}} = 10^3$ is the default enhancement multiplier, $\gamma = 1.0$ is the scaling exponent, and $k_{\text{max}} = 10^{-9}\text{ m}^2$ is the permeability ceiling. This dynamic venting relieves local overpressures and routes hydrothermal fluids toward the planetesimal surface.
+
 ### 4. Coupled Fluid Mass Continuity
 Conservation of pore fluid mass with fluid compressibility is:
 

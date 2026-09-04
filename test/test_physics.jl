@@ -694,4 +694,47 @@
         @test_throws ArgumentError Erebus.compute_fluid_viscosity(300.0, 2; mode = :bogus)
     end
 
+    @testset "dynamic hydrofracturing and compute_hydrofracture_permeability()" begin
+        k0 = 1.0e-15 # m²
+        sigma_t = 1.0e7 # 10 MPa
+        kappa_frac = 1.0e3
+
+        # Case 1: Compressive / sub-tensile regime (Peff = 5 MPa > -10 MPa) -> no hydrofracture
+        Peff_comp = 5.0e6
+        @test Erebus.compute_hydrofracture_factor(Peff_comp, sigma_t; kappa_frac=kappa_frac) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_comp, sigma_t; kappa_frac=kappa_frac) == k0
+
+        # Case 2: Exact tensile limit (Peff = -10 MPa) -> overpressure = 0 -> factor = 1.0
+        Peff_limit = -1.0e7
+        @test Erebus.compute_hydrofracture_factor(Peff_limit, sigma_t; kappa_frac=kappa_frac) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_limit, sigma_t; kappa_frac=kappa_frac) == k0
+
+        # Case 3: Overpressured regime (Peff = -20 MPa, overpressure = 10 MPa = 1.0 * sigma_t)
+        # factor = 1.0 + 1000.0 * (1.0)^1.0 = 1001.0
+        Peff_over = -2.0e7
+        expected_factor = 1.0 + kappa_frac * 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, sigma_t; kappa_frac=kappa_frac) ≈ expected_factor rtol=1e-12
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_over, sigma_t; kappa_frac=kappa_frac) ≈ k0 * expected_factor rtol=1e-12
+
+        # Case 4: Power-law scaling with gamma = 2.0
+        # normalized overpressure = 2.0 (Peff = -30 MPa)
+        # factor = 1.0 + 1000.0 * (2.0)^2.0 = 4001.0
+        Peff_over2 = -3.0e7
+        @test Erebus.compute_hydrofracture_factor(Peff_over2, sigma_t; kappa_frac=kappa_frac, gamma=2.0) ≈ 4001.0 rtol=1e-12
+
+        # Case 5: Inactive (active=false)
+        @test Erebus.compute_hydrofracture_factor(Peff_over, sigma_t; active=false) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, Peff_over, sigma_t; active=false) == k0
+
+        # Case 6: Permeability ceiling (kmax)
+        kmax = 1.0e-13
+        @test Erebus.compute_hydrofracture_permeability(k0, -1.0e8, sigma_t; kappa_frac=kappa_frac, kmax=kmax) == kmax
+
+        # Case 7: Non-finite / corrupt inputs
+        @test Erebus.compute_hydrofracture_factor(NaN, sigma_t) == 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, NaN) == 1.0
+        @test Erebus.compute_hydrofracture_factor(Peff_over, -1.0e7) == 1.0
+        @test Erebus.compute_hydrofracture_permeability(k0, NaN, sigma_t) == k0
+    end
+
 end

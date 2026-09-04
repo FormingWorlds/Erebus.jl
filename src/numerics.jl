@@ -418,7 +418,14 @@ function assemble_hydromechanical_lse!(
     betasolid = betasolid,
     betafluid = betafluid,
     phimin = phimin,
-    phimax = phimax
+    phimax = phimax,
+    hydrofracture::Bool = false,
+    pr = nothing,
+    pf = nothing,
+    TEN = nothing,
+    kappa_frac::Real = 1.0e3,
+    gamma_frac::Real = 1.0,
+    k_frac_max::Real = 1.0e-9
 )
 # @timeit to "assemble_hydromechanical_lse()" begin
     # initialize LHS sparse coefficient matrix
@@ -786,7 +793,15 @@ function assemble_hydromechanical_lse!(
             #       kpf        kqx     kpf+6⋅Ny1
             #
             # LHS coefficient matrix
-            updateindex!(L, +, RX[i, j], kqx, kqx) # qxD
+            rx_val = RX[i, j]
+            if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                Peff_x = 0.5 * (pr[i, j] + pr[i, j+1] - pf[i, j] - pf[i, j+1])
+                sigma_t_x = 0.5 * (TEN[i, j] + TEN[i-1, j])
+                ffrac_x = compute_hydrofracture_factor(Peff_x, sigma_t_x; active=true, kappa_frac=kappa_frac, gamma=gamma_frac)
+                rx_floor = 1.0e-5 / k_frac_max
+                rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+            end
+            updateindex!(L, +, rx_val, kqx, kqx) # qxD
             updateindex!(L, +, -Kcont*inv(dx), kqx, kpf) # P₁
             updateindex!(L, +, Kcont*inv(dx), kqx, kpf+6*Ny1) # P₂
             # RHS coefficient vector
@@ -820,7 +835,15 @@ function assemble_hydromechanical_lse!(
             #                kpf+6
             #
             # LHS coefficient matrix
-            updateindex!(L, +, RY[i, j], kqy, kqy) # qyD
+            ry_val = RY[i, j]
+            if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                Peff_y = 0.5 * (pr[i, j] + pr[i+1, j] - pf[i, j] - pf[i+1, j])
+                sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j-1])
+                ffrac_y = compute_hydrofracture_factor(Peff_y, sigma_t_y; active=true, kappa_frac=kappa_frac, gamma=gamma_frac)
+                ry_floor = 1.0e-5 / k_frac_max
+                ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+            end
+            updateindex!(L, +, ry_val, kqy, kqy) # qyD
             updateindex!(L, +, -Kcont*inv(dy), kqy, kpf) # P₁
             updateindex!(L, +, Kcont*inv(dy), kqy, kpf+6) # P₂
             # RHS coefficient vector

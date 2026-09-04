@@ -118,6 +118,15 @@ using TOML
         @test_throws ArgumentError validate_config(
             SimulationConfig(poroelasticity = PoroelasticConfig(betasolid = 2.5e-11, betafluid = 4e-10, phimin = -0.1, phimax = 0.9))
         )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(poroelasticity = PoroelasticConfig(kappa_frac = -1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(poroelasticity = PoroelasticConfig(gamma_frac = 0.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(poroelasticity = PoroelasticConfig(k_frac_max = -1.0e-9))
+        )
 
         # Invalid time parameters
         @test_throws ArgumentError validate_config(
