@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://formingworlds.github.io/Erebus.jl/dev)
-[![Test Coverage](https://codecov.io/gh/formingworlds/Erebus.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/formingworlds/Erebus.jl)
+[![Test Coverage](https://codecov.io/gh/FormingWorlds/Erebus.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/FormingWorlds/Erebus.jl)
 [![Code Style: Blue](https://img.shields.io/badge/code%20style-blue-4495d1.svg)](https://github.com/invenia/BlueStyle)
 
 `Erebus.jl` is a two-dimensional hydro-thermo-mechanical-chemical (HTMC) geodynamic modeling code for planetesimal evolution. It simulates coupled two-phase fluid-solid flow, visco-elasto-plastic rock deformation, radiogenic heating, fluid thermal buoyancy, temperature-dependent Darcy percolation, and dynamic hydrofracturing in early solar system planetesimals.
@@ -75,7 +75,7 @@ Available pre-configured setups in `configs/`:
 
 - `configs/hydrothermal_benchmark.toml`: 2D hydrothermal circulation benchmark (32x32 cells, 100 km diameter planetesimal, 26Al decay heating, Darcy thermal buoyancy, Arrhenius fluid viscosity, dynamic hydrofracturing).
 - `configs/default.toml`: Default reference configuration with baseline physical properties.
-- `configs/test_quick.toml`: Low-resolution configuration for rapid execution and sanity checks.
+- `configs/test_quick.toml`: Short-duration configuration (5 timesteps) for rapid execution and sanity checks.
 
 
 ### Resume from Checkpoint
@@ -98,10 +98,10 @@ julia --project scripts/export_hydrothermal_data.jl output_hydrothermal/
 python3 scripts/generate_hydrothermal_benchmark.py output_hydrothermal/benchmark_plot_data.json
 
 # Generate comprehensive multi-panel diagnostic plots (requires PyPlot and StatsBase)
-julia scripts/generate_plots.jl output_hydrothermal/
+julia --project scripts/generate_plots.jl output_hydrothermal/
 
-# Generate time-evolution MP4 animations
-julia scripts/generate_animations.jl output_hydrothermal/
+# Generate time-evolution MP4 animations (requires Plots)
+julia --project scripts/generate_animations.jl output_hydrothermal/
 ```
 
 ---
