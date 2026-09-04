@@ -190,6 +190,47 @@ function get_viscosities_stresses_density_gradients!(
 end # function get_viscosities_stresses_density_gradients!
 
 """
+Check if point (i, j) lies on or outside domain boundary for gravitational Poisson solver.
+
+$(SIGNATURES)
+
+# Details
+
+    - i: y-index
+    - j: x-index
+    - Ny1: total number of P nodes in y
+    - Nx1: total number of P nodes in x
+    - xp_val: x coordinates of P nodes
+    - yp_val: y coordinates of P nodes
+    - xc_val: center coordinate in x
+    - yc_val: center coordinate in y
+    - r_limit: radius limit for circular planetary domain
+
+# Returns
+
+    - true if node is boundary or outside domain, false if interior
+"""
+@inline function is_gravitational_boundary(
+    i::Integer,
+    j::Integer,
+    Ny1::Integer,
+    Nx1::Integer,
+    xp_val,
+    yp_val,
+    xc_val,
+    yc_val,
+    r_limit,
+)
+    return (
+        i == 1 ||
+        i == Ny1 ||
+        j == 1 ||
+        j == Nx1 ||
+        distance(xp_val[j], yp_val[i], xc_val, yc_val) > r_limit
+    )
+end
+
+"""
 Assemble the LHS sparse coefficient matrix and fill RHS coefficient vector
 of the Poisson equation to be solved for the gravitational potential Φ.
 
@@ -199,13 +240,15 @@ $(SIGNATURES)
 
     - RHO: density at P nodes
     - RP: right hand side coefficient vector
+    - coords: grid coordinates
+    - LP: optional ExtendableSparseMatrix buffer to reuse
 
 # Returns
 
     - LP: LHS sparse coefficient matrix
 
 """
-function assemble_gravitational_lse!(RHO, RP; coords=nothing)
+function assemble_gravitational_lse!(RHO, RP; coords=nothing, LP=nothing)
     Ny1, Nx1 = size(RHO)
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
@@ -213,36 +256,77 @@ function assemble_gravitational_lse!(RHO, RP; coords=nothing)
     yp_val = coords === nothing ? yp : coords.yp
     xc_val = coords === nothing ? xcenter : coords.xcenter
     yc_val = coords === nothing ? ycenter : coords.ycenter
+    r_limit = min(xc_val, yc_val)
 
-    # fresh LHS sparse coefficient matrix
-    LP = ExtendableSparseMatrix(Nx1*Ny1, Nx1*Ny1)
+    L = if LP === nothing
+        ExtendableSparseMatrix(Nx1 * Ny1, Nx1 * Ny1)
+    else
+        if !isempty(LP.cscmatrix.nzval)
+            nonzeros(LP.cscmatrix) .= zero(0.0)
+        end
+        LP
+    end
     # reset RHS coefficient vector
     RP .= zero(0.0)
+    G_coeff = 4.0 * 2.0 * inv(3.0) * π * G
     # iterate over P nodes
     for j in 1:1:Nx1, i in 1:1:Ny1
         # define global index in algebraic space
-        gk = (j-1) * Ny1 + i
+        gk = (j - 1) * Ny1 + i
         # decide if external / boundary points
-        @inbounds if (
-            i==1 ||
-            i==Ny1 ||
-            j==1 ||
-            j==Nx1 ||
-            distance(xp_val[j], yp_val[i], xc_val, yc_val) > min(xc_val, yc_val)
+        @inbounds if is_gravitational_boundary(
+            i, j, Ny1, Nx1, xp_val, yp_val, xc_val, yc_val, r_limit
         )
             # boundary condition: ϕ = 0
-            updateindex!(LP, +, 1.0, gk, gk)
+            updateindex!(L, +, 1.0, gk, gk)
         else
             # internal points: 2D Poisson equation: gravitational potential Φ
-            updateindex!(LP, +, inv(dx_val^2), gk, gk-Ny1) # Φ₁
-            updateindex!(LP, +, inv(dy_val^2), gk, gk-1) # Φ₂
-            updateindex!(LP, +, -2.0*(inv(dx_val^2)+inv(dy_val^2)), gk, gk) # Φ₃
-            updateindex!(LP, +, inv(dy_val^2), gk, gk+1) # Φ₄
-            updateindex!(LP, +, inv(dx_val^2), gk, gk+Ny1) # Φ₅
-            @inbounds RP[gk] = 4.0 * 2.0 * inv(3.0) * π * G * RHO[i, j]
+            updateindex!(L, +, inv(dx_val^2), gk, gk - Ny1) # Φ₁
+            updateindex!(L, +, inv(dy_val^2), gk, gk - 1) # Φ₂
+            updateindex!(L, +, -2.0 * (inv(dx_val^2) + inv(dy_val^2)), gk, gk) # Φ₃
+            updateindex!(L, +, inv(dy_val^2), gk, gk + 1) # Φ₄
+            updateindex!(L, +, inv(dx_val^2), gk, gk + Ny1) # Φ₅
+            @inbounds RP[gk] = G_coeff * RHO[i, j]
         end
     end
-    return LP
+    flush!(L)
+    return L
+end
+
+"""
+Assemble right-hand side coefficient vector for gravitational Poisson equation.
+
+$(SIGNATURES)
+
+# Details
+
+    - RHO: density at P nodes
+    - RP: right hand side coefficient vector to populate
+    - coords: grid coordinates
+
+# Returns
+
+    - RP
+"""
+function assemble_gravitational_rhs!(RHO, RP; coords=nothing)
+    Ny1, Nx1 = size(RHO)
+    xp_val = coords === nothing ? xp : coords.xp
+    yp_val = coords === nothing ? yp : coords.yp
+    xc_val = coords === nothing ? xcenter : coords.xcenter
+    yc_val = coords === nothing ? ycenter : coords.ycenter
+    r_limit = min(xc_val, yc_val)
+
+    RP .= zero(0.0)
+    G_coeff = 4.0 * 2.0 * inv(3.0) * π * G
+    for j in 1:1:Nx1, i in 1:1:Ny1
+        @inbounds if !is_gravitational_boundary(
+            i, j, Ny1, Nx1, xp_val, yp_val, xc_val, yc_val, r_limit
+        )
+            gk = (j - 1) * Ny1 + i
+            RP[gk] = G_coeff * RHO[i, j]
+        end
+    end
+    return RP
 end
 
 """
@@ -327,10 +411,12 @@ $(SIGNATURES)
     - DMP: mass transfer term at P nodes
     - dt: time step
     - R: vector to store RHS coefficients
+    - coords: grid coordinates
+    - L: optional ExtendableSparseMatrix buffer to reuse
 
 # Returns
 
-    - L: LHS coefficient matrix
+    - L: LHS coefficient matrix (SparseMatrixCSC)
 """
 function assemble_hydromechanical_lse!(
     ETA,
@@ -369,6 +455,7 @@ function assemble_hydromechanical_lse!(
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
     coords=nothing,
+    L=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -376,8 +463,15 @@ function assemble_hydromechanical_lse!(
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
 
-    # initialize LHS sparse coefficient matrix
-    L = ExtendableSparseMatrix(Nx1*Ny1*6, Nx1*Ny1*6)
+    # initialize or reuse LHS sparse coefficient matrix
+    L = if L === nothing
+        ExtendableSparseMatrix(Nx1 * Ny1 * 6, Nx1 * Ny1 * 6)
+    else
+        if !isempty(L.cscmatrix.nzval)
+            nonzeros(L.cscmatrix) .= zero(0.0)
+        end
+        L
+    end
     # reset RHS coefficient vector
     R .= 0.0
     @inbounds begin
@@ -1570,18 +1664,29 @@ $(SIGNATURES)
 	- HS: shear heating at P nodes
     - DHP: latent heating (HL) at P nodes
     - RT: thermal RHS coefficient vector
-	- dt: current time step length
+    - dt: current time step length
+    - coords: grid coordinates
+    - LT: optional ExtendableSparseMatrix buffer to reuse
 
 # Returns
 
     - LT: LHS sparse coefficient matrix
 """
-function assemble_thermal_lse!(tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=nothing)
+function assemble_thermal_lse!(
+    tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=nothing, LT=nothing
+)
     Ny1, Nx1 = size(tk1)
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
-    # fresh LHS coefficient matrix
-    LT = ExtendableSparseMatrix(Ny1*Nx1, Ny1*Nx1)
+    # fresh or reusable LHS coefficient matrix
+    LT = if LT === nothing
+        ExtendableSparseMatrix(Ny1 * Nx1, Ny1 * Nx1)
+    else
+        if !isempty(LT.cscmatrix.nzval)
+            nonzeros(LT.cscmatrix) .= zero(0.0)
+        end
+        LT
+    end
     # reset RHS coefficient vector
     RT .= zero(0.0)
     # compose global thermal matrix LT and coefficient vector RT
