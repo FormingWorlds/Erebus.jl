@@ -7,12 +7,12 @@ using TOML
     @testset "default_config() matches baseline constants" begin
         cfg = default_config()
         @test cfg isa SimulationConfig
-        @test cfg.grid.Nx == 15
-        @test cfg.grid.Ny == 15
-        @test cfg.grid.xsize == 14000.0
-        @test cfg.grid.ysize == 14000.0
-        @test cfg.geometry.rplanet == 5000.0
-        @test cfg.geometry.rcrust == 4800.0
+        @test cfg.grid.Nx == 33
+        @test cfg.grid.Ny == 33
+        @test cfg.grid.xsize == 140000.0
+        @test cfg.grid.ysize == 140000.0
+        @test cfg.geometry.rplanet == 50000.0
+        @test cfg.geometry.rcrust == 50000.0
         # Poroelastic baseline default matches constants.jl test baseline (0.0)
         @test cfg.poroelasticity.betasolid == 0.0
         @test cfg.poroelasticity.betafluid == 0.0
@@ -47,8 +47,8 @@ using TOML
         # Default TOML file provides calibrated production configuration
         default_toml = joinpath(@__DIR__, "..", "configs", "default.toml")
         cfg_def = load_config(default_toml)
-        @test cfg_def.grid.Nx == 15
-        @test cfg_def.grid.xsize == 14000.0
+        @test cfg_def.grid.Nx == 33
+        @test cfg_def.grid.xsize == 140000.0
         @test cfg_def.poroelasticity.betasolid == 2.5e-11
         @test cfg_def.poroelasticity.betafluid == 4.0e-10
         @test cfg_def.materials.ksolidm == SVector{3, Float64}([3.0, 3.0, 3000.0])
@@ -60,8 +60,8 @@ using TOML
         @test cfg_q.output.output_dir == "output_test"
         @test cfg_q.output.savematstep == 2
         # Verify inherited defaults for omitted sections
-        @test cfg_q.grid.Nx == 15
-        @test cfg_q.geometry.rplanet == 5000.0
+        @test cfg_q.grid.Nx == 33
+        @test cfg_q.geometry.rplanet == 50000.0
         @test cfg_q.solver.titermax == 10000
 
         # Missing file error check
@@ -77,12 +77,12 @@ using TOML
         n_steps = 5
         """
         cfg = load_config(toml_str)
-        @test cfg.grid.Nx == 15
-        @test cfg.grid.Ny == 15
+        @test cfg.grid.Nx == 33
+        @test cfg.grid.Ny == 33
         @test cfg.poroelasticity.betasolid == 1.0e-10
         @test cfg.poroelasticity.betafluid == 0.0 # baseline default preserved
         @test cfg.time.n_steps == 5
-        @test cfg.geometry.rplanet == 5000.0 # default preserved
+        @test cfg.geometry.rplanet == 50000.0 # default preserved
     end
 
     @testset "validate_config() schema and physical bounds enforcement" begin
@@ -91,18 +91,18 @@ using TOML
 
         # Compiled grid constraints (dynamic grid resizing requires recompilation)
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 31, Ny = 15, xsize = 14000.0, ysize = 14000.0))
+            SimulationConfig(grid = GridConfig(Nx = 15, Ny = 33, xsize = 140000.0, ysize = 140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 15, Ny = 31, xsize = 14000.0, ysize = 14000.0))
+            SimulationConfig(grid = GridConfig(Nx = 33, Ny = 15, xsize = 140000.0, ysize = 140000.0))
         )
         @test_throws ArgumentError validate_config(
-            SimulationConfig(grid = GridConfig(Nx = 15, Ny = 15, xsize = 50000.0, ysize = 14000.0))
+            SimulationConfig(grid = GridConfig(Nx = 33, Ny = 33, xsize = 50000.0, ysize = 140000.0))
         )
 
         # Compiled geometry constraints
         @test_throws ArgumentError validate_config(
-            SimulationConfig(geometry = GeometryConfig(rplanet = 6000.0, rcrust = 4800.0, xcenter = 7000.0, ycenter = 7000.0, psurface = 1e3))
+            SimulationConfig(geometry = GeometryConfig(rplanet = 60000.0, rcrust = 50000.0, xcenter = 70000.0, ycenter = 70000.0, psurface = 1e3))
         )
 
         # Invalid poroelastic parameters
@@ -235,6 +235,23 @@ using TOML
         @test hr_sol_on[1] > 0.0
         hr_sol_off, _ = Erebus.calculate_radioactive_heating(false, false, 0.0)
         @test all(hr_sol_off .== 0.0)
+    end
+
+    @testset "output restart_from validation" begin
+        # Non-existent checkpoint file
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(output = OutputConfig(restart_from = "nonexistent_checkpoint.jld2"))
+        )
+        # Non-.jld2 extension
+        tmp_txt = tempname() * ".txt"
+        touch(tmp_txt)
+        try
+            @test_throws ArgumentError validate_config(
+                SimulationConfig(output = OutputConfig(restart_from = tmp_txt))
+            )
+        finally
+            rm(tmp_txt, force=true)
+        end
     end
 end
 

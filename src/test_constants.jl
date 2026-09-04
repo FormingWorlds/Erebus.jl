@@ -5,27 +5,25 @@ const hr_al = true
 const hr_fe = false
 # planetary parameters
 # planetary radius [m]
-const rplanet = 5_000.0
+const rplanet = 50_000.0
 # crust radius [m]
-const rcrust = 4_800.0
+const rcrust = 50_000.0
 # surface pressure [Pa]
 const psurface = 1.0e+3
 # model size, geometry, and resolution
 # horizontal model size [m]
-const xsize = 14_000.0
-# const xsize = 140_000.0
+const xsize = 140_000.0
 # vertical model size [m]
-const ysize = 14_000.0
-# const ysize = 140_000.0
+const ysize = 140_000.0
 # horizontal center of model
 const xcenter = xsize / 2
 # vertical center of model
 const ycenter = ysize / 2  
 # basic grid resolution in x direction (horizontal)
-const Nx = 15
+const Nx = 33
 # const Nx = 141
 # basic grid resolution in y direction (vertical)	
-const Ny = 15
+const Ny = 33
 # const Ny = 141
 # Vx, Vy, P grid resolution in x direction (horizontal)
 const Nx1 = Nx + 1

@@ -23,6 +23,7 @@ makedocs(
         "Tutorials" => [
             "Quickstart" => "tutorials/quickstart.md",
             "1D Terzaghi Consolidation" => "tutorials/terzaghi_consolidation.md",
+            "2D Hydrothermal Circulation" => "tutorials/hydrothermal_circulation.md",
         ],
 
         "How-To Guides" => [

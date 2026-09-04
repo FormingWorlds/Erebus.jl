@@ -13,10 +13,10 @@ Defines the numerical domain dimensions and basic grid resolution.
 
 ```toml
 [grid]
-xsize = 14000.0   # Horizontal domain size [m]
-ysize = 14000.0   # Vertical domain size [m]
-Nx = 15           # Basic grid resolution in x
-Ny = 15           # Basic grid resolution in y
+xsize = 140000.0   # Horizontal domain size [m]
+ysize = 140000.0   # Vertical domain size [m]
+Nx = 33           # Basic grid resolution in x
+Ny = 33           # Basic grid resolution in y
 ```
 
 *Note: In the current version, grid resolution `Nx` and `Ny` are coupled to compile-time static stencils. Changes to grid dimensions require updating constants and recompiling.*
@@ -26,10 +26,10 @@ Defines the spherical planetesimal geometry and location within the Cartesian co
 
 ```toml
 [geometry]
-rplanet = 5000.0   # Total planetesimal radius [m]
-rcrust = 4800.0    # Crust radius [m] (transition from core/mantle to crust)
-xcenter = 7000.0   # Horizontal center coordinate [m]
-ycenter = 7000.0   # Vertical center coordinate [m]
+rplanet = 50000.0   # Total planetesimal radius [m]
+rcrust = 50000.0    # Crust radius [m] (single planet phase)
+xcenter = 70000.0   # Horizontal center coordinate [m]
+ycenter = 70000.0   # Vertical center coordinate [m]
 psurface = 1.0e+3  # Surface ambient pressure anchor [Pa]
 ```
 

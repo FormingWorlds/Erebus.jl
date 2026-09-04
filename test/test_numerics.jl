@@ -1490,7 +1490,7 @@
         c_v = k_perm / (eta_f * S)
 
         u0 = 1.0e6
-        dt = 2.0e5 # Timestep [s]
+        dt = 2.0e7 # Timestep [s] scaled with column height (H^2/cv)
 
         ETA = fill(1e25, Ny, Nx)
         ETAP = fill(1e25, Ny1, Nx1)
@@ -1552,10 +1552,11 @@
 
         # Verify numerical solution against analytical solution across column depth
         # Account for psurface boundary condition at draining anchors
+        mid_col = div(Nx1, 2)
         for i = 3:Ny-1
             y = (i - 2) * dy
             u_ana = analytical_2drain(y, t_total, H, c_v, u0 - psurface) + psurface
-            u_num = pf[i, 8]
+            u_num = pf[i, mid_col]
             rel_err = abs(u_num - u_ana) / u0
             @test rel_err < 0.035
         end

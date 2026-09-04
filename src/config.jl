@@ -15,10 +15,10 @@ Grid discretization and spatial domain parameters.
 $(FIELDS)
 """
 Base.@kwdef struct GridConfig
-    xsize::Float64 = 14_000.0
-    ysize::Float64 = 14_000.0
-    Nx::Int = 15
-    Ny::Int = 15
+    xsize::Float64 = 140_000.0
+    ysize::Float64 = 140_000.0
+    Nx::Int = 33
+    Ny::Int = 33
 end
 
 """
@@ -27,10 +27,10 @@ Planetary body geometry parameters.
 $(FIELDS)
 """
 Base.@kwdef struct GeometryConfig
-    rplanet::Float64 = 5_000.0
-    rcrust::Float64 = 4_800.0
-    xcenter::Float64 = 7_000.0
-    ycenter::Float64 = 7_000.0
+    rplanet::Float64 = 50_000.0
+    rcrust::Float64 = 50_000.0
+    xcenter::Float64 = 70_000.0
+    ycenter::Float64 = 70_000.0
     psurface::Float64 = 1.0e+3
 end
 
@@ -158,6 +158,7 @@ Base.@kwdef struct OutputConfig
     output_dir::String = "output"
     savematstep::Int = 10
     visstep::Int = 1
+    restart_from::String = ""
 end
 
 """
@@ -245,6 +246,10 @@ function validate_config(cfg::SimulationConfig)
     # Output checks
     cfg.output.savematstep >= 1 || throw(ArgumentError("savematstep must be >= 1, got $(cfg.output.savematstep)"))
     cfg.output.visstep >= 1 || throw(ArgumentError("visstep must be >= 1, got $(cfg.output.visstep)"))
+    if !isempty(cfg.output.restart_from)
+        isfile(cfg.output.restart_from) || throw(ArgumentError("Specified restart_from checkpoint file does not exist: '$(cfg.output.restart_from)'"))
+        endswith(cfg.output.restart_from, ".jld2") || throw(ArgumentError("restart_from checkpoint file must have .jld2 extension, got '$(cfg.output.restart_from)'"))
+    end
 
     # Thermodynamics checks
     0.0 <= cfg.thermodynamics.ratio_al <= 1.0 || throw(ArgumentError("ratio_al must be in [0, 1], got $(cfg.thermodynamics.ratio_al)"))

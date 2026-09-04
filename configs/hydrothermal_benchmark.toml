@@ -1,15 +1,16 @@
-# Erebus.jl Planetesimal Simulation Configuration
-# Calibrated baseline physical model for thermo-hydro-mechanical evolution
+# Erebus.jl 2D Hydrothermal Circulation Benchmark Configuration
+# 32x32 grid resolution (Nx=33, Ny=33, dx=dy=4375.0 m)
+# Fully coupled Darcy thermal buoyancy, Arrhenius fluid viscosity, and dynamic hydrofracturing
 
 [grid]
 xsize = 140000.0        # horizontal domain size [m]
 ysize = 140000.0        # vertical domain size [m]
-Nx = 33                  # basic grid resolution in x (must match compiled constants)
-Ny = 33                  # basic grid resolution in y (must match compiled constants)
+Nx = 33                  # basic grid resolution in x
+Ny = 33                  # basic grid resolution in y
 
 [geometry]
 rplanet = 50000.0       # planetesimal radius [m]
-rcrust = 50000.0        # crust radius [m]
+rcrust = 50000.0        # crust radius [m] (single planet phase)
 xcenter = 70000.0       # horizontal center [m]
 ycenter = 70000.0       # vertical center [m]
 psurface = 1.0e+3        # surface pressure anchor [Pa]
@@ -23,10 +24,10 @@ dtstep = 200             # iterations before changing timestep
 dxymax = 0.05            # max marker displacement per timestep [grid units]
 vpratio = 0.3333333333333333 # weight of averaged velocity for moving markers
 DTmax = 20.0             # max temperature change per timestep [K]
-start_time = 7.0965e+13  # initial simulation time [s] (2.25 Ma)
+start_time = 0.0         # initial simulation time [s] (0.0 Ma after CAIs)
 endtime = 4.731e+14      # maximum simulation time [s] (15.0 Ma)
 start_step = 1           # starting timestep counter
-n_steps = 10             # total number of timesteps to run
+n_steps = 15             # total number of timesteps to run
 
 [solver]
 titermax = 10000         # maximum global/plastic iterations
@@ -41,10 +42,14 @@ etamin = 1.0e+12         # lower viscosity cut-off [Pa s]
 etamax = 1.0e+23         # upper viscosity cut-off [Pa s]
 
 [poroelasticity]
-betasolid = 2.5e-11      # solid silicate matrix compressibility [1/Pa] (production value)
-betafluid = 4.0e-10      # pore fluid (water) compressibility [1/Pa] (production value)
+betasolid = 2.5e-11      # solid silicate matrix compressibility [1/Pa]
+betafluid = 4.0e-10      # pore fluid (water) compressibility [1/Pa]
 phimin = 1.0e-4          # minimum porosity floor [-]
 phimax = 0.9999          # maximum porosity ceiling [-]
+hydrofracture = true     # dynamic tensile hydrofracturing enabled
+kappa_frac = 1000.0      # permeability multiplier scaling coefficient [-]
+gamma_frac = 1.0         # power-law exponent for normalized overpressure [-]
+k_frac_max = 1.0e-9      # strict upper permeability ceiling [m²]
 
 [thermodynamics]
 hr_al = true             # 26Al decay heating active in solid phase
@@ -54,11 +59,13 @@ ratio_fe = 1.0e-6        # initial 60Fe/56Fe isotope ratio
 tmsolidphase = 1416.0    # solid phase melting temperature [K]
 tmfluidphase = 273.0     # fluid phase melting temperature [K]
 phim0 = 0.2              # standard reference porosity [-]
+thermal_buoyancy = true  # Darcy thermal buoyancy enabled
+fluid_viscosity_mode = "arrhenius" # temperature-dependent fluid viscosity
+fluid_viscosity_Ea = 15000.0       # activation energy [J/mol]
+fluid_viscosity_T0 = 293.15        # reference temperature [K]
+fluid_viscosity_eta0 = 1.0e-3      # reference liquid viscosity [Pa s]
 
 [materials]
-# Material index 1: Planetesimal core / mantle
-# Material index 2: Porous silicate crust / rock
-# Material index 3: Sticky air / space
 rhosolidm = [3300.0, 3300.0, 1.0]
 rhofluidm = [1000.0, 1000.0, 1.0]
 etasolidm = [1.0e+19, 1.0e+19, 1.0e+16]
@@ -74,11 +81,12 @@ kfluidm = [50.0, 50.0, 3000.0]
 gggsolidm = [1.0e+10, 1.0e+10, 1.0e+10]
 frictsolidm = [0.6, 0.6, 0.0]
 cohessolidm = [1.0e+08, 1.0e+08, 1.0e+08]
-tenssolidm = [6.0e+07, 6.0e+07, 6.0e+07]
-kphim0 = [1.0e-13, 1.0e-13, 1.0e-17]
+tenssolidm = [5.0e+04, 5.0e+04, 1.0e+08]
+kphim0 = [1.0e-12, 1.0e-12, 1.0e-17]
 tkm0 = [170.0, 170.0, 170.0]
 
 [output]
-output_dir = "output"
-savematstep = 10         # checkpoint storage periodicity
+output_dir = "output_hydrothermal"
+savematstep = 1          # checkpoint storage periodicity
 visstep = 1              # visualization cadence
+restart_from = ""        # optional path to checkpoint .jld2 to resume from

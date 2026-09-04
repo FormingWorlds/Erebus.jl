@@ -316,6 +316,24 @@ function save_state(
 end
 
 """
+Load simulation state from a JLD2 checkpoint archive.
+
+$(SIGNATURES)
+
+# Details
+
+    - checkpoint_path: absolute or relative path to JLD2 checkpoint archive
+
+# Returns
+
+    - checkpoint_data: dictionary containing saved state arrays and progression parameters
+"""
+function load_state(checkpoint_path::AbstractString)
+    isfile(checkpoint_path) || throw(ArgumentError("Checkpoint file does not exist: $checkpoint_path"))
+    return JLD2.load(checkpoint_path)
+end
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -323,13 +341,19 @@ $(SIGNATURES)
 # Details
 
     - output_path: Absolute path where to save simulation output files
+    - restart_from: Optional path to checkpoint JLD2 file to resume from
 
 # Returns
     
     - nothing
 """
-function simulation_loop(cfg::SimulationConfig = default_config(); output_path::String = cfg.output.output_dir)
+function simulation_loop(
+    cfg::SimulationConfig = default_config();
+    output_path::String = cfg.output.output_dir,
+    restart_from::AbstractString = cfg.output.restart_from
+)
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
+    isdir(output_path) || mkpath(output_path)
 # @timeit to "simulation_loop setup" begin
     # -------------------------------------------------------------------------
     # set up dynamic simulation parameters from given static parameters"
@@ -523,165 +547,296 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
     ) = setup_staggered_grid_properties_helpers()
 
     # -------------------------------------------------------------------------
-    # set up markers"
+    # set up markers and state (from checkpoint or fresh definition)
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers()
-    (
-        xm,
-        ym,
-        tm,
-        tkm,
-        sxxm,
-        sxym,
-        etavpm,
-        phim,
-        phinewm,
-        pfm0,
-        XWsolidm,
-        XWsolidm0
-    ) = setup_marker_properties(marknum)
-    (
-        rhototalm,
-        rhocptotalm,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm_rhocptotalm,
-        etafluidcur_inv_kphim,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur
-    ) = setup_marker_properties_helpers(marknum)
-    define_markers!(
-        xm,
-        ym,
-        tm,
-        phim,
-        etavpm,
-        rhototalm,
-        rhocptotalm,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur,
-        XWsolidm0
-    )
-    # copy thermodynamic marker properties to next generation for initial setup
-    XWsolidm .= XWsolidm0
-    phinewm .= phim
+    is_restart = !isempty(restart_from)
+    if is_restart
+        ckpt = load_state(restart_from)
+        start_step_val = ckpt["timestep"] + 1
+        dt = ckpt["dt"]
+        timesum = ckpt["timesum"]
+        marknum = ckpt["marknum"]
+        n_steps_val = cfg.time.n_steps
+        if n_steps_val < start_step_val
+            @warn "Restart checkpoint timestep ($(ckpt["timestep"])) >= target n_steps ($n_steps_val). No timesteps will be executed."
+        end
 
-    # save initial state
-    save_state(
-        output_path,
-        0,
-        dt,
-        timesum,
-        marknum,
-        ETA,
-        ETA0,
-        GGG,
-        EXY,
-        SXY,
-        SXY0,
-        wyx,
-        COH,
-        TEN,
-        FRI,
-        YNY,
-        RHOX,
-        RHOFX,
-        KX,
-        PHIX,
-        vx,
-        vxf,
-        RX,
-        qxD,
-        gx,
-        RHOY,
-        RHOFY,
-        KY,
-        PHIY,
-        vy,
-        vyf,
-        RY,
-        qyD,
-        gy,
-        RHO,
-        RHOCP,
-        ALPHA,
-        ALPHAF,
-        HR,
-        HA,
-        HS,
-        ETAP,
-        GGGP,
-        EXX,
-        SXX,
-        SXX0,
-        tk1,
-        tk2,
-        vxp,
-        vyp,
-        vxpf,
-        vypf,
-        pr,
-        pf,
-        ps,
-        pr0,
-        pf0,
-        ps0,
-        ETAPHI,
-        BETAPHI,
-        PHI,
-        APHI,
-        FI,
-        ETA5,
-        ETA00,
-        YNY5,
-        YNY00,
-        YNY_inv_ETA,
-        DSXY,
-        EII,
-        SII,
-        DSXX,
-        DMP,
-        DHP,
-        XWS,
-        XWsolidm0,
-        xm,
-        ym,
-        tm,
-        tkm,
-        sxxm,
-        sxym,
-        etavpm,
-        phim,
-        rhototalm,
-        rhocptotalm,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm_rhocptotalm,
-        etafluidcur_inv_kphim,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur
-    )
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0
+        ) = setup_marker_properties(marknum)
+        (
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur
+        ) = setup_marker_properties_helpers(marknum)
+
+        # Restore staggered grid arrays
+        ETA .= ckpt["ETA"]
+        ETA0 .= ckpt["ETA0"]
+        GGG .= ckpt["GGG"]
+        EXY .= ckpt["EXY"]
+        SXY .= ckpt["SXY"]
+        SXY0 .= ckpt["SXY0"]
+        wyx .= ckpt["wyx"]
+        COH .= ckpt["COH"]
+        TEN .= ckpt["TEN"]
+        FRI .= ckpt["FRI"]
+        YNY .= ckpt["YNY"]
+        RHOX .= ckpt["RHOX"]
+        RHOFX .= ckpt["RHOFX"]
+        KX .= ckpt["KX"]
+        PHIX .= ckpt["PHIX"]
+        vx .= ckpt["vx"]
+        vxf .= ckpt["vxf"]
+        RX .= ckpt["RX"]
+        qxD .= ckpt["qxD"]
+        gx .= ckpt["gx"]
+        RHOY .= ckpt["RHOY"]
+        RHOFY .= ckpt["RHOFY"]
+        KY .= ckpt["KY"]
+        PHIY .= ckpt["PHIY"]
+        vy .= ckpt["vy"]
+        vyf .= ckpt["vyf"]
+        RY .= ckpt["RY"]
+        qyD .= ckpt["qyD"]
+        gy .= ckpt["gy"]
+        RHO .= ckpt["RHO"]
+        RHOCP .= ckpt["RHOCP"]
+        ALPHA .= ckpt["ALPHA"]
+        ALPHAF .= ckpt["ALPHAF"]
+        HR .= ckpt["HR"]
+        HA .= ckpt["HA"]
+        HS .= ckpt["HS"]
+        ETAP .= ckpt["ETAP"]
+        GGGP .= ckpt["GGGP"]
+        EXX .= ckpt["EXX"]
+        SXX .= ckpt["SXX"]
+        SXX0 .= ckpt["SXX0"]
+        tk1 .= ckpt["tk1"]
+        tk2 .= ckpt["tk2"]
+        pr .= ckpt["pr"]
+        pf .= ckpt["pf"]
+        ps .= ckpt["ps"]
+        pr0 .= ckpt["pr0"]
+        pf0 .= ckpt["pf0"]
+        ps0 .= ckpt["ps0"]
+        ETAPHI .= ckpt["ETAPHI"]
+        BETAPHI .= ckpt["BETAPHI"]
+        PHI .= ckpt["PHI"]
+        APHI .= ckpt["APHI"]
+        FI .= ckpt["FI"]
+        DMP .= ckpt["DMP"]
+        DHP .= ckpt["DHP"]
+        XWS .= ckpt["XWS"]
+
+        # Restore marker properties
+        xm .= ckpt["xm"]
+        ym .= ckpt["ym"]
+        tm .= ckpt["tm"]
+        tkm .= ckpt["tkm"]
+        sxxm .= ckpt["sxxm"]
+        sxym .= ckpt["sxym"]
+        etavpm .= ckpt["etavpm"]
+        phim .= ckpt["phim"]
+        phinewm .= phim
+        rhototalm .= ckpt["rhototalm"]
+        rhocptotalm .= ckpt["rhocptotalm"]
+        etatotalm .= ckpt["etatotalm"]
+        hrtotalm .= ckpt["hrtotalm"]
+        ktotalm .= ckpt["ktotalm"]
+        tkm_rhocptotalm .= ckpt["tkm_rhocptotalm"]
+        etafluidcur_inv_kphim .= ckpt["etafluidcur_inv_kphim"]
+        inv_gggtotalm .= ckpt["inv_gggtotalm"]
+        fricttotalm .= ckpt["fricttotalm"]
+        cohestotalm .= ckpt["cohestotalm"]
+        tenstotalm .= ckpt["tenstotalm"]
+        rhofluidcur .= ckpt["rhofluidcur"]
+        alphasolidcur .= ckpt["alphasolidcur"]
+        alphafluidcur .= ckpt["alphafluidcur"]
+        XWsolidm0 .= ckpt["XWsolidm0"]
+        XWsolidm .= XWsolidm0
+        @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
+    else
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0
+        ) = setup_marker_properties(marknum)
+        (
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur
+        ) = setup_marker_properties_helpers(marknum)
+        define_markers!(
+            xm,
+            ym,
+            tm,
+            phim,
+            etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            XWsolidm0
+        )
+        # copy thermodynamic marker properties to next generation for initial setup
+        XWsolidm .= XWsolidm0
+        phinewm .= phim
+
+        # save initial state
+        save_state(
+            output_path,
+            0,
+            dt,
+            timesum,
+            marknum,
+            ETA,
+            ETA0,
+            GGG,
+            EXY,
+            SXY,
+            SXY0,
+            wyx,
+            COH,
+            TEN,
+            FRI,
+            YNY,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            vx,
+            vxf,
+            RX,
+            qxD,
+            gx,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            vy,
+            vyf,
+            RY,
+            qyD,
+            gy,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            HA,
+            HS,
+            ETAP,
+            GGGP,
+            EXX,
+            SXX,
+            SXX0,
+            tk1,
+            tk2,
+            vxp,
+            vyp,
+            vxpf,
+            vypf,
+            pr,
+            pf,
+            ps,
+            pr0,
+            pf0,
+            ps0,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            APHI,
+            FI,
+            ETA5,
+            ETA00,
+            YNY5,
+            YNY00,
+            YNY_inv_ETA,
+            DSXY,
+            EII,
+            SII,
+            DSXX,
+            DMP,
+            DHP,
+            XWS,
+            XWsolidm0,
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur
+        )
+    end
 
     # ---------------------------------------------------------------------
      # set up interpolation arrays"
@@ -1687,6 +1842,9 @@ function parse_commandline()
         "--output_path", "-o"
             help = "output path for simulation data (overrides config output_dir if provided)"
             default = ""
+        "--restart", "-r"
+            help = "path to JLD2 checkpoint file to resume from"
+            default = ""
         "--show_timer"
             help = "show timing results?"
             arg_type = Bool
@@ -1713,10 +1871,12 @@ function run_simulation(config_or_output::AbstractString = "")
         parsed_args = parse_commandline()
         target = parsed_args["config_or_output"]
         cli_output = parsed_args["output_path"]
+        cli_restart = parsed_args["restart"]
         show_timer = parsed_args["show_timer"]
     else
         target = config_or_output
         cli_output = ""
+        cli_restart = ""
         show_timer = false
     end
 
@@ -1738,6 +1898,24 @@ function run_simulation(config_or_output::AbstractString = "")
         default_config()
     end
 
+    if !isempty(cli_restart)
+        cfg = SimulationConfig(
+            grid = cfg.grid,
+            geometry = cfg.geometry,
+            time = cfg.time,
+            solver = cfg.solver,
+            poroelasticity = cfg.poroelasticity,
+            thermodynamics = cfg.thermodynamics,
+            materials = cfg.materials,
+            output = OutputConfig(
+                output_dir = cfg.output.output_dir,
+                savematstep = cfg.output.savematstep,
+                visstep = cfg.output.visstep,
+                restart_from = cli_restart
+            )
+        )
+    end
+
     actual_output = isempty(cli_output) ? cfg.output.output_dir : cli_output
     actual_output = endswith(actual_output, "/") ? actual_output : actual_output * "/"
     mkpath(actual_output)
@@ -1753,7 +1931,7 @@ function run_simulation(config_or_output::AbstractString = "")
     @info "writing results to $actual_output"
     t1 = now()
     @info "start time = $t1"
-    simulation_loop(cfg; output_path = actual_output)
+    simulation_loop(cfg; output_path = actual_output, restart_from = cfg.output.restart_from)
     t2 = now()
     @info "end time = $t2"
     @info "total run time = $(Dates.canonicalize(
@@ -1762,4 +1940,15 @@ function run_simulation(config_or_output::AbstractString = "")
         show(to)
     end
     close(io)
+end
+
+"""
+    run_simulation(cfg::SimulationConfig; restart_from::AbstractString = "", output_path::AbstractString = "")
+
+Execute a simulation using a pre-loaded `SimulationConfig` object.
+"""
+function run_simulation(cfg::SimulationConfig; restart_from::AbstractString = "", output_path::AbstractString = "")
+    actual_restart = isempty(restart_from) ? cfg.output.restart_from : restart_from
+    actual_output = isempty(output_path) ? cfg.output.output_dir : output_path
+    simulation_loop(cfg; output_path = actual_output, restart_from = actual_restart)
 end

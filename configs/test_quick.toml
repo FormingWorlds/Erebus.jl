@@ -1,9 +1,9 @@
 # Quick 2-step test configuration for integration and parameter exploration tests
 [grid]
-xsize = 14000.0
-ysize = 14000.0
-Nx = 15
-Ny = 15
+xsize = 140000.0
+ysize = 140000.0
+Nx = 33
+Ny = 33
 
 [time]
 dt_initial = 1.0e+11
