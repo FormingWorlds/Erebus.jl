@@ -72,9 +72,11 @@ julia --project launch.jl configs/test_quick.toml -o output_test/
 ```
 
 Available pre-configured setups in `configs/`:
+
 - `configs/hydrothermal_benchmark.toml`: 2D hydrothermal circulation benchmark (32x32 cells, 100 km diameter planetesimal, 26Al decay heating, Darcy thermal buoyancy, Arrhenius fluid viscosity, dynamic hydrofracturing).
 - `configs/default.toml`: Default reference configuration with baseline physical properties.
 - `configs/test_quick.toml`: Low-resolution configuration for rapid execution and sanity checks.
+
 
 ### Resume from Checkpoint
 
@@ -128,6 +130,7 @@ julia --project=. test/runtests.jl
 ```
 
 The test suite covers:
+
 - Unit verification: Grid metrics, particle interpolation kernels, constitutive relations, and TOML schema validators.
 - Terzaghi 1D consolidation benchmark: Verifies poroelastic compressibility against the analytical Fourier series solution.
 - 2D hydrothermal benchmark: Verifies coupled Darcy thermal buoyancy, fluid viscosity transitions, and hydrofracturing.
@@ -162,12 +165,13 @@ If you use `Erebus.jl` in your research, please cite:
 - Gerya, T. (2019). *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press. [DOI: 10.1017/9781316534243](https://doi.org/10.1017/9781316534243).
 - Lichtenberg, T., et al. (2021). *Bifurcation of planetary building blocks during Solar System formation*. Science, 371(6527), 365-370. [DOI: 10.1126/science.abb3091](https://doi.org/10.1126/science.abb3091).
 
-
 ### Acknowledgements
 
 `Erebus.jl` was originally created by Beat Hubmann (ETH Zurich). Ongoing development is supported by:
+
 - European Research Council (ERC) Starting Grant *MagmaWorlds* (grant agreement no. 101219807).
 - Dutch Research Council (NWO) NWA *PRELIFE* (grant no. NWA.1630.23.013).
+
 
 ---
 
