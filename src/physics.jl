@@ -641,6 +641,8 @@ function compute_shear_heating!(
     HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf;
     hydrofracture::Bool = false,
     TEN = nothing,
+    KX = nothing,
+    KY = nothing,
     kappa_frac::Real = 1.0e3,
     gamma_frac::Real = 1.0,
     k_frac_max::Real = 1.0e-9
@@ -657,23 +659,47 @@ function compute_shear_heating!(
         if hydrofracture && TEN !== nothing
             Peff_x1 = 0.5 * (pr[i, j-1] + pr[i, j] - pf[i, j-1] - pf[i, j])
             sigma_tx1 = 0.5 * (TEN[i, j-1] + TEN[i-1, j-1])
-            fx1 = compute_hydrofracture_factor(Peff_x1, sigma_tx1; kappa_frac=kappa_frac, gamma=gamma_frac)
-            rx_jm1 = max(RX[i, j-1] / fx1, 1.0e-5 / k_frac_max)
+            kphi_x1 = (KX !== nothing) ? KX[i, j-1] : 0.0
+            if kphi_x1 > 0.0
+                keff_x1 = compute_hydrofracture_permeability(kphi_x1, Peff_x1, sigma_tx1; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                rx_jm1 = RX[i, j-1] * (kphi_x1 / keff_x1)
+            else
+                fx1 = compute_hydrofracture_factor(Peff_x1, sigma_tx1; kappa_frac=kappa_frac, gamma=gamma_frac)
+                rx_jm1 = max(RX[i, j-1] / fx1, 1.0e-5 / k_frac_max)
+            end
 
             Peff_x2 = 0.5 * (pr[i, j] + pr[i, j+1] - pf[i, j] - pf[i, j+1])
             sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i-1, j])
-            fx2 = compute_hydrofracture_factor(Peff_x2, sigma_tx2; kappa_frac=kappa_frac, gamma=gamma_frac)
-            rx_j = max(RX[i, j] / fx2, 1.0e-5 / k_frac_max)
+            kphi_x2 = (KX !== nothing) ? KX[i, j] : 0.0
+            if kphi_x2 > 0.0
+                keff_x2 = compute_hydrofracture_permeability(kphi_x2, Peff_x2, sigma_tx2; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                rx_j = RX[i, j] * (kphi_x2 / keff_x2)
+            else
+                fx2 = compute_hydrofracture_factor(Peff_x2, sigma_tx2; kappa_frac=kappa_frac, gamma=gamma_frac)
+                rx_j = max(RX[i, j] / fx2, 1.0e-5 / k_frac_max)
+            end
 
             Peff_y1 = 0.5 * (pr[i-1, j] + pr[i, j] - pf[i-1, j] - pf[i, j])
             sigma_ty1 = 0.5 * (TEN[i-1, j] + TEN[i-1, j-1])
-            fy1 = compute_hydrofracture_factor(Peff_y1, sigma_ty1; kappa_frac=kappa_frac, gamma=gamma_frac)
-            ry_im1 = max(RY[i-1, j] / fy1, 1.0e-5 / k_frac_max)
+            kphi_y1 = (KY !== nothing) ? KY[i-1, j] : 0.0
+            if kphi_y1 > 0.0
+                keff_y1 = compute_hydrofracture_permeability(kphi_y1, Peff_y1, sigma_ty1; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                ry_im1 = RY[i-1, j] * (kphi_y1 / keff_y1)
+            else
+                fy1 = compute_hydrofracture_factor(Peff_y1, sigma_ty1; kappa_frac=kappa_frac, gamma=gamma_frac)
+                ry_im1 = max(RY[i-1, j] / fy1, 1.0e-5 / k_frac_max)
+            end
 
             Peff_y2 = 0.5 * (pr[i, j] + pr[i+1, j] - pf[i, j] - pf[i+1, j])
             sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j-1])
-            fy2 = compute_hydrofracture_factor(Peff_y2, sigma_ty2; kappa_frac=kappa_frac, gamma=gamma_frac)
-            ry_i = max(RY[i, j] / fy2, 1.0e-5 / k_frac_max)
+            kphi_y2 = (KY !== nothing) ? KY[i, j] : 0.0
+            if kphi_y2 > 0.0
+                keff_y2 = compute_hydrofracture_permeability(kphi_y2, Peff_y2, sigma_ty2; active=true, kappa_frac=kappa_frac, gamma=gamma_frac, kmax=k_frac_max)
+                ry_i = RY[i, j] * (kphi_y2 / keff_y2)
+            else
+                fy2 = compute_hydrofracture_factor(Peff_y2, sigma_ty2; kappa_frac=kappa_frac, gamma=gamma_frac)
+                ry_i = max(RY[i, j] / fy2, 1.0e-5 / k_frac_max)
+            end
         end
         # compute shear heating HS
         @inbounds HS[i, j] = (

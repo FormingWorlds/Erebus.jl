@@ -26,7 +26,7 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5), dpi=300)
 # -------------------------------------------------------------
 # Panel (a): Viscosity vs Temperature (Semi-log)
 # -------------------------------------------------------------
-T_liquid = np.linspace(T_melt, 700, 300)
+T_liquid = np.linspace(T_melt, 650, 300)
 
 Ea_values = [15.0e3, 10.0e3, 20.0e3]
 Ea_labels = [r'$E_a = 15\ \mathrm{kJ/mol}$ (Erebus default)',
@@ -50,7 +50,7 @@ ax1.set_yscale('log')
 ax1.set_xlabel('Temperature $T$ [K]', fontsize=11)
 ax1.set_ylabel(r'Dynamic Fluid Viscosity $\eta_f(T)$ [Pa s]', fontsize=11)
 ax1.set_title('(a) Fluid Viscosity vs Temperature', fontsize=11, fontweight='bold')
-ax1.set_xlim(270, 700)
+ax1.set_xlim(270, 650)
 ax1.set_ylim(5.0e-5, 3.0e-3)
 ax1.grid(True, which='both', alpha=0.3)
 ax1.legend(loc='upper right', fontsize=8.5, framealpha=0.9)
@@ -71,8 +71,8 @@ ax2.axhline(1.0, color='black', ls='--', lw=1.0, alpha=0.5)
 ax2.set_xlabel('Temperature $T$ [K]', fontsize=11)
 ax2.set_ylabel(r'Mobility Ratio $\eta_0 / \eta_f(T)$ [-]', fontsize=11)
 ax2.set_title(r'(b) Darcy Flux Enhancement Factor', fontsize=11, fontweight='bold')
-ax2.set_xlim(270, 700)
-ax2.set_ylim(0, 16)
+ax2.set_xlim(270, 650)
+ax2.set_ylim(0, 45)
 ax2.grid(True, alpha=0.3)
 ax2.legend(loc='upper left', fontsize=8.5, framealpha=0.9)
 

@@ -1119,6 +1119,8 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                     pr = pr,
                     pf = pf,
                     TEN = TEN,
+                    KX = KX,
+                    KY = KY,
                     kappa_frac = kappa_frac_val,
                     gamma_frac = gamma_frac_val,
                     k_frac_max = k_frac_max_val
@@ -1300,6 +1302,8 @@ function simulation_loop(cfg::SimulationConfig = default_config(); output_path::
                 pf;
                 hydrofracture = hydrofracture_val,
                 TEN = TEN,
+                KX = KX,
+                KY = KY,
                 kappa_frac = kappa_frac_val,
                 gamma_frac = gamma_frac_val,
                 k_frac_max = k_frac_max_val
