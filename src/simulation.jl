@@ -439,6 +439,13 @@ function simulation_loop(
     phim0_val = cfg.thermodynamics.phim0
     kfluidm_val = cfg.materials.kfluidm
     disk_enabled_val = cfg.disk.enabled
+    reaction_active_val = cfg.reaction.active
+    delta_H_val = cfg.reaction.delta_H
+    delta_S_val = cfg.reaction.delta_S
+    pfcoeff_val = cfg.reaction.pfcoeff
+    pferrmax_val = cfg.reaction.pferrmax
+    dtr_hyd_val = cfg.reaction.dtreaction_hydration
+    dtr_deh_val = cfg.reaction.dtreaction_dehydration
 
     nthreads = Threads.nthreads()
 
@@ -454,7 +461,7 @@ function simulation_loop(
         marker_property_mode,
         hr_al,
         hr_fe,
-        reaction_active,
+        reaction_active = reaction_active_val,
         reaction_rate_coeff_mode,
         log_completion_rate,
         t_half_al,
@@ -491,12 +498,13 @@ function simulation_loop(
         phim0,
         phimin,
         phimax,
-        ΔHWD,
-        ΔSWD,
+        ΔHWD = delta_H_val,
+        ΔSWD = delta_S_val,
         ΔVWD,
-        Δtreaction,
-        pfcoeff,
-        pferrmax,
+        dtreaction_hydration = dtr_hyd_val,
+        dtreaction_dehydration = dtr_deh_val,
+        pfcoeff = pfcoeff_val,
+        pferrmax = pferrmax_val,
         start_time,
         start_step,
         endtime,
@@ -520,6 +528,8 @@ function simulation_loop(
         coords
     )
     Q_metric = spherical_metric_val ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
+    DQPF = zeros(Float64, coords.Ny1, coords.Nx1)
+    DQPFSUM = zeros(Float64, coords.Ny1, coords.Nx1)
 
     # -------------------------------------------------------------------------
     # set up markers and state (from checkpoint or fresh definition)
@@ -1290,7 +1300,7 @@ function simulation_loop(
 
             #     @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
-            if reaction_active
+            if reaction_active_val
                 perform_thermochemical_reaction!(
                     DMP,
                     DHP,
@@ -1312,6 +1322,9 @@ function simulation_loop(
                     timestep,
                     titer;
                     coords=coords,
+                    DQPF=DQPF,
+                    DQPFSUM=DQPFSUM,
+                    cfg=cfg.reaction,
                 )
             end
 
@@ -1637,7 +1650,9 @@ function simulation_loop(
             # prepare next pass of thermochemical iteration
             dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
             # evaluate iteration outcome
-            if compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
+            if compute_thermochemical_iteration_outcome(
+                DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
+            )
                 # exit thermochemical iterations loop
                 break
             end

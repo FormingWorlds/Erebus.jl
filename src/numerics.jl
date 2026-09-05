@@ -2018,11 +2018,11 @@ $(SIGNATURES)
 
     - dt: adjusted next time step
 """
-function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
+function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer; pferrmax=1.0e5)
     # @timeit to "compute_thermochemical_iteration_outcome" begin
-    pferrcur = maximum(abs, pf-pf0)
+    pferrcur = maximum(abs, pf - pf0)
     DMPmax = maximum(abs, DMP)
     @info "end thermochemical iter $titer" pferrcur DMPmax
-    return pferrcur < pferrmax && (titer>2||DMPmax<=0.0)
+    return pferrcur < pferrmax && (titer > 2 || DMPmax <= 0.0)
     # end # @timeit to "compute_thermochemical_iteration_outcome"
 end # function compute_thermochemical_iteration_outcome

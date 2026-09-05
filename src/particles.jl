@@ -916,11 +916,14 @@ $(SIGNATURES)
 
     - nothing
 """
-function reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM)
+function reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM, DQPFSUM=nothing)
     # P Nodes
     DMPSUM .= zero(0.0)
     DHPSUM .= zero(0.0)
     WTPSUM .= zero(0.0)
+    if DQPFSUM !== nothing
+        DQPFSUM .= zero(0.0)
+    end
     return nothing
 end
 
