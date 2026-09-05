@@ -187,6 +187,8 @@ Base.@kwdef struct MaterialConfig
     tenssolidm::SVector{3,Float64} = SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
     kphim0::SVector{3,Float64} = SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
     tkm0::SVector{3,Float64} = SVector{3,Float64}([170.0, 170.0, 170.0])
+    XWsolidm_init::SVector{3,Float64} = SVector{3,Float64}([0.5, 0.5, NaN])
+
 end
 
 """

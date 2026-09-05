@@ -220,6 +220,8 @@ function define_markers!(
     ycenter_val=ycenter,
     rplanet_val=rplanet,
     rcrust_val=rcrust,
+    XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN])
+
 )
     Nxm_val = coords === nothing ? Nxm : coords.Nxm
     Nym_val = coords === nothing ? Nym : coords.Nym
@@ -249,9 +251,9 @@ function define_markers!(
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
             # wet solid molar fraction
-            XWsolidm0[m] = XWsolidm_init[tm[m]]
+            XWsolidm0[m] = XWsolidm_init_val[tm[m]]
             if randomized
-                XWsolidm0[m] += XWsolidm_init[tm[m]] * (rand(rgen)-0.5)
+                XWsolidm0[m] += XWsolidm_init_val[tm[m]] * (rand(rgen)-0.5)
             end
         else
             # sticky space ("air") [to have internal free surface]

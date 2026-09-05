@@ -1,7 +1,7 @@
 name = "Erebus"
 uuid = "414e42a7-a454-40ea-ab0c-c0e19dfc8d35"
-authors = ["Beat Hubmann"]
 version = "1.0.0-DEV"
+authors = ["Beat Hubmann"]
 
 [deps]
 AMD = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
@@ -13,6 +13,7 @@ Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterTools = "35a29f4d-8980-5a13-9543-d66fff28ecb8"
 ExtendableSparse = "95c220a8-a1cf-11e9-0c77-dbfce5f500b3"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -21,8 +22,8 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
-TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
 AMD = "0.5.0 - 0.5.3"
@@ -33,12 +34,13 @@ Documenter = "1"
 DocumenterTools = "0.1"
 ExtendableSparse = "1, 2"
 JLD2 = "0.4, 0.5, 0.6"
+JSON = "1.7.1"
 LinearSolve = "2, 3, 4, 5"
 Pardiso = "0.5, 1"
 ProgressMeter = "1"
 StaticArrays = "1"
-TimerOutputs = "0.5"
 TOML = "1"
+TimerOutputs = "0.5"
 julia = "1"
 
 [extras]
