@@ -80,7 +80,6 @@
         @test isapprox(RP_unit[gk_mid], expected_prefactor; rtol=1e-10)
         @test abs(RP_unit[gk_mid] - (4.0 * π * G)) > 1e-10 # prefactor discrimination (not 4πG)
         @test abs(RP_unit[gk_mid] - (4.0 / 3.0 * π * G)) > 1e-10 # prefactor discrimination (not 4πG/3)
-        @test RP_unit[gk_mid] > 0.0
     end
 
     @testset "process_gravitational_solution!(): gradient operator invariants" begin
@@ -177,7 +176,6 @@
         # 3. Scale and magnitude discrimination guard
         g_max = maximum(hypot.(gx[1:Ny, 1:Nx], gy[1:Ny, 1:Nx]))
         @test 0.005 < g_max < 0.1 # order of magnitude for 40 km body at 3300 kg/m^3
-        @test g_max > 0.0 # sign
     end
 
     @testset "recompute_bulk_viscosity!(): harmonic averaging and compaction scaling" begin
@@ -195,6 +193,18 @@
             @test isapprox(ETAPHI[i, j], expected_etaphi; rtol=1e-12)
         end
 
+        # Exercise non-unity etaphikoef to pin coefficient scaling
+        etaphikoef_val = 2.5
+        ETAP_val = zeros(Ny1, Nx1)
+        ETAPHI_val = zeros(Ny1, Nx1)
+        Erebus.recompute_bulk_viscosity!(
+            ETA_const, ETAP_val, ETAPHI_val, PHI, etaphikoef_val
+        )
+        for j in 2:Nx, i in 2:Ny
+            @test isapprox(ETAP_val[i, j], eta0; rtol=1e-12)
+            @test isapprox(ETAPHI_val[i, j], etaphikoef_val * eta0 / PHI[i, j]; rtol=1e-12)
+        end
+
         # 2. Extremum bounding: min(ETA_4) <= ETAP[i, j] <= max(ETA_4)
         ETA_var = 1.0e17 .+ rand(rgen, Ny, Nx) * 1.0e18
         Erebus.recompute_bulk_viscosity!(ETA_var, ETAP, ETAPHI, PHI, etaphikoef)
@@ -205,8 +215,8 @@
             eta_max = max(
                 ETA_var[i - 1, j - 1], ETA_var[i, j - 1], ETA_var[i - 1, j], ETA_var[i, j]
             )
-            @test ETAP[i, j] >= eta_min - 1e-6
-            @test ETAP[i, j] <= eta_max + 1e-6
+            @test ETAP[i, j] >= eta_min * (1.0 - 1e-12)
+            @test ETAP[i, j] <= eta_max * (1.0 + 1e-12)
         end
 
         # 3. Compaction resistance porosity inverse scaling: eta_phi ~ 1/phi
@@ -420,7 +430,8 @@
             betafluid=0.0,
         )
 
-        # 1. Rigid Body Translation Invariant: sum of solid velocity stencil on interior Vx rows is 0
+        # 1. Discrete Laplacian row-sum consistency: sum of solid velocity stencil on interior Vx rows is 0
+        # (null space for uniform viscosity and zero gravity)
         for j in 3:(Nx - 2), i in 3:(Ny - 2)
             kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
             vx_sum =
@@ -432,7 +443,8 @@
             @test isapprox(vx_sum, 0.0; atol=1e-12)
         end
 
-        # 2. Rigid Body Translation Invariant: sum of solid velocity stencil on interior Vy rows is 0
+        # 2. Discrete Laplacian row-sum consistency: sum of solid velocity stencil on interior Vy rows is 0
+        # (null space for uniform viscosity and zero gravity)
         for j in 3:(Nx - 2), i in 3:(Ny - 2)
             kvy = ((j - 1) * Ny1 + i - 1) * 6 + 2
             vy_sum =
@@ -456,21 +468,136 @@
             @test isapprox(qy_sum, 0.0; atol=1e-12)
         end
 
-        # 4. Two-Phase Volume Balance: solid compaction rate equals fluid expulsion rate
+        # 4. Discrete Continuity Divergence Operator Magnitudes
+        for j in 3:(Nx - 2), i in 3:(Ny - 2)
+            kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
+            kvy = kvx + 1
+            kpm = kvx + 2
+            kqx = kvx + 3
+            kqy = kvx + 4
+            kpf = kvx + 5
+            # Solid continuity (div v_s)
+            @test isapprox(L[kpm, kvx - 6 * Ny1], -1.0 / dx; rtol=1e-12)
+            @test isapprox(L[kpm, kvx], 1.0 / dx; rtol=1e-12)
+            @test isapprox(L[kpm, kvy - 6], -1.0 / dy; rtol=1e-12)
+            @test isapprox(L[kpm, kvy], 1.0 / dy; rtol=1e-12)
+            # Fluid continuity (div q_D)
+            @test isapprox(L[kpf, kqx - 6 * Ny1], -1.0 / dx; rtol=1e-12)
+            @test isapprox(L[kpf, kqx], 1.0 / dx; rtol=1e-12)
+            @test isapprox(L[kpf, kqy - 6], -1.0 / dy; rtol=1e-12)
+            @test isapprox(L[kpf, kqy], 1.0 / dy; rtol=1e-12)
+        end
+
+        # 5. Momentum Pressure Gradient, Darcy Resistance, and Stokes Viscous Stencil Magnitudes
+        etac = ETA[1, 1] * GGG[1, 1] * dt / (GGG[1, 1] * dt + ETA[1, 1])
+        for j in 3:(Nx - 2), i in 3:(Ny - 2)
+            kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
+            kvy = kvx + 1
+            kpm = kvx + 2
+            kqx = kvx + 3
+            kqy = kvx + 4
+            kpf = kvx + 5
+            # Stokes pressure gradient
+            @test isapprox(L[kvx, kpm], Kcont / dx; rtol=1e-12)
+            @test isapprox(L[kvx, kpm + 6 * Ny1], -Kcont / dx; rtol=1e-12)
+            @test isapprox(L[kvy, kpm], Kcont / dy; rtol=1e-12)
+            @test isapprox(L[kvy, kpm + 6], -Kcont / dy; rtol=1e-12)
+            # Stokes viscous stencil
+            @test isapprox(L[kvx, kvx + 6 * Ny1], etac / dx^2; rtol=1e-12)
+            @test isapprox(L[kvx, kvx - 6 * Ny1], etac / dx^2; rtol=1e-12)
+            @test isapprox(L[kvx, kvx + 6], etac / dy^2; rtol=1e-12)
+            @test isapprox(L[kvx, kvx - 6], etac / dy^2; rtol=1e-12)
+            @test isapprox(L[kvx, kvx], -2.0 * etac / dx^2 - 2.0 * etac / dy^2; rtol=1e-12)
+            # Darcy momentum resistance and pressure gradient
+            @test isapprox(L[kqx, kqx], RX[i, j]; rtol=1e-12)
+            @test isapprox(L[kqx, kpf], -Kcont / dx; rtol=1e-12)
+            @test isapprox(L[kqx, kpf + 6 * Ny1], Kcont / dx; rtol=1e-12)
+            @test isapprox(L[kqy, kqy], RY[i, j]; rtol=1e-12)
+            @test isapprox(L[kqy, kpf], -Kcont / dy; rtol=1e-12)
+            @test isapprox(L[kqy, kpf + 6], Kcont / dy; rtol=1e-12)
+        end
+
+        # 6. Two-Phase Volume Balance: solid compaction rate equals fluid expulsion rate
         for j in 3:(Nx - 2), i in 3:(Ny - 2)
             kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
             kpm = kvx + 2
             kpf = kvx + 5
-            @test isapprox(L[kpm, kpm] + L[kpm, kpf], 0.0; atol=1e-12)
-            @test isapprox(L[kpf, kpm] + L[kpf, kpf], 0.0; atol=1e-12)
+            @test isapprox(L[kpm, kpm], -L[kpm, kpf]; rtol=1e-12)
+            @test isapprox(L[kpf, kpf], -L[kpf, kpm]; rtol=1e-12)
             @test isapprox(L[kpm, kpm], -L[kpf, kpm]; rtol=1e-12)
         end
 
-        # 5. Boundary Condition Rows: ghost and external rows have 1.0 on diagonal
+        # 7. Boundary Condition Rows: ghost and external rows have 1.0 on diagonal
         for j in 1:Nx1, i in 1:Ny1
             kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
             if i == 1 || i == Ny1 || j == 1 || j == Nx || j == Nx1
                 @test isapprox(L[kvx, kvx], 1.0; rtol=1e-12)
+            end
+        end
+
+        # 8. Active Gravity, Density Variation, and Boundary RHS Verification
+        gx_act = fill(0.04, Ny1, Nx1)
+        gy_act = fill(0.06, Ny1, Nx1)
+        RHOX_var = zeros(Ny1, Nx1)
+        for jj in 1:Nx1, ii in 1:Ny1
+            RHOX_var[ii, jj] = 3000.0 + 10.0 * (jj - 1)
+        end
+        R_act = zeros(Nx1 * Ny1 * 6)
+        L_act = Erebus.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX_var,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            gx_act,
+            gy_act,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_act;
+            betasolid=0.0,
+            betafluid=0.0,
+        )
+        for j in 3:(Nx - 2), i in 3:(Ny - 2)
+            kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
+            kvy = kvx + 1
+            kqx = kvx + 3
+            kqy = kvx + 4
+            @test isapprox(R_act[kvx], -RHOX_var[i, j] * gx_act[i, j]; rtol=1e-12)
+            @test isapprox(R_act[kvy], -RHOY[i, j] * gy_act[i, j]; rtol=1e-12)
+            @test isapprox(R_act[kqx], RHOFX[i, j] * gx_act[i, j]; rtol=1e-12)
+            @test isapprox(R_act[kqy], RHOFY[i, j] * gy_act[i, j]; rtol=1e-12)
+            drho_dx = 0.5 * (RHOX_var[i, j + 1] - RHOX_var[i, j - 1]) / dx
+            expected_diag_vx =
+                -2.0 * etac / dx^2 - 2.0 * etac / dy^2 - drho_dx * gx_act[i, j] * dt
+            @test isapprox(L_act[kvx, kvx], expected_diag_vx; rtol=1e-12)
+        end
+        for j in 1:Nx1, i in 1:Ny1
+            kvy = ((j - 1) * Ny1 + i - 1) * 6 + 2
+            if i == 1
+                @test isapprox(R_act[kvy], vytop; rtol=1e-12)
+            elseif i == Ny
+                @test isapprox(R_act[kvy], vybottom; rtol=1e-12)
+            end
+            kpm = ((j - 1) * Ny1 + i - 1) * 6 + 3
+            kpf = ((j - 1) * Ny1 + i - 1) * 6 + 6
+            if (i == 2 && 2 <= j <= Nx) ||
+                (j == 2 && 2 < i < Ny) ||
+                (i == Ny && 2 <= j <= Nx) ||
+                (j == Nx && 2 < i < Ny)
+                @test isapprox(R_act[kpm], psurface; rtol=1e-12)
+                @test isapprox(R_act[kpf], psurface; rtol=1e-12)
             end
         end
     end
@@ -555,20 +682,40 @@
         @test isapprox(aphimax, 0.0; atol=1e-12)
         @test all(isapprox.(APHI[2:Ny, 2:Nx], 0.0; atol=1e-12))
 
-        # 2. Overpressure: pr > pf drives positive compaction rate Aphi > 0
+        # 2. Overpressure: pr > pf drives positive compaction rate Aphi > 0 with exact incompressible formula
         pr_high = fill(10.0e6, Ny1, Nx1)
         pf_low = fill(2.0e6, Ny1, Nx1)
         aphimax = Erebus.compute_Aϕ!(
             APHI, ETAPHI, BETTAPHI, PHI, pr_high, pf_low, pr_high, pf_low, dt
         )
-        @test aphimax > 0.0
-        @test all(APHI[2:Ny, 2:Nx] .> 0.0)
+        expected_aphi = (10.0e6 - 2.0e6) / (ETAPHI[2, 2] * (1.0 - PHI[2, 2]) * PHI[2, 2])
+        @test isapprox(aphimax, expected_aphi; rtol=1e-12)
+        @test all(isapprox.(APHI[2:Ny, 2:Nx], expected_aphi; rtol=1e-12))
 
         # 3. Underpressure: pr < pf drives dilation rate Aphi < 0
         aphimax = Erebus.compute_Aϕ!(
             APHI, ETAPHI, BETTAPHI, PHI, pf_low, pr_high, pf_low, pr_high, dt
         )
         @test all(APHI[2:Ny, 2:Nx] .< 0.0)
+
+        # 4. Poroelastic compaction benchmark with nonzero betasolid
+        betasolid = 2.5e-11
+        pr_t = fill(10.0e6, Ny1, Nx1)
+        pf_t = fill(2.0e6, Ny1, Nx1)
+        pr0_t = fill(9.0e6, Ny1, Nx1)
+        pf0_t = fill(1.5e6, Ny1, Nx1)
+        aphimax_poro = Erebus.compute_Aϕ!(
+            APHI, ETAPHI, BETTAPHI, PHI, pr_t, pf_t, pr0_t, pf0_t, dt; betasolid=betasolid
+        )
+        for j in 2:Nx, i in 2:Ny
+            bd = (BETTAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
+            kbw = 1.0 - betasolid / bd
+            comp =
+                (pr_t[i, j] - pf_t[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
+                bd * ((pr_t[i, j] - pr0_t[i, j]) - kbw * (pf_t[i, j] - pf0_t[i, j])) / dt
+            @test isapprox(APHI[i, j], comp / PHI[i, j]; rtol=1e-12)
+        end
+        @test aphimax_poro != aphimax
     end
 
     @testset "compute_fluid_velocities!(): two-phase relative velocity and Galilean invariance" begin
@@ -750,9 +897,13 @@
             @test isapprox(EXX[i, j], 0.0; atol=1e-18)
         end
 
-        # 3. Second Invariant Non-negativity
-        @test all(EII .>= 0.0)
-        @test all(SII .>= 0.0)
+        # 3. Second Invariant Exact Magnitude Benchmark on Simple Shear:
+        # E_II = 0.5 * gamma_dot, S_II = 2 * eta_eff * (0.5 * gamma_dot) = eta_eff * gamma_dot
+        etac_shear = ETA[1, 1] * GGG[1, 1] * dtm / (GGG[1, 1] * dtm + ETA[1, 1])
+        for j in 3:(Nx - 1), i in 3:(Ny - 1)
+            @test isapprox(EII[i, j], 0.5 * gamma_dot; rtol=1e-6)
+            @test isapprox(SII[i, j], etac_shear * gamma_dot; rtol=1e-6)
+        end
     end
 
     @testset "symmetrize_p_node_observables!(): Neumann symmetry and idempotence" begin
@@ -841,8 +992,8 @@
         DSY = zeros(Ny, Nx)
         YERRNOD = zeros(nplast)
 
-        # 1. Stable Regime: very high confining pressure (pr = 100 MPa, pf = 0) suppresses yielding
-        pr_high = fill(1.0e8, Ny1, Nx1)
+        # 1. Stable Regime: very high confining pressure (pr = 300 MPa, pf = 0) suppresses yielding (syield >= siiel)
+        pr_high = fill(3.0e8, Ny1, Nx1)
         pf_zero = fill(0.0, Ny1, Nx1)
         complete = Erebus.compute_nodal_adjustment!(
             ETA,
@@ -871,9 +1022,9 @@
             ),
         ) # viscosity unchanged
 
-        # 2. Plastic Yielding Regime: elevated pore pressure (pf = 99.9 MPa) reduces effective pressure
+        # 2. Plastic Yielding Regime: elevated pore pressure (pf = 299.9 MPa) reduces effective pressure
         # P_eff = pr - pf = 0.1 MPa => yield strength sigma_y drops, triggering failure
-        pf_elevated = fill(9.99e7, Ny1, Nx1)
+        pf_elevated = fill(2.999e8, Ny1, Nx1)
         complete = Erebus.compute_nodal_adjustment!(
             ETA,
             ETA0,
@@ -1122,13 +1273,20 @@
 
         # Verify each matrix block independently against theoretical values
         for j in 4:(Nx - 2), i in 4:(Ny - 2)
-            kvx = ((j-1)*Ny1 + i-1) * 6 + 1
+            kvx = ((j - 1) * Ny1 + i - 1) * 6 + 1
             kpm = kvx + 2
             kpf = kvx + 5
             @test L[kpm, kpf] ≈ C_expected rtol=1e-10
             @test L[kpf, kpm] ≈ C_expected rtol=1e-10
             @test L[kpm, kpm] ≈ D_pm_expected rtol=1e-10
             @test L[kpf, kpf] ≈ D_pf_expected rtol=1e-10
+            # Compressibility introduces asymmetry: D_pm != -C_expected
+            @test abs(L[kpm, kpm] + L[kpm, kpf]) > 1.0
+            # Poroelastic RHS verification
+            R_pm_expected = bd_th * (pr0[i, j] - kbw_th * pf0[i, j]) / dt + DMP[i, j]
+            R_pf_expected = -bd_th * kbw_th * (pr0[i, j] - (1.0 / ksk_th) * pf0[i, j]) / dt
+            @test isapprox(R[kpm], R_pm_expected; rtol=1e-10)
+            @test isapprox(R[kpf], R_pf_expected; rtol=1e-10)
         end
 
         # Verify solution solvability and finiteness

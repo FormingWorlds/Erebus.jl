@@ -56,7 +56,7 @@
 
     @testset "Simulation Orchestration Error Contracts" begin
         # Nonexistent config file path
-        @test_throws SystemError run_simulation("nonexistent_config_file_path.toml")
+        @test_throws ArgumentError run_simulation("nonexistent_config_file_path.toml")
 
         # Config with nonexistent checkpoint restart
         bad_restart_cfg = SimulationConfig(
