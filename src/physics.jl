@@ -35,7 +35,10 @@ $(SIGNATURES)
     - total: computed total property
 """
 function total(solid, fluid, ϕ)
-    return solid*(1.0-ϕ) + fluid*ϕ
+    if !(0.0 <= ϕ <= 1.0)
+        throw(DomainError(ϕ, "Porosity must be in [0, 1]"))
+    end
+    return solid * (1.0 - ϕ) + fluid * ϕ
 end
 
 """
@@ -54,10 +57,17 @@ $(SIGNATURES)
     - ktotal: total thermal conductivity of mixed phase [W/m/K]
 """
 function ktotal(ksolid, kfluid, phi)
+    if !(0.0 <= phi <= 1.0)
+        throw(DomainError(phi, "Porosity must be in [0, 1]"))
+    end
+    if ksolid < 0.0 || kfluid < 0.0
+        throw(DomainError((ksolid, kfluid), "Thermal conductivities must be non-negative"))
+    end
     return (
         sqrt(
-            ksolid * kfluid/2 + ((ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))^2)*inv(16.0)
-        ) - 0.25 * (ksolid*(3.0*phi-2.0) + kfluid*(1.0-3.0*phi))
+            ksolid * kfluid / 2 +
+            ((ksolid * (3.0 * phi - 2.0) + kfluid * (1.0 - 3.0 * phi))^2) * inv(16.0),
+        ) - 0.25 * (ksolid * (3.0 * phi - 2.0) + kfluid * (1.0 - 3.0 * phi))
     )
 end
 
@@ -76,8 +86,14 @@ $(SIGNATURES)
     - kphim: empirical porosity-dependent permeability [m^2]
 """
 function kphi(kphim0m, phimm)
+    if !(0.0 <= phimm < 1.0)
+        throw(DomainError(phimm, "Porosity must be in [0, 1)"))
+    end
+    if kphim0m < 0.0
+        throw(DomainError(kphim0m, "Reference permeability must be non-negative"))
+    end
     # phim0 is a global constant defined independent of material type
-    return kphim0m * (phimm*inv(phim0))^3.0 * ((1.0-phimm)*inv(1.0-phim0))^-2.0
+    return kphim0m * (phimm * inv(phim0))^3.0 * ((1.0 - phimm) * inv(1.0 - phim0))^-2.0
 end
 
 """
@@ -98,7 +114,17 @@ $(SIGNATURES)
                             times current fluid viscosity
 """
 function ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)
-    return ηᶠcur * inv(kϕᵣ) * (phim0*inv(ϕ))^3.0 * ((1.0-ϕ)*inv(1.0-phim0))^2.0
+    if !(0.0 < ϕ < 1.0)
+        throw(DomainError(ϕ, "Porosity must be strictly between 0 and 1"))
+    end
+    if kϕᵣ <= 0.0 || ηᶠcur < 0.0
+        throw(
+            DomainError(
+                (kϕᵣ, ηᶠcur), "Permeability must be positive and viscosity non-negative"
+            ),
+        )
+    end
+    return ηᶠcur * inv(kϕᵣ) * (phim0 * inv(ϕ))^3.0 * ((1.0 - ϕ) * inv(1.0 - phim0))^2.0
 end
 
 """
@@ -119,7 +145,10 @@ $(SIGNATURES)
     - Q: radiogenic heat production [W/kg]
 """
 function Q_radiogenic(f, ratio, E, tau, time)
-    return f * ratio * E * exp(-time*inv(tau)) * inv(tau)
+    if time < 0.0 || tau <= 0.0
+        throw(DomainError((time, tau), "Decay time and lifetime must be non-negative"))
+    end
+    return f * ratio * E * exp(-time * inv(tau)) * inv(tau)
 end
 
 """
@@ -137,8 +166,11 @@ $(SIGNATURES)
     - etatotal: rocky marker temperature-dependent total viscosity 
 """
 function etatotal_rocks(tkmm, tmm)
-    @inbounds etasolidcur = ifelse(tkmm>tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
-    @inbounds etafluidcur = ifelse(tkmm>tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
+    if tkmm <= 0.0
+        throw(DomainError(tkmm, "Absolute temperature must be positive"))
+    end
+    @inbounds etasolidcur = ifelse(tkmm > tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
+    @inbounds etafluidcur = ifelse(tkmm > tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
     return max(etamin, etasolidcur, etafluidcur)
 end
 
@@ -215,11 +247,14 @@ $(SIGNATURES)
 function compute_rhocpfluidm(T, mode)
     # @timeit to "compute_rhocpfluidm" begin
     if mode == 1
-        if T < tmfluidphase-5.0
+        if T <= 0.0
+            throw(DomainError(T, "Absolute temperature must be positive"))
+        end
+        if T < tmfluidphase - 5.0
             ρᶠCₚᶠ = ρH₂Oᶠⁱ * 7.67T
         elseif T < tmfluidphase
             ρᶠCₚᶠ = ρH₂Oᶠⁱ * (7.67T + 0.1Lᶠ)
-        elseif T < tmfluidphase+5.0
+        elseif T < tmfluidphase + 5.0
             ρᶠCₚᶠ = ρH₂Oᶠ * (4200.0 + 0.1Lᶠ)
         elseif T < 410.0
             ρᶠCₚᶠ = ρH₂Oᶠ * 4200.0
@@ -229,7 +264,7 @@ function compute_rhocpfluidm(T, mode)
     elseif mode == 9
         @inbounds ρᶠCₚᶠ = rhocpfluidm[1]
     else
-        throw("unknown mode $mode")
+        throw(ArgumentError("unknown mode $mode"))
     end
     # end # @timeit to "compute_rhocpfluidm"
     return ρᶠCₚᶠ
@@ -254,11 +289,14 @@ $(SIGNATURES)
 function compute_ksolidm(T, mode)
     # @timeit to "compute_ksolidm" begin
     if mode == 1
-        kˢ = 0.73 + 1293.0/(T+77.0)
+        if T <= 0.0
+            throw(DomainError(T, "Absolute temperature must be positive"))
+        end
+        kˢ = 0.73 + 1293.0 / (T + 77.0)
     elseif mode == 9
         @inbounds kˢ = ksolidm[1]
     else
-        throw("unknown mode $mode")
+        throw(ArgumentError("unknown mode $mode"))
     end
     # end # @timeit to "compute_ksolidm"
     return kˢ
@@ -284,9 +322,12 @@ $(SIGNATURES)
 function compute_kfluidm(T, mode)
     # @timeit to "compute_kfluidm" begin
     if mode == 1
+        if T <= 0.0
+            throw(DomainError(T, "Absolute temperature must be positive"))
+        end
         if T < tmfluidphase
-            kᶠ = 0.465 + 488.0/T
-        elseif T < 410
+            kᶠ = 0.465 + 488.0 / T
+        elseif T < 410.0
             kᶠ = -0.581 + 6.34e-3T - 7.93e-6T^2
         else
             kᶠ = -0.142 + 4.12e-3T - 5.01e-6T^2
@@ -294,7 +335,7 @@ function compute_kfluidm(T, mode)
     elseif mode == 9
         @inbounds kᶠ = kfluidm[1]
     else
-        throw("unknown mode $mode")
+        throw(ArgumentError("unknown mode $mode"))
     end
     # end # @timeit to "compute_kfluidm"
     return kᶠ
@@ -324,16 +365,24 @@ $(SIGNATURES)
 """
 function compute_Δtreaction(T, ϕ, mode)
     # @timeit to "compute_Δtreaction" begin
+    if mode in (1, 2, 3)
+        if T <= 0.0
+            throw(DomainError(T, "Absolute temperature must be positive"))
+        end
+        if !(0.0 < ϕ <= 1.0)
+            throw(DomainError(ϕ, "Porosity must be in (0, 1]"))
+        end
+    end
     if mode == 1
-        Δtr = -log_completion_rate / (A_I*ϕ) * exp(b_I*(T-c_I)^2)
+        Δtr = -log_completion_rate / (A_I * ϕ) * exp(b_I * (T - c_I)^2)
     elseif mode == 2
-        Δtr = -log_completion_rate / (Sxo_B*ϕ) * 2.0^((To_B-T)/Tscl_B)
+        Δtr = -log_completion_rate / (Sxo_B * ϕ) * 2.0^((To_B - T) / Tscl_B)
     elseif mode == 3
-        Δtr = -log_completion_rate / (Sxo_B*ϕ) * exp(Ea_T / RG * (1.0/T - 1.0/To_T))
+        Δtr = -log_completion_rate / (Sxo_B * ϕ) * exp(Ea_T / RG * (1.0 / T - 1.0 / To_T))
     elseif mode == 9
         Δtr = Δtreaction
     else
-        throw("unknown mode $mode")
+        throw(ArgumentError("unknown mode $mode"))
     end
     # end # @timeit to "compute_Δtreaction"
     return Δtr
@@ -360,10 +409,26 @@ $(SIGNATURES)
 """
 function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr)
     # @timeit to "compute_gibbs_free_energy" begin
+    if T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive"))
+    end
+    if pf < 0.0
+        throw(DomainError(pf, "Fluid pressure must be non-negative"))
+    end
+    if !(0.0 < XDˢ < 1.0) || !(0.0 < XWˢ < 1.0)
+        throw(DomainError((XDˢ, XWˢ), "Molar fractions must be strictly in (0, 1)"))
+    end
+    if Δt < 0.0 || Δtr <= 0.0
+        throw(
+            DomainError(
+                (Δt, Δtr), "Timestep must be non-negative and reaction time positive"
+            ),
+        )
+    end
     # compute incomplete reaction for short timestep Δt < Δtreaction
     if Δt < Δtr
         # compute ΔG for dehydration reaction (16.145), (16.165b)
-        ΔGWD = (ΔHWD - T*ΔSWD + pf*ΔVWD + RG*T*log(XDˢ/XWˢ)) * (1.0 - Δt/Δtr)
+        ΔGWD = (ΔHWD - T * ΔSWD + pf * ΔVWD + RG * T * log(XDˢ / XWˢ)) * (1.0 - Δt / Δtr)
     else
         # Δt ≥ Δtreaction (16.165a)
         ΔGWD = zero(0.0)
@@ -390,8 +455,13 @@ $(SIGNATURES)
 
     - Hᵗ: relative enthalpy of system for single dehydration reaction (16.163)
 """
-function compute_relative_enthalpy(Xsolid, XWsolid)
-    return -Xsolid * XWsolid * ΔHWD / (MD+MH₂O)
+function compute_relative_enthalpy(Xsolid, XWsolid; tol=1e-12)
+    if !(-tol <= Xsolid <= 1.0 + tol) || !(-tol <= XWsolid <= 1.0 + tol)
+        throw(DomainError((Xsolid, XWsolid), "Solid fractions must be in [0, 1]"))
+    end
+    Xsolid_cl = clamp(Xsolid, 0.0, 1.0)
+    XWsolid_cl = clamp(XWsolid, 0.0, 1.0)
+    return -Xsolid_cl * XWsolid_cl * ΔHWD / (MD + MH₂O)
 end # function compute_relative_enthalpy
 
 """
@@ -410,8 +480,14 @@ $(SIGNATURES)
     - KWD: dehydration reaction constant (16.151)
 """
 function compute_reaction_constant(T, pf, ΔGWD)
+    if T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive"))
+    end
+    if pf < 0.0
+        throw(DomainError(pf, "Fluid pressure must be non-negative"))
+    end
     # compute reaction constant (16.151)
-    return exp(-(ΔHWD - T*ΔSWD + ΔVWD*pf - ΔGWD) / (RG*T))
+    return exp(-(ΔHWD - T * ΔSWD + ΔVWD * pf - ΔGWD) / (RG * T))
 end # function compute_reaction_constant
 
 """

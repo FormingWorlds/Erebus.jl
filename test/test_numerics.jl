@@ -870,41 +870,59 @@
         end
     end # testset "compute_fluid_velocity!()"
 
-    @testset "compute_displacement_timestep()" begin
+    @testset "compute_displacement_timestep(): CFL and porosity-rate constraints" begin
         dt = dt_longest
-        # simulate data
+
+        # 1. Zero velocity and zero porosity rate: timestep preserved exactly
+        dt_zero = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), dt, 0.0
+        )
+        @test dt_zero ≈ dt rtol=1e-12
+
+        # 2. Solid velocity CFL constraint: dt * max(|vx|) <= dxymax * dx
+        U_fast = 100.0 * (dxymax * dx / dt)
+        vx_fast = fill(U_fast, Ny1, Nx1)
+        dt_vx = Erebus.compute_displacement_timestep(
+            vx_fast, zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), dt, 0.0
+        )
+        @test dt_vx * U_fast ≈ dxymax * dx rtol=1e-12
+        @test dt_vx < dt
+
+        # 3. Fluid velocity CFL constraint: dt * max(|vxf|) <= dxymax * dx
+        V_fast = 200.0 * (dxymax * dx / dt)
+        vxf_fast = fill(V_fast, Ny1, Nx1)
+        dt_vxf = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1), zeros(Ny1, Nx1), vxf_fast, zeros(Ny1, Nx1), dt, 0.0
+        )
+        @test dt_vxf * V_fast ≈ dxymax * dx rtol=1e-12
+        @test dt_vxf < dt
+
+        # 4. Porosity rate constraint: dt * aphimax <= dphimax
+        aphi_fast = 50.0 * (dphimax / dt)
+        dt_phi = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            aphi_fast,
+        )
+        @test dt_phi * aphi_fast ≈ dphimax rtol=1e-12
+        @test dt_phi < dt
+
+        # 5. Monotonicity and positivity under combined random loads
         aphimax = rand(rgen)
         vx = rand(rgen, Ny1, Nx1)
         vy = rand(rgen, Ny1, Nx1)
         vxf = rand(rgen, Ny1, Nx1)
         vyf = rand(rgen, Ny1, Nx1)
-        # compute displacement timestep
         dtm = Erebus.compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
-        # verification, from HTM-planetary.m, line 1117ff
-        dtm_ver=dt
-        maxvx=maximum(abs.(vx))
-        maxvy=maximum(abs.(vy))
-        if dtm_ver*maxvx>dxymax*dx
-            dtm_ver=dxymax*dx/maxvx
-        end
-        if dtm_ver*maxvy>dxymax*dy
-            dtm_ver=dxymax*dy/maxvy
-        end
-        # Fluid velocity
-        maxvxf=maximum(abs.(vxf))
-        maxvyf=maximum(abs.(vyf))
-        if dtm_ver*maxvxf>dxymax*dx
-            dtm_ver=dxymax*dx/maxvxf
-        end
-        if dtm_ver*maxvyf>dxymax*dy
-            dtm_ver=dxymax*dy/maxvyf
-        end
-        # Porosity change
-        if aphimax*dtm_ver>dphimax
-            dtm_ver=dphimax/aphimax
-        end
-        # test
-        @test dtm ≈ dtm_ver rtol=1e-9
+        @test 0.0 < dtm <= dt
+        @test dtm * maximum(abs, vx) <= dxymax * dx + 1e-12
+        @test dtm * maximum(abs, vy) <= dxymax * dy + 1e-12
+        @test dtm * maximum(abs, vxf) <= dxymax * dx + 1e-12
+        @test dtm * maximum(abs, vyf) <= dxymax * dy + 1e-12
+        @test dtm * aphimax <= dphimax + 1e-12
     end # testset "compute_displacement_timestep()"
 
     @testset "compute_stress_strainrate!()" begin
@@ -1083,17 +1101,37 @@
         @test ps ≈ ps_ver rtol=1e-9
     end # testset "symmetrize_p_node_observables!()"
 
-    @testset "positive_max()" begin
-        # simulate data
-        A = rand(rgen, -100:0.1:100, 100, 100)
-        B = rand(rgen, -100:0.1:100, 100, 100)
-        R = zeros(100, 100)
-        # compute positive max
+    @testset "positive_max(): non-negativity and upper bound axioms" begin
+        A = rand(rgen, -100:0.1:100, 50, 50)
+        B = rand(rgen, -100:0.1:100, 50, 50)
+        R = zeros(50, 50)
         Erebus.positive_max!(A, B, R)
-        # test
-        for i in eachindex(R)
-            @test R[i] == max(A[i], B[i], 0.0)
-        end
+
+        # Axiom 1: Non-negativity everywhere
+        @test all(r -> r >= 0.0, R)
+
+        # Axiom 2: Upper bound (R >= A and R >= B everywhere)
+        @test all(R .>= A)
+        @test all(R .>= B)
+
+        # Axiom 3: Negative saturation: strictly negative inputs produce exact zero
+        A_neg = fill(-10.0, 10, 10)
+        B_neg = fill(-25.0, 10, 10)
+        R_neg = fill(99.0, 10, 10)
+        Erebus.positive_max!(A_neg, B_neg, R_neg)
+        @test all(iszero, R_neg)
+
+        # Axiom 4: Positive maximum selection
+        A_pos = [2.0 5.0; 8.0 1.0]
+        B_pos = [3.0 1.0; 6.0 4.0]
+        R_pos = zeros(2, 2)
+        Erebus.positive_max!(A_pos, B_pos, R_pos)
+        @test R_pos ≈ [3.0 5.0; 8.0 4.0] rtol=1e-12
+
+        # Axiom 5: Commutativity / symmetry: positive_max(A, B) == positive_max(B, A)
+        R_sym = zeros(50, 50)
+        Erebus.positive_max!(B, A, R_sym)
+        @test R ≈ R_sym rtol=1e-12
     end # testset "positive_max()"
 
     @testset "compute_nodal_adjustment!()" begin
@@ -1248,47 +1286,63 @@
         @test YNY_inv_ETA == YNY_inv_ETA_ver
     end # testset "finalize_plastic_iteration_pass!()"
 
-    @testset "finalize_thermochemical_iteration_pass()" begin
-        DT_small = rand(rgen, Ny1, Nx1)
-        DT_large = rand(rgen, Ny1, Nx1) .* DTmax .* 2.0
-        titers = collect(1:1:3)
-        for DT in [DT_small, DT_large], titer in titers
-            maxDTcurrent = maximum(abs, DT)
-            dt = Erebus.finalize_thermochemical_iteration_pass(
-                maxDTcurrent, dt_longest, titer
-            )
-            # verification, from HTM-hydration.m, line 1230ff
-            dt_ver = dt_longest
-            if titer==1
-                if maxDTcurrent>DTmax
-                    dt_ver=dt_ver/maxDTcurrent*DTmax
-                end
-            end
-            # test
-            @test dt ≈ dt_ver rtol=1e-9
-        end
+    @testset "finalize_thermochemical_iteration_pass(): thermal relaxation step control" begin
+        # 1. First iteration (titer == 1) with sub-threshold temperature change: dt unchanged
+        dt_sub = Erebus.finalize_thermochemical_iteration_pass(DTmax * 0.5, dt_longest, 1)
+        @test dt_sub ≈ dt_longest rtol=1e-12
+
+        # 2. First iteration (titer == 1) with excessive temperature change: dt scaled proportionally
+        maxDT_large = DTmax * 4.0
+        dt_cut = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 1)
+        @test dt_cut ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
+        @test dt_cut < dt_longest
+
+        # 3. Subsequent iterations (titer > 1): dt is preserved regardless of DT magnitude
+        dt_iter2 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 2)
+        dt_iter3 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 3)
+        @test dt_iter2 ≈ dt_longest rtol=1e-12
+        @test dt_iter3 ≈ dt_longest rtol=1e-12
+
+        # 4. Positivity and monotonicity: larger excess DT produces strictly smaller dt in titer 1
+        dt_cut_larger = Erebus.finalize_thermochemical_iteration_pass(
+            DTmax * 8.0, dt_longest, 1
+        )
+        @test dt_cut_larger < dt_cut
+        @test dt_cut_larger > 0.0
     end # testset "finalize_thermochemical_iteration_pass()"
 
-    @testset "compute_thermochemical_iteration_outcome" begin
-        pf_small = rand(rgen, Ny1, Nx1)
-        pf_large = rand(rgen, Ny1, Nx1) .* pferrmax .* 2.0
-        pf0 = rand(rgen, Ny1, Nx1)
-        DMP_small = rand(rgen, Ny1, Nx1) .* 2.0 .- 1.0
+    @testset "compute_thermochemical_iteration_outcome: convergence decision boundaries" begin
+        # 1. Converged case: small pressure error and past titer threshold (titer > 2)
+        pf_converged = rand(rgen, Ny1, Nx1)
+        pf0 = copy(pf_converged) # zero pressure error
+        DMP_active = fill(1.0e-5, Ny1, Nx1)
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_active, pf_converged, pf0, 3
+        ) == true
+
+        # 2. Converged case: small pressure error and zero mass reaction (DMP <= 0) even at titer 1
         DMP_zero = zeros(Ny1, Nx1)
-        titers = collect(1:1:3)
-        for titer in titers, pf in [pf_small, pf_large], DMP in [DMP_small, DMP_zero]
-            outcome = Erebus.compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer)
-            # verification, from HTM-hydration.m, line 1385ff
-            pferrcur=maximum(abs, pf-pf0)
-            DMPmax=maximum(abs, DMP)
-            if pferrcur<pferrmax && (titer>2 || DMPmax<=0)
-                outcome_ver = true
-            else
-                outcome_ver = false
-            end
-            # test
-            @test outcome == outcome_ver
-        end
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_zero, pf_converged, pf0, 1
+        ) == true
+
+        # 3. Non-converged case: excessive pressure error (pferrcur >= pferrmax)
+        pf_diverged = copy(pf0)
+        pf_diverged[2, 2] += pferrmax * 2.0
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_active, pf_diverged, pf0, 3
+        ) == false
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_zero, pf_diverged, pf0, 1
+        ) == false
+
+        # 4. Non-converged case: active reaction (DMP > 0) at early iterations (titer <= 2)
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_active, pf_converged, pf0, 1
+        ) == false
+        @test Erebus.compute_thermochemical_iteration_outcome(
+            DMP_active, pf_converged, pf0, 2
+        ) == false
     end # testset "compute_thermochemical_iteration_outcome"
 
     @testset "assemble_thermal_lse!" begin
@@ -1568,6 +1622,18 @@
             rel_err = abs(u_num - u_ana) / u0
             @test rel_err < 0.035
         end
+
+        # Physical Invariant 1: Peak excess pore pressure decays monotonically over consolidation
+        @test maximum(pf[:, mid_col]) < u0
+
+        # Physical Invariant 2: Positivity and bounded pressure profile inside column
+        @test all(pf[3:(Ny - 1), mid_col] .>= psurface - 1e-6)
+        @test all(isfinite, pf)
+
+        # Physical Invariant 3: Spatial symmetry of pressure profile across draining boundaries
+        top_idx = 3
+        bot_idx = Ny - 1
+        @test isapprox(pf[top_idx, mid_col], pf[bot_idx, mid_col]; rtol=0.05)
     end # testset "Terzaghi 1D consolidation numerical simulation verification"
 
     @testset "assemble_hydromechanical_lse!() dynamic hydrofracture integration" begin

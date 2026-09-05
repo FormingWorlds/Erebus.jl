@@ -15,15 +15,15 @@ using StaticArrays
             @test size(b.RHOXSUM) == (18, 18)
             @test size(b.RHOYSUM) == (18, 18)
             @test size(b.RHOSUM) == (18, 18)
-            @test all(b.ETA0SUM .== 0.0)
+            @test all(iszero, b.ETA0SUM)
         end
 
         # Dirty buffers and reset
         buffers[1].ETA0SUM .= 1.0
         buffers[2].RHOSUM .= 2.5
         reset_thread_buffers!(buffers)
-        @test all(buffers[1].ETA0SUM .== 0.0)
-        @test all(buffers[2].RHOSUM .== 0.0)
+        @test all(iszero, buffers[1].ETA0SUM)
+        @test all(iszero, buffers[2].RHOSUM)
     end
 
     @testset "ThreadInterpolationBuffers reduction equivalence" begin
@@ -73,8 +73,8 @@ using StaticArrays
             buffers,
         )
 
-        @test all(ETA0SUM .== 4.0)
-        @test all(RHOSUM .== 300.0)
+        @test all(isapprox.(ETA0SUM, 4.0; rtol=1e-12))
+        @test all(isapprox.(RHOSUM, 300.0; rtol=1e-12))
     end
 
     @testset "Marker interpolation: serial vs threaded buffer reduction" begin
@@ -475,7 +475,7 @@ using StaticArrays
         dt_clamped = compute_adaptive_timestep(
             vx, vy, vxf, vyf, 0.01, 0.0; coords=coords, dt_min=5.0, dt_longest_val=1e10
         )
-        @test dt_clamped == 5.0
+        @test dt_clamped ≈ 5.0 rtol=1e-12
 
         # Custom dx_val / dy_val override
         vx[2, 2] = 1.0e-3

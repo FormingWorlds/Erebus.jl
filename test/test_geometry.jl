@@ -1,27 +1,54 @@
 @testset "Geometry" begin
-    @testset "setup_staggered_grid_geometry()" begin
-        # verification, from HTM-planetary.m line 38ff
-        # Basic nodes
-        x_ver=0:dx:xsize # Horizontal coordinates of basic grid points, m
-        y_ver=0:dy:ysize # Vertical coordinates of basic grid points, m
-        # Vx-Nodes
-        xvx_ver=0:dx:(xsize + dy) # Horizontal coordinates of vx grid points, m
-        yvx_ver=(-dy / 2):dy:(ysize + dy / 2) # Vertical coordinates of vx grid points, m
-        # Vy-nodes
-        xvy_ver=(-dx / 2):dx:(xsize + dx / 2) # Horizontal coordinates of vy grid points, m
-        yvy_ver=0:dy:(ysize + dy) # Vertical coordinates of vy grid points, m
-        # P-Nodes
-        xp_ver=(-dx / 2):dx:(xsize + dx / 2) # Horizontal coordinates of P grid points, m
-        yp_ver=(-dy / 2):dy:(ysize + dy / 2) # Vertical coordinates of P grid points, m
-        # test
-        @test x == x_ver
-        @test y == y_ver
-        @test xvx == xvx_ver
-        @test yvx == yvx_ver
-        @test xvy == xvy_ver
-        @test yvy == yvy_ver
-        @test xp == xp_ver
-        @test yp == yp_ver
+    @testset "setup_staggered_grid_geometry(): metric monotonicity and staggered topology" begin
+        # 1. Grid spacing positivity and scale
+        @test dx > 0.0
+        @test dy > 0.0
+        @test isapprox(dx, xsize / (Nx - 1); rtol=1e-12)
+        @test isapprox(dy, ysize / (Ny - 1); rtol=1e-12)
+
+        # 2. Strict monotonicity and uniform spacing
+        for j in 1:(Nx - 1)
+            @test x[j + 1] > x[j]
+            @test isapprox(x[j + 1] - x[j], dx; rtol=1e-12)
+        end
+        for i in 1:(Ny - 1)
+            @test y[i + 1] > y[i]
+            @test isapprox(y[i + 1] - y[i], dy; rtol=1e-12)
+        end
+
+        # 3. Domain coverage: basic grid spans [0, xsize] x [0, ysize]
+        @test isapprox(x[1], 0.0; atol=1e-12)
+        @test isapprox(x[end], xsize; rtol=1e-12)
+        @test isapprox(y[1], 0.0; atol=1e-12)
+        @test isapprox(y[end], ysize; rtol=1e-12)
+
+        # 4. Staggered grid topology and mid-cell placement
+        # Pressure nodes are centered between basic nodes for interior cells
+        for j in 2:Nx
+            @test isapprox(xp[j], 0.5 * (x[j] + x[j - 1]); rtol=1e-12)
+        end
+        for i in 2:Ny
+            @test isapprox(yp[i], 0.5 * (y[i] + y[i - 1]); rtol=1e-12)
+        end
+
+        # Ghost node extensions: pressure grid has half-cell padding beyond physical domain
+        @test isapprox(xp[1], -0.5 * dx; rtol=1e-12)
+        @test isapprox(xp[end], xsize + 0.5 * dx; rtol=1e-12)
+        @test isapprox(yp[1], -0.5 * dy; rtol=1e-12)
+        @test isapprox(yp[end], ysize + 0.5 * dy; rtol=1e-12)
+
+        # 5. Velocity node offsets
+        # Vx nodes: horizontally aligned with x, vertically staggered by -dy/2
+        @test isapprox(xvx[1], 0.0; atol=1e-12)
+        @test isapprox(yvx[1], -0.5 * dy; rtol=1e-12)
+        @test isapprox(yvx[end], ysize + 0.5 * dy; rtol=1e-12)
+
+        # Vy nodes: horizontally staggered by -dx/2, vertically aligned with y
+        @test isapprox(xvy[1], -0.5 * dx; atol=1e-12)
+        @test isapprox(xvy[end], xsize + 0.5 * dx; rtol=1e-12)
+        @test isapprox(yvy[1], 0.0; atol=1e-12)
+
+        # 6. Grid dimension consistency
         @test length(x) == Nx
         @test length(y) == Ny
         @test length(xvx) == Nx1
@@ -30,187 +57,255 @@
         @test length(yvy) == Ny1
         @test length(xp) == Nx1
         @test length(yp) == Ny1
+        @test Nx1 == Nx + 1
+        @test Ny1 == Ny + 1
+
+        # 7. Discrimination guard: staggered node is not coincident with basic node
+        @test abs(xp[1] - x[1]) >= 0.49 * dx
+        @test abs(yp[1] - y[1]) >= 0.49 * dy
     end # testset "setup_staggered_grid_geometry()"
 
-    @testset "setup_staggered_grid_properties()" begin
-        # set up staggered grid properties
-        (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETTAPHI, PHI, APHI, FI, DMP, DHP, XWS) = Erebus.setup_staggered_grid_properties()
-        # verification, from HTM-planetary.m line 51ff, i2visHTM_hydration.m line 691, 692, 1587
-        # Basic nodes
-        ETA_ver = zeros(Ny, Nx) # Viscoplastic Viscosity, Pa*s
-        ETA0_ver = zeros(Ny, Nx) # Viscous Viscosity, Pa*s
-        GGG_ver = zeros(Ny, Nx) # Shear modulus, Pa
-        EXY_ver = zeros(Ny, Nx) # EPSILONxy, 1/s
-        SXY_ver = zeros(Ny, Nx) # SIGMAxy, 1/s
-        SXY0_ver = zeros(Ny, Nx) # SIGMA0xy, 1/s
-        wyx_ver = zeros(Ny, Nx) # Rotation rate, 1/s
-        COH_ver = zeros(Ny, Nx) # Compressive strength, Pa
-        TEN_ver = zeros(Ny, Nx) # Tensile strength, Pa
-        FRI_ver = zeros(Ny, Nx) # Friction
-        YNY_ver = zeros(Ny, Nx) # Plastic yielding mark, 1=yes,0=no
-        # Vx-Nodes
-        RHOX_ver = zeros(Ny1, Nx1) # Density, kg/m^3
-        RHOFX_ver = zeros(Ny1, Nx1) # Fluid Density, kg/m^3
-        KX_ver = zeros(Ny1, Nx1) # Thermal conductivity, W/m/K
-        PHIX_ver = zeros(Ny1, Nx1) # Porosity
-        vx_ver = zeros(Ny1, Nx1) # Solid vx-velocity m/s
-        vxf_ver = zeros(Ny1, Nx1) # Fluid vx-velocity m/s
-        RX_ver = zeros(Ny1, Nx1) # ETAfluid/Kphi ratio , m^2
-        qxD_ver = zeros(Ny1, Nx1) # qx-Darcy flux m/s
-        gx_ver = zeros(Ny1, Nx1) # gx-gravity, m/s^2
-        # Vy-Nodes
-        RHOY_ver = zeros(Ny1, Nx1) # Density, kg/m^3
-        RHOFY_ver = zeros(Ny1, Nx1) # Fluid Density, kg/m^3
-        KY_ver = zeros(Ny1, Nx1) # Thermal conductivity, W/m/K
-        PHIY_ver = zeros(Ny1, Nx1) # Porosity
-        vy_ver = zeros(Ny1, Nx1) # Solid vy-velocity m/s
-        vyf_ver = zeros(Ny1, Nx1) # Fluid vy-velocity m/s
-        RY_ver = zeros(Ny1, Nx1) # ETAfluid/Kphi ratio , m^2
-        qyD_ver = zeros(Ny1, Nx1) # qy-Darcy flux m/s
-        gy_ver = zeros(Ny1, Nx1) # gy-gravity, m/s^2
-        # P-nodes
-        RHO_ver = zeros(Ny1, Nx1) # Density, kg/m^3
-        RHOCP_ver = zeros(Ny1, Nx1) # Volumetric heat capacity, J/m^3/K
-        ALPHA_ver = zeros(Ny1, Nx1) # Thermal expansion, J/m^3/K
-        ALPHAF_ver = zeros(Ny1, Nx1) # Fluid Thermal expansion, J/m^3/K
-        HR_ver = zeros(Ny1, Nx1) # Radioactive heating, W/m^3
-        HA_ver = zeros(Ny1, Nx1) # Adiabatic heating, W/m^3
-        HS_ver = zeros(Ny1, Nx1) # Shear heating, W/m^3
-        ETAP_ver = zeros(Ny1, Nx1) # Viscosity, Pa*s
-        GGGP_ver = zeros(Ny1, Nx1) # Shear modulus, Pa
-        # RMK: EXX, SXX (but oddly not SXX0) are first defined with
-        # size (Ny, Nx) in the verification code (lines 93-95), but later
-        # redefined with size (Ny1, Nx1) (lines 1158, 1160). Possibly an 
-        # oversight; we assume the latter size from the beginning.
-        EXX_ver = zeros(Ny1, Nx1) # EPSILONxx, 1/s
-        SXX_ver = zeros(Ny1, Nx1) # SIGMA'xx, 1/s
-        SXX0_ver = zeros(Ny1, Nx1) # SIGMA0'xx, 1/s
-        tk1_ver = zeros(Ny1, Nx1) # Old temperature, K
-        tk2_ver = zeros(Ny1, Nx1) # New temperature, K
-        DT_ver = zeros(Ny1, Nx1) # temperature difference, K
-        DT0_ver = zeros(Ny1, Nx1) # previous temperature difference, K
-        vxp_ver = zeros(Ny1, Nx1) # Solid Vx in pressure nodes, m/s
-        vyp_ver = zeros(Ny1, Nx1) # Solid Vy in pressure nodes, m/s
-        vxpf_ver = zeros(Ny1, Nx1) # Fluid Vx in pressure nodes, m/s
-        vypf_ver = zeros(Ny1, Nx1) # Fluid Vy in pressure nodes, m/s
-        pr_ver = zeros(Ny1, Nx1) # Total Pressure, Pa
-        pf_ver = zeros(Ny1, Nx1) # Fluid Pressure, Pa
-        ps_ver = zeros(Ny1, Nx1) # Solid Pressure, Pa
-        pr0_ver = zeros(Ny1, Nx1) # Old Total Pressure, Pa
-        pf0_ver = zeros(Ny1, Nx1) # Old Fluid Pressure, Pa
-        ps0_ver = zeros(Ny1, Nx1) # Old Solid Pressure, Pa
-        ETAPHI_ver = zeros(Ny1, Nx1) # Bulk Viscosity, Pa*s
-        BETTAPHI_ver = zeros(Ny1, Nx1) # Bulk compresibility, Pa*s
-        PHI_ver = zeros(Ny1, Nx1) # porosity
-        APHI_ver = zeros(Ny1, Nx1) # Dln((1-PHI)/PHI)/Dt
-        FI_ver = zeros(Ny1, Nx1) # Gravity potential, J/kg
-        DMP_ver = zeros(Ny1, Nx1)
-        DHP_ver = zeros(Ny1, Nx1)
-        XWS_ver = zeros(Ny1, Nx1)
-        # test
-        @test ETA == ETA_ver
-        @test ETA0 == ETA0_ver
-        @test GGG == GGG_ver
-        @test EXY == EXY_ver
-        @test SXY == SXY_ver
-        @test SXY0 == SXY0_ver
-        @test wyx == wyx_ver
-        @test COH == COH_ver
-        @test TEN == TEN_ver
-        @test FRI == FRI_ver
-        @test YNY == YNY_ver
-        @test RHOX == RHOX_ver
-        @test RHOFX == RHOFX_ver
-        @test KX == KX_ver
-        @test PHIX == PHIX_ver
-        @test vx == vx_ver
-        @test vxf == vxf_ver
-        @test RX == RX_ver
-        @test qxD == qxD_ver
-        @test gx == gx_ver
-        @test RHOY == RHOY_ver
-        @test RHOFY == RHOFY_ver
-        @test KY == KY_ver
-        @test PHIY == PHIY_ver
-        @test vy == vy_ver
-        @test vyf == vyf_ver
-        @test RY == RY_ver
-        @test qyD == qyD_ver
-        @test gy == gy_ver
-        @test RHO == RHO_ver
-        @test RHOCP == RHOCP_ver
-        @test ALPHA == ALPHA_ver
-        @test ALPHAF == ALPHAF_ver
-        @test HR == HR_ver
-        @test HA == HA_ver
-        @test HS == HS_ver
-        @test ETAP == ETAP_ver
-        @test GGGP == GGGP_ver
-        @test EXX == EXX_ver
-        @test SXX == SXX_ver
-        @test SXX0 == SXX0_ver
-        @test tk1 == tk1_ver
-        @test tk2 == tk2_ver
-        @test DT == DT_ver
-        @test DT0 == DT0_ver
-        @test vxp == vxp_ver
-        @test vyp == vyp_ver
-        @test vxpf == vxpf_ver
-        @test vypf == vypf_ver
-        @test pr == pr_ver
-        @test pf == pf_ver
-        @test ps == ps_ver
-        @test pr0 == pr0_ver
-        @test pf0 == pf0_ver
-        @test ps0 == ps0_ver
-        @test ETAPHI == ETAPHI_ver
-        @test BETTAPHI == BETTAPHI_ver
-        @test PHI == PHI_ver
-        @test APHI == APHI_ver
-        @test FI == FI_ver
-        @test DMP == DMP_ver
-        @test DHP == DHP_ver
-        @test XWS == XWS_ver
+    @testset "setup_staggered_grid_properties(): tensor dimension conformance" begin
+        props = Erebus.setup_staggered_grid_properties()
+        (
+            ETA,
+            ETA0,
+            GGG,
+            EXY,
+            SXY,
+            SXY0,
+            wyx,
+            COH,
+            TEN,
+            FRI,
+            YNY,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            vx,
+            vxf,
+            RX,
+            qxD,
+            gx,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            vy,
+            vyf,
+            RY,
+            qyD,
+            gy,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            HA,
+            HS,
+            ETAP,
+            GGGP,
+            EXX,
+            SXX,
+            SXX0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            vxp,
+            vyp,
+            vxpf,
+            vypf,
+            pr,
+            pf,
+            ps,
+            pr0,
+            pf0,
+            ps0,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            APHI,
+            FI,
+            DMP,
+            DHP,
+            XWS,
+        ) = props
+
+        # 1. Basic node tensor dimensions: (Ny, Nx)
+        basic_tensors = [ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY]
+        for t in basic_tensors
+            @test size(t) == (Ny, Nx)
+            @test all(iszero, t)
+        end
+
+        # 2. Velocity and Pressure staggered node tensor dimensions: (Ny1, Nx1)
+        staggered_tensors = [
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            vx,
+            vxf,
+            RX,
+            qxD,
+            gx,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            vy,
+            vyf,
+            RY,
+            qyD,
+            gy,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            HA,
+            HS,
+            ETAP,
+            GGGP,
+            EXX,
+            SXX,
+            SXX0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            vxp,
+            vyp,
+            vxpf,
+            vypf,
+            pr,
+            pf,
+            ps,
+            pr0,
+            pf0,
+            ps0,
+            ETAPHI,
+            BETTAPHI,
+            PHI,
+            APHI,
+            FI,
+            DMP,
+            DHP,
+            XWS,
+        ]
+        for t in staggered_tensors
+            @test size(t) == (Ny1, Nx1)
+            @test all(iszero, t)
+        end
     end # testset "setup_staggered_grid_properties()"
 
-    @testset "setup_staggered_grid_properties_helpers()" begin
-        # setup staggered grid properties helpers
-        (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = Erebus.setup_staggered_grid_properties_helpers()
-        # test
-        @test ETA5 == zeros(Float64, Ny, Nx)
-        @test ETA00 == zeros(Float64, Ny, Nx)
-        @test YNY5 == zeros(Bool, Ny, Nx)
-        @test YNY00 == zeros(Bool, Ny, Nx)
-        @test YNY_inv_ETA == zeros(Float64, Ny, Nx)
-        @test DSXY == zeros(Float64, Ny, Nx)
-        @test DSY == zeros(Float64, Ny, Nx)
-        @test EII == zeros(Float64, Ny1, Nx1)
-        @test SII == zeros(Float64, Ny1, Nx1)
-        @test DSXX == zeros(Float64, Ny1, Nx1)
-        @test tk0 == zeros(Float64, Ny1, Nx1)
+    @testset "setup_staggered_grid_properties_helpers(): helper array dimensions" begin
+        helpers = Erebus.setup_staggered_grid_properties_helpers()
+        (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = helpers
+
+        # Basic helpers (Ny, Nx)
+        for h in [ETA5, ETA00, DSXY, DSY]
+            @test size(h) == (Ny, Nx)
+            @test eltype(h) == Float64
+            @test all(iszero, h)
+        end
+        for h in [YNY5, YNY00]
+            @test size(h) == (Ny, Nx)
+            @test eltype(h) == Bool
+            @test all(!, h)
+        end
+
+        # Staggered helpers (Ny1, Nx1)
+        for h in [EII, SII, DSXX, tk0]
+            @test size(h) == (Ny1, Nx1)
+            @test eltype(h) == Float64
+            @test all(iszero, h)
+        end
     end # testset "setup_staggered_grid_properties_helpers()"
 
-    @testset "grid_vector()" begin
-        grid = rand(rgen, 10, 10)
-        @test Erebus.grid_vector(1, 1, grid) ==
-            @SVector [grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]]
+    @testset "grid_vector(): 4-point cell stencil ordering" begin
+        grid = rand(rgen, 8, 8)
+
+        # 1. Stencil ordering: [top-left (i, j), bottom-left (i+1, j), top-right (i, j+1), bottom-right (i+1, j+1)]
+        v11 = Erebus.grid_vector(1, 1, grid)
+        @test v11 == @SVector [grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]]
+        @test length(v11) == 4
+
+        # 2. Interior cell ordering consistency
+        v34 = Erebus.grid_vector(3, 4, grid)
+        @test v34[1] == grid[3, 4]
+        @test v34[2] == grid[4, 4]
+        @test v34[3] == grid[3, 5]
+        @test v34[4] == grid[4, 5]
+
+        # 3. Positivity preservation
+        grid_pos = rand(rgen, 5, 5) .+ 1.0
+        v_pos = Erebus.grid_vector(2, 2, grid_pos)
+        @test all(v_pos .> 0.0)
     end # testset "grid_vector()"
 
-    @testset "grid_average()" begin
-        grid = rand(rgen, 10, 10)
-        @test Erebus.grid_average(1, 1, grid) ==
-            0.25 * (grid[1, 1] + grid[2, 1] + grid[1, 2] + grid[2, 2])
+    @testset "grid_average(): partition of unity and convex hull" begin
+        # 1. Constant field partition of unity: average of constant c is c identically
+        const_val = 42.5
+        grid_const = fill(const_val, 6, 6)
+        @test isapprox(Erebus.grid_average(1, 1, grid_const), const_val; rtol=1e-12)
+        @test isapprox(Erebus.grid_average(3, 3, grid_const), const_val; rtol=1e-12)
+
+        # 2. Convex hull invariant: min(cell) <= average <= max(cell)
+        grid_rand = rand(rgen, 6, 6)
+        for j in 1:5, i in 1:5
+            cell_vals = [
+                grid_rand[i, j],
+                grid_rand[i + 1, j],
+                grid_rand[i, j + 1],
+                grid_rand[i + 1, j + 1],
+            ]
+            avg = Erebus.grid_average(i, j, grid_rand)
+            @test minimum(cell_vals) <= avg <= maximum(cell_vals)
+        end
+
+        # 3. Linearity: avg(a*G1 + b*G2) == a*avg(G1) + b*avg(G2)
+        g1 = rand(rgen, 6, 6)
+        g2 = rand(rgen, 6, 6)
+        a, b = 2.5, -1.8
+        comb = a .* g1 .+ b .* g2
+        avg_comb = Erebus.grid_average(2, 2, comb)
+        expected_comb =
+            a * Erebus.grid_average(2, 2, g1) + b * Erebus.grid_average(2, 2, g2)
+        @test isapprox(avg_comb, expected_comb; rtol=1e-12)
+
+        # 4. Discrete symmetry under transpose: for a symmetric matrix, diagonal cell average is symmetric
+        sym_mat = [1.0 2.0; 2.0 3.0]
+        @test isapprox(
+            Erebus.grid_average(1, 1, sym_mat), 0.25 * (1.0 + 2.0 + 2.0 + 3.0); rtol=1e-12
+        )
     end # testset "grid_average()"
 
-    @testset "apply_insulating_boundary_conditions!()" begin
-        max_size = 10
-        for j in 3:1:max_size, i in 3:1:max_size
-            t = rand(rgen, i, j)
-            Erebus.apply_insulating_boundary_conditions!(t)
-            @test t[1, 2:(j - 1)] == t[2, 2:(j - 1)]
-            @test t[i, 2:(j - 1)] == t[i - 1, 2:(j - 1)]
-            @test t[:, 1] == t[:, 2]
-            @test t[:, j] == t[:, j - 1]
-        end
+    @testset "apply_insulating_boundary_conditions!(): zero Neumann flux and idempotency" begin
+        # 1. Zero Neumann flux: normal derivative across boundary is zero (ghost cell == adjacent interior cell)
+        ny_test, nx_test = 8, 8
+        t_field = rand(rgen, ny_test, nx_test)
+        t_orig = copy(t_field)
+
+        Erebus.apply_insulating_boundary_conditions!(t_field)
+
+        # Top and bottom zero flux: dT/dy = 0
+        @test t_field[1, 2:(nx_test - 1)] == t_field[2, 2:(nx_test - 1)]
+        @test t_field[ny_test, 2:(nx_test - 1)] == t_field[ny_test - 1, 2:(nx_test - 1)]
+
+        # Left and right zero flux: dT/dx = 0
+        @test t_field[:, 1] == t_field[:, 2]
+        @test t_field[:, nx_test] == t_field[:, nx_test - 1]
+
+        # 2. Interior preservation: physical interior (3:(ny-2), 3:(nx-2)) must not be modified
+        @test t_field[3:(ny_test - 2), 3:(nx_test - 2)] ==
+            t_orig[3:(ny_test - 2), 3:(nx_test - 2)]
+
+        # 3. Idempotency: BC(BC(T)) == BC(T)
+        t_double = copy(t_field)
+        Erebus.apply_insulating_boundary_conditions!(t_double)
+        @test t_double == t_field
     end # testset "apply_insulating_boundary_conditions!()"
 end

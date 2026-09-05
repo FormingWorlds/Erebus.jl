@@ -15,9 +15,9 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         def_disk = DiskConfig()
         @test def_disk.enabled == false
         @test def_disk.model === :fixed
-        @test def_disk.t_ambient == 170.0
-        @test def_disk.orbital_distance_au == 2.5
-        @test def_disk.stellar_mass_msun == 1.0
+        @test def_disk.t_ambient ≈ 170.0 rtol=1e-12
+        @test def_disk.orbital_distance_au ≈ 2.5 rtol=1e-12
+        @test def_disk.stellar_mass_msun ≈ 1.0 rtol=1e-12
 
         # Valid configurations
         cfg_mono = SimulationConfig(disk=DiskConfig(enabled=true, model=:monotonic))
@@ -111,21 +111,21 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
 
         loaded_cfg = load_config(tmp_path)
         @test loaded_cfg.geometry.spherical_metric == true
-        @test loaded_cfg.geometry.metric_regularization_cells == 0.75
+        @test loaded_cfg.geometry.metric_regularization_cells ≈ 0.75 rtol=1e-12
         @test loaded_cfg.thermodynamics.surface_radiation == true
-        @test loaded_cfg.thermodynamics.emissivity == 0.85
+        @test loaded_cfg.thermodynamics.emissivity ≈ 0.85 rtol=1e-12
         @test loaded_cfg.disk.enabled == true
         @test loaded_cfg.disk.model === :class0_to_class2
-        @test loaded_cfg.disk.orbital_distance_au == 1.5
-        @test loaded_cfg.disk.stellar_mass_msun == 0.3
+        @test loaded_cfg.disk.orbital_distance_au ≈ 1.5 rtol=1e-12
+        @test loaded_cfg.disk.stellar_mass_msun ≈ 0.3 rtol=1e-12
         rm(tmp_path; force=true)
     end
 
     @testset "Disk Temperature Model 1: Monotonic Viscous Decay" begin
         # Fixed ambient mode when disabled
         cfg_disabled = DiskConfig(enabled=false, model=:monotonic, t_ambient=180.0)
-        @test compute_disk_temperature(0.0, cfg_disabled) == 180.0
-        @test compute_disk_temperature(1.0e14, cfg_disabled) == 180.0
+        @test compute_disk_temperature(0.0, cfg_disabled) ≈ 180.0 rtol=1e-12
+        @test compute_disk_temperature(1.0e14, cfg_disabled) ≈ 180.0 rtol=1e-12
 
         # Monotonic decay enabled
         cfg_mono = DiskConfig(
@@ -322,9 +322,9 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         @test isapprox(h_close, h_tangent; rtol=1e-5)
 
         # Non-finite and non-positive temperature handling
-        @test compute_radiation_htc(0.0, 170.0) == 0.0
-        @test compute_radiation_htc(300.0, -10.0) == 0.0
-        @test compute_radiation_htc(NaN, 170.0) == 0.0
+        @test iszero(compute_radiation_htc(0.0, 170.0))
+        @test iszero(compute_radiation_htc(300.0, -10.0))
+        @test iszero(compute_radiation_htc(NaN, 170.0))
     end
 
     @testset "Radiative Boundary Application on Staggered Grid" begin
@@ -441,7 +441,7 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
             r_sq = (coords.xp[j] - xcenter)^2 + (coords.yp[i] - ycenter)^2
             if r_sq > rplanet^2
-                @test Q_metric[i, j] == 0.0
+                @test iszero(Q_metric[i, j])
             end
         end
     end
@@ -614,6 +614,8 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
             Q_metric=Q_metric_pti,
         )
         @test all(tk2_pti .> tk_prev)
+        @test all(isfinite, tk2_pti)
+        @test minimum(tk2_pti) > 0.0
     end
 
     @testset "Simulation Integration with Spherical Metric, Radiation, and Disk Models" begin
