@@ -233,6 +233,33 @@ Base.@kwdef struct DiskConfig
 end
 
 """
+Silicate hydration and dehydration thermochemical reaction parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct ReactionConfig
+    active::Bool = true
+    hydration_active::Bool = true
+    dehydration_active::Bool = true
+    hydration_mode::Int = 1
+    dehydration_mode::Int = 2
+    dtreaction_hydration::Float64 = 1.0e10
+    dtreaction_dehydration::Float64 = 1.0e8
+    delta_H::Float64 = 40_000.0
+    delta_S::Float64 = 60.0
+    A_I::Float64 = 1.0e-11
+    b_I::Float64 = 2.5e-4
+    c_I::Float64 = 543.0
+    Sxo_B::Float64 = 2.0e-11
+    Tscl_B::Float64 = 10.0
+    To_B::Float64 = 293.0
+    alpha_relaxation::Float64 = 0.5
+    pfcoeff::Float64 = 0.5
+    pferrmax::Float64 = 1.0e5
+    p_cavitation::Float64 = 1.0e7
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -244,6 +271,7 @@ Base.@kwdef struct SimulationConfig
     solver::SolverConfig = SolverConfig()
     poroelasticity::PoroelasticConfig = PoroelasticConfig()
     thermodynamics::ThermalConfig = ThermalConfig()
+    reaction::ReactionConfig = ReactionConfig()
     materials::MaterialConfig = MaterialConfig()
     output::OutputConfig = OutputConfig()
     disk::DiskConfig = DiskConfig()
@@ -493,6 +521,51 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
 
+    # Reaction checks
+    cfg.reaction.hydration_mode in Set([1, 2, 3, 9]) || throw(
+        ArgumentError(
+            "hydration_mode must be 1, 2, 3, or 9, got $(cfg.reaction.hydration_mode)"
+        ),
+    )
+    cfg.reaction.dehydration_mode in Set([1, 2, 3, 9]) || throw(
+        ArgumentError(
+            "dehydration_mode must be 1, 2, 3, or 9, got $(cfg.reaction.dehydration_mode)",
+        ),
+    )
+    cfg.reaction.dtreaction_hydration > 0.0 &&
+    isfinite(cfg.reaction.dtreaction_hydration) ||
+        throw(ArgumentError("dtreaction_hydration must be > 0 and finite"))
+    cfg.reaction.dtreaction_dehydration > 0.0 &&
+    isfinite(cfg.reaction.dtreaction_dehydration) ||
+        throw(ArgumentError("dtreaction_dehydration must be > 0 and finite"))
+    cfg.reaction.delta_H > 0.0 && isfinite(cfg.reaction.delta_H) ||
+        throw(ArgumentError("delta_H must be > 0 and finite"))
+    cfg.reaction.delta_S > 0.0 && isfinite(cfg.reaction.delta_S) ||
+        throw(ArgumentError("delta_S must be > 0 and finite"))
+    cfg.reaction.A_I > 0.0 && isfinite(cfg.reaction.A_I) ||
+        throw(ArgumentError("A_I must be > 0 and finite"))
+    cfg.reaction.b_I > 0.0 && isfinite(cfg.reaction.b_I) ||
+        throw(ArgumentError("b_I must be > 0 and finite"))
+    cfg.reaction.c_I > 0.0 && isfinite(cfg.reaction.c_I) ||
+        throw(ArgumentError("c_I must be > 0 and finite"))
+    cfg.reaction.Sxo_B > 0.0 && isfinite(cfg.reaction.Sxo_B) ||
+        throw(ArgumentError("Sxo_B must be > 0 and finite"))
+    cfg.reaction.Tscl_B > 0.0 && isfinite(cfg.reaction.Tscl_B) ||
+        throw(ArgumentError("Tscl_B must be > 0 and finite"))
+    cfg.reaction.To_B > 0.0 && isfinite(cfg.reaction.To_B) ||
+        throw(ArgumentError("To_B must be > 0 and finite"))
+    0.0 < cfg.reaction.alpha_relaxation <= 1.0 || throw(
+        ArgumentError(
+            "alpha_relaxation must be in (0, 1], got $(cfg.reaction.alpha_relaxation)"
+        ),
+    )
+    0.0 <= cfg.reaction.pfcoeff <= 1.0 ||
+        throw(ArgumentError("pfcoeff must be in [0, 1], got $(cfg.reaction.pfcoeff)"))
+    cfg.reaction.pferrmax > 0.0 && isfinite(cfg.reaction.pferrmax) ||
+        throw(ArgumentError("pferrmax must be > 0 and finite"))
+    cfg.reaction.p_cavitation >= 0.0 && isfinite(cfg.reaction.p_cavitation) ||
+        throw(ArgumentError("p_cavitation must be >= 0 and finite"))
+
     # Materials checks: all 18 property arrays must be positive/non-negative and finite
     for (arr, name, strictly_pos) in [
         (cfg.materials.rhosolidm, "rhosolidm", true),
@@ -590,6 +663,7 @@ const VALID_SECTIONS = Set([
     "solver",
     "poroelasticity",
     "thermodynamics",
+    "reaction",
     "materials",
     "output",
     "disk",
@@ -607,10 +681,11 @@ $(SIGNATURES)
 - `cfg::SimulationConfig`: Validated configuration struct.
 """
 function load_config(source::AbstractString)::SimulationConfig
+    has_newlines = occursin('\n', source)
     # Resolve file path: direct path or relative to Erebus package root
-    resolved_path = if isfile(source)
+    resolved_path = if !has_newlines && isfile(source)
         source
-    elseif isfile(joinpath(@__DIR__, "..", source))
+    elseif !has_newlines && isfile(joinpath(@__DIR__, "..", source))
         normpath(joinpath(@__DIR__, "..", source))
     else
         nothing
@@ -662,6 +737,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.thermodynamics
     end
+    react = if haskey(parsed, "reaction")
+        _dict_to_struct(ReactionConfig, parsed["reaction"], def.reaction)
+    else
+        def.reaction
+    end
     mat = if haskey(parsed, "materials")
         _dict_to_struct(MaterialConfig, parsed["materials"], def.materials)
     else
@@ -685,6 +765,7 @@ function load_config(source::AbstractString)::SimulationConfig
         solver=solv,
         poroelasticity=poro,
         thermodynamics=therm,
+        reaction=react,
         materials=mat,
         output=out,
         disk=dsk,
@@ -713,15 +794,15 @@ function _struct_to_dict(s)
 end
 
 """
-Saves a `SimulationConfig` to a `.toml` file.
+Saves a `SimulationConfig` to an IO stream or a `.toml` file.
 
 $(SIGNATURES)
 
 # Arguments
-- `path`: Output file path.
+- `io_or_path`: Output IO stream or file path.
 - `cfg`: Configuration to serialize.
 """
-function save_config(path::AbstractString, cfg::SimulationConfig)
+function save_config(io::IO, cfg::SimulationConfig)
     d = Dict{String,Any}(
         "grid" => _struct_to_dict(cfg.grid),
         "geometry" => _struct_to_dict(cfg.geometry),
@@ -729,12 +810,18 @@ function save_config(path::AbstractString, cfg::SimulationConfig)
         "solver" => _struct_to_dict(cfg.solver),
         "poroelasticity" => _struct_to_dict(cfg.poroelasticity),
         "thermodynamics" => _struct_to_dict(cfg.thermodynamics),
+        "reaction" => _struct_to_dict(cfg.reaction),
         "materials" => _struct_to_dict(cfg.materials),
         "output" => _struct_to_dict(cfg.output),
         "disk" => _struct_to_dict(cfg.disk),
     )
+    TOML.print(io, d; sorted=true)
+    return io
+end
+
+function save_config(path::AbstractString, cfg::SimulationConfig)
     open(path, "w") do io
-        return TOML.print(io, d; sorted=true)
+        return save_config(io, cfg)
     end
     return path
 end
