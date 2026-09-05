@@ -70,4 +70,18 @@ jobs:
         run: |
           julia -e 'using JuliaFormatter; if !format(".", BlueStyle(); overwrite=false, verbose=true) error("Code style check failed: files are not formatted according to BlueStyle! Run using JuliaFormatter; format(\".\", BlueStyle()) locally to fix.") end'
 
+  test-quality:
+    name: Test Quality Standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+      - name: Check test quality against baseline
+        run: julia tools/check_test_quality.jl --check
+      - name: Verify literature references
+        run: julia tools/verify_references.jl
+
+
 

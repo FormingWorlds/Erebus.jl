@@ -9,41 +9,41 @@ using TOML
         @test cfg isa SimulationConfig
         @test cfg.grid.Nx == 33
         @test cfg.grid.Ny == 33
-        @test cfg.grid.xsize == 140000.0
-        @test cfg.grid.ysize == 140000.0
-        @test cfg.geometry.rplanet == 50000.0
-        @test cfg.geometry.rcrust == 50000.0
+        @test cfg.grid.xsize ≈ 140000.0 rtol=1e-12
+        @test cfg.grid.ysize ≈ 140000.0 rtol=1e-12
+        @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12
+        @test cfg.geometry.rcrust ≈ 50000.0 rtol=1e-12
         # Poroelastic baseline default matches constants.jl test baseline (0.0)
-        @test cfg.poroelasticity.betasolid == 0.0
-        @test cfg.poroelasticity.betafluid == 0.0
-        @test cfg.poroelasticity.phimin == 1.0e-4
-        @test cfg.poroelasticity.phimax == 0.9999
+        @test iszero(cfg.poroelasticity.betasolid)
+        @test iszero(cfg.poroelasticity.betafluid)
+        @test cfg.poroelasticity.phimin ≈ 1.0e-4 rtol=1e-12
+        @test cfg.poroelasticity.phimax ≈ 0.9999 rtol=1e-12
         @test cfg.time.dt_longest ≈ 1.0e11 / cfg.time.yearlength
         @test cfg.time.dt_initial ≈ 1.0e11 / cfg.time.yearlength
-        @test cfg.time.start_time == 2.25e6
-        @test cfg.time.endtime == 15.0e6
+        @test cfg.time.start_time ≈ 2.25e6 rtol=1e-12
+        @test cfg.time.endtime ≈ 15.0e6 rtol=1e-12
         @test cfg.time.n_steps == 10
         @test cfg.solver.use_pardiso == false
 
         # Material arrays must match constants.jl element-by-element
-        @test cfg.materials.rhosolidm == SVector{3,Float64}([3300.0, 3300.0, 1.0])
-        @test cfg.materials.rhofluidm == SVector{3,Float64}([1000.0, 1000.0, 1.0])
-        @test cfg.materials.etasolidm == SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
-        @test cfg.materials.etasolidmm == SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
-        @test cfg.materials.etafluidm == SVector{3,Float64}([1.0e+12, 1.0e+12, 1.0e-03])
-        @test cfg.materials.etafluidmm == SVector{3,Float64}([1.0e-03, 1.0e-03, 1.0e-03])
-        @test cfg.materials.rhocpsolidm == SVector{3,Float64}([3.3e+06, 3.3e+06, 3.0e+06])
-        @test cfg.materials.rhocpfluidm == SVector{3,Float64}([1.0e+06, 1.0e+06, 3.0e+06])
-        @test cfg.materials.alphasolidm == SVector{3,Float64}([3.0e-05, 3.0e-05, 0.0])
-        @test cfg.materials.alphafluidm == SVector{3,Float64}([5.0e-05, 5.0e-05, 0.0])
-        @test cfg.materials.ksolidm == SVector{3,Float64}([3.0, 3.0, 3000.0])
-        @test cfg.materials.kfluidm == SVector{3,Float64}([50.0, 50.0, 3000.0])
-        @test cfg.materials.gggsolidm == SVector{3,Float64}([1.0e+10, 1.0e+10, 1.0e+10])
-        @test cfg.materials.frictsolidm == SVector{3,Float64}([0.6, 0.6, 0.0])
-        @test cfg.materials.cohessolidm == SVector{3,Float64}([1.0e+08, 1.0e+08, 1.0e+08])
-        @test cfg.materials.tenssolidm == SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
-        @test cfg.materials.kphim0 == SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
-        @test cfg.materials.tkm0 == SVector{3,Float64}([170.0, 170.0, 170.0])
+        @test cfg.materials.rhosolidm ≈ SVector{3,Float64}([3300.0, 3300.0, 1.0])
+        @test cfg.materials.rhofluidm ≈ SVector{3,Float64}([1000.0, 1000.0, 1.0])
+        @test cfg.materials.etasolidm ≈ SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
+        @test cfg.materials.etasolidmm ≈ SVector{3,Float64}([1.0e+19, 1.0e+19, 1.0e+16])
+        @test cfg.materials.etafluidm ≈ SVector{3,Float64}([1.0e+12, 1.0e+12, 1.0e-03])
+        @test cfg.materials.etafluidmm ≈ SVector{3,Float64}([1.0e-03, 1.0e-03, 1.0e-03])
+        @test cfg.materials.rhocpsolidm ≈ SVector{3,Float64}([3.3e+06, 3.3e+06, 3.0e+06])
+        @test cfg.materials.rhocpfluidm ≈ SVector{3,Float64}([1.0e+06, 1.0e+06, 3.0e+06])
+        @test cfg.materials.alphasolidm ≈ SVector{3,Float64}([3.0e-05, 3.0e-05, 0.0])
+        @test cfg.materials.alphafluidm ≈ SVector{3,Float64}([5.0e-05, 5.0e-05, 0.0])
+        @test cfg.materials.ksolidm ≈ SVector{3,Float64}([3.0, 3.0, 3000.0])
+        @test cfg.materials.kfluidm ≈ SVector{3,Float64}([50.0, 50.0, 3000.0])
+        @test cfg.materials.gggsolidm ≈ SVector{3,Float64}([1.0e+10, 1.0e+10, 1.0e+10])
+        @test cfg.materials.frictsolidm ≈ SVector{3,Float64}([0.6, 0.6, 0.0])
+        @test cfg.materials.cohessolidm ≈ SVector{3,Float64}([1.0e+08, 1.0e+08, 1.0e+08])
+        @test cfg.materials.tenssolidm ≈ SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
+        @test cfg.materials.kphim0 ≈ SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
+        @test cfg.materials.tkm0 ≈ SVector{3,Float64}([170.0, 170.0, 170.0])
     end
 
     @testset "load_config() from file" begin
@@ -51,10 +51,10 @@ using TOML
         default_toml = joinpath(@__DIR__, "..", "configs", "default.toml")
         cfg_def = load_config(default_toml)
         @test cfg_def.grid.Nx == 33
-        @test cfg_def.grid.xsize == 140000.0
-        @test cfg_def.poroelasticity.betasolid == 2.5e-11
-        @test cfg_def.poroelasticity.betafluid == 4.0e-10
-        @test cfg_def.materials.ksolidm == SVector{3,Float64}([3.0, 3.0, 3000.0])
+        @test cfg_def.grid.xsize ≈ 140000.0 rtol=1e-12
+        @test cfg_def.poroelasticity.betasolid ≈ 2.5e-11 rtol=1e-12
+        @test cfg_def.poroelasticity.betafluid ≈ 4.0e-10 rtol=1e-12
+        @test cfg_def.materials.ksolidm ≈ SVector{3,Float64}([3.0, 3.0, 3000.0])
 
         # Quick test TOML file
         quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
@@ -64,7 +64,7 @@ using TOML
         @test cfg_q.output.savematstep == 2
         # Verify inherited defaults for omitted sections
         @test cfg_q.grid.Nx == 33
-        @test cfg_q.geometry.rplanet == 50000.0
+        @test cfg_q.geometry.rplanet ≈ 50000.0 rtol=1e-12
         @test cfg_q.solver.titermax == 10000
 
         # Missing file error check
@@ -82,10 +82,10 @@ using TOML
         cfg = load_config(toml_str)
         @test cfg.grid.Nx == 33
         @test cfg.grid.Ny == 33
-        @test cfg.poroelasticity.betasolid == 1.0e-10
-        @test cfg.poroelasticity.betafluid == 0.0 # baseline default preserved
+        @test cfg.poroelasticity.betasolid ≈ 1.0e-10 rtol=1e-12
+        @test iszero(cfg.poroelasticity.betafluid) # baseline default preserved
         @test cfg.time.n_steps == 5
-        @test cfg.geometry.rplanet == 50000.0 # default preserved
+        @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12 # default preserved
     end
 
     @testset "validate_config() schema and physical bounds enforcement" begin
@@ -337,15 +337,15 @@ using TOML
 
             @test cfg_loaded.grid.Nx == cfg_orig.grid.Nx
             @test cfg_loaded.grid.Ny == cfg_orig.grid.Ny
-            @test cfg_loaded.grid.xsize == cfg_orig.grid.xsize
-            @test cfg_loaded.grid.ysize == cfg_orig.grid.ysize
-            @test cfg_loaded.poroelasticity.betasolid == cfg_orig.poroelasticity.betasolid
-            @test cfg_loaded.poroelasticity.betafluid == cfg_orig.poroelasticity.betafluid
-            @test cfg_loaded.poroelasticity.phimin == cfg_orig.poroelasticity.phimin
-            @test cfg_loaded.poroelasticity.phimax == cfg_orig.poroelasticity.phimax
+            @test cfg_loaded.grid.xsize ≈ cfg_orig.grid.xsize
+            @test cfg_loaded.grid.ysize ≈ cfg_orig.grid.ysize
+            @test cfg_loaded.poroelasticity.betasolid ≈ cfg_orig.poroelasticity.betasolid
+            @test cfg_loaded.poroelasticity.betafluid ≈ cfg_orig.poroelasticity.betafluid
+            @test cfg_loaded.poroelasticity.phimin ≈ cfg_orig.poroelasticity.phimin
+            @test cfg_loaded.poroelasticity.phimax ≈ cfg_orig.poroelasticity.phimax
             @test cfg_loaded.time.n_steps == cfg_orig.time.n_steps
             @test cfg_loaded.output.output_dir == cfg_orig.output.output_dir
-            @test cfg_loaded.materials.rhosolidm == cfg_orig.materials.rhosolidm
+            @test cfg_loaded.materials.rhosolidm ≈ cfg_orig.materials.rhosolidm
         finally
             rm(tmp_path, force=true)
         end
@@ -380,7 +380,7 @@ using TOML
         hr_sol_on, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
         @test hr_sol_on[1] > 0.0
         hr_sol_off, _ = Erebus.calculate_radioactive_heating(false, false, 0.0)
-        @test all(hr_sol_off .== 0.0)
+        @test all(iszero, hr_sol_off)
     end
 
     @testset "output restart_from validation" begin

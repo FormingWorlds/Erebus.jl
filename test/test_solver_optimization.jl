@@ -334,7 +334,7 @@ using Test
         @test sol1.retcode == LinearSolve.SciMLBase.ReturnCode.Success
 
         sol1_ref = LinearSolve.solve(LinearProblem(L, R), UMFPACKFactorization()).u
-        @test maximum(abs.(sol1.u - sol1_ref)) == 0.0
+        @test isapprox(sol1.u, sol1_ref; atol=1e-12)
 
         # Simulate 3 successive Picard iterations with property updates
         for iter in 2:4

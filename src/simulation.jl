@@ -1240,6 +1240,9 @@ function simulation_loop(
         # apply thermal boundary conditions for interpolated temperature
         # ---------------------------------------------------------------------
         apply_insulating_boundary_conditions!(tk1)
+        # Initialize tk2 from tk1 so thermochemical iterations before
+        # the thermal Poisson solve receive valid physical temperatures (T > 0).
+        tk2 .= tk1
 
         # ---------------------------------------------------------------------
         # compute gravity solution

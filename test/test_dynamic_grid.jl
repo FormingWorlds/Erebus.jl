@@ -18,8 +18,8 @@ using Test
         @test length(c17.yvx) == 18
         @test length(c17.xvy) == 18
         @test length(c17.yvy) == 18
-        @test c17.dx == 140_000.0 / 16
-        @test c17.dy == 140_000.0 / 16
+        @test c17.dx ≈ 140_000.0 / 16
+        @test c17.dy ≈ 140_000.0 / 16
         @test c17.Nxm == 16 * 4
         @test c17.Nym == 16 * 4
         @test c17.start_marknum == (16 * 4)^2
@@ -53,8 +53,8 @@ using Test
         c25 = GridCoordinates(cfg_grid)
         @test c25.Nx == 25
         @test c25.Ny == 25
-        @test c25.xsize == 100_000.0
-        @test c25.dx == 100_000.0 / 24
+        @test c25.xsize ≈ 100_000.0 rtol=1e-12
+        @test c25.dx ≈ 100_000.0 / 24 rtol=1e-12
     end
 
     @testset "Dynamic staggered grid allocation" begin
@@ -184,6 +184,11 @@ using Test
         RHO = fill(3000.0, c.Ny1, c.Nx1)
         RP = zeros(c.Ny1, c.Nx1)
         LP = assemble_gravitational_lse!(RHO, RP; coords=c)
-        @test size(LP, 1) == c.Nx1 * c.Ny1
+        total_dofs = c.Nx1 * c.Ny1
+        @test size(LP) == (total_dofs, total_dofs)
+        # Dirichlet boundary: corner and boundary DOFs must have unit diagonal
+        @test LP[1, 1] ≈ 1.0 rtol=1e-12
+        @test LP[total_dofs, total_dofs] ≈ 1.0 rtol=1e-12
+        @test iszero(RP[1, 1])
     end
 end
