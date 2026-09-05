@@ -53,4 +53,28 @@
         @test abs(res - 1e6) > 10.0 # scale guard: not missing yearlength
         @test abs(res - (1e6 * yearlength)) > 10.0 # conversion guard: not identity
     end # testset "s_to_Ma()"
+
+    @testset "Simulation Orchestration Error Contracts" begin
+        # Nonexistent config file path
+        @test_throws SystemError run_simulation("nonexistent_config_file_path.toml")
+
+        # Config with nonexistent checkpoint restart
+        bad_restart_cfg = SimulationConfig(
+            output=OutputConfig(restart_from="nonexistent_checkpoint.jld2")
+        )
+        @test_throws ArgumentError run_simulation(bad_restart_cfg)
+
+        # Dynamic coordinates support in setup_dynamic_simulation_parameters
+        coords = Erebus.GridCoordinates(15, 15; xsize=100000.0, ysize=100000.0)
+        (ts, dt, time, marknum, hrsolid, hrfluid, YERRNOD) = Erebus.setup_dynamic_simulation_parameters(;
+            coords=coords
+        )
+        @test marknum == coords.start_marknum
+        @test isapprox(dt, 1.0e11; rtol=1e-12)
+
+        # s_to_Ma non-finite propagation
+        @test isnan(Erebus.s_to_Ma(NaN))
+        @test isinf(Erebus.s_to_Ma(Inf))
+        @test isinf(Erebus.s_to_Ma(-Inf))
+    end
 end

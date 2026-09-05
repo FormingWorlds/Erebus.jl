@@ -401,4 +401,93 @@ using TOML
             rm(tmp_txt, force=true)
         end
     end
+
+    @testset "Unphysical Disk Configurations" begin
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(orbital_distance_au=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(stellar_mass_msun=-0.5))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(model=:invalid_disk_model))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(t_visc_0_myr=-0.1))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(gamma=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(orbital_distance_au=NaN))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(orbital_distance_au=Inf))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(stellar_mass_msun=NaN))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(disk=DiskConfig(t_visc_0_myr=Inf))
+        )
+    end
+
+    @testset "Unphysical Thermodynamics Configurations" begin
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(Lᶠ=-100.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(ratio_al=1.5))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(ratio_fe=-0.05))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(emissivity=-0.1))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(emissivity=1.2))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=NaN))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=Inf))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                thermodynamics=ThermalConfig(fluid_viscosity_mode=:invalid_mode)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_T0=-10.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_T0=NaN))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_eta0=-1.0e-3))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_eta0=Inf))
+        )
+    end
+
+    @testset "Unphysical Solver Configurations" begin
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(solver=SolverConfig(etamin=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(solver=SolverConfig(etamin=10.0, etamax=1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(solver=SolverConfig(etaphikoef=-0.1))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(solver=SolverConfig(titermax=0))
+        )
+    end
 end
