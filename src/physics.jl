@@ -1161,3 +1161,260 @@ function compute_hydrofracture_permeability(
     k_enhanced = kphi * factor
     return clamp(Float64(k_enhanced), Float64(kphi), Float64(kmax))
 end
+
+"""
+    compute_disk_temperature(t_seconds::Real, cfg::DiskConfig)::Float64
+
+Compute ambient protoplanetary disk midplane temperature T_disk [K] at time t [s].
+
+Supports three operating modes in `cfg.model`:
+- `:fixed`: Constant ambient temperature `cfg.t_ambient`.
+- `:monotonic`: Power-law viscous clearing (Lynden-Bell & Pringle 1974;
+  Johansen et al. 2015).
+- `:class1_to_class2`: Cold-to-hot-to-cold evolution from disk buildup
+  through peak accretion to flared irradiation floor
+  (Drążkowska & Dullemond 2018; Lichtenberg et al. 2021; Williams et al. 2026;
+  `:class0_to_class2` supported as alias).
+
+# Arguments
+- `t_seconds`: Simulation time [s]
+- `cfg`: Protoplanetary disk configuration struct (`DiskConfig`)
+- `orbital_distance_au`: Optional orbital distance override [AU]
+  (defaults to `cfg.orbital_distance_au`)
+- `stellar_mass_msun`: Optional host star mass override [M_sun]
+  (defaults to `cfg.stellar_mass_msun`)
+
+# Returns
+- `T_disk`: Ambient disk temperature [K]
+"""
+function compute_disk_temperature(
+    t_seconds::Real,
+    cfg::DiskConfig;
+    orbital_distance_au::Real=cfg.orbital_distance_au,
+    stellar_mass_msun::Real=cfg.stellar_mass_msun,
+)::Float64
+    if !cfg.enabled || cfg.model === :fixed
+        return Float64(cfg.t_ambient)
+    end
+
+    t_sec_nonneg = max(0.0, Float64(t_seconds))
+    t_Myr = t_sec_nonneg / (1.0e6 * (365.25 * 86400.0))
+    r_au = Float64(orbital_distance_au)
+    m_star = Float64(stellar_mass_msun)
+
+    T_irr = cfg.t_irr_1au * (m_star ^ cfg.p_m_irr) * (r_au ^ (-cfg.q_irr))
+    T_peak = cfg.t_peak_1au * (m_star ^ cfg.p_m_visc) * (r_au ^ (-cfg.q_visc))
+
+    T_visc_excess4 = max(0.0, T_peak^4 - T_irr^4)
+
+    if cfg.model === :monotonic
+        t_visc = cfg.t_visc_0_myr * (m_star ^ cfg.p_m_visc_decay)
+        decay = (1.0 + t_Myr / t_visc) ^ (-cfg.gamma)
+        T4 = T_irr^4 + T_visc_excess4 * decay
+        return max(cfg.t_cloud, T4 ^ 0.25)
+    elseif cfg.model === :class1_to_class2 || cfg.model === :class0_to_class2
+        t_peak = cfg.t_peak_time_1au_myr * (m_star ^ cfg.p_m_t) * (r_au ^ cfg.p_r_t)
+        tau_star = 0.8 * t_peak
+
+        if t_Myr <= 0.0
+            f_acc = 0.0
+            g_star = 0.0
+        else
+            x = t_Myr / t_peak
+            f_acc =
+                (1.0 + cfg.alpha / cfg.gamma) * (x ^ cfg.alpha) /
+                (1.0 + (cfg.alpha / cfg.gamma) * (x ^ (cfg.alpha + cfg.gamma)))
+            g_star = 1.0 - exp(-t_Myr / tau_star)
+        end
+
+        T_eff_irr4 = cfg.t_cloud^4 + (T_irr^4 - cfg.t_cloud^4) * g_star
+        T4 = T_eff_irr4 + T_visc_excess4 * f_acc
+        return max(cfg.t_cloud, T4 ^ 0.25)
+    else
+        throw(ArgumentError("Unknown disk model: $(cfg.model)"))
+    end
+end
+
+"""
+    compute_snowline_radius(
+        t_seconds::Real, cfg::DiskConfig;
+        T_sub::Real=170.0, r_min::Real=0.05, r_max::Real=100.0,
+        tol::Real=1e-4, max_iter::Int=50,
+        stellar_mass_msun::Real=cfg.stellar_mass_msun
+    )::Float64
+
+Compute heliocentric water snowline radius [AU] at time `t_seconds` where ambient
+disk temperature equals volatile sublimation temperature `T_sub` (default: 170.0 K).
+Returns `r_min` if the entire disk is below `T_sub`, or `r_max` if the disk remains
+above `T_sub`. Employs a coarse-to-fine radial scan from `r_max` inward to guarantee
+locating the outermost snowline under non-monotonic profiles.
+
+# Arguments
+- `t_seconds`: Simulation time [s]
+- `cfg`: Protoplanetary disk configuration struct (`DiskConfig`)
+- `T_sub`: Volatile sublimation threshold temperature [K] (default: 170.0 K)
+- `r_min`: Minimum search radius [AU] (default: 0.05 AU)
+- `r_max`: Maximum search radius [AU] (default: 100.0 AU)
+- `tol`: Absolute convergence tolerance in orbital distance [AU] (default: 1e-4 AU)
+- `max_iter`: Maximum bisection iterations (default: 50)
+- `stellar_mass_msun`: Host star mass [M_sun] (default: `cfg.stellar_mass_msun`)
+
+# Returns
+- `r_snow`: Water snowline orbital distance [AU]
+"""
+function compute_snowline_radius(
+    t_seconds::Real,
+    cfg::DiskConfig;
+    T_sub::Real=170.0,
+    r_min::Real=0.05,
+    r_max::Real=100.0,
+    tol::Real=1e-4,
+    max_iter::Int=50,
+    stellar_mass_msun::Real=cfg.stellar_mass_msun,
+)::Float64
+    T_outer = compute_disk_temperature(
+        t_seconds, cfg; orbital_distance_au=r_max, stellar_mass_msun=stellar_mass_msun
+    )
+    if T_outer >= T_sub
+        return Float64(r_max)
+    end
+
+    # Scan radially inward from r_max to r_min across log-spaced intervals
+    # to locate the outermost crossing bracket [r_lo, r_hi]
+    n_coarse = 200
+    log_rmax = log(Float64(r_max))
+    log_rmin = log(Float64(r_min))
+    dlog_r = (log_rmax - log_rmin) / n_coarse
+
+    r_hi = Float64(r_max)
+    r_lo = Float64(r_min)
+    found_bracket = false
+
+    for step in 1:n_coarse
+        r_step = exp(log_rmax - step * dlog_r)
+        T_step = compute_disk_temperature(
+            t_seconds, cfg; orbital_distance_au=r_step, stellar_mass_msun=stellar_mass_msun
+        )
+        if T_step >= T_sub
+            r_lo = r_step
+            r_hi = exp(log_rmax - (step - 1) * dlog_r)
+            found_bracket = true
+            break
+        end
+    end
+
+    if !found_bracket
+        return Float64(r_min)
+    end
+
+    for _ in 1:max_iter
+        r_mid = 0.5 * (r_lo + r_hi)
+        T_mid = compute_disk_temperature(
+            t_seconds, cfg; orbital_distance_au=r_mid, stellar_mass_msun=stellar_mass_msun
+        )
+        if abs(T_mid - T_sub) < tol || (r_hi - r_lo) < tol
+            return r_mid
+        end
+        if T_mid >= T_sub
+            r_lo = r_mid
+        else
+            r_hi = r_mid
+        end
+    end
+    return 0.5 * (r_lo + r_hi)
+end
+
+"""
+    compute_radiation_htc(
+        T_surf::Real, T_amb::Real;
+        emissivity::Real=0.9, sigma_sb::Real=5.670374419e-8
+    )::Float64
+
+Compute linearized Stefan-Boltzmann radiative heat transfer coefficient h_rad [W/(m² K)]:
+
+    h_rad = ε * σ_SB * (T_surf² + T_amb²) * (T_surf + T_amb)
+
+such that h_rad * (T_surf - T_amb) = ε * σ_SB * (T_surf⁴ - T_amb⁴).
+
+# Arguments
+- `T_surf`: Surface temperature [K]
+- `T_amb`: Ambient disk temperature [K]
+- `emissivity`: Surface thermal emissivity in [0, 1]
+- `sigma_sb`: Stefan-Boltzmann constant [W/(m² K⁴)]
+
+# Returns
+- `h_rad`: Linearized radiative heat transfer coefficient [W/(m² K)]
+"""
+function compute_radiation_htc(
+    T_surf::Real, T_amb::Real; emissivity::Real=0.9, sigma_sb::Real=5.670374419e-8
+)::Float64
+    if !isfinite(T_surf) || !isfinite(T_amb) || T_surf <= 0.0 || T_amb <= 0.0
+        return 0.0
+    end
+    T_s = Float64(T_surf)
+    T_a = Float64(T_amb)
+    return Float64(emissivity) * Float64(sigma_sb) * (T_s^2 + T_a^2) * (T_s + T_a)
+end
+
+"""
+    compute_spherical_metric_heat_source!(Q_metric, tk, KX, KY, coords;
+                                          xcenter, ycenter, rplanet, reg_cells=0.5)
+
+Compute geometric metric volumetric heat source Q_metric [W/m³] on P-nodes
+to account for 3D spherical divergence on a 2D Cartesian grid:
+
+    Q_metric = (k / r_eff²) * [ (x - xc) * (∂T/∂x) + (y - yc) * (∂T/∂y) ]
+
+inside r <= rplanet, and 0 in sticky air.
+
+# Arguments
+- `Q_metric`: Output matrix [W/m³] of size (Ny1, Nx1)
+- `tk`: Temperature field [K] of size (Ny1, Nx1)
+- `KX`: Thermal conductivity at Vx nodes [W/(m K)]
+- `KY`: Thermal conductivity at Vy nodes [W/(m K)]
+- `coords`: Grid coordinate descriptors
+- `xcenter`: Horizontal center coordinate [m]
+- `ycenter`: Vertical center coordinate [m]
+- `rplanet`: Planetesimal radius [m]
+- `reg_cells`: Radial regularization parameter in grid cell units
+"""
+function compute_spherical_metric_heat_source!(
+    Q_metric::AbstractMatrix{Float64},
+    tk::AbstractMatrix{Float64},
+    KX::AbstractMatrix{Float64},
+    KY::AbstractMatrix{Float64},
+    coords::GridCoordinates;
+    xcenter::Real,
+    ycenter::Real,
+    rplanet::Real,
+    reg_cells::Real=0.5,
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    dx = coords.dx
+    dy = coords.dy
+    inv_2dx = inv(2.0 * dx)
+    inv_2dy = inv(2.0 * dy)
+    eps_r = reg_cells * min(dx, dy)
+    eps_r2 = eps_r^2
+    rplanet2 = rplanet^2
+
+    fill!(Q_metric, 0.0)
+
+    @inbounds for j in 2:(Nx1 - 1)
+        xj = coords.xp[j]
+        dx_c = xj - xcenter
+        for i in 2:(Ny1 - 1)
+            yi = coords.yp[i]
+            dy_c = yi - ycenter
+            r2 = dx_c^2 + dy_c^2
+            if r2 <= rplanet2
+                k_node = 0.25 * (KX[i, j - 1] + KX[i, j] + KY[i - 1, j] + KY[i, j])
+                dT_dx = (tk[i, j + 1] - tk[i, j - 1]) * inv_2dx
+                dT_dy = (tk[i + 1, j] - tk[i - 1, j]) * inv_2dy
+                r_eff2 = r2 + eps_r2
+                Q_metric[i, j] = (k_node / r_eff2) * (dx_c * dT_dx + dy_c * dT_dy)
+            end
+        end
+    end
+    return Q_metric
+end

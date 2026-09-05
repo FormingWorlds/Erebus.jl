@@ -26,11 +26,17 @@ export Config,
     ThermalConfig,
     MaterialConfig,
     OutputConfig,
+    DiskConfig,
     SimulationConfig,
     default_config,
     load_config,
     validate_config,
     save_config,
+    compute_disk_temperature,
+    compute_snowline_radius,
+    compute_radiation_htc,
+    compute_spherical_metric_heat_source!,
+    apply_radiative_surface_boundary!,
     GridCoordinates,
     default_grid_coordinates,
     compute_adaptive_timestep,
@@ -109,7 +115,11 @@ module Physics
         compute_rhofluid,
         compute_fluid_viscosity,
         compute_hydrofracture_factor,
-        compute_hydrofracture_permeability
+        compute_hydrofracture_permeability,
+        compute_disk_temperature,
+        compute_snowline_radius,
+        compute_radiation_htc,
+        compute_spherical_metric_heat_source!
     export distance,
         total,
         ktotal,
@@ -135,7 +145,11 @@ module Physics
         compute_rhofluid,
         compute_fluid_viscosity,
         compute_hydrofracture_factor,
-        compute_hydrofracture_permeability
+        compute_hydrofracture_permeability,
+        compute_disk_temperature,
+        compute_snowline_radius,
+        compute_radiation_htc,
+        compute_spherical_metric_heat_source!
 end
 
 module Particles
@@ -255,7 +269,8 @@ module Numerics
         assemble_thermal_lse!,
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,
-        compute_thermochemical_iteration_outcome
+        compute_thermochemical_iteration_outcome,
+        apply_radiative_surface_boundary!
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
@@ -281,7 +296,8 @@ module Numerics
         assemble_thermal_lse!,
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,
-        compute_thermochemical_iteration_outcome
+        compute_thermochemical_iteration_outcome,
+        apply_radiative_surface_boundary!
 end
 
 module Simulation
@@ -312,6 +328,7 @@ module Config
         ThermalConfig,
         MaterialConfig,
         OutputConfig,
+        DiskConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -325,6 +342,7 @@ module Config
         ThermalConfig,
         MaterialConfig,
         OutputConfig,
+        DiskConfig,
         SimulationConfig,
         default_config,
         load_config,

@@ -6,8 +6,8 @@ Nx = 33
 Ny = 33
 
 [time]
-dt_initial = 1.0e+11
-dt_longest = 1.0e+11
+dt_initial = 3168.80878
+dt_longest = 3168.80878
 n_steps = 2
 
 [poroelasticity]

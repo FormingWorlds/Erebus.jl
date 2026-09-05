@@ -20,5 +20,6 @@ const rgen = MersenneTwister(seed)
     include("test_particles.jl")
     include("test_numerics.jl")
     include("test_simulation.jl")
+    include("test_geometry_radiation.jl")
     include("test_integration.jl")
 end

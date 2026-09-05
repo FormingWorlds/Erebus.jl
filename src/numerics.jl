@@ -1673,7 +1673,19 @@ $(SIGNATURES)
     - LT: LHS sparse coefficient matrix
 """
 function assemble_thermal_lse!(
-    tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=nothing, LT=nothing
+    tk1,
+    RHOCP,
+    KX,
+    KY,
+    HR,
+    HA,
+    HS,
+    DHP,
+    RT,
+    dt;
+    coords=nothing,
+    LT=nothing,
+    Q_metric=nothing,
 )
     Ny1, Nx1 = size(tk1)
     dx_val = coords === nothing ? dx : coords.dx
@@ -1739,12 +1751,137 @@ function assemble_thermal_lse!(
                 RT[gk] = (
                     RHOCP[i, j]/dt*tk1[i, j] + HR[i, j] + HA[i, j] + HS[i, j] + DHP[i, j]
                 )
+                if Q_metric !== nothing
+                    RT[gk] += Q_metric[i, j]
+                end
             end
         end
     end # @inbounds
     flush!(LT) # finalize CSC matrix
     return LT
 end # function assemble_thermal_lse!
+
+"""
+    apply_radiative_surface_boundary!(
+        KX, KY, tk, coords, rplanet, xcenter, ycenter, T_amb;
+        emissivity=0.9, sigma_sb=5.670374419e-8,
+        k_rock=nothing, marker_property_mode=1
+    )
+
+Apply linearized Stefan-Boltzmann radiative cooling at planetesimal-sticky air
+interface faces.
+
+Modifies interface conductivities in KX and KY using harmonic series resistance:
+
+    1 / U_eff = (Δ / (2 * k_bulk)) + (1 / h_rad)
+    k_face = U_eff * Δ = 2 * k_bulk * (h_rad * Δ) / (2 * k_bulk + h_rad * Δ)
+
+where `h_rad = compute_radiation_htc(T_surf, T_amb; emissivity, sigma_sb)`, and `k_bulk`
+is local rock thermal conductivity: evaluated dynamically via
+`compute_ksolidm(T_surf, marker_property_mode)` when `k_rock === nothing`, or given by
+constant scalar `k_rock` when specified.
+
+# Arguments
+- `KX`: Horizontal conductivity array at Vx nodes [W/(m K)]
+- `KY`: Vertical conductivity array at Vy nodes [W/(m K)]
+- `tk`: Temperature field [K] at P nodes
+- `coords`: Grid coordinate descriptors
+- `rplanet`: Planetesimal radius [m]
+- `xcenter`: Center horizontal coordinate [m]
+- `ycenter`: Center vertical coordinate [m]
+- `T_amb`: Ambient disk temperature [K]
+- `emissivity`: Radiative emissivity
+- `sigma_sb`: Stefan-Boltzmann constant
+- `k_rock`: Rock thermal conductivity [W/(m K)] override
+  (default: `nothing` for temperature-dependent calculation)
+- `marker_property_mode`: Marker property regime index (default: 1)
+"""
+function apply_radiative_surface_boundary!(
+    KX::AbstractMatrix{Float64},
+    KY::AbstractMatrix{Float64},
+    tk::AbstractMatrix{Float64},
+    coords::GridCoordinates,
+    rplanet::Real,
+    xcenter::Real,
+    ycenter::Real,
+    T_amb::Real;
+    emissivity::Real=0.9,
+    sigma_sb::Real=5.670374419e-8,
+    k_rock::Union{Real,Nothing}=nothing,
+    marker_property_mode::Int=1,
+    phi::Real=0.0,
+    kfluid::Real=50.0,
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    dx = coords.dx
+    dy = coords.dy
+    rplanet2 = rplanet^2
+
+    # Horizontal faces KX[i, j] between P(i, j) and P(i, j+1)
+    @inbounds for j in 1:(Nx1 - 1)
+        xj1 = coords.xp[j] - xcenter
+        xj2 = coords.xp[j + 1] - xcenter
+        for i in 1:Ny1
+            yi = coords.yp[i] - ycenter
+            r1_sq = xj1^2 + yi^2
+            r2_sq = xj2^2 + yi^2
+            is_rock1 = r1_sq <= rplanet2
+            is_rock2 = r2_sq <= rplanet2
+            if is_rock1 != is_rock2
+                T_surf = is_rock1 ? tk[i, j] : tk[i, j + 1]
+                h_rad = compute_radiation_htc(
+                    T_surf, T_amb; emissivity=emissivity, sigma_sb=sigma_sb
+                )
+                k_rad = h_rad * dx
+                k_bulk = if k_rock !== nothing
+                    Float64(k_rock)
+                elseif phi > 0.0
+                    ktotal(
+                        compute_ksolidm(T_surf, marker_property_mode),
+                        Float64(kfluid),
+                        Float64(phi),
+                    )
+                else
+                    compute_ksolidm(T_surf, marker_property_mode)
+                end
+                KX[i, j] = (2.0 * k_bulk * k_rad) / (2.0 * k_bulk + k_rad)
+            end
+        end
+    end
+
+    # Vertical faces KY[i, j] between P(i, j) and P(i+1, j)
+    @inbounds for j in 1:Nx1
+        xj = coords.xp[j] - xcenter
+        for i in 1:(Ny1 - 1)
+            yi1 = coords.yp[i] - ycenter
+            yi2 = coords.yp[i + 1] - ycenter
+            r1_sq = xj^2 + yi1^2
+            r2_sq = xj^2 + yi2^2
+            is_rock1 = r1_sq <= rplanet2
+            is_rock2 = r2_sq <= rplanet2
+            if is_rock1 != is_rock2
+                T_surf = is_rock1 ? tk[i, j] : tk[i + 1, j]
+                h_rad = compute_radiation_htc(
+                    T_surf, T_amb; emissivity=emissivity, sigma_sb=sigma_sb
+                )
+                k_rad = h_rad * dy
+                k_bulk = if k_rock !== nothing
+                    Float64(k_rock)
+                elseif phi > 0.0
+                    ktotal(
+                        compute_ksolidm(T_surf, marker_property_mode),
+                        Float64(kfluid),
+                        Float64(phi),
+                    )
+                else
+                    compute_ksolidm(T_surf, marker_property_mode)
+                end
+                KY[i, j] = (2.0 * k_bulk * k_rad) / (2.0 * k_bulk + k_rad)
+            end
+        end
+    end
+    return nothing
+end
 
 """
 Perform thermal iterations to time step thermal field at P nodes.
@@ -1774,7 +1911,23 @@ $(SIGNATURES)
     - nothing
 """
 function perform_thermal_iterations!(
-    tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt; coords=nothing
+    tk0,
+    tk1,
+    tk2,
+    DT,
+    DT0,
+    RHOCP,
+    KX,
+    KY,
+    HR,
+    HA,
+    HS,
+    DHP,
+    RT,
+    ST,
+    dt;
+    coords=nothing,
+    Q_metric=nothing,
 )
     # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
@@ -1787,7 +1940,7 @@ function perform_thermal_iterations!(
     while dttsum < dt
         # fresh LHS coefficient matrix
         LT = assemble_thermal_lse!(
-            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt; coords=coords
+            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt; coords=coords, Q_metric=Q_metric
         )
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
