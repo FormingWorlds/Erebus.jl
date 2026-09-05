@@ -657,5 +657,116 @@ _mean(x) = sum(x) / length(x)
         @test !compute_thermochemical_iteration_outcome(
             dmp_dummy, pf_a, pf_b, 3; pferrmax=10.0
         )
+
+        # 8. DomainError guard on NaN and out-of-bounds marker wet fraction
+        XW_nan = copy(XWsolidm0)
+        XW_nan[1] = NaN
+        @test_throws DomainError perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XW_nan,
+            XWsolidm,
+            phim,
+            phinewm,
+            pfm0,
+            marknum,
+            1.0e8,
+            2,
+            1;
+            coords=c17,
+        )
+        XW_neg = copy(XWsolidm0)
+        XW_neg[1] = -0.1
+        @test_throws DomainError perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XW_neg,
+            XWsolidm,
+            phim,
+            phinewm,
+            pfm0,
+            marknum,
+            1.0e8,
+            2,
+            1;
+            coords=c17,
+        )
+        XW_excess = copy(XWsolidm0)
+        XW_excess[1] = 1.2
+        @test_throws DomainError perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XW_excess,
+            XWsolidm,
+            phim,
+            phinewm,
+            pfm0,
+            marknum,
+            1.0e8,
+            2,
+            1;
+            coords=c17,
+        )
+
+        # 9. Large-extent hydration step with fast kinetics
+        cfg_fast_hyd = ReactionConfig(; dtreaction_hydration=1.0e5, hydration_mode=9)
+        XW_init_hyd = fill(0.05, marknum)
+        XW_out_hyd = fill(0.05, marknum)
+        phi_init_hyd = fill(0.50, marknum)
+        phi_out_hyd = fill(0.50, marknum)
+        pfm0_hyd = fill(3.0e7, marknum)
+        perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XW_init_hyd,
+            XW_out_hyd,
+            phi_init_hyd,
+            phi_out_hyd,
+            pfm0_hyd,
+            marknum,
+            1.0e7,
+            2,
+            1;
+            coords=c17,
+            DQPF=DQPF,
+            DQPFSUM=DQPFSUM,
+            cfg=cfg_fast_hyd,
+        )
+        @test _mean(XW_out_hyd) > 0.85
+        @test _mean(phi_out_hyd) < 0.35
+        @test any(DHP .> 0.0)
+        @test any(DQPF .< 0.0)
     end
 end

@@ -428,7 +428,7 @@ $(SIGNATURES)
 
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
-function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr; cfg=nothing)
+@inline function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr; cfg=nothing)
     # @timeit to "compute_gibbs_free_energy" begin
     if T <= 0.0
         throw(DomainError(T, "Absolute temperature must be positive"))
@@ -504,7 +504,7 @@ $(SIGNATURES)
 
     - KWD: dehydration reaction constant (16.151)
 """
-function compute_reaction_constant(T, pf, ΔGWD; cfg=nothing)
+@inline function compute_reaction_constant(T, pf, ΔGWD; cfg=nothing)
     if T <= 0.0
         throw(DomainError(T, "Absolute temperature must be positive"))
     end
@@ -650,8 +650,6 @@ function perform_thermochemical_reaction!(
     imin_p_val = coords === nothing ? imin_p : coords.imin_p
     imax_p_val = coords === nothing ? imax_p : coords.imax_p
 
-    dH = react_cfg.delta_H
-    dS = react_cfg.delta_S
     pfcoeff_val = react_cfg.pfcoeff
     p_cav = react_cfg.p_cavitation
     alpha_rel = react_cfg.alpha_relaxation
@@ -686,6 +684,14 @@ function perform_thermochemical_reaction!(
                 pfm₀[m] = pfnm
 
                 # compute bulk composition of solid and fluid system
+                if isnan(XWˢm₀[m]) || !(0.0 <= XWˢm₀[m] <= 1.0)
+                    throw(
+                        DomainError(
+                            XWˢm₀[m],
+                            "Marker wet solid fraction must be in [0, 1] and non-NaN",
+                        ),
+                    )
+                end
                 # clamp previous wet solid molar fraction to interior (prevent singular logs)
                 XWˢm₀_cl = clamp(XWˢm₀[m], eps_comp, 1.0 - eps_comp)
                 XDˢm₀ = 1.0 - XWˢm₀_cl
@@ -708,8 +714,7 @@ function perform_thermochemical_reaction!(
                 ρᶠ₀ = ifelse(tknm > tmfluidphase, ρH₂Oᶠ, ρH₂Oᶠⁱ)
 
                 # Continuous equilibrium state
-                ΔG_eq = dH - tknm * dS + pfnm * ΔVWD
-                KWD_eq = exp(-ΔG_eq / (RG * tknm))
+                KWD_eq = compute_reaction_constant(tknm, pfnm, 0.0; cfg=react_cfg)
                 XW_eq = inv(KWD_eq + 1.0)
 
                 # Select kinetic rate timescale based on continuous affinity direction
@@ -743,16 +748,13 @@ function perform_thermochemical_reaction!(
                     XWˢm₁ = XWˢm₀_cl
                 else
                     # Finite-rate relaxation kinetics
-                    ΔGWD = dH - tknm * dS + pfnm * ΔVWD + RG * tknm * log(XDˢm₀ / XWˢm₀_cl)
-                    if Δt < Δtr
-                        ΔGWD_star = ΔGWD * (1.0 - Δt / Δtr)
-                        KWD_star = exp(
-                            -(dH - tknm * dS + pfnm * ΔVWD - ΔGWD_star) / (RG * tknm)
-                        )
-                        XWˢm₁ = inv(KWD_star + 1.0)
-                    else
-                        XWˢm₁ = XW_eq
-                    end
+                    ΔGWD_star = compute_gibbs_free_energy(
+                        tknm, pfnm, XDˢm₀, XWˢm₀_cl, Δt, Δtr; cfg=react_cfg
+                    )
+                    KWD_star = compute_reaction_constant(
+                        tknm, pfnm, ΔGWD_star; cfg=react_cfg
+                    )
+                    XWˢm₁ = inv(KWD_star + 1.0)
                 end
 
                 # Clamp reacted fraction to interior
@@ -815,7 +817,7 @@ function perform_thermochemical_reaction!(
                         ΔHm = zero(0.0)
                     end
 
-                    # Fluid continuity source term DQPF (water mass exchange into pore space)
+                    # Fluid continuity exchange diagnostic DQPF (water mass exchange into pore space)
                     Γwater = Γmass
                     ΔQmᶠ = Γwater / ρᶠ₁
 

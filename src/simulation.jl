@@ -440,6 +440,12 @@ function simulation_loop(
     kfluidm_val = cfg.materials.kfluidm
     disk_enabled_val = cfg.disk.enabled
     reaction_active_val = cfg.reaction.active
+    delta_H_val = cfg.reaction.delta_H
+    delta_S_val = cfg.reaction.delta_S
+    pfcoeff_val = cfg.reaction.pfcoeff
+    pferrmax_val = cfg.reaction.pferrmax
+    dtr_hyd_val = cfg.reaction.dtreaction_hydration
+    dtr_deh_val = cfg.reaction.dtreaction_dehydration
 
     nthreads = Threads.nthreads()
 
@@ -492,12 +498,13 @@ function simulation_loop(
         phim0,
         phimin,
         phimax,
-        ΔHWD,
-        ΔSWD,
+        ΔHWD = delta_H_val,
+        ΔSWD = delta_S_val,
         ΔVWD,
-        Δtreaction,
-        pfcoeff,
-        pferrmax,
+        dtreaction_hydration = dtr_hyd_val,
+        dtreaction_dehydration = dtr_deh_val,
+        pfcoeff = pfcoeff_val,
+        pferrmax = pferrmax_val,
         start_time,
         start_step,
         endtime,
