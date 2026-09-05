@@ -50,4 +50,4 @@ where $\rho$ is phase density, $f_m$ is elemental mass abundance, and $E_{\text{
 
 ## Verification Test Suite
 
-- `test/test_physics.jl`: `@testset "radionuclides"`
+- `test/test_physics.jl`: `@testset "Q_radiogenic(): half-life and conservation closure"`

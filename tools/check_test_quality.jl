@@ -23,19 +23,40 @@ end
 function parse_all_expressions(content::String)
     exprs = Tuple{Any,Int}[]
     pos = 1
-    len = length(content)
+    len = ncodeunits(content)
+    line_num = 1
     while pos <= len
-        line_num = count(c -> c == '\n', SubString(content, 1, pos)) + 1
+        while pos <= len && isspace(content[pos])
+            if content[pos] == '\n'
+                line_num += 1
+            end
+            pos += 1
+        end
+        pos > len && break
+        start_line = line_num
         ex, next_pos = Meta.parse(content, pos)
         ex === nothing && break
-        push!(exprs, (ex, line_num))
+        push!(exprs, (ex, start_line))
+        line_num += count(c -> c == '\n', @views content[pos:(next_pos - 1)])
         pos = next_pos
     end
     return exprs
 end
 
-function is_float_literal(x)
-    return isa(x, AbstractFloat)
+function contains_float_literal(x)
+    if isa(x, AbstractFloat)
+        return true
+    elseif isa(x, Expr)
+        if Meta.isexpr(x, :call) && length(x.args) >= 1
+            fn = x.args[1]
+            if fn in
+                (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)
+                return false
+            end
+        end
+        return any(contains_float_literal, x.args)
+    end
+    return false
 end
 
 function contains_float_equality(node)
@@ -44,7 +65,7 @@ function contains_float_equality(node)
         arg1 = node.args[2]
         arg2 = node.args[3]
         if (op === :(==) || op === :.==) &&
-            (is_float_literal(arg1) || is_float_literal(arg2))
+            (contains_float_literal(arg1) || contains_float_literal(arg2))
             return true
         end
     elseif Meta.isexpr(node, :comparison)
@@ -52,7 +73,7 @@ function contains_float_equality(node)
             if node.args[i] === :(==) || node.args[i] === :.==
                 left = node.args[i - 1]
                 right = node.args[i + 1]
-                if is_float_literal(left) || is_float_literal(right)
+                if contains_float_literal(left) || contains_float_literal(right)
                     return true
                 end
             end
@@ -133,6 +154,21 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                         ),
                     )
                 end
+                # Check for: typeof(x) == Type or typeof(x) === Type
+                if (op === :(==) || op === :(===)) &&
+                    Meta.isexpr(arg1, :call) &&
+                    length(arg1.args) >= 1 &&
+                    arg1.args[1] === :typeof
+                    push!(
+                        violations,
+                        Violation(
+                            file,
+                            line,
+                            :weak_assert,
+                            "Weak assertion testing `typeof(x) == Type`",
+                        ),
+                    )
+                end
             end
         end
     end
@@ -189,18 +225,20 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
     end
 end
 
-function walk_ast(ex, file::String, line::Int, violations::Vector{Violation})
-    check_float_equality(ex, file, line, violations)
-    check_weak_asserts(ex, file, line, violations)
-    check_testsets(ex, file, line, violations)
+function walk_ast(
+    ex, file::String, start_line::Int, current_line::Int, violations::Vector{Violation}
+)
+    check_float_equality(ex, file, current_line, violations)
+    check_weak_asserts(ex, file, current_line, violations)
+    check_testsets(ex, file, current_line, violations)
 
     if isa(ex, Expr)
-        current_line = line
+        curr = current_line
         for child in ex.args
             if isa(child, LineNumberNode)
-                current_line = child.line
+                curr = start_line + child.line - 1
             elseif isa(child, Expr)
-                walk_ast(child, file, current_line, violations)
+                walk_ast(child, file, start_line, curr, violations)
             end
         end
     end
@@ -210,8 +248,8 @@ function lint_file(filepath::String)
     violations = Violation[]
     content = read(filepath, String)
     exprs = parse_all_expressions(content)
-    for (ex, line) in exprs
-        walk_ast(ex, filepath, line, violations)
+    for (ex, start_line) in exprs
+        walk_ast(ex, filepath, start_line, start_line, violations)
     end
     return violations
 end

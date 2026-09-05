@@ -319,34 +319,28 @@
         # test
         # @test typeof(L) == ExtendableSparseMatrix{Float64, Int64}
         # @test size(L) == (Nx1*Ny1*6, Nx1*Ny1*6)
-        @test typeof(R) == Vector{Float64}
-        @test size(R) == (Nx1*Ny1*6,)
-        @test typeof(S) == Vector{Float64}
-        @test size(S) == (Nx1*Ny1*6,)
+        @test eltype(R) === Float64
+        @test size(R) == (Nx1 * Ny1 * 6,)
+        @test eltype(S) === Float64
+        @test size(S) == (Nx1 * Ny1 * 6,)
     end
 
     @testset "setup_thermal_lse()" begin
         # setup thermal LSE
         RP, SP = Erebus.setup_thermal_lse()
-        # test
-        # @test typeof(LP) == ExtendableSparseMatrix{Float64, Int64}
-        # @test size(LP) == (Nx1*Ny1, Nx1*Ny1)
-        @test typeof(RP) == Vector{Float64}
-        @test size(RP) == (Nx1*Ny1,)
-        @test typeof(SP) == Vector{Float64}
-        @test size(SP) == (Nx1*Ny1,)
+        @test eltype(RP) === Float64
+        @test size(RP) == (Nx1 * Ny1,)
+        @test eltype(SP) === Float64
+        @test size(SP) == (Nx1 * Ny1,)
     end
 
     @testset "setup_gravitational_lse()" begin
         # setup gravitational LSE
         RT, ST = Erebus.setup_gravitational_lse()
-        # test
-        # @test typeof(LT) == ExtendableSparseMatrix{Float64, Int64}
-        # @test size(LT) == (Nx1*Ny1, Nx1*Ny1)
-        @test typeof(RT) == Vector{Float64}
-        @test size(RT) == (Nx1*Ny1,)
-        @test typeof(ST) == Vector{Float64}
-        @test size(ST) == (Nx1*Ny1,)
+        @test eltype(RT) === Float64
+        @test size(RT) == (Nx1 * Ny1,)
+        @test eltype(ST) === Float64
+        @test size(ST) == (Nx1 * Ny1,)
     end
 
     @testset "assemble_hydromechanical_lse()" begin

@@ -28,7 +28,7 @@ where $k_{\phi 0}$ is reference permeability at reference porosity $\phi_0$.
 4. **Error Contract**: Passing $\phi < 0$ or $\phi \ge 1$ throws `DomainError`.
 
 ### Verification Test Suite
-- `test/test_physics.jl`: `@testset "kphi()"`
+- `test/test_physics.jl`: `@testset "kphi(): Kozeny-Carman permeability invariants"`
 
 ---
 

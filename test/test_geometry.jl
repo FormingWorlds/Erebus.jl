@@ -230,15 +230,15 @@
 
         # 1. Stencil ordering: [top-left (i, j), bottom-left (i+1, j), top-right (i, j+1), bottom-right (i+1, j+1)]
         v11 = Erebus.grid_vector(1, 1, grid)
-        @test v11 == @SVector [grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]]
+        @test v11 ≈ @SVector [grid[1, 1], grid[2, 1], grid[1, 2], grid[2, 2]]
         @test length(v11) == 4
 
         # 2. Interior cell ordering consistency
         v34 = Erebus.grid_vector(3, 4, grid)
-        @test v34[1] == grid[3, 4]
-        @test v34[2] == grid[4, 4]
-        @test v34[3] == grid[3, 5]
-        @test v34[4] == grid[4, 5]
+        @test v34[1] ≈ grid[3, 4]
+        @test v34[2] ≈ grid[4, 4]
+        @test v34[3] ≈ grid[3, 5]
+        @test v34[4] ≈ grid[4, 5]
 
         # 3. Positivity preservation
         grid_pos = rand(rgen, 5, 5) .+ 1.0
@@ -292,20 +292,20 @@
         Erebus.apply_insulating_boundary_conditions!(t_field)
 
         # Top and bottom zero flux: dT/dy = 0
-        @test t_field[1, 2:(nx_test - 1)] == t_field[2, 2:(nx_test - 1)]
-        @test t_field[ny_test, 2:(nx_test - 1)] == t_field[ny_test - 1, 2:(nx_test - 1)]
+        @test t_field[1, 2:(nx_test - 1)] ≈ t_field[2, 2:(nx_test - 1)]
+        @test t_field[ny_test, 2:(nx_test - 1)] ≈ t_field[ny_test - 1, 2:(nx_test - 1)]
 
         # Left and right zero flux: dT/dx = 0
-        @test t_field[:, 1] == t_field[:, 2]
-        @test t_field[:, nx_test] == t_field[:, nx_test - 1]
+        @test t_field[:, 1] ≈ t_field[:, 2]
+        @test t_field[:, nx_test] ≈ t_field[:, nx_test - 1]
 
         # 2. Interior preservation: physical interior (3:(ny-2), 3:(nx-2)) must not be modified
-        @test t_field[3:(ny_test - 2), 3:(nx_test - 2)] ==
+        @test t_field[3:(ny_test - 2), 3:(nx_test - 2)] ≈
             t_orig[3:(ny_test - 2), 3:(nx_test - 2)]
 
         # 3. Idempotency: BC(BC(T)) == BC(T)
         t_double = copy(t_field)
         Erebus.apply_insulating_boundary_conditions!(t_double)
-        @test t_double == t_field
+        @test t_double ≈ t_field
     end # testset "apply_insulating_boundary_conditions!()"
 end

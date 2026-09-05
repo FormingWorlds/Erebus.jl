@@ -292,17 +292,26 @@
             alphafluidcur,
             XWsolidm0;
             randomized=false,
+            rcrust_val=40_000.0,
+            rplanet_val=50_000.0,
         )
 
-        # 1. Planetary spatial zoning invariant:
-        # Distance from center r = sqrt((x - xsize/2)^2 + (y - ysize/2)^2)
-        cx, cy = xsize / 2.0, ysize / 2.0
+        # 1. Planetary spatial zoning invariant: 3-zone core, crust, sticky-air discrimination
+        @test count(==(1), tm) > 0
+        @test count(==(2), tm) > 0
+        @test count(==(3), tm) > 0
+
+        cx, cy = xcenter, ycenter
+        r_crust_test = 40_000.0
+        r_planet_test = 50_000.0
         for m in 1:marknum
-            r = sqrt((xm[m] - cx)^2 + (ym[m] - cy)^2)
-            if r < rcrust
-                @test tm[m] == 1  # Core / mantle
-            elseif r < rplanet
-                @test tm[m] == 2  # Crust
+            r = Erebus.distance(xm[m], ym[m], cx, cy)
+            if r < r_planet_test
+                if r > r_crust_test
+                    @test tm[m] == 2  # Crust
+                else
+                    @test tm[m] == 1  # Core / mantle
+                end
             else
                 @test tm[m] == 3  # Sticky air / space
             end
@@ -421,7 +430,8 @@
         @test j_cl == jmin_basic
         @test i_cl == imin_basic
 
-        # Far right and below domain: must clamp to (imax, jmax)
+        # Far right and below domain: must clamp to (imax, jmax) across all staggered grids
+        # Basic grid clamp
         i_cr, j_cr = Erebus.fix(
             xsize + 10.0 * dx,
             ysize + 10.0 * dy,
@@ -437,7 +447,65 @@
         @test j_cr == jmax_basic
         @test i_cr == imax_basic
 
-        # 2. Partition of unity: sum of weights equals 1.0 across all grid types
+        # Vx grid clamp
+        i_vx, j_vx = Erebus.fix(
+            xsize + 10.0 * dx,
+            ysize + 10.0 * dy,
+            xvx,
+            yvx,
+            dx,
+            dy,
+            jmin_vx,
+            jmax_vx,
+            imin_vx,
+            imax_vx,
+        )
+        @test j_vx == jmax_vx
+        @test i_vx == imax_vx
+
+        # Vy grid clamp
+        i_vy, j_vy = Erebus.fix(
+            xsize + 10.0 * dx,
+            ysize + 10.0 * dy,
+            xvy,
+            yvy,
+            dx,
+            dy,
+            jmin_vy,
+            jmax_vy,
+            imin_vy,
+            imax_vy,
+        )
+        @test j_vy == jmax_vy
+        @test i_vy == imax_vy
+
+        # P grid clamp
+        i_p, j_p = Erebus.fix(
+            xsize + 10.0 * dx,
+            ysize + 10.0 * dy,
+            xp,
+            yp,
+            dx,
+            dy,
+            jmin_p,
+            jmax_p,
+            imin_p,
+            imax_p,
+        )
+        @test j_p == jmax_p
+        @test i_p == imax_p
+
+        # 2. fix_distances(): bilinear distance decomposition axioms
+        cx_dist, cy_dist = 0.35 * xsize, 0.65 * ysize
+        i_d, j_d, dxmj, dymi = Erebus.fix_distances(
+            cx_dist, cy_dist, x, y, dx, dy, jmin_basic, jmax_basic, imin_basic, imax_basic
+        )
+        @test isapprox(dxmj, cx_dist - x[j_d]; rtol=1e-12)
+        @test isapprox(dymi, cy_dist - y[i_d]; rtol=1e-12)
+        @test 0.0 <= dxmj <= dx
+        @test 0.0 <= dymi <= dy
+
+        # 3. Partition of unity: sum of weights equals 1.0 across all grid types
         coords_test = [
             (0.23 * xsize, 0.45 * ysize),
             (0.78 * xsize, 0.12 * ysize),
@@ -795,50 +863,59 @@
         @test isapprox(xm, expected_xm; rtol=1e-10)
         @test isapprox(ym, expected_ym; rtol=1e-10)
 
-        # 3. Spatially varying non-linear velocity field: verifies RK4 multi-stage advection
-        # and non-vanishing second-order spatial velocity corrections
-        vx_grad = zeros(Ny1, Nx1)
-        vy_grad = zeros(Ny1, Nx1)
-        γ_rate = 1.0e-8
-        for j in 1:Nx1, i in 1:Ny1
-            vx_grad[i, j] = γ_rate * (i * dy)
-            vy_grad[i, j] = γ_rate * (j * dx)
-        end
-        xm_shear = copy(xm_init)
-        ym_shear = copy(ym_init)
+        # 3. Analytical hyperbolic trajectory: exact closed-form solution discriminating RK4 from explicit Euler
+        # For vx = γ * y and vy = γ * x with symmetric initial coordinates x0 = y0,
+        # the exact continuous trajectory is x(t) = y(t) = x0 * exp(γ * t).
+        # Multi-stage RK4 integrates this to 4th-order accuracy O((γ*dt)⁵),
+        # while explicit Euler produces only x0 * (1 + γ * dt), missing higher-order terms by ~3.5 m.
+        γ_rate = 1.0e-4
+        dt_rk4 = 100.0
+        vx_grad = [γ_rate * yvx[i] for i in 1:Ny1, j in 1:Nx1]
+        vy_grad = [γ_rate * xvy[j] for i in 1:Ny1, j in 1:Nx1]
+
+        x0_sym = 70_000.0
+        y0_sym = 70_000.0
+        xm_sym = [x0_sym]
+        ym_sym = [y0_sym]
+        tm_sym = [1]
+        tkm_sym = [300.0]
+        phim_sym = [0.1]
+        sxym_sym = [0.0]
+        sxxm_sym = [0.0]
+
         Erebus.move_markers_rk4!(
-            xm_shear,
-            ym_shear,
-            tm,
-            tkm,
-            phim,
-            sxym,
-            sxxm,
+            xm_sym,
+            ym_sym,
+            tm_sym,
+            tkm_sym,
+            phim_sym,
+            sxym_sym,
+            sxxm_sym,
             vx_grad,
             vy_grad,
             vx_grad,
             vy_grad,
             wyx,
             tk2,
-            marknum,
-            dt_adv,
+            1,
+            dt_rk4,
             1,
         )
-        # Displacements must be strictly positive and bounded by maximum grid velocity * dt
-        dx_disp = xm_shear .- xm_init
-        dy_disp = ym_shear .- ym_init
-        @test all(dx_disp .> 0.0)
-        @test all(dy_disp .> 0.0)
-        max_vx = maximum(vx_grad)
-        max_vy = maximum(vy_grad)
-        @test all(dx_disp .<= max_vx * dt_adv)
-        @test all(dy_disp .<= max_vy * dt_adv)
-        # Multi-stage RK4 displacement strictly exceeds initial-velocity Euler step
-        # because velocity increases along the trajectory
-        v0_x = γ_rate * (ysize / 2.0)
-        v0_y = γ_rate * (xsize / 2.0)
-        @test all(dx_disp .> v0_x * dt_adv)
-        @test all(dy_disp .> v0_y * dt_adv)
+
+        dx_disp = xm_sym[1] - x0_sym
+        dy_disp = ym_sym[1] - y0_sym
+        exact_disp = x0_sym * (exp(γ_rate * dt_rk4) - 1.0)
+        euler_disp = x0_sym * γ_rate * dt_rk4
+
+        # RK4 matches exact analytical solution to within 1 cm (order of 58 nm error)
+        @test isapprox(dx_disp, exact_disp; atol=1e-2)
+        @test isapprox(dy_disp, exact_disp; atol=1e-2)
+
+        # Discrimination guard: RK4 displacement strictly exceeds explicit Euler step by > 3.0 m
+        @test abs(dx_disp - euler_disp) > 3.0
+        @test abs(dy_disp - euler_disp) > 3.0
+        @test dx_disp > euler_disp
+        @test dy_disp > euler_disp
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!(): zero-velocity pressure invariance" begin
@@ -937,4 +1014,88 @@
             @test isfinite(phim[m])
         end
     end # testset "replenish_markers!()"
+
+    @testset "update_marker_porosity!(): compaction, dilation, and clamp bounds" begin
+        xm_p = [0.5 * xsize, 0.5 * xsize, 0.5 * xsize, 0.5 * xsize]
+        ym_p = [0.5 * ysize, 0.5 * ysize, 0.5 * ysize, 0.5 * ysize]
+        tm_p = [1, 1, 1, 3]
+        phi_0 = 0.20
+        phim_p = [phi_0, phi_0, phi_0, phi_0]
+        dt_p = 1.0e4
+
+        # 1. Compaction: positive volumetric strain rate APHI > 0 strictly decreases porosity
+        APHI_compact = fill(1.0e-5, Ny1, Nx1)
+        phim_compact = copy(phim_p)
+        Erebus.update_marker_porosity!(
+            xm_p, ym_p, tm_p, phim_compact, APHI_compact, dt_p, 4
+        )
+        @test phim_compact[1] < phi_0
+        expected_compact = phi_0 / ((1.0 - phi_0) * exp(1.0e-5 * dt_p) + phi_0)
+        @test isapprox(phim_compact[1], expected_compact; rtol=1e-12)
+        @test phim_compact[4] == phi_0  # Sticky air marker remains unchanged
+
+        # 2. Dilation: negative volumetric strain rate APHI < 0 strictly increases porosity
+        APHI_dilate = fill(-1.0e-5, Ny1, Nx1)
+        phim_dilate = copy(phim_p)
+        Erebus.update_marker_porosity!(xm_p, ym_p, tm_p, phim_dilate, APHI_dilate, dt_p, 4)
+        @test phim_dilate[1] > phi_0
+        expected_dilate = phi_0 / ((1.0 - phi_0) * exp(-1.0e-5 * dt_p) + phi_0)
+        @test isapprox(phim_dilate[1], expected_dilate; rtol=1e-12)
+
+        # 3. Discrimination guard: sign flip test
+        # If exp(-aphim*dt) was computed instead of exp(aphim*dt), compaction and dilation would invert
+        @test phim_compact[1] < phi_0 < phim_dilate[1]
+        @test abs(phim_compact[1] - phim_dilate[1]) > 1.0e-3
+
+        # 4. Extreme clamping bounds: phimin and phimax
+        APHI_extreme_compact = fill(1.0, Ny1, Nx1)
+        phim_min_test = [0.20]
+        Erebus.update_marker_porosity!(
+            [0.5 * xsize],
+            [0.5 * ysize],
+            [1],
+            phim_min_test,
+            APHI_extreme_compact,
+            1.0e3,
+            1;
+            phimin=0.01,
+            phimax=0.50,
+        )
+        @test phim_min_test[1] ≈ 0.01
+
+        APHI_extreme_dilate = fill(-1.0, Ny1, Nx1)
+        phim_max_test = [0.20]
+        Erebus.update_marker_porosity!(
+            [0.5 * xsize],
+            [0.5 * ysize],
+            [1],
+            phim_max_test,
+            APHI_extreme_dilate,
+            1.0e3,
+            1;
+            phimin=0.01,
+            phimax=0.50,
+        )
+        @test phim_max_test[1] ≈ 0.50
+    end # testset "update_marker_porosity!()"
+
+    @testset "update_marker_temperature!(): timestep initialization and incremental heating" begin
+        xm_t = [0.5 * xsize]
+        ym_t = [0.5 * ysize]
+        tkm_t = [0.0]
+        tk2_t = fill(350.0, Ny1, Nx1)
+        DT_t = fill(5.0, Ny1, Nx1)
+
+        # 1. Timestep 1: initializes tkm directly from tk2 grid
+        Erebus.update_marker_temperature!(xm_t, ym_t, tkm_t, DT_t, tk2_t, 1, 1)
+        @test isapprox(tkm_t[1], 350.0; rtol=1e-12)
+
+        # 2. Timestep > 1: increments tkm by interpolated DT
+        Erebus.update_marker_temperature!(xm_t, ym_t, tkm_t, DT_t, tk2_t, 2, 1)
+        @test isapprox(tkm_t[1], 355.0; rtol=1e-12)
+
+        # Repeated step
+        Erebus.update_marker_temperature!(xm_t, ym_t, tkm_t, DT_t, tk2_t, 3, 1)
+        @test isapprox(tkm_t[1], 360.0; rtol=1e-12)
+    end # testset "update_marker_temperature!()"
 end

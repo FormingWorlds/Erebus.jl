@@ -145,8 +145,13 @@ $(SIGNATURES)
     - Q: radiogenic heat production [W/kg]
 """
 function Q_radiogenic(f, ratio, E, tau, time)
-    if time < 0.0 || tau <= 0.0
-        throw(DomainError((time, tau), "Decay time and lifetime must be non-negative"))
+    if time < 0.0 || tau <= 0.0 || f < 0.0 || ratio < 0.0
+        throw(
+            DomainError(
+                (f, ratio, E, tau, time),
+                "Decay time, abundance, and ratio must be non-negative, and lifetime must be positive",
+            ),
+        )
     end
     return f * ratio * E * exp(-time * inv(tau)) * inv(tau)
 end
@@ -1424,6 +1429,9 @@ such that h_rad * (T_surf - T_amb) = ε * σ_SB * (T_surf⁴ - T_amb⁴).
 function compute_radiation_htc(
     T_surf::Real, T_amb::Real; emissivity::Real=0.9, sigma_sb::Real=5.670374419e-8
 )::Float64
+    if !(0.0 <= emissivity <= 1.0)
+        throw(DomainError(emissivity, "Emissivity must be in [0.0, 1.0]"))
+    end
     if !isfinite(T_surf) || !isfinite(T_amb) || T_surf <= 0.0 || T_amb <= 0.0
         return 0.0
     end

@@ -103,31 +103,39 @@ When a test pins a specific numerical value against an analytical solution or be
 ### Canonical Example
 
 ```julia
-@testset "Stefan-Boltzmann Surface Flux" begin
-    # Test at T_surf = 300 K, T_disk = 150 K with emissivity = 0.9
-    T_s = 300.0
-    T_d = 150.0
+@testset "Stefan-Boltzmann Surface Radiation Physics" begin
+    # Test at T_surf = 350 K, T_amb = 170 K with emissivity = 0.9
+    T_s = 350.0
+    T_a = 170.0
     eps = 0.9
-    flux = Erebus.radiative_surface_flux(T_s, T_d, eps)
+    sigma = 5.670374419e-8
+    h_rad = Erebus.compute_radiation_htc(T_s, T_a; emissivity=eps, sigma_sb=sigma)
 
-    # Primary pin: F = eps * sigma * (T_s^4 - T_d^4)
-    expected = 0.9 * 5.670374419e-8 * (300.0^4 - 150.0^4)
-    @test isapprox(flux, expected; rtol=1e-10)
+    # Primary pin: h_rad * (T_s - T_a) == eps * sigma * (T_s^4 - T_a^4)
+    flux_linear = h_rad * (T_s - T_a)
+    flux_exact = eps * sigma * (T_s^4 - T_a^4)
+    @test isapprox(flux_linear, flux_exact; rtol=1e-12)
 
-    # 1. Exponent guard: linear temperature difference yields completely wrong flux
-    wrong_linear = 0.9 * 5.670374419e-8 * (300.0 - 150.0)
-    @test abs(flux - wrong_linear) > 10.0
+    # 1. Limiting derivative behavior: as T_amb -> T_surf, h_rad -> 4 * eps * sigma * T^3
+    T_close = T_s + 1e-6
+    h_close = Erebus.compute_radiation_htc(T_s, T_close; emissivity=eps, sigma_sb=sigma)
+    h_tangent = 4.0 * eps * sigma * (T_s^3)
+    @test isapprox(h_close, h_tangent; rtol=1e-5)
 
-    # 2. Sign guard: T_s > T_d must yield positive outward cooling flux
-    @test flux > 0.0
+    # 2. Sign and positivity guard
+    @test h_rad > 0.0
 
-    # 3. Scale guard: order of magnitude is ~387 W/m^2, not 0.387 or 387,000
-    @test 100.0 < flux < 1000.0
+    # 3. Scale guard: order of magnitude is ~3 W/(m² K)
+    @test 1.0 < h_rad < 10.0
 
-    # 4. Error contract: unphysical negative temperatures must throw DomainError
-    @test_throws DomainError Erebus.radiative_surface_flux(-300.0, 150.0, eps)
-    @test_throws DomainError Erebus.radiative_surface_flux(300.0, -150.0, eps)
-    @test_throws DomainError Erebus.radiative_surface_flux(300.0, 150.0, -0.1)
+    # 4. Truncation and non-positive temperature handling: returns 0.0 smooth cutoff
+    @test iszero(Erebus.compute_radiation_htc(0.0, 170.0))
+    @test iszero(Erebus.compute_radiation_htc(300.0, -10.0))
+    @test iszero(Erebus.compute_radiation_htc(NaN, 170.0))
+
+    # 5. Error contract: unphysical emissivity throws DomainError
+    @test_throws DomainError Erebus.compute_radiation_htc(T_s, T_a; emissivity=-0.1)
+    @test_throws DomainError Erebus.compute_radiation_htc(T_s, T_a; emissivity=1.5)
 end
 ```
 
@@ -154,8 +162,7 @@ Each validation page must list:
 
 A native Julia AST linter enforces these rules in CI. The linter parses all test files using `Meta.parse`:
 
-- Verifies that testsets contain >= 2 assertions.
-- Blocks standalone weak assertions.
-- Flags float comparisons using `==`.
-- Checks for error contract tests (`@test_throws`).
+- Verifies that testsets contain >= 2 assertions (`min_asserts`).
+- Blocks standalone weak assertions (`weak_assert`).
+- Flags float comparisons using `==` or `.==` (`float_equality`).
 - Compares violation counts against `tools/test_quality_baseline.json` as a one-way ratchet: violation counts cannot increase.

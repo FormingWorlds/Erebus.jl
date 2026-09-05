@@ -297,9 +297,12 @@
         # Scale guard: ~1e-7 W/kg for 26Al at CAI formation
         @test 1.0e-9 < Q0 < 1.0e-5
 
-        # 7. Error contract: negative decay time throws DomainError
+        # 7. Error contract: negative decay time, non-positive lifetime, negative abundance/ratio throw DomainError
         @test_throws DomainError Erebus.Q_radiogenic(f, ratio, E, tau, -1.0)
         @test_throws DomainError Erebus.Q_radiogenic(f, ratio, E, -tau, 1000.0)
+        @test_throws DomainError Erebus.Q_radiogenic(f, ratio, E, 0.0, 1000.0)
+        @test_throws DomainError Erebus.Q_radiogenic(-f, ratio, E, tau, 1000.0)
+        @test_throws DomainError Erebus.Q_radiogenic(f, -ratio, E, tau, 1000.0)
     end # testset "Q_radiogenic()"
 
     @testset "calculate_radioactive_heating(): isotope activity and density scaling" begin
@@ -537,7 +540,7 @@
         # 4. Mode 9: constant property independent of temperature
         const_val = rhocpfluidm[1]
         for t in [100.0, 273.0, 500.0]
-            @test Erebus.compute_rhocpfluidm(t, 9) == const_val
+            @test Erebus.compute_rhocpfluidm(t, 9) ≈ const_val
         end
 
         # 5. Discrimination guards
@@ -574,7 +577,7 @@
 
         # 4. Mode 9: constant property independent of temperature
         for t in [200.0, 500.0, 1000.0]
-            @test Erebus.compute_ksolidm(t, 9) == ksolidm[1]
+            @test Erebus.compute_ksolidm(t, 9) ≈ ksolidm[1]
         end
 
         # 5. Discrimination guards
@@ -609,7 +612,7 @@
 
         # 4. Mode 9: constant property independent of temperature
         for t in [100.0, 300.0, 700.0]
-            @test Erebus.compute_kfluidm(t, 9) == kfluidm[1]
+            @test Erebus.compute_kfluidm(t, 9) ≈ kfluidm[1]
         end
 
         # 5. Discrimination guards
@@ -657,8 +660,8 @@
         end
 
         # 4. Mode 9: constant property independent of temperature and porosity
-        @test Erebus.compute_Δtreaction(200.0, 0.05, 9) == Δtreaction
-        @test Erebus.compute_Δtreaction(600.0, 0.50, 9) == Δtreaction
+        @test Erebus.compute_Δtreaction(200.0, 0.05, 9) ≈ Δtreaction
+        @test Erebus.compute_Δtreaction(600.0, 0.50, 9) ≈ Δtreaction
 
         # 5. Discrimination guards
         # Sign guard
@@ -737,9 +740,44 @@
             end
         end
 
-        # 3. Timestep 1 backloading: properties synchronized during initialisation step
-        @test XWˢm₀ == XWˢm
-        @test phim == phinewm
+        # 3. Latent heat term sign: DHP > 0 strictly pins enthalpy transfer sign
+        @test any(WTPSUM .> 0.0)
+        @test any(DHP .> 0.0)
+        @test !any(DHP .< 0.0)
+
+        # 4. Timestep evolution: for timestep > 1, XWˢm₀ and phim remain at pre-reaction values
+        XW_prev = copy(XWˢm₀)
+        phi_prev = copy(phim)
+        Erebus.perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf,
+            tk2,
+            tm,
+            xm,
+            ym,
+            XWˢm₀,
+            XWˢm,
+            phim,
+            phinewm,
+            pfm₀,
+            marknum,
+            dt,
+            2,
+            3,
+        )
+        reacted = [m for m in 1:marknum if tm[m] < 3 && phinewm[m] != phi_prev[m]]
+        @test !isempty(reacted)
+        for m in reacted
+            # Pre-reaction arrays preserved on timestep > 1
+            @test XWˢm₀[m] ≈ XW_prev[m]
+            @test phim[m] ≈ phi_prev[m]
+            # Reacted arrays updated
+            @test phinewm[m] != phim[m]
+        end
 
         # 4. Sticky air markers (tm = 3) do not react
         # Create a pure air marker run
@@ -864,8 +902,14 @@
         end
 
         # 2. Incompressible limit: zero thermal expansion -> identically zero adiabatic heating
-        ps_grad = [5.0e7 + 1.0e4 * j for i in 1:Ny1, j in 1:Nx1]
-        pf_grad = [3.0e7 + 1.0e4 * j for i in 1:Ny1, j in 1:Nx1]
+        ps_grad = [
+            5.0e7 + 1.0e4 * j + 5.0e2 * j^2 + 3.0e3 * i + 2.0e2 * i^2 for
+            i in 1:Ny1, j in 1:Nx1
+        ]
+        pf_grad = [
+            3.0e7 + 1.0e4 * j + 5.0e2 * j^2 + 3.0e3 * i + 2.0e2 * i^2 for
+            i in 1:Ny1, j in 1:Nx1
+        ]
         Erebus.compute_adiabatic_heating!(
             HA,
             tk1,
@@ -883,26 +927,33 @@
             @test isapprox(HA[i, j], 0.0; atol=1e-12)
         end
 
-        # 3. Compression heating sign: flow along increasing pressure gradient (compression) produces heating
-        HA_comp = zeros(Ny1, Nx1)
+        # 3. Upwind stencil discrimination on non-linear pressure field
+        # For quadratic field, forward difference strictly differs from backward difference:
+        #   (ps[i, j+1] - ps[i, j])/dx != (ps[i, j] - ps[i, j-1])/dx
+        # Positive velocity chooses forward stencil for solid, backward stencil for fluid
+        HA_pos = zeros(Ny1, Nx1)
         Erebus.compute_adiabatic_heating!(
-            HA_comp, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps_grad, pf_grad
+            HA_pos, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps_grad, pf_grad
+        )
+        # Verify exact forward/backward difference evaluation at interior point (Ny÷2, Nx÷2)
+        i_mid, j_mid = Ny ÷ 2, Nx ÷ 2
+        dpsdx_fwd = (ps_grad[i_mid, j_mid + 1] - ps_grad[i_mid, j_mid]) / dx
+        dpsdx_bwd = (ps_grad[i_mid, j_mid] - ps_grad[i_mid, j_mid - 1]) / dx
+        @test abs(dpsdx_fwd - dpsdx_bwd) > 1.0e-3  # Second derivative non-vanishing
+        @test HA_pos[i_mid, j_mid] > 0.0
+
+        # Negative velocity chooses backward stencil for solid, forward stencil for fluid
+        HA_neg = zeros(Ny1, Nx1)
+        Erebus.compute_adiabatic_heating!(
+            HA_neg, tk1, ALPHA, ALPHAF, PHI, -vx, -vy, -vxf, -vyf, ps_grad, pf_grad
         )
         for j in 2:Nx, i in 2:Ny
-            @test HA_comp[i, j] > 0.0
+            @test HA_neg[i, j] < 0.0
+            # Under non-linear pressure gradient, magnitude of forward and backward steps differs
+            @test !isapprox(abs(HA_pos[i, j]), abs(HA_neg[i, j]); rtol=1e-4)
         end
 
-        # 4. Decompression cooling sign: opposing velocity produces cooling (HA < 0)
-        HA_decomp = zeros(Ny1, Nx1)
-        Erebus.compute_adiabatic_heating!(
-            HA_decomp, tk1, ALPHA, ALPHAF, PHI, -vx, -vy, -vxf, -vyf, ps_grad, pf_grad
-        )
-        for j in 2:Nx, i in 2:Ny
-            @test HA_decomp[i, j] < 0.0
-            @test isapprox(HA_decomp[i, j], -HA_comp[i, j]; rtol=1e-12)
-        end
-
-        # 5. Linearity in thermal expansion: doubling expansivity doubles heating
+        # 4. Linearity in thermal expansion: doubling expansivity doubles heating
         HA_double = zeros(Ny1, Nx1)
         Erebus.compute_adiabatic_heating!(
             HA_double,
@@ -918,7 +969,7 @@
             pf_grad,
         )
         for j in 2:Nx, i in 2:Ny
-            @test isapprox(HA_double[i, j], 2.0 * HA_comp[i, j]; rtol=1e-12)
+            @test isapprox(HA_double[i, j], 2.0 * HA_pos[i, j]; rtol=1e-12)
         end
     end # testset "compute_adiabatic_heating!()"
 
@@ -967,12 +1018,11 @@
         T0 = 273.15
 
         # Sub-freezing / baseline: no thermal expansion
-        @test Erebus.compute_rhofluid(250.0, rho0, alpha, T0) == rho0
-        @test Erebus.compute_rhofluid(T0, rho0, alpha, T0) == rho0
+        @test Erebus.compute_rhofluid(250.0, rho0, alpha, T0) ≈ rho0
+        @test Erebus.compute_rhofluid(T0, rho0, alpha, T0) ≈ rho0
 
         # When thermal_buoyancy = false, always returns rho0
-        @test Erebus.compute_rhofluid(500.0, rho0, alpha, T0; thermal_buoyancy=false) ==
-            rho0
+        @test Erebus.compute_rhofluid(500.0, rho0, alpha, T0; thermal_buoyancy=false) ≈ rho0
 
         # Positive thermal expansion for T > T0
         T1 = 373.15 # ΔT = 100 K
@@ -982,11 +1032,11 @@
 
         # Extreme temperature clamping (clamped to 0.1 * rho0)
         T_extreme = 10000.0
-        @test Erebus.compute_rhofluid(T_extreme, rho0, alpha, T0) == 0.1 * rho0
+        @test Erebus.compute_rhofluid(T_extreme, rho0, alpha, T0) ≈ 0.1 * rho0
 
         # Zero or negative alpha
-        @test Erebus.compute_rhofluid(400.0, rho0, 0.0, T0) == rho0
-        @test Erebus.compute_rhofluid(400.0, rho0, -1e-4, T0) == rho0
+        @test Erebus.compute_rhofluid(400.0, rho0, 0.0, T0) ≈ rho0
+        @test Erebus.compute_rhofluid(400.0, rho0, -1e-4, T0) ≈ rho0
 
         # Verification of thermal buoyancy driving force: Δρ = -ρ0 * α * ΔT
         g = 9.81

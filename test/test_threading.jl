@@ -430,7 +430,7 @@ using StaticArrays
         dt_cfl = compute_adaptive_timestep(
             vx, vy, vxf, vyf, dt0, 0.0; coords=coords, dt_longest_val=1e10
         )
-        @test dt_cfl == dt0
+        @test dt_cfl ≈ dt0
 
         # Fast velocity triggers CFL limiter: dt <= dxymax * dx / max(vx)
         vx .= 1e-3 # 1 mm/s = very fast in geodynamics
@@ -623,8 +623,8 @@ using StaticArrays
                 DTmax_val=DTmax,
             )
         end
-        @test dt_cur == dt1
+        @test dt_cur ≈ dt1
         @test dt_cur > 1.0
-        @test dt_cur == dt_ref * (DTmax / maxDTcurrent)
+        @test dt_cur ≈ dt_ref * (DTmax / maxDTcurrent)
     end
 end

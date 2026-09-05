@@ -27,7 +27,7 @@ $$k_{\text{interface}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \Delta}{2 k_{\te
 1. **Thermal Equilibrium**: When $T_{\text{surf}} = T_{\text{disk}}$, $F_{\text{rad}} = 0$ exactly.
 2. **Directional Heat Transfer**: $T_{\text{surf}} > T_{\text{disk}} \implies F_{\text{rad}} > 0$ (cooling); $T_{\text{surf}} < T_{\text{disk}} \implies F_{\text{rad}} < 0$ (heating).
 3. **Harmonic Bounding**: $k_{\text{interface}} \le 2 k_{\text{rock}}$ under arbitrarily intense radiation ($h_{\text{rad}} \to \infty$).
-4. **Error Contract**: Passing non-positive absolute temperatures ($T \le 0\text{ K}$) or unphysical emissivity ($\epsilon \notin [0, 1]$) throws `DomainError`.
+4. **Error Contract and Truncation**: Passing unphysical emissivity ($\epsilon \notin [0, 1]$) throws `DomainError`. Passing non-positive or non-finite absolute temperatures ($T \le 0\text{ K}$) returns $0.0$, which disables radiative coupling without numerical instability.
 
 ---
 

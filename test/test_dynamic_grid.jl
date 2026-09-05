@@ -18,8 +18,8 @@ using Test
         @test length(c17.yvx) == 18
         @test length(c17.xvy) == 18
         @test length(c17.yvy) == 18
-        @test c17.dx == 140_000.0 / 16
-        @test c17.dy == 140_000.0 / 16
+        @test c17.dx ≈ 140_000.0 / 16
+        @test c17.dy ≈ 140_000.0 / 16
         @test c17.Nxm == 16 * 4
         @test c17.Nym == 16 * 4
         @test c17.start_marknum == (16 * 4)^2

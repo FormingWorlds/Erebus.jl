@@ -27,7 +27,7 @@ where $k_s$ is matrix solid conductivity, $k_f$ is pore fluid conductivity, and 
 5. **Error Contract**: Passing $\phi < 0$, $\phi > 1$, $k_s < 0$, or $k_f < 0$ throws `DomainError`.
 
 ### Verification Test Suite
-- `test/test_physics.jl`: `@testset "ktotal()"`
+- `test/test_physics.jl`: `@testset "ktotal(): physical limits and non-linear mixture invariants"`
 
 ---
 

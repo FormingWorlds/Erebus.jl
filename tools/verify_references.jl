@@ -76,14 +76,17 @@ function main()
     failed = false
     sorted_dois = sort(collect(all_dois))
 
+    has_skipped = false
     for doi in sorted_dois
         is_valid, code = check_doi(doi)
         srcs = join(doi_sources[doi], ", ")
         if is_valid
             println("  [PASS] ($code) https://doi.org/$doi  ($srcs)")
         elseif code == -1
-            println("  [FAIL] (network error or timeout) https://doi.org/$doi  ($srcs)")
-            failed = true
+            println(
+                "  [SKIP] (network unreachable or timeout) https://doi.org/$doi  ($srcs)"
+            )
+            has_skipped = true
         else
             println(
                 "  [FAIL] (HTTP $code) https://doi.org/$doi  ($srcs) - UNRESOLVED OR INVALID DOI",
@@ -95,6 +98,11 @@ function main()
     if failed
         println("\nReference verification failed: Unresolved or invalid DOIs found.")
         exit(1)
+    elseif has_skipped
+        println(
+            "\nReference verification finished: Some DOIs were skipped due to network isolation.",
+        )
+        exit(0)
     else
         println("\nAll cited DOIs successfully resolved against the registry.")
         exit(0)

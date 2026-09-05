@@ -6,13 +6,13 @@ This module validates temperature-dependent fluid viscosity and phase state tran
 
 ## Governing Formulation
 
-Above the melting point ($T \ge T_{\text{melt}} = 273.15\text{ K}$), liquid water viscosity follows the Arrhenius activation law:
+Above the melting point ($T \ge T_{\text{melt}} = 273.0\text{ K}$), liquid water viscosity follows the Arrhenius activation law normalized at reference temperature $T_0 = 293.15\text{ K}$:
 
-$$\eta_f(T) = \eta_0 \exp\left( \frac{E_a}{R T} \right)$$
+$$\eta_f(T) = \eta_0 \exp\left[ \frac{E_a}{R} \left( \frac{1}{T} - \frac{1}{T_0} \right) \right]$$
 
 Below the melting point ($T < T_{\text{melt}}$), pore water freezes into solid ice, switching to high-viscosity solid rheology:
 
-$$\eta_f(T) = \eta_{\text{ice}} \approx 10^{14}\text{ Pa}\cdot\text{s}$$
+$$\eta_f(T) = \eta_{\text{ice}} \approx 10^{12}\text{ Pa}\cdot\text{s}$$
 
 ---
 
@@ -30,16 +30,18 @@ $$\eta_f(T) = \eta_{\text{ice}} \approx 10^{14}\text{ Pa}\cdot\text{s}$$
 1. **Liquid Monotonicity**:
    In the liquid phase ($T \ge T_{\text{melt}}$), viscosity decreases strictly monotonically with temperature: $\partial \eta_f / \partial T < 0$.
 2. **Phase Boundary Discontinuity**:
-   Crossing $T = T_{\text{melt}}$ produces a sharp, physically bounded transition from liquid Darcy flow ($\eta_f \sim 10^{-3}\text{ Pa}\cdot\text{s}$) to immobile frozen pore ice ($\eta_f \sim 10^{14}\text{ Pa}\cdot\text{s}$).
+   Crossing $T = T_{\text{melt}}$ produces a sharp, physically bounded transition from liquid Darcy flow ($\eta_f \sim 10^{-3}\text{ Pa}\cdot\text{s}$) to immobile frozen pore ice ($\eta_f \approx 10^{12}\text{ Pa}\cdot\text{s}$).
 3. **Strict Positivity**:
    $\eta_f(T) > 0$ for all physical temperatures $T > 0\text{ K}$.
 4. **Physical Bounds**:
    Liquid viscosity is clamped within physical bounds: $\eta_{\text{min}} \le \eta_f \le \eta_{\text{max}}$.
-5. **Error Contract**:
-   Passing non-positive absolute temperatures ($T \le 0\text{ K}$) throws `DomainError`.
+5. **Phase Limiting Behavior**:
+   Non-positive absolute temperatures ($T \le 0\text{ K}$) or non-finite values evaluate to the frozen ice regime ($\eta_{\text{ice}} = 10^{12}\text{ Pa}\cdot\text{s}$).
 
 ---
 
 ## Verification Test Suite
 
-- `test/test_physics.jl`: `@testset "etatotal_rocks()"`
+- `test/test_physics.jl`:
+  - `@testset "etatotal_rocks(): phase transition and viscosity bounds"`
+  - `@testset "temperature-dependent fluid viscosity and compute_fluid_viscosity()"`

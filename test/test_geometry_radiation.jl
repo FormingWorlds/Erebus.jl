@@ -325,6 +325,10 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         @test iszero(compute_radiation_htc(0.0, 170.0))
         @test iszero(compute_radiation_htc(300.0, -10.0))
         @test iszero(compute_radiation_htc(NaN, 170.0))
+
+        # Emissivity domain error contract
+        @test_throws DomainError compute_radiation_htc(300.0, 170.0; emissivity=-0.1)
+        @test_throws DomainError compute_radiation_htc(300.0, 170.0; emissivity=1.5)
     end
 
     @testset "Radiative Boundary Application on Staggered Grid" begin
@@ -390,8 +394,8 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
             k_rock=nothing,
             marker_property_mode=1,
         )
-        @test count(KX_dyn .!= 10.0) == n_modified_kx
-        @test count(KY_dyn .!= 10.0) == n_modified_ky
+        @test count(x -> !isapprox(x, 10.0; rtol=1e-6), KX_dyn) == n_modified_kx
+        @test count(x -> !isapprox(x, 10.0; rtol=1e-6), KY_dyn) == n_modified_ky
         # Verify dynamic conductivity produces higher effective conductivity at low T
         @test all(KX_dyn .> 0.0)
         @test all(KY_dyn .> 0.0)

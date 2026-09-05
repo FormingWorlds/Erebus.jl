@@ -3,7 +3,7 @@
 Erebus is a Julia package for 2D thermochemical evolution, hydrothermal circulation, and volatile transport in porous planetesimals.
 
 ## Rules Discovery
-Testing standards and deep-dive test rules live in [`.github/.claude/rules/erebus-tests.md`](.claude/rules/erebus-tests.md). When opening, creating, or editing any test or physics routine, follow those rules.
+Testing standards and deep-dive test rules live in [`.github/.claude/rules/erebus-tests.md`](.github/.claude/rules/erebus-tests.md). When opening, creating, or editing any test or physics routine, follow those rules.
 
 ## The Iron Law of Test-Driven Development (TDD)
 All new features, bug fixes, physical parameterizations, and solver adjustments in Erebus MUST follow the RED-GREEN-REFACTOR cycle:
