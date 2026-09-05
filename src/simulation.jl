@@ -2039,6 +2039,7 @@ function run_simulation(config_or_output::AbstractString="")
     end
 
     cfg = if endswith(target, ".toml")
+        isfile(target) || throw(ArgumentError("Configuration file does not exist: $target"))
         load_config(target)
     elseif !isempty(target)
         def = default_config()

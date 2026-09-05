@@ -1,8 +1,9 @@
 # Erebus.jl
 
 [![Build Status](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage Status](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/Coverage.yml/badge.svg?branch=main)](https://github.com/FormingWorlds/Erebus.jl/actions/workflows/Coverage.yml?query=branch%3Amain)
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://formingworlds.github.io/Erebus.jl/dev)
-[![Test Coverage](https://codecov.io/gh/FormingWorlds/Erebus.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/FormingWorlds/Erebus.jl)
+[![codecov](https://codecov.io/gh/FormingWorlds/Erebus.jl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/FormingWorlds/Erebus.jl)
 [![Code Style: Blue](https://img.shields.io/badge/code%20style-blue-4495d1.svg)](https://github.com/invenia/BlueStyle)
 
 `Erebus.jl` is a two-dimensional hydro-thermo-mechanical-chemical (HTMC) geodynamic modeling code for planetesimal evolution. It simulates coupled two-phase fluid-solid flow, visco-elasto-plastic rock deformation, radiogenic heating, fluid thermal buoyancy, temperature-dependent Darcy percolation, and dynamic hydrofracturing in early solar system planetesimals.
