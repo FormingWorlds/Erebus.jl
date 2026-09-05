@@ -40,10 +40,10 @@ function setup_dynamic_simulation_parameters(
 )
     # timestep counter (current), init to startstep
     timestep::Int64 = cfg.time.start_step
-    # computational timestep (current), init to dt_longest [s]
-    dt::Float64 = cfg.time.dt_longest
-    # time sum (current), init to starttime [s]
-    timesum::Float64 = cfg.time.start_time
+    # computational timestep (current), init to dt_initial [s]
+    dt::Float64 = cfg.time.dt_initial * cfg.time.yearlength
+    # time sum (current), init to start_time [s]
+    timesum::Float64 = cfg.time.start_time * cfg.time.yearlength
     # current number of markers, init to startmarknum
     marknum::Int64 = coords === nothing ? start_marknum : coords.start_marknum
     # radiogenic heat production solid phase
@@ -406,7 +406,8 @@ function simulation_loop(
     kappa_frac_val = cfg.poroelasticity.kappa_frac
     gamma_frac_val = cfg.poroelasticity.gamma_frac
     k_frac_max_val = cfg.poroelasticity.k_frac_max
-    dt_longest_val = cfg.time.dt_longest
+    dt_longest_val = cfg.time.dt_longest * cfg.time.yearlength
+    endtime_val = cfg.time.endtime * cfg.time.yearlength
     dtcoefup_val = cfg.time.dtcoefup
     hr_al_val = cfg.thermodynamics.hr_al
     hr_fe_val = cfg.thermodynamics.hr_fe
@@ -430,8 +431,17 @@ function simulation_loop(
     xcenter_val = cfg.geometry.xcenter
     ycenter_val = cfg.geometry.ycenter
     psurface_val = cfg.geometry.psurface
+    spherical_metric_val = cfg.geometry.spherical_metric
+    metric_reg_val = cfg.geometry.metric_regularization_cells
+    surface_radiation_val = cfg.thermodynamics.surface_radiation
+    emissivity_val = cfg.thermodynamics.emissivity
+    sigma_sb_val = cfg.thermodynamics.sigma_sb
+    phim0_val = cfg.thermodynamics.phim0
+    kfluidm_val = cfg.materials.kfluidm
+    disk_enabled_val = cfg.disk.enabled
 
     nthreads = Threads.nthreads()
+
     use_threading = nthreads > 1
     num_buffers = nthreads
     thread_buffers =
@@ -509,6 +519,7 @@ function simulation_loop(
     (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers(
         coords
     )
+    Q_metric = spherical_metric_val ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
 
     # -------------------------------------------------------------------------
     # set up markers and state (from checkpoint or fresh definition)
@@ -818,7 +829,7 @@ function simulation_loop(
             (:maxT_K, maxT),
             (:dt_s, dt),
             (:timesum_Ma, s_to_Ma(timesum)),
-            (:to_go_Ma, s_to_Ma(endtime-timesum)),
+            (:to_go_Ma, s_to_Ma(endtime_val - timesum)),
         ]
     p = Progress(
         n_steps_val;
@@ -866,6 +877,20 @@ function simulation_loop(
             WTPSUM,
         )
         # end # @timeit to "set up interpolation arrays" 
+
+        # ---------------------------------------------------------------------
+        # compute ambient disk temperature and update sticky air markers
+        # ---------------------------------------------------------------------
+        T_amb = compute_disk_temperature(timesum, cfg.disk)
+        isfinite(T_amb) ||
+            throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
+        if disk_enabled_val || surface_radiation_val
+            @threads :static for m in 1:marknum
+                if tm[m] >= 3
+                    tkm[m] = T_amb
+                end
+            end
+        end
 
         # ---------------------------------------------------------------------
         # calculate radioactive heating
@@ -1235,9 +1260,31 @@ function simulation_loop(
         @info "\n\n ********** begin timestep $timestep - dt = $dt s **********"
 
         # ---------------------------------------------------------------------
+        # apply surface radiation boundary condition
+        # ---------------------------------------------------------------------
+        if surface_radiation_val
+            apply_radiative_surface_boundary!(
+                KX,
+                KY,
+                tk1,
+                coords,
+                rplanet_val,
+                xcenter_val,
+                ycenter_val,
+                T_amb;
+                emissivity=emissivity_val,
+                sigma_sb=sigma_sb_val,
+                marker_property_mode=marker_property_mode,
+                phi=phim0_val,
+                kfluid=kfluidm_val[2],
+            )
+        end
+
+        # ---------------------------------------------------------------------
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
         for titer in 1:1:titermax_val
+
             #     @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
             if reaction_active
@@ -1525,11 +1572,40 @@ function simulation_loop(
             )
 
             # ------------------------------------------------------------------
+            # compute spherical metric heat source Q_metric
+            # ------------------------------------------------------------------
+            if spherical_metric_val
+                compute_spherical_metric_heat_source!(
+                    Q_metric,
+                    tk1,
+                    KX,
+                    KY,
+                    coords;
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    reg_cells=metric_reg_val,
+                )
+            end
+
+            # ------------------------------------------------------------------
             # solve temperature equation
             # ------------------------------------------------------------------
             # assemble thermal system of equations 
             LT = assemble_thermal_lse!(
-                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=coords, LT=LT_thermal
+                tk1,
+                RHOCP,
+                KX,
+                KY,
+                HR,
+                HA,
+                HS,
+                DHP,
+                RT,
+                dt;
+                coords=coords,
+                LT=LT_thermal,
+                Q_metric=Q_metric,
             )
             # solve thermal system of equations
             if thermal_cache === nothing
@@ -1873,7 +1949,7 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # finish timestep
         # ---------------------------------------------------------------------
-        if timesum > endtime
+        if timesum > endtime_val
             break
         end
     end # for timestep = startstep:1:n_steps

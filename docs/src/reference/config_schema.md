@@ -27,18 +27,20 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `xcenter` | `Float64` | `70000.0` | m | Horizontal position of planetesimal center | $\in [0, \text{xsize}]$ |
 | `ycenter` | `Float64` | `70000.0` | m | Vertical position of planetesimal center | $\in [0, \text{ysize}]$ |
 | `psurface` | `Float64` | `1.0e+3` | Pa | Surface pressure anchor | $\ge 0$ |
+| `spherical_metric` | `Bool` | `false` | - | Enable 3D spherical geometric metric heat source term in 2D Cartesian solver | `true` / `false` |
+| `metric_regularization_cells` | `Float64` | `0.5` | grid units | Regularization radius at center $r \to 0$ in units of grid cell spacing $\Delta$ | $> 0$ |
 
 ---
 
 ## `[time]`
 
 > [!NOTE]
-> `TimeConfig` defines `yearlength = 31557600.0` s (Julian year: $365.25 \times 86400\text{ s}$). Default `start_time = 7.10046e13` s ($2.25\text{ Ma}$) and `endtime = 4.73364e14` s ($15.0\text{ Ma}$) reflect canonical CAI formation timing in the early Solar System.
+> `TimeConfig` defines `yearlength = 31557600.0` s (Julian year: $365.25 \times 86400\text{ s}$). Simulation time parameters (`dt_initial`, `dt_longest`, `start_time`, `endtime`) are specified in years [yr] in configuration files. Default `start_time = 2.25e6` yr ($2.25\text{ Ma}$) and `endtime = 15.0e6` yr ($15.0\text{ Ma}$) reflect canonical CAI formation timing in the early Solar System.
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
-| `dt_initial` | `Float64` | `1.0e+11` | s | Initial computational timestep | $> 0$ |
-| `dt_longest` | `Float64` | `1.0e+11` | s | Maximum allowed computational timestep | $\ge \text{dt\_initial}$ |
+| `dt_initial` | `Float64` | `3168.80878` | yr | Initial computational timestep (~$10^{11}\text{ s}$) | $> 0$ |
+| `dt_longest` | `Float64` | `3168.80878` | yr | Maximum allowed computational timestep (~$10^{11}\text{ s}$) | $\ge \text{dt\_initial}$ |
 | `dtcoefdn` | `Float64` | `0.5` | - | Factor to reduce timestep on non-convergence | $\in (0, 1)$ |
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
@@ -46,8 +48,8 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting parameter | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
 | `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
-| `start_time` | `Float64` | `7.10046e+13` | s | Simulation start time after CAIs (2.25 Ma) | $\ge 0$ |
-| `endtime` | `Float64` | `4.73364e+14` | s | Total simulation end time (15 Ma) | $> \text{start\_time}$ |
+| `start_time` | `Float64` | `2.25e+6` | yr | Simulation start time after CAIs (2.25 Ma) | $\ge 0$ |
+| `endtime` | `Float64` | `15.0e+6` | yr | Total simulation end time (15 Ma) | $> \text{start\_time}$ |
 | `start_step` | `Int` | `1` | - | Initial timestep counter index | $\ge 1$ |
 | `n_steps` | `Int` | `10` | - | Total number of computational timesteps | $\ge 1$ |
 
@@ -108,6 +110,9 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `fluid_viscosity_Ea` | `Float64` | `15.0e+3` | J/mol | Activation energy for fluid viscous flow | $\ge 0$ |
 | `fluid_viscosity_T0` | `Float64` | `293.15` | K | Reference temperature for fluid viscosity | $> 0$ |
 | `fluid_viscosity_eta0` | `Float64` | `1.0e-3` | Pa s | Reference liquid water viscosity at T0 | $> 0$ |
+| `surface_radiation` | `Bool` | `false` | - | Enable linearized Stefan-Boltzmann radiative cooling boundary condition | `true` / `false` |
+| `emissivity` | `Float64` | `0.9` | - | Surface thermal emissivity $\epsilon$ | $\in [0, 1]$ |
+| `sigma_sb` | `Float64` | `5.670374419e-8` | $\text{W}/(\text{m}^2\cdot\text{K}^4)$ | Stefan-Boltzmann radiation constant $\sigma$ | $> 0$ |
 
 ---
 
@@ -148,3 +153,32 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `output_dir` | `String` | `"output"` | - | Output directory path | Non-empty string |
 | `savematstep` | `Int` | `10` | - | Checkpoint saving frequency | $\ge 1$ |
 | `visstep` | `Int` | `1` | - | Visualization step cadence | $\ge 1$ |
+
+---
+
+## `[disk]`
+
+Parameters controlling protoplanetary disk ambient temperature evolution and astronomical host star scalings.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `enabled` | `Bool` | `false` | - | Enable disk ambient temperature evolution | `true` / `false` |
+| `model` | `Symbol` | `:fixed` | - | Evolution model (`:fixed`, `:monotonic`, `:class1_to_class2`; `:class0_to_class2` alias) | `:fixed` / `:monotonic` / `:class1_to_class2` / `:class0_to_class2` |
+| `t_ambient` | `Float64` | `170.0` | K | Constant background temperature for `:fixed` mode and ambient sink temperature when `surface_radiation = true` with `disk.enabled = false` | $> 0$ |
+| `orbital_distance_au` | `Float64` | `2.5` | AU | Planetesimal heliocentric orbital distance $r$ | $> 0$ |
+| `stellar_mass_msun` | `Float64` | `1.0` | $M_\odot$ | Host star mass $M_\star$ | $> 0$ |
+| `t_cloud` | `Float64` | `30.0` | K | Molecular cloud background temperature floor $T_{\text{cloud}}$ | $> 0$ |
+| `t_irr_1au` | `Float64` | `150.0` | K | Flared disk irradiation temperature at 1 AU for $1\,M_\odot$ | $> 0$ |
+| `t_peak_1au` | `Float64` | `520.0` | K | Peak viscous dissipation temperature at 1 AU for $1\,M_\odot$ | $> 0$ |
+| `t_peak_time_1au_myr` | `Float64` | `0.12` | Myr | Time of peak viscous dissipation at 1 AU for $1\,M_\odot$ | $> 0$ |
+| `t_visc_0_myr` | `Float64` | `0.25` | Myr | Viscous dissipation power-law reference time $t_0$ | $> 0$ |
+| `gamma` | `Float64` | `1.4` | - | Viscous dissipation power-law decay index $\gamma$ ($t > t_0$) | $> 0$ |
+| `alpha` | `Float64` | `2.0` | - | Early infall heating rise power-law index $\alpha$ ($t \le t_{\text{peak}}$) | $> 0$ |
+| `q_irr` | `Float64` | `0.42857142857142855` | - | Flared disk irradiation radial scaling exponent $q_{\text{irr}}$ ($3/7$) | $> 0$ |
+| `q_visc` | `Float64` | `0.75` | - | Viscous dissipation radial scaling exponent $q_{\text{visc}}$ ($3/4$) | $> 0$ |
+| `p_r_t` | `Float64` | `0.25` | - | Radial scaling exponent for peak heating time $p_{r,t}$ | $\ge 0$ |
+| `p_m_irr` | `Float64` | `0.25` | - | Stellar mass scaling exponent for irradiation temperature $p_{M,\text{irr}}$ | $\ge 0$ |
+| `p_m_visc` | `Float64` | `0.30` | - | Stellar mass scaling exponent for peak viscous temperature $p_{M,\text{visc}}$ | $\ge 0$ |
+| `p_m_t` | `Float64` | `0.40` | - | Stellar mass scaling exponent for peak heating time $p_{M,t}$ | $\ge 0$ |
+| `p_m_visc_decay` | `Float64` | `0.30` | - | Stellar mass scaling exponent for viscous dissipation time $p_{M,\text{visc,decay}}$ | $\ge 0$ |
+

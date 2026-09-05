@@ -15,18 +15,18 @@ ycenter = 70000.0       # vertical center [m]
 psurface = 1.0e+3        # surface pressure anchor [Pa]
 
 [time]
-dt_initial = 1.0e+11     # initial computational timestep [s]
-dt_longest = 1.0e+11     # maximum allowed computational timestep [s]
-dtcoefdn = 0.5           # coefficient to decrease computational timestep
-dtcoefup = 1.2           # coefficient to increase computational timestep
-dtstep = 200             # iterations before changing timestep
-dxymax = 0.05            # max marker displacement per timestep [grid units]
+dt_initial = 3168.80878      # initial computational timestep [yr] (~1e11 s)
+dt_longest = 3168.80878      # maximum allowed computational timestep [yr] (~1e11 s)
+dtcoefdn = 0.5               # coefficient to decrease computational timestep
+dtcoefup = 1.2               # coefficient to increase computational timestep
+dtstep = 200                 # iterations before changing timestep
+dxymax = 0.05                # max marker displacement per timestep [grid units]
 vpratio = 0.3333333333333333 # weight of averaged velocity for moving markers
-DTmax = 20.0             # max temperature change per timestep [K]
-start_time = 7.0965e+13  # initial simulation time [s] (2.25 Ma)
-endtime = 4.731e+14      # maximum simulation time [s] (15.0 Ma)
-start_step = 1           # starting timestep counter
-n_steps = 10             # total number of timesteps to run
+DTmax = 20.0                 # max temperature change per timestep [K]
+start_time = 2.25e6          # initial simulation time [yr] (2.25 Ma)
+endtime = 15.0e6             # maximum simulation time [yr] (15.0 Ma)
+start_step = 1               # starting timestep counter
+n_steps = 10                 # total number of timesteps to run
 
 [solver]
 titermax = 10000         # maximum global/plastic iterations

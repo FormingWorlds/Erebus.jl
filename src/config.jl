@@ -32,27 +32,64 @@ Base.@kwdef struct GeometryConfig
     xcenter::Float64 = 70_000.0
     ycenter::Float64 = 70_000.0
     psurface::Float64 = 1.0e+3
+    spherical_metric::Bool = false
+    metric_regularization_cells::Float64 = 0.5
 end
 
 """
 Timestepping and temporal integration parameters.
 
+Time parameters (`dt_initial`, `dt_longest`, `start_time`, `endtime`) are defined in years [yr].
+Simulation routines convert them to seconds using `yearlength`.
+
 $(FIELDS)
 """
-Base.@kwdef struct TimeConfig
-    dt_initial::Float64 = 1.0e+11
-    dt_longest::Float64 = 1.0e+11
-    dtcoefdn::Float64 = 0.5
-    dtcoefup::Float64 = 1.2
-    dtstep::Int = 200
-    dxymax::Float64 = 0.05
-    vpratio::Float64 = 1.0 / 3.0
-    DTmax::Float64 = 20.0
-    yearlength::Float64 = 365.25 * 24 * 3600
-    start_time::Float64 = 2.25e6 * (365.25 * 24 * 3600)
-    endtime::Float64 = 15.0e6 * (365.25 * 24 * 3600)
-    start_step::Int = 1
-    n_steps::Int = 10
+struct TimeConfig
+    dt_initial::Float64
+    dt_longest::Float64
+    dtcoefdn::Float64
+    dtcoefup::Float64
+    dtstep::Int
+    dxymax::Float64
+    vpratio::Float64
+    DTmax::Float64
+    yearlength::Float64
+    start_time::Float64
+    endtime::Float64
+    start_step::Int
+    n_steps::Int
+end
+
+function TimeConfig(;
+    dt_initial::Real=1.0e11 / (365.25 * 24 * 3600),
+    dt_longest::Real=1.0e11 / (365.25 * 24 * 3600),
+    dtcoefdn::Real=0.5,
+    dtcoefup::Real=1.2,
+    dtstep::Integer=200,
+    dxymax::Real=0.05,
+    vpratio::Real=1.0 / 3.0,
+    DTmax::Real=20.0,
+    yearlength::Real=365.25 * 24 * 3600,
+    start_time::Real=2.25e6,
+    endtime::Real=15.0e6,
+    start_step::Integer=1,
+    n_steps::Integer=10,
+)
+    return TimeConfig(
+        Float64(dt_initial),
+        Float64(dt_longest),
+        Float64(dtcoefdn),
+        Float64(dtcoefup),
+        Int(dtstep),
+        Float64(dxymax),
+        Float64(vpratio),
+        Float64(DTmax),
+        Float64(yearlength),
+        Float64(start_time),
+        Float64(endtime),
+        Int(start_step),
+        Int(n_steps),
+    )
 end
 
 """
@@ -117,6 +154,9 @@ Base.@kwdef struct ThermalConfig
     fluid_viscosity_Ea::Float64 = 15.0e3
     fluid_viscosity_T0::Float64 = 293.15
     fluid_viscosity_eta0::Float64 = 1.0e-3
+    surface_radiation::Bool = false
+    emissivity::Float64 = 0.9
+    sigma_sb::Float64 = 5.670374419e-8
 end
 
 """
@@ -162,6 +202,37 @@ Base.@kwdef struct OutputConfig
 end
 
 """
+Protoplanetary disk ambient temperature evolution parameters.
+
+Scaling exponents calibrate semi-analytical disk temperature profiles across
+orbital radius and host star mass against multi-zone disk simulation models
+(Drążkowska & Dullemond 2018; Lichtenberg et al. 2021; Williams et al. 2026).
+
+$(FIELDS)
+"""
+Base.@kwdef struct DiskConfig
+    enabled::Bool = false
+    model::Symbol = :fixed
+    t_ambient::Float64 = 170.0
+    orbital_distance_au::Float64 = 2.5
+    stellar_mass_msun::Float64 = 1.0
+    t_cloud::Float64 = 30.0
+    t_irr_1au::Float64 = 150.0
+    t_peak_1au::Float64 = 520.0
+    t_peak_time_1au_myr::Float64 = 0.12
+    t_visc_0_myr::Float64 = 0.25
+    gamma::Float64 = 1.4
+    alpha::Float64 = 2.0
+    q_irr::Float64 = 3.0 / 7.0
+    q_visc::Float64 = 0.75
+    p_r_t::Float64 = 0.25
+    p_m_irr::Float64 = 0.25
+    p_m_visc::Float64 = 0.30
+    p_m_t::Float64 = 0.40
+    p_m_visc_decay::Float64 = 0.30
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -175,6 +246,7 @@ Base.@kwdef struct SimulationConfig
     thermodynamics::ThermalConfig = ThermalConfig()
     materials::MaterialConfig = MaterialConfig()
     output::OutputConfig = OutputConfig()
+    disk::DiskConfig = DiskConfig()
 end
 
 """
@@ -210,6 +282,12 @@ function validate_config(cfg::SimulationConfig)
         throw(ArgumentError("Crust radius must be > 0, got $(cfg.geometry.rcrust)"))
     cfg.geometry.rcrust <= cfg.geometry.rplanet ||
         throw(ArgumentError("Crust radius must be <= planet radius"))
+    cfg.geometry.metric_regularization_cells > 0.0 &&
+    isfinite(cfg.geometry.metric_regularization_cells) || throw(
+        ArgumentError(
+            "metric_regularization_cells must be > 0 and finite, got $(cfg.geometry.metric_regularization_cells)",
+        ),
+    )
     min_dist_to_boundary = min(
         cfg.geometry.xcenter,
         cfg.grid.xsize - cfg.geometry.xcenter,
@@ -235,6 +313,10 @@ function validate_config(cfg::SimulationConfig)
         throw(ArgumentError("dt_longest must be >= dt_initial"))
     cfg.time.n_steps >= 1 ||
         throw(ArgumentError("n_steps must be >= 1, got $(cfg.time.n_steps)"))
+    cfg.time.start_time >= 0.0 ||
+        throw(ArgumentError("start_time must be >= 0, got $(cfg.time.start_time)"))
+    cfg.time.endtime > cfg.time.start_time ||
+        throw(ArgumentError("endtime must be > start_time"))
     cfg.time.start_step >= 1 ||
         throw(ArgumentError("start_step must be >= 1, got $(cfg.time.start_step)"))
     isfinite(cfg.time.dt_initial) || throw(ArgumentError("dt_initial must be finite"))
@@ -346,6 +428,70 @@ function validate_config(cfg::SimulationConfig)
     cfg.thermodynamics.fluid_viscosity_eta0 > 0.0 &&
     isfinite(cfg.thermodynamics.fluid_viscosity_eta0) ||
         throw(ArgumentError("fluid_viscosity_eta0 must be > 0 and finite"))
+    0.0 <= cfg.thermodynamics.emissivity <= 1.0 || throw(
+        ArgumentError("emissivity must be in [0, 1], got $(cfg.thermodynamics.emissivity)"),
+    )
+    cfg.thermodynamics.sigma_sb > 0.0 && isfinite(cfg.thermodynamics.sigma_sb) || throw(
+        ArgumentError(
+            "sigma_sb must be > 0 and finite, got $(cfg.thermodynamics.sigma_sb)"
+        ),
+    )
+
+    # Disk checks
+    cfg.disk.model in Set([:fixed, :monotonic, :class1_to_class2, :class0_to_class2]) ||
+        throw(
+            ArgumentError(
+                "disk model must be :fixed, :monotonic, :class1_to_class2, or :class0_to_class2, got $(cfg.disk.model)",
+            ),
+        )
+    cfg.disk.t_ambient > 0.0 && isfinite(cfg.disk.t_ambient) ||
+        throw(ArgumentError("t_ambient must be > 0 and finite, got $(cfg.disk.t_ambient)"))
+    cfg.disk.orbital_distance_au > 0.0 && isfinite(cfg.disk.orbital_distance_au) || throw(
+        ArgumentError(
+            "orbital_distance_au must be > 0 and finite, got $(cfg.disk.orbital_distance_au)",
+        ),
+    )
+    cfg.disk.stellar_mass_msun > 0.0 && isfinite(cfg.disk.stellar_mass_msun) || throw(
+        ArgumentError(
+            "stellar_mass_msun must be > 0 and finite, got $(cfg.disk.stellar_mass_msun)",
+        ),
+    )
+    cfg.disk.t_cloud > 0.0 && isfinite(cfg.disk.t_cloud) ||
+        throw(ArgumentError("t_cloud must be > 0 and finite, got $(cfg.disk.t_cloud)"))
+    cfg.disk.t_irr_1au > 0.0 && isfinite(cfg.disk.t_irr_1au) ||
+        throw(ArgumentError("t_irr_1au must be > 0 and finite, got $(cfg.disk.t_irr_1au)"))
+    cfg.disk.t_peak_1au > 0.0 && isfinite(cfg.disk.t_peak_1au) || throw(
+        ArgumentError("t_peak_1au must be > 0 and finite, got $(cfg.disk.t_peak_1au)")
+    )
+    cfg.disk.t_peak_time_1au_myr > 0.0 && isfinite(cfg.disk.t_peak_time_1au_myr) || throw(
+        ArgumentError(
+            "t_peak_time_1au_myr must be > 0 and finite, got $(cfg.disk.t_peak_time_1au_myr)",
+        ),
+    )
+    cfg.disk.t_visc_0_myr > 0.0 && isfinite(cfg.disk.t_visc_0_myr) || throw(
+        ArgumentError("t_visc_0_myr must be > 0 and finite, got $(cfg.disk.t_visc_0_myr)"),
+    )
+    cfg.disk.gamma > 0.0 && isfinite(cfg.disk.gamma) ||
+        throw(ArgumentError("gamma must be > 0 and finite, got $(cfg.disk.gamma)"))
+    cfg.disk.alpha > 0.0 && isfinite(cfg.disk.alpha) ||
+        throw(ArgumentError("alpha must be > 0 and finite, got $(cfg.disk.alpha)"))
+    cfg.disk.q_irr > 0.0 && isfinite(cfg.disk.q_irr) ||
+        throw(ArgumentError("q_irr must be > 0 and finite, got $(cfg.disk.q_irr)"))
+    cfg.disk.q_visc > 0.0 && isfinite(cfg.disk.q_visc) ||
+        throw(ArgumentError("q_visc must be > 0 and finite, got $(cfg.disk.q_visc)"))
+    cfg.disk.p_r_t >= 0.0 && isfinite(cfg.disk.p_r_t) ||
+        throw(ArgumentError("p_r_t must be >= 0 and finite, got $(cfg.disk.p_r_t)"))
+    cfg.disk.p_m_irr >= 0.0 && isfinite(cfg.disk.p_m_irr) ||
+        throw(ArgumentError("p_m_irr must be >= 0 and finite, got $(cfg.disk.p_m_irr)"))
+    cfg.disk.p_m_visc >= 0.0 && isfinite(cfg.disk.p_m_visc) ||
+        throw(ArgumentError("p_m_visc must be >= 0 and finite, got $(cfg.disk.p_m_visc)"))
+    cfg.disk.p_m_t >= 0.0 && isfinite(cfg.disk.p_m_t) ||
+        throw(ArgumentError("p_m_t must be >= 0 and finite, got $(cfg.disk.p_m_t)"))
+    cfg.disk.p_m_visc_decay >= 0.0 && isfinite(cfg.disk.p_m_visc_decay) || throw(
+        ArgumentError(
+            "p_m_visc_decay must be >= 0 and finite, got $(cfg.disk.p_m_visc_decay)"
+        ),
+    )
 
     # Materials checks: all 18 property arrays must be positive/non-negative and finite
     for (arr, name, strictly_pos) in [
@@ -446,6 +592,7 @@ const VALID_SECTIONS = Set([
     "thermodynamics",
     "materials",
     "output",
+    "disk",
 ])
 
 """
@@ -525,6 +672,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.output
     end
+    dsk = if haskey(parsed, "disk")
+        _dict_to_struct(DiskConfig, parsed["disk"], def.disk)
+    else
+        def.disk
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -535,6 +687,7 @@ function load_config(source::AbstractString)::SimulationConfig
         thermodynamics=therm,
         materials=mat,
         output=out,
+        disk=dsk,
     )
 
     validate_config(cfg)
@@ -578,6 +731,7 @@ function save_config(path::AbstractString, cfg::SimulationConfig)
         "thermodynamics" => _struct_to_dict(cfg.thermodynamics),
         "materials" => _struct_to_dict(cfg.materials),
         "output" => _struct_to_dict(cfg.output),
+        "disk" => _struct_to_dict(cfg.disk),
     )
     open(path, "w") do io
         return TOML.print(io, d; sorted=true)

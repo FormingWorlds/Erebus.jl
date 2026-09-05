@@ -18,7 +18,10 @@ using TOML
         @test cfg.poroelasticity.betafluid == 0.0
         @test cfg.poroelasticity.phimin == 1.0e-4
         @test cfg.poroelasticity.phimax == 0.9999
-        @test cfg.time.dt_longest == 1.0e11
+        @test cfg.time.dt_longest ≈ 1.0e11 / cfg.time.yearlength
+        @test cfg.time.dt_initial ≈ 1.0e11 / cfg.time.yearlength
+        @test cfg.time.start_time == 2.25e6
+        @test cfg.time.endtime == 15.0e6
         @test cfg.time.n_steps == 10
         @test cfg.solver.use_pardiso == false
 
@@ -196,7 +199,7 @@ using TOML
             SimulationConfig(
                 time=TimeConfig(
                     dt_initial=-1.0,
-                    dt_longest=1e11,
+                    dt_longest=100.0,
                     dtcoefdn=0.5,
                     dtcoefup=1.2,
                     dtstep=200,
@@ -205,7 +208,7 @@ using TOML
                     DTmax=20.0,
                     yearlength=3.15e7,
                     start_time=0.0,
-                    endtime=1e12,
+                    endtime=1000.0,
                     start_step=1,
                     n_steps=10,
                 ),
@@ -214,8 +217,8 @@ using TOML
         @test_throws ArgumentError validate_config(
             SimulationConfig(
                 time=TimeConfig(
-                    dt_initial=1e11,
-                    dt_longest=1e10,
+                    dt_initial=200.0,
+                    dt_longest=100.0,
                     dtcoefdn=0.5,
                     dtcoefup=1.2,
                     dtstep=200,
@@ -224,7 +227,7 @@ using TOML
                     DTmax=20.0,
                     yearlength=3.15e7,
                     start_time=0.0,
-                    endtime=1e12,
+                    endtime=1000.0,
                     start_step=1,
                     n_steps=10,
                 ),
@@ -233,8 +236,8 @@ using TOML
         @test_throws ArgumentError validate_config(
             SimulationConfig(
                 time=TimeConfig(
-                    dt_initial=1e11,
-                    dt_longest=1e11,
+                    dt_initial=100.0,
+                    dt_longest=100.0,
                     dtcoefdn=0.5,
                     dtcoefup=1.2,
                     dtstep=200,
@@ -243,11 +246,17 @@ using TOML
                     DTmax=20.0,
                     yearlength=3.15e7,
                     start_time=0.0,
-                    endtime=1e12,
+                    endtime=1000.0,
                     start_step=1,
                     n_steps=0,
                 ),
             ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(time=TimeConfig(start_time=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(time=TimeConfig(start_time=10.0, endtime=5.0))
         )
 
         # Invalid solver parameters: titermax must be <= nplast to prevent plastic array overflow
@@ -303,8 +312,8 @@ using TOML
                 betasolid=3.0e-11, betafluid=5.0e-10, phimin=2e-4, phimax=0.99
             ),
             time=TimeConfig(
-                dt_initial=5e10,
-                dt_longest=5e10,
+                dt_initial=1000.0,
+                dt_longest=1000.0,
                 dtcoefdn=0.5,
                 dtcoefup=1.2,
                 dtstep=200,
@@ -313,7 +322,7 @@ using TOML
                 DTmax=20.0,
                 yearlength=3.15e7,
                 start_time=0.0,
-                endtime=1e12,
+                endtime=1.0e6,
                 start_step=1,
                 n_steps=4,
             ),

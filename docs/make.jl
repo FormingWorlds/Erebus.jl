@@ -43,6 +43,7 @@ makedocs(;
             "Model Overview" => "explanations/model_overview.md",
             "Governing Equations" => "explanations/governing_equations.md",
             "Discretization & Numerics" => "explanations/discretization_numerics.md",
+            "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Reference" => [

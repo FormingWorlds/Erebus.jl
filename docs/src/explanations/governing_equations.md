@@ -137,3 +137,60 @@ $$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\r
 $$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_f$$
 
 where $\tau$ is the mean lifetime of each radioactive isotope, and $\rho_s$, $\rho_f$ are solid and fluid densities.
+
+### Spherical Geometric Metric Weighting (2D Cartesian)
+In 3D spherically symmetric coordinates with radius $r = \sqrt{(x - x_c)^2 + (y - y_c)^2}$, the heat flux divergence is:
+
+$$\nabla_{\text{3D}} \cdot \mathbf{q} = \frac{1}{r^2} \frac{\partial}{\partial r}\left(r^2 q_r\right) = \frac{\partial q_r}{\partial r} + \frac{2}{r} q_r$$
+
+In 2D Cartesian coordinates $(x, y)$, the divergence is:
+
+$$\nabla_{\text{2D}} \cdot \mathbf{q} = \frac{\partial q_x}{\partial x} + \frac{\partial q_y}{\partial y} = \frac{\partial q_r}{\partial r} + \frac{1}{r} q_r$$
+
+The difference between 3D spherical and 2D Cartesian divergence is:
+
+$$\nabla_{\text{3D}} \cdot \mathbf{q} - \nabla_{\text{2D}} \cdot \mathbf{q} = \frac{1}{r} q_r = -\frac{k}{r} \frac{\partial T}{\partial r}$$
+
+Solving spherical heat diffusion on the 2D Cartesian grid introduces the geometric metric term:
+
+$$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = - \nabla_{\text{2D}} \cdot \mathbf{q} + Q_{\text{metric}} + Q_{\text{sources}}$$
+
+where:
+
+$$Q_{\text{metric}} = \frac{k}{r_{\text{eff}}^2} \left[ (x - x_c)\frac{\partial T}{\partial x} + (y - y_c)\frac{\partial T}{\partial y} \right]$$
+
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $Q_{\text{metric}}$ | Spherical geometric curvature heat source term | $\text{W/m}^3$ |
+| $r_{\text{eff}}$ | Regularized radial distance from center: $\sqrt{(x - x_c)^2 + (y - y_c)^2 + \epsilon_r^2}$ | $\text{m}$ |
+| $\epsilon_r$ | Core regularization radius: $\text{reg\_cells} \cdot \min(\Delta x, \Delta y)$ | $\text{m}$ |
+| $(x_c, y_c)$ | Planetesimal centroid coordinates in domain | $\text{m}$ |
+
+### Stefan-Boltzmann Surface Radiation Boundary Condition
+The planetesimal surface radiates into surrounding disk gas according to the Stefan-Boltzmann law:
+
+$$F_{\text{rad}} = \epsilon \sigma_{\text{SB}} \left( T_{\text{surf}}^4 - T_{\text{disk}}^4 \right)$$
+
+Linearizing around $T_{\text{surf}}$ and $T_{\text{disk}}$:
+
+$$F_{\text{rad}} = h_{\text{rad}} (T_{\text{surf}} - T_{\text{disk}})$$
+
+$$h_{\text{rad}} = \epsilon \sigma_{\text{SB}} \left( T_{\text{surf}}^2 + T_{\text{disk}}^2 \right) \left( T_{\text{surf}} + T_{\text{disk}} \right)$$
+
+At the rock-air boundary face between cell $(i, j)$ and neighbor $(i, j+1)$ across grid step $\Delta$, the harmonic series resistance between half-cell internal conduction and surface radiation yields the effective interface conductivity:
+
+$$k_{\text{interface}}^{\text{eff}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \Delta}{2 k_{\text{rock}} + h_{\text{rad}} \Delta}$$
+
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $F_{\text{rad}}$ | Surface radiative cooling heat flux | $\text{W/m}^2$ |
+| $\epsilon$ | Surface thermal emissivity | - |
+| $\sigma_{\text{SB}}$ | Stefan-Boltzmann constant: $5.670374419\times 10^{-8}$ | $\text{W}/(\text{m}^2\cdot\text{K}^4)$ |
+| $h_{\text{rad}}$ | Linearized radiative transfer coefficient | $\text{W}/(\text{m}^2\cdot\text{K})$ |
+| $k_{\text{interface}}^{\text{eff}}$ | Harmonic interface effective conductivity across boundary face | $\text{W}/(\text{m}\cdot\text{K})$ |
+| $T_{\text{surf}}$ | Planetesimal surface boundary temperature | $\text{K}$ |
+| $T_{\text{disk}}$ | Ambient nebular sink temperature | $\text{K}$ |
+
+This formulation provides A-stability for the linearized implicit operator with a bounded, positive effective interface conductivity evaluated from the lagged surface temperature.
+
+
