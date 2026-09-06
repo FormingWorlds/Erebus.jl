@@ -189,7 +189,6 @@ const kphim0 = SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
 # initial temperature [K]
 const tkm0 = SVector{3,Float64}([170.0, 170.0, 170.0])
 # initial wet solid molar fraction
-const XWsolidm_init = SVector{3,Float64}([0.50, 0.50, NaN])
 # marker property mode (1: dynamic calculations, 9: static parameters)
 const marker_property_mode = 1
 # coefficient to compute compaction viscosity from shear viscosity

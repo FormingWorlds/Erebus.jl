@@ -148,6 +148,7 @@ function save_state(
     DSXX,
     DMP,
     DHP,
+    DQPF,
     XWS,
     XWsolidm0,
     xm,
@@ -210,7 +211,6 @@ function save_state(
         timesum,
         marknum,
         phim0,
-        XWsolidm_init,
         ratio_al,
         t_half_al,
         dsubgrids,
@@ -313,6 +313,7 @@ function save_state(
         DSXX,
         DMP,
         DHP,
+        DQPF,
         XWS,
         XWsolidm0,
         xm,
@@ -490,7 +491,6 @@ function simulation_loop(
         tenssolidm,
         kphim0,
         tkm0,
-        XWsolidm_init,
         etaphikoef,
         αη,
         tmsolidphase,
@@ -686,6 +686,7 @@ function simulation_loop(
             ycenter_val=ycenter_val,
             rplanet_val=rplanet_val,
             rcrust_val=rcrust_val,
+
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -767,6 +768,7 @@ function simulation_loop(
             DSXX,
             DMP,
             DHP,
+            DQPF,
             XWS,
             XWsolidm0,
             xm,
@@ -1917,6 +1919,7 @@ function simulation_loop(
                 DSXX,
                 DMP,
                 DHP,
+            DQPF,
                 XWS,
                 XWsolidm0,
                 xm,

@@ -1,0 +1,92 @@
+[grid]
+xsize = 140000.0
+ysize = 140000.0
+Nx = 33
+Ny = 33
+
+[geometry]
+rplanet = 50000.0
+rcrust = 50000.0
+xcenter = 70000.0
+ycenter = 70000.0
+psurface = 1000.0
+
+[time]
+dt_initial = 3168.80878
+dt_longest = 3168.80878
+dtcoefdn = 0.5
+dtcoefup = 1.2
+dtstep = 500
+dxymax = 0.05
+vpratio = 0.3333333333333333
+DTmax = 20.0
+start_time = 0.0
+endtime = 15000000.0
+start_step = 1
+n_steps = 1000000
+
+[solver]
+titermax = 10000
+nplast = 100000
+yerrmax = 100.0
+etawt = 0.0
+dphimax = 100.01
+seed = 42
+use_pardiso = false
+etaphikoef = 1.0
+etamin = 1000000000000.0
+etamax = 1e+23
+
+[poroelasticity]
+betasolid = 2.5e-11
+betafluid = 4e-10
+phimin = 0.0001
+phimax = 0.9999
+hydrofracture = true
+kappa_frac = 1000.0
+gamma_frac = 1.0
+k_frac_max = 1e-9
+
+[thermodynamics]
+hr_al = true
+hr_fe = false
+ratio_al = 5e-5
+ratio_fe = 1e-6
+tmsolidphase = 1416.0
+tmfluidphase = 273.0
+phim0 = 0.3
+thermal_buoyancy = true
+fluid_viscosity_mode = "arrhenius"
+fluid_viscosity_Ea = 15000.0
+fluid_viscosity_T0 = 293.15
+fluid_viscosity_eta0 = 0.001
+
+[materials]
+rhosolidm = [ 3300.0, 3300.0, 1.0,]
+rhofluidm = [ 1000.0, 1000.0, 1.0,]
+etasolidm = [ 1e+19, 1e+19, 1e+16,]
+etasolidmm = [ 1e+19, 1e+19, 1e+16,]
+etafluidm = [ 1000000000000.0, 1000000000000.0, 0.001,]
+etafluidmm = [ 0.001, 0.001, 0.001,]
+rhocpsolidm = [ 3300000.0, 3300000.0, 3000000.0,]
+rhocpfluidm = [ 1000000.0, 1000000.0, 3000000.0,]
+alphasolidm = [ 3e-5, 3e-5, 0.0,]
+alphafluidm = [ 5e-5, 5e-5, 0.0,]
+ksolidm = [ 3.0, 3.0, 3000.0,]
+kfluidm = [ 50.0, 50.0, 3000.0,]
+gggsolidm = [ 10000000000.0, 10000000000.0, 10000000000.0,]
+frictsolidm = [ 0.6, 0.6, 0.0,]
+cohessolidm = [ 100000000.0, 100000000.0, 100000000.0,]
+tenssolidm = [ 50000.0, 50000.0, 100000000.0,]
+kphim0 = [ 1e-12, 1e-12, 1e-17,]
+tkm0 = [ 170.0, 170.0, 170.0,]
+XWsolidm_init = [ 0.0, 0.0, 0.0,]
+
+[output]
+output_dir = "output_hydrothermal_reaction_off_32"
+savematstep = 1
+visstep = 1
+restart_from = ""
+
+[reaction]
+active = false

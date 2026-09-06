@@ -53,6 +53,8 @@ makedocs(;
             "Radionuclide Decay" => "validation/radionuclides.md",
             "Fluid Viscosity & Phase Changes" => "validation/fluid_viscosity.md",
             "Surface Radiation & Disk Evolution" => "validation/disk_radiation.md",
+            "Hydrothermal Reactions" => "validation/hydrothermal_reactions.md",
+
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",
