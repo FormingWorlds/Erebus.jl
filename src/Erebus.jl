@@ -28,11 +28,16 @@ export Config,
     MaterialConfig,
     OutputConfig,
     DiskConfig,
+    MeltingConfig,
     SimulationConfig,
     default_config,
     load_config,
     validate_config,
     save_config,
+    compute_melt_fraction,
+    rhocp_apparent_silicate,
+    compute_melt_weakened_viscosity,
+    regularized_soft_turbulence_conductivity,
     compute_disk_temperature,
     compute_snowline_radius,
     compute_radiation_htc,
@@ -120,7 +125,11 @@ module Physics
         compute_disk_temperature,
         compute_snowline_radius,
         compute_radiation_htc,
-        compute_spherical_metric_heat_source!
+        compute_spherical_metric_heat_source!,
+        compute_melt_fraction,
+        rhocp_apparent_silicate,
+        compute_melt_weakened_viscosity,
+        regularized_soft_turbulence_conductivity
     export distance,
         total,
         ktotal,
@@ -150,7 +159,11 @@ module Physics
         compute_disk_temperature,
         compute_snowline_radius,
         compute_radiation_htc,
-        compute_spherical_metric_heat_source!
+        compute_spherical_metric_heat_source!,
+        compute_melt_fraction,
+        rhocp_apparent_silicate,
+        compute_melt_weakened_viscosity,
+        regularized_soft_turbulence_conductivity
 end
 
 module Particles
@@ -331,6 +344,7 @@ module Config
         MaterialConfig,
         OutputConfig,
         DiskConfig,
+        MeltingConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -346,6 +360,7 @@ module Config
         MaterialConfig,
         OutputConfig,
         DiskConfig,
+        MeltingConfig,
         SimulationConfig,
         default_config,
         load_config,

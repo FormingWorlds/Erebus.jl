@@ -43,6 +43,7 @@ makedocs(;
             "Model Overview" => "explanations/model_overview.md",
             "Governing Equations" => "explanations/governing_equations.md",
             "Discretization & Numerics" => "explanations/discretization_numerics.md",
+            "Silicate Melting & Soft Turbulence" => "explanations/rock_melting.md",
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
@@ -54,6 +55,7 @@ makedocs(;
             "Fluid Viscosity & Phase Changes" => "validation/fluid_viscosity.md",
             "Surface Radiation & Disk Evolution" => "validation/disk_radiation.md",
             "Hydrothermal Reactions" => "validation/hydrothermal_reactions.md",
+            "Silicate Rock Melting" => "validation/rock_melting.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

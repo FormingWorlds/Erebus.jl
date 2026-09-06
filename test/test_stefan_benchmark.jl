@@ -95,8 +95,21 @@ end
         # Set up markers in 1D column
         marknum = 200
         props = setup_marker_properties(marknum, coords)
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) =
-            props
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+        ) = props
 
         tm .= 1
         xm .= W_domain / 2

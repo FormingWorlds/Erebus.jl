@@ -261,6 +261,33 @@ Base.@kwdef struct ReactionConfig
 end
 
 """
+Silicate rock melting, latent heat buffering, and melt-weakened rheology parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct MeltingConfig
+    active::Bool = false
+    T_solidus::SVector{3,Float64} = SVector{3,Float64}([1400.0, 1400.0, NaN])
+    T_liquidus::SVector{3,Float64} = SVector{3,Float64}([1800.0, 1800.0, NaN])
+    L_melt::Float64 = 4.0e5
+    rho_melt::Float64 = 2800.0
+    alpha_eta::Float64 = 28.0
+    phi_crit::Float64 = 0.4
+    eta_melt::Float64 = 10.0
+    dpdt_clapeyron::Float64 = 0.0
+    latent_heat_mode::Symbol = :apparent_cp
+    soft_turbulence::Bool = false
+    turb_exponent::Float64 = 1.0 / 3.0
+    eta_fluid_silicate::Float64 = 100.0
+    F_turb_start::Float64 = 0.30
+    F_turb_end::Float64 = 0.50
+    dT_turb_min::Float64 = 10.0
+    T_surface_ref::Float64 = 300.0
+    k_turb_cutoff::Float64 = 1.0e6
+    k_turb_floor::Float64 = 1.0e-3
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -276,6 +303,7 @@ Base.@kwdef struct SimulationConfig
     materials::MaterialConfig = MaterialConfig()
     output::OutputConfig = OutputConfig()
     disk::DiskConfig = DiskConfig()
+    melting::MeltingConfig = MeltingConfig()
 end
 
 """
@@ -611,6 +639,110 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    # Melting checks
+    if cfg.melting.soft_turbulence && !cfg.melting.active
+        throw(
+            ArgumentError(
+                "Melting soft_turbulence cannot be enabled when melting active is false",
+            ),
+        )
+    end
+
+    if cfg.melting.active
+        for idx in 1:2
+            T_s = cfg.melting.T_solidus[idx]
+            T_l = cfg.melting.T_liquidus[idx]
+            (T_s > 0.0 && isfinite(T_s)) || throw(
+                ArgumentError("Melting T_solidus[$idx] must be > 0 and finite, got $T_s"),
+            )
+            (T_l > 0.0 && isfinite(T_l)) || throw(
+                ArgumentError("Melting T_liquidus[$idx] must be > 0 and finite, got $T_l"),
+            )
+            T_s < T_l || throw(
+                ArgumentError(
+                    "Melting T_solidus[$idx] ($T_s) must be < T_liquidus[$idx] ($T_l)"
+                ),
+            )
+        end
+        (cfg.melting.L_melt > 0.0 && isfinite(cfg.melting.L_melt)) || throw(
+            ArgumentError(
+                "Melting L_melt must be > 0 and finite, got $(cfg.melting.L_melt)"
+            ),
+        )
+        (cfg.melting.rho_melt > 0.0 && isfinite(cfg.melting.rho_melt)) || throw(
+            ArgumentError(
+                "Melting rho_melt must be > 0 and finite, got $(cfg.melting.rho_melt)"
+            ),
+        )
+        (cfg.melting.alpha_eta >= 0.0 && isfinite(cfg.melting.alpha_eta)) || throw(
+            ArgumentError(
+                "Melting alpha_eta must be >= 0 and finite, got $(cfg.melting.alpha_eta)",
+            ),
+        )
+        (0.0 < cfg.melting.phi_crit < 1.0 && isfinite(cfg.melting.phi_crit)) || throw(
+            ArgumentError(
+                "Melting phi_crit must be in (0, 1), got $(cfg.melting.phi_crit)"
+            ),
+        )
+        (cfg.melting.eta_melt > 0.0 && isfinite(cfg.melting.eta_melt)) || throw(
+            ArgumentError(
+                "Melting eta_melt must be > 0 and finite, got $(cfg.melting.eta_melt)"
+            ),
+        )
+        (cfg.melting.dpdt_clapeyron >= 0.0 && isfinite(cfg.melting.dpdt_clapeyron)) ||
+            throw(
+                ArgumentError(
+                    "Melting dpdt_clapeyron must be >= 0 and finite, got $(cfg.melting.dpdt_clapeyron)",
+                ),
+            )
+        cfg.melting.latent_heat_mode == :apparent_cp || throw(
+            ArgumentError(
+                "Melting latent_heat_mode must be :apparent_cp, got $(cfg.melting.latent_heat_mode)",
+            ),
+        )
+
+        if cfg.melting.soft_turbulence
+            (cfg.melting.turb_exponent > 0.0 && isfinite(cfg.melting.turb_exponent)) ||
+                throw(
+                    ArgumentError(
+                        "Melting turb_exponent must be > 0 and finite, got $(cfg.melting.turb_exponent)",
+                    ),
+                )
+            (
+                cfg.melting.eta_fluid_silicate > 0.0 &&
+                isfinite(cfg.melting.eta_fluid_silicate)
+            ) || throw(
+                ArgumentError(
+                    "Melting eta_fluid_silicate must be > 0 and finite, got $(cfg.melting.eta_fluid_silicate)",
+                ),
+            )
+            (0.0 <= cfg.melting.F_turb_start < cfg.melting.F_turb_end <= 1.0) || throw(
+                ArgumentError(
+                    "Melting F_turb bounds must satisfy 0 <= F_turb_start < F_turb_end <= 1, got [$(cfg.melting.F_turb_start), $(cfg.melting.F_turb_end)]",
+                ),
+            )
+            (cfg.melting.dT_turb_min > 0.0 && isfinite(cfg.melting.dT_turb_min)) || throw(
+                ArgumentError(
+                    "Melting dT_turb_min must be > 0 and finite, got $(cfg.melting.dT_turb_min)",
+                ),
+            )
+            (cfg.melting.T_surface_ref > 0.0 && isfinite(cfg.melting.T_surface_ref)) ||
+                throw(
+                    ArgumentError(
+                        "Melting T_surface_ref must be > 0 and finite, got $(cfg.melting.T_surface_ref)",
+                    ),
+                )
+            (
+                0.0 < cfg.melting.k_turb_floor < cfg.melting.k_turb_cutoff &&
+                isfinite(cfg.melting.k_turb_cutoff)
+            ) || throw(
+                ArgumentError(
+                    "Melting k_turb bounds must satisfy 0 < k_turb_floor < k_turb_cutoff, got floor=$(cfg.melting.k_turb_floor), cutoff=$(cfg.melting.k_turb_cutoff)",
+                ),
+            )
+        end
+    end
+
     return nothing
 end
 
@@ -668,6 +800,7 @@ const VALID_SECTIONS = Set([
     "materials",
     "output",
     "disk",
+    "melting",
 ])
 
 """
@@ -758,6 +891,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.disk
     end
+    melt = if haskey(parsed, "melting")
+        _dict_to_struct(MeltingConfig, parsed["melting"], def.melting)
+    else
+        def.melting
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -770,6 +908,7 @@ function load_config(source::AbstractString)::SimulationConfig
         materials=mat,
         output=out,
         disk=dsk,
+        melting=melt,
     )
 
     validate_config(cfg)
@@ -815,6 +954,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "materials" => _struct_to_dict(cfg.materials),
         "output" => _struct_to_dict(cfg.output),
         "disk" => _struct_to_dict(cfg.disk),
+        "melting" => _struct_to_dict(cfg.melting),
     )
     TOML.print(io, d; sorted=true)
     return io
@@ -825,4 +965,10 @@ function save_config(path::AbstractString, cfg::SimulationConfig)
         return save_config(io, cfg)
     end
     return path
+end
+
+function save_config(cfg::SimulationConfig)::String
+    io = IOBuffer()
+    save_config(io, cfg)
+    return String(take!(io))
 end

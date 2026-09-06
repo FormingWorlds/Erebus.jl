@@ -58,7 +58,11 @@ function setup_marker_properties(
     XWsolidm = randomized ? rand(rgen, marknum) : zeros(marknum)
     # previous marker melt molar fraction
     XWsolidm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
-    return (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0)
+    # marker silicate melt fraction Fm [-]
+    Fm = zeros(marknum)
+    return (
+        xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm
+    )
 end # function setup_marker_properties()
 
 function setup_marker_properties(marknum, coords::GridCoordinates; randomized=false)
@@ -336,6 +340,26 @@ function compute_marker_properties!(
     fluid_viscosity_Ea::Real=15.0e3,
     fluid_viscosity_T0::Real=293.15,
     fluid_viscosity_eta0::Real=1.0e-3,
+    pm=nothing,
+    Fm=nothing,
+    melting_active::Bool=false,
+    T_solidus_val=nothing,
+    T_liquidus_val=nothing,
+    L_melt_val::Real=4.0e5,
+    rho_melt_val::Real=2800.0,
+    alpha_eta_val::Real=28.0,
+    phi_crit_val::Real=0.4,
+    eta_melt_val::Real=10.0,
+    dpdt_clapeyron_val::Real=0.0,
+    soft_turbulence::Bool=false,
+    turb_exponent_val::Real=1.0 / 3.0,
+    eta_fluid_silicate_val::Real=100.0,
+    F_turb_start_val::Real=0.30,
+    F_turb_end_val::Real=0.50,
+    dT_turb_min_val::Real=10.0,
+    T_surface_ref_val::Real=300.0,
+    k_turb_cutoff_val::Real=1.0e6,
+    k_turb_floor_val::Real=1.0e-3,
 )
     # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
@@ -361,11 +385,52 @@ function compute_marker_properties!(
         if rhofluidcur !== nothing
             rhofluidcur[m] = rhofluidm0
         end
-        rhototalm[m] = total(rhosolidm0, rhofluidm0, phim[m])
-        rhocptotalm[m] = total(
-            rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m]
-        )
-        etasolidcur = ifelse(tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
+
+        rhosolid_eff = rhosolidm0
+        rhocpsolid_eff = rhocpsolidm[tm[m]]
+        etasolidcur_raw = ifelse(tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
+        etasolidcur = etasolidcur_raw
+        F_melt = 0.0
+
+        if melting_active
+            T_sol = T_solidus_val === nothing ? 1400.0 : T_solidus_val[tm[m]]
+            T_liq = T_liquidus_val === nothing ? 1800.0 : T_liquidus_val[tm[m]]
+            P_val = pm === nothing ? 0.0 : max(0.0, pm[m])
+            F_melt = compute_melt_fraction(
+                tkm[m], P_val, tm[m]; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt_clapeyron_val
+            )
+            if Fm !== nothing
+                Fm[m] = F_melt
+            end
+            rhosolid_eff = (1.0 - F_melt) * rhosolidm0 + F_melt * rho_melt_val
+            rhocpsolid_eff = rhocp_apparent_silicate(
+                tkm[m],
+                P_val,
+                rhocpsolidm[tm[m]],
+                rhosolidm0,
+                tm[m];
+                T_sol=T_sol,
+                T_liq=T_liq,
+                L_melt=L_melt_val,
+                active=true,
+                dpdt=dpdt_clapeyron_val,
+            )
+            etasolidcur = compute_melt_weakened_viscosity(
+                etasolidcur,
+                F_melt,
+                tm[m];
+                alpha_eta=alpha_eta_val,
+                phi_crit=phi_crit_val,
+                eta_melt=eta_melt_val,
+                etamin=etamin,
+                etamax=etamax,
+            )
+        elseif Fm !== nothing
+            Fm[m] = 0.0
+        end
+
+        rhototalm[m] = total(rhosolid_eff, rhofluidm0, phim[m])
+        rhocptotalm[m] = total(rhocpsolid_eff, compute_rhocpfluidm(tkm[m], mode), phim[m])
         etafluidcur = compute_fluid_viscosity(
             tkm[m],
             tm[m];
@@ -382,8 +447,40 @@ function compute_marker_properties!(
         ktotalm[m] = ktotal(
             compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
         )
+        if melting_active && soft_turbulence
+            eta_fluid = if F_melt <= F_turb_start_val
+                etasolidcur
+            else
+                xi_mush = clamp(
+                    (F_melt - F_turb_start_val) / (F_turb_end_val - F_turb_start_val),
+                    0.0,
+                    1.0,
+                )
+                log_eta =
+                    (1.0 - xi_mush) * log(etasolidcur) +
+                    xi_mush * log(eta_fluid_silicate_val)
+                exp(log_eta)
+            end
+            ktotalm[m] = regularized_soft_turbulence_conductivity(
+                ktotalm[m],
+                etatotalm[m],
+                eta_fluid,
+                F_melt,
+                tkm[m],
+                T_surface_ref_val;
+                turb_exponent=turb_exponent_val,
+                F_start=F_turb_start_val,
+                F_end=F_turb_end_val,
+                dT_min=dT_turb_min_val,
+                k_floor=k_turb_floor_val,
+                k_cutoff=k_turb_cutoff_val,
+            )
+        end
     else
         # sticky air
+        if Fm !== nothing
+            Fm[m] = 0.0
+        end
         etafluidcur = etafluidm[tm[m]]
         if rhofluidcur !== nothing
             rhofluidcur[m] = rhofluidm[tm[m]]
@@ -431,6 +528,11 @@ function update_marker_viscosity!(
     YNY,
     YNY_inv_ETA;
     coords::Union{Nothing,GridCoordinates}=nothing,
+    Fm=nothing,
+    melting_active::Bool=false,
+    alpha_eta_val::Real=28.0,
+    phi_crit_val::Real=0.4,
+    eta_melt_val::Real=10.0,
 )
     x_val = coords === nothing ? x : coords.x
     y_val = coords === nothing ? y : coords.y
@@ -454,12 +556,25 @@ function update_marker_viscosity!(
     )
     @inbounds if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
-        @inbounds etatotalm[m] = etatotal_rocks(tkm[m], tm[m]) # * exp(-αη*phim[m]) # ∇! CHANGE!!!
+        eta_rock = etatotal_rocks(tkm[m], tm[m])
+        if melting_active && Fm !== nothing
+            eta_rock = compute_melt_weakened_viscosity(
+                eta_rock,
+                Fm[m],
+                tm[m];
+                alpha_eta=alpha_eta_val,
+                phi_crit=phi_crit_val,
+                eta_melt=eta_melt_val,
+                etamin=etamin,
+                etamax=etamax,
+            )
+        end
+        etatotalm[m] = eta_rock
         # else
         # air: constant etatotalm[m]=etasolidm[tm[m]] as initialized
         # pass
     end
-    if any(grid_vector(i, j, YNY))
+    if any(!iszero, grid_vector(i, j, YNY))
         interpolate_to_marker!(m, i, j, weights, etavpm, YNY_inv_ETA)
         @inbounds etavpm[m] = inv(etavpm[m])
         @inbounds etavpm[m] = ifelse(etavpm[m]>etatotalm[m], etatotalm[m], etavpm[m])
@@ -2727,6 +2842,7 @@ function replenish_markers!(
     etafluidcur_inv_kphim,
     mdis,
     mnum;
+    Fm=nothing,
     randomized=random_markers,
     coords::Union{Nothing,GridCoordinates}=nothing,
 )
@@ -2804,6 +2920,9 @@ function replenish_markers!(
                     push!(pfm0, pfm0[m])
                     push!(XWsolidm, XWsolidm[m])
                     push!(XWsolidm0, XWsolidm0[m])
+                    if Fm !== nothing
+                        push!(Fm, Fm[m])
+                    end
                     push!(rhototalm, rhototalm[m])
                     push!(rhocptotalm, rhocptotalm[m])
                     push!(etatotalm, etatotalm[m])

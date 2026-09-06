@@ -1,0 +1,110 @@
+[grid]
+xsize = 140000.0
+ysize = 140000.0
+Nx = 65
+Ny = 65
+
+[geometry]
+rplanet = 50000.0
+rcrust = 50000.0
+xcenter = 70000.0
+ycenter = 70000.0
+psurface = 1000.0
+
+[time]
+dt_initial = 1577880.0
+dt_longest = 1577880.0
+dtcoefdn = 0.5
+dtcoefup = 1.2
+dtstep = 500
+dxymax = 0.05
+vpratio = 0.3333333333333333
+DTmax = 20.0
+start_time = 0.0
+endtime = 50000.0
+start_step = 1
+n_steps = 1000000
+
+[solver]
+titermax = 10000
+nplast = 100000
+yerrmax = 100.0
+etawt = 0.0
+dphimax = 100.01
+seed = 42
+use_pardiso = false
+etaphikoef = 1.0
+etamin = 1.0e12
+etamax = 1.0e23
+
+[poroelasticity]
+betasolid = 2.5e-11
+betafluid = 4.0e-10
+phimin = 0.0001
+phimax = 0.9999
+hydrofracture = false
+kappa_frac = 1000.0
+gamma_frac = 1.0
+k_frac_max = 1.0e-9
+
+[thermodynamics]
+hr_al = false
+hr_fe = false
+ratio_al = 5.0e-5
+ratio_fe = 1.0e-6
+tmsolidphase = 1400.0
+tmfluidphase = 273.0
+phim0 = 0.001
+thermal_buoyancy = true
+fluid_viscosity_mode = "arrhenius"
+fluid_viscosity_Ea = 15000.0
+fluid_viscosity_T0 = 293.15
+fluid_viscosity_eta0 = 0.001
+
+[materials]
+rhosolidm = [3300.0, 3300.0, 1.0]
+rhofluidm = [1000.0, 1000.0, 1.0]
+etasolidm = [1.0e19, 1.0e19, 1.0e16]
+etasolidmm = [1.0e19, 1.0e19, 1.0e16]
+etafluidm = [1.0e12, 1.0e12, 0.001]
+etafluidmm = [0.001, 0.001, 0.001]
+rhocpsolidm = [3300000.0, 3300000.0, 3000000.0]
+rhocpfluidm = [1000000.0, 1000000.0, 3000000.0]
+alphasolidm = [3.0e-5, 3.0e-5, 0.0]
+alphafluidm = [5.0e-5, 5.0e-5, 0.0]
+ksolidm = [3.0, 3.0, 3000.0]
+kfluidm = [50.0, 50.0, 3000.0]
+gggsolidm = [1.0e10, 1.0e10, 1.0e10]
+frictsolidm = [0.6, 0.6, 0.0]
+cohessolidm = [1.0e8, 1.0e8, 1.0e8]
+tenssolidm = [50000.0, 50000.0, 1.0e8]
+kphim0 = [1.0e-12, 1.0e-12, 1.0e-17]
+tkm0 = [1850.0, 1000.0, 300.0]
+XWsolidm_init = [0.0, 0.0, 0.0]
+
+[output]
+output_dir = "output_magma_ocean_cooling_turb_on_64"
+savematstep = 10
+visstep = 1
+restart_from = ""
+
+[melting]
+active = true
+T_solidus = [1400.0, 1400.0, nan]
+T_liquidus = [1800.0, 1800.0, nan]
+L_melt = 400000.0
+latent_heat_mode = "apparent_cp"
+alpha_eta = 28.0
+phi_crit = 0.4
+eta_melt = 10.0
+rho_melt = 2800.0
+dpdt_clapeyron = 0.0
+soft_turbulence = true
+turb_exponent = 0.3333333333333333
+eta_fluid_silicate = 100.0
+F_turb_start = 0.30
+F_turb_end = 0.50
+dT_turb_min = 10.0
+T_surface_ref = 300.0
+k_turb_cutoff = 1.0e6
+k_turb_floor = 0.001

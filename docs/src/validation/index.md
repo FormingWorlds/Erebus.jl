@@ -13,6 +13,8 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Radionuclide Decay** | Short-lived radioactive heating ($^{26}\text{Al}$, $^{60}\text{Fe}$) | Russell et al. (1996); Tachibana & Huss (2003); Lichtenberg et al. (2019) | `test/test_physics.jl` |
 | **Fluid Viscosity & Phase Transitions** | Arrhenius water viscosity and hydrothermal phase limits | Hubmann (2022); Gerya (2019) | `test/test_physics.jl` |
 | **Surface Radiation & Disk Evolution** | Stefan-Boltzmann boundary and protoplanetary disk clearing | Chiang & Goldreich (1997); Drążkowska & Dullemond (2018); Williams et al. (2026) | `test/test_geometry_radiation.jl` |
+| **Hydrothermal Reactions** | Hydration and dehydration kinetics (Arrhenius) with latent heat and mass coupling | Hubmann (2022); Gerya (2019) | `test/test_reaction_pathways.jl` |
+| **Silicate Rock Melting & Magma Convection** | Linear melt fraction, apparent heat capacity, melt-weakened rheology, and sub-grid soft turbulence | Gerya (2019); Costa et al. (2009); Solomatov (2007) | `test/test_melting.jl`, `test/test_soft_turbulence.jl` |
 
 ---
 
@@ -22,4 +24,3 @@ Each validation module fulfills three requirements:
 1. **Literature Grounding**: Every parameterization maps to a verified scientific publication with a valid DOI.
 2. **Analytical Limits**: Numerical implementations are tested against closed-form mathematical limits (e.g. pure solid limit, infinite-time decay, steady-state conduction).
 3. **Physical Invariants**: Unit tests assert physical conservation (energy, mass), boundedness ($T > 0\text{ K}$, $\phi \in [0, 1]$), and monotonicity.
-| **Hydrothermal Reactions** | Hydration and dehydration kinetics (Arrhenius) with latent heat and mass coupling | Hubmann (2022); Gerya (2019) | `hydrothermal_reaction_on_32.toml` |
