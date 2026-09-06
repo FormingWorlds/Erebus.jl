@@ -20,7 +20,7 @@ makedocs(;
     sitename="Erebus.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", nothing) == "true",
-        canonical="https://formingworlds.github.io/Erebus.jl/stable/",
+        canonical="https://proteus-framework.org/Erebus.jl/stable/",
         edit_link="main",
         size_threshold_warn=250 * 1024,
         size_threshold=350 * 1024,
@@ -69,5 +69,8 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/FormingWorlds/Erebus.jl.git", devbranch="main", push_preview=true
+    repo="github.com/FormingWorlds/Erebus.jl.git",
+    devbranch="main",
+    push_preview=true,
+    versions=["stable" => "dev", "dev" => "dev"],
 )
