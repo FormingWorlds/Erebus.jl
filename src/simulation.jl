@@ -461,7 +461,7 @@ function simulation_loop(
     eta_fluid_silicate_val = cfg.melting.eta_fluid_silicate
     F_turb_start_val = cfg.melting.F_turb_start
     F_turb_end_val = cfg.melting.F_turb_end
-    F_turb_crit_val = cfg.melting.F_turb_crit
+    turb_exponent_val = cfg.melting.turb_exponent
     dT_turb_min_val = cfg.melting.dT_turb_min
     T_surface_ref_val = cfg.melting.T_surface_ref
     k_turb_cutoff_val = cfg.melting.k_turb_cutoff
@@ -992,7 +992,7 @@ function simulation_loop(
                         eta_fluid_silicate_val=eta_fluid_silicate_val,
                         F_turb_start_val=F_turb_start_val,
                         F_turb_end_val=F_turb_end_val,
-                        F_turb_crit_val=F_turb_crit_val,
+                        turb_exponent_val=turb_exponent_val,
                         dT_turb_min_val=dT_turb_min_val,
                         T_surface_ref_val=T_surface_ref_val,
                         k_turb_cutoff_val=k_turb_cutoff_val,
@@ -1154,7 +1154,7 @@ function simulation_loop(
                     eta_fluid_silicate_val=eta_fluid_silicate_val,
                     F_turb_start_val=F_turb_start_val,
                     F_turb_end_val=F_turb_end_val,
-                    F_turb_crit_val=F_turb_crit_val,
+                    turb_exponent_val=turb_exponent_val,
                     dT_turb_min_val=dT_turb_min_val,
                     T_surface_ref_val=T_surface_ref_val,
                     k_turb_cutoff_val=k_turb_cutoff_val,

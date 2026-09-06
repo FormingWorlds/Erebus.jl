@@ -226,6 +226,16 @@ Parameters controlling silicate rock melting, latent heat buffering, and melt-we
 | `alpha_eta` | `Float64` | `28.0` | - | Melt weakening exponential coefficient | $\ge 0$ |
 | `phi_crit` | `Float64` | `0.4` | - | Critical melt fraction for crystal suspension transition | $\in (0, 1)$ |
 | `eta_melt` | `Float64` | `10.0` | Pa s | Dynamic viscosity of pure silicate melt | $> 0$ |
-| `dpdt_clapeyron` | `Float64` | `0.0` | Pa/K | Clapeyron slope for pressure-dependent solidus/liquidus | $\ge 0$ |
+| `dpdt_clapeyron` | `Float64` | `0.0` | K/Pa | Clapeyron slope for pressure-dependent solidus and liquidus | $\ge 0$ |
 | `latent_heat_mode` | `Symbol` | `:apparent_cp` | - | Latent heat formulation mode | `:apparent_cp` |
+| `soft_turbulence` | `Bool` | `false` | - | Enable regularized sub-grid soft turbulence thermal conductivity enhancement | `true` / `false` |
+| `turb_exponent` | `Float64` | `0.333333333333` | - | Power-law exponent for viscosity ratio ($1/3$ for Solomatov 2007, $1/2$ for boundary layer scaling) | $> 0$ |
+| `eta_fluid_silicate` | `Float64` | `100.0` | Pa s | Dynamic viscosity of turbulent silicate fluid magma | $> 0$ |
+| `F_turb_start` | `Float64` | `0.30` | - | Melt fraction threshold for onset of turbulent conductivity enhancement | $0 \le F_{\text{start}} < F_{\text{end}} \le 1$ |
+| `F_turb_end` | `Float64` | `0.50` | - | Melt fraction threshold for fully developed turbulent conductivity | $F_{\text{start}} < F_{\text{end}} \le 1$ |
+| `dT_turb_min` | `Float64` | `10.0` | K | Minimum temperature contrast scale for thermal regularization | $> 0$ |
+| `T_surface_ref` | `Float64` | `300.0` | K | Reference ambient/surface temperature for contrast evaluation | $> 0$ |
+| `k_turb_cutoff` | `Float64` | `1.0e+6` | W/(m K) | Upper cutoff for turbulent thermal conductivity | $> k_{\text{turb,floor}}$ |
+| `k_turb_floor` | `Float64` | `1.0e-3` | W/(m K) | Lower cutoff floor for regularized thermal conductivity | $> 0$ |
+
 

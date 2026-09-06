@@ -152,24 +152,47 @@ using TOML
         # Sticky air (tm == 3): non-melting material
         @test iszero(compute_melt_fraction(2000.0, 0.0, 3; T_sol=T_sol, T_liq=T_liq))
 
-        # Clapeyron pressure dependence: positive slope raises solidus
+        # Clapeyron pressure dependence: positive slope raises solidus and liquidus
         dpdt = 5.0e-8 # 50 K / GPa = 5e-8 K/Pa
         P_litho = 2.0e8 # 200 MPa
         F_P0 = compute_melt_fraction(1500.0, 0.0, 1; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt)
         F_P = compute_melt_fraction(1500.0, P_litho, 1; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt)
         @test F_P < F_P0
         T_s_eff = T_sol + dpdt * P_litho
-        expected_F_P = (1500.0 - T_s_eff) / (T_liq - T_s_eff)
+        T_l_eff = T_liq + dpdt * P_litho
+        expected_F_P = (1500.0 - T_s_eff) / (T_l_eff - T_s_eff)
         @test isapprox(F_P, expected_F_P; rtol=1e-12)
+
+        # High pressure test: melting interval does not collapse at P > 400 MPa
+        P_high = 1.0e9 # 1 GPa
+        T_s_high = T_sol + dpdt * P_high # 1450 K
+        T_l_high = T_liq + dpdt * P_high # 1850 K
+        @test isapprox(T_l_high - T_s_high, T_liq - T_sol; rtol=1e-12)
+        F_high = compute_melt_fraction(
+            1650.0, P_high, 1; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt
+        )
+        @test isapprox(F_high, (1650.0 - T_s_high) / (T_l_high - T_s_high); rtol=1e-12)
 
         # Discrimination guards: non-zero, non-unity, distinct from quadratic
         F_quarter = compute_melt_fraction(1500.0, 0.0, 1; T_sol=T_sol, T_liq=T_liq)
         @test isapprox(F_quarter, 0.25; rtol=1e-12)
         @test abs(F_quarter - 0.25^2) > 0.1 # Distinguishes linear from quadratic
 
-        # Domain error contract
+        # Domain error contract: invalid and non-finite inputs
         @test_throws DomainError compute_melt_fraction(
             -10.0, 0.0, 1; T_sol=T_sol, T_liq=T_liq
+        )
+        @test_throws DomainError compute_melt_fraction(
+            NaN, 0.0, 1; T_sol=T_sol, T_liq=T_liq
+        )
+        @test_throws DomainError compute_melt_fraction(
+            1500.0, NaN, 1; T_sol=T_sol, T_liq=T_liq
+        )
+        @test_throws DomainError compute_melt_fraction(
+            1500.0, 0.0, 1; T_sol=NaN, T_liq=T_liq
+        )
+        @test_throws DomainError compute_melt_fraction(
+            1500.0, 0.0, 1; T_sol=T_sol, T_liq=Inf
         )
         @test_throws DomainError compute_melt_fraction(
             1500.0, 0.0, 1; T_sol=1800.0, T_liq=1400.0
@@ -288,7 +311,24 @@ using TOML
             rtol=1e-12,
         )
 
-        # Domain error contract
+        # Clapeyron shift preserves latent heat buffering at high pressure
+        dpdt = 5.0e-8
+        P_high = 1.0e9 # 1 GPa
+        rhocp_eff_high = rhocp_apparent_silicate(
+            1650.0,
+            P_high,
+            rhocp_base,
+            rho_s,
+            1;
+            T_sol=T_sol,
+            T_liq=T_liq,
+            L_melt=L_melt,
+            active=true,
+            dpdt=dpdt,
+        )
+        @test isapprox(rhocp_eff_high, rhocp_base + expected_spike; rtol=1e-12)
+
+        # Domain error contract: negative and non-finite inputs
         @test_throws DomainError rhocp_apparent_silicate(
             -50.0,
             0.0,
@@ -297,6 +337,50 @@ using TOML
             1;
             T_sol=T_sol,
             T_liq=T_liq,
+            L_melt=L_melt,
+            active=true,
+        )
+        @test_throws DomainError rhocp_apparent_silicate(
+            NaN,
+            0.0,
+            rhocp_base,
+            rho_s,
+            1;
+            T_sol=T_sol,
+            T_liq=T_liq,
+            L_melt=L_melt,
+            active=true,
+        )
+        @test_throws DomainError rhocp_apparent_silicate(
+            1500.0,
+            NaN,
+            rhocp_base,
+            rho_s,
+            1;
+            T_sol=T_sol,
+            T_liq=T_liq,
+            L_melt=L_melt,
+            active=true,
+        )
+        @test_throws DomainError rhocp_apparent_silicate(
+            1500.0,
+            0.0,
+            rhocp_base,
+            rho_s,
+            1;
+            T_sol=NaN,
+            T_liq=T_liq,
+            L_melt=L_melt,
+            active=true,
+        )
+        @test_throws DomainError rhocp_apparent_silicate(
+            1500.0,
+            0.0,
+            rhocp_base,
+            rho_s,
+            1;
+            T_sol=T_sol,
+            T_liq=Inf,
             L_melt=L_melt,
             active=true,
         )
@@ -460,6 +544,13 @@ using TOML
         @test abs(eta_02 - eta_s * exp(+alpha_eta * 0.2)) > 1e18 # Exponent sign guard
         @test eta_02 > 0.0                                       # Positivity
         @test etamin <= eta_02 <= etamax                         # Clamping bounds
+
+        # Domain error contract: non-finite and non-positive inputs
+        @test_throws DomainError compute_melt_weakened_viscosity(eta_s, NaN, 1)
+        @test_throws DomainError compute_melt_weakened_viscosity(eta_s, Inf, 1)
+        @test_throws DomainError compute_melt_weakened_viscosity(NaN, 0.5, 1)
+        @test_throws DomainError compute_melt_weakened_viscosity(0.0, 0.5, 1)
+        @test_throws DomainError compute_melt_weakened_viscosity(-1.0e19, 0.5, 1)
     end
 
     @testset "Marker Properties Setup with Fm" begin
@@ -548,8 +639,9 @@ using TOML
             )
         end
 
-        # Marker 1: T_s = 1400 + 1e-7 * 2e7 = 1402 K -> F_m = (1600 - 1402) / (1800 - 1402)
-        expected_Fm1 = (1600.0 - 1402.0) / (1800.0 - 1402.0)
+        # Marker 1: T_s = 1400 + 1e-7 * 2e7 = 1402 K, T_l = 1800 + 1e-7 * 2e7 = 1802 K
+        # F_m = (1600 - 1402) / (1802 - 1402) = 198 / 400 = 0.495
+        expected_Fm1 = (1600.0 - 1402.0) / (1802.0 - 1402.0)
         @test isapprox(Fm[1], expected_Fm1; rtol=1e-12)
         # Marker 2: Sub-solidus -> F_m = 0
         @test iszero(Fm[2])

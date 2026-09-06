@@ -1674,14 +1674,17 @@ $(SIGNATURES)
 function compute_melt_fraction(
     T::Real, P::Real, tm::Integer; T_sol::Real=1400.0, T_liq::Real=1800.0, dpdt::Real=0.0
 )
-    if T <= 0.0
-        throw(DomainError(T, "Absolute temperature must be positive"))
+    if !isfinite(T) || T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive and finite"))
     end
-    if T_sol >= T_liq
+    if !isfinite(P)
+        throw(DomainError(P, "Pressure must be finite"))
+    end
+    if !isfinite(T_sol) || !isfinite(T_liq) || T_sol >= T_liq
         throw(
             DomainError(
                 (T_sol, T_liq),
-                "Solidus temperature must be strictly less than liquidus temperature",
+                "Solidus temperature must be finite and strictly less than liquidus temperature",
             ),
         )
     end
@@ -1689,12 +1692,21 @@ function compute_melt_fraction(
         return 0.0
     end
     T_s = T_sol + dpdt * max(0.0, P)
+    T_l = T_liq + dpdt * max(0.0, P)
+    if T_s >= T_l
+        throw(
+            DomainError(
+                (T_s, T_l),
+                "Pressure-shifted solidus must be strictly less than shifted liquidus",
+            ),
+        )
+    end
     if T <= T_s
         return 0.0
-    elseif T >= T_liq
+    elseif T >= T_l
         return 1.0
     else
-        return (T - T_s) / (T_liq - T_s)
+        return (T - T_s) / (T_l - T_s)
     end
 end
 
@@ -1730,14 +1742,17 @@ function rhocp_apparent_silicate(
     active::Bool=true,
     dpdt::Real=0.0,
 )
-    if T <= 0.0
-        throw(DomainError(T, "Absolute temperature must be positive"))
+    if !isfinite(T) || T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive and finite"))
     end
-    if T_sol >= T_liq
+    if !isfinite(P)
+        throw(DomainError(P, "Pressure must be finite"))
+    end
+    if !isfinite(T_sol) || !isfinite(T_liq) || T_sol >= T_liq
         throw(
             DomainError(
                 (T_sol, T_liq),
-                "Solidus temperature must be strictly less than liquidus temperature",
+                "Solidus temperature must be finite and strictly less than liquidus temperature",
             ),
         )
     end
@@ -1745,8 +1760,17 @@ function rhocp_apparent_silicate(
         return rhocp_solid
     end
     T_s = T_sol + dpdt * max(0.0, P)
-    if T_s < T < T_liq
-        dFdT = inv(T_liq - T_s)
+    T_l = T_liq + dpdt * max(0.0, P)
+    if T_s >= T_l
+        throw(
+            DomainError(
+                (T_s, T_l),
+                "Pressure-shifted solidus must be strictly less than shifted liquidus",
+            ),
+        )
+    end
+    if T_s < T < T_l
+        dFdT = inv(T_l - T_s)
         return rhocp_solid + rho_solid * L_melt * dFdT
     else
         return rhocp_solid
@@ -1781,6 +1805,12 @@ function compute_melt_weakened_viscosity(
     etamin::Real=1.0e12,
     etamax::Real=1.0e23,
 )
+    if !isfinite(F_m)
+        throw(DomainError(F_m, "Melt fraction must be finite"))
+    end
+    if !isfinite(eta_solid) || eta_solid <= 0.0
+        throw(DomainError(eta_solid, "Solid viscosity must be positive and finite"))
+    end
     if tm >= 3
         return clamp(eta_solid, etamin, etamax)
     end
@@ -1817,6 +1847,7 @@ smoothly in logarithmic space across a melt fraction transition window.
 - `T_surface`: Reference surface/ambient temperature [K]
 
 # Keyword Arguments
+- `turb_exponent`: Power exponent for viscosity ratio (default 1/3 from Solomatov 2007)
 - `F_start`: Lower boundary of transition window [0, 1] (default 0.30)
 - `F_end`: Upper boundary of transition window [0, 1] (default 0.50)
 - `dT_min`: Temperature contrast scale [K] (default 10.0)
@@ -1833,14 +1864,38 @@ function regularized_soft_turbulence_conductivity(
     F_m::Real,
     T_marker::Real,
     T_surface::Real;
+    turb_exponent::Real=1.0 / 3.0,
     F_start::Real=0.30,
     F_end::Real=0.50,
     dT_min::Real=10.0,
     k_floor::Real=1.0e-3,
     k_cutoff::Real=1.0e6,
 )
-    if k_cond <= 0.0 || eta_num <= 0.0 || eta_fluid <= 0.0
-        throw(DomainError((k_cond, eta_num, eta_fluid), "k_cond and viscosities must be positive"))
+    if !isfinite(k_cond) ||
+        k_cond <= 0.0 ||
+        !isfinite(eta_num) ||
+        eta_num <= 0.0 ||
+        !isfinite(eta_fluid) ||
+        eta_fluid <= 0.0
+        throw(
+            DomainError(
+                (k_cond, eta_num, eta_fluid),
+                "k_cond and viscosities must be positive and finite",
+            ),
+        )
+    end
+    if !isfinite(F_m) || !isfinite(T_marker) || !isfinite(T_surface)
+        throw(
+            DomainError(
+                (F_m, T_marker, T_surface), "Melt fraction and temperatures must be finite"
+            ),
+        )
+    end
+    if F_end <= F_start
+        throw(DomainError((F_start, F_end), "F_end must be strictly greater than F_start"))
+    end
+    if !isfinite(turb_exponent) || turb_exponent <= 0.0
+        throw(DomainError(turb_exponent, "Turbulence exponent must be positive and finite"))
     end
 
     # Melt fraction weight factor using cubic smoothstep
@@ -1853,14 +1908,14 @@ function regularized_soft_turbulence_conductivity(
 
     w_total = w_F * w_T
     if w_total <= 0.0
-        return clamp(k_cond, k_floor, k_cutoff)
+        return max(k_cond, clamp(k_cond, k_floor, k_cutoff))
     end
 
     # Target turbulent conductivity from Solomatov (2007) scaling reduction
-    k_turb = clamp(k_cond * sqrt(eta_num / eta_fluid), k_floor, k_cutoff)
+    k_turb_raw = k_cond * (eta_num / eta_fluid)^turb_exponent
+    k_turb = max(k_cond, clamp(k_turb_raw, k_floor, k_cutoff))
 
     # Geometric blend in logarithmic space
     log_k = (1.0 - w_total) * log10(k_cond) + w_total * log10(k_turb)
-    return clamp(10.0^log_k, k_floor, k_cutoff)
+    return max(k_cond, clamp(10.0^log_k, k_floor, k_cutoff))
 end
-

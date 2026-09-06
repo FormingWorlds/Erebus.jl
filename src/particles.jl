@@ -352,10 +352,10 @@ function compute_marker_properties!(
     eta_melt_val::Real=10.0,
     dpdt_clapeyron_val::Real=0.0,
     soft_turbulence::Bool=false,
+    turb_exponent_val::Real=1.0 / 3.0,
     eta_fluid_silicate_val::Real=100.0,
     F_turb_start_val::Real=0.30,
     F_turb_end_val::Real=0.50,
-    F_turb_crit_val::Real=0.40,
     dT_turb_min_val::Real=10.0,
     T_surface_ref_val::Real=300.0,
     k_turb_cutoff_val::Real=1.0e6,
@@ -449,10 +449,16 @@ function compute_marker_properties!(
         )
         if melting_active && soft_turbulence
             eta_fluid = if F_melt <= F_turb_start_val
-                etasolidcur_raw
+                etasolidcur
             else
-                xi_mush = clamp((F_melt - F_turb_start_val) / (F_turb_end_val - F_turb_start_val), 0.0, 1.0)
-                log_eta = (1.0 - xi_mush) * log(etasolidcur_raw) + xi_mush * log(eta_fluid_silicate_val)
+                xi_mush = clamp(
+                    (F_melt - F_turb_start_val) / (F_turb_end_val - F_turb_start_val),
+                    0.0,
+                    1.0,
+                )
+                log_eta =
+                    (1.0 - xi_mush) * log(etasolidcur) +
+                    xi_mush * log(eta_fluid_silicate_val)
                 exp(log_eta)
             end
             ktotalm[m] = regularized_soft_turbulence_conductivity(
@@ -462,6 +468,7 @@ function compute_marker_properties!(
                 F_melt,
                 tkm[m],
                 T_surface_ref_val;
+                turb_exponent=turb_exponent_val,
                 F_start=F_turb_start_val,
                 F_end=F_turb_end_val,
                 dT_min=dT_turb_min_val,
