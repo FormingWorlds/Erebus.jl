@@ -235,11 +235,12 @@
 
     @testset "setup_marker_properties() & helpers: vector allocation and types" begin
         n_markers = 500
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = Erebus.setup_marker_properties(
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = Erebus.setup_marker_properties(
             n_markers
         )
 
-        for v in [xm, ym, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0]
+        for v in
+            [xm, ym, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm]
             @test length(v) == n_markers
             @test eltype(v) == Float64
             @test all(iszero, v)
@@ -264,7 +265,7 @@
 
     @testset "define_markers!() & compute_marker_properties!(): planetary zoning and bounds" begin
         marknum = start_marknum
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = Erebus.setup_marker_properties(
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = Erebus.setup_marker_properties(
             marknum
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = Erebus.setup_marker_properties_helpers(
@@ -415,7 +416,7 @@
 
     @testset "Config-Driven Marker Initialization (phim0_val and XWsolidm_init_val)" begin
         marknum = start_marknum
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = Erebus.setup_marker_properties(
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = Erebus.setup_marker_properties(
             marknum
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = Erebus.setup_marker_properties_helpers(

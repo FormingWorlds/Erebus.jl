@@ -182,3 +182,50 @@ Parameters controlling protoplanetary disk ambient temperature evolution and ast
 | `p_m_t` | `Float64` | `0.40` | - | Stellar mass scaling exponent for peak heating time $p_{M,t}$ | $\ge 0$ |
 | `p_m_visc_decay` | `Float64` | `0.30` | - | Stellar mass scaling exponent for viscous dissipation time $p_{M,\text{visc,decay}}$ | $\ge 0$ |
 
+---
+
+## `[reaction]`
+
+Parameters controlling hydrothermal water-rock hydration and dehydration reactions.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `true` | - | Enable two-way hydrothermal reaction coupling | `true` / `false` |
+| `hydration_active` | `Bool` | `true` | - | Enable serpentine hydration reaction pathway | `true` / `false` |
+| `dehydration_active` | `Bool` | `true` | - | Enable serpentine dehydration reaction pathway | `true` / `false` |
+| `hydration_mode` | `Int` | `1` | - | Hydration kinetics formulation mode | `1` |
+| `dehydration_mode` | `Int` | `2` | - | Dehydration kinetics formulation mode | `2` |
+| `dtreaction_hydration` | `Float64` | `1.0e10` | s | Timescale for serpentine hydration kinetics | $> 0$ |
+| `dtreaction_dehydration` | `Float64` | `1.0e8` | s | Timescale for serpentine dehydration kinetics | $> 0$ |
+| `delta_H` | `Float64` | `40000.0` | J/mol | Enthalpy of reaction | $> 0$ |
+| `delta_S` | `Float64` | `60.0` | J/(mol K) | Entropy of reaction | $> 0$ |
+| `A_I` | `Float64` | `1.0e-11` | $\text{s}^{-1}$ | Kinetic rate pre-factor | $> 0$ |
+| `b_I` | `Float64` | `2.5e-4` | $1/\text{K}$ | Temperature sensitivity coefficient | $> 0$ |
+| `c_I` | `Float64` | `543.0` | K | Equilibrium temperature parameter | $> 0$ |
+| `Sxo_B` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction scale pre-factor | $> 0$ |
+| `Tscl_B` | `Float64` | `10.0` | K | Temperature scale factor | $> 0$ |
+| `To_B` | `Float64` | `293.0` | K | Reference temperature | $> 0$ |
+| `alpha_relaxation` | `Float64` | `0.5` | - | Reaction rate under-relaxation factor | $\in (0, 1]$ |
+| `pfcoeff` | `Float64` | `0.5` | - | Fluid pressure relaxation coefficient | $\in (0, 1]$ |
+| `pferrmax` | `Float64` | `1.0e5` | Pa | Maximum fluid pressure iteration residual | $> 0$ |
+| `p_cavitation` | `Float64` | `1.0e7` | Pa | Cavitation pressure limit | $> 0$ |
+
+---
+
+## `[melting]`
+
+Parameters controlling silicate rock melting, latent heat buffering, and melt-weakened rheology.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable silicate rock melting and magma rheology | `true` / `false` |
+| `T_solidus` | `SVector{3}` | `[1400.0, 1400.0, NaN]` | K | Material solidus temperatures | All $> 0$ or `NaN` |
+| `T_liquidus` | `SVector{3}` | `[1800.0, 1800.0, NaN]` | K | Material liquidus temperatures | $> T_{\text{solidus}}$ or `NaN` |
+| `L_melt` | `Float64` | `4.0e5` | J/kg | Latent heat of silicate melting | $> 0$ |
+| `rho_melt` | `Float64` | `2800.0` | $\text{kg/m}^3$ | Molten silicate magma density | $> 0$ |
+| `alpha_eta` | `Float64` | `28.0` | - | Melt weakening exponential coefficient | $\ge 0$ |
+| `phi_crit` | `Float64` | `0.4` | - | Critical melt fraction for crystal suspension transition | $\in (0, 1)$ |
+| `eta_melt` | `Float64` | `10.0` | Pa s | Dynamic viscosity of pure silicate melt | $> 0$ |
+| `dpdt_clapeyron` | `Float64` | `0.0` | Pa/K | Clapeyron slope for pressure-dependent solidus/liquidus | $\ge 0$ |
+| `latent_heat_mode` | `Symbol` | `:apparent_cp` | - | Latent heat formulation mode | `:apparent_cp` |
+

@@ -148,8 +148,21 @@ _mean(x) = sum(x) / length(x)
         c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
         marknum = 100
         props = setup_marker_properties(marknum, c17)
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) =
-            props
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+        ) = props
 
         tm .= 1
         xm .= 5000.0
@@ -268,8 +281,21 @@ _mean(x) = sum(x) / length(x)
         c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
         marknum = 100
         props = setup_marker_properties(marknum, c17)
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) =
-            props
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+        ) = props
 
         tm .= 1
         xm .= 5000.0
@@ -406,8 +432,21 @@ _mean(x) = sum(x) / length(x)
         c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
         marknum = 10
         props = setup_marker_properties(marknum, c17)
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) =
-            props
+        (
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+        ) = props
 
         tm .= 1
         xm .= 5000.0

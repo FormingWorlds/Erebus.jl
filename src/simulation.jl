@@ -448,6 +448,15 @@ function simulation_loop(
     pferrmax_val = cfg.reaction.pferrmax
     dtr_hyd_val = cfg.reaction.dtreaction_hydration
     dtr_deh_val = cfg.reaction.dtreaction_dehydration
+    melting_active_val = cfg.melting.active
+    T_solidus_val = cfg.melting.T_solidus
+    T_liquidus_val = cfg.melting.T_liquidus
+    L_melt_val = cfg.melting.L_melt
+    rho_melt_val = cfg.melting.rho_melt
+    alpha_eta_val = cfg.melting.alpha_eta
+    phi_crit_val = cfg.melting.phi_crit
+    eta_melt_val = cfg.melting.eta_melt
+    dpdt_clapeyron_val = cfg.melting.dpdt_clapeyron
 
     nthreads = Threads.nthreads()
 
@@ -562,7 +571,7 @@ function simulation_loop(
             @warn "Restart checkpoint timestep ($(ckpt["timestep"])) >= target n_steps ($n_steps_val). No timesteps will be executed."
         end
 
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
             marknum, coords
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
@@ -656,7 +665,7 @@ function simulation_loop(
         XWsolidm .= XWsolidm0
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = setup_marker_properties(
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
             marknum, coords
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
@@ -959,6 +968,17 @@ function simulation_loop(
                         fluid_viscosity_Ea=fluid_viscosity_Ea_val,
                         fluid_viscosity_T0=fluid_viscosity_T0_val,
                         fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+                        pm=pfm0,
+                        Fm=Fm,
+                        melting_active=melting_active_val,
+                        T_solidus_val=T_solidus_val,
+                        T_liquidus_val=T_liquidus_val,
+                        L_melt_val=L_melt_val,
+                        rho_melt_val=rho_melt_val,
+                        alpha_eta_val=alpha_eta_val,
+                        phi_crit_val=phi_crit_val,
+                        eta_melt_val=eta_melt_val,
+                        dpdt_clapeyron_val=dpdt_clapeyron_val,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1101,6 +1121,17 @@ function simulation_loop(
                     fluid_viscosity_Ea=fluid_viscosity_Ea_val,
                     fluid_viscosity_T0=fluid_viscosity_T0_val,
                     fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+                    pm=pfm0,
+                    Fm=Fm,
+                    melting_active=melting_active_val,
+                    T_solidus_val=T_solidus_val,
+                    T_liquidus_val=T_liquidus_val,
+                    L_melt_val=L_melt_val,
+                    rho_melt_val=rho_melt_val,
+                    alpha_eta_val=alpha_eta_val,
+                    phi_crit_val=phi_crit_val,
+                    eta_melt_val=eta_melt_val,
+                    dpdt_clapeyron_val=dpdt_clapeyron_val,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(
@@ -1674,7 +1705,21 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         @threads :static for m in 1:1:marknum
             update_marker_viscosity!(
-                m, xm, ym, tm, tkm, etatotalm, etavpm, YNY, YNY_inv_ETA; coords=coords
+                m,
+                xm,
+                ym,
+                tm,
+                tkm,
+                etatotalm,
+                etavpm,
+                YNY,
+                YNY_inv_ETA;
+                coords=coords,
+                Fm=Fm,
+                melting_active=melting_active_val,
+                alpha_eta_val=alpha_eta_val,
+                phi_crit_val=phi_crit_val,
+                eta_melt_val=eta_melt_val,
             )
         end
 
@@ -1833,6 +1878,7 @@ function simulation_loop(
             etafluidcur_inv_kphim,
             mdis,
             mnum;
+            Fm=Fm,
             randomized=random_markers,
             coords=coords,
         )

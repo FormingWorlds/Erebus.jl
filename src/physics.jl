@@ -1654,3 +1654,148 @@ function compute_spherical_metric_heat_source!(
     end
     return Q_metric
 end
+
+"""
+Compute silicate partial melt fraction based on temperature, pressure, and rock type.
+
+$(SIGNATURES)
+
+# Details
+- `T`: marker temperature [K]
+- `P`: lithostatic or total pressure [Pa]
+- `tm`: marker phase material type (1: core/mantle, 2: crust, 3: air)
+- `T_sol`: solidus temperature [K]
+- `T_liq`: liquidus temperature [K]
+- `dpdt`: Clapeyron slope dT_sol/dP [K/Pa]
+
+# Returns
+- `F_m`: silicate melt mass/volume fraction in [0, 1]
+"""
+function compute_melt_fraction(
+    T::Real, P::Real, tm::Integer; T_sol::Real=1400.0, T_liq::Real=1800.0, dpdt::Real=0.0
+)
+    if T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive"))
+    end
+    if T_sol >= T_liq
+        throw(
+            DomainError(
+                (T_sol, T_liq),
+                "Solidus temperature must be strictly less than liquidus temperature",
+            ),
+        )
+    end
+    if tm >= 3
+        return 0.0
+    end
+    T_s = T_sol + dpdt * max(0.0, P)
+    if T <= T_s
+        return 0.0
+    elseif T >= T_liq
+        return 1.0
+    else
+        return (T - T_s) / (T_liq - T_s)
+    end
+end
+
+"""
+Compute apparent volumetric heat capacity of silicate rock including latent heat of melting.
+
+$(SIGNATURES)
+
+# Details
+- `T`: marker temperature [K]
+- `P`: marker pressure [Pa]
+- `rhocp_solid`: sensible solid volumetric heat capacity [J/(m^3 K)]
+- `rho_solid`: solid density [kg/m^3]
+- `tm`: marker phase material type (1: core/mantle, 2: crust, 3: air)
+- `T_sol`: solidus temperature [K]
+- `T_liq`: liquidus temperature [K]
+- `L_melt`: latent heat of silicate melting [J/kg]
+- `active`: boolean flag to enable latent heat addition
+- `dpdt`: Clapeyron slope dT_sol/dP [K/Pa]
+
+# Returns
+- `rhocp_eff`: effective volumetric heat capacity [J/(m^3 K)]
+"""
+function rhocp_apparent_silicate(
+    T::Real,
+    P::Real,
+    rhocp_solid::Real,
+    rho_solid::Real,
+    tm::Integer;
+    T_sol::Real=1400.0,
+    T_liq::Real=1800.0,
+    L_melt::Real=4.0e5,
+    active::Bool=true,
+    dpdt::Real=0.0,
+)
+    if T <= 0.0
+        throw(DomainError(T, "Absolute temperature must be positive"))
+    end
+    if T_sol >= T_liq
+        throw(
+            DomainError(
+                (T_sol, T_liq),
+                "Solidus temperature must be strictly less than liquidus temperature",
+            ),
+        )
+    end
+    if !active || tm >= 3
+        return rhocp_solid
+    end
+    T_s = T_sol + dpdt * max(0.0, P)
+    if T_s < T < T_liq
+        dFdT = inv(T_liq - T_s)
+        return rhocp_solid + rho_solid * L_melt * dFdT
+    else
+        return rhocp_solid
+    end
+end
+
+"""
+Compute melt-weakened matrix viscosity and suspension transition.
+
+$(SIGNATURES)
+
+# Details
+- `eta_solid`: solid rock matrix viscosity [Pa s]
+- `F_m`: silicate melt fraction in [0, 1]
+- `tm`: marker phase material type (1: core/mantle, 2: crust, 3: air)
+- `alpha_eta`: melt weakening exponent (Gerya 2019 eq 16.67)
+- `phi_crit`: rheologically critical melt fraction for disaggregation
+- `eta_melt`: pure liquid melt viscosity limit [Pa s]
+- `etamin`: lower viscosity clamp [Pa s]
+- `etamax`: upper viscosity clamp [Pa s]
+
+# Returns
+- `eta_eff`: effective shear viscosity [Pa s]
+"""
+function compute_melt_weakened_viscosity(
+    eta_solid::Real,
+    F_m::Real,
+    tm::Integer;
+    alpha_eta::Real=28.0,
+    phi_crit::Real=0.4,
+    eta_melt::Real=10.0,
+    etamin::Real=1.0e12,
+    etamax::Real=1.0e23,
+)
+    if tm >= 3
+        return clamp(eta_solid, etamin, etamax)
+    end
+    F_clamped = clamp(F_m, 0.0, 1.0)
+    if iszero(F_clamped)
+        return clamp(eta_solid, etamin, etamax)
+    elseif F_clamped < phi_crit
+        eta_weak = eta_solid * exp(-alpha_eta * F_clamped)
+        return clamp(eta_weak, etamin, etamax)
+    else
+        # Critical disaggregation into magma ocean suspension
+        eta_at_crit = eta_solid * exp(-alpha_eta * phi_crit)
+        frac = (F_clamped - phi_crit) / (1.0 - phi_crit)
+        log_eta = (1.0 - frac) * log(eta_at_crit) + frac * log(eta_melt)
+        eta_susp = exp(log_eta)
+        return clamp(eta_susp, etamin, etamax)
+    end
+end
