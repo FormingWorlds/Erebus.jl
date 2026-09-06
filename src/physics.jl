@@ -1214,7 +1214,7 @@ at extreme temperatures.
     - rho0: reference fluid density at T0 [kg/m³]
     - alpha: fluid volumetric thermal expansion coefficient α_f [1/K]
     - T0: reference temperature [K]
-    - thermal_buoyancy: toggle thermal expansion (default: true)
+    - thermal_buoyancy: enable or disable thermal expansion (default: true)
 
 # Returns
 
@@ -1786,7 +1786,7 @@ $(SIGNATURES)
 - `eta_solid`: solid rock matrix viscosity [Pa s]
 - `F_m`: silicate melt fraction in [0, 1]
 - `tm`: marker phase material type (1: core/mantle, 2: crust, 3: air)
-- `alpha_eta`: melt weakening exponent (Gerya 2019 eq 16.67)
+- `alpha_eta`: melt weakening exponent (Costa et al. 2009; Gerya 2019 Section 16.6.2)
 - `phi_crit`: rheologically critical melt fraction for disaggregation
 - `eta_melt`: pure liquid melt viscosity limit [Pa s]
 - `etamin`: lower viscosity clamp [Pa s]

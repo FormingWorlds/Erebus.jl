@@ -289,7 +289,39 @@ using JLD2
             F_end=0.50,
             dT_min=10.0,
         )
-        @test isapprox(k_iso, k_cond; rtol=1e-12)
+        # Asymptotic limit 2b: Partial thermal contrast (0 < dT < dT_min)
+        # Weight w_T = (dT / dT_min)^2
+        k_partial_dt = regularized_soft_turbulence_conductivity(
+            k_cond,
+            eta_num,
+            eta_fluid,
+            1.0,
+            305.0,
+            300.0;
+            turb_exponent=1.0 / 3.0,
+            F_start=0.30,
+            F_end=0.50,
+            dT_min=10.0,
+        )
+        # w_F = 1.0, w_T = (5/10)^2 = 0.25, w = 0.25
+        k_expected_partial = 10.0^(0.75 * log10(k_cond) + 0.25 * log10(k_turb_expected))
+        @test isapprox(k_partial_dt, k_expected_partial; rtol=1e-10)
+
+        # Test at dT = 2 K (w_T = 0.04)
+        k_partial_dt2 = regularized_soft_turbulence_conductivity(
+            k_cond,
+            eta_num,
+            eta_fluid,
+            1.0,
+            302.0,
+            300.0;
+            turb_exponent=1.0 / 3.0,
+            F_start=0.30,
+            F_end=0.50,
+            dT_min=10.0,
+        )
+        k_expected_partial2 = 10.0^(0.96 * log10(k_cond) + 0.04 * log10(k_turb_expected))
+        @test isapprox(k_partial_dt2, k_expected_partial2; rtol=1e-10)
 
         # Asymptotic limit 3: Fully molten (F_m >= F_turb_end) and large dT
         # Weight w = 1.0, so should return k_turb_expected exactly

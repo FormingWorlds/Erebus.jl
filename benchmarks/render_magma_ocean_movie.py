@@ -101,7 +101,7 @@ def render_single_frame(task):
     k_2d[mask_outside] = np.nan
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.0), dpi=120, constrained_layout=True)
-    fig.suptitle(f"Erebus 2D Planetesimal Magma Ocean Benchmark (128x128)  |  Time = {t_kyr:5.1f} kyr",
+    fig.suptitle(f"Erebus Planetesimal Magma Ocean Benchmark (1D Revolved, 128 Cells)  |  Time = {t_kyr:5.1f} kyr",
                  fontsize=14, fontweight='bold', color=NEUTRALS['graphite'])
 
     def format_ax(ax, title, has_ylabel=True):
@@ -207,7 +207,7 @@ def generate_summary_figure():
     ax_a.contour(X, Y, T_15_2d, levels=[1400.0, 1800.0], colors=['white', STRATA['gold']], linewidths=1.2, linestyles=['--', ':'])
     ax_a.add_patch(Circle((0.0, 0.0), R_PLANET_KM, fill=False, edgecolor=NEUTRALS['graphite'], lw=1.2))
     ax_a.set_aspect('equal')
-    ax_a.set_title(r'2D Thermal Field at $t = 15$ kyr', fontsize=12, fontweight='bold')
+    ax_a.set_title(r'Revolved Thermal Field at $t = 15$ kyr', fontsize=12, fontweight='bold')
     ax_a.set_xlabel('x [km]')
     ax_a.set_ylabel('y [km]')
     fig.colorbar(cf_a, ax=ax_a, fraction=0.046, pad=0.04, label='Temperature [K]')
@@ -349,23 +349,21 @@ def generate_convergence_figure():
     ax2.grid(True)
     ax2.legend(loc='lower left', fontsize=8.5)
 
-    # Panel (c): Convergence Error vs Cell Width Delta r
+    # Panel (c): Core Temperature vs Grid Resolution
     ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    t_256_core = res_256["snapshot_T"]["15000.0"][0]
-    dr_vals = [50.0 / 32, 50.0 / 64, 50.0 / 128]
-    err_vals = [
-        abs(res_32["snapshot_T"]["15000.0"][0] - t_256_core) / t_256_core,
-        abs(res_64["snapshot_T"]["15000.0"][0] - t_256_core) / t_256_core,
-        abs(res_128["snapshot_T"]["15000.0"][0] - t_256_core) / t_256_core,
-    ]
-    ax3.loglog(dr_vals, err_vals, 'o-', color=STRATA['magma'], linewidth=2.2, markersize=7, label=r'Core $T$ relative error vs $N_r = 256$')
-    dr_ref = np.array([0.3, 1.6])
-    ax3.loglog(dr_ref, err_vals[-1] * (dr_ref / dr_vals[-1])**2, 'k--', linewidth=1.5, label=r'Second-order $\mathcal{O}(\Delta r^2)$ slope')
+    dr_vals = np.array([50.0 / 32, 50.0 / 64, 50.0 / 128, 50.0 / 256])
+    t_cores = np.array([
+        res_32["snapshot_T"]["15000.0"][0],
+        res_64["snapshot_T"]["15000.0"][0],
+        res_128["snapshot_T"]["15000.0"][0],
+        res_256["snapshot_T"]["15000.0"][0],
+    ])
+    ax3.plot(dr_vals, t_cores, 'o-', color=STRATA['magma'], linewidth=2.2, markersize=7, label=r'Core $T$ at 15 kyr [K]')
     ax3.set_xlabel(r'Grid Cell Size $\Delta r$ [km]')
-    ax3.set_ylabel('Relative Error [-]')
-    ax3.set_title('Numerical Order of Convergence', fontsize=12, fontweight='bold')
-    ax3.grid(True, which="both")
+    ax3.set_ylabel(r'Central Temperature $T_\mathrm{core}$ [K]')
+    ax3.set_title('Grid Resolution Convergence', fontsize=12, fontweight='bold')
+    ax3.grid(True)
     ax3.legend(loc='lower right', fontsize=8.5)
 
     conv_png_assets = os.path.join(ASSETS_DIR, "magma_ocean_grid_convergence.png")
@@ -418,17 +416,17 @@ def generate_regularization_figure():
     ax2.grid(True)
     ax2.legend(loc='upper right', fontsize=8.5)
 
-    # Panel (c): Surface temperature difference gating
+    # Panel (c): Surface temperature difference weighting
     ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Gating factor $w_T = \mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)$')
+    ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Weighting factor $w_T = [\mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)]^2$')
     ax3.axvline(10.0, color=STRATA['amber'], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
     ax3.axhspan(0, 1, color=STRATA['cobalt'], alpha=0.08)
     ax3.set_xlim(0.0, 30.0)
     ax3.set_ylim(-0.05, 1.05)
     ax3.set_xlabel(r'Temperature Difference $\Delta T = T - T_\mathrm{surface}$ [K]')
-    ax3.set_ylabel(r'Thermal Boundary Gate $w_T$ [-]')
-    ax3.set_title('Surface Singularity Guard', fontsize=12, fontweight='bold')
+    ax3.set_ylabel(r'Thermal Boundary Weight $w_T$ [-]')
+    ax3.set_title('Surface Thermal Weighting', fontsize=12, fontweight='bold')
     ax3.grid(True)
     ax3.legend(loc='lower right', fontsize=8.5)
 

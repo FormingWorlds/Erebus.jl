@@ -59,7 +59,7 @@ function setup_marker_properties(
     # previous marker melt molar fraction
     XWsolidm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
     # marker silicate melt fraction Fm [-]
-    Fm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    Fm = zeros(marknum)
     return (
         xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm
     )

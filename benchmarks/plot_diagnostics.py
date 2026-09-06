@@ -120,15 +120,15 @@ ax2.legend(loc='upper right', fontsize=8.5)
 ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
-ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Gating factor $w_T = \mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)$')
+ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Weighting factor $w_T = [\mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)]^2$')
 ax3.axvline(10.0, color=STRATA['amber'], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
 ax3.axhspan(0, 1, color=STRATA['cobalt'], alpha=0.08)
 
 ax3.set_xlim(0.0, 30.0)
 ax3.set_ylim(-0.05, 1.05)
 ax3.set_xlabel(r'Temperature Difference $\Delta T = T - T_\mathrm{surface}$ [K]', fontsize=11)
-ax3.set_ylabel(r'Thermal Boundary Gate $w_T$ [-]', fontsize=11)
-ax3.set_title('Surface Boundary Singularity Gating', fontsize=12, fontweight='bold', pad=10)
+ax3.set_ylabel(r'Thermal Boundary Weight $w_T$ [-]', fontsize=11)
+ax3.set_title('Surface Boundary Weighting', fontsize=12, fontweight='bold', pad=10)
 ax3.grid(True)
 ax3.legend(loc='lower right', fontsize=8.5)
 

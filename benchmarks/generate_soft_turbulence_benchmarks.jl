@@ -70,7 +70,7 @@ for eta_fl in eta_fluids
 end
 
 dT_vals = range(0.0, 30.0; length=200)
-w_T_vals = [clamp(dt / 10.0, 0.0, 1.0) for dt in dT_vals]
+w_T_vals = [clamp(dt / 10.0, 0.0, 1.0)^2 for dt in dT_vals]
 
 # -----------------------------------------------------------------------------
 # Part 2: 1D Implicit Planetesimal Magma Ocean Solidification Benchmark
