@@ -35,7 +35,9 @@ function export_reaction_data()
     stride = length(ARGS) >= 2 ? parse(Int, ARGS[2]) : max(1, div(length(files), 250))
     selected_indices = unique(vcat(collect(1:stride:length(files)), [length(files)]))
     selected_files = files[selected_indices]
-    println("Processing $(length(selected_files)) checkpoints out of $(length(files)) (stride=$stride)...")
+    println(
+        "Processing $(length(selected_files)) checkpoints out of $(length(files)) (stride=$stride)...",
+    )
 
     # Read geometry once from first file
     local dx, dy, rplanet, xcenter, ycenter, xp, yp, mask
@@ -47,7 +49,7 @@ function export_reaction_data()
         ycenter = f["ycenter"]
         xp = f["xp"]
         yp = f["yp"]
-        mask = [(x - xcenter)^2 + (y - ycenter)^2 <= rplanet^2 for y in yp, x in xp]
+        return mask = [(x - xcenter)^2 + (y - ycenter)^2 <= rplanet^2 for y in yp, x in xp]
     end
 
     mask_count = sum(mask)
@@ -76,7 +78,7 @@ function export_reaction_data()
 
             qx = f["qxD"]
             qy = f["qyD"]
-            qmag = sqrt.(qx.^2 .+ qy.^2)
+            qmag = sqrt.(qx .^ 2 .+ qy .^ 2)
             push!(mean_q, sum(qmag[mask]) / mask_count)
 
             wf = sum(phi[mask]) * dx * dy * rho_f
@@ -85,7 +87,7 @@ function export_reaction_data()
             mass_frac = @. (MH2O * XWS) / (MD + MH2O * XWS)
             rho_s = @. (MD + MH2O * XWS) / ((1.0 - XWS) * VD_s + XWS * VW_s)
             ws = sum(((1.0 .- phi) .* mass_frac .* rho_s)[mask]) * dx * dy
-            push!(water_solid, ws)
+            return push!(water_solid, ws)
         end
     end
 
@@ -99,7 +101,7 @@ function export_reaction_data()
         DQPF_last = haskey(f, "DQPF") ? f["DQPF"] : zeros(size(tk_last))
         DHP_last = haskey(f, "DHP") ? f["DHP"] : zeros(size(tk_last))
         x_coords = collect(f["x"])
-        y_coords = collect(f["y"])
+        return y_coords = collect(f["y"])
     end
 
     out_dict = Dict(
@@ -120,14 +122,14 @@ function export_reaction_data()
         "pf" => pf_last,
         "XWS" => XWS_last,
         "DQPF" => DQPF_last,
-        "DHP" => DHP_last
+        "DHP" => DHP_last,
     )
 
     json_path = joinpath(output_dir, "reaction_plot_data.json")
     open(json_path, "w") do io
-        JSON.print(io, out_dict)
+        return JSON.print(io, out_dict)
     end
-    println("Exported JSON data to $json_path")
+    return println("Exported JSON data to $json_path")
 end
 
 export_reaction_data()

@@ -11,9 +11,12 @@ function export_frames()
 
     files = sort(
         filter(
-            f -> startswith(f, "output_") && endswith(f, ".jld2") && f != "output_00000.jld2",
-            readdir(input_dir)
-        )
+            f ->
+                startswith(f, "output_") &&
+                endswith(f, ".jld2") &&
+                f != "output_00000.jld2",
+            readdir(input_dir),
+        ),
     )
     N = length(files)
     if N == 0
@@ -43,7 +46,7 @@ function export_frames()
             write(io, Float32(xcenter))
             write(io, Float32(ycenter))
             write(io, Float32.(xp))
-            write(io, Float32.(yp))
+            return write(io, Float32.(yp))
         end
     end
 
@@ -62,11 +65,11 @@ function export_frames()
                 write(io, tk)
                 write(io, XWS)
                 write(io, DQPF)
-                write(io, DHP)
+                return write(io, DHP)
             end
         end
     end
-    println("Done exporting $(length(selected)) frames to $out_dir")
+    return println("Done exporting $(length(selected)) frames to $out_dir")
 end
 
 export_frames()
