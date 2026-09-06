@@ -17,8 +17,7 @@ import sys
 
 run_tag = sys.argv[1] if len(sys.argv) > 1 else "128x128"
 out_name = sys.argv[2] if len(sys.argv) > 2 else "hydrothermal_reaction_128"
-
-frame_dir = "/tmp/erebus_movie_frames"
+frame_dir = sys.argv[3] if len(sys.argv) > 3 else "/tmp/erebus_movie_frames"
 png_dir = f"/tmp/erebus_movie_pngs_{out_name}"
 os.makedirs(png_dir, exist_ok=True)
 
@@ -33,8 +32,8 @@ with open(meta_path, "rb") as f:
 rplanet_km = rplanet * 1e-3
 xc_km = xc * 1e-3
 yc_km = yc * 1e-3
-xp_km = np.linspace(x[0]*1e-3, x[-1]*1e-3, nx)
-yp_km = np.linspace(y[0]*1e-3, y[-1]*1e-3, ny)
+xp_km = np.linspace(x[0]*1e-3, x[-1]*1e-3, nx) - xc_km
+yp_km = np.linspace(y[0]*1e-3, y[-1]*1e-3, ny) - yc_km
 Xp, Yp = np.meshgrid(xp_km, yp_km)
 
 def render_frame(fpath):
@@ -50,42 +49,76 @@ def render_frame(fpath):
         DQPF = np.frombuffer(f.read(n_elem * 4), dtype=np.float32).reshape(ny, nx).T
         DHP = np.frombuffer(f.read(n_elem * 4), dtype=np.float32).reshape(ny, nx).T
 
+    # Fixed scales and normalizations
+    t_min, t_max = 170.0, 1200.0
+    t_levels = np.linspace(t_min, t_max, 41)
+    t_norm = matplotlib.colors.Normalize(vmin=t_min, vmax=t_max)
+    t_ticks = [200, 400, 600, 800, 1000, 1200]
+
+    xw_min, xw_max = 0.0, 1.0
+    xw_levels = np.linspace(xw_min, xw_max, 31)
+    xw_norm = matplotlib.colors.Normalize(vmin=xw_min, vmax=xw_max)
+    xw_ticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+    dqpf_limit = 1.0e-14
+    dqpf_levels = np.linspace(-dqpf_limit, dqpf_limit, 41)
+    dqpf_norm = matplotlib.colors.Normalize(vmin=-dqpf_limit, vmax=dqpf_limit)
+    dqpf_ticks = [-1.0e-14, -5.0e-15, 0.0, 5.0e-15, 1.0e-14]
+
     fig, axes = plt.subplots(1, 3, figsize=(16, 5), dpi=150)
     fig.suptitle(f"Erebus 2D Hydrothermal Benchmark ({run_tag})  |  Time = {time_Ma:5.2f} Ma", fontsize=15, fontweight='bold')
 
-    # Panel 1: Temperature
+    def format_movie_ax(ax, title, has_ylabel=True):
+        ax.set_facecolor('white')
+        ax.add_patch(Circle((0.0, 0.0), rplanet_km, fill=False, edgecolor='black', lw=1.2, ls='-'))
+        ax.set_aspect('equal')
+        ax.set_title(title)
+        ax.set_xlabel("x [km]")
+        if has_ylabel:
+            ax.set_ylabel("y [km]")
+        ax.set_xlim(xp_km[0], xp_km[-1])
+        ax.set_ylim(yp_km[0], yp_km[-1])
+
+    # Panel 1: Temperature (viridis: perceptually uniform and colorblind friendly)
     ax = axes[0]
-    cf = ax.contourf(Xp, Yp, tk, levels=35, cmap='inferno', vmin=170, vmax=4300)
-    fig.colorbar(cf, ax=ax, label="Temperature [K]")
-    c = Circle((xc_km, yc_km), rplanet_km, fill=False, edgecolor='cyan', lw=1.5, ls='--')
-    ax.add_patch(c)
-    ax.set_aspect('equal')
-    ax.set_title("Temperature $T$")
-    ax.set_xlabel("x [km]")
-    ax.set_ylabel("y [km]")
+    cf = ax.contourf(Xp, Yp, tk, levels=t_levels, norm=t_norm, cmap='viridis', extend='both')
+    clip_c0 = Circle((0.0, 0.0), rplanet_km, transform=ax.transData)
+    try:
+        cf.set_clip_path(clip_c0)
+    except Exception:
+        for col in cf.collections:
+            col.set_clip_path(clip_c0)
+    cb = fig.colorbar(cf, ax=ax, ticks=t_ticks, label="Temperature [K]", fraction=0.046, pad=0.04)
+    cb.ax.set_ylim(t_min, t_max)
+    format_movie_ax(ax, "Temperature $T$", has_ylabel=True)
 
-    # Panel 2: Hydration extent XW
+    # Panel 2: Hydration extent XW (cividis_r: inverted so hydration is blue)
     ax = axes[1]
-    cf = ax.contourf(Xp, Yp, XWS, levels=30, cmap='YlGnBu', vmin=0.0, vmax=1.0)
-    fig.colorbar(cf, ax=ax, label="Hydration Extent $X_W$")
-    c = Circle((xc_km, yc_km), rplanet_km, fill=False, edgecolor='cyan', lw=1.5, ls='--')
-    ax.add_patch(c)
-    ax.set_aspect('equal')
-    ax.set_title("Hydration Reaction Front ($X_W$)")
-    ax.set_xlabel("x [km]")
+    cf = ax.contourf(Xp, Yp, XWS, levels=xw_levels, norm=xw_norm, cmap='cividis_r', extend='both')
+    clip_c1 = Circle((0.0, 0.0), rplanet_km, transform=ax.transData)
+    try:
+        cf.set_clip_path(clip_c1)
+    except Exception:
+        for col in cf.collections:
+            col.set_clip_path(clip_c1)
+    cb = fig.colorbar(cf, ax=ax, ticks=xw_ticks, label="Hydration Extent $X_W$", fraction=0.046, pad=0.04)
+    cb.ax.set_ylim(xw_min, xw_max)
+    format_movie_ax(ax, "Hydration Reaction Front ($X_W$)", has_ylabel=False)
 
-    # Panel 3: Fluid source term DQPF
+    # Panel 3: Fluid source term DQPF (PuOr_r: diverging colorblind friendly)
     ax = axes[2]
-    q_max = max(1e-12, float(np.percentile(np.abs(DQPF), 99.5)))
-    cf = ax.contourf(Xp, Yp, DQPF, levels=30, cmap='RdBu_r', vmin=-q_max, vmax=q_max)
-    fig.colorbar(cf, ax=ax, label="DQPF [1/s] (Fluid Exchange)")
-    c = Circle((xc_km, yc_km), rplanet_km, fill=False, edgecolor='cyan', lw=1.5, ls='--')
-    ax.add_patch(c)
-    ax.set_aspect('equal')
-    ax.set_title("Fluid Mass Exchange (DQPF)")
-    ax.set_xlabel("x [km]")
+    cf = ax.contourf(Xp, Yp, DQPF, levels=dqpf_levels, norm=dqpf_norm, cmap='PuOr_r', extend='both')
+    clip_c2 = Circle((0.0, 0.0), rplanet_km, transform=ax.transData)
+    try:
+        cf.set_clip_path(clip_c2)
+    except Exception:
+        for col in cf.collections:
+            col.set_clip_path(clip_c2)
+    cb = fig.colorbar(cf, ax=ax, ticks=dqpf_ticks, label="DQPF [1/s] (Fluid Exchange)", fraction=0.046, pad=0.04, format='%.1e')
+    cb.ax.set_ylim(-dqpf_limit, dqpf_limit)
+    format_movie_ax(ax, "Fluid Mass Exchange (DQPF)", has_ylabel=False)
 
-    plt.tight_layout()
+    fig.subplots_adjust(left=0.06, right=0.94, bottom=0.12, top=0.88, wspace=0.35)
     plt.savefig(png_path)
     plt.close(fig)
     return png_path

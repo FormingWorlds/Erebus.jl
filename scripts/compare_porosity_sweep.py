@@ -14,7 +14,7 @@ dirs = [
     ("phi = 0.50", os.path.join(repo_root, "output_sweep_phi50"))
 ]
 
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+colors = ['#0072B2', '#E69F00', '#009E73']  # Okabe-Ito colorblind: Blue, Orange, Bluish Green
 
 fig, axes = plt.subplots(2, 2, figsize=(13, 9), dpi=300)
 
@@ -53,10 +53,14 @@ for idx, (label, dpath) in enumerate(dirs):
 
 # Configure axes
 ax = axes[0, 0]
+ax.axhspan(100.0, 273.15, color='#56B4E9', alpha=0.15, label='Frozen Pore Ice (T < 273 K)')
+ax.axhline(273.15, color='#0072B2', ls='--', lw=1.5, label='Water Ice Melting (273 K)')
+ax.axhline(1416.0, color='#D55E00', ls=':', lw=1.5, label='Rock Solidus (1416 K)')
 ax.set_xlabel("Time [Ma]")
 ax.set_ylabel("Temperature [K]")
+ax.set_ylim(100.0, 1500.0)
 ax.set_title("(a) Thermal Evolution")
-ax.legend(loc="best", frameon=True, fontsize=9)
+ax.legend(loc="best", frameon=True, fontsize=8)
 ax.grid(True, alpha=0.3)
 
 ax = axes[0, 1]
