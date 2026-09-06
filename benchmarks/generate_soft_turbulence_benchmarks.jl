@@ -88,7 +88,9 @@ rho_s = 3300.0        # kg/m^3
 cp_s = 1000.0         # J/(kg*K)
 rho_cp_base = rho_s * cp_s # 3.3e6 J/(m^3*K)
 
-function run_planetesimal_cooling(Nr; soft_turb::Bool=true, t_total_yr=50_000.0, dt_yr=50.0)
+function run_planetesimal_cooling(
+    Nr; soft_turb::Bool=true, t_total_yr=50_000.0, dt_yr=50.0, movie_snapshots::Bool=false
+)
     dr = R_planet / Nr
     r = [(i - 0.5) * dr for i in 1:Nr] # cell centers
     r_face = [i * dr for i in 0:Nr]    # cell faces
@@ -109,8 +111,14 @@ function run_planetesimal_cooling(Nr; soft_turb::Bool=true, t_total_yr=50_000.0,
     times_yr = Float64[]
     T_core_hist = Float64[]
     melt_radius_hist = Float64[]
+    q_surf_hist = Float64[]
 
-    snapshots_t = [0.0, 5000.0, 15000.0, 30000.0, 50000.0]
+    snapshot_times = if movie_snapshots
+        collect(0.0:500.0:t_total_yr)
+    else
+        [0.0, 5000.0, 15000.0, 30000.0, 50000.0]
+    end
+
     snapshot_T = Dict{String,Vector{Float64}}()
     snapshot_Fm = Dict{String,Vector{Float64}}()
     snapshot_k = Dict{String,Vector{Float64}}()
@@ -126,6 +134,8 @@ function run_planetesimal_cooling(Nr; soft_turb::Bool=true, t_total_yr=50_000.0,
         end
     end
     push!(melt_radius_hist, r_melt)
+    push!(q_surf_hist, k_cond * (T[Nr] - T_surf_init) / (dr / 2.0))
+
     snapshot_T["0.0"] = copy(T)
     snapshot_Fm["0.0"] = copy(Fm)
 
@@ -238,10 +248,12 @@ function run_planetesimal_cooling(Nr; soft_turb::Bool=true, t_total_yr=50_000.0,
             end
         end
         push!(melt_radius_hist, r_melt)
+        q_surf = k_face[Nr + 1] * (T[Nr] - T_surf_init) / (dr / 2.0)
+        push!(q_surf_hist, q_surf)
 
-        if snap_idx <= length(snapshots_t) && current_time_yr >= snapshots_t[snap_idx]
-            t_snap = snapshots_t[snap_idx]
-            key = string(t_snap)
+        if snap_idx <= length(snapshot_times) && current_time_yr >= snapshot_times[snap_idx] - 1e-6
+            t_snap = snapshot_times[snap_idx]
+            key = string(round(t_snap; digits=1))
             snapshot_T[key] = copy(T)
             snapshot_Fm[key] = copy(Fm)
             snapshot_k[key] = copy(k_cell)
@@ -254,23 +266,26 @@ function run_planetesimal_cooling(Nr; soft_turb::Bool=true, t_total_yr=50_000.0,
         "times_yr" => times_yr,
         "T_core_hist" => T_core_hist,
         "melt_radius_hist" => melt_radius_hist,
+        "q_surf_hist" => q_surf_hist,
         "snapshot_T" => snapshot_T,
         "snapshot_Fm" => snapshot_Fm,
         "snapshot_k" => snapshot_k,
     )
 end
 
-println("Running Case A: Soft Turbulence OFF (Nr=100)...")
-res_off = run_planetesimal_cooling(100; soft_turb=false, t_total_yr=50_000.0, dt_yr=50.0)
+println("Running Case A: Soft Turbulence OFF (Nr=128)...")
+res_off = run_planetesimal_cooling(128; soft_turb=false, t_total_yr=50_000.0, dt_yr=50.0)
 
-println("Running Case B: Soft Turbulence ON (Nr=100)...")
-res_on = run_planetesimal_cooling(100; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
+println("Running Case B: Soft Turbulence ON (Nr=128, movie frames)...")
+res_on = run_planetesimal_cooling(
+    128; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0, movie_snapshots=true
+)
 
-println("Running Resolution Test: Nr=50...")
-res_grid50 = run_planetesimal_cooling(50; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
-
-println("Running Resolution Test: Nr=200...")
-res_grid200 = run_planetesimal_cooling(200; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
+println("Running Resolution Convergence Tests: Nr in [32, 64, 128, 256]...")
+res_grid32 = run_planetesimal_cooling(32; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
+res_grid64 = run_planetesimal_cooling(64; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
+res_grid128 = res_on
+res_grid256 = run_planetesimal_cooling(256; soft_turb=true, t_total_yr=50_000.0, dt_yr=50.0)
 
 output_dir = normpath(joinpath(@__DIR__, "..", "output_files"))
 mkpath(output_dir)
@@ -285,8 +300,10 @@ all_data = Dict(
     "w_T_vals" => w_T_vals,
     "res_off" => res_off,
     "res_on" => res_on,
-    "res_grid50" => res_grid50,
-    "res_grid200" => res_grid200,
+    "res_grid32" => res_grid32,
+    "res_grid64" => res_grid64,
+    "res_grid128" => res_grid128,
+    "res_grid256" => res_grid256,
 )
 
 open(output_path, "w") do io
