@@ -6,13 +6,20 @@ import os
 import glob
 import struct
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from multiprocessing import Pool
 import subprocess
 
+import sys
+
+run_tag = sys.argv[1] if len(sys.argv) > 1 else "128x128"
+out_name = sys.argv[2] if len(sys.argv) > 2 else "hydrothermal_reaction_128"
+
 frame_dir = "/tmp/erebus_movie_frames"
-png_dir = "/tmp/erebus_movie_pngs"
+png_dir = f"/tmp/erebus_movie_pngs_{out_name}"
 os.makedirs(png_dir, exist_ok=True)
 
 # Read metadata
@@ -33,7 +40,7 @@ Xp, Yp = np.meshgrid(xp_km, yp_km)
 def render_frame(fpath):
     idx_str = os.path.basename(fpath).replace("frame_", "").replace(".bin", "")
     png_path = os.path.join(png_dir, f"frame_{idx_str}.png")
-    
+
     with open(fpath, "rb") as f:
         timesum = struct.unpack("f", f.read(4))[0]
         time_Ma = timesum / (365.25 * 86400 * 1e6)
@@ -44,7 +51,7 @@ def render_frame(fpath):
         DHP = np.frombuffer(f.read(n_elem * 4), dtype=np.float32).reshape(ny, nx).T
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5), dpi=150)
-    fig.suptitle(f"Erebus 2D Hydrothermal Benchmark (128x128)  |  Time = {time_Ma:5.2f} Ma", fontsize=15, fontweight='bold')
+    fig.suptitle(f"Erebus 2D Hydrothermal Benchmark ({run_tag})  |  Time = {time_Ma:5.2f} Ma", fontsize=15, fontweight='bold')
 
     # Panel 1: Temperature
     ax = axes[0]
@@ -93,8 +100,11 @@ if __name__ == '__main__':
 
     # Encode MP4 video with ffmpeg
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    mp4_out = os.path.join(repo_root, "docs", "src", "assets", "hydrothermal_reaction_128.mp4")
-    cmd = [
+    mp4_out = os.path.join(repo_root, "docs", "src", "assets", f"{out_name}.mp4")
+    gif_out = os.path.join(repo_root, "docs", "src", "assets", f"{out_name}.gif")
+    env = os.environ.copy()
+    env["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/Cellar/x265/4.2/lib"
+    cmd_mp4 = [
         "ffmpeg", "-y",
         "-r", "20",
         "-i", os.path.join(png_dir, "frame_%04d.png"),
@@ -103,5 +113,14 @@ if __name__ == '__main__':
         "-pix_fmt", "yuv420p",
         mp4_out
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd_mp4, env=env, check=True)
     print(f"Successfully generated MP4 video: {mp4_out}")
+
+    cmd_gif = [
+        "ffmpeg", "-y",
+        "-i", mp4_out,
+        "-vf", "fps=12,scale=1200:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+        gif_out
+    ]
+    subprocess.run(cmd_gif, env=env, check=True)
+    print(f"Successfully generated GIF: {gif_out}")

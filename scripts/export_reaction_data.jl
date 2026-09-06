@@ -51,10 +51,11 @@ function export_reaction_data()
     end
 
     mask_count = sum(mask)
-    MH2O = 0.01801528
-    MD = 0.031548
+    MH2O = 0.018
+    MD = 0.120
     rho_f = 1000.0
-    rho_s = 3300.0
+    VD_s = MD / 3300.0
+    VW_s = (MD + MH2O) / 2600.0
 
     for (idx, file) in enumerate(selected_files)
         path = joinpath(output_dir, file)
@@ -66,12 +67,12 @@ function export_reaction_data()
             tk = f["tk2"]
             mean_T_val = sum(tk[mask]) / mask_count
             push!(mean_T, mean_T_val)
-            push!(max_T, maximum(tk))
+            push!(max_T, maximum(tk[mask]))
 
             XWS = haskey(f, "XWS") ? f["XWS"] : zeros(size(tk))
             mean_XW_val = sum(XWS[mask]) / mask_count
             push!(mean_XW, mean_XW_val)
-            push!(max_XW, maximum(XWS))
+            push!(max_XW, maximum(XWS[mask]))
 
             qx = f["qxD"]
             qy = f["qyD"]
@@ -82,7 +83,8 @@ function export_reaction_data()
             push!(water_fluid, wf)
 
             mass_frac = @. (MH2O * XWS) / (MD + MH2O * XWS)
-            ws = sum(((1.0 .- phi) .* mass_frac)[mask]) * dx * dy * rho_s
+            rho_s = @. (MD + MH2O * XWS) / ((1.0 - XWS) * VD_s + XWS * VW_s)
+            ws = sum(((1.0 .- phi) .* mass_frac .* rho_s)[mask]) * dx * dy
             push!(water_solid, ws)
         end
     end

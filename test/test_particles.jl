@@ -410,7 +410,56 @@
         @test isapprox(rhof_test[2], 1000.0 * (1.0 - 2.0e-4 * 100.0); rtol=1e-12)
         # Sticky air marker -> density is 1.0
         @test isapprox(rhof_test[3], 1.0; rtol=1e-12)
-    end # testset "define_markers!() & compute_marker_properties!()"
+        @test isapprox(hrtot_test[3], 0.0; atol=1e-12)
+    end
+
+    @testset "Config-Driven Marker Initialization (phim0_val and XWsolidm_init_val)" begin
+        marknum = start_marknum
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0) = Erebus.setup_marker_properties(
+            marknum
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = Erebus.setup_marker_properties_helpers(
+            marknum
+        )
+
+        custom_phim0 = 0.35
+        custom_XW = SVector{3,Float64}([0.0, 0.0, 0.0])
+
+        Erebus.define_markers!(
+            xm,
+            ym,
+            tm,
+            phim,
+            etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            XWsolidm0;
+            randomized=false,
+            rcrust_val=40_000.0,
+            rplanet_val=50_000.0,
+            phim0_val=custom_phim0,
+            XWsolidm_init_val=custom_XW,
+        )
+
+        planet_markers = findall(m -> tm[m] in (1, 2), 1:marknum)
+        @test length(planet_markers) > 100
+        @test isapprox(phim[planet_markers[1]], custom_phim0; atol=1e-12)
+        for m in planet_markers
+            @test isapprox(phim[m], custom_phim0; atol=1e-12)
+            @test isapprox(XWsolidm0[m], 0.0; atol=1e-12)
+        end
+    end
 
     @testset "fix(), fix_distances(), and fix_weights(): bilinear interpolation axioms" begin
         # 1. Coordinate clamping outside domain

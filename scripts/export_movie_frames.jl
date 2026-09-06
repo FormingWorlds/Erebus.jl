@@ -27,22 +27,23 @@ function export_frames()
     println("Exporting $(length(selected)) frames from $N checkpoints...")
 
     # Geometry from first file
+    # Geometry from first file
     jldopen(joinpath(input_dir, selected[1]), "r") do f
-        x = collect(f["x"])
-        y = collect(f["y"])
+        xp = collect(f["xp"])
+        yp = collect(f["yp"])
         rplanet = f["rplanet"]
         xcenter = f["xcenter"]
         ycenter = f["ycenter"]
-        
+
         # Save geometry metadata
         open(joinpath(out_dir, "meta.bin"), "w") do io
-            write(io, Int32(length(x)))
-            write(io, Int32(length(y)))
+            write(io, Int32(length(xp)))
+            write(io, Int32(length(yp)))
             write(io, Float32(rplanet))
             write(io, Float32(xcenter))
             write(io, Float32(ycenter))
-            write(io, Float32.(x))
-            write(io, Float32.(y))
+            write(io, Float32.(xp))
+            write(io, Float32.(yp))
         end
     end
 

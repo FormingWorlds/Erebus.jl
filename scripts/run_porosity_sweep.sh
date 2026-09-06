@@ -7,6 +7,7 @@ julia --project=. -e 'using Erebus; cfg = load_config("configs/hydrothermal_reac
 PID35=$!
 julia --project=. -e 'using Erebus; cfg = load_config("configs/hydrothermal_reaction_sweep_phi50.toml"); Erebus.simulation_loop(cfg)' > /tmp/sweep_phi50.log 2>&1 &
 PID50=$!
+trap 'kill $PID20 $PID35 $PID50 2>/dev/null || true' EXIT
 
 echo "Launched phi=0.20 (PID $PID20), phi=0.35 (PID $PID35), phi=0.50 (PID $PID50)"
 wait $PID20
