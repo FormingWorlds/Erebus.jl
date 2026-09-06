@@ -457,6 +457,15 @@ function simulation_loop(
     phi_crit_val = cfg.melting.phi_crit
     eta_melt_val = cfg.melting.eta_melt
     dpdt_clapeyron_val = cfg.melting.dpdt_clapeyron
+    soft_turbulence_val = cfg.melting.soft_turbulence
+    eta_fluid_silicate_val = cfg.melting.eta_fluid_silicate
+    F_turb_start_val = cfg.melting.F_turb_start
+    F_turb_end_val = cfg.melting.F_turb_end
+    F_turb_crit_val = cfg.melting.F_turb_crit
+    dT_turb_min_val = cfg.melting.dT_turb_min
+    T_surface_ref_val = cfg.melting.T_surface_ref
+    k_turb_cutoff_val = cfg.melting.k_turb_cutoff
+    k_turb_floor_val = cfg.melting.k_turb_floor
 
     nthreads = Threads.nthreads()
 
@@ -979,6 +988,15 @@ function simulation_loop(
                         phi_crit_val=phi_crit_val,
                         eta_melt_val=eta_melt_val,
                         dpdt_clapeyron_val=dpdt_clapeyron_val,
+                        soft_turbulence=soft_turbulence_val,
+                        eta_fluid_silicate_val=eta_fluid_silicate_val,
+                        F_turb_start_val=F_turb_start_val,
+                        F_turb_end_val=F_turb_end_val,
+                        F_turb_crit_val=F_turb_crit_val,
+                        dT_turb_min_val=dT_turb_min_val,
+                        T_surface_ref_val=T_surface_ref_val,
+                        k_turb_cutoff_val=k_turb_cutoff_val,
+                        k_turb_floor_val=k_turb_floor_val,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1132,6 +1150,15 @@ function simulation_loop(
                     phi_crit_val=phi_crit_val,
                     eta_melt_val=eta_melt_val,
                     dpdt_clapeyron_val=dpdt_clapeyron_val,
+                    soft_turbulence=soft_turbulence_val,
+                    eta_fluid_silicate_val=eta_fluid_silicate_val,
+                    F_turb_start_val=F_turb_start_val,
+                    F_turb_end_val=F_turb_end_val,
+                    F_turb_crit_val=F_turb_crit_val,
+                    dT_turb_min_val=dT_turb_min_val,
+                    T_surface_ref_val=T_surface_ref_val,
+                    k_turb_cutoff_val=k_turb_cutoff_val,
+                    k_turb_floor_val=k_turb_floor_val,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(

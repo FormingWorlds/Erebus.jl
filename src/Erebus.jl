@@ -37,6 +37,7 @@ export Config,
     compute_melt_fraction,
     rhocp_apparent_silicate,
     compute_melt_weakened_viscosity,
+    regularized_soft_turbulence_conductivity,
     compute_disk_temperature,
     compute_snowline_radius,
     compute_radiation_htc,
@@ -127,7 +128,8 @@ module Physics
         compute_spherical_metric_heat_source!,
         compute_melt_fraction,
         rhocp_apparent_silicate,
-        compute_melt_weakened_viscosity
+        compute_melt_weakened_viscosity,
+        regularized_soft_turbulence_conductivity
     export distance,
         total,
         ktotal,
@@ -160,7 +162,8 @@ module Physics
         compute_spherical_metric_heat_source!,
         compute_melt_fraction,
         rhocp_apparent_silicate,
-        compute_melt_weakened_viscosity
+        compute_melt_weakened_viscosity,
+        regularized_soft_turbulence_conductivity
 end
 
 module Particles

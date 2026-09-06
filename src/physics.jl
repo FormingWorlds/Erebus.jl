@@ -1799,3 +1799,68 @@ function compute_melt_weakened_viscosity(
         return clamp(eta_susp, etamin, etamax)
     end
 end
+
+"""
+Compute regularized effective thermal conductivity from soft turbulence.
+
+$(SIGNATURES)
+
+Blends conductive thermal conductivity and turbulent convective conductivity
+smoothly in logarithmic space across a melt fraction transition window.
+
+# Arguments
+- `k_cond`: Conductive thermal conductivity [W/(m K)]
+- `eta_num`: Numerical shear viscosity used in momentum solver [Pa s]
+- `eta_fluid`: Physical fluid/magma viscosity [Pa s]
+- `F_m`: Silicate melt fraction [0, 1]
+- `T_marker`: Local marker temperature [K]
+- `T_surface`: Reference surface/ambient temperature [K]
+
+# Keyword Arguments
+- `F_start`: Lower boundary of transition window [0, 1] (default 0.30)
+- `F_end`: Upper boundary of transition window [0, 1] (default 0.50)
+- `dT_min`: Temperature contrast scale [K] (default 10.0)
+- `k_floor`: Minimum thermal conductivity [W/(m K)] (default 1.0e-3)
+- `k_cutoff`: Maximum thermal conductivity [W/(m K)] (default 1.0e6)
+
+# Returns
+- `k_eff`: Effective thermal conductivity [W/(m K)]
+"""
+function regularized_soft_turbulence_conductivity(
+    k_cond::Real,
+    eta_num::Real,
+    eta_fluid::Real,
+    F_m::Real,
+    T_marker::Real,
+    T_surface::Real;
+    F_start::Real=0.30,
+    F_end::Real=0.50,
+    dT_min::Real=10.0,
+    k_floor::Real=1.0e-3,
+    k_cutoff::Real=1.0e6,
+)
+    if k_cond <= 0.0 || eta_num <= 0.0 || eta_fluid <= 0.0
+        throw(DomainError((k_cond, eta_num, eta_fluid), "k_cond and viscosities must be positive"))
+    end
+
+    # Melt fraction weight factor using cubic smoothstep
+    xi = clamp((F_m - F_start) / (F_end - F_start), 0.0, 1.0)
+    w_F = xi * xi * (3.0 - 2.0 * xi)
+
+    # Temperature contrast weight factor
+    dT = abs(T_marker - T_surface)
+    w_T = clamp(dT / dT_min, 0.0, 1.0)^2
+
+    w_total = w_F * w_T
+    if w_total <= 0.0
+        return clamp(k_cond, k_floor, k_cutoff)
+    end
+
+    # Target turbulent conductivity from Solomatov (2007) scaling reduction
+    k_turb = clamp(k_cond * sqrt(eta_num / eta_fluid), k_floor, k_cutoff)
+
+    # Geometric blend in logarithmic space
+    log_k = (1.0 - w_total) * log10(k_cond) + w_total * log10(k_turb)
+    return clamp(10.0^log_k, k_floor, k_cutoff)
+end
+

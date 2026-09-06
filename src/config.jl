@@ -276,6 +276,15 @@ Base.@kwdef struct MeltingConfig
     eta_melt::Float64 = 10.0
     dpdt_clapeyron::Float64 = 0.0
     latent_heat_mode::Symbol = :apparent_cp
+    soft_turbulence::Bool = false
+    eta_fluid_silicate::Float64 = 100.0
+    F_turb_start::Float64 = 0.30
+    F_turb_end::Float64 = 0.50
+    F_turb_crit::Float64 = 0.40
+    dT_turb_min::Float64 = 10.0
+    T_surface_ref::Float64 = 300.0
+    k_turb_cutoff::Float64 = 1.0e6
+    k_turb_floor::Float64 = 1.0e-3
 end
 
 """
@@ -683,6 +692,21 @@ function validate_config(cfg::SimulationConfig)
                 "Melting latent_heat_mode must be :apparent_cp, got $(cfg.melting.latent_heat_mode)",
             ),
         )
+
+        if cfg.melting.soft_turbulence
+            (cfg.melting.eta_fluid_silicate > 0.0 && isfinite(cfg.melting.eta_fluid_silicate)) ||
+                throw(ArgumentError("Melting eta_fluid_silicate must be > 0 and finite, got $(cfg.melting.eta_fluid_silicate)"))
+            (0.0 <= cfg.melting.F_turb_start < cfg.melting.F_turb_end <= 1.0) ||
+                throw(ArgumentError("Melting F_turb bounds must satisfy 0 <= F_turb_start < F_turb_end <= 1, got [$(cfg.melting.F_turb_start), $(cfg.melting.F_turb_end)]"))
+            (cfg.melting.F_turb_start <= cfg.melting.F_turb_crit <= cfg.melting.F_turb_end) ||
+                throw(ArgumentError("Melting F_turb_crit must lie in [F_turb_start, F_turb_end], got $(cfg.melting.F_turb_crit)"))
+            (cfg.melting.dT_turb_min > 0.0 && isfinite(cfg.melting.dT_turb_min)) ||
+                throw(ArgumentError("Melting dT_turb_min must be > 0 and finite, got $(cfg.melting.dT_turb_min)"))
+            (cfg.melting.T_surface_ref > 0.0 && isfinite(cfg.melting.T_surface_ref)) ||
+                throw(ArgumentError("Melting T_surface_ref must be > 0 and finite, got $(cfg.melting.T_surface_ref)"))
+            (0.0 < cfg.melting.k_turb_floor < cfg.melting.k_turb_cutoff && isfinite(cfg.melting.k_turb_cutoff)) ||
+                throw(ArgumentError("Melting k_turb bounds must satisfy 0 < k_turb_floor < k_turb_cutoff, got floor=$(cfg.melting.k_turb_floor), cutoff=$(cfg.melting.k_turb_cutoff)"))
+        end
     end
 
     return nothing

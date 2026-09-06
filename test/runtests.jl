@@ -24,5 +24,6 @@ const rgen = MersenneTwister(seed)
     include("test_reaction_pathways.jl")
     include("test_stefan_benchmark.jl")
     include("test_melting.jl")
+    include("test_soft_turbulence.jl")
     include("test_integration.jl")
 end
