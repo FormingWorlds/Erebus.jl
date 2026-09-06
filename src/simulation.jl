@@ -174,6 +174,7 @@ function save_state(
     alphasolidcur,
     alphafluidcur;
     coords::Union{Nothing,GridCoordinates}=nothing,
+    phim0_val=phim0,
 )
     # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -210,7 +211,7 @@ function save_state(
         marker_property_mode,
         timesum,
         marknum,
-        phim0,
+        phim0=phim0_val,
         ratio_al,
         t_half_al,
         dsubgrids,
@@ -495,7 +496,7 @@ function simulation_loop(
         αη,
         tmsolidphase,
         tmfluidphase,
-        phim0,
+        phim0=phim0_val,
         phimin,
         phimax,
         ΔHWD = delta_H_val,
@@ -686,7 +687,8 @@ function simulation_loop(
             ycenter_val=ycenter_val,
             rplanet_val=rplanet_val,
             rcrust_val=rcrust_val,
-
+            XWsolidm_init_val=cfg.materials.XWsolidm_init,
+            phim0_val=phim0_val,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -794,6 +796,7 @@ function simulation_loop(
             alphasolidcur,
             alphafluidcur;
             coords=coords,
+            phim0_val=phim0_val,
         )
     end
 
@@ -1919,7 +1922,7 @@ function simulation_loop(
                 DSXX,
                 DMP,
                 DHP,
-            DQPF,
+                DQPF,
                 XWS,
                 XWsolidm0,
                 xm,
@@ -1945,6 +1948,7 @@ function simulation_loop(
                 alphasolidcur,
                 alphafluidcur;
                 coords=coords,
+                phim0_val=phim0_val,
             )
         end
         # ---------------------------------------------------------------------

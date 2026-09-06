@@ -32,62 +32,78 @@ function export_reaction_data()
     water_solid = Float64[]
     water_fluid = Float64[]
 
-    local last_data
+    stride = length(ARGS) >= 2 ? parse(Int, ARGS[2]) : max(1, div(length(files), 250))
+    selected_indices = unique(vcat(collect(1:stride:length(files)), [length(files)]))
+    selected_files = files[selected_indices]
+    println(
+        "Processing $(length(selected_files)) checkpoints out of $(length(files)) (stride=$stride)...",
+    )
 
-    for (i, file) in enumerate(files)
-        path = joinpath(output_dir, file)
-        data = load_state(path)
-        last_data = data
-        
-        push!(time_Ma, data["timesum"] / (365.25 * 86400 * 1e6))
-        
-        # global water balance approximation
-        dx = data["dx"]
-        dy = data["dy"]
-        phi = data["PHI"]
-        mask = [(x - data["xcenter"])^2 + (y - data["ycenter"])^2 <= data["rplanet"]^2 for y in data["yp"], x in data["xp"]]
-        
-        tk = data["tk2"]
-        mean_T_val = sum(tk[mask]) / sum(mask)
-        push!(mean_T, mean_T_val)
-        
-        # Max temperature
-        push!(max_T, maximum(tk))
-        
-        XWS = haskey(data, "XWS") ? data["XWS"] : zeros(size(tk))
-        # Mean XW
-        mean_XW_val = sum(XWS[mask]) / sum(mask)
-        push!(mean_XW, mean_XW_val)
-        push!(max_XW, maximum(XWS))
-        
-        # Circulation proxy (mean Darcy magnitude)
-        qx = data["qxD"]
-        qy = data["qyD"]
-        # Very rough proxy
-        qmag = sqrt.(qx.^2 .+ qy.^2)
-        push!(mean_q, sum(qmag[mask]) / sum(mask))
-        
-        # Fluid water mass
-        rho_f = 1000.0 # nominal fluid density
-        wf = sum(phi[mask]) * dx * dy * rho_f
-        push!(water_fluid, wf)
-        
-        # Solid water mass (convert molar fraction to mass fraction)
-        MH2O = 0.01801528
-        MD = 0.031548
-        mass_frac = @. (MH2O * XWS) / (MD + MH2O * XWS)
-        rho_s = 3300.0
-        ws = sum(((1.0 .- phi) .* mass_frac)[mask]) * dx * dy * rho_s
-        push!(water_solid, ws)
+    # Read geometry once from first file
+    local dx, dy, rplanet, xcenter, ycenter, xp, yp, mask
+    jldopen(joinpath(output_dir, selected_files[1]), "r") do f
+        dx = f["dx"]
+        dy = f["dy"]
+        rplanet = f["rplanet"]
+        xcenter = f["xcenter"]
+        ycenter = f["ycenter"]
+        xp = f["xp"]
+        yp = f["yp"]
+        return mask = [(x - xcenter)^2 + (y - ycenter)^2 <= rplanet^2 for y in yp, x in xp]
     end
 
-    # Extract final fields
-    tk = last_data["tk2"]
-    pf = last_data["pf"]
-    XWS = haskey(last_data, "XWS") ? last_data["XWS"] : zeros(size(tk))
-    DQPF = haskey(last_data, "DQPF") ? last_data["DQPF"] : zeros(size(tk))
-    DHP = haskey(last_data, "DHP") ? last_data["DHP"] : zeros(size(tk))
-    
+    mask_count = sum(mask)
+    MH2O = 0.018
+    MD = 0.120
+    rho_f = 1000.0
+    VD_s = MD / 3300.0
+    VW_s = (MD + MH2O) / 2600.0
+
+    for (idx, file) in enumerate(selected_files)
+        path = joinpath(output_dir, file)
+        jldopen(path, "r") do f
+            ts = f["timesum"]
+            push!(time_Ma, ts / (365.25 * 86400 * 1e6))
+
+            phi = f["PHI"]
+            tk = f["tk2"]
+            mean_T_val = sum(tk[mask]) / mask_count
+            push!(mean_T, mean_T_val)
+            push!(max_T, maximum(tk[mask]))
+
+            XWS = haskey(f, "XWS") ? f["XWS"] : zeros(size(tk))
+            mean_XW_val = sum(XWS[mask]) / mask_count
+            push!(mean_XW, mean_XW_val)
+            push!(max_XW, maximum(XWS[mask]))
+
+            qx = f["qxD"]
+            qy = f["qyD"]
+            qmag = sqrt.(qx .^ 2 .+ qy .^ 2)
+            push!(mean_q, sum(qmag[mask]) / mask_count)
+
+            wf = sum(phi[mask]) * dx * dy * rho_f
+            push!(water_fluid, wf)
+
+            mass_frac = @. (MH2O * XWS) / (MD + MH2O * XWS)
+            rho_s = @. (MD + MH2O * XWS) / ((1.0 - XWS) * VD_s + XWS * VW_s)
+            ws = sum(((1.0 .- phi) .* mass_frac .* rho_s)[mask]) * dx * dy
+            return push!(water_solid, ws)
+        end
+    end
+
+    # Extract final fields from last file
+    last_path = joinpath(output_dir, files[end])
+    local tk_last, pf_last, XWS_last, DQPF_last, DHP_last, x_coords, y_coords
+    jldopen(last_path, "r") do f
+        tk_last = f["tk2"]
+        pf_last = f["pf"]
+        XWS_last = haskey(f, "XWS") ? f["XWS"] : zeros(size(tk_last))
+        DQPF_last = haskey(f, "DQPF") ? f["DQPF"] : zeros(size(tk_last))
+        DHP_last = haskey(f, "DHP") ? f["DHP"] : zeros(size(tk_last))
+        x_coords = collect(f["x"])
+        return y_coords = collect(f["y"])
+    end
+
     out_dict = Dict(
         "time_Ma" => time_Ma,
         "mean_T" => mean_T,
@@ -97,23 +113,23 @@ function export_reaction_data()
         "mean_q" => mean_q,
         "water_solid" => water_solid,
         "water_fluid" => water_fluid,
-        "x" => collect(last_data["x"]),
-        "y" => collect(last_data["y"]),
-        "rplanet" => last_data["rplanet"],
-        "xcenter" => last_data["xcenter"],
-        "ycenter" => last_data["ycenter"],
-        "tk" => tk,
-        "pf" => pf,
-        "XWS" => XWS,
-        "DQPF" => DQPF,
-        "DHP" => DHP
+        "x" => x_coords,
+        "y" => y_coords,
+        "rplanet" => rplanet,
+        "xcenter" => xcenter,
+        "ycenter" => ycenter,
+        "tk" => tk_last,
+        "pf" => pf_last,
+        "XWS" => XWS_last,
+        "DQPF" => DQPF_last,
+        "DHP" => DHP_last,
     )
-    
+
     json_path = joinpath(output_dir, "reaction_plot_data.json")
     open(json_path, "w") do io
-        JSON.print(io, out_dict)
+        return JSON.print(io, out_dict)
     end
-    println("Exported JSON data to $json_path")
+    return println("Exported JSON data to $json_path")
 end
 
 export_reaction_data()

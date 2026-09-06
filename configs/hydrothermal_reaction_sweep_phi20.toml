@@ -1,8 +1,8 @@
 [grid]
 xsize = 140000.0
 ysize = 140000.0
-Nx = 129
-Ny = 129
+Nx = 33
+Ny = 33
 
 [geometry]
 rplanet = 50000.0
@@ -83,8 +83,8 @@ tkm0 = [ 170.0, 170.0, 170.0,]
 XWsolidm_init = [ 0.0, 0.0, 0.0,]
 
 [output]
-output_dir = "output_hydrothermal_reaction_on_128"
-savematstep = 1
+output_dir = "output_sweep_phi20"
+savematstep = 20
 visstep = 1
 restart_from = ""
 
