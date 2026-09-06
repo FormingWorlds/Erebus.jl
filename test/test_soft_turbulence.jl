@@ -289,6 +289,22 @@ using JLD2
             F_end=0.50,
             dT_min=10.0,
         )
+        @test isapprox(k_iso, k_cond; rtol=1e-12)
+
+        # Asymptotic limit 2a: Sub-surface temperature (T < T_surface)
+        k_cold = regularized_soft_turbulence_conductivity(
+            k_cond,
+            eta_num,
+            eta_fluid,
+            0.80,
+            250.0,
+            300.0;
+            F_start=0.30,
+            F_end=0.50,
+            dT_min=10.0,
+        )
+        @test isapprox(k_cold, k_cond; rtol=1e-12)
+
         # Asymptotic limit 2b: Partial thermal contrast (0 < dT < dT_min)
         # Weight w_T = (dT / dT_min)^2
         k_partial_dt = regularized_soft_turbulence_conductivity(

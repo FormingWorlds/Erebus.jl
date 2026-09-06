@@ -640,6 +640,14 @@ function validate_config(cfg::SimulationConfig)
     end
 
     # Melting checks
+    if cfg.melting.soft_turbulence && !cfg.melting.active
+        throw(
+            ArgumentError(
+                "Melting soft_turbulence cannot be enabled when melting active is false",
+            ),
+        )
+    end
+
     if cfg.melting.active
         for idx in 1:2
             T_s = cfg.melting.T_solidus[idx]

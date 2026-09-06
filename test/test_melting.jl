@@ -88,6 +88,13 @@ using TOML
                 melting=MeltingConfig(; active=true, latent_heat_mode=:invalid_mode)
             ),
         )
+
+        # Validation bounds: soft_turbulence cannot be true when active=false
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                melting=MeltingConfig(; active=false, soft_turbulence=true)
+            ),
+        )
     end
 
     @testset "MeltingConfig TOML Serialization Round-Trip" begin

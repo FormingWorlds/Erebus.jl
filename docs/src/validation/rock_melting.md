@@ -16,7 +16,7 @@ $$F_m(T, P) = \begin{cases}
 1, & T \ge T_l(P)
 \end{cases}$$
 
-where $dT/dP$ is the Clapeyron slope (`dpdt_clapeyron`, default 0 Pa/K). For non-melting materials (such as sticky air), $F_m = 0$.
+where $dT/dP$ is the Clapeyron slope (`dpdt_clapeyron`, default 0 K/Pa). For non-melting materials (such as sticky air), $F_m = 0$.
 
 ### 2. Latent Heat via Apparent Heat Capacity
 
@@ -124,28 +124,27 @@ Metrics demonstrate spatial convergence:
 ---
 
 ### Conductivity Regularization and Singularity Elimination
-
-In previous formulations, hard step thresholds at marker state transitions caused severe numerical artifacts. At $F_m = 0.40$, conductivity jumped discontinuously by three orders of magnitude, producing a Dirac $\delta$-function spike in spatial derivatives.
-
+ 
+Discontinuous step thresholds at marker state transitions produce numerical artifacts. When conductivity jumps discontinuously by three orders of magnitude at $F_m = 0.40$, the spatial flux derivative develops a Dirac $\delta$-function spike.
+ 
 `Erebus.jl` resolves this issue with regularized geometric blending:
-
+ 
 ![Conductivity Regularization](../assets/magma_ocean_regularization.png)
-
+ 
 The regularization provides three improvements:
 1. **$C^1$ Smoothness in Mush Interval:** The cubic smoothstep provides continuous first derivatives $d(\log_{10} k_{\text{eff}})/dF_m$ throughout the melting interval $[F_{\text{start}}, F_{\text{end}}]$. This eliminates singular flux spikes.
 2. **Viscosity Matching:** Blending $\eta_{\text{fluid}}$ from matrix viscosity down to liquid silicate viscosity prevents the conductivity dip at melting onset.
 3. **Surface Boundary Weighting:** The quadratic thermal contrast weight $w_T = [\text{clamp}(\Delta T / \Delta T_{\text{min}}, 0, 1)]^2$ forces $k_{\text{eff}} \to k_{\text{cond}}$ smoothly as $\Delta T \to 0$, preventing isothermal boundary artifacts.
-
+ 
 ---
-
+ 
 ## Analytical Verification
-
+ 
 The implementation is verified against the following benchmarks:
-1. **Stefan Moving-Boundary Problem**: Latent heat buffering matches the analytical similarity solution for 1D phase front propagation.
-2. **Enthalpy Conservation**: Numerical integration of apparent heat capacity over the solidus-liquidus interval recovers the theoretical latent heat energy within $10^{-6}$ relative error in unit tests (midpoint Riemann sum).
-3. **Rheological Invariants**: Viscosity remains monotonic with $F_m$ for fixed solid viscosity, strictly positive, and continuous at the transition $F_m = \phi_{\text{crit}}$.
-4. **Soft Turbulence Monotonicity & Asymptotics**: Effective thermal conductivity matches $k_{\text{cond}}$ exactly for $F_m \le F_{\text{start}}$ or isothermal conditions, recovers $k_{\text{turb}}$ for $F_m \ge F_{\text{end}}$, and satisfies $k_{\text{eff}} \ge k_{\text{cond}}$ monotonically in $F_m$ over the transition window for constant viscosities.
-5. **Planetesimal Magma Ocean Solidification Benchmark**: Effective convective conductivity transports core heat to the surface, buffering interior temperatures and preventing runaway super-liquidus overheating.
+1. **Enthalpy Conservation**: Numerical integration of apparent heat capacity over the solidus-liquidus interval recovers the theoretical latent heat energy within $10^{-6}$ relative error in unit tests (midpoint Riemann sum).
+2. **Rheological Invariants**: Viscosity remains monotonic with $F_m$ for fixed solid viscosity, strictly positive, and continuous at the transition $F_m = \phi_{\text{crit}}$.
+3. **Soft Turbulence Monotonicity & Asymptotics**: Effective thermal conductivity matches $k_{\text{cond}}$ exactly for $F_m \le F_{\text{start}}$ or isothermal conditions, recovers $k_{\text{turb}}$ for $F_m \ge F_{\text{end}}$, and satisfies $k_{\text{eff}} \ge k_{\text{cond}}$ monotonically in $F_m$ over the transition window for constant viscosities.
+4. **Planetesimal Magma Ocean Solidification Benchmark**: Effective convective conductivity transports core heat to the surface, buffering interior temperatures and preventing runaway super-liquidus overheating.
 
 ---
 

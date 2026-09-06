@@ -1662,7 +1662,7 @@ $(SIGNATURES)
 
 # Details
 - `T`: marker temperature [K]
-- `P`: lithostatic or total pressure [Pa]
+- `P`: marker pressure [Pa] (fluid or lithostatic)
 - `tm`: marker phase material type (1: core/mantle, 2: crust, 3: air)
 - `T_sol`: solidus temperature [K]
 - `T_liq`: liquidus temperature [K]
@@ -1903,7 +1903,7 @@ function regularized_soft_turbulence_conductivity(
     w_F = xi * xi * (3.0 - 2.0 * xi)
 
     # Temperature contrast weight factor
-    dT = abs(T_marker - T_surface)
+    dT = max(0.0, T_marker - T_surface)
     w_T = clamp(dT / dT_min, 0.0, 1.0)^2
 
     w_total = w_F * w_T

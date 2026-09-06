@@ -40,7 +40,7 @@ $$T_l(P) = T_{l,0} + \frac{dT}{dP} P$$
 |:---|:---|:---|:---|
 | $T_{s,0}$ | Silicate solidus temperature at zero pressure | $1400.0$ | $\text{K}$ |
 | $T_{l,0}$ | Silicate liquidus temperature at zero pressure | $1800.0$ | $\text{K}$ |
-| $\frac{dT}{dP}$ | Clapeyron melting slope with pressure | $1.2\times 10^{-7}$ | $\text{K/Pa}$ ($120\text{ K/GPa}$) |
+| $\frac{dT}{dP}$ | Clapeyron melting slope with pressure | $0.0$ ($1.2\times 10^{-7}$ when enabled) | $\text{K/Pa}$ ($120\text{ K/GPa}$) |
 
 Shifting both the solidus and the liquidus by the identical slope $dT/dP$ preserves the melting temperature interval:
 
@@ -149,7 +149,7 @@ An exponent of $\beta = 1/2$ corresponds to classical laminar boundary layer par
 
 ## Regularization and Singularity Elimination
 
-In previous numerical implementations, such as `i2elvis_planet`, sub-grid convective conductivity was introduced as a discontinuous step function triggered when markers satisfied a condition ($F_m > 0.40$ and $T > 1600\text{ K}$).
+Discontinuous step thresholds at marker state transitions produce numerical artifacts. When conductivity jumps discontinuously by three orders of magnitude at $F_m = 0.40$, the spatial flux derivative develops a Dirac $\delta$-function spike.
 This step change introduces three severe numerical pathologies:
 1. **Dirac Flux Spikes:**
    A step change in conductivity between adjacent grid cells generates a discontinuous spatial derivative $\nabla \cdot (k \nabla T)$, producing non-physical temperature oscillations.
@@ -242,8 +242,8 @@ dT_turb_min = 10.0             # Thermal contrast required for turbulent transpo
 T_surface_ref = 300.0          # Reference surface temperature [K]
 k_turb_floor = 1.0e-3          # Numerical minimum conductivity floor [W/(m K)]
 k_turb_cutoff = 1.0e6          # Maximum conductivity cap [W/(m K)]
-T_solidus_0 = 1400.0           # Solidus temperature at zero pressure [K]
-T_liquidus_0 = 1800.0          # Liquidus temperature at zero pressure [K]
-dT_dP_melt = 1.2e-7            # Clapeyron slope dT/dP [K/Pa]
-latent_heat_silicate = 4.0e5   # Silicate latent heat of fusion [J/kg]
+T_solidus = [1400.0, 1400.0, nan]  # Solidus per phase (1: mantle, 2: crust, 3: air) [K]
+T_liquidus = [1800.0, 1800.0, nan] # Liquidus per phase [K]
+dpdt_clapeyron = 0.0               # Clapeyron slope dT/dP (default 0, typical 1.2e-7) [K/Pa]
+L_melt = 4.0e5                     # Silicate latent heat of fusion [J/kg]
 ```

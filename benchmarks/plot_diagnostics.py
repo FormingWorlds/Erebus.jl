@@ -116,7 +116,7 @@ ax2.set_title('Logarithmic Gradient Smoothness', fontsize=12, fontweight='bold',
 ax2.grid(True)
 ax2.legend(loc='upper right', fontsize=8.5)
 
-# Panel (c): Surface temperature difference gating
+# Panel (c): Surface temperature difference weighting
 ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
@@ -217,21 +217,21 @@ print("Saved diagnostic_planetesimal_cooling.[pdf,png]")
 # -----------------------------------------------------------------------------
 fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 4.8), constrained_layout=True)
 
-res_50 = data["res_grid50"]
-res_100 = data["res_on"]
-res_200 = data["res_grid200"]
+res_32 = data["res_grid32"]
+res_128 = data["res_grid128"]
+res_256 = data["res_grid256"]
 
-r_50_km = np.array(res_50["r"]) / 1000.0
-r_100_km = np.array(res_100["r"]) / 1000.0
-r_200_km = np.array(res_200["r"]) / 1000.0
+r_32_km = np.array(res_32["r"]) / 1000.0
+r_128_km = np.array(res_128["r"]) / 1000.0
+r_256_km = np.array(res_256["r"]) / 1000.0
 
 # Panel (a): Radial Temperature at t = 15 kyr across Resolutions
 ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
-ax1.plot(r_50_km, res_50["snapshot_T"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 50$ cells ($\Delta r = 1.0$ km)')
-ax1.plot(r_100_km, res_100["snapshot_T"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 100$ cells ($\Delta r = 0.5$ km)')
-ax1.plot(r_200_km, res_200["snapshot_T"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 200$ cells ($\Delta r = 0.25$ km)')
+ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$ cells ($\Delta r = 1.56$ km)')
+ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$ cells ($\Delta r = 0.39$ km)')
+ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$ cells ($\Delta r = 0.20$ km)')
 
 ax1.set_xlim(0, 50)
 ax1.set_ylim(250, 1900)
@@ -245,9 +245,9 @@ ax1.legend(loc='lower left', fontsize=8.5)
 ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
-ax2.plot(r_50_km, res_50["snapshot_Fm"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 50$')
-ax2.plot(r_100_km, res_100["snapshot_Fm"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 100$')
-ax2.plot(r_200_km, res_200["snapshot_Fm"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 200$')
+ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$')
+ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$')
+ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$')
 ax2.axhline(0.40, color=STRATA['ink'], linestyle=':', linewidth=1.5, label=r'Rheological Transition $F_\mathrm{crit} = 0.40$')
 
 ax2.set_xlim(0, 40)
@@ -258,22 +258,22 @@ ax2.set_title('Resolution Convergence: Melt Distribution', fontsize=12, fontweig
 ax2.grid(True)
 ax2.legend(loc='lower left', fontsize=8.5)
 
-# Panel (c): Convergence Error Profile Relative to Nr = 200
+# Panel (c): Convergence Error Profile Relative to Nr = 256
 ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
          bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
-# Interpolate onto Nr=50 and Nr=100 grid points
-T_ref = np.interp(r_50_km, r_200_km, res_200["snapshot_T"]["15000.0"])
-err_50 = np.abs(np.array(res_50["snapshot_T"]["15000.0"]) - T_ref)
+# Interpolate onto Nr=32 and Nr=128 grid points
+T_ref = np.interp(r_32_km, r_256_km, res_256["snapshot_T"]["15000.0"])
+err_32 = np.abs(np.array(res_32["snapshot_T"]["15000.0"]) - T_ref)
 
-T_ref_100 = np.interp(r_100_km, r_200_km, res_200["snapshot_T"]["15000.0"])
-err_100 = np.abs(np.array(res_100["snapshot_T"]["15000.0"]) - T_ref_100)
+T_ref_128 = np.interp(r_128_km, r_256_km, res_256["snapshot_T"]["15000.0"])
+err_128 = np.abs(np.array(res_128["snapshot_T"]["15000.0"]) - T_ref_128)
 
-ax3.plot(r_50_km, err_50, '-', color=STRATA['cobalt'], linewidth=2.0, label=r'$|T_{50} - T_{200}|$ ($\mathrm{max} = ' + f'{np.max(err_50):.1f}' + r'\ \mathrm{K}$)')
-ax3.plot(r_100_km, err_100, '-', color=STRATA['amber'], linewidth=2.0, label=r'$|T_{100} - T_{200}|$ ($\mathrm{max} = ' + f'{np.max(err_100):.1f}' + r'\ \mathrm{K}$)')
+ax3.plot(r_32_km, err_32, '-', color=STRATA['cobalt'], linewidth=2.0, label=r'$|T_{32} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_32):.1f}' + r'\ \mathrm{K}$)')
+ax3.plot(r_128_km, err_128, '-', color=STRATA['amber'], linewidth=2.0, label=r'$|T_{128} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_128):.1f}' + r'\ \mathrm{K}$)')
 
 ax3.set_xlim(0, 50)
-ax3.set_ylim(0, max(np.max(err_50)*1.1, 10.0))
+ax3.set_ylim(0, max(np.max(err_32)*1.1, 10.0))
 ax3.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
 ax3.set_ylabel(r'Absolute Temperature Error $|\Delta T|$ [K]', fontsize=11)
 ax3.set_title('Grid Resolution Error Convergence', fontsize=12, fontweight='bold', pad=10)
