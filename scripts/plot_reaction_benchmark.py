@@ -26,11 +26,11 @@ mean_q = np.array(data['mean_q'])
 water_solid = np.array(data['water_solid'])
 water_fluid = np.array(data['water_fluid'])
 
-tk = np.array(data['tk'])
-pf = np.array(data['pf']) * 1e-6 # MPa
-XWS = np.array(data['XWS'])
-DQPF = np.array(data['DQPF'])
-DHP = np.array(data['DHP'])
+tk = np.array(data['tk']).T
+pf = np.array(data['pf']).T * 1e-6 # MPa
+XWS = np.array(data['XWS']).T
+DQPF = np.array(data['DQPF']).T
+DHP = np.array(data['DHP']).T
 
 x = np.array(data['x']) * 1e-3
 y = np.array(data['y']) * 1e-3
