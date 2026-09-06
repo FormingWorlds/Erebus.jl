@@ -1,38 +1,66 @@
-# Hydrothermal Reactions
+# Hydrothermal Water-Rock Reactions
 
-This page validates the fully coupled hydro-thermo-chemical module in `Erebus.jl`. The model integrates multi-phase fluid flow, thermal evolution (including latent heat), and the kinetics of hydration and dehydration reactions. 
+This page validates the coupled hydro-thermo-chemical module in `Erebus.jl`. The model integrates multi-phase porous fluid flow, thermal changes with latent heat, and reaction rates.
 
 ## 2D Hydrothermal Benchmark
 
-To isolate the effects of hydrothermal reactions and fluid circulation on the global water budget, we initialize a 2D planetesimal (50 km radius) composed of anhydrous rock and pore ice (porosity $\phi = 0.2$). The planetesimal is heated by short-lived radionuclides, which melts the ice and drives hydrothermal circulation. 
+The numerical benchmark simulates the full two-dimensional coupled evolution of a 50 km radius planetesimal, resolving Darcy porous flow, thermal convection, and kinetic mineral hydration simultaneously. The interior starts with anhydrous rock, and pore ice. Short-lived radionuclide decay of $^{26}\text{Al}$ heats the interior, melts the ice, and starts fluid flow.
 
-As the interior heats up, hydration reactions consume pore fluid to produce hydrated minerals. The benchmark verifies:
-1. **Reaction Kinetics:** The hydration and dehydration fronts propagate correctly according to the Arrhenius kinetic model (`hydration_mode = 1`, `dehydration_mode = 2`).
-2. **Latent Heat (`DHP`):** The release of heat during hydration (exothermic) and absorption during dehydration (endothermic).
-3. **Mass Conservation:** The exchange of water mass between the fluid (pore) phase and the solid (mineral) phase, diagnosed via the fluid source term `DQPF`.
+When temperatures rise, water-rock reactions bind pore fluid into hydrous phases. 
 
-### 128x128 High-Resolution Results
+The benchmark verifies:
+1. **Reaction Rates:** Wet and dry fronts advance following Arrhenius kinetics (`hydration_mode = 1`, `dehydration_mode = 2`).
+2. **Latent Heat Feedback:** Heat releases when rock hydrates, and absorbs when hydrous rock breaks down, through the `DHP` term.
+3. **Conserved Mass:** Fluid exchange between pore fluid and mineral phases conserves total water, tracked by the `DQPF` diagnostic.
 
-The following fields demonstrate the state of the planetesimal after internal heating has driven widespread hydration.
+### High-Resolution Benchmark (128x128)
+
+The 128x128 grid resolves detailed reaction front geometry, and internal flow.
 
 ![128x128 Benchmark Summary](../assets/hydrothermal_reaction_128.png)
 
-- **(a) Temperature Evolution:** The mean and maximum temperatures rise rapidly due to radiogenic heating, before relaxing as heat conducts outward.
-- **(b) Global Water Budget:** The total water mass is conserved. Water transitions from the fluid phase (pores) to the solid phase (hydrated minerals) as the hydration front moves inward.
-- **(c) Reaction & Circulation:** Mean fluid circulation (Darcy flux $|q|$) peaks during the main hydration phase.
-- **(d) Hydration Extent ($X_W$):** A fully hydrated outer shell forms, while the inner core remains anhydrous due to high temperatures preventing hydration.
-- **(e) Fluid Source Term (DQPF):** Active regions of fluid consumption (hydration) and production (dehydration).
-- **(f) Latent Heat (DHP):** The corresponding thermal feedback from the reaction fronts.
+- **(a) Thermal History:** Central temperature increases from radiogenic heating, and relaxes as heat conducts outward.
+- **(b) Water Mass Partition:** Total water mass stays constant. Pore fluid transitions into mineral-bound water, as the wet front moves inward.
+- **(c) Fluid Flow:** Mean Darcy velocity peaks during the primary hydration window.
+- **(d) Reaction Extent ($X_W$):** A hydrated outer shell forms around an anhydrous core. Core temperatures stay high.
+- **(e) Fluid Source Term (DQPF):** Shows local fluid uptake in wet zones, and water loss in dry zones.
+- **(f) Latent Heat (DHP):** Shows thermal release and heat loss along active reaction fronts.
 
-### 32x32 Low-Resolution Comparison
+### 2D Simulation Animation
 
-For rapid testing and continuous integration, we also provide a 32x32 benchmark. Despite the coarser grid, it captures the same macroscopic physical behavior and mass conservation constraints.
+The animation below shows the time history of internal temperature (left), hydration extent $X_W$ (center), and fluid mass exchange rate `DQPF` (right), over 15 Ma.
 
-![32x32 Benchmark Summary](../assets/hydrothermal_reaction_32.png)
+![2D Hydrothermal Benchmark Animation](../assets/hydrothermal_reaction_128.gif)
+
+### Grid Convergence (32x32 versus 128x128)
+
+We test spatial grid convergence by comparing the 32x32 grid ($4.24\text{ km}$ cell size), with the 128x128 grid ($1.09\text{ km}$ cell size).
+
+![Grid Convergence Comparison](../assets/hydrothermal_grid_convergence.png)
+
+Comparison yields:
+- **Thermal Match:** Peak core temperature differs by 2.4% (4174.9 K at 32x32, versus 4277.2 K at 128x128).
+- **Reaction Extent:** Final mean hydrous phase share $\bar{X}_W$ matches closely (0.0046 at 32x32, versus 0.0040 at 128x128), with a gap below 0.043 for all steps.
+- **Conserved Water:** Both grid sizes conserve total water inventory during the run.
+- **Flow Speed:** Peak Darcy velocity agrees to a factor of 1.2.
+
+### Porosity Parameter Sweep ($\phi_0 \in [0.20, 0.50]$)
+
+We test the role of initial pore ice, by varying initial porosity $\phi_0$ from 0.20 to 0.50.
+
+![Porosity Parameter Sweep](../assets/hydrothermal_porosity_sweep.png)
+
+The parameter sweep reveals three distinct regimes:
+1. **Thermal Buffer:** Core temperature drops. Increasing $\phi_0$ from 0.20 to 0.50 lowers maximum core temperature from 4174.9 K, to 2564.1 K, because larger fluid volume increases heat capacity, and convective cooling.
+2. **Hydration Bound:** Maximum hydration extent $X_W$ increases from 0.335 ($\phi_0 = 0.20$), to 0.639 ($\phi_0 = 0.50$). In low-porosity planetesimals, hydration stops when local pore water depletes. Higher initial porosity allows larger hydration extent.
+3. **Flow Intensity:** Peak Darcy velocity increases by a factor of 3.7 (from $3.09 \times 10^{-17}\text{ m/s}$, to $1.15 \times 10^{-16}\text{ m/s}$), as higher porosity increases bulk permeability.
 
 ## Configurations
 
-The benchmark configurations can be found in `configs/`:
-- `hydrothermal_reaction_on_128.toml` (Coupled, high-resolution)
-- `hydrothermal_reaction_on_32.toml` (Coupled, low-resolution)
-- `hydrothermal_reaction_off_32.toml` (Baseline, reactions disabled)
+Model setup files live in `configs/`:
+- `hydrothermal_reaction_on_128.toml` (Coupled benchmark, 128x128)
+- `hydrothermal_reaction_on_32.toml` (Coupled benchmark, 32x32)
+- `hydrothermal_reaction_off_32.toml` (Baseline benchmark, reactions disabled)
+- `hydrothermal_reaction_sweep_phi20.toml` ($\phi_0 = 0.20$ sweep)
+- `hydrothermal_reaction_sweep_phi35.toml` ($\phi_0 = 0.35$ sweep)
+- `hydrothermal_reaction_sweep_phi50.toml` ($\phi_0 = 0.50$ sweep)

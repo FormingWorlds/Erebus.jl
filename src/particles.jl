@@ -220,8 +220,8 @@ function define_markers!(
     ycenter_val=ycenter,
     rplanet_val=rplanet,
     rcrust_val=rcrust,
-    XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN])
-
+    XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN]),
+    phim0_val=phim0,
 )
     Nxm_val = coords === nothing ? Nxm : coords.Nxm
     Nym_val = coords === nothing ? Nym : coords.Nym
@@ -244,9 +244,9 @@ function define_markers!(
             # planet
             tm[m] = ifelse(rmark>rcrust_val, 2, 1)
             # porosity
-            phim[m] = phim0
+            phim[m] = phim0_val
             if randomized
-                phim[m] += phim0 * (rand(rgen)-0.5)
+                phim[m] += phim0_val * (rand(rgen)-0.5)
             end
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!

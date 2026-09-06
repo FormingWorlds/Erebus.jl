@@ -686,7 +686,8 @@ function simulation_loop(
             ycenter_val=ycenter_val,
             rplanet_val=rplanet_val,
             rcrust_val=rcrust_val,
-
+            XWsolidm_init_val=cfg.materials.XWsolidm_init,
+            phim0_val=phim0_val,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -1919,7 +1920,7 @@ function simulation_loop(
                 DSXX,
                 DMP,
                 DHP,
-            DQPF,
+                DQPF,
                 XWS,
                 XWsolidm0,
                 xm,
