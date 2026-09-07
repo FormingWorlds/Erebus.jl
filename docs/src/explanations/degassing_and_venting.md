@@ -84,7 +84,8 @@ The effective boundary venting pressure $P_{\text{vent}}$ represents the higher 
 $$P_{\text{vent}} = \max\left(P_{\text{amb}}, P_{\text{sat,ice}}(T_{\text{surf}})\right)$$
 
 - At temperatures $T_{\text{surf}} < 150\text{ K}$, $P_{\text{sat,ice}} \ll 1\text{ Pa}$; the cold trap retains ice, and $P_{\text{vent}}$ is bounded below by $P_{\text{amb}}$.
-- At temperatures $T_{\text{surf}} > 200\text{ K}$, $P_{\text{sat,ice}} > 10\text{ Pa}$; sublimating vapor establishes the local boundary pressure, driving free venting into the ambient medium.
+- At temperatures $T_{\text{surf}} > 232\text{ K}$, $P_{\text{sat,ice}} > 10\text{ Pa}$; sublimating vapor establishes the local boundary pressure, driving free venting into the ambient medium.
+- At temperatures $T_{\text{surf}} \ge 273.16\text{ K}$, saturation vapor pressure over liquid water follows the Arden Buck formulation up to water critical pressure ($22.064\text{ MPa}$ at $647.1\text{ K}$).
 
 ---
 
@@ -214,6 +215,8 @@ Beyond water and nitrogen, the complete volatile inventory includes carbon and s
 - Sulfur dissolves as sulfide (S²⁻) under reducing conditions and sulfate (SO₄²⁻) under oxidizing conditions (Boulliung & Wood 2022, 2023; Gaillard et al. 2022). Total dissolved sulfur is bounded by the Sulfur Content at Sulfide Saturation (O'Neill & Mavrogenes 2002; Smythe et al. 2017). When `scss_active = true`, `compute_sulfur_solubility_melt` caps dissolved sulfur at this saturation limit.
 - Homogeneous chemical equilibrium for the ten-species system (H₂, H₂O, CO, CO₂, CH₄, N₂, NH₃, H₂S, S₂, SO₂) is evaluated via `solve_chnos_speciation` with graphite saturation clipping and exact elemental quadratic partitioning for nitrogen and sulfur.
 
+The multi-species H-C-N-S solubility, speciation, and organic devolatilization routines operate as a standalone thermodynamic analysis suite in `Erebus.jl` (`Erebus.Physics.Volatiles`). In the 2D Stokes-Darcy dynamical solver, fluid flow models the bulk pore fluid (dominated by water). Dynamic reactive transport coupling multi-species dissolved chemistry to 2D marker flow is in development.
+
 For benchmark comparisons across all four elemental systems, see the validation chapter [Multi-Species H-C-N-S Volatile Solubility, Speciation, and Saturation Ceilings](../validation/hcns_solubility.md).
 
 ---
@@ -262,7 +265,7 @@ The time evolution of atmospheric mass subject to surface venting flux $\dot{M}_
 
 $$\frac{d M_{\text{atm}}}{dt} = \dot{M}_{\text{vent}} - k_{\text{escape}} M_{\text{atm}}$$
 
-In the 2D Cartesian cross-sectional domain, marker fluid drainage is evaluated per unit out-of-plane length ($[\text{kg/m}]$). Before coupling with the 3D spherical atmosphere, this 2D mass is scaled to 3D by the volume-to-area geometric depth $L_{\text{3D}} = V_{\text{3D}} / A_{\text{2D}} = \frac{4}{3} R_{\text{planet}}$ [m]; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
+In the 2D Cartesian cross-sectional domain, marker fluid drainage is evaluated per unit out-of-plane length ($[\text{kg/m}]$). Before coupling with the 3D spherical atmosphere, this 2D surface boundary flux is scaled to 3D by the ratio of spherical surface area to 2D circular boundary perimeter: $L_{\text{3D}} = A_{\text{sphere}} / P_{\text{2D}} = \frac{4 \pi R_{\text{planet}}^2}{2 \pi R_{\text{planet}}} = 2 R_{\text{planet}}$ [m]; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
 
 For a constant computational timestep $\Delta t$, the analytical solution yields:
 
@@ -286,5 +289,5 @@ where $g = G M_{\text{planet}} / R_{\text{planet}}^2$. In the coupled hydromecha
 
 $$P_{\text{amb,eff}} = P_{\text{amb}} + P_{\text{atm}}$$
 
-When substantial atmospheres accumulate, $P_{\text{amb,eff}}$ opposes ongoing boiling and venting, naturally throttling further surface volatile discharge. In the explicit time-advancement scheme of `Erebus.jl`, surface atmospheric pressure $P_{\text{atm}}$ is evaluated from the previous step atmospheric inventory, lagging the hydromechanical solve by one timestep in an operator-split fashion. Within the 2D Stokes-Darcy simulation loop, marker fluid drainage is tracked as a bulk H₂O atmospheric reservoir, while multi-species kinetic fractionation across lighter and heavier volatiles (H₂, CO₂, N₂) is evaluated analytically via `evolve_atmospheric_species_inventory`.
+When substantial atmospheres accumulate, $P_{\text{amb,eff}}$ opposes ongoing boiling and venting, naturally throttling further surface volatile discharge. In the explicit time-advancement scheme of `Erebus.jl`, surface atmospheric pressure $P_{\text{atm}}$ is evaluated from the previous step atmospheric inventory, lagging the hydromechanical solve by one timestep in an operator-split fashion. Within the 2D Stokes-Darcy simulation loop, marker fluid drainage is tracked as a bulk atmospheric reservoir for the volatile species configured in `EscapeConfig.species` (default H₂O). Multi-species kinetic escape across lighter and heavier volatiles (H₂, CO₂, N₂) can be evaluated analytically via `evolve_atmospheric_species_inventory` using the species-specific molecular mass.
 

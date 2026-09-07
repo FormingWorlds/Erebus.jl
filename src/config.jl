@@ -315,6 +315,9 @@ end
 """
 Multi-species volatile solubility and organic devolatilization parameters.
 
+Configures the standalone thermodynamic speciation and volatile solubility library
+(`Erebus.Physics.Volatiles`). Dynamic reactive transport coupling in 2D fluid flow is in development.
+
 $(FIELDS)
 """
 Base.@kwdef struct VolatilesConfig
@@ -993,6 +996,13 @@ function validate_config(cfg::SimulationConfig)
         throw(ArgumentError("M_planet must be > 0 and finite, got $(cfg.escape.M_planet)"))
     (cfg.escape.R_planet > 0.0 && isfinite(cfg.escape.R_planet)) ||
         throw(ArgumentError("R_planet must be > 0 and finite, got $(cfg.escape.R_planet)"))
+    if cfg.escape.active
+        isapprox(cfg.escape.R_planet, cfg.geometry.rplanet; rtol=0.01) || throw(
+            ArgumentError(
+                "escape.R_planet ($(cfg.escape.R_planet)) must match simulated planet radius geometry.rplanet ($(cfg.geometry.rplanet)) when escape.active=true",
+            ),
+        )
+    end
     (cfg.escape.T_exobase > 0.0 && isfinite(cfg.escape.T_exobase)) || throw(
         ArgumentError("T_exobase must be > 0 and finite, got $(cfg.escape.T_exobase)")
     )
@@ -1008,6 +1018,10 @@ function validate_config(cfg::SimulationConfig)
                 "escape species must be one of :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2, got $(cfg.escape.species)",
             ),
         )
+
+    if cfg.volatiles.active
+        @warn "VolatilesConfig active=true: multi-species H-C-N-S volatile solubility, gas speciation, and organic devolatilization operate as a standalone thermodynamic library; dynamic reactive transport is not yet coupled to the 2D Stokes-Darcy fluid flow solver."
+    end
 
     return nothing
 end
@@ -1176,9 +1190,33 @@ function load_config(source::AbstractString)::SimulationConfig
         def.volatiles
     end
     esc = if haskey(parsed, "escape")
-        _dict_to_struct(EscapeConfig, parsed["escape"], def.escape)
+        parsed_esc = parsed["escape"]
+        def_esc = if !haskey(parsed_esc, "R_planet") && geom.rplanet != def.geometry.rplanet
+            EscapeConfig(
+                def.escape.active,
+                def.escape.M_planet,
+                geom.rplanet,
+                def.escape.T_exobase,
+                geom.rplanet,
+                def.escape.species,
+            )
+        else
+            def.escape
+        end
+        _dict_to_struct(EscapeConfig, parsed_esc, def_esc)
     else
-        def.escape
+        if geom.rplanet != def.geometry.rplanet
+            EscapeConfig(
+                def.escape.active,
+                def.escape.M_planet,
+                geom.rplanet,
+                def.escape.T_exobase,
+                geom.rplanet,
+                def.escape.species,
+            )
+        else
+            def.escape
+        end
     end
 
     cfg = SimulationConfig(;

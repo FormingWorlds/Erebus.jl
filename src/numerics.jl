@@ -1154,6 +1154,7 @@ function compute_Aϕ!(
     betasolid=betasolid,
     phimin=phimin,
     phimax=phimax,
+    S_vent::Union{AbstractMatrix{Float64},Nothing}=nothing,
 )
     # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
@@ -1170,6 +1171,13 @@ function compute_Aϕ!(
                 (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
                 betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
             )
+            if S_vent !== nothing
+                s_v = S_vent[i, j]
+                if s_v > 0.0
+                    # Subtract venting sink to avoid double drainage with explicit marker sink.
+                    compaction = max(0.0, compaction - s_v)
+                end
+            end
             APHI[i, j] = compaction / PHI[i, j]
         end
         return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation

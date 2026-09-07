@@ -240,6 +240,7 @@ using TOML
         # Triple point: T = 273.16 K -> P = 611.66 Pa
         P_triple = compute_ice_vapor_pressure(273.16)
         @test isapprox(P_triple, 611.66; rtol=1e-3)
+        @test isapprox(compute_water_vapor_pressure(273.16), 611.66; rtol=1e-3)
 
         # Cold lid temperatures
         P_200 = compute_ice_vapor_pressure(200.0)
@@ -250,18 +251,30 @@ using TOML
         @test 1.0e-6 <= P_150 <= 2.0e-5
         @test isapprox(P_150, 5.9e-6; rtol=0.1)
 
-        # Monotonicity
-        temps = [140.0, 160.0, 180.0, 200.0, 220.0, 240.0, 260.0, 273.16]
-        pressures = [compute_ice_vapor_pressure(T) for T in temps]
+        # Liquid regime and boiling point: T = 373.15 K -> P ~ 101.3 kPa (1 atm)
+        P_boil = compute_water_vapor_pressure(373.15)
+        @test isapprox(P_boil, 101325.0; rtol=0.01)
+
+        # High-temperature hydrothermal regime: T = 500 K -> P ~ 2.46 MPa
+        P_500 = compute_water_vapor_pressure(500.0)
+        @test isapprox(P_500, 2.46e6; rtol=0.05)
+
+        # Supercritical regime clamp
+        P_crit = compute_water_vapor_pressure(700.0)
+        @test isapprox(P_crit, 22.064e6; rtol=1e-12)
+
+        # Monotonicity across all physical regimes
+        temps = [140.0, 180.0, 220.0, 273.16, 300.0, 373.15, 450.0, 550.0, 647.096]
+        pressures = [compute_water_vapor_pressure(T) for T in temps]
         @test issorted(pressures)
         @test all(p -> p > 0.0, pressures)
 
         # Domain bounds and parameter guards
-        @test_throws DomainError compute_ice_vapor_pressure(0.0)
-        @test_throws DomainError compute_ice_vapor_pressure(-10.0)
-        @test_throws DomainError compute_ice_vapor_pressure(200.0; P0=0.0)
-        @test_throws DomainError compute_ice_vapor_pressure(200.0; T0=-1.0)
-        @test_throws DomainError compute_ice_vapor_pressure(200.0; Rv=0.0)
+        @test_throws DomainError compute_water_vapor_pressure(0.0)
+        @test_throws DomainError compute_water_vapor_pressure(-10.0)
+        @test_throws DomainError compute_water_vapor_pressure(200.0; P0=0.0)
+        @test_throws DomainError compute_water_vapor_pressure(200.0; T0=-1.0)
+        @test_throws DomainError compute_water_vapor_pressure(200.0; Rv=0.0)
     end
 
     @testset "Venting Pressure with Cold-Trap Limit" begin

@@ -1716,10 +1716,13 @@ anchored at the water triple point (T0 = 273.16 K, P0 = 611.66 Pa).
 - `P_sat`: Equilibrium ice sublimation vapor pressure [Pa]
 
 # Notes
-- For temperatures at or above the triple point (`T >= T0`), the vapor pressure saturates
-  at the triple-point value `P0 = 611.66 Pa` because the bulk ice phase transitions to liquid water.
+- For temperatures below the triple point (`T < T0`), vapor pressure follows ice sublimation
+  via the integrated Clausius-Clapeyron relation with latent heat `L_sub = 2.83e6 J/kg`.
+- Above the triple point (`T >= T0`), saturation vapor pressure over liquid water follows
+  the Arden Buck (1981) formulation up to the critical point (`T_crit = 647.096 K`), clamped
+  at water critical pressure `P_crit = 22.064 MPa`.
 """
-function compute_ice_vapor_pressure(
+function compute_water_vapor_pressure(
     T::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5
 )::Float64
     T_val = Float64(T)
@@ -1740,23 +1743,34 @@ function compute_ice_vapor_pressure(
     end
     L_sub_val = Float64(L_sub)
 
-    if T_val >= T0_val
-        return P0_val
+    if T_val <= T0_val
+        return P0_val * exp(-(L_sub_val / Rv_val) * (1.0 / T_val - 1.0 / T0_val))
     end
-    return P0_val * exp(-(L_sub_val / Rv_val) * (1.0 / T_val - 1.0 / T0_val))
+
+    # Liquid water saturation vapor pressure via Arden Buck (1981)
+    T_crit = 647.096
+    P_crit = 22.064e6
+    if T_val >= T_crit
+        return P_crit
+    end
+    Tc = T_val - 273.15
+    p_buck = 611.21 * exp((18.678 - Tc / 234.5) * (Tc / (Tc + 257.14)))
+    return min(P_crit, max(P0_val, p_buck))
 end
+
+const compute_ice_vapor_pressure = compute_water_vapor_pressure
 
 """
     compute_venting_pressure(T_surf::Real, P_amb::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5)::Float64
 
 Compute effective boundary venting fluid pressure P_vent [Pa] at a planetesimal surface:
 
-    P_vent = max(P_amb, P_sat,ice(T_surf))
+    P_vent = max(P_amb, P_sat(T_surf))
 
-Enforces the physical cold-trap constraint: if ambient nebular gas pressure exceeds
-ice sublimation pressure at cold surface temperatures, the ambient gas confines pore fluid;
-if ambient pressure drops below sublimation pressure (space vacuum), flash sublimation
-sets the effective boundary vapor pressure.
+Enforces the physical cold-trap and boiling constraints: if ambient nebular gas pressure exceeds
+saturation vapor pressure at surface temperatures, ambient gas confines pore fluid;
+if ambient pressure drops below saturation vapor pressure, boiling or flash sublimation
+sets the effective boundary venting pressure.
 
 # Arguments
 - `T_surf`: Planetesimal surface temperature [K]
@@ -1773,7 +1787,7 @@ function compute_venting_pressure(
     L_sub::Real=2.83e6,
     Rv::Real=461.5,
 )::Float64
-    P_sat = compute_ice_vapor_pressure(T_surf; P0=P0, T0=T0, L_sub=L_sub, Rv=Rv)
+    P_sat = compute_water_vapor_pressure(T_surf; P0=P0, T0=T0, L_sub=L_sub, Rv=Rv)
     return max(Float64(P_amb), P_sat)
 end
 

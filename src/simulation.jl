@@ -1562,6 +1562,7 @@ function simulation_loop(
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
+                    S_vent=cfg.venting.active ? S_vent_grid : nothing,
                 )
 
                 # compute fluid velocities
@@ -1623,6 +1624,7 @@ function simulation_loop(
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
+                    S_vent=cfg.venting.active ? S_vent_grid : nothing,
                 )
                 # symmetrize P node observables
                 symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
@@ -1917,6 +1919,7 @@ function simulation_loop(
             coords=coords,
         )
         delta_m_vent = 0.0
+        delta_m_vent_3d = 0.0
         if cfg.venting.active
             delta_m_vent = sink_vented_marker_porosity!(
                 xm,
@@ -1930,14 +1933,17 @@ function simulation_loop(
                 phimin=phimin_val,
                 rhofluidcur=rhofluidm[2],
             )
-            M_vent_total += delta_m_vent
+            # Area flux geometric scaling: 4πR² / 2πR = 2 * R_planet
+            L_3D_equiv = 2.0 * rplanet_val
+            delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            M_vent_total += delta_m_vent_3d
         end
 
         if cfg.escape.active
-            # Convert 2D planar vented mass [kg/m] to equivalent 3D spherical mass [kg]
-            # using volume-to-area geometric depth L_3D = (4/3) * R_planet
-            L_3D_equiv = (4.0 / 3.0) * cfg.escape.R_planet
-            delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            L_3D_equiv = 2.0 * cfg.escape.R_planet
+            if !cfg.venting.active
+                delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            end
             M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
             esc_res = evolve_atmospheric_species_inventory(
                 M_atm_total,

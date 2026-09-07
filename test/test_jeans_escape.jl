@@ -320,6 +320,9 @@ using Erebus.Physics
         # Modify escape section and verify round-trip
         toml_content = read(quick_toml, String)
         escape_block = """
+        [geometry]
+        rplanet = 60000.0
+
         [escape]
         active = true
         M_planet = 2.5e18
@@ -330,6 +333,7 @@ using Erebus.Physics
         full_toml = toml_content * "\n" * escape_block
         cfg_loaded = load_config(full_toml)
         @test cfg_loaded.escape.active
+        @test isapprox(cfg_loaded.geometry.rplanet, 60000.0; rtol=1e-12)
         @test isapprox(cfg_loaded.escape.M_planet, 2.5e18; rtol=1e-12)
         @test isapprox(cfg_loaded.escape.R_planet, 60000.0; rtol=1e-12)
         @test isapprox(cfg_loaded.escape.T_exobase, 220.0; rtol=1e-12)
@@ -341,6 +345,7 @@ using Erebus.Physics
         saved_str = String(take!(io))
         cfg_reloaded = load_config(saved_str)
         @test cfg_reloaded.escape.active == cfg_loaded.escape.active
+        @test isapprox(cfg_reloaded.geometry.rplanet, cfg_loaded.geometry.rplanet; rtol=1e-12)
         @test isapprox(cfg_reloaded.escape.M_planet, cfg_loaded.escape.M_planet; rtol=1e-12)
         @test isapprox(cfg_reloaded.escape.R_planet, cfg_loaded.escape.R_planet; rtol=1e-12)
         @test isapprox(
@@ -364,6 +369,12 @@ using Erebus.Physics
             escape=EscapeConfig(; R_planet=50000.0, R_exobase=40000.0)
         )
         @test_throws ArgumentError validate_config(cfg_bad_R_exo)
+
+        cfg_mismatched_radius = SimulationConfig(;
+            geometry=GeometryConfig(; rplanet=50000.0),
+            escape=EscapeConfig(; active=true, R_planet=60000.0),
+        )
+        @test_throws ArgumentError validate_config(cfg_mismatched_radius)
     end
 
     @testset "Simulation Loop Integration with Atmospheric Escape" begin
@@ -518,12 +529,10 @@ using Erebus.Physics
             @test data_c["M_vent_total"] >= 0.0
             @test data_c["M_atm_total"] >= 0.0
             @test data_c["M_escaped_total"] >= 0.0
-            # 3D equivalent mass conversion: L_3D = (4/3) * R_planet
-            L_3D = (4.0 / 3.0) * cfg_coupled.escape.R_planet
-            total_3d_vented = data_c["M_vent_total"] * L_3D
+            # Exact mass balance: 3D vented mass equals retained atmospheric mass plus escaped mass
             @test isapprox(
                 data_c["M_atm_total"] + data_c["M_escaped_total"],
-                total_3d_vented;
+                data_c["M_vent_total"];
                 rtol=1e-10,
                 atol=1e-12,
             )
