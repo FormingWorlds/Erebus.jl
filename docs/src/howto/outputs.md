@@ -18,7 +18,7 @@ Each checkpoint file stores:
   - `qyD`: Vertical Darcy fluid flux on staggered Vy nodes [m/s]
   - `tk1`: Temperature array on grid nodes [K]
   - `PHI`: Porosity field on P nodes [-]
-  - `SXX`: Deviatoric normal stress on P nodes [Pa] (with $\sigma_{yy}' = -\sigma_{xx}'$)
+  - `SXX`: Deviatoric normal stress on P nodes [Pa], where $\sigma_{yy}' = -\sigma_{xx}'$
   - `SXY`: Deviatoric shear stress on shear nodes [Pa]
 - Progression state variables:
   - `timesum`: Total elapsed physical time [s]
