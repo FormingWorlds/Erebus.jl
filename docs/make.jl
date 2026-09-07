@@ -22,8 +22,8 @@ makedocs(;
         prettyurls=get(ENV, "CI", nothing) == "true",
         canonical="https://proteus-framework.org/Erebus.jl/stable/",
         edit_link="main",
-        size_threshold_warn=250 * 1024,
-        size_threshold=350 * 1024,
+        size_threshold_warn=350 * 1024,
+        size_threshold=450 * 1024,
     ),
     pages=[
         "Home" => "index.md",
@@ -60,6 +60,7 @@ makedocs(;
             "Cold Surface Venting" => "validation/cold_surface_venting.md",
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
             "Volatile Exsolution & Nitrogen Chemistry" => "validation/volatile_exsolution.md",
+            "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
         ],
         "Reference" => [

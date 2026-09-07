@@ -2231,33 +2231,68 @@ Compute equilibrium dissolved water solubility in silicate melt at low pressure.
 
 $(SIGNATURES)
 
-Follows the low-pressure square-root law (Burnham 1979; Dixon et al. 1995)
+Follows the low-pressure square-root law (Burnham 1979; Dixon et al. 1995; Sossi et al. 2023)
 where water dissolves dominantly as hydroxyl (OH⁻):
+- `:burnham_dixon`: Burnham (1979) / Dixon et al. (1995) baseline:
     w_H2O = As * sqrt(max(0, P [MPa]))  [wt%]
+- `:sossi_peridotite`: Sossi et al. (2023) peridotitic melt:
+    w_H2O = 524.0 * sqrt(max(0, P [bar]))  [ppmw] (converted to wt%)
+- `:basalt_dixon`: Dixon et al. (1995) MORB basalt:
+    w_H2O = 965.0 * sqrt(max(0, P [bar]))  [ppmw] (converted to wt%)
+- `:newcombe_lunar`: Newcombe et al. (2017) lunar glass:
+    w_H2O = 683.0 * sqrt(max(0, P [bar]))  [ppmw] (converted to wt%)
 
 # Arguments
 - `P_Pa`: Pore fluid pressure [Pa]
 
 # Keyword Arguments
-- `As`: Burnham water solubility coefficient [wt% / MPa^0.5] (default: 0.40, representative baseline for basaltic melt)
+- `As`: Water solubility coefficient [wt% / MPa^0.5] for `:burnham_dixon` (default: 0.40)
+- `law`: Solubility formulation (`:burnham_dixon`, `:sossi_peridotite`, `:basalt_dixon`, `:newcombe_lunar`)
 
 # Returns
 - `w_H2O`: Equilibrium dissolved water concentration in melt [wt%]
 """
-function compute_water_solubility_melt(P_Pa::Real; As::Real=0.40)::Float64
+function compute_water_solubility_melt(
+    P_Pa::Real; As::Real=0.40, law::Symbol=:burnham_dixon
+)::Float64
     P_val = Float64(P_Pa)
     if !isfinite(P_val)
         throw(DomainError(P_val, "Pressure must be finite"))
     end
-    As_val = Float64(As)
-    if As_val <= 0.0 || !isfinite(As_val)
-        throw(DomainError(As_val, "Water solubility coefficient As must be > 0 and finite"))
+    if law === :burnham_dixon
+        As_val = Float64(As)
+        if As_val <= 0.0 || !isfinite(As_val)
+            throw(
+                DomainError(
+                    As_val, "Water solubility coefficient As must be > 0 and finite"
+                ),
+            )
+        end
+        if P_val <= 0.0
+            return 0.0
+        end
+        return As_val * sqrt(P_val * 1.0e-6)
+    elseif law === :sossi_peridotite
+        if P_val <= 0.0
+            return 0.0
+        end
+        p_bar = P_val * 1.0e-5
+        return (524.0 * sqrt(p_bar)) * 1.0e-4
+    elseif law === :basalt_dixon
+        if P_val <= 0.0
+            return 0.0
+        end
+        p_bar = P_val * 1.0e-5
+        return (965.0 * sqrt(p_bar)) * 1.0e-4
+    elseif law === :newcombe_lunar
+        if P_val <= 0.0
+            return 0.0
+        end
+        p_bar = P_val * 1.0e-5
+        return (683.0 * sqrt(p_bar)) * 1.0e-4
+    else
+        throw(ArgumentError("Unknown water solubility law: $law"))
     end
-    if P_val <= 0.0
-        return 0.0
-    end
-    P_MPa = P_val * 1.0e-6
-    return As_val * sqrt(P_MPa)
 end
 
 """
@@ -2373,6 +2408,677 @@ function compute_organic_nitrogen_yield(
     return inv(1.0 + exp(-arg))
 end
 
+"""
+Compute equilibrium dissolved molecular hydrogen (H2) solubility in silicate melt.
+
+$(SIGNATURES)
+
+Calculates dissolved H2 concentration under reducing magmatic conditions:
+- `:hirschmann2012`: Hirschmann et al. (2012) synthetic basalt fit:
+    log10(X_H2 [ppmw]) = 1.1008 + 0.5241 * log10(p_H2 [bar])
+- `:gaillard2003`: Gaillard et al. (2003) power law fit:
+    X_H2 [ppmw] = 0.163 * (p_H2 [bar])^1.252
+
+# Arguments
+- `p_H2_Pa`: Partial pressure of H2 [Pa]
+
+# Keyword Arguments
+- `law`: Formulation (`:hirschmann2012` or `:gaillard2003`)
+
+# Returns
+- `ppmw`: Dissolved H2 concentration in melt [ppmw]
+"""
+function compute_h2_solubility_melt(p_H2_Pa::Real; law::Symbol=:hirschmann2012)::Float64
+    p_val = Float64(p_H2_Pa)
+    if !isfinite(p_val)
+        throw(DomainError(p_val, "Partial pressure of H2 must be finite"))
+    end
+    if p_val <= 0.0
+        return 0.0
+    end
+    p_bar = p_val * 1.0e-5
+    if law === :hirschmann2012
+        return 10.0^(1.10083602 + 0.52413928 * log10(p_bar))
+    elseif law === :gaillard2003
+        return 0.163 * (p_bar^1.252)
+    else
+        throw(ArgumentError("Unknown H2 solubility law: $law"))
+    end
+end
+
+"""
+Compute equilibrium nitrogen solubility in silicate melt using Dasgupta et al. (2022).
+
+$(SIGNATURES)
+
+Partitions nitrogen into physical molecular dissolution (N2) and chemical nitride dissolution (N3-)
+incorporating temperature, total pressure, redox state, and melt composition:
+    w_chem [ppmw] = sqrt(p_N2 [GPa]) * exp(5908.0 * sqrt(p_tot [GPa]) / T - 1.6 * ΔIW)
+    w_phys [ppmw] = p_N2 [GPa] * exp(4.67 + 7.11 * x_SiO2 - 13.06 * x_Al2O3 - 120.67 * x_TiO2)
+    w_total = w_chem + w_phys
+
+# Arguments
+- `p_N2_Pa`: Partial pressure of N2 [Pa]
+- `p_total_Pa`: Total pressure [Pa]
+- `T_K`: Melt temperature [K]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units]
+
+# Keyword Arguments
+- `x_SiO2`: Silicate melt SiO2 mole fraction (default: 0.56, Earth/chondritic mantle)
+- `x_Al2O3`: Silicate melt Al2O3 mole fraction (default: 0.11)
+- `x_TiO2`: Silicate melt TiO2 mole fraction (default: 0.01)
+
+# Returns
+- `NamedTuple`: `(; total_ppm, physical_ppm, chemical_ppm)`
+"""
+function compute_nitrogen_solubility_dasgupta(
+    p_N2_Pa::Real,
+    p_total_Pa::Real,
+    T_K::Real,
+    delta_IW::Real;
+    x_SiO2::Real=0.56,
+    x_Al2O3::Real=0.11,
+    x_TiO2::Real=0.01,
+)::@NamedTuple{total_ppm::Float64, physical_ppm::Float64, chemical_ppm::Float64}
+    p_val = Float64(p_N2_Pa)
+    if !isfinite(p_val)
+        throw(DomainError(p_val, "p_N2 must be finite"))
+    end
+    p_tot = Float64(p_total_Pa)
+    if !isfinite(p_tot)
+        throw(DomainError(p_tot, "p_total must be finite"))
+    end
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    d_IW = Float64(delta_IW)
+    if !isfinite(d_IW) || abs(d_IW) > 50.0
+        throw(DomainError(d_IW, "delta_IW must be finite and within [-50, 50]"))
+    end
+    for (nm, v) in (("x_SiO2", x_SiO2), ("x_Al2O3", x_Al2O3), ("x_TiO2", x_TiO2))
+        fv = Float64(v)
+        if fv < 0.0 || fv > 1.0 || !isfinite(fv)
+            throw(DomainError(fv, "$nm must be in [0, 1] and finite"))
+        end
+    end
+
+    if p_val <= 0.0
+        return (total_ppm=0.0, physical_ppm=0.0, chemical_ppm=0.0)
+    end
+
+    pN2_GPa = p_val * 1.0e-9
+    ptot_GPa = max(p_tot, 0.0) * 1.0e-9
+
+    chem_exp = (5908.0 * sqrt(max(ptot_GPa, 1.0e-15))) / T - 1.6 * d_IW
+    chem_exp_clamped = clamp(chem_exp, -100.0, 100.0)
+    chemical_ppm = sqrt(pN2_GPa) * exp(chem_exp_clamped)
+
+    phys_prefactor = exp(
+        4.67 + 7.11 * Float64(x_SiO2) - 13.06 * Float64(x_Al2O3) - 120.67 * Float64(x_TiO2)
+    )
+    physical_ppm = pN2_GPa * phys_prefactor
+
+    total_ppm = physical_ppm + chemical_ppm
+    return (total_ppm=total_ppm, physical_ppm=physical_ppm, chemical_ppm=chemical_ppm)
+end
+
+"""
+Compute equilibrium dissolved carbon monoxide (CO) in silicate melt.
+
+$(SIGNATURES)
+
+- `:armstrong2015`: Armstrong et al. (2015) mafic melt:
+    log10(X_CO [ppmw]) = -0.738 + 0.876 * log10(p_CO [bar]) - 5.44e-5 * p_tot [bar]
+- `:yoshioka2019_morb`: Yoshioka et al. (2019) MORB basalt at graphite saturation:
+    X_C [wt%] = 10^(-5.20 + 0.80 * log10(p_CO [bar])) -> X_CO [ppmw] = X_C * 1e4 * (28.0101 / 12.011)
+
+# Arguments
+- `p_CO_Pa`: Partial pressure of CO [Pa]
+- `p_total_Pa`: Total pressure [Pa]
+
+# Keyword Arguments
+- `law`: Formulation (`:armstrong2015` or `:yoshioka2019_morb`)
+
+# Returns
+- `ppmw`: Dissolved CO concentration in melt [ppmw]
+"""
+function compute_co_solubility_melt(
+    p_CO_Pa::Real, p_total_Pa::Real; law::Symbol=:armstrong2015
+)::Float64
+    p_co = Float64(p_CO_Pa)
+    if !isfinite(p_co)
+        throw(DomainError(p_co, "p_CO must be finite"))
+    end
+    p_tot = Float64(p_total_Pa)
+    if !isfinite(p_tot)
+        throw(DomainError(p_tot, "p_total must be finite"))
+    end
+    if p_co <= 0.0
+        return 0.0
+    end
+    p_co_bar = p_co * 1.0e-5
+    p_tot_bar = max(p_tot, 0.0) * 1.0e-5
+
+    if law === :armstrong2015
+        log_co = -0.738 + 0.876 * log10(p_co_bar) - 5.44e-5 * p_tot_bar
+        return 10.0^log_co
+    elseif law === :yoshioka2019_morb
+        co_wtp = 10.0^(-5.20 + 0.80 * log10(p_co_bar))
+        return co_wtp * 1.0e4 * (28.0101 / 12.011)
+    else
+        throw(ArgumentError("Unknown CO solubility law: $law"))
+    end
+end
+
+"""
+Compute equilibrium dissolved methane (CH4) in silicate melt.
+
+$(SIGNATURES)
+
+Ardia et al. (2013) haplobasalt fit under strongly reducing conditions:
+    X_CH4 [ppmw] = p_CH4 [GPa] * exp(4.93 - 1.93 * p_tot [GPa])
+
+# Arguments
+- `p_CH4_Pa`: Partial pressure of CH4 [Pa]
+- `p_total_Pa`: Total pressure [Pa]
+
+# Keyword Arguments
+- `law`: Formulation (`:ardia2013`)
+
+# Returns
+- `ppmw`: Dissolved CH4 concentration in melt [ppmw]
+"""
+function compute_ch4_solubility_melt(
+    p_CH4_Pa::Real, p_total_Pa::Real; law::Symbol=:ardia2013
+)::Float64
+    p_ch4 = Float64(p_CH4_Pa)
+    if !isfinite(p_ch4)
+        throw(DomainError(p_ch4, "p_CH4 must be finite"))
+    end
+    p_tot = Float64(p_total_Pa)
+    if !isfinite(p_tot)
+        throw(DomainError(p_tot, "p_total must be finite"))
+    end
+    if p_ch4 <= 0.0
+        return 0.0
+    end
+    p_ch4_gpa = p_ch4 * 1.0e-9
+    p_tot_gpa = max(p_tot, 0.0) * 1.0e-9
+
+    if law === :ardia2013
+        return p_ch4_gpa * exp(4.93 - 1.93 * p_tot_gpa)
+    else
+        throw(ArgumentError("Unknown CH4 solubility law: $law"))
+    end
+end
+
+"""
+Compute equilibrium dissolved carbon dioxide (CO2) in silicate melt as carbonate.
+
+$(SIGNATURES)
+
+Dixon et al. (1995) MORB basalt fit:
+    x = 3.8e-7 * p_CO2 [bar] * exp(-23.0 * (p_CO2 [bar] - 1.0) / (83.15 * T [K]))
+    X_CO2 [ppmw] = 1e4 * (4400.0 * x) / (36.6 - 44.0 * x)
+
+# Arguments
+- `p_CO2_Pa`: Partial pressure of CO2 [Pa]
+- `T_K`: Melt temperature [K]
+
+# Keyword Arguments
+- `law`: Formulation (`:dixon1995`)
+
+# Returns
+- `ppmw`: Dissolved CO2 concentration in melt [ppmw]
+"""
+function compute_co2_solubility_melt(
+    p_CO2_Pa::Real, T_K::Real; law::Symbol=:dixon1995
+)::Float64
+    p_co2 = Float64(p_CO2_Pa)
+    if !isfinite(p_co2)
+        throw(DomainError(p_co2, "p_CO2 must be finite"))
+    end
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    if p_co2 <= 0.0
+        return 0.0
+    end
+    p_co2_bar = p_co2 * 1.0e-5
+
+    if law === :dixon1995
+        x = 3.8e-7 * p_co2_bar * exp(-23.0 * (p_co2_bar - 1.0) / (83.15 * T))
+        denom = 36.6 - 44.0 * x
+        if denom <= 0.0
+            throw(
+                DomainError(
+                    denom, "CO2 mole fraction exceeds Dixon (1995) denominator pole"
+                ),
+            )
+        end
+        return 1.0e4 * (4400.0 * x) / denom
+    else
+        throw(ArgumentError("Unknown CO2 solubility law: $law"))
+    end
+end
+
+"""
+Compute equilibrium dissolved carbon in silicate melt under reducing conditions.
+
+$(SIGNATURES)
+
+Partitions dissolved carbon into CO (Armstrong et al. 2015), CH4 (Ardia et al. 2013),
+and CO2 (Dixon et al. 1995). If `graphite_saturation` is true, caps CO and CO2 partial
+pressures at graphite saturation fugacities calculated via `compute_graphite_saturation_fugacity`.
+
+# Arguments
+- `p_CO_Pa`: Partial pressure of CO [Pa]
+- `p_CH4_Pa`: Partial pressure of CH4 [Pa]
+- `p_CO2_Pa`: Partial pressure of CO2 [Pa]
+- `p_total_Pa`: Total pressure [Pa]
+- `T_K`: Melt temperature [K]
+
+# Keyword Arguments
+- `co_law`: Law for CO (default: `:armstrong2015`)
+- `ch4_law`: Law for CH4 (default: `:ardia2013`)
+- `co2_law`: Law for CO2 (default: `:dixon1995`)
+- `graphite_saturation`: Whether to enforce graphite saturation ceiling (default: false)
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units] (default: 0.0)
+
+# Returns
+- `NamedTuple`: `(; total_ppm, co_ppm, ch4_ppm, co2_ppm)`
+"""
+function compute_carbon_solubility_melt(
+    p_CO_Pa::Real,
+    p_CH4_Pa::Real,
+    p_CO2_Pa::Real,
+    p_total_Pa::Real,
+    T_K::Real;
+    co_law::Symbol=:armstrong2015,
+    ch4_law::Symbol=:ardia2013,
+    co2_law::Symbol=:dixon1995,
+    graphite_saturation::Bool=false,
+    delta_IW::Real=0.0,
+)::@NamedTuple{total_ppm::Float64, co_ppm::Float64, ch4_ppm::Float64, co2_ppm::Float64}
+    p_co = Float64(p_CO_Pa)
+    p_co2 = Float64(p_CO2_Pa)
+    if graphite_saturation
+        log10_fO2 = compute_iron_wustite_fO2(T_K; delta_IW=delta_IW)
+        gr = compute_graphite_saturation_fugacity(T_K, log10_fO2)
+        p_co = min(p_co, gr.f_CO_max_bar * 1.0e5)
+        p_co2 = min(p_co2, gr.f_CO2_max_bar * 1.0e5)
+    end
+    co = compute_co_solubility_melt(p_co, p_total_Pa; law=co_law)
+    ch4 = compute_ch4_solubility_melt(p_CH4_Pa, p_total_Pa; law=ch4_law)
+    co2 = compute_co2_solubility_melt(p_co2, T_K; law=co2_law)
+    return (total_ppm=co + ch4 + co2, co_ppm=co, ch4_ppm=ch4, co2_ppm=co2)
+end
+
+"""
+Compute maximum carbon fugacities at graphite saturation (a_C = 1).
+
+$(SIGNATURES)
+
+French (1966) and Holloway et al. (1992) graphite-gas buffer equilibria:
+    C(gr) + 1/2 O2 <=> CO  => log10(f_CO_max)  = 5785.0 / T + 4.545 + 0.5 * log10_fO2
+    C(gr) + O2     <=> CO2 => log10(f_CO2_max) = 20590.0 / T - 0.043 + log10_fO2
+
+# Arguments
+- `T_K`: Melt temperature [K]
+- `log10_fO2`: log10 of oxygen fugacity [bar]
+
+# Returns
+- `NamedTuple`: `(; f_CO_max_bar, f_CO2_max_bar)`
+"""
+function compute_graphite_saturation_fugacity(
+    T_K::Real, log10_fO2::Real
+)::@NamedTuple{f_CO_max_bar::Float64, f_CO2_max_bar::Float64}
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    lfO2 = Float64(log10_fO2)
+    if !isfinite(lfO2)
+        throw(DomainError(lfO2, "log10_fO2 must be finite"))
+    end
+
+    log_co = 5785.0 / T + 4.545 + 0.5 * lfO2
+    log_co2 = 20590.0 / T - 0.043 + lfO2
+
+    return (f_CO_max_bar=10.0^log_co, f_CO2_max_bar=10.0^log_co2)
+end
+
+"""
+Compute equilibrium dissolved sulfur in silicate melt.
+
+$(SIGNATURES)
+
+Calculates dissolved sulfur concentration under reducing-to-oxidizing conditions:
+- `:boulliung2023`: Boulliung & Wood (2022, 2023) sulfide capacity (and optional sulfate capacity):
+    log10(C_S2-) = 0.225 - slope / T
+    S_sulfide [wt%] = C_S2- * sqrt(p_S2 [bar] / f_O2 [bar])
+- `:gaillard2022`: Gaillard et al. (2022) basaltic melt sulfide capacity:
+    ln(S [ppmw]) = 13.8426 - 26476.0 / T + 0.124 * x_FeO + 0.5 * ln(p_S2 [bar] / f_O2 [bar])
+
+# Arguments
+- `p_S2_Pa`: Partial pressure of S2 [Pa]
+- `T_K`: Melt temperature [K]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units]
+
+# Keyword Arguments
+- `law`: Formulation (`:boulliung2023` or `:gaillard2022`)
+- `sulfide_melt`: Melt composition for Boulliung (`:basalt`, `:andesite`, `:trachybasalt`)
+- `include_sulfate`: Whether to add sulfate capacity (relevant above IW+2)
+- `x_FeO`: Melt FeO content [wt%] (default: 10.0)
+- `scss_active`: Whether to enforce SCSS saturation limit (default: false)
+- `p_total_Pa`: Total pressure for SCSS [Pa] (default: 0.0)
+- `scss_law`: SCSS formulation (`:smythe2017` or `:oneill2002`)
+
+# Returns
+- `S_ppm`: Dissolved sulfur concentration in melt [ppmw]
+"""
+function compute_sulfur_solubility_melt(
+    p_S2_Pa::Real,
+    T_K::Real,
+    delta_IW::Real;
+    law::Symbol=:boulliung2023,
+    sulfide_melt::Symbol=:basalt,
+    include_sulfate::Bool=false,
+    x_FeO::Real=10.0,
+    scss_active::Bool=false,
+    p_total_Pa::Real=0.0,
+    scss_law::Symbol=:smythe2017,
+)::Float64
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    d_IW = Float64(delta_IW)
+    if !isfinite(d_IW) || abs(d_IW) > 50.0
+        throw(DomainError(d_IW, "delta_IW must be finite and within [-50, 50]"))
+    end
+    p_s2 = Float64(p_S2_Pa)
+    if !isfinite(p_s2)
+        throw(DomainError(p_s2, "p_S2 must be finite"))
+    end
+    p_s2_bar = max(p_s2, 0.0) * 1.0e-5
+    if p_s2_bar < 1.0e-20
+        return 0.0
+    end
+    x_fe = Float64(x_FeO)
+    if !isfinite(x_fe)
+        throw(DomainError(x_fe, "x_FeO must be finite"))
+    end
+
+    log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=d_IW)
+    fO2_bar = 10.0^log10_fO2
+
+    s_ppm = if law === :boulliung2023
+        slope_s2 = if sulfide_melt === :basalt
+            8045.7465
+        elseif sulfide_melt === :andesite
+            8921.0927
+        elseif sulfide_melt === :trachybasalt
+            7842.5
+        else
+            throw(ArgumentError("Unknown sulfide_melt: $sulfide_melt"))
+        end
+        logC_s2 = 0.225 - slope_s2 / T
+        s_wtp = 10.0^(logC_s2 - 0.5 * (log10_fO2 - log10(p_s2_bar)))
+        s_base = s_wtp * 1.0e4
+
+        if include_sulfate
+            slope_s6 = if sulfide_melt === :basalt
+                32333.5635
+            elseif sulfide_melt === :andesite
+                31586.2393
+            elseif sulfide_melt === :trachybasalt
+                32446.366
+            end
+            logC_s6 = -12.948 + slope_s6 / T
+            so4_wtp = 10.0^(logC_s6 + 0.5 * log10(p_s2_bar) + 1.5 * log10_fO2)
+            s_base += (so4_wtp * (32.065 / 96.06)) * 1.0e4
+        end
+        s_base
+    elseif law === :gaillard2022
+        ln_s = 13.8426 - 26476.0 / T + 0.124 * x_fe + 0.5 * log(p_s2_bar / fO2_bar)
+        exp(ln_s)
+    else
+        throw(ArgumentError("Unknown sulfur solubility law: $law"))
+    end
+
+    if scss_active
+        cap = compute_scss(T, p_total_Pa; x_FeO=x_fe, law=scss_law)
+        return min(s_ppm, cap)
+    end
+    return s_ppm
+end
+
+"""
+Compute Sulfur Content at Sulfide Saturation (SCSS) in silicate melt.
+
+$(SIGNATURES)
+
+Calculates the maximum dissolved sulfur content before an immiscible Fe-S sulfide liquid
+exsolves (O'Neill & Mavrogenes 2002; Fortin et al. 2015; Smythe et al. 2017):
+- `:smythe2017`: Smythe et al. (2017) pressure-dependent formulation:
+    ln(SCSS [ppmw]) = 7.50 - 4500.0 / T + 0.90 * ln(max(0.1, x_FeO)) - 2.5e-4 * (P_tot [bar] / T)
+- `:oneill2002`: O'Neill & Mavrogenes (2002) 1-bar baseline:
+    ln(SCSS [ppmw]) = 7.50 - 4500.0 / T + 0.90 * ln(max(0.1, x_FeO))
+
+# Arguments
+- `T_K`: Melt temperature [K]
+- `p_total_Pa`: Total pressure [Pa]
+
+# Keyword Arguments
+- `x_FeO`: Silicate melt FeO content [wt%] (default: 10.0)
+- `law`: SCSS formulation (`:smythe2017` or `:oneill2002`)
+
+# Returns
+- `scss_ppm`: Maximum dissolved sulfur in melt [ppmw]
+"""
+function compute_scss(
+    T_K::Real, p_total_Pa::Real; x_FeO::Real=10.0, law::Symbol=:smythe2017
+)::Float64
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    p_tot = Float64(p_total_Pa)
+    if !isfinite(p_tot)
+        throw(DomainError(p_tot, "p_total must be finite"))
+    end
+    x_fe = Float64(x_FeO)
+    if x_fe < 0.0 || !isfinite(x_fe)
+        throw(DomainError(x_fe, "x_FeO must be >= 0 and finite"))
+    end
+    p_bar = max(p_tot, 0.0) * 1.0e-5
+    fe_term = log(max(x_fe, 0.1))
+
+    if law === :smythe2017
+        ln_scss = 7.50 - 4500.0 / T + 0.90 * fe_term - 2.5e-4 * (p_bar / T)
+        return exp(ln_scss)
+    elseif law === :oneill2002
+        ln_scss = 7.50 - 4500.0 / T + 0.90 * fe_term
+        return exp(ln_scss)
+    else
+        throw(ArgumentError("Unknown SCSS law: $law"))
+    end
+end
+
+"""
+Solve homogeneous gas-phase chemical equilibrium for the C-H-O-N-S volatile system.
+
+$(SIGNATURES)
+
+Given elemental gas fractions `z_H, z_C, z_N, z_S`, total pressure `p_total_Pa`, melt temperature `T_K`,
+and oxygen fugacity offset `delta_IW`, solves for partial pressures of major outgassed species:
+`H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2`.
+
+# Arguments
+- `p_total_Pa`: Total gas pressure [Pa]
+- `T_K`: Gas temperature [K]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units]
+
+# Keyword Arguments
+- `z_H`: Elemental hydrogen fraction (default: 0.80)
+- `z_C`: Elemental carbon fraction (default: 0.15)
+- `z_N`: Elemental nitrogen fraction (default: 0.03)
+- `z_S`: Elemental sulfur fraction (default: 0.02)
+- `graphite_saturation`: Whether to cap C fugacities at graphite saturation (default: true)
+
+# Returns
+- `NamedTuple`: `(; p_H2_Pa, p_H2O_Pa, p_CO_Pa, p_CO2_Pa, p_CH4_Pa, p_N2_Pa, p_NH3_Pa, p_H2S_Pa, p_S2_Pa, p_SO2_Pa)`
+"""
+function solve_chnos_speciation(
+    p_total_Pa::Real,
+    T_K::Real,
+    delta_IW::Real;
+    z_H::Real=0.80,
+    z_C::Real=0.15,
+    z_N::Real=0.03,
+    z_S::Real=0.02,
+    graphite_saturation::Bool=true,
+)::@NamedTuple{
+    p_H2_Pa::Float64,
+    p_H2O_Pa::Float64,
+    p_CO_Pa::Float64,
+    p_CO2_Pa::Float64,
+    p_CH4_Pa::Float64,
+    p_N2_Pa::Float64,
+    p_NH3_Pa::Float64,
+    p_H2S_Pa::Float64,
+    p_S2_Pa::Float64,
+    p_SO2_Pa::Float64,
+}
+    p_tot = Float64(p_total_Pa)
+    if !isfinite(p_tot)
+        throw(DomainError(p_tot, "p_total must be finite"))
+    end
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    d_IW = Float64(delta_IW)
+    if !isfinite(d_IW) || abs(d_IW) > 50.0
+        throw(DomainError(d_IW, "delta_IW must be finite and within [-50, 50]"))
+    end
+    if p_tot <= 0.0
+        return (
+            p_H2_Pa=0.0,
+            p_H2O_Pa=0.0,
+            p_CO_Pa=0.0,
+            p_CO2_Pa=0.0,
+            p_CH4_Pa=0.0,
+            p_N2_Pa=0.0,
+            p_NH3_Pa=0.0,
+            p_H2S_Pa=0.0,
+            p_S2_Pa=0.0,
+            p_SO2_Pa=0.0,
+        )
+    end
+
+    sum_z = Float64(z_H) + Float64(z_C) + Float64(z_N) + Float64(z_S)
+    if sum_z <= 0.0 || !isfinite(sum_z)
+        throw(
+            DomainError(
+                sum_z, "Sum of volatile elemental abundances must be > 0 and finite"
+            ),
+        )
+    end
+    nH = Float64(z_H) / sum_z
+    nC = Float64(z_C) / sum_z
+    nN = Float64(z_N) / sum_z
+    nS = Float64(z_S) / sum_z
+
+    log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=d_IW)
+    p_tot_bar = p_tot * 1.0e-5
+
+    # 1. Hydrogen speciation: H2 + 1/2 O2 <=> H2O
+    logK_H2O = 12700.0 / T - 2.80
+    log_rH = clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
+    rH = 10.0^log_rH
+    pH_tot_bar = nH * p_tot_bar
+    pH2_bar = pH_tot_bar / (1.0 + rH)
+    pH2O_bar = (rH * pH_tot_bar) / (1.0 + rH)
+
+    # 2. Carbon speciation: CO + 1/2 O2 <=> CO2, CO + 3 H2 <=> CH4 + H2O
+    logK_CO2 = 14800.0 / T - 4.58
+    log_rCO2 = clamp(logK_CO2 + 0.5 * log10_fO2, -100.0, 100.0)
+    rCO2 = 10.0^log_rCO2
+
+    logK_CH4 = 11500.0 / T - 12.0
+    log_pH2_term = 2.0 * log10(max(pH2_bar, 1.0e-30))
+    log_rCH4 = clamp(logK_CH4 + log_pH2_term - log_rH, -100.0, 100.0)
+    rCH4 = 10.0^log_rCH4
+
+    pC_tot_bar = nC * p_tot_bar
+    denom_C = 1.0 + rCO2 + rCH4
+    pCO_bar = pC_tot_bar / denom_C
+    pCO2_bar = rCO2 * pCO_bar
+    pCH4_bar = rCH4 * pCO_bar
+
+    # Graphite ceiling
+    if graphite_saturation
+        gr = compute_graphite_saturation_fugacity(T, log10_fO2)
+        if pCO_bar > gr.f_CO_max_bar
+            pCO_bar = gr.f_CO_max_bar
+            pCO2_bar = min(rCO2 * pCO_bar, gr.f_CO2_max_bar)
+            pCH4_bar = min(pCH4_bar, rCH4 * pCO_bar)
+        end
+    end
+
+    # 3. Nitrogen speciation: 1/2 N2 + 3/2 H2 <=> NH3
+    # Equilibrium: p_NH3 = r_NH3 * sqrt(p_N2)
+    # Conservation: 2 * p_N2 + p_NH3 = p_N,tot
+    # Quadratic: 2 * u^2 + r_NH3 * u - p_N,tot = 0 where u = sqrt(p_N2)
+    # Root: u = 2 * p_N,tot / (r_NH3 + sqrt(r_NH3^2 + 8 * p_N,tot))
+    logK_NH3 = 2800.0 / T - 5.80
+    log_rNH3 = clamp(logK_NH3 + 1.5 * log10(max(pH2_bar, 1.0e-30)), -100.0, 100.0)
+    rNH3 = 10.0^log_rNH3
+    pN_tot_bar = nN * p_tot_bar
+    denom_N = rNH3 + sqrt(rNH3^2 + 8.0 * pN_tot_bar)
+    u_N = (2.0 * pN_tot_bar) / max(denom_N, 1.0e-30)
+    pN2_bar = u_N^2
+    pNH3_bar = rNH3 * u_N
+
+    # 4. Sulfur speciation: H2 + 1/2 S2 <=> H2S, 1/2 S2 + O2 <=> SO2
+    # Equilibrium: p_H2S = r_H2S * sqrt(p_S2), p_SO2 = r_SO2 * sqrt(p_S2)
+    # Conservation: 2 * p_S2 + p_H2S + p_SO2 = p_S,tot
+    # Quadratic: 2 * v^2 + B_S * v - p_S,tot = 0 where v = sqrt(p_S2), B_S = r_H2S + r_SO2
+    # Root: v = 2 * p_S,tot / (B_S + sqrt(B_S^2 + 8 * p_S,tot))
+    logK_H2S = 4800.0 / T - 2.50
+    log_rH2S = clamp(logK_H2S + log10(max(pH2_bar, 1.0e-30)), -100.0, 100.0)
+    rH2S = 10.0^log_rH2S
+
+    logK_SO2 = 18800.0 / T - 3.80
+    log_rSO2 = clamp(logK_SO2 + log10_fO2, -100.0, 100.0)
+    rSO2 = 10.0^log_rSO2
+
+    pS_tot_bar = nS * p_tot_bar
+    B_S = rH2S + rSO2
+    denom_S = B_S + sqrt(B_S^2 + 8.0 * pS_tot_bar)
+    v_S = (2.0 * pS_tot_bar) / max(denom_S, 1.0e-30)
+    pS2_bar = v_S^2
+    pH2S_bar = rH2S * v_S
+    pSO2_bar = rSO2 * v_S
+
+    return (
+        p_H2_Pa=pH2_bar * 1.0e5,
+        p_H2O_Pa=pH2O_bar * 1.0e5,
+        p_CO_Pa=pCO_bar * 1.0e5,
+        p_CO2_Pa=pCO2_bar * 1.0e5,
+        p_CH4_Pa=pCH4_bar * 1.0e5,
+        p_N2_Pa=pN2_bar * 1.0e5,
+        p_NH3_Pa=pNH3_bar * 1.0e5,
+        p_H2S_Pa=pH2S_bar * 1.0e5,
+        p_S2_Pa=pS2_bar * 1.0e5,
+        p_SO2_Pa=pSO2_bar * 1.0e5,
+    )
+end
+
 # =============================================================================
 # Atmospheric Jeans Kinetic Escape & Volatile Inventory Dynamics
 # =============================================================================
@@ -2384,10 +3090,15 @@ const AVOGADRO_CONSTANT = 6.02214076e23     # [mol^-1]
 
 # Volatile molecular masses [kg] (Standard atomic weights divided by Avogadro constant)
 const MASS_H2O_KG = 2.991507e-26  # H2O (18.01528 g/mol)
+const MASS_H2_KG = 3.347447e-27   # H2  (2.01588 g/mol)
 const MASS_N2_KG = 4.651735e-26   # N2  (28.01340 g/mol)
 const MASS_NH3_KG = 2.827986e-26  # NH3 (17.03052 g/mol)
 const MASS_CO_KG = 4.651187e-26   # CO  (28.01010 g/mol)
 const MASS_CO2_KG = 7.307950e-26  # CO2 (44.00950 g/mol)
+const MASS_CH4_KG = 2.663920e-26  # CH4 (16.04246 g/mol)
+const MASS_H2S_KG = 5.659267e-26  # H2S (34.08088 g/mol)
+const MASS_S2_KG = 1.064904e-25   # S2  (64.130 g/mol)
+const MASS_SO2_KG = 1.063841e-25  # SO2 (64.066 g/mol)
 
 """
 Upper threshold on the Jeans parameter λ above which kinetic effusion is numerically negligible.
@@ -2400,7 +3111,7 @@ Retrieve molecular mass in kilograms for standard planetary volatile species.
 $(SIGNATURES)
 
 # Arguments
-- `species::Symbol`: Volatile species identifier (`:H2O`, `:N2`, `:NH3`, `:CO`, `:CO2`).
+- `species::Symbol`: Volatile species identifier (`:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2`).
 
 # Returns
 - `mass::Float64`: Molecular mass [kg].
@@ -2409,6 +3120,8 @@ function get_species_molecular_mass(species::Symbol)::Float64
     s = Symbol(uppercase(String(species)))
     if s === :H2O
         return MASS_H2O_KG
+    elseif s === :H2
+        return MASS_H2_KG
     elseif s === :N2
         return MASS_N2_KG
     elseif s === :NH3
@@ -2417,10 +3130,18 @@ function get_species_molecular_mass(species::Symbol)::Float64
         return MASS_CO_KG
     elseif s === :CO2
         return MASS_CO2_KG
+    elseif s === :CH4
+        return MASS_CH4_KG
+    elseif s === :H2S
+        return MASS_H2S_KG
+    elseif s === :S2
+        return MASS_S2_KG
+    elseif s === :SO2
+        return MASS_SO2_KG
     else
         throw(
             ArgumentError(
-                "Unknown species: $species. Supported species: :H2O, :N2, :NH3, :CO, :CO2"
+                "Unknown species: $species. Supported species: :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2",
             ),
         )
     end

@@ -1946,7 +1946,7 @@ function simulation_loop(
                 cfg.escape.M_planet,
                 cfg.escape.R_planet,
                 cfg.escape.T_exobase,
-                MASS_H2O_KG;
+                get_species_molecular_mass(cfg.escape.species);
                 R_exobase=cfg.escape.R_exobase,
             )
             M_atm_total = esc_res.M_atm

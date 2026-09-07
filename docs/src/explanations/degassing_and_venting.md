@@ -206,6 +206,16 @@ $$y(T) = \frac{1}{1 + \exp\left[-\frac{T - T_{\text{devol}}}{\Delta T}\right]}$$
 
 where $T_{\text{devol}} = 550.0\text{ K}$ is the characteristic devolatilization midpoint temperature and $\Delta T = 50.0\text{ K}$ is the thermal transition scale.
 
+### 5. Multi-Component H-C-N-S Volatile Solubility and Saturation Limits
+
+Beyond water and nitrogen, the complete volatile inventory includes carbon and sulfur species:
+
+- Carbon dissolves as neutral $\text{CO}$ and $\text{CH}_4$ in reduced melts (Armstrong et al. 2015; Ardia et al. 2013; Yoshioka et al. 2019) and as carbonate in oxidized melts (Dixon et al. 1995). Carbon gas fugacities are physically limited by graphite saturation ($a_{\text{C}} = 1$) via the heterogeneous equilibria of French (1966) and Holloway et al. (1992).
+- Sulfur dissolves as sulfide ($\text{S}^{2-}$) under reducing conditions and sulfate ($\text{SO}_4^{2-}$) under oxidizing conditions (Boulliung & Wood 2022, 2023; Gaillard et al. 2022). Total dissolved sulfur is bounded by the Sulfur Content at Sulfide Saturation (O'Neill & Mavrogenes 2002; Smythe et al. 2017). When `scss_active = true`, `compute_sulfur_solubility_melt` caps dissolved sulfur at this saturation limit.
+- Homogeneous chemical equilibrium for the ten-species system ($\text{H}_2, \text{H}_2\text{O}, \text{CO}, \text{CO}_2, \text{CH}_4, \text{N}_2, \text{NH}_3, \text{H}_2\text{S}, \text{S}_2, \text{SO}_2$) is evaluated via `solve_chnos_speciation` with graphite saturation clipping and exact elemental quadratic partitioning for nitrogen and sulfur.
+
+For benchmark comparisons across all four elemental systems, see the validation chapter [Multi-Species H-C-N-S Volatile Solubility, Speciation, and Saturation Ceilings](../validation/hcns_solubility.md).
+
 ---
 
 ## Atmospheric Accumulation and Jeans Kinetic Escape

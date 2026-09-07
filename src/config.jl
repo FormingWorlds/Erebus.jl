@@ -321,11 +321,36 @@ Base.@kwdef struct VolatilesConfig
     active::Bool = false
     fO2_delta_IW::Float64 = -1.0
     water_solubility_coeff::Float64 = 0.40
+    water_law::Symbol = :burnham_dixon
+    h2_active::Bool = false
+    h2_law::Symbol = :hirschmann2012
+    nitrogen_law::Symbol = :dasgupta2022
     nitrogen_henry_coeff::Float64 = 0.40
     nitrogen_nitride_capacity::Float64 = 1.0e-3
     t_organic_devol::Float64 = 550.0
     dt_organic_devol::Float64 = 50.0
     organic_n_initial_ppm::Float64 = 500.0
+
+    # Carbon solubility parameters
+    carbon_active::Bool = false
+    co_law::Symbol = :armstrong2015
+    ch4_law::Symbol = :ardia2013
+    co2_law::Symbol = :dixon1995
+    graphite_saturation::Bool = true
+
+    # Sulfur solubility parameters
+    sulfur_active::Bool = false
+    sulfide_law::Symbol = :boulliung2023
+    sulfide_melt::Symbol = :basalt
+    include_sulfate::Bool = false
+    scss_active::Bool = true
+    scss_law::Symbol = :smythe2017
+    melt_feo_wtpct::Float64 = 10.0
+
+    # Silicate melt composition mole fractions
+    x_sio2::Float64 = 0.56
+    x_al2o3::Float64 = 0.11
+    x_tio2::Float64 = 0.01
 end
 
 """
@@ -339,6 +364,7 @@ Base.@kwdef struct EscapeConfig
     R_planet::Float64 = 50_000.0
     T_exobase::Float64 = 200.0
     R_exobase::Float64 = 50_000.0
+    species::Symbol = :H2O
 end
 
 """
@@ -906,6 +932,61 @@ function validate_config(cfg::SimulationConfig)
             "organic_n_initial_ppm must be >= 0 and finite, got $(cfg.volatiles.organic_n_initial_ppm)",
         ),
     )
+    cfg.volatiles.water_law in
+    Set([:burnham_dixon, :sossi_peridotite, :basalt_dixon, :newcombe_lunar]) || throw(
+        ArgumentError(
+            "water_law must be :burnham_dixon, :sossi_peridotite, :basalt_dixon, or :newcombe_lunar, got $(cfg.volatiles.water_law)",
+        ),
+    )
+    cfg.volatiles.h2_law in Set([:hirschmann2012, :gaillard2003]) || throw(
+        ArgumentError(
+            "h2_law must be :hirschmann2012 or :gaillard2003, got $(cfg.volatiles.h2_law)",
+        ),
+    )
+    cfg.volatiles.nitrogen_law in Set([:dasgupta2022, :libourel2003]) || throw(
+        ArgumentError(
+            "nitrogen_law must be :dasgupta2022 or :libourel2003, got $(cfg.volatiles.nitrogen_law)",
+        ),
+    )
+    cfg.volatiles.co_law in Set([:armstrong2015, :yoshioka2019_morb]) || throw(
+        ArgumentError(
+            "co_law must be :armstrong2015 or :yoshioka2019_morb, got $(cfg.volatiles.co_law)",
+        ),
+    )
+    cfg.volatiles.ch4_law in Set([:ardia2013]) ||
+        throw(ArgumentError("ch4_law must be :ardia2013, got $(cfg.volatiles.ch4_law)"))
+    cfg.volatiles.co2_law in Set([:dixon1995]) ||
+        throw(ArgumentError("co2_law must be :dixon1995, got $(cfg.volatiles.co2_law)"))
+    cfg.volatiles.sulfide_law in Set([:boulliung2023, :gaillard2022]) || throw(
+        ArgumentError(
+            "sulfide_law must be :boulliung2023 or :gaillard2022, got $(cfg.volatiles.sulfide_law)",
+        ),
+    )
+    cfg.volatiles.sulfide_melt in Set([:basalt, :andesite, :trachybasalt]) || throw(
+        ArgumentError(
+            "sulfide_melt must be :basalt, :andesite, or :trachybasalt, got $(cfg.volatiles.sulfide_melt)",
+        ),
+    )
+    cfg.volatiles.scss_law in Set([:smythe2017, :oneill2002]) || throw(
+        ArgumentError(
+            "scss_law must be :smythe2017 or :oneill2002, got $(cfg.volatiles.scss_law)"
+        ),
+    )
+    (cfg.volatiles.melt_feo_wtpct >= 0.0 && isfinite(cfg.volatiles.melt_feo_wtpct)) ||
+        throw(
+            ArgumentError(
+                "melt_feo_wtpct must be >= 0 and finite, got $(cfg.volatiles.melt_feo_wtpct)",
+            ),
+        )
+    (0.0 <= cfg.volatiles.x_sio2 <= 1.0 && isfinite(cfg.volatiles.x_sio2)) || throw(
+        ArgumentError("x_sio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_sio2)"),
+    )
+    (0.0 <= cfg.volatiles.x_al2o3 <= 1.0 && isfinite(cfg.volatiles.x_al2o3)) || throw(
+        ArgumentError("x_al2o3 must be in [0, 1] and finite, got $(cfg.volatiles.x_al2o3)"),
+    )
+    (0.0 <= cfg.volatiles.x_tio2 <= 1.0 && isfinite(cfg.volatiles.x_tio2)) || throw(
+        ArgumentError("x_tio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_tio2)"),
+    )
 
     # Escape checks
     (cfg.escape.M_planet > 0.0 && isfinite(cfg.escape.M_planet)) ||
@@ -919,6 +1000,12 @@ function validate_config(cfg::SimulationConfig)
         throw(
             ArgumentError(
                 "R_exobase must be >= R_planet ($(cfg.escape.R_planet)) and finite, got $(cfg.escape.R_exobase)",
+            ),
+        )
+    cfg.escape.species in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) ||
+        throw(
+            ArgumentError(
+                "escape species must be one of :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2, got $(cfg.escape.species)",
             ),
         )
 

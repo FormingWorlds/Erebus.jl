@@ -26,8 +26,13 @@ using Erebus.Physics
         @test get_species_molecular_mass(:NH3) == MASS_NH3_KG
         @test get_species_molecular_mass(:CO) == MASS_CO_KG
         @test get_species_molecular_mass(:CO2) == MASS_CO2_KG
+        @test get_species_molecular_mass(:CH4) == MASS_CH4_KG
+        @test get_species_molecular_mass(:H2) == MASS_H2_KG
+        @test get_species_molecular_mass(:H2S) == MASS_H2S_KG
+        @test get_species_molecular_mass(:S2) == MASS_S2_KG
+        @test get_species_molecular_mass(:SO2) == MASS_SO2_KG
 
-        @test_throws ArgumentError get_species_molecular_mass(:CH4)
+        @test_throws ArgumentError get_species_molecular_mass(:xenon)
         @test_throws ArgumentError get_species_molecular_mass(:argon)
     end
 
