@@ -345,7 +345,9 @@ using Erebus.Physics
         saved_str = String(take!(io))
         cfg_reloaded = load_config(saved_str)
         @test cfg_reloaded.escape.active == cfg_loaded.escape.active
-        @test isapprox(cfg_reloaded.geometry.rplanet, cfg_loaded.geometry.rplanet; rtol=1e-12)
+        @test isapprox(
+            cfg_reloaded.geometry.rplanet, cfg_loaded.geometry.rplanet; rtol=1e-12
+        )
         @test isapprox(cfg_reloaded.escape.M_planet, cfg_loaded.escape.M_planet; rtol=1e-12)
         @test isapprox(cfg_reloaded.escape.R_planet, cfg_loaded.escape.R_planet; rtol=1e-12)
         @test isapprox(

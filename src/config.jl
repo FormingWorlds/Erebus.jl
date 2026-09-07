@@ -1191,18 +1191,19 @@ function load_config(source::AbstractString)::SimulationConfig
     end
     esc = if haskey(parsed, "escape")
         parsed_esc = parsed["escape"]
-        def_esc = if !haskey(parsed_esc, "R_planet") && geom.rplanet != def.geometry.rplanet
-            EscapeConfig(
-                def.escape.active,
-                def.escape.M_planet,
-                geom.rplanet,
-                def.escape.T_exobase,
-                geom.rplanet,
-                def.escape.species,
-            )
-        else
-            def.escape
-        end
+        def_esc =
+            if !haskey(parsed_esc, "R_planet") && geom.rplanet != def.geometry.rplanet
+                EscapeConfig(
+                    def.escape.active,
+                    def.escape.M_planet,
+                    geom.rplanet,
+                    def.escape.T_exobase,
+                    geom.rplanet,
+                    def.escape.species,
+                )
+            else
+                def.escape
+            end
         _dict_to_struct(EscapeConfig, parsed_esc, def_esc)
     else
         if geom.rplanet != def.geometry.rplanet

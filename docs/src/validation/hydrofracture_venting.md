@@ -56,8 +56,8 @@ $$k_{\text{frac}}(P_{\text{eff}}) = \min\left(k_{\text{max}}, k_v \left[1 + \kap
 
 - **Fu, R. R., & Elkins-Tanton, L. T. (2014)**. The early thermal evolution of planetesimals: Implications for differentiated asteroids and carbonaceous chondrite parent bodies. *Earth and Planetary Science Letters*, 390, 128-137.  
   [https://doi.org/10.1016/j.epsl.2014.01.009](https://doi.org/10.1016/j.epsl.2014.01.009)
-- **Neveu, M., Desch, S. J., & Castillo-Rogez, J. C. (2015)**. Core cracking and hydrothermal circulation in Ceres and other icy bodies. *Journal of Geophysical Research: Planets*, 120(6), 1230-1254.  
-  [https://doi.org/10.1002/2014JE004742](https://doi.org/10.1002/2014JE004742)
+- **Neveu, M., Desch, S. J., & Castillo-Rogez, J. C. (2015)**. Core cracking and hydrothermal circulation can profoundly affect Ceres' geophysical evolution. *Journal of Geophysical Research: Planets*, 120(2), 123-154.  
+  [https://doi.org/10.1002/2014JE004714](https://doi.org/10.1002/2014JE004714)
 - **Manga, M., & Wang, C.-Y. (2007)**. Pressurized oceans and eruptive mechanism for Enceladus. *Geophysical Research Letters*, 34(7), L07202.  
   [https://doi.org/10.1029/2007GL029297](https://doi.org/10.1029/2007GL029297)
 

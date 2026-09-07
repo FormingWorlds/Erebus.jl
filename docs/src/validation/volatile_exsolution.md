@@ -79,7 +79,7 @@ $$y(T) = \frac{1}{1 + \exp\left[-\frac{T - T_{\text{devol}}}{\Delta T}\right]}$$
 - **Burnham, C. W. (1979)**. The importance of volatile constituents. In *The Evolution of the Igneous Rocks: Fiftieth Anniversary Perspectives*, Princeton University Press, 439-482.
 - **O'Neill, H. S. C. (1988)**. Systems Fe-O and Cu-O: thermodynamic data for the equilibria Fe-"FeO", Fe-Fe3O4, "FeO"-Fe3O4, Fe-SiO2-Fe2SiO4, and Cu-Cu2O. *American Mineralogist*, 73(5-6), 470-486.
 - **Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995)**. An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: Calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631.  
-  [https://doi.org/10.1093/petrology/36.6.1607](https://doi.org/10.1093/petrology/36.6.1607)
+  [https://doi.org/10.1093/oxfordjournals.petrology.a037267](https://doi.org/10.1093/oxfordjournals.petrology.a037267)
 - **Libourel, G., Marty, B., & Humbert, F. (2003)**. Nitrogen solubility in basaltic melt. Part I. Effect of oxygen fugacity. *Geochimica et Cosmochimica Acta*, 67(21), 4123-4135.  
   [https://doi.org/10.1016/S0016-7037(03)00259-X](https://doi.org/10.1016/S0016-7037(03)00259-X)
 - **Campbell, A. J., Danielson, L., Righter, K., Seagle, C. T., Wang, Y., & Prakapenka, V. B. (2009)**. High pressure effects on the iron-wüstite and cobalt-palladium oxygen buffers. *Earth and Planetary Science Letters*, 286(3-4), 556-564.  

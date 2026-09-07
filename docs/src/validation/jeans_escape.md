@@ -93,8 +93,6 @@ $$P_{\text{amb,eff}} = P_{\text{amb}} + P_{\text{atm}}$$
 - **Chamberlain, J. W., & Hunten, D. M. (1987)**. *Theory of Planetary Atmospheres: An Introduction to Radiative Transfer and Planetary Atmospheres* (2nd ed.). Academic Press.
 - **Catling, D. C., & Kasting, J. F. (2017)**. *Atmospheric Evolution on Inhabited and Lifeless Worlds*. Cambridge University Press.  
   [https://doi.org/10.1017/9781139020558](https://doi.org/10.1017/9781139020558)
-- **Tian, F. (2015)**. History of water on Mars: A review. *Solar System Research*, 49(7), 548-554.  
-  [https://doi.org/10.1134/S003809461507011X](https://doi.org/10.1134/S003809461507011X)
 - **Zahnle, K. J., & Catling, D. C. (2017)**. The cosmic shoreline: The evidence that atmospheric loss can explain the division between atmospheres and bare rocks in the Solar System and exoplanets. *The Astrophysical Journal*, 843(2), 122.  
   [https://doi.org/10.3847/1538-4357/aa7747](https://doi.org/10.3847/1538-4357/aa7747)
 

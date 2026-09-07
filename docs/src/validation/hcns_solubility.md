@@ -45,7 +45,7 @@ $$\log_{10}(X_{\text{H}_2} [\text{ppmw}]) = 1.1008 + 0.5241 \log_{10}(P_{\text{H
 
 Dissolved carbon partitions into carbon monoxide (CO), methane (CH₄), and carbonate (CO₃²⁻):
 
-**Carbon monoxide** (Armstrong et al. 2015; Yoshioka et al. 2019):
+**Carbon monoxide** (Armstrong et al. 2015):
 
 $$\log_{10}(X_{\text{CO}} [\text{ppmw}]) = -0.738 + 0.876 \log_{10}(p_{\text{CO}} [\text{bar}]) - 5.44 \times 10^{-5} P_{\text{tot}} [\text{bar}]$$
 
@@ -76,50 +76,48 @@ $$w_{\text{chem}}^{\text{N}} [\text{ppmw}] = \sqrt{p_{\text{N}_2} [\text{GPa}]} 
 $$w_{\text{total}}^{\text{N}} = w_{\text{phys}}^{\text{N}} + w_{\text{chem}}^{\text{N}}$$
 
 ### Sulfur Solubility and Sulfide Saturation Ceiling (SCSS)
-
-Dissolved sulfur in silicate melt is governed by sulfide capacity under reducing conditions and sulfate capacity under oxidizing conditions (Boulliung & Wood 2022, 2023; Gaillard et al. 2022):
-
+ 
+Dissolved sulfur in silicate melt is governed by sulfide capacity under reducing conditions and sulfate capacity under oxidizing conditions (Boulliung & Wood 2022, 2023):
+ 
 $$\log_{10}(C_{\text{S}^{2-}}) = 0.225 - \frac{\mathcal{S}_{\text{melt}}}{T}$$
-
+ 
 $$S_{\text{sulfide}} [\text{wt}\%] = C_{\text{S}^{2-}} \sqrt{\frac{p_{\text{S}_2} [\text{bar}]}{f_{\text{O}_2} [\text{bar}]}}$$
-
+ 
 Silicate melt cannot dissolve unbounded quantities of sulfide. When dissolved sulfur reaches the Sulfur Content at Sulfide Saturation (O'Neill & Mavrogenes 2002; Smythe et al. 2017), an immiscible Fe-S sulfide melt (matte) forms:
-
+ 
 $$\ln(\text{SCSS} [\text{ppmw}]) = 7.50 - \frac{4500.0}{T} + 0.90 \ln(\max(0.1, x_{\text{FeO}})) - 2.5 \times 10^{-4} \frac{P_{\text{tot}} [\text{bar}]}{T}$$
-
+ 
 In `Erebus.jl`, the physical routine `compute_sulfur_solubility_melt` supports enforcing the saturation ceiling via `scss_active = true`:
-
+ 
 $$S_{\text{melt}} = \min(S_{\text{solubility}}, \text{SCSS})$$
-
+ 
 where dissolved sulfur is capped at the sulfide saturation limit (SCSS) representing the threshold for exsolution of immiscible Fe-S matte. In atmospheric evolution runs, `simulation.jl` currently tracks atmospheric inventory dynamics and Jeans escape for the configured species (`cfg.escape.species`).
-
+ 
 ---
-
+ 
 ## 3. Literature Anchors
-
+ 
 - French, B. M. (1966). Some geological implications of equilibrium between graphite and a C-H-O gas phase at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253. [https://doi.org/10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
-- Holloway, J. R., Pan, V., & Gudmundsson, G. (1992). High-pressure fluid-absent melting in mantle peridotite. *European Journal of Mineralogy*, 4(5), 905-914. [https://doi.org/10.1127/ejm/4/5/0905](https://doi.org/10.1127/ejm/4/5/0905)
-- Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995). An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: Calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. [https://doi.org/10.1093/petrology/36.6.1607](https://doi.org/10.1093/petrology/36.6.1607)
+- Holloway, J. R., Pan, V., & Gudmundsson, G. (1992). High-pressure fluid-absent melting experiments in the presence of graphite: oxygen fugacity, ferric/ferrous ratio and dissolved CO₂. *European Journal of Mineralogy*, 4(1), 105-114. [https://doi.org/10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)
+- Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995). An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: Calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. [https://doi.org/10.1093/oxfordjournals.petrology.a037267](https://doi.org/10.1093/oxfordjournals.petrology.a037267)
 - O'Neill, H. S. C., & Mavrogenes, J. A. (2002). The sulfide capacity and the sulfur content at sulfide saturation of silicate melts at 1400 C and 1 bar. *Journal of Petrology*, 43(6), 1049-1087. [https://doi.org/10.1093/petrology/43.6.1049](https://doi.org/10.1093/petrology/43.6.1049)
-- Gaillard, F., Schmidt, B. C., Mackwell, S., & McCammon, C. (2003). Rate of hydrogen-iron redox exchange in silicate melts and glasses. *Geochimica et Cosmochimica Acta*, 67(13), 2427-2441. [https://doi.org/10.1016/S0016-7037(02)01348-1](https://doi.org/10.1016/S0016-7037(02)01348-1)
+- Gaillard, F., Schmidt, B. C., Mackwell, S., & McCammon, C. (2003). Rate of hydrogen-iron redox exchange in silicate melts and glasses. *Geochimica et Cosmochimica Acta*, 67(13), 2427-2441. [https://doi.org/10.1016/S0016-7037(02)01407-2](https://doi.org/10.1016/S0016-7037(02)01407-2)
 - Hirschmann, M. M., Withers, A. C., Ardia, P., & Foley, N. T. (2012). Solubility of molecular H2 in silicate melts to 3 GPa with implications for degassed volatiles and early planetary atmospheres. *Earth and Planetary Science Letters*, 345, 38-48. [https://doi.org/10.1016/j.epsl.2012.06.031](https://doi.org/10.1016/j.epsl.2012.06.031)
 - Ardia, P., Hirschmann, M. M., Withers, A. C., & Stanley, B. D. (2013). Solubility of CH4 in a synthetic basaltic melt, with applications to atmosphere-magma ocean interactions. *Geochimica et Cosmochimica Acta*, 114, 52-71. [https://doi.org/10.1016/j.gca.2013.03.028](https://doi.org/10.1016/j.gca.2013.03.028)
 - Armstrong, L. S., Hirschmann, M. M., Withers, A. C., & Eiler, J. M. (2015). Solubility of carbon monoxide in a synthetic basaltic melt: Constraints on early planetary degassing. *Geochimica et Cosmochimica Acta*, 171, 283-302. [https://doi.org/10.1016/j.gca.2015.09.006](https://doi.org/10.1016/j.gca.2015.09.006)
 - Newcombe, M. E., Brett, A., Beckett, J. R., Baker, M. B., Newman, S., Guan, Y., & Eiler, J. M. (2017). Solubility of water in lunar basalt. *Geochimica et Cosmochimica Acta*, 200, 330-352. [https://doi.org/10.1016/j.gca.2016.12.008](https://doi.org/10.1016/j.gca.2016.12.008)
 - Smythe, D. J., Wood, B. J., & Kiseeva, E. S. (2017). The sulfur content of silicate melts at sulfide saturation: New experiments and a model incorporating the effects of melt composition. *American Mineralogist*, 102(4), 795-803. [https://doi.org/10.2138/am-2017-5931](https://doi.org/10.2138/am-2017-5931)
-- Yoshioka, T., Watenphul, A., & Keppler, H. (2019). Carbon monoxide solubility in MORB basalt and graphite saturation. *Contributions to Mineralogy and Petrology*, 174(5), 45. [https://doi.org/10.1007/s00410-019-1582-7](https://doi.org/10.1007/s00410-019-1582-7)
 - Boulliung, J., & Wood, B. J. (2022). The sulfur capacity of silicate melts: A new model for sulfide and sulfate solubility. *Geochimica et Cosmochimica Acta*, 336, 150-164. [https://doi.org/10.1016/j.gca.2022.09.009](https://doi.org/10.1016/j.gca.2022.09.009)
 - Dasgupta, R., Ding, S., & Erdman, M. E. (2022). Nitrogen solubility in silicate melts and the volatile budget of terrestrial planets. *Geochimica et Cosmochimica Acta*, 324, 280-299. [https://doi.org/10.1016/j.gca.2022.03.010](https://doi.org/10.1016/j.gca.2022.03.010)
-- Gaillard, F., Bouhifd, M. A., Fialin, M., Malki, M., & Iacono-Marziano, G. (2022). The sulfur content of magmas at sulfide and sulfate saturation. *Chemical Geology*, 605, 120952. [https://doi.org/10.1016/j.chemgeo.2022.120952](https://doi.org/10.1016/j.chemgeo.2022.120952)
 - Sossi, P. A., Tollan, P. M. E., O'Neill, H. S. C., & Boulliung, J. (2023). Water solubility in peridotite liquid. *Earth and Planetary Science Letters*, 601, 117894. [https://doi.org/10.1016/j.epsl.2022.117894](https://doi.org/10.1016/j.epsl.2022.117894)
-
+ 
 ---
-
+ 
 ## 4. Parameterization Behavior
-
+ 
 Figure 1 illustrates the operational behavior of the multi-component H-C-N-S volatile solubility, speciation, and saturation limits:
-
+ 
 ![HCNS Volatile Solubility Benchmark](../assets/hcns_solubility_benchmark.png)
-
-*Figure 1: Four-panel diagnostic demonstration of the multi-species H-C-N-S volatile solubility parameterizations in Erebus.jl. (a) Dissolved water concentration in silicate melt as a function of pore/surface pressure $P \in [0, 200]\text{ bar}$ across four compositional calibrations: MORB basalt (Dixon et al. 1995), lunar basalt (Newcombe et al. 2017), peridotite (Sossi et al. 2023), and the baseline Burnham-Dixon parameterization. (b) Carbon solubility speciation as a function of species partial pressure up to $100\text{ bar}$ at $T = 1500\text{ K}$, contrasting carbonate dissolution (CO₂), dissolved carbon monoxide (CO), and methane (CH₄). Dotted horizontal lines show the graphite saturation ceiling at $\Delta\text{IW} = -1$. (c) Composition-dependent nitrogen solubility as a function of redox offset $\Delta\text{IW} \in [-4, +2]$ at $p_{\text{N}_2} = 10\text{ bar}$ and $T = 1600\text{ K}$ (Dasgupta et al. 2022), decomposing total dissolved nitrogen into physical molecular (N₂) and chemical nitride (N³⁻) dissolution for Earth mantle and lunar basalt compositions. (d) Sulfur solubility as a function of redox state at $T = 1500\text{ K}$ and $p_{\text{S}_2} = 1\text{ bar}$, showing sulfide and sulfate capacities (Boulliung & Wood 2023; Gaillard et al. 2022) and the sulfur content at sulfide saturation (SCSS) ceiling for $10\text{ wt}\%$ and $20\text{ wt}\%$ FeO (Smythe et al. 2017). The yellow shaded region indicates where raw sulfide solubility exceeds SCSS, causing precipitation of an immiscible Fe-S sulfide liquid (matte).*
+ 
+*Figure 1: Four-panel diagnostic demonstration of the multi-species H-C-N-S volatile solubility parameterizations in Erebus.jl. (a) Dissolved water concentration in silicate melt as a function of pore/surface pressure $P \in [0, 200]\text{ bar}$ across four compositional calibrations: MORB basalt (Dixon et al. 1995), lunar basalt (Newcombe et al. 2017), peridotite (Sossi et al. 2023), and the baseline Burnham-Dixon parameterization. (b) Carbon solubility speciation as a function of species partial pressure up to $100\text{ bar}$ at $T = 1500\text{ K}$, contrasting carbonate dissolution (CO₂), dissolved carbon monoxide (CO), and methane (CH₄). Dotted horizontal lines show the graphite saturation ceiling at $\Delta\text{IW} = -1$. (c) Composition-dependent nitrogen solubility as a function of redox offset $\Delta\text{IW} \in [-4, +2]$ at $p_{\text{N}_2} = 10\text{ bar}$ and $T = 1600\text{ K}$ (Dasgupta et al. 2022), decomposing total dissolved nitrogen into physical molecular (N₂) and chemical nitride (N³⁻) dissolution for Earth mantle and lunar basalt compositions. (d) Sulfur solubility as a function of redox state at $T = 1500\text{ K}$ and $p_{\text{S}_2} = 1\text{ bar}$, showing sulfide and sulfate capacities (Boulliung & Wood 2023) and the sulfur content at sulfide saturation (SCSS) ceiling for $10\text{ wt}\%$ and $20\text{ wt}\%$ FeO (Smythe et al. 2017). The yellow shaded region indicates where raw sulfide solubility exceeds SCSS, causing precipitation of an immiscible Fe-S sulfide liquid (matte).*
 
