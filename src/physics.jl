@@ -3656,7 +3656,12 @@ References:
 - `DomainError`: If droplet radius is negative, viscosity is non-positive, or inputs non-finite.
 """
 function stokes_settling_velocity(
-    r_drop::Real, drho::Real, g_acc::Real, eta_susp::Real; hadamard_rybczynski::Bool=false
+    r_drop::Real,
+    drho::Real,
+    g_acc::Real,
+    eta_susp::Real;
+    hadamard_rybczynski::Bool=false,
+    eta_metal::Union{Nothing,Real}=nothing,
 )
     if r_drop < 0.0 || !isfinite(r_drop)
         throw(DomainError(r_drop, "Droplet radius must be non-negative and finite"))
@@ -3667,10 +3672,18 @@ function stokes_settling_velocity(
     if !isfinite(drho) || !isfinite(g_acc)
         throw(DomainError((drho, g_acc), "Density contrast and gravity must be finite"))
     end
+    if eta_metal !== nothing && (!isfinite(eta_metal) || eta_metal <= 0.0)
+        throw(DomainError(eta_metal, "Metal viscosity must be positive and finite"))
+    end
 
     v_st = (2.0 / 9.0) * drho * g_acc * (r_drop^2) / eta_susp
     if hadamard_rybczynski
-        v_st *= 1.5
+        f_hr = if eta_metal !== nothing
+            (3.0 * eta_susp + 3.0 * eta_metal) / (2.0 * eta_susp + 3.0 * eta_metal)
+        else
+            1.5
+        end
+        v_st *= f_hr
     end
     return v_st
 end
@@ -3852,6 +3865,7 @@ function metal_segregation_velocity(
     eta_metal::Real=1.0e-2,
     phi_crit_perc::Real=0.05,
     phi_residual::Real=0.02,
+    phi0::Real=0.1,
     perm_exponent::Real=3.0,
     r_drop::Real=5.0e-3,
     hindered_exponent::Real=4.5,
@@ -3902,6 +3916,7 @@ function metal_segregation_velocity(
                 k_metal_ref=k_metal_ref,
                 phi_crit_perc=phi_crit_perc,
                 perm_exponent=perm_exponent,
+                phi0=phi0,
             )
             phi_mobile = phi_m - phi_residual
             (km / (phi_m * eta_metal)) * drho * g_acc * (phi_mobile / phi_m)
@@ -3912,7 +3927,12 @@ function metal_segregation_velocity(
     # Settling component
     v_settle = if settling_active && F_m >= F_settle_start && phi_m > 0.0
         v0 = stokes_settling_velocity(
-            r_drop, drho, g_acc, eta_susp; hadamard_rybczynski=hadamard_rybczynski
+            r_drop,
+            drho,
+            g_acc,
+            eta_susp;
+            hadamard_rybczynski=hadamard_rybczynski,
+            eta_metal=eta_metal,
         )
         h = richardson_zaki_hindrance(
             phi_m; hindered_exponent=hindered_exponent, phi_pack=phi_pack

@@ -61,6 +61,7 @@ makedocs(;
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
             "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
+            "Iron Core Formation" => "validation/core_formation.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

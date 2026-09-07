@@ -102,6 +102,7 @@ export Config,
     compute_spherical_metric_heat_source!,
     apply_radiative_surface_boundary!,
     apply_venting_surface_boundary!,
+    apply_metal_segregation!,
     sink_vented_marker_porosity!,
     GridCoordinates,
     default_grid_coordinates,
@@ -443,6 +444,7 @@ module Numerics
         compute_thermochemical_iteration_outcome,
         apply_radiative_surface_boundary!,
         apply_venting_surface_boundary!,
+        apply_metal_segregation!,
         compute_face_venting_permeability
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
@@ -472,6 +474,7 @@ module Numerics
         compute_thermochemical_iteration_outcome,
         apply_radiative_surface_boundary!,
         apply_venting_surface_boundary!,
+        apply_metal_segregation!,
         compute_face_venting_permeability
 end
 

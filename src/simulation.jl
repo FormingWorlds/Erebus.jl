@@ -581,6 +581,7 @@ function simulation_loop(
     M_escaped_total = 0.0
     S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+    Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     Xfem = nothing
     Xfem0 = nothing
     Xfe_bulk = nothing
@@ -774,6 +775,7 @@ function simulation_loop(
             Xfe_bulk_val=Xfe_bulk_val,
             T_eutectic_val=T_eutectic_val,
             dT_metal_val=dT_metal_val,
+            tkm0_val=cfg.materials.tkm0,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -1827,6 +1829,11 @@ function simulation_loop(
             else
                 fill!(Q_lat_grid, 0.0)
             end
+            Q_seg_val = if coreformation_active_val && cfg.coreformation.segregation_heating
+                Q_seg_grid
+            else
+                nothing
+            end
             # assemble thermal system of equations 
             LT = assemble_thermal_lse!(
                 tk1,
@@ -1843,6 +1850,7 @@ function simulation_loop(
                 LT=LT_thermal,
                 Q_metric=Q_metric,
                 Q_lat=Q_lat_grid,
+                Q_seg=Q_seg_val,
             )
             # solve thermal system of equations
             if thermal_cache === nothing
@@ -2073,6 +2081,34 @@ function simulation_loop(
         backtrace_pressures_rk4!(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords
         )
+
+        # ---------------------------------------------------------------------
+        # iron core formation segregation
+        # ---------------------------------------------------------------------
+        if coreformation_active_val && Xfe_bulk !== nothing && Xfem !== nothing
+            fill!(Q_seg_grid, 0.0)
+            apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                dt,
+                cfg.coreformation;
+                coords=coords,
+                xcenter=xcenter_val,
+                ycenter=ycenter_val,
+                rplanet=rplanet_val,
+                gx=gx,
+                gy=gy,
+                Q_seg_grid=cfg.coreformation.segregation_heating ? Q_seg_grid : nothing,
+                rho_silicate=rhosolidm[1],
+                eta_silicate=etasolidm[1],
+            )
+        end
 
         # ---------------------------------------------------------------------
         # replenish sparse areas with additional markers

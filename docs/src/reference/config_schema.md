@@ -318,6 +318,41 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 
 ---
 
+## `[coreformation]`
+
+Parameters controlling iron core formation, porous metal percolation, Stokes droplet settling, segregation dissipation heating, and mass conservation.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `percolation_active` | `Bool` | `false` | - | Enable Darcy percolation of liquid Fe-FeS through solid silicate matrix | `true` / `false` |
+| `settling_active` | `Bool` | `false` | - | Enable Stokes settling of liquid metal droplets in magma ocean | `true` / `false` |
+| `rho_metal` | `Float64` | `7200.0` | $\text{kg/m}^3$ | Density of liquid metal (Fe-FeS) phase | $> \rho_{\text{silicate}}$ |
+| `eta_metal` | `Float64` | `1.0e-2` | Pa s | Dynamic viscosity of liquid metal phase | $> 0$ |
+| `k_metal` | `Float64` | `40.0` | W/(m K) | Thermal conductivity of metallic phase | $> 0$ |
+| `rhocp_metal` | `Float64` | `4.0e6` | $\text{J/(m}^3\text{ K)}$ | Volumetric heat capacity of metallic phase | $> 0$ |
+| `Xfe_bulk` | `Float64` | `0.20` | - | Initial bulk metal volume fraction in planet interior | $\in [0, \phi_{\text{pack}}]$ |
+| `phi_pack` | `Float64` | `0.65` | - | Maximum packing fraction of segregated core metal | $\in (0, 1]$ |
+| `T_eutectic` | `Float64` | `1213.0` | K | Fe-FeS binary eutectic melting temperature | $> 0$ |
+| `dT_metal` | `Float64` | `50.0` | K | Temperature range for complete metal melting | $> 0$ |
+| `k_metal_ref` | `Float64` | `1.0e-9` | $\text{m}^2$ | Reference permeability for liquid metal percolation | $> 0$ |
+| `perm_exponent` | `Float64` | `3.0` | - | Power-law exponent for metal permeability function | $> 0$ |
+| `phi_crit_perc` | `Float64` | `0.05` | - | Critical porosity threshold for percolation connectivity | $\in [0, \phi_{\text{pack}})$ |
+| `phi_residual` | `Float64` | `0.02` | - | Residual trapped metal volume fraction | $\in [0, \phi_{\text{crit\_perc}}]$ |
+| `phi0` | `Float64` | `0.1` | - | Reference porosity for liquid metal Kozeny-Carman permeability | $\in (0, 1)$ |
+| `droplet_size_mode` | `Symbol` | `:weber_mean` | - | Metal droplet diameter calculation mode (`:weber_mean`, `:weber_turbulent`, `:fixed`) | valid symbol |
+| `droplet_diameter_fixed` | `Float64` | `5.0e-3` | m | Fixed droplet diameter when `droplet_size_mode = :fixed` | $> 0$ |
+| `sigma_metal_silicate` | `Float64` | `1.0` | N/m | Metal-silicate interfacial surface tension | $> 0$ |
+| `We_crit` | `Float64` | `10.0` | - | Critical Weber number for droplet breakup | $> 0$ |
+| `hindered_exponent` | `Float64` | `4.5` | - | Richardson-Zaki hindered settling power-law exponent | $\ge 0$ |
+| `hadamard_rybczynski` | `Bool` | `false` | - | Enable fluid droplet internal circulation correction factor | `true` / `false` |
+| `F_settle_start` | `Float64` | `0.40` | - | Silicate melt fraction where settling commences | $\in [0, 1]$ |
+| `F_perc_end` | `Float64` | `0.50` | - | Silicate melt fraction where percolation terminates | $\in [F_{\text{settle\_start}}, 1]$ |
+| `segregation_heating` | `Bool` | `true` | - | Enable gravitational potential energy dissipation heating | `true` / `false` |
+| `cfl_settling` | `Float64` | `0.5` | - | Courant-Friedrichs-Lewy stability safety factor for subcycling | $\in (0, 1]$ |
+| `max_subcycles` | `Int` | `2000` | - | Maximum allowed subcycles per hydrodynamic step | $\ge 1$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input

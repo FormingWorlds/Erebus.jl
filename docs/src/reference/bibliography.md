@@ -59,4 +59,34 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1088/0004-637X/705/2/1206](https://doi.org/10.1088/0004-637X/705/2/1206)  
   *Semi-analytical formulation for viscous accretion disk clearing and midplane temperature evolution.*
 
+---
+
+## Core Formation and Metal-Silicate Segregation
+
+- **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeability of silicate melts. *Nature*, 422(6928), 154-157.  
+  [https://doi.org/10.1038/nature01524](https://doi.org/10.1038/nature01524)  
+  *Experimental determination of liquid Fe-FeS percolation connectivity and permeability thresholds in crystalline silicates.*
+
+- **Rubie, D. C., Melosh, H. J., Reid, J. E., Liebske, C., & Righter, K. (2003)**. Mechanisms of metal-silicate equilibration in the terrestrial magma ocean. *Earth and Planetary Science Letters*, 205(3-4), 239-255.  
+  [https://doi.org/10.1016/S0012-821X(02)01044-0](https://doi.org/10.1016/S0012-821X(02)01044-0)  
+  *Capillary droplet emulsification, Weber number stability limits, and Stokes settling dynamics in magma oceans.*
+
+- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009)**. A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.  
+  [https://doi.org/10.1111/j.1365-246X.2009.04321.x](https://doi.org/10.1111/j.1365-246X.2009.04321.x)  
+  *Two-phase continuum formulation for metal-silicate differentiation, gravitational dissipation heating, and planetary core formation.*
+
+- **Rubie, D. C., Nimmo, F., & Melosh, H. J. (2015)**. Formation of Earth's Core. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 43-79). Elsevier.  
+  [https://doi.org/10.1016/B978-0-444-53802-4.00152-4](https://doi.org/10.1016/B978-0-444-53802-4.00152-4)  
+  *Comprehensive review of percolation, diapirism, and turbulent droplet emulsification during planetary core segregation.*
+
+- **Deguen, R., Olson, P., & Cardin, P. (2011)**. Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.  
+  [https://doi.org/10.1016/j.epsl.2011.08.019](https://doi.org/10.1016/j.epsl.2011.08.019)  
+  *Experimental constraints on droplet emulsification, fluid entrainment, and turbulent mixing regimes during core formation.*
+
+- **Deguen, R., Landeau, M., & Olson, P. (2014)**. Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.  
+  [https://doi.org/10.1016/j.epsl.2014.01.034](https://doi.org/10.1016/j.epsl.2014.01.034)  
+  *Fluid dynamical model for metal diapir and droplet fragmentation in convective planetary magma oceans.*
+
+
+
 

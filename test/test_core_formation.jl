@@ -5,6 +5,7 @@ using Erebus.Physics
 using Erebus.Particles
 using Erebus.Geometry
 using Erebus: start_hrsolidm, start_hrfluidm
+using Erebus.Numerics: assemble_thermal_lse!
 using StaticArrays
 using TOML
 using JLD2
@@ -26,6 +27,7 @@ using JLD2
         @test isapprox(cfg_def.perm_exponent, 3.0; rtol=1e-12)
         @test isapprox(cfg_def.phi_crit_perc, 0.05; rtol=1e-12)
         @test isapprox(cfg_def.phi_residual, 0.02; rtol=1e-12)
+        @test isapprox(cfg_def.phi0, 0.1; rtol=1e-12)
         @test cfg_def.droplet_size_mode == :weber_mean
         @test isapprox(cfg_def.droplet_diameter_fixed, 5.0e-3; rtol=1e-12)
         @test isapprox(cfg_def.sigma_metal_silicate, 1.0; rtol=1e-12)
@@ -97,6 +99,27 @@ using JLD2
                     settling_active=true, F_settle_start=0.60, F_perc_end=0.40
                 ),
                 melting=MeltingConfig(; active=true),
+            ),
+        )
+
+        # Xfe_bulk cannot exceed phi_pack
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, Xfe_bulk=0.75, phi_pack=0.65
+                ),
+            ),
+        )
+
+        # phi0 must be in (0, 1)
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(; percolation_active=true, phi0=-0.05)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(; percolation_active=true, phi0=1.05)
             ),
         )
 
@@ -247,9 +270,16 @@ using JLD2
         @test iszero(stokes_settling_velocity(r_d, 0.0, g_acc, eta))
         @test iszero(stokes_settling_velocity(r_d, drho, 0.0, eta))
 
-        # 4. Fluid droplet Hadamard-Rybczynski factor (1.5x)
-        v_hr = stokes_settling_velocity(r_d, drho, g_acc, eta; hadamard_rybczynski=true)
-        @test isapprox(v_hr, 1.5 * v_analytical; rtol=1e-10)
+        # 4. Fluid droplet Hadamard-Rybczynski factor
+        v_hr_inviscid = stokes_settling_velocity(
+            r_d, drho, g_acc, eta; hadamard_rybczynski=true
+        )
+        @test isapprox(v_hr_inviscid, 1.5 * v_analytical; rtol=1e-10)
+        # Viscosity ratio: (3*eta_s + 3*eta_m) / (2*eta_s + 3*eta_m) = (30 + 3) / (20 + 3) = 33/23
+        v_hr_ratio = stokes_settling_velocity(
+            r_d, drho, g_acc, eta; hadamard_rybczynski=true, eta_metal=1.0
+        )
+        @test isapprox(v_hr_ratio, (33.0 / 23.0) * v_analytical; rtol=1e-10)
 
         # 5. Error contracts
         @test_throws DomainError stokes_settling_velocity(-1.0e-3, drho, g_acc, eta)
@@ -946,6 +976,711 @@ using JLD2
             end
         finally
             rm(output_dir, recursive=true, force=true)
+        end
+    end
+
+    @testset "Phase 3: Sub-Cycled Drift-Flux Segregation Solver" begin
+        # Setup grid and markers for segregation tests
+        Nx_test = 16
+        Ny_test = 16
+        coords = GridCoordinates(
+            GridConfig(; Nx=Nx_test, Ny=Ny_test, xsize=140000.0, ysize=140000.0)
+        )
+        marknum = coords.Nxm * coords.Nym
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
+            marknum, coords
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            marknum
+        )
+        (Xfem, Xfem0, Xfe_bulk) = setup_marker_metal_properties(marknum)
+
+        define_markers!(
+            xm,
+            ym,
+            tm,
+            phim,
+            etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            XWsolidm0;
+            randomized=false,
+            coords=coords,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk_val=0.20,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+        )
+
+        @testset "Inactive and Early Guard Conditions" begin
+            cfg_inactive = CoreFormationConfig(
+                percolation_active=false, settling_active=false
+            )
+            res_inactive = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                1.0e10,
+                cfg_inactive;
+                coords=coords,
+            )
+            @test iszero(res_inactive.max_v_seg)
+            @test iszero(res_inactive.n_subcycles)
+            @test iszero(res_inactive.total_dissipation_energy)
+
+            # Zero dt guard
+            cfg_active = CoreFormationConfig(percolation_active=true, settling_active=false)
+            res_zerodt = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                0.0,
+                cfg_active;
+                coords=coords,
+            )
+            @test iszero(res_zerodt.max_v_seg)
+            @test iszero(res_zerodt.n_subcycles)
+        end
+
+        @testset "Frozen State Invariance (Below Eutectic)" begin
+            # Set temperature below eutectic (1000 K < 1213 K)
+            fill!(tkm, 1000.0)
+            fill!(Xfem, 0.0)
+            initial_sum = sum(Xfe_bulk)
+
+            cfg_perc = CoreFormationConfig(percolation_active=true, settling_active=false)
+            res_cold = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                1.0e10,
+                cfg_perc;
+                coords=coords,
+            )
+            @test iszero(res_cold.max_v_seg)
+            @test iszero(res_cold.n_subcycles)
+            @test isapprox(sum(Xfe_bulk), initial_sum; atol=1e-14)
+        end
+
+        @testset "Machine-Precision Mass Conservation under Percolation" begin
+            # Heat interior above eutectic to melt iron
+            for m in 1:marknum
+                if tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+                    tkm[m] = 1300.0
+                    Xfem[m] = Xfe_bulk[m]
+                    phim[m] = 0.02 # solid silicate matrix
+                end
+            end
+
+            initial_sum = sum(Xfe_bulk)
+            @test initial_sum > 0.0
+
+            cfg_perc = CoreFormationConfig(
+                percolation_active=true,
+                settling_active=false,
+                phi_crit_perc=0.05,
+                phi_residual=0.02,
+                cfl_settling=0.5,
+            )
+
+            dt_step = 1.0e10 # 317 years
+            res = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                dt_step,
+                cfg_perc;
+                coords=coords,
+                rplanet=50000.0,
+            )
+
+            final_sum = sum(Xfe_bulk)
+            # Mass conservation must hold to machine precision (10^-12)
+            rel_err = abs(final_sum - initial_sum) / initial_sum
+            @test rel_err < 1.0e-12
+            @test res.max_v_seg > 0.0
+            @test res.n_subcycles >= 1
+
+            # Physical segregation check: central markers gain iron, outer markers lose iron
+            r_core = 15000.0
+            r_outer = 45000.0
+            core_fe_sum = 0.0
+            core_count = 0
+            outer_fe_sum = 0.0
+            outer_count = 0
+            for m in 1:marknum
+                if tm[m] < 3
+                    rm = distance(xm[m], ym[m], coords.xcenter, coords.ycenter)
+                    if rm <= r_core
+                        core_fe_sum += Xfe_bulk[m]
+                        core_count += 1
+                    elseif rm >= 35000.0 && rm <= r_outer
+                        outer_fe_sum += Xfe_bulk[m]
+                        outer_count += 1
+                    end
+                end
+            end
+            avg_core_fe = core_fe_sum / core_count
+            avg_outer_fe = outer_fe_sum / outer_count
+            @test avg_core_fe >= 0.20
+            @test avg_outer_fe <= 0.20
+            @test avg_core_fe > avg_outer_fe
+            @test all(x -> 0.0 <= x <= 1.0, Xfe_bulk)
+        end
+
+        @testset "CFL Subcycling and Energetics" begin
+            # Large timestep triggers multiple subcycles
+            dt_large = 1.0e11 # ~3168 years
+            Q_seg = zeros(Float64, coords.Ny1, coords.Nx1)
+
+            cfg_perc = CoreFormationConfig(
+                percolation_active=true,
+                settling_active=false,
+                cfl_settling=0.25,
+                segregation_heating=true,
+            )
+
+            initial_sum = sum(Xfe_bulk)
+            res_sub = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                dt_large,
+                cfg_perc;
+                coords=coords,
+                rplanet=50000.0,
+                Q_seg_grid=Q_seg,
+            )
+
+            @test res_sub.n_subcycles > 1
+            @test res_sub.dt_sub <= dt_large
+            @test res_sub.total_dissipation_energy > 0.0
+            # Dissipation grid must have positive energy inside planet
+            @test maximum(Q_seg) > 0.0
+
+            # Mass conservation across all subcycles
+            final_sum = sum(Xfe_bulk)
+            @test abs(final_sum - initial_sum) / initial_sum < 1.0e-12
+        end
+
+        @testset "Magma Ocean Stokes Settling Mode" begin
+            # High silicate melt fraction (Fm = 0.70) triggers settling
+            for m in 1:marknum
+                if tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+                    phim[m] = 0.70
+                    tkm[m] = 1700.0
+                    Xfem[m] = Xfe_bulk[m]
+                end
+            end
+
+            cfg_settle = CoreFormationConfig(
+                percolation_active=false,
+                settling_active=true,
+                F_settle_start=0.40,
+                droplet_size_mode=:fixed,
+                droplet_diameter_fixed=1.0e-2,
+            )
+
+            initial_sum = sum(Xfe_bulk)
+            res_settle = apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                1.0e9,
+                cfg_settle;
+                coords=coords,
+                rplanet=50000.0,
+            )
+
+            @test res_settle.max_v_seg > 0.0
+            @test abs(sum(Xfe_bulk) - initial_sum) / initial_sum < 1.0e-12
+            @test all(x -> 0.0 <= x <= 1.0, Xfe_bulk)
+        end
+
+        @testset "Multi-Step Sequential Evolution and Packing Bounds" begin
+            # Reset markers
+            fill!(Xfe_bulk, 0.0)
+            for m in 1:marknum
+                if tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+                    Xfe_bulk[m] = 0.25
+                    tkm[m] = 1400.0
+                    Xfem[m] = Xfe_bulk[m]
+                    phim[m] = 0.55 # hybrid percolation + settling
+                end
+            end
+
+            cfg_multi = CoreFormationConfig(
+                percolation_active=true,
+                settling_active=true,
+                phi_pack=0.65,
+                cfl_settling=0.5,
+            )
+
+            base_sum = sum(Xfe_bulk)
+            for step in 1:5
+                apply_metal_segregation!(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    phim,
+                    Xfe_bulk,
+                    Xfem,
+                    marknum,
+                    5.0e9,
+                    cfg_multi;
+                    coords=coords,
+                    rplanet=50000.0,
+                )
+                curr_sum = sum(Xfe_bulk)
+                # Exact conservation at every single timestep
+                @test abs(curr_sum - base_sum) / base_sum < 1.0e-12
+                # Packing fraction invariant
+                @test all(x -> x <= cfg_multi.phi_pack + 1.0e-10, Xfe_bulk)
+                @test all(x -> x >= 0.0, Xfe_bulk)
+            end
+        end
+
+        @testset "Non-Uniform Marker Initialization and Packing Invariant" begin
+            # Alternating high/low metal markers in shared cells (Sonnet finding 1 repro)
+            fill!(Xfe_bulk, 0.0)
+            for m in 1:marknum
+                if tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+                    Xfe_bulk[m] = isodd(m) ? 0.60 : 0.02
+                    tkm[m] = 1350.0
+                    Xfem[m] = Xfe_bulk[m]
+                    phim[m] = 0.05
+                end
+            end
+
+            cfg_hetero = CoreFormationConfig(
+                percolation_active=true,
+                settling_active=false,
+                phi_pack=0.65,
+                cfl_settling=0.5,
+            )
+
+            initial_hetero_sum = sum(Xfe_bulk)
+            for step in 1:20
+                apply_metal_segregation!(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    phim,
+                    Xfe_bulk,
+                    Xfem,
+                    marknum,
+                    5.0e9,
+                    cfg_hetero;
+                    coords=coords,
+                    rplanet=50000.0,
+                )
+                curr_sum = sum(Xfe_bulk)
+                # Exact conservation
+                @test abs(curr_sum - initial_hetero_sum) / initial_hetero_sum < 1.0e-12
+                # Strict marker-level packing fraction ceiling: NO marker can exceed phi_pack
+                @test all(x -> x <= cfg_hetero.phi_pack + 1.0e-10, Xfe_bulk)
+                @test all(x -> x >= 0.0, Xfe_bulk)
+                @test maximum(Xfe_bulk) <= cfg_hetero.phi_pack + 1.0e-10
+            end
+        end
+
+        @testset "Input Guard Validation on Metal Packing Exceedance" begin
+            # Test that apply_metal_segregation! rejects invalid marker metal fractions
+            m_int = findfirst(
+                m ->
+                    tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0,
+                1:marknum,
+            )
+            @test m_int isa Int
+            @test 1 <= m_int <= marknum
+            fill!(Xfe_bulk, 0.20)
+            Xfe_bulk[m_int] = 0.80 # exceeds phi_pack = 0.65
+            cfg_guard = CoreFormationConfig(percolation_active=true, phi_pack=0.65)
+            @test_throws DomainError apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                1.0e9,
+                cfg_guard;
+                coords=coords,
+                rplanet=50000.0,
+            )
+
+            Xfe_bulk[m_int] = -0.05 # negative
+            @test_throws DomainError apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_bulk,
+                Xfem,
+                marknum,
+                1.0e9,
+                cfg_guard;
+                coords=coords,
+                rplanet=50000.0,
+            )
+            Xfe_bulk[m_int] = 0.20 # restore
+        end
+    end
+
+    @testset "Phase 4: Coupled Core Formation Integration & Benchmarks" begin
+        @testset "Benchmark Configuration Loading & Schema Validation" begin
+            bench_toml = joinpath(
+                @__DIR__, "..", "configs", "core_formation_benchmark.toml"
+            )
+            @test isfile(bench_toml)
+
+            cfg = load_config(bench_toml)
+            @test cfg.coreformation isa CoreFormationConfig
+            @test cfg.coreformation.percolation_active == true
+            @test cfg.coreformation.settling_active == true
+            @test isapprox(cfg.coreformation.rho_metal, 7200.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.eta_metal, 1.0e-2; rtol=1e-12)
+            @test isapprox(cfg.coreformation.k_metal, 40.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.rhocp_metal, 4.0e6; rtol=1e-12)
+            @test isapprox(cfg.coreformation.Xfe_bulk, 0.20; rtol=1e-12)
+            @test isapprox(cfg.coreformation.phi_pack, 0.65; rtol=1e-12)
+            @test isapprox(cfg.coreformation.T_eutectic, 1213.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.dT_metal, 50.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.k_metal_ref, 1.0e-9; rtol=1e-12)
+            @test isapprox(cfg.coreformation.perm_exponent, 3.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.phi_crit_perc, 0.05; rtol=1e-12)
+            @test isapprox(cfg.coreformation.phi_residual, 0.02; rtol=1e-12)
+            @test isapprox(cfg.coreformation.phi0, 0.1; rtol=1e-12)
+            @test cfg.coreformation.droplet_size_mode == :weber_mean
+            @test isapprox(cfg.coreformation.droplet_diameter_fixed, 5.0e-3; rtol=1e-12)
+            @test isapprox(cfg.coreformation.sigma_metal_silicate, 1.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.We_crit, 10.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.hindered_exponent, 4.5; rtol=1e-12)
+            @test cfg.coreformation.hadamard_rybczynski == false
+            @test isapprox(cfg.coreformation.F_settle_start, 0.40; rtol=1e-12)
+            @test isapprox(cfg.coreformation.F_perc_end, 0.50; rtol=1e-12)
+            @test cfg.coreformation.segregation_heating == true
+            @test isapprox(cfg.coreformation.cfl_settling, 0.5; rtol=1e-12)
+            @test cfg.coreformation.max_subcycles == 2000
+
+            # Direct validation check
+            @test validate_config(cfg) === nothing
+        end
+
+        @testset "Full Multi-Step Coupled Simulation with Iron Segregation" begin
+            output_dir = mktempdir()
+            try
+                bench_toml = joinpath(
+                    @__DIR__, "..", "configs", "core_formation_benchmark.toml"
+                )
+                cfg_base = load_config(bench_toml)
+                # Short 3-step run for integration test
+                cfg = SimulationConfig(
+                    grid=cfg_base.grid,
+                    geometry=cfg_base.geometry,
+                    time=TimeConfig(
+                        n_steps=3,
+                        dt_initial=cfg_base.time.dt_initial,
+                        dt_longest=cfg_base.time.dt_longest,
+                    ),
+                    solver=cfg_base.solver,
+                    poroelasticity=cfg_base.poroelasticity,
+                    thermodynamics=cfg_base.thermodynamics,
+                    reaction=cfg_base.reaction,
+                    melting=cfg_base.melting,
+                    coreformation=cfg_base.coreformation,
+                    materials=cfg_base.materials,
+                    output=OutputConfig(savematstep=1, output_dir=output_dir),
+                )
+
+                Erebus.simulation_loop(cfg; output_path=output_dir)
+
+                for step in 0:3
+                    fpath = joinpath(output_dir, "output_$(lpad(step, 5, '0')).jld2")
+                    @test isfile(fpath)
+                end
+
+                initial_state = load_state(joinpath(output_dir, "output_00000.jld2"))
+                final_state = load_state(joinpath(output_dir, "output_00003.jld2"))
+
+                @test haskey(initial_state, "Xfe_bulk")
+                @test haskey(initial_state, "Xfem")
+                @test haskey(initial_state, "Xfem0")
+                @test haskey(final_state, "Xfe_bulk")
+                @test haskey(final_state, "Xfem")
+                @test haskey(final_state, "Xfem0")
+
+                Xfe_init = initial_state["Xfe_bulk"]
+                Xfe_final = final_state["Xfe_bulk"]
+
+                @test length(Xfe_init) == 16384
+                @test length(Xfe_final) == length(Xfe_init)
+
+                # Boundedness invariants
+                @test all(x -> 0.0 <= x <= cfg.coreformation.phi_pack + 1.0e-10, Xfe_final)
+                @test all(x -> 0.0 <= x <= 1.0, final_state["Xfem"])
+
+                # Conservation of initial state metal inventory
+                sum_init = sum(Xfe_init)
+                sum_final = sum(Xfe_final)
+                @test sum_init > 0.0
+                @test sum_final > 0.0
+                rel_diff = abs(sum_final - sum_init) / sum_init
+                @test rel_diff < 1.0e-10
+
+                # Physical core segregation assertions:
+                # 1. Interior was preheated to 1350 K, exceeding Fe-FeS eutectic (1213 K)
+                @test any(x -> x > 1213.0, final_state["tkm"])
+                # 2. Molten metal fraction is non-zero
+                @test any(x -> x > 0.0, final_state["Xfem"])
+                # 3. Metal segregated inward into core
+                @test maximum(final_state["Xfe_bulk"]) > 0.20
+            finally
+                rm(output_dir, recursive=true, force=true)
+            end
+        end
+
+        @testset "Coupled Dissipation Heating Thermal Impact" begin
+            # Verify that Q_seg_grid is positive and bounded when segregation occurs
+            Nx_t = 16
+            Ny_t = 16
+            coords_t = GridCoordinates(
+                GridConfig(; Nx=Nx_t, Ny=Ny_t, xsize=140000.0, ysize=140000.0)
+            )
+            marknum_t = coords_t.Nxm * coords_t.Nym
+            (xm_t, ym_t, tm_t, tkm_t, sxxm_t, sxym_t, etavpm_t, phim_t, phinewm_t, pfm0_t, XWsolidm_t, XWsolidm0_t, Fm_t) = setup_marker_properties(
+                marknum_t, coords_t
+            )
+            (rhototalm_t, rhocptotalm_t, etatotalm_t, hrtotalm_t, ktotalm_t, tkm_rhocptotalm_t, etafluidcur_inv_kphim_t, inv_gggtotalm_t, fricttotalm_t, cohestotalm_t, tenstotalm_t, rhofluidcur_t, alphasolidcur_t, alphafluidcur_t) = setup_marker_properties_helpers(
+                marknum_t
+            )
+            (Xfem_t, Xfem0_t, Xfe_bulk_t) = setup_marker_metal_properties(marknum_t)
+
+            define_markers!(
+                xm_t,
+                ym_t,
+                tm_t,
+                phim_t,
+                etavpm_t,
+                rhototalm_t,
+                rhocptotalm_t,
+                etatotalm_t,
+                hrtotalm_t,
+                ktotalm_t,
+                tkm_t,
+                inv_gggtotalm_t,
+                fricttotalm_t,
+                cohestotalm_t,
+                tenstotalm_t,
+                rhofluidcur_t,
+                alphasolidcur_t,
+                alphafluidcur_t,
+                XWsolidm0_t;
+                randomized=false,
+                coords=coords_t,
+                Xfe_bulk=Xfe_bulk_t,
+                Xfem=Xfem_t,
+                Xfem0=Xfem0_t,
+                Xfe_bulk_val=0.20,
+                T_eutectic_val=1213.0,
+                dT_metal_val=50.0,
+            )
+
+            # Warm interior to melt metal
+            for m in 1:marknum_t
+                if tm_t[m] < 3 &&
+                    distance(xm_t[m], ym_t[m], coords_t.xcenter, coords_t.ycenter) <= 50000.0
+                    tkm_t[m] = 1350.0
+                    Xfem_t[m] = 1.0
+                    phim_t[m] = 0.05
+                end
+            end
+
+            Q_seg_grid = zeros(Float64, coords_t.Ny1, coords_t.Nx1)
+            cfg_heat = CoreFormationConfig(
+                percolation_active=true,
+                settling_active=false,
+                segregation_heating=true,
+                cfl_settling=0.5,
+            )
+
+            res = apply_metal_segregation!(
+                xm_t,
+                ym_t,
+                tm_t,
+                tkm_t,
+                phim_t,
+                Xfe_bulk_t,
+                Xfem_t,
+                marknum_t,
+                1.0e10,
+                cfg_heat;
+                coords=coords_t,
+                rplanet=50000.0,
+                Q_seg_grid=Q_seg_grid,
+            )
+
+            @test res.total_dissipation_energy > 0.0
+            @test maximum(Q_seg_grid) > 0.0
+            @test minimum(Q_seg_grid) >= 0.0
+            @test all(isfinite, Q_seg_grid)
+        end
+
+        @testset "Dynamic Convective Velocity and Rouse Number Coupling" begin
+            # Flow field: convective velocity ~ 1e-4 m/s, settling velocity ~ 1e-5 m/s -> R ~ 0.1
+            u_conv = 1.0e-4
+            v_settle = 1.0e-5
+            r_susp = suspension_rouse_number(v_settle, u_conv)
+            @test isapprox(r_susp, 0.1; rtol=1e-12)
+            @test r_susp < 1.0
+
+            # Quiescent mantle: convective velocity ~ 1e-6 m/s, settling velocity ~ 1e-4 m/s -> R ~ 100
+            u_slow = 1.0e-6
+            v_fast = 1.0e-4
+            r_settle = suspension_rouse_number(v_fast, u_slow)
+            @test isapprox(r_settle, 100.0; rtol=1e-12)
+            @test r_settle > 1.0
+            @test r_settle > r_susp
+        end
+
+        @testset "Weber Droplet Size Modes Discrimination" begin
+            cfg_mean = CoreFormationConfig(
+                percolation_active=false,
+                settling_active=true,
+                droplet_size_mode=:weber_mean,
+                sigma_metal_silicate=1.0,
+                We_crit=10.0,
+            )
+            cfg_turb = CoreFormationConfig(
+                percolation_active=false,
+                settling_active=true,
+                droplet_size_mode=:weber_turbulent,
+                sigma_metal_silicate=1.0,
+                We_crit=10.0,
+            )
+
+            # Test gravity-capillary balance d = sqrt(We * sigma / (drho * g))
+            drho_val = 3900.0
+            g_low = 0.05
+            g_high = 0.20
+            d_mean_low = sqrt(
+                cfg_mean.We_crit * cfg_mean.sigma_metal_silicate / (drho_val * g_low)
+            )
+            d_mean_high = sqrt(
+                cfg_mean.We_crit * cfg_mean.sigma_metal_silicate / (drho_val * g_high)
+            )
+            @test d_mean_low > d_mean_high
+            # 4x higher gravity -> 2x smaller droplet
+            @test isapprox(d_mean_low / d_mean_high, 2.0; rtol=1e-10)
+
+            # Weber turbulent relative velocity balance: d = We * sigma / (rho * v^2)
+            v_fast = 1.0e-2
+            v_slow = 1.0e-3
+            d_turb_fast = weber_equilibrium_diameter(3300.0, v_fast, 1.0; We_crit=10.0)
+            d_turb_slow = weber_equilibrium_diameter(3300.0, v_slow, 1.0; We_crit=10.0)
+            @test d_turb_fast < d_turb_slow
+            # 10x faster relative velocity -> 100x smaller droplet
+            @test isapprox(d_turb_slow / d_turb_fast, 100.0; rtol=1e-10)
+        end
+
+        @testset "Thermal RHS Assembly with Segregation Heating Source" begin
+            # Verify assemble_thermal_lse! accepts Q_seg without mutating HR
+            coords_local = GridCoordinates(
+                GridConfig(; Nx=16, Ny=16, xsize=140000.0, ysize=140000.0)
+            )
+            Ny1, Nx1 = coords_local.Ny1, coords_local.Nx1
+            tk1 = fill(1400.0, Ny1, Nx1)
+            RHOCP = fill(3.0e6, Ny1, Nx1)
+            KX = fill(3.0, Ny1, Nx1)
+            KY = fill(3.0, Ny1, Nx1)
+            HR = fill(1.0e-7, Ny1, Nx1)
+            HA = zeros(Ny1, Nx1)
+            HS = zeros(Ny1, Nx1)
+            DHP = zeros(Ny1, Nx1)
+            RT1 = zeros(Ny1 * Nx1)
+            RT2 = zeros(Ny1 * Nx1)
+            Q_seg = fill(5.0e-7, Ny1, Nx1)
+
+            HR_initial = copy(HR)
+            LT1 = assemble_thermal_lse!(
+                tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT1, 1.0e9; coords=coords_local
+            )
+            # Assemble with Q_seg passed directly
+            LT2 = assemble_thermal_lse!(
+                tk1,
+                RHOCP,
+                KX,
+                KY,
+                HR,
+                HA,
+                HS,
+                DHP,
+                RT2,
+                1.0e9;
+                coords=coords_local,
+                Q_seg=Q_seg,
+            )
+
+            # HR must not be modified in place
+            @test HR == HR_initial
+            # Interior points must differ exactly by Q_seg
+            for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+                gk = (j - 1) * Ny1 + i
+                @test isapprox(RT2[gk] - RT1[gk], Q_seg[i, j]; atol=1e-14)
+            end
         end
     end
 end
