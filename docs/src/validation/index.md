@@ -15,8 +15,8 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Surface Radiation & Disk Evolution** | Stefan-Boltzmann boundary and protoplanetary disk clearing | Chiang & Goldreich (1997); Drążkowska & Dullemond (2018); Williams et al. (2026) | `test/test_geometry_radiation.jl` |
 | **Hydrothermal Reactions** | Hydration and dehydration kinetics (Arrhenius) with latent heat and mass coupling | Hubmann (2022); Gerya (2019) | `test/test_reaction_pathways.jl` |
 | **Silicate Rock Melting & Magma Convection** | Linear melt fraction, apparent heat capacity, melt-weakened rheology, and sub-grid soft turbulence | Gerya (2019); Costa et al. (2009); Solomatov (2007) | `test/test_melting.jl`, `test/test_soft_turbulence.jl` |
-| **Cold Surface Venting & Ice Sealing** | Darcy Robin leaky drainage, Clausius-Clapeyron cold trap, and cryogenic pore ice sealing | Hubmann (2022); Gerya (2019) | `test/test_cold_venting.jl`, `test/test_hydrofracture_venting.jl` |
-| **Volatile Exsolution & Nitrogen Chemistry** | Burnham water solubility, redox-dependent nitride capacity, and organic devolatilization | Burnham (1979); Libourel et al. (2003); Boulliung et al. (2020) | `test/test_volatiles.jl` |
+| **Cold Surface Venting & Ice Sealing** | Darcy Robin leaky drainage, Clausius-Clapeyron cold trap, and cryogenic pore ice sealing | Hubmann (2022); Gerya (2019) | `test/test_venting_thermodynamics.jl`, `test/test_venting_darcy_sink.jl`, `test/test_venting_integration.jl`, `test/test_hydrofracture_venting.jl` |
+| **H-C-N-S Volatile Solubility & Speciation** | Multi-species (H, C, N, S) solubility laws, graphite and sulfide saturation limits, organic devolatilization | Burnham (1979); Dixon et al. (1995); Dasgupta et al. (2022); Boulliung & Wood (2022) | `test/test_volatile_solubility.jl`, `test/test_volatile_solubility_hcns.jl` |
 | **Jeans Kinetic Atmospheric Escape** | Maxwellian effusion, scale height relaxation, mass conservation, and surface pressure feedback | Jeans (1925); Catling & Kasting (2017) | `test/test_jeans_escape.jl` |
 
 ---

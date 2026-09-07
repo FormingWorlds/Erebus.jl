@@ -6,15 +6,14 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 ## `[grid]`
 
-> [!NOTE]
-> In the current release, grid resolution and domain dimensions are compiled into static array stencils. `validate_config` asserts that `xsize`, `ysize`, `Nx`, and `Ny` equal the compiled values in `src/constants.jl`.
+Grid resolution and domain dimensions are configured per simulation run and constructed dynamically via `GridCoordinates(cfg.grid)`.
 
 | Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `xsize` | `Float64` | `140000.0` | m | Total horizontal domain size | Must match compiled constant |
-| `ysize` | `Float64` | `140000.0` | m | Total vertical domain size | Must match compiled constant |
-| `Nx` | `Int` | `33` | - | Number of basic grid points in x | Must match compiled constant |
-| `Ny` | `Int` | `33` | - | Number of basic grid points in y | Must match compiled constant |
+| `xsize` | `Float64` | `140000.0` | m | Total horizontal domain size | $> 0$ |
+| `ysize` | `Float64` | `140000.0` | m | Total vertical domain size | $> 0$ |
+| `Nx` | `Int` | `33` | - | Number of basic grid points in x | $\ge 3$ |
+| `Ny` | `Int` | `33` | - | Number of basic grid points in y | $\ge 3$ |
 
 ---
 
@@ -22,8 +21,8 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 
 | Parameter | Type | Default | Units | Description | Bounds / Invariant |
 |:---|:---|:---|:---|:---|:---|
-| `rplanet` | `Float64` | `50000.0` | m | Outer radius of the planetesimal | Must match compiled constant |
-| `rcrust` | `Float64` | `50000.0` | m | Boundary radius between core/mantle and crust | Must match compiled constant |
+| `rplanet` | `Float64` | `50000.0` | m | Outer radius of the planetesimal | $> 0$ |
+| `rcrust` | `Float64` | `50000.0` | m | Boundary radius between core/mantle and crust | $\in (0, \text{rplanet}]$ |
 | `xcenter` | `Float64` | `70000.0` | m | Horizontal position of planetesimal center | $\in [0, \text{xsize}]$ |
 | `ycenter` | `Float64` | `70000.0` | m | Vertical position of planetesimal center | $\in [0, \text{ysize}]$ |
 | `psurface` | `Float64` | `1.0e+3` | Pa | Surface pressure anchor | $\ge 0$ |
@@ -121,7 +120,7 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 3-element vectors representing `[Index 1: Core, Index 2: Crust, Index 3: Sticky Air]`.
 
 > [!WARNING]
-> Eight material arrays are compiled into numerical stencils and cannot be modified without recompiling: `rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, and `kfluidm`. `validate_config` throws an `ArgumentError` if custom values differ from `src/constants.jl`. The remaining ten arrays can be modified freely.
+> Eight material arrays are compiled into numerical stencils and cannot be modified without recompiling: `rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, and `kfluidm`. `validate_config` throws an `ArgumentError` if custom values differ from `src/constants.jl`. The remaining eleven property arrays can be configured freely.
 
 | Parameter | Type | Default | Units | Status | Bounds | Description |
 |:---|:---|:---|:---|:---|:---|:---|
@@ -143,6 +142,7 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Configurable | All $> 0$ | Tensile strength |
 | `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Configurable | All $> 0$ | Reference permeability |
 | `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Configurable | All $> 0$ | Initial temperature |
+| `XWsolidm_init` | `SVector{3}` | `[0.5, 0.5, NaN]` | - | Configurable | All $\ge 0$ or `NaN` | Initial solid water fraction |
 
 ---
 
@@ -153,12 +153,13 @@ This reference documents every parameter in `Erebus.jl` configuration files (`.t
 | `output_dir` | `String` | `"output"` | - | Output directory path | Non-empty string |
 | `savematstep` | `Int` | `10` | - | Checkpoint saving frequency | $\ge 1$ |
 | `visstep` | `Int` | `1` | - | Visualization step cadence | $\ge 1$ |
+| `restart_from` | `String` | `""` | - | Checkpoint JLD2 file path to resume simulation from | File path or empty string |
 
 ---
 
 ## `[disk]`
 
-Parameters controlling protoplanetary disk ambient temperature evolution and astronomical host star scalings.
+Parameters controlling protoplanetary disk ambient temperature evolution, gas dispersal, and astronomical host star scalings.
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
@@ -181,6 +182,13 @@ Parameters controlling protoplanetary disk ambient temperature evolution and ast
 | `p_m_visc` | `Float64` | `0.30` | - | Stellar mass scaling exponent for peak viscous temperature $p_{M,\text{visc}}$ | $\ge 0$ |
 | `p_m_t` | `Float64` | `0.40` | - | Stellar mass scaling exponent for peak heating time $p_{M,t}$ | $\ge 0$ |
 | `p_m_visc_decay` | `Float64` | `0.30` | - | Stellar mass scaling exponent for viscous dissipation time $p_{M,\text{visc,decay}}$ | $\ge 0$ |
+| `t_dispersal_myr` | `Float64` | `3.0` | Myr | Gas disk dispersal midpoint time | $> 0$ |
+| `dt_dispersal_myr` | `Float64` | `0.1` | Myr | Gas disk dispersal transition half-width | $> 0$ |
+| `p_amb_disk` | `Float64` | `10.0` | Pa | Nebular gas ambient pressure before dispersal | $> 0$ |
+| `p_amb_space` | `Float64` | `1.0e-4` | Pa | Interplanetary vacuum ambient pressure floor | $\ge 0$ |
+| `albedo` | `Float64` | `0.06` | - | Planetesimal surface Bond albedo | $\in [0, 1)$ |
+| `t_eq_custom` | `Float64` | `NaN` | K | Custom solar equilibrium surface temperature (`NaN` = use solar scaling) | `NaN` or $> 0$ |
+| `dispersal_active` | `Bool` | `false` | - | Enable dynamic nebular gas dispersal pressure decay | `true` / `false` |
 
 ---
 
@@ -193,8 +201,8 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `active` | `Bool` | `true` | - | Enable two-way hydrothermal reaction coupling | `true` / `false` |
 | `hydration_active` | `Bool` | `true` | - | Enable serpentine hydration reaction pathway | `true` / `false` |
 | `dehydration_active` | `Bool` | `true` | - | Enable serpentine dehydration reaction pathway | `true` / `false` |
-| `hydration_mode` | `Int` | `1` | - | Hydration kinetics formulation mode | `1` |
-| `dehydration_mode` | `Int` | `2` | - | Dehydration kinetics formulation mode | `2` |
+| `hydration_mode` | `Int` | `1` | - | Hydration kinetics formulation mode | `1, 2, 3, 9` |
+| `dehydration_mode` | `Int` | `2` | - | Dehydration kinetics formulation mode | `1, 2, 3, 9` |
 | `dtreaction_hydration` | `Float64` | `1.0e10` | s | Timescale for serpentine hydration kinetics | $> 0$ |
 | `dtreaction_dehydration` | `Float64` | `1.0e8` | s | Timescale for serpentine dehydration kinetics | $> 0$ |
 | `delta_H` | `Float64` | `40000.0` | J/mol | Enthalpy of reaction | $> 0$ |
@@ -206,7 +214,7 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `Tscl_B` | `Float64` | `10.0` | K | Temperature scale factor | $> 0$ |
 | `To_B` | `Float64` | `293.0` | K | Reference temperature | $> 0$ |
 | `alpha_relaxation` | `Float64` | `0.5` | - | Reaction rate under-relaxation factor | $\in (0, 1]$ |
-| `pfcoeff` | `Float64` | `0.5` | - | Fluid pressure relaxation coefficient | $\in (0, 1]$ |
+| `pfcoeff` | `Float64` | `0.5` | - | Fluid pressure relaxation coefficient | $\in [0, 1]$ |
 | `pferrmax` | `Float64` | `1.0e5` | Pa | Maximum fluid pressure iteration residual | $> 0$ |
 | `p_cavitation` | `Float64` | `1.0e7` | Pa | Cavitation pressure limit | $> 0$ |
 
@@ -306,4 +314,30 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 | `R_planet` | `Float64` | `50000.0` | m | Planetesimal surface radius for atmospheric surface pressure | $> 0$ |
 | `T_exobase` | `Float64` | `200.0` | K | Exobase temperature for Maxwellian thermal velocity | $> 0$ |
 | `R_exobase` | `Float64` | `50000.0` | m | Exobase radius for escape flux surface integration | $\ge \text{R\_planet}$ |
-| `species` | `Symbol` | `:H2O` | - | Primary outgassed volatile species for kinetic escape | valid volatile symbol |
+| `species` | `Symbol` | `:H2O` | - | Primary outgassed volatile species for kinetic escape | `:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2` |
+
+---
+
+## Configuration Loading and Synchronization
+
+### File and String Input
+
+The function `load_config` accepts either a filepath to a TOML configuration file or a raw string containing TOML content:
+
+```julia
+# Load from file path
+cfg = load_config("configs/hydrothermal_benchmark.toml")
+
+# Load from inline TOML string
+cfg = load_config("""
+[grid]
+xsize = 140000.0
+ysize = 140000.0
+Nx = 33
+Ny = 33
+""")
+```
+
+### Automatic Radius Synchronization
+
+When `escape.R_planet` is not explicitly defined in an input configuration and `geometry.rplanet` differs from the default radius ($50000.0\text{ m}$), `load_config` automatically initializes both `escape.R_planet` and `escape.R_exobase` to match `geometry.rplanet`. If `escape.R_planet` is explicitly defined without `escape.R_exobase`, `escape.R_exobase` retains its default value. When `escape.active = true`, `validate_config` enforces that `escape.R_planet` matches `geometry.rplanet` within 1% relative tolerance (`isapprox(escape.R_planet, geometry.rplanet; rtol=0.01)`).

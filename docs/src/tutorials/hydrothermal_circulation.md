@@ -81,8 +81,8 @@ ycenter = 70000.0
 psurface = 1.0e+3
 
 [time]
-dt_initial = 1.0e11
-dt_longest = 1.0e11
+dt_initial = 3168.80878    # initial timestep [yr] (~1e11 s)
+dt_longest = 3168.80878    # max timestep [yr] (~1e11 s)
 start_time = 0.0          # 0.0 Ma after CAIs
 n_steps = 15
 

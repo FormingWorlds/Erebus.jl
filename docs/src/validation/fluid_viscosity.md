@@ -40,6 +40,22 @@ $$\eta_f(T) = \eta_{\text{ice}} \approx 10^{12}\text{ Pa}\cdot\text{s}$$
 
 ---
 
+## Parameterization Benchmarking
+
+The temperature-dependent fluid viscosity formulation approximates liquid water behavior under planetesimal hydrothermal conditions:
+
+$$\eta_f(T) = \eta_{f0} \exp\left[\frac{E_a}{R} \left(\frac{1}{T} - \frac{1}{T_0}\right)\right]$$
+
+with reference viscosity $\eta_{f0} = 1.0\times 10^{-3}\text{ Pa}\cdot\text{s}$ at $T_0 = 293.15\text{ K}$ ($20^\circ\text{C}$) and activation energy $E_a = 15.0\text{ kJ/mol}$.
+
+This single-activation energy relation closely tracks experimental liquid water data (IAPWS / NIST standard tables) within about $13\%$ in the sub-boiling regime $T \in [273, 373]\text{ K}$. At higher temperatures ($T \approx 470\text{ to }570\text{ K}$), liquid water curvature follows a Vogel-Fulcher-Tammann profile, where the single Arrhenius fit underestimates viscosity by $\approx 29\text{ to }43\%$ before entering the supercritical regime ($T > 647\text{ K}$).
+
+![Temperature-Dependent Fluid Viscosity Benchmarking](../assets/fluid_viscosity_temperature.png)
+
+*Figure 1: Benchmarking of temperature-dependent pore fluid viscosity $\eta_f(T)$ in Erebus. (a) Dynamic fluid viscosity over the range $T \in [270, 650]\text{ K}$ on a logarithmic scale, comparing the default Arrhenius model ($E_a = 15.0\text{ kJ/mol}$, blue curve) against experimental liquid water measurements from IAPWS/NIST standards (red circles). (b) Hydrothermal Darcy mobility enhancement factor $\eta_{f0} / \eta_f(T)$ illustrating the $5\times\text{ to }24\times$ increase in fluid percolation speed as interior temperatures rise in liquid hydrothermal conditions ($273\text{ to }600\text{ K}$).*
+
+---
+
 ## Verification Test Suite
 
 - `test/test_physics.jl`:

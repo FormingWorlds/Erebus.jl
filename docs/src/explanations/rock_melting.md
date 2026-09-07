@@ -226,24 +226,16 @@ The melting and soft turbulence system operates on both Lagrangian markers and E
 
 ---
 
-## Configuration Reference
+## Configuration Controls
 
-Melting and turbulence parameters are configured in the `[melting]` table of simulation input files:
+Melting and turbulence parameters are set in the `[melting]` table of simulation configuration files. Key controls include:
 
-```toml
-[melting]
-active = true                  # Enable silicate melting thermodynamics
-soft_turbulence = true         # Enable regularized sub-grid soft turbulence
-turb_exponent = 0.333333333333 # Convective heat flux scaling exponent (Solomatov 2007: 1/3)
-eta_fluid_silicate = 100.0     # Dynamic viscosity of liquid silicate melt [Pa s]
-F_turb_start = 0.30            # Melt fraction at turbulence onset [-]
-F_turb_end = 0.50              # Melt fraction at full turbulence development [-]
-dT_turb_min = 10.0             # Thermal contrast required for turbulent transport [K]
-T_surface_ref = 300.0          # Reference surface temperature [K]
-k_turb_floor = 1.0e-3          # Numerical minimum conductivity floor [W/(m K)]
-k_turb_cutoff = 1.0e6          # Maximum conductivity cap [W/(m K)]
-T_solidus = [1400.0, 1400.0, nan]  # Solidus per phase (1: mantle, 2: crust, 3: air) [K]
-T_liquidus = [1800.0, 1800.0, nan] # Liquidus per phase [K]
-dpdt_clapeyron = 0.0               # Clapeyron slope dT/dP (default 0, typical 1.2e-7) [K/Pa]
-L_melt = 4.0e5                     # Silicate latent heat of fusion [J/kg]
-```
+- `active`: Enables silicate melting thermodynamics and apparent heat capacity buffering.
+- `soft_turbulence`: Enables regularized sub-grid soft turbulence convection.
+- `turb_exponent`: Convective heat flux scaling exponent ($\beta = 1/3$ for Solomatov 2007 soft turbulence; $\beta = 1/2$ for laminar boundary layers).
+- `eta_fluid_silicate`: Dynamic viscosity of liquid silicate magma ($100.0\text{ Pa}\cdot\text{s}$).
+- `F_turb_start` and `F_turb_end`: Melt fraction bounds for smoothstep conductivity blending ($[0.30, 0.50]$).
+- `T_solidus` and `T_liquidus`: Phase-dependent solidus and liquidus temperatures.
+- `dpdt_clapeyron`: Pressure-dependent melting slope $dT/dP$ (default $0.0\text{ K/Pa}$; typical $1.2\times 10^{-7}\text{ K/Pa}$).
+
+For complete schema details, default values, and data types, see the [Configuration Schema Reference](../reference/config_schema.md#melting).

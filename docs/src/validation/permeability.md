@@ -35,21 +35,57 @@ where $k_{\phi 0}$ is reference permeability at reference porosity $\phi_0$.
 ## 2. Terzaghi Effective Overpressure and Hydrofracturing
 
 ### Governing Formulation
-When pore fluid pressure $P_f$ exceeds solid confining pressure $P_s$ plus tensile strength $\sigma_T$, rock fractures and increases effective permeability:
+When pore fluid pressure exceeds total confining pressure plus rock tensile strength, dynamic hydrofracturing enhances Darcy permeability:
 
-$$\Delta P_{\text{eff}} = P_f - P_s - \sigma_T$$
+$$P_{\text{eff}} = P_t - P_f \le -\sigma_t$$
 
-$$k_{\text{eff}} = \min\left( k(\phi) \left[ 1 + \left(\frac{\max(0, \Delta P_{\text{eff}})}{\sigma_{\text{scale}}}\right)^\alpha \right], k_{\text{max}} \right)$$
+The effective permeability scaling is parameterized as:
+
+$$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \left(\frac{\max(0, -P_{\text{eff}} - \sigma_t)}{\sigma_t}\right)^\gamma\right], k_{\text{max}}\right)$$
 
 ### Literature Anchors
 - **Terzaghi, K. (1925)**. *Erdbaumechanik auf bodenphysikalischer Grundlage*. Franz Deuticke, Leipzig.
 - **Wang, H. F. (2000)**. *Theory of Linear Poroelasticity with Applications to Geomechanics and Hydrogeology*. Princeton University Press.
 
 ### Invariants and Limits
-1. **No Overpressure**: When $P_f \le P_s + \sigma_T$, $\Delta P_{\text{eff}} \le 0$ and $k_{\text{eff}} = k(\phi)$.
-2. **Strict Upper Bound**: $k_{\text{eff}} \le k_{\text{max}}$ under arbitrarily high fluid overpressure.
-3. **Monotonic Enhancement**: $k_{\text{eff}}$ increases monotonically with pore fluid overpressure $\Delta P_{\text{eff}} > 0$.
+1. **No Overpressure**: When $P_{\text{eff}} > -\sigma_t$, $k_\phi^{\text{eff}} = k_\phi$.
+2. **Strict Upper Bound**: $k_\phi^{\text{eff}} \le k_{\text{max}}$ under arbitrarily high fluid overpressure.
+3. **Monotonic Enhancement**: $k_\phi^{\text{eff}}$ increases monotonically with normalized overpressure for all positive scaling exponents $\gamma > 0$.
+
+### Parameterization Behavior
+
+![Dynamic Hydrofracturing Verification](../assets/hydrofracture_verification.png)
+
+*Figure 1: Verification of dynamic hydrofracturing permeability enhancement in Erebus. (a) Effective permeability $k_\phi^{\text{eff}}$ as a function of Terzaghi effective stress $P_{\text{eff}} = P_t - P_f$ for compressive ($P_{\text{eff}} > 0$), intact tensile ($-\sigma_t < P_{\text{eff}} \le 0$), and hydrofractured ($P_{\text{eff}} \le -\sigma_t$) regimes for representative matrix permeabilities ($k_0 \in [10^{-16}, 10^{-14}]\text{ m}^2$) at tensile strength $\sigma_t = 10\text{ MPa}$. (b) Permeability enhancement factor $k_{\text{eff}} / k_0$ as a function of normalized overpressure for scaling exponents $\gamma \in \{0.5, 1.0, 2.0\}$ at $\kappa_{\text{frac}} = 10^3$.*
 
 ### Verification Test Suite
 - `test/test_physics.jl`: Hydrofracturing permeability bounds
 - `test/test_numerics.jl`: Stokes-Darcy coupled fluid-matrix pressure solve
+
+---
+
+## 3. Poroelastic Constitutive Limits
+
+In `src/physics.jl`, the constitutive poroelastic functions are verified against physical asymptotic limits:
+
+1. **Incompressible Solid Skeleton ($\beta_s \to 0$)**:
+   $$\lim_{\beta_s \to 0} K_{\text{BW}} = 1, \quad \lim_{\beta_s \to 0} B = \frac{\beta_\phi}{\beta_\phi + \phi(1 - \phi)\beta_f}$$
+   Verified over porosity values $\phi \in [\phi_{\text{min}}, \phi_{\text{max}}]$.
+
+2. **Incompressible Pore Fluid ($\beta_f \to 0$)**:
+   As fluid compressibility approaches zero, Skempton coefficient $B$ approaches its undrained upper bound:
+   $$\lim_{\beta_f \to 0} B = \min\left(1, \frac{\beta_d - \beta_s}{\beta_d - (1 + \phi)\beta_s}\right) = 1$$
+   where the code clamps the theoretical ratio to $[0, 1]$ to enforce the physical upper bound.
+
+3. **Porosity Bounding Guarantees**:
+   Constitutive routines clamp porosity to $[\phi_{\text{min}}, \phi_{\text{max}}]$ to prevent singular division when $\phi \to 0$ or $\phi \to 1$.
+
+### Parameterization Behavior
+
+![Poroelastic Constitutive Limits Verification](../assets/poroelastic_verification.png)
+
+*Figure 2: Theoretical behavior of derived poroelastic coefficients in Erebus. (a) Biot-Willis coefficient $K_{\text{BW}}$ as a function of porosity $\phi$ for varied solid grain compressibility $\beta_s$ to confirm asymptotic convergence toward unity ($K_{\text{BW}} \equiv 1$) in the incompressible solid grain limit. (b) Skempton pore pressure coefficient $B$ as a function of fluid compressibility $\beta_f$ for representative porosity values to display undrained response transitions.*
+
+### Verification Test Suite
+- `test/test_physics.jl`: Poroelastic constitutive functions and asymptotic limits
+
