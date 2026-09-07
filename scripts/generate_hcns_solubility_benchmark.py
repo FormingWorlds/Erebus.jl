@@ -172,8 +172,8 @@ def main():
     ax_b.plot(p_gas_bar, co_ppm, color="#ff7f0e", lw=2.2, label=r"$\mathrm{CO}$ Dissolved (Armstrong 2015)")
     ax_b.plot(p_gas_bar, ch4_ppm, color="#2ca02c", lw=2.0, label=r"$\mathrm{CH}_4$ Dissolved (Ardia 2013)")
 
-    ax_b.axhline(co_gr_cap, color="#ff7f0e", ls=":", lw=1.5, label=r"Graphite Saturation $\mathrm{CO}$ cap ($\Delta$IW = -1)")
-    ax_b.axhline(co2_gr_cap, color="#d62728", ls=":", lw=1.5, label=r"Graphite Saturation $\mathrm{CO}_2$ cap ($\Delta$IW = -1)")
+    ax_b.axhline(co_gr_cap, color="#e6550d", ls="--", lw=2.0, label=r"Graphite Saturation $\mathrm{CO}$ cap ($\Delta$IW = -1)")
+    ax_b.axhline(co2_gr_cap, color="#756bb1", ls="--", lw=2.0, label=r"Graphite Saturation $\mathrm{CO}_2$ cap ($\Delta$IW = -1)")
 
     ax_b.set_yscale("log")
     ax_b.set_xlabel("Species Partial Pressure $p_i$ [bar]", fontsize=11, fontweight="bold")
@@ -205,7 +205,7 @@ def main():
     ax_c.plot(d_IW_range, chem_dasg, color="#d62728", lw=1.8, ls=":", label=r"Nitride $\mathrm{N}^{3-}$ Chemical Dissolution")
     ax_c.plot(d_IW_range, np.full_like(d_IW_range, phys_dasg), color="#1f77b4", lw=1.8, ls="-.", label=r"Molecular $\mathrm{N}_2$ Physical Dissolution")
 
-    ax_c.axvline(0.0, color="gray", ls="-.", lw=1.0, alpha=0.7)
+    ax_c.axvline(0.0, color="#555555", ls="--", lw=1.2, alpha=0.8)
     ax_c.set_yscale("log")
     ax_c.set_xlabel(r"Redox Offset $\Delta$IW [$\log_{10}$ units]", fontsize=11, fontweight="bold")
     ax_c.set_ylabel("Nitrogen Concentration in Melt [ppmw]", fontsize=11, fontweight="bold")
@@ -219,43 +219,44 @@ def main():
     # Panel (d): Sulfur Solubility & SCSS Saturation Ceiling
     # -------------------------------------------------------------------------
     ax_d = axes[1, 1]
+    d_IW_range_s = np.linspace(-4.0, 6.5, 500)
     p_S2_Pa = 1.0 * 1.0e5 # 1 bar S2
     T_1500K = 1500.0
     p_tot_100bar = 100.0 * 1.0e5
 
     s_boul_pure = np.array([
         compute_sulfur_solubility_melt(p_S2_Pa, T_1500K, d, law="boulliung2023", sulfide_melt="basalt", include_sulfate=False)
-        for d in d_IW_range
+        for d in d_IW_range_s
     ])
     s_boul_so4 = np.array([
         compute_sulfur_solubility_melt(p_S2_Pa, T_1500K, d, law="boulliung2023", sulfide_melt="basalt", include_sulfate=True)
-        for d in d_IW_range
+        for d in d_IW_range_s
     ])
     s_gail = np.array([
         compute_sulfur_solubility_melt(p_S2_Pa, T_1500K, d, law="gaillard2022", x_FeO=10.0)
-        for d in d_IW_range
+        for d in d_IW_range_s
     ])
 
     scss_10feo = compute_scss(T_1500K, p_tot_100bar, x_FeO=10.0)
     scss_20feo = compute_scss(T_1500K, p_tot_100bar, x_FeO=20.0)
 
-    ax_d.plot(d_IW_range, s_boul_pure, color="#ff7f0e", lw=2.2, label=r"Boulliung & Wood (2023) Sulfide $\mathrm{S}^{2-}$")
-    ax_d.plot(d_IW_range, s_boul_so4, color="#d62728", lw=2.4, ls="--", label=r"Boulliung & Wood (2023) Sulfide + Sulfate $\mathrm{SO}_4^{2-}$")
-    ax_d.plot(d_IW_range, s_gail, color="#2ca02c", lw=2.0, ls="-.", label=r"Gaillard et al. (2022) Basalt")
+    ax_d.plot(d_IW_range_s, s_boul_pure, color="#ff7f0e", lw=2.2, label=r"Boulliung & Wood (2023) Sulfide $\mathrm{S}^{2-}$")
+    ax_d.plot(d_IW_range_s, s_boul_so4, color="#d62728", lw=2.4, ls="--", label=r"Boulliung & Wood (2023) Sulfide + Sulfate $\mathrm{SO}_4^{2-}$")
+    ax_d.plot(d_IW_range_s, s_gail, color="#2ca02c", lw=2.0, ls="-.", label=r"Gaillard et al. (2022) Basalt")
 
-    ax_d.axhline(scss_10feo, color="#7f7f7f", ls=":", lw=2.2, label=f"SCSS Ceiling (10 wt% FeO): {scss_10feo:.0f} ppmw")
-    ax_d.axhline(scss_20feo, color="#bcbd22", ls=":", lw=2.0, label=f"SCSS Ceiling (20 wt% FeO): {scss_20feo:.0f} ppmw")
+    ax_d.axhline(scss_10feo, color="#222222", ls="--", lw=2.2, label=f"SCSS Ceiling (10 wt% FeO): {scss_10feo:.0f} ppmw")
+    ax_d.axhline(scss_20feo, color="#8c564b", ls="-.", lw=2.2, label=f"SCSS Ceiling (20 wt% FeO): {scss_20feo:.0f} ppmw")
 
     # Shaded region where raw solubility exceeds SCSS (immiscible Fe-S matte precipitation)
-    ax_d.axhspan(scss_10feo, 1e7, color="gold", alpha=0.12, label="Sulfide Liquid (Matte) Precipitation Zone")
+    ax_d.axhspan(scss_10feo, 1e7, color="#fef3c7", alpha=0.45, label="Sulfide Liquid (Matte) Precipitation Zone")
 
-    ax_d.axvline(0.0, color="gray", ls="-.", lw=1.0, alpha=0.7)
+    ax_d.axvline(0.0, color="#555555", ls="--", lw=1.2, alpha=0.8)
     ax_d.set_yscale("log")
     ax_d.set_xlabel(r"Redox Offset $\Delta$IW [$\log_{10}$ units]", fontsize=11, fontweight="bold")
     ax_d.set_ylabel("Sulfur Concentration in Melt [ppmw]", fontsize=11, fontweight="bold")
     ax_d.set_title(r"(d) Sulfur Solubility, Sulfate Transition & SCSS Ceiling ($T = 1500$ K)", fontsize=12, fontweight="bold")
-    ax_d.set_xlim(-4, 2)
-    ax_d.set_ylim(1.0, 1.0e6)
+    ax_d.set_xlim(-4, 6.5)
+    ax_d.set_ylim(1.0, 2.0e7)
     ax_d.grid(True, which="both", ls=":", alpha=0.6)
     ax_d.legend(loc="upper right", fontsize=8.0, framealpha=0.9)
 

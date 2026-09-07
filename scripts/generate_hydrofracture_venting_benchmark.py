@@ -32,8 +32,8 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     out_fig = os.path.join(out_dir, "hydrofracture_venting_benchmark.png")
 
-    fig, axes = plt.subplots(2, 2, figsize=(13, 10), dpi=300)
-    plt.subplots_adjust(hspace=0.32, wspace=0.30)
+    fig, axes = plt.subplots(2, 2, figsize=(13.5, 10.5), dpi=300)
+    plt.subplots_adjust(hspace=0.34, wspace=0.38)
 
     # -------------------------------------------------------------------------
     # Panel (a): Cryogenic Pore Ice Permeability Sealing
@@ -99,24 +99,26 @@ def main():
     ax_b.axvline(273.15, color="cyan", ls="--", lw=2.0,
                  label=r"Cryogenic Boundary ($T = 273.15$ K)")
 
-    # Annotate quadrants
-    ax_b.text(140, 2.0, "Cryogenically Sealed\nIntact Lid", color="white",
-              fontsize=9.5, fontweight="bold", ha="center", va="center",
+    # Annotate quadrants with well-bounded positions
+    ax_b.text(180, 4.0, "Cryogenically Sealed\nIntact Lid", color="white",
+              fontsize=9.0, fontweight="bold", ha="center", va="center",
               bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.6))
-    ax_b.text(140, -22.0, "Breached Cold Lid\nHydrofracture Vent", color="white",
-              fontsize=9.5, fontweight="bold", ha="center", va="center",
+    ax_b.text(180, -20.0, "Breached Cold Lid\nHydrofracture Vent", color="white",
+              fontsize=9.0, fontweight="bold", ha="center", va="center",
               bbox=dict(boxstyle="round,pad=0.3", facecolor="darkred", alpha=0.6))
-    ax_b.text(295, 2.0, "Warm Darcy\nPermeable Sink", color="white",
-              fontsize=9.5, fontweight="bold", ha="center", va="center",
+    ax_b.text(290, 4.0, "Warm Darcy\nPermeable Sink", color="white",
+              fontsize=9.0, fontweight="bold", ha="center", va="center",
               bbox=dict(boxstyle="round,pad=0.3", facecolor="navy", alpha=0.6))
-    ax_b.text(295, -22.0, "Warm Breached\nHydrofracture", color="white",
-              fontsize=9.5, fontweight="bold", ha="center", va="center",
+    ax_b.text(290, -20.0, "Warm Breached\nHydrofracture", color="white",
+              fontsize=9.0, fontweight="bold", ha="center", va="center",
               bbox=dict(boxstyle="round,pad=0.3", facecolor="darkgreen", alpha=0.6))
 
     ax_b.set_xlabel("Surface Temperature $T_{\\mathrm{surf}}$ [K]", fontsize=11, fontweight="bold")
     ax_b.set_ylabel("Effective Pressure $P_{\\mathrm{eff}} = P_t - P_f$ [MPa]", fontsize=11, fontweight="bold")
     ax_b.set_title("(b) Venting Regime & Effective Permeability Map", fontsize=12, fontweight="bold")
-    ax_b.legend(loc="upper right", fontsize=8.0, framealpha=0.9)
+    ax_b.set_xlim(100, 320)
+    ax_b.set_ylim(-30, 10)
+    ax_b.legend(loc="lower left", fontsize=8.0, framealpha=0.9)
 
     # -------------------------------------------------------------------------
     # Panel (c): Episodic Rupture, Venting Pulse & Resealing Cycle

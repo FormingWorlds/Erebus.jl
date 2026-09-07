@@ -135,11 +135,20 @@ def generate_benchmark_figure(output_path):
     time_s = time_yr * sec_per_year
     dt_step = time_s[1] - time_s[0]
 
-    # Two body sizes: R = 50 km (small planetesimal) vs R = 2000 km (planetary embryo)
+    # Three body sizes:
+    # R = 50 km (rapid effusion, complete escape)
+    # R = 1350 km (intermediate body, dynamic partitioning, tau ~ 1.7 yr)
+    # R = 2000 km (planetary embryo, strong gravitational retention)
     vent_flux_rate = 100.0  # kg / s steady venting
 
-    for R_choice, ls_choice, col_choice in [(50.0, "--", "#1f77b4"), (2000.0, "-", "#d62728")]:
-        R_val = R_choice * 1.0e3
+    bodies = [
+        {"R": 50.0, "col": "#1f77b4", "label_atm": None, "label_esc": r"Escaped to Space ($R=50$ km)"},
+        {"R": 1350.0, "col": "#2ca02c", "label_atm": r"Atmosphere ($R=1350$ km)", "label_esc": r"Escaped to Space ($R=1350$ km)"},
+        {"R": 2000.0, "col": "#d62728", "label_atm": r"Atmosphere ($R=2000$ km)", "label_esc": None},
+    ]
+
+    for b in bodies:
+        R_val = b["R"] * 1.0e3
         M_val = (4.0 / 3.0) * np.pi * (R_val ** 3) * rho_bulk
         m_sp = MASSES["H2O"]
         v_th = compute_thermal_velocity(T_exo, m_sp)
@@ -167,8 +176,12 @@ def generate_benchmark_figure(output_path):
             M_atm[i] = cur_M
             M_escaped[i] = cur_esc
 
-        ax_d.plot(time_yr, M_atm * 1e-9, color=col_choice, lw=2.2, ls=ls_choice, label=f"Atmosphere ($R={R_choice:.0f}$ km)")
-        ax_d.plot(time_yr, M_escaped * 1e-9, color=col_choice, lw=1.5, ls=":", label=f"Escaped to Space ($R={R_choice:.0f}$ km)")
+        if b["label_atm"]:
+            ax_d.plot(time_yr, M_atm * 1e-9, color=b["col"], lw=2.2, ls="-", label=b["label_atm"])
+        if b["label_esc"]:
+            ls_e = "--" if b["R"] == 50.0 else ":"
+            lw_e = 2.0 if b["R"] == 50.0 else 1.8
+            ax_d.plot(time_yr, M_escaped * 1e-9, color=b["col"], lw=lw_e, ls=ls_e, label=b["label_esc"])
 
     ax_d.set_xlabel("Time [yr]", fontsize=11, fontweight="bold")
     ax_d.set_ylabel(r"Volatile Inventory [$10^9$ kg]", fontsize=11, fontweight="bold")

@@ -147,12 +147,13 @@ def main():
     ax_b = axes[0, 1]
     T_range = np.linspace(800.0, 1800.0, 500)
     delta_IW_values = [-3.0, -2.0, -1.0, 0.0, +1.0, +2.0]
-    cmap_b = plt.get_cmap("coolwarm", len(delta_IW_values))
+    colors_b = ["#08519c", "#3182bd", "#6baed6", "#111111", "#e6550d", "#a50f15"]
 
     for idx, d_iw in enumerate(delta_IW_values):
         log_fO2 = compute_iron_wustite_fO2(T_range, delta_IW=d_iw)
         label_str = f"$\\Delta$IW = {d_iw:+.0f}" if d_iw != 0 else "IW Buffer ($\\Delta$IW = 0)"
-        ax_b.plot(T_range, log_fO2, color=cmap_b(idx), lw=2.0, label=label_str)
+        lw_val = 2.4 if d_iw == 0.0 else 2.0
+        ax_b.plot(T_range, log_fO2, color=colors_b[idx], lw=lw_val, label=label_str)
 
     ax_b.set_xlabel("Melt Temperature $T$ [K]", fontsize=11, fontweight="bold")
     ax_b.set_ylabel(r"Oxygen Fugacity $\log_{10}(f_{\mathrm{O}_2}\ [\mathrm{bar}])$", fontsize=11, fontweight="bold")
