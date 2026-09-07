@@ -306,6 +306,10 @@ Base.@kwdef struct VentingConfig
     conductance_factor::Float64 = 1.0
     L_sublimation::Float64 = 2.83e6
     latent_cooling::Bool = true
+    ice_sealing::Bool = false
+    t_freeze::Float64 = 273.15
+    dt_seal::Float64 = 10.0
+    k_seal_min_ratio::Float64 = 1.0e-6
 end
 
 """
@@ -809,6 +813,16 @@ function validate_config(cfg::SimulationConfig)
             "L_sublimation must be > 0 and finite, got $(cfg.venting.L_sublimation)"
         ),
     )
+    cfg.venting.t_freeze > 0.0 && isfinite(cfg.venting.t_freeze) ||
+        throw(ArgumentError("t_freeze must be > 0 and finite, got $(cfg.venting.t_freeze)"))
+    cfg.venting.dt_seal > 0.0 && isfinite(cfg.venting.dt_seal) ||
+        throw(ArgumentError("dt_seal must be > 0 and finite, got $(cfg.venting.dt_seal)"))
+    (0.0 < cfg.venting.k_seal_min_ratio <= 1.0 && isfinite(cfg.venting.k_seal_min_ratio)) ||
+        throw(
+            ArgumentError(
+                "k_seal_min_ratio must be in (0, 1], got $(cfg.venting.k_seal_min_ratio)"
+            ),
+        )
 
     return nothing
 end

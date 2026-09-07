@@ -1778,6 +1778,95 @@ function compute_venting_pressure(
 end
 
 """
+    compute_ice_sealed_permeability(
+        k0::Real, T::Real;
+        T_freeze::Real=273.15, delta_T_seal::Real=10.0, k_min_ratio::Real=1.0e-6
+    )::Float64
+
+Compute effective rock permeability k_sealed [m²] reduced by cryogenic pore ice freezing:
+
+    k_sealed = k0 * [ (1 - r_min) * exp(-(T_freeze - T) / ΔT_seal) + r_min ]
+
+For temperatures at or above freezing (`T >= T_freeze`), pore ice melts and permeability
+equals `k0`. For sub-freezing temperatures (`T < T_freeze`), pore ice blocks pore throats
+and reduces permeability exponentially toward the floor ratio `r_min = k_min_ratio`.
+
+# Arguments
+- `k0`: Reference unsealed permeability [m²]
+- `T`: Local rock temperature [K]
+- `T_freeze`: Water freezing temperature [K] (default: 273.15 K)
+- `delta_T_seal`: Temperature scale for ice sealing [K] (default: 10.0 K)
+- `k_min_ratio`: Minimum residual permeability floor ratio in (0, 1] (default: 1.0e-6)
+
+# Returns
+- `k_sealed`: Effective sealed permeability [m²]
+"""
+function compute_ice_sealed_permeability(
+    k0::Real,
+    T::Real;
+    T_freeze::Real=273.15,
+    delta_T_seal::Real=10.0,
+    k_min_ratio::Real=1.0e-6,
+)::Float64
+    k0_val = Float64(k0)
+    if k0_val <= 0.0 || !isfinite(k0_val)
+        throw(DomainError(k0_val, "Reference permeability k0 must be > 0 and finite"))
+    end
+    T_val = Float64(T)
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature T must be > 0 and finite"))
+    end
+    T_frz = Float64(T_freeze)
+    if T_frz <= 0.0 || !isfinite(T_frz)
+        throw(DomainError(T_frz, "T_freeze must be > 0 and finite"))
+    end
+    dT_seal = Float64(delta_T_seal)
+    if dT_seal <= 0.0 || !isfinite(dT_seal)
+        throw(DomainError(dT_seal, "delta_T_seal must be > 0 and finite"))
+    end
+    r_min = Float64(k_min_ratio)
+    if !(0.0 < r_min <= 1.0) || !isfinite(r_min)
+        throw(DomainError(r_min, "k_min_ratio must be in (0, 1] and finite"))
+    end
+
+    if T_val >= T_frz
+        return k0_val
+    end
+
+    arg = (T_frz - T_val) / dT_seal
+    factor = (1.0 - r_min) * exp(-arg) + r_min
+    return clamp(k0_val * factor, k0_val * r_min, k0_val)
+end
+
+"""
+    is_hydrofracture_breached(Peff::Real, sigma_t::Real)::Bool
+    is_hydrofracture_breached(Pt::Real, Pf::Real, sigma_t::Real)::Bool
+
+Assess whether hydraulic tensile failure criterion (Peff <= -sigma_t) is satisfied,
+breaching the rock matrix or cryogenic ice lid.
+
+# Arguments
+- `Peff`: Terzaghi effective pressure Pt - Pf [Pa]
+- `Pt`: Total confining pressure [Pa]
+- `Pf`: Pore fluid pressure [Pa]
+- `sigma_t`: Rock tensile strength [Pa]
+
+# Returns
+- `breached::Bool`: `true` if hydraulic tensile fractures open, `false` otherwise.
+  Non-finite inputs or non-positive `sigma_t <= 0.0` return `false` as an invalid-input safety guard.
+"""
+function is_hydrofracture_breached(Peff::Real, sigma_t::Real)::Bool
+    if !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0
+        return false
+    end
+    return Float64(Peff) <= -Float64(sigma_t)
+end
+
+function is_hydrofracture_breached(Pt::Real, Pf::Real, sigma_t::Real)::Bool
+    return is_hydrofracture_breached(Pt - Pf, sigma_t)
+end
+
+"""
     compute_spherical_metric_heat_source!(Q_metric, tk, KX, KY, coords;
                                           xcenter, ycenter, rplanet, reg_cells=0.5)
 

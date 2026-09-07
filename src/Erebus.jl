@@ -47,6 +47,9 @@ export Config,
     compute_ambient_conditions,
     compute_ice_vapor_pressure,
     compute_venting_pressure,
+    compute_ice_sealed_permeability,
+    is_hydrofracture_breached,
+    compute_face_venting_permeability,
     compute_spherical_metric_heat_source!,
     apply_radiative_surface_boundary!,
     apply_venting_surface_boundary!,
@@ -130,6 +133,8 @@ module Physics
         compute_fluid_viscosity,
         compute_hydrofracture_factor,
         compute_hydrofracture_permeability,
+        compute_ice_sealed_permeability,
+        is_hydrofracture_breached,
         compute_disk_temperature,
         compute_snowline_radius,
         compute_radiation_htc,
@@ -164,6 +169,8 @@ module Physics
         compute_fluid_viscosity,
         compute_hydrofracture_factor,
         compute_hydrofracture_permeability,
+        compute_ice_sealed_permeability,
+        is_hydrofracture_breached,
         compute_disk_temperature,
         compute_snowline_radius,
         compute_radiation_htc,
@@ -292,7 +299,9 @@ module Numerics
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,
         compute_thermochemical_iteration_outcome,
-        apply_radiative_surface_boundary!
+        apply_radiative_surface_boundary!,
+        apply_venting_surface_boundary!,
+        compute_face_venting_permeability
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
@@ -319,7 +328,9 @@ module Numerics
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,
         compute_thermochemical_iteration_outcome,
-        apply_radiative_surface_boundary!
+        apply_radiative_surface_boundary!,
+        apply_venting_surface_boundary!,
+        compute_face_venting_permeability
 end
 
 module Simulation

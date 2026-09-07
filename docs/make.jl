@@ -58,6 +58,7 @@ makedocs(;
             "Hydrothermal Reactions" => "validation/hydrothermal_reactions.md",
             "Silicate Rock Melting" => "validation/rock_melting.md",
             "Cold Surface Venting" => "validation/cold_surface_venting.md",
+            "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

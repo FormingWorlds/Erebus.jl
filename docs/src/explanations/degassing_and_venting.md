@@ -35,14 +35,32 @@ $$S_{\text{vent}} = \frac{C_{\text{face}}}{\Delta} \max(0, P_f - P_{\text{vent}}
 
 where $C_{\text{face}} = \frac{k_{\text{vent}}}{\eta_f \Delta} \times f_{\text{conductance}}$ is the face conductance.
 
-### 2. Venting Activation Modes
+### 2. Venting Activation Modes and Cold Lid Rupture
 
-`Erebus.jl` supports two physical venting modes:
+`Erebus.jl` supports two venting activation modes:
 
-1. `:darcy_sink`: Unconditional porous drainage whenever $P_f > P_{\text{vent}}$.
-2. `:hydrofracture_gated`: Venting is restricted to tensile failure zones where Terzaghi effective pressure satisfies:
-   $$P_{\text{eff}} = P_t - P_f \le -\sigma_t$$
-   where $P_t$ is total mechanical mixture pressure and $\sigma_t$ is rock tensile strength [$\text{Pa}$]. In this mode, an intact, non-fractured cold lid suppresses venting until fluid overpressures fracture the lid.
+1. `:darcy_sink`: Porous drainage whenever pore fluid pressure exceeds venting pressure ($P_f > P_{\text{vent}}$).
+2. `:hydrofracture_gated`: Venting activates only at tensile failure zones where Terzaghi effective pressure satisfies:
+   $$P_{\text{eff}} = P_t - P_f \le -\sigma_t \iff P_f \ge P_t + \sigma_t$$
+   where $P_t$ is total mechanical mixture pressure and $\sigma_t$ is rock tensile strength [$\text{Pa}$]. In this mode, an intact, non-fractured crust prevents venting until internal fluid overpressure breaches the lid.
+
+### 3. Cryogenic Pore Ice Permeability Sealing
+
+In cold nebular or post-dispersal environments ($T_{\text{surf}} < 273.15\text{ K}$), pore fluid freezes into water ice, clogging pores and reducing matrix permeability:
+
+$$k_{\text{eff}}(T) = k_v \cdot \left[(1 - r_{\text{min}}) \exp\left(-\frac{T_{\text{freeze}} - T}{\Delta T_{\text{seal}}}\right) + r_{\text{min}}\right] \quad (T < T_{\text{freeze}})$$
+
+| Parameter | Description | Value | Units |
+|:---|:---|:---|:---|
+| $T_{\text{freeze}}$ | Liquid-solid transition temperature | $273.15$ | $\text{K}$ |
+| $\Delta T_{\text{seal}}$ | Sealing temperature interval | $10.0$ | $\text{K}$ |
+| $r_{\text{min}}$ | Residual cryogenic permeability ratio | $1.0\times 10^{-6}$ | - |
+
+When overpressures breach the lid ($P_{\text{eff}} \le -\sigma_t$), macroscopic hydrofractures cut through rock and ice, providing high-permeability pathways:
+
+$$k_{\text{frac}}(P_{\text{eff}}) = \min\left(k_{\text{max}}, k_v \left[1 + \kappa_{\text{frac}} \left(\frac{-P_{\text{eff}} - \sigma_t}{\sigma_t}\right)^\gamma\right]\right)$$
+
+This mechanism produces episodic cryovolcanic venting cycles: internal dehydration inflates pore pressure, breaches the cold lid, rapidly discharges volatiles, drops fluid pressure, and reseals the crust.
 
 ---
 

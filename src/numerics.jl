@@ -460,6 +460,10 @@ function assemble_hydromechanical_lse!(
     venting_mode::Symbol=:darcy_sink,
     k_vent::Real=1.0e-11,
     conductance_factor::Real=1.0,
+    ice_sealing::Bool=false,
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
     rplanet::Real=50000.0,
     xcenter::Real=70000.0,
     ycenter::Real=70000.0,
@@ -1013,6 +1017,14 @@ function assemble_hydromechanical_lse!(
             k_vent=k_vent,
             conductance_factor=conductance_factor,
             mode=venting_mode,
+            hydrofracture=hydrofracture,
+            ice_sealing=ice_sealing,
+            t_freeze=t_freeze,
+            dt_seal=dt_seal,
+            k_seal_min_ratio=k_seal_min_ratio,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
             pr=pr,
             pf=pf,
             TEN=TEN,
@@ -1929,17 +1941,93 @@ function apply_radiative_surface_boundary!(
 end
 
 """
+    compute_face_venting_permeability(
+        k_v, breached, ice_sealing, T_surf, peff, sigma_t;
+        t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
+        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9,
+    )
+
+Compute effective rock face permeability at the planetesimal surface, accounting for
+tensile hydrofracture breaching or cryogenic pore ice sealing.
+
+# Arguments
+- `k_v::Real`: Reference matrix permeability [m^2].
+- `breached::Bool`: Whether tensile failure has ruptured the rock lid.
+- `ice_sealing::Bool`: Whether cryogenic pore ice sealing is active below freezing.
+- `T_surf::Real`: Local surface rock temperature [K].
+- `peff::Real`: Terzaghi effective stress `P_t - P_f` [Pa].
+- `sigma_t::Real`: Rock tensile strength [Pa].
+
+# Keywords
+- `t_freeze::Real`: Water freezing temperature [K] (default: 273.15).
+- `dt_seal::Real`: Temperature sealing interval [K] (default: 10.0).
+- `k_seal_min_ratio::Real`: Minimum residual cryogenic permeability ratio (default: 1.0e-6).
+- `kappa_frac::Real`: Hydrofracture multiplier (default: 1.0e3).
+- `gamma_frac::Real`: Hydrofracture power-law exponent (default: 1.0).
+- `k_frac_max::Real`: Maximum fractured permeability ceiling [m^2] (default: 1.0e-9).
+
+# Returns
+- Effective face permeability [m^2].
+"""
+function compute_face_venting_permeability(
+    k_v::Real,
+    breached::Bool,
+    ice_sealing::Bool,
+    T_surf::Real,
+    peff::Real,
+    sigma_t::Real;
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+)
+    if breached
+        return compute_hydrofracture_permeability(
+            k_v,
+            peff,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma_frac,
+            kmax=k_frac_max,
+        )
+    elseif ice_sealing
+        return compute_ice_sealed_permeability(
+            k_v,
+            T_surf;
+            T_freeze=t_freeze,
+            delta_T_seal=dt_seal,
+            k_min_ratio=k_seal_min_ratio,
+        )
+    else
+        return Float64(k_v)
+    end
+end
+
+"""
     apply_venting_surface_boundary!(
         L, R, tk, coords, rplanet, xcenter, ycenter, P_amb;
         k_vent=1.0e-11, conductance_factor=1.0, mode=:darcy_sink,
+        hydrofracture=false,
+        ice_sealing=false, t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
+        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9,
         pr=nothing, pf=nothing, TEN=nothing, PHI=nothing, phimin=1.0e-4, dt=1.0e10,
         eta_fluid_surf=1.0e-3, L_sub=2.83e6, Kcont=1.0e20, S_vent_out=nothing
     )
 
 Apply permeable venting sink boundary condition at rock-air interface faces (`r = rplanet`).
 Computes local venting pressure `P_vent = max(P_amb, P_sat,ice(T_surf))` and assembles Robin
-conductance into the fluid continuity row (scaled by `Kcont`). If `mode === :hydrofracture_gated`,
-only faces satisfying tensile failure `Peff <= -sigma_t` are activated.
+conductance into the fluid continuity row (scaled by `Kcont`).
+
+If `mode === :hydrofracture_gated`, venting requires `pr`, `pf`, and `TEN` to evaluate tensile
+failure `Peff <= -sigma_t`. If any pressure array is missing or the lid is unbreached, the face
+remains closed (`is_open = false`).
+If `ice_sealing === true`, sub-freezing rock faces (`T_surf < t_freeze`) experience exponential
+pore ice permeability sealing during unbreached porous flow (`:darcy_sink` mode).
+When overpressure breaches the lid (`Peff <= -sigma_t` and `hydrofracture === true` or
+`mode === :hydrofracture_gated`), enhanced hydrofracture permeability opens.
 Only outward venting is permitted (`pf > P_vent`), and venting is fluid-limited (`phi > phimin`).
 """
 function apply_venting_surface_boundary!(
@@ -1954,6 +2042,14 @@ function apply_venting_surface_boundary!(
     k_vent::Real=1.0e-11,
     conductance_factor::Real=1.0,
     mode::Symbol=:darcy_sink,
+    hydrofracture::Bool=false,
+    ice_sealing::Bool=false,
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
     pr::Union{AbstractMatrix{Float64},Nothing}=nothing,
     pf::Union{AbstractMatrix{Float64},Nothing}=nothing,
     TEN::Union{AbstractMatrix{Float64},Nothing}=nothing,
@@ -2001,27 +2097,33 @@ function apply_venting_surface_boundary!(
                 i_rock = i
                 j_rock = is_rock1 ? j : (j + 1)
 
-                # Skip domain boundary ghost and anchor nodes (Minor 8)
+                # Skip domain boundary ghost and anchor nodes
                 if i_rock < 2 || i_rock > Ny1 - 1 || j_rock < 2 || j_rock > Nx1 - 1
                     continue
                 end
 
-                is_open = true
-                if mode === :hydrofracture_gated &&
+                breached = false
+                peff = 0.0
+                sigma_t = 0.0
+                if (mode === :hydrofracture_gated || hydrofracture) &&
                     pr !== nothing &&
                     pf !== nothing &&
                     TEN !== nothing
                     peff = pr[i_rock, j_rock] - pf[i_rock, j_rock]
                     sigma_t = TEN[i_rock, j_rock]
-                    if peff > -sigma_t
-                        is_open = false
-                    end
+                    breached = is_hydrofracture_breached(peff, sigma_t)
                 end
 
-                T_surf = tk[i_rock, j_rock]
+                is_open = true
+                if mode === :hydrofracture_gated && !breached
+                    is_open = false
+                end
+
+                T_raw = tk[i_rock, j_rock]
+                T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
                 P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
 
-                # One-sided venting condition: pore fluid must exceed venting pressure (Major 3)
+                # One-sided venting condition: pore fluid must exceed venting pressure
                 if pf !== nothing
                     pf_cur = pf[i_rock, j_rock]
                     if pf_cur <= P_vent
@@ -2029,7 +2131,7 @@ function apply_venting_surface_boundary!(
                     end
                 end
 
-                # Fluid-availability limit (Major 2): no venting from dry rock
+                # Fluid-availability limit: no venting from dry rock
                 phi_avail = 1.0
                 if PHI !== nothing
                     phi_rock = PHI[i_rock, j_rock]
@@ -2040,7 +2142,22 @@ function apply_venting_surface_boundary!(
                 end
 
                 if is_open
-                    C_face = (k_v / (eta_f * dx^2)) * c_factor
+                    k_face = compute_face_venting_permeability(
+                        k_v,
+                        breached,
+                        ice_sealing,
+                        T_surf,
+                        peff,
+                        sigma_t;
+                        t_freeze=t_freeze,
+                        dt_seal=dt_seal,
+                        k_seal_min_ratio=k_seal_min_ratio,
+                        kappa_frac=kappa_frac,
+                        gamma_frac=gamma_frac,
+                        k_frac_max=k_frac_max,
+                    )
+
+                    C_face = (k_face / (eta_f * dx^2)) * c_factor
                     kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
 
                     # If pf and PHI are known, check and cap Darcy rate by available fluid
@@ -2089,27 +2206,33 @@ function apply_venting_surface_boundary!(
                 i_rock = is_rock1 ? i : (i + 1)
                 j_rock = j
 
-                # Skip domain boundary ghost and anchor nodes (Minor 8)
+                # Skip domain boundary ghost and anchor nodes
                 if i_rock < 2 || i_rock > Ny1 - 1 || j_rock < 2 || j_rock > Nx1 - 1
                     continue
                 end
 
-                is_open = true
-                if mode === :hydrofracture_gated &&
+                breached = false
+                peff = 0.0
+                sigma_t = 0.0
+                if (mode === :hydrofracture_gated || hydrofracture) &&
                     pr !== nothing &&
                     pf !== nothing &&
                     TEN !== nothing
                     peff = pr[i_rock, j_rock] - pf[i_rock, j_rock]
                     sigma_t = TEN[i_rock, j_rock]
-                    if peff > -sigma_t
-                        is_open = false
-                    end
+                    breached = is_hydrofracture_breached(peff, sigma_t)
                 end
 
-                T_surf = tk[i_rock, j_rock]
+                is_open = true
+                if mode === :hydrofracture_gated && !breached
+                    is_open = false
+                end
+
+                T_raw = tk[i_rock, j_rock]
+                T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
                 P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
 
-                # One-sided venting condition: pore fluid must exceed venting pressure (Major 3)
+                # One-sided venting condition: pore fluid must exceed venting pressure
                 if pf !== nothing
                     pf_cur = pf[i_rock, j_rock]
                     if pf_cur <= P_vent
@@ -2117,7 +2240,7 @@ function apply_venting_surface_boundary!(
                     end
                 end
 
-                # Fluid-availability limit (Major 2): no venting from dry rock
+                # Fluid-availability limit: no venting from dry rock
                 phi_avail = 1.0
                 if PHI !== nothing
                     phi_rock = PHI[i_rock, j_rock]
@@ -2128,7 +2251,22 @@ function apply_venting_surface_boundary!(
                 end
 
                 if is_open
-                    C_face = (k_v / (eta_f * dy^2)) * c_factor
+                    k_face = compute_face_venting_permeability(
+                        k_v,
+                        breached,
+                        ice_sealing,
+                        T_surf,
+                        peff,
+                        sigma_t;
+                        t_freeze=t_freeze,
+                        dt_seal=dt_seal,
+                        k_seal_min_ratio=k_seal_min_ratio,
+                        kappa_frac=kappa_frac,
+                        gamma_frac=gamma_frac,
+                        k_frac_max=k_frac_max,
+                    )
+
+                    C_face = (k_face / (eta_f * dy^2)) * c_factor
                     kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
 
                     # If pf and PHI are known, check and cap Darcy rate by available fluid
