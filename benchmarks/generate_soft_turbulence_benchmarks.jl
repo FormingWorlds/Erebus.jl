@@ -251,7 +251,8 @@ function run_planetesimal_cooling(
         q_surf = k_face[Nr + 1] * (T[Nr] - T_surf_init) / (dr / 2.0)
         push!(q_surf_hist, q_surf)
 
-        if snap_idx <= length(snapshot_times) && current_time_yr >= snapshot_times[snap_idx] - 1e-6
+        if snap_idx <= length(snapshot_times) &&
+            current_time_yr >= snapshot_times[snap_idx] - 1e-6
             t_snap = snapshot_times[snap_idx]
             key = string(round(t_snap; digits=1))
             snapshot_T[key] = copy(T)

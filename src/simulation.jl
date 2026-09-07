@@ -175,6 +175,11 @@ function save_state(
     alphafluidcur;
     coords::Union{Nothing,GridCoordinates}=nothing,
     phim0_val=phim0,
+    M_vent_total::Real=0.0,
+    M_atm_total::Real=0.0,
+    M_escaped_total::Real=0.0,
+    P_amb::Real=10.0,
+    S_vent::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
     # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -212,6 +217,11 @@ function save_state(
         timesum,
         marknum,
         phim0=phim0_val,
+        M_vent_total,
+        M_atm_total,
+        M_escaped_total,
+        P_amb,
+        S_vent=S_vent === nothing ? zeros(Float64, Ny1_val, Nx1_val) : S_vent,
         ratio_al,
         t_half_al,
         dsubgrids,
@@ -554,9 +564,23 @@ function simulation_loop(
     # set up markers and state (from checkpoint or fresh definition)
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers(coords)
+    M_vent_total = 0.0
+    M_atm_total = 0.0
+    M_escaped_total = 0.0
+    S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+    Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
+        if haskey(ckpt, "M_vent_total")
+            M_vent_total = Float64(ckpt["M_vent_total"])
+        end
+        if haskey(ckpt, "M_atm_total")
+            M_atm_total = Float64(ckpt["M_atm_total"])
+        end
+        if haskey(ckpt, "M_escaped_total")
+            M_escaped_total = Float64(ckpt["M_escaped_total"])
+        end
         if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
             (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
                 DimensionMismatch(
@@ -815,6 +839,11 @@ function simulation_loop(
             alphafluidcur;
             coords=coords,
             phim0_val=phim0_val,
+            M_vent_total=M_vent_total,
+            M_atm_total=M_atm_total,
+            M_escaped_total=M_escaped_total,
+            P_amb=cfg.disk.p_amb_disk,
+            S_vent=S_vent_grid,
         )
     end
 
@@ -912,11 +941,19 @@ function simulation_loop(
         # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
-        # compute ambient disk temperature and update sticky air markers
+        # compute ambient conditions and update sticky air markers
         # ---------------------------------------------------------------------
-        T_amb = compute_disk_temperature(timesum, cfg.disk)
+        T_amb, P_amb, w_disp = compute_ambient_conditions(timesum, cfg.disk)
         isfinite(T_amb) ||
             throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
+        P_atm = if cfg.escape.active
+            compute_surface_atmospheric_pressure(
+                M_atm_total, cfg.escape.M_planet, cfg.escape.R_planet
+            )
+        else
+            0.0
+        end
+        P_amb_eff = P_amb + P_atm
         if disk_enabled_val || surface_radiation_val
             @threads :static for m in 1:marknum
                 if tm[m] >= 3
@@ -1419,6 +1456,7 @@ function simulation_loop(
                 @info("thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
                 recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
+                fill!(S_vent_grid, 0.0)
                 # assemble hydromechanical system of equations
                 L = assemble_hydromechanical_lse!(
                     ETA,
@@ -1458,6 +1496,22 @@ function simulation_loop(
                     gamma_frac=gamma_frac_val,
                     k_frac_max=k_frac_max_val,
                     L=L_hydromech,
+                    venting=cfg.venting.active,
+                    venting_mode=cfg.venting.mode,
+                    k_vent=cfg.venting.k_vent,
+                    conductance_factor=cfg.venting.conductance_factor,
+                    ice_sealing=cfg.venting.ice_sealing,
+                    t_freeze=cfg.venting.t_freeze,
+                    dt_seal=cfg.venting.dt_seal,
+                    k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
+                    rplanet=rplanet_val,
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    P_amb=P_amb_eff,
+                    tk=tk1,
+                    eta_fluid_surf=etafluidmm[2],
+                    L_sub=cfg.venting.L_sublimation,
+                    S_vent_out=S_vent_grid,
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -1508,6 +1562,7 @@ function simulation_loop(
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
+                    S_vent=cfg.venting.active ? S_vent_grid : nothing,
                 )
 
                 # compute fluid velocities
@@ -1569,6 +1624,7 @@ function simulation_loop(
                     betasolid=cur_betasolid,
                     phimin=phimin_val,
                     phimax=phimax_val,
+                    S_vent=cfg.venting.active ? S_vent_grid : nothing,
                 )
                 # symmetrize P node observables
                 symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
@@ -1606,6 +1662,40 @@ function simulation_loop(
                 end
                 # end # @timeit to "plastic iteration"
             end # for iplast=1:1:nplast
+
+            # Refresh venting drainage rate using converged fluid pressure
+            if cfg.venting.active
+                apply_venting_surface_boundary!(
+                    nothing,
+                    nothing,
+                    tk1,
+                    coords,
+                    rplanet_val,
+                    xcenter_val,
+                    ycenter_val,
+                    P_amb_eff;
+                    k_vent=cfg.venting.k_vent,
+                    conductance_factor=cfg.venting.conductance_factor,
+                    mode=cfg.venting.mode,
+                    hydrofracture=hydrofracture_val,
+                    ice_sealing=cfg.venting.ice_sealing,
+                    t_freeze=cfg.venting.t_freeze,
+                    dt_seal=cfg.venting.dt_seal,
+                    k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
+                    kappa_frac=kappa_frac_val,
+                    gamma_frac=gamma_frac_val,
+                    k_frac_max=k_frac_max_val,
+                    pr=pr,
+                    pf=pf,
+                    TEN=TEN,
+                    PHI=PHI,
+                    phimin=phimin_val,
+                    dt=dt,
+                    eta_fluid_surf=etafluidmm[2],
+                    L_sub=cfg.venting.L_sublimation,
+                    S_vent_out=S_vent_grid,
+                )
+            end
 
             # ------------------------------------------------------------------
             # compute shear heating HS in P nodes
@@ -1670,6 +1760,11 @@ function simulation_loop(
             # ------------------------------------------------------------------
             # solve temperature equation
             # ------------------------------------------------------------------
+            if cfg.venting.active && cfg.venting.latent_cooling
+                @. Q_lat_grid = -cfg.venting.L_sublimation * rhofluidm[2] * S_vent_grid
+            else
+                fill!(Q_lat_grid, 0.0)
+            end
             # assemble thermal system of equations 
             LT = assemble_thermal_lse!(
                 tk1,
@@ -1685,6 +1780,7 @@ function simulation_loop(
                 coords=coords,
                 LT=LT_thermal,
                 Q_metric=Q_metric,
+                Q_lat=Q_lat_grid,
             )
             # solve thermal system of equations
             if thermal_cache === nothing
@@ -1822,6 +1918,46 @@ function simulation_loop(
             phimax=phimax_val,
             coords=coords,
         )
+        delta_m_vent = 0.0
+        delta_m_vent_3d = 0.0
+        if cfg.venting.active
+            delta_m_vent = sink_vented_marker_porosity!(
+                xm,
+                ym,
+                tm,
+                phim,
+                S_vent_grid,
+                dt,
+                marknum;
+                coords=coords,
+                phimin=phimin_val,
+                rhofluidcur=rhofluidm[2],
+            )
+            # Area flux geometric scaling: 4πR² / 2πR = 2 * R_planet
+            L_3D_equiv = 2.0 * rplanet_val
+            delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            M_vent_total += delta_m_vent_3d
+        end
+
+        if cfg.escape.active
+            L_3D_equiv = 2.0 * cfg.escape.R_planet
+            if !cfg.venting.active
+                delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            end
+            M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
+            esc_res = evolve_atmospheric_species_inventory(
+                M_atm_total,
+                M_vent_rate,
+                dt,
+                cfg.escape.M_planet,
+                cfg.escape.R_planet,
+                cfg.escape.T_exobase,
+                get_species_molecular_mass(cfg.escape.species);
+                R_exobase=cfg.escape.R_exobase,
+            )
+            M_atm_total = esc_res.M_atm
+            M_escaped_total += esc_res.M_escaped_step
+        end
         phinewm .= phim
 
         # ---------------------------------------------------------------------
@@ -2022,6 +2158,11 @@ function simulation_loop(
                 alphafluidcur;
                 coords=coords,
                 phim0_val=phim0_val,
+                M_vent_total=M_vent_total,
+                M_atm_total=M_atm_total,
+                M_escaped_total=M_escaped_total,
+                P_amb=P_amb_eff,
+                S_vent=S_vent_grid,
             )
         end
         # ---------------------------------------------------------------------

@@ -11,7 +11,7 @@ This page contains the auto-generated API documentation for all public functions
 
 ```@autodocs
 Modules = [Erebus]
-Order = [:type, :function]
+Order = [:type, :function, :constant]
 ```
 
 ---
@@ -20,7 +20,7 @@ Order = [:type, :function]
 
 ```@autodocs
 Modules = [Erebus.Config]
-Order = [:type, :function]
+Order = [:type, :function, :constant]
 ```
 
 ---
@@ -29,7 +29,7 @@ Order = [:type, :function]
 
 ```@autodocs
 Modules = [Erebus.Physics]
-Order = [:type, :function]
+Order = [:type, :function, :constant]
 ```
 
 ---

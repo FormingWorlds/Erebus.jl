@@ -231,6 +231,13 @@ Base.@kwdef struct DiskConfig
     p_m_visc::Float64 = 0.30
     p_m_t::Float64 = 0.40
     p_m_visc_decay::Float64 = 0.30
+    t_dispersal_myr::Float64 = 3.0
+    dt_dispersal_myr::Float64 = 0.1
+    p_amb_disk::Float64 = 10.0
+    p_amb_space::Float64 = 1.0e-4
+    albedo::Float64 = 0.06
+    t_eq_custom::Float64 = NaN
+    dispersal_active::Bool = false
 end
 
 """
@@ -288,6 +295,82 @@ Base.@kwdef struct MeltingConfig
 end
 
 """
+Planetesimal surface volatile degassing and venting parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct VentingConfig
+    active::Bool = false
+    mode::Symbol = :darcy_sink
+    k_vent::Float64 = 1.0e-11
+    conductance_factor::Float64 = 1.0
+    L_sublimation::Float64 = 2.83e6
+    latent_cooling::Bool = true
+    ice_sealing::Bool = false
+    t_freeze::Float64 = 273.15
+    dt_seal::Float64 = 10.0
+    k_seal_min_ratio::Float64 = 1.0e-6
+end
+
+"""
+Multi-species volatile solubility and organic devolatilization parameters.
+
+Configures the standalone thermodynamic speciation and volatile solubility library
+(`Erebus.Physics.Volatiles`). Dynamic reactive transport coupling in 2D fluid flow is in development.
+
+$(FIELDS)
+"""
+Base.@kwdef struct VolatilesConfig
+    active::Bool = false
+    fO2_delta_IW::Float64 = -1.0
+    water_solubility_coeff::Float64 = 0.40
+    water_law::Symbol = :burnham_dixon
+    h2_active::Bool = false
+    h2_law::Symbol = :hirschmann2012
+    nitrogen_law::Symbol = :dasgupta2022
+    nitrogen_henry_coeff::Float64 = 0.40
+    nitrogen_nitride_capacity::Float64 = 1.0e-3
+    t_organic_devol::Float64 = 550.0
+    dt_organic_devol::Float64 = 50.0
+    organic_n_initial_ppm::Float64 = 500.0
+
+    # Carbon solubility parameters
+    carbon_active::Bool = false
+    co_law::Symbol = :armstrong2015
+    ch4_law::Symbol = :ardia2013
+    co2_law::Symbol = :dixon1995
+    graphite_saturation::Bool = true
+
+    # Sulfur solubility parameters
+    sulfur_active::Bool = false
+    sulfide_law::Symbol = :boulliung2023
+    sulfide_melt::Symbol = :basalt
+    include_sulfate::Bool = false
+    scss_active::Bool = true
+    scss_law::Symbol = :smythe2017
+    melt_feo_wtpct::Float64 = 10.0
+
+    # Silicate melt composition mole fractions
+    x_sio2::Float64 = 0.56
+    x_al2o3::Float64 = 0.11
+    x_tio2::Float64 = 0.01
+end
+
+"""
+Atmospheric Jeans kinetic escape and volatile mass loss parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct EscapeConfig
+    active::Bool = false
+    M_planet::Float64 = 1.309e18
+    R_planet::Float64 = 50_000.0
+    T_exobase::Float64 = 200.0
+    R_exobase::Float64 = 50_000.0
+    species::Symbol = :H2O
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -304,6 +387,9 @@ Base.@kwdef struct SimulationConfig
     output::OutputConfig = OutputConfig()
     disk::DiskConfig = DiskConfig()
     melting::MeltingConfig = MeltingConfig()
+    venting::VentingConfig = VentingConfig()
+    volatiles::VolatilesConfig = VolatilesConfig()
+    escape::EscapeConfig = EscapeConfig()
 end
 
 """
@@ -549,6 +635,31 @@ function validate_config(cfg::SimulationConfig)
             "p_m_visc_decay must be >= 0 and finite, got $(cfg.disk.p_m_visc_decay)"
         ),
     )
+    cfg.disk.t_dispersal_myr > 0.0 && isfinite(cfg.disk.t_dispersal_myr) || throw(
+        ArgumentError(
+            "t_dispersal_myr must be > 0 and finite, got $(cfg.disk.t_dispersal_myr)"
+        ),
+    )
+    cfg.disk.dt_dispersal_myr > 0.0 && isfinite(cfg.disk.dt_dispersal_myr) || throw(
+        ArgumentError(
+            "dt_dispersal_myr must be > 0 and finite, got $(cfg.disk.dt_dispersal_myr)"
+        ),
+    )
+    cfg.disk.p_amb_disk > 0.0 && isfinite(cfg.disk.p_amb_disk) || throw(
+        ArgumentError("p_amb_disk must be > 0 and finite, got $(cfg.disk.p_amb_disk)")
+    )
+    cfg.disk.p_amb_space >= 0.0 && isfinite(cfg.disk.p_amb_space) || throw(
+        ArgumentError("p_amb_space must be >= 0 and finite, got $(cfg.disk.p_amb_space)"),
+    )
+    (0.0 <= cfg.disk.albedo < 1.0) && isfinite(cfg.disk.albedo) ||
+        throw(ArgumentError("albedo must be in [0.0, 1.0), got $(cfg.disk.albedo)"))
+    isnan(cfg.disk.t_eq_custom) ||
+        (cfg.disk.t_eq_custom > 0.0 && isfinite(cfg.disk.t_eq_custom)) ||
+        throw(
+            ArgumentError(
+                "t_eq_custom must be > 0 and finite when specified, got $(cfg.disk.t_eq_custom)",
+            ),
+        )
 
     # Reaction checks
     cfg.reaction.hydration_mode in Set([1, 2, 3, 9]) || throw(
@@ -643,7 +754,7 @@ function validate_config(cfg::SimulationConfig)
     if cfg.melting.soft_turbulence && !cfg.melting.active
         throw(
             ArgumentError(
-                "Melting soft_turbulence cannot be enabled when melting active is false",
+                "Melting soft_turbulence cannot be enabled when melting active is false"
             ),
         )
     end
@@ -743,6 +854,175 @@ function validate_config(cfg::SimulationConfig)
         end
     end
 
+    # Venting checks
+    cfg.venting.mode in Set([:darcy_sink, :hydrofracture_gated]) || throw(
+        ArgumentError(
+            "venting mode must be :darcy_sink or :hydrofracture_gated, got $(cfg.venting.mode)",
+        ),
+    )
+    cfg.venting.k_vent > 0.0 && isfinite(cfg.venting.k_vent) ||
+        throw(ArgumentError("k_vent must be > 0 and finite, got $(cfg.venting.k_vent)"))
+    cfg.venting.conductance_factor > 0.0 && isfinite(cfg.venting.conductance_factor) ||
+        throw(
+            ArgumentError(
+                "conductance_factor must be > 0 and finite, got $(cfg.venting.conductance_factor)",
+            ),
+        )
+    cfg.venting.L_sublimation > 0.0 && isfinite(cfg.venting.L_sublimation) || throw(
+        ArgumentError(
+            "L_sublimation must be > 0 and finite, got $(cfg.venting.L_sublimation)"
+        ),
+    )
+    cfg.venting.t_freeze > 0.0 && isfinite(cfg.venting.t_freeze) ||
+        throw(ArgumentError("t_freeze must be > 0 and finite, got $(cfg.venting.t_freeze)"))
+    cfg.venting.dt_seal > 0.0 && isfinite(cfg.venting.dt_seal) ||
+        throw(ArgumentError("dt_seal must be > 0 and finite, got $(cfg.venting.dt_seal)"))
+    (0.0 < cfg.venting.k_seal_min_ratio <= 1.0 && isfinite(cfg.venting.k_seal_min_ratio)) ||
+        throw(
+            ArgumentError(
+                "k_seal_min_ratio must be in (0, 1], got $(cfg.venting.k_seal_min_ratio)"
+            ),
+        )
+
+    # Volatiles checks
+    (isfinite(cfg.volatiles.fO2_delta_IW) && abs(cfg.volatiles.fO2_delta_IW) <= 50.0) ||
+        throw(
+            ArgumentError(
+                "fO2_delta_IW must be finite and within [-50, 50], got $(cfg.volatiles.fO2_delta_IW)",
+            ),
+        )
+    (
+        cfg.volatiles.water_solubility_coeff > 0.0 &&
+        isfinite(cfg.volatiles.water_solubility_coeff)
+    ) || throw(
+        ArgumentError(
+            "water_solubility_coeff must be > 0 and finite, got $(cfg.volatiles.water_solubility_coeff)",
+        ),
+    )
+    (
+        cfg.volatiles.nitrogen_henry_coeff > 0.0 &&
+        isfinite(cfg.volatiles.nitrogen_henry_coeff)
+    ) || throw(
+        ArgumentError(
+            "nitrogen_henry_coeff must be > 0 and finite, got $(cfg.volatiles.nitrogen_henry_coeff)",
+        ),
+    )
+    (
+        cfg.volatiles.nitrogen_nitride_capacity > 0.0 &&
+        isfinite(cfg.volatiles.nitrogen_nitride_capacity)
+    ) || throw(
+        ArgumentError(
+            "nitrogen_nitride_capacity must be > 0 and finite, got $(cfg.volatiles.nitrogen_nitride_capacity)",
+        ),
+    )
+    (cfg.volatiles.t_organic_devol > 0.0 && isfinite(cfg.volatiles.t_organic_devol)) ||
+        throw(
+            ArgumentError(
+                "t_organic_devol must be > 0 and finite, got $(cfg.volatiles.t_organic_devol)",
+            ),
+        )
+    (cfg.volatiles.dt_organic_devol > 0.0 && isfinite(cfg.volatiles.dt_organic_devol)) ||
+        throw(
+            ArgumentError(
+                "dt_organic_devol must be > 0 and finite, got $(cfg.volatiles.dt_organic_devol)",
+            ),
+        )
+    (
+        cfg.volatiles.organic_n_initial_ppm >= 0.0 &&
+        isfinite(cfg.volatiles.organic_n_initial_ppm)
+    ) || throw(
+        ArgumentError(
+            "organic_n_initial_ppm must be >= 0 and finite, got $(cfg.volatiles.organic_n_initial_ppm)",
+        ),
+    )
+    cfg.volatiles.water_law in
+    Set([:burnham_dixon, :sossi_peridotite, :basalt_dixon, :newcombe_lunar]) || throw(
+        ArgumentError(
+            "water_law must be :burnham_dixon, :sossi_peridotite, :basalt_dixon, or :newcombe_lunar, got $(cfg.volatiles.water_law)",
+        ),
+    )
+    cfg.volatiles.h2_law in Set([:hirschmann2012, :gaillard2003]) || throw(
+        ArgumentError(
+            "h2_law must be :hirschmann2012 or :gaillard2003, got $(cfg.volatiles.h2_law)",
+        ),
+    )
+    cfg.volatiles.nitrogen_law in Set([:dasgupta2022, :libourel2003]) || throw(
+        ArgumentError(
+            "nitrogen_law must be :dasgupta2022 or :libourel2003, got $(cfg.volatiles.nitrogen_law)",
+        ),
+    )
+    cfg.volatiles.co_law in Set([:armstrong2015, :yoshioka2019_morb]) || throw(
+        ArgumentError(
+            "co_law must be :armstrong2015 or :yoshioka2019_morb, got $(cfg.volatiles.co_law)",
+        ),
+    )
+    cfg.volatiles.ch4_law in Set([:ardia2013]) ||
+        throw(ArgumentError("ch4_law must be :ardia2013, got $(cfg.volatiles.ch4_law)"))
+    cfg.volatiles.co2_law in Set([:dixon1995]) ||
+        throw(ArgumentError("co2_law must be :dixon1995, got $(cfg.volatiles.co2_law)"))
+    cfg.volatiles.sulfide_law in Set([:boulliung2023, :gaillard2022]) || throw(
+        ArgumentError(
+            "sulfide_law must be :boulliung2023 or :gaillard2022, got $(cfg.volatiles.sulfide_law)",
+        ),
+    )
+    cfg.volatiles.sulfide_melt in Set([:basalt, :andesite, :trachybasalt]) || throw(
+        ArgumentError(
+            "sulfide_melt must be :basalt, :andesite, or :trachybasalt, got $(cfg.volatiles.sulfide_melt)",
+        ),
+    )
+    cfg.volatiles.scss_law in Set([:smythe2017, :oneill2002]) || throw(
+        ArgumentError(
+            "scss_law must be :smythe2017 or :oneill2002, got $(cfg.volatiles.scss_law)"
+        ),
+    )
+    (cfg.volatiles.melt_feo_wtpct >= 0.0 && isfinite(cfg.volatiles.melt_feo_wtpct)) ||
+        throw(
+            ArgumentError(
+                "melt_feo_wtpct must be >= 0 and finite, got $(cfg.volatiles.melt_feo_wtpct)",
+            ),
+        )
+    (0.0 <= cfg.volatiles.x_sio2 <= 1.0 && isfinite(cfg.volatiles.x_sio2)) || throw(
+        ArgumentError("x_sio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_sio2)"),
+    )
+    (0.0 <= cfg.volatiles.x_al2o3 <= 1.0 && isfinite(cfg.volatiles.x_al2o3)) || throw(
+        ArgumentError("x_al2o3 must be in [0, 1] and finite, got $(cfg.volatiles.x_al2o3)"),
+    )
+    (0.0 <= cfg.volatiles.x_tio2 <= 1.0 && isfinite(cfg.volatiles.x_tio2)) || throw(
+        ArgumentError("x_tio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_tio2)"),
+    )
+
+    # Escape checks
+    (cfg.escape.M_planet > 0.0 && isfinite(cfg.escape.M_planet)) ||
+        throw(ArgumentError("M_planet must be > 0 and finite, got $(cfg.escape.M_planet)"))
+    (cfg.escape.R_planet > 0.0 && isfinite(cfg.escape.R_planet)) ||
+        throw(ArgumentError("R_planet must be > 0 and finite, got $(cfg.escape.R_planet)"))
+    if cfg.escape.active
+        isapprox(cfg.escape.R_planet, cfg.geometry.rplanet; rtol=0.01) || throw(
+            ArgumentError(
+                "escape.R_planet ($(cfg.escape.R_planet)) must match simulated planet radius geometry.rplanet ($(cfg.geometry.rplanet)) when escape.active=true",
+            ),
+        )
+    end
+    (cfg.escape.T_exobase > 0.0 && isfinite(cfg.escape.T_exobase)) || throw(
+        ArgumentError("T_exobase must be > 0 and finite, got $(cfg.escape.T_exobase)")
+    )
+    (cfg.escape.R_exobase >= cfg.escape.R_planet && isfinite(cfg.escape.R_exobase)) ||
+        throw(
+            ArgumentError(
+                "R_exobase must be >= R_planet ($(cfg.escape.R_planet)) and finite, got $(cfg.escape.R_exobase)",
+            ),
+        )
+    cfg.escape.species in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) ||
+        throw(
+            ArgumentError(
+                "escape species must be one of :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2, got $(cfg.escape.species)",
+            ),
+        )
+
+    if cfg.volatiles.active
+        @warn "VolatilesConfig active=true: multi-species H-C-N-S volatile solubility, gas speciation, and organic devolatilization operate as a standalone thermodynamic library; dynamic reactive transport is not yet coupled to the 2D Stokes-Darcy fluid flow solver."
+    end
+
     return nothing
 end
 
@@ -801,6 +1081,9 @@ const VALID_SECTIONS = Set([
     "output",
     "disk",
     "melting",
+    "venting",
+    "volatiles",
+    "escape",
 ])
 
 """
@@ -896,6 +1179,46 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.melting
     end
+    vent = if haskey(parsed, "venting")
+        _dict_to_struct(VentingConfig, parsed["venting"], def.venting)
+    else
+        def.venting
+    end
+    vol = if haskey(parsed, "volatiles")
+        _dict_to_struct(VolatilesConfig, parsed["volatiles"], def.volatiles)
+    else
+        def.volatiles
+    end
+    esc = if haskey(parsed, "escape")
+        parsed_esc = parsed["escape"]
+        def_esc =
+            if !haskey(parsed_esc, "R_planet") && geom.rplanet != def.geometry.rplanet
+                EscapeConfig(
+                    def.escape.active,
+                    def.escape.M_planet,
+                    geom.rplanet,
+                    def.escape.T_exobase,
+                    geom.rplanet,
+                    def.escape.species,
+                )
+            else
+                def.escape
+            end
+        _dict_to_struct(EscapeConfig, parsed_esc, def_esc)
+    else
+        if geom.rplanet != def.geometry.rplanet
+            EscapeConfig(
+                def.escape.active,
+                def.escape.M_planet,
+                geom.rplanet,
+                def.escape.T_exobase,
+                geom.rplanet,
+                def.escape.species,
+            )
+        else
+            def.escape
+        end
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -909,6 +1232,9 @@ function load_config(source::AbstractString)::SimulationConfig
         output=out,
         disk=dsk,
         melting=melt,
+        venting=vent,
+        volatiles=vol,
+        escape=esc,
     )
 
     validate_config(cfg)
@@ -955,6 +1281,9 @@ function save_config(io::IO, cfg::SimulationConfig)
         "output" => _struct_to_dict(cfg.output),
         "disk" => _struct_to_dict(cfg.disk),
         "melting" => _struct_to_dict(cfg.melting),
+        "venting" => _struct_to_dict(cfg.venting),
+        "volatiles" => _struct_to_dict(cfg.volatiles),
+        "escape" => _struct_to_dict(cfg.escape),
     )
     TOML.print(io, d; sorted=true)
     return io

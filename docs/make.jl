@@ -22,8 +22,8 @@ makedocs(;
         prettyurls=get(ENV, "CI", nothing) == "true",
         canonical="https://proteus-framework.org/Erebus.jl/stable/",
         edit_link="main",
-        size_threshold_warn=250 * 1024,
-        size_threshold=350 * 1024,
+        size_threshold_warn=350 * 1024,
+        size_threshold=450 * 1024,
     ),
     pages=[
         "Home" => "index.md",
@@ -45,6 +45,7 @@ makedocs(;
             "Discretization & Numerics" => "explanations/discretization_numerics.md",
             "Silicate Melting & Soft Turbulence" => "explanations/rock_melting.md",
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
+            "Degassing & Cold Venting" => "explanations/degassing_and_venting.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [
@@ -56,6 +57,11 @@ makedocs(;
             "Surface Radiation & Disk Evolution" => "validation/disk_radiation.md",
             "Hydrothermal Reactions" => "validation/hydrothermal_reactions.md",
             "Silicate Rock Melting" => "validation/rock_melting.md",
+            "Cold Surface Venting" => "validation/cold_surface_venting.md",
+            "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
+            "Volatile Exsolution & Nitrogen Chemistry" => "validation/volatile_exsolution.md",
+            "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
+            "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

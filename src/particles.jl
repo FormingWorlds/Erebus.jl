@@ -3371,3 +3371,87 @@ function update_marker_porosity!(
     # end # @timeit to "update_marker_porosity!"
     return nothing
 end # function update_marker_porosity!
+
+"""
+    sink_vented_marker_porosity!(
+        xm, ym, tm, phim, S_vent_grid, dt, marknum;
+        coords, phimin=1.0e-4, rhofluidcur=1000.0
+    )::Float64
+
+Drain fluid volume and mass from rock markers in surface cells where venting is active.
+Updates marker porosity `phim` by `Δϕ_m = -S_vent * dt`, clamped to `phimin`.
+Returns total mass of vented fluid ΔM_vent [kg] drained during this time step.
+
+# Arguments
+- `xm`: Marker x-coordinates [m]
+- `ym`: Marker y-coordinates [m]
+- `tm`: Marker material phase type
+- `phim`: Marker porosity array
+- `S_vent_grid`: Surface venting loss rate grid [s⁻¹]
+- `dt`: Time step length [s]
+- `marknum`: Total number of active markers
+- `coords`: GridCoordinates struct
+- `phimin`: Minimum porosity floor
+- `rhofluidcur`: Reference fluid density [kg/m³]
+
+# Returns
+- `delta_m_vent`: Total fluid mass vented across surface during time step [kg]
+"""
+function sink_vented_marker_porosity!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{Int64},
+    phim::AbstractVector{Float64},
+    S_vent_grid::AbstractMatrix{Float64},
+    dt::Real,
+    marknum::Integer;
+    coords::GridCoordinates,
+    phimin::Real=1.0e-4,
+    rhofluidcur::Real=1000.0,
+)::Float64
+    xp_val = coords.xp
+    yp_val = coords.yp
+    dx_val = coords.dx
+    dy_val = coords.dy
+    jmin_p_val = coords.jmin_p
+    jmax_p_val = coords.jmax_p
+    imin_p_val = coords.imin_p
+    imax_p_val = coords.imax_p
+
+    marknum <= 0 && return 0.0
+    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    nthreads = max(Threads.nthreads(), Threads.maxthreadid())
+    thread_mass = zeros(Float64, nthreads)
+
+    @inbounds begin
+        @threads :static for m in 1:marknum
+            if tm[m] < 3
+                i, j, weights = fix_weights(
+                    xm[m],
+                    ym[m],
+                    xp_val,
+                    yp_val,
+                    dx_val,
+                    dy_val,
+                    jmin_p_val,
+                    jmax_p_val,
+                    imin_p_val,
+                    imax_p_val,
+                )
+                s_vent_m = dot4(grid_vector(i, j, S_vent_grid), weights)
+                if s_vent_m > 0.0
+                    dphi = s_vent_m * dt
+                    phi_old = phim[m]
+                    phi_new = max(Float64(phimin), phi_old - dphi)
+                    phim[m] = phi_new
+                    dphi_actual = phi_old - phi_new
+                    if dphi_actual > 0.0
+                        tid = Threads.threadid()
+                        thread_mass[tid] += Float64(rhofluidcur) * dphi_actual * V_marker
+                    end
+                end
+            end
+        end
+    end
+    return sum(thread_mass)
+end

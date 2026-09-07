@@ -238,4 +238,72 @@ Parameters controlling silicate rock melting, latent heat buffering, and melt-we
 | `k_turb_cutoff` | `Float64` | `1.0e+6` | W/(m K) | Upper cutoff for turbulent thermal conductivity | $> k_{\text{turb,floor}}$ |
 | `k_turb_floor` | `Float64` | `1.0e-3` | W/(m K) | Lower cutoff floor for regularized thermal conductivity | $> 0$ |
 
+---
 
+## `[venting]`
+
+Parameters controlling planetesimal surface volatile venting, ice sealing, and hydrofracture breaching.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable surface volatile venting sink | `true` / `false` |
+| `mode` | `Symbol` | `:darcy_sink` | - | Venting activation mode | `:darcy_sink` / `:hydrofracture_gated` |
+| `k_vent` | `Float64` | `1.0e-11` | $\text{m}^2$ | Surface venting boundary permeability | $> 0$ |
+| `conductance_factor` | `Float64` | `1.0` | - | Dimensionless boundary conductance multiplier | $> 0$ |
+| `L_sublimation` | `Float64` | `2.83e6` | J/kg | Latent heat of ice sublimation | $> 0$ |
+| `latent_cooling` | `Bool` | `true` | - | Enable volatile sublimation latent heat cooling | `true` / `false` |
+| `ice_sealing` | `Bool` | `false` | - | Enable cryogenic pore ice permeability reduction | `true` / `false` |
+| `t_freeze` | `Float64` | `273.15` | K | Water freezing temperature threshold | $> 0$ |
+| `dt_seal` | `Float64` | `10.0` | K | Exponential ice sealing temperature scale | $> 0$ |
+| `k_seal_min_ratio` | `Float64` | `1.0e-6` | - | Minimum cryogenic permeability residual ratio | $\in (0, 1]$ |
+
+---
+
+## `[volatiles]`
+
+Parameters controlling multi-species volatile solubility in silicate melt and primordial organic devolatilization.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable multi-species volatile solubility and chemistry | `true` / `false` |
+| `fO2_delta_IW` | `Float64` | `-1.0` | log10 units | Redox state relative to iron-wüstite buffer ($\Delta\text{IW}$) | $\in [-50, 50]$ |
+| `water_solubility_coeff` | `Float64` | `0.40` | $\text{wt}\% / \text{MPa}^{0.5}$ | Burnham low-pressure water solubility coefficient $A_s$ | $> 0$ |
+| `water_law` | `Symbol` | `:burnham_dixon` | - | Water solubility law (`:burnham_dixon`, `:sossi_peridotite`, `:basalt_dixon`, `:newcombe_lunar`) | valid symbol |
+| `h2_active` | `Bool` | `false` | - | Enable molecular $\text{H}_2$ dissolution in silicate melt | `true` / `false` |
+| `h2_law` | `Symbol` | `:hirschmann2012` | - | Molecular $\text{H}_2$ solubility law (`:hirschmann2012`, `:gaillard2003`) | valid symbol |
+| `nitrogen_law` | `Symbol` | `:dasgupta2022` | - | Nitrogen solubility law (`:dasgupta2022`, `:libourel2003`) | valid symbol |
+| `nitrogen_henry_coeff` | `Float64` | `0.40` | ppm / bar | Henry coefficient $K_h$ for molecular $\text{N}_2$ dissolution | $> 0$ |
+| `nitrogen_nitride_capacity` | `Float64` | `1.0e-3` | $\text{wt}\% / \text{bar}^{0.5}$ | Chemical nitride capacity $C_{\text{nitride}}$ | $> 0$ |
+| `t_organic_devol` | `Float64` | `550.0` | K | Characteristic midpoint temperature $T_{\text{devol}}$ for organic devolatilization | $> 0$ |
+| `dt_organic_devol` | `Float64` | `50.0` | K | Transition temperature scale $\Delta T$ for organic devolatilization | $> 0$ |
+| `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
+| `carbon_active` | `Bool` | `false` | - | Enable carbon species solubility ($\text{CO}, \text{CH}_4, \text{CO}_2$) | `true` / `false` |
+| `co_law` | `Symbol` | `:armstrong2015` | - | Carbon monoxide solubility law (`:armstrong2015`, `:yoshioka2019_morb`) | valid symbol |
+| `ch4_law` | `Symbol` | `:ardia2013` | - | Methane solubility law (`:ardia2013`) | valid symbol |
+| `co2_law` | `Symbol` | `:dixon1995` | - | Carbon dioxide carbonate solubility law (`:dixon1995`) | valid symbol |
+| `graphite_saturation` | `Bool` | `true` | - | Enforce graphite saturation ceiling on carbon fugacities | `true` / `false` |
+| `sulfur_active` | `Bool` | `false` | - | Enable sulfur species solubility in silicate melt | `true` / `false` |
+| `sulfide_law` | `Symbol` | `:boulliung2023` | - | Sulfide solubility law (`:boulliung2023`, `:gaillard2022`) | valid symbol |
+| `sulfide_melt` | `Symbol` | `:basalt` | - | Silicate melt composition for Boulliung (`:basalt`, `:andesite`, `:trachybasalt`) | valid symbol |
+| `include_sulfate` | `Bool` | `false` | - | Include sulfate capacity at oxidizing conditions | `true` / `false` |
+| `scss_active` | `Bool` | `true` | - | Cap dissolved sulfur at sulfide saturation (SCSS) | `true` / `false` |
+| `scss_law` | `Symbol` | `:smythe2017` | - | SCSS formulation (`:smythe2017`, `:oneill2002`) | valid symbol |
+| `melt_feo_wtpct` | `Float64` | `10.0` | wt% | Silicate melt $\text{FeO}$ concentration for SCSS calculation | $\ge 0$ |
+| `x_sio2` | `Float64` | `0.56` | - | Silicate melt $\text{SiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
+| `x_al2o3` | `Float64` | `0.11` | - | Silicate melt $\text{Al}_2\text{O}_3$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
+| `x_tio2` | `Float64` | `0.01` | - | Silicate melt $\text{TiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
+
+---
+
+## `[escape]`
+
+Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape, and surface pressure feedback.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable atmospheric inventory evolution and Jeans escape | `true` / `false` |
+| `M_planet` | `Float64` | `1.309e+18` | kg | Planetesimal mass for gravitational potential | $> 0$ |
+| `R_planet` | `Float64` | `50000.0` | m | Planetesimal surface radius for atmospheric surface pressure | $> 0$ |
+| `T_exobase` | `Float64` | `200.0` | K | Exobase temperature for Maxwellian thermal velocity | $> 0$ |
+| `R_exobase` | `Float64` | `50000.0` | m | Exobase radius for escape flux surface integration | $\ge \text{R\_planet}$ |
+| `species` | `Symbol` | `:H2O` | - | Primary outgassed volatile species for kinetic escape | valid volatile symbol |

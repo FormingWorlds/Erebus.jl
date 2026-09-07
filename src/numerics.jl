@@ -456,6 +456,22 @@ function assemble_hydromechanical_lse!(
     k_frac_max::Real=1.0e-9,
     coords=nothing,
     L=nothing,
+    venting::Bool=false,
+    venting_mode::Symbol=:darcy_sink,
+    k_vent::Real=1.0e-11,
+    conductance_factor::Real=1.0,
+    ice_sealing::Bool=false,
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    rplanet::Real=50000.0,
+    xcenter::Real=70000.0,
+    ycenter::Real=70000.0,
+    P_amb::Real=10.0,
+    tk=nothing,
+    eta_fluid_surf::Real=1.0e-3,
+    L_sub::Real=2.83e6,
+    S_vent_out=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -987,7 +1003,43 @@ function assemble_hydromechanical_lse!(
             end # Ptotal/Pfluid equation
         end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
+
+    if venting && tk !== nothing && coords !== nothing
+        apply_venting_surface_boundary!(
+            L,
+            R,
+            tk,
+            coords,
+            rplanet,
+            xcenter,
+            ycenter,
+            P_amb;
+            k_vent=k_vent,
+            conductance_factor=conductance_factor,
+            mode=venting_mode,
+            hydrofracture=hydrofracture,
+            ice_sealing=ice_sealing,
+            t_freeze=t_freeze,
+            dt_seal=dt_seal,
+            k_seal_min_ratio=k_seal_min_ratio,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            PHI=PHI,
+            phimin=phimin,
+            dt=dt,
+            eta_fluid_surf=eta_fluid_surf,
+            L_sub=L_sub,
+            Kcont=Kcont,
+            S_vent_out=S_vent_out,
+        )
+    end
+
     flush!(L) # finalize CSC matrix
+
     # end # @timeit to "assemble_hydromechanical_lse()"
     # return L
     return L.cscmatrix
@@ -1102,6 +1154,7 @@ function compute_Aϕ!(
     betasolid=betasolid,
     phimin=phimin,
     phimax=phimax,
+    S_vent::Union{AbstractMatrix{Float64},Nothing}=nothing,
 )
     # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
@@ -1118,6 +1171,13 @@ function compute_Aϕ!(
                 (pr[i, j] - pf[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
                 betadrained * ((pr[i, j] - pr0[i, j]) - kbw * (pf[i, j] - pf0[i, j])) / dt
             )
+            if S_vent !== nothing
+                s_v = S_vent[i, j]
+                if s_v > 0.0
+                    # Subtract venting sink to avoid double drainage with explicit marker sink.
+                    compaction = max(0.0, compaction - s_v)
+                end
+            end
             APHI[i, j] = compaction / PHI[i, j]
         end
         return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
@@ -1686,6 +1746,7 @@ function assemble_thermal_lse!(
     coords=nothing,
     LT=nothing,
     Q_metric=nothing,
+    Q_lat=nothing,
 )
     Ny1, Nx1 = size(tk1)
     dx_val = coords === nothing ? dx : coords.dx
@@ -1754,9 +1815,13 @@ function assemble_thermal_lse!(
                 if Q_metric !== nothing
                     RT[gk] += Q_metric[i, j]
                 end
+                if Q_lat !== nothing
+                    RT[gk] += Q_lat[i, j]
+                end
             end
         end
     end # @inbounds
+
     flush!(LT) # finalize CSC matrix
     return LT
 end # function assemble_thermal_lse!
@@ -1884,6 +1949,369 @@ function apply_radiative_surface_boundary!(
 end
 
 """
+    compute_face_venting_permeability(
+        k_v, breached, ice_sealing, T_surf, peff, sigma_t;
+        t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
+        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9,
+    )
+
+Compute effective rock face permeability at the planetesimal surface, accounting for
+tensile hydrofracture breaching or cryogenic pore ice sealing.
+
+# Arguments
+- `k_v::Real`: Reference matrix permeability [m^2].
+- `breached::Bool`: Whether tensile failure has ruptured the rock lid.
+- `ice_sealing::Bool`: Whether cryogenic pore ice sealing is active below freezing.
+- `T_surf::Real`: Local surface rock temperature [K].
+- `peff::Real`: Terzaghi effective stress `P_t - P_f` [Pa].
+- `sigma_t::Real`: Rock tensile strength [Pa].
+
+# Keywords
+- `t_freeze::Real`: Water freezing temperature [K] (default: 273.15).
+- `dt_seal::Real`: Temperature sealing interval [K] (default: 10.0).
+- `k_seal_min_ratio::Real`: Minimum residual cryogenic permeability ratio (default: 1.0e-6).
+- `kappa_frac::Real`: Hydrofracture multiplier (default: 1.0e3).
+- `gamma_frac::Real`: Hydrofracture power-law exponent (default: 1.0).
+- `k_frac_max::Real`: Maximum fractured permeability ceiling [m^2] (default: 1.0e-9).
+
+# Returns
+- Effective face permeability [m^2].
+"""
+function compute_face_venting_permeability(
+    k_v::Real,
+    breached::Bool,
+    ice_sealing::Bool,
+    T_surf::Real,
+    peff::Real,
+    sigma_t::Real;
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+)
+    if breached
+        return compute_hydrofracture_permeability(
+            k_v,
+            peff,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma_frac,
+            kmax=k_frac_max,
+        )
+    elseif ice_sealing
+        return compute_ice_sealed_permeability(
+            k_v,
+            T_surf;
+            T_freeze=t_freeze,
+            delta_T_seal=dt_seal,
+            k_min_ratio=k_seal_min_ratio,
+        )
+    else
+        return Float64(k_v)
+    end
+end
+
+"""
+    apply_venting_surface_boundary!(
+        L, R, tk, coords, rplanet, xcenter, ycenter, P_amb;
+        k_vent=1.0e-11, conductance_factor=1.0, mode=:darcy_sink,
+        hydrofracture=false,
+        ice_sealing=false, t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
+        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9,
+        pr=nothing, pf=nothing, TEN=nothing, PHI=nothing, phimin=1.0e-4, dt=1.0e10,
+        eta_fluid_surf=1.0e-3, L_sub=2.83e6, Kcont=1.0e20, S_vent_out=nothing
+    )
+
+Apply permeable venting sink boundary condition at rock-air interface faces (`r = rplanet`).
+Computes local venting pressure `P_vent = max(P_amb, P_sat,ice(T_surf))` and assembles Robin
+conductance into the fluid continuity row (scaled by `Kcont`).
+
+If `mode === :hydrofracture_gated`, venting requires `pr`, `pf`, and `TEN` to evaluate tensile
+failure `Peff <= -sigma_t`. If any pressure array is missing or the lid is unbreached, the face
+remains closed (`is_open = false`).
+If `ice_sealing === true`, sub-freezing rock faces (`T_surf < t_freeze`) experience exponential
+pore ice permeability sealing during unbreached porous flow (`:darcy_sink` mode).
+When overpressure breaches the lid (`Peff <= -sigma_t` and `hydrofracture === true` or
+`mode === :hydrofracture_gated`), enhanced hydrofracture permeability opens.
+Only outward venting is permitted (`pf > P_vent`), and venting is fluid-limited (`phi > phimin`).
+"""
+function apply_venting_surface_boundary!(
+    L,
+    R::Union{AbstractVector{Float64},Nothing},
+    tk::AbstractMatrix{Float64},
+    coords::GridCoordinates,
+    rplanet::Real,
+    xcenter::Real,
+    ycenter::Real,
+    P_amb::Real;
+    k_vent::Real=1.0e-11,
+    conductance_factor::Real=1.0,
+    mode::Symbol=:darcy_sink,
+    hydrofracture::Bool=false,
+    ice_sealing::Bool=false,
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+    pr::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    pf::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    TEN::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    PHI::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    phimin::Real=1.0e-4,
+    dt::Real=1.0e10,
+    eta_fluid_surf::Real=1.0e-3,
+    L_sub::Real=2.83e6,
+    Kcont::Real=1.0e20,
+    S_vent_out::Union{AbstractMatrix{Float64},Nothing}=nothing,
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    dx = coords.dx
+    dy = coords.dy
+    if dx <= 0.0 || dy <= 0.0 || !isfinite(dx) || !isfinite(dy)
+        throw(DomainError((dx, dy), "Grid spacing must be > 0 and finite"))
+    end
+    eta_f = Float64(eta_fluid_surf)
+    if eta_f <= 0.0 || !isfinite(eta_f)
+        throw(DomainError(eta_f, "eta_fluid_surf must be > 0 and finite"))
+    end
+    rplanet2 = Float64(rplanet)^2
+    p_amb_val = Float64(P_amb)
+    k_v = Float64(k_vent)
+    c_factor = Float64(conductance_factor)
+    kcont_val = Float64(Kcont)
+    dt_val = max(Float64(dt), 1.0e-12)
+    phimin_val = Float64(phimin)
+
+    if S_vent_out !== nothing
+        S_vent_out .= 0.0
+    end
+
+    # Horizontal faces between P(i, j) and P(i, j+1)
+    @inbounds for j in 1:(Nx1 - 1)
+        xj1 = coords.xp[j] - xcenter
+        xj2 = coords.xp[j + 1] - xcenter
+        for i in 1:Ny1
+            yi = coords.yp[i] - ycenter
+            r1_sq = xj1^2 + yi^2
+            r2_sq = xj2^2 + yi^2
+            is_rock1 = r1_sq <= rplanet2
+            is_rock2 = r2_sq <= rplanet2
+            if is_rock1 != is_rock2
+                i_rock = i
+                j_rock = is_rock1 ? j : (j + 1)
+
+                # Skip domain boundary ghost and anchor nodes
+                if i_rock < 2 || i_rock > Ny1 - 1 || j_rock < 2 || j_rock > Nx1 - 1
+                    continue
+                end
+
+                breached = false
+                peff = 0.0
+                sigma_t = 0.0
+                if (mode === :hydrofracture_gated || hydrofracture) &&
+                    pr !== nothing &&
+                    pf !== nothing &&
+                    TEN !== nothing
+                    peff = pr[i_rock, j_rock] - pf[i_rock, j_rock]
+                    sigma_t = TEN[i_rock, j_rock]
+                    breached = is_hydrofracture_breached(peff, sigma_t)
+                end
+
+                is_open = true
+                if mode === :hydrofracture_gated && !breached
+                    is_open = false
+                end
+
+                T_raw = tk[i_rock, j_rock]
+                T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
+                P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
+
+                # One-sided venting condition: pore fluid must exceed venting pressure
+                if pf !== nothing
+                    pf_cur = pf[i_rock, j_rock]
+                    if pf_cur <= P_vent
+                        is_open = false
+                    end
+                end
+
+                # Fluid-availability limit: no venting from dry rock
+                phi_avail = 1.0
+                if PHI !== nothing
+                    phi_rock = PHI[i_rock, j_rock]
+                    phi_avail = max(0.0, phi_rock - phimin_val)
+                    if phi_avail <= 0.0
+                        is_open = false
+                    end
+                end
+
+                if is_open
+                    k_face = compute_face_venting_permeability(
+                        k_v,
+                        breached,
+                        ice_sealing,
+                        T_surf,
+                        peff,
+                        sigma_t;
+                        t_freeze=t_freeze,
+                        dt_seal=dt_seal,
+                        k_seal_min_ratio=k_seal_min_ratio,
+                        kappa_frac=kappa_frac,
+                        gamma_frac=gamma_frac,
+                        k_frac_max=k_frac_max,
+                    )
+
+                    C_face = (k_face / (eta_f * dx^2)) * c_factor
+                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
+
+                    # If pf and PHI are known, check and cap Darcy rate by available fluid
+                    C_face_eff = C_face
+                    S_vent_actual = 0.0
+                    if pf !== nothing
+                        pf_cur = pf[i_rock, j_rock]
+                        S_darcy = C_face * (pf_cur - P_vent)
+                        if PHI !== nothing
+                            S_max = phi_avail / dt_val
+                            if S_darcy > S_max && S_darcy > 0.0
+                                C_face_eff = C_face * (S_max / S_darcy)
+                                S_vent_actual = S_max
+                            else
+                                S_vent_actual = max(0.0, S_darcy)
+                            end
+                        else
+                            S_vent_actual = max(0.0, S_darcy)
+                        end
+                    end
+
+                    if L !== nothing && R !== nothing
+                        updateindex!(L, +, kcont_val * C_face_eff, kpf, kpf)
+                        R[kpf] += C_face_eff * P_vent
+                    end
+
+                    if S_vent_out !== nothing
+                        S_vent_out[i_rock, j_rock] += S_vent_actual
+                    end
+                end
+            end
+        end
+    end
+
+    # Vertical faces between P(i, j) and P(i+1, j)
+    @inbounds for j in 1:Nx1
+        xj = coords.xp[j] - xcenter
+        for i in 1:(Ny1 - 1)
+            yi1 = coords.yp[i] - ycenter
+            yi2 = coords.yp[i + 1] - ycenter
+            r1_sq = xj^2 + yi1^2
+            r2_sq = xj^2 + yi2^2
+            is_rock1 = r1_sq <= rplanet2
+            is_rock2 = r2_sq <= rplanet2
+            if is_rock1 != is_rock2
+                i_rock = is_rock1 ? i : (i + 1)
+                j_rock = j
+
+                # Skip domain boundary ghost and anchor nodes
+                if i_rock < 2 || i_rock > Ny1 - 1 || j_rock < 2 || j_rock > Nx1 - 1
+                    continue
+                end
+
+                breached = false
+                peff = 0.0
+                sigma_t = 0.0
+                if (mode === :hydrofracture_gated || hydrofracture) &&
+                    pr !== nothing &&
+                    pf !== nothing &&
+                    TEN !== nothing
+                    peff = pr[i_rock, j_rock] - pf[i_rock, j_rock]
+                    sigma_t = TEN[i_rock, j_rock]
+                    breached = is_hydrofracture_breached(peff, sigma_t)
+                end
+
+                is_open = true
+                if mode === :hydrofracture_gated && !breached
+                    is_open = false
+                end
+
+                T_raw = tk[i_rock, j_rock]
+                T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
+                P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
+
+                # One-sided venting condition: pore fluid must exceed venting pressure
+                if pf !== nothing
+                    pf_cur = pf[i_rock, j_rock]
+                    if pf_cur <= P_vent
+                        is_open = false
+                    end
+                end
+
+                # Fluid-availability limit: no venting from dry rock
+                phi_avail = 1.0
+                if PHI !== nothing
+                    phi_rock = PHI[i_rock, j_rock]
+                    phi_avail = max(0.0, phi_rock - phimin_val)
+                    if phi_avail <= 0.0
+                        is_open = false
+                    end
+                end
+
+                if is_open
+                    k_face = compute_face_venting_permeability(
+                        k_v,
+                        breached,
+                        ice_sealing,
+                        T_surf,
+                        peff,
+                        sigma_t;
+                        t_freeze=t_freeze,
+                        dt_seal=dt_seal,
+                        k_seal_min_ratio=k_seal_min_ratio,
+                        kappa_frac=kappa_frac,
+                        gamma_frac=gamma_frac,
+                        k_frac_max=k_frac_max,
+                    )
+
+                    C_face = (k_face / (eta_f * dy^2)) * c_factor
+                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
+
+                    # If pf and PHI are known, check and cap Darcy rate by available fluid
+                    C_face_eff = C_face
+                    S_vent_actual = 0.0
+                    if pf !== nothing
+                        pf_cur = pf[i_rock, j_rock]
+                        S_darcy = C_face * (pf_cur - P_vent)
+                        if PHI !== nothing
+                            S_max = phi_avail / dt_val
+                            if S_darcy > S_max && S_darcy > 0.0
+                                C_face_eff = C_face * (S_max / S_darcy)
+                                S_vent_actual = S_max
+                            else
+                                S_vent_actual = max(0.0, S_darcy)
+                            end
+                        else
+                            S_vent_actual = max(0.0, S_darcy)
+                        end
+                    end
+
+                    if L !== nothing && R !== nothing
+                        updateindex!(L, +, kcont_val * C_face_eff, kpf, kpf)
+                        R[kpf] += C_face_eff * P_vent
+                    end
+
+                    if S_vent_out !== nothing
+                        S_vent_out[i_rock, j_rock] += S_vent_actual
+                    end
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+"""
 Perform thermal iterations to time step thermal field at P nodes.
 
 $(SIGNATURES)
@@ -1928,6 +2356,7 @@ function perform_thermal_iterations!(
     dt;
     coords=nothing,
     Q_metric=nothing,
+    Q_lat=nothing,
 )
     # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
@@ -1940,8 +2369,21 @@ function perform_thermal_iterations!(
     while dttsum < dt
         # fresh LHS coefficient matrix
         LT = assemble_thermal_lse!(
-            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dtt; coords=coords, Q_metric=Q_metric
+            tk1,
+            RHOCP,
+            KX,
+            KY,
+            HR,
+            HA,
+            HS,
+            DHP,
+            RT,
+            dtt;
+            coords=coords,
+            Q_metric=Q_metric,
+            Q_lat=Q_lat,
         )
+
         # solve system of equations
         ST .= LT \ RT # implicit: flush!(LT)
         # reshape solution vector to 2D array
