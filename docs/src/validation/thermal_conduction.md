@@ -53,3 +53,26 @@ $$\frac{\Delta T_{\text{sph}}}{\Delta T_{\text{cyl}}} = \frac{4}{6} = \frac{2}{3
   Verifies that the numerical 2D Cartesian solve with $Q_{\text{metric}}$ recovers the analytical $2/3$ temperature gradient ratio within 1% accuracy.
 - `test/test_geometry_radiation.jl`: `@testset "Spherical Geometric Metric Divergence"`  
   Verifies core regularization, directional sign consistency ($Q_{\text{metric}} < 0$ for outwardly decreasing temperature), and sticky-air vanishing.
+
+---
+
+## 3. Darcy Thermal Buoyancy and Fluid Equation of State
+
+### Governing Formulation
+The fluid thermal expansion equation of state and the Darcy thermal buoyancy driving force are verified against theoretical scaling:
+
+$$\mathbf{q}_D = - \frac{k_\phi}{\eta_f} \left(\nabla P_f - \rho_f(T) \mathbf{g}\right)$$
+
+In a hydrostatic vertical column with temperature contrast $\Delta T = T - T_{\text{melt}}$, the upward buoyant Darcy discharge velocity scaling is:
+
+$$|q_{yD}| = \frac{k_\phi}{\eta_f} \rho_{f0} \alpha_f \Delta T g$$
+
+### Parameterization Behavior
+
+![Darcy Thermal Buoyancy Verification](../assets/darcy_buoyancy_verification.png)
+
+*Figure 1: Thermal buoyancy and fluid equation of state verification in Erebus. (a) Temperature-dependent fluid density $\rho_f(T)$ over the range $T \in [240, 700]\text{ K}$ displaying sub-freezing ice density ($\rho_{\text{ice}} = 917\text{ kg/m}^3$), liquid water density at $T_{\text{melt}} = 273.0\text{ K}$ ($\rho_{\text{water}} = 1000\text{ kg/m}^3$), and linear thermal expansion above melting. Curves compare the code baseline ($\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$) against ambient water and hydrothermal regimes. (b) Upward buoyant Darcy discharge velocity $|q_{yD}|$ as a function of thermal contrast $\Delta T$ for representative crustal permeabilities ($k_\phi \in [10^{-14}, 10^{-12}]\text{ m}^2$) at the code baseline $\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$.*
+
+### Verification Test Suite
+- `test/test_physics.jl`: Thermal expansion and buoyancy driving forces
+

@@ -16,8 +16,8 @@ Nx = 33
 Ny = 33
 
 [time]
-dt_initial = 1.0e+11
-dt_longest = 1.0e+11
+dt_initial = 3168.80878
+dt_longest = 3168.80878
 n_steps = 2
 
 [poroelasticity]
@@ -29,7 +29,7 @@ output_dir = "output_test"
 savematstep = 2
 ```
 
-This configuration runs 2 timesteps of $1.0 \times 10^{11}\text{ s}$ each ($\approx 3,170\text{ years}$ per step), using the standard $33 \times 33$ staggered grid with $16,384$ markers.
+In `Erebus.jl`, all `[time]` configuration parameters are specified in Julian years ($1\text{ yr} = 31,557,600\text{ s}$). The value `3168.80878` yr corresponds to $1.0 \times 10^{11}\text{ s}$ per timestep. This configuration runs 2 timesteps of $1.0 \times 10^{11}\text{ s}$ each, using the standard $33 \times 33$ staggered grid with $16,384$ markers.
 
 ---
 

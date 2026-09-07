@@ -1,164 +1,145 @@
-# Configuration Guide
+# How to Configure Simulations
 
-`Erebus.jl` uses structured `.toml` configuration files to define all physical, geometric, solver, and storage parameters. This allows running parameter space explorations and reproducing simulation runs without modifying source code.
+This guide shows how to configure simulation runs in `Erebus.jl` using `.toml` configuration files.
+
+For the complete list of parameters, data types, physical units, and default values, see the [Configuration Schema Reference](../reference/config_schema.md).
 
 ---
 
-## Configuration File Sections
+## 1. Configure a Hydrothermal Benchmark Simulation
 
-A simulation configuration is organized into nine logical groups:
-
-### 1. `[grid]`
-Defines the numerical domain dimensions and basic grid resolution.
+To set up a 2D hydrothermal circulation benchmark with radiogenic heating and water phase changes, create a `.toml` configuration file with the following core sections:
 
 ```toml
 [grid]
-xsize = 140000.0 # Horizontal domain size [m]
-ysize = 140000.0 # Vertical domain size [m]
-Nx    = 33       # Basic grid resolution in x
-Ny    = 33       # Basic grid resolution in y
-```
+xsize = 140000.0  # Horizontal domain width [m]
+ysize = 140000.0  # Vertical domain height [m]
+Nx    = 33        # Grid points in x (>= 3)
+Ny    = 33        # Grid points in y (>= 3)
 
-*Note: In the current version, grid resolution `Nx` and `Ny` are coupled to compile-time static stencils. Changes to grid dimensions require updating constants and recompiling.*
-
-### 2. `[geometry]`
-Defines the spherical planetesimal geometry and location within the Cartesian computational domain.
-
-```toml
 [geometry]
-rplanet  = 50000.0 # Total planetesimal radius [m]
-rcrust   = 50000.0 # Crust radius [m] (single planet phase)
-xcenter  = 70000.0 # Horizontal center coordinate [m]
-ycenter  = 70000.0 # Vertical center coordinate [m]
-psurface = 1.0e+3  # Surface ambient pressure anchor [Pa]
-```
+rplanet  = 50000.0  # Planetesimal radius [m]
+rcrust   = 50000.0  # Crustal boundary radius [m]
+xcenter  = 70000.0  # Center x-coordinate [m]
+ycenter  = 70000.0  # Center y-coordinate [m]
+psurface = 1000.0   # Surface pressure anchor [Pa]
 
-### 3. `[time]`
-Controls the timestepping and temporal integration. Time parameters are specified in years.
-
-```toml
 [time]
-dt_initial = 3168.80878     # Initial computational timestep [yr] (~1e11 s)
-dt_longest = 3168.80878     # Maximum allowable computational timestep [yr] (~1e11 s)
-dtcoefdn   = 0.5            # Timestep reduction factor upon non-convergence
-dtcoefup   = 1.2            # Timestep growth factor upon rapid convergence
-dtstep     = 200            # Iteration interval before increasing timestep
-dxymax     = 0.05           # Maximum marker displacement per timestep [grid units]
-vpratio    = 0.333333333333 # Marker velocity weighting (staggered vs node)
-DTmax      = 20.0           # Maximum temperature change per step [K]
-start_time = 2.25e6         # Initial simulation time [yr] (2.25 Ma after CAIs)
-endtime    = 15.0e6         # Final simulation time [yr] (15.0 Ma)
-start_step = 1              # Starting step counter
-n_steps    = 10             # Total timesteps to compute
-```
+dt_initial = 3168.80878  # Initial timestep [Julian yr] (1e11 s)
+dt_longest = 3168.80878  # Maximum timestep [Julian yr] (1e11 s)
+start_time = 2.25e6      # Start time [Julian yr] (2.25 Ma after CAIs)
+endtime    = 15.0e6      # End time [Julian yr] (15.0 Ma)
+start_step = 1           # Starting step index
+n_steps    = 10          # Total steps to run
 
-### 4. `[solver]`
-Controls the Picard iteration loop, yielding tolerances, and sparse matrix solver.
-
-```toml
-[solver]
-titermax    = 10000     # Maximum global thermo-mechanical iterations
-nplast      = 100000    # Maximum plastic yielding iterations
-yerrmax     = 100.0     # Yielding tolerance level
-etawt       = 0.0       # Viscosity relaxation weight
-dphimax     = 100.01    # Maximum allowable porosity change ratio per step
-seed        = 42        # Random seed for marker spatial distribution
-use_pardiso = false     # Enable Pardiso solver (false: SuiteSparse UMFPACK)
-etaphikoef  = 1.0       # Bulk viscosity scaling factor
-etamin      = 1.0e+12   # Lower viscosity cutoff [Pa s]
-etamax      = 1.0e+23   # Upper viscosity cutoff [Pa s]
-```
-
-### 5. `[poroelasticity]`
-Sets solid matrix and fluid pore compressibility and porosity bounds.
-
-```toml
-[poroelasticity]
-betasolid     = 2.5e-11 # Solid silicate matrix compressibility [1/Pa]
-betafluid     = 4.0e-10 # Pore fluid (water) compressibility [1/Pa]
-phimin        = 1.0e-4  # Minimum porosity threshold floor [-]
-phimax        = 0.9999  # Maximum porosity threshold ceiling [-]
-hydrofracture = false   # Dynamic hydrofracturing enhancement
-kappa_frac    = 1.0e+3  # Permeability multiplier factor [-]
-gamma_frac    = 1.0     # Overpressure scaling exponent [-]
-k_frac_max    = 1.0e-9  # Permeability ceiling [m^2]
-```
-
-### 6. `[thermodynamics]`
-Controls radiogenic isotope abundances, half-lives, decay energies, and phase change parameters.
-
-```toml
 [thermodynamics]
-hr_al                = true        # Enable 26Al decay heating
-hr_fe                = false       # Enable 60Fe decay heating
-ratio_al             = 5.0e-5      # Initial 26Al/27Al isotope ratio at CAI formation
-ratio_fe             = 1.0e-6      # Initial 60Fe/56Fe isotope ratio at CAI formation
-tmsolidphase         = 1416.0      # Silicate solidus melting temperature [K]
-tmfluidphase         = 273.0       # H2O ice melting temperature [K]
-Lᶠ                   = 333.55e+3   # Latent heat of melting for water ice [J/kg]
-phim0                = 0.2         # Standard reference porosity [-]
-thermal_buoyancy     = true        # Enable Darcy thermal buoyancy
-fluid_viscosity_mode = "arrhenius" # Viscosity mode: "arrhenius" or "constant"
-fluid_viscosity_Ea   = 15.0e+3     # Activation energy [J/mol]
-fluid_viscosity_T0   = 293.15      # Reference temperature [K]
-fluid_viscosity_eta0 = 1.0e-3      # Reference viscosity at T0 [Pa s]
+hr_al            = true   # Enable 26Al radiogenic decay heating
+hr_fe            = false  # Disable 60Fe decay heating
+ratio_al         = 5.0e-5 # Initial 26Al/27Al isotope ratio
+thermal_buoyancy = true   # Enable Darcy thermal buoyancy
 ```
 
-### 7. `[materials]`
-Specifies material phase properties on the 3-phase staggered grid:
-- Index 1: Planetesimal core / mantle (`rmark <= rcrust`)
-- Index 2: Porous silicate crust / rock (`rcrust < rmark < rplanet`)
-- Index 3: Sticky air / space (`rmark >= rplanet`)
+Load and execute the configuration in Julia:
 
-*Note: In the current release, eight material arrays (`rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, `kfluidm`) and radii (`rplanet`, `rcrust`) are locked to compiled constants in `src/constants.jl`. Modifying them requires recompilation. The other 10 material arrays can be configured freely in TOML.*
+```julia
+using Erebus
+
+cfg = load_config("configs/hydrothermal_benchmark.toml")
+run_simulation(cfg)
+```
+
+---
+
+## 2. Configure Cold Surface Venting and Atmospheric Loss
+
+To model volatile drainage across a cold planetesimal lid and couple it to kinetic escape into space, add `[venting]` and `[escape]` sections:
 
 ```toml
-[materials]
-rhosolidm   = [3300.0, 3300.0, 1.0]
-rhofluidm   = [1000.0, 1000.0, 1.0]
-etasolidm   = [1.0e+19, 1.0e+19, 1.0e+16]
-etasolidmm  = [1.0e+19, 1.0e+19, 1.0e+16]
-etafluidm   = [1.0e+12, 1.0e+12, 1.0e-03]
-etafluidmm  = [1.0e-03, 1.0e-03, 1.0e-03]
-rhocpsolidm = [3.3e+06, 3.3e+06, 3.0e+06]
-rhocpfluidm = [1.0e+06, 1.0e+06, 3.0e+06]
-alphasolidm = [3.0e-05, 3.0e-05, 0.0]
-alphafluidm = [5.0e-05, 5.0e-05, 0.0]
-ksolidm     = [3.0, 3.0, 3000.0]
-kfluidm     = [50.0, 50.0, 3000.0]
-gggsolidm   = [1.0e+10, 1.0e+10, 1.0e+10]
-frictsolidm = [0.6, 0.6, 0.0]
-cohessolidm = [1.0e+08, 1.0e+08, 1.0e+08]
-tenssolidm  = [6.0e+07, 6.0e+07, 6.0e+07]
-kphim0      = [1.0e-13, 1.0e-13, 1.0e-17]
-tkm0        = [170.0, 170.0, 170.0]
+[venting]
+active      = true                  # Enable surface boundary venting
+mode        = "hydrofracture_gated" # Only vent when pore pressure breaches rock strength
+k_vent      = 1.0e-11               # Surface boundary permeability [m^2]
+ice_sealing = true                  # Cryogenic permeability reduction below freezing
+t_freeze    = 273.15                # Freezing temperature [K]
+dt_seal     = 10.0                  # Freezing transition width [K]
+
+[escape]
+active    = true   # Enable kinetic atmospheric escape
+species   = "H2O"  # Volatile species ("H2O", "CO2", "N2", "CH4", "CO", "H2")
+T_exobase = 200.0  # Exobase temperature [K]
 ```
 
-### 8. `[output]`
-Configures file output paths and checkpoint cadences.
+When `ice_sealing = true`, cryogenic pore ice reduces matrix permeability below $273.15\text{ K}$. Venting activates only when pore fluid pressure breaches the cold lid.
+
+---
+
+## 3. Scale Grid Resolution Dynamically
+
+`Erebus.jl` dynamically allocates coordinates and field arrays from the input configuration. You can change domain sizes and grid resolutions without recompiling:
+
+```toml
+[grid]
+xsize = 200000.0  # Enlarged domain width [m]
+ysize = 200000.0  # Enlarged domain height [m]
+Nx    = 65        # Higher horizontal resolution
+Ny    = 65        # Higher vertical resolution
+```
+
+The code instantiates `GridCoordinates(cfg.grid)` at runtime. Grid resolution must satisfy $N_x \ge 3$ and $N_y \ge 3$. Domain sizes must be strictly positive ($xsize > 0$, $ysize > 0$).
+
+---
+
+## 4. Manage Checkpoints and Restart Simulations
+
+To save simulation state at regular intervals, configure the `[output]` section:
 
 ```toml
 [output]
-output_dir  = "output" # Directory for simulation JLD2 checkpoints
-savematstep = 10       # Save full checkpoint every N timesteps
-visstep     = 1        # Visualization output frequency
+output_dir  = "output_run1"  # Directory for JLD2 output files
+savematstep = 10             # Save checkpoint every 10 timesteps
+visstep     = 1              # Save visualization outputs every step
 ```
 
-### 9. `[disk]`
-Controls protoplanetary disk ambient temperature evolution, stellar mass scalings, and boundary conditions.
+To resume a simulation from a saved checkpoint, specify `restart_from`:
+
+```toml
+[output]
+output_dir   = "output_run1"
+restart_from = "output_run1/output_00010.jld2"
+savematstep  = 10
+visstep      = 1
+
+[time]
+n_steps = 50  # Advance through step 50
+```
+
+When `restart_from` is non-empty, `run_simulation` reloads marker distributions, field arrays, and time counters directly from the JLD2 checkpoint. The simulation automatically resumes from the saved checkpoint step (`timestep + 1`).
+
+---
+
+## 5. Model Protoplanetary Disk Thermal Evolution
+
+To simulate a planetesimal embedded in an evolving protoplanetary disk, configure the `[disk]` section:
 
 ```toml
 [disk]
-enabled             = false              # Enable nebular temperature evolution
-model               = "class1_to_class2" # Model: "fixed", "monotonic", "class1_to_class2"
-t_ambient           = 170.0              # Constant background temperature [K]
-orbital_distance_au = 2.5                # Planetesimal orbital distance [AU]
-stellar_mass_msun   = 1.0                # Host star mass [M_sun]
-t_cloud             = 30.0               # Molecular cloud temperature floor [K]
-t_irr_1au           = 150.0              # Flared disk irradiation at 1 AU [K]
-t_peak_1au          = 520.0              # Peak viscous heating at 1 AU [K]
-t_peak_time_1au_myr = 0.12               # Peak accretion heating time at 1 AU [Myr]
-t_visc_0_myr        = 0.25               # Viscous decay reference timescale [Myr]
-gamma               = 1.4                # Viscous clearing decay exponent [-]
-alpha               = 2.0                # Early accretion rise exponent [-]
+enabled             = true                 # Enable disk temperature evolution
+model               = "class1_to_class2"   # Two-stage accretion-to-clearing model
+orbital_distance_au = 2.5                  # Planetesimal semi-major axis [AU]
+stellar_mass_msun   = 1.0                  # Central star mass [Solar masses]
+t_dispersal_myr     = 3.0                  # Disk dispersal epoch [Myr]
+dt_dispersal_myr    = 0.5                  # Dispersal transition duration [Myr]
+p_amb_disk          = 1.0                  # Nebular gas pressure [Pa]
+p_amb_space         = 1.0e-4               # Post-dispersal vacuum pressure [Pa]
+albedo              = 0.06                 # Post-dispersal Bond albedo
 ```
+
+During the simulation, the external boundary conditions smoothly transition from gas-rich disk conditions to solar radiative equilibrium in vacuum space.
+
+---
+
+## Further Reading
+
+- [Configuration Schema Reference](../reference/config_schema.md): Exhaustive parameter definitions, data types, and units.
+- [Running Simulations](running.md): Instructions for command-line execution and batch processing.
+- [Outputs and Checkpoints](outputs.md): How to analyze JLD2 files and inspect marker data.
