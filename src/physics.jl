@@ -1593,6 +1593,191 @@ function compute_radiation_htc(
 end
 
 """
+    compute_disk_dispersal_weight(time_seconds::Real; t_dispersal_myr::Real=3.0, dt_dispersal_myr::Real=0.1)::Float64
+
+Compute smooth sigmoid transition weight w_disp in [0, 1] representing the fraction
+of circumstellar gas disk cleared at time `time_seconds`:
+
+    w_disp = 1 / (1 + exp(-(t_Myr - t_dispersal_myr) / dt_dispersal_myr))
+
+# Arguments
+- `time_seconds`: Simulation time [s]
+- `t_dispersal_myr`: Epoch of disk gas dispersal [Myr] (default: 3.0 Myr)
+- `dt_dispersal_myr`: Characteristic duration of dispersal transition [Myr] (default: 0.1 Myr)
+
+# Returns
+- `w_disp`: Sigmoid dispersal weight in [0, 1]
+"""
+function compute_disk_dispersal_weight(
+    time_seconds::Real; t_dispersal_myr::Real=3.0, dt_dispersal_myr::Real=0.1
+)::Float64
+    if dt_dispersal_myr <= 0.0 || !isfinite(dt_dispersal_myr)
+        throw(DomainError(dt_dispersal_myr, "dt_dispersal_myr must be > 0 and finite"))
+    end
+    t_sec_nonneg = max(0.0, Float64(time_seconds))
+    t_Myr = t_sec_nonneg / (1.0e6 * (365.25 * 86400.0))
+    t_disp = Float64(t_dispersal_myr)
+    dt_disp = Float64(dt_dispersal_myr)
+    arg = clamp((t_Myr - t_disp) / dt_disp, -100.0, 100.0)
+    w = 1.0 / (1.0 + exp(-arg))
+    return clamp(w, 0.0, 1.0)
+end
+
+"""
+    compute_solar_equilibrium_temperature(orbital_distance_au::Real; albedo::Real=0.06, stellar_luminosity_lsun::Real=1.0)::Float64
+
+Compute vacuum solar radiation equilibrium temperature T_eq [K] at heliocentric distance
+`orbital_distance_au` [AU] assuming fast planetary rotation or uniform spherical emission:
+
+    T_eq = ((1 - A) * L_star / (16 * π * σ_SB * d²))^(1/4)
+
+# Arguments
+- `orbital_distance_au`: Heliocentric orbital distance [AU]
+- `albedo`: Bond albedo in [0, 1) (default: 0.06 for dark carbonaceous planetesimals)
+- `stellar_luminosity_lsun`: Host star luminosity in solar units [L_sun] (default: 1.0)
+
+# Returns
+- `T_eq`: Solar radiation equilibrium temperature [K]
+"""
+function compute_solar_equilibrium_temperature(
+    orbital_distance_au::Real; albedo::Real=0.06, stellar_luminosity_lsun::Real=1.0
+)::Float64
+    r_au = Float64(orbital_distance_au)
+    if r_au <= 0.0 || !isfinite(r_au)
+        throw(DomainError(r_au, "orbital_distance_au must be > 0 and finite"))
+    end
+    A = Float64(albedo)
+    if !(0.0 <= A < 1.0) || !isfinite(A)
+        throw(DomainError(A, "albedo must be in [0.0, 1.0)"))
+    end
+    L_sun = 3.828e26 * Float64(stellar_luminosity_lsun)
+    sigma_sb = 5.670374419e-8
+    d_m = r_au * 1.495978707e11
+    F_sun = L_sun / (4.0 * π * d_m^2)
+    T_eq4 = (1.0 - A) * F_sun / (4.0 * sigma_sb)
+    return T_eq4^0.25
+end
+
+"""
+    compute_ambient_conditions(time_seconds::Real, cfg::DiskConfig)::Tuple{Float64,Float64,Float64}
+
+Compute evolving ambient temperature T_amb [K], ambient pressure P_amb [Pa], and disk
+dispersal weight w_disp at time `time_seconds`. Transitions smoothly from nebular disk
+conditions to solar radiative equilibrium and space vacuum upon disk gas clearing.
+
+# Arguments
+- `time_seconds`: Simulation time [s]
+- `cfg`: Protoplanetary disk configuration struct (`DiskConfig`)
+
+# Returns
+- `(T_amb, P_amb, w_disp)`: Ambient temperature [K], ambient pressure [Pa], and dispersal weight in [0, 1]
+"""
+function compute_ambient_conditions(
+    time_seconds::Real, cfg::DiskConfig
+)::Tuple{Float64,Float64,Float64}
+    w_disp = if cfg.dispersal_active
+        compute_disk_dispersal_weight(
+            time_seconds;
+            t_dispersal_myr=cfg.t_dispersal_myr,
+            dt_dispersal_myr=cfg.dt_dispersal_myr,
+        )
+    else
+        0.0
+    end
+    T_disk = compute_disk_temperature(time_seconds, cfg)
+    T_eq = if isfinite(cfg.t_eq_custom) && cfg.t_eq_custom > 0.0
+        Float64(cfg.t_eq_custom)
+    else
+        compute_solar_equilibrium_temperature(cfg.orbital_distance_au; albedo=cfg.albedo)
+    end
+    T_amb = (1.0 - w_disp) * T_disk + w_disp * T_eq
+    P_amb = (1.0 - w_disp) * cfg.p_amb_disk + w_disp * cfg.p_amb_space
+    return (T_amb, P_amb, w_disp)
+end
+
+"""
+    compute_ice_vapor_pressure(T::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5)::Float64
+
+Compute water ice sublimation equilibrium vapor pressure P_sat,ice [Pa] at temperature `T` [K]
+using the integrated Clausius-Clapeyron relation:
+
+    P_sat,ice = P0 * exp(-(L_sub / Rv) * (1/T - 1/T0))
+
+anchored at the water triple point (T0 = 273.16 K, P0 = 611.66 Pa).
+
+# Arguments
+- `T`: Temperature [K]
+- `P0`: Triple-point water vapor pressure [Pa] (default: 611.66 Pa)
+- `T0`: Triple-point temperature [K] (default: 273.16 K)
+- `L_sub`: Latent heat of ice sublimation [J/kg] (default: 2.83e6 J/kg)
+- `Rv`: Specific gas constant for water vapor [J/(kg K)] (default: 461.5 J/(kg K))
+
+# Returns
+- `P_sat`: Equilibrium ice sublimation vapor pressure [Pa]
+
+# Notes
+- For temperatures at or above the triple point (`T >= T0`), the vapor pressure saturates
+  at the triple-point value `P0 = 611.66 Pa` because the bulk ice phase transitions to liquid water.
+"""
+function compute_ice_vapor_pressure(
+    T::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5
+)::Float64
+    T_val = Float64(T)
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
+    end
+    P0_val = Float64(P0)
+    if P0_val <= 0.0 || !isfinite(P0_val)
+        throw(DomainError(P0_val, "Triple-point pressure P0 must be > 0 and finite"))
+    end
+    T0_val = Float64(T0)
+    if T0_val <= 0.0 || !isfinite(T0_val)
+        throw(DomainError(T0_val, "Triple-point temperature T0 must be > 0 and finite"))
+    end
+    Rv_val = Float64(Rv)
+    if Rv_val <= 0.0 || !isfinite(Rv_val)
+        throw(DomainError(Rv_val, "Gas constant Rv must be > 0 and finite"))
+    end
+    L_sub_val = Float64(L_sub)
+
+    if T_val >= T0_val
+        return P0_val
+    end
+    return P0_val * exp(-(L_sub_val / Rv_val) * (1.0 / T_val - 1.0 / T0_val))
+end
+
+"""
+    compute_venting_pressure(T_surf::Real, P_amb::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5)::Float64
+
+Compute effective boundary venting fluid pressure P_vent [Pa] at a planetesimal surface:
+
+    P_vent = max(P_amb, P_sat,ice(T_surf))
+
+Enforces the physical cold-trap constraint: if ambient nebular gas pressure exceeds
+ice sublimation pressure at cold surface temperatures, the ambient gas confines pore fluid;
+if ambient pressure drops below sublimation pressure (space vacuum), flash sublimation
+sets the effective boundary vapor pressure.
+
+# Arguments
+- `T_surf`: Planetesimal surface temperature [K]
+- `P_amb`: Ambient surrounding gas pressure [Pa]
+
+# Returns
+- `P_vent`: Effective venting boundary pressure [Pa]
+"""
+function compute_venting_pressure(
+    T_surf::Real,
+    P_amb::Real;
+    P0::Real=611.66,
+    T0::Real=273.16,
+    L_sub::Real=2.83e6,
+    Rv::Real=461.5,
+)::Float64
+    P_sat = compute_ice_vapor_pressure(T_surf; P0=P0, T0=T0, L_sub=L_sub, Rv=Rv)
+    return max(Float64(P_amb), P_sat)
+end
+
+"""
     compute_spherical_metric_heat_source!(Q_metric, tk, KX, KY, coords;
                                           xcenter, ycenter, rplanet, reg_cells=0.5)
 

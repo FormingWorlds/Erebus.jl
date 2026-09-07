@@ -45,6 +45,7 @@ makedocs(;
             "Discretization & Numerics" => "explanations/discretization_numerics.md",
             "Silicate Melting & Soft Turbulence" => "explanations/rock_melting.md",
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
+            "Degassing & Cold Venting" => "explanations/degassing_and_venting.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [
@@ -56,6 +57,7 @@ makedocs(;
             "Surface Radiation & Disk Evolution" => "validation/disk_radiation.md",
             "Hydrothermal Reactions" => "validation/hydrothermal_reactions.md",
             "Silicate Rock Melting" => "validation/rock_melting.md",
+            "Cold Surface Venting" => "validation/cold_surface_venting.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

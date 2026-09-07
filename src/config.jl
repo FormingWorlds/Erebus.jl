@@ -231,6 +231,13 @@ Base.@kwdef struct DiskConfig
     p_m_visc::Float64 = 0.30
     p_m_t::Float64 = 0.40
     p_m_visc_decay::Float64 = 0.30
+    t_dispersal_myr::Float64 = 3.0
+    dt_dispersal_myr::Float64 = 0.1
+    p_amb_disk::Float64 = 10.0
+    p_amb_space::Float64 = 1.0e-4
+    albedo::Float64 = 0.06
+    t_eq_custom::Float64 = NaN
+    dispersal_active::Bool = false
 end
 
 """
@@ -288,6 +295,20 @@ Base.@kwdef struct MeltingConfig
 end
 
 """
+Planetesimal surface volatile degassing and venting parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct VentingConfig
+    active::Bool = false
+    mode::Symbol = :darcy_sink
+    k_vent::Float64 = 1.0e-11
+    conductance_factor::Float64 = 1.0
+    L_sublimation::Float64 = 2.83e6
+    latent_cooling::Bool = true
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -304,6 +325,7 @@ Base.@kwdef struct SimulationConfig
     output::OutputConfig = OutputConfig()
     disk::DiskConfig = DiskConfig()
     melting::MeltingConfig = MeltingConfig()
+    venting::VentingConfig = VentingConfig()
 end
 
 """
@@ -549,6 +571,31 @@ function validate_config(cfg::SimulationConfig)
             "p_m_visc_decay must be >= 0 and finite, got $(cfg.disk.p_m_visc_decay)"
         ),
     )
+    cfg.disk.t_dispersal_myr > 0.0 && isfinite(cfg.disk.t_dispersal_myr) || throw(
+        ArgumentError(
+            "t_dispersal_myr must be > 0 and finite, got $(cfg.disk.t_dispersal_myr)"
+        ),
+    )
+    cfg.disk.dt_dispersal_myr > 0.0 && isfinite(cfg.disk.dt_dispersal_myr) || throw(
+        ArgumentError(
+            "dt_dispersal_myr must be > 0 and finite, got $(cfg.disk.dt_dispersal_myr)"
+        ),
+    )
+    cfg.disk.p_amb_disk > 0.0 && isfinite(cfg.disk.p_amb_disk) || throw(
+        ArgumentError("p_amb_disk must be > 0 and finite, got $(cfg.disk.p_amb_disk)")
+    )
+    cfg.disk.p_amb_space >= 0.0 && isfinite(cfg.disk.p_amb_space) || throw(
+        ArgumentError("p_amb_space must be >= 0 and finite, got $(cfg.disk.p_amb_space)"),
+    )
+    (0.0 <= cfg.disk.albedo < 1.0) && isfinite(cfg.disk.albedo) ||
+        throw(ArgumentError("albedo must be in [0.0, 1.0), got $(cfg.disk.albedo)"))
+    isnan(cfg.disk.t_eq_custom) ||
+        (cfg.disk.t_eq_custom > 0.0 && isfinite(cfg.disk.t_eq_custom)) ||
+        throw(
+            ArgumentError(
+                "t_eq_custom must be > 0 and finite when specified, got $(cfg.disk.t_eq_custom)",
+            ),
+        )
 
     # Reaction checks
     cfg.reaction.hydration_mode in Set([1, 2, 3, 9]) || throw(
@@ -643,7 +690,7 @@ function validate_config(cfg::SimulationConfig)
     if cfg.melting.soft_turbulence && !cfg.melting.active
         throw(
             ArgumentError(
-                "Melting soft_turbulence cannot be enabled when melting active is false",
+                "Melting soft_turbulence cannot be enabled when melting active is false"
             ),
         )
     end
@@ -743,6 +790,26 @@ function validate_config(cfg::SimulationConfig)
         end
     end
 
+    # Venting checks
+    cfg.venting.mode in Set([:darcy_sink, :hydrofracture_gated]) || throw(
+        ArgumentError(
+            "venting mode must be :darcy_sink or :hydrofracture_gated, got $(cfg.venting.mode)",
+        ),
+    )
+    cfg.venting.k_vent > 0.0 && isfinite(cfg.venting.k_vent) ||
+        throw(ArgumentError("k_vent must be > 0 and finite, got $(cfg.venting.k_vent)"))
+    cfg.venting.conductance_factor > 0.0 && isfinite(cfg.venting.conductance_factor) ||
+        throw(
+            ArgumentError(
+                "conductance_factor must be > 0 and finite, got $(cfg.venting.conductance_factor)",
+            ),
+        )
+    cfg.venting.L_sublimation > 0.0 && isfinite(cfg.venting.L_sublimation) || throw(
+        ArgumentError(
+            "L_sublimation must be > 0 and finite, got $(cfg.venting.L_sublimation)"
+        ),
+    )
+
     return nothing
 end
 
@@ -801,6 +868,7 @@ const VALID_SECTIONS = Set([
     "output",
     "disk",
     "melting",
+    "venting",
 ])
 
 """
@@ -896,6 +964,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.melting
     end
+    vent = if haskey(parsed, "venting")
+        _dict_to_struct(VentingConfig, parsed["venting"], def.venting)
+    else
+        def.venting
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -909,6 +982,7 @@ function load_config(source::AbstractString)::SimulationConfig
         output=out,
         disk=dsk,
         melting=melt,
+        venting=vent,
     )
 
     validate_config(cfg)
@@ -955,6 +1029,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "output" => _struct_to_dict(cfg.output),
         "disk" => _struct_to_dict(cfg.disk),
         "melting" => _struct_to_dict(cfg.melting),
+        "venting" => _struct_to_dict(cfg.venting),
     )
     TOML.print(io, d; sorted=true)
     return io
