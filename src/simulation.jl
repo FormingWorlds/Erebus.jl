@@ -180,6 +180,9 @@ function save_state(
     M_escaped_total::Real=0.0,
     P_amb::Real=10.0,
     S_vent::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    Xfem=nothing,
+    Xfem0=nothing,
+    Xfe_bulk=nothing,
 )
     # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -349,6 +352,7 @@ function save_state(
         rhofluidcur,
         alphasolidcur,
         alphafluidcur,
+        (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
     )
     # end # @timeit to "save_state"
     return nothing
@@ -476,6 +480,13 @@ function simulation_loop(
     T_surface_ref_val = cfg.melting.T_surface_ref
     k_turb_cutoff_val = cfg.melting.k_turb_cutoff
     k_turb_floor_val = cfg.melting.k_turb_floor
+    coreformation_active_val = cfg.coreformation.percolation_active || cfg.coreformation.settling_active
+    Xfe_bulk_val = cfg.coreformation.Xfe_bulk
+    T_eutectic_val = cfg.coreformation.T_eutectic
+    dT_metal_val = cfg.coreformation.dT_metal
+    rho_metal_val = cfg.coreformation.rho_metal
+    k_metal_val = cfg.coreformation.k_metal
+    rhocp_metal_val = cfg.coreformation.rhocp_metal
 
     nthreads = Threads.nthreads()
 
@@ -569,6 +580,9 @@ function simulation_loop(
     M_escaped_total = 0.0
     S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+    Xfem = nothing
+    Xfem0 = nothing
+    Xfe_bulk = nothing
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
@@ -696,6 +710,25 @@ function simulation_loop(
         alphafluidcur .= ckpt["alphafluidcur"]
         XWsolidm0 .= ckpt["XWsolidm0"]
         XWsolidm .= XWsolidm0
+        if coreformation_active_val
+            Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
+            if haskey(ckpt, "Xfe_bulk")
+                Xfe_bulk .= ckpt["Xfe_bulk"]
+            else
+                for m in 1:marknum
+                    rmark = distance(xm[m], ym[m], xcenter_val, ycenter_val)
+                    if rmark < rplanet_val
+                        Xfe_bulk[m] = Xfe_bulk_val
+                    end
+                end
+            end
+            if haskey(ckpt, "Xfem")
+                Xfem .= ckpt["Xfem"]
+            end
+            if haskey(ckpt, "Xfem0")
+                Xfem0 .= ckpt["Xfem0"]
+            end
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -704,6 +737,9 @@ function simulation_loop(
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
             marknum
         )
+        if coreformation_active_val
+            Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
+        end
         define_markers!(
             xm,
             ym,
@@ -731,6 +767,12 @@ function simulation_loop(
             rcrust_val=rcrust_val,
             XWsolidm_init_val=cfg.materials.XWsolidm_init,
             phim0_val=phim0_val,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk_val=Xfe_bulk_val,
+            T_eutectic_val=T_eutectic_val,
+            dT_metal_val=dT_metal_val,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -844,6 +886,9 @@ function simulation_loop(
             M_escaped_total=M_escaped_total,
             P_amb=cfg.disk.p_amb_disk,
             S_vent=S_vent_grid,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk=Xfe_bulk,
         )
     end
 
@@ -1034,6 +1079,14 @@ function simulation_loop(
                         T_surface_ref_val=T_surface_ref_val,
                         k_turb_cutoff_val=k_turb_cutoff_val,
                         k_turb_floor_val=k_turb_floor_val,
+                        Xfe_bulk=Xfe_bulk,
+                        Xfem=Xfem,
+                        coreformation_active=coreformation_active_val,
+                        T_eutectic_val=T_eutectic_val,
+                        dT_metal_val=dT_metal_val,
+                        rho_metal_val=rho_metal_val,
+                        k_metal_val=k_metal_val,
+                        rhocp_metal_val=rhocp_metal_val,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1196,6 +1249,14 @@ function simulation_loop(
                     T_surface_ref_val=T_surface_ref_val,
                     k_turb_cutoff_val=k_turb_cutoff_val,
                     k_turb_floor_val=k_turb_floor_val,
+                    Xfe_bulk=Xfe_bulk,
+                    Xfem=Xfem,
+                    coreformation_active=coreformation_active_val,
+                    T_eutectic_val=T_eutectic_val,
+                    dT_metal_val=dT_metal_val,
+                    rho_metal_val=rho_metal_val,
+                    k_metal_val=k_metal_val,
+                    rhocp_metal_val=rhocp_metal_val,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(
@@ -1906,6 +1967,9 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         XWsolidm0 .= XWsolidm
         phim .= phinewm
+        if coreformation_active_val && Xfem !== nothing && Xfem0 !== nothing
+            Xfem0 .= Xfem
+        end
         update_marker_porosity!(
             xm,
             ym,
@@ -2044,6 +2108,9 @@ function simulation_loop(
             Fm=Fm,
             randomized=random_markers,
             coords=coords,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk=Xfe_bulk,
         )
 
         # ---------------------------------------------------------------------
@@ -2163,6 +2230,9 @@ function simulation_loop(
                 M_escaped_total=M_escaped_total,
                 P_amb=P_amb_eff,
                 S_vent=S_vent_grid,
+                Xfem=Xfem,
+                Xfem0=Xfem0,
+                Xfe_bulk=Xfe_bulk,
             )
         end
         # ---------------------------------------------------------------------

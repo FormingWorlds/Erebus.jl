@@ -1,5 +1,28 @@
 
 """
+Set up marker metal property arrays for iron core formation tracking.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum`: Number of markers
+
+# Keyword Arguments
+- `randomized`: Boolean flag for interface consistency
+
+# Returns
+- `Xfem`: Molten metal volume fraction array [0, 1]
+- `Xfem0`: Molten metal volume fraction array at previous timestep [0, 1]
+- `Xfe_bulk`: Bulk total metal volume fraction array [0, 1]
+"""
+function setup_marker_metal_properties(marknum::Int; randomized::Bool=false)
+    Xfem = zeros(Float64, marknum)
+    Xfem0 = zeros(Float64, marknum)
+    Xfe_bulk = zeros(Float64, marknum)
+    return (Xfem, Xfem0, Xfe_bulk)
+end
+
+"""
 Set up geodesic and physical properties of the set of markers.
 
 $(SIGNATURES)
@@ -20,7 +43,10 @@ $(SIGNATURES)
     - phim : marker porosity
 """
 function setup_marker_properties(
-    marknum; randomized=false, coords::Union{Nothing,GridCoordinates}=nothing
+    marknum;
+    randomized=false,
+    coords::Union{Nothing,GridCoordinates}=nothing,
+    include_metal::Bool=false,
 )
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
@@ -60,13 +86,25 @@ function setup_marker_properties(
     XWsolidm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
     # marker silicate melt fraction Fm [-]
     Fm = zeros(marknum)
-    return (
-        xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm
-    )
+    if include_metal
+        Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum; randomized=randomized)
+        return (
+            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm,
+            Xfem, Xfem0, Xfe_bulk
+        )
+    else
+        return (
+            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm
+        )
+    end
 end # function setup_marker_properties()
 
-function setup_marker_properties(marknum, coords::GridCoordinates; randomized=false)
-    return setup_marker_properties(marknum; randomized=randomized, coords=coords)
+function setup_marker_properties(
+    marknum, coords::GridCoordinates; randomized=false, include_metal::Bool=false
+)
+    return setup_marker_properties(
+        marknum; randomized=randomized, coords=coords, include_metal=include_metal
+    )
 end
 
 """
@@ -220,12 +258,18 @@ function define_markers!(
     XWsolidm0;
     randomized=random_markers,
     coords=nothing,
-    xcenter_val=xcenter,
-    ycenter_val=ycenter,
+    xcenter_val=coords === nothing ? xcenter : coords.xcenter,
+    ycenter_val=coords === nothing ? ycenter : coords.ycenter,
     rplanet_val=rplanet,
     rcrust_val=rcrust,
     XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN]),
     phim0_val=phim0,
+    Xfe_bulk=nothing,
+    Xfem=nothing,
+    Xfem0=nothing,
+    Xfe_bulk_val::Real=0.0,
+    T_eutectic_val::Real=1213.0,
+    dT_metal_val::Real=50.0,
 )
     Nxm_val = coords === nothing ? Nxm : coords.Nxm
     Nym_val = coords === nothing ? Nym : coords.Nym
@@ -259,6 +303,9 @@ function define_markers!(
             if randomized
                 XWsolidm0[m] += XWsolidm_init_val[tm[m]] * (rand(rgen)-0.5)
             end
+            if Xfe_bulk !== nothing
+                Xfe_bulk[m] = Xfe_bulk_val
+            end
         else
             # sticky space ("air") [to have internal free surface]
             tm[m] = 3
@@ -272,6 +319,9 @@ function define_markers!(
             etatotalm[m] = etasolidm[tm[m]]
             hrtotalm[m] = start_hrsolidm[tm[m]]
             ktotalm[m] = ksolidm[tm[m]]
+            if Xfe_bulk !== nothing
+                Xfe_bulk[m] = 0.0
+            end
         end
         # common initialisations for all marker types
         tkm[m] = tkm0[tm[m]]
@@ -282,6 +332,16 @@ function define_markers!(
         rhofluidcur[m] = rhofluidm[tm[m]]
         alphasolidcur[m] = alphasolidm[tm[m]]
         alphafluidcur[m] = alphafluidm[tm[m]]
+        if Xfem !== nothing
+            F_fe = compute_metal_melt_fraction(
+                tkm[m]; T_eutectic=T_eutectic_val, dT_metal=dT_metal_val
+            )
+            fe_bulk_curr = Xfe_bulk !== nothing ? Xfe_bulk[m] : 0.0
+            Xfem[m] = fe_bulk_curr * F_fe
+        end
+        if Xfem0 !== nothing
+            Xfem0[m] = Xfem !== nothing ? Xfem[m] : 0.0
+        end
     end
     return nothing
 end
@@ -360,6 +420,14 @@ function compute_marker_properties!(
     T_surface_ref_val::Real=300.0,
     k_turb_cutoff_val::Real=1.0e6,
     k_turb_floor_val::Real=1.0e-3,
+    Xfe_bulk=nothing,
+    Xfem=nothing,
+    coreformation_active::Bool=false,
+    T_eutectic_val::Real=1213.0,
+    dT_metal_val::Real=50.0,
+    rho_metal_val::Real=7200.0,
+    k_metal_val::Real=40.0,
+    rhocp_metal_val::Real=4.0e6,
 )
     # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
@@ -476,10 +544,28 @@ function compute_marker_properties!(
                 k_cutoff=k_turb_cutoff_val,
             )
         end
+        if coreformation_active
+            if Xfe_bulk !== nothing && Xfem !== nothing
+                F_fe = compute_metal_melt_fraction(
+                    tkm[m]; T_eutectic=T_eutectic_val, dT_metal=dT_metal_val
+                )
+                Xfem[m] = Xfe_bulk[m] * F_fe
+            end
+            phi_m = Xfem !== nothing ? Xfem[m] : 0.0
+            if phi_m > 0.0
+                rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_val, phi_m)
+                ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_m)
+                rhocptotalm[m] = metal_blended_heat_capacity(rhocptotalm[m], rhocp_metal_val, phi_m)
+                hrtotalm[m] = (1.0 - phi_m) * hrtotalm[m]
+            end
+        end
     else
         # sticky air
         if Fm !== nothing
             Fm[m] = 0.0
+        end
+        if coreformation_active && Xfem !== nothing
+            Xfem[m] = 0.0
         end
         etafluidcur = etafluidm[tm[m]]
         if rhofluidcur !== nothing
@@ -2845,6 +2931,9 @@ function replenish_markers!(
     Fm=nothing,
     randomized=random_markers,
     coords::Union{Nothing,GridCoordinates}=nothing,
+    Xfem=nothing,
+    Xfem0=nothing,
+    Xfe_bulk=nothing,
 )
     # @timeit to "replenish_markers!" begin
     Nym_val, Nxm_val = size(mnum)
@@ -2937,6 +3026,15 @@ function replenish_markers!(
                     push!(alphafluidcur, alphafluidcur[m])
                     push!(tkm_rhocptotalm, tkm_rhocptotalm[m])
                     push!(etafluidcur_inv_kphim, etafluidcur_inv_kphim[m])
+                    if Xfem !== nothing
+                        push!(Xfem, Xfem[m])
+                    end
+                    if Xfem0 !== nothing
+                        push!(Xfem0, Xfem0[m])
+                    end
+                    if Xfe_bulk !== nothing
+                        push!(Xfe_bulk, Xfe_bulk[m])
+                    end
                 end
             end
         end

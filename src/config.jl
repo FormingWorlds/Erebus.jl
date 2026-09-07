@@ -371,6 +371,39 @@ Base.@kwdef struct EscapeConfig
 end
 
 """
+Iron core formation by metal percolation and gravitational settling parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct CoreFormationConfig
+    percolation_active::Bool = false
+    settling_active::Bool = false
+    rho_metal::Float64 = 7200.0
+    eta_metal::Float64 = 1.0e-2
+    k_metal::Float64 = 40.0
+    rhocp_metal::Float64 = 4.0e6
+    Xfe_bulk::Float64 = 0.20
+    phi_pack::Float64 = 0.65
+    T_eutectic::Float64 = 1213.0
+    dT_metal::Float64 = 50.0
+    k_metal_ref::Float64 = 1.0e-9
+    perm_exponent::Float64 = 3.0
+    phi_crit_perc::Float64 = 0.05
+    phi_residual::Float64 = 0.02
+    droplet_size_mode::Symbol = :weber_mean
+    droplet_diameter_fixed::Float64 = 5.0e-3
+    sigma_metal_silicate::Float64 = 1.0
+    We_crit::Float64 = 10.0
+    hindered_exponent::Float64 = 4.5
+    hadamard_rybczynski::Bool = false
+    F_settle_start::Float64 = 0.40
+    F_perc_end::Float64 = 0.50
+    segregation_heating::Bool = true
+    cfl_settling::Float64 = 0.5
+    max_subcycles::Int = 2000
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -390,6 +423,7 @@ Base.@kwdef struct SimulationConfig
     venting::VentingConfig = VentingConfig()
     volatiles::VolatilesConfig = VolatilesConfig()
     escape::EscapeConfig = EscapeConfig()
+    coreformation::CoreFormationConfig = CoreFormationConfig()
 end
 
 """
@@ -1019,6 +1053,78 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
 
+    # Core formation validation
+    if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
+        cf = cfg.coreformation
+        (isfinite(cf.rho_metal) && cf.rho_metal > cfg.materials.rhosolidm[1]) || throw(
+            ArgumentError("rho_metal ($(cf.rho_metal)) must be finite and exceed silicate rock density ($(cfg.materials.rhosolidm[1]))")
+        )
+        (cf.eta_metal > 0.0 && isfinite(cf.eta_metal)) || throw(
+            ArgumentError("eta_metal must be positive and finite, got $(cf.eta_metal)")
+        )
+        (cf.k_metal > 0.0 && isfinite(cf.k_metal)) || throw(
+            ArgumentError("k_metal must be positive and finite, got $(cf.k_metal)")
+        )
+        (cf.rhocp_metal > 0.0 && isfinite(cf.rhocp_metal)) || throw(
+            ArgumentError("rhocp_metal must be positive and finite, got $(cf.rhocp_metal)")
+        )
+        (0.0 <= cf.Xfe_bulk <= 1.0) || throw(
+            ArgumentError("Xfe_bulk must be in [0, 1], got $(cf.Xfe_bulk)")
+        )
+        (0.0 < cf.phi_pack <= 1.0) || throw(
+            ArgumentError("phi_pack must be in (0, 1], got $(cf.phi_pack)")
+        )
+        (0.0 <= cf.phi_residual <= cf.phi_crit_perc < cf.phi_pack) || throw(
+            ArgumentError("phi_residual ($(cf.phi_residual)) must be <= phi_crit_perc ($(cf.phi_crit_perc)) < phi_pack ($(cf.phi_pack))")
+        )
+        (0.0 <= cf.F_settle_start <= cf.F_perc_end <= 1.0) || throw(
+            ArgumentError("F_settle_start ($(cf.F_settle_start)) must be <= F_perc_end ($(cf.F_perc_end)) in [0, 1]")
+        )
+        (0.0 < cf.cfl_settling <= 1.0) || throw(
+            ArgumentError("cfl_settling must be in (0, 1], got $(cf.cfl_settling)")
+        )
+        cf.max_subcycles > 0 || throw(
+            ArgumentError("max_subcycles must be > 0, got $(cf.max_subcycles)")
+        )
+        cf.droplet_size_mode in Set([:fixed, :weber_mean, :weber_turbulent]) || throw(
+            ArgumentError("droplet_size_mode must be one of :fixed, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)")
+        )
+        (cf.droplet_diameter_fixed > 0.0 && isfinite(cf.droplet_diameter_fixed)) || throw(
+            ArgumentError("droplet_diameter_fixed must be positive, got $(cf.droplet_diameter_fixed)")
+        )
+        (cf.sigma_metal_silicate > 0.0 && isfinite(cf.sigma_metal_silicate)) || throw(
+            ArgumentError("sigma_metal_silicate must be positive, got $(cf.sigma_metal_silicate)")
+        )
+        (cf.We_crit > 0.0 && isfinite(cf.We_crit)) || throw(
+            ArgumentError("We_crit must be positive, got $(cf.We_crit)")
+        )
+        (cf.hindered_exponent >= 0.0 && isfinite(cf.hindered_exponent)) || throw(
+            ArgumentError("hindered_exponent must be non-negative, got $(cf.hindered_exponent)")
+        )
+    end
+
+    if cfg.coreformation.percolation_active
+        cf = cfg.coreformation
+        cf.T_eutectic < cfg.melting.T_solidus[1] || throw(
+            ArgumentError("T_eutectic ($(cf.T_eutectic)) must be below silicate solidus ($(cfg.melting.T_solidus[1])) for percolation")
+        )
+        (cf.dT_metal > 0.0 && isfinite(cf.dT_metal)) || throw(
+            ArgumentError("dT_metal must be positive, got $(cf.dT_metal)")
+        )
+        (cf.k_metal_ref > 0.0 && isfinite(cf.k_metal_ref)) || throw(
+            ArgumentError("k_metal_ref must be positive, got $(cf.k_metal_ref)")
+        )
+        (cf.perm_exponent >= 0.0 && isfinite(cf.perm_exponent)) || throw(
+            ArgumentError("perm_exponent must be non-negative, got $(cf.perm_exponent)")
+        )
+    end
+
+    if cfg.coreformation.settling_active
+        cfg.melting.active || throw(
+            ArgumentError("settling_active requires melting.active = true for silicate melt fraction")
+        )
+    end
+
     if cfg.volatiles.active
         @warn "VolatilesConfig active=true: multi-species H-C-N-S volatile solubility, gas speciation, and organic devolatilization operate as a standalone thermodynamic library; dynamic reactive transport is not yet coupled to the 2D Stokes-Darcy fluid flow solver."
     end
@@ -1084,6 +1190,7 @@ const VALID_SECTIONS = Set([
     "venting",
     "volatiles",
     "escape",
+    "coreformation",
 ])
 
 """
@@ -1219,6 +1326,11 @@ function load_config(source::AbstractString)::SimulationConfig
             def.escape
         end
     end
+    coreform = if haskey(parsed, "coreformation")
+        _dict_to_struct(CoreFormationConfig, parsed["coreformation"], def.coreformation)
+    else
+        def.coreformation
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1235,6 +1347,7 @@ function load_config(source::AbstractString)::SimulationConfig
         venting=vent,
         volatiles=vol,
         escape=esc,
+        coreformation=coreform,
     )
 
     validate_config(cfg)
@@ -1284,6 +1397,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "venting" => _struct_to_dict(cfg.venting),
         "volatiles" => _struct_to_dict(cfg.volatiles),
         "escape" => _struct_to_dict(cfg.escape),
+        "coreformation" => _struct_to_dict(cfg.coreformation),
     )
     TOML.print(io, d; sorted=true)
     return io
