@@ -8,10 +8,10 @@ This module describes the multi-component H-C-N-S volatile solubility laws, gas-
 
 Early planetesimals and protoplanetary embryos accreted heterogeneous mixtures of hydrous silicates, iron sulfides, refractory carbonaceous matter, and trapped nebular gases. During core-mantle differentiation and internal radiogenic heating, silicate partial melting and magma ocean evolution partition volatile elements between the crystalline matrix, liquid silicate melt, immiscible metallic liquids, and exsolved gas phases:
 
-1. Hydrogen ($\text{H}_2\text{O}$ and $\text{H}_2$) dissolves as hydroxyl ($\text{OH}^-$) and molecular $\text{H}_2\text{O}$ in silicate melts across basaltic, peridotitic, and lunar compositions. Molecular $\text{H}_2$ dissolves under strongly reducing conditions, where hydrogen outgassing is dominated by $\text{H}_2$ rather than $\text{H}_2\text{O}$.
-2. Carbon ($\text{CO}$, $\text{CH}_4$, and $\text{CO}_2$) dissolves as neutral $\text{CO}$ and $\text{CH}_4$ in reduced silicate melts ($\Delta\text{IW} \le 0$). Under oxidized conditions ($\Delta\text{IW} > 0$), carbon dissolves predominantly as carbonate ($\text{CO}_3^{2-}$). Carbon fugacities are physically bounded by graphite saturation ($a_{\text{C}} = 1$), above which elemental graphite precipitates.
-3. Nitrogen ($\text{N}_2$ and Nitride $\text{N}^{3-}$) dissolves physically as molecular $\text{N}_2$ in oxidizing environments. Under reducing conditions ($\Delta\text{IW} \le -1$), chemical dissolution as nitride ($\text{N}^{3-}$) dominates, strongly modulated by melt composition ($\text{SiO}_2$, $\text{Al}_2\text{O}_3$, and $\text{TiO}_2$).
-4. Sulfur ($\text{S}^{2-}$ and $\text{SO}_4^{2-}$) dissolves as sulfide ($\text{S}^{2-}$) under reducing conditions and transitions to sulfate ($\text{SO}_4^{2-}$) above $\Delta\text{IW} \approx +1.5$. In silicate melts, dissolved sulfur content is physically capped by the sulfur content at sulfide saturation (SCSS). When sulfur exceeds SCSS, excess sulfur exsolves into an immiscible Fe-S sulfide liquid (matte) rather than remaining dissolved in the silicate melt.
+1. **Hydrogen (H₂O and H₂)**: Dissolves as hydroxyl (OH⁻) and molecular H₂O in silicate melts across basaltic, peridotitic, and lunar compositions. Under strongly reducing conditions, dissolved H₂ dominates hydrogen outgassing.
+2. **Carbon (CO, CH₄, and CO₂)**: Dissolves as neutral CO and CH₄ in reduced silicate melts ($\Delta\text{IW} \le 0$). Under oxidized conditions ($\Delta\text{IW} > 0$), carbon dissolves predominantly as carbonate (CO₃²⁻). Carbon fugacities are physically bounded by graphite saturation ($a_{\text{C}} = 1$), above which elemental graphite precipitates.
+3. **Nitrogen (N₂ and nitride N³⁻)**: Dissolves physically as molecular N₂ in oxidizing environments. Under reducing conditions ($\Delta\text{IW} \le -1$), chemical dissolution as nitride (N³⁻) dominates, strongly modulated by melt composition (SiO₂, Al₂O₃, and TiO₂).
+4. **Sulfur (S²⁻ and SO₄²⁻)**: Dissolves as sulfide (S²⁻) under reducing conditions and transitions to sulfate (SO₄²⁻) above $\Delta\text{IW} \approx +1.5$. In silicate melts, dissolved sulfur content is physically capped by the sulfur content at sulfide saturation (SCSS). When sulfur exceeds SCSS, excess sulfur exsolves into an immiscible Fe-S sulfide liquid (matte) rather than remaining dissolved in the silicate melt.
 
 ---
 
@@ -19,16 +19,23 @@ Early planetesimals and protoplanetary embryos accreted heterogeneous mixtures o
 
 ### Water and Molecular Hydrogen Solubility
 
-Water solubility in silicate melt is parameterized through multiple compositional laws:
+Water solubility in silicate melt is parameterized through four compositional laws:
 
-- Burnham & Dixon standard basalt:
-  $$w_{\text{melt}}^{\text{H}_2\text{O}} = A_s \sqrt{\max(0, P_f \times 10^{-6})} \quad [\text{wt}\%]$$
-- Sossi et al. (2023) peridotite melt:
-  $$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(524.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
-- Dixon et al. (1995) MORB basalt:
-  $$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(965.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
-- Newcombe et al. (2017) lunar basalt:
-  $$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(683.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
+**Burnham & Dixon standard basalt**:
+
+$$w_{\text{melt}}^{\text{H}_2\text{O}} = A_s \sqrt{\max(0, P_f \times 10^{-6})} \quad [\text{wt}\%]$$
+
+**Sossi et al. (2023) peridotite melt**:
+
+$$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(524.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
+
+**Dixon et al. (1995) MORB basalt**:
+
+$$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(965.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
+
+**Newcombe et al. (2017) lunar basalt**:
+
+$$w_{\text{melt}}^{\text{H}_2\text{O}} = \left(683.0 \sqrt{P_f \times 10^{-5}}\right) \times 10^{-4} \quad [\text{wt}\%]$$
 
 Molecular hydrogen dissolves under reducing conditions following Henry law calibrations (Hirschmann et al. 2012; Gaillard et al. 2003):
 
@@ -36,27 +43,36 @@ $$\log_{10}(X_{\text{H}_2} [\text{ppmw}]) = 1.1008 + 0.5241 \log_{10}(P_{\text{H
 
 ### Carbon Solubility Speciation and Graphite Saturation
 
-Dissolved carbon partitions into $\text{CO}$, $\text{CH}_4$, and carbonate ($\text{CO}_3^{2-}$):
+Dissolved carbon partitions into carbon monoxide (CO), methane (CH₄), and carbonate (CO₃²⁻):
 
-1. Carbon monoxide (Armstrong et al. 2015; Yoshioka et al. 2019):
-   $$\log_{10}(X_{\text{CO}} [\text{ppmw}]) = -0.738 + 0.876 \log_{10}(p_{\text{CO}} [\text{bar}]) - 5.44 \times 10^{-5} P_{\text{tot}} [\text{bar}]$$
-2. Methane (Ardia et al. 2013):
-   $$X_{\text{CH}_4} [\text{ppmw}] = p_{\text{CH}_4} [\text{GPa}] \exp\left(4.93 - 1.93 P_{\text{tot}} [\text{GPa}]\right)$$
-3. Carbon dioxide and carbonate (Dixon et al. 1995):
-   $$x_{\text{CO}_2} = 3.8 \times 10^{-7} p_{\text{CO}_2} [\text{bar}] \exp\left[-\frac{23.0 (p_{\text{CO}_2} - 1)}{83.15 T}\right]$$
-   $$X_{\text{CO}_2} [\text{ppmw}] = 10^4 \times \frac{4400.0 x_{\text{CO}_2}}{36.6 - 44.0 x_{\text{CO}_2}}$$
+**Carbon monoxide** (Armstrong et al. 2015; Yoshioka et al. 2019):
+
+$$\log_{10}(X_{\text{CO}} [\text{ppmw}]) = -0.738 + 0.876 \log_{10}(p_{\text{CO}} [\text{bar}]) - 5.44 \times 10^{-5} P_{\text{tot}} [\text{bar}]$$
+
+**Methane** (Ardia et al. 2013):
+
+$$X_{\text{CH}_4} [\text{ppmw}] = p_{\text{CH}_4} [\text{GPa}] \exp\left(4.93 - 1.93 P_{\text{tot}} [\text{GPa}]\right)$$
+
+**Carbon dioxide and carbonate** (Dixon et al. 1995):
+
+$$x_{\text{CO}_2} = 3.8 \times 10^{-7} p_{\text{CO}_2} [\text{bar}] \exp\left[-\frac{23.0 (p_{\text{CO}_2} - 1)}{83.15 T}\right]$$
+
+$$X_{\text{CO}_2} [\text{ppmw}] = 10^4 \times \frac{4400.0 x_{\text{CO}_2}}{36.6 - 44.0 x_{\text{CO}_2}}$$
 
 At graphite saturation ($a_{\text{C}} = 1$), maximum carbon monoxide and dioxide fugacities are governed by the heterogeneous buffer equilibria of French (1966) and Holloway et al. (1992):
 
 $$\log_{10}(f_{\text{CO}}^{\text{max}} [\text{bar}]) = \frac{5785.0}{T} + 4.545 + 0.5 \log_{10}(f_{\text{O}_2})$$
+
 $$\log_{10}(f_{\text{CO}_2}^{\text{max}} [\text{bar}]) = \frac{20590.0}{T} - 0.043 + \log_{10}(f_{\text{O}_2})$$
 
 ### Composition-Dependent Nitrogen Solubility
 
-Dasgupta et al. (2022) parameterize nitrogen solubility in silicate melt by incorporating temperature, pressure, redox state, and network-forming cation fractions ($\text{SiO}_2, \text{Al}_2\text{O}_3, \text{TiO}_2$):
+Dasgupta et al. (2022) parameterize nitrogen solubility in silicate melt by incorporating temperature, pressure, redox state, and network-forming cation fractions (SiO₂, Al₂O₃, TiO₂):
 
 $$w_{\text{phys}}^{\text{N}} [\text{ppmw}] = p_{\text{N}_2} [\text{GPa}] \exp\left(4.67 + 7.11 x_{\text{SiO}_2} - 13.06 x_{\text{Al}_2\text{O}_3} - 120.67 x_{\text{TiO}_2}\right)$$
+
 $$w_{\text{chem}}^{\text{N}} [\text{ppmw}] = \sqrt{p_{\text{N}_2} [\text{GPa}]} \exp\left[\frac{5908.0 \sqrt{P_{\text{tot}} [\text{GPa}]}}{T} - 1.6 \Delta\text{IW}\right]$$
+
 $$w_{\text{total}}^{\text{N}} = w_{\text{phys}}^{\text{N}} + w_{\text{chem}}^{\text{N}}$$
 
 ### Sulfur Solubility and Sulfide Saturation Ceiling (SCSS)
@@ -64,6 +80,7 @@ $$w_{\text{total}}^{\text{N}} = w_{\text{phys}}^{\text{N}} + w_{\text{chem}}^{\t
 Dissolved sulfur in silicate melt is governed by sulfide capacity under reducing conditions and sulfate capacity under oxidizing conditions (Boulliung & Wood 2022, 2023; Gaillard et al. 2022):
 
 $$\log_{10}(C_{\text{S}^{2-}}) = 0.225 - \frac{\mathcal{S}_{\text{melt}}}{T}$$
+
 $$S_{\text{sulfide}} [\text{wt}\%] = C_{\text{S}^{2-}} \sqrt{\frac{p_{\text{S}_2} [\text{bar}]}{f_{\text{O}_2} [\text{bar}]}}$$
 
 Silicate melt cannot dissolve unbounded quantities of sulfide. When dissolved sulfur reaches the Sulfur Content at Sulfide Saturation (O'Neill & Mavrogenes 2002; Smythe et al. 2017), an immiscible Fe-S sulfide melt (matte) forms:
@@ -104,4 +121,5 @@ Figure 1 illustrates the operational behavior of the multi-component H-C-N-S vol
 
 ![HCNS Volatile Solubility Benchmark](../assets/hcns_solubility_benchmark.png)
 
-*Figure 1: Four-panel diagnostic demonstration of the multi-species H-C-N-S volatile solubility parameterizations in Erebus.jl. (a) Dissolved water concentration in silicate melt as a function of pore/surface pressure $P \in [0, 200]\text{ bar}$ across four compositional calibrations: MORB basalt (Dixon et al. 1995), lunar basalt (Newcombe et al. 2017), peridotite (Sossi et al. 2023), and the baseline Burnham-Dixon parameterization. (b) Carbon solubility speciation as a function of species partial pressure up to $100\text{ bar}$ at $T = 1500\text{ K}$, contrasting carbonate dissolution ($\text{CO}_2$), dissolved carbon monoxide ($\text{CO}$), and methane ($\text{CH}_4$). Dotted horizontal lines show the graphite saturation ceiling at $\Delta\text{IW} = -1$. (c) Composition-dependent nitrogen solubility as a function of redox offset $\Delta\text{IW} \in [-4, +2]$ at $p_{\text{N}_2} = 10\text{ bar}$ and $T = 1600\text{ K}$ (Dasgupta et al. 2022), decomposing total dissolved nitrogen into physical molecular ($\text{N}_2$) and chemical nitride ($\text{N}^{3-}$) dissolution for Earth mantle and lunar basalt compositions. (d) Sulfur solubility as a function of redox state at $T = 1500\text{ K}$ and $p_{\text{S}_2} = 1\text{ bar}$, showing sulfide and sulfate capacities (Boulliung & Wood 2023; Gaillard et al. 2022) and the sulfur content at sulfide saturation (SCSS) ceiling for $10\text{ wt}\%$ and $20\text{ wt}\%$ $\text{FeO}$ (Smythe et al. 2017). The yellow shaded region indicates where raw sulfide solubility exceeds SCSS, causing precipitation of an immiscible Fe-S sulfide liquid (matte).*
+*Figure 1: Four-panel diagnostic demonstration of the multi-species H-C-N-S volatile solubility parameterizations in Erebus.jl. (a) Dissolved water concentration in silicate melt as a function of pore/surface pressure $P \in [0, 200]\text{ bar}$ across four compositional calibrations: MORB basalt (Dixon et al. 1995), lunar basalt (Newcombe et al. 2017), peridotite (Sossi et al. 2023), and the baseline Burnham-Dixon parameterization. (b) Carbon solubility speciation as a function of species partial pressure up to $100\text{ bar}$ at $T = 1500\text{ K}$, contrasting carbonate dissolution (CO₂), dissolved carbon monoxide (CO), and methane (CH₄). Dotted horizontal lines show the graphite saturation ceiling at $\Delta\text{IW} = -1$. (c) Composition-dependent nitrogen solubility as a function of redox offset $\Delta\text{IW} \in [-4, +2]$ at $p_{\text{N}_2} = 10\text{ bar}$ and $T = 1600\text{ K}$ (Dasgupta et al. 2022), decomposing total dissolved nitrogen into physical molecular (N₂) and chemical nitride (N³⁻) dissolution for Earth mantle and lunar basalt compositions. (d) Sulfur solubility as a function of redox state at $T = 1500\text{ K}$ and $p_{\text{S}_2} = 1\text{ bar}$, showing sulfide and sulfate capacities (Boulliung & Wood 2023; Gaillard et al. 2022) and the sulfur content at sulfide saturation (SCSS) ceiling for $10\text{ wt}\%$ and $20\text{ wt}\%$ FeO (Smythe et al. 2017). The yellow shaded region indicates where raw sulfide solubility exceeds SCSS, causing precipitation of an immiscible Fe-S sulfide liquid (matte).*
+
