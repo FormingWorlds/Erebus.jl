@@ -167,3 +167,25 @@ Figures 1 and 2 illustrate the operational behavior of the volatile solubility p
 5. **Organic Midpoint Symmetry**: At $T = T_{\text{devol}}$, the organic devolatilization yield equals $0.5$ exactly, approaching $0$ for $T \ll T_{\text{devol}}$ and $1$ for $T \gg T_{\text{devol}}$.
 6. **Graphite and Sulfide Saturation Ceilings**: Evaluated carbon monoxide and dioxide fugacities never exceed graphite saturation limits ($a_{\text{C}} \le 1$). When `scss_active = true`, dissolved sulfur never exceeds the SCSS boundary.
 7. **Domain Guards**: Non-positive temperatures, non-finite pressures, non-positive solubility coefficients, and non-physical devolatilization temperatures throw explicit `DomainError` exceptions.
+
+---
+
+## 6. Verification Test Suite
+
+- `test/test_volatile_solubility.jl`:
+  - `@testset "Multi-Species Volatile Solubility & Nitrogen Chemistry"`
+  - `@testset "compute_iron_wustite_fO2 Invariants"`
+  - `@testset "compute_water_solubility_melt Invariants & Asymptotics"`
+  - `@testset "compute_nitrogen_solubility_melt Redox Scaling & Partitioning"`
+  - `@testset "compute_organic_nitrogen_yield Invariants"`
+  - `@testset "VolatilesConfig Schema & Bounds Validation"`
+- `test/test_volatile_solubility_hcns.jl`:
+  - `@testset "HCNS Volatile Solubility, Speciation, and Saturation Ceilings"`
+  - `@testset "Extended Water Solubility Laws"`
+  - `@testset "Molecular H2 Solubility Laws"`
+  - `@testset "Dasgupta et al. (2022) Compositional Nitrogen Solubility"`
+  - `@testset "Carbon Species Solubility Laws (CO, CH4, CO2)"`
+  - `@testset "Graphite Saturation Ceiling (French 1966 / Holloway 1992)"`
+  - `@testset "Sulfur Solubility Laws (Boulliung & Wood 2023, Gaillard 2022)"`
+  - `@testset "SCSS Ceilings (Smythe et al. 2017 / O'Neill & Mavrogenes 2002)"`
+  - `@testset "Gas Speciation Solver (solve_chnos_speciation)"`

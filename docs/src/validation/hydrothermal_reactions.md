@@ -68,3 +68,17 @@ Model setup files live in `configs/`:
 - `hydrothermal_reaction_sweep_phi20.toml` ($\phi_0 = 0.20$ sweep)
 - `hydrothermal_reaction_sweep_phi35.toml` ($\phi_0 = 0.35$ sweep)
 - `hydrothermal_reaction_sweep_phi50.toml` ($\phi_0 = 0.50$ sweep)
+
+---
+
+## Verification Test Suite
+
+- `test/test_reaction_pathways.jl`:
+  - `@testset "Reaction Pathways & Thermodynamic Coupling"`
+  - `@testset "ReactionConfig Schema & Bounds Validation"`
+  - `@testset "Equilibrium Direction and Continuous Phase Boundary"`
+  - `@testset "Two-Way Kinetics Timescales with ReactionConfig"`
+  - `@testset "Exothermic Hydration: Physical Invariants & Fluid Suction"`
+  - `@testset "Endothermic Dehydration: Physical Invariants & Pore Overpressure"`
+  - `@testset "Dynamic Hydrofracture Coupling to Fluid Overpressure"`
+  - `@testset "Reaction Activation Switches and Picard Under-Relaxation"`

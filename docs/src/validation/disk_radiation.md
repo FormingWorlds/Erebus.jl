@@ -60,7 +60,17 @@ $$k_{\text{interface}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \Delta}{2 k_{\te
 
 ---
 
-## Verification Test Suite
+## 3. Parameterization Behavior and Snowline Dynamics
+
+Figure 1 illustrates the operational behavior of the two-stage protoplanetary disk thermal evolution parameterization (`:class1_to_class2`):
+
+![Protoplanetary Disk Temperature Evolution and Snowline Dynamics](../assets/disk_temperature_multidistance_multimass.png)
+
+*Figure 1: Protoplanetary disk midplane temperature evolution across orbital distances and stellar masses in Erebus.jl. (a) Thermal history at orbital distances $r \in \{0.5, 1.0, 2.5, 5.0\}\text{ AU}$ around a solar-mass star ($1.0\,M_\odot$), showing early accretion heating rising to peak temperatures followed by viscous clearing decay toward the flared irradiation floor. (b) Midplane temperature profiles across central star masses $M_\star \in \{0.5, 1.0, 2.0\}\,M_\odot$ at $r = 2.5\text{ AU}$. Dotted horizontal lines mark the water snowline ($T = 170\text{ K}$).*
+
+---
+
+## 4. Verification Test Suite
 
 - `test/test_geometry_radiation.jl`:
   - `@testset "Stefan-Boltzmann Surface Radiation Physics"`

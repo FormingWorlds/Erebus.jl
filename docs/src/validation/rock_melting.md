@@ -155,3 +155,18 @@ Model setup files live in `configs/`:
 - `magma_ocean_cooling_turb_off_128.toml` (Baseline benchmark, conduction only, 128x128)
 - `magma_ocean_cooling_turb_on_64.toml` (Medium-resolution benchmark, 64x64)
 - `magma_ocean_cooling_turb_on_32.toml` (Fast benchmark, 32x32)
+
+---
+
+## Verification Test Suite
+
+- `test/test_melting.jl`:
+  - `@testset "Silicate Rock Melting & Magma Rheology"`
+  - `@testset "compute_melt_fraction: Analytical Limits & Monotonicity"`
+  - `@testset "rhocp_apparent_silicate: Latent Heat & Conservation Integral"`
+  - `@testset "compute_melt_weakened_viscosity: Rheological Transition"`
+- `test/test_soft_turbulence.jl`:
+  - `@testset "Sub-Grid Soft Turbulence & Regularized Conductivity"`
+  - `@testset "Physics: regularized_soft_turbulence_conductivity"`
+  - `@testset "Grid Interpolation: KX & KY receive enhanced conductivity"`
+  - `@testset "Mini-Simulation Execution with Soft Turbulence"`

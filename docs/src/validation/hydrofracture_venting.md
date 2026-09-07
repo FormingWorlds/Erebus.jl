@@ -73,10 +73,23 @@ Figure 1 presents an illustrative verification benchmark for the operational reg
 
 ---
 
-## 5. Invariants and Verification Tests
+## 5. Mathematical Invariants and Limits
 
 1. **Unsealed Thermal Asymptote**: For $T \ge T_{\text{freeze}}$, $k_{\text{eff}} = k_v$ within machine precision.
 2. **Deep Cryogenic Limit**: For $T \ll T_{\text{freeze}}$, $k_{\text{eff}} \to k_v \cdot r_{\text{min}}$ monotonically.
 3. **Tensile Failure Threshold**: A boundary cell transitions from closed to open when $P_{\text{eff}} = -\sigma_t$ exactly.
 4. **Episodic Resealing**: As $P_f$ dissipates such that $P_{\text{eff}} > -\sigma_t$, venting shuts off completely in `:hydrofracture_gated` mode or drops toward the residual floor ratio $r_{\text{min}}$ (approaching $10^{-6}$ as $T$ decreases well below $T_{\text{freeze}}$) under cryogenic ice sealing.
 5. **Domain Guards**: Non-positive reference permeability, zero or negative temperature, and non-physical sealing parameters raise informative errors.
+
+---
+
+## 6. Verification Test Suite
+
+- `test/test_hydrofracture_venting.jl`:
+  - `@testset "compute_ice_sealed_permeability Invariants & Asymptotics"`
+  - `@testset "is_hydrofracture_breached Invariants"`
+  - `@testset "Surface Boundary Hydrofracture Gating & Cryogenic Sealing Assembly"`
+  - `@testset "compute_face_venting_permeability Invariants"`
+  - `@testset "VentingConfig Validation on Ice Sealing Parameters"`
+  - `@testset "Episodic Hydrofracture Breaching & Lid Resealing Dynamics"`
+  - `@testset "Simulation Loop with Hydrofracture-Gated & Ice Sealed Venting"`
