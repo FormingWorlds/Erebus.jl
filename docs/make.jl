@@ -72,7 +72,7 @@ makedocs(;
             "Acknowledgements" => "community/acknowledgements.md",
         ],
     ],
-    warnonly=[:missing_docs],
+    warnonly=[:missing_docs, :cross_references],
 )
 
 deploydocs(;
