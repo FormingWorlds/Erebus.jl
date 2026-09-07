@@ -115,3 +115,19 @@ Figure 1 illustrates the scaling regimes of Jeans escape across planetary body s
 3. **Small-Loss Taylor Convergence**: When $k_{\text{escape}} \Delta t < 10^{-6}$, the linear source evaluation matches the unregularized formula to relative error $< 10^{-14}$, which eliminates numerical division-by-zero artifacts when escape rates approach zero.
 4. **Exponential Flux Suppression**: For large Jeans parameters exceeding $\text{JEANS\_LAMBDA\_CUTOFF} = 100$, kinetic effusion flux is set to zero, which preserves atmospheric inventories on massive bodies.
 5. **Species Mass Ordering**: For identical thermal and planetary conditions, heavier volatiles have strictly larger Jeans parameters ($\lambda_{\text{CO}_2} > \lambda_{\text{N}_2} > \lambda_{\text{H}_2\text{O}}$) and longer retention timescales.
+
+---
+
+## 6. Verification Test Suite
+
+- `test/test_jeans_escape.jl`:
+  - `@testset "Atmospheric Jeans Kinetic Escape & Volatile Loss"`
+  - `@testset "Molecular Masses & Physical Constants"`
+  - `@testset "compute_escape_velocity Invariants"`
+  - `@testset "compute_thermal_velocity Invariants"`
+  - `@testset "compute_jeans_parameter Invariants"`
+  - `@testset "compute_jeans_escape_flux & Mass Loss Rate Invariants"`
+  - `@testset "Atmospheric Scale Height & Surface Pressure"`
+  - `@testset "evolve_atmospheric_species_inventory Dynamics & Conservation"`
+  - `@testset "EscapeConfig Schema & Bounds Validation"`
+  - `@testset "Simulation Loop Integration with Atmospheric Escape"`

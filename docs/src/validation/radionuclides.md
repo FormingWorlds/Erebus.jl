@@ -48,6 +48,33 @@ where $\rho$ is phase density, $f_m$ is elemental mass abundance, and $E_{\text{
 
 ---
 
+## Analytical Energy Conservation
+
+The cumulative energy released per unit volume from initial accretion ($t = 0$) up to time $t$ is obtained by integrating the volumetric heating rate:
+
+$$E(t) = \int_0^t Q(t') \, dt' = Q_0 \tau \left[ 1 - \exp\left(-\frac{t}{\tau}\right) \right]$$
+
+where $\tau = t_{1/2} / \ln 2$ is the mean lifetime of the radionuclide and $E_\infty = Q_0 \tau$ is the total energy released as $t \to \infty$.
+
+The fraction of total isotopic energy released as a function of elapsed half-lives $n = t / t_{1/2}$ evaluates to the closed-form relation:
+
+$$f(n) = \frac{E(n \cdot t_{1/2})}{E_\infty} = 1 - \left(\frac{1}{2}\right)^n$$
+
+The table below tabulates theoretical cumulative energy release fractions $f(n)$ across progressive radioactive decay intervals:
+
+| Elapsed Half-Lives ($t / t_{1/2}$) | Total Elapsed Time ($^{26}\text{Al}$) | Cumulative Energy Fraction $f(n) = 1 - (1/2)^n$ | Unreleased Residual $(1/2)^n$ |
+|:---|:---|:---|:---|
+| $0.5$ | $0.3585\text{ Ma}$ | $0.292893$ | $0.707107$ |
+| $1.0$ | $0.7170\text{ Ma}$ | $0.500000$ | $0.500000$ |
+| $2.0$ | $1.4340\text{ Ma}$ | $0.750000$ | $0.250000$ |
+| $5.0$ | $3.5850\text{ Ma}$ | $0.968750$ | $0.031250$ |
+| $10.0$ | $7.1700\text{ Ma}$ | $0.999023$ | $0.000977$ |
+
+---
+
 ## Verification Test Suite
 
-- `test/test_physics.jl`: `@testset "Q_radiogenic(): half-life and conservation closure"`
+- `test/test_physics.jl`:
+  - `@testset "Q_radiogenic(): half-life and conservation closure"`: Verifies initial heating $Q(0) = Q_0$, half-life decay $Q(t_{1/2}) = 0.5 Q_0$, two half-lives $Q(2 t_{1/2}) = 0.25 Q_0$, and total integrated energy closure $\int_0^\infty Q(t) \, dt = Q_0 \tau$ within $10^{-12}$ relative tolerance.
+  - `@testset "calculate_radioactive_heating(): isotope activity and density scaling"`: Verifies volumetric heating scaling and phase assignment.
+
