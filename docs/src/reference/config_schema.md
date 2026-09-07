@@ -238,4 +238,41 @@ Parameters controlling silicate rock melting, latent heat buffering, and melt-we
 | `k_turb_cutoff` | `Float64` | `1.0e+6` | W/(m K) | Upper cutoff for turbulent thermal conductivity | $> k_{\text{turb,floor}}$ |
 | `k_turb_floor` | `Float64` | `1.0e-3` | W/(m K) | Lower cutoff floor for regularized thermal conductivity | $> 0$ |
 
+---
+
+## `[venting]`
+
+Parameters controlling planetesimal surface volatile venting, ice sealing, and hydrofracture breaching.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable surface volatile venting sink | `true` / `false` |
+| `mode` | `Symbol` | `:darcy_sink` | - | Venting activation mode | `:darcy_sink` / `:hydrofracture_gated` |
+| `k_vent` | `Float64` | `1.0e-11` | $\text{m}^2$ | Surface venting boundary permeability | $> 0$ |
+| `conductance_factor` | `Float64` | `1.0` | - | Dimensionless boundary conductance multiplier | $> 0$ |
+| `L_sublimation` | `Float64` | `2.83e6` | J/kg | Latent heat of ice sublimation | $> 0$ |
+| `latent_cooling` | `Bool` | `true` | - | Enable volatile sublimation latent heat cooling | `true` / `false` |
+| `ice_sealing` | `Bool` | `false` | - | Enable cryogenic pore ice permeability reduction | `true` / `false` |
+| `t_freeze` | `Float64` | `273.15` | K | Water freezing temperature threshold | $> 0$ |
+| `dt_seal` | `Float64` | `10.0` | K | Exponential ice sealing temperature scale | $> 0$ |
+| `k_seal_min_ratio` | `Float64` | `1.0e-6` | - | Minimum cryogenic permeability residual ratio | $\in (0, 1]$ |
+
+---
+
+## `[volatiles]`
+
+Parameters controlling multi-species volatile solubility in silicate melt and primordial organic devolatilization.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable multi-species volatile solubility and chemistry | `true` / `false` |
+| `fO2_delta_IW` | `Float64` | `-1.0` | log10 units | Redox state relative to iron-wüstite buffer ($\Delta\text{IW}$) | $\in [-50, 50]$ |
+| `water_solubility_coeff` | `Float64` | `0.40` | $\text{wt}\% / \text{MPa}^{0.5}$ | Burnham low-pressure water solubility coefficient $A_s$ | $> 0$ |
+| `nitrogen_henry_coeff` | `Float64` | `0.40` | ppm / bar | Henry coefficient $K_h$ for molecular $\text{N}_2$ dissolution | $> 0$ |
+| `nitrogen_nitride_capacity` | `Float64` | `1.0e-3` | $\text{wt}\% / \text{bar}^{0.5}$ | Chemical nitride capacity $C_{\text{nitride}}$ | $> 0$ |
+| `t_organic_devol` | `Float64` | `550.0` | K | Characteristic midpoint temperature $T_{\text{devol}}$ for organic devolatilization | $> 0$ |
+| `dt_organic_devol` | `Float64` | `50.0` | K | Transition temperature scale $\Delta T$ for organic devolatilization | $> 0$ |
+| `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
+
+
 

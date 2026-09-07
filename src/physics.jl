@@ -2193,3 +2193,182 @@ function regularized_soft_turbulence_conductivity(
     log_k = (1.0 - w_total) * log10(k_cond) + w_total * log10(k_turb)
     return max(k_cond, clamp(10.0^log_k, k_floor, k_cutoff))
 end
+
+"""
+Compute oxygen fugacity of the iron-wüstite (IW) buffer.
+
+$(SIGNATURES)
+
+Calculates log10(fO2 [bar]) using the empirical 1-bar parameterization (e.g. O'Neill 1988; Campbell et al. 2009):
+    log10(fO2) = 6.541 - 28164 / T + ΔIW
+
+# Arguments
+- `T_K`: Temperature [K]
+
+# Keyword Arguments
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer in log10 units (default: 0.0)
+
+# Notes
+The default `delta_IW = 0.0` represents the neutral iron-wüstite buffer. Planetesimal interiors are typically more reduced, for example `delta_IW = -1.0` in `VolatilesConfig`.
+
+# Returns
+- `log10_fO2`: log10 of oxygen fugacity in bar
+"""
+function compute_iron_wustite_fO2(T_K::Real; delta_IW::Real=0.0)::Float64
+    T_val = Float64(T_K)
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
+    end
+    d_IW = Float64(delta_IW)
+    if !isfinite(d_IW)
+        throw(DomainError(d_IW, "delta_IW must be finite"))
+    end
+    return 6.541 - 28164.0 / T_val + d_IW
+end
+
+"""
+Compute equilibrium dissolved water solubility in silicate melt at low pressure.
+
+$(SIGNATURES)
+
+Follows the low-pressure square-root law (Burnham 1979; Dixon et al. 1995)
+where water dissolves dominantly as hydroxyl (OH⁻):
+    w_H2O = As * sqrt(max(0, P [MPa]))  [wt%]
+
+# Arguments
+- `P_Pa`: Pore fluid pressure [Pa]
+
+# Keyword Arguments
+- `As`: Burnham water solubility coefficient [wt% / MPa^0.5] (default: 0.40, representative baseline for basaltic melt)
+
+# Returns
+- `w_H2O`: Equilibrium dissolved water concentration in melt [wt%]
+"""
+function compute_water_solubility_melt(P_Pa::Real; As::Real=0.40)::Float64
+    P_val = Float64(P_Pa)
+    if !isfinite(P_val)
+        throw(DomainError(P_val, "Pressure must be finite"))
+    end
+    As_val = Float64(As)
+    if As_val <= 0.0 || !isfinite(As_val)
+        throw(DomainError(As_val, "Water solubility coefficient As must be > 0 and finite"))
+    end
+    if P_val <= 0.0
+        return 0.0
+    end
+    P_MPa = P_val * 1.0e-6
+    return As_val * sqrt(P_MPa)
+end
+
+"""
+Compute equilibrium nitrogen solubility in silicate melt under reducing conditions.
+
+$(SIGNATURES)
+
+Partitions nitrogen into physical molecular dissolution (N2) and chemical nitride dissolution (N³⁻)
+following Libourel et al. (2003) and Boulliung et al. (2020):
+    w_phys = Kh * f_N2  [ppm]
+    w_chem = (C_nitride * 10^4) * sqrt(f_N2) * 10^(-0.75 * ΔIW)  [ppm]
+    w_total = w_phys + w_chem  [ppm]
+
+This parameterization is isothermal at reference magmatic temperature (~1673 K).
+
+# Arguments
+- `P_Pa`: Pore fluid pressure [Pa]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units] (default: 0.0)
+
+# Keyword Arguments
+- `Kh`: Henry law coefficient for molecular N2 [ppm / bar] (default: 0.40)
+- `C_nitride`: Chemical nitride capacity [wt% / bar^0.5] (default: 1.0e-3)
+
+# Notes
+The default `delta_IW = 0.0` corresponds to the neutral iron-wüstite buffer. Planetesimal interiors are typically more reduced, for example `delta_IW = -1.0` in `VolatilesConfig`.
+
+# Returns
+- `NamedTuple`: `(; total_ppm, physical_ppm, chemical_ppm)`
+"""
+function compute_nitrogen_solubility_melt(
+    P_Pa::Real, delta_IW::Real; Kh::Real=0.40, C_nitride::Real=1.0e-3
+)::@NamedTuple{total_ppm::Float64, physical_ppm::Float64, chemical_ppm::Float64}
+    P_val = Float64(P_Pa)
+    if !isfinite(P_val)
+        throw(DomainError(P_val, "Pressure must be finite"))
+    end
+    d_IW = Float64(delta_IW)
+    if !isfinite(d_IW) || abs(d_IW) > 50.0
+        throw(DomainError(d_IW, "delta_IW must be finite and within [-50, 50]"))
+    end
+    Kh_val = Float64(Kh)
+    if Kh_val <= 0.0 || !isfinite(Kh_val)
+        throw(DomainError(Kh_val, "Henry coefficient Kh must be > 0 and finite"))
+    end
+    Cn_val = Float64(C_nitride)
+    if Cn_val <= 0.0 || !isfinite(Cn_val)
+        throw(DomainError(Cn_val, "Nitride capacity C_nitride must be > 0 and finite"))
+    end
+
+    if P_val <= 0.0
+        return (total_ppm=0.0, physical_ppm=0.0, chemical_ppm=0.0)
+    end
+
+    # Pore fluid pressure converted to bar for gas fugacity
+    f_N2 = P_val * 1.0e-5
+    physical_ppm = Kh_val * f_N2
+
+    # Chemical nitride scaling relative to iron-wüstite buffer
+    fO2_ratio = 10.0^d_IW
+    chemical_ppm = (Cn_val * 1.0e4) * sqrt(f_N2) * (fO2_ratio)^(-0.75)
+    total_ppm = physical_ppm + chemical_ppm
+
+    return (total_ppm=total_ppm, physical_ppm=physical_ppm, chemical_ppm=chemical_ppm)
+end
+
+function compute_nitrogen_solubility_melt(
+    P_Pa::Real; delta_IW::Real=0.0, Kh::Real=0.40, C_nitride::Real=1.0e-3
+)::@NamedTuple{total_ppm::Float64, physical_ppm::Float64, chemical_ppm::Float64}
+    return compute_nitrogen_solubility_melt(P_Pa, delta_IW; Kh=Kh, C_nitride=C_nitride)
+end
+
+"""
+Compute devolatilization yield of primordial organic nitrogen as a function of temperature.
+
+$(SIGNATURES)
+
+Models thermal decomposition of organic nitrogen matter via a logistic sigmoid:
+    yield = inv(1 + exp(-(T - T_devol) / ΔT))
+
+# Arguments
+- `T_K`: Temperature [K]
+
+# Keyword Arguments
+- `T_devol`: Characteristic devolatilization midpoint temperature [K] (default: 550.0)
+- `delta_T`: Transition temperature scale [K] (default: 50.0)
+
+# Returns
+- `yield`: Devolatilized nitrogen fraction in [0, 1]
+"""
+function compute_organic_nitrogen_yield(
+    T_K::Real; T_devol::Real=550.0, delta_T::Real=50.0
+)::Float64
+    T_val = Float64(T_K)
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
+    end
+    Td = Float64(T_devol)
+    if Td <= 0.0 || !isfinite(Td)
+        throw(DomainError(Td, "T_devol must be > 0 and finite"))
+    end
+    dT = Float64(delta_T)
+    if dT <= 0.0 || !isfinite(dT)
+        throw(DomainError(dT, "delta_T must be > 0 and finite"))
+    end
+
+    arg = (T_val - Td) / dT
+    # Clamp argument to prevent numerical underflow/overflow in exp
+    if arg > 40.0
+        return 1.0
+    elseif arg < -40.0
+        return 0.0
+    end
+    return inv(1.0 + exp(-arg))
+end

@@ -313,6 +313,22 @@ Base.@kwdef struct VentingConfig
 end
 
 """
+Multi-species volatile solubility and organic devolatilization parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct VolatilesConfig
+    active::Bool = false
+    fO2_delta_IW::Float64 = -1.0
+    water_solubility_coeff::Float64 = 0.40
+    nitrogen_henry_coeff::Float64 = 0.40
+    nitrogen_nitride_capacity::Float64 = 1.0e-3
+    t_organic_devol::Float64 = 550.0
+    dt_organic_devol::Float64 = 50.0
+    organic_n_initial_ppm::Float64 = 500.0
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -330,6 +346,7 @@ Base.@kwdef struct SimulationConfig
     disk::DiskConfig = DiskConfig()
     melting::MeltingConfig = MeltingConfig()
     venting::VentingConfig = VentingConfig()
+    volatiles::VolatilesConfig = VolatilesConfig()
 end
 
 """
@@ -824,6 +841,58 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
 
+    # Volatiles checks
+    (isfinite(cfg.volatiles.fO2_delta_IW) && abs(cfg.volatiles.fO2_delta_IW) <= 50.0) ||
+        throw(
+            ArgumentError(
+                "fO2_delta_IW must be finite and within [-50, 50], got $(cfg.volatiles.fO2_delta_IW)",
+            ),
+        )
+    (
+        cfg.volatiles.water_solubility_coeff > 0.0 &&
+        isfinite(cfg.volatiles.water_solubility_coeff)
+    ) || throw(
+        ArgumentError(
+            "water_solubility_coeff must be > 0 and finite, got $(cfg.volatiles.water_solubility_coeff)",
+        ),
+    )
+    (
+        cfg.volatiles.nitrogen_henry_coeff > 0.0 &&
+        isfinite(cfg.volatiles.nitrogen_henry_coeff)
+    ) || throw(
+        ArgumentError(
+            "nitrogen_henry_coeff must be > 0 and finite, got $(cfg.volatiles.nitrogen_henry_coeff)",
+        ),
+    )
+    (
+        cfg.volatiles.nitrogen_nitride_capacity > 0.0 &&
+        isfinite(cfg.volatiles.nitrogen_nitride_capacity)
+    ) || throw(
+        ArgumentError(
+            "nitrogen_nitride_capacity must be > 0 and finite, got $(cfg.volatiles.nitrogen_nitride_capacity)",
+        ),
+    )
+    (cfg.volatiles.t_organic_devol > 0.0 && isfinite(cfg.volatiles.t_organic_devol)) ||
+        throw(
+            ArgumentError(
+                "t_organic_devol must be > 0 and finite, got $(cfg.volatiles.t_organic_devol)",
+            ),
+        )
+    (cfg.volatiles.dt_organic_devol > 0.0 && isfinite(cfg.volatiles.dt_organic_devol)) ||
+        throw(
+            ArgumentError(
+                "dt_organic_devol must be > 0 and finite, got $(cfg.volatiles.dt_organic_devol)",
+            ),
+        )
+    (
+        cfg.volatiles.organic_n_initial_ppm >= 0.0 &&
+        isfinite(cfg.volatiles.organic_n_initial_ppm)
+    ) || throw(
+        ArgumentError(
+            "organic_n_initial_ppm must be >= 0 and finite, got $(cfg.volatiles.organic_n_initial_ppm)",
+        ),
+    )
+
     return nothing
 end
 
@@ -883,6 +952,7 @@ const VALID_SECTIONS = Set([
     "disk",
     "melting",
     "venting",
+    "volatiles",
 ])
 
 """
@@ -983,6 +1053,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.venting
     end
+    vol = if haskey(parsed, "volatiles")
+        _dict_to_struct(VolatilesConfig, parsed["volatiles"], def.volatiles)
+    else
+        def.volatiles
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -997,6 +1072,7 @@ function load_config(source::AbstractString)::SimulationConfig
         disk=dsk,
         melting=melt,
         venting=vent,
+        volatiles=vol,
     )
 
     validate_config(cfg)
@@ -1044,6 +1120,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "disk" => _struct_to_dict(cfg.disk),
         "melting" => _struct_to_dict(cfg.melting),
         "venting" => _struct_to_dict(cfg.venting),
+        "volatiles" => _struct_to_dict(cfg.volatiles),
     )
     TOML.print(io, d; sorted=true)
     return io

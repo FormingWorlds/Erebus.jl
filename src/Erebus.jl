@@ -30,11 +30,16 @@ export Config,
     DiskConfig,
     MeltingConfig,
     VentingConfig,
+    VolatilesConfig,
     SimulationConfig,
     default_config,
     load_config,
     validate_config,
     save_config,
+    compute_iron_wustite_fO2,
+    compute_water_solubility_melt,
+    compute_nitrogen_solubility_melt,
+    compute_organic_nitrogen_yield,
     compute_melt_fraction,
     rhocp_apparent_silicate,
     compute_melt_weakened_viscosity,
@@ -142,7 +147,11 @@ module Physics
         compute_melt_fraction,
         rhocp_apparent_silicate,
         compute_melt_weakened_viscosity,
-        regularized_soft_turbulence_conductivity
+        regularized_soft_turbulence_conductivity,
+        compute_iron_wustite_fO2,
+        compute_water_solubility_melt,
+        compute_nitrogen_solubility_melt,
+        compute_organic_nitrogen_yield
     export distance,
         total,
         ktotal,
@@ -178,7 +187,11 @@ module Physics
         compute_melt_fraction,
         rhocp_apparent_silicate,
         compute_melt_weakened_viscosity,
-        regularized_soft_turbulence_conductivity
+        regularized_soft_turbulence_conductivity,
+        compute_iron_wustite_fO2,
+        compute_water_solubility_melt,
+        compute_nitrogen_solubility_melt,
+        compute_organic_nitrogen_yield
 end
 
 module Particles
@@ -365,6 +378,7 @@ module Config
         DiskConfig,
         MeltingConfig,
         VentingConfig,
+        VolatilesConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -382,6 +396,7 @@ module Config
         DiskConfig,
         MeltingConfig,
         VentingConfig,
+        VolatilesConfig,
         SimulationConfig,
         default_config,
         load_config,

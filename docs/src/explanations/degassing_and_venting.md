@@ -154,3 +154,55 @@ This volumetric sink is incorporated into the right-hand side of the thermal ene
 $$\rho C_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + H_R + H_A + H_S + Q_{\text{lat}}$$
 
 where $H_R$ is radiogenic heating, $H_A$ is adiabatic work, and $H_S$ is shear heating. Sublimation cooling acts as a strong thermostatic buffer, stabilizing surface crust against runaway heating while venting continues.
+
+---
+
+## Multi-Species Volatile Solubility and Organic Devolatilization
+
+During planetesimal differentiation and internal melting, volatile elements partition between crystalline minerals, liquid silicate melt, and free hydrothermal pore fluids.
+
+### 1. Silicate Melt Water Solubility Law
+
+At crustal pressures ($P_f \le 100\text{ MPa}$), water dissolves primarily as hydroxyl ($\text{OH}^-$) ions in liquid silicate melt. The equilibrium saturation concentration follows the square-root law of Burnham (1979) and Dixon et al. (1995):
+
+$$w_{\text{sat}}^{\text{H}_2\text{O}} = A_s \sqrt{\max(0, P_f \times 10^{-6})} \quad [\text{wt}\%]$$
+
+where $A_s \approx 0.40\text{ wt}\%/\text{MPa}^{0.5}$ is a representative baseline coefficient for basaltic melts and $P_f$ is pore fluid pressure [$\text{Pa}$].
+
+### 2. Multi-Species Nitrogen Solubility Under Reducing Conditions
+
+Nitrogen exhibits a dual dissolution mechanism in silicate melts (Libourel et al. 2003; Boulliung et al. 2020). The current parameterization is isothermal at reference magmatic conditions ($T \approx 1673\text{ K}$):
+
+1. **Physical Molecular Dissolution ($\text{N}_2$)**: At oxidizing conditions, nitrogen dissolves as molecular dinitrogen, governed by Henry's law:
+   $$w_{\text{phys}}^{\text{N}} = K_h \cdot f_{\text{N}_2} \quad [\text{ppm}]$$
+   where $K_h = 0.40\text{ ppm/bar}$ is an illustrative baseline constant and $f_{\text{N}_2} = P_f \times 10^{-5}\text{ bar}$.
+
+2. **Chemical Nitride Dissolution ($\text{N}^{3-}$)**: Under the reducing conditions typical of unoxidized planetesimal interiors ($\Delta\text{IW} \le 0$), nitrogen dissolves chemically as nitride ions:
+   $$\frac{1}{2}\text{N}_2\text{(g)} + \frac{3}{2}\text{O}^{2-}\text{(melt)} \rightleftharpoons \text{N}^{3-}\text{(melt)} + \frac{3}{4}\text{O}_2\text{(g)}$$
+   The chemical nitride saturation concentration scales inversely with oxygen fugacity:
+   $$w_{\text{chem}}^{\text{N}} = (C_{\text{nitride}} \times 10^4) \sqrt{f_{\text{N}_2}} \cdot \left(\frac{f_{\text{O}_2}}{f_{\text{O}_2}^{\text{IW}}}\right)^{-3/4} \quad [\text{ppm}]$$
+   where $C_{\text{nitride}} = 1.0\times 10^{-3}\text{ wt}\%/\text{bar}^{0.5}$ is the baseline chemical nitride capacity, and $f_{\text{O}_2} / f_{\text{O}_2}^{\text{IW}} = 10^{\Delta\text{IW}}$.
+
+3. **Total Nitrogen Capacity**:
+   $$w_{\text{total}}^{\text{N}} = w_{\text{phys}}^{\text{N}} + w_{\text{chem}}^{\text{N}} \quad [\text{ppm}]$$
+
+When $\Delta\text{IW}$ decreases by $2$ (i.e., $f_{\text{O}_2}$ drops by two orders of magnitude, for example from $\text{IW}$ to $\text{IW}-2$), chemical nitride solubility increases by a factor of $10^{2.0 \times 0.75} = 10^{1.5} \approx 31.62$, rendering the melt a major reservoir for nitrogen storage during interior magma ocean episodes.
+
+### 3. Iron-Wüstite Oxygen Fugacity Buffer
+
+The 1-bar oxygen fugacity along the iron-wüstite buffer is evaluated following empirical calibrations (e.g. O'Neill 1988; Campbell et al. 2009):
+
+$$\log_{10}(f_{\text{O}_2} [\text{bar}]) = 6.541 - \frac{28164}{T} + \Delta\text{IW}$$
+
+where $T$ is local rock temperature in Kelvin. The default $\Delta\text{IW} = 0$ corresponds to neutral IW, while planetesimal interiors use reduced offsets such as $\Delta\text{IW} = -1.0$.
+
+### 4. Primordial Organic Nitrogen Devolatilization
+
+Carbonaceous chondrite parent bodies contain up to several hundred parts per million of primordial macromolecular organic nitrogen. During prograde radiogenic metamorphism ($400\text{ to }700\text{ K}$), thermal breakdown releases ammonia ($\text{NH}_3$) and molecular nitrogen ($\text{N}_2$) into the hydrothermal pore network.
+
+This devolatilization yield $y(T) \in [0, 1]$ is parameterized as a continuous logistic transition:
+
+$$y(T) = \frac{1}{1 + \exp\left[-\frac{T - T_{\text{devol}}}{\Delta T}\right]}$$
+
+where $T_{\text{devol}} = 550.0\text{ K}$ is the characteristic devolatilization midpoint temperature and $\Delta T = 50.0\text{ K}$ is the thermal transition scale.
+
