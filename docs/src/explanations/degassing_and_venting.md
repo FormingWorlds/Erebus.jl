@@ -206,3 +206,75 @@ $$y(T) = \frac{1}{1 + \exp\left[-\frac{T - T_{\text{devol}}}{\Delta T}\right]}$$
 
 where $T_{\text{devol}} = 550.0\text{ K}$ is the characteristic devolatilization midpoint temperature and $\Delta T = 50.0\text{ K}$ is the thermal transition scale.
 
+---
+
+## Atmospheric Accumulation and Jeans Kinetic Escape
+
+Volatiles released through cold surface venting or magma degassing collect above the solid surface, forming a transient or steady-state atmosphere. For low-mass planetesimals, thermal effusion (Jeans escape) strips this vapor envelope to space.
+
+### 1. Escape Velocity and Thermal Velocity
+
+The gravitational escape velocity $v_{\text{esc}}$ [$\text{m/s}$] at planetary radius $R$ [$\text{m}$] for a body of mass $M$ [$\text{kg}$] is:
+
+$$v_{\text{esc}} = \sqrt{\frac{2 G M}{R}}$$
+
+The most probable Maxwellian thermal velocity $v_{\text{th}}$ [$\text{m/s}$] of a gas species with molecular mass $m$ [$\text{kg}$] at exobase temperature $T_{\text{exo}}$ [$\text{K}$] is:
+
+$$v_{\text{th}} = \sqrt{\frac{2 k_B T_{\text{exo}}}{m}}$$
+
+where $G = 6.67430\times 10^{-11}\text{ m}^3/(\text{kg}\cdot\text{s}^2)$ and $k_B = 1.380649\times 10^{-23}\text{ J/K}$.
+
+### 2. Jeans Parameter and Kinetic Escape Flux
+
+The dimensionless Jeans parameter $\lambda$ represents the ratio of gravitational binding energy to thermal kinetic energy at the exobase:
+
+$$\lambda = \left(\frac{v_{\text{esc}}}{v_{\text{th}}}\right)^2 = \frac{G M m}{k_B T_{\text{exo}} R_{\text{exo}}}$$
+
+The classic kinetic Jeans escape flux $\Phi_{\text{Jeans}}$ [$\text{molecules}/(\text{m}^2\cdot\text{s})$] across the exobase radius $R_{\text{exo}}$ is given by Jeans (1925):
+
+$$\Phi_{\text{Jeans}} = \frac{n_{\text{exo}} v_{\text{th}}}{2 \sqrt{\pi}} (1 + \lambda) \exp(-\lambda)$$
+
+where $n_{\text{exo}}$ is the number density of the species at the exobase [$\text{m}^{-3}$].
+
+When $\lambda \ll 1$ (typical for small asteroids with $R < 100\text{ km}$ and $v_{\text{esc}} < 100\text{ m/s}$), thermal velocities exceed the escape velocity. Escape operates in the rapid effusion regime, and vented gases depart into the interplanetary medium within hours to weeks. Conversely, when $\lambda \gg 10$ (massive planetary embryos or giant planets), the exponential factor $\exp(-\lambda)$ suppresses kinetic escape, and vented volatiles accumulate into an enduring atmosphere.
+
+### 3. Integrated Atmospheric Mass Loss Rate
+
+Relating the exobase density $n_{\text{exo}}$ to the total atmospheric inventory $M_{\text{atm}}$ [$\text{kg}$] through the atmospheric scale height $H = k_B T / (m g)$, the total planetary mass loss rate $\dot{M}_{\text{escape}}$ [$\text{kg/s}$] can be written in linear relaxation form:
+
+$$\dot{M}_{\text{escape}} = 4 \pi R_{\text{exo}}^2 m \Phi_{\text{Jeans}} = k_{\text{escape}} M_{\text{atm}}$$
+
+where $k_{\text{escape}} = \frac{v_{\text{th}}}{2 \sqrt{\pi} H} (1 + \lambda) \exp(-\lambda)$ [$\text{s}^{-1}$] is the effective escape rate coefficient. The exobase density closure $M_{\text{atm}} \approx 4 \pi R_{\text{exo}}^2 \rho_{\text{exo}} H$ represents an upper bound on loss for bound atmospheres ($\lambda > 1$), because true exobase density falls below the column-averaged density.
+
+### 4. Atmospheric Mass Conservation and Evolution
+
+The time evolution of atmospheric mass subject to surface venting flux $\dot{M}_{\text{vent}}$ [$\text{kg/s}$] and kinetic escape is governed by:
+
+$$\frac{d M_{\text{atm}}}{dt} = \dot{M}_{\text{vent}} - k_{\text{escape}} M_{\text{atm}}$$
+
+In the 2D Cartesian cross-sectional domain, marker fluid drainage is evaluated per unit out-of-plane length ($[\text{kg/m}]$). Before coupling with the 3D spherical atmosphere, this 2D mass is scaled to 3D by the volume-to-area geometric depth $L_{\text{3D}} = V_{\text{3D}} / A_{\text{2D}} = \frac{4}{3} R_{\text{planet}}$ [m]; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
+
+For a constant computational timestep $\Delta t$, the analytical solution yields:
+
+$$M_{\text{atm}}(t + \Delta t) = M_{\text{atm}}(t) \exp(-x) + \frac{\dot{M}_{\text{vent}}}{k_{\text{escape}}} \left[1 - \exp(-x)\right]$$
+
+where $x = k_{\text{escape}} \Delta t$. For small loss rates ($x < 10^{-6}$), numerical precision is preserved via a Taylor expansion:
+
+$$\frac{1 - \exp(-x)}{k_{\text{escape}}} = \Delta t \left(1 - \frac{x}{2} + \frac{x^2}{6}\right)$$
+
+The cumulative mass lost to space during the step is determined from exact conservation:
+
+$$\Delta M_{\text{escaped}} = M_{\text{atm}}(t) + \dot{M}_{\text{vent}} \Delta t - M_{\text{atm}}(t + \Delta t)$$
+
+### 5. Surface Pressure Boundary Feedback
+
+The accumulated atmospheric mass exerts a downward hydrostatic column pressure at the planetesimal surface:
+
+$$P_{\text{atm}} = \frac{M_{\text{atm}} g}{4 \pi R_{\text{planet}}^2}$$
+
+where $g = G M_{\text{planet}} / R_{\text{planet}}^2$. In the coupled hydromechanical system, this atmospheric pressure contributes to the effective ambient boundary pressure:
+
+$$P_{\text{amb,eff}} = P_{\text{amb}} + P_{\text{atm}}$$
+
+When substantial atmospheres accumulate, $P_{\text{amb,eff}}$ opposes ongoing boiling and venting, naturally throttling further surface volatile discharge. In the explicit time-advancement scheme of `Erebus.jl`, surface atmospheric pressure $P_{\text{atm}}$ is evaluated from the previous step atmospheric inventory, lagging the hydromechanical solve by one timestep in an operator-split fashion. Within the 2D Stokes-Darcy simulation loop, marker fluid drainage is tracked as a bulk $\text{H}_2\text{O}$ atmospheric reservoir, while multi-species kinetic fractionation across lighter and heavier volatiles ($\text{H}_2, \text{CO}_2, \text{N}_2$) is evaluated analytically via `evolve_atmospheric_species_inventory`.
+

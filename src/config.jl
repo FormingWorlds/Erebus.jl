@@ -329,6 +329,19 @@ Base.@kwdef struct VolatilesConfig
 end
 
 """
+Atmospheric Jeans kinetic escape and volatile mass loss parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct EscapeConfig
+    active::Bool = false
+    M_planet::Float64 = 1.309e18
+    R_planet::Float64 = 50_000.0
+    T_exobase::Float64 = 200.0
+    R_exobase::Float64 = 50_000.0
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -347,6 +360,7 @@ Base.@kwdef struct SimulationConfig
     melting::MeltingConfig = MeltingConfig()
     venting::VentingConfig = VentingConfig()
     volatiles::VolatilesConfig = VolatilesConfig()
+    escape::EscapeConfig = EscapeConfig()
 end
 
 """
@@ -893,6 +907,21 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
 
+    # Escape checks
+    (cfg.escape.M_planet > 0.0 && isfinite(cfg.escape.M_planet)) ||
+        throw(ArgumentError("M_planet must be > 0 and finite, got $(cfg.escape.M_planet)"))
+    (cfg.escape.R_planet > 0.0 && isfinite(cfg.escape.R_planet)) ||
+        throw(ArgumentError("R_planet must be > 0 and finite, got $(cfg.escape.R_planet)"))
+    (cfg.escape.T_exobase > 0.0 && isfinite(cfg.escape.T_exobase)) || throw(
+        ArgumentError("T_exobase must be > 0 and finite, got $(cfg.escape.T_exobase)")
+    )
+    (cfg.escape.R_exobase >= cfg.escape.R_planet && isfinite(cfg.escape.R_exobase)) ||
+        throw(
+            ArgumentError(
+                "R_exobase must be >= R_planet ($(cfg.escape.R_planet)) and finite, got $(cfg.escape.R_exobase)",
+            ),
+        )
+
     return nothing
 end
 
@@ -953,6 +982,7 @@ const VALID_SECTIONS = Set([
     "melting",
     "venting",
     "volatiles",
+    "escape",
 ])
 
 """
@@ -1058,6 +1088,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.volatiles
     end
+    esc = if haskey(parsed, "escape")
+        _dict_to_struct(EscapeConfig, parsed["escape"], def.escape)
+    else
+        def.escape
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1073,6 +1108,7 @@ function load_config(source::AbstractString)::SimulationConfig
         melting=melt,
         venting=vent,
         volatiles=vol,
+        escape=esc,
     )
 
     validate_config(cfg)
@@ -1121,6 +1157,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "melting" => _struct_to_dict(cfg.melting),
         "venting" => _struct_to_dict(cfg.venting),
         "volatiles" => _struct_to_dict(cfg.volatiles),
+        "escape" => _struct_to_dict(cfg.escape),
     )
     TOML.print(io, d; sorted=true)
     return io

@@ -274,5 +274,16 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `dt_organic_devol` | `Float64` | `50.0` | K | Transition temperature scale $\Delta T$ for organic devolatilization | $> 0$ |
 | `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
 
+---
 
+## `[escape]`
 
+Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape, and surface pressure feedback.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable atmospheric inventory evolution and Jeans escape | `true` / `false` |
+| `M_planet` | `Float64` | `1.309e+18` | kg | Planetesimal mass for gravitational potential | $> 0$ |
+| `R_planet` | `Float64` | `50000.0` | m | Planetesimal surface radius for atmospheric surface pressure | $> 0$ |
+| `T_exobase` | `Float64` | `200.0` | K | Exobase temperature for Maxwellian thermal velocity | $> 0$ |
+| `R_exobase` | `Float64` | `50000.0` | m | Exobase radius for escape flux surface integration | $\ge \text{R\_planet}$ |

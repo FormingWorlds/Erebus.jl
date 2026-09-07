@@ -176,6 +176,8 @@ function save_state(
     coords::Union{Nothing,GridCoordinates}=nothing,
     phim0_val=phim0,
     M_vent_total::Real=0.0,
+    M_atm_total::Real=0.0,
+    M_escaped_total::Real=0.0,
     P_amb::Real=10.0,
     S_vent::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
@@ -216,6 +218,8 @@ function save_state(
         marknum,
         phim0=phim0_val,
         M_vent_total,
+        M_atm_total,
+        M_escaped_total,
         P_amb,
         S_vent=S_vent === nothing ? zeros(Float64, Ny1_val, Nx1_val) : S_vent,
         ratio_al,
@@ -561,6 +565,8 @@ function simulation_loop(
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers(coords)
     M_vent_total = 0.0
+    M_atm_total = 0.0
+    M_escaped_total = 0.0
     S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
     is_restart = !isempty(restart_from)
@@ -568,6 +574,12 @@ function simulation_loop(
         ckpt = load_state(restart_from)
         if haskey(ckpt, "M_vent_total")
             M_vent_total = Float64(ckpt["M_vent_total"])
+        end
+        if haskey(ckpt, "M_atm_total")
+            M_atm_total = Float64(ckpt["M_atm_total"])
+        end
+        if haskey(ckpt, "M_escaped_total")
+            M_escaped_total = Float64(ckpt["M_escaped_total"])
         end
         if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
             (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
@@ -828,6 +840,8 @@ function simulation_loop(
             coords=coords,
             phim0_val=phim0_val,
             M_vent_total=M_vent_total,
+            M_atm_total=M_atm_total,
+            M_escaped_total=M_escaped_total,
             P_amb=cfg.disk.p_amb_disk,
             S_vent=S_vent_grid,
         )
@@ -932,6 +946,14 @@ function simulation_loop(
         T_amb, P_amb, w_disp = compute_ambient_conditions(timesum, cfg.disk)
         isfinite(T_amb) ||
             throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
+        P_atm = if cfg.escape.active
+            compute_surface_atmospheric_pressure(
+                M_atm_total, cfg.escape.M_planet, cfg.escape.R_planet
+            )
+        else
+            0.0
+        end
+        P_amb_eff = P_amb + P_atm
         if disk_enabled_val || surface_radiation_val
             @threads :static for m in 1:marknum
                 if tm[m] >= 3
@@ -1485,7 +1507,7 @@ function simulation_loop(
                     rplanet=rplanet_val,
                     xcenter=xcenter_val,
                     ycenter=ycenter_val,
-                    P_amb=P_amb,
+                    P_amb=P_amb_eff,
                     tk=tk1,
                     eta_fluid_surf=etafluidmm[2],
                     L_sub=cfg.venting.L_sublimation,
@@ -1649,7 +1671,7 @@ function simulation_loop(
                     rplanet_val,
                     xcenter_val,
                     ycenter_val,
-                    P_amb;
+                    P_amb_eff;
                     k_vent=cfg.venting.k_vent,
                     conductance_factor=cfg.venting.conductance_factor,
                     mode=cfg.venting.mode,
@@ -1894,6 +1916,7 @@ function simulation_loop(
             phimax=phimax_val,
             coords=coords,
         )
+        delta_m_vent = 0.0
         if cfg.venting.active
             delta_m_vent = sink_vented_marker_porosity!(
                 xm,
@@ -1908,6 +1931,26 @@ function simulation_loop(
                 rhofluidcur=rhofluidm[2],
             )
             M_vent_total += delta_m_vent
+        end
+
+        if cfg.escape.active
+            # Convert 2D planar vented mass [kg/m] to equivalent 3D spherical mass [kg]
+            # using volume-to-area geometric depth L_3D = (4/3) * R_planet
+            L_3D_equiv = (4.0 / 3.0) * cfg.escape.R_planet
+            delta_m_vent_3d = delta_m_vent * L_3D_equiv
+            M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
+            esc_res = evolve_atmospheric_species_inventory(
+                M_atm_total,
+                M_vent_rate,
+                dt,
+                cfg.escape.M_planet,
+                cfg.escape.R_planet,
+                cfg.escape.T_exobase,
+                MASS_H2O_KG;
+                R_exobase=cfg.escape.R_exobase,
+            )
+            M_atm_total = esc_res.M_atm
+            M_escaped_total += esc_res.M_escaped_step
         end
         phinewm .= phim
 
@@ -2110,7 +2153,9 @@ function simulation_loop(
                 coords=coords,
                 phim0_val=phim0_val,
                 M_vent_total=M_vent_total,
-                P_amb=P_amb,
+                M_atm_total=M_atm_total,
+                M_escaped_total=M_escaped_total,
+                P_amb=P_amb_eff,
                 S_vent=S_vent_grid,
             )
         end

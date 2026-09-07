@@ -60,6 +60,7 @@ makedocs(;
             "Cold Surface Venting" => "validation/cold_surface_venting.md",
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
             "Volatile Exsolution & Nitrogen Chemistry" => "validation/volatile_exsolution.md",
+            "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

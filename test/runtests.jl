@@ -30,5 +30,6 @@ const rgen = MersenneTwister(seed)
     include("test_venting_integration.jl")
     include("test_hydrofracture_venting.jl")
     include("test_volatile_solubility.jl")
+    include("test_jeans_escape.jl")
     include("test_integration.jl")
 end
