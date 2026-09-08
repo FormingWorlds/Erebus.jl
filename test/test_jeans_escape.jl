@@ -132,13 +132,17 @@ using Erebus.Physics
         n_exo = 1.0e18 # m^-3
 
         # Effusion limit: lambda -> 0
-        flux_effusion = compute_jeans_escape_flux(n_exo, T_200, MASS_H2O_KG, 0.0)
+        flux_effusion = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 0.0; hydrodynamic=false
+        )
         # Expected: n * v_th / (2 * sqrt(pi))
         expected_effusion = n_exo * v_th / (2.0 * sqrt(π))
         @test isapprox(flux_effusion, expected_effusion; rtol=1e-12)
 
         # Gravitational suppression: lambda = 5.0
-        flux_lambda5 = compute_jeans_escape_flux(n_exo, T_200, MASS_H2O_KG, 5.0)
+        flux_lambda5 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 5.0; hydrodynamic=false
+        )
         # Factor: (1 + 5) * exp(-5) ≈ 6 * 0.0067379 = 0.0404
         @test isapprox(flux_lambda5 / flux_effusion, 6.0 * exp(-5.0); rtol=1e-12)
         @test flux_lambda5 < flux_effusion
@@ -156,7 +160,7 @@ using Erebus.Physics
         rho_exo = n_exo * MASS_H2O_KG
         M_50km = (4.0 / 3.0) * π * R_50km^3 * 2500.0
         loss_rate = compute_jeans_mass_loss_rate(
-            M_50km, R_50km, T_200, MASS_H2O_KG, rho_exo
+            M_50km, R_50km, T_200, MASS_H2O_KG, rho_exo; hydrodynamic=false
         )
         lambda_val = compute_jeans_parameter(M_50km, R_50km, T_200, MASS_H2O_KG)
         expected_loss =
@@ -169,8 +173,63 @@ using Erebus.Physics
             MASS_H2O_KG
         @test isapprox(loss_rate, expected_loss; rtol=1e-10)
 
+        # Hydrodynamic blow-off regime when lambda < 1.5 and hydrodynamic=true
+        c_s = sqrt(1.4 * 1.380649e-23 * T_200 / MASS_H2O_KG)
+        flux_hydro = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 0.0; hydrodynamic=true
+        )
+        @test isapprox(flux_hydro, n_exo * c_s; rtol=1e-12)
+        @test flux_hydro > flux_effusion
+
+        loss_rate_hydro = compute_jeans_mass_loss_rate(
+            M_50km, R_50km, T_200, MASS_H2O_KG, rho_exo; hydrodynamic=true
+        )
+        expected_loss_hydro = 4.0 * π * R_50km^2 * rho_exo * c_s
+        @test isapprox(loss_rate_hydro, expected_loss_hydro; rtol=1e-10)
+
         # Zero density gives zero loss rate
         @test iszero(compute_jeans_mass_loss_rate(M_50km, R_50km, T_200, MASS_H2O_KG, 0.0))
+
+        # Hermite spline transition continuity across lambda in [1.0, 2.0]
+        flux_099 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 0.999; hydrodynamic=true
+        )
+        flux_101 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 1.001; hydrodynamic=true
+        )
+        @test isapprox(flux_099, flux_101; rtol=1e-2)
+
+        flux_199 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 1.999; hydrodynamic=true
+        )
+        flux_201 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 2.001; hydrodynamic=true
+        )
+        @test isapprox(flux_199, flux_201; rtol=1e-2)
+
+        # Monotonicity check across transition: flux decreases as gravity increases
+        flux_10 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 1.0; hydrodynamic=true
+        )
+        flux_15 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 1.5; hydrodynamic=true
+        )
+        flux_20 = compute_jeans_escape_flux(
+            n_exo, T_200, MASS_H2O_KG, 2.0; hydrodynamic=true
+        )
+        @test flux_10 > flux_15 > flux_20
+
+        # Exact consistency between compute_jeans_escape_flux and compute_jeans_mass_loss_rate
+        for test_R in [20_000.0, 50_000.0, 100_000.0, 500_000.0]
+            m_loss = compute_jeans_mass_loss_rate(
+                M_50km, test_R, T_200, MASS_H2O_KG, rho_exo; hydrodynamic=true
+            )
+            lam_test = compute_jeans_parameter(M_50km, test_R, T_200, MASS_H2O_KG)
+            f_test = compute_jeans_escape_flux(
+                n_exo, T_200, MASS_H2O_KG, lam_test; hydrodynamic=true
+            )
+            @test isapprox(m_loss, 4.0 * π * test_R^2 * f_test * MASS_H2O_KG; rtol=1e-12)
+        end
     end
 
     @testset "Atmospheric Scale Height & Surface Pressure" begin
@@ -228,15 +287,27 @@ using Erebus.Physics
         # Exact mass conservation: M_atm + M_escaped == M_init
         @test isapprox(res_decay.M_atm + res_decay.M_escaped_step, M_init; rtol=1e-12)
 
-        # Case 2: Steady venting influx into small body
+        # Case 2: Steady venting influx into small body (pure effusion)
         vent_rate = 100.0 # kg / s
         res_vent = evolve_atmospheric_species_inventory(
-            0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG
+            0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG; hydrodynamic=false
         )
         total_vented = vent_rate * dt_1yr
         @test isapprox(res_vent.M_atm + res_vent.M_escaped_step, total_vented; rtol=1e-12)
         # On a 50 km body, escape is fast, so most vented mass escapes
         @test res_vent.M_escaped_step > res_vent.M_atm
+
+        # Case 2b: Steady venting influx into small body with hydrodynamic blowoff
+        res_vent_hydro = evolve_atmospheric_species_inventory(
+            0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG; hydrodynamic=true
+        )
+        @test isapprox(
+            res_vent_hydro.M_atm + res_vent_hydro.M_escaped_step, total_vented; rtol=1e-12
+        )
+        @test res_vent_hydro.M_escaped_step > res_vent_hydro.M_atm
+        c_s_h2o = sqrt(1.4 * 1.380649e-23 * T_200 / MASS_H2O_KG)
+        k_hydro = c_s_h2o / R_50km
+        @test isapprox(res_vent_hydro.M_atm, vent_rate / k_hydro; rtol=1e-5)
 
         # Case 3: Massive body retention (R = 5000 km, M = 1.3e24 kg)
         R_massive = 5_000_000.0
@@ -377,6 +448,33 @@ using Erebus.Physics
             escape=EscapeConfig(; active=true, R_planet=60000.0),
         )
         @test_throws ArgumentError validate_config(cfg_mismatched_radius)
+
+        cfg_bad_gamma = SimulationConfig(; escape=EscapeConfig(; gamma=0.0))
+        @test_throws ArgumentError validate_config(cfg_bad_gamma)
+
+        cfg_bad_species = SimulationConfig(;
+            escape=EscapeConfig(; species=:unsupported_gas)
+        )
+        @test_throws ArgumentError validate_config(cfg_bad_species)
+
+        cfg_bad_species_list = SimulationConfig(;
+            escape=EscapeConfig(; species_list=[:H2O, :invalid_gas])
+        )
+        @test_throws ArgumentError validate_config(cfg_bad_species_list)
+
+        cfg_mismatched_venting_escape_multi = SimulationConfig(;
+            venting=VentingConfig(; active=true, species=:CO2),
+            escape=EscapeConfig(;
+                active=true, multi_species=true, species_list=[:H2O, :CO]
+            ),
+        )
+        @test_throws ArgumentError validate_config(cfg_mismatched_venting_escape_multi)
+
+        cfg_mismatched_venting_escape_single = SimulationConfig(;
+            venting=VentingConfig(; active=true, species=:CO2),
+            escape=EscapeConfig(; active=true, multi_species=false, species=:H2O),
+        )
+        @test_throws ArgumentError validate_config(cfg_mismatched_venting_escape_single)
     end
 
     @testset "Simulation Loop Integration with Atmospheric Escape" begin

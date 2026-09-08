@@ -468,6 +468,7 @@ function assemble_hydromechanical_lse!(
     xcenter::Real=70000.0,
     ycenter::Real=70000.0,
     P_amb::Real=10.0,
+    venting_species::Symbol=:H2O,
     tk=nothing,
     eta_fluid_surf::Real=1.0e-3,
     L_sub::Real=2.83e6,
@@ -1014,6 +1015,7 @@ function assemble_hydromechanical_lse!(
             xcenter,
             ycenter,
             P_amb;
+            species=venting_species,
             k_vent=k_vent,
             conductance_factor=conductance_factor,
             mode=venting_mode,
@@ -1997,6 +1999,7 @@ function compute_face_venting_permeability(
     T_surf::Real,
     peff::Real,
     sigma_t::Real;
+    species::Symbol=:H2O,
     t_freeze::Real=273.15,
     dt_seal::Real=10.0,
     k_seal_min_ratio::Real=1.0e-6,
@@ -2014,7 +2017,7 @@ function compute_face_venting_permeability(
             gamma=gamma_frac,
             kmax=k_frac_max,
         )
-    elseif ice_sealing
+    elseif ice_sealing && (species === :H2O || species === :water)
         return compute_ice_sealed_permeability(
             k_v,
             T_surf;
@@ -2060,6 +2063,7 @@ function apply_venting_surface_boundary!(
     xcenter::Real,
     ycenter::Real,
     P_amb::Real;
+    species::Symbol=:H2O,
     k_vent::Real=1.0e-11,
     conductance_factor::Real=1.0,
     mode::Symbol=:darcy_sink,
@@ -2142,7 +2146,9 @@ function apply_venting_surface_boundary!(
 
                 T_raw = tk[i_rock, j_rock]
                 T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
-                P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
+                P_vent = compute_venting_pressure(
+                    T_surf, p_amb_val; species=species, L_sub=L_sub
+                )
 
                 # One-sided venting condition: pore fluid must exceed venting pressure
                 if pf !== nothing
@@ -2170,6 +2176,7 @@ function apply_venting_surface_boundary!(
                         T_surf,
                         peff,
                         sigma_t;
+                        species=species,
                         t_freeze=t_freeze,
                         dt_seal=dt_seal,
                         k_seal_min_ratio=k_seal_min_ratio,
@@ -2251,7 +2258,9 @@ function apply_venting_surface_boundary!(
 
                 T_raw = tk[i_rock, j_rock]
                 T_surf = isfinite(T_raw) ? max(T_raw, 1.0e-3) : 1.0e-3
-                P_vent = compute_venting_pressure(T_surf, p_amb_val; L_sub=L_sub)
+                P_vent = compute_venting_pressure(
+                    T_surf, p_amb_val; species=species, L_sub=L_sub
+                )
 
                 # One-sided venting condition: pore fluid must exceed venting pressure
                 if pf !== nothing
@@ -2279,6 +2288,7 @@ function apply_venting_surface_boundary!(
                         T_surf,
                         peff,
                         sigma_t;
+                        species=species,
                         t_freeze=t_freeze,
                         dt_seal=dt_seal,
                         k_seal_min_ratio=k_seal_min_ratio,

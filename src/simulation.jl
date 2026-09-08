@@ -183,6 +183,12 @@ function save_state(
     Xfem=nothing,
     Xfem0=nothing,
     Xfe_bulk=nothing,
+    M_atm_species::Union{Nothing,Dict{Symbol,Float64}}=nothing,
+    M_escaped_species::Union{Nothing,Dict{Symbol,Float64}}=nothing,
+    XH2Om=nothing,
+    XCm=nothing,
+    XNm=nothing,
+    XSm=nothing,
 )
     # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -353,6 +359,8 @@ function save_state(
         alphasolidcur,
         alphafluidcur,
         (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
+        (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
+        (M_atm_species !== nothing ? (; M_atm_species, M_escaped_species) : (;))...,
     )
     # end # @timeit to "save_state"
     return nothing
@@ -590,6 +598,20 @@ function simulation_loop(
     Xfe_bulk = nothing
     Xfe_bulk_step_start = nothing
     Xfem_step_start = nothing
+    XH2Om = nothing
+    XCm = nothing
+    XNm = nothing
+    XSm = nothing
+    M_atm_species = if cfg.escape.multi_species
+        Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+    else
+        nothing
+    end
+    M_escaped_species = if cfg.escape.multi_species
+        Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+    else
+        nothing
+    end
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
@@ -601,6 +623,20 @@ function simulation_loop(
         end
         if haskey(ckpt, "M_escaped_total")
             M_escaped_total = Float64(ckpt["M_escaped_total"])
+        end
+        if cfg.escape.multi_species
+            if haskey(ckpt, "M_atm_species")
+                raw_atm = ckpt["M_atm_species"]
+                M_atm_species = Dict{Symbol,Float64}(
+                    Symbol(k) => Float64(v) for (k, v) in pairs(raw_atm)
+                )
+            end
+            if haskey(ckpt, "M_escaped_species")
+                raw_esc = ckpt["M_escaped_species"]
+                M_escaped_species = Dict{Symbol,Float64}(
+                    Symbol(k) => Float64(v) for (k, v) in pairs(raw_esc)
+                )
+            end
         end
         if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
             (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
@@ -738,6 +774,22 @@ function simulation_loop(
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
         end
+        if cfg.volatiles.active
+            if haskey(ckpt, "XH2Om")
+                XH2Om = Vector{Float64}(ckpt["XH2Om"])
+                XCm = Vector{Float64}(ckpt["XCm"])
+                XNm = Vector{Float64}(ckpt["XNm"])
+                XSm = Vector{Float64}(ckpt["XSm"])
+            else
+                (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
+                    marknum;
+                    initial_water_wtpct=cfg.volatiles.initial_water_wtpct,
+                    initial_carbon_ppm=cfg.volatiles.initial_carbon_ppm,
+                    initial_nitrogen_ppm=cfg.volatiles.initial_nitrogen_ppm,
+                    initial_sulfur_ppm=cfg.volatiles.initial_sulfur_ppm,
+                )
+            end
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -750,6 +802,15 @@ function simulation_loop(
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
+        end
+        if cfg.volatiles.active
+            (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
+                marknum;
+                initial_water_wtpct=cfg.volatiles.initial_water_wtpct,
+                initial_carbon_ppm=cfg.volatiles.initial_carbon_ppm,
+                initial_nitrogen_ppm=cfg.volatiles.initial_nitrogen_ppm,
+                initial_sulfur_ppm=cfg.volatiles.initial_sulfur_ppm,
+            )
         end
         define_markers!(
             xm,
@@ -901,6 +962,12 @@ function simulation_loop(
             Xfem=Xfem,
             Xfem0=Xfem0,
             Xfe_bulk=Xfe_bulk,
+            M_atm_species=M_atm_species,
+            M_escaped_species=M_escaped_species,
+            XH2Om=XH2Om,
+            XCm=XCm,
+            XNm=XNm,
+            XSm=XSm,
         )
     end
 
@@ -1101,6 +1168,12 @@ function simulation_loop(
                         L_metal_val=L_metal_val,
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
+                        volatiles_active=cfg.volatiles.active,
+                        volatiles_cfg=cfg.volatiles,
+                        XH2Om=XH2Om,
+                        XCm=XCm,
+                        XNm=XNm,
+                        XSm=XSm,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1273,6 +1346,12 @@ function simulation_loop(
                     L_metal_val=L_metal_val,
                     k_metal_val=k_metal_val,
                     rhocp_metal_val=rhocp_metal_val,
+                    volatiles_active=cfg.volatiles.active,
+                    volatiles_cfg=cfg.volatiles,
+                    XH2Om=XH2Om,
+                    XCm=XCm,
+                    XNm=XNm,
+                    XSm=XSm,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(
@@ -1601,6 +1680,7 @@ function simulation_loop(
                     xcenter=xcenter_val,
                     ycenter=ycenter_val,
                     P_amb=P_amb_eff,
+                    venting_species=cfg.venting.species,
                     tk=tk1,
                     eta_fluid_surf=etafluidmm[2],
                     L_sub=cfg.venting.L_sublimation,
@@ -1770,6 +1850,7 @@ function simulation_loop(
                     xcenter_val,
                     ycenter_val,
                     P_amb_eff;
+                    species=cfg.venting.species,
                     k_vent=cfg.venting.k_vent,
                     conductance_factor=cfg.venting.conductance_factor,
                     mode=cfg.venting.mode,
@@ -2095,18 +2176,47 @@ function simulation_loop(
                 delta_m_vent_3d = delta_m_vent * L_3D_equiv
             end
             M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
-            esc_res = evolve_atmospheric_species_inventory(
-                M_atm_total,
-                M_vent_rate,
-                dt,
-                cfg.escape.M_planet,
-                cfg.escape.R_planet,
-                cfg.escape.T_exobase,
-                get_species_molecular_mass(cfg.escape.species);
-                R_exobase=cfg.escape.R_exobase,
-            )
-            M_atm_total = esc_res.M_atm
-            M_escaped_total += esc_res.M_escaped_step
+            if cfg.escape.multi_species &&
+                M_atm_species !== nothing &&
+                M_escaped_species !== nothing
+                for sp in cfg.escape.species_list
+                    m_sp = get_species_molecular_mass(sp)
+                    v_rate_sp = (sp == cfg.venting.species) ? M_vent_rate : 0.0
+                    prev_sp = get(M_atm_species, sp, 0.0)
+                    esc_sp = evolve_atmospheric_species_inventory(
+                        prev_sp,
+                        v_rate_sp,
+                        dt,
+                        cfg.escape.M_planet,
+                        cfg.escape.R_planet,
+                        cfg.escape.T_exobase,
+                        m_sp;
+                        R_exobase=cfg.escape.R_exobase,
+                        gamma=cfg.escape.gamma,
+                        hydrodynamic=cfg.escape.hydrodynamic,
+                    )
+                    M_atm_species[sp] = esc_sp.M_atm
+                    M_escaped_species[sp] =
+                        get(M_escaped_species, sp, 0.0) + esc_sp.M_escaped_step
+                end
+                M_atm_total = sum(values(M_atm_species))
+                M_escaped_total = sum(values(M_escaped_species))
+            else
+                esc_res = evolve_atmospheric_species_inventory(
+                    M_atm_total,
+                    M_vent_rate,
+                    dt,
+                    cfg.escape.M_planet,
+                    cfg.escape.R_planet,
+                    cfg.escape.T_exobase,
+                    get_species_molecular_mass(cfg.escape.species);
+                    R_exobase=cfg.escape.R_exobase,
+                    gamma=cfg.escape.gamma,
+                    hydrodynamic=cfg.escape.hydrodynamic,
+                )
+                M_atm_total = esc_res.M_atm
+                M_escaped_total += esc_res.M_escaped_step
+            end
         end
         phinewm .= phim
 
@@ -2197,6 +2307,10 @@ function simulation_loop(
             Xfem=Xfem,
             Xfem0=Xfem0,
             Xfe_bulk=Xfe_bulk,
+            XH2Om=XH2Om,
+            XCm=XCm,
+            XNm=XNm,
+            XSm=XSm,
         )
         if coreformation_active_val
             if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
@@ -2327,6 +2441,12 @@ function simulation_loop(
                 Xfem=Xfem,
                 Xfem0=Xfem0,
                 Xfe_bulk=Xfe_bulk,
+                M_atm_species=M_atm_species,
+                M_escaped_species=M_escaped_species,
+                XH2Om=XH2Om,
+                XCm=XCm,
+                XNm=XNm,
+                XSm=XSm,
             )
         end
         # ---------------------------------------------------------------------

@@ -1761,7 +1761,82 @@ end
 const compute_ice_vapor_pressure = compute_water_vapor_pressure
 
 """
-    compute_venting_pressure(T_surf::Real, P_amb::Real; P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5)::Float64
+Compute equilibrium saturation vapor pressure [Pa] for volatile species at temperature T_K.
+
+Supported species:
+- `:H2O`: Water ice / liquid sublimation & vapor pressure (Clausius-Clapeyron)
+- `:CO2`: Carbon dioxide sublimation vapor pressure
+- `:CH4`: Methane vapor pressure
+- `:CO`: Carbon monoxide vapor pressure
+- `:N2`: Molecular nitrogen vapor pressure
+- `:H2`: Molecular hydrogen (hyper-volatile / supercritical at T >= 33 K)
+- `:NH3`: Ammonia vapor pressure
+- `:H2S`: Hydrogen sulfide vapor pressure
+- `:SO2`: Sulfur dioxide vapor pressure
+- `:S2`: Diatomic sulfur vapor pressure
+"""
+function compute_species_vapor_pressure(species::Symbol, T_K::Real)::Float64
+    T_val = Float64(T_K)
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
+    end
+    if species === :H2O
+        return compute_water_vapor_pressure(T_val)
+    elseif species === :CO2
+        # Triple point: T0 = 216.58 K, P0 = 5.18e5 Pa, L_sub = 5.71e5 J/kg, Rv = 188.92 J/(kg K)
+        arg = clamp(-(5.71e5 / 188.92) * (1.0 / T_val - 1.0 / 216.58), -100.0, 100.0)
+        return 5.18e5 * exp(arg)
+    elseif species === :CH4
+        # Non-condensible / supercritical above Tc = 190.6 K; triple point: T0 = 90.69 K, P0 = 1.17e4 Pa
+        if T_val >= 190.6
+            return 0.0
+        end
+        arg = clamp(-(5.10e5 / 518.3) * (1.0 / T_val - 1.0 / 90.69), -100.0, 100.0)
+        return 1.17e4 * exp(arg)
+    elseif species === :CO
+        # Non-condensible / supercritical above Tc = 132.9 K; triple point: T0 = 68.15 K, P0 = 1.54e4 Pa
+        if T_val >= 132.9
+            return 0.0
+        end
+        arg = clamp(-(2.97e5 / 296.8) * (1.0 / T_val - 1.0 / 68.15), -100.0, 100.0)
+        return 1.54e4 * exp(arg)
+    elseif species === :N2
+        # Non-condensible / supercritical above Tc = 126.2 K; triple point: T0 = 63.15 K, P0 = 1.25e4 Pa
+        if T_val >= 126.2
+            return 0.0
+        end
+        arg = clamp(-(2.54e5 / 296.8) * (1.0 / T_val - 1.0 / 63.15), -100.0, 100.0)
+        return 1.25e4 * exp(arg)
+    elseif species === :H2
+        # Non-condensible / supercritical above Tc = 33.1 K; triple point: T0 = 13.8 K, P0 = 7.04e3 Pa
+        if T_val >= 33.0
+            return 0.0
+        end
+        arg = clamp(-(4.54e5 / 4124.0) * (1.0 / T_val - 1.0 / 13.8), -100.0, 100.0)
+        return 7.04e3 * exp(arg)
+    elseif species === :NH3
+        # Triple point: T0 = 195.4 K, P0 = 6060.0 Pa, L_sub = 1.70e6 J/kg, Rv = 488.2 J/(kg K)
+        arg = clamp(-(1.70e6 / 488.2) * (1.0 / T_val - 1.0 / 195.4), -100.0, 100.0)
+        return 6060.0 * exp(arg)
+    elseif species === :H2S
+        # Triple point: T0 = 187.6 K, P0 = 2.32e4 Pa, L_sub = 6.98e5 J/kg, Rv = 243.9 J/(kg K)
+        arg = clamp(-(6.98e5 / 243.9) * (1.0 / T_val - 1.0 / 187.6), -100.0, 100.0)
+        return 2.32e4 * exp(arg)
+    elseif species === :SO2
+        # Triple point: T0 = 197.7 K, P0 = 1670.0 Pa, L_sub = 5.25e5 J/kg, Rv = 129.8 J/(kg K)
+        arg = clamp(-(5.25e5 / 129.8) * (1.0 / T_val - 1.0 / 197.7), -100.0, 100.0)
+        return 1670.0 * exp(arg)
+    elseif species === :S2
+        # Boiling / reference: T0 = 718.0 K, P0 = 1.0e5 Pa, L_sub = 1.45e6 J/kg, Rv = 129.6 J/(kg K)
+        arg = clamp(-(1.45e6 / 129.6) * (1.0 / T_val - 1.0 / 718.0), -100.0, 100.0)
+        return 1.0e5 * exp(arg)
+    else
+        throw(ArgumentError("Unknown volatile species: $species"))
+    end
+end
+
+"""
+    compute_venting_pressure(T_surf::Real, P_amb::Real; species::Symbol=:H2O, P0::Real=611.66, T0::Real=273.16, L_sub::Real=2.83e6, Rv::Real=461.5)::Float64
 
 Compute effective boundary venting fluid pressure P_vent [Pa] at a planetesimal surface:
 
@@ -1776,18 +1851,26 @@ sets the effective boundary venting pressure.
 - `T_surf`: Planetesimal surface temperature [K]
 - `P_amb`: Ambient surrounding gas pressure [Pa]
 
+# Keyword Arguments
+- `species`: Volatile species identifier (default: `:H2O`)
+
 # Returns
 - `P_vent`: Effective venting boundary pressure [Pa]
 """
 function compute_venting_pressure(
     T_surf::Real,
     P_amb::Real;
+    species::Symbol=:H2O,
     P0::Real=611.66,
     T0::Real=273.16,
     L_sub::Real=2.83e6,
     Rv::Real=461.5,
 )::Float64
-    P_sat = compute_water_vapor_pressure(T_surf; P0=P0, T0=T0, L_sub=L_sub, Rv=Rv)
+    P_sat = if species === :H2O
+        compute_water_vapor_pressure(T_surf; P0=P0, T0=T0, L_sub=L_sub, Rv=Rv)
+    else
+        compute_species_vapor_pressure(species, T_surf)
+    end
     return max(Float64(P_amb), P_sat)
 end
 
@@ -2731,6 +2814,55 @@ function compute_carbon_solubility_melt(
 end
 
 """
+Compute composite dissolved carbon concentration in silicate melt from total pressure and speciation.
+
+$(SIGNATURES)
+
+# Arguments
+- `p_total_Pa`: Total pressure [Pa]
+- `T_K`: Temperature [K]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer [log10 units] (default: 0.0)
+
+# Keyword Arguments
+- `co_law`: Law for CO solubility (default: `:armstrong2015`)
+- `ch4_law`: Law for CH4 solubility (default: `:ardia2013`)
+- `co2_law`: Law for CO2 solubility (default: `:dixon1995`)
+- `graphite_saturation`: Whether to enforce graphite saturation ceiling (default: false)
+
+# Returns
+- `NamedTuple`: `(; total_ppm, co_ppm, ch4_ppm, co2_ppm)`
+"""
+function compute_carbon_solubility_melt(
+    p_total_Pa::Real,
+    T_K::Real,
+    delta_IW::Real=0.0;
+    co_law::Symbol=:armstrong2015,
+    ch4_law::Symbol=:ardia2013,
+    co2_law::Symbol=:dixon1995,
+    graphite_saturation::Bool=false,
+)::@NamedTuple{total_ppm::Float64, co_ppm::Float64, ch4_ppm::Float64, co2_ppm::Float64}
+    p_tot = Float64(p_total_Pa)
+    if p_tot <= 0.0
+        return (total_ppm=0.0, co_ppm=0.0, ch4_ppm=0.0, co2_ppm=0.0)
+    end
+    spec = solve_chnos_speciation(
+        p_tot, T_K, delta_IW; graphite_saturation=graphite_saturation
+    )
+    return compute_carbon_solubility_melt(
+        spec.p_CO_Pa,
+        spec.p_CH4_Pa,
+        spec.p_CO2_Pa,
+        p_tot,
+        T_K;
+        co_law=co_law,
+        ch4_law=ch4_law,
+        co2_law=co2_law,
+        graphite_saturation=graphite_saturation,
+        delta_IW=delta_IW,
+    )
+end
+
+"""
 Compute maximum carbon fugacities at graphite saturation (a_C = 1).
 
 $(SIGNATURES)
@@ -2923,13 +3055,201 @@ function compute_scss(
 end
 
 """
+Compute equilibrium volatile exsolution from silicate melt for H-C-N-S volatile species.
+
+$(SIGNATURES)
+
+When silicate melting occurs (`F_melt > 0`), dissolved volatiles partition into the melt phase.
+If the volatile concentration in the melt exceeds the saturation solubility at local pore pressure `P_Pa`
+and temperature `T_K`, the excess volatile mass exsolves into the pore fluid phase.
+
+# Arguments
+- `F_melt`: Silicate melt volume/mass fraction in [0, 1]
+- `P_Pa`: Local pore fluid / ambient pressure [Pa]
+- `T_K`: Local temperature [K]
+- `w_H2O_bulk`: Bulk rock water mass fraction [-] (e.g. 0.01 for 1 wt%)
+- `C_C_bulk_ppm`: Bulk rock carbon concentration [ppm]
+- `C_N_bulk_ppm`: Bulk rock nitrogen concentration [ppm]
+- `C_S_bulk_ppm`: Bulk rock sulfur concentration [ppm]
+- `delta_IW`: Oxygen fugacity offset relative to IW buffer
+
+# Keyword Arguments
+- `water_law`: Water solubility law (default: `:burnham_dixon`)
+- `water_As`: Water solubility coefficient (default: 0.40)
+- `carbon_active`: Whether carbon solubility is modeled (default: false)
+- `co_law`: Carbon monoxide solubility law (default: `:armstrong2015`)
+- `ch4_law`: Methane solubility law (default: `:ardia2013`)
+- `co2_law`: Carbon dioxide solubility law (default: `:dixon1995`)
+- `nitrogen_law`: Nitrogen solubility law (default: `:dasgupta2022`)
+- `nitrogen_henry`: Nitrogen Henry coefficient (default: 0.40)
+- `nitrogen_nitride`: Nitrogen nitride capacity (default: 1.0e-3)
+- `sulfur_active`: Whether sulfur solubility is modeled (default: false)
+- `sulfide_law`: Sulfide solubility law (default: `:boulliung2023`)
+- `graphite_saturation`: Whether carbon is capped at graphite saturation (default: true)
+
+# Returns
+- `NamedTuple`:
+  - `w_H2O_ex`: Exsolved water mass fraction [-]
+  - `w_C_ex`: Exsolved carbon mass fraction [-]
+  - `w_N_ex`: Exsolved nitrogen mass fraction [-]
+  - `w_S_ex`: Exsolved sulfur mass fraction [-]
+  - `w_total_ex`: Total exsolved volatile mass fraction [-]
+  - `w_H2O_diss`: Retained dissolved water mass fraction [-]
+  - `C_C_diss_ppm`: Retained dissolved carbon concentration [ppm]
+  - `C_N_diss_ppm`: Retained dissolved nitrogen concentration [ppm]
+  - `C_S_diss_ppm`: Retained dissolved sulfur concentration [ppm]
+  - `z_H`, `z_C`, `z_N`, `z_S`: Elemental atom fractions of the exsolved gas
+"""
+function compute_volatile_exsolution(
+    F_melt::Real,
+    P_Pa::Real,
+    T_K::Real,
+    w_H2O_bulk::Real,
+    C_C_bulk_ppm::Real,
+    C_N_bulk_ppm::Real,
+    C_S_bulk_ppm::Real,
+    delta_IW::Real;
+    water_law::Symbol=:burnham_dixon,
+    water_As::Real=0.40,
+    carbon_active::Bool=false,
+    co_law::Symbol=:armstrong2015,
+    ch4_law::Symbol=:ardia2013,
+    co2_law::Symbol=:dixon1995,
+    nitrogen_law::Symbol=:dasgupta2022,
+    nitrogen_henry::Real=0.40,
+    nitrogen_nitride::Real=1.0e-3,
+    sulfur_active::Bool=false,
+    sulfide_law::Symbol=:boulliung2023,
+    graphite_saturation::Bool=true,
+)::@NamedTuple{
+    w_H2O_ex::Float64,
+    w_C_ex::Float64,
+    w_N_ex::Float64,
+    w_S_ex::Float64,
+    w_total_ex::Float64,
+    w_H2O_diss::Float64,
+    C_C_diss_ppm::Float64,
+    C_N_diss_ppm::Float64,
+    C_S_diss_ppm::Float64,
+    z_H::Float64,
+    z_C::Float64,
+    z_N::Float64,
+    z_S::Float64,
+}
+    F_m = clamp(Float64(F_melt), 0.0, 1.0)
+    P_val = max(Float64(P_Pa), 0.0)
+    T_val = Float64(T_K)
+    d_IW = Float64(delta_IW)
+    w_H2O = max(Float64(w_H2O_bulk), 0.0)
+    C_C = max(Float64(C_C_bulk_ppm), 0.0)
+    C_N = max(Float64(C_N_bulk_ppm), 0.0)
+    C_S = max(Float64(C_S_bulk_ppm), 0.0)
+
+    if F_m <= 0.0 || T_val <= 0.0
+        return (
+            w_H2O_ex=0.0,
+            w_C_ex=0.0,
+            w_N_ex=0.0,
+            w_S_ex=0.0,
+            w_total_ex=0.0,
+            w_H2O_diss=w_H2O,
+            C_C_diss_ppm=C_C,
+            C_N_diss_ppm=C_N,
+            C_S_diss_ppm=C_S,
+            z_H=0.80,
+            z_C=0.15,
+            z_N=0.03,
+            z_S=0.02,
+        )
+    end
+
+    # 1. Water solubility
+    S_H2O_wtpct = compute_water_solubility_melt(P_val; As=water_As, law=water_law)
+    S_H2O_frac = S_H2O_wtpct * 0.01
+    cap_H2O = F_m * S_H2O_frac
+    w_H2O_ex = max(0.0, w_H2O - cap_H2O)
+    w_H2O_diss = min(w_H2O, cap_H2O)
+
+    # 2. Nitrogen solubility
+    S_N_res = compute_nitrogen_solubility_melt(
+        P_val, d_IW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
+    )
+    cap_N = F_m * S_N_res.total_ppm
+    C_N_ex = max(0.0, C_N - cap_N)
+    C_N_diss = min(C_N, cap_N)
+    w_N_ex = C_N_ex * 1.0e-6
+
+    # 3. Carbon solubility
+    w_C_ex = 0.0
+    C_C_diss = C_C
+    if carbon_active
+        S_C_res = compute_carbon_solubility_melt(
+            P_val,
+            T_val,
+            d_IW;
+            co_law=co_law,
+            ch4_law=ch4_law,
+            co2_law=co2_law,
+            graphite_saturation=graphite_saturation,
+        )
+        cap_C = F_m * S_C_res.total_ppm
+        C_C_ex = max(0.0, C_C - cap_C)
+        C_C_diss = min(C_C, cap_C)
+        w_C_ex = C_C_ex * 1.0e-6
+    end
+
+    # 4. Sulfur solubility
+    w_S_ex = 0.0
+    C_S_diss = C_S
+    if sulfur_active
+        S_S_ppm = compute_sulfur_solubility_melt(P_val, T_val, d_IW; law=sulfide_law)
+        cap_S = F_m * S_S_ppm
+        C_S_ex = max(0.0, C_S - cap_S)
+        C_S_diss = min(C_S, cap_S)
+        w_S_ex = C_S_ex * 1.0e-6
+    end
+
+    w_total_ex = w_H2O_ex + w_C_ex + w_N_ex + w_S_ex
+
+    # Elemental atom counts of exsolved gas
+    mol_H = 2.0 * (w_H2O_ex / 0.01801528)
+    mol_C = w_C_ex / 0.012011
+    mol_N = w_N_ex / 0.014007
+    mol_S = w_S_ex / 0.032065
+    mol_tot = mol_H + mol_C + mol_N + mol_S
+
+    z_H, z_C, z_N, z_S = if mol_tot > 0.0
+        (mol_H / mol_tot, mol_C / mol_tot, mol_N / mol_tot, mol_S / mol_tot)
+    else
+        (0.80, 0.15, 0.03, 0.02)
+    end
+
+    return (
+        w_H2O_ex=w_H2O_ex,
+        w_C_ex=w_C_ex,
+        w_N_ex=w_N_ex,
+        w_S_ex=w_S_ex,
+        w_total_ex=w_total_ex,
+        w_H2O_diss=w_H2O_diss,
+        C_C_diss_ppm=C_C_diss,
+        C_N_diss_ppm=C_N_diss,
+        C_S_diss_ppm=C_S_diss,
+        z_H=z_H,
+        z_C=z_C,
+        z_N=z_N,
+        z_S=z_S,
+    )
+end
+
+"""
 Solve homogeneous gas-phase chemical equilibrium for the C-H-O-N-S volatile system.
 
 $(SIGNATURES)
 
 Given elemental gas fractions `z_H, z_C, z_N, z_S`, total pressure `p_total_Pa`, melt temperature `T_K`,
 and oxygen fugacity offset `delta_IW`, solves for partial pressures of major outgassed species:
-`H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2`.
+`H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2` while enforcing Dalton's law of partial
+pressures (∑ p_i = p_total) and simultaneous atomic mass conservation for H, C, N, and S.
 
 # Arguments
 - `p_total_Pa`: Total gas pressure [Pa]
@@ -3010,86 +3330,259 @@ function solve_chnos_speciation(
     log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=d_IW)
     p_tot_bar = p_tot * 1.0e-5
 
-    # 1. Hydrogen speciation: H2 + 1/2 O2 <=> H2O
     logK_H2O = 12700.0 / T - 2.80
-    log_rH = clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
-    rH = 10.0^log_rH
-    pH_tot_bar = nH * p_tot_bar
-    pH2_bar = pH_tot_bar / (1.0 + rH)
-    pH2O_bar = (rH * pH_tot_bar) / (1.0 + rH)
+    r_H = 10.0^clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
 
-    # 2. Carbon speciation: CO + 1/2 O2 <=> CO2, CO + 3 H2 <=> CH4 + H2O
     logK_CO2 = 14800.0 / T - 4.58
-    log_rCO2 = clamp(logK_CO2 + 0.5 * log10_fO2, -100.0, 100.0)
-    rCO2 = 10.0^log_rCO2
+    r_CO2 = 10.0^clamp(logK_CO2 + 0.5 * log10_fO2, -100.0, 100.0)
 
-    logK_CH4 = 11500.0 / T - 12.0
-    log_pH2_term = 2.0 * log10(max(pH2_bar, 1.0e-30))
-    log_rCH4 = clamp(logK_CH4 + log_pH2_term - log_rH, -100.0, 100.0)
-    rCH4 = 10.0^log_rCH4
+    logK_SO2 = 18800.0 / T - 3.80
+    r_SO2 = 10.0^clamp(logK_SO2 + log10_fO2, -100.0, 100.0)
 
-    pC_tot_bar = nC * p_tot_bar
-    denom_C = 1.0 + rCO2 + rCH4
-    pCO_bar = pC_tot_bar / denom_C
-    pCO2_bar = rCO2 * pCO_bar
-    pCH4_bar = rCH4 * pCO_bar
+    # Initial guess for total atomic pressure
+    A_atoms = 2.0 * p_tot_bar
+    pH2 = nH > 0.0 ? (nH * A_atoms) / (2.0 * (1.0 + r_H)) : 0.0
 
-    # Graphite ceiling
-    if graphite_saturation
+    p_CO = 0.0
+    p_CO2 = 0.0
+    p_CH4 = 0.0
+    p_N2 = 0.0
+    p_NH3 = 0.0
+    p_S2 = 0.0
+    p_H2S = 0.0
+    p_SO2 = 0.0
+    p_H2O = 0.0
+
+    # Simultaneous element conservation and Dalton law iteration
+    for outer_iter in 1:100
+        for inner_iter in 1:40
+            log_pH2 = pH2 > 0.0 ? log10(max(pH2, 1.0e-30)) : -100.0
+            r_CH4 = if pH2 > 0.0
+                10.0^clamp(
+                    11500.0 / T - 12.0 + 2.0 * log_pH2 - log10(max(r_H, 1.0e-30)),
+                    -100.0,
+                    100.0,
+                )
+            else
+                0.0
+            end
+            r_NH3 = if pH2 > 0.0
+                10.0^clamp(2800.0 / T - 5.80 + 1.5 * log_pH2, -100.0, 100.0)
+            else
+                0.0
+            end
+            r_H2S = pH2 > 0.0 ? 10.0^clamp(4800.0 / T - 2.50 + log_pH2, -100.0, 100.0) : 0.0
+
+            if nC > 0.0
+                p_CO = (nC * A_atoms) / (1.0 + r_CO2 + r_CH4)
+                p_CO2 = r_CO2 * p_CO
+                p_CH4 = r_CH4 * p_CO
+            else
+                p_CO = 0.0
+                p_CO2 = 0.0
+                p_CH4 = 0.0
+            end
+
+            if nN > 0.0
+                A_N = nN * A_atoms
+                denom_N = r_NH3 + sqrt(r_NH3^2 + 8.0 * A_N)
+                u_N = (2.0 * A_N) / max(denom_N, 1.0e-30)
+                p_N2 = u_N^2
+                p_NH3 = r_NH3 * u_N
+            else
+                p_N2 = 0.0
+                p_NH3 = 0.0
+            end
+
+            if nS > 0.0
+                A_S = nS * A_atoms
+                B_S = r_H2S + r_SO2
+                denom_S = B_S + sqrt(B_S^2 + 8.0 * A_S)
+                v_S = (2.0 * A_S) / max(denom_S, 1.0e-30)
+                p_S2 = v_S^2
+                p_H2S = r_H2S * v_S
+                p_SO2 = r_SO2 * v_S
+            else
+                p_S2 = 0.0
+                p_H2S = 0.0
+                p_SO2 = 0.0
+            end
+
+            if nH > 0.0
+                H_sequestered = 4.0 * p_CH4 + 3.0 * p_NH3 + 2.0 * p_H2S
+                H_avail = max(0.0, nH * A_atoms - H_sequestered)
+                pH2_new = H_avail / (2.0 * (1.0 + r_H))
+                diff = abs(pH2_new - pH2)
+                pH2 = 0.5 * (pH2 + pH2_new)
+                if diff < 1.0e-13 * p_tot_bar
+                    break
+                end
+            else
+                pH2 = 0.0
+                break
+            end
+        end
+
+        p_H2O = r_H * pH2
+        p_calc = pH2 + p_H2O + p_CO + p_CO2 + p_CH4 + p_N2 + p_NH3 + p_H2S + p_S2 + p_SO2
+        err = abs(p_calc - p_tot_bar) / p_tot_bar
+        if err < 1.0e-12
+            break
+        end
+        A_atoms *= (p_tot_bar / p_calc)
+    end
+
+    # If graphite saturation is enabled, verify carbon activity a_C <= 1.
+    # When uncapped p_CO exceeds the graphite saturation ceiling, elemental carbon precipitates
+    # as solid graphite. The gas phase carbon partial pressures are fixed by equilibrium with graphite,
+    # and the remaining pressure is partitioned among volatile elements (H, N, S) preserving their
+    # relative abundances and satisfying Dalton's law exactly.
+    if graphite_saturation && nC > 0.0
         gr = compute_graphite_saturation_fugacity(T, log10_fO2)
-        if pCO_bar > gr.f_CO_max_bar
-            pCO_bar = gr.f_CO_max_bar
-            pCO2_bar = min(rCO2 * pCO_bar, gr.f_CO2_max_bar)
-            pCH4_bar = min(pCH4_bar, rCH4 * pCO_bar)
+        f_co_max_bar = gr.f_CO_max_bar
+        if p_CO > f_co_max_bar
+            p_CO_sat_bar = f_co_max_bar
+            p_CO2_sat_bar = r_CO2 * p_CO_sat_bar
+            z_HNS = Float64(z_H) + Float64(z_N) + Float64(z_S)
+            if z_HNS <= 0.0
+                p_C_tot_bar = p_CO_sat_bar + p_CO2_sat_bar
+                scale_sat = p_tot_bar / max(p_C_tot_bar, 1.0e-30)
+                return (
+                    p_H2_Pa=0.0,
+                    p_H2O_Pa=0.0,
+                    p_CO_Pa=p_CO_sat_bar * scale_sat * 1.0e5,
+                    p_CO2_Pa=p_CO2_sat_bar * scale_sat * 1.0e5,
+                    p_CH4_Pa=0.0,
+                    p_N2_Pa=0.0,
+                    p_NH3_Pa=0.0,
+                    p_H2S_Pa=0.0,
+                    p_S2_Pa=0.0,
+                    p_SO2_Pa=0.0,
+                )
+            end
+
+            # Solve for pH2 with monotonic 1D bisection
+            function _sat_residual(test_pH2_bar)
+                l_pH2 = test_pH2_bar > 0.0 ? log10(max(test_pH2_bar, 1.0e-30)) : -100.0
+                r_ch4_test = if test_pH2_bar > 0.0
+                    10.0^clamp(
+                        11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
+                        -100.0,
+                        100.0,
+                    )
+                else
+                    0.0
+                end
+                p_C_test = p_CO_sat_bar + p_CO2_sat_bar + r_ch4_test * p_CO_sat_bar
+                p_rem_test = p_tot_bar - p_C_test
+                if p_rem_test <= 0.0
+                    return p_C_test - p_tot_bar
+                end
+                hns_res = solve_chnos_speciation(
+                    p_rem_test * 1.0e5,
+                    T,
+                    d_IW;
+                    z_H=z_H,
+                    z_C=0.0,
+                    z_N=z_N,
+                    z_S=z_S,
+                    graphite_saturation=false,
+                )
+                return test_pH2_bar - (hns_res.p_H2_Pa * 1.0e-5)
+            end
+
+            lo_sat = 0.0
+            hi_sat = p_tot_bar
+            for _ in 1:60
+                mid_sat = 0.5 * (lo_sat + hi_sat)
+                if _sat_residual(mid_sat) > 0.0
+                    hi_sat = mid_sat
+                else
+                    lo_sat = mid_sat
+                end
+            end
+            best_pH2_bar = 0.5 * (lo_sat + hi_sat)
+            l_pH2_final = best_pH2_bar > 0.0 ? log10(max(best_pH2_bar, 1.0e-30)) : -100.0
+            r_ch4_final = if best_pH2_bar > 0.0
+                10.0^clamp(
+                    11500.0 / T - 12.0 + 2.0 * l_pH2_final - log10(max(r_H, 1.0e-30)),
+                    -100.0,
+                    100.0,
+                )
+            else
+                0.0
+            end
+            p_CH4_sat_bar = r_ch4_final * p_CO_sat_bar
+            p_C_final = p_CO_sat_bar + p_CO2_sat_bar + p_CH4_sat_bar
+
+            if p_C_final >= p_tot_bar
+                scale_sat = p_tot_bar / p_C_final
+                return (
+                    p_H2_Pa=0.0,
+                    p_H2O_Pa=0.0,
+                    p_CO_Pa=p_CO_sat_bar * scale_sat * 1.0e5,
+                    p_CO2_Pa=p_CO2_sat_bar * scale_sat * 1.0e5,
+                    p_CH4_Pa=p_CH4_sat_bar * scale_sat * 1.0e5,
+                    p_N2_Pa=0.0,
+                    p_NH3_Pa=0.0,
+                    p_H2S_Pa=0.0,
+                    p_S2_Pa=0.0,
+                    p_SO2_Pa=0.0,
+                )
+            end
+
+            p_rem_final_bar = p_tot_bar - p_C_final
+            hns_final = solve_chnos_speciation(
+                p_rem_final_bar * 1.0e5,
+                T,
+                d_IW;
+                z_H=z_H,
+                z_C=0.0,
+                z_N=z_N,
+                z_S=z_S,
+                graphite_saturation=false,
+            )
+            return (
+                p_H2_Pa=hns_final.p_H2_Pa,
+                p_H2O_Pa=hns_final.p_H2O_Pa,
+                p_CO_Pa=p_CO_sat_bar * 1.0e5,
+                p_CO2_Pa=p_CO2_sat_bar * 1.0e5,
+                p_CH4_Pa=p_CH4_sat_bar * 1.0e5,
+                p_N2_Pa=hns_final.p_N2_Pa,
+                p_NH3_Pa=hns_final.p_NH3_Pa,
+                p_H2S_Pa=hns_final.p_H2S_Pa,
+                p_S2_Pa=hns_final.p_S2_Pa,
+                p_SO2_Pa=hns_final.p_SO2_Pa,
+            )
         end
     end
 
-    # 3. Nitrogen speciation: 1/2 N2 + 3/2 H2 <=> NH3
-    # Equilibrium: p_NH3 = r_NH3 * sqrt(p_N2)
-    # Conservation: 2 * p_N2 + p_NH3 = p_N,tot
-    # Quadratic: 2 * u^2 + r_NH3 * u - p_N,tot = 0 where u = sqrt(p_N2)
-    # Root: u = 2 * p_N,tot / (r_NH3 + sqrt(r_NH3^2 + 8 * p_N,tot))
-    logK_NH3 = 2800.0 / T - 5.80
-    log_rNH3 = clamp(logK_NH3 + 1.5 * log10(max(pH2_bar, 1.0e-30)), -100.0, 100.0)
-    rNH3 = 10.0^log_rNH3
-    pN_tot_bar = nN * p_tot_bar
-    denom_N = rNH3 + sqrt(rNH3^2 + 8.0 * pN_tot_bar)
-    u_N = (2.0 * pN_tot_bar) / max(denom_N, 1.0e-30)
-    pN2_bar = u_N^2
-    pNH3_bar = rNH3 * u_N
-
-    # 4. Sulfur speciation: H2 + 1/2 S2 <=> H2S, 1/2 S2 + O2 <=> SO2
-    # Equilibrium: p_H2S = r_H2S * sqrt(p_S2), p_SO2 = r_SO2 * sqrt(p_S2)
-    # Conservation: 2 * p_S2 + p_H2S + p_SO2 = p_S,tot
-    # Quadratic: 2 * v^2 + B_S * v - p_S,tot = 0 where v = sqrt(p_S2), B_S = r_H2S + r_SO2
-    # Root: v = 2 * p_S,tot / (B_S + sqrt(B_S^2 + 8 * p_S,tot))
-    logK_H2S = 4800.0 / T - 2.50
-    log_rH2S = clamp(logK_H2S + log10(max(pH2_bar, 1.0e-30)), -100.0, 100.0)
-    rH2S = 10.0^log_rH2S
-
-    logK_SO2 = 18800.0 / T - 3.80
-    log_rSO2 = clamp(logK_SO2 + log10_fO2, -100.0, 100.0)
-    rSO2 = 10.0^log_rSO2
-
-    pS_tot_bar = nS * p_tot_bar
-    B_S = rH2S + rSO2
-    denom_S = B_S + sqrt(B_S^2 + 8.0 * pS_tot_bar)
-    v_S = (2.0 * pS_tot_bar) / max(denom_S, 1.0e-30)
-    pS2_bar = v_S^2
-    pH2S_bar = rH2S * v_S
-    pSO2_bar = rSO2 * v_S
+    p_calc = pH2 + p_H2O + p_CO + p_CO2 + p_CH4 + p_N2 + p_NH3 + p_H2S + p_S2 + p_SO2
+    if p_calc > 0.0
+        norm = p_tot_bar / p_calc
+        pH2 *= norm
+        p_H2O *= norm
+        p_CO *= norm
+        p_CO2 *= norm
+        p_CH4 *= norm
+        p_N2 *= norm
+        p_NH3 *= norm
+        p_H2S *= norm
+        p_S2 *= norm
+        p_SO2 *= norm
+    end
 
     return (
-        p_H2_Pa=pH2_bar * 1.0e5,
-        p_H2O_Pa=pH2O_bar * 1.0e5,
-        p_CO_Pa=pCO_bar * 1.0e5,
-        p_CO2_Pa=pCO2_bar * 1.0e5,
-        p_CH4_Pa=pCH4_bar * 1.0e5,
-        p_N2_Pa=pN2_bar * 1.0e5,
-        p_NH3_Pa=pNH3_bar * 1.0e5,
-        p_H2S_Pa=pH2S_bar * 1.0e5,
-        p_S2_Pa=pS2_bar * 1.0e5,
-        p_SO2_Pa=pSO2_bar * 1.0e5,
+        p_H2_Pa=pH2 * 1.0e5,
+        p_H2O_Pa=p_H2O * 1.0e5,
+        p_CO_Pa=p_CO * 1.0e5,
+        p_CO2_Pa=p_CO2 * 1.0e5,
+        p_CH4_Pa=p_CH4 * 1.0e5,
+        p_N2_Pa=p_N2 * 1.0e5,
+        p_NH3_Pa=p_NH3 * 1.0e5,
+        p_H2S_Pa=p_H2S * 1.0e5,
+        p_S2_Pa=p_S2 * 1.0e5,
+        p_SO2_Pa=p_SO2 * 1.0e5,
     )
 end
 
@@ -3168,6 +3661,16 @@ const MASS_SO2_KG = 1.063841e-25
 Upper threshold on the Jeans parameter λ above which kinetic effusion is numerically negligible.
 """
 const JEANS_LAMBDA_CUTOFF = 100.0
+
+"""
+Lower threshold on the Jeans parameter λ below which escape is pure hydrodynamic sound-speed blow-off.
+"""
+const HYDRODYNAMIC_ESCAPE_LAMBDA_LOW = 1.0
+
+"""
+Upper threshold on the Jeans parameter λ above which escape transitions fully to kinetic effusion.
+"""
+const HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF = 2.0
 
 """
 Retrieve molecular mass in kilograms for standard planetary volatile species.
@@ -3318,7 +3821,12 @@ $(SIGNATURES)
 - `Phi_Jeans`: Kinetic escape number flux [m^-2 s^-1]
 """
 function compute_jeans_escape_flux(
-    n_exo::Real, T_exo_K::Real, m_species_kg::Real, lambda::Real
+    n_exo::Real,
+    T_exo_K::Real,
+    m_species_kg::Real,
+    lambda::Real;
+    gamma::Real=1.4,
+    hydrodynamic::Bool=true,
 )::Float64
     n_val = Float64(n_exo)
     if !isfinite(n_val)
@@ -3335,7 +3843,24 @@ function compute_jeans_escape_flux(
     if lam_val > JEANS_LAMBDA_CUTOFF
         return 0.0
     end
-    v_th = compute_thermal_velocity(T_exo_K, m_species_kg)
+    T_val = Float64(T_exo_K)
+    m_val = Float64(m_species_kg)
+    if hydrodynamic && lam_val < HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF
+        c_s = sqrt(Float64(gamma) * BOLTZMANN_CONSTANT * T_val / m_val)
+        flux_hydro = n_val * c_s
+        v_th = compute_thermal_velocity(T_val, m_val)
+        effusion_factor = (1.0 + lam_val) * exp(-lam_val)
+        flux_eff = (n_val * v_th / (2.0 * sqrt(π))) * effusion_factor
+        s = clamp(
+            (lam_val - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
+            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
+            0.0,
+            1.0,
+        )
+        w = s * s * (3.0 - 2.0 * s)
+        return (1.0 - w) * flux_hydro + w * flux_eff
+    end
+    v_th = compute_thermal_velocity(T_val, m_val)
     effusion_factor = (1.0 + lam_val) * exp(-lam_val)
     return (n_val * v_th / (2.0 * sqrt(π))) * effusion_factor
 end
@@ -3354,11 +3879,21 @@ $(SIGNATURES)
 - `m_species_kg::Real`: Particle molecular mass [kg]
 - `rho_exo_kg_m3::Real`: Gas mass density at exobase [kg/m^3]
 
+# Keyword Arguments
+- `gamma::Real`: Adiabatic index for hydrodynamic blow-off regime (default: 1.4)
+- `hydrodynamic::Bool`: Enable hydrodynamic sound speed escape when λ < 2.0 (default: true)
+
 # Returns
 - `loss_rate`: Mass escape rate [kg/s]
 """
 function compute_jeans_mass_loss_rate(
-    M_planet::Real, R_exo_m::Real, T_exo_K::Real, m_species_kg::Real, rho_exo_kg_m3::Real
+    M_planet::Real,
+    R_exo_m::Real,
+    T_exo_K::Real,
+    m_species_kg::Real,
+    rho_exo_kg_m3::Real;
+    gamma::Real=1.4,
+    hydrodynamic::Bool=true,
 )::Float64
     rho_val = Float64(rho_exo_kg_m3)
     if !isfinite(rho_val)
@@ -3375,9 +3910,27 @@ function compute_jeans_mass_loss_rate(
     if lam > JEANS_LAMBDA_CUTOFF
         return 0.0
     end
-    v_th = compute_thermal_velocity(T_exo_K, m_species_kg)
-    effusion_factor = (1.0 + lam) * exp(-lam)
     area = 4.0 * π * R_val^2
+    T_val = Float64(T_exo_K)
+    m_val = Float64(m_species_kg)
+    if hydrodynamic && lam < HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF
+        c_s = sqrt(Float64(gamma) * BOLTZMANN_CONSTANT * T_val / m_val)
+        flux_hydro = rho_val * c_s
+        v_th = compute_thermal_velocity(T_val, m_val)
+        effusion_factor = (1.0 + lam) * exp(-lam)
+        flux_eff = rho_val * (v_th / (2.0 * sqrt(π))) * effusion_factor
+        s = clamp(
+            (lam - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
+            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
+            0.0,
+            1.0,
+        )
+        w = s * s * (3.0 - 2.0 * s)
+        mass_flux = (1.0 - w) * flux_hydro + w * flux_eff
+        return area * mass_flux
+    end
+    v_th = compute_thermal_velocity(T_val, m_val)
+    effusion_factor = (1.0 + lam) * exp(-lam)
     mass_flux = rho_val * (v_th / (2.0 * sqrt(π))) * effusion_factor
     return area * mass_flux
 end
@@ -3481,6 +4034,10 @@ Mass is conserved to machine precision:
 - `m_species::Real`: Molecular mass of volatile species [kg]
 - `R_exobase::Real=R_planet`: Exobase radius for escape evaluation [m]
 
+# Keyword Arguments
+- `gamma::Real`: Adiabatic index for hydrodynamic blow-off regime (default: 1.4)
+- `hydrodynamic::Bool`: Enable hydrodynamic blow-off when λ < 2.0 (default: true)
+
 # Returns
 - `NamedTuple`: `(; M_atm, M_escaped_step, escape_rate)`
 """
@@ -3493,6 +4050,8 @@ function evolve_atmospheric_species_inventory(
     T_exo::Real,
     m_species::Real;
     R_exobase::Real=R_planet,
+    gamma::Real=1.4,
+    hydrodynamic::Bool=true,
 )::@NamedTuple{M_atm::Float64, M_escaped_step::Float64, escape_rate::Float64}
     M_prev = Float64(M_atm_prev)
     if !isfinite(M_prev) || M_prev < 0.0
@@ -3525,12 +4084,26 @@ function evolve_atmospheric_species_inventory(
 
     lam = compute_jeans_parameter(M_planet, R_exo_val, T_exo, m_species)
     v_th = compute_thermal_velocity(T_exo, m_species)
-    H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
 
     # Compute loss rate coefficient k_escape [s^-1]
     k_escape = if lam > JEANS_LAMBDA_CUTOFF
         0.0
+    elseif hydrodynamic && lam < HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF
+        c_s = sqrt(Float64(gamma) * BOLTZMANN_CONSTANT * Float64(T_exo) / Float64(m_species))
+        k_hydro = c_s / R_exo_val
+        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
+        effusion_factor = (1.0 + lam) * exp(-lam)
+        k_eff = (v_th / (2.0 * sqrt(π) * H)) * effusion_factor
+        s = clamp(
+            (lam - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
+            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
+            0.0,
+            1.0,
+        )
+        w = s * s * (3.0 - 2.0 * s)
+        (1.0 - w) * k_hydro + w * k_eff
     else
+        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
         effusion_factor = (1.0 + lam) * exp(-lam)
         (v_th / (2.0 * sqrt(π) * H)) * effusion_factor
     end

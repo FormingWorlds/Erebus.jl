@@ -2,6 +2,8 @@ using Test
 using Erebus
 using Erebus.Config
 using Erebus.Physics
+using Erebus.Particles
+using JLD2
 
 @testset "HCNS Volatile Solubility, Speciation, and Saturation Ceilings" begin
     @testset "Extended Water Solubility Laws" begin
@@ -356,21 +358,49 @@ using Erebus.Physics
         @test spec_ox.p_CO2_Pa > spec_ox.p_CO_Pa
         @test spec_ox.p_SO2_Pa > spec_red.p_SO2_Pa
 
-        # Elemental conservation checks
-        pN_tot = 0.03 * p_tot
-        pS_tot = 0.02 * p_tot
-        # Nitrogen conservation: 2 * p_N2 + p_NH3 = pN_tot
-        @test isapprox(2.0 * spec_red.p_N2_Pa + spec_red.p_NH3_Pa, pN_tot; rtol=1e-10)
-        @test isapprox(2.0 * spec_ox.p_N2_Pa + spec_ox.p_NH3_Pa, pN_tot; rtol=1e-10)
-        # Sulfur conservation: 2 * p_S2 + p_H2S + p_SO2 = pS_tot
-        @test isapprox(
-            2.0 * spec_red.p_S2_Pa + spec_red.p_H2S_Pa + spec_red.p_SO2_Pa,
-            pS_tot;
-            rtol=1e-10,
-        )
-        @test isapprox(
-            2.0 * spec_ox.p_S2_Pa + spec_ox.p_H2S_Pa + spec_ox.p_SO2_Pa, pS_tot; rtol=1e-10
-        )
+        # Dalton's law of partial pressures: sum(p_i) == p_tot
+        sum_p_red =
+            spec_red.p_H2_Pa +
+            spec_red.p_H2O_Pa +
+            spec_red.p_CO_Pa +
+            spec_red.p_CO2_Pa +
+            spec_red.p_CH4_Pa +
+            spec_red.p_N2_Pa +
+            spec_red.p_NH3_Pa +
+            spec_red.p_H2S_Pa +
+            spec_red.p_S2_Pa +
+            spec_red.p_SO2_Pa
+        @test isapprox(sum_p_red, p_tot; rtol=1e-10)
+
+        sum_p_ox =
+            spec_ox.p_H2_Pa +
+            spec_ox.p_H2O_Pa +
+            spec_ox.p_CO_Pa +
+            spec_ox.p_CO2_Pa +
+            spec_ox.p_CH4_Pa +
+            spec_ox.p_N2_Pa +
+            spec_ox.p_NH3_Pa +
+            spec_ox.p_H2S_Pa +
+            spec_ox.p_S2_Pa +
+            spec_ox.p_SO2_Pa
+        @test isapprox(sum_p_ox, p_tot; rtol=1e-10)
+
+        # Simultaneous atomic mass conservation checks (z_H=0.80, z_C=0.15, z_N=0.03, z_S=0.02)
+        for sp in (spec_red, spec_ox)
+            A_H =
+                2.0 * (sp.p_H2_Pa + sp.p_H2O_Pa) +
+                4.0 * sp.p_CH4_Pa +
+                3.0 * sp.p_NH3_Pa +
+                2.0 * sp.p_H2S_Pa
+            A_C = sp.p_CO_Pa + sp.p_CO2_Pa + sp.p_CH4_Pa
+            A_N = 2.0 * sp.p_N2_Pa + sp.p_NH3_Pa
+            A_S = 2.0 * sp.p_S2_Pa + sp.p_H2S_Pa + sp.p_SO2_Pa
+            A_tot = A_H + A_C + A_N + A_S
+            @test isapprox(A_H / A_tot, 0.80; rtol=1e-10)
+            @test isapprox(A_C / A_tot, 0.15; rtol=1e-10)
+            @test isapprox(A_N / A_tot, 0.03; rtol=1e-10)
+            @test isapprox(A_S / A_tot, 0.02; rtol=1e-10)
+        end
 
         # Low temperature stability (no NaN, all non-negative and finite)
         spec_cold5 = solve_chnos_speciation(1.0e7, 5.0, 0.0)
@@ -504,5 +534,223 @@ using Erebus.Physics
                 volatiles=VolatilesConfig(melt_feo_wtpct=-1.0),
             ),
         )
+    end
+
+    @testset "Volatiles Marker & Simulation Integration" begin
+        # 1. Marker volatile properties initialization
+        marknum = 100
+        (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
+            marknum;
+            initial_water_wtpct=2.0,
+            initial_carbon_ppm=750.0,
+            initial_nitrogen_ppm=80.0,
+            initial_sulfur_ppm=1200.0,
+        )
+        @test length(XH2Om) == marknum
+        @test all(isapprox.(XH2Om, 2.0; rtol=1e-12))
+        @test all(isapprox.(XCm, 750.0; rtol=1e-12))
+        @test all(isapprox.(XNm, 80.0; rtol=1e-12))
+        @test all(isapprox.(XSm, 1200.0; rtol=1e-12))
+
+        # 2. update_marker_volatile_exsolution!
+        Fm = fill(0.5, marknum)
+        pfm0 = fill(1.0e7, marknum)
+        tkm = fill(1600.0, marknum)
+        phim = fill(0.05, marknum)
+        cfg_vol = VolatilesConfig(
+            active=true,
+            initial_water_wtpct=2.0,
+            initial_carbon_ppm=750.0,
+            initial_sulfur_ppm=1200.0,
+            carbon_active=true,
+            sulfur_active=true,
+        )
+        dw = update_marker_volatile_exsolution!(
+            Fm, pfm0, tkm, phim, XH2Om, XCm, XNm, XSm; cfg=cfg_vol
+        )
+        @test dw > 0.0
+        # Dissolved water retains melt capacity: 0.5 * 0.40 * sqrt(10) ≈ 0.6325 wt%
+        @test all(isapprox.(XH2Om, 0.6324555; rtol=1e-4))
+        # Total exsolved fraction per marker ~ 0.0144, for 100 markers dw ~ 1.442
+        @test isapprox(dw, 1.44238; rtol=1e-3)
+        # Porosity increases by dw_step * (3000/1000) from 0.05 to ~0.0933
+        @test all(isapprox.(phim, 0.09327; rtol=1e-3))
+
+        # Idempotency test: subsequent call under same conditions yields zero additional exsolution
+        dw_repeat = update_marker_volatile_exsolution!(
+            Fm, pfm0, tkm, phim, XH2Om, XCm, XNm, XSm; cfg=cfg_vol
+        )
+        @test iszero(dw_repeat)
+        @test all(isapprox.(XH2Om, 0.6324555; rtol=1e-4))
+
+        # Decompression test: pressure drop to 1 MPa induces further degassing
+        pfm0_decomp = fill(1.0e6, marknum)
+        dw_decomp = update_marker_volatile_exsolution!(
+            Fm, pfm0_decomp, tkm, phim, XH2Om, XCm, XNm, XSm; cfg=cfg_vol
+        )
+        @test dw_decomp > 0.0
+        # At 1 MPa, solubility is 0.40 * sqrt(1) = 0.40 wt%, with F=0.5 cap is 0.20 wt%
+        @test all(isapprox.(XH2Om, 0.20; rtol=1e-4))
+
+        # Non-melting marker (Fm = 0) does not exsolve
+        XH2O_zero = [2.0]
+        XC_zero = [750.0]
+        XN_zero = [80.0]
+        XS_zero = [1200.0]
+        phi_zero = [0.05]
+        dw_zero = update_marker_volatile_exsolution!(
+            [0.0],
+            [1.0e7],
+            [1600.0],
+            phi_zero,
+            XH2O_zero,
+            XC_zero,
+            XN_zero,
+            XS_zero;
+            cfg=cfg_vol,
+        )
+        @test iszero(dw_zero)
+        @test XH2O_zero[1] ≈ 2.0 rtol=1e-12
+        @test phi_zero[1] ≈ 0.05 rtol=1e-12
+
+        # 3. compute_marker_properties! with volatile exsolution
+        coords = GridCoordinates(15, 15; xsize=100_000.0, ysize=100_000.0)
+        (xm, ym, tm, tkm_m, sxxm, sxym, etavpm, phim_m, phinewm, pfm0_m, XWsolidm, XWsolidm0, Fm_m) = setup_marker_properties(
+            10, coords
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            10
+        )
+        (XH2O_m, XC_m, XN_m, XS_m) = setup_marker_volatile_properties(
+            10; initial_water_wtpct=3.0
+        )
+        hrsolidm_dummy = fill(1.0e-8, 3)
+        hrfluidm_dummy = fill(1.0e-8, 3)
+
+        # Set marker 1 as hot mantle (tm=1, melting)
+        tm[1] = 1
+        tkm_m[1] = 1800.0
+        pfm0_m[1] = 5.0e7
+        phim_m[1] = 0.01
+
+        compute_marker_properties!(
+            1,
+            tm,
+            tkm_m,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolidm_dummy,
+            hrfluidm_dummy,
+            phim_m,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            pm=pfm0_m,
+            Fm=Fm_m,
+            melting_active=true,
+            T_solidus_val=1400.0,
+            T_liquidus_val=2000.0,
+            volatiles_active=true,
+            volatiles_cfg=cfg_vol,
+            XH2Om=XH2O_m,
+            XCm=XC_m,
+            XNm=XN_m,
+            XSm=XS_m,
+        )
+        @test Fm_m[1] > 0.0
+        @test XH2O_m[1] < 3.0
+        @test phim_m[1] > 0.01
+
+        # Set marker 2 as sticky air (tm=3)
+        tm[2] = 3
+        tkm_m[2] = 200.0
+        phim_m[2] = 1.0e-3
+        compute_marker_properties!(
+            2,
+            tm,
+            tkm_m,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolidm_dummy,
+            hrfluidm_dummy,
+            phim_m,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            pm=pfm0_m,
+            Fm=Fm_m,
+            melting_active=true,
+            volatiles_active=true,
+            volatiles_cfg=cfg_vol,
+            XH2Om=XH2O_m,
+            XCm=XC_m,
+            XNm=XN_m,
+            XSm=XS_m,
+        )
+        @test iszero(Fm_m[2])
+        @test XH2O_m[2] ≈ 3.0 rtol=1e-12
+
+        # 4. Multi-species atmospheric evolution & differential loss
+        M_atm_species = Dict{Symbol,Float64}(:H2 => 1.0e12, :CO2 => 1.0e12)
+        M_escaped_species = Dict{Symbol,Float64}(:H2 => 0.0, :CO2 => 0.0)
+        species_list = [:H2, :CO2]
+        dt = 3.15576e7
+        M_p = 1.0e23
+        R_p = 2.0e6
+        T_exo = 250.0
+
+        for sp in species_list
+            m_sp = get_species_molecular_mass(sp)
+            esc_sp = evolve_atmospheric_species_inventory(
+                M_atm_species[sp], 0.0, dt, M_p, R_p, T_exo, m_sp; hydrodynamic=true
+            )
+            M_atm_species[sp] = esc_sp.M_atm
+            M_escaped_species[sp] += esc_sp.M_escaped_step
+        end
+        @test M_atm_species[:H2] < M_atm_species[:CO2]
+        @test M_escaped_species[:H2] > M_escaped_species[:CO2]
+        @test M_atm_species[:H2] + M_escaped_species[:H2] ≈ 1.0e12 rtol=1e-12
+        @test M_atm_species[:CO2] + M_escaped_species[:CO2] ≈ 1.0e12 rtol=1e-12
+
+        # 5. Checkpoint serialization round-trip
+        mktempdir() do tmp_dir
+            ckpt_path = joinpath(tmp_dir, "test_ckpt.jld2")
+            test_atm = Dict{Symbol,Float64}(:H2O => 5.0e10, :CO => 2.0e10)
+            test_esc = Dict{Symbol,Float64}(:H2O => 1.0e9, :CO => 4.0e9)
+            test_XH2O = [1.5, 1.8]
+            test_XC = [400.0, 500.0]
+            test_XN = [40.0, 50.0]
+            test_XS = [900.0, 1100.0]
+
+            JLD2.jldsave(
+                ckpt_path;
+                M_atm_species=test_atm,
+                M_escaped_species=test_esc,
+                XH2Om=test_XH2O,
+                XCm=test_XC,
+                XNm=test_XN,
+                XSm=test_XS,
+            )
+
+            loaded = load_state(ckpt_path)
+            @test loaded["M_atm_species"][:H2O] ≈ 5.0e10 rtol=1e-12
+            @test loaded["M_atm_species"][:CO] ≈ 2.0e10 rtol=1e-12
+            @test loaded["M_escaped_species"][:H2O] ≈ 1.0e9 rtol=1e-12
+            @test loaded["M_escaped_species"][:CO] ≈ 4.0e9 rtol=1e-12
+            @test loaded["XH2Om"] ≈ test_XH2O rtol=1e-12
+            @test loaded["XCm"] ≈ test_XC rtol=1e-12
+            @test loaded["XNm"] ≈ test_XN rtol=1e-12
+            @test loaded["XSm"] ≈ test_XS rtol=1e-12
+        end
     end
 end

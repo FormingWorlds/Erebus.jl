@@ -72,6 +72,10 @@ export Config,
     MASS_S2_KG,
     MASS_SO2_KG,
     JEANS_LAMBDA_CUTOFF,
+    HYDRODYNAMIC_ESCAPE_LAMBDA_LOW,
+    HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF,
+    compute_species_vapor_pressure,
+    compute_volatile_exsolution,
     metal_permeability,
     stokes_settling_velocity,
     weber_equilibrium_diameter,
@@ -111,7 +115,10 @@ export Config,
     allocate_thread_interpolation_buffers,
     reset_thread_buffers!,
     reduce_thread_buffers!,
-    setup_marker_metal_properties
+    setup_marker_metal_properties,
+    setup_marker_volatile_properties,
+    update_single_marker_volatile_exsolution!,
+    update_marker_volatile_exsolution!
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -319,13 +326,20 @@ module Physics
         MASS_H2S_KG,
         MASS_S2_KG,
         MASS_SO2_KG,
-        JEANS_LAMBDA_CUTOFF
+        JEANS_LAMBDA_CUTOFF,
+        HYDRODYNAMIC_ESCAPE_LAMBDA_LOW,
+        HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF,
+        compute_species_vapor_pressure,
+        compute_volatile_exsolution
 end
 
 module Particles
     import ..Erebus:
         setup_marker_properties,
         setup_marker_metal_properties,
+        setup_marker_volatile_properties,
+        update_single_marker_volatile_exsolution!,
+        update_marker_volatile_exsolution!,
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
         define_markers!,
@@ -370,6 +384,9 @@ module Particles
         reduce_thread_buffers!
     export setup_marker_properties,
         setup_marker_metal_properties,
+        setup_marker_volatile_properties,
+        update_single_marker_volatile_exsolution!,
+        update_marker_volatile_exsolution!,
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
         define_markers!,
