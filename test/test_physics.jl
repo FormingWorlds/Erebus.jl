@@ -308,33 +308,50 @@
     @testset "calculate_radioactive_heating(): isotope activity and density scaling" begin
         # 1. Inactive isotopes: returns zero heating vectors
         v_zero = @SVector [0.0, 0.0, 0.0]
-        heat_solid_off, heat_fluid_off = Erebus.calculate_radioactive_heating(
+        heat_solid_off, heat_fluid_off, heat_metal_off = Erebus.calculate_radioactive_heating(
             false, false, 1000.0
         )
         @test heat_solid_off == v_zero
         @test heat_fluid_off == v_zero
+        @test heat_metal_off == v_zero
 
         # 2. Aluminum-26 active: solid phase carries radiogenic power
-        heat_s_al, heat_f_al = Erebus.calculate_radioactive_heating(true, false, 0.0)
+        heat_s_al, heat_f_al, heat_m_al = Erebus.calculate_radioactive_heating(
+            true, false, 0.0
+        )
         @test heat_s_al[1] > 0.0
         @test heat_s_al[2] > 0.0
         @test heat_s_al[3] ≈ 0.0 atol=1e-12  # Sticky air has zero heating
         @test heat_f_al == v_zero
+        @test heat_m_al == v_zero
 
         # Density scaling invariant: Q_vol = Q_mass * rho
         Q_al_mass = Erebus.Q_radiogenic(f_al, ratio_al, E_al, tau_al, 0.0)
         @test isapprox(heat_s_al[1], Q_al_mass * rhosolidm[1]; rtol=1e-10)
         @test isapprox(heat_s_al[2], Q_al_mass * rhosolidm[2]; rtol=1e-10)
 
-        # 3. Iron-60 active: fluid phase carries heating
-        heat_s_fe, heat_f_fe = Erebus.calculate_radioactive_heating(false, true, 0.0)
+        # 3. Iron-60 active: metallic phase carries heating (pore fluid carries zero)
+        heat_s_fe, heat_f_fe, heat_m_fe = Erebus.calculate_radioactive_heating(
+            false, true, 0.0
+        )
         @test heat_s_fe == v_zero
-        @test heat_f_fe[1] > 0.0
-        @test heat_f_fe[2] ≈ 0.0 atol=1e-12
-        @test heat_f_fe[3] ≈ 0.0 atol=1e-12
+        @test heat_f_fe == v_zero
+        @test heat_m_fe[1] > 0.0
+        @test heat_m_fe[2] > 0.0
+        @test heat_m_fe[3] ≈ 0.0 atol=1e-12
+
+        Q_fe_mass = Erebus.Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, 0.0)
+        @test isapprox(heat_m_fe[1], Q_fe_mass * 5450.0; rtol=1e-10)
+        @test isapprox(heat_m_fe[2], Q_fe_mass * 5450.0; rtol=1e-10)
+
+        # Custom rho_metal keyword argument
+        _, _, heat_m_custom = Erebus.calculate_radioactive_heating(
+            false, true, 0.0; rho_metal=7200.0
+        )
+        @test isapprox(heat_m_custom[1], Q_fe_mass * 7200.0; rtol=1e-10)
 
         # 4. Temporal decay: heating decreases over time
-        heat_s_late, _ = Erebus.calculate_radioactive_heating(true, false, t_half_al)
+        heat_s_late, _, _ = Erebus.calculate_radioactive_heating(true, false, t_half_al)
         @test heat_s_late[1] < heat_s_al[1]
         @test isapprox(heat_s_late[1], 0.5 * heat_s_al[1]; rtol=1e-8)
     end # testset "calculate_radioactive_heating()"
@@ -1145,5 +1162,68 @@
         @test Erebus.compute_hydrofracture_factor(Peff_over, NaN) ≈ 1.0 rtol=1e-12
         @test Erebus.compute_hydrofracture_factor(Peff_over, -1.0e7) ≈ 1.0 rtol=1e-12
         @test Erebus.compute_hydrofracture_permeability(k0, NaN, sigma_t) ≈ k0 rtol=1e-12
+    end
+
+    @testset "compute_liquid_metal_density(): sulfur content, EOS models, and thermodynamic scaling" begin
+        # 1. Sanloup et al. (2000) calibration: pure Fe and eutectic
+        rho_fe_sanloup = Erebus.compute_liquid_metal_density(0.0; law=:sanloup2000)
+        rho_eut_sanloup = Erebus.compute_liquid_metal_density(0.31; law=:sanloup2000)
+        @test isapprox(rho_fe_sanloup, 7020.0; rtol=1e-10)
+        @test isapprox(rho_eut_sanloup, 5454.5; rtol=1e-10)
+        @test rho_eut_sanloup < rho_fe_sanloup
+
+        # 2. Morard et al. (2014) calibration: pure Fe and eutectic
+        rho_fe_morard = Erebus.compute_liquid_metal_density(0.0; law=:morard2014)
+        rho_eut_morard = Erebus.compute_liquid_metal_density(0.31; law=:morard2014)
+        @test isapprox(rho_fe_morard, 7020.0; rtol=1e-10)
+        @test isapprox(rho_eut_morard, 7020.0 * (1.0 - 0.72 * 0.31); rtol=1e-10)
+        @test rho_eut_morard < rho_fe_morard
+
+        # 3. Inter-model consistency: models agree within 0.05% at eutectic
+        @test isapprox(rho_eut_sanloup, rho_eut_morard; rtol=5e-4)
+        @test abs(rho_eut_sanloup - rho_eut_morard) < 5.0
+
+        # 4. Strict monotonicity with sulfur content
+        w_grid = [0.0, 0.10, 0.20, 0.31, 0.40]
+        rhos_sanloup = [
+            Erebus.compute_liquid_metal_density(w; law=:sanloup2000) for w in w_grid
+        ]
+        rhos_morard = [
+            Erebus.compute_liquid_metal_density(w; law=:morard2014) for w in w_grid
+        ]
+        @test all(diff(rhos_sanloup) .< 0.0)
+        @test all(diff(rhos_morard) .< 0.0)
+
+        # 5. Thermal expansion scaling: higher T -> lower density
+        rho_hot = Erebus.compute_liquid_metal_density(
+            0.31; T=1600.0, T0=1500.0, alpha_m=1.0e-4
+        )
+        rho_cold = Erebus.compute_liquid_metal_density(
+            0.31; T=1400.0, T0=1500.0, alpha_m=1.0e-4
+        )
+        @test rho_hot < rho_eut_sanloup
+        @test rho_cold > rho_eut_sanloup
+        @test isapprox(rho_hot, rho_eut_sanloup * (1.0 - 1.0e-4 * 100.0); rtol=1e-10)
+        @test isapprox(rho_cold, rho_eut_sanloup * (1.0 + 1.0e-4 * 100.0); rtol=1e-10)
+
+        # 6. Compressibility scaling: higher P -> higher density
+        rho_pressurized = Erebus.compute_liquid_metal_density(0.31; P=1.0e9, K_T=6.5e10)
+        @test rho_pressurized > rho_eut_sanloup
+        @test isapprox(
+            rho_pressurized, rho_eut_sanloup * (1.0 + 1.0e9 / 6.5e10); rtol=1e-10
+        )
+
+        # 7. Error contracts: DomainError and ArgumentError on unphysical inputs
+        @test_throws DomainError Erebus.compute_liquid_metal_density(-0.01)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.41)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(NaN)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.31; T=0.0)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.31; T=-100.0)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.31; T=NaN)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.31; P=-1.0e6)
+        @test_throws DomainError Erebus.compute_liquid_metal_density(0.31; P=NaN)
+        @test_throws ArgumentError Erebus.compute_liquid_metal_density(
+            0.31; law=:unknown_eos
+        )
     end
 end

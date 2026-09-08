@@ -637,10 +637,13 @@ function compute_marker_properties!(
     Xfe_bulk=nothing,
     Xfem=nothing,
     coreformation_active::Bool=false,
+    hrmetalm=nothing,
+    sulfur_fraction_val::Real=0.31,
+    metal_density_mode_val::Symbol=:sanloup2000,
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
-    rho_metal_val::Real=7200.0,
-    rho_metal_solid_val::Real=7800.0,
+    rho_metal_val::Real=5450.0,
+    rho_metal_solid_val::Real=5700.0,
     L_metal_val::Real=2.7e5,
     k_metal_val::Real=40.0,
     rhocp_metal_val::Real=4.0e6,
@@ -796,7 +799,18 @@ function compute_marker_properties!(
                 if Xfem !== nothing
                     Xfem[m] = phi_fe * F_fe
                 end
-                rho_metal_local = (1.0 - F_fe) * rho_metal_solid_val + F_fe * rho_metal_val
+                rho_liq = if metal_density_mode_val !== :constant
+                    P_val = pm === nothing ? 0.0 : max(0.0, pm[m])
+                    compute_liquid_metal_density(
+                        sulfur_fraction_val;
+                        T=tkm[m],
+                        P=P_val,
+                        law=metal_density_mode_val,
+                    )
+                else
+                    rho_metal_val
+                end
+                rho_metal_local = (1.0 - F_fe) * rho_metal_solid_val + F_fe * rho_liq
                 rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_local, phi_fe)
                 ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_fe)
                 rhocp_eff_metal = rhocp_metal_val
@@ -808,11 +822,21 @@ function compute_marker_properties!(
                 rhocptotalm[m] = metal_blended_heat_capacity(
                     rhocptotalm[m], rhocp_eff_metal, phi_fe
                 )
-                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m]
+                hr_metal_term = hrmetalm !== nothing ? hrmetalm[tm[m]] : 0.0
+                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
             else
                 if Xfem !== nothing
                     Xfem[m] = 0.0
                 end
+            end
+        elseif !coreformation_active && hrmetalm !== nothing && Xfe_bulk !== nothing
+            phi_fe = Xfe_bulk[m]
+            if phi_fe > 0.0
+                hr_metal_term = hrmetalm[tm[m]]
+                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
+            end
+            if Xfem !== nothing
+                Xfem[m] = 0.0
             end
         elseif Xfem !== nothing
             Xfem[m] = 0.0

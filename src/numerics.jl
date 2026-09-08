@@ -2612,6 +2612,8 @@ function apply_metal_segregation!(
     g_acc_cell = zeros(Float64, Ny_val, Nx_val)
     cap_cell = zeros(Float64, Ny_val, Nx_val)
     phi_fe_cell = zeros(Float64, Ny_val, Nx_val)
+    T_cell = zeros(Float64, Ny_val, Nx_val)
+    drho_cell = zeros(Float64, Ny_val, Nx_val)
 
     # Bin markers into grid cells
     @inbounds for m in 1:marknum
@@ -2623,6 +2625,7 @@ function apply_metal_segregation!(
                 M_fe_cell[i_c, j_c] += Xfe_bulk[m]
                 M_rock_markers[i_c, j_c] += 1
                 phi_m_cell[i_c, j_c] += Xfem[m]
+                T_cell[i_c, j_c] += tkm[m]
                 F_m_val = if Fm !== nothing
                     Fm[m]
                 elseif tkm[m] >= T_solidus_silicate &&
@@ -2649,6 +2652,7 @@ function apply_metal_segregation!(
             phi_fe_cell[i, j] = M_fe_cell[i, j] / n_m
             phi_m_cell[i, j] /= n_m
             F_m_cell[i, j] /= n_m
+            T_cell[i, j] /= n_m
             m_bulk = phi_fe_cell[i, j]
             Xfem_cell[i, j] =
                 m_bulk > 0.0 ? clamp(phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
@@ -2656,7 +2660,6 @@ function apply_metal_segregation!(
     end
 
     # Compute cell segregation velocities
-    drho = cfg_core.rho_metal - rho_silicate
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
         n_m = M_rock_markers[i, j]
         if n_m == 0
@@ -2680,6 +2683,18 @@ function apply_metal_segregation!(
         phi_m = phi_m_cell[i, j]
         F_m = F_m_cell[i, j]
 
+        rho_metal_eff = if cfg_core.metal_density_mode !== :constant
+            compute_liquid_metal_density(
+                cfg_core.sulfur_fraction;
+                T=max(T_cell[i, j], 100.0),
+                law=cfg_core.metal_density_mode,
+            )
+        else
+            cfg_core.rho_metal
+        end
+        drho = max(rho_metal_eff - rho_silicate, 1.0)
+        drho_cell[i, j] = drho
+
         if phi_m > 0.0 && g_acc > 0.0 && drho > 0.0
             eta_matrix = if ETA !== nothing && i <= size(ETA, 1) && j <= size(ETA, 2)
                 ETA[i, j]
@@ -2691,13 +2706,15 @@ function apply_metal_segregation!(
             )
             r_drop = if cfg_core.droplet_size_mode === :fixed
                 cfg_core.droplet_diameter_fixed / 2.0
-            elseif cfg_core.droplet_size_mode === :weber_mean
-                # Gravity-capillary Weber balance: d = sqrt(We_crit * sigma / (drho * g))
-                d_weber = sqrt(
+            elseif cfg_core.droplet_size_mode === :capillary_mean ||
+                cfg_core.droplet_size_mode === :bond_mean ||
+                cfg_core.droplet_size_mode === :weber_mean
+                # Gravity-capillary (Bond) balance: d = sqrt(We_crit * sigma / (drho * g))
+                d_cap = sqrt(
                     cfg_core.We_crit * cfg_core.sigma_metal_silicate /
                     max(drho * g_acc, 1.0e-8),
                 )
-                clamp(d_weber / 2.0, 1.0e-4, 5.0e-2)
+                clamp(d_cap / 2.0, 1.0e-4, 5.0e-2)
             else # :weber_turbulent
                 v_est = stokes_settling_velocity(
                     cfg_core.droplet_diameter_fixed / 2.0,
@@ -2705,9 +2722,10 @@ function apply_metal_segregation!(
                     max(g_acc, 1.0e-5),
                     eta_susp,
                 )
+                v_rel = max(v_est, 1.0e-6)
                 d_weber = weber_equilibrium_diameter(
                     rho_silicate,
-                    max(v_est, 1.0e-6),
+                    v_rel,
                     cfg_core.sigma_metal_silicate;
                     We_crit=cfg_core.We_crit,
                 )
@@ -2952,7 +2970,7 @@ function apply_metal_segregation!(
             if n_m > 0 && v_s > 0.0
                 phi_m_curr = (m_fe[i, j] / n_m) * Xfem_cell[i, j]
                 Q_diss = segregation_dissipation_heating(
-                    min(phi_m_curr, 1.0), drho, g_acc_cell[i, j], v_s
+                    min(phi_m_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing

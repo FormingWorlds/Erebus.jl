@@ -30,8 +30,8 @@ const L_METAL = 2.7e5            # Fe-FeS eutectic latent heat of melting [J/kg]
 
 const RHO_SIL_SOLID = 3300.0     # Silicate solid density [kg/m^3]
 const RHO_SIL_MELT = 2700.0      # Silicate melt density [kg/m^3]
-const RHO_METAL_SOLID = 7800.0   # Solid metal density [kg/m^3]
-const RHO_METAL_MELT = 7200.0    # Molten Fe-FeS density [kg/m^3]
+const RHO_METAL_SOLID = 5700.0   # Solid Fe-FeS eutectic density [kg/m^3]
+const RHO_METAL_MELT = 5450.0    # Molten Fe-FeS eutectic density [kg/m^3]
 const RHO_ICE = 920.0            # Water ice density [kg/m^3]
 
 const CP_SIL = 1000.0            # Silicate heat capacity [J/(kg K)]
@@ -63,7 +63,7 @@ function run_core_formation_sim(
     Nr::Int=128;
     percolation_active::Bool=true,
     settling_active::Bool=true,
-    droplet_mode::Symbol=:weber_mean, # :fixed, :weber_mean, :weber_turbulent
+    droplet_mode::Symbol=:capillary_mean, # :fixed, :capillary_mean, :bond_mean, :weber_mean, :weber_turbulent
     segregation_heating::Bool=true,
     droplet_diameter_fixed::Float64=1.0e-2,
     t_end_yr::Float64=3.5e6,          # 3.5 Myr
@@ -166,7 +166,9 @@ function run_core_formation_sim(
             # Droplet radius
             r_drop = if droplet_mode === :fixed
                 droplet_diameter_fixed / 2.0
-            elseif droplet_mode === :weber_mean
+            elseif droplet_mode === :capillary_mean ||
+                droplet_mode === :bond_mean ||
+                droplet_mode === :weber_mean
                 d_w = sqrt(10.0 * SIGMA_FE_SIL / max(drho * g_r[i], 1.0e-8))
                 clamp(d_w / 2.0, 1.0e-4, 0.05)
             else # :weber_turbulent
@@ -176,8 +178,9 @@ function run_core_formation_sim(
                     max(g_r[i], 1.0e-5),
                     eta_matrix[i],
                 )
+                v_rel = max(v_est, 1.0e-6)
                 d_w = weber_equilibrium_diameter(
-                    RHO_SIL_SOLID, max(v_est, 1.0e-6), SIGMA_FE_SIL; We_crit=10.0
+                    RHO_SIL_SOLID, v_rel, SIGMA_FE_SIL; We_crit=10.0
                 )
                 clamp(d_w / 2.0, 1.0e-4, 0.05)
             end
@@ -397,7 +400,7 @@ res_ref = run_core_formation_sim(
     128;
     percolation_active=true,
     settling_active=true,
-    droplet_mode=:weber_mean,
+    droplet_mode=:capillary_mean,
     segregation_heating=true,
     t_end_yr=3.5e6,
     dt_yr=500.0,
@@ -410,7 +413,7 @@ res_perc_only = run_core_formation_sim(
     64;
     percolation_active=true,
     settling_active=false,
-    droplet_mode=:weber_mean,
+    droplet_mode=:capillary_mean,
     segregation_heating=true,
     t_end_yr=3.5e6,
     dt_yr=1000.0,
@@ -421,7 +424,7 @@ res_settle_only = run_core_formation_sim(
     64;
     percolation_active=false,
     settling_active=true,
-    droplet_mode=:weber_mean,
+    droplet_mode=:capillary_mean,
     segregation_heating=true,
     t_end_yr=3.5e6,
     dt_yr=1000.0,
@@ -457,7 +460,7 @@ res_no_heating = run_core_formation_sim(
     64;
     percolation_active=true,
     settling_active=true,
-    droplet_mode=:weber_mean,
+    droplet_mode=:capillary_mean,
     segregation_heating=false,
     t_end_yr=3.5e6,
     dt_yr=1000.0,
