@@ -220,6 +220,7 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 
 ---
 
+<a id="melting"></a>
 ## `[melting]`
 
 Parameters controlling silicate rock melting, latent heat buffering, and melt-weakened rheology.

@@ -46,6 +46,7 @@ makedocs(;
             "Silicate Melting & Soft Turbulence" => "explanations/rock_melting.md",
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
             "Degassing & Cold Venting" => "explanations/degassing_and_venting.md",
+            "Iron Core Formation & Metal Segregation" => "explanations/core_formation.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [

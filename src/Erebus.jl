@@ -16,7 +16,7 @@ using StaticArrays
 using TimerOutputs
 using TOML
 
-export run_simulation, load_state
+export run_simulation, load_state, simulation_loop
 export Config,
     GridConfig,
     GeometryConfig,

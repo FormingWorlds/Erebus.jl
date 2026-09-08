@@ -2107,6 +2107,7 @@ function simulation_loop(
                 Q_seg_grid=cfg.coreformation.segregation_heating ? Q_seg_grid : nothing,
                 rho_silicate=rhosolidm[1],
                 eta_silicate=etasolidm[1],
+                ETA=ETA,
             )
         end
 

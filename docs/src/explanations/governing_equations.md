@@ -118,7 +118,7 @@ tensile hydrofracturing occurs, limiting the sustainable pore overpressure.
 
 Heat transport across the planetesimal is governed by the energy conservation equation:
 
-$$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q_{\text{radiogenic}} + Q_{\text{adiabatic}} + Q_{\text{shear}} + \text{DHP}$$
+$$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q_{\text{radiogenic}} + Q_{\text{adiabatic}} + Q_{\text{shear}} + \text{DHP} + Q_{\text{seg}} + Q_{\text{lat}}$$
 
 | Symbol | Description | Units |
 |:---|:---|:---|
@@ -128,6 +128,8 @@ $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla
 | $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
 | $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |
 | $Q_{\text{radiogenic}}$ | Total radiogenic heat production rate: $Q_{\text{al}} + Q_{\text{fe}}$ | $\text{W/m}^3$ |
+| $Q_{\text{seg}}$ | Gravitational dissipation heating from metal segregation | $\text{W/m}^3$ |
+| $Q_{\text{lat}}$ | Latent cooling rate from surface volatile sublimation | $\text{W/m}^3$ |
 
 ### Radiogenic Decay Kinetics
 Volumetric heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay is computed with the decay rate constant $\lambda = 1/\tau = \ln(2)/t_{1/2}$:
@@ -192,5 +194,33 @@ $$k_{\text{interface}}^{\text{eff}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \De
 | $T_{\text{disk}}$ | Ambient nebular sink temperature | $\text{K}$ |
 
 This formulation provides A-stability for the linearized implicit operator with a bounded, positive effective interface conductivity evaluated from the lagged surface temperature.
+
+---
+
+## Core Formation Drift-Flux Transport Equations
+
+Metal segregation is governed by the conservative drift-flux transport equation for molten iron volume fraction $\phi_m$:
+
+$$\frac{\partial \phi_m}{\partial t} + \nabla \cdot (\phi_m \mathbf{v}_{\text{matrix}}) + \nabla \cdot (\phi_m \mathbf{v}_{\text{seg}}) = 0$$
+
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $\phi_m$ | Volumetric concentration of molten metal | - |
+| $\mathbf{v}_{\text{matrix}}$ | Bulk velocity of the silicate matrix/fluid mixture | $\text{m/s}$ |
+| $\mathbf{v}_{\text{seg}}$ | Relative segregation drift velocity vector | $\text{m/s}$ |
+
+The relative segregation velocity magnitude $v_{\text{seg}}$ transitions from porous Darcy percolation in solid rock ($F_m < F_{\text{settle\_start}}$) to Stokes droplet settling in magma oceans ($F_m > F_{\text{perc\_end}}$):
+
+$$v_{\text{seg}}(F_m) = (1 - \xi) v_{\text{perc}} + \xi v_{\text{settle}}$$
+
+where $\xi(F_m)$ is a $C^1$-continuous cubic Hermite polynomial weight based on the local silicate melt fraction $F_m$.
+
+### Gravitational Dissipation Heating
+The irreversible dissipation of gravitational potential energy during metal descent produces a local thermal source:
+
+$$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
+
+where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $g$ is local gravity, and $\phi_m$ is the molten metal fraction. This source directly enters the thermal energy equation.
+
 
 

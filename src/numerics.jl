@@ -2536,6 +2536,7 @@ function apply_metal_segregation!(
     Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     rho_silicate::Real=3000.0,
     eta_silicate::Real=1.0e18,
+    ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
     if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
         dt <= 0.0 ||
@@ -2583,6 +2584,7 @@ function apply_metal_segregation!(
     Xfem_cell = zeros(Float64, Ny_val, Nx_val)
     g_acc_cell = zeros(Float64, Ny_val, Nx_val)
     cap_cell = zeros(Float64, Ny_val, Nx_val)
+    phi_fe_cell = zeros(Float64, Ny_val, Nx_val)
 
     # Bin markers into grid cells
     @inbounds for m in 1:marknum
@@ -2604,11 +2606,12 @@ function apply_metal_segregation!(
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
         n_m = M_rock_markers[i, j]
         if n_m > 0
+            phi_fe_cell[i, j] = M_fe_cell[i, j] / n_m
             phi_m_cell[i, j] /= n_m
             F_m_cell[i, j] /= n_m
-            m_bulk = M_fe_cell[i, j]
+            m_bulk = phi_fe_cell[i, j]
             Xfem_cell[i, j] =
-                m_bulk > 0.0 ? clamp(n_m * phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
+                m_bulk > 0.0 ? clamp(phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
         end
     end
 
@@ -2638,8 +2641,13 @@ function apply_metal_segregation!(
         F_m = F_m_cell[i, j]
 
         if phi_m > 0.0 && g_acc > 0.0 && drho > 0.0
+            eta_matrix = if ETA !== nothing && i <= size(ETA, 1) && j <= size(ETA, 2)
+                ETA[i, j]
+            else
+                eta_silicate
+            end
             eta_susp = compute_melt_weakened_viscosity(
-                eta_silicate, F_m, 1; phi_crit=0.4, eta_melt=10.0, etamin=0.1, etamax=1.0e20
+                eta_matrix, F_m, 1; phi_crit=0.4, eta_melt=10.0, etamin=0.1, etamax=1.0e20
             )
             r_drop = if cfg_core.droplet_size_mode === :fixed
                 cfg_core.droplet_diameter_fixed / 2.0

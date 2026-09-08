@@ -63,7 +63,7 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Core Formation and Metal-Silicate Segregation
 
-- **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeability of silicate melts. *Nature*, 422(6928), 154-157.  
+- **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeable flow. *Nature*, 422(6928), 154-157.  
   [https://doi.org/10.1038/nature01524](https://doi.org/10.1038/nature01524)  
   *Experimental determination of liquid Fe-FeS percolation connectivity and permeability thresholds in crystalline silicates.*
 
@@ -71,9 +71,13 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/S0012-821X(02)01044-0](https://doi.org/10.1016/S0012-821X(02)01044-0)  
   *Capillary droplet emulsification, Weber number stability limits, and Stokes settling dynamics in magma oceans.*
 
-- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009)**. A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.  
+- **Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009a)**. A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.  
   [https://doi.org/10.1111/j.1365-246X.2009.04321.x](https://doi.org/10.1111/j.1365-246X.2009.04321.x)  
-  *Two-phase continuum formulation for metal-silicate differentiation, gravitational dissipation heating, and planetary core formation.*
+  *Two-phase continuum formulation for metal-silicate differentiation and planetary core formation.*
+
+- **Monteux, J., Jellinek, A. M., & Buffett, B. A. (2009b)**. Heating of the early Earth by core formation: Physical mechanisms and thermal impact. *Journal of Geophysical Research*, 114(B6), B06404.  
+  [https://doi.org/10.1029/2008JB006166](https://doi.org/10.1029/2008JB006166)  
+  *Gravitational dissipation heating mechanics and thermal feedback during planetary core segregation.*
 
 - **Rubie, D. C., Nimmo, F., & Melosh, H. J. (2015)**. Formation of Earth's Core. In *Treatise on Geophysics* (2nd ed., Vol. 9, pp. 43-79). Elsevier.  
   [https://doi.org/10.1016/B978-0-444-53802-4.00152-4](https://doi.org/10.1016/B978-0-444-53802-4.00152-4)  
