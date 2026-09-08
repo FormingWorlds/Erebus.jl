@@ -302,6 +302,7 @@ $(FIELDS)
 Base.@kwdef struct VentingConfig
     active::Bool = false
     mode::Symbol = :darcy_sink
+    species::Symbol = :H2O
     k_vent::Float64 = 1.0e-11
     conductance_factor::Float64 = 1.0
     L_sublimation::Float64 = 2.83e6
@@ -333,6 +334,9 @@ Base.@kwdef struct VolatilesConfig
     t_organic_devol::Float64 = 550.0
     dt_organic_devol::Float64 = 50.0
     organic_n_initial_ppm::Float64 = 500.0
+    initial_water_wtpct::Float64 = 1.0
+    initial_carbon_ppm::Float64 = 500.0
+    initial_sulfur_ppm::Float64 = 1000.0
 
     # Carbon solubility parameters
     carbon_active::Bool = false
@@ -368,6 +372,10 @@ Base.@kwdef struct EscapeConfig
     T_exobase::Float64 = 200.0
     R_exobase::Float64 = 50_000.0
     species::Symbol = :H2O
+    multi_species::Bool = false
+    species_list::Vector{Symbol} = [:H2O, :H2, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2]
+    gamma::Float64 = 1.4
+    hydrodynamic::Bool = true
 end
 
 """
@@ -920,6 +928,12 @@ function validate_config(cfg::SimulationConfig)
                 "k_seal_min_ratio must be in (0, 1], got $(cfg.venting.k_seal_min_ratio)"
             ),
         )
+    cfg.venting.species in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) ||
+        throw(
+            ArgumentError(
+                "venting species must be one of standard volatile species, got $(cfg.venting.species)",
+            ),
+        )
 
     # Volatiles checks
     (isfinite(cfg.volatiles.fO2_delta_IW) && abs(cfg.volatiles.fO2_delta_IW) <= 50.0) ||
@@ -970,6 +984,30 @@ function validate_config(cfg::SimulationConfig)
     ) || throw(
         ArgumentError(
             "organic_n_initial_ppm must be >= 0 and finite, got $(cfg.volatiles.organic_n_initial_ppm)",
+        ),
+    )
+    (
+        cfg.volatiles.initial_water_wtpct >= 0.0 &&
+        isfinite(cfg.volatiles.initial_water_wtpct)
+    ) || throw(
+        ArgumentError(
+            "initial_water_wtpct must be >= 0 and finite, got $(cfg.volatiles.initial_water_wtpct)",
+        ),
+    )
+    (
+        cfg.volatiles.initial_carbon_ppm >= 0.0 &&
+        isfinite(cfg.volatiles.initial_carbon_ppm)
+    ) || throw(
+        ArgumentError(
+            "initial_carbon_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_carbon_ppm)",
+        ),
+    )
+    (
+        cfg.volatiles.initial_sulfur_ppm >= 0.0 &&
+        isfinite(cfg.volatiles.initial_sulfur_ppm)
+    ) || throw(
+        ArgumentError(
+            "initial_sulfur_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_sulfur_ppm)",
         ),
     )
     cfg.volatiles.water_law in
@@ -1049,12 +1087,36 @@ function validate_config(cfg::SimulationConfig)
                 "R_exobase must be >= R_planet ($(cfg.escape.R_planet)) and finite, got $(cfg.escape.R_exobase)",
             ),
         )
+    (cfg.escape.gamma > 0.0 && isfinite(cfg.escape.gamma)) ||
+        throw(ArgumentError("gamma must be > 0 and finite, got $(cfg.escape.gamma)"))
     cfg.escape.species in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) ||
         throw(
             ArgumentError(
                 "escape species must be one of :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2, got $(cfg.escape.species)",
             ),
         )
+    for sp in cfg.escape.species_list
+        sp in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) || throw(
+            ArgumentError(
+                "escape species_list elements must be one of standard volatile species, got $sp",
+            ),
+        )
+    end
+    if cfg.venting.active && cfg.escape.active
+        if !cfg.escape.multi_species
+            cfg.venting.species == cfg.escape.species || throw(
+                ArgumentError(
+                    "venting species $(cfg.venting.species) must match escape species $(cfg.escape.species) when escape.multi_species=false",
+                ),
+            )
+        else
+            cfg.venting.species in cfg.escape.species_list || throw(
+                ArgumentError(
+                    "venting species $(cfg.venting.species) must be in escape species_list ($(cfg.escape.species_list)) when both venting and escape are active",
+                ),
+            )
+        end
+    end
 
     # Core formation validation
     if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
@@ -1151,8 +1213,8 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
-    if cfg.volatiles.active
-        @warn "VolatilesConfig active=true: multi-species H-C-N-S volatile solubility, gas speciation, and organic devolatilization operate as a standalone thermodynamic library; dynamic reactive transport is not yet coupled to the 2D Stokes-Darcy fluid flow solver."
+    if cfg.volatiles.active && !cfg.melting.active
+        @warn "VolatilesConfig active=true without melting.active=true: silicate melt volatile exsolution occurs only when melting.active=true."
     end
 
     return nothing
@@ -1191,6 +1253,8 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
                 kwargs[fname] = convert(ftype, val)
             elseif ftype === Symbol && val isa AbstractString
                 kwargs[fname] = Symbol(val)
+            elseif ftype === Vector{Symbol} && val isa AbstractVector
+                kwargs[fname] = [Symbol(x) for x in val]
             else
                 kwargs[fname] = val
             end
@@ -1326,13 +1390,17 @@ function load_config(source::AbstractString)::SimulationConfig
         parsed_esc = parsed["escape"]
         def_esc =
             if !haskey(parsed_esc, "R_planet") && geom.rplanet != def.geometry.rplanet
-                EscapeConfig(
-                    def.escape.active,
-                    def.escape.M_planet,
-                    geom.rplanet,
-                    def.escape.T_exobase,
-                    geom.rplanet,
-                    def.escape.species,
+                EscapeConfig(;
+                    active=def.escape.active,
+                    M_planet=def.escape.M_planet,
+                    R_planet=geom.rplanet,
+                    T_exobase=def.escape.T_exobase,
+                    R_exobase=geom.rplanet,
+                    species=def.escape.species,
+                    multi_species=def.escape.multi_species,
+                    species_list=def.escape.species_list,
+                    gamma=def.escape.gamma,
+                    hydrodynamic=def.escape.hydrodynamic,
                 )
             else
                 def.escape
@@ -1340,13 +1408,17 @@ function load_config(source::AbstractString)::SimulationConfig
         _dict_to_struct(EscapeConfig, parsed_esc, def_esc)
     else
         if geom.rplanet != def.geometry.rplanet
-            EscapeConfig(
-                def.escape.active,
-                def.escape.M_planet,
-                geom.rplanet,
-                def.escape.T_exobase,
-                geom.rplanet,
-                def.escape.species,
+            EscapeConfig(;
+                active=def.escape.active,
+                M_planet=def.escape.M_planet,
+                R_planet=geom.rplanet,
+                T_exobase=def.escape.T_exobase,
+                R_exobase=geom.rplanet,
+                species=def.escape.species,
+                multi_species=def.escape.multi_species,
+                species_list=def.escape.species_list,
+                gamma=def.escape.gamma,
+                hydrodynamic=def.escape.hydrodynamic,
             )
         else
             def.escape
@@ -1391,6 +1463,8 @@ function _struct_to_dict(s)
             d[String(fname)] = collect(val)
         elseif val isa Symbol
             d[String(fname)] = String(val)
+        elseif val isa AbstractVector{Symbol}
+            d[String(fname)] = [String(x) for x in val]
         else
             d[String(fname)] = val
         end

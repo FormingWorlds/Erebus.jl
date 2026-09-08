@@ -23,6 +23,191 @@ function setup_marker_metal_properties(marknum::Int; randomized::Bool=false)
 end
 
 """
+Set up marker volatile inventories for dissolved H2O, C, N, and S in silicate.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum::Int`: Total marker count
+
+# Keyword Arguments
+- `initial_water_wtpct::Real`: Initial water concentration [wt%] (default: 1.0)
+- `initial_carbon_ppm::Real`: Initial carbon concentration [ppmw] (default: 500.0)
+- `initial_nitrogen_ppm::Real`: Initial nitrogen concentration [ppmw] (default: 50.0)
+- `initial_sulfur_ppm::Real`: Initial sulfur concentration [ppmw] (default: 1000.0)
+
+# Returns
+- `(XH2Om, XCm, XNm, XSm)`: Dissolved volatile concentrations on markers
+"""
+function setup_marker_volatile_properties(
+    marknum::Int;
+    initial_water_wtpct::Real=1.0,
+    initial_carbon_ppm::Real=500.0,
+    initial_nitrogen_ppm::Real=50.0,
+    initial_sulfur_ppm::Real=1000.0,
+)
+    XH2Om = fill(Float64(initial_water_wtpct), marknum)
+    XCm = fill(Float64(initial_carbon_ppm), marknum)
+    XNm = fill(Float64(initial_nitrogen_ppm), marknum)
+    XSm = fill(Float64(initial_sulfur_ppm), marknum)
+    return (XH2Om, XCm, XNm, XSm)
+end
+
+"""
+Update volatile concentrations and exsolution porosity for a single marker.
+
+$(SIGNATURES)
+
+# Arguments
+- `m::Integer`: Marker index
+- `F_melt::Real`: Marker silicate melt fraction [-]
+- `P_val::Real`: Marker pressure [Pa]
+- `T_val::Real`: Marker temperature [K]
+- `XH2Om::AbstractVector{Float64}`: Marker dissolved water concentration array [wt%]
+- `XCm`: Marker dissolved carbon concentration array [ppmw] (or nothing)
+- `XNm`: Marker dissolved nitrogen concentration array [ppmw] (or nothing)
+- `XSm`: Marker dissolved sulfur concentration array [ppmw] (or nothing)
+- `phim::AbstractVector{Float64}`: Marker porosity array [-]
+- `cfg::VolatilesConfig`: Volatiles configuration
+
+# Keyword Arguments
+- `rhosolid::Real`: Solid silicate density [kg/m^3] (default: 3000.0)
+- `rhofluid::Real`: Pore fluid density [kg/m^3] (default: 1000.0)
+- `phimax::Real`: Maximum porosity cap (default: 0.9999)
+
+# Returns
+- `dw_step::Float64`: Exsolved volatile mass fraction [-]
+"""
+function update_single_marker_volatile_exsolution!(
+    m::Integer,
+    F_melt::Real,
+    P_val::Real,
+    T_val::Real,
+    XH2Om::AbstractVector{Float64},
+    XCm::Union{AbstractVector{Float64},Nothing},
+    XNm::Union{AbstractVector{Float64},Nothing},
+    XSm::Union{AbstractVector{Float64},Nothing},
+    phim::AbstractVector{Float64},
+    cfg::VolatilesConfig;
+    rhosolid::Real=3000.0,
+    rhofluid::Real=1000.0,
+    phimax::Real=0.9999,
+)::Float64
+    F_m = Float64(F_melt)
+    T_m = Float64(T_val)
+    if F_m <= 0.0 || T_m <= 0.0
+        return 0.0
+    end
+    P_m = max(Float64(P_val), 0.0)
+    w_H2O_in = XH2Om[m] * 0.01
+    C_C_in = XCm !== nothing ? XCm[m] : 0.0
+    C_N_in = XNm !== nothing ? XNm[m] : 0.0
+    C_S_in = XSm !== nothing ? XSm[m] : 0.0
+
+    ex = compute_volatile_exsolution(
+        F_m,
+        P_m,
+        T_m,
+        w_H2O_in,
+        C_C_in,
+        C_N_in,
+        C_S_in,
+        cfg.fO2_delta_IW;
+        water_law=cfg.water_law,
+        water_As=cfg.water_solubility_coeff,
+        carbon_active=cfg.carbon_active,
+        co_law=cfg.co_law,
+        ch4_law=cfg.ch4_law,
+        co2_law=cfg.co2_law,
+        nitrogen_law=cfg.nitrogen_law,
+        nitrogen_henry=cfg.nitrogen_henry_coeff,
+        nitrogen_nitride=cfg.nitrogen_nitride_capacity,
+        sulfur_active=cfg.sulfur_active,
+        sulfide_law=cfg.sulfide_law,
+        graphite_saturation=cfg.graphite_saturation,
+    )
+
+    XH2Om[m] = ex.w_H2O_diss * 100.0
+    if XCm !== nothing
+        XCm[m] = ex.C_C_diss_ppm
+    end
+    if XNm !== nothing
+        XNm[m] = ex.C_N_diss_ppm
+    end
+    if XSm !== nothing
+        XSm[m] = ex.C_S_diss_ppm
+    end
+
+    dw_step = ex.w_total_ex
+    if dw_step > 0.0
+        rho_s = Float64(rhosolid)
+        rho_f = max(Float64(rhofluid), 100.0)
+        dphi = dw_step * (rho_s / rho_f)
+        phim[m] = min(Float64(phimax), phim[m] + dphi)
+    end
+    return dw_step
+end
+
+"""
+Update volatile concentrations and exsolution porosity for all markers.
+
+$(SIGNATURES)
+
+# Arguments
+- `Fm`: Silicate melt fraction array [-]
+- `pfm0`: Fluid pressure array [Pa]
+- `tkm`: Temperature array [K]
+- `phim`: Marker porosity array [-]
+- `XH2Om`: Marker dissolved water concentration array [wt%]
+- `XCm`: Marker dissolved carbon concentration array [ppmw]
+- `XNm`: Marker dissolved nitrogen concentration array [ppmw]
+- `XSm`: Marker dissolved sulfur concentration array [ppmw]
+
+# Keyword Arguments
+- `cfg::VolatilesConfig`: Volatiles configuration
+- `rhosolid::Real`: Solid silicate density [kg/m^3] (default: 3000.0)
+- `rhofluid::Real`: Pore fluid density [kg/m^3] (default: 1000.0)
+- `phimax::Real`: Maximum porosity cap (default: 0.9999)
+
+# Returns
+- `total_dw`: Total exsolved mass fraction across all markers
+"""
+function update_marker_volatile_exsolution!(
+    Fm::AbstractVector{Float64},
+    pfm0::AbstractVector{Float64},
+    tkm::AbstractVector{Float64},
+    phim::AbstractVector{Float64},
+    XH2Om::AbstractVector{Float64},
+    XCm::AbstractVector{Float64},
+    XNm::AbstractVector{Float64},
+    XSm::AbstractVector{Float64};
+    cfg::VolatilesConfig=VolatilesConfig(),
+    rhosolid::Real=3000.0,
+    rhofluid::Real=1000.0,
+    phimax::Real=0.9999,
+)
+    total_dw = 0.0
+    @inbounds for m in eachindex(Fm)
+        total_dw += update_single_marker_volatile_exsolution!(
+            m,
+            Fm[m],
+            pfm0[m],
+            tkm[m],
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            phim,
+            cfg;
+            rhosolid=rhosolid,
+            rhofluid=rhofluid,
+            phimax=phimax,
+        )
+    end
+    return total_dw
+end
+
+"""
 Set up geodesic and physical properties of the set of markers.
 
 $(SIGNATURES)
@@ -459,6 +644,12 @@ function compute_marker_properties!(
     L_metal_val::Real=2.7e5,
     k_metal_val::Real=40.0,
     rhocp_metal_val::Real=4.0e6,
+    volatiles_active::Bool=false,
+    volatiles_cfg::Union{Nothing,VolatilesConfig}=nothing,
+    XH2Om=nothing,
+    XCm=nothing,
+    XNm=nothing,
+    XSm=nothing,
 )
     # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
@@ -524,6 +715,27 @@ function compute_marker_properties!(
                 etamin=etamin,
                 etamax=etamax,
             )
+
+            if volatiles_active &&
+                F_melt > 0.0 &&
+                XH2Om !== nothing &&
+                volatiles_cfg !== nothing
+                update_single_marker_volatile_exsolution!(
+                    m,
+                    F_melt,
+                    P_val,
+                    tkm[m],
+                    XH2Om,
+                    XCm,
+                    XNm,
+                    XSm,
+                    phim,
+                    volatiles_cfg;
+                    rhosolid=rhosolidm0,
+                    rhofluid=rhofluidm0,
+                    phimax=phimax,
+                )
+            end
         elseif Fm !== nothing
             Fm[m] = 0.0
         end
@@ -2980,6 +3192,10 @@ function replenish_markers!(
     Xfem=nothing,
     Xfem0=nothing,
     Xfe_bulk=nothing,
+    XH2Om=nothing,
+    XCm=nothing,
+    XNm=nothing,
+    XSm=nothing,
 )
     # @timeit to "replenish_markers!" begin
     Nym_val, Nxm_val = size(mnum)
@@ -3080,6 +3296,18 @@ function replenish_markers!(
                     end
                     if Xfe_bulk !== nothing
                         push!(Xfe_bulk, Xfe_bulk[m])
+                    end
+                    if XH2Om !== nothing
+                        push!(XH2Om, XH2Om[m])
+                    end
+                    if XCm !== nothing
+                        push!(XCm, XCm[m])
+                    end
+                    if XNm !== nothing
+                        push!(XNm, XNm[m])
+                    end
+                    if XSm !== nothing
+                        push!(XSm, XSm[m])
                     end
                 end
             end

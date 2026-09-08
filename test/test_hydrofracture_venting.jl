@@ -572,4 +572,37 @@ using StaticArrays
         @test all(isfinite, S_out)
         @test all(S_out .>= 0.0)
     end
+
+    @testset "Species-Dependent Venting and Ice Sealing Bypass" begin
+        k0 = 1.0e-11
+        T_cold = 150.0
+
+        # Water ice seals at 150 K
+        k_h2o = compute_face_venting_permeability(
+            k0, false, true, T_cold, 1.0e6, 1.0e7; species=:H2O
+        )
+        @test k_h2o < k0 * 1.0e-3
+
+        # Non-condensible volatiles (H2, CO, N2, CH4) bypass water ice sealing
+        for sp in [:H2, :CO, :N2, :CH4]
+            k_gas = compute_face_venting_permeability(
+                k0, false, true, T_cold, 1.0e6, 1.0e7; species=sp
+            )
+            @test k_gas == k0
+        end
+
+        # Species-specific venting pressure
+        P_amb = 10.0
+        # H2 at 150 K is non-condensible (above Tc=33.1 K), so P_vent equals P_amb without condensation resistance
+        P_vent_h2 = compute_venting_pressure(T_cold, P_amb; species=:H2)
+        @test isapprox(P_vent_h2, P_amb; rtol=1e-5)
+
+        # At cryogenic temperature below triple point (T=10 K), H2 sublimates with finite vapor pressure
+        P_vent_h2_cryo = compute_venting_pressure(10.0, P_amb; species=:H2)
+        @test P_vent_h2_cryo > P_amb
+
+        # H2O at 150 K has negligible vapor pressure, so P_vent equals P_amb
+        P_vent_h2o = compute_venting_pressure(T_cold, P_amb; species=:H2O)
+        @test isapprox(P_vent_h2o, P_amb; rtol=1e-5)
+    end
 end
