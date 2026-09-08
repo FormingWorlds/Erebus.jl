@@ -33,12 +33,18 @@ In planetesimals that accreted early, decay heating drove temperatures past the 
 Rock melted into a crystal-liquid mush and transitioned into a vigorously convecting magma ocean above the rheological disaggregation threshold ($\phi_{\text{crit}} \approx 0.40$).
 Sub-grid soft turbulence convection transported heat outward to the surface, buffering interior temperatures and governing core segregation.
 
+### 7. Iron Core Formation and Metal Segregation
+At temperatures exceeding the Fe-FeS eutectic ($T_{\text{eut}} \approx 1213\text{ K}$), dense metallic liquid melts and segregates inward toward the center.
+In partially molten rock, metal trickles downward by porous Darcy percolation.
+In magma oceans, metal droplets rain downward via Stokes settling, releasing gravitational potential energy that accelerates core formation.
+
 ---
 
 ## Thermo-Hydro-Mechanical Coupling
 
 `Erebus.jl` resolves these interacting regimes through a fully coupled numerical framework:
-- Thermal solver calculates conduction, radioactive decay, latent heat buffering, and fluid advective heat transport.
+- Thermal solver calculates conduction, radioactive decay, latent heat buffering, fluid advective heat transport, and segregation dissipation heating.
 - Hydromechanical solver simultaneously solves coupled Stokes solid deformation, Darcy fluid flux, and poroelastic volume changes in a monolithic linear system.
 - Marker-in-Cell advects material phases, temperature, composition, and porosity without numerical diffusion across moving boundaries.
 - Melting and soft turbulence routines evaluate pressure-dependent silicate melting, apparent heat capacity latent heat buffering, suspension rheology, and regularized sub-grid convective conductivity.
+- Metal segregation drift-flux solver tracks conservative downward migration of molten iron, couples percolation and Stokes droplet settling through the rheological transition, and computes gravitational dissipation heating.

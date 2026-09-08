@@ -46,6 +46,7 @@ makedocs(;
             "Silicate Melting & Soft Turbulence" => "explanations/rock_melting.md",
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
             "Degassing & Cold Venting" => "explanations/degassing_and_venting.md",
+            "Iron Core Formation & Metal Segregation" => "explanations/core_formation.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [
@@ -61,6 +62,7 @@ makedocs(;
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
             "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
+            "Iron Core Formation" => "validation/core_formation.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

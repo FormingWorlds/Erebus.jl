@@ -190,7 +190,7 @@ Strict monotonicity is enforced by clamping $k_{\text{eff}} = \max(k_{\text{cond
 
 To prevent the unphysical drop where $\eta_{\text{num}} < \eta_{\text{fluid}}$ during the initial stages of melting, the reference fluid viscosity $\eta_{\text{fluid}}$ is blended from the current matrix viscosity down to the magma viscosity:
 
-$$\log_{10} \eta_{\text{fluid}}(F_m) = (1 - \xi) \log_{10} \eta_{\text{matrix}} + \xi \log_{10} \eta_{\text{melt}}$$
+$$\log_{10} \eta_{\text{fluid}}(F_m) = (1 - \xi) \log_{10} \eta_{\text{matrix}} + \xi \log_{10} \eta_{\text{fluid,silicate}}$$
 
 This formulation maintains $\eta_{\text{num}} / \eta_{\text{fluid}} \ge 1.0$ throughout the entire transition window.
 

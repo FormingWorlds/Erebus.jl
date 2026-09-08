@@ -298,6 +298,7 @@ function define_markers!(
     Xfe_bulk_val::Real=0.0,
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
+    tkm0_val=tkm0,
 )
     Nxm_val = coords === nothing ? Nxm : coords.Nxm
     Nym_val = coords === nothing ? Nym : coords.Nym
@@ -352,7 +353,7 @@ function define_markers!(
             end
         end
         # common initialisations for all marker types
-        tkm[m] = tkm0[tm[m]]
+        tkm[m] = tkm0_val[tm[m]]
         inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
         fricttotalm[m] = frictsolidm[tm[m]]
         cohestotalm[m] = cohessolidm[tm[m]]

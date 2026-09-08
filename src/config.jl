@@ -390,6 +390,7 @@ Base.@kwdef struct CoreFormationConfig
     perm_exponent::Float64 = 3.0
     phi_crit_perc::Float64 = 0.05
     phi_residual::Float64 = 0.02
+    phi0::Float64 = 0.1
     droplet_size_mode::Symbol = :weber_mean
     droplet_diameter_fixed::Float64 = 5.0e-3
     sigma_metal_silicate::Float64 = 1.0
@@ -1069,8 +1070,11 @@ function validate_config(cfg::SimulationConfig)
         (cf.rhocp_metal > 0.0 && isfinite(cf.rhocp_metal)) || throw(
             ArgumentError("rhocp_metal must be positive and finite, got $(cf.rhocp_metal)"),
         )
-        (0.0 <= cf.Xfe_bulk <= 1.0) ||
-            throw(ArgumentError("Xfe_bulk must be in [0, 1], got $(cf.Xfe_bulk)"))
+        (0.0 <= cf.Xfe_bulk <= cf.phi_pack) || throw(
+            ArgumentError(
+                "Xfe_bulk must be in [0, phi_pack] ($([0, cf.phi_pack])), got $(cf.Xfe_bulk)",
+            ),
+        )
         (0.0 < cf.phi_pack <= 1.0) ||
             throw(ArgumentError("phi_pack must be in (0, 1], got $(cf.phi_pack)"))
         (0.0 <= cf.phi_residual <= cf.phi_crit_perc < cf.phi_pack) || throw(
@@ -1078,6 +1082,8 @@ function validate_config(cfg::SimulationConfig)
                 "phi_residual ($(cf.phi_residual)) must be <= phi_crit_perc ($(cf.phi_crit_perc)) < phi_pack ($(cf.phi_pack))",
             ),
         )
+        (0.0 < cf.phi0 < 1.0) ||
+            throw(ArgumentError("phi0 must be in (0, 1), got $(cf.phi0)"))
         (0.0 <= cf.F_settle_start <= cf.F_perc_end <= 1.0) || throw(
             ArgumentError(
                 "F_settle_start ($(cf.F_settle_start)) must be <= F_perc_end ($(cf.F_perc_end)) in [0, 1]",

@@ -1,0 +1,89 @@
+# Erebus.jl Planetesimal Iron Core Formation Benchmark Configuration
+# Coupled thermo-hydro-mechanical simulation with metal percolation and Stokes settling
+
+[grid]
+xsize = 140000.0        # horizontal domain size [m]
+ysize = 140000.0        # vertical domain size [m]
+Nx = 33                  # basic grid resolution in x
+Ny = 33                  # basic grid resolution in y
+
+[geometry]
+rplanet = 50000.0       # planetesimal radius [m]
+rcrust = 50000.0        # crust radius [m]
+xcenter = 70000.0       # horizontal center [m]
+ycenter = 70000.0       # vertical center [m]
+psurface = 1.0e+3        # surface pressure anchor [Pa]
+
+[time]
+dt_initial = 3168.80878      # initial computational timestep [yr] (~1e11 s)
+dt_longest = 3168.80878      # maximum allowed computational timestep [yr] (~1e11 s)
+dtcoefdn = 0.5               # coefficient to decrease computational timestep
+dtcoefup = 1.2               # coefficient to increase computational timestep
+dtstep = 200                 # iterations before changing timestep
+dxymax = 0.05                # max marker displacement per timestep [grid units]
+vpratio = 0.3333333333333333 # weight of averaged velocity for moving markers
+DTmax = 20.0                 # max temperature change per timestep [K]
+start_time = 2.25e6          # initial simulation time [yr] (2.25 Ma)
+endtime = 15.0e6             # maximum simulation time [yr] (15.0 Ma)
+start_step = 1               # starting timestep counter
+n_steps = 5                  # total number of timesteps to run
+
+[materials]
+tkm0 = [1350.0, 1350.0, 170.0]  # planet interior preheated above Fe-FeS eutectic (1213 K)
+
+[solver]
+titermax = 10000         # maximum global/plastic iterations
+nplast = 100000          # maximum plastic iterations
+yerrmax = 100.0          # yielding tolerance level
+etawt = 0.0              # weight for old viscosity
+dphimax = 100.01         # max porosity ratio change per timestep
+seed = 42                # random seed for marker initialization
+use_pardiso = false      # direct sparse solver selection
+etaphikoef = 1.0         # bulk viscosity scaling factor
+etamin = 1.0e+12         # lower viscosity cut-off [Pa s]
+etamax = 1.0e+23         # upper viscosity cut-off [Pa s]
+
+[poroelasticity]
+betasolid = 2.5e-11      # solid silicate matrix compressibility [1/Pa]
+betafluid = 4.0e-10      # pore fluid compressibility [1/Pa]
+phimin = 1.0e-4          # minimum porosity floor [-]
+phimax = 0.9999          # maximum porosity ceiling [-]
+
+[thermodynamics]
+hr_al = true             # 26Al decay heating active in solid phase
+hr_fe = true             # 60Fe decay heating active in solid phase
+
+[melting]
+active = true            # silicate melt tracking active
+
+[coreformation]
+percolation_active = true
+settling_active = true
+rho_metal = 7200.0
+eta_metal = 1.0e-2
+k_metal = 40.0
+rhocp_metal = 4.0e6
+Xfe_bulk = 0.20
+phi_pack = 0.65
+T_eutectic = 1213.0
+dT_metal = 50.0
+k_metal_ref = 1.0e-9
+perm_exponent = 3.0
+phi_crit_perc = 0.05
+phi_residual = 0.02
+phi0 = 0.1
+droplet_size_mode = "weber_mean"
+droplet_diameter_fixed = 5.0e-3
+sigma_metal_silicate = 1.0
+We_crit = 10.0
+hindered_exponent = 4.5
+hadamard_rybczynski = false
+F_settle_start = 0.40
+F_perc_end = 0.50
+segregation_heating = true
+cfl_settling = 0.5
+max_subcycles = 2000
+
+[output]
+output_dir = "output_core_benchmark"
+savematstep = 1

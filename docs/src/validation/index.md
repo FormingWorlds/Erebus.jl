@@ -18,6 +18,7 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Cold Surface Venting & Ice Sealing** | Darcy Robin leaky drainage, Clausius-Clapeyron cold trap, and cryogenic pore ice sealing | Hubmann (2022); Gerya (2019) | `test/test_venting_thermodynamics.jl`, `test/test_venting_darcy_sink.jl`, `test/test_venting_integration.jl`, `test/test_hydrofracture_venting.jl` |
 | **H-C-N-S Volatile Solubility & Speciation** | Multi-species (H, C, N, S) solubility laws, graphite and sulfide saturation limits, organic devolatilization | Burnham (1979); Dixon et al. (1995); Dasgupta et al. (2022); Boulliung & Wood (2022) | `test/test_volatile_solubility.jl`, `test/test_volatile_solubility_hcns.jl` |
 | **Jeans Kinetic Atmospheric Escape** | Maxwellian effusion, scale height relaxation, mass conservation, and surface pressure feedback | Jeans (1925); Catling & Kasting (2017) | `test/test_jeans_escape.jl` |
+| **Iron Core Formation** | Fe-FeS percolation Darcy flow, Stokes droplet settling, regime handover, dissipation heating, and mass conservation | Yoshino et al. (2003); Rubie et al. (2003, 2015); Monteux et al. (2009); Lichtenberg et al. (2019) | `test/test_core_formation.jl` |
 
 ---
 

@@ -1747,6 +1747,7 @@ function assemble_thermal_lse!(
     LT=nothing,
     Q_metric=nothing,
     Q_lat=nothing,
+    Q_seg=nothing,
 )
     Ny1, Nx1 = size(tk1)
     dx_val = coords === nothing ? dx : coords.dx
@@ -1817,6 +1818,9 @@ function assemble_thermal_lse!(
                 end
                 if Q_lat !== nothing
                     RT[gk] += Q_lat[i, j]
+                end
+                if Q_seg !== nothing
+                    RT[gk] += Q_seg[i, j]
                 end
             end
         end
@@ -2468,3 +2472,547 @@ function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer; pferrmax=
     return pferrcur < pferrmax && (titer > 2 || DMPmax <= 0.0)
     # end # @timeit to "compute_thermochemical_iteration_outcome"
 end # function compute_thermochemical_iteration_outcome
+
+"""
+Apply iron metal segregation via sub-cycled conservative drift-flux transport.
+
+$(SIGNATURES)
+
+Solves the conservative drift-flux transport equation for molten iron metal
+percolation through a solid silicate matrix and Stokes settling through a magma ocean.
+Subcycles the explicit finite-volume transport step using a local CFL criterion.
+Guarantees mass conservation of total metal to machine precision when input marker
+metal fractions satisfy 0 <= Xfe_bulk <= phi_pack.
+
+References:
+- Stevenson (1990), Fluid dynamics of core formation.
+- Deguen et al. (2014), Earth Planet. Sci. Lett., 391, 274-287.
+- Lichtenberg et al. (2019, 2021), Science / JGR Planets.
+
+# Arguments
+- `xm::AbstractVector{Float64}`: Marker x-coordinates [m]
+- `ym::AbstractVector{Float64}`: Marker y-coordinates [m]
+- `tm::AbstractVector{<:Integer}`: Marker material phase type
+- `tkm::AbstractVector{Float64}`: Marker temperature [K]
+- `phim::AbstractVector{Float64}`: Marker silicate melt fraction / porosity [-]
+- `Xfe_bulk::AbstractVector{Float64}`: Marker bulk metal volume fraction [-]
+- `Xfem::AbstractVector{Float64}`: Marker molten metal fraction [-]
+- `marknum::Integer`: Number of markers
+- `dt::Real`: Timestep duration [s]
+- `cfg_core::CoreFormationConfig`: Core formation configuration parameters
+
+# Keyword Arguments
+- `coords=nothing`: `GridCoordinates` domain geometry struct
+- `xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0`: Planet center x [m]
+- `ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0`: Planet center y [m]
+- `rplanet::Real=50000.0`: Planet radius [m]
+- `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
+- `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
+- `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
+- `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional grid to accumulate dissipation heating [W/m^3]
+- `rho_silicate::Real=3000.0`: Reference silicate rock density [kg/m^3]
+
+# Returns
+- NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy)` where `total_dissipation_energy` is in [J/m].
+"""
+function apply_metal_segregation!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    tkm::AbstractVector{Float64},
+    phim::AbstractVector{Float64},
+    Xfe_bulk::AbstractVector{Float64},
+    Xfem::AbstractVector{Float64},
+    marknum::Integer,
+    dt::Real,
+    cfg_core::CoreFormationConfig;
+    coords=nothing,
+    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
+    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
+    rplanet::Real=50000.0,
+    g_surf::Real=0.1,
+    gx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    gy::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    rho_silicate::Real=3000.0,
+    eta_silicate::Real=1.0e18,
+    ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+)
+    if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
+        dt <= 0.0 ||
+        marknum <= 0
+        return (; max_v_seg=0.0, n_subcycles=0, dt_sub=0.0, total_dissipation_energy=0.0)
+    end
+
+    # Validate input marker bounds
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                xfe = Xfe_bulk[m]
+                if !isfinite(xfe) || xfe < 0.0 || xfe > cfg_core.phi_pack + 1.0e-7
+                    throw(
+                        DomainError(
+                            xfe,
+                            "Marker bulk metal fraction must be finite, non-negative, and <= phi_pack",
+                        ),
+                    )
+                end
+            end
+        end
+    end
+
+    Nx_val = coords !== nothing ? coords.Nx : 32
+    Ny_val = coords !== nothing ? coords.Ny : 32
+    dx_val = if coords !== nothing
+        coords.dx
+    else
+        (coords !== nothing ? coords.xsize / Nx_val : 4375.0)
+    end
+    dy_val = if coords !== nothing
+        coords.dy
+    else
+        (coords !== nothing ? coords.ysize / Ny_val : 4375.0)
+    end
+
+    # Allocate cell accumulations
+    M_fe_cell = zeros(Float64, Ny_val, Nx_val)
+    M_rock_markers = zeros(Int, Ny_val, Nx_val)
+    v_seg_cell = zeros(Float64, Ny_val, Nx_val)
+    phi_m_cell = zeros(Float64, Ny_val, Nx_val)
+    F_m_cell = zeros(Float64, Ny_val, Nx_val)
+    Xfem_cell = zeros(Float64, Ny_val, Nx_val)
+    g_acc_cell = zeros(Float64, Ny_val, Nx_val)
+    cap_cell = zeros(Float64, Ny_val, Nx_val)
+    phi_fe_cell = zeros(Float64, Ny_val, Nx_val)
+
+    # Bin markers into grid cells
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
+                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                M_fe_cell[i_c, j_c] += Xfe_bulk[m]
+                M_rock_markers[i_c, j_c] += 1
+                phi_m_cell[i_c, j_c] += Xfem[m]
+                F_m_cell[i_c, j_c] += phim[m]
+                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - Xfe_bulk[m], 0.0)
+            end
+        end
+    end
+
+    # Normalize cell averages
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        n_m = M_rock_markers[i, j]
+        if n_m > 0
+            phi_fe_cell[i, j] = M_fe_cell[i, j] / n_m
+            phi_m_cell[i, j] /= n_m
+            F_m_cell[i, j] /= n_m
+            m_bulk = phi_fe_cell[i, j]
+            Xfem_cell[i, j] =
+                m_bulk > 0.0 ? clamp(phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
+        end
+    end
+
+    # Compute cell segregation velocities
+    drho = cfg_core.rho_metal - rho_silicate
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        n_m = M_rock_markers[i, j]
+        if n_m == 0
+            continue
+        end
+        xc = (j - 0.5) * dx_val
+        yc = (i - 0.5) * dy_val
+        rc = distance(xc, yc, xcenter, ycenter)
+        if rc > rplanet
+            continue
+        end
+
+        g_acc = if gx !== nothing && gy !== nothing && i <= size(gx, 1) && j <= size(gx, 2)
+            g_mag = sqrt(gx[i, j]^2 + gy[i, j]^2)
+            g_mag > 0.0 ? g_mag : g_surf * min(rc / rplanet, 1.0)
+        else
+            g_surf * min(rc / rplanet, 1.0)
+        end
+        g_acc_cell[i, j] = g_acc
+
+        phi_m = phi_m_cell[i, j]
+        F_m = F_m_cell[i, j]
+
+        if phi_m > 0.0 && g_acc > 0.0 && drho > 0.0
+            eta_matrix = if ETA !== nothing && i <= size(ETA, 1) && j <= size(ETA, 2)
+                ETA[i, j]
+            else
+                eta_silicate
+            end
+            eta_susp = compute_melt_weakened_viscosity(
+                eta_matrix, F_m, 1; phi_crit=0.4, eta_melt=10.0, etamin=0.1, etamax=1.0e20
+            )
+            r_drop = if cfg_core.droplet_size_mode === :fixed
+                cfg_core.droplet_diameter_fixed / 2.0
+            elseif cfg_core.droplet_size_mode === :weber_mean
+                # Gravity-capillary Weber balance: d = sqrt(We_crit * sigma / (drho * g))
+                d_weber = sqrt(
+                    cfg_core.We_crit * cfg_core.sigma_metal_silicate /
+                    max(drho * g_acc, 1.0e-8),
+                )
+                clamp(d_weber / 2.0, 1.0e-4, 5.0e-2)
+            else # :weber_turbulent
+                v_est = stokes_settling_velocity(
+                    cfg_core.droplet_diameter_fixed / 2.0,
+                    drho,
+                    max(g_acc, 1.0e-5),
+                    eta_susp,
+                )
+                d_weber = weber_equilibrium_diameter(
+                    rho_silicate,
+                    max(v_est, 1.0e-6),
+                    cfg_core.sigma_metal_silicate;
+                    We_crit=cfg_core.We_crit,
+                )
+                clamp(d_weber / 2.0, 1.0e-4, 5.0e-2)
+            end
+
+            v_seg_cell[i, j] = metal_segregation_velocity(
+                phi_m,
+                F_m,
+                drho,
+                g_acc,
+                eta_susp;
+                percolation_active=cfg_core.percolation_active,
+                settling_active=cfg_core.settling_active,
+                k_metal_ref=cfg_core.k_metal_ref,
+                eta_metal=cfg_core.eta_metal,
+                phi_crit_perc=cfg_core.phi_crit_perc,
+                phi_residual=cfg_core.phi_residual,
+                phi0=cfg_core.phi0,
+                perm_exponent=cfg_core.perm_exponent,
+                r_drop=r_drop,
+                hindered_exponent=cfg_core.hindered_exponent,
+                phi_pack=cfg_core.phi_pack,
+                hadamard_rybczynski=cfg_core.hadamard_rybczynski,
+                F_settle_start=cfg_core.F_settle_start,
+                F_perc_end=cfg_core.F_perc_end,
+            )
+        end
+    end
+
+    max_v = maximum(v_seg_cell)
+    if max_v <= 0.0
+        return (; max_v_seg=0.0, n_subcycles=0, dt_sub=0.0, total_dissipation_energy=0.0)
+    end
+
+    # CFL calculation and subcycling
+    dt_cfl = cfg_core.cfl_settling * min(dx_val, dy_val) / max_v
+    n_sub_raw = Int(ceil(dt / dt_cfl))
+    if n_sub_raw > cfg_core.max_subcycles
+        @warn "CFL subcycling requires $n_sub_raw steps, capped at max_subcycles $(cfg_core.max_subcycles)" maxlog=5
+    end
+    n_sub = clamp(n_sub_raw, 1, cfg_core.max_subcycles)
+    dt_sub = dt / n_sub
+
+    # Working copy of cell metal mass for subcycling
+    m_fe = copy(M_fe_cell)
+    total_diss_energy = 0.0
+
+    # Pre-allocated arrays for subcycling fluxes and limiters
+    req_flux_x = zeros(Float64, Ny_val, Nx_val - 1)
+    req_flux_y = zeros(Float64, Ny_val - 1, Nx_val)
+    flux_x = zeros(Float64, Ny_val, Nx_val - 1)
+    flux_y = zeros(Float64, Ny_val - 1, Nx_val)
+    outflow_tot = zeros(Float64, Ny_val, Nx_val)
+    inflow_tot = zeros(Float64, Ny_val, Nx_val)
+    alpha_out = ones(Float64, Ny_val, Nx_val)
+    alpha_in = ones(Float64, Ny_val, Nx_val)
+
+    # Subcycling loop
+    for _ in 1:n_sub
+        fill!(outflow_tot, 0.0)
+        fill!(inflow_tot, 0.0)
+        fill!(req_flux_x, 0.0)
+        fill!(req_flux_y, 0.0)
+
+        # 1. Compute unscaled requested fluxes across East-West faces
+        @inbounds for j in 1:(Nx_val - 1)
+            xf = j * dx_val
+            for i in 1:Ny_val
+                yf = (i - 0.5) * dy_val
+                dxf = xf - xcenter
+                dyf = yf - ycenter
+                rf = sqrt(dxf^2 + dyf^2)
+                if rf > rplanet || rf < 1.0e-3
+                    continue
+                end
+
+                # Determine transport direction
+                nx =
+                    if gx !== nothing &&
+                        gy !== nothing &&
+                        i <= size(gx, 1) &&
+                        j <= size(gx, 2)
+                        gx_f = gx[i, j]
+                        gy_f =
+                            0.5 *
+                            (gy[i, j] + (j + 1 <= size(gy, 2) ? gy[i, j + 1] : gy[i, j]))
+                        g_f = sqrt(gx_f^2 + gy_f^2)
+                        g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
+                    else
+                        -dxf / rf
+                    end
+
+                vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i, j + 1])
+                uf = vf * nx
+
+                donor_j = uf > 0.0 ? j : j + 1
+                rec_j = uf > 0.0 ? j + 1 : j
+
+                n_donor = M_rock_markers[i, donor_j]
+                n_rec = M_rock_markers[i, rec_j]
+                if n_donor == 0 || n_rec == 0
+                    continue
+                end
+
+                X_donor = m_fe[i, donor_j] / n_donor
+                X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[i, donor_j]
+                m_avail = X_mob * n_donor
+
+                fx = abs(uf) * (dt_sub / dx_val) * m_avail
+                fx_req = uf > 0.0 ? fx : -fx
+                req_flux_x[i, j] = fx_req
+
+                if fx_req > 0.0
+                    outflow_tot[i, j] += fx_req
+                    inflow_tot[i, j + 1] += fx_req
+                else
+                    outflow_tot[i, j + 1] += -fx_req
+                    inflow_tot[i, j] += -fx_req
+                end
+            end
+        end
+
+        # 2. Compute unscaled requested fluxes across North-South faces
+        @inbounds for i in 1:(Ny_val - 1)
+            yf = i * dy_val
+            for j in 1:Nx_val
+                xf = (j - 0.5) * dx_val
+                dxf = xf - xcenter
+                dyf = yf - ycenter
+                rf = sqrt(dxf^2 + dyf^2)
+                if rf > rplanet || rf < 1.0e-3
+                    continue
+                end
+
+                ny =
+                    if gx !== nothing &&
+                        gy !== nothing &&
+                        i <= size(gy, 1) &&
+                        j <= size(gy, 2)
+                        gy_f = gy[i, j]
+                        gx_f =
+                            0.5 *
+                            (gx[i, j] + (i + 1 <= size(gx, 1) ? gx[i + 1, j] : gx[i, j]))
+                        g_f = sqrt(gx_f^2 + gy_f^2)
+                        g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
+                    else
+                        -dyf / rf
+                    end
+
+                vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i + 1, j])
+                wf = vf * ny
+
+                donor_i = wf > 0.0 ? i : i + 1
+                rec_i = wf > 0.0 ? i + 1 : i
+
+                n_donor = M_rock_markers[donor_i, j]
+                n_rec = M_rock_markers[rec_i, j]
+                if n_donor == 0 || n_rec == 0
+                    continue
+                end
+
+                X_donor = m_fe[donor_i, j] / n_donor
+                X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[donor_i, j]
+                m_avail = X_mob * n_donor
+
+                fy = abs(wf) * (dt_sub / dy_val) * m_avail
+                fy_req = wf > 0.0 ? fy : -fy
+                req_flux_y[i, j] = fy_req
+
+                if fy_req > 0.0
+                    outflow_tot[i, j] += fy_req
+                    inflow_tot[i + 1, j] += fy_req
+                else
+                    outflow_tot[i + 1, j] += -fy_req
+                    inflow_tot[i, j] += -fy_req
+                end
+            end
+        end
+
+        # 3. Multi-dimensional flux limiters per cell
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            n_m = M_rock_markers[i, j]
+            if n_m > 0
+                X_c = m_fe[i, j] / n_m
+                m_avail = max(X_c - cfg_core.phi_residual, 0.0) * Xfem_cell[i, j] * n_m
+                m_cap = max(cfg_core.phi_pack - X_c, 0.0) * n_m
+                alpha_out[i, j] = if outflow_tot[i, j] > m_avail && m_avail > 0.0
+                    m_avail / outflow_tot[i, j]
+                else
+                    (outflow_tot[i, j] > m_avail ? 0.0 : 1.0)
+                end
+                alpha_in[i, j] = if inflow_tot[i, j] > m_cap && m_cap > 0.0
+                    m_cap / inflow_tot[i, j]
+                else
+                    (inflow_tot[i, j] > m_cap ? 0.0 : 1.0)
+                end
+            else
+                alpha_out[i, j] = 0.0
+                alpha_in[i, j] = 0.0
+            end
+        end
+
+        # 4. Scale fluxes by joint donor-receiver limiters
+        @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+            fx_req = req_flux_x[i, j]
+            if iszero(fx_req)
+                flux_x[i, j] = 0.0
+            else
+                donor_j = fx_req > 0.0 ? j : j + 1
+                rec_j = fx_req > 0.0 ? j + 1 : j
+                lim = min(alpha_out[i, donor_j], alpha_in[i, rec_j])
+                flux_x[i, j] = fx_req * lim
+            end
+        end
+
+        @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+            fy_req = req_flux_y[i, j]
+            if iszero(fy_req)
+                flux_y[i, j] = 0.0
+            else
+                donor_i = fy_req > 0.0 ? i : i + 1
+                rec_i = fy_req > 0.0 ? i + 1 : i
+                lim = min(alpha_out[donor_i, j], alpha_in[rec_i, j])
+                flux_y[i, j] = fy_req * lim
+            end
+        end
+
+        # 5. Conservative update of cell metal masses
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
+            F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
+            F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
+            F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
+            m_fe[i, j] += (F_w - F_e + F_n - F_s)
+        end
+
+        # 6. Gravitational potential energy dissipation heating
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            n_m = M_rock_markers[i, j]
+            v_s = v_seg_cell[i, j]
+            if n_m > 0 && v_s > 0.0
+                phi_m_curr = (m_fe[i, j] / n_m) * Xfem_cell[i, j]
+                Q_diss = segregation_dissipation_heating(
+                    min(phi_m_curr, 1.0), drho, g_acc_cell[i, j], v_s
+                )
+                total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
+                if Q_seg_grid !== nothing
+                    dQ = 0.25 * Q_diss * (dt_sub / dt)
+                    if i <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i, j] += dQ
+                    end
+                    if i <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i, j + 1] += dQ
+                    end
+                    if (i + 1) <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i + 1, j] += dQ
+                    end
+                    if (i + 1) <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i + 1, j + 1] += dQ
+                    end
+                end
+            end
+        end
+    end
+
+    # Distribute net cell mass changes to markers in each cell
+    initial_sum = 0.0
+    @inbounds for m in 1:marknum
+        initial_sum += Xfe_bulk[m]
+    end
+
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
+                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                n_m = M_rock_markers[i_c, j_c]
+                if n_m > 0
+                    m_target = m_fe[i_c, j_c]
+                    m_init = M_fe_cell[i_c, j_c]
+                    dm_cell = m_target - m_init
+                    if dm_cell > 0.0
+                        c_tot = cap_cell[i_c, j_c]
+                        if c_tot > 0.0
+                            frac_gain = min(dm_cell / c_tot, 1.0)
+                            dX = frac_gain * max(cfg_core.phi_pack - Xfe_bulk[m], 0.0)
+                            Xfe_bulk[m] = clamp(Xfe_bulk[m] + dX, 0.0, cfg_core.phi_pack)
+                        else
+                            Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
+                        end
+                    elseif dm_cell < 0.0
+                        if m_init > 0.0
+                            scale_loss = max(m_target / m_init, 0.0)
+                            Xfe_bulk[m] = clamp(
+                                Xfe_bulk[m] * scale_loss, 0.0, cfg_core.phi_pack
+                            )
+                        else
+                            Xfe_bulk[m] = 0.0
+                        end
+                    else
+                        Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
+                    end
+                end
+            end
+        end
+    end
+
+    # Enforce floating point conservation without creating out-of-bounds markers
+    final_sum = 0.0
+    @inbounds for m in 1:marknum
+        final_sum += Xfe_bulk[m]
+    end
+
+    diff_sum = initial_sum - final_sum
+    if abs(diff_sum) > 1.0e-12 * initial_sum
+        eligible_count = 0
+        @inbounds for m in 1:marknum
+            if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
+                if diff_sum > 0.0 && Xfe_bulk[m] < cfg_core.phi_pack
+                    eligible_count += 1
+                elseif diff_sum < 0.0 && Xfe_bulk[m] > 0.0
+                    eligible_count += 1
+                end
+            end
+        end
+        if eligible_count > 0
+            corr = diff_sum / eligible_count
+            @inbounds for m in 1:marknum
+                if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
+                    if diff_sum > 0.0 && Xfe_bulk[m] < cfg_core.phi_pack
+                        Xfe_bulk[m] = min(Xfe_bulk[m] + corr, cfg_core.phi_pack)
+                    elseif diff_sum < 0.0 && Xfe_bulk[m] > 0.0
+                        Xfe_bulk[m] = max(Xfe_bulk[m] + corr, 0.0)
+                    end
+                end
+            end
+        end
+    end
+
+    return (;
+        max_v_seg=max_v,
+        n_subcycles=n_sub,
+        dt_sub=dt_sub,
+        total_dissipation_energy=total_diss_energy,
+    )
+end
