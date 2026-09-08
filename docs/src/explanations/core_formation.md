@@ -28,17 +28,27 @@ $$F_{\text{fe}}(T) = \begin{cases}
 1, & T \ge T_{\text{eutectic}} + \Delta T_{\text{metal}}
 \end{cases}$$
 
-For a marker with bulk metal volume fraction $X_{\text{fe,bulk}}$, the local molten metal volume fraction $\phi_m$ is:
+For a marker with bulk metal volume fraction $X_{\text{fe,bulk}}$, the local molten metal volume fraction $\phi_m$ available for segregation transport is:
 
 $$\phi_m = X_{\text{fe,bulk}} \cdot F_{\text{fe}}(T)$$
 
-When $\phi_m > 0$, the marker density, thermal conductivity, and volumetric heat capacity are updated via volume-weighted mixture rules:
+The local metallic phase density transitions from solid ($\rho_{\text{metal,solid}}$) to liquid ($\rho_{\text{metal,liquid}}$) across the melting interval:
 
-$$\rho_{\text{eff}} = (1 - \phi_m) \rho_{\text{sil}} + \phi_m \rho_{\text{metal}}$$
+$$\rho_{\text{metal}}(T) = (1 - F_{\text{fe}}) \rho_{\text{metal,solid}} + F_{\text{fe}} \rho_{\text{metal,liquid}}$$
 
-$$k_{\text{eff}} = (1 - \phi_m) k_{\text{sil}} + \phi_m k_{\text{metal}}$$
+The marker composite density and thermal conductivity blend the host rock or ice matrix with metal across all temperatures using bulk metal volume fraction $X_{\text{fe,bulk}}$:
 
-$$(\rho C_p)_{\text{eff}} = (1 - \phi_m) (\rho C_p)_{\text{sil}} + \phi_m (\rho C_p)_{\text{metal}}$$
+$$\rho_{\text{eff}} = (1 - X_{\text{fe,bulk}}) \rho_{\text{sil}} + X_{\text{fe,bulk}} \rho_{\text{metal}}(T)$$
+
+$$k_{\text{eff}} = (1 - X_{\text{fe,bulk}}) k_{\text{sil}} + X_{\text{fe,bulk}} k_{\text{metal}}$$
+
+During metal melting ($T_{\text{eutectic}} \le T \le T_{\text{eutectic}} + \Delta T_{\text{metal}}$), the apparent volumetric heat capacity of the metal incorporates the latent heat of melting $L_{\text{metal}}$ using the solid metal reference density:
+
+$$(\rho C_p)_{\text{eff,metal}} = (\rho C_p)_{\text{metal}} + \rho_{\text{metal,solid}} \frac{L_{\text{metal}}}{\Delta T_{\text{metal}}}$$
+
+$$(\rho C_p)_{\text{eff}} = (1 - X_{\text{fe,bulk}}) (\rho C_p)_{\text{sil}} + X_{\text{fe,bulk}} (\rho C_p)_{\text{eff,metal}}$$
+
+Solid and liquid metal share baseline conductivity $k_{\text{metal}}$ and unbuffered heat capacity $(\rho C_p)_{\text{metal}}$.
 
 ---
 

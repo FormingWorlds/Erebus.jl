@@ -486,8 +486,11 @@ function simulation_loop(
     T_eutectic_val = cfg.coreformation.T_eutectic
     dT_metal_val = cfg.coreformation.dT_metal
     rho_metal_val = cfg.coreformation.rho_metal
+    rho_metal_solid_val = cfg.coreformation.rho_metal_solid
+    L_metal_val = cfg.coreformation.L_metal
     k_metal_val = cfg.coreformation.k_metal
     rhocp_metal_val = cfg.coreformation.rhocp_metal
+    max_v_seg_prev = 0.0
 
     nthreads = Threads.nthreads()
 
@@ -585,6 +588,8 @@ function simulation_loop(
     Xfem = nothing
     Xfem0 = nothing
     Xfe_bulk = nothing
+    Xfe_bulk_step_start = nothing
+    Xfem_step_start = nothing
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
@@ -730,6 +735,8 @@ function simulation_loop(
             if haskey(ckpt, "Xfem0")
                 Xfem0 .= ckpt["Xfem0"]
             end
+            Xfe_bulk_step_start = zeros(Float64, marknum)
+            Xfem_step_start = zeros(Float64, marknum)
         end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
@@ -741,6 +748,8 @@ function simulation_loop(
         )
         if coreformation_active_val
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
+            Xfe_bulk_step_start = zeros(Float64, marknum)
+            Xfem_step_start = zeros(Float64, marknum)
         end
         define_markers!(
             xm,
@@ -1088,6 +1097,8 @@ function simulation_loop(
                         T_eutectic_val=T_eutectic_val,
                         dT_metal_val=dT_metal_val,
                         rho_metal_val=rho_metal_val,
+                        rho_metal_solid_val=rho_metal_solid_val,
+                        L_metal_val=L_metal_val,
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                     )
@@ -1258,6 +1269,8 @@ function simulation_loop(
                     T_eutectic_val=T_eutectic_val,
                     dT_metal_val=dT_metal_val,
                     rho_metal_val=rho_metal_val,
+                    rho_metal_solid_val=rho_metal_solid_val,
+                    L_metal_val=L_metal_val,
                     k_metal_val=k_metal_val,
                     rhocp_metal_val=rhocp_metal_val,
                 )
@@ -1457,6 +1470,22 @@ function simulation_loop(
             )
         end
 
+        # Snapshot metal inventory at timestep start for idempotent thermochemical iterations
+        if coreformation_active_val
+            if Xfe_bulk !== nothing && Xfe_bulk_step_start !== nothing
+                if length(Xfe_bulk_step_start) != length(Xfe_bulk)
+                    resize!(Xfe_bulk_step_start, length(Xfe_bulk))
+                end
+                copyto!(Xfe_bulk_step_start, Xfe_bulk)
+            end
+            if Xfem !== nothing && Xfem_step_start !== nothing
+                if length(Xfem_step_start) != length(Xfem)
+                    resize!(Xfem_step_start, length(Xfem))
+                end
+                copyto!(Xfem_step_start, Xfem)
+            end
+        end
+
         # ---------------------------------------------------------------------
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
@@ -1649,6 +1678,9 @@ function simulation_loop(
                     maxDTcurrent=maxDTcurrent,
                     DTmax_val=DTmax,
                     dt_longest_val=dt_longest_val,
+                    max_v_seg=max_v_seg_prev,
+                    max_subcycles=cfg.coreformation.max_subcycles,
+                    cfl_settling=cfg.coreformation.cfl_settling,
                 )
 
                 # compute stresses, stress changes and strain rate components
@@ -1819,6 +1851,51 @@ function simulation_loop(
                     rplanet=rplanet_val,
                     reg_cells=metric_reg_val,
                 )
+            end
+
+            # ------------------------------------------------------------------
+            # iron core formation segregation
+            # ------------------------------------------------------------------
+            if coreformation_active_val && Xfe_bulk !== nothing && Xfem !== nothing
+                if Xfe_bulk_step_start !== nothing
+                    if length(Xfe_bulk) != length(Xfe_bulk_step_start)
+                        resize!(Xfe_bulk, length(Xfe_bulk_step_start))
+                    end
+                    copyto!(Xfe_bulk, Xfe_bulk_step_start)
+                end
+                if Xfem_step_start !== nothing
+                    if length(Xfem) != length(Xfem_step_start)
+                        resize!(Xfem, length(Xfem_step_start))
+                    end
+                    copyto!(Xfem, Xfem_step_start)
+                end
+                fill!(Q_seg_grid, 0.0)
+                seg_res = apply_metal_segregation!(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    phim,
+                    Xfe_bulk,
+                    Xfem,
+                    marknum,
+                    dt,
+                    cfg.coreformation;
+                    coords=coords,
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    gx=gx,
+                    gy=gy,
+                    Q_seg_grid=cfg.coreformation.segregation_heating ? Q_seg_grid : nothing,
+                    rho_silicate=rhosolidm[1],
+                    eta_silicate=etasolidm[1],
+                    ETA=ETA,
+                    Fm=Fm,
+                    T_solidus_silicate=cfg.melting.T_solidus[1],
+                    T_liquidus_silicate=cfg.melting.T_liquidus[1],
+                )
+                max_v_seg_prev = seg_res.max_v_seg
             end
 
             # ------------------------------------------------------------------
@@ -2082,34 +2159,6 @@ function simulation_loop(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords
         )
 
-        # ---------------------------------------------------------------------
-        # iron core formation segregation
-        # ---------------------------------------------------------------------
-        if coreformation_active_val && Xfe_bulk !== nothing && Xfem !== nothing
-            fill!(Q_seg_grid, 0.0)
-            apply_metal_segregation!(
-                xm,
-                ym,
-                tm,
-                tkm,
-                phim,
-                Xfe_bulk,
-                Xfem,
-                marknum,
-                dt,
-                cfg.coreformation;
-                coords=coords,
-                xcenter=xcenter_val,
-                ycenter=ycenter_val,
-                rplanet=rplanet_val,
-                gx=gx,
-                gy=gy,
-                Q_seg_grid=cfg.coreformation.segregation_heating ? Q_seg_grid : nothing,
-                rho_silicate=rhosolidm[1],
-                eta_silicate=etasolidm[1],
-                ETA=ETA,
-            )
-        end
 
         # ---------------------------------------------------------------------
         # replenish sparse areas with additional markers
@@ -2150,6 +2199,14 @@ function simulation_loop(
             Xfem0=Xfem0,
             Xfe_bulk=Xfe_bulk,
         )
+        if coreformation_active_val
+            if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
+                resize!(Xfe_bulk_step_start, marknum)
+            end
+            if Xfem_step_start !== nothing && length(Xfem_step_start) != marknum
+                resize!(Xfem_step_start, marknum)
+            end
+        end
 
         # ---------------------------------------------------------------------
         # update timesum

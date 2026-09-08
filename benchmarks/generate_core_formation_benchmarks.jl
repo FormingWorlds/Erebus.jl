@@ -26,6 +26,7 @@ const T_SOLIDUS = 1416.0         # Silicate solidus [K]
 const T_LIQUIDUS = 1800.0        # Silicate liquidus [K]
 const L_SILICATE = 4.0e5         # Silicate latent heat of melting [J/kg]
 const L_ICE = 3.33e5             # Water ice latent heat of melting [J/kg]
+const L_METAL = 2.7e5            # Fe-FeS eutectic latent heat of melting [J/kg]
 
 const RHO_SIL_SOLID = 3300.0     # Silicate solid density [kg/m^3]
 const RHO_SIL_MELT = 2700.0      # Silicate melt density [kg/m^3]
@@ -259,16 +260,19 @@ function run_core_formation_sim(
 
         for i in 1:Nr
             rc = r_centers[i]
+            rho_eff = rho_bulk[i]
             # Apparent heat capacity buffering
             cp_eff = CP_SIL
             if T[i] >= T_SOLIDUS && T[i] <= T_LIQUIDUS
                 cp_eff += L_SILICATE / (T_LIQUIDUS - T_SOLIDUS)
             end
+            if T[i] >= T_EUTECTIC && T[i] <= T_EUTECTIC + DT_METAL && phi_fe[i] > 0.0
+                cp_eff += (phi_fe[i] * RHO_METAL_SOLID / rho_eff) * (L_METAL / DT_METAL)
+            end
             if T[i] >= 270.0 && T[i] <= 276.0 && phi_ice[i] > 0.0
                 cp_eff += L_ICE / 6.0
             end
 
-            rho_eff = rho_bulk[i]
             heat_cap = rho_eff * cp_eff
 
             vol_shell = vol_shells[i]

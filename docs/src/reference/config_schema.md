@@ -328,6 +328,8 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `percolation_active` | `Bool` | `false` | - | Enable Darcy percolation of liquid Fe-FeS through solid silicate matrix | `true` / `false` |
 | `settling_active` | `Bool` | `false` | - | Enable Stokes settling of liquid metal droplets in magma ocean | `true` / `false` |
 | `rho_metal` | `Float64` | `7200.0` | $\text{kg/m}^3$ | Density of liquid metal (Fe-FeS) phase | $> \rho_{\text{silicate}}$ |
+| `rho_metal_solid` | `Float64` | `7800.0` | $\text{kg/m}^3$ | Density of solid metal (Fe-FeS) phase | $> \rho_{\text{metal}}$ |
+| `L_metal` | `Float64` | `2.7e5` | J/kg | Latent heat of melting for Fe-FeS eutectic mixture | $\ge 0$ |
 | `eta_metal` | `Float64` | `1.0e-2` | Pa s | Dynamic viscosity of liquid metal phase | $> 0$ |
 | `k_metal` | `Float64` | `40.0` | W/(m K) | Thermal conductivity of metallic phase | $> 0$ |
 | `rhocp_metal` | `Float64` | `4.0e6` | $\text{J/(m}^3\text{ K)}$ | Volumetric heat capacity of metallic phase | $> 0$ |

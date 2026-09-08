@@ -1331,6 +1331,9 @@ function compute_adaptive_timestep(
     DTmax_val=DTmax,
     dt_longest_val=dt_longest,
     dt_min=1.0,
+    max_v_seg::Real=0.0,
+    max_subcycles::Integer=2000,
+    cfl_settling::Real=0.5,
 )
     dt_cand = compute_displacement_timestep(
         vx,
@@ -1348,6 +1351,12 @@ function compute_adaptive_timestep(
     ref_dt = dt_ref === nothing ? dt : dt_ref
     if maxDTcurrent > DTmax_val && maxDTcurrent > 0.0
         dt_cand = min(dt_cand, ref_dt * (DTmax_val * inv(maxDTcurrent)))
+    end
+    if max_v_seg > 0.0
+        min_dx = min(dx_val, dy_val)
+        dt_cfl_seg = cfl_settling * min_dx / max_v_seg
+        dt_seg_bound = max_subcycles * dt_cfl_seg
+        dt_cand = min(dt_cand, dt_seg_bound)
     end
     dt_cand = clamp(dt_cand, dt_min, dt_longest_val)
     return dt_cand
@@ -2511,6 +2520,11 @@ References:
 - `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
 - `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional grid to accumulate dissipation heating [W/m^3]
 - `rho_silicate::Real=3000.0`: Reference silicate rock density [kg/m^3]
+- `eta_silicate::Real=1.0e18`: Reference silicate rock dynamic viscosity [Pa s]
+- `ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Matrix viscosity on grid [Pa s]
+- `Fm::Union{Nothing,AbstractVector{Float64}}=nothing`: Marker silicate melt fraction [-]
+- `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
+- `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
 
 # Returns
 - NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy)` where `total_dissipation_energy` is in [J/m].
@@ -2537,6 +2551,9 @@ function apply_metal_segregation!(
     rho_silicate::Real=3000.0,
     eta_silicate::Real=1.0e18,
     ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    T_solidus_silicate::Real=1400.0,
+    T_liquidus_silicate::Real=1800.0,
 )
     if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
         dt <= 0.0 ||
@@ -2596,7 +2613,19 @@ function apply_metal_segregation!(
                 M_fe_cell[i_c, j_c] += Xfe_bulk[m]
                 M_rock_markers[i_c, j_c] += 1
                 phi_m_cell[i_c, j_c] += Xfem[m]
-                F_m_cell[i_c, j_c] += phim[m]
+                F_m_val = if Fm !== nothing
+                    Fm[m]
+                elseif tkm[m] >= T_solidus_silicate && T_liquidus_silicate > T_solidus_silicate
+                    clamp(
+                        (tkm[m] - T_solidus_silicate) /
+                        (T_liquidus_silicate - T_solidus_silicate),
+                        0.0,
+                        1.0,
+                    )
+                else
+                    0.0
+                end
+                F_m_cell[i_c, j_c] += F_m_val
                 cap_cell[i_c, j_c] += max(cfg_core.phi_pack - Xfe_bulk[m], 0.0)
             end
         end
@@ -2707,7 +2736,7 @@ function apply_metal_segregation!(
     dt_cfl = cfg_core.cfl_settling * min(dx_val, dy_val) / max_v
     n_sub_raw = Int(ceil(dt / dt_cfl))
     if n_sub_raw > cfg_core.max_subcycles
-        @warn "CFL subcycling requires $n_sub_raw steps, capped at max_subcycles $(cfg_core.max_subcycles)" maxlog=5
+        @warn "CFL subcycling requires $n_sub_raw steps, capped at max_subcycles $(cfg_core.max_subcycles); segregation transport throttled" maxlog=10
     end
     n_sub = clamp(n_sub_raw, 1, cfg_core.max_subcycles)
     dt_sub = dt / n_sub
@@ -3006,6 +3035,18 @@ function apply_metal_segregation!(
                     end
                 end
             end
+        end
+    end
+
+    # Keep molten metal fraction Xfem consistent with newly segregated bulk metal
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            F_fe = compute_metal_melt_fraction(
+                tkm[m]; T_eutectic=cfg_core.T_eutectic, dT_metal=cfg_core.dT_metal
+            )
+            Xfem[m] = Xfe_bulk[m] * F_fe
+        else
+            Xfem[m] = 0.0
         end
     end
 

@@ -3842,6 +3842,7 @@ References:
 - `eta_metal`: Dynamic viscosity of molten metal [Pa s] (default 1.0e-2)
 - `phi_crit_perc`: Percolation connectivity threshold [-] (default 0.05)
 - `phi_residual`: Capillary-trapped residual metal fraction [-] (default 0.02)
+- `phi0`: Reference porosity scale [-] (default 0.1)
 - `perm_exponent`: Porosity exponent for permeability [-] (default 3.0)
 - `r_drop`: Settling droplet radius [m] (default 5.0e-3)
 - `hindered_exponent`: Richardson-Zaki exponent [-] (default 4.5)
