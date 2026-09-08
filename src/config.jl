@@ -1057,63 +1057,71 @@ function validate_config(cfg::SimulationConfig)
     if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
         cf = cfg.coreformation
         (isfinite(cf.rho_metal) && cf.rho_metal > cfg.materials.rhosolidm[1]) || throw(
-            ArgumentError("rho_metal ($(cf.rho_metal)) must be finite and exceed silicate rock density ($(cfg.materials.rhosolidm[1]))")
+            ArgumentError(
+                "rho_metal ($(cf.rho_metal)) must be finite and exceed silicate rock density ($(cfg.materials.rhosolidm[1]))",
+            ),
         )
         (cf.eta_metal > 0.0 && isfinite(cf.eta_metal)) || throw(
             ArgumentError("eta_metal must be positive and finite, got $(cf.eta_metal)")
         )
-        (cf.k_metal > 0.0 && isfinite(cf.k_metal)) || throw(
-            ArgumentError("k_metal must be positive and finite, got $(cf.k_metal)")
-        )
+        (cf.k_metal > 0.0 && isfinite(cf.k_metal)) ||
+            throw(ArgumentError("k_metal must be positive and finite, got $(cf.k_metal)"))
         (cf.rhocp_metal > 0.0 && isfinite(cf.rhocp_metal)) || throw(
-            ArgumentError("rhocp_metal must be positive and finite, got $(cf.rhocp_metal)")
+            ArgumentError("rhocp_metal must be positive and finite, got $(cf.rhocp_metal)"),
         )
-        (0.0 <= cf.Xfe_bulk <= 1.0) || throw(
-            ArgumentError("Xfe_bulk must be in [0, 1], got $(cf.Xfe_bulk)")
-        )
-        (0.0 < cf.phi_pack <= 1.0) || throw(
-            ArgumentError("phi_pack must be in (0, 1], got $(cf.phi_pack)")
-        )
+        (0.0 <= cf.Xfe_bulk <= 1.0) ||
+            throw(ArgumentError("Xfe_bulk must be in [0, 1], got $(cf.Xfe_bulk)"))
+        (0.0 < cf.phi_pack <= 1.0) ||
+            throw(ArgumentError("phi_pack must be in (0, 1], got $(cf.phi_pack)"))
         (0.0 <= cf.phi_residual <= cf.phi_crit_perc < cf.phi_pack) || throw(
-            ArgumentError("phi_residual ($(cf.phi_residual)) must be <= phi_crit_perc ($(cf.phi_crit_perc)) < phi_pack ($(cf.phi_pack))")
+            ArgumentError(
+                "phi_residual ($(cf.phi_residual)) must be <= phi_crit_perc ($(cf.phi_crit_perc)) < phi_pack ($(cf.phi_pack))",
+            ),
         )
         (0.0 <= cf.F_settle_start <= cf.F_perc_end <= 1.0) || throw(
-            ArgumentError("F_settle_start ($(cf.F_settle_start)) must be <= F_perc_end ($(cf.F_perc_end)) in [0, 1]")
+            ArgumentError(
+                "F_settle_start ($(cf.F_settle_start)) must be <= F_perc_end ($(cf.F_perc_end)) in [0, 1]",
+            ),
         )
-        (0.0 < cf.cfl_settling <= 1.0) || throw(
-            ArgumentError("cfl_settling must be in (0, 1], got $(cf.cfl_settling)")
-        )
-        cf.max_subcycles > 0 || throw(
-            ArgumentError("max_subcycles must be > 0, got $(cf.max_subcycles)")
-        )
+        (0.0 < cf.cfl_settling <= 1.0) ||
+            throw(ArgumentError("cfl_settling must be in (0, 1], got $(cf.cfl_settling)"))
+        cf.max_subcycles > 0 ||
+            throw(ArgumentError("max_subcycles must be > 0, got $(cf.max_subcycles)"))
         cf.droplet_size_mode in Set([:fixed, :weber_mean, :weber_turbulent]) || throw(
-            ArgumentError("droplet_size_mode must be one of :fixed, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)")
+            ArgumentError(
+                "droplet_size_mode must be one of :fixed, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)",
+            ),
         )
         (cf.droplet_diameter_fixed > 0.0 && isfinite(cf.droplet_diameter_fixed)) || throw(
-            ArgumentError("droplet_diameter_fixed must be positive, got $(cf.droplet_diameter_fixed)")
+            ArgumentError(
+                "droplet_diameter_fixed must be positive, got $(cf.droplet_diameter_fixed)",
+            ),
         )
         (cf.sigma_metal_silicate > 0.0 && isfinite(cf.sigma_metal_silicate)) || throw(
-            ArgumentError("sigma_metal_silicate must be positive, got $(cf.sigma_metal_silicate)")
+            ArgumentError(
+                "sigma_metal_silicate must be positive, got $(cf.sigma_metal_silicate)"
+            ),
         )
-        (cf.We_crit > 0.0 && isfinite(cf.We_crit)) || throw(
-            ArgumentError("We_crit must be positive, got $(cf.We_crit)")
-        )
+        (cf.We_crit > 0.0 && isfinite(cf.We_crit)) ||
+            throw(ArgumentError("We_crit must be positive, got $(cf.We_crit)"))
         (cf.hindered_exponent >= 0.0 && isfinite(cf.hindered_exponent)) || throw(
-            ArgumentError("hindered_exponent must be non-negative, got $(cf.hindered_exponent)")
+            ArgumentError(
+                "hindered_exponent must be non-negative, got $(cf.hindered_exponent)"
+            ),
         )
     end
 
     if cfg.coreformation.percolation_active
         cf = cfg.coreformation
         cf.T_eutectic < cfg.melting.T_solidus[1] || throw(
-            ArgumentError("T_eutectic ($(cf.T_eutectic)) must be below silicate solidus ($(cfg.melting.T_solidus[1])) for percolation")
+            ArgumentError(
+                "T_eutectic ($(cf.T_eutectic)) must be below silicate solidus ($(cfg.melting.T_solidus[1])) for percolation",
+            ),
         )
-        (cf.dT_metal > 0.0 && isfinite(cf.dT_metal)) || throw(
-            ArgumentError("dT_metal must be positive, got $(cf.dT_metal)")
-        )
-        (cf.k_metal_ref > 0.0 && isfinite(cf.k_metal_ref)) || throw(
-            ArgumentError("k_metal_ref must be positive, got $(cf.k_metal_ref)")
-        )
+        (cf.dT_metal > 0.0 && isfinite(cf.dT_metal)) ||
+            throw(ArgumentError("dT_metal must be positive, got $(cf.dT_metal)"))
+        (cf.k_metal_ref > 0.0 && isfinite(cf.k_metal_ref)) ||
+            throw(ArgumentError("k_metal_ref must be positive, got $(cf.k_metal_ref)"))
         (cf.perm_exponent >= 0.0 && isfinite(cf.perm_exponent)) || throw(
             ArgumentError("perm_exponent must be non-negative, got $(cf.perm_exponent)")
         )
@@ -1121,7 +1129,9 @@ function validate_config(cfg::SimulationConfig)
 
     if cfg.coreformation.settling_active
         cfg.melting.active || throw(
-            ArgumentError("settling_active requires melting.active = true for silicate melt fraction")
+            ArgumentError(
+                "settling_active requires melting.active = true for silicate melt fraction",
+            ),
         )
     end
 

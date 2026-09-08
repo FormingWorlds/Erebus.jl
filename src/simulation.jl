@@ -480,7 +480,8 @@ function simulation_loop(
     T_surface_ref_val = cfg.melting.T_surface_ref
     k_turb_cutoff_val = cfg.melting.k_turb_cutoff
     k_turb_floor_val = cfg.melting.k_turb_floor
-    coreformation_active_val = cfg.coreformation.percolation_active || cfg.coreformation.settling_active
+    coreformation_active_val =
+        cfg.coreformation.percolation_active || cfg.coreformation.settling_active
     Xfe_bulk_val = cfg.coreformation.Xfe_bulk
     T_eutectic_val = cfg.coreformation.T_eutectic
     dT_metal_val = cfg.coreformation.dT_metal

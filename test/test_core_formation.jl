@@ -49,17 +49,13 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    rho_metal=3000.0,
+                    percolation_active=true, rho_metal=3000.0
                 ),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
-                coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    rho_metal=Inf,
-                ),
+                coreformation=CoreFormationConfig(; percolation_active=true, rho_metal=Inf)
             ),
         )
 
@@ -67,17 +63,13 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    eta_metal=-1.0e-2,
+                    percolation_active=true, eta_metal=-1.0e-2
                 ),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
-                coreformation=CoreFormationConfig(;
-                    settling_active=true,
-                    k_metal=0.0,
-                ),
+                coreformation=CoreFormationConfig(; settling_active=true, k_metal=0.0),
                 melting=MeltingConfig(; active=true),
             ),
         )
@@ -86,18 +78,14 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    phi_residual=0.10,
-                    phi_crit_perc=0.05,
+                    percolation_active=true, phi_residual=0.10, phi_crit_perc=0.05
                 ),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    phi_crit_perc=0.70,
-                    phi_pack=0.65,
+                    percolation_active=true, phi_crit_perc=0.70, phi_pack=0.65
                 ),
             ),
         )
@@ -106,9 +94,7 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    settling_active=true,
-                    F_settle_start=0.60,
-                    F_perc_end=0.40,
+                    settling_active=true, F_settle_start=0.60, F_perc_end=0.40
                 ),
                 melting=MeltingConfig(; active=true),
             ),
@@ -118,8 +104,7 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    settling_active=true,
-                    droplet_size_mode=:invalid_mode,
+                    settling_active=true, droplet_size_mode=:invalid_mode
                 ),
                 melting=MeltingConfig(; active=true),
             ),
@@ -129,8 +114,7 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    T_eutectic=1500.0,
+                    percolation_active=true, T_eutectic=1500.0
                 ),
             ),
         )
@@ -138,9 +122,7 @@ using JLD2
         # Settling requires melting active
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
-                coreformation=CoreFormationConfig(;
-                    settling_active=true,
-                ),
+                coreformation=CoreFormationConfig(; settling_active=true),
                 melting=MeltingConfig(; active=false),
             ),
         )
@@ -149,16 +131,14 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    cfl_settling=0.0,
+                    percolation_active=true, cfl_settling=0.0
                 ),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true,
-                    max_subcycles=0,
+                    percolation_active=true, max_subcycles=0
                 ),
             ),
         )
@@ -215,17 +195,25 @@ using JLD2
         phi0 = 0.1
         phi_mob = phi_m - phi_crit # 0.10
         # Expected: k_ref * (phi_mob / phi0)^3 * ((1 - phi_mob)/(1 - phi0))^(-2) = 1e-9
-        k_val = metal_permeability(phi_m; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0)
+        k_val = metal_permeability(
+            phi_m; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0
+        )
         @test isapprox(k_val, 1.0e-9; rtol=1e-10)
 
         # 4. Strict monotonicity above threshold
-        k_low = metal_permeability(0.10; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0)
-        k_high = metal_permeability(0.20; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0)
+        k_low = metal_permeability(
+            0.10; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0
+        )
+        k_high = metal_permeability(
+            0.20; k_metal_ref=k_ref, phi_crit_perc=phi_crit, phi0=phi0
+        )
         @test k_low > 0.0
         @test k_high > k_low
 
         # 5. Prefactor scaling (k_ref doubles permeability)
-        k_doubled = metal_permeability(phi_m; k_metal_ref=2.0e-9, phi_crit_perc=phi_crit, phi0=phi0)
+        k_doubled = metal_permeability(
+            phi_m; k_metal_ref=2.0e-9, phi_crit_perc=phi_crit, phi0=phi0
+        )
         @test isapprox(k_doubled, 2.0 * k_val; rtol=1e-10)
     end
 
@@ -295,12 +283,18 @@ using JLD2
         @test_throws DomainError weber_equilibrium_diameter(rho_sil, 0.0, sigma)
         @test_throws DomainError weber_equilibrium_diameter(rho_sil, -0.01, sigma)
         @test_throws DomainError weber_equilibrium_diameter(rho_sil, v_rel, -1.0)
-        @test_throws DomainError weber_equilibrium_diameter(rho_sil, v_rel, sigma; We_crit=0.0)
+        @test_throws DomainError weber_equilibrium_diameter(
+            rho_sil, v_rel, sigma; We_crit=0.0
+        )
     end
 
     @testset "Richardson-Zaki Hindered Settling" begin
         # 1. Boundary limits: 1.0 at zero metal, 0.0 at/above packing
-        @test isapprox(richardson_zaki_hindrance(0.0; hindered_exponent=4.5, phi_pack=0.65), 1.0; rtol=1e-12)
+        @test isapprox(
+            richardson_zaki_hindrance(0.0; hindered_exponent=4.5, phi_pack=0.65),
+            1.0;
+            rtol=1e-12,
+        )
         @test iszero(richardson_zaki_hindrance(0.65; hindered_exponent=4.5, phi_pack=0.65))
         @test iszero(richardson_zaki_hindrance(0.80; hindered_exponent=4.5, phi_pack=0.65))
 
@@ -332,8 +326,16 @@ using JLD2
         @test iszero(compute_metal_melt_fraction(1213.0; T_eutectic=T_eut, dT_metal=dT_m))
 
         # 2. Super-eutectic: full melt
-        @test isapprox(compute_metal_melt_fraction(1263.0; T_eutectic=T_eut, dT_metal=dT_m), 1.0; rtol=1e-12)
-        @test isapprox(compute_metal_melt_fraction(1400.0; T_eutectic=T_eut, dT_metal=dT_m), 1.0; rtol=1e-12)
+        @test isapprox(
+            compute_metal_melt_fraction(1263.0; T_eutectic=T_eut, dT_metal=dT_m),
+            1.0;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            compute_metal_melt_fraction(1400.0; T_eutectic=T_eut, dT_metal=dT_m),
+            1.0;
+            rtol=1e-12,
+        )
 
         # 3. Mid-window linear ramp
         f_mid = compute_metal_melt_fraction(1238.0; T_eutectic=T_eut, dT_metal=dT_m)
@@ -359,57 +361,96 @@ using JLD2
 
         # 1. Inactive case: returns zero
         v_none = metal_segregation_velocity(
-            phi_m, 0.20, drho, g_acc, eta_s;
-            percolation_active=false, settling_active=false,
+            phi_m, 0.20, drho, g_acc, eta_s; percolation_active=false, settling_active=false
         )
         @test iszero(v_none)
 
         # 2. Percolation only case:
         v_perc_solid = metal_segregation_velocity(
-            phi_m, 0.0, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=false,
-            phi_crit_perc=0.05, F_perc_end=0.50,
+            phi_m,
+            0.0,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=false,
+            phi_crit_perc=0.05,
+            F_perc_end=0.50,
         )
         @test v_perc_solid > 0.0
 
         # Shuts off at or above disaggregation when settling is inactive
         v_perc_high_melt = metal_segregation_velocity(
-            phi_m, 0.55, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=false,
-            phi_crit_perc=0.05, F_perc_end=0.50,
+            phi_m,
+            0.55,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=false,
+            phi_crit_perc=0.05,
+            F_perc_end=0.50,
         )
         @test iszero(v_perc_high_melt)
 
         # 3. Settling only case:
         v_settle_sub = metal_segregation_velocity(
-            phi_m, 0.20, drho, g_acc, eta_s;
-            percolation_active=false, settling_active=true,
+            phi_m,
+            0.20,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=false,
+            settling_active=true,
             F_settle_start=0.40,
         )
         @test iszero(v_settle_sub)
 
         v_settle_high = metal_segregation_velocity(
-            phi_m, 0.60, drho, g_acc, eta_s;
-            percolation_active=false, settling_active=true,
+            phi_m,
+            0.60,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=false,
+            settling_active=true,
             F_settle_start=0.40,
         )
         @test v_settle_high > 0.0
 
         # 4. Hybrid transition continuity across [0.40, 0.50]
         v_hyb_solid = metal_segregation_velocity(
-            phi_m, 0.39, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=true,
-            F_settle_start=0.40, F_perc_end=0.50,
+            phi_m,
+            0.39,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=true,
+            F_settle_start=0.40,
+            F_perc_end=0.50,
         )
         v_hyb_mid = metal_segregation_velocity(
-            phi_m, 0.45, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=true,
-            F_settle_start=0.40, F_perc_end=0.50,
+            phi_m,
+            0.45,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=true,
+            F_settle_start=0.40,
+            F_perc_end=0.50,
         )
         v_hyb_melt = metal_segregation_velocity(
-            phi_m, 0.51, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=true,
-            F_settle_start=0.40, F_perc_end=0.50,
+            phi_m,
+            0.51,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=true,
+            F_settle_start=0.40,
+            F_perc_end=0.50,
         )
         @test isapprox(v_hyb_solid, v_perc_solid; rtol=1e-10)
         @test isapprox(v_hyb_melt, v_settle_high; rtol=1e-10)
@@ -417,41 +458,62 @@ using JLD2
 
         # 5. Residual metal fraction sensitivity
         v_res_low = metal_segregation_velocity(
-            phi_m, 0.0, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=false,
-            phi_crit_perc=0.05, phi_residual=0.01,
+            phi_m,
+            0.0,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=false,
+            phi_crit_perc=0.05,
+            phi_residual=0.01,
         )
         v_res_high = metal_segregation_velocity(
-            phi_m, 0.0, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=false,
-            phi_crit_perc=0.05, phi_residual=0.04,
+            phi_m,
+            0.0,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=false,
+            phi_crit_perc=0.05,
+            phi_residual=0.04,
         )
         @test v_res_low > v_res_high > 0.0
 
         # Trapped below residual
         v_trapped = metal_segregation_velocity(
-            0.03, 0.0, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=false,
-            phi_crit_perc=0.05, phi_residual=0.04,
+            0.03,
+            0.0,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            settling_active=false,
+            phi_crit_perc=0.05,
+            phi_residual=0.04,
         )
         @test iszero(v_trapped)
 
         # 6. Error contracts
         @test_throws DomainError metal_segregation_velocity(
-            -0.01, 0.2, drho, g_acc, eta_s;
-            percolation_active=true, settling_active=true,
+            -0.01, 0.2, drho, g_acc, eta_s; percolation_active=true, settling_active=true
         )
         @test_throws DomainError metal_segregation_velocity(
-            phi_m, 0.2, drho, g_acc, -1.0;
-            percolation_active=true, settling_active=true,
+            phi_m, 0.2, drho, g_acc, -1.0; percolation_active=true, settling_active=true
         )
         @test_throws DomainError metal_segregation_velocity(
-            phi_m, 0.2, drho, g_acc, eta_s;
-            percolation_active=true, phi_residual=-0.01,
+            phi_m, 0.2, drho, g_acc, eta_s; percolation_active=true, phi_residual=-0.01
         )
         @test_throws DomainError metal_segregation_velocity(
-            phi_m, 0.2, drho, g_acc, eta_s;
-            percolation_active=true, phi_crit_perc=0.05, phi_residual=0.06,
+            phi_m,
+            0.2,
+            drho,
+            g_acc,
+            eta_s;
+            percolation_active=true,
+            phi_crit_perc=0.05,
+            phi_residual=0.06,
         )
     end
 
@@ -480,7 +542,9 @@ using JLD2
         @test_throws DomainError segregation_dissipation_heating(1.05, drho, g_acc, v_seg)
         @test_throws DomainError segregation_dissipation_heating(phi_m, -1.0, g_acc, v_seg)
         @test_throws DomainError segregation_dissipation_heating(phi_m, drho, -0.05, v_seg)
-        @test_throws DomainError segregation_dissipation_heating(phi_m, drho, g_acc, -1.0e-4)
+        @test_throws DomainError segregation_dissipation_heating(
+            phi_m, drho, g_acc, -1.0e-4
+        )
     end
 
     @testset "Metal Property Blending Mixtures" begin
@@ -494,20 +558,33 @@ using JLD2
         # 1. Density mixture limits
         @test isapprox(metal_blended_density(rho_s, rho_m, 0.0), rho_s; rtol=1e-12)
         @test isapprox(metal_blended_density(rho_s, rho_m, 1.0), rho_m; rtol=1e-12)
-        @test isapprox(metal_blended_density(rho_s, rho_m, 0.5), 0.5 * (rho_s + rho_m); rtol=1e-12)
-        @test metal_blended_density(rho_s, rho_m, 0.2) < metal_blended_density(rho_s, rho_m, 0.4)
+        @test isapprox(
+            metal_blended_density(rho_s, rho_m, 0.5), 0.5 * (rho_s + rho_m); rtol=1e-12
+        )
+        @test metal_blended_density(rho_s, rho_m, 0.2) <
+            metal_blended_density(rho_s, rho_m, 0.4)
 
         # 2. Thermal conductivity mixture limits
         @test isapprox(metal_blended_conductivity(k_s, k_m, 0.0), k_s; rtol=1e-12)
         @test isapprox(metal_blended_conductivity(k_s, k_m, 1.0), k_m; rtol=1e-12)
-        @test isapprox(metal_blended_conductivity(k_s, k_m, 0.5; mode=:arithmetic), 21.5; rtol=1e-12)
+        @test isapprox(
+            metal_blended_conductivity(k_s, k_m, 0.5; mode=:arithmetic), 21.5; rtol=1e-12
+        )
         k_geom = metal_blended_conductivity(k_s, k_m, 0.5; mode=:geometric)
         @test isapprox(k_geom, sqrt(k_s * k_m); rtol=1e-12)
 
         # 3. Heat capacity mixture limits
-        @test isapprox(metal_blended_heat_capacity(rhocp_s, rhocp_m, 0.0), rhocp_s; rtol=1e-12)
-        @test isapprox(metal_blended_heat_capacity(rhocp_s, rhocp_m, 1.0), rhocp_m; rtol=1e-12)
-        @test isapprox(metal_blended_heat_capacity(rhocp_s, rhocp_m, 0.5), 0.5 * (rhocp_s + rhocp_m); rtol=1e-12)
+        @test isapprox(
+            metal_blended_heat_capacity(rhocp_s, rhocp_m, 0.0), rhocp_s; rtol=1e-12
+        )
+        @test isapprox(
+            metal_blended_heat_capacity(rhocp_s, rhocp_m, 1.0), rhocp_m; rtol=1e-12
+        )
+        @test isapprox(
+            metal_blended_heat_capacity(rhocp_s, rhocp_m, 0.5),
+            0.5 * (rhocp_s + rhocp_m);
+            rtol=1e-12,
+        )
 
         # 4. Error contracts
         @test_throws DomainError metal_blended_density(-3300.0, rho_m, 0.5)
@@ -515,7 +592,9 @@ using JLD2
         @test_throws DomainError metal_blended_density(rho_s, rho_m, -0.1)
         @test_throws DomainError metal_blended_conductivity(0.0, k_m, 0.5)
         @test_throws DomainError metal_blended_heat_capacity(rhocp_s, -1.0, 0.5)
-        @test_throws ArgumentError metal_blended_conductivity(k_s, k_m, 0.5; mode=:unsupported)
+        @test_throws ArgumentError metal_blended_conductivity(
+            k_s, k_m, 0.5; mode=:unsupported
+        )
     end
 
     @testset "Suspension Rouse Number Diagnostic" begin
@@ -572,12 +651,33 @@ using JLD2
 
         # Initialize markers with metal tracking
         define_markers!(
-            xm, ym, tm, phim, etavpm, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm,
-            tkm, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur,
+            xm,
+            ym,
+            tm,
+            phim,
+            etavpm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
             XWsolidm0;
-            randomized=false, coords=coords,
-            Xfe_bulk=Xfe_bulk, Xfem=Xfem, Xfem0=Xfem0,
-            Xfe_bulk_val=0.22, T_eutectic_val=1213.0, dT_metal_val=50.0,
+            randomized=false,
+            coords=coords,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk_val=0.22,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
         )
 
         for m in 1:marknum
@@ -596,8 +696,12 @@ using JLD2
 
     @testset "compute_marker_properties! Metal Blending & Melting" begin
         marknum = 10
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(marknum)
-        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(marknum)
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
+            marknum
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            marknum
+        )
         (Xfem, Xfem0, Xfe_bulk) = setup_marker_metal_properties(marknum)
 
         # Setup planet rock marker (tm = 1) with bulk metal
@@ -610,10 +714,30 @@ using JLD2
         # 1. Below eutectic: metal is solid, no liquid metal
         tkm[m] = 1100.0
         compute_marker_properties!(
-            m, tm, tkm, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm,
-            etafluidcur_inv_kphim, start_hrsolidm, start_hrfluidm, phim, XWsolidm0, 9, rhofluidcur;
-            Xfe_bulk=Xfe_bulk, Xfem=Xfem, coreformation_active=true,
-            T_eutectic_val=1213.0, dT_metal_val=50.0, rho_metal_val=7200.0, k_metal_val=40.0, rhocp_metal_val=4.0e6,
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+            rho_metal_val=7200.0,
+            k_metal_val=40.0,
+            rhocp_metal_val=4.0e6,
         )
         @test iszero(Xfem[m])
         # Density should equal pure rock density (3300)
@@ -622,10 +746,30 @@ using JLD2
         # 2. Above eutectic: metal melts and blends density and conductivity
         tkm[m] = 1300.0 # above T_eutectic + dT_metal (1263 K) -> full melt fraction 1.0
         compute_marker_properties!(
-            m, tm, tkm, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm,
-            etafluidcur_inv_kphim, start_hrsolidm, start_hrfluidm, phim, XWsolidm0, 9, rhofluidcur;
-            Xfe_bulk=Xfe_bulk, Xfem=Xfem, coreformation_active=true,
-            T_eutectic_val=1213.0, dT_metal_val=50.0, rho_metal_val=7200.0, k_metal_val=40.0, rhocp_metal_val=4.0e6,
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+            rho_metal_val=7200.0,
+            k_metal_val=40.0,
+            rhocp_metal_val=4.0e6,
         )
         @test isapprox(Xfem[m], 0.25; rtol=1e-12)
         # Expected blended density: 0.75 * 3300 + 0.25 * 7200 = 2475 + 1800 = 4275 kg/m^3
@@ -652,8 +796,12 @@ using JLD2
         coords = GridCoordinates(GridConfig(; Nx=5, Ny=5, xsize=10000.0, ysize=10000.0))
         mdis, mnum = setup_marker_geometry_helpers(coords)
         marknum = 25
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(marknum, coords)
-        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(marknum)
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
+            marknum, coords
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
+            marknum
+        )
         (Xfem, Xfem0, Xfe_bulk) = setup_marker_metal_properties(marknum)
 
         # Place markers at positions with non-uniform distinct metal values
@@ -668,12 +816,40 @@ using JLD2
         end
 
         marknum_new = replenish_markers!(
-            xm, ym, tm, tkm, phim, sxxm, sxym, etavpm, phinewm, pfm0, XWsolidm, XWsolidm0,
-            rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, inv_gggtotalm, fricttotalm,
-            cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur, tkm_rhocptotalm,
-            etafluidcur_inv_kphim, mdis, mnum;
-            Fm=Fm, randomized=false, coords=coords,
-            Xfem=Xfem, Xfem0=Xfem0, Xfe_bulk=Xfe_bulk,
+            xm,
+            ym,
+            tm,
+            tkm,
+            phim,
+            sxxm,
+            sxym,
+            etavpm,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            mdis,
+            mnum;
+            Fm=Fm,
+            randomized=false,
+            coords=coords,
+            Xfem=Xfem,
+            Xfem0=Xfem0,
+            Xfe_bulk=Xfe_bulk,
         )
 
         @test marknum_new > marknum
@@ -724,9 +900,7 @@ using JLD2
                 reaction=cfg.reaction,
                 melting=cfg.melting,
                 coreformation=CoreFormationConfig(
-                    percolation_active=true,
-                    settling_active=true,
-                    Xfe_bulk=0.22,
+                    percolation_active=true, settling_active=true, Xfe_bulk=0.22
                 ),
                 output=OutputConfig(savematstep=1, output_dir=output_dir),
             )
@@ -757,8 +931,7 @@ using JLD2
                     reaction=cfg.reaction,
                     melting=cfg.melting,
                     coreformation=CoreFormationConfig(
-                        percolation_active=false,
-                        settling_active=false,
+                        percolation_active=false, settling_active=false
                     ),
                     output=OutputConfig(savematstep=1, output_dir=output_dir_nocore),
                 )

@@ -3598,13 +3598,23 @@ function metal_permeability(
         throw(DomainError(phi_m, "Metal volume fraction must be in [0, 1) and finite"))
     end
     if k_metal_ref < 0.0 || !isfinite(k_metal_ref)
-        throw(DomainError(k_metal_ref, "Reference permeability must be non-negative and finite"))
+        throw(
+            DomainError(
+                k_metal_ref, "Reference permeability must be non-negative and finite"
+            ),
+        )
     end
     if !(0.0 <= phi_crit_perc < 1.0) || !isfinite(phi_crit_perc)
-        throw(DomainError(phi_crit_perc, "Percolation threshold must be in [0, 1) and finite"))
+        throw(
+            DomainError(phi_crit_perc, "Percolation threshold must be in [0, 1) and finite")
+        )
     end
     if perm_exponent < 0.0 || !isfinite(perm_exponent)
-        throw(DomainError(perm_exponent, "Permeability exponent must be non-negative and finite"))
+        throw(
+            DomainError(
+                perm_exponent, "Permeability exponent must be non-negative and finite"
+            ),
+        )
     end
     if !(0.0 < phi0 < 1.0) || !isfinite(phi0)
         throw(DomainError(phi0, "Reference porosity must be in (0, 1) and finite"))
@@ -3615,7 +3625,9 @@ function metal_permeability(
     end
 
     phi_mob = phi_m - phi_crit_perc
-    return k_metal_ref * (phi_mob / phi0)^perm_exponent * ((1.0 - phi_mob) / (1.0 - phi0))^(-2.0)
+    return k_metal_ref *
+           (phi_mob / phi0)^perm_exponent *
+           ((1.0 - phi_mob) / (1.0 - phi0))^(-2.0)
 end
 
 """
@@ -3644,11 +3656,7 @@ References:
 - `DomainError`: If droplet radius is negative, viscosity is non-positive, or inputs non-finite.
 """
 function stokes_settling_velocity(
-    r_drop::Real,
-    drho::Real,
-    g_acc::Real,
-    eta_susp::Real;
-    hadamard_rybczynski::Bool=false,
+    r_drop::Real, drho::Real, g_acc::Real, eta_susp::Real; hadamard_rybczynski::Bool=false
 )
     if r_drop < 0.0 || !isfinite(r_drop)
         throw(DomainError(r_drop, "Droplet radius must be non-negative and finite"))
@@ -3692,10 +3700,7 @@ References:
 - `DomainError`: If densities, velocity, surface tension, or We_crit are non-positive.
 """
 function weber_equilibrium_diameter(
-    rho_silicate::Real,
-    v_rel::Real,
-    sigma::Real;
-    We_crit::Real=10.0,
+    rho_silicate::Real, v_rel::Real, sigma::Real; We_crit::Real=10.0
 )
     if rho_silicate <= 0.0 || !isfinite(rho_silicate)
         throw(DomainError(rho_silicate, "Silicate density must be positive and finite"))
@@ -3735,15 +3740,17 @@ References:
 - `DomainError`: If `phi_m` is not in [0, 1], exponent negative, or `phi_pack` out of range.
 """
 function richardson_zaki_hindrance(
-    phi_m::Real;
-    hindered_exponent::Real=4.5,
-    phi_pack::Real=0.65,
+    phi_m::Real; hindered_exponent::Real=4.5, phi_pack::Real=0.65
 )
     if !(0.0 <= phi_m <= 1.0) || !isfinite(phi_m)
         throw(DomainError(phi_m, "Metal volume fraction must be in [0, 1] and finite"))
     end
     if hindered_exponent < 0.0 || !isfinite(hindered_exponent)
-        throw(DomainError(hindered_exponent, "Hindered exponent must be non-negative and finite"))
+        throw(
+            DomainError(
+                hindered_exponent, "Hindered exponent must be non-negative and finite"
+            ),
+        )
     end
     if !(0.0 < phi_pack <= 1.0) || !isfinite(phi_pack)
         throw(DomainError(phi_pack, "Packing fraction must be in (0, 1] and finite"))
@@ -3779,11 +3786,7 @@ References:
 # Raises
 - `DomainError`: If temperatures are non-positive or non-finite.
 """
-function compute_metal_melt_fraction(
-    T::Real;
-    T_eutectic::Real=1213.0,
-    dT_metal::Real=50.0,
-)
+function compute_metal_melt_fraction(T::Real; T_eutectic::Real=1213.0, dT_metal::Real=50.0)
     if !isfinite(T) || T < 0.0
         throw(DomainError(T, "Temperature must be non-negative and finite"))
     end
@@ -3874,7 +3877,12 @@ function metal_segregation_velocity(
     end
     if percolation_active
         if !(0.0 <= phi_residual <= phi_crit_perc) || !isfinite(phi_residual)
-            throw(DomainError(phi_residual, "Residual metal fraction must be non-negative and <= phi_crit_perc"))
+            throw(
+                DomainError(
+                    phi_residual,
+                    "Residual metal fraction must be non-negative and <= phi_crit_perc",
+                ),
+            )
         end
     end
 
@@ -3883,19 +3891,32 @@ function metal_segregation_velocity(
     end
 
     # Percolation component
-    v_perc = if percolation_active && F_m < F_perc_end && phi_m > phi_crit_perc && phi_m > phi_residual
-        phi_m_perm = min(phi_m, 1.0 - 1e-7)
-        km = metal_permeability(phi_m_perm; k_metal_ref=k_metal_ref, phi_crit_perc=phi_crit_perc, perm_exponent=perm_exponent)
-        phi_mobile = phi_m - phi_residual
-        (km / (phi_m * eta_metal)) * drho * g_acc * (phi_mobile / phi_m)
-    else
-        0.0
-    end
+    v_perc =
+        if percolation_active &&
+            F_m < F_perc_end &&
+            phi_m > phi_crit_perc &&
+            phi_m > phi_residual
+            phi_m_perm = min(phi_m, 1.0 - 1e-7)
+            km = metal_permeability(
+                phi_m_perm;
+                k_metal_ref=k_metal_ref,
+                phi_crit_perc=phi_crit_perc,
+                perm_exponent=perm_exponent,
+            )
+            phi_mobile = phi_m - phi_residual
+            (km / (phi_m * eta_metal)) * drho * g_acc * (phi_mobile / phi_m)
+        else
+            0.0
+        end
 
     # Settling component
     v_settle = if settling_active && F_m >= F_settle_start && phi_m > 0.0
-        v0 = stokes_settling_velocity(r_drop, drho, g_acc, eta_susp; hadamard_rybczynski=hadamard_rybczynski)
-        h = richardson_zaki_hindrance(phi_m; hindered_exponent=hindered_exponent, phi_pack=phi_pack)
+        v0 = stokes_settling_velocity(
+            r_drop, drho, g_acc, eta_susp; hadamard_rybczynski=hadamard_rybczynski
+        )
+        h = richardson_zaki_hindrance(
+            phi_m; hindered_exponent=hindered_exponent, phi_pack=phi_pack
+        )
         v0 * h
     else
         0.0
@@ -3939,12 +3960,7 @@ References:
 # Raises
 - `DomainError`: If fractions or inputs are negative or unphysical.
 """
-function segregation_dissipation_heating(
-    phi_m::Real,
-    drho::Real,
-    g_acc::Real,
-    v_seg::Real,
-)
+function segregation_dissipation_heating(phi_m::Real, drho::Real, g_acc::Real, v_seg::Real)
     if !(0.0 <= phi_m <= 1.0) || !isfinite(phi_m)
         throw(DomainError(phi_m, "Metal volume fraction must be in [0, 1] and finite"))
     end
@@ -3974,11 +3990,7 @@ $(SIGNATURES)
 # Returns
 - Effective composite density [kg/m^3].
 """
-function metal_blended_density(
-    rho_silicate::Real,
-    rho_metal::Real,
-    phi_m::Real,
-)
+function metal_blended_density(rho_silicate::Real, rho_metal::Real, phi_m::Real)
     if rho_silicate <= 0.0 || !isfinite(rho_silicate)
         throw(DomainError(rho_silicate, "Silicate density must be positive and finite"))
     end
@@ -4009,10 +4021,7 @@ $(SIGNATURES)
 - Effective thermal conductivity [W/(m K)].
 """
 function metal_blended_conductivity(
-    k_silicate::Real,
-    k_metal::Real,
-    phi_m::Real;
-    mode::Symbol=:arithmetic,
+    k_silicate::Real, k_metal::Real, phi_m::Real; mode::Symbol=:arithmetic
 )
     if k_silicate <= 0.0 || !isfinite(k_silicate)
         throw(DomainError(k_silicate, "Silicate conductivity must be positive and finite"))
@@ -4046,13 +4055,13 @@ $(SIGNATURES)
 # Returns
 - Effective volumetric heat capacity [J/(m^3 K)].
 """
-function metal_blended_heat_capacity(
-    rhocp_silicate::Real,
-    rhocp_metal::Real,
-    phi_m::Real,
-)
+function metal_blended_heat_capacity(rhocp_silicate::Real, rhocp_metal::Real, phi_m::Real)
     if rhocp_silicate <= 0.0 || !isfinite(rhocp_silicate)
-        throw(DomainError(rhocp_silicate, "Silicate heat capacity must be positive and finite"))
+        throw(
+            DomainError(
+                rhocp_silicate, "Silicate heat capacity must be positive and finite"
+            ),
+        )
     end
     if rhocp_metal <= 0.0 || !isfinite(rhocp_metal)
         throw(DomainError(rhocp_metal, "Metal heat capacity must be positive and finite"))
@@ -4079,10 +4088,7 @@ References:
 # Returns
 - Rouse number [-] (> 1 indicates rainout, < 1 indicates suspension).
 """
-function suspension_rouse_number(
-    v_settle::Real,
-    u_conv::Real,
-)
+function suspension_rouse_number(v_settle::Real, u_conv::Real)
     if v_settle < 0.0 || !isfinite(v_settle)
         throw(DomainError(v_settle, "Settling velocity must be non-negative and finite"))
     end

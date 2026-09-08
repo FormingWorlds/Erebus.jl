@@ -87,14 +87,42 @@ function setup_marker_properties(
     # marker silicate melt fraction Fm [-]
     Fm = zeros(marknum)
     if include_metal
-        Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum; randomized=randomized)
+        Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(
+            marknum; randomized=randomized
+        )
         return (
-            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm,
-            Xfem, Xfem0, Xfe_bulk
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+            Xfem,
+            Xfem0,
+            Xfe_bulk,
         )
     else
         return (
-            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
         )
     end
 end # function setup_marker_properties()
@@ -555,7 +583,9 @@ function compute_marker_properties!(
             if phi_m > 0.0
                 rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_val, phi_m)
                 ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_m)
-                rhocptotalm[m] = metal_blended_heat_capacity(rhocptotalm[m], rhocp_metal_val, phi_m)
+                rhocptotalm[m] = metal_blended_heat_capacity(
+                    rhocptotalm[m], rhocp_metal_val, phi_m
+                )
                 hrtotalm[m] = (1.0 - phi_m) * hrtotalm[m]
             end
         end
