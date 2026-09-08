@@ -1070,7 +1070,7 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         (isfinite(cf.L_metal) && cf.L_metal >= 0.0) || throw(
-            ArgumentError("L_metal must be non-negative and finite, got $(cf.L_metal)"),
+            ArgumentError("L_metal must be non-negative and finite, got $(cf.L_metal)")
         )
         (cf.eta_metal > 0.0 && isfinite(cf.eta_metal)) || throw(
             ArgumentError("eta_metal must be positive and finite, got $(cf.eta_metal)")

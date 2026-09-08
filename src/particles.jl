@@ -588,7 +588,9 @@ function compute_marker_properties!(
                 rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_local, phi_fe)
                 ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_fe)
                 rhocp_eff_metal = rhocp_metal_val
-                if L_metal_val > 0.0 && tkm[m] >= T_eutectic_val && tkm[m] <= T_eutectic_val + dT_metal_val
+                if L_metal_val > 0.0 &&
+                    tkm[m] >= T_eutectic_val &&
+                    tkm[m] <= T_eutectic_val + dT_metal_val
                     rhocp_eff_metal += rho_metal_solid_val * L_metal_val / dT_metal_val
                 end
                 rhocptotalm[m] = metal_blended_heat_capacity(

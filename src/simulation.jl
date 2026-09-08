@@ -2159,7 +2159,6 @@ function simulation_loop(
             pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords
         )
 
-
         # ---------------------------------------------------------------------
         # replenish sparse areas with additional markers
         # ---------------------------------------------------------------------

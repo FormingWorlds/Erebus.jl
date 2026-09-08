@@ -2615,7 +2615,8 @@ function apply_metal_segregation!(
                 phi_m_cell[i_c, j_c] += Xfem[m]
                 F_m_val = if Fm !== nothing
                     Fm[m]
-                elseif tkm[m] >= T_solidus_silicate && T_liquidus_silicate > T_solidus_silicate
+                elseif tkm[m] >= T_solidus_silicate &&
+                    T_liquidus_silicate > T_solidus_silicate
                     clamp(
                         (tkm[m] - T_solidus_silicate) /
                         (T_liquidus_silicate - T_solidus_silicate),

@@ -89,16 +89,12 @@ using JLD2
         # L_metal must be non-negative and finite
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
-                coreformation=CoreFormationConfig(;
-                    percolation_active=true, L_metal=-1.0e5
-                ),
+                coreformation=CoreFormationConfig(; percolation_active=true, L_metal=-1.0e5)
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
-                coreformation=CoreFormationConfig(;
-                    percolation_active=true, L_metal=NaN
-                ),
+                coreformation=CoreFormationConfig(; percolation_active=true, L_metal=NaN)
             ),
         )
 
@@ -859,9 +855,7 @@ using JLD2
         # Apparent heat capacity buffered by metal latent heat:
         # 0.75 * 3.3e6 + 0.25 * (4.0e6 + 7800.0 * 2.7e5 / 50.0) = 2.475e6 + 1.153e7 = 1.4005e7 J/(m^3 K)
         @test isapprox(
-            rhocptotalm[m],
-            0.75 * 3.3e6 + 0.25 * (4.0e6 + 7800.0 * 2.7e5 / 50.0);
-            rtol=1e-2,
+            rhocptotalm[m], 0.75 * 3.3e6 + 0.25 * (4.0e6 + 7800.0 * 2.7e5 / 50.0); rtol=1e-2
         )
 
         # 3. Above eutectic: fully molten metal blends liquid density and conductivity
@@ -1803,9 +1797,7 @@ using JLD2
             fill!(Fm_d, 0.0)    # zero silicate melt
 
             cfg_settle_only = CoreFormationConfig(
-                percolation_active=false,
-                settling_active=true,
-                F_settle_start=0.40,
+                percolation_active=false, settling_active=true, F_settle_start=0.40
             )
 
             # Case A: High porosity, but zero silicate melt fraction -> zero settling velocity
@@ -1940,7 +1932,8 @@ using JLD2
 
             for m in 1:marknum_t
                 if tm_t[m] < 3 &&
-                    distance(xm_t[m], ym_t[m], coords_titer.xcenter, coords_titer.ycenter) <= 50000.0
+                    distance(xm_t[m], ym_t[m], coords_titer.xcenter, coords_titer.ycenter) <=
+                   50000.0
                     tkm_t[m] = 1600.0
                     Fm_t[m] = 0.60
                     Xfem_t[m] = Xfe_bulk_t[m]
@@ -1948,9 +1941,7 @@ using JLD2
             end
 
             cfg_titer = CoreFormationConfig(
-                percolation_active=true,
-                settling_active=true,
-                cfl_settling=0.5,
+                percolation_active=true, settling_active=true, cfl_settling=0.5
             )
             dt_step = 1.0e9
 
@@ -2021,13 +2012,16 @@ using JLD2
 
             @test res_pass1.max_v_seg > 0.0
             # Unrestored passes compound and artificially over-transport metal mass
-            @test sum(abs.(Xfe_unrestored .- Xfe_bulk_t)) > sum(abs.(Xfe_pass1 .- Xfe_bulk_t))
+            @test sum(abs.(Xfe_unrestored .- Xfe_bulk_t)) >
+                sum(abs.(Xfe_pass1 .- Xfe_bulk_t))
             # Restored snapshot matches single pass to exact floating-point precision
             @test isapprox(Xfe_restored, Xfe_pass1; atol=1e-14)
             @test isapprox(sum(Xfe_restored), sum(Xfe_bulk_t); rtol=1e-12)
             # Verify Xfem is updated consistently with newly segregated bulk metal
             @test isapprox(
-                Xfe_pass1 .* compute_metal_melt_fraction.(tkm_t; T_eutectic=cfg_titer.T_eutectic, dT_metal=cfg_titer.dT_metal),
+                Xfe_pass1 .* compute_metal_melt_fraction.(
+                    tkm_t; T_eutectic=cfg_titer.T_eutectic, dT_metal=cfg_titer.dT_metal
+                ),
                 Xfem_pass1;
                 atol=1e-14,
             )
