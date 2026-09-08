@@ -14,10 +14,8 @@ $(SIGNATURES)
     - SP: gravitational linear system of equations: solution vector
 """
 function setup_gravitational_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
-    # @timeit to "setup_gravitational_lse()" begin
     RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
-    # end # @timeit to "setup_gravitational_lse()"
     return RP, SP
 end
 function setup_gravitational_lse(coords::GridCoordinates)
@@ -39,10 +37,8 @@ $(SIGNATURES)
     - S: hydromechanical linear system of equations: solution vector
 """
 function setup_hydromechanical_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
-    # @timeit to "setup_hydromechanical_lse()" begin
     R = Vector{Float64}(undef, Ny1*Nx1*6)
     S = Vector{Float64}(undef, Ny1*Nx1*6)
-    # end # @timeit to "setup_hydromechanical_lse()"
     return R, S
 end
 function setup_hydromechanical_lse(coords::GridCoordinates)
@@ -64,10 +60,8 @@ $(SIGNATURES)
     - ST: thermal linear system of equations: solution vector
 """
 function setup_thermal_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
-    # @timeit to "setup_thermal_lse()" begin
     RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
-    # end # @timeit to "setup_thermal_lse()"
     return RT, ST
 end
 setup_thermal_lse(coords::GridCoordinates) = setup_thermal_lse(coords.Nx1, coords.Ny1)
@@ -158,8 +152,6 @@ function get_viscosities_stresses_density_gradients!(
     Ny_val = Ny1 - 1
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
-
-    # @timeit to "get_viscosities_stresses_density_gradients!()" begin
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
@@ -186,7 +178,6 @@ function get_viscosities_stresses_density_gradients!(
             0.5 * (RHOY[3:Ny1, :]-RHOY[1:(Ny1 - 2), :]) * inv(dy_val)
     end # @inbounds
     return nothing
-    # end # @timeit to "get_viscosities_stresses_density_gradients!()"
 end # function get_viscosities_stresses_density_gradients!
 
 """
@@ -523,35 +514,7 @@ function assemble_hydromechanical_lse!(
                     updateindex!(L, +, bcbottom, kvx, kvx-6)
                 end
             else
-                # Vx equation internal points: x-Stokes
-                #
-                #                           kvx-6
-                #                            Vx₂
-                #                             |
-                #               kvy-6     ETA(i-1,j)   kvy+6⋅Ny1-6
-                #                Vy₁      GGG(i-1,j)     Vy₃
-                #                 *       SXY0(i-1,j)     *
-                #                           basic₁
-                #                            ETA₁                       
-                #                            SXY₁
-                #               ETAP(i,j)     |      ETAP(i,j+1)
-                #               GGGP(i,j)     |      GGGP(i,j+1) 
-                #   kvx-6⋅Ny1   SXX0(i,j)    kvx     SXX0(i,j+1)  kvx+6⋅Ny1
-                #     Vx₁---------P₁---------Vx₃---------P₂---------Vx₅
-                #                kpm          |        kpm+6⋅Ny1
-                #               ETAP₁         |        ETAP₂
-                #               SXX₁          |        SXX₂
-                #                          ETA(i,j) 
-                #                kvy       GGG(i,j)     kvy+6⋅Ny1
-                #                Vy₂       SXY0(i,j)      Vy₄
-                #                 *        basic₂          * 
-                #                            ETA₂ 
-                #                            SXY₂
-                #                             |
-                #                           kvx+6
-                #                            Vx₄
-                #                             *
-                #
+                # Vx momentum internal stencil (see docs/src/explanations/discretization_numerics.md)
                 # computational viscosity
                 ETA₁ =
                     ETA[i - 1, j] * GGG[i - 1, j] * dt / (GGG[i - 1, j]*dt + ETA[i - 1, j])
@@ -655,34 +618,7 @@ function assemble_hydromechanical_lse!(
                     updateindex!(L, +, bcright, kvy, kvy-6*Ny1)
                 end
             else
-                # Vy equation internal points: y-Stokes
-                #
-                #                           kvy-6
-                #                            Vy₂
-                #                             |
-                #                          ETAP(i,j)
-                #                          GGGP(i,j)
-                #             kvx-6⋅Ny1    SXX0(i,j)     kvx
-                #                Vx₁          P₁         Vx₃
-                #                 *         ETAP₁         *
-                #                            SYY₁
-                #               ETA(i,j-1)   kpm       ETA(i,j)
-                #               GGG(i,j-1)    |        GGG(i,j)
-                #   kvy-6⋅Ny1   SXY0(i,j-1)  kvy       SXY0(i,j)  kvy+6⋅Ny1
-                #     Vy₁-------basic₁-------Vv₃-------basic₂-------Vy₅
-                #               ETA₁          |        ETA₂     
-                #               SXY₁          |        SXY₂
-                #                            kpm+6
-                #                         ETAP(i+1,j)
-                #                         GGGP(i+1,j)
-                #          kvx-6⋅Ny1+6    SXX0(i+1,j)   kvx+6
-                #                Vx₂          P₂        Vx₄
-                #                 *         ETAP₂        *  
-                #                            SYY₂
-                #                             |
-                #                           kvy+6
-                #                            Vy₄
-                #
+                # Vy momentum internal stencil (see docs/src/explanations/discretization_numerics.md)
                 # computational viscosity
                 ETA₁ =
                     ETA[i, j - 1] * GGG[i, j - 1] * dt / (GGG[i, j - 1]*dt + ETA[i, j - 1])
@@ -779,19 +715,7 @@ function assemble_hydromechanical_lse!(
                 updateindex!(L, +, Kcont, kpm, kpm)
                 R[kpm] = psurface
             else
-                # P equation internal points: continuity equation: ∂Vx/∂x+∂Vy/∂y=0
-                #
-                #                 kvy-6
-                #                  Vy₁
-                #                   |
-                #                   |
-                #      kvx-6⋅Ny1   kpm       kvx
-                #        Vx₁--------P--------Vx₂
-                #                   |
-                #                   |
-                #                  kvy
-                #                  Vy₂
-                #
+                # Solid continuity internal stencil: ∂Vx/∂x + ∂Vy/∂y = 0
                 updateindex!(L, +, -1.0/dx_val, kpm, kvx-6*Ny1) # Vx₁
                 updateindex!(L, +, 1.0/dx_val, kpm, kvx) # Vx₂
                 updateindex!(L, +, -1.0/dy_val, kpm, kvy-6) # Vy₁
@@ -844,12 +768,8 @@ function assemble_hydromechanical_lse!(
                     updateindex!(L, +, bcfbottom, kqx, kqx-6)
                 end
             else
-                # qxDarcy equation internal points: x-Darcy equation:
-                # ηfluid/kᵩx⋅qxDarcy + ∂P/∂x = ρfluid⋅gx
-                #
-                #        P₁--------qxD--------P₂
-                #       kpf        kqx     kpf+6⋅Ny1
-                #
+                # x-Darcy flux internal stencil: (η_f/k_ϕx) * qxD + ∂P/∂x = ρ_f * gx
+                # See Stencil Topologies in docs/src/explanations/discretization_numerics.md
                 # LHS coefficient matrix
                 rx_val = RX[i, j]
                 if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
@@ -900,18 +820,7 @@ function assemble_hydromechanical_lse!(
                     updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
                 end
             else
-                # qyDarcy equation internal points: y-Darcy equation:
-                # ηfluid/kᵩy⋅qyDarcy + ∂P/∂y = ρfluid⋅gy
-                #
-                #                  P₁
-                #                 kpf
-                #                  |
-                #                 qyD
-                #                 kqy
-                #                  |
-                #                  P₂
-                #                kpf+6
-                #
+                # y-Darcy flux internal stencil: (η_f/k_ϕy) * qyD + ∂P/∂y = ρ_f * gy
                 # LHS coefficient matrix
                 ry_val = RY[i, j]
                 if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
@@ -964,18 +873,7 @@ function assemble_hydromechanical_lse!(
                 updateindex!(L, +, Kcont, kpf, kpf)
                 R[kpf] = psurface
             else
-                # Ptotal/Pfluid equation internal points: continuity equation:
-                # ∂qxD/∂x + ∂qyD/∂y - (Ptotal-Pfluid)/ηϕ = 0.0
-                #
-                #                 qyD₁
-                #                kqy-6
-                #                  |
-                #       qxD₁-------P-------qxD₂
-                #    kqx-6⋅Ny1    kpf      kqx
-                #                  |
-                #                 qyD₂
-                #                 kqy
-                #
+                # Fluid continuity internal stencil: ∂qxD/∂x + ∂qyD/∂y - (Pt - Pf)/η_ϕ = 0
                 # LHS coefficient matrix
                 updateindex!(L, +, -inv(dx_val), kpf, kqx-6*Ny1) # qxD₁
                 updateindex!(L, +, inv(dx_val), kpf, kqx) # qxD₂
@@ -1041,8 +939,6 @@ function assemble_hydromechanical_lse!(
     end
 
     flush!(L) # finalize CSC matrix
-
-    # end # @timeit to "assemble_hydromechanical_lse()"
     # return L
     return L.cscmatrix
 end # function assemble_hydromechanical_lse!
@@ -1067,7 +963,6 @@ $(SIGNATURES)
     - nothing
 """
 function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf; coords=nothing)
-    # @timeit to "process_hydromechanical_solution!()" begin
     Ny1, Nx1 = size(vx)
     S_mat = reshape(S, (:, Ny1, Nx1))
     @inbounds begin
@@ -1081,7 +976,6 @@ function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf; coords=n
     # Δp = 0.25 * (pf[2, 2]+pf[2, Nx]+pf[Ny, 2]+pf[Ny, Nx]) - psurface
     # pr .-= Δp
     # pf .-= Δp
-    # end # @timeit to "process_hydromechanical_solution!()"
     return nothing
 end # function process_hydromechanical_solution!
 
@@ -1101,7 +995,6 @@ Recompute bulk viscosity at P nodes.
     - nothing
 """
 function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
-    # @timeit to "recompute_bulk_viscosity!" begin
     @inbounds begin
         @views @. ETAP[2:(end - 1), 2:(end - 1)] =
             4.0 / (
@@ -1112,7 +1005,6 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
             )
         @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
     end # @inbounds
-    # end # @timeit to "recompute_bulk_viscosity!"
     return nothing
 end
 
@@ -1158,7 +1050,6 @@ function compute_Aϕ!(
     phimax=phimax,
     S_vent::Union{AbstractMatrix{Float64},Nothing}=nothing,
 )
-    # @timeit to "compute_Aϕ!()" begin
     # APHI .= 0.0
     Ny1, Nx1 = size(APHI)
     Nx = Nx1 - 1
@@ -1185,7 +1076,6 @@ function compute_Aϕ!(
         return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
     end # @inbounds
     # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
-    # end # @timeit to "compute_Aϕ!()"
 end # function compute_Aϕ!
 
 """
@@ -1214,7 +1104,6 @@ $(SIGNATURES)
     - nothing
 """
 function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coords=nothing)
-    # @timeit to "compute_fluid_velocities!()" begin
     Ny1, Nx1 = size(vxf)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -1246,7 +1135,6 @@ function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coord
     # end
     # @views @. vyf[:, 1] = -bcfleft*vyf[:, 2]    
     # @views @. vyf[:, Nx1] = -bcfright*vyf[:, Nx]     
-    # end # @timeit to "compute_fluid_velocities!()"
     return nothing
 end # function compute_fluid_velocities!
 
@@ -1418,7 +1306,6 @@ function compute_stress_strainrate!(
     dt;
     coords=nothing,
 )
-    # @timeit to "compute_stress_strainrate!()" begin
     Ny, Nx = size(EXY)
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
@@ -1480,7 +1367,6 @@ function compute_stress_strainrate!(
     #         )/4.0
     #     )^2
     # )
-    # end # @timeit to "compute_stress_strainrate!()"
     return nothing
 end # function compute_stress_strainrate!
 
@@ -1503,7 +1389,6 @@ $(SIGNATURES)
     - nothing
 """
 function symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
-    # @timeit to "symmetrize_p_node_observables!()" begin
     Ny1, Nx1 = size(SXX)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -1535,7 +1420,6 @@ function symmetrize_p_node_observables!(SXX, APHI, PHI, pr, pf, ps)
         # solid pressure
         ps = (pr-pf*PHI) * inv(1-PHI)
     end
-    # end # @timeit to "symmetrize_p_node_observables!()"
     return nothing
 end # function symmetrize_p_node_observables!
 
@@ -1587,7 +1471,6 @@ function compute_nodal_adjustment!(
     dt,
     iplast,
 )
-    # @timeit to "compute_nodal_adjustment!()" begin
     # reset / setup
     Ny, Nx = size(ETA)
     ETA5 .= ETA0
@@ -1648,7 +1531,6 @@ function compute_nodal_adjustment!(
         @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
         return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
     end # @inbounds
-    # end # @timeit to "compute_nodal_adjustment!()
 end # function compute_nodal_adjustment!
 
 """
@@ -1667,11 +1549,9 @@ $(SIGNATURES)
     - nothing
 """
 function positive_max!(A, B, C)
-    # @timeit to "positive_max!()" begin
     @inbounds for i in eachindex(A)
         C[i] = max(0, ifelse(A[i] > B[i], A[i], B[i]))
     end
-    # end # @timeit to "positive_max!()"
     return nothing
 end # function positive_max
 
@@ -1700,7 +1580,6 @@ $(SIGNATURES)
 function finalize_plastic_iteration_pass!(
     ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
 )
-    # @timeit to "finalize_plastic_iteration_pass!()" begin
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:
         # decrease time step and reset to previous viscoplastic viscosity
@@ -1715,7 +1594,6 @@ function finalize_plastic_iteration_pass!(
     end
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
-    # end # @timeit to "finalize_plastic_iteration_pass!()"
 end # function finalize_plastic_iteration_pass
 
 """
@@ -2381,7 +2259,6 @@ function perform_thermal_iterations!(
     Q_metric=nothing,
     Q_lat=nothing,
 )
-    # @timeit to "perform_thermal_iterations!" begin
     # set up thermal iterations
     Ny1, Nx1 = size(tk1)
     tk0 .= tk1
@@ -2434,7 +2311,6 @@ function perform_thermal_iterations!(
     # finalize overall temperature change and advance temperature field
     DT .= tk2 .- tk0
     DT0 .= DT
-    # end # @timeit to "perform_thermal_iterations!"
     return nothing
 end # function perform_thermal_iterations!
 
@@ -2455,14 +2331,12 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
-    # @timeit to "finalize_thermochemical_iteration_pass" begin
     if titer == 1
         if maxDTcurrent > DTmax
             dt *= (DTmax * inv(maxDTcurrent))
             @info "titer 1: reducing dt due to maxDT: dt=$dt s"
         end
     end
-    # end # @timeit to "finalize_thermochemical_iteration_pass"
     return dt
 end # function finalize_thermochemical_iteration_pass
 
@@ -2484,12 +2358,10 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer; pferrmax=1.0e5)
-    # @timeit to "compute_thermochemical_iteration_outcome" begin
     pferrcur = maximum(abs, pf - pf0)
     DMPmax = maximum(abs, DMP)
     @info "end thermochemical iter $titer" pferrcur DMPmax
     return pferrcur < pferrmax && (titer > 2 || DMPmax <= 0.0)
-    # end # @timeit to "compute_thermochemical_iteration_outcome"
 end # function compute_thermochemical_iteration_outcome
 
 """

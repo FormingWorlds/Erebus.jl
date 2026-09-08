@@ -27,6 +27,12 @@
 - **Marker-in-Cell Advection**:
   Conservative transport of composition, temperature, melt fraction, and porosity on moving lagrangian markers interpolated onto the Eulerian staggered grid.
 
+- **Metallic Core Formation & Diapir Segregation**:
+  Coupled Darcy porous percolation of liquid Fe-FeS through solid silicate matrix, Stokes gravitational settling through magma oceans with Richardson-Zaki hindrance, Weber droplet breakup, dynamic density EOS, and gravitational dissipation heating.
+
+- **Multi-Species Volatile Degassing & Atmospheric Escape**:
+  Coupled multi-component H-C-N-S volatile solubility, homogeneous gas speciation across ten species, graphite saturation clipping, chemical nitride dissolution under reducing conditions, cold surface venting, and hydrodynamic/Jeans kinetic atmospheric escape.
+
 - **Reproducible TOML Configuration**:
   Declarative simulation parameters structured across grid, geometry, timestepping, solver controls, poroelasticity, thermodynamics, materials, and output storage.
 
