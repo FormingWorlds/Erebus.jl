@@ -386,8 +386,10 @@ $(FIELDS)
 Base.@kwdef struct CoreFormationConfig
     percolation_active::Bool = false
     settling_active::Bool = false
-    rho_metal::Float64 = 7200.0
-    rho_metal_solid::Float64 = 7800.0
+    sulfur_fraction::Float64 = 0.31
+    metal_density_mode::Symbol = :sanloup2000
+    rho_metal::Float64 = 5450.0
+    rho_metal_solid::Float64 = 5700.0
     L_metal::Float64 = 2.7e5
     eta_metal::Float64 = 1.0e-2
     k_metal::Float64 = 40.0
@@ -401,7 +403,7 @@ Base.@kwdef struct CoreFormationConfig
     phi_crit_perc::Float64 = 0.05
     phi_residual::Float64 = 0.02
     phi0::Float64 = 0.1
-    droplet_size_mode::Symbol = :weber_mean
+    droplet_size_mode::Symbol = :capillary_mean
     droplet_diameter_fixed::Float64 = 5.0e-3
     sigma_metal_silicate::Float64 = 1.0
     We_crit::Float64 = 10.0
@@ -1121,6 +1123,16 @@ function validate_config(cfg::SimulationConfig)
     # Core formation validation
     if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
         cf = cfg.coreformation
+        (0.0 <= cf.sulfur_fraction <= 0.40 && isfinite(cf.sulfur_fraction)) || throw(
+            ArgumentError(
+                "sulfur_fraction must be in [0, 0.40] and finite, got $(cf.sulfur_fraction)",
+            ),
+        )
+        cf.metal_density_mode in Set([:sanloup2000, :morard2014, :constant]) || throw(
+            ArgumentError(
+                "metal_density_mode must be :sanloup2000, :morard2014, or :constant, got $(cf.metal_density_mode)",
+            ),
+        )
         (isfinite(cf.rho_metal) && cf.rho_metal > cfg.materials.rhosolidm[1]) || throw(
             ArgumentError(
                 "rho_metal ($(cf.rho_metal)) must be finite and exceed silicate rock density ($(cfg.materials.rhosolidm[1]))",
@@ -1165,9 +1177,10 @@ function validate_config(cfg::SimulationConfig)
             throw(ArgumentError("cfl_settling must be in (0, 1], got $(cf.cfl_settling)"))
         cf.max_subcycles > 0 ||
             throw(ArgumentError("max_subcycles must be > 0, got $(cf.max_subcycles)"))
-        cf.droplet_size_mode in Set([:fixed, :weber_mean, :weber_turbulent]) || throw(
+        cf.droplet_size_mode in
+        Set([:fixed, :capillary_mean, :bond_mean, :weber_mean, :weber_turbulent]) || throw(
             ArgumentError(
-                "droplet_size_mode must be one of :fixed, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)",
+                "droplet_size_mode must be one of :fixed, :capillary_mean, :bond_mean, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)",
             ),
         )
         (cf.droplet_diameter_fixed > 0.0 && isfinite(cf.droplet_diameter_fixed)) || throw(

@@ -190,10 +190,25 @@ $(SIGNATURES)
     - fe: true if radioactive isotope 60Fe is present
     - timesum: time elapsed since initial conditions at start of simulation
 
+# Keyword Arguments
+
+    - ratio_al: initial isotopic ratio of 26Al/27Al
+    - E_al: decay energy of 26Al [J]
+    - f_al: mass fraction of 27Al in silicate matrix
+    - tau_al: mean lifetime of 26Al [s]
+    - ratio_fe: initial isotopic ratio of 60Fe/56Fe
+    - E_fe: decay energy of 60Fe [J]
+    - f_fe: mass fraction of 56Fe in metallic phase
+    - tau_fe: mean lifetime of 60Fe [s]
+    - rhosolidm: density vector of solid silicate phases [kg/m^3]
+    - rhofluidm: density vector of pore fluid phases [kg/m^3]
+    - rho_metal: density of metallic phase [kg/m^3] (default 5450.0)
+
 # Returns
 
-    - hrsolidm: radiogenic heat production of 26Al [W/m^3]
-    - hrfluidm: radiogenic heat production of 60Fe [W/m^3]
+    - hrsolidm: radiogenic heat production of 26Al in silicate rock [W/m^3]
+    - hrfluidm: radiogenic heat production in pore fluid [W/m^3] (zero: pore water carries no 26Al/60Fe)
+    - hrmetalm: radiogenic heat production of 60Fe in metallic iron phase [W/m^3]
 """
 function calculate_radioactive_heating(
     al,
@@ -209,26 +224,30 @@ function calculate_radioactive_heating(
     tau_fe=tau_fe,
     rhosolidm=rhosolidm,
     rhofluidm=rhofluidm,
+    rho_metal=5450.0,
 )
-    #26Al: planet ✓, crust ✓, space ×
+    # 26Al: planet ✓, crust ✓, space × (lithophile, in silicate rock phase)
     if al
         # 26Al radiogenic heat production [W/kg]
         Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum)
         # Solid phase 26Al radiogenic heat production [W/m^3]
-        @inbounds hrsolidm = @SVector [Q_al*rhosolidm[1], Q_al*rhosolidm[2], 0.0]
+        @inbounds hrsolidm = @SVector [Q_al * rhosolidm[1], Q_al * rhosolidm[2], 0.0]
     else
         hrsolidm = @SVector zeros(3)
     end
-    #60Fe: planet ✓, crust ×, space ×
+    # Fluid phase: pore fluid (water/ice) carries no radiogenic isotopes
+    hrfluidm = @SVector zeros(3)
+    # 60Fe: planet ✓, crust ✓, space × (siderophile, resides in metallic iron phase)
     if fe
         # 60Fe radiogenic heat production [W/kg]
         Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum)
-        # Fluid phase 60Fe radiogenic heat production [W/m^3]
-        @inbounds hrfluidm = @SVector [Q_fe*rhofluidm[1], 0.0, 0.0]
+        # Metallic phase 60Fe radiogenic heat production [W/m^3]
+        # Silicate mantle (1) and crust (2) metal carries 60Fe; sticky air/space (3) carries zero.
+        @inbounds hrmetalm = @SVector [Q_fe * rho_metal, Q_fe * rho_metal, 0.0]
     else
-        hrfluidm = @SVector zeros(3)
+        hrmetalm = @SVector zeros(3)
     end
-    return hrsolidm, hrfluidm
+    return hrsolidm, hrfluidm, hrmetalm
 end
 
 """
@@ -4691,4 +4710,74 @@ function suspension_rouse_number(v_settle::Real, u_conv::Real)
     end
 
     return v_settle / u_conv
+end
+
+"""
+Compute density of liquid Fe-FeS metallic melt as a function of sulfur mass fraction.
+
+$(SIGNATURES)
+
+References:
+- Sanloup et al. (2000), Geophys. Res. Lett., 27(6), 811-814.
+- Morard et al. (2014), C. R. Geoscience, 346(5-6), 130-139.
+
+# Arguments
+- `w_S::Real`: Sulfur mass fraction in metallic melt [-] (e.g., 0.0 for pure iron, 0.31 for Fe-FeS eutectic, 0.365 for stoichiometric FeS)
+
+# Keyword Arguments
+- `T::Real=1500.0`: Melt temperature [K] (default: 1500.0)
+- `P::Real=0.0`: Confining pressure [Pa] (default: 0.0)
+- `law::Symbol=:sanloup2000`: Density parameterization (`:sanloup2000` or `:morard2014`)
+- `alpha_m::Real=1.0e-4`: Volumetric thermal expansion coefficient [1/K] (default: 1.0e-4)
+- `K_T::Real=6.5e10`: Isothermal bulk modulus [Pa] (default: 65.0 GPa)
+- `T0::Real=1500.0`: Reference temperature for 1-bar density calibration [K] (default: 1500.0)
+
+# Returns
+- `rho_metal::Float64`: Liquid metal density [kg/m^3].
+
+# Raises
+- `DomainError`: If `w_S` is not in [0.0, 0.40], `T <= 0.0`, or `P < 0.0`.
+- `ArgumentError`: If `law` is not `:sanloup2000` or `:morard2014`.
+"""
+function compute_liquid_metal_density(
+    w_S::Real;
+    T::Real=1500.0,
+    P::Real=0.0,
+    law::Symbol=:sanloup2000,
+    alpha_m::Real=1.0e-4,
+    K_T::Real=6.5e10,
+    T0::Real=1500.0,
+)::Float64
+    w_val = Float64(w_S)
+    T_val = Float64(T)
+    P_val = Float64(P)
+    if !(0.0 <= w_val <= 0.40) || !isfinite(w_val)
+        throw(DomainError(w_val, "Sulfur mass fraction must be in [0, 0.40] and finite"))
+    end
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Temperature must be positive and finite"))
+    end
+    if P_val < 0.0 || !isfinite(P_val)
+        throw(DomainError(P_val, "Pressure must be non-negative and finite"))
+    end
+
+    rho0 = if law === :sanloup2000
+        # Sanloup et al. (2000) linear calibration: pure Fe ~7020 kg/m^3 at 1500 K,
+        # dropping to ~5450 kg/m^3 at eutectic w_S = 0.31 (~5050 kg/m^3 per unit w_S).
+        7020.0 - 5050.0 * w_val
+    elseif law === :morard2014
+        # Morard et al. (2014) relative deficit model: rho = rho_Fe * (1 - 0.72 * w_S)
+        7020.0 * (1.0 - 0.72 * w_val)
+    else
+        throw(
+            ArgumentError(
+                "Unknown liquid metal density law: $law. Supported: :sanloup2000, :morard2014",
+            ),
+        )
+    end
+
+    # Thermal expansion and compressibility correction:
+    # Floor of 0.5 prevents unphysical negative/zero density during extreme numerical transients.
+    thermal_factor = max(0.5, 1.0 - alpha_m * (T_val - T0) + P_val / K_T)
+    return rho0 * thermal_factor
 end

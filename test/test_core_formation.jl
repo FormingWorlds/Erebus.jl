@@ -15,8 +15,10 @@ using JLD2
         cfg_def = CoreFormationConfig()
         @test cfg_def.percolation_active == false
         @test cfg_def.settling_active == false
-        @test isapprox(cfg_def.rho_metal, 7200.0; rtol=1e-12)
-        @test isapprox(cfg_def.rho_metal_solid, 7800.0; rtol=1e-12)
+        @test isapprox(cfg_def.sulfur_fraction, 0.31; rtol=1e-12)
+        @test cfg_def.metal_density_mode == :sanloup2000
+        @test isapprox(cfg_def.rho_metal, 5450.0; rtol=1e-12)
+        @test isapprox(cfg_def.rho_metal_solid, 5700.0; rtol=1e-12)
         @test isapprox(cfg_def.L_metal, 2.7e5; rtol=1e-12)
         @test isapprox(cfg_def.eta_metal, 1.0e-2; rtol=1e-12)
         @test isapprox(cfg_def.k_metal, 40.0; rtol=1e-12)
@@ -30,7 +32,7 @@ using JLD2
         @test isapprox(cfg_def.phi_crit_perc, 0.05; rtol=1e-12)
         @test isapprox(cfg_def.phi_residual, 0.02; rtol=1e-12)
         @test isapprox(cfg_def.phi0, 0.1; rtol=1e-12)
-        @test cfg_def.droplet_size_mode == :weber_mean
+        @test cfg_def.droplet_size_mode == :capillary_mean
         @test isapprox(cfg_def.droplet_diameter_fixed, 5.0e-3; rtol=1e-12)
         @test isapprox(cfg_def.sigma_metal_silicate, 1.0; rtol=1e-12)
         @test isapprox(cfg_def.We_crit, 10.0; rtol=1e-12)
@@ -49,6 +51,38 @@ using JLD2
     end
 
     @testset "CoreFormationConfig Bounds Validation" begin
+        # Sulfur fraction bounds: must be in [0, 0.40] and finite
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, sulfur_fraction=-0.05
+                ),
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, sulfur_fraction=0.45
+                ),
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, sulfur_fraction=NaN
+                ),
+            ),
+        )
+
+        # Metal density mode validation: must be :sanloup2000, :morard2014, or :constant
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, metal_density_mode=:invalid_density_mode
+                ),
+            ),
+        )
+
         # Metal density must exceed silicate density (rhosolidm[1] = 3300) and be finite
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
@@ -67,14 +101,14 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true, rho_metal=7200.0, rho_metal_solid=7200.0
+                    percolation_active=true, rho_metal=5450.0, rho_metal_solid=5450.0
                 ),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(;
-                    percolation_active=true, rho_metal=7200.0, rho_metal_solid=7000.0
+                    percolation_active=true, rho_metal=5450.0, rho_metal_solid=5400.0
                 ),
             ),
         )
@@ -804,6 +838,7 @@ using JLD2
             Xfe_bulk=Xfe_bulk,
             Xfem=Xfem,
             coreformation_active=true,
+            metal_density_mode_val=:constant,
             T_eutectic_val=1213.0,
             dT_metal_val=50.0,
             rho_metal_val=7200.0,
@@ -841,6 +876,7 @@ using JLD2
             Xfe_bulk=Xfe_bulk,
             Xfem=Xfem,
             coreformation_active=true,
+            metal_density_mode_val=:constant,
             T_eutectic_val=1213.0,
             dT_metal_val=50.0,
             rho_metal_val=7200.0,
@@ -880,6 +916,7 @@ using JLD2
             Xfe_bulk=Xfe_bulk,
             Xfem=Xfem,
             coreformation_active=true,
+            metal_density_mode_val=:constant,
             T_eutectic_val=1213.0,
             dT_metal_val=50.0,
             rho_metal_val=7200.0,
@@ -896,6 +933,128 @@ using JLD2
         @test ktotalm[m] > 3.0
         # Heat capacity returns to unbuffered mixture
         @test isapprox(rhocptotalm[m], 0.75 * 3.3e6 + 0.25 * 4.0e6; rtol=1e-2)
+
+        # 4. Variable EOS liquid metal density (Sanloup 2000 and Morard 2014)
+        compute_marker_properties!(
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            metal_density_mode_val=:sanloup2000,
+            sulfur_fraction_val=0.31,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+        )
+        rho_liq_sanloup = compute_liquid_metal_density(0.31; T=1300.0, law=:sanloup2000)
+        @test isapprox(rhototalm[m], 0.75 * 3300.0 + 0.25 * rho_liq_sanloup; rtol=1e-4)
+
+        compute_marker_properties!(
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            metal_density_mode_val=:morard2014,
+            sulfur_fraction_val=0.31,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+        )
+        rho_liq_morard = compute_liquid_metal_density(0.31; T=1300.0, law=:morard2014)
+        @test isapprox(rhototalm[m], 0.75 * 3300.0 + 0.25 * rho_liq_morard; rtol=1e-4)
+
+        # 5. Radiogenic heat deposition of 60Fe into metallic iron phase
+        hrmetal_vec = @SVector [8.0e-5, 8.0e-5, 0.0]
+        hrtotalm_base = start_hrsolidm[tm[m]]
+        compute_marker_properties!(
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            hrmetalm=hrmetal_vec,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+        )
+        phi_fe_val = Xfe_bulk[m]
+        expected_hr = (1.0 - phi_fe_val) * hrtotalm_base + phi_fe_val * hrmetal_vec[tm[m]]
+        @test isapprox(hrtotalm[m], expected_hr; rtol=1e-10)
+        @test hrtotalm[m] > hrtotalm_base
+
+        # 6. Radiogenic heat deposition of 60Fe into crust markers (tm=2)
+        tm[m] = 2 # crust rock
+        hrtotalm_base_crust = start_hrsolidm[tm[m]]
+        compute_marker_properties!(
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            hrmetalm=hrmetal_vec,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+        )
+        expected_hr_crust =
+            (1.0 - phi_fe_val) * hrtotalm_base_crust + phi_fe_val * hrmetal_vec[tm[m]]
+        @test isapprox(hrtotalm[m], expected_hr_crust; rtol=1e-10)
+        @test hrtotalm[m] > 0.0
+        tm[m] = 1 # restore
     end
 
     @testset "Xfem0 Timestep Advancing" begin
@@ -1068,7 +1227,7 @@ using JLD2
         end
     end
 
-    @testset "Phase 3: Sub-Cycled Drift-Flux Segregation Solver" begin
+    @testset "Sub-Cycled Drift-Flux Segregation Solver" begin
         # Setup grid and markers for segregation tests
         Nx_test = 16
         Ny_test = 16
@@ -1467,9 +1626,69 @@ using JLD2
             )
             Xfe_bulk[m_int] = 0.20 # restore
         end
+
+        @testset "Variable Metal Density Mode Segregation Coupling" begin
+            # Verify segregation velocity responds to sulfur fraction and EOS law
+            # via dynamic liquid metal density in apply_metal_segregation!
+            for m in 1:marknum
+                if tm[m] < 3 &&
+                    distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+                    tkm[m] = 1350.0
+                    Xfem[m] = Xfe_bulk[m]
+                    phim[m] = 0.02
+                end
+            end
+
+            cfg_low_s = CoreFormationConfig(;
+                percolation_active=true,
+                settling_active=false,
+                metal_density_mode=:sanloup2000,
+                sulfur_fraction=0.10,
+                phi_crit_perc=0.05,
+            )
+            cfg_high_s = CoreFormationConfig(;
+                percolation_active=true,
+                settling_active=false,
+                metal_density_mode=:sanloup2000,
+                sulfur_fraction=0.35,
+                phi_crit_perc=0.05,
+            )
+
+            res_low_s = apply_metal_segregation!(
+                copy(xm),
+                copy(ym),
+                tm,
+                tkm,
+                phim,
+                copy(Xfe_bulk),
+                copy(Xfem),
+                marknum,
+                1.0e10,
+                cfg_low_s;
+                coords=coords,
+                rplanet=50000.0,
+            )
+            res_high_s = apply_metal_segregation!(
+                copy(xm),
+                copy(ym),
+                tm,
+                tkm,
+                phim,
+                copy(Xfe_bulk),
+                copy(Xfem),
+                marknum,
+                1.0e10,
+                cfg_high_s;
+                coords=coords,
+                rplanet=50000.0,
+            )
+            @test res_low_s.max_v_seg > res_high_s.max_v_seg
+            @test res_low_s.max_v_seg > 0.0
+            @test res_high_s.max_v_seg > 0.0
+        end
     end
 
-    @testset "Phase 4: Coupled Core Formation Integration & Benchmarks" begin
+    @testset "Coupled Core Formation Integration & Benchmarks" begin
         @testset "Benchmark Configuration Loading & Schema Validation" begin
             bench_toml = joinpath(
                 @__DIR__, "..", "configs", "core_formation_benchmark.toml"
@@ -1480,7 +1699,10 @@ using JLD2
             @test cfg.coreformation isa CoreFormationConfig
             @test cfg.coreformation.percolation_active == true
             @test cfg.coreformation.settling_active == true
-            @test isapprox(cfg.coreformation.rho_metal, 7200.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.sulfur_fraction, 0.31; rtol=1e-12)
+            @test cfg.coreformation.metal_density_mode == :sanloup2000
+            @test isapprox(cfg.coreformation.rho_metal, 5450.0; rtol=1e-12)
+            @test isapprox(cfg.coreformation.rho_metal_solid, 5700.0; rtol=1e-12)
             @test isapprox(cfg.coreformation.eta_metal, 1.0e-2; rtol=1e-12)
             @test isapprox(cfg.coreformation.k_metal, 40.0; rtol=1e-12)
             @test isapprox(cfg.coreformation.rhocp_metal, 4.0e6; rtol=1e-12)
@@ -1493,7 +1715,7 @@ using JLD2
             @test isapprox(cfg.coreformation.phi_crit_perc, 0.05; rtol=1e-12)
             @test isapprox(cfg.coreformation.phi_residual, 0.02; rtol=1e-12)
             @test isapprox(cfg.coreformation.phi0, 0.1; rtol=1e-12)
-            @test cfg.coreformation.droplet_size_mode == :weber_mean
+            @test cfg.coreformation.droplet_size_mode == :capillary_mean
             @test isapprox(cfg.coreformation.droplet_diameter_fixed, 5.0e-3; rtol=1e-12)
             @test isapprox(cfg.coreformation.sigma_metal_silicate, 1.0; rtol=1e-12)
             @test isapprox(cfg.coreformation.We_crit, 10.0; rtol=1e-12)
@@ -1686,6 +1908,20 @@ using JLD2
         end
 
         @testset "Weber Droplet Size Modes Discrimination" begin
+            cfg_cap = CoreFormationConfig(
+                percolation_active=false,
+                settling_active=true,
+                droplet_size_mode=:capillary_mean,
+                sigma_metal_silicate=1.0,
+                We_crit=10.0,
+            )
+            cfg_bond = CoreFormationConfig(
+                percolation_active=false,
+                settling_active=true,
+                droplet_size_mode=:bond_mean,
+                sigma_metal_silicate=1.0,
+                We_crit=10.0,
+            )
             cfg_mean = CoreFormationConfig(
                 percolation_active=false,
                 settling_active=true,
@@ -1701,19 +1937,29 @@ using JLD2
                 We_crit=10.0,
             )
 
+            @test cfg_cap.droplet_size_mode === :capillary_mean
+            @test cfg_bond.droplet_size_mode === :bond_mean
+            @test cfg_mean.droplet_size_mode === :weber_mean
+
             # Test gravity-capillary balance d = sqrt(We * sigma / (drho * g))
             drho_val = 3900.0
             g_low = 0.05
             g_high = 0.20
             d_mean_low = sqrt(
-                cfg_mean.We_crit * cfg_mean.sigma_metal_silicate / (drho_val * g_low)
+                cfg_cap.We_crit * cfg_cap.sigma_metal_silicate / (drho_val * g_low)
             )
             d_mean_high = sqrt(
-                cfg_mean.We_crit * cfg_mean.sigma_metal_silicate / (drho_val * g_high)
+                cfg_cap.We_crit * cfg_cap.sigma_metal_silicate / (drho_val * g_high)
             )
             @test d_mean_low > d_mean_high
             # 4x higher gravity -> 2x smaller droplet
             @test isapprox(d_mean_low / d_mean_high, 2.0; rtol=1e-10)
+
+            # Capillary and Bond modes compute identical diameter to Weber mean
+            d_bond_low = sqrt(
+                cfg_bond.We_crit * cfg_bond.sigma_metal_silicate / (drho_val * g_low)
+            )
+            @test isapprox(d_bond_low, d_mean_low; rtol=1e-12)
 
             # Weber turbulent relative velocity balance: d = We * sigma / (rho * v^2)
             v_fast = 1.0e-2
@@ -2062,6 +2308,30 @@ using JLD2
             end
             copyto!(Xfe_bulk_m, Xfe_snap)
             @test length(Xfe_bulk_m) == n_grown
+        end
+
+        @testset "60Fe Radiogenic Heating with Inactive Core Formation" begin
+            # Verify that when hr_fe is active but core formation is inactive,
+            # Xfe_bulk is allocated and markers receive 60Fe decay power
+            output_dir = mktempdir()
+            try
+                cfg_fe_only = SimulationConfig(;
+                    grid=GridConfig(; Nx=8, Ny=8, xsize=70000.0, ysize=70000.0),
+                    time=TimeConfig(; n_steps=2, dt_initial=1.0e8),
+                    thermodynamics=ThermalConfig(; hr_al=false, hr_fe=true),
+                    coreformation=CoreFormationConfig(;
+                        percolation_active=false, settling_active=false
+                    ),
+                    output=OutputConfig(; output_dir=output_dir, savematstep=1),
+                )
+                @test run_simulation(cfg_fe_only) === nothing
+                final_state = load_state(joinpath(output_dir, "output_00002.jld2"))
+                @test haskey(final_state, "Xfe_bulk")
+                @test maximum(final_state["tk2"]) > 150.0
+                @test final_state["timestep"] == 2
+            finally
+                rm(output_dir; recursive=true, force=true)
+            end
         end
     end
 end

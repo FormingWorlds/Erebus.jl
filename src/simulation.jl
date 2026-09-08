@@ -495,6 +495,8 @@ function simulation_loop(
     dT_metal_val = cfg.coreformation.dT_metal
     rho_metal_val = cfg.coreformation.rho_metal
     rho_metal_solid_val = cfg.coreformation.rho_metal_solid
+    sulfur_fraction_val = cfg.coreformation.sulfur_fraction
+    metal_density_mode_val = cfg.coreformation.metal_density_mode
     L_metal_val = cfg.coreformation.L_metal
     k_metal_val = cfg.coreformation.k_metal
     rhocp_metal_val = cfg.coreformation.rhocp_metal
@@ -753,7 +755,7 @@ function simulation_loop(
         alphafluidcur .= ckpt["alphafluidcur"]
         XWsolidm0 .= ckpt["XWsolidm0"]
         XWsolidm .= XWsolidm0
-        if coreformation_active_val
+        if coreformation_active_val || hr_fe_val
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
             if haskey(ckpt, "Xfe_bulk")
                 Xfe_bulk .= ckpt["Xfe_bulk"]
@@ -798,7 +800,7 @@ function simulation_loop(
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
             marknum
         )
-        if coreformation_active_val
+        if coreformation_active_val || hr_fe_val
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
@@ -1089,7 +1091,7 @@ function simulation_loop(
         # ---------------------------------------------------------------------
         # calculate radioactive heating
         # ---------------------------------------------------------------------
-        hrsolidm, hrfluidm = calculate_radioactive_heating(
+        hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
             hr_al_val,
             hr_fe_val,
             timesum;
@@ -1101,6 +1103,7 @@ function simulation_loop(
             E_fe=E_fe_val,
             f_fe=f_fe_val,
             tau_fe=tau_fe_val,
+            rho_metal=rho_metal_val,
         )
 
         # ---------------------------------------------------------------------
@@ -1161,6 +1164,9 @@ function simulation_loop(
                         Xfe_bulk=Xfe_bulk,
                         Xfem=Xfem,
                         coreformation_active=coreformation_active_val,
+                        hrmetalm=hrmetalm,
+                        sulfur_fraction_val=sulfur_fraction_val,
+                        metal_density_mode_val=metal_density_mode_val,
                         T_eutectic_val=T_eutectic_val,
                         dT_metal_val=dT_metal_val,
                         rho_metal_val=rho_metal_val,
@@ -1339,6 +1345,9 @@ function simulation_loop(
                     Xfe_bulk=Xfe_bulk,
                     Xfem=Xfem,
                     coreformation_active=coreformation_active_val,
+                    hrmetalm=hrmetalm,
+                    sulfur_fraction_val=sulfur_fraction_val,
+                    metal_density_mode_val=metal_density_mode_val,
                     T_eutectic_val=T_eutectic_val,
                     dT_metal_val=dT_metal_val,
                     rho_metal_val=rho_metal_val,

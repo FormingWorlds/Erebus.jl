@@ -377,9 +377,9 @@ using TOML
             ),
         )
         # Radiogenic heating calculation keyword arguments and toggling
-        hr_sol_on, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
+        hr_sol_on, _, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
         @test hr_sol_on[1] > 0.0
-        hr_sol_off, _ = Erebus.calculate_radioactive_heating(false, false, 0.0)
+        hr_sol_off, _, _ = Erebus.calculate_radioactive_heating(false, false, 0.0)
         @test all(iszero, hr_sol_off)
     end
 

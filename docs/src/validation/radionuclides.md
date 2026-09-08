@@ -6,7 +6,7 @@ This module validates the radiogenic heating rate calculations from short-lived 
 
 ## Governing Formulation
 
-Radioactive decay generates volumetric heating $Q(t)$ in the solid rock and fluid phases:
+Radioactive decay generates volumetric heating $Q(t)$ in the solid rock ($^{26}\text{Al}$) and metallic iron ($^{60}\text{Fe}$) phases:
 
 $$Q(t) = Q_0 \exp\left(-\frac{t}{\tau}\right) = Q_0 \left(\frac{1}{2}\right)^{t / t_{1/2}}$$
 
