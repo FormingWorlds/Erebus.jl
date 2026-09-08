@@ -455,6 +455,8 @@ function compute_marker_properties!(
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
     rho_metal_val::Real=7200.0,
+    rho_metal_solid_val::Real=7800.0,
+    L_metal_val::Real=2.7e5,
     k_metal_val::Real=40.0,
     rhocp_metal_val::Real=4.0e6,
 )
@@ -573,29 +575,42 @@ function compute_marker_properties!(
                 k_cutoff=k_turb_cutoff_val,
             )
         end
-        if coreformation_active
-            if Xfe_bulk !== nothing && Xfem !== nothing
+        if coreformation_active && Xfe_bulk !== nothing
+            phi_fe = Xfe_bulk[m]
+            if phi_fe > 0.0
                 F_fe = compute_metal_melt_fraction(
                     tkm[m]; T_eutectic=T_eutectic_val, dT_metal=dT_metal_val
                 )
-                Xfem[m] = Xfe_bulk[m] * F_fe
-            end
-            phi_m = Xfem !== nothing ? Xfem[m] : 0.0
-            if phi_m > 0.0
-                rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_val, phi_m)
-                ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_m)
+                if Xfem !== nothing
+                    Xfem[m] = phi_fe * F_fe
+                end
+                rho_metal_local = (1.0 - F_fe) * rho_metal_solid_val + F_fe * rho_metal_val
+                rhototalm[m] = metal_blended_density(rhototalm[m], rho_metal_local, phi_fe)
+                ktotalm[m] = metal_blended_conductivity(ktotalm[m], k_metal_val, phi_fe)
+                rhocp_eff_metal = rhocp_metal_val
+                if L_metal_val > 0.0 &&
+                    tkm[m] >= T_eutectic_val &&
+                    tkm[m] <= T_eutectic_val + dT_metal_val
+                    rhocp_eff_metal += rho_metal_solid_val * L_metal_val / dT_metal_val
+                end
                 rhocptotalm[m] = metal_blended_heat_capacity(
-                    rhocptotalm[m], rhocp_metal_val, phi_m
+                    rhocptotalm[m], rhocp_eff_metal, phi_fe
                 )
-                hrtotalm[m] = (1.0 - phi_m) * hrtotalm[m]
+                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m]
+            else
+                if Xfem !== nothing
+                    Xfem[m] = 0.0
+                end
             end
+        elseif Xfem !== nothing
+            Xfem[m] = 0.0
         end
     else
         # sticky air
         if Fm !== nothing
             Fm[m] = 0.0
         end
-        if coreformation_active && Xfem !== nothing
+        if Xfem !== nothing
             Xfem[m] = 0.0
         end
         etafluidcur = etafluidm[tm[m]]

@@ -16,6 +16,8 @@ using JLD2
         @test cfg_def.percolation_active == false
         @test cfg_def.settling_active == false
         @test isapprox(cfg_def.rho_metal, 7200.0; rtol=1e-12)
+        @test isapprox(cfg_def.rho_metal_solid, 7800.0; rtol=1e-12)
+        @test isapprox(cfg_def.L_metal, 2.7e5; rtol=1e-12)
         @test isapprox(cfg_def.eta_metal, 1.0e-2; rtol=1e-12)
         @test isapprox(cfg_def.k_metal, 40.0; rtol=1e-12)
         @test isapprox(cfg_def.rhocp_metal, 4.0e6; rtol=1e-12)
@@ -58,6 +60,41 @@ using JLD2
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 coreformation=CoreFormationConfig(; percolation_active=true, rho_metal=Inf)
+            ),
+        )
+
+        # Solid metal density must be finite and strictly > rho_metal
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, rho_metal=7200.0, rho_metal_solid=7200.0
+                ),
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, rho_metal=7200.0, rho_metal_solid=7000.0
+                ),
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(;
+                    percolation_active=true, rho_metal_solid=Inf
+                ),
+            ),
+        )
+
+        # L_metal must be non-negative and finite
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(; percolation_active=true, L_metal=-1.0e5)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                coreformation=CoreFormationConfig(; percolation_active=true, L_metal=NaN)
             ),
         )
 
@@ -173,6 +210,8 @@ using JLD2
                 percolation_active=true,
                 settling_active=true,
                 rho_metal=7800.0,
+                rho_metal_solid=8200.0,
+                L_metal=2.5e5,
                 eta_metal=5.0e-3,
                 phi_pack=0.70,
                 T_eutectic=1230.0,
@@ -190,6 +229,8 @@ using JLD2
         @test cfg_loaded.coreformation.percolation_active == true
         @test cfg_loaded.coreformation.settling_active == true
         @test isapprox(cfg_loaded.coreformation.rho_metal, 7800.0; rtol=1e-12)
+        @test isapprox(cfg_loaded.coreformation.rho_metal_solid, 8200.0; rtol=1e-12)
+        @test isapprox(cfg_loaded.coreformation.L_metal, 2.5e5; rtol=1e-12)
         @test isapprox(cfg_loaded.coreformation.eta_metal, 5.0e-3; rtol=1e-12)
         @test isapprox(cfg_loaded.coreformation.phi_pack, 0.70; rtol=1e-12)
         @test isapprox(cfg_loaded.coreformation.T_eutectic, 1230.0; rtol=1e-12)
@@ -741,7 +782,7 @@ using JLD2
         phim[m] = 1.0e-4
         Xfe_bulk[m] = 0.25
 
-        # 1. Below eutectic: metal is solid, no liquid metal
+        # 1. Below eutectic: metal is solid, carrying solid mass, no liquid metal
         tkm[m] = 1100.0
         compute_marker_properties!(
             m,
@@ -766,14 +807,58 @@ using JLD2
             T_eutectic_val=1213.0,
             dT_metal_val=50.0,
             rho_metal_val=7200.0,
+            rho_metal_solid_val=7800.0,
+            L_metal_val=2.7e5,
             k_metal_val=40.0,
             rhocp_metal_val=4.0e6,
         )
         @test iszero(Xfem[m])
-        # Density should equal pure rock density (3300)
-        @test isapprox(rhototalm[m], 3300.0; rtol=1e-4)
+        # Density should equal blended solid metal + rock density (0.75 * 3300 + 0.25 * 7800 = 4425 kg/m^3)
+        @test isapprox(rhototalm[m], 4425.0; rtol=1e-3)
+        @test rhototalm[m] > 3300.0
+        # Volumetric heat capacity is unbuffered below melting
+        @test isapprox(rhocptotalm[m], 0.75 * 3.3e6 + 0.25 * 4.0e6; rtol=1e-2)
 
-        # 2. Above eutectic: metal melts and blends density and conductivity
+        # 2. In melting range: partial melt with latent heat buffering
+        tkm[m] = 1238.0 # 50% through 50 K melting interval
+        compute_marker_properties!(
+            m,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            start_hrsolidm,
+            start_hrfluidm,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            coreformation_active=true,
+            T_eutectic_val=1213.0,
+            dT_metal_val=50.0,
+            rho_metal_val=7200.0,
+            rho_metal_solid_val=7800.0,
+            L_metal_val=2.7e5,
+            k_metal_val=40.0,
+            rhocp_metal_val=4.0e6,
+        )
+        @test isapprox(Xfem[m], 0.125; rtol=1e-4)
+        # Blended density: 0.75 * 3300 + 0.25 * 7500 = 4350 kg/m^3
+        @test isapprox(rhototalm[m], 4350.0; rtol=1e-3)
+        # Apparent heat capacity buffered by metal latent heat:
+        # 0.75 * 3.3e6 + 0.25 * (4.0e6 + 7800.0 * 2.7e5 / 50.0) = 2.475e6 + 1.153e7 = 1.4005e7 J/(m^3 K)
+        @test isapprox(
+            rhocptotalm[m], 0.75 * 3.3e6 + 0.25 * (4.0e6 + 7800.0 * 2.7e5 / 50.0); rtol=1e-2
+        )
+
+        # 3. Above eutectic: fully molten metal blends liquid density and conductivity
         tkm[m] = 1300.0 # above T_eutectic + dT_metal (1263 K) -> full melt fraction 1.0
         compute_marker_properties!(
             m,
@@ -798,6 +883,8 @@ using JLD2
             T_eutectic_val=1213.0,
             dT_metal_val=50.0,
             rho_metal_val=7200.0,
+            rho_metal_solid_val=7800.0,
+            L_metal_val=2.7e5,
             k_metal_val=40.0,
             rhocp_metal_val=4.0e6,
         )
@@ -807,6 +894,8 @@ using JLD2
         @test rhototalm[m] > 3300.0
         # Conductivity should increase above solid rock value (~3.0) toward metal (40.0)
         @test ktotalm[m] > 3.0
+        # Heat capacity returns to unbuffered mixture
+        @test isapprox(rhocptotalm[m], 0.75 * 3.3e6 + 0.25 * 4.0e6; rtol=1e-2)
     end
 
     @testset "Xfem0 Timestep Advancing" begin
@@ -1681,6 +1770,298 @@ using JLD2
                 gk = (j - 1) * Ny1 + i
                 @test isapprox(RT2[gk] - RT1[gk], Q_seg[i, j]; atol=1e-14)
             end
+        end
+
+        @testset "Segregation Regime Silicate Melt vs Porosity Discrimination" begin
+            # Verify that pore water porosity (phim) does NOT trigger Stokes settling when Fm is zero
+            coords_discr = GridCoordinates(
+                GridConfig(; Nx=9, Ny=9, xsize=70000.0, ysize=70000.0)
+            )
+            marknum_d = 25
+            props_d = setup_marker_properties(marknum_d, coords_discr)
+            xm_d = props_d[1]
+            ym_d = props_d[2]
+            tm_d = props_d[3]
+            tkm_d = props_d[4]
+            phim_d = props_d[8]
+            Fm_d = props_d[13]
+
+            (Xfem_d, Xfem0_d, Xfe_bulk_d) = setup_marker_metal_properties(marknum_d)
+            fill!(xm_d, coords_discr.xcenter)
+            fill!(ym_d, coords_discr.ycenter + 10000.0) # safely inside planet radius (10 km < 35 km)
+            fill!(tm_d, 1) # rock
+            fill!(tkm_d, 1250.0) # molten metal (T > 1213 K)
+            fill!(Xfe_bulk_d, 0.20)
+            fill!(Xfem_d, 0.20)
+            fill!(phim_d, 0.35) # high pore water porosity
+            fill!(Fm_d, 0.0)    # zero silicate melt
+
+            cfg_settle_only = CoreFormationConfig(
+                percolation_active=false, settling_active=true, F_settle_start=0.40
+            )
+
+            # Case A: High porosity, but zero silicate melt fraction -> zero settling velocity
+            res_nosilicate = apply_metal_segregation!(
+                xm_d,
+                ym_d,
+                tm_d,
+                tkm_d,
+                phim_d,
+                Xfe_bulk_d,
+                Xfem_d,
+                marknum_d,
+                1.0e8,
+                cfg_settle_only;
+                coords=coords_discr,
+                rplanet=35000.0,
+                Fm=Fm_d,
+            )
+            @test iszero(res_nosilicate.max_v_seg)
+
+            # Case B: High silicate melt fraction (Fm = 0.60 > F_settle_start) -> active settling
+            fill!(Fm_d, 0.60)
+            res_withsilicate = apply_metal_segregation!(
+                xm_d,
+                ym_d,
+                tm_d,
+                tkm_d,
+                phim_d,
+                Xfe_bulk_d,
+                Xfem_d,
+                marknum_d,
+                1.0e8,
+                cfg_settle_only;
+                coords=coords_discr,
+                rplanet=35000.0,
+                Fm=Fm_d,
+            )
+            @test res_withsilicate.max_v_seg > 0.0
+        end
+
+        @testset "Adaptive Timestep Segregation CFL Constraint" begin
+            coords_dt = GridCoordinates(
+                GridConfig(; Nx=17, Ny=17, xsize=70000.0, ysize=70000.0)
+            )
+            dx = coords_dt.dx
+            dy = coords_dt.dy
+            vx = zeros(18, 17)
+            vy = zeros(17, 18)
+            vxf = zeros(17, 18)
+            vyf = zeros(18, 17)
+
+            # When max_v_seg > 0, dt must satisfy segregation subcycle ceiling
+            v_fast = 1.0e-3 # m/s
+            cfl_settle = 0.5
+            max_sub = 100
+            dt_seg_limit = max_sub * cfl_settle * min(dx, dy) / v_fast
+
+            dt_test = compute_adaptive_timestep(
+                vx,
+                vy,
+                vxf,
+                vyf,
+                1.0e12, # requested large dt
+                0.0;    # aphimax
+                coords=coords_dt,
+                dt_longest_val=1.0e15,
+                max_v_seg=v_fast,
+                max_subcycles=max_sub,
+                cfl_settling=cfl_settle,
+            )
+            @test dt_test <= dt_seg_limit + 1.0e-6
+
+            # When max_v_seg == 0, segregation CFL does not constrain dt
+            dt_unconstrained = compute_adaptive_timestep(
+                vx,
+                vy,
+                vxf,
+                vyf,
+                1.0e12,
+                0.0;
+                coords=coords_dt,
+                dt_longest_val=1.0e15,
+                max_v_seg=0.0,
+            )
+            @test dt_unconstrained > dt_seg_limit
+        end
+
+        @testset "Thermochemical Iteration Invariance for Metal Segregation" begin
+            # Setup a planet domain where markers have molten metal in high silicate melt
+            coords_titer = GridCoordinates(
+                GridConfig(; Nx=16, Ny=16, xsize=140000.0, ysize=140000.0)
+            )
+            marknum_t = coords_titer.Nxm * coords_titer.Nym
+            props_t = setup_marker_properties(marknum_t, coords_titer)
+            xm_t = props_t[1]
+            ym_t = props_t[2]
+            tm_t = props_t[3]
+            tkm_t = props_t[4]
+            phim_t = props_t[8]
+            Fm_t = props_t[13]
+            (Xfem_t, Xfem0_t, Xfe_bulk_t) = setup_marker_metal_properties(marknum_t)
+
+            define_markers!(
+                xm_t,
+                ym_t,
+                tm_t,
+                phim_t,
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                tkm_t,
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t),
+                zeros(marknum_t);
+                randomized=false,
+                coords=coords_titer,
+                Xfe_bulk=Xfe_bulk_t,
+                Xfem=Xfem_t,
+                Xfem0=Xfem0_t,
+                Xfe_bulk_val=0.20,
+                T_eutectic_val=1213.0,
+                dT_metal_val=50.0,
+            )
+
+            for m in 1:marknum_t
+                if tm_t[m] < 3 &&
+                    distance(xm_t[m], ym_t[m], coords_titer.xcenter, coords_titer.ycenter) <=
+                   50000.0
+                    tkm_t[m] = 1600.0
+                    Fm_t[m] = 0.60
+                    Xfem_t[m] = Xfe_bulk_t[m]
+                end
+            end
+
+            cfg_titer = CoreFormationConfig(
+                percolation_active=true, settling_active=true, cfl_settling=0.5
+            )
+            dt_step = 1.0e9
+
+            # Single iteration pass
+            Xfe_pass1 = copy(Xfe_bulk_t)
+            Xfem_pass1 = copy(Xfem_t)
+            res_pass1 = apply_metal_segregation!(
+                xm_t,
+                ym_t,
+                tm_t,
+                tkm_t,
+                phim_t,
+                Xfe_pass1,
+                Xfem_pass1,
+                marknum_t,
+                dt_step,
+                cfg_titer;
+                coords=coords_titer,
+                rplanet=50000.0,
+                Fm=Fm_t,
+            )
+
+            # Multiple passes without snapshot/restore (compounding error)
+            Xfe_unrestored = copy(Xfe_bulk_t)
+            Xfem_unrestored = copy(Xfem_t)
+            for _ in 1:3
+                apply_metal_segregation!(
+                    xm_t,
+                    ym_t,
+                    tm_t,
+                    tkm_t,
+                    phim_t,
+                    Xfe_unrestored,
+                    Xfem_unrestored,
+                    marknum_t,
+                    dt_step,
+                    cfg_titer;
+                    coords=coords_titer,
+                    rplanet=50000.0,
+                    Fm=Fm_t,
+                )
+            end
+
+            # Multiple passes WITH snapshot/restore (simulation_loop invariant)
+            Xfe_restored = copy(Xfe_bulk_t)
+            Xfem_restored = copy(Xfem_t)
+            Xfe_snap = copy(Xfe_bulk_t)
+            Xfem_snap = copy(Xfem_t)
+            for _ in 1:3
+                copyto!(Xfe_restored, Xfe_snap)
+                copyto!(Xfem_restored, Xfem_snap)
+                apply_metal_segregation!(
+                    xm_t,
+                    ym_t,
+                    tm_t,
+                    tkm_t,
+                    phim_t,
+                    Xfe_restored,
+                    Xfem_restored,
+                    marknum_t,
+                    dt_step,
+                    cfg_titer;
+                    coords=coords_titer,
+                    rplanet=50000.0,
+                    Fm=Fm_t,
+                )
+            end
+
+            @test res_pass1.max_v_seg > 0.0
+            # Unrestored passes compound and artificially over-transport metal mass
+            @test sum(abs.(Xfe_unrestored .- Xfe_bulk_t)) >
+                sum(abs.(Xfe_pass1 .- Xfe_bulk_t))
+            # Restored snapshot matches single pass to exact floating-point precision
+            @test isapprox(Xfe_restored, Xfe_pass1; atol=1e-14)
+            @test isapprox(sum(Xfe_restored), sum(Xfe_bulk_t); rtol=1e-12)
+            # Verify Xfem is updated consistently with newly segregated bulk metal
+            @test isapprox(
+                Xfe_pass1 .* compute_metal_melt_fraction.(
+                    tkm_t; T_eutectic=cfg_titer.T_eutectic, dT_metal=cfg_titer.dT_metal
+                ),
+                Xfem_pass1;
+                atol=1e-14,
+            )
+        end
+
+        @testset "Snapshot Buffer Resizing Under Marker Replenishment" begin
+            n_initial = 100
+            n_grown = 120
+            Xfe_bulk_m = fill(0.20, n_initial)
+            Xfem_m = fill(0.10, n_initial)
+            Xfe_snap = zeros(Float64, n_initial)
+            Xfem_snap = zeros(Float64, n_initial)
+
+            # Initial snapshot
+            copyto!(Xfe_snap, Xfe_bulk_m)
+            copyto!(Xfem_snap, Xfem_m)
+
+            # Replenishment grows arrays
+            append!(Xfe_bulk_m, fill(0.15, n_grown - n_initial))
+            append!(Xfem_m, fill(0.05, n_grown - n_initial))
+
+            # Resizing logic from simulation_loop step start
+            if length(Xfe_snap) != length(Xfe_bulk_m)
+                resize!(Xfe_snap, length(Xfe_bulk_m))
+            end
+            if length(Xfem_snap) != length(Xfem_m)
+                resize!(Xfem_snap, length(Xfem_m))
+            end
+            copyto!(Xfe_snap, Xfe_bulk_m)
+            copyto!(Xfem_snap, Xfem_m)
+            @test length(Xfe_snap) == n_grown
+            @test length(Xfem_snap) == n_grown
+            @test isapprox(Xfe_snap[end], 0.15; atol=1e-14)
+
+            # Restoration inside titer loop
+            if length(Xfe_bulk_m) != length(Xfe_snap)
+                resize!(Xfe_bulk_m, length(Xfe_snap))
+            end
+            copyto!(Xfe_bulk_m, Xfe_snap)
+            @test length(Xfe_bulk_m) == n_grown
         end
     end
 end

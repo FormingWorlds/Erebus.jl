@@ -379,6 +379,8 @@ Base.@kwdef struct CoreFormationConfig
     percolation_active::Bool = false
     settling_active::Bool = false
     rho_metal::Float64 = 7200.0
+    rho_metal_solid::Float64 = 7800.0
+    L_metal::Float64 = 2.7e5
     eta_metal::Float64 = 1.0e-2
     k_metal::Float64 = 40.0
     rhocp_metal::Float64 = 4.0e6
@@ -1061,6 +1063,14 @@ function validate_config(cfg::SimulationConfig)
             ArgumentError(
                 "rho_metal ($(cf.rho_metal)) must be finite and exceed silicate rock density ($(cfg.materials.rhosolidm[1]))",
             ),
+        )
+        (isfinite(cf.rho_metal_solid) && cf.rho_metal_solid > cf.rho_metal) || throw(
+            ArgumentError(
+                "rho_metal_solid ($(cf.rho_metal_solid)) must be finite and > rho_metal ($(cf.rho_metal))",
+            ),
+        )
+        (isfinite(cf.L_metal) && cf.L_metal >= 0.0) || throw(
+            ArgumentError("L_metal must be non-negative and finite, got $(cf.L_metal)")
         )
         (cf.eta_metal > 0.0 && isfinite(cf.eta_metal)) || throw(
             ArgumentError("eta_metal must be positive and finite, got $(cf.eta_metal)")
