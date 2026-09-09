@@ -3873,6 +3873,7 @@ function drain_vented_marker_volatiles!(
     ret_cfg::RetentionConfig;
     coords::GridCoordinates,
     rhosolid::Real=3000.0,
+    phim::Union{Nothing,AbstractVector{Float64}}=nothing,
 )::@NamedTuple{
     M_vent_H2O::Float64,
     M_vent_C::Float64,
@@ -3904,7 +3905,7 @@ function drain_vented_marker_volatiles!(
     imax_p_val = coords.imax_p
 
     V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
-    M_marker_rock = Float64(rhosolid) * V_marker
+    M_marker_solid0 = Float64(rhosolid) * V_marker
     chi = ret_cfg.chi_vent
     dt_val = Float64(dt)
 
@@ -3917,6 +3918,11 @@ function drain_vented_marker_volatiles!(
     @inbounds begin
         @threads :static for m in 1:marknum
             if tm[m] < 3
+                M_marker_rock = if phim !== nothing
+                    M_marker_solid0 * (1.0 - clamp(phim[m], 0.0, 1.0))
+                else
+                    M_marker_solid0
+                end
                 i, j, weights = fix_weights(
                     xm[m],
                     ym[m],

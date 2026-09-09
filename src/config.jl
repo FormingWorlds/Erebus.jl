@@ -1150,6 +1150,13 @@ function validate_config(cfg::SimulationConfig)
     end
 
     # Retention checks
+    if cfg.retention.active && !cfg.volatiles.active
+        throw(
+            ArgumentError(
+                "RetentionConfig active=true requires VolatilesConfig active=true (enable [volatiles] active = true).",
+            ),
+        )
+    end
     (cfg.retention.h2o_retention_ppm >= 0.0 && isfinite(cfg.retention.h2o_retention_ppm)) ||
         throw(
             ArgumentError(

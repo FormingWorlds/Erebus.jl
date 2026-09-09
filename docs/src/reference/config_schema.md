@@ -334,7 +334,7 @@ Parameters controlling thermodynamic volatile retention floors in nominally anhy
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
-| `active` | `Bool` | `false` | - | Enable thermodynamic volatile retention floors and venting drainage | `true` / `false` |
+| `active` | `Bool` | `false` | - | Enable thermodynamic volatile retention floors and venting drainage (requires `[volatiles]` active = true) | `true` / `false` |
 | `h2o_retention_ppm` | `Float64` | `50.0` | ppmw | Subsolidus water retention floor in nominally anhydrous minerals (NAMs) | $\ge 0$ |
 | `carbon_retention_ppm` | `Float64` | `50.0` | ppmw | Subsolidus carbon retention floor in refractory graphite/matrix | $\ge 0$ |
 | `nitrogen_retention_ppm` | `Float64` | `5.0` | ppmw | Subsolidus nitrogen retention floor in crystalline silicates | $\ge 0$ |
@@ -343,7 +343,7 @@ Parameters controlling thermodynamic volatile retention floors in nominally anhy
 | `dT_retention` | `Float64` | `200.0` | K | Temperature scale for supersolidus retention floor decay | $> 0$ |
 | `retention_law` | `Symbol` | `:nams_exponential` | - | Retention floor law (`:constant_floor`, `:linear_melt_blend`, `:nams_exponential`) | valid symbol |
 | `venting_drainage_active` | `Bool` | `true` | - | Drain mobile dissolved marker volatiles during surface venting | `true` / `false` |
-| `chi_vent` | `Float64` | `1.0` | - | Volatile venting extraction efficiency factor | $\ge 0$ |
+| `chi_vent` | `Float64` | `1.0` | - | Volatile venting extraction efficiency factor | $\in [0, 1]$ |
 
 ---
 

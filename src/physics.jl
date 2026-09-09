@@ -3085,8 +3085,29 @@ function compute_volatile_retention_floor(
     if !cfg.active
         return 0.0
     end
-    T_k = isfinite(Float64(T_val)) ? max(0.0, Float64(T_val)) : 0.0
-    F_m = isfinite(Float64(F_melt)) ? clamp(Float64(F_melt), 0.0, 1.0) : 0.0
+    if !isfinite(Float64(T_val)) || Float64(T_val) < 0.0
+        throw(
+            DomainError(
+                T_val, "Temperature T_val must be non-negative and finite, got $T_val K"
+            ),
+        )
+    end
+    if !isfinite(Float64(F_melt)) || Float64(F_melt) < 0.0
+        throw(
+            DomainError(
+                F_melt, "Melt fraction F_melt must be non-negative and finite, got $F_melt"
+            ),
+        )
+    end
+    if !isfinite(Float64(P_val)) || Float64(P_val) < 0.0
+        throw(
+            DomainError(
+                P_val, "Pressure P_val must be non-negative and finite, got $P_val Pa"
+            ),
+        )
+    end
+    T_k = Float64(T_val)
+    F_m = min(1.0, Float64(F_melt))
 
     C_base = if species === :H2O
         cfg.h2o_retention_ppm

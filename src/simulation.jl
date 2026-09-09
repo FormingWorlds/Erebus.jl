@@ -803,7 +803,7 @@ function simulation_loop(
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
         end
-        if cfg.volatiles.active || cfg.retention.active
+        if cfg.volatiles.active
             if haskey(ckpt, "XH2Om")
                 XH2Om = Vector{Float64}(ckpt["XH2Om"])
                 XCm = Vector{Float64}(ckpt["XCm"])
@@ -832,7 +832,7 @@ function simulation_loop(
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
         end
-        if cfg.volatiles.active || cfg.retention.active
+        if cfg.volatiles.active
             (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
                 marknum;
                 initial_water_wtpct=cfg.volatiles.initial_water_wtpct,
@@ -1202,7 +1202,7 @@ function simulation_loop(
                         L_metal_val=L_metal_val,
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
-                        volatiles_active=cfg.volatiles.active || cfg.retention.active,
+                        volatiles_active=cfg.volatiles.active,
                         volatiles_cfg=cfg.volatiles,
                         retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
@@ -1384,7 +1384,7 @@ function simulation_loop(
                     L_metal_val=L_metal_val,
                     k_metal_val=k_metal_val,
                     rhocp_metal_val=rhocp_metal_val,
-                    volatiles_active=cfg.volatiles.active || cfg.retention.active,
+                    volatiles_active=cfg.volatiles.active,
                     volatiles_cfg=cfg.volatiles,
                     retention_cfg=cfg.retention,
                     XH2Om=XH2Om,
@@ -2214,6 +2214,7 @@ function simulation_loop(
                     cfg.retention;
                     coords=coords,
                     rhosolid=cfg.materials.rhosolidm[2],
+                    phim=phim,
                 )
                 M_vent_H2O_total += vented_vols.M_vent_H2O * L_3D_equiv
                 M_vent_C_total += vented_vols.M_vent_C * L_3D_equiv

@@ -20,11 +20,20 @@ using TOML
         sim_cfg = SimulationConfig()
         @test !sim_cfg.retention.active
         @test isapprox(sim_cfg.volatiles.initial_nitrogen_ppm, 50.0; atol=1.0e-12)
+
+        # Type stability checks with @inferred
+        ret_act = RetentionConfig(; active=true)
+        @test @inferred(compute_volatile_retention_floor(1300.0, :H2O, ret_act)) isa Float64
+        @test @inferred(compute_h2o_retention_floor(1300.0, ret_act)) isa Float64
+        @test @inferred(compute_carbon_retention_floor(1300.0, ret_act)) isa Float64
+        @test @inferred(compute_nitrogen_retention_floor(1300.0, ret_act)) isa Float64
+        @test @inferred(compute_sulfur_retention_floor(1300.0, ret_act)) isa Float64
     end
 
     @testset "RetentionConfig Parameter Bounds Validation" begin
-        # Valid active configuration
+        # Valid active configuration (requires volatiles.active = true)
         valid_cfg = SimulationConfig(;
+            volatiles=VolatilesConfig(; active=true),
             retention=RetentionConfig(;
                 active=true,
                 h2o_retention_ppm=100.0,
@@ -38,6 +47,14 @@ using TOML
             ),
         )
         @test validate_config(valid_cfg) === nothing
+
+        # Retention active without volatiles active throws ArgumentError
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(;
+                volatiles=VolatilesConfig(; active=false),
+                retention=RetentionConfig(; active=true),
+            ),
+        )
 
         # Invalid negative H2O retention floor
         @test_throws ArgumentError validate_config(
@@ -95,7 +112,7 @@ using TOML
                 venting_drainage_active=false,
                 chi_vent=0.5,
             ),
-            volatiles=VolatilesConfig(; initial_nitrogen_ppm=75.0),
+            volatiles=VolatilesConfig(; active=true, initial_nitrogen_ppm=75.0),
         )
 
         toml_str = save_config(orig_cfg)
@@ -133,6 +150,23 @@ using TOML
         )
         @test isapprox(
             compute_volatile_retention_floor(1300.0, :C, ret_inact), 0.0; atol=1.0e-12
+        )
+
+        # Invalid inputs throw DomainError
+        @test_throws DomainError compute_volatile_retention_floor(-10.0, :H2O, ret_exp)
+        @test_throws DomainError compute_volatile_retention_floor(NaN, :H2O, ret_exp)
+        @test_throws DomainError compute_volatile_retention_floor(Inf, :H2O, ret_exp)
+        @test_throws DomainError compute_volatile_retention_floor(
+            1300.0, :H2O, ret_exp; F_melt=-0.1
+        )
+        @test_throws DomainError compute_volatile_retention_floor(
+            1300.0, :H2O, ret_exp; F_melt=NaN
+        )
+        @test_throws DomainError compute_volatile_retention_floor(
+            1300.0, :H2O, ret_exp; P_val=-1.0
+        )
+        @test_throws DomainError compute_volatile_retention_floor(
+            1300.0, :H2O, ret_exp; P_val=NaN
         )
 
         # Sub-solidus behavior: T <= T_solidus_ref returns exact base floor
@@ -568,5 +602,126 @@ using TOML
         )
         @test isapprox(res_zero_s.M_vent_volatiles_total, 0.0; atol=1.0e-14)
         @test isapprox(XH2Om[1], 1.0; atol=1.0e-14)
+
+        # Porosity scaling test: 50% porosity reduces drained rock mass by half
+        phim_half = fill(0.5, marknum)
+        XH2Om_test = fill(1.0, marknum)
+        res_half = drain_vented_marker_volatiles!(
+            xm,
+            ym,
+            tm_rock,
+            tkm,
+            XH2Om_test,
+            nothing,
+            nothing,
+            nothing,
+            S_vent_grid,
+            1.0e10,
+            marknum,
+            ret_cfg;
+            coords=coords,
+            phim=phim_half,
+        )
+        XH2Om_zero_phi = fill(1.0, marknum)
+        res_zero_phi = drain_vented_marker_volatiles!(
+            xm,
+            ym,
+            tm_rock,
+            tkm,
+            XH2Om_zero_phi,
+            nothing,
+            nothing,
+            nothing,
+            S_vent_grid,
+            1.0e10,
+            marknum,
+            ret_cfg;
+            coords=coords,
+            phim=zeros(Float64, marknum),
+        )
+        @test isapprox(res_half.M_vent_H2O, 0.5 * res_zero_phi.M_vent_H2O; rtol=1.0e-12)
+    end
+
+    @testset "Simulation Loop Volatile Retention & Drainage Integration" begin
+        output_dir = mktempdir()
+        try
+            quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+            cfg = load_config(quick_toml)
+            sim_cfg = SimulationConfig(
+                grid=cfg.grid,
+                geometry=cfg.geometry,
+                time=TimeConfig(
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                    dtcoefdn=cfg.time.dtcoefdn,
+                    dtcoefup=cfg.time.dtcoefup,
+                    dtstep=cfg.time.dtstep,
+                    dxymax=cfg.time.dxymax,
+                    vpratio=cfg.time.vpratio,
+                    DTmax=cfg.time.DTmax,
+                    start_time=cfg.time.start_time,
+                    endtime=cfg.time.endtime,
+                    start_step=1,
+                    n_steps=2,
+                ),
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                reaction=cfg.reaction,
+                materials=cfg.materials,
+                output=OutputConfig(output_dir=output_dir, savematstep=2),
+                disk=cfg.disk,
+                melting=cfg.melting,
+                volatiles=VolatilesConfig(
+                    active=true,
+                    carbon_active=true,
+                    sulfur_active=true,
+                    initial_water_wtpct=1.0,
+                    initial_carbon_ppm=500.0,
+                    initial_nitrogen_ppm=50.0,
+                    initial_sulfur_ppm=1000.0,
+                ),
+                retention=RetentionConfig(
+                    active=true,
+                    venting_drainage_active=true,
+                    h2o_retention_ppm=50.0,
+                    carbon_retention_ppm=50.0,
+                    nitrogen_retention_ppm=5.0,
+                    sulfur_retention_ppm=100.0,
+                ),
+                venting=VentingConfig(
+                    active=true, mode=:darcy_sink, k_vent=1.0e-11, conductance_factor=1.0
+                ),
+            )
+
+            Erebus.simulation_loop(sim_cfg; output_path=output_dir)
+
+            files = readdir(output_dir)
+            @test "output_00000.jld2" in files
+            @test "output_00002.jld2" in files
+
+            data2 = load_state(joinpath(output_dir, "output_00002.jld2"))
+            @test data2["timestep"] == 2
+            @test haskey(data2, "M_vent_H2O_total")
+            @test haskey(data2, "M_vent_C_total")
+            @test haskey(data2, "M_vent_N_total")
+            @test haskey(data2, "M_vent_S_total")
+            @test data2["M_vent_H2O_total"] >= 0.0
+            @test data2["M_vent_C_total"] >= 0.0
+            @test data2["M_vent_N_total"] >= 0.0
+            @test data2["M_vent_S_total"] >= 0.0
+
+            # Marker volatile inventories exist and remain finite and non-negative
+            @test haskey(data2, "XH2Om")
+            @test haskey(data2, "XCm")
+            @test haskey(data2, "XNm")
+            @test haskey(data2, "XSm")
+            @test all(data2["XH2Om"] .>= 0.0)
+            @test all(data2["XCm"] .>= 0.0)
+            @test all(data2["XNm"] .>= 0.0)
+            @test all(data2["XSm"] .>= 0.0)
+        finally
+            rm(output_dir; recursive=true, force=true)
+        end
     end
 end
