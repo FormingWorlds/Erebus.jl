@@ -491,6 +491,40 @@ Base.@kwdef struct PhaseTrackingConfig
 end
 
 """
+Hydrothermal subgrid convection parameterization configuration.
+
+Configures porous Rayleigh-Darcy convection, free-fluid Rayleigh convection,
+cubic smoothstep porosity transition blending, cell-Péclet resolution weighting,
+and Picard relaxation damping.
+
+$(FIELDS)
+"""
+Base.@kwdef struct HydrothermalConfig
+    active::Bool = false
+    phi_start::Float64 = 0.30
+    phi_end::Float64 = 0.70
+    Ra_m_crit::Float64 = 4.0 * pi^2
+    Ra_crit::Float64 = 1100.0
+    c_porous::Float64 = 1.0
+    c_free::Float64 = 0.088
+    H_layer::Float64 = 10000.0
+    dT_min::Float64 = 5.0
+    k_floor::Float64 = 1.0e-3
+    k_cutoff::Float64 = 1.0e6
+    picard_damping::Float64 = 0.5
+    resolution_weighting::Bool = true
+    Pe_crit::Float64 = 2.0
+    T_surface_ref::Float64 = 273.15
+    gravity::Float64 = 0.5
+    cp_fluid::Float64 = 4184.0
+    alpha_fluid::Float64 = 2.0e-4
+    k_fluid_ref::Float64 = 0.6
+    rho_fluid_ref::Float64 = 1000.0
+    mu_fluid_ref::Float64 = 1.0e-3
+    kphi_ref::Float64 = 1.0e-13
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -514,6 +548,7 @@ Base.@kwdef struct SimulationConfig
     coreformation::CoreFormationConfig = CoreFormationConfig()
     metal_partition::MetalPartitionConfig = MetalPartitionConfig()
     phase_tracking::PhaseTrackingConfig = PhaseTrackingConfig()
+    hydrothermal::HydrothermalConfig = HydrothermalConfig()
 end
 
 """
@@ -1535,6 +1570,113 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    if cfg.hydrothermal.active
+        (
+            0.0 <= cfg.hydrothermal.phi_start < cfg.hydrothermal.phi_end <= 1.0 &&
+            isfinite(cfg.hydrothermal.phi_start) &&
+            isfinite(cfg.hydrothermal.phi_end)
+        ) || throw(
+            ArgumentError(
+                "phi_start and phi_end must satisfy 0.0 <= phi_start < phi_end <= 1.0 and be finite, got ($(cfg.hydrothermal.phi_start), $(cfg.hydrothermal.phi_end))",
+            ),
+        )
+        (cfg.hydrothermal.Ra_m_crit > 0.0 && isfinite(cfg.hydrothermal.Ra_m_crit)) || throw(
+            ArgumentError(
+                "Ra_m_crit must be > 0 and finite, got $(cfg.hydrothermal.Ra_m_crit)"
+            ),
+        )
+        (cfg.hydrothermal.Ra_crit > 0.0 && isfinite(cfg.hydrothermal.Ra_crit)) || throw(
+            ArgumentError(
+                "Ra_crit must be > 0 and finite, got $(cfg.hydrothermal.Ra_crit)"
+            ),
+        )
+        (cfg.hydrothermal.c_porous > 0.0 && isfinite(cfg.hydrothermal.c_porous)) || throw(
+            ArgumentError(
+                "c_porous must be > 0 and finite, got $(cfg.hydrothermal.c_porous)"
+            ),
+        )
+        (cfg.hydrothermal.c_free > 0.0 && isfinite(cfg.hydrothermal.c_free)) || throw(
+            ArgumentError("c_free must be > 0 and finite, got $(cfg.hydrothermal.c_free)"),
+        )
+        (cfg.hydrothermal.H_layer > 0.0 && isfinite(cfg.hydrothermal.H_layer)) || throw(
+            ArgumentError(
+                "H_layer must be > 0 and finite, got $(cfg.hydrothermal.H_layer)"
+            ),
+        )
+        (cfg.hydrothermal.dT_min > 0.0 && isfinite(cfg.hydrothermal.dT_min)) || throw(
+            ArgumentError("dT_min must be > 0 and finite, got $(cfg.hydrothermal.dT_min)"),
+        )
+        (
+            0.0 < cfg.hydrothermal.k_floor < cfg.hydrothermal.k_cutoff &&
+            isfinite(cfg.hydrothermal.k_floor) &&
+            isfinite(cfg.hydrothermal.k_cutoff)
+        ) || throw(
+            ArgumentError(
+                "k_floor and k_cutoff must satisfy 0.0 < k_floor < k_cutoff and be finite, got ($(cfg.hydrothermal.k_floor), $(cfg.hydrothermal.k_cutoff))",
+            ),
+        )
+        (
+            0.0 < cfg.hydrothermal.picard_damping <= 1.0 &&
+            isfinite(cfg.hydrothermal.picard_damping)
+        ) || throw(
+            ArgumentError(
+                "picard_damping must be in (0, 1] and finite, got $(cfg.hydrothermal.picard_damping)",
+            ),
+        )
+        (cfg.hydrothermal.Pe_crit > 0.0 && isfinite(cfg.hydrothermal.Pe_crit)) || throw(
+            ArgumentError(
+                "Pe_crit must be > 0 and finite, got $(cfg.hydrothermal.Pe_crit)"
+            ),
+        )
+        (
+            cfg.hydrothermal.T_surface_ref > 0.0 && isfinite(cfg.hydrothermal.T_surface_ref)
+        ) || throw(
+            ArgumentError(
+                "T_surface_ref must be > 0 and finite, got $(cfg.hydrothermal.T_surface_ref)",
+            ),
+        )
+        (cfg.hydrothermal.gravity > 0.0 && isfinite(cfg.hydrothermal.gravity)) || throw(
+            ArgumentError(
+                "gravity must be > 0 and finite, got $(cfg.hydrothermal.gravity)"
+            ),
+        )
+        (cfg.hydrothermal.cp_fluid > 0.0 && isfinite(cfg.hydrothermal.cp_fluid)) || throw(
+            ArgumentError(
+                "cp_fluid must be > 0 and finite, got $(cfg.hydrothermal.cp_fluid)"
+            ),
+        )
+        (cfg.hydrothermal.alpha_fluid > 0.0 && isfinite(cfg.hydrothermal.alpha_fluid)) ||
+            throw(
+                ArgumentError(
+                    "alpha_fluid must be > 0 and finite, got $(cfg.hydrothermal.alpha_fluid)",
+                ),
+            )
+        (cfg.hydrothermal.k_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.k_fluid_ref)) ||
+            throw(
+                ArgumentError(
+                    "k_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.k_fluid_ref)",
+                ),
+            )
+        (
+            cfg.hydrothermal.rho_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.rho_fluid_ref)
+        ) || throw(
+            ArgumentError(
+                "rho_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.rho_fluid_ref)",
+            ),
+        )
+        (cfg.hydrothermal.mu_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.mu_fluid_ref)) ||
+            throw(
+                ArgumentError(
+                    "mu_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.mu_fluid_ref)",
+                ),
+            )
+        (cfg.hydrothermal.kphi_ref > 0.0 && isfinite(cfg.hydrothermal.kphi_ref)) || throw(
+            ArgumentError(
+                "kphi_ref must be > 0 and finite, got $(cfg.hydrothermal.kphi_ref)"
+            ),
+        )
+    end
+
     return nothing
 end
 
@@ -1602,6 +1744,7 @@ const VALID_SECTIONS = Set([
     "coreformation",
     "metal_partition",
     "phase_tracking",
+    "hydrothermal",
 ])
 
 """
@@ -1765,6 +1908,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.phase_tracking
     end
+    hydrotherm = if haskey(parsed, "hydrothermal")
+        _dict_to_struct(HydrothermalConfig, parsed["hydrothermal"], def.hydrothermal)
+    else
+        def.hydrothermal
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1785,6 +1933,7 @@ function load_config(source::AbstractString)::SimulationConfig
         coreformation=coreform,
         metal_partition=metal_part,
         phase_tracking=phase_track,
+        hydrothermal=hydrotherm,
     )
 
     validate_config(cfg)
@@ -1840,6 +1989,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "coreformation" => _struct_to_dict(cfg.coreformation),
         "metal_partition" => _struct_to_dict(cfg.metal_partition),
         "phase_tracking" => _struct_to_dict(cfg.phase_tracking),
+        "hydrothermal" => _struct_to_dict(cfg.hydrothermal),
     )
     TOML.print(io, d; sorted=true)
     return io

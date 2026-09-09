@@ -737,6 +737,8 @@ function compute_marker_properties!(
     Xmin_graphite_m=nothing,
     Xmin_nitride_m=nothing,
     Xmin_metal_matrix_m=nothing,
+    hydrothermal_active::Bool=false,
+    hydrothermal_cfg::Union{Nothing,HydrothermalConfig}=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -842,9 +844,10 @@ function compute_marker_properties!(
         )
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
-        ktotalm[m] = ktotal(
+        k_lattice = ktotal(
             compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
         )
+        ktotalm[m] = k_lattice
         if melting_active && soft_turbulence
             eta_fluid = if F_melt <= F_turb_start_val
                 etasolidcur
@@ -860,7 +863,7 @@ function compute_marker_properties!(
                 exp(log_eta)
             end
             ktotalm[m] = regularized_soft_turbulence_conductivity(
-                ktotalm[m],
+                k_lattice,
                 etatotalm[m],
                 eta_fluid,
                 F_melt,
@@ -873,6 +876,17 @@ function compute_marker_properties!(
                 k_floor=k_turb_floor_val,
                 k_cutoff=k_turb_cutoff_val,
             )
+        end
+        if hydrothermal_active && hydrothermal_cfg !== nothing && hydrothermal_cfg.active
+            k_hydro = apply_hydrothermal_convection_closure(
+                k_lattice,
+                tkm[m],
+                phim[m],
+                tm[m];
+                cfg=hydrothermal_cfg,
+                tmfluidphase_val=tmfluidphase_val,
+            )
+            ktotalm[m] = max(ktotalm[m], k_hydro)
         end
         metal_partition_active =
             metal_partition_cfg !== nothing && metal_partition_cfg.active

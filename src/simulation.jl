@@ -1347,6 +1347,8 @@ function simulation_loop(
                         Xmin_graphite_m=Xmin_graphite_m,
                         Xmin_nitride_m=Xmin_nitride_m,
                         Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                        hydrothermal_active=cfg.hydrothermal.active,
+                        hydrothermal_cfg=cfg.hydrothermal,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1541,6 +1543,8 @@ function simulation_loop(
                     Xmin_graphite_m=Xmin_graphite_m,
                     Xmin_nitride_m=Xmin_nitride_m,
                     Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                    hydrothermal_active=cfg.hydrothermal.active,
+                    hydrothermal_cfg=cfg.hydrothermal,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(

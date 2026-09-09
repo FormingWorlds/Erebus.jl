@@ -195,6 +195,29 @@ $$k_{\text{interface}}^{\text{eff}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \De
 
 This formulation provides A-stability for the linearized implicit operator with a bounded, positive effective interface conductivity evaluated from the lagged surface temperature.
 
+### Hydrothermal Subgrid Convection Closure
+Subgrid convective circulation in porous rock aquifers and open fluid layers is closed through an effective thermal conductivity enhancement:
+
+$$k_{\mathrm{eff}} = (1 - \gamma) k_{\mathrm{prev}} + \gamma \left[ (1 - w_{\mathrm{res}}) k_{\mathrm{target}} + w_{\mathrm{res}} k_{\mathrm{cond}} \right]$$
+
+$$k_{\mathrm{target}} = \max\left(k_{\mathrm{cond}}, \mathrm{clamp}(Nu_{\mathrm{ramped}} \cdot k_{\mathrm{cond}}, k_{\mathrm{floor}}, k_{\mathrm{cutoff}})\right)$$
+
+where:
+
+$$Nu_{\mathrm{ramped}} = 10^{w_T \log_{10}(Nu)}$$
+
+$$w_T = \mathrm{clamp}\left(\frac{\Delta T}{\Delta T_{\mathrm{min}}}, 0, 1\right)^2$$
+
+$$\log_{10}(Nu) = (1 - w_\phi) \log_{10}(Nu_{\mathrm{porous}}) + w_\phi \log_{10}(Nu_{\mathrm{free}})$$
+
+$$Nu_{\mathrm{porous}} = 1.0 + c_{\mathrm{porous}} \max\left(0.0, \frac{Ra_m}{Ra_{m,\mathrm{crit}}} - 1.0\right)$$
+
+$$Nu_{\mathrm{free}} = \max\left(1.0, c_{\mathrm{free}} Ra^{1/3}\right)$$
+
+$$Ra_m = \frac{\rho_f^2 c_{p,f} g \alpha_f K \Delta T H}{\mu_f k_{\mathrm{cond}}}, \quad Ra = \frac{\rho_f^2 c_{p,f} g \alpha_f \Delta T H^3}{\mu_f k_f}$$
+
+The temperature ramp weight $w_T$ regularizes convective enhancement across the near-surface thermal boundary layer $\Delta T \le \Delta T_{\mathrm{min}}$. The porosity weight $w_\phi = \xi^2(3 - 2\xi)$ with $\xi = \mathrm{clamp}((\phi - \phi_{\mathrm{start}})/(\phi_{\mathrm{end}} - \phi_{\mathrm{start}}), 0, 1)$ smoothly transitions from porous Rayleigh-Darcy scaling to free-fluid Rayleigh scaling. The relaxation factor $\gamma \in (0, 1]$ damps enhancement relative to the baseline ($k_{\mathrm{prev}} = k_{\mathrm{cond}}$) or provides under-relaxation across iterative solver cycles. The resolution weight $w_{\mathrm{res}} = \mathrm{clamp}(Pe_{\mathrm{cell}} / Pe_{\mathrm{crit}}, 0, 1)$ with $Pe_{\mathrm{cell}} = v_{\mathrm{Darcy}} \Delta x / \kappa_f$ damps subgrid enhancement when fluid flow is resolved on the grid.
+
 ---
 
 ## Core Formation Drift-Flux Transport Equations
