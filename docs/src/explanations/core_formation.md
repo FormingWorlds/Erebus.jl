@@ -120,13 +120,15 @@ $$C_{\text{HR}} = \frac{3 \eta_{\text{metal}} + 3 \eta_{\text{susp}}}{2 \eta_{\t
 
 #### Droplet Size Determination
 
-Droplet size is controlled by the balance between disruptive hydrodynamic shear forces and restorative surface tension forces, characterized by the droplet Weber number $\text{We} = \rho_{\text{sil}} v^2 d / \sigma$. Three modes are available:
+Droplet size is controlled by the balance between disruptive hydrodynamic shear forces and restorative surface tension forces. Five modes are supported:
 
-1. `:fixed`: Constant prescribed droplet diameter $d_{\text{fixed}} = 2 r_{\text{drop}}$ (default $1.0\text{ cm}$).
-2. `:weber_mean`: Gravity-capillary equilibrium balance where maximum droplet size is limited by Rayleigh-Taylor/Kelvin-Helmholtz instabilities:
-   $$d_{\text{weber}} = \sqrt{\frac{\text{We}_{\text{crit}} \, \sigma}{\Delta\rho \, g}}$$
-3. `:weber_turbulent`: Dynamic breakup based on the estimated settling velocity:
-   $$d_{\text{weber}} = \frac{\text{We}_{\text{crit}} \, \sigma}{\rho_{\text{sil}} \, v_{\text{est}}^2}$$
+1. `:capillary_mean` (default): Gravity-capillary equilibrium balance where maximum droplet size is limited by Rayleigh-Taylor instabilities:
+   $$d_{\text{cap}} = \sqrt{\frac{\text{We}_{\text{crit}} \, \sigma}{\Delta\rho \, g}}$$
+2. `:bond_mean`: Equivalent alias to `:capillary_mean`.
+3. `:weber_mean`: Equivalent alias to `:capillary_mean`.
+4. `:weber_turbulent`: Dynamic breakup based on estimated relative settling velocity:
+   $$d_{\text{turb}} = \frac{\text{We}_{\text{crit}} \, \sigma}{\rho_{\text{sil}} \, v_{\text{est}}^2}$$
+5. `:fixed`: Constant prescribed droplet diameter $d_{\text{fixed}} = 2 r_{\text{drop}}$ (default $0.5\text{ cm} = 5.0\times 10^{-3}\text{ m}$).
 
 #### Hindered Settling and Maximum Packing
 

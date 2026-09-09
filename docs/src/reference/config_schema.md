@@ -265,6 +265,7 @@ Parameters controlling planetesimal surface volatile venting, ice sealing, and h
 | `t_freeze` | `Float64` | `273.15` | K | Water freezing temperature threshold | $> 0$ |
 | `dt_seal` | `Float64` | `10.0` | K | Exponential ice sealing temperature scale | $> 0$ |
 | `k_seal_min_ratio` | `Float64` | `1.0e-6` | - | Minimum cryogenic permeability residual ratio | $\in (0, 1]$ |
+| `species` | `Symbol` | `:H2O` | - | Primary vented volatile gas species | `:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2` |
 
 ---
 

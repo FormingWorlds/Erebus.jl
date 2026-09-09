@@ -262,7 +262,7 @@ $(SIGNATURES)
         - mode: marker property computation mode
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
                  Travis and Schubert, 2005)
-            - 2: constant parameter rhocpfluidm
+            - 9: constant parameter rhocpfluidm
 
 # Returns
     
@@ -333,7 +333,7 @@ $(SIGNATURES)
         - mode:
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
                  Grimm & Mcsween, 1989; Bland & Travis, 2017)
-            - 9: constant parameter ksolidm
+            - 9: constant parameter kfluidm
 
 # Returns
     
@@ -871,7 +871,7 @@ $(SIGNATURES)
     - ETA: viscoplastic viscosity at basic nodes
     - SXY: σ₀xy XY stress at basic nodes
     - ETAP: viscosity at P nodes
-    - SXX: σ₀xy XY stress at basic nodes
+    - SXX: normal stress at P nodes
     - RX: ηfluid/Kϕ at Vx nodes
     - RY: ηfluid/Kϕ at Vy nodes
     - qxD: qx-Darcy flux at Vx nodes
@@ -1055,17 +1055,17 @@ function compute_adiabatic_heating!(
             VXFP = 0.5 * (vxf[i, j]+vxf[i, j - 1])
             VYFP = 0.5 * (vyf[i, j]+vyf[i - 1, j])
             # evaluate DPsolid/Dt with upwind differences
-            if VXP < 0.0
-                dpsdx = (ps[i, j]-ps[i, j - 1]) * inv(dx_val)
+            if VXP > 0.0
+                dpsdx = (ps[i, j] - ps[i, j - 1]) * inv(dx_val)
             else
-                dpsdx = (ps[i, j + 1]-ps[i, j]) * inv(dx_val)
+                dpsdx = (ps[i, j + 1] - ps[i, j]) * inv(dx_val)
             end
-            if VYP < 0.0
-                dpsdy = (ps[i, j]-ps[i - 1, j]) * inv(dy_val)
+            if VYP > 0.0
+                dpsdy = (ps[i, j] - ps[i - 1, j]) * inv(dy_val)
             else
-                dpsdy = (ps[i + 1, j]-ps[i, j]) * inv(dy_val)
+                dpsdy = (ps[i + 1, j] - ps[i, j]) * inv(dy_val)
             end
-            dpsdt = VXP*dpsdx + VYP*dpsdy
+            dpsdt = VXP * dpsdx + VYP * dpsdy
             # evaluate DPfluid/Dt with upwind differences
             if VXFP > 0.0
                 dpfdx = (pf[i, j]-pf[i, j - 1]) * inv(dx_val)

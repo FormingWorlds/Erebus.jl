@@ -1226,4 +1226,128 @@
             0.31; law=:unknown_eos
         )
     end
+
+    @testset "compute_adiabatic_heating!(): upwind differencing consistency and directional invariants" begin
+        grid_cfg = GridConfig(Nx=5, Ny=5, xsize=10000.0, ysize=10000.0)
+        coords = GridCoordinates(grid_cfg)
+        Nx1, Ny1 = coords.Nx1, coords.Ny1
+        dx_val, dy_val = coords.dx, coords.dy
+
+        HA = zeros(Ny1, Nx1)
+        PHI = fill(0.5, Ny1, Nx1)
+        ALPHA = fill(3.0e-5, Ny1, Nx1)
+        ALPHAF = fill(3.0e-5, Ny1, Nx1)
+        tk1 = fill(300.0, Ny1, Nx1)
+
+        # 1. Zero velocity yields strictly zero adiabatic heating
+        vx_zero = zeros(Ny1, Nx1)
+        vy_zero = zeros(Ny1, Nx1)
+        vxf_zero = zeros(Ny1, Nx1)
+        vyf_zero = zeros(Ny1, Nx1)
+        ps_lin = [1.0e6 + 50.0 * (j - 1) + 20.0 * (i - 1) for i in 1:Ny1, j in 1:Nx1]
+        pf_lin = copy(ps_lin)
+
+        Erebus.compute_adiabatic_heating!(
+            HA,
+            tk1,
+            ALPHA,
+            ALPHAF,
+            PHI,
+            vx_zero,
+            vy_zero,
+            vxf_zero,
+            vyf_zero,
+            ps_lin,
+            pf_lin;
+            coords=coords,
+        )
+        @test all(iszero, HA)
+
+        # 2. Nonlinear pressure field to distinguish forward vs backward differencing
+        # Cell j=3 has ps[i, 2] = 1e6 + 100.0, ps[i, 3] = 1e6 + 400.0, ps[i, 4] = 1e6 + 900.0
+        # Backward difference: (400 - 100) / dx = 300 / dx
+        # Forward difference: (900 - 400) / dx = 500 / dx
+        ps_quad = [1.0e6 + 100.0 * (j - 1)^2 for i in 1:Ny1, j in 1:Nx1]
+        pf_quad = copy(ps_quad)
+
+        # (a) Positive solid velocity (VXP > 0) -> uses backward difference (upstream j-1)
+        HA_pos = zeros(Ny1, Nx1)
+        vx_pos = fill(1.0, Ny1, Nx1)
+        Erebus.compute_adiabatic_heating!(
+            HA_pos,
+            tk1,
+            ALPHA,
+            ALPHAF,
+            zeros(Ny1, Nx1),
+            vx_pos,
+            vy_zero,
+            vxf_zero,
+            vyf_zero,
+            ps_quad,
+            pf_quad;
+            coords=coords,
+        )
+        expected_dpsdx_pos = (ps_quad[3, 3] - ps_quad[3, 2]) / dx_val
+        expected_HA_pos = 1.0 * tk1[3, 3] * ALPHA[3, 3] * (1.0 * expected_dpsdx_pos)
+        @test isapprox(HA_pos[3, 3], expected_HA_pos; rtol=1e-12)
+
+        # (b) Negative solid velocity (VXP < 0) -> uses forward difference (upstream j+1)
+        HA_neg = zeros(Ny1, Nx1)
+        vx_neg = fill(-1.0, Ny1, Nx1)
+        Erebus.compute_adiabatic_heating!(
+            HA_neg,
+            tk1,
+            ALPHA,
+            ALPHAF,
+            zeros(Ny1, Nx1),
+            vx_neg,
+            vy_zero,
+            vxf_zero,
+            vyf_zero,
+            ps_quad,
+            pf_quad;
+            coords=coords,
+        )
+        expected_dpsdx_neg = (ps_quad[3, 4] - ps_quad[3, 3]) / dx_val
+        expected_HA_neg = 1.0 * tk1[3, 3] * ALPHA[3, 3] * (-1.0 * expected_dpsdx_neg)
+        @test isapprox(HA_neg[3, 3], expected_HA_neg; rtol=1e-12)
+
+        # (c) Upwind discrimination: positive and negative heating rates differ due to non-linear gradient
+        @test abs(HA_pos[3, 3]) < abs(HA_neg[3, 3])
+
+        # 3. Solid and fluid equivalence: when PHI=1.0 and ALPHA=ALPHAF, fluid motion matches pure solid motion
+        HA_fluid_pos = zeros(Ny1, Nx1)
+        Erebus.compute_adiabatic_heating!(
+            HA_fluid_pos,
+            tk1,
+            ALPHA,
+            ALPHAF,
+            fill(1.0, Ny1, Nx1),
+            vx_zero,
+            vy_zero,
+            vx_pos,
+            vy_zero,
+            ps_quad,
+            pf_quad;
+            coords=coords,
+        )
+        @test isapprox(HA_pos[3, 3], HA_fluid_pos[3, 3]; rtol=1e-12)
+
+        HA_fluid_neg = zeros(Ny1, Nx1)
+        Erebus.compute_adiabatic_heating!(
+            HA_fluid_neg,
+            tk1,
+            ALPHA,
+            ALPHAF,
+            fill(1.0, Ny1, Nx1),
+            vx_zero,
+            vy_zero,
+            vx_neg,
+            vy_zero,
+            ps_quad,
+            pf_quad;
+            coords=coords,
+        )
+        @test isapprox(HA_neg[3, 3], HA_fluid_neg[3, 3]; rtol=1e-12)
+    end
 end

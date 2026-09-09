@@ -36,7 +36,7 @@ where $k_s$ is matrix solid conductivity, $k_f$ is pore fluid conductivity, and 
 ### Governing Formulation
 Radial heat conduction in a 3D spherically symmetric body simulated on a 2D Cartesian grid requires adding a geometric curvature heat source term:
 
-$$Q_{\text{metric}} = -\frac{k}{r} \frac{\partial T}{\partial r} = \frac{k}{r_{\text{eff}}^2} \left[ (x - x_c)\frac{\partial T}{\partial x} + (y - y_c)\frac{\partial T}{\partial y} \right]$$
+$$Q_{\text{metric}} = \frac{k}{r} \frac{\partial T}{\partial r} = \frac{k}{r_{\text{eff}}^2} \left[ (x - x_c)\frac{\partial T}{\partial x} + (y - y_c)\frac{\partial T}{\partial y} \right]$$
 
 with core regularization radius $r_{\text{eff}} = \sqrt{(x - x_c)^2 + (y - y_c)^2 + \epsilon_r^2}$.
 

@@ -11,7 +11,7 @@ Volatiles released by cold surface venting or interior magma ocean degassing col
 In `Erebus.jl`, atmospheric evolution connects surface venting, planetary gravity, thermal velocity distributions, and boundary pressure feedback:
 
 1. **Effusion vs Retention**: Planetesimals with low escape velocity ($v_{\text{esc}} \ll v_{\text{th}}$, $\lambda \ll 1$) cannot retain vented volatiles; molecules in the high-velocity Maxwellian tail effuse into space. Larger planetary embryos ($R > 1400\text{ km}$, $\lambda > 10$) gravitationally trap volatiles, sustaining surface atmospheres.
-2. **2D to 3D Planetary Coupling**: In the 2D Cartesian simulation grid, fluid mass draining from marker porosity is modeled per unit out-of-plane length ($[\text{kg/m}]$). To couple with the 3D spherical atmosphere, this 2D mass is scaled to 3D using the volume-to-area geometric depth $L_{\text{3D}} = V_{\text{3D}} / A_{\text{2D}} = \frac{4}{3} R_{\text{planet}}$ [m] before solving atmospheric inventory evolution; this ensures that $P_{\text{atm}} = M_{\text{atm}} g / (4 \pi R_{\text{planet}}^2)$ evaluates in true Pascals.
+2. **2D to 3D Planetary Coupling**: In the 2D Cartesian simulation grid, fluid mass draining from marker porosity is modeled per unit out-of-plane length ($[\text{kg/m}]$). To couple with the 3D spherical atmosphere, this 2D mass is scaled to 3D using the surface area ratio $L_{\text{3D}} = A_{\text{3D}} / P_{\text{2D}} = \frac{4\pi R_{\text{planet}}^2}{2\pi R_{\text{planet}}} = 2 R_{\text{planet}}$ [m] before solving atmospheric inventory evolution; this ensures that $P_{\text{atm}} = M_{\text{atm}} g / (4 \pi R_{\text{planet}}^2)$ evaluates in true Pascals.
 3. **Volatile Mass Fractionation**: Kinetic escape rates depend directly on molecular mass ($m_i$). Light species escape orders of magnitude faster than heavy species. In the 2D coupled Stokes-Darcy simulation loop, marker fluid drainage is tracked as a bulk H₂O vapor reservoir, whereas multi-species fractionation is solved analytically via `evolve_atmospheric_species_inventory` and illustrated in standalone benchmarks.
 4. **Surface Boundary Feedback**: The accumulated atmospheric mass generates a downward hydrostatic pressure $P_{\text{atm}} = M_{\text{atm}} g / (4 \pi R^2)$. This column weight adds to ambient nebular or space pressure ($P_{\text{amb,eff}} = P_{\text{amb}} + P_{\text{atm}}$), opposing porous Darcy venting and suppressing further volatile boiling.
 
@@ -43,17 +43,26 @@ $$\Phi_{\text{Jeans}} = \frac{n_{\text{exo}} v_{\text{th}}}{2 \sqrt{\pi}} (1 + \
 
 where $n_{\text{exo}}$ is the number density at the exobase.
 
-### Integrated Loss Rate and Timescale
+### Integrated Loss Rate and Hydrodynamic Blow-Off
 
 Using the barometric scale height $H = k_B T / (m g)$, the planetary mass loss rate $\dot{M}_{\text{escape}}$ [$\text{kg/s}$] relates linearly to the atmospheric inventory $M_{\text{atm}}$:
 
-$$\dot{M}_{\text{escape}} = 4 \pi R_{\text{exo}}^2 m \Phi_{\text{Jeans}} = k_{\text{escape}} M_{\text{atm}}$$
+$$\dot{M}_{\text{escape}} = 4 \pi R_{\text{exo}}^2 m \Phi = k_{\text{escape}} M_{\text{atm}}$$
 
-where the linear escape rate coefficient $k_{\text{escape}}$ [$\text{s}^{-1}$] is:
+In `Erebus.jl`, $k_{\text{escape}}$ evaluates across two regimes depending on $\lambda$:
 
-$$k_{\text{escape}} = \frac{v_{\text{th}}}{2 \sqrt{\pi} H} (1 + \lambda) \exp(-\lambda)$$
+1. **Kinetic Jeans Effusion ($\lambda \ge 2.0$)**:
+   $$k_{\text{jeans}} = \frac{v_{\text{th}}}{2 \sqrt{\pi} H} (1 + \lambda) \exp(-\lambda)$$
 
-The exobase density closure $M_{\text{atm}} \approx 4 \pi R^2 \rho_{\text{exo}} H$ is an upper bound on escape loss for gravitationally bound atmospheres ($\lambda > 1$), where true exobase density falls below the column average. The characteristic atmospheric depletion timescale is $\tau_{\text{loss}} = 1 / k_{\text{escape}}$ [$\text{s}$].
+2. **Transonic Hydrodynamic Blow-Off ($\lambda < 1.0$)**:
+   When gravity cannot bind the thermal envelope ($\lambda < 1.0$), escape approaches the adiabatic sound speed $c_s = \sqrt{\gamma k_B T_{\text{exo}} / m}$:
+   $$k_{\text{blowoff}} = \frac{c_s}{H}$$
+
+3. **Smooth Transition ($1.0 \le \lambda \le 2.0$)**:
+   The solver blends $k_{\text{blowoff}}$ and $k_{\text{jeans}}$ via a $C^1$-continuous cubic Hermite smoothstep polynomial $S(\lambda)$:
+   $$k_{\text{escape}} = (1 - S(\lambda)) k_{\text{blowoff}} + S(\lambda) k_{\text{jeans}}$$
+
+The characteristic atmospheric depletion timescale is $\tau_{\text{loss}} = 1 / k_{\text{escape}}$ [$\text{s}$].
 
 ### Atmospheric Mass Conservation and Analytic Step Solution
 

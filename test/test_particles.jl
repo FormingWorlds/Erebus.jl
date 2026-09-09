@@ -1148,4 +1148,66 @@
         Erebus.update_marker_temperature!(xm_t, ym_t, tkm_t, DT_t, tk2_t, 3, 1)
         @test isapprox(tkm_t[1], 360.0; rtol=1e-12)
     end # testset "update_marker_temperature!()"
+
+    @testset "apply_subgrid_temperature_diffusion!(): relaxation and scalar scoping" begin
+        coords = GridCoordinates(GridConfig(Nx=10, Ny=10, xsize=100000.0, ysize=100000.0))
+        Ny1_p, Nx1_p = coords.Ny1, coords.Nx1
+        marknum_p = 8
+        xm_p = fill(0.5 * coords.xsize, marknum_p)
+        ym_p = fill(0.5 * coords.ysize, marknum_p)
+        tm_p = fill(1, marknum_p)
+        tkm_p = fill(400.0, marknum_p)
+        phim_p = fill(0.05, marknum_p)
+        tk1_p = fill(300.0, Ny1_p, Nx1_p)
+        DT_p = zeros(Ny1_p, Nx1_p)
+        TKSUM_p = zeros(Ny1_p, Nx1_p)
+        RHOCPSUM_p = zeros(Ny1_p, Nx1_p)
+        dt_sub = 1.0e8
+        mode_p = 1
+
+        # 1. With dsubgridt = 0.0: no diffusion or modification occurs
+        tkm_init = copy(tkm_p)
+        Erebus.apply_subgrid_temperature_diffusion!(
+            xm_p,
+            ym_p,
+            tm_p,
+            tkm_p,
+            phim_p,
+            tk1_p,
+            DT_p,
+            TKSUM_p,
+            RHOCPSUM_p,
+            dt_sub,
+            marknum_p,
+            mode_p;
+            coords=coords,
+            dsubgridt=0.0,
+        )
+        @test tkm_p == tkm_init
+        @test all(iszero, DT_p)
+
+        # 2. With dsubgridt = 1.0: markers relax toward grid temperature, no UndefVarError
+        Erebus.apply_subgrid_temperature_diffusion!(
+            xm_p,
+            ym_p,
+            tm_p,
+            tkm_p,
+            phim_p,
+            tk1_p,
+            DT_p,
+            TKSUM_p,
+            RHOCPSUM_p,
+            dt_sub,
+            marknum_p,
+            mode_p;
+            coords=coords,
+            dsubgridt=1.0,
+        )
+        # Markers should have cooled toward 300 K
+        @test all(tkm_p .< 400.0)
+        @test all(tkm_p .> 300.0)
+        # Grid DT should have warmed due to heat transfer from markers
+        @test any(DT_p .> 0.0)
+        @test all(isfinite, DT_p)
+    end
 end
