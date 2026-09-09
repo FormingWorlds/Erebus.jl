@@ -278,12 +278,15 @@ using JLD2
 
         # Domain error on negative / out-of-bounds inputs
         @test_throws DomainError compute_troilite_stoichiometry(-0.01)
+        @test_throws DomainError compute_troilite_stoichiometry(1.5)
         @test_throws DomainError compute_schreibersite_stoichiometry(-0.01)
+        @test_throws DomainError compute_schreibersite_stoichiometry(1.5)
         @test_throws DomainError compute_schreibersite_stoichiometry(0.001; ni_frac=-0.1)
         @test_throws DomainError compute_schreibersite_stoichiometry(0.001; ni_frac=1.2)
         @test_throws DomainError compute_cohenite_graphite_stoichiometry(-0.01)
         @test_throws DomainError compute_cohenite_graphite_stoichiometry(1.5)
         @test_throws DomainError compute_nitride_stoichiometry(-0.01)
+        @test_throws DomainError compute_nitride_stoichiometry(1.5)
         @test_throws ArgumentError compute_nitride_stoichiometry(0.001; mode=:invalid_mode)
     end
 
@@ -351,11 +354,28 @@ using JLD2
         )
         @test total_mid ≈ 1.0 atol=1e-12
 
-        # High sulfur (w_S = 0.50): troilite capped at 1.0, assemblage strictly conserved
+        # High sulfur (w_S = 0.50): troilite limited by available metallic iron (0.50 Fe)
         res_high_S = compute_normative_mineral_assemblage(1100.0, 0.50, 0.0, 0.0, 0.0, cfg)
-        @test res_high_S.w_troilite ≈ 1.0 atol=1e-12
+        f_fe_S = 55.845 / 32.065
+        f_troilite = 87.910 / 32.065
+        expected_troilite = (0.50 / f_fe_S) * f_troilite
+        @test res_high_S.w_troilite ≈ expected_troilite atol=1e-5
         @test iszero(res_high_S.w_metal_matrix)
-        @test (res_high_S.w_troilite + res_high_S.w_liquid_alloy) ≈ 1.0 atol=1e-12
+
+        # Exact eutectic interval boundaries
+        res_eut_lower = compute_normative_mineral_assemblage(
+            1213.0, w_S, w_C, w_N, w_P, cfg
+        )
+        @test res_eut_lower.F_solid ≈ 1.0 atol=1e-12
+        @test res_eut_lower.F_liquid ≈ 0.0 atol=1e-12
+        @test iszero(res_eut_lower.w_liquid_alloy)
+
+        res_eut_upper = compute_normative_mineral_assemblage(
+            1263.0, w_S, w_C, w_N, w_P, cfg
+        )
+        @test res_eut_upper.F_solid ≈ 0.0 atol=1e-12
+        @test res_eut_upper.F_liquid ≈ 1.0 atol=1e-12
+        @test res_eut_upper.w_liquid_alloy ≈ 1.0 atol=1e-12
 
         # Multiple high volatiles (w_S=0.30, w_C=0.05, w_P=0.01): total solid strictly <= 1.0
         res_multi_high = compute_normative_mineral_assemblage(
@@ -371,6 +391,9 @@ using JLD2
         )
         @test total_solid_multi ≈ res_multi_high.F_solid atol=1e-12
         @test (total_solid_multi + res_multi_high.w_liquid_alloy) ≈ 1.0 atol=1e-12
+        # Carbon strictly conserved in cohenite + graphite
+        C_in_coh = res_multi_high.w_cohenite * (12.011 / (3.0 * 55.845 + 12.011))
+        @test (C_in_coh + res_multi_high.w_graphite) ≈ 0.05 atol=1e-12
 
         # Strict input domain checking
         @test_throws DomainError compute_normative_mineral_assemblage(
@@ -378,6 +401,17 @@ using JLD2
         )
         @test_throws DomainError compute_normative_mineral_assemblage(
             1000.0, -0.01, w_C, w_N, w_P, cfg
+        )
+        @test_throws DomainError compute_normative_mineral_assemblage(
+            1000.0, 1.01, w_C, w_N, w_P, cfg
+        )
+        @test_throws DomainError compute_normative_mineral_assemblage(
+            1000.0,
+            0.60,
+            0.50,
+            0.0,
+            0.0,
+            cfg, # Sum of volatiles > 1.0
         )
         @test_throws DomainError compute_normative_mineral_assemblage(
             1000.0, w_S, -0.01, w_N, w_P, cfg

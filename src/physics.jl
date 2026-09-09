@@ -5576,13 +5576,15 @@ Notes
 Molar masses: S = 32.065 g/mol, Fe = 55.845 g/mol, FeS = 87.910 g/mol.
 """
 function compute_troilite_stoichiometry(w_S::Real)
-    (w_S >= 0.0 && isfinite(w_S)) ||
-        throw(DomainError(w_S, "w_S must be non-negative and finite"))
+    (0.0 <= w_S <= 1.0 && isfinite(w_S)) ||
+        throw(DomainError(w_S, "w_S must be in [0, 1] and finite"))
     w_S_f = Float64(w_S)
     f_troilite = 87.910 / 32.065
     f_fe = 55.845 / 32.065
-    w_troilite = min(1.0, w_S_f * f_troilite)
-    w_fe_consumed = min(max(0.0, 1.0 - w_S_f), w_S_f * f_fe)
+    S_fe_limit = (1.0 - w_S_f) / f_fe
+    S_troilite = min(w_S_f, S_fe_limit)
+    w_troilite = S_troilite * f_troilite
+    w_fe_consumed = S_troilite * f_fe
     return (w_troilite, w_fe_consumed)
 end
 
@@ -5603,15 +5605,15 @@ Returns
 
 Raises
 ------
-- `DomainError`: If `w_P` is negative or non-finite, or `ni_frac` is not in [0, 1].
+- `DomainError`: If `w_P` is not in [0, 1] or non-finite, or `ni_frac` is not in [0, 1].
 
 Notes
 -----
 Molar masses: P = 30.97376 g/mol, Fe = 55.845 g/mol, Ni = 58.6934 g/mol.
 """
 function compute_schreibersite_stoichiometry(w_P::Real; ni_frac::Real=0.25)
-    (w_P >= 0.0 && isfinite(w_P)) ||
-        throw(DomainError(w_P, "w_P must be non-negative and finite"))
+    (0.0 <= w_P <= 1.0 && isfinite(w_P)) ||
+        throw(DomainError(w_P, "w_P must be in [0, 1] and finite"))
     (0.0 <= ni_frac <= 1.0 && isfinite(ni_frac)) ||
         throw(DomainError(ni_frac, "ni_frac must be in [0, 1]"))
     w_P_f = Float64(w_P)
@@ -5621,8 +5623,10 @@ function compute_schreibersite_stoichiometry(w_P::Real; ni_frac::Real=0.25)
     M_schreib = 3.0 * M_metal_avg + M_P
     f_schreib = M_schreib / M_P
     f_metal = (3.0 * M_metal_avg) / M_P
-    w_schreib = min(1.0, w_P_f * f_schreib)
-    w_metal_consumed = min(max(0.0, 1.0 - w_P_f), w_P_f * f_metal)
+    P_metal_limit = (1.0 - w_P_f) / f_metal
+    P_schreib = min(w_P_f, P_metal_limit)
+    w_schreib = P_schreib * f_schreib
+    w_metal_consumed = P_schreib * f_metal
     return (w_schreib, w_metal_consumed)
 end
 
@@ -5684,7 +5688,7 @@ Returns
 
 Raises
 ------
-- `DomainError`: If `w_N` is negative or non-finite.
+- `DomainError`: If `w_N` is not in [0, 1] or non-finite.
 - `ArgumentError`: If `mode` is not one of `:roaldite`, `:carlsbergite`, or `:osbornite`.
 
 Notes
@@ -5692,8 +5696,8 @@ Notes
 Molar masses: N = 14.007 g/mol, Fe = 55.845 g/mol, Cr = 51.996 g/mol, Ti = 47.867 g/mol.
 """
 function compute_nitride_stoichiometry(w_N::Real; mode::Symbol=:roaldite)
-    (w_N >= 0.0 && isfinite(w_N)) ||
-        throw(DomainError(w_N, "w_N must be non-negative and finite"))
+    (0.0 <= w_N <= 1.0 && isfinite(w_N)) ||
+        throw(DomainError(w_N, "w_N must be in [0, 1] and finite"))
     w_N_f = Float64(w_N)
     M_N = 14.007
     f_nitride, f_metal = if mode === :roaldite
@@ -5712,8 +5716,10 @@ function compute_nitride_stoichiometry(w_N::Real; mode::Symbol=:roaldite)
             ),
         )
     end
-    w_nitride = min(1.0, w_N_f * f_nitride)
-    w_metal_consumed = min(max(0.0, 1.0 - w_N_f), w_N_f * f_metal)
+    N_metal_limit = (1.0 - w_N_f) / f_metal
+    N_nitride = min(w_N_f, N_metal_limit)
+    w_nitride = N_nitride * f_nitride
+    w_metal_consumed = N_nitride * f_metal
     return (w_nitride, w_metal_consumed)
 end
 
@@ -5749,7 +5755,7 @@ Returns
 Raises
 ------
 - `DomainError`: If `T`, `w_S`, `w_C`, `w_N`, or `w_P` are negative or non-finite,
-  or if `cfg.dT_transition` is not strictly positive.
+  if `w_S + w_C + w_N + w_P > 1.0`, or if `cfg.dT_transition` is not strictly positive.
 
 Notes
 -----
@@ -5761,14 +5767,22 @@ function compute_normative_mineral_assemblage(
 )
     (T >= 0.0 && isfinite(T)) ||
         throw(DomainError(T, "Temperature must be non-negative and finite"))
-    (w_S >= 0.0 && isfinite(w_S)) ||
-        throw(DomainError(w_S, "w_S must be non-negative and finite"))
-    (w_C >= 0.0 && isfinite(w_C)) ||
-        throw(DomainError(w_C, "w_C must be non-negative and finite"))
-    (w_N >= 0.0 && isfinite(w_N)) ||
-        throw(DomainError(w_N, "w_N must be non-negative and finite"))
-    (w_P >= 0.0 && isfinite(w_P)) ||
-        throw(DomainError(w_P, "w_P must be non-negative and finite"))
+    (0.0 <= w_S <= 1.0 && isfinite(w_S)) ||
+        throw(DomainError(w_S, "w_S must be in [0, 1] and finite"))
+    (0.0 <= w_C <= 1.0 && isfinite(w_C)) ||
+        throw(DomainError(w_C, "w_C must be in [0, 1] and finite"))
+    (0.0 <= w_N <= 1.0 && isfinite(w_N)) ||
+        throw(DomainError(w_N, "w_N must be in [0, 1] and finite"))
+    (0.0 <= w_P <= 1.0 && isfinite(w_P)) ||
+        throw(DomainError(w_P, "w_P must be in [0, 1] and finite"))
+    w_S_f = Float64(w_S)
+    w_C_f = Float64(w_C)
+    w_N_f = Float64(w_N)
+    w_P_f = Float64(w_P)
+    w_volatiles = w_S_f + w_C_f + w_N_f + w_P_f
+    (w_volatiles <= 1.0) || throw(
+        DomainError(w_volatiles, "Sum of volatile mass fractions must not exceed 1.0")
+    )
     (cfg.dT_transition > 0.0 && isfinite(cfg.dT_transition)) || throw(
         DomainError(
             cfg.dT_transition, "dT_transition must be strictly positive and finite"
@@ -5782,27 +5796,61 @@ function compute_normative_mineral_assemblage(
     F_solid = clamp(1.0 - (T_f - T_eut) / dT, 0.0, 1.0)
     F_liquid = 1.0 - F_solid
 
-    w_troilite_0, _ = compute_troilite_stoichiometry(w_S)
-    w_schreib_0, _ = compute_schreibersite_stoichiometry(
-        w_P; ni_frac=cfg.schreibersite_ni_frac
-    )
-    w_coh_0, w_gra_0, _ = compute_cohenite_graphite_stoichiometry(
-        w_C; carbide_max=cfg.cohenite_carbide_max
-    )
-    w_nit_0, _ = compute_nitride_stoichiometry(w_N; mode=cfg.nitride_mode)
+    # Available metallic iron-nickel pool for mineral formation
+    w_metal_avail = 1.0 - w_volatiles
 
-    w_accessories_0 = w_troilite_0 + w_schreib_0 + w_coh_0 + w_gra_0 + w_nit_0
-    if w_accessories_0 > 1.0
-        norm_factor = 1.0 / w_accessories_0
-        w_troilite_0 *= norm_factor
-        w_schreib_0 *= norm_factor
-        w_coh_0 *= norm_factor
-        w_gra_0 *= norm_factor
-        w_nit_0 *= norm_factor
-        w_metal_matrix_0 = 0.0
+    # 1. Troilite (FeS): sulfide has highest affinity for metallic iron
+    f_troilite = 87.910 / 32.065
+    f_fe_S = 55.845 / 32.065
+    S_troilite = min(w_S_f, w_metal_avail / f_fe_S)
+    w_troilite_0 = S_troilite * f_troilite
+    w_metal_avail = max(0.0, w_metal_avail - S_troilite * f_fe_S)
+
+    # 2. Schreibersite ((Fe,Ni)3P)
+    x_ni = Float64(cfg.schreibersite_ni_frac)
+    M_metal_avg = (1.0 - x_ni) * 55.845 + x_ni * 58.6934
+    M_P = 30.97376
+    f_schreib = (3.0 * M_metal_avg + M_P) / M_P
+    f_metal_P = (3.0 * M_metal_avg) / M_P
+    P_schreib = min(w_P_f, w_metal_avail / f_metal_P)
+    w_schreib_0 = P_schreib * f_schreib
+    w_metal_avail = max(0.0, w_metal_avail - P_schreib * f_metal_P)
+
+    # 3. Nitride
+    M_N = 14.007
+    f_nitride, f_metal_N = if cfg.nitride_mode === :roaldite
+        M_Fe = 55.845
+        (4.0 * M_Fe + M_N) / M_N, (4.0 * M_Fe) / M_N
+    elseif cfg.nitride_mode === :carlsbergite
+        M_Cr = 51.996
+        (M_Cr + M_N) / M_N, M_Cr / M_N
+    elseif cfg.nitride_mode === :osbornite
+        M_Ti = 47.867
+        (M_Ti + M_N) / M_N, M_Ti / M_N
     else
-        w_metal_matrix_0 = 1.0 - w_accessories_0
+        throw(
+            ArgumentError(
+                "Unknown nitride_mode: :$(cfg.nitride_mode). Expected :roaldite, :carlsbergite, or :osbornite",
+            ),
+        )
     end
+    N_nit = min(w_N_f, w_metal_avail / f_metal_N)
+    w_nit_0 = N_nit * f_nitride
+    w_metal_avail = max(0.0, w_metal_avail - N_nit * f_metal_N)
+
+    # 4. Cohenite (Fe3C) and crystalline Graphite (C):
+    # Cohenite forms up to carbide saturation and available iron; excess carbon precipitates as graphite
+    f_fe_C = (3.0 * 55.845) / 12.011
+    f_cohenite = f_fe_C + 1.0
+    c_max = Float64(cfg.cohenite_carbide_max)
+    C_fe_limit = w_metal_avail / f_fe_C
+    C_carbide = min(w_C_f, c_max, C_fe_limit)
+    w_coh_0 = C_carbide * f_cohenite
+    w_gra_0 = w_C_f - C_carbide
+    w_metal_avail = max(0.0, w_metal_avail - C_carbide * f_fe_C)
+
+    # Residual metallic iron-nickel matrix
+    w_metal_matrix_0 = w_metal_avail
 
     w_troilite = F_solid * w_troilite_0
     w_schreibersite = F_solid * w_schreib_0

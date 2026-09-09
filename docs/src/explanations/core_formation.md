@@ -302,7 +302,7 @@ where $F_{\text{solid}}(T) = 1.0 - (T - T_{\text{eutectic}}) / \Delta T_{\text{t
 ### Regional Classification
 
 Marker phase distributions are integrated across radial domains (core, mantle, crust). Simulation outputs are classified into meteorite affinities:
-- Magmatic differentiated bodies ($f_{\text{molten,core}} \ge 0.80$ and $f_{\text{metal,core}} \ge 0.40$): Corresponds to groups IIIAB, IVA, and IVB.
+- Magmatic differentiated bodies ($f_{\text{molten,core}} \ge 0.80$, $f_{\text{metal,core}} \ge 0.40$, and $f_{\text{solid,crust}} \le 0.005$): Corresponds to groups IIIAB, IVA, and IVB.
 - Primitive incomplete bodies ($f_{\text{molten,core}} \le 0.60$ and $f_{\text{solid,crust}} \ge 0.01$): Corresponds to IAB complexes and winonaites.
 - Transitional bodies: Intermediate segregation states.
 

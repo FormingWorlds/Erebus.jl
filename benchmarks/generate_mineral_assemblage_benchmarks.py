@@ -60,7 +60,9 @@ os.makedirs(OUTPUT_FILES_DIR, exist_ok=True)
 def compute_troilite_stoichiometry(w_S):
     f_troilite = 87.910 / 32.065
     f_fe = 55.845 / 32.065
-    return w_S * f_troilite, w_S * f_fe
+    S_fe_limit = np.maximum(0.0, 1.0 - w_S) / f_fe
+    S_troilite = np.minimum(w_S, S_fe_limit)
+    return S_troilite * f_troilite, S_troilite * f_fe
 
 def compute_schreibersite_stoichiometry(w_P, ni_frac=0.25):
     M_metal_avg = (1.0 - ni_frac) * 55.845 + ni_frac * 58.6934
@@ -68,15 +70,18 @@ def compute_schreibersite_stoichiometry(w_P, ni_frac=0.25):
     M_schreib = 3.0 * M_metal_avg + M_P
     f_schreib = M_schreib / M_P
     f_metal = (3.0 * M_metal_avg) / M_P
-    return w_P * f_schreib, w_P * f_metal
+    P_metal_limit = np.maximum(0.0, 1.0 - w_P) / f_metal
+    P_schreib = np.minimum(w_P, P_metal_limit)
+    return P_schreib * f_schreib, P_schreib * f_metal
 
 def compute_cohenite_graphite_stoichiometry(w_C, carbide_max=0.0667):
-    f_cohenite = (3.0 * 55.845 + 12.011) / 12.011
-    w_coh_sat = min(1.0, carbide_max * f_cohenite)
-    w_fe_sat = min(1.0 - carbide_max, carbide_max * (f_cohenite - 1.0))
-    w_coh = np.where(w_C <= carbide_max, np.minimum(1.0, w_C * f_cohenite), w_coh_sat)
-    w_gra = np.where(w_C <= carbide_max, 0.0, w_C - carbide_max)
-    w_fe = np.where(w_C <= carbide_max, np.minimum(1.0 - w_C, w_coh - w_C), w_fe_sat)
+    f_fe = (3.0 * 55.845) / 12.011
+    f_cohenite = f_fe + 1.0
+    C_fe_limit = np.maximum(0.0, 1.0 - w_C) / f_fe
+    C_carbide = np.minimum(w_C, np.minimum(carbide_max, C_fe_limit))
+    w_coh = C_carbide * f_cohenite
+    w_gra = w_C - C_carbide
+    w_fe = C_carbide * f_fe
     return w_coh, w_gra, w_fe
 
 def compute_nitride_stoichiometry(w_N, mode='roaldite'):
@@ -84,15 +89,20 @@ def compute_nitride_stoichiometry(w_N, mode='roaldite'):
     if mode == 'roaldite':
         M_Fe = 55.845
         f_nitride = (4.0 * M_Fe + M_N) / M_N
+        f_metal = (4.0 * M_Fe) / M_N
     elif mode == 'carlsbergite':
         M_Cr = 51.996
         f_nitride = (M_Cr + M_N) / M_N
+        f_metal = M_Cr / M_N
     elif mode == 'osbornite':
         M_Ti = 47.867
         f_nitride = (M_Ti + M_N) / M_N
+        f_metal = M_Ti / M_N
     else:
         raise ValueError(f"Unknown nitride mode {mode}")
-    return w_N * f_nitride
+    N_metal_limit = np.maximum(0.0, 1.0 - w_N) / f_metal
+    N_nitride = np.minimum(w_N, N_metal_limit)
+    return N_nitride * f_nitride, N_nitride * f_metal
 
 def compute_eutectic_melting(T, T_eutectic=1213.0, dT_transition=50.0):
     F_solid = np.clip(1.0 - (T - T_eutectic) / dT_transition, 0.0, 1.0)
@@ -147,7 +157,7 @@ def generate_benchmark_figure():
     w_tro_0, _ = compute_troilite_stoichiometry(0.04)
     w_sch_0, _ = compute_schreibersite_stoichiometry(0.001, ni_frac=0.25)
     w_coh_0, w_gra_0, _ = compute_cohenite_graphite_stoichiometry(0.002, carbide_max=0.0667)
-    w_nit_0 = compute_nitride_stoichiometry(0.0001, mode='roaldite')
+    w_nit_0, _ = compute_nitride_stoichiometry(0.0001, mode='roaldite')
     w_acc_0 = w_tro_0 + w_sch_0 + w_coh_0 + w_gra_0 + w_nit_0
     w_matrix_0 = max(0.0, 1.0 - w_acc_0)
 
