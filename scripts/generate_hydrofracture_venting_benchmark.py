@@ -150,7 +150,7 @@ def main():
     ax_c.set_ylabel("Pressure [MPa]", fontsize=11, fontweight="bold", color="#d62728")
     ax_c.tick_params(axis="y", labelcolor="#d62728")
     ax_c.set_xlim(0, 120)
-    ax_c.set_ylim(0, 20)
+    ax_c.set_ylim(0, 23)
     ax_c.grid(True, ls=":", alpha=0.6)
 
     ax_c2 = ax_c.twinx()
@@ -173,7 +173,7 @@ def main():
 
     lines_c = [ax_c.lines[0], ax_c.lines[1], ax_c.lines[2], ax_c2.lines[0]]
     labels_c = [l.get_label() for l in lines_c]
-    ax_c.legend(lines_c, labels_c, loc="upper right", fontsize=8.0, framealpha=0.9)
+    ax_c.legend(lines_c, labels_c, loc="upper left", fontsize=8.0, framealpha=0.9)
     ax_c.set_title("(c) Episodic Overpressure Rupture & Resealing", fontsize=12, fontweight="bold")
 
     # -------------------------------------------------------------------------
@@ -194,7 +194,7 @@ def main():
     q_unsealed = (k_unsealed / eta_f) * np.maximum(0.0, (P_f * 1.0e6) - P_vent) / dx
     cum_mass_unsealed = np.cumsum(rho_water * q_unsealed * dt_sec)
 
-    ax_d.plot(time_hr, mass_flux, color="#1f77b4", lw=2.0, label="Pulsed Venting Flux (Hydrofracture Gated)")
+    ax_d.plot(time_hr, mass_flux, color="#1f77b4", lw=2.0, label="Pulsed Venting Flux (Hydrofracture Rupture)")
     ax_d.set_xlabel("Time [hours]", fontsize=11, fontweight="bold")
     ax_d.set_ylabel(r"Surface Mass Flux [$\mathrm{kg}/(\mathrm{m}^2\cdot\mathrm{s})$]",
                     fontsize=11, fontweight="bold", color="#1f77b4")
@@ -205,18 +205,18 @@ def main():
     ax_d.grid(True, which="both", ls=":", alpha=0.6)
 
     ax_d2 = ax_d.twinx()
-    ax_d2.plot(time_hr, cum_mass, color="#9467bd", lw=2.5, label="Cumulative Vented Mass (Gated)")
-    ax_d2.plot(time_hr, cum_mass_unsealed, color="gray", lw=1.5, ls="--", label="Cumulative Mass (Ungated Leakage)")
+    ax_d2.plot(time_hr, cum_mass, color="#9467bd", lw=2.5, label="Cumulative Vented Mass (Episodic Rupture)")
+    ax_d2.plot(time_hr, cum_mass_unsealed, color="gray", lw=1.5, ls="--", label="Cumulative Mass (Continuous Leakage)")
     ax_d2.set_ylabel(r"Cumulative Mass [$\mathrm{kg}/\mathrm{m}^2$]",
                      fontsize=11, fontweight="bold", color="#9467bd")
     ax_d2.tick_params(axis="y", labelcolor="#9467bd")
 
     lines_d = [ax_d.lines[0], ax_d2.lines[0], ax_d2.lines[1]]
     labels_d = [l.get_label() for l in lines_d]
-    ax_d.legend(lines_d, labels_d, loc="center left", fontsize=8.0, framealpha=0.9)
+    ax_d.legend(lines_d, labels_d, loc="upper left", fontsize=8.0, framealpha=0.9)
     ax_d.set_title("(d) Pulsed Cryovolcanic Venting vs Steady Leakage", fontsize=12, fontweight="bold")
 
-    plt.savefig(out_fig, dpi=300)
+    plt.savefig(out_fig, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"Generated benchmark figure: {out_fig}")
 

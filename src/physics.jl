@@ -5552,3 +5552,563 @@ function compute_core_volatile_budgets(
         M_total_S_met,
     )
 end
+
+"""
+    compute_troilite_stoichiometry(w_S::Real)
+
+Compute stoichiometric conversion of sulfur into troilite (FeS).
+
+Parameters
+----------
+- `w_S::Real`: Mass fraction of sulfur in the metallic alloy [-].
+
+Returns
+-------
+- `(w_troilite, w_fe_consumed)::Tuple{Float64, Float64}`: Mass fraction of troilite
+  formed and iron consumed per unit mass of metallic alloy [-].
+
+Raises
+------
+- `DomainError`: If `w_S` is negative or non-finite.
+
+Notes
+-----
+Molar masses: S = 32.065 g/mol, Fe = 55.845 g/mol, FeS = 87.910 g/mol.
+"""
+function compute_troilite_stoichiometry(w_S::Real)
+    (0.0 <= w_S <= 1.0 && isfinite(w_S)) ||
+        throw(DomainError(w_S, "w_S must be in [0, 1] and finite"))
+    w_S_f = Float64(w_S)
+    f_troilite = 87.910 / 32.065
+    f_fe = 55.845 / 32.065
+    S_fe_limit = (1.0 - w_S_f) / f_fe
+    S_troilite = min(w_S_f, S_fe_limit)
+    w_troilite = S_troilite * f_troilite
+    w_fe_consumed = S_troilite * f_fe
+    return (w_troilite, w_fe_consumed)
+end
+
+"""
+    compute_schreibersite_stoichiometry(w_P::Real; ni_frac::Real=0.25)
+
+Compute stoichiometric conversion of phosphorus into schreibersite ((Fe,Ni)3P).
+
+Parameters
+----------
+- `w_P::Real`: Mass fraction of phosphorus in the metallic alloy [-].
+- `ni_frac::Real`: Molar nickel fraction in the metal matrix Ni/(Fe+Ni) [-] (default: 0.25).
+
+Returns
+-------
+- `(w_schreibersite, w_metal_consumed)::Tuple{Float64, Float64}`: Mass fraction of schreibersite
+  formed and metal (Fe+Ni) consumed per unit mass of metallic alloy [-].
+
+Raises
+------
+- `DomainError`: If `w_P` is not in [0, 1] or non-finite, or `ni_frac` is not in [0, 1].
+
+Notes
+-----
+Molar masses: P = 30.97376 g/mol, Fe = 55.845 g/mol, Ni = 58.6934 g/mol.
+"""
+function compute_schreibersite_stoichiometry(w_P::Real; ni_frac::Real=0.25)
+    (0.0 <= w_P <= 1.0 && isfinite(w_P)) ||
+        throw(DomainError(w_P, "w_P must be in [0, 1] and finite"))
+    (0.0 <= ni_frac <= 1.0 && isfinite(ni_frac)) ||
+        throw(DomainError(ni_frac, "ni_frac must be in [0, 1]"))
+    w_P_f = Float64(w_P)
+    x_ni = Float64(ni_frac)
+    M_metal_avg = (1.0 - x_ni) * 55.845 + x_ni * 58.6934
+    M_P = 30.97376
+    M_schreib = 3.0 * M_metal_avg + M_P
+    f_schreib = M_schreib / M_P
+    f_metal = (3.0 * M_metal_avg) / M_P
+    P_metal_limit = (1.0 - w_P_f) / f_metal
+    P_schreib = min(w_P_f, P_metal_limit)
+    w_schreib = P_schreib * f_schreib
+    w_metal_consumed = P_schreib * f_metal
+    return (w_schreib, w_metal_consumed)
+end
+
+"""
+    compute_cohenite_graphite_stoichiometry(w_C::Real; carbide_max::Real=0.0667)
+
+Compute stoichiometric allocation of carbon into cohenite (Fe3C) and crystalline graphite (C).
+
+Parameters
+----------
+- `w_C::Real`: Mass fraction of carbon in the metallic alloy [-].
+- `carbide_max::Real`: Maximum carbon mass fraction accommodated in carbide [-] (default: 0.0667).
+
+Returns
+-------
+- `(w_cohenite, w_graphite, w_fe_consumed)::Tuple{Float64, Float64, Float64}`: Mass fraction of
+  cohenite, graphite, and iron consumed per unit mass of metallic alloy [-].
+
+Raises
+------
+- `DomainError`: If `w_C` is negative or non-finite, or `carbide_max` is not in (0, 1].
+
+Notes
+-----
+Molar masses: C = 12.011 g/mol, Fe = 55.845 g/mol. Stoichiometric cohenite factor ~ 14.948.
+When carbon exceeds carbide_max, cohenite saturates and excess carbon precipitates as graphite.
+"""
+function compute_cohenite_graphite_stoichiometry(w_C::Real; carbide_max::Real=0.0667)
+    (0.0 <= w_C <= 1.0 && isfinite(w_C)) ||
+        throw(DomainError(w_C, "w_C must be in [0, 1] and finite"))
+    (0.0 < carbide_max <= 1.0 && isfinite(carbide_max)) ||
+        throw(DomainError(carbide_max, "carbide_max must be in (0, 1]"))
+    w_C_f = Float64(w_C)
+    c_max = Float64(carbide_max)
+    f_fe = (3.0 * 55.845) / 12.011
+    f_cohenite = f_fe + 1.0
+    C_fe_limit = (1.0 - w_C_f) / f_fe
+    C_carbide = min(w_C_f, c_max, C_fe_limit)
+    w_cohenite = C_carbide * f_cohenite
+    w_graphite = w_C_f - C_carbide
+    w_fe_consumed = C_carbide * f_fe
+    return (w_cohenite, w_graphite, w_fe_consumed)
+end
+
+"""
+    compute_nitride_stoichiometry(w_N::Real; mode::Symbol=:roaldite)
+
+Compute stoichiometric conversion of nitrogen into nitride minerals.
+
+Parameters
+----------
+- `w_N::Real`: Mass fraction of nitrogen in the metallic alloy [-].
+- `mode::Symbol`: Nitride mineral model (`:roaldite` for Fe4N, `:carlsbergite` for CrN, `:osbornite` for TiN).
+
+Returns
+-------
+- `(w_nitride, w_metal_consumed)::Tuple{Float64, Float64}`: Mass fraction of nitride
+  formed and metal consumed per unit mass of metallic alloy [-].
+
+Raises
+------
+- `DomainError`: If `w_N` is not in [0, 1] or non-finite.
+- `ArgumentError`: If `mode` is not one of `:roaldite`, `:carlsbergite`, or `:osbornite`.
+
+Notes
+-----
+Molar masses: N = 14.007 g/mol, Fe = 55.845 g/mol, Cr = 51.996 g/mol, Ti = 47.867 g/mol.
+"""
+function compute_nitride_stoichiometry(w_N::Real; mode::Symbol=:roaldite)
+    (0.0 <= w_N <= 1.0 && isfinite(w_N)) ||
+        throw(DomainError(w_N, "w_N must be in [0, 1] and finite"))
+    w_N_f = Float64(w_N)
+    M_N = 14.007
+    f_nitride, f_metal = if mode === :roaldite
+        M_Fe = 55.845
+        (4.0 * M_Fe + M_N) / M_N, (4.0 * M_Fe) / M_N
+    elseif mode === :carlsbergite
+        M_Cr = 51.996
+        (M_Cr + M_N) / M_N, M_Cr / M_N
+    elseif mode === :osbornite
+        M_Ti = 47.867
+        (M_Ti + M_N) / M_N, M_Ti / M_N
+    else
+        throw(
+            ArgumentError(
+                "Unknown nitride_mode: :$mode. Expected :roaldite, :carlsbergite, or :osbornite",
+            ),
+        )
+    end
+    N_metal_limit = (1.0 - w_N_f) / f_metal
+    N_nitride = min(w_N_f, N_metal_limit)
+    w_nitride = N_nitride * f_nitride
+    w_metal_consumed = N_nitride * f_metal
+    return (w_nitride, w_metal_consumed)
+end
+
+"""
+    compute_normative_mineral_assemblage(
+        T::Real, w_S::Real, w_C::Real, w_N::Real, w_P::Real, cfg::PhaseTrackingConfig
+    )
+
+Compute temperature-dependent normative accessory mineral assemblage and eutectic melt fraction.
+
+Parameters
+----------
+- `T::Real`: Local temperature [K].
+- `w_S::Real`: Sulfur mass fraction in metallic alloy [-].
+- `w_C::Real`: Carbon mass fraction in metallic alloy [-].
+- `w_N::Real`: Nitrogen mass fraction in metallic alloy [-].
+- `w_P::Real`: Phosphorus mass fraction in metallic alloy [-].
+- `cfg::PhaseTrackingConfig`: Phase tracking configuration struct.
+
+Returns
+-------
+- Named tuple with fields:
+  - `F_solid`: Solid metal fraction in [0, 1] [-].
+  - `F_liquid`: Liquid metal fraction in [0, 1] [-].
+  - `w_troilite`: Troilite mass fraction in metallic system [-].
+  - `w_schreibersite`: Schreibersite mass fraction in metallic system [-].
+  - `w_cohenite`: Cohenite mass fraction in metallic system [-].
+  - `w_graphite`: Graphite mass fraction in metallic system [-].
+  - `w_nitride`: Nitride mass fraction in metallic system [-].
+  - `w_metal_matrix`: Solid Fe-Ni metal matrix mass fraction in metallic system [-].
+  - `w_liquid_alloy`: Molten Fe-FeS liquid alloy mass fraction in metallic system [-].
+
+Raises
+------
+- `DomainError`: If `T`, `w_S`, `w_C`, `w_N`, or `w_P` are negative or non-finite,
+  if `w_S + w_C + w_N + w_P > 1.0`, or if `cfg.dT_transition` is not strictly positive.
+
+Notes
+-----
+Sub-eutectic mineral phases dissolve continuously across the eutectic transition interval
+[T_eutectic, T_eutectic + dT_transition]. Total phase mass fractions strictly sum to 1.0.
+"""
+function compute_normative_mineral_assemblage(
+    T::Real, w_S::Real, w_C::Real, w_N::Real, w_P::Real, cfg::PhaseTrackingConfig
+)
+    (T >= 0.0 && isfinite(T)) ||
+        throw(DomainError(T, "Temperature must be non-negative and finite"))
+    (0.0 <= w_S <= 1.0 && isfinite(w_S)) ||
+        throw(DomainError(w_S, "w_S must be in [0, 1] and finite"))
+    (0.0 <= w_C <= 1.0 && isfinite(w_C)) ||
+        throw(DomainError(w_C, "w_C must be in [0, 1] and finite"))
+    (0.0 <= w_N <= 1.0 && isfinite(w_N)) ||
+        throw(DomainError(w_N, "w_N must be in [0, 1] and finite"))
+    (0.0 <= w_P <= 1.0 && isfinite(w_P)) ||
+        throw(DomainError(w_P, "w_P must be in [0, 1] and finite"))
+    w_S_f = Float64(w_S)
+    w_C_f = Float64(w_C)
+    w_N_f = Float64(w_N)
+    w_P_f = Float64(w_P)
+    w_volatiles = w_S_f + w_C_f + w_N_f + w_P_f
+    (w_volatiles <= 1.0) || throw(
+        DomainError(w_volatiles, "Sum of volatile mass fractions must not exceed 1.0")
+    )
+    (cfg.dT_transition > 0.0 && isfinite(cfg.dT_transition)) || throw(
+        DomainError(
+            cfg.dT_transition, "dT_transition must be strictly positive and finite"
+        ),
+    )
+
+    T_f = Float64(T)
+    T_eut = cfg.T_eutectic
+    dT = cfg.dT_transition
+
+    F_solid = clamp(1.0 - (T_f - T_eut) / dT, 0.0, 1.0)
+    F_liquid = 1.0 - F_solid
+
+    # Available metallic iron-nickel pool for mineral formation
+    w_metal_avail = 1.0 - w_volatiles
+
+    # 1. Troilite (FeS): sulfide has highest affinity for metallic iron
+    f_troilite = 87.910 / 32.065
+    f_fe_S = 55.845 / 32.065
+    S_troilite = min(w_S_f, w_metal_avail / f_fe_S)
+    w_troilite_0 = S_troilite * f_troilite
+    w_metal_avail = max(0.0, w_metal_avail - S_troilite * f_fe_S)
+
+    # 2. Schreibersite ((Fe,Ni)3P)
+    x_ni = Float64(cfg.schreibersite_ni_frac)
+    M_metal_avg = (1.0 - x_ni) * 55.845 + x_ni * 58.6934
+    M_P = 30.97376
+    f_schreib = (3.0 * M_metal_avg + M_P) / M_P
+    f_metal_P = (3.0 * M_metal_avg) / M_P
+    P_schreib = min(w_P_f, w_metal_avail / f_metal_P)
+    w_schreib_0 = P_schreib * f_schreib
+    w_metal_avail = max(0.0, w_metal_avail - P_schreib * f_metal_P)
+
+    # 3. Nitride
+    M_N = 14.007
+    f_nitride, f_metal_N = if cfg.nitride_mode === :roaldite
+        M_Fe = 55.845
+        (4.0 * M_Fe + M_N) / M_N, (4.0 * M_Fe) / M_N
+    elseif cfg.nitride_mode === :carlsbergite
+        M_Cr = 51.996
+        (M_Cr + M_N) / M_N, M_Cr / M_N
+    elseif cfg.nitride_mode === :osbornite
+        M_Ti = 47.867
+        (M_Ti + M_N) / M_N, M_Ti / M_N
+    else
+        throw(
+            ArgumentError(
+                "Unknown nitride_mode: :$(cfg.nitride_mode). Expected :roaldite, :carlsbergite, or :osbornite",
+            ),
+        )
+    end
+    N_nit = min(w_N_f, w_metal_avail / f_metal_N)
+    w_nit_0 = N_nit * f_nitride
+    w_metal_avail = max(0.0, w_metal_avail - N_nit * f_metal_N)
+
+    # 4. Cohenite (Fe3C) and crystalline Graphite (C):
+    # Cohenite forms up to carbide saturation and available iron; excess carbon precipitates as graphite
+    f_fe_C = (3.0 * 55.845) / 12.011
+    f_cohenite = f_fe_C + 1.0
+    c_max = Float64(cfg.cohenite_carbide_max)
+    C_fe_limit = w_metal_avail / f_fe_C
+    C_carbide = min(w_C_f, c_max, C_fe_limit)
+    w_coh_0 = C_carbide * f_cohenite
+    w_gra_0 = w_C_f - C_carbide
+    w_metal_avail = max(0.0, w_metal_avail - C_carbide * f_fe_C)
+
+    # Residual metallic iron-nickel matrix
+    w_metal_matrix_0 = w_metal_avail
+
+    w_troilite = F_solid * w_troilite_0
+    w_schreibersite = F_solid * w_schreib_0
+    w_cohenite = F_solid * w_coh_0
+    w_graphite = F_solid * w_gra_0
+    w_nitride = F_solid * w_nit_0
+    w_metal_matrix = F_solid * w_metal_matrix_0
+    w_liquid_alloy = F_liquid
+
+    return (;
+        F_solid,
+        F_liquid,
+        w_troilite,
+        w_schreibersite,
+        w_cohenite,
+        w_graphite,
+        w_nitride,
+        w_metal_matrix,
+        w_liquid_alloy,
+    )
+end
+
+"""
+    compute_regional_mineral_modes(
+        xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
+        cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
+        rplanet::Real=50000.0,
+        xcenter::Real=70000.0,
+        ycenter::Real=70000.0,
+        rho_metal::Real=7800.0,
+        V_marker=nothing,
+        use_3d_volume::Bool=true,
+    )
+
+Aggregate modal accessory mineral abundances across planetesimal core, mantle, and crust regions.
+
+Parameters
+----------
+- `xm, ym`: Marker coordinate arrays [m].
+- `tm`: Marker type array (1=silicate/metal, 2=crust/ice, 3=sticky air).
+- `tkm`: Marker temperature array [K].
+- `Xfe_bulk`: Marker bulk metal volume fraction array [-].
+- `Xfe_S_m, Xfe_C_m, Xfe_N_m`: Marker volatile concentration arrays in metal [ppmw].
+- `marknum`: Number of markers.
+
+Returns
+-------
+- Named tuple containing integrated regional masses [kg] and diagnostic meteorite classification.
+"""
+function compute_regional_mineral_modes(
+    xm,
+    ym,
+    tm,
+    tkm,
+    Xfe_bulk,
+    Xfe_S_m,
+    Xfe_C_m,
+    Xfe_N_m,
+    marknum;
+    cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
+    rplanet::Real=50000.0,
+    xcenter::Real=70000.0,
+    ycenter::Real=70000.0,
+    rho_metal::Real=7800.0,
+    V_marker=nothing,
+    use_3d_volume::Bool=true,
+)
+    M_total_metal = 0.0
+    M_total_troilite = 0.0
+    M_total_schreibersite = 0.0
+    M_total_cohenite = 0.0
+    M_total_graphite = 0.0
+    M_total_nitride = 0.0
+    M_total_metal_matrix = 0.0
+    M_total_liquid_alloy = 0.0
+
+    M_core_metal = 0.0
+    M_core_troilite = 0.0
+    M_core_schreibersite = 0.0
+    M_core_cohenite = 0.0
+    M_core_graphite = 0.0
+    M_core_nitride = 0.0
+    M_core_metal_matrix = 0.0
+    M_core_liquid_alloy = 0.0
+
+    M_mantle_metal = 0.0
+    M_mantle_troilite = 0.0
+    M_mantle_schreibersite = 0.0
+    M_mantle_cohenite = 0.0
+    M_mantle_graphite = 0.0
+    M_mantle_nitride = 0.0
+    M_mantle_metal_matrix = 0.0
+    M_mantle_liquid_alloy = 0.0
+
+    M_crust_metal = 0.0
+    M_crust_troilite = 0.0
+    M_crust_schreibersite = 0.0
+    M_crust_cohenite = 0.0
+    M_crust_graphite = 0.0
+    M_crust_nitride = 0.0
+    M_crust_metal_matrix = 0.0
+    M_crust_liquid_alloy = 0.0
+
+    marknum >= 0 || throw(ArgumentError("marknum must be non-negative, got $marknum"))
+    length(xm) >= marknum || throw(DimensionMismatch("length(xm) must be >= marknum"))
+    length(ym) >= marknum || throw(DimensionMismatch("length(ym) must be >= marknum"))
+    length(tm) >= marknum || throw(DimensionMismatch("length(tm) must be >= marknum"))
+    length(tkm) >= marknum || throw(DimensionMismatch("length(tkm) must be >= marknum"))
+    (cfg.r_core_norm < cfg.r_mantle_norm) ||
+        throw(ArgumentError("r_core_norm must be strictly less than r_mantle_norm"))
+
+    r_p = Float64(rplanet)
+    rc_cut = r_p * clamp(cfg.r_core_norm, 0.0, 1.0)
+    rm_cut = r_p * clamp(cfg.r_mantle_norm, 0.0, 1.0)
+    (rho_metal > 0.0 && isfinite(rho_metal)) ||
+        throw(DomainError(rho_metal, "rho_metal must be strictly positive and finite"))
+    rho_m = Float64(rho_metal)
+
+    N_planet = 0
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            dx = xm[m] - xcenter
+            dy = ym[m] - ycenter
+            if sqrt(dx^2 + dy^2) <= rplanet
+                N_planet += 1
+            end
+        end
+    end
+
+    V_tot = use_3d_volume ? (4.0 / 3.0) * pi * r_p^3 : pi * r_p^2
+    V_m = if V_marker !== nothing
+        Float64(V_marker)
+    elseif N_planet > 0
+        V_tot / N_planet
+    else
+        1.0
+    end
+
+    w_P = cfg.bulk_P_ppm * 1.0e-6
+
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            dx = xm[m] - xcenter
+            dy = ym[m] - ycenter
+            rmark = sqrt(dx^2 + dy^2)
+            if rmark <= rplanet
+                fe_frac = Xfe_bulk !== nothing ? Xfe_bulk[m] : 0.0
+                if fe_frac > 0.0
+                    dM_fe = fe_frac * rho_m * V_m
+                    w_S = Xfe_S_m !== nothing ? Xfe_S_m[m] * 1.0e-6 : 0.0
+                    w_C = Xfe_C_m !== nothing ? Xfe_C_m[m] * 1.0e-6 : 0.0
+                    w_N = Xfe_N_m !== nothing ? Xfe_N_m[m] * 1.0e-6 : 0.0
+
+                    res = compute_normative_mineral_assemblage(
+                        tkm[m], w_S, w_C, w_N, w_P, cfg
+                    )
+
+                    dM_tro = dM_fe * res.w_troilite
+                    dM_sch = dM_fe * res.w_schreibersite
+                    dM_coh = dM_fe * res.w_cohenite
+                    dM_gra = dM_fe * res.w_graphite
+                    dM_nit = dM_fe * res.w_nitride
+                    dM_mat = dM_fe * res.w_metal_matrix
+                    dM_liq = dM_fe * res.w_liquid_alloy
+
+                    M_total_metal += dM_fe
+                    M_total_troilite += dM_tro
+                    M_total_schreibersite += dM_sch
+                    M_total_cohenite += dM_coh
+                    M_total_graphite += dM_gra
+                    M_total_nitride += dM_nit
+                    M_total_metal_matrix += dM_mat
+                    M_total_liquid_alloy += dM_liq
+
+                    if rmark <= rc_cut
+                        M_core_metal += dM_fe
+                        M_core_troilite += dM_tro
+                        M_core_schreibersite += dM_sch
+                        M_core_cohenite += dM_coh
+                        M_core_graphite += dM_gra
+                        M_core_nitride += dM_nit
+                        M_core_metal_matrix += dM_mat
+                        M_core_liquid_alloy += dM_liq
+                    elseif rmark <= rm_cut
+                        M_mantle_metal += dM_fe
+                        M_mantle_troilite += dM_tro
+                        M_mantle_schreibersite += dM_sch
+                        M_mantle_cohenite += dM_coh
+                        M_mantle_graphite += dM_gra
+                        M_mantle_nitride += dM_nit
+                        M_mantle_metal_matrix += dM_mat
+                        M_mantle_liquid_alloy += dM_liq
+                    else
+                        M_crust_metal += dM_fe
+                        M_crust_troilite += dM_tro
+                        M_crust_schreibersite += dM_sch
+                        M_crust_cohenite += dM_coh
+                        M_crust_graphite += dM_gra
+                        M_crust_nitride += dM_nit
+                        M_crust_metal_matrix += dM_mat
+                        M_crust_liquid_alloy += dM_liq
+                    end
+                end
+            end
+        end
+    end
+
+    f_molten_core = M_core_metal > 0.0 ? M_core_liquid_alloy / M_core_metal : 0.0
+    f_crust_solid_acc = if M_crust_metal > 0.0
+        (M_crust_troilite + M_crust_schreibersite + M_crust_cohenite) / M_crust_metal
+    else
+        0.0
+    end
+
+    classification =
+        if f_molten_core >= 0.8 &&
+            (M_core_metal / max(M_total_metal, 1.0e-12)) >= 0.4 &&
+            f_crust_solid_acc <= 0.005
+            :magmatic_differentiated
+        elseif f_crust_solid_acc >= 0.01 && f_molten_core <= 0.6
+            :IAB_winonaite_primitive
+        else
+            :transitional
+        end
+
+    return (;
+        M_total_metal,
+        M_total_troilite,
+        M_total_schreibersite,
+        M_total_cohenite,
+        M_total_graphite,
+        M_total_nitride,
+        M_total_metal_matrix,
+        M_total_liquid_alloy,
+        M_core_metal,
+        M_core_troilite,
+        M_core_schreibersite,
+        M_core_cohenite,
+        M_core_graphite,
+        M_core_nitride,
+        M_core_metal_matrix,
+        M_core_liquid_alloy,
+        M_mantle_metal,
+        M_mantle_troilite,
+        M_mantle_schreibersite,
+        M_mantle_cohenite,
+        M_mantle_graphite,
+        M_mantle_nitride,
+        M_mantle_metal_matrix,
+        M_mantle_liquid_alloy,
+        M_crust_metal,
+        M_crust_troilite,
+        M_crust_schreibersite,
+        M_crust_cohenite,
+        M_crust_graphite,
+        M_crust_nitride,
+        M_crust_metal_matrix,
+        M_crust_liquid_alloy,
+        classification,
+    )
+end

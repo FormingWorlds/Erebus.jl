@@ -35,11 +35,14 @@ export Config,
     EscapeConfig,
     CoreFormationConfig,
     MetalPartitionConfig,
+    PhaseTrackingConfig,
     SimulationConfig,
     default_config,
     load_config,
     validate_config,
     save_config,
+    serialize_config,
+    parse_config_string,
     compute_volatile_retention_floor,
     compute_h2o_retention_floor,
     compute_carbon_retention_floor,
@@ -132,7 +135,14 @@ export Config,
     compute_metal_silicate_partition_coefficient,
     compute_metal_silicate_partition_coefficients,
     equilibrate_metal_silicate_volatiles!,
-    compute_core_volatile_budgets
+    compute_core_volatile_budgets,
+    compute_troilite_stoichiometry,
+    compute_schreibersite_stoichiometry,
+    compute_cohenite_graphite_stoichiometry,
+    compute_nitride_stoichiometry,
+    compute_normative_mineral_assemblage,
+    compute_regional_mineral_modes,
+    setup_marker_phase_tracking_properties
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -364,7 +374,13 @@ module Physics
         compute_metal_silicate_partition_coefficient,
         compute_metal_silicate_partition_coefficients,
         equilibrate_metal_silicate_volatiles!,
-        compute_core_volatile_budgets
+        compute_core_volatile_budgets,
+        compute_troilite_stoichiometry,
+        compute_schreibersite_stoichiometry,
+        compute_cohenite_graphite_stoichiometry,
+        compute_nitride_stoichiometry,
+        compute_normative_mineral_assemblage,
+        compute_regional_mineral_modes
 end
 
 module Particles
@@ -373,6 +389,7 @@ module Particles
         setup_marker_metal_properties,
         setup_marker_volatile_properties,
         setup_marker_metal_volatile_properties,
+        setup_marker_phase_tracking_properties,
         update_single_marker_volatile_exsolution!,
         update_marker_volatile_exsolution!,
         drain_vented_marker_volatiles!,
@@ -422,6 +439,7 @@ module Particles
         setup_marker_metal_properties,
         setup_marker_volatile_properties,
         setup_marker_metal_volatile_properties,
+        setup_marker_phase_tracking_properties,
         update_single_marker_volatile_exsolution!,
         update_marker_volatile_exsolution!,
         setup_marker_properties_helpers,

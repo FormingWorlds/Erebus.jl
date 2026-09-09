@@ -66,6 +66,7 @@ makedocs(;
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
             "Iron Core Formation" => "validation/core_formation.md",
             "Core Geochemistry & Volatiles" => "validation/core_geochemistry.md",
+            "Normative Accessory Minerals" => "validation/mineral_assemblages.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

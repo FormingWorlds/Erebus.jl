@@ -221,7 +221,7 @@ def generate_benchmark_figure():
     ax_d.set_xscale('log')
     ax_d.set_yscale('log')
     ax_d.set_xlim(8, 800)
-    ax_d.set_ylim(0.4, 50)
+    ax_d.set_ylim(0.4, 80)
     ax_d.set_xlabel(r'Core Carbon Concentration $w_\mathrm{C}$ [ppmw]', fontsize=10)
     ax_d.set_ylabel(r'Core Nitrogen Concentration $w_\mathrm{N}$ [ppmw]', fontsize=10)
     ax_d.set_title('Magmatic Iron Meteorites vs. Core Model', fontsize=11, fontweight='bold')
@@ -386,10 +386,10 @@ def generate_benchmark_figure():
     png_path_out = os.path.join(OUTPUT_FILES_DIR, "core_geochemistry_benchmark.png")
     pdf_path_out = os.path.join(OUTPUT_FILES_DIR, "core_geochemistry_benchmark.pdf")
 
-    fig.savefig(png_path_assets, dpi=200)
-    fig.savefig(pdf_path_assets)
-    fig.savefig(png_path_out, dpi=200)
-    fig.savefig(pdf_path_out)
+    fig.savefig(png_path_assets, dpi=200, bbox_inches='tight')
+    fig.savefig(pdf_path_assets, bbox_inches='tight')
+    fig.savefig(png_path_out, dpi=200, bbox_inches='tight')
+    fig.savefig(pdf_path_out, bbox_inches='tight')
     plt.close(fig)
     print(f"Successfully generated benchmark figure at {png_path_assets}")
 

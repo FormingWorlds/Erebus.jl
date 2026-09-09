@@ -81,7 +81,7 @@ def generate_benchmark_figure(output_path):
     ax_a.set_xlim(10, 2000)
     ax_a.set_ylim(1e-3, 1e2)
     ax_a.grid(True, ls=":", alpha=0.6)
-    ax_a.legend(loc="upper left", fontsize=8.5, framealpha=0.9)
+    ax_a.legend(loc="lower right", fontsize=8.5, framealpha=0.9)
 
     # -------------------------------------------------------------------------
     # Panel (b): Kinetic Flux Ratio vs Lambda
@@ -188,7 +188,7 @@ def generate_benchmark_figure(output_path):
     ax_d.set_title(r"(d) Inventory Partitioning (Venting = $100$ kg/s)", fontsize=12, fontweight="bold")
     ax_d.set_xlim(0, 5)
     ax_d.grid(True, ls=":", alpha=0.6)
-    ax_d.legend(loc="center right", fontsize=8.5, framealpha=0.9)
+    ax_d.legend(loc="upper left", fontsize=8.5, framealpha=0.9)
 
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()

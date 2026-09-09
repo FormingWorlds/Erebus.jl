@@ -468,6 +468,29 @@ Base.@kwdef struct MetalPartitionConfig
 end
 
 """
+Normative accessory mineral tracking and meteorite diagnostic parameters.
+
+Configures sub-eutectic stoichiometric allocation of S, P, C, and N into solid
+accessory phases (troilite FeS, schreibersite (Fe,Ni)3P, cohenite (Fe,Ni)3C,
+graphite C, nitrides Fe4N/CrN/TiN) and residual metallic matrix, as well as
+thermal dissolution across the eutectic transition (T_eutectic ≈ 1213 K).
+
+$(FIELDS)
+"""
+Base.@kwdef struct PhaseTrackingConfig
+    active::Bool = false
+    T_eutectic::Float64 = 1213.0
+    dT_transition::Float64 = 50.0
+    bulk_P_ppm::Float64 = 1000.0
+    schreibersite_ni_frac::Float64 = 0.25
+    cohenite_carbide_max::Float64 = 0.0667
+    nitride_mode::Symbol = :roaldite
+    track_regional_modes::Bool = true
+    r_core_norm::Float64 = 0.5
+    r_mantle_norm::Float64 = 0.85
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -490,6 +513,7 @@ Base.@kwdef struct SimulationConfig
     escape::EscapeConfig = EscapeConfig()
     coreformation::CoreFormationConfig = CoreFormationConfig()
     metal_partition::MetalPartitionConfig = MetalPartitionConfig()
+    phase_tracking::PhaseTrackingConfig = PhaseTrackingConfig()
 end
 
 """
@@ -1434,6 +1458,83 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
 
+    # Phase tracking validation
+    if cfg.phase_tracking.active
+        (
+            cfg.coreformation.percolation_active ||
+            cfg.coreformation.settling_active ||
+            cfg.metal_partition.active
+        ) || throw(
+            ArgumentError(
+                "phase_tracking requires core formation (percolation_active or settling_active) or metal_partition to be active",
+            ),
+        )
+        isapprox(cfg.phase_tracking.T_eutectic, cfg.coreformation.T_eutectic; atol=1e-3) ||
+            throw(
+                ArgumentError(
+                    "phase_tracking.T_eutectic ($(cfg.phase_tracking.T_eutectic)) must match coreformation.T_eutectic ($(cfg.coreformation.T_eutectic))",
+                ),
+            )
+        (cfg.phase_tracking.T_eutectic > 0.0 && isfinite(cfg.phase_tracking.T_eutectic)) ||
+            throw(
+                ArgumentError(
+                    "T_eutectic must be > 0 and finite, got $(cfg.phase_tracking.T_eutectic)",
+                ),
+            )
+        (
+            cfg.phase_tracking.dT_transition > 0.0 &&
+            isfinite(cfg.phase_tracking.dT_transition)
+        ) || throw(
+            ArgumentError(
+                "dT_transition must be > 0 and finite, got $(cfg.phase_tracking.dT_transition)",
+            ),
+        )
+        (cfg.phase_tracking.bulk_P_ppm >= 0.0 && isfinite(cfg.phase_tracking.bulk_P_ppm)) ||
+            throw(
+                ArgumentError(
+                    "bulk_P_ppm must be >= 0 and finite, got $(cfg.phase_tracking.bulk_P_ppm)",
+                ),
+            )
+        (
+            0.0 <= cfg.phase_tracking.schreibersite_ni_frac <= 1.0 &&
+            isfinite(cfg.phase_tracking.schreibersite_ni_frac)
+        ) || throw(
+            ArgumentError(
+                "schreibersite_ni_frac must be in [0, 1] and finite, got $(cfg.phase_tracking.schreibersite_ni_frac)",
+            ),
+        )
+        (
+            0.0 < cfg.phase_tracking.cohenite_carbide_max <= 1.0 &&
+            isfinite(cfg.phase_tracking.cohenite_carbide_max)
+        ) || throw(
+            ArgumentError(
+                "cohenite_carbide_max must be in (0, 1] and finite, got $(cfg.phase_tracking.cohenite_carbide_max)",
+            ),
+        )
+        cfg.phase_tracking.nitride_mode in Set([:roaldite, :carlsbergite, :osbornite]) ||
+            throw(
+                ArgumentError(
+                    "nitride_mode must be :roaldite, :carlsbergite, or :osbornite, got :$(cfg.phase_tracking.nitride_mode)",
+                ),
+            )
+        (
+            0.0 < cfg.phase_tracking.r_core_norm < 1.0 &&
+            isfinite(cfg.phase_tracking.r_core_norm)
+        ) || throw(
+            ArgumentError(
+                "r_core_norm must be in (0, 1) and finite, got $(cfg.phase_tracking.r_core_norm)",
+            ),
+        )
+        (
+            cfg.phase_tracking.r_core_norm < cfg.phase_tracking.r_mantle_norm <= 1.0 &&
+            isfinite(cfg.phase_tracking.r_mantle_norm)
+        ) || throw(
+            ArgumentError(
+                "r_mantle_norm must be in (r_core_norm, 1] and finite, got $(cfg.phase_tracking.r_mantle_norm)",
+            ),
+        )
+    end
+
     return nothing
 end
 
@@ -1500,6 +1601,7 @@ const VALID_SECTIONS = Set([
     "escape",
     "coreformation",
     "metal_partition",
+    "phase_tracking",
 ])
 
 """
@@ -1658,6 +1760,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.metal_partition
     end
+    phase_track = if haskey(parsed, "phase_tracking")
+        _dict_to_struct(PhaseTrackingConfig, parsed["phase_tracking"], def.phase_tracking)
+    else
+        def.phase_tracking
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1677,6 +1784,7 @@ function load_config(source::AbstractString)::SimulationConfig
         escape=esc,
         coreformation=coreform,
         metal_partition=metal_part,
+        phase_tracking=phase_track,
     )
 
     validate_config(cfg)
@@ -1731,6 +1839,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "escape" => _struct_to_dict(cfg.escape),
         "coreformation" => _struct_to_dict(cfg.coreformation),
         "metal_partition" => _struct_to_dict(cfg.metal_partition),
+        "phase_tracking" => _struct_to_dict(cfg.phase_tracking),
     )
     TOML.print(io, d; sorted=true)
     return io
@@ -1747,4 +1856,22 @@ function save_config(cfg::SimulationConfig)::String
     io = IOBuffer()
     save_config(io, cfg)
     return String(take!(io))
+end
+
+"""
+Serializes a `SimulationConfig` to a TOML-formatted string.
+
+$(SIGNATURES)
+"""
+function serialize_config(cfg::SimulationConfig)::String
+    return save_config(cfg)
+end
+
+"""
+Parses a `SimulationConfig` from a TOML-formatted string.
+
+$(SIGNATURES)
+"""
+function parse_config_string(str::AbstractString)::SimulationConfig
+    return load_config(str)
 end
