@@ -6018,7 +6018,9 @@ function compute_regional_mineral_modes(
     end
 
     classification =
-        if f_molten_core >= 0.8 && (M_core_metal / max(M_total_metal, 1.0e-12)) >= 0.4 && f_crust_solid_acc <= 0.005
+        if f_molten_core >= 0.8 &&
+            (M_core_metal / max(M_total_metal, 1.0e-12)) >= 0.4 &&
+            f_crust_solid_acc <= 0.005
             :magmatic_differentiated
         elseif f_crust_solid_acc >= 0.01 && f_molten_core <= 0.6
             :IAB_winonaite_primitive

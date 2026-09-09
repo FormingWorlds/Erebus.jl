@@ -175,7 +175,7 @@ The mathematical foundations, constitutive formulations, and numerical technique
   *Petrologic synthesis of ureilites as mantle restites formed by partial extraction of Fe-S-rich eutectic melts from carbonaceous parent bodies.*
 
 - **Scott, E. R. D. (1972)**. Chemical fractionation in iron meteorites and its interpretation of their origin. *Geochimica et Cosmochimica Acta*, 36(11), 1205-1236.  
-  [https://doi.org/10.1016/0016-7037(72)90046-2](https://doi.org/10.1016/0016-7037(72)90046-2)  
+  [https://doi.org/10.1016/0016-7037(72)90046-4](https://doi.org/10.1016/0016-7037(72)90046-4)  
   *Quantitative fractional crystallization modeling and trace element partitioning in magmatic iron meteorite groups.*
 
 - **Wasson, J. T., & Kallemeyn, G. W. (2002)**. The IAB iron-meteorite complex: A modern classification. *Geochimica et Cosmochimica Acta*, 66(13), 2445-2473.  

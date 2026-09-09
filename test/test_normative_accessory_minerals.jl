@@ -47,11 +47,13 @@ using JLD2
 
         # Validation errors on missing coreformation or mismatched T_eutectic
         @test_throws ArgumentError validate_config(
-            SimulationConfig(phase_tracking=PhaseTrackingConfig(active=true)),
+            SimulationConfig(phase_tracking=PhaseTrackingConfig(active=true))
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(
-                coreformation=CoreFormationConfig(percolation_active=true, T_eutectic=1100.0),
+                coreformation=CoreFormationConfig(
+                    percolation_active=true, T_eutectic=1100.0
+                ),
                 phase_tracking=PhaseTrackingConfig(active=true, T_eutectic=1213.0),
             ),
         )
@@ -60,7 +62,9 @@ using JLD2
         base_core = CoreFormationConfig(percolation_active=true, T_eutectic=1213.0)
         @test_throws ArgumentError validate_config(
             SimulationConfig(
-                coreformation=CoreFormationConfig(percolation_active=true, T_eutectic=-10.0),
+                coreformation=CoreFormationConfig(
+                    percolation_active=true, T_eutectic=-10.0
+                ),
                 phase_tracking=PhaseTrackingConfig(active=true, T_eutectic=-10.0),
             ),
         )
@@ -417,7 +421,9 @@ using JLD2
             marknum
         )
         (Xfem, Xfem0, Xfe_bulk) = setup_marker_metal_properties(marknum)
-        (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) = setup_marker_metal_volatile_properties(marknum)
+        (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) = setup_marker_metal_volatile_properties(
+            marknum
+        )
         fill!(phim, 1.0e-4)
 
         # 1. Sub-eutectic rock marker with bulk metal
@@ -620,14 +626,52 @@ using JLD2
         @test modes.M_core_liquid_alloy > 0.0
 
         # Regional mass conservation: sum across core, mantle, crust equals total
-        @test isapprox(modes.M_total_metal, modes.M_core_metal + modes.M_mantle_metal + modes.M_crust_metal; rtol=1e-12)
-        @test isapprox(modes.M_total_troilite, modes.M_core_troilite + modes.M_mantle_troilite + modes.M_crust_troilite; rtol=1e-12)
-        @test isapprox(modes.M_total_schreibersite, modes.M_core_schreibersite + modes.M_mantle_schreibersite + modes.M_crust_schreibersite; rtol=1e-12)
-        @test isapprox(modes.M_total_cohenite, modes.M_core_cohenite + modes.M_mantle_cohenite + modes.M_crust_cohenite; rtol=1e-12)
-        @test isapprox(modes.M_total_graphite, modes.M_core_graphite + modes.M_mantle_graphite + modes.M_crust_graphite; rtol=1e-12)
-        @test isapprox(modes.M_total_nitride, modes.M_core_nitride + modes.M_mantle_nitride + modes.M_crust_nitride; rtol=1e-12)
-        @test isapprox(modes.M_total_metal_matrix, modes.M_core_metal_matrix + modes.M_mantle_metal_matrix + modes.M_crust_metal_matrix; rtol=1e-12)
-        @test isapprox(modes.M_total_liquid_alloy, modes.M_core_liquid_alloy + modes.M_mantle_liquid_alloy + modes.M_crust_liquid_alloy; rtol=1e-12)
+        @test isapprox(
+            modes.M_total_metal,
+            modes.M_core_metal + modes.M_mantle_metal + modes.M_crust_metal;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_troilite,
+            modes.M_core_troilite + modes.M_mantle_troilite + modes.M_crust_troilite;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_schreibersite,
+            modes.M_core_schreibersite +
+            modes.M_mantle_schreibersite +
+            modes.M_crust_schreibersite;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_cohenite,
+            modes.M_core_cohenite + modes.M_mantle_cohenite + modes.M_crust_cohenite;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_graphite,
+            modes.M_core_graphite + modes.M_mantle_graphite + modes.M_crust_graphite;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_nitride,
+            modes.M_core_nitride + modes.M_mantle_nitride + modes.M_crust_nitride;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_metal_matrix,
+            modes.M_core_metal_matrix +
+            modes.M_mantle_metal_matrix +
+            modes.M_crust_metal_matrix;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            modes.M_total_liquid_alloy,
+            modes.M_core_liquid_alloy +
+            modes.M_mantle_liquid_alloy +
+            modes.M_crust_liquid_alloy;
+            rtol=1e-12,
+        )
 
         # Deterministic classification tests
         # Case 1: Magmatic differentiated fixture
@@ -641,8 +685,19 @@ using JLD2
             end
         end
         modes_mag = compute_regional_mineral_modes(
-            xm, ym, tm, tkm_mag, Xfe_bulk_mag, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rplanet=50000.0, xcenter=70000.0, ycenter=70000.0,
+            xm,
+            ym,
+            tm,
+            tkm_mag,
+            Xfe_bulk_mag,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rplanet=50000.0,
+            xcenter=70000.0,
+            ycenter=70000.0,
         )
         @test modes_mag.classification === :magmatic_differentiated
 
@@ -655,22 +710,52 @@ using JLD2
             tkm_trans[m] = r <= 25000.0 ? 1400.0 : 800.0
         end
         modes_trans = compute_regional_mineral_modes(
-            xm, ym, tm, tkm_trans, Xfe_bulk_trans, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rplanet=50000.0, xcenter=70000.0, ycenter=70000.0,
+            xm,
+            ym,
+            tm,
+            tkm_trans,
+            Xfe_bulk_trans,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rplanet=50000.0,
+            xcenter=70000.0,
+            ycenter=70000.0,
         )
         @test modes_trans.classification === :transitional
 
         # Case 3: Primitive IAB / winonaite fixture (cold sub-eutectic interior, high crustal retention)
         tkm_prim = fill(900.0, marknum)
         modes_prim = compute_regional_mineral_modes(
-            xm, ym, tm, tkm_prim, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rplanet=50000.0, xcenter=70000.0, ycenter=70000.0,
+            xm,
+            ym,
+            tm,
+            tkm_prim,
+            Xfe_bulk,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rplanet=50000.0,
+            xcenter=70000.0,
+            ycenter=70000.0,
         )
         @test modes_prim.classification === :IAB_winonaite_primitive
 
         # Case 4: Marknum = 0 edge case
         empty_modes = compute_regional_mineral_modes(
-            Float64[], Float64[], Int[], Float64[], Float64[], Float64[], Float64[], Float64[], 0;
+            Float64[],
+            Float64[],
+            Int[],
+            Float64[],
+            Float64[],
+            Float64[],
+            Float64[],
+            Float64[],
+            0;
             cfg=cfg,
         )
         @test iszero(empty_modes.M_total_metal)
@@ -685,8 +770,19 @@ using JLD2
             end
         end
         modes_crust_only = compute_regional_mineral_modes(
-            xm, ym, tm, tkm, Xfe_crust_only, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rplanet=50000.0, xcenter=70000.0, ycenter=70000.0,
+            xm,
+            ym,
+            tm,
+            tkm,
+            Xfe_crust_only,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rplanet=50000.0,
+            xcenter=70000.0,
+            ycenter=70000.0,
         )
         @test iszero(modes_crust_only.M_core_metal)
         @test modes_crust_only.M_crust_metal > 0.0
@@ -699,17 +795,42 @@ using JLD2
             xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, -5; cfg=cfg
         )
         @test_throws ArgumentError compute_regional_mineral_modes(
-            xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=PhaseTrackingConfig(r_core_norm=0.8, r_mantle_norm=0.5)
+            xm,
+            ym,
+            tm,
+            tkm,
+            Xfe_bulk,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=PhaseTrackingConfig(r_core_norm=0.8, r_mantle_norm=0.5),
         )
         @test_throws DomainError compute_regional_mineral_modes(
-            xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rho_metal=-100.0
+            xm,
+            ym,
+            tm,
+            tkm,
+            Xfe_bulk,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rho_metal=-100.0,
         )
         @test_throws DomainError compute_regional_mineral_modes(
-            xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-            cfg=cfg, rho_metal=0.0
+            xm,
+            ym,
+            tm,
+            tkm,
+            Xfe_bulk,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            cfg=cfg,
+            rho_metal=0.0,
         )
     end
 end
-
