@@ -510,4 +510,131 @@ using TOML
             ),
         )
     end
+
+    @testset "Accretion Configurations" begin
+        cfg_default = AccretionConfig()
+        @test cfg_default.active == false
+        @test cfg_default.mode === :pebble_hill
+        @test cfg_default.M_initial ≈ 1.0e17
+        @test cfg_default.R_initial ≈ 20000.0
+        @test cfg_default.rho_bulk ≈ 3000.0
+        @test cfg_default.M_target ≈ 1.0e20
+        @test cfg_default.R_target ≈ 50000.0
+        @test cfg_default.h_impact ≈ 0.5
+        @test cfg_default.phi_accreted ≈ 0.35
+        @test cfg_default.Xfe_bulk_accreted ≈ 0.10
+        @test cfg_default.dM_dt_constant ≈ 1.5e6
+        @test cfg_default.dR_dt_constant ≈ 5.0e-10
+
+        # Valid config passes validation
+        @test validate_config(SimulationConfig(accretion=AccretionConfig(active=true))) ===
+            nothing
+
+        # Invalid modes
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, mode=:invalid_mode))
+        )
+
+        # Invalid mass and radius bounds
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, M_initial=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                accretion=AccretionConfig(active=true, M_target=1.0e16, M_initial=1.0e17)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, R_initial=-1000.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                accretion=AccretionConfig(active=true, R_target=10000.0, R_initial=20000.0)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, rho_bulk=-1000.0))
+        )
+
+        # Target radius exceeding domain boundary
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, R_target=80000.0))
+        )
+
+        # Invalid timing and growth parameters
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, t_start_myr=-0.5))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, t_duration_myr=0.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, dM_dt_constant=0.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, dR_dt_constant=-1.0e-5))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, tau_growth_myr=0.0))
+        )
+
+        # Invalid physical fractions
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, h_impact=-0.1))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, h_impact=1.5))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, phi_accreted=-0.1))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, phi_accreted=1.2))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                accretion=AccretionConfig(active=true, Xfe_bulk_accreted=-0.05)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, Xfe_bulk_accreted=1.05))
+        )
+
+        # Invalid volatile abundances
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, XC_accreted_ppm=-10.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, XN_accreted_ppm=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, XS_accreted_ppm=-50.0))
+        )
+
+        # Invalid pebble/turbulence parameters
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, stokes_number=0.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(accretion=AccretionConfig(active=true, alpha_turbulence=-1e-3))
+        )
+
+        # TOML deserialization roundtrip
+        toml_overlay = """
+        [accretion]
+        active = true
+        mode = "safronov"
+        M_initial = 2.0e17
+        R_initial = 25000.0
+        h_impact = 0.8
+        Sigma_pl_0 = 150.0
+        """
+        cfg_parsed = load_config(toml_overlay)
+        @test cfg_parsed.accretion.active == true
+        @test cfg_parsed.accretion.mode === :safronov
+        @test cfg_parsed.accretion.M_initial ≈ 2.0e17
+        @test cfg_parsed.accretion.R_initial ≈ 25000.0
+        @test cfg_parsed.accretion.h_impact ≈ 0.8
+        @test cfg_parsed.accretion.Sigma_pl_0 ≈ 150.0
+    end
 end

@@ -23,6 +23,7 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Core Geochemistry & Volatiles** | Siderophile partitioning (H, C, N, S), sulfur suppression of carbon, and dynamic alloy density | Grewal et al. (2019a, 2019b); Clesi et al. (2018); Boujibar et al. (2014) | `test/test_core_volatile_partitioning.jl` |
 | **Normative Accessory Minerals** | Stoichiometric sub-eutectic mineral exsolution, thermal eutectic dissolution, and meteorite classification | Benedix et al. (2000); Goldstein et al. (2009); Chabot & Drake (1999) | `test/test_normative_accessory_minerals.jl` |
 | **Hydrothermal Subgrid Convection** | Porous Rayleigh-Darcy scaling, boundary-layer free-fluid Rayleigh scaling, smoothstep porosity transition, and cell-Péclet damping | Horton & Rogers (1945); Lapwood (1948); Kraichnan (1962); Elder (1967) | `test/test_hydrothermal_convection.jl` |
+| **Planetesimal Accretion & Impact Heating** | Bondi and Hill pebble accretion, Safronov gravitational focusing, exact 3D spherical mapping, impact heating, and radiogenic clock inheritance | Safronov (1972); Ormel & Klahr (2010); Lambrechts & Johansen (2012); Lichtenberg et al. (2019) | `test/test_accretion.jl`, `test/test_config.jl` |
 
 ---
 

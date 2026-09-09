@@ -527,6 +527,89 @@ kphi_ref = 1.0e-13
 
 ---
 
+## `[accretion]`
+
+Planetesimal accretion engine parameterization models Bondi and Hill pebble accretion rates, Safronov gravitational focusing in planetesimal collision swarms, analytical growth modes, exact 3D spherical geometric mapping, impact heating thermodynamics, protoplanetary disk snowline coupling, and radiogenic onion-shell thermal structure.
+
+```toml
+[accretion]
+active = false
+mode = "pebble_hill"
+M_initial = 1.0e17
+R_initial = 20000.0
+rho_bulk = 3000.0
+M_target = 1.0e20
+R_target = 50000.0
+t_start_myr = 0.0
+t_duration_myr = 2.0
+dM_dt_constant = 1.5e6
+dR_dt_constant = 5.0e-10
+tau_growth_myr = 0.5
+h_impact = 0.5
+v_inf = 0.0
+cp_rock = 1000.0
+phi_accreted = 0.35
+Xfe_bulk_accreted = 0.10
+snowline_coupling = true
+T_snowline_cond = 160.0
+XWsolid_wet = 0.40
+XWsolid_dry = 0.0
+XH2O_wet_wtpct = 10.0
+XH2O_dry_wtpct = 0.1
+XC_accreted_ppm = 1000.0
+XN_accreted_ppm = 100.0
+XS_accreted_ppm = 10000.0
+Sigma_peb_0 = 50.0
+p_peb = 1.0
+stokes_number = 0.05
+alpha_turbulence = 1.0e-3
+c_hill = 1.0
+c_bondi = 1.0
+Sigma_pl_0 = 100.0
+v_disp_kms = 0.1
+track_accretion_time = true
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable planetesimal accretion engine | `true` / `false` |
+| `mode` | `Symbol` | `:pebble_hill` | - | Accretion rate model | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto` |
+| `M_initial` | `Float64` | `1.0e17` | kg | Initial planetesimal mass | $> 0$ |
+| `R_initial` | `Float64` | `20000.0` | m | Initial planetesimal seed radius | $> 0$ |
+| `rho_bulk` | `Float64` | `3000.0` | $\text{kg/m}^3$ | Bulk density of accreted shell | $> 0$ |
+| `M_target` | `Float64` | `1.0e20` | kg | Target cutoff mass | $\ge M_{\text{initial}}$ |
+| `R_target` | `Float64` | `50000.0` | m | Target cutoff radius | $\ge R_{\text{initial}}$ and fits domain |
+| `t_start_myr` | `Float64` | `0.0` | Myr | Accretion onset epoch | $\ge 0$ |
+| `t_duration_myr` | `Float64` | `2.0` | Myr | Accretion duration | $> 0$ |
+| `dM_dt_constant` | `Float64` | `1.5e6` | kg/s | Prescribed mass accretion rate | $> 0$ |
+| `dR_dt_constant` | `Float64` | `5.0e-10` | m/s | Prescribed radius growth rate | $> 0$ |
+| `tau_growth_myr` | `Float64` | `0.5` | Myr | E-folding growth timescale | $> 0$ |
+| `h_impact` | `Float64` | `0.5` | - | Impact kinetic energy retention fraction | $\in [0, 1]$ |
+| `v_inf` | `Float64` | `0.0` | m/s | Impactor approach velocity at infinity | $\ge 0$ |
+| `cp_rock` | `Float64` | `1000.0` | $\text{J/(kg K)}$ | Rock specific heat capacity | $> 0$ |
+| `phi_accreted` | `Float64` | `0.35` | - | Initial porosity of accreted rock shell | $\in [0, 1]$ |
+| `Xfe_bulk_accreted` | `Float64` | `0.10` | - | Bulk metallic volume fraction of accreted shell | $\in [0, 1]$ |
+| `snowline_coupling` | `Bool` | `true` | - | Couple accreted volatiles to disk water snowline | `true` / `false` |
+| `T_snowline_cond` | `Float64` | `160.0` | K | Water condensation temperature threshold | $> 0$ |
+| `XWsolid_wet` | `Float64` | `0.40` | - | Hydrated silicate fraction outside snowline | $\in [0, 1]$ |
+| `XWsolid_dry` | `Float64` | `0.0` | - | Hydrated silicate fraction inside snowline | $\in [0, 1]$ |
+| `XH2O_wet_wtpct` | `Float64` | `10.0` | wt% | Water mass fraction outside snowline | $\ge 0$ |
+| `XH2O_dry_wtpct` | `Float64` | `0.1` | wt% | Water mass fraction inside snowline | $\ge 0$ |
+| `XC_accreted_ppm` | `Float64` | `1000.0` | ppmw | Carbon abundance in accreted shell | $\ge 0$ |
+| `XN_accreted_ppm` | `Float64` | `100.0` | ppmw | Nitrogen abundance in accreted shell | $\ge 0$ |
+| `XS_accreted_ppm` | `Float64` | `10000.0` | ppmw | Sulfur abundance in accreted shell | $\ge 0$ |
+| `Sigma_peb_0` | `Float64` | `50.0` | $\text{kg/m}^2$ | Pebble surface density at 1 AU | $\ge 0$ |
+| `p_peb` | `Float64` | `1.0` | - | Pebble surface density power law exponent | - |
+| `stokes_number` | `Float64` | `0.05` | - | Aerodynamic pebble Stokes number | $> 0$ |
+| `alpha_turbulence` | `Float64` | `1.0e-3` | - | Dimensionless Shakura-Sunyaev turbulence | $> 0$ |
+| `c_hill` | `Float64` | `1.0` | - | Hill pebble accretion efficiency prefactor | $> 0$ |
+| `c_bondi` | `Float64` | `1.0` | - | Bondi pebble accretion efficiency prefactor | $> 0$ |
+| `Sigma_pl_0` | `Float64` | `100.0` | $\text{kg/m}^2$ | Planetesimal swarm surface density | $\ge 0$ |
+| `v_disp_kms` | `Float64` | `0.1` | km/s | Planetesimal swarm velocity dispersion | $> 0$ |
+| `track_accretion_time` | `Bool` | `true` | - | Track accretion epoch timestamp array on markers | `true` / `false` |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input
