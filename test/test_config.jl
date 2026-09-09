@@ -490,4 +490,24 @@ using TOML
             SimulationConfig(solver=SolverConfig(titermax=0))
         )
     end
+
+    @testset "Hydrothermal Configurations" begin
+        cfg_default = HydrothermalConfig()
+        @test cfg_default.active == false
+        @test cfg_default.phi_start ≈ 0.30
+
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                hydrothermal=HydrothermalConfig(active=true, phi_start=0.8, phi_end=0.2)
+            ),
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(hydrothermal=HydrothermalConfig(active=true, Ra_m_crit=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(
+                hydrothermal=HydrothermalConfig(active=true, k_floor=10.0, k_cutoff=1.0)
+            ),
+        )
+    end
 end

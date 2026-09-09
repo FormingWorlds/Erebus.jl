@@ -67,6 +67,7 @@ makedocs(;
             "Iron Core Formation" => "validation/core_formation.md",
             "Core Geochemistry & Volatiles" => "validation/core_geochemistry.md",
             "Normative Accessory Minerals" => "validation/mineral_assemblages.md",
+            "Hydrothermal Subgrid Convection" => "validation/hydrothermal_convection.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

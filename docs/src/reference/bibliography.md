@@ -182,6 +182,34 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/S0016-7037(02)00848-7](https://doi.org/10.1016/S0016-7037(02)00848-7)  
   *Systematics and classification of the IAB complex, subgroup definitions, and evidence for partial melting and impact mixing.*
 
+---
+
+## Hydrothermal Convection and Fluid Transport
+
+- **Elder, J. W. (1967)**. Steady free convection in a porous medium heated from below. *Journal of Fluid Mechanics*, 27(1), 29-48.  
+  [https://doi.org/10.1017/s0022112067000023](https://doi.org/10.1017/s0022112067000023)  
+  *Numerical solutions and laboratory experiments on thermal convection cells in fluid-saturated porous media.*
+
+- **Horton, C. W., & Rogers, F. T. (1945)**. Convection currents in a porous medium. *Journal of Applied Physics*, 16(6), 367-370.  
+  [https://doi.org/10.1063/1.1707601](https://doi.org/10.1063/1.1707601)  
+  *Theoretical derivation of the critical Rayleigh number for the onset of convection in a porous layer heated from below.*
+
+- **Howard, L. N. (1966)**. Convection at high Rayleigh number. In *Applied Mechanics* (pp. 1109-1115). Springer, Berlin, Heidelberg.  
+  [https://doi.org/10.1007/978-3-662-29364-5_147](https://doi.org/10.1007/978-3-662-29364-5_147)  
+  *Boundary layer instability model for turbulent thermal convection and derivation of asymptotic one-third power law heat flux scaling.*
+
+- **Kraichnan, R. H. (1962)**. Turbulent thermal convection at arbitrary Prandtl number. *The Physics of Fluids*, 5(11), 1374-1389.  
+  [https://doi.org/10.1063/1.1706533](https://doi.org/10.1063/1.1706533)  
+  *Theoretical formulation for turbulent boundary-layer convective heat transport scaling with Rayleigh number.*
+
+- **Lapwood, E. R. (1948)**. Convective flow of a fluid through a porous medium. *Mathematical Proceedings of the Cambridge Philosophical Society*, 44(4), 508-521.  
+  [https://doi.org/10.1017/S030500410002452X](https://doi.org/10.1017/S030500410002452X)  
+  *Governing equations, boundary condition analysis, and critical Rayleigh-Darcy onset threshold for fluid circulation in permeable strata.*
+
+- **Turcotte, D. L., & Schubert, G. (2014)**. *Geodynamics* (3rd ed.). Cambridge University Press.  
+  [https://doi.org/10.1017/CBO9780511843877](https://doi.org/10.1017/CBO9780511843877)  
+  *Standard textbook reference for porous flow, thermal convection scaling laws, and planetary thermal evolution.*
+
 
 
 

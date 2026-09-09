@@ -470,6 +470,63 @@ r_mantle_norm = 0.85
 
 ---
 
+## `[hydrothermal]`
+
+Subgrid hydrothermal convection parameterization models convective heat transfer enhancement in porous rock aquifers, muddy slurries, and open water oceans. It blends porous Rayleigh-Darcy scaling ($Nu_{\text{porous}} \propto Ra_m$) with free-fluid boundary layer Rayleigh scaling ($Nu_{\text{free}} \propto Ra^{1/3}$) across a cubic smoothstep porosity transition, and damps subgrid enhancement via the grid cell-Péclet number to prevent double-counting when flow is resolved on the Eulerian mesh.
+
+```toml
+[hydrothermal]
+active = false
+phi_start = 0.30
+phi_end = 0.70
+Ra_m_crit = 39.47841760435743
+Ra_crit = 1100.0
+c_porous = 1.0
+c_free = 0.088
+H_layer = 10000.0
+dT_min = 5.0
+k_floor = 1.0e-3
+k_cutoff = 1.0e6
+picard_damping = 0.5
+resolution_weighting = true
+Pe_crit = 2.0
+T_surface_ref = 273.15
+gravity = 0.5
+cp_fluid = 4184.0
+alpha_fluid = 2.0e-4
+k_fluid_ref = 0.6
+rho_fluid_ref = 1000.0
+mu_fluid_ref = 1.0e-3
+kphi_ref = 1.0e-13
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable subgrid hydrothermal convection closure | `true` / `false` |
+| `phi_start` | `Float64` | `0.30` | - | Porosity threshold for transition onset | $\in [0, \text{phi\_end})$ |
+| `phi_end` | `Float64` | `0.70` | - | Porosity threshold for full free-fluid regime | $\in (\text{phi\_start}, 1]$ |
+| `Ra_m_crit` | `Float64` | `39.4784` | - | Critical porous Rayleigh-Darcy number ($4\pi^2$) | $> 0$ |
+| `Ra_crit` | `Float64` | `1100.0` | - | Critical free-fluid Rayleigh number | $> 0$ |
+| `c_porous` | `Float64` | `1.0` | - | Porous convective Nusselt number scaling prefactor | $> 0$ |
+| `c_free` | `Float64` | `0.088` | - | Boundary-layer free-fluid Nusselt number coefficient | $> 0$ |
+| `H_layer` | `Float64` | `10000.0` | m | Characteristic convective layer thickness | $> 0$ |
+| `dT_min` | `Float64` | `5.0` | K | Temperature contrast for quadratic boundary regularization | $> 0$ |
+| `k_floor` | `Float64` | `1.0e-3` | $\text{W/(m K)}$ | Minimum thermal conductivity floor | $> 0$ |
+| `k_cutoff` | `Float64` | `1.0e6` | $\text{W/(m K)}$ | Maximum enhanced thermal conductivity ceiling | $> \text{k\_floor}$ |
+| `picard_damping` | `Float64` | `0.5` | - | Relaxation damping factor for convective enhancement | $\in (0, 1]$ |
+| `resolution_weighting` | `Bool` | `true` | - | Enable cell-Péclet grid-resolution damping | `true` / `false` |
+| `Pe_crit` | `Float64` | `2.0` | - | Critical cell-Péclet number for resolved damping | $> 0$ |
+| `T_surface_ref` | `Float64` | `273.15` | K | Surface reference temperature for convective driving scale | $> 0$ |
+| `gravity` | `Float64` | `0.5` | $\text{m/s}^2$ | Bulk planetesimal gravitational acceleration | $> 0$ |
+| `cp_fluid` | `Float64` | `4184.0` | $\text{J/(kg K)}$ | Fluid isobaric heat capacity | $> 0$ |
+| `alpha_fluid` | `Float64` | `2.0e-4` | $1/\text{K}$ | Fluid isobaric thermal expansivity | $> 0$ |
+| `k_fluid_ref` | `Float64` | `0.6` | $\text{W/(m K)}$ | Reference fluid thermal conductivity | $> 0$ |
+| `rho_fluid_ref` | `Float64` | `1000.0` | $\text{kg/m}^3$ | Reference fluid density | $> 0$ |
+| `mu_fluid_ref` | `Float64` | `1.0e-3` | $\text{Pa s}$ | Reference dynamic fluid viscosity | $> 0$ |
+| `kphi_ref` | `Float64` | `1.0e-13` | $\text{m}^2$ | Baseline reference permeability | $> 0$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input
