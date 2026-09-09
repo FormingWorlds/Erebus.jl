@@ -151,9 +151,16 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Normative Accessory Minerals and Meteorite Petrology
 
+- **Benedix, G. K., McCoy, T. J., & Keil, K. (1998)**. A petrologic and geochemical study of silicate inclusions in IAB iron meteorites: Implications for the primitive achondrite parent body. *Geochimica et Cosmochimica Acta*, 62(14), 2535-2553.  
+  [https://doi.org/10.1016/S0016-7037(98)00166-5](https://doi.org/10.1016/S0016-7037(98)00166-5)  
+  *Petrologic and geochemical analysis of silicate inclusions, partial melting, and thermal metamorphism in the IAB parent body.*
+
 - **Benedix, G. K., McCoy, T. J., Keil, K., & Bogard, D. D. (2000)**. A petrologic and geochemical study of winonaites: Implications for trace element behavior during primitive achondrite differentiation. *Geochimica et Cosmochimica Acta*, 64(14), 2535-2553.  
   [https://doi.org/10.1016/S0016-7037(00)00383-5](https://doi.org/10.1016/S0016-7037(00)00383-5)  
   *Petrologic and geochemical characterization of primitive achondrite parent bodies, incomplete differentiation, and accessory phase retention.*
+
+- **Buchwald, V. F. (1975)**. *Handbook of Iron Meteorites: Their History, Distribution, Composition, and Structure*. University of California Press.  
+  *Comprehensive catalog and structural characterization of iron meteorites, accessory mineral rhabdites, and troilite nodules.*
 
 - **Chabot, N. L., & Drake, M. J. (1999)**. Crystallization of magmatic iron meteorites: The role of phosphorus and sulfur. *Meteoritics & Planetary Science*, 34(2), 235-246.  
   [https://doi.org/10.1111/j.1945-5100.1999.tb01749.x](https://doi.org/10.1111/j.1945-5100.1999.tb01749.x)  
@@ -162,6 +169,18 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Goldstein, J. I., Scott, E. R. D., & Chabot, N. L. (2009)**. Iron meteorites: Crystallization, thermal history, parent bodies, and origin. *Chemie der Erde - Geochemistry*, 69(4), 293-325.  
   [https://doi.org/10.1016/j.chemer.2009.01.002](https://doi.org/10.1016/j.chemer.2009.01.002)  
   *Review of iron meteorite parent bodies, cooling rates, core segregation regimes, and mineralogical structures.*
+
+- **Goodrich, C. A., Scott, E. R. D., & Fioretti, A. M. (2004)**. Ureilitic meteorites: Clues to the mantle of a differentiated carbon-rich asteroid. *Chemie der Erde - Geochemistry*, 64(4), 283-327.  
+  [https://doi.org/10.1016/j.chemer.2004.08.001](https://doi.org/10.1016/j.chemer.2004.08.001)  
+  *Petrologic synthesis of ureilites as mantle restites formed by partial extraction of Fe-S-rich eutectic melts from carbonaceous parent bodies.*
+
+- **Scott, E. R. D. (1972)**. Chemical fractionation in iron meteorites and its interpretation of their origin. *Geochimica et Cosmochimica Acta*, 36(11), 1205-1236.  
+  [https://doi.org/10.1016/0016-7037(72)90046-2](https://doi.org/10.1016/0016-7037(72)90046-2)  
+  *Quantitative fractional crystallization modeling and trace element partitioning in magmatic iron meteorite groups.*
+
+- **Wasson, J. T., & Kallemeyn, G. W. (2002)**. The IAB iron-meteorite complex: A modern classification. *Geochimica et Cosmochimica Acta*, 66(13), 2445-2473.  
+  [https://doi.org/10.1016/S0016-7037(02)00848-7](https://doi.org/10.1016/S0016-7037(02)00848-7)  
+  *Systematics and classification of the IAB complex, subgroup definitions, and evidence for partial melting and impact mixing.*
 
 
 
