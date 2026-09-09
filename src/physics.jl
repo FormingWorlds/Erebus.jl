@@ -5651,22 +5651,19 @@ Molar masses: C = 12.011 g/mol, Fe = 55.845 g/mol. Stoichiometric cohenite facto
 When carbon exceeds carbide_max, cohenite saturates and excess carbon precipitates as graphite.
 """
 function compute_cohenite_graphite_stoichiometry(w_C::Real; carbide_max::Real=0.0667)
-    (w_C >= 0.0 && isfinite(w_C)) ||
-        throw(DomainError(w_C, "w_C must be non-negative and finite"))
+    (0.0 <= w_C <= 1.0 && isfinite(w_C)) ||
+        throw(DomainError(w_C, "w_C must be in [0, 1] and finite"))
     (0.0 < carbide_max <= 1.0 && isfinite(carbide_max)) ||
         throw(DomainError(carbide_max, "carbide_max must be in (0, 1]"))
     w_C_f = Float64(w_C)
     c_max = Float64(carbide_max)
-    f_cohenite = (3.0 * 55.845 + 12.011) / 12.011
-    if w_C_f <= c_max
-        w_cohenite = min(1.0, w_C_f * f_cohenite)
-        w_graphite = 0.0
-        w_fe_consumed = min(max(0.0, 1.0 - w_C_f), w_cohenite - w_C_f)
-    else
-        w_cohenite = min(1.0, c_max * f_cohenite)
-        w_graphite = w_C_f - c_max
-        w_fe_consumed = min(max(0.0, 1.0 - c_max), c_max * (f_cohenite - 1.0))
-    end
+    f_fe = (3.0 * 55.845) / 12.011
+    f_cohenite = f_fe + 1.0
+    C_fe_limit = (1.0 - w_C_f) / f_fe
+    C_carbide = min(w_C_f, c_max, C_fe_limit)
+    w_cohenite = C_carbide * f_cohenite
+    w_graphite = w_C_f - C_carbide
+    w_fe_consumed = C_carbide * f_fe
     return (w_cohenite, w_graphite, w_fe_consumed)
 end
 
@@ -5909,10 +5906,11 @@ function compute_regional_mineral_modes(
     M_crust_metal_matrix = 0.0
     M_crust_liquid_alloy = 0.0
 
-    @assert length(xm) >= marknum "length(xm) must be >= marknum"
-    @assert length(ym) >= marknum "length(ym) must be >= marknum"
-    @assert length(tm) >= marknum "length(tm) must be >= marknum"
-    @assert length(tkm) >= marknum "length(tkm) must be >= marknum"
+    marknum >= 0 || throw(ArgumentError("marknum must be non-negative, got $marknum"))
+    length(xm) >= marknum || throw(DimensionMismatch("length(xm) must be >= marknum"))
+    length(ym) >= marknum || throw(DimensionMismatch("length(ym) must be >= marknum"))
+    length(tm) >= marknum || throw(DimensionMismatch("length(tm) must be >= marknum"))
+    length(tkm) >= marknum || throw(DimensionMismatch("length(tkm) must be >= marknum"))
     (cfg.r_core_norm < cfg.r_mantle_norm) ||
         throw(ArgumentError("r_core_norm must be strictly less than r_mantle_norm"))
 
@@ -6020,7 +6018,7 @@ function compute_regional_mineral_modes(
     end
 
     classification =
-        if f_molten_core >= 0.8 && (M_core_metal / max(M_total_metal, 1.0e-12)) >= 0.4
+        if f_molten_core >= 0.8 && (M_core_metal / max(M_total_metal, 1.0e-12)) >= 0.4 && f_crust_solid_acc <= 0.005
             :magmatic_differentiated
         elseif f_crust_solid_acc >= 0.01 && f_molten_core <= 0.6
             :IAB_winonaite_primitive

@@ -237,9 +237,9 @@ def generate_benchmark_figure():
     # Representative meteorite groups plotted from petrologic literature data
     # (Benedix et al. 2000, Goldstein et al. 2009, Chabot & Drake 1999)
     # Magmatic irons: complete core differentiation, depleted crustal accessory retention
-    magmatic_x = [0.95, 0.98, 0.92, 0.89, 0.96]
-    magmatic_y = [0.0005, 0.0002, 0.0010, 0.0018, 0.0008]
-    magmatic_labels = ['IIIAB', 'IVA', 'IVB', 'IIAB', 'IAB-MG']
+    magmatic_x = [0.95, 0.98, 0.92, 0.89, 0.94]
+    magmatic_y = [0.0005, 0.0002, 0.0010, 0.0018, 0.0006]
+    magmatic_labels = ['IIIAB', 'IVA', 'IVB', 'IIAB', 'IC']
 
     # Primitive non-magmatic irons (IAB complex & winonaites): incomplete melting, high crustal retention
     primitive_x = [0.22, 0.35, 0.15, 0.45, 0.28]
@@ -251,7 +251,7 @@ def generate_benchmark_figure():
     trans_y = [0.018, 0.012, 0.024]
     trans_labels = ['IIICD', 'Ureilite metal', 'Tombigbee']
 
-    ax_d.scatter(magmatic_x, np.array(magmatic_y) * 100.0, s=70, color=STRATA['magma'], marker='o', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Magmatic Irons (IIIAB, IVA, IVB)')
+    ax_d.scatter(magmatic_x, np.array(magmatic_y) * 100.0, s=70, color=STRATA['magma'], marker='o', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Magmatic Irons (IIIAB, IVA, IVB, IC)')
     ax_d.scatter(primitive_x, np.array(primitive_y) * 100.0, s=75, color=STRATA['gold'], marker='s', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Primitive Complex (IAB / Winonaites)')
     ax_d.scatter(trans_x, np.array(trans_y) * 100.0, s=70, color=STRATA['plum'], marker='^', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Transitional Incomplete Segregations')
 
@@ -259,7 +259,7 @@ def generate_benchmark_figure():
         ('IIAB', (0.89, 0.0018 * 100.0), (0.83, 1.6)),
         ('IVB', (0.92, 0.0010 * 100.0), (0.86, 2.5)),
         ('IIIAB', (0.95, 0.0005 * 100.0), (0.89, 3.4)),
-        ('IAB-MG', (0.96, 0.0008 * 100.0), (0.92, 4.3)),
+        ('IC', (0.94, 0.0006 * 100.0), (0.92, 4.3)),
         ('IVA', (0.98, 0.0002 * 100.0), (0.95, 5.2)),
     ]
     for lbl, xy_pt, xy_txt in magmatic_annot:

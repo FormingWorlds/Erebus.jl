@@ -150,7 +150,7 @@ The diagnostic classification regimes in `src/physics.jl` correspond to the shad
 
 #### Literature Benchmark Data Sources
 
-The 13 discrete meteorite groups and specimens plotted in Panel (d) are compiled from published petrologic modal analyses and core differentiation models:
+The 13 discrete meteorite groups and specimens plotted in Panel (d) are representative benchmark coordinates derived from published petrologic modal analyses and core differentiation thermal models (Scott, 1972; Wasson and Kallemeyn, 2002; Goldstein et al., 2009). They represent characteristic petrologic regimes rather than individual specimen-level spot analyses:
 
 | Group / Specimen | Regime | $f_{\text{molten,core}}$ [-] | $f_{\text{solid,crust}}$ [wt%] | Petrologic Context and Literature Source |
 |:---|:---|:---|:---|:---|
@@ -164,12 +164,15 @@ The 13 discrete meteorite groups and specimens plotted in Panel (d) are compiled
 | **Ureilite metal** | Transitional | $0.72$ | $1.2$ | Ultramafic mantle restites after extraction of $\approx 70\%$ Fe-S-rich metallic melt. Preserves residual metal, graphite, and troilite (Goodrich et al., 2004, 2015). |
 | **IIAB** | Magmatic | $0.89$ | $0.18$ | Magmatic iron group formed by fractional crystallization of low-Ni, high-P/S metallic core. Crustal accessory phases completely dissolved; trace secondary exsolution (Chabot and Drake, 1999; Goldstein et al., 2009). |
 | **IVB** | Magmatic | $0.92$ | $0.10$ | Highly refractory, volatile-depleted magmatic iron group formed in an oxidized, differentiated core (Goldstein et al., 2009). |
+| **IC** | Magmatic | $0.94$ | $0.06$ | Coarse octahedrite magmatic group formed by fractional crystallization of a metallic core (Scott, 1972; Goldstein et al., 2009). |
 | **IIIAB** | Magmatic | $0.95$ | $0.05$ | Prototypical magmatic iron group formed by extensive fractional crystallization of a segregated metallic core (Scott, 1972; Chabot and Drake, 1999). |
-| **IAB-MG** | Magmatic/Segregated | $0.96$ | $0.08$ | Main group IAB metallic pools formed by extensive local segregation or impact-melt pooling (Wasson and Kallemeyn, 2002). |
 | **IVA** | Magmatic | $0.98$ | $0.02$ | Magmatic iron group with volatile-poor, rapidly cooled core crystallization signature and near-total crustal metal stripping (Goldstein et al., 2009). |
 
 ### Modeling Simplifications and Limitations
 
+- Spatially uniform bulk phosphorus: Schreibersite abundance uses the global configuration parameter `bulk_P_ppm` rather than an advected per-marker concentration field. While sulfur, carbon, and nitrogen undergo dynamic metal-silicate partitioning and marker transport, dynamic fractional crystallization and redistribution of phosphorus (Chabot and Drake, 1999) during core solidification are not modeled.
+- Stoichiometric carbon mass conservation: Cohenite ($\text{Fe}_3\text{C}$) forms up to `cohenite_carbide_max` and the available metallic iron limit, with excess carbon precipitated as crystalline graphite. Both carbon and iron masses are strictly conserved across all concentration regimes.
+- Spherical volume weighting: Regional integrated phase masses ($M_{\text{core}}$, $M_{\text{mantle}}$, $M_{\text{crust}}$) are evaluated using concentric spherical shell volumes (`use_3d_volume=true`, $(4/3)\pi r^3$) by default, matching the convention used in the core volatile budget diagnostics.
 - Shared dissolution interval: All accessory minerals (troilite, schreibersite, cohenite, graphite, and nitrides) dissolve across the shared temperature interval $[T_{\text{eutectic}}, T_{\text{eutectic}} + \Delta T_{\text{transition}}]$. In multicomponent metallic systems, refractory graphite and carbides exhibit higher thermal stability than sulfides and dissolve according to composition-dependent liquidus curves.
 - Linear melt fraction parameterization: Solid metal fraction scales linearly across the melting interval rather than following non-linear thermodynamic lever-rule trajectories.
 

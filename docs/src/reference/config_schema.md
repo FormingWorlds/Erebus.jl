@@ -439,7 +439,7 @@ phi_core_threshold = 0.40
 
 ## `[phase_tracking]`
 
-Normative accessory mineral tracking and meteorite diagnostic parameters configure sub-eutectic stoichiometric allocation of S, P, C, and N into solid accessory phases (troilite $\text{FeS}$, schreibersite $(\text{Fe,Ni})_3\text{P}$, cohenite $(\text{Fe,Ni})_3\text{C}$, graphite $\text{C}$, nitrides $\text{Fe}_4\text{N}/\text{CrN}/\text{TiN}$) and residual metallic matrix, as well as thermal dissolution across the eutectic transition ($T_{\text{eutectic}} \approx 1213\text{ K}$).
+Normative accessory mineral tracking and meteorite diagnostic parameters configure sub-eutectic stoichiometric allocation of S, P, C, and N into solid accessory phases (troilite $\text{FeS}$, schreibersite $(\text{Fe,Ni})_3\text{P}$, cohenite $(\text{Fe,Ni})_3\text{C}$, graphite $\text{C}$, nitrides $\text{Fe}_4\text{N}/\text{CrN}/\text{TiN}$) and residual metallic matrix, as well as thermal dissolution across the eutectic transition ($T_{\text{eutectic}} \approx 1213\text{ K}$). Enabling `[phase_tracking] active = true` requires `[coreformation] active = true` to provide the metallic carrier phase, and enforces that `phase_tracking.T_eutectic` matches `coreformation.T_eutectic`.
 
 ```toml
 [phase_tracking]

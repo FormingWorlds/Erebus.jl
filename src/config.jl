@@ -1460,6 +1460,21 @@ function validate_config(cfg::SimulationConfig)
 
     # Phase tracking validation
     if cfg.phase_tracking.active
+        (
+            cfg.coreformation.percolation_active ||
+            cfg.coreformation.settling_active ||
+            cfg.metal_partition.active
+        ) || throw(
+            ArgumentError(
+                "phase_tracking requires core formation (percolation_active or settling_active) or metal_partition to be active",
+            ),
+        )
+        isapprox(cfg.phase_tracking.T_eutectic, cfg.coreformation.T_eutectic; atol=1e-3) ||
+            throw(
+                ArgumentError(
+                    "phase_tracking.T_eutectic ($(cfg.phase_tracking.T_eutectic)) must match coreformation.T_eutectic ($(cfg.coreformation.T_eutectic))",
+                ),
+            )
         (cfg.phase_tracking.T_eutectic > 0.0 && isfinite(cfg.phase_tracking.T_eutectic)) ||
             throw(
                 ArgumentError(
