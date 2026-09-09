@@ -437,6 +437,37 @@ Base.@kwdef struct CoreFormationConfig
 end
 
 """
+Metal-silicate volatile partitioning and core segregation transport parameters.
+
+Configures thermodynamic exchange of H, C, N, and S between molten metallic iron
+and silicate melt during core formation, including donor-cell advective transport
+of metal-hosted volatiles and dynamic liquid metal density coupling.
+
+$(FIELDS)
+"""
+Base.@kwdef struct MetalPartitionConfig
+    active::Bool = false
+    model_carbon::Symbol = :grewal2019
+    model_nitrogen::Symbol = :grewal2019
+    model_hydrogen::Symbol = :clesi2018
+    model_sulfur::Symbol = :boujibar2014
+    D_H_const::Float64 = 0.5
+    D_C_const::Float64 = 500.0
+    D_N_const::Float64 = 20.0
+    D_S_const::Float64 = 200.0
+    equilibration_rate::Float64 = 1.0
+    dynamic_sulfur_density::Bool = true
+    D_min::Float64 = 1.0e-4
+    D_max::Float64 = 1.0e5
+    initial_metal_h_ppm::Float64 = 0.0
+    initial_metal_c_ppm::Float64 = 0.0
+    initial_metal_n_ppm::Float64 = 0.0
+    initial_metal_s_ppm::Float64 = 0.0
+    core_radius_fraction::Float64 = 0.5
+    phi_core_threshold::Float64 = 0.40
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -458,6 +489,7 @@ Base.@kwdef struct SimulationConfig
     retention::RetentionConfig = RetentionConfig()
     escape::EscapeConfig = EscapeConfig()
     coreformation::CoreFormationConfig = CoreFormationConfig()
+    metal_partition::MetalPartitionConfig = MetalPartitionConfig()
 end
 
 """
@@ -1319,6 +1351,89 @@ function validate_config(cfg::SimulationConfig)
         @warn "VolatilesConfig active=true without melting.active=true: silicate melt volatile exsolution occurs only when melting.active=true."
     end
 
+    # Metal partition validation
+    if cfg.metal_partition.active
+        if !cfg.volatiles.active
+            throw(
+                ArgumentError(
+                    "MetalPartitionConfig active=true requires VolatilesConfig active=true (enable [volatiles] active = true).",
+                ),
+            )
+        end
+        if !cfg.coreformation.percolation_active && !cfg.coreformation.settling_active
+            @warn "MetalPartitionConfig active=true without coreformation percolation_active or settling_active: metal volatile segregation transport will remain inactive."
+        end
+    end
+    (cfg.metal_partition.D_min > 0.0 && isfinite(cfg.metal_partition.D_min)) || throw(
+        ArgumentError("D_min must be > 0 and finite, got $(cfg.metal_partition.D_min)")
+    )
+    (
+        cfg.metal_partition.D_max >= cfg.metal_partition.D_min &&
+        isfinite(cfg.metal_partition.D_max)
+    ) || throw(
+        ArgumentError(
+            "D_max must be >= D_min and finite, got $(cfg.metal_partition.D_max)"
+        ),
+    )
+    (
+        0.0 <= cfg.metal_partition.equilibration_rate <= 1.0 &&
+        isfinite(cfg.metal_partition.equilibration_rate)
+    ) || throw(
+        ArgumentError(
+            "equilibration_rate must be in [0, 1] and finite, got $(cfg.metal_partition.equilibration_rate)",
+        ),
+    )
+    (
+        0.0 <= cfg.metal_partition.core_radius_fraction <= 1.0 &&
+        isfinite(cfg.metal_partition.core_radius_fraction)
+    ) || throw(
+        ArgumentError(
+            "core_radius_fraction must be in [0, 1] and finite, got $(cfg.metal_partition.core_radius_fraction)",
+        ),
+    )
+    (
+        0.0 <= cfg.metal_partition.phi_core_threshold <= 1.0 &&
+        isfinite(cfg.metal_partition.phi_core_threshold)
+    ) || throw(
+        ArgumentError(
+            "phi_core_threshold must be in [0, 1] and finite, got $(cfg.metal_partition.phi_core_threshold)",
+        ),
+    )
+    for (name, val) in [
+        ("D_H_const", cfg.metal_partition.D_H_const),
+        ("D_C_const", cfg.metal_partition.D_C_const),
+        ("D_N_const", cfg.metal_partition.D_N_const),
+        ("D_S_const", cfg.metal_partition.D_S_const),
+        ("initial_metal_h_ppm", cfg.metal_partition.initial_metal_h_ppm),
+        ("initial_metal_c_ppm", cfg.metal_partition.initial_metal_c_ppm),
+        ("initial_metal_n_ppm", cfg.metal_partition.initial_metal_n_ppm),
+        ("initial_metal_s_ppm", cfg.metal_partition.initial_metal_s_ppm),
+    ]
+        (val >= 0.0 && isfinite(val)) ||
+            throw(ArgumentError("$name must be >= 0 and finite, got $val"))
+    end
+    cfg.metal_partition.model_carbon in Set([:constant, :grewal2019, :fischer2020]) ||
+        throw(
+            ArgumentError(
+                "model_carbon must be :constant, :grewal2019, or :fischer2020, got :$(cfg.metal_partition.model_carbon)",
+            ),
+        )
+    cfg.metal_partition.model_nitrogen in Set([:constant, :grewal2019]) || throw(
+        ArgumentError(
+            "model_nitrogen must be :constant or :grewal2019, got :$(cfg.metal_partition.model_nitrogen)",
+        ),
+    )
+    cfg.metal_partition.model_hydrogen in Set([:constant, :clesi2018]) || throw(
+        ArgumentError(
+            "model_hydrogen must be :constant or :clesi2018, got :$(cfg.metal_partition.model_hydrogen)",
+        ),
+    )
+    cfg.metal_partition.model_sulfur in Set([:constant, :boujibar2014]) || throw(
+        ArgumentError(
+            "model_sulfur must be :constant or :boujibar2014, got :$(cfg.metal_partition.model_sulfur)",
+        ),
+    )
+
     return nothing
 end
 
@@ -1384,6 +1499,7 @@ const VALID_SECTIONS = Set([
     "retention",
     "escape",
     "coreformation",
+    "metal_partition",
 ])
 
 """
@@ -1537,6 +1653,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.coreformation
     end
+    metal_part = if haskey(parsed, "metal_partition")
+        _dict_to_struct(MetalPartitionConfig, parsed["metal_partition"], def.metal_partition)
+    else
+        def.metal_partition
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1555,6 +1676,7 @@ function load_config(source::AbstractString)::SimulationConfig
         retention=ret,
         escape=esc,
         coreformation=coreform,
+        metal_partition=metal_part,
     )
 
     validate_config(cfg)
@@ -1608,6 +1730,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "retention" => _struct_to_dict(cfg.retention),
         "escape" => _struct_to_dict(cfg.escape),
         "coreformation" => _struct_to_dict(cfg.coreformation),
+        "metal_partition" => _struct_to_dict(cfg.metal_partition),
     )
     TOML.print(io, d; sorted=true)
     return io

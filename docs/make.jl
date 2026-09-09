@@ -65,6 +65,7 @@ makedocs(;
             "Volatile Retention Floors & Vent Drainage" => "validation/volatile_retention.md",
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
             "Iron Core Formation" => "validation/core_formation.md",
+            "Core Geochemistry & Volatiles" => "validation/core_geochemistry.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

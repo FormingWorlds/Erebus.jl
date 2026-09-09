@@ -2440,12 +2440,26 @@ function apply_metal_segregation!(
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
     T_solidus_silicate::Real=1400.0,
     T_liquidus_silicate::Real=1800.0,
+    Xfe_H_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_C_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_N_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_S_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    cfg_partition::Union{Nothing,MetalPartitionConfig}=nothing,
 )
     if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
         dt <= 0.0 ||
         marknum <= 0
         return (; max_v_seg=0.0, n_subcycles=0, dt_sub=0.0, total_dissipation_energy=0.0)
     end
+
+    track_volatiles = (
+        cfg_partition !== nothing &&
+        cfg_partition.active &&
+        Xfe_H_m !== nothing &&
+        Xfe_C_m !== nothing &&
+        Xfe_N_m !== nothing &&
+        Xfe_S_m !== nothing
+    )
 
     # Validate input marker bounds
     @inbounds for m in 1:marknum
@@ -2491,6 +2505,11 @@ function apply_metal_segregation!(
     T_cell = zeros(Float64, Ny_val, Nx_val)
     drho_cell = zeros(Float64, Ny_val, Nx_val)
 
+    M_fe_H_cell = track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0)
+    M_fe_C_cell = track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0)
+    M_fe_N_cell = track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0)
+    M_fe_S_cell = track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0)
+
     # Bin markers into grid cells
     @inbounds for m in 1:marknum
         if tm[m] < 3
@@ -2498,7 +2517,8 @@ function apply_metal_segregation!(
             if rmark <= rplanet
                 j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
                 i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
-                M_fe_cell[i_c, j_c] += Xfe_bulk[m]
+                fe_m = Xfe_bulk[m]
+                M_fe_cell[i_c, j_c] += fe_m
                 M_rock_markers[i_c, j_c] += 1
                 phi_m_cell[i_c, j_c] += Xfem[m]
                 T_cell[i_c, j_c] += tkm[m]
@@ -2516,7 +2536,14 @@ function apply_metal_segregation!(
                     0.0
                 end
                 F_m_cell[i_c, j_c] += F_m_val
-                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - Xfe_bulk[m], 0.0)
+                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - fe_m, 0.0)
+
+                if track_volatiles
+                    M_fe_H_cell[i_c, j_c] += fe_m * Xfe_H_m[m]
+                    M_fe_C_cell[i_c, j_c] += fe_m * Xfe_C_m[m]
+                    M_fe_N_cell[i_c, j_c] += fe_m * Xfe_N_m[m]
+                    M_fe_S_cell[i_c, j_c] += fe_m * Xfe_S_m[m]
+                end
             end
         end
     end
@@ -2560,10 +2587,16 @@ function apply_metal_segregation!(
         F_m = F_m_cell[i, j]
 
         rho_metal_eff = if cfg_core.metal_density_mode !== :constant
+            w_S_val =
+                if track_volatiles &&
+                    cfg_partition.dynamic_sulfur_density &&
+                    M_fe_cell[i, j] > 0.0
+                    clamp((M_fe_S_cell[i, j] / M_fe_cell[i, j]) * 1.0e-6, 0.0, 0.40)
+                else
+                    cfg_core.sulfur_fraction
+                end
             compute_liquid_metal_density(
-                cfg_core.sulfur_fraction;
-                T=max(T_cell[i, j], 100.0),
-                law=cfg_core.metal_density_mode,
+                w_S_val; T=max(T_cell[i, j], 100.0), law=cfg_core.metal_density_mode
             )
         else
             cfg_core.rho_metal
@@ -2649,6 +2682,20 @@ function apply_metal_segregation!(
     # Working copy of cell metal mass for subcycling
     m_fe = copy(M_fe_cell)
     total_diss_energy = 0.0
+
+    m_fe_H = track_volatiles ? copy(M_fe_H_cell) : zeros(Float64, 0, 0)
+    m_fe_C = track_volatiles ? copy(M_fe_C_cell) : zeros(Float64, 0, 0)
+    m_fe_N = track_volatiles ? copy(M_fe_N_cell) : zeros(Float64, 0, 0)
+    m_fe_S = track_volatiles ? copy(M_fe_S_cell) : zeros(Float64, 0, 0)
+
+    flux_H_x = track_volatiles ? zeros(Float64, Ny_val, Nx_val - 1) : zeros(Float64, 0, 0)
+    flux_H_y = track_volatiles ? zeros(Float64, Ny_val - 1, Nx_val) : zeros(Float64, 0, 0)
+    flux_C_x = track_volatiles ? zeros(Float64, Ny_val, Nx_val - 1) : zeros(Float64, 0, 0)
+    flux_C_y = track_volatiles ? zeros(Float64, Ny_val - 1, Nx_val) : zeros(Float64, 0, 0)
+    flux_N_x = track_volatiles ? zeros(Float64, Ny_val, Nx_val - 1) : zeros(Float64, 0, 0)
+    flux_N_y = track_volatiles ? zeros(Float64, Ny_val - 1, Nx_val) : zeros(Float64, 0, 0)
+    flux_S_x = track_volatiles ? zeros(Float64, Ny_val, Nx_val - 1) : zeros(Float64, 0, 0)
+    flux_S_y = track_volatiles ? zeros(Float64, Ny_val - 1, Nx_val) : zeros(Float64, 0, 0)
 
     # Pre-allocated arrays for subcycling fluxes and limiters
     req_flux_x = zeros(Float64, Ny_val, Nx_val - 1)
@@ -2830,6 +2877,56 @@ function apply_metal_segregation!(
             end
         end
 
+        if track_volatiles
+            @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+                fx = flux_x[i, j]
+                if iszero(fx)
+                    flux_H_x[i, j] = 0.0
+                    flux_C_x[i, j] = 0.0
+                    flux_N_x[i, j] = 0.0
+                    flux_S_x[i, j] = 0.0
+                else
+                    donor_j = fx > 0.0 ? j : j + 1
+                    m_d = m_fe[i, donor_j]
+                    if m_d > 0.0
+                        flux_H_x[i, j] = fx * (m_fe_H[i, donor_j] / m_d)
+                        flux_C_x[i, j] = fx * (m_fe_C[i, donor_j] / m_d)
+                        flux_N_x[i, j] = fx * (m_fe_N[i, donor_j] / m_d)
+                        flux_S_x[i, j] = fx * (m_fe_S[i, donor_j] / m_d)
+                    else
+                        flux_H_x[i, j] = 0.0
+                        flux_C_x[i, j] = 0.0
+                        flux_N_x[i, j] = 0.0
+                        flux_S_x[i, j] = 0.0
+                    end
+                end
+            end
+
+            @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+                fy = flux_y[i, j]
+                if iszero(fy)
+                    flux_H_y[i, j] = 0.0
+                    flux_C_y[i, j] = 0.0
+                    flux_N_y[i, j] = 0.0
+                    flux_S_y[i, j] = 0.0
+                else
+                    donor_i = fy > 0.0 ? i : i + 1
+                    m_d = m_fe[donor_i, j]
+                    if m_d > 0.0
+                        flux_H_y[i, j] = fy * (m_fe_H[donor_i, j] / m_d)
+                        flux_C_y[i, j] = fy * (m_fe_C[donor_i, j] / m_d)
+                        flux_N_y[i, j] = fy * (m_fe_N[donor_i, j] / m_d)
+                        flux_S_y[i, j] = fy * (m_fe_S[donor_i, j] / m_d)
+                    else
+                        flux_H_y[i, j] = 0.0
+                        flux_C_y[i, j] = 0.0
+                        flux_N_y[i, j] = 0.0
+                        flux_S_y[i, j] = 0.0
+                    end
+                end
+            end
+        end
+
         # 5. Conservative update of cell metal masses
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
             F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
@@ -2837,6 +2934,32 @@ function apply_metal_segregation!(
             F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
             F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
             m_fe[i, j] += (F_w - F_e + F_n - F_s)
+
+            if track_volatiles
+                F_H_w = (j > 1) ? flux_H_x[i, j - 1] : 0.0
+                F_H_e = (j < Nx_val) ? flux_H_x[i, j] : 0.0
+                F_H_n = (i > 1) ? flux_H_y[i - 1, j] : 0.0
+                F_H_s = (i < Ny_val) ? flux_H_y[i, j] : 0.0
+                m_fe_H[i, j] = max(0.0, m_fe_H[i, j] + (F_H_w - F_H_e + F_H_n - F_H_s))
+
+                F_C_w = (j > 1) ? flux_C_x[i, j - 1] : 0.0
+                F_C_e = (j < Nx_val) ? flux_C_x[i, j] : 0.0
+                F_C_n = (i > 1) ? flux_C_y[i - 1, j] : 0.0
+                F_C_s = (i < Ny_val) ? flux_C_y[i, j] : 0.0
+                m_fe_C[i, j] = max(0.0, m_fe_C[i, j] + (F_C_w - F_C_e + F_C_n - F_C_s))
+
+                F_N_w = (j > 1) ? flux_N_x[i, j - 1] : 0.0
+                F_N_e = (j < Nx_val) ? flux_N_x[i, j] : 0.0
+                F_N_n = (i > 1) ? flux_N_y[i - 1, j] : 0.0
+                F_N_s = (i < Ny_val) ? flux_N_y[i, j] : 0.0
+                m_fe_N[i, j] = max(0.0, m_fe_N[i, j] + (F_N_w - F_N_e + F_N_n - F_N_s))
+
+                F_S_w = (j > 1) ? flux_S_x[i, j - 1] : 0.0
+                F_S_e = (j < Nx_val) ? flux_S_x[i, j] : 0.0
+                F_S_n = (i > 1) ? flux_S_y[i - 1, j] : 0.0
+                F_S_s = (i < Ny_val) ? flux_S_y[i, j] : 0.0
+                m_fe_S[i, j] = max(0.0, m_fe_S[i, j] + (F_S_w - F_S_e + F_S_n - F_S_s))
+            end
         end
 
         # 6. Gravitational potential energy dissipation heating
@@ -2885,6 +3008,7 @@ function apply_metal_segregation!(
                     m_target = m_fe[i_c, j_c]
                     m_init = M_fe_cell[i_c, j_c]
                     dm_cell = m_target - m_init
+                    dX = 0.0
                     if dm_cell > 0.0
                         c_tot = cap_cell[i_c, j_c]
                         if c_tot > 0.0
@@ -2905,6 +3029,21 @@ function apply_metal_segregation!(
                         end
                     else
                         Xfe_bulk[m] = clamp(Xfe_bulk[m], 0.0, cfg_core.phi_pack)
+                    end
+
+                    if track_volatiles
+                        X_new = Xfe_bulk[m]
+                        if X_new > 0.0 && m_target > 0.0
+                            Xfe_H_m[m] = m_fe_H[i_c, j_c] / m_target
+                            Xfe_C_m[m] = m_fe_C[i_c, j_c] / m_target
+                            Xfe_N_m[m] = m_fe_N[i_c, j_c] / m_target
+                            Xfe_S_m[m] = m_fe_S[i_c, j_c] / m_target
+                        else
+                            Xfe_H_m[m] = 0.0
+                            Xfe_C_m[m] = 0.0
+                            Xfe_N_m[m] = 0.0
+                            Xfe_S_m[m] = 0.0
+                        end
                     end
                 end
             end

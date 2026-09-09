@@ -123,6 +123,31 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/j.epsl.2013.10.015](https://doi.org/10.1016/j.epsl.2013.10.015)  
   *Secondary-ion mass spectrometry measurements of nitrogen solubility and retention in nominally anhydrous mantle minerals.*
 
+---
+
+## Metal-Silicate Volatile Partitioning and Geochemistry
+
+- **Grewal, D. S., Dasgupta, R., Sun, C., Tsuno, K., & Costin, G. (2019a)**. Delivery of carbon, nitrogen, and sulfur to the silicate Earth by a planetary merger. *Science Advances*, 5(1), eaau3669.  
+  [https://doi.org/10.1126/sciadv.aau3669](https://doi.org/10.1126/sciadv.aau3669)  
+  *Experimental parameterization of carbon, nitrogen, and sulfur partitioning between liquid metal and silicate melt as a function of temperature, pressure, oxygen fugacity, and alloy composition.*
+
+- **Grewal, D. S., Dasgupta, R., & Farnell, A. (2019b)**. The speciation of carbon, nitrogen, and water in magma oceans and its effect on volatile partitioning between metal and silicate. *Geochimica et Cosmochimica Acta*, 251, 87-115.  
+  [https://doi.org/10.1016/j.gca.2019.02.009](https://doi.org/10.1016/j.gca.2019.02.009)  
+  *Experimental determination of carbon and nitrogen siderophile partitioning and the suppression of carbon affinity by dissolved sulfur in metallic iron alloys.*
+
+- **Fischer, R. A., Cottrell, E., Hauri, E., Lee, K. K. M., & Le Voyer, M. (2020)**. The partitioning of carbon and oxygen between core and mantle in the early Earth. *Proceedings of the National Academy of Sciences*, 117(16), 8743-8749.  
+  [https://doi.org/10.1073/pnas.1919930117](https://doi.org/10.1073/pnas.1919930117)  
+  *High-pressure and high-temperature laser-heated diamond anvil cell measurements of carbon partitioning between metallic liquid and molten silicate.*
+
+- **Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018)**. Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876.  
+  [https://doi.org/10.1126/sciadv.1701876](https://doi.org/10.1126/sciadv.1701876)  
+  *Experimental determination of hydrogen partitioning between liquid iron and silicate melt at low pressures relevant to planetesimals and protoplanetary embryos.*
+
+- **Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014)**. Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54.  
+  [https://doi.org/10.1016/j.epsl.2014.01.021](https://doi.org/10.1016/j.epsl.2014.01.021)  
+  *Empirical parameterization of sulfur partitioning between metallic liquid and silicate melt as a function of temperature, pressure, and oxygen fugacity.*
+
+
 
 
 
