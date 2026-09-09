@@ -189,6 +189,7 @@ function save_state(
     XCm=nothing,
     XNm=nothing,
     XSm=nothing,
+    DT0::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -306,6 +307,7 @@ function save_state(
         SXX0,
         tk1,
         tk2,
+        DT0=DT0 === nothing ? zeros(Float64, Ny1_val, Nx1_val) : DT0,
         vxp,
         vyp,
         vxpf,
@@ -712,6 +714,9 @@ function simulation_loop(
         SXX0 .= ckpt["SXX0"]
         tk1 .= ckpt["tk1"]
         tk2 .= ckpt["tk2"]
+        if haskey(ckpt, "DT0")
+            DT0 .= ckpt["DT0"]
+        end
         pr .= ckpt["pr"]
         pf .= ckpt["pf"]
         ps .= ckpt["ps"]
@@ -968,6 +973,7 @@ function simulation_loop(
             XCm=XCm,
             XNm=XNm,
             XSm=XSm,
+            DT0=DT0,
         )
     end
 
@@ -2084,6 +2090,7 @@ function simulation_loop(
             dt,
             marknum;
             coords=coords,
+            dsubgrids=dsubgrids,
         )
 
         # ---------------------------------------------------------------------
@@ -2109,6 +2116,7 @@ function simulation_loop(
             marknum,
             marker_property_mode;
             coords=coords,
+            dsubgridt=dsubgridt,
         )
 
         # ---------------------------------------------------------------------
@@ -2436,6 +2444,7 @@ function simulation_loop(
                 XCm=XCm,
                 XNm=XNm,
                 XSm=XSm,
+                DT0=DT0,
             )
         end
         # ---------------------------------------------------------------------

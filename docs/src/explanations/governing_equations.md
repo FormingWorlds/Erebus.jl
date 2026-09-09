@@ -136,9 +136,9 @@ Volumetric heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay is c
 
 $$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}} \exp\left(-\frac{t}{\tau_{\text{al}}}\right) \rho_s$$
 
-$$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_f$$
+$$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_{\text{metal}}$$
 
-where $\tau$ is the mean lifetime of each radioactive isotope, and $\rho_s$, $\rho_f$ are solid and fluid densities.
+where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase.
 
 ### Spherical Geometric Metric Weighting (2D Cartesian)
 In 3D spherically symmetric coordinates with radius $r = \sqrt{(x - x_c)^2 + (y - y_c)^2}$, the heat flux divergence is:

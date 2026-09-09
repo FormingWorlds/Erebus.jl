@@ -8,7 +8,7 @@ This page documents the physical formulation, mathematical limits, and numerical
 
 Early planetary differentiation separates dense metallic iron from lighter silicate rock to form a central metallic core and an overlying silicate mantle. In early Solar System planetesimals, this differentiation is driven by internal decay heating from short-lived radionuclides ($^{26}\text{Al}$ and $^{60}\text{Fe}$).
 
-The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \approx 1213\text{ K}$), melting hundreds of Kelvin below the silicate solidus ($T_{\text{solidus}} \approx 1416\text{ K}$). Metal-silicate segregation operates in two distinct physical regimes:
+The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \approx 1213\text{ K}$), melting hundreds of Kelvin below the silicate solidus ($T_{\text{solidus}} \approx 1400\text{ K}$). Metal-silicate segregation operates in two distinct physical regimes:
 
 1. **Porous Percolation Regime ($F_m \le 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit}} \approx 0.05$). The flow is governed by porous Darcy dynamics with Kozeny-Carman permeability.
 2. **Magma Ocean Stokes Settling Regime ($F_m \ge 0.50$)**: When silicate melting exceeds the rheological transition threshold ($\phi_{\text{rheo}} \approx 0.40$), the rigid crystalline framework breaks down into a low-viscosity crystal suspension. Dense liquid metal emulsifies into droplets whose diameter is governed by capillary-hydrodynamic balance. Droplets sink rapidly through the magma ocean following Stokes drag with hindered settling corrections.
@@ -152,7 +152,7 @@ The planetesimal differentiates in four sequential stages driven by $^{26}\text{
 1. **Primordial Homogeneous Accretion ($t = 0\text{ Ma}$)**: The body starts completely cold ($T = 150\text{ K}$) and uniformly icy throughout its entire volume.
 2. **Pore Ice Melting and Rock Desiccation ($t \approx 0.3 - 0.8\text{ Ma}$)**: Radioactive decay warms the interior above 273.15 K. Pore ice melts in the interior and dehydrates the rock, while surface conductive cooling maintains a cold outer lid ($T < 273.15\text{ K}$) where primordial ice is preserved dynamically.
 3. **Porous Fe-FeS Percolation ($t \approx 1.0 - 1.4\text{ Ma}$)**: Interior temperatures reach the Fe-FeS eutectic ($T_{\text{eutectic}} = 1213\text{ K}$). Molten metallic alloy exceeds the percolation threshold ($\phi_{\text{crit,perc}} = 0.05$) and drains inward through crystalline silicate pores.
-4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1416\text{ K}$) and reaches the rheological breakdown threshold ($F_m \ge 0.40$). Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension. Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
+4. **Magma Ocean Stokes Settling and Core Ponding ($t \approx 1.5 - 3.5\text{ Ma}$)**: Silicate melting crosses the solidus ($1400\text{ K}$) and reaches the rheological breakdown threshold ($F_m \ge 0.40$). Dense liquid metal droplets settle rapidly through the low-viscosity magma suspension. Droplets pond at the planetary center to form a segregated metallic core of radius $\approx 27\text{ km}$ at maximum packing ($\phi_{\text{pack}} = 0.65$), capped by an iron-depleted silicate mantle ($\phi_{\text{fe}} = 0.02$) and an outer primordial icy crust.
 
 ### Benchmark Results
 
@@ -165,7 +165,7 @@ The multi-panel summary figure illustrates the critical physical mechanisms:
 - **(c) Differentiation Fronts Timeline**: Traces the radial expansion of the metallic core boundary ($\phi_{\text{fe}} \ge 0.50$, reaching $27\text{ km}$) and the magma ocean boundary ($F_m \ge 0.40$).
 - **(d) Radial Metal Concentration Profiles**: Shows $\phi_{\text{fe}}(r)$ at $t = 0.0, 1.0, 1.5,$ and $3.0\text{ Ma}$. Bulk iron begins uniformly at $0.12$, depletes to the residual threshold $0.02$ in the mantle, and ponds up to $\phi_{\text{pack}} = 0.65$ in the central core.
 - **(e) Transport Regime Comparison**: Compares segregation velocities for three configurations: porous percolation only (slow, $\sim 10^{-7}\text{ m/s}$), Stokes droplet settling only, and the coupled Hermite transition model.
-- **(f) Droplet Size Physics Sensitivity**: Compares core radius growth for constant droplet diameter ($1.0\text{ cm}$), Weber equilibrium balance ($d \propto \sqrt{\sigma / g}$), and dynamic turbulent breakup ($d \propto v^{-2}$).
+- **(f) Droplet Size Physics Sensitivity**: Compares core radius growth for constant droplet diameter ($0.5\text{ cm}$), Weber equilibrium balance ($d \propto \sqrt{\sigma / g}$), and dynamic turbulent breakup ($d \propto v^{-2}$).
 
 ### 2D Simulation Video
 

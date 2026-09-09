@@ -3360,6 +3360,7 @@ function apply_subgrid_stress_diffusion!(
     dt,
     marknum;
     coords::Union{Nothing,GridCoordinates}=nothing,
+    dsubgrids::Real=dsubgrids,
 )
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
@@ -3529,6 +3530,7 @@ function apply_subgrid_temperature_diffusion!(
     marknum,
     mode;
     coords::Union{Nothing,GridCoordinates}=nothing,
+    dsubgridt::Real=dsubgridt,
 )
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
@@ -3568,7 +3570,7 @@ function apply_subgrid_temperature_diffusion!(
             @inbounds rhocptotalm = total(
                 rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m]
             )
-            @inbounds ktotalm[m] = ktotal(
+            @inbounds ktotalm = ktotal(
                 compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
             )
         else

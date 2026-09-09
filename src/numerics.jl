@@ -1497,6 +1497,7 @@ function compute_nodal_adjustment!(
             # update error for previous yielding nodes
             ynn = false
             if YNY[i, j] > 0
+                ynn = true
                 DSY[i, j] = SIIB - syield
                 ddd += DSY[i, j]^2
                 ynpl += 1
@@ -2258,6 +2259,7 @@ function perform_thermal_iterations!(
     coords=nothing,
     Q_metric=nothing,
     Q_lat=nothing,
+    DTmax::Real=DTmax,
 )
     # set up thermal iterations
     Ny1, Nx1 = size(tk1)
@@ -2298,12 +2300,14 @@ function perform_thermal_iterations!(
                 dtt *= DTmax * inv(maxDTcurrent)
             else
                 dttsum += dtt
+                tk1 .= tk2
             end
         else
             # second+ thermal iteration passes:
             # update dttsum and adjust timestep
             dttsum += dtt
-            dtt = min(dtt, dt-dttsum)
+            tk1 .= tk2
+            dtt = min(dtt, dt - dttsum)
         end
         # increase thermal iteration counter
         titer += 1

@@ -1048,6 +1048,42 @@
         @test any(YNY5) # yielding flags triggered
         @test any(ETA5 .< ETA0) # apparent viscosity reduced to bring stress to envelope
         @test all(ETA5 .> 0.0) # apparent viscosity remains positive
+
+        # 3. Persistent yielding node single-counting invariant:
+        # Verify that previously yielding nodes (YNY > 0) are not double-counted in ynpl or YERRNOD.
+        COH_high = fill(1.0e14, Ny, Nx)
+        COH_high[2, 2] = 1.0e6
+        COH_high[2, 3] = 2.0e6
+        YNY_mixed = zeros(Bool, Ny, Nx)
+        YNY_mixed[2, 2] = true   # persistent yielding node
+        YNY_mixed[2, 3] = false  # newly yielding node
+        YNY5_mixed = zeros(Bool, Ny, Nx)
+        DSY_mixed = zeros(Ny, Nx)
+        YERRNOD_mixed = zeros(nplast)
+        Erebus.compute_nodal_adjustment!(
+            ETA,
+            ETA0,
+            ETA5,
+            GGG,
+            SXX,
+            SXY,
+            pr_high,
+            pf_elevated,
+            COH_high,
+            TEN,
+            FRI,
+            YNY_mixed,
+            YNY5_mixed,
+            YERRNOD_mixed,
+            DSY_mixed,
+            dt,
+            iplast,
+        )
+        # Expected error: root-mean-square of exactly 2 yielding nodes
+        expected_rms = sqrt((DSY_mixed[2, 2]^2 + DSY_mixed[2, 3]^2) / 2.0)
+        double_count_rms = sqrt((2.0 * DSY_mixed[2, 2]^2 + DSY_mixed[2, 3]^2) / 3.0)
+        @test isapprox(YERRNOD_mixed[iplast], expected_rms; rtol=1e-12)
+        @test abs(YERRNOD_mixed[iplast] - double_count_rms) > 1e-4
     end
 
     @testset "finalize_plastic_iteration_pass!(): convergence vs stalled recovery" begin
@@ -1749,4 +1785,56 @@
         @test delta_R ≈ expected_delta_R rtol=1e-12
         @test delta_R ≈ (rho0_f * alpha_f * delta_T * g_accel) rtol=1e-12
     end # testset "assemble_hydromechanical_lse!() Darcy thermal buoyancy integration"
+
+    @testset "perform_thermal_iterations!(): subcycling temperature advance and conservation" begin
+        coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=50000.0, ysize=50000.0))
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        tk0 = fill(300.0, Ny1, Nx1)
+        tk1 = fill(300.0, Ny1, Nx1)
+        tk2 = zeros(Ny1, Nx1)
+        DT = zeros(Ny1, Nx1)
+        DT0 = zeros(Ny1, Nx1)
+        RHOCP = fill(3.3e6, Ny1, Nx1)
+        KX = fill(3.0, Ny1, Nx1)
+        KY = fill(3.0, Ny1, Nx1)
+        HR = fill(100.0, Ny1, Nx1)
+        HA = zeros(Ny1, Nx1)
+        HS = zeros(Ny1, Nx1)
+        DHP = zeros(Ny1, Nx1)
+        RT = zeros(Ny1 * Nx1)
+        ST = zeros(Ny1 * Nx1)
+        dt = 1.0e6
+        DTmax = 5.0
+
+        Erebus.perform_thermal_iterations!(
+            tk0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            RHOCP,
+            KX,
+            KY,
+            HR,
+            HA,
+            HS,
+            DHP,
+            RT,
+            ST,
+            dt;
+            coords=coords,
+            DTmax=DTmax,
+        )
+
+        # 1. Monotonic heating across subcycles
+        @test all(tk2 .> tk0)
+        # 2. Conservation: overall DT matches tk2 .- tk0
+        @test isapprox(DT, tk2 .- tk0; rtol=1e-12)
+        # 3. DT0 equals DT
+        @test isapprox(DT0, DT; rtol=1e-12)
+        # 4. Temperature advance invariant: tk1 updated across subcycles to match final tk2
+        @test isapprox(tk1, tk2; rtol=1e-12)
+        # 5. Total heating exceeds DTmax (verifying subcycling occurred)
+        @test maximum(DT) > DTmax
+    end
 end

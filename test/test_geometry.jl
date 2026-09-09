@@ -201,6 +201,28 @@
         end
     end # testset "setup_staggered_grid_properties()"
 
+    @testset "setup_staggered_grid_properties(randomized=true): broadcasting and field variance" begin
+        props_rand = Erebus.setup_staggered_grid_properties(; randomized=true)
+        SXX_rand = props_rand[40]
+        SXX0_rand = props_rand[41]
+        FI_rand = props_rand[60]
+
+        # 1. Non-constancy and finite values across randomized fields
+        @test all(isfinite, SXX_rand)
+        @test all(isfinite, SXX0_rand)
+        @test all(isfinite, FI_rand)
+
+        # 2. SXX / SXX0 broadcast bounds [-1e3, 1e3]
+        @test -1.0e3 <= minimum(SXX_rand) < 0.0 < maximum(SXX_rand) <= 1.0e3
+        @test -1.0e3 <= minimum(SXX0_rand) < 0.0 < maximum(SXX0_rand) <= 1.0e3
+
+        # 3. Discrimination guard: FI must be non-constant in [-1e2, 1e2]
+        # (catches regression of the 2e2.=1e2 bug which produced a constant field of 100.0)
+        @test minimum(FI_rand) < 0.0 < maximum(FI_rand)
+        @test minimum(FI_rand) != maximum(FI_rand)
+        @test abs(maximum(FI_rand) - minimum(FI_rand)) > 10.0
+    end
+
     @testset "setup_staggered_grid_properties_helpers(): helper array dimensions" begin
         helpers = Erebus.setup_staggered_grid_properties_helpers()
         (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = helpers

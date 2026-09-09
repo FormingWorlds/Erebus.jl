@@ -77,4 +77,79 @@
         @test isinf(Erebus.s_to_Ma(Inf))
         @test isinf(Erebus.s_to_Ma(-Inf))
     end
+
+    @testset "save_state() and load_state(): DT0 persistence and recovery" begin
+        # 1. Direct round-trip unit test of DT0 in JLD2 checkpoint
+        mktempdir() do tmpdir
+            dummy_file = joinpath(tmpdir, "test_ckpt.jld2")
+            test_dt0 = [i * 1.5 + j * 0.7 for i in 1:5, j in 1:5]
+            JLD2.jldsave(dummy_file; DT0=test_dt0)
+            loaded = load_state(dummy_file)
+            @test haskey(loaded, "DT0")
+            @test loaded["DT0"] == test_dt0
+
+            # Absence test: file without DT0 does not have the key
+            dummy_no_dt0 = joinpath(tmpdir, "test_no_dt0.jld2")
+            JLD2.jldsave(dummy_no_dt0; timestep=1)
+            loaded_no = load_state(dummy_no_dt0)
+            @test !haskey(loaded_no, "DT0")
+        end
+
+        # 2. Simulation checkpoint emission and restart restoration
+        mktempdir() do tmpdir
+            quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+            cfg = load_config(quick_toml)
+            cfg_run = SimulationConfig(
+                time=TimeConfig(
+                    n_steps=2,
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                ),
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                materials=cfg.materials,
+                output=OutputConfig(output_dir=tmpdir, savematstep=1),
+            )
+            Erebus.simulation_loop(cfg_run; output_path=tmpdir)
+            ckpt1_path = joinpath(tmpdir, "output_00001.jld2")
+            @test isfile(ckpt1_path)
+            state1 = load_state(ckpt1_path)
+            @test haskey(state1, "DT0")
+            @test size(state1["DT0"]) == (cfg_run.grid.Ny + 1, cfg_run.grid.Nx + 1)
+            @test all(isfinite, state1["DT0"])
+            @test any(!iszero, state1["DT0"])
+            @test any(state1["DT0"] .> 0.0)
+
+            # Test restart restoring DT0
+            dir_res = mktempdir()
+            try
+                cfg_res = SimulationConfig(
+                    time=TimeConfig(
+                        start_step=1,
+                        n_steps=2,
+                        dt_initial=cfg.time.dt_initial,
+                        dt_longest=cfg.time.dt_longest,
+                    ),
+                    solver=cfg.solver,
+                    poroelasticity=cfg.poroelasticity,
+                    thermodynamics=cfg.thermodynamics,
+                    materials=cfg.materials,
+                    output=OutputConfig(
+                        output_dir=dir_res, savematstep=1, restart_from=ckpt1_path
+                    ),
+                )
+                Erebus.simulation_loop(
+                    cfg_res; output_path=dir_res, restart_from=ckpt1_path
+                )
+                ckpt2_res_path = joinpath(dir_res, "output_00002.jld2")
+                @test isfile(ckpt2_res_path)
+                state2_res = load_state(ckpt2_res_path)
+                @test haskey(state2_res, "DT0")
+                @test all(isfinite, state2_res["DT0"])
+            finally
+                rm(dir_res, recursive=true, force=true)
+            end
+        end
+    end
 end

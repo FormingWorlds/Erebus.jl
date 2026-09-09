@@ -159,47 +159,47 @@ function setup_staggered_grid_properties(Nx::Int=Nx, Ny::Int=Ny; randomized=fals
     # EPSILONxx [1/s]
     EXX = randomized ? rand(rgen, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # σ′xx [1/s]
-    SXX = randomized ? rand(rgen, Ny1, Nx1)*2e3-1e3 : zeros(Ny1, Nx1)
+    SXX = randomized ? rand(rgen, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
     # σ₀′ (SIGMA0'xx) [1/s]
-    SXX0 = randomized ? rand(rgen, Ny1, Nx1)*2e3-1e3 : zeros(Ny1, Nx1)
+    SXX0 = randomized ? rand(rgen, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
     # current temperature [K]
-    tk1 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
+    tk1 = randomized ? rand(rgen, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
     # next temperature [K]
-    tk2 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
+    tk2 = randomized ? rand(rgen, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
     # temperature difference at P nodes [K]
-    DT = randomized ? rand(rgen, Ny1, Nx1)*2e2 .- 1e2 : zeros(Ny1, Nx1)
+    DT = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # previous temperature difference at P nodes [K]
-    DT0 = randomized ? rand(rgen, Ny1, Nx1)*2e2 .- 1e2 : zeros(Ny1, Nx1)
+    DT0 = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # solid vx in pressure nodes [m/s]
-    vxp = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vxp = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # solid vy in pressure nodes [m/s]
-    vyp = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vyp = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vx in pressure nodes [m/s]
-    vxpf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vxpf = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vy in pressure nodes [m/s]
-    vypf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vypf = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # total pressure [Pa]
-    pr = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    pr = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # fluid pressure [Pa]
-    pf = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    pf = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # solid pressure [Pa]
-    ps = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    ps = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous total pressure [Pa]
-    pr0 = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    pr0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous fluid pressure [Pa]
-    pf0 = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    pf0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous solid pressure [Pa]
-    ps0 = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    ps0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # bulk viscosity [Pa*s]
-    ETAPHI = randomized ? rand(rgen, Ny1, Nx1)*1e14 : zeros(Ny1, Nx1)
+    ETAPHI = randomized ? rand(rgen, Ny1, Nx1) * 1e14 : zeros(Ny1, Nx1)
     # bulk compressibility [Pa*s]
-    BETAPHI = randomized ? rand(rgen, Ny1, Nx1)*1e-10 : zeros(Ny1, Nx1)
+    BETAPHI = randomized ? rand(rgen, Ny1, Nx1) * 1e-10 : zeros(Ny1, Nx1)
     # porosity
     PHI = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # Dln[(1-ϕ)/ϕ]/Dt
-    APHI = randomized ? rand(rgen, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
+    APHI = randomized ? rand(rgen, Ny1, Nx1) * 2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # gravity potential [J/kg]
-    FI = randomized ? rand(rgen, Ny1, Nx1)*2e2.=1e2 : zeros(Ny1, Nx1)
+    FI = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # mass transfer term
     DMP = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
     # enthalpy transfer/latent heating term
