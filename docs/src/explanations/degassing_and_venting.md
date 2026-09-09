@@ -221,6 +221,61 @@ For benchmark comparisons across all four elemental systems, see the validation 
 
 ---
 
+## Thermodynamic Volatile Retention Floors and Low-Temperature Vent Drainage Coupling
+
+### 1. Solid Matrix Volatile Retention Floors in Nominally Anhydrous Minerals
+
+In classical melt solubility formulations (e.g., Burnham, 1979; Dixon et al., 1995), volatile solubility in silicate melt scales with pressure as $S_{\text{eq}} \propto \sqrt{P}$ or $S_{\text{eq}} \propto P$. Under decompression toward near-vacuum surface environments ($P \to 0$), these classical parameterizations predict that all dissolved volatiles exsolve into the fluid or vapor phase. However, laboratory analyses of natural mantle xenoliths, meteorites, and high-pressure experiments demonstrate that crystalline silicates retain trace volatile concentrations in crystal lattice defects within nominally anhydrous minerals (NAMs: olivine, pyroxenes) and refractory carbonaceous grains (Hirschmann et al., 2006; Peslier et al., 2017; Shcheka et al., 2006; Hirschmann, 2018; Li et al., 2013).
+
+To capture this physical behavior, `Erebus.jl` incorporates thermodynamic volatile retention floors. For each volatile species (H2O, C, N, S), a temperature-dependent retention floor $C_{\text{ret}}(T)$ defines the minimum volatile concentration retained in the solid matrix. Below the reference solidus temperature $T_{\text{solidus}}$, volatiles are locked in the crystalline lattice at nominal concentration $C_{\text{floor}}$:
+
+- **Nominally Anhydrous Minerals (NAMs) Exponential Decay** (`:nams_exponential`, default):
+  $$C_{\text{ret}}(T) = \begin{cases} C_{\text{floor}}, & T \le T_{\text{solidus}} \\ C_{\text{floor}} \exp\left(-\frac{T - T_{\text{solidus}}}{\Delta T_{\text{ret}}}\right), & T > T_{\text{solidus}} \end{cases}$$
+  where $\Delta T_{\text{ret}}$ is the characteristic temperature scale for melt extraction of lattice-bound volatiles.
+
+- **Linear Melt Blend** (`:linear_melt_blend`):
+  $$C_{\text{ret}}(T) = C_{\text{floor}} \left[1 - \text{clamp}\left(\frac{T - T_{\text{solidus}}}{\Delta T_{\text{ret}}}, 0, 1\right)\right]$$
+
+- **Constant Floor** (`:constant_floor`):
+  $$C_{\text{ret}}(T) = C_{\text{floor}}$$
+
+### 2. Decompression Exsolution Clamping and Vacuum Preservation Invariant
+
+When volatile exsolution is evaluated in marker particles, the total bulk volatile inventory $C_{\text{bulk}}$ partitions between the immovable retention floor $C_{\text{ret}}(T)$ and the mobile volatile concentration $C_{\text{mob}}$:
+
+$$C_{\text{mob}} = \max\left(0, C_{\text{bulk}} - C_{\text{ret}}(T)\right)$$
+
+The equilibrium melt solubility $S_{\text{eq}}(P, T)$ acts exclusively on this mobile fraction. The resulting dissolved concentration $C_{\text{sol}}$ and exsolved volatile concentration $C_{\text{exs}}$ are given by:
+
+$$C_{\text{sol}} = C_{\text{ret}}(T) + \min\left(C_{\text{mob}}, S_{\text{eq}}\right)$$
+$$C_{\text{exs}} = \max\left(0, C_{\text{mob}} - S_{\text{eq}}\right)$$
+
+This formulation enforces two fundamental physical invariants:
+1. **Vacuum Retention Floor Invariant**: As $P \to 0$ (implying $S_{\text{eq}} \to 0$), the exsolved concentration satisfies $C_{\text{exs}} \to C_{\text{mob}}$, while the dissolved concentration asymptotes to $C_{\text{sol}} \to C_{\text{ret}}(T) > 0$. Unphysical total degassing of cold crustal planetesimal rocks is strictly prevented.
+2. **Sub-Floor Invariance**: When $C_{\text{bulk}} \le C_{\text{ret}}(T)$, mobile volatile concentration $C_{\text{mob}} = 0$, yielding $C_{\text{sol}} = C_{\text{bulk}}$ and $C_{\text{exs}} = 0$ identically, regardless of the local ambient pressure.
+
+### 3. Low-Temperature Hydrothermal Venting and Mobile Volatile Drainage
+
+During early planetesimal evolution, fluid release through porous Darcy flow and hydrofracture networks vents fluids into space or the surrounding nebula. In `Erebus.jl`, when surface venting is active ($S_{\text{vent}} > 0$) on marker particles, mobile dissolved volatiles drain at a rate proportional to the local venting volumetric sink rate:
+
+$$\frac{d C_{\text{mob}}}{dt} = -S_{\text{vent}} \cdot C_{\text{mob}} \cdot \chi_{\text{vent}}$$
+
+where $\chi_{\text{vent}}$ is the volatile venting extraction efficiency factor. Over a discrete computational timestep $\Delta t$, this linear kinetic equation integrates analytically:
+
+$$C_{\text{mob}}(t + \Delta t) = C_{\text{mob}}(t) \exp\left(-S_{\text{vent}} \chi_{\text{vent}} \Delta t\right)$$
+
+The updated bulk volatile concentration is reconstructed by adding the retained floor:
+
+$$C_{\text{bulk}}(t + \Delta t) = C_{\text{ret}}(T) + C_{\text{mob}}(t + \Delta t)$$
+
+The incremental mass of volatiles extracted from marker $m$ during the timestep is:
+
+$$\Delta M_{\text{vent}, m} = \rho_m V_m \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
+
+These increments are scaled from 2D Cartesian cross-sectional geometry to 3D spherical geometry using the planetary metric factor $L_{\text{3D}} = 2 R_{\text{planet}}$, and accumulated into cumulative species inventories ($M_{\text{vent}}^{\text{H2O}}$, $M_{\text{vent}}^{\text{C}}$, $M_{\text{vent}}^{\text{N}}$, $M_{\text{vent}}^{\text{S}}$). This mechanism couples low-temperature hydrothermal fluid discharge directly to marker chemistry while preserving solid retention floors against exhaustive depletion.
+
+---
+
 ## Atmospheric Accumulation and Jeans Kinetic Escape
 
 Volatiles released through cold surface venting or magma degassing collect above the solid surface, forming a transient or steady-state atmosphere. For low-mass planetesimals, thermal effusion (Jeans escape) strips this vapor envelope to space.

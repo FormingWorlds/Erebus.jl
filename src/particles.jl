@@ -92,6 +92,7 @@ function update_single_marker_volatile_exsolution!(
     rhosolid::Real=3000.0,
     rhofluid::Real=1000.0,
     phimax::Real=0.9999,
+    retention_cfg::Union{Nothing,RetentionConfig}=nothing,
 )::Float64
     F_m = Float64(F_melt)
     T_m = Float64(T_val)
@@ -104,6 +105,7 @@ function update_single_marker_volatile_exsolution!(
     C_N_in = XNm !== nothing ? XNm[m] : 0.0
     C_S_in = XSm !== nothing ? XSm[m] : 0.0
 
+    ret_act = retention_cfg !== nothing && retention_cfg.active
     ex = compute_volatile_exsolution(
         F_m,
         P_m,
@@ -125,6 +127,8 @@ function update_single_marker_volatile_exsolution!(
         sulfur_active=cfg.sulfur_active,
         sulfide_law=cfg.sulfide_law,
         graphite_saturation=cfg.graphite_saturation,
+        retention_active=ret_act,
+        retention_cfg=retention_cfg,
     )
 
     XH2Om[m] = ex.w_H2O_diss * 100.0
@@ -185,6 +189,7 @@ function update_marker_volatile_exsolution!(
     rhosolid::Real=3000.0,
     rhofluid::Real=1000.0,
     phimax::Real=0.9999,
+    retention_cfg::Union{Nothing,RetentionConfig}=nothing,
 )
     total_dw = 0.0
     @inbounds for m in eachindex(Fm)
@@ -202,6 +207,7 @@ function update_marker_volatile_exsolution!(
             rhosolid=rhosolid,
             rhofluid=rhofluid,
             phimax=phimax,
+            retention_cfg=retention_cfg,
         )
     end
     return total_dw
@@ -649,6 +655,7 @@ function compute_marker_properties!(
     rhocp_metal_val::Real=4.0e6,
     volatiles_active::Bool=false,
     volatiles_cfg::Union{Nothing,VolatilesConfig}=nothing,
+    retention_cfg::Union{Nothing,RetentionConfig}=nothing,
     XH2Om=nothing,
     XCm=nothing,
     XNm=nothing,
@@ -736,6 +743,7 @@ function compute_marker_properties!(
                     rhosolid=rhosolidm0,
                     rhofluid=rhofluidm0,
                     phimax=phimax,
+                    retention_cfg=retention_cfg,
                 )
             end
         elseif Fm !== nothing
@@ -3815,4 +3823,182 @@ function sink_vented_marker_porosity!(
         end
     end
     return sum(thread_mass)
+end
+
+"""
+Drain mobile dissolved volatiles from rock markers in surface cells where hydrothermal venting is active.
+
+$(SIGNATURES)
+
+Volatile concentrations are depleted according to:
+```math
+\\frac{dC_{\\text{mob}}}{dt} = -S_{\\text{vent}} \\cdot C_{\\text{mob}} \\cdot \\chi_{\\text{vent}}
+```
+The thermodynamic retention floor `C_ret(T)` is preserved, ensuring volatiles locked in nominally
+anhydrous minerals and refractory matrices are not extracted.
+
+# Arguments
+- `xm`: Marker x-coordinates [m]
+- `ym`: Marker y-coordinates [m]
+- `tm`: Marker material phase type
+- `tkm`: Marker temperature array [K]
+- `XH2Om`: Marker dissolved water array [wt%]
+- `XCm`: Marker dissolved carbon array [ppmw] (or nothing)
+- `XNm`: Marker dissolved nitrogen array [ppmw] (or nothing)
+- `XSm`: Marker dissolved sulfur array [ppmw] (or nothing)
+- `S_vent_grid`: Surface venting loss rate grid [s⁻¹]
+- `dt`: Time step length [s]
+- `marknum`: Total number of active markers
+- `ret_cfg`: RetentionConfig struct
+
+# Keyword Arguments
+- `coords`: GridCoordinates struct
+- `rhosolid`: Reference solid rock density [kg/m³] (default: 3000.0)
+
+# Returns
+- Named tuple with mass of each volatile species drained during the time step [kg]
+"""
+function drain_vented_marker_volatiles!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{Int64},
+    tkm::AbstractVector{Float64},
+    XH2Om::AbstractVector{Float64},
+    XCm::Union{Nothing,AbstractVector{Float64}},
+    XNm::Union{Nothing,AbstractVector{Float64}},
+    XSm::Union{Nothing,AbstractVector{Float64}},
+    S_vent_grid::AbstractMatrix{Float64},
+    dt::Real,
+    marknum::Integer,
+    ret_cfg::RetentionConfig;
+    coords::GridCoordinates,
+    rhosolid::Real=3000.0,
+)::@NamedTuple{
+    M_vent_H2O::Float64,
+    M_vent_C::Float64,
+    M_vent_N::Float64,
+    M_vent_S::Float64,
+    M_vent_volatiles_total::Float64,
+}
+    if !ret_cfg.active ||
+        !ret_cfg.venting_drainage_active ||
+        ret_cfg.chi_vent <= 0.0 ||
+        dt <= 0.0 ||
+        marknum <= 0
+        return (
+            M_vent_H2O=0.0,
+            M_vent_C=0.0,
+            M_vent_N=0.0,
+            M_vent_S=0.0,
+            M_vent_volatiles_total=0.0,
+        )
+    end
+
+    xp_val = coords.xp
+    yp_val = coords.yp
+    dx_val = coords.dx
+    dy_val = coords.dy
+    jmin_p_val = coords.jmin_p
+    jmax_p_val = coords.jmax_p
+    imin_p_val = coords.imin_p
+    imax_p_val = coords.imax_p
+
+    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    M_marker_rock = Float64(rhosolid) * V_marker
+    chi = ret_cfg.chi_vent
+    dt_val = Float64(dt)
+
+    nthreads = max(Threads.nthreads(), Threads.maxthreadid())
+    th_H2O = zeros(Float64, nthreads)
+    th_C = zeros(Float64, nthreads)
+    th_N = zeros(Float64, nthreads)
+    th_S = zeros(Float64, nthreads)
+
+    @inbounds begin
+        @threads :static for m in 1:marknum
+            if tm[m] < 3
+                i, j, weights = fix_weights(
+                    xm[m],
+                    ym[m],
+                    xp_val,
+                    yp_val,
+                    dx_val,
+                    dy_val,
+                    jmin_p_val,
+                    jmax_p_val,
+                    imin_p_val,
+                    imax_p_val,
+                )
+                s_vent_m = dot4(grid_vector(i, j, S_vent_grid), weights)
+                if s_vent_m > 0.0
+                    decay_arg = -s_vent_m * chi * dt_val
+                    decay_factor = exp(clamp(decay_arg, -50.0, 0.0))
+                    drain_fraction = 1.0 - decay_factor
+                    T_m = tkm[m]
+                    tid = Threads.threadid()
+
+                    # 1. Water drainage (wt% units, 1 wt% = 10,000 ppm)
+                    C_ret_H2O_ppm = compute_h2o_retention_floor(T_m, ret_cfg)
+                    w_ret_H2O = C_ret_H2O_ppm * 1.0e-4
+                    w_cur = XH2Om[m]
+                    if w_cur > w_ret_H2O
+                        w_mob = w_cur - w_ret_H2O
+                        dw = w_mob * drain_fraction
+                        XH2Om[m] = w_cur - dw
+                        th_H2O[tid] += (dw * 0.01) * M_marker_rock
+                    end
+
+                    # 2. Carbon drainage (ppmw units)
+                    if XCm !== nothing
+                        C_ret_C = compute_carbon_retention_floor(T_m, ret_cfg)
+                        C_cur = XCm[m]
+                        if C_cur > C_ret_C
+                            C_mob = C_cur - C_ret_C
+                            dC = C_mob * drain_fraction
+                            XCm[m] = C_cur - dC
+                            th_C[tid] += (dC * 1.0e-6) * M_marker_rock
+                        end
+                    end
+
+                    # 3. Nitrogen drainage (ppmw units)
+                    if XNm !== nothing
+                        C_ret_N = compute_nitrogen_retention_floor(T_m, ret_cfg)
+                        C_cur = XNm[m]
+                        if C_cur > C_ret_N
+                            C_mob = C_cur - C_ret_N
+                            dC = C_mob * drain_fraction
+                            XNm[m] = C_cur - dC
+                            th_N[tid] += (dC * 1.0e-6) * M_marker_rock
+                        end
+                    end
+
+                    # 4. Sulfur drainage (ppmw units)
+                    if XSm !== nothing
+                        C_ret_S = compute_sulfur_retention_floor(T_m, ret_cfg)
+                        C_cur = XSm[m]
+                        if C_cur > C_ret_S
+                            C_mob = C_cur - C_ret_S
+                            dC = C_mob * drain_fraction
+                            XSm[m] = C_cur - dC
+                            th_S[tid] += (dC * 1.0e-6) * M_marker_rock
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    m_H2O = sum(th_H2O)
+    m_C = sum(th_C)
+    m_N = sum(th_N)
+    m_S = sum(th_S)
+    m_tot = m_H2O + m_C + m_N + m_S
+
+    return (
+        M_vent_H2O=m_H2O,
+        M_vent_C=m_C,
+        M_vent_N=m_N,
+        M_vent_S=m_S,
+        M_vent_volatiles_total=m_tot,
+    )
 end

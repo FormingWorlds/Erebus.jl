@@ -62,6 +62,7 @@ makedocs(;
             "Cold Surface Venting" => "validation/cold_surface_venting.md",
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
             "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
+            "Volatile Retention Floors & Vent Drainage" => "validation/volatile_retention.md",
             "Jeans Kinetic Atmospheric Escape" => "validation/jeans_escape.md",
             "Iron Core Formation" => "validation/core_formation.md",
         ],
