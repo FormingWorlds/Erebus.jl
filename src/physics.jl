@@ -3056,6 +3056,126 @@ function compute_scss(
 end
 
 """
+Compute the thermodynamic volatile retention floor [ppmw] in nominally anhydrous minerals (NAMs)
+and refractory solid phases for species `species` (`:H2O`, `:C`, `:N`, `:S`) at temperature `T_val` [K],
+melt fraction `F_melt` [-], and pressure `P_val` [Pa].
+
+$(SIGNATURES)
+
+# Details
+- For water (`:H2O`): models hydroxyl defect retention in nominally anhydrous minerals (olivine,
+  pyroxene) following Hirschmann et al. (2006) and Peslier et al. (2017).
+- For carbon (`:C`): models refractory graphite and interstitial carbon retention in the solid
+  silicate lattice following Shcheka et al. (2006) and Hirschmann (2018).
+- For nitrogen (`:N`): models lattice-bound nitrogen and refractory nitride retention (Li et al. 2013).
+- For sulfur (`:S`): models monosulfide solid solution (MSS) and refractory sulfide retention.
+
+# Retention Laws (`cfg.retention_law`):
+- `:constant_floor`: returns constant retention floor `cfg.<species>_retention_ppm`.
+- `:nams_exponential`: near/below `T_solidus_ref`, returns baseline floor; for `T > T_solidus_ref`,
+  decays exponentially as `C_ret0 * exp(-(T - T_solidus_ref) / dT_retention)`.
+- `:linear_melt_blend`: scales as `C_ret0 * max(0.0, 1.0 - F_melt)`.
+
+# Returns
+- `C_ret_ppm::Float64`: Retained volatile concentration in solid matrix [ppmw]
+"""
+function compute_volatile_retention_floor(
+    T_val::Real, species::Symbol, cfg::RetentionConfig; F_melt::Real=0.0, P_val::Real=0.0
+)::Float64
+    if !cfg.active
+        return 0.0
+    end
+    if !isfinite(Float64(T_val)) || Float64(T_val) < 0.0
+        throw(
+            DomainError(
+                T_val, "Temperature T_val must be non-negative and finite, got $T_val K"
+            ),
+        )
+    end
+    if !isfinite(Float64(F_melt)) || Float64(F_melt) < 0.0
+        throw(
+            DomainError(
+                F_melt, "Melt fraction F_melt must be non-negative and finite, got $F_melt"
+            ),
+        )
+    end
+    if !isfinite(Float64(P_val)) || Float64(P_val) < 0.0
+        throw(
+            DomainError(
+                P_val, "Pressure P_val must be non-negative and finite, got $P_val Pa"
+            ),
+        )
+    end
+    T_k = Float64(T_val)
+    F_m = min(1.0, Float64(F_melt))
+
+    C_base = if species === :H2O
+        cfg.h2o_retention_ppm
+    elseif species === :C
+        cfg.carbon_retention_ppm
+    elseif species === :N
+        cfg.nitrogen_retention_ppm
+    elseif species === :S
+        cfg.sulfur_retention_ppm
+    else
+        throw(
+            ArgumentError(
+                "Unknown volatile species for retention floor: $species. Expected :H2O, :C, :N, or :S.",
+            ),
+        )
+    end
+
+    if C_base <= 0.0
+        return 0.0
+    end
+
+    if cfg.retention_law === :constant_floor
+        return C_base
+    elseif cfg.retention_law === :linear_melt_blend
+        return C_base * max(0.0, 1.0 - F_m)
+    elseif cfg.retention_law === :nams_exponential
+        T_sol = cfg.T_solidus_ref
+        dT = cfg.dT_retention
+        if T_k <= T_sol
+            return C_base
+        else
+            arg = -(T_k - T_sol) / dT
+            return C_base * exp(clamp(arg, -40.0, 0.0))
+        end
+    else
+        throw(ArgumentError("Unknown retention_law: $(cfg.retention_law)"))
+    end
+end
+
+"""
+Compute water retention floor in nominally anhydrous minerals [ppmw].
+"""
+compute_h2o_retention_floor(
+    T_val::Real, cfg::RetentionConfig; F_melt::Real=0.0, P_val::Real=0.0
+)::Float64 = compute_volatile_retention_floor(T_val, :H2O, cfg; F_melt=F_melt, P_val=P_val)
+
+"""
+Compute carbon retention floor in refractory solid phases [ppmw].
+"""
+compute_carbon_retention_floor(
+    T_val::Real, cfg::RetentionConfig; F_melt::Real=0.0, P_val::Real=0.0
+)::Float64 = compute_volatile_retention_floor(T_val, :C, cfg; F_melt=F_melt, P_val=P_val)
+
+"""
+Compute nitrogen retention floor in mineral lattice and nitrides [ppmw].
+"""
+compute_nitrogen_retention_floor(
+    T_val::Real, cfg::RetentionConfig; F_melt::Real=0.0, P_val::Real=0.0
+)::Float64 = compute_volatile_retention_floor(T_val, :N, cfg; F_melt=F_melt, P_val=P_val)
+
+"""
+Compute sulfur retention floor in solid sulfides and MSS [ppmw].
+"""
+compute_sulfur_retention_floor(
+    T_val::Real, cfg::RetentionConfig; F_melt::Real=0.0, P_val::Real=0.0
+)::Float64 = compute_volatile_retention_floor(T_val, :S, cfg; F_melt=F_melt, P_val=P_val)
+
+"""
 Compute equilibrium volatile exsolution from silicate melt for H-C-N-S volatile species.
 
 $(SIGNATURES)
@@ -3063,6 +3183,8 @@ $(SIGNATURES)
 When silicate melting occurs (`F_melt > 0`), dissolved volatiles partition into the melt phase.
 If the volatile concentration in the melt exceeds the saturation solubility at local pore pressure `P_Pa`
 and temperature `T_K`, the excess volatile mass exsolves into the pore fluid phase.
+When retention floor modeling is active, exsolution is bounded by the mobile excess above the solid
+retention floor, preventing unphysical total dehydration or decarbonation.
 
 # Arguments
 - `F_melt`: Silicate melt volume/mass fraction in [0, 1]
@@ -3087,6 +3209,8 @@ and temperature `T_K`, the excess volatile mass exsolves into the pore fluid pha
 - `sulfur_active`: Whether sulfur solubility is modeled (default: false)
 - `sulfide_law`: Sulfide solubility law (default: `:boulliung2023`)
 - `graphite_saturation`: Whether carbon is capped at graphite saturation (default: true)
+- `retention_active`: Whether thermodynamic volatile retention floors are active (default: false)
+- `retention_cfg`: RetentionConfig struct (default: nothing)
 
 # Returns
 - `NamedTuple`:
@@ -3122,6 +3246,8 @@ function compute_volatile_exsolution(
     sulfur_active::Bool=false,
     sulfide_law::Symbol=:boulliung2023,
     graphite_saturation::Bool=true,
+    retention_active::Bool=false,
+    retention_cfg::Union{Nothing,RetentionConfig}=nothing,
 )::@NamedTuple{
     w_H2O_ex::Float64,
     w_C_ex::Float64,
@@ -3164,20 +3290,57 @@ function compute_volatile_exsolution(
         )
     end
 
+    # Evaluate retention floors if retention active
+    w_ret_act_H2O = 0.0
+    w_H2O_mob = w_H2O
+    C_ret_act_N = 0.0
+    C_N_mob = C_N
+    C_ret_act_C = 0.0
+    C_C_mob = C_C
+    C_ret_act_S = 0.0
+    C_S_mob = C_S
+
+    if retention_active && retention_cfg !== nothing && retention_cfg.active
+        C_ret_H2O_ppm = compute_h2o_retention_floor(
+            T_val, retention_cfg; F_melt=F_m, P_val=P_val
+        )
+        w_ret_H2O = C_ret_H2O_ppm * 1.0e-6
+        w_ret_act_H2O = min(w_H2O, w_ret_H2O)
+        w_H2O_mob = max(0.0, w_H2O - w_ret_act_H2O)
+
+        C_ret_N = compute_nitrogen_retention_floor(
+            T_val, retention_cfg; F_melt=F_m, P_val=P_val
+        )
+        C_ret_act_N = min(C_N, C_ret_N)
+        C_N_mob = max(0.0, C_N - C_ret_act_N)
+
+        C_ret_C = compute_carbon_retention_floor(
+            T_val, retention_cfg; F_melt=F_m, P_val=P_val
+        )
+        C_ret_act_C = min(C_C, C_ret_C)
+        C_C_mob = max(0.0, C_C - C_ret_act_C)
+
+        C_ret_S = compute_sulfur_retention_floor(
+            T_val, retention_cfg; F_melt=F_m, P_val=P_val
+        )
+        C_ret_act_S = min(C_S, C_ret_S)
+        C_S_mob = max(0.0, C_S - C_ret_act_S)
+    end
+
     # 1. Water solubility
     S_H2O_wtpct = compute_water_solubility_melt(P_val; As=water_As, law=water_law)
     S_H2O_frac = S_H2O_wtpct * 0.01
     cap_H2O = F_m * S_H2O_frac
-    w_H2O_ex = max(0.0, w_H2O - cap_H2O)
-    w_H2O_diss = min(w_H2O, cap_H2O)
+    w_H2O_ex = max(0.0, w_H2O_mob - cap_H2O)
+    w_H2O_diss = w_ret_act_H2O + min(w_H2O_mob, cap_H2O)
 
     # 2. Nitrogen solubility
     S_N_res = compute_nitrogen_solubility_melt(
         P_val, d_IW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
     )
     cap_N = F_m * S_N_res.total_ppm
-    C_N_ex = max(0.0, C_N - cap_N)
-    C_N_diss = min(C_N, cap_N)
+    C_N_ex = max(0.0, C_N_mob - cap_N)
+    C_N_diss = C_ret_act_N + min(C_N_mob, cap_N)
     w_N_ex = C_N_ex * 1.0e-6
 
     # 3. Carbon solubility
@@ -3194,8 +3357,8 @@ function compute_volatile_exsolution(
             graphite_saturation=graphite_saturation,
         )
         cap_C = F_m * S_C_res.total_ppm
-        C_C_ex = max(0.0, C_C - cap_C)
-        C_C_diss = min(C_C, cap_C)
+        C_C_ex = max(0.0, C_C_mob - cap_C)
+        C_C_diss = C_ret_act_C + min(C_C_mob, cap_C)
         w_C_ex = C_C_ex * 1.0e-6
     end
 
@@ -3205,8 +3368,8 @@ function compute_volatile_exsolution(
     if sulfur_active
         S_S_ppm = compute_sulfur_solubility_melt(P_val, T_val, d_IW; law=sulfide_law)
         cap_S = F_m * S_S_ppm
-        C_S_ex = max(0.0, C_S - cap_S)
-        C_S_diss = min(C_S, cap_S)
+        C_S_ex = max(0.0, C_S_mob - cap_S)
+        C_S_diss = C_ret_act_S + min(C_S_mob, cap_S)
         w_S_ex = C_S_ex * 1.0e-6
     end
 

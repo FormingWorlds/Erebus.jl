@@ -289,6 +289,7 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
 | `initial_water_wtpct` | `Float64` | `1.0` | wt% | Initial water concentration in solid silicate matrix | $\ge 0$ |
 | `initial_carbon_ppm` | `Float64` | `500.0` | ppm | Initial carbon concentration in solid silicate matrix | $\ge 0$ |
+| `initial_nitrogen_ppm` | `Float64` | `50.0` | ppm | Initial dissolved nitrogen concentration in solid silicate matrix | $\ge 0$ |
 | `initial_sulfur_ppm` | `Float64` | `1000.0` | ppm | Initial sulfur concentration in solid silicate matrix | $\ge 0$ |
 | `carbon_active` | `Bool` | `false` | - | Enable carbon species solubility ($\text{CO}, \text{CH}_4, \text{CO}_2$) | `true` / `false` |
 | `co_law` | `Symbol` | `:armstrong2015` | - | Carbon monoxide solubility law (`:armstrong2015`, `:yoshioka2019_morb`) | valid symbol |
@@ -324,6 +325,25 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 | `species_list` | `Vector{Symbol}` | `[:H2O, :H2, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2]` | - | Volatile species tracked for multi-species escape | valid symbols |
 | `gamma` | `Float64` | `1.4` | - | Atmospheric adiabatic index (ratio of specific heats) | $> 0$ |
 | `hydrodynamic` | `Bool` | `true` | - | Check hydrodynamic energy-limited escape rate ceiling | `true` / `false` |
+
+---
+
+## `[retention]`
+
+Parameters controlling thermodynamic volatile retention floors in nominally anhydrous minerals (NAMs) and low-temperature surface venting drainage coupling.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable thermodynamic volatile retention floors and venting drainage (requires `[volatiles]` active = true) | `true` / `false` |
+| `h2o_retention_ppm` | `Float64` | `50.0` | ppmw | Subsolidus water retention floor in nominally anhydrous minerals (NAMs) | $\ge 0$ |
+| `carbon_retention_ppm` | `Float64` | `50.0` | ppmw | Subsolidus carbon retention floor in refractory graphite/matrix | $\ge 0$ |
+| `nitrogen_retention_ppm` | `Float64` | `5.0` | ppmw | Subsolidus nitrogen retention floor in crystalline silicates | $\ge 0$ |
+| `sulfur_retention_ppm` | `Float64` | `100.0` | ppmw | Subsolidus sulfur retention floor in refractory sulfides/matrix | $\ge 0$ |
+| `T_solidus_ref` | `Float64` | `1400.0` | K | Reference solidus temperature for retention depletion | $> 0$ |
+| `dT_retention` | `Float64` | `200.0` | K | Temperature scale for supersolidus retention floor decay | $> 0$ |
+| `retention_law` | `Symbol` | `:nams_exponential` | - | Retention floor law (`:constant_floor`, `:linear_melt_blend`, `:nams_exponential`) | valid symbol |
+| `venting_drainage_active` | `Bool` | `true` | - | Drain mobile dissolved marker volatiles during surface venting | `true` / `false` |
+| `chi_vent` | `Float64` | `1.0` | - | Volatile venting extraction efficiency factor | $\in [0, 1]$ |
 
 ---
 

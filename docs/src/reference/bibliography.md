@@ -99,6 +99,30 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1029/2008GC002138](https://doi.org/10.1029/2008GC002138)  
   *Rheological weakening parameterization and viscosity reduction across the solid-liquid silicate transition.*
 
+---
+
+## Volatile Degassing, Solubility, and Retention
+
+- **Hirschmann, M. M., Tenner, C., Falksen, C., Sautter, K., & Hervig, R. L. (2006)**. Water storage capacity of olivine and pyroxenes to 14 GPa: Results from SIMS analysis. *Earth and Planetary Science Letters*, 247(3-4), 199-214.  
+  [https://doi.org/10.1016/j.epsl.2006.04.022](https://doi.org/10.1016/j.epsl.2006.04.022)  
+  *Water storage capacity in nominally anhydrous minerals (NAMs) and retention floors in planetary mantles.*
+
+- **Peslier, A. H., Schönbächler, M., Busemann, H., & Karato, S. I. (2017)**. Water in the Earth's interior: Distribution and access to domains in time and space. *Space Science Reviews*, 212(1-2), 843-910.  
+  [https://doi.org/10.1007/s11214-017-0387-z](https://doi.org/10.1007/s11214-017-0387-z)  
+  *Distribution and retention of hydrogen in nominally anhydrous minerals across terrestrial and planetesimal interiors.*
+
+- **Shcheka, S. S., Wiedenbeck, M., Frost, D. J., & Keppler, H. (2006)**. Carbon solubility in mantle minerals. *Earth and Planetary Science Letters*, 245(3-4), 730-742.  
+  [https://doi.org/10.1016/j.epsl.2006.03.036](https://doi.org/10.1016/j.epsl.2006.03.036)  
+  *Experimental measurements of carbon solubility and retention in olivine, pyroxene, and mantle silicates.*
+
+- **Hirschmann, M. M. (2018)**. Comparative storage capacities for carbon and water in the mantle: Implications for the carbon and water cycles. *Earth and Planetary Science Letters*, 502, 262-273.  
+  [https://doi.org/10.1016/j.epsl.2018.08.023](https://doi.org/10.1016/j.epsl.2018.08.023)  
+  *Thermodynamic limits on carbon and water storage capacities in crystalline mantle silicates versus basaltic melts.*
+
+- **Li, Y., Wiedenbeck, M., Shcheka, S., & Keppler, H. (2013)**. Nitrogen solubility in upper mantle minerals. *Earth and Planetary Science Letters*, 377-378, 311-323.  
+  [https://doi.org/10.1016/j.epsl.2013.10.015](https://doi.org/10.1016/j.epsl.2013.10.015)  
+  *Secondary-ion mass spectrometry measurements of nitrogen solubility and retention in nominally anhydrous mantle minerals.*
+
 
 
 

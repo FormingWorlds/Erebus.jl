@@ -336,6 +336,7 @@ Base.@kwdef struct VolatilesConfig
     organic_n_initial_ppm::Float64 = 500.0
     initial_water_wtpct::Float64 = 1.0
     initial_carbon_ppm::Float64 = 500.0
+    initial_nitrogen_ppm::Float64 = 50.0
     initial_sulfur_ppm::Float64 = 1000.0
 
     # Carbon solubility parameters
@@ -358,6 +359,25 @@ Base.@kwdef struct VolatilesConfig
     x_sio2::Float64 = 0.56
     x_al2o3::Float64 = 0.11
     x_tio2::Float64 = 0.01
+end
+
+"""
+Thermodynamic volatile retention floor in nominally anhydrous minerals (NAMs) and refractory phases,
+and coupling of hydrothermal surface venting to dissolved volatile depletion.
+
+$(FIELDS)
+"""
+Base.@kwdef struct RetentionConfig
+    active::Bool = false
+    h2o_retention_ppm::Float64 = 50.0
+    carbon_retention_ppm::Float64 = 50.0
+    nitrogen_retention_ppm::Float64 = 5.0
+    sulfur_retention_ppm::Float64 = 100.0
+    T_solidus_ref::Float64 = 1400.0
+    dT_retention::Float64 = 200.0
+    retention_law::Symbol = :nams_exponential
+    venting_drainage_active::Bool = true
+    chi_vent::Float64 = 1.0
 end
 
 """
@@ -435,6 +455,7 @@ Base.@kwdef struct SimulationConfig
     melting::MeltingConfig = MeltingConfig()
     venting::VentingConfig = VentingConfig()
     volatiles::VolatilesConfig = VolatilesConfig()
+    retention::RetentionConfig = RetentionConfig()
     escape::EscapeConfig = EscapeConfig()
     coreformation::CoreFormationConfig = CoreFormationConfig()
 end
@@ -1005,6 +1026,14 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
     (
+        cfg.volatiles.initial_nitrogen_ppm >= 0.0 &&
+        isfinite(cfg.volatiles.initial_nitrogen_ppm)
+    ) || throw(
+        ArgumentError(
+            "initial_nitrogen_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_nitrogen_ppm)",
+        ),
+    )
+    (
         cfg.volatiles.initial_sulfur_ppm >= 0.0 &&
         isfinite(cfg.volatiles.initial_sulfur_ppm)
     ) || throw(
@@ -1119,6 +1148,66 @@ function validate_config(cfg::SimulationConfig)
             )
         end
     end
+
+    # Retention checks
+    if cfg.retention.active && !cfg.volatiles.active
+        throw(
+            ArgumentError(
+                "RetentionConfig active=true requires VolatilesConfig active=true (enable [volatiles] active = true).",
+            ),
+        )
+    end
+    (cfg.retention.h2o_retention_ppm >= 0.0 && isfinite(cfg.retention.h2o_retention_ppm)) ||
+        throw(
+            ArgumentError(
+                "h2o_retention_ppm must be >= 0 and finite, got $(cfg.retention.h2o_retention_ppm)",
+            ),
+        )
+    (
+        cfg.retention.carbon_retention_ppm >= 0.0 &&
+        isfinite(cfg.retention.carbon_retention_ppm)
+    ) || throw(
+        ArgumentError(
+            "carbon_retention_ppm must be >= 0 and finite, got $(cfg.retention.carbon_retention_ppm)",
+        ),
+    )
+    (
+        cfg.retention.nitrogen_retention_ppm >= 0.0 &&
+        isfinite(cfg.retention.nitrogen_retention_ppm)
+    ) || throw(
+        ArgumentError(
+            "nitrogen_retention_ppm must be >= 0 and finite, got $(cfg.retention.nitrogen_retention_ppm)",
+        ),
+    )
+    (
+        cfg.retention.sulfur_retention_ppm >= 0.0 &&
+        isfinite(cfg.retention.sulfur_retention_ppm)
+    ) || throw(
+        ArgumentError(
+            "sulfur_retention_ppm must be >= 0 and finite, got $(cfg.retention.sulfur_retention_ppm)",
+        ),
+    )
+    (cfg.retention.T_solidus_ref > 0.0 && isfinite(cfg.retention.T_solidus_ref)) || throw(
+        ArgumentError(
+            "T_solidus_ref must be > 0 and finite, got $(cfg.retention.T_solidus_ref)"
+        ),
+    )
+    (cfg.retention.dT_retention > 0.0 && isfinite(cfg.retention.dT_retention)) || throw(
+        ArgumentError(
+            "dT_retention must be > 0 and finite, got $(cfg.retention.dT_retention)"
+        ),
+    )
+    cfg.retention.retention_law in
+    Set([:nams_exponential, :constant_floor, :linear_melt_blend]) || throw(
+        ArgumentError(
+            "retention_law must be :nams_exponential, :constant_floor, or :linear_melt_blend, got $(cfg.retention.retention_law)",
+        ),
+    )
+    (0.0 <= cfg.retention.chi_vent <= 1.0 && isfinite(cfg.retention.chi_vent)) || throw(
+        ArgumentError(
+            "chi_vent must be in [0, 1] and finite, got $(cfg.retention.chi_vent)"
+        ),
+    )
 
     # Core formation validation
     if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
@@ -1292,6 +1381,7 @@ const VALID_SECTIONS = Set([
     "melting",
     "venting",
     "volatiles",
+    "retention",
     "escape",
     "coreformation",
 ])
@@ -1399,6 +1489,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.volatiles
     end
+    ret = if haskey(parsed, "retention")
+        _dict_to_struct(RetentionConfig, parsed["retention"], def.retention)
+    else
+        def.retention
+    end
     esc = if haskey(parsed, "escape")
         parsed_esc = parsed["escape"]
         def_esc =
@@ -1457,6 +1552,7 @@ function load_config(source::AbstractString)::SimulationConfig
         melting=melt,
         venting=vent,
         volatiles=vol,
+        retention=ret,
         escape=esc,
         coreformation=coreform,
     )
@@ -1509,6 +1605,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "melting" => _struct_to_dict(cfg.melting),
         "venting" => _struct_to_dict(cfg.venting),
         "volatiles" => _struct_to_dict(cfg.volatiles),
+        "retention" => _struct_to_dict(cfg.retention),
         "escape" => _struct_to_dict(cfg.escape),
         "coreformation" => _struct_to_dict(cfg.coreformation),
     )

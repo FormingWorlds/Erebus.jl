@@ -176,6 +176,10 @@ function save_state(
     coords::Union{Nothing,GridCoordinates}=nothing,
     phim0_val=phim0,
     M_vent_total::Real=0.0,
+    M_vent_H2O_total::Real=0.0,
+    M_vent_C_total::Real=0.0,
+    M_vent_N_total::Real=0.0,
+    M_vent_S_total::Real=0.0,
     M_atm_total::Real=0.0,
     M_escaped_total::Real=0.0,
     P_amb::Real=10.0,
@@ -227,6 +231,10 @@ function save_state(
         marknum,
         phim0=phim0_val,
         M_vent_total,
+        M_vent_H2O_total,
+        M_vent_C_total,
+        M_vent_N_total,
+        M_vent_S_total,
         M_atm_total,
         M_escaped_total,
         P_amb,
@@ -590,6 +598,10 @@ function simulation_loop(
     # -------------------------------------------------------------------------
     mdis, mnum = setup_marker_geometry_helpers(coords)
     M_vent_total = 0.0
+    M_vent_H2O_total = 0.0
+    M_vent_C_total = 0.0
+    M_vent_N_total = 0.0
+    M_vent_S_total = 0.0
     M_atm_total = 0.0
     M_escaped_total = 0.0
     S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
@@ -619,6 +631,18 @@ function simulation_loop(
         ckpt = load_state(restart_from)
         if haskey(ckpt, "M_vent_total")
             M_vent_total = Float64(ckpt["M_vent_total"])
+        end
+        if haskey(ckpt, "M_vent_H2O_total")
+            M_vent_H2O_total = Float64(ckpt["M_vent_H2O_total"])
+        end
+        if haskey(ckpt, "M_vent_C_total")
+            M_vent_C_total = Float64(ckpt["M_vent_C_total"])
+        end
+        if haskey(ckpt, "M_vent_N_total")
+            M_vent_N_total = Float64(ckpt["M_vent_N_total"])
+        end
+        if haskey(ckpt, "M_vent_S_total")
+            M_vent_S_total = Float64(ckpt["M_vent_S_total"])
         end
         if haskey(ckpt, "M_atm_total")
             M_atm_total = Float64(ckpt["M_atm_total"])
@@ -960,6 +984,10 @@ function simulation_loop(
             coords=coords,
             phim0_val=phim0_val,
             M_vent_total=M_vent_total,
+            M_vent_H2O_total=M_vent_H2O_total,
+            M_vent_C_total=M_vent_C_total,
+            M_vent_N_total=M_vent_N_total,
+            M_vent_S_total=M_vent_S_total,
             M_atm_total=M_atm_total,
             M_escaped_total=M_escaped_total,
             P_amb=cfg.disk.p_amb_disk,
@@ -1176,6 +1204,7 @@ function simulation_loop(
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
                         volatiles_cfg=cfg.volatiles,
+                        retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
                         XCm=XCm,
                         XNm=XNm,
@@ -1357,6 +1386,7 @@ function simulation_loop(
                     rhocp_metal_val=rhocp_metal_val,
                     volatiles_active=cfg.volatiles.active,
                     volatiles_cfg=cfg.volatiles,
+                    retention_cfg=cfg.retention,
                     XH2Om=XH2Om,
                     XCm=XCm,
                     XNm=XNm,
@@ -2165,6 +2195,33 @@ function simulation_loop(
             L_3D_equiv = 2.0 * rplanet_val
             delta_m_vent_3d = delta_m_vent * L_3D_equiv
             M_vent_total += delta_m_vent_3d
+
+            if cfg.retention.active &&
+                cfg.retention.venting_drainage_active &&
+                XH2Om !== nothing
+                vented_vols = drain_vented_marker_volatiles!(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    XH2Om,
+                    XCm,
+                    XNm,
+                    XSm,
+                    S_vent_grid,
+                    dt,
+                    marknum,
+                    cfg.retention;
+                    coords=coords,
+                    rhosolid=cfg.materials.rhosolidm,
+                    phim=phim,
+                    Fm=Fm,
+                )
+                M_vent_H2O_total += vented_vols.M_vent_H2O * L_3D_equiv
+                M_vent_C_total += vented_vols.M_vent_C * L_3D_equiv
+                M_vent_N_total += vented_vols.M_vent_N * L_3D_equiv
+                M_vent_S_total += vented_vols.M_vent_S * L_3D_equiv
+            end
         end
 
         if cfg.escape.active
@@ -2431,6 +2488,10 @@ function simulation_loop(
                 coords=coords,
                 phim0_val=phim0_val,
                 M_vent_total=M_vent_total,
+                M_vent_H2O_total=M_vent_H2O_total,
+                M_vent_C_total=M_vent_C_total,
+                M_vent_N_total=M_vent_N_total,
+                M_vent_S_total=M_vent_S_total,
                 M_atm_total=M_atm_total,
                 M_escaped_total=M_escaped_total,
                 P_amb=P_amb_eff,
