@@ -190,7 +190,6 @@ function save_state(
     XNm=nothing,
     XSm=nothing,
 )
-    # @timeit to "save_state" begin
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
     Ny_val = coords === nothing ? Ny : coords.Ny
@@ -362,7 +361,6 @@ function save_state(
         (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
         (M_atm_species !== nothing ? (; M_atm_species, M_escaped_species) : (;))...,
     )
-    # end # @timeit to "save_state"
     return nothing
 end
 
@@ -1005,8 +1003,6 @@ function simulation_loop(
         initialize_pardiso!(pardiso_solver, iparms_dict)
     end
 
-    # end # @timeit to "simulation_loop setup"
-
     # -------------------------------------------------------------------------
     # iterate timesteps"
     # -------------------------------------------------------------------------
@@ -1027,7 +1023,6 @@ function simulation_loop(
         barlen=10,
     )
     for timestep in start_step_val:1:n_steps_val
-        # @timeit to "set up interpolation arrays" begin
         timestep_begin = now()
         # ---------------------------------------------------------------------
         # reset interpolation arrays
@@ -1064,7 +1059,6 @@ function simulation_loop(
             PHISUM,
             WTPSUM,
         )
-        # end # @timeit to "set up interpolation arrays" 
 
         # ---------------------------------------------------------------------
         # compute ambient conditions and update sticky air markers
@@ -1524,9 +1518,7 @@ function simulation_loop(
         # compute gravitational acceleration
         # ---------------------------------------------------------------------
         assemble_gravitational_rhs!(RHO, RP; coords=coords)
-        #     @timeit to "solve gravitational LSE" begin
         SP = F_grav \ RP
-        #     end # @timeit to "solve gravitational LSE"
         process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
 
         # ---------------------------------------------------------------------
@@ -1578,8 +1570,6 @@ function simulation_loop(
         # perform thermochemical iterations (outer iteration loop)
         # ---------------------------------------------------------------------
         for titer in 1:1:titermax_val
-
-            #     @timeit to "thermochemical iteration (outer)" begin
             # perform thermochemical reaction
             if reaction_active_val
                 perform_thermochemical_reaction!(
@@ -1614,7 +1604,6 @@ function simulation_loop(
             # -----------------------------------------------------------------
 
             # save initial viscosity, yielding nodes
-            #     @timeit to "save initial viscosity, yielding nodes" begin
             ETA00 .= ETA
             YNY00 .= YNY
             cur_betasolid = timestep == 1 ? 0.0 : betasolid_val
@@ -1623,17 +1612,12 @@ function simulation_loop(
                 # no elastic compaction during first timestep
                 BETAPHI .= 0.0
             end
-            #     end # @timeit to "save initial viscosity, yielding nodes"
-
-            #     @timeit to "advance pressure generation" begin
             # advance pressure generation inside thermochemical iteration
             pr0 .= pr
             pf0 .= pf
-            #     end # @timeit to "advance pressure generation"
 
             # perform plastic iterations
             for iplast in 1:1:titermax_val
-                #     @timeit to "plastic iteration (inner)" begin
                 @info("thermochemical iter $titer - hydromechanical iter $iplast")
                 # recompute bulk viscosity at pressure nodes
                 recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
@@ -1697,7 +1681,6 @@ function simulation_loop(
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
-                #     @timeit to "solve hydromechanical system" begin
                 if use_pardiso_val
                     set_phase!(pardiso_solver, Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE)
                     pardiso(pardiso_solver, S, get_matrix(pardiso_solver, L, :N), R)
@@ -1722,7 +1705,6 @@ function simulation_loop(
                     end
                     S = hydromech_sol.u
                 end
-                #     end # @timeit to "solve hydromechanical system"
                 @info "finished hydro-mechanical solver $titer-$iplast"
                 # obtain hydromechanical observables from solution
                 process_hydromechanical_solution!(
@@ -1845,7 +1827,6 @@ function simulation_loop(
                         ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
                     )
                 end
-                # end # @timeit to "plastic iteration"
             end # for iplast=1:1:nplast
 
             # Refresh venting drainage rate using converged fluid pressure
@@ -2052,7 +2033,6 @@ function simulation_loop(
                 # exit thermochemical iterations loop
                 break
             end
-            #     end # @timeit to "thermochemical iteration (outer)"
         end # for titer=1:1:ntiter
 
         # ---------------------------------------------------------------------

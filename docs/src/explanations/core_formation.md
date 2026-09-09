@@ -36,6 +36,18 @@ The local metallic phase density transitions from solid ($\rho_{\text{metal,soli
 
 $$\rho_{\text{metal}}(T) = (1 - F_{\text{fe}}) \rho_{\text{metal,solid}} + F_{\text{fe}} \rho_{\text{metal,liquid}}$$
 
+### Liquid Metal Density Equations of State (`metal_density_mode`)
+
+The molten metal density $\rho_{\text{metal,liquid}}$ is governed by the light-element alloy chemistry, configured via `metal_density_mode`:
+
+1. `:sanloup2000` (default): Fe-FeS liquid alloy formulation from Sanloup et al. (2000) parameterized by the sulfur mass fraction $w_S \in [0, 0.40]$ (`sulfur_fraction`, default $0.31$ for eutectic composition):
+   $$\rho_0(w_S) = 7020.0 - 5050.0 \cdot w_S \quad [\text{kg/m}^3]$$
+   Coupled with thermal expansion ($\alpha_m = 10^{-4}\text{ K}^{-1}$) and isothermal compressibility ($K_T = 65\text{ GPa}$):
+   $$\rho_{\text{liquid}}(T, P) = \rho_0(w_S) \left[1 - \alpha_m (T - T_0) + \frac{P}{K_T}\right]$$
+2. `:morard2014`: Fe-S liquid alloy formulation from Morard et al. (2014):
+   $$\rho_0(w_S) = 7020.0 \cdot (1.0 - 0.72 \cdot w_S) \quad [\text{kg/m}^3]$$
+3. `:constant`: Fixed prescribed liquid metal density $\rho_{\text{metal}}$ (default $5450\text{ kg/m}^3$).
+
 The marker composite density and thermal conductivity blend the host rock or ice matrix with metal across all temperatures using bulk metal volume fraction $X_{\text{fe,bulk}}$:
 
 $$\rho_{\text{eff}} = (1 - X_{\text{fe,bulk}}) \rho_{\text{sil}} + X_{\text{fe,bulk}} \rho_{\text{metal}}(T)$$
@@ -193,9 +205,9 @@ In large planetesimals and protoplanets ($R > 100\text{ km}$), segregation heati
 
 ## References
 
-- Deguen, R., Olson, P., & Cardin, P. (2011). Driving magma ocean convection by core formation. *Earth and Planetary Science Letters*, 310(3-4), 303-313.
-- Deguen, R., Landeau, M., & Olson, P. (2014). Tunnelling of liquid metal through a magma ocean. *Earth and Planetary Science Letters*, 391, 274-287.
-- Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019). A water budget divide in developing exoplanetary systems. *Nature Astronomy*, 3(4), 307-313.
+- Deguen, R., Olson, P., & Cardin, P. (2011). Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.
+- Deguen, R., Landeau, M., & Olson, P. (2014). Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.
+- Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019). A water budget dichotomy of rocky protoplanets from 26Al-heating. *Nature Astronomy*, 3(4), 307-313.
 - Lichtenberg, T., Bower, D. J., Hammond, M., Boukrouche, R., Sanan, P., Tsai, S. M., & Pierrehumbert, R. T. (2021). Vertically resolved magma ocean-protoatmosphere evolution. *Journal of Geophysical Research: Planets*, 126(2), e2020JE006711.
 - Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009a). A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.
 - Monteux, J., Jellinek, A. M., & Buffett, B. A. (2009b). Heating of the early Earth by core formation: Physical mechanisms and thermal impact. *Journal of Geophysical Research*, 114(B6), B06404.

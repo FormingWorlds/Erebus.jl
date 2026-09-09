@@ -654,7 +654,6 @@ function compute_marker_properties!(
     XNm=nothing,
     XSm=nothing,
 )
-    # @timeit to "compute_marker_properties!" begin
     if tm[m] < 3
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
@@ -859,7 +858,6 @@ function compute_marker_properties!(
     # kphim[m] = kphi(kphim0[tm[m]], phim[m])
     # etafluidcur_inv_kphim[m] = etafluidcur[m] * inv(kphim[m])
     etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(kphim0[tm[m]], phim[m], etafluidcur)
-    # end # @timeit to "compute_marker_properties!"
     return nothing
 end # function compute_marker_properties!
 
@@ -1572,12 +1570,10 @@ using given bilinear interpolation weights.
     - nothing
 """
 function interpolate_add_to_grid!(i, j, weights, property, grid)
-    # @timeit to "interpolate_add_to_grid!" begin
     @inbounds grid[i, j] += property * weights[1]
     @inbounds grid[i + 1, j] += property * weights[2]
     @inbounds grid[i, j + 1] += property * weights[3]
     @inbounds grid[i + 1, j + 1] += property * weights[4]
-    # end # @timeit to "interpolate_add_to_grid!"
     return nothing
 end # function interpolate_add_to_grid!
 
@@ -2082,7 +2078,6 @@ function compute_basic_node_properties!(
     FRI,
     YNY,
 )
-    # @timeit to "compute_basic_node_properties!" begin
     Ny, Nx = size(WTSUM)
     @inbounds begin
         for j in 1:1:Nx, i in 1:1:Ny
@@ -2100,7 +2095,6 @@ function compute_basic_node_properties!(
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_basic_node_properties!"
     return nothing
 end # function compute_basic_node_properties!
 
@@ -2131,7 +2125,6 @@ $(SIGNATURES)
 function compute_vx_node_properties!(
     RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOX, RHOFX, KX, PHIX, RX
 )
-    # @timeit to "compute_vx_node_properties!" begin
     Ny1, Nx1 = size(WTXSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -2144,7 +2137,6 @@ function compute_vx_node_properties!(
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_vx_node_properties!"
     return nothing
 end # function compute_vx_node_properties!
 
@@ -2175,7 +2167,6 @@ $(SIGNATURES)
 function compute_vy_node_properties!(
     RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOY, RHOFY, KY, PHIY, RY
 )
-    # @timeit to "compute_vy_node_properties!" begin
     Ny1, Nx1 = size(WTYSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -2188,7 +2179,6 @@ function compute_vy_node_properties!(
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_vy_node_properties!"
     return nothing
 end # function compute_vy_node_properties!
 
@@ -2247,7 +2237,6 @@ function compute_p_node_properties!(
     PHI,
     BETAPHI,
 )
-    # @timeit to "compute_p_node_properties!" begin
     Ny1, Nx1 = size(WTPSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -2265,7 +2254,6 @@ function compute_p_node_properties!(
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_p_node_properties!"
     return nothing
 end # function compute_p_node_properties!
 
@@ -2285,7 +2273,6 @@ $(SIGNATURES)
     - nothing
 """
 function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
-    # @timeit to "compute_molarfraction!" begin
     Ny1, Nx1 = size(WTPSUM)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -2296,7 +2283,6 @@ function compute_molarfraction!(XWSSUM, WTPSUM, XWS)
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_molarfraction!"
     return nothing
 end # function compute_molarfraction!
 
@@ -2350,7 +2336,6 @@ $(SIGNATURES)
     - nothing
 """
 function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=nothing)
-    # @timeit to "compute_velocities!" begin
     Ny1, Nx1 = size(vxp)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -2400,7 +2385,6 @@ function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=noth
         # bottom
         @views @. vypf[Ny1, :] = 2.0*vybottom - vypf[Ny, :]
     end # @inbounds
-    # end # @timeit to "compute_velocities!"
     return nothing
 end # function compute_velocities!
 
@@ -2421,7 +2405,6 @@ $(SIGNATURES)
     - nothing
 """
 function compute_rotation_rate!(vx, vy, wyx; coords=nothing)
-    # @timeit to "compute_rotation_rate!" begin
     Ny, Nx = size(wyx)
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
@@ -2430,7 +2413,6 @@ function compute_rotation_rate!(vx, vy, wyx; coords=nothing)
             0.5 *
             ((vy[i, j + 1]-vy[i, j])*inv(dx_val) - (vx[i + 1, j]-vx[i, j])*inv(dy_val))
     end
-    # end # @timeit to "compute_rotation_rate!"
     return nothing
 end # function compute_rotation_rate!
 
@@ -2513,8 +2495,6 @@ function move_markers_rk4!(
     imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
     Nx_val = coords === nothing ? Nx : coords.Nx
     Ny_val = coords === nothing ? Ny : coords.Ny
-
-    # @timeit to "move_markers_rk4!" begin
     @inbounds begin
         Threads.@threads :static for m in 1:1:marknum
             xmm = xmrk4 = xm[m]
@@ -2792,7 +2772,6 @@ function move_markers_rk4!(
                 )
         end # marker loop
     end # @inbounds   
-    # end # @timeit to "move_markers_rk4!"
     return nothing
 end # function move_markers_rk4!
 
@@ -2824,7 +2803,6 @@ $(SIGNATURES)
 function backtrace_pressures_rk4!(
     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=nothing
 )
-    # @timeit to "backtrace_pressures_rk4!" begin
     xp_val = coords === nothing ? xp : coords.xp
     yp_val = coords === nothing ? yp : coords.yp
     xvx_val = coords === nothing ? xvx : coords.xvx
@@ -3087,7 +3065,6 @@ function backtrace_pressures_rk4!(
             pf0[ii, jj] = dot4(grid_vector(i, j, pf), weights)
         end
     end # inbounds
-    # end # @timeit to "backtrace_pressures_rk4!"
     return nothing
 end # function backtrace_pressures_rk4!
 
@@ -3114,7 +3091,6 @@ $(SIGNATURES)
 function update_marker_population_geometry!(
     m, i, j, xm, ym, mdis, mnum, xxm_axis=xxm, yym_axis=yym
 )
-    # @timeit to "update_marker_population_geometry!" begin
     @inbounds begin
         dismij = distance(xm[m], ym[m], xxm_axis[j], yym_axis[i])
         dismi1j = distance(xm[m], ym[m], xxm_axis[j], yym_axis[i + 1])
@@ -3137,7 +3113,6 @@ function update_marker_population_geometry!(
             mnum[i + 1, j + 1] = m
         end
     end # @inbounds
-    # end # @timeit to "update_marker_population_geometry!"
     return nothing
 end
 
@@ -3221,7 +3196,6 @@ function replenish_markers!(
     XNm=nothing,
     XSm=nothing,
 )
-    # @timeit to "replenish_markers!" begin
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
     yym_val = coords === nothing ? yym : coords.yym
@@ -3338,7 +3312,6 @@ function replenish_markers!(
         end
     end # @inbounds  
     return length(xm)
-    # end # @timeit to "replenish_markers!"
 end # function replenish_markers!
 
 """
@@ -3388,7 +3361,6 @@ function apply_subgrid_stress_diffusion!(
     marknum;
     coords::Union{Nothing,GridCoordinates}=nothing,
 )
-    # @timeit to "apply_subgrid_stress_diffusion!" begin
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
         return nothing
@@ -3470,7 +3442,6 @@ function apply_subgrid_stress_diffusion!(
     # compute DSXYsubgrid and update DSXY at all basic nodes
     @views @. DSXY[WTSUM[:, :] > 0.0] -=
         SXYSUM[:, :][WTSUM[:, :] > 0.0] / WTSUM[:, :][WTSUM[:, :] > 0.0]
-    # end # @timeit to "apply_subgrid_stress_diffusion!"
     return nothing
 end # function apply_subgrid_stress_diffusion!
 
@@ -3496,7 +3467,6 @@ $(SIGNATURES)
 function update_marker_stress!(
     xm, ym, sxxm, sxym, DSXX, DSXY, marknum; coords::Union{Nothing,GridCoordinates}=nothing
 )
-    # @timeit to "update_marker_stress!" begin
     Ny, Nx = size(DSXY)
     xp_val = coords === nothing ? xp : coords.xp
     yp_val = coords === nothing ? yp : coords.yp
@@ -3515,7 +3485,6 @@ function update_marker_stress!(
         interpolate_add_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
         interpolate_add_to_marker!(m, i_basic, j_basic, weights_basic, sxym, DSXY)
     end
-    # end # @timeit to "update_marker_stress!"
     return nothing
 end # function update_marker_stress!
 
@@ -3561,7 +3530,6 @@ function apply_subgrid_temperature_diffusion!(
     mode;
     coords::Union{Nothing,GridCoordinates}=nothing,
 )
-    # @timeit to "apply_subgrid_temperature_diffusion!" begin
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
         return nothing
@@ -3624,7 +3592,6 @@ function apply_subgrid_temperature_diffusion!(
             DT[i, j] -= TKSUM[i, j] / RHOCPSUM[i, j]
         end
     end
-    # end # @timeit to "apply_subgrid_temperature_diffusion!"
     return nothing
 end # function apply_subgrid_temperature_diffusion! 
 
@@ -3650,7 +3617,6 @@ $(SIGNATURES)
 function update_marker_temperature!(
     xm, ym, tkm, DT, tk2, timestep, marknum; coords::Union{Nothing,GridCoordinates}=nothing
 )
-    # @timeit to "update_marker_temperature!" begin
     xp_val = coords === nothing ? xp : coords.xp
     yp_val = coords === nothing ? yp : coords.yp
     dx_val = coords === nothing ? dx : coords.dx
@@ -3694,7 +3660,6 @@ function update_marker_temperature!(
             interpolate_add_to_marker!(m, i, j, weights, tkm, DT)
         end
     end
-    # end # @timeit to "update_marker_temperature!"
     return nothing
 end # function update_marker_temperature!
 
@@ -3729,7 +3694,6 @@ function update_marker_porosity!(
     phimax=phimax,
     coords::Union{Nothing,GridCoordinates}=nothing,
 )
-    # @timeit to "update_marker_porosity!" begin
     # update porosity for compaction
     xp_val = coords === nothing ? xp : coords.xp
     yp_val = coords === nothing ? yp : coords.yp
@@ -3764,7 +3728,6 @@ function update_marker_porosity!(
             end
         end
     end # @inbounds
-    # end # @timeit to "update_marker_porosity!"
     return nothing
 end # function update_marker_porosity!
 

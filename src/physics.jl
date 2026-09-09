@@ -269,7 +269,6 @@ $(SIGNATURES)
         - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
 """
 function compute_rhocpfluidm(T, mode)
-    # @timeit to "compute_rhocpfluidm" begin
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -290,7 +289,6 @@ function compute_rhocpfluidm(T, mode)
     else
         throw(ArgumentError("unknown mode $mode"))
     end
-    # end # @timeit to "compute_rhocpfluidm"
     return ρᶠCₚᶠ
 end # function compute_rhocpfluidm
 
@@ -311,7 +309,6 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of solid
 """
 function compute_ksolidm(T, mode)
-    # @timeit to "compute_ksolidm" begin
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -322,7 +319,6 @@ function compute_ksolidm(T, mode)
     else
         throw(ArgumentError("unknown mode $mode"))
     end
-    # end # @timeit to "compute_ksolidm"
     return kˢ
 end # function compute_ksolidm
 
@@ -344,7 +340,6 @@ $(SIGNATURES)
         - kᶠ: thermal conductivity of fluid
 """
 function compute_kfluidm(T, mode)
-    # @timeit to "compute_kfluidm" begin
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -361,7 +356,6 @@ function compute_kfluidm(T, mode)
     else
         throw(ArgumentError("unknown mode $mode"))
     end
-    # end # @timeit to "compute_kfluidm"
     return kᶠ
 end # function compute_kfluidm
 
@@ -390,7 +384,6 @@ $(SIGNATURES)
 function compute_Δtreaction(
     T, ϕ, mode; cfg=nothing, is_hydration::Union{Bool,Nothing}=nothing
 )
-    # @timeit to "compute_Δtreaction" begin
     if mode in (1, 2, 3)
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -424,7 +417,6 @@ function compute_Δtreaction(
     else
         throw(ArgumentError("unknown mode $mode"))
     end
-    # end # @timeit to "compute_Δtreaction"
     return Δtr
 end # function compute_dtreaction
 
@@ -448,7 +440,6 @@ $(SIGNATURES)
     - ΔGWD: molar Gibbs free energy for single dehydration reaction (16.165a/b).
 """
 @inline function compute_gibbs_free_energy(T, pf, XDˢ, XWˢ, Δt, Δtr; cfg=nothing)
-    # @timeit to "compute_gibbs_free_energy" begin
     if T <= 0.0
         throw(DomainError(T, "Absolute temperature must be positive"))
     end
@@ -477,7 +468,6 @@ $(SIGNATURES)
         ΔGWD = zero(0.0)
     end
     return ΔGWD
-    # end # @timeit to "compute_gibbs_free_energy"
 end # function compute_gibbs_free_energy
 
 """
@@ -557,7 +547,6 @@ $(SIGNATURES)
 function compute_thermodynamic_xfer!(
     DMPSUM, DHPSUM, WTPSUM, DMP, DHP, DQPFSUM=nothing, DQPF=nothing
 )
-    # @timeit to "compute_thermodynamic_xfer!" begin
     Ny1, Nx1 = size(DMP)
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -577,7 +566,6 @@ function compute_thermodynamic_xfer!(
             end
         end
     end # @inbounds
-    # end # @timeit to "compute_thermodynamic_xfer!"
     return nothing
 end # function compute_thermodynamic_xfer!
 
@@ -638,7 +626,6 @@ function perform_thermochemical_reaction!(
     cfg=nothing,
     backload_step1::Bool=true,
 )
-    # @timeit to "perform_thermochemical_reaction!" begin
     react_cfg = if cfg === nothing
         ReactionConfig()
     elseif cfg isa ReactionConfig
@@ -871,7 +858,6 @@ function perform_thermochemical_reaction!(
         @info "min/max fluid source term" extrema(DQPF)
     end
     return nothing
-    # end # @timeit to "perform_thermochemical_reaction!"
 end # function perform_thermochemical_reaction!
 
 """
@@ -922,7 +908,6 @@ function compute_shear_heating!(
     k_frac_max::Real=1.0e-9,
     coords=nothing,
 )
-    # @timeit to "compute_shear_heating!" begin
     Ny1, Nx1 = size(HS)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -1027,7 +1012,6 @@ function compute_shear_heating!(
             0.5 * (ry_im1*qyD[i - 1, j]^2 + ry_i*qyD[i, j]^2)
         )
     end
-    # end # @timeit to "compute_shear_heating!" 
     return nothing
 end # function compute_shear_heating!
 
@@ -1057,7 +1041,6 @@ $(SIGNATURES)
 function compute_adiabatic_heating!(
     HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf; coords=nothing
 )
-    # @timeit to "compute_adiabatic_heating!" begin
     Ny1, Nx1 = size(HA)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -1102,7 +1085,6 @@ function compute_adiabatic_heating!(
             )
         end
     end # @inbounds
-    # end # @timeit to "compute_adiabatic_heating!"
 end # function compute_adiabatic_heating!
 
 """

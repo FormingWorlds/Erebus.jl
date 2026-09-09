@@ -31,6 +31,7 @@ makedocs(;
             "Quickstart" => "tutorials/quickstart.md",
             "1D Terzaghi Consolidation" => "tutorials/terzaghi_consolidation.md",
             "2D Hydrothermal Circulation" => "tutorials/hydrothermal_circulation.md",
+            "Planetesimal Differentiation" => "tutorials/planetesimal_differentiation.md",
         ],
         "How-To Guides" => [
             "Installation" => "howto/installation.md",
@@ -74,7 +75,7 @@ makedocs(;
             "Acknowledgements" => "community/acknowledgements.md",
         ],
     ],
-    warnonly=[:missing_docs, :cross_references],
+    warnonly=[:cross_references],
 )
 
 deploydocs(;

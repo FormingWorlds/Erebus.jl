@@ -91,6 +91,15 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/j.epsl.2014.01.034](https://doi.org/10.1016/j.epsl.2014.01.034)  
   *Fluid dynamical model for metal diapir and droplet fragmentation in convective planetary magma oceans.*
 
+---
+
+## Silicate Melting and Magma Rheology
+
+- **Costa, A., Caricchi, L., & Bagdassarov, N. (2009)**. A model for the rheology of particle-bearing suspensions and partially molten rocks. *Geochemistry, Geophysics, Geosystems*, 10(3), Q03010.  
+  [https://doi.org/10.1029/2008GC002138](https://doi.org/10.1029/2008GC002138)  
+  *Rheological weakening parameterization and viscosity reduction across the solid-liquid silicate transition.*
+
+
 
 
 

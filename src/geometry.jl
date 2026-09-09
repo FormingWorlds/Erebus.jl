@@ -429,7 +429,6 @@ becomes
     - nothing
 """
 function apply_insulating_boundary_conditions!(t)
-    # @timeit to "apply_insulating_boundary_conditions!" begin
     Nyy, Nxx = size(t)
     if Nyy>2 && Nxx>2
         @inbounds begin
@@ -443,6 +442,5 @@ function apply_insulating_boundary_conditions!(t)
             @views @. t[:, Nxx] = t[:, Nxx - 1]
         end # @inbounds
     end
-    # end # @timeit to "apply_insulating_boundary_conditions!"
     return nothing
 end

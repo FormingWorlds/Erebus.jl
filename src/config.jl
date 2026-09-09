@@ -316,8 +316,8 @@ end
 """
 Multi-species volatile solubility and organic devolatilization parameters.
 
-Configures the standalone thermodynamic speciation and volatile solubility library
-(`Erebus.Physics.Volatiles`). Dynamic reactive transport coupling in 2D fluid flow is in development.
+Configures thermodynamic speciation and multi-species volatile solubility routines
+in `Erebus.Physics`. Couples marker volatile exsolution to 10-species atmospheric accumulation and kinetic escape.
 
 $(FIELDS)
 """

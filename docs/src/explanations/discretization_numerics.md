@@ -57,6 +57,114 @@ $$\mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ P_t \\ q_{xD} \\ q_{yD} \\ P_f \end
 
 The sparse system is solved using direct sparse LU factorization (UMFPACK via `LinearSolve.jl` or Pardiso via `Pardiso.jl`).
 
+### Stencil Topologies
+
+#### 1. Horizontal Momentum ($v_x$ Stencil)
+
+```text
+                           kvx-6
+                            Vx₂
+                             |
+               kvy-6     ETA(i-1,j)   kvy+6⋅Ny1-6
+                Vy₁      GGG(i-1,j)     Vy₃
+                 *       SXY0(i-1,j)     *
+                           basic₁
+                            ETA₁                       
+                            SXY₁
+               ETAP(i,j)     |      ETAP(i,j+1)
+               GGGP(i,j)     |      GGGP(i,j+1) 
+   kvx-6⋅Ny1   SXX0(i,j)    kvx     SXX0(i,j+1)  kvx+6⋅Ny1
+     Vx₁---------P₁---------Vx₃---------P₂---------Vx₅
+                kpm          |        kpm+6⋅Ny1
+               ETAP₁         |        ETAP₂
+               SXX₁          |        SXX₂
+                          ETA(i,j) 
+                kvy       GGG(i,j)     kvy+6⋅Ny1
+                Vy₂       SXY0(i,j)      Vy₄
+                 *        basic₂          * 
+                            ETA₂ 
+                            SXY₂
+                             |
+                           kvx+6
+                            Vx₄
+                             *
+```
+
+#### 2. Vertical Momentum ($v_y$ Stencil)
+
+```text
+                           kvy-6
+                            Vy₂
+                             |
+                          ETAP(i,j)
+                          GGGP(i,j)
+             kvx-6⋅Ny1    SXX0(i,j)     kvx
+                Vx₁          P₁         Vx₃
+                 *         ETAP₁         *
+                            SYY₁
+               ETA(i,j-1)   kpm       ETA(i,j)
+               GGG(i,j-1)    |        GGG(i,j)
+   kvy-6⋅Ny1   SXY0(i,j-1)  kvy       SXY0(i,j)  kvy+6⋅Ny1
+     Vy₁-------basic₁-------Vy₃-------basic₂-------Vy₅
+               ETA₁          |        ETA₂     
+               SXY₁          |        SXY₂
+                            kpm+6
+                         ETAP(i+1,j)
+                         GGGP(i+1,j)
+          kvx-6⋅Ny1+6    SXX0(i+1,j)   kvx+6
+                Vx₂          P₂        Vx₄
+                 *         ETAP₂        *  
+                            SYY₂
+                             |
+                           kvy+6
+                            Vy₄
+```
+
+#### 3. Solid Continuity ($P_t$ Stencil)
+
+```text
+                 kvy-6
+                  Vy₁
+                   |
+                   |
+      kvx-6⋅Ny1   kpm       kvx
+        Vx₁--------P--------Vx₂
+                   |
+                   |
+                  kvy
+                  Vy₂
+```
+
+#### 4. Darcy Fluid Continuity ($P_f$ Stencil)
+
+```text
+                 qyD₁
+                kqy-6
+                  |
+       qxD₁-------P-------qxD₂
+    kqx-6⋅Ny1    kpf      kqx
+                  |
+                 qyD₂
+                 kqy
+```
+
+#### 5. Horizontal Darcy Flux ($q_x^D$ Stencil)
+
+```text
+       P₁--------qxD--------P₂
+      kpf        kqx     kpf+6⋅Ny1
+```
+
+#### 6. Vertical Darcy Flux ($q_y^D$ Stencil)
+
+```text
+       P₁  kpf
+       |
+      qyD  kqy
+       |
+       P₂  kpf+6
+```
+
 ---
 
 ## Non-Linear Iterations (Picard Loop)

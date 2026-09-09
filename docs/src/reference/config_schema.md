@@ -286,6 +286,9 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `t_organic_devol` | `Float64` | `550.0` | K | Characteristic midpoint temperature $T_{\text{devol}}$ for organic devolatilization | $> 0$ |
 | `dt_organic_devol` | `Float64` | `50.0` | K | Transition temperature scale $\Delta T$ for organic devolatilization | $> 0$ |
 | `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
+| `initial_water_wtpct` | `Float64` | `1.0` | wt% | Initial water concentration in solid silicate matrix | $\ge 0$ |
+| `initial_carbon_ppm` | `Float64` | `500.0` | ppm | Initial carbon concentration in solid silicate matrix | $\ge 0$ |
+| `initial_sulfur_ppm` | `Float64` | `1000.0` | ppm | Initial sulfur concentration in solid silicate matrix | $\ge 0$ |
 | `carbon_active` | `Bool` | `false` | - | Enable carbon species solubility ($\text{CO}, \text{CH}_4, \text{CO}_2$) | `true` / `false` |
 | `co_law` | `Symbol` | `:armstrong2015` | - | Carbon monoxide solubility law (`:armstrong2015`, `:yoshioka2019_morb`) | valid symbol |
 | `ch4_law` | `Symbol` | `:ardia2013` | - | Methane solubility law (`:ardia2013`) | valid symbol |
@@ -316,6 +319,10 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 | `T_exobase` | `Float64` | `200.0` | K | Exobase temperature for Maxwellian thermal velocity | $> 0$ |
 | `R_exobase` | `Float64` | `50000.0` | m | Exobase radius for escape flux surface integration | $\ge \text{R\_planet}$ |
 | `species` | `Symbol` | `:H2O` | - | Primary outgassed volatile species for kinetic escape | `:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2` |
+| `multi_species` | `Bool` | `false` | - | Enable coupled 10-species atmospheric inventory and escape tracking | `true` / `false` |
+| `species_list` | `Vector{Symbol}` | `[:H2O, :H2, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2]` | - | Volatile species tracked for multi-species escape | valid symbols |
+| `gamma` | `Float64` | `1.4` | - | Atmospheric adiabatic index (ratio of specific heats) | $> 0$ |
+| `hydrodynamic` | `Bool` | `true` | - | Check hydrodynamic energy-limited escape rate ceiling | `true` / `false` |
 
 ---
 
@@ -327,8 +334,10 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 |:---|:---|:---|:---|:---|:---|
 | `percolation_active` | `Bool` | `false` | - | Enable Darcy percolation of liquid Fe-FeS through solid silicate matrix | `true` / `false` |
 | `settling_active` | `Bool` | `false` | - | Enable Stokes settling of liquid metal droplets in magma ocean | `true` / `false` |
-| `rho_metal` | `Float64` | `7200.0` | $\text{kg/m}^3$ | Density of liquid metal (Fe-FeS) phase | $> \rho_{\text{silicate}}$ |
-| `rho_metal_solid` | `Float64` | `7800.0` | $\text{kg/m}^3$ | Density of solid metal (Fe-FeS) phase | $> \rho_{\text{metal}}$ |
+| `rho_metal` | `Float64` | `5450.0` | $\text{kg/m}^3$ | Density of liquid metal (Fe-FeS) phase | $> \rho_{\text{silicate}}$ |
+| `rho_metal_solid` | `Float64` | `5700.0` | $\text{kg/m}^3$ | Density of solid metal (Fe-FeS) phase | $> \rho_{\text{metal}}$ |
+| `sulfur_fraction` | `Float64` | `0.31` | - | Sulfur mass fraction in Fe-FeS liquid metal phase ($w_S$) | $\in [0.0, 0.40]$ |
+| `metal_density_mode` | `Symbol` | `:sanloup2000` | - | Liquid metal density equation of state (`:sanloup2000`, `:morard2014`, `:constant`) | valid symbol |
 | `L_metal` | `Float64` | `2.7e5` | J/kg | Latent heat of melting for Fe-FeS eutectic mixture | $\ge 0$ |
 | `eta_metal` | `Float64` | `1.0e-2` | Pa s | Dynamic viscosity of liquid metal phase | $> 0$ |
 | `k_metal` | `Float64` | `40.0` | W/(m K) | Thermal conductivity of metallic phase | $> 0$ |
@@ -342,7 +351,7 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `phi_crit_perc` | `Float64` | `0.05` | - | Critical porosity threshold for percolation connectivity | $\in [0, \phi_{\text{pack}})$ |
 | `phi_residual` | `Float64` | `0.02` | - | Residual trapped metal volume fraction | $\in [0, \phi_{\text{crit\_perc}}]$ |
 | `phi0` | `Float64` | `0.1` | - | Reference porosity for liquid metal Kozeny-Carman permeability | $\in (0, 1)$ |
-| `droplet_size_mode` | `Symbol` | `:weber_mean` | - | Metal droplet diameter calculation mode (`:weber_mean`, `:weber_turbulent`, `:fixed`) | valid symbol |
+| `droplet_size_mode` | `Symbol` | `:capillary_mean` | - | Metal droplet diameter calculation mode (`:capillary_mean`, `:bond_mean`, `:weber_mean`, `:weber_turbulent`, `:fixed`) | valid symbol |
 | `droplet_diameter_fixed` | `Float64` | `5.0e-3` | m | Fixed droplet diameter when `droplet_size_mode = :fixed` | $> 0$ |
 | `sigma_metal_silicate` | `Float64` | `1.0` | N/m | Metal-silicate interfacial surface tension | $> 0$ |
 | `We_crit` | `Float64` | `10.0` | - | Critical Weber number for droplet breakup | $> 0$ |
