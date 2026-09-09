@@ -14,7 +14,7 @@ The transport of dense molten metal through this changing silicate environment s
 1. **Porous Darcy percolation**: Dense molten metal trickles downward through the pore channels of a solid or partially molten silicate crystalline matrix.
 2. **Stokes droplet settling**: Molten metal breaks into discrete liquid droplets that rain downward through a liquid silicate magma ocean.
 
-`Erebus.jl` couples these two transport mechanisms into a unified drift-flux formulation across the entire melting history of the planetesimal.
+`Erebus.jl` couples these two transport mechanisms into a unified drift-flux formulation throughout the melting history of the planetesimal.
 
 ---
 
@@ -193,22 +193,118 @@ In large planetesimals and protoplanets ($R > 100\text{ km}$), segregation heati
 
 ---
 
+## Metal-Silicate Volatile Partitioning
+
+During planetesimal differentiation and core formation, volatile elements (H, C, N, and S) partition between molten metallic iron alloys and silicate melts. The thermodynamic distribution is quantified by the metal-silicate partition coefficient $D_i^{\text{met/sil}}$:
+
+$$D_i^{\text{met/sil}} = \frac{C_i^{\text{metal}}}{C_i^{\text{silicate}}}$$
+
+where $C_i^{\text{metal}}$ is the concentration of element $i$ in the molten metal phase [ppmw] and $C_i^{\text{silicate}}$ is the concentration dissolved in the coexisting silicate melt [ppmw].
+
+### Empirical Parameterizations
+
+`Erebus.jl` parameterizes $D_i^{\text{met/sil}}(T, P, \Delta\text{IW}, w_S)$ as functions of temperature $T$ [K], pressure $P$ [Pa], oxygen fugacity $\Delta\text{IW}$ relative to the iron-wüstite buffer, and alloy sulfur mass fraction $w_S$:
+
+1. **Carbon Partitioning (`model_carbon`)**:
+   - `:grewal2019` (default): Grewal et al. (2019b) parameterization accounting for the strong suppression of carbon siderophile affinity by dissolved sulfur:
+     $$\log_{10} D_C = 1.80 + \frac{2200}{T} - 1.5 \times 10^{-8} \frac{P}{T} - 0.25 \, \Delta\text{IW} + 4.2 \ln(1 - X_S)$$
+     where $X_S$ is the mole fraction of sulfur in the Fe-S liquid alloy. In sulfur-free metallic iron, carbon is strongly siderophile ($D_C \approx 2000 - 3000$). At the Fe-FeS eutectic ($w_S \approx 0.31$, $X_S \approx 0.44$), $D_C$ drops sharply to $\approx 15 - 30$.
+   - `:fischer2020`: High-pressure parameterization from Fischer et al. (2020):
+     $$\log_{10} D_C = 1.50 + \frac{2500}{T} - 1.2 \times 10^{-8} \frac{P}{T} - 0.20 \, \Delta\text{IW}$$
+   - `:constant`: Fixed prescribed value `D_C_const`.
+
+2. **Nitrogen Partitioning (`model_nitrogen`)**:
+   - `:grewal2019` (default): Grewal et al. (2019a, 2019b) parameterization:
+     $$\log_{10} D_N = 0.85 + \frac{1200}{T} - 0.25 \, \Delta\text{IW} + 0.60 \ln(1 - X_S)$$
+     Nitrogen is moderately siderophile ($D_N \approx 20 - 50$). Because the sulfur interaction term ($0.60 \ln(1 - X_S)$) is much smaller than that for carbon ($4.2 \ln(1 - X_S)$), nitrogen partitioning is comparatively insensitive to sulfur content. Consequently, core formation in sulfur-rich planetesimals lowers the metallic C/N ratio, generating superchondritic C/N in the residual silicate mantle.
+   - `:constant`: Fixed prescribed value `D_N_const`.
+
+3. **Hydrogen Partitioning (`model_hydrogen`)**:
+   - `:clesi2018` (default): Clesi et al. (2018) low-pressure parameterization:
+     $$\log_{10} D_H = -0.80 + \frac{300}{T} + 5.0 \times 10^{-8} \frac{P}{T} + 0.05 \, \Delta\text{IW}$$
+     In the low-pressure planetesimal regime ($P < 1\text{ GPa}$), hydrogen is moderately siderophile to lithophile ($D_H \approx 0.1 - 1.0$). Stoichiometric conversion connects silicate water concentration to elemental hydrogen via $f_H = (2 \times 1.00794 / 18.01528) \times 10^4 \approx 1118.98\text{ ppmw H}$ per $1\text{ wt}\% \text{ H}_2\text{O}$.
+   - `:constant`: Fixed prescribed value `D_H_const`.
+
+4. **Sulfur Partitioning (`model_sulfur`)**:
+   - `:boujibar2014` (default): Boujibar et al. (2014) parameterization:
+     $$\log_{10} D_S = 2.80 - \frac{800}{T} + 1.0 \times 10^{-10} P - 0.20 \, \Delta\text{IW}$$
+     Sulfur partitions strongly into metallic liquid ($D_S \approx 100 - 500$), concentrating primordial sulfur into the segregated metallic core.
+   - `:constant`: Fixed prescribed value `D_S_const`.
+
+### Elemental Mass Conservation
+
+When molten metal ($F_{\text{fe}} > 0$) coexists with silicate melt ($F_{\text{melt}} > 0$), elemental volatile mass is conserved across both phases:
+
+$$M_{i,\text{total}} = m_{\text{sil}} C_{i,\text{sil}} + m_{\text{met}} C_{i,\text{met}}$$
+
+where $m_{\text{sil}} = \phi_{\text{sil}} \rho_{\text{sil}}$ and $m_{\text{met}} = \phi_{\text{fe}} F_{\text{fe}} \rho_{\text{met}}$. The thermodynamic equilibrium concentration in the silicate melt is:
+
+$$C_{i,\text{sil}}^{\text{eq}} = \frac{M_{i,\text{total}}}{m_{\text{sil}} + D_i m_{\text{met}}}$$
+
+Kinetic exchange advances toward equilibrium with rate fraction $\alpha_{\text{eq}} \in [0, 1]$ (`equilibration_rate`):
+
+$$\Delta C_{i,\text{sil}} = \alpha_{\text{eq}} \left(C_{i,\text{sil}}^{\text{eq}} - C_{i,\text{sil}}\right)$$
+
+$$\Delta C_{i,\text{met}} = -\Delta C_{i,\text{sil}} \left(\frac{m_{\text{sil}}}{m_{\text{met}}}\right)$$
+
+This formulation conserves total volatile mass to floating-point precision on every marker.
+
+---
+
+## Advective Core Segregation Transport of Volatiles
+
+As molten metallic droplets segregate downward under gravity, metal-hosted volatiles are advected alongside the metallic mass flux. Within `apply_metal_segregation!`, the volatile mass flux across cell face $(i, j)$ is computed using upwind donor-cell concentrations:
+
+$$F_{i, k}^x = F_{\text{fe}, x} \cdot \left(\frac{M_{\text{fe}, k}}{M_{\text{fe}}}\right)_{\text{donor}}$$
+
+$$F_{i, k}^y = F_{\text{fe}, y} \cdot \left(\frac{M_{\text{fe}, k}}{M_{\text{fe}}}\right)_{\text{donor}}$$
+
+where $k \in \{H, C, N, S\}$ and the donor cell is selected by the sign of the metallic mass flux. Cell volatile inventories update conservatively:
+
+$$M_{\text{fe}, k}^{n+1} = M_{\text{fe}, k}^n + \Delta t \left(F_{w, k} - F_{e, k} + F_{n, k} - F_{s, k}\right)$$
+
+### Dynamic Sulfur Density Feedback
+
+When `dynamic_sulfur_density = true`, the local sulfur content of the metallic alloy $w_S = X_{\text{fe}, S} \cdot 10^{-6}$ is evaluated dynamically on each marker and grid cell. The local alloy density feeds back into droplet buoyancy $\Delta\rho = \rho_{\text{metal}}(w_S) - \rho_{\text{silicate}}$:
+
+$$\rho_0(w_S) = 7020.0 - 5050.0 \cdot w_S \quad [\text{kg/m}^3]$$
+
+Sulfur-poor metal differentiates faster due to its higher density contrast, whereas sulfur-rich metal exhibits lower settling velocities and longer segregation timescales.
+
+### Integrated Core Volatile Budgets
+
+Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets`:
+
+$$M_{\text{core}, k} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
+
+The resulting mean core volatile concentrations $w_{\text{core}, k} = M_{\text{core}, k} / M_{\text{core}, \text{metal}}$ are compared with empirical concentrations measured in magmatic iron meteorites (groups IIAB, IIIAB, IVA, IVB).
+
+---
+
 ## Source Code Architecture
 
 | Physical Component | Source File | Key Functions |
 |:---|:---|:---|
-| Parameter definition | `src/config.jl` | `CoreFormationConfig` |
+| Parameter definition | `src/config.jl` | `CoreFormationConfig`, `MetalPartitionConfig` |
+| Partition coefficients | `src/physics.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
+| Volatile equilibration | `src/physics.jl` | `equilibrate_metal_silicate_volatiles!` |
+| Core budget integration | `src/physics.jl` | `compute_core_volatile_budgets` |
 | Melt fraction & velocity | `src/physics.jl` | `compute_metal_melt_fraction`, `metal_segregation_velocity`, `segregation_dissipation_heating` |
-| Marker tracking & properties | `src/particles.jl` | `compute_marker_properties!`, `setup_marker_metal_properties`, `replenish_markers!` |
+| Marker tracking & properties | `src/particles.jl` | `compute_marker_properties!`, `setup_marker_metal_properties`, `setup_marker_metal_volatile_properties`, `replenish_markers!` |
 | Conservative transport | `src/numerics.jl` | `apply_metal_segregation!`, `assemble_thermal_lse!` |
-| Main simulation integration | `src/simulation.jl` | Timestep loop sequence |
+| Main simulation integration | `src/simulation.jl` | Timestep loop sequence and checkpoint persistence |
 
 ---
 
 ## References
 
+- Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014). Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54.
+- Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018). Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876.
 - Deguen, R., Olson, P., & Cardin, P. (2011). Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.
 - Deguen, R., Landeau, M., & Olson, P. (2014). Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.
+- Fischer, R. A., Cottrell, E., Hauri, E., Lee, K. K. M., & Le Voyer, M. (2020). The partitioning of carbon and oxygen between core and mantle in the early Earth. *Proceedings of the National Academy of Sciences*, 117(16), 8743-8749.
+- Grewal, D. S., Dasgupta, R., Sun, C., Tsuno, K., & Costin, G. (2019a). Delivery of carbon, nitrogen, and sulfur to the silicate Earth by a planetary merger. *Science Advances*, 5(1), eaau3669.
+- Grewal, D. S., Dasgupta, R., & Farnell, A. (2019b). The speciation of carbon, nitrogen, and water in magma oceans and its effect on volatile partitioning between metal and silicate. *Geochimica et Cosmochimica Acta*, 251, 87-115.
 - Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019). A water budget dichotomy of rocky protoplanets from 26Al-heating. *Nature Astronomy*, 3(4), 307-313.
 - Lichtenberg, T., Bower, D. J., Hammond, M., Boukrouche, R., Sanan, P., Tsai, S. M., & Pierrehumbert, R. T. (2021). Vertically resolved magma ocean-protoatmosphere evolution. *Journal of Geophysical Research: Planets*, 126(2), e2020JE006711.
 - Monteux, J., Ricard, Y., Coltice, N., Dubuffet, F., & Aguilar, M. (2009a). A model of metal-silicate separation on growing planets. *Geophysical Journal International*, 179(1), 515-526.
@@ -216,3 +312,4 @@ In large planetesimals and protoplanets ($R > 100\text{ km}$), segregation heati
 - Rubie, D. C., Melosh, H. J., Reid, J. E., Liebske, C., & Righter, K. (2003). Mechanisms of metal-silicate equilibration in the terrestrial magma ocean. *Earth and Planetary Science Letters*, 205(3-4), 239-255.
 - Stevenson, D. J. (1990). Fluid dynamics of core formation. In *Origin of the Earth* (pp. 231-249). Oxford University Press.
 - Yoshino, T., Walter, M. J., & Katsura, T. (2003). Core formation in planetesimals triggered by permeable flow. *Nature*, 422(6928), 154-157.
+

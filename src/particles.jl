@@ -54,6 +54,37 @@ function setup_marker_volatile_properties(
 end
 
 """
+Set up marker metal-hosted volatile inventories for H, C, N, and S in metallic iron alloy.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum::Int`: Total marker count
+
+# Keyword Arguments
+- `initial_h_ppm::Real`: Initial hydrogen in metal [ppmw] (default: 0.0)
+- `initial_c_ppm::Real`: Initial carbon in metal [ppmw] (default: 0.0)
+- `initial_n_ppm::Real`: Initial nitrogen in metal [ppmw] (default: 0.0)
+- `initial_s_ppm::Real`: Initial sulfur in metal [ppmw] (default: 0.0)
+
+# Returns
+- `(Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m)`: Metal volatile concentration arrays on markers [ppmw]
+"""
+function setup_marker_metal_volatile_properties(
+    marknum::Int;
+    initial_h_ppm::Real=0.0,
+    initial_c_ppm::Real=0.0,
+    initial_n_ppm::Real=0.0,
+    initial_s_ppm::Real=0.0,
+)
+    Xfe_H_m = fill(Float64(initial_h_ppm), marknum)
+    Xfe_C_m = fill(Float64(initial_c_ppm), marknum)
+    Xfe_N_m = fill(Float64(initial_n_ppm), marknum)
+    Xfe_S_m = fill(Float64(initial_s_ppm), marknum)
+    return (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m)
+end
+
+"""
 Update volatile concentrations and exsolution porosity for a single marker.
 
 $(SIGNATURES)
@@ -660,6 +691,11 @@ function compute_marker_properties!(
     XCm=nothing,
     XNm=nothing,
     XSm=nothing,
+    metal_partition_cfg::Union{Nothing,MetalPartitionConfig}=nothing,
+    Xfe_H_m=nothing,
+    Xfe_C_m=nothing,
+    Xfe_N_m=nothing,
+    Xfe_S_m=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -797,7 +833,9 @@ function compute_marker_properties!(
                 k_cutoff=k_turb_cutoff_val,
             )
         end
-        if coreformation_active && Xfe_bulk !== nothing
+        metal_partition_active =
+            metal_partition_cfg !== nothing && metal_partition_cfg.active
+        if (coreformation_active || metal_partition_active) && Xfe_bulk !== nothing
             phi_fe = Xfe_bulk[m]
             if phi_fe > 0.0
                 F_fe = compute_metal_melt_fraction(
@@ -806,13 +844,55 @@ function compute_marker_properties!(
                 if Xfem !== nothing
                     Xfem[m] = phi_fe * F_fe
                 end
+
+                # Volatile partitioning between molten metal and silicate melt
+                if metal_partition_cfg !== nothing &&
+                    metal_partition_cfg.active &&
+                    volatiles_active &&
+                    F_fe > 0.0 &&
+                    XH2Om !== nothing &&
+                    Xfe_H_m !== nothing &&
+                    Xfe_C_m !== nothing &&
+                    Xfe_N_m !== nothing &&
+                    Xfe_S_m !== nothing
+                    P_val_equil = pm === nothing ? 0.0 : max(0.0, pm[m])
+                    fO2_val = volatiles_cfg !== nothing ? volatiles_cfg.fO2_delta_IW : -1.0
+                    equilibrate_metal_silicate_volatiles!(
+                        m,
+                        F_fe,
+                        F_melt,
+                        tkm[m],
+                        P_val_equil,
+                        fO2_val,
+                        Xfe_bulk,
+                        Xfem !== nothing ? Xfem : zeros(Float64, length(Xfe_bulk)),
+                        XH2Om,
+                        XCm,
+                        XNm,
+                        XSm,
+                        Xfe_H_m,
+                        Xfe_C_m,
+                        Xfe_N_m,
+                        Xfe_S_m,
+                        metal_partition_cfg;
+                        rho_silicate=rhosolidm0,
+                        rho_metal=rho_metal_val,
+                        equilibration_fraction=metal_partition_cfg.equilibration_rate,
+                    )
+                end
+
                 rho_liq = if metal_density_mode_val !== :constant
                     P_val = pm === nothing ? 0.0 : max(0.0, pm[m])
+                    w_S_eff =
+                        if metal_partition_cfg !== nothing &&
+                            metal_partition_cfg.dynamic_sulfur_density &&
+                            Xfe_S_m !== nothing
+                            clamp(Xfe_S_m[m] * 1.0e-6, 0.0, 0.40)
+                        else
+                            sulfur_fraction_val
+                        end
                     compute_liquid_metal_density(
-                        sulfur_fraction_val;
-                        T=tkm[m],
-                        P=P_val,
-                        law=metal_density_mode_val,
+                        w_S_eff; T=tkm[m], P=P_val, law=metal_density_mode_val
                     )
                 else
                     rho_metal_val
@@ -3203,6 +3283,10 @@ function replenish_markers!(
     XCm=nothing,
     XNm=nothing,
     XSm=nothing,
+    Xfe_H_m=nothing,
+    Xfe_C_m=nothing,
+    Xfe_N_m=nothing,
+    Xfe_S_m=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
@@ -3314,6 +3398,18 @@ function replenish_markers!(
                     end
                     if XSm !== nothing
                         push!(XSm, XSm[m])
+                    end
+                    if Xfe_H_m !== nothing
+                        push!(Xfe_H_m, Xfe_H_m[m])
+                    end
+                    if Xfe_C_m !== nothing
+                        push!(Xfe_C_m, Xfe_C_m[m])
+                    end
+                    if Xfe_N_m !== nothing
+                        push!(Xfe_N_m, Xfe_N_m[m])
+                    end
+                    if Xfe_S_m !== nothing
+                        push!(Xfe_S_m, Xfe_S_m[m])
                     end
                 end
             end

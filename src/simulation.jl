@@ -193,6 +193,11 @@ function save_state(
     XCm=nothing,
     XNm=nothing,
     XSm=nothing,
+    Xfe_H_m=nothing,
+    Xfe_C_m=nothing,
+    Xfe_N_m=nothing,
+    Xfe_S_m=nothing,
+    core_budgets=nothing,
     DT0::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -369,6 +374,8 @@ function save_state(
         alphafluidcur,
         (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
         (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
+        (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
+        (core_budgets !== nothing ? (; core_budgets) : (;))...,
         (M_atm_species !== nothing ? (; M_atm_species, M_escaped_species) : (;))...,
     )
     return nothing
@@ -497,7 +504,9 @@ function simulation_loop(
     k_turb_cutoff_val = cfg.melting.k_turb_cutoff
     k_turb_floor_val = cfg.melting.k_turb_floor
     coreformation_active_val =
-        cfg.coreformation.percolation_active || cfg.coreformation.settling_active
+        cfg.coreformation.percolation_active ||
+        cfg.coreformation.settling_active ||
+        cfg.metal_partition.active
     Xfe_bulk_val = cfg.coreformation.Xfe_bulk
     T_eutectic_val = cfg.coreformation.T_eutectic
     dT_metal_val = cfg.coreformation.dT_metal
@@ -616,6 +625,15 @@ function simulation_loop(
     XCm = nothing
     XNm = nothing
     XSm = nothing
+    Xfe_H_m = nothing
+    Xfe_C_m = nothing
+    Xfe_N_m = nothing
+    Xfe_S_m = nothing
+    Xfe_H_m_step_start = nothing
+    Xfe_C_m_step_start = nothing
+    Xfe_N_m_step_start = nothing
+    Xfe_S_m_step_start = nothing
+    core_budgets = nothing
     M_atm_species = if cfg.escape.multi_species
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
     else
@@ -819,6 +837,26 @@ function simulation_loop(
                 )
             end
         end
+        if cfg.metal_partition.active
+            if haskey(ckpt, "Xfe_H_m")
+                Xfe_H_m = Vector{Float64}(ckpt["Xfe_H_m"])
+                Xfe_C_m = Vector{Float64}(ckpt["Xfe_C_m"])
+                Xfe_N_m = Vector{Float64}(ckpt["Xfe_N_m"])
+                Xfe_S_m = Vector{Float64}(ckpt["Xfe_S_m"])
+            else
+                (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) = setup_marker_metal_volatile_properties(
+                    marknum;
+                    initial_h_ppm=cfg.metal_partition.initial_metal_h_ppm,
+                    initial_c_ppm=cfg.metal_partition.initial_metal_c_ppm,
+                    initial_n_ppm=cfg.metal_partition.initial_metal_n_ppm,
+                    initial_s_ppm=cfg.metal_partition.initial_metal_s_ppm,
+                )
+            end
+            Xfe_H_m_step_start = zeros(Float64, marknum)
+            Xfe_C_m_step_start = zeros(Float64, marknum)
+            Xfe_N_m_step_start = zeros(Float64, marknum)
+            Xfe_S_m_step_start = zeros(Float64, marknum)
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -840,6 +878,19 @@ function simulation_loop(
                 initial_nitrogen_ppm=cfg.volatiles.initial_nitrogen_ppm,
                 initial_sulfur_ppm=cfg.volatiles.initial_sulfur_ppm,
             )
+        end
+        if cfg.metal_partition.active
+            (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) = setup_marker_metal_volatile_properties(
+                marknum;
+                initial_h_ppm=cfg.metal_partition.initial_metal_h_ppm,
+                initial_c_ppm=cfg.metal_partition.initial_metal_c_ppm,
+                initial_n_ppm=cfg.metal_partition.initial_metal_n_ppm,
+                initial_s_ppm=cfg.metal_partition.initial_metal_s_ppm,
+            )
+            Xfe_H_m_step_start = zeros(Float64, marknum)
+            Xfe_C_m_step_start = zeros(Float64, marknum)
+            Xfe_N_m_step_start = zeros(Float64, marknum)
+            Xfe_S_m_step_start = zeros(Float64, marknum)
         end
         define_markers!(
             xm,
@@ -1209,6 +1260,11 @@ function simulation_loop(
                         XCm=XCm,
                         XNm=XNm,
                         XSm=XSm,
+                        metal_partition_cfg=cfg.metal_partition,
+                        Xfe_H_m=Xfe_H_m,
+                        Xfe_C_m=Xfe_C_m,
+                        Xfe_N_m=Xfe_N_m,
+                        Xfe_S_m=Xfe_S_m,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1391,6 +1447,11 @@ function simulation_loop(
                     XCm=XCm,
                     XNm=XNm,
                     XSm=XSm,
+                    metal_partition_cfg=cfg.metal_partition,
+                    Xfe_H_m=Xfe_H_m,
+                    Xfe_C_m=Xfe_C_m,
+                    Xfe_N_m=Xfe_N_m,
+                    Xfe_S_m=Xfe_S_m,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(
@@ -1599,6 +1660,32 @@ function simulation_loop(
                     resize!(Xfem_step_start, length(Xfem))
                 end
                 copyto!(Xfem_step_start, Xfem)
+            end
+        end
+        if cfg.metal_partition.active
+            if Xfe_H_m !== nothing && Xfe_H_m_step_start !== nothing
+                if length(Xfe_H_m_step_start) != length(Xfe_H_m)
+                    resize!(Xfe_H_m_step_start, length(Xfe_H_m))
+                end
+                copyto!(Xfe_H_m_step_start, Xfe_H_m)
+            end
+            if Xfe_C_m !== nothing && Xfe_C_m_step_start !== nothing
+                if length(Xfe_C_m_step_start) != length(Xfe_C_m)
+                    resize!(Xfe_C_m_step_start, length(Xfe_C_m))
+                end
+                copyto!(Xfe_C_m_step_start, Xfe_C_m)
+            end
+            if Xfe_N_m !== nothing && Xfe_N_m_step_start !== nothing
+                if length(Xfe_N_m_step_start) != length(Xfe_N_m)
+                    resize!(Xfe_N_m_step_start, length(Xfe_N_m))
+                end
+                copyto!(Xfe_N_m_step_start, Xfe_N_m)
+            end
+            if Xfe_S_m !== nothing && Xfe_S_m_step_start !== nothing
+                if length(Xfe_S_m_step_start) != length(Xfe_S_m)
+                    resize!(Xfe_S_m_step_start, length(Xfe_S_m))
+                end
+                copyto!(Xfe_S_m_step_start, Xfe_S_m)
             end
         end
 
@@ -1976,6 +2063,32 @@ function simulation_loop(
                     end
                     copyto!(Xfem, Xfem_step_start)
                 end
+                if cfg.metal_partition.active
+                    if Xfe_H_m_step_start !== nothing && Xfe_H_m !== nothing
+                        if length(Xfe_H_m) != length(Xfe_H_m_step_start)
+                            resize!(Xfe_H_m, length(Xfe_H_m_step_start))
+                        end
+                        copyto!(Xfe_H_m, Xfe_H_m_step_start)
+                    end
+                    if Xfe_C_m_step_start !== nothing && Xfe_C_m !== nothing
+                        if length(Xfe_C_m) != length(Xfe_C_m_step_start)
+                            resize!(Xfe_C_m, length(Xfe_C_m_step_start))
+                        end
+                        copyto!(Xfe_C_m, Xfe_C_m_step_start)
+                    end
+                    if Xfe_N_m_step_start !== nothing && Xfe_N_m !== nothing
+                        if length(Xfe_N_m) != length(Xfe_N_m_step_start)
+                            resize!(Xfe_N_m, length(Xfe_N_m_step_start))
+                        end
+                        copyto!(Xfe_N_m, Xfe_N_m_step_start)
+                    end
+                    if Xfe_S_m_step_start !== nothing && Xfe_S_m !== nothing
+                        if length(Xfe_S_m) != length(Xfe_S_m_step_start)
+                            resize!(Xfe_S_m, length(Xfe_S_m_step_start))
+                        end
+                        copyto!(Xfe_S_m, Xfe_S_m_step_start)
+                    end
+                end
                 fill!(Q_seg_grid, 0.0)
                 seg_res = apply_metal_segregation!(
                     xm,
@@ -2001,6 +2114,11 @@ function simulation_loop(
                     Fm=Fm,
                     T_solidus_silicate=cfg.melting.T_solidus[1],
                     T_liquidus_silicate=cfg.melting.T_liquidus[1],
+                    cfg_partition=cfg.metal_partition,
+                    Xfe_H_m=Xfe_H_m,
+                    Xfe_C_m=Xfe_C_m,
+                    Xfe_N_m=Xfe_N_m,
+                    Xfe_S_m=Xfe_S_m,
                 )
                 max_v_seg_prev = seg_res.max_v_seg
             end
@@ -2365,6 +2483,10 @@ function simulation_loop(
             XCm=XCm,
             XNm=XNm,
             XSm=XSm,
+            Xfe_H_m=Xfe_H_m,
+            Xfe_C_m=Xfe_C_m,
+            Xfe_N_m=Xfe_N_m,
+            Xfe_S_m=Xfe_S_m,
         )
         if coreformation_active_val
             if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
@@ -2372,6 +2494,20 @@ function simulation_loop(
             end
             if Xfem_step_start !== nothing && length(Xfem_step_start) != marknum
                 resize!(Xfem_step_start, marknum)
+            end
+        end
+        if cfg.metal_partition.active
+            if Xfe_H_m_step_start !== nothing && length(Xfe_H_m_step_start) != marknum
+                resize!(Xfe_H_m_step_start, marknum)
+            end
+            if Xfe_C_m_step_start !== nothing && length(Xfe_C_m_step_start) != marknum
+                resize!(Xfe_C_m_step_start, marknum)
+            end
+            if Xfe_N_m_step_start !== nothing && length(Xfe_N_m_step_start) != marknum
+                resize!(Xfe_N_m_step_start, marknum)
+            end
+            if Xfe_S_m_step_start !== nothing && length(Xfe_S_m_step_start) != marknum
+                resize!(Xfe_S_m_step_start, marknum)
             end
         end
 
@@ -2385,6 +2521,25 @@ function simulation_loop(
         #  save data for analysis and visualization
         # ---------------------------------------------------------------------
         if timestep % savematstep_val == 0
+            if cfg.metal_partition.active && Xfe_bulk !== nothing
+                core_budgets = compute_core_volatile_budgets(
+                    xm,
+                    ym,
+                    tm,
+                    Xfe_bulk,
+                    Xfe_H_m,
+                    Xfe_C_m,
+                    Xfe_N_m,
+                    Xfe_S_m,
+                    marknum;
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    rho_metal=cfg.coreformation.rho_metal,
+                    core_radius_fraction=cfg.metal_partition.core_radius_fraction,
+                    phi_core_threshold=cfg.metal_partition.phi_core_threshold,
+                )
+            end
             save_state(
                 output_path,
                 timestep,
@@ -2505,6 +2660,11 @@ function simulation_loop(
                 XCm=XCm,
                 XNm=XNm,
                 XSm=XSm,
+                Xfe_H_m=Xfe_H_m,
+                Xfe_C_m=Xfe_C_m,
+                Xfe_N_m=Xfe_N_m,
+                Xfe_S_m=Xfe_S_m,
+                core_budgets=core_budgets,
                 DT0=DT0,
             )
         end

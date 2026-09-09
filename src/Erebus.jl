@@ -34,6 +34,7 @@ export Config,
     RetentionConfig,
     EscapeConfig,
     CoreFormationConfig,
+    MetalPartitionConfig,
     SimulationConfig,
     default_config,
     load_config,
@@ -125,8 +126,13 @@ export Config,
     reduce_thread_buffers!,
     setup_marker_metal_properties,
     setup_marker_volatile_properties,
+    setup_marker_metal_volatile_properties,
     update_single_marker_volatile_exsolution!,
-    update_marker_volatile_exsolution!
+    update_marker_volatile_exsolution!,
+    compute_metal_silicate_partition_coefficient,
+    compute_metal_silicate_partition_coefficients,
+    equilibrate_metal_silicate_volatiles!,
+    compute_core_volatile_budgets
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -259,7 +265,11 @@ module Physics
         MASS_H2S_KG,
         MASS_S2_KG,
         MASS_SO2_KG,
-        JEANS_LAMBDA_CUTOFF
+        JEANS_LAMBDA_CUTOFF,
+        compute_metal_silicate_partition_coefficient,
+        compute_metal_silicate_partition_coefficients,
+        equilibrate_metal_silicate_volatiles!,
+        compute_core_volatile_budgets
     export distance,
         total,
         ktotal,
@@ -350,7 +360,11 @@ module Physics
         compute_h2o_retention_floor,
         compute_carbon_retention_floor,
         compute_nitrogen_retention_floor,
-        compute_sulfur_retention_floor
+        compute_sulfur_retention_floor,
+        compute_metal_silicate_partition_coefficient,
+        compute_metal_silicate_partition_coefficients,
+        equilibrate_metal_silicate_volatiles!,
+        compute_core_volatile_budgets
 end
 
 module Particles
@@ -358,6 +372,7 @@ module Particles
         setup_marker_properties,
         setup_marker_metal_properties,
         setup_marker_volatile_properties,
+        setup_marker_metal_volatile_properties,
         update_single_marker_volatile_exsolution!,
         update_marker_volatile_exsolution!,
         drain_vented_marker_volatiles!,
@@ -406,6 +421,7 @@ module Particles
     export setup_marker_properties,
         setup_marker_metal_properties,
         setup_marker_volatile_properties,
+        setup_marker_metal_volatile_properties,
         update_single_marker_volatile_exsolution!,
         update_marker_volatile_exsolution!,
         setup_marker_properties_helpers,
@@ -553,6 +569,7 @@ module Config
         RetentionConfig,
         EscapeConfig,
         CoreFormationConfig,
+        MetalPartitionConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -574,6 +591,7 @@ module Config
         RetentionConfig,
         EscapeConfig,
         CoreFormationConfig,
+        MetalPartitionConfig,
         SimulationConfig,
         default_config,
         load_config,

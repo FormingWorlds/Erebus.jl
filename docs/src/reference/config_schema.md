@@ -386,6 +386,57 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 
 ---
 
+### `[metal_partition]` - Metal-Silicate Volatile Partitioning & Transport
+
+The `[metal_partition]` section controls thermodynamic volatile exchange between molten iron alloy and silicate melt, donor-cell advective volatile transport during core segregation, and dynamic liquid metal density coupling.
+
+```toml
+[metal_partition]
+active = false
+model_carbon = "grewal2019"
+model_nitrogen = "grewal2019"
+model_hydrogen = "clesi2018"
+model_sulfur = "boujibar2014"
+D_H_const = 0.5
+D_C_const = 500.0
+D_N_const = 20.0
+D_S_const = 200.0
+equilibration_rate = 1.0
+dynamic_sulfur_density = true
+D_min = 1.0e-4
+D_max = 1.0e5
+initial_metal_h_ppm = 0.0
+initial_metal_c_ppm = 0.0
+initial_metal_n_ppm = 0.0
+initial_metal_s_ppm = 0.0
+core_radius_fraction = 0.5
+phi_core_threshold = 0.40
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable metal-silicate volatile partitioning and core segregation transport | `true` / `false` |
+| `model_carbon` | `Symbol` | `:grewal2019` | - | Carbon partition model parameterization | `:constant`, `:grewal2019`, `:fischer2020` |
+| `model_nitrogen` | `Symbol` | `:grewal2019` | - | Nitrogen partition model parameterization | `:constant`, `:grewal2019` |
+| `model_hydrogen` | `Symbol` | `:clesi2018` | - | Hydrogen partition model parameterization | `:constant`, `:clesi2018` |
+| `model_sulfur` | `Symbol` | `:boujibar2014` | - | Sulfur partition model parameterization | `:constant`, `:boujibar2014` |
+| `D_H_const` | `Float64` | `0.5` | - | Constant partition coefficient for hydrogen | $\ge 0$ |
+| `D_C_const` | `Float64` | `500.0` | - | Constant partition coefficient for carbon | $\ge 0$ |
+| `D_N_const` | `Float64` | `20.0` | - | Constant partition coefficient for nitrogen | $\ge 0$ |
+| `D_S_const` | `Float64` | `200.0` | - | Constant partition coefficient for sulfur | $\ge 0$ |
+| `equilibration_rate` | `Float64` | `1.0` | - | Kinetic equilibration fraction per timestep pass ($\alpha_{\text{eq}}$) | $\in [0, 1]$ |
+| `dynamic_sulfur_density` | `Bool` | `true` | - | Evaluate liquid metal density using marker sulfur mass fraction $w_S$ | `true` / `false` |
+| `D_min` | `Float64` | `1.0e-4` | - | Numerical floor on partition coefficients | $> 0$ |
+| `D_max` | `Float64` | `1.0e5` | - | Numerical ceiling on partition coefficients | $\ge D_{\text{min}}$ |
+| `initial_metal_h_ppm` | `Float64` | `0.0` | ppmw | Initial hydrogen concentration in primordial metallic phase | $\ge 0$ |
+| `initial_metal_c_ppm` | `Float64` | `0.0` | ppmw | Initial carbon concentration in primordial metallic phase | $\ge 0$ |
+| `initial_metal_n_ppm` | `Float64` | `0.0` | ppmw | Initial nitrogen concentration in primordial metallic phase | $\ge 0$ |
+| `initial_metal_s_ppm` | `Float64` | `0.0` | ppmw | Initial sulfur concentration in primordial metallic phase | $\ge 0$ |
+| `core_radius_fraction` | `Float64` | `0.5` | - | Fractional planet radius defining central core region ($r_c / R_{\text{planet}}$) | $\in [0, 1]$ |
+| `phi_core_threshold` | `Float64` | `0.40` | - | Metal volume fraction threshold for core membership | $\in [0, 1]$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input

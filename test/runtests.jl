@@ -34,5 +34,6 @@ const rgen = MersenneTwister(seed)
     include("test_volatile_retention.jl")
     include("test_jeans_escape.jl")
     include("test_core_formation.jl")
+    include("test_core_volatile_partitioning.jl")
     include("test_integration.jl")
 end
