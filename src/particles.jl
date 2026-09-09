@@ -85,6 +85,40 @@ function setup_marker_metal_volatile_properties(
 end
 
 """
+Setup normative accessory mineral phase tracking arrays on markers.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum::Integer`: Number of markers.
+- `cfg::PhaseTrackingConfig`: Phase tracking configuration.
+
+# Returns
+- Named tuple with fields `(Xmin_troilite_m, Xmin_schreibersite_m, Xmin_cohenite_m, Xmin_graphite_m, Xmin_nitride_m, Xmin_metal_matrix_m)`.
+  If `cfg.active` is `false`, all fields are `nothing`.
+"""
+function setup_marker_phase_tracking_properties(marknum::Integer, cfg::PhaseTrackingConfig)
+    if !cfg.active
+        return (;
+            Xmin_troilite_m=nothing,
+            Xmin_schreibersite_m=nothing,
+            Xmin_cohenite_m=nothing,
+            Xmin_graphite_m=nothing,
+            Xmin_nitride_m=nothing,
+            Xmin_metal_matrix_m=nothing,
+        )
+    end
+    return (;
+        Xmin_troilite_m=zeros(Float64, marknum),
+        Xmin_schreibersite_m=zeros(Float64, marknum),
+        Xmin_cohenite_m=zeros(Float64, marknum),
+        Xmin_graphite_m=zeros(Float64, marknum),
+        Xmin_nitride_m=zeros(Float64, marknum),
+        Xmin_metal_matrix_m=zeros(Float64, marknum),
+    )
+end
+
+"""
 Update volatile concentrations and exsolution porosity for a single marker.
 
 $(SIGNATURES)
@@ -696,6 +730,13 @@ function compute_marker_properties!(
     Xfe_C_m=nothing,
     Xfe_N_m=nothing,
     Xfe_S_m=nothing,
+    phase_tracking_cfg::Union{Nothing,PhaseTrackingConfig}=nothing,
+    Xmin_troilite_m=nothing,
+    Xmin_schreibersite_m=nothing,
+    Xmin_cohenite_m=nothing,
+    Xmin_graphite_m=nothing,
+    Xmin_nitride_m=nothing,
+    Xmin_metal_matrix_m=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -928,6 +969,34 @@ function compute_marker_properties!(
         elseif Xfem !== nothing
             Xfem[m] = 0.0
         end
+        if phase_tracking_cfg !== nothing &&
+            phase_tracking_cfg.active &&
+            Xmin_troilite_m !== nothing
+            fe_frac = Xfe_bulk !== nothing ? Xfe_bulk[m] : 0.0
+            if fe_frac > 0.0
+                T_safe = max(0.0, tkm[m])
+                w_S = Xfe_S_m !== nothing ? max(0.0, Xfe_S_m[m] * 1.0e-6) : 0.0
+                w_C = Xfe_C_m !== nothing ? max(0.0, Xfe_C_m[m] * 1.0e-6) : 0.0
+                w_N = Xfe_N_m !== nothing ? max(0.0, Xfe_N_m[m] * 1.0e-6) : 0.0
+                w_P = max(0.0, phase_tracking_cfg.bulk_P_ppm * 1.0e-6)
+                res_min = compute_normative_mineral_assemblage(
+                    T_safe, w_S, w_C, w_N, w_P, phase_tracking_cfg
+                )
+                Xmin_troilite_m[m] = res_min.w_troilite
+                Xmin_schreibersite_m[m] = res_min.w_schreibersite
+                Xmin_cohenite_m[m] = res_min.w_cohenite
+                Xmin_graphite_m[m] = res_min.w_graphite
+                Xmin_nitride_m[m] = res_min.w_nitride
+                Xmin_metal_matrix_m[m] = res_min.w_metal_matrix
+            else
+                Xmin_troilite_m[m] = 0.0
+                Xmin_schreibersite_m[m] = 0.0
+                Xmin_cohenite_m[m] = 0.0
+                Xmin_graphite_m[m] = 0.0
+                Xmin_nitride_m[m] = 0.0
+                Xmin_metal_matrix_m[m] = 0.0
+            end
+        end
     else
         # sticky air
         if Fm !== nothing
@@ -935,6 +1004,14 @@ function compute_marker_properties!(
         end
         if Xfem !== nothing
             Xfem[m] = 0.0
+        end
+        if Xmin_troilite_m !== nothing
+            Xmin_troilite_m[m] = 0.0
+            Xmin_schreibersite_m[m] = 0.0
+            Xmin_cohenite_m[m] = 0.0
+            Xmin_graphite_m[m] = 0.0
+            Xmin_nitride_m[m] = 0.0
+            Xmin_metal_matrix_m[m] = 0.0
         end
         etafluidcur = etafluidm[tm[m]]
         if rhofluidcur !== nothing
@@ -3287,6 +3364,12 @@ function replenish_markers!(
     Xfe_C_m=nothing,
     Xfe_N_m=nothing,
     Xfe_S_m=nothing,
+    Xmin_troilite_m=nothing,
+    Xmin_schreibersite_m=nothing,
+    Xmin_cohenite_m=nothing,
+    Xmin_graphite_m=nothing,
+    Xmin_nitride_m=nothing,
+    Xmin_metal_matrix_m=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
@@ -3410,6 +3493,24 @@ function replenish_markers!(
                     end
                     if Xfe_S_m !== nothing
                         push!(Xfe_S_m, Xfe_S_m[m])
+                    end
+                    if Xmin_troilite_m !== nothing
+                        push!(Xmin_troilite_m, Xmin_troilite_m[m])
+                    end
+                    if Xmin_schreibersite_m !== nothing
+                        push!(Xmin_schreibersite_m, Xmin_schreibersite_m[m])
+                    end
+                    if Xmin_cohenite_m !== nothing
+                        push!(Xmin_cohenite_m, Xmin_cohenite_m[m])
+                    end
+                    if Xmin_graphite_m !== nothing
+                        push!(Xmin_graphite_m, Xmin_graphite_m[m])
+                    end
+                    if Xmin_nitride_m !== nothing
+                        push!(Xmin_nitride_m, Xmin_nitride_m[m])
+                    end
+                    if Xmin_metal_matrix_m !== nothing
+                        push!(Xmin_metal_matrix_m, Xmin_metal_matrix_m[m])
                     end
                 end
             end

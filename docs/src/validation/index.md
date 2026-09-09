@@ -20,6 +20,8 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Volatile Retention Floors & Vent Drainage** | Nominally anhydrous mineral retention floors, vacuum exsolution clamping, and low-temperature venting drainage coupling | Hirschmann et al. (2006); Peslier et al. (2017); Shcheka et al. (2006); Hirschmann (2018); Li et al. (2013) | `test/test_volatile_retention.jl` |
 | **Jeans Kinetic Atmospheric Escape** | Maxwellian effusion, scale height relaxation, mass conservation, and surface pressure feedback | Jeans (1925); Catling & Kasting (2017) | `test/test_jeans_escape.jl` |
 | **Iron Core Formation** | Fe-FeS percolation Darcy flow, Stokes droplet settling, regime handover, dissipation heating, and mass conservation | Yoshino et al. (2003); Rubie et al. (2003, 2015); Monteux et al. (2009); Lichtenberg et al. (2019) | `test/test_core_formation.jl` |
+| **Core Geochemistry & Volatiles** | Siderophile partitioning (H, C, N, S), sulfur suppression of carbon, and dynamic alloy density | Grewal et al. (2019a, 2019b); Clesi et al. (2018); Boujibar et al. (2014) | `test/test_core_volatile_partitioning.jl` |
+| **Normative Accessory Minerals** | Stoichiometric sub-eutectic mineral exsolution, thermal eutectic dissolution, and meteorite classification | Benedix et al. (2000); Goldstein et al. (2009); Chabot & Drake (1999) | `test/test_normative_accessory_minerals.jl` |
 
 ---
 

@@ -437,6 +437,39 @@ phi_core_threshold = 0.40
 
 ---
 
+## `[phase_tracking]`
+
+Normative accessory mineral tracking and meteorite diagnostic parameters configure sub-eutectic stoichiometric allocation of S, P, C, and N into solid accessory phases (troilite $\text{FeS}$, schreibersite $(\text{Fe,Ni})_3\text{P}$, cohenite $(\text{Fe,Ni})_3\text{C}$, graphite $\text{C}$, nitrides $\text{Fe}_4\text{N}/\text{CrN}/\text{TiN}$) and residual metallic matrix, as well as thermal dissolution across the eutectic transition ($T_{\text{eutectic}} \approx 1213\text{ K}$).
+
+```toml
+[phase_tracking]
+active = false
+T_eutectic = 1213.0
+dT_transition = 50.0
+bulk_P_ppm = 1000.0
+schreibersite_ni_frac = 0.25
+cohenite_carbide_max = 0.0667
+nitride_mode = "roaldite"
+track_regional_modes = true
+r_core_norm = 0.5
+r_mantle_norm = 0.85
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable normative accessory mineral tracking | `true` / `false` |
+| `T_eutectic` | `Float64` | `1213.0` | K | Metallic Fe-FeS eutectic temperature | $> 0$ |
+| `dT_transition` | `Float64` | `50.0` | K | Eutectic phase dissolution temperature interval | $> 0$ |
+| `bulk_P_ppm` | `Float64` | `1000.0` | ppmw | Bulk phosphorus concentration in metallic alloy | $\ge 0$ |
+| `schreibersite_ni_frac` | `Float64` | `0.25` | - | Nickel molar fraction in schreibersite $(\text{Fe,Ni})_3\text{P}$ | $\in [0, 1]$ |
+| `cohenite_carbide_max` | `Float64` | `0.0667` | - | Maximum carbon mass fraction before graphite saturation | $\in (0, 1]$ |
+| `nitride_mode` | `Symbol` | `:roaldite` | - | Mineral stoichiometry for accessory nitrides | `:roaldite`, `:carlsbergite`, `:osbornite` |
+| `track_regional_modes` | `Bool` | `true` | - | Calculate regional modal mineral distributions and classifications | `true` / `false` |
+| `r_core_norm` | `Float64` | `0.5` | - | Normalized radial boundary for planetesimal core ($r / R_{\text{planet}}$) | $\in (0, 1)$ |
+| `r_mantle_norm` | `Float64` | `0.85` | - | Normalized radial boundary for planetesimal mantle ($r / R_{\text{planet}}$) | $\in (\text{r\_core\_norm}, 1]$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input

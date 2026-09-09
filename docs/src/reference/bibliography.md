@@ -147,6 +147,22 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/j.epsl.2014.01.021](https://doi.org/10.1016/j.epsl.2014.01.021)  
   *Empirical parameterization of sulfur partitioning between metallic liquid and silicate melt as a function of temperature, pressure, and oxygen fugacity.*
 
+---
+
+## Normative Accessory Minerals and Meteorite Petrology
+
+- **Benedix, G. K., McCoy, T. J., Keil, K., & Bogard, D. D. (2000)**. A petrologic and geochemical study of winonaites: Implications for trace element behavior during primitive achondrite differentiation. *Geochimica et Cosmochimica Acta*, 64(14), 2535-2553.  
+  [https://doi.org/10.1016/S0016-7037(00)00383-5](https://doi.org/10.1016/S0016-7037(00)00383-5)  
+  *Petrologic and geochemical characterization of primitive achondrite parent bodies, incomplete differentiation, and accessory phase retention.*
+
+- **Chabot, N. L., & Drake, M. J. (1999)**. Crystallization of magmatic iron meteorites: The role of phosphorus and sulfur. *Meteoritics & Planetary Science*, 34(2), 235-246.  
+  [https://doi.org/10.1111/j.1945-5100.1999.tb01749.x](https://doi.org/10.1111/j.1945-5100.1999.tb01749.x)  
+  *Thermodynamics and crystallization pathways of magmatic iron meteorites, focused on phosphorus and sulfur fractional crystallization.*
+
+- **Goldstein, J. I., Scott, E. R. D., & Chabot, N. L. (2009)**. Iron meteorites: Crystallization, thermal history, parent bodies, and origin. *Chemie der Erde - Geochemistry*, 69(4), 293-325.  
+  [https://doi.org/10.1016/j.chemer.2009.01.002](https://doi.org/10.1016/j.chemer.2009.01.002)  
+  *Review of iron meteorite parent bodies, cooling rates, core segregation regimes, and mineralogical structures.*
+
 
 
 

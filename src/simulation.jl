@@ -198,6 +198,13 @@ function save_state(
     Xfe_N_m=nothing,
     Xfe_S_m=nothing,
     core_budgets=nothing,
+    Xmin_troilite_m=nothing,
+    Xmin_schreibersite_m=nothing,
+    Xmin_cohenite_m=nothing,
+    Xmin_graphite_m=nothing,
+    Xmin_nitride_m=nothing,
+    Xmin_metal_matrix_m=nothing,
+    regional_mineral_modes=nothing,
     DT0::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -377,6 +384,21 @@ function save_state(
         (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
         (core_budgets !== nothing ? (; core_budgets) : (;))...,
         (M_atm_species !== nothing ? (; M_atm_species, M_escaped_species) : (;))...,
+        (
+            if Xmin_troilite_m !== nothing
+                (;
+                    Xmin_troilite_m,
+                    Xmin_schreibersite_m,
+                    Xmin_cohenite_m,
+                    Xmin_graphite_m,
+                    Xmin_nitride_m,
+                    Xmin_metal_matrix_m,
+                )
+            else
+                (;)
+            end
+        )...,
+        (regional_mineral_modes !== nothing ? (; regional_mineral_modes) : (;))...,
     )
     return nothing
 end
@@ -634,6 +656,13 @@ function simulation_loop(
     Xfe_N_m_step_start = nothing
     Xfe_S_m_step_start = nothing
     core_budgets = nothing
+    Xmin_troilite_m = nothing
+    Xmin_schreibersite_m = nothing
+    Xmin_cohenite_m = nothing
+    Xmin_graphite_m = nothing
+    Xmin_nitride_m = nothing
+    Xmin_metal_matrix_m = nothing
+    regional_mineral_modes = nothing
     M_atm_species = if cfg.escape.multi_species
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
     else
@@ -857,6 +886,29 @@ function simulation_loop(
             Xfe_N_m_step_start = zeros(Float64, marknum)
             Xfe_S_m_step_start = zeros(Float64, marknum)
         end
+        if cfg.phase_tracking.active
+            if haskey(ckpt, "Xmin_troilite_m")
+                Xmin_troilite_m = Vector{Float64}(ckpt["Xmin_troilite_m"])
+                Xmin_schreibersite_m = Vector{Float64}(ckpt["Xmin_schreibersite_m"])
+                Xmin_cohenite_m = Vector{Float64}(ckpt["Xmin_cohenite_m"])
+                Xmin_graphite_m = Vector{Float64}(ckpt["Xmin_graphite_m"])
+                Xmin_nitride_m = Vector{Float64}(ckpt["Xmin_nitride_m"])
+                Xmin_metal_matrix_m = Vector{Float64}(ckpt["Xmin_metal_matrix_m"])
+            else
+                phase_arrays = setup_marker_phase_tracking_properties(
+                    marknum, cfg.phase_tracking
+                )
+                Xmin_troilite_m = phase_arrays.Xmin_troilite_m
+                Xmin_schreibersite_m = phase_arrays.Xmin_schreibersite_m
+                Xmin_cohenite_m = phase_arrays.Xmin_cohenite_m
+                Xmin_graphite_m = phase_arrays.Xmin_graphite_m
+                Xmin_nitride_m = phase_arrays.Xmin_nitride_m
+                Xmin_metal_matrix_m = phase_arrays.Xmin_metal_matrix_m
+            end
+            if haskey(ckpt, "regional_mineral_modes")
+                regional_mineral_modes = ckpt["regional_mineral_modes"]
+            end
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -891,6 +943,17 @@ function simulation_loop(
             Xfe_C_m_step_start = zeros(Float64, marknum)
             Xfe_N_m_step_start = zeros(Float64, marknum)
             Xfe_S_m_step_start = zeros(Float64, marknum)
+        end
+        if cfg.phase_tracking.active
+            phase_arrays = setup_marker_phase_tracking_properties(
+                marknum, cfg.phase_tracking
+            )
+            Xmin_troilite_m = phase_arrays.Xmin_troilite_m
+            Xmin_schreibersite_m = phase_arrays.Xmin_schreibersite_m
+            Xmin_cohenite_m = phase_arrays.Xmin_cohenite_m
+            Xmin_graphite_m = phase_arrays.Xmin_graphite_m
+            Xmin_nitride_m = phase_arrays.Xmin_nitride_m
+            Xmin_metal_matrix_m = phase_arrays.Xmin_metal_matrix_m
         end
         define_markers!(
             xm,
@@ -1052,6 +1115,18 @@ function simulation_loop(
             XCm=XCm,
             XNm=XNm,
             XSm=XSm,
+            Xfe_H_m=Xfe_H_m,
+            Xfe_C_m=Xfe_C_m,
+            Xfe_N_m=Xfe_N_m,
+            Xfe_S_m=Xfe_S_m,
+            core_budgets=core_budgets,
+            Xmin_troilite_m=Xmin_troilite_m,
+            Xmin_schreibersite_m=Xmin_schreibersite_m,
+            Xmin_cohenite_m=Xmin_cohenite_m,
+            Xmin_graphite_m=Xmin_graphite_m,
+            Xmin_nitride_m=Xmin_nitride_m,
+            Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+            regional_mineral_modes=regional_mineral_modes,
             DT0=DT0,
         )
     end
@@ -1265,6 +1340,13 @@ function simulation_loop(
                         Xfe_C_m=Xfe_C_m,
                         Xfe_N_m=Xfe_N_m,
                         Xfe_S_m=Xfe_S_m,
+                        phase_tracking_cfg=cfg.phase_tracking,
+                        Xmin_troilite_m=Xmin_troilite_m,
+                        Xmin_schreibersite_m=Xmin_schreibersite_m,
+                        Xmin_cohenite_m=Xmin_cohenite_m,
+                        Xmin_graphite_m=Xmin_graphite_m,
+                        Xmin_nitride_m=Xmin_nitride_m,
+                        Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                     )
                     @inbounds marker_to_basic_nodes!(
                         m,
@@ -1452,6 +1534,13 @@ function simulation_loop(
                     Xfe_C_m=Xfe_C_m,
                     Xfe_N_m=Xfe_N_m,
                     Xfe_S_m=Xfe_S_m,
+                    phase_tracking_cfg=cfg.phase_tracking,
+                    Xmin_troilite_m=Xmin_troilite_m,
+                    Xmin_schreibersite_m=Xmin_schreibersite_m,
+                    Xmin_cohenite_m=Xmin_cohenite_m,
+                    Xmin_graphite_m=Xmin_graphite_m,
+                    Xmin_nitride_m=Xmin_nitride_m,
+                    Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                 )
                 # interpolate marker properties to basic nodes
                 @inbounds marker_to_basic_nodes!(
@@ -2487,6 +2576,12 @@ function simulation_loop(
             Xfe_C_m=Xfe_C_m,
             Xfe_N_m=Xfe_N_m,
             Xfe_S_m=Xfe_S_m,
+            Xmin_troilite_m=Xmin_troilite_m,
+            Xmin_schreibersite_m=Xmin_schreibersite_m,
+            Xmin_cohenite_m=Xmin_cohenite_m,
+            Xmin_graphite_m=Xmin_graphite_m,
+            Xmin_nitride_m=Xmin_nitride_m,
+            Xmin_metal_matrix_m=Xmin_metal_matrix_m,
         )
         if coreformation_active_val
             if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
@@ -2538,6 +2633,26 @@ function simulation_loop(
                     rho_metal=cfg.coreformation.rho_metal,
                     core_radius_fraction=cfg.metal_partition.core_radius_fraction,
                     phi_core_threshold=cfg.metal_partition.phi_core_threshold,
+                )
+            end
+            if cfg.phase_tracking.active &&
+                cfg.phase_tracking.track_regional_modes &&
+                Xfe_bulk !== nothing
+                regional_mineral_modes = compute_regional_mineral_modes(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    Xfe_bulk,
+                    Xfe_S_m,
+                    Xfe_C_m,
+                    Xfe_N_m,
+                    marknum;
+                    cfg=cfg.phase_tracking,
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    rho_metal=cfg.coreformation.rho_metal,
                 )
             end
             save_state(
@@ -2665,6 +2780,13 @@ function simulation_loop(
                 Xfe_N_m=Xfe_N_m,
                 Xfe_S_m=Xfe_S_m,
                 core_budgets=core_budgets,
+                Xmin_troilite_m=Xmin_troilite_m,
+                Xmin_schreibersite_m=Xmin_schreibersite_m,
+                Xmin_cohenite_m=Xmin_cohenite_m,
+                Xmin_graphite_m=Xmin_graphite_m,
+                Xmin_nitride_m=Xmin_nitride_m,
+                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                regional_mineral_modes=regional_mineral_modes,
                 DT0=DT0,
             )
         end

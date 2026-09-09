@@ -281,16 +281,44 @@ The resulting mean core volatile concentrations $w_{\text{core}, k} = M_{\text{c
 
 ---
 
+## Normative Accessory Mineral Tracking and Meteorite Diagnostics
+
+While the binary Fe-FeS eutectic is ~1261 K at low pressure, minor nickel, phosphorus, and carbon depress initial melting to ~1213 K (940 °C; Goldstein et al., 2009; Chabot and Drake, 1999). Below this temperature ($T \le T_{\text{eutectic}}$), minor and volatile elements in solid metallic iron exsolve into accessory phases:
+1. Troilite ($\text{FeS}$): Formed from sulfur via molar conversion $w_{\text{troilite}} = w_S \cdot (M_{\text{FeS}} / M_S) \approx 2.742 \cdot w_S$.
+2. Schreibersite ($(\text{Fe,Ni})_3\text{P}$): Formed from phosphorus with nickel molar fraction $x_{\text{Ni}} = 0.25$, yielding $w_{\text{schreibersite}} \approx 6.478 \cdot w_P$.
+3. Cohenite ($(\text{Fe,Ni})_3\text{C}$) and graphite ($\text{C}$): Formed from carbon up to the carbide saturation limit ($w_{C,\text{max}} \approx 0.0667$). Excess carbon precipitates as elemental graphite.
+4. Nitrides ($\text{Fe}_4\text{N}$, $\text{CrN}$, or $\text{TiN}$): Formed from nitrogen according to the selected mode.
+5. Metal matrix: Residual solid metallic alloy.
+
+### Thermal Dissolution
+
+During heating through the eutectic interval ($T_{\text{eutectic}} \le T \le T_{\text{eutectic}} + \Delta T_{\text{transition}}$), solid accessory phases dissolve into metallic liquid:
+
+$$X_{m, i} = F_{\text{solid}}(T) \cdot w_i^{\text{stoich}}$$
+
+where $F_{\text{solid}}(T) = 1.0 - (T - T_{\text{eutectic}}) / \Delta T_{\text{transition}}$.
+
+### Regional Classification
+
+Marker phase distributions are integrated across radial domains (core, mantle, crust). Simulation outputs are classified into meteorite affinities:
+- Magmatic differentiated bodies ($f_{\text{molten,core}} \ge 0.80$ and $f_{\text{metal,core}} \ge 0.40$): Corresponds to groups IIIAB, IVA, and IVB.
+- Primitive incomplete bodies ($f_{\text{molten,core}} \le 0.60$ and $f_{\text{solid,crust}} \ge 0.01$): Corresponds to IAB complexes and winonaites.
+- Transitional bodies: Intermediate segregation states.
+
+---
+
 ## Source Code Architecture
 
 | Physical Component | Source File | Key Functions |
 |:---|:---|:---|
-| Parameter definition | `src/config.jl` | `CoreFormationConfig`, `MetalPartitionConfig` |
+| Parameter definition | `src/config.jl` | `CoreFormationConfig`, `MetalPartitionConfig`, `PhaseTrackingConfig` |
 | Partition coefficients | `src/physics.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
 | Volatile equilibration | `src/physics.jl` | `equilibrate_metal_silicate_volatiles!` |
+| Accessory minerals | `src/physics.jl` | `compute_troilite_stoichiometry`, `compute_schreibersite_stoichiometry`, `compute_cohenite_graphite_stoichiometry`, `compute_nitride_stoichiometry`, `compute_normative_mineral_assemblage` |
+| Regional modes | `src/physics.jl` | `compute_regional_mineral_modes` |
 | Core budget integration | `src/physics.jl` | `compute_core_volatile_budgets` |
-| Melt fraction & velocity | `src/physics.jl` | `compute_metal_melt_fraction`, `metal_segregation_velocity`, `segregation_dissipation_heating` |
-| Marker tracking & properties | `src/particles.jl` | `compute_marker_properties!`, `setup_marker_metal_properties`, `setup_marker_metal_volatile_properties`, `replenish_markers!` |
+| Melt fraction and velocity | `src/physics.jl` | `compute_metal_melt_fraction`, `metal_segregation_velocity`, `segregation_dissipation_heating` |
+| Marker tracking and properties | `src/particles.jl` | `compute_marker_properties!`, `setup_marker_metal_properties`, `setup_marker_metal_volatile_properties`, `setup_marker_phase_tracking_properties`, `replenish_markers!` |
 | Conservative transport | `src/numerics.jl` | `apply_metal_segregation!`, `assemble_thermal_lse!` |
 | Main simulation integration | `src/simulation.jl` | Timestep loop sequence and checkpoint persistence |
 
@@ -298,11 +326,14 @@ The resulting mean core volatile concentrations $w_{\text{core}, k} = M_{\text{c
 
 ## References
 
+- Benedix, G. K., McCoy, T. J., Keil, K., & Bogard, D. D. (2000). A petrologic and geochemical study of winonaites: Implications for trace element behavior during primitive achondrite differentiation. *Geochimica et Cosmochimica Acta*, 64(14), 2535-2553.
 - Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014). Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54.
+- Chabot, N. L., & Drake, M. J. (1999). Crystallization of magmatic iron meteorites: The role of phosphorus and sulfur. *Meteoritics & Planetary Science*, 34(2), 235-246.
 - Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018). Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876.
 - Deguen, R., Olson, P., & Cardin, P. (2011). Experiments on turbulent metal-silicate mixing in a magma ocean. *Earth and Planetary Science Letters*, 310(3-4), 303-313.
 - Deguen, R., Landeau, M., & Olson, P. (2014). Turbulent metal-silicate mixing, fragmentation, and equilibration in magma oceans. *Earth and Planetary Science Letters*, 391, 274-287.
 - Fischer, R. A., Cottrell, E., Hauri, E., Lee, K. K. M., & Le Voyer, M. (2020). The partitioning of carbon and oxygen between core and mantle in the early Earth. *Proceedings of the National Academy of Sciences*, 117(16), 8743-8749.
+- Goldstein, J. I., Scott, E. R. D., & Chabot, N. L. (2009). Iron meteorites: Crystallization, thermal history, parent bodies, and origin. *Chemie der Erde - Geochemistry*, 69(4), 293-325.
 - Grewal, D. S., Dasgupta, R., Sun, C., Tsuno, K., & Costin, G. (2019a). Delivery of carbon, nitrogen, and sulfur to the silicate Earth by a planetary merger. *Science Advances*, 5(1), eaau3669.
 - Grewal, D. S., Dasgupta, R., & Farnell, A. (2019b). The speciation of carbon, nitrogen, and water in magma oceans and its effect on volatile partitioning between metal and silicate. *Geochimica et Cosmochimica Acta*, 251, 87-115.
 - Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019). A water budget dichotomy of rocky protoplanets from 26Al-heating. *Nature Astronomy*, 3(4), 307-313.
