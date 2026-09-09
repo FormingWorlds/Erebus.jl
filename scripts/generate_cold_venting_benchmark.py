@@ -103,12 +103,12 @@ def main():
     T_cross_disk = T_eval[np.argmin(np.abs(P_sat - P_disk))]
     ax_b.scatter([T_cross_disk], [P_disk], color="#d62728", s=60, zorder=5)
     ax_b.annotate(f"Free Venting\n$T > {T_cross_disk:.0f}$ K",
-                  xy=(T_cross_disk, P_disk), xytext=(T_cross_disk - 35, P_disk * 8),
+                  xy=(T_cross_disk, P_disk), xytext=(T_cross_disk - 45, P_disk * 3.5),
                   arrowprops=dict(arrowstyle="->", color="#d62728", lw=1.2),
                   fontsize=9, fontweight="bold", color="#d62728")
 
     ax_b.set_yscale("log")
-    ax_b.set_ylim(1e-12, 1e3)
+    ax_b.set_ylim(1e-12, 3e3)
     ax_b.set_xlim(100, 280)
     ax_b.set_xlabel("Surface Temperature $T_{\\mathrm{surf}}$ [K]", fontsize=11, fontweight="bold")
     ax_b.set_ylabel("Equilibrium Vapor Pressure [Pa]", fontsize=11, fontweight="bold")
@@ -134,7 +134,7 @@ def main():
         ax_c.plot(delta_P, q_flux, lw=2.0, color=col, label=f"$k_{{\\mathrm{{vent}}}} = 10^{{{int(np.log10(k_v))}}}$ m$^2$")
 
     ax_c.axvline(0.0, color="gray", ls="--", lw=1.0)
-    ax_c.annotate("Zero Flux Gate\n($P_f \\leq P_{\\mathrm{vent}}$)",
+    ax_c.annotate("Zero Flux Threshold\n($P_f \\leq P_{\\mathrm{vent}}$)",
                   xy=(0.0, 5.0), xytext=(-0.45, 12.0),
                   arrowprops=dict(arrowstyle="->", color="gray", lw=1.0),
                   fontsize=9, color="#555555")

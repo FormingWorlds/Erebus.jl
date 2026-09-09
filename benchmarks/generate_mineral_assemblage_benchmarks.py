@@ -157,8 +157,8 @@ def generate_benchmark_figure():
               label=r'Troilite $\times 10^{-1}$ [wt%]')
     ax_b.plot(T_arr, F_sol * w_sch_0 * 100.0, color=STRATA['gold'], lw=2.0, ls='-.',
               label=r'Schreibersite [wt%]')
-    ax_b.plot(T_arr, F_sol * w_coh_0 * 100.0, color=STRATA['plum'], lw=2.0, ls=':',
-              label=r'Cohenite [wt%]')
+    ax_b.plot(T_arr, F_sol * w_coh_0 * 100.0 / 10.0, color=STRATA['plum'], lw=2.0, ls=':',
+              label=r'Cohenite $\times 10^{-1}$ [wt%]')
 
     ax_b.axvspan(T_eut, T_eut + dT_trans, color=NEUTRALS['cream'], alpha=0.5, label='Eutectic Transition Interval')
     ax_b.axvline(T_eut, color=STRATA['magma'], ls='--', lw=1.2)
@@ -170,7 +170,7 @@ def generate_benchmark_figure():
     ax_b.set_ylabel('Phase Fraction / Abundance [- / wt%]', fontsize=11, fontweight='bold')
     ax_b.set_title(r'(b) Eutectic Phase Dissolution ($T_{\mathrm{eut}} = 1213\ \mathrm{K}, \Delta T = 50\ \mathrm{K}$)', fontsize=12, fontweight='bold', pad=10)
     ax_b.set_xlim(1130.0, 1310.0)
-    ax_b.set_ylim(0.0, 1.05)
+    ax_b.set_ylim(0.0, 1.20)
     ax_b.grid(True, alpha=0.5)
     ax_b.legend(loc='center left', fontsize=9, framealpha=0.9)
 
@@ -226,9 +226,9 @@ def generate_benchmark_figure():
     ax_d = axes[1, 1]
     
     # Classification fields
-    rect_magmatic = Rectangle((0.80, 0.0), 0.20, 0.005, facecolor=STRATA['magma'], alpha=0.25, lw=1.2, edgecolor=STRATA['magma'])
-    rect_primitive = Rectangle((0.0, 0.01), 0.60, 0.14, facecolor=STRATA['gold'], alpha=0.25, lw=1.2, edgecolor=STRATA['gold'])
-    rect_trans = Rectangle((0.0, 0.0), 1.0, 0.15, facecolor=NEUTRALS['mist'], alpha=0.15, lw=1.0, ls='--', edgecolor=NEUTRALS['graphite'])
+    rect_magmatic = Rectangle((0.80, 0.0), 0.20, 0.5, facecolor=STRATA['magma'], alpha=0.25, lw=1.2, edgecolor=STRATA['magma'])
+    rect_primitive = Rectangle((0.0, 1.0), 0.60, 9.0, facecolor=STRATA['gold'], alpha=0.25, lw=1.2, edgecolor=STRATA['gold'])
+    rect_trans = Rectangle((0.0, 0.0), 1.0, 10.0, facecolor=NEUTRALS['mist'], alpha=0.15, lw=1.0, ls='--', edgecolor=NEUTRALS['graphite'])
 
     ax_d.add_patch(rect_trans)
     ax_d.add_patch(rect_primitive)
@@ -255,14 +255,30 @@ def generate_benchmark_figure():
     ax_d.scatter(primitive_x, np.array(primitive_y) * 100.0, s=75, color=STRATA['gold'], marker='s', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Primitive Complex (IAB / Winonaites)')
     ax_d.scatter(trans_x, np.array(trans_y) * 100.0, s=70, color=STRATA['plum'], marker='^', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Transitional Incomplete Segregations')
 
-    for x, y, lbl in zip(magmatic_x, magmatic_y, magmatic_labels):
-        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.04, y * 100.0 + 0.35), fontsize=8, color=STRATA['magma'], fontweight='bold')
+    magmatic_annot = [
+        ('IIAB', (0.89, 0.0018 * 100.0), (0.83, 1.6)),
+        ('IVB', (0.92, 0.0010 * 100.0), (0.86, 2.5)),
+        ('IIIAB', (0.95, 0.0005 * 100.0), (0.89, 3.4)),
+        ('IAB-MG', (0.96, 0.0008 * 100.0), (0.92, 4.3)),
+        ('IVA', (0.98, 0.0002 * 100.0), (0.95, 5.2)),
+    ]
+    for lbl, xy_pt, xy_txt in magmatic_annot:
+        ax_d.annotate(lbl, xy=xy_pt, xytext=xy_txt,
+                      arrowprops=dict(arrowstyle="->", color=STRATA['magma'], lw=0.8),
+                      fontsize=8, color=STRATA['magma'], fontweight='bold', ha='center', va='bottom')
 
     for x, y, lbl in zip(primitive_x, primitive_y, primitive_labels):
-        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.05, y * 100.0 + 0.35), fontsize=8, color=STRATA['ink'], fontweight='bold')
+        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.04, y * 100.0 + 0.35), fontsize=8, color=STRATA['ink'], fontweight='bold')
 
-    for x, y, lbl in zip(trans_x, trans_y, trans_labels):
-        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.05, y * 100.0 + 0.4), fontsize=8, color=STRATA['plum'], fontweight='bold')
+    trans_annot = [
+        ('Tombigbee', (0.64, 0.024 * 100.0), (0.52, 3.0), 'left', 'bottom'),
+        ('IIICD', (0.68, 0.018 * 100.0), (0.58, 1.8), 'left', 'center'),
+        ('Ureilite metal', (0.72, 0.012 * 100.0), (0.72, 0.35), 'center', 'top'),
+    ]
+    for lbl, xy_pt, xy_txt, ha_val, va_val in trans_annot:
+        ax_d.annotate(lbl, xy=xy_pt, xytext=xy_txt,
+                      arrowprops=dict(arrowstyle="->", color=STRATA['plum'], lw=0.8),
+                      fontsize=8, color=STRATA['plum'], fontweight='bold', ha=ha_val, va=va_val)
 
     ax_d.set_xlabel(r'Molten Core Metal Fraction $f_{\mathrm{molten,core}}$ [-]', fontsize=11, fontweight='bold')
     ax_d.set_ylabel(r'Crustal Solid Accessory Retention $f_{\mathrm{solid,crust}}$ [wt%]', fontsize=11, fontweight='bold')

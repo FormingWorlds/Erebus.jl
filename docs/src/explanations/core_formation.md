@@ -88,11 +88,12 @@ The interstitial pore segregation velocity $v_{\text{perc}}$ for mobile metal tr
 
 $$v_{\text{perc}} = \frac{k_{\text{metal}}(\phi_m)}{\phi_m \, \eta_{\text{metal}}} \Delta\rho \, g \left(\frac{\phi_m - \phi_{\text{residual}}}{\phi_m}\right)$$
 
-where:
-- $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the positive density contrast between metal and silicate.
-- $\eta_{\text{metal}}$ is the dynamic viscosity of molten iron-sulfur alloy ($\sim 10^{-2}\text{ Pa}\cdot\text{s}$).
-- $g$ is the local gravitational acceleration directed radially inward.
-- $\phi_{\text{residual}}$ is the residual trapped threshold below which metal is immobilized in matrix pores.
+| Symbol | Description | Units |
+|:---|:---|:---|
+| $\Delta\rho$ | Density contrast: $\rho_{\text{metal}} - \rho_{\text{silicate}}$ | $\text{kg/m}^3$ |
+| $\eta_{\text{metal}}$ | Dynamic viscosity of molten iron-sulfur alloy ($\sim 10^{-2}\text{ Pa}\cdot\text{s}$) | $\text{Pa}\cdot\text{s}$ |
+| $g$ | Local gravitational acceleration directed radially inward | $\text{m/s}^2$ |
+| $\phi_{\text{residual}}$ | Residual trapped threshold below which metal is immobilized | - |
 
 The effective permeability for molten metal $k_{\text{metal}}(\phi_m)$ follows a modified Kozeny-Carman formulation:
 
