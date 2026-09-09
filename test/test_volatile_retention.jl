@@ -640,6 +640,75 @@ using TOML
             phim=zeros(Float64, marknum),
         )
         @test isapprox(res_half.M_vent_H2O, 0.5 * res_zero_phi.M_vent_H2O; rtol=1.0e-12)
+
+        # Melt fraction coupling with :linear_melt_blend
+        ret_linear = RetentionConfig(;
+            active=true,
+            venting_drainage_active=true,
+            h2o_retention_ppm=50.0,
+            retention_law=:linear_melt_blend,
+        )
+        XH2Om_melt0 = fill(0.005, marknum) # 50 ppm, right at floor when Fm=0
+        res_melt0 = drain_vented_marker_volatiles!(
+            xm,
+            ym,
+            tm_rock,
+            tkm,
+            XH2Om_melt0,
+            nothing,
+            nothing,
+            nothing,
+            S_vent_grid,
+            1.0e10,
+            marknum,
+            ret_linear;
+            coords=coords,
+            Fm=zeros(Float64, marknum),
+        )
+        # When Fm=0, C_cur == C_ret so no drainage
+        @test isapprox(res_melt0.M_vent_H2O, 0.0; atol=1.0e-14)
+
+        XH2Om_melt1 = fill(0.005, marknum)
+        res_melt1 = drain_vented_marker_volatiles!(
+            xm,
+            ym,
+            tm_rock,
+            tkm,
+            XH2Om_melt1,
+            nothing,
+            nothing,
+            nothing,
+            S_vent_grid,
+            1.0e10,
+            marknum,
+            ret_linear;
+            coords=coords,
+            Fm=fill(1.0, marknum),
+        )
+        # When Fm=1, C_ret=0 so all mobile volatiles drain
+        @test res_melt1.M_vent_H2O > 0.0
+
+        # Vector rhosolid support (core rock tm=1 vs crust rock tm=2)
+        tm_mixed = [isodd(m) ? 1 : 2 for m in 1:marknum]
+        rhosolid_vec = [3300.0, 2700.0, 1.0]
+        XH2Om_vec = fill(1.0, marknum)
+        res_vec = drain_vented_marker_volatiles!(
+            xm,
+            ym,
+            tm_mixed,
+            tkm,
+            XH2Om_vec,
+            nothing,
+            nothing,
+            nothing,
+            S_vent_grid,
+            1.0e10,
+            marknum,
+            ret_cfg;
+            coords=coords,
+            rhosolid=rhosolid_vec,
+        )
+        @test res_vec.M_vent_H2O > 0.0
     end
 
     @testset "Simulation Loop Volatile Retention & Drainage Integration" begin

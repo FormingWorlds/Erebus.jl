@@ -87,7 +87,7 @@ where $L_{\text{3D}} = 2 R_{\text{planet}}$ [m] relates 2D planar cross-section 
 
 1. **Retention Floor Lower-Bound Protection**: Even under intense or prolonged venting ($S_{\text{vent}} \Delta t \to \infty$), marker volatile concentration cannot drop below $C_{\text{ret}}(T)$: $C_{\text{bulk}}(t) \ge C_{\text{ret}}(T)$.
 2. **Zero-Venting Invariance**: If $S_{\text{vent}} = 0$, $C_{\text{mob}}$ and $C_{\text{bulk}}$ remain constant ($dC_{\text{mob}}/dt = 0$), producing zero vented mass.
-3. **Sticky-Air and Non-Rock Protection**: Venting drainage operates exclusively on solid rock markers ($t_m = 2$), leaving ambient sticky-air markers ($t_m = 1$) unaltered.
+3. **Sticky-Air and Non-Rock Protection**: Venting drainage operates on solid rock markers ($t_m < 3$, including $t_m = 1$ core rock and $t_m = 2$ crust rock), leaving ambient sticky-air markers ($t_m = 3$) unaltered.
 
 ---
 

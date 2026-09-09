@@ -3872,8 +3872,9 @@ function drain_vented_marker_volatiles!(
     marknum::Integer,
     ret_cfg::RetentionConfig;
     coords::GridCoordinates,
-    rhosolid::Real=3000.0,
+    rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     phim::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
 )::@NamedTuple{
     M_vent_H2O::Float64,
     M_vent_C::Float64,
@@ -3905,7 +3906,6 @@ function drain_vented_marker_volatiles!(
     imax_p_val = coords.imax_p
 
     V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
-    M_marker_solid0 = Float64(rhosolid) * V_marker
     chi = ret_cfg.chi_vent
     dt_val = Float64(dt)
 
@@ -3918,11 +3918,17 @@ function drain_vented_marker_volatiles!(
     @inbounds begin
         @threads :static for m in 1:marknum
             if tm[m] < 3
-                M_marker_rock = if phim !== nothing
-                    M_marker_solid0 * (1.0 - clamp(phim[m], 0.0, 1.0))
+                rho_m = if rhosolid isa Real
+                    Float64(rhosolid)
                 else
-                    M_marker_solid0
+                    Float64(rhosolid[tm[m]])
                 end
+                M_marker_rock = if phim !== nothing
+                    rho_m * V_marker * (1.0 - clamp(phim[m], 0.0, 1.0))
+                else
+                    rho_m * V_marker
+                end
+                F_m = Fm === nothing ? 0.0 : clamp(Fm[m], 0.0, 1.0)
                 i, j, weights = fix_weights(
                     xm[m],
                     ym[m],
@@ -3944,7 +3950,7 @@ function drain_vented_marker_volatiles!(
                     tid = Threads.threadid()
 
                     # 1. Water drainage (wt% units, 1 wt% = 10,000 ppm)
-                    C_ret_H2O_ppm = compute_h2o_retention_floor(T_m, ret_cfg)
+                    C_ret_H2O_ppm = compute_h2o_retention_floor(T_m, ret_cfg; F_melt=F_m)
                     w_ret_H2O = C_ret_H2O_ppm * 1.0e-4
                     w_cur = XH2Om[m]
                     if w_cur > w_ret_H2O
@@ -3956,7 +3962,7 @@ function drain_vented_marker_volatiles!(
 
                     # 2. Carbon drainage (ppmw units)
                     if XCm !== nothing
-                        C_ret_C = compute_carbon_retention_floor(T_m, ret_cfg)
+                        C_ret_C = compute_carbon_retention_floor(T_m, ret_cfg; F_melt=F_m)
                         C_cur = XCm[m]
                         if C_cur > C_ret_C
                             C_mob = C_cur - C_ret_C
@@ -3968,7 +3974,7 @@ function drain_vented_marker_volatiles!(
 
                     # 3. Nitrogen drainage (ppmw units)
                     if XNm !== nothing
-                        C_ret_N = compute_nitrogen_retention_floor(T_m, ret_cfg)
+                        C_ret_N = compute_nitrogen_retention_floor(T_m, ret_cfg; F_melt=F_m)
                         C_cur = XNm[m]
                         if C_cur > C_ret_N
                             C_mob = C_cur - C_ret_N
@@ -3980,7 +3986,7 @@ function drain_vented_marker_volatiles!(
 
                     # 4. Sulfur drainage (ppmw units)
                     if XSm !== nothing
-                        C_ret_S = compute_sulfur_retention_floor(T_m, ret_cfg)
+                        C_ret_S = compute_sulfur_retention_floor(T_m, ret_cfg; F_melt=F_m)
                         C_cur = XSm[m]
                         if C_cur > C_ret_S
                             C_mob = C_cur - C_ret_S

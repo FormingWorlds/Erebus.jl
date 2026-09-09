@@ -2213,8 +2213,9 @@ function simulation_loop(
                     marknum,
                     cfg.retention;
                     coords=coords,
-                    rhosolid=cfg.materials.rhosolidm[2],
+                    rhosolid=cfg.materials.rhosolidm,
                     phim=phim,
+                    Fm=Fm,
                 )
                 M_vent_H2O_total += vented_vols.M_vent_H2O * L_3D_equiv
                 M_vent_C_total += vented_vols.M_vent_C * L_3D_equiv
