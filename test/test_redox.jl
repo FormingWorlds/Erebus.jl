@@ -254,9 +254,30 @@ end
     c_over_vent = Erebus.RedoxComponents(n_H2=15.0)
     @test_throws DomainError Erebus.vent_gas_redox_budget(c_rock0, c_over_vent)
 
-    # 5. Crust reference state conversion invariance
+    # Non-volatile vent domain contract: cannot vent condensed phases
+    c_nonvol_vent = Erebus.RedoxComponents(n_Fe0=1.0)
+    @test_throws DomainError Erebus.vent_gas_redox_budget(c_rock0, c_nonvol_vent)
+
+    # 5. Crust reference state conversion invariance and reaction conservation
     rb_fe0_crust = Erebus.compute_redox_budget(c_fe0; reference=:crust)
     @test isapprox(rb_fe0_crust, -3.0; atol=1e-12)
+
+    # Crust reference conservation across serpentinization
+    rb_crust_init = Erebus.compute_redox_budget(c_before; reference=:crust)
+    rb_crust_final = Erebus.compute_redox_budget(c_after; reference=:crust)
+    @test isapprox(rb_crust_init, rb_crust_final; atol=1e-12)
+
+    # Crust reference conservation across core segregation
+    rb_crust_bulk = Erebus.compute_redox_budget(c_bulk; reference=:crust)
+    rb_crust_mantle = Erebus.compute_redox_budget(c_mantle; reference=:crust)
+    rb_crust_core = Erebus.compute_redox_budget(c_core; reference=:crust)
+    @test isapprox(rb_crust_bulk, rb_crust_mantle + rb_crust_core; atol=1e-12)
+
+    # Crust reference conservation across venting
+    rb_crust_rock0 = Erebus.compute_redox_budget(c_rock0; reference=:crust)
+    rb_crust_rock1 = Erebus.compute_redox_budget(c_rock1; reference=:crust)
+    rb_crust_vent = Erebus.compute_redox_budget(c_vent; reference=:crust)
+    @test isapprox(rb_crust_rock0, rb_crust_rock1 + rb_crust_vent; atol=1e-12)
 
     # 6. Struct domain contracts
     @test_throws DomainError Erebus.RedoxComponents(n_Fe0=-1.0)

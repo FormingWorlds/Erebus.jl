@@ -301,7 +301,7 @@ struct RedoxComponents
             n_P_phosphide,
             n_P_phosphate,
         )
-        for (i, v) in enumerate(fields)
+        for v in fields
             vf = Float64(v)
             if !isfinite(vf) || vf < 0.0
                 throw(
@@ -552,6 +552,21 @@ Conserves total electrons across rock and gas reservoirs:
 function vent_gas_redox_budget(
     c_rock::RedoxComponents, c_vent::RedoxComponents
 )::RedoxComponents
+    if c_vent.n_Fe0 > 0.0 ||
+        c_vent.n_Fe2 > 0.0 ||
+        c_vent.n_Fe3 > 0.0 ||
+        c_vent.n_C_graphite > 0.0 ||
+        c_vent.n_Fe3C > 0.0 ||
+        c_vent.n_S_sulfide > 0.0 ||
+        c_vent.n_SO4 > 0.0 ||
+        c_vent.n_P_phosphide > 0.0 ||
+        c_vent.n_P_phosphate > 0.0
+        throw(
+            DomainError(
+                c_vent, "Vented gas inventory cannot contain non-volatile condensed species"
+            ),
+        )
+    end
     if c_vent.n_H2 > c_rock.n_H2 ||
         c_vent.n_H2O > c_rock.n_H2O ||
         c_vent.n_CO > c_rock.n_CO ||
