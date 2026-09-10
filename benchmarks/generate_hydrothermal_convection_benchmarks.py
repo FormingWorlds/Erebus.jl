@@ -157,19 +157,25 @@ def main():
 
     # Transition zone highlight
     ax_b.axvspan(0.30, 0.70, color=NEUTRALS['bone'], alpha=0.35,
-                 label="Smoothstep transition zone $[0.3, 0.7]$")
+                 label="Transition $[0.3, 0.7]$")
     ax_b.axvline(0.30, color=STRATA['plum'], linestyle=':', lw=1.2)
     ax_b.axvline(0.70, color=STRATA['plum'], linestyle=':', lw=1.2)
 
-    ax_b.text(0.15, 2.5, "Porous\nDarcy", color=STRATA['cobalt'], fontsize=10, ha='center', fontweight='bold')
-    ax_b.text(0.50, 15.0, "Smoothstep\nBlending", color=STRATA['plum'], fontsize=10, ha='center', fontweight='bold')
-    ax_b.text(0.85, 200.0, "Free Fluid\nBoundary Layer", color=STRATA['amber'], fontsize=10, ha='center', fontweight='bold')
+    ax_b.set_ylim(0.5, 5.0e7)
+    ax_b.set_xlim(0.0, 1.0)
+
+    ax_b.text(0.15, 0.88, "Porous Darcy\nRegime", transform=ax_b.transAxes,
+              color=STRATA['cobalt'], fontsize=9.5, ha='center', fontweight='bold')
+    ax_b.text(0.50, 0.88, "Smoothstep Blending\nTransition", transform=ax_b.transAxes,
+              color=STRATA['plum'], fontsize=9.5, ha='center', fontweight='bold')
+    ax_b.text(0.85, 0.12, "Free Fluid\nBoundary Layer", transform=ax_b.transAxes,
+              color=STRATA['amber'], fontsize=9.5, ha='center', fontweight='bold')
 
     ax_b.set_xlabel(r"Porosity $\phi$ [-]", fontsize=11, fontweight='medium')
     ax_b.set_ylabel(r"Effective Nusselt number $Nu$ [-]", fontsize=11, fontweight='medium')
     ax_b.set_title("(b) Nusselt Scaling Across Porosity Regimes", fontsize=12, fontweight='bold', pad=10)
     ax_b.grid(True)
-    ax_b.legend(loc='lower right', fontsize=9)
+    ax_b.legend(loc='lower right', bbox_to_anchor=(0.98, 0.28), fontsize=8.5)
 
     # -------------------------------------------------------------------------
     # Panel (c): Effective Conductivity Enhancement Across phi - dT

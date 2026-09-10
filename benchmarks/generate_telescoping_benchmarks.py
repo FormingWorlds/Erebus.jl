@@ -216,10 +216,11 @@ def main():
     ax_d.axhline(R_lunar, color=NEUTRALS['graphite'], linestyle='--', linewidth=1.2,
                  label=r'Lunar Target Radius ($R = 1737$ km)')
     ax_d.set_yscale('log')
+    ax_d.set_ylim(30.0, 10000.0)
     ax_d.set_xlabel('Accretion Time $t$ [Myr]', fontsize=11)
     ax_d.set_ylabel('Radius & Domain Scale [km]', fontsize=11)
     ax_d.set_title('(d) Accretion Trajectory & Discrete Telescoping Events', fontsize=12, fontweight='bold')
-    ax_d.legend(fontsize=8.5, loc='upper left')
+    ax_d.legend(fontsize=8.5, loc='upper left', bbox_to_anchor=(0.02, 0.98))
     ax_d.grid(True, which='both')
 
     plt.tight_layout()

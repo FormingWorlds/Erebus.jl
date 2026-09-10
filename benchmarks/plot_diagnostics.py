@@ -68,9 +68,6 @@ w_T = np.array(data["w_T_vals"])
 fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 4.8), constrained_layout=True)
 
 # Panel (a): keff vs Fm
-ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 # Plot i2elvis reference (discontinuous step at Fm = 0.40)
 ax1.plot(Fm, data["k_i2elvis_curves"]["100"], '--', color=NEUTRALS['mist'], linewidth=2.0,
          label=r'Raw i2elvis ($F_m=0.40$ step)')
@@ -94,14 +91,11 @@ ax1.set_xlim(0.0, 1.0)
 ax1.set_ylim(1.0, 5e6)
 ax1.set_xlabel(r'Silicate Melt Fraction $F_m$ [-]', fontsize=11)
 ax1.set_ylabel(r'Effective Thermal Conductivity $k_\mathrm{eff}$ [$\mathrm{W/(m\cdot K)}$]', fontsize=11)
-ax1.set_title('Thermal Conductivity Scaling', fontsize=12, fontweight='bold', pad=10)
+ax1.set_title('(a) Thermal Conductivity Scaling', fontsize=12, fontweight='bold', pad=10)
 ax1.grid(True)
 ax1.legend(loc='lower right', fontsize=8.5)
 
 # Panel (b): Logarithmic derivative d(log10 k)/dFm (smoothness proof)
-ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 for key in ['10', '100', '1000']:
     ax2.plot(Fm, data["dk_dFm_erebus"][key], '-', color=colors_eta[key], linewidth=2.2, label=labels_eta[key])
 
@@ -112,15 +106,12 @@ ax2.set_xlim(0.20, 0.60)
 ax2.set_ylim(-2, 45)
 ax2.set_xlabel(r'Silicate Melt Fraction $F_m$ [-]', fontsize=11)
 ax2.set_ylabel(r'$\mathrm{d}(\log_{10} k_\mathrm{eff}) / \mathrm{d}F_m$ [-]', fontsize=11)
-ax2.set_title('Logarithmic Gradient Smoothness', fontsize=12, fontweight='bold', pad=10)
+ax2.set_title('(b) Logarithmic Gradient Smoothness', fontsize=12, fontweight='bold', pad=10)
 ax2.grid(True)
 ax2.legend(loc='upper right', fontsize=8.5)
 
 # Panel (c): Surface temperature difference weighting
-ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
-ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Weighting factor $w_T = [\mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)]^2$')
+ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Boundary weight $w_T(\Delta T)$')
 ax3.axvline(10.0, color=STRATA['amber'], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
 ax3.axhspan(0, 1, color=STRATA['cobalt'], alpha=0.08)
 
@@ -128,7 +119,7 @@ ax3.set_xlim(0.0, 30.0)
 ax3.set_ylim(-0.05, 1.05)
 ax3.set_xlabel(r'Temperature Difference $\Delta T = T - T_\mathrm{surface}$ [K]', fontsize=11)
 ax3.set_ylabel(r'Thermal Boundary Weight $w_T$ [-]', fontsize=11)
-ax3.set_title('Surface Boundary Weighting', fontsize=12, fontweight='bold', pad=10)
+ax3.set_title('(c) Surface Boundary Weighting', fontsize=12, fontweight='bold', pad=10)
 ax3.grid(True)
 ax3.legend(loc='lower right', fontsize=8.5)
 
@@ -150,26 +141,20 @@ t_off = np.array(res_off["times_yr"])
 t_on = np.array(res_on["times_yr"])
 
 # Panel (a): Core Temperature Evolution T_core(t)
-ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 ax1.plot(t_off / 1000.0, res_off["T_core_hist"], '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
 ax1.plot(t_on / 1000.0, res_on["T_core_hist"], '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
 ax1.axhline(1800.0, color=STRATA['gold'], linestyle=':', linewidth=1.5, label='Liquidus $T_l = 1800$ K')
 ax1.axhline(1400.0, color=STRATA['ink'], linestyle=':', linewidth=1.5, label='Solidus $T_s = 1400$ K')
 
 ax1.set_xlim(0, 50.0)
-ax1.set_ylim(1300, 1900)
+ax1.set_ylim(1200, 2050)
 ax1.set_xlabel('Time [kyr]', fontsize=11)
 ax1.set_ylabel(r'Central Temperature $T_\mathrm{core}$ [K]', fontsize=11)
-ax1.set_title('Core Thermal Quenching', fontsize=12, fontweight='bold', pad=10)
+ax1.set_title('(a) Core Thermal Quenching', fontsize=12, fontweight='bold', pad=10)
 ax1.grid(True)
-ax1.legend(loc='lower left', fontsize=8.5)
+ax1.legend(loc='lower right', bbox_to_anchor=(0.98, 0.05), fontsize=8.5)
 
 # Panel (b): Radial Temperature Profiles T(r) at Selected Times
-ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 times_to_plot = ["0.0", "5000.0", "15000.0", "50000.0"]
 time_colors = [STRATA['gold'], STRATA['amber'], STRATA['magma'], STRATA['plum']]
 
@@ -188,24 +173,21 @@ ax2.set_xlim(0, 50)
 ax2.set_ylim(200, 1900)
 ax2.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
 ax2.set_ylabel('Temperature $T(r)$ [K]', fontsize=11)
-ax2.set_title('Radial Temperature Structure', fontsize=12, fontweight='bold', pad=10)
+ax2.set_title('(b) Radial Temperature Structure', fontsize=12, fontweight='bold', pad=10)
 ax2.grid(True)
 ax2.legend(loc='lower left', fontsize=8.5)
 
 # Panel (c): Magma Ocean Solidification Front r_melt(t)
-ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 ax3.plot(t_off / 1000.0, np.array(res_off["melt_radius_hist"]) / 1000.0, '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
 ax3.plot(t_on / 1000.0, np.array(res_on["melt_radius_hist"]) / 1000.0, '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
 
 ax3.set_xlim(0, 50.0)
-ax3.set_ylim(0, 35.0)
+ax3.set_ylim(0, 45.0)
 ax3.set_xlabel('Time [kyr]', fontsize=11)
 ax3.set_ylabel(r'Magma Ocean Radius ($F_m \geq 0.40$) [km]', fontsize=11)
-ax3.set_title('Magma Ocean Crystallization Front', fontsize=12, fontweight='bold', pad=10)
+ax3.set_title('(c) Magma Ocean Crystallization Front', fontsize=12, fontweight='bold', pad=10)
 ax3.grid(True)
-ax3.legend(loc='upper right', fontsize=8.5)
+ax3.legend(loc='lower right', bbox_to_anchor=(0.98, 0.05), fontsize=8.5)
 
 fig.savefig(os.path.join(out_dir, "diagnostic_planetesimal_cooling.pdf"))
 fig.savefig(os.path.join(out_dir, "diagnostic_planetesimal_cooling.png"), dpi=300)
@@ -226,9 +208,6 @@ r_128_km = np.array(res_128["r"]) / 1000.0
 r_256_km = np.array(res_256["r"]) / 1000.0
 
 # Panel (a): Radial Temperature at t = 15 kyr across Resolutions
-ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$ cells ($\Delta r = 1.56$ km)')
 ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$ cells ($\Delta r = 0.39$ km)')
 ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$ cells ($\Delta r = 0.20$ km)')
@@ -237,14 +216,11 @@ ax1.set_xlim(0, 50)
 ax1.set_ylim(250, 1900)
 ax1.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
 ax1.set_ylabel('Temperature $T(r)$ [K] at $t = 15$ kyr', fontsize=11)
-ax1.set_title('Resolution Convergence: $T(r)$ Profile', fontsize=12, fontweight='bold', pad=10)
+ax1.set_title('(a) Resolution Convergence: $T(r)$ Profile', fontsize=12, fontweight='bold', pad=10)
 ax1.grid(True)
 ax1.legend(loc='lower left', fontsize=8.5)
 
 # Panel (b): Melt Fraction Profile Fm(r) at t = 15 kyr
-ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$')
 ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$')
 ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$')
@@ -254,14 +230,11 @@ ax2.set_xlim(0, 40)
 ax2.set_ylim(-0.05, 1.05)
 ax2.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
 ax2.set_ylabel('Melt Fraction $F_m(r)$ [-] at $t = 15$ kyr', fontsize=11)
-ax2.set_title('Resolution Convergence: Melt Distribution', fontsize=12, fontweight='bold', pad=10)
+ax2.set_title('(b) Resolution Convergence: Melt Distribution', fontsize=12, fontweight='bold', pad=10)
 ax2.grid(True)
 ax2.legend(loc='lower left', fontsize=8.5)
 
 # Panel (c): Convergence Error Profile Relative to Nr = 256
-ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
-         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-
 # Interpolate onto Nr=32 and Nr=128 grid points
 T_ref = np.interp(r_32_km, r_256_km, res_256["snapshot_T"]["15000.0"])
 err_32 = np.abs(np.array(res_32["snapshot_T"]["15000.0"]) - T_ref)
@@ -273,12 +246,12 @@ ax3.plot(r_32_km, err_32, '-', color=STRATA['cobalt'], linewidth=2.0, label=r'$|
 ax3.plot(r_128_km, err_128, '-', color=STRATA['amber'], linewidth=2.0, label=r'$|T_{128} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_128):.1f}' + r'\ \mathrm{K}$)')
 
 ax3.set_xlim(0, 50)
-ax3.set_ylim(0, max(np.max(err_32)*1.1, 10.0))
+ax3.set_ylim(0, max(np.max(err_32)*1.6, 10.0))
 ax3.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
 ax3.set_ylabel(r'Absolute Temperature Error $|\Delta T|$ [K]', fontsize=11)
-ax3.set_title('Grid Resolution Error Convergence', fontsize=12, fontweight='bold', pad=10)
+ax3.set_title('(c) Grid Resolution Error Convergence', fontsize=12, fontweight='bold', pad=10)
 ax3.grid(True)
-ax3.legend(loc='upper right', fontsize=8.5)
+ax3.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98), fontsize=8.5)
 
 fig.savefig(os.path.join(out_dir, "diagnostic_resolution_convergence.pdf"))
 fig.savefig(os.path.join(out_dir, "diagnostic_resolution_convergence.png"), dpi=300)
