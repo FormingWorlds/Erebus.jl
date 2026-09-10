@@ -48,10 +48,10 @@ In `Erebus.jl`, the telescoping condition is evaluated at each computational ste
 $$\mathcal{T}(R) = \begin{cases} \text{true} & \text{if } R(t) > f_{\text{threshold}} \cdot \dfrac{x_{\text{size}}}{2} \text{ and } \ell < \ell_{\text{max}} \\ \text{false} & \text{otherwise} \end{cases}$$
 
 where:
-- $f_{\text{threshold}}$ is the configured threshold fraction (`r_threshold_fraction`, default $0.70$).
-- $x_{\text{size}} / 2$ is the domain half-width.
-- $\ell$ is the current telescoping level (`telescope_level`, 0-indexed).
-- $\ell_{\text{max}}$ is the maximum allowable doubling level (`max_telescope_levels`, default 10).
+- Threshold fraction $f_{\text{threshold}}$ is the configured limit (`r_threshold_fraction`, default $0.70$).
+- Domain half-width is $x_{\text{size}} / 2$.
+- Current telescoping level is $\ell$ (`telescope_level`, 0-indexed).
+- Maximum allowable doubling level is $\ell_{\text{max}}$ (`max_telescope_levels`, default 10).
 
 A threshold fraction of 0.70 ensures that a sticky-air buffer of at least 30% of the domain half-width separates the planetesimal surface from the outer computational boundary. This buffer prevents artificial boundary reflections and spurious stress coupling.
 

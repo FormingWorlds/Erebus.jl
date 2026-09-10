@@ -223,21 +223,23 @@ def main():
 
     ax_d1 = ax_d
     line1 = ax_d1.plot(r_coords_km, Q_norm, color=STRATA['magma'], linewidth=2.2,
-                       label=r'Normalized Radiogenic Power $Q(t_{\rm acc}) / Q_0$')
+                       label=r'Radiogenic Power $Q(t_{\rm acc})/Q_0$')
     ax_d1.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
     ax_d1.set_ylabel(r'Radiogenic Power $Q_{\rm rad} / Q_0$ [-]', color=STRATA['magma'], fontsize=11)
     ax_d1.tick_params(axis='y', labelcolor=STRATA['magma'])
+    ax_d1.set_ylim(-0.05, 1.15)
     ax_d1.grid(True)
 
     ax_d2 = ax_d1.twinx()
     line2 = ax_d2.plot(r_coords_km, H2O_wtpct, color=STRATA['cobalt'], linewidth=2.0,
-                       linestyle='--', label=r'Accreted $\rm H_2O$ Content [wt%]')
+                       linestyle='--', label=r'Accreted $\mathrm{H_2O}$ Content [wt%]')
     ax_d2.set_ylabel(r'Water Content [wt%]', color=STRATA['cobalt'], fontsize=11)
     ax_d2.tick_params(axis='y', labelcolor=STRATA['cobalt'])
+    ax_d2.set_ylim(-0.5, 12.0)
 
     lines = line1 + line2
     labels = [l.get_label() for l in lines]
-    ax_d1.legend(lines, labels, fontsize=8.5, loc='center left')
+    ax_d1.legend(lines, labels, fontsize=8.5, loc='lower left', bbox_to_anchor=(0.04, 0.08))
     ax_d.set_title('(d) Onion-Shell Radiogenic Clock & Snowline Volatiles', fontsize=12, fontweight='bold')
 
     plt.tight_layout()

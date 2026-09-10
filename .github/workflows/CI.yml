@@ -55,6 +55,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           # DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
         run: julia --project=docs/ docs/make.jl
+      - name: Verify documentation formatting
+        run: julia tools/check_docs_formatting.jl
 
   format:
     name: Code Style - BlueStyle
@@ -82,6 +84,8 @@ jobs:
         run: julia tools/check_test_quality.jl --check
       - name: Verify literature references
         run: julia tools/verify_references.jl
+      - name: Check documentation formatting
+        run: julia tools/check_docs_formatting.jl
 
 
 

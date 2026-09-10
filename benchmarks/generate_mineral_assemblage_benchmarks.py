@@ -132,7 +132,7 @@ def generate_benchmark_figure():
     ax_a.plot(w_P_arr * 100.0, w_sch * 100.0, color=STRATA['cobalt'], lw=2.0, ls='-.', label=r'Schreibersite $(\mathrm{Fe,Ni})_3\mathrm{P}$ ($x_{\mathrm{Ni}}=0.25$)')
 
     ax_a.axvline(6.67, color=STRATA['plum'], ls=':', lw=1.2, alpha=0.8)
-    ax_a.annotate('Carbide Saturation\n(6.67 wt% C)', xy=(6.67, 75.0), xytext=(8.0, 55.0),
+    ax_a.annotate('Carbide Saturation\n(6.67 wt% C)', xy=(6.67, 75.0), xytext=(7.5, 80.0),
                   arrowprops=dict(arrowstyle="->", color=STRATA['plum'], lw=1.0),
                   fontsize=9, color=STRATA['plum'], fontweight='bold')
 
@@ -140,9 +140,9 @@ def generate_benchmark_figure():
     ax_a.set_ylabel('Accessory Phase Abundance [wt%]', fontsize=11, fontweight='bold')
     ax_a.set_title('(a) Stoichiometric Accessory Mineral Conversion', fontsize=12, fontweight='bold', pad=10)
     ax_a.set_xlim(0.0, 12.0)
-    ax_a.set_ylim(0.0, 105.0)
+    ax_a.set_ylim(0.0, 110.0)
     ax_a.grid(True, alpha=0.5)
-    ax_a.legend(loc='upper left', fontsize=9, framealpha=0.9)
+    ax_a.legend(loc='center right', bbox_to_anchor=(0.98, 0.45), fontsize=8.5, framealpha=0.9)
 
     # -------------------------------------------------------------------------
     # Panel (b): Thermal Eutectic Melting Transition
@@ -180,9 +180,9 @@ def generate_benchmark_figure():
     ax_b.set_ylabel('Phase Fraction / Abundance [- / wt%]', fontsize=11, fontweight='bold')
     ax_b.set_title(r'(b) Eutectic Phase Dissolution ($T_{\mathrm{eut}} = 1213\ \mathrm{K}, \Delta T = 50\ \mathrm{K}$)', fontsize=12, fontweight='bold', pad=10)
     ax_b.set_xlim(1130.0, 1310.0)
-    ax_b.set_ylim(0.0, 1.20)
+    ax_b.set_ylim(0.0, 1.65)
     ax_b.grid(True, alpha=0.5)
-    ax_b.legend(loc='center left', fontsize=9, framealpha=0.9)
+    ax_b.legend(loc='upper center', bbox_to_anchor=(0.5, 0.98), ncol=2, fontsize=8.5, framealpha=0.9)
 
     # -------------------------------------------------------------------------
     # Panel (c): Planetesimal Radial Mineral Distribution
@@ -218,17 +218,21 @@ def generate_benchmark_figure():
     ax_c.plot(r_arr, w_sch_prof * 10.0, color=STRATA['cobalt'], lw=2.0, ls='-.', label=r'Schreibersite $\times 10$ [wt%]')
     ax_c.plot(r_arr, w_coh_prof * 10.0, color=STRATA['plum'], lw=2.0, ls=':', label=r'Cohenite $\times 10$ [wt%]')
 
-    ax_c.axvspan(0.0, r_core, color=NEUTRALS['bone'], alpha=0.35, label=r'Metallic Core ($r \leq 25$ km)')
-    ax_c.axvspan(r_core, r_mantle, color=NEUTRALS['cream'], alpha=0.35, label='Silicate Mantle')
-    ax_c.axvspan(r_mantle, R_p, color=NEUTRALS['paper'], alpha=0.6, label=r'Primitive Crust ($r \geq 42.5$ km)')
+    ax_c.axvspan(0.0, r_core, color=NEUTRALS['bone'], alpha=0.35)
+    ax_c.axvspan(r_core, r_mantle, color=NEUTRALS['cream'], alpha=0.35)
+    ax_c.axvspan(r_mantle, R_p, color=NEUTRALS['paper'], alpha=0.6)
+
+    ax_c.text(12.5, 96.0, 'Core', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
+    ax_c.text(33.7, 96.0, 'Mantle', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
+    ax_c.text(46.2, 96.0, 'Crust', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
 
     ax_c.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11, fontweight='bold')
     ax_c.set_ylabel('Bulk Planetesimal Phase Abundance [wt%]', fontsize=11, fontweight='bold')
     ax_c.set_title('(c) Differentiated Planetesimal Radial Assemblage', fontsize=12, fontweight='bold', pad=10)
     ax_c.set_xlim(0.0, 50.0)
-    ax_c.set_ylim(0.0, 95.0)
+    ax_c.set_ylim(0.0, 105.0)
     ax_c.grid(True, alpha=0.5)
-    ax_c.legend(loc='center right', fontsize=8.5, framealpha=0.9)
+    ax_c.legend(loc='center right', bbox_to_anchor=(0.98, 0.48), fontsize=8.0, framealpha=0.9)
 
     # -------------------------------------------------------------------------
     # Panel (d): Diagnostic Meteorite Classification Diagram

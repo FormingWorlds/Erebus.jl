@@ -89,8 +89,6 @@ def generate_benchmark_figure():
     # Panel (a): Oxygen Fugacity Sensitivity D_i(dIW)
     # -------------------------------------------------------------------------
     ax_a = axes[0, 0]
-    ax_a.text(0.04, 0.93, '(a)', transform=ax_a.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
     dIW_arr = np.linspace(-4.0, 0.0, 100)
     T_ref = 1600.0
     P_ref = 1.0e8  # 0.1 GPa
@@ -103,19 +101,17 @@ def generate_benchmark_figure():
 
     ax_a.set_yscale('log')
     ax_a.set_xlim(-4.0, 0.0)
-    ax_a.set_ylim(0.1, 10000.0)
+    ax_a.set_ylim(0.05, 10000.0)
     ax_a.set_xlabel(r'Oxygen Fugacity $\Delta\mathrm{IW}$ [log units]', fontsize=10)
     ax_a.set_ylabel(r'Partition Coefficient $D_i^\mathrm{met/sil}$ [-]', fontsize=10)
-    ax_a.set_title(r'Redox Sensitivity ($T = 1600$ K, $P = 0.1$ GPa, $w_\mathrm{S} = 0.05$)', fontsize=11, fontweight='bold')
+    ax_a.set_title(r'(a) Redox Sensitivity ($T = 1600$ K, $P = 0.1$ GPa, $w_\mathrm{S} = 0.05$)', fontsize=11, fontweight='bold')
     ax_a.grid(True)
-    ax_a.legend(loc='upper right', fontsize=8.5)
+    ax_a.legend(loc='lower left', bbox_to_anchor=(0.04, 0.18), fontsize=8.5)
 
     # -------------------------------------------------------------------------
     # Panel (b): Sulfur Saturation & Carbon Suppression D_i(w_S)
     # -------------------------------------------------------------------------
     ax_b = axes[0, 1]
-    ax_b.text(0.04, 0.93, '(b)', transform=ax_b.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
     w_S_arr = np.linspace(0.0, 0.31, 100)
     dIW_val = -2.0
 
@@ -137,7 +133,7 @@ def generate_benchmark_figure():
     ax_b.set_ylim(5, 5000)
     ax_b.set_xlabel(r'Alloy Sulfur Content $w_\mathrm{S}$ [wt%]', fontsize=10)
     ax_b.set_ylabel(r'Partition Coefficient $D_i^\mathrm{met/sil}$ [-]', fontsize=10)
-    ax_b.set_title(r'Sulfur Suppression of Carbon Affinity ($\Delta\mathrm{IW} = -2$)', fontsize=11, fontweight='bold')
+    ax_b.set_title(r'(b) Sulfur Suppression of Carbon Affinity ($\Delta\mathrm{IW} = -2$)', fontsize=11, fontweight='bold')
     ax_b.grid(True)
     ax_b.legend(loc='lower left', fontsize=8.5)
 
@@ -145,8 +141,6 @@ def generate_benchmark_figure():
     # Panel (c): Thermal Sensitivity D_i(T)
     # -------------------------------------------------------------------------
     ax_c = axes[0, 2]
-    ax_c.text(0.04, 0.93, '(c)', transform=ax_c.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
     T_arr = np.linspace(1300.0, 2200.0, 100)
     w_S_med = 0.10
 
@@ -160,7 +154,7 @@ def generate_benchmark_figure():
     ax_c.set_ylim(0.1, 2000.0)
     ax_c.set_xlabel('Temperature $T$ [K]', fontsize=10)
     ax_c.set_ylabel(r'Partition Coefficient $D_i^\mathrm{met/sil}$ [-]', fontsize=10)
-    ax_c.set_title(r'Thermal Sensitivity ($P = 0.1$ GPa, $\Delta\mathrm{IW} = -2$, $w_\mathrm{S} = 0.10$)', fontsize=11, fontweight='bold')
+    ax_c.set_title(r'(c) Thermal Sensitivity ($P = 0.1$ GPa, $\Delta\mathrm{IW} = -2$, $w_\mathrm{S} = 0.10$)', fontsize=11, fontweight='bold')
     ax_c.grid(True)
     ax_c.legend(loc='center right', fontsize=8.5)
 
@@ -168,8 +162,6 @@ def generate_benchmark_figure():
     # Panel (d): Magmatic Iron Meteorites vs. Erebus Model Tracks
     # -------------------------------------------------------------------------
     ax_d = axes[1, 0]
-    ax_d.text(0.04, 0.93, '(d)', transform=ax_d.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
     # Literature fields for magmatic iron meteorites (C ppmw vs N ppmw)
     groups = [
@@ -224,7 +216,7 @@ def generate_benchmark_figure():
     ax_d.set_ylim(0.4, 80)
     ax_d.set_xlabel(r'Core Carbon Concentration $w_\mathrm{C}$ [ppmw]', fontsize=10)
     ax_d.set_ylabel(r'Core Nitrogen Concentration $w_\mathrm{N}$ [ppmw]', fontsize=10)
-    ax_d.set_title('Magmatic Iron Meteorites vs. Core Model', fontsize=11, fontweight='bold')
+    ax_d.set_title('(d) Magmatic Iron Meteorites vs. Core Model', fontsize=11, fontweight='bold')
     ax_d.grid(True)
     ax_d.legend(loc='lower right', fontsize=7.5)
 
@@ -232,8 +224,6 @@ def generate_benchmark_figure():
     # Panel (e): Core Volatile Segregation Dynamics Over Time
     # -------------------------------------------------------------------------
     ax_e = axes[1, 1]
-    ax_e.text(0.04, 0.93, '(e)', transform=ax_e.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
     # Read reference simulation trajectory from core formation benchmark dataset
     benchmark_data_path = os.path.join(OUTPUT_FILES_DIR, "core_formation_benchmark_data.json")
@@ -306,19 +296,17 @@ def generate_benchmark_figure():
 
     ax_e.axvspan(1.05, 1.6, color=NEUTRALS['cream'], alpha=0.5, label='Runaway Core Segregation')
     ax_e.set_xlim(0.5, 3.5)
-    ax_e.set_ylim(0.0, 16.0)
+    ax_e.set_ylim(0.0, 20.0)
     ax_e.set_xlabel('Time [Ma]', fontsize=10)
     ax_e.set_ylabel(r'Integrated Core Mass [$10^{13} - 10^{16}$ kg]', fontsize=10)
-    ax_e.set_title('Core Volatile Delivery Timeline', fontsize=11, fontweight='bold')
+    ax_e.set_title('(e) Core Volatile Delivery Timeline', fontsize=11, fontweight='bold')
     ax_e.grid(True)
-    ax_e.legend(loc='center left', fontsize=8.0)
+    ax_e.legend(loc='upper left', bbox_to_anchor=(0.04, 0.98), fontsize=8.0)
 
     # -------------------------------------------------------------------------
     # Panel (f): Planetary Reservoir Mass Partitioning Budgets
     # -------------------------------------------------------------------------
     ax_f = axes[1, 2]
-    ax_f.text(0.04, 0.93, '(f)', transform=ax_f.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
 
     # Closed-system thermodynamic partition equilibrium at final differentiation conditions
     m_core_final = M_core_fe[-1]
@@ -376,7 +364,7 @@ def generate_benchmark_figure():
     ax_f.set_yticklabels(elements, fontsize=10, fontweight='bold')
     ax_f.set_xlim(0, 100)
     ax_f.set_xlabel('Elemental Mass Fraction [%]', fontsize=10)
-    ax_f.set_title('Planetary Reservoir Allocation', fontsize=11, fontweight='bold')
+    ax_f.set_title('(f) Planetary Reservoir Allocation', fontsize=11, fontweight='bold')
     ax_f.grid(True, axis='x')
     ax_f.legend(loc='lower center', bbox_to_anchor=(0.5, -0.22), ncol=3, fontsize=8.0)
 

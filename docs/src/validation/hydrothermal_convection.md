@@ -23,15 +23,15 @@ In fluid-saturated porous rock, the dimensionless Rayleigh-Darcy number sets con
 $$Ra_m = \frac{\rho_f^2 \, c_{p,f} \, g \, \alpha_f \, K \, \Delta T \, H}{\mu_f \, k_{\mathrm{cond}}}$$
 
 where:
-- $\rho_f$: Fluid density [$\mathrm{kg/m}^3$] from `compute_rhofluid(T)`
-- $c_{p,f}$: Fluid isobaric heat capacity [$\mathrm{J/(kg\,K)}$] (default: $4184.0$)
-- $g$: Local or bulk gravitational acceleration [$\mathrm{m/s}^2$]
-- $\alpha_f$: Fluid isobaric thermal expansivity [$1/\mathrm{K}$] (default: $2.0 \times 10^{-4}$)
-- $K$: Medium permeability [$\mathrm{m}^2$] from the Kozeny-Carman relation $k(\phi)$ or user input
-- $\Delta T = \max(0.0, T - T_{\mathrm{surface\_ref}})$: Convective temperature scale [$\mathrm{K}$]
-- $H$: Characteristic convective layer thickness [$\mathrm{m}$] (default: $10^4\text{ m}$)
-- $\mu_f$: Dynamic fluid viscosity [$\mathrm{Pa\,s}$] from `compute_fluid_viscosity(T)`
-- $k_{\mathrm{cond}}$: Conductive bulk thermal conductivity [$\mathrm{W/(m\,K)}$]
+- Fluid density $\rho_f$ [$\mathrm{kg/m}^3$] from `compute_rhofluid(T)`
+- Fluid isobaric heat capacity $c_{p,f}$ [$\mathrm{J/(kg\,K)}$] (default: $4184.0$)
+- Gravitational acceleration $g$ [$\mathrm{m/s}^2$] (local or bulk)
+- Fluid isobaric thermal expansivity $\alpha_f$ [$1/\mathrm{K}$] (default: $2.0 \times 10^{-4}$)
+- Medium permeability $K$ [$\mathrm{m}^2$] from the Kozeny-Carman relation $k(\phi)$ or user input
+- Convective driving temperature contrast $\Delta T = \max(0.0, T - T_{\mathrm{surface\_ref}})$ [$\mathrm{K}$]
+- Characteristic convective layer thickness $H$ [$\mathrm{m}$] (default: $10^4\text{ m}$)
+- Dynamic fluid viscosity $\mu_f$ [$\mathrm{Pa\,s}$] from `compute_fluid_viscosity(T)`
+- Conductive bulk thermal conductivity $k_{\mathrm{cond}}$ [$\mathrm{W/(m\,K)}$]
 
 Onset of porous convection occurs at the critical Rayleigh-Darcy number:
 
