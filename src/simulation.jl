@@ -206,6 +206,10 @@ function save_state(
     Xmin_metal_matrix_m=nothing,
     regional_mineral_modes=nothing,
     DT0::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    t_accreted=nothing,
+    M_accreted_total=nothing,
+    M_planet_val=nothing,
+    rplanet::Union{Nothing,Real}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -257,7 +261,7 @@ function save_state(
         dsubgridt,
         hr_al,
         hr_fe,
-        rplanet,
+        rplanet=rplanet !== nothing ? Float64(rplanet) : 50000.0,
         rcrust,
         psurface,
         xsize=xsize_val,
@@ -399,6 +403,9 @@ function save_state(
             end
         )...,
         (regional_mineral_modes !== nothing ? (; regional_mineral_modes) : (;))...,
+        (t_accreted !== nothing ? (; t_accreted) : (;))...,
+        (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
+        (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
     )
     return nothing
 end
@@ -487,8 +494,18 @@ function simulation_loop(
     fluid_viscosity_Ea_val = cfg.thermodynamics.fluid_viscosity_Ea
     fluid_viscosity_T0_val = cfg.thermodynamics.fluid_viscosity_T0
     fluid_viscosity_eta0_val = cfg.thermodynamics.fluid_viscosity_eta0
-    rplanet_val = cfg.geometry.rplanet
-    rcrust_val = cfg.geometry.rcrust
+    rplanet_val = cfg.accretion.active ? cfg.accretion.R_initial : cfg.geometry.rplanet
+    rcrust_val = if cfg.accretion.active
+        min(cfg.geometry.rcrust, cfg.accretion.R_initial)
+    else
+        cfg.geometry.rcrust
+    end
+    M_planet_val = if cfg.accretion.active
+        cfg.accretion.M_initial
+    else
+        (4.0 / 3.0 * pi * (rplanet_val^3) * cfg.accretion.rho_bulk)
+    end
+    M_accreted_total = 0.0
     xcenter_val = cfg.geometry.xcenter
     ycenter_val = cfg.geometry.ycenter
     psurface_val = cfg.geometry.psurface
@@ -909,6 +926,26 @@ function simulation_loop(
                 regional_mineral_modes = ckpt["regional_mineral_modes"]
             end
         end
+        if cfg.accretion.active
+            if haskey(ckpt, "t_accreted")
+                t_accreted = Vector{Float64}(ckpt["t_accreted"])
+            else
+                t_accreted = setup_marker_accretion_properties(
+                    marknum, cfg.accretion; initial_time=timesum
+                )
+            end
+            if haskey(ckpt, "M_accreted_total")
+                M_accreted_total = Float64(ckpt["M_accreted_total"])
+            end
+            if haskey(ckpt, "M_planet_val")
+                M_planet_val = Float64(ckpt["M_planet_val"])
+            end
+            if haskey(ckpt, "rplanet")
+                rplanet_val = Float64(ckpt["rplanet"])
+            end
+        else
+            t_accreted = nothing
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -955,6 +992,9 @@ function simulation_loop(
             Xmin_nitride_m = phase_arrays.Xmin_nitride_m
             Xmin_metal_matrix_m = phase_arrays.Xmin_metal_matrix_m
         end
+        t_accreted = setup_marker_accretion_properties(
+            marknum, cfg.accretion; initial_time=timesum
+        )
         define_markers!(
             xm,
             ym,
@@ -1128,6 +1168,10 @@ function simulation_loop(
             Xmin_metal_matrix_m=Xmin_metal_matrix_m,
             regional_mineral_modes=regional_mineral_modes,
             DT0=DT0,
+            rplanet=rplanet_val,
+            t_accreted=t_accreted,
+            M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
+            M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
         )
     end
 
@@ -1239,6 +1283,84 @@ function simulation_loop(
                 if tm[m] >= 3
                     tkm[m] = T_amb
                 end
+            end
+        end
+
+        # ---------------------------------------------------------------------
+        # planetesimal accretion engine: mass addition, heating, boundary advance
+        # ---------------------------------------------------------------------
+        if cfg.accretion.active
+            dM_dt_acc = compute_accretion_rate(
+                timesum, M_planet_val, rplanet_val, cfg.accretion, cfg.disk
+            )
+            # Clamp mass increment so M_planet_val does not overshoot M_target
+            dM_remain = max(0.0, cfg.accretion.M_target - M_planet_val)
+            dM_acc = min(dM_dt_acc * dt, dM_remain)
+
+            if dM_acc > 0.0 && rplanet_val < cfg.accretion.R_target
+                dR_acc = compute_radius_increment(
+                    rplanet_val, dM_acc, cfg.accretion.rho_bulk
+                )
+                # Clamp radius increment so rplanet_val does not overshoot R_target
+                dR_remain = max(0.0, cfg.accretion.R_target - rplanet_val)
+                dR_acc = min(dR_acc, dR_remain)
+                T_acc = T_amb
+                if cfg.accretion.h_impact > 0.0
+                    _, delta_T_imp = compute_impact_heating(
+                        M_planet_val,
+                        rplanet_val;
+                        h_impact=cfg.accretion.h_impact,
+                        c_p=cfg.accretion.cp_rock,
+                        v_inf=cfg.accretion.v_inf,
+                    )
+                    T_acc += delta_T_imp
+                end
+                XW_acc = cfg.accretion.XWsolid_dry
+                H2O_acc = cfg.accretion.XH2O_dry_wtpct
+                if cfg.accretion.snowline_coupling
+                    XW_acc, H2O_acc = evaluate_snowline_water_content(
+                        T_amb;
+                        T_snowline_cond=cfg.accretion.T_snowline_cond,
+                        XW_wet=cfg.accretion.XWsolid_wet,
+                        XW_dry=cfg.accretion.XWsolid_dry,
+                        H2O_wet_wtpct=cfg.accretion.XH2O_wet_wtpct,
+                        H2O_dry_wtpct=cfg.accretion.XH2O_dry_wtpct,
+                    )
+                end
+
+                advance_accretion_boundary!(
+                    rplanet_val,
+                    dR_acc,
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    phim,
+                    XWsolidm0,
+                    Xfe_bulk,
+                    Xfem;
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    T_accreted=T_acc,
+                    phi_accreted=cfg.accretion.phi_accreted,
+                    XWsolid_accreted=XW_acc,
+                    Xfe_accreted=cfg.accretion.Xfe_bulk_accreted,
+                    t_accreted=t_accreted,
+                    current_time=timesum,
+                    XWsolidm=XWsolidm,
+                    phinewm=phinewm,
+                    XH2Om=cfg.volatiles.active ? XH2Om : nothing,
+                    XCm=cfg.volatiles.active ? XCm : nothing,
+                    XNm=cfg.volatiles.active ? XNm : nothing,
+                    XSm=cfg.volatiles.active ? XSm : nothing,
+                    XH2O_accreted=H2O_acc,
+                    XC_accreted=cfg.accretion.XC_accreted_ppm,
+                    XN_accreted=cfg.accretion.XN_accreted_ppm,
+                    XS_accreted=cfg.accretion.XS_accreted_ppm,
+                )
+                rplanet_val += dR_acc
+                M_planet_val += dM_acc
+                M_accreted_total += dM_acc
             end
         end
 
@@ -2586,7 +2708,11 @@ function simulation_loop(
             Xmin_graphite_m=Xmin_graphite_m,
             Xmin_nitride_m=Xmin_nitride_m,
             Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+            t_accreted=t_accreted,
         )
+        if t_accreted !== nothing && length(t_accreted) != marknum
+            resize!(t_accreted, marknum)
+        end
         if coreformation_active_val
             if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
                 resize!(Xfe_bulk_step_start, marknum)
@@ -2792,6 +2918,10 @@ function simulation_loop(
                 Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                 regional_mineral_modes=regional_mineral_modes,
                 DT0=DT0,
+                rplanet=rplanet_val,
+                t_accreted=t_accreted,
+                M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
+                M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
             )
         end
         # ---------------------------------------------------------------------

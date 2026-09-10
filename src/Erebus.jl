@@ -37,6 +37,7 @@ export Config,
     MetalPartitionConfig,
     PhaseTrackingConfig,
     HydrothermalConfig,
+    AccretionConfig,
     SimulationConfig,
     default_config,
     load_config,
@@ -148,7 +149,26 @@ export Config,
     compute_nitride_stoichiometry,
     compute_normative_mineral_assemblage,
     compute_regional_mineral_modes,
-    setup_marker_phase_tracking_properties
+    setup_marker_phase_tracking_properties,
+    compute_keplerian_frequency,
+    compute_keplerian_velocity,
+    compute_sound_speed,
+    compute_gas_scale_height,
+    compute_pebble_scale_height,
+    compute_bondi_radius,
+    compute_hill_radius,
+    compute_pebble_surface_density,
+    compute_pebble_accretion_rate,
+    compute_safronov_accretion_rate,
+    compute_impact_heating,
+    compute_radius_increment,
+    evaluate_snowline_water_content,
+    advance_accretion_boundary!,
+    compute_accretion_rate,
+    setup_marker_accretion_properties,
+    M_SUN_KG,
+    AU_METERS,
+    SEC_PER_YEAR
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -173,6 +193,7 @@ include("coordinates.jl")
 include("geometry.jl")
 include("physics.jl")
 include("particles.jl")
+include("accretion.jl")
 include("numerics.jl")
 include("simulation.jl")
 
@@ -604,6 +625,9 @@ module Config
         EscapeConfig,
         CoreFormationConfig,
         MetalPartitionConfig,
+        PhaseTrackingConfig,
+        HydrothermalConfig,
+        AccretionConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -626,6 +650,9 @@ module Config
         EscapeConfig,
         CoreFormationConfig,
         MetalPartitionConfig,
+        PhaseTrackingConfig,
+        HydrothermalConfig,
+        AccretionConfig,
         SimulationConfig,
         default_config,
         load_config,

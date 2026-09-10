@@ -48,6 +48,7 @@ makedocs(;
             "Protoplanetary Disk Evolution" => "explanations/disk_temperature_evolution.md",
             "Degassing & Cold Venting" => "explanations/degassing_and_venting.md",
             "Iron Core Formation & Metal Segregation" => "explanations/core_formation.md",
+            "Planetesimal Accretion Mechanics" => "explanations/accretion_mechanics.md",
             "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [
@@ -68,6 +69,7 @@ makedocs(;
             "Core Geochemistry & Volatiles" => "validation/core_geochemistry.md",
             "Normative Accessory Minerals" => "validation/mineral_assemblages.md",
             "Hydrothermal Subgrid Convection" => "validation/hydrothermal_convection.md",
+            "Planetesimal Accretion & Impact Heating" => "validation/planetesimal_accretion.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

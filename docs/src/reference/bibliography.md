@@ -210,8 +210,25 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1017/CBO9780511843877](https://doi.org/10.1017/CBO9780511843877)  
   *Standard textbook reference for porous flow, thermal convection scaling laws, and planetary thermal evolution.*
 
+---
 
+## Planetesimal Accretion and Growth Dynamics
 
+- **Chambers, J. E. (2006)**. A semi-analytic model for oligarchic growth. *Icarus*, 180(2), 496-513.  
+  [https://doi.org/10.1016/j.icarus.2005.10.017](https://doi.org/10.1016/j.icarus.2005.10.017)  
+  *Semi-analytic formulation for Safronov gravitational focusing and oligarchic growth of planetary embryos.*
 
+- **Lambrechts, M., & Johansen, A. (2012)**. Rapid growth of gas-giant cores by pebble accretion. *Astronomy & Astrophysics*, 544, A32.  
+  [https://doi.org/10.1051/0004-6361/201219127](https://doi.org/10.1051/0004-6361/201219127)  
+  *Pebble accretion scaling laws, transition mass between Bondi and Hill regimes, and rapid planetary core growth.*
 
+- **Ormel, C. W., & Klahr, H. H. (2010)**. The effect of gas drag on the growth of protoplanets. Analytical expressions for the accretion of small bodies in laminar disks. *Astronomy & Astrophysics*, 520, A43.  
+  [https://doi.org/10.1051/0004-6361/201014903](https://doi.org/10.1051/0004-6361/201014903)  
+  *Analytical derivation of 2D and 3D pebble accretion regimes and capture cross-sections in laminar protoplanetary disks.*
 
+- **Safronov, V. S. (1972)**. *Evolution of the protoplanetary cloud and formation of the earth and the planets*. Translated from Russian, Israel Program for Scientific Translations, Jerusalem. NASA-TT-F-677.  
+  *Foundational theory of planetesimal collision swarms, velocity dispersion evolution, and gravitational focusing parameterization.*
+
+- **Youdin, A. N., & Lithwick, Y. (2007)**. Particle stirring in turbulent protoplanetary disks: Including orbital effects. *Icarus*, 192(2), 588-604.  
+  [https://doi.org/10.1016/j.icarus.2007.07.012](https://doi.org/10.1016/j.icarus.2007.07.012)  
+  *Dust and pebble vertical scale height equilibrium under turbulent diffusion and midplane aerodynamic settling.*

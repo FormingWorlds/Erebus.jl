@@ -119,6 +119,30 @@ function setup_marker_phase_tracking_properties(marknum::Integer, cfg::PhaseTrac
 end
 
 """
+Set up marker accretion epoch timestamp tracking array.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum::Integer`: Number of markers.
+- `cfg::AccretionConfig`: Accretion configuration.
+
+# Keyword Arguments
+- `initial_time::Real`: Initial timestamp assigned to primordial markers [s] (default: 0.0).
+
+# Returns
+- `Vector{Float64}` holding accretion epoch timestamps if tracking is active, or `nothing`.
+"""
+function setup_marker_accretion_properties(
+    marknum::Integer, cfg::AccretionConfig; initial_time::Real=0.0
+)::Union{Nothing,Vector{Float64}}
+    if !cfg.active || !cfg.track_accretion_time
+        return nothing
+    end
+    return fill(Float64(initial_time), marknum)
+end
+
+"""
 Update volatile concentrations and exsolution porosity for a single marker.
 
 $(SIGNATURES)
@@ -3384,6 +3408,7 @@ function replenish_markers!(
     Xmin_graphite_m=nothing,
     Xmin_nitride_m=nothing,
     Xmin_metal_matrix_m=nothing,
+    t_accreted=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
@@ -3525,6 +3550,9 @@ function replenish_markers!(
                     end
                     if Xmin_metal_matrix_m !== nothing
                         push!(Xmin_metal_matrix_m, Xmin_metal_matrix_m[m])
+                    end
+                    if t_accreted !== nothing
+                        push!(t_accreted, t_accreted[m])
                     end
                 end
             end

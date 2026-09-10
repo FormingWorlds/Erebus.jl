@@ -525,6 +525,54 @@ Base.@kwdef struct HydrothermalConfig
 end
 
 """
+Planetesimal accretion engine configuration.
+
+Configures Bondi and Hill pebble accretion rates, Safronov gravitational focusing,
+runaway and oligarchic growth regimes, 3D-to-2D spherical geometric mapping,
+impact heating, dynamic sticky-air to rock marker conversion, volatile inheritance
+from protoplanetary disk snowline evolution, and 26Al radiogenic clock inheritance.
+
+$(FIELDS)
+"""
+Base.@kwdef struct AccretionConfig
+    active::Bool = false
+    mode::Symbol = :pebble_hill
+    M_initial::Float64 = 1.0e17
+    R_initial::Float64 = 20000.0
+    rho_bulk::Float64 = 3000.0
+    M_target::Float64 = 1.0e20
+    R_target::Float64 = 50000.0
+    t_start_myr::Float64 = 0.0
+    t_duration_myr::Float64 = 2.0
+    dM_dt_constant::Float64 = 1.5e6
+    dR_dt_constant::Float64 = 5.0e-10
+    tau_growth_myr::Float64 = 0.5
+    h_impact::Float64 = 0.5
+    v_inf::Float64 = 0.0
+    cp_rock::Float64 = 1000.0
+    phi_accreted::Float64 = 0.35
+    Xfe_bulk_accreted::Float64 = 0.10
+    snowline_coupling::Bool = true
+    T_snowline_cond::Float64 = 160.0
+    XWsolid_wet::Float64 = 0.40
+    XWsolid_dry::Float64 = 0.0
+    XH2O_wet_wtpct::Float64 = 10.0
+    XH2O_dry_wtpct::Float64 = 0.1
+    XC_accreted_ppm::Float64 = 1000.0
+    XN_accreted_ppm::Float64 = 100.0
+    XS_accreted_ppm::Float64 = 10000.0
+    Sigma_peb_0::Float64 = 50.0
+    p_peb::Float64 = 1.0
+    stokes_number::Float64 = 0.05
+    alpha_turbulence::Float64 = 1.0e-3
+    c_hill::Float64 = 1.0
+    c_bondi::Float64 = 1.0
+    Sigma_pl_0::Float64 = 100.0
+    v_disp_kms::Float64 = 0.1
+    track_accretion_time::Bool = true
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -549,6 +597,7 @@ Base.@kwdef struct SimulationConfig
     metal_partition::MetalPartitionConfig = MetalPartitionConfig()
     phase_tracking::PhaseTrackingConfig = PhaseTrackingConfig()
     hydrothermal::HydrothermalConfig = HydrothermalConfig()
+    accretion::AccretionConfig = AccretionConfig()
 end
 
 """
@@ -1677,6 +1726,193 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    if cfg.accretion.active
+        (cfg.accretion.M_initial > 0.0 && isfinite(cfg.accretion.M_initial)) || throw(
+            ArgumentError(
+                "M_initial must be > 0 and finite, got $(cfg.accretion.M_initial)"
+            ),
+        )
+        (cfg.accretion.R_initial > 0.0 && isfinite(cfg.accretion.R_initial)) || throw(
+            ArgumentError(
+                "R_initial must be > 0 and finite, got $(cfg.accretion.R_initial)"
+            ),
+        )
+        (cfg.accretion.rho_bulk > 0.0 && isfinite(cfg.accretion.rho_bulk)) || throw(
+            ArgumentError("rho_bulk must be > 0 and finite, got $(cfg.accretion.rho_bulk)"),
+        )
+        (
+            cfg.accretion.M_target >= cfg.accretion.M_initial &&
+            isfinite(cfg.accretion.M_target)
+        ) || throw(
+            ArgumentError(
+                "M_target must be >= M_initial and finite, got $(cfg.accretion.M_target)",
+            ),
+        )
+        (
+            cfg.accretion.R_target >= cfg.accretion.R_initial &&
+            isfinite(cfg.accretion.R_target)
+        ) || throw(
+            ArgumentError(
+                "R_target must be >= R_initial and finite, got $(cfg.accretion.R_target)",
+            ),
+        )
+        (cfg.accretion.t_start_myr >= 0.0 && isfinite(cfg.accretion.t_start_myr)) || throw(
+            ArgumentError(
+                "t_start_myr must be >= 0 and finite, got $(cfg.accretion.t_start_myr)"
+            ),
+        )
+        (cfg.accretion.t_duration_myr > 0.0 && isfinite(cfg.accretion.t_duration_myr)) ||
+            throw(
+                ArgumentError(
+                    "t_duration_myr must be > 0 and finite, got $(cfg.accretion.t_duration_myr)",
+                ),
+            )
+        (cfg.accretion.dM_dt_constant > 0.0 && isfinite(cfg.accretion.dM_dt_constant)) ||
+            throw(
+                ArgumentError(
+                    "dM_dt_constant must be > 0 and finite, got $(cfg.accretion.dM_dt_constant)",
+                ),
+            )
+        (cfg.accretion.dR_dt_constant > 0.0 && isfinite(cfg.accretion.dR_dt_constant)) ||
+            throw(
+                ArgumentError(
+                    "dR_dt_constant must be > 0 and finite, got $(cfg.accretion.dR_dt_constant)",
+                ),
+            )
+        (cfg.accretion.tau_growth_myr > 0.0 && isfinite(cfg.accretion.tau_growth_myr)) ||
+            throw(
+                ArgumentError(
+                    "tau_growth_myr must be > 0 and finite, got $(cfg.accretion.tau_growth_myr)",
+                ),
+            )
+        r_max_domain = min(
+            cfg.geometry.xcenter,
+            cfg.geometry.ycenter,
+            cfg.grid.xsize - cfg.geometry.xcenter,
+            cfg.grid.ysize - cfg.geometry.ycenter,
+        )
+        (cfg.accretion.R_target <= r_max_domain) || throw(
+            ArgumentError(
+                "R_target ($(cfg.accretion.R_target)) exceeds distance to domain boundary ($r_max_domain)",
+            ),
+        )
+        cfg.accretion.mode in Set([
+            :constant_rate,
+            :linear_radius,
+            :exponential,
+            :safronov,
+            :pebble_bondi,
+            :pebble_hill,
+            :pebble_auto,
+        ]) || throw(
+            ArgumentError(
+                "mode must be :constant_rate, :linear_radius, :exponential, :safronov, :pebble_bondi, :pebble_hill, or :pebble_auto, got :$(cfg.accretion.mode)",
+            ),
+        )
+        (0.0 <= cfg.accretion.h_impact <= 1.0 && isfinite(cfg.accretion.h_impact)) || throw(
+            ArgumentError(
+                "h_impact must be in [0, 1] and finite, got $(cfg.accretion.h_impact)"
+            ),
+        )
+        (cfg.accretion.v_inf >= 0.0 && isfinite(cfg.accretion.v_inf)) || throw(
+            ArgumentError("v_inf must be >= 0 and finite, got $(cfg.accretion.v_inf)")
+        )
+        (cfg.accretion.cp_rock > 0.0 && isfinite(cfg.accretion.cp_rock)) || throw(
+            ArgumentError("cp_rock must be > 0 and finite, got $(cfg.accretion.cp_rock)"),
+        )
+        (
+            0.0 <= cfg.accretion.phi_accreted <= 1.0 && isfinite(cfg.accretion.phi_accreted)
+        ) || throw(
+            ArgumentError(
+                "phi_accreted must be in [0, 1] and finite, got $(cfg.accretion.phi_accreted)",
+            ),
+        )
+        (
+            0.0 <= cfg.accretion.Xfe_bulk_accreted <= 1.0 &&
+            isfinite(cfg.accretion.Xfe_bulk_accreted)
+        ) || throw(
+            ArgumentError(
+                "Xfe_bulk_accreted must be in [0, 1] and finite, got $(cfg.accretion.Xfe_bulk_accreted)",
+            ),
+        )
+        (cfg.accretion.T_snowline_cond > 0.0 && isfinite(cfg.accretion.T_snowline_cond)) ||
+            throw(
+                ArgumentError(
+                    "T_snowline_cond must be > 0 and finite, got $(cfg.accretion.T_snowline_cond)",
+                ),
+            )
+        (0.0 <= cfg.accretion.XWsolid_wet <= 1.0 && isfinite(cfg.accretion.XWsolid_wet)) ||
+            throw(
+                ArgumentError(
+                    "XWsolid_wet must be in [0, 1] and finite, got $(cfg.accretion.XWsolid_wet)",
+                ),
+            )
+        (0.0 <= cfg.accretion.XWsolid_dry <= 1.0 && isfinite(cfg.accretion.XWsolid_dry)) ||
+            throw(
+                ArgumentError(
+                    "XWsolid_dry must be in [0, 1] and finite, got $(cfg.accretion.XWsolid_dry)",
+                ),
+            )
+        (cfg.accretion.XH2O_wet_wtpct >= 0.0 && isfinite(cfg.accretion.XH2O_wet_wtpct)) ||
+            throw(
+                ArgumentError(
+                    "XH2O_wet_wtpct must be >= 0 and finite, got $(cfg.accretion.XH2O_wet_wtpct)",
+                ),
+            )
+        (cfg.accretion.XH2O_dry_wtpct >= 0.0 && isfinite(cfg.accretion.XH2O_dry_wtpct)) ||
+            throw(
+                ArgumentError(
+                    "XH2O_dry_wtpct must be >= 0 and finite, got $(cfg.accretion.XH2O_dry_wtpct)",
+                ),
+            )
+        (cfg.accretion.XC_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XC_accreted_ppm)) ||
+            throw(
+                ArgumentError(
+                    "XC_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XC_accreted_ppm)",
+                ),
+            )
+        (cfg.accretion.XN_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XN_accreted_ppm)) ||
+            throw(
+                ArgumentError(
+                    "XN_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XN_accreted_ppm)",
+                ),
+            )
+        (cfg.accretion.XS_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XS_accreted_ppm)) ||
+            throw(
+                ArgumentError(
+                    "XS_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XS_accreted_ppm)",
+                ),
+            )
+        (cfg.accretion.stokes_number > 0.0 && isfinite(cfg.accretion.stokes_number)) ||
+            throw(
+                ArgumentError(
+                    "stokes_number must be > 0 and finite, got $(cfg.accretion.stokes_number)",
+                ),
+            )
+        (
+            cfg.accretion.alpha_turbulence > 0.0 && isfinite(cfg.accretion.alpha_turbulence)
+        ) || throw(
+            ArgumentError(
+                "alpha_turbulence must be > 0 and finite, got $(cfg.accretion.alpha_turbulence)",
+            ),
+        )
+        (cfg.accretion.Sigma_peb_0 >= 0.0 && isfinite(cfg.accretion.Sigma_peb_0)) || throw(
+            ArgumentError(
+                "Sigma_peb_0 must be >= 0 and finite, got $(cfg.accretion.Sigma_peb_0)"
+            ),
+        )
+        (cfg.accretion.Sigma_pl_0 >= 0.0 && isfinite(cfg.accretion.Sigma_pl_0)) || throw(
+            ArgumentError(
+                "Sigma_pl_0 must be >= 0 and finite, got $(cfg.accretion.Sigma_pl_0)"
+            ),
+        )
+        (cfg.accretion.v_disp_kms > 0.0 && isfinite(cfg.accretion.v_disp_kms)) || throw(
+            ArgumentError(
+                "v_disp_kms must be > 0 and finite, got $(cfg.accretion.v_disp_kms)"
+            ),
+        )
+    end
+
     return nothing
 end
 
@@ -1745,6 +1981,7 @@ const VALID_SECTIONS = Set([
     "metal_partition",
     "phase_tracking",
     "hydrothermal",
+    "accretion",
 ])
 
 """
@@ -1913,6 +2150,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.hydrothermal
     end
+    acc = if haskey(parsed, "accretion")
+        _dict_to_struct(AccretionConfig, parsed["accretion"], def.accretion)
+    else
+        def.accretion
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -1934,6 +2176,7 @@ function load_config(source::AbstractString)::SimulationConfig
         metal_partition=metal_part,
         phase_tracking=phase_track,
         hydrothermal=hydrotherm,
+        accretion=acc,
     )
 
     validate_config(cfg)
