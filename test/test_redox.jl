@@ -12,6 +12,12 @@ using Erebus
     lfo2_iw_legacy = Erebus.compute_iron_wustite_fO2(T; delta_IW=0.0)
     @test isapprox(lfo2_iw_engine, lfo2_iw_legacy; atol=1e-12)
 
+    # Frost (1991) Table 1 Iron-Wüstite calibration pin
+    lfo2_iw_frost = Erebus.log10_fo2_of_buffer(:IW_Frost, T, P_1bar)
+    @test isapprox(lfo2_iw_frost, -27489.0 / T + 6.702; atol=1e-6)
+    # Quantified offset: Frost IW sits ~0.64 dex above Campbell IW at 1400 K
+    @test isapprox(lfo2_iw_frost - lfo2_iw_engine, 0.6433; atol=0.01)
+
     # 1. Petrologic ordering guard at 1400 K and 1 bar (Frost 1991):
     # MH > NNO > QFM > WM > IW > QIF
     lfo2_mh = Erebus.log10_fo2_of_buffer(:MH, T, P_1bar)
@@ -54,7 +60,7 @@ using Erebus
 end
 
 @testset "Graphite CCO Buffer Inversion Physics" begin
-    # Test CCO buffer across pressures at T = 1300 K
+    # Test CCO buffer across pressures at T = 1300 K (French 1966)
     T = 1300.0
     P_10bar = 1.0e6   # 10 bar in Pa
     P_100bar = 1.0e7  # 100 bar in Pa
@@ -75,11 +81,21 @@ end
     # Pressure dependence guard: higher pressure shifts equilibrium toward CO2, increasing fO2
     @test lfo2_cco_100 > lfo2_cco_10
 
-    # Scale guard: at 1300 K and 10 bar, CCO sits near IW to IW+2
+    # Scale guard: at 1300 K and 10 bar, CCO sits at ΔIW ≈ -0.92
     lfo2_iw = Erebus.log10_fo2_of_buffer(:IW, T, P_10bar)
     delta_cco_iw = lfo2_cco_10 - lfo2_iw
-    @test -2.0 < delta_cco_iw < 4.0
-    @test lfo2_cco_10 < 0.0
+    @test -1.5 < delta_cco_iw < -0.5
+    @test isapprox(delta_cco_iw, -0.92; atol=0.1)
+
+    # Low pressure stability guard: verify no catastrophic cancellation down to 1e-10 Pa
+    P_low = 1.0e-10
+    lfo2_cco_low = Erebus.log10_fo2_of_buffer(:CCO, T, P_low)
+    @test isfinite(lfo2_cco_low)
+    @test lfo2_cco_low < lfo2_cco_10
+
+    # Error contracts
+    @test_throws DomainError Erebus.log10_fo2_of_buffer(:CCO, 50.0, P_10bar) # T < 100 K
+    @test_throws DomainError Erebus.log10_fo2_of_buffer(:CCO, T, 0.0)        # P <= 0
 end
 
 @testset "Bidirectional Buffer Translation and Invariants" begin
@@ -143,6 +159,14 @@ end
     # Boundedness: tolerance threshold gating
     buf_tol, _ = Erebus.local_controlling_buffer(1e-7, 0.0, 0.0; tol=1e-6)
     @test buf_tol === :QFM
+
+    # Domain error contracts
+    @test_throws DomainError Erebus.local_controlling_buffer(-0.1, 0.0, 0.0)
+    @test_throws DomainError Erebus.local_controlling_buffer(1.2, 0.0, 0.0)
+    @test_throws DomainError Erebus.local_controlling_buffer(NaN, 0.0, 0.0)
+    @test_throws DomainError Erebus.local_controlling_buffer(0.0, -0.05, 0.0)
+    @test_throws DomainError Erebus.local_controlling_buffer(0.0, 0.0, 1.05)
+    @test_throws DomainError Erebus.local_controlling_buffer(0.0, 0.0, 0.0; tol=-1e-4)
 end
 
 @testset "Evans 2012 Redox Budget Electron Accounting" begin
@@ -151,32 +175,26 @@ end
     # Crust reference state (C): Fe3+, C4+, S6+, H+, O2-, P5+
 
     # 1. Pure component electron counts relative to Mantle reference state
-    # 1 mol Fe0 -> nu = -2 mol e-
     c_fe0 = Erebus.RedoxComponents(n_Fe0=1.0)
     rb_fe0 = Erebus.compute_redox_budget(c_fe0; reference=:mantle)
     @test isapprox(rb_fe0, -2.0; atol=1e-12)
 
-    # 1 mol Fe3+ -> nu = +1 mol e-
     c_fe3 = Erebus.RedoxComponents(n_Fe3=1.0)
     rb_fe3 = Erebus.compute_redox_budget(c_fe3; reference=:mantle)
     @test isapprox(rb_fe3, 1.0; atol=1e-12)
 
-    # 1 mol H2 -> nu = -2 mol e-
     c_h2 = Erebus.RedoxComponents(n_H2=1.0)
     rb_h2 = Erebus.compute_redox_budget(c_h2; reference=:mantle)
     @test isapprox(rb_h2, -2.0; atol=1e-12)
 
-    # 1 mol H2O -> nu = 0.0
     c_h2o = Erebus.RedoxComponents(n_H2O=1.0)
     rb_h2o = Erebus.compute_redox_budget(c_h2o; reference=:mantle)
     @test isapprox(rb_h2o, 0.0; atol=1e-12)
 
-    # 1 mol CO2 -> nu = +4 mol e-
     c_co2 = Erebus.RedoxComponents(n_CO2=1.0)
     rb_co2 = Erebus.compute_redox_budget(c_co2; reference=:mantle)
     @test isapprox(rb_co2, 4.0; atol=1e-12)
 
-    # 1 mol CH4 -> nu = -4 mol e-
     c_ch4 = Erebus.RedoxComponents(n_CH4=1.0)
     rb_ch4 = Erebus.compute_redox_budget(c_ch4; reference=:mantle)
     @test isapprox(rb_ch4, -4.0; atol=1e-12)
@@ -186,33 +204,42 @@ end
     rb_spec = Erebus.compute_specific_redox_budget(c_fe0, mass; reference=:mantle)
     @test isapprox(rb_spec, -0.02; atol=1e-12)
 
-    # 2. Conservation Invariant: Serpentinization Reaction
-    # 3 FeO (Fe2+) + H2O -> Fe3O4 (1 Fe2+ + 2 Fe3+) + H2
-    # Before: 3 mol Fe2+ (0) + 1 mol H2O (0) => RB = 0.0
-    # After: 2 mol Fe3+ (+2) + 1 mol H2 (-2) => RB = 0.0
+    # 2. Conservation Invariant: Serpentinization Reaction (both zero and non-zero backgrounds)
     c_before = Erebus.RedoxComponents(n_Fe2=3.0, n_H2O=1.0)
-    c_after = Erebus.serpentinize_redox_budget(c_before, 1.0) # react 1 mol H2O
+    c_after = Erebus.serpentinize_redox_budget(c_before, 1.0)
     rb_init = Erebus.compute_redox_budget(c_before; reference=:mantle)
     rb_final = Erebus.compute_redox_budget(c_after; reference=:mantle)
     @test isapprox(rb_init, rb_final; atol=1e-12)
     @test isapprox(c_after.n_Fe3, 2.0; atol=1e-12)
     @test isapprox(c_after.n_H2, 1.0; atol=1e-12)
 
+    # Non-zero background: ensure conservation holds with coexisting Fe0 and Fe3+
+    c_bg = Erebus.RedoxComponents(n_Fe0=10.0, n_Fe2=10.0, n_Fe3=2.0, n_H2O=5.0)
+    c_bg_after = Erebus.serpentinize_redox_budget(c_bg, 2.0)
+    rb_bg_init = Erebus.compute_redox_budget(c_bg; reference=:mantle)
+    rb_bg_final = Erebus.compute_redox_budget(c_bg_after; reference=:mantle)
+    @test isapprox(rb_bg_init, rb_bg_final; atol=1e-12)
+    @test rb_bg_init != 0.0
+
+    # Over-consumption error contract: cannot react more Fe2+ or H2O than available
+    @test_throws DomainError Erebus.serpentinize_redox_budget(c_before, 5.0)
+    @test_throws DomainError Erebus.serpentinize_redox_budget(c_before, -0.5)
+
     # 3. Conservation Invariant: Core Segregation
-    # Metal segregation moves Fe0 to core, conserving total whole-body electrons
     c_bulk = Erebus.RedoxComponents(n_Fe0=50.0, n_Fe2=100.0, n_Fe3=5.0)
-    c_mantle, c_core = Erebus.segregate_core_redox_budget(c_bulk, 0.8) # 80% metal to core
+    c_mantle, c_core = Erebus.segregate_core_redox_budget(c_bulk, 0.8)
     rb_bulk = Erebus.compute_redox_budget(c_bulk; reference=:mantle)
     rb_mantle = Erebus.compute_redox_budget(c_mantle; reference=:mantle)
     rb_core = Erebus.compute_redox_budget(c_core; reference=:mantle)
     @test isapprox(rb_bulk, rb_mantle + rb_core; atol=1e-12)
-    # Core is highly reduced (negative RB_M)
     @test rb_core < 0.0
-    # Mantle is more oxidized after metal segregation
     @test rb_mantle > rb_bulk
 
+    # Core segregation domain contract
+    @test_throws DomainError Erebus.segregate_core_redox_budget(c_bulk, -0.1)
+    @test_throws DomainError Erebus.segregate_core_redox_budget(c_bulk, 1.1)
+
     # 4. Conservation Invariant: Degassing and Gas Venting
-    # Loss of reduced gas (H2, CO) leaves an oxidized residual rock
     c_rock0 = Erebus.RedoxComponents(n_Fe2=100.0, n_H2=10.0, n_CO=5.0, n_CO2=5.0)
     c_vent = Erebus.RedoxComponents(n_H2=8.0, n_CO=3.0)
     c_rock1 = Erebus.vent_gas_redox_budget(c_rock0, c_vent)
@@ -220,17 +247,20 @@ end
     rb_rock1 = Erebus.compute_redox_budget(c_rock1; reference=:mantle)
     rb_vent = Erebus.compute_redox_budget(c_vent; reference=:mantle)
     @test isapprox(rb_rock0, rb_rock1 + rb_vent; atol=1e-12)
-    # Vented gas is reducing (rb_vent < 0), so rock becomes more oxidized (rb_rock1 > rb_rock0)
     @test rb_vent < 0.0
     @test rb_rock1 > rb_rock0
 
+    # Over-venting domain contract: cannot vent more than available in rock
+    c_over_vent = Erebus.RedoxComponents(n_H2=15.0)
+    @test_throws DomainError Erebus.vent_gas_redox_budget(c_rock0, c_over_vent)
+
     # 5. Crust reference state conversion invariance
-    # In crust reference state (Fe3+, C4+, S6+):
-    # Fe0 has nu = -3, Fe2+ has nu = -1, Fe3+ has nu = 0
     rb_fe0_crust = Erebus.compute_redox_budget(c_fe0; reference=:crust)
     @test isapprox(rb_fe0_crust, -3.0; atol=1e-12)
 
-    # 6. Error contracts
+    # 6. Struct domain contracts
+    @test_throws DomainError Erebus.RedoxComponents(n_Fe0=-1.0)
+    @test_throws DomainError Erebus.RedoxComponents(n_H2=NaN)
     @test_throws ArgumentError Erebus.compute_redox_budget(c_fe0; reference=:INVALID_REF)
     @test_throws DomainError Erebus.compute_specific_redox_budget(
         c_fe0, -10.0; reference=:mantle
