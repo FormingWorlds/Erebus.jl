@@ -762,6 +762,15 @@ Base.@kwdef struct AccretionConfig
     Sigma_pl_0::Float64 = 100.0
     v_disp_kms::Float64 = 0.1
     track_accretion_time::Bool = true
+    stage1_mode::Symbol = :safronov
+    stage2_mode::Symbol = :pebble_auto
+    stage3_mode::Symbol = :safronov
+    M_onset::Float64 = NaN
+    f_onset::Float64 = 1.0
+    M_iso::Float64 = NaN
+    f_iso::Float64 = 0.5
+    transition_smoothing::Bool = true
+    transition_width::Float64 = 0.10
 end
 
 """
@@ -2012,9 +2021,10 @@ function validate_config(cfg::SimulationConfig)
             :pebble_bondi,
             :pebble_hill,
             :pebble_auto,
+            :multistage,
         ]) || throw(
             ArgumentError(
-                "mode must be :constant_rate, :linear_radius, :exponential, :safronov, :pebble_bondi, :pebble_hill, or :pebble_auto, got :$(cfg.accretion.mode)",
+                "mode must be :constant_rate, :linear_radius, :exponential, :safronov, :pebble_bondi, :pebble_hill, :pebble_auto, or :multistage, got :$(cfg.accretion.mode)",
             ),
         )
         (0.0 <= cfg.accretion.h_impact <= 1.0 && isfinite(cfg.accretion.h_impact)) || throw(
@@ -2117,6 +2127,62 @@ function validate_config(cfg::SimulationConfig)
         (cfg.accretion.v_disp_kms > 0.0 && isfinite(cfg.accretion.v_disp_kms)) || throw(
             ArgumentError(
                 "v_disp_kms must be > 0 and finite, got $(cfg.accretion.v_disp_kms)"
+            ),
+        )
+        valid_stage = Set([
+            :constant_rate,
+            :linear_radius,
+            :exponential,
+            :safronov,
+            :pebble_bondi,
+            :pebble_hill,
+            :pebble_auto,
+        ])
+        cfg.accretion.stage1_mode in valid_stage || throw(
+            ArgumentError(
+                "stage1_mode must be one of $valid_stage, got :$(cfg.accretion.stage1_mode)",
+            ),
+        )
+        cfg.accretion.stage2_mode in valid_stage || throw(
+            ArgumentError(
+                "stage2_mode must be one of $valid_stage, got :$(cfg.accretion.stage2_mode)",
+            ),
+        )
+        cfg.accretion.stage3_mode in valid_stage || throw(
+            ArgumentError(
+                "stage3_mode must be one of $valid_stage, got :$(cfg.accretion.stage3_mode)",
+            ),
+        )
+        (cfg.accretion.f_onset > 0.0 && isfinite(cfg.accretion.f_onset)) || throw(
+            ArgumentError("f_onset must be > 0 and finite, got $(cfg.accretion.f_onset)"),
+        )
+        (cfg.accretion.f_iso > 0.0 && isfinite(cfg.accretion.f_iso)) ||
+            throw(ArgumentError("f_iso must be > 0 and finite, got $(cfg.accretion.f_iso)"))
+        (
+            isnan(cfg.accretion.M_onset) ||
+            (cfg.accretion.M_onset > 0.0 && isfinite(cfg.accretion.M_onset))
+        ) || throw(
+            ArgumentError(
+                "M_onset must be NaN or > 0 and finite, got $(cfg.accretion.M_onset)"
+            ),
+        )
+        (isnan(cfg.accretion.M_iso) || isfinite(cfg.accretion.M_iso)) ||
+            throw(ArgumentError("M_iso must be NaN or finite, got $(cfg.accretion.M_iso)"))
+        if !isnan(cfg.accretion.M_onset) &&
+            !isnan(cfg.accretion.M_iso) &&
+            cfg.accretion.M_iso > 0.0
+            cfg.accretion.M_onset < cfg.accretion.M_iso || throw(
+                ArgumentError(
+                    "M_onset ($(cfg.accretion.M_onset)) must be < M_iso ($(cfg.accretion.M_iso))",
+                ),
+            )
+        end
+        (
+            0.0 <= cfg.accretion.transition_width <= 0.5 &&
+            isfinite(cfg.accretion.transition_width)
+        ) || throw(
+            ArgumentError(
+                "transition_width must be in [0, 0.5] and finite, got $(cfg.accretion.transition_width)",
             ),
         )
     end
@@ -2286,7 +2352,20 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
                 end
                 kwargs[fname] = SVector{expected_len,eltype(ftype)}(val)
             elseif ftype <: Real && !(val isa ftype)
-                kwargs[fname] = convert(ftype, val)
+                if val isa AbstractString && ftype <: AbstractFloat
+                    parsed = tryparse(ftype, val)
+                    if parsed !== nothing
+                        kwargs[fname] = parsed
+                    else
+                        throw(
+                            ArgumentError(
+                                "Cannot parse string '$val' as $ftype for field '$sname'"
+                            ),
+                        )
+                    end
+                else
+                    kwargs[fname] = convert(ftype, val)
+                end
             elseif ftype === Symbol && val isa AbstractString
                 kwargs[fname] = Symbol(val)
             elseif ftype === Vector{Symbol} && val isa AbstractVector

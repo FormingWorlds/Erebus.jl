@@ -214,6 +214,10 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 ## Planetesimal Accretion and Growth Dynamics
 
+- **Bitsch, B., Morbidelli, A., Johansen, A., Lega, E., Lambrechts, M., & Crida, A. (2018)**. Pebble-isolation mass: Constraints on giants' growth and gas accretion. *Astronomy & Astrophysics*, 612, A30.  
+  [https://doi.org/10.1051/0004-6361/201731931](https://doi.org/10.1051/0004-6361/201731931)  
+  *Pebble isolation mass parameterization as a function of disk aspect ratio and turbulence, defining the termination threshold of efficient pebble accretion.*
+
 - **Chambers, J. E. (2006)**. A semi-analytic model for oligarchic growth. *Icarus*, 180(2), 496-513.  
   [https://doi.org/10.1016/j.icarus.2005.10.017](https://doi.org/10.1016/j.icarus.2005.10.017)  
   *Semi-analytic formulation for Safronov gravitational focusing and oligarchic growth of planetary embryos.*
@@ -222,12 +226,24 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1051/0004-6361/201219127](https://doi.org/10.1051/0004-6361/201219127)  
   *Pebble accretion scaling laws, transition mass between Bondi and Hill regimes, and rapid planetary core growth.*
 
+- **Lambrechts, M., Johansen, A., & Morbidelli, A. (2014)**. Separating gas-giant and ice-giant planets by shifting pebble accretion realms. *Astronomy & Astrophysics*, 572, A35.  
+  [https://doi.org/10.1051/0004-6361/201424343](https://doi.org/10.1051/0004-6361/201424343)  
+  *Derivation of the pebble isolation mass threshold and transition from pebble accretion to late giant embryo collisions.*
+
+- **Liu, B., Ormel, C. W., & Johansen, A. (2019)**. Growth of planetesimals after the streaming instability: Planetesimal collisions versus pebble accretion. *Astronomy & Astrophysics*, 624, A114.  
+  [https://doi.org/10.1051/0004-6361/201834241](https://doi.org/10.1051/0004-6361/201834241)  
+  *Demonstrates that bodies born from streaming instability grow by mutual planetesimal collisions before reaching the pebble accretion settling regime.*
+
 - **Ormel, C. W., & Klahr, H. H. (2010)**. The effect of gas drag on the growth of protoplanets. Analytical expressions for the accretion of small bodies in laminar disks. *Astronomy & Astrophysics*, 520, A43.  
   [https://doi.org/10.1051/0004-6361/201014903](https://doi.org/10.1051/0004-6361/201014903)  
   *Analytical derivation of 2D and 3D pebble accretion regimes and capture cross-sections in laminar protoplanetary disks.*
 
 - **Safronov, V. S. (1972)**. *Evolution of the protoplanetary cloud and formation of the earth and the planets*. Translated from Russian, Israel Program for Scientific Translations, Jerusalem. NASA-TT-F-677.  
   *Foundational theory of planetesimal collision swarms, velocity dispersion evolution, and gravitational focusing parameterization.*
+
+- **Visser, R. G., & Ormel, C. W. (2016)**. On the onset of pebble accretion: Planetesimal growth in protoplanetary discs. *Astronomy & Astrophysics*, 586, A66.  
+  [https://doi.org/10.1051/0004-6361/201527376](https://doi.org/10.1051/0004-6361/201527376)  
+  *Trajectory simulations demonstrating gas drag deflection around small planetesimals and defining the aerodynamic onset mass for pebble capture.*
 
 - **Youdin, A. N., & Lithwick, Y. (2007)**. Particle stirring in turbulent protoplanetary disks: Including orbital effects. *Icarus*, 192(2), 588-604.  
   [https://doi.org/10.1016/j.icarus.2007.07.012](https://doi.org/10.1016/j.icarus.2007.07.012)  

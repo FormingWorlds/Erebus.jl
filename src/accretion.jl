@@ -248,6 +248,147 @@ function compute_pebble_surface_density(
 end
 
 """
+Compute sub-Keplerian gas headwind velocity in protoplanetary disk.
+
+The radial pressure gradient of disk gas drives sub-Keplerian rotation with
+fractional deviation parameter \$\\eta \\approx 1.5 (c_s / v_K)^2\$, producing a headwind
+velocity \$v_{\\mathrm{hw}} = \\eta v_K = 1.5 c_s^2 / v_K\$.
+
+\$(SIGNATURES)
+
+# Arguments
+- `c_s`: Gas sound speed [m/s]
+- `v_K`: Keplerian orbital velocity [m/s]
+
+# Returns
+- `v_hw`: Sub-Keplerian headwind velocity [m/s]
+
+# Raises
+- `DomainError`: If `c_s` or `v_K` is non-positive or non-finite.
+"""
+function compute_headwind_velocity(c_s::Real, v_K::Real)::Float64
+    cs_val = Float64(c_s)
+    vk_val = Float64(v_K)
+    if !isfinite(cs_val) || cs_val <= 0.0
+        throw(DomainError(cs_val, "Sound speed must be positive and finite"))
+    end
+    if !isfinite(vk_val) || vk_val <= 0.0
+        throw(DomainError(vk_val, "Keplerian velocity must be positive and finite"))
+    end
+    eta_disk = 1.5 * (cs_val / vk_val)^2
+    return eta_disk * vk_val
+end
+
+"""
+Compute the onset mass for efficient pebble accretion in the settling regime.
+
+Below this mass, gas drag deflects pebbles around the planetesimal and the
+pebble accretion efficiency is near zero (Visser & Ormel 2016; Liu et al. 2019).
+The criterion balances the headwind Bondi radius against the pebble drift
+distance per stopping time: \$R_B = G M / v_{\\mathrm{hw}}^2 \\ge v_{\\mathrm{hw}} t_s\$, with
+\$t_s = \\mathrm{St} / \\Omega_K\$, yielding:
+\$\$M_{\\mathrm{onset}} = f_{\\mathrm{onset}} \\frac{v_{\\mathrm{hw}}^3 \\mathrm{St}}{G \\Omega_K}\$\$
+
+\$(SIGNATURES)
+
+# Arguments
+- `M_star`: Stellar mass [kg]
+- `a`: Semi-major axis [m]
+- `St`: Aerodynamic Stokes number [-]
+- `c_s`: Gas sound speed [m/s]
+
+# Keyword Arguments
+- `f_onset`: Calibration prefactor against trajectory integrations (default: 1.0)
+
+# Returns
+- `M_onset`: Onset mass for settling pebble accretion [kg]
+
+# Raises
+- `DomainError`: If any input is non-positive or non-finite.
+"""
+function compute_pebble_onset_mass(
+    M_star::Real, a::Real, St::Real, c_s::Real; f_onset::Real=1.0
+)::Float64
+    Ms_val = Float64(M_star)
+    a_val = Float64(a)
+    St_val = Float64(St)
+    cs_val = Float64(c_s)
+    fo_val = Float64(f_onset)
+
+    if !isfinite(Ms_val) || Ms_val <= 0.0
+        throw(DomainError(Ms_val, "Stellar mass must be positive and finite"))
+    end
+    if !isfinite(a_val) || a_val <= 0.0
+        throw(DomainError(a_val, "Semi-major axis must be positive and finite"))
+    end
+    if !isfinite(St_val) || St_val < 0.0
+        throw(DomainError(St_val, "Stokes number must be non-negative and finite"))
+    end
+    if !isfinite(cs_val) || cs_val <= 0.0
+        throw(DomainError(cs_val, "Sound speed must be positive and finite"))
+    end
+    if !isfinite(fo_val) || fo_val <= 0.0
+        throw(DomainError(fo_val, "f_onset must be positive and finite"))
+    end
+
+    Omega_K = compute_keplerian_frequency(a_val, Ms_val)
+    v_K = compute_keplerian_velocity(a_val, Ms_val)
+    v_hw = compute_headwind_velocity(cs_val, v_K)
+
+    return fo_val * (v_hw^3) * St_val / (G_GRAV * Omega_K)
+end
+
+"""
+Compute the pebble isolation mass where disk gas pressure bumps halt pebble drift.
+
+When a planetary core reaches the pebble isolation mass (Lambrechts et al. 2014;
+Bitsch et al. 2018), its gravitational perturbation creates an exterior pressure
+maximum in the gas disk that traps inward-drifting pebbles:
+\$\$M_{\\mathrm{iso}} = f_{\\mathrm{iso}} M_{\\star} \\left(\\frac{H_g}{a}\\right)^3 = f_{\\mathrm{iso}} M_{\\star} \\left(\\frac{c_s}{v_K}\\right)^3\$\$
+
+\$(SIGNATURES)
+
+# Arguments
+- `M_star`: Stellar mass [kg]
+- `a`: Semi-major axis [m]
+- `c_s`: Gas sound speed [m/s]
+
+# Keyword Arguments
+- `f_iso`: Calibration prefactor (default: 0.5, corresponding to \$\\approx 20 M_\\oplus (h/0.05)^3\$)
+
+# Returns
+- `M_iso`: Pebble isolation mass [kg]
+
+# Raises
+- `DomainError`: If any input is non-positive or non-finite.
+"""
+function compute_pebble_isolation_mass(
+    M_star::Real, a::Real, c_s::Real; f_iso::Real=0.5
+)::Float64
+    Ms_val = Float64(M_star)
+    a_val = Float64(a)
+    cs_val = Float64(c_s)
+    f_iso_val = Float64(f_iso)
+
+    if !isfinite(Ms_val) || Ms_val <= 0.0
+        throw(DomainError(Ms_val, "Stellar mass must be positive and finite"))
+    end
+    if !isfinite(a_val) || a_val <= 0.0
+        throw(DomainError(a_val, "Semi-major axis must be positive and finite"))
+    end
+    if !isfinite(cs_val) || cs_val <= 0.0
+        throw(DomainError(cs_val, "Sound speed must be positive and finite"))
+    end
+    if !isfinite(f_iso_val) || f_iso_val <= 0.0
+        throw(DomainError(f_iso_val, "f_iso must be positive and finite"))
+    end
+
+    v_K = compute_keplerian_velocity(a_val, Ms_val)
+    h_aspect = cs_val / v_K
+    return f_iso_val * Ms_val * (h_aspect^3)
+end
+
+"""
 Compute pebble accretion rate [kg/s] onto planetesimal in Bondi, Hill, or automated transition regime.
 
 $(SIGNATURES)
@@ -293,8 +434,7 @@ function compute_pebble_accretion_rate(
     rho_peb = Float64(Sigma_peb) / (sqrt(2.0 * pi) * H_peb)
 
     # Sub-Keplerian gas headwind velocity: eta * v_K with eta ~ (c_s / v_K)^2
-    eta_disk = 1.5 * (Float64(c_s) / v_K)^2
-    v_rel = eta_disk * v_K
+    v_rel = compute_headwind_velocity(c_s, v_K)
 
     # Hill radius and orbital shearing velocity
     R_H = compute_hill_radius(M_val, a, M_star)
@@ -640,12 +780,216 @@ function advance_accretion_boundary!(
 end
 
 """
-Compute total accretion mass rate [kg/s] for the planetesimal according to configured mode.
+Compute multi-stage accretion rate across planetesimal collision, pebble accretion, and late impact regimes.
+
+Dispatches growth across three chronological stages governed by aerodynamic onset and pebble isolation:
+- **Stage 1 (Sub-onset)**: Mutual planetesimal collisions (`acc_cfg.stage1_mode`, default `:safronov`) when \$M < M_{\\mathrm{onset}}\$.
+- **Stage 2 (Pebble accretion)**: Settling pebble capture (`acc_cfg.stage2_mode`, default `:pebble_auto`) when \$M_{\\mathrm{onset}} \\le M < M_{\\mathrm{iso}}\$.
+- **Stage 3 (Post-isolation)**: Late embryo and giant collisions (`acc_cfg.stage3_mode`, default `:safronov`) when \$M \\ge M_{\\mathrm{iso}}\$.
+
+If `acc_cfg.transition_smoothing` is `true`, smoothstep blending \$S(x) = 3x^2 - 2x^3\$ is applied
+across transition windows of fractional half-width `acc_cfg.transition_width` to ensure \$\\dot{M}(t)\$ continuity.
 
 $(SIGNATURES)
 
 # Arguments
 - `time_seconds`: Current simulation time [s]
+- `M`: Current planetesimal mass [kg]
+- `R`: Current planetesimal radius [m]
+- `acc_cfg`: Accretion configuration struct
+- `disk_cfg`: Disk configuration struct
+
+# Returns
+- `dM_dt`: Accretion mass rate [kg/s]
+"""
+function compute_multistage_accretion_rate(
+    time_seconds::Real,
+    M::Real,
+    R::Real,
+    acc_cfg::AccretionConfig,
+    disk_cfg::DiskConfig=DiskConfig(),
+)::Float64
+    M_val = Float64(M)
+    R_val = Float64(R)
+    t_sec = Float64(time_seconds)
+
+    if !isfinite(M_val) || M_val < 0.0
+        throw(DomainError(M_val, "Planetesimal mass M must be non-negative and finite"))
+    end
+    if !isfinite(R_val) || R_val <= 0.0
+        throw(DomainError(R_val, "Planetesimal radius R must be positive and finite"))
+    end
+    if !isfinite(t_sec) || t_sec < 0.0
+        throw(DomainError(t_sec, "Elapsed time must be non-negative and finite"))
+    end
+
+    a_m = disk_cfg.orbital_distance_au * AU_METERS
+    M_star = disk_cfg.stellar_mass_msun * M_SUN_KG
+    T_disk = if disk_cfg.enabled
+        compute_disk_temperature(t_sec, disk_cfg)
+    else
+        disk_cfg.t_ambient
+    end
+    c_s = compute_sound_speed(T_disk)
+
+    # 1. Determine M_onset
+    M_onset = if !isnan(acc_cfg.M_onset) && acc_cfg.M_onset > 0.0
+        acc_cfg.M_onset
+    else
+        compute_pebble_onset_mass(
+            M_star, a_m, acc_cfg.stokes_number, c_s; f_onset=acc_cfg.f_onset
+        )
+    end
+
+    # 2. Determine M_iso
+    M_iso = if !isnan(acc_cfg.M_iso)
+        acc_cfg.M_iso
+    else
+        compute_pebble_isolation_mass(M_star, a_m, c_s; f_iso=acc_cfg.f_iso)
+    end
+
+    # Helper function to evaluate base rate for any mode
+    function _eval_stage_rate(mode::Symbol)::Float64
+        if mode === :constant_rate
+            return max(0.0, acc_cfg.dM_dt_constant)
+        elseif mode === :linear_radius
+            return max(
+                0.0, 4.0 * pi * (R_val^2) * acc_cfg.rho_bulk * acc_cfg.dR_dt_constant
+            )
+        elseif mode === :exponential
+            tau_sec = acc_cfg.tau_growth_myr * 1.0e6 * SEC_PER_YEAR
+            return max(0.0, M_val / tau_sec)
+        elseif mode === :safronov
+            Omega_K = compute_keplerian_frequency(a_m, M_star)
+            sigma_v = acc_cfg.v_disp_kms * 1000.0
+            return compute_safronov_accretion_rate(
+                M_val, R_val, acc_cfg.Sigma_pl_0, sigma_v, Omega_K
+            )
+        elseif mode in Set([:pebble_bondi, :pebble_hill, :pebble_auto])
+            Sigma_peb = compute_pebble_surface_density(
+                disk_cfg.orbital_distance_au;
+                Sigma_peb_0=acc_cfg.Sigma_peb_0,
+                p_peb=acc_cfg.p_peb,
+            )
+            return compute_pebble_accretion_rate(
+                M_val,
+                M_star,
+                a_m,
+                Sigma_peb,
+                acc_cfg.stokes_number,
+                c_s,
+                acc_cfg.alpha_turbulence;
+                c_bondi=acc_cfg.c_bondi,
+                c_hill=acc_cfg.c_hill,
+                regime=mode,
+            )
+        else
+            throw(ArgumentError("Unrecognized stage mode: :$mode"))
+        end
+    end
+
+    # If smoothing is disabled or transition width is 0, sharp step transition
+    if !acc_cfg.transition_smoothing || acc_cfg.transition_width <= 0.0
+        if isfinite(M_iso) && M_iso > 0.0
+            if M_iso <= M_onset
+                return if M_val < M_iso
+                    _eval_stage_rate(acc_cfg.stage1_mode)
+                else
+                    _eval_stage_rate(acc_cfg.stage3_mode)
+                end
+            else
+                if M_val < M_onset
+                    return _eval_stage_rate(acc_cfg.stage1_mode)
+                elseif M_val >= M_iso
+                    return _eval_stage_rate(acc_cfg.stage3_mode)
+                else
+                    return _eval_stage_rate(acc_cfg.stage2_mode)
+                end
+            end
+        else
+            return if M_val < M_onset
+                _eval_stage_rate(acc_cfg.stage1_mode)
+            else
+                _eval_stage_rate(acc_cfg.stage2_mode)
+            end
+        end
+    end
+
+    # Smoothstep function S(x) = 3x^2 - 2x^3 for x in [0, 1]
+    function _smoothstep(x::Float64)::Float64
+        xc = clamp(x, 0.0, 1.0)
+        return xc * xc * (3.0 - 2.0 * xc)
+    end
+
+    rate1 = _eval_stage_rate(acc_cfg.stage1_mode)
+
+    # If M_iso is not active (NaN or <= 0), smooth between stage 1 and stage 2
+    if !isfinite(M_iso) || M_iso <= 0.0
+        rate2 = _eval_stage_rate(acc_cfg.stage2_mode)
+        w = acc_cfg.transition_width
+        M_onset_low = M_onset * (1.0 - w)
+        M_onset_high = M_onset * (1.0 + w)
+        if M_val <= M_onset_low
+            return max(0.0, rate1)
+        elseif M_val >= M_onset_high
+            return max(0.0, rate2)
+        else
+            s1 = _smoothstep((M_val - M_onset_low) / (M_onset_high - M_onset_low))
+            return max(0.0, (1.0 - s1) * rate1 + s1 * rate2)
+        end
+    end
+
+    rate3 = _eval_stage_rate(acc_cfg.stage3_mode)
+
+    # If M_iso <= M_onset, Stage 2 has zero width: smooth directly from Stage 1 to Stage 3 around M_iso
+    if M_iso <= M_onset
+        w = acc_cfg.transition_width
+        M_trans_low = M_iso * (1.0 - w)
+        M_trans_high = M_iso * (1.0 + w)
+        if M_val <= M_trans_low
+            return max(0.0, rate1)
+        elseif M_val >= M_trans_high
+            return max(0.0, rate3)
+        else
+            s = _smoothstep((M_val - M_trans_low) / (M_trans_high - M_trans_low))
+            return max(0.0, (1.0 - s) * rate1 + s * rate3)
+        end
+    end
+
+    rate2 = _eval_stage_rate(acc_cfg.stage2_mode)
+
+    # When M_onset < M_iso, adjust effective half-width to prevent overlapping transition windows
+    w_nom = acc_cfg.transition_width
+    w_max = (M_iso - M_onset) / (2.0 * (M_iso + M_onset))
+    w_eff = min(w_nom, w_max)
+
+    M_onset_low = M_onset * (1.0 - w_eff)
+    M_onset_high = M_onset * (1.0 + w_eff)
+    M_iso_low = M_iso * (1.0 - w_eff)
+    M_iso_high = M_iso * (1.0 + w_eff)
+
+    if M_val <= M_onset_low
+        return max(0.0, rate1)
+    elseif M_val < M_onset_high
+        s1 = _smoothstep((M_val - M_onset_low) / (M_onset_high - M_onset_low))
+        return max(0.0, (1.0 - s1) * rate1 + s1 * rate2)
+    elseif M_val <= M_iso_low
+        return max(0.0, rate2)
+    elseif M_val < M_iso_high
+        s2 = _smoothstep((M_val - M_iso_low) / (M_iso_high - M_iso_low))
+        return max(0.0, (1.0 - s2) * rate2 + s2 * rate3)
+    else
+        return max(0.0, rate3)
+    end
+end
+
+"""
+Compute net planetesimal accretion rate [kg/s] for current simulation step.
+
+$(SIGNATURES)
+
+# Arguments
+- `time_seconds`: Current simulation elapsed time [s]
 - `M`: Current planetesimal mass [kg]
 - `R`: Current planetesimal radius [m]
 - `acc_cfg`: AccretionConfig struct
@@ -680,7 +1024,11 @@ function compute_accretion_rate(
         return 0.0
     end
 
-    if acc_cfg.mode === :constant_rate
+    if acc_cfg.mode === :multistage
+        return compute_multistage_accretion_rate(
+            time_seconds, M_val, R_val, acc_cfg, disk_cfg
+        )
+    elseif acc_cfg.mode === :constant_rate
         return max(0.0, acc_cfg.dM_dt_constant)
     elseif acc_cfg.mode === :linear_radius
         # dM/dt = 4 pi R^2 rho_bulk dR/dt
