@@ -85,10 +85,10 @@ Hydrothermal alteration oxidizes ferrous iron in olivine/pyroxene to ferric iron
 $$3\text{FeO} + \text{H}_2\text{O} \to \text{Fe}_3\text{O}_4 + \text{H}_2$$
 
 Under the mantle reference state:
-- $3\text{FeO}$ ($\text{Fe}^{2+}$) has $\nu = 0$.
-- $\text{H}_2\text{O}$ has $\nu = 0$.
-- $\text{Fe}_3\text{O}_4$ contains $2\text{Fe}^{3+}$ ($\nu = +1$ each, total $+2$).
-- $\text{H}_2$ contains $2\text{H}^0$ ($\nu = -1$ each, total $-2$).
+- Reactant $3\text{FeO}$: ferrous iron ($\text{Fe}^{2+}$) has $\nu = 0$.
+- Reactant $\text{H}_2\text{O}$: water has $\nu = 0$.
+- Product $\text{Fe}_3\text{O}_4$: magnetite contains $2\text{Fe}^{3+}$ ($\nu = +1$ each, total $+2$).
+- Product $\text{H}_2$: molecular hydrogen contains $2\text{H}^0$ ($\nu = -1$ each, total $-2$).
 
 Total electron balance is identically zero: $\Delta RB = (+2) + (-2) = 0$.
 
