@@ -22,8 +22,8 @@ makedocs(;
         prettyurls=get(ENV, "CI", nothing) == "true",
         canonical="https://proteus-framework.org/Erebus.jl/stable/",
         edit_link="main",
-        size_threshold_warn=350 * 1024,
-        size_threshold=450 * 1024,
+        size_threshold_warn=500 * 1024,
+        size_threshold=650 * 1024,
     ),
     pages=[
         "Home" => "index.md",
@@ -73,6 +73,7 @@ makedocs(;
             "Hydrothermal Subgrid Convection" => "validation/hydrothermal_convection.md",
             "Planetesimal Accretion & Impact Heating" => "validation/planetesimal_accretion.md",
             "Telescoping Computational Domain" => "validation/telescoping_domain.md",
+            "Volatile & Refractory Mixtures" => "validation/volatile_mixtures.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

@@ -381,6 +381,198 @@ Base.@kwdef struct RetentionConfig
 end
 
 """
+Refractory carbon, nitrogen, sulfur, and phosphorus component configuration.
+
+Grounds refractory element fractions and thermal breakdown thresholds across planetesimal
+differentiation and accretion following:
+- Carbon (f_refr_C): Bergin et al. (2026)
+- Nitrogen (f_refr_N): Alexander et al. (2012)
+- Sulfur (f_refr_S): Kama et al. (2019)
+- Phosphorus (f_refr_P): Pasek (2008)
+- Hydrogen (f_refr_H): Alexander et al. (2012), Hirschmann et al. (2006)
+
+$(FIELDS)
+"""
+Base.@kwdef struct RefractoryConfig
+    active::Bool = false
+    f_refr_C::Float64 = 0.60
+    f_refr_N::Float64 = 0.10
+    f_refr_S::Float64 = 0.89
+    f_refr_P::Float64 = 0.98
+    f_refr_H::Float64 = 0.05
+    T_pyrolysis_C::Float64 = 600.0
+    T_dehydrate_H::Float64 = 750.0
+
+    function RefractoryConfig(
+        active::Bool,
+        f_refr_C::Real,
+        f_refr_N::Real,
+        f_refr_S::Real,
+        f_refr_P::Real,
+        f_refr_H::Real,
+        T_pyrolysis_C::Real,
+        T_dehydrate_H::Real,
+    )
+        (0.0 <= f_refr_C <= 1.0) ||
+            throw(DomainError(f_refr_C, "f_refr_C must be in [0, 1]"))
+        (0.0 <= f_refr_N <= 1.0) ||
+            throw(DomainError(f_refr_N, "f_refr_N must be in [0, 1]"))
+        (0.0 <= f_refr_S <= 1.0) ||
+            throw(DomainError(f_refr_S, "f_refr_S must be in [0, 1]"))
+        (0.0 <= f_refr_P <= 1.0) ||
+            throw(DomainError(f_refr_P, "f_refr_P must be in [0, 1]"))
+        (0.0 <= f_refr_H <= 1.0) ||
+            throw(DomainError(f_refr_H, "f_refr_H must be in [0, 1]"))
+        T_pyrolysis_C >= 0.0 ||
+            throw(DomainError(T_pyrolysis_C, "T_pyrolysis_C must be >= 0"))
+        T_dehydrate_H >= 0.0 ||
+            throw(DomainError(T_dehydrate_H, "T_dehydrate_H must be >= 0"))
+        return new(
+            active,
+            Float64(f_refr_C),
+            Float64(f_refr_N),
+            Float64(f_refr_S),
+            Float64(f_refr_P),
+            Float64(f_refr_H),
+            Float64(T_pyrolysis_C),
+            Float64(T_dehydrate_H),
+        )
+    end
+end
+
+"""
+Multi-species volatile ice and pore fluid mixture configuration.
+
+Parameterizes multi-snowline disk condensation and composition-dependent
+freezing point depression in the H-C-N-S-P-O volatile system.
+
+$(FIELDS)
+"""
+Base.@kwdef struct VolatileMixtureConfig
+    active::Bool = false
+    X_ice_H2O::Float64 = 0.85
+    X_ice_CO2::Float64 = 0.08
+    X_ice_CO::Float64 = 0.02
+    X_ice_CH4::Float64 = 0.01
+    X_ice_NH3::Float64 = 0.03
+    X_ice_N2::Float64 = 0.005
+    X_ice_H2S::Float64 = 0.005
+    X_ice_PH3::Float64 = 0.0
+    T_eutectic_ammonia::Float64 = 176.0
+    lambda_nh3_depression::Float64 = (273.15 - 176.0) / 0.33
+    lambda_solute_depression::Float64 = 50.0
+    T_freeze_floor::Float64 = 176.0
+    T_cond_H2O::Float64 = 160.0
+    T_cond_NH3::Float64 = 135.0
+    T_cond_CO2::Float64 = 75.0
+    T_cond_H2S::Float64 = 75.0
+    T_cond_CH4::Float64 = 45.0
+    T_cond_CO::Float64 = 25.0
+    T_cond_N2::Float64 = 18.0
+    T_cond_PH3::Float64 = 40.0
+    alpha_P::Float64 = 0.0
+    P_ref::Float64 = 1.0
+
+    function VolatileMixtureConfig(
+        active::Bool,
+        X_ice_H2O::Real,
+        X_ice_CO2::Real,
+        X_ice_CO::Real,
+        X_ice_CH4::Real,
+        X_ice_NH3::Real,
+        X_ice_N2::Real,
+        X_ice_H2S::Real,
+        X_ice_PH3::Real,
+        T_eutectic_ammonia::Real,
+        lambda_nh3_depression::Real,
+        lambda_solute_depression::Real,
+        T_freeze_floor::Real,
+        T_cond_H2O::Real,
+        T_cond_NH3::Real,
+        T_cond_CO2::Real,
+        T_cond_H2S::Real,
+        T_cond_CH4::Real,
+        T_cond_CO::Real,
+        T_cond_N2::Real,
+        T_cond_PH3::Real,
+        alpha_P::Real,
+        P_ref::Real,
+    )
+        for (name, val) in [
+            ("X_ice_H2O", X_ice_H2O),
+            ("X_ice_CO2", X_ice_CO2),
+            ("X_ice_CO", X_ice_CO),
+            ("X_ice_CH4", X_ice_CH4),
+            ("X_ice_NH3", X_ice_NH3),
+            ("X_ice_N2", X_ice_N2),
+            ("X_ice_H2S", X_ice_H2S),
+            ("X_ice_PH3", X_ice_PH3),
+        ]
+            (0.0 <= val <= 1.0) || throw(DomainError(val, "$name must be in [0, 1]"))
+        end
+        T_eutectic_ammonia >= 0.0 ||
+            throw(DomainError(T_eutectic_ammonia, "T_eutectic_ammonia must be >= 0"))
+        T_freeze_floor >= 0.0 ||
+            throw(DomainError(T_freeze_floor, "T_freeze_floor must be >= 0"))
+        alpha_P >= 0.0 || throw(DomainError(alpha_P, "alpha_P must be >= 0"))
+        P_ref > 0.0 || throw(DomainError(P_ref, "P_ref must be > 0"))
+        for (name, val) in [
+            ("T_cond_H2O", T_cond_H2O),
+            ("T_cond_NH3", T_cond_NH3),
+            ("T_cond_CO2", T_cond_CO2),
+            ("T_cond_H2S", T_cond_H2S),
+            ("T_cond_CH4", T_cond_CH4),
+            ("T_cond_CO", T_cond_CO),
+            ("T_cond_N2", T_cond_N2),
+            ("T_cond_PH3", T_cond_PH3),
+        ]
+            val >= 0.0 || throw(DomainError(val, "$name must be >= 0"))
+        end
+        if !(
+            T_cond_H2O >= T_cond_NH3 &&
+            T_cond_NH3 >= T_cond_CO2 &&
+            T_cond_NH3 >= T_cond_H2S &&
+            T_cond_CO2 >= T_cond_CH4 &&
+            T_cond_H2S >= T_cond_CH4 &&
+            T_cond_CH4 >= T_cond_PH3 &&
+            T_cond_PH3 >= T_cond_CO &&
+            T_cond_CO >= T_cond_N2
+        )
+            throw(
+                ArgumentError(
+                    "Unphysical snowline ordering: condensation temperatures must satisfy T_cond_H2O >= T_cond_NH3 >= max(T_cond_CO2, T_cond_H2S) >= min(T_cond_CO2, T_cond_H2S) >= T_cond_CH4 >= T_cond_PH3 >= T_cond_CO >= T_cond_N2",
+                ),
+            )
+        end
+        return new(
+            active,
+            Float64(X_ice_H2O),
+            Float64(X_ice_CO2),
+            Float64(X_ice_CO),
+            Float64(X_ice_CH4),
+            Float64(X_ice_NH3),
+            Float64(X_ice_N2),
+            Float64(X_ice_H2S),
+            Float64(X_ice_PH3),
+            Float64(T_eutectic_ammonia),
+            Float64(lambda_nh3_depression),
+            Float64(lambda_solute_depression),
+            Float64(T_freeze_floor),
+            Float64(T_cond_H2O),
+            Float64(T_cond_NH3),
+            Float64(T_cond_CO2),
+            Float64(T_cond_H2S),
+            Float64(T_cond_CH4),
+            Float64(T_cond_CO),
+            Float64(T_cond_N2),
+            Float64(T_cond_PH3),
+            Float64(alpha_P),
+            Float64(P_ref),
+        )
+    end
+end
+
+"""
 Atmospheric Jeans kinetic escape and volatile mass loss parameters.
 
 $(FIELDS)
@@ -612,6 +804,8 @@ Base.@kwdef struct SimulationConfig
     hydrothermal::HydrothermalConfig = HydrothermalConfig()
     accretion::AccretionConfig = AccretionConfig()
     telescoping::TelescopingConfig = TelescopingConfig()
+    refractory::RefractoryConfig = RefractoryConfig()
+    volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
 end
 
 """
@@ -1964,6 +2158,108 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    # Refractory checks
+    (0.0 <= cfg.refractory.f_refr_C <= 1.0 && isfinite(cfg.refractory.f_refr_C)) || throw(
+        ArgumentError(
+            "f_refr_C must be in [0, 1] and finite, got $(cfg.refractory.f_refr_C)"
+        ),
+    )
+    (0.0 <= cfg.refractory.f_refr_N <= 1.0 && isfinite(cfg.refractory.f_refr_N)) || throw(
+        ArgumentError(
+            "f_refr_N must be in [0, 1] and finite, got $(cfg.refractory.f_refr_N)"
+        ),
+    )
+    (0.0 <= cfg.refractory.f_refr_S <= 1.0 && isfinite(cfg.refractory.f_refr_S)) || throw(
+        ArgumentError(
+            "f_refr_S must be in [0, 1] and finite, got $(cfg.refractory.f_refr_S)"
+        ),
+    )
+    (0.0 <= cfg.refractory.f_refr_P <= 1.0 && isfinite(cfg.refractory.f_refr_P)) || throw(
+        ArgumentError(
+            "f_refr_P must be in [0, 1] and finite, got $(cfg.refractory.f_refr_P)"
+        ),
+    )
+    (0.0 <= cfg.refractory.f_refr_H <= 1.0 && isfinite(cfg.refractory.f_refr_H)) || throw(
+        ArgumentError(
+            "f_refr_H must be in [0, 1] and finite, got $(cfg.refractory.f_refr_H)"
+        ),
+    )
+    (cfg.refractory.T_pyrolysis_C >= 0.0 && isfinite(cfg.refractory.T_pyrolysis_C)) ||
+        throw(
+            ArgumentError(
+                "T_pyrolysis_C must be >= 0 and finite, got $(cfg.refractory.T_pyrolysis_C)"
+            ),
+        )
+    (cfg.refractory.T_dehydrate_H >= 0.0 && isfinite(cfg.refractory.T_dehydrate_H)) ||
+        throw(
+            ArgumentError(
+                "T_dehydrate_H must be >= 0 and finite, got $(cfg.refractory.T_dehydrate_H)"
+            ),
+        )
+
+    # Volatile mixture checks
+    (
+        cfg.volatile_mixture.T_eutectic_ammonia >= 0.0 &&
+        isfinite(cfg.volatile_mixture.T_eutectic_ammonia)
+    ) || throw(
+        ArgumentError(
+            "T_eutectic_ammonia must be >= 0 and finite, got $(cfg.volatile_mixture.T_eutectic_ammonia)",
+        ),
+    )
+    (
+        cfg.volatile_mixture.T_freeze_floor >= 0.0 &&
+        isfinite(cfg.volatile_mixture.T_freeze_floor)
+    ) || throw(
+        ArgumentError(
+            "T_freeze_floor must be >= 0 and finite, got $(cfg.volatile_mixture.T_freeze_floor)",
+        ),
+    )
+    (
+        cfg.volatile_mixture.alpha_P >= 0.0 &&
+        isfinite(cfg.volatile_mixture.alpha_P)
+    ) || throw(
+        ArgumentError(
+            "alpha_P must be >= 0 and finite, got $(cfg.volatile_mixture.alpha_P)",
+        ),
+    )
+    (
+        cfg.volatile_mixture.P_ref > 0.0 &&
+        isfinite(cfg.volatile_mixture.P_ref)
+    ) || throw(
+        ArgumentError(
+            "P_ref must be > 0 and finite, got $(cfg.volatile_mixture.P_ref)",
+        ),
+    )
+    for (name, val) in [
+        ("X_ice_H2O", cfg.volatile_mixture.X_ice_H2O),
+        ("X_ice_CO2", cfg.volatile_mixture.X_ice_CO2),
+        ("X_ice_CO", cfg.volatile_mixture.X_ice_CO),
+        ("X_ice_CH4", cfg.volatile_mixture.X_ice_CH4),
+        ("X_ice_NH3", cfg.volatile_mixture.X_ice_NH3),
+        ("X_ice_N2", cfg.volatile_mixture.X_ice_N2),
+        ("X_ice_H2S", cfg.volatile_mixture.X_ice_H2S),
+        ("X_ice_PH3", cfg.volatile_mixture.X_ice_PH3),
+    ]
+        (0.0 <= val <= 1.0 && isfinite(val)) ||
+            throw(ArgumentError("$name must be in [0, 1] and finite, got $val"))
+    end
+    if !(
+        cfg.volatile_mixture.T_cond_H2O >= cfg.volatile_mixture.T_cond_NH3 &&
+        cfg.volatile_mixture.T_cond_NH3 >= cfg.volatile_mixture.T_cond_CO2 &&
+        cfg.volatile_mixture.T_cond_NH3 >= cfg.volatile_mixture.T_cond_H2S &&
+        cfg.volatile_mixture.T_cond_CO2 >= cfg.volatile_mixture.T_cond_CH4 &&
+        cfg.volatile_mixture.T_cond_H2S >= cfg.volatile_mixture.T_cond_CH4 &&
+        cfg.volatile_mixture.T_cond_CH4 >= cfg.volatile_mixture.T_cond_PH3 &&
+        cfg.volatile_mixture.T_cond_PH3 >= cfg.volatile_mixture.T_cond_CO &&
+        cfg.volatile_mixture.T_cond_CO >= cfg.volatile_mixture.T_cond_N2
+    )
+        throw(
+            ArgumentError(
+                "Unphysical snowline ordering: condensation temperatures must satisfy T_cond_H2O >= T_cond_NH3 >= max(T_cond_CO2, T_cond_H2S) >= min(T_cond_CO2, T_cond_H2S) >= T_cond_CH4 >= T_cond_PH3 >= T_cond_CO >= T_cond_N2",
+            ),
+        )
+    end
+
     return nothing
 end
 
@@ -2034,6 +2330,8 @@ const VALID_SECTIONS = Set([
     "hydrothermal",
     "accretion",
     "telescoping",
+    "refractory",
+    "volatile_mixture",
 ])
 
 """
@@ -2212,6 +2510,16 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.telescoping
     end
+    refr = if haskey(parsed, "refractory")
+        _dict_to_struct(RefractoryConfig, parsed["refractory"], def.refractory)
+    else
+        def.refractory
+    end
+    volmix = if haskey(parsed, "volatile_mixture")
+        _dict_to_struct(VolatileMixtureConfig, parsed["volatile_mixture"], def.volatile_mixture)
+    else
+        def.volatile_mixture
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2235,6 +2543,8 @@ function load_config(source::AbstractString)::SimulationConfig
         hydrothermal=hydrotherm,
         accretion=acc,
         telescoping=tele,
+        refractory=refr,
+        volatile_mixture=volmix,
     )
 
     validate_config(cfg)
@@ -2293,6 +2603,8 @@ function save_config(io::IO, cfg::SimulationConfig)
         "hydrothermal" => _struct_to_dict(cfg.hydrothermal),
         "accretion" => _struct_to_dict(cfg.accretion),
         "telescoping" => _struct_to_dict(cfg.telescoping),
+        "refractory" => _struct_to_dict(cfg.refractory),
+        "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
     )
     TOML.print(io, d; sorted=true)
     return io

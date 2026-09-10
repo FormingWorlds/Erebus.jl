@@ -232,3 +232,23 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Youdin, A. N., & Lithwick, Y. (2007)**. Particle stirring in turbulent protoplanetary disks: Including orbital effects. *Icarus*, 192(2), 588-604.  
   [https://doi.org/10.1016/j.icarus.2007.07.012](https://doi.org/10.1016/j.icarus.2007.07.012)  
   *Dust and pebble vertical scale height equilibrium under turbulent diffusion and midplane aerodynamic settling.*
+
+---
+
+## Volatile Mixtures and Refractory Elements
+
+- **Alexander, C. M. O'D., Bowden, R., Fogel, M. L., Howard, K. T., Herd, C. D. K., & Nittler, L. R. (2012)**. The Provenances of Asteroids, and Their Contributions to the Volatile Inventories of the Terrestrial Planets. *Science*, 337(6095), 721-723.  
+  [https://doi.org/10.1126/science.1223474](https://doi.org/10.1126/science.1223474)  
+  *Elemental and isotopic abundances of H, C, and N in chondritic insoluble organic matter and phyllosilicates; establishes chondritic refractory volatile fractions.*
+
+- **Bergin, E. A., Hirschmann, M. M., & Izidoro, A. (2026)**. Carbon from Interstellar Clouds to Habitable Worlds. *Annual Review of Astronomy and Astrophysics*, 64, arXiv:2602.10308.  
+  [https://doi.org/10.48550/arXiv.2602.10308](https://doi.org/10.48550/arXiv.2602.10308)  
+  *Synthesis of refractory carbonaceous solids in protoplanetary disks; 50% to 80% of carbon remains locked in refractory grains across all planetesimal formation radii.*
+
+- **Kama, M., Shorttle, O., Jermyn, A. S., Folsom, C. P., Furuya, K., Bergin, E. A., Walsh, C., & Keller, L. (2019)**. Abundant Refractory Sulfur in Protoplanetary Disks. *The Astrophysical Journal*, 885(2), 114.  
+  [https://doi.org/10.3847/1538-4357/ab45f8](https://doi.org/10.3847/1538-4357/ab45f8)  
+  *Observational and theoretical constraints on refractory sulfur carrier phases in disks; (89 ± 8)% of sulfur resides in refractory iron sulfides (troilite FeS).*
+
+- **Pasek, M. A. (2008)**. Rethinking early Earth phosphorus geochemistry. *Proceedings of the National Academy of Sciences*, 105(3), 853-858.  
+  [https://doi.org/10.1073/pnas.0708205105](https://doi.org/10.1073/pnas.0708205105)  
+  *Mineralogy and prebiotic delivery of meteoritic phosphorus; establishes refractory phosphide (schreibersite) retention in planetesimals.*
