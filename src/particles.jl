@@ -119,6 +119,45 @@ function setup_marker_phase_tracking_properties(marknum::Integer, cfg::PhaseTrac
 end
 
 """
+Set up marker multi-component volatile ice and refractory fraction arrays.
+
+$(SIGNATURES)
+
+# Parameters
+- `marknum`: Total count of markers.
+- `mix_cfg`: Volatile mixture configuration struct.
+- `refr_cfg`: Refractory phase configuration struct.
+
+# Returns
+- Named tuple containing marker arrays for each volatile ice and refractory element fraction.
+
+# Raises
+- `DomainError`: If `marknum` is negative.
+"""
+function setup_marker_hcnspo_properties(
+    marknum::Integer,
+    mix_cfg::VolatileMixtureConfig=VolatileMixtureConfig(),
+    refr_cfg::RefractoryConfig=RefractoryConfig(),
+)
+    marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+    return (;
+        X_ice_H2O_m=zeros(Float64, marknum),
+        X_ice_NH3_m=zeros(Float64, marknum),
+        X_ice_CO2_m=zeros(Float64, marknum),
+        X_ice_CO_m=zeros(Float64, marknum),
+        X_ice_CH4_m=zeros(Float64, marknum),
+        X_ice_N2_m=zeros(Float64, marknum),
+        X_ice_H2S_m=zeros(Float64, marknum),
+        X_ice_PH3_m=zeros(Float64, marknum),
+        X_refr_C_m=zeros(Float64, marknum),
+        X_refr_S_m=zeros(Float64, marknum),
+        X_refr_N_m=zeros(Float64, marknum),
+        X_refr_P_m=zeros(Float64, marknum),
+        X_refr_H_m=zeros(Float64, marknum),
+    )
+end
+
+"""
 Set up marker accretion epoch timestamp tracking array.
 
 $(SIGNATURES)

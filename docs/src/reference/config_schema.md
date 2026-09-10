@@ -633,6 +633,94 @@ buffer_markers_per_cell = 4
 
 ---
 
+## `[refractory]`
+
+Configuration for refractory elemental budgets (carbon, nitrogen, sulfur, phosphorus, hydrogen) and thermal organic pyrolysis kinetics.
+
+```toml
+[refractory]
+active = false
+f_refr_C = 0.60
+f_refr_N = 0.10
+f_refr_S = 0.89
+f_refr_P = 0.98
+f_refr_H = 0.05
+T_pyrolysis_C = 600.0
+T_dehydrate_H = 750.0
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable refractory phase tracking | `true` / `false` |
+| `f_refr_C` | `Float64` | `0.60` | - | Refractory carbon fraction in accreted dust (Bergin et al. 2026) | $\in [0, 1]$ |
+| `f_refr_N` | `Float64` | `0.10` | - | Refractory nitrogen fraction in dust | $\in [0, 1]$ |
+| `f_refr_S` | `Float64` | `0.89` | - | Refractory sulfur fraction locked in FeS (Kama et al. 2019) | $\in [0, 1]$ |
+| `f_refr_P` | `Float64` | `0.98` | - | Refractory phosphorus fraction in schreibersite / phosphates | $\in [0, 1]$ |
+| `f_refr_H` | `Float64` | `0.05` | - | Refractory hydrogen fraction in organics | $\in [0, 1]$ |
+| `T_pyrolysis_C` | `Float64` | `600.0` | K | Thermal pyrolysis threshold for insoluble organic matter | $\ge 0$ |
+| `T_dehydrate_H` | `Float64` | `750.0` | K | Thermal dehydration threshold for refractory hydroxyl phases | $\ge 0$ |
+
+---
+
+## `[volatile_mixture]`
+
+Configuration for multi-species volatile ice mixtures, multi-snowline disk condensation temperatures, and ammonia-water eutectic freezing point depression.
+
+```toml
+[volatile_mixture]
+active = false
+X_ice_H2O = 0.85
+X_ice_CO2 = 0.08
+X_ice_CO = 0.02
+X_ice_CH4 = 0.01
+X_ice_NH3 = 0.03
+X_ice_N2 = 0.005
+X_ice_H2S = 0.005
+X_ice_PH3 = 0.0
+T_eutectic_ammonia = 176.0
+lambda_nh3_depression = 294.39
+lambda_solute_depression = 50.0
+T_freeze_floor = 176.0
+T_cond_H2O = 160.0
+T_cond_NH3 = 135.0
+T_cond_CO2 = 75.0
+T_cond_H2S = 75.0
+T_cond_CH4 = 45.0
+T_cond_CO = 25.0
+T_cond_N2 = 18.0
+T_cond_PH3 = 40.0
+alpha_P = 0.0
+P_ref = 1.0
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable multi-species volatile mixture engine | `true` / `false` |
+| `X_ice_H2O` | `Float64` | `0.85` | - | Nominal water ice mass fraction in cryogenic ice mixture | $\in [0, 1]$ |
+| `X_ice_CO2` | `Float64` | `0.08` | - | Carbon dioxide ice mass fraction | $\in [0, 1]$ |
+| `X_ice_CO` | `Float64` | `0.02` | - | Carbon monoxide ice mass fraction | $\in [0, 1]$ |
+| `X_ice_CH4` | `Float64` | `0.01` | - | Methane ice mass fraction | $\in [0, 1]$ |
+| `X_ice_NH3` | `Float64` | `0.03` | - | Ammonia ice mass fraction | $\in [0, 1]$ |
+| `X_ice_N2` | `Float64` | `0.005` | - | Nitrogen ice mass fraction | $\in [0, 1]$ |
+| `X_ice_H2S` | `Float64` | `0.005` | - | Hydrogen sulfide ice mass fraction | $\in [0, 1]$ |
+| `X_ice_PH3` | `Float64` | `0.0` | - | Phosphine ice mass fraction | $\in [0, 1]$ |
+| `T_eutectic_ammonia` | `Float64` | `176.0` | K | Ammonia-water eutectic temperature floor | $\ge 0$ |
+| `lambda_nh3_depression` | `Float64` | `294.39` | K | Freezing point depression slope for ammonia | - |
+| `lambda_solute_depression` | `Float64` | `50.0` | K | Freezing point depression slope for general solutes | - |
+| `T_freeze_floor` | `Float64` | `176.0` | K | Absolute liquid stability temperature floor | $\ge 0$ |
+| `T_cond_H2O` | `Float64` | `160.0` | K | Water ice disk condensation temperature | $\ge T_{\text{cond,NH3}}$ |
+| `T_cond_NH3` | `Float64` | `135.0` | K | Ammonia ice disk condensation temperature | $\ge T_{\text{cond,CO2}}$ |
+| `T_cond_CO2` | `Float64` | `75.0` | K | Carbon dioxide ice condensation temperature | $\ge T_{\text{cond,CH4}}$ |
+| `T_cond_H2S` | `Float64` | `75.0` | K | Hydrogen sulfide ice condensation temperature | $\ge 0$ |
+| `T_cond_CH4` | `Float64` | `45.0` | K | Methane ice condensation temperature | $\ge T_{\text{cond,CO}}$ |
+| `T_cond_CO` | `Float64` | `25.0` | K | Carbon monoxide ice condensation temperature | $\ge T_{\text{cond,N2}}$ |
+| `T_cond_N2` | `Float64` | `18.0` | K | Molecular nitrogen ice condensation temperature | $\ge 0$ |
+| `T_cond_PH3` | `Float64` | `40.0` | K | Phosphine ice condensation temperature | $\ge 0$ |
+| `alpha_P` | `Float64` | `0.0` | - | Clausius-Clapeyron pressure-shifting sensitivity factor | $\ge 0$ |
+| `P_ref` | `Float64` | `1.0` | Pa | Reference pressure for disk condensation shifting | $> 0$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input

@@ -211,6 +211,7 @@ function save_state(
     M_planet_val=nothing,
     rplanet::Union{Nothing,Real}=nothing,
     telescope_level::Union{Nothing,Integer}=nothing,
+    hcnspo_props=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -408,6 +409,7 @@ function save_state(
         (t_accreted !== nothing ? (; t_accreted) : (;))...,
         (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
         (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
+        (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
     )
     return nothing
 end
@@ -985,6 +987,18 @@ function simulation_loop(
         else
             t_accreted = nothing
         end
+        hcnspo_props = if cfg.volatile_mixture.active || cfg.refractory.active
+            hp = setup_marker_hcnspo_properties(marknum, cfg.volatile_mixture, cfg.refractory)
+            for k in keys(hp)
+                k_str = string(k)
+                if haskey(ckpt, k_str)
+                    getfield(hp, k) .= ckpt[k_str]
+                end
+            end
+            hp
+        else
+            nothing
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -1034,6 +1048,11 @@ function simulation_loop(
         t_accreted = setup_marker_accretion_properties(
             marknum, cfg.accretion; initial_time=timesum
         )
+        hcnspo_props = if cfg.volatile_mixture.active || cfg.refractory.active
+            setup_marker_hcnspo_properties(marknum, cfg.volatile_mixture, cfg.refractory)
+        else
+            nothing
+        end
         define_markers!(
             xm,
             ym,
@@ -1072,6 +1091,30 @@ function simulation_loop(
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
         phinewm .= phim
+
+        if hcnspo_props !== nothing
+            for m in 1:marknum
+                if tm[m] == 2
+                    if cfg.volatile_mixture.active
+                        hcnspo_props.X_ice_H2O_m[m] = cfg.volatile_mixture.X_ice_H2O
+                        hcnspo_props.X_ice_NH3_m[m] = cfg.volatile_mixture.X_ice_NH3
+                        hcnspo_props.X_ice_CO2_m[m] = cfg.volatile_mixture.X_ice_CO2
+                        hcnspo_props.X_ice_CO_m[m] = cfg.volatile_mixture.X_ice_CO
+                        hcnspo_props.X_ice_CH4_m[m] = cfg.volatile_mixture.X_ice_CH4
+                        hcnspo_props.X_ice_N2_m[m] = cfg.volatile_mixture.X_ice_N2
+                        hcnspo_props.X_ice_H2S_m[m] = cfg.volatile_mixture.X_ice_H2S
+                        hcnspo_props.X_ice_PH3_m[m] = cfg.volatile_mixture.X_ice_PH3
+                    end
+                    if cfg.refractory.active
+                        hcnspo_props.X_refr_C_m[m] = cfg.refractory.f_refr_C
+                        hcnspo_props.X_refr_S_m[m] = cfg.refractory.f_refr_S
+                        hcnspo_props.X_refr_N_m[m] = cfg.refractory.f_refr_N
+                        hcnspo_props.X_refr_P_m[m] = cfg.refractory.f_refr_P
+                        hcnspo_props.X_refr_H_m[m] = cfg.refractory.f_refr_H
+                    end
+                end
+            end
+        end
 
         # save initial state
         save_state(
@@ -1212,6 +1255,7 @@ function simulation_loop(
             M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
             M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
             telescope_level=telescope_level,
+            hcnspo_props=hcnspo_props,
         )
     end
 
@@ -1368,6 +1412,29 @@ function simulation_loop(
                     )
                 end
 
+                cond_state_acc = if (cfg.volatile_mixture.active || cfg.refractory.active)
+                    evaluate_disk_volatile_condensation(
+                        T_amb,
+                        P_amb,
+                        cfg.volatile_mixture,
+                        cfg.refractory;
+                        P_ref=cfg.volatile_mixture.P_ref,
+                        alpha_P=cfg.volatile_mixture.alpha_P,
+                    )
+                else
+                    nothing
+                end
+
+                if cfg.volatile_mixture.active && cond_state_acc !== nothing
+                    if cond_state_acc.condensed_H2O
+                        XW_acc = cfg.volatile_mixture.X_ice_H2O
+                        H2O_acc = cfg.volatile_mixture.X_ice_H2O * 100.0
+                    else
+                        XW_acc = cfg.accretion.XWsolid_dry
+                        H2O_acc = cfg.accretion.XH2O_dry_wtpct
+                    end
+                end
+
                 advance_accretion_boundary!(
                     rplanet_val,
                     dR_acc,
@@ -1397,6 +1464,8 @@ function simulation_loop(
                     XC_accreted=cfg.accretion.XC_accreted_ppm,
                     XN_accreted=cfg.accretion.XN_accreted_ppm,
                     XS_accreted=cfg.accretion.XS_accreted_ppm,
+                    hcnspo_props=hcnspo_props,
+                    disk_state=cond_state_acc,
                 )
                 rplanet_val += dR_acc
                 M_planet_val += dM_acc
@@ -3207,6 +3276,7 @@ function simulation_loop(
                 M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                 M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
                 telescope_level=telescope_level,
+                hcnspo_props=hcnspo_props,
             )
         end
         # ---------------------------------------------------------------------

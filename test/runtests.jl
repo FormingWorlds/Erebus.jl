@@ -39,6 +39,7 @@ const rgen = MersenneTwister(seed)
     include("test_normative_accessory_minerals.jl")
     include("test_hydrothermal_convection.jl")
     include("test_accretion.jl")
+    include("test_volatile_mixtures.jl")
     include("test_telescoping.jl")
     include("test_integration.jl")
 end

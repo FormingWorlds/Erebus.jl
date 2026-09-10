@@ -561,6 +561,8 @@ function advance_accretion_boundary!(
     XC_accreted::Real=1000.0,
     XN_accreted::Real=100.0,
     XS_accreted::Real=10000.0,
+    hcnspo_props=nothing,
+    disk_state=nothing,
 )::Int
     R_new = Float64(R_current) + Float64(delta_R)
     R_new_sq = R_new^2
@@ -606,6 +608,23 @@ function advance_accretion_boundary!(
                 end
                 if XSm !== nothing
                     @inbounds XSm[m] = Float64(XS_accreted)
+                end
+
+                if hcnspo_props !== nothing && disk_state !== nothing
+                    @inbounds hcnspo_props.X_ice_H2O_m[m] = Float64(disk_state.X_ice_H2O)
+                    @inbounds hcnspo_props.X_ice_NH3_m[m] = Float64(disk_state.X_ice_NH3)
+                    @inbounds hcnspo_props.X_ice_CO2_m[m] = Float64(disk_state.X_ice_CO2)
+                    @inbounds hcnspo_props.X_ice_CO_m[m] = Float64(disk_state.X_ice_CO)
+                    @inbounds hcnspo_props.X_ice_CH4_m[m] = Float64(disk_state.X_ice_CH4)
+                    @inbounds hcnspo_props.X_ice_N2_m[m] = Float64(disk_state.X_ice_N2)
+                    @inbounds hcnspo_props.X_ice_H2S_m[m] = Float64(disk_state.X_ice_H2S)
+                    @inbounds hcnspo_props.X_ice_PH3_m[m] = Float64(disk_state.X_ice_PH3)
+
+                    @inbounds hcnspo_props.X_refr_C_m[m] = Float64(disk_state.f_refr_C)
+                    @inbounds hcnspo_props.X_refr_S_m[m] = Float64(disk_state.f_refr_S)
+                    @inbounds hcnspo_props.X_refr_N_m[m] = Float64(disk_state.f_refr_N)
+                    @inbounds hcnspo_props.X_refr_P_m[m] = Float64(disk_state.f_refr_P)
+                    @inbounds hcnspo_props.X_refr_H_m[m] = Float64(disk_state.f_refr_H)
                 end
 
                 if t_accreted !== nothing
@@ -706,4 +725,164 @@ function compute_accretion_rate(
     else
         return 0.0
     end
+end
+
+"""
+Evaluate multi-snowline volatile condensation and refractory delivery state in the protoplanetary disk.
+
+$(SIGNATURES)
+
+# Parameters
+- `T_disk`: Midplane disk temperature [K].
+- `P_disk`: Midplane gas pressure [Pa].
+- `mix_cfg`: Volatile mixture configuration struct.
+- `refr_cfg`: Refractory phase configuration struct.
+
+# Keywords
+- `P_ref`: Reference midplane pressure for snowline condensation [Pa] (default: 1.0).
+- `alpha_P`: Pressure sensitivity coefficient for Clausius-Clapeyron snowline shifting (default: 0.0).
+
+# Returns
+- Named tuple with condensation boolean flags, volatile ice mass fractions, and refractory delivery fractions.
+
+# Raises
+- `DomainError`: If disk temperature, pressure, P_ref, or alpha_P is negative or NaN.
+"""
+function evaluate_disk_volatile_condensation(
+    T_disk::Real,
+    P_disk::Real=1.0,
+    mix_cfg::VolatileMixtureConfig=VolatileMixtureConfig(),
+    refr_cfg::RefractoryConfig=RefractoryConfig();
+    P_ref::Real=mix_cfg.P_ref,
+    alpha_P::Real=mix_cfg.alpha_P,
+)
+    (isnan(T_disk) || T_disk < 0.0) &&
+        throw(DomainError(T_disk, "Disk temperature must be non-negative"))
+    (isnan(P_disk) || P_disk < 0.0) &&
+        throw(DomainError(P_disk, "Disk pressure must be non-negative"))
+    (isnan(P_ref) || P_ref <= 0.0) && throw(DomainError(P_ref, "P_ref must be positive"))
+    (isnan(alpha_P) || alpha_P < 0.0) &&
+        throw(DomainError(alpha_P, "alpha_P must be non-negative"))
+
+    T = Float64(T_disk)
+    p_factor = max(
+        0.01, 1.0 + Float64(alpha_P) * log(max(Float64(P_disk), 1.0e-8) / Float64(P_ref))
+    )
+
+    condensed_H2O = mix_cfg.active && (T <= mix_cfg.T_cond_H2O * p_factor)
+    condensed_NH3 = mix_cfg.active && (T <= mix_cfg.T_cond_NH3 * p_factor)
+    condensed_CO2 = mix_cfg.active && (T <= mix_cfg.T_cond_CO2 * p_factor)
+    condensed_H2S = mix_cfg.active && (T <= mix_cfg.T_cond_H2S * p_factor)
+    condensed_CH4 = mix_cfg.active && (T <= mix_cfg.T_cond_CH4 * p_factor)
+    condensed_CO = mix_cfg.active && (T <= mix_cfg.T_cond_CO * p_factor)
+    condensed_N2 = mix_cfg.active && (T <= mix_cfg.T_cond_N2 * p_factor)
+    condensed_PH3 = mix_cfg.active && (T <= mix_cfg.T_cond_PH3 * p_factor)
+
+    X_ice_H2O = condensed_H2O ? Float64(mix_cfg.X_ice_H2O) : 0.0
+    X_ice_NH3 = condensed_NH3 ? Float64(mix_cfg.X_ice_NH3) : 0.0
+    X_ice_CO2 = condensed_CO2 ? Float64(mix_cfg.X_ice_CO2) : 0.0
+    X_ice_H2S = condensed_H2S ? Float64(mix_cfg.X_ice_H2S) : 0.0
+    X_ice_CH4 = condensed_CH4 ? Float64(mix_cfg.X_ice_CH4) : 0.0
+    X_ice_CO = condensed_CO ? Float64(mix_cfg.X_ice_CO) : 0.0
+    X_ice_N2 = condensed_N2 ? Float64(mix_cfg.X_ice_N2) : 0.0
+    X_ice_PH3 = condensed_PH3 ? Float64(mix_cfg.X_ice_PH3) : 0.0
+
+    f_refr_C = refr_cfg.active ? Float64(refr_cfg.f_refr_C) : 0.0
+    f_refr_S = refr_cfg.active ? Float64(refr_cfg.f_refr_S) : 0.0
+    f_refr_N = refr_cfg.active ? Float64(refr_cfg.f_refr_N) : 0.0
+    f_refr_P = refr_cfg.active ? Float64(refr_cfg.f_refr_P) : 0.0
+    f_refr_H = refr_cfg.active ? Float64(refr_cfg.f_refr_H) : 0.0
+
+    return (;
+        condensed_H2O,
+        condensed_NH3,
+        condensed_CO2,
+        condensed_H2S,
+        condensed_CH4,
+        condensed_CO,
+        condensed_N2,
+        condensed_PH3,
+        X_ice_H2O,
+        X_ice_NH3,
+        X_ice_CO2,
+        X_ice_H2S,
+        X_ice_CH4,
+        X_ice_CO,
+        X_ice_N2,
+        X_ice_PH3,
+        f_refr_C,
+        f_refr_S,
+        f_refr_N,
+        f_refr_P,
+        f_refr_H,
+    )
+end
+
+"""
+Advance planetesimal accretion boundary with multi-component volatile ices and refractory phases.
+
+$(SIGNATURES)
+
+# Parameters
+- `R_current`: Current planetesimal radius [m].
+- `delta_R`: Incremental radial growth [m].
+- `xm`: Marker x-coordinates [m].
+- `ym`: Marker y-coordinates [m].
+- `tm`: Marker material type array.
+- `tkm`: Marker temperature array [K].
+- `phim`: Marker porosity array.
+- `XWsolidm0`: Reference solid water content array.
+- `hcnspo_props`: Marker HCNSPO properties struct or named tuple.
+- `disk_state`: Disk condensation state from `evaluate_disk_volatile_condensation`.
+
+# Keywords
+- `xcenter`: Domain x-center coordinate [m] (default: 70000.0).
+- `ycenter`: Domain y-center coordinate [m] (default: 70000.0).
+- `T_accreted`: Default accreted temperature [K] (default: 150.0).
+- `phi_accreted`: Default accreted porosity (default: 0.35).
+- `current_time`: Current simulation time [s] (default: 0.0).
+- `t_accreted`: Optional marker accretion epoch array.
+
+# Returns
+- `Int`: Count of converted markers from sticky air (tm == 3) to rock (tm == 2).
+"""
+function advance_accretion_boundary_hcnspo!(
+    R_current::Real,
+    delta_R::Real,
+    xm::AbstractVector{<:Real},
+    ym::AbstractVector{<:Real},
+    tm::AbstractVector{<:Integer},
+    tkm::AbstractVector{<:Real},
+    phim::AbstractVector{<:Real},
+    XWsolidm0::AbstractVector{<:Real},
+    hcnspo_props,
+    disk_state;
+    xcenter::Real=70000.0,
+    ycenter::Real=70000.0,
+    T_accreted::Real=150.0,
+    phi_accreted::Real=0.35,
+    current_time::Real=0.0,
+    t_accreted::Union{Nothing,AbstractVector{<:Real}}=nothing,
+)::Int
+    return advance_accretion_boundary!(
+        R_current,
+        delta_R,
+        xm,
+        ym,
+        tm,
+        tkm,
+        phim,
+        XWsolidm0,
+        nothing,
+        nothing;
+        xcenter=xcenter,
+        ycenter=ycenter,
+        T_accreted=T_accreted,
+        phi_accreted=phi_accreted,
+        XWsolid_accreted=disk_state.X_ice_H2O,
+        current_time=current_time,
+        t_accreted=t_accreted,
+        hcnspo_props=hcnspo_props,
+        disk_state=disk_state,
+    )
 end
