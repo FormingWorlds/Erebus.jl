@@ -1928,7 +1928,10 @@ function validate_config(cfg::SimulationConfig)
     end
 
     if cfg.telescoping.active
-        (0.0 < cfg.telescoping.r_threshold_fraction < 1.0 && isfinite(cfg.telescoping.r_threshold_fraction)) || throw(
+        (
+            0.0 < cfg.telescoping.r_threshold_fraction < 1.0 &&
+            isfinite(cfg.telescoping.r_threshold_fraction)
+        ) || throw(
             ArgumentError(
                 "r_threshold_fraction must be in (0, 1) and finite, got $(cfg.telescoping.r_threshold_fraction)",
             ),
@@ -1948,11 +1951,12 @@ function validate_config(cfg::SimulationConfig)
                 "max_telescope_levels must be >= 1, got $(cfg.telescoping.max_telescope_levels)",
             ),
         )
-        (cfg.telescoping.target_radius > 0.0 && isfinite(cfg.telescoping.target_radius)) || throw(
-            ArgumentError(
-                "target_radius must be > 0 and finite, got $(cfg.telescoping.target_radius)",
-            ),
-        )
+        (cfg.telescoping.target_radius > 0.0 && isfinite(cfg.telescoping.target_radius)) ||
+            throw(
+                ArgumentError(
+                    "target_radius must be > 0 and finite, got $(cfg.telescoping.target_radius)",
+                ),
+            )
         (cfg.telescoping.buffer_markers_per_cell >= 1) || throw(
             ArgumentError(
                 "buffer_markers_per_cell must be >= 1, got $(cfg.telescoping.buffer_markers_per_cell)",

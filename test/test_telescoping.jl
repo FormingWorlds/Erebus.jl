@@ -32,40 +32,38 @@ using JLD2
 
         # Bounds validation in SimulationConfig
         sim_cfg_bad_frac = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, r_threshold_fraction=1.5),
+            telescoping=TelescopingConfig(; active=true, r_threshold_fraction=1.5)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_frac)
 
         sim_cfg_bad_frac_low = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, r_threshold_fraction=0.0),
+            telescoping=TelescopingConfig(; active=true, r_threshold_fraction=0.0)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_frac_low)
 
         sim_cfg_bad_levels = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, max_telescope_levels=0),
+            telescoping=TelescopingConfig(; active=true, max_telescope_levels=0)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_levels)
 
         sim_cfg_bad_radius = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, target_radius=-1000.0),
+            telescoping=TelescopingConfig(; active=true, target_radius=-1000.0)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_radius)
 
         sim_cfg_bad_buffer = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, buffer_markers_per_cell=0),
+            telescoping=TelescopingConfig(; active=true, buffer_markers_per_cell=0)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_buffer)
 
         # Even grid dimensions rejected when telescoping is active
         sim_cfg_even_nx = SimulationConfig(;
-            grid=GridConfig(Nx=20, Ny=17),
-            telescoping=TelescopingConfig(; active=true),
+            grid=GridConfig(Nx=20, Ny=17), telescoping=TelescopingConfig(; active=true)
         )
         @test_throws ArgumentError validate_config(sim_cfg_even_nx)
 
         sim_cfg_even_ny = SimulationConfig(;
-            grid=GridConfig(Nx=17, Ny=20),
-            telescoping=TelescopingConfig(; active=true),
+            grid=GridConfig(Nx=17, Ny=20), telescoping=TelescopingConfig(; active=true)
         )
         @test_throws ArgumentError validate_config(sim_cfg_even_ny)
     end
@@ -78,19 +76,21 @@ using JLD2
         cfg_tele = TelescopingConfig(; active=true, r_threshold_fraction=0.70)
 
         # Half domain is 70_000.0 m. Threshold is 0.70 * 70_000 = 49_000.0 m
-        @test should_telescope_domain(40_000.0, coords, cfg_tele; level=0) == false
-        @test should_telescope_domain(49_000.0, coords, cfg_tele; level=0) == false
-        @test should_telescope_domain(49_001.0, coords, cfg_tele; level=0) == true
-        @test should_telescope_domain(60_000.0, coords, cfg_tele; level=0) == true
+        @test !should_telescope_domain(40_000.0, coords, cfg_tele; level=0)
+        @test !should_telescope_domain(49_000.0, coords, cfg_tele; level=0)
+        @test should_telescope_domain(49_001.0, coords, cfg_tele; level=0)
+        @test should_telescope_domain(60_000.0, coords, cfg_tele; level=0)
 
         # Inactive configuration
         cfg_inactive = TelescopingConfig(; active=false, r_threshold_fraction=0.70)
-        @test should_telescope_domain(60_000.0, coords, cfg_inactive; level=0) == false
+        @test !should_telescope_domain(60_000.0, coords, cfg_inactive; level=0)
 
         # Maximum level reached
-        cfg_max = TelescopingConfig(; active=true, r_threshold_fraction=0.70, max_telescope_levels=2)
-        @test should_telescope_domain(60_000.0, coords, cfg_max; level=1) == true
-        @test should_telescope_domain(60_000.0, coords, cfg_max; level=2) == false
+        cfg_max = TelescopingConfig(;
+            active=true, r_threshold_fraction=0.70, max_telescope_levels=2
+        )
+        @test should_telescope_domain(60_000.0, coords, cfg_max; level=1)
+        @test !should_telescope_domain(60_000.0, coords, cfg_max; level=2)
 
         # Domain errors
         @test_throws DomainError should_telescope_domain(-100.0, coords, cfg_tele; level=0)
@@ -156,10 +156,10 @@ using JLD2
         joff = 8
         @test arr_new[(ioff + 1):(ioff + 17), (joff + 1):(joff + 17)] == arr_old
         # Verify outer border cells have background value
-        @test all(arr_new[1:ioff, :] .== -999.0)
-        @test all(arr_new[(ioff + 18):33, :] .== -999.0)
-        @test all(arr_new[:, 1:joff] .== -999.0)
-        @test all(arr_new[:, (joff + 18):33] .== -999.0)
+        @test all(isapprox.(arr_new[1:ioff, :], -999.0))
+        @test all(isapprox.(arr_new[(ioff + 18):33, :], -999.0))
+        @test all(isapprox.(arr_new[:, 1:joff], -999.0))
+        @test all(isapprox.(arr_new[:, (joff + 18):33], -999.0))
 
         # Asymmetric / odd-difference dimensions rejected
         @test_throws ArgumentError remap_staggered_grid_array(arr_old, (32, 33))
@@ -173,8 +173,8 @@ using JLD2
         ioff_p = (34 - 18) ÷ 2
         joff_p = (34 - 18) ÷ 2
         @test p_new[(ioff_p + 1):(ioff_p + 18), (joff_p + 1):(joff_p + 18)] == p_old
-        @test p_new[1, 1] == 200.0
-        @test p_new[34, 34] == 200.0
+        @test isapprox(p_new[1, 1], 200.0)
+        @test isapprox(p_new[34, 34], 200.0)
     end
 
     # ---------------------------------------------------------------------
@@ -228,11 +228,33 @@ using JLD2
         r_old = [sqrt((xm[m] - c17.xcenter)^2 + (ym[m] - c17.ycenter)^2) for m in 1:N_m]
 
         new_marknum = telescope_marker_arrays!(
-            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0,
-            XWsolidm, XWsolidm0, Fm, rhototalm, rhocptotalm, etatotalm,
-            hrtotalm, ktotalm, inv_gggtotalm, fricttotalm, cohestotalm,
-            tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur,
-            tkm_rhocptotalm, etafluidcur_inv_kphim;
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim;
             old_coords=c17,
             new_coords=c33,
             T_ambient=250.0,
@@ -261,10 +283,10 @@ using JLD2
         # INVARIANT: New outer markers are sticky air (tm = 3) at ambient temperature
         for m in (N_m + 1):new_marknum
             @test tm[m] == 3
-            @test tkm[m] == 250.0
-            @test phim[m] == 0.35
-            @test Xfe_bulk[m] == 0.0
-            @test XH2Om[m] == 0.0
+            @test isapprox(tkm[m], 250.0)
+            @test isapprox(phim[m], 0.35)
+            @test isapprox(Xfe_bulk[m], 0.0; atol=1e-15)
+            @test isapprox(XH2Om[m], 0.0; atol=1e-15)
         end
 
         # Verify exact marker injection for arbitrary and non-square buffer marker counts (no silent shortfall)
@@ -299,12 +321,33 @@ using JLD2
             etafluidcur_inv_kphim_t = [1.0e10]
 
             tot_m = telescope_marker_arrays!(
-                xm_t, ym_t, tm_t, tkm_t, sxxm_t, sxym_t, etavpm_t,
-                phim_t, phinewm_t, pfm0_t, XWsolidm_t, XWsolidm0_t, Fm_t,
-                rhototalm_t, rhocptotalm_t, etatotalm_t, hrtotalm_t, ktotalm_t,
-                inv_gggtotalm_t, fricttotalm_t, cohestotalm_t, tenstotalm_t,
-                rhofluidcur_t, alphasolidcur_t, alphafluidcur_t,
-                tkm_rhocptotalm_t, etafluidcur_inv_kphim_t;
+                xm_t,
+                ym_t,
+                tm_t,
+                tkm_t,
+                sxxm_t,
+                sxym_t,
+                etavpm_t,
+                phim_t,
+                phinewm_t,
+                pfm0_t,
+                XWsolidm_t,
+                XWsolidm0_t,
+                Fm_t,
+                rhototalm_t,
+                rhocptotalm_t,
+                etatotalm_t,
+                hrtotalm_t,
+                ktotalm_t,
+                inv_gggtotalm_t,
+                fricttotalm_t,
+                cohestotalm_t,
+                tenstotalm_t,
+                rhofluidcur_t,
+                alphasolidcur_t,
+                alphafluidcur_t,
+                tkm_rhocptotalm_t,
+                etafluidcur_inv_kphim_t;
                 old_coords=c17,
                 new_coords=c33,
                 buffer_markers_per_cell=n_buf,
@@ -368,11 +411,33 @@ using JLD2
         XSm = fill(1000.0, N_m)
 
         new_marknum = telescope_marker_arrays!(
-            xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0,
-            XWsolidm, XWsolidm0, Fm, rhototalm, rhocptotalm, etatotalm,
-            hrtotalm, ktotalm, inv_gggtotalm, fricttotalm, cohestotalm,
-            tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur,
-            tkm_rhocptotalm, etafluidcur_inv_kphim;
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim;
             old_coords=c17,
             new_coords=c33,
             T_ambient=250.0,
@@ -388,7 +453,9 @@ using JLD2
         )
 
         solid_count_new = count(m -> tm[m] in (1, 2), 1:new_marknum)
-        thermal_energy_new = sum(rhocptotalm[m] * tkm[m] for m in 1:new_marknum if tm[m] in (1, 2))
+        thermal_energy_new = sum(
+            rhocptotalm[m] * tkm[m] for m in 1:new_marknum if tm[m] in (1, 2)
+        )
         iron_inventory_new = sum(Xfe_bulk[m] for m in 1:new_marknum if tm[m] in (1, 2))
         water_inventory_new = sum(XH2Om[m] for m in 1:new_marknum if tm[m] in (1, 2))
 
@@ -410,15 +477,16 @@ using JLD2
         for m in (N_m + 1):new_marknum
             @test 0.0 <= xm[m] <= c33.xsize
             @test 0.0 <= ym[m] <= c33.ysize
-            in_inner = (shift_x < xm[m] < shift_x + c17.xsize) &&
-                       (shift_y < ym[m] < shift_y + c17.ysize)
+            in_inner =
+                (shift_x < xm[m] < shift_x + c17.xsize) &&
+                (shift_y < ym[m] < shift_y + c17.ysize)
             @test !in_inner
             @test tm[m] == 3
-            @test Xfe_bulk[m] == 0.0
-            @test XH2Om[m] == 0.0
-            @test XCm[m] == 0.0
-            @test XNm[m] == 0.0
-            @test XSm[m] == 0.0
+            @test isapprox(Xfe_bulk[m], 0.0; atol=1e-15)
+            @test isapprox(XH2Om[m], 0.0; atol=1e-15)
+            @test isapprox(XCm[m], 0.0; atol=1e-15)
+            @test isapprox(XNm[m], 0.0; atol=1e-15)
+            @test isapprox(XSm[m], 0.0; atol=1e-15)
         end
     end
 
@@ -448,8 +516,8 @@ using JLD2
         # Potential must be negative in interior (attractive gravity)
         @test minimum(FI) < 0.0
         # Dirichlet boundary: FI must be zero on the outer boundary
-        @test FI[1, 1] == 0.0
-        @test FI[c33.Ny1, c33.Nx1] == 0.0
+        @test isapprox(FI[1, 1], 0.0; atol=1e-15)
+        @test isapprox(FI[c33.Ny1, c33.Nx1], 0.0; atol=1e-15)
     end
 
     # ---------------------------------------------------------------------
@@ -489,9 +557,7 @@ using JLD2
                     dM_dt_constant=1.0e15,
                 ),
                 telescoping=TelescopingConfig(
-                    active=true,
-                    r_threshold_fraction=0.70,
-                    max_telescope_levels=2,
+                    active=true, r_threshold_fraction=0.70, max_telescope_levels=2
                 ),
             )
 
@@ -539,7 +605,9 @@ using JLD2
                         n_steps=2,
                     ),
                     solver=SolverConfig(titermax=2, nplast=1),
-                    output=OutputConfig(output_dir=restart_output_dir, savematstep=1, visstep=0),
+                    output=OutputConfig(
+                        output_dir=restart_output_dir, savematstep=1, visstep=0
+                    ),
                     accretion=AccretionConfig(
                         active=true,
                         mode=:constant_rate,
@@ -551,12 +619,12 @@ using JLD2
                         dM_dt_constant=1.0e15,
                     ),
                     telescoping=TelescopingConfig(
-                        active=true,
-                        r_threshold_fraction=0.70,
-                        max_telescope_levels=2,
+                        active=true, r_threshold_fraction=0.70, max_telescope_levels=2
                     ),
                 )
-                Erebus.simulation_loop(restart_cfg; output_path=restart_output_dir, restart_from=step1_file)
+                Erebus.simulation_loop(
+                    restart_cfg; output_path=restart_output_dir, restart_from=step1_file
+                )
                 restarted_file = joinpath(restart_output_dir, "output_00002.jld2")
                 @test isfile(restarted_file)
                 restarted_data = JLD2.load(restarted_file)

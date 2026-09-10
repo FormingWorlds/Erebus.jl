@@ -29,10 +29,7 @@ to trigger a telescoping domain doubling event.
   maximum telescoping levels have not been reached.
 """
 function should_telescope_domain(
-    rplanet::Real,
-    coords::GridCoordinates,
-    cfg::TelescopingConfig;
-    level::Integer=0,
+    rplanet::Real, coords::GridCoordinates, cfg::TelescopingConfig; level::Integer=0
 )::Bool
     if !isfinite(rplanet) || rplanet < 0.0
         throw(DomainError(rplanet, "rplanet must be non-negative and finite"))
@@ -46,10 +43,7 @@ function should_telescope_domain(
 end
 
 function should_telescope_domain(
-    rplanet::Real,
-    coords::GridCoordinates,
-    cfg::SimulationConfig;
-    level::Integer=0,
+    rplanet::Real, coords::GridCoordinates, cfg::SimulationConfig; level::Integer=0
 )::Bool
     return should_telescope_domain(rplanet, coords, cfg.telescoping; level=level)
 end
@@ -75,12 +69,7 @@ function compute_telescoped_coordinates(coords::GridCoordinates)::GridCoordinate
     xsize_new = 2.0 * coords.xsize
     ysize_new = 2.0 * coords.ysize
     return GridCoordinates(
-        Nx_new,
-        Ny_new;
-        xsize=xsize_new,
-        ysize=ysize_new,
-        Nxmc=coords.Nxmc,
-        Nymc=coords.Nymc,
+        Nx_new, Ny_new; xsize=xsize_new, ysize=ysize_new, Nxmc=coords.Nxmc, Nymc=coords.Nymc
     )
 end
 
@@ -93,9 +82,7 @@ the original array and setting outer buffer cells to `background_val`.
 $(SIGNATURES)
 """
 function remap_staggered_grid_array(
-    old_arr::AbstractMatrix{T},
-    new_dims::Tuple{Int,Int};
-    background_val::Real=zero(T),
+    old_arr::AbstractMatrix{T}, new_dims::Tuple{Int,Int}; background_val::Real=zero(T)
 )::Matrix{T} where {T}
     Ny_old, Nx_old = size(old_arr)
     Ny_new, Nx_new = new_dims
@@ -273,8 +260,9 @@ function telescope_marker_arrays!(
 
     for j in 1:Nx_cells_new
         for i in 1:Ny_cells_new
-            is_inner = (joff_cells < j <= joff_cells + Nx_cells_old) &&
-                       (ioff_cells < i <= ioff_cells + Ny_cells_old)
+            is_inner =
+                (joff_cells < j <= joff_cells + Nx_cells_old) &&
+                (ioff_cells < i <= ioff_cells + Ny_cells_old)
             if !is_inner
                 cell_x0 = (j - 1) * dx
                 cell_y0 = (i - 1) * dy
