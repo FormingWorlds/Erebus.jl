@@ -573,6 +573,19 @@ Base.@kwdef struct AccretionConfig
 end
 
 """
+Telescoping domain configuration for growth from small planetesimals to lunar mass.
+
+$(FIELDS)
+"""
+Base.@kwdef struct TelescopingConfig
+    active::Bool = false
+    r_threshold_fraction::Float64 = 0.70
+    max_telescope_levels::Int = 10
+    target_radius::Float64 = 1_737_000.0
+    buffer_markers_per_cell::Int = 4
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -598,6 +611,7 @@ Base.@kwdef struct SimulationConfig
     phase_tracking::PhaseTrackingConfig = PhaseTrackingConfig()
     hydrothermal::HydrothermalConfig = HydrothermalConfig()
     accretion::AccretionConfig = AccretionConfig()
+    telescoping::TelescopingConfig = TelescopingConfig()
 end
 
 """
@@ -1913,6 +1927,39 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    if cfg.telescoping.active
+        (0.0 < cfg.telescoping.r_threshold_fraction < 1.0 && isfinite(cfg.telescoping.r_threshold_fraction)) || throw(
+            ArgumentError(
+                "r_threshold_fraction must be in (0, 1) and finite, got $(cfg.telescoping.r_threshold_fraction)",
+            ),
+        )
+        isodd(cfg.grid.Nx) || throw(
+            ArgumentError(
+                "Telescoping domain requires odd grid.Nx for symmetric centering, got $(cfg.grid.Nx)",
+            ),
+        )
+        isodd(cfg.grid.Ny) || throw(
+            ArgumentError(
+                "Telescoping domain requires odd grid.Ny for symmetric centering, got $(cfg.grid.Ny)",
+            ),
+        )
+        (cfg.telescoping.max_telescope_levels >= 1) || throw(
+            ArgumentError(
+                "max_telescope_levels must be >= 1, got $(cfg.telescoping.max_telescope_levels)",
+            ),
+        )
+        (cfg.telescoping.target_radius > 0.0 && isfinite(cfg.telescoping.target_radius)) || throw(
+            ArgumentError(
+                "target_radius must be > 0 and finite, got $(cfg.telescoping.target_radius)",
+            ),
+        )
+        (cfg.telescoping.buffer_markers_per_cell >= 1) || throw(
+            ArgumentError(
+                "buffer_markers_per_cell must be >= 1, got $(cfg.telescoping.buffer_markers_per_cell)",
+            ),
+        )
+    end
+
     return nothing
 end
 
@@ -1982,6 +2029,7 @@ const VALID_SECTIONS = Set([
     "phase_tracking",
     "hydrothermal",
     "accretion",
+    "telescoping",
 ])
 
 """
@@ -2155,6 +2203,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.accretion
     end
+    tele = if haskey(parsed, "telescoping")
+        _dict_to_struct(TelescopingConfig, parsed["telescoping"], def.telescoping)
+    else
+        def.telescoping
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2177,6 +2230,7 @@ function load_config(source::AbstractString)::SimulationConfig
         phase_tracking=phase_track,
         hydrothermal=hydrotherm,
         accretion=acc,
+        telescoping=tele,
     )
 
     validate_config(cfg)
@@ -2233,6 +2287,8 @@ function save_config(io::IO, cfg::SimulationConfig)
         "metal_partition" => _struct_to_dict(cfg.metal_partition),
         "phase_tracking" => _struct_to_dict(cfg.phase_tracking),
         "hydrothermal" => _struct_to_dict(cfg.hydrothermal),
+        "accretion" => _struct_to_dict(cfg.accretion),
+        "telescoping" => _struct_to_dict(cfg.telescoping),
     )
     TOML.print(io, d; sorted=true)
     return io
