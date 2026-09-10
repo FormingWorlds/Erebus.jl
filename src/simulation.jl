@@ -210,6 +210,7 @@ function save_state(
     M_accreted_total=nothing,
     M_planet_val=nothing,
     rplanet::Union{Nothing,Real}=nothing,
+    telescope_level::Union{Nothing,Integer}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -262,6 +263,7 @@ function save_state(
         hr_al,
         hr_fe,
         rplanet=rplanet !== nothing ? Float64(rplanet) : 50000.0,
+        telescope_level=telescope_level !== nothing ? Int(telescope_level) : 0,
         rcrust,
         psurface,
         xsize=xsize_val,
@@ -690,9 +692,13 @@ function simulation_loop(
     else
         nothing
     end
+    telescope_level = 0
     is_restart = !isempty(restart_from)
     if is_restart
         ckpt = load_state(restart_from)
+        if haskey(ckpt, "telescope_level")
+            telescope_level = Int(ckpt["telescope_level"])
+        end
         if haskey(ckpt, "M_vent_total")
             M_vent_total = Float64(ckpt["M_vent_total"])
         end
@@ -728,19 +734,52 @@ function simulation_loop(
                 )
             end
         end
-        if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
-            (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
-                DimensionMismatch(
-                    "Checkpoint grid size ($(ckpt["Nx"])x$(ckpt["Ny"])) does not match current simulation grid size ($(coords.Nx)x$(coords.Ny))",
-                ),
+        if cfg.telescoping.active &&
+            haskey(ckpt, "Nx") &&
+            haskey(ckpt, "Ny") &&
+            (ckpt["Nx"] != coords.Nx || ckpt["Ny"] != coords.Ny)
+            coords = GridCoordinates(
+                ckpt["Nx"],
+                ckpt["Ny"];
+                xsize=Float64(ckpt["xsize"]),
+                ysize=Float64(ckpt["ysize"]),
+                Nxmc=coords.Nxmc,
+                Nymc=coords.Nymc,
             )
-        end
-        if haskey(ckpt, "xsize") && haskey(ckpt, "ysize")
-            (ckpt["xsize"] == coords.xsize && ckpt["ysize"] == coords.ysize) || throw(
-                DimensionMismatch(
-                    "Checkpoint domain size ($(ckpt["xsize"])x$(ckpt["ysize"])) does not match current simulation domain size ($(coords.xsize)x$(coords.ysize))",
-                ),
+            xcenter_val = coords.xcenter
+            ycenter_val = coords.ycenter
+            (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties(
+                coords
             )
+            (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers(
+                coords
+            )
+            Q_metric =
+                spherical_metric_val ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
+            DQPF = zeros(Float64, coords.Ny1, coords.Nx1)
+            DQPFSUM = zeros(Float64, coords.Ny1, coords.Nx1)
+            mdis, mnum = setup_marker_geometry_helpers(coords)
+            S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+            Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+            Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+            if use_threading
+                thread_buffers = allocate_thread_interpolation_buffers(num_buffers, coords)
+            end
+        else
+            if haskey(ckpt, "Nx") && haskey(ckpt, "Ny")
+                (ckpt["Nx"] == coords.Nx && ckpt["Ny"] == coords.Ny) || throw(
+                    DimensionMismatch(
+                        "Checkpoint grid size ($(ckpt["Nx"])x$(ckpt["Ny"])) does not match current simulation grid size ($(coords.Nx)x$(coords.Ny))",
+                    ),
+                )
+            end
+            if haskey(ckpt, "xsize") && haskey(ckpt, "ysize")
+                (ckpt["xsize"] == coords.xsize && ckpt["ysize"] == coords.ysize) || throw(
+                    DimensionMismatch(
+                        "Checkpoint domain size ($(ckpt["xsize"])x$(ckpt["ysize"])) does not match current simulation domain size ($(coords.xsize)x$(coords.ysize))",
+                    ),
+                )
+            end
         end
         start_step_val = ckpt["timestep"] + 1
         dt = ckpt["dt"]
@@ -1172,6 +1211,7 @@ function simulation_loop(
             t_accreted=t_accreted,
             M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
             M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
+            telescope_level=telescope_level,
         )
     end
 
@@ -1362,6 +1402,250 @@ function simulation_loop(
                 M_planet_val += dM_acc
                 M_accreted_total += dM_acc
             end
+        end
+
+        # ---------------------------------------------------------------------
+        # telescoping domain expansion
+        # ---------------------------------------------------------------------
+        if cfg.telescoping.active && should_telescope_domain(
+            rplanet_val, coords, cfg.telescoping; level=telescope_level
+        )
+            @info "Triggering domain telescoping expansion" level=telescope_level + 1 rplanet=rplanet_val old_xsize=coords.xsize new_xsize=2.0 *
+                                                                                                                                           coords.xsize
+            old_coords = coords
+            coords = compute_telescoped_coordinates(old_coords)
+            xcenter_val = coords.xcenter
+            ycenter_val = coords.ycenter
+
+            # Remap staggered grid variables
+            ETA = remap_staggered_grid_array(
+                ETA, (coords.Ny, coords.Nx); background_val=cfg.materials.etasolidm[3]
+            )
+            ETA0 = remap_staggered_grid_array(
+                ETA0, (coords.Ny, coords.Nx); background_val=cfg.materials.etasolidm[3]
+            )
+            GGG = remap_staggered_grid_array(
+                GGG, (coords.Ny, coords.Nx); background_val=cfg.materials.gggsolidm[3]
+            )
+            EXY = remap_staggered_grid_array(EXY, (coords.Ny, coords.Nx))
+            SXY = remap_staggered_grid_array(SXY, (coords.Ny, coords.Nx))
+            SXY0 = remap_staggered_grid_array(SXY0, (coords.Ny, coords.Nx))
+            wyx = remap_staggered_grid_array(wyx, (coords.Ny, coords.Nx))
+            COH = remap_staggered_grid_array(
+                COH, (coords.Ny, coords.Nx); background_val=cfg.materials.cohessolidm[3]
+            )
+            TEN = remap_staggered_grid_array(
+                TEN, (coords.Ny, coords.Nx); background_val=cfg.materials.tenssolidm[3]
+            )
+            FRI = remap_staggered_grid_array(
+                FRI, (coords.Ny, coords.Nx); background_val=cfg.materials.frictsolidm[3]
+            )
+            YNY = remap_staggered_grid_array(YNY, (coords.Ny, coords.Nx))
+            ETA5 = remap_staggered_grid_array(
+                ETA5, (coords.Ny, coords.Nx); background_val=cfg.materials.etasolidm[3]
+            )
+            ETA00 = remap_staggered_grid_array(
+                ETA00, (coords.Ny, coords.Nx); background_val=cfg.materials.etasolidm[3]
+            )
+            YNY5 = remap_staggered_grid_array(YNY5, (coords.Ny, coords.Nx))
+            YNY00 = remap_staggered_grid_array(YNY00, (coords.Ny, coords.Nx))
+            YNY_inv_ETA = remap_staggered_grid_array(YNY_inv_ETA, (coords.Ny, coords.Nx))
+            DSXY = remap_staggered_grid_array(DSXY, (coords.Ny, coords.Nx))
+            DSY = remap_staggered_grid_array(DSY, (coords.Ny, coords.Nx))
+
+            RHOX = remap_staggered_grid_array(
+                RHOX, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhosolidm[3]
+            )
+            RHOFX = remap_staggered_grid_array(
+                RHOFX, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhofluidm[3]
+            )
+            KX = remap_staggered_grid_array(
+                KX, (coords.Ny1, coords.Nx1); background_val=cfg.materials.ksolidm[3]
+            )
+            PHIX = remap_staggered_grid_array(
+                PHIX, (coords.Ny1, coords.Nx1); background_val=cfg.poroelasticity.phimin
+            )
+            vx = remap_staggered_grid_array(vx, (coords.Ny1, coords.Nx1))
+            vxf = remap_staggered_grid_array(vxf, (coords.Ny1, coords.Nx1))
+            RX = remap_staggered_grid_array(RX, (coords.Ny1, coords.Nx1))
+            qxD = remap_staggered_grid_array(qxD, (coords.Ny1, coords.Nx1))
+            gx = remap_staggered_grid_array(gx, (coords.Ny1, coords.Nx1))
+
+            RHOY = remap_staggered_grid_array(
+                RHOY, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhosolidm[3]
+            )
+            RHOFY = remap_staggered_grid_array(
+                RHOFY, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhofluidm[3]
+            )
+            KY = remap_staggered_grid_array(
+                KY, (coords.Ny1, coords.Nx1); background_val=cfg.materials.ksolidm[3]
+            )
+            PHIY = remap_staggered_grid_array(
+                PHIY, (coords.Ny1, coords.Nx1); background_val=cfg.poroelasticity.phimin
+            )
+            vy = remap_staggered_grid_array(vy, (coords.Ny1, coords.Nx1))
+            vyf = remap_staggered_grid_array(vyf, (coords.Ny1, coords.Nx1))
+            RY = remap_staggered_grid_array(RY, (coords.Ny1, coords.Nx1))
+            qyD = remap_staggered_grid_array(qyD, (coords.Ny1, coords.Nx1))
+            gy = remap_staggered_grid_array(gy, (coords.Ny1, coords.Nx1))
+
+            RHO = remap_staggered_grid_array(
+                RHO, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhosolidm[3]
+            )
+            RHOCP = remap_staggered_grid_array(
+                RHOCP, (coords.Ny1, coords.Nx1); background_val=cfg.materials.rhocpsolidm[3]
+            )
+            ALPHA = remap_staggered_grid_array(
+                ALPHA, (coords.Ny1, coords.Nx1); background_val=cfg.materials.alphasolidm[3]
+            )
+            ALPHAF = remap_staggered_grid_array(
+                ALPHAF,
+                (coords.Ny1, coords.Nx1);
+                background_val=cfg.materials.alphafluidm[3],
+            )
+            HR = remap_staggered_grid_array(HR, (coords.Ny1, coords.Nx1))
+            HA = remap_staggered_grid_array(HA, (coords.Ny1, coords.Nx1))
+            HS = remap_staggered_grid_array(HS, (coords.Ny1, coords.Nx1))
+            ETAP = remap_staggered_grid_array(
+                ETAP, (coords.Ny1, coords.Nx1); background_val=cfg.materials.etasolidm[3]
+            )
+            GGGP = remap_staggered_grid_array(
+                GGGP, (coords.Ny1, coords.Nx1); background_val=cfg.materials.gggsolidm[3]
+            )
+            EXX = remap_staggered_grid_array(EXX, (coords.Ny1, coords.Nx1))
+            SXX = remap_staggered_grid_array(SXX, (coords.Ny1, coords.Nx1))
+            SXX0 = remap_staggered_grid_array(SXX0, (coords.Ny1, coords.Nx1))
+            tk1 = remap_staggered_grid_array(
+                tk1, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+            )
+            tk2 = remap_staggered_grid_array(
+                tk2, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+            )
+            DT = remap_staggered_grid_array(DT, (coords.Ny1, coords.Nx1))
+            DT0 = remap_staggered_grid_array(DT0, (coords.Ny1, coords.Nx1))
+            vxp = remap_staggered_grid_array(vxp, (coords.Ny1, coords.Nx1))
+            vyp = remap_staggered_grid_array(vyp, (coords.Ny1, coords.Nx1))
+            vxpf = remap_staggered_grid_array(vxpf, (coords.Ny1, coords.Nx1))
+            vypf = remap_staggered_grid_array(vypf, (coords.Ny1, coords.Nx1))
+            pr = remap_staggered_grid_array(pr, (coords.Ny1, coords.Nx1))
+            pf = remap_staggered_grid_array(pf, (coords.Ny1, coords.Nx1))
+            ps = remap_staggered_grid_array(ps, (coords.Ny1, coords.Nx1))
+            pr0 = remap_staggered_grid_array(pr0, (coords.Ny1, coords.Nx1))
+            pf0 = remap_staggered_grid_array(pf0, (coords.Ny1, coords.Nx1))
+            ps0 = remap_staggered_grid_array(ps0, (coords.Ny1, coords.Nx1))
+            ETAPHI = remap_staggered_grid_array(
+                ETAPHI, (coords.Ny1, coords.Nx1); background_val=cfg.materials.etasolidm[3]
+            )
+            BETAPHI = remap_staggered_grid_array(BETAPHI, (coords.Ny1, coords.Nx1))
+            PHI = remap_staggered_grid_array(
+                PHI, (coords.Ny1, coords.Nx1); background_val=cfg.poroelasticity.phimin
+            )
+            APHI = remap_staggered_grid_array(APHI, (coords.Ny1, coords.Nx1))
+            FI = remap_staggered_grid_array(FI, (coords.Ny1, coords.Nx1))
+            DMP = remap_staggered_grid_array(DMP, (coords.Ny1, coords.Nx1))
+            DHP = remap_staggered_grid_array(DHP, (coords.Ny1, coords.Nx1))
+            XWS = remap_staggered_grid_array(XWS, (coords.Ny1, coords.Nx1))
+            EII = remap_staggered_grid_array(EII, (coords.Ny1, coords.Nx1))
+            SII = remap_staggered_grid_array(SII, (coords.Ny1, coords.Nx1))
+            DSXX = remap_staggered_grid_array(DSXX, (coords.Ny1, coords.Nx1))
+            tk0 = remap_staggered_grid_array(
+                tk0, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+            )
+            if Q_metric !== nothing
+                Q_metric = remap_staggered_grid_array(Q_metric, (coords.Ny1, coords.Nx1))
+            end
+            DQPF = remap_staggered_grid_array(DQPF, (coords.Ny1, coords.Nx1))
+            DQPFSUM = remap_staggered_grid_array(DQPFSUM, (coords.Ny1, coords.Nx1))
+            S_vent_grid = remap_staggered_grid_array(S_vent_grid, (coords.Ny1, coords.Nx1))
+            Q_lat_grid = remap_staggered_grid_array(Q_lat_grid, (coords.Ny1, coords.Nx1))
+            Q_seg_grid = remap_staggered_grid_array(Q_seg_grid, (coords.Ny1, coords.Nx1))
+
+            # Helper geometries and buffers
+            mdis, mnum = setup_marker_geometry_helpers(coords)
+            (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties(
+                coords
+            )
+            if use_threading
+                thread_buffers = allocate_thread_interpolation_buffers(num_buffers, coords)
+            end
+
+            # Telescope marker arrays
+            marknum = telescope_marker_arrays!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                sxxm,
+                sxym,
+                etavpm,
+                phim,
+                phinewm,
+                pfm0,
+                XWsolidm,
+                XWsolidm0,
+                Fm,
+                rhototalm,
+                rhocptotalm,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                inv_gggtotalm,
+                fricttotalm,
+                cohestotalm,
+                tenstotalm,
+                rhofluidcur,
+                alphasolidcur,
+                alphafluidcur,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim;
+                old_coords=old_coords,
+                new_coords=coords,
+                T_ambient=cfg.materials.tkm0[3],
+                phi_ambient=cfg.poroelasticity.phimin,
+                buffer_markers_per_cell=cfg.telescoping.buffer_markers_per_cell,
+                materials=cfg.materials,
+                Xfem=Xfem,
+                Xfem0=Xfem0,
+                Xfe_bulk=Xfe_bulk,
+                XH2Om=cfg.volatiles.active ? XH2Om : nothing,
+                XCm=cfg.volatiles.active ? XCm : nothing,
+                XNm=cfg.volatiles.active ? XNm : nothing,
+                XSm=cfg.volatiles.active ? XSm : nothing,
+                Xfe_H_m=Xfe_H_m,
+                Xfe_C_m=Xfe_C_m,
+                Xfe_N_m=Xfe_N_m,
+                Xfe_S_m=Xfe_S_m,
+                Xmin_troilite_m=Xmin_troilite_m,
+                Xmin_schreibersite_m=Xmin_schreibersite_m,
+                Xmin_cohenite_m=Xmin_cohenite_m,
+                Xmin_graphite_m=Xmin_graphite_m,
+                Xmin_nitride_m=Xmin_nitride_m,
+                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                t_accreted=t_accreted,
+            )
+
+            # Re-initialize linear solvers and Poisson operator for new grid size
+            R, S = setup_hydromechanical_lse(coords)
+            hydromech_sol = nothing
+            L_hydromech = ExtendableSparseMatrix(
+                coords.Nx1 * coords.Ny1 * 6, coords.Nx1 * coords.Ny1 * 6
+            )
+            hydromech_cache = nothing
+
+            RT, ST = setup_thermal_lse(coords)
+            LT_thermal = ExtendableSparseMatrix(
+                coords.Ny1 * coords.Nx1, coords.Ny1 * coords.Nx1
+            )
+            thermal_cache = nothing
+
+            RP, SP = setup_gravitational_lse(coords)
+            LP = assemble_gravitational_lse!(
+                zeros(coords.Ny1, coords.Nx1), RP; coords=coords
+            )
+            F_grav = lu(LP.cscmatrix)
+
+            telescope_level += 1
+            @info "Telescoping complete" level=telescope_level Nx=coords.Nx Ny=coords.Ny marknum=marknum
         end
 
         # ---------------------------------------------------------------------
@@ -2922,6 +3206,7 @@ function simulation_loop(
                 t_accreted=t_accreted,
                 M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                 M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
+                telescope_level=telescope_level,
             )
         end
         # ---------------------------------------------------------------------

@@ -38,6 +38,7 @@ export Config,
     PhaseTrackingConfig,
     HydrothermalConfig,
     AccretionConfig,
+    TelescopingConfig,
     SimulationConfig,
     default_config,
     load_config,
@@ -168,7 +169,11 @@ export Config,
     setup_marker_accretion_properties,
     M_SUN_KG,
     AU_METERS,
-    SEC_PER_YEAR
+    SEC_PER_YEAR,
+    should_telescope_domain,
+    compute_telescoped_coordinates,
+    remap_staggered_grid_array,
+    telescope_marker_arrays!
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -194,6 +199,7 @@ include("geometry.jl")
 include("physics.jl")
 include("particles.jl")
 include("accretion.jl")
+include("telescoping.jl")
 include("numerics.jl")
 include("simulation.jl")
 
@@ -628,6 +634,7 @@ module Config
         PhaseTrackingConfig,
         HydrothermalConfig,
         AccretionConfig,
+        TelescopingConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -653,6 +660,7 @@ module Config
         PhaseTrackingConfig,
         HydrothermalConfig,
         AccretionConfig,
+        TelescopingConfig,
         SimulationConfig,
         default_config,
         load_config,

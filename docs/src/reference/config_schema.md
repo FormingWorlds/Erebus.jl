@@ -610,6 +610,29 @@ track_accretion_time = true
 
 ---
 
+## `[telescoping]`
+
+Telescoping domain configuration for dynamic spatial box doubling during planetary accretion to lunar mass ($R \sim 1,737\text{ km}$). When the planetesimal radius exceeds the threshold fraction of the domain half-width, physical dimensions and basic grid node counts double simultaneously, preserving exact cell spacing $dx = \text{const}$.
+
+```toml
+[telescoping]
+active = true
+r_threshold_fraction = 0.70
+max_telescope_levels = 10
+target_radius = 1737000.0
+buffer_markers_per_cell = 4
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable telescoping domain doubling | `true` / `false` |
+| `r_threshold_fraction` | `Float64` | `0.70` | - | Radius fraction of domain half-width triggering doubling | $\in (0, 1)$ |
+| `max_telescope_levels` | `Int` | `10` | - | Maximum permitted domain doubling levels | $\ge 1$ |
+| `target_radius` | `Float64` | `1737000.0` | m | Target final planetary radius of accretion sequence (e.g. lunar radius 1,737 km) | $> 0$ |
+| `buffer_markers_per_cell` | `Int` | `4` | - | Sticky-air markers injected per outer buffer cell | $\ge 1$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input
