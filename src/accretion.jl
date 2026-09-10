@@ -765,7 +765,9 @@ function evaluate_disk_volatile_condensation(
         throw(DomainError(alpha_P, "alpha_P must be non-negative"))
 
     T = Float64(T_disk)
-    p_factor = max(0.01, 1.0 + Float64(alpha_P) * log(max(Float64(P_disk), 1.0e-8) / Float64(P_ref)))
+    p_factor = max(
+        0.01, 1.0 + Float64(alpha_P) * log(max(Float64(P_disk), 1.0e-8) / Float64(P_ref))
+    )
 
     condensed_H2O = mix_cfg.active && (T <= mix_cfg.T_cond_H2O * p_factor)
     condensed_NH3 = mix_cfg.active && (T <= mix_cfg.T_cond_NH3 * p_factor)

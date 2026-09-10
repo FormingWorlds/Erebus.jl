@@ -300,14 +300,20 @@ using Erebus.Particles
 
         # Case I: Independent active gating
         st_mix_off = evaluate_disk_volatile_condensation(
-            10.0, P_midplane, VolatileMixtureConfig(active=false), RefractoryConfig(active=true)
+            10.0,
+            P_midplane,
+            VolatileMixtureConfig(active=false),
+            RefractoryConfig(active=true),
         )
         @test st_mix_off.condensed_H2O == false
         @test iszero(st_mix_off.X_ice_H2O)
         @test st_mix_off.f_refr_C > 0.0
 
         st_refr_off = evaluate_disk_volatile_condensation(
-            10.0, P_midplane, VolatileMixtureConfig(active=true), RefractoryConfig(active=false)
+            10.0,
+            P_midplane,
+            VolatileMixtureConfig(active=true),
+            RefractoryConfig(active=false),
         )
         @test st_refr_off.condensed_H2O == true
         @test st_refr_off.X_ice_H2O > 0.0
@@ -541,7 +547,9 @@ using Erebus.Particles
             r = sqrt((xm[m] - 70000.0)^2 + (ym[m] - 70000.0)^2)
             if r <= R_curr + delta_R
                 @test tm_direct[m] == 2
-                @test isapprox(hcnspo_direct.X_ice_H2O_m[m], disk_state.X_ice_H2O, atol=1e-10)
+                @test isapprox(
+                    hcnspo_direct.X_ice_H2O_m[m], disk_state.X_ice_H2O, atol=1e-10
+                )
                 @test isapprox(hcnspo_direct.X_refr_C_m[m], disk_state.f_refr_C, atol=1e-10)
             end
         end

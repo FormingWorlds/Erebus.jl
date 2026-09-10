@@ -2214,21 +2214,14 @@ function validate_config(cfg::SimulationConfig)
             "T_freeze_floor must be >= 0 and finite, got $(cfg.volatile_mixture.T_freeze_floor)",
         ),
     )
-    (
-        cfg.volatile_mixture.alpha_P >= 0.0 &&
-        isfinite(cfg.volatile_mixture.alpha_P)
-    ) || throw(
-        ArgumentError(
-            "alpha_P must be >= 0 and finite, got $(cfg.volatile_mixture.alpha_P)",
-        ),
-    )
-    (
-        cfg.volatile_mixture.P_ref > 0.0 &&
-        isfinite(cfg.volatile_mixture.P_ref)
-    ) || throw(
-        ArgumentError(
-            "P_ref must be > 0 and finite, got $(cfg.volatile_mixture.P_ref)",
-        ),
+    (cfg.volatile_mixture.alpha_P >= 0.0 && isfinite(cfg.volatile_mixture.alpha_P)) ||
+        throw(
+            ArgumentError(
+                "alpha_P must be >= 0 and finite, got $(cfg.volatile_mixture.alpha_P)"
+            ),
+        )
+    (cfg.volatile_mixture.P_ref > 0.0 && isfinite(cfg.volatile_mixture.P_ref)) || throw(
+        ArgumentError("P_ref must be > 0 and finite, got $(cfg.volatile_mixture.P_ref)")
     )
     for (name, val) in [
         ("X_ice_H2O", cfg.volatile_mixture.X_ice_H2O),
