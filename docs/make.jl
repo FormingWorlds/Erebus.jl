@@ -32,6 +32,7 @@ makedocs(;
             "1D Terzaghi Consolidation" => "tutorials/terzaghi_consolidation.md",
             "2D Hydrothermal Circulation" => "tutorials/hydrothermal_circulation.md",
             "Planetesimal Differentiation" => "tutorials/planetesimal_differentiation.md",
+            "Growth to Lunar Mass" => "tutorials/growth_to_lunar_mass.md",
         ],
         "How-To Guides" => [
             "Installation" => "howto/installation.md",

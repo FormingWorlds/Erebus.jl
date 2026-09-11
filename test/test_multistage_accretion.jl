@@ -528,4 +528,178 @@ using Erebus
         @test isnan(parsed_cfg.accretion.M_onset)
         @test isnan(parsed_cfg.accretion.M_iso)
     end
+
+    # ---------------------------------------------------------------------
+    # 7. Disk Dispersal Pebble Termination & Late Collision Transition
+    # ---------------------------------------------------------------------
+    @testset "Disk Dispersal Pebble Termination" begin
+        # A. Pebble surface density scaling with w_disp
+        @testset "Pebble Surface Density Scaling" begin
+            sig_nom = compute_pebble_surface_density(1.0; Sigma_peb_0=100.0, p_peb=1.0)
+            sig_half = compute_pebble_surface_density(
+                1.0; Sigma_peb_0=100.0, p_peb=1.0, w_disp=0.5
+            )
+            sig_zero = compute_pebble_surface_density(
+                1.0; Sigma_peb_0=100.0, p_peb=1.0, w_disp=1.0
+            )
+            sig_over = compute_pebble_surface_density(
+                1.0; Sigma_peb_0=100.0, p_peb=1.0, w_disp=1.2
+            )
+
+            @test isapprox(sig_nom, 100.0, rtol=1e-12)
+            @test isapprox(sig_half, 50.0, rtol=1e-12)
+            @test isapprox(sig_zero, 0.0, atol=1e-15)
+            @test isapprox(sig_over, 0.0, atol=1e-15)
+
+            @test_throws DomainError compute_pebble_surface_density(1.0; w_disp=-0.1)
+            @test_throws DomainError compute_pebble_surface_density(1.0; w_disp=NaN)
+        end
+
+        # B. Single-mode pebble accretion with dynamic disk dispersal
+        @testset "Single Mode Pebble Dispersal Shutdown" begin
+            disk_disp = DiskConfig(
+                orbital_distance_au=1.0,
+                stellar_mass_msun=1.0,
+                t_ambient=200.0,
+                dispersal_active=true,
+                t_dispersal_myr=2.0,
+                dt_dispersal_myr=0.05,
+            )
+            acc_peb = AccretionConfig(
+                active=true,
+                mode=:pebble_auto,
+                Sigma_peb_0=50.0,
+                stokes_number=0.05,
+                t_start_myr=0.0,
+                t_duration_myr=5.0,
+                M_target=1.0e28,
+                R_target=1.0e8,
+            )
+            M_test = 1.0e22
+            R_test = 100000.0
+            sec_yr = 3.15576e7
+
+            # Early time: undispersed disk
+            t_early = 0.5 * 1.0e6 * sec_yr
+            rate_early = compute_accretion_rate(t_early, M_test, R_test, acc_peb, disk_disp)
+            @test rate_early > 0.0
+
+            # Dispersal midpoint: ~50% drop
+            t_mid = 2.0 * 1.0e6 * sec_yr
+            rate_mid = compute_accretion_rate(t_mid, M_test, R_test, acc_peb, disk_disp)
+            @test isapprox(rate_mid, 0.5 * rate_early, rtol=0.05)
+
+            # Post-dispersal: strictly zero pebble accretion
+            t_late = 3.0 * 1.0e6 * sec_yr
+            rate_late = compute_accretion_rate(t_late, M_test, R_test, acc_peb, disk_disp)
+            @test isapprox(rate_late, 0.0, atol=1e-25)
+        end
+
+        # C. Multi-stage accretion: disk dispersal switches Stage 2 to Stage 3 for M < M_iso
+        @testset "Multistage Transition to Stage 3 on Dispersal" begin
+            disk_disp = DiskConfig(
+                orbital_distance_au=1.0,
+                stellar_mass_msun=1.0,
+                t_ambient=200.0,
+                dispersal_active=true,
+                t_dispersal_myr=2.0,
+                dt_dispersal_myr=0.05,
+            )
+            acc_multi_sharp = AccretionConfig(
+                active=true,
+                mode=:multistage,
+                stage1_mode=:safronov,
+                stage2_mode=:pebble_auto,
+                stage3_mode=:safronov,
+                transition_smoothing=false,
+                M_onset=1.0e20,
+                M_iso=1.0e26,
+                M_target=1.0e28,
+                R_target=1.0e8,
+                Sigma_pl_0=100.0,
+                Sigma_peb_0=50.0,
+                v_disp_kms=0.2,
+                t_start_myr=0.0,
+                t_duration_myr=5.0,
+            )
+            acc_multi_smooth = AccretionConfig(
+                active=true,
+                mode=:multistage,
+                stage1_mode=:safronov,
+                stage2_mode=:pebble_auto,
+                stage3_mode=:safronov,
+                transition_smoothing=true,
+                transition_width=0.10,
+                M_onset=1.0e20,
+                M_iso=1.0e26,
+                M_target=1.0e28,
+                R_target=1.0e8,
+                Sigma_pl_0=100.0,
+                Sigma_peb_0=50.0,
+                v_disp_kms=0.2,
+                t_start_myr=0.0,
+                t_duration_myr=5.0,
+            )
+
+            M_lunar = 7.35e22  # Well between M_onset (1e20) and M_iso (1e26)
+            R_lunar = 1737000.0
+            sec_yr = 3.15576e7
+            Omega_K_1au = compute_keplerian_frequency(1.495978707e11, 1.98847e30)
+
+            # Before dispersal: in Stage 2 (pebble accretion)
+            t_early = 0.5 * 1.0e6 * sec_yr
+            rate_early_sharp = compute_accretion_rate(
+                t_early, M_lunar, R_lunar, acc_multi_sharp, disk_disp
+            )
+            rate_early_smooth = compute_accretion_rate(
+                t_early, M_lunar, R_lunar, acc_multi_smooth, disk_disp
+            )
+            @test rate_early_sharp > 0.0
+            @test isapprox(rate_early_smooth, rate_early_sharp, rtol=1e-4)
+
+            # During dispersal at midpoint: w_disp = 0.50
+            t_mid = 2.0 * 1.0e6 * sec_yr
+            rate_mid_sharp = compute_accretion_rate(
+                t_mid, M_lunar, R_lunar, acc_multi_sharp, disk_disp
+            )
+            rate_mid_smooth = compute_accretion_rate(
+                t_mid, M_lunar, R_lunar, acc_multi_smooth, disk_disp
+            )
+            expected_stage3 = compute_safronov_accretion_rate(
+                M_lunar,
+                R_lunar,
+                acc_multi_sharp.Sigma_pl_0,
+                acc_multi_sharp.v_disp_kms * 1000.0,
+                Omega_K_1au,
+            )
+            # Sharp mode switches to Stage 3 at w_disp >= 0.5
+            @test isapprox(rate_mid_sharp, expected_stage3, rtol=1e-10)
+            # Smooth mode provides convex combination: 0.5 * rate_peb + 0.5 * rate_stage3
+            @test isapprox(
+                rate_mid_smooth,
+                0.5 * rate_early_sharp + 0.5 * expected_stage3,
+                rtol=1e-4,
+            )
+
+            # After dispersal: pebble accretion stops; switches to Stage 3 Safronov collisions
+            t_late = 3.0 * 1.0e6 * sec_yr
+            rate_late_sharp = compute_accretion_rate(
+                t_late, M_lunar, R_lunar, acc_multi_sharp, disk_disp
+            )
+            rate_late_smooth = compute_accretion_rate(
+                t_late, M_lunar, R_lunar, acc_multi_smooth, disk_disp
+            )
+            expected_stage3 = compute_safronov_accretion_rate(
+                M_lunar,
+                R_lunar,
+                acc_multi_sharp.Sigma_pl_0,
+                acc_multi_sharp.v_disp_kms * 1000.0,
+                Omega_K_1au,
+            )
+
+            @test isapprox(rate_late_sharp, expected_stage3, rtol=1e-10)
+            @test isapprox(rate_late_smooth, expected_stage3, rtol=1e-10)
+            @test rate_late_sharp > 0.0
+        end
+    end
 end
