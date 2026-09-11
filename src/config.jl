@@ -573,6 +573,36 @@ Base.@kwdef struct VolatileMixtureConfig
 end
 
 """
+Coupled 1D atmosphere, Guillot semi-grey radiation, disk envelope capture, and hydrodynamic escape parameters.
+
+$(FIELDS)
+"""
+Base.@kwdef struct AtmosphereConfig
+    active::Bool = false
+    mode::Symbol = :guillot
+    kappa_ir_default::Float64 = 1.0e-2
+    kappa_vis_default::Float64 = 1.0e-3
+    opacities::Dict{Symbol,Float64} = Dict(
+        :H2O => 1.0e-2,
+        :CO2 => 1.0e-3,
+        :CH4 => 2.0e-3,
+        :CO => 1.0e-4,
+        :N2 => 1.0e-5,
+        :H2 => 1.0e-5,
+        :NH3 => 5.0e-3,
+        :H2S => 1.0e-3,
+        :SO2 => 2.0e-3,
+    )
+    albedo::Float64 = 0.20
+    gamma_guillot::Float64 = 0.10
+    T_skin_floor::Float64 = 50.0
+    f_rec::Float64 = 0.10
+    tau_boil::Float64 = 1.0e4 * SEC_PER_YEAR
+    crossover_active::Bool = true
+    b_diff_ref::Float64 = 1.0e21
+end
+
+"""
 Atmospheric Jeans kinetic escape and volatile mass loss parameters.
 
 $(FIELDS)
@@ -815,6 +845,7 @@ Base.@kwdef struct SimulationConfig
     telescoping::TelescopingConfig = TelescopingConfig()
     refractory::RefractoryConfig = RefractoryConfig()
     volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
+    atmosphere::AtmosphereConfig = AtmosphereConfig()
 end
 
 """
@@ -2319,6 +2350,67 @@ function validate_config(cfg::SimulationConfig)
         )
     end
 
+    # AtmosphereConfig validation
+    if cfg.atmosphere.active
+        (
+            cfg.atmosphere.kappa_ir_default > 0.0 &&
+            isfinite(cfg.atmosphere.kappa_ir_default)
+        ) || throw(
+            ArgumentError(
+                "atmosphere.kappa_ir_default must be > 0 and finite, got $(cfg.atmosphere.kappa_ir_default)",
+            ),
+        )
+        (
+            cfg.atmosphere.kappa_vis_default > 0.0 &&
+            isfinite(cfg.atmosphere.kappa_vis_default)
+        ) || throw(
+            ArgumentError(
+                "atmosphere.kappa_vis_default must be > 0 and finite, got $(cfg.atmosphere.kappa_vis_default)",
+            ),
+        )
+        cfg.atmosphere.mode in Set([:guillot, :grey, :isothermal]) || throw(
+            ArgumentError(
+                "atmosphere.mode must be one of :guillot, :grey, :isothermal, got $(cfg.atmosphere.mode)",
+            ),
+        )
+        (0.0 <= cfg.atmosphere.albedo < 1.0 && isfinite(cfg.atmosphere.albedo)) || throw(
+            ArgumentError(
+                "atmosphere.albedo must be in [0, 1) and finite, got $(cfg.atmosphere.albedo)",
+            ),
+        )
+        (cfg.atmosphere.gamma_guillot > 0.0 && isfinite(cfg.atmosphere.gamma_guillot)) ||
+            throw(
+                ArgumentError(
+                    "atmosphere.gamma_guillot must be > 0 and finite, got $(cfg.atmosphere.gamma_guillot)",
+                ),
+            )
+        (cfg.atmosphere.T_skin_floor > 0.0 && isfinite(cfg.atmosphere.T_skin_floor)) ||
+            throw(
+                ArgumentError(
+                    "atmosphere.T_skin_floor must be > 0 and finite, got $(cfg.atmosphere.T_skin_floor)",
+                ),
+            )
+        (cfg.atmosphere.f_rec > 0.0 && isfinite(cfg.atmosphere.f_rec)) || throw(
+            ArgumentError(
+                "atmosphere.f_rec must be > 0 and finite, got $(cfg.atmosphere.f_rec)"
+            ),
+        )
+        (cfg.atmosphere.tau_boil > 0.0 && isfinite(cfg.atmosphere.tau_boil)) || throw(
+            ArgumentError(
+                "atmosphere.tau_boil must be > 0 and finite, got $(cfg.atmosphere.tau_boil)",
+            ),
+        )
+        (cfg.atmosphere.b_diff_ref > 0.0 && isfinite(cfg.atmosphere.b_diff_ref)) || throw(
+            ArgumentError(
+                "atmosphere.b_diff_ref must be > 0 and finite, got $(cfg.atmosphere.b_diff_ref)",
+            ),
+        )
+        for (sp, kap) in cfg.atmosphere.opacities
+            (kap >= 0.0 && isfinite(kap)) ||
+                throw(ArgumentError("opacity for $sp must be >= 0 and finite, got $kap"))
+        end
+    end
+
     return nothing
 end
 
@@ -2370,6 +2462,13 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
                 kwargs[fname] = Symbol(val)
             elseif ftype === Vector{Symbol} && val isa AbstractVector
                 kwargs[fname] = [Symbol(x) for x in val]
+            elseif ftype <: AbstractDict && val isa AbstractDict
+                K = keytype(ftype)
+                V = valtype(ftype)
+                kwargs[fname] = Dict{K,V}(
+                    (K === Symbol ? Symbol(k) : convert(K, k)) => convert(V, v) for
+                    (k, v) in val
+                )
             else
                 kwargs[fname] = val
             end
@@ -2404,6 +2503,7 @@ const VALID_SECTIONS = Set([
     "telescoping",
     "refractory",
     "volatile_mixture",
+    "atmosphere",
 ])
 
 """
@@ -2592,6 +2692,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.volatile_mixture
     end
+    atm = if haskey(parsed, "atmosphere")
+        _dict_to_struct(AtmosphereConfig, parsed["atmosphere"], def.atmosphere)
+    else
+        def.atmosphere
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2617,6 +2722,7 @@ function load_config(source::AbstractString)::SimulationConfig
         telescoping=tele,
         refractory=refr,
         volatile_mixture=volmix,
+        atmosphere=atm,
     )
 
     validate_config(cfg)
@@ -2636,6 +2742,8 @@ function _struct_to_dict(s)
             d[String(fname)] = String(val)
         elseif val isa AbstractVector{Symbol}
             d[String(fname)] = [String(x) for x in val]
+        elseif val isa AbstractDict{Symbol,<:Any}
+            d[String(fname)] = Dict{String,Any}(String(k) => v for (k, v) in val)
         else
             d[String(fname)] = val
         end
@@ -2677,6 +2785,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "telescoping" => _struct_to_dict(cfg.telescoping),
         "refractory" => _struct_to_dict(cfg.refractory),
         "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
+        "atmosphere" => _struct_to_dict(cfg.atmosphere),
     )
     TOML.print(io, d; sorted=true)
     return io

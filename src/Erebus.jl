@@ -41,6 +41,7 @@ export Config,
     TelescopingConfig,
     RefractoryConfig,
     VolatileMixtureConfig,
+    AtmosphereConfig,
     SimulationConfig,
     default_config,
     load_config,
@@ -197,7 +198,17 @@ export Config,
     should_telescope_domain,
     compute_telescoped_coordinates,
     remap_staggered_grid_array,
-    telescope_marker_arrays!
+    telescope_marker_arrays!,
+    AtmosphereState,
+    compute_gravitational_capture_radius,
+    compute_disk_envelope_mass,
+    compute_atmospheric_optical_depth,
+    compute_guillot_surface_temperature,
+    compute_effective_radiation_htc,
+    compute_boiloff_rate,
+    compute_crossover_mass,
+    compute_crossover_drag_fraction,
+    evolve_coupled_atmosphere_step!
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -224,6 +235,7 @@ include("physics.jl")
 include("redox.jl")
 include("particles.jl")
 include("accretion.jl")
+include("atmosphere.jl")
 include("telescoping.jl")
 include("numerics.jl")
 include("simulation.jl")
@@ -478,7 +490,17 @@ module Physics
         compute_mixture_freezing_point,
         compute_mixture_fluid_density,
         compute_mixture_fluid_viscosity,
-        evaluate_refractory_pyrolysis
+        evaluate_refractory_pyrolysis,
+        AtmosphereState,
+        compute_gravitational_capture_radius,
+        compute_disk_envelope_mass,
+        compute_atmospheric_optical_depth,
+        compute_guillot_surface_temperature,
+        compute_effective_radiation_htc,
+        compute_boiloff_rate,
+        compute_crossover_mass,
+        compute_crossover_drag_fraction,
+        evolve_coupled_atmosphere_step!
 end
 
 module Particles
@@ -694,6 +716,7 @@ module Config
         TelescopingConfig,
         RefractoryConfig,
         VolatileMixtureConfig,
+        AtmosphereConfig,
         SimulationConfig,
         default_config,
         load_config,
@@ -722,6 +745,7 @@ module Config
         TelescopingConfig,
         RefractoryConfig,
         VolatileMixtureConfig,
+        AtmosphereConfig,
         SimulationConfig,
         default_config,
         load_config,

@@ -328,6 +328,27 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 
 ---
 
+## `[atmosphere]`
+
+Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas envelope capture and boil-off, Guillot (2010) semi-grey radiative equilibrium, and Zahnle-Kasting hydrodynamic crossover escape.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable coupled 1D atmosphere, disk gas envelope, and crossover escape | `true` / `false` |
+| `mode` | `Symbol` | `:guillot` | - | Radiative transfer equilibrium mode (`:guillot`, `:grey`, `:isothermal`) | valid symbol |
+| `kappa_ir_default` | `Float64` | `1.0e-2` | $\mathrm{m}^2/\mathrm{kg}$ | Default longwave specific opacity | $> 0$ |
+| `kappa_vis_default` | `Float64` | `1.0e-3` | $\mathrm{m}^2/\mathrm{kg}$ | Default shortwave specific opacity | $> 0$ |
+| `opacities` | `Dict{Symbol, Float64}` | *see below* | $\mathrm{m}^2/\mathrm{kg}$ | Species-dependent infrared longwave opacities | non-negative |
+| `albedo` | `Float64` | `0.20` | - | Planetary Bond albedo | $\in [0, 1)$ |
+| `gamma_guillot` | `Float64` | `0.10` | - | Ratio of shortwave to longwave opacity $\kappa_{\mathrm{vis}} / \kappa_{\mathrm{ir}}$ | $> 0$ |
+| `T_skin_floor` | `Float64` | `50.0` | K | Minimum allowable skin temperature floor | $> 0$ |
+| `f_rec` | `Float64` | `0.10` | - | Ormel et al. (2015) envelope steady-state recycling fraction | $> 0$ |
+| `tau_boil` | `Float64` | `3.15576e+11` | s | Hydrodynamic envelope boil-off relaxation timescale (10 kyr) | $> 0$ |
+| `crossover_active` | `Bool` | `true` | - | Enable Zahnle & Kasting (1986) hydrodynamic crossover drag | `true` / `false` |
+| `b_diff_ref` | `Float64` | `1.0e+21` | $\mathrm{m}^{-1}\mathrm{s}^{-1}$ | Binary diffusion coefficient parameter | $> 0$ |
+
+---
+
 ## `[retention]`
 
 Parameters controlling thermodynamic volatile retention floors in nominally anhydrous minerals (NAMs) and low-temperature surface venting drainage coupling.
