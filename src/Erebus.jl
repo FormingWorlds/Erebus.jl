@@ -369,7 +369,17 @@ module Physics
         compute_mixture_freezing_point,
         compute_mixture_fluid_density,
         compute_mixture_fluid_viscosity,
-        evaluate_refractory_pyrolysis
+        evaluate_refractory_pyrolysis,
+        AtmosphereState,
+        compute_gravitational_capture_radius,
+        compute_disk_envelope_mass,
+        compute_atmospheric_optical_depth,
+        compute_guillot_surface_temperature,
+        compute_effective_radiation_htc,
+        compute_boiloff_rate,
+        compute_crossover_mass,
+        compute_crossover_drag_fraction,
+        evolve_coupled_atmosphere_step!
     export distance,
         total,
         ktotal,

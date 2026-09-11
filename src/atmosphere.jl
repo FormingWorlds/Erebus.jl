@@ -279,7 +279,7 @@ function compute_guillot_surface_temperature(
         if T_e < 0.0 || !isfinite(T_e)
             throw(DomainError(T_e, "Equilibrium temperature must be >= 0 and finite"))
         end
-        (1.0 - alb) * (T_e^4)
+        T_e^4
     else
         0.25 * (1.0 - alb) * (Tirr^4)
     end
@@ -504,7 +504,6 @@ end
         R_planet::Real,
         T_amb::Real,
         cfg::AtmosphereConfig;
-        P_disk::Real=0.0,
         rho_disk::Real=0.0,
         c_s::Real=300.0,
         M_star::Real=1.98847e30,
@@ -512,6 +511,9 @@ end
         T_int::Real=T_amb,
         T_exobase::Real=T_amb,
         R_exobase::Real=R_planet,
+        hydrodynamic::Bool=true,
+        gamma::Real=1.4,
+        escape_active::Bool=true,
     )
 
 Advance the atmospheric species inventory, gas envelope capture/boil-off, radiative equilibrium, and hydrodynamic crossover escape over time step dt_s with machine-precision mass conservation.
@@ -524,7 +526,6 @@ function evolve_coupled_atmosphere_step!(
     R_planet::Real,
     T_amb::Real,
     cfg::AtmosphereConfig;
-    P_disk::Real=0.0,
     rho_disk::Real=0.0,
     c_s::Real=300.0,
     M_star::Real=1.98847e30,
@@ -532,8 +533,14 @@ function evolve_coupled_atmosphere_step!(
     T_int::Real=T_amb,
     T_exobase::Real=T_amb,
     R_exobase::Real=R_planet,
+    hydrodynamic::Bool=true,
+    gamma::Real=1.4,
+    escape_active::Bool=true,
 )
     dt = Float64(dt_s)
+    if !isfinite(dt)
+        throw(DomainError(dt, "Time step dt_s must be finite"))
+    end
     if dt <= 0.0
         return atm_state
     end
@@ -541,6 +548,7 @@ function evolve_coupled_atmosphere_step!(
     M_p = Float64(M_planet)
     R_p = Float64(R_planet)
     Tamb = Float64(T_amb)
+    T_int_actual = Float64(T_int)
 
     if M_p <= 0.0 || !isfinite(M_p)
         throw(DomainError(M_p, "Planet mass must be > 0 and finite"))
@@ -551,10 +559,14 @@ function evolve_coupled_atmosphere_step!(
     if Tamb <= 0.0 || !isfinite(Tamb)
         throw(DomainError(Tamb, "Ambient temperature must be > 0 and finite"))
     end
+    if T_int_actual < 0.0 || !isfinite(T_int_actual)
+        throw(DomainError(T_int_actual, "Internal temperature must be >= 0 and finite"))
+    end
 
     T_exo = max(Tamb, Float64(T_exobase))
     R_exo = max(R_p, Float64(R_exobase))
     g_surf = GRAVITATIONAL_CONSTANT * M_p / (R_p^2)
+    g_exo = GRAVITATIONAL_CONSTANT * M_p / (R_exo^2)
     area = 4.0 * π * (R_p^2)
     area_exo = 4.0 * π * (R_exo^2)
 
@@ -590,63 +602,67 @@ function evolve_coupled_atmosphere_step!(
         end
     end
 
-    # 3. Hydrodynamic escape and crossover drag
-    has_h2 = haskey(atm_state.M_atm, :H2) && atm_state.M_atm[:H2] > 0.0
-    if has_h2
-        carrier_sp = :H2
-        m_carrier = get_species_molecular_mass(:H2)
-        M_carrier = atm_state.M_atm[:H2]
+    # 3. Hydrodynamic escape and crossover drag (active once disk disperses)
+    if escape_active && rho_disk <= 0.0
+        has_h2 = haskey(atm_state.M_atm, :H2) && atm_state.M_atm[:H2] > 0.0
+        if has_h2
+            carrier_sp = :H2
+            m_carrier = get_species_molecular_mass(:H2)
+            M_carrier = atm_state.M_atm[:H2]
 
-        # Carrier mole fraction before escape step
-        total_moles_pre = sum(
-            m_curr / get_species_molecular_mass(sp) for
-            (sp, m_curr) in atm_state.M_atm if m_curr > 0.0
-        )
-        X_carrier = if total_moles_pre > 0.0
-            clamp((M_carrier / m_carrier) / total_moles_pre, 0.0, 1.0)
-        else
-            1.0
-        end
-
-        # Carrier escape flux via hydrodynamic blow-off
-        esc_carrier = evolve_atmospheric_species_inventory(
-            M_carrier,
-            0.0,
-            dt,
-            M_p,
-            R_p,
-            T_exo,
-            m_carrier;
-            R_exobase=R_exo,
-            hydrodynamic=true,
-        )
-        dM_esc_carrier = esc_carrier.M_escaped_step
-        atm_state.M_atm[:H2] = esc_carrier.M_atm
-        atm_state.M_escaped[:H2] = get(atm_state.M_escaped, :H2, 0.0) + dM_esc_carrier
-        atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
-
-        Phi_carrier = if dt > 0.0 && area_exo > 0.0
-            (dM_esc_carrier / dt) / (m_carrier * area_exo)
-        else
-            0.0
-        end
-
-        if cfg.crossover_active && Phi_carrier > 0.0
-            m_c = compute_crossover_mass(
-                m_carrier, T_exo, Phi_carrier, g_surf, X_carrier; b_diff=cfg.b_diff_ref
+            # Carrier mole fraction before escape step
+            total_moles_pre = sum(
+                m_curr / get_species_molecular_mass(sp) for
+                (sp, m_curr) in atm_state.M_atm if m_curr > 0.0
             )
-            for (sp, m_curr) in atm_state.M_atm
-                if sp != :H2 && m_curr > 0.0
-                    m_sp = get_species_molecular_mass(sp)
-                    x_drag = compute_crossover_drag_fraction(m_sp, m_c, m_carrier)
-                    # Zahnle & Kasting (1986): momentum coupling drags species proportional to carrier loss
-                    dM_drag = if (M_carrier > 0.0 && x_drag > 0.0)
-                        min(m_curr, dM_esc_carrier * (m_curr / M_carrier) * x_drag)
-                    else
-                        0.0
+            X_carrier = if total_moles_pre > 0.0
+                clamp((M_carrier / m_carrier) / total_moles_pre, 0.0, 1.0)
+            else
+                1.0
+            end
+
+            # Carrier escape flux via hydrodynamic blow-off
+            esc_carrier = evolve_atmospheric_species_inventory(
+                M_carrier,
+                0.0,
+                dt,
+                M_p,
+                R_p,
+                T_exo,
+                m_carrier;
+                R_exobase=R_exo,
+                hydrodynamic=hydrodynamic,
+                gamma=gamma,
+            )
+            dM_esc_carrier = esc_carrier.M_escaped_step
+            atm_state.M_atm[:H2] = esc_carrier.M_atm
+            atm_state.M_escaped[:H2] = get(atm_state.M_escaped, :H2, 0.0) + dM_esc_carrier
+            atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
+
+            Phi_carrier = if dt > 0.0 && area_exo > 0.0
+                (dM_esc_carrier / dt) / (m_carrier * area_exo)
+            else
+                0.0
+            end
+
+            if cfg.crossover_active && Phi_carrier > 0.0
+                m_c = compute_crossover_mass(
+                    m_carrier, T_exo, Phi_carrier, g_exo, X_carrier; b_diff=cfg.b_diff_ref
+                )
+                for (sp, m_curr) in atm_state.M_atm
+                    if sp != :H2 && m_curr > 0.0
+                        m_sp = get_species_molecular_mass(sp)
+                        x_drag = compute_crossover_drag_fraction(m_sp, m_c, m_carrier)
+                        # Zahnle & Kasting (1986): momentum coupling drags species proportional to carrier loss
+                        dM_drag = if (M_carrier > 0.0 && x_drag > 0.0)
+                            min(m_curr, dM_esc_carrier * (m_curr / M_carrier) * x_drag)
+                        else
+                            0.0
+                        end
+                        atm_state.M_atm[sp] = m_curr - dM_drag
+                        atm_state.M_escaped[sp] =
+                            get(atm_state.M_escaped, sp, 0.0) + dM_drag
                     end
-                    atm_state.M_atm[sp] = m_curr - dM_drag
-                    atm_state.M_escaped[sp] = get(atm_state.M_escaped, sp, 0.0) + dM_drag
                 end
             end
         end
@@ -659,7 +675,6 @@ function evolve_coupled_atmosphere_step!(
         atm_state.M_atm, R_p, cfg.opacities; kappa_default=cfg.kappa_ir_default
     )
 
-    T_int_actual = Float64(T_int)
     T_calc = if cfg.mode === :guillot
         compute_guillot_surface_temperature(
             atm_state.tau_LW,

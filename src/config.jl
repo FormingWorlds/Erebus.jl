@@ -2390,9 +2390,9 @@ function validate_config(cfg::SimulationConfig)
                     "atmosphere.T_skin_floor must be > 0 and finite, got $(cfg.atmosphere.T_skin_floor)",
                 ),
             )
-        (cfg.atmosphere.f_rec > 0.0 && isfinite(cfg.atmosphere.f_rec)) || throw(
+        (0.0 < cfg.atmosphere.f_rec <= 1.0 && isfinite(cfg.atmosphere.f_rec)) || throw(
             ArgumentError(
-                "atmosphere.f_rec must be > 0 and finite, got $(cfg.atmosphere.f_rec)"
+                "atmosphere.f_rec must be in (0, 1] and finite, got $(cfg.atmosphere.f_rec)",
             ),
         )
         (cfg.atmosphere.tau_boil > 0.0 && isfinite(cfg.atmosphere.tau_boil)) || throw(

@@ -3028,14 +3028,16 @@ function simulation_loop(
                 rplanet_val,
                 T_amb,
                 cfg.atmosphere;
-                P_disk=P_amb,
                 rho_disk=rho_disk_val,
                 c_s=c_s_disk,
                 M_star=M_star_val,
                 a_orb=a_orb_val,
-                T_int=0.0,
+                T_int=T_amb,
                 T_exobase=cfg.escape.T_exobase,
                 R_exobase=R_exo_val,
+                hydrodynamic=cfg.escape.hydrodynamic,
+                gamma=cfg.escape.gamma,
+                escape_active=cfg.escape.active,
             )
 
             M_atm_total = sum(values(atm_state.M_atm))

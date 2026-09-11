@@ -220,6 +220,12 @@ using StaticArrays
         T4_noint_expected = (0.5 + (sqrt(3.0) / 4.0) * gamma) * (T_eqm_test^4)
         @test isapprox(T_surf_noint, (T4_noint_expected)^0.25, rtol=1e-12)
 
+        # Explicit T_eqm argument consistency (verifies albedo is not double-counted)
+        T_surf_with_eqm = compute_guillot_surface_temperature(
+            0.0, T_int, T_irr; T_eqm=T_eqm_test, gamma=gamma, albedo=albedo
+        )
+        @test isapprox(T_surf_with_eqm, T_surf_thin, rtol=1e-12)
+
         # Albedo sensitivity: Higher albedo cools surface equilibrium temperature
         T_surf_alb10 = compute_guillot_surface_temperature(
             2.0, T_int, T_irr; gamma=gamma, albedo=0.10
@@ -273,6 +279,10 @@ using StaticArrays
         # Monotonicity: strictly decreasing with optical depth
         h_rad_thick = compute_effective_radiation_htc(T_surf, T_amb, 20.0; emissivity=0.9)
         @test h_rad_thick < h_rad_att
+
+        # Module Physics submodule export consistency
+        @test Erebus.Physics.compute_effective_radiation_htc ===
+            Erebus.compute_effective_radiation_htc
 
         # Error guards
         @test_throws DomainError compute_effective_radiation_htc(
@@ -428,7 +438,6 @@ using StaticArrays
             R_50km,
             T_disk,
             cfg_atm;
-            P_disk=0.0,
             rho_disk=0.0,
             c_s=c_s,
             M_star=M_sun,
@@ -441,6 +450,14 @@ using StaticArrays
             M_out = atm_state.M_atm[sp] + atm_state.M_escaped[sp]
             @test isapprox(M_out, M_in, rtol=1e-12)
         end
+
+        # Discrimination test: lighter species (H2O, 18 g/mol) undergoes higher escaped fraction than heavier (CO2, 44 g/mol)
+        frac_esc_h2o =
+            atm_state.M_escaped[:H2O] / (M_atm_init[:H2O] + vent_rates[:H2O] * dt_s)
+        frac_esc_co2 =
+            atm_state.M_escaped[:CO2] / (M_atm_init[:CO2] + vent_rates[:CO2] * dt_s)
+        @test frac_esc_h2o > frac_esc_co2
+        @test frac_esc_h2o > 0.0
 
         # Invariant 2: Surface pressure matches analytical gravity relation
         M_tot = sum(values(atm_state.M_atm))
@@ -480,7 +497,9 @@ using StaticArrays
         @test isapprox(atm_tint.F_net_rad, F_net_expected, rtol=1e-12)
         @test atm_tint.F_net_rad > 0.0
 
-        # Invariant 7: Disk gas envelope capture and boiloff with bound mass tracking
+        # Invariant 7: Disk gas envelope capture and growth for a massive embryo
+        R_embryo = 1.5e6
+        M_embryo = 1.0e23
         atm_disk = AtmosphereState(
             Dict(:H2 => 0.0, :H2O => 1.0e14),
             Dict(:H2 => 0.0, :H2O => 0.0),
@@ -496,8 +515,8 @@ using StaticArrays
             atm_disk,
             Dict(:H2 => 0.0, :H2O => 0.0),
             dt_s,
-            M_50km,
-            R_50km,
+            M_embryo,
+            R_embryo,
             T_disk,
             cfg_atm;
             rho_disk=rho_disk_val,
@@ -505,30 +524,46 @@ using StaticArrays
             M_star=M_sun,
             a_orb=a_test,
         )
-        @test atm_disk.M_env_bound >= 0.0
-        @test atm_disk.M_atm[:H2] >= 0.0
+        @test atm_disk.M_env_bound > 0.0
+        @test atm_disk.M_atm[:H2] > 0.0
         # Bound envelope mass cannot exceed available atmospheric H2
         @test atm_disk.M_env_bound <= atm_disk.M_atm[:H2] * (1.0 + 1e-12)
 
-        # Invariant 8: Envelope boil-off during disk dispersal (rho_disk = 0.0)
-        atm_boil = AtmosphereState(
+        # Invariant 8: Envelope boil-off timescale sensitivity during disk dispersal
+        atm_boil1 = AtmosphereState(
             Dict(:H2 => 1.0e15), Dict(:H2 => 0.0), 0.0, 0.0, 0.0, 1.0e15, 0.0, 0.0
         )
         cfg_boil_fast = AtmosphereConfig(active=true, tau_boil=100.0 * Erebus.SEC_PER_YEAR)
         evolve_coupled_atmosphere_step!(
-            atm_boil,
+            atm_boil1,
             Dict(:H2 => 0.0),
-            50.0 * Erebus.SEC_PER_YEAR,
-            M_50km,
-            R_50km,
+            10.0 * Erebus.SEC_PER_YEAR,
+            M_embryo,
+            R_embryo,
             T_disk,
             cfg_boil_fast;
             rho_disk=0.0,
+            escape_active=false,
         )
-        @test atm_boil.M_env_bound < 1.0e15
-        @test atm_boil.M_atm[:H2] < 1.0e15
-        @test atm_boil.M_escaped[:H2] > 0.0
-        @test isapprox(atm_boil.M_atm[:H2] + atm_boil.M_escaped[:H2], 1.0e15; rtol=1e-12)
+        atm_boil2 = AtmosphereState(
+            Dict(:H2 => 1.0e15), Dict(:H2 => 0.0), 0.0, 0.0, 0.0, 1.0e15, 0.0, 0.0
+        )
+        cfg_boil_slow = AtmosphereConfig(active=true, tau_boil=1000.0 * Erebus.SEC_PER_YEAR)
+        evolve_coupled_atmosphere_step!(
+            atm_boil2,
+            Dict(:H2 => 0.0),
+            10.0 * Erebus.SEC_PER_YEAR,
+            M_embryo,
+            R_embryo,
+            T_disk,
+            cfg_boil_slow;
+            rho_disk=0.0,
+            escape_active=false,
+        )
+        # Shorter tau_boil unbinds and boils off envelope mass faster
+        @test atm_boil1.M_env_bound < atm_boil2.M_env_bound
+        @test isapprox(atm_boil1.M_atm[:H2] + atm_boil1.M_escaped[:H2], 1.0e15; rtol=1e-12)
+        @test isapprox(atm_boil2.M_atm[:H2] + atm_boil2.M_escaped[:H2], 1.0e15; rtol=1e-12)
 
         # Invariant 9: Safety when H2 is absent (no hydrodynamic strip of heavy species)
         atm_noh2 = AtmosphereState(
@@ -542,11 +577,26 @@ using StaticArrays
             0.0,
         )
         evolve_coupled_atmosphere_step!(
-            atm_noh2, Dict(:H2O => 0.0, :CO2 => 0.0), dt_s, M_50km, R_50km, T_disk, cfg_atm;
+            atm_noh2, Dict(:H2O => 0.0, :CO2 => 0.0), dt_s, M_50km, R_50km, T_disk, cfg_atm
         )
-        # At 150 K, water and CO2 are cold and do NOT blow off hydrodynamically
-        @test atm_noh2.M_atm[:H2O] > 0.99e14
-        @test atm_noh2.M_atm[:CO2] > 0.99e14
+        @test isapprox(atm_noh2.M_atm[:H2O], 1.0e14, rtol=1e-12)
+        @test isapprox(atm_noh2.M_atm[:CO2], 1.0e14, rtol=1e-12)
+        @test iszero(get(atm_noh2.M_escaped, :H2O, 0.0))
+        @test iszero(get(atm_noh2.M_escaped, :CO2, 0.0))
+
+        # Guard against NaN dt_s and invalid T_int
+        atm_nan = AtmosphereState(
+            Dict(:H2O => 1.0e14), Dict(:H2O => 0.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        )
+        @test_throws DomainError evolve_coupled_atmosphere_step!(
+            atm_nan, Dict(:H2O => 0.0), NaN, M_50km, R_50km, T_disk, cfg_atm
+        )
+        @test_throws DomainError evolve_coupled_atmosphere_step!(
+            atm_nan, Dict(:H2O => 0.0), dt_s, M_50km, R_50km, T_disk, cfg_atm; T_int=-10.0
+        )
+        @test_throws DomainError evolve_coupled_atmosphere_step!(
+            atm_nan, Dict(:H2O => 0.0), dt_s, M_50km, R_50km, T_disk, cfg_atm; T_int=NaN
+        )
 
         # Invariant 10: Atmospheric modes and skin temperature floor
         cfg_iso = AtmosphereConfig(mode=:isothermal, T_skin_floor=60.0)
@@ -651,6 +701,16 @@ using StaticArrays
             atmosphere=AtmosphereConfig(; active=true, kappa_vis_default=-0.01)
         )
         @test_throws ArgumentError validate_config(bad_kvis)
+
+        # 8. Invalid f_rec (must be in (0, 1])
+        bad_frec_hi = SimulationConfig(;
+            atmosphere=AtmosphereConfig(; active=true, f_rec=1.5)
+        )
+        @test_throws ArgumentError validate_config(bad_frec_hi)
+        bad_frec_lo = SimulationConfig(;
+            atmosphere=AtmosphereConfig(; active=true, f_rec=-0.1)
+        )
+        @test_throws ArgumentError validate_config(bad_frec_lo)
 
         # TOML Round-Trip Serialization
         toml_str = serialize_config(sim_cfg)

@@ -342,7 +342,7 @@ Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas env
 | `albedo` | `Float64` | `0.20` | - | Planetary Bond albedo | $\in [0, 1)$ |
 | `gamma_guillot` | `Float64` | `0.10` | - | Ratio of shortwave to longwave opacity $\kappa_{\mathrm{vis}} / \kappa_{\mathrm{ir}}$ | $> 0$ |
 | `T_skin_floor` | `Float64` | `50.0` | K | Minimum allowable skin temperature floor | $> 0$ |
-| `f_rec` | `Float64` | `0.10` | - | Ormel et al. (2015) envelope steady-state recycling fraction | $> 0$ |
+| `f_rec` | `Float64` | `0.10` | - | Ormel et al. (2015) envelope steady-state recycling fraction | $\in (0, 1]$ |
 | `tau_boil` | `Float64` | `3.15576e+11` | s | Hydrodynamic envelope boil-off relaxation timescale (10 kyr) | $> 0$ |
 | `crossover_active` | `Bool` | `true` | - | Enable Zahnle & Kasting (1986) hydrodynamic crossover drag | `true` / `false` |
 | `b_diff_ref` | `Float64` | `1.0e+21` | $\mathrm{m}^{-1}\mathrm{s}^{-1}$ | Binary diffusion coefficient parameter | $> 0$ |

@@ -1790,9 +1790,14 @@ function apply_radiative_surface_boundary!(
             is_rock2 = r2_sq <= rplanet2
             if is_rock1 != is_rock2
                 T_surf = is_rock1 ? tk[i, j] : tk[i, j + 1]
-                h_rad = compute_effective_radiation_htc(
-                    T_surf, T_amb, tau_LW; emissivity=emissivity, sigma_sb=sigma_sb
-                )
+                h_rad =
+                    if T_surf > 0.0 && T_amb > 0.0 && isfinite(T_surf) && isfinite(T_amb)
+                        compute_effective_radiation_htc(
+                            T_surf, T_amb, tau_LW; emissivity=emissivity, sigma_sb=sigma_sb
+                        )
+                    else
+                        0.0
+                    end
                 k_rad = h_rad * dx
                 k_bulk = if k_rock !== nothing
                     Float64(k_rock)
@@ -1822,9 +1827,14 @@ function apply_radiative_surface_boundary!(
             is_rock2 = r2_sq <= rplanet2
             if is_rock1 != is_rock2
                 T_surf = is_rock1 ? tk[i, j] : tk[i + 1, j]
-                h_rad = compute_effective_radiation_htc(
-                    T_surf, T_amb, tau_LW; emissivity=emissivity, sigma_sb=sigma_sb
-                )
+                h_rad =
+                    if T_surf > 0.0 && T_amb > 0.0 && isfinite(T_surf) && isfinite(T_amb)
+                        compute_effective_radiation_htc(
+                            T_surf, T_amb, tau_LW; emissivity=emissivity, sigma_sb=sigma_sb
+                        )
+                    else
+                        0.0
+                    end
                 k_rad = h_rad * dy
                 k_bulk = if k_rock !== nothing
                     Float64(k_rock)

@@ -88,7 +88,7 @@ Collisional momentum transfer couples the dragged escape flux directly to the ca
 
 $$\Phi_j = \Phi_H \frac{X_j}{X_H} x_j$$
 
-giving mass loss rate $\Delta M_{j,\text{drag}} = \Delta M_H \frac{M_j}{M_H} x_j$. Heavy species also retain independent thermal Jeans escape channels.
+giving mass loss rate $\Delta M_{j,\text{drag}} = \Delta M_H \frac{M_j}{M_H} x_j$. In the coupled envelope model, heavier volatile species escape via carrier-drag entrainment when a light carrier wind is active; when carrier hydrogen is absent, heavier species remain gravitationally retained.
 
 ### Volatile Influx Coupling: Porosity Venting and Retention Drainage
 
@@ -139,13 +139,14 @@ b_diff_ref = 1.0e21           # Binary diffusion parameter [m^-1 s^-1]
 
 [atmosphere.opacities]
 H2O = 1.0e-2
-CO2 = 5.0e-3
+CO2 = 1.0e-3
 CH4 = 2.0e-3
-CO  = 1.0e-3
-N2  = 5.0e-4
-H2  = 1.0e-4
-H2S = 2.0e-3
-SO2 = 5.0e-3
+CO  = 1.0e-4
+N2  = 1.0e-5
+H2  = 1.0e-5
+NH3 = 5.0e-3
+H2S = 1.0e-3
+SO2 = 2.0e-3
 ```
 
 ---
