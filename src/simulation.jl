@@ -212,6 +212,7 @@ function save_state(
     rplanet::Union{Nothing,Real}=nothing,
     telescope_level::Union{Nothing,Integer}=nothing,
     hcnspo_props=nothing,
+    atm_state::Union{Nothing,AtmosphereState}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -410,6 +411,22 @@ function save_state(
         (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
         (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
         (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
+        (
+            if atm_state !== nothing
+                (;
+                    atm_M_atm=atm_state.M_atm,
+                    atm_M_escaped=atm_state.M_escaped,
+                    atm_P_surf=atm_state.P_surf,
+                    atm_T_surf_eq=atm_state.T_surf_eq,
+                    atm_tau_LW=atm_state.tau_LW,
+                    atm_M_env_bound=atm_state.M_env_bound,
+                    atm_F_net_rad=atm_state.F_net_rad,
+                    atm_h_rad_eff=atm_state.h_rad_eff,
+                )
+            else
+                (;)
+            end
+        )...,
     )
     return nothing
 end
@@ -506,6 +523,8 @@ function simulation_loop(
     end
     M_planet_val = if cfg.accretion.active
         cfg.accretion.M_initial
+    elseif cfg.escape.active
+        cfg.escape.M_planet
     else
         (4.0 / 3.0 * pi * (rplanet_val^3) * cfg.accretion.rho_bulk)
     end
@@ -684,13 +703,27 @@ function simulation_loop(
     Xmin_nitride_m = nothing
     Xmin_metal_matrix_m = nothing
     regional_mineral_modes = nothing
-    M_atm_species = if cfg.escape.multi_species
+    M_atm_species = if cfg.escape.multi_species || cfg.atmosphere.active
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
     else
         nothing
     end
-    M_escaped_species = if cfg.escape.multi_species
+    M_escaped_species = if cfg.escape.multi_species || cfg.atmosphere.active
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+    else
+        nothing
+    end
+    atm_state = if cfg.atmosphere.active
+        AtmosphereState(
+            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list),
+            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        )
     else
         nothing
     end
@@ -722,7 +755,7 @@ function simulation_loop(
         if haskey(ckpt, "M_escaped_total")
             M_escaped_total = Float64(ckpt["M_escaped_total"])
         end
-        if cfg.escape.multi_species
+        if cfg.escape.multi_species || cfg.atmosphere.active
             if haskey(ckpt, "M_atm_species")
                 raw_atm = ckpt["M_atm_species"]
                 M_atm_species = Dict{Symbol,Float64}(
@@ -734,6 +767,36 @@ function simulation_loop(
                 M_escaped_species = Dict{Symbol,Float64}(
                     Symbol(k) => Float64(v) for (k, v) in pairs(raw_esc)
                 )
+            end
+        end
+        if cfg.atmosphere.active && atm_state !== nothing
+            if haskey(ckpt, "atm_M_atm")
+                for (k, v) in pairs(ckpt["atm_M_atm"])
+                    atm_state.M_atm[Symbol(k)] = Float64(v)
+                end
+            end
+            if haskey(ckpt, "atm_M_escaped")
+                for (k, v) in pairs(ckpt["atm_M_escaped"])
+                    atm_state.M_escaped[Symbol(k)] = Float64(v)
+                end
+            end
+            if haskey(ckpt, "atm_P_surf")
+                atm_state.P_surf = Float64(ckpt["atm_P_surf"])
+            end
+            if haskey(ckpt, "atm_T_surf_eq")
+                atm_state.T_surf_eq = Float64(ckpt["atm_T_surf_eq"])
+            end
+            if haskey(ckpt, "atm_tau_LW")
+                atm_state.tau_LW = Float64(ckpt["atm_tau_LW"])
+            end
+            if haskey(ckpt, "atm_M_env_bound")
+                atm_state.M_env_bound = Float64(ckpt["atm_M_env_bound"])
+            end
+            if haskey(ckpt, "atm_F_net_rad")
+                atm_state.F_net_rad = Float64(ckpt["atm_F_net_rad"])
+            end
+            if haskey(ckpt, "atm_h_rad_eff")
+                atm_state.h_rad_eff = Float64(ckpt["atm_h_rad_eff"])
             end
         end
         if cfg.telescoping.active &&
@@ -1253,9 +1316,10 @@ function simulation_loop(
             rplanet=rplanet_val,
             t_accreted=t_accreted,
             M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
-            M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
+            M_planet_val=M_planet_val,
             telescope_level=telescope_level,
             hcnspo_props=hcnspo_props,
+            atm_state=atm_state,
         )
     end
 
@@ -1354,10 +1418,10 @@ function simulation_loop(
         T_amb, P_amb, w_disp = compute_ambient_conditions(timesum, cfg.disk)
         isfinite(T_amb) ||
             throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
-        P_atm = if cfg.escape.active
-            compute_surface_atmospheric_pressure(
-                M_atm_total, cfg.escape.M_planet, cfg.escape.R_planet
-            )
+        P_atm = if cfg.atmosphere.active && atm_state !== nothing
+            atm_state.P_surf
+        elseif cfg.escape.active
+            compute_surface_atmospheric_pressure(M_atm_total, M_planet_val, rplanet_val)
         else
             0.0
         end
@@ -2198,6 +2262,11 @@ function simulation_loop(
         # apply surface radiation boundary condition
         # ---------------------------------------------------------------------
         if surface_radiation_val
+            tau_LW_val = if cfg.atmosphere.active && atm_state !== nothing
+                atm_state.tau_LW
+            else
+                0.0
+            end
             apply_radiative_surface_boundary!(
                 KX,
                 KY,
@@ -2212,6 +2281,7 @@ function simulation_loop(
                 marker_property_mode=marker_property_mode,
                 phi=phim0_val,
                 kfluid=kfluidm_val[2],
+                tau_LW=tau_LW_val,
             )
         end
 
@@ -2864,6 +2934,7 @@ function simulation_loop(
         )
         delta_m_vent = 0.0
         delta_m_vent_3d = 0.0
+        vented_vols = nothing
         if cfg.venting.active
             delta_m_vent = sink_vented_marker_porosity!(
                 xm,
@@ -2910,28 +2981,118 @@ function simulation_loop(
             end
         end
 
-        if cfg.escape.active
-            L_3D_equiv = 2.0 * cfg.escape.R_planet
+        if cfg.atmosphere.active && atm_state !== nothing
+            L_3D_equiv = 2.0 * rplanet_val
+            vent_rates = Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+            if cfg.venting.active && dt > 0.0
+                # 1. Pore fluid mass vented from surface porosity sink
+                vent_sp = cfg.venting.species
+                vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + delta_m_vent_3d / dt
+
+                # 2. Additional mobile volatiles drained from mineral markers
+                if cfg.retention.active &&
+                    cfg.retention.venting_drainage_active &&
+                    XH2Om !== nothing &&
+                    vented_vols !== nothing
+                    vent_rates[:H2O] =
+                        get(vent_rates, :H2O, 0.0) +
+                        (vented_vols.M_vent_H2O * L_3D_equiv) / dt
+                    # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
+                    vent_rates[:CO2] =
+                        get(vent_rates, :CO2, 0.0) +
+                        (vented_vols.M_vent_C * (44.0095 / 12.011) * L_3D_equiv) / dt
+                    vent_rates[:N2] =
+                        get(vent_rates, :N2, 0.0) + (vented_vols.M_vent_N * L_3D_equiv) / dt
+                    # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
+                    vent_rates[:H2S] =
+                        get(vent_rates, :H2S, 0.0) +
+                        (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) / dt
+                end
+            end
+
+            c_s_disk = compute_sound_speed(T_amb)
+            rho_disk_val = if (cfg.disk.enabled && c_s_disk > 0.0)
+                max(0.0, (1.0 - w_disp) * cfg.disk.p_amb_disk) / (c_s_disk^2)
+            else
+                0.0
+            end
+            a_orb_val = cfg.disk.orbital_distance_au * AU_METERS
+            M_star_val = cfg.disk.stellar_mass_msun * M_SUN_KG
+            R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
+
+            evolve_coupled_atmosphere_step!(
+                atm_state,
+                vent_rates,
+                dt,
+                M_planet_val,
+                rplanet_val,
+                T_amb,
+                cfg.atmosphere;
+                rho_disk=rho_disk_val,
+                c_s=c_s_disk,
+                M_star=M_star_val,
+                a_orb=a_orb_val,
+                T_int=T_amb,
+                T_exobase=cfg.escape.T_exobase,
+                R_exobase=R_exo_val,
+                hydrodynamic=cfg.escape.hydrodynamic,
+                gamma=cfg.escape.gamma,
+                escape_active=cfg.escape.active,
+            )
+
+            M_atm_total = sum(values(atm_state.M_atm))
+            M_escaped_total = sum(values(atm_state.M_escaped))
+            if M_atm_species !== nothing
+                for (sp, val) in atm_state.M_atm
+                    M_atm_species[sp] = val
+                end
+            end
+            if M_escaped_species !== nothing
+                for (sp, val) in atm_state.M_escaped
+                    M_escaped_species[sp] = val
+                end
+            end
+        elseif cfg.escape.active
+            L_3D_equiv = 2.0 * rplanet_val
             if !cfg.venting.active
                 delta_m_vent_3d = delta_m_vent * L_3D_equiv
             end
             M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
+            R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
             if cfg.escape.multi_species &&
                 M_atm_species !== nothing &&
                 M_escaped_species !== nothing
                 for sp in cfg.escape.species_list
                     m_sp = get_species_molecular_mass(sp)
                     v_rate_sp = (sp == cfg.venting.species) ? M_vent_rate : 0.0
+                    if cfg.retention.active &&
+                        cfg.retention.venting_drainage_active &&
+                        XH2Om !== nothing &&
+                        vented_vols !== nothing &&
+                        dt > 0.0
+                        if sp == :H2O
+                            v_rate_sp += (vented_vols.M_vent_H2O * L_3D_equiv) / dt
+                        elseif sp == :CO2
+                            v_rate_sp +=
+                                (vented_vols.M_vent_C * (44.0095 / 12.011) * L_3D_equiv) /
+                                dt
+                        elseif sp == :N2
+                            v_rate_sp += (vented_vols.M_vent_N * L_3D_equiv) / dt
+                        elseif sp == :H2S
+                            v_rate_sp +=
+                                (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) / dt
+                        end
+                    end
                     prev_sp = get(M_atm_species, sp, 0.0)
                     esc_sp = evolve_atmospheric_species_inventory(
                         prev_sp,
                         v_rate_sp,
                         dt,
-                        cfg.escape.M_planet,
-                        cfg.escape.R_planet,
+                        M_planet_val,
+                        rplanet_val,
                         cfg.escape.T_exobase,
                         m_sp;
-                        R_exobase=cfg.escape.R_exobase,
+                        R_exobase=R_exo_val,
                         gamma=cfg.escape.gamma,
                         hydrodynamic=cfg.escape.hydrodynamic,
                     )
@@ -2942,15 +3103,24 @@ function simulation_loop(
                 M_atm_total = sum(values(M_atm_species))
                 M_escaped_total = sum(values(M_escaped_species))
             else
+                M_vent_rate_eff = M_vent_rate
+                if cfg.retention.active &&
+                    cfg.retention.venting_drainage_active &&
+                    XH2Om !== nothing &&
+                    vented_vols !== nothing &&
+                    dt > 0.0 &&
+                    cfg.escape.species == :H2O
+                    M_vent_rate_eff += (vented_vols.M_vent_H2O * L_3D_equiv) / dt
+                end
                 esc_res = evolve_atmospheric_species_inventory(
                     M_atm_total,
-                    M_vent_rate,
+                    M_vent_rate_eff,
                     dt,
-                    cfg.escape.M_planet,
-                    cfg.escape.R_planet,
+                    M_planet_val,
+                    rplanet_val,
                     cfg.escape.T_exobase,
                     get_species_molecular_mass(cfg.escape.species);
-                    R_exobase=cfg.escape.R_exobase,
+                    R_exobase=R_exo_val,
                     gamma=cfg.escape.gamma,
                     hydrodynamic=cfg.escape.hydrodynamic,
                 )
@@ -3274,9 +3444,10 @@ function simulation_loop(
                 rplanet=rplanet_val,
                 t_accreted=t_accreted,
                 M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
-                M_planet_val=cfg.accretion.active ? M_planet_val : nothing,
+                M_planet_val=M_planet_val,
                 telescope_level=telescope_level,
                 hcnspo_props=hcnspo_props,
+                atm_state=atm_state,
             )
         end
         # ---------------------------------------------------------------------

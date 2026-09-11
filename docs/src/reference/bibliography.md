@@ -268,3 +268,19 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Pasek, M. A. (2008)**. Rethinking early Earth phosphorus geochemistry. *Proceedings of the National Academy of Sciences*, 105(3), 853-858.  
   [https://doi.org/10.1073/pnas.0708205105](https://doi.org/10.1073/pnas.0708205105)  
   *Mineralogy and prebiotic delivery of meteoritic phosphorus; establishes refractory phosphide (schreibersite) retention in planetesimals.*
+
+---
+
+## Coupled Atmospheres, Gas Envelopes, and Radiative Equilibrium
+
+- **Guillot, T. (2010)**. On the radiative equilibrium of irradiated planetary atmospheres. *Astronomy & Astrophysics*, 520, A27.  
+  [https://doi.org/10.1051/0004-6361/200913396](https://doi.org/10.1051/0004-6361/200913396)  
+  *Analytical semi-grey radiative equilibrium solution for irradiated planetary atmospheres, greenhouse blanketing, and skin temperature limits.*
+
+- **Ormel, C. W., Shi, J.-M., & Kuiper, R. (2015)**. Hydrodynamics of embedded planets' first atmospheres - II. A rapid recycling of atmosphere gas. *Monthly Notices of the Royal Astronomical Society*, 447(4), 3512-3525.  
+  [https://doi.org/10.1093/mnras/stu2704](https://doi.org/10.1093/mnras/stu2704)  
+  *3D hydrodynamical simulations establishing the recycling limit and bound gas envelope mass of embedded planetary embryos.*
+
+- **Zahnle, K. J., & Kasting, J. F. (1986)**. Mass fractionation during transonic escape and implications for loss of water from Mars and Venus. *Icarus*, 68(3), 462-480.  
+  [https://doi.org/10.1016/0019-1035(86)90051-5](https://doi.org/10.1016/0019-1035(86)90051-5)  
+  *Multi-component hydrodynamic escape and crossover mass formulation for heavy volatile drag by escaping light carrier gases.*

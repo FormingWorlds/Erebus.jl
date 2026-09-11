@@ -75,6 +75,7 @@ makedocs(;
             "Telescoping Computational Domain" => "validation/telescoping_domain.md",
             "Volatile & Refractory Mixtures" => "validation/volatile_mixtures.md",
             "Multi-Stage Accretion Sequence" => "validation/multistage_accretion.md",
+            "Coupled Atmosphere & Gas Envelopes" => "validation/coupled_atmosphere.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",
