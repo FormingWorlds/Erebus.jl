@@ -27,6 +27,7 @@ The physical formulations in `Erebus.jl` are anchored against peer-reviewed lite
 | **Planetesimal Accretion & Impact Heating** | Bondi and Hill pebble accretion, Safronov gravitational focusing, exact 3D spherical mapping, impact heating, and radiogenic clock inheritance | Safronov (1972); Ormel & Klahr (2010); Lambrechts & Johansen (2012); Lichtenberg et al. (2019) | `test/test_accretion.jl`, `test/test_config.jl` |
 | **Telescoping Domain** | Constant cell spacing coordinate doubling, marker distance preservation, sticky-air buffer generation, and physical conservation | Gerya (2019); Crameri et al. (2012) | `test/test_telescoping.jl` |
 | **Volatiles & Refractory Mixtures** | Multi-snowline condensation, ammonia eutectic freezing depression, and refractory organic pyrolysis | Bergin et al. (2026); Kama et al. (2019) | `test/test_volatile_mixtures.jl` |
+| **Multi-Stage Accretion Sequence** | Planetesimal collisions before settling pebble accretion, pebble isolation mass, and smoothstep transitions | Visser & Ormel (2016); Liu et al. (2019); Lambrechts et al. (2014) | `test/test_multistage_accretion.jl` |
 
 ---
 

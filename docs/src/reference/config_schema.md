@@ -568,12 +568,21 @@ c_bondi = 1.0
 Sigma_pl_0 = 100.0
 v_disp_kms = 0.1
 track_accretion_time = true
+stage1_mode = "safronov"
+stage2_mode = "pebble_auto"
+stage3_mode = "safronov"
+M_onset = nan
+f_onset = 1.0
+M_iso = nan
+f_iso = 0.5
+transition_smoothing = true
+transition_width = 0.10
 ```
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
 | `active` | `Bool` | `false` | - | Enable planetesimal accretion engine | `true` / `false` |
-| `mode` | `Symbol` | `:pebble_hill` | - | Accretion rate model | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto` |
+| `mode` | `Symbol` | `:pebble_hill` | - | Accretion rate model | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto`, `:multistage` |
 | `M_initial` | `Float64` | `1.0e17` | kg | Initial planetesimal mass | $> 0$ |
 | `R_initial` | `Float64` | `20000.0` | m | Initial planetesimal seed radius | $> 0$ |
 | `rho_bulk` | `Float64` | `3000.0` | $\text{kg/m}^3$ | Bulk density of accreted shell | $> 0$ |
@@ -607,6 +616,15 @@ track_accretion_time = true
 | `Sigma_pl_0` | `Float64` | `100.0` | $\text{kg/m}^2$ | Planetesimal swarm surface density | $\ge 0$ |
 | `v_disp_kms` | `Float64` | `0.1` | km/s | Planetesimal swarm velocity dispersion | $> 0$ |
 | `track_accretion_time` | `Bool` | `true` | - | Track accretion epoch timestamp array on markers | `true` / `false` |
+| `stage1_mode` | `Symbol` | `:safronov` | - | Sub-onset growth regime ($M < M_{\text{onset}}$) | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto` |
+| `stage2_mode` | `Symbol` | `:pebble_auto` | - | Super-onset pebble settling regime ($M_{\text{onset}} \le M < M_{\text{iso}}$) | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto` |
+| `stage3_mode` | `Symbol` | `:safronov` | - | Post-isolation giant impact regime ($M \ge M_{\text{iso}}$) | `:constant_rate`, `:linear_radius`, `:exponential`, `:safronov`, `:pebble_bondi`, `:pebble_hill`, `:pebble_auto` |
+| `M_onset` | `Float64` | `NaN` | kg | Fixed settling regime onset mass threshold (`NaN` computes dynamically) | $\text{NaN}$ or $> 0$ |
+| `f_onset` | `Float64` | `1.0` | - | Trajectory calibration prefactor for onset mass | $> 0$ |
+| `M_iso` | `Float64` | `NaN` | kg | Fixed pebble isolation mass threshold (`NaN` computes dynamically, $\le 0$ disables) | $\text{NaN}$, $\le 0$ (disabled), or $> 0$ |
+| `f_iso` | `Float64` | `0.5` | - | Calibration prefactor for pebble isolation mass | $> 0$ |
+| `transition_smoothing` | `Bool` | `true` | - | Enable smoothstep blending across stage boundaries | `true` / `false` |
+| `transition_width` | `Float64` | `0.10` | - | Fractional mass transition half-width | $\in [0, 0.5]$ |
 
 ---
 
