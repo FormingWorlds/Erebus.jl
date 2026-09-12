@@ -75,3 +75,19 @@ During simulation execution, Erebus emits structured log messages:
 - Runtime duration per timestep and total elapsed simulation time (in Ma).
 
 Binary checkpoints (`.jld2`) are saved to the designated `output_dir` at intervals determined by `savematstep`.
+
+---
+
+## Performance Profiling and Benchmarking
+
+To benchmark execution runtime and memory allocation across repeated runs:
+
+```bash
+julia --project tools/profile_simulation.jl configs/test_quick.toml
+```
+
+The profiling harness:
+1. Executes a warm-up run to compile all methods.
+2. Executes repeated benchmark runs (default: 3 iterations).
+3. Reports minimum and mean wall-clock execution time, plus mean memory allocation and mean garbage collection duration.
+4. Saves structured JSON metrics to `output_files/profiling_baseline.json`.

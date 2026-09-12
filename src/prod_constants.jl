@@ -137,8 +137,9 @@ const imax_m = Nym - 1
 const random_markers = true
 # const random_markers = false
 # physical constants
-# gravitational constant [m³*kg⁻¹*s⁻²]
-const G = 6.672e-11
+# gravitational constant [m³*kg⁻¹*s⁻²] (CODATA 2018)
+const G = 6.67430e-11
+const GRAVITATIONAL_CONSTANT = G
 # scaled pressure    
 # pressure scaling coefficient (eqn 7.19-7.21 in Gerya(2019))
 # const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
