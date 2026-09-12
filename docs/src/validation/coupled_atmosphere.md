@@ -16,7 +16,7 @@ During planetesimal accretion and differentiation, interior volatile outgassing 
 
 4. *Semi-Grey Radiative Equilibrium and Greenhouse Blanketing*. Outgassed volatiles ($\mathrm{H_2O}, \mathrm{CO_2}, \mathrm{CH_4}, \mathrm{CO}, \mathrm{N_2}, \mathrm{H_2S}, \mathrm{SO_2}$) accumulate in the planetary atmosphere, producing significant infrared longwave optical depth $\tau_{\text{LW}}$. This volatile blanket suppresses surface radiative cooling by attenuating the effective radiative heat transfer coefficient ($h_{\text{rad,eff}} = h_{\text{bare}} / [1 + 0.75\tau_{\text{LW}}]$), elevating the surface temperature in accordance with the semi-grey analytical solution of Guillot (2010).
 
-5. *Multi-Species Crossover Hydrodynamic Escape*. When light carrier gases (such as $\mathrm{H_2}$ from serpentinization, core formation, or envelope capture) escape hydrodynamically at high flux $\Phi_H$, momentum transfer through neutral collisions drags heavier volatile species into the escaping wind. Species heavier than the Zahnle & Kasting (1986) crossover mass $m_c$ remain gravitationally retained, driving elemental and isotopic fractionation.
+5. *Convex Multi-Species Active-Set Hydrodynamic Escape*. Escaping light volatiles exert collisional drag on heavier species. Rather than restricting escape to hydrogen-dominated atmospheres, `Erebus.jl` implements the general convex active-set closure of Attia & Lichtenberg (2026). When volatiles escape hydrodynamically, the active-set closure determines individual species escape fluxes by minimizing inter-species frictional dissipation subject to non-negativity constraints. In the binary hydrogen-carrier limit, this formulation reproduces the classical crossover mass of Zahnle & Kasting (1986). In arbitrary multi-component mixtures without hydrogen, it partitions hydrodynamic base flux over the remaining volatile inventory while maintaining machine-precision mass conservation.
 
 ---
 
@@ -48,7 +48,7 @@ Mass removed by boil-off transfers strictly to $M_{\text{escaped}}$, preserving 
 
 ### Multi-Species Optical Depth and Greenhouse Blanketing
 
-The total longwave optical depth of an atmosphere with species masses $M_{\text{atm}, i}$ and specific opacities $\kappa_i$ [$\text{m}^2/\text{kg}$] across surface area $4\pi R_{\text{planet}}^2$ is:
+The total longwave optical depth of an atmosphere with species masses $M_{\text{atm}, i}$ and specific opacities $\kappa_i$ [$\text{m}^2/\text{kg}$] over surface area $4\pi R_{\text{planet}}^2$ is:
 
 $$\tau_{\text{LW}} = \frac{1}{4\pi R_{\text{planet}}^2} \sum_i \kappa_i M_{\text{atm}, i}$$
 
@@ -72,7 +72,7 @@ $$T^4(0) = \frac{1}{2} T_{\text{int}}^4 + \left(\frac{1}{2} + \frac{\sqrt{3}}{4}
 
 exhibiting the characteristic $2^{-1/4} \approx 0.84$ temperature depression relative to the ambient irradiation equilibrium temperature when $\gamma \ll 1$.
 
-### Zahnle-Kasting Multi-Species Crossover Hydrodynamic Escape
+### Multi-Species Hydrodynamic Escape and Convex Active-Set Closure
 
 When light carrier hydrogen escapes hydrodynamically with molecular flux $\Phi_H = \dot{M}_H / (m_H 4\pi R^2)$ [$\text{molecules}/(\text{m}^2\cdot\text{s})$], heavier volatile species $j$ experience upward collisional drag against gravity. Following Zahnle & Kasting (1986), the crossover mass $m_c$ above which species cannot escape is:
 
@@ -88,7 +88,24 @@ Collisional momentum transfer couples the dragged escape flux directly to the ca
 
 $$\Phi_j = \Phi_H \frac{X_j}{X_H} x_j$$
 
-giving mass loss rate $\Delta M_{j,\text{drag}} = \Delta M_H \frac{M_j}{M_H} x_j$. In the coupled envelope model, heavier volatile species escape via carrier-drag entrainment when a light carrier wind is active; when carrier hydrogen is absent, heavier species remain gravitationally retained.
+giving mass loss rate $\Delta M_{j,\text{drag}} = \Delta M_H \frac{M_j}{M_H} x_j$.
+
+For general $N$-component mixtures with arbitrary volatile compositions, `Erebus.jl` computes escape partitioning via the convex active-set closure of Attia & Lichtenberg (2026). The solver minimizes total inter-species frictional dissipation:
+
+$$\min_{\mathbf{w} \ge 0} \frac{1}{4} \sum_{j=1}^N \sum_{k=1}^N \frac{X_j X_k}{b_{jk}} (w_j - w_k)^2 + \sum_{j=1}^N \frac{m_j g}{k_B T_{\text{exo}}} X_j w_j \quad \text{subject to} \quad \sum_{j=1}^N m_j X_j w_j = \phi_{\text{base}}$$
+
+where $w_j = \Phi_j / X_j$ are species drift variables, and $\phi_{\text{base}}$ is the total hydrodynamic mass flux [$\text{kg}/(\text{m}^2\cdot\text{s})$].
+
+The active-set algorithm partitions the volatile inventory into an active escaping set $\mathcal{A}$ ($w_j > 0$) and an inactive retained set $\mathcal{R}$ ($w_k = 0$). Retention stability is verified via:
+
+$$R_k = \sum_{i \in \mathcal{A}} \frac{X_i w_i}{b_{ik}} - \left(\frac{m_k g}{k_B T_{\text{exo}}} - C\right) \le 0, \quad \forall k \in \mathcal{R}$$
+
+This multi-species closure satisfies exact physical and mathematical limits:
+1. *IsoFATE Binary Equivalence*: In binary mixtures, the active-set closure reproduces the crossover mass and flux partition of Hunten et al. (1987) throughout the full supercritical and subcritical parameter space.
+2. *Gu & Chen (2023) Ternary Reduction*: In three-species mixtures ($\mathrm{H} + \mathrm{He} + \mathrm{D}$), the closure matches numerical integrations in both supercritical and subcritical regimes.
+3. *Chassefière (1996) Analytical Partition*: In equal-drag binary systems, the solver reproduces the exact algebraic flux ratio.
+4. *Carrier Independence*: Hydrodynamic loss proceeds for active volatiles even in atmospheres devoid of molecular hydrogen.
+5. *Exact Mass Conservation*: For all species, $\sum_j \Delta M_{j,\text{escaped}} + \sum_j M_{j,\text{atm}} = \sum_j M_{j,\text{atm,init}} + \sum_j \dot{M}_{j,\text{vent}} \Delta t$ to floating-point precision.
 
 ### Volatile Influx Coupling: Porosity Venting and Retention Drainage
 
@@ -102,7 +119,7 @@ Volatiles enter the coupled atmosphere through two additive surface mechanisms i
    $$\dot{M}_{\text{N2}} = \frac{M_{\text{vent,N}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
    $$\dot{M}_{\text{H2S}} = \frac{M_{\text{vent,S}} \cdot (34.08 / 32.06) \cdot 2 R_{\text{planet}}}{\Delta t}$$
 
-Both contributions sum additively into $\mathbf{\dot{M}}_{\text{vent}}$ to preserve complete volatile mass conservation across hydromechanical and atmospheric modules.
+Both contributions sum additively into $\mathbf{\dot{M}}_{\text{vent}}$ to preserve complete volatile mass conservation between hydromechanical and atmospheric modules.
 
 ---
 
@@ -113,7 +130,7 @@ Both contributions sum additively into $\mathbf{\dot{M}}_{\text{vent}}$ to prese
 The 4 panels above verify the numerical implementation against analytical limits and published benchmarks:
 
 - *Panel (a) Semi-Grey Radiative Equilibrium*. Shows $T(\tau)$ profiles for $\gamma \in [0.01, 5.0]$. For $\gamma < 1$, visible radiation penetrates deeper than thermal emission, establishing a strong greenhouse temperature inversion in the deep atmosphere. At low optical depth ($\tau \to 0$), temperatures converge to the skin temperature limit.
-- *Panel (b) Disk Gas Envelope Capture & Recycling*. Compares the captured isothermal envelope mass to the Ormel et al. (2015) recycling limit across planetesimal radii from $100\text{ km}$ to $2000\text{ km}$. For sub-Ceres bodies ($R \le 200\text{ km}$), $R_{\text{cap}} \le R_{\text{planet}}$, preventing gas capture. For embryos exceeding $R \sim 1500\text{ km}$, bound envelope mass reaches $10^{18}\text{--}10^{19}\text{ kg}$.
+- *Panel (b) Disk Gas Envelope Capture & Recycling*. Compares the captured isothermal envelope mass to the Ormel et al. (2015) recycling limit for planetesimal radii from $100\text{ km}$ to $2000\text{ km}$. For sub-Ceres bodies ($R \le 200\text{ km}$), $R_{\text{cap}} \le R_{\text{planet}}$, preventing gas capture. For embryos exceeding $R \sim 1500\text{ km}$, bound envelope mass reaches $10^{18}\text{ to }10^{19}\text{ kg}$.
 - *Panel (c) Greenhouse Thermal Blanketing*. Illustrates the rapid attenuation of effective surface heat transfer coefficient $h_{\text{rad,eff}}$ with longwave optical depth $\tau_{\text{LW}}$, reducing surface heat loss by more than a factor of 10 for $\tau_{\text{LW}} > 10$.
 - *Panel (d) Zahnle-Kasting Crossover Drag*. Evaluates drag efficiencies $x_j$ for common planetary volatiles ($\mathrm{CH_4}, \mathrm{H_2O}, \mathrm{CO}, \mathrm{CO_2}, \mathrm{SO_2}$) as a function of carrier hydrogen escape flux $\Phi_{\mathrm{H}_2}$. At low fluxes ($\Phi_{\mathrm{H}_2} < 10^{18}\text{ m}^{-2}\text{s}^{-1}$), heavy species remain completely retained ($x_j = 0$). At extreme fluxes ($\Phi_{\mathrm{H}_2} \ge 10^{20}\text{ m}^{-2}\text{s}^{-1}$), even sulfur dioxide experiences substantial hydrodynamic drag.
 
@@ -134,8 +151,8 @@ gamma_guillot = 0.10          # Visible to IR opacity ratio
 T_skin_floor = 50.0           # Minimum skin temperature floor [K]
 f_rec = 0.10                  # Ormel et al. (2015) envelope recycling factor
 tau_boil = 3.15576e11         # Hydrodynamic boil-off timescale [s] (1e4 yr)
-crossover_active = true       # Zahnle-Kasting hydrodynamic crossover drag
-b_diff_ref = 1.0e21           # Binary diffusion parameter [m^-1 s^-1]
+crossover_active = true       # Hydrodynamic multispecies crossover drag
+b_diff_ref = 1.0e21           # Binary diffusion parameter reference [m^-1 s^-1]
 
 [atmosphere.opacities]
 H2O = 1.0e-2
@@ -153,9 +170,14 @@ SO2 = 2.0e-3
 
 ## 5. References
 
+- **Attia, O., & Lichtenberg, T. (2026)**. A convex active-set closure for multi-species atmospheric escape. *arXiv preprint*, arXiv:2608.30106.
+- **Chassefière, E. (1996)**. Hydrodynamic escape of hydrogen from a hot water-rich atmosphere: The case of Venus. *Journal of Geophysical Research: Planets*, 101(E11), 26039-26056.
+- **Gu, Y., & Chen, J. (2023)**. Mass fractionation in multi-species hydrodynamic escape. *The Astrophysical Journal*, 959(2), 112.
 - **Guillot, T. (2010)**. On the radiative equilibrium of irradiated planetary atmospheres. *Astronomy & Astrophysics*, 520, A27.  
   [https://doi.org/10.1051/0004-6361/200913396](https://doi.org/10.1051/0004-6361/200913396)
+- **Hunten, D. M., Pepin, R. O., & Walker, J. C. G. (1987)**. Mass fractionation in hydrodynamic escape. *Icarus*, 69(3), 532-549.
 - **Ormel, C. W., Shi, J.-M., & Kuiper, R. (2015)**. Hydrodynamics of embedded planets' first atmospheres - II. A rapid recycling of atmosphere gas. *Monthly Notices of the Royal Astronomical Society*, 447(4), 3512-3525.  
   [https://doi.org/10.1093/mnras/stu2704](https://doi.org/10.1093/mnras/stu2704)
 - **Zahnle, K. J., & Kasting, J. F. (1986)**. Mass fractionation during transonic escape and implications for loss of water from Mars and Venus. *Icarus*, 68(3), 462-480.  
   [https://doi.org/10.1016/0019-1035(86)90051-5](https://doi.org/10.1016/0019-1035(86)90051-5)
+- **Zahnle, K., Kasting, J. F., & Pollack, J. B. (1990)**. Mass fractionation of noble gases in diffusion-limited hydrodynamic hydrogen escape. *Icarus*, 84(2), 502-527.

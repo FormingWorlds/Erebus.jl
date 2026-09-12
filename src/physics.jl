@@ -4227,6 +4227,11 @@ Avogadro constant N_A in 1/mol (SI exact definition).
 """
 const AVOGADRO_CONSTANT = 6.02214076e23
 
+"""
+Unified atomic mass unit (amu, Dalton) in kilograms [kg] (CODATA 2018).
+"""
+const ATOMIC_MASS_UNIT = 1.66053906660e-27
+
 # Volatile molecular masses [kg] (Standard atomic weights divided by Avogadro constant)
 """
 Molecular mass of water (H2O) in kilograms [kg], with molar mass 18.01528 g/mol.
@@ -4294,15 +4299,15 @@ Upper threshold on the Jeans parameter λ above which escape transitions fully t
 const HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF = 2.0
 
 """
+    get_species_molecular_mass(species::Symbol)::Float64
+
 Retrieve molecular mass in kilograms for standard planetary volatile species.
 
-$(SIGNATURES)
-
-# Arguments
-- `species::Symbol`: Volatile species identifier (`:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2`).
+# Parameters
+- `species`: Volatile species identifier (`:H2O`, `:H2`, `:N2`, `:NH3`, `:CO`, `:CO2`, `:CH4`, `:H2S`, `:S2`, `:SO2`, etc.).
 
 # Returns
-- `mass::Float64`: Molecular mass [kg].
+- `mass`: Molecular mass [kg].
 """
 function get_species_molecular_mass(species::Symbol)::Float64
     s = Symbol(uppercase(String(species)))
@@ -4326,10 +4331,42 @@ function get_species_molecular_mass(species::Symbol)::Float64
         return MASS_S2_KG
     elseif s === :SO2
         return MASS_SO2_KG
+    elseif s === :H
+        return 1.008 * ATOMIC_MASS_UNIT
+    elseif s === :D
+        return 2.0141 * ATOMIC_MASS_UNIT
+    elseif s === :HE
+        return 4.0026 * ATOMIC_MASS_UNIT
+    elseif s === :C
+        return 12.011 * ATOMIC_MASS_UNIT
+    elseif s === :N
+        return 14.007 * ATOMIC_MASS_UNIT
+    elseif s === :O
+        return 15.999 * ATOMIC_MASS_UNIT
+    elseif s === :NE
+        return 19.992 * ATOMIC_MASS_UNIT
+    elseif s === :NA
+        return 22.990 * ATOMIC_MASS_UNIT
+    elseif s === :MG
+        return 24.305 * ATOMIC_MASS_UNIT
+    elseif s === :SI
+        return 28.085 * ATOMIC_MASS_UNIT
+    elseif s === :S
+        return 32.060 * ATOMIC_MASS_UNIT
+    elseif s === :AR
+        return 35.968 * ATOMIC_MASS_UNIT
+    elseif s === :FE
+        return 55.845 * ATOMIC_MASS_UNIT
+    elseif s === :KR
+        return 83.798 * ATOMIC_MASS_UNIT
+    elseif s === :XE
+        return 131.293 * ATOMIC_MASS_UNIT
+    elseif s === :O2
+        return 31.998 * ATOMIC_MASS_UNIT
     else
         throw(
             ArgumentError(
-                "Unknown species: $species. Supported species: :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2",
+                "Unknown species: $species. Supported species: :H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2, :H, :D, :He, :C, :N, :O, :Ne, :Na, :Mg, :Si, :S, :Ar, :Fe, :Kr, :Xe, :O2",
             ),
         )
     end

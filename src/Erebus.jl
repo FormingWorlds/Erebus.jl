@@ -98,6 +98,7 @@ export Config,
     MASS_H2S_KG,
     MASS_S2_KG,
     MASS_SO2_KG,
+    ATOMIC_MASS_UNIT,
     JEANS_LAMBDA_CUTOFF,
     HYDRODYNAMIC_ESCAPE_LAMBDA_LOW,
     HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF,
@@ -208,7 +209,12 @@ export Config,
     compute_boiloff_rate,
     compute_crossover_mass,
     compute_crossover_drag_fraction,
-    evolve_coupled_atmosphere_step!
+    evolve_coupled_atmosphere_step!,
+    get_binary_diffusion_parameter,
+    assemble_binary_diffusion_matrix,
+    solve_fixed_active,
+    solve_multispecies_escape_closure,
+    compute_escape_activation_threshold
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -379,7 +385,13 @@ module Physics
         compute_boiloff_rate,
         compute_crossover_mass,
         compute_crossover_drag_fraction,
-        evolve_coupled_atmosphere_step!
+        evolve_coupled_atmosphere_step!,
+        get_binary_diffusion_parameter,
+        assemble_binary_diffusion_matrix,
+        solve_fixed_active,
+        solve_multispecies_escape_closure,
+        compute_escape_activation_threshold,
+        ATOMIC_MASS_UNIT
     export distance,
         total,
         ktotal,
@@ -510,7 +522,13 @@ module Physics
         compute_boiloff_rate,
         compute_crossover_mass,
         compute_crossover_drag_fraction,
-        evolve_coupled_atmosphere_step!
+        evolve_coupled_atmosphere_step!,
+        get_binary_diffusion_parameter,
+        assemble_binary_diffusion_matrix,
+        solve_fixed_active,
+        solve_multispecies_escape_closure,
+        compute_escape_activation_threshold,
+        ATOMIC_MASS_UNIT
 end
 
 module Particles

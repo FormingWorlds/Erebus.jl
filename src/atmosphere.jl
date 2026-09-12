@@ -495,6 +495,599 @@ function compute_crossover_drag_fraction(
     end
 end
 
+# -----------------------------------------------------------------------------
+# Multispecies Escape Closure and Binary Diffusion Parameters
+# -----------------------------------------------------------------------------
+
+"""
+Standard atomic and molecular weights for atmospheric escape species [amu].
+"""
+const SPECIES_AMU_ESCAPE = Dict{Symbol,Float64}(
+    :H => 1.008,
+    :D => 2.0141,
+    :He => 4.0026,
+    :C => 12.011,
+    :N => 14.007,
+    :O => 15.999,
+    :Ne => 19.992,
+    :Na => 22.990,
+    :Mg => 24.305,
+    :Si => 28.085,
+    :S => 32.060,
+    :Ar => 35.968,
+    :Fe => 55.845,
+    :Kr => 83.798,
+    :Xe => 131.293,
+    :H2 => 2.01588,
+    :H2O => 18.0153,
+    :CO => 28.0101,
+    :CO2 => 44.0095,
+    :CH4 => 16.043,
+    :N2 => 28.014,
+    :NH3 => 17.0305,
+    :O2 => 31.998,
+    :H2S => 34.082,
+    :SO2 => 64.066,
+    :S2 => 64.130,
+)
+
+"""
+Kinetic diameters for atmospheric escape species [pm].
+"""
+const SPECIES_DIAMETER_PM = Dict{Symbol,Float64}(
+    :H => 260.0,
+    :D => 265.0,
+    :He => 260.0,
+    :Ne => 275.0,
+    :Ar => 340.0,
+    :Kr => 360.0,
+    :Xe => 396.0,
+    :O => 275.0,
+    :C => 307.5658,
+    :N => 280.4276,
+    :S => 325.6579,
+    :Na => 410.6908,
+    :Mg => 312.9934,
+    :Si => 379.9342,
+    :Fe => 441.4474,
+    :H2 => 289.0,
+    :H2O => 265.0,
+    :CO2 => 330.0,
+    :O2 => 346.0,
+    :CH4 => 380.0,
+    :N2 => 364.0,
+    :CO => 376.0,
+    :NH3 => 260.0,
+    :H2S => 360.0,
+    :SO2 => 360.0,
+    :S2 => 400.0,
+)
+
+"""
+Atomic binary diffusion parameters at T = 1000 K [m^-1 s^-1].
+Tabulated from Attia & Lichtenberg (2026, Data S1).
+"""
+const ATOMIC_BINARY_DIFFUSION_1000K_SI = Dict{Tuple{Symbol,Symbol},Float64}(
+    (:H, :He) => 1.6e22,
+    (:H, :N) => 1.059e22,
+    (:H, :C) => 9.655e21,
+    (:H, :Ne) => 9.3e21,
+    (:H, :Mg) => 9.2856e21,
+    (:H, :O) => 9.0e21,
+    (:H, :S) => 8.8454e21,
+    (:H, :Kr) => 7.818e21,
+    (:H, :Si) => 7.4245e21,
+    (:H, :Xe) => 6.9685e21,
+    (:H, :Na) => 6.7851e21,
+    (:H, :Ar) => 6.5e21,
+    (:He, :Ne) => 6.3014e21,
+    (:H, :Fe) => 6.126e21,
+    (:He, :O) => 6.0e21,
+    (:He, :N) => 5.9149e21,
+    (:He, :C) => 5.4609e21,
+    (:He, :Mg) => 5.0078e21,
+    (:He, :S) => 4.7109e21,
+    (:He, :Ar) => 4.4906e21,
+    (:He, :Si) => 3.9765e21,
+    (:He, :Kr) => 3.8388e21,
+    (:He, :Na) => 3.6699e21,
+    (:He, :Fe) => 3.2054e21,
+    (:He, :Xe) => 3.1869e21,
+    (:N, :O) => 3.1296e21,
+    (:O, :Ne) => 3.0e21,
+    (:C, :O) => 2.9681e21,
+    (:C, :N) => 2.5189e21,
+    (:N, :Ne) => 2.4832e21,
+    (:O, :Mg) => 2.4569e21,
+    (:C, :Ne) => 2.3649e21,
+    (:O, :S) => 2.2385e21,
+    (:N, :Mg) => 2.1096e21,
+    (:C, :Mg) => 1.9757e21,
+    (:O, :Si) => 1.9267e21,
+    (:Ne, :Mg) => 1.92e21,
+    (:N, :S) => 1.895e21,
+    (:O, :Na) => 1.8271e21,
+    (:C, :S) => 1.82e21,
+    (:O, :Ar) => 1.8e21,
+    (:N, :Ar) => 1.7907e21,
+    (:O, :Kr) => 1.7853e21,
+    (:C, :Ar) => 1.7393e21,
+    (:Ne, :S) => 1.7365e21,
+    (:Ne, :Ar) => 1.6161e21,
+    (:O, :Xe) => 1.5518e21,
+    (:N, :Si) => 1.509e21,
+    (:Ne, :Si) => 1.4998e21,
+    (:N, :Kr) => 1.4703e21,
+    (:C, :Si) => 1.4674e21,
+    (:O, :Fe) => 1.4576e21,
+    (:Ne, :Na) => 1.43e21,
+    (:N, :Na) => 1.4276e21,
+    (:C, :Kr) => 1.3927e21,
+    (:C, :Na) => 1.3883e21,
+    (:Mg, :S) => 1.3776e21,
+    (:Ne, :Kr) => 1.3571e21,
+    (:Mg, :Ar) => 1.3477e21,
+    (:N, :Xe) => 1.2358e21,
+    (:C, :Xe) => 1.2251e21,
+    (:S, :Ar) => 1.1997e21,
+    (:Ne, :Xe) => 1.1723e21,
+    (:Mg, :Si) => 1.1607e21,
+    (:N, :Fe) => 1.1536e21,
+    (:C, :Fe) => 1.1405e21,
+    (:Na, :Mg) => 1.1175e21,
+    (:Ne, :Fe) => 1.1163e21,
+    (:Si, :Ar) => 1.0633e21,
+    (:Si, :S) => 1.0443e21,
+    (:Na, :Ar) => 1.037e21,
+    (:Mg, :Kr) => 1.0233e21,
+    (:Na, :S) => 1.014e21,
+    (:Na, :Si) => 9.0514e20,
+    (:Ar, :Kr) => 8.9036e20,
+    (:S, :Kr) => 8.886e20,
+    (:Mg, :Xe) => 8.837e20,
+    (:Mg, :Fe) => 8.5885e20,
+    (:Si, :Kr) => 8.0112e20,
+    (:Na, :Kr) => 7.9739e20,
+    (:Ar, :Fe) => 7.6625e20,
+    (:S, :Xe) => 7.6095e20,
+    (:Ar, :Xe) => 7.6038e20,
+    (:S, :Fe) => 7.575e20,
+    (:Na, :Xe) => 6.989e20,
+    (:Si, :Xe) => 6.9465e20,
+    (:Si, :Fe) => 6.8976e20,
+    (:Na, :Fe) => 6.8649e20,
+    (:Fe, :Kr) => 5.4101e20,
+    (:Kr, :Xe) => 4.9214e20,
+    (:Fe, :Xe) => 4.5826e20,
+)
+
+"""
+Molecular binary diffusion parameters at T = 1000 K [m^-1 s^-1].
+Tabulated from Zahnle & Kasting (2023) and Marrero & Mason (1972).
+"""
+const MOLECULAR_BINARY_DIFFUSION_1000K_SI = Dict{Tuple{Symbol,Symbol},Float64}(
+    (:H2O, :CO2) => 1.56e21,
+    (:H2O, :O2) => 1.59e21,
+    (:CO2, :O2) => 1.00e21,
+    (:CO2, :He) => 3.56e21,
+    (:CO2, :Ne) => 1.62e21,
+    (:CO2, :Ar) => 1.00e21,
+    (:CO2, :N2) => 1.04e21,
+    (:H2, :CO2) => 4.09e21,
+    (:H2, :H2O) => 4.80e21,
+    (:H2, :N2) => 4.71e21,
+    (:H2, :He) => 1.30e23,
+    (:H2, :Ne) => 9.40e22,
+    (:H2, :Ar) => 7.10e22,
+    (:H2, :Kr) => 6.10e22,
+    (:H2, :Xe) => 5.00e22,
+)
+
+"""
+    get_binary_diffusion_parameter(
+        species_1::Symbol, species_2::Symbol, T_K::Real;
+        b_anchor::Real=4.09e21,
+    )::Float64
+
+Evaluate the binary diffusion parameter b_ij(T) = n D_ij in m^-1 s^-1 for a gas pair.
+Directly accesses tabulated values or applies Zahnle & Kasting (2023) Eq. (10) scaling.
+
+# Parameters
+- `species_1`: Symbol of first gas species.
+- `species_2`: Symbol of second gas species.
+- `T_K`: Temperature [K].
+
+# Keywords
+- `b_anchor`: Reference anchor parameter [m^-1 s^-1] (default: 4.09e21 for H2-CO2).
+
+# Returns
+- `b_ij`: Binary diffusion parameter [m^-1 s^-1].
+
+# Raises
+- `DomainError`: If temperature is non-positive or non-finite.
+"""
+function _canonical_escape_symbol(s::Symbol)::Symbol
+    u = uppercase(String(s))
+    if u == "H"
+        return :H
+    elseif u == "D"
+        return :D
+    elseif u == "HE"
+        return :He
+    elseif u == "C"
+        return :C
+    elseif u == "N"
+        return :N
+    elseif u == "O"
+        return :O
+    elseif u == "NE"
+        return :Ne
+    elseif u == "NA"
+        return :Na
+    elseif u == "MG"
+        return :Mg
+    elseif u == "SI"
+        return :Si
+    elseif u == "S"
+        return :S
+    elseif u == "AR"
+        return :Ar
+    elseif u == "FE"
+        return :Fe
+    elseif u == "KR"
+        return :Kr
+    elseif u == "XE"
+        return :Xe
+    elseif u == "H2"
+        return :H2
+    elseif u == "H2O"
+        return :H2O
+    elseif u == "CO"
+        return :CO
+    elseif u == "CO2"
+        return :CO2
+    elseif u == "CH4"
+        return :CH4
+    elseif u == "N2"
+        return :N2
+    elseif u == "NH3"
+        return :NH3
+    elseif u == "O2"
+        return :O2
+    elseif u == "H2S"
+        return :H2S
+    elseif u == "SO2"
+        return :SO2
+    elseif u == "S2"
+        return :S2
+    else
+        return s
+    end
+end
+
+function get_binary_diffusion_parameter(
+    species_1::Symbol, species_2::Symbol, T_K::Real; b_anchor::Real=4.09e21
+)::Float64
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    s1 = _canonical_escape_symbol(species_1)
+    s2 = _canonical_escape_symbol(species_2)
+    if s1 === s2
+        return Inf
+    end
+
+    pair_key = (s1, s2)
+    rev_key = (s2, s1)
+
+    b_1000 = if haskey(ATOMIC_BINARY_DIFFUSION_1000K_SI, pair_key)
+        ATOMIC_BINARY_DIFFUSION_1000K_SI[pair_key]
+    elseif haskey(ATOMIC_BINARY_DIFFUSION_1000K_SI, rev_key)
+        ATOMIC_BINARY_DIFFUSION_1000K_SI[rev_key]
+    elseif haskey(MOLECULAR_BINARY_DIFFUSION_1000K_SI, pair_key)
+        MOLECULAR_BINARY_DIFFUSION_1000K_SI[pair_key]
+    elseif haskey(MOLECULAR_BINARY_DIFFUSION_1000K_SI, rev_key)
+        MOLECULAR_BINARY_DIFFUSION_1000K_SI[rev_key]
+    else
+        m1 = get(SPECIES_AMU_ESCAPE, s1, nothing)
+        m2 = get(SPECIES_AMU_ESCAPE, s2, nothing)
+        d1 = get(SPECIES_DIAMETER_PM, s1, nothing)
+        d2 = get(SPECIES_DIAMETER_PM, s2, nothing)
+        if m1 === nothing || m2 === nothing || d1 === nothing || d2 === nothing
+            return Float64(b_anchor) * (T / 1000.0)^0.75
+        end
+        m_a1 = SPECIES_AMU_ESCAPE[:H2]
+        m_a2 = SPECIES_AMU_ESCAPE[:CO2]
+        d_a1 = SPECIES_DIAMETER_PM[:H2]
+        d_a2 = SPECIES_DIAMETER_PM[:CO2]
+        rm_target = 1.0 / m1 + 1.0 / m2
+        rm_anchor = 1.0 / m_a1 + 1.0 / m_a2
+        d_sum_target = d1 + d2
+        d_sum_anchor = d_a1 + d_a2
+        Float64(b_anchor) * sqrt(rm_target / rm_anchor) * ((d_sum_anchor / d_sum_target)^2)
+    end
+
+    return b_1000 * (T / 1000.0)^0.75
+end
+
+"""
+    assemble_binary_diffusion_matrix(
+        species_list::AbstractVector{Symbol}, T_K::Real
+    )::Matrix{Float64}
+
+Assemble the symmetric N x N binary diffusion matrix b_ij in m^-1 s^-1 with Inf on diagonal.
+
+# Parameters
+- `species_list`: Vector of species symbols.
+- `T_K`: Temperature [K].
+
+# Returns
+- `b_mat`: Symmetric N x N matrix [m^-1 s^-1].
+"""
+function assemble_binary_diffusion_matrix(
+    species_list::AbstractVector{Symbol}, T_K::Real
+)::Matrix{Float64}
+    N = length(species_list)
+    b_mat = fill(Inf, N, N)
+    for j in 1:N
+        for i in (j + 1):N
+            bij = get_binary_diffusion_parameter(species_list[i], species_list[j], T_K)
+            b_mat[i, j] = bij
+            b_mat[j, i] = bij
+        end
+    end
+    return b_mat
+end
+
+"""
+    solve_fixed_active(
+        phi::Real, X::AbstractVector{<:Real}, m::AbstractVector{<:Real},
+        T::Real, g0::Real, b::AbstractMatrix{<:Real},
+        active::Union{AbstractVector{Int},Set{Int}},
+    )::Tuple{Vector{Float64},Float64}
+
+Solve the multispecies linear closure equations on a fixed candidate escaping active set.
+Uses two-sided diagonal matrix equilibration to ensure numerical stability across large dynamic ranges.
+
+# Parameters
+- `phi`: Total mass escape flux [kg / (m^2 s)].
+- `X`: Base mole fractions summing to 1.
+- `m`: Particle masses [kg].
+- `T`: Exobase temperature [K].
+- `g0`: Gravitational acceleration [m/s^2].
+- `b`: Symmetric binary diffusion parameter matrix [m^-1 s^-1].
+- `active`: Collection of 1-based indices of escaping species.
+
+# Returns
+- `(w, C)`: Drift variables w_j [m^-2 s^-1] and inverse scale height C [m^-1].
+"""
+function solve_fixed_active(
+    phi::Real,
+    X::AbstractVector{<:Real},
+    m::AbstractVector{<:Real},
+    T::Real,
+    g0::Real,
+    b::AbstractMatrix{<:Real},
+    active::Union{AbstractVector{Int},Set{Int}},
+)::Tuple{Vector{Float64},Float64}
+    kT = K_BOLTZMANN * Float64(T)
+    grav = Float64(g0)
+    phi_val = Float64(phi)
+    A = sort(collect(active))
+    N = length(X)
+    R = [k for k in 1:N if k ∉ active]
+    nA = length(A)
+
+    if nA == 1
+        j = A[1]
+        w = zeros(Float64, N)
+        w[j] = phi_val / (Float64(m[j]) * Float64(X[j]))
+        R_sum = isempty(R) ? 0.0 : sum(Float64(X[k]) / Float64(b[j, k]) for k in R)
+        C = Float64(m[j]) * grav / kT + w[j] * R_sum
+        return w, C
+    end
+
+    M = zeros(Float64, nA + 1, nA + 1)
+    rhs = zeros(Float64, nA + 1)
+    for (row, j) in enumerate(A)
+        diag = 0.0
+        for (col, i) in enumerate(A)
+            if i != j
+                term = Float64(X[i]) / Float64(b[i, j])
+                M[row, col] += term
+                diag += term
+            end
+        end
+        for k in R
+            diag += Float64(X[k]) / Float64(b[j, k])
+        end
+        M[row, row] -= diag
+        M[row, nA + 1] = 1.0
+        rhs[row] = Float64(m[j]) * grav / kT
+    end
+    for (col, j) in enumerate(A)
+        M[nA + 1, col] = Float64(m[j]) * Float64(X[j])
+    end
+    rhs[nA + 1] = phi_val
+
+    # Two-sided equilibration: D_r M D_c y = D_r rhs, sol = D_c y
+    dr = zeros(Float64, nA + 1)
+    for r in 1:(nA + 1)
+        max_r = maximum(abs, M[r, :])
+        dr[r] = max_r > 0.0 ? 1.0 / max_r : 1.0
+    end
+    Ms = M .* dr
+
+    dc = zeros(Float64, nA + 1)
+    for c in 1:(nA + 1)
+        max_c = maximum(abs, Ms[:, c])
+        dc[c] = max_c > 0.0 ? 1.0 / max_c : 1.0
+    end
+    Ms = Ms .* dc'
+
+    sol = dc .* (Ms \ (rhs .* dr))
+    w = zeros(Float64, N)
+    for (col, j) in enumerate(A)
+        w[j] = sol[col]
+    end
+    return w, sol[nA + 1]
+end
+
+"""
+    solve_multispecies_escape_closure(
+        phi::Real, X::AbstractVector{<:Real}, m::AbstractVector{<:Real},
+        T::Real, g0::Real, b::AbstractMatrix{<:Real};
+        return_diag::Bool=false,
+    )
+
+Solve the general convex multispecies hydrodynamic escape closure (Attia & Lichtenberg 2026).
+Partitions total mass flux phi into non-negative individual species number fluxes Phi_j.
+
+# Parameters
+- `phi`: Total mass escape flux [kg / (m^2 s)].
+- `X`: Species base mole fractions.
+- `m`: Species molecular masses [kg].
+- `T`: Exobase temperature [K].
+- `g0`: Exobase gravitational acceleration [m/s^2].
+- `b`: Symmetric binary diffusion parameter matrix [m^-1 s^-1].
+
+# Keywords
+- `return_diag`: If true, returns `(Phi, C, active_set)`.
+
+# Returns
+- `Phi`: Vector of species number escape fluxes [molecules / (m^2 s)].
+
+# Raises
+- `DomainError`: If phi < 0, T <= 0, or g0 <= 0.
+- `DimensionMismatch`: If array lengths do not conform.
+"""
+function solve_multispecies_escape_closure(
+    phi::Real,
+    X::AbstractVector{<:Real},
+    m::AbstractVector{<:Real},
+    T::Real,
+    g0::Real,
+    b::AbstractMatrix{<:Real};
+    return_diag::Bool=false,
+)
+    phi_val = Float64(phi)
+    T_val = Float64(T)
+    g0_val = Float64(g0)
+    N = length(X)
+
+    if phi_val < 0.0 || !isfinite(phi_val)
+        throw(DomainError(phi_val, "Mass flux phi must be non-negative and finite"))
+    end
+    if T_val <= 0.0 || !isfinite(T_val)
+        throw(DomainError(T_val, "Exobase temperature must be positive and finite"))
+    end
+    if g0_val <= 0.0 || !isfinite(g0_val)
+        throw(DomainError(g0_val, "Gravitational acceleration must be positive and finite"))
+    end
+    if length(m) != N || size(b, 1) != N || size(b, 2) != N
+        throw(DimensionMismatch("Input dimensions of X, m, b do not match"))
+    end
+
+    kT = K_BOLTZMANN * T_val
+    if phi_val == 0.0
+        Phi = zeros(Float64, N)
+        if return_diag
+            return Phi, minimum(m) * g0_val / kT, Set{Int}()
+        end
+        return Phi
+    end
+
+    active = Set(1:N)
+    wscale = phi_val / minimum(m)
+    for _ in 1:(4 * N + 8)
+        w, C = solve_fixed_active(phi_val, X, m, T_val, g0_val, b, active)
+        neg = Set([j for j in active if w[j] < -1e-12 * wscale])
+        if !isempty(neg)
+            setdiff!(active, neg)
+            if isempty(active)
+                error("Active-set iteration produced empty active set")
+            end
+            continue
+        end
+
+        # Retention check for inactive species
+        viol = 0
+        worst = 0.0
+        for k in 1:N
+            if k in active
+                continue
+            end
+            Rk =
+                sum(Float64(X[i]) * w[i] / Float64(b[i, k]) for i in active) -
+                (Float64(m[k]) * g0_val / kT - C)
+            if Rk > 1e-12 * abs(Float64(m[k]) * g0_val / kT) && Rk > worst
+                viol = k
+                worst = Rk
+            end
+        end
+        if viol == 0
+            w = max.(w, 0.0)
+            Phi = [Float64(X[k]) * w[k] for k in 1:N]
+            for k in 1:N
+                if k ∉ active
+                    Phi[k] = 0.0
+                end
+            end
+            if return_diag
+                return Phi, C, active
+            end
+            return Phi
+        end
+        push!(active, viol)
+    end
+    return error("Active-set iteration did not converge")
+end
+
+"""
+    compute_escape_activation_threshold(
+        X::AbstractVector{<:Real}, m::AbstractVector{<:Real},
+        T::Real, g0::Real, b::AbstractMatrix{<:Real},
+    )::Float64
+
+Compute the threshold mass flux phi* at which the first heavier gas entrains with the escaping wind.
+
+# Parameters
+- `X`: Species mole fractions.
+- `m`: Species masses [kg].
+- `T`: Exobase temperature [K].
+- `g0`: Gravitational acceleration [m/s^2].
+- `b`: Symmetric binary diffusion parameter matrix [m^-1 s^-1].
+
+# Returns
+- `phi_star`: Activation threshold mass flux [kg / (m^2 s)].
+"""
+function compute_escape_activation_threshold(
+    X::AbstractVector{<:Real},
+    m::AbstractVector{<:Real},
+    T::Real,
+    g0::Real,
+    b::AbstractMatrix{<:Real},
+)::Float64
+    T_val = Float64(T)
+    g0_val = Float64(g0)
+    kT = K_BOLTZMANN * T_val
+    l = argmin(m)
+    best = Inf
+    N = length(X)
+    for k in 1:N
+        if k == l
+            continue
+        end
+        denom =
+            Float64(X[l]) / Float64(b[l, k]) +
+            sum(Float64(X[kk]) / Float64(b[l, kk]) for kk in 1:N if kk != l; init=0.0)
+        w_star = (Float64(m[k]) - Float64(m[l])) * g0_val / kT / denom
+        best = min(best, Float64(m[l]) * Float64(X[l]) * w_star)
+    end
+    return best
+end
+
 """
     evolve_coupled_atmosphere_step!(
         atm_state::AtmosphereState,
@@ -514,9 +1107,36 @@ end
         hydrodynamic::Bool=true,
         gamma::Real=1.4,
         escape_active::Bool=true,
-    )
+    )::AtmosphereState
 
-Advance the atmospheric species inventory, gas envelope capture/boil-off, radiative equilibrium, and hydrodynamic crossover escape over time step dt_s with machine-precision mass conservation.
+Advance the atmospheric species inventory, gas envelope capture/boil-off, radiative equilibrium, and multispecies hydrodynamic escape over time step dt_s with mass conservation.
+
+# Parameters
+- `atm_state`: Mutable `AtmosphereState` containing atmospheric species masses and cumulative escape.
+- `vent_rates`: Dictionary of species venting rates [kg/s].
+- `dt_s`: Simulation time step [s].
+- `M_planet`: Planetesimal mass [kg].
+- `R_planet`: Planetesimal radius [m].
+- `T_amb`: Ambient temperature [K].
+- `cfg`: Atmosphere configuration parameters (`AtmosphereConfig`).
+
+# Keywords
+- `rho_disk`: Protoplanetary disk gas density [kg/m^3] (default: 0.0).
+- `c_s`: Disk sound speed [m/s] (default: 300.0).
+- `M_star`: Central star mass [kg] (default: 1.98847e30).
+- `a_orb`: Planetary semi-major axis [m] (default: 1.495978707e11).
+- `T_int`: Interior temperature [K] (default: T_amb).
+- `T_exobase`: Exobase temperature [K] (default: T_amb).
+- `R_exobase`: Exobase radius [m] (default: R_planet).
+- `hydrodynamic`: Whether to include hydrodynamic blow-off (default: true).
+- `gamma`: Heat capacity ratio (default: 1.4).
+- `escape_active`: Whether escape is active (default: true).
+
+# Returns
+- `atm_state`: Updated `AtmosphereState`.
+
+# Raises
+- `DomainError`: If planet properties or ambient temperatures are non-positive or non-finite.
 """
 function evolve_coupled_atmosphere_step!(
     atm_state::AtmosphereState,
@@ -602,26 +1222,17 @@ function evolve_coupled_atmosphere_step!(
         end
     end
 
-    # 3. Hydrodynamic escape and crossover drag (active once disk disperses)
+    # 3. Hydrodynamic escape and multispecies closure (active once disk disperses)
     if escape_active && rho_disk <= 0.0
-        has_h2 = haskey(atm_state.M_atm, :H2) && atm_state.M_atm[:H2] > 0.0
-        if has_h2
-            carrier_sp = :H2
-            m_carrier = get_species_molecular_mass(:H2)
-            M_carrier = atm_state.M_atm[:H2]
+        present_species = Symbol[sp for (sp, mass) in atm_state.M_atm if mass > 0.0]
+        if !isempty(present_species)
+            m_species = [get_species_molecular_mass(sp) for sp in present_species]
+            min_idx = argmin(m_species)
+            carrier_sp = present_species[min_idx]
+            m_carrier = m_species[min_idx]
+            M_carrier = atm_state.M_atm[carrier_sp]
 
-            # Carrier mole fraction before escape step
-            total_moles_pre = sum(
-                m_curr / get_species_molecular_mass(sp) for
-                (sp, m_curr) in atm_state.M_atm if m_curr > 0.0
-            )
-            X_carrier = if total_moles_pre > 0.0
-                clamp((M_carrier / m_carrier) / total_moles_pre, 0.0, 1.0)
-            else
-                1.0
-            end
-
-            # Carrier escape flux via hydrodynamic blow-off
+            # Unconstrained escape of lightest species via hydrodynamic blow-off
             esc_carrier = evolve_atmospheric_species_inventory(
                 M_carrier,
                 0.0,
@@ -634,35 +1245,44 @@ function evolve_coupled_atmosphere_step!(
                 hydrodynamic=hydrodynamic,
                 gamma=gamma,
             )
-            dM_esc_carrier = esc_carrier.M_escaped_step
-            atm_state.M_atm[:H2] = esc_carrier.M_atm
-            atm_state.M_escaped[:H2] = get(atm_state.M_escaped, :H2, 0.0) + dM_esc_carrier
-            atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
+            dM_esc_base = esc_carrier.M_escaped_step
 
-            Phi_carrier = if dt > 0.0 && area_exo > 0.0
-                (dM_esc_carrier / dt) / (m_carrier * area_exo)
-            else
-                0.0
-            end
-
-            if cfg.crossover_active && Phi_carrier > 0.0
-                m_c = compute_crossover_mass(
-                    m_carrier, T_exo, Phi_carrier, g_exo, X_carrier; b_diff=cfg.b_diff_ref
+            if !cfg.crossover_active || length(present_species) == 1
+                atm_state.M_atm[carrier_sp] = esc_carrier.M_atm
+                atm_state.M_escaped[carrier_sp] =
+                    get(atm_state.M_escaped, carrier_sp, 0.0) + dM_esc_base
+                if carrier_sp === :H2
+                    atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
+                end
+            elseif dM_esc_base > 0.0 && dt > 0.0 && area_exo > 0.0
+                total_moles = sum(
+                    atm_state.M_atm[sp] / m_species[idx] for
+                    (idx, sp) in enumerate(present_species)
                 )
-                for (sp, m_curr) in atm_state.M_atm
-                    if sp != :H2 && m_curr > 0.0
-                        m_sp = get_species_molecular_mass(sp)
-                        x_drag = compute_crossover_drag_fraction(m_sp, m_c, m_carrier)
-                        # Zahnle & Kasting (1986): momentum coupling drags species proportional to carrier loss
-                        dM_drag = if (M_carrier > 0.0 && x_drag > 0.0)
-                            min(m_curr, dM_esc_carrier * (m_curr / M_carrier) * x_drag)
-                        else
-                            0.0
-                        end
-                        atm_state.M_atm[sp] = m_curr - dM_drag
-                        atm_state.M_escaped[sp] =
-                            get(atm_state.M_escaped, sp, 0.0) + dM_drag
-                    end
+                X_vec = [
+                    (atm_state.M_atm[sp] / m_species[idx]) / total_moles for
+                    (idx, sp) in enumerate(present_species)
+                ]
+                phi_base = (dM_esc_base / dt) / area_exo
+                b_mat = assemble_binary_diffusion_matrix(present_species, T_exo)
+                if cfg.b_diff_ref != 1.0e21
+                    b_mat .*= (cfg.b_diff_ref / 1.0e21)
+                end
+
+                Phi_vec = solve_multispecies_escape_closure(
+                    phi_base, X_vec, m_species, T_exo, g_exo, b_mat
+                )
+
+                for (idx, sp) in enumerate(present_species)
+                    Phi_j = Phi_vec[idx]
+                    dM_esc_j = min(
+                        atm_state.M_atm[sp], Phi_j * m_species[idx] * area_exo * dt
+                    )
+                    atm_state.M_atm[sp] -= dM_esc_j
+                    atm_state.M_escaped[sp] = get(atm_state.M_escaped, sp, 0.0) + dM_esc_j
+                end
+                if haskey(atm_state.M_atm, :H2)
+                    atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
                 end
             end
         end
