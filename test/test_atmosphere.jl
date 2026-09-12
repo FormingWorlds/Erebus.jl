@@ -1263,4 +1263,230 @@ using Random
         @test all(v >= 0.0 for v in values(atm_state.M_atm))
         @test all(v >= 0.0 for v in values(atm_state.M_escaped))
     end
+
+    # ---------------------------------------------------------------------
+    # 18. Speciated Volatile Venting under Variable Oxygen Fugacity
+    # ---------------------------------------------------------------------
+    @testset "Speciated Volatile Venting under Variable Oxygen Fugacity" begin
+        # Reducing conditions (delta_IW = -2.0)
+        T_gas = 1200.0
+        P_gas = 1.0e5
+        m_H2O_rel = 1.0e12
+        m_C_rel = 5.0e11
+        m_N_rel = 1.0e11
+        m_S_rel = 2.0e11
+
+        red_spec = speciate_vented_volatiles(
+            m_H2O_rel, m_C_rel, m_N_rel, m_S_rel, P_gas, T_gas, -2.0
+        )
+
+        # Elemental mole conservation
+        n_elem_in = (
+            2.0 * m_H2O_rel / 18.01528e-3 +
+            m_C_rel / 12.011e-3 +
+            m_N_rel / 14.007e-3 +
+            m_S_rel / 32.06e-3
+        )
+
+        n_elem_out_red = (
+            2.0 * (red_spec[:H2] / 2.01588e-3) +
+            2.0 * (red_spec[:H2O] / 18.01528e-3) +
+            1.0 * (red_spec[:CO] / 28.0101e-3) +
+            1.0 * (red_spec[:CO2] / 44.0095e-3) +
+            5.0 * (red_spec[:CH4] / 16.0425e-3) +
+            2.0 * (red_spec[:N2] / 28.0134e-3) +
+            4.0 * (red_spec[:NH3] / 17.0305e-3) +
+            3.0 * (red_spec[:H2S] / 34.0809e-3) +
+            2.0 * (red_spec[:S2] / 64.12e-3) +
+            1.0 * (red_spec[:SO2] / 64.066e-3)
+        )
+        @test isapprox(n_elem_out_red, n_elem_in, rtol=1e-10)
+
+        nH_in = 2.0 * m_H2O_rel / 18.01528e-3
+        nC_in = m_C_rel / 12.011e-3
+        nN_in = m_N_rel / 14.007e-3
+        nS_in = m_S_rel / 32.06e-3
+
+        nH_out_red = (
+            2.0 * (red_spec[:H2] / 2.01588e-3) +
+            2.0 * (red_spec[:H2O] / 18.01528e-3) +
+            4.0 * (red_spec[:CH4] / 16.0425e-3) +
+            3.0 * (red_spec[:NH3] / 17.0305e-3) +
+            2.0 * (red_spec[:H2S] / 34.0809e-3)
+        )
+        nC_out_red =
+            red_spec[:CO] / 28.0101e-3 +
+            red_spec[:CO2] / 44.0095e-3 +
+            red_spec[:CH4] / 16.0425e-3
+        nN_out_red = 2.0 * (red_spec[:N2] / 28.0134e-3) + red_spec[:NH3] / 17.0305e-3
+        nS_out_red =
+            red_spec[:H2S] / 34.0809e-3 +
+            2.0 * (red_spec[:S2] / 64.12e-3) +
+            red_spec[:SO2] / 64.066e-3
+
+        @test isapprox(nH_out_red, nH_in, rtol=1e-10)
+        @test isapprox(nC_out_red, nC_in, rtol=1e-10)
+        @test isapprox(nN_out_red, nN_in, rtol=1e-10)
+        @test isapprox(nS_out_red, nS_in, rtol=1e-10)
+
+        # In reducing conditions, H2 and CO dominate
+        @test red_spec[:H2] > red_spec[:H2O]
+        @test red_spec[:CO] > red_spec[:CO2]
+
+        # Oxidizing conditions (delta_IW = +2.0)
+        ox_spec = speciate_vented_volatiles(
+            m_H2O_rel, m_C_rel, m_N_rel, m_S_rel, P_gas, T_gas, 2.0
+        )
+
+        n_elem_out_ox = (
+            2.0 * (ox_spec[:H2] / 2.01588e-3) +
+            2.0 * (ox_spec[:H2O] / 18.01528e-3) +
+            1.0 * (ox_spec[:CO] / 28.0101e-3) +
+            1.0 * (ox_spec[:CO2] / 44.0095e-3) +
+            5.0 * (ox_spec[:CH4] / 16.0425e-3) +
+            2.0 * (ox_spec[:N2] / 28.0134e-3) +
+            4.0 * (ox_spec[:NH3] / 17.0305e-3) +
+            3.0 * (ox_spec[:H2S] / 34.0809e-3) +
+            2.0 * (ox_spec[:S2] / 64.12e-3) +
+            1.0 * (ox_spec[:SO2] / 64.066e-3)
+        )
+        @test isapprox(n_elem_out_ox, n_elem_in, rtol=1e-10)
+
+        nH_out_ox = (
+            2.0 * (ox_spec[:H2] / 2.01588e-3) +
+            2.0 * (ox_spec[:H2O] / 18.01528e-3) +
+            4.0 * (ox_spec[:CH4] / 16.0425e-3) +
+            3.0 * (ox_spec[:NH3] / 17.0305e-3) +
+            2.0 * (ox_spec[:H2S] / 34.0809e-3)
+        )
+        nC_out_ox =
+            ox_spec[:CO] / 28.0101e-3 +
+            ox_spec[:CO2] / 44.0095e-3 +
+            ox_spec[:CH4] / 16.0425e-3
+        nN_out_ox = 2.0 * (ox_spec[:N2] / 28.0134e-3) + ox_spec[:NH3] / 17.0305e-3
+        nS_out_ox =
+            ox_spec[:H2S] / 34.0809e-3 +
+            2.0 * (ox_spec[:S2] / 64.12e-3) +
+            ox_spec[:SO2] / 64.066e-3
+
+        @test isapprox(nH_out_ox, nH_in, rtol=1e-10)
+        @test isapprox(nC_out_ox, nC_in, rtol=1e-10)
+        @test isapprox(nN_out_ox, nN_in, rtol=1e-10)
+        @test isapprox(nS_out_ox, nS_in, rtol=1e-10)
+
+        # Strongly reducing conditions (delta_IW = -4.0 and -6.0) with graphite saturation
+        for dIW_red in (-4.0, -6.0)
+            spec_deep = speciate_vented_volatiles(
+                m_H2O_rel,
+                m_C_rel,
+                m_N_rel,
+                m_S_rel,
+                P_gas,
+                T_gas,
+                dIW_red;
+                graphite_saturation=true,
+            )
+            nH_deep = (
+                2.0 * (spec_deep[:H2] / 2.01588e-3) +
+                2.0 * (spec_deep[:H2O] / 18.01528e-3) +
+                4.0 * (spec_deep[:CH4] / 16.0425e-3) +
+                3.0 * (spec_deep[:NH3] / 17.0305e-3) +
+                2.0 * (spec_deep[:H2S] / 34.0809e-3)
+            )
+            nC_deep =
+                spec_deep[:CO] / 28.0101e-3 +
+                spec_deep[:CO2] / 44.0095e-3 +
+                spec_deep[:CH4] / 16.0425e-3
+            nN_deep = 2.0 * (spec_deep[:N2] / 28.0134e-3) + spec_deep[:NH3] / 17.0305e-3
+            nS_deep =
+                spec_deep[:H2S] / 34.0809e-3 +
+                2.0 * (spec_deep[:S2] / 64.12e-3) +
+                spec_deep[:SO2] / 64.066e-3
+
+            @test isapprox(nH_deep, nH_in, rtol=1e-10)
+            @test nC_deep < nC_in
+            @test nC_deep > 0.0
+            @test nN_deep <= nN_in * (1.0 + 1e-10)
+            @test nS_deep <= nS_in * (1.0 + 1e-10)
+        end
+
+        # In oxidizing conditions, H2O and CO2 dominate
+        @test ox_spec[:H2O] > ox_spec[:H2]
+        @test ox_spec[:CO2] > ox_spec[:CO]
+
+        # Redox shift ordering invariants
+        @test ox_spec[:H2O] > red_spec[:H2O]
+        @test ox_spec[:CO2] > red_spec[:CO2]
+        @test red_spec[:H2] > ox_spec[:H2]
+
+        # Oxidizing gas has higher total mass because oxygen is incorporated from buffer
+        m_tot_out_red = sum(values(red_spec))
+        m_tot_out_ox = sum(values(ox_spec))
+        @test m_tot_out_ox > m_tot_out_red
+
+        # Non-negative masses
+        @test all(v >= 0.0 for v in values(red_spec))
+        @test all(v >= 0.0 for v in values(ox_spec))
+
+        # Zero releases yield zero values
+        empty_spec = speciate_vented_volatiles(0.0, 0.0, 0.0, 0.0, P_gas, T_gas, 0.0)
+        @test all(iszero, values(empty_spec))
+
+        # Integration with coupled atmosphere evolution
+        atm_state = AtmosphereState()
+        cfg_atm = AtmosphereConfig(; crossover_active=false, tau_boil=Inf)
+        dt_test = 1000.0
+        vent_rates_test = Dict(sp => m_val / dt_test for (sp, m_val) in ox_spec)
+        evolve_coupled_atmosphere_step!(
+            atm_state,
+            vent_rates_test,
+            dt_test,
+            1.0e21,
+            5.0e5,
+            300.0,
+            cfg_atm;
+            escape_active=false,
+        )
+        for (sp, m_val) in ox_spec
+            @test isapprox(atm_state.M_atm[sp], m_val; rtol=1e-10)
+        end
+
+        # Input validation DomainError contracts
+        @test_throws DomainError speciate_vented_volatiles(
+            -1.0, 1.0, 1.0, 1.0, P_gas, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, -1.0, 1.0, 1.0, P_gas, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, -1.0, 1.0, P_gas, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, -1.0, P_gas, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            NaN, 1.0, 1.0, 1.0, P_gas, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, 0.0, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, -1.0, T_gas, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, P_gas, 0.0, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, P_gas, -10.0, 0.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, P_gas, T_gas, 60.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, P_gas, T_gas, -60.0
+        )
+        @test_throws DomainError speciate_vented_volatiles(
+            1.0, 1.0, 1.0, 1.0, P_gas, T_gas, NaN
+        )
+    end
 end

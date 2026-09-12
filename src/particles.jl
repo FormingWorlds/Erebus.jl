@@ -3448,6 +3448,7 @@ function replenish_markers!(
     Xmin_nitride_m=nothing,
     Xmin_metal_matrix_m=nothing,
     t_accreted=nothing,
+    hcnspo_props=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
@@ -3592,6 +3593,11 @@ function replenish_markers!(
                     end
                     if t_accreted !== nothing
                         push!(t_accreted, t_accreted[m])
+                    end
+                    if hcnspo_props !== nothing
+                        for prop in values(hcnspo_props)
+                            push!(prop, prop[m])
+                        end
                     end
                 end
             end

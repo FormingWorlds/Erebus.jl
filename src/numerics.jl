@@ -457,6 +457,7 @@ function assemble_hydromechanical_lse!(
     eta_fluid_surf::Real=1.0e-3,
     L_sub::Real=2.83e6,
     S_vent_out=nothing,
+    DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -892,6 +893,9 @@ function assemble_hydromechanical_lse!(
                 ) # Pfluid
                 # RHS coefficient vector
                 R[kpf] = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
+                if DQPF !== nothing
+                    R[kpf] += DQPF[i, j]
+                end
             end # Ptotal/Pfluid equation
         end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
@@ -1207,6 +1211,9 @@ function compute_adaptive_timestep(
     max_v_seg::Real=0.0,
     max_subcycles::Integer=2000,
     cfl_settling::Real=0.5,
+    DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    cfl_reaction::Real=0.5,
+    dphi_reaction_max::Real=0.01,
 )
     dt_cand = compute_displacement_timestep(
         vx,
@@ -1230,6 +1237,13 @@ function compute_adaptive_timestep(
         dt_cfl_seg = cfl_settling * min_dx / max_v_seg
         dt_seg_bound = max_subcycles * dt_cfl_seg
         dt_cand = min(dt_cand, dt_seg_bound)
+    end
+    if DQPF !== nothing
+        max_dqpf = maximum(abs, DQPF)
+        if max_dqpf > 0.0
+            dt_rxn = Float64(cfl_reaction) * Float64(dphi_reaction_max) / max_dqpf
+            dt_cand = min(dt_cand, dt_rxn)
+        end
     end
     dt_cand = clamp(dt_cand, dt_min, dt_longest_val)
     return dt_cand
@@ -2206,6 +2220,83 @@ function apply_venting_surface_boundary!(
         end
     end
     return nothing
+end
+
+"""
+    compute_mean_surface_temperature(
+        tk::AbstractMatrix{<:Real},
+        coords::GridCoordinates,
+        rplanet::Real,
+        xcenter::Real,
+        ycenter::Real;
+        T_default::Real=300.0,
+    )::Float64
+
+Compute average temperature of planetesimal rock nodes at the surface boundary (r ≈ rplanet).
+Returns `T_default` if no surface rock nodes are identified.
+"""
+function compute_mean_surface_temperature(
+    tk::AbstractMatrix{<:Real},
+    coords::GridCoordinates,
+    rplanet::Real,
+    xcenter::Real,
+    ycenter::Real;
+    T_default::Real=300.0,
+)::Float64
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    rplanet2 = Float64(rplanet)^2
+    t_sum = 0.0
+    count = 0
+    visited = falses(Ny1, Nx1)
+    # Horizontal rock-air interfaces
+    @inbounds for j in 1:(Nx1 - 1)
+        xj1 = coords.xp[j] - xcenter
+        xj2 = coords.xp[j + 1] - xcenter
+        for i in 1:Ny1
+            yi = coords.yp[i] - ycenter
+            is_rock1 = (xj1^2 + yi^2) <= rplanet2
+            is_rock2 = (xj2^2 + yi^2) <= rplanet2
+            if is_rock1 != is_rock2
+                i_rock = i
+                j_rock = is_rock1 ? j : (j + 1)
+                if 2 <= i_rock <= Ny1 - 1 &&
+                    2 <= j_rock <= Nx1 - 1 &&
+                    !visited[i_rock, j_rock]
+                    t_val = Float64(tk[i_rock, j_rock])
+                    if isfinite(t_val) && t_val > 0.0
+                        visited[i_rock, j_rock] = true
+                        t_sum += t_val
+                        count += 1
+                    end
+                end
+            end
+        end
+    end
+    # Vertical rock-air interfaces
+    @inbounds for j in 1:Nx1
+        xj = coords.xp[j] - xcenter
+        for i in 1:(Ny1 - 1)
+            yi1 = coords.yp[i] - ycenter
+            yi2 = coords.yp[i + 1] - ycenter
+            is_rock1 = (xj^2 + yi1^2) <= rplanet2
+            is_rock2 = (xj^2 + yi2^2) <= rplanet2
+            if is_rock1 != is_rock2
+                i_rock = is_rock1 ? i : (i + 1)
+                j_rock = j
+                if 2 <= i_rock <= Ny1 - 1 &&
+                    2 <= j_rock <= Nx1 - 1 &&
+                    !visited[i_rock, j_rock]
+                    t_val = Float64(tk[i_rock, j_rock])
+                    if isfinite(t_val) && t_val > 0.0
+                        visited[i_rock, j_rock] = true
+                        t_sum += t_val
+                        count += 1
+                    end
+                end
+            end
+        end
+    end
+    return count > 0 ? t_sum / count : Float64(T_default)
 end
 
 """

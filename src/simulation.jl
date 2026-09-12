@@ -1755,6 +1755,7 @@ function simulation_loop(
                 Xmin_nitride_m=Xmin_nitride_m,
                 Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                 t_accreted=t_accreted,
+                hcnspo_props=hcnspo_props,
             )
 
             # Re-initialize linear solvers and Poisson operator for new grid size
@@ -2267,6 +2268,14 @@ function simulation_loop(
             else
                 0.0
             end
+            T_amb_rad =
+                if cfg.atmosphere.active &&
+                    atm_state !== nothing &&
+                    atm_state.T_surf_eq > 0.0
+                    atm_state.T_surf_eq
+                else
+                    T_amb
+                end
             apply_radiative_surface_boundary!(
                 KX,
                 KY,
@@ -2275,7 +2284,7 @@ function simulation_loop(
                 rplanet_val,
                 xcenter_val,
                 ycenter_val,
-                T_amb;
+                T_amb_rad;
                 emissivity=emissivity_val,
                 sigma_sb=sigma_sb_val,
                 marker_property_mode=marker_property_mode,
@@ -2439,6 +2448,7 @@ function simulation_loop(
                     eta_fluid_surf=etafluidmm[2],
                     L_sub=cfg.venting.L_sublimation,
                     S_vent_out=S_vent_grid,
+                    DQPF=DQPF,
                 )
                 # solve hydromechanical system of equations
                 @info "starting hydro-mechanical solver $titer-$iplast"
@@ -2461,13 +2471,13 @@ function simulation_loop(
                     if !LinearSolve.SciMLBase.successful_retcode(hydromech_sol) ||
                         !all(isfinite, hydromech_sol.u)
                         error(
-                            "Hydromechanical solver failed: retcode=$(hydromech_sol.retcode), finite=$(all(isfinite, hydromech_sol.u))",
+                            "LinearSolve failed with retcode $(hydromech_sol.retcode) or produced non-finite values",
                         )
                     end
-                    S = hydromech_sol.u
+                    S .= hydromech_sol.u
                 end
                 @info "finished hydro-mechanical solver $titer-$iplast"
-                # obtain hydromechanical observables from solution
+                # process hydromechanical solution
                 process_hydromechanical_solution!(
                     S, vx, vy, pr, qxD, qyD, pf; coords=coords
                 )
@@ -2513,6 +2523,9 @@ function simulation_loop(
                     max_v_seg=max_v_seg_prev,
                     max_subcycles=cfg.coreformation.max_subcycles,
                     cfl_settling=cfg.coreformation.cfl_settling,
+                    DQPF=DQPF,
+                    cfl_reaction=cfg.reaction.cfl_reaction,
+                    dphi_reaction_max=cfg.reaction.dphi_reaction_max,
                 )
 
                 # compute stresses, stress changes and strain rate components
@@ -2994,19 +3007,50 @@ function simulation_loop(
                     cfg.retention.venting_drainage_active &&
                     XH2Om !== nothing &&
                     vented_vols !== nothing
-                    vent_rates[:H2O] =
-                        get(vent_rates, :H2O, 0.0) +
-                        (vented_vols.M_vent_H2O * L_3D_equiv) / dt
-                    # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
-                    vent_rates[:CO2] =
-                        get(vent_rates, :CO2, 0.0) +
-                        (vented_vols.M_vent_C * (44.0095 / 12.011) * L_3D_equiv) / dt
-                    vent_rates[:N2] =
-                        get(vent_rates, :N2, 0.0) + (vented_vols.M_vent_N * L_3D_equiv) / dt
-                    # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
-                    vent_rates[:H2S] =
-                        get(vent_rates, :H2S, 0.0) +
-                        (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) / dt
+                    if cfg.volatiles.speciation_active
+                        m_H2O_step = vented_vols.M_vent_H2O * L_3D_equiv
+                        m_C_step = vented_vols.M_vent_C * L_3D_equiv
+                        m_N_step = vented_vols.M_vent_N * L_3D_equiv
+                        m_S_step = vented_vols.M_vent_S * L_3D_equiv
+                        p_surf_val = if cfg.atmosphere.active
+                            max(atm_state.P_surf, P_amb_eff)
+                        else
+                            P_amb_eff
+                        end
+                        T_surf_val = if (cfg.atmosphere.active && atm_state.T_surf_eq > 0.0)
+                            atm_state.T_surf_eq
+                        else
+                            T_amb
+                        end
+                        spec_dict = speciate_vented_volatiles(
+                            m_H2O_step,
+                            m_C_step,
+                            m_N_step,
+                            m_S_step,
+                            p_surf_val,
+                            T_surf_val,
+                            cfg.volatiles.fO2_delta_IW;
+                            graphite_saturation=cfg.volatiles.graphite_saturation,
+                        )
+                        for (sp, m_sp) in spec_dict
+                            vent_rates[sp] = get(vent_rates, sp, 0.0) + m_sp / dt
+                        end
+                    else
+                        vent_rates[:H2O] =
+                            get(vent_rates, :H2O, 0.0) +
+                            (vented_vols.M_vent_H2O * L_3D_equiv) / dt
+                        # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
+                        vent_rates[:CO2] =
+                            get(vent_rates, :CO2, 0.0) +
+                            (vented_vols.M_vent_C * (44.0095 / 12.011) * L_3D_equiv) / dt
+                        vent_rates[:N2] =
+                            get(vent_rates, :N2, 0.0) +
+                            (vented_vols.M_vent_N * L_3D_equiv) / dt
+                        # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
+                        vent_rates[:H2S] =
+                            get(vent_rates, :H2S, 0.0) +
+                            (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) / dt
+                    end
                 end
             end
 
@@ -3019,6 +3063,9 @@ function simulation_loop(
             a_orb_val = cfg.disk.orbital_distance_au * AU_METERS
             M_star_val = cfg.disk.stellar_mass_msun * M_SUN_KG
             R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
+            T_int_val = compute_mean_surface_temperature(
+                tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+            )
 
             evolve_coupled_atmosphere_step!(
                 atm_state,
@@ -3032,7 +3079,7 @@ function simulation_loop(
                 c_s=c_s_disk,
                 M_star=M_star_val,
                 a_orb=a_orb_val,
-                T_int=T_amb,
+                T_int=T_int_val,
                 T_exobase=cfg.escape.T_exobase,
                 R_exobase=R_exo_val,
                 hydrodynamic=cfg.escape.hydrodynamic,
@@ -3232,9 +3279,17 @@ function simulation_loop(
             Xmin_nitride_m=Xmin_nitride_m,
             Xmin_metal_matrix_m=Xmin_metal_matrix_m,
             t_accreted=t_accreted,
+            hcnspo_props=hcnspo_props,
         )
         if t_accreted !== nothing && length(t_accreted) != marknum
             resize!(t_accreted, marknum)
+        end
+        if hcnspo_props !== nothing
+            for prop in values(hcnspo_props)
+                if length(prop) != marknum
+                    resize!(prop, marknum)
+                end
+            end
         end
         if coreformation_active_val
             if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum

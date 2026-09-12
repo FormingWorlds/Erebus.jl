@@ -1018,6 +1018,8 @@
         )
         mdis, mnum = Erebus.setup_marker_geometry_helpers()
 
+        hcnspo_test = (X_ice_H2O_m=fill(0.05, marknum), X_refr_Fe_m=fill(0.20, marknum))
+
         marknum_new = Erebus.replenish_markers!(
             xm,
             ym,
@@ -1048,12 +1050,17 @@
             mdis,
             mnum;
             randomized=false,
+            hcnspo_props=hcnspo_test,
         )
 
         # 1. Population recovery: new markers added to depleted cells
-        @test marknum_new >= marknum
+        @test marknum_new > marknum
         @test length(xm) == marknum_new
         @test length(ym) == marknum_new
+        @test length(hcnspo_test.X_ice_H2O_m) == marknum_new
+        @test length(hcnspo_test.X_refr_Fe_m) == marknum_new
+        @test all(x -> isapprox(x, 0.05; rtol=1e-12), hcnspo_test.X_ice_H2O_m)
+        @test all(x -> isapprox(x, 0.20; rtol=1e-12), hcnspo_test.X_refr_Fe_m)
 
         # 2. Newly added marker coordinates are strictly within physical domain
         for m in 1:marknum_new

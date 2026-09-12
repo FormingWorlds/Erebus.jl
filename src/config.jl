@@ -265,6 +265,8 @@ Base.@kwdef struct ReactionConfig
     pfcoeff::Float64 = 0.5
     pferrmax::Float64 = 1.0e5
     p_cavitation::Float64 = 1.0e7
+    cfl_reaction::Float64 = 0.5
+    dphi_reaction_max::Float64 = 0.01
 end
 
 """
@@ -323,6 +325,7 @@ $(FIELDS)
 """
 Base.@kwdef struct VolatilesConfig
     active::Bool = false
+    speciation_active::Bool = false
     fO2_delta_IW::Float64 = -1.0
     water_solubility_coeff::Float64 = 0.40
     water_law::Symbol = :burnham_dixon
@@ -1161,6 +1164,11 @@ function validate_config(cfg::SimulationConfig)
         throw(ArgumentError("pferrmax must be > 0 and finite"))
     cfg.reaction.p_cavitation >= 0.0 && isfinite(cfg.reaction.p_cavitation) ||
         throw(ArgumentError("p_cavitation must be >= 0 and finite"))
+    cfg.reaction.cfl_reaction > 0.0 && isfinite(cfg.reaction.cfl_reaction) ||
+        throw(ArgumentError("cfl_reaction must be > 0 and finite"))
+    0.0 < cfg.reaction.dphi_reaction_max <= 1.0 &&
+    isfinite(cfg.reaction.dphi_reaction_max) ||
+        throw(ArgumentError("dphi_reaction_max must be in (0, 1] and finite"))
 
     # Materials checks: all 18 property arrays must be positive/non-negative and finite
     for (arr, name, strictly_pos) in [
