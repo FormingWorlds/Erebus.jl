@@ -1221,4 +1221,46 @@ using Random
         m_tot_final = sum(values(atm_state.M_atm)) + sum(values(atm_state.M_escaped))
         @test isapprox(m_tot_final, 1.2e15, rtol=1e-12)
     end
+
+    # ---------------------------------------------------------------------
+    # 17. Extreme Dynamic Range and Trace Volatile Closure Robustness
+    # ---------------------------------------------------------------------
+    @testset "Extreme Dynamic Range and Trace Volatile Closure Robustness" begin
+        # 19 decades difference in mole fractions
+        sp_list = [:SO2, :S2, :N2, :H2, :CO2]
+        m_species = [get_species_molecular_mass(sp) for sp in sp_list]
+        X_vec = [
+            1.7309164887986588e-19,
+            1.7291886671099497e-19,
+            0.19792829217056152,
+            0.5500968135895964,
+            0.2519748942398421,
+        ]
+        phi_base = 2.456094800800854e-5
+        g0 = 0.3707944444444444
+        T_val = 600.0
+        b_mat = assemble_binary_diffusion_matrix(sp_list, T_val)
+
+        Phi, C, act = solve_multispecies_escape_closure(
+            phi_base, X_vec, m_species, T_val, g0, b_mat; return_diag=true
+        )
+        @test all(Phi .>= 0.0)
+        @test isapprox(sum(Phi .* m_species), phi_base, rtol=1e-12)
+
+        # Trace volatile inventory in coupled atmosphere time step
+        atm_state = AtmosphereState()
+        atm_state.M_atm[:CO2] = 1.0e14
+        atm_state.M_atm[:N2] = 1.0e14
+        atm_state.M_atm[:H2] = 1.0e14
+        atm_state.M_atm[:SO2] = 1.0e-4
+        atm_state.M_atm[:S2] = 1.0e-4
+        cfg = AtmosphereConfig(crossover_active=true)
+        evolve_coupled_atmosphere_step!(
+            atm_state, Dict{Symbol,Float64}(), 3600.0, 1.0e21, 5.0e5, 300.0, cfg
+        )
+        m_tot_final = sum(values(atm_state.M_atm)) + sum(values(atm_state.M_escaped))
+        @test isapprox(m_tot_final, 3.0e14 + 2.0e-4, rtol=1e-12)
+        @test all(v >= 0.0 for v in values(atm_state.M_atm))
+        @test all(v >= 0.0 for v in values(atm_state.M_escaped))
+    end
 end

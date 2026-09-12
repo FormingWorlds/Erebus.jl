@@ -680,27 +680,9 @@ const MOLECULAR_BINARY_DIFFUSION_1000K_SI = Dict{Tuple{Symbol,Symbol},Float64}(
 )
 
 """
-    get_binary_diffusion_parameter(
-        species_1::Symbol, species_2::Symbol, T_K::Real;
-        b_anchor::Real=4.09e21,
-    )::Float64
+    _canonical_escape_symbol(s::Symbol)::Symbol
 
-Evaluate the binary diffusion parameter b_ij(T) = n D_ij in m^-1 s^-1 for a gas pair.
-Directly accesses tabulated values or applies Zahnle & Kasting (2023) Eq. (10) scaling.
-
-# Parameters
-- `species_1`: Symbol of first gas species.
-- `species_2`: Symbol of second gas species.
-- `T_K`: Temperature [K].
-
-# Keywords
-- `b_anchor`: Reference anchor parameter [m^-1 s^-1] (default: 4.09e21 for H2-CO2).
-
-# Returns
-- `b_ij`: Binary diffusion parameter [m^-1 s^-1].
-
-# Raises
-- `DomainError`: If temperature is non-positive or non-finite.
+Normalize volatile species symbol `s` to canonical casing used in diffusion dictionaries.
 """
 function _canonical_escape_symbol(s::Symbol)::Symbol
     u = uppercase(String(s))
@@ -761,6 +743,29 @@ function _canonical_escape_symbol(s::Symbol)::Symbol
     end
 end
 
+"""
+    get_binary_diffusion_parameter(
+        species_1::Symbol, species_2::Symbol, T_K::Real;
+        b_anchor::Real=4.09e21,
+    )::Float64
+
+Evaluate the binary diffusion parameter b_ij(T) = n D_ij in m^-1 s^-1 for a gas pair.
+Directly accesses tabulated values or applies Zahnle & Kasting (2023) Eq. (10) scaling.
+
+# Parameters
+- `species_1`: Symbol of first gas species.
+- `species_2`: Symbol of second gas species.
+- `T_K`: Temperature [K].
+
+# Keywords
+- `b_anchor`: Reference anchor parameter [m^-1 s^-1] (default: 4.09e21 for H2-CO2).
+
+# Returns
+- `b_ij`: Binary diffusion parameter [m^-1 s^-1].
+
+# Raises
+- `DomainError`: If temperature is non-positive or non-finite.
+"""
 function get_binary_diffusion_parameter(
     species_1::Symbol, species_2::Symbol, T_K::Real; b_anchor::Real=4.09e21
 )::Float64
@@ -907,22 +912,7 @@ function solve_fixed_active(
     end
     rhs[nA + 1] = phi_val
 
-    # Two-sided equilibration: D_r M D_c y = D_r rhs, sol = D_c y
-    dr = zeros(Float64, nA + 1)
-    for r in 1:(nA + 1)
-        max_r = maximum(abs, M[r, :])
-        dr[r] = max_r > 0.0 ? 1.0 / max_r : 1.0
-    end
-    Ms = M .* dr
-
-    dc = zeros(Float64, nA + 1)
-    for c in 1:(nA + 1)
-        max_c = maximum(abs, Ms[:, c])
-        dc[c] = max_c > 0.0 ? 1.0 / max_c : 1.0
-    end
-    Ms = Ms .* dc'
-
-    sol = dc .* (Ms \ (rhs .* dr))
+    sol = M \ rhs
     w = zeros(Float64, N)
     for (col, j) in enumerate(A)
         w[j] = sol[col]
@@ -996,7 +986,23 @@ function solve_multispecies_escape_closure(
 
     active = Set(1:N)
     wscale = phi_val / minimum(m)
+    visited = Set{Set{Int}}()
+    best_feasible_Phi = zeros(Float64, N)
+    best_feasible_C = minimum(m) * g0_val / kT
+    best_feasible_active = Set{Int}()
+    min_violation = Inf
+
     for _ in 1:(4 * N + 8)
+        if active in visited
+            if !isinf(min_violation)
+                if return_diag
+                    return best_feasible_Phi, best_feasible_C, best_feasible_active
+                end
+                return best_feasible_Phi
+            end
+        end
+        push!(visited, copy(active))
+
         w, C = solve_fixed_active(phi_val, X, m, T_val, g0_val, b, active)
         neg = Set([j for j in active if w[j] < -1e-12 * wscale])
         if !isempty(neg)
@@ -1022,6 +1028,20 @@ function solve_multispecies_escape_closure(
                 worst = Rk
             end
         end
+
+        if worst < min_violation
+            min_violation = worst
+            w_clamp = max.(w, 0.0)
+            best_feasible_Phi = [Float64(X[k]) * w_clamp[k] for k in 1:N]
+            for k in 1:N
+                if k ∉ active
+                    best_feasible_Phi[k] = 0.0
+                end
+            end
+            best_feasible_C = C
+            best_feasible_active = copy(active)
+        end
+
         if viol == 0
             w = max.(w, 0.0)
             Phi = [Float64(X[k]) * w[k] for k in 1:N]
@@ -1036,6 +1056,13 @@ function solve_multispecies_escape_closure(
             return Phi
         end
         push!(active, viol)
+    end
+
+    if !isinf(min_violation)
+        if return_diag
+            return best_feasible_Phi, best_feasible_C, best_feasible_active
+        end
+        return best_feasible_Phi
     end
     return error("Active-set iteration did not converge")
 end
