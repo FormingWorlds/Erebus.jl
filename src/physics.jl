@@ -4215,10 +4215,8 @@ end
 # =============================================================================
 
 # Fundamental physical constants
-"""
-Newtonian gravitational constant G in m^3 / (kg s^2), from CODATA 2018.
-"""
-const GRAVITATIONAL_CONSTANT = 6.67430e-11
+# Note: GRAVITATIONAL_CONSTANT is defined in constants.jl (CODATA 2018)
+
 
 """
 Boltzmann constant k_B in J / K (SI exact definition).

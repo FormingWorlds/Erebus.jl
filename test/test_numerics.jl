@@ -76,7 +76,7 @@
         Erebus.assemble_gravitational_rhs!(fill(1.0, Ny1, Nx1), RP_unit)
         gk_mid = (div(Nx1, 2) - 1) * Ny1 + div(Ny1, 2)
         # Independently derived 8πG/3 with G = 6.67430e-11 m^3/(kg s^2) (CODATA 2018)
-        expected_prefactor = 4.0 * 2.0 * inv(3.0) * π * 6.67430e-11
+        expected_prefactor = 5.59144849276116e-10
         @test isapprox(RP_unit[gk_mid], expected_prefactor; rtol=1e-10)
         @test abs(RP_unit[gk_mid] - (4.0 * π * G)) > 1e-10 # prefactor discrimination (not 4πG)
         @test abs(RP_unit[gk_mid] - (4.0 / 3.0 * π * G)) > 1e-10 # prefactor discrimination (not 4πG/3)

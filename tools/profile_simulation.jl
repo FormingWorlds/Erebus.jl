@@ -65,7 +65,8 @@ end
 
 function main()
     config_file = length(ARGS) >= 1 ? ARGS[1] : "configs/test_quick.toml"
-    output_dir = "output_files"
+    repo_root = dirname(@__DIR__)
+    output_dir = joinpath(repo_root, "output_files")
     mkpath(output_dir)
     output_file = joinpath(output_dir, "profiling_baseline.json")
 
@@ -74,7 +75,7 @@ function main()
     println("==========================================================")
     println("Config: $config_file")
 
-    data = run_profile(config_file; n_runs=3)
+    data = run_profile(config_file)
 
     open(output_file, "w") do f
         JSON.print(f, data, 2)
