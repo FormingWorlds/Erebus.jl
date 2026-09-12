@@ -152,4 +152,46 @@
             end
         end
     end
+
+    @testset "End-to-end speciation and surface thermal coupling in simulation_loop" begin
+        mktempdir() do tmpdir
+            quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+            cfg = load_config(quick_toml)
+            cfg_run = SimulationConfig(
+                time=TimeConfig(
+                    n_steps=2,
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                ),
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=ThermalConfig(surface_radiation=true),
+                materials=cfg.materials,
+                reaction=ReactionConfig(cfl_reaction=0.5, dphi_reaction_max=0.01),
+                atmosphere=AtmosphereConfig(active=true),
+                volatiles=VolatilesConfig(
+                    active=true, speciation_active=true, graphite_saturation=true
+                ),
+                output=OutputConfig(output_dir=tmpdir, savematstep=1),
+            )
+            Erebus.simulation_loop(cfg_run; output_path=tmpdir)
+            ckpt1_path = joinpath(tmpdir, "output_00001.jld2")
+            @test isfile(ckpt1_path)
+            state1 = load_state(ckpt1_path)
+            @test haskey(state1, "tk1")
+            @test all(isfinite, state1["tk1"])
+            @test any(state1["tk1"] .> 0.0)
+            @test haskey(state1, "atm_T_surf_eq")
+            @test isfinite(state1["atm_T_surf_eq"])
+            @test state1["atm_T_surf_eq"] > 0.0
+            @test haskey(state1, "DQPF")
+            @test all(isfinite, state1["DQPF"])
+
+            ckpt2_path = joinpath(tmpdir, "output_00002.jld2")
+            @test isfile(ckpt2_path)
+            state2 = load_state(ckpt2_path)
+            @test isfinite(state2["atm_T_surf_eq"])
+            @test state2["atm_T_surf_eq"] > 0.0
+        end
+    end
 end

@@ -637,4 +637,89 @@ using JLD2
             rm(output_dir; recursive=true, force=true)
         end
     end
+
+    # ---------------------------------------------------------------------
+    # 9. HCNSPO Marker Array Replenishment Under Domain Doubling
+    # ---------------------------------------------------------------------
+    @testset "telescope_marker_arrays!() with HCNSPO marker replenishment" begin
+        c17 = GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        c33 = GridCoordinates(33, 33; xsize=280_000.0, ysize=280_000.0)
+        N_m = 1000
+        xm = rand(N_m) .* 100_000.0 .+ 20_000.0
+        ym = rand(N_m) .* 100_000.0 .+ 20_000.0
+        tm = fill(1, N_m)
+        tkm = fill(300.0, N_m)
+        sxxm = zeros(N_m)
+        sxym = zeros(N_m)
+        etavpm = fill(1.0e22, N_m)
+        phim = fill(0.1, N_m)
+        phinewm = fill(0.1, N_m)
+        pfm0 = zeros(N_m)
+        XWsolidm = fill(0.1, N_m)
+        XWsolidm0 = fill(0.1, N_m)
+        Fm = zeros(N_m)
+        rhototalm = fill(3200.0, N_m)
+        rhocptotalm = fill(3.2e6, N_m)
+        etatotalm = fill(1.0e20, N_m)
+        hrtotalm = fill(1.0e-7, N_m)
+        ktotalm = fill(3.0, N_m)
+        inv_gggtotalm = fill(1.0e-10, N_m)
+        fricttotalm = fill(0.6, N_m)
+        cohestotalm = fill(1.0e7, N_m)
+        tenstotalm = fill(1.0e7, N_m)
+        rhofluidcur = fill(1000.0, N_m)
+        alphasolidcur = fill(3.0e-5, N_m)
+        alphafluidcur = fill(2.0e-4, N_m)
+        tkm_rhocptotalm = fill(6.0e8, N_m)
+        etafluidcur_inv_kphim = fill(1.0e10, N_m)
+
+        # Setup HCNSPO marker properties
+        cfg_vm = VolatileMixtureConfig()
+        cfg_refr = RefractoryConfig()
+        hcnspo = setup_marker_hcnspo_properties(N_m, cfg_vm, cfg_refr)
+
+        h2o_init = copy(hcnspo.X_ice_H2O_m)
+
+        new_marknum = telescope_marker_arrays!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            sxxm,
+            sxym,
+            etavpm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim;
+            old_coords=c17,
+            new_coords=c33,
+            hcnspo_props=hcnspo,
+        )
+
+        @test new_marknum > N_m
+        for arr in values(hcnspo)
+            @test length(arr) == new_marknum
+            # Buffer markers are initialized to zero
+            @test all(iszero, arr[(N_m + 1):new_marknum])
+        end
+        # Existing markers preserve values
+        @test isapprox(hcnspo.X_ice_H2O_m[1:N_m], h2o_init; rtol=1e-12)
+    end
 end

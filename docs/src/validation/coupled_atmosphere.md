@@ -109,17 +109,29 @@ This multi-species closure satisfies exact physical and mathematical limits:
 
 ### Volatile Influx Coupling: Porosity Venting and Retention Drainage
 
-Volatiles enter the coupled atmosphere through two additive surface mechanisms in each simulation timestep $\Delta t$:
+Volatiles enter the coupled atmosphere through surface mechanisms in each simulation timestep $\Delta t$:
 
 1. *Pore Fluid Porosity Venting*. Pore fluid reaching permeable surface cells discharges via the Darcy sink $\Delta m_{\text{vent}}$. Scaled by geometric factor $L_{\text{3D}} = 2 R_{\text{planet}}$, this injects into the bulk venting species budget (default $\mathrm{H_2O}$):
    $$\dot{M}_{\text{vent,pore}} = \frac{\Delta m_{\text{vent}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
-2. *Mineral Mobile Volatile Drainage*. Mobile volatiles in solid markers within active venting zones drain above retention floors, providing stoichiometric influxes:
-   $$\dot{M}_{\text{H2O}} = \frac{M_{\text{vent,H2O}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
-   $$\dot{M}_{\text{CO2}} = \frac{M_{\text{vent,C}} \cdot (44.0095 / 12.011) \cdot 2 R_{\text{planet}}}{\Delta t}$$
-   $$\dot{M}_{\text{N2}} = \frac{M_{\text{vent,N}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
-   $$\dot{M}_{\text{H2S}} = \frac{M_{\text{vent,S}} \cdot (34.08 / 32.06) \cdot 2 R_{\text{planet}}}{\Delta t}$$
+2. *Mineral Mobile Volatile Drainage*. Mobile volatiles in solid markers within active venting zones drain above retention floors.
+
+When `speciation_active = false`, elemental releases partition via direct stoichiometry:
+$$\dot{M}_{\text{H2O}} = \frac{M_{\text{vent,H2O}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
+$$\dot{M}_{\text{CO2}} = \frac{M_{\text{vent,C}} \cdot (44.0095 / 12.011) \cdot 2 R_{\text{planet}}}{\Delta t}$$
+$$\dot{M}_{\text{N2}} = \frac{M_{\text{vent,N}} \cdot 2 R_{\text{planet}}}{\Delta t}$$
+$$\dot{M}_{\text{H2S}} = \frac{M_{\text{vent,S}} \cdot (34.08 / 32.06) \cdot 2 R_{\text{planet}}}{\Delta t}$$
+
+When `speciation_active = true`, the elemental volatile mass releases ($M_{\text{H2O}}$, $M_{\text{C}}$, $M_{\text{N}}$, $M_{\text{S}}$) are partitioned into equilibrium gas species through `speciate_vented_volatiles`:
+$$\mathbf{\dot{M}}_{\text{vent}} = \frac{\text{speciate\_vented\_volatiles}(M_{\text{H2O}}, M_{\text{C}}, M_{\text{N}}, M_{\text{S}}, P_{\text{surf}}, T_{\text{surf}}, \Delta\text{IW}) \cdot 2 R_{\text{planet}}}{\Delta t}$$
+resolving molecular speciation across $\mathrm{H_2, H_2O, CO, CO_2, CH_4, N_2, NH_3, H_2S, S_2, SO_2}$ at local ambient surface pressure $P_{\text{surf}}$, temperature $T_{\text{surf}}$, and mantle oxygen fugacity $\Delta\text{IW}$.
 
 Both contributions sum additively into $\mathbf{\dot{M}}_{\text{vent}}$ to preserve complete volatile mass conservation between hydromechanical and atmospheric modules.
+
+### Bidirectional Surface Thermal Coupling
+
+Atmosphere and interior thermal solvers interact through a closed boundary coupling loop:
+1. *Interior to Atmosphere*. The mean surface rock temperature $T_{\text{int}}$ is computed by averaging rock temperatures along the physical planetesimal boundary ($r \approx R_{\text{planet}}$) via `compute_mean_surface_temperature`. This value supplies the internal heat source term $T_{\text{int}}$ to `evolve_coupled_atmosphere_step!`.
+2. *Atmosphere to Interior*. The resulting atmospheric equilibrium surface temperature $T_{\text{surf,eq}}$ replaces the far-field ambient disk temperature $T_{\text{amb}}$ in `apply_radiative_surface_boundary!`, self-consistently adjusting internal conductive heat loss to atmospheric greenhouse blanketing.
 
 ---
 

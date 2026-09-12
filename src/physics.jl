@@ -4210,6 +4210,183 @@ function solve_chnos_speciation(
     )
 end
 
+"""
+    speciate_vented_volatiles(
+        m_H2O::Real,
+        m_C::Real,
+        m_N::Real,
+        m_S::Real,
+        P_amb_Pa::Real,
+        T_surf_K::Real,
+        delta_IW::Real;
+        graphite_saturation::Bool=true,
+    )::Dict{Symbol,Float64}
+
+Calculate equilibrium molecular speciation of vented volatile mass fluxes.
+Partitions elemental C, N, S and water mass releases into gaseous species (H2, H2O, CO,
+CO2, CH4, N2, NH3, H2S, S2, SO2) at exsolution temperature, pressure, and oxygen fugacity.
+When graphite saturation precipitates solid carbon under reducing conditions, gas-phase carbon
+is governed by graphite equilibrium, and gas moles are scaled to the non-condensing carrier element.
+"""
+function speciate_vented_volatiles(
+    m_H2O::Real,
+    m_C::Real,
+    m_N::Real,
+    m_S::Real,
+    P_amb_Pa::Real,
+    T_surf_K::Real,
+    delta_IW::Real=0.0;
+    graphite_saturation::Bool=true,
+)::Dict{Symbol,Float64}
+    m_h2o = Float64(m_H2O)
+    m_c = Float64(m_C)
+    m_n = Float64(m_N)
+    m_s = Float64(m_S)
+    p_amb = Float64(P_amb_Pa)
+    t_surf = Float64(T_surf_K)
+    d_iw = Float64(delta_IW)
+
+    if m_h2o < 0.0 || !isfinite(m_h2o)
+        throw(DomainError(m_H2O, "Vented H2O mass must be non-negative and finite"))
+    end
+    if m_c < 0.0 || !isfinite(m_c)
+        throw(DomainError(m_C, "Vented C mass must be non-negative and finite"))
+    end
+    if m_n < 0.0 || !isfinite(m_n)
+        throw(DomainError(m_N, "Vented N mass must be non-negative and finite"))
+    end
+    if m_s < 0.0 || !isfinite(m_s)
+        throw(DomainError(m_S, "Vented S mass must be non-negative and finite"))
+    end
+    if p_amb <= 0.0 || !isfinite(p_amb)
+        throw(
+            DomainError(P_amb_Pa, "Ambient pressure must be strictly positive and finite")
+        )
+    end
+    if t_surf <= 0.0 || !isfinite(t_surf)
+        throw(
+            DomainError(
+                T_surf_K, "Surface temperature must be strictly positive and finite"
+            ),
+        )
+    end
+    if !isfinite(d_iw) || abs(d_iw) > 50.0
+        throw(DomainError(delta_IW, "delta_IW must be finite and within [-50, 50]"))
+    end
+
+    # Molar elemental amounts released
+    nH = 2.0 * m_h2o / 18.01528e-3
+    nC = m_c / 12.011e-3
+    nN = m_n / 14.007e-3
+    nS = m_s / 32.06e-3
+    n_tot = nH + nC + nN + nS
+
+    species_dict = Dict{Symbol,Float64}(
+        :H2 => 0.0,
+        :H2O => 0.0,
+        :CO => 0.0,
+        :CO2 => 0.0,
+        :CH4 => 0.0,
+        :N2 => 0.0,
+        :NH3 => 0.0,
+        :H2S => 0.0,
+        :S2 => 0.0,
+        :SO2 => 0.0,
+    )
+    if n_tot <= 0.0
+        return species_dict
+    end
+
+    z_H = nH / n_tot
+    z_C = nC / n_tot
+    z_N = nN / n_tot
+    z_S = nS / n_tot
+
+    p_amb_eval = max(p_amb, 1.0)
+    t_surf_eval = max(t_surf, 273.15)
+
+    spec = solve_chnos_speciation(
+        p_amb_eval,
+        t_surf_eval,
+        d_iw;
+        z_H=z_H,
+        z_C=z_C,
+        z_N=z_N,
+        z_S=z_S,
+        graphite_saturation=graphite_saturation,
+    )
+
+    p_sum = (
+        spec.p_H2_Pa +
+        spec.p_H2O_Pa +
+        spec.p_CO_Pa +
+        spec.p_CO2_Pa +
+        spec.p_CH4_Pa +
+        spec.p_N2_Pa +
+        spec.p_NH3_Pa +
+        spec.p_H2S_Pa +
+        spec.p_S2_Pa +
+        spec.p_SO2_Pa
+    )
+
+    if p_sum <= 0.0
+        # Fallback to simple stoichiometric partition if partial pressures degenerate
+        species_dict[:H2O] = m_h2o
+        species_dict[:CO2] = m_c * (44.0095 / 12.011)
+        species_dict[:N2] = m_n
+        species_dict[:H2S] = m_s * (34.08 / 32.06)
+        return species_dict
+    end
+
+    # Moles of elements per mole of gas
+    y_H2 = spec.p_H2_Pa / p_sum
+    y_H2O = spec.p_H2O_Pa / p_sum
+    y_CO = spec.p_CO_Pa / p_sum
+    y_CO2 = spec.p_CO2_Pa / p_sum
+    y_CH4 = spec.p_CH4_Pa / p_sum
+    y_N2 = spec.p_N2_Pa / p_sum
+    y_NH3 = spec.p_NH3_Pa / p_sum
+    y_H2S = spec.p_H2S_Pa / p_sum
+    y_S2 = spec.p_S2_Pa / p_sum
+    y_SO2 = spec.p_SO2_Pa / p_sum
+
+    c_H = 2.0 * y_H2 + 2.0 * y_H2O + 4.0 * y_CH4 + 3.0 * y_NH3 + 2.0 * y_H2S
+    c_C = y_CO + y_CO2 + y_CH4
+    c_N = 2.0 * y_N2 + y_NH3
+    c_S = y_H2S + 2.0 * y_S2 + y_SO2
+    c_elem = c_H + c_C + c_N + c_S
+
+    # Scale gas moles from non-condensing carrier elements when graphite saturation occurs.
+    N_gas = if graphite_saturation
+        if nH > 0.0 && c_H > 0.0
+            nH / c_H
+        elseif nN > 0.0 && c_N > 0.0
+            nN / c_N
+        elseif nS > 0.0 && c_S > 0.0
+            nS / c_S
+        elseif nC > 0.0 && c_C > 0.0
+            nC / c_C
+        else
+            0.0
+        end
+    else
+        c_elem > 0.0 ? n_tot / c_elem : 0.0
+    end
+
+    species_dict[:H2] = N_gas * y_H2 * 2.01588e-3
+    species_dict[:H2O] = N_gas * y_H2O * 18.01528e-3
+    species_dict[:CO] = N_gas * y_CO * 28.0101e-3
+    species_dict[:CO2] = N_gas * y_CO2 * 44.0095e-3
+    species_dict[:CH4] = N_gas * y_CH4 * 16.0425e-3
+    species_dict[:N2] = N_gas * y_N2 * 28.0134e-3
+    species_dict[:NH3] = N_gas * y_NH3 * 17.0305e-3
+    species_dict[:H2S] = N_gas * y_H2S * 34.0809e-3
+    species_dict[:S2] = N_gas * y_S2 * 64.12e-3
+    species_dict[:SO2] = N_gas * y_SO2 * 64.066e-3
+
+    return species_dict
+end
+
 # =============================================================================
 # Atmospheric Jeans Kinetic Escape & Volatile Inventory Dynamics
 # =============================================================================

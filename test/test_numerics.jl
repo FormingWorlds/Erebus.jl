@@ -1837,4 +1837,166 @@
         # 5. Total heating exceeds DTmax (verifying subcycling occurred)
         @test maximum(DT) > DTmax
     end
+
+    @testset "assemble_hydromechanical_lse!() and compute_adaptive_timestep: DQPF coupling and reaction CFL" begin
+        coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=50000.0, ysize=50000.0))
+        Ny, Nx = coords.Ny, coords.Nx
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+
+        ETA = fill(1e22, Ny, Nx)
+        ETAP = fill(1e22, Ny1, Nx1)
+        GGG = fill(1e10, Ny, Nx)
+        GGGP = fill(1e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(1e-3 / 1e-13, Ny1, Nx1)
+        RY = fill(1e-3 / 1e-13, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        ETAPHI = fill(1e25, Ny1, Nx1)
+        BETAPHI = fill(1e-10, Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = fill(0.1, Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = zeros(Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        dt = 1e8
+        R_no_dqpf = zeros(Nx1 * Ny1 * 6)
+        R_with_dqpf = zeros(Nx1 * Ny1 * 6)
+
+        Erebus.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_no_dqpf;
+            coords=coords,
+        )
+
+        DQPF = zeros(Ny1, Nx1)
+        i_int, j_int = 4, 4
+        dqpf_val = 2.5e-12
+        DQPF[i_int, j_int] = dqpf_val
+
+        Erebus.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_with_dqpf;
+            coords=coords,
+            DQPF=DQPF,
+        )
+
+        # Invariant 1: DQPF appears unscaled on fluid continuity RHS at interior node
+        kpf_int = ((j_int - 1) * Ny1 + i_int - 1) * 6 + 6
+        @test isapprox(R_with_dqpf[kpf_int] - R_no_dqpf[kpf_int], dqpf_val; rtol=1e-12)
+
+        # Invariant 2: Other RHS entries remain unchanged
+        for k in 1:length(R_no_dqpf)
+            if k != kpf_int
+                @test isapprox(R_with_dqpf[k], R_no_dqpf[k]; atol=1e-14)
+            end
+        end
+
+        # Invariant 3: Reaction CFL in compute_adaptive_timestep
+        vx = zeros(Ny1, Nx)
+        vy = zeros(Ny, Nx1)
+        vxf = zeros(Ny1, Nx)
+        vyf = zeros(Ny, Nx1)
+        aphimax = 0.0
+        cfl_rxn = 0.5
+        dphimax_test = 0.01
+        dqpf_rxn = 1.0e-9
+        DQPF_cfl = zeros(Ny1, Nx1)
+        DQPF_cfl[i_int, j_int] = dqpf_rxn
+        dt_adaptive_no_dqpf = compute_adaptive_timestep(
+            vx, vy, vxf, vyf, dt, aphimax; coords=coords, dphimax_val=dphimax_test
+        )
+        dt_adaptive_dqpf = compute_adaptive_timestep(
+            vx,
+            vy,
+            vxf,
+            vyf,
+            dt,
+            aphimax;
+            coords=coords,
+            dphimax_val=dphimax_test,
+            DQPF=DQPF_cfl,
+            cfl_reaction=cfl_rxn,
+        )
+        expected_dt_rxn = cfl_rxn * dphimax_test / dqpf_rxn
+        @test isapprox(dt_adaptive_dqpf, expected_dt_rxn; rtol=1e-12)
+        @test dt_adaptive_dqpf < dt_adaptive_no_dqpf
+    end
+
+    @testset "compute_mean_surface_temperature(): surface boundary extraction" begin
+        coords = GridCoordinates(GridConfig(Nx=11, Ny=11, xsize=50000.0, ysize=50000.0))
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        rplanet = 15000.0
+        xcenter = coords.xcenter
+        ycenter = coords.ycenter
+
+        # Uniform temperature field
+        tk_uniform = fill(450.0, Ny1, Nx1)
+        T_mean = compute_mean_surface_temperature(
+            tk_uniform, coords, rplanet, xcenter, ycenter
+        )
+        @test isapprox(T_mean, 450.0; rtol=1e-12)
+
+        # Fallback when planet radius is zero
+        T_default = 300.0
+        T_fallback = compute_mean_surface_temperature(
+            tk_uniform, coords, 0.0, xcenter, ycenter; T_default=T_default
+        )
+        @test isapprox(T_fallback, T_default; rtol=1e-12)
+
+        # Radial temperature gradient
+        tk_grad = zeros(Ny1, Nx1)
+        for j in 1:Nx1, i in 1:Ny1
+            r = sqrt((coords.xp[j] - xcenter)^2 + (coords.yp[i] - ycenter)^2)
+            tk_grad[i, j] = 300.0 + 200.0 * max(0.0, 1.0 - r / rplanet)
+        end
+        T_surf = compute_mean_surface_temperature(
+            tk_grad, coords, rplanet, xcenter, ycenter
+        )
+        @test isapprox(T_surf, 300.0; atol=30.0)
+    end
 end

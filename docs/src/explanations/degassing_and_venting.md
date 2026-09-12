@@ -348,6 +348,66 @@ When substantial atmospheres accumulate, $P_{\text{amb,eff}}$ opposes ongoing bo
 
 ---
 
+## Dehydration Source Coupling and Adaptive Timestepping
+
+When metamorphic dehydration reactions occur in the deep planetesimal interior, bound hydroxyl groups convert into pore fluid. The reaction creates a local volumetric fluid source $\text{DQPF}$ [$\text{s}^{-1}$] on the staggered finite-difference grid:
+
+$$\text{DQPF}_{i, j} = \frac{\rho_s}{\rho_f} \frac{\Delta X_w}{\Delta t_{\text{rxn}}}$$
+
+### 1. Unscaled Stokes-Darcy Continuity Injection
+
+In the hydromechanical Stokes-Darcy formulation, the fluid continuity equation on interior pressure nodes $(i, j)$ satisfies:
+
+$$\nabla \cdot \mathbf{q}_D - \frac{P_t - P_f}{\eta_\phi (1 - \phi)} + \beta_d K_{\text{bw}} \left(\frac{1}{K_{\text{sk}}} \frac{\partial P_f}{\partial t} - \frac{\partial P_t}{\partial t}\right) = \text{DQPF}_{i, j}$$
+
+In the discrete linear system $L \mathbf{S} = \mathbf{R}$, the fluid continuity row $k_{pf} = ((j - 1) N_{y1} + i - 1) \cdot 6 + 6$ carries SI physical units of inverse seconds ($\text{s}^{-1}$). The fluid generation rate $\text{DQPF}$ enters directly on the right-hand side vector:
+
+$$R[k_{pf}] \leftarrow R[k_{pf}] + \text{DQPF}[i, j]$$
+
+This term does not receive $K_{\text{cont}}$ matrix scaling, because numerical pressure conditioning operates on the matrix diagonals rather than the physical divergence balance.
+
+### 2. Reaction CFL Timestep Bound
+
+To prevent unphysical pore fluid pressure spikes and numerical instability during rapid dehydration events, the adaptive timestep algorithm enforces a reaction CFL constraint alongside advective and compaction limits:
+
+$$\Delta t_{\text{rxn}} = c_{\text{rxn}} \frac{\Delta \phi_{\text{max}}}{\max_{i, j} |\text{DQPF}_{i, j}|}$$
+
+where $c_{\text{rxn}} = 0.5$ is the reaction Courant number and $\Delta \phi_{\text{max}}$ is the maximum allowable porosity increment per timestep (typically $0.01$). The simulation timestep is bounded by:
+
+$$\Delta t = \min\left(\Delta t_{\text{adv}}, \Delta t_{\text{compaction}}, \Delta t_{\text{thermal}}, \Delta t_{\text{rxn}}\right)$$
+
+---
+
+## Thermodynamic Speciation of Vented Volatiles
+
+During surface venting and volcanic degassing, volatiles exsolve from the solid matrix into ambient gas. When `speciation_active = true` in `VolatilesConfig`, `Erebus.jl` bypasses fixed stoichiometric ratios and evaluates multi-element thermodynamic speciation using `speciate_vented_volatiles`.
+
+### 1. Element Conservation and Speciation Solver
+
+The routine takes cumulative mass releases of water $M_{\text{H2O}}$ and elemental carbon $M_{\text{C}}$, nitrogen $M_{\text{N}}$, and sulfur $M_{\text{S}}$ from active venting markers. It computes elemental molar proportions:
+
+$$n_{\text{H}} = \frac{2 M_{\text{H2O}}}{M_{\text{mol,H2O}}}, \quad n_{\text{C}} = \frac{M_{\text{C}}}{M_{\text{mol,C}}}, \quad n_{\text{N}} = \frac{M_{\text{N}}}{M_{\text{mol,N}}}, \quad n_{\text{S}} = \frac{M_{\text{S}}}{M_{\text{mol,S}}}$$
+
+$$z_i = \frac{n_i}{n_{\text{tot}}}, \quad n_{\text{tot}} = n_{\text{H}} + n_{\text{C}} + n_{\text{N}} + n_{\text{S}}$$
+
+At ambient surface pressure $P_{\text{surf}}$, temperature $T_{\text{surf}}$, and mantle oxygen fugacity relative to iron-wüstite $\Delta\text{IW}$, the non-linear speciation solver `solve_chnos_speciation` computes equilibrium partial pressures for 10 gas species: $\mathrm{H_2, H_2O, CO, CO_2, CH_4, N_2, NH_3, H_2S, S_2, SO_2}$.
+
+### 2. Gas Mass Flux Reconstruction
+
+Mole fractions $y_k = P_k / \sum_m P_m$ yield the average elemental stoichiometric content per mole of equilibrium gas $c_{\text{elem}}$:
+
+$$c_{\text{elem}} = \sum_k c_{\text{elem}, k} y_k$$
+
+The total moles of equilibrium gas produced is $N_{\text{gas}} = n_{\text{tot}} / c_{\text{elem}}$. The individual species mass fluxes delivered to the coupled atmosphere are:
+
+$$M_k = N_{\text{gas}} y_k M_{\text{mol}, k}$$
+
+This formulation guarantees exact elemental conservation of H, C, N, and S. Oxygen abundance adjusts to ambient oxygen fugacity $\Delta\text{IW}$:
+- Under reducing conditions ($\Delta\text{IW} < 0$), vented gases are dominated by reduced species ($\mathrm{H_2, CH_4, CO}$).
+- Under oxidizing conditions ($\Delta\text{IW} > 0$), bonded oxygen from the rock buffer shifts speciation toward oxidized species ($\mathrm{H_2O, CO_2, SO_2}$), yielding a higher total molecular gas mass.
+
+---
+
 ## Convex Active-Set Multi-Species Atmospheric Escape Closure
 
 When planetesimals lose their atmospheres during or after disk clearing, stellar irradiation or internal heat drives hydrodynamic escape. In multi-component gas envelopes, light escaping species exert upward drag forces on heavier species through neutral collisions. Classical escape treatments (such as Zahnle & Kasting 1986) consider only binary mixtures with a dominant hydrogen carrier. `Erebus.jl` implements the general convex active-set multi-species hydrodynamic escape closure formulated by Attia & Lichtenberg (2026), resolving arbitrary $N$-component atmospheric mixtures without assuming a dominant carrier gas.
