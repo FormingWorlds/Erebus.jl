@@ -43,5 +43,6 @@ const rgen = MersenneTwister(seed)
     include("test_volatile_mixtures.jl")
     include("test_atmosphere.jl")
     include("test_telescoping.jl")
+    include("test_tutorial_lunar_growth.jl")
     include("test_integration.jl")
 end

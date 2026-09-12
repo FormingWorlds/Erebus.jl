@@ -24,6 +24,9 @@ const M_SUN_KG = 1.98847e30
 # Seconds per year [s]
 const SEC_PER_YEAR = 3.15576e7
 
+# Dispersal weight threshold at which disk pebble flux is truncated to zero
+const DISPERSAL_TERMINATION_WEIGHT_THRESHOLD = 1.0 - 1.0e-4
+
 """
 Compute Keplerian orbital angular frequency at semi-major axis `a` around star of mass `M_star`.
 
@@ -221,16 +224,18 @@ $(SIGNATURES)
 # Keyword Arguments
 - `Sigma_peb_0`: Reference pebble surface density at 1 AU [kg/m^2] (default: 50.0)
 - `p_peb`: Radial power-law index (default: 1.0)
+- `w_disp`: Protoplanetary disk gas dispersal weight (default: 0.0); values in [0, 1] scale density continuously, values >= 1 clamp to zero flux
 
 # Returns
 - `Sigma_peb`: Local pebble surface density [kg/m^2]
 """
 function compute_pebble_surface_density(
-    a_au::Real; Sigma_peb_0::Real=50.0, p_peb::Real=1.0
+    a_au::Real; Sigma_peb_0::Real=50.0, p_peb::Real=1.0, w_disp::Real=0.0
 )::Float64
     a_val = Float64(a_au)
     sig0_val = Float64(Sigma_peb_0)
     p_val = Float64(p_peb)
+    w_val = Float64(w_disp)
     if !isfinite(a_val) || a_val <= 0.0
         throw(DomainError(a_val, "Orbital distance must be positive and finite"))
     end
@@ -244,7 +249,11 @@ function compute_pebble_surface_density(
     if !isfinite(p_val)
         throw(DomainError(p_val, "Power-law index must be finite"))
     end
-    return sig0_val * (a_val^(-p_val))
+    if !isfinite(w_val) || w_val < 0.0
+        throw(DomainError(w_val, "Dispersal weight must be non-negative and finite"))
+    end
+    f_disk = w_val >= DISPERSAL_TERMINATION_WEIGHT_THRESHOLD ? 0.0 : max(0.0, 1.0 - w_val)
+    return f_disk * sig0_val * (a_val^(-p_val))
 end
 
 """
@@ -782,13 +791,14 @@ end
 """
 Compute multi-stage accretion rate across planetesimal collision, pebble accretion, and late impact regimes.
 
-Dispatches growth across three chronological stages governed by aerodynamic onset and pebble isolation:
+Dispatches growth across three chronological stages governed by aerodynamic onset, pebble isolation, and disk dispersal:
 - **Stage 1 (Sub-onset)**: Mutual planetesimal collisions (`acc_cfg.stage1_mode`, default `:safronov`) when \$M < M_{\\mathrm{onset}}\$.
-- **Stage 2 (Pebble accretion)**: Settling pebble capture (`acc_cfg.stage2_mode`, default `:pebble_auto`) when \$M_{\\mathrm{onset}} \\le M < M_{\\mathrm{iso}}\$.
-- **Stage 3 (Post-isolation)**: Late embryo and giant collisions (`acc_cfg.stage3_mode`, default `:safronov`) when \$M \\ge M_{\\mathrm{iso}}\$.
+- **Stage 2 (Pebble accretion)**: Settling pebble capture (`acc_cfg.stage2_mode`, default `:pebble_auto`) when \$M_{\\mathrm{onset}} \\le M < M_{\\mathrm{iso}}\$ and disk gas is present.
+- **Stage 3 (Post-isolation / Post-dispersal)**: Late embryo and giant collisions (`acc_cfg.stage3_mode`, default `:safronov`) when \$M \\ge M_{\\mathrm{iso}}\$ or after disk gas disperses (\$w_{\\mathrm{disp}} \\to 1\$).
 
 If `acc_cfg.transition_smoothing` is `true`, smoothstep blending \$S(x) = 3x^2 - 2x^3\$ is applied
 across transition windows of fractional half-width `acc_cfg.transition_width` to ensure \$\\dot{M}(t)\$ continuity.
+When the disk disperses, pebble flux halts and Stage 2 transitions smoothly to Stage 3.
 
 $(SIGNATURES)
 
@@ -832,6 +842,16 @@ function compute_multistage_accretion_rate(
     end
     c_s = compute_sound_speed(T_disk)
 
+    w_disp = if disk_cfg.dispersal_active
+        compute_disk_dispersal_weight(
+            t_sec;
+            t_dispersal_myr=disk_cfg.t_dispersal_myr,
+            dt_dispersal_myr=disk_cfg.dt_dispersal_myr,
+        )
+    else
+        0.0
+    end
+
     # 1. Determine M_onset
     M_onset = if !isnan(acc_cfg.M_onset) && acc_cfg.M_onset > 0.0
         acc_cfg.M_onset
@@ -870,6 +890,7 @@ function compute_multistage_accretion_rate(
                 disk_cfg.orbital_distance_au;
                 Sigma_peb_0=acc_cfg.Sigma_peb_0,
                 p_peb=acc_cfg.p_peb,
+                w_disp=w_disp,
             )
             return compute_pebble_accretion_rate(
                 M_val,
@@ -888,29 +909,51 @@ function compute_multistage_accretion_rate(
         end
     end
 
+    rate1 = _eval_stage_rate(acc_cfg.stage1_mode)
+    rate3 = _eval_stage_rate(acc_cfg.stage3_mode)
+    rate2_raw = _eval_stage_rate(acc_cfg.stage2_mode)
+
+    use_smoothing = acc_cfg.transition_smoothing && acc_cfg.transition_width > 0.0
+
+    # Pebble accretion scales linearly with Sigma_peb(w_disp) = (1 - w_disp) * Sigma_peb_0.
+    # Therefore rate2_raw + w_disp * rate3 forms an exact convex blend between Stage 2 and Stage 3.
+    rate2 = if acc_cfg.stage2_mode in Set([:pebble_bondi, :pebble_hill, :pebble_auto])
+        if w_disp == 0.0
+            rate2_raw
+        elseif w_disp >= DISPERSAL_TERMINATION_WEIGHT_THRESHOLD
+            rate3
+        elseif use_smoothing
+            rate2_raw + w_disp * rate3
+        else
+            w_disp >= 0.5 ? rate3 : rate2_raw
+        end
+    else
+        rate2_raw
+    end
+
     # If smoothing is disabled or transition width is 0, sharp step transition
-    if !acc_cfg.transition_smoothing || acc_cfg.transition_width <= 0.0
+    if !use_smoothing
         if isfinite(M_iso) && M_iso > 0.0
             if M_iso <= M_onset
                 return if M_val < M_iso
-                    _eval_stage_rate(acc_cfg.stage1_mode)
+                    rate1
                 else
-                    _eval_stage_rate(acc_cfg.stage3_mode)
+                    rate3
                 end
             else
                 if M_val < M_onset
-                    return _eval_stage_rate(acc_cfg.stage1_mode)
+                    return rate1
                 elseif M_val >= M_iso
-                    return _eval_stage_rate(acc_cfg.stage3_mode)
+                    return rate3
                 else
-                    return _eval_stage_rate(acc_cfg.stage2_mode)
+                    return rate2
                 end
             end
         else
             return if M_val < M_onset
-                _eval_stage_rate(acc_cfg.stage1_mode)
+                rate1
             else
-                _eval_stage_rate(acc_cfg.stage2_mode)
+                rate2
             end
         end
     end
@@ -921,11 +964,8 @@ function compute_multistage_accretion_rate(
         return xc * xc * (3.0 - 2.0 * xc)
     end
 
-    rate1 = _eval_stage_rate(acc_cfg.stage1_mode)
-
     # If M_iso is not active (NaN or <= 0), smooth between stage 1 and stage 2
     if !isfinite(M_iso) || M_iso <= 0.0
-        rate2 = _eval_stage_rate(acc_cfg.stage2_mode)
         w = acc_cfg.transition_width
         M_onset_low = M_onset * (1.0 - w)
         M_onset_high = M_onset * (1.0 + w)
@@ -938,8 +978,6 @@ function compute_multistage_accretion_rate(
             return max(0.0, (1.0 - s1) * rate1 + s1 * rate2)
         end
     end
-
-    rate3 = _eval_stage_rate(acc_cfg.stage3_mode)
 
     # If M_iso <= M_onset, Stage 2 has zero width: smooth directly from Stage 1 to Stage 3 around M_iso
     if M_iso <= M_onset
@@ -955,8 +993,6 @@ function compute_multistage_accretion_rate(
             return max(0.0, (1.0 - s) * rate1 + s * rate3)
         end
     end
-
-    rate2 = _eval_stage_rate(acc_cfg.stage2_mode)
 
     # When M_onset < M_iso, adjust effective half-width to prevent overlapping transition windows
     w_nom = acc_cfg.transition_width
@@ -1045,12 +1081,22 @@ function compute_accretion_rate(
             M_val, R_val, acc_cfg.Sigma_pl_0, sigma_v, Omega_K
         )
     elseif acc_cfg.mode in Set([:pebble_bondi, :pebble_hill, :pebble_auto])
+        w_disp = if disk_cfg.dispersal_active
+            compute_disk_dispersal_weight(
+                t_sec;
+                t_dispersal_myr=disk_cfg.t_dispersal_myr,
+                dt_dispersal_myr=disk_cfg.dt_dispersal_myr,
+            )
+        else
+            0.0
+        end
         a_m = disk_cfg.orbital_distance_au * AU_METERS
         M_star = disk_cfg.stellar_mass_msun * M_SUN_KG
         Sigma_peb = compute_pebble_surface_density(
             disk_cfg.orbital_distance_au;
             Sigma_peb_0=acc_cfg.Sigma_peb_0,
             p_peb=acc_cfg.p_peb,
+            w_disp=w_disp,
         )
         T_disk = if disk_cfg.enabled
             compute_disk_temperature(t_sec, disk_cfg)

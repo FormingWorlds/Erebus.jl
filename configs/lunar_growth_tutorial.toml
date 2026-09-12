@@ -1,0 +1,145 @@
+# Erebus.jl Flagship Tutorial: Growth to Lunar Mass
+# Coupled multi-stage accretion from 50 km planetesimal seed to 1,737 km differentiated embryo
+
+[grid]
+xsize = 140000.0        # initial horizontal domain size [m] (expanded via telescoping)
+ysize = 140000.0        # initial vertical domain size [m]
+Nx = 33                  # basic grid resolution in x
+Ny = 33                  # basic grid resolution in y
+
+[geometry]
+rplanet = 50000.0       # initial planetesimal radius [m] (50 km)
+rcrust = 50000.0        # crust radius [m]
+xcenter = 70000.0       # horizontal center [m]
+ycenter = 70000.0       # vertical center [m]
+psurface = 1.0e+3       # surface pressure anchor [Pa]
+
+[time]
+dt_initial = 1000.0     # initial computational timestep [yr]
+dt_longest = 10000.0    # maximum computational timestep [yr]
+dtcoefdn = 0.5          # coefficient to decrease timestep
+dtcoefup = 1.2          # coefficient to increase timestep
+dtstep = 200            # iterations before changing timestep
+dxymax = 0.05           # max marker displacement per timestep [grid units]
+vpratio = 0.3333333333333333
+DTmax = 20.0            # max temperature change per timestep [K]
+start_time = 0.0        # initial simulation time [yr]
+endtime = 5.0e6         # maximum simulation time [yr] (5.0 Ma)
+start_step = 1
+n_steps = 10            # demonstration step count for test suite
+
+[solver]
+titermax = 10000
+nplast = 100000
+yerrmax = 100.0
+etawt = 0.0
+dphimax = 100.01
+seed = 42
+use_pardiso = false
+etaphikoef = 1.0
+etamin = 1.0e+12
+etamax = 1.0e+23
+
+[poroelasticity]
+betasolid = 2.5e-11
+betafluid = 4.0e-10
+phimin = 1.0e-4
+phimax = 0.9999
+
+[thermodynamics]
+hr_al = true            # 26Al radioactive decay heating active
+hr_fe = true            # 60Fe radioactive decay heating active
+ratio_al = 5.0e-5       # initial 26Al/27Al isotope ratio
+ratio_fe = 1.0e-6       # initial 60Fe/56Fe isotope ratio
+tmsolidphase = 1416.0
+tmfluidphase = 273.0
+phim0 = 0.2
+
+[materials]
+rhosolidm = [3300.0, 3300.0, 1.0]
+rhofluidm = [1000.0, 1000.0, 1.0]
+etasolidm = [1.0e+19, 1.0e+19, 1.0e+16]
+etasolidmm = [1.0e+19, 1.0e+19, 1.0e+16]
+etafluidm = [1.0e+12, 1.0e+12, 1.0e-03]
+etafluidmm = [1.0e-03, 1.0e-03, 1.0e-03]
+rhocpsolidm = [3.3e+06, 3.3e+06, 3.0e+06]
+rhocpfluidm = [1.0e+06, 1.0e+06, 3.0e+06]
+alphasolidm = [3.0e-05, 3.0e-05, 0.0]
+alphafluidm = [5.0e-05, 5.0e-05, 0.0]
+ksolidm = [3.0, 3.0, 3000.0]
+kfluidm = [50.0, 50.0, 3000.0]
+gggsolidm = [1.0e+10, 1.0e+10, 1.0e+10]
+frictsolidm = [0.6, 0.6, 0.0]
+cohessolidm = [1.0e+08, 1.0e+08, 1.0e+08]
+tenssolidm = [6.0e+07, 6.0e+07, 6.0e+07]
+kphim0 = [1.0e-13, 1.0e-13, 1.0e-17]
+tkm0 = [170.0, 170.0, 170.0]
+
+[accretion]
+active = true
+mode = "multistage"
+stage1_mode = "safronov"
+stage2_mode = "pebble_auto"
+stage3_mode = "safronov"
+t_start_myr = 0.0
+t_duration_myr = 5.0
+M_initial = 1.753e18    # 50 km radius seed mass [kg] at 3348 kg/m^3
+M_target = 7.35e22      # Lunar mass [kg]
+R_initial = 50000.0     # 50 km seed radius [m]
+R_target = 1737000.0    # Lunar radius [m]
+rho_bulk = 3348.0       # Bulk embryo density [kg/m^3]
+Sigma_pl_0 = 100.0      # Reference planetesimal surface density [kg/m^2]
+Sigma_peb_0 = 50.0      # Reference pebble surface density [kg/m^2]
+stokes_number = 0.05    # Aerodynamic Stokes number [-]
+v_disp_kms = 0.2        # Planetesimal velocity dispersion [km/s]
+transition_smoothing = true
+transition_width = 0.10
+
+[telescoping]
+active = true
+r_threshold_fraction = 0.70
+max_telescope_levels = 6
+target_radius = 1737000.0
+
+[disk]
+enabled = true
+dispersal_active = true
+t_dispersal_myr = 2.0
+dt_dispersal_myr = 0.10
+p_amb_disk = 10.0
+p_amb_space = 1.0e-4
+orbital_distance_au = 1.0
+stellar_mass_msun = 1.0
+
+[atmosphere]
+active = true
+mode = "guillot"
+tau_boil = 3.15576e11   # 10 kyr characteristic boil-off timescale [s]
+f_rec = 0.10
+crossover_active = true
+b_diff_ref = 1.0e21
+
+[volatiles]
+active = true
+initial_water_wtpct = 1.5
+initial_carbon_ppm = 800.0
+initial_nitrogen_ppm = 80.0
+initial_sulfur_ppm = 1200.0
+carbon_active = true
+
+[retention]
+active = true
+venting_drainage_active = true
+
+[coreformation]
+percolation_active = true
+settling_active = true
+Xfe_bulk = 0.015
+
+[output]
+output_dir = "output_lunar_growth"
+savematstep = 10
+visstep = 1
+
+[melting]
+active = true
