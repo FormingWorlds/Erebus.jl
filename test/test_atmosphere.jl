@@ -1058,7 +1058,7 @@ using Random
                 phi, X, m, T, g0, b; return_diag=true
             )
             @test act == Set([1, 3])
-            @test Phi[2] == 0.0
+            @test iszero(Phi[2])
             Phi3_ref = X3 * (Phi[1] * (1.0 + a2 * X2 / X1) - phi_DL_D) / (X1 + a3 * X2)
             @test isapprox(Phi[3], Phi3_ref, rtol=1e-10)
         end
