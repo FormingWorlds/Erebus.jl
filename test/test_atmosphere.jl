@@ -1,6 +1,8 @@
 using Test
 using Erebus
 using StaticArrays
+using LinearAlgebra
+using Random
 
 @testset "Coupled 1D Atmosphere, Disk Envelope, and Escape Physics" begin
     M_sun = 1.98847e30
@@ -565,7 +567,7 @@ using StaticArrays
         @test isapprox(atm_boil1.M_atm[:H2] + atm_boil1.M_escaped[:H2], 1.0e15; rtol=1e-12)
         @test isapprox(atm_boil2.M_atm[:H2] + atm_boil2.M_escaped[:H2], 1.0e15; rtol=1e-12)
 
-        # Invariant 9: Safety when H2 is absent (no hydrodynamic strip of heavy species)
+        # Invariant 9: Multispecies escape when H2 is absent (resolving carrier deadlock)
         atm_noh2 = AtmosphereState(
             Dict(:H2O => 1.0e14, :CO2 => 1.0e14),
             Dict(:H2O => 0.0, :CO2 => 0.0),
@@ -579,10 +581,10 @@ using StaticArrays
         evolve_coupled_atmosphere_step!(
             atm_noh2, Dict(:H2O => 0.0, :CO2 => 0.0), dt_s, M_50km, R_50km, T_disk, cfg_atm
         )
-        @test isapprox(atm_noh2.M_atm[:H2O], 1.0e14, rtol=1e-12)
-        @test isapprox(atm_noh2.M_atm[:CO2], 1.0e14, rtol=1e-12)
-        @test iszero(get(atm_noh2.M_escaped, :H2O, 0.0))
-        @test iszero(get(atm_noh2.M_escaped, :CO2, 0.0))
+        @test isapprox(atm_noh2.M_atm[:H2O] + atm_noh2.M_escaped[:H2O], 1.0e14, rtol=1e-12)
+        @test isapprox(atm_noh2.M_atm[:CO2] + atm_noh2.M_escaped[:CO2], 1.0e14, rtol=1e-12)
+        @test atm_noh2.M_escaped[:H2O] > 0.0
+        @test atm_noh2.M_escaped[:CO2] > 0.0
 
         # Guard against NaN dt_s and invalid T_int
         atm_nan = AtmosphereState(
@@ -965,5 +967,300 @@ using StaticArrays
         finally
             rm(output_dir_vent; recursive=true, force=true)
         end
+    end
+
+    # ---------------------------------------------------------------------
+    # 11. Multispecies Escape: Binary Reduction vs IsoFATE
+    # ---------------------------------------------------------------------
+    @testset "Multispecies Escape: Binary Reduction vs IsoFATE" begin
+        function isofate_binary(phi, x1, x2, m1, m2, T, g0, b12)
+            kT = Erebus.K_BOLTZMANN * T
+            H1 = kT / (m1 * g0)
+            H2 = kT / (m2 * g0)
+            phi_c = b12 * x1 * (m2 - m1) / H1
+            if phi < phi_c
+                return phi / m1, 0.0, phi_c
+            end
+            mbar = m1 * x1 + m2 * x2
+            Phi1 = (x1 * phi + x1 * x2 * (m2 - m1) * b12 / H2) / mbar
+            Phi2 = (x2 * phi + x1 * x2 * (m1 - m2) * b12 / H1) / mbar
+            return Phi1, Phi2, phi_c
+        end
+
+        rng = MersenneTwister(101)
+        for _ in 1:200
+            m1 = Erebus.ATOMIC_MASS_UNIT * (1.0 + 3.0 * rand(rng))
+            m2 = m1 * (1.5 + 38.5 * rand(rng))
+            x2 = 0.01 + 0.89 * rand(rng)
+            x1 = 1.0 - x2
+            T = 200.0 + 1800.0 * rand(rng)
+            g0 = 1.0 + 29.0 * rand(rng)
+            b12 = (0.5 + 4.5 * rand(rng)) * 1e21 * (T / 1000.0)^0.75
+            b = [Inf b12; b12 Inf]
+            kT = Erebus.K_BOLTZMANN * T
+            phi_c = b12 * x1 * (m2 - m1) * m1 * g0 / kT
+
+            for frac in (0.2, 0.999999, 1.000001, 1.7, 30.0)
+                phi = frac * phi_c
+                Phi = solve_multispecies_escape_closure(phi, [x1, x2], [m1, m2], T, g0, b)
+                P1, P2, _ = isofate_binary(phi, x1, x2, m1, m2, T, g0, b12)
+                err = max(abs(Phi[1] - P1), abs(Phi[2] - P2)) / max(P1, 1e-300)
+                @test err < 1e-11
+                @test isapprox(m1 * Phi[1] + m2 * Phi[2], phi, rtol=1e-12)
+            end
+        end
+    end
+
+    # ---------------------------------------------------------------------
+    # 12. Multispecies Escape: Ternary Reduction vs Gu & Chen (2023)
+    # ---------------------------------------------------------------------
+    @testset "Multispecies Escape: Ternary Reduction vs Gu & Chen (2023)" begin
+        m = [1.008, 4.0026, 2.0141] .* Erebus.ATOMIC_MASS_UNIT
+        T = 1000.0
+        g0 = 10.0
+        kT = Erebus.K_BOLTZMANN * T
+        b12 = 1.04e20 * (T^0.732)
+        b13 = 7.183e19 * (T^0.728)
+        b23 = 5.087e19 * (T^0.728)
+        b = [Inf b12 b13; b12 Inf b23; b13 b23 Inf]
+        X3 = 1e-13
+        X2 = 0.15
+        X1 = 1.0 - X2 - X3
+        X = [X1, X2, X3]
+        a2, a3 = b13 / b12, b13 / b23
+        Phid(bij, mi) = bij * (mi - m[1]) * g0 / kT
+        phi_DL_He = Phid(b12, m[2])
+        phi_DL_D = Phid(b13, m[3])
+        phi_crit_He = m[1] * X1 * phi_DL_He
+        phi_crit_D = m[1] * phi_DL_D / (1.0 + a2 * X2 / X1)
+
+        # Supercritical: He escaping
+        for frac in (1.5, 5.0, 50.0)
+            phi = frac * phi_crit_He
+            Phi, C, act = solve_multispecies_escape_closure(
+                phi, X, m, T, g0, b; return_diag=true
+            )
+            f2, f3 = X2 / X1, X3 / X1
+            Phi3_ref =
+                f3 * (Phi[1] + a3 * Phi[2] + a2 * phi_DL_He * X2 - phi_DL_D) /
+                (1.0 + a3 * f2)
+            @test isapprox(Phi[3], Phi3_ref, rtol=1e-10)
+            @test act == Set([1, 2, 3])
+        end
+
+        # Subcritical: He retained, D escaping
+        for frac in (1.5, 3.0)
+            phi = frac * phi_crit_D
+            if phi >= phi_crit_He
+                continue
+            end
+            Phi, C, act = solve_multispecies_escape_closure(
+                phi, X, m, T, g0, b; return_diag=true
+            )
+            @test act == Set([1, 3])
+            @test iszero(Phi[2])
+            Phi3_ref = X3 * (Phi[1] * (1.0 + a2 * X2 / X1) - phi_DL_D) / (X1 + a3 * X2)
+            @test isapprox(Phi[3], Phi3_ref, rtol=1e-10)
+        end
+    end
+
+    # ---------------------------------------------------------------------
+    # 13. Multispecies Escape: Chassefiere (1996) Binary Partition
+    # ---------------------------------------------------------------------
+    @testset "Multispecies Escape: Chassefiere (1996) Binary Partition" begin
+        m1 = 1.008 * Erebus.ATOMIC_MASS_UNIT
+        m2 = 15.999 * Erebus.ATOMIC_MASS_UNIT
+        x1, x2 = 0.667, 0.333
+        T = 1000.0
+        g0 = 9.8
+        kT = Erebus.K_BOLTZMANN * T
+        b12 = 4.8e21
+        b = [Inf b12; b12 Inf]
+        phi_star = compute_escape_activation_threshold([x1, x2], [m1, m2], T, g0, b)
+
+        for frac in (1.2, 2.0, 10.0)
+            phi = frac * phi_star
+            Phi = solve_multispecies_escape_closure(phi, [x1, x2], [m1, m2], T, g0, b)
+            diff_drift = Phi[1] / x1 - Phi[2] / x2
+            expected_diff = b12 * (m2 - m1) * g0 / kT
+            @test isapprox(diff_drift, expected_diff, rtol=1e-11)
+            @test isapprox(m1 * Phi[1] + m2 * Phi[2], phi, rtol=1e-12)
+        end
+    end
+
+    # ---------------------------------------------------------------------
+    # 14. Multispecies Escape: Three-Species Limiting Flux (Z90 Eq. 42)
+    # ---------------------------------------------------------------------
+    @testset "Multispecies Escape: Three-Species Limiting Flux" begin
+        m = [2.01588, 44.0095, 28.014] .* Erebus.ATOMIC_MASS_UNIT
+        T, g0 = 400.0, 3.73
+        kT = Erebus.K_BOLTZMANN * T
+        b12 = 2.3e19 * (T^0.75)
+        b13 = 2.65e19 * (T^0.75)
+        b23 = 1.0e19 * (T^0.75)
+        b = [Inf b12 b13; b12 Inf b23; b13 b23 Inf]
+        f2, f3 = 1.0, 0.5
+        X1 = 1.0 / (1.0 + f2 + f3)
+        X = [X1, f2 * X1, f3 * X1]
+
+        phi12 = b12 * (m[2] - m[1]) * g0 / kT / (1.0 + f2 + (b12 / b13) * f3)
+        phi13 = b13 * (m[3] - m[1]) * g0 / kT / (1.0 + f3 + (b13 / b12) * f2)
+        first_thresh = min(phi12, phi13)
+        phi_thresh = m[1] * first_thresh
+
+        eps_val = 1e-6
+        Phi_lo = solve_multispecies_escape_closure(
+            phi_thresh * (1.0 - eps_val), X, m, T, g0, b
+        )
+        Phi_hi = solve_multispecies_escape_closure(
+            phi_thresh * (1.0 + eps_val), X, m, T, g0, b
+        )
+
+        idx = phi12 < phi13 ? 2 : 3
+        other_idx = phi12 < phi13 ? 3 : 2
+        @test iszero(Phi_lo[idx])
+        @test Phi_hi[idx] > 0.0
+        @test iszero(Phi_lo[other_idx])
+    end
+
+    # ---------------------------------------------------------------------
+    # 15. Binary Diffusion Parameters and Scaling Rules
+    # ---------------------------------------------------------------------
+    @testset "Binary Diffusion Matrix and Scaling Properties" begin
+        # Direct lookup of tabulated pairs at 1000 K
+        b_h_he = get_binary_diffusion_parameter(:H, :He, 1000.0)
+        @test isapprox(b_h_he, 1.6e22, rtol=1e-12)
+
+        # Symmetry: b_ij == b_ji
+        @test isapprox(
+            get_binary_diffusion_parameter(:He, :H, 1000.0),
+            get_binary_diffusion_parameter(:H, :He, 1000.0),
+            rtol=1e-12,
+        )
+
+        # Temperature scaling exponent: b ∝ T^0.75
+        b_2000 = get_binary_diffusion_parameter(:H, :He, 2000.0)
+        @test isapprox(b_2000, b_h_he * (2000.0 / 1000.0)^0.75, rtol=1e-12)
+
+        # Self-diffusion is Infinite on diagonal
+        @test isinf(get_binary_diffusion_parameter(:H, :H, 1000.0))
+
+        # Matrix assembly
+        species_test = [:H, :He, :O]
+        b_mat = assemble_binary_diffusion_matrix(species_test, 1000.0)
+        @test size(b_mat) == (3, 3)
+        @test isinf(b_mat[1, 1])
+        @test isinf(b_mat[2, 2])
+        @test isinf(b_mat[3, 3])
+        @test isapprox(b_mat[1, 2], b_mat[2, 1], rtol=1e-12)
+        @test isapprox(b_mat[1, 3], b_mat[3, 1], rtol=1e-12)
+
+        # Error guards
+        @test_throws DomainError get_binary_diffusion_parameter(:H, :He, 0.0)
+        @test_throws DomainError get_binary_diffusion_parameter(:H, :He, -100.0)
+        @test_throws DomainError get_binary_diffusion_parameter(:H, :He, NaN)
+        @test_throws DomainError solve_multispecies_escape_closure(
+            -1.0, [0.5, 0.5], [1.0, 2.0], 1000.0, 10.0, b_mat[1:2, 1:2]
+        )
+        @test_throws DomainError solve_multispecies_escape_closure(
+            1.0, [0.5, 0.5], [1.0, 2.0], 0.0, 10.0, b_mat[1:2, 1:2]
+        )
+        @test_throws DomainError solve_multispecies_escape_closure(
+            1.0, [0.5, 0.5], [1.0, 2.0], 1000.0, 0.0, b_mat[1:2, 1:2]
+        )
+        @test_throws DimensionMismatch solve_multispecies_escape_closure(
+            1.0, [0.5, 0.5], [1.0], 1000.0, 10.0, b_mat[1:2, 1:2]
+        )
+    end
+
+    # ---------------------------------------------------------------------
+    # 16. Standard Atomic Weights and Noble Gas Species Consistency
+    # ---------------------------------------------------------------------
+    @testset "Standard Atomic Weights and Noble Gas Species Consistency" begin
+        # Single source of truth verification
+        @test SPECIES_AMU_ESCAPE === SPECIES_AMU
+        @test haskey(SPECIES_AMU, :Ar)
+        @test haskey(SPECIES_AMU, :Ne)
+
+        # IUPAC standard atomic weights (Meija et al. 2016)
+        @test isapprox(SPECIES_AMU[:Ar], 39.948, atol=1e-3)
+        @test isapprox(SPECIES_AMU[:Ne], 20.1797, atol=1e-4)
+
+        # Molecular mass lookup in physics module
+        @test isapprox(
+            get_species_molecular_mass(:Ar), 39.948 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:ar), 39.948 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:Ne), 20.1797 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:ne), 20.1797 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+
+        # Binary diffusion matrix with noble gases
+        sp_list = [:H, :He, :Ne, :Ar]
+        b_mat = assemble_binary_diffusion_matrix(sp_list, 1000.0)
+        @test size(b_mat) == (4, 4)
+        @test isapprox(b_mat[1, 4], 6.5e21, rtol=1e-12) # H-Ar
+        @test isapprox(b_mat[2, 4], 4.4906e21, rtol=1e-12) # He-Ar
+        @test isapprox(b_mat[3, 4], 1.6161e21, rtol=1e-12) # Ne-Ar
+
+        # Evolve step with arbitrary volatile mixture containing Ar and Ne
+        atm_state = AtmosphereState()
+        atm_state.M_atm[:H] = 1.0e15
+        atm_state.M_atm[:Ar] = 1.0e14
+        atm_state.M_atm[:Ne] = 1.0e14
+        cfg = AtmosphereConfig(crossover_active=true)
+        evolve_coupled_atmosphere_step!(
+            atm_state, Dict{Symbol,Float64}(), 3600.0, 1.0e21, 5.0e5, 300.0, cfg
+        )
+        # Verify mass conservation holds with noble gases
+        m_tot_final = sum(values(atm_state.M_atm)) + sum(values(atm_state.M_escaped))
+        @test isapprox(m_tot_final, 1.2e15, rtol=1e-12)
+    end
+
+    # ---------------------------------------------------------------------
+    # 17. Extreme Dynamic Range and Trace Volatile Closure Robustness
+    # ---------------------------------------------------------------------
+    @testset "Extreme Dynamic Range and Trace Volatile Closure Robustness" begin
+        # 19 decades difference in mole fractions
+        sp_list = [:SO2, :S2, :N2, :H2, :CO2]
+        m_species = [get_species_molecular_mass(sp) for sp in sp_list]
+        X_vec = [
+            1.7309164887986588e-19,
+            1.7291886671099497e-19,
+            0.19792829217056152,
+            0.5500968135895964,
+            0.2519748942398421,
+        ]
+        phi_base = 2.456094800800854e-5
+        g0 = 0.3707944444444444
+        T_val = 600.0
+        b_mat = assemble_binary_diffusion_matrix(sp_list, T_val)
+
+        Phi, C, act = solve_multispecies_escape_closure(
+            phi_base, X_vec, m_species, T_val, g0, b_mat; return_diag=true
+        )
+        @test all(Phi .>= 0.0)
+        @test isapprox(sum(Phi .* m_species), phi_base, rtol=1e-12)
+
+        # Trace volatile inventory in coupled atmosphere time step
+        atm_state = AtmosphereState()
+        atm_state.M_atm[:CO2] = 1.0e14
+        atm_state.M_atm[:N2] = 1.0e14
+        atm_state.M_atm[:H2] = 1.0e14
+        atm_state.M_atm[:SO2] = 1.0e-4
+        atm_state.M_atm[:S2] = 1.0e-4
+        cfg = AtmosphereConfig(crossover_active=true)
+        evolve_coupled_atmosphere_step!(
+            atm_state, Dict{Symbol,Float64}(), 3600.0, 1.0e21, 5.0e5, 300.0, cfg
+        )
+        m_tot_final = sum(values(atm_state.M_atm)) + sum(values(atm_state.M_escaped))
+        @test isapprox(m_tot_final, 3.0e14 + 2.0e-4, rtol=1e-12)
+        @test all(v >= 0.0 for v in values(atm_state.M_atm))
+        @test all(v >= 0.0 for v in values(atm_state.M_escaped))
     end
 end

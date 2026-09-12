@@ -346,3 +346,78 @@ $$P_{\text{amb,eff}} = P_{\text{amb}} + P_{\text{atm}}$$
 
 When substantial atmospheres accumulate, $P_{\text{amb,eff}}$ opposes ongoing boiling and venting, naturally throttling further surface volatile discharge. In the explicit time-advancement scheme of `Erebus.jl`, surface atmospheric pressure $P_{\text{atm}}$ is evaluated from the previous step atmospheric inventory, lagging the hydromechanical solve by one timestep in an operator-split fashion. Within the 2D Stokes-Darcy simulation loop, marker fluid drainage and volatile exsolution feed species-resolved atmospheric inventories ($M_{\text{atm}}^{\text{species}}$) for the 10-species gas mixture. Multi-species kinetic escape is evaluated for each volatile species using its molecular mass, with a cubic Hermite transition between sound-speed blow-off and kinetic Jeans effusion, tracking cumulative escaped masses ($M_{\text{escaped}}^{\text{species}}$) across timesteps.
 
+---
+
+## Convex Active-Set Multi-Species Atmospheric Escape Closure
+
+When planetesimals lose their atmospheres during or after disk clearing, stellar irradiation or internal heat drives hydrodynamic escape. In multi-component gas envelopes, light escaping species exert upward drag forces on heavier species through neutral collisions. Classical escape treatments (such as Zahnle & Kasting 1986) consider only binary mixtures with a dominant hydrogen carrier. `Erebus.jl` implements the general convex active-set multi-species hydrodynamic escape closure formulated by Attia & Lichtenberg (2026), resolving arbitrary $N$-component atmospheric mixtures without assuming a dominant carrier gas.
+
+### 1. Multi-Component Momentum Balance
+
+In an $N$-component atmospheric flow subject to gravity and inter-species friction, momentum conservation for species $j$ follows the 1D Burgers-Stefan-Maxwell diffusion relations (Burgers 1969; Zahnle & Kasting 1986; Attia & Lichtenberg 2026):
+
+$$-\frac{k_B T}{m_j} \frac{d \ln y_j}{d r} - g(r) - \sum_{k \ne j} \frac{k_B T}{b_{jk}} \frac{y_k}{m_j} (u_j - u_k) = 0$$
+
+where $y_j$ is the local mole fraction, $u_j$ is the bulk radial velocity, and $b_{jk} = n D_{jk}$ is the binary diffusion parameter [$\text{m}^{-1}\text{s}^{-1}$]. 
+
+Defining the drift variables $w_j = \Phi_j / X_j$ [$\text{m}^{-2}\text{s}^{-1}$], where $\Phi_j$ is the number escape flux and $X_j$ is the base mole fraction, the coupled momentum equations reduce to:
+
+$$\sum_{k \ne j} \frac{X_k}{b_{jk}} (w_j - w_k) + \frac{m_j g}{k_B T} = C$$
+
+where $C$ is a separation constant representing the asymptotic density scale height parameter.
+
+### 2. Active-Set Quadratic Dissipation Minimization
+
+Total mass conservation requires that the sum of individual species mass fluxes equals the total hydrodynamic base mass flux $\phi_{\text{base}}$ [$\text{kg}/(\text{m}^2\cdot\text{s})$]:
+
+$$\sum_{j=1}^N m_j X_j w_j = \phi_{\text{base}}$$
+
+Because individual species escape fluxes must remain non-negative ($w_j \ge 0$), the physical flux distribution corresponds to the unique minimum of inter-species frictional dissipation subject to non-negativity constraints (Attia & Lichtenberg 2026):
+
+$$\min_{\mathbf{w} \ge 0} \frac{1}{4} \sum_{j=1}^N \sum_{k=1}^N \frac{X_j X_k}{b_{jk}} (w_j - w_k)^2 + \sum_{j=1}^N \frac{m_j g}{k_B T} X_j w_j \quad \text{subject to} \quad \sum_{j=1}^N m_j X_j w_j = \phi_{\text{base}}$$
+
+The active set $\mathcal{A} \subseteq \{1, \dots, N\}$ designates escaping species ($w_j > 0$), while the inactive retained set $\mathcal{R}$ designates gravitationally bound species ($w_k = 0$).
+
+For a candidate active set $\mathcal{A}$, the linear Karush-Kuhn-Tucker (KKT) equality system is:
+
+$$\sum_{i \in \mathcal{A}, i \ne j} \frac{X_i}{b_{ij}} (w_j - w_i) + w_j \sum_{k \in \mathcal{R}} \frac{X_k}{b_{jk}} - C = -\frac{m_j g}{k_B T}, \quad \forall j \in \mathcal{A}$$
+
+$$\sum_{j \in \mathcal{A}} m_j X_j w_j = \phi_{\text{base}}$$
+
+For retained species $k \in \mathcal{R}$, stability requires satisfaction of the retention criterion:
+
+$$R_k = \sum_{i \in \mathcal{A}} \frac{X_i w_i}{b_{ik}} - \left(\frac{m_k g}{k_B T} - C\right) \le 0, \quad \forall k \in \mathcal{R}$$
+
+If $R_k > 0$ for any retained species, that species violates gravitational retention and enters the active set $\mathcal{A}$. The active-set iteration terminates in a finite number of steps, yielding the unique global solution for individual escape fluxes $\Phi_j = X_j w_j$.
+
+### 3. Binary Diffusion Parameters and Scaling Laws
+
+The binary diffusion parameter $b_{ij}(T) = n D_{ij}$ [$\text{m}^{-1}\text{s}^{-1}$] scales with temperature according to kinetic theory:
+
+$$b_{ij}(T) = b_{ij}(T_{\text{ref}}) \left(\frac{T}{T_{\text{ref}}}\right)^s$$
+
+with reference temperature $T_{\text{ref}} = 1000\text{ K}$ and temperature exponent $s = 0.75$.
+
+`Erebus.jl` incorporates:
+1. **91 atomic pairs** from Data S1 of Attia & Lichtenberg (2026), spanning H, He, C, N, O, Ne, Na, Mg, Si, S, Ar, Fe, Kr, and Xe.
+2. **Molecular pairs** from Zahnle & Kasting (2023) and Marrero & Mason (1972) for volatile gas mixtures ($\mathrm{H_2, H_2O, CO, CO_2, CH_4, N_2, NH_3, O_2, H_2S, SO_2, S_2}$).
+3. **Reduced-mass and diameter scaling** for untabulated species pairs following Zahnle & Kasting (2023, Eq. 10):
+   $$b_{ij}(1000\text{ K}) = b_{\text{anchor}} \sqrt{\frac{\mu_{\text{anchor}}}{\mu_{ij}}} \left(\frac{d_{\text{anchor}}}{d_i + d_j}\right)^2$$
+   anchored to the $\mathrm{H_2}$ and $\mathrm{CO_2}$ reference pair ($b_{\text{anchor}} = 4.09\times 10^{21}\text{ m}^{-1}\text{s}^{-1}$, $d_{\mathrm{H}_2} = 289\text{ pm}$, $d_{\mathrm{CO}_2} = 330\text{ pm}$).
+
+### 4. Two-Sided Matrix Equilibration
+
+Because diffusion parameters and mole fractions span multiple orders of magnitude (from $10^{20}$ to $10^{23}\text{ m}^{-1}\text{s}^{-1}$ and $10^{-6}$ to $1.0$), the linear system $M \mathbf{y} = \mathbf{r}$ can be ill-conditioned. `Erebus.jl` solves the fixed-active system with two-sided diagonal matrix equilibration:
+
+$$D_r M D_c \mathbf{z} = D_r \mathbf{r}, \quad \mathbf{y} = D_c \mathbf{z}$$
+
+where $D_r = \text{diag}(1 / \max_c |M_{rc}|)$ scales rows and $D_c = \text{diag}(1 / \max_r |(D_r M)_{rc}|)$ scales columns. This equilibration maintains numerical stability across high dynamic ranges of composition and molecular weight.
+
+### 5. Classical Limits and Conservation Properties
+
+The convex active-set closure satisfies several exact analytical limits:
+- **Binary Crossover Equivalence**: In a binary mixture ($N = 2$), the solution matches the analytical crossover mass and drag equations of Hunten et al. (1987) and Zahnle & Kasting (1986).
+- **Ternary Analytic Reduction**: In a three-component mixture ($N = 3$), the solution reproduces the limiting flux relations of Zahnle et al. (1990) and matches numerical integrations of Gu & Chen (2023).
+- **Strict Mass Conservation**: The sum of escaping species mass fluxes identically satisfies $\sum_{j=1}^N m_j \Phi_j = \phi_{\text{base}}$ whenever $\phi_{\text{base}} > 0$.
+- **Carrier Independence**: The closure operates on any mixture composition. When hydrogen is absent or exhausted, the model continues to partition escape across the remaining volatile inventory.
+
