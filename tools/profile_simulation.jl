@@ -15,7 +15,7 @@ function run_profile(config_path::String; n_runs::Int=3)
     # Warm-up run to compile all Julia methods
     println("Performing warm-up run...")
     mktempdir() do tmpdir
-        Erebus.run_simulation(cfg; output_path=tmpdir)
+        return Erebus.run_simulation(cfg; output_path=tmpdir)
     end
 
     # Profile runs
@@ -66,9 +66,11 @@ end
 function main()
     repo_root = dirname(@__DIR__)
     raw_config = length(ARGS) >= 1 ? ARGS[1] : joinpath("configs", "test_quick.toml")
-    config_file = isabspath(raw_config) ? raw_config : (
-        isfile(raw_config) ? abspath(raw_config) : joinpath(repo_root, raw_config)
-    )
+    config_file = if isabspath(raw_config)
+        raw_config
+    else
+        (isfile(raw_config) ? abspath(raw_config) : joinpath(repo_root, raw_config))
+    end
     output_dir = joinpath(repo_root, "output_files")
     mkpath(output_dir)
     output_file = joinpath(output_dir, "profiling_baseline.json")
@@ -81,7 +83,7 @@ function main()
     data = run_profile(config_file)
 
     open(output_file, "w") do f
-        JSON.print(f, data, 2)
+        return JSON.print(f, data, 2)
     end
 
     println("----------------------------------------------------------")
@@ -90,7 +92,7 @@ function main()
     @printf("Mean allocated:  %.2f MB\n", data["mean_alloc_mb"])
     @printf("Mean GC time:    %.3f s\n", data["mean_gc_time_s"])
     println("Baseline metrics saved to: $output_file")
-    println("==========================================================")
+    return println("==========================================================")
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

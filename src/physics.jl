@@ -4217,7 +4217,6 @@ end
 # Fundamental physical constants
 # Note: GRAVITATIONAL_CONSTANT is defined in constants.jl and test_constants.jl (CODATA 2018)
 
-
 """
 Boltzmann constant k_B in J / K (SI exact definition).
 """
