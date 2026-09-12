@@ -157,15 +157,8 @@ function get_viscosities_stresses_density_gradients!(
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
     # previous stresses
     @views @. SXYcomp = SXY0*ETA / (GGG*dt+ETA)
-    @views @. SXXcomp = SXX0*ETAP / (GGGP*dt+ETAP)
-    @views @. SYYcomp = -SXX0*ETAP / (GGGP*dt+ETAP)
-    # for erroneously undersized (Ny, Nx) SSX0, SSX
-    # @views @. SXXcomp = (
-    # SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt + ETAP[1:Ny, 1:Nx])
-    # )
-    # @views @. SYYcomp = (
-    # -SXX0*ETAP[1:Ny, 1:Nx] / (GGGP[1:Ny, 1:Nx]*dt+ETAP[1:Ny, 1:Nx])
-    # )
+    @views @. SXXcomp = SXX0 * ETAP / (GGGP * dt + ETAP)
+    @views @. SYYcomp = -SXX0 * ETAP / (GGGP * dt + ETAP)
     # density gradients
     @inbounds begin
         @views @. dRHOXdx[:, 2:Nx_val] =
@@ -1125,16 +1118,6 @@ function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coord
         @views @. vyf += vy
     end # @inbounds
 
-    # for j=1:1:Nx, i=2:1:Ny
-    #     vxf[i, j] = qxD[i, j]*inv(PHIX[i,j]) + vx[i, j]
-    # end
-    # @views @. vxf[1, :] = -bcftop*vxf[2, :]    
-    # @views @. vxf[Ny1, :] = -bcfbottom*vxf[Ny, :]
-    # for j=2:1:Nx, i=1:1:Ny
-    #     vyf[i,j] = qyD[i,j]*inv(PHIY[i,j]) + vy[i,j]
-    # end
-    # @views @. vyf[:, 1] = -bcfleft*vyf[:, 2]    
-    # @views @. vyf[:, Nx1] = -bcfright*vyf[:, Nx]     
     return nothing
 end # function compute_fluid_velocities!
 
