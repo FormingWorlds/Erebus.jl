@@ -676,9 +676,7 @@ using Erebus
             @test isapprox(rate_mid_sharp, expected_stage3, rtol=1e-10)
             # Smooth mode provides convex combination: 0.5 * rate_peb + 0.5 * rate_stage3
             @test isapprox(
-                rate_mid_smooth,
-                0.5 * rate_early_sharp + 0.5 * expected_stage3,
-                rtol=1e-4,
+                rate_mid_smooth, 0.5 * rate_early_sharp + 0.5 * expected_stage3, rtol=1e-4
             )
 
             # After dispersal: pebble accretion stops; switches to Stage 3 Safronov collisions

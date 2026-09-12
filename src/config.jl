@@ -2040,8 +2040,10 @@ function validate_config(cfg::SimulationConfig)
             cfg.grid.ysize - cfg.geometry.ycenter,
         )
         r_max_allowed = if cfg.telescoping.active
-            (isapprox(cfg.geometry.xcenter, cfg.grid.xsize / 2.0; rtol=1e-3) &&
-             isapprox(cfg.geometry.ycenter, cfg.grid.ysize / 2.0; rtol=1e-3)) || throw(
+            (
+                isapprox(cfg.geometry.xcenter, cfg.grid.xsize / 2.0; rtol=1e-3) &&
+                isapprox(cfg.geometry.ycenter, cfg.grid.ysize / 2.0; rtol=1e-3)
+            ) || throw(
                 ArgumentError(
                     "Telescoping domain requires planet center (xcenter, ycenter) at domain center (xsize/2, ysize/2)",
                 ),
@@ -2248,8 +2250,10 @@ function validate_config(cfg::SimulationConfig)
                 "Telescoping domain requires odd grid.Ny for symmetric centering, got $(cfg.grid.Ny)",
             ),
         )
-        (cfg.telescoping.max_telescope_levels >= 1 &&
-         cfg.telescoping.max_telescope_levels <= 30) || throw(
+        (
+            cfg.telescoping.max_telescope_levels >= 1 &&
+            cfg.telescoping.max_telescope_levels <= 30
+        ) || throw(
             ArgumentError(
                 "max_telescope_levels must be between 1 and 30, got $(cfg.telescoping.max_telescope_levels)",
             ),
