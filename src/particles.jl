@@ -15,6 +15,11 @@ $(SIGNATURES)
 - `Xfem0`: Molten metal volume fraction array at previous timestep [0, 1]
 - `Xfe_bulk`: Bulk total metal volume fraction array [0, 1]
 """
+function setup_marker_magma_properties(marknum::Int)
+    F_extract_m = zeros(Float64, marknum)
+    return (F_extract_m,)
+end
+
 function setup_marker_metal_properties(marknum::Int; randomized::Bool=false)
     Xfem = zeros(Float64, marknum)
     Xfem0 = zeros(Float64, marknum)
@@ -802,6 +807,9 @@ function compute_marker_properties!(
     Xmin_metal_matrix_m=nothing,
     hydrothermal_active::Bool=false,
     hydrothermal_cfg::Union{Nothing,HydrothermalConfig}=nothing,
+    magma_transport_active::Bool=false,
+    track_depletion::Bool=false,
+    F_extract_m=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -840,6 +848,9 @@ function compute_marker_properties!(
             F_melt = compute_melt_fraction(
                 tkm[m], P_val, tm[m]; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt_clapeyron_val
             )
+            if magma_transport_active && track_depletion && F_extract_m !== nothing
+                F_melt = max(0.0, F_melt - F_extract_m[m])
+            end
             if Fm !== nothing
                 Fm[m] = F_melt
             end
@@ -3449,6 +3460,7 @@ function replenish_markers!(
     Xmin_metal_matrix_m=nothing,
     t_accreted=nothing,
     hcnspo_props=nothing,
+    F_extract_m=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     xxm_val = coords === nothing ? xxm : coords.xxm
@@ -3593,6 +3605,9 @@ function replenish_markers!(
                     end
                     if t_accreted !== nothing
                         push!(t_accreted, t_accreted[m])
+                    end
+                    if F_extract_m !== nothing
+                        push!(F_extract_m, F_extract_m[m])
                     end
                     if hcnspo_props !== nothing
                         for prop in values(hcnspo_props)

@@ -249,6 +249,34 @@ Parameters controlling silicate rock melting, latent heat buffering, and melt-we
 
 ---
 
+<a id="magma_transport"></a>
+## `[magma_transport]`
+
+Parameters controlling two-phase silicate melt segregation, porous Darcy percolation, hindered crystal settling, conservative drift-flux transport, and depletion tracking.
+
+| Parameter | Type | Default | Units | Description | Bounds |
+|:---|:---|:---|:---|:---|:---|
+| `active` | `Bool` | `false` | - | Enable buoyant silicate melt segregation and magma transport | `true` / `false` |
+| `k_melt_ref` | `Float64` | `1.0e-11` | $\text{m}^2$ | Reference permeability of molten silicate matrix | $> 0$ |
+| `perm_exponent` | `Float64` | `3.0` | - | McKenzie (1984) permeability power-law exponent | $> 0$ |
+| `phi0` | `Float64` | `0.10` | - | Reference porosity/melt fraction scale | $\in (0, 1)$ |
+| `phi_residual` | `Float64` | `0.01` | - | Residual silicate melt threshold trapped in matrix | $\ge 0$ |
+| `phi_crit` | `Float64` | `0.40` | - | Rheological transition threshold between Darcy and Stokes | $\in (0, 1)$ |
+| `phi_pack` | `Float64` | `1.0` | - | Maximum silicate melt packing limit | $\in (0, 1]$ |
+| `eta_melt` | `Float64` | `10.0` | Pa s | Dynamic shear viscosity of liquid silicate melt | $> 0$ |
+| `r_grain` | `Float64` | `1.0e-3` | m | Mean silicate crystal grain radius for Stokes settling | $> 0$ |
+| `hindered_exponent` | `Float64` | `2.0` | - | Richardson-Zaki (1954) hindered settling exponent | $\ge 0$ |
+| `F_perc_end` | `Float64` | `0.35` | - | Upper limit of pure Darcy porous percolation regime | $0 \le \phi_{\text{residual}} < F_{\text{perc\_end}} \le \phi_{\text{crit}}$ |
+| `F_settle_start` | `Float64` | `0.45` | - | Lower limit of pure Stokes crystal settling regime | $\phi_{\text{crit}} \le F_{\text{settle\_start}} \le \phi_{\text{pack}}$ |
+| `cfl_melt` | `Float64` | `0.5` | - | Courant-Friedrichs-Lewy safety factor for segregation subcycling | $\in (0, 1]$ |
+| `max_subcycles` | `Int` | `2000` | - | Maximum segregation subcycles per global timestep | $\ge 1$ |
+| `segregation_heating` | `Bool` | `true` | - | Enable gravitational energy dissipation heating | `true` / `false` |
+| `latent_crystallization` | `Bool` | `true` | - | Enable latent heat release upon subsolidus melt crystallization | `true` / `false` |
+| `exsolution_active` | `Bool` | `true` | - | Enable decompression volatile exsolution coupling | `true` / `false` |
+| `track_depletion` | `Bool` | `true` | - | Enable Lagrangian marker melt extraction and mantle depletion tracking | `true` / `false` |
+
+---
+
 ## `[venting]`
 
 Parameters controlling planetesimal surface volatile venting, ice sealing, and hydrofracture breaching.

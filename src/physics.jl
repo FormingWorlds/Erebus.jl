@@ -2203,6 +2203,205 @@ function compute_melt_weakened_viscosity(
 end
 
 """
+Compute silicate melt permeability through a compacting solid matrix.
+
+$(SIGNATURES)
+
+Calculates the permeable channel network conductivity according to the
+McKenzie (1984) power-law formulation with residual melt retention threshold.
+
+# Arguments
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+
+# Keyword Arguments
+- `k0::Real=1.0e-11`: Reference permeability [m^2]
+- `phi0::Real=0.10`: Reference melt fraction [-]
+- `n::Real=3.0`: Permeability power-law exponent [-]
+- `phi_residual::Real=0.01`: Residual melt retention threshold [-]
+- `phi_crit::Real=0.40`: Rheological critical melt fraction for matrix disaggregation [-]
+
+# Returns
+- `k_m::Float64`: Effective silicate melt permeability [m^2]
+"""
+function silicate_melt_permeability(
+    F_m::Real;
+    k0::Real=1.0e-11,
+    phi0::Real=0.10,
+    n::Real=3.0,
+    phi_residual::Real=0.01,
+    phi_crit::Real=0.40,
+)
+    if !isfinite(F_m) || F_m < 0.0 || F_m > 1.0
+        throw(DomainError(F_m, "Silicate melt fraction must be finite and within [0, 1]"))
+    end
+    if !isfinite(k0) || k0 <= 0.0
+        throw(DomainError(k0, "Reference permeability k0 must be positive and finite"))
+    end
+    if !isfinite(phi0) || phi0 <= 0.0 || phi0 > 1.0
+        throw(DomainError(phi0, "Reference melt fraction phi0 must be within (0, 1]"))
+    end
+    if !isfinite(n) || n <= 0.0
+        throw(DomainError(n, "Permeability exponent n must be positive and finite"))
+    end
+    if !isfinite(phi_residual) || phi_residual < 0.0 || phi_residual >= phi_crit
+        throw(
+            DomainError(
+                phi_residual, "Residual threshold must satisfy 0 <= phi_residual < phi_crit"
+            ),
+        )
+    end
+    if !isfinite(phi_crit) || phi_crit <= 0.0 || phi_crit >= 1.0
+        throw(
+            DomainError(phi_crit, "Critical melt fraction phi_crit must be within (0, 1)")
+        )
+    end
+
+    if F_m <= phi_residual
+        return 0.0
+    elseif F_m <= phi_crit
+        phi_eff = (F_m - phi_residual) / phi0
+        return Float64(k0 * (phi_eff^n))
+    else
+        phi_crit_eff = (phi_crit - phi_residual) / phi0
+        k_crit = k0 * (phi_crit_eff^n)
+        d_phi = (F_m - phi_crit) / phi0
+        return Float64(k_crit + k0 * d_phi)
+    end
+end
+
+"""
+Compute buoyant silicate melt segregation velocity through solid matrix or crystal mush.
+
+$(SIGNATURES)
+
+Calculates the upward/outward relative migration velocity between buoyant liquid
+silicate melt and solid silicate rock. Transitions smoothly from Darcy porous flow
+in the percolation regime to Stokes settling in the crystal suspension regime.
+
+# Arguments
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+- `drho::Real`: Density contrast (rho_solid - rho_melt) [kg/m^3]
+- `g_acc::Real`: Gravitational acceleration magnitude [m/s^2]
+- `eta_melt::Real`: Liquid silicate melt dynamic viscosity [Pa s]
+
+# Keyword Arguments
+- `k_melt_ref::Real=1.0e-11`: Reference permeability [m^2]
+- `phi0::Real=0.10`: Reference melt fraction [-]
+- `perm_exponent::Real=3.0`: Permeability power-law exponent [-]
+- `phi_residual::Real=0.01`: Residual melt retention threshold [-]
+- `phi_crit::Real=0.40`: Rheological critical melt fraction [-]
+- `r_grain::Real=1.0e-3`: Crystal grain radius for Stokes settling [m]
+- `hindered_exponent::Real=2.0`: Richardson-Zaki hindrance exponent [-]
+- `F_perc_end::Real=0.35`: Upper melt fraction of pure percolation regime [-]
+- `F_settle_start::Real=0.45`: Lower melt fraction of pure suspension regime [-]
+
+# Returns
+- `v_seg::Float64`: Buoyant segregation velocity magnitude [m/s]
+"""
+function silicate_melt_segregation_velocity(
+    F_m::Real,
+    drho::Real,
+    g_acc::Real,
+    eta_melt::Real;
+    k_melt_ref::Real=1.0e-11,
+    phi0::Real=0.10,
+    perm_exponent::Real=3.0,
+    phi_residual::Real=0.01,
+    phi_crit::Real=0.40,
+    r_grain::Real=1.0e-3,
+    hindered_exponent::Real=2.0,
+    F_perc_end::Real=0.35,
+    F_settle_start::Real=0.45,
+)
+    if !isfinite(F_m) || F_m < 0.0 || F_m > 1.0
+        throw(DomainError(F_m, "Silicate melt fraction must be finite and within [0, 1]"))
+    end
+    if !isfinite(drho)
+        throw(DomainError(drho, "Density contrast must be finite"))
+    end
+    if !isfinite(g_acc) || g_acc < 0.0
+        throw(DomainError(g_acc, "Gravity acceleration must be non-negative and finite"))
+    end
+    if !isfinite(eta_melt) || eta_melt <= 0.0
+        throw(DomainError(eta_melt, "Melt viscosity must be positive and finite"))
+    end
+    if !isfinite(r_grain) || r_grain <= 0.0
+        throw(DomainError(r_grain, "Grain radius must be positive and finite"))
+    end
+    if !isfinite(hindered_exponent) || hindered_exponent < 0.0
+        throw(DomainError(hindered_exponent, "Hindrance exponent must be non-negative"))
+    end
+    if !(0.0 < F_perc_end <= F_settle_start <= 1.0)
+        throw(
+            DomainError(
+                (F_perc_end, F_settle_start),
+                "Regime bounds must satisfy 0 < F_perc_end <= F_settle_start <= 1",
+            ),
+        )
+    end
+
+    if F_m <= phi_residual || drho <= 0.0 || g_acc <= 0.0
+        return 0.0
+    end
+
+    # Darcy percolation velocity: v_perc = (k_m / (eta_m * F_m)) * drho * g
+    k_m = silicate_melt_permeability(
+        F_m;
+        k0=k_melt_ref,
+        phi0=phi0,
+        n=perm_exponent,
+        phi_residual=phi_residual,
+        phi_crit=phi_crit,
+    )
+    v_perc = (k_m / (eta_melt * F_m)) * drho * g_acc
+
+    # Stokes crystal suspension velocity: v_susp = (2 r^2 drho g / (9 eta_m)) * (F_m)^m
+    v_stokes = (2.0 * r_grain^2 * drho * g_acc) / (9.0 * eta_melt)
+    v_susp = v_stokes * (F_m^hindered_exponent)
+
+    if F_m <= F_perc_end
+        return Float64(v_perc)
+    elseif F_m >= F_settle_start
+        return Float64(v_susp)
+    else
+        # Smooth Hermite cubic interpolation between regimes
+        xi = (F_m - F_perc_end) / (F_settle_start - F_perc_end)
+        w = 3.0 * xi^2 - 2.0 * xi^3
+        return Float64((1.0 - w) * v_perc + w * v_susp)
+    end
+end
+
+"""
+Compute gravitational potential energy dissipation heating during silicate melt ascent.
+
+$(SIGNATURES)
+
+Calculates the volumetric heat generation rate from buoyancy dissipation
+as molten rock migrates relative to the solid mantle matrix.
+
+# Arguments
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+- `drho::Real`: Density contrast (rho_solid - rho_melt) [kg/m^3]
+- `g_acc::Real`: Gravitational acceleration magnitude [m/s^2]
+- `v_seg::Real`: Silicate melt segregation velocity magnitude [m/s]
+
+# Returns
+- `Q_diss::Float64`: Volumetric dissipation heat source [W/m^3]
+"""
+function silicate_melt_dissipation_heating(F_m::Real, drho::Real, g_acc::Real, v_seg::Real)
+    if !isfinite(F_m) || F_m < 0.0 || F_m > 1.0
+        throw(DomainError(F_m, "Silicate melt fraction must be finite and within [0, 1]"))
+    end
+    if !isfinite(drho) || !isfinite(g_acc) || !isfinite(v_seg)
+        throw(DomainError((drho, g_acc, v_seg), "Inputs must be finite"))
+    end
+    if F_m <= 0.0 || drho <= 0.0 || g_acc <= 0.0 || v_seg <= 0.0
+        return 0.0
+    end
+    return Float64(drho * g_acc * F_m * v_seg)
+end
+
+"""
 Compute regularized effective thermal conductivity from soft turbulence.
 
 $(SIGNATURES)
