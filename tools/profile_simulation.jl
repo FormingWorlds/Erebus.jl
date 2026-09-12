@@ -64,8 +64,11 @@ function run_profile(config_path::String; n_runs::Int=3)
 end
 
 function main()
-    config_file = length(ARGS) >= 1 ? ARGS[1] : "configs/test_quick.toml"
     repo_root = dirname(@__DIR__)
+    raw_config = length(ARGS) >= 1 ? ARGS[1] : joinpath("configs", "test_quick.toml")
+    config_file = isabspath(raw_config) ? raw_config : (
+        isfile(raw_config) ? abspath(raw_config) : joinpath(repo_root, raw_config)
+    )
     output_dir = joinpath(repo_root, "output_files")
     mkpath(output_dir)
     output_file = joinpath(output_dir, "profiling_baseline.json")

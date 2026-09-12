@@ -6,11 +6,11 @@ impact heating thermodynamics, and marker boundary expansion.
 using DocStringExtensions
 using LinearAlgebra
 
-# Gravitational constant [m^3 / (kg s^2)]
-const G_GRAV = 6.67430e-11
+# Gravitational constant [m^3 / (kg s^2)] (CODATA 2018)
+const G_GRAV = GRAVITATIONAL_CONSTANT
 
-# Boltzmann constant [J / K]
-const K_BOLTZMANN = 1.380649e-23
+# Boltzmann constant [J / K] (SI exact definition)
+const K_BOLTZMANN = BOLTZMANN_CONSTANT
 
 # Proton mass [kg]
 const M_PROTON = 1.67262192e-27

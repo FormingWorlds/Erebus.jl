@@ -89,5 +89,5 @@ julia --project tools/profile_simulation.jl configs/test_quick.toml
 The profiling harness:
 1. Executes a warm-up run to compile all methods.
 2. Executes repeated benchmark runs (default: 3 iterations).
-3. Reports minimum and mean wall-clock execution time, memory allocation, and garbage collection duration.
+3. Reports minimum and mean wall-clock execution time, plus mean memory allocation and mean garbage collection duration.
 4. Saves structured JSON metrics to `output_files/profiling_baseline.json`.

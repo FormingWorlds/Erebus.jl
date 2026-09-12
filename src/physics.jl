@@ -4215,7 +4215,7 @@ end
 # =============================================================================
 
 # Fundamental physical constants
-# Note: GRAVITATIONAL_CONSTANT is defined in constants.jl (CODATA 2018)
+# Note: GRAVITATIONAL_CONSTANT is defined in constants.jl and test_constants.jl (CODATA 2018)
 
 
 """
