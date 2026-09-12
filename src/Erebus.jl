@@ -214,7 +214,9 @@ export Config,
     assemble_binary_diffusion_matrix,
     solve_fixed_active,
     solve_multispecies_escape_closure,
-    compute_escape_activation_threshold
+    compute_escape_activation_threshold,
+    SPECIES_AMU,
+    SPECIES_AMU_ESCAPE
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -391,7 +393,9 @@ module Physics
         solve_fixed_active,
         solve_multispecies_escape_closure,
         compute_escape_activation_threshold,
-        ATOMIC_MASS_UNIT
+        ATOMIC_MASS_UNIT,
+        SPECIES_AMU,
+        SPECIES_AMU_ESCAPE
     export distance,
         total,
         ktotal,
@@ -528,7 +532,9 @@ module Physics
         solve_fixed_active,
         solve_multispecies_escape_closure,
         compute_escape_activation_threshold,
-        ATOMIC_MASS_UNIT
+        ATOMIC_MASS_UNIT,
+        SPECIES_AMU,
+        SPECIES_AMU_ESCAPE
 end
 
 module Particles

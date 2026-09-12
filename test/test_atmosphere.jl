@@ -1172,4 +1172,53 @@ using Random
             1.0, [0.5, 0.5], [1.0], 1000.0, 10.0, b_mat[1:2, 1:2]
         )
     end
+
+    # ---------------------------------------------------------------------
+    # 16. Standard Atomic Weights and Noble Gas Species Consistency
+    # ---------------------------------------------------------------------
+    @testset "Standard Atomic Weights and Noble Gas Species Consistency" begin
+        # Single source of truth verification
+        @test SPECIES_AMU_ESCAPE === SPECIES_AMU
+        @test haskey(SPECIES_AMU, :Ar)
+        @test haskey(SPECIES_AMU, :Ne)
+
+        # IUPAC standard atomic weights (Meija et al. 2016)
+        @test isapprox(SPECIES_AMU[:Ar], 39.948, atol=1e-3)
+        @test isapprox(SPECIES_AMU[:Ne], 20.1797, atol=1e-4)
+
+        # Molecular mass lookup in physics module
+        @test isapprox(
+            get_species_molecular_mass(:Ar), 39.948 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:ar), 39.948 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:Ne), 20.1797 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+        @test isapprox(
+            get_species_molecular_mass(:ne), 20.1797 * ATOMIC_MASS_UNIT, rtol=1e-12
+        )
+
+        # Binary diffusion matrix with noble gases
+        sp_list = [:H, :He, :Ne, :Ar]
+        b_mat = assemble_binary_diffusion_matrix(sp_list, 1000.0)
+        @test size(b_mat) == (4, 4)
+        @test isapprox(b_mat[1, 4], 6.5e21, rtol=1e-12) # H-Ar
+        @test isapprox(b_mat[2, 4], 4.4906e21, rtol=1e-12) # He-Ar
+        @test isapprox(b_mat[3, 4], 1.6161e21, rtol=1e-12) # Ne-Ar
+
+        # Evolve step with arbitrary volatile mixture containing Ar and Ne
+        atm_state = AtmosphereState()
+        atm_state.M_atm[:H] = 1.0e15
+        atm_state.M_atm[:Ar] = 1.0e14
+        atm_state.M_atm[:Ne] = 1.0e14
+        cfg = AtmosphereConfig(crossover_active=true)
+        evolve_coupled_atmosphere_step!(
+            atm_state, Dict{Symbol,Float64}(), 3600.0, 1.0e21, 5.0e5, 300.0, cfg
+        )
+        # Verify mass conservation holds with noble gases
+        m_tot_final = sum(values(atm_state.M_atm)) + sum(values(atm_state.M_escaped))
+        @test isapprox(m_tot_final, 1.2e15, rtol=1e-12)
+    end
 end

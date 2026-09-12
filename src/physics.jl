@@ -4232,6 +4232,39 @@ Unified atomic mass unit (amu, Dalton) in kilograms [kg] (CODATA 2018).
 """
 const ATOMIC_MASS_UNIT = 1.66053906660e-27
 
+"""
+Standard atomic and molecular weights for planetary volatile and escape species [amu].
+Values follow IUPAC standard atomic weights (Meija et al. 2016).
+"""
+const SPECIES_AMU = Dict{Symbol,Float64}(
+    :H => 1.008,
+    :D => 2.0141,
+    :He => 4.0026,
+    :C => 12.011,
+    :N => 14.007,
+    :O => 15.999,
+    :Ne => 20.1797,
+    :Na => 22.990,
+    :Mg => 24.305,
+    :Si => 28.085,
+    :S => 32.060,
+    :Ar => 39.948,
+    :Fe => 55.845,
+    :Kr => 83.798,
+    :Xe => 131.293,
+    :H2 => 2.01588,
+    :H2O => 18.01528,
+    :CO => 28.0101,
+    :CO2 => 44.0095,
+    :CH4 => 16.04246,
+    :N2 => 28.0134,
+    :NH3 => 17.03052,
+    :O2 => 31.998,
+    :H2S => 34.08088,
+    :SO2 => 64.066,
+    :S2 => 64.130,
+)
+
 # Volatile molecular masses [kg] (Standard atomic weights divided by Avogadro constant)
 """
 Molecular mass of water (H2O) in kilograms [kg], with molar mass 18.01528 g/mol.
@@ -4332,37 +4365,37 @@ function get_species_molecular_mass(species::Symbol)::Float64
     elseif s === :SO2
         return MASS_SO2_KG
     elseif s === :H
-        return 1.008 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:H] * ATOMIC_MASS_UNIT
     elseif s === :D
-        return 2.0141 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:D] * ATOMIC_MASS_UNIT
     elseif s === :HE
-        return 4.0026 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:He] * ATOMIC_MASS_UNIT
     elseif s === :C
-        return 12.011 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:C] * ATOMIC_MASS_UNIT
     elseif s === :N
-        return 14.007 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:N] * ATOMIC_MASS_UNIT
     elseif s === :O
-        return 15.999 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:O] * ATOMIC_MASS_UNIT
     elseif s === :NE
-        return 19.992 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Ne] * ATOMIC_MASS_UNIT
     elseif s === :NA
-        return 22.990 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Na] * ATOMIC_MASS_UNIT
     elseif s === :MG
-        return 24.305 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Mg] * ATOMIC_MASS_UNIT
     elseif s === :SI
-        return 28.085 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Si] * ATOMIC_MASS_UNIT
     elseif s === :S
-        return 32.060 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:S] * ATOMIC_MASS_UNIT
     elseif s === :AR
-        return 35.968 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Ar] * ATOMIC_MASS_UNIT
     elseif s === :FE
-        return 55.845 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Fe] * ATOMIC_MASS_UNIT
     elseif s === :KR
-        return 83.798 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Kr] * ATOMIC_MASS_UNIT
     elseif s === :XE
-        return 131.293 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:Xe] * ATOMIC_MASS_UNIT
     elseif s === :O2
-        return 31.998 * ATOMIC_MASS_UNIT
+        return SPECIES_AMU[:O2] * ATOMIC_MASS_UNIT
     else
         throw(
             ArgumentError(

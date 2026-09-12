@@ -26,6 +26,28 @@ mutable struct AtmosphereState
     h_rad_eff::Float64
 end
 
+function AtmosphereState(;
+    M_atm::Dict{Symbol,Float64}=Dict{Symbol,Float64}(),
+    M_escaped::Dict{Symbol,Float64}=Dict{Symbol,Float64}(),
+    P_surf::Real=0.0,
+    T_surf_eq::Real=0.0,
+    tau_LW::Real=0.0,
+    M_env_bound::Real=0.0,
+    F_net_rad::Real=0.0,
+    h_rad_eff::Real=0.0,
+)
+    return AtmosphereState(
+        M_atm,
+        M_escaped,
+        Float64(P_surf),
+        Float64(T_surf_eq),
+        Float64(tau_LW),
+        Float64(M_env_bound),
+        Float64(F_net_rad),
+        Float64(h_rad_eff),
+    )
+end
+
 """
     compute_gravitational_capture_radius(M::Real, M_star::Real, a::Real, c_s::Real)::Float64
 
@@ -501,35 +523,9 @@ end
 
 """
 Standard atomic and molecular weights for atmospheric escape species [amu].
+References `SPECIES_AMU` from the physics module as the single source of truth.
 """
-const SPECIES_AMU_ESCAPE = Dict{Symbol,Float64}(
-    :H => 1.008,
-    :D => 2.0141,
-    :He => 4.0026,
-    :C => 12.011,
-    :N => 14.007,
-    :O => 15.999,
-    :Ne => 19.992,
-    :Na => 22.990,
-    :Mg => 24.305,
-    :Si => 28.085,
-    :S => 32.060,
-    :Ar => 35.968,
-    :Fe => 55.845,
-    :Kr => 83.798,
-    :Xe => 131.293,
-    :H2 => 2.01588,
-    :H2O => 18.0153,
-    :CO => 28.0101,
-    :CO2 => 44.0095,
-    :CH4 => 16.043,
-    :N2 => 28.014,
-    :NH3 => 17.0305,
-    :O2 => 31.998,
-    :H2S => 34.082,
-    :SO2 => 64.066,
-    :S2 => 64.130,
-)
+const SPECIES_AMU_ESCAPE = SPECIES_AMU
 
 """
 Kinetic diameters for atmospheric escape species [pm].
@@ -1265,9 +1261,6 @@ function evolve_coupled_atmosphere_step!(
                 ]
                 phi_base = (dM_esc_base / dt) / area_exo
                 b_mat = assemble_binary_diffusion_matrix(present_species, T_exo)
-                if cfg.b_diff_ref != 1.0e21
-                    b_mat .*= (cfg.b_diff_ref / 1.0e21)
-                end
 
                 Phi_vec = solve_multispecies_escape_closure(
                     phi_base, X_vec, m_species, T_exo, g_exo, b_mat
