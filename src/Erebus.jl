@@ -17,7 +17,8 @@ using TimerOutputs
 using TOML
 
 export run_simulation, load_state, simulation_loop
-export MetalSegregationWorkspace, MagmaSegregationWorkspace
+export MetalSegregationWorkspace,
+    MagmaSegregationWorkspace, HydromechanicalLSEWorkspace, ThermalLSEWorkspace
 export Config,
     GridConfig,
     GeometryConfig,
@@ -150,6 +151,7 @@ export Config,
     apply_silicate_melt_segregation!,
     sink_vented_marker_porosity!,
     drain_vented_marker_volatiles!,
+    advance_marker_thermo_porosity_venting!,
     GridCoordinates,
     default_grid_coordinates,
     compute_adaptive_timestep,
@@ -604,6 +606,9 @@ module Particles
         apply_subgrid_temperature_diffusion!,
         update_marker_temperature!,
         update_marker_porosity!,
+        sink_vented_marker_porosity!,
+        drain_vented_marker_volatiles!,
+        advance_marker_thermo_porosity_venting!,
         ThreadInterpolationBuffers,
         allocate_thread_interpolation_buffers,
         reset_thread_buffers!,
@@ -655,7 +660,9 @@ module Particles
         apply_subgrid_temperature_diffusion!,
         update_marker_temperature!,
         update_marker_porosity!,
+        sink_vented_marker_porosity!,
         drain_vented_marker_volatiles!,
+        advance_marker_thermo_porosity_venting!,
         ThreadInterpolationBuffers,
         allocate_thread_interpolation_buffers,
         reset_thread_buffers!,
@@ -697,7 +704,9 @@ module Numerics
         apply_silicate_melt_segregation!,
         compute_face_venting_permeability,
         MetalSegregationWorkspace,
-        MagmaSegregationWorkspace
+        MagmaSegregationWorkspace,
+        HydromechanicalLSEWorkspace,
+        ThermalLSEWorkspace
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
@@ -731,7 +740,9 @@ module Numerics
         apply_silicate_melt_segregation!,
         compute_face_venting_permeability,
         MetalSegregationWorkspace,
-        MagmaSegregationWorkspace
+        MagmaSegregationWorkspace,
+        HydromechanicalLSEWorkspace,
+        ThermalLSEWorkspace
 end
 
 module Simulation
@@ -744,7 +755,9 @@ module Simulation
         parse_commandline,
         run_simulation,
         MetalSegregationWorkspace,
-        MagmaSegregationWorkspace
+        MagmaSegregationWorkspace,
+        HydromechanicalLSEWorkspace,
+        ThermalLSEWorkspace
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
@@ -753,7 +766,9 @@ module Simulation
         parse_commandline,
         run_simulation,
         MetalSegregationWorkspace,
-        MagmaSegregationWorkspace
+        MagmaSegregationWorkspace,
+        HydromechanicalLSEWorkspace,
+        ThermalLSEWorkspace
 end
 
 module Config

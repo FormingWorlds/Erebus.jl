@@ -143,3 +143,47 @@ mutable struct MagmaSegregationWorkspace
         )
     end
 end
+
+"""
+Reusable pre-allocated memory workspace for hydromechanical linear system assembly and solution.
+
+$(FIELDS)
+"""
+mutable struct HydromechanicalLSEWorkspace
+    Ny1::Int
+    Nx1::Int
+    L::ExtendableSparseMatrix{Float64,Int64}
+    is_initialized::Bool
+
+    function HydromechanicalLSEWorkspace(Ny1::Integer, Nx1::Integer)
+        Ny1_val = Int(Ny1)
+        Nx1_val = Int(Nx1)
+        dim = Ny1_val * Nx1_val * 6
+        L = ExtendableSparseMatrix(dim, dim)
+        return new(Ny1_val, Nx1_val, L, false)
+    end
+end
+function HydromechanicalLSEWorkspace(coords::GridCoordinates)
+    return HydromechanicalLSEWorkspace(coords.Ny1, coords.Nx1)
+end
+
+"""
+Reusable pre-allocated memory workspace for thermal linear system assembly and solution.
+
+$(FIELDS)
+"""
+mutable struct ThermalLSEWorkspace
+    Ny1::Int
+    Nx1::Int
+    LT::ExtendableSparseMatrix{Float64,Int64}
+    is_initialized::Bool
+
+    function ThermalLSEWorkspace(Ny1::Integer, Nx1::Integer)
+        Ny1_val = Int(Ny1)
+        Nx1_val = Int(Nx1)
+        dim = Ny1_val * Nx1_val
+        LT = ExtendableSparseMatrix(dim, dim)
+        return new(Ny1_val, Nx1_val, LT, false)
+    end
+end
+ThermalLSEWorkspace(coords::GridCoordinates) = ThermalLSEWorkspace(coords.Ny1, coords.Nx1)

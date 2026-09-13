@@ -39,18 +39,32 @@ function assemble_thermal_lse!(
     Q_metric=nothing,
     Q_lat=nothing,
     Q_seg=nothing,
+    workspace=nothing,
 )
     Ny1, Nx1 = size(tk1)
     dx_val = coords === nothing ? dx : coords.dx
     dy_val = coords === nothing ? dy : coords.dy
+
     # fresh or reusable LHS coefficient matrix
-    LT = if LT === nothing
+    LT_target =
+        if workspace !== nothing &&
+            hasproperty(workspace, :Ny1) &&
+            hasproperty(workspace, :Nx1) &&
+            hasproperty(workspace, :LT) &&
+            workspace.Ny1 == Ny1 &&
+            workspace.Nx1 == Nx1
+            workspace.LT
+        else
+            LT
+        end
+
+    LT = if LT_target === nothing
         ExtendableSparseMatrix(Ny1 * Nx1, Ny1 * Nx1)
     else
-        if !isempty(LT.cscmatrix.nzval)
-            nonzeros(LT.cscmatrix) .= zero(0.0)
+        if !isempty(LT_target.cscmatrix.nzval)
+            nonzeros(LT_target.cscmatrix) .= zero(0.0)
         end
-        LT
+        LT_target
     end
     # reset RHS coefficient vector
     RT .= zero(0.0)
@@ -118,6 +132,14 @@ function assemble_thermal_lse!(
     end # @inbounds
 
     flush!(LT) # finalize CSC matrix
+    if workspace !== nothing &&
+        hasproperty(workspace, :Ny1) &&
+        hasproperty(workspace, :Nx1) &&
+        hasproperty(workspace, :is_initialized) &&
+        workspace.Ny1 == Ny1 &&
+        workspace.Nx1 == Nx1
+        workspace.is_initialized = true
+    end
     return LT
 end # function assemble_thermal_lse!
 
