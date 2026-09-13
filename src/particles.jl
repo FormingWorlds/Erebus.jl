@@ -4313,3 +4313,240 @@ function drain_vented_marker_volatiles!(
         M_vent_volatiles_total=m_tot,
     )
 end
+
+"""
+Advance marker temperature, porosity compaction, surface venting, and volatile drainage in one pass.
+
+$(SIGNATURES)
+
+# Arguments
+- `xm`: Marker x-coordinates [m]
+- `ym`: Marker y-coordinates [m]
+- `tm`: Marker material phase type
+- `tkm`: Marker temperature array [K]
+- `phim`: Marker porosity array
+- `DT`: Temperature change grid [K]
+- `tk2`: Subgrid-diffused temperature grid [K]
+- `APHI`: Compaction rate grid Dln[(1-ϕ)/ϕ]/Dt [s⁻¹]
+- `dt`: Time step length [s]
+- `timestep`: Current simulation time step index
+- `marknum`: Total number of active markers
+
+# Keyword Arguments
+- `coords`: GridCoordinates struct
+- `phimin`: Minimum porosity floor
+- `phimax`: Maximum porosity ceiling
+- `venting`: Boolean flag for surface venting
+- `S_vent_grid`: Surface venting loss rate grid [s⁻¹]
+- `rhofluidcur`: Reference fluid density [kg/m³]
+- `ret_cfg`: Optional RetentionConfig struct
+- `XH2Om`: Optional marker dissolved water array [wt%]
+- `XCm`: Optional marker dissolved carbon array [ppmw]
+- `XNm`: Optional marker dissolved nitrogen array [ppmw]
+- `XSm`: Optional marker dissolved sulfur array [ppmw]
+- `rhosolid`: Reference solid rock density [kg/m³]
+- `Fm`: Optional marker melt fraction array
+
+# Returns
+- Named tuple with `delta_m_vent` [kg] and `vented_vols` NamedTuple or nothing
+"""
+function advance_marker_thermo_porosity_venting!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{Int64},
+    tkm::AbstractVector{Float64},
+    phim::AbstractVector{Float64},
+    DT::AbstractMatrix{Float64},
+    tk2::AbstractMatrix{Float64},
+    APHI::AbstractMatrix{Float64},
+    dt::Real,
+    timestep::Integer,
+    marknum::Integer;
+    coords::GridCoordinates,
+    phimin::Real=1.0e-4,
+    phimax::Real=1.0,
+    venting::Bool=false,
+    S_vent_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    rhofluidcur::Real=1000.0,
+    ret_cfg::Union{Nothing,RetentionConfig}=nothing,
+    XH2Om::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XCm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XNm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
+    Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+)
+    marknum <= 0 && return (delta_m_vent=0.0, vented_vols=nothing)
+
+    xp_val = coords.xp
+    yp_val = coords.yp
+    dx_val = coords.dx
+    dy_val = coords.dy
+    jmin_p_val = coords.jmin_p
+    jmax_p_val = coords.jmax_p
+    imin_p_val = coords.imin_p
+    imax_p_val = coords.imax_p
+
+    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    dt_val = Float64(dt)
+    phimin_val = Float64(phimin)
+    phimax_val = Float64(phimax)
+    rhofluid_val = Float64(rhofluidcur)
+
+    venting_active = venting && S_vent_grid !== nothing
+    drain_volatiles =
+        venting_active &&
+        ret_cfg !== nothing &&
+        ret_cfg.active &&
+        ret_cfg.venting_drainage_active &&
+        ret_cfg.chi_vent > 0.0 &&
+        dt_val > 0.0 &&
+        XH2Om !== nothing
+
+    chi = drain_volatiles ? ret_cfg.chi_vent : 0.0
+
+    nthreads = max(Threads.nthreads(), Threads.maxthreadid())
+    th_vent = zeros(Float64, nthreads)
+    th_H2O = zeros(Float64, nthreads)
+    th_C = zeros(Float64, nthreads)
+    th_N = zeros(Float64, nthreads)
+    th_S = zeros(Float64, nthreads)
+
+    @inbounds begin
+        @threads :static for m in 1:marknum
+            i, j, weights = fix_weights(
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
+            )
+
+            # Update marker temperature
+            if timestep == 1
+                interpolate_to_marker!(m, i, j, weights, tkm, tk2)
+            else
+                interpolate_add_to_marker!(m, i, j, weights, tkm, DT)
+            end
+
+            # Rock marker porosity and volatile updates
+            if tm[m] < 3
+                # Porosity compaction
+                aphim = dot4(grid_vector(i, j, APHI), weights)
+                denom = (1.0 - phim[m]) * exp(aphim * dt_val) + phim[m]
+                phim[m] = max(phimin_val, min(phimax_val, phim[m] / denom))
+
+                # Surface venting and volatile drainage
+                if venting_active
+                    s_vent_m = dot4(grid_vector(i, j, S_vent_grid), weights)
+                    if s_vent_m > 0.0
+                        dphi = s_vent_m * dt_val
+                        phi_old = phim[m]
+                        phi_new = max(phimin_val, phi_old - dphi)
+                        phim[m] = phi_new
+                        dphi_actual = phi_old - phi_new
+                        tid = Threads.threadid()
+                        if dphi_actual > 0.0
+                            th_vent[tid] += rhofluid_val * dphi_actual * V_marker
+                        end
+
+                        if drain_volatiles
+                            decay_arg = -s_vent_m * chi * dt_val
+                            decay_factor = exp(clamp(decay_arg, -50.0, 0.0))
+                            drain_fraction = 1.0 - decay_factor
+                            T_m = tkm[m]
+                            rho_m = if rhosolid isa Real
+                                Float64(rhosolid)
+                            else
+                                Float64(rhosolid[tm[m]])
+                            end
+                            M_marker_rock =
+                                rho_m * V_marker * (1.0 - clamp(phim[m], 0.0, 1.0))
+                            F_m = Fm === nothing ? 0.0 : clamp(Fm[m], 0.0, 1.0)
+
+                            # Water drainage
+                            C_ret_H2O_ppm = compute_h2o_retention_floor(
+                                T_m, ret_cfg; F_melt=F_m
+                            )
+                            w_ret_H2O = C_ret_H2O_ppm * 1.0e-4
+                            w_cur = XH2Om[m]
+                            if w_cur > w_ret_H2O
+                                w_mob = w_cur - w_ret_H2O
+                                dw = w_mob * drain_fraction
+                                XH2Om[m] = w_cur - dw
+                                th_H2O[tid] += (dw * 0.01) * M_marker_rock
+                            end
+
+                            # Carbon drainage
+                            if XCm !== nothing
+                                C_ret_C = compute_carbon_retention_floor(
+                                    T_m, ret_cfg; F_melt=F_m
+                                )
+                                C_cur = XCm[m]
+                                if C_cur > C_ret_C
+                                    C_mob = C_cur - C_ret_C
+                                    dC = C_mob * drain_fraction
+                                    XCm[m] = C_cur - dC
+                                    th_C[tid] += (dC * 1.0e-6) * M_marker_rock
+                                end
+                            end
+
+                            # Nitrogen drainage
+                            if XNm !== nothing
+                                C_ret_N = compute_nitrogen_retention_floor(
+                                    T_m, ret_cfg; F_melt=F_m
+                                )
+                                C_cur = XNm[m]
+                                if C_cur > C_ret_N
+                                    C_mob = C_cur - C_ret_N
+                                    dC = C_mob * drain_fraction
+                                    XNm[m] = C_cur - dC
+                                    th_N[tid] += (dC * 1.0e-6) * M_marker_rock
+                                end
+                            end
+
+                            # Sulfur drainage
+                            if XSm !== nothing
+                                C_ret_S = compute_sulfur_retention_floor(
+                                    T_m, ret_cfg; F_melt=F_m
+                                )
+                                C_cur = XSm[m]
+                                if C_cur > C_ret_S
+                                    C_mob = C_cur - C_ret_S
+                                    dC = C_mob * drain_fraction
+                                    XSm[m] = C_cur - dC
+                                    th_S[tid] += (dC * 1.0e-6) * M_marker_rock
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    delta_m_vent = sum(th_vent)
+    vented_vols = if drain_volatiles
+        m_H2O = sum(th_H2O)
+        m_C = sum(th_C)
+        m_N = sum(th_N)
+        m_S = sum(th_S)
+        m_tot = m_H2O + m_C + m_N + m_S
+        (
+            M_vent_H2O=m_H2O,
+            M_vent_C=m_C,
+            M_vent_N=m_N,
+            M_vent_S=m_S,
+            M_vent_volatiles_total=m_tot,
+        )
+    else
+        nothing
+    end
+
+    return (delta_m_vent=delta_m_vent, vented_vols=vented_vols)
+end

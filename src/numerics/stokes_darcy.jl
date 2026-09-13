@@ -90,6 +90,7 @@ function assemble_hydromechanical_lse!(
     L_sub::Real=2.83e6,
     S_vent_out=nothing,
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    workspace=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -98,13 +99,25 @@ function assemble_hydromechanical_lse!(
     dy_val = coords === nothing ? dy : coords.dy
 
     # initialize or reuse LHS sparse coefficient matrix
-    L = if L === nothing
+    L_target =
+        if workspace !== nothing &&
+            hasproperty(workspace, :Ny1) &&
+            hasproperty(workspace, :Nx1) &&
+            hasproperty(workspace, :L) &&
+            workspace.Ny1 == Ny1 &&
+            workspace.Nx1 == Nx1
+            workspace.L
+        else
+            L
+        end
+
+    L = if L_target === nothing
         ExtendableSparseMatrix(Nx1 * Ny1 * 6, Nx1 * Ny1 * 6)
     else
-        if !isempty(L.cscmatrix.nzval)
-            nonzeros(L.cscmatrix) .= zero(0.0)
+        if !isempty(L_target.cscmatrix.nzval)
+            nonzeros(L_target.cscmatrix) .= zero(0.0)
         end
-        L
+        L_target
     end
     # reset RHS coefficient vector
     R .= 0.0
@@ -568,6 +581,14 @@ function assemble_hydromechanical_lse!(
     end
 
     flush!(L) # finalize CSC matrix
+    if workspace !== nothing &&
+        hasproperty(workspace, :Ny1) &&
+        hasproperty(workspace, :Nx1) &&
+        hasproperty(workspace, :is_initialized) &&
+        workspace.Ny1 == Ny1 &&
+        workspace.Nx1 == Nx1
+        workspace.is_initialized = true
+    end
     # return L
     return L.cscmatrix
 end # function assemble_hydromechanical_lse!
