@@ -19,89 +19,24 @@ A realistic geochemical model of core formation must reproduce these geochemical
 
 ---
 
-## 2. Mathematical Formulation
+## 2. Theoretical Formulation
 
-### Metal-Silicate Partition Coefficients
+The thermodynamics of metal-silicate volatile partitioning ($D_i^{\text{met/sil}}$ parameterizations for H, C, N, and S), phase equilibration, normative mineral crystallization, and conservative volatile drift-flux transport are derived in detail in [Iron Core Formation and Metal Segregation](../explanations/core_formation.md).
 
-The distribution of volatile element $i \in \{\text{H}, \text{C}, \text{N}, \text{S}\}$ between molten metallic alloy and silicate melt is quantified by the Nernst partition coefficient $D_i^{\text{met/sil}}$:
+Key constitutive relations validated on this page include:
 
-$$D_i^{\text{met/sil}} = \frac{C_i^{\text{metal}}}{C_i^{\text{silicate}}}$$
-
-where $C_i^{\text{metal}}$ is the elemental concentration in the liquid metal alloy [ppmw] and $C_i^{\text{silicate}}$ is the concentration dissolved in the coexisting silicate melt [ppmw].
-
-#### Carbon Partitioning ($D_C$)
-
-Carbon exhibits strong siderophile behavior in pure iron melts. However, dissolved sulfur strongly repels carbon in liquid Fe alloys, dramatically reducing carbon solubility in metallic liquid. In `Erebus.jl`, the default parameterization follows Grewal et al. (2019b):
-
-$$\log_{10} D_C = 1.80 + \frac{2200}{T} - 1.5 \times 10^{-8} \frac{P}{T} - 0.25 \, \Delta\text{IW} + 4.2 \ln(1 - X_S)$$
-
-where $T$ is temperature [K], $P$ is pressure [Pa], $\Delta\text{IW}$ is oxygen fugacity in $\log_{10}$ units relative to the Iron-Wüstite buffer, and $X_S$ is the mole fraction of sulfur in the metallic liquid:
-
-$$X_S = \frac{w_S / M_S}{w_S / M_S + (1 - w_S) / M_{\text{Fe}}}$$
-
-with $M_S = 32.065\text{ g/mol}$ and $M_{\text{Fe}} = 55.845\text{ g/mol}$. In sulfur-poor alloys, $D_C \sim 1000 - 3000$. Near the Fe-FeS eutectic ($w_S \approx 0.31$, $X_S \approx 0.44$), $D_C$ drops by two orders of magnitude to $D_C \sim 15 - 30$.
-
-#### Nitrogen Partitioning ($D_N$)
-
-Nitrogen is moderately siderophile. Following Grewal et al. (2019a, 2019b):
-
-$$\log_{10} D_N = 0.85 + \frac{1200}{T} - 0.25 \, \Delta\text{IW} + 0.60 \ln(1 - X_S)$$
-
-Because the repulsive sulfur interaction parameter for nitrogen ($0.60$) is seven times smaller than that for carbon ($4.2$), nitrogen partitioning remains relatively constant over varying alloy sulfur contents ($D_N \approx 15 - 50$). Consequently, sulfur enrichment in metallic liquid selectively suppresses $D_C$ while maintaining $D_N$, shifting the $(C/N)_{\text{metal}}$ ratio to sub-chondritic values.
-
-#### Hydrogen Partitioning ($D_H$)
-
-In low-pressure planetesimal environments ($P < 1\text{ GPa}$), hydrogen is moderately lithophile to weakly siderophile. The parameterization follows Clesi et al. (2018):
-
-$$\log_{10} D_H = -0.80 + \frac{300}{T} + 5.0 \times 10^{-8} \frac{P}{T} + 0.05 \, \Delta\text{IW}$$
-
-Stoichiometric conversion between silicate water content $X_{\text{H}_2\text{O}}$ [wt%] and elemental hydrogen concentration $C_{\text{H},\text{sil}}$ [ppmw] is given by:
-
-$$C_{\text{H},\text{sil}} = X_{\text{H}_2\text{O}} \times \left(\frac{2 M_H}{M_{\text{H}_2\text{O}}}\right) \times 10^4 \approx 1118.98 \times X_{\text{H}_2\text{O}}$$
-
-#### Sulfur Partitioning ($D_S$)
-
-Sulfur is strongly chalcophile and partitions into metallic liquids following Boujibar et al. (2014):
-
-$$\log_{10} D_S = 2.80 - \frac{800}{T} + 1.0 \times 10^{-10} P - 0.20 \, \Delta\text{IW}$$
-
-Sulfur partition coefficients typically range from $100$ to $500$, driving extensive sulfur extraction from the silicate mantle into the segregating core.
-
----
-
-### Phase Equilibration and Mass Conservation
-
-On Lagrangian markers where molten metal ($F_{\text{fe}} > 0$) coexists with silicate melt ($F_{\text{melt}} > 0$), elemental volatile mass is conserved:
-
-$$M_{i,\text{tot}} = m_{\text{sil}} C_{i,\text{sil}} + m_{\text{met}} C_{i,\text{met}}$$
-
-where $m_{\text{sil}} = \phi_{\text{sil}} \rho_{\text{silicate}}$ and $m_{\text{met}} = \phi_{\text{fe}} F_{\text{fe}} \rho_{\text{metal}}$ represent the interacting phase masses per unit marker volume. Thermodynamic equilibrium concentration in the silicate melt is:
-
-$$C_{i,\text{sil}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} + D_i m_{\text{met}}}$$
-
-Kinetic exchange relaxes concentrations toward equilibrium with efficiency fraction $\alpha_{\text{eq}} \in [0, 1]$ (`equilibration_rate`):
-
-$$\Delta C_{i,\text{sil}} = \alpha_{\text{eq}} \left(C_{i,\text{sil}}^{\text{eq}} - C_{i,\text{sil}}\right)$$
-
-$$\Delta C_{i,\text{met}} = -\Delta C_{i,\text{sil}} \left(\frac{m_{\text{sil}}}{m_{\text{met}}}\right)$$
-
-This guarantees strict mass conservation $\sum \Delta M_i = 0$ on every marker.
-
----
-
-### Conservative Advective Transport and Dynamic Density Feedback
-
-During the explicit drift-flux segregation solve (`apply_metal_segregation!`), volatile elements hosted within metallic liquid are advected alongside the metallic mass flux:
-
-$$F_{i, k}^x = F_{\text{fe}, x} \cdot \left(\frac{M_{\text{fe}, k}}{M_{\text{fe}}}\right)_{\text{donor}}$$
-
-$$F_{i, k}^y = F_{\text{fe}, y} \cdot \left(\frac{M_{\text{fe}, k}}{M_{\text{fe}}}\right)_{\text{donor}}$$
-
-When `dynamic_sulfur_density = true`, the local reference density of liquid metal updates based on its sulfur concentration:
-
-$$\rho_{\text{metal}}(w_S) = 7020.0 - 5050.0 \cdot w_S \quad [\text{kg/m}^3]$$
-
-This density feeds back directly into Stokes droplet settling velocities and porous Darcy percolation rates, physically slowing down the segregation of sulfur-rich melts.
+- **Nernst Partition Coefficient ($D_i^{\text{met/sil}}$):**
+  $$D_i^{\text{met/sil}} = \frac{C_i^{\text{metal}}}{C_i^{\text{silicate}}}$$
+- **Sulfur-Dependent Carbon and Nitrogen Partitioning (Grewal et al., 2019a, 2019b):**
+  $$\log_{10} D_C = 1.80 + \frac{2200}{T} - 1.5 \times 10^{-8} \frac{P}{T} - 0.25 \, \Delta\text{IW} + 4.2 \ln(1 - X_S)$$
+  $$\log_{10} D_N = 0.85 + \frac{1200}{T} - 0.25 \, \Delta\text{IW} + 0.60 \ln(1 - X_S)$$
+- **Hydrogen (Clesi et al., 2018) and Sulfur (Boujibar et al., 2014) Partitioning:**
+  $$\log_{10} D_H = -0.80 + \frac{300}{T} + 5.0 \times 10^{-8} \frac{P}{T} + 0.05 \, \Delta\text{IW}$$
+  $$\log_{10} D_S = 2.80 - \frac{800}{T} + 1.0 \times 10^{-10} P - 0.20 \, \Delta\text{IW}$$
+- **Phase Equilibration and Strict Mass Conservation:**
+  $$C_{i,\text{sil}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} + D_i m_{\text{met}}}, \quad \Delta C_{i,\text{sil}} = \alpha_{\text{eq}} \left(C_{i,\text{sil}}^{\text{eq}} - C_{i,\text{sil}}\right)$$
+- **Dynamic Sulfur Density Feedback:**
+  $$\rho_{\text{metal}}(w_S) = 7020.0 - 5050.0 \cdot w_S \quad [\text{kg/m}^3]$$
 
 ---
 

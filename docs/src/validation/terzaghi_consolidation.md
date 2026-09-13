@@ -1,6 +1,6 @@
-# Tutorial: 1D Terzaghi Consolidation
+# 1D Terzaghi Consolidation Benchmark
 
-This tutorial walks through setting up and running the 1D Terzaghi analytical consolidation benchmark used to verify poroelastic compressibility and coupled Stokes-Darcy flow in `Erebus.jl`.
+This page documents the 1D Terzaghi analytical consolidation benchmark used to verify poroelastic compressibility and coupled Stokes-Darcy flow in `Erebus.jl`.
 
 For the underlying physical equations and poroelastic coefficients, see [Governing Equations](../explanations/governing_equations.md) and [Discretization & Numerics](../explanations/discretization_numerics.md).
 

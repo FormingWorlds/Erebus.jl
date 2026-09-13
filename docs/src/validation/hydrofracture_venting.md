@@ -16,39 +16,19 @@ Tensile failure ruptures the cold lid, producing hydrofractures that discharge f
 
 ---
 
-## 2. Mathematical Formulation
+## 2. Theoretical Formulation
 
-### Cryogenic Pore Ice Permeability Sealing
+The physical theory of cryogenic pore ice sealing, tensile overpressure failure, and episodic hydrofracture venting dynamics is derived in detail in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../explanations/degassing_and_venting.md).
 
-For sub-freezing rock temperatures ($T < T_{\text{freeze}}$), pore ice reduces permeability via an exponential temperature cutoff:
+Key constitutive relations validated on this page include:
 
-$$k_{\text{eff}}(T) = k_v \cdot \left[(1 - r_{\text{min}}) \exp\left(-\frac{T_{\text{freeze}} - T}{\Delta T_{\text{seal}}}\right) + r_{\text{min}}\right]$$
-
-| Parameter | Description | Standard Value | Units |
-|:---|:---|:---|:---|
-| $k_v$ | Reference matrix permeability | $1.0\times 10^{-11}$ | $\text{m}^2$ |
-| $T_{\text{freeze}}$ | Liquid-solid transition temperature | $273.15$ | $\text{K}$ |
-| $\Delta T_{\text{seal}}$ | Temperature sealing transition scale | $10.0$ | $\text{K}$ |
-| $r_{\text{min}}$ | Minimum residual cryogenic permeability ratio | $1.0\times 10^{-6}$ | - |
-
-For $T \ge T_{\text{freeze}}$, $k_{\text{eff}} = k_v$ (unsealed matrix).
-
-### Cold Lid Hydrofracture Breaching
-
-Hydrofracturing activates when Terzaghi effective pressure satisfies tensile failure:
-
-$$P_{\text{eff}} = P_t - P_f \le -\sigma_t$$
-
-When breached, macroscopic fractures cut across the cold lid, bypassing the pore ice seal with an enhanced permeability:
-
-$$k_{\text{frac}}(P_{\text{eff}}) = \min\left(k_{\text{max}}, k_v \left[1 + \kappa_{\text{frac}} \left(\frac{-P_{\text{eff}} - \sigma_t}{\sigma_t}\right)^\gamma\right]\right)$$
-
-| Parameter | Description | Standard Value | Units |
-|:---|:---|:---|:---|
-| $\sigma_t$ | Rock tensile strength | $1.0\times 10^7$ | $\text{Pa}$ |
-| $\kappa_{\text{frac}}$ | Fracture enhancement multiplier | $1.0\times 10^3$ | - |
-| $\gamma$ | Power-law scaling exponent | $1.0$ | - |
-| $k_{\text{max}}$ | Maximum fractured permeability ceiling | $1.0\times 10^{-9}$ | $\text{m}^2$ |
+- **Cryogenic Pore Ice Permeability Sealing ($k_{\text{eff}}$):**
+  $$k_{\text{eff}}(T) = k_v \cdot \left[(1 - r_{\text{min}}) \exp\left(-\frac{T_{\text{freeze}} - T}{\Delta T_{\text{seal}}}\right) + r_{\text{min}}\right] \quad (T < T_{\text{freeze}})$$
+  with $k_{\text{eff}} = k_v$ for $T \ge T_{\text{freeze}}$.
+- **Cold Lid Hydrofracture Breaching Criterion ($P_{\text{eff}}$):**
+  $$P_{\text{eff}} = P_t - P_f \le -\sigma_t \iff P_f \ge P_t + \sigma_t$$
+- **Fracture Permeability Enhancement ($k_{\text{frac}}$):**
+  $$k_{\text{frac}}(P_{\text{eff}}) = \min\left(k_{\text{max}}, k_v \left[1 + \kappa_{\text{frac}} \left(\frac{-P_{\text{eff}} - \sigma_t}{\sigma_t}\right)^\gamma\right]\right)$$
 
 ---
 

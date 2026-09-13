@@ -41,6 +41,40 @@ In magma oceans, metal droplets rain downward via Stokes settling, releasing gra
 
 ---
 
+## Global Architecture & Execution Flow
+
+The full simulation lifecycle, coupling between Eulerian staggered grids and Lagrangian markers, and the nested sequence of multi-physics solvers are visualized in the flowchart below:
+
+![Erebus.jl Architecture & Execution Flow](../assets/erebus_architecture_flowchart.svg)
+
+### Numerical Execution Pipeline
+
+1. **Simulation Initialization**:
+   - Parses and validates configuration settings via `SimulationConfig`.
+   - Allocates staggered Eulerian finite-difference grids for momentum, mass conservation, Darcy filtration, and energy equations.
+   - Populates Lagrangian markers with initial thermochemical, phase, porosity, metal fraction, and volatile budgets across planetary layers and surrounding sticky air.
+
+2. **Adaptive Time Stepping & Boundary Pre-Solve**:
+   - Determines the global timestep $\Delta t = \min(\Delta t_{\text{CFL}}, \Delta t_{\text{diff}}, \Delta t_{\text{thermal}}, \Delta t_{\text{max}})$, with adaptive subcycling for metal segregation CFL constraints.
+   - Evaluates ambient protoplanetary disk thermal conditions ($T_{\text{amb}}, P_{\text{amb}}$), disk dispersal weighting $w_{\text{disp}}(t)$, gas envelope capture, Guillot semi-grey greenhouse atmosphere, and non-linear Stefan-Boltzmann surface radiation.
+   - Ingests volumetric radiogenic heating ($^{26}\text{Al}, ^{60}\text{Fe}$), accretion impact heating, and dissipation source terms.
+
+3. **Coupled Multi-Physics Core Solvers**:
+   - **Thermochemical & Phase State**: Evaluates pressure-dependent silicate solidus/liquidus, apparent heat capacity latent heat buffering, Solomatov (2007) sub-grid soft turbulence scaling ($k_{\text{turb}} \sim \text{Ra}^{1/3}$), hydrothermal Rayleigh-Darcy porous convection closures, Costa / Gerya rheological weakening, and clay dehydration.
+   - **Stokes-Darcy Hydromechanics**: Monolithic linear system assembly ($K \mathbf{u} = \mathbf{f}$) solving solid matrix deformation, Darcy fluid filtration, poroelastic compaction/dilation, and Terzaghi effective stress plasticity with tensile hydrofracturing.
+   - **Metal & Magma Segregation**: Dual-regime metal drift-flux solver transitioning from porous Darcy percolation ($F_m \le 0.40$) to hindered Stokes droplet settling ($F_m \ge 0.50$) via cubic Hermite blending, coupled with buoyant silicate melt migration, accessory mineral crystallization, and gravitational dissipation heating ($Q_{\text{seg}}$).
+   - **Thermal Energy Solve**: Implicit sparse solve for temperature $T^{n+1}$ incorporating conduction, advection, latent heats, radiogenic sources, and segregation dissipation.
+
+4. **Transport, Atmosphere & Mesh Advancement**:
+   - Advects Lagrangian markers via 4th-order Runge-Kutta velocity interpolation, applying local particle replenishment in under-resolved cells.
+   - Evaluates multi-species HCNS volatile degassing, cold surface venting, ice cold-trap clamping, and atmospheric escape.
+   - Executes telescoping domain coordinate doubling ($x_{\text{size}} \to 2 x_{\text{size}}$) with invariant resolution ($dx = \text{const}$) and odd-parity remapping when the planetesimal exceeds 70% of the domain half-width.
+
+5. **State Persistence & Time Advancement**:
+   - Updates simulation time $t \leftarrow t + \Delta t$, exports JLD2 checkpoint snapshots and core budget metrics, and advances to the next time step until reaching target epoch or maximum steps.
+
+---
+
 ## Thermo-Hydro-Mechanical Coupling
 
 `Erebus.jl` resolves these interacting regimes through a fully coupled numerical framework:

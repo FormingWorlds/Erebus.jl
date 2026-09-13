@@ -33,30 +33,20 @@ $$k_{\text{interface}} = \frac{2 k_{\text{rock}} h_{\text{rad}} \Delta}{2 k_{\te
 
 ## 2. Protoplanetary Disk Temperature Evolution
 
-### Governing Formulations
-1. **Monotonic Viscous Clearing (`:monotonic`)**:
+The physical foundations of disk accretion heating, flared disk irradiation scaling, cloud infall, and viscous dissipation decay are derived in detail in [Protoplanetary Disk Temperature Evolution](../explanations/disk_temperature_evolution.md).
 
-   $$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{irr}}^4 + \max(0, T_{\text{peak}}^4 - T_{\text{irr}}^4) \left( 1 + \frac{t}{t_{\text{visc}}} \right)^{-\gamma} \right]^{1/4}$$
+Key temperature evolution models validated on this page include:
 
-2. **Two-Stage Accretion Heating (`:class1_to_class2` or `:class0_to_class2`)**:
-
-   $$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{eff, irr}}(t)^4 + \max(0, T_{\text{peak}}^4 - T_{\text{irr}}^4) f_{\text{acc}}(t) \right]^{1/4}$$
-
-### Literature Anchors
-- **Chiang, E. I., & Goldreich, P. (1997)**. Spectral energy distributions of T Tauri stars with passive circumstellar disks. *The Astrophysical Journal*, 490(1), 368-376.  
-  [https://doi.org/10.1086/304869](https://doi.org/10.1086/304869)
-- **Drążkowska, J., & Dullemond, C. P. (2018)**. Planetesimal formation during protoplanetary disk buildup. *Astronomy & Astrophysics*, 614, A62.  
-  [https://doi.org/10.1051/0004-6361/201732221](https://doi.org/10.1051/0004-6361/201732221)
-- **Williams, J., Krijt, S., Drążkowska, J., & Lichtenberg, T. (2026)**. Planetesimal formation across the stellar mass spectrum and its influence on exoplanet-inherited volatile budgets. *Monthly Notices of the Royal Astronomical Society*, 551(3), stag1510.  
-  [https://doi.org/10.1093/mnras/stag1510](https://doi.org/10.1093/mnras/stag1510)
-- **Lynden-Bell, D., & Pringle, J. E. (1974)**. The evolution of viscous discs and the origin of the nebular variables. *Monthly Notices of the Royal Astronomical Society*, 168(3), 603-637.  
-  [https://doi.org/10.1093/mnras/168.3.603](https://doi.org/10.1093/mnras/168.3.603)
+- **Monotonic Viscous Clearing (`:monotonic`):**
+  $$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{irr}}^4 + \max(0, T_{\text{peak}}^4 - T_{\text{irr}}^4) \left( 1 + \frac{t}{t_{\text{visc}}} \right)^{-\gamma} \right]^{1/4}$$
+- **Two-Stage Accretion Heating (`:class1_to_class2`):**
+  $$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{eff, irr}}(t)^4 + \max(0, T_{\text{peak}}^4 - T_{\text{irr}}^4) f_{\text{acc}}(t) \right]^{1/4}$$
 
 ### Invariants and Limits
 1. **Asymptotic Convergence**: For both models, $\lim_{t \to \infty} T_{\text{disk}}(t, r) = T_{\text{irr}}(r)$.
 2. **Molecular Cloud Floor**: $T_{\text{disk}} \ge T_{\text{cloud}} = 30.0\text{ K}$ across all radial distances and times.
 3. **Viscous Peak Heating**: For Model 2, $T_{\text{disk}}(t_{\text{peak}}) = T_{\text{peak}}$ when $T_{\text{peak}} \ge T_{\text{irr}}$.
-4. **Snowline Migration**: The water snowline ($T = 170\text{ K}$) expands outward during accretion peak and retreats inward during viscous clearing.
+4. **Snowline Migration**: The water snowline ($T = 170\text{ K}$ for disk sublimation, configurable via `T_sub`; cf. $T_{\text{cond}} = 160\text{ K}$ for pebble accretion condensation) expands outward during accretion peak and retreats inward during viscous clearing.
 
 ---
 

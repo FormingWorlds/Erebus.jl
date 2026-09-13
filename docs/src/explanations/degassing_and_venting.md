@@ -481,3 +481,20 @@ The convex active-set closure satisfies several exact analytical limits:
 - **Strict Mass Conservation**: The sum of escaping species mass fluxes identically satisfies $\sum_{j=1}^N m_j \Phi_j = \phi_{\text{base}}$ whenever $\phi_{\text{base}} > 0$.
 - **Carrier Independence**: The closure operates on any mixture composition. When hydrogen is absent or exhausted, the model continues to partition escape across the remaining volatile inventory.
 
+---
+
+## References
+
+- Attia, O., & Lichtenberg, T. (2026). Atmospheric evolution of rocky protoplanets. *Astronomy & Astrophysics*, in press.
+- Fu, R. R., & Elkins-Tanton, L. T. (2014). The early thermal evolution of planetesimals: Implications for differentiated asteroids and carbonaceous chondrite parent bodies. *Earth and Planetary Science Letters*, 390, 128-137.
+- Gerya, T. (2019). *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press.
+- Hunten, D. M., Pepin, R. O., & Walker, J. C. (1987). Mass fractionation in hydrodynamic escape. *Icarus*, 69(3), 532-549.
+- Kurokawa, H., Shibuya, T., Sekine, Y., Ehlmann, B. L., Usui, F., Kikuchi, S., & Yoda, M. (2022). Distant formation and differentiation of outer main belt asteroids and carbonaceous chondrite parent bodies. *AGU Advances*, 3(1), e2021AV000568.
+- Manga, M., & Wang, C.-Y. (2007). Pressurized oceans and eruptive mechanism for Enceladus. *Geophysical Research Letters*, 34(7), L07202.
+- Marrero, T. R., & Mason, E. A. (1972). Gaseous diffusion coefficients. *Journal of Physical and Chemical Reference Data*, 1(1), 3-118.
+- Neveu, M., Desch, S. J., & Castillo-Rogez, J. C. (2015). Core cracking and hydrothermal circulation can profoundly affect Ceres' geophysical evolution. *Journal of Geophysical Research: Planets*, 120(2), 123-154.
+- Washburn, E. W. (1924). The vapor pressure of ice and of water below the freezing point. *Monthly Weather Review*, 52(10), 488-490.
+- Young, E. D., Ash, R. D., England, P., & Rumble, D. (1999). Fluid flow in carbonaceous chondrite parent bodies and the origin of magnetites. *Science*, 286(5443), 1331-1335.
+- Zahnle, K. J., & Kasting, J. F. (1986). Mass fractionating fractionation in a hydrodynamic hydrogen flow. *Icarus*, 68(3), 462-480.
+- Zahnle, K. J., & Kasting, J. F. (2023). Chemical markers of atmospheric escape. *Icarus*, 390, 115318.
+
