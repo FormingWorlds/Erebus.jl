@@ -213,6 +213,7 @@ function save_state(
     telescope_level::Union{Nothing,Integer}=nothing,
     hcnspo_props=nothing,
     atm_state::Union{Nothing,AtmosphereState}=nothing,
+    F_extract_m=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     Nx_val = coords === nothing ? Nx : coords.Nx
@@ -387,6 +388,7 @@ function save_state(
         rhofluidcur,
         alphasolidcur,
         alphafluidcur,
+        (F_extract_m !== nothing ? (; F_extract_m) : (;))...,
         (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
         (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
         (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
@@ -703,6 +705,10 @@ function simulation_loop(
     Xmin_nitride_m = nothing
     Xmin_metal_matrix_m = nothing
     regional_mineral_modes = nothing
+    magma_active_val = cfg.magma_transport.active
+    F_extract_m = nothing
+    F_extract_m_step_start = nothing
+    Fm_step_start = nothing
     M_atm_species = if cfg.escape.multi_species || cfg.atmosphere.active
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
     else
@@ -1062,6 +1068,15 @@ function simulation_loop(
         else
             nothing
         end
+        if magma_active_val
+            F_extract_m = if haskey(ckpt, "F_extract_m")
+                Vector{Float64}(ckpt["F_extract_m"])
+            else
+                zeros(Float64, marknum)
+            end
+            F_extract_m_step_start = zeros(Float64, marknum)
+            Fm_step_start = zeros(Float64, marknum)
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
@@ -1074,6 +1089,11 @@ function simulation_loop(
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
+        end
+        if magma_active_val
+            F_extract_m = setup_marker_magma_properties(marknum)[1]
+            F_extract_m_step_start = zeros(Float64, marknum)
+            Fm_step_start = zeros(Float64, marknum)
         end
         if cfg.volatiles.active
             (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
@@ -1756,6 +1776,7 @@ function simulation_loop(
                 Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                 t_accreted=t_accreted,
                 hcnspo_props=hcnspo_props,
+                F_extract_m=F_extract_m,
             )
 
             # Re-initialize linear solvers and Poisson operator for new grid size
@@ -1838,6 +1859,9 @@ function simulation_loop(
                         pm=pfm0,
                         Fm=Fm,
                         melting_active=melting_active_val,
+                        magma_transport_active=magma_active_val,
+                        track_depletion=cfg.magma_transport.track_depletion,
+                        F_extract_m=F_extract_m,
                         T_solidus_val=T_solidus_val,
                         T_liquidus_val=T_liquidus_val,
                         L_melt_val=L_melt_val,
@@ -2034,6 +2058,9 @@ function simulation_loop(
                     pm=pfm0,
                     Fm=Fm,
                     melting_active=melting_active_val,
+                    magma_transport_active=magma_active_val,
+                    track_depletion=cfg.magma_transport.track_depletion,
+                    F_extract_m=F_extract_m,
                     T_solidus_val=T_solidus_val,
                     T_liquidus_val=T_liquidus_val,
                     L_melt_val=L_melt_val,
@@ -2333,6 +2360,22 @@ function simulation_loop(
                     resize!(Xfe_S_m_step_start, length(Xfe_S_m))
                 end
                 copyto!(Xfe_S_m_step_start, Xfe_S_m)
+            end
+        end
+
+        # Snapshot magma inventory at timestep start for idempotent thermochemical iterations
+        if magma_active_val
+            if Fm !== nothing && Fm_step_start !== nothing
+                if length(Fm_step_start) != length(Fm)
+                    resize!(Fm_step_start, length(Fm))
+                end
+                copyto!(Fm_step_start, Fm)
+            end
+            if F_extract_m !== nothing && F_extract_m_step_start !== nothing
+                if length(F_extract_m_step_start) != length(F_extract_m)
+                    resize!(F_extract_m_step_start, length(F_extract_m))
+                end
+                copyto!(F_extract_m_step_start, F_extract_m)
             end
         end
 
@@ -2782,11 +2825,67 @@ function simulation_loop(
             else
                 fill!(Q_lat_grid, 0.0)
             end
-            Q_seg_val = if coreformation_active_val && cfg.coreformation.segregation_heating
-                Q_seg_grid
-            else
-                nothing
+
+            # ------------------------------------------------------------------
+            # silicate melt magma segregation
+            # ------------------------------------------------------------------
+            if magma_active_val && Fm !== nothing
+                if Fm_step_start !== nothing
+                    if length(Fm) != length(Fm_step_start)
+                        resize!(Fm, length(Fm_step_start))
+                    end
+                    copyto!(Fm, Fm_step_start)
+                end
+                if F_extract_m_step_start !== nothing && F_extract_m !== nothing
+                    if length(F_extract_m) != length(F_extract_m_step_start)
+                        resize!(F_extract_m, length(F_extract_m_step_start))
+                    end
+                    copyto!(F_extract_m, F_extract_m_step_start)
+                end
+                if !coreformation_active_val || !cfg.coreformation.segregation_heating
+                    fill!(Q_seg_grid, 0.0)
+                end
+                magma_res = apply_silicate_melt_segregation!(
+                    xm,
+                    ym,
+                    tm,
+                    tkm,
+                    Fm,
+                    marknum,
+                    dt,
+                    cfg.magma_transport;
+                    coords=coords,
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    gx=gx,
+                    gy=gy,
+                    Q_seg_grid=if cfg.magma_transport.segregation_heating
+                        Q_seg_grid
+                    else
+                        nothing
+                    end,
+                    Q_lat_grid=if cfg.magma_transport.latent_crystallization
+                        Q_lat_grid
+                    else
+                        nothing
+                    end,
+                    rho_silicate=rhosolidm[1],
+                    rho_melt=cfg.melting.rho_melt,
+                    T_solidus_silicate=cfg.melting.T_solidus[1],
+                    T_liquidus_silicate=cfg.melting.T_liquidus[1],
+                    L_melt=cfg.melting.L_melt,
+                    F_extract_m=F_extract_m,
+                )
             end
+
+            Q_seg_val =
+                if (coreformation_active_val && cfg.coreformation.segregation_heating) ||
+                    (magma_active_val && cfg.magma_transport.segregation_heating)
+                    Q_seg_grid
+                else
+                    nothing
+                end
             # assemble thermal system of equations 
             LT = assemble_thermal_lse!(
                 tk1,
@@ -3280,6 +3379,7 @@ function simulation_loop(
             Xmin_metal_matrix_m=Xmin_metal_matrix_m,
             t_accreted=t_accreted,
             hcnspo_props=hcnspo_props,
+            F_extract_m=F_extract_m,
         )
         if t_accreted !== nothing && length(t_accreted) != marknum
             resize!(t_accreted, marknum)
@@ -3297,6 +3397,15 @@ function simulation_loop(
             end
             if Xfem_step_start !== nothing && length(Xfem_step_start) != marknum
                 resize!(Xfem_step_start, marknum)
+            end
+        end
+        if magma_active_val
+            if F_extract_m_step_start !== nothing &&
+                length(F_extract_m_step_start) != marknum
+                resize!(F_extract_m_step_start, marknum)
+            end
+            if Fm_step_start !== nothing && length(Fm_step_start) != marknum
+                resize!(Fm_step_start, marknum)
             end
         end
         if cfg.metal_partition.active

@@ -170,3 +170,35 @@ Model setup files live in `configs/`:
   - `@testset "Physics: regularized_soft_turbulence_conductivity"`
   - `@testset "Grid Interpolation: KX & KY receive enhanced conductivity"`
   - `@testset "Mini-Simulation Execution with Soft Turbulence"`
+- `test/test_magma_transport.jl`:
+  - `@testset "Magma Transport Configuration & Validation"`
+  - `@testset "Silicate Melt Permeability Formulation"`
+  - `@testset "Silicate Melt Segregation Velocity & Regimes"`
+  - `@testset "Silicate Melt Gravitational Dissipation Heating"`
+  - `@testset "Marker Magma Allocation & Depletion Properties"`
+  - `@testset "Two-Phase Melt Segregation Operator: Mass Conservation & Ascent"`
+  - `@testset "Two-Phase Melt Segregation: Thermal Dissipation & Crystallization Latent Heat"`
+  - `@testset "Two-Phase Melt Segregation: Neutral & Negative Buoyancy Cutoff"`
+
+---
+
+## Two-Phase Silicate Melt Segregation Verification
+
+The two-phase silicate melt segregation, porous percolation, hindered settling, and conservative drift-flux transport implementation is verified by dedicated unit and integration tests:
+
+1. **Analytical Regime Limits:**
+   - Darcy percolation velocity matches $v_{\text{perc}} = (k_\phi / \eta_{\text{melt}} F_m) \Delta\rho g$ exactly when $F_m \le F_{\text{perc\_end}}$.
+   - Hindered settling velocity matches $v_{\text{susp}} = v_{\text{Stokes}} F_m^n$ exactly when $F_m \ge F_{\text{settle\_start}}$, and recovers unhindered Stokes settling when $F_m \to 1.0$.
+   - The Hermite cubic blend smoothly interpolates between Darcy percolation and Stokes crystal settling without discontinuities or negative derivatives.
+   - Permeability and segregation velocities evaluate to exactly zero when melt fraction is at or below the residual threshold $\phi_{\text{residual}}$.
+   - Segregation velocity vanishes under neutral buoyancy ($\Delta\rho = 0$) or negative buoyancy ($\Delta\rho < 0$).
+
+2. **Machine-Precision Mass Conservation:**
+   - Conservative finite-volume donor-receiver flux limiting conserves total silicate melt mass to machine precision across all subcycles ($< 10^{-12}$ relative drift).
+   - Clamping prevents donor cell melt fraction from becoming negative ($F_m \ge 0$) and receiver cells from exceeding the packing ceiling ($F_m \le \phi_{\text{pack}}$).
+
+3. **Thermal and Depletion Coupling:**
+   - Gravitational shear dissipation heating rates satisfy $\Psi = \Delta\rho g F_m v_{\text{seg}}$ and accumulate non-negative thermal energy into the energy solver.
+   - Subsolidus crystallization latent heat releases $Q_{\text{lat}} = \dot{M}_{\text{cryst}} L_m$, buffering temperature drops when buoyant melt rises into subsolidus crustal regions.
+   - Mantle depletion tracking accurately records cumulative extracted melt on Lagrangian markers and prevents remelting of depleted residues.
+

@@ -211,6 +211,94 @@ When $\Delta T \to 0$ or $F_m \le F_{\text{start}}$, $w_{\text{total}} \to 0$, r
 
 ---
 
+## Two-Phase Silicate Melt Segregation and Magma Ascent
+
+When internal temperatures exceed the silicate solidus, silicate rock partially melts.
+Liquid silicate melt is less dense than the crystalline silicate matrix ($\Delta\rho = \rho_{\text{solid}} - \rho_{\text{melt}} > 0$).
+This density contrast generates a buoyant body force that drives melt upward and outward toward the surface, while the solid crystalline matrix compacts or settles inward.
+
+### 1. Governing Migration Regimes
+
+Silicate melt migration spans two physical regimes separated by the rheologically critical melt fraction $\phi_{\text{crit}} \approx 0.40$:
+
+1. **Porous Darcy Percolation ($F_m \le F_{\text{perc\_end}}$):**
+   Below the disaggregation threshold, solid silicate grains form a continuous, compacting framework.
+   Buoyant melt percolates through interconnected channels following Darcy's law (McKenzie, 1984):
+
+   $$\mathbf{v}_{\text{perc}} = \frac{k_\phi}{\eta_{\text{melt}} F_m} \Delta\rho \, \mathbf{g}$$
+
+   where the matrix permeability $k_\phi$ follows a McKenzie power-law relation modified with a residual melt retention threshold $\phi_{\text{residual}}$:
+
+   $$k_\phi = k_{\text{ref}} \left[ \frac{\max\left(0, F_m - \phi_{\text{residual}}\right)}{\phi_0} \right]^n$$
+
+   When $F_m \le \phi_{\text{residual}}$, permeability vanishes ($k_\phi = 0$), retaining a trapped melt fraction within the crystalline matrix.
+
+2. **Hindered Stokes Crystal Settling ($F_m \ge F_{\text{settle\_start}}$):**
+   When the melt fraction exceeds the disaggregation threshold, the solid framework breaks down into a crystal suspension.
+   Isolated silicate crystals settle downward through liquid magma under gravity, while buoyant melt ascends.
+   The upward melt segregation velocity equals the downward crystal settling flux scaled by the Richardson and Zaki (1954) hindered settling relation:
+
+   $$\mathbf{v}_{\text{susp}} = \mathbf{v}_{\text{Stokes}} F_m^n$$
+
+   $$\mathbf{v}_{\text{Stokes}} = \frac{2 r_{\text{grain}}^2 \Delta\rho \, \mathbf{g}}{9 \eta_{\text{melt}}}$$
+
+   As melt fraction approaches unity ($F_m \to 1.0$), hindered settling approaches the unhindered Stokes velocity limit.
+
+3. **Smoothstep Regime Transition:**
+   Across the intermediate mush window $[F_{\text{perc\_end}}, F_{\text{settle\_start}}]$, the segregation velocity transitions smoothly using a $C^1$ cubic Hermite smoothstep blend:
+
+   $$\xi = \text{clamp}\left( \frac{F_m - F_{\text{perc\_end}}}{F_{\text{settle\_start}} - F_{\text{perc\_end}}}, 0.0, 1.0 \right)$$
+
+   $$w(\xi) = 3 \xi^2 - 2 \xi^3$$
+
+   $$\mathbf{v}_{\text{seg}} = (1 - w(\xi)) \mathbf{v}_{\text{perc}} + w(\xi) \mathbf{v}_{\text{susp}}$$
+
+### 2. Operator-Split Conservative Drift-Flux Transport
+
+Resolving simultaneous Stokes matrix flow, aqueous fluid Darcy flow, and silicate melt migration in a single monolithic matrix leads to ill-conditioning because of the 20-order-of-magnitude viscosity contrast between liquid magma and solid mantle rock.
+`Erebus.jl` solves silicate melt segregation via an operator-split conservative drift-flux formulation on Eulerian cell volumes:
+
+$$\frac{\partial (\rho_m F_m)}{\partial t} + \nabla \cdot \left(\rho_m F_m \mathbf{v}_{\text{seg}}\right) = -\dot{M}_{\text{cryst}}$$
+
+To preserve mass to machine precision ($< 10^{-12}$ relative drift) and maintain numerical monotonicity:
+- Explicit subcycling subdivides each global timestep $\Delta t$ into $N_{\text{sub}}$ subcycles constrained by the Courant-Friedrichs-Lewy (CFL) limit:
+
+  $$\Delta t_{\text{sub}} \le C_{\text{cfl}} \min\left( \frac{\Delta x}{|v_{x,\text{seg}}|}, \frac{\Delta y}{|v_{y,\text{seg}}|} \right)$$
+
+- Multidimensional donor-receiver flux limiters clamp outgoing fluxes so no donor cell drains below zero or exceeds the physical packing ceiling $\phi_{\text{pack}}$.
+- Subcycle flux increments are accumulated on grid faces and redistributed proportionally among Lagrangian markers within each cell.
+
+### 3. Energetics and Phase Coupling
+
+Silicate melt migration couples to the thermal energy equation through two mechanisms:
+
+1. **Gravitational Energy Dissipation:**
+   Segregation releases gravitational potential energy as heat through viscous shear dissipation:
+
+   $$\Psi_{\text{seg}} = \Delta\rho \, g \, F_m \, \|\mathbf{v}_{\text{seg}}\|$$
+
+   This volumetric heating rate is accumulated into the Eulerian thermal source grid $Q_{\text{seg}}$ and passed to the implicit energy solver.
+
+2. **Subsolidus Crystallization Latent Heat:**
+   When buoyant melt migrates into cooler regions where temperature drops below the local silicate solidus or thermodynamic equilibrium melt fraction ($T < T_{\text{sol}}$), the excess liquid melt crystallizes.
+   Crystallization releases latent heat of fusion $L_m$:
+
+   $$\dot{Q}_{\text{lat}} = \rho_m \dot{F}_{\text{freeze}} L_m$$
+
+   Latent heat release buffers local temperatures, preventing discontinuous quenching and maintaining thermodynamic equilibrium.
+
+### 4. Mantle Depletion Tracking
+
+When melt segregates outward, the residual solid mantle residue becomes depleted in basaltic components.
+`Erebus.jl` tracks cumulative melt extraction on each Lagrangian marker $m$ through the depletion state variable $F_{\text{extract}}[m]$.
+The net available melt fraction is bounded by the thermodynamic equilibrium melt fraction:
+
+$$F_m[m] = \max\left(0.0, F_{\text{eq}}(T, P) - F_{\text{extract}}[m]\right)$$
+
+This tracking prevents remelting of already depleted residues under subsequent isobaric reheating.
+
+---
+
 ## Numerical Integration Architecture
 
 The melting and soft turbulence system operates on both Lagrangian markers and Eulerian grid cells:

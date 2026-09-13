@@ -28,9 +28,10 @@ When the compaction rate exceeded the rate of fluid escape via Darcy percolation
 ### 5. Failure and Hydrofracture
 When the Terzaghi effective stress became tensile ($\sigma_{\text{eff}} \le -\sigma_{\text{tensile}}$), the silicate matrix experienced hydrofracturing, creating high-permeability pathways that vented fluids to the planetesimal surface.
 
-### 6. Silicate Rock Melting and Magma Ocean Formation
+### 6. Silicate Rock Melting, Magma Ascent, and Magma Ocean Formation
 In planetesimals that accreted early, decay heating drove temperatures past the silicate solidus ($T_{\text{sol}} \approx 1400\text{ K}$).
 Rock melted into a crystal-liquid mush and transitioned into a vigorously convecting magma ocean above the rheological disaggregation threshold ($\phi_{\text{crit}} \approx 0.40$).
+Buoyant silicate melt segregates outward via porous Darcy percolation and hindered Stokes crystal settling, releasing gravitational shear dissipation and latent heat of crystallization.
 Sub-grid soft turbulence convection transported heat outward to the surface, buffering interior temperatures and governing core segregation.
 
 ### 7. Iron Core Formation and Metal Segregation
@@ -47,4 +48,6 @@ In magma oceans, metal droplets rain downward via Stokes settling, releasing gra
 - Hydromechanical solver simultaneously solves coupled Stokes solid deformation, Darcy fluid flux, and poroelastic volume changes in a monolithic linear system.
 - Marker-in-Cell advects material phases, temperature, composition, and porosity without numerical diffusion across moving boundaries.
 - Melting and soft turbulence routines evaluate pressure-dependent silicate melting, apparent heat capacity latent heat buffering, suspension rheology, and regularized sub-grid convective conductivity.
+- Magma transport drift-flux solver tracks conservative outward buoyant migration of silicate melt, couples Darcy percolation and hindered Stokes crystal settling, models subsolidus crystallization and dissipation heating, and tracks mantle depletion.
 - Metal segregation drift-flux solver tracks conservative downward migration of molten iron, couples percolation and Stokes droplet settling through the rheological transition, and computes gravitational dissipation heating.
+

@@ -297,6 +297,36 @@ Base.@kwdef struct MeltingConfig
 end
 
 """
+Two-phase buoyant silicate melt segregation and magma migration parameters.
+
+Configures Darcy percolation of buoyant silicate melt through a compacting solid
+matrix and Stokes crystal settling through magma mush/ocean regimes, including
+CFL-limited subcycling, potential energy dissipation, and subsolidus freezing.
+
+$(FIELDS)
+"""
+Base.@kwdef struct MagmaTransportConfig
+    active::Bool = false
+    k_melt_ref::Float64 = 1.0e-11
+    perm_exponent::Float64 = 3.0
+    phi0::Float64 = 0.10
+    phi_residual::Float64 = 0.01
+    phi_crit::Float64 = 0.40
+    phi_pack::Float64 = 1.0
+    eta_melt::Float64 = 10.0
+    r_grain::Float64 = 1.0e-3
+    hindered_exponent::Float64 = 2.0
+    F_perc_end::Float64 = 0.35
+    F_settle_start::Float64 = 0.45
+    cfl_melt::Float64 = 0.5
+    max_subcycles::Int = 2000
+    segregation_heating::Bool = true
+    latent_crystallization::Bool = true
+    exsolution_active::Bool = true
+    track_depletion::Bool = true
+end
+
+"""
 Planetesimal surface volatile degassing and venting parameters.
 
 $(FIELDS)
@@ -849,6 +879,7 @@ Base.@kwdef struct SimulationConfig
     refractory::RefractoryConfig = RefractoryConfig()
     volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
     atmosphere::AtmosphereConfig = AtmosphereConfig()
+    magma_transport::MagmaTransportConfig = MagmaTransportConfig()
 end
 
 """
@@ -1316,6 +1347,75 @@ function validate_config(cfg::SimulationConfig)
                 ),
             )
         end
+    end
+
+    # Magma transport checks
+    if cfg.magma_transport.active
+        cfg.melting.active || throw(
+            ArgumentError("magma_transport cannot be active when melting is inactive")
+        )
+        mt = cfg.magma_transport
+        (mt.k_melt_ref > 0.0 && isfinite(mt.k_melt_ref)) || throw(
+            ArgumentError(
+                "magma_transport k_melt_ref must be > 0 and finite, got $(mt.k_melt_ref)",
+            ),
+        )
+        (mt.perm_exponent > 0.0 && isfinite(mt.perm_exponent)) || throw(
+            ArgumentError(
+                "magma_transport perm_exponent must be > 0 and finite, got $(mt.perm_exponent)",
+            ),
+        )
+        (0.0 < mt.phi0 <= 1.0 && isfinite(mt.phi0)) ||
+            throw(ArgumentError("magma_transport phi0 must be in (0, 1], got $(mt.phi0)"))
+        (0.0 <= mt.phi_residual < mt.phi_crit && isfinite(mt.phi_residual)) || throw(
+            ArgumentError(
+                "magma_transport phi_residual must satisfy 0 <= phi_residual < phi_crit, got $(mt.phi_residual)",
+            ),
+        )
+        (0.0 < mt.phi_crit < 1.0 && isfinite(mt.phi_crit)) || throw(
+            ArgumentError("magma_transport phi_crit must be in (0, 1), got $(mt.phi_crit)"),
+        )
+        (mt.phi_crit <= mt.phi_pack <= 1.0 && isfinite(mt.phi_pack)) || throw(
+            ArgumentError(
+                "magma_transport phi_pack must satisfy phi_crit <= phi_pack <= 1, got $(mt.phi_pack)",
+            ),
+        )
+        (mt.eta_melt > 0.0 && isfinite(mt.eta_melt)) || throw(
+            ArgumentError(
+                "magma_transport eta_melt must be > 0 and finite, got $(mt.eta_melt)"
+            ),
+        )
+        (mt.r_grain > 0.0 && isfinite(mt.r_grain)) || throw(
+            ArgumentError(
+                "magma_transport r_grain must be > 0 and finite, got $(mt.r_grain)"
+            ),
+        )
+        (mt.hindered_exponent >= 0.0 && isfinite(mt.hindered_exponent)) || throw(
+            ArgumentError(
+                "magma_transport hindered_exponent must be >= 0 and finite, got $(mt.hindered_exponent)",
+            ),
+        )
+        (
+            0.0 <=
+            mt.phi_residual <
+            mt.F_perc_end <=
+            mt.phi_crit <=
+            mt.F_settle_start <=
+            mt.phi_pack <=
+            1.0
+        ) || throw(
+            ArgumentError(
+                "magma_transport regime ordering must satisfy 0 <= phi_residual < F_perc_end <= phi_crit <= F_settle_start <= phi_pack <= 1, got [$(mt.phi_residual), $(mt.F_perc_end), $(mt.phi_crit), $(mt.F_settle_start), $(mt.phi_pack)]",
+            ),
+        )
+        (0.0 < mt.cfl_melt <= 1.0 && isfinite(mt.cfl_melt)) || throw(
+            ArgumentError("magma_transport cfl_melt must be in (0, 1], got $(mt.cfl_melt)"),
+        )
+        mt.max_subcycles >= 1 || throw(
+            ArgumentError(
+                "magma_transport max_subcycles must be >= 1, got $(mt.max_subcycles)"
+            ),
+        )
     end
 
     # Venting checks
@@ -2528,6 +2628,7 @@ const VALID_SECTIONS = Set([
     "refractory",
     "volatile_mixture",
     "atmosphere",
+    "magma_transport",
 ])
 
 """
@@ -2721,6 +2822,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.atmosphere
     end
+    magma = if haskey(parsed, "magma_transport")
+        _dict_to_struct(MagmaTransportConfig, parsed["magma_transport"], def.magma_transport)
+    else
+        def.magma_transport
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2747,6 +2853,7 @@ function load_config(source::AbstractString)::SimulationConfig
         refractory=refr,
         volatile_mixture=volmix,
         atmosphere=atm,
+        magma_transport=magma,
     )
 
     validate_config(cfg)
@@ -2810,6 +2917,7 @@ function save_config(io::IO, cfg::SimulationConfig)
         "refractory" => _struct_to_dict(cfg.refractory),
         "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
         "atmosphere" => _struct_to_dict(cfg.atmosphere),
+        "magma_transport" => _struct_to_dict(cfg.magma_transport),
     )
     TOML.print(io, d; sorted=true)
     return io

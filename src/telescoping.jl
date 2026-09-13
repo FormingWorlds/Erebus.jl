@@ -200,6 +200,7 @@ function telescope_marker_arrays!(
     t_accreted::Union{Nothing,AbstractVector{<:Real}}=nothing,
     materials::Union{Nothing,MaterialConfig}=nothing,
     hcnspo_props=nothing,
+    F_extract_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
 )::Int
     if iseven(old_coords.Nx) || iseven(old_coords.Ny)
         throw(
@@ -353,6 +354,9 @@ function telescope_marker_arrays!(
                         end
                         if t_accreted !== nothing
                             push!(t_accreted, 0.0)
+                        end
+                        if F_extract_m !== nothing
+                            push!(F_extract_m, 0.0)
                         end
                         if hcnspo_props !== nothing
                             for prop in values(hcnspo_props)
