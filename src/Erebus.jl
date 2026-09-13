@@ -17,6 +17,7 @@ using TimerOutputs
 using TOML
 
 export run_simulation, load_state, simulation_loop
+export MetalSegregationWorkspace, MagmaSegregationWorkspace
 export Config,
     GridConfig,
     GeometryConfig,
@@ -694,7 +695,9 @@ module Numerics
         apply_venting_surface_boundary!,
         apply_metal_segregation!,
         apply_silicate_melt_segregation!,
-        compute_face_venting_permeability
+        compute_face_venting_permeability,
+        MetalSegregationWorkspace,
+        MagmaSegregationWorkspace
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
@@ -726,7 +729,9 @@ module Numerics
         apply_venting_surface_boundary!,
         apply_metal_segregation!,
         apply_silicate_melt_segregation!,
-        compute_face_venting_permeability
+        compute_face_venting_permeability,
+        MetalSegregationWorkspace,
+        MagmaSegregationWorkspace
 end
 
 module Simulation
@@ -737,14 +742,18 @@ module Simulation
         load_state,
         simulation_loop,
         parse_commandline,
-        run_simulation
+        run_simulation,
+        MetalSegregationWorkspace,
+        MagmaSegregationWorkspace
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
         load_state,
         simulation_loop,
         parse_commandline,
-        run_simulation
+        run_simulation,
+        MetalSegregationWorkspace,
+        MagmaSegregationWorkspace
 end
 
 module Config
