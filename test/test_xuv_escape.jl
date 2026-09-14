@@ -199,4 +199,59 @@ include("test_helpers.jl")
             atm_state.M_atm[:CO2] + atm_state.M_escaped[:CO2], 1.0e12; rtol=1e-10
         )
     end
+
+    # -------------------------------------------------------------------------
+    # 6. Energy Conservation With Extended Exobase
+    # -------------------------------------------------------------------------
+    @testset "XUV Energy Conservation With Extended Exobase" begin
+        # For a planet where thermal escape is negligible (lambda >> 30),
+        # verify that escape is strictly energy-limited regardless of R_exobase / R_xuv ratio.
+        M_earth = 5.972e24
+        R_earth = 6.371e6
+        cfg_atm = AtmosphereConfig(; active=true, mode=:guillot)
+        cfg_esc = EscapeConfig(;
+            active=true,
+            hydrodynamic=true,
+            xuv_driven=true,
+            epsilon_xuv=0.15,
+            F_xuv_1au_sat=2.0,
+            r_xuv_ratio=1.2,
+            tidal_correction=false,
+        )
+
+        atm_state = AtmosphereState()
+        atm_state.M_atm[:H2] = 1.0e18
+
+        dt = 1000.0
+        vent_rates = Dict{Symbol,Float64}(:H2 => 0.0)
+        R_exo = 1.5 * R_earth
+        sim_time = 1.0e6 * Erebus.SEC_PER_YEAR
+
+        F_xuv = compute_stellar_xuv_flux(1.0e6, d_au; F_xuv_1au_sat=2.0)
+        R_xuv = 1.2 * R_earth
+        xuv_res = compute_energy_limited_escape_flux(
+            M_earth, R_earth, F_xuv; epsilon=0.15, R_xuv=R_xuv, K_tide=1.0
+        )
+        expected_dM = xuv_res.M_dot_xuv * dt
+
+        evolve_coupled_atmosphere_step!(
+            atm_state,
+            vent_rates,
+            dt,
+            M_earth,
+            R_earth,
+            300.0,
+            cfg_atm;
+            R_exobase=R_exo,
+            T_exobase=300.0,
+            escape_cfg=cfg_esc,
+            sim_time_s=sim_time,
+            a_orb=a_orb,
+            escape_active=true,
+        )
+
+        @test atm_state.M_escaped[:H2] > 0.0
+        @test isapprox(atm_state.M_escaped[:H2], expected_dM; rtol=1e-5)
+        @test isapprox(atm_state.M_atm[:H2] + atm_state.M_escaped[:H2], 1.0e18; rtol=1e-10)
+    end
 end

@@ -552,6 +552,7 @@ function degas_magma_ocean_markers!(
     v_m = Float64(marker_volume)
     m_marker = rho_s * v_m
     L_3D = 2.0 * Rp # 2D Cartesian to 3D spherical metric factor
+    delta_IW_eff = cfg.redox_coupled ? Float64(delta_IW) : 0.0
 
     tot_ex_H2O = 0.0
     tot_ex_C = 0.0
@@ -569,7 +570,6 @@ function degas_magma_ocean_markers!(
         end
 
         F_curr = Fm[m]
-        F_prev = Fm_old[m]
 
         # Check degassing activation: molten magma ocean (F >= F_thresh) or near-surface ascending melt
         is_magma_ocean = F_curr >= F_thresh
@@ -580,33 +580,25 @@ function degas_magma_ocean_markers!(
         end
 
         T_m = tkm[m]
-
-        # Crystallization concentration effect: when F_curr < F_prev, incompatible volatiles concentrate in liquid
-        if cfg.crystallization_degassing && F_curr < F_prev && F_curr > 0.0
-            concentration_ratio = min(10.0, F_prev / F_curr)
-            XH2Om[m] *= concentration_ratio
-            XCm[m] *= concentration_ratio
-            XNm[m] *= concentration_ratio
-            XSm[m] *= concentration_ratio
-        end
+        F_sol_factor = cfg.crystallization_degassing ? F_curr : 1.0
 
         # Evaluate equilibrium solubilities at surface ambient pressure
         # 1. Water solubility
         S_H2O_wtpct = compute_water_solubility_melt(psurf_val)
         S_H2O_frac = S_H2O_wtpct * 0.01
-        w_H2O_sat = F_curr * S_H2O_frac
+        w_H2O_sat = F_sol_factor * S_H2O_frac
 
         # 2. Nitrogen solubility
-        S_N_res = compute_nitrogen_solubility_melt(psurf_val, delta_IW)
-        w_N_sat = F_curr * (S_N_res.total_ppm * 1.0e-6)
+        S_N_res = compute_nitrogen_solubility_melt(psurf_val, delta_IW_eff)
+        w_N_sat = F_sol_factor * (S_N_res.total_ppm * 1.0e-6)
 
         # 3. Carbon solubility
-        S_C_res = compute_carbon_solubility_melt(psurf_val, T_m, delta_IW)
-        w_C_sat = F_curr * (S_C_res.total_ppm * 1.0e-6)
+        S_C_res = compute_carbon_solubility_melt(psurf_val, T_m, delta_IW_eff)
+        w_C_sat = F_sol_factor * (S_C_res.total_ppm * 1.0e-6)
 
         # 4. Sulfur solubility
-        S_S_ppm = compute_sulfur_solubility_melt(psurf_val, T_m, delta_IW)
-        w_S_sat = F_curr * (S_S_ppm * 1.0e-6)
+        S_S_ppm = compute_sulfur_solubility_melt(psurf_val, T_m, delta_IW_eff)
+        w_S_sat = F_sol_factor * (S_S_ppm * 1.0e-6)
 
         # Retention floors (if enabled)
         if retention_cfg !== nothing && retention_cfg.active
@@ -675,7 +667,7 @@ function degas_magma_ocean_markers!(
         m_S_3D,
         psurf_val,
         T_surf_ref,
-        delta_IW;
+        delta_IW_eff;
         graphite_saturation=true,
     )
 

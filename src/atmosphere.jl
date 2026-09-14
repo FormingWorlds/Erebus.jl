@@ -1306,7 +1306,7 @@ function evolve_coupled_atmosphere_step!(
                     R_xuv=R_xuv,
                     K_tide=K_tide,
                 )
-                phi_xuv = xuv_res.phi_xuv
+                phi_xuv = area_exo > 0.0 ? xuv_res.M_dot_xuv / area_exo : 0.0
             end
 
             phi_base = max(phi_thermal, phi_xuv)

@@ -311,4 +311,58 @@ include("test_helpers.jl")
         @test rates_cryst[:H2O] > 0.0
         @test all(XH2Om .<= XH2O_pre_cryst)
     end
+
+    # -------------------------------------------------------------------------
+    # 5. Magma Ocean Degassing Integration in simulation_loop
+    # -------------------------------------------------------------------------
+    @testset "Magma Ocean Degassing Runtime Integration in simulation_loop" begin
+        quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+        cfg_base = load_config(quick_toml)
+
+        for mode in (:dynamic_flux, :equilibrium)
+            mktempdir() do output_dir
+                cfg_run = SimulationConfig(;
+                    grid=cfg_base.grid,
+                    geometry=cfg_base.geometry,
+                    time=TimeConfig(
+                        dt_initial=cfg_base.time.dt_initial,
+                        dt_longest=cfg_base.time.dt_longest,
+                        dtcoefdn=cfg_base.time.dtcoefdn,
+                        dtcoefup=cfg_base.time.dtcoefup,
+                        dtstep=cfg_base.time.dtstep,
+                        dxymax=cfg_base.time.dxymax,
+                        vpratio=cfg_base.time.vpratio,
+                        DTmax=cfg_base.time.DTmax,
+                        start_time=cfg_base.time.start_time,
+                        endtime=cfg_base.time.endtime,
+                        start_step=1,
+                        n_steps=2,
+                    ),
+                    solver=cfg_base.solver,
+                    poroelasticity=cfg_base.poroelasticity,
+                    thermodynamics=cfg_base.thermodynamics,
+                    reaction=cfg_base.reaction,
+                    materials=cfg_base.materials,
+                    output=OutputConfig(output_dir=output_dir, savematstep=2),
+                    disk=cfg_base.disk,
+                    melting=cfg_base.melting,
+                    venting=VentingConfig(active=false),
+                    magma_degassing=MagmaOceanDegassingConfig(active=true, mode=mode),
+                    atmosphere=AtmosphereConfig(active=true, mode=:guillot),
+                )
+
+                Erebus.simulation_loop(cfg_run; output_path=output_dir)
+
+                files = readdir(output_dir)
+                @test "output_00000.jld2" in files
+                @test "output_00002.jld2" in files
+
+                data2 = load_state(joinpath(output_dir, "output_00002.jld2"))
+                @test data2["timestep"] == 2
+                @test haskey(data2, "M_planet_val")
+                @test data2["M_planet_val"] > 0.0
+                @test haskey(data2, "atm_P_surf")
+            end
+        end
+    end
 end

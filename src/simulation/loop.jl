@@ -3035,36 +3035,82 @@ function simulation_loop(
                                     (surf_diw / surf_count)
                                 else
                                     (
-                                    sum(redox_props.deltaIW_m) /
-                                    length(redox_props.deltaIW_m)
-                                )
+                                        sum(redox_props.deltaIW_m) /
+                                        length(redox_props.deltaIW_m)
+                                    )
                                 end
                             else
                                 cfg.volatiles.fO2_delta_IW
                             end
                         v_m = (coords.xsize * coords.ysize) / max(1, marknum)
                         Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
-                        degas_magma_ocean_markers!(
-                            tm,
-                            xm,
-                            ym,
-                            Fm,
-                            Fm_prev,
-                            tkm,
-                            XH2Om,
-                            XCm,
-                            XNm,
-                            XSm,
-                            marknum,
-                            dt,
-                            p_surf_mo,
-                            rplanet_val,
-                            cfg.magma_degassing;
-                            rho_solid=cfg.materials.rhosolidm[1],
-                            marker_volume=v_m,
-                            delta_IW=fO2_diw_mo,
-                            retention_cfg=cfg.retention,
-                        )
+
+                        if cfg.magma_degassing.mode === :dynamic_flux
+                            degas_magma_ocean_markers!(
+                                xm,
+                                ym,
+                                tm,
+                                tkm,
+                                Fm,
+                                Fm_prev,
+                                XH2Om,
+                                XCm,
+                                XNm,
+                                XSm,
+                                marknum,
+                                dt,
+                                p_surf_mo,
+                                rplanet_val,
+                                cfg.magma_degassing;
+                                rho_solid=cfg.materials.rhosolidm[1],
+                                marker_volume=v_m,
+                                delta_IW=fO2_diw_mo,
+                                retention_cfg=cfg.retention,
+                            )
+                        else
+                            # Equilibrium partitioning mode across molten magma ocean
+                            m_melt_tot = 0.0
+                            m_H_tot = 0.0
+                            m_C_tot = 0.0
+                            m_N_tot = 0.0
+                            m_S_tot = 0.0
+                            m_marker =
+                                cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
+                            for m in 1:marknum
+                                if tm[m] < 3 &&
+                                    Fm[m] >= cfg.magma_degassing.F_melt_threshold
+                                    m_melt_tot += Fm[m] * m_marker
+                                    m_H_tot += XH2Om[m] * (2.01588 / 18.01528) * m_marker
+                                    m_C_tot += XCm[m] * m_marker
+                                    m_N_tot += XNm[m] * m_marker
+                                    m_S_tot += XSm[m] * m_marker
+                                end
+                            end
+                            if m_melt_tot > 0.0 &&
+                                (m_H_tot + m_C_tot + m_N_tot + m_S_tot) > 0.0
+                                g_surf =
+                                    GRAVITATIONAL_CONSTANT * M_planet_val / (rplanet_val^2)
+                                sol_eq = solve_magma_ocean_volatile_partitioning(
+                                    m_melt_tot,
+                                    m_H_tot,
+                                    m_C_tot,
+                                    m_N_tot,
+                                    m_S_tot,
+                                    rplanet_val,
+                                    g_surf,
+                                    T_int_val,
+                                    fO2_diw_mo,
+                                )
+                                rates = Dict{Symbol,Float64}()
+                                for (sp, m_atm_eq) in sol_eq.M_atm_i
+                                    m_atm_cur = get(atm_state.M_atm, sp, 0.0)
+                                    rates[sp] = max(0.0, m_atm_eq - m_atm_cur) / dt
+                                end
+                                rates
+                            else
+                                nothing
+                            end
+                        end
                     else
                         nothing
                     end
