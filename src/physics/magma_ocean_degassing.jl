@@ -2,10 +2,23 @@
 # Magma Ocean Multi-Component Volatile Partitioning & Degassing Engine
 # =============================================================================
 
-"""
-Mass-conserved volatile partitioning between liquid silicate melt and atmosphere.
+using DocStringExtensions
 
-$(SIGNATURES)
+"""
+    solve_magma_ocean_volatile_partitioning(
+        M_melt::Real,
+        M_tot_H::Real,
+        M_tot_C::Real,
+        M_tot_N::Real,
+        M_tot_S::Real,
+        R_planet::Real,
+        g::Real,
+        T_mo::Real,
+        delta_IW::Real;
+        kwargs...
+    )
+
+Mass-conserved volatile partitioning between liquid silicate melt and atmosphere.
 
 Solves the coupled non-linear system of Dalton partial pressures, gas-phase chemical equilibrium,
 and silicate melt solubility across ten gas species:
@@ -517,9 +530,13 @@ function solve_magma_ocean_volatile_partitioning(
 end
 
 """
-Evaluate volatile exsolution and dynamic degassing rates from Lagrangian melt markers.
+    degas_magma_ocean_markers!(
+        xm, ym, tm, tkm, Fm, Fm_old, XH2Om, XCm, XNm, XSm,
+        marknum, dt, P_surf, R_planet, cfg;
+        kwargs...
+    )
 
-$(SIGNATURES)
+Evaluate volatile exsolution and dynamic degassing rates from Lagrangian melt markers.
 
 Identifies molten and ascending markers in the magma ocean or near-surface zone,
 extracts supersaturated dissolved volatiles above equilibrium solubility, and generates

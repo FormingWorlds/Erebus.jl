@@ -2,6 +2,8 @@
 # Atmospheric Jeans Kinetic Escape & Volatile Inventory Dynamics
 # =============================================================================
 
+using DocStringExtensions
+
 # Fundamental physical constants
 # Note: GRAVITATIONAL_CONSTANT is defined in constants.jl and test_constants.jl (CODATA 2018)
 
