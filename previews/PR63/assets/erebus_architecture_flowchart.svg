@@ -1,0 +1,343 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1060" width="100%" height="100%">
+
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap');
+      
+      .title-text { font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700; fill: #F2EAD3; }
+      .subtitle-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-weight: 400; fill: #9C9298; }
+      .section-title { font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; fill: #F2EAD3; letter-spacing: 0.5px; }
+      .box-title { font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; fill: #F2EAD3; }
+      .box-body { font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 400; fill: #E6DAB6; font-size: 11.5px; }
+      .box-code { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-weight: 500; font-size: 11px; }
+      .tag-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-weight: 600; font-size: 9.5px; letter-spacing: 0.5px; }
+      .arrow-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-weight: 500; font-size: 10px; fill: #DE7037; }
+    </style>
+
+    <!-- Markers for arrows -->
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#DE7037" />
+    </marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F0BA5E" />
+    </marker>
+    <marker id="arrow-cobalt" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3E5B86" />
+    </marker>
+    <marker id="arrow-plum" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#6A2A4D" />
+    </marker>
+
+    <!-- Drop Shadows -->
+    <filter id="card-shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1240" height="1060" fill="#15101C" />
+  <g opacity="0.06">
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E6DAB6" stroke-width="0.75" />
+    </pattern>
+    <rect width="100%" height="100%" fill="url(#grid)" />
+  </g>
+
+  <!-- Header Section -->
+  <g transform="translate(60, 45)">
+    <text class="title-text" font-size="24" y="0">EREBUS.JL ARCHITECTURE &amp; EXECUTION FLOW</text>
+    <text class="subtitle-text" font-size="12.5" y="24">Two-Dimensional Thermo-Hydro-Mechanical Evolution of Early Planetesimals</text>
+    
+    <!-- Strata Accent Rule -->
+    <g transform="translate(0, 36)">
+      <rect x="0" y="0" width="80" height="3.5" rx="1.75" fill="#F0BA5E" />
+      <rect x="85" y="0" width="80" height="3.5" rx="1.75" fill="#DE7037" />
+      <rect x="170" y="0" width="80" height="3.5" rx="1.75" fill="#A23E3C" />
+      <rect x="255" y="0" width="80" height="3.5" rx="1.75" fill="#6A2A4D" />
+      <rect x="340" y="0" width="80" height="3.5" rx="1.75" fill="#3E5B86" />
+    </g>
+  </g>
+
+
+  <!-- SECTION 1: INITIALIZATION -->
+  <g transform="translate(60, 110)">
+    <rect width="1120" height="142" rx="10" fill="#2C162B" stroke="#E6DAB6" stroke-opacity="0.25" stroke-width="1.2" filter="url(#card-shadow)" />
+    <rect x="0" y="0" width="1120" height="30" rx="10" fill="#241123" />
+    <rect x="0" y="20" width="1120" height="10" fill="#241123" />
+    
+    <text class="section-title" x="18" y="20" font-size="12">1. SIMULATION INITIALIZATION &amp; DOMAIN SETUP</text>
+    <rect x="940" y="7" width="165" height="16" rx="8" fill="#3E5B86" opacity="0.3" />
+    <text class="tag-text" x="1022" y="19" text-anchor="middle" fill="#3E5B86">STAGE: PRE-FLIGHT</text>
+
+    <!-- 3 Sub-Cards inside Init -->
+    <!-- Card 1: Configuration -->
+    <g transform="translate(18, 42)">
+      <rect width="345" height="86" rx="6" fill="#1C101E" stroke="#3E5B86" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="22" font-size="13" fill="#F2EAD3">TOML Configuration Parsing</text>
+      <text class="box-body" x="14" y="42">• Validates <tspan class="box-code" fill="#DE7037">SimulationConfig</tspan> schema</text>
+      <text class="box-body" x="14" y="59">• Sets material regimes, thermodynamics, &amp; bounds</text>
+      <text class="box-body" x="14" y="76">• Selects Pardiso / UMFPACK sparse solvers</text>
+    </g>
+
+    <!-- Card 2: Mesh & Fields -->
+    <g transform="translate(387, 42)">
+      <rect width="345" height="86" rx="6" fill="#1C101E" stroke="#3E5B86" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="22" font-size="13" fill="#F2EAD3">Staggered Eulerian Grids</text>
+      <text class="box-body" x="14" y="42">• Basic nodes <tspan class="box-code" fill="#F0BA5E">(Nx, Ny)</tspan>: shear stress <tspan class="box-code" fill="#E6DAB6">σxy</tspan>, viscosity <tspan class="box-code" fill="#E6DAB6">η</tspan></text>
+      <text class="box-body" x="14" y="59">• Cell centers <tspan class="box-code" fill="#F0BA5E">(Nx-1, Ny-1)</tspan>: normal stress, <tspan class="box-code" fill="#DE7037">P, T, φ</tspan></text>
+      <text class="box-body" x="14" y="76">• Staggered faces: velocities <tspan class="box-code" fill="#E6DAB6">vx, vy</tspan> and Darcy flux <tspan class="box-code" fill="#E6DAB6">qx, qy</tspan></text>
+    </g>
+
+    <!-- Card 3: Markers -->
+    <g transform="translate(756, 42)">
+      <rect width="345" height="86" rx="6" fill="#1C101E" stroke="#3E5B86" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="22" font-size="13" fill="#F2EAD3">Marker-in-Cell Generation</text>
+      <text class="box-body" x="14" y="42">• Particles distributed in rock, core, &amp; sticky air</text>
+      <text class="box-body" x="14" y="59">• Tracks phase <tspan class="box-code" fill="#F0BA5E">tm</tspan>, melt fraction <tspan class="box-code" fill="#DE7037">Fm</tspan>, metal <tspan class="box-code" fill="#F0BA5E">Xfe</tspan></text>
+      <text class="box-body" x="14" y="76">• Initializes volatile mass fractions: <tspan class="box-code" fill="#E6DAB6">H, C, N, S</tspan></text>
+    </g>
+  </g>
+
+
+  <!-- Connector: 1 -> 2 -->
+  <g transform="translate(620, 252)">
+    <line x1="0" y1="0" x2="0" y2="28" stroke="#DE7037" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <text class="arrow-text" x="10" y="16">initialize state</text>
+  </g>
+
+
+  <!-- SECTION 2: ADAPTIVE TIMESTEP & BOUNDARY PRE-SOLVE -->
+  <g transform="translate(60, 284)">
+    <rect width="1120" height="126" rx="10" fill="#2C162B" stroke="#E6DAB6" stroke-opacity="0.25" stroke-width="1.2" filter="url(#card-shadow)" />
+    <rect x="0" y="0" width="1120" height="30" rx="10" fill="#241123" />
+    <rect x="0" y="20" width="1120" height="10" fill="#241123" />
+
+    <text class="section-title" x="18" y="20" font-size="12">2. ADAPTIVE TIME STEPPING &amp; ENVIRONMENT COUPLING</text>
+    <rect x="915" y="7" width="190" height="16" rx="8" fill="#DE7037" opacity="0.25" />
+    <text class="tag-text" x="1010" y="19" text-anchor="middle" fill="#DE7037">TIME EVOLUTION LOOP</text>
+
+    <!-- 3 Sub-Cards -->
+    <!-- Card 1: Adaptive dt -->
+    <g transform="translate(18, 38)">
+      <rect width="345" height="76" rx="6" fill="#1C101E" stroke="#DE7037" stroke-width="1" stroke-opacity="0.5" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Adaptive CFL Time Step Control</text>
+      <text class="box-body" x="14" y="38">• Evaluates Courant condition on matrix &amp; Darcy flow</text>
+      <text class="box-body" x="14" y="54">• Subcycles metal segregation CFL: <tspan class="box-code" fill="#F0BA5E">Nsub ≤ Nmax</tspan></text>
+      <text class="box-body" x="14" y="70">• Clamps max growth rate: <tspan class="box-code" fill="#DE7037">dt ≤ min(dt_max, 1.2·dt_prev)</tspan></text>
+    </g>
+
+    <!-- Card 2: Disk & Atmosphere -->
+    <g transform="translate(387, 38)">
+      <rect width="345" height="76" rx="6" fill="#1C101E" stroke="#DE7037" stroke-width="1" stroke-opacity="0.5" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Protoplanetary Disk &amp; Envelope</text>
+      <text class="box-body" x="14" y="38">• Dispersal sigmoid: <tspan class="box-code" fill="#E6DAB6">w_disp(t) → Tamb(t), Pamb(t)</tspan></text>
+      <text class="box-body" x="14" y="54">• Flared disk irradiation &amp; Class 0/I/II viscous heating</text>
+      <text class="box-body" x="14" y="70">• Gas envelope capture &amp; Guillot greenhouse atmosphere</text>
+    </g>
+
+    <!-- Card 3: Volumetric Heating Sources -->
+    <g transform="translate(756, 38)">
+      <rect width="345" height="76" rx="6" fill="#1C101E" stroke="#DE7037" stroke-width="1" stroke-opacity="0.5" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Radiogenic &amp; Accretion Sources</text>
+      <text class="box-body" x="14" y="38">• Short-lived radionuclides: <tspan class="box-code" fill="#F0BA5E">²⁶Al (0.717 Ma)</tspan> &amp; <tspan class="box-code" fill="#A23E3C">⁶⁰Fe (2.62 Ma)</tspan></text>
+      <text class="box-body" x="14" y="54">• Accretion impact shock heating on outer shells</text>
+      <text class="box-body" x="14" y="70">• Gravitational potential energy dissipation: <tspan class="box-code" fill="#F0BA5E">Qseg</tspan></text>
+    </g>
+  </g>
+
+
+  <!-- Connector: 2 -> 3 -->
+  <g transform="translate(620, 410)">
+    <line x1="0" y1="0" x2="0" y2="28" stroke="#DE7037" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <text class="arrow-text" x="10" y="16">assemble &amp; solve</text>
+  </g>
+
+
+  <!-- SECTION 3: COUPLED MULTI-PHYSICS SOLVERS -->
+  <g transform="translate(60, 442)">
+    <rect width="1120" height="326" rx="10" fill="#2C162B" stroke="#E6DAB6" stroke-opacity="0.25" stroke-width="1.2" filter="url(#card-shadow)" />
+    <rect x="0" y="0" width="1120" height="30" rx="10" fill="#241123" />
+    <rect x="0" y="20" width="1120" height="10" fill="#241123" />
+
+    <text class="section-title" x="18" y="20" font-size="12">3. COUPLED MULTI-PHYSICS CORE SOLVERS</text>
+    <rect x="915" y="7" width="190" height="16" rx="8" fill="#A23E3C" opacity="0.3" />
+    <text class="tag-text" x="1010" y="19" text-anchor="middle" fill="#A23E3C">MONOLITHIC &amp; SPLIT SOLVERS</text>
+
+    <!-- 4 Solver Columns -->
+    
+    <!-- Solver 1: Thermochemical & Phase State -->
+    <g transform="translate(18, 40)">
+      <rect width="260" height="272" rx="6" fill="#1C101E" stroke="#A23E3C" stroke-width="1.2" />
+      <rect x="0" y="0" width="260" height="26" rx="6" fill="#A23E3C" fill-opacity="0.25" />
+      <rect x="0" y="18" width="260" height="8" fill="#A23E3C" fill-opacity="0.25" />
+      <text class="box-title" x="12" y="18" font-size="12" fill="#F2EAD3">Thermochemical &amp; Melting</text>
+      
+      <text class="box-body" x="12" y="44" font-weight="600" fill="#F0BA5E">Phase State &amp; Melting:</text>
+      <text class="box-body" x="12" y="60">• Solidus/liquidus: <tspan class="box-code" fill="#E6DAB6">Ts(P), Tl(P)</tspan></text>
+      <text class="box-body" x="12" y="76">• Melt fraction: <tspan class="box-code" fill="#E6DAB6">Fm ∈ [0, 1]</tspan></text>
+      <text class="box-body" x="12" y="92">• Latent heat buffer: <tspan class="box-code" fill="#E6DAB6">ρ·cp,eff</tspan></text>
+      
+      <text class="box-body" x="12" y="116" font-weight="600" fill="#F0BA5E">Convective Closures:</text>
+      <text class="box-body" x="12" y="132">• Soft turbulence: <tspan class="box-code" fill="#E6DAB6">Nu ~ Ra^(1/3)</tspan></text>
+      <text class="box-body" x="12" y="148">• Hydrothermal: <tspan class="box-code" fill="#E6DAB6">Rayleigh-Darcy Nu_eff</tspan></text>
+      <text class="box-body" x="12" y="164">• Regularized conductivity: <tspan class="box-code" fill="#E6DAB6">keff</tspan></text>
+      
+      <text class="box-body" x="12" y="190" font-weight="600" fill="#F0BA5E">Rheological Softening:</text>
+      <text class="box-body" x="12" y="206">• Costa / Gerya weakening (<tspan class="box-code" fill="#E6DAB6">Fm ≤ 0.4</tspan>)</text>
+      <text class="box-body" x="12" y="222">• Suspension breakdown (<tspan class="box-code" fill="#E6DAB6">Fm &gt; 0.4</tspan>)</text>
+      <text class="box-body" x="12" y="238">• Viscosity clamping: <tspan class="box-code" fill="#E6DAB6">[ηmin, ηmax]</tspan></text>
+      <text class="box-body" x="12" y="258">• Clay dehydration &amp; pore fluid</text>
+    </g>
+
+    <!-- Solver 2: Stokes-Darcy Hydromechanics -->
+    <g transform="translate(294, 40)">
+      <rect width="260" height="272" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1.2" />
+      <rect x="0" y="0" width="260" height="26" rx="6" fill="#6A2A4D" fill-opacity="0.3" />
+      <rect x="0" y="18" width="260" height="8" fill="#6A2A4D" fill-opacity="0.3" />
+      <text class="box-title" x="12" y="18" font-size="12" fill="#F2EAD3">Stokes-Darcy Hydromechanics</text>
+      
+      <text class="box-body" x="12" y="44" font-weight="600" fill="#F0BA5E">Coupled Flow Equations:</text>
+      <text class="box-body" x="12" y="60">• Solid matrix momentum: <tspan class="box-code" fill="#E6DAB6">-∇Pt + ∇·σ'</tspan></text>
+      <text class="box-body" x="12" y="76">• Darcy filtration: <tspan class="box-code" fill="#E6DAB6">q = -(k/ηf)(∇Pf - ρf·g)</tspan></text>
+      <text class="box-body" x="12" y="92">• Fluid mass conservation</text>
+
+      <text class="box-body" x="12" y="118" font-weight="600" fill="#F0BA5E">Poroelastic Mechanics:</text>
+      <text class="box-body" x="12" y="134">• Matrix &amp; fluid compressibility</text>
+      <text class="box-body" x="12" y="150">• Biot-Willis coefficient: <tspan class="box-code" fill="#E6DAB6">KBW</tspan></text>
+      <text class="box-body" x="12" y="166">• Dynamic compaction &amp; dilation</text>
+
+      <text class="box-body" x="12" y="192" font-weight="600" fill="#F0BA5E">Terzaghi Stress &amp; Failure:</text>
+      <text class="box-body" x="12" y="208">• Effective stress: <tspan class="box-code" fill="#E6DAB6">Peff = Pt - Pf</tspan></text>
+      <text class="box-body" x="12" y="224">• Mohr-Coulomb shear yielding</text>
+      <text class="box-body" x="12" y="240">• Tensile hydrofracture breach</text>
+      <text class="box-body" x="12" y="260">• Sparse LSE: <tspan class="box-code" fill="#DE7037">Ku = f (UMFPACK)</tspan></text>
+    </g>
+
+    <!-- Solver 3: Core Formation & Magma Transport -->
+    <g transform="translate(570, 40)">
+      <rect width="260" height="272" rx="6" fill="#1C101E" stroke="#DE7037" stroke-width="1.2" />
+      <rect x="0" y="0" width="260" height="26" rx="6" fill="#DE7037" fill-opacity="0.25" />
+      <rect x="0" y="18" width="260" height="8" fill="#DE7037" fill-opacity="0.25" />
+      <text class="box-title" x="12" y="18" font-size="12" fill="#F2EAD3">Metal &amp; Magma Segregation</text>
+      
+      <text class="box-body" x="12" y="44" font-weight="600" fill="#F0BA5E">Dual-Regime Metal Drift-Flux:</text>
+      <text class="box-body" x="12" y="60">• Darcy percolation: <tspan class="box-code" fill="#E6DAB6">Fm ≤ 0.40</tspan></text>
+      <text class="box-body" x="12" y="76">• Stokes settling: <tspan class="box-code" fill="#E6DAB6">Fm ≥ 0.50</tspan></text>
+      <text class="box-body" x="12" y="92">• Cubic Hermite smooth handover</text>
+
+      <text class="box-body" x="12" y="118" font-weight="600" fill="#F0BA5E">Microphysics Corrections:</text>
+      <text class="box-body" x="12" y="134">• Richardson-Zaki hindered drag</text>
+      <text class="box-body" x="12" y="150">• Weber droplet size equilibrium</text>
+      <text class="box-body" x="12" y="166">• Dynamic sulfur density: <tspan class="box-code" fill="#E6DAB6">ρ(wS)</tspan></text>
+
+      <text class="box-body" x="12" y="192" font-weight="600" fill="#F0BA5E">Silicate Magma Ascent:</text>
+      <text class="box-body" x="12" y="208">• Buoyant melt percolation</text>
+      <text class="box-body" x="12" y="224">• Subsolidus crystallization</text>
+      <text class="box-body" x="12" y="240">• Siderophile partitioning: <tspan class="box-code" fill="#E6DAB6">D(H,C,N,S)</tspan></text>
+      <text class="box-body" x="12" y="260">• Potential energy heat: <tspan class="box-code" fill="#F0BA5E">Qseg</tspan></text>
+    </g>
+
+    <!-- Solver 4: Thermal Energy Solve -->
+    <g transform="translate(846, 40)">
+      <rect width="256" height="272" rx="6" fill="#1C101E" stroke="#3E5B86" stroke-width="1.2" />
+      <rect x="0" y="0" width="256" height="26" rx="6" fill="#3E5B86" fill-opacity="0.3" />
+      <rect x="0" y="18" width="256" height="8" fill="#3E5B86" fill-opacity="0.3" />
+      <text class="box-title" x="12" y="18" font-size="12" fill="#F2EAD3">Thermal Energy Solve</text>
+      
+      <text class="box-body" x="12" y="44" font-weight="600" fill="#F0BA5E">Energy Conservation:</text>
+      <text class="box-body" x="12" y="60">• Apparent capacity: <tspan class="box-code" fill="#E6DAB6">ρ·cp,eff · ∂T/∂t</tspan></text>
+      <text class="box-body" x="12" y="76">• Heat conduction: <tspan class="box-code" fill="#E6DAB6">∇·(keff ∇T)</tspan></text>
+      <text class="box-body" x="12" y="92">• Fluid heat advection: <tspan class="box-code" fill="#E6DAB6">q · ∇T</tspan></text>
+
+      <text class="box-body" x="12" y="118" font-weight="600" fill="#F0BA5E">Coupled Source Terms:</text>
+      <text class="box-body" x="12" y="134">• Radiogenic volumetric: <tspan class="box-code" fill="#E6DAB6">Qrad</tspan></text>
+      <text class="box-body" x="12" y="150">• Dissipation heating: <tspan class="box-code" fill="#E6DAB6">Qseg + Qvisc</tspan></text>
+      <text class="box-body" x="12" y="166">• Sublimation cooling: <tspan class="box-code" fill="#E6DAB6">Qlat &lt; 0</tspan></text>
+
+      <text class="box-body" x="12" y="192" font-weight="600" fill="#F0BA5E">Implicit Grid Discretization:</text>
+      <text class="box-body" x="12" y="208">• Radiative Robin boundary</text>
+      <text class="box-body" x="12" y="224">• Harmonic interface: <tspan class="box-code" fill="#E6DAB6">k_interface</tspan></text>
+      <text class="box-body" x="12" y="240">• Sparse thermal LSE assembly</text>
+      <text class="box-body" x="12" y="260">• Updates temperature: <tspan class="box-code" fill="#DE7037">T(n+1)</tspan></text>
+    </g>
+  </g>
+
+
+  <!-- Connector: 3 -> 4 -->
+  <g transform="translate(620, 768)">
+    <line x1="0" y1="0" x2="0" y2="28" stroke="#DE7037" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <text class="arrow-text" x="10" y="16">update markers &amp; atmosphere</text>
+  </g>
+
+
+  <!-- SECTION 4: TRANSPORT, ATMOSPHERE & MESH EVOLUTION -->
+  <g transform="translate(60, 800)">
+    <rect width="1120" height="138" rx="10" fill="#2C162B" stroke="#E6DAB6" stroke-opacity="0.25" stroke-width="1.2" filter="url(#card-shadow)" />
+    <rect x="0" y="0" width="1120" height="30" rx="10" fill="#241123" />
+    <rect x="0" y="20" width="1120" height="10" fill="#241123" />
+
+    <text class="section-title" x="18" y="20" font-size="12">4. TRANSPORT, ATMOSPHERE &amp; DOMAIN ADVANCEMENT</text>
+    <rect x="915" y="7" width="190" height="16" rx="8" fill="#DE7037" opacity="0.25" />
+    <text class="tag-text" x="1010" y="19" text-anchor="middle" fill="#DE7037">POST-SOLVE TRANSPORT</text>
+
+    <!-- 3 Sub-Cards -->
+    <!-- Card 1: Marker Advection -->
+    <g transform="translate(18, 40)">
+      <rect width="345" height="84" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Marker-in-Cell Advection</text>
+      <text class="box-body" x="14" y="38">• 4th-order Runge-Kutta velocity interpolation</text>
+      <text class="box-body" x="14" y="55">• Subgrid dispersion &amp; marker-to-grid remapping</text>
+      <text class="box-body" x="14" y="72">• Local marker replenishment in depleted cells</text>
+    </g>
+
+    <!-- Card 2: Volatiles & Escape -->
+    <g transform="translate(387, 40)">
+      <rect width="345" height="84" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Volatiles, Venting &amp; Atmosphere</text>
+      <text class="box-body" x="14" y="38">• Multi-species HCNS solubility &amp; gas speciation</text>
+      <text class="box-body" x="14" y="55">• Cold surface venting &amp; ice cold-trap clamping</text>
+      <text class="box-body" x="14" y="72">• Hydrodynamic boil-off &amp; Jeans kinetic escape</text>
+    </g>
+
+    <!-- Card 3: Telescoping Domain -->
+    <g transform="translate(756, 40)">
+      <rect width="345" height="84" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1" stroke-opacity="0.6" />
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Telescoping Domain Expansion</text>
+      <text class="box-body" x="14" y="38">• Doubling trigger: <tspan class="box-code" fill="#F0BA5E">R(t) &gt; 0.70 · (xsize/2)</tspan></text>
+      <text class="box-body" x="14" y="55">• Invariant resolution: <tspan class="box-code" fill="#E6DAB6">dx = const</tspan>, odd-parity remapping</text>
+      <text class="box-body" x="14" y="72">• Buffer marker generation &amp; Poisson refactorization</text>
+    </g>
+  </g>
+
+
+  <!-- Connector: 4 -> 5 -->
+  <g transform="translate(620, 938)">
+    <line x1="0" y1="0" x2="0" y2="24" stroke="#DE7037" stroke-width="2" marker-end="url(#arrow-amber)" />
+  </g>
+
+
+  <!-- SECTION 5: CHECKPOINTING & RECURRENCE -->
+  <g transform="translate(60, 964)">
+    <rect width="1120" height="62" rx="8" fill="#1C101E" stroke="#F0BA5E" stroke-opacity="0.5" stroke-width="1.2" />
+    
+    <!-- Left: Time Advance -->
+    <text class="box-title" x="20" y="26" font-size="13" fill="#F0BA5E">Time Advancement:</text>
+    <text class="box-code" x="165" y="26" fill="#F2EAD3">t ← t + dt,  step ← step + 1</text>
+    
+    <!-- Center: Persistence -->
+    <text class="box-title" x="420" y="26" font-size="13" fill="#F0BA5E">Data Persistence:</text>
+    <text class="box-code" x="555" y="26" fill="#E6DAB6">JLD2 Checkpoint Snapshots &amp; Core Budgets</text>
+
+    <!-- Right: Checkpoint status -->
+    <text class="box-body" x="20" y="48" fill="#9C9298">• Terminates when <tspan class="box-code" fill="#DE7037">t ≥ t_end</tspan> or maximum steps reached</text>
+    <text class="box-body" x="420" y="48" fill="#9C9298">• Zero numerical diffusion on moving boundaries via Lagrangian markers</text>
+  </g>
+
+
+  <!-- Feedback Loop Arrow: 5 -> 2 -->
+  <g>
+    <path d="M 60 995 L 30 995 L 30 347 L 54 347" fill="none" stroke="#DE7037" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-amber)" />
+    <text class="arrow-text" transform="translate(22, 680) rotate(-90)" text-anchor="middle">next time step (dt)</text>
+  </g>
+
+</svg>
