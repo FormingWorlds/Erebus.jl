@@ -323,16 +323,16 @@ function compute_spherical_metric_heat_source!(
 end
 
 """
-Linear interpolation between `a` and `b` with blend factor `t`.
+    lerp(a, b, t)
 
-$(SIGNATURES)
+Linear interpolation between `a` and `b` with blend factor `t`.
 """
 @inline lerp(a, b, t) = a * (1.0 - t) + b * t
 
 """
-Cubic smoothstep Hermite interpolation between 0 and 1 for `x` clamped to `[x0, x1]`.
+    smoothstep(x0, x1, x)
 
-$(SIGNATURES)
+Cubic smoothstep Hermite interpolation between 0 and 1 for `x` clamped to `[x0, x1]`.
 """
 @inline function smoothstep(x0::Real, x1::Real, x::Real)
     x0 == x1 && return x >= x1 ? 1.0 : 0.0
@@ -341,9 +341,9 @@ $(SIGNATURES)
 end
 
 """
-Validate that `v` is positive and finite, otherwise throw `DomainError`.
+    require_positive_finite(v, name)
 
-$(SIGNATURES)
+Validate that `v` is positive and finite, otherwise throw `DomainError`.
 """
 @inline function require_positive_finite(v::Real, name::AbstractString)
     (isfinite(v) && v > 0.0) ||
@@ -352,9 +352,9 @@ $(SIGNATURES)
 end
 
 """
-Validate that `v` is non-negative and finite, otherwise throw `DomainError`.
+    require_nonneg_finite(v, name)
 
-$(SIGNATURES)
+Validate that `v` is non-negative and finite, otherwise throw `DomainError`.
 """
 @inline function require_nonneg_finite(v::Real, name::AbstractString)
     (isfinite(v) && v >= 0.0) ||
@@ -363,9 +363,9 @@ $(SIGNATURES)
 end
 
 """
-Validate that `v` is in unit interval [0, 1] and finite, otherwise throw `DomainError`.
+    require_unit_interval(v, name)
 
-$(SIGNATURES)
+Validate that `v` is in unit interval [0, 1] and finite, otherwise throw `DomainError`.
 """
 @inline function require_unit_interval(v::Real, name::AbstractString)
     (isfinite(v) && 0.0 <= v <= 1.0) ||
