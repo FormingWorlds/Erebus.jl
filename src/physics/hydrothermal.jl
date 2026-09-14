@@ -222,9 +222,8 @@ function compute_hydrothermal_nusselt(
     elseif phi >= phi_end
         return Float64(Nu_free)
     else
-        xi = (phi - phi_start) / (phi_end - phi_start)
-        w_phi = xi * xi * (3.0 - 2.0 * xi)
-        log_Nu = (1.0 - w_phi) * log10(Nu_porous) + w_phi * log10(Nu_free)
+        w_phi = smoothstep(phi_start, phi_end, phi)
+        log_Nu = lerp(log10(Nu_porous), log10(Nu_free), w_phi)
         return Float64(10.0^log_Nu)
     end
 end

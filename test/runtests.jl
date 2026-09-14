@@ -8,6 +8,7 @@ using Test
 
 include("../src/test_constants.jl")
 # include("../src/constants.jl")
+include("test_helpers.jl")
 const rgen = MersenneTwister(seed)
 
 @testset verbose=true "Erebus.jl" begin

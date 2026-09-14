@@ -173,3 +173,26 @@ Construct the baseline `GridCoordinates` corresponding to compiled default const
 function default_grid_coordinates()
     return GridCoordinates(Nx, Ny; xsize=xsize, ysize=ysize, Nxmc=Nxmc, Nymc=Nymc)
 end
+
+"""
+    @unpack_coords coords fields...
+
+Unpack grid coordinate fields from `coords::Union{GridCoordinates, Nothing}`.
+When `coords === nothing`, falls back to global variables with the same names.
+Defines `<field>_val` for each symbol in `fields`.
+"""
+macro unpack_coords(coords, fields...)
+    c_var = gensym("coords")
+    assigns = map(fields) do f
+        val = Symbol(f, "_val")
+        return :($(esc(val)) = if $c_var === nothing
+            $(esc(f))
+        else
+            getfield($c_var, $(QuoteNode(f)))
+        end)
+    end
+    return quote
+        $c_var = $(esc(coords))
+        $(assigns...)
+    end
+end

@@ -216,30 +216,8 @@ function save_state(
     F_extract_m=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
-    Nx_val = coords === nothing ? Nx : coords.Nx
-    Ny_val = coords === nothing ? Ny : coords.Ny
-    Nx1_val = coords === nothing ? Nx1 : coords.Nx1
-    Ny1_val = coords === nothing ? Ny1 : coords.Ny1
-    Nxm_val = coords === nothing ? Nxm : coords.Nxm
-    Nym_val = coords === nothing ? Nym : coords.Nym
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    dxm_val = coords === nothing ? dxm : coords.dxm
-    dym_val = coords === nothing ? dym : coords.dym
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    xvx_val = coords === nothing ? xvx : coords.xvx
-    yvx_val = coords === nothing ? yvx : coords.yvx
-    xvy_val = coords === nothing ? xvy : coords.xvy
-    yvy_val = coords === nothing ? yvy : coords.yvy
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    xxm_val = coords === nothing ? xxm : coords.xxm
-    yym_val = coords === nothing ? yym : coords.yym
-    xsize_val = coords === nothing ? xsize : coords.xsize
-    ysize_val = coords === nothing ? ysize : coords.ysize
-    xcenter_val = coords === nothing ? xcenter : coords.xcenter
-    ycenter_val = coords === nothing ? ycenter : coords.ycenter
+    @unpack_coords coords Nx Ny Nx1 Ny1 Nxm Nym dx dy dxm dym
+    @unpack_coords coords x y xvx yvx xvy yvy xp yp xxm yym xsize ysize xcenter ycenter
     jldsave(
         fid;
         timestep,

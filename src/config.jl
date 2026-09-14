@@ -891,6 +891,95 @@ function default_config()::SimulationConfig
     return SimulationConfig()
 end
 
+function _config_field_name(ex)
+    if ex isa Symbol
+        return string(ex)
+    elseif Meta.isexpr(ex, :.)
+        parts = Symbol[]
+        curr = ex
+        while Meta.isexpr(curr, :.)
+            push!(
+                parts, curr.args[end] isa QuoteNode ? curr.args[end].value : curr.args[end]
+            )
+            curr = curr.args[1]
+        end
+        if curr isa Symbol && curr !== :cfg
+            push!(parts, curr)
+        end
+        return join(reverse(string.(parts)), ".")
+    else
+        return string(ex)
+    end
+end
+
+macro check_positive(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        $v > 0.0 || throw(ArgumentError(string($lbl, " must be > 0, got ", $v)))
+    end
+end
+
+macro check_nonneg(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        $v >= 0.0 || throw(ArgumentError(string($lbl, " must be >= 0, got ", $v)))
+    end
+end
+
+macro check_ge(expr, bound, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    b = gensym("b")
+    quote
+        $v = $(esc(expr))
+        $b = $(esc(bound))
+        $v >= $b || throw(ArgumentError(string($lbl, " must be >= ", $b, ", got ", $v)))
+    end
+end
+
+macro check_positive_finite(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        ($v > 0.0 && isfinite($v)) ||
+            throw(ArgumentError(string($lbl, " must be > 0 and finite, got ", $v)))
+    end
+end
+
+macro check_nonneg_finite(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        ($v >= 0.0 && isfinite($v)) ||
+            throw(ArgumentError(string($lbl, " must be >= 0 and finite, got ", $v)))
+    end
+end
+
+macro check_finite(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        isfinite($v) || throw(ArgumentError(string($lbl, " must be finite")))
+    end
+end
+
+macro check_unit_interval(expr, label=nothing)
+    lbl = label === nothing ? _config_field_name(expr) : label
+    v = gensym("v")
+    quote
+        $v = $(esc(expr))
+        (0.0 <= $v <= 1.0 && isfinite($v)) ||
+            throw(ArgumentError(string($lbl, " must be in [0, 1] and finite, got ", $v)))
+    end
+end
+
 """
 Validates physical bounds and numerical consistency of a `SimulationConfig`.
 
@@ -901,26 +990,17 @@ $(SIGNATURES)
 """
 function validate_config(cfg::SimulationConfig)
     # Grid checks: must be valid dimensions and domain bounds
-    cfg.grid.Nx >= 3 || throw(ArgumentError("Grid Nx must be >= 3, got $(cfg.grid.Nx)"))
-    cfg.grid.Ny >= 3 || throw(ArgumentError("Grid Ny must be >= 3, got $(cfg.grid.Ny)"))
-    cfg.grid.xsize > 0.0 ||
-        throw(ArgumentError("Domain xsize must be > 0, got $(cfg.grid.xsize)"))
-    cfg.grid.ysize > 0.0 ||
-        throw(ArgumentError("Domain ysize must be > 0, got $(cfg.grid.ysize)"))
+    @check_ge cfg.grid.Nx 3
+    @check_ge cfg.grid.Ny 3
+    @check_positive cfg.grid.xsize "Domain xsize"
+    @check_positive cfg.grid.ysize "Domain ysize"
 
     # Geometry checks
-    cfg.geometry.rplanet > 0.0 ||
-        throw(ArgumentError("Planet radius must be > 0, got $(cfg.geometry.rplanet)"))
-    cfg.geometry.rcrust > 0.0 ||
-        throw(ArgumentError("Crust radius must be > 0, got $(cfg.geometry.rcrust)"))
+    @check_positive cfg.geometry.rplanet "Planet radius"
+    @check_positive cfg.geometry.rcrust "Crust radius"
     cfg.geometry.rcrust <= cfg.geometry.rplanet ||
         throw(ArgumentError("Crust radius must be <= planet radius"))
-    cfg.geometry.metric_regularization_cells > 0.0 &&
-    isfinite(cfg.geometry.metric_regularization_cells) || throw(
-        ArgumentError(
-            "metric_regularization_cells must be > 0 and finite, got $(cfg.geometry.metric_regularization_cells)",
-        ),
-    )
+    @check_positive_finite cfg.geometry.metric_regularization_cells
     min_dist_to_boundary = min(
         cfg.geometry.xcenter,
         cfg.grid.xsize - cfg.geometry.xcenter,
@@ -940,74 +1020,45 @@ function validate_config(cfg::SimulationConfig)
     )
 
     # Time checks
-    cfg.time.dt_initial > 0.0 ||
-        throw(ArgumentError("Initial dt must be > 0, got $(cfg.time.dt_initial)"))
+    @check_positive cfg.time.dt_initial "Initial dt"
     cfg.time.dt_longest >= cfg.time.dt_initial ||
         throw(ArgumentError("dt_longest must be >= dt_initial"))
-    cfg.time.n_steps >= 1 ||
-        throw(ArgumentError("n_steps must be >= 1, got $(cfg.time.n_steps)"))
-    cfg.time.start_time >= 0.0 ||
-        throw(ArgumentError("start_time must be >= 0, got $(cfg.time.start_time)"))
+    @check_ge cfg.time.n_steps 1
+    @check_nonneg cfg.time.start_time
     cfg.time.endtime > cfg.time.start_time ||
         throw(ArgumentError("endtime must be > start_time"))
-    cfg.time.start_step >= 1 ||
-        throw(ArgumentError("start_step must be >= 1, got $(cfg.time.start_step)"))
-    isfinite(cfg.time.dt_initial) || throw(ArgumentError("dt_initial must be finite"))
-    isfinite(cfg.time.dt_longest) || throw(ArgumentError("dt_longest must be finite"))
+    @check_ge cfg.time.start_step 1
+    @check_finite cfg.time.dt_initial
+    @check_finite cfg.time.dt_longest
 
     # Poroelasticity checks
-    cfg.poroelasticity.betasolid >= 0.0 ||
-        throw(ArgumentError("betasolid must be >= 0, got $(cfg.poroelasticity.betasolid)"))
-    cfg.poroelasticity.betafluid >= 0.0 ||
-        throw(ArgumentError("betafluid must be >= 0, got $(cfg.poroelasticity.betafluid)"))
-    isfinite(cfg.poroelasticity.betasolid) ||
-        throw(ArgumentError("betasolid must be finite"))
-    isfinite(cfg.poroelasticity.betafluid) ||
-        throw(ArgumentError("betafluid must be finite"))
+    @check_nonneg_finite cfg.poroelasticity.betasolid
+    @check_nonneg_finite cfg.poroelasticity.betafluid
     0.0 < cfg.poroelasticity.phimin < cfg.poroelasticity.phimax < 1.0 || throw(
         ArgumentError(
             "Porosity bounds must satisfy 0 < phimin < phimax < 1, got phimin=$(cfg.poroelasticity.phimin), phimax=$(cfg.poroelasticity.phimax)",
         ),
     )
-    cfg.poroelasticity.kappa_frac >= 0.0 && isfinite(cfg.poroelasticity.kappa_frac) ||
-        throw(
-            ArgumentError(
-                "kappa_frac must be >= 0 and finite, got $(cfg.poroelasticity.kappa_frac)"
-            ),
-        )
-    cfg.poroelasticity.gamma_frac > 0.0 && isfinite(cfg.poroelasticity.gamma_frac) || throw(
-        ArgumentError(
-            "gamma_frac must be > 0 and finite, got $(cfg.poroelasticity.gamma_frac)"
-        ),
-    )
-    cfg.poroelasticity.k_frac_max > 0.0 && isfinite(cfg.poroelasticity.k_frac_max) || throw(
-        ArgumentError(
-            "k_frac_max must be > 0 and finite, got $(cfg.poroelasticity.k_frac_max)"
-        ),
-    )
+    @check_nonneg_finite cfg.poroelasticity.kappa_frac
+    @check_positive_finite cfg.poroelasticity.gamma_frac
+    @check_positive_finite cfg.poroelasticity.k_frac_max
 
     # Solver checks
-    cfg.solver.titermax >= 1 ||
-        throw(ArgumentError("titermax must be >= 1, got $(cfg.solver.titermax)"))
-    cfg.solver.nplast >= 1 ||
-        throw(ArgumentError("nplast must be >= 1, got $(cfg.solver.nplast)"))
+    @check_ge cfg.solver.titermax 1
+    @check_ge cfg.solver.nplast 1
     cfg.solver.titermax <= cfg.solver.nplast || throw(
         ArgumentError(
             "titermax ($(cfg.solver.titermax)) must be <= nplast ($(cfg.solver.nplast)) to prevent array bounds overflow in plastic convergence tracking",
         ),
     )
-    cfg.solver.etamin > 0.0 ||
-        throw(ArgumentError("etamin must be > 0, got $(cfg.solver.etamin)"))
+    @check_positive cfg.solver.etamin
     cfg.solver.etamax >= cfg.solver.etamin ||
         throw(ArgumentError("etamax must be >= etamin"))
-    cfg.solver.etaphikoef > 0.0 ||
-        throw(ArgumentError("etaphikoef must be > 0, got $(cfg.solver.etaphikoef)"))
+    @check_positive cfg.solver.etaphikoef
 
     # Output checks
-    cfg.output.savematstep >= 1 ||
-        throw(ArgumentError("savematstep must be >= 1, got $(cfg.output.savematstep)"))
-    cfg.output.visstep >= 1 ||
-        throw(ArgumentError("visstep must be >= 1, got $(cfg.output.visstep)"))
+    @check_ge cfg.output.savematstep 1
+    @check_ge cfg.output.visstep 1
     if !isempty(cfg.output.restart_from)
         isfile(cfg.output.restart_from) || throw(
             ArgumentError(
@@ -1022,53 +1073,30 @@ function validate_config(cfg::SimulationConfig)
     end
 
     # Thermodynamics checks
-    0.0 <= cfg.thermodynamics.ratio_al <= 1.0 || throw(
-        ArgumentError("ratio_al must be in [0, 1], got $(cfg.thermodynamics.ratio_al)")
-    )
-    0.0 <= cfg.thermodynamics.ratio_fe <= 1.0 || throw(
-        ArgumentError("ratio_fe must be in [0, 1], got $(cfg.thermodynamics.ratio_fe)")
-    )
+    @check_unit_interval cfg.thermodynamics.ratio_al
+    @check_unit_interval cfg.thermodynamics.ratio_fe
     cfg.thermodynamics.tmfluidphase < cfg.thermodynamics.tmsolidphase || throw(
         ArgumentError(
             "tmfluidphase ($(cfg.thermodynamics.tmfluidphase)) must be < tmsolidphase ($(cfg.thermodynamics.tmsolidphase))",
         ),
     )
-    cfg.thermodynamics.Lᶠ > 0.0 ||
-        throw(ArgumentError("Lᶠ must be > 0, got $(cfg.thermodynamics.Lᶠ)"))
-    cfg.thermodynamics.E_al > 0.0 && isfinite(cfg.thermodynamics.E_al) ||
-        throw(ArgumentError("E_al must be > 0 and finite"))
-    cfg.thermodynamics.f_al > 0.0 && isfinite(cfg.thermodynamics.f_al) ||
-        throw(ArgumentError("f_al must be > 0 and finite"))
-    cfg.thermodynamics.t_half_al > 0.0 && isfinite(cfg.thermodynamics.t_half_al) ||
-        throw(ArgumentError("t_half_al must be > 0 and finite"))
-    cfg.thermodynamics.E_fe > 0.0 && isfinite(cfg.thermodynamics.E_fe) ||
-        throw(ArgumentError("E_fe must be > 0 and finite"))
-    cfg.thermodynamics.f_fe > 0.0 && isfinite(cfg.thermodynamics.f_fe) ||
-        throw(ArgumentError("f_fe must be > 0 and finite"))
-    cfg.thermodynamics.t_half_fe > 0.0 && isfinite(cfg.thermodynamics.t_half_fe) ||
-        throw(ArgumentError("t_half_fe must be > 0 and finite"))
+    @check_positive cfg.thermodynamics.Lᶠ
+    @check_positive_finite cfg.thermodynamics.E_al
+    @check_positive_finite cfg.thermodynamics.f_al
+    @check_positive_finite cfg.thermodynamics.t_half_al
+    @check_positive_finite cfg.thermodynamics.E_fe
+    @check_positive_finite cfg.thermodynamics.f_fe
+    @check_positive_finite cfg.thermodynamics.t_half_fe
     cfg.thermodynamics.fluid_viscosity_mode in Set([:arrhenius, :constant]) || throw(
         ArgumentError(
             "fluid_viscosity_mode must be :arrhenius or :constant, got $(cfg.thermodynamics.fluid_viscosity_mode)",
         ),
     )
-    cfg.thermodynamics.fluid_viscosity_Ea >= 0.0 &&
-    isfinite(cfg.thermodynamics.fluid_viscosity_Ea) ||
-        throw(ArgumentError("fluid_viscosity_Ea must be >= 0 and finite"))
-    cfg.thermodynamics.fluid_viscosity_T0 > 0.0 &&
-    isfinite(cfg.thermodynamics.fluid_viscosity_T0) ||
-        throw(ArgumentError("fluid_viscosity_T0 must be > 0 and finite"))
-    cfg.thermodynamics.fluid_viscosity_eta0 > 0.0 &&
-    isfinite(cfg.thermodynamics.fluid_viscosity_eta0) ||
-        throw(ArgumentError("fluid_viscosity_eta0 must be > 0 and finite"))
-    0.0 <= cfg.thermodynamics.emissivity <= 1.0 || throw(
-        ArgumentError("emissivity must be in [0, 1], got $(cfg.thermodynamics.emissivity)"),
-    )
-    cfg.thermodynamics.sigma_sb > 0.0 && isfinite(cfg.thermodynamics.sigma_sb) || throw(
-        ArgumentError(
-            "sigma_sb must be > 0 and finite, got $(cfg.thermodynamics.sigma_sb)"
-        ),
-    )
+    @check_nonneg_finite cfg.thermodynamics.fluid_viscosity_Ea
+    @check_positive_finite cfg.thermodynamics.fluid_viscosity_T0
+    @check_positive_finite cfg.thermodynamics.fluid_viscosity_eta0
+    @check_unit_interval cfg.thermodynamics.emissivity
+    @check_positive_finite cfg.thermodynamics.sigma_sb
 
     # Disk checks
     cfg.disk.model in Set([:fixed, :monotonic, :class1_to_class2, :class0_to_class2]) ||
@@ -1077,70 +1105,27 @@ function validate_config(cfg::SimulationConfig)
                 "disk model must be :fixed, :monotonic, :class1_to_class2, or :class0_to_class2, got $(cfg.disk.model)",
             ),
         )
-    cfg.disk.t_ambient > 0.0 && isfinite(cfg.disk.t_ambient) ||
-        throw(ArgumentError("t_ambient must be > 0 and finite, got $(cfg.disk.t_ambient)"))
-    cfg.disk.orbital_distance_au > 0.0 && isfinite(cfg.disk.orbital_distance_au) || throw(
-        ArgumentError(
-            "orbital_distance_au must be > 0 and finite, got $(cfg.disk.orbital_distance_au)",
-        ),
-    )
-    cfg.disk.stellar_mass_msun > 0.0 && isfinite(cfg.disk.stellar_mass_msun) || throw(
-        ArgumentError(
-            "stellar_mass_msun must be > 0 and finite, got $(cfg.disk.stellar_mass_msun)",
-        ),
-    )
-    cfg.disk.t_cloud > 0.0 && isfinite(cfg.disk.t_cloud) ||
-        throw(ArgumentError("t_cloud must be > 0 and finite, got $(cfg.disk.t_cloud)"))
-    cfg.disk.t_irr_1au > 0.0 && isfinite(cfg.disk.t_irr_1au) ||
-        throw(ArgumentError("t_irr_1au must be > 0 and finite, got $(cfg.disk.t_irr_1au)"))
-    cfg.disk.t_peak_1au > 0.0 && isfinite(cfg.disk.t_peak_1au) || throw(
-        ArgumentError("t_peak_1au must be > 0 and finite, got $(cfg.disk.t_peak_1au)")
-    )
-    cfg.disk.t_peak_time_1au_myr > 0.0 && isfinite(cfg.disk.t_peak_time_1au_myr) || throw(
-        ArgumentError(
-            "t_peak_time_1au_myr must be > 0 and finite, got $(cfg.disk.t_peak_time_1au_myr)",
-        ),
-    )
-    cfg.disk.t_visc_0_myr > 0.0 && isfinite(cfg.disk.t_visc_0_myr) || throw(
-        ArgumentError("t_visc_0_myr must be > 0 and finite, got $(cfg.disk.t_visc_0_myr)"),
-    )
-    cfg.disk.gamma > 0.0 && isfinite(cfg.disk.gamma) ||
-        throw(ArgumentError("gamma must be > 0 and finite, got $(cfg.disk.gamma)"))
-    cfg.disk.alpha > 0.0 && isfinite(cfg.disk.alpha) ||
-        throw(ArgumentError("alpha must be > 0 and finite, got $(cfg.disk.alpha)"))
-    cfg.disk.q_irr > 0.0 && isfinite(cfg.disk.q_irr) ||
-        throw(ArgumentError("q_irr must be > 0 and finite, got $(cfg.disk.q_irr)"))
-    cfg.disk.q_visc > 0.0 && isfinite(cfg.disk.q_visc) ||
-        throw(ArgumentError("q_visc must be > 0 and finite, got $(cfg.disk.q_visc)"))
-    cfg.disk.p_r_t >= 0.0 && isfinite(cfg.disk.p_r_t) ||
-        throw(ArgumentError("p_r_t must be >= 0 and finite, got $(cfg.disk.p_r_t)"))
-    cfg.disk.p_m_irr >= 0.0 && isfinite(cfg.disk.p_m_irr) ||
-        throw(ArgumentError("p_m_irr must be >= 0 and finite, got $(cfg.disk.p_m_irr)"))
-    cfg.disk.p_m_visc >= 0.0 && isfinite(cfg.disk.p_m_visc) ||
-        throw(ArgumentError("p_m_visc must be >= 0 and finite, got $(cfg.disk.p_m_visc)"))
-    cfg.disk.p_m_t >= 0.0 && isfinite(cfg.disk.p_m_t) ||
-        throw(ArgumentError("p_m_t must be >= 0 and finite, got $(cfg.disk.p_m_t)"))
-    cfg.disk.p_m_visc_decay >= 0.0 && isfinite(cfg.disk.p_m_visc_decay) || throw(
-        ArgumentError(
-            "p_m_visc_decay must be >= 0 and finite, got $(cfg.disk.p_m_visc_decay)"
-        ),
-    )
-    cfg.disk.t_dispersal_myr > 0.0 && isfinite(cfg.disk.t_dispersal_myr) || throw(
-        ArgumentError(
-            "t_dispersal_myr must be > 0 and finite, got $(cfg.disk.t_dispersal_myr)"
-        ),
-    )
-    cfg.disk.dt_dispersal_myr > 0.0 && isfinite(cfg.disk.dt_dispersal_myr) || throw(
-        ArgumentError(
-            "dt_dispersal_myr must be > 0 and finite, got $(cfg.disk.dt_dispersal_myr)"
-        ),
-    )
-    cfg.disk.p_amb_disk > 0.0 && isfinite(cfg.disk.p_amb_disk) || throw(
-        ArgumentError("p_amb_disk must be > 0 and finite, got $(cfg.disk.p_amb_disk)")
-    )
-    cfg.disk.p_amb_space >= 0.0 && isfinite(cfg.disk.p_amb_space) || throw(
-        ArgumentError("p_amb_space must be >= 0 and finite, got $(cfg.disk.p_amb_space)"),
-    )
+    @check_positive_finite cfg.disk.t_ambient
+    @check_positive_finite cfg.disk.orbital_distance_au
+    @check_positive_finite cfg.disk.stellar_mass_msun
+    @check_positive_finite cfg.disk.t_cloud
+    @check_positive_finite cfg.disk.t_irr_1au
+    @check_positive_finite cfg.disk.t_peak_1au
+    @check_positive_finite cfg.disk.t_peak_time_1au_myr
+    @check_positive_finite cfg.disk.t_visc_0_myr
+    @check_positive_finite cfg.disk.gamma
+    @check_positive_finite cfg.disk.alpha
+    @check_positive_finite cfg.disk.q_irr
+    @check_positive_finite cfg.disk.q_visc
+    @check_nonneg_finite cfg.disk.p_r_t
+    @check_nonneg_finite cfg.disk.p_m_irr
+    @check_nonneg_finite cfg.disk.p_m_visc
+    @check_nonneg_finite cfg.disk.p_m_t
+    @check_nonneg_finite cfg.disk.p_m_visc_decay
+    @check_positive_finite cfg.disk.t_dispersal_myr
+    @check_positive_finite cfg.disk.dt_dispersal_myr
+    @check_positive_finite cfg.disk.p_amb_disk
+    @check_nonneg_finite cfg.disk.p_amb_space
     (0.0 <= cfg.disk.albedo < 1.0) && isfinite(cfg.disk.albedo) ||
         throw(ArgumentError("albedo must be in [0.0, 1.0), got $(cfg.disk.albedo)"))
     isnan(cfg.disk.t_eq_custom) ||
@@ -1162,41 +1147,25 @@ function validate_config(cfg::SimulationConfig)
             "dehydration_mode must be 1, 2, 3, or 9, got $(cfg.reaction.dehydration_mode)",
         ),
     )
-    cfg.reaction.dtreaction_hydration > 0.0 &&
-    isfinite(cfg.reaction.dtreaction_hydration) ||
-        throw(ArgumentError("dtreaction_hydration must be > 0 and finite"))
-    cfg.reaction.dtreaction_dehydration > 0.0 &&
-    isfinite(cfg.reaction.dtreaction_dehydration) ||
-        throw(ArgumentError("dtreaction_dehydration must be > 0 and finite"))
-    cfg.reaction.delta_H > 0.0 && isfinite(cfg.reaction.delta_H) ||
-        throw(ArgumentError("delta_H must be > 0 and finite"))
-    cfg.reaction.delta_S > 0.0 && isfinite(cfg.reaction.delta_S) ||
-        throw(ArgumentError("delta_S must be > 0 and finite"))
-    cfg.reaction.A_I > 0.0 && isfinite(cfg.reaction.A_I) ||
-        throw(ArgumentError("A_I must be > 0 and finite"))
-    cfg.reaction.b_I > 0.0 && isfinite(cfg.reaction.b_I) ||
-        throw(ArgumentError("b_I must be > 0 and finite"))
-    cfg.reaction.c_I > 0.0 && isfinite(cfg.reaction.c_I) ||
-        throw(ArgumentError("c_I must be > 0 and finite"))
-    cfg.reaction.Sxo_B > 0.0 && isfinite(cfg.reaction.Sxo_B) ||
-        throw(ArgumentError("Sxo_B must be > 0 and finite"))
-    cfg.reaction.Tscl_B > 0.0 && isfinite(cfg.reaction.Tscl_B) ||
-        throw(ArgumentError("Tscl_B must be > 0 and finite"))
-    cfg.reaction.To_B > 0.0 && isfinite(cfg.reaction.To_B) ||
-        throw(ArgumentError("To_B must be > 0 and finite"))
+    @check_positive_finite cfg.reaction.dtreaction_hydration
+    @check_positive_finite cfg.reaction.dtreaction_dehydration
+    @check_positive_finite cfg.reaction.delta_H
+    @check_positive_finite cfg.reaction.delta_S
+    @check_positive_finite cfg.reaction.A_I
+    @check_positive_finite cfg.reaction.b_I
+    @check_positive_finite cfg.reaction.c_I
+    @check_positive_finite cfg.reaction.Sxo_B
+    @check_positive_finite cfg.reaction.Tscl_B
+    @check_positive_finite cfg.reaction.To_B
     0.0 < cfg.reaction.alpha_relaxation <= 1.0 || throw(
         ArgumentError(
             "alpha_relaxation must be in (0, 1], got $(cfg.reaction.alpha_relaxation)"
         ),
     )
-    0.0 <= cfg.reaction.pfcoeff <= 1.0 ||
-        throw(ArgumentError("pfcoeff must be in [0, 1], got $(cfg.reaction.pfcoeff)"))
-    cfg.reaction.pferrmax > 0.0 && isfinite(cfg.reaction.pferrmax) ||
-        throw(ArgumentError("pferrmax must be > 0 and finite"))
-    cfg.reaction.p_cavitation >= 0.0 && isfinite(cfg.reaction.p_cavitation) ||
-        throw(ArgumentError("p_cavitation must be >= 0 and finite"))
-    cfg.reaction.cfl_reaction > 0.0 && isfinite(cfg.reaction.cfl_reaction) ||
-        throw(ArgumentError("cfl_reaction must be > 0 and finite"))
+    @check_unit_interval cfg.reaction.pfcoeff
+    @check_positive_finite cfg.reaction.pferrmax
+    @check_nonneg_finite cfg.reaction.p_cavitation
+    @check_positive_finite cfg.reaction.cfl_reaction
     0.0 < cfg.reaction.dphi_reaction_max <= 1.0 &&
     isfinite(cfg.reaction.dphi_reaction_max) ||
         throw(ArgumentError("dphi_reaction_max must be in (0, 1] and finite"))
@@ -1270,37 +1239,16 @@ function validate_config(cfg::SimulationConfig)
                 ),
             )
         end
-        (cfg.melting.L_melt > 0.0 && isfinite(cfg.melting.L_melt)) || throw(
-            ArgumentError(
-                "Melting L_melt must be > 0 and finite, got $(cfg.melting.L_melt)"
-            ),
-        )
-        (cfg.melting.rho_melt > 0.0 && isfinite(cfg.melting.rho_melt)) || throw(
-            ArgumentError(
-                "Melting rho_melt must be > 0 and finite, got $(cfg.melting.rho_melt)"
-            ),
-        )
-        (cfg.melting.alpha_eta >= 0.0 && isfinite(cfg.melting.alpha_eta)) || throw(
-            ArgumentError(
-                "Melting alpha_eta must be >= 0 and finite, got $(cfg.melting.alpha_eta)",
-            ),
-        )
+        @check_positive_finite cfg.melting.L_melt
+        @check_positive_finite cfg.melting.rho_melt
+        @check_nonneg_finite cfg.melting.alpha_eta
         (0.0 < cfg.melting.phi_crit < 1.0 && isfinite(cfg.melting.phi_crit)) || throw(
             ArgumentError(
                 "Melting phi_crit must be in (0, 1), got $(cfg.melting.phi_crit)"
             ),
         )
-        (cfg.melting.eta_melt > 0.0 && isfinite(cfg.melting.eta_melt)) || throw(
-            ArgumentError(
-                "Melting eta_melt must be > 0 and finite, got $(cfg.melting.eta_melt)"
-            ),
-        )
-        (cfg.melting.dpdt_clapeyron >= 0.0 && isfinite(cfg.melting.dpdt_clapeyron)) ||
-            throw(
-                ArgumentError(
-                    "Melting dpdt_clapeyron must be >= 0 and finite, got $(cfg.melting.dpdt_clapeyron)",
-                ),
-            )
+        @check_positive_finite cfg.melting.eta_melt
+        @check_nonneg_finite cfg.melting.dpdt_clapeyron
         cfg.melting.latent_heat_mode == :apparent_cp || throw(
             ArgumentError(
                 "Melting latent_heat_mode must be :apparent_cp, got $(cfg.melting.latent_heat_mode)",
@@ -1308,36 +1256,15 @@ function validate_config(cfg::SimulationConfig)
         )
 
         if cfg.melting.soft_turbulence
-            (cfg.melting.turb_exponent > 0.0 && isfinite(cfg.melting.turb_exponent)) ||
-                throw(
-                    ArgumentError(
-                        "Melting turb_exponent must be > 0 and finite, got $(cfg.melting.turb_exponent)",
-                    ),
-                )
-            (
-                cfg.melting.eta_fluid_silicate > 0.0 &&
-                isfinite(cfg.melting.eta_fluid_silicate)
-            ) || throw(
-                ArgumentError(
-                    "Melting eta_fluid_silicate must be > 0 and finite, got $(cfg.melting.eta_fluid_silicate)",
-                ),
-            )
+            @check_positive_finite cfg.melting.turb_exponent
+            @check_positive_finite cfg.melting.eta_fluid_silicate
             (0.0 <= cfg.melting.F_turb_start < cfg.melting.F_turb_end <= 1.0) || throw(
                 ArgumentError(
                     "Melting F_turb bounds must satisfy 0 <= F_turb_start < F_turb_end <= 1, got [$(cfg.melting.F_turb_start), $(cfg.melting.F_turb_end)]",
                 ),
             )
-            (cfg.melting.dT_turb_min > 0.0 && isfinite(cfg.melting.dT_turb_min)) || throw(
-                ArgumentError(
-                    "Melting dT_turb_min must be > 0 and finite, got $(cfg.melting.dT_turb_min)",
-                ),
-            )
-            (cfg.melting.T_surface_ref > 0.0 && isfinite(cfg.melting.T_surface_ref)) ||
-                throw(
-                    ArgumentError(
-                        "Melting T_surface_ref must be > 0 and finite, got $(cfg.melting.T_surface_ref)",
-                    ),
-                )
+            @check_positive_finite cfg.melting.dT_turb_min
+            @check_positive_finite cfg.melting.T_surface_ref
             (
                 0.0 < cfg.melting.k_turb_floor < cfg.melting.k_turb_cutoff &&
                 isfinite(cfg.melting.k_turb_cutoff)
@@ -1355,16 +1282,8 @@ function validate_config(cfg::SimulationConfig)
             ArgumentError("magma_transport cannot be active when melting is inactive")
         )
         mt = cfg.magma_transport
-        (mt.k_melt_ref > 0.0 && isfinite(mt.k_melt_ref)) || throw(
-            ArgumentError(
-                "magma_transport k_melt_ref must be > 0 and finite, got $(mt.k_melt_ref)",
-            ),
-        )
-        (mt.perm_exponent > 0.0 && isfinite(mt.perm_exponent)) || throw(
-            ArgumentError(
-                "magma_transport perm_exponent must be > 0 and finite, got $(mt.perm_exponent)",
-            ),
-        )
+        @check_positive_finite mt.k_melt_ref
+        @check_positive_finite mt.perm_exponent
         (0.0 < mt.phi0 <= 1.0 && isfinite(mt.phi0)) ||
             throw(ArgumentError("magma_transport phi0 must be in (0, 1], got $(mt.phi0)"))
         (0.0 <= mt.phi_residual < mt.phi_crit && isfinite(mt.phi_residual)) || throw(
@@ -1380,21 +1299,9 @@ function validate_config(cfg::SimulationConfig)
                 "magma_transport phi_pack must satisfy phi_crit <= phi_pack <= 1, got $(mt.phi_pack)",
             ),
         )
-        (mt.eta_melt > 0.0 && isfinite(mt.eta_melt)) || throw(
-            ArgumentError(
-                "magma_transport eta_melt must be > 0 and finite, got $(mt.eta_melt)"
-            ),
-        )
-        (mt.r_grain > 0.0 && isfinite(mt.r_grain)) || throw(
-            ArgumentError(
-                "magma_transport r_grain must be > 0 and finite, got $(mt.r_grain)"
-            ),
-        )
-        (mt.hindered_exponent >= 0.0 && isfinite(mt.hindered_exponent)) || throw(
-            ArgumentError(
-                "magma_transport hindered_exponent must be >= 0 and finite, got $(mt.hindered_exponent)",
-            ),
-        )
+        @check_positive_finite mt.eta_melt
+        @check_positive_finite mt.r_grain
+        @check_nonneg_finite mt.hindered_exponent
         (
             0.0 <=
             mt.phi_residual <
@@ -1424,23 +1331,11 @@ function validate_config(cfg::SimulationConfig)
             "venting mode must be :darcy_sink or :hydrofracture_gated, got $(cfg.venting.mode)",
         ),
     )
-    cfg.venting.k_vent > 0.0 && isfinite(cfg.venting.k_vent) ||
-        throw(ArgumentError("k_vent must be > 0 and finite, got $(cfg.venting.k_vent)"))
-    cfg.venting.conductance_factor > 0.0 && isfinite(cfg.venting.conductance_factor) ||
-        throw(
-            ArgumentError(
-                "conductance_factor must be > 0 and finite, got $(cfg.venting.conductance_factor)",
-            ),
-        )
-    cfg.venting.L_sublimation > 0.0 && isfinite(cfg.venting.L_sublimation) || throw(
-        ArgumentError(
-            "L_sublimation must be > 0 and finite, got $(cfg.venting.L_sublimation)"
-        ),
-    )
-    cfg.venting.t_freeze > 0.0 && isfinite(cfg.venting.t_freeze) ||
-        throw(ArgumentError("t_freeze must be > 0 and finite, got $(cfg.venting.t_freeze)"))
-    cfg.venting.dt_seal > 0.0 && isfinite(cfg.venting.dt_seal) ||
-        throw(ArgumentError("dt_seal must be > 0 and finite, got $(cfg.venting.dt_seal)"))
+    @check_positive_finite cfg.venting.k_vent
+    @check_positive_finite cfg.venting.conductance_factor
+    @check_positive_finite cfg.venting.L_sublimation
+    @check_positive_finite cfg.venting.t_freeze
+    @check_positive_finite cfg.venting.dt_seal
     (0.0 < cfg.venting.k_seal_min_ratio <= 1.0 && isfinite(cfg.venting.k_seal_min_ratio)) ||
         throw(
             ArgumentError(
@@ -1461,82 +1356,16 @@ function validate_config(cfg::SimulationConfig)
                 "fO2_delta_IW must be finite and within [-50, 50], got $(cfg.volatiles.fO2_delta_IW)",
             ),
         )
-    (
-        cfg.volatiles.water_solubility_coeff > 0.0 &&
-        isfinite(cfg.volatiles.water_solubility_coeff)
-    ) || throw(
-        ArgumentError(
-            "water_solubility_coeff must be > 0 and finite, got $(cfg.volatiles.water_solubility_coeff)",
-        ),
-    )
-    (
-        cfg.volatiles.nitrogen_henry_coeff > 0.0 &&
-        isfinite(cfg.volatiles.nitrogen_henry_coeff)
-    ) || throw(
-        ArgumentError(
-            "nitrogen_henry_coeff must be > 0 and finite, got $(cfg.volatiles.nitrogen_henry_coeff)",
-        ),
-    )
-    (
-        cfg.volatiles.nitrogen_nitride_capacity > 0.0 &&
-        isfinite(cfg.volatiles.nitrogen_nitride_capacity)
-    ) || throw(
-        ArgumentError(
-            "nitrogen_nitride_capacity must be > 0 and finite, got $(cfg.volatiles.nitrogen_nitride_capacity)",
-        ),
-    )
-    (cfg.volatiles.t_organic_devol > 0.0 && isfinite(cfg.volatiles.t_organic_devol)) ||
-        throw(
-            ArgumentError(
-                "t_organic_devol must be > 0 and finite, got $(cfg.volatiles.t_organic_devol)",
-            ),
-        )
-    (cfg.volatiles.dt_organic_devol > 0.0 && isfinite(cfg.volatiles.dt_organic_devol)) ||
-        throw(
-            ArgumentError(
-                "dt_organic_devol must be > 0 and finite, got $(cfg.volatiles.dt_organic_devol)",
-            ),
-        )
-    (
-        cfg.volatiles.organic_n_initial_ppm >= 0.0 &&
-        isfinite(cfg.volatiles.organic_n_initial_ppm)
-    ) || throw(
-        ArgumentError(
-            "organic_n_initial_ppm must be >= 0 and finite, got $(cfg.volatiles.organic_n_initial_ppm)",
-        ),
-    )
-    (
-        cfg.volatiles.initial_water_wtpct >= 0.0 &&
-        isfinite(cfg.volatiles.initial_water_wtpct)
-    ) || throw(
-        ArgumentError(
-            "initial_water_wtpct must be >= 0 and finite, got $(cfg.volatiles.initial_water_wtpct)",
-        ),
-    )
-    (
-        cfg.volatiles.initial_carbon_ppm >= 0.0 &&
-        isfinite(cfg.volatiles.initial_carbon_ppm)
-    ) || throw(
-        ArgumentError(
-            "initial_carbon_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_carbon_ppm)",
-        ),
-    )
-    (
-        cfg.volatiles.initial_nitrogen_ppm >= 0.0 &&
-        isfinite(cfg.volatiles.initial_nitrogen_ppm)
-    ) || throw(
-        ArgumentError(
-            "initial_nitrogen_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_nitrogen_ppm)",
-        ),
-    )
-    (
-        cfg.volatiles.initial_sulfur_ppm >= 0.0 &&
-        isfinite(cfg.volatiles.initial_sulfur_ppm)
-    ) || throw(
-        ArgumentError(
-            "initial_sulfur_ppm must be >= 0 and finite, got $(cfg.volatiles.initial_sulfur_ppm)",
-        ),
-    )
+    @check_positive_finite cfg.volatiles.water_solubility_coeff
+    @check_positive_finite cfg.volatiles.nitrogen_henry_coeff
+    @check_positive_finite cfg.volatiles.nitrogen_nitride_capacity
+    @check_positive_finite cfg.volatiles.t_organic_devol
+    @check_positive_finite cfg.volatiles.dt_organic_devol
+    @check_nonneg_finite cfg.volatiles.organic_n_initial_ppm
+    @check_nonneg_finite cfg.volatiles.initial_water_wtpct
+    @check_nonneg_finite cfg.volatiles.initial_carbon_ppm
+    @check_nonneg_finite cfg.volatiles.initial_nitrogen_ppm
+    @check_nonneg_finite cfg.volatiles.initial_sulfur_ppm
     cfg.volatiles.water_law in
     Set([:burnham_dixon, :sossi_peridotite, :basalt_dixon, :newcombe_lunar]) || throw(
         ArgumentError(
@@ -1577,27 +1406,14 @@ function validate_config(cfg::SimulationConfig)
             "scss_law must be :smythe2017 or :oneill2002, got $(cfg.volatiles.scss_law)"
         ),
     )
-    (cfg.volatiles.melt_feo_wtpct >= 0.0 && isfinite(cfg.volatiles.melt_feo_wtpct)) ||
-        throw(
-            ArgumentError(
-                "melt_feo_wtpct must be >= 0 and finite, got $(cfg.volatiles.melt_feo_wtpct)",
-            ),
-        )
-    (0.0 <= cfg.volatiles.x_sio2 <= 1.0 && isfinite(cfg.volatiles.x_sio2)) || throw(
-        ArgumentError("x_sio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_sio2)"),
-    )
-    (0.0 <= cfg.volatiles.x_al2o3 <= 1.0 && isfinite(cfg.volatiles.x_al2o3)) || throw(
-        ArgumentError("x_al2o3 must be in [0, 1] and finite, got $(cfg.volatiles.x_al2o3)"),
-    )
-    (0.0 <= cfg.volatiles.x_tio2 <= 1.0 && isfinite(cfg.volatiles.x_tio2)) || throw(
-        ArgumentError("x_tio2 must be in [0, 1] and finite, got $(cfg.volatiles.x_tio2)"),
-    )
+    @check_nonneg_finite cfg.volatiles.melt_feo_wtpct
+    @check_unit_interval cfg.volatiles.x_sio2
+    @check_unit_interval cfg.volatiles.x_al2o3
+    @check_unit_interval cfg.volatiles.x_tio2
 
     # Escape checks
-    (cfg.escape.M_planet > 0.0 && isfinite(cfg.escape.M_planet)) ||
-        throw(ArgumentError("M_planet must be > 0 and finite, got $(cfg.escape.M_planet)"))
-    (cfg.escape.R_planet > 0.0 && isfinite(cfg.escape.R_planet)) ||
-        throw(ArgumentError("R_planet must be > 0 and finite, got $(cfg.escape.R_planet)"))
+    @check_positive_finite cfg.escape.M_planet
+    @check_positive_finite cfg.escape.R_planet
     if cfg.escape.active
         isapprox(cfg.escape.R_planet, cfg.geometry.rplanet; rtol=0.01) || throw(
             ArgumentError(
@@ -1605,17 +1421,14 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
     end
-    (cfg.escape.T_exobase > 0.0 && isfinite(cfg.escape.T_exobase)) || throw(
-        ArgumentError("T_exobase must be > 0 and finite, got $(cfg.escape.T_exobase)")
-    )
+    @check_positive_finite cfg.escape.T_exobase
     (cfg.escape.R_exobase >= cfg.escape.R_planet && isfinite(cfg.escape.R_exobase)) ||
         throw(
             ArgumentError(
                 "R_exobase must be >= R_planet ($(cfg.escape.R_planet)) and finite, got $(cfg.escape.R_exobase)",
             ),
         )
-    (cfg.escape.gamma > 0.0 && isfinite(cfg.escape.gamma)) ||
-        throw(ArgumentError("gamma must be > 0 and finite, got $(cfg.escape.gamma)"))
+    @check_positive_finite cfg.escape.gamma
     cfg.escape.species in Set([:H2O, :H2, :N2, :NH3, :CO, :CO2, :CH4, :H2S, :S2, :SO2]) ||
         throw(
             ArgumentError(
@@ -1653,57 +1466,19 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
     end
-    (cfg.retention.h2o_retention_ppm >= 0.0 && isfinite(cfg.retention.h2o_retention_ppm)) ||
-        throw(
-            ArgumentError(
-                "h2o_retention_ppm must be >= 0 and finite, got $(cfg.retention.h2o_retention_ppm)",
-            ),
-        )
-    (
-        cfg.retention.carbon_retention_ppm >= 0.0 &&
-        isfinite(cfg.retention.carbon_retention_ppm)
-    ) || throw(
-        ArgumentError(
-            "carbon_retention_ppm must be >= 0 and finite, got $(cfg.retention.carbon_retention_ppm)",
-        ),
-    )
-    (
-        cfg.retention.nitrogen_retention_ppm >= 0.0 &&
-        isfinite(cfg.retention.nitrogen_retention_ppm)
-    ) || throw(
-        ArgumentError(
-            "nitrogen_retention_ppm must be >= 0 and finite, got $(cfg.retention.nitrogen_retention_ppm)",
-        ),
-    )
-    (
-        cfg.retention.sulfur_retention_ppm >= 0.0 &&
-        isfinite(cfg.retention.sulfur_retention_ppm)
-    ) || throw(
-        ArgumentError(
-            "sulfur_retention_ppm must be >= 0 and finite, got $(cfg.retention.sulfur_retention_ppm)",
-        ),
-    )
-    (cfg.retention.T_solidus_ref > 0.0 && isfinite(cfg.retention.T_solidus_ref)) || throw(
-        ArgumentError(
-            "T_solidus_ref must be > 0 and finite, got $(cfg.retention.T_solidus_ref)"
-        ),
-    )
-    (cfg.retention.dT_retention > 0.0 && isfinite(cfg.retention.dT_retention)) || throw(
-        ArgumentError(
-            "dT_retention must be > 0 and finite, got $(cfg.retention.dT_retention)"
-        ),
-    )
+    @check_nonneg_finite cfg.retention.h2o_retention_ppm
+    @check_nonneg_finite cfg.retention.carbon_retention_ppm
+    @check_nonneg_finite cfg.retention.nitrogen_retention_ppm
+    @check_nonneg_finite cfg.retention.sulfur_retention_ppm
+    @check_positive_finite cfg.retention.T_solidus_ref
+    @check_positive_finite cfg.retention.dT_retention
     cfg.retention.retention_law in
     Set([:nams_exponential, :constant_floor, :linear_melt_blend]) || throw(
         ArgumentError(
             "retention_law must be :nams_exponential, :constant_floor, or :linear_melt_blend, got $(cfg.retention.retention_law)",
         ),
     )
-    (0.0 <= cfg.retention.chi_vent <= 1.0 && isfinite(cfg.retention.chi_vent)) || throw(
-        ArgumentError(
-            "chi_vent must be in [0, 1] and finite, got $(cfg.retention.chi_vent)"
-        ),
-    )
+    @check_unit_interval cfg.retention.chi_vent
 
     # Core formation validation
     if cfg.coreformation.percolation_active || cfg.coreformation.settling_active
@@ -1728,17 +1503,10 @@ function validate_config(cfg::SimulationConfig)
                 "rho_metal_solid ($(cf.rho_metal_solid)) must be finite and > rho_metal ($(cf.rho_metal))",
             ),
         )
-        (isfinite(cf.L_metal) && cf.L_metal >= 0.0) || throw(
-            ArgumentError("L_metal must be non-negative and finite, got $(cf.L_metal)")
-        )
-        (cf.eta_metal > 0.0 && isfinite(cf.eta_metal)) || throw(
-            ArgumentError("eta_metal must be positive and finite, got $(cf.eta_metal)")
-        )
-        (cf.k_metal > 0.0 && isfinite(cf.k_metal)) ||
-            throw(ArgumentError("k_metal must be positive and finite, got $(cf.k_metal)"))
-        (cf.rhocp_metal > 0.0 && isfinite(cf.rhocp_metal)) || throw(
-            ArgumentError("rhocp_metal must be positive and finite, got $(cf.rhocp_metal)"),
-        )
+        @check_nonneg_finite cf.L_metal
+        @check_positive_finite cf.eta_metal
+        @check_positive_finite cf.k_metal
+        @check_positive_finite cf.rhocp_metal
         (0.0 <= cf.Xfe_bulk <= cf.phi_pack) || throw(
             ArgumentError(
                 "Xfe_bulk must be in [0, phi_pack] ($([0, cf.phi_pack])), got $(cf.Xfe_bulk)",
@@ -1768,23 +1536,10 @@ function validate_config(cfg::SimulationConfig)
                 "droplet_size_mode must be one of :fixed, :capillary_mean, :bond_mean, :weber_mean, :weber_turbulent, got $(cf.droplet_size_mode)",
             ),
         )
-        (cf.droplet_diameter_fixed > 0.0 && isfinite(cf.droplet_diameter_fixed)) || throw(
-            ArgumentError(
-                "droplet_diameter_fixed must be positive, got $(cf.droplet_diameter_fixed)",
-            ),
-        )
-        (cf.sigma_metal_silicate > 0.0 && isfinite(cf.sigma_metal_silicate)) || throw(
-            ArgumentError(
-                "sigma_metal_silicate must be positive, got $(cf.sigma_metal_silicate)"
-            ),
-        )
-        (cf.We_crit > 0.0 && isfinite(cf.We_crit)) ||
-            throw(ArgumentError("We_crit must be positive, got $(cf.We_crit)"))
-        (cf.hindered_exponent >= 0.0 && isfinite(cf.hindered_exponent)) || throw(
-            ArgumentError(
-                "hindered_exponent must be non-negative, got $(cf.hindered_exponent)"
-            ),
-        )
+        @check_positive_finite cf.droplet_diameter_fixed
+        @check_positive_finite cf.sigma_metal_silicate
+        @check_positive_finite cf.We_crit
+        @check_nonneg_finite cf.hindered_exponent
     end
 
     if cfg.coreformation.percolation_active
@@ -1794,13 +1549,9 @@ function validate_config(cfg::SimulationConfig)
                 "T_eutectic ($(cf.T_eutectic)) must be below silicate solidus ($(cfg.melting.T_solidus[1])) for percolation",
             ),
         )
-        (cf.dT_metal > 0.0 && isfinite(cf.dT_metal)) ||
-            throw(ArgumentError("dT_metal must be positive, got $(cf.dT_metal)"))
-        (cf.k_metal_ref > 0.0 && isfinite(cf.k_metal_ref)) ||
-            throw(ArgumentError("k_metal_ref must be positive, got $(cf.k_metal_ref)"))
-        (cf.perm_exponent >= 0.0 && isfinite(cf.perm_exponent)) || throw(
-            ArgumentError("perm_exponent must be non-negative, got $(cf.perm_exponent)")
-        )
+        @check_positive_finite cf.dT_metal
+        @check_positive_finite cf.k_metal_ref
+        @check_nonneg_finite cf.perm_exponent
     end
 
     if cfg.coreformation.settling_active
@@ -1828,9 +1579,7 @@ function validate_config(cfg::SimulationConfig)
             @warn "MetalPartitionConfig active=true without coreformation percolation_active or settling_active: metal volatile segregation transport will remain inactive."
         end
     end
-    (cfg.metal_partition.D_min > 0.0 && isfinite(cfg.metal_partition.D_min)) || throw(
-        ArgumentError("D_min must be > 0 and finite, got $(cfg.metal_partition.D_min)")
-    )
+    @check_positive_finite cfg.metal_partition.D_min
     (
         cfg.metal_partition.D_max >= cfg.metal_partition.D_min &&
         isfinite(cfg.metal_partition.D_max)
@@ -1839,43 +1588,17 @@ function validate_config(cfg::SimulationConfig)
             "D_max must be >= D_min and finite, got $(cfg.metal_partition.D_max)"
         ),
     )
-    (
-        0.0 <= cfg.metal_partition.equilibration_rate <= 1.0 &&
-        isfinite(cfg.metal_partition.equilibration_rate)
-    ) || throw(
-        ArgumentError(
-            "equilibration_rate must be in [0, 1] and finite, got $(cfg.metal_partition.equilibration_rate)",
-        ),
-    )
-    (
-        0.0 <= cfg.metal_partition.core_radius_fraction <= 1.0 &&
-        isfinite(cfg.metal_partition.core_radius_fraction)
-    ) || throw(
-        ArgumentError(
-            "core_radius_fraction must be in [0, 1] and finite, got $(cfg.metal_partition.core_radius_fraction)",
-        ),
-    )
-    (
-        0.0 <= cfg.metal_partition.phi_core_threshold <= 1.0 &&
-        isfinite(cfg.metal_partition.phi_core_threshold)
-    ) || throw(
-        ArgumentError(
-            "phi_core_threshold must be in [0, 1] and finite, got $(cfg.metal_partition.phi_core_threshold)",
-        ),
-    )
-    for (name, val) in [
-        ("D_H_const", cfg.metal_partition.D_H_const),
-        ("D_C_const", cfg.metal_partition.D_C_const),
-        ("D_N_const", cfg.metal_partition.D_N_const),
-        ("D_S_const", cfg.metal_partition.D_S_const),
-        ("initial_metal_h_ppm", cfg.metal_partition.initial_metal_h_ppm),
-        ("initial_metal_c_ppm", cfg.metal_partition.initial_metal_c_ppm),
-        ("initial_metal_n_ppm", cfg.metal_partition.initial_metal_n_ppm),
-        ("initial_metal_s_ppm", cfg.metal_partition.initial_metal_s_ppm),
-    ]
-        (val >= 0.0 && isfinite(val)) ||
-            throw(ArgumentError("$name must be >= 0 and finite, got $val"))
-    end
+    @check_unit_interval cfg.metal_partition.equilibration_rate
+    @check_unit_interval cfg.metal_partition.core_radius_fraction
+    @check_unit_interval cfg.metal_partition.phi_core_threshold
+    @check_nonneg_finite cfg.metal_partition.D_H_const
+    @check_nonneg_finite cfg.metal_partition.D_C_const
+    @check_nonneg_finite cfg.metal_partition.D_N_const
+    @check_nonneg_finite cfg.metal_partition.D_S_const
+    @check_nonneg_finite cfg.metal_partition.initial_metal_h_ppm
+    @check_nonneg_finite cfg.metal_partition.initial_metal_c_ppm
+    @check_nonneg_finite cfg.metal_partition.initial_metal_n_ppm
+    @check_nonneg_finite cfg.metal_partition.initial_metal_s_ppm
     cfg.metal_partition.model_carbon in Set([:constant, :grewal2019, :fischer2020]) ||
         throw(
             ArgumentError(
@@ -1915,34 +1638,10 @@ function validate_config(cfg::SimulationConfig)
                     "phase_tracking.T_eutectic ($(cfg.phase_tracking.T_eutectic)) must match coreformation.T_eutectic ($(cfg.coreformation.T_eutectic))",
                 ),
             )
-        (cfg.phase_tracking.T_eutectic > 0.0 && isfinite(cfg.phase_tracking.T_eutectic)) ||
-            throw(
-                ArgumentError(
-                    "T_eutectic must be > 0 and finite, got $(cfg.phase_tracking.T_eutectic)",
-                ),
-            )
-        (
-            cfg.phase_tracking.dT_transition > 0.0 &&
-            isfinite(cfg.phase_tracking.dT_transition)
-        ) || throw(
-            ArgumentError(
-                "dT_transition must be > 0 and finite, got $(cfg.phase_tracking.dT_transition)",
-            ),
-        )
-        (cfg.phase_tracking.bulk_P_ppm >= 0.0 && isfinite(cfg.phase_tracking.bulk_P_ppm)) ||
-            throw(
-                ArgumentError(
-                    "bulk_P_ppm must be >= 0 and finite, got $(cfg.phase_tracking.bulk_P_ppm)",
-                ),
-            )
-        (
-            0.0 <= cfg.phase_tracking.schreibersite_ni_frac <= 1.0 &&
-            isfinite(cfg.phase_tracking.schreibersite_ni_frac)
-        ) || throw(
-            ArgumentError(
-                "schreibersite_ni_frac must be in [0, 1] and finite, got $(cfg.phase_tracking.schreibersite_ni_frac)",
-            ),
-        )
+        @check_positive_finite cfg.phase_tracking.T_eutectic
+        @check_positive_finite cfg.phase_tracking.dT_transition
+        @check_nonneg_finite cfg.phase_tracking.bulk_P_ppm
+        @check_unit_interval cfg.phase_tracking.schreibersite_ni_frac
         (
             0.0 < cfg.phase_tracking.cohenite_carbide_max <= 1.0 &&
             isfinite(cfg.phase_tracking.cohenite_carbide_max)
@@ -1985,32 +1684,12 @@ function validate_config(cfg::SimulationConfig)
                 "phi_start and phi_end must satisfy 0.0 <= phi_start < phi_end <= 1.0 and be finite, got ($(cfg.hydrothermal.phi_start), $(cfg.hydrothermal.phi_end))",
             ),
         )
-        (cfg.hydrothermal.Ra_m_crit > 0.0 && isfinite(cfg.hydrothermal.Ra_m_crit)) || throw(
-            ArgumentError(
-                "Ra_m_crit must be > 0 and finite, got $(cfg.hydrothermal.Ra_m_crit)"
-            ),
-        )
-        (cfg.hydrothermal.Ra_crit > 0.0 && isfinite(cfg.hydrothermal.Ra_crit)) || throw(
-            ArgumentError(
-                "Ra_crit must be > 0 and finite, got $(cfg.hydrothermal.Ra_crit)"
-            ),
-        )
-        (cfg.hydrothermal.c_porous > 0.0 && isfinite(cfg.hydrothermal.c_porous)) || throw(
-            ArgumentError(
-                "c_porous must be > 0 and finite, got $(cfg.hydrothermal.c_porous)"
-            ),
-        )
-        (cfg.hydrothermal.c_free > 0.0 && isfinite(cfg.hydrothermal.c_free)) || throw(
-            ArgumentError("c_free must be > 0 and finite, got $(cfg.hydrothermal.c_free)"),
-        )
-        (cfg.hydrothermal.H_layer > 0.0 && isfinite(cfg.hydrothermal.H_layer)) || throw(
-            ArgumentError(
-                "H_layer must be > 0 and finite, got $(cfg.hydrothermal.H_layer)"
-            ),
-        )
-        (cfg.hydrothermal.dT_min > 0.0 && isfinite(cfg.hydrothermal.dT_min)) || throw(
-            ArgumentError("dT_min must be > 0 and finite, got $(cfg.hydrothermal.dT_min)"),
-        )
+        @check_positive_finite cfg.hydrothermal.Ra_m_crit
+        @check_positive_finite cfg.hydrothermal.Ra_crit
+        @check_positive_finite cfg.hydrothermal.c_porous
+        @check_positive_finite cfg.hydrothermal.c_free
+        @check_positive_finite cfg.hydrothermal.H_layer
+        @check_positive_finite cfg.hydrothermal.dT_min
         (
             0.0 < cfg.hydrothermal.k_floor < cfg.hydrothermal.k_cutoff &&
             isfinite(cfg.hydrothermal.k_floor) &&
@@ -2028,74 +1707,21 @@ function validate_config(cfg::SimulationConfig)
                 "picard_damping must be in (0, 1] and finite, got $(cfg.hydrothermal.picard_damping)",
             ),
         )
-        (cfg.hydrothermal.Pe_crit > 0.0 && isfinite(cfg.hydrothermal.Pe_crit)) || throw(
-            ArgumentError(
-                "Pe_crit must be > 0 and finite, got $(cfg.hydrothermal.Pe_crit)"
-            ),
-        )
-        (
-            cfg.hydrothermal.T_surface_ref > 0.0 && isfinite(cfg.hydrothermal.T_surface_ref)
-        ) || throw(
-            ArgumentError(
-                "T_surface_ref must be > 0 and finite, got $(cfg.hydrothermal.T_surface_ref)",
-            ),
-        )
-        (cfg.hydrothermal.gravity > 0.0 && isfinite(cfg.hydrothermal.gravity)) || throw(
-            ArgumentError(
-                "gravity must be > 0 and finite, got $(cfg.hydrothermal.gravity)"
-            ),
-        )
-        (cfg.hydrothermal.cp_fluid > 0.0 && isfinite(cfg.hydrothermal.cp_fluid)) || throw(
-            ArgumentError(
-                "cp_fluid must be > 0 and finite, got $(cfg.hydrothermal.cp_fluid)"
-            ),
-        )
-        (cfg.hydrothermal.alpha_fluid > 0.0 && isfinite(cfg.hydrothermal.alpha_fluid)) ||
-            throw(
-                ArgumentError(
-                    "alpha_fluid must be > 0 and finite, got $(cfg.hydrothermal.alpha_fluid)",
-                ),
-            )
-        (cfg.hydrothermal.k_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.k_fluid_ref)) ||
-            throw(
-                ArgumentError(
-                    "k_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.k_fluid_ref)",
-                ),
-            )
-        (
-            cfg.hydrothermal.rho_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.rho_fluid_ref)
-        ) || throw(
-            ArgumentError(
-                "rho_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.rho_fluid_ref)",
-            ),
-        )
-        (cfg.hydrothermal.mu_fluid_ref > 0.0 && isfinite(cfg.hydrothermal.mu_fluid_ref)) ||
-            throw(
-                ArgumentError(
-                    "mu_fluid_ref must be > 0 and finite, got $(cfg.hydrothermal.mu_fluid_ref)",
-                ),
-            )
-        (cfg.hydrothermal.kphi_ref > 0.0 && isfinite(cfg.hydrothermal.kphi_ref)) || throw(
-            ArgumentError(
-                "kphi_ref must be > 0 and finite, got $(cfg.hydrothermal.kphi_ref)"
-            ),
-        )
+        @check_positive_finite cfg.hydrothermal.Pe_crit
+        @check_positive_finite cfg.hydrothermal.T_surface_ref
+        @check_positive_finite cfg.hydrothermal.gravity
+        @check_positive_finite cfg.hydrothermal.cp_fluid
+        @check_positive_finite cfg.hydrothermal.alpha_fluid
+        @check_positive_finite cfg.hydrothermal.k_fluid_ref
+        @check_positive_finite cfg.hydrothermal.rho_fluid_ref
+        @check_positive_finite cfg.hydrothermal.mu_fluid_ref
+        @check_positive_finite cfg.hydrothermal.kphi_ref
     end
 
     if cfg.accretion.active
-        (cfg.accretion.M_initial > 0.0 && isfinite(cfg.accretion.M_initial)) || throw(
-            ArgumentError(
-                "M_initial must be > 0 and finite, got $(cfg.accretion.M_initial)"
-            ),
-        )
-        (cfg.accretion.R_initial > 0.0 && isfinite(cfg.accretion.R_initial)) || throw(
-            ArgumentError(
-                "R_initial must be > 0 and finite, got $(cfg.accretion.R_initial)"
-            ),
-        )
-        (cfg.accretion.rho_bulk > 0.0 && isfinite(cfg.accretion.rho_bulk)) || throw(
-            ArgumentError("rho_bulk must be > 0 and finite, got $(cfg.accretion.rho_bulk)"),
-        )
+        @check_positive_finite cfg.accretion.M_initial
+        @check_positive_finite cfg.accretion.R_initial
+        @check_positive_finite cfg.accretion.rho_bulk
         (
             cfg.accretion.M_target >= cfg.accretion.M_initial &&
             isfinite(cfg.accretion.M_target)
@@ -2112,35 +1738,11 @@ function validate_config(cfg::SimulationConfig)
                 "R_target must be >= R_initial and finite, got $(cfg.accretion.R_target)",
             ),
         )
-        (cfg.accretion.t_start_myr >= 0.0 && isfinite(cfg.accretion.t_start_myr)) || throw(
-            ArgumentError(
-                "t_start_myr must be >= 0 and finite, got $(cfg.accretion.t_start_myr)"
-            ),
-        )
-        (cfg.accretion.t_duration_myr > 0.0 && isfinite(cfg.accretion.t_duration_myr)) ||
-            throw(
-                ArgumentError(
-                    "t_duration_myr must be > 0 and finite, got $(cfg.accretion.t_duration_myr)",
-                ),
-            )
-        (cfg.accretion.dM_dt_constant > 0.0 && isfinite(cfg.accretion.dM_dt_constant)) ||
-            throw(
-                ArgumentError(
-                    "dM_dt_constant must be > 0 and finite, got $(cfg.accretion.dM_dt_constant)",
-                ),
-            )
-        (cfg.accretion.dR_dt_constant > 0.0 && isfinite(cfg.accretion.dR_dt_constant)) ||
-            throw(
-                ArgumentError(
-                    "dR_dt_constant must be > 0 and finite, got $(cfg.accretion.dR_dt_constant)",
-                ),
-            )
-        (cfg.accretion.tau_growth_myr > 0.0 && isfinite(cfg.accretion.tau_growth_myr)) ||
-            throw(
-                ArgumentError(
-                    "tau_growth_myr must be > 0 and finite, got $(cfg.accretion.tau_growth_myr)",
-                ),
-            )
+        @check_nonneg_finite cfg.accretion.t_start_myr
+        @check_positive_finite cfg.accretion.t_duration_myr
+        @check_positive_finite cfg.accretion.dM_dt_constant
+        @check_positive_finite cfg.accretion.dR_dt_constant
+        @check_positive_finite cfg.accretion.tau_growth_myr
         r_max_domain = min(
             cfg.geometry.xcenter,
             cfg.geometry.ycenter,
@@ -2179,108 +1781,24 @@ function validate_config(cfg::SimulationConfig)
                 "mode must be :constant_rate, :linear_radius, :exponential, :safronov, :pebble_bondi, :pebble_hill, :pebble_auto, or :multistage, got :$(cfg.accretion.mode)",
             ),
         )
-        (0.0 <= cfg.accretion.h_impact <= 1.0 && isfinite(cfg.accretion.h_impact)) || throw(
-            ArgumentError(
-                "h_impact must be in [0, 1] and finite, got $(cfg.accretion.h_impact)"
-            ),
-        )
-        (cfg.accretion.v_inf >= 0.0 && isfinite(cfg.accretion.v_inf)) || throw(
-            ArgumentError("v_inf must be >= 0 and finite, got $(cfg.accretion.v_inf)")
-        )
-        (cfg.accretion.cp_rock > 0.0 && isfinite(cfg.accretion.cp_rock)) || throw(
-            ArgumentError("cp_rock must be > 0 and finite, got $(cfg.accretion.cp_rock)"),
-        )
-        (
-            0.0 <= cfg.accretion.phi_accreted <= 1.0 && isfinite(cfg.accretion.phi_accreted)
-        ) || throw(
-            ArgumentError(
-                "phi_accreted must be in [0, 1] and finite, got $(cfg.accretion.phi_accreted)",
-            ),
-        )
-        (
-            0.0 <= cfg.accretion.Xfe_bulk_accreted <= 1.0 &&
-            isfinite(cfg.accretion.Xfe_bulk_accreted)
-        ) || throw(
-            ArgumentError(
-                "Xfe_bulk_accreted must be in [0, 1] and finite, got $(cfg.accretion.Xfe_bulk_accreted)",
-            ),
-        )
-        (cfg.accretion.T_snowline_cond > 0.0 && isfinite(cfg.accretion.T_snowline_cond)) ||
-            throw(
-                ArgumentError(
-                    "T_snowline_cond must be > 0 and finite, got $(cfg.accretion.T_snowline_cond)",
-                ),
-            )
-        (0.0 <= cfg.accretion.XWsolid_wet <= 1.0 && isfinite(cfg.accretion.XWsolid_wet)) ||
-            throw(
-                ArgumentError(
-                    "XWsolid_wet must be in [0, 1] and finite, got $(cfg.accretion.XWsolid_wet)",
-                ),
-            )
-        (0.0 <= cfg.accretion.XWsolid_dry <= 1.0 && isfinite(cfg.accretion.XWsolid_dry)) ||
-            throw(
-                ArgumentError(
-                    "XWsolid_dry must be in [0, 1] and finite, got $(cfg.accretion.XWsolid_dry)",
-                ),
-            )
-        (cfg.accretion.XH2O_wet_wtpct >= 0.0 && isfinite(cfg.accretion.XH2O_wet_wtpct)) ||
-            throw(
-                ArgumentError(
-                    "XH2O_wet_wtpct must be >= 0 and finite, got $(cfg.accretion.XH2O_wet_wtpct)",
-                ),
-            )
-        (cfg.accretion.XH2O_dry_wtpct >= 0.0 && isfinite(cfg.accretion.XH2O_dry_wtpct)) ||
-            throw(
-                ArgumentError(
-                    "XH2O_dry_wtpct must be >= 0 and finite, got $(cfg.accretion.XH2O_dry_wtpct)",
-                ),
-            )
-        (cfg.accretion.XC_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XC_accreted_ppm)) ||
-            throw(
-                ArgumentError(
-                    "XC_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XC_accreted_ppm)",
-                ),
-            )
-        (cfg.accretion.XN_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XN_accreted_ppm)) ||
-            throw(
-                ArgumentError(
-                    "XN_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XN_accreted_ppm)",
-                ),
-            )
-        (cfg.accretion.XS_accreted_ppm >= 0.0 && isfinite(cfg.accretion.XS_accreted_ppm)) ||
-            throw(
-                ArgumentError(
-                    "XS_accreted_ppm must be >= 0 and finite, got $(cfg.accretion.XS_accreted_ppm)",
-                ),
-            )
-        (cfg.accretion.stokes_number > 0.0 && isfinite(cfg.accretion.stokes_number)) ||
-            throw(
-                ArgumentError(
-                    "stokes_number must be > 0 and finite, got $(cfg.accretion.stokes_number)",
-                ),
-            )
-        (
-            cfg.accretion.alpha_turbulence > 0.0 && isfinite(cfg.accretion.alpha_turbulence)
-        ) || throw(
-            ArgumentError(
-                "alpha_turbulence must be > 0 and finite, got $(cfg.accretion.alpha_turbulence)",
-            ),
-        )
-        (cfg.accretion.Sigma_peb_0 >= 0.0 && isfinite(cfg.accretion.Sigma_peb_0)) || throw(
-            ArgumentError(
-                "Sigma_peb_0 must be >= 0 and finite, got $(cfg.accretion.Sigma_peb_0)"
-            ),
-        )
-        (cfg.accretion.Sigma_pl_0 >= 0.0 && isfinite(cfg.accretion.Sigma_pl_0)) || throw(
-            ArgumentError(
-                "Sigma_pl_0 must be >= 0 and finite, got $(cfg.accretion.Sigma_pl_0)"
-            ),
-        )
-        (cfg.accretion.v_disp_kms > 0.0 && isfinite(cfg.accretion.v_disp_kms)) || throw(
-            ArgumentError(
-                "v_disp_kms must be > 0 and finite, got $(cfg.accretion.v_disp_kms)"
-            ),
-        )
+        @check_unit_interval cfg.accretion.h_impact
+        @check_nonneg_finite cfg.accretion.v_inf
+        @check_positive_finite cfg.accretion.cp_rock
+        @check_unit_interval cfg.accretion.phi_accreted
+        @check_unit_interval cfg.accretion.Xfe_bulk_accreted
+        @check_positive_finite cfg.accretion.T_snowline_cond
+        @check_unit_interval cfg.accretion.XWsolid_wet
+        @check_unit_interval cfg.accretion.XWsolid_dry
+        @check_nonneg_finite cfg.accretion.XH2O_wet_wtpct
+        @check_nonneg_finite cfg.accretion.XH2O_dry_wtpct
+        @check_nonneg_finite cfg.accretion.XC_accreted_ppm
+        @check_nonneg_finite cfg.accretion.XN_accreted_ppm
+        @check_nonneg_finite cfg.accretion.XS_accreted_ppm
+        @check_positive_finite cfg.accretion.stokes_number
+        @check_positive_finite cfg.accretion.alpha_turbulence
+        @check_nonneg_finite cfg.accretion.Sigma_peb_0
+        @check_nonneg_finite cfg.accretion.Sigma_pl_0
+        @check_positive_finite cfg.accretion.v_disp_kms
         valid_stage = Set([
             :constant_rate,
             :linear_radius,
@@ -2305,11 +1823,8 @@ function validate_config(cfg::SimulationConfig)
                 "stage3_mode must be one of $valid_stage, got :$(cfg.accretion.stage3_mode)",
             ),
         )
-        (cfg.accretion.f_onset > 0.0 && isfinite(cfg.accretion.f_onset)) || throw(
-            ArgumentError("f_onset must be > 0 and finite, got $(cfg.accretion.f_onset)"),
-        )
-        (cfg.accretion.f_iso > 0.0 && isfinite(cfg.accretion.f_iso)) ||
-            throw(ArgumentError("f_iso must be > 0 and finite, got $(cfg.accretion.f_iso)"))
+        @check_positive_finite cfg.accretion.f_onset
+        @check_positive_finite cfg.accretion.f_iso
         (
             isnan(cfg.accretion.M_onset) ||
             (cfg.accretion.M_onset > 0.0 && isfinite(cfg.accretion.M_onset))
@@ -2380,83 +1895,27 @@ function validate_config(cfg::SimulationConfig)
     end
 
     # Refractory checks
-    (0.0 <= cfg.refractory.f_refr_C <= 1.0 && isfinite(cfg.refractory.f_refr_C)) || throw(
-        ArgumentError(
-            "f_refr_C must be in [0, 1] and finite, got $(cfg.refractory.f_refr_C)"
-        ),
-    )
-    (0.0 <= cfg.refractory.f_refr_N <= 1.0 && isfinite(cfg.refractory.f_refr_N)) || throw(
-        ArgumentError(
-            "f_refr_N must be in [0, 1] and finite, got $(cfg.refractory.f_refr_N)"
-        ),
-    )
-    (0.0 <= cfg.refractory.f_refr_S <= 1.0 && isfinite(cfg.refractory.f_refr_S)) || throw(
-        ArgumentError(
-            "f_refr_S must be in [0, 1] and finite, got $(cfg.refractory.f_refr_S)"
-        ),
-    )
-    (0.0 <= cfg.refractory.f_refr_P <= 1.0 && isfinite(cfg.refractory.f_refr_P)) || throw(
-        ArgumentError(
-            "f_refr_P must be in [0, 1] and finite, got $(cfg.refractory.f_refr_P)"
-        ),
-    )
-    (0.0 <= cfg.refractory.f_refr_H <= 1.0 && isfinite(cfg.refractory.f_refr_H)) || throw(
-        ArgumentError(
-            "f_refr_H must be in [0, 1] and finite, got $(cfg.refractory.f_refr_H)"
-        ),
-    )
-    (cfg.refractory.T_pyrolysis_C >= 0.0 && isfinite(cfg.refractory.T_pyrolysis_C)) ||
-        throw(
-            ArgumentError(
-                "T_pyrolysis_C must be >= 0 and finite, got $(cfg.refractory.T_pyrolysis_C)"
-            ),
-        )
-    (cfg.refractory.T_dehydrate_H >= 0.0 && isfinite(cfg.refractory.T_dehydrate_H)) ||
-        throw(
-            ArgumentError(
-                "T_dehydrate_H must be >= 0 and finite, got $(cfg.refractory.T_dehydrate_H)"
-            ),
-        )
+    @check_unit_interval cfg.refractory.f_refr_C
+    @check_unit_interval cfg.refractory.f_refr_N
+    @check_unit_interval cfg.refractory.f_refr_S
+    @check_unit_interval cfg.refractory.f_refr_P
+    @check_unit_interval cfg.refractory.f_refr_H
+    @check_nonneg_finite cfg.refractory.T_pyrolysis_C
+    @check_nonneg_finite cfg.refractory.T_dehydrate_H
 
     # Volatile mixture checks
-    (
-        cfg.volatile_mixture.T_eutectic_ammonia >= 0.0 &&
-        isfinite(cfg.volatile_mixture.T_eutectic_ammonia)
-    ) || throw(
-        ArgumentError(
-            "T_eutectic_ammonia must be >= 0 and finite, got $(cfg.volatile_mixture.T_eutectic_ammonia)",
-        ),
-    )
-    (
-        cfg.volatile_mixture.T_freeze_floor >= 0.0 &&
-        isfinite(cfg.volatile_mixture.T_freeze_floor)
-    ) || throw(
-        ArgumentError(
-            "T_freeze_floor must be >= 0 and finite, got $(cfg.volatile_mixture.T_freeze_floor)",
-        ),
-    )
-    (cfg.volatile_mixture.alpha_P >= 0.0 && isfinite(cfg.volatile_mixture.alpha_P)) ||
-        throw(
-            ArgumentError(
-                "alpha_P must be >= 0 and finite, got $(cfg.volatile_mixture.alpha_P)"
-            ),
-        )
-    (cfg.volatile_mixture.P_ref > 0.0 && isfinite(cfg.volatile_mixture.P_ref)) || throw(
-        ArgumentError("P_ref must be > 0 and finite, got $(cfg.volatile_mixture.P_ref)")
-    )
-    for (name, val) in [
-        ("X_ice_H2O", cfg.volatile_mixture.X_ice_H2O),
-        ("X_ice_CO2", cfg.volatile_mixture.X_ice_CO2),
-        ("X_ice_CO", cfg.volatile_mixture.X_ice_CO),
-        ("X_ice_CH4", cfg.volatile_mixture.X_ice_CH4),
-        ("X_ice_NH3", cfg.volatile_mixture.X_ice_NH3),
-        ("X_ice_N2", cfg.volatile_mixture.X_ice_N2),
-        ("X_ice_H2S", cfg.volatile_mixture.X_ice_H2S),
-        ("X_ice_PH3", cfg.volatile_mixture.X_ice_PH3),
-    ]
-        (0.0 <= val <= 1.0 && isfinite(val)) ||
-            throw(ArgumentError("$name must be in [0, 1] and finite, got $val"))
-    end
+    @check_nonneg_finite cfg.volatile_mixture.T_eutectic_ammonia
+    @check_nonneg_finite cfg.volatile_mixture.T_freeze_floor
+    @check_nonneg_finite cfg.volatile_mixture.alpha_P
+    @check_positive_finite cfg.volatile_mixture.P_ref
+    @check_unit_interval cfg.volatile_mixture.X_ice_H2O
+    @check_unit_interval cfg.volatile_mixture.X_ice_CO2
+    @check_unit_interval cfg.volatile_mixture.X_ice_CO
+    @check_unit_interval cfg.volatile_mixture.X_ice_CH4
+    @check_unit_interval cfg.volatile_mixture.X_ice_NH3
+    @check_unit_interval cfg.volatile_mixture.X_ice_N2
+    @check_unit_interval cfg.volatile_mixture.X_ice_H2S
+    @check_unit_interval cfg.volatile_mixture.X_ice_PH3
     if !(
         cfg.volatile_mixture.T_cond_H2O >= cfg.volatile_mixture.T_cond_NH3 &&
         cfg.volatile_mixture.T_cond_NH3 >= cfg.volatile_mixture.T_cond_CO2 &&
@@ -2476,22 +1935,8 @@ function validate_config(cfg::SimulationConfig)
 
     # AtmosphereConfig validation
     if cfg.atmosphere.active
-        (
-            cfg.atmosphere.kappa_ir_default > 0.0 &&
-            isfinite(cfg.atmosphere.kappa_ir_default)
-        ) || throw(
-            ArgumentError(
-                "atmosphere.kappa_ir_default must be > 0 and finite, got $(cfg.atmosphere.kappa_ir_default)",
-            ),
-        )
-        (
-            cfg.atmosphere.kappa_vis_default > 0.0 &&
-            isfinite(cfg.atmosphere.kappa_vis_default)
-        ) || throw(
-            ArgumentError(
-                "atmosphere.kappa_vis_default must be > 0 and finite, got $(cfg.atmosphere.kappa_vis_default)",
-            ),
-        )
+        @check_positive_finite cfg.atmosphere.kappa_ir_default
+        @check_positive_finite cfg.atmosphere.kappa_vis_default
         cfg.atmosphere.mode in Set([:guillot, :grey, :isothermal]) || throw(
             ArgumentError(
                 "atmosphere.mode must be one of :guillot, :grey, :isothermal, got $(cfg.atmosphere.mode)",
@@ -2502,33 +1947,15 @@ function validate_config(cfg::SimulationConfig)
                 "atmosphere.albedo must be in [0, 1) and finite, got $(cfg.atmosphere.albedo)",
             ),
         )
-        (cfg.atmosphere.gamma_guillot > 0.0 && isfinite(cfg.atmosphere.gamma_guillot)) ||
-            throw(
-                ArgumentError(
-                    "atmosphere.gamma_guillot must be > 0 and finite, got $(cfg.atmosphere.gamma_guillot)",
-                ),
-            )
-        (cfg.atmosphere.T_skin_floor > 0.0 && isfinite(cfg.atmosphere.T_skin_floor)) ||
-            throw(
-                ArgumentError(
-                    "atmosphere.T_skin_floor must be > 0 and finite, got $(cfg.atmosphere.T_skin_floor)",
-                ),
-            )
+        @check_positive_finite cfg.atmosphere.gamma_guillot
+        @check_positive_finite cfg.atmosphere.T_skin_floor
         (0.0 < cfg.atmosphere.f_rec <= 1.0 && isfinite(cfg.atmosphere.f_rec)) || throw(
             ArgumentError(
                 "atmosphere.f_rec must be in (0, 1] and finite, got $(cfg.atmosphere.f_rec)",
             ),
         )
-        (cfg.atmosphere.tau_boil > 0.0 && isfinite(cfg.atmosphere.tau_boil)) || throw(
-            ArgumentError(
-                "atmosphere.tau_boil must be > 0 and finite, got $(cfg.atmosphere.tau_boil)",
-            ),
-        )
-        (cfg.atmosphere.b_diff_ref > 0.0 && isfinite(cfg.atmosphere.b_diff_ref)) || throw(
-            ArgumentError(
-                "atmosphere.b_diff_ref must be > 0 and finite, got $(cfg.atmosphere.b_diff_ref)",
-            ),
-        )
+        @check_positive_finite cfg.atmosphere.tau_boil
+        @check_positive_finite cfg.atmosphere.b_diff_ref
         for (sp, kap) in cfg.atmosphere.opacities
             (kap >= 0.0 && isfinite(kap)) ||
                 throw(ArgumentError("opacity for $sp must be >= 0 and finite, got $kap"))

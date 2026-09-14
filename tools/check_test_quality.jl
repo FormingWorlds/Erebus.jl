@@ -183,7 +183,8 @@ function collect_assertions_in_testset(block_ex)
             macroname = node.args[1]
             if macroname === Symbol("@test") ||
                 macroname === Symbol("@test_throws") ||
-                macroname === Symbol("@test_broken")
+                macroname === Symbol("@test_broken") ||
+                macroname === Symbol("@reject_config")
                 assert_count += 1
             elseif macroname === Symbol("@testset")
                 has_sub_testsets = true

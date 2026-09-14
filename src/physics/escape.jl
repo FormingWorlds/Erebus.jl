@@ -208,14 +208,8 @@ $(SIGNATURES)
 - `v_esc`: Escape velocity [m/s]
 """
 function compute_escape_velocity(M_planet::Real, r::Real)::Float64
-    M_val = Float64(M_planet)
-    if M_val <= 0.0 || !isfinite(M_val)
-        throw(DomainError(M_val, "Planetary mass must be > 0 and finite"))
-    end
-    r_val = Float64(r)
-    if r_val <= 0.0 || !isfinite(r_val)
-        throw(DomainError(r_val, "Radius must be > 0 and finite"))
-    end
+    M_val = require_positive_finite(Float64(M_planet), "Planetary mass")
+    r_val = require_positive_finite(Float64(r), "Radius")
     return sqrt(2.0 * GRAVITATIONAL_CONSTANT * M_val / r_val)
 end
 
@@ -234,14 +228,8 @@ $(SIGNATURES)
 - `v_th`: Most probable thermal speed [m/s]
 """
 function compute_thermal_velocity(T_K::Real, m_species_kg::Real)::Float64
-    T_val = Float64(T_K)
-    if T_val <= 0.0 || !isfinite(T_val)
-        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
-    end
-    m_val = Float64(m_species_kg)
-    if m_val <= 0.0 || !isfinite(m_val)
-        throw(DomainError(m_val, "Molecular mass must be > 0 and finite"))
-    end
+    T_val = require_positive_finite(Float64(T_K), "Temperature")
+    m_val = require_positive_finite(Float64(m_species_kg), "Molecular mass")
     return sqrt(2.0 * BOLTZMANN_CONSTANT * T_val / m_val)
 end
 
@@ -264,22 +252,10 @@ $(SIGNATURES)
 function compute_jeans_parameter(
     M_planet::Real, r_exo_m::Real, T_exo_K::Real, m_species_kg::Real
 )::Float64
-    M_val = Float64(M_planet)
-    if M_val <= 0.0 || !isfinite(M_val)
-        throw(DomainError(M_val, "Planetary mass must be > 0 and finite"))
-    end
-    r_val = Float64(r_exo_m)
-    if r_val <= 0.0 || !isfinite(r_val)
-        throw(DomainError(r_val, "Exobase radius must be > 0 and finite"))
-    end
-    T_val = Float64(T_exo_K)
-    if T_val <= 0.0 || !isfinite(T_val)
-        throw(DomainError(T_val, "Exobase temperature must be > 0 and finite"))
-    end
-    m_val = Float64(m_species_kg)
-    if m_val <= 0.0 || !isfinite(m_val)
-        throw(DomainError(m_val, "Molecular mass must be > 0 and finite"))
-    end
+    M_val = require_positive_finite(Float64(M_planet), "Planetary mass")
+    r_val = require_positive_finite(Float64(r_exo_m), "Exobase radius")
+    T_val = require_positive_finite(Float64(T_exo_K), "Exobase temperature")
+    m_val = require_positive_finite(Float64(m_species_kg), "Molecular mass")
     return (GRAVITATIONAL_CONSTANT * M_val * m_val) / (BOLTZMANN_CONSTANT * T_val * r_val)
 end
 
@@ -288,16 +264,20 @@ Compute Jeans kinetic escape particle number flux across the exobase.
 
 $(SIGNATURES)
 
-    Φ_Jeans = (n_exo * v_th) / (2 * sqrt(π)) * (1 + λ) * exp(-λ)
+    Φ = n_exo * (v_th / (2 * sqrt(π))) * (1 + λ) * exp(-λ)
 
 # Arguments
 - `n_exo::Real`: Particle number density at exobase [m^-3]
 - `T_exo_K::Real`: Exobase temperature [K]
 - `m_species_kg::Real`: Particle molecular mass [kg]
-- `lambda::Real`: Dimensionless Jeans parameter
+- `lambda::Real`: Dimensionless Jeans parameter [-]
+
+# Keyword Arguments
+- `gamma::Real`: Adiabatic index for hydrodynamic blow-off regime (default: 1.4)
+- `hydrodynamic::Bool`: Enable hydrodynamic sound speed escape when λ < 2.0 (default: true)
 
 # Returns
-- `Phi_Jeans`: Kinetic escape number flux [m^-2 s^-1]
+- `flux`: Particle number escape flux [m^-2 s^-1]
 """
 function compute_jeans_escape_flux(
     n_exo::Real,
@@ -314,10 +294,7 @@ function compute_jeans_escape_flux(
     if n_val <= 0.0
         return 0.0
     end
-    lam_val = Float64(lambda)
-    if !isfinite(lam_val) || lam_val < 0.0
-        throw(DomainError(lam_val, "Jeans parameter must be non-negative and finite"))
-    end
+    lam_val = require_nonneg_finite(Float64(lambda), "Jeans parameter")
     # Strong gravitational retention underflow guard
     if lam_val > JEANS_LAMBDA_CUTOFF
         return 0.0
@@ -330,14 +307,10 @@ function compute_jeans_escape_flux(
         v_th = compute_thermal_velocity(T_val, m_val)
         effusion_factor = (1.0 + lam_val) * exp(-lam_val)
         flux_eff = (n_val * v_th / (2.0 * sqrt(π))) * effusion_factor
-        s = clamp(
-            (lam_val - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
-            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
-            0.0,
-            1.0,
+        w = smoothstep(
+            HYDRODYNAMIC_ESCAPE_LAMBDA_LOW, HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF, lam_val
         )
-        w = s * s * (3.0 - 2.0 * s)
-        return (1.0 - w) * flux_hydro + w * flux_eff
+        return lerp(flux_hydro, flux_eff, w)
     end
     v_th = compute_thermal_velocity(T_val, m_val)
     effusion_factor = (1.0 + lam_val) * exp(-lam_val)
@@ -381,10 +354,7 @@ function compute_jeans_mass_loss_rate(
     if rho_val <= 0.0
         return 0.0
     end
-    R_val = Float64(R_exo_m)
-    if R_val <= 0.0 || !isfinite(R_val)
-        throw(DomainError(R_val, "Exobase radius must be > 0 and finite"))
-    end
+    R_val = require_positive_finite(Float64(R_exo_m), "Exobase radius")
     lam = compute_jeans_parameter(M_planet, R_val, T_exo_K, m_species_kg)
     if lam > JEANS_LAMBDA_CUTOFF
         return 0.0
@@ -398,14 +368,10 @@ function compute_jeans_mass_loss_rate(
         v_th = compute_thermal_velocity(T_val, m_val)
         effusion_factor = (1.0 + lam) * exp(-lam)
         flux_eff = rho_val * (v_th / (2.0 * sqrt(π))) * effusion_factor
-        s = clamp(
-            (lam - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
-            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
-            0.0,
-            1.0,
+        w = smoothstep(
+            HYDRODYNAMIC_ESCAPE_LAMBDA_LOW, HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF, lam
         )
-        w = s * s * (3.0 - 2.0 * s)
-        mass_flux = (1.0 - w) * flux_hydro + w * flux_eff
+        mass_flux = lerp(flux_hydro, flux_eff, w)
         return area * mass_flux
     end
     v_th = compute_thermal_velocity(T_val, m_val)
@@ -424,7 +390,7 @@ $(SIGNATURES)
 # Arguments
 - `M_planet::Real`: Planetary mass [kg]
 - `R_planet::Real`: Planetary radius [m]
-- `T_exo_K::Real`: Atmospheric temperature [K]
+- `T_exo_K::Real`: Exobase temperature [K]
 - `m_species_kg::Real`: Particle molecular mass [kg]
 
 # Returns
@@ -433,22 +399,10 @@ $(SIGNATURES)
 function compute_atmospheric_scale_height(
     M_planet::Real, R_planet::Real, T_exo_K::Real, m_species_kg::Real
 )::Float64
-    M_val = Float64(M_planet)
-    if M_val <= 0.0 || !isfinite(M_val)
-        throw(DomainError(M_val, "Planetary mass must be > 0 and finite"))
-    end
-    R_val = Float64(R_planet)
-    if R_val <= 0.0 || !isfinite(R_val)
-        throw(DomainError(R_val, "Planetary radius must be > 0 and finite"))
-    end
-    T_val = Float64(T_exo_K)
-    if T_val <= 0.0 || !isfinite(T_val)
-        throw(DomainError(T_val, "Temperature must be > 0 and finite"))
-    end
-    m_val = Float64(m_species_kg)
-    if m_val <= 0.0 || !isfinite(m_val)
-        throw(DomainError(m_val, "Molecular mass must be > 0 and finite"))
-    end
+    M_val = require_positive_finite(Float64(M_planet), "Planetary mass")
+    R_val = require_positive_finite(Float64(R_planet), "Planetary radius")
+    T_val = require_positive_finite(Float64(T_exo_K), "Temperature")
+    m_val = require_positive_finite(Float64(m_species_kg), "Molecular mass")
     g = GRAVITATIONAL_CONSTANT * M_val / (R_val^2)
     return (BOLTZMANN_CONSTANT * T_val) / (m_val * g)
 end
@@ -471,18 +425,9 @@ $(SIGNATURES)
 function compute_surface_atmospheric_pressure(
     M_atm_total::Real, M_planet::Real, R_planet::Real
 )::Float64
-    M_atm_val = Float64(M_atm_total)
-    if !isfinite(M_atm_val) || M_atm_val < 0.0
-        throw(DomainError(M_atm_val, "Atmospheric mass must be non-negative and finite"))
-    end
-    M_val = Float64(M_planet)
-    if M_val <= 0.0 || !isfinite(M_val)
-        throw(DomainError(M_val, "Planetary mass must be > 0 and finite"))
-    end
-    R_val = Float64(R_planet)
-    if R_val <= 0.0 || !isfinite(R_val)
-        throw(DomainError(R_val, "Planetary radius must be > 0 and finite"))
-    end
+    M_atm_val = require_nonneg_finite(Float64(M_atm_total), "Atmospheric mass")
+    M_val = require_positive_finite(Float64(M_planet), "Planetary mass")
+    R_val = require_positive_finite(Float64(R_planet), "Planetary radius")
     if M_atm_val == 0.0
         return 0.0
     end
@@ -573,14 +518,10 @@ function evolve_atmospheric_species_inventory(
         H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
         effusion_factor = (1.0 + lam) * exp(-lam)
         k_eff = (v_th / (2.0 * sqrt(π) * H)) * effusion_factor
-        s = clamp(
-            (lam - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW) /
-            (HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF - HYDRODYNAMIC_ESCAPE_LAMBDA_LOW),
-            0.0,
-            1.0,
+        w = smoothstep(
+            HYDRODYNAMIC_ESCAPE_LAMBDA_LOW, HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF, lam
         )
-        w = s * s * (3.0 - 2.0 * s)
-        (1.0 - w) * k_hydro + w * k_eff
+        lerp(k_hydro, k_eff, w)
     else
         H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
         effusion_factor = (1.0 + lam) * exp(-lam)

@@ -42,8 +42,7 @@ function assemble_thermal_lse!(
     workspace=nothing,
 )
     Ny1, Nx1 = size(tk1)
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
 
     # fresh or reusable LHS coefficient matrix
     LT_target =

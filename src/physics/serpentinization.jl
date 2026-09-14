@@ -286,14 +286,7 @@ function perform_thermochemical_reaction!(
 
     # reset interpolation arrays
     reset_thermochemical_properties!(DMPSUM, DHPSUM, WTPSUM, DQPFSUM)
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
 
     pfcoeff_val = react_cfg.pfcoeff
     p_cav = react_cfg.p_cavitation

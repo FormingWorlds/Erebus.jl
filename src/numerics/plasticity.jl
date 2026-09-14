@@ -58,8 +58,7 @@ function get_viscosities_stresses_density_gradients!(
     Ny1, Nx1 = size(RHOX)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
     # computational viscosity
     @views @. ETAcomp = ETA*GGG*dt / (GGG*dt + ETA)
     @views @. ETAPcomp = ETAP*GGGP*dt / (GGGP*dt + ETAP)
@@ -177,8 +176,7 @@ function compute_stress_strainrate!(
     coords=nothing,
 )
     Ny, Nx = size(EXY)
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
     @inbounds begin
         # ϵxy, σxy, Δσxy at basic nodes
         for j in 1:1:Nx, i in 1:1:Ny
