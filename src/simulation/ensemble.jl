@@ -107,8 +107,7 @@ function sample_parameters(spec::EnsembleSweepSpec)
             run_id = string(spec.sampling_method, "_", lpad(i, 4, '0'))
             run_out_dir = joinpath(spec.output_dir, run_id)
             overrides = Dict{String,Any}(
-                "output.output_dir" => run_out_dir,
-                "solver.seed" => spec.seed + i,
+                "output.output_dir" => run_out_dir, "solver.seed" => spec.seed + i
             )
             run_cfg = override_config(spec.base_config, overrides)
             push!(results, (run_id, Dict{String,Any}(), run_cfg))

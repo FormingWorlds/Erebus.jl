@@ -966,7 +966,9 @@ function simulation_loop(
         barlen=10,
     )
     if (cfg.output.mode in (:telemetry, :both))
-        telemetry_io = init_telemetry(output_path, cfg.output.telemetry_file; append=is_restart)
+        telemetry_io = init_telemetry(
+            output_path, cfg.output.telemetry_file; append=is_restart
+        )
     end
     try
         for timestep in start_step_val:1:n_steps_val
