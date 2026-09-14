@@ -453,6 +453,173 @@ using Erebus.Particles
         )
     end
 
+    @testset "Kinetic Arrhenius IOM Pyrolysis" begin
+        refr_cfg = RefractoryConfig(;
+            active=true,
+            kinetics_active=true,
+            A_C=1.0e14,
+            Ea_C=2.0e5,
+            A_N=1.0e14,
+            Ea_N=2.0e5,
+            A_H=1.0e14,
+            Ea_H=1.8e5,
+            dh_pyro_C=5.0e5,
+            dh_pyro_N=5.0e5,
+            dh_pyro_H=5.0e5,
+        )
+        C_init = 1000.0
+        N_init = 100.0
+        H_init = 50.0
+        dt_yr = 1.0e4
+        dt_s = dt_yr * 3.15576e7
+
+        # 1. Dormant at low temperature (T = 300 K)
+        res_low = step_refractory_pyrolysis_kinetic(
+            300.0, dt_s, C_init, N_init, H_init, refr_cfg
+        )
+        @test isapprox(res_low.C_refr_remaining, C_init; rtol=1e-8)
+        @test isapprox(res_low.C_graphite_residue, 0.0; atol=1e-6)
+        @test isapprox(res_low.C_devolatilized_gas, 0.0; atol=1e-6)
+        @test isapprox(res_low.N_refr_remaining, N_init; rtol=1e-8)
+        @test isapprox(res_low.N_devolatilized_gas, 0.0; atol=1e-6)
+        @test isapprox(res_low.H_refr_remaining, H_init; rtol=1e-4)
+        @test isapprox(res_low.H_dehydrated_gas, 0.0; atol=1e-3)
+        @test isapprox(res_low.dH_pyro_J_per_kg, 0.0; atol=50.0)
+
+        # 2. Intermediate temperature (T = 420 K, geological timescale)
+        res_mid = step_refractory_pyrolysis_kinetic(
+            420.0, dt_s, C_init, N_init, H_init, refr_cfg
+        )
+        @test res_mid.C_refr_remaining < C_init
+        @test res_mid.C_refr_remaining > 0.0
+        @test res_mid.C_graphite_residue > 0.0
+        @test res_mid.C_devolatilized_gas > 0.0
+        @test res_mid.N_devolatilized_gas > 0.0
+        @test res_mid.H_dehydrated_gas > 0.0
+        @test res_mid.dH_pyro_J_per_kg < 0.0
+
+        # Analytic check for carbon rate constant: k = A * exp(-Ea / (R * T))
+        R_gas = 8.314462618
+        k_C = refr_cfg.A_C * exp(-refr_cfg.Ea_C / (R_gas * 420.0))
+        expected_C_rem = C_init * exp(-k_C * dt_s)
+        @test isapprox(res_mid.C_refr_remaining, expected_C_rem; rtol=1e-10)
+
+        # 3. High temperature (T = 800 K) with rapid conversion
+        res_high = step_refractory_pyrolysis_kinetic(
+            800.0, dt_s, C_init, N_init, H_init, refr_cfg
+        )
+        @test isapprox(res_high.C_refr_remaining, 0.0; atol=1e-6)
+        @test isapprox(res_high.N_refr_remaining, 0.0; atol=1e-6)
+        @test isapprox(res_high.H_refr_remaining, 0.0; atol=1e-6)
+        @test isapprox(res_high.C_graphite_residue, refr_cfg.f_refr_C * C_init; rtol=1e-6)
+        @test isapprox(
+            res_high.C_devolatilized_gas, (1.0 - refr_cfg.f_refr_C) * C_init; rtol=1e-6
+        )
+
+        # 4. Strict element mass conservation across all regimes
+        for res in [res_low, res_mid, res_high]
+            @test isapprox(
+                C_init,
+                res.C_refr_remaining + res.C_graphite_residue + res.C_devolatilized_gas;
+                rtol=1e-12,
+            )
+            @test isapprox(
+                N_init, res.N_refr_remaining + res.N_devolatilized_gas; rtol=1e-12
+            )
+            @test isapprox(H_init, res.H_refr_remaining + res.H_dehydrated_gas; rtol=1e-12)
+        end
+
+        # 5. Path dependence (kinetics check): short heating vs long heating at T = 420 K
+        res_short = step_refractory_pyrolysis_kinetic(
+            420.0, 1.0e2 * 3.15576e7, C_init, N_init, H_init, refr_cfg
+        )
+        res_long = step_refractory_pyrolysis_kinetic(
+            420.0, 1.0e4 * 3.15576e7, C_init, N_init, H_init, refr_cfg
+        )
+        @test res_short.C_refr_remaining > res_long.C_refr_remaining
+        @test res_short.C_devolatilized_gas < res_long.C_devolatilized_gas
+
+        # 6. Domain errors
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            -10.0, dt_s, C_init, N_init, H_init, refr_cfg
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, -1.0, C_init, N_init, H_init, refr_cfg
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, dt_s, -1.0, N_init, H_init, refr_cfg
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, dt_s, C_init, -1.0, H_init, refr_cfg
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, dt_s, C_init, N_init, -1.0, refr_cfg
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, dt_s, C_init, N_init, H_init, refr_cfg; f_graphite=-0.1
+        )
+        @test_throws DomainError step_refractory_pyrolysis_kinetic(
+            600.0, dt_s, C_init, N_init, H_init, refr_cfg; f_graphite=1.1
+        )
+
+        # 7. Marker update loop test
+        m_tkm = [300.0, 420.0, 600.0]
+        m_phim = [0.01, 0.01, 0.01]
+        m_C = [C_init, C_init, C_init]
+        m_N = [N_init, N_init, N_init]
+        m_H = [H_init, H_init, H_init]
+        up_res = update_marker_pyrolysis!(
+            m_tkm, dt_s, m_phim, m_C, m_N, m_H, refr_cfg; ppm_scale=true
+        )
+        @test up_res.total_dC_gas > 0.0
+        @test up_res.total_dN_gas > 0.0
+        @test up_res.total_dH_gas > 0.0
+        @test up_res.total_dC_graphite > 0.0
+        @test up_res.total_dH_pyro < 0.0
+        # Marker 1 (300 K) unchanged porosity, marker 2 (420 K) partial, marker 3 (600 K) complete
+        @test isapprox(m_phim[1], 0.01; atol=1e-10)
+        @test m_phim[2] > 0.01
+        @test m_phim[3] > m_phim[2]
+
+        # 8. Localized DHP latent heat coupling test
+        coords_mock = (;
+            Nx1=10,
+            Ny1=10,
+            xp=collect(range(0.0, 10000.0; length=10)),
+            yp=collect(range(0.0, 10000.0; length=10)),
+            dx=10000.0 / 9,
+            dy=10000.0 / 9,
+            jmin_p=1,
+            jmax_p=10,
+            imin_p=1,
+            imax_p=10,
+        )
+        dhp_grid = zeros(Float64, 10, 10)
+        xm_mock = [1000.0, 5000.0, 8000.0]
+        ym_mock = [1000.0, 5000.0, 8000.0]
+        m_C2 = [C_init, C_init, C_init]
+        m_N2 = [N_init, N_init, N_init]
+        m_H2 = [H_init, H_init, H_init]
+        m_phim2 = [0.01, 0.01, 0.01]
+        update_marker_pyrolysis!(
+            m_tkm,
+            dt_s,
+            m_phim2,
+            m_C2,
+            m_N2,
+            m_H2,
+            refr_cfg;
+            xm=xm_mock,
+            ym=ym_mock,
+            coords=coords_mock,
+            DHP=dhp_grid,
+            ppm_scale=true,
+        )
+        # Endothermic heat sink: DHP is negative in cells containing hot pyrolyzing markers
+        @test any(dhp_grid .< 0.0)
+        @test all(dhp_grid .<= 0.0)
+    end
+
     # =========================================================================
     # 6. Marker Allocation & Accretion Injection
     # =========================================================================

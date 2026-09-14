@@ -420,6 +420,56 @@ Base.@kwdef struct RetentionConfig
 end
 
 """
+Planetesimal redox state and electron budget configuration (Evans 2012).
+
+Tracks extensive redox budget RB [mol e-] and dynamically buffers oxygen
+fugacity relative to iron-wustite (IW) across planetary differentiation and venting.
+
+$(FIELDS)
+"""
+Base.@kwdef struct RedoxConfig
+    active::Bool = false
+    reference::Symbol = :mantle
+    serpentinization_redox::Bool = true
+    segregation_redox::Bool = true
+    venting_redox::Bool = true
+    deltaIW_min::Float64 = -6.0
+    deltaIW_max::Float64 = 6.0
+    initial_x_ferric::Float64 = 0.05
+
+    function RedoxConfig(
+        active::Bool,
+        reference::Symbol,
+        serpentinization_redox::Bool,
+        segregation_redox::Bool,
+        venting_redox::Bool,
+        deltaIW_min::Real,
+        deltaIW_max::Real,
+        initial_x_ferric::Real,
+    )
+        (reference === :mantle || reference === :crust) ||
+            throw(ArgumentError("reference must be :mantle or :crust, got '$reference'"))
+        deltaIW_min <= deltaIW_max || throw(
+            ArgumentError(
+                "deltaIW_min ($deltaIW_min) must be <= deltaIW_max ($deltaIW_max)"
+            ),
+        )
+        (0.0 <= initial_x_ferric <= 1.0) ||
+            throw(DomainError(initial_x_ferric, "initial_x_ferric must be in [0, 1]"))
+        return new(
+            active,
+            reference,
+            serpentinization_redox,
+            segregation_redox,
+            venting_redox,
+            Float64(deltaIW_min),
+            Float64(deltaIW_max),
+            Float64(initial_x_ferric),
+        )
+    end
+end
+
+"""
 Refractory carbon, nitrogen, sulfur, and phosphorus component configuration.
 
 Grounds refractory element fractions and thermal breakdown thresholds across planetesimal
@@ -441,6 +491,17 @@ Base.@kwdef struct RefractoryConfig
     f_refr_H::Float64 = 0.05
     T_pyrolysis_C::Float64 = 600.0
     T_dehydrate_H::Float64 = 750.0
+    kinetics_active::Bool = false
+    A_C::Float64 = 1.0e14
+    Ea_C::Float64 = 2.0e5
+    A_N::Float64 = 1.0e14
+    Ea_N::Float64 = 2.0e5
+    A_H::Float64 = 1.0e14
+    Ea_H::Float64 = 1.8e5
+    dh_pyro_C::Float64 = 5.0e5
+    dh_pyro_N::Float64 = 5.0e5
+    dh_pyro_H::Float64 = 5.0e5
+    T_pyro_min::Float64 = 300.0
 
     function RefractoryConfig(
         active::Bool,
@@ -451,6 +512,17 @@ Base.@kwdef struct RefractoryConfig
         f_refr_H::Real,
         T_pyrolysis_C::Real,
         T_dehydrate_H::Real,
+        kinetics_active::Bool,
+        A_C::Real,
+        Ea_C::Real,
+        A_N::Real,
+        Ea_N::Real,
+        A_H::Real,
+        Ea_H::Real,
+        dh_pyro_C::Real,
+        dh_pyro_N::Real,
+        dh_pyro_H::Real,
+        T_pyro_min::Real,
     )
         (0.0 <= f_refr_C <= 1.0) ||
             throw(DomainError(f_refr_C, "f_refr_C must be in [0, 1]"))
@@ -466,6 +538,21 @@ Base.@kwdef struct RefractoryConfig
             throw(DomainError(T_pyrolysis_C, "T_pyrolysis_C must be >= 0"))
         T_dehydrate_H >= 0.0 ||
             throw(DomainError(T_dehydrate_H, "T_dehydrate_H must be >= 0"))
+        T_pyro_min >= 0.0 || throw(DomainError(T_pyro_min, "T_pyro_min must be >= 0"))
+        if kinetics_active
+            A_C > 0.0 || throw(DomainError(A_C, "A_C must be positive"))
+            Ea_C > 0.0 || throw(DomainError(Ea_C, "Ea_C must be positive"))
+            A_N > 0.0 || throw(DomainError(A_N, "A_N must be positive"))
+            Ea_N > 0.0 || throw(DomainError(Ea_N, "Ea_N must be positive"))
+            A_H > 0.0 || throw(DomainError(A_H, "A_H must be positive"))
+            Ea_H > 0.0 || throw(DomainError(Ea_H, "Ea_H must be positive"))
+            dh_pyro_C >= 0.0 ||
+                throw(DomainError(dh_pyro_C, "dh_pyro_C must be non-negative"))
+            dh_pyro_N >= 0.0 ||
+                throw(DomainError(dh_pyro_N, "dh_pyro_N must be non-negative"))
+            dh_pyro_H >= 0.0 ||
+                throw(DomainError(dh_pyro_H, "dh_pyro_H must be non-negative"))
+        end
         return new(
             active,
             Float64(f_refr_C),
@@ -475,6 +562,17 @@ Base.@kwdef struct RefractoryConfig
             Float64(f_refr_H),
             Float64(T_pyrolysis_C),
             Float64(T_dehydrate_H),
+            kinetics_active,
+            Float64(A_C),
+            Float64(Ea_C),
+            Float64(A_N),
+            Float64(Ea_N),
+            Float64(A_H),
+            Float64(Ea_H),
+            Float64(dh_pyro_C),
+            Float64(dh_pyro_N),
+            Float64(dh_pyro_H),
+            Float64(T_pyro_min),
         )
     end
 end
@@ -886,6 +984,7 @@ Base.@kwdef struct SimulationConfig
     volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
     atmosphere::AtmosphereConfig = AtmosphereConfig()
     magma_transport::MagmaTransportConfig = MagmaTransportConfig()
+    redox::RedoxConfig = RedoxConfig()
 end
 
 """
@@ -1922,6 +2021,35 @@ function validate_config(cfg::SimulationConfig)
     @check_unit_interval cfg.refractory.f_refr_H
     @check_nonneg_finite cfg.refractory.T_pyrolysis_C
     @check_nonneg_finite cfg.refractory.T_dehydrate_H
+    @check_nonneg_finite cfg.refractory.T_pyro_min
+    if cfg.refractory.kinetics_active
+        @check_positive_finite cfg.refractory.A_C
+        @check_positive_finite cfg.refractory.Ea_C
+        @check_positive_finite cfg.refractory.A_N
+        @check_positive_finite cfg.refractory.Ea_N
+        @check_positive_finite cfg.refractory.A_H
+        @check_positive_finite cfg.refractory.Ea_H
+        @check_nonneg_finite cfg.refractory.dh_pyro_C
+        @check_nonneg_finite cfg.refractory.dh_pyro_N
+        @check_nonneg_finite cfg.refractory.dh_pyro_H
+    end
+
+    # Redox checks
+    if cfg.redox.active
+        cfg.redox.reference in Set([:mantle, :crust]) || throw(
+            ArgumentError(
+                "redox.reference must be :mantle or :crust, got $(cfg.redox.reference)"
+            ),
+        )
+        @check_finite cfg.redox.deltaIW_min
+        @check_finite cfg.redox.deltaIW_max
+        cfg.redox.deltaIW_min <= cfg.redox.deltaIW_max || throw(
+            ArgumentError(
+                "redox deltaIW_min ($(cfg.redox.deltaIW_min)) must be <= deltaIW_max ($(cfg.redox.deltaIW_max))",
+            ),
+        )
+        @check_unit_interval cfg.redox.initial_x_ferric
+    end
 
     # Volatile mixture checks
     @check_nonneg_finite cfg.volatile_mixture.T_eutectic_ammonia
@@ -2076,6 +2204,7 @@ const VALID_SECTIONS = Set([
     "volatile_mixture",
     "atmosphere",
     "magma_transport",
+    "redox",
 ])
 
 """
@@ -2274,6 +2403,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.magma_transport
     end
+    rdx = if haskey(parsed, "redox")
+        _dict_to_struct(RedoxConfig, parsed["redox"], def.redox)
+    else
+        def.redox
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2301,6 +2435,7 @@ function load_config(source::AbstractString)::SimulationConfig
         volatile_mixture=volmix,
         atmosphere=atm,
         magma_transport=magma,
+        redox=rdx,
     )
 
     validate_config(cfg)
@@ -2361,6 +2496,7 @@ function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
         "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
         "atmosphere" => _struct_to_dict(cfg.atmosphere),
         "magma_transport" => _struct_to_dict(cfg.magma_transport),
+        "redox" => _struct_to_dict(cfg.redox),
     )
 end
 

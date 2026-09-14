@@ -491,4 +491,66 @@ include("test_helpers.jl")
         @test isapprox(dx_val, 1000.0; atol=1e-12)
         @test isapprox(dy_val, 2000.0; atol=1e-12)
     end
+
+    @testset "RedoxConfig & RefractoryConfig Validation and TOML Roundtrip" begin
+        # 1. RedoxConfig constructor validation
+        @test_throws ArgumentError RedoxConfig(; reference=:INVALID)
+        @test_throws ArgumentError RedoxConfig(; deltaIW_min=3.0, deltaIW_max=1.0)
+        @test_throws DomainError RedoxConfig(; initial_x_ferric=-0.1)
+        @test_throws DomainError RedoxConfig(; initial_x_ferric=1.1)
+
+        # 2. RedoxConfig & RefractoryConfig constructor domain bounds
+        @test_throws DomainError RedoxConfig(; active=true, initial_x_ferric=-0.05)
+        @test_throws DomainError RefractoryConfig(;
+            active=true, kinetics_active=true, A_C=0.0
+        )
+        @test_throws DomainError RefractoryConfig(;
+            active=true, kinetics_active=true, Ea_C=-1.0
+        )
+        @test_throws DomainError RefractoryConfig(;
+            active=true, kinetics_active=true, dh_pyro_C=-100.0
+        )
+        @test_throws DomainError RefractoryConfig(; active=true, T_pyro_min=-50.0)
+
+        # 4. TOML load/save roundtrip for redox and refractory
+        toml_overlay = """
+        [redox]
+        active = true
+        reference = "crust"
+        serpentinization_redox = true
+        segregation_redox = true
+        venting_redox = true
+        deltaIW_min = -5.0
+        deltaIW_max = 5.0
+        initial_x_ferric = 0.08
+
+        [refractory]
+        active = true
+        kinetics_active = true
+        A_C = 2.0e14
+        Ea_C = 2.1e5
+        dh_pyro_C = 4.5e5
+        T_pyro_min = 320.0
+        """
+        cfg_parsed = load_config(toml_overlay)
+        validate_config(cfg_parsed)
+        @test cfg_parsed.redox.active == true
+        @test cfg_parsed.redox.reference === :crust
+        @test isapprox(cfg_parsed.redox.deltaIW_min, -5.0)
+        @test isapprox(cfg_parsed.redox.deltaIW_max, 5.0)
+        @test isapprox(cfg_parsed.redox.initial_x_ferric, 0.08)
+        @test cfg_parsed.refractory.active == true
+        @test cfg_parsed.refractory.kinetics_active == true
+        @test isapprox(cfg_parsed.refractory.A_C, 2.0e14)
+        @test isapprox(cfg_parsed.refractory.Ea_C, 2.1e5)
+        @test isapprox(cfg_parsed.refractory.dh_pyro_C, 4.5e5)
+        @test isapprox(cfg_parsed.refractory.T_pyro_min, 320.0)
+
+        # Roundtrip via save_config
+        dict_cfg = config_to_dict(cfg_parsed)
+        @test haskey(dict_cfg, "redox")
+        @test haskey(dict_cfg, "refractory")
+        @test dict_cfg["redox"]["reference"] == "crust"
+        @test isapprox(dict_cfg["refractory"]["T_pyro_min"], 320.0; atol=1e-12)
+    end
 end

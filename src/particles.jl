@@ -163,6 +163,161 @@ function setup_marker_hcnspo_properties(
 end
 
 """
+Set up marker redox state and iron speciation tracking arrays.
+
+$(SIGNATURES)
+
+# Arguments
+- `marknum::Integer`: Number of markers.
+- `cfg::RedoxConfig`: Planetesimal redox configuration.
+
+# Keyword Arguments
+- `initial_xfe_bulk`: Bulk metal mass fraction array (or nothing)
+- `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
+
+# Returns
+- Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m)`
+"""
+function setup_marker_redox_properties(
+    marknum::Integer,
+    cfg::RedoxConfig;
+    initial_xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
+    tkm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    pfm::Union{Nothing,AbstractVector{Float64}}=nothing,
+)
+    if !cfg.active
+        return (; nFe0_m=nothing, nFe2_m=nothing, nFe3_m=nothing, deltaIW_m=nothing)
+    end
+    marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+
+    M_Fe = 0.055845
+    w_FeO_silicate = 0.15
+    M_FeO = 0.071844
+
+    nFe0_m = zeros(Float64, marknum)
+    nFe2_m = zeros(Float64, marknum)
+    nFe3_m = zeros(Float64, marknum)
+    deltaIW_m = zeros(Float64, marknum)
+
+    x_ferric = clamp(cfg.initial_x_ferric, 0.0, 1.0)
+
+    for m in 1:marknum
+        xfe = initial_xfe_bulk !== nothing ? initial_xfe_bulk[m] : 0.0
+        n_fe0 = max(0.0, xfe) / M_Fe
+        w_sil = max(0.0, 1.0 - xfe)
+        n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
+
+        n_fe3 = n_fe_sil * x_ferric
+        n_fe2 = n_fe_sil * (1.0 - x_ferric)
+
+        nFe0_m[m] = n_fe0
+        nFe2_m[m] = n_fe2
+        nFe3_m[m] = n_fe3
+
+        T_val = tkm !== nothing ? max(100.0, tkm[m]) : 1500.0
+        P_val = pfm !== nothing ? max(0.0, pfm[m]) : 1.0e7
+
+        c = marker_redox_components(n_fe0, n_fe2, n_fe3)
+        deltaIW_m[m] = local_delta_iw(
+            c,
+            T_val,
+            P_val;
+            deltaIW_min=cfg.deltaIW_min,
+            deltaIW_max=cfg.deltaIW_max,
+            initial_x_ferric=cfg.initial_x_ferric,
+        )
+    end
+
+    return (; nFe0_m=nFe0_m, nFe2_m=nFe2_m, nFe3_m=nFe3_m, deltaIW_m=deltaIW_m)
+end
+
+"""
+Dynamically update marker redox inventories and local oxygen fugacity (Evans 2012).
+
+$(SIGNATURES)
+
+# Arguments
+- `redox_props`: NamedTuple with arrays `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m)`.
+- `tkm`: Marker temperature array [K].
+- `pfm`: Marker pressure array [Pa].
+- `cfg`: `RedoxConfig`.
+
+# Keyword Arguments
+- `Xfem`: Optional marker metal mass fraction array (for core segregation coupling).
+- `XWsolidm`: Optional marker wet solid fraction array (for serpentinization coupling).
+
+# Returns
+- `nothing`
+"""
+function update_marker_redox!(
+    redox_props,
+    tkm::AbstractVector{Float64},
+    pfm::AbstractVector{Float64},
+    cfg::RedoxConfig;
+    Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XWsolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
+)
+    if !cfg.active || redox_props === nothing || redox_props.deltaIW_m === nothing
+        return nothing
+    end
+
+    nFe0_m = redox_props.nFe0_m
+    nFe2_m = redox_props.nFe2_m
+    nFe3_m = redox_props.nFe3_m
+    deltaIW_m = redox_props.deltaIW_m
+
+    (nFe0_m === nothing || nFe2_m === nothing || nFe3_m === nothing) && return nothing
+
+    marknum = length(tkm)
+    M_Fe = 0.055845
+    w_FeO_silicate = 0.15
+    M_FeO = 0.071844
+    x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
+
+    for m in 1:marknum
+        # Metal segregation coupling: drain metallic Fe(0) as metal segregates
+        if cfg.segregation_redox && Xfem !== nothing
+            xfe = max(0.0, Xfem[m])
+            n_fe0 = xfe / M_Fe
+            w_sil = max(0.0, 1.0 - xfe)
+            n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
+        else
+            n_fe0 = nFe0_m[m]
+            n_fe_sil = nFe2_m[m] + nFe3_m[m]
+        end
+
+        # Serpentinization redox coupling: hydration converts FeO to magnetite (Fe3+)
+        x_ferric = if cfg.serpentinization_redox && XWsolidm !== nothing
+            clamp(x_fe_init + 0.5 * XWsolidm[m], 0.0, 1.0)
+        else
+            x_fe_init
+        end
+
+        n_fe3 = n_fe_sil * x_ferric
+        n_fe2 = n_fe_sil * (1.0 - x_ferric)
+
+        nFe0_m[m] = n_fe0
+        nFe2_m[m] = n_fe2
+        nFe3_m[m] = n_fe3
+
+        T_val = max(100.0, tkm[m])
+        P_val = max(0.0, pfm[m])
+
+        c = marker_redox_components(n_fe0, n_fe2, n_fe3)
+        deltaIW_m[m] = local_delta_iw(
+            c,
+            T_val,
+            P_val;
+            deltaIW_min=cfg.deltaIW_min,
+            deltaIW_max=cfg.deltaIW_max,
+            initial_x_ferric=cfg.initial_x_ferric,
+        )
+    end
+
+    return nothing
+end
+
+"""
 Set up marker accretion epoch timestamp tracking array.
 
 $(SIGNATURES)
@@ -226,6 +381,7 @@ function update_single_marker_volatile_exsolution!(
     rhofluid::Real=1000.0,
     phimax::Real=0.9999,
     retention_cfg::Union{Nothing,RetentionConfig}=nothing,
+    delta_IW::Union{Nothing,Real}=nothing,
 )::Float64
     F_m = Float64(F_melt)
     T_m = Float64(T_val)
@@ -238,6 +394,8 @@ function update_single_marker_volatile_exsolution!(
     C_N_in = XNm !== nothing ? XNm[m] : 0.0
     C_S_in = XSm !== nothing ? XSm[m] : 0.0
 
+    d_iw = delta_IW !== nothing ? Float64(delta_IW) : cfg.fO2_delta_IW
+
     ret_act = retention_cfg !== nothing && retention_cfg.active
     ex = compute_volatile_exsolution(
         F_m,
@@ -247,7 +405,7 @@ function update_single_marker_volatile_exsolution!(
         C_C_in,
         C_N_in,
         C_S_in,
-        cfg.fO2_delta_IW;
+        d_iw;
         water_law=cfg.water_law,
         water_As=cfg.water_solubility_coeff,
         carbon_active=cfg.carbon_active,
@@ -804,6 +962,7 @@ function compute_marker_properties!(
     magma_transport_active::Bool=false,
     track_depletion::Bool=false,
     F_extract_m=nothing,
+    deltaIW_m=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -891,6 +1050,7 @@ function compute_marker_properties!(
                     rhofluid=rhofluidm0,
                     phimax=phimax,
                     retention_cfg=retention_cfg,
+                    delta_IW=deltaIW_m !== nothing ? deltaIW_m[m] : nothing,
                 )
             end
         elseif Fm !== nothing
@@ -979,7 +1139,13 @@ function compute_marker_properties!(
                     Xfe_N_m !== nothing &&
                     Xfe_S_m !== nothing
                     P_val_equil = pm === nothing ? 0.0 : max(0.0, pm[m])
-                    fO2_val = volatiles_cfg !== nothing ? volatiles_cfg.fO2_delta_IW : -1.0
+                    fO2_val = if deltaIW_m !== nothing
+                        deltaIW_m[m]
+                    elseif volatiles_cfg !== nothing
+                        volatiles_cfg.fO2_delta_IW
+                    else
+                        -1.0
+                    end
                     equilibrate_metal_silicate_volatiles!(
                         m,
                         F_fe,

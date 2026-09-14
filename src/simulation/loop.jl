@@ -621,6 +621,18 @@ function simulation_loop(
         else
             nothing
         end
+        redox_props = if cfg.redox.active
+            rp = setup_marker_redox_properties(marknum, cfg.redox; initial_xfe_bulk=Xfe_bulk)
+            for k in keys(rp)
+                k_str = string(k)
+                if haskey(ckpt, k_str)
+                    getfield(rp, k) .= ckpt[k_str]
+                end
+            end
+            rp
+        else
+            nothing
+        end
         if magma_active_val
             F_extract_m = if haskey(ckpt, "F_extract_m")
                 Vector{Float64}(ckpt["F_extract_m"])
@@ -686,6 +698,13 @@ function simulation_loop(
         )
         hcnspo_props = if cfg.volatile_mixture.active || cfg.refractory.active
             setup_marker_hcnspo_properties(marknum, cfg.volatile_mixture, cfg.refractory)
+        else
+            nothing
+        end
+        redox_props = if cfg.redox.active
+            setup_marker_redox_properties(
+                marknum, cfg.redox; initial_xfe_bulk=Xfe_bulk, tkm=tkm, pfm=pfm0
+            )
         else
             nothing
         end
@@ -1445,6 +1464,12 @@ function simulation_loop(
             # ---------------------------------------------------------------------
             # compute marker properties and interpolate to staggered grid
             # ---------------------------------------------------------------------
+            if cfg.redox.active && redox_props !== nothing
+                update_marker_redox!(
+                    redox_props, tkm, pfm0, cfg.redox; Xfem=Xfem, XWsolidm=XWsolidm
+                )
+            end
+
             if use_tiled_p2m
                 p2m_workspace = ensure_workspace_compatible(
                     p2m_workspace, coords, marknum, cfg.solver.tile_size
@@ -1539,6 +1564,11 @@ function simulation_loop(
                                 Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                                 hydrothermal_active=cfg.hydrothermal.active,
                                 hydrothermal_cfg=cfg.hydrothermal,
+                                deltaIW_m=if redox_props !== nothing
+                                    redox_props.deltaIW_m
+                                else
+                                    nothing
+                                end,
                             )
                             scatter_marker_to_master_grids!(
                                 m,
@@ -1686,6 +1716,11 @@ function simulation_loop(
                             Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                             hydrothermal_active=cfg.hydrothermal.active,
                             hydrothermal_cfg=cfg.hydrothermal,
+                            deltaIW_m=if redox_props !== nothing
+                                redox_props.deltaIW_m
+                            else
+                                nothing
+                            end,
                         )
                         @inbounds marker_to_basic_nodes!(
                             m,
@@ -1885,6 +1920,7 @@ function simulation_loop(
                         Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                         hydrothermal_active=cfg.hydrothermal.active,
                         hydrothermal_cfg=cfg.hydrothermal,
+                        deltaIW_m=redox_props !== nothing ? redox_props.deltaIW_m : nothing,
                     )
                     # interpolate marker properties to basic nodes
                     @inbounds marker_to_basic_nodes!(
@@ -2182,6 +2218,25 @@ function simulation_loop(
                         DQPF=DQPF,
                         DQPFSUM=DQPFSUM,
                         cfg=cfg.reaction,
+                    )
+                end
+
+                if cfg.refractory.active &&
+                    cfg.refractory.kinetics_active &&
+                    hcnspo_props !== nothing
+                    update_marker_pyrolysis!(
+                        tkm,
+                        dt,
+                        phim,
+                        hcnspo_props.X_refr_C_m,
+                        hcnspo_props.X_refr_N_m,
+                        hcnspo_props.X_refr_H_m,
+                        cfg.refractory;
+                        xm=xm,
+                        ym=ym,
+                        coords=coords,
+                        DHP=DHP,
+                        rhosolid=cfg.materials.rhosolidm,
                     )
                 end
 
@@ -2893,6 +2948,29 @@ function simulation_loop(
                                 else
                                     T_amb
                                 end
+                            fO2_delta_IW_vent =
+                                if redox_props !== nothing &&
+                                    redox_props.deltaIW_m !== nothing
+                                    surf_count = 0
+                                    surf_diw = 0.0
+                                    r_cut_sq = (0.8 * rplanet_val)^2
+                                    for m in 1:marknum
+                                        if tm[m] < 3 && (xm[m]^2 + ym[m]^2) >= r_cut_sq
+                                            surf_diw += redox_props.deltaIW_m[m]
+                                            surf_count += 1
+                                        end
+                                    end
+                                    if surf_count > 0
+                                        (surf_diw / surf_count)
+                                    else
+                                        (
+                                            sum(redox_props.deltaIW_m) /
+                                            length(redox_props.deltaIW_m)
+                                        )
+                                    end
+                                else
+                                    cfg.volatiles.fO2_delta_IW
+                                end
                             spec_dict = speciate_vented_volatiles(
                                 m_H2O_step,
                                 m_C_step,
@@ -2900,7 +2978,7 @@ function simulation_loop(
                                 m_S_step,
                                 p_surf_val,
                                 T_surf_val,
-                                cfg.volatiles.fO2_delta_IW;
+                                fO2_delta_IW_vent;
                                 graphite_saturation=cfg.volatiles.graphite_saturation,
                             )
                             for (sp, m_sp) in spec_dict
@@ -3439,6 +3517,7 @@ function simulation_loop(
                     M_planet_val=M_planet_val,
                     telescope_level=telescope_level,
                     hcnspo_props=hcnspo_props,
+                    redox_props=redox_props,
                     atm_state=atm_state,
                 )
             end
