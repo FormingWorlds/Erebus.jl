@@ -2,6 +2,8 @@
 
 This page documents the physical formulation and numerical verification of the multi-stage planetesimal accretion sequence in `Erebus.jl`. The model implements chronological growth regimes driven by aerodynamic onset and pebble isolation: planetesimal-planetesimal collisions (Safronov gravitational focusing) prior to the settling regime, followed by efficient pebble capture (Bondi and Hill accretion), and terminating in late embryo collisions beyond the pebble isolation mass.
 
+For the underlying orbital kinematics and pebble accretion regimes, see [Planetesimal Accretion Mechanics](../explanations/accretion_mechanics.md).
+
 ---
 
 ## 1. Physical Motivation
@@ -90,10 +92,10 @@ The numerical implementation verifies:
 
 ## 4. References
 
-- Bitsch, B., Morbidelli, A., Johansen, A., et al. (2018). Pebble-isolation mass: Constraints on giants' growth and gas accretion. *A&A*, 612, A30. [https://doi.org/10.1051/0004-6361/201731931](https://doi.org/10.1051/0004-6361/201731931)
+- Bitsch, B., Morbidelli, A., Johansen, A., Lega, E., Lambrechts, M., & Crida, A. (2018). Pebble-isolation mass: Scaling law and implications for the formation of super-Earths and gas giants. *A&A*, 612, A30. [https://doi.org/10.1051/0004-6361/201731931](https://doi.org/10.1051/0004-6361/201731931)
 - Chambers, J. E. (2006). A semi-analytic model for oligarchic growth. *Icarus*, 180, 496. [https://doi.org/10.1016/j.icarus.2005.10.017](https://doi.org/10.1016/j.icarus.2005.10.017)
 - Lambrechts, M., & Johansen, A. (2012). Rapid growth of gas-giant cores by pebble accretion. *A&A*, 544, A32. [https://doi.org/10.1051/0004-6361/201219127](https://doi.org/10.1051/0004-6361/201219127)
-- Lambrechts, M., Johansen, A., & Morbidelli, A. (2014). Separating gas-giant and ice-giant planets by shifting pebble accretion realms. *A&A*, 572, A35. [https://doi.org/10.1051/0004-6361/201424343](https://doi.org/10.1051/0004-6361/201424343)
-- Liu, B., Ormel, C. W., & Johansen, A. (2019). Growth of planetesimals after the streaming instability: Planetesimal collisions versus pebble accretion. *A&A*, 624, A114. [https://doi.org/10.1051/0004-6361/201834241](https://doi.org/10.1051/0004-6361/201834241)
+- Lambrechts, M., Johansen, A., & Morbidelli, A. (2014). Separating gas-giant and ice-giant planets by halting pebble accretion. *A&A*, 572, A35. [https://doi.org/10.1051/0004-6361/201423814](https://doi.org/10.1051/0004-6361/201423814)
+- Liu, B., Ormel, C. W., & Johansen, A. (2019). Growth after the streaming instability: From planetesimal accretion to pebble accretion. *A&A*, 624, A114. [https://doi.org/10.1051/0004-6361/201834174](https://doi.org/10.1051/0004-6361/201834174)
 - Safronov, V. S. (1972). *Evolution of the protoplanetary cloud and formation of the earth and the planets*. NASA-TT-F-677.
-- Visser, R. G., & Ormel, C. W. (2016). On the onset of pebble accretion: Planetesimal growth in protoplanetary discs. *A&A*, 586, A66. [https://doi.org/10.1051/0004-6361/201527376](https://doi.org/10.1051/0004-6361/201527376)
+- Visser, R. G., & Ormel, C. W. (2016). On the growth of pebble-accreting planetesimals. *A&A*, 586, A66. [https://doi.org/10.1051/0004-6361/201527361](https://doi.org/10.1051/0004-6361/201527361)

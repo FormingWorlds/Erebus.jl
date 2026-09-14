@@ -8,7 +8,7 @@ This page documents the mathematical formulation, grid transformation invariants
 
 Simulating planetesimal evolution from seed bodies to protoplanets presents a severe multiscale spatial challenge:
 
-1. **Spatial Scale Range:** Planetesimal seeds initiate accretion at radii $R \sim 20 - 50\text{ km}$, while oligarchic and pebble growth can grow embryos to lunar mass ($R \approx 1,737\text{ km}$, $M \approx 7.35 \times 10^{22}\text{ kg}$). This represents a factor of 35 increase in radius and nearly five orders of magnitude in mass.
+1. **Spatial Scale Range:** Planetesimal seeds initiate accretion at radii $R \sim 20 - 50\text{ km}$, while oligarchic and pebble growth can grow embryos to lunar mass ($R \approx 1,737\text{ km}$, $M \approx 7.35 \times 10^{22}\text{ kg}$). This represents a factor of 35 to 87 increase in radius and 4 to 6 orders of magnitude in mass.
 2. **Resolution Trade-Offs on Static Grids:** 
    - A static grid sized to contain the final lunar body ($x_{\text{size}} \approx 5,000\text{ km}$) with modest node counts ($N_x = 101$) yields cell resolution $dx \approx 50\text{ km}$. On such a grid, an initial seed of $R = 25\text{ km}$ spans less than a single cell.
    - Maintaining $dx = 1\text{ km}$ on a static box of $5,000\text{ km}$ requires $N_x = 5001$ nodes. The resulting 2D linear system has $N_{\text{dof}} \approx 2.5 \times 10^7$ degrees of freedom per timestep, which is computationally prohibitive for million-year evolutionary runs.
@@ -17,118 +17,22 @@ Simulating planetesimal evolution from seed bodies to protoplanets presents a se
 
 ---
 
-## 2. Mathematical Formulation and Invariants
+## 2. Theoretical Formulation and Invariants
 
-### Spatial Coordinate Doubling
+The mathematical principles of coordinate doubling, radial distance invariance $r_m^{\text{new}} = r_m^{\text{old}}$, odd-grid parity alignment ($N_x = 2k + 1$), and sticky-air buffer replenishment are derived in detail in [Telescoping Computational Domains](../explanations/telescoping_domain.md).
 
-Let the current grid have physical dimensions $(x_{\text{size}}, y_{\text{size}})$ and basic node counts $(N_x, N_y)$. The uniform grid cell spacings are:
+Key discrete transformations validated on this page include:
 
-$$dx = \frac{x_{\text{size}}}{N_x - 1}, \qquad dy = \frac{y_{\text{size}}}{N_y - 1}$$
-
-When a telescoping trigger occurs, the new domain dimensions and node counts are defined by:
-
-$$x_{\text{size}}^{\text{new}} = 2 \, x_{\text{size}}, \qquad y_{\text{size}}^{\text{new}} = 2 \, y_{\text{size}}$$
-
-$$N_x^{\text{new}} = 2(N_x - 1) + 1, \qquad N_y^{\text{new}} = 2(N_y - 1) + 1$$
-
-The new cell spacing satisfies:
-
-$$dx^{\text{new}} = \frac{x_{\text{size}}^{\text{new}}}{N_x^{\text{new}} - 1} = \frac{2 \, x_{\text{size}}}{2(N_x - 1)} = \frac{x_{\text{size}}}{N_x - 1} = dx$$
-
-$$dy^{\text{new}} = \frac{y_{\text{size}}^{\text{new}}}{N_y^{\text{new}} - 1} = \frac{2 \, y_{\text{size}}}{2(N_y - 1)} = \frac{y_{\text{size}}}{N_y - 1} = dy$$
-
-The spatial resolution remains strictly identical after domain doubling.
-
----
-
-### Doubling Trigger Criterion
-
-In `Erebus.jl`, the telescoping condition is evaluated at each computational step:
-
-$$\mathcal{T}(R) = \begin{cases} \text{true} & \text{if } R(t) > f_{\text{threshold}} \cdot \dfrac{x_{\text{size}}}{2} \text{ and } \ell < \ell_{\text{max}} \\ \text{false} & \text{otherwise} \end{cases}$$
-
-where:
-- Threshold fraction $f_{\text{threshold}}$ is the configured limit (`r_threshold_fraction`, default $0.70$).
-- Domain half-width is $x_{\text{size}} / 2$.
-- Current telescoping level is $\ell$ (`telescope_level`, 0-indexed).
-- Maximum allowable doubling level is $\ell_{\text{max}}$ (`max_telescope_levels`, default 10).
-
-A threshold fraction of 0.70 ensures that a sticky-air buffer of at least 30% of the domain half-width separates the planetesimal surface from the outer computational boundary. This buffer prevents artificial boundary reflections and spurious stress coupling.
-
----
-
-### Marker Coordinate Translation and Radial Invariance
-
-The physical center of the planetesimal shifts from $(x_c^{\text{old}}, y_c^{\text{old}})$ to $(x_c^{\text{new}}, y_c^{\text{new}}) = (x_{\text{size}}^{\text{new}}/2, y_{\text{size}}^{\text{new}}/2)$. The spatial shift vector is:
-
-$$\Delta x_{\text{shift}} = x_c^{\text{new}} - x_c^{\text{old}} = \frac{x_{\text{size}}^{\text{new}}}{2} - \frac{x_{\text{size}}}{2} = \frac{x_{\text{size}}}{2}$$
-
-$$\Delta y_{\text{shift}} = y_c^{\text{new}} - y_c^{\text{old}} = \frac{y_{\text{size}}^{\text{new}}}{2} - \frac{y_{\text{size}}}{2} = \frac{y_{\text{size}}}{2}$$
-
-All existing Lagrangian markers $m = 1, \dots, N_{\text{markers}}$ undergo pure translation:
-
-$$x_m^{\text{new}} = x_m^{\text{old}} + \Delta x_{\text{shift}}$$
-
-$$y_m^{\text{new}} = y_m^{\text{old}} + \Delta y_{\text{shift}}$$
-
-The radial distance of any marker from the planetesimal center is strictly invariant:
-
-$$\begin{aligned}
-r_m^{\text{new}} &= \sqrt{\left(x_m^{\text{new}} - x_c^{\text{new}}\right)^2 + \left(y_m^{\text{new}} - y_c^{\text{new}}\right)^2} \\
-&= \sqrt{\left(x_m^{\text{old}} + \Delta x_{\text{shift}} - \left(x_c^{\text{old}} + \Delta x_{\text{shift}}\right)\right)^2 + \left(y_m^{\text{old}} + \Delta y_{\text{shift}} - \left(y_c^{\text{old}} + \Delta y_{\text{shift}}\right)\right)^2} \\
-&= \sqrt{\left(x_m^{\text{old}} - x_c^{\text{old}}\right)^2 + \left(y_m^{\text{old}} - y_c^{\text{old}}\right)^2} = r_m^{\text{old}}
-\end{aligned}$$
-
-Radial coordinates, lithostatic stress profiles, thermal depth gradients, and chemical stratification profiles are unaffected by domain doubling.
-
----
-
-### Staggered Grid Array Centering and Parity Invariant
-
-Symmetric centering of Eulerian field arrays requires odd basic grid dimensions $N_x$ and $N_y$ ($N_x = 2k + 1, N_y = 2m + 1$). Under this parity condition:
-
-$$N_x^{\text{new}} - N_x^{\text{old}} = (2(2k) + 1) - (2k + 1) = 2k$$
-
-$$j_{\text{off}} = \frac{N_x^{\text{new}} - N_x^{\text{old}}}{2} = k$$
-
-$$i_{\text{off}} = \frac{N_y^{\text{new}} - N_y^{\text{old}}}{2} = m$$
-
-The physical translation of the planetary center satisfies:
-
-$$\Delta x_{\text{shift}} = \frac{x_{\text{size}}}{2} = \frac{(N_x^{\text{old}} - 1) dx}{2} = k \, dx = j_{\text{off}} \, dx$$
-
-$$\Delta y_{\text{shift}} = \frac{y_{\text{size}}}{2} = \frac{(N_y^{\text{old}} - 1) dy}{2} = m \, dy = i_{\text{off}} \, dy$$
-
-Because continuous marker coordinate shifts $\Delta x_{\text{shift}}$ and discrete grid node shifts $j_{\text{off}} \, dx$ match identically, markers and Eulerian grid nodes maintain zero relative offset across domain doubling. If $N_x$ or $N_y$ were even, $(N_x - 1)$ would be odd, introducing a half-cell offset ($dx / 2$) between continuous marker centers and discrete node blocks. Consequently, `Erebus.jl` validates and enforces odd grid dimensions whenever telescoping is active.
-
-1. **Basic Node Remapping:** For arrays of size $(N_y, N_x)$ (for example shear viscosity $\eta$, shear modulus $G$, stress components $\sigma_{xy}$):
-   $$A^{\text{new}}[i_{\text{off}} + i, \, j_{\text{off}} + j] = A^{\text{old}}[i, j] \qquad \forall \; 1 \le i \le N_y^{\text{old}}, \; 1 \le j \le N_x^{\text{old}}$$
-   Outer grid nodes outside this central sub-block are initialized to background values.
-
-2. **Staggered Velocity and Flux Nodes:** In `Erebus.jl`, velocity and flux arrays are allocated with dimensions $(N_{y1}, N_{x1})$ where $N_{y1} = N_y + 1$ and $N_{x1} = N_x + 1$. Because $N_{x1}^{\text{new}} - N_{x1}^{\text{old}} = N_x^{\text{new}} - N_x^{\text{old}} = 2k$, the staggered offsets satisfy $j_{\text{off},1} = j_{\text{off}} = k$ and $i_{\text{off},1} = i_{\text{off}} = m$. Velocity nodes in outer buffer cells are set to zero ($v_x = 0$, $v_y = 0$) to enforce zero-traction boundary conditions in the far field.
-
----
-
-### Sticky-Air Buffer Marker Generation
-
-When the computational box doubles, the physical area quadruples:
-
-$$A_{\text{new}} = x_{\text{size}}^{\text{new}} \, y_{\text{size}}^{\text{new}} = 4 \, x_{\text{size}} \, y_{\text{size}} = 4 \, A_{\text{old}}$$
-
-The central region of area $A_{\text{old}}$ contains all original planetary and sticky-air markers. The outer buffer cells, encompassing the remaining area $3 A_{\text{old}}$, are populated with new sticky-air markers to maintain consistent marker coverage:
-
-1. **Cell Sub-Grid Invariant:** For each cell $(i, j)$ outside the central region ($1 \le j \le N_{x,\text{cells}}^{\text{new}}$, $1 \le i \le N_{y,\text{cells}}^{\text{new}}$ with $(i, j)$ outside the inner region), $n_{\text{sub}} = \text{buffer\_markers\_per\_cell}$ markers are injected.
-2. **Sub-Cell Positioning:** With $n_x$ defined as the largest divisor of $n_{\text{sub}}$ satisfying $n_x \le \lfloor\sqrt{n_{\text{sub}}}\rfloor$ and $n_y = n_{\text{sub}} / n_x$ (yielding $n_x = n_y = \sqrt{n_{\text{sub}}}$ for square values such as 1, 4, 9, 16), markers are positioned uniformly at:
-   $$x_m = (j - 1) dx + \left(i_x - \frac{1}{2}\right) \frac{dx}{n_x}, \qquad y_m = (i - 1) dy + \left(i_y - \frac{1}{2}\right) \frac{dy}{n_y}$$
-3. **Sticky-Air Material Properties:** Buffer markers receive ambient sticky-air properties:
-   - Phase type: $tm = 3$ (sticky air)
-   - Temperature: $T = T_{\text{ambient}}$ (default $250.0\text{ K}$)
-   - Porosity: $\phi = \phi_{\text{ambient}}$ (default $0.35$)
-   - Total density: $\rho = 1.0\text{ kg/m}^3$ (or configured sticky-air density)
-   - Viscosity: $\eta = 1.0 \times 10^{16}\text{ Pa s}$ (or configured sticky-air viscosity)
-   - Radiogenic heat source: $hr = 0.0\text{ W/kg}$
-   - Volatile fractions: $X_{\text{H}_2\text{O}} = 0$, $X_{\text{C}} = 0$, $X_{\text{N}} = 0$, $X_{\text{S}} = 0$
-   - Bulk metal fraction: $X_{\text{fe,bulk}} = 0$
+- **Invariant Grid Resolution ($dx = \text{const}$):**
+  $$x_{\text{size}}^{\text{new}} = 2 \, x_{\text{size}}, \quad N_x^{\text{new}} = 2(N_x - 1) + 1 \implies dx^{\text{new}} = dx$$
+- **Trigger Criterion:**
+  $$R(t) > f_{\text{threshold}} \cdot \frac{x_{\text{size}}}{2}, \quad f_{\text{threshold}} = 0.70$$
+- **Marker Coordinate Translation:**
+  $$x_m^{\text{new}} = x_m^{\text{old}} + \frac{x_{\text{size}}}{2}, \quad y_m^{\text{new}} = y_m^{\text{old}} + \frac{y_{\text{size}}}{2} \implies r_m^{\text{new}} = r_m^{\text{old}}$$
+- **Odd-Parity Grid Remapping:**
+  $$j_{\text{off}} = \frac{N_x^{\text{new}} - N_x^{\text{old}}}{2} = k, \quad \Delta x_{\text{shift}} = j_{\text{off}} \, dx$$
+  $$A^{\text{new}}[i_{\text{off}} + i, \, j_{\text{off}} + j] = A^{\text{old}}[i, j]$$
+- **Sticky-Air Buffer Replenishment:** Injection of $n_{\text{sub}}$ neutral markers per cell in outer cells of area $3 A_{\text{old}}$ with phase type $tm = 3$ and ambient thermal properties.
 
 ---
 

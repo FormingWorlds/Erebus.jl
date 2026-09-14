@@ -29,7 +29,6 @@ makedocs(;
         "Home" => "index.md",
         "Tutorials" => [
             "Quickstart" => "tutorials/quickstart.md",
-            "1D Terzaghi Consolidation" => "tutorials/terzaghi_consolidation.md",
             "2D Hydrothermal Circulation" => "tutorials/hydrothermal_circulation.md",
             "Planetesimal Differentiation" => "tutorials/planetesimal_differentiation.md",
             "Growth to Lunar Mass" => "tutorials/growth_to_lunar_mass.md",
@@ -51,10 +50,10 @@ makedocs(;
             "Iron Core Formation & Metal Segregation" => "explanations/core_formation.md",
             "Planetesimal Accretion Mechanics" => "explanations/accretion_mechanics.md",
             "Telescoping Domain Dynamics" => "explanations/telescoping_domain.md",
-            "Verification & Benchmarks" => "explanations/verification.md",
         ],
         "Validation" => [
             "Overview" => "validation/index.md",
+            "1D Terzaghi Consolidation" => "validation/terzaghi_consolidation.md",
             "Thermal Conduction & Geometry" => "validation/thermal_conduction.md",
             "Permeability & Hydrofracture" => "validation/permeability.md",
             "Radionuclide Decay" => "validation/radionuclides.md",

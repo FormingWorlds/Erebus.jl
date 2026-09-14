@@ -18,93 +18,25 @@ The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \a
 
 ---
 
-## 2. Mathematical Formulation
+### 2. Theoretical Formulation
 
-### Metal Melting and Volume Fraction
+The physical theory, chemical equation of state models (Sanloup et al., 2000; Morard et al., 2014), permeability relations, and droplet breakup mechanics are derived in detail in [Iron Core Formation and Metal Segregation](../explanations/core_formation.md).
 
-The local metallic melt fraction $\chi_m(T)$ transitions linearly over a specified melting interval $\Delta T_{\text{metal}}$ above the eutectic temperature $T_{\text{eutectic}}$:
+Key constitutive formulations validated on this page include:
 
-$$\chi_m(T) = \text{clamp}\left(\frac{T - T_{\text{eutectic}}}{\Delta T_{\text{metal}}}, 0, 1\right)$$
-
-The mobile liquid metal volume fraction $\phi_m$ is:
-
-$$\phi_m = \chi_m(T) \cdot X_{\text{fe,bulk}}$$
-
-where $X_{\text{fe,bulk}}$ is the local bulk metal volume fraction on markers.
-
-### Porous Percolation Regime
-
-When the silicate matrix remains predominantly solid ($F_m \le F_{\text{settle,start}}$), liquid metal drains as a porous fluid through interconnected grain edges. Darcy filtration flux is $q_{\text{perc}} = (k_{\text{metal}} / \eta_{\text{metal}}) \Delta\rho g$. The interstitial pore segregation velocity $v_{\text{perc}}$ available for mobile metal transport is:
-
-$$v_{\text{perc}} = \frac{k_{\text{metal}}(\phi_m)}{\phi_m \, \eta_{\text{metal}}} \Delta\rho \, g \left(\frac{\phi_m - \phi_{\text{residual}}}{\phi_m}\right)$$
-
-where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $\eta_{\text{metal}}$ is the liquid metal dynamic viscosity ($10^{-2}\text{ Pa s}$), and $g$ is local gravitational acceleration. The term $(\phi_m - \phi_{\text{residual}}) / \phi_m$ accounts for the mobile fraction above the residual trapped threshold.
-
-The permeability of the liquid metal network follows the modified Kozeny-Carman power-law:
-
-$$k_{\text{metal}}(\phi_m) = \begin{cases}
-0, & \phi_m \le \phi_{\text{crit}} \\
-k_{\text{ref}} \left(\frac{\phi_m - \phi_{\text{crit}}}{\phi_0}\right)^n \left(\frac{1 - (\phi_m - \phi_{\text{crit}})}{1 - \phi_0}\right)^{-2}, & \phi_{\text{crit}} < \phi_m < \phi_{\text{pack}}
-\end{cases}$$
-
-where $\phi_{\text{crit}}$ is the percolation threshold, $\phi_0$ is the reference porosity ($0.10$ by default, configurable via `phi0`), $k_{\text{ref}}$ is the reference permeability ($10^{-9}\text{ m}^2$), and $n$ is the permeability exponent ($n = 3$). If $\phi_m \le \phi_{\text{residual}}$, flow ceases and residual metal is trapped in matrix pores.
-
-### Magma Ocean Droplet Settling Regime
-
-When silicate melt fraction exceeds $F_{\text{perc,end}}$, the silicate matrix loses macroscopic shear strength. Liquid metal droplets sink through the magma suspension. The terminal Stokes settling velocity of an isolated droplet of radius $r_d$ is:
-
-$$v_{\text{Stokes}} = \frac{2}{9} \frac{\Delta\rho \, g \, r_d^2}{\eta_{\text{silicate}}}$$
-
-where $\eta_{\text{silicate}}$ is the effective melt-weakened viscosity of the surrounding silicate magma.
-
-To account for two-phase fluid interactions, two corrections are applied:
-
-1. **Hadamard-Rybczynski Circulation Factor**: For fluid metal droplets in fluid silicate:
-   $$f_{\text{HR}} = \frac{3\eta_{\text{silicate}} + 3\eta_{\text{metal}}}{2\eta_{\text{silicate}} + 3\eta_{\text{metal}}}$$
-   When enabled, this factor increases terminal velocity by up to $1.5$ relative to rigid spheres in the inviscid droplet limit ($\eta_{\text{metal}} \ll \eta_{\text{silicate}}$).
-2. **Richardson-Zaki Hindered Settling**: Droplet-droplet return flow suppresses settling velocity at finite metal concentration up to the packing ceiling $\phi_{\text{pack}}$:
-   $$f_{\text{hindered}} = \left(1 - \frac{\phi_m}{\phi_{\text{pack}}}\right)^m$$
-   where $m$ is the hindered settling exponent ($m = 4.5$).
-
-The stable droplet diameter $d_d = 2 r_d$ is evaluated based on `droplet_size_mode`:
-
-- `:fixed`: Uses constant specified diameter $d_d = \text{droplet\_diameter\_fixed}$.
-- `:weber_mean`: Gravity-capillary balance balancing interfacial surface tension and gravitational body force:
-  $$d_d = \sqrt{\frac{\text{We}_{\text{crit}} \sigma_{\text{metal-silicate}}}{\Delta\rho \, g}}$$
-- `:weber_turbulent`: Relative velocity dynamic pressure balance:
-  $$d_d = \frac{\text{We}_{\text{crit}} \sigma_{\text{metal-silicate}}}{\rho_{\text{silicate}} v_{\text{rel}}^2}$$
-
-In numerical calculations, $r_d$ is clamped within $[10^{-4}, 0.05]\text{ m}$.
-
-### Continuous Regime Transition
-
-Over the rheological breakdown interval $F_m \in [F_{\text{settle,start}}, F_{\text{perc,end}}]$, the net segregation velocity transitions smoothly using a cubic Hermite polynomial:
-
-$$\xi = \text{clamp}\left(\frac{F_m - F_{\text{settle,start}}}{F_{\text{perc,end}} - F_{\text{settle,start}}}, 0, 1\right)$$
-
-$$w = 3\xi^2 - 2\xi^3$$
-
-$$v_{\text{seg}} = (1 - w) v_{\text{perc}} + w v_{\text{settle}}$$
-
-This guarantees $C^1$ continuity of the velocity field and prevents unphysical numerical shocks.
-
-### Segregation Dissipation Heating
-
-The loss of gravitational potential energy during metal descent is converted into volumetric dissipation heat:
-
-$$Q_{\text{seg}} = \phi_{m,\text{curr}} \Delta\rho \, g \, v_{\text{seg}}$$
-
-where $\phi_{m,\text{curr}} = \chi_m(T) \cdot X_{\text{fe,bulk}}$ is the local molten metal fraction. This volumetric heating rate [$W/\text{m}^3$] is distributed to surrounding grid nodes. In the numerical operator splitting, dissipation heating $Q_{\text{seg}}$ computed at timestep $t$ is added to the thermal right-hand-side vector $HR$ before the energy solve at timestep $t+1$.
-
-### Material Property Blending
-
-As metal migrates, physical properties blend locally based on bulk metal fraction $X_{\text{fe}}$:
-
-- **Density**: Volume-weighted mixture:
+- **Mobile Metal Volume Fraction ($\phi_m$):**
+  $$\phi_m = \chi_m(T) \cdot X_{\text{fe,bulk}}, \quad \chi_m(T) = \text{clamp}\left(\frac{T - T_{\text{eutectic}}}{\Delta T_{\text{metal}}}, 0, 1\right)$$
+- **Porous Darcy Percolation Velocity ($v_{\text{perc}}$):**
+  $$v_{\text{perc}} = \frac{k_{\text{metal}}(\phi_m)}{\phi_m \, \eta_{\text{metal}}} \Delta\rho \, g \left(\frac{\phi_m - \phi_{\text{residual}}}{\phi_m}\right)$$
+- **Magma Ocean Stokes Settling Velocity ($v_{\text{Stokes}}$):**
+  $$v_{\text{Stokes}} = \frac{2}{9} \frac{\Delta\rho \, g \, r_d^2}{\eta_{\text{silicate}}} f_{\text{HR}} f_{\text{hindered}}$$
+- **Continuous Hermite Handover ($v_{\text{seg}}$):** Smooth $C^1$ transition across the rheological breakdown interval $F_m \in [F_{\text{settle,start}}, F_{\text{perc,end}}]$:
+  $$v_{\text{seg}} = (1 - w) v_{\text{perc}} + w v_{\text{settle}}, \quad w = 3\xi^2 - 2\xi^3$$
+- **Gravitational Dissipation Heating ($Q_{\text{seg}}$):**
+  $$Q_{\text{seg}} = \phi_{m,\text{curr}} \Delta\rho \, g \, v_{\text{seg}}$$
+- **Volume-Weighted Material Property Blending:**
   $$\rho = (1 - X_{\text{fe}}) \rho_{\text{silicate}} + X_{\text{fe}} \rho_{\text{metal}}$$
-- **Heat Capacity**: Volumetric mixture:
   $$\rho c_p = (1 - X_{\text{fe}}) (\rho c_p)_{\text{silicate}} + X_{\text{fe}} (\rho c_p)_{\text{metal}}$$
-- **Thermal Conductivity**: Volume-weighted arithmetic mixture (standard in simulation loop):
   $$k = (1 - X_{\text{fe}}) k_{\text{silicate}} + X_{\text{fe}} k_{\text{metal}}$$
 
 ---

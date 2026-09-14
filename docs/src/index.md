@@ -31,34 +31,46 @@
   Coupled Darcy porous percolation of liquid Fe-FeS through solid silicate matrix, Stokes gravitational settling through magma oceans with Richardson-Zaki hindrance, Weber droplet breakup, dynamic density EOS, and gravitational dissipation heating.
 
 - **Multi-Species Volatile Degassing & Atmospheric Escape**:
-  Coupled multi-component H-C-N-S volatile solubility, homogeneous gas speciation across ten species, graphite saturation clipping, chemical nitride dissolution under reducing conditions, cold surface venting, and hydrodynamic/Jeans kinetic atmospheric escape.
+  Coupled multi-component H-C-N-S volatile solubility, homogeneous gas speciation for ten species, graphite saturation clipping, chemical nitride dissolution under reducing conditions, cold surface venting, and hydrodynamic/Jeans kinetic atmospheric escape.
 
 - **Reproducible TOML Configuration**:
-  Declarative simulation parameters structured across grid, geometry, timestepping, solver controls, poroelasticity, thermodynamics, materials, and output storage.
+  Declarative simulation parameters structured by grid, geometry, timestepping, solver controls, poroelasticity, thermodynamics, materials, and output storage.
+
+---
+
+## Architecture & Execution Flow
+
+`Erebus.jl` couples Eulerian staggered finite-difference grids with Lagrangian Marker-in-Cell particles in an adaptive multi-physics execution pipeline:
+
+![Erebus.jl Architecture & Execution Flow](assets/erebus_architecture_flowchart.svg)
 
 ---
 
 ## Documentation Structure
 
-The documentation follows the Diataxis framework, separated into four distinct quadrants:
+The documentation follows the Diataxis framework, structured into learning, task, theoretical, validation, and reference categories:
 
 ```@raw html
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
-  <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-    <h3><a href="tutorials/quickstart/">Tutorials</a></h3>
-    <p>Learning-oriented guides taking you through a complete simulation run and analytical benchmark verification.</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 20px;">
+  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
+    <h3 style="margin-top: 0;"><a href="tutorials/quickstart/" style="color: #DE7037;">Tutorials</a></h3>
+    <p style="color: #E6DAB6; font-size: 14px;">Workflow-oriented guides taking you through a complete simulation run, hydrothermal circulation, differentiation, and growth to lunar mass.</p>
   </div>
-  <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-    <h3><a href="howto/installation/">How-To Guides</a></h3>
-    <p>Task-oriented instructions for configuring simulation setups, exploring parameter spaces, and post-processing output files.</p>
+  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
+    <h3 style="margin-top: 0;"><a href="howto/installation/" style="color: #DE7037;">How-To Guides</a></h3>
+    <p style="color: #E6DAB6; font-size: 14px;">Task-oriented instructions for configuring simulation setups, tuning numerical solvers, and post-processing outputs.</p>
   </div>
-  <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-    <h3><a href="explanations/model_overview/">Explanations</a></h3>
-    <p>In-depth theoretical background on the governing Stokes-Darcy equations, poroelastic constitutive laws, and numerical algorithms.</p>
+  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
+    <h3 style="margin-top: 0;"><a href="explanations/model_overview/" style="color: #DE7037;">Explanations</a></h3>
+    <p style="color: #E6DAB6; font-size: 14px;">In-depth theoretical derivations of governing Stokes-Darcy equations, melting rheology, core segregation, and atmospheric loss.</p>
   </div>
-  <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">
-    <h3><a href="reference/config_schema/">Reference</a></h3>
-    <p>Comprehensive technical specifications for all TOML configuration options, submodule APIs, and literature citations.</p>
+  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
+    <h3 style="margin-top: 0;"><a href="validation/" style="color: #DE7037;">Validation</a></h3>
+    <p style="color: #E6DAB6; font-size: 14px;">Closed-form analytical benchmarks, grid convergence tests, and observational meteorite matching for all physical modules.</p>
+  </div>
+  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
+    <h3 style="margin-top: 0;"><a href="reference/config_schema/" style="color: #DE7037;">Reference</a></h3>
+    <p style="color: #E6DAB6; font-size: 14px;">Technical specifications for all TOML configuration options, public API functions, and source literature citations.</p>
   </div>
 </div>
 ```
