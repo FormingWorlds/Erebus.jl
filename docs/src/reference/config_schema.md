@@ -353,6 +353,13 @@ Parameters controlling planetary atmospheric accumulation, kinetic Jeans escape,
 | `species_list` | `Vector{Symbol}` | `[:H2O, :H2, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2]` | - | Volatile species tracked for multi-species escape | valid symbols |
 | `gamma` | `Float64` | `1.4` | - | Atmospheric adiabatic index (ratio of specific heats) | $> 0$ |
 | `hydrodynamic` | `Bool` | `true` | - | Check hydrodynamic energy-limited escape rate ceiling | `true` / `false` |
+| `xuv_driven` | `Bool` | `false` | - | Enable stellar XUV photoevaporation mass loss | `true` / `false` |
+| `epsilon_xuv` | `Float64` | `0.15` | - | Photoevaporation energy-limited escape efficiency | $> 0$ |
+| `F_xuv_1au_sat` | `Float64` | `1.361` | $\mathrm{W}/\mathrm{m}^2$ | Saturated stellar XUV flux at 1 AU | $\ge 0$ |
+| `t_sat_yr` | `Float64` | `1.0e+8` | yr | Saturated phase duration | $> 0$ |
+| `beta_xuv` | `Float64` | `1.23` | - | XUV flux power-law decay exponent (Ribas et al. 2005) | $\ge 0$ |
+| `r_xuv_ratio` | `Float64` | `1.0` | - | Effective XUV absorption radius ratio $R_{\mathrm{XUV}} / R_{\mathrm{planet}}$ | $\ge 1.0$ |
+| `tidal_correction` | `Bool` | `true` | - | Enable Roche lobe / tidal gravitational barrier reduction | `true` / `false` |
 
 ---
 
@@ -785,6 +792,33 @@ P_ref = 1.0
 | `T_cond_PH3` | `Float64` | `40.0` | K | Phosphine ice condensation temperature | $\ge 0$ |
 | `alpha_P` | `Float64` | `0.0` | - | Clausius-Clapeyron pressure-shifting sensitivity factor | $\ge 0$ |
 | `P_ref` | `Float64` | `1.0` | Pa | Reference pressure for disk condensation shifting | $> 0$ |
+
+---
+
+## `[magma_degassing]`
+
+Configuration for multi-component volatile partitioning and degassing between liquid silicate melt and atmosphere across magma ocean differentiation and melt crystallization.
+
+```toml
+[magma_degassing]
+active = false
+mode = "dynamic_flux"
+F_melt_threshold = 0.40
+degas_depth_fraction = 0.90
+crystallization_degassing = true
+redox_coupled = true
+efficiency = 1.0
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable magma ocean volatile partitioning and degassing | `true` / `false` |
+| `mode` | `Symbol` | `:dynamic_flux` | - | Degassing mode | `:dynamic_flux`, `:equilibrium` |
+| `F_melt_threshold` | `Float64` | `0.40` | - | Silicate melt fraction threshold for active magma ocean degassing | $\in [0, 1]$ |
+| `degas_depth_fraction` | `Float64` | `0.90` | - | Planetary radius fraction above which ascending melt degasses | $\in [0, 1]$ |
+| `crystallization_degassing` | `Bool` | `true` | - | Enable incompatible volatile concentration upon crystallization | `true` / `false` |
+| `redox_coupled` | `Bool` | `true` | - | Couple degassing speciation to local marker redox $\Delta\mathrm{IW}$ state | `true` / `false` |
+| `efficiency` | `Float64` | `1.0` | - | Volatile exsolution kinetics efficiency factor | $\in (0, 1]$ |
 
 ---
 

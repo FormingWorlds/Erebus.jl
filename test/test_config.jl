@@ -553,4 +553,83 @@ include("test_helpers.jl")
         @test dict_cfg["redox"]["reference"] == "crust"
         @test isapprox(dict_cfg["refractory"]["T_pyro_min"], 320.0; atol=1e-12)
     end
+
+    @testset "MagmaOceanDegassingConfig & EscapeConfig XUV validation and TOML roundtrip" begin
+        # 1. MagmaOceanDegassingConfig constructor validation
+        cfg_mo = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:equilibrium,
+            F_melt_threshold=0.5,
+            degas_depth_fraction=0.85,
+            efficiency=0.9,
+        )
+        @test cfg_mo.active == true
+        @test cfg_mo.mode === :equilibrium
+        @test isapprox(cfg_mo.F_melt_threshold, 0.5)
+        @test isapprox(cfg_mo.degas_depth_fraction, 0.85)
+        @test isapprox(cfg_mo.efficiency, 0.9)
+
+        # Domain errors for MagmaOceanDegassingConfig
+        @test_throws ArgumentError MagmaOceanDegassingConfig(; mode=:invalid_mode)
+        @test_throws DomainError MagmaOceanDegassingConfig(; F_melt_threshold=-0.1)
+        @test_throws DomainError MagmaOceanDegassingConfig(; F_melt_threshold=1.1)
+        @test_throws DomainError MagmaOceanDegassingConfig(; degas_depth_fraction=-0.05)
+        @test_throws DomainError MagmaOceanDegassingConfig(; degas_depth_fraction=1.05)
+        @test_throws DomainError MagmaOceanDegassingConfig(; efficiency=0.0)
+        @test_throws DomainError MagmaOceanDegassingConfig(; efficiency=1.5)
+
+        # 2. EscapeConfig XUV domain errors
+        @test_throws DomainError EscapeConfig(; epsilon_xuv=0.0)
+        @test_throws DomainError EscapeConfig(; epsilon_xuv=-0.1)
+        @test_throws DomainError EscapeConfig(; F_xuv_1au_sat=-1.0)
+        @test_throws DomainError EscapeConfig(; t_sat_yr=0.0)
+        @test_throws DomainError EscapeConfig(; beta_xuv=-0.5)
+        @test_throws DomainError EscapeConfig(; r_xuv_ratio=0.8)
+
+        # 3. TOML loading and roundtrip
+        toml_overlay = """
+        [magma_degassing]
+        active = true
+        mode = "equilibrium"
+        F_melt_threshold = 0.35
+        degas_depth_fraction = 0.92
+        crystallization_degassing = true
+        redox_coupled = true
+        efficiency = 0.85
+
+        [escape]
+        active = true
+        xuv_driven = true
+        epsilon_xuv = 0.20
+        F_xuv_1au_sat = 2.5
+        t_sat_yr = 5.0e7
+        beta_xuv = 1.15
+        r_xuv_ratio = 1.05
+        tidal_correction = true
+        """
+        cfg_loaded = load_config(toml_overlay)
+        validate_config(cfg_loaded)
+        @test cfg_loaded.magma_degassing.active == true
+        @test cfg_loaded.magma_degassing.mode === :equilibrium
+        @test isapprox(cfg_loaded.magma_degassing.F_melt_threshold, 0.35)
+        @test isapprox(cfg_loaded.magma_degassing.degas_depth_fraction, 0.92)
+        @test cfg_loaded.magma_degassing.crystallization_degassing == true
+        @test isapprox(cfg_loaded.magma_degassing.efficiency, 0.85)
+
+        @test cfg_loaded.escape.active == true
+        @test cfg_loaded.escape.xuv_driven == true
+        @test isapprox(cfg_loaded.escape.epsilon_xuv, 0.20)
+        @test isapprox(cfg_loaded.escape.F_xuv_1au_sat, 2.5)
+        @test isapprox(cfg_loaded.escape.t_sat_yr, 5.0e7)
+        @test isapprox(cfg_loaded.escape.beta_xuv, 1.15)
+        @test isapprox(cfg_loaded.escape.r_xuv_ratio, 1.05)
+        @test cfg_loaded.escape.tidal_correction == true
+
+        # Roundtrip via dict
+        dict_repr = config_to_dict(cfg_loaded)
+        @test haskey(dict_repr, "magma_degassing")
+        @test haskey(dict_repr, "escape")
+        @test dict_repr["magma_degassing"]["mode"] == "equilibrium"
+        @test isapprox(dict_repr["escape"]["epsilon_xuv"], 0.20)
+    end
 end

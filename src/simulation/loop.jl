@@ -3017,6 +3017,58 @@ function simulation_loop(
                     tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
                 )
 
+                degas_rates =
+                    if cfg.magma_degassing.active && XH2Om !== nothing && Fm !== nothing
+                        p_surf_mo = atm_state.P_surf > 0.0 ? atm_state.P_surf : P_amb_eff
+                        fO2_diw_mo =
+                            if redox_props !== nothing && redox_props.deltaIW_m !== nothing
+                                surf_count = 0
+                                surf_diw = 0.0
+                                r_cut_sq = (0.8 * rplanet_val)^2
+                                for m in 1:marknum
+                                    if tm[m] < 3 && (xm[m]^2 + ym[m]^2) >= r_cut_sq
+                                        surf_diw += redox_props.deltaIW_m[m]
+                                        surf_count += 1
+                                    end
+                                end
+                                if surf_count > 0
+                                    (surf_diw / surf_count)
+                                else
+                                    (
+                                    sum(redox_props.deltaIW_m) /
+                                    length(redox_props.deltaIW_m)
+                                )
+                                end
+                            else
+                                cfg.volatiles.fO2_delta_IW
+                            end
+                        v_m = (coords.xsize * coords.ysize) / max(1, marknum)
+                        Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
+                        degas_magma_ocean_markers!(
+                            tm,
+                            xm,
+                            ym,
+                            Fm,
+                            Fm_prev,
+                            tkm,
+                            XH2Om,
+                            XCm,
+                            XNm,
+                            XSm,
+                            marknum,
+                            dt,
+                            p_surf_mo,
+                            rplanet_val,
+                            cfg.magma_degassing;
+                            rho_solid=cfg.materials.rhosolidm[1],
+                            marker_volume=v_m,
+                            delta_IW=fO2_diw_mo,
+                            retention_cfg=cfg.retention,
+                        )
+                    else
+                        nothing
+                    end
+
                 evolve_coupled_atmosphere_step!(
                     atm_state,
                     vent_rates,
@@ -3035,6 +3087,9 @@ function simulation_loop(
                     hydrodynamic=cfg.escape.hydrodynamic,
                     gamma=cfg.escape.gamma,
                     escape_active=cfg.escape.active,
+                    escape_cfg=cfg.escape,
+                    sim_time_s=timesum,
+                    degas_rates=degas_rates,
                 )
 
                 M_atm_total = sum(values(atm_state.M_atm))

@@ -303,6 +303,53 @@ Base.@kwdef struct MeltingConfig
 end
 
 """
+Magma ocean multi-component volatile partitioning and degassing configuration.
+
+Configures equilibrium and dynamic degassing of H, C, N, S volatiles between silicate melt
+and overlying atmosphere across magma ocean differentiation and melt crystallization.
+
+$(FIELDS)
+"""
+Base.@kwdef struct MagmaOceanDegassingConfig
+    active::Bool = false
+    mode::Symbol = :dynamic_flux
+    F_melt_threshold::Float64 = 0.40
+    degas_depth_fraction::Float64 = 0.90
+    crystallization_degassing::Bool = true
+    redox_coupled::Bool = true
+    efficiency::Float64 = 1.0
+
+    function MagmaOceanDegassingConfig(
+        active::Bool,
+        mode::Symbol,
+        F_melt_threshold::Real,
+        degas_depth_fraction::Real,
+        crystallization_degassing::Bool,
+        redox_coupled::Bool,
+        efficiency::Real,
+    )
+        (mode === :equilibrium || mode === :dynamic_flux) ||
+            throw(ArgumentError("mode must be :equilibrium or :dynamic_flux, got '$mode'"))
+        (0.0 <= F_melt_threshold <= 1.0) ||
+            throw(DomainError(F_melt_threshold, "F_melt_threshold must be in [0, 1]"))
+        (0.0 <= degas_depth_fraction <= 1.0) || throw(
+            DomainError(degas_depth_fraction, "degas_depth_fraction must be in [0, 1]")
+        )
+        (0.0 < efficiency <= 1.0) ||
+            throw(DomainError(efficiency, "efficiency must be in (0, 1]"))
+        return new(
+            active,
+            mode,
+            Float64(F_melt_threshold),
+            Float64(degas_depth_fraction),
+            crystallization_degassing,
+            redox_coupled,
+            Float64(efficiency),
+        )
+    end
+end
+
+"""
 Two-phase buoyant silicate melt segregation and magma migration parameters.
 
 Configures Darcy percolation of buoyant silicate melt through a compacting solid
@@ -740,7 +787,7 @@ Base.@kwdef struct AtmosphereConfig
 end
 
 """
-Atmospheric Jeans kinetic escape and volatile mass loss parameters.
+Atmospheric Jeans kinetic escape, XUV photoevaporation, and volatile mass loss parameters.
 
 $(FIELDS)
 """
@@ -755,6 +802,68 @@ Base.@kwdef struct EscapeConfig
     species_list::Vector{Symbol} = [:H2O, :H2, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2]
     gamma::Float64 = 1.4
     hydrodynamic::Bool = true
+    xuv_driven::Bool = false
+    epsilon_xuv::Float64 = 0.15
+    F_xuv_1au_sat::Float64 = 1.361
+    t_sat_yr::Float64 = 1.0e8
+    beta_xuv::Float64 = 1.23
+    r_xuv_ratio::Float64 = 1.0
+    tidal_correction::Bool = true
+
+    function EscapeConfig(
+        active,
+        M_planet,
+        R_planet,
+        T_exobase,
+        R_exobase,
+        species,
+        multi_species,
+        species_list,
+        gamma,
+        hydrodynamic,
+        xuv_driven,
+        epsilon_xuv,
+        F_xuv_1au_sat,
+        t_sat_yr,
+        beta_xuv,
+        r_xuv_ratio,
+        tidal_correction,
+    )
+        if epsilon_xuv <= 0.0 || !isfinite(epsilon_xuv)
+            throw(DomainError(epsilon_xuv, "epsilon_xuv must be > 0 and finite"))
+        end
+        if F_xuv_1au_sat < 0.0 || !isfinite(F_xuv_1au_sat)
+            throw(DomainError(F_xuv_1au_sat, "F_xuv_1au_sat must be >= 0 and finite"))
+        end
+        if t_sat_yr <= 0.0 || !isfinite(t_sat_yr)
+            throw(DomainError(t_sat_yr, "t_sat_yr must be > 0 and finite"))
+        end
+        if beta_xuv < 0.0 || !isfinite(beta_xuv)
+            throw(DomainError(beta_xuv, "beta_xuv must be >= 0 and finite"))
+        end
+        if r_xuv_ratio < 1.0 || !isfinite(r_xuv_ratio)
+            throw(DomainError(r_xuv_ratio, "r_xuv_ratio must be >= 1.0 and finite"))
+        end
+        return new(
+            active,
+            Float64(M_planet),
+            Float64(R_planet),
+            Float64(T_exobase),
+            Float64(R_exobase),
+            Symbol(species),
+            multi_species,
+            Vector{Symbol}(species_list),
+            Float64(gamma),
+            hydrodynamic,
+            xuv_driven,
+            Float64(epsilon_xuv),
+            Float64(F_xuv_1au_sat),
+            Float64(t_sat_yr),
+            Float64(beta_xuv),
+            Float64(r_xuv_ratio),
+            tidal_correction,
+        )
+    end
 end
 
 """
@@ -985,6 +1094,7 @@ Base.@kwdef struct SimulationConfig
     atmosphere::AtmosphereConfig = AtmosphereConfig()
     magma_transport::MagmaTransportConfig = MagmaTransportConfig()
     redox::RedoxConfig = RedoxConfig()
+    magma_degassing::MagmaOceanDegassingConfig = MagmaOceanDegassingConfig()
 end
 
 """
@@ -2110,6 +2220,36 @@ function validate_config(cfg::SimulationConfig)
         end
     end
 
+    # Magma ocean degassing validation
+    if cfg.magma_degassing.active
+        cfg.magma_degassing.mode in Set([:equilibrium, :dynamic_flux]) || throw(
+            ArgumentError(
+                "magma_degassing.mode must be :equilibrium or :dynamic_flux, got $(cfg.magma_degassing.mode)",
+            ),
+        )
+        @check_unit_interval cfg.magma_degassing.F_melt_threshold
+        @check_unit_interval cfg.magma_degassing.degas_depth_fraction
+        (
+            0.0 < cfg.magma_degassing.efficiency <= 1.0 &&
+            isfinite(cfg.magma_degassing.efficiency)
+        ) || throw(
+            ArgumentError(
+                "magma_degassing.efficiency must be in (0, 1], got $(cfg.magma_degassing.efficiency)",
+            ),
+        )
+    end
+
+    # EscapeConfig validation
+    @check_positive_finite cfg.escape.epsilon_xuv
+    @check_nonneg_finite cfg.escape.F_xuv_1au_sat
+    @check_positive_finite cfg.escape.t_sat_yr
+    @check_nonneg_finite cfg.escape.beta_xuv
+    (cfg.escape.r_xuv_ratio >= 1.0 && isfinite(cfg.escape.r_xuv_ratio)) || throw(
+        ArgumentError(
+            "escape.r_xuv_ratio must be >= 1.0 and finite, got $(cfg.escape.r_xuv_ratio)",
+        ),
+    )
+
     return nothing
 end
 
@@ -2205,6 +2345,7 @@ const VALID_SECTIONS = Set([
     "atmosphere",
     "magma_transport",
     "redox",
+    "magma_degassing",
 ])
 
 """
@@ -2330,6 +2471,13 @@ function load_config(source::AbstractString)::SimulationConfig
                     species_list=def.escape.species_list,
                     gamma=def.escape.gamma,
                     hydrodynamic=def.escape.hydrodynamic,
+                    xuv_driven=def.escape.xuv_driven,
+                    epsilon_xuv=def.escape.epsilon_xuv,
+                    F_xuv_1au_sat=def.escape.F_xuv_1au_sat,
+                    t_sat_yr=def.escape.t_sat_yr,
+                    beta_xuv=def.escape.beta_xuv,
+                    r_xuv_ratio=def.escape.r_xuv_ratio,
+                    tidal_correction=def.escape.tidal_correction,
                 )
             else
                 def.escape
@@ -2348,6 +2496,13 @@ function load_config(source::AbstractString)::SimulationConfig
                 species_list=def.escape.species_list,
                 gamma=def.escape.gamma,
                 hydrodynamic=def.escape.hydrodynamic,
+                xuv_driven=def.escape.xuv_driven,
+                epsilon_xuv=def.escape.epsilon_xuv,
+                F_xuv_1au_sat=def.escape.F_xuv_1au_sat,
+                t_sat_yr=def.escape.t_sat_yr,
+                beta_xuv=def.escape.beta_xuv,
+                r_xuv_ratio=def.escape.r_xuv_ratio,
+                tidal_correction=def.escape.tidal_correction,
             )
         else
             def.escape
@@ -2408,6 +2563,13 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.redox
     end
+    magma_degas = if haskey(parsed, "magma_degassing")
+        _dict_to_struct(
+            MagmaOceanDegassingConfig, parsed["magma_degassing"], def.magma_degassing
+        )
+    else
+        def.magma_degassing
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2436,6 +2598,7 @@ function load_config(source::AbstractString)::SimulationConfig
         atmosphere=atm,
         magma_transport=magma,
         redox=rdx,
+        magma_degassing=magma_degas,
     )
 
     validate_config(cfg)
@@ -2497,6 +2660,7 @@ function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
         "atmosphere" => _struct_to_dict(cfg.atmosphere),
         "magma_transport" => _struct_to_dict(cfg.magma_transport),
         "redox" => _struct_to_dict(cfg.redox),
+        "magma_degassing" => _struct_to_dict(cfg.magma_degassing),
     )
 end
 
