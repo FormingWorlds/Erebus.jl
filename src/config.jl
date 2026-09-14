@@ -108,6 +108,8 @@ Base.@kwdef struct SolverConfig
     etaphikoef::Float64 = 1.0
     etamin::Float64 = 1.0e+12
     etamax::Float64 = 1.0e+23
+    p2m_mode::Symbol = :tiled
+    tile_size::Int = 4
 end
 
 """
@@ -200,6 +202,10 @@ Base.@kwdef struct OutputConfig
     savematstep::Int = 10
     visstep::Int = 1
     restart_from::String = ""
+    mode::Symbol = :snapshots
+    telemetrystep::Int = 1
+    telemetry_file::String = "telemetry.csv"
+    save_final::Bool = true
 end
 
 """
@@ -1055,10 +1061,24 @@ function validate_config(cfg::SimulationConfig)
     cfg.solver.etamax >= cfg.solver.etamin ||
         throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.solver.etaphikoef
+    cfg.solver.p2m_mode in (:tiled, :buffered) || throw(
+        ArgumentError(
+            "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.solver.p2m_mode)"
+        ),
+    )
+    @check_ge cfg.solver.tile_size 2
 
     # Output checks
     @check_ge cfg.output.savematstep 1
     @check_ge cfg.output.visstep 1
+    @check_ge cfg.output.telemetrystep 1
+    cfg.output.mode in (:snapshots, :telemetry, :both) || throw(
+        ArgumentError(
+            "output.mode must be one of :snapshots, :telemetry, :both, got :$(cfg.output.mode)",
+        ),
+    )
+    !isempty(cfg.output.telemetry_file) ||
+        throw(ArgumentError("output.telemetry_file cannot be empty"))
     if !isempty(cfg.output.restart_from)
         isfile(cfg.output.restart_from) || throw(
             ArgumentError(
@@ -2310,16 +2330,12 @@ function _struct_to_dict(s)
 end
 
 """
-Saves a `SimulationConfig` to an IO stream or a `.toml` file.
+Converts a `SimulationConfig` to a nested dictionary representation.
 
 $(SIGNATURES)
-
-# Arguments
-- `io_or_path`: Output IO stream or file path.
-- `cfg`: Configuration to serialize.
 """
-function save_config(io::IO, cfg::SimulationConfig)
-    d = Dict{String,Any}(
+function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
+    return Dict{String,Any}(
         "grid" => _struct_to_dict(cfg.grid),
         "geometry" => _struct_to_dict(cfg.geometry),
         "time" => _struct_to_dict(cfg.time),
@@ -2346,6 +2362,19 @@ function save_config(io::IO, cfg::SimulationConfig)
         "atmosphere" => _struct_to_dict(cfg.atmosphere),
         "magma_transport" => _struct_to_dict(cfg.magma_transport),
     )
+end
+
+"""
+Saves a `SimulationConfig` to an IO stream or a `.toml` file.
+
+$(SIGNATURES)
+
+# Arguments
+- `io_or_path`: Output IO stream or file path.
+- `cfg`: Configuration to serialize.
+"""
+function save_config(io::IO, cfg::SimulationConfig)
+    d = config_to_dict(cfg)
     TOML.print(io, d; sorted=true)
     return io
 end

@@ -221,6 +221,13 @@ include("test_helpers.jl")
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)
         @reject_config output=OutputConfig(savematstep=10, visstep=0)
+        @reject_config output=OutputConfig(telemetrystep=0)
+        @reject_config output=OutputConfig(mode=:invalid_mode)
+        @reject_config output=OutputConfig(telemetry_file="")
+
+        # Invalid solver parameters
+        @reject_config solver=SolverConfig(p2m_mode=:unsupported)
+        @reject_config solver=SolverConfig(tile_size=1)
 
         # Invalid thermodynamics
         @reject_config thermodynamics=ThermalConfig(ratio_al=-0.1)

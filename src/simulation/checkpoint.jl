@@ -17,6 +17,108 @@ function s_to_Ma(s)
 end
 
 """
+    init_telemetry(output_dir, filename="telemetry.csv")
+
+Initialize telemetry CSV file with header row and return an open writable IO stream.
+"""
+function init_telemetry(
+    output_dir::AbstractString, filename::AbstractString="telemetry.csv"; append::Bool=false
+)
+    mkpath(output_dir)
+    filepath = joinpath(output_dir, filename)
+    if append && isfile(filepath)
+        return open(filepath, "a")
+    end
+    io = open(filepath, "w")
+    header = join(
+        [
+            "step",
+            "time_Ma",
+            "dt_yr",
+            "rplanet",
+            "rcore",
+            "T_peak",
+            "T_mean",
+            "phi_max",
+            "phi_mean",
+            "M_outgassed_total",
+            "M_vent_H2O",
+            "M_atm",
+            "M_escaped",
+            "F_melt_max",
+            "F_melt_mean",
+        ],
+        ",",
+    )
+    println(io, header)
+    flush(io)
+    return io
+end
+
+"""
+    stream_telemetry_row!(io, step, time_Ma, dt_yr, rplanet, rcore, T_peak, T_mean,
+                          phi_max, phi_mean, M_outgassed, M_vent_H2O, M_atm, M_escaped,
+                          F_melt_max, F_melt_mean)
+
+Stream a single row of scalar diagnostic telemetry to the given IO stream.
+"""
+function stream_telemetry_row!(
+    io::IO,
+    step::Integer,
+    time_Ma::Real,
+    dt_yr::Real,
+    rplanet::Real,
+    rcore::Real,
+    T_peak::Real,
+    T_mean::Real,
+    phi_max::Real,
+    phi_mean::Real,
+    M_outgassed::Real,
+    M_vent_H2O::Real,
+    M_atm::Real,
+    M_escaped::Real,
+    F_melt_max::Real,
+    F_melt_mean::Real,
+)
+    println(
+        io,
+        string(
+            step,
+            ",",
+            time_Ma,
+            ",",
+            dt_yr,
+            ",",
+            rplanet,
+            ",",
+            rcore,
+            ",",
+            T_peak,
+            ",",
+            T_mean,
+            ",",
+            phi_max,
+            ",",
+            phi_mean,
+            ",",
+            M_outgassed,
+            ",",
+            M_vent_H2O,
+            ",",
+            M_atm,
+            ",",
+            M_escaped,
+            ",",
+            F_melt_max,
+            ",",
+            F_melt_mean,
+        ),
+    )
+    flush(io)
+    return nothing
+end
+
+"""
 Set up and initialize dynamic simulation parameters.
 
 $(SIGNATURES)
