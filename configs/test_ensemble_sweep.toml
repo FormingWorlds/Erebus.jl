@@ -1,0 +1,12 @@
+[base]
+config = "configs/test_quick.toml"
+
+[ensemble]
+output_dir = "output_ensemble_test"
+method = "lhs"
+num_samples = 3
+seed = 42
+
+[parameters]
+"thermodynamics.phim0" = [0.15, 0.35]
+"geometry.rplanet" = [50000.0, 55000.0]

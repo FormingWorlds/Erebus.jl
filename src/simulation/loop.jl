@@ -133,8 +133,14 @@ function simulation_loop(
 
     use_threading = nthreads > 1
     num_buffers = nthreads
-    thread_buffers =
-        use_threading ? allocate_thread_interpolation_buffers(num_buffers, coords) : nothing
+    use_tiled_p2m = cfg.solver.p2m_mode == :tiled
+    thread_buffers = if (!use_tiled_p2m && use_threading)
+        allocate_thread_interpolation_buffers(num_buffers, coords)
+    else
+        nothing
+    end
+    p2m_workspace =
+        use_tiled_p2m ? P2MTiledWorkspace(coords, marknum, cfg.solver.tile_size) : nothing
 
     @info "Simulation layout" coords.Nx coords.Ny coords.xsize coords.dx coords.dy coords.ysize rplanet_val rcrust_val marknum nthreads
     @info(
@@ -281,6 +287,7 @@ function simulation_loop(
     end
     telescope_level = 0
     is_restart = !isempty(restart_from)
+    telemetry_io = nothing
     if is_restart
         ckpt = load_state(restart_from)
         if haskey(ckpt, "telescope_level")
@@ -379,7 +386,7 @@ function simulation_loop(
             S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
             Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
             Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
-            if use_threading
+            if !use_tiled_p2m && use_threading
                 thread_buffers = allocate_thread_interpolation_buffers(num_buffers, coords)
             end
         else
@@ -746,147 +753,149 @@ function simulation_loop(
         end
 
         # save initial state
-        save_state(
-            output_path,
-            0,
-            dt,
-            timesum,
-            marknum,
-            ETA,
-            ETA0,
-            GGG,
-            EXY,
-            SXY,
-            SXY0,
-            wyx,
-            COH,
-            TEN,
-            FRI,
-            YNY,
-            RHOX,
-            RHOFX,
-            KX,
-            PHIX,
-            vx,
-            vxf,
-            RX,
-            qxD,
-            gx,
-            RHOY,
-            RHOFY,
-            KY,
-            PHIY,
-            vy,
-            vyf,
-            RY,
-            qyD,
-            gy,
-            RHO,
-            RHOCP,
-            ALPHA,
-            ALPHAF,
-            HR,
-            HA,
-            HS,
-            ETAP,
-            GGGP,
-            EXX,
-            SXX,
-            SXX0,
-            tk1,
-            tk2,
-            vxp,
-            vyp,
-            vxpf,
-            vypf,
-            pr,
-            pf,
-            ps,
-            pr0,
-            pf0,
-            ps0,
-            ETAPHI,
-            BETAPHI,
-            PHI,
-            APHI,
-            FI,
-            ETA5,
-            ETA00,
-            YNY5,
-            YNY00,
-            YNY_inv_ETA,
-            DSXY,
-            EII,
-            SII,
-            DSXX,
-            DMP,
-            DHP,
-            DQPF,
-            XWS,
-            XWsolidm0,
-            xm,
-            ym,
-            tm,
-            tkm,
-            sxxm,
-            sxym,
-            etavpm,
-            phim,
-            rhototalm,
-            rhocptotalm,
-            etatotalm,
-            hrtotalm,
-            ktotalm,
-            tkm_rhocptotalm,
-            etafluidcur_inv_kphim,
-            inv_gggtotalm,
-            fricttotalm,
-            cohestotalm,
-            tenstotalm,
-            rhofluidcur,
-            alphasolidcur,
-            alphafluidcur;
-            coords=coords,
-            phim0_val=phim0_val,
-            M_vent_total=M_vent_total,
-            M_vent_H2O_total=M_vent_H2O_total,
-            M_vent_C_total=M_vent_C_total,
-            M_vent_N_total=M_vent_N_total,
-            M_vent_S_total=M_vent_S_total,
-            M_atm_total=M_atm_total,
-            M_escaped_total=M_escaped_total,
-            P_amb=cfg.disk.p_amb_disk,
-            S_vent=S_vent_grid,
-            Xfem=Xfem,
-            Xfem0=Xfem0,
-            Xfe_bulk=Xfe_bulk,
-            M_atm_species=M_atm_species,
-            M_escaped_species=M_escaped_species,
-            XH2Om=XH2Om,
-            XCm=XCm,
-            XNm=XNm,
-            XSm=XSm,
-            Xfe_H_m=Xfe_H_m,
-            Xfe_C_m=Xfe_C_m,
-            Xfe_N_m=Xfe_N_m,
-            Xfe_S_m=Xfe_S_m,
-            core_budgets=core_budgets,
-            Xmin_troilite_m=Xmin_troilite_m,
-            Xmin_schreibersite_m=Xmin_schreibersite_m,
-            Xmin_cohenite_m=Xmin_cohenite_m,
-            Xmin_graphite_m=Xmin_graphite_m,
-            Xmin_nitride_m=Xmin_nitride_m,
-            Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-            regional_mineral_modes=regional_mineral_modes,
-            DT0=DT0,
-            rplanet=rplanet_val,
-            t_accreted=t_accreted,
-            M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
-            M_planet_val=M_planet_val,
-            telescope_level=telescope_level,
-            hcnspo_props=hcnspo_props,
-            atm_state=atm_state,
-        )
+        if cfg.output.mode != :telemetry
+            save_state(
+                output_path,
+                0,
+                dt,
+                timesum,
+                marknum,
+                ETA,
+                ETA0,
+                GGG,
+                EXY,
+                SXY,
+                SXY0,
+                wyx,
+                COH,
+                TEN,
+                FRI,
+                YNY,
+                RHOX,
+                RHOFX,
+                KX,
+                PHIX,
+                vx,
+                vxf,
+                RX,
+                qxD,
+                gx,
+                RHOY,
+                RHOFY,
+                KY,
+                PHIY,
+                vy,
+                vyf,
+                RY,
+                qyD,
+                gy,
+                RHO,
+                RHOCP,
+                ALPHA,
+                ALPHAF,
+                HR,
+                HA,
+                HS,
+                ETAP,
+                GGGP,
+                EXX,
+                SXX,
+                SXX0,
+                tk1,
+                tk2,
+                vxp,
+                vyp,
+                vxpf,
+                vypf,
+                pr,
+                pf,
+                ps,
+                pr0,
+                pf0,
+                ps0,
+                ETAPHI,
+                BETAPHI,
+                PHI,
+                APHI,
+                FI,
+                ETA5,
+                ETA00,
+                YNY5,
+                YNY00,
+                YNY_inv_ETA,
+                DSXY,
+                EII,
+                SII,
+                DSXX,
+                DMP,
+                DHP,
+                DQPF,
+                XWS,
+                XWsolidm0,
+                xm,
+                ym,
+                tm,
+                tkm,
+                sxxm,
+                sxym,
+                etavpm,
+                phim,
+                rhototalm,
+                rhocptotalm,
+                etatotalm,
+                hrtotalm,
+                ktotalm,
+                tkm_rhocptotalm,
+                etafluidcur_inv_kphim,
+                inv_gggtotalm,
+                fricttotalm,
+                cohestotalm,
+                tenstotalm,
+                rhofluidcur,
+                alphasolidcur,
+                alphafluidcur;
+                coords=coords,
+                phim0_val=phim0_val,
+                M_vent_total=M_vent_total,
+                M_vent_H2O_total=M_vent_H2O_total,
+                M_vent_C_total=M_vent_C_total,
+                M_vent_N_total=M_vent_N_total,
+                M_vent_S_total=M_vent_S_total,
+                M_atm_total=M_atm_total,
+                M_escaped_total=M_escaped_total,
+                P_amb=cfg.disk.p_amb_disk,
+                S_vent=S_vent_grid,
+                Xfem=Xfem,
+                Xfem0=Xfem0,
+                Xfe_bulk=Xfe_bulk,
+                M_atm_species=M_atm_species,
+                M_escaped_species=M_escaped_species,
+                XH2Om=XH2Om,
+                XCm=XCm,
+                XNm=XNm,
+                XSm=XSm,
+                Xfe_H_m=Xfe_H_m,
+                Xfe_C_m=Xfe_C_m,
+                Xfe_N_m=Xfe_N_m,
+                Xfe_S_m=Xfe_S_m,
+                core_budgets=core_budgets,
+                Xmin_troilite_m=Xmin_troilite_m,
+                Xmin_schreibersite_m=Xmin_schreibersite_m,
+                Xmin_cohenite_m=Xmin_cohenite_m,
+                Xmin_graphite_m=Xmin_graphite_m,
+                Xmin_nitride_m=Xmin_nitride_m,
+                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                regional_mineral_modes=regional_mineral_modes,
+                DT0=DT0,
+                rplanet=rplanet_val,
+                t_accreted=t_accreted,
+                M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
+                M_planet_val=M_planet_val,
+                telescope_level=telescope_level,
+                hcnspo_props=hcnspo_props,
+                atm_state=atm_state,
+            )
+        end
     end
 
     # ---------------------------------------------------------------------
@@ -956,6 +965,11 @@ function simulation_loop(
         barglyphs=BarGlyphs('|', '█', ['▁', '▂', '▃', '▄', '▅', '▆', '▇'], ' ', '|'),
         barlen=10,
     )
+    if (cfg.output.mode in (:telemetry, :both))
+        telemetry_io = init_telemetry(
+            output_path, cfg.output.telemetry_file; append=is_restart
+        )
+    end
     try
         for timestep in start_step_val:1:n_steps_val
             timestep_begin = now()
@@ -1311,7 +1325,7 @@ function simulation_loop(
                 (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties(
                     coords
                 )
-                if use_threading
+                if !use_tiled_p2m && use_threading
                     thread_buffers = allocate_thread_interpolation_buffers(
                         num_buffers, coords
                     )
@@ -1431,7 +1445,159 @@ function simulation_loop(
             # ---------------------------------------------------------------------
             # compute marker properties and interpolate to staggered grid
             # ---------------------------------------------------------------------
-            if use_threading
+            if use_tiled_p2m
+                p2m_workspace = ensure_workspace_compatible(
+                    p2m_workspace, coords, marknum, cfg.solver.tile_size
+                )
+                bin_markers_into_tiles!(p2m_workspace, xm, ym, coords, marknum)
+                for color in 1:4
+                    tiles = p2m_workspace.tiles_by_color[color]
+                    Threads.@threads :dynamic for t in tiles
+                        lo = p2m_workspace.tile_offsets[t]
+                        hi = p2m_workspace.tile_offsets[t + 1] - 1
+                        lo > hi && continue
+                        for idx in lo:hi
+                            m = p2m_workspace.tile_markers[idx]
+                            compute_marker_properties!(
+                                m,
+                                tm,
+                                tkm,
+                                rhototalm,
+                                rhocptotalm,
+                                etatotalm,
+                                hrtotalm,
+                                ktotalm,
+                                tkm_rhocptotalm,
+                                etafluidcur_inv_kphim,
+                                hrsolidm,
+                                hrfluidm,
+                                phim,
+                                XWsolidm0,
+                                marker_property_mode,
+                                rhofluidcur;
+                                thermal_buoyancy=thermal_buoyancy_val,
+                                alphafluid=alphafluid_val,
+                                tmfluidphase_val=tmfluidphase_val,
+                                fluid_viscosity_mode=fluid_viscosity_mode_val,
+                                fluid_viscosity_Ea=fluid_viscosity_Ea_val,
+                                fluid_viscosity_T0=fluid_viscosity_T0_val,
+                                fluid_viscosity_eta0=fluid_viscosity_eta0_val,
+                                pm=pfm0,
+                                Fm=Fm,
+                                melting_active=melting_active_val,
+                                magma_transport_active=magma_active_val,
+                                track_depletion=cfg.magma_transport.track_depletion,
+                                F_extract_m=F_extract_m,
+                                T_solidus_val=T_solidus_val,
+                                T_liquidus_val=T_liquidus_val,
+                                L_melt_val=L_melt_val,
+                                rho_melt_val=rho_melt_val,
+                                alpha_eta_val=alpha_eta_val,
+                                phi_crit_val=phi_crit_val,
+                                eta_melt_val=eta_melt_val,
+                                dpdt_clapeyron_val=dpdt_clapeyron_val,
+                                soft_turbulence=soft_turbulence_val,
+                                eta_fluid_silicate_val=eta_fluid_silicate_val,
+                                F_turb_start_val=F_turb_start_val,
+                                F_turb_end_val=F_turb_end_val,
+                                turb_exponent_val=turb_exponent_val,
+                                dT_turb_min_val=dT_turb_min_val,
+                                T_surface_ref_val=T_surface_ref_val,
+                                k_turb_cutoff_val=k_turb_cutoff_val,
+                                k_turb_floor_val=k_turb_floor_val,
+                                Xfe_bulk=Xfe_bulk,
+                                Xfem=Xfem,
+                                coreformation_active=coreformation_active_val,
+                                hrmetalm=hrmetalm,
+                                sulfur_fraction_val=sulfur_fraction_val,
+                                metal_density_mode_val=metal_density_mode_val,
+                                T_eutectic_val=T_eutectic_val,
+                                dT_metal_val=dT_metal_val,
+                                rho_metal_val=rho_metal_val,
+                                rho_metal_solid_val=rho_metal_solid_val,
+                                L_metal_val=L_metal_val,
+                                k_metal_val=k_metal_val,
+                                rhocp_metal_val=rhocp_metal_val,
+                                volatiles_active=cfg.volatiles.active,
+                                volatiles_cfg=cfg.volatiles,
+                                retention_cfg=cfg.retention,
+                                XH2Om=XH2Om,
+                                XCm=XCm,
+                                XNm=XNm,
+                                XSm=XSm,
+                                metal_partition_cfg=cfg.metal_partition,
+                                Xfe_H_m=Xfe_H_m,
+                                Xfe_C_m=Xfe_C_m,
+                                Xfe_N_m=Xfe_N_m,
+                                Xfe_S_m=Xfe_S_m,
+                                phase_tracking_cfg=cfg.phase_tracking,
+                                Xmin_troilite_m=Xmin_troilite_m,
+                                Xmin_schreibersite_m=Xmin_schreibersite_m,
+                                Xmin_cohenite_m=Xmin_cohenite_m,
+                                Xmin_graphite_m=Xmin_graphite_m,
+                                Xmin_nitride_m=Xmin_nitride_m,
+                                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+                                hydrothermal_active=cfg.hydrothermal.active,
+                                hydrothermal_cfg=cfg.hydrothermal,
+                            )
+                            scatter_marker_to_master_grids!(
+                                m,
+                                xm[m],
+                                ym[m],
+                                coords,
+                                etatotalm,
+                                etavpm,
+                                inv_gggtotalm,
+                                sxym,
+                                cohestotalm,
+                                tenstotalm,
+                                fricttotalm,
+                                ETA0SUM,
+                                ETASUM,
+                                GGGSUM,
+                                SXYSUM,
+                                COHSUM,
+                                TENSUM,
+                                FRISUM,
+                                WTSUM,
+                                rhototalm,
+                                rhofluidcur,
+                                ktotalm,
+                                phim,
+                                etafluidcur_inv_kphim,
+                                RHOXSUM,
+                                RHOFXSUM,
+                                KXSUM,
+                                PHIXSUM,
+                                RXSUM,
+                                WTXSUM,
+                                RHOYSUM,
+                                RHOFYSUM,
+                                KYSUM,
+                                PHIYSUM,
+                                RYSUM,
+                                WTYSUM,
+                                sxxm,
+                                rhocptotalm,
+                                alphasolidcur,
+                                alphafluidcur,
+                                hrtotalm,
+                                tkm_rhocptotalm,
+                                GGGPSUM,
+                                SXXSUM,
+                                RHOSUM,
+                                RHOCPSUM,
+                                ALPHASUM,
+                                ALPHAFSUM,
+                                HRSUM,
+                                PHISUM,
+                                TKSUM,
+                                WTPSUM,
+                            )
+                        end
+                    end
+                end
+            elseif use_threading
                 reset_thread_buffers!(thread_buffers)
                 nchunks = length(thread_buffers)
                 Threads.@threads :static for c in 1:nchunks
@@ -3041,28 +3207,79 @@ function simulation_loop(
             timestep_end = now()
 
             # ---------------------------------------------------------------------
-            #  save data for analysis and visualization
+            # save data evaluation and core budget update
             # ---------------------------------------------------------------------
-            if timestep % savematstep_val == 0
-                if cfg.metal_partition.active && Xfe_bulk !== nothing
-                    core_budgets = compute_core_volatile_budgets(
-                        xm,
-                        ym,
-                        tm,
-                        Xfe_bulk,
-                        Xfe_H_m,
-                        Xfe_C_m,
-                        Xfe_N_m,
-                        Xfe_S_m,
-                        marknum;
-                        xcenter=xcenter_val,
-                        ycenter=ycenter_val,
-                        rplanet=rplanet_val,
-                        rho_metal=cfg.coreformation.rho_metal,
-                        core_radius_fraction=cfg.metal_partition.core_radius_fraction,
-                        phi_core_threshold=cfg.metal_partition.phi_core_threshold,
-                    )
-                end
+            should_save_snapshot = if cfg.output.mode in (:snapshots, :both)
+                timestep % savematstep_val == 0
+            elseif cfg.output.mode == :telemetry
+                cfg.output.save_final && (timestep == n_steps_val)
+            else
+                false
+            end
+
+            need_telemetry = (
+                telemetry_io !== nothing &&
+                (timestep % cfg.output.telemetrystep == 0 || timestep == n_steps_val)
+            )
+
+            if (cfg.metal_partition.active && Xfe_bulk !== nothing) &&
+                (need_telemetry || should_save_snapshot)
+                core_budgets = compute_core_volatile_budgets(
+                    xm,
+                    ym,
+                    tm,
+                    Xfe_bulk,
+                    Xfe_H_m,
+                    Xfe_C_m,
+                    Xfe_N_m,
+                    Xfe_S_m,
+                    marknum;
+                    xcenter=xcenter_val,
+                    ycenter=ycenter_val,
+                    rplanet=rplanet_val,
+                    rho_metal=cfg.coreformation.rho_metal,
+                    core_radius_fraction=cfg.metal_partition.core_radius_fraction,
+                    phi_core_threshold=cfg.metal_partition.phi_core_threshold,
+                )
+            end
+
+            # ---------------------------------------------------------------------
+            # streaming telemetry record
+            # ---------------------------------------------------------------------
+            if need_telemetry
+                core_radius_current =
+                    if (core_budgets !== nothing && core_budgets.M_core_metal > 0.0)
+                        (
+                            3.0 * core_budgets.M_core_metal /
+                            (4.0 * π * cfg.coreformation.rho_metal)
+                        )^(1.0 / 3.0)
+                    else
+                        0.0
+                    end
+                stream_telemetry_row!(
+                    telemetry_io,
+                    timestep,
+                    s_to_Ma(timesum),
+                    dt / cfg.time.yearlength,
+                    rplanet_val,
+                    core_radius_current,
+                    maximum(tk2),
+                    sum(tk2) / length(tk2),
+                    maximum(PHI),
+                    sum(PHI) / length(PHI),
+                    M_vent_H2O_total + M_vent_C_total + M_vent_N_total + M_vent_S_total,
+                    M_vent_H2O_total,
+                    M_atm_total,
+                    M_escaped_total,
+                    Fm !== nothing ? maximum(Fm) : 0.0,
+                    Fm !== nothing ? (sum(Fm) / length(Fm)) : 0.0,
+                )
+            end
+
+            # ---------------------------------------------------------------------
+            # save data for analysis and visualization
+            # ---------------------------------------------------------------------
+            if should_save_snapshot
                 if cfg.phase_tracking.active &&
                     cfg.phase_tracking.track_regional_modes &&
                     Xfe_bulk !== nothing
@@ -3253,6 +3470,9 @@ function simulation_loop(
             end
         end # for timestep = startstep:1:n_steps
     finally
+        if telemetry_io !== nothing
+            close(telemetry_io)
+        end
         if use_pardiso_val && pardiso_solver !== nothing
             set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
             pardiso(pardiso_solver)
