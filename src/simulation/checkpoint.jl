@@ -314,6 +314,7 @@ function save_state(
     rplanet::Union{Nothing,Real}=nothing,
     telescope_level::Union{Nothing,Integer}=nothing,
     hcnspo_props=nothing,
+    redox_props=nothing,
     atm_state::Union{Nothing,AtmosphereState}=nothing,
     F_extract_m=nothing,
 )
@@ -493,6 +494,7 @@ function save_state(
         (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
         (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
         (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
+        (redox_props !== nothing ? (; redox_props...) : (;))...,
         (
             if atm_state !== nothing
                 (;

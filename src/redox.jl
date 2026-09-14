@@ -600,3 +600,153 @@ function vent_gas_redox_budget(
         n_P_phosphate=c_rock.n_P_phosphate,
     )
 end
+
+"""
+Assemble a `RedoxComponents` inventory for a single marker or parcel from state.
+
+$(SIGNATURES)
+
+# Arguments
+- `n_Fe0`: Moles of metallic iron
+- `n_Fe2`: Moles of ferrous iron
+- `n_Fe3`: Moles of ferric iron
+
+# Keyword Arguments
+- `n_H2`: Moles of H2 (default: 0.0)
+- `n_H2O`: Moles of H2O (default: 0.0)
+- `n_C_graphite`: Moles of C graphite (default: 0.0)
+- `n_CO`: Moles of CO (default: 0.0)
+- `n_CO2`: Moles of CO2 (default: 0.0)
+- `n_CH4`: Moles of CH4 (default: 0.0)
+- `n_Fe3C`: Moles of Fe3C (default: 0.0)
+- `n_S_sulfide`: Moles of sulfide (default: 0.0)
+- `n_S2`: Moles of S2 (default: 0.0)
+- `n_SO2`: Moles of SO2 (default: 0.0)
+- `n_SO4`: Moles of SO4 (default: 0.0)
+- `n_P_phosphide`: Moles of phosphide (default: 0.0)
+- `n_P_phosphate`: Moles of phosphate (default: 0.0)
+
+# Returns
+- `RedoxComponents`
+"""
+function marker_redox_components(
+    n_Fe0::Real,
+    n_Fe2::Real,
+    n_Fe3::Real;
+    n_H2::Real=0.0,
+    n_H2O::Real=0.0,
+    n_C_graphite::Real=0.0,
+    n_CO::Real=0.0,
+    n_CO2::Real=0.0,
+    n_CH4::Real=0.0,
+    n_Fe3C::Real=0.0,
+    n_S_sulfide::Real=0.0,
+    n_S2::Real=0.0,
+    n_SO2::Real=0.0,
+    n_SO4::Real=0.0,
+    n_P_phosphide::Real=0.0,
+    n_P_phosphate::Real=0.0,
+)::RedoxComponents
+    return RedoxComponents(;
+        n_Fe0=max(0.0, Float64(n_Fe0)),
+        n_Fe2=max(0.0, Float64(n_Fe2)),
+        n_Fe3=max(0.0, Float64(n_Fe3)),
+        n_H2=max(0.0, Float64(n_H2)),
+        n_H2O=max(0.0, Float64(n_H2O)),
+        n_C_graphite=max(0.0, Float64(n_C_graphite)),
+        n_CO=max(0.0, Float64(n_CO)),
+        n_CO2=max(0.0, Float64(n_CO2)),
+        n_CH4=max(0.0, Float64(n_CH4)),
+        n_Fe3C=max(0.0, Float64(n_Fe3C)),
+        n_S_sulfide=max(0.0, Float64(n_S_sulfide)),
+        n_S2=max(0.0, Float64(n_S2)),
+        n_SO2=max(0.0, Float64(n_SO2)),
+        n_SO4=max(0.0, Float64(n_SO4)),
+        n_P_phosphide=max(0.0, Float64(n_P_phosphide)),
+        n_P_phosphate=max(0.0, Float64(n_P_phosphate)),
+    )
+end
+
+"""
+Compute local oxygen fugacity offset relative to Iron-Wüstite buffer (ΔIW) from redox inventory.
+
+$(SIGNATURES)
+
+# Arguments
+- `c`: `RedoxComponents` inventory
+- `T_K`: Temperature [K]
+- `P_Pa`: Pressure [Pa]
+
+# Keyword Arguments
+- `deltaIW_min`: Minimum clamp limit (default: -6.0)
+- `deltaIW_max`: Maximum clamp limit (default: 6.0)
+- `initial_x_ferric`: Reference ferric iron molar fraction in silicate (default: 0.05)
+
+# Returns
+- `Float64`: ΔIW [log10 units]
+"""
+function local_delta_iw(
+    c::RedoxComponents,
+    T_K::Real,
+    P_Pa::Real;
+    deltaIW_min::Real=-6.0,
+    deltaIW_max::Real=6.0,
+    initial_x_ferric::Real=0.05,
+)::Float64
+    T = Float64(T_K)
+    T > 0.0 || throw(DomainError(T, "T_K must be positive"))
+    P = Float64(P_Pa)
+    P >= 0.0 || throw(DomainError(P, "P_Pa must be non-negative"))
+    d_min = Float64(deltaIW_min)
+    d_max = Float64(deltaIW_max)
+    d_min <= d_max || throw(ArgumentError("deltaIW_min must be <= deltaIW_max"))
+
+    tot_fe = c.n_Fe0 + c.n_Fe2 + c.n_Fe3
+    x_fe_ref = clamp(Float64(initial_x_ferric), 1.0e-6, 1.0 - 1.0e-6)
+    ratio_ref = x_fe_ref / (1.0 - x_fe_ref)
+
+    # Compute silicate buffer value if iron oxides are present
+    delta_sil = if c.n_Fe2 > 1.0e-12
+        if c.n_Fe3 > 1.0e-12
+            ratio = c.n_Fe3 / c.n_Fe2
+            clamp(4.0 * log10(ratio / ratio_ref), d_min, d_max)
+        else
+            d_min
+        end
+    elseif c.n_Fe3 > 1.0e-12
+        d_max
+    else
+        nothing
+    end
+
+    # Metal-saturated buffer branch
+    if tot_fe > 0.0 && c.n_Fe0 > 0.0
+        x_feo = (c.n_Fe2 + c.n_Fe3) / tot_fe
+        delta_metal = if x_feo > 1.0e-6
+            clamp(2.0 * log10(x_feo), d_min, min(0.0, d_max))
+        else
+            d_min
+        end
+
+        if delta_sil !== nothing
+            # Smoothly transition from metal-buffered to silicate-buffered as metal exhausts
+            w_metal = clamp((c.n_Fe0 / tot_fe) / 1.0e-3, 0.0, 1.0)
+            return w_metal * delta_metal + (1.0 - w_metal) * delta_sil
+        else
+            return delta_metal
+        end
+    end
+
+    if delta_sil !== nothing
+        return delta_sil
+    end
+
+    if c.n_H2 > 1.0e-12 && c.n_H2O > 1.0e-12
+        lfo2_iw = log10_fo2_of_buffer(:IW, T, P)
+        log_k = 12760.0 / T - 2.84
+        lfo2_gas = 2.0 * (log10(c.n_H2O / c.n_H2) - log_k)
+        return clamp(lfo2_gas - lfo2_iw, d_min, d_max)
+    end
+
+    return clamp(0.0, d_min, d_max)
+end

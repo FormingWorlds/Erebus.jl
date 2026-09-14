@@ -290,3 +290,167 @@ end
         c_fe0, 0.0; reference=:mantle
     )
 end
+
+@testset "Marker Redox Components and Local Delta IW Dynamics" begin
+    # 1. marker_redox_components adapter construction
+    c_m = Erebus.marker_redox_components(1.5, 3.0, 0.2; n_H2O=10.0, n_CO2=2.0)
+    @test isapprox(c_m.n_Fe0, 1.5; atol=1e-12)
+    @test isapprox(c_m.n_Fe2, 3.0; atol=1e-12)
+    @test isapprox(c_m.n_Fe3, 0.2; atol=1e-12)
+    @test isapprox(c_m.n_H2O, 10.0; atol=1e-12)
+    @test isapprox(c_m.n_CO2, 2.0; atol=1e-12)
+    @test isapprox(c_m.n_H2, 0.0; atol=1e-12)
+
+    # Negative inputs are clamped non-negative
+    c_neg = Erebus.marker_redox_components(-1.0, 2.0, 0.0)
+    @test isapprox(c_neg.n_Fe0, 0.0; atol=1e-12)
+
+    # 2. local_delta_iw: Metal-saturated regime
+    T = 1500.0
+    P = 1.0e8
+    c_metal = Erebus.marker_redox_components(1.0, 0.2, 0.0)
+    diw_metal = Erebus.local_delta_iw(c_metal, T, P)
+    @test diw_metal < 0.0
+    # Thermodynamic target: x_FeO = 0.2 / 1.2 = 1/6; deltaIW = 2 * log10(1/6) ≈ -1.5563
+    @test isapprox(diw_metal, -1.5563; atol=1e-3)
+
+    # Upper clamp limit respected even if negative
+    diw_clamped = Erebus.local_delta_iw(c_metal, T, P; deltaIW_max=-2.0)
+    @test isapprox(diw_clamped, -2.0; atol=1e-6)
+
+    # 3. local_delta_iw: Silicate ferric/ferrous buffer regime (metal-absent)
+    # Reference neutral state with default initial_x_ferric=0.05 (Fe3+/Fe2+ = 0.05/0.95)
+    c_neutral = Erebus.marker_redox_components(0.0, 0.95, 0.05)
+    diw_neutral = Erebus.local_delta_iw(c_neutral, T, P)
+    @test isapprox(diw_neutral, 0.0; atol=1e-6)
+
+    # Custom initial_x_ferric reference ratio consistency
+    diw_custom_ref = Erebus.local_delta_iw(
+        Erebus.marker_redox_components(0.0, 0.90, 0.10), T, P; initial_x_ferric=0.10
+    )
+    @test isapprox(diw_custom_ref, 0.0; atol=1e-6)
+
+    # Oxidized silicate: Fe3+ / Fe2+ = 0.20 / 0.80 = 0.25 (should buffer > 0)
+    c_ox = Erebus.marker_redox_components(0.0, 0.80, 0.20)
+    diw_ox = Erebus.local_delta_iw(c_ox, T, P)
+    @test diw_ox > diw_neutral
+    @test isapprox(diw_ox, 2.7068; atol=1e-3)
+
+    # Deeply reduced silicate without Fe3+: clamps to deltaIW_min
+    c_red = Erebus.marker_redox_components(0.0, 1.0, 0.0)
+    diw_red = Erebus.local_delta_iw(c_red, T, P; deltaIW_min=-5.0)
+    @test isapprox(diw_red, -5.0; atol=1e-12)
+
+    # Completely oxidized silicate without Fe2+: clamps to deltaIW_max
+    c_all_fe3 = Erebus.marker_redox_components(0.0, 0.0, 1.0)
+    diw_all_fe3 = Erebus.local_delta_iw(c_all_fe3, T, P; deltaIW_max=5.0)
+    @test isapprox(diw_all_fe3, 5.0; atol=1e-12)
+
+    # 4. Continuity across metallic iron exhaustion (n_Fe0 -> 0)
+    # Ensure smooth transition without discontinuous jumps
+    fe0_sweep = [1.0e-2, 1.0e-3, 5.0e-4, 2.0e-4, 1.0e-4, 5.0e-5, 1.0e-5, 0.0]
+    diw_prev = Erebus.local_delta_iw(
+        Erebus.marker_redox_components(fe0_sweep[1], 0.80, 0.20), T, P
+    )
+    for fe0 in fe0_sweep[2:end]
+        c_step = Erebus.marker_redox_components(fe0, 0.80, 0.20)
+        diw_curr = Erebus.local_delta_iw(c_step, T, P)
+        @test diw_curr >= diw_prev - 1e-6 # Monotonic oxidation as reducing metal depletes
+        @test abs(diw_curr - diw_prev) < 2.0 # Smooth, continuous transition
+        diw_prev = diw_curr
+    end
+
+    # 5. Dynamic update_marker_redox! response to core segregation and serpentinization
+    cfg_rdx = RedoxConfig(;
+        active=true, segregation_redox=true, serpentinization_redox=true
+    )
+    props = Erebus.setup_marker_redox_properties(2, cfg_rdx; initial_xfe_bulk=[0.3, 0.3])
+    @test props.deltaIW_m[1] <= 0.0
+    @test props.deltaIW_m[2] <= 0.0
+
+    # Core segregation drains metal to 0 on marker 1, marker 2 stays metal-bearing
+    tkm_test = [1200.0, 1200.0]
+    pfm_test = [1.0e7, 1.0e7]
+    Erebus.update_marker_redox!(
+        props, tkm_test, pfm_test, cfg_rdx; Xfem=[0.0, 0.3], XWsolidm=[0.0, 0.0]
+    )
+    @test isapprox(props.nFe0_m[1], 0.0; atol=1e-12)
+    @test props.nFe0_m[2] > 0.0
+    @test props.deltaIW_m[1] > props.deltaIW_m[2]
+
+    # Serpentinization on marker 1 oxidizes Fe2+ to Fe3+, raising deltaIW further
+    diw_before_serp = props.deltaIW_m[1]
+    Erebus.update_marker_redox!(
+        props, tkm_test, pfm_test, cfg_rdx; Xfem=[0.0, 0.3], XWsolidm=[0.8, 0.0]
+    )
+    @test props.deltaIW_m[1] > diw_before_serp
+    @test props.nFe3_m[1] > props.nFe3_m[2]
+
+    # 6. local_delta_iw: Gas buffer fallback (Fe-free, H2O + H2)
+    c_gas = Erebus.marker_redox_components(0.0, 0.0, 0.0; n_H2=1.0, n_H2O=10.0)
+    diw_gas = Erebus.local_delta_iw(c_gas, T, P)
+    @test isfinite(diw_gas)
+
+    # 7. Error contracts
+    @test_throws DomainError Erebus.local_delta_iw(c_neutral, -100.0, P)
+    @test_throws DomainError Erebus.local_delta_iw(c_neutral, T, -1.0)
+    @test_throws ArgumentError Erebus.local_delta_iw(
+        c_neutral, T, P; deltaIW_min=2.0, deltaIW_max=-2.0
+    )
+
+    # 6. Complete End-to-End Differentiation Electron Conservation Test
+    # Stage 0: Primordial bulk assemblage (Fe0 metal, silicates, water, organics)
+    c_initial = Erebus.RedoxComponents(;
+        n_Fe0=50.0,
+        n_Fe2=100.0,
+        n_Fe3=5.0,
+        n_H2=0.0,
+        n_H2O=20.0,
+        n_C_graphite=10.0,
+        n_CO=0.0,
+        n_CO2=2.0,
+        n_CH4=0.0,
+    )
+    rb_initial = Erebus.compute_redox_budget(c_initial; reference=:mantle)
+
+    # Stage 1: Hydrothermal serpentinization consumes 10 mol H2O -> oxidizes Fe2+ to Fe3+ + produces H2
+    c_serp = Erebus.serpentinize_redox_budget(c_initial, 10.0)
+    rb_serp = Erebus.compute_redox_budget(c_serp; reference=:mantle)
+    @test isapprox(rb_serp, rb_initial; atol=1e-12)
+
+    # Stage 2: Core segregation (80% metal extracts to core)
+    c_mantle, c_core = Erebus.segregate_core_redox_budget(c_serp, 0.80)
+    rb_core = Erebus.compute_redox_budget(c_core; reference=:mantle)
+    rb_mantle = Erebus.compute_redox_budget(c_mantle; reference=:mantle)
+    @test isapprox(rb_mantle + rb_core, rb_initial; atol=1e-12)
+
+    # Stage 3: Gas venting (degas all produced H2 and CO2)
+    c_vent = Erebus.RedoxComponents(; n_H2=c_mantle.n_H2, n_CO2=c_mantle.n_CO2)
+    c_crust_residue = Erebus.vent_gas_redox_budget(c_mantle, c_vent)
+    rb_vent = Erebus.compute_redox_budget(c_vent; reference=:mantle)
+    rb_crust_residue = Erebus.compute_redox_budget(c_crust_residue; reference=:mantle)
+
+    # Total conservation check: Residue + Core + Vented Gas == Initial
+    @test isapprox(rb_crust_residue + rb_core + rb_vent, rb_initial; atol=1e-12)
+
+    # 7. setup_marker_redox_properties initialization
+    cfg_inactive = Erebus.RedoxConfig(; active=false)
+    p_inact = Erebus.setup_marker_redox_properties(10, cfg_inactive)
+    @test p_inact.nFe0_m === nothing
+    @test p_inact.deltaIW_m === nothing
+
+    cfg_act = Erebus.RedoxConfig(; active=true, initial_x_ferric=0.08)
+    xfe_init = fill(0.20, 10)
+    p_act = Erebus.setup_marker_redox_properties(10, cfg_act; initial_xfe_bulk=xfe_init)
+    @test length(p_act.nFe0_m) == 10
+    @test length(p_act.nFe2_m) == 10
+    @test length(p_act.nFe3_m) == 10
+    @test length(p_act.deltaIW_m) == 10
+    @test all(p_act.nFe0_m .> 0.0)
+    @test all(p_act.nFe2_m .> 0.0)
+    @test all(p_act.nFe3_m .> 0.0)
+    @test all(p_act.deltaIW_m .< 0.0) # metal present -> deltaIW negative
+
+    # Domain error contract on negative marknum
+    @test_throws DomainError Erebus.setup_marker_redox_properties(-5, cfg_act)
+end
