@@ -325,38 +325,10 @@ import Erebus:
         xm = coords.x[1] .+ rand(rng, marknum) .* coords.xsize
         ym = coords.y[1] .+ rand(rng, marknum) .* coords.ysize
         rhototalm = 3200.0 .+ rand(rng, marknum) .* 200.0
-
         run_scatter = function ()
-            ETA0 = zeros(Float64, coords.Ny, coords.Nx)
-            ETA = zeros(Float64, coords.Ny, coords.Nx)
-            GGG = zeros(Float64, coords.Ny, coords.Nx)
-            SXY = zeros(Float64, coords.Ny, coords.Nx)
-            COH = zeros(Float64, coords.Ny, coords.Nx)
-            TEN = zeros(Float64, coords.Ny, coords.Nx)
-            FRI = zeros(Float64, coords.Ny, coords.Nx)
-            WT = zeros(Float64, coords.Ny, coords.Nx)
-            RHOX = zeros(Float64, coords.Ny, coords.Nx1)
-            RHOFX = zeros(Float64, coords.Ny, coords.Nx1)
-            KX = zeros(Float64, coords.Ny, coords.Nx1)
-            PHIX = zeros(Float64, coords.Ny, coords.Nx1)
-            RX = zeros(Float64, coords.Ny, coords.Nx1)
-            WTX = zeros(Float64, coords.Ny, coords.Nx1)
-            RHOY = zeros(Float64, coords.Ny1, coords.Nx)
-            RHOFY = zeros(Float64, coords.Ny1, coords.Nx)
-            KY = zeros(Float64, coords.Ny1, coords.Nx)
-            PHIY = zeros(Float64, coords.Ny1, coords.Nx)
-            RY = zeros(Float64, coords.Ny1, coords.Nx)
-            WTY = zeros(Float64, coords.Ny1, coords.Nx)
-            GGGP = zeros(Float64, coords.Ny1, coords.Nx1)
-            SXX = zeros(Float64, coords.Ny1, coords.Nx1)
-            RHO = zeros(Float64, coords.Ny1, coords.Nx1)
-            RHOCP = zeros(Float64, coords.Ny1, coords.Nx1)
-            ALPHA = zeros(Float64, coords.Ny1, coords.Nx1)
-            ALPHAF = zeros(Float64, coords.Ny1, coords.Nx1)
-            HR = zeros(Float64, coords.Ny1, coords.Nx1)
-            PHI = zeros(Float64, coords.Ny1, coords.Nx1)
-            TK = zeros(Float64, coords.Ny1, coords.Nx1)
-            WTP = zeros(Float64, coords.Ny1, coords.Nx1)
+            (ETA0, ETA, GGG, SXY, COH, TEN, FRI, WT, RHOX, RHOFX, KX, PHIX, RX, WTX, RHOY, RHOFY, KY, PHIY, RY, WTY, RHO, RHOCP, ALPHA, ALPHAF, HR, GGGP, SXX, TK, PHI, DMP, DHP, XWS, WTP) = setup_interpolated_properties(
+                coords
+            )
 
             dummy_vec = zeros(Float64, marknum)
             ws = P2MTiledWorkspace(coords, marknum, 4)
