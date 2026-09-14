@@ -958,12 +958,6 @@ function compute_multistage_accretion_rate(
         end
     end
 
-    # Smoothstep function S(x) = 3x^2 - 2x^3 for x in [0, 1]
-    function _smoothstep(x::Float64)::Float64
-        xc = clamp(x, 0.0, 1.0)
-        return xc * xc * (3.0 - 2.0 * xc)
-    end
-
     # If M_iso is not active (NaN or <= 0), smooth between stage 1 and stage 2
     if !isfinite(M_iso) || M_iso <= 0.0
         w = acc_cfg.transition_width
@@ -974,8 +968,8 @@ function compute_multistage_accretion_rate(
         elseif M_val >= M_onset_high
             return max(0.0, rate2)
         else
-            s1 = _smoothstep((M_val - M_onset_low) / (M_onset_high - M_onset_low))
-            return max(0.0, (1.0 - s1) * rate1 + s1 * rate2)
+            s1 = smoothstep(M_onset_low, M_onset_high, M_val)
+            return max(0.0, lerp(rate1, rate2, s1))
         end
     end
 
@@ -989,8 +983,8 @@ function compute_multistage_accretion_rate(
         elseif M_val >= M_trans_high
             return max(0.0, rate3)
         else
-            s = _smoothstep((M_val - M_trans_low) / (M_trans_high - M_trans_low))
-            return max(0.0, (1.0 - s) * rate1 + s * rate3)
+            s = smoothstep(M_trans_low, M_trans_high, M_val)
+            return max(0.0, lerp(rate1, rate3, s))
         end
     end
 
@@ -1007,13 +1001,13 @@ function compute_multistage_accretion_rate(
     if M_val <= M_onset_low
         return max(0.0, rate1)
     elseif M_val < M_onset_high
-        s1 = _smoothstep((M_val - M_onset_low) / (M_onset_high - M_onset_low))
-        return max(0.0, (1.0 - s1) * rate1 + s1 * rate2)
+        s1 = smoothstep(M_onset_low, M_onset_high, M_val)
+        return max(0.0, lerp(rate1, rate2, s1))
     elseif M_val <= M_iso_low
         return max(0.0, rate2)
     elseif M_val < M_iso_high
-        s2 = _smoothstep((M_val - M_iso_low) / (M_iso_high - M_iso_low))
-        return max(0.0, (1.0 - s2) * rate2 + s2 * rate3)
+        s2 = smoothstep(M_iso_low, M_iso_high, M_val)
+        return max(0.0, lerp(rate2, rate3, s2))
     else
         return max(0.0, rate3)
     end

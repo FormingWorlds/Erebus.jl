@@ -3,6 +3,8 @@ using Erebus
 using StaticArrays
 using TOML
 
+include("test_helpers.jl")
+
 @testset "Config" begin
     @testset "default_config() matches baseline constants" begin
         cfg = default_config()
@@ -101,185 +103,129 @@ using TOML
         ) === nothing
 
         # Invalid grid constraints
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=2, Ny=33, xsize=140000.0, ysize=140000.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=33, Ny=1, xsize=140000.0, ysize=140000.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=-50000.0, ysize=140000.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(grid=GridConfig(Nx=33, Ny=33, xsize=140000.0, ysize=0.0))
-        )
+        @reject_config grid=GridConfig(Nx=2, Ny=33, xsize=140000.0, ysize=140000.0)
+        @reject_config grid=GridConfig(Nx=33, Ny=1, xsize=140000.0, ysize=140000.0)
+        @reject_config grid=GridConfig(Nx=33, Ny=33, xsize=-50000.0, ysize=140000.0)
+        @reject_config grid=GridConfig(Nx=33, Ny=33, xsize=140000.0, ysize=0.0)
 
         # Planet exceeding domain boundary (centered)
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
-                geometry=GeometryConfig(
-                    rplanet=50000.0,
-                    rcrust=50000.0,
-                    xcenter=40000.0,
-                    ycenter=40000.0,
-                    psurface=1e3,
-                ),
+        @reject_config(
+            grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
+            geometry=GeometryConfig(
+                rplanet=50000.0,
+                rcrust=50000.0,
+                xcenter=40000.0,
+                ycenter=40000.0,
+                psurface=1e3,
             ),
         )
 
         # Planet exceeding domain boundary (off-center placement)
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
-                geometry=GeometryConfig(
-                    rplanet=30000.0,
-                    rcrust=30000.0,
-                    xcenter=5000.0,
-                    ycenter=40000.0,
-                    psurface=1e3,
-                ),
+        @reject_config(
+            grid=GridConfig(Nx=33, Ny=33, xsize=80000.0, ysize=80000.0),
+            geometry=GeometryConfig(
+                rplanet=30000.0,
+                rcrust=30000.0,
+                xcenter=5000.0,
+                ycenter=40000.0,
+                psurface=1e3,
             ),
         )
 
         # Crust radius exceeding planet radius
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                geometry=GeometryConfig(
-                    rplanet=40000.0,
-                    rcrust=50000.0,
-                    xcenter=70000.0,
-                    ycenter=70000.0,
-                    psurface=1e3,
-                ),
+        @reject_config(
+            geometry=GeometryConfig(
+                rplanet=40000.0,
+                rcrust=50000.0,
+                xcenter=70000.0,
+                ycenter=70000.0,
+                psurface=1e3,
             ),
         )
 
         # Invalid poroelastic parameters
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                poroelasticity=PoroelasticConfig(
-                    betasolid=-1.0e-11, betafluid=4e-10, phimin=1e-4, phimax=0.9999
-                ),
-            ),
+        @reject_config poroelasticity=PoroelasticConfig(
+            betasolid=-1.0e-11, betafluid=4e-10, phimin=1e-4, phimax=0.9999
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                poroelasticity=PoroelasticConfig(
-                    betasolid=2.5e-11, betafluid=-4e-10, phimin=1e-4, phimax=0.9999
-                ),
-            ),
+        @reject_config poroelasticity=PoroelasticConfig(
+            betasolid=2.5e-11, betafluid=-4e-10, phimin=1e-4, phimax=0.9999
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                poroelasticity=PoroelasticConfig(
-                    betasolid=2.5e-11, betafluid=4e-10, phimin=0.9, phimax=0.1
-                ),
-            ),
+        @reject_config poroelasticity=PoroelasticConfig(
+            betasolid=2.5e-11, betafluid=4e-10, phimin=0.9, phimax=0.1
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                poroelasticity=PoroelasticConfig(
-                    betasolid=2.5e-11, betafluid=4e-10, phimin=-0.1, phimax=0.9
-                ),
-            ),
+        @reject_config poroelasticity=PoroelasticConfig(
+            betasolid=2.5e-11, betafluid=4e-10, phimin=-0.1, phimax=0.9
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity=PoroelasticConfig(kappa_frac=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity=PoroelasticConfig(gamma_frac=0.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(poroelasticity=PoroelasticConfig(k_frac_max=-1.0e-9))
-        )
+        @reject_config poroelasticity=PoroelasticConfig(kappa_frac=-1.0)
+        @reject_config poroelasticity=PoroelasticConfig(gamma_frac=0.0)
+        @reject_config poroelasticity=PoroelasticConfig(k_frac_max=-1.0e-9)
 
         # Invalid time parameters
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                time=TimeConfig(
-                    dt_initial=-1.0,
-                    dt_longest=100.0,
-                    dtcoefdn=0.5,
-                    dtcoefup=1.2,
-                    dtstep=200,
-                    dxymax=0.05,
-                    vpratio=0.33,
-                    DTmax=20.0,
-                    yearlength=3.15e7,
-                    start_time=0.0,
-                    endtime=1000.0,
-                    start_step=1,
-                    n_steps=10,
-                ),
+        @reject_config(
+            time=TimeConfig(
+                dt_initial=-1.0,
+                dt_longest=100.0,
+                dtcoefdn=0.5,
+                dtcoefup=1.2,
+                dtstep=200,
+                dxymax=0.05,
+                vpratio=0.33,
+                DTmax=20.0,
+                yearlength=3.15e7,
+                start_time=0.0,
+                endtime=1000.0,
+                start_step=1,
+                n_steps=10,
             ),
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                time=TimeConfig(
-                    dt_initial=200.0,
-                    dt_longest=100.0,
-                    dtcoefdn=0.5,
-                    dtcoefup=1.2,
-                    dtstep=200,
-                    dxymax=0.05,
-                    vpratio=0.33,
-                    DTmax=20.0,
-                    yearlength=3.15e7,
-                    start_time=0.0,
-                    endtime=1000.0,
-                    start_step=1,
-                    n_steps=10,
-                ),
+        @reject_config(
+            time=TimeConfig(
+                dt_initial=200.0,
+                dt_longest=100.0,
+                dtcoefdn=0.5,
+                dtcoefup=1.2,
+                dtstep=200,
+                dxymax=0.05,
+                vpratio=0.33,
+                DTmax=20.0,
+                yearlength=3.15e7,
+                start_time=0.0,
+                endtime=1000.0,
+                start_step=1,
+                n_steps=10,
             ),
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                time=TimeConfig(
-                    dt_initial=100.0,
-                    dt_longest=100.0,
-                    dtcoefdn=0.5,
-                    dtcoefup=1.2,
-                    dtstep=200,
-                    dxymax=0.05,
-                    vpratio=0.33,
-                    DTmax=20.0,
-                    yearlength=3.15e7,
-                    start_time=0.0,
-                    endtime=1000.0,
-                    start_step=1,
-                    n_steps=0,
-                ),
+        @reject_config(
+            time=TimeConfig(
+                dt_initial=100.0,
+                dt_longest=100.0,
+                dtcoefdn=0.5,
+                dtcoefup=1.2,
+                dtstep=200,
+                dxymax=0.05,
+                vpratio=0.33,
+                DTmax=20.0,
+                yearlength=3.15e7,
+                start_time=0.0,
+                endtime=1000.0,
+                start_step=1,
+                n_steps=0,
             ),
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(time=TimeConfig(start_time=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(time=TimeConfig(start_time=10.0, endtime=5.0))
-        )
+        @reject_config time=TimeConfig(start_time=-1.0)
+        @reject_config time=TimeConfig(start_time=10.0, endtime=5.0)
 
         # Invalid solver parameters: titermax must be <= nplast to prevent plastic array overflow
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(solver=SolverConfig(titermax=200_000, nplast=100_000))
-        )
+        @reject_config solver=SolverConfig(titermax=200_000, nplast=100_000)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(output=OutputConfig(savematstep=0, visstep=1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(output=OutputConfig(savematstep=10, visstep=0))
-        )
+        @reject_config output=OutputConfig(savematstep=0, visstep=1)
+        @reject_config output=OutputConfig(savematstep=10, visstep=0)
 
         # Invalid thermodynamics
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(ratio_al=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                thermodynamics=ThermalConfig(tmfluidphase=1500.0, tmsolidphase=1400.0)
-            ),
+        @reject_config thermodynamics=ThermalConfig(ratio_al=-0.1)
+        @reject_config thermodynamics=ThermalConfig(
+            tmfluidphase=1500.0, tmsolidphase=1400.0
         )
     end
 
@@ -365,16 +311,10 @@ using TOML
             ),
         )
         # Invalid radiogenic half-life
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(t_half_al=-1.0))
-        )
+        @reject_config thermodynamics=ThermalConfig(t_half_al=-1.0)
         # Material modification away from compiled constants
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                materials=MaterialConfig(
-                    rhosolidm=SVector{3,Float64}([4000.0, 3300.0, 1.0])
-                ),
-            ),
+        @reject_config materials=MaterialConfig(
+            rhosolidm=SVector{3,Float64}([4000.0, 3300.0, 1.0])
         )
         # Radiogenic heating calculation keyword arguments and toggling
         hr_sol_on, _, _ = Erebus.calculate_radioactive_heating(true, false, 0.0)
@@ -385,110 +325,50 @@ using TOML
 
     @testset "output restart_from validation" begin
         # Non-existent checkpoint file
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                output=OutputConfig(restart_from="nonexistent_checkpoint.jld2")
-            ),
-        )
+        @reject_config output=OutputConfig(restart_from="nonexistent_checkpoint.jld2")
         # Non-.jld2 extension
         tmp_txt = tempname() * ".txt"
         touch(tmp_txt)
         try
-            @test_throws ArgumentError validate_config(
-                SimulationConfig(output=OutputConfig(restart_from=tmp_txt))
-            )
+            @reject_config output=OutputConfig(restart_from=tmp_txt)
         finally
             rm(tmp_txt, force=true)
         end
     end
 
     @testset "Unphysical Disk Configurations" begin
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(orbital_distance_au=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(stellar_mass_msun=-0.5))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(model=:invalid_disk_model))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(t_visc_0_myr=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(gamma=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(orbital_distance_au=NaN))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(orbital_distance_au=Inf))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(stellar_mass_msun=NaN))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(disk=DiskConfig(t_visc_0_myr=Inf))
-        )
+        @reject_config disk=DiskConfig(orbital_distance_au=-1.0)
+        @reject_config disk=DiskConfig(stellar_mass_msun=-0.5)
+        @reject_config disk=DiskConfig(model=:invalid_disk_model)
+        @reject_config disk=DiskConfig(t_visc_0_myr=-0.1)
+        @reject_config disk=DiskConfig(gamma=-1.0)
+        @reject_config disk=DiskConfig(orbital_distance_au=NaN)
+        @reject_config disk=DiskConfig(orbital_distance_au=Inf)
+        @reject_config disk=DiskConfig(stellar_mass_msun=NaN)
+        @reject_config disk=DiskConfig(t_visc_0_myr=Inf)
     end
 
     @testset "Unphysical Thermodynamics Configurations" begin
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(Lᶠ=-100.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(ratio_al=1.5))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(ratio_fe=-0.05))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(emissivity=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(emissivity=1.2))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=NaN))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(sigma_sb=Inf))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                thermodynamics=ThermalConfig(fluid_viscosity_mode=:invalid_mode)
-            ),
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_T0=-10.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_T0=NaN))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_eta0=-1.0e-3))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(thermodynamics=ThermalConfig(fluid_viscosity_eta0=Inf))
-        )
+        @reject_config thermodynamics=ThermalConfig(Lᶠ=-100.0)
+        @reject_config thermodynamics=ThermalConfig(ratio_al=1.5)
+        @reject_config thermodynamics=ThermalConfig(ratio_fe=-0.05)
+        @reject_config thermodynamics=ThermalConfig(emissivity=-0.1)
+        @reject_config thermodynamics=ThermalConfig(emissivity=1.2)
+        @reject_config thermodynamics=ThermalConfig(sigma_sb=-1.0)
+        @reject_config thermodynamics=ThermalConfig(sigma_sb=NaN)
+        @reject_config thermodynamics=ThermalConfig(sigma_sb=Inf)
+        @reject_config thermodynamics=ThermalConfig(fluid_viscosity_mode=:invalid_mode)
+        @reject_config thermodynamics=ThermalConfig(fluid_viscosity_T0=-10.0)
+        @reject_config thermodynamics=ThermalConfig(fluid_viscosity_T0=NaN)
+        @reject_config thermodynamics=ThermalConfig(fluid_viscosity_eta0=-1.0e-3)
+        @reject_config thermodynamics=ThermalConfig(fluid_viscosity_eta0=Inf)
     end
 
     @testset "Unphysical Solver Configurations" begin
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(solver=SolverConfig(etamin=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(solver=SolverConfig(etamin=10.0, etamax=1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(solver=SolverConfig(etaphikoef=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(solver=SolverConfig(titermax=0))
-        )
+        @reject_config solver=SolverConfig(etamin=-1.0)
+        @reject_config solver=SolverConfig(etamin=10.0, etamax=1.0)
+        @reject_config solver=SolverConfig(etaphikoef=-0.1)
+        @reject_config solver=SolverConfig(titermax=0)
     end
 
     @testset "Hydrothermal Configurations" begin
@@ -496,18 +376,12 @@ using TOML
         @test cfg_default.active == false
         @test cfg_default.phi_start ≈ 0.30
 
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                hydrothermal=HydrothermalConfig(active=true, phi_start=0.8, phi_end=0.2)
-            ),
+        @reject_config hydrothermal=HydrothermalConfig(
+            active=true, phi_start=0.8, phi_end=0.2
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(hydrothermal=HydrothermalConfig(active=true, Ra_m_crit=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                hydrothermal=HydrothermalConfig(active=true, k_floor=10.0, k_cutoff=1.0)
-            ),
+        @reject_config hydrothermal=HydrothermalConfig(active=true, Ra_m_crit=-1.0)
+        @reject_config hydrothermal=HydrothermalConfig(
+            active=true, k_floor=10.0, k_cutoff=1.0
         )
     end
 
@@ -531,93 +405,45 @@ using TOML
             nothing
 
         # Invalid modes
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, mode=:invalid_mode))
-        )
+        @reject_config accretion=AccretionConfig(active=true, mode=:invalid_mode)
 
         # Invalid mass and radius bounds
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, M_initial=-1.0))
+        @reject_config accretion=AccretionConfig(active=true, M_initial=-1.0)
+        @reject_config accretion=AccretionConfig(
+            active=true, M_target=1.0e16, M_initial=1.0e17
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                accretion=AccretionConfig(active=true, M_target=1.0e16, M_initial=1.0e17)
-            ),
+        @reject_config accretion=AccretionConfig(active=true, R_initial=-1000.0)
+        @reject_config accretion=AccretionConfig(
+            active=true, R_target=10000.0, R_initial=20000.0
         )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, R_initial=-1000.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                accretion=AccretionConfig(active=true, R_target=10000.0, R_initial=20000.0)
-            ),
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, rho_bulk=-1000.0))
-        )
+        @reject_config accretion=AccretionConfig(active=true, rho_bulk=-1000.0)
 
         # Target radius exceeding domain boundary
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, R_target=80000.0))
-        )
+        @reject_config accretion=AccretionConfig(active=true, R_target=80000.0)
 
         # Invalid timing and growth parameters
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, t_start_myr=-0.5))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, t_duration_myr=0.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, dM_dt_constant=0.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, dR_dt_constant=-1.0e-5))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, tau_growth_myr=0.0))
-        )
+        @reject_config accretion=AccretionConfig(active=true, t_start_myr=-0.5)
+        @reject_config accretion=AccretionConfig(active=true, t_duration_myr=0.0)
+        @reject_config accretion=AccretionConfig(active=true, dM_dt_constant=0.0)
+        @reject_config accretion=AccretionConfig(active=true, dR_dt_constant=-1.0e-5)
+        @reject_config accretion=AccretionConfig(active=true, tau_growth_myr=0.0)
 
         # Invalid physical fractions
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, h_impact=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, h_impact=1.5))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, phi_accreted=-0.1))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, phi_accreted=1.2))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                accretion=AccretionConfig(active=true, Xfe_bulk_accreted=-0.05)
-            ),
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, Xfe_bulk_accreted=1.05))
-        )
+        @reject_config accretion=AccretionConfig(active=true, h_impact=-0.1)
+        @reject_config accretion=AccretionConfig(active=true, h_impact=1.5)
+        @reject_config accretion=AccretionConfig(active=true, phi_accreted=-0.1)
+        @reject_config accretion=AccretionConfig(active=true, phi_accreted=1.2)
+        @reject_config accretion=AccretionConfig(active=true, Xfe_bulk_accreted=-0.05)
+        @reject_config accretion=AccretionConfig(active=true, Xfe_bulk_accreted=1.05)
 
         # Invalid volatile abundances
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, XC_accreted_ppm=-10.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, XN_accreted_ppm=-1.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, XS_accreted_ppm=-50.0))
-        )
+        @reject_config accretion=AccretionConfig(active=true, XC_accreted_ppm=-10.0)
+        @reject_config accretion=AccretionConfig(active=true, XN_accreted_ppm=-1.0)
+        @reject_config accretion=AccretionConfig(active=true, XS_accreted_ppm=-50.0)
 
         # Invalid pebble/turbulence parameters
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, stokes_number=0.0))
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(accretion=AccretionConfig(active=true, alpha_turbulence=-1e-3))
-        )
+        @reject_config accretion=AccretionConfig(active=true, stokes_number=0.0)
+        @reject_config accretion=AccretionConfig(active=true, alpha_turbulence=-1e-3)
 
         # TOML deserialization roundtrip
         toml_overlay = """
@@ -636,5 +462,26 @@ using TOML
         @test cfg_parsed.accretion.R_initial ≈ 25000.0
         @test cfg_parsed.accretion.h_impact ≈ 0.8
         @test cfg_parsed.accretion.Sigma_pl_0 ≈ 150.0
+    end
+
+    @testset "@reject_config and @unpack_coords helper validation" begin
+        # 1. Test @reject_config with both kwarg and raw expression forms
+        @reject_config grid=GridConfig(Nx=1)
+        @reject_config SimulationConfig(grid=GridConfig(Ny=1))
+
+        # 2. Test @unpack_coords with concrete GridCoordinates
+        test_coords = GridCoordinates(33, 33; xsize=100000.0, ysize=100000.0)
+        @unpack_coords test_coords dx dy Nx Ny
+        @test isapprox(dx_val, test_coords.dx; atol=1e-12)
+        @test isapprox(dy_val, test_coords.dy; atol=1e-12)
+        @test Nx_val == 33
+        @test Ny_val == 33
+
+        # 3. Test @unpack_coords with nothing (falls back to caller variables)
+        dx, dy = 1000.0, 2000.0
+        no_coords = nothing
+        @unpack_coords no_coords dx dy
+        @test isapprox(dx_val, 1000.0; atol=1e-12)
+        @test isapprox(dy_val, 2000.0; atol=1e-12)
     end
 end

@@ -95,8 +95,7 @@ function assemble_hydromechanical_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
 
     # initialize or reuse LHS sparse coefficient matrix
     L_target =

@@ -75,6 +75,48 @@
         @test_throws DomainError Erebus.total(s, f, NaN)
     end # testset "total()"
 
+    @testset "smoothstep() and lerp() invariants" begin
+        # 1. Bounds and endpoints
+        @test isapprox(Erebus.smoothstep(0.0, 10.0, 0.0), 0.0; atol=1e-12)
+        @test isapprox(Erebus.smoothstep(0.0, 10.0, 10.0), 1.0; atol=1e-12)
+        @test isapprox(Erebus.smoothstep(0.0, 10.0, 5.0), 0.5; atol=1e-12)
+
+        # 2. Clamping beyond bounds
+        @test isapprox(Erebus.smoothstep(0.0, 10.0, -5.0), 0.0; atol=1e-12)
+        @test isapprox(Erebus.smoothstep(0.0, 10.0, 15.0), 1.0; atol=1e-12)
+
+        # 3. Degenerate x0 == x1 endpoint guard (does not return NaN)
+        @test isapprox(Erebus.smoothstep(5.0, 5.0, 4.0), 0.0; atol=1e-12)
+        @test isapprox(Erebus.smoothstep(5.0, 5.0, 5.0), 1.0; atol=1e-12)
+        @test isapprox(Erebus.smoothstep(5.0, 5.0, 6.0), 1.0; atol=1e-12)
+
+        # 4. lerp partition of unity
+        @test isapprox(Erebus.lerp(100.0, 200.0, 0.0), 100.0; atol=1e-12)
+        @test isapprox(Erebus.lerp(100.0, 200.0, 1.0), 200.0; atol=1e-12)
+        @test isapprox(Erebus.lerp(100.0, 200.0, 0.5), 150.0; atol=1e-12)
+    end
+
+    @testset "require_* validation guards" begin
+        @test isapprox(Erebus.require_positive_finite(1.0, "p"), 1.0; atol=1e-12)
+        @test_throws DomainError Erebus.require_positive_finite(0.0, "p")
+        @test_throws DomainError Erebus.require_positive_finite(-1.0, "p")
+        @test_throws DomainError Erebus.require_positive_finite(NaN, "p")
+        @test_throws DomainError Erebus.require_positive_finite(Inf, "p")
+
+        @test isapprox(Erebus.require_nonneg_finite(0.0, "nn"), 0.0; atol=1e-12)
+        @test isapprox(Erebus.require_nonneg_finite(2.5, "nn"), 2.5; atol=1e-12)
+        @test_throws DomainError Erebus.require_nonneg_finite(-0.1, "nn")
+        @test_throws DomainError Erebus.require_nonneg_finite(NaN, "nn")
+        @test_throws DomainError Erebus.require_nonneg_finite(Inf, "nn")
+
+        @test isapprox(Erebus.require_unit_interval(0.0, "u"), 0.0; atol=1e-12)
+        @test isapprox(Erebus.require_unit_interval(1.0, "u"), 1.0; atol=1e-12)
+        @test isapprox(Erebus.require_unit_interval(0.5, "u"), 0.5; atol=1e-12)
+        @test_throws DomainError Erebus.require_unit_interval(-0.01, "u")
+        @test_throws DomainError Erebus.require_unit_interval(1.01, "u")
+        @test_throws DomainError Erebus.require_unit_interval(NaN, "u")
+    end
+
     @testset "dot4(): vector space inner product axioms" begin
         # 1. Positivity: dot4(v, v) > 0 for non-zero vectors, == 0 for zero vector
         z = zeros(4)

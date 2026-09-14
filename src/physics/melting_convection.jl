@@ -441,8 +441,7 @@ function regularized_soft_turbulence_conductivity(
     end
 
     # Melt fraction weight factor using cubic smoothstep
-    xi = clamp((F_m - F_start) / (F_end - F_start), 0.0, 1.0)
-    w_F = xi * xi * (3.0 - 2.0 * xi)
+    w_F = smoothstep(F_start, F_end, F_m)
 
     # Temperature contrast weight factor
     dT = max(0.0, T_marker - T_surface)
@@ -458,6 +457,6 @@ function regularized_soft_turbulence_conductivity(
     k_turb = max(k_cond, clamp(k_turb_raw, k_floor, k_cutoff))
 
     # Geometric blend in logarithmic space
-    log_k = (1.0 - w_total) * log10(k_cond) + w_total * log10(k_turb)
+    log_k = lerp(log10(k_cond), log10(k_turb), w_total)
     return max(k_cond, clamp(10.0^log_k, k_floor, k_cutoff))
 end

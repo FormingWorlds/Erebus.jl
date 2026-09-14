@@ -11,7 +11,7 @@ This page contains the auto-generated API documentation for all public functions
 
 ```@autodocs
 Modules = [Erebus]
-Order = [:type, :function, :constant]
+Order = [:type, :function, :constant, :macro]
 ```
 
 ---

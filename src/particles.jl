@@ -372,10 +372,7 @@ function setup_marker_properties(
     coords::Union{Nothing,GridCoordinates}=nothing,
     include_metal::Bool=false,
 )
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    xsize_val = coords === nothing ? xsize : coords.xsize
-    ysize_val = coords === nothing ? ysize : coords.ysize
+    @unpack_coords coords dx dy xsize ysize
     # horizontal marker coordinate [m]
     xm = if randomized
         rand(rgen, (-dx_val):0.1:(xsize_val + dx_val), marknum)
@@ -624,10 +621,7 @@ function define_markers!(
     dT_metal_val::Real=50.0,
     tkm0_val=tkm0,
 )
-    Nxm_val = coords === nothing ? Nxm : coords.Nxm
-    Nym_val = coords === nothing ? Nym : coords.Nym
-    dxm_val = coords === nothing ? dxm : coords.dxm
-    dym_val = coords === nothing ? dym : coords.dym
+    @unpack_coords coords Nxm Nym dxm dym
     for jm in 1:1:Nxm_val, im in 1:1:Nym_val
         # calculate marker counter
         m = (jm-1) * Nym_val + im
@@ -1153,14 +1147,7 @@ function update_marker_viscosity!(
     phi_crit_val::Real=0.4,
     eta_melt_val::Real=10.0,
 )
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
-    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
-    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
-    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
+    @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     @inbounds i, j, weights = fix_weights(
         xm[m],
         ym[m],
@@ -1928,14 +1915,7 @@ function marker_to_basic_nodes!(
     WTSUM;
     coords=nothing,
 )
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
-    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
-    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
-    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
+    @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     i, j, weights = fix_weights(
         xmm,
         ymm,
@@ -2004,14 +1984,7 @@ function marker_to_vx_nodes!(
     WTXSUM;
     coords=nothing,
 )
-    xvx_val = coords === nothing ? xvx : coords.xvx
-    yvx_val = coords === nothing ? yvx : coords.yvx
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
-    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
-    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
-    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
+    @unpack_coords coords xvx yvx dx dy jmin_vx jmax_vx imin_vx imax_vx
     i, j, weights = fix_weights(
         xmm,
         ymm,
@@ -2078,14 +2051,7 @@ function marker_to_vy_nodes!(
     WTYSUM;
     coords=nothing,
 )
-    xvy_val = coords === nothing ? xvy : coords.xvy
-    yvy_val = coords === nothing ? yvy : coords.yvy
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
-    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
-    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
-    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
+    @unpack_coords coords xvy yvy dx dy jmin_vy jmax_vy imin_vy imax_vy
     i, j, weights = fix_weights(
         xmm,
         ymm,
@@ -2168,14 +2134,7 @@ function marker_to_p_nodes!(
     WTPSUM;
     coords=nothing,
 )
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     i, j, weights = fix_weights(
         xmm,
         ymm,
@@ -2224,14 +2183,7 @@ $(SIGNATURES)
 function molarfraction_marker_to_p_nodes!(
     m, xmm, ymm, XWsolidm0, XWSSUM, WTPSUM; coords=nothing
 )
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     i, j, weights = fix_weights(
         xmm,
         ymm,
@@ -2659,8 +2611,7 @@ $(SIGNATURES)
 """
 function compute_rotation_rate!(vx, vy, wyx; coords=nothing)
     Ny, Nx = size(wyx)
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
     for j in 1:1:Nx, i in 1:1:Ny
         @inbounds wyx[i, j] =
             0.5 *
@@ -2720,34 +2671,9 @@ function move_markers_rk4!(
     mode;
     coords=nothing,
 )
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    xvx_val = coords === nothing ? xvx : coords.xvx
-    yvx_val = coords === nothing ? yvx : coords.yvx
-    xvy_val = coords === nothing ? xvy : coords.xvy
-    yvy_val = coords === nothing ? yvy : coords.yvy
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
-    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
-    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
-    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
-    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
-    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
-    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
-    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
-    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
-    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
-    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
-    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
-    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
-    Nx_val = coords === nothing ? Nx : coords.Nx
-    Ny_val = coords === nothing ? Ny : coords.Ny
+    @unpack_coords coords xp yp x y xvx yvx xvy yvy dx dy
+    @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
+    @unpack_coords coords jmin_vx jmax_vx imin_vx imax_vx jmin_vy jmax_vy imin_vy imax_vy Nx Ny
     @inbounds begin
         Threads.@threads :static for m in 1:1:marknum
             xmm = xmrk4 = xm[m]
@@ -3056,28 +2982,9 @@ $(SIGNATURES)
 function backtrace_pressures_rk4!(
     pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=nothing
 )
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    xvx_val = coords === nothing ? xvx : coords.xvx
-    yvx_val = coords === nothing ? yvx : coords.yvx
-    xvy_val = coords === nothing ? xvy : coords.xvy
-    yvy_val = coords === nothing ? yvy : coords.yvy
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
-    jmin_vx_val = coords === nothing ? jmin_vx : coords.jmin_vx
-    jmax_vx_val = coords === nothing ? jmax_vx : coords.jmax_vx
-    imin_vx_val = coords === nothing ? imin_vx : coords.imin_vx
-    imax_vx_val = coords === nothing ? imax_vx : coords.imax_vx
-    jmin_vy_val = coords === nothing ? jmin_vy : coords.jmin_vy
-    jmax_vy_val = coords === nothing ? jmax_vy : coords.jmax_vy
-    imin_vy_val = coords === nothing ? imin_vy : coords.imin_vy
-    imax_vy_val = coords === nothing ? imax_vy : coords.imax_vy
-    Nx_val = coords === nothing ? Nx : coords.Nx
-    Ny_val = coords === nothing ? Ny : coords.Ny
+    @unpack_coords coords xp yp xvx yvx xvy yvy dx dy
+    @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_vx jmax_vx imin_vx imax_vx
+    @unpack_coords coords jmin_vy jmax_vy imin_vy imax_vy Nx Ny
 
     @inbounds begin
         # setup RK4 scheme
@@ -3463,16 +3370,7 @@ function replenish_markers!(
     F_extract_m=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
-    xxm_val = coords === nothing ? xxm : coords.xxm
-    yym_val = coords === nothing ? yym : coords.yym
-    dxm_val = coords === nothing ? dxm : coords.dxm
-    dym_val = coords === nothing ? dym : coords.dym
-    jmin_m_val = coords === nothing ? jmin_m : coords.jmin_m
-    jmax_m_val = coords === nothing ? jmax_m : coords.jmax_m
-    imin_m_val = coords === nothing ? imin_m : coords.imin_m
-    imax_m_val = coords === nothing ? imax_m : coords.imax_m
-    Nxmc_val = coords === nothing ? Nxmc : coords.Nxmc
-    Nymc_val = coords === nothing ? Nymc : coords.Nymc
+    @unpack_coords coords xxm yym dxm dym jmin_m jmax_m imin_m imax_m Nxmc Nymc
     # reset marker population geometry tracker
     mdis .= mdis_init
     mnum .= 0
@@ -3674,20 +3572,7 @@ function apply_subgrid_stress_diffusion!(
         return nothing
     end
     Ny, Nx = size(SXYSUM)
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
-    jmin_basic_val = coords === nothing ? jmin_basic : coords.jmin_basic
-    jmax_basic_val = coords === nothing ? jmax_basic : coords.jmax_basic
-    imin_basic_val = coords === nothing ? imin_basic : coords.imin_basic
-    imax_basic_val = coords === nothing ? imax_basic : coords.imax_basic
+    @unpack_coords coords xp yp x y dx dy jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
     # fix etam[tm[m]] RMK: It's a temporary fix, not yet implemented in source
     etam = @SVector ones(3)
     # reset interpolation arrays
@@ -3776,12 +3661,7 @@ function update_marker_stress!(
     xm, ym, sxxm, sxym, DSXX, DSXY, marknum; coords::Union{Nothing,GridCoordinates}=nothing
 )
     Ny, Nx = size(DSXY)
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    x_val = coords === nothing ? x : coords.x
-    y_val = coords === nothing ? y : coords.y
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords xp yp x y dx dy
     @threads :static for m in 1:1:marknum
         @inbounds i_p, j_p, weights_p = fix_weights(
             xm[m], ym[m], xp_val, yp_val, dx_val, dy_val, 2, Nx-1, 2, Ny-1
@@ -3844,14 +3724,7 @@ function apply_subgrid_temperature_diffusion!(
         return nothing
     end
     Ny1, Nx1 = size(RHOCPSUM)
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     # reset interpolation arrays
     TKSUM .= 0.0
     RHOCPSUM .= 0.0
@@ -3926,14 +3799,7 @@ $(SIGNATURES)
 function update_marker_temperature!(
     xm, ym, tkm, DT, tk2, timestep, marknum; coords::Union{Nothing,GridCoordinates}=nothing
 )
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     if timestep == 1
         # interpolate tk2 to markers instead of DT for first time step        
         @threads :static for m in 1:1:marknum
@@ -4004,14 +3870,7 @@ function update_marker_porosity!(
     coords::Union{Nothing,GridCoordinates}=nothing,
 )
     # update porosity for compaction
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    jmin_p_val = coords === nothing ? jmin_p : coords.jmin_p
-    jmax_p_val = coords === nothing ? jmax_p : coords.jmax_p
-    imin_p_val = coords === nothing ? imin_p : coords.imin_p
-    imax_p_val = coords === nothing ? imax_p : coords.imax_p
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     @inbounds begin
         @threads :static for m in 1:1:marknum
             if tm[m] < 3

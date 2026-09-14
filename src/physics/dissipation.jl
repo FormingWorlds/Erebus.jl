@@ -182,8 +182,7 @@ function compute_adiabatic_heating!(
     Ny1, Nx1 = size(HA)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
     @inbounds begin
         for j in 2:1:Nx, i in 2:1:Ny
             # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)

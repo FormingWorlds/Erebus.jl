@@ -18,10 +18,7 @@ $(SIGNATURES)
 """
 function assemble_gravitational_lse!(RHO, RP; coords=nothing, LP=nothing)
     Ny1, Nx1 = size(RHO)
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
+    @unpack_coords coords dx dy xp yp
     xc_val = coords === nothing ? xcenter : coords.xcenter
     yc_val = coords === nothing ? ycenter : coords.ycenter
     r_limit = min(xc_val, yc_val)
@@ -78,8 +75,7 @@ $(SIGNATURES)
 """
 function assemble_gravitational_rhs!(RHO, RP; coords=nothing)
     Ny1, Nx1 = size(RHO)
-    xp_val = coords === nothing ? xp : coords.xp
-    yp_val = coords === nothing ? yp : coords.yp
+    @unpack_coords coords xp yp
     xc_val = coords === nothing ? xcenter : coords.xcenter
     yc_val = coords === nothing ? ycenter : coords.ycenter
     r_limit = min(xc_val, yc_val)
@@ -116,8 +112,7 @@ function process_gravitational_solution!(SP, FI, gx, gy; coords=nothing)
     Ny1, Nx1 = size(FI)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    dx_val = coords === nothing ? dx : coords.dx
-    dy_val = coords === nothing ? dy : coords.dy
+    @unpack_coords coords dx dy
     FI .= reshape(SP, Ny1, Nx1)
     @inbounds gx[:, 1:Nx_val] .= -diff(FI, dims=2) ./ dx_val
     @inbounds gy[1:Ny_val, :] .= -diff(FI, dims=1) ./ dy_val
