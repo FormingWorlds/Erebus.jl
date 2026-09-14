@@ -288,7 +288,7 @@ function solve_magma_ocean_volatile_partitioning(
             p_dict[:H2O]; As=water_As, law=water_law
         )
         w_H2O_frac = w_H2O_wtpct * 0.01
-        w_H2_frac = compute_h2_solubility_melt(p_dict[:H2])
+        w_H2_frac = compute_h2_solubility_melt(p_dict[:H2]) * 1.0e-6
         w_diss_H = w_H2O_frac * (2.01588 / 18.01528) + w_H2_frac
         m_melt_H = M_m * w_diss_H
 
@@ -322,9 +322,7 @@ function solve_magma_ocean_volatile_partitioning(
         # 4. Sulfur
         C_S_ppm = 0.0
         if sulfur_active
-            S_S_ppm = compute_sulfur_solubility_melt(P_eval, T, dIW; law=sulfide_law)
-            f_S_gas = clamp((p_dict[:H2S] + p_dict[:SO2] + p_dict[:S2]) / P_eval, 0.0, 1.0)
-            C_S_ppm = S_S_ppm * f_S_gas
+            C_S_ppm = compute_sulfur_solubility_melt(p_dict[:S2], T, dIW; law=sulfide_law)
         end
         w_diss_S = C_S_ppm * 1.0e-6
         m_melt_S = M_m * w_diss_S
@@ -441,6 +439,55 @@ function solve_magma_ocean_volatile_partitioning(
         get(final_atm_i, :S2, 0.0) * 1.0
     )
 
+    scale_H = m_atm_H > mH ? mH / max(m_atm_H, 1.0e-30) : 1.0
+    scale_C = m_atm_C > mC ? mC / max(m_atm_C, 1.0e-30) : 1.0
+    scale_N = m_atm_N > mN ? mN / max(m_atm_N, 1.0e-30) : 1.0
+    scale_S = m_atm_S > mS ? mS / max(m_atm_S, 1.0e-30) : 1.0
+
+    if min(scale_H, scale_C, scale_N, scale_S) < 1.0
+        for (sp, mass) in final_atm_i
+            if sp in (:H2, :H2O)
+                final_atm_i[sp] = mass * scale_H
+            elseif sp in (:CO, :CO2)
+                final_atm_i[sp] = mass * scale_C
+            elseif sp === :CH4
+                final_atm_i[sp] = mass * min(scale_H, scale_C)
+            elseif sp === :N2
+                final_atm_i[sp] = mass * scale_N
+            elseif sp === :NH3
+                final_atm_i[sp] = mass * min(scale_H, scale_N)
+            elseif sp in (:SO2, :S2)
+                final_atm_i[sp] = mass * scale_S
+            elseif sp === :H2S
+                final_atm_i[sp] = mass * min(scale_H, scale_S)
+            end
+        end
+        m_atm_H = (
+            get(final_atm_i, :H2, 0.0) * 1.0 +
+            get(final_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
+            get(final_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
+            get(final_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
+            get(final_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
+        )
+        m_atm_C = (
+            get(final_atm_i, :CO, 0.0) * (12.011 / 28.0101) +
+            get(final_atm_i, :CO2, 0.0) * (12.011 / 44.0095) +
+            get(final_atm_i, :CH4, 0.0) * (12.011 / 16.04246)
+        )
+        m_atm_N = (
+            get(final_atm_i, :N2, 0.0) * 1.0 +
+            get(final_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
+        )
+        m_atm_S = (
+            get(final_atm_i, :H2S, 0.0) * (32.060 / 34.08088) +
+            get(final_atm_i, :SO2, 0.0) * (32.060 / 64.066) +
+            get(final_atm_i, :S2, 0.0) * 1.0
+        )
+        final_p_i = Dict{Symbol,Float64}(k => v / col_coeff for (k, v) in final_atm_i)
+        final_P_surf = sum(values(final_p_i))
+        final_atm_tot = sum(values(final_atm_i))
+    end
+
     final_melt_H = max(0.0, mH - m_atm_H)
     final_melt_C = max(0.0, mC - m_atm_C)
     final_melt_N = max(0.0, mN - m_atm_N)
@@ -553,6 +600,8 @@ function degas_magma_ocean_markers!(
     m_marker = rho_s * v_m
     L_3D = 2.0 * Rp # 2D Cartesian to 3D spherical metric factor
     delta_IW_eff = cfg.redox_coupled ? Float64(delta_IW) : 0.0
+    T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
+    spec_surf = solve_chnos_speciation(psurf_val, T_surf_ref, delta_IW_eff)
 
     tot_ex_H2O = 0.0
     tot_ex_C = 0.0
@@ -570,26 +619,25 @@ function degas_magma_ocean_markers!(
         end
 
         F_curr = Fm[m]
+        F_prev = Fm_old[m]
 
         # Check degassing activation: molten magma ocean (F >= F_thresh) or near-surface ascending melt
-        is_magma_ocean = F_curr >= F_thresh
-        is_near_surface_melt = (r_sq >= r_degas_sq) && (F_curr > 0.01)
-
-        if !(is_magma_ocean || is_near_surface_melt)
+        is_degassing_zone = (r_sq >= r_degas_sq) && (F_curr >= F_thresh || F_curr > 0.01)
+        if !is_degassing_zone
             continue
         end
 
         T_m = tkm[m]
-        F_sol_factor = cfg.crystallization_degassing ? F_curr : 1.0
+        F_sol_factor = (cfg.crystallization_degassing && F_curr < F_prev) ? F_curr : 1.0
 
-        # Evaluate equilibrium solubilities at surface ambient pressure
+        # Evaluate equilibrium solubilities at surface ambient partial pressures
         # 1. Water solubility
-        S_H2O_wtpct = compute_water_solubility_melt(psurf_val)
+        S_H2O_wtpct = compute_water_solubility_melt(spec_surf.p_H2O_Pa)
         S_H2O_frac = S_H2O_wtpct * 0.01
         w_H2O_sat = F_sol_factor * S_H2O_frac
 
         # 2. Nitrogen solubility
-        S_N_res = compute_nitrogen_solubility_melt(psurf_val, delta_IW_eff)
+        S_N_res = compute_nitrogen_solubility_melt(spec_surf.p_N2_Pa, delta_IW_eff)
         w_N_sat = F_sol_factor * (S_N_res.total_ppm * 1.0e-6)
 
         # 3. Carbon solubility
@@ -597,7 +645,7 @@ function degas_magma_ocean_markers!(
         w_C_sat = F_sol_factor * (S_C_res.total_ppm * 1.0e-6)
 
         # 4. Sulfur solubility
-        S_S_ppm = compute_sulfur_solubility_melt(psurf_val, T_m, delta_IW_eff)
+        S_S_ppm = compute_sulfur_solubility_melt(spec_surf.p_S2_Pa, T_m, delta_IW_eff)
         w_S_sat = F_sol_factor * (S_S_ppm * 1.0e-6)
 
         # Retention floors (if enabled)
@@ -624,26 +672,32 @@ function degas_magma_ocean_markers!(
             w_S_sat = max(w_S_sat, ret_S)
         end
 
+        # Marker volatile concentrations converted to dimensionless mass fractions
+        w_H2O_m = XH2Om[m] * 0.01
+        w_C_m = XCm[m] * 1.0e-6
+        w_N_m = XNm[m] * 1.0e-6
+        w_S_m = XSm[m] * 1.0e-6
+
         # Supersaturated volatile extraction
-        ex_H2O = max(0.0, XH2Om[m] - w_H2O_sat) * eff
-        ex_C = max(0.0, XCm[m] - w_C_sat) * eff
-        ex_N = max(0.0, XNm[m] - w_N_sat) * eff
-        ex_S = max(0.0, XSm[m] - w_S_sat) * eff
+        ex_H2O = max(0.0, w_H2O_m - w_H2O_sat) * eff
+        ex_C = max(0.0, w_C_m - w_C_sat) * eff
+        ex_N = max(0.0, w_N_m - w_N_sat) * eff
+        ex_S = max(0.0, w_S_m - w_S_sat) * eff
 
         if ex_H2O > 0.0
-            XH2Om[m] -= ex_H2O
+            XH2Om[m] = max(0.0, (w_H2O_m - ex_H2O) * 100.0)
             tot_ex_H2O += ex_H2O * m_marker
         end
         if ex_C > 0.0
-            XCm[m] -= ex_C
+            XCm[m] = max(0.0, (w_C_m - ex_C) * 1.0e6)
             tot_ex_C += ex_C * m_marker
         end
         if ex_N > 0.0
-            XNm[m] -= ex_N
+            XNm[m] = max(0.0, (w_N_m - ex_N) * 1.0e6)
             tot_ex_N += ex_N * m_marker
         end
         if ex_S > 0.0
-            XSm[m] -= ex_S
+            XSm[m] = max(0.0, (w_S_m - ex_S) * 1.0e6)
             tot_ex_S += ex_S * m_marker
         end
     end

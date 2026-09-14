@@ -622,16 +622,20 @@ where xi = R_Hill / R_planet and R_Hill = a * (M_planet / (3 * M_star))^(1/3).
 - `a_orb`: Orbital semi-major axis [m].
 - `R_planet`: Planetary surface radius [m].
 
+# Keywords
+- `K_tide_min`: Minimum regularization floor preventing division by zero as xi -> 1 (default: 1.0e-4).
+
 # Returns
 - `K_tide`: Dimensionless tidal correction factor in (0, 1].
 """
 function compute_roche_lobe_correction(
-    M_planet::Real, M_star::Real, a_orb::Real, R_planet::Real
+    M_planet::Real, M_star::Real, a_orb::Real, R_planet::Real; K_tide_min::Real=1.0e-4
 )::Float64
     Mp = Float64(M_planet)
     Ms = Float64(M_star)
     a = Float64(a_orb)
     Rp = Float64(R_planet)
+    K_min = Float64(K_tide_min)
 
     if Mp <= 0.0 || !isfinite(Mp)
         throw(DomainError(Mp, "Planetary mass must be > 0 and finite"))
@@ -645,6 +649,9 @@ function compute_roche_lobe_correction(
     if Rp <= 0.0 || !isfinite(Rp)
         throw(DomainError(Rp, "Planetary radius must be > 0 and finite"))
     end
+    if K_min <= 0.0 || !isfinite(K_min)
+        throw(DomainError(K_min, "K_tide_min floor must be > 0 and finite"))
+    end
 
     R_Hill = a * cbrt(Mp / (3.0 * Ms))
     if Rp >= R_Hill
@@ -653,7 +660,7 @@ function compute_roche_lobe_correction(
 
     xi = R_Hill / Rp
     K_tide = 1.0 - 1.5 / xi + 0.5 / (xi^3)
-    return clamp(K_tide, 0.05, 1.0)
+    return clamp(K_tide, K_min, 1.0)
 end
 
 """

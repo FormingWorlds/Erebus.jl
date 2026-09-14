@@ -3070,22 +3070,52 @@ function simulation_loop(
                         else
                             # Equilibrium partitioning mode across molten magma ocean
                             m_melt_tot = 0.0
-                            m_H_tot = 0.0
-                            m_C_tot = 0.0
-                            m_N_tot = 0.0
-                            m_S_tot = 0.0
+                            m_H_melt = 0.0
+                            m_C_melt = 0.0
+                            m_N_melt = 0.0
+                            m_S_melt = 0.0
                             m_marker =
                                 cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
                             for m in 1:marknum
                                 if tm[m] < 3 &&
+                                    (xm[m]^2 + ym[m]^2 <= rplanet_val^2) &&
                                     Fm[m] >= cfg.magma_degassing.F_melt_threshold
                                     m_melt_tot += Fm[m] * m_marker
-                                    m_H_tot += XH2Om[m] * (2.01588 / 18.01528) * m_marker
-                                    m_C_tot += XCm[m] * m_marker
-                                    m_N_tot += XNm[m] * m_marker
-                                    m_S_tot += XSm[m] * m_marker
+                                    m_H_melt +=
+                                        (XH2Om[m] * 0.01) * (2.01588 / 18.01528) * m_marker
+                                    m_C_melt += (XCm[m] * 1.0e-6) * m_marker
+                                    m_N_melt += (XNm[m] * 1.0e-6) * m_marker
+                                    m_S_melt += (XSm[m] * 1.0e-6) * m_marker
                                 end
                             end
+
+                            # Atmospheric elemental inventories
+                            m_H_atm =
+                                get(atm_state.M_atm, :H2, 0.0) * 1.0 +
+                                get(atm_state.M_atm, :H2O, 0.0) * (2.01588 / 18.01528) +
+                                get(atm_state.M_atm, :CH4, 0.0) * (4.03176 / 16.04246) +
+                                get(atm_state.M_atm, :NH3, 0.0) * (3.02382 / 17.03052) +
+                                get(atm_state.M_atm, :H2S, 0.0) * (2.01588 / 34.08088)
+
+                            m_C_atm =
+                                get(atm_state.M_atm, :CO, 0.0) * (12.011 / 28.0101) +
+                                get(atm_state.M_atm, :CO2, 0.0) * (12.011 / 44.0095) +
+                                get(atm_state.M_atm, :CH4, 0.0) * (12.011 / 16.04246)
+
+                            m_N_atm =
+                                get(atm_state.M_atm, :N2, 0.0) * 1.0 +
+                                get(atm_state.M_atm, :NH3, 0.0) * (14.007 / 17.03052)
+
+                            m_S_atm =
+                                get(atm_state.M_atm, :H2S, 0.0) * (32.060 / 34.08088) +
+                                get(atm_state.M_atm, :SO2, 0.0) * (32.060 / 64.066) +
+                                get(atm_state.M_atm, :S2, 0.0) * 1.0
+
+                            m_H_tot = m_H_melt + m_H_atm
+                            m_C_tot = m_C_melt + m_C_atm
+                            m_N_tot = m_N_melt + m_N_atm
+                            m_S_tot = m_S_melt + m_S_atm
+
                             if m_melt_tot > 0.0 &&
                                 (m_H_tot + m_C_tot + m_N_tot + m_S_tot) > 0.0
                                 g_surf =
@@ -3101,6 +3131,26 @@ function simulation_loop(
                                     T_int_val,
                                     fO2_diw_mo,
                                 )
+
+                                # Deplete molten markers according to residual melt volatile concentration
+                                new_XH2O_wtpct =
+                                    (sol_eq.M_melt_H * (18.01528 / 2.01588) / m_melt_tot) *
+                                    100.0
+                                new_XC_ppm = (sol_eq.M_melt_C / m_melt_tot) * 1.0e6
+                                new_XN_ppm = (sol_eq.M_melt_N / m_melt_tot) * 1.0e6
+                                new_XS_ppm = (sol_eq.M_melt_S / m_melt_tot) * 1.0e6
+
+                                for m in 1:marknum
+                                    if tm[m] < 3 &&
+                                        (xm[m]^2 + ym[m]^2 <= rplanet_val^2) &&
+                                        Fm[m] >= cfg.magma_degassing.F_melt_threshold
+                                        XH2Om[m] = new_XH2O_wtpct
+                                        XCm[m] = new_XC_ppm
+                                        XNm[m] = new_XN_ppm
+                                        XSm[m] = new_XS_ppm
+                                    end
+                                end
+
                                 rates = Dict{Symbol,Float64}()
                                 for (sp, m_atm_eq) in sol_eq.M_atm_i
                                     m_atm_cur = get(atm_state.M_atm, sp, 0.0)

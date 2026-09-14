@@ -233,11 +233,15 @@ include("test_helpers.jl")
         Fm = fill(0.8, N_markers) # 80% melt fraction
         Fm_old = fill(0.8, N_markers)
 
-        # High volatile concentration (supersaturated relative to low surface pressure)
-        XH2Om = fill(0.02, N_markers) # 2 wt% H2O
-        XCm = fill(1000.0e-6, N_markers) # 1000 ppm C
-        XNm = fill(100.0e-6, N_markers) # 100 ppm N
-        XSm = fill(2000.0e-6, N_markers) # 2000 ppm S
+        # High volatile concentration in standard marker units:
+        # XH2Om: wt% (2.0 wt%)
+        # XCm: ppmw (1000.0 ppm)
+        # XNm: ppmw (100.0 ppm)
+        # XSm: ppmw (2000.0 ppm)
+        XH2Om = fill(2.0, N_markers)
+        XCm = fill(1000.0, N_markers)
+        XNm = fill(100.0, N_markers)
+        XSm = fill(2000.0, N_markers)
         rhosolidm_val = 3000.0
         marker_vol = ((2.0 * R_p)^2) / 10000.0 # Marker area in 2D
 
@@ -278,9 +282,15 @@ include("test_helpers.jl")
         @test rates isa Dict{Symbol,Float64}
         @test haskey(rates, :H2O)
         @test rates[:H2O] > 0.0
+        @test rates[:CO] > 0.0 || rates[:CO2] > 0.0
+        @test rates[:N2] > 0.0
+        @test rates[:H2S] > 0.0 || rates[:SO2] > 0.0 || rates[:S2] > 0.0
 
         # Marker volatiles must have decreased due to degassing
-        @test all(XH2Om .< 0.02)
+        @test all(XH2Om .< 2.0)
+        @test all(XCm .< 1000.0)
+        @test all(XNm .< 100.0)
+        @test all(XSm .< 2000.0)
 
         # Crystallization exsolution pass: melt fraction decreases from 0.8 to 0.2
         Fm_crystallizing = fill(0.2, N_markers)
@@ -313,7 +323,27 @@ include("test_helpers.jl")
     end
 
     # -------------------------------------------------------------------------
-    # 5. Magma Ocean Degassing Integration in simulation_loop
+    # 5. Extreme Elemental Ratios Mass Conservation
+    # -------------------------------------------------------------------------
+    @testset "Extreme Elemental Ratios Mass Conservation" begin
+        sol_ext = solve_magma_ocean_volatile_partitioning(
+            M_melt, 1.0e10, 1.0e15, 1.0e8, 1.0e11, R_p, g_surf, T_mo, 3.0;
+        )
+        m_atm_N =
+            get(sol_ext.M_atm_i, :N2, 0.0) +
+            get(sol_ext.M_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
+        @test isapprox(m_atm_N + sol_ext.M_melt_N, 1.0e8; rtol=1e-5)
+        m_atm_H =
+            get(sol_ext.M_atm_i, :H2, 0.0) * 1.0 +
+            get(sol_ext.M_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
+            get(sol_ext.M_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
+            get(sol_ext.M_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
+            get(sol_ext.M_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
+        @test isapprox(m_atm_H + sol_ext.M_melt_H, 1.0e10; rtol=1e-5)
+    end
+
+    # -------------------------------------------------------------------------
+    # 6. Magma Ocean Degassing Integration in simulation_loop
     # -------------------------------------------------------------------------
     @testset "Magma Ocean Degassing Runtime Integration in simulation_loop" begin
         quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
