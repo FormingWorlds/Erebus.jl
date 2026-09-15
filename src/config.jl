@@ -118,6 +118,11 @@ Base.@kwdef struct SolverConfig
     krylov_restart::Int = 50
     darcy_elimination::Bool = false
     preconditioner::Symbol = :block_schur
+    mg_levels::Int = 4
+    mg_pre_smooth::Int = 2
+    mg_post_smooth::Int = 2
+    mg_smoother::Symbol = :damped_jacobi
+    mg_omega::Float64 = 0.67
 end
 
 """
@@ -1298,11 +1303,27 @@ function validate_config(cfg::SimulationConfig)
     @check_nonneg_finite cfg.solver.krylov_atol
     @check_ge cfg.solver.krylov_maxiter 1
     @check_ge cfg.solver.krylov_restart 1
-    cfg.solver.preconditioner in (:none, :diagonal, :block_schur) || throw(
+    cfg.solver.preconditioner in (:none, :diagonal, :block_schur, :multigrid) || throw(
         ArgumentError(
-            "solver.preconditioner must be :none, :diagonal, or :block_schur, got :$(cfg.solver.preconditioner)",
+            "solver.preconditioner must be :none, :diagonal, :block_schur, or :multigrid, got :$(cfg.solver.preconditioner)",
         ),
     )
+    @check_ge cfg.solver.mg_levels 1
+    @check_ge cfg.solver.mg_pre_smooth 1
+    @check_ge cfg.solver.mg_post_smooth 1
+    cfg.solver.mg_smoother in (:damped_jacobi, :redblack_gauss_seidel) || throw(
+        ArgumentError(
+            "solver.mg_smoother must be :damped_jacobi or :redblack_gauss_seidel, got :$(cfg.solver.mg_smoother)",
+        ),
+    )
+    @check_positive_finite cfg.solver.mg_omega
+    cfg.solver.mg_omega <= 1.0 ||
+        throw(ArgumentError("solver.mg_omega must be <= 1.0, got $(cfg.solver.mg_omega)"))
+    if cfg.solver.preconditioner == :multigrid &&
+        cfg.solver.mg_levels > 1 &&
+        (isodd(cfg.grid.Nx) || isodd(cfg.grid.Ny))
+        @warn "solver.preconditioner is :multigrid with mg_levels=$(cfg.solver.mg_levels), but grid.Nx=$(cfg.grid.Nx) or grid.Ny=$(cfg.grid.Ny) is odd; geometric multigrid coarsening requires even dimensions"
+    end
     if cfg.solver.hydromech_solver == :matrix_free
         cfg.solver.darcy_elimination || throw(
             ArgumentError(

@@ -75,7 +75,12 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `krylov_maxiter` | `Int` | `200` | - | Maximum Krylov iterations per hydromechanical step | $\ge 1$ |
 | `krylov_restart` | `Int` | `50` | - | Subspace restart dimension for GMRES and FGMRES | $\ge 1$ |
 | `darcy_elimination` | `Bool` | `false` | - | Analytical condensation of Darcy fluxes to 4 DOFs per node | `true` / `false` |
-| `preconditioner` | `String` / `Symbol` | `"block_schur"` | - | Preconditioner for iterative hydromechanical solve | `"block_schur"`, `"diagonal"`, `"none"` |
+| `preconditioner` | `String` / `Symbol` | `"block_schur"` | - | Preconditioner for iterative hydromechanical solve | `"block_schur"`, `"diagonal"`, `"multigrid"`, `"none"` |
+| `mg_levels` | `Int` | `4` | - | Number of geometric multigrid levels | $\ge 1$ |
+| `mg_pre_smooth` | `Int` | `2` | - | Pre-smoothing relaxation sweeps per level | $\ge 1$ |
+| `mg_post_smooth` | `Int` | `2` | - | Post-smoothing relaxation sweeps per level | $\ge 1$ |
+| `mg_smoother` | `String` / `Symbol` | `"damped_jacobi"` | - | Multigrid relaxation smoother method | `"damped_jacobi"`, `"redblack_gauss_seidel"` |
+| `mg_omega` | `Float64` | `0.67` | - | Relaxation damping parameter $\omega$ | $\in (0, 1]$ |
 
 ---
 

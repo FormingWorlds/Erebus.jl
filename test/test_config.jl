@@ -717,5 +717,32 @@ include("test_helpers.jl")
         @test haskey(dict_repr, "solver")
         @test dict_repr["solver"]["hydromech_solver"] == "iterative"
         @test dict_repr["solver"]["preconditioner"] == "diagonal"
+
+        # 5. Multigrid configuration and validation
+        cfg_mg = load_config("""
+        [solver]
+        hydromech_solver = "iterative"
+        krylov_method = "fgmres"
+        preconditioner = "multigrid"
+        mg_levels = 5
+        mg_pre_smooth = 3
+        mg_post_smooth = 3
+        mg_smoother = "redblack_gauss_seidel"
+        mg_omega = 0.75
+        """)
+        validate_config(cfg_mg)
+        @test cfg_mg.solver.preconditioner === :multigrid
+        @test cfg_mg.solver.mg_levels == 5
+        @test cfg_mg.solver.mg_pre_smooth == 3
+        @test cfg_mg.solver.mg_post_smooth == 3
+        @test cfg_mg.solver.mg_smoother === :redblack_gauss_seidel
+        @test isapprox(cfg_mg.solver.mg_omega, 0.75)
+
+        @reject_config solver=SolverConfig(mg_levels=0)
+        @reject_config solver=SolverConfig(mg_pre_smooth=0)
+        @reject_config solver=SolverConfig(mg_post_smooth=0)
+        @reject_config solver=SolverConfig(mg_omega=0.0)
+        @reject_config solver=SolverConfig(mg_omega=1.5)
+        @reject_config solver=SolverConfig(mg_smoother=:invalid_smoother)
     end
 end
