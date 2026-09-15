@@ -6,9 +6,6 @@ impact heating thermodynamics, and marker boundary expansion.
 using DocStringExtensions
 using LinearAlgebra
 
-# Gravitational constant [m^3 / (kg s^2)] (CODATA 2018)
-const G_GRAV = GRAVITATIONAL_CONSTANT
-
 # Boltzmann constant [J / K] (SI exact definition)
 const K_BOLTZMANN = BOLTZMANN_CONSTANT
 

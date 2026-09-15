@@ -1179,6 +1179,9 @@ function evolve_coupled_atmosphere_step!(
     hydrodynamic::Bool=true,
     gamma::Real=1.4,
     escape_active::Bool=true,
+    escape_cfg::Union{Nothing,EscapeConfig}=nothing,
+    sim_time_s::Real=0.0,
+    degas_rates::Union{Nothing,AbstractDict{Symbol,<:Real}}=nothing,
 )
     dt = Float64(dt_s)
     if !isfinite(dt)
@@ -1213,10 +1216,16 @@ function evolve_coupled_atmosphere_step!(
     area = 4.0 * π * (R_p^2)
     area_exo = 4.0 * π * (R_exo^2)
 
-    # 1. Influx from interior venting
+    # 1. Influx from interior venting and magma ocean degassing
     for (sp, rate) in vent_rates
         M_influx = Float64(rate) * dt
         atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + M_influx
+    end
+    if degas_rates !== nothing
+        for (sp, rate) in degas_rates
+            M_influx = Float64(rate) * dt
+            atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + M_influx
+        end
     end
 
     # 2. Disk envelope capture and boil-off if embedded in disk or clearing
@@ -1255,7 +1264,7 @@ function evolve_coupled_atmosphere_step!(
             m_carrier = m_species[min_idx]
             M_carrier = atm_state.M_atm[carrier_sp]
 
-            # Unconstrained escape of lightest species via hydrodynamic blow-off
+            # Unconstrained thermal / blow-off escape of lightest species
             esc_carrier = evolve_atmospheric_species_inventory(
                 M_carrier,
                 0.0,
@@ -1268,16 +1277,49 @@ function evolve_coupled_atmosphere_step!(
                 hydrodynamic=hydrodynamic,
                 gamma=gamma,
             )
-            dM_esc_base = esc_carrier.M_escaped_step
+            dM_esc_thermal = esc_carrier.M_escaped_step
+            phi_thermal = dt > 0.0 ? (dM_esc_thermal / dt) / area_exo : 0.0
+
+            # Energy-limited XUV escape base flux
+            phi_xuv = 0.0
+            if escape_cfg !== nothing && escape_cfg.xuv_driven && escape_cfg.active
+                t_yr = max(1.0, Float64(sim_time_s) / SEC_PER_YEAR)
+                d_au = max(0.01, a_orb / AU_METERS)
+                F_xuv = compute_stellar_xuv_flux(
+                    t_yr,
+                    d_au;
+                    F_xuv_1au_sat=escape_cfg.F_xuv_1au_sat,
+                    t_sat_yr=escape_cfg.t_sat_yr,
+                    beta=escape_cfg.beta_xuv,
+                )
+                K_tide = if escape_cfg.tidal_correction && M_star > 0.0
+                    compute_roche_lobe_correction(M_p, M_star, a_orb, R_p)
+                else
+                    1.0
+                end
+                R_xuv = escape_cfg.r_xuv_ratio * R_p
+                xuv_res = compute_energy_limited_escape_flux(
+                    M_p,
+                    R_p,
+                    F_xuv;
+                    epsilon=escape_cfg.epsilon_xuv,
+                    R_xuv=R_xuv,
+                    K_tide=K_tide,
+                )
+                phi_xuv = area_exo > 0.0 ? xuv_res.M_dot_xuv / area_exo : 0.0
+            end
+
+            phi_base = max(phi_thermal, phi_xuv)
 
             if !cfg.crossover_active || length(present_species) == 1
-                atm_state.M_atm[carrier_sp] = esc_carrier.M_atm
+                dM_esc_base = min(M_carrier, phi_base * area_exo * dt)
+                atm_state.M_atm[carrier_sp] -= dM_esc_base
                 atm_state.M_escaped[carrier_sp] =
                     get(atm_state.M_escaped, carrier_sp, 0.0) + dM_esc_base
                 if carrier_sp === :H2
                     atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
                 end
-            elseif dM_esc_base > 0.0 && dt > 0.0 && area_exo > 0.0
+            elseif phi_base > 0.0 && dt > 0.0 && area_exo > 0.0
                 total_moles = sum(
                     atm_state.M_atm[sp] / m_species[idx] for
                     (idx, sp) in enumerate(present_species)
@@ -1286,7 +1328,6 @@ function evolve_coupled_atmosphere_step!(
                     (atm_state.M_atm[sp] / m_species[idx]) / total_moles for
                     (idx, sp) in enumerate(present_species)
                 ]
-                phi_base = (dM_esc_base / dt) / area_exo
                 b_mat = assemble_binary_diffusion_matrix(present_species, T_exo)
 
                 Phi_vec = solve_multispecies_escape_closure(
