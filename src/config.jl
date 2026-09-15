@@ -110,6 +110,14 @@ Base.@kwdef struct SolverConfig
     etamax::Float64 = 1.0e+23
     p2m_mode::Symbol = :tiled
     tile_size::Int = 4
+    hydromech_solver::Symbol = :direct
+    krylov_method::Symbol = :fgmres
+    krylov_rtol::Float64 = 1.0e-6
+    krylov_atol::Float64 = 1.0e-10
+    krylov_maxiter::Int = 200
+    krylov_restart::Int = 50
+    darcy_elimination::Bool = false
+    preconditioner::Symbol = :block_schur
 end
 
 """
@@ -1276,6 +1284,42 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
     @check_ge cfg.solver.tile_size 2
+    cfg.solver.hydromech_solver in (:direct, :iterative, :matrix_free) || throw(
+        ArgumentError(
+            "solver.hydromech_solver must be :direct, :iterative, or :matrix_free, got :$(cfg.solver.hydromech_solver)",
+        ),
+    )
+    cfg.solver.krylov_method in (:fgmres, :gmres, :bicgstab) || throw(
+        ArgumentError(
+            "solver.krylov_method must be :fgmres, :gmres, or :bicgstab, got :$(cfg.solver.krylov_method)",
+        ),
+    )
+    @check_positive_finite cfg.solver.krylov_rtol
+    @check_nonneg_finite cfg.solver.krylov_atol
+    @check_ge cfg.solver.krylov_maxiter 1
+    @check_ge cfg.solver.krylov_restart 1
+    cfg.solver.preconditioner in (:none, :diagonal, :block_schur) || throw(
+        ArgumentError(
+            "solver.preconditioner must be :none, :diagonal, or :block_schur, got :$(cfg.solver.preconditioner)",
+        ),
+    )
+    if cfg.solver.hydromech_solver == :matrix_free
+        cfg.solver.darcy_elimination || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free requires solver.darcy_elimination = true",
+            ),
+        )
+        !cfg.poroelasticity.hydrofracture || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free does not currently support poroelasticity.hydrofracture = true; use :direct or :iterative instead",
+            ),
+        )
+        !cfg.venting.active || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free does not currently support venting.active = true; use :direct or :iterative instead",
+            ),
+        )
+    end
 
     # Output checks
     @check_ge cfg.output.savematstep 1

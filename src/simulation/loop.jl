@@ -928,9 +928,11 @@ function simulation_loop(
     # set up of matrices for global grav/thermal/hydromechanical solvers"
     # -------------------------------------------------------------------------
     # hydromechanical solver
-    R, S = setup_hydromechanical_lse(coords)
+    darcy_elim_val = cfg.solver.darcy_elimination
+    dof_per_node_val = darcy_elim_val ? 4 : 6
+    R, S = setup_hydromechanical_lse(coords; dof_per_node=dof_per_node_val)
     hydromech_sol = nothing
-    hydromech_ws = HydromechanicalLSEWorkspace(coords)
+    hydromech_ws = HydromechanicalLSEWorkspace(coords; dof_per_node=dof_per_node_val)
     L_hydromech = hydromech_ws.L
     hydromech_cache = nothing
     # thermal solver
@@ -1408,9 +1410,11 @@ function simulation_loop(
                 )
 
                 # Re-initialize linear solvers and Poisson operator for new grid size
-                R, S = setup_hydromechanical_lse(coords)
+                R, S = setup_hydromechanical_lse(coords; dof_per_node=dof_per_node_val)
                 hydromech_sol = nothing
-                hydromech_ws = HydromechanicalLSEWorkspace(coords)
+                hydromech_ws = HydromechanicalLSEWorkspace(
+                    coords; dof_per_node=dof_per_node_val
+                )
                 L_hydromech = hydromech_ws.L
                 hydromech_cache = nothing
 
@@ -2264,67 +2268,191 @@ function simulation_loop(
                     recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
                     fill!(S_vent_grid, 0.0)
                     # assemble hydromechanical system of equations
-                    L = assemble_hydromechanical_lse!(
-                        ETA,
-                        ETAP,
-                        GGG,
-                        GGGP,
-                        SXY0,
-                        SXX0,
-                        RHOX,
-                        RHOY,
-                        RHOFX,
-                        RHOFY,
-                        RX,
-                        RY,
-                        ETAPHI,
-                        BETAPHI,
-                        PHI,
-                        gx,
-                        gy,
-                        pr0,
-                        pf0,
-                        DMP,
-                        dt,
-                        R;
-                        coords=coords,
-                        betasolid=cur_betasolid,
-                        betafluid=cur_betafluid,
-                        phimin=phimin_val,
-                        phimax=phimax_val,
-                        hydrofracture=hydrofracture_val,
-                        pr=pr,
-                        pf=pf,
-                        TEN=TEN,
-                        KX=KX,
-                        KY=KY,
-                        kappa_frac=kappa_frac_val,
-                        gamma_frac=gamma_frac_val,
-                        k_frac_max=k_frac_max_val,
-                        L=L_hydromech,
-                        venting=cfg.venting.active,
-                        venting_mode=cfg.venting.mode,
-                        k_vent=cfg.venting.k_vent,
-                        conductance_factor=cfg.venting.conductance_factor,
-                        ice_sealing=cfg.venting.ice_sealing,
-                        t_freeze=cfg.venting.t_freeze,
-                        dt_seal=cfg.venting.dt_seal,
-                        k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
-                        rplanet=rplanet_val,
-                        xcenter=xcenter_val,
-                        ycenter=ycenter_val,
-                        P_amb=P_amb_eff,
-                        venting_species=cfg.venting.species,
-                        tk=tk1,
-                        eta_fluid_surf=etafluidmm[2],
-                        L_sub=cfg.venting.L_sublimation,
-                        S_vent_out=S_vent_grid,
-                        DQPF=DQPF,
-                        workspace=hydromech_ws,
-                    )
+                    if darcy_elim_val
+                        L = assemble_hydromechanical_4var_lse!(
+                            ETA,
+                            ETAP,
+                            GGG,
+                            GGGP,
+                            SXY0,
+                            SXX0,
+                            RHOX,
+                            RHOY,
+                            RHOFX,
+                            RHOFY,
+                            RX,
+                            RY,
+                            ETAPHI,
+                            BETAPHI,
+                            PHI,
+                            gx,
+                            gy,
+                            pr0,
+                            pf0,
+                            DMP,
+                            dt,
+                            R;
+                            coords=coords,
+                            betasolid=cur_betasolid,
+                            betafluid=cur_betafluid,
+                            phimin=phimin_val,
+                            phimax=phimax_val,
+                            hydrofracture=hydrofracture_val,
+                            pr=pr,
+                            pf=pf,
+                            TEN=TEN,
+                            KX=KX,
+                            KY=KY,
+                            kappa_frac=kappa_frac_val,
+                            gamma_frac=gamma_frac_val,
+                            k_frac_max=k_frac_max_val,
+                            L=L_hydromech,
+                            venting=cfg.venting.active,
+                            venting_mode=cfg.venting.mode,
+                            k_vent=cfg.venting.k_vent,
+                            conductance_factor=cfg.venting.conductance_factor,
+                            ice_sealing=cfg.venting.ice_sealing,
+                            t_freeze=cfg.venting.t_freeze,
+                            dt_seal=cfg.venting.dt_seal,
+                            k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
+                            rplanet=rplanet_val,
+                            xcenter=xcenter_val,
+                            ycenter=ycenter_val,
+                            P_amb=P_amb_eff,
+                            venting_species=cfg.venting.species,
+                            tk=tk1,
+                            eta_fluid_surf=etafluidmm[2],
+                            L_sub=cfg.venting.L_sublimation,
+                            S_vent_out=S_vent_grid,
+                            DQPF=DQPF,
+                            workspace=hydromech_ws,
+                        )
+                    else
+                        L = assemble_hydromechanical_lse!(
+                            ETA,
+                            ETAP,
+                            GGG,
+                            GGGP,
+                            SXY0,
+                            SXX0,
+                            RHOX,
+                            RHOY,
+                            RHOFX,
+                            RHOFY,
+                            RX,
+                            RY,
+                            ETAPHI,
+                            BETAPHI,
+                            PHI,
+                            gx,
+                            gy,
+                            pr0,
+                            pf0,
+                            DMP,
+                            dt,
+                            R;
+                            coords=coords,
+                            betasolid=cur_betasolid,
+                            betafluid=cur_betafluid,
+                            phimin=phimin_val,
+                            phimax=phimax_val,
+                            hydrofracture=hydrofracture_val,
+                            pr=pr,
+                            pf=pf,
+                            TEN=TEN,
+                            KX=KX,
+                            KY=KY,
+                            kappa_frac=kappa_frac_val,
+                            gamma_frac=gamma_frac_val,
+                            k_frac_max=k_frac_max_val,
+                            L=L_hydromech,
+                            venting=cfg.venting.active,
+                            venting_mode=cfg.venting.mode,
+                            k_vent=cfg.venting.k_vent,
+                            conductance_factor=cfg.venting.conductance_factor,
+                            ice_sealing=cfg.venting.ice_sealing,
+                            t_freeze=cfg.venting.t_freeze,
+                            dt_seal=cfg.venting.dt_seal,
+                            k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
+                            rplanet=rplanet_val,
+                            xcenter=xcenter_val,
+                            ycenter=ycenter_val,
+                            P_amb=P_amb_eff,
+                            venting_species=cfg.venting.species,
+                            tk=tk1,
+                            eta_fluid_surf=etafluidmm[2],
+                            L_sub=cfg.venting.L_sublimation,
+                            S_vent_out=S_vent_grid,
+                            DQPF=DQPF,
+                            workspace=hydromech_ws,
+                        )
+                    end
                     # solve hydromechanical system of equations
                     @info "starting hydro-mechanical solver $titer-$iplast"
-                    if use_pardiso_val && pardiso_solver !== nothing
+                    if darcy_elim_val
+                        hydromech_ws.pr_presolve .= pr
+                        hydromech_ws.pf_presolve .= pf
+                    end
+                    if cfg.solver.hydromech_solver == :matrix_free
+                        op_mf = MatrixFreeStokesDarcyOperator(
+                            ETA,
+                            ETAP,
+                            GGG,
+                            GGGP,
+                            RHOX,
+                            RHOY,
+                            RHOFX,
+                            RHOFY,
+                            RX,
+                            RY,
+                            ETAPHI,
+                            BETAPHI,
+                            PHI,
+                            gx,
+                            gy,
+                            dt;
+                            coords=coords,
+                            betasolid=cur_betasolid,
+                            betafluid=cur_betafluid,
+                            phimin=phimin_val,
+                            phimax=phimax_val,
+                        )
+                        _, stats = solve_hydromechanical_iterative!(
+                            op_mf,
+                            R,
+                            S;
+                            coords=coords,
+                            method=cfg.solver.krylov_method,
+                            rtol=cfg.solver.krylov_rtol,
+                            atol=cfg.solver.krylov_atol,
+                            maxiter=cfg.solver.krylov_maxiter,
+                            restart=cfg.solver.krylov_restart,
+                            preconditioner=cfg.solver.preconditioner,
+                        )
+                        if !stats.solved
+                            error(
+                                "Matrix-free Krylov solver $(cfg.solver.krylov_method) failed to converge within $(stats.niter) iterations (status: $(stats.status))",
+                            )
+                        end
+                    elseif cfg.solver.hydromech_solver == :iterative
+                        _, stats = solve_hydromechanical_iterative!(
+                            L,
+                            R,
+                            S;
+                            coords=coords,
+                            method=cfg.solver.krylov_method,
+                            rtol=cfg.solver.krylov_rtol,
+                            atol=cfg.solver.krylov_atol,
+                            maxiter=cfg.solver.krylov_maxiter,
+                            restart=cfg.solver.krylov_restart,
+                            preconditioner=cfg.solver.preconditioner,
+                        )
+                        if !stats.solved
+                            error(
+                                "Iterative Krylov solver $(cfg.solver.krylov_method) failed to converge within $(stats.niter) iterations (status: $(stats.status))",
+                            )
+                        end
+                    elseif use_pardiso_val && pardiso_solver !== nothing
                         L_csc = get_matrix(pardiso_solver, L, :N)
                         current_nnz = nnz(L_csc)
                         if current_nnz != pardiso_last_nnz
@@ -2358,9 +2486,36 @@ function simulation_loop(
                     end
                     @info "finished hydro-mechanical solver $titer-$iplast"
                     # process hydromechanical solution
-                    process_hydromechanical_solution!(
-                        S, vx, vy, pr, qxD, qyD, pf; coords=coords
-                    )
+                    if darcy_elim_val
+                        process_hydromechanical_4var_solution!(
+                            S, vx, vy, pr, pf; coords=coords
+                        )
+                        reconstruct_darcy_fluxes!(
+                            qxD,
+                            qyD,
+                            pf,
+                            RHOFX,
+                            RHOFY,
+                            RX,
+                            RY,
+                            gx,
+                            gy,
+                            coords;
+                            hydrofracture=hydrofracture_val,
+                            pr=hydromech_ws.pr_presolve,
+                            pf_eff=hydromech_ws.pf_presolve,
+                            TEN=TEN,
+                            KX=KX,
+                            KY=KY,
+                            kappa_frac=kappa_frac_val,
+                            gamma_frac=gamma_frac_val,
+                            k_frac_max=k_frac_max_val,
+                        )
+                    else
+                        process_hydromechanical_solution!(
+                            S, vx, vy, pr, qxD, qyD, pf; coords=coords
+                        )
+                    end
 
                     # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
                     aphimax = compute_Aϕ!(

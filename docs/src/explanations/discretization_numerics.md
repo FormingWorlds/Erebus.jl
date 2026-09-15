@@ -167,6 +167,49 @@ The sparse system is solved using direct sparse LU factorization (UMFPACK via `L
 
 ---
 
+## Analytical Darcy Elimination (4-Variable System)
+
+To reduce computational overhead and memory footprint, the linear momentum equations for Darcy filtration:
+
+$$R_x q_{xD} + \frac{\partial P_f}{\partial x} = \rho_f g_x$$
+
+$$R_y q_{yD} + \frac{\partial P_f}{\partial y} = \rho_f g_y$$
+
+can be substituted directly into the fluid mass conservation equation. Because the Darcy flux degrees of freedom appear with strictly diagonal drag coefficients $R_x = \eta_f / k_{\phi, x}$ and $R_y = \eta_f / k_{\phi, y}$, the fluxes $q_{xD}$ and $q_{yD}$ are eliminated analytically at $\mathcal{O}(N)$ operations prior to matrix assembly or operator evaluation:
+
+$$q_{xD, ij} = \frac{1}{R_{x, ij}} \left(\rho_{f, ij} g_{x, ij} - \frac{P_{f, i, j+1} - P_{f, ij}}{\Delta x}\right)$$
+
+$$q_{yD, ij} = \frac{1}{R_{y, ij}} \left(\rho_{f, ij} g_{y, ij} - \frac{P_{f, i+1, j} - P_{f, ij}}{\Delta y}\right)$$
+
+Substituting these expressions into $\nabla \cdot \mathbf{q}_D$ yields a discrete 5-point Laplacian operator for $P_f$:
+
+$$\nabla \cdot \mathbf{q}_D = \frac{q_{xD, ij} - q_{xD, i, j-1}}{\Delta x} + \frac{q_{yD, ij} - q_{yD, i-1, j}}{\Delta y}$$
+
+This condenses the Stokes-Darcy system from six unknowns per cell ($v_x, v_y, P_t, q_{xD}, q_{yD}, P_f$) to four unknowns per cell ($v_x, v_y, P_t, P_f$):
+
+$$\mathbf{u}_4 = \begin{bmatrix} v_x \\ v_y \\ P_t \\ P_f \end{bmatrix}$$
+
+Following the solution of the 4-variable linear system, the Darcy velocity fields $q_{xD}$ and $q_{yD}$ are reconstructed in $\mathcal{O}(N)$ time with machine-precision fidelity via `reconstruct_darcy_fluxes!`.
+
+---
+
+## Matrix-Free Operators and Preconditioned Krylov Solvers
+
+At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.6 \times 10^7$ degrees of freedom), storing a global sparse matrix in Compressed Sparse Column (CSC) format requires gigabytes of memory, and sparse direct factorization requires tens to hundreds of gigabytes of RAM.
+
+`Erebus.jl` provides matrix-free operator evaluation (`MatrixFreeStokesDarcyOperator`) and iterative Krylov solvers (`solve_hydromechanical_iterative!`):
+
+1. **Matrix-Free Operator Evaluation**:
+   The operator action $\mathbf{y} = \mathbf{A} \mathbf{x}$ is evaluated directly on 2D grid property arrays without allocating sparse matrix indices or non-zero value arrays. Thread-parallel column execution yields high cache locality and eliminates memory allocation during solver iterations.
+
+2. **Block-Schur Preconditioning**:
+   Decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence across diverse permeability and viscosity regimes.
+
+3. **Krylov Solvers**:
+   Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl`.
+
+---
+
 ## Non-Linear Iterations (Picard Loop)
 
 Because effective viscosities $\eta(\dot{\varepsilon}_{\text{II}}, P_{\text{eff}})$, permeabilities $k_\phi(\phi)$, and bulk viscosities $\eta_\phi(\phi)$ depend non-linearly on the state variables, each timestep executes nested Picard iteration loops:
