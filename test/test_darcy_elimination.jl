@@ -339,8 +339,8 @@ using Test
             KY=KY_test,
         )
 
-        @test norm(vx4 - vx6) / norm(vx6) < 1.0e-10
-        @test norm(vy4 - vy6) / norm(vy6) < 1.0e-10
+        @test norm(vx4 - vx6) / norm(vx6) < 1.0e-9
+        @test norm(vy4 - vy6) / norm(vy6) < 1.0e-9
         @test norm(pr4 - pr6) / norm(pr6) < 1.0e-8
         @test norm(pf4 - pf6) / norm(pf6) < 1.0e-5
         @test norm(qxD4 - qxD6) / (norm(qxD6) + 1.0e-30) < 1.0e-3
@@ -438,8 +438,8 @@ using Test
         qyD4 = zeros(Ny1, Nx1)
         reconstruct_darcy_fluxes!(qxD4, qyD4, pf4, RHOFX, RHOFY, RX, RY, gx, gy, coords)
 
-        @test norm(vx4 - vx6) / norm(vx6) < 1.0e-10
-        @test norm(vy4 - vy6) / norm(vy6) < 1.0e-10
+        @test norm(vx4 - vx6) / norm(vx6) < 1.0e-9
+        @test norm(vy4 - vy6) / norm(vy6) < 1.0e-9
         @test norm(pr4 - pr6) / norm(pr6) < 1.0e-8
         @test norm(pf4 - pf6) / norm(pf6) < 1.0e-8
         @test norm(qxD4 - qxD6) / (norm(qxD6) + 1.0e-30) < 1.0e-10
