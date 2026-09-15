@@ -68,6 +68,14 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
 | `etamin` | `Float64` | `1.0e+12` | Pa s | Lower shear viscosity cutoff | $> 0$ |
 | `etamax` | `Float64` | `1.0e+23` | Pa s | Upper shear viscosity cutoff | $\ge \text{etamin}$ |
+| `hydromech_solver` | `String` / `Symbol` | `"direct"` | - | Hydromechanical linear solver module | `"direct"`, `"iterative"`, `"matrix_free"` |
+| `krylov_method` | `String` / `Symbol` | `"fgmres"` | - | Krylov iterative solver method | `"fgmres"`, `"gmres"`, `"bicgstab"` |
+| `krylov_rtol` | `Float64` | `1.0e-6` | - | Relative convergence tolerance for Krylov iterations | $> 0$ |
+| `krylov_atol` | `Float64` | `1.0e-10` | - | Absolute convergence tolerance for Krylov iterations | $\ge 0$ |
+| `krylov_maxiter` | `Int` | `200` | - | Maximum Krylov iterations per hydromechanical step | $\ge 1$ |
+| `krylov_restart` | `Int` | `50` | - | Subspace restart dimension for GMRES and FGMRES | $\ge 1$ |
+| `darcy_elimination` | `Bool` | `false` | - | Analytical condensation of Darcy fluxes to 4 DOFs per node | `true` / `false` |
+| `preconditioner` | `String` / `Symbol` | `"block_schur"` | - | Preconditioner for iterative hydromechanical solve | `"block_schur"`, `"diagonal"`, `"none"` |
 
 ---
 

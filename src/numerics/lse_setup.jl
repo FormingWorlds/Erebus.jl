@@ -36,13 +36,13 @@ $(SIGNATURES)
     - R: hydromechanical linear system of equations: RHS vector
     - S: hydromechanical linear system of equations: solution vector
 """
-function setup_hydromechanical_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
-    R = Vector{Float64}(undef, Ny1*Nx1*6)
-    S = Vector{Float64}(undef, Ny1*Nx1*6)
+function setup_hydromechanical_lse(Nx1::Int=Nx1, Ny1::Int=Ny1; dof_per_node::Int=6)
+    R = Vector{Float64}(undef, Ny1*Nx1*dof_per_node)
+    S = Vector{Float64}(undef, Ny1*Nx1*dof_per_node)
     return R, S
 end
-function setup_hydromechanical_lse(coords::GridCoordinates)
-    return setup_hydromechanical_lse(coords.Nx1, coords.Ny1)
+function setup_hydromechanical_lse(coords::GridCoordinates; dof_per_node::Int=6)
+    return setup_hydromechanical_lse(coords.Nx1, coords.Ny1; dof_per_node=dof_per_node)
 end
 
 """

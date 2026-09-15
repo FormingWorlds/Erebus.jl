@@ -154,17 +154,31 @@ mutable struct HydromechanicalLSEWorkspace
     Nx1::Int
     L::ExtendableSparseMatrix{Float64,Int64}
     is_initialized::Bool
+    dof_per_node::Int
+    pr_presolve::Matrix{Float64}
+    pf_presolve::Matrix{Float64}
 
-    function HydromechanicalLSEWorkspace(Ny1::Integer, Nx1::Integer)
+    function HydromechanicalLSEWorkspace(
+        Ny1::Integer, Nx1::Integer; dof_per_node::Integer=6
+    )
         Ny1_val = Int(Ny1)
         Nx1_val = Int(Nx1)
-        dim = Ny1_val * Nx1_val * 6
+        dof_val = Int(dof_per_node)
+        dim = Ny1_val * Nx1_val * dof_val
         L = ExtendableSparseMatrix(dim, dim)
-        return new(Ny1_val, Nx1_val, L, false)
+        return new(
+            Ny1_val,
+            Nx1_val,
+            L,
+            false,
+            dof_val,
+            zeros(Float64, Ny1_val, Nx1_val),
+            zeros(Float64, Ny1_val, Nx1_val),
+        )
     end
 end
-function HydromechanicalLSEWorkspace(coords::GridCoordinates)
-    return HydromechanicalLSEWorkspace(coords.Ny1, coords.Nx1)
+function HydromechanicalLSEWorkspace(coords::GridCoordinates; dof_per_node::Integer=6)
+    return HydromechanicalLSEWorkspace(coords.Ny1, coords.Nx1; dof_per_node=dof_per_node)
 end
 
 """

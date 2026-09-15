@@ -228,6 +228,13 @@ include("test_helpers.jl")
         # Invalid solver parameters
         @reject_config solver=SolverConfig(p2m_mode=:unsupported)
         @reject_config solver=SolverConfig(tile_size=1)
+        @reject_config solver=SolverConfig(hydromech_solver=:unknown_solver)
+        @reject_config solver=SolverConfig(krylov_method=:unknown_method)
+        @reject_config solver=SolverConfig(krylov_rtol=-1.0e-5)
+        @reject_config solver=SolverConfig(krylov_atol=-1.0e-5)
+        @reject_config solver=SolverConfig(krylov_maxiter=0)
+        @reject_config solver=SolverConfig(krylov_restart=0)
+        @reject_config solver=SolverConfig(preconditioner=:unknown_prec)
 
         # Invalid thermodynamics
         @reject_config thermodynamics=ThermalConfig(ratio_al=-0.1)
@@ -631,5 +638,84 @@ include("test_helpers.jl")
         @test haskey(dict_repr, "escape")
         @test dict_repr["magma_degassing"]["mode"] == "equilibrium"
         @test isapprox(dict_repr["escape"]["epsilon_xuv"], 0.20)
+    end
+
+    @testset "SolverConfig Validation, Cross-Validation, and TOML Roundtrip" begin
+        # 1. Invalid preconditioner rejection
+        @reject_config solver=SolverConfig(preconditioner=:block_jacobi)
+        @reject_config solver=SolverConfig(preconditioner=:unknown_prec)
+
+        # 2. Matrix-free cross-validation constraints
+        @reject_config solver=SolverConfig(
+            hydromech_solver=:matrix_free, darcy_elimination=false
+        )
+        @reject_config solver=SolverConfig(
+            hydromech_solver=:matrix_free, darcy_elimination=true
+        ) poroelasticity=PoroelasticConfig(hydrofracture=true)
+        @reject_config solver=SolverConfig(
+            hydromech_solver=:matrix_free, darcy_elimination=true
+        ) venting=VentingConfig(active=true)
+
+        # 3. Valid configurations pass validation
+        cfg_iter = load_config("""
+        [solver]
+        hydromech_solver = "iterative"
+        krylov_method = "fgmres"
+        krylov_rtol = 1.0e-7
+        krylov_atol = 1.0e-11
+        krylov_maxiter = 150
+        krylov_restart = 30
+        darcy_elimination = true
+        preconditioner = "diagonal"
+        """)
+        validate_config(cfg_iter)
+        @test cfg_iter.solver.hydromech_solver === :iterative
+        @test cfg_iter.solver.krylov_method === :fgmres
+        @test isapprox(cfg_iter.solver.krylov_rtol, 1.0e-7)
+        @test isapprox(cfg_iter.solver.krylov_atol, 1.0e-11)
+        @test cfg_iter.solver.krylov_maxiter == 150
+        @test cfg_iter.solver.krylov_restart == 30
+        @test cfg_iter.solver.darcy_elimination == true
+        @test cfg_iter.solver.preconditioner === :diagonal
+
+        cfg_mf = load_config("""
+        [solver]
+        hydromech_solver = "matrix_free"
+        krylov_method = "gmres"
+        darcy_elimination = true
+        preconditioner = "block_schur"
+        """)
+        validate_config(cfg_mf)
+        @test cfg_mf.solver.hydromech_solver === :matrix_free
+        @test cfg_mf.solver.darcy_elimination == true
+        @test cfg_mf.solver.preconditioner === :block_schur
+
+        # 4. TOML load and roundtrip
+        toml_solver = """
+        [solver]
+        hydromech_solver = "iterative"
+        krylov_method = "bicgstab"
+        krylov_rtol = 1.0e-8
+        krylov_atol = 1.0e-12
+        krylov_maxiter = 300
+        krylov_restart = 40
+        darcy_elimination = true
+        preconditioner = "diagonal"
+        """
+        cfg_loaded = load_config(toml_solver)
+        validate_config(cfg_loaded)
+        @test cfg_loaded.solver.hydromech_solver === :iterative
+        @test cfg_loaded.solver.krylov_method === :bicgstab
+        @test isapprox(cfg_loaded.solver.krylov_rtol, 1.0e-8)
+        @test isapprox(cfg_loaded.solver.krylov_atol, 1.0e-12)
+        @test cfg_loaded.solver.krylov_maxiter == 300
+        @test cfg_loaded.solver.krylov_restart == 40
+        @test cfg_loaded.solver.darcy_elimination == true
+        @test cfg_loaded.solver.preconditioner === :diagonal
+
+        dict_repr = config_to_dict(cfg_loaded)
+        @test haskey(dict_repr, "solver")
+        @test dict_repr["solver"]["hydromech_solver"] == "iterative"
+        @test dict_repr["solver"]["preconditioner"] == "diagonal"
     end
 end

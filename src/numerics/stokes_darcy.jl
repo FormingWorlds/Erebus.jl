@@ -629,6 +629,714 @@ function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf; coords=n
 end # function process_hydromechanical_solution!
 
 """
+Assemble condensed 4-variable hydromechanical system of equations with analytical diagonal Darcy elimination.
+
+$(SIGNATURES)
+
+Eliminates the diagonal Darcy flux variables (qxD, qyD) at order-N cost, reducing the linear system
+from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
+"""
+function assemble_hydromechanical_4var_lse!(
+    ETA,
+    ETAP,
+    GGG,
+    GGGP,
+    SXY0,
+    SXX0,
+    RHOX,
+    RHOY,
+    RHOFX,
+    RHOFY,
+    RX,
+    RY,
+    ETAPHI,
+    BETAPHI,
+    PHI,
+    gx,
+    gy,
+    pr0,
+    pf0,
+    DMP,
+    dt,
+    R;
+    betasolid=betasolid,
+    betafluid=betafluid,
+    phimin=phimin,
+    phimax=phimax,
+    hydrofracture::Bool=false,
+    pr=nothing,
+    pf=nothing,
+    TEN=nothing,
+    KX=nothing,
+    KY=nothing,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+    coords=nothing,
+    L=nothing,
+    venting::Bool=false,
+    venting_mode::Symbol=:darcy_sink,
+    k_vent::Real=1.0e-11,
+    conductance_factor::Real=1.0,
+    ice_sealing::Bool=false,
+    t_freeze::Real=273.15,
+    dt_seal::Real=10.0,
+    k_seal_min_ratio::Real=1.0e-6,
+    rplanet::Real=50000.0,
+    xcenter::Real=70000.0,
+    ycenter::Real=70000.0,
+    P_amb::Real=10.0,
+    venting_species::Symbol=:H2O,
+    tk=nothing,
+    eta_fluid_surf::Real=1.0e-3,
+    L_sub::Real=2.83e6,
+    S_vent_out=nothing,
+    DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    workspace=nothing,
+)
+    Ny1, Nx1 = size(ETAP)
+    Nx_val = Nx1 - 1
+    Ny_val = Ny1 - 1
+    @unpack_coords coords dx dy
+
+    L_target =
+        if workspace !== nothing &&
+            hasproperty(workspace, :Ny1) &&
+            hasproperty(workspace, :Nx1) &&
+            hasproperty(workspace, :L) &&
+            workspace.Ny1 == Ny1 &&
+            workspace.Nx1 == Nx1
+            workspace.L
+        else
+            L
+        end
+
+    L = if L_target === nothing
+        ExtendableSparseMatrix(Nx1 * Ny1 * 4, Nx1 * Ny1 * 4)
+    else
+        if !isempty(L_target.cscmatrix.nzval)
+            nonzeros(L_target.cscmatrix) .= zero(0.0)
+        end
+        L_target
+    end
+    fill!(R, 0.0)
+
+    @inbounds begin
+        for j in 1:1:Nx1, i in 1:1:Ny1
+            kvx = ((j - 1) * Ny1 + i - 1) * 4 + 1
+            kvy = kvx + 1
+            kpm = kvx + 2
+            kpf = kvx + 3
+
+            # Vx equation
+            if i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
+                updateindex!(L, +, 1.0, kvx, kvx)
+                if j == 1
+                    R[kvx] = vxleft
+                end
+                if j == Nx_val
+                    R[kvx] = vxright
+                end
+                if i == 1 && 1 < j < Nx_val
+                    updateindex!(L, +, bctop, kvx, kvx + 4)
+                end
+                if i == Ny1 && 1 < j < Nx_val
+                    updateindex!(L, +, bcbottom, kvx, kvx - 4)
+                end
+            else
+                ETA₁ =
+                    ETA[i - 1, j] * GGG[i - 1, j] * dt /
+                    (GGG[i - 1, j] * dt + ETA[i - 1, j])
+                ETA₂ = ETA[i, j] * GGG[i, j] * dt / (GGG[i, j] * dt + ETA[i, j])
+                ETAP₁ = ETAP[i, j] * GGGP[i, j] * dt / (GGGP[i, j] * dt + ETAP[i, j])
+                ETAP₂ =
+                    ETAP[i, j + 1] * GGGP[i, j + 1] * dt /
+                    (GGGP[i, j + 1] * dt + ETAP[i, j + 1])
+                SXY₁ = SXY0[i - 1, j] * ETA[i - 1, j] / (GGG[i - 1, j] * dt + ETA[i - 1, j])
+                SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j] * dt + ETA[i, j])
+                SXX₁ = SXX0[i, j] * ETAP[i, j] / (GGGP[i, j] * dt + ETAP[i, j])
+                SXX₂ =
+                    SXX0[i, j + 1] * ETAP[i, j + 1] / (GGGP[i, j + 1] * dt + ETAP[i, j + 1])
+                ∂RHO∂x = 0.5 * (RHOX[i, j + 1] - RHOX[i, j - 1]) * inv(dx_val)
+                ∂RHO∂y = 0.5 * (RHOX[i + 1, j] - RHOX[i - 1, j]) * inv(dy_val)
+
+                updateindex!(L, +, ETAP₁ / dx_val^2, kvx, kvx - 4 * Ny1)
+                updateindex!(L, +, ETA₁ / dy_val^2, kvx, kvx - 4)
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -(ETAP₁ + ETAP₂) * inv(dx_val^2) - (ETA₁ + ETA₂) * inv(dy_val^2) -
+                        ∂RHO∂x * gx[i, j] * dt
+                    ),
+                    kvx,
+                    kvx,
+                )
+                updateindex!(L, +, ETA₂ / dy_val^2, kvx, kvx + 4)
+                updateindex!(L, +, ETAP₂ / dx_val^2, kvx, kvx + 4 * Ny1)
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₁ * inv(dx_val) * inv(dy_val) -
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₂ * inv(dx_val) * inv(dy_val) +
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy + 4 * Ny1,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₁ * inv(dx_val) * inv(dy_val) +
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy - 4,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₂ * inv(dx_val) * inv(dy_val) -
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂y * gx[i, j] * dt * 0.25
+                    ),
+                    kvx,
+                    kvy + 4 * Ny1 - 4,
+                )
+                updateindex!(L, +, Kcont * inv(dx_val), kvx, kpm)
+                updateindex!(L, +, -Kcont * inv(dx_val), kvx, kpm + 4 * Ny1)
+                R[kvx] = (
+                    -RHOX[i, j] * gx[i, j] - (SXX₂ - SXX₁) * inv(dx_val) -
+                    (SXY₂ - SXY₁) * inv(dy_val)
+                )
+            end
+
+            # Vy equation
+            if i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
+                updateindex!(L, +, 1.0, kvy, kvy)
+                if i == 1
+                    R[kvy] = vytop
+                end
+                if i == Ny_val
+                    R[kvy] = vybottom
+                end
+                if j == 1 && 1 < i < Ny_val
+                    updateindex!(L, +, bcleft, kvy, kvy + 4 * Ny1)
+                end
+                if j == Nx1 && 1 < i < Ny_val
+                    updateindex!(L, +, bcright, kvy, kvy - 4 * Ny1)
+                end
+            else
+                ETA₁ =
+                    ETA[i, j - 1] * GGG[i, j - 1] * dt /
+                    (GGG[i, j - 1] * dt + ETA[i, j - 1])
+                ETA₂ = ETA[i, j] * GGG[i, j] * dt / (GGG[i, j] * dt + ETA[i, j])
+                ETAP₁ = ETAP[i, j] * GGGP[i, j] * dt / (GGGP[i, j] * dt + ETAP[i, j])
+                ETAP₂ =
+                    ETAP[i + 1, j] * GGGP[i + 1, j] * dt /
+                    (GGGP[i + 1, j] * dt + ETAP[i + 1, j])
+                SXY₁ = SXY0[i, j - 1] * ETA[i, j - 1] / (GGG[i, j - 1] * dt + ETA[i, j - 1])
+                SXY₂ = SXY0[i, j] * ETA[i, j] / (GGG[i, j] * dt + ETA[i, j])
+                SYY₁ = -SXX0[i, j] * ETAP[i, j] / (GGGP[i, j] * dt + ETAP[i, j])
+                SYY₂ =
+                    -SXX0[i + 1, j] * ETAP[i + 1, j] /
+                    (GGGP[i + 1, j] * dt + ETAP[i + 1, j])
+                ∂RHO∂x = 0.5 * (RHOY[i, j + 1] - RHOY[i, j - 1]) * inv(dx_val)
+                ∂RHO∂y = 0.5 * (RHOY[i + 1, j] - RHOY[i - 1, j]) * inv(dy_val)
+
+                updateindex!(L, +, ETA₁ / dx_val^2, kvy, kvy - 4 * Ny1)
+                updateindex!(L, +, ETAP₁ / dy_val^2, kvy, kvy - 4)
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -(ETA₁ + ETA₂) * inv(dx_val^2) - (ETAP₁ + ETAP₂) * inv(dy_val^2) -
+                        ∂RHO∂y * gy[i, j] * dt
+                    ),
+                    kvy,
+                    kvy,
+                )
+                updateindex!(L, +, ETAP₂ / dy_val^2, kvy, kvy + 4)
+                updateindex!(L, +, ETA₂ / dx_val^2, kvy, kvy + 4 * Ny1)
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₁ * inv(dx_val) * inv(dy_val) -
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₂ * inv(dx_val) * inv(dy_val) +
+                        ETA₂ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx + 4,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        -ETAP₁ * inv(dx_val) * inv(dy_val) +
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx - 4 * Ny1,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    (
+                        ETAP₂ * inv(dx_val) * inv(dy_val) -
+                        ETA₁ * inv(dx_val) * inv(dy_val) - ∂RHO∂x * gy[i, j] * dt * 0.25
+                    ),
+                    kvy,
+                    kvx + 4 - 4 * Ny1,
+                )
+                updateindex!(L, +, Kcont * inv(dy_val), kvy, kpm)
+                updateindex!(L, +, -Kcont * inv(dy_val), kvy, kpm + 4)
+                R[kvy] = (
+                    -RHOY[i, j] * gy[i, j] - (SXY₂ - SXY₁) * inv(dx_val) -
+                    (SYY₂ - SYY₁) * inv(dy_val)
+                )
+            end
+
+            # P total equation
+            if i == 1 || i == Ny1 || j == 1 || j == Nx1
+                updateindex!(L, +, 1.0, kpm, kpm)
+            elseif (
+                (i == 2 && 2 <= j <= Nx_val) ||
+                (j == 2 && 2 < i < Ny_val) ||
+                (i == Ny_val && 2 <= j <= Nx_val) ||
+                (j == Nx_val && 2 < i < Ny_val)
+            )
+                updateindex!(L, +, Kcont, kpm, kpm)
+                R[kpm] = psurface
+            else
+                updateindex!(L, +, -1.0 / dx_val, kpm, kvx - 4 * Ny1)
+                updateindex!(L, +, 1.0 / dx_val, kpm, kvx)
+                updateindex!(L, +, -1.0 / dy_val, kpm, kvy - 4)
+                updateindex!(L, +, 1.0 / dy_val, kpm, kvy)
+
+                betadrained = compute_drained_compressibility(
+                    BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+                )
+                kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+
+                updateindex!(
+                    L,
+                    +,
+                    Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
+                    kpm,
+                    kpm,
+                )
+                updateindex!(
+                    L,
+                    +,
+                    -Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                    kpm,
+                    kpf,
+                )
+                R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+            end
+
+            # P fluid equation (condensed with Darcy elimination)
+            if i == 1 || i == Ny1 || j == 1 || j == Nx1
+                updateindex!(L, +, 1.0, kpf, kpf)
+            elseif (
+                (i == 2 && 2 <= j <= Nx_val) ||
+                (j == 2 && 2 < i < Ny_val) ||
+                (i == Ny_val && 2 <= j <= Nx_val) ||
+                (j == Nx_val && 2 < i < Ny_val)
+            )
+                updateindex!(L, +, Kcont, kpf, kpf)
+                R[kpf] = psurface
+            else
+                betadrained = compute_drained_compressibility(
+                    BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+                )
+                kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+                ksk = compute_skempton_coefficient(
+                    betadrained,
+                    PHI[i, j],
+                    betasolid,
+                    betafluid;
+                    phimin=phimin,
+                    phimax=phimax,
+                )
+
+                updateindex!(
+                    L,
+                    +,
+                    -Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                    kpf,
+                    kpm,
+                )
+                diag_pf =
+                    Kcont *
+                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / ksk / dt)
+                rhs_pf = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
+                if DQPF !== nothing
+                    rhs_pf += DQPF[i, j]
+                end
+
+                # qxD divergence elimination: (qxD[i, j] - qxD[i, j-1]) / dx
+                if 1 < i < Ny1 && 1 < j < Nx_val
+                    rx2 = RX[i, j]
+                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                        Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
+                        sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                        kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
+                        if kphi_x > 0.0
+                            keff_x = compute_hydrofracture_permeability(
+                                kphi_x,
+                                Peff_x,
+                                sigma_t_x;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                                kmax=k_frac_max,
+                            )
+                            rx2 = RX[i, j] * (kphi_x / keff_x)
+                        else
+                            ffrac_x = compute_hydrofracture_factor(
+                                Peff_x,
+                                sigma_t_x;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                            )
+                            rx_floor = 1.0e-5 / k_frac_max
+                            rx2 = max(RX[i, j] / ffrac_x, rx_floor)
+                        end
+                    end
+                    coeff_x2 = Kcont / (dx_val^2 * rx2)
+                    diag_pf += coeff_x2
+                    updateindex!(L, +, -coeff_x2, kpf, kpf + 4 * Ny1)
+                    rhs_pf -= (RHOFX[i, j] * gx[i, j]) / (dx_val * rx2)
+                end
+
+                if 1 < i < Ny1 && 2 < j <= Nx_val
+                    rx1 = RX[i, j - 1]
+                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                        Peff_x = 0.5 * (pr[i, j - 1] + pr[i, j] - pf[i, j - 1] - pf[i, j])
+                        sigma_t_x = 0.5 * (TEN[i, j - 1] + TEN[i - 1, j - 1])
+                        kphi_x = (KX !== nothing) ? KX[i, j - 1] : 0.0
+                        if kphi_x > 0.0
+                            keff_x = compute_hydrofracture_permeability(
+                                kphi_x,
+                                Peff_x,
+                                sigma_t_x;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                                kmax=k_frac_max,
+                            )
+                            rx1 = RX[i, j - 1] * (kphi_x / keff_x)
+                        else
+                            ffrac_x = compute_hydrofracture_factor(
+                                Peff_x,
+                                sigma_t_x;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                            )
+                            rx_floor = 1.0e-5 / k_frac_max
+                            rx1 = max(RX[i, j - 1] / ffrac_x, rx_floor)
+                        end
+                    end
+                    coeff_x1 = Kcont / (dx_val^2 * rx1)
+                    diag_pf += coeff_x1
+                    updateindex!(L, +, -coeff_x1, kpf, kpf - 4 * Ny1)
+                    rhs_pf += (RHOFX[i, j - 1] * gx[i, j - 1]) / (dx_val * rx1)
+                end
+
+                # qyD divergence elimination: (qyD[i, j] - qyD[i-1, j]) / dy
+                if 1 < j < Nx1 && 1 < i < Ny_val
+                    ry2 = RY[i, j]
+                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                        Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
+                        sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                        kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
+                        if kphi_y > 0.0
+                            keff_y = compute_hydrofracture_permeability(
+                                kphi_y,
+                                Peff_y,
+                                sigma_t_y;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                                kmax=k_frac_max,
+                            )
+                            ry2 = RY[i, j] * (kphi_y / keff_y)
+                        else
+                            ffrac_y = compute_hydrofracture_factor(
+                                Peff_y,
+                                sigma_t_y;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                            )
+                            ry_floor = 1.0e-5 / k_frac_max
+                            ry2 = max(RY[i, j] / ffrac_y, ry_floor)
+                        end
+                    end
+                    coeff_y2 = Kcont / (dy_val^2 * ry2)
+                    diag_pf += coeff_y2
+                    updateindex!(L, +, -coeff_y2, kpf, kpf + 4)
+                    rhs_pf -= (RHOFY[i, j] * gy[i, j]) / (dy_val * ry2)
+                end
+
+                if 1 < j < Nx1 && 2 < i <= Ny_val
+                    ry1 = RY[i - 1, j]
+                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+                        Peff_y = 0.5 * (pr[i - 1, j] + pr[i, j] - pf[i - 1, j] - pf[i, j])
+                        sigma_t_y = 0.5 * (TEN[i - 1, j] + TEN[i - 1, j - 1])
+                        kphi_y = (KY !== nothing) ? KY[i - 1, j] : 0.0
+                        if kphi_y > 0.0
+                            keff_y = compute_hydrofracture_permeability(
+                                kphi_y,
+                                Peff_y,
+                                sigma_t_y;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                                kmax=k_frac_max,
+                            )
+                            ry1 = RY[i - 1, j] * (kphi_y / keff_y)
+                        else
+                            ffrac_y = compute_hydrofracture_factor(
+                                Peff_y,
+                                sigma_t_y;
+                                active=true,
+                                kappa_frac=kappa_frac,
+                                gamma=gamma_frac,
+                            )
+                            ry_floor = 1.0e-5 / k_frac_max
+                            ry1 = max(RY[i - 1, j] / ffrac_y, ry_floor)
+                        end
+                    end
+                    coeff_y1 = Kcont / (dy_val^2 * ry1)
+                    diag_pf += coeff_y1
+                    updateindex!(L, +, -coeff_y1, kpf, kpf - 4)
+                    rhs_pf += (RHOFY[i - 1, j] * gy[i - 1, j]) / (dy_val * ry1)
+                end
+
+                updateindex!(L, +, diag_pf, kpf, kpf)
+                R[kpf] = rhs_pf
+            end
+        end
+    end
+
+    if venting && tk !== nothing && coords !== nothing
+        apply_venting_surface_boundary!(
+            L,
+            R,
+            tk,
+            coords,
+            rplanet,
+            xcenter,
+            ycenter,
+            P_amb;
+            species=venting_species,
+            k_vent=k_vent,
+            conductance_factor=conductance_factor,
+            mode=venting_mode,
+            hydrofracture=hydrofracture,
+            ice_sealing=ice_sealing,
+            t_freeze=t_freeze,
+            dt_seal=dt_seal,
+            k_seal_min_ratio=k_seal_min_ratio,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma_frac,
+            k_frac_max=k_frac_max,
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            PHI=PHI,
+            phimin=phimin,
+            dt=dt,
+            eta_fluid_surf=eta_fluid_surf,
+            L_sub=L_sub,
+            S_vent_out=S_vent_out,
+            dof_stride=4,
+        )
+    end
+
+    flush!(L)
+    if workspace !== nothing &&
+        hasproperty(workspace, :Ny1) &&
+        hasproperty(workspace, :Nx1) &&
+        hasproperty(workspace, :is_initialized) &&
+        workspace.Ny1 == Ny1 &&
+        workspace.Nx1 == Nx1
+        workspace.is_initialized = true
+    end
+    return L.cscmatrix
+end
+
+"""
+Reconstruct Darcy fluxes qxD and qyD from fluid pressure Pf and fluid body forces.
+
+$(SIGNATURES)
+"""
+function reconstruct_darcy_fluxes!(
+    qxD::AbstractMatrix{Float64},
+    qyD::AbstractMatrix{Float64},
+    pf::AbstractMatrix{Float64},
+    RHOFX::AbstractMatrix{Float64},
+    RHOFY::AbstractMatrix{Float64},
+    RX::AbstractMatrix{Float64},
+    RY::AbstractMatrix{Float64},
+    gx::AbstractMatrix{Float64},
+    gy::AbstractMatrix{Float64},
+    coords::GridCoordinates;
+    hydrofracture::Bool=false,
+    pr::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    pf_eff::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    TEN::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    KX::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    KY::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    dx_val = coords.dx
+    dy_val = coords.dy
+    Nx_val = coords.Nx
+    Ny_val = coords.Ny
+
+    pf_eff_use = pf_eff !== nothing ? pf_eff : pf
+
+    fill!(qxD, 0.0)
+    fill!(qyD, 0.0)
+
+    @inbounds for j in 1:Nx1, i in 1:Ny1
+        # Internal qxD nodes: 1 < i < Ny1 and 1 < j < Nx_val
+        if !(i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1)
+            rx_val = RX[i, j]
+            if hydrofracture && pr !== nothing && TEN !== nothing
+                Peff_x =
+                    0.5 *
+                    (pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] - pf_eff_use[i, j + 1])
+                sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
+                if kphi_x > 0.0
+                    keff_x = compute_hydrofracture_permeability(
+                        kphi_x,
+                        Peff_x,
+                        sigma_t_x;
+                        active=true,
+                        kappa_frac=kappa_frac,
+                        gamma=gamma_frac,
+                        kmax=k_frac_max,
+                    )
+                    rx_val = RX[i, j] * (kphi_x / keff_x)
+                else
+                    ffrac_x = compute_hydrofracture_factor(
+                        Peff_x,
+                        sigma_t_x;
+                        active=true,
+                        kappa_frac=kappa_frac,
+                        gamma=gamma_frac,
+                    )
+                    rx_floor = 1.0e-5 / k_frac_max
+                    rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+                end
+            end
+            qxD[i, j] =
+                (RHOFX[i, j] * gx[i, j] + (pf[i, j] - pf[i, j + 1]) / dx_val) / rx_val
+        end
+
+        # Internal qyD nodes: 1 < j < Nx1 and 1 < i < Ny_val
+        if !(i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1)
+            ry_val = RY[i, j]
+            if hydrofracture && pr !== nothing && TEN !== nothing
+                Peff_y =
+                    0.5 *
+                    (pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] - pf_eff_use[i + 1, j])
+                sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
+                if kphi_y > 0.0
+                    keff_y = compute_hydrofracture_permeability(
+                        kphi_y,
+                        Peff_y,
+                        sigma_t_y;
+                        active=true,
+                        kappa_frac=kappa_frac,
+                        gamma=gamma_frac,
+                        kmax=k_frac_max,
+                    )
+                    ry_val = RY[i, j] * (kphi_y / keff_y)
+                else
+                    ffrac_y = compute_hydrofracture_factor(
+                        Peff_y,
+                        sigma_t_y;
+                        active=true,
+                        kappa_frac=kappa_frac,
+                        gamma=gamma_frac,
+                    )
+                    ry_floor = 1.0e-5 / k_frac_max
+                    ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+                end
+            end
+            qyD[i, j] =
+                (RHOFY[i, j] * gy[i, j] + (pf[i, j] - pf[i + 1, j]) / dy_val) / ry_val
+        end
+    end
+
+    # Boundary ghost node relations
+    @inbounds begin
+        for j in 2:Nx_val
+            qxD[1, j] = -bcftop * qxD[2, j]
+            qxD[Ny1, j] = -bcfbottom * qxD[Ny_val, j]
+        end
+        for i in 2:Ny_val
+            qyD[i, 1] = -bcfleft * qyD[i, 2]
+            qyD[i, Nx1] = -bcfright * qyD[i, Nx_val]
+        end
+    end
+
+    return nothing
+end
+
+"""
+Process condensed 4-variable hydromechanical solution vector to output physical observables.
+
+$(SIGNATURES)
+"""
+function process_hydromechanical_4var_solution!(S, vx, vy, pr, pf; coords=nothing)
+    Ny1, Nx1 = size(vx)
+    S_mat = reshape(S, (4, Ny1, Nx1))
+    @inbounds begin
+        @views @. vx = S_mat[1, :, :]
+        @views @. vy = S_mat[2, :, :]
+        @views @. pr = S_mat[3, :, :] * Kcont
+        @views @. pf = S_mat[4, :, :] * Kcont
+    end
+    return nothing
+end
+
+"""
 Recompute bulk viscosity at P nodes.
 
 # Details

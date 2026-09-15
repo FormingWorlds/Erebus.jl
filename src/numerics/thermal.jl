@@ -398,6 +398,7 @@ function apply_venting_surface_boundary!(
     L_sub::Real=2.83e6,
     Kcont::Real=1.0e20,
     S_vent_out::Union{AbstractMatrix{Float64},Nothing}=nothing,
+    dof_stride::Int=6,
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx = coords.dx
@@ -499,7 +500,7 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dx^2)) * c_factor
-                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
+                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * dof_stride + dof_stride
 
                     # If pf and PHI are known, check and cap Darcy rate by available fluid
                     C_face_eff = C_face
@@ -611,7 +612,7 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dy^2)) * c_factor
-                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * 6 + 6
+                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * dof_stride + dof_stride
 
                     # If pf and PHI are known, check and cap Darcy rate by available fluid
                     C_face_eff = C_face
