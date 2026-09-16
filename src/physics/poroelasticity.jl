@@ -1,7 +1,7 @@
 """
-Compute drained bulk compressibility of a porous medium.
+    compute_drained_compressibility(betaphi, phi, betasolid; phimin=phimin, phimax=phimax)
 
-$(SIGNATURES)
+Compute drained bulk compressibility of a porous medium.
 
 # Details
 
@@ -23,18 +23,19 @@ and ϕ is porosity [-]. References: Biot (1941), Detournay & Cheng (1993), Gerya
     - betadrained: drained bulk compressibility β_d [1/Pa]
 """
 function compute_drained_compressibility(
-    betaphi::Real, phi::Real, betasolid::Real; phimin::Real=phimin, phimax::Real=phimax
-)
-    bphi = max(betaphi, 0.0)
-    bsolid = max(betasolid, 0.0)
-    phi_eff = clamp(phi, phimin, phimax)
-    return (bphi + bsolid) / (1.0 - phi_eff)
+    betaphi::T1, phi::T2, betasolid::T3; phimin::Real=phimin, phimax::Real=phimax
+) where {T1<:Real,T2<:Real,T3<:Real}
+    T = promote_type(T1, T2, T3)
+    bphi = max(betaphi, zero(T))
+    bsolid = max(betasolid, zero(T))
+    phi_eff = clamp(phi, T(phimin), T(phimax))
+    return (bphi + bsolid) / (one(T) - phi_eff)
 end
 
 """
-Compute Biot-Willis coefficient for poroelastic coupling.
+    compute_biot_willis_coefficient(betadrained, betasolid)
 
-$(SIGNATURES)
+Compute Biot-Willis coefficient for poroelastic coupling.
 
 # Details
 
@@ -53,20 +54,23 @@ Physical bounds: K_BW ∈ [0, 1]. References: Biot (1941), Wang (2000).
 
     - kbw: Biot-Willis coefficient K_BW [-]
 """
-function compute_biot_willis_coefficient(betadrained::Real, betasolid::Real)
-    if betasolid <= 0.0
-        return 1.0
+function compute_biot_willis_coefficient(
+    betadrained::T1, betasolid::T2
+) where {T1<:Real,T2<:Real}
+    T = promote_type(T1, T2)
+    if betasolid <= zero(T)
+        return one(T)
     end
     if betadrained <= betasolid
-        return 0.0
+        return zero(T)
     end
-    return clamp(1.0 - betasolid / betadrained, 0.0, 1.0)
+    return clamp(one(T) - betasolid / betadrained, zero(T), one(T))
 end
 
 """
-Compute Skempton coefficient B for pore pressure response to mean stress.
+    compute_skempton_coefficient(betadrained, phi, betasolid, betafluid; phimin=phimin, phimax=phimax)
 
-$(SIGNATURES)
+Compute Skempton coefficient B for pore pressure response to mean stress.
 
 # Details
 
@@ -89,25 +93,26 @@ Physical bounds: B ∈ [0, 1]. References: Skempton (1954), Rice & Cleary (1976)
     - ksk: Skempton coefficient B [-]
 """
 function compute_skempton_coefficient(
-    betadrained::Real,
-    phi::Real,
-    betasolid::Real,
-    betafluid::Real;
+    betadrained::T1,
+    phi::T2,
+    betasolid::T3,
+    betafluid::T4;
     phimin::Real=phimin,
     phimax::Real=phimax,
-)
-    if betasolid <= 0.0 && betafluid <= 0.0
-        return 1.0
+) where {T1<:Real,T2<:Real,T3<:Real,T4<:Real}
+    T = promote_type(T1, T2, T3, T4)
+    if betasolid <= zero(T) && betafluid <= zero(T)
+        return one(T)
     end
-    bsolid = max(betasolid, 0.0)
-    bfluid = max(betafluid, 0.0)
-    phi_eff = clamp(phi, phimin, phimax)
+    bsolid = max(betasolid, zero(T))
+    bfluid = max(betafluid, zero(T))
+    phi_eff = clamp(phi, T(phimin), T(phimax))
     num = betadrained - bsolid
     denom = num + phi_eff * (bfluid - bsolid)
-    if denom <= 0.0 || num <= 0.0
-        return 1.0
+    if denom <= zero(T) || num <= zero(T)
+        return one(T)
     end
-    return clamp(num / denom, 0.0, 1.0)
+    return clamp(num / denom, zero(T), one(T))
 end
 
 """

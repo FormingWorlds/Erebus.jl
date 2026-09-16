@@ -21,7 +21,9 @@ Grid level representation within a geometric multigrid hierarchy.
 - `r_buf::Vector{T}`: Pre-allocated residual and right-hand side vector.
 - `res_buf::Vector{T}`: Pre-allocated operator evaluation buffer.
 """
-struct MultigridLevel{T<:AbstractFloat}
+struct MultigridLevel{
+    T<:AbstractFloat,V<:AbstractVector{T},O<:MatrixFreeStokesDarcyOperator{T}
+}
     level::Int
     Nx::Int
     Ny::Int
@@ -29,11 +31,11 @@ struct MultigridLevel{T<:AbstractFloat}
     Ny1::Int
     dx::T
     dy::T
-    op::MatrixFreeStokesDarcyOperator{T}
-    inv_diag::Vector{T}
-    x_buf::Vector{T}
-    r_buf::Vector{T}
-    res_buf::Vector{T}
+    op::O
+    inv_diag::V
+    x_buf::V
+    r_buf::V
+    res_buf::V
 end
 
 function MultigridLevel(
@@ -44,43 +46,72 @@ function MultigridLevel(
     Ny1::Int,
     dx::T,
     dy::T,
-    op::MatrixFreeStokesDarcyOperator{T},
-    inv_diag::Vector{T},
-    x_buf::Vector{T},
-    r_buf::Vector{T},
-) where {T<:AbstractFloat}
-    res_buf = zeros(T, length(x_buf))
-    return MultigridLevel{T}(
+    op::O,
+    inv_diag::V,
+    x_buf::V,
+    r_buf::V,
+) where {T<:AbstractFloat,V<:AbstractVector{T},O<:MatrixFreeStokesDarcyOperator{T}}
+    res_buf = similar(x_buf)
+    fill!(res_buf, zero(T))
+    return MultigridLevel{T,V,O}(
+        level, Nx, Ny, Nx1, Ny1, dx, dy, op, inv_diag, x_buf, r_buf, res_buf
+    )
+end
+
+function MultigridLevel{T}(
+    level::Int,
+    Nx::Int,
+    Ny::Int,
+    Nx1::Int,
+    Ny1::Int,
+    dx::T,
+    dy::T,
+    op::O,
+    inv_diag::V,
+    x_buf::V,
+    r_buf::V,
+    res_buf::V,
+) where {T<:AbstractFloat,V<:AbstractVector{T},O<:MatrixFreeStokesDarcyOperator{T}}
+    return MultigridLevel{T,V,O}(
         level, Nx, Ny, Nx1, Ny1, dx, dy, op, inv_diag, x_buf, r_buf, res_buf
     )
 end
 
 """
-    StaggeredGridHierarchy{T<:AbstractFloat}
+    StaggeredGridHierarchy{T<:AbstractFloat, L<:MultigridLevel{T}}
 
 Multi-level geometric grid hierarchy for staggered-grid Stokes-Darcy systems.
 
 # Parameters
-- `levels::Vector{MultigridLevel{T}}`: Ordered list of grid levels from finest to coarsest.
+- `levels::Vector{L}`: Ordered list of grid levels from finest to coarsest.
 """
-struct StaggeredGridHierarchy{T<:AbstractFloat}
-    levels::Vector{MultigridLevel{T}}
+struct StaggeredGridHierarchy{T<:AbstractFloat,L<:MultigridLevel{T}}
+    levels::Vector{L}
+end
+
+function StaggeredGridHierarchy(levels::Vector{L}) where {T,L<:MultigridLevel{T}}
+    return StaggeredGridHierarchy{T,L}(levels)
+end
+
+function StaggeredGridHierarchy{T}(levels::Vector{L}) where {T,L<:MultigridLevel{T}}
+    return StaggeredGridHierarchy{T,L}(levels)
 end
 
 """
-    MultigridPreconditioner{T<:AbstractFloat} <: AbstractStokesDarcyPreconditioner
+    MultigridPreconditioner{T<:AbstractFloat, H<:StaggeredGridHierarchy{T}} <: AbstractStokesDarcyPreconditioner
 
 Geometric multigrid preconditioner applying decoupled V-cycles on velocity and fluid pressure.
 
 # Parameters
-- `hierarchy::StaggeredGridHierarchy{T}`: Multigrid level hierarchy.
+- `hierarchy::H`: Multigrid level hierarchy.
 - `pre_smooth::Int`: Number of pre-smoothing relaxation sweeps.
 - `post_smooth::Int`: Number of post-smoothing relaxation sweeps.
 - `omega::T`: Relaxation damping parameter (e.g. 2/3 for damped Jacobi).
 - `smoother::Symbol`: Relaxation method (`:damped_jacobi` or `:redblack_gauss_seidel`).
 """
-struct MultigridPreconditioner{T<:AbstractFloat} <: AbstractStokesDarcyPreconditioner
-    hierarchy::StaggeredGridHierarchy{T}
+struct MultigridPreconditioner{T<:AbstractFloat,H<:StaggeredGridHierarchy{T}} <:
+       AbstractStokesDarcyPreconditioner
+    hierarchy::H
     pre_smooth::Int
     post_smooth::Int
     omega::T
@@ -89,19 +120,19 @@ end
 
 # Backward-compatible constructor accepting optional dof_stride keyword/positional
 function MultigridPreconditioner(
-    hierarchy::StaggeredGridHierarchy{T},
+    hierarchy::H,
     pre_smooth::Int,
     post_smooth::Int,
     omega::Real,
     smoother::Symbol,
     dof_stride::Int=4,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat,H<:StaggeredGridHierarchy{T}}
     dof_stride == 4 || throw(
         ArgumentError(
             "MultigridPreconditioner requires dof_stride == 4, got $(dof_stride)"
         ),
     )
-    return MultigridPreconditioner{T}(
+    return MultigridPreconditioner{T,H}(
         hierarchy, pre_smooth, post_smooth, T(omega), smoother
     )
 end
@@ -433,13 +464,13 @@ Execute one recursive geometric multigrid V-cycle on the decoupled Stokes veloci
 function v_cycle_velocity!(
     xv::AbstractVector{T},
     bv::AbstractVector{T},
-    hierarchy::StaggeredGridHierarchy{T},
+    hierarchy::StaggeredGridHierarchy{T,L},
     level_idx::Int=1;
     pre_smooth::Int=2,
     post_smooth::Int=2,
     omega::Real=0.67,
     smoother::Symbol=:damped_jacobi,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat,L<:MultigridLevel{T}}
     levels = hierarchy.levels
     curr = levels[level_idx]
     num_levels = length(levels)
@@ -574,13 +605,13 @@ Execute one recursive geometric multigrid V-cycle on the decoupled Darcy fluid p
 function v_cycle_darcy!(
     xpf::AbstractVector{T},
     bpf::AbstractVector{T},
-    hierarchy::StaggeredGridHierarchy{T},
+    hierarchy::StaggeredGridHierarchy{T,L},
     level_idx::Int=1;
     pre_smooth::Int=2,
     post_smooth::Int=2,
     omega::Real=0.67,
     smoother::Symbol=:damped_jacobi,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat,L<:MultigridLevel{T}}
     levels = hierarchy.levels
     curr = levels[level_idx]
     num_levels = length(levels)
@@ -711,13 +742,13 @@ Execute one recursive geometric multigrid V-cycle on `hierarchy`.
 function v_cycle!(
     x::AbstractVector{T},
     b::AbstractVector{T},
-    hierarchy::StaggeredGridHierarchy{T},
+    hierarchy::StaggeredGridHierarchy{T,L},
     level_idx::Int=1;
     pre_smooth::Int=2,
     post_smooth::Int=2,
     omega::Real=0.67,
     smoother::Symbol=:damped_jacobi,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat,L<:MultigridLevel{T}}
     levels = hierarchy.levels
     curr = levels[level_idx]
 
@@ -757,6 +788,32 @@ end
 function LinearAlgebra.ldiv!(
     y::AbstractVector, P::MultigridPreconditioner, x::AbstractVector
 )
+    backend_y = KernelAbstractions.get_backend(y)
+    backend_x = KernelAbstractions.get_backend(x)
+    backend_y == backend_x || throw(
+        ArgumentError(
+            "Backend mismatch in ldiv!: y is on $(typeof(backend_y)) while x is on $(typeof(backend_x))",
+        ),
+    )
+    backend_p = KernelAbstractions.get_backend(P.hierarchy.levels[1].op.ETA)
+    backend_y == backend_p || throw(
+        ArgumentError(
+            "Backend mismatch in ldiv!: preconditioner hierarchy arrays are on $(typeof(backend_p)) while vectors are on $(typeof(backend_y))",
+        ),
+    )
+    if !(backend_y isa KernelAbstractions.CPU)
+        fill!(y, zero(eltype(y)))
+        return apply_multigrid_vcycle_device!(
+            y,
+            x,
+            P.hierarchy;
+            backend=backend_y,
+            smoother=P.smoother,
+            pre_smooth=P.pre_smooth,
+            post_smooth=P.post_smooth,
+            omega=P.omega,
+        )
+    end
     fill!(y, zero(eltype(y)))
     v_cycle!(
         y,
@@ -873,10 +930,12 @@ Compute inverse diagonal scaling for multigrid levels, including Schur complemen
 function compute_multigrid_inv_diag(
     op::MatrixFreeStokesDarcyOperator{T}; tol::Real=1.0e-30
 ) where {T<:AbstractFloat}
-    d = compute_operator_diagonal(op)
-    inv_d = [abs(v) > tol ? inv(v) : one(T) for v in d]
-    inv_d_mat = reshape(inv_d, (4, op.Ny1, op.Nx1))
-    d_mat = reshape(d, (4, op.Ny1, op.Nx1))
+    backend_op = KernelAbstractions.get_backend(op.ETA)
+    d_raw = compute_operator_diagonal(op)
+    d_host = to_host(d_raw)
+    inv_d_host = [abs(v) > tol ? inv(v) : one(T) for v in d_host]
+    inv_d_mat = reshape(inv_d_host, (4, op.Ny1, op.Nx1))
+    d_mat = reshape(d_host, (4, op.Ny1, op.Nx1))
     dx2 = op.dx^2
     dy2 = op.dy^2
     Kcont = op.Kcont
@@ -888,7 +947,7 @@ function compute_multigrid_inv_diag(
         schur_pt = d_mat[3, i, j] + Kcont * ((dvx1 + dvx2) / dx2 + (dvy1 + dvy2) / dy2)
         inv_d_mat[3, i, j] = abs(schur_pt) > tol ? inv(schur_pt) : one(T)
     end
-    return inv_d
+    return to_device(backend_op, inv_d_host)
 end
 
 """
@@ -897,16 +956,23 @@ end
 Build a `StaggeredGridHierarchy` from a fine-grid `MatrixFreeStokesDarcyOperator`.
 """
 function build_staggered_multigrid_hierarchy(
-    op_fine::MatrixFreeStokesDarcyOperator{T}; max_levels::Int=4
-) where {T<:AbstractFloat}
-    levels = MultigridLevel{T}[]
+    op_fine::MatrixFreeStokesDarcyOperator{T,M}; max_levels::Int=4
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    backend_op = KernelAbstractions.get_backend(op_fine.ETA)
+    if !(backend_op isa KernelAbstractions.CPU)
+        op_host = to_host(op_fine)
+        h_host = build_staggered_multigrid_hierarchy(op_host; max_levels=max_levels)
+        return to_device(backend_op, h_host)
+    end
+    LType = MultigridLevel{T,Vector{T},MatrixFreeStokesDarcyOperator{T,M}}
+    levels = LType[]
 
     # Level 1: fine grid
     inv_d_fine = compute_multigrid_inv_diag(op_fine)
     d_fine_len = op_fine.Ny1 * op_fine.Nx1 * 4
     push!(
         levels,
-        MultigridLevel{T}(
+        MultigridLevel(
             1,
             op_fine.Nx_val,
             op_fine.Ny_val,
@@ -994,7 +1060,7 @@ function build_staggered_multigrid_hierarchy(
         curr_level += 1
         push!(
             levels,
-            MultigridLevel{T}(
+            MultigridLevel(
                 curr_level,
                 Nx_c,
                 Ny_c,
@@ -1016,7 +1082,7 @@ function build_staggered_multigrid_hierarchy(
         @warn "Staggered grid hierarchy stopped at level $(length(levels)) with coarsest resolution $(levels[end].Nx)x$(levels[end].Ny) cells"
     end
 
-    return StaggeredGridHierarchy{T}(levels)
+    return StaggeredGridHierarchy{T,LType}(levels)
 end
 
 """
@@ -1025,21 +1091,19 @@ end
 Build a `MultigridPreconditioner` wrapping a geometric multigrid hierarchy.
 """
 function build_multigrid_preconditioner(
-    op_fine::MatrixFreeStokesDarcyOperator{T};
+    op_fine::MatrixFreeStokesDarcyOperator{T,M};
     levels::Int=4,
     pre_smooth::Int=2,
     post_smooth::Int=2,
     omega::Real=0.67,
     smoother::Symbol=:damped_jacobi,
     dof_stride::Int=4,
-) where {T<:AbstractFloat}
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
     dof_stride == 4 || throw(
         ArgumentError(
             "MultigridPreconditioner requires dof_stride == 4, got $(dof_stride)"
         ),
     )
     hierarchy = build_staggered_multigrid_hierarchy(op_fine; max_levels=levels)
-    return MultigridPreconditioner{T}(
-        hierarchy, pre_smooth, post_smooth, T(omega), smoother
-    )
+    return MultigridPreconditioner(hierarchy, pre_smooth, post_smooth, T(omega), smoother)
 end

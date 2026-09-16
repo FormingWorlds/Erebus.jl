@@ -40,28 +40,28 @@ allocating or assembling a global sparse matrix.
 - `bcleft::T`: Left boundary condition velocity factor [-].
 - `bcright::T`: Right boundary condition velocity factor [-].
 """
-struct MatrixFreeStokesDarcyOperator{T<:AbstractFloat}
+struct MatrixFreeStokesDarcyOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
     Ny1::Int
     Nx1::Int
     dx::T
     dy::T
     Nx_val::Int
     Ny_val::Int
-    ETA::Matrix{T}
-    ETAP::Matrix{T}
-    GGG::Matrix{T}
-    GGGP::Matrix{T}
-    RHOX::Matrix{T}
-    RHOY::Matrix{T}
-    RHOFX::Matrix{T}
-    RHOFY::Matrix{T}
-    RX::Matrix{T}
-    RY::Matrix{T}
-    ETAPHI::Matrix{T}
-    BETAPHI::Matrix{T}
-    PHI::Matrix{T}
-    gx::Matrix{T}
-    gy::Matrix{T}
+    ETA::M
+    ETAP::M
+    GGG::M
+    GGGP::M
+    RHOX::M
+    RHOY::M
+    RHOFX::M
+    RHOFY::M
+    RX::M
+    RY::M
+    ETAPHI::M
+    BETAPHI::M
+    PHI::M
+    gx::M
+    gy::M
     dt::T
     betasolid::T
     betafluid::T
@@ -74,27 +74,95 @@ struct MatrixFreeStokesDarcyOperator{T<:AbstractFloat}
     bcright::T
 end
 
+function MatrixFreeStokesDarcyOperator{T}(
+    Ny1::Int,
+    Nx1::Int,
+    dx::T,
+    dy::T,
+    Nx_val::Int,
+    Ny_val::Int,
+    ETA::M,
+    ETAP::M,
+    GGG::M,
+    GGGP::M,
+    RHOX::M,
+    RHOY::M,
+    RHOFX::M,
+    RHOFY::M,
+    RX::M,
+    RY::M,
+    ETAPHI::M,
+    BETAPHI::M,
+    PHI::M,
+    gx::M,
+    gy::M,
+    dt::T,
+    betasolid::T,
+    betafluid::T,
+    phimin::T,
+    phimax::T,
+    Kcont::T,
+    bctop::T,
+    bcbottom::T,
+    bcleft::T,
+    bcright::T,
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    return MatrixFreeStokesDarcyOperator{T,M}(
+        Ny1,
+        Nx1,
+        dx,
+        dy,
+        Nx_val,
+        Ny_val,
+        ETA,
+        ETAP,
+        GGG,
+        GGGP,
+        RHOX,
+        RHOY,
+        RHOFX,
+        RHOFY,
+        RX,
+        RY,
+        ETAPHI,
+        BETAPHI,
+        PHI,
+        gx,
+        gy,
+        dt,
+        betasolid,
+        betafluid,
+        phimin,
+        phimax,
+        Kcont,
+        bctop,
+        bcbottom,
+        bcleft,
+        bcright,
+    )
+end
+
 """
     MatrixFreeStokesDarcyOperator(ETA, ETAP, GGG, GGGP, RHOX, RHOY, RHOFX, RHOFY, RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, dt; coords, kwargs...)
 
 Construct a `MatrixFreeStokesDarcyOperator` from grid arrays and geometry.
 """
 function MatrixFreeStokesDarcyOperator(
-    ETA::Matrix{T},
-    ETAP::Matrix{T},
-    GGG::Matrix{T},
-    GGGP::Matrix{T},
-    RHOX::Matrix{T},
-    RHOY::Matrix{T},
-    RHOFX::Matrix{T},
-    RHOFY::Matrix{T},
-    RX::Matrix{T},
-    RY::Matrix{T},
-    ETAPHI::Matrix{T},
-    BETAPHI::Matrix{T},
-    PHI::Matrix{T},
-    gx::Matrix{T},
-    gy::Matrix{T},
+    ETA::M,
+    ETAP::M,
+    GGG::M,
+    GGGP::M,
+    RHOX::M,
+    RHOY::M,
+    RHOFX::M,
+    RHOFY::M,
+    RX::M,
+    RY::M,
+    ETAPHI::M,
+    BETAPHI::M,
+    PHI::M,
+    gx::M,
+    gy::M,
     dt::Real;
     coords::GridCoordinates,
     betasolid::Real=Erebus.betasolid,
@@ -106,8 +174,8 @@ function MatrixFreeStokesDarcyOperator(
     bcbottom::Real=Erebus.bcbottom,
     bcleft::Real=Erebus.bcleft,
     bcright::Real=Erebus.bcright,
-) where {T<:AbstractFloat}
-    return MatrixFreeStokesDarcyOperator{T}(
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    return MatrixFreeStokesDarcyOperator{T,M}(
         coords.Ny1,
         coords.Nx1,
         T(coords.dx),
@@ -170,6 +238,17 @@ end
 end
 
 """
+    maxwell_effective_viscosity(eta::T, g::T, dt::T) where {T<:Real}
+
+Compute Maxwell viscoelastic effective viscosity avoiding intermediate overflow.
+"""
+@inline function maxwell_effective_viscosity(eta::T, g::T, dt::T) where {T<:Real}
+    g_dt = g * dt
+    denom = g_dt + eta
+    return iszero(denom) ? zero(T) : eta * (g_dt / denom)
+end
+
+"""
     LinearAlgebra.mul!(y, op::MatrixFreeStokesDarcyOperator, x)
 
 Evaluate matrix-free operator application y = A * x for the condensed 4-variable system.
@@ -177,6 +256,22 @@ Evaluate matrix-free operator application y = A * x for the condensed 4-variable
 function LinearAlgebra.mul!(
     y::AbstractVector, op::MatrixFreeStokesDarcyOperator, x::AbstractVector
 )
+    backend = KernelAbstractions.get_backend(y)
+    backend_x = KernelAbstractions.get_backend(x)
+    backend == backend_x || throw(
+        ArgumentError(
+            "Backend mismatch in mul!: y is on $(typeof(backend)) while x is on $(typeof(backend_x))",
+        ),
+    )
+    backend_op = KernelAbstractions.get_backend(op.ETA)
+    backend == backend_op || throw(
+        ArgumentError(
+            "Backend mismatch in mul!: operator arrays are on $(typeof(backend_op)) while vectors are on $(typeof(backend))",
+        ),
+    )
+    if !(backend isa KernelAbstractions.CPU)
+        return mul_device!(y, op, x; backend=backend)
+    end
     Ny1 = op.Ny1
     Nx1 = op.Nx1
     dx_val = op.dx
@@ -187,230 +282,75 @@ function LinearAlgebra.mul!(
 
     x_mat = reshape(x, (4, Ny1, Nx1))
     y_mat = reshape(y, (4, Ny1, Nx1))
-    fill!(y, 0.0)
 
     Kcont = op.Kcont
     bctop = op.bctop
     bcbottom = op.bcbottom
     bcleft = op.bcleft
     bcright = op.bcright
+    betasolid = op.betasolid
+    betafluid = op.betafluid
+    phimin = op.phimin
+    phimax = op.phimax
+    ETA = op.ETA
+    ETAP = op.ETAP
+    GGG = op.GGG
+    GGGP = op.GGGP
+    RHOX = op.RHOX
+    RHOY = op.RHOY
+    RHOFX = op.RHOFX
+    RHOFY = op.RHOFY
+    RX = op.RX
+    RY = op.RY
+    ETAPHI = op.ETAPHI
+    BETAPHI = op.BETAPHI
+    PHI = op.PHI
+    gx = op.gx
+    gy = op.gy
 
     # Node-disjoint updates allow thread-parallel execution over columns.
     Threads.@threads for j in 1:Nx1
         @inbounds for i in 1:Ny1
-            # Equation 1: Solid x-velocity (Vx)
-            if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
-                y_mat[1, i, j] = x_mat[1, i, j]
-                if i == 1 && 1 < j < Nx_val
-                    y_mat[1, i, j] += bctop * x_mat[1, i + 1, j]
-                end
-                if i == Ny1 && 1 < j < Nx_val
-                    y_mat[1, i, j] += bcbottom * x_mat[1, i - 1, j]
-                end
-            else
-                ETA1 =
-                    op.ETA[i - 1, j] * op.GGG[i - 1, j] * dt /
-                    (op.GGG[i - 1, j] * dt + op.ETA[i - 1, j])
-                ETA2 = op.ETA[i, j] * op.GGG[i, j] * dt / (op.GGG[i, j] * dt + op.ETA[i, j])
-                ETAP1 =
-                    op.ETAP[i, j] * op.GGGP[i, j] * dt /
-                    (op.GGGP[i, j] * dt + op.ETAP[i, j])
-                ETAP2 =
-                    op.ETAP[i, j + 1] * op.GGGP[i, j + 1] * dt /
-                    (op.GGGP[i, j + 1] * dt + op.ETAP[i, j + 1])
-                dRHOdx = 0.5 * (op.RHOX[i, j + 1] - op.RHOX[i, j - 1]) * inv(dx_val)
-                dRHOdy = 0.5 * (op.RHOX[i + 1, j] - op.RHOX[i - 1, j]) * inv(dy_val)
-
-                val_vx =
-                    (ETAP1 / dx_val^2) * x_mat[1, i, j - 1] +
-                    (ETA1 / dy_val^2) * x_mat[1, i - 1, j] +
-                    (
-                        -(ETAP1 + ETAP2) * inv(dx_val^2) - (ETA1 + ETA2) * inv(dy_val^2) -
-                        dRHOdx * op.gx[i, j] * dt
-                    ) * x_mat[1, i, j] +
-                    (ETA2 / dy_val^2) * x_mat[1, i + 1, j] +
-                    (ETAP2 / dx_val^2) * x_mat[1, i, j + 1] +
-                    (
-                        ETAP1 * inv(dx_val) * inv(dy_val) -
-                        ETA2 * inv(dx_val) * inv(dy_val) - dRHOdy * op.gx[i, j] * dt * 0.25
-                    ) * x_mat[2, i, j] +
-                    (
-                        -ETAP2 * inv(dx_val) * inv(dy_val) +
-                        ETA2 * inv(dx_val) * inv(dy_val) - dRHOdy * op.gx[i, j] * dt * 0.25
-                    ) * x_mat[2, i, j + 1] +
-                    (
-                        -ETAP1 * inv(dx_val) * inv(dy_val) +
-                        ETA1 * inv(dx_val) * inv(dy_val) - dRHOdy * op.gx[i, j] * dt * 0.25
-                    ) * x_mat[2, i - 1, j] +
-                    (
-                        ETAP2 * inv(dx_val) * inv(dy_val) -
-                        ETA1 * inv(dx_val) * inv(dy_val) - dRHOdy * op.gx[i, j] * dt * 0.25
-                    ) * x_mat[2, i - 1, j + 1] +
-                    (Kcont * inv(dx_val)) * x_mat[3, i, j] -
-                    (Kcont * inv(dx_val)) * x_mat[3, i, j + 1]
-                y_mat[1, i, j] = val_vx
-            end
-
-            # Equation 2: Solid y-velocity (Vy)
-            if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
-                y_mat[2, i, j] = x_mat[2, i, j]
-                if j == 1 && 1 < i < Ny_val
-                    y_mat[2, i, j] += bcleft * x_mat[2, i, j + 1]
-                end
-                if j == Nx1 && 1 < i < Ny_val
-                    y_mat[2, i, j] += bcright * x_mat[2, i, j - 1]
-                end
-            else
-                ETA1 =
-                    op.ETA[i, j - 1] * op.GGG[i, j - 1] * dt /
-                    (op.GGG[i, j - 1] * dt + op.ETA[i, j - 1])
-                ETA2 = op.ETA[i, j] * op.GGG[i, j] * dt / (op.GGG[i, j] * dt + op.ETA[i, j])
-                ETAP1 =
-                    op.ETAP[i, j] * op.GGGP[i, j] * dt /
-                    (op.GGGP[i, j] * dt + op.ETAP[i, j])
-                ETAP2 =
-                    op.ETAP[i + 1, j] * op.GGGP[i + 1, j] * dt /
-                    (op.GGGP[i + 1, j] * dt + op.ETAP[i + 1, j])
-                dRHOdx = 0.5 * (op.RHOY[i, j + 1] - op.RHOY[i, j - 1]) * inv(dx_val)
-                dRHOdy = 0.5 * (op.RHOY[i + 1, j] - op.RHOY[i - 1, j]) * inv(dy_val)
-
-                val_vy =
-                    (ETA1 / dx_val^2) * x_mat[2, i, j - 1] +
-                    (ETAP1 / dy_val^2) * x_mat[2, i - 1, j] +
-                    (
-                        -(ETA1 + ETA2) * inv(dx_val^2) - (ETAP1 + ETAP2) * inv(dy_val^2) -
-                        dRHOdy * op.gy[i, j] * dt
-                    ) * x_mat[2, i, j] +
-                    (ETAP2 / dy_val^2) * x_mat[2, i + 1, j] +
-                    (ETA2 / dx_val^2) * x_mat[2, i, j + 1] +
-                    (
-                        ETAP1 * inv(dx_val) * inv(dy_val) -
-                        ETA2 * inv(dx_val) * inv(dy_val) - dRHOdx * op.gy[i, j] * dt * 0.25
-                    ) * x_mat[1, i, j] +
-                    (
-                        -ETAP2 * inv(dx_val) * inv(dy_val) +
-                        ETA2 * inv(dx_val) * inv(dy_val) - dRHOdx * op.gy[i, j] * dt * 0.25
-                    ) * x_mat[1, i + 1, j] +
-                    (
-                        -ETAP1 * inv(dx_val) * inv(dy_val) +
-                        ETA1 * inv(dx_val) * inv(dy_val) - dRHOdx * op.gy[i, j] * dt * 0.25
-                    ) * x_mat[1, i, j - 1] +
-                    (
-                        ETAP2 * inv(dx_val) * inv(dy_val) -
-                        ETA1 * inv(dx_val) * inv(dy_val) - dRHOdx * op.gy[i, j] * dt * 0.25
-                    ) * x_mat[1, i + 1, j - 1] +
-                    (Kcont * inv(dy_val)) * x_mat[3, i, j] -
-                    (Kcont * inv(dy_val)) * x_mat[3, i + 1, j]
-                y_mat[2, i, j] = val_vy
-            end
-
-            # Equation 3: Total pressure (Pt)
-            if i == 1 || i == Ny1 || j == 1 || j == Nx1
-                y_mat[3, i, j] = x_mat[3, i, j]
-            elseif (
-                (i == 2 && 2 <= j <= Nx_val) ||
-                (j == 2 && 2 < i < Ny_val) ||
-                (i == Ny_val && 2 <= j <= Nx_val) ||
-                (j == Nx_val && 2 < i < Ny_val)
+            pt = evaluate_stokes_darcy_point(
+                i,
+                j,
+                x_mat,
+                Ny1,
+                Nx1,
+                dx_val,
+                dy_val,
+                Nx_val,
+                Ny_val,
+                dt,
+                Kcont,
+                bctop,
+                bcbottom,
+                bcleft,
+                bcright,
+                betasolid,
+                betafluid,
+                phimin,
+                phimax,
+                ETA,
+                ETAP,
+                GGG,
+                GGGP,
+                RHOX,
+                RHOY,
+                RHOFX,
+                RHOFY,
+                RX,
+                RY,
+                ETAPHI,
+                BETAPHI,
+                PHI,
+                gx,
+                gy,
             )
-                y_mat[3, i, j] = Kcont * x_mat[3, i, j]
-            else
-                betadrained = compute_drained_compressibility(
-                    op.BETAPHI[i, j],
-                    op.PHI[i, j],
-                    op.betasolid;
-                    phimin=op.phimin,
-                    phimax=op.phimax,
-                )
-                kbw = compute_biot_willis_coefficient(betadrained, op.betasolid)
-
-                val_pm =
-                    (-1.0 / dx_val) * x_mat[1, i, j - 1] +
-                    (1.0 / dx_val) * x_mat[1, i, j] +
-                    (-1.0 / dy_val) * x_mat[2, i - 1, j] +
-                    (1.0 / dy_val) * x_mat[2, i, j] +
-                    (
-                        Kcont *
-                        (inv(op.ETAPHI[i, j]) / (1.0 - op.PHI[i, j]) + betadrained / dt)
-                    ) * x_mat[3, i, j] +
-                    (
-                        -Kcont * (
-                            inv(op.ETAPHI[i, j]) / (1.0 - op.PHI[i, j]) +
-                            betadrained * kbw / dt
-                        )
-                    ) * x_mat[4, i, j]
-                y_mat[3, i, j] = val_pm
-            end
-
-            # Equation 4: Fluid pressure (Pf) with condensed Darcy divergence
-            if i == 1 || i == Ny1 || j == 1 || j == Nx1
-                y_mat[4, i, j] = x_mat[4, i, j]
-            elseif (
-                (i == 2 && 2 <= j <= Nx_val) ||
-                (j == 2 && 2 < i < Ny_val) ||
-                (i == Ny_val && 2 <= j <= Nx_val) ||
-                (j == Nx_val && 2 < i < Ny_val)
-            )
-                y_mat[4, i, j] = Kcont * x_mat[4, i, j]
-            else
-                betadrained = compute_drained_compressibility(
-                    op.BETAPHI[i, j],
-                    op.PHI[i, j],
-                    op.betasolid;
-                    phimin=op.phimin,
-                    phimax=op.phimax,
-                )
-                kbw = compute_biot_willis_coefficient(betadrained, op.betasolid)
-                ksk = compute_skempton_coefficient(
-                    betadrained,
-                    op.PHI[i, j],
-                    op.betasolid,
-                    op.betafluid;
-                    phimin=op.phimin,
-                    phimax=op.phimax,
-                )
-
-                val_pf =
-                    (
-                        -Kcont * (
-                            inv(op.ETAPHI[i, j]) / (1.0 - op.PHI[i, j]) +
-                            betadrained * kbw / dt
-                        )
-                    ) * x_mat[3, i, j]
-                diag_pf =
-                    Kcont * (
-                        inv(op.ETAPHI[i, j]) / (1.0 - op.PHI[i, j]) +
-                        betadrained * kbw / ksk / dt
-                    )
-
-                if 1 < i < Ny1 && 1 < j < Nx_val
-                    rx2 = op.RX[i, j]
-                    coeff_x2 = Kcont / (dx_val^2 * rx2)
-                    diag_pf += coeff_x2
-                    val_pf -= coeff_x2 * x_mat[4, i, j + 1]
-                end
-                if 1 < i < Ny1 && 2 < j <= Nx_val
-                    rx1 = op.RX[i, j - 1]
-                    coeff_x1 = Kcont / (dx_val^2 * rx1)
-                    diag_pf += coeff_x1
-                    val_pf -= coeff_x1 * x_mat[4, i, j - 1]
-                end
-                if 1 < j < Nx1 && 1 < i < Ny_val
-                    ry2 = op.RY[i, j]
-                    coeff_y2 = Kcont / (dy_val^2 * ry2)
-                    diag_pf += coeff_y2
-                    val_pf -= coeff_y2 * x_mat[4, i + 1, j]
-                end
-                if 1 < j < Nx1 && 2 < i <= Ny_val
-                    ry1 = op.RY[i - 1, j]
-                    coeff_y1 = Kcont / (dy_val^2 * ry1)
-                    diag_pf += coeff_y1
-                    val_pf -= coeff_y1 * x_mat[4, i - 1, j]
-                end
-
-                val_pf += diag_pf * x_mat[4, i, j]
-                y_mat[4, i, j] = val_pf
-            end
+            y_mat[1, i, j] = pt[1]
+            y_mat[2, i, j] = pt[2]
+            y_mat[3, i, j] = pt[3]
+            y_mat[4, i, j] = pt[4]
         end
     end
     return y
@@ -450,6 +390,10 @@ Compute diagonal entries of the matrix-free Stokes-Darcy operator in O(N) operat
 - `d::Vector{T}`: Vector of diagonal entries of length `Ny1 * Nx1 * 4`.
 """
 function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {T}
+    backend_op = KernelAbstractions.get_backend(op.ETA)
+    if !(backend_op isa KernelAbstractions.CPU)
+        return compute_operator_diagonal_device(op; backend=backend_op)
+    end
     Ny1 = op.Ny1
     Nx1 = op.Nx1
     dx_val = op.dx
@@ -467,15 +411,10 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
             d_mat[1, i, j] = one(T)
         else
-            ETA1 =
-                op.ETA[i - 1, j] * op.GGG[i - 1, j] * dt /
-                (op.GGG[i - 1, j] * dt + op.ETA[i - 1, j])
-            ETA2 = op.ETA[i, j] * op.GGG[i, j] * dt / (op.GGG[i, j] * dt + op.ETA[i, j])
-            ETAP1 =
-                op.ETAP[i, j] * op.GGGP[i, j] * dt / (op.GGGP[i, j] * dt + op.ETAP[i, j])
-            ETAP2 =
-                op.ETAP[i, j + 1] * op.GGGP[i, j + 1] * dt /
-                (op.GGGP[i, j + 1] * dt + op.ETAP[i, j + 1])
+            ETA1 = maxwell_effective_viscosity(op.ETA[i - 1, j], op.GGG[i - 1, j], dt)
+            ETA2 = maxwell_effective_viscosity(op.ETA[i, j], op.GGG[i, j], dt)
+            ETAP1 = maxwell_effective_viscosity(op.ETAP[i, j], op.GGGP[i, j], dt)
+            ETAP2 = maxwell_effective_viscosity(op.ETAP[i, j + 1], op.GGGP[i, j + 1], dt)
             dRHOdx = 0.5 * (op.RHOX[i, j + 1] - op.RHOX[i, j - 1]) * inv(dx_val)
             d_mat[1, i, j] =
                 -(ETAP1 + ETAP2) * inv(dx_val^2) - (ETA1 + ETA2) * inv(dy_val^2) -
@@ -486,15 +425,10 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
             d_mat[2, i, j] = one(T)
         else
-            ETA1 =
-                op.ETA[i, j - 1] * op.GGG[i, j - 1] * dt /
-                (op.GGG[i, j - 1] * dt + op.ETA[i, j - 1])
-            ETA2 = op.ETA[i, j] * op.GGG[i, j] * dt / (op.GGG[i, j] * dt + op.ETA[i, j])
-            ETAP1 =
-                op.ETAP[i, j] * op.GGGP[i, j] * dt / (op.GGGP[i, j] * dt + op.ETAP[i, j])
-            ETAP2 =
-                op.ETAP[i + 1, j] * op.GGGP[i + 1, j] * dt /
-                (op.GGGP[i + 1, j] * dt + op.ETAP[i + 1, j])
+            ETA1 = maxwell_effective_viscosity(op.ETA[i, j - 1], op.GGG[i, j - 1], dt)
+            ETA2 = maxwell_effective_viscosity(op.ETA[i, j], op.GGG[i, j], dt)
+            ETAP1 = maxwell_effective_viscosity(op.ETAP[i, j], op.GGGP[i, j], dt)
+            ETAP2 = maxwell_effective_viscosity(op.ETAP[i + 1, j], op.GGGP[i + 1, j], dt)
             dRHOdy = 0.5 * (op.RHOY[i + 1, j] - op.RHOY[i - 1, j]) * inv(dy_val)
             d_mat[2, i, j] =
                 -(ETA1 + ETA2) * inv(dx_val^2) - (ETAP1 + ETAP2) * inv(dy_val^2) -

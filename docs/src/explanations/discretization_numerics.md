@@ -214,6 +214,15 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
 4. **Krylov Solvers**:
    Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl`.
 
+5. **Hardware Acceleration (GPU via `KernelAbstractions.jl`)**:
+   Device-agnostic parallel kernels support multi-threaded CPUs and hardware accelerators (NVIDIA GPUs via `CUDA.jl`, Apple Silicon via `Metal.jl`, and AMD GPUs via `AMDGPU.jl`):
+   - **Operator Evaluation (`mul_device!`)**: Computes point stencils for momentum, continuity, and Darcy flow directly on device memory with configurable workgroup tiling (default 16x16).
+   - **Operator Diagonal (`compute_operator_diagonal_device`)**: Evaluates diagonal elements in parallel on device for Jacobi relaxation and Schur complement scaling.
+   - **Adjoint Restriction (`restrict_4var_device!`)**: Formulated as a coarse-grid gather operation where each thread computes one coarse cell from sixteen fine staggered nodes. This eliminates race conditions and atomic write instructions on GPUs.
+   - **Continuous Prolongation (`prolongate_4var_device!`)**: Bilinear interpolation for velocity nodes ($v_x, v_y$) and piecewise-constant injection for pressure nodes ($P_t, P_f$) matching staggered boundary conditions.
+   - **Relaxation Smoothers (`smooth_velocity_device!`, `smooth_darcy_device!`)**: Executes in-place relaxation sweeps (damped Jacobi or Red-Black Gauss-Seidel) using pre-allocated working buffers on each level to eliminate buffer reallocations during V-cycles. Note that on Julia's host CPU backend `KernelAbstractions.jl` allocates task partition contexts during launch, whereas hardware GPU backends enqueue directly to device streams without host heap allocations.
+   - **Precision Considerations on Apple Silicon**: Apple Metal GPUs do not provide hardware double-precision (`Float64`) arithmetic. Simulations deployed to Apple Metal hardware must configure single-precision floating point (`Float32`). Transferring `Float64` arrays or operators to Metal devices raises an informative `ArgumentError`.
+
 ---
 
 ## Non-Linear Iterations (Picard Loop)

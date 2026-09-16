@@ -6,6 +6,7 @@ using Dates
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
+using KernelAbstractions
 using LinearAlgebra
 using LinearSolve
 using Logging
@@ -54,6 +55,15 @@ export MetalSegregationWorkspace,
     restrict_4var!,
     prolongate_4var!,
     smooth_damped_jacobi!,
+    to_device,
+    to_host,
+    mul_device!,
+    compute_operator_diagonal_device,
+    restrict_4var_device!,
+    prolongate_4var_device!,
+    smooth_damped_jacobi_device!,
+    apply_multigrid_vcycle_device!,
+    apply_multigrid_vcycle!,
     assemble_hydromechanical_lse!,
     assemble_hydromechanical_4var_lse!,
     reconstruct_darcy_fluxes!,
