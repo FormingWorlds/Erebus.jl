@@ -146,6 +146,29 @@ Base.size(op::MatrixFreeStokesDarcyOperator) = (op.Ny1 * op.Nx1 * 4, op.Ny1 * op
 Base.size(op::MatrixFreeStokesDarcyOperator, d::Int) = d in (1, 2) ? op.Ny1 * op.Nx1 * 4 : 1
 Base.eltype(::MatrixFreeStokesDarcyOperator{T}) where {T} = T
 
+@inline function is_boundary_vx(
+    i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int
+)
+    return i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
+end
+
+@inline function is_boundary_vy(
+    i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int
+)
+    return i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
+end
+
+@inline function is_boundary_p(i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int)
+    return i == 1 ||
+           i == Ny1 ||
+           j == 1 ||
+           j == Nx1 ||
+           (i == 2 && 2 <= j <= Nx_val) ||
+           (j == 2 && 2 < i < Ny_val) ||
+           (i == Ny_val && 2 <= j <= Nx_val) ||
+           (j == Nx_val && 2 < i < Ny_val)
+end
+
 """
     LinearAlgebra.mul!(y, op::MatrixFreeStokesDarcyOperator, x)
 
@@ -176,7 +199,7 @@ function LinearAlgebra.mul!(
     Threads.@threads for j in 1:Nx1
         @inbounds for i in 1:Ny1
             # Equation 1: Solid x-velocity (Vx)
-            if i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
+            if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
                 y_mat[1, i, j] = x_mat[1, i, j]
                 if i == 1 && 1 < j < Nx_val
                     y_mat[1, i, j] += bctop * x_mat[1, i + 1, j]
@@ -229,7 +252,7 @@ function LinearAlgebra.mul!(
             end
 
             # Equation 2: Solid y-velocity (Vy)
-            if i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
+            if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
                 y_mat[2, i, j] = x_mat[2, i, j]
                 if j == 1 && 1 < i < Ny_val
                     y_mat[2, i, j] += bcleft * x_mat[2, i, j + 1]
@@ -441,7 +464,7 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
 
     for j in 1:Nx1, i in 1:Ny1
         # Vx diagonal
-        if i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
+        if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
             d_mat[1, i, j] = one(T)
         else
             ETA1 =
@@ -460,7 +483,7 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         end
 
         # Vy diagonal
-        if i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
+        if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
             d_mat[2, i, j] = one(T)
         else
             ETA1 =
@@ -786,6 +809,11 @@ function solve_hydromechanical_iterative!(
     maxiter::Int=200,
     restart::Int=50,
     preconditioner::Symbol=:block_schur,
+    mg_levels::Int=4,
+    mg_pre_smooth::Int=2,
+    mg_post_smooth::Int=2,
+    mg_omega::Real=0.67,
+    mg_smoother::Symbol=:damped_jacobi,
     P=nothing,
 ) where {T<:AbstractFloat}
     # Validate arguments early
@@ -796,13 +824,32 @@ function solve_hydromechanical_iterative!(
             ),
         )
     end
-    if P === nothing && preconditioner ∉ (:block_schur, :diagonal, :none)
+    if P === nothing && preconditioner ∉ (:block_schur, :diagonal, :none, :multigrid)
         throw(ArgumentError("Unknown preconditioner: $(preconditioner)"))
     end
 
     # Construct preconditioner if not supplied
     prec = if P !== nothing
         P
+    elseif preconditioner == :multigrid
+        if A isa MatrixFreeStokesDarcyOperator
+            build_multigrid_preconditioner(
+                A;
+                levels=mg_levels,
+                pre_smooth=mg_pre_smooth,
+                post_smooth=mg_post_smooth,
+                omega=mg_omega,
+                smoother=mg_smoother,
+            )
+        else
+            @warn "preconditioner=:multigrid is only supported for MatrixFreeStokesDarcyOperator; falling back to :block_schur"
+            stride = if coords !== nothing && coords.Ny1 * coords.Nx1 > 0
+                Int(size(A, 1) ÷ (coords.Ny1 * coords.Nx1))
+            else
+                4
+            end
+            build_block_schur_preconditioner(A; coords=coords, dof_stride=stride)
+        end
     elseif preconditioner == :block_schur
         stride = if A isa MatrixFreeStokesDarcyOperator
             4

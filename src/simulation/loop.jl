@@ -2428,6 +2428,11 @@ function simulation_loop(
                             maxiter=cfg.solver.krylov_maxiter,
                             restart=cfg.solver.krylov_restart,
                             preconditioner=cfg.solver.preconditioner,
+                            mg_levels=cfg.solver.mg_levels,
+                            mg_pre_smooth=cfg.solver.mg_pre_smooth,
+                            mg_post_smooth=cfg.solver.mg_post_smooth,
+                            mg_smoother=cfg.solver.mg_smoother,
+                            mg_omega=cfg.solver.mg_omega,
                         )
                         if !stats.solved
                             error(
@@ -2446,6 +2451,11 @@ function simulation_loop(
                             maxiter=cfg.solver.krylov_maxiter,
                             restart=cfg.solver.krylov_restart,
                             preconditioner=cfg.solver.preconditioner,
+                            mg_levels=cfg.solver.mg_levels,
+                            mg_pre_smooth=cfg.solver.mg_pre_smooth,
+                            mg_post_smooth=cfg.solver.mg_post_smooth,
+                            mg_smoother=cfg.solver.mg_smoother,
+                            mg_omega=cfg.solver.mg_omega,
                         )
                         if !stats.solved
                             error(

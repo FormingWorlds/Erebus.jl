@@ -205,7 +205,13 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
 2. **Block-Schur Preconditioning**:
    Decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence across diverse permeability and viscosity regimes.
 
-3. **Krylov Solvers**:
+3. **Geometric Multigrid (GMG) Preconditioning**:
+   At high grid resolutions, geometric multigrid provides fast error damping across spatial scales:
+   - **Grid Hierarchy**: The grid spacing doubles at each coarser level ($\Delta x_{l+1} = 2 \Delta x_l, \Delta y_{l+1} = 2 \Delta y_l$). Rheological viscosities and hydraulic drag coarsen with harmonic averaging. Densities and body forces coarsen with arithmetic averaging.
+   - **Restriction and Prolongation**: Volume-weighted conservative restriction ($R = \frac{1}{4} P^T$) transfers fine residuals to coarse grids. Continuous staggered prolongation prolongates coarse corrections to fine grids with boundary condition guards.
+   - **Decoupled V-Cycles**: Damped Jacobi or Red-Black Gauss-Seidel relaxation smoothers operate separately on the elliptic velocity momentum block ($v_x, v_y$) and the elliptic fluid Darcy pressure block ($P_f$). Total solid pressure ($P_t$) scales with the discrete Schur complement diagonal.
+
+4. **Krylov Solvers**:
    Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl`.
 
 ---
