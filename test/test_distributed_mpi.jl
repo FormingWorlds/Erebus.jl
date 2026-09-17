@@ -111,9 +111,20 @@ end
         @test topo.ymin_loc ≈ 0.0
         @test topo.ymax_loc ≈ 100.0
 
+        # Parameter validation checks
+        @test_throws ArgumentError DistributedGridTopology2D(comm, 32, 32; px=64, py=1)
+        @test_throws ArgumentError DistributedGridTopology2D(comm, 32, 32; px=1, py=64)
+        @test_throws ArgumentError DistributedGridTopology2D(comm, 32, 32; px=2, py=1)
+
+        # Automatic factorization when one coordinate is unspecified
+        topo_auto_y = DistributedGridTopology2D(comm, 32, 32; px=1, py=0)
+        @test topo_auto_y.px == 1
+        @test topo_auto_y.py == 1
+
         buf = HaloBuffer{Float64}(4, topo.ny1_loc, topo.nx1_loc; halo_width=1)
         @test size(buf.send_east) == (4, topo.ny1_loc, 1)
         @test size(buf.send_north) == (4, 1, topo.nx1_loc)
+        @test size(buf.work_x) == (4, topo.ny1_loc, topo.nx1_loc)
     end
 
     @testset "Distributed Dot and Norm on Comm Self" begin
@@ -143,6 +154,12 @@ end
         dist_copy = copy(dist_x)
         @test dist_copy[1] ≈ dist_x[1]
         @test dist_copy[4] ≈ dist_x[4]
+
+        # 2D Matrix reduction with halo exclusion
+        M1 = fill(2.0, 6, 6)
+        M2 = fill(3.0, 6, 6)
+        @test distributed_dot(topo, M1, M2) ≈ 6.0 * 16
+        @test distributed_norm(topo, M1) ≈ sqrt(4.0 * 16)
     end
 
     @testset "Distributed Operator Application Single Process" begin
@@ -198,6 +215,7 @@ end
 
         rng = MersenneTwister(42)
         x = randn(rng, Ny1 * Nx1 * 4)
+        x_orig = copy(x)
         y_ref = zeros(Ny1 * Nx1 * 4)
         y_dist = zeros(Ny1 * Nx1 * 4)
 
@@ -206,11 +224,15 @@ end
         @test y_dist ≈ y_ref
         @test norm(y_dist) ≈ norm(y_ref)
 
+        # Assert mul! does NOT mutate input vector x
+        @test x == x_orig
+
         # 5-argument mul!
         y_dist5 = zeros(Ny1 * Nx1 * 4)
         mul!(y_dist5, dist_op, x, 2.0, 0.0)
         @test y_dist5 ≈ 2.0 .* y_ref
         @test norm(y_dist5) ≈ 2.0 * norm(y_ref)
+        @test x == x_orig
     end
 
     @testset "Marker Particle Migration Single Process" begin
@@ -241,10 +263,23 @@ end
         @test markers_nt.tkm[2] ≈ 290.0
     end
 
+    function run_mpi_test_with_timeout(cmd::Cmd; timeout_secs::Real=90.0)
+        proc = run(cmd, wait=false)
+        timed_out = false
+        timer = Timer(timeout_secs) do _
+            timed_out = true
+            kill(proc)
+        end
+        wait(proc)
+        close(timer)
+        !timed_out || error("MPI command timed out after $(timeout_secs)s: $cmd")
+        return proc
+    end
+
     @testset "Multi-Process MPI Integration (2 Ranks)" begin
         script = joinpath(@__DIR__, "mpi_worker_tests.jl")
         cmd = `$(MPI.mpiexec()) -n 2 $(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $script 2`
-        p = run(cmd)
+        p = run_mpi_test_with_timeout(cmd; timeout_secs=90.0)
         @test success(p)
         @test p.exitcode == 0
     end
@@ -252,7 +287,7 @@ end
     @testset "Multi-Process MPI Integration (4 Ranks 2x2 Grid)" begin
         script = joinpath(@__DIR__, "mpi_worker_tests.jl")
         cmd = `$(MPI.mpiexec()) -n 4 $(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $script 4`
-        p = run(cmd)
+        p = run_mpi_test_with_timeout(cmd; timeout_secs=90.0)
         @test success(p)
         @test p.exitcode == 0
     end

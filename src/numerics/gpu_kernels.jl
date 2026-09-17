@@ -97,6 +97,10 @@ function to_device(
         op.bcbottom,
         op.bcleft,
         op.bcright,
+        op.bc_north,
+        op.bc_south,
+        op.bc_west,
+        op.bc_east,
     )
 end
 
@@ -186,6 +190,10 @@ function to_host(op::MatrixFreeStokesDarcyOperator{T}) where {T}
         op.bcbottom,
         op.bcleft,
         op.bcright,
+        op.bc_north,
+        op.bc_south,
+        op.bc_west,
+        op.bc_east,
     )
 end
 
@@ -272,15 +280,30 @@ end
     PHI,
     gx,
     gy,
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
 ) where {T<:AbstractFloat}
     # Equation 1: Solid x-velocity (Vx)
     val_vx = zero(T)
-    if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
+    if is_boundary_vx(
+        i,
+        j,
+        Ny_val,
+        Nx_val,
+        Ny1,
+        Nx1;
+        bc_north=bc_north,
+        bc_south=bc_south,
+        bc_west=bc_west,
+        bc_east=bc_east,
+    )
         val_vx = x_mat[1, i, j]
-        if i == 1 && 1 < j < Nx_val
+        if bc_north && i == 1 && 1 < j < Nx_val
             val_vx += bctop * x_mat[1, i + 1, j]
         end
-        if i == Ny1 && 1 < j < Nx_val
+        if bc_south && i == Ny1 && 1 < j < Nx_val
             val_vx += bcbottom * x_mat[1, i - 1, j]
         end
     else
@@ -322,12 +345,23 @@ end
 
     # Equation 2: Solid y-velocity (Vy)
     val_vy = zero(T)
-    if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
+    if is_boundary_vy(
+        i,
+        j,
+        Ny_val,
+        Nx_val,
+        Ny1,
+        Nx1;
+        bc_north=bc_north,
+        bc_south=bc_south,
+        bc_west=bc_west,
+        bc_east=bc_east,
+    )
         val_vy = x_mat[2, i, j]
-        if j == 1 && 1 < i < Ny_val
+        if bc_west && j == 1 && 1 < i < Ny_val
             val_vy += bcleft * x_mat[2, i, j + 1]
         end
-        if j == Nx1 && 1 < i < Ny_val
+        if bc_east && j == Nx1 && 1 < i < Ny_val
             val_vy += bcright * x_mat[2, i, j - 1]
         end
     else
@@ -369,15 +403,19 @@ end
 
     # Equation 3: Total pressure (Pt)
     val_pt = zero(T)
-    if i == 1 || i == Ny1 || j == 1 || j == Nx1
-        val_pt = x_mat[3, i, j]
-    elseif (
-        (i == 2 && 2 <= j <= Nx_val) ||
-        (j == 2 && 2 < i < Ny_val) ||
-        (i == Ny_val && 2 <= j <= Nx_val) ||
-        (j == Nx_val && 2 < i < Ny_val)
+    if is_boundary_p(
+        i,
+        j,
+        Ny_val,
+        Nx_val,
+        Ny1,
+        Nx1;
+        bc_north=bc_north,
+        bc_south=bc_south,
+        bc_west=bc_west,
+        bc_east=bc_east,
     )
-        val_pt = Kcont * x_mat[3, i, j]
+        val_pt = x_mat[3, i, j]
     else
         betadrained = compute_drained_compressibility(
             BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -397,15 +435,19 @@ end
 
     # Equation 4: Fluid pressure (Pf) with condensed Darcy divergence
     val_pf = zero(T)
-    if i == 1 || i == Ny1 || j == 1 || j == Nx1
-        val_pf = x_mat[4, i, j]
-    elseif (
-        (i == 2 && 2 <= j <= Nx_val) ||
-        (j == 2 && 2 < i < Ny_val) ||
-        (i == Ny_val && 2 <= j <= Nx_val) ||
-        (j == Nx_val && 2 < i < Ny_val)
+    if is_boundary_p(
+        i,
+        j,
+        Ny_val,
+        Nx_val,
+        Ny1,
+        Nx1;
+        bc_north=bc_north,
+        bc_south=bc_south,
+        bc_west=bc_west,
+        bc_east=bc_east,
     )
-        val_pf = Kcont * x_mat[4, i, j]
+        val_pf = x_mat[4, i, j]
     else
         betadrained = compute_drained_compressibility(
             BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax

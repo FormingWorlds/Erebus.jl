@@ -19,6 +19,9 @@ function simulation_loop(
 )
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
     isdir(output_path) || mkpath(output_path)
+    if cfg.mpi.enable
+        @warn "Distributed multi-node orchestration for simulation_loop is scheduled for Milestone 4/5. Executing local simulation loop."
+    end
     coords = GridCoordinates(cfg.grid)
 
     # -------------------------------------------------------------------------

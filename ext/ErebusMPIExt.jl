@@ -25,7 +25,7 @@ function Erebus.DistributedGridTopology2D(
     total_size = MPI.Comm_size(comm)
 
     # Automatic 2D factorization minimizing surface-to-volume ratio.
-    if px <= 0 || py <= 0
+    if px <= 0 && py <= 0
         best_diff = typemax(Int)
         best_py = 1
         best_px = total_size
@@ -41,9 +41,19 @@ function Erebus.DistributedGridTopology2D(
         end
         py = best_py
         px = best_px
+    elseif px <= 0 && py > 0
+        mod(total_size, py) == 0 ||
+            throw(ArgumentError("comm size $total_size is not divisible by py ($py)"))
+        px = div(total_size, py)
+    elseif py <= 0 && px > 0
+        mod(total_size, px) == 0 ||
+            throw(ArgumentError("comm size $total_size is not divisible by px ($px)"))
+        py = div(total_size, px)
     end
     px * py == total_size ||
         throw(ArgumentError("px * py ($px * $py) must match comm size $total_size"))
+    px <= Nx_global || throw(ArgumentError("px ($px) cannot exceed Nx_global ($Nx_global)"))
+    py <= Ny_global || throw(ArgumentError("py ($py) cannot exceed Ny_global ($Ny_global)"))
 
     # Dimension 0 is Y (rows), dimension 1 is X (cols)
     dims = Cint[py, px]
@@ -57,20 +67,20 @@ function Erebus.DistributedGridTopology2D(
     (south_rank, north_rank) = MPI.Cart_shift(cart_comm, 0, 1)
     (west_rank, east_rank) = MPI.Cart_shift(cart_comm, 1, 1)
 
-    # Compute diagonal corner neighbor ranks.
-    nw = (cy > 0 && cx > 0) ? MPI.Cart_rank(cart_comm, Cint[cy - 1, cx - 1]) : MPI.PROC_NULL
-    ne = if (cy > 0 && cx < px - 1)
-        MPI.Cart_rank(cart_comm, Cint[cy - 1, cx + 1])
-    else
-        MPI.PROC_NULL
-    end
-    sw = if (cy < py - 1 && cx > 0)
+    # Compute diagonal corner neighbor ranks (cy+1 is North, cy-1 is South, cx+1 is East, cx-1 is West).
+    nw = if (cy < py - 1 && cx > 0)
         MPI.Cart_rank(cart_comm, Cint[cy + 1, cx - 1])
     else
         MPI.PROC_NULL
     end
-    se = if (cy < py - 1 && cx < px - 1)
+    ne = if (cy < py - 1 && cx < px - 1)
         MPI.Cart_rank(cart_comm, Cint[cy + 1, cx + 1])
+    else
+        MPI.PROC_NULL
+    end
+    sw = (cy > 0 && cx > 0) ? MPI.Cart_rank(cart_comm, Cint[cy - 1, cx - 1]) : MPI.PROC_NULL
+    se = if (cy > 0 && cx < px - 1)
+        MPI.Cart_rank(cart_comm, Cint[cy - 1, cx + 1])
     else
         MPI.PROC_NULL
     end
@@ -180,6 +190,7 @@ function Erebus.HaloBuffer{T}(nvars::Int, ny::Int, nx::Int; halo_width::Int=1) w
         zeros(T, nvars, hw, nx),
         MPI.Request[],
         MPI.Request[],
+        zeros(T, nvars, ny, nx),
     )
 end
 
@@ -294,18 +305,62 @@ Wrap a local `MatrixFreeStokesDarcyOperator` with halo communication for distrib
 function Erebus.DistributedStokesDarcyOperator(
     local_op::MatrixFreeStokesDarcyOperator{T,M}, topology::DistributedGridTopology2D
 ) where {T,M}
-    buf = Erebus.HaloBuffer{T}(
-        4, local_op.Ny1, local_op.Nx1; halo_width=topology.halo_width
+    bc_north = (topology.neighbors.north == MPI.PROC_NULL)
+    bc_south = (topology.neighbors.south == MPI.PROC_NULL)
+    bc_west = (topology.neighbors.west == MPI.PROC_NULL)
+    bc_east = (topology.neighbors.east == MPI.PROC_NULL)
+
+    configured_local_op = MatrixFreeStokesDarcyOperator{T,M}(
+        local_op.Ny1,
+        local_op.Nx1,
+        local_op.dx,
+        local_op.dy,
+        local_op.Nx_val,
+        local_op.Ny_val,
+        local_op.ETA,
+        local_op.ETAP,
+        local_op.GGG,
+        local_op.GGGP,
+        local_op.RHOX,
+        local_op.RHOY,
+        local_op.RHOFX,
+        local_op.RHOFY,
+        local_op.RX,
+        local_op.RY,
+        local_op.ETAPHI,
+        local_op.BETAPHI,
+        local_op.PHI,
+        local_op.gx,
+        local_op.gy,
+        local_op.dt,
+        local_op.betasolid,
+        local_op.betafluid,
+        local_op.phimin,
+        local_op.phimax,
+        local_op.Kcont,
+        local_op.bctop,
+        local_op.bcbottom,
+        local_op.bcleft,
+        local_op.bcright,
+        bc_north,
+        bc_south,
+        bc_west,
+        bc_east,
     )
-    return DistributedStokesDarcyOperator{T,M,typeof(buf)}(local_op, topology, buf)
+    buf = Erebus.HaloBuffer{T}(
+        4, configured_local_op.Ny1, configured_local_op.Nx1; halo_width=topology.halo_width
+    )
+    return DistributedStokesDarcyOperator{T,M,typeof(buf)}(
+        configured_local_op, topology, buf
+    )
 end
 
 function LinearAlgebra.mul!(
     y::AbstractVector, op::DistributedStokesDarcyOperator, x::AbstractVector
 )
-    x_mat = reshape(x, (4, op.local_op.Ny1, op.local_op.Nx1))
-    Erebus.exchange_halos!(op.topology, x_mat; buffer=op.halo_buffer)
-    LinearAlgebra.mul!(y, op.local_op, x)
+    copyto!(op.halo_buffer.work_x, x)
+    Erebus.exchange_halos!(op.topology, op.halo_buffer.work_x; buffer=op.halo_buffer)
+    LinearAlgebra.mul!(y, op.local_op, vec(op.halo_buffer.work_x))
     return y
 end
 
@@ -340,6 +395,42 @@ function Erebus.distributed_norm(topo::DistributedGridTopology2D, x::AbstractVec
     local_sq = dot(x, x)
     global_sq = MPI.Allreduce(local_sq, +, topo.cart_comm)
     return sqrt(max(zero(global_sq), global_sq))
+end
+
+function Erebus.distributed_dot(
+    topo::DistributedGridTopology2D, A::AbstractMatrix{T}, B::AbstractMatrix{T}
+) where {T}
+    hw = topo.halo_width
+    ny, nx = size(A)
+    local_sum = zero(T)
+    @inbounds for j in (hw + 1):(nx - hw), i in (hw + 1):(ny - hw)
+        local_sum += A[i, j] * B[i, j]
+    end
+    return MPI.Allreduce(local_sum, +, topo.cart_comm)
+end
+
+function Erebus.distributed_norm(
+    topo::DistributedGridTopology2D, A::AbstractMatrix{T}
+) where {T}
+    return sqrt(max(zero(T), Erebus.distributed_dot(topo, A, A)))
+end
+
+function Erebus.distributed_dot(
+    topo::DistributedGridTopology2D, A::AbstractArray{T,3}, B::AbstractArray{T,3}
+) where {T}
+    hw = topo.halo_width
+    nvars, ny, nx = size(A)
+    local_sum = zero(T)
+    @inbounds for j in (hw + 1):(nx - hw), i in (hw + 1):(ny - hw), v in 1:nvars
+        local_sum += A[v, i, j] * B[v, i, j]
+    end
+    return MPI.Allreduce(local_sum, +, topo.cart_comm)
+end
+
+function Erebus.distributed_norm(
+    topo::DistributedGridTopology2D, A::AbstractArray{T,3}
+) where {T}
+    return sqrt(max(zero(T), Erebus.distributed_dot(topo, A, A)))
 end
 
 function LinearAlgebra.dot(x::DistributedVector, y::DistributedVector)
@@ -410,7 +501,9 @@ function Erebus.migrate_markers!(
     MPI.Alltoall!(MPI.UBuffer(send_counts, 1), MPI.UBuffer(recv_counts, 1), topo.cart_comm)
     num_incoming = Int(sum(recv_counts))
 
-    if num_outgoing == 0 && num_incoming == 0
+    # Collective synchronization: check globally if any rank has outgoing markers
+    global_outgoing = MPI.Allreduce(num_outgoing, +, topo.cart_comm)
+    if global_outgoing == 0
         return (0, 0)
     end
 

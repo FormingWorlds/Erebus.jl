@@ -99,6 +99,7 @@ mutable struct HaloBuffer{T,R}
     recv_south::Array{T,3}
     reqs_x::Vector{R}
     reqs_y::Vector{R}
+    work_x::Array{T,3}
 end
 
 # Distributed Stokes-Darcy operator with halo communication.
