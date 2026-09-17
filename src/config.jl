@@ -126,6 +126,18 @@ Base.@kwdef struct SolverConfig
 end
 
 """
+MPI distributed execution configuration.
+
+$(FIELDS)
+"""
+Base.@kwdef struct MPIConfig
+    enable::Bool = false
+    px::Int = 0
+    py::Int = 0
+    halo_width::Int = 1
+end
+
+"""
 Poroelastic constitutive parameters and porosity limits.
 
 Default compressibilities default to 0.0 to match the test baseline in `constants.jl`.
@@ -1108,6 +1120,7 @@ Base.@kwdef struct SimulationConfig
     magma_transport::MagmaTransportConfig = MagmaTransportConfig()
     redox::RedoxConfig = RedoxConfig()
     magma_degassing::MagmaOceanDegassingConfig = MagmaOceanDegassingConfig()
+    mpi::MPIConfig = MPIConfig()
 end
 
 """
@@ -1340,6 +1353,14 @@ function validate_config(cfg::SimulationConfig)
                 "solver.hydromech_solver = :matrix_free does not currently support venting.active = true; use :direct or :iterative instead",
             ),
         )
+    end
+
+    # MPI checks
+    if cfg.mpi.enable
+        cfg.mpi.px >= 0 || throw(ArgumentError("mpi.px must be >= 0, got $(cfg.mpi.px)"))
+        cfg.mpi.py >= 0 || throw(ArgumentError("mpi.py must be >= 0, got $(cfg.mpi.py)"))
+        cfg.mpi.halo_width >= 1 ||
+            throw(ArgumentError("mpi.halo_width must be >= 1, got $(cfg.mpi.halo_width)"))
     end
 
     # Output checks
@@ -2635,6 +2656,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.magma_degassing
     end
+    mpi = if haskey(parsed, "mpi")
+        _dict_to_struct(MPIConfig, parsed["mpi"], def.mpi)
+    else
+        def.mpi
+    end
 
     cfg = SimulationConfig(;
         grid=grid,
@@ -2664,6 +2690,7 @@ function load_config(source::AbstractString)::SimulationConfig
         magma_transport=magma,
         redox=rdx,
         magma_degassing=magma_degas,
+        mpi=mpi,
     )
 
     validate_config(cfg)
@@ -2726,6 +2753,7 @@ function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
         "magma_transport" => _struct_to_dict(cfg.magma_transport),
         "redox" => _struct_to_dict(cfg.redox),
         "magma_degassing" => _struct_to_dict(cfg.magma_degassing),
+        "mpi" => _struct_to_dict(cfg.mpi),
     )
 end
 

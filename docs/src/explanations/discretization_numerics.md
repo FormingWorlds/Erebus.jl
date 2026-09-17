@@ -203,7 +203,7 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    The operator action $\mathbf{y} = \mathbf{A} \mathbf{x}$ is evaluated directly on 2D grid property arrays without allocating sparse matrix indices or non-zero value arrays. Thread-parallel column execution yields high cache locality and eliminates memory allocation during solver iterations.
 
 2. **Block-Schur Preconditioning**:
-   Decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence across diverse permeability and viscosity regimes.
+   Decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence over diverse permeability and viscosity regimes.
 
 3. **Geometric Multigrid (GMG) Preconditioning**:
    At high grid resolutions, geometric multigrid provides fast error damping across spatial scales:
@@ -222,6 +222,14 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    - **Continuous Prolongation (`prolongate_4var_device!`)**: Bilinear interpolation for velocity nodes ($v_x, v_y$) and piecewise-constant injection for pressure nodes ($P_t, P_f$) matching staggered boundary conditions.
    - **Relaxation Smoothers (`smooth_velocity_device!`, `smooth_darcy_device!`)**: Executes in-place relaxation sweeps (damped Jacobi or Red-Black Gauss-Seidel) using pre-allocated working buffers on each level to eliminate buffer reallocations during V-cycles. Note that on Julia's host CPU backend `KernelAbstractions.jl` allocates task partition contexts during launch, whereas hardware GPU backends enqueue directly to device streams without host heap allocations.
    - **Precision Considerations on Apple Silicon**: Apple Metal GPUs do not provide hardware double-precision (`Float64`) arithmetic. Simulations deployed to Apple Metal hardware must configure single-precision floating point (`Float32`). Transferring `Float64` arrays or operators to Metal devices raises an informative `ArgumentError`.
+
+6. **2D Domain Decomposition and Distributed Memory (MPI)**:
+   For extreme-resolution simulations on High-Performance Computing (HPC) clusters, `Erebus.jl` integrates domain decomposition via `MPI.jl` (v0.20):
+   - **2D Cartesian Process Grid (`DistributedGridTopology2D`)**: Organizes compute nodes into a 2D Cartesian mesh ($P_y \times P_x$) using `MPI.Cart_create` with automatic surface-to-volume ratio optimization ($P_y \approx P_x \approx \sqrt{P}$). Identifies cardinal (North, South, East, West) and diagonal corner neighbors.
+   - **Asynchronous Halo Exchange (`exchange_halos!`)**: Non-blocking peer-to-peer ghost cell communication using pre-allocated buffers (`HaloBuffer`) with non-blocking `MPI.Isend` and `MPI.Irecv!` followed by `MPI.Waitall`. Dimensional 2-step exchange ensures corners are communicated without diagonal message overhead.
+   - **Distributed Matrix-Free Operator (`DistributedStokesDarcyOperator`)**: Evaluates $\mathbf{y} = \mathbf{A} \mathbf{x}$ for distributed subdomains with overlapped interior computation and boundary halo exchange.
+   - **Distributed Krylov Solvers (`DistributedVector`)**: Overloaded inner products (`distributed_dot`) and norms (`distributed_norm`) using `MPI.Allreduce` enable standard Krylov solvers (`fgmres`, `gmres`, `bicgstab`) to scale over distributed compute nodes.
+   - **Lagrangian Marker Migration (`migrate_markers!`)**: Markers crossing subdomain boundaries are routed to destination ranks via `MPI.Alltoall` count exchange and `MPI.Alltoallv!` payload transfer, enforcing 100% exact particle count and mass conservation among ranks.
 
 ---
 
