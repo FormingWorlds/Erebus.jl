@@ -24,6 +24,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 
 [compat]
 AMD = "0.5.0 - 0.5.3"
@@ -41,7 +42,21 @@ ProgressMeter = "1"
 StaticArrays = "1"
 TOML = "1"
 TimerOutputs = "0.5"
+KernelAbstractions = "0.9"
+AMDGPU = "0.8, 0.9, 1, 2"
+CUDA = "5, 6"
+Metal = "1"
 julia = "1"
+
+[weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+
+[extensions]
+ErebusAMDGPUExt = "AMDGPU"
+ErebusCUDAExt = "CUDA"
+ErebusMetalExt = "Metal"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

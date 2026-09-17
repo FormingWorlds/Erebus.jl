@@ -22,8 +22,8 @@ makedocs(;
         prettyurls=get(ENV, "CI", nothing) == "true",
         canonical="https://proteus-framework.org/Erebus.jl/stable/",
         edit_link="main",
-        size_threshold_warn=500 * 1024,
-        size_threshold=650 * 1024,
+        size_threshold_warn=600 * 1024,
+        size_threshold=800 * 1024,
     ),
     pages=[
         "Home" => "index.md",
