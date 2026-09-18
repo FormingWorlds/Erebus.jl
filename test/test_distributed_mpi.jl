@@ -291,4 +291,10 @@ end
         @test success(p)
         @test p.exitcode == 0
     end
+
+    @testset "Simulation Loop MPI Guard" begin
+        cfg_mpi = SimulationConfig(; mpi=MPIConfig(; enable=true))
+        @test cfg_mpi.mpi.enable
+        @test_throws ErrorException simulation_loop(cfg_mpi)
+    end
 end
