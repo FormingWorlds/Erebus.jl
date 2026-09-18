@@ -51,6 +51,7 @@ makedocs(;
             "Iron Core Formation & Metal Segregation" => "explanations/core_formation.md",
             "Planetesimal Accretion Mechanics" => "explanations/accretion_mechanics.md",
             "Telescoping Domain Dynamics" => "explanations/telescoping_domain.md",
+            "Magma Ascent & Matrix Compaction" => "explanations/magma_compaction.md",
         ],
         "Validation" => [
             "Overview" => "validation/index.md",
@@ -77,6 +78,7 @@ makedocs(;
             "Volatile & Refractory Mixtures" => "validation/volatile_mixtures.md",
             "Multi-Stage Accretion Sequence" => "validation/multistage_accretion.md",
             "Coupled Atmosphere & Gas Envelopes" => "validation/coupled_atmosphere.md",
+            "Magma Compaction & Decompression Exsolution" => "validation/magma_compaction.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

@@ -116,6 +116,8 @@ mutable struct MagmaSegregationWorkspace
     inflow_tot::Matrix{Float64}
     alpha_out::Matrix{Float64}
     alpha_in::Matrix{Float64}
+    P_comp::Matrix{Float64}
+    div_v::Matrix{Float64}
 
     function MagmaSegregationWorkspace(Ny::Integer, Nx::Integer)
         Ny_val = Int(Ny)
@@ -140,6 +142,8 @@ mutable struct MagmaSegregationWorkspace
             zeros(Float64, Ny_val, Nx_val),
             ones(Float64, Ny_val, Nx_val),
             ones(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
         )
     end
 end
