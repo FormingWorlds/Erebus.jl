@@ -2432,6 +2432,7 @@ const VALID_SECTIONS = Set([
     "magma_transport",
     "redox",
     "magma_degassing",
+    "mpi",
 ])
 
 """
