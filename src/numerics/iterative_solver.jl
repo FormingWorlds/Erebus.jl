@@ -78,6 +78,82 @@ struct MatrixFreeStokesDarcyOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
     bc_east::Bool
 end
 
+function MatrixFreeStokesDarcyOperator{T,M}(
+    Ny1::Int,
+    Nx1::Int,
+    dx::T,
+    dy::T,
+    Nx_val::Int,
+    Ny_val::Int,
+    ETA::M,
+    ETAP::M,
+    GGG::M,
+    GGGP::M,
+    RHOX::M,
+    RHOY::M,
+    RHOFX::M,
+    RHOFY::M,
+    RX::M,
+    RY::M,
+    ETAPHI::M,
+    BETAPHI::M,
+    PHI::M,
+    gx::M,
+    gy::M,
+    dt::T,
+    betasolid::T,
+    betafluid::T,
+    phimin::T,
+    phimax::T,
+    Kcont::T,
+    bctop::T,
+    bcbottom::T,
+    bcleft::T,
+    bcright::T;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    return MatrixFreeStokesDarcyOperator{T,M}(
+        Ny1,
+        Nx1,
+        dx,
+        dy,
+        Nx_val,
+        Ny_val,
+        ETA,
+        ETAP,
+        GGG,
+        GGGP,
+        RHOX,
+        RHOY,
+        RHOFX,
+        RHOFY,
+        RX,
+        RY,
+        ETAPHI,
+        BETAPHI,
+        PHI,
+        gx,
+        gy,
+        dt,
+        betasolid,
+        betafluid,
+        phimin,
+        phimax,
+        Kcont,
+        bctop,
+        bcbottom,
+        bcleft,
+        bcright,
+        bc_north,
+        bc_south,
+        bc_west,
+        bc_east,
+    )
+end
+
 function MatrixFreeStokesDarcyOperator{T}(
     Ny1::Int,
     Nx1::Int,
@@ -515,19 +591,15 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         end
 
         # Pt diagonal
-        if is_boundary_p(
-            i,
-            j,
-            Ny_val,
-            Nx_val,
-            Ny1,
-            Nx1;
-            bc_north=bcn,
-            bc_south=bcs,
-            bc_west=bcw,
-            bc_east=bce,
-        )
+        if i == 1 || i == Ny1 || j == 1 || j == Nx1
             d_mat[3, i, j] = one(T)
+        elseif (
+            (bcn && i == 2 && 2 <= j <= Nx_val) ||
+            (bcw && j == 2 && 2 < i < Ny_val) ||
+            (bcs && i == Ny_val && 2 <= j <= Nx_val) ||
+            (bce && j == Nx_val && 2 < i < Ny_val)
+        )
+            d_mat[3, i, j] = Kcont
         else
             betadrained = compute_drained_compressibility(
                 op.BETAPHI[i, j],
@@ -541,19 +613,15 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         end
 
         # Pf diagonal
-        if is_boundary_p(
-            i,
-            j,
-            Ny_val,
-            Nx_val,
-            Ny1,
-            Nx1;
-            bc_north=bcn,
-            bc_south=bcs,
-            bc_west=bcw,
-            bc_east=bce,
-        )
+        if i == 1 || i == Ny1 || j == 1 || j == Nx1
             d_mat[4, i, j] = one(T)
+        elseif (
+            (bcn && i == 2 && 2 <= j <= Nx_val) ||
+            (bcw && j == 2 && 2 < i < Ny_val) ||
+            (bcs && i == Ny_val && 2 <= j <= Nx_val) ||
+            (bce && j == Nx_val && 2 < i < Ny_val)
+        )
+            d_mat[4, i, j] = Kcont
         else
             betadrained = compute_drained_compressibility(
                 op.BETAPHI[i, j],

@@ -403,19 +403,15 @@ end
 
     # Equation 3: Total pressure (Pt)
     val_pt = zero(T)
-    if is_boundary_p(
-        i,
-        j,
-        Ny_val,
-        Nx_val,
-        Ny1,
-        Nx1;
-        bc_north=bc_north,
-        bc_south=bc_south,
-        bc_west=bc_west,
-        bc_east=bc_east,
-    )
+    if i == 1 || i == Ny1 || j == 1 || j == Nx1
         val_pt = x_mat[3, i, j]
+    elseif (
+        (bc_north && i == 2 && 2 <= j <= Nx_val) ||
+        (bc_west && j == 2 && 2 < i < Ny_val) ||
+        (bc_south && i == Ny_val && 2 <= j <= Nx_val) ||
+        (bc_east && j == Nx_val && 2 < i < Ny_val)
+    )
+        val_pt = Kcont * x_mat[3, i, j]
     else
         betadrained = compute_drained_compressibility(
             BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -435,19 +431,15 @@ end
 
     # Equation 4: Fluid pressure (Pf) with condensed Darcy divergence
     val_pf = zero(T)
-    if is_boundary_p(
-        i,
-        j,
-        Ny_val,
-        Nx_val,
-        Ny1,
-        Nx1;
-        bc_north=bc_north,
-        bc_south=bc_south,
-        bc_west=bc_west,
-        bc_east=bc_east,
-    )
+    if i == 1 || i == Ny1 || j == 1 || j == Nx1
         val_pf = x_mat[4, i, j]
+    elseif (
+        (bc_north && i == 2 && 2 <= j <= Nx_val) ||
+        (bc_west && j == 2 && 2 < i < Ny_val) ||
+        (bc_south && i == Ny_val && 2 <= j <= Nx_val) ||
+        (bc_east && j == Nx_val && 2 < i < Ny_val)
+    )
+        val_pf = Kcont * x_mat[4, i, j]
     else
         betadrained = compute_drained_compressibility(
             BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
