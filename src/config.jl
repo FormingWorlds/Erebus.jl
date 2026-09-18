@@ -1647,11 +1647,12 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         @check_positive_finite mt.bulk_viscosity_ratio
-        (0.0 < mt.min_bulk_porosity < mt.phi_crit && isfinite(mt.min_bulk_porosity)) || throw(
-            ArgumentError(
-                "magma_transport min_bulk_porosity must satisfy 0 < min_bulk_porosity < phi_crit, got $(mt.min_bulk_porosity)",
-            ),
-        )
+        (0.0 < mt.min_bulk_porosity < mt.phi_crit && isfinite(mt.min_bulk_porosity)) ||
+            throw(
+                ArgumentError(
+                    "magma_transport min_bulk_porosity must satisfy 0 < min_bulk_porosity < phi_crit, got $(mt.min_bulk_porosity)",
+                ),
+            )
         (
             0.0 < mt.compaction_length_min <= mt.compaction_length_max &&
             isfinite(mt.compaction_length_min) &&
@@ -1665,7 +1666,7 @@ function validate_config(cfg::SimulationConfig)
         if mt.eruption_active && !mt.compaction_active
             throw(
                 ArgumentError(
-                    "magma_transport eruption_active=true requires compaction_active=true",
+                    "magma_transport eruption_active=true requires compaction_active=true"
                 ),
             )
         end

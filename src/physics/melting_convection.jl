@@ -488,13 +488,14 @@ Calculates effective bulk viscosity `zeta_m = bulk_ratio * eta_s / max(F_m, phi_
 - `zeta_m::Float64`: Matrix bulk viscosity [Pa s]
 """
 function compaction_viscosity(
-    eta_solid::Real,
-    F_m::Real;
-    bulk_ratio::Real=1.0,
-    phi_min::Real=0.005,
+    eta_solid::Real, F_m::Real; bulk_ratio::Real=1.0, phi_min::Real=0.005
 )
     if !isfinite(eta_solid) || eta_solid <= 0.0
-        throw(DomainError(eta_solid, "Solid matrix shear viscosity must be positive and finite"))
+        throw(
+            DomainError(
+                eta_solid, "Solid matrix shear viscosity must be positive and finite"
+            ),
+        )
     end
     if !isfinite(F_m) || F_m < 0.0 || F_m > 1.0
         throw(DomainError(F_m, "Silicate melt fraction must be in [0, 1]"))
@@ -544,7 +545,11 @@ function compaction_length(
     delta_max::Real=50000.0,
 )
     if !isfinite(eta_solid) || eta_solid <= 0.0
-        throw(DomainError(eta_solid, "Solid matrix shear viscosity must be positive and finite"))
+        throw(
+            DomainError(
+                eta_solid, "Solid matrix shear viscosity must be positive and finite"
+            ),
+        )
     end
     if !isfinite(eta_melt) || eta_melt <= 0.0
         throw(DomainError(eta_melt, "Melt viscosity must be positive and finite"))
@@ -552,7 +557,10 @@ function compaction_length(
     if !isfinite(k_melt) || k_melt < 0.0
         throw(DomainError(k_melt, "Melt permeability must be non-negative and finite"))
     end
-    if !isfinite(delta_min) || !isfinite(delta_max) || delta_min <= 0.0 || delta_min > delta_max
+    if !isfinite(delta_min) ||
+        !isfinite(delta_max) ||
+        delta_min <= 0.0 ||
+        delta_min > delta_max
         throw(
             DomainError(
                 (delta_min, delta_max),
@@ -587,11 +595,7 @@ Calculates `P_comp = -zeta_m * div_v`.
 - `P_comp::Float64`: Matrix compaction pressure [Pa]
 """
 function compaction_pressure(
-    div_v::Real,
-    eta_solid::Real,
-    F_m::Real;
-    bulk_ratio::Real=1.0,
-    phi_min::Real=0.005,
+    div_v::Real, eta_solid::Real, F_m::Real; bulk_ratio::Real=1.0, phi_min::Real=0.005
 )
     if !isfinite(div_v)
         throw(DomainError(div_v, "Velocity divergence must be finite"))

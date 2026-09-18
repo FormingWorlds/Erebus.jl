@@ -199,17 +199,13 @@ Random.seed!(42)
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 melting=m_active,
-                magma_transport=MagmaTransportConfig(;
-                    active=true, min_bulk_porosity=0.0
-                ),
+                magma_transport=MagmaTransportConfig(; active=true, min_bulk_porosity=0.0),
             ),
         )
         @test_throws ArgumentError validate_config(
             SimulationConfig(;
                 melting=m_active,
-                magma_transport=MagmaTransportConfig(;
-                    active=true, min_bulk_porosity=0.45
-                ),
+                magma_transport=MagmaTransportConfig(; active=true, min_bulk_porosity=0.45),
             ),
         )
 
@@ -218,9 +214,7 @@ Random.seed!(42)
             SimulationConfig(;
                 melting=m_active,
                 magma_transport=MagmaTransportConfig(;
-                    active=true,
-                    compaction_length_min=50000.0,
-                    compaction_length_max=100.0,
+                    active=true, compaction_length_min=50000.0, compaction_length_max=100.0
                 ),
             ),
         )
@@ -292,9 +286,7 @@ Random.seed!(42)
         @test loaded_cfg.magma_transport.compaction_active == true
         @test isapprox(loaded_cfg.magma_transport.bulk_viscosity_ratio, 1.5; rtol=1e-12)
         @test isapprox(loaded_cfg.magma_transport.min_bulk_porosity, 0.008; rtol=1e-12)
-        @test isapprox(
-            loaded_cfg.magma_transport.compaction_length_min, 200.0; rtol=1e-12
-        )
+        @test isapprox(loaded_cfg.magma_transport.compaction_length_min, 200.0; rtol=1e-12)
         @test isapprox(
             loaded_cfg.magma_transport.compaction_length_max, 40000.0; rtol=1e-12
         )
@@ -426,7 +418,9 @@ Random.seed!(42)
         @test_throws DomainError silicate_melt_permeability(NaN)
         @test_throws DomainError silicate_melt_permeability(0.05; k0=-1.0e-11)
         @test_throws DomainError silicate_melt_permeability(0.05; phi0=0.0)
-        @test_throws DomainError silicate_melt_permeability(0.05; phi0=0.005, phi_residual=0.005)
+        @test_throws DomainError silicate_melt_permeability(
+            0.05; phi0=0.005, phi_residual=0.005
+        )
         @test_throws DomainError silicate_melt_permeability(0.05; n=0.0)
         @test_throws DomainError silicate_melt_permeability(0.05; phi_residual=-0.01)
     end
@@ -913,10 +907,7 @@ Random.seed!(42)
             rho_melt=2800.0,
         )
 
-        cfg_no_comp = MagmaTransportConfig(;
-            active=true,
-            compaction_active=false,
-        )
+        cfg_no_comp = MagmaTransportConfig(; active=true, compaction_active=false)
         Fm_off = copy(Fm)
         res_off = apply_silicate_melt_segregation!(
             copy(xm),
@@ -1325,7 +1316,9 @@ Random.seed!(42)
 
         # Validate config checks
         cfg_invalid = SimulationConfig(
-            magma_transport=MagmaTransportConfig(active=true, eruption_active=true, compaction_active=false),
+            magma_transport=MagmaTransportConfig(
+                active=true, eruption_active=true, compaction_active=false
+            ),
             melting=MeltingConfig(active=true),
         )
         @test_throws ArgumentError validate_config(cfg_invalid)

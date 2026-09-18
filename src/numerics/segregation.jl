@@ -1092,7 +1092,8 @@ function apply_silicate_melt_segregation!(
                 else
                     j_l = max(j - 1, 1)
                     j_r = min(j + 1, size(vx, 2))
-                    (vx[min(i, size(vx, 1)), j_r] - vx[min(i, size(vx, 1)), j_l]) / (max(j_r - j_l, 1) * dx_val)
+                    (vx[min(i, size(vx, 1)), j_r] - vx[min(i, size(vx, 1)), j_l]) /
+                    (max(j_r - j_l, 1) * dx_val)
                 end
                 dvy = if size(vy, 1) >= Ny_val + 1 && size(vy, 2) >= Nx_val + 1
                     (vy[i + 1, j + 1] - vy[i, j + 1]) / dy_val
@@ -1101,7 +1102,8 @@ function apply_silicate_melt_segregation!(
                 else
                     i_b = max(i - 1, 1)
                     i_t = min(i + 1, size(vy, 1))
-                    (vy[i_t, min(j, size(vy, 2))] - vy[i_b, min(j, size(vy, 2))]) / (max(i_t - i_b, 1) * dy_val)
+                    (vy[i_t, min(j, size(vy, 2))] - vy[i_b, min(j, size(vy, 2))]) /
+                    (max(i_t - i_b, 1) * dy_val)
                 end
                 div_v_cell[i, j] = dvx + dvy
             end
@@ -1145,7 +1147,11 @@ function apply_silicate_melt_segregation!(
                     phi_residual=cfg_magma.phi_residual,
                     phi_crit=cfg_magma.phi_crit,
                 )
-                eta_s = ETA !== nothing ? ETA[min(i, size(ETA, 1)), min(j, size(ETA, 2))] : eta_silicate
+                eta_s = if ETA !== nothing
+                    ETA[min(i, size(ETA, 1)), min(j, size(ETA, 2))]
+                else
+                    eta_silicate
+                end
                 delta_c = compaction_length(
                     max(eta_s, 1.0e-3),
                     cfg_magma.eta_melt,
@@ -1201,12 +1207,23 @@ function apply_silicate_melt_segregation!(
 
     total_exsolved_vol = 0.0
     if cfg_magma.exsolution_active &&
-       cfg_volatiles !== nothing &&
-       cfg_volatiles.active &&
-       XH2Om !== nothing &&
-       phim !== nothing
+        cfg_volatiles !== nothing &&
+        cfg_volatiles.active &&
+        XH2Om !== nothing &&
+        phim !== nothing
         total_exsolved_vol = exsolve_magma_volatiles!(
-            xm, ym, tm, tkm, Fm, marknum, XH2Om, XCm, XNm, XSm, phim, cfg_volatiles;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            marknum,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            phim,
+            cfg_volatiles;
             pr=pr,
             xcenter=xcenter,
             ycenter=ycenter,
@@ -1313,9 +1330,10 @@ function apply_silicate_melt_segregation!(
                 end
                 if cfg_magma.ponding_active
                     if (uf > 0.0 && T_cell[i, j + 1] < T_solidus_silicate) ||
-                       (uf < 0.0 && T_cell[i, j] < T_solidus_silicate)
+                        (uf < 0.0 && T_cell[i, j] < T_solidus_silicate)
                         P_donor = uf > 0.0 ? P_comp_cell[i, j] : P_comp_cell[i, j + 1]
-                        if !cfg_magma.eruption_active || P_donor <= cfg_magma.tensile_strength
+                        if !cfg_magma.eruption_active ||
+                            P_donor <= cfg_magma.tensile_strength
                             uf = 0.0
                         end
                     end
@@ -1394,9 +1412,10 @@ function apply_silicate_melt_segregation!(
                 end
                 if cfg_magma.ponding_active
                     if (wf > 0.0 && T_cell[i + 1, j] < T_solidus_silicate) ||
-                       (wf < 0.0 && T_cell[i, j] < T_solidus_silicate)
+                        (wf < 0.0 && T_cell[i, j] < T_solidus_silicate)
                         P_donor = wf > 0.0 ? P_comp_cell[i, j] : P_comp_cell[i + 1, j]
-                        if !cfg_magma.eruption_active || P_donor <= cfg_magma.tensile_strength
+                        if !cfg_magma.eruption_active ||
+                            P_donor <= cfg_magma.tensile_strength
                             wf = 0.0
                         end
                     end
