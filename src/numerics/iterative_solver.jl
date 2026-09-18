@@ -72,9 +72,13 @@ struct MatrixFreeStokesDarcyOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
     bcbottom::T
     bcleft::T
     bcright::T
+    bc_north::Bool
+    bc_south::Bool
+    bc_west::Bool
+    bc_east::Bool
 end
 
-function MatrixFreeStokesDarcyOperator{T}(
+function MatrixFreeStokesDarcyOperator{T,M}(
     Ny1::Int,
     Nx1::Int,
     dx::T,
@@ -105,7 +109,11 @@ function MatrixFreeStokesDarcyOperator{T}(
     bctop::T,
     bcbottom::T,
     bcleft::T,
-    bcright::T,
+    bcright::T;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
 ) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
     return MatrixFreeStokesDarcyOperator{T,M}(
         Ny1,
@@ -139,6 +147,86 @@ function MatrixFreeStokesDarcyOperator{T}(
         bcbottom,
         bcleft,
         bcright,
+        bc_north,
+        bc_south,
+        bc_west,
+        bc_east,
+    )
+end
+
+function MatrixFreeStokesDarcyOperator{T}(
+    Ny1::Int,
+    Nx1::Int,
+    dx::T,
+    dy::T,
+    Nx_val::Int,
+    Ny_val::Int,
+    ETA::M,
+    ETAP::M,
+    GGG::M,
+    GGGP::M,
+    RHOX::M,
+    RHOY::M,
+    RHOFX::M,
+    RHOFY::M,
+    RX::M,
+    RY::M,
+    ETAPHI::M,
+    BETAPHI::M,
+    PHI::M,
+    gx::M,
+    gy::M,
+    dt::T,
+    betasolid::T,
+    betafluid::T,
+    phimin::T,
+    phimax::T,
+    Kcont::T,
+    bctop::T,
+    bcbottom::T,
+    bcleft::T,
+    bcright::T;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    return MatrixFreeStokesDarcyOperator{T,M}(
+        Ny1,
+        Nx1,
+        dx,
+        dy,
+        Nx_val,
+        Ny_val,
+        ETA,
+        ETAP,
+        GGG,
+        GGGP,
+        RHOX,
+        RHOY,
+        RHOFX,
+        RHOFY,
+        RX,
+        RY,
+        ETAPHI,
+        BETAPHI,
+        PHI,
+        gx,
+        gy,
+        dt,
+        betasolid,
+        betafluid,
+        phimin,
+        phimax,
+        Kcont,
+        bctop,
+        bcbottom,
+        bcleft,
+        bcright,
+        bc_north,
+        bc_south,
+        bc_west,
+        bc_east,
     )
 end
 
@@ -174,6 +262,10 @@ function MatrixFreeStokesDarcyOperator(
     bcbottom::Real=Erebus.bcbottom,
     bcleft::Real=Erebus.bcleft,
     bcright::Real=Erebus.bcright,
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
 ) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
     return MatrixFreeStokesDarcyOperator{T,M}(
         coords.Ny1,
@@ -207,6 +299,10 @@ function MatrixFreeStokesDarcyOperator(
         T(bcbottom),
         T(bcleft),
         T(bcright),
+        bc_north,
+        bc_south,
+        bc_west,
+        bc_east,
     )
 end
 
@@ -215,26 +311,55 @@ Base.size(op::MatrixFreeStokesDarcyOperator, d::Int) = d in (1, 2) ? op.Ny1 * op
 Base.eltype(::MatrixFreeStokesDarcyOperator{T}) where {T} = T
 
 @inline function is_boundary_vx(
-    i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+    Ny1::Int,
+    Nx1::Int;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
 )
-    return i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
+    return i == 1 || i == Ny1 || j == 1 || j == Nx1 || (bc_east && j == Nx_val)
 end
 
 @inline function is_boundary_vy(
-    i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+    Ny1::Int,
+    Nx1::Int;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
 )
-    return i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
+    return i == 1 || i == Ny1 || j == 1 || j == Nx1 || (bc_south && i == Ny_val)
 end
 
-@inline function is_boundary_p(i::Int, j::Int, Ny_val::Int, Nx_val::Int, Ny1::Int, Nx1::Int)
+@inline function is_boundary_p(
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+    Ny1::Int,
+    Nx1::Int;
+    bc_north::Bool=true,
+    bc_south::Bool=true,
+    bc_west::Bool=true,
+    bc_east::Bool=true,
+)
     return i == 1 ||
            i == Ny1 ||
            j == 1 ||
            j == Nx1 ||
-           (i == 2 && 2 <= j <= Nx_val) ||
-           (j == 2 && 2 < i < Ny_val) ||
-           (i == Ny_val && 2 <= j <= Nx_val) ||
-           (j == Nx_val && 2 < i < Ny_val)
+           (bc_north && i == 2 && 2 <= j <= Nx_val) ||
+           (bc_west && j == 2 && 2 < i < Ny_val) ||
+           (bc_south && i == Ny_val && 2 <= j <= Nx_val) ||
+           (bc_east && j == Nx_val && 2 < i < Ny_val)
 end
 
 """
@@ -346,6 +471,10 @@ function LinearAlgebra.mul!(
                 PHI,
                 gx,
                 gy,
+                op.bc_north,
+                op.bc_south,
+                op.bc_west,
+                op.bc_east,
             )
             y_mat[1, i, j] = pt[1]
             y_mat[2, i, j] = pt[2]
@@ -402,13 +531,28 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
     Ny_val = op.Ny_val
     dt = op.dt
     Kcont = op.Kcont
+    bcn = op.bc_north
+    bcs = op.bc_south
+    bcw = op.bc_west
+    bce = op.bc_east
 
     d = zeros(T, Ny1 * Nx1 * 4)
     d_mat = reshape(d, (4, Ny1, Nx1))
 
     for j in 1:Nx1, i in 1:Ny1
         # Vx diagonal
-        if is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
+        if is_boundary_vx(
+            i,
+            j,
+            Ny_val,
+            Nx_val,
+            Ny1,
+            Nx1;
+            bc_north=bcn,
+            bc_south=bcs,
+            bc_west=bcw,
+            bc_east=bce,
+        )
             d_mat[1, i, j] = one(T)
         else
             ETA1 = maxwell_effective_viscosity(op.ETA[i - 1, j], op.GGG[i - 1, j], dt)
@@ -422,7 +566,18 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         end
 
         # Vy diagonal
-        if is_boundary_vy(i, j, Ny_val, Nx_val, Ny1, Nx1)
+        if is_boundary_vy(
+            i,
+            j,
+            Ny_val,
+            Nx_val,
+            Ny1,
+            Nx1;
+            bc_north=bcn,
+            bc_south=bcs,
+            bc_west=bcw,
+            bc_east=bce,
+        )
             d_mat[2, i, j] = one(T)
         else
             ETA1 = maxwell_effective_viscosity(op.ETA[i, j - 1], op.GGG[i, j - 1], dt)
@@ -439,10 +594,10 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         if i == 1 || i == Ny1 || j == 1 || j == Nx1
             d_mat[3, i, j] = one(T)
         elseif (
-            (i == 2 && 2 <= j <= Nx_val) ||
-            (j == 2 && 2 < i < Ny_val) ||
-            (i == Ny_val && 2 <= j <= Nx_val) ||
-            (j == Nx_val && 2 < i < Ny_val)
+            (bcn && i == 2 && 2 <= j <= Nx_val) ||
+            (bcw && j == 2 && 2 < i < Ny_val) ||
+            (bcs && i == Ny_val && 2 <= j <= Nx_val) ||
+            (bce && j == Nx_val && 2 < i < Ny_val)
         )
             d_mat[3, i, j] = Kcont
         else
@@ -461,10 +616,10 @@ function compute_operator_diagonal(op::MatrixFreeStokesDarcyOperator{T}) where {
         if i == 1 || i == Ny1 || j == 1 || j == Nx1
             d_mat[4, i, j] = one(T)
         elseif (
-            (i == 2 && 2 <= j <= Nx_val) ||
-            (j == 2 && 2 < i < Ny_val) ||
-            (i == Ny_val && 2 <= j <= Nx_val) ||
-            (j == Nx_val && 2 < i < Ny_val)
+            (bcn && i == 2 && 2 <= j <= Nx_val) ||
+            (bcw && j == 2 && 2 < i < Ny_val) ||
+            (bcs && i == Ny_val && 2 <= j <= Nx_val) ||
+            (bce && j == Nx_val && 2 < i < Ny_val)
         )
             d_mat[4, i, j] = Kcont
         else

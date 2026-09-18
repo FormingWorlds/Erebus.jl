@@ -835,6 +835,25 @@ efficiency = 1.0
 
 ---
 
+## `[mpi]`
+
+```toml
+[mpi]
+enable = true
+px = 2
+py = 2
+halo_width = 1
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `enable` | `Bool` | `false` | - | Enable MPI distributed memory execution | `true` / `false` |
+| `px` | `Int` | `0` | - | Number of process partitions in x (0 = auto-detect) | $\ge 0$ |
+| `py` | `Int` | `0` | - | Number of process partitions in y (0 = auto-detect) | $\ge 0$ |
+| `halo_width` | `Int` | `1` | grid units | Depth of ghost cell halo margins | $\ge 1$ |
+
+---
+
 ## Configuration Loading and Synchronization
 
 ### File and String Input

@@ -37,6 +37,7 @@ makedocs(;
             "Installation" => "howto/installation.md",
             "Configuration (.toml)" => "howto/configuration.md",
             "Running Simulations" => "howto/running.md",
+            "Distributed Simulations (MPI)" => "howto/distributed_simulations.md",
             "Parameter Exploration" => "howto/parameter_exploration.md",
             "Outputs & Checkpoints" => "howto/outputs.md",
         ],
