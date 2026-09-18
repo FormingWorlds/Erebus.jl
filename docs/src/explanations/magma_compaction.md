@@ -40,10 +40,10 @@ Melt filtration relative to the deforming solid matrix satisfies Darcy's law:
 $$\phi_m (\mathbf{v}_m - \mathbf{v}_s) = -\frac{k_m}{\eta_m} (\nabla P_m - \rho_m \mathbf{g})$$
 
 where:
-- $k_m$ is the effective silicate melt permeability [$\text{m}^2$].
-- $\eta_m$ is the liquid silicate dynamic viscosity [$\text{Pa}\cdot\text{s}$].
-- $P_m$ is the liquid melt pressure [$\text{Pa}$].
-- $\mathbf{g}$ is gravitational acceleration [$\text{m}/\text{s}^2$].
+- Permeability $k_m$ is the effective silicate melt permeability [$\text{m}^2$].
+- Dynamic viscosity $\eta_m$ is the liquid silicate viscosity [$\text{Pa}\cdot\text{s}$].
+- Melt pressure $P_m$ is the liquid melt pressure [$\text{Pa}$].
+- Gravitational acceleration $\mathbf{g}$ is the gravity vector [$\text{m}/\text{s}^2$].
 
 In a deformable compacting medium, the liquid melt pressure $P_m$ differs from the mean solid matrix pressure $P_s$ by the dynamic compaction pressure $P_{\text{comp}}$:
 
@@ -69,9 +69,9 @@ The resistance of the porous crystalline matrix to volumetric compaction or dila
 $$\zeta_m = \xi_{\text{bulk}} \frac{\eta_s}{\max(\phi_m, \phi_{\min})}$$
 
 where:
-- $\eta_s$ is the shear viscosity of the solid rock matrix [$\text{Pa}\cdot\text{s}$].
-- $\xi_{\text{bulk}}$ is the bulk-to-shear viscosity ratio (`bulk_viscosity_ratio`, default 1.0).
-- $\phi_{\min}$ is a numerical regularization threshold (`min_bulk_porosity`, default 0.005) that prevents infinite bulk viscosity in subsolidus rock.
+- Shear viscosity $\eta_s$ is the shear viscosity of the solid rock matrix [$\text{Pa}\cdot\text{s}$].
+- Viscosity ratio $\xi_{\text{bulk}}$ is the bulk-to-shear viscosity ratio (`bulk_viscosity_ratio`, default 1.0).
+- Regularization threshold $\phi_{\min}$ is a numerical threshold (`min_bulk_porosity`, default 0.005) that prevents infinite bulk viscosity in subsolidus rock.
 
 ### Compaction Length Scale ($\delta_c$)
 
