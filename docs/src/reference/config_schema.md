@@ -762,6 +762,41 @@ T_dehydrate_H = 750.0
 
 ---
 
+## `[redox]`
+
+Configuration for extensive redox budget accounting (Evans 2012) and dynamic local oxygen fugacity buffering.
+
+```toml
+[redox]
+active = false
+reference = "mantle"
+serpentinization_redox = true
+segregation_redox = true
+venting_redox = true
+deltaIW_min = -6.0
+deltaIW_max = 6.0
+initial_x_ferric = 0.05
+pyrolysis_redox = true
+graphite_buffer_active = true
+w_graphite_threshold = 1.0e-6
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `active` | `Bool` | `false` | - | Enable extensive redox budget tracking and local oxygen fugacity buffering (Evans 2012) | `true` / `false` |
+| `reference` | `Symbol` | `:mantle` | - | Reference electron oxidation state | `:mantle`, `:crust` |
+| `serpentinization_redox` | `Bool` | `true` | - | Couple hydrothermal serpentine formation to Fe oxidation and H2 production | `true` / `false` |
+| `segregation_redox` | `Bool` | `true` | - | Couple metallic core segregation to mantle oxidation | `true` / `false` |
+| `venting_redox` | `Bool` | `true` | - | Couple volatile gas venting to rock electron loss | `true` / `false` |
+| `deltaIW_min` | `Float64` | `-6.0` | log10 | Minimum clamped oxygen fugacity relative to Iron-Wüstite ($\Delta\mathrm{IW}$) | $\le \mathrm{deltaIW\_max}$ |
+| `deltaIW_max` | `Float64` | `6.0` | log10 | Maximum clamped oxygen fugacity relative to Iron-Wüstite ($\Delta\mathrm{IW}$) | $\ge \mathrm{deltaIW\_min}$ |
+| `initial_x_ferric` | `Float64` | `0.05` | - | Initial reference ferric iron molar fraction in silicate ($\mathrm{Fe}^{3+}/\Sigma\mathrm{Fe}$) | $\in [0, 1]$ |
+| `pyrolysis_redox` | `Bool` | `true` | - | Couple refractory organic carbon pyrolysis to redox component inventories | `true` / `false` |
+| `graphite_buffer_active` | `Bool` | `true` | - | Activate Graphite-CO-CO2 (CCO) buffer when metallic iron is depleted | `true` / `false` |
+| `w_graphite_threshold` | `Float64` | `1.0e-6` | - | Mass fraction threshold of graphite residue for active CCO buffering | $\in [0, 1]$ |
+
+---
+
 ## `[volatile_mixture]`
 
 Configuration for multi-species volatile ice mixtures, multi-snowline disk condensation temperatures, and ammonia-water eutectic freezing point depression.

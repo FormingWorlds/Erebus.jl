@@ -618,6 +618,114 @@ using Erebus.Particles
         # Endothermic heat sink: DHP is negative in cells containing hot pyrolyzing markers
         @test any(dhp_grid .< 0.0)
         @test all(dhp_grid .<= 0.0)
+
+        # 9. Pyrolysis coupling to marker redox properties (graphite deposition & CCO buffering)
+        rdx_cfg = RedoxConfig(;
+            active=true, pyrolysis_redox=true, graphite_buffer_active=true
+        )
+        props_rdx = setup_marker_redox_properties(3, rdx_cfg)
+        props_rdx.nFe2_m .= 1.0
+        props_rdx.nFe3_m .= 0.05
+        p_lith = [1.0e7, 1.0e7, 1.0e7]
+        update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)
+        @test isapprox(props_rdx.deltaIW_m[1], 0.0; atol=1e-4)
+
+        m_C3 = [C_init, C_init, C_init]
+        m_N3 = [N_init, N_init, N_init]
+        m_H3 = [H_init, H_init, H_init]
+        m_phim3 = [0.01, 0.01, 0.01]
+
+        update_marker_pyrolysis!(
+            m_tkm,
+            dt_s,
+            m_phim3,
+            m_C3,
+            m_N3,
+            m_H3,
+            refr_cfg;
+            ppm_scale=true,
+            redox_props=props_rdx,
+            redox_cfg=rdx_cfg,
+        )
+
+        @test isapprox(props_rdx.nC_graphite_m[1], 0.0; atol=1e-12)
+        @test props_rdx.nC_graphite_m[3] > 0.0
+        @test props_rdx.nCO_m[3] > 0.0
+
+        # Before core segregation: carbothermic smelting reduces FeO to Fe0 (metal-buffered)
+        update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)
+        @test isapprox(props_rdx.deltaIW_m[1], 0.0; atol=1e-4)
+        @test props_rdx.nFe0_m[3] > 0.0
+        @test props_rdx.deltaIW_m[3] <= 0.0
+
+        fe0_smelted = props_rdx.nFe0_m[3]
+        c_before_seg = Erebus.marker_redox_components(
+            props_rdx.nFe0_m[3],
+            props_rdx.nFe2_m[3],
+            props_rdx.nFe3_m[3];
+            n_C_graphite=props_rdx.nC_graphite_m[3],
+            n_CO=props_rdx.nCO_m[3],
+            n_CO2=props_rdx.nCO2_m[3],
+            n_CH4=props_rdx.nCH4_m[3],
+        )
+        rb_before_seg = Erebus.compute_redox_budget(c_before_seg; reference=:mantle)
+
+        # After core segregation: metallic Fe0 segregates to core, graphite buffers along CCO
+        update_marker_redox!(
+            props_rdx, [300.0, 420.0, 1300.0], p_lith, rdx_cfg; Xfem=[0.0, 0.0, 0.0]
+        )
+        @test isapprox(props_rdx.nFe0_m[3], 0.0; atol=1e-12)
+        @test props_rdx.deltaIW_m[3] > props_rdx.deltaIW_m[1]
+        @test 0.5 < props_rdx.deltaIW_m[3] < 1.2
+
+        # Verify extensive redox budget conservation: Mantle residue + Core metal == Total
+        c_after_seg = Erebus.marker_redox_components(
+            props_rdx.nFe0_m[3],
+            props_rdx.nFe2_m[3],
+            props_rdx.nFe3_m[3];
+            n_C_graphite=props_rdx.nC_graphite_m[3],
+            n_CO=props_rdx.nCO_m[3],
+            n_CO2=props_rdx.nCO2_m[3],
+            n_CH4=props_rdx.nCH4_m[3],
+        )
+        rb_mantle = Erebus.compute_redox_budget(c_after_seg; reference=:mantle)
+        rb_core = -2.0 * fe0_smelted
+        @test isapprox(rb_mantle + rb_core, rb_before_seg; atol=1e-12)
+
+        # 10. Venting drainage of redox gas products (CO, CO2, CH4 drain; graphite stays)
+        co_before = props_rdx.nCO_m[3]
+        gr_before = props_rdx.nC_graphite_m[3]
+        @test co_before > 0.0
+        @test gr_before > 0.0
+
+        # Run venting on marker 3
+        coords_vent = GridCoordinates(
+            GridConfig(; Nx=5, Ny=5, xsize=10000.0, ysize=10000.0)
+        )
+        s_vent = zeros(Float64, coords_vent.Ny1, coords_vent.Nx1)
+        s_vent .= 1.0e-3 # active venting
+        ret_cfg_vent = RetentionConfig(;
+            active=true, venting_drainage_active=true, chi_vent=1.0
+        )
+        drain_res = Erebus.drain_vented_marker_volatiles!(
+            [coords_vent.xp[2], coords_vent.xp[2], coords_vent.xp[2]],
+            [coords_vent.yp[2], coords_vent.yp[2], coords_vent.yp[2]],
+            [1, 1, 1],
+            [300.0, 420.0, 1300.0],
+            [1.0, 1.0, 1.0],
+            [100.0, 100.0, 100.0],
+            [10.0, 10.0, 10.0],
+            [50.0, 50.0, 50.0],
+            s_vent,
+            100.0,
+            3,
+            ret_cfg_vent;
+            coords=coords_vent,
+            redox_props=props_rdx,
+        )
+        # Gaseous CO drains with vented fluid; solid graphite remains in rock
+        @test props_rdx.nCO_m[3] < co_before
+        @test isapprox(props_rdx.nC_graphite_m[3], gr_before; atol=1e-12)
     end
 
     # =========================================================================

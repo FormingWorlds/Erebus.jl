@@ -176,7 +176,7 @@ $(SIGNATURES)
 - `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
 
 # Returns
-- Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m)`
+- Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m, nC_graphite_m, nCO_m, nCO2_m, nCH4_m)`
 """
 function setup_marker_redox_properties(
     marknum::Integer,
@@ -186,7 +186,16 @@ function setup_marker_redox_properties(
     pfm::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     if !cfg.active
-        return (; nFe0_m=nothing, nFe2_m=nothing, nFe3_m=nothing, deltaIW_m=nothing)
+        return (;
+            nFe0_m=nothing,
+            nFe2_m=nothing,
+            nFe3_m=nothing,
+            deltaIW_m=nothing,
+            nC_graphite_m=nothing,
+            nCO_m=nothing,
+            nCO2_m=nothing,
+            nCH4_m=nothing,
+        )
     end
     marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
 
@@ -198,6 +207,10 @@ function setup_marker_redox_properties(
     nFe2_m = zeros(Float64, marknum)
     nFe3_m = zeros(Float64, marknum)
     deltaIW_m = zeros(Float64, marknum)
+    nC_graphite_m = zeros(Float64, marknum)
+    nCO_m = zeros(Float64, marknum)
+    nCO2_m = zeros(Float64, marknum)
+    nCH4_m = zeros(Float64, marknum)
 
     x_ferric = clamp(cfg.initial_x_ferric, 0.0, 1.0)
 
@@ -217,7 +230,15 @@ function setup_marker_redox_properties(
         T_val = tkm !== nothing ? max(100.0, tkm[m]) : 1500.0
         P_val = pfm !== nothing ? max(0.0, pfm[m]) : 1.0e7
 
-        c = marker_redox_components(n_fe0, n_fe2, n_fe3)
+        c = marker_redox_components(
+            n_fe0,
+            n_fe2,
+            n_fe3;
+            n_C_graphite=nC_graphite_m[m],
+            n_CO=nCO_m[m],
+            n_CO2=nCO2_m[m],
+            n_CH4=nCH4_m[m],
+        )
         deltaIW_m[m] = local_delta_iw(
             c,
             T_val,
@@ -225,10 +246,21 @@ function setup_marker_redox_properties(
             deltaIW_min=cfg.deltaIW_min,
             deltaIW_max=cfg.deltaIW_max,
             initial_x_ferric=cfg.initial_x_ferric,
+            graphite_buffer_active=cfg.graphite_buffer_active,
+            w_graphite_threshold=cfg.w_graphite_threshold,
         )
     end
 
-    return (; nFe0_m=nFe0_m, nFe2_m=nFe2_m, nFe3_m=nFe3_m, deltaIW_m=deltaIW_m)
+    return (;
+        nFe0_m=nFe0_m,
+        nFe2_m=nFe2_m,
+        nFe3_m=nFe3_m,
+        deltaIW_m=deltaIW_m,
+        nC_graphite_m=nC_graphite_m,
+        nCO_m=nCO_m,
+        nCO2_m=nCO2_m,
+        nCH4_m=nCH4_m,
+    )
 end
 
 """
@@ -237,7 +269,7 @@ Dynamically update marker redox inventories and local oxygen fugacity (Evans 201
 $(SIGNATURES)
 
 # Arguments
-- `redox_props`: NamedTuple with arrays `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m)`.
+- `redox_props`: NamedTuple with redox marker arrays.
 - `tkm`: Marker temperature array [K].
 - `pfm`: Marker pressure array [Pa].
 - `cfg`: `RedoxConfig`.
@@ -265,6 +297,11 @@ function update_marker_redox!(
     nFe2_m = redox_props.nFe2_m
     nFe3_m = redox_props.nFe3_m
     deltaIW_m = redox_props.deltaIW_m
+    nC_graphite_m =
+        hasproperty(redox_props, :nC_graphite_m) ? redox_props.nC_graphite_m : nothing
+    nCO_m = hasproperty(redox_props, :nCO_m) ? redox_props.nCO_m : nothing
+    nCO2_m = hasproperty(redox_props, :nCO2_m) ? redox_props.nCO2_m : nothing
+    nCH4_m = hasproperty(redox_props, :nCH4_m) ? redox_props.nCH4_m : nothing
 
     (nFe0_m === nothing || nFe2_m === nothing || nFe3_m === nothing) && return nothing
 
@@ -275,26 +312,63 @@ function update_marker_redox!(
     x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
 
     for m in 1:marknum
-        # Metal segregation coupling: drain metallic Fe(0) as metal segregates
-        if cfg.segregation_redox && Xfem !== nothing
-            xfe = max(0.0, Xfem[m])
-            n_fe0 = xfe / M_Fe
-            w_sil = max(0.0, 1.0 - xfe)
-            n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
-        else
-            n_fe0 = nFe0_m[m]
-            n_fe_sil = nFe2_m[m] + nFe3_m[m]
-        end
+        n_c_gr = nC_graphite_m !== nothing ? nC_graphite_m[m] : 0.0
+        n_co = nCO_m !== nothing ? nCO_m[m] : 0.0
+        n_co2 = nCO2_m !== nothing ? nCO2_m[m] : 0.0
+        n_ch4 = nCH4_m !== nothing ? nCH4_m[m] : 0.0
 
-        # Serpentinization redox coupling: hydration converts FeO to magnetite (Fe3+)
-        x_ferric = if cfg.serpentinization_redox && XWsolidm !== nothing
-            clamp(x_fe_init + 0.5 * XWsolidm[m], 0.0, 1.0)
-        else
-            x_fe_init
-        end
+        has_pyrolyzed =
+            cfg.pyrolysis_redox &&
+            (n_c_gr > 1.0e-12 || n_co > 1.0e-12 || n_co2 > 1.0e-12 || n_ch4 > 1.0e-12)
 
-        n_fe3 = n_fe_sil * x_ferric
-        n_fe2 = n_fe_sil * (1.0 - x_ferric)
+        if has_pyrolyzed
+            # Preserve mutated iron states from dynamic redox reactions (pyrolysis)
+            n_fe2 = nFe2_m[m]
+            n_fe3 = nFe3_m[m]
+
+            # Incremental serpentinization coupling if hydration occurs on pyrolyzed parcel
+            if cfg.serpentinization_redox && XWsolidm !== nothing
+                x_ferric_target = clamp(x_fe_init + 0.5 * XWsolidm[m], 0.0, 1.0)
+                tot_sil_fe = n_fe2 + n_fe3
+                if tot_sil_fe > 1.0e-12
+                    curr_x_fe3 = n_fe3 / tot_sil_fe
+                    if x_ferric_target > curr_x_fe3
+                        d_fe3 = (x_ferric_target - curr_x_fe3) * tot_sil_fe
+                        n_fe3 += d_fe3
+                        n_fe2 -= d_fe3
+                    end
+                end
+            end
+
+            # Metal segregation coupling: drain metallic Fe(0) as metal segregates to core
+            if cfg.segregation_redox && Xfem !== nothing
+                xfe = max(0.0, Xfem[m])
+                n_fe0 = min(nFe0_m[m], xfe / M_Fe)
+            else
+                n_fe0 = nFe0_m[m]
+            end
+        else
+            # Metal segregation coupling: drain metallic Fe(0) as metal segregates
+            if cfg.segregation_redox && Xfem !== nothing
+                xfe = max(0.0, Xfem[m])
+                n_fe0 = xfe / M_Fe
+                w_sil = max(0.0, 1.0 - xfe)
+                n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
+            else
+                n_fe0 = nFe0_m[m]
+                n_fe_sil = nFe2_m[m] + nFe3_m[m]
+            end
+
+            # Serpentinization redox coupling: hydration converts FeO to magnetite (Fe3+)
+            x_ferric = if cfg.serpentinization_redox && XWsolidm !== nothing
+                clamp(x_fe_init + 0.5 * XWsolidm[m], 0.0, 1.0)
+            else
+                x_fe_init
+            end
+
+            n_fe3 = n_fe_sil * x_ferric
+            n_fe2 = n_fe_sil * (1.0 - x_ferric)
+        end
 
         nFe0_m[m] = n_fe0
         nFe2_m[m] = n_fe2
@@ -303,7 +377,9 @@ function update_marker_redox!(
         T_val = max(100.0, tkm[m])
         P_val = max(0.0, pfm[m])
 
-        c = marker_redox_components(n_fe0, n_fe2, n_fe3)
+        c = marker_redox_components(
+            n_fe0, n_fe2, n_fe3; n_C_graphite=n_c_gr, n_CO=n_co, n_CO2=n_co2, n_CH4=n_ch4
+        )
         deltaIW_m[m] = local_delta_iw(
             c,
             T_val,
@@ -311,6 +387,8 @@ function update_marker_redox!(
             deltaIW_min=cfg.deltaIW_min,
             deltaIW_max=cfg.deltaIW_max,
             initial_x_ferric=cfg.initial_x_ferric,
+            graphite_buffer_active=cfg.graphite_buffer_active,
+            w_graphite_threshold=cfg.w_graphite_threshold,
         )
     end
 
@@ -4199,6 +4277,7 @@ function drain_vented_marker_volatiles!(
     rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     phim::Union{Nothing,AbstractVector{Float64}}=nothing,
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    redox_props=nothing,
 )::@NamedTuple{
     M_vent_H2O::Float64,
     M_vent_C::Float64,
@@ -4319,6 +4398,21 @@ function drain_vented_marker_volatiles!(
                             th_S[tid] += (dC * 1.0e-6) * M_marker_rock
                         end
                     end
+
+                    # 5. Gaseous carbon species drainage from redox inventory (CO, CO2, CH4)
+                    if redox_props !== nothing
+                        if hasproperty(redox_props, :nCO_m) && redox_props.nCO_m !== nothing
+                            redox_props.nCO_m[m] *= (1.0 - drain_fraction)
+                        end
+                        if hasproperty(redox_props, :nCO2_m) &&
+                            redox_props.nCO2_m !== nothing
+                            redox_props.nCO2_m[m] *= (1.0 - drain_fraction)
+                        end
+                        if hasproperty(redox_props, :nCH4_m) &&
+                            redox_props.nCH4_m !== nothing
+                            redox_props.nCH4_m[m] *= (1.0 - drain_fraction)
+                        end
+                    end
                 end
             end
         end
@@ -4400,6 +4494,7 @@ function advance_marker_thermo_porosity_venting!(
     XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
     rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    redox_props=nothing,
 )
     marknum <= 0 && return (delta_m_vent=0.0, vented_vols=nothing)
 
@@ -4546,6 +4641,22 @@ function advance_marker_thermo_porosity_venting!(
                                     dC = C_mob * drain_fraction
                                     XSm[m] = C_cur - dC
                                     th_S[tid] += (dC * 1.0e-6) * M_marker_rock
+                                end
+                            end
+
+                            # Gaseous carbon species drainage from redox inventory (CO, CO2, CH4)
+                            if redox_props !== nothing
+                                if hasproperty(redox_props, :nCO_m) &&
+                                    redox_props.nCO_m !== nothing
+                                    redox_props.nCO_m[m] *= (1.0 - drain_fraction)
+                                end
+                                if hasproperty(redox_props, :nCO2_m) &&
+                                    redox_props.nCO2_m !== nothing
+                                    redox_props.nCO2_m[m] *= (1.0 - drain_fraction)
+                                end
+                                if hasproperty(redox_props, :nCH4_m) &&
+                                    redox_props.nCH4_m !== nothing
+                                    redox_props.nCH4_m[m] *= (1.0 - drain_fraction)
                                 end
                             end
                         end
