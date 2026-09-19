@@ -857,6 +857,65 @@ References:
 # Returns
 - NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy, total_crystallized_mass)`
 """
+function exsolve_magma_volatiles!(
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    tkm::AbstractVector{Float64},
+    Fm::AbstractVector{Float64},
+    marknum::Integer,
+    XH2Om::AbstractVector{Float64},
+    XCm::Union{Nothing,AbstractVector{Float64}},
+    XNm::Union{Nothing,AbstractVector{Float64}},
+    XSm::Union{Nothing,AbstractVector{Float64}},
+    phim::AbstractVector{Float64},
+    cfg_volatiles::VolatilesConfig;
+    pr::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    xcenter::Real=0.0,
+    ycenter::Real=0.0,
+    rplanet::Real=1.0e6,
+    dx_val::Real=1000.0,
+    dy_val::Real=1000.0,
+    Nx_val::Integer=32,
+    Ny_val::Integer=32,
+    rho_silicate::Real=3000.0,
+    g_surf::Real=1.0,
+)
+    total_exsolved_vol = 0.0
+    @inbounds for m in 1:marknum
+        if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet && Fm[m] > 0.0
+            j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
+            i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+            P_marker = if pr !== nothing
+                i_pr = size(pr, 1) >= Ny_val + 1 ? i_c + 1 : min(i_c, size(pr, 1))
+                j_pr = size(pr, 2) >= Nx_val + 1 ? j_c + 1 : min(j_c, size(pr, 2))
+                max(pr[i_pr, j_pr], 0.0)
+            else
+                rmark = distance(xm[m], ym[m], xcenter, ycenter)
+                rho_silicate * g_surf * max(rplanet - rmark, 0.0)
+            end
+            T_marker = tkm[m]
+            dw = update_single_marker_volatile_exsolution!(
+                m,
+                Fm[m],
+                P_marker,
+                T_marker,
+                XH2Om,
+                XCm,
+                XNm,
+                XSm,
+                phim,
+                cfg_volatiles;
+                rhosolid=rho_silicate,
+                rhofluid=1000.0,
+                phimax=0.9999,
+            )
+            total_exsolved_vol += dw
+        end
+    end
+    return total_exsolved_vol
+end
+
 function apply_silicate_melt_segregation!(
     xm::AbstractVector{Float64},
     ym::AbstractVector{Float64},
@@ -877,10 +936,22 @@ function apply_silicate_melt_segregation!(
     Q_lat_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     rho_silicate::Real=3000.0,
     rho_melt::Real=2800.0,
+    eta_silicate::Real=1.0e18,
+    ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     T_solidus_silicate::Real=1400.0,
     T_liquidus_silicate::Real=1800.0,
     L_melt::Real=4.0e5,
     F_extract_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    vx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    vy::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    pr::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    div_v::Union{Nothing,AbstractMatrix{Float64}}=nothing,
+    XH2Om::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XCm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XNm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    phim::Union{Nothing,AbstractVector{Float64}}=nothing,
+    cfg_volatiles::Union{Nothing,VolatilesConfig}=nothing,
     workspace=nothing,
 )
     if !cfg_magma.active || dt <= 0.0 || marknum <= 0
@@ -890,6 +961,9 @@ function apply_silicate_melt_segregation!(
             dt_sub=0.0,
             total_dissipation_energy=0.0,
             total_crystallized_mass=0.0,
+            max_compaction_pressure=0.0,
+            mean_compaction_length=0.0,
+            total_exsolved_volatiles=0.0,
         )
     end
 
@@ -936,6 +1010,8 @@ function apply_silicate_melt_segregation!(
     cap_cell = has_ws ? fill!(workspace.cap_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     T_cell = has_ws ? fill!(workspace.T_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     drho_cell = has_ws ? fill!(workspace.drho_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    P_comp_cell = has_ws ? fill!(workspace.P_comp, 0.0) : zeros(Float64, Ny_val, Nx_val)
+    div_v_cell = has_ws ? fill!(workspace.div_v, 0.0) : zeros(Float64, Ny_val, Nx_val)
 
     # Bin markers into grid cells
     @inbounds for m in 1:marknum
@@ -997,7 +1073,170 @@ function apply_silicate_melt_segregation!(
         end
     end
 
+    # Evaluate solid matrix divergence and dynamic compaction pressure
+    if cfg_magma.compaction_active
+        if div_v !== nothing
+            @inbounds for j in 1:Nx_val, i in 1:Ny_val
+                div_v_cell[i, j] = div_v[min(i, size(div_v, 1)), min(j, size(div_v, 2))]
+            end
+        elseif vx !== nothing && vy !== nothing
+            @inbounds for j in 1:Nx_val, i in 1:Ny_val
+                # On Gerya staggered grid (size Ny1 x Nx1):
+                # Cell (i, j) center is at xp[j+1], yp[i+1].
+                # Horizontal velocity Vx is along row i+1, across faces j (left) and j+1 (right).
+                # Vertical velocity Vy is along col j+1, across faces i (top) and i+1 (bottom).
+                dvx = if size(vx, 2) >= Nx_val + 1 && size(vx, 1) >= Ny_val + 1
+                    (vx[i + 1, j + 1] - vx[i + 1, j]) / dx_val
+                elseif size(vx, 2) >= Nx_val + 1
+                    (vx[min(i, size(vx, 1)), j + 1] - vx[min(i, size(vx, 1)), j]) / dx_val
+                else
+                    j_l = max(j - 1, 1)
+                    j_r = min(j + 1, size(vx, 2))
+                    (vx[min(i, size(vx, 1)), j_r] - vx[min(i, size(vx, 1)), j_l]) /
+                    (max(j_r - j_l, 1) * dx_val)
+                end
+                dvy = if size(vy, 1) >= Ny_val + 1 && size(vy, 2) >= Nx_val + 1
+                    (vy[i + 1, j + 1] - vy[i, j + 1]) / dy_val
+                elseif size(vy, 1) >= Ny_val + 1
+                    (vy[i + 1, min(j, size(vy, 2))] - vy[i, min(j, size(vy, 2))]) / dy_val
+                else
+                    i_b = max(i - 1, 1)
+                    i_t = min(i + 1, size(vy, 1))
+                    (vy[i_t, min(j, size(vy, 2))] - vy[i_b, min(j, size(vy, 2))]) /
+                    (max(i_t - i_b, 1) * dy_val)
+                end
+                div_v_cell[i, j] = dvx + dvy
+            end
+        end
+
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            F_m = F_m_cell[i, j]
+            if F_m > cfg_magma.phi_residual
+                eta_s = if ETA !== nothing
+                    i_eta = size(ETA, 1) >= Ny_val + 1 ? i + 1 : min(i, size(ETA, 1))
+                    j_eta = size(ETA, 2) >= Nx_val + 1 ? j + 1 : min(j, size(ETA, 2))
+                    ETA[i_eta, j_eta]
+                else
+                    eta_silicate
+                end
+                P_comp_cell[i, j] = compaction_pressure(
+                    div_v_cell[i, j],
+                    max(eta_s, 1.0e-3),
+                    F_m;
+                    bulk_ratio=cfg_magma.bulk_viscosity_ratio,
+                    phi_min=cfg_magma.min_bulk_porosity,
+                )
+            else
+                P_comp_cell[i, j] = 0.0
+            end
+        end
+    end
+
+    max_P_comp = cfg_magma.compaction_active ? maximum(P_comp_cell) : 0.0
+    sum_delta_c = 0.0
+    count_delta_c = 0
+    if cfg_magma.compaction_active
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            F_m = F_m_cell[i, j]
+            if F_m > cfg_magma.phi_residual
+                km = silicate_melt_permeability(
+                    F_m;
+                    k0=cfg_magma.k_melt_ref,
+                    phi0=cfg_magma.phi0,
+                    n=cfg_magma.perm_exponent,
+                    phi_residual=cfg_magma.phi_residual,
+                    phi_crit=cfg_magma.phi_crit,
+                )
+                eta_s = if ETA !== nothing
+                    ETA[min(i, size(ETA, 1)), min(j, size(ETA, 2))]
+                else
+                    eta_silicate
+                end
+                delta_c = compaction_length(
+                    max(eta_s, 1.0e-3),
+                    cfg_magma.eta_melt,
+                    km,
+                    F_m;
+                    bulk_ratio=cfg_magma.bulk_viscosity_ratio,
+                    phi_min=cfg_magma.min_bulk_porosity,
+                    delta_min=cfg_magma.compaction_length_min,
+                    delta_max=cfg_magma.compaction_length_max,
+                )
+                sum_delta_c += delta_c
+                count_delta_c += 1
+            end
+        end
+    end
+
     max_v = maximum(v_seg_cell)
+    if cfg_magma.compaction_active
+        max_v_comp = 0.0
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            F_m = F_m_cell[i, j]
+            if F_m > cfg_magma.phi_residual
+                km = silicate_melt_permeability(
+                    F_m;
+                    k0=cfg_magma.k_melt_ref,
+                    phi0=cfg_magma.phi0,
+                    n=cfg_magma.perm_exponent,
+                    phi_residual=cfg_magma.phi_residual,
+                    phi_crit=cfg_magma.phi_crit,
+                )
+                dPx = 0.0
+                if j < Nx_val
+                    dPx = max(dPx, abs(P_comp_cell[i, j] - P_comp_cell[i, j + 1]) / dx_val)
+                end
+                if j > 1
+                    dPx = max(dPx, abs(P_comp_cell[i, j] - P_comp_cell[i, j - 1]) / dx_val)
+                end
+                dPy = 0.0
+                if i < Ny_val
+                    dPy = max(dPy, abs(P_comp_cell[i, j] - P_comp_cell[i + 1, j]) / dy_val)
+                end
+                if i > 1
+                    dPy = max(dPy, abs(P_comp_cell[i, j] - P_comp_cell[i - 1, j]) / dy_val)
+                end
+                v_c = (km / (cfg_magma.eta_melt * F_m)) * hypot(dPx, dPy)
+                if v_c > max_v_comp
+                    max_v_comp = v_c
+                end
+            end
+        end
+        max_v = max(max_v, max_v_comp)
+    end
+
+    total_exsolved_vol = 0.0
+    if cfg_magma.exsolution_active &&
+        cfg_volatiles !== nothing &&
+        cfg_volatiles.active &&
+        XH2Om !== nothing &&
+        phim !== nothing
+        total_exsolved_vol = exsolve_magma_volatiles!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            marknum,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            phim,
+            cfg_volatiles;
+            pr=pr,
+            xcenter=xcenter,
+            ycenter=ycenter,
+            rplanet=rplanet,
+            dx_val=dx_val,
+            dy_val=dy_val,
+            Nx_val=Nx_val,
+            Ny_val=Ny_val,
+            rho_silicate=rho_silicate,
+            g_surf=g_surf,
+        )
+    end
+
     if max_v <= 0.0
         return (;
             max_v_seg=0.0,
@@ -1005,6 +1244,9 @@ function apply_silicate_melt_segregation!(
             dt_sub=0.0,
             total_dissipation_energy=0.0,
             total_crystallized_mass=0.0,
+            max_compaction_pressure=max_P_comp,
+            mean_compaction_length=count_delta_c > 0 ? sum_delta_c / count_delta_c : 0.0,
+            total_exsolved_volatiles=total_exsolved_vol,
         )
     end
 
@@ -1071,6 +1313,31 @@ function apply_silicate_melt_segregation!(
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i, j + 1])
                 uf = vf * nx
+                if cfg_magma.compaction_active
+                    dP_x = (P_comp_cell[i, j] - P_comp_cell[i, j + 1]) / dx_val
+                    F_face_x = 0.5 * (F_m_cell[i, j] + F_m_cell[i, j + 1])
+                    if F_face_x > cfg_magma.phi_residual
+                        km_face_x = silicate_melt_permeability(
+                            F_face_x;
+                            k0=cfg_magma.k_melt_ref,
+                            phi0=cfg_magma.phi0,
+                            n=cfg_magma.perm_exponent,
+                            phi_residual=cfg_magma.phi_residual,
+                            phi_crit=cfg_magma.phi_crit,
+                        )
+                        uf += (km_face_x / (cfg_magma.eta_melt * F_face_x)) * dP_x
+                    end
+                end
+                if cfg_magma.ponding_active
+                    if (uf > 0.0 && T_cell[i, j + 1] < T_solidus_silicate) ||
+                        (uf < 0.0 && T_cell[i, j] < T_solidus_silicate)
+                        P_donor = uf > 0.0 ? P_comp_cell[i, j] : P_comp_cell[i, j + 1]
+                        if !cfg_magma.eruption_active ||
+                            P_donor <= cfg_magma.tensile_strength
+                            uf = 0.0
+                        end
+                    end
+                end
 
                 donor_j = uf > 0.0 ? j : j + 1
                 rec_j = uf > 0.0 ? j + 1 : j
@@ -1128,6 +1395,31 @@ function apply_silicate_melt_segregation!(
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i + 1, j])
                 wf = vf * ny
+                if cfg_magma.compaction_active
+                    dP_y = (P_comp_cell[i, j] - P_comp_cell[i + 1, j]) / dy_val
+                    F_face_y = 0.5 * (F_m_cell[i, j] + F_m_cell[i + 1, j])
+                    if F_face_y > cfg_magma.phi_residual
+                        km_face_y = silicate_melt_permeability(
+                            F_face_y;
+                            k0=cfg_magma.k_melt_ref,
+                            phi0=cfg_magma.phi0,
+                            n=cfg_magma.perm_exponent,
+                            phi_residual=cfg_magma.phi_residual,
+                            phi_crit=cfg_magma.phi_crit,
+                        )
+                        wf += (km_face_y / (cfg_magma.eta_melt * F_face_y)) * dP_y
+                    end
+                end
+                if cfg_magma.ponding_active
+                    if (wf > 0.0 && T_cell[i + 1, j] < T_solidus_silicate) ||
+                        (wf < 0.0 && T_cell[i, j] < T_solidus_silicate)
+                        P_donor = wf > 0.0 ? P_comp_cell[i, j] : P_comp_cell[i + 1, j]
+                        if !cfg_magma.eruption_active ||
+                            P_donor <= cfg_magma.tensile_strength
+                            wf = 0.0
+                        end
+                    end
+                end
 
                 donor_i = wf > 0.0 ? i : i + 1
                 rec_i = wf > 0.0 ? i + 1 : i
@@ -1217,7 +1509,12 @@ function apply_silicate_melt_segregation!(
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
             n_m = M_rock_markers[i, j]
             v_s = v_seg_cell[i, j]
-            if n_m > 0 && v_s > 0.0
+            F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
+            F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
+            F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
+            F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
+            flux_thru = 0.5 * (abs(F_w) + abs(F_e) + abs(F_n) + abs(F_s))
+            if n_m > 0 && v_s > 0.0 && flux_thru > 0.0
                 F_curr = m_melt[i, j] / n_m
                 Q_diss = silicate_melt_dissipation_heating(
                     min(F_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
@@ -1370,11 +1667,15 @@ function apply_silicate_melt_segregation!(
         end
     end
 
+    mean_delta_c = count_delta_c > 0 ? sum_delta_c / count_delta_c : 0.0
     return (;
         max_v_seg=max_v,
         n_subcycles=n_sub,
         dt_sub=dt_sub,
         total_dissipation_energy=total_diss_energy,
         total_crystallized_mass=total_cryst_mass,
+        max_compaction_pressure=max_P_comp,
+        mean_compaction_length=mean_delta_c,
+        total_exsolved_volatiles=total_exsolved_vol,
     )
 end

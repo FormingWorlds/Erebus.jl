@@ -402,6 +402,14 @@ Base.@kwdef struct MagmaTransportConfig
     latent_crystallization::Bool = true
     exsolution_active::Bool = true
     track_depletion::Bool = true
+    compaction_active::Bool = false
+    bulk_viscosity_ratio::Float64 = 1.0
+    min_bulk_porosity::Float64 = 0.005
+    compaction_length_min::Float64 = 100.0
+    compaction_length_max::Float64 = 50000.0
+    ponding_active::Bool = false
+    eruption_active::Bool = false
+    tensile_strength::Float64 = 1.0e7
 end
 
 """
@@ -1638,6 +1646,30 @@ function validate_config(cfg::SimulationConfig)
                 "magma_transport max_subcycles must be >= 1, got $(mt.max_subcycles)"
             ),
         )
+        @check_positive_finite mt.bulk_viscosity_ratio
+        (0.0 < mt.min_bulk_porosity < mt.phi_crit && isfinite(mt.min_bulk_porosity)) ||
+            throw(
+                ArgumentError(
+                    "magma_transport min_bulk_porosity must satisfy 0 < min_bulk_porosity < phi_crit, got $(mt.min_bulk_porosity)",
+                ),
+            )
+        (
+            0.0 < mt.compaction_length_min <= mt.compaction_length_max &&
+            isfinite(mt.compaction_length_min) &&
+            isfinite(mt.compaction_length_max)
+        ) || throw(
+            ArgumentError(
+                "magma_transport compaction length bounds must satisfy 0 < compaction_length_min <= compaction_length_max, got min=$(mt.compaction_length_min), max=$(mt.compaction_length_max)",
+            ),
+        )
+        @check_positive_finite mt.tensile_strength
+        if mt.eruption_active && !mt.compaction_active
+            throw(
+                ArgumentError(
+                    "magma_transport eruption_active=true requires compaction_active=true"
+                ),
+            )
+        end
     end
 
     # Venting checks

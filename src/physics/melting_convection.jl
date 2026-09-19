@@ -221,21 +221,29 @@ function silicate_melt_permeability(
             ),
         )
     end
+    if phi0 <= phi_residual
+        throw(
+            DomainError(
+                phi0, "Reference melt fraction phi0 must be greater than phi_residual"
+            ),
+        )
+    end
     if !isfinite(phi_crit) || phi_crit <= 0.0 || phi_crit >= 1.0
         throw(
             DomainError(phi_crit, "Critical melt fraction phi_crit must be within (0, 1)")
         )
     end
 
+    denom = phi0 - phi_residual
     if F_m <= phi_residual
         return 0.0
     elseif F_m <= phi_crit
-        phi_eff = (F_m - phi_residual) / phi0
+        phi_eff = (F_m - phi_residual) / denom
         return Float64(k0 * (phi_eff^n))
     else
-        phi_crit_eff = (phi_crit - phi_residual) / phi0
+        phi_crit_eff = (phi_crit - phi_residual) / denom
         k_crit = k0 * (phi_crit_eff^n)
-        d_phi = (F_m - phi_crit) / phi0
+        d_phi = (F_m - phi_crit) / denom
         return Float64(k_crit + k0 * d_phi)
     end
 end
@@ -459,4 +467,139 @@ function regularized_soft_turbulence_conductivity(
     # Geometric blend in logarithmic space
     log_k = lerp(log10(k_cond), log10(k_turb), w_total)
     return max(k_cond, clamp(10.0^log_k, k_floor, k_cutoff))
+end
+
+"""
+Compute solid matrix bulk compaction viscosity from McKenzie (1984).
+
+$(SIGNATURES)
+
+Calculates effective bulk viscosity `zeta_m = bulk_ratio * eta_s / max(F_m, phi_min)`.
+
+# Arguments
+- `eta_solid::Real`: Solid rock shear viscosity [Pa s]
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+
+# Keyword Arguments
+- `bulk_ratio::Real=1.0`: Ratio of bulk viscosity to shear viscosity [-]
+- `phi_min::Real=0.005`: Regularization porosity floor preventing singular viscosity [-]
+
+# Returns
+- `zeta_m::Float64`: Matrix bulk viscosity [Pa s]
+"""
+function compaction_viscosity(
+    eta_solid::Real, F_m::Real; bulk_ratio::Real=1.0, phi_min::Real=0.005
+)
+    if !isfinite(eta_solid) || eta_solid <= 0.0
+        throw(
+            DomainError(
+                eta_solid, "Solid matrix shear viscosity must be positive and finite"
+            ),
+        )
+    end
+    if !isfinite(F_m) || F_m < 0.0 || F_m > 1.0
+        throw(DomainError(F_m, "Silicate melt fraction must be in [0, 1]"))
+    end
+    if !isfinite(bulk_ratio) || bulk_ratio <= 0.0
+        throw(DomainError(bulk_ratio, "Bulk viscosity ratio must be positive and finite"))
+    end
+    if !isfinite(phi_min) || phi_min <= 0.0 || phi_min >= 1.0
+        throw(DomainError(phi_min, "Porosity regularization floor must be within (0, 1)"))
+    end
+
+    phi_eff = max(Float64(F_m), Float64(phi_min))
+    return Float64(bulk_ratio * eta_solid / phi_eff)
+end
+
+"""
+Compute matrix compaction length scale from McKenzie (1984).
+
+$(SIGNATURES)
+
+Calculates compaction length `delta_c = sqrt((zeta_m + (4/3)*eta_s) * k_m / eta_m)`,
+clamped between `delta_min` and `delta_max`.
+
+# Arguments
+- `eta_solid::Real`: Solid rock shear viscosity [Pa s]
+- `eta_melt::Real`: Liquid silicate melt dynamic viscosity [Pa s]
+- `k_melt::Real`: Effective melt permeability [m^2]
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+
+# Keyword Arguments
+- `bulk_ratio::Real=1.0`: Ratio of bulk viscosity to shear viscosity [-]
+- `phi_min::Real=0.005`: Regularization porosity floor [-]
+- `delta_min::Real=100.0`: Minimum allowable compaction length [m]
+- `delta_max::Real=50000.0`: Maximum allowable compaction length [m]
+
+# Returns
+- `delta_c::Float64`: Effective compaction length scale [m]
+"""
+function compaction_length(
+    eta_solid::Real,
+    eta_melt::Real,
+    k_melt::Real,
+    F_m::Real;
+    bulk_ratio::Real=1.0,
+    phi_min::Real=0.005,
+    delta_min::Real=100.0,
+    delta_max::Real=50000.0,
+)
+    if !isfinite(eta_solid) || eta_solid <= 0.0
+        throw(
+            DomainError(
+                eta_solid, "Solid matrix shear viscosity must be positive and finite"
+            ),
+        )
+    end
+    if !isfinite(eta_melt) || eta_melt <= 0.0
+        throw(DomainError(eta_melt, "Melt viscosity must be positive and finite"))
+    end
+    if !isfinite(k_melt) || k_melt < 0.0
+        throw(DomainError(k_melt, "Melt permeability must be non-negative and finite"))
+    end
+    if !isfinite(delta_min) ||
+        !isfinite(delta_max) ||
+        delta_min <= 0.0 ||
+        delta_min > delta_max
+        throw(
+            DomainError(
+                (delta_min, delta_max),
+                "Compaction length bounds must satisfy 0 < delta_min <= delta_max",
+            ),
+        )
+    end
+
+    zeta_m = compaction_viscosity(eta_solid, F_m; bulk_ratio=bulk_ratio, phi_min=phi_min)
+    delta_sq = (zeta_m + (4.0 / 3.0) * eta_solid) * k_melt / eta_melt
+    delta_raw = sqrt(max(0.0, delta_sq))
+    return Float64(clamp(delta_raw, delta_min, delta_max))
+end
+
+"""
+Compute dynamic compaction pressure from solid matrix velocity divergence.
+
+$(SIGNATURES)
+
+Calculates `P_comp = -zeta_m * div_v`.
+
+# Arguments
+- `div_v::Real`: Divergence of solid matrix velocity field [1/s]
+- `eta_solid::Real`: Solid rock shear viscosity [Pa s]
+- `F_m::Real`: Silicate melt volume fraction in [0, 1]
+
+# Keyword Arguments
+- `bulk_ratio::Real=1.0`: Ratio of bulk viscosity to shear viscosity [-]
+- `phi_min::Real=0.005`: Regularization porosity floor [-]
+
+# Returns
+- `P_comp::Float64`: Matrix compaction pressure [Pa]
+"""
+function compaction_pressure(
+    div_v::Real, eta_solid::Real, F_m::Real; bulk_ratio::Real=1.0, phi_min::Real=0.005
+)
+    if !isfinite(div_v)
+        throw(DomainError(div_v, "Velocity divergence must be finite"))
+    end
+    zeta_m = compaction_viscosity(eta_solid, F_m; bulk_ratio=bulk_ratio, phi_min=phi_min)
+    return Float64(-zeta_m * div_v)
 end

@@ -287,6 +287,14 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 | `latent_crystallization` | `Bool` | `true` | - | Enable latent heat release upon subsolidus melt crystallization | `true` / `false` |
 | `exsolution_active` | `Bool` | `true` | - | Enable decompression volatile exsolution coupling | `true` / `false` |
 | `track_depletion` | `Bool` | `true` | - | Enable Lagrangian marker melt extraction and mantle depletion tracking | `true` / `false` |
+| `compaction_active` | `Bool` | `false` | - | Enable McKenzie (1984) matrix compaction and dynamic compaction pressure | `true` / `false` |
+| `bulk_viscosity_ratio` | `Float64` | `1.0` | - | Ratio of matrix bulk compaction viscosity to shear viscosity | $> 0$ |
+| `min_bulk_porosity` | `Float64` | `0.005` | - | Regularization porosity floor preventing singular bulk viscosity | $\in (0, \phi_{\text{crit}})$ |
+| `compaction_length_min` | `Float64` | `100.0` | m | Minimum allowable compaction length scale | $> 0$ |
+| `compaction_length_max` | `Float64` | `50000.0` | m | Maximum allowable compaction length scale | $\ge \delta_{c,\min}$ |
+| `ponding_active` | `Bool` | `false` | - | Enable crustal magma sill ponding beneath subsolidus lid | `true` / `false` |
+| `eruption_active` | `Bool` | `false` | - | Enable volcanic overpressure hydrofracture eruption | `true` / `false` |
+| `tensile_strength` | `Float64` | `1.0e7` | Pa | Crustal rock tensile strength threshold for volcanic eruption | $> 0$ |
 
 ---
 
