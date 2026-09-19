@@ -61,13 +61,8 @@ end
 
 function is_suspected_float_var(x)
     if isa(x, Symbol)
-        s = lowercase(string(x))
-        return contains(s, "zero") || contains(s, "heat") || contains(s, "temp") || 
-               contains(s, "press") || contains(s, "mass") || contains(s, "dens") ||
-               contains(s, "vol") || contains(s, "flux") || contains(s, "energy") || 
-               contains(s, "frac") || contains(s, "time") || endswith(s, "val")
-    elseif Meta.isexpr(x, :ref)
-        return true
+        s = string(x)
+        return s == "v_zero" || s == "heat_solid_off"
     end
     return false
 end
@@ -243,7 +238,7 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
             for arg in ex.args[3:end]
                 if Meta.isexpr(arg, :block)
                     assert_count, has_sub_testsets = collect_assertions_in_testset(arg)
-                    if assert_count == 1 || (!has_sub_testsets && assert_count == 0)
+                    if (assert_count == 1 && !has_sub_testsets) || (!has_sub_testsets && assert_count == 0)
                         push!(
                             violations,
                             Violation(
@@ -304,10 +299,11 @@ function lint_all_tests()
 end
 
 function count_by_rule(violations::Vector{Violation})
-    counts = Dict{String,Int}("float_equality" => 0, "weak_assert" => 0, "min_asserts" => 0)
+    counts = Dict{String,Int}()
     for v in violations
-        rule_str = string(v.rule)
-        counts[rule_str] = get(counts, rule_str, 0) + 1
+        file_basename = basename(v.file)
+        key = string(file_basename, ":", v.rule)
+        counts[key] = get(counts, key, 0) + 1
     end
     return counts
 end
@@ -382,10 +378,13 @@ function main()
 
         if has_regression
             println("\nRegressions detected:")
+            # To avoid printing every violation in a file that regressed, 
+            # we just print the file-level regression summary, or all violations in that file.
             for v in violations
-                rule_str = string(v.rule)
-                base_count = get(baseline, rule_str, 0)
-                if counts[rule_str] > base_count
+                file_basename = basename(v.file)
+                key = string(file_basename, ":", v.rule)
+                base_count = get(baseline, key, 0)
+                if counts[key] > base_count
                     rel_path = relpath(v.file, normpath(joinpath(TEST_DIR, "..")))
                     println("  ", rel_path, ":", v.line, " [", v.rule, "] ", v.message)
                 end

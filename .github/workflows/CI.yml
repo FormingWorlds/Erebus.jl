@@ -37,11 +37,28 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
-          coverage: true
+          coverage: false
         env:
           EREBUS_TEST_GROUP: unit
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v1
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: true
+        env:
+          EREBUS_TEST_GROUP: all
       - name: Check Coverage
-        run: julia tools/check_coverage.jl
+        run: |
+          julia --project=tools tools/check_coverage.jl
 
   docs:
     name: Documentation

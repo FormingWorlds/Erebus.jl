@@ -69,6 +69,14 @@ integration_tests = [
     "test_integration.jl"
 ]
 
+all_test_files = filter(f -> endswith(f, ".jl") && f != "runtests.jl", readdir(@__DIR__))
+listed_tests = Set(vcat(unit_tests, integration_tests))
+for f in all_test_files
+    if f ∉ listed_tests && f != "test_helpers.jl" && f != "test_constants.jl" && f != "mpi_worker_tests.jl"
+        error("Test file $f is not listed in runtests.jl (neither unit nor integration group).")
+    end
+end
+
 files_to_run = String[]
 if test_group == "all" || test_group == "unit"
     append!(files_to_run, unit_tests)

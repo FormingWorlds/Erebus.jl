@@ -31,4 +31,4 @@ jobs:
         env:
           EREBUS_TEST_GROUP: integration
       - name: Check Coverage
-        run: julia tools/check_coverage.jl
+        run: julia --project=tools tools/check_coverage.jl
