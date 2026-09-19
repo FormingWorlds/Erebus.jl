@@ -1,5 +1,5 @@
 {
-    "float_equality": 0,
+    "float_equality": 32,
     "min_asserts": 0,
-    "weak_assert": 0
+    "weak_assert": 377
 }
