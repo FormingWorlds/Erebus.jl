@@ -214,6 +214,7 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `active` | `Bool` | `true` | - | Enable two-way hydrothermal reaction coupling | `true` / `false` |
 | `hydration_active` | `Bool` | `true` | - | Enable serpentine hydration reaction pathway | `true` / `false` |
 | `dehydration_active` | `Bool` | `true` | - | Enable serpentine dehydration reaction pathway | `true` / `false` |
+| `fluid_overpressure_coupling` | `Bool` | `true` | - | Enable dehydration fluid source term coupling in Stokes-Darcy fluid continuity | `true` / `false` |
 | `hydration_mode` | `Int` | `1` | - | Hydration kinetics formulation mode | `1, 2, 3, 9` |
 | `dehydration_mode` | `Int` | `2` | - | Dehydration kinetics formulation mode | `1, 2, 3, 9` |
 | `dtreaction_hydration` | `Float64` | `1.0e10` | s | Timescale for serpentine hydration kinetics | $> 0$ |

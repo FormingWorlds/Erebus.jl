@@ -451,3 +451,9 @@ const iparms = collect(
 const cache_kwargs = (;
     nprocs=4, verbose=true, abstol=1e-8, reltol=1e-8, maxiter=30, iparm=iparms
 )
+
+# Volatile species set in thermodynamic equilibrium surface speciation
+const SPECIATION_SPECIES = Set{Symbol}([
+    :H2, :H2O, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2
+])
+

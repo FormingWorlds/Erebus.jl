@@ -1,4 +1,155 @@
 """
+Compute surface-mean oxygen fugacity (ΔIW) from near-surface silicate markers.
+
+$(SIGNATURES)
+"""
+function compute_surface_mean_delta_iw(
+    redox_props,
+    tm,
+    xm,
+    ym,
+    marknum::Int,
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet_val::Float64,
+    fallback::Float64,
+)
+    if redox_props === nothing || redox_props.deltaIW_m === nothing
+        return fallback
+    end
+    surf_count = 0
+    surf_diw = 0.0
+    r_cut_sq = (0.8 * rplanet_val)^2
+    r_max_sq = rplanet_val^2
+    for m in 1:marknum
+        if tm[m] < 3
+            r_sq = (xm[m] - xcenter)^2 + (ym[m] - ycenter)^2
+            if r_sq >= r_cut_sq && r_sq <= r_max_sq
+                surf_diw += redox_props.deltaIW_m[m]
+                surf_count += 1
+            end
+        end
+    end
+    if surf_count > 0
+        return surf_diw / surf_count
+    else
+        delta_iw_arr = redox_props.deltaIW_m
+        return isempty(delta_iw_arr) ? fallback : sum(delta_iw_arr) / length(delta_iw_arr)
+    end
+end
+
+"""
+Compute multi-species surface volatile venting rates [kg/s].
+
+$(SIGNATURES)
+
+# Arguments
+- `cfg`: Simulation configuration.
+- `delta_m_vent_3d`: 3D-equivalent pore fluid water mass vented from surface Darcy sink [kg].
+- `vented_vols`: Drained mobile mineral volatiles NamedTuple or nothing.
+- `L_3D_equiv`: 3D geometric cross-section factor [m].
+- `dt`: Current timestep [s].
+- `P_surf`: Surface boundary pressure [Pa].
+- `T_surf`: Surface boundary temperature [K].
+- `redox_props`: Redox properties struct or nothing.
+- `marknum`: Number of active markers.
+- `tm`: Marker material type array.
+- `xm`: Marker x coordinates [m].
+- `ym`: Marker y coordinates [m].
+- `rplanet_val`: Planetesimal radius [m].
+- `xcenter_val`: Planetesimal center x coordinate [m] (default: 0.0).
+- `ycenter_val`: Planetesimal center y coordinate [m] (default: 0.0).
+
+# Returns
+- `Dict{Symbol,Float64}` mapping volatile species to surface venting rates [kg/s].
+"""
+function compute_surface_venting_rates(
+    cfg::SimulationConfig,
+    delta_m_vent_3d::Float64,
+    vented_vols,
+    L_3D_equiv::Float64,
+    dt::Float64,
+    P_surf::Float64,
+    T_surf::Float64,
+    redox_props,
+    marknum::Int,
+    tm,
+    xm,
+    ym,
+    rplanet_val::Float64,
+    xcenter_val::Float64=0.0,
+    ycenter_val::Float64=0.0,
+)
+    vent_rates = Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+    (
+        dt <= 0.0 || (
+            !cfg.venting.active && (
+                vented_vols === nothing ||
+                !cfg.retention.active ||
+                !cfg.retention.venting_drainage_active
+            )
+        )
+    ) && return vent_rates
+
+    drain_on = (
+        vented_vols !== nothing &&
+        cfg.retention.active &&
+        cfg.retention.venting_drainage_active
+    )
+    m_pore_H2O = cfg.venting.active ? delta_m_vent_3d : 0.0
+    m_mineral_H2O = drain_on ? vented_vols.M_vent_H2O * L_3D_equiv : 0.0
+    m_H2O_step = m_pore_H2O + m_mineral_H2O
+
+    m_C_step = drain_on ? vented_vols.M_vent_C * L_3D_equiv : 0.0
+    m_N_step = drain_on ? vented_vols.M_vent_N * L_3D_equiv : 0.0
+    m_S_step = drain_on ? vented_vols.M_vent_S * L_3D_equiv : 0.0
+
+    (m_H2O_step + m_C_step + m_N_step + m_S_step) <= 0.0 && return vent_rates
+
+    if cfg.volatiles.speciation_active
+        fO2_delta_IW_vent = compute_surface_mean_delta_iw(
+            redox_props,
+            tm,
+            xm,
+            ym,
+            marknum,
+            xcenter_val,
+            ycenter_val,
+            rplanet_val,
+            cfg.volatiles.fO2_delta_IW,
+        )
+        fO2_delta_IW_vent = clamp(fO2_delta_IW_vent, -50.0, 50.0)
+        P_surf_eval = max(P_surf, 1.0)
+        T_surf_eval = max(T_surf, 273.15)
+
+        spec_dict = speciate_vented_volatiles(
+            m_H2O_step,
+            m_C_step,
+            m_N_step,
+            m_S_step,
+            P_surf_eval,
+            T_surf_eval,
+            fO2_delta_IW_vent;
+            graphite_saturation=cfg.volatiles.graphite_saturation,
+        )
+        for (sp, m_sp) in spec_dict
+            vent_rates[sp] = get(vent_rates, sp, 0.0) + m_sp / dt
+        end
+    else
+        vent_sp = cfg.venting.species
+        vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + m_pore_H2O / dt
+        vent_rates[:H2O]    = get(vent_rates, :H2O, 0.0)    + m_mineral_H2O / dt
+        # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
+        vent_rates[:CO2] = get(vent_rates, :CO2, 0.0) + (m_C_step * (44.0095 / 12.011)) / dt
+        vent_rates[:N2]  = get(vent_rates, :N2, 0.0)  + m_N_step / dt
+        # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
+        vent_rates[:H2S] = get(vent_rates, :H2S, 0.0) + (m_S_step * (34.08 / 32.06)) / dt
+    end
+
+    return vent_rates
+end
+
+"""
 Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
@@ -2330,6 +2481,7 @@ function simulation_loop(
                             L_sub=cfg.venting.L_sublimation,
                             S_vent_out=S_vent_grid,
                             DQPF=DQPF,
+                            fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
                             workspace=hydromech_ws,
                         )
                     else
@@ -2389,6 +2541,7 @@ function simulation_loop(
                             L_sub=cfg.venting.L_sublimation,
                             S_vent_out=S_vent_grid,
                             DQPF=DQPF,
+                            fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
                             workspace=hydromech_ws,
                         )
                     end
@@ -3099,91 +3252,25 @@ function simulation_loop(
 
             if cfg.atmosphere.active && atm_state !== nothing
                 L_3D_equiv = 2.0 * rplanet_val
-                vent_rates = Dict{Symbol,Float64}(
-                    sp => 0.0 for sp in cfg.escape.species_list
+                p_surf_val = max(atm_state.P_surf, P_amb_eff)
+                T_surf_val = atm_state.T_surf_eq > 0.0 ? atm_state.T_surf_eq : T_amb
+                vent_rates = compute_surface_venting_rates(
+                    cfg,
+                    delta_m_vent_3d,
+                    vented_vols,
+                    L_3D_equiv,
+                    dt,
+                    p_surf_val,
+                    T_surf_val,
+                    redox_props,
+                    marknum,
+                    tm,
+                    xm,
+                    ym,
+                    rplanet_val,
+                    xcenter_val,
+                    ycenter_val,
                 )
-                if cfg.venting.active && dt > 0.0
-                    # 1. Pore fluid mass vented from surface porosity sink
-                    vent_sp = cfg.venting.species
-                    vent_rates[vent_sp] =
-                        get(vent_rates, vent_sp, 0.0) + delta_m_vent_3d / dt
-
-                    # 2. Additional mobile volatiles drained from mineral markers
-                    if cfg.retention.active &&
-                        cfg.retention.venting_drainage_active &&
-                        XH2Om !== nothing &&
-                        vented_vols !== nothing
-                        if cfg.volatiles.speciation_active
-                            m_H2O_step = vented_vols.M_vent_H2O * L_3D_equiv
-                            m_C_step = vented_vols.M_vent_C * L_3D_equiv
-                            m_N_step = vented_vols.M_vent_N * L_3D_equiv
-                            m_S_step = vented_vols.M_vent_S * L_3D_equiv
-                            p_surf_val = if cfg.atmosphere.active
-                                max(atm_state.P_surf, P_amb_eff)
-                            else
-                                P_amb_eff
-                            end
-                            T_surf_val =
-                                if (cfg.atmosphere.active && atm_state.T_surf_eq > 0.0)
-                                    atm_state.T_surf_eq
-                                else
-                                    T_amb
-                                end
-                            fO2_delta_IW_vent =
-                                if redox_props !== nothing &&
-                                    redox_props.deltaIW_m !== nothing
-                                    surf_count = 0
-                                    surf_diw = 0.0
-                                    r_cut_sq = (0.8 * rplanet_val)^2
-                                    for m in 1:marknum
-                                        if tm[m] < 3 && (xm[m]^2 + ym[m]^2) >= r_cut_sq
-                                            surf_diw += redox_props.deltaIW_m[m]
-                                            surf_count += 1
-                                        end
-                                    end
-                                    if surf_count > 0
-                                        (surf_diw / surf_count)
-                                    else
-                                        (
-                                            sum(redox_props.deltaIW_m) /
-                                            length(redox_props.deltaIW_m)
-                                        )
-                                    end
-                                else
-                                    cfg.volatiles.fO2_delta_IW
-                                end
-                            spec_dict = speciate_vented_volatiles(
-                                m_H2O_step,
-                                m_C_step,
-                                m_N_step,
-                                m_S_step,
-                                p_surf_val,
-                                T_surf_val,
-                                fO2_delta_IW_vent;
-                                graphite_saturation=cfg.volatiles.graphite_saturation,
-                            )
-                            for (sp, m_sp) in spec_dict
-                                vent_rates[sp] = get(vent_rates, sp, 0.0) + m_sp / dt
-                            end
-                        else
-                            vent_rates[:H2O] =
-                                get(vent_rates, :H2O, 0.0) +
-                                (vented_vols.M_vent_H2O * L_3D_equiv) / dt
-                            # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
-                            vent_rates[:CO2] =
-                                get(vent_rates, :CO2, 0.0) +
-                                (vented_vols.M_vent_C * (44.0095 / 12.011) * L_3D_equiv) /
-                                dt
-                            vent_rates[:N2] =
-                                get(vent_rates, :N2, 0.0) +
-                                (vented_vols.M_vent_N * L_3D_equiv) / dt
-                            # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
-                            vent_rates[:H2S] =
-                                get(vent_rates, :H2S, 0.0) +
-                                (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) / dt
-                        end
-                    end
-                end
 
                 c_s_disk = compute_sound_speed(T_amb)
                 rho_disk_val = if (cfg.disk.enabled && c_s_disk > 0.0)
@@ -3201,28 +3288,17 @@ function simulation_loop(
                 degas_rates =
                     if cfg.magma_degassing.active && XH2Om !== nothing && Fm !== nothing
                         p_surf_mo = atm_state.P_surf > 0.0 ? atm_state.P_surf : P_amb_eff
-                        fO2_diw_mo =
-                            if redox_props !== nothing && redox_props.deltaIW_m !== nothing
-                                surf_count = 0
-                                surf_diw = 0.0
-                                r_cut_sq = (0.8 * rplanet_val)^2
-                                for m in 1:marknum
-                                    if tm[m] < 3 && (xm[m]^2 + ym[m]^2) >= r_cut_sq
-                                        surf_diw += redox_props.deltaIW_m[m]
-                                        surf_count += 1
-                                    end
-                                end
-                                if surf_count > 0
-                                    (surf_diw / surf_count)
-                                else
-                                    (
-                                        sum(redox_props.deltaIW_m) /
-                                        length(redox_props.deltaIW_m)
-                                    )
-                                end
-                            else
-                                cfg.volatiles.fO2_delta_IW
-                            end
+                        fO2_diw_mo = compute_surface_mean_delta_iw(
+                            redox_props,
+                            tm,
+                            xm,
+                            ym,
+                            marknum,
+                            xcenter_val,
+                            ycenter_val,
+                            rplanet_val,
+                            cfg.volatiles.fO2_delta_IW,
+                        )
                         v_m = (coords.xsize * coords.ysize) / max(1, marknum)
                         Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
 
@@ -3259,7 +3335,7 @@ function simulation_loop(
                                 cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
                             for m in 1:marknum
                                 if tm[m] < 3 &&
-                                    (xm[m]^2 + ym[m]^2 <= rplanet_val^2) &&
+                                    (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
                                     Fm[m] >= cfg.magma_degassing.F_melt_threshold
                                     m_melt_tot += Fm[m] * m_marker
                                     m_H_melt +=
@@ -3323,7 +3399,7 @@ function simulation_loop(
 
                                 for m in 1:marknum
                                     if tm[m] < 3 &&
-                                        (xm[m]^2 + ym[m]^2 <= rplanet_val^2) &&
+                                        (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
                                         Fm[m] >= cfg.magma_degassing.F_melt_threshold
                                         XH2Om[m] = new_XH2O_wtpct
                                         XCm[m] = new_XC_ppm
@@ -3383,39 +3459,35 @@ function simulation_loop(
                 end
             elseif cfg.escape.active
                 L_3D_equiv = 2.0 * rplanet_val
-                if !cfg.venting.active
-                    delta_m_vent_3d = delta_m_vent * L_3D_equiv
-                end
-                M_vent_rate = dt > 0.0 ? delta_m_vent_3d / dt : 0.0
                 R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
+                T_surf_esc = compute_mean_surface_temperature(
+                    tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+                )
+
+                vent_rates_esc = compute_surface_venting_rates(
+                    cfg,
+                    delta_m_vent_3d,
+                    vented_vols,
+                    L_3D_equiv,
+                    dt,
+                    P_amb_eff,
+                    T_surf_esc,
+                    redox_props,
+                    marknum,
+                    tm,
+                    xm,
+                    ym,
+                    rplanet_val,
+                    xcenter_val,
+                    ycenter_val,
+                )
+
                 if cfg.escape.multi_species &&
                     M_atm_species !== nothing &&
                     M_escaped_species !== nothing
                     for sp in cfg.escape.species_list
                         m_sp = get_species_molecular_mass(sp)
-                        v_rate_sp = (sp == cfg.venting.species) ? M_vent_rate : 0.0
-                        if cfg.retention.active &&
-                            cfg.retention.venting_drainage_active &&
-                            XH2Om !== nothing &&
-                            vented_vols !== nothing &&
-                            dt > 0.0
-                            if sp == :H2O
-                                v_rate_sp += (vented_vols.M_vent_H2O * L_3D_equiv) / dt
-                            elseif sp == :CO2
-                                v_rate_sp +=
-                                    (
-                                        vented_vols.M_vent_C *
-                                        (44.0095 / 12.011) *
-                                        L_3D_equiv
-                                    ) / dt
-                            elseif sp == :N2
-                                v_rate_sp += (vented_vols.M_vent_N * L_3D_equiv) / dt
-                            elseif sp == :H2S
-                                v_rate_sp +=
-                                    (vented_vols.M_vent_S * (34.08 / 32.06) * L_3D_equiv) /
-                                    dt
-                            end
-                        end
+                        v_rate_sp = get(vent_rates_esc, sp, 0.0)
                         prev_sp = get(M_atm_species, sp, 0.0)
                         esc_sp = evolve_atmospheric_species_inventory(
                             prev_sp,
@@ -3436,15 +3508,7 @@ function simulation_loop(
                     M_atm_total = sum(values(M_atm_species))
                     M_escaped_total = sum(values(M_escaped_species))
                 else
-                    M_vent_rate_eff = M_vent_rate
-                    if cfg.retention.active &&
-                        cfg.retention.venting_drainage_active &&
-                        XH2Om !== nothing &&
-                        vented_vols !== nothing &&
-                        dt > 0.0 &&
-                        cfg.escape.species == :H2O
-                        M_vent_rate_eff += (vented_vols.M_vent_H2O * L_3D_equiv) / dt
-                    end
+                    M_vent_rate_eff = get(vent_rates_esc, cfg.escape.species, 0.0)
                     esc_res = evolve_atmospheric_species_inventory(
                         M_atm_total,
                         M_vent_rate_eff,

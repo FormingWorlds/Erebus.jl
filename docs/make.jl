@@ -65,6 +65,7 @@ makedocs(;
             "Silicate Rock Melting" => "validation/rock_melting.md",
             "Cold Surface Venting" => "validation/cold_surface_venting.md",
             "Cold Lid Hydrofracture & Ice Sealing" => "validation/hydrofracture_venting.md",
+            "Dehydration-Darcy Coupling & Venting" => "validation/dehydration_darcy_coupling.md",
             "H-C-N-S Volatile Solubility & Speciation" => "validation/hcns_solubility.md",
             "Volatile Retention Floors & Vent Drainage" => "validation/volatile_retention.md",
             "Redox Buffers & Electron Accounting" => "validation/redox_buffers.md",

@@ -1504,6 +1504,12 @@ function speciate_vented_volatiles(
     if m_s < 0.0 || !isfinite(m_s)
         throw(DomainError(m_S, "Vented S mass must be non-negative and finite"))
     end
+
+    species_dict = Dict{Symbol,Float64}(sp => 0.0 for sp in SPECIATION_SPECIES)
+    if (m_h2o + m_c + m_n + m_s) <= 0.0
+        return species_dict
+    end
+
     if p_amb <= 0.0 || !isfinite(p_amb)
         throw(
             DomainError(P_amb_Pa, "Ambient pressure must be strictly positive and finite")
@@ -1527,18 +1533,6 @@ function speciate_vented_volatiles(
     nS = m_s / 32.06e-3
     n_tot = nH + nC + nN + nS
 
-    species_dict = Dict{Symbol,Float64}(
-        :H2 => 0.0,
-        :H2O => 0.0,
-        :CO => 0.0,
-        :CO2 => 0.0,
-        :CH4 => 0.0,
-        :N2 => 0.0,
-        :NH3 => 0.0,
-        :H2S => 0.0,
-        :S2 => 0.0,
-        :SO2 => 0.0,
-    )
     if n_tot <= 0.0
         return species_dict
     end

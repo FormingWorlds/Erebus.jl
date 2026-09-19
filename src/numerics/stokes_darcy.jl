@@ -90,6 +90,7 @@ function assemble_hydromechanical_lse!(
     L_sub::Real=2.83e6,
     S_vent_out=nothing,
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    fluid_overpressure_coupling::Bool=true,
     workspace=nothing,
 )
     Ny1, Nx1 = size(ETAP)
@@ -537,7 +538,7 @@ function assemble_hydromechanical_lse!(
                 ) # Pfluid
                 # RHS coefficient vector
                 R[kpf] = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
-                if DQPF !== nothing
+                if DQPF !== nothing && fluid_overpressure_coupling
                     R[kpf] += DQPF[i, j]
                 end
             end # Ptotal/Pfluid equation
@@ -692,6 +693,7 @@ function assemble_hydromechanical_4var_lse!(
     L_sub::Real=2.83e6,
     S_vent_out=nothing,
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    fluid_overpressure_coupling::Bool=true,
     workspace=nothing,
 )
     Ny1, Nx1 = size(ETAP)
@@ -994,7 +996,7 @@ function assemble_hydromechanical_4var_lse!(
                     Kcont *
                     (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / ksk / dt)
                 rhs_pf = -betadrained * kbw * (pr0[i, j] - (1.0 / ksk) * pf0[i, j]) / dt
-                if DQPF !== nothing
+                if DQPF !== nothing && fluid_overpressure_coupling
                     rhs_pf += DQPF[i, j]
                 end
 
