@@ -521,6 +521,9 @@ Base.@kwdef struct RedoxConfig
     deltaIW_min::Float64 = -6.0
     deltaIW_max::Float64 = 6.0
     initial_x_ferric::Float64 = 0.05
+    pyrolysis_redox::Bool = true
+    graphite_buffer_active::Bool = true
+    w_graphite_threshold::Float64 = 1.0e-6
 
     function RedoxConfig(
         active::Bool,
@@ -531,6 +534,9 @@ Base.@kwdef struct RedoxConfig
         deltaIW_min::Real,
         deltaIW_max::Real,
         initial_x_ferric::Real,
+        pyrolysis_redox::Bool=true,
+        graphite_buffer_active::Bool=true,
+        w_graphite_threshold::Real=1.0e-6,
     )
         (reference === :mantle || reference === :crust) ||
             throw(ArgumentError("reference must be :mantle or :crust, got '$reference'"))
@@ -541,6 +547,9 @@ Base.@kwdef struct RedoxConfig
         )
         (0.0 <= initial_x_ferric <= 1.0) ||
             throw(DomainError(initial_x_ferric, "initial_x_ferric must be in [0, 1]"))
+        (0.0 <= w_graphite_threshold <= 1.0) || throw(
+            DomainError(w_graphite_threshold, "w_graphite_threshold must be in [0, 1]")
+        )
         return new(
             active,
             reference,
@@ -550,6 +559,9 @@ Base.@kwdef struct RedoxConfig
             Float64(deltaIW_min),
             Float64(deltaIW_max),
             Float64(initial_x_ferric),
+            pyrolysis_redox,
+            graphite_buffer_active,
+            Float64(w_graphite_threshold),
         )
     end
 end
@@ -2315,6 +2327,7 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         @check_unit_interval cfg.redox.initial_x_ferric
+        @check_unit_interval cfg.redox.w_graphite_threshold
     end
 
     # Volatile mixture checks

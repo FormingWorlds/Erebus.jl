@@ -602,6 +602,181 @@ function vent_gas_redox_budget(
 end
 
 """
+Update redox component inventory during organic matter pyrolysis (Evans 2012).
+
+$(SIGNATURES)
+
+Models breakdown of refractory organic carbon into graphite residue and carbon
+volatile gases (CO, CO2, CH4), conserving carbon atoms and extensive electron budget RB.
+
+# Arguments
+- `c`: Initial `RedoxComponents` inventory
+- `delta_n_c_iom`: Moles of organic carbon pyrolyzed
+- `delta_n_gr`: Moles of solid graphite residue formed
+- `delta_n_co`: Moles of CO gas produced
+- `delta_n_co2`: Moles of CO2 gas produced
+- `delta_n_ch4`: Moles of CH4 gas produced
+
+# Keyword Arguments
+- `delta_n_h2`: Explicit change in H2 moles (default: 0.0)
+- `delta_n_h2o`: Explicit change in H2O moles (default: 0.0)
+- `delta_n_fe0`: Explicit change in Fe0 moles (default: 0.0)
+- `delta_n_fe2`: Explicit change in Fe2+ moles (default: 0.0)
+- `delta_n_fe3`: Explicit change in Fe3+ moles (default: 0.0)
+- `auto_balance`: Balance electron deficit by reducing or oxidizing iron/water (default: true)
+- `reference`: Reference state for electron accounting (default: `:mantle`)
+
+# Returns
+- `RedoxComponents`: Updated redox component inventory
+
+# Raises
+- `DomainError`: If inputs are negative, non-finite, violate carbon conservation, or oxidants are exhausted
+"""
+function pyrolyze_redox_budget(
+    c::RedoxComponents,
+    delta_n_c_iom::Real,
+    delta_n_gr::Real,
+    delta_n_co::Real,
+    delta_n_co2::Real,
+    delta_n_ch4::Real;
+    delta_n_h2::Real=0.0,
+    delta_n_h2o::Real=0.0,
+    delta_n_fe0::Real=0.0,
+    delta_n_fe2::Real=0.0,
+    delta_n_fe3::Real=0.0,
+    auto_balance::Bool=true,
+    reference::Symbol=:mantle,
+)::RedoxComponents
+    (reference === :mantle || reference === :crust) ||
+        throw(ArgumentError("reference must be :mantle or :crust, got '$reference'"))
+
+    d_c = Float64(delta_n_c_iom)
+    d_gr = Float64(delta_n_gr)
+    d_co = Float64(delta_n_co)
+    d_co2 = Float64(delta_n_co2)
+    d_ch4 = Float64(delta_n_ch4)
+
+    (isfinite(d_c) && d_c >= 0.0) ||
+        throw(DomainError(d_c, "delta_n_c_iom must be >= 0 and finite"))
+    (isfinite(d_gr) && d_gr >= 0.0) ||
+        throw(DomainError(d_gr, "delta_n_gr must be >= 0 and finite"))
+    (isfinite(d_co) && d_co >= 0.0) ||
+        throw(DomainError(d_co, "delta_n_co must be >= 0 and finite"))
+    (isfinite(d_co2) && d_co2 >= 0.0) ||
+        throw(DomainError(d_co2, "delta_n_co2 must be >= 0 and finite"))
+    (isfinite(d_ch4) && d_ch4 >= 0.0) ||
+        throw(DomainError(d_ch4, "delta_n_ch4 must be >= 0 and finite"))
+
+    d_c_sum = d_gr + d_co + d_co2 + d_ch4
+    if abs(d_c - d_c_sum) > 1.0e-9 * max(1.0, d_c)
+        throw(
+            DomainError(
+                d_c,
+                "Pyrolysis carbon products (sum = $d_c_sum) must equal delta_n_c_iom ($d_c)",
+            ),
+        )
+    end
+
+    d_fe0 = Float64(delta_n_fe0)
+    d_fe2 = Float64(delta_n_fe2)
+    d_fe3 = Float64(delta_n_fe3)
+    d_h2 = Float64(delta_n_h2)
+    d_h2o = Float64(delta_n_h2o)
+
+    # Net electron transfer from carbon oxidation/reduction
+    # nu(CO)=+2, nu(CO2)=+4, nu(CH4)=-4 relative to C0
+    delta_rb_c = 2.0 * d_co + 4.0 * d_co2 - 4.0 * d_ch4
+
+    if auto_balance &&
+        d_fe0 == 0.0 &&
+        d_fe2 == 0.0 &&
+        d_fe3 == 0.0 &&
+        d_h2 == 0.0 &&
+        d_h2o == 0.0
+        if delta_rb_c > 1.0e-14
+            rem_rb = delta_rb_c
+
+            red_fe3 = min(c.n_Fe3, rem_rb)
+            d_fe3 -= red_fe3
+            d_fe2 += red_fe3
+            rem_rb -= red_fe3
+
+            if rem_rb > 1.0e-14
+                avail_fe2 = c.n_Fe2 + d_fe2
+                red_fe2 = min(avail_fe2, rem_rb / 2.0)
+                d_fe2 -= red_fe2
+                d_fe0 += red_fe2
+                rem_rb -= 2.0 * red_fe2
+            end
+
+            if rem_rb > 1.0e-14
+                red_h2o = min(c.n_H2O, rem_rb / 2.0)
+                d_h2o -= red_h2o
+                d_h2 += red_h2o
+                rem_rb -= 2.0 * red_h2o
+            end
+
+            if rem_rb > 1.0e-10 * max(1.0, delta_rb_c)
+                throw(
+                    DomainError(
+                        rem_rb, "Insufficient rock oxidants to balance carbon oxidation"
+                    ),
+                )
+            end
+        elseif delta_rb_c < -1.0e-14
+            rem_rb = -delta_rb_c
+
+            ox_fe0 = min(c.n_Fe0, rem_rb / 2.0)
+            d_fe0 -= ox_fe0
+            d_fe2 += ox_fe0
+            rem_rb -= 2.0 * ox_fe0
+
+            if rem_rb > 1.0e-14
+                avail_fe2 = c.n_Fe2 + d_fe2
+                ox_fe2 = min(avail_fe2, rem_rb)
+                d_fe2 -= ox_fe2
+                d_fe3 += ox_fe2
+                rem_rb -= ox_fe2
+            end
+
+            if rem_rb > 1.0e-14
+                ox_h2 = min(c.n_H2, rem_rb / 2.0)
+                d_h2 -= ox_h2
+                d_h2o += ox_h2
+                rem_rb -= 2.0 * ox_h2
+            end
+
+            if rem_rb > 1.0e-10 * max(1.0, -delta_rb_c)
+                throw(
+                    DomainError(
+                        rem_rb, "Insufficient rock reductants to balance carbon reduction"
+                    ),
+                )
+            end
+        end
+    end
+
+    return RedoxComponents(;
+        n_Fe0=max(0.0, c.n_Fe0 + d_fe0),
+        n_Fe2=max(0.0, c.n_Fe2 + d_fe2),
+        n_Fe3=max(0.0, c.n_Fe3 + d_fe3),
+        n_H2=max(0.0, c.n_H2 + d_h2),
+        n_H2O=max(0.0, c.n_H2O + d_h2o),
+        n_C_graphite=c.n_C_graphite + d_gr,
+        n_CO=c.n_CO + d_co,
+        n_CO2=c.n_CO2 + d_co2,
+        n_CH4=c.n_CH4 + d_ch4,
+        n_Fe3C=c.n_Fe3C,
+        n_S_sulfide=c.n_S_sulfide,
+        n_S2=c.n_S2,
+        n_SO2=c.n_SO2,
+        n_SO4=c.n_SO4,
+        n_P_phosphide=c.n_P_phosphide,
+        n_P_phosphate=c.n_P_phosphate,
+    )
+end
+
+"""
 Assemble a `RedoxComponents` inventory for a single marker or parcel from state.
 
 $(SIGNATURES)
@@ -681,6 +856,8 @@ $(SIGNATURES)
 - `deltaIW_min`: Minimum clamp limit (default: -6.0)
 - `deltaIW_max`: Maximum clamp limit (default: 6.0)
 - `initial_x_ferric`: Reference ferric iron molar fraction in silicate (default: 0.05)
+- `graphite_buffer_active`: Enable graphite-CO-CO2 (CCO) buffer when metal exhausts (default: true)
+- `w_graphite_threshold`: Threshold for active graphite buffering in mass fraction (default: 1.0e-6)
 
 # Returns
 - `Float64`: ΔIW [log10 units]
@@ -692,6 +869,8 @@ function local_delta_iw(
     deltaIW_min::Real=-6.0,
     deltaIW_max::Real=6.0,
     initial_x_ferric::Real=0.05,
+    graphite_buffer_active::Bool=true,
+    w_graphite_threshold::Real=1.0e-6,
 )::Float64
     T = Float64(T_K)
     T > 0.0 || throw(DomainError(T, "T_K must be positive"))
@@ -719,6 +898,31 @@ function local_delta_iw(
         nothing
     end
 
+    # Graphite CCO buffer offset relative to IW
+    delta_cco = if graphite_buffer_active && c.n_C_graphite > 1.0e-12
+        P_eff = P > 0.0 ? P : 1.0e5
+        T_eff = max(T, 100.0)
+        clamp(
+            log10_fo2_of_buffer(:CCO, T_eff, P_eff) -
+            log10_fo2_of_buffer(:IW, T_eff, P_eff),
+            d_min,
+            d_max,
+        )
+    else
+        nothing
+    end
+
+    # Target non-metal buffer: graphite (CCO) or silicate ferric/ferrous
+    delta_target = if delta_cco !== nothing && delta_sil !== nothing
+        w_gr_thresh = max(1.0e-12, Float64(w_graphite_threshold) / 0.012011)
+        w_gr = clamp(c.n_C_graphite / w_gr_thresh, 0.0, 1.0)
+        w_gr * delta_cco + (1.0 - w_gr) * delta_sil
+    elseif delta_cco !== nothing
+        delta_cco
+    else
+        delta_sil
+    end
+
     # Metal-saturated buffer branch
     if tot_fe > 0.0 && c.n_Fe0 > 0.0
         x_feo = (c.n_Fe2 + c.n_Fe3) / tot_fe
@@ -728,17 +932,17 @@ function local_delta_iw(
             d_min
         end
 
-        if delta_sil !== nothing
-            # Smoothly transition from metal-buffered to silicate-buffered as metal exhausts
+        if delta_target !== nothing
+            # Smoothly transition from metal-buffered to target buffer as metal exhausts
             w_metal = clamp((c.n_Fe0 / tot_fe) / 1.0e-3, 0.0, 1.0)
-            return w_metal * delta_metal + (1.0 - w_metal) * delta_sil
+            return w_metal * delta_metal + (1.0 - w_metal) * delta_target
         else
             return delta_metal
         end
     end
 
-    if delta_sil !== nothing
-        return delta_sil
+    if delta_target !== nothing
+        return delta_target
     end
 
     if c.n_H2 > 1.0e-12 && c.n_H2O > 1.0e-12

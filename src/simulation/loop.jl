@@ -2397,6 +2397,8 @@ function simulation_loop(
                         coords=coords,
                         DHP=DHP,
                         rhosolid=cfg.materials.rhosolidm,
+                        redox_props=redox_props,
+                        redox_cfg=cfg.redox,
                     )
                 end
 

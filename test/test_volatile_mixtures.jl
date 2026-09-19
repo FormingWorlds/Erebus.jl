@@ -618,6 +618,53 @@ using Erebus.Particles
         # Endothermic heat sink: DHP is negative in cells containing hot pyrolyzing markers
         @test any(dhp_grid .< 0.0)
         @test all(dhp_grid .<= 0.0)
+
+        # 9. Pyrolysis coupling to marker redox properties (graphite deposition & CCO buffering)
+        rdx_cfg = RedoxConfig(;
+            active=true, pyrolysis_redox=true, graphite_buffer_active=true
+        )
+        props_rdx = setup_marker_redox_properties(3, rdx_cfg)
+        props_rdx.nFe2_m .= 1.0
+        props_rdx.nFe3_m .= 0.05
+        p_lith = [1.0e7, 1.0e7, 1.0e7]
+        update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)
+        @test isapprox(props_rdx.deltaIW_m[1], 0.0; atol=1e-4)
+
+        m_C3 = [C_init, C_init, C_init]
+        m_N3 = [N_init, N_init, N_init]
+        m_H3 = [H_init, H_init, H_init]
+        m_phim3 = [0.01, 0.01, 0.01]
+
+        update_marker_pyrolysis!(
+            m_tkm,
+            dt_s,
+            m_phim3,
+            m_C3,
+            m_N3,
+            m_H3,
+            refr_cfg;
+            ppm_scale=true,
+            redox_props=props_rdx,
+            redox_cfg=rdx_cfg,
+        )
+
+        @test isapprox(props_rdx.nC_graphite_m[1], 0.0; atol=1e-12)
+        @test props_rdx.nC_graphite_m[3] > 0.0
+        @test props_rdx.nCO_m[3] > 0.0
+
+        # Before core segregation: carbothermic smelting reduces FeO to Fe0 (metal-buffered)
+        update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)
+        @test isapprox(props_rdx.deltaIW_m[1], 0.0; atol=1e-4)
+        @test props_rdx.nFe0_m[3] > 0.0
+        @test props_rdx.deltaIW_m[3] <= 0.0
+
+        # After core segregation: metallic Fe0 segregates to core, graphite buffers along CCO
+        update_marker_redox!(
+            props_rdx, [300.0, 420.0, 1300.0], p_lith, rdx_cfg; Xfem=[0.0, 0.0, 0.0]
+        )
+        @test isapprox(props_rdx.nFe0_m[3], 0.0; atol=1e-12)
+        @test props_rdx.deltaIW_m[3] > props_rdx.deltaIW_m[1]
+        @test 0.5 < props_rdx.deltaIW_m[3] < 1.2
     end
 
     # =========================================================================

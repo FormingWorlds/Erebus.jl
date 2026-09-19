@@ -438,6 +438,10 @@ end
     p_inact = Erebus.setup_marker_redox_properties(10, cfg_inactive)
     @test p_inact.nFe0_m === nothing
     @test p_inact.deltaIW_m === nothing
+    @test p_inact.nC_graphite_m === nothing
+    @test p_inact.nCO_m === nothing
+    @test p_inact.nCO2_m === nothing
+    @test p_inact.nCH4_m === nothing
 
     cfg_act = Erebus.RedoxConfig(; active=true, initial_x_ferric=0.08)
     xfe_init = fill(0.20, 10)
@@ -446,11 +450,220 @@ end
     @test length(p_act.nFe2_m) == 10
     @test length(p_act.nFe3_m) == 10
     @test length(p_act.deltaIW_m) == 10
+    @test length(p_act.nC_graphite_m) == 10
+    @test length(p_act.nCO_m) == 10
     @test all(p_act.nFe0_m .> 0.0)
     @test all(p_act.nFe2_m .> 0.0)
     @test all(p_act.nFe3_m .> 0.0)
     @test all(p_act.deltaIW_m .< 0.0) # metal present -> deltaIW negative
+    @test all(isapprox.(p_act.nC_graphite_m, 0.0; atol=1e-12))
+    @test all(isapprox.(p_act.nCO_m, 0.0; atol=1e-12))
 
     # Domain error contract on negative marknum
     @test_throws DomainError Erebus.setup_marker_redox_properties(-5, cfg_act)
+end
+
+@testset "Organic Carbon Pyrolysis Electron Conservation (Evans 2012)" begin
+    # Initial rock reservoir containing metal, iron oxides, and water
+    c_init = Erebus.RedoxComponents(;
+        n_Fe0=1.0,
+        n_Fe2=5.0,
+        n_Fe3=0.8,
+        n_H2=0.0,
+        n_H2O=2.0,
+        n_C_graphite=0.0,
+        n_CO=0.0,
+        n_CO2=0.0,
+        n_CH4=0.0,
+    )
+    rb_m_init = Erebus.compute_redox_budget(c_init; reference=:mantle)
+
+    # 1. Pure graphite residue formation (nu = 0 in mantle reference)
+    c_gr = Erebus.pyrolyze_redox_budget(c_init, 2.0, 2.0, 0.0, 0.0, 0.0)
+    @test isapprox(c_gr.n_C_graphite, 2.0; atol=1e-12)
+    @test isapprox(c_gr.n_CO, 0.0; atol=1e-12)
+    rb_m_gr = Erebus.compute_redox_budget(c_gr; reference=:mantle)
+    @test isapprox(rb_m_gr, rb_m_init; atol=1e-12)
+
+    # 2. Disproportionation: 2 C -> CO2 (nu = +4) + CH4 (nu = -4), net carbon e- delta = 0
+    c_disp = Erebus.pyrolyze_redox_budget(c_init, 2.0, 0.0, 0.0, 1.0, 1.0)
+    @test isapprox(c_disp.n_CO2, 1.0; atol=1e-12)
+    @test isapprox(c_disp.n_CH4, 1.0; atol=1e-12)
+    rb_m_disp = Erebus.compute_redox_budget(c_disp; reference=:mantle)
+    @test isapprox(rb_m_disp, rb_m_init; atol=1e-12)
+
+    # 3. Carbon oxidation to CO: C -> CO (+2 e-) coupled to iron reduction (Fe3+ -> Fe2+)
+    c_co = Erebus.pyrolyze_redox_budget(c_init, 0.5, 0.0, 0.5, 0.0, 0.0; auto_balance=true)
+    @test isapprox(c_co.n_CO, 0.5; atol=1e-12)
+    # 0.5 mol CO releases 1.0 e-. Fe3+ (0.8 mol) absorbs 0.8 e-, remaining 0.2 e- reduces 0.1 mol Fe2+ -> Fe0
+    @test isapprox(c_co.n_Fe3, 0.0; atol=1e-12)
+    @test isapprox(c_co.n_Fe0, 1.0 + 0.1; atol=1e-12)
+    rb_m_co = Erebus.compute_redox_budget(c_co; reference=:mantle)
+    @test isapprox(rb_m_co, rb_m_init; atol=1e-12)
+
+    # 4. Mixed pyrolysis products: graphite (60%), CO (20%), CO2 (10%), CH4 (10%)
+    c_mix = Erebus.pyrolyze_redox_budget(c_init, 2.0, 1.2, 0.4, 0.2, 0.2; auto_balance=true)
+    @test isapprox(c_mix.n_C_graphite, 1.2; atol=1e-12)
+    @test isapprox(c_mix.n_CO, 0.4; atol=1e-12)
+    @test isapprox(c_mix.n_CO2, 0.2; atol=1e-12)
+    @test isapprox(c_mix.n_CH4, 0.2; atol=1e-12)
+    rb_m_mix = Erebus.compute_redox_budget(c_mix; reference=:mantle)
+    @test isapprox(rb_m_mix, rb_m_init; atol=1e-12)
+
+    # 5. Whole-body 4-stage differentiation electron conservation
+    c_s1 = Erebus.serpentinize_redox_budget(c_init, 0.5)
+    c_s2 = Erebus.pyrolyze_redox_budget(c_s1, 1.0, 0.6, 0.3, 0.1, 0.0; auto_balance=true)
+    c_mantle, c_core = Erebus.segregate_core_redox_budget(c_s2, 0.90)
+    c_gas_vent = Erebus.RedoxComponents(;
+        n_H2=c_mantle.n_H2, n_CO=c_mantle.n_CO, n_CO2=c_mantle.n_CO2
+    )
+    c_final_rock = Erebus.vent_gas_redox_budget(c_mantle, c_gas_vent)
+
+    rb_rock = Erebus.compute_redox_budget(c_final_rock; reference=:mantle)
+    rb_core = Erebus.compute_redox_budget(c_core; reference=:mantle)
+    rb_gas = Erebus.compute_redox_budget(c_gas_vent; reference=:mantle)
+    @test isapprox(rb_rock + rb_core + rb_gas, rb_m_init; atol=1e-12)
+
+    # 6. Gauge invariance: reference frame (:mantle vs :crust) yields identical reaction stoichiometry
+    c_crust = Erebus.pyrolyze_redox_budget(
+        c_init, 0.5, 0.0, 0.5, 0.0, 0.0; auto_balance=true, reference=:crust
+    )
+    @test isapprox(c_crust.n_Fe3, c_co.n_Fe3; atol=1e-12)
+    @test isapprox(c_crust.n_Fe0, c_co.n_Fe0; atol=1e-12)
+
+    # 7. Error contracts
+    @test_throws DomainError Erebus.pyrolyze_redox_budget(c_init, -1.0, 0.0, 0.0, 0.0, 0.0)
+    @test_throws DomainError Erebus.pyrolyze_redox_budget(c_init, 1.0, 0.5, 0.0, 0.0, 0.0)
+    @test_throws DomainError Erebus.pyrolyze_redox_budget(
+        Erebus.RedoxComponents(), 1.0, 0.0, 1.0, 0.0, 0.0; auto_balance=true
+    )
+    # Insufficient rock reductants during carbon reduction (CH4 production without rock reductants)
+    c_all_fe3 = Erebus.RedoxComponents(; n_Fe3=1.0)
+    @test_throws DomainError Erebus.pyrolyze_redox_budget(
+        c_all_fe3, 1.0, 0.0, 0.0, 0.0, 1.0; auto_balance=true
+    )
+    @test_throws ArgumentError Erebus.pyrolyze_redox_budget(
+        c_init, 1.0, 1.0, 0.0, 0.0, 0.0; reference=:unknown
+    )
+end
+
+@testset "Graphite CCO Oxygen Fugacity Buffering and Transitions" begin
+    T = 1300.0
+    P_100bar = 1.0e7
+
+    # 1. Graphite CCO buffer locking when metallic iron is depleted
+    c_gr = Erebus.marker_redox_components(0.0, 1.0, 0.05; n_C_graphite=0.1)
+    diw_gr = Erebus.local_delta_iw(
+        c_gr, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=1.0e-6
+    )
+
+    # Theoretical CCO offset at 1300 K, 100 bar
+    lfo2_cco = Erebus.log10_fo2_of_buffer(:CCO, T, P_100bar)
+    lfo2_iw = Erebus.log10_fo2_of_buffer(:IW, T, P_100bar)
+    diw_cco_expected = lfo2_cco - lfo2_iw
+    @test isapprox(diw_gr, diw_cco_expected; atol=1e-3)
+    @test diw_gr > 0.0
+    @test 0.5 < diw_gr < 1.2
+
+    # 2. Buffer bypass when graphite buffering is deactivated
+    diw_no_gr = Erebus.local_delta_iw(c_gr, T, P_100bar; graphite_buffer_active=false)
+    c_sil_only = Erebus.marker_redox_components(0.0, 1.0, 0.05)
+    diw_sil_expected = Erebus.local_delta_iw(c_sil_only, T, P_100bar)
+    @test isapprox(diw_no_gr, diw_sil_expected; atol=1e-6)
+
+    # 3. Sensitivity to w_graphite_threshold at intermediate graphite contents
+    c_int_gr = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=2.0e-4)
+    diw_high_thresh = Erebus.local_delta_iw(
+        c_int_gr, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=1.0e-2
+    )
+    diw_low_thresh = Erebus.local_delta_iw(
+        c_int_gr, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=1.0e-6
+    )
+    # Lower threshold reaches full CCO buffer while high threshold stays closer to oxidized silicate
+    @test diw_low_thresh < diw_high_thresh
+    @test isapprox(diw_low_thresh, diw_cco_expected; atol=1e-2)
+
+    # 4. Smooth continuous transition across metal exhaustion: IW -> CCO
+    fe0_sweep = [1.0e-2, 1.0e-3, 5.0e-4, 2.0e-4, 1.0e-4, 5.0e-5, 1.0e-5, 0.0]
+    diw_prev = Erebus.local_delta_iw(
+        Erebus.marker_redox_components(fe0_sweep[1], 1.0, 0.05; n_C_graphite=0.1),
+        T,
+        P_100bar;
+        graphite_buffer_active=true,
+    )
+    for fe0 in fe0_sweep[2:end]
+        c_step = Erebus.marker_redox_components(fe0, 1.0, 0.05; n_C_graphite=0.1)
+        diw_curr = Erebus.local_delta_iw(c_step, T, P_100bar; graphite_buffer_active=true)
+        @test diw_curr >= diw_prev - 1e-6
+        @test abs(diw_curr - diw_prev) < 2.0
+        diw_prev = diw_curr
+    end
+    @test isapprox(diw_prev, diw_cco_expected; atol=1e-3)
+
+    # 5. Smooth continuous transition across graphite exhaustion: CCO -> QFM
+    c_ox_sil = Erebus.marker_redox_components(0.0, 0.80, 0.20)
+    diw_ox_sil = Erebus.local_delta_iw(c_ox_sil, T, P_100bar)
+    gr_sweep = [1.0e-1, 1.0e-2, 1.0e-3, 5.0e-4, 1.0e-4, 5.0e-5, 1.0e-5, 0.0]
+    diw_prev_gr = Erebus.local_delta_iw(
+        Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=gr_sweep[1]),
+        T,
+        P_100bar;
+        graphite_buffer_active=true,
+    )
+    for gr in gr_sweep[2:end]
+        c_step = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=gr)
+        diw_curr = Erebus.local_delta_iw(c_step, T, P_100bar; graphite_buffer_active=true)
+        @test diw_curr >= diw_prev_gr - 1e-6
+        @test abs(diw_curr - diw_prev_gr) < 2.0
+        diw_prev_gr = diw_curr
+    end
+    @test isapprox(diw_prev_gr, diw_ox_sil; atol=1e-3)
+end
+
+@testset "Multi-Timestep Pyrolysis and Redox Coupling Invariants" begin
+    tkm = [1300.0]
+    dt = 100.0
+    phim = [0.1]
+    X_refr_C_m = [0.5]
+    X_refr_N_m = [0.001]
+    X_refr_H_m = [0.002]
+
+    cfg_ref = Erebus.RefractoryConfig(; active=true, kinetics_active=true, f_refr_C=0.6)
+    cfg_rdx = Erebus.RedoxConfig(; active=true, pyrolysis_redox=true)
+
+    props = Erebus.setup_marker_redox_properties(1, cfg_rdx; tkm=tkm, pfm=[1.0e7])
+    fe3_init = props.nFe3_m[1]
+    @test fe3_init > 0.0
+
+    # Execute 5 consecutive timesteps
+    for step in 1:5
+        Erebus.update_marker_pyrolysis!(
+            tkm,
+            dt,
+            phim,
+            X_refr_C_m,
+            X_refr_N_m,
+            X_refr_H_m,
+            cfg_ref;
+            redox_props=props,
+            redox_cfg=cfg_rdx,
+        )
+        Erebus.update_marker_redox!(
+            props, tkm, [1.0e7], cfg_rdx; Xfem=nothing, XWsolidm=nothing
+        )
+    end
+
+    # 1. Smelting reduction is preserved: Fe3+ stays depleted and does not revert
+    @test isapprox(props.nFe3_m[1], 0.0; atol=1e-12)
+    @test props.nFe0_m[1] > 0.0
+
+    # 2. Multi-species carbon speciation: both CO and CO2 are formed
+    @test props.nCO_m[1] > 0.0
+    @test props.nCO2_m[1] > 0.0
+    @test props.nC_graphite_m[1] > 0.0
+
+    # 3. Oxygen starvation handling: total carbon is bounded and non-negative
+    @test isfinite(props.nC_graphite_m[1])
+    @test isfinite(props.nCO_m[1])
+    @test isfinite(props.nCO2_m[1])
 end
