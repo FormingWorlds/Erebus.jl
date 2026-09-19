@@ -23,11 +23,17 @@ using TOML
         @test cfg_def.Pe_crit ≈ 2.0
         @test cfg_def.T_surface_ref ≈ 273.15
         @test cfg_def.gravity ≈ 0.5
+        @test cfg_def.sill_coupling == true
 
         # TOML serialization and deserialization roundtrip
         sim_cfg = SimulationConfig(;
             hydrothermal=HydrothermalConfig(;
-                active=true, phi_start=0.25, phi_end=0.65, picard_damping=0.75, c_free=0.10
+                active=true,
+                phi_start=0.25,
+                phi_end=0.65,
+                picard_damping=0.75,
+                c_free=0.10,
+                sill_coupling=true,
             ),
         )
         toml_str = save_config(sim_cfg)
@@ -37,6 +43,7 @@ using TOML
         @test loaded_cfg.hydrothermal.phi_end ≈ 0.65
         @test loaded_cfg.hydrothermal.picard_damping ≈ 0.75
         @test loaded_cfg.hydrothermal.c_free ≈ 0.10
+        @test loaded_cfg.hydrothermal.sill_coupling == true
 
         # Unphysical parameter validation
         @test_throws ArgumentError validate_config(
@@ -383,6 +390,15 @@ using TOML
         )
         @test k_at_2_5 >= k_cond
         @test k_at_2_5 < k_at_5_0
+
+        # Layer thickness scaling with H_eff
+        k_h5k = apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.35, tm_crust; cfg=cfg, H_eff=5000.0
+        )
+        k_h10k = apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.35, tm_crust; cfg=cfg, H_eff=10000.0
+        )
+        @test k_h10k > k_h5k > k_cond
 
         # Error handling - warm, cold, and inactive states
         @test_throws DomainError apply_hydrothermal_convection_closure(

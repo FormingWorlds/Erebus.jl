@@ -3007,7 +3007,12 @@ function simulation_loop(
                         end
                         copyto!(F_extract_m, F_extract_m_step_start)
                     end
-                    if !coreformation_active_val || !cfg.coreformation.segregation_heating
+                    if (
+                        !coreformation_active_val || !cfg.coreformation.segregation_heating
+                    ) && (
+                        !cfg.magma_transport.segregation_heating &&
+                        !cfg.magma_transport.sensible_heat_transport
+                    )
                         fill!(Q_seg_grid, 0.0)
                     end
                     magma_res = apply_silicate_melt_segregation!(
@@ -3025,7 +3030,8 @@ function simulation_loop(
                         rplanet=rplanet_val,
                         gx=gx,
                         gy=gy,
-                        Q_seg_grid=if cfg.magma_transport.segregation_heating
+                        Q_seg_grid=if cfg.magma_transport.segregation_heating ||
+                            cfg.magma_transport.sensible_heat_transport
                             Q_seg_grid
                         else
                             nothing
@@ -3059,7 +3065,12 @@ function simulation_loop(
                 Q_seg_val =
                     if (
                         coreformation_active_val && cfg.coreformation.segregation_heating
-                    ) || (magma_active_val && cfg.magma_transport.segregation_heating)
+                    ) || (
+                        magma_active_val && (
+                            cfg.magma_transport.segregation_heating ||
+                            cfg.magma_transport.sensible_heat_transport
+                        )
+                    )
                         Q_seg_grid
                     else
                         nothing

@@ -80,6 +80,7 @@ makedocs(;
             "Multi-Stage Accretion Sequence" => "validation/multistage_accretion.md",
             "Coupled Atmosphere & Gas Envelopes" => "validation/coupled_atmosphere.md",
             "Magma Compaction & Decompression Exsolution" => "validation/magma_compaction.md",
+            "Crustal Sill Cooling & Magma-Hydrothermal Coupling" => "validation/sill_cooling.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

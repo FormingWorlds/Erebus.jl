@@ -411,6 +411,10 @@ Base.@kwdef struct MagmaTransportConfig
     ponding_active::Bool = false
     eruption_active::Bool = false
     tensile_strength::Float64 = 1.0e7
+    sensible_heat_transport::Bool = true
+    cp_melt::Float64 = 1200.0
+    sill_cooling_active::Bool = true
+    crystallization_timescale::Float64 = 0.0
 end
 
 """
@@ -1024,6 +1028,7 @@ Base.@kwdef struct HydrothermalConfig
     rho_fluid_ref::Float64 = 1000.0
     mu_fluid_ref::Float64 = 1.0e-3
     kphi_ref::Float64 = 1.0e-13
+    sill_coupling::Bool = true
 end
 
 """
@@ -1664,6 +1669,8 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         @check_positive_finite mt.tensile_strength
+        @check_positive_finite mt.cp_melt
+        @check_nonneg_finite mt.crystallization_timescale
         if mt.eruption_active && !mt.compaction_active
             throw(
                 ArgumentError(

@@ -336,6 +336,7 @@ $(SIGNATURES)
 - `Pe_cell`: Cell-Péclet number for resolved Darcy flow (default: 0.0)
 - `k_prev`: Conductivity iterate from previous Picard step [W/(m K)] (default: k_cond)
 - `tmfluidphase_val`: Melting temperature of pore fluid [K] (default: 273.15)
+- `H_eff`: Characteristic convective layer thickness [m] (default: cfg.H_layer)
 
 # Returns
 - `k_eff`: Effective hydrothermal thermal conductivity [W/(m K)]
@@ -350,6 +351,7 @@ function apply_hydrothermal_convection_closure(
     Pe_cell::Real=0.0,
     k_prev::Real=k_cond,
     tmfluidphase_val::Real=273.15,
+    H_eff::Real=cfg.H_layer,
 )
     # Physical domain contracts: validate inputs before checking activity or temperature thresholds
     if !isfinite(T) || T <= 0.0
@@ -398,6 +400,8 @@ function apply_hydrothermal_convection_closure(
         tmfluidphase=tmfluidphase_val,
     )
 
+    H_layer_val = (H_eff > 0.0 && isfinite(H_eff)) ? Float64(H_eff) : cfg.H_layer
+
     # Rayleigh numbers
     Ra_m = compute_porous_rayleigh_darcy(
         rho_f,
@@ -406,7 +410,7 @@ function apply_hydrothermal_convection_closure(
         cfg.alpha_fluid,
         K_eff,
         dT,
-        cfg.H_layer,
+        H_layer_val,
         mu_f,
         k_cond,
     )
@@ -416,7 +420,7 @@ function apply_hydrothermal_convection_closure(
         cfg.gravity,
         cfg.alpha_fluid,
         dT,
-        cfg.H_layer,
+        H_layer_val,
         mu_f,
         cfg.k_fluid_ref,
     )

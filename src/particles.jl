@@ -1004,6 +1004,9 @@ function compute_marker_properties!(
             if magma_transport_active && track_depletion && F_extract_m !== nothing
                 F_melt = max(0.0, F_melt - F_extract_m[m])
             end
+            if magma_transport_active && Fm !== nothing
+                F_melt = max(F_melt, Fm[m])
+            end
             if Fm !== nothing
                 Fm[m] = F_melt
             end

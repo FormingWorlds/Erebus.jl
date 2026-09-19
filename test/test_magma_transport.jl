@@ -39,6 +39,10 @@ Random.seed!(42)
         @test cfg_def.ponding_active == false
         @test cfg_def.eruption_active == false
         @test isapprox(cfg_def.tensile_strength, 1.0e7; rtol=1e-12)
+        @test cfg_def.sensible_heat_transport == true
+        @test isapprox(cfg_def.cp_melt, 1200.0; rtol=1e-12)
+        @test cfg_def.sill_cooling_active == true
+        @test isapprox(cfg_def.crystallization_timescale, 0.0; rtol=1e-12)
 
         # Integration in SimulationConfig
         sim_cfg = default_config()
@@ -258,6 +262,10 @@ Random.seed!(42)
             ponding_active=true,
             eruption_active=true,
             tensile_strength=1.5e7,
+            sensible_heat_transport=true,
+            cp_melt=1350.0,
+            sill_cooling_active=true,
+            crystallization_timescale=3600.0,
         )
         sim_cfg = SimulationConfig(;
             melting=MeltingConfig(; active=true), magma_transport=custom_magma
@@ -293,6 +301,12 @@ Random.seed!(42)
         @test loaded_cfg.magma_transport.ponding_active == true
         @test loaded_cfg.magma_transport.eruption_active == true
         @test isapprox(loaded_cfg.magma_transport.tensile_strength, 1.5e7; rtol=1e-12)
+        @test loaded_cfg.magma_transport.sensible_heat_transport == true
+        @test isapprox(loaded_cfg.magma_transport.cp_melt, 1350.0; rtol=1e-12)
+        @test loaded_cfg.magma_transport.sill_cooling_active == true
+        @test isapprox(
+            loaded_cfg.magma_transport.crystallization_timescale, 3600.0; rtol=1e-12
+        )
     end
 
     @testset "compaction_viscosity: McKenzie (1984) Bulk Viscosity" begin
