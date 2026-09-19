@@ -397,6 +397,10 @@ include("test_helpers.jl")
         @reject_config hydrothermal=HydrothermalConfig(
             active=true, k_floor=10.0, k_cutoff=1.0
         )
+        @reject_config hydrothermal=HydrothermalConfig(active=true, H_layer_min=-10.0)
+        @reject_config hydrothermal=HydrothermalConfig(
+            active=true, H_layer_min=20000.0, H_layer=10000.0
+        )
     end
 
     @testset "Accretion Configurations" begin

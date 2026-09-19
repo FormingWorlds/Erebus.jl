@@ -79,17 +79,37 @@ Because $w_\phi'(0) = 0$ and $w_\phi'(1) = 0$, the transition is $C^1$ smooth at
 
 ---
 
+### Dynamic Radial Gravity Coupling ($g(r)$)
+
+Planetesimal interior gravity varies linearly from zero at the center to maximum surface gravity at $r = R_{\mathrm{planet}}$. When `dynamic_gravity = true`, the closure replaces bulk gravity with the local marker radial acceleration:
+
+$$g(r) = \begin{cases} g_{\mathrm{surf}} \left(\frac{r}{R_{\mathrm{planet}}}\right), & r \le R_{\mathrm{planet}} \\ g_{\mathrm{surf}} \left(\frac{R_{\mathrm{planet}}}{r}\right)^2, & r > R_{\mathrm{planet}} \end{cases}$$
+
+where surface gravity is determined by planetary mass $g_{\mathrm{surf}} = G M_{\mathrm{planet}} / R_{\mathrm{planet}}^2$ when mass tracking is active, or defaults to `cfg.gravity`. The linear interior scaling assumes a uniform-density bulk sphere ($M(r) \propto r^3$), regularising the center without singularity. At the planetary center ($r \to 0$), local gravity vanishes continuously ($g \to 0$), suppressing buoyancy forces ($Ra_m \to 0, Ra \to 0$) and returning conductive thermal conductivity without singularity or division by zero.
+
+---
+
+### Dynamic Convective Layer Thickness ($H_{\mathrm{eff}}$)
+
+Convective Rayleigh numbers scale steeply with layer thickness ($Ra_m \propto H, Ra \propto H^3$). Rather than prescribing an invariant shell thickness, setting `dynamic_layer_depth = true` couples $H$ to the physical radial extent of the permeable convective envelope:
+
+$$H_{\mathrm{eff}} = \mathrm{clamp}\left(R_{\mathrm{planet}} - R_{\mathrm{base}}, \, H_{\mathrm{layer\_min}}, \, H_{\mathrm{layer}}\right)$$
+
+where $R_{\mathrm{base}}$ represents the inner boundary of hydrothermal circulation, such as the core radius $R_{\mathrm{core}}$ or an impermeable dehydration basement. Clamping within $[H_{\mathrm{layer\_min}}, H_{\mathrm{layer}}]$ ensures bounded, positive layer scales during core growth and planetary accretion.
+
+---
+
 ### Cell-Péclet Resolution Weighting and Picard Damping
 
-When Darcy flow is resolved directly on the Eulerian grid, applying the full subgrid convective conductivity would double-count convective heat flux. To prevent double-counting, the solver computes the grid cell-Péclet number:
+When Darcy fluid filtration is resolved directly on the numerical grid, adding full subgrid convective conductivity would double-count advective heat flux. With `dynamic_peclet = true` and `resolution_weighting = true`, the solver calculates the local grid cell-Péclet number:
 
-$$Pe_{\mathrm{cell}} = \frac{v_{\mathrm{Darcy}} \, \Delta x}{\kappa_f}$$
+$$Pe_{\mathrm{cell}} = \frac{v_f \, \min(\Delta x, \Delta y)}{\kappa_f}$$
 
-where $\kappa_f = k_{\mathrm{cond}} / (\rho_f \, c_{p,f})$ is thermal diffusivity. The resolution weighting factor:
+where $v_f = \sqrt{q_{x,D}^2 + q_{y,D}^2}$ is the superficial Darcy filtration velocity, and $\kappa_f = k_{\mathrm{cond}} / (\rho_f \, c_{p,f})$ is thermal diffusivity. The resolution weighting factor:
 
 $$w_{\mathrm{res}} = \mathrm{clamp}\left(\frac{Pe_{\mathrm{cell}}}{Pe_{\mathrm{crit}}}, 0.0, 1.0\right)$$
 
-damps the target convective conductivity toward the conductive baseline when $Pe_{\mathrm{cell}} \to Pe_{\mathrm{crit}} = 2.0$:
+damps target convective conductivity smoothly toward the conductive baseline as $Pe_{\mathrm{cell}} \to Pe_{\mathrm{crit}} = 2.0$:
 
 $$k^\dagger = (1.0 - w_{\mathrm{res}}) \, k_{\mathrm{target}} + w_{\mathrm{res}} \, k_{\mathrm{cond}}$$
 
@@ -129,7 +149,11 @@ Hydrothermal subgrid convection is configured via the `[hydrothermal]` table in 
 | `Ra_crit` | Float64 | `1100.0` | - | Critical Rayleigh number for free-fluid convection onset |
 | `c_porous` | Float64 | `1.0` | - | Linear scaling prefactor for porous Nusselt number |
 | `c_free` | Float64 | `0.088` | - | Boundary-layer scaling coefficient for free-fluid Nusselt number |
-| `H_layer` | Float64 | `10000.0` | $\mathrm{m}$ | Characteristic convective layer thickness |
+| `H_layer` | Float64 | `10000.0` | $\mathrm{m}$ | Characteristic convective layer thickness ceiling |
+| `H_layer_min` | Float64 | `100.0` | $\mathrm{m}$ | Minimum convective layer thickness floor |
+| `dynamic_gravity` | Bool | `true` | - | Couple local radial gravity to planetesimal mass and radius |
+| `dynamic_layer_depth` | Bool | `true` | - | Couple convective layer thickness to permeable shell boundary |
+| `dynamic_peclet` | Bool | `true` | - | Couple resolved Darcy filtration velocity to cell-Péclet damping |
 | `dT_min` | Float64 | `5.0` | $\mathrm{K}$ | Temperature contrast threshold for quadratic boundary regularization |
 | `k_floor` | Float64 | `1.0e-3` | $\mathrm{W/(m\,K)}$ | Minimum thermal conductivity floor |
 | `k_cutoff` | Float64 | `1.0e6` | $\mathrm{W/(m\,K)}$ | Maximum enhanced thermal conductivity ceiling |

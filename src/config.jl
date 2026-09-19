@@ -1040,6 +1040,10 @@ Base.@kwdef struct HydrothermalConfig
     rho_fluid_ref::Float64 = 1000.0
     mu_fluid_ref::Float64 = 1.0e-3
     kphi_ref::Float64 = 1.0e-13
+    dynamic_gravity::Bool = true
+    dynamic_layer_depth::Bool = true
+    dynamic_peclet::Bool = true
+    H_layer_min::Float64 = 100.0
 end
 
 """
@@ -2113,6 +2117,15 @@ function validate_config(cfg::SimulationConfig)
         @check_positive_finite cfg.hydrothermal.rho_fluid_ref
         @check_positive_finite cfg.hydrothermal.mu_fluid_ref
         @check_positive_finite cfg.hydrothermal.kphi_ref
+        @check_positive_finite cfg.hydrothermal.H_layer_min
+        (
+            cfg.hydrothermal.H_layer_min <= cfg.hydrothermal.H_layer &&
+            isfinite(cfg.hydrothermal.H_layer_min)
+        ) || throw(
+            ArgumentError(
+                "H_layer_min must be <= H_layer, got H_layer_min=$(cfg.hydrothermal.H_layer_min), H_layer=$(cfg.hydrothermal.H_layer)",
+            ),
+        )
     end
 
     if cfg.accretion.active

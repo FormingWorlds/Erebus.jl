@@ -406,6 +406,7 @@ function simulation_loop(
     Xfe_N_m_step_start = nothing
     Xfe_S_m_step_start = nothing
     core_budgets = nothing
+    rcore_val = 0.0
     Xmin_troilite_m = nothing
     Xmin_schreibersite_m = nothing
     Xmin_cohenite_m = nothing
@@ -765,6 +766,9 @@ function simulation_loop(
         else
             t_accreted = nothing
         end
+        if haskey(ckpt, "rcore")
+            rcore_val = Float64(ckpt["rcore"])
+        end
         hcnspo_props = if cfg.volatile_mixture.active || cfg.refractory.active
             hp = setup_marker_hcnspo_properties(marknum, cfg.volatile_mixture, cfg.refractory)
             for k in keys(hp)
@@ -1063,6 +1067,7 @@ function simulation_loop(
                 regional_mineral_modes=regional_mineral_modes,
                 DT0=DT0,
                 rplanet=rplanet_val,
+                rcore=rcore_val,
                 t_accreted=t_accreted,
                 M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                 M_planet_val=M_planet_val,
@@ -1729,6 +1734,16 @@ function simulation_loop(
                                 else
                                     nothing
                                 end,
+                                xm=xm,
+                                ym=ym,
+                                coords=coords,
+                                rplanet_val=rplanet_val,
+                                M_planet_val=M_planet_val,
+                                rcore_val=rcore_val,
+                                qxD_val=qxD,
+                                qyD_val=qyD,
+                                xcenter_val=xcenter_val,
+                                ycenter_val=ycenter_val,
                             )
                             scatter_marker_to_master_grids!(
                                 m,
@@ -1881,6 +1896,16 @@ function simulation_loop(
                             else
                                 nothing
                             end,
+                            xm=xm,
+                            ym=ym,
+                            coords=coords,
+                            rplanet_val=rplanet_val,
+                            M_planet_val=M_planet_val,
+                            rcore_val=rcore_val,
+                            qxD_val=qxD,
+                            qyD_val=qyD,
+                            xcenter_val=xcenter_val,
+                            ycenter_val=ycenter_val,
                         )
                         @inbounds marker_to_basic_nodes!(
                             m,
@@ -2081,6 +2106,16 @@ function simulation_loop(
                         hydrothermal_active=cfg.hydrothermal.active,
                         hydrothermal_cfg=cfg.hydrothermal,
                         deltaIW_m=redox_props !== nothing ? redox_props.deltaIW_m : nothing,
+                        xm=xm,
+                        ym=ym,
+                        coords=coords,
+                        rplanet_val=rplanet_val,
+                        M_planet_val=M_planet_val,
+                        rcore_val=rcore_val,
+                        qxD_val=qxD,
+                        qyD_val=qyD,
+                        xcenter_val=xcenter_val,
+                        ycenter_val=ycenter_val,
                     )
                     # interpolate marker properties to basic nodes
                     @inbounds marker_to_basic_nodes!(
@@ -3714,7 +3749,7 @@ function simulation_loop(
             )
 
             if (cfg.metal_partition.active && Xfe_bulk !== nothing) &&
-                (need_telemetry || should_save_snapshot)
+                (need_telemetry || should_save_snapshot || cfg.hydrothermal.active)
                 core_budgets = compute_core_volatile_budgets(
                     xm,
                     ym,
@@ -3732,21 +3767,22 @@ function simulation_loop(
                     core_radius_fraction=cfg.metal_partition.core_radius_fraction,
                     phi_core_threshold=cfg.metal_partition.phi_core_threshold,
                 )
+                if (core_budgets !== nothing && core_budgets.M_core_metal > 0.0)
+                    rcore_val =
+                        (
+                            3.0 * core_budgets.M_core_metal /
+                            (4.0 * π * cfg.coreformation.rho_metal)
+                        )^(1.0 / 3.0)
+                else
+                    rcore_val = 0.0
+                end
             end
 
             # ---------------------------------------------------------------------
             # streaming telemetry record
             # ---------------------------------------------------------------------
             if need_telemetry
-                core_radius_current =
-                    if (core_budgets !== nothing && core_budgets.M_core_metal > 0.0)
-                        (
-                            3.0 * core_budgets.M_core_metal /
-                            (4.0 * π * cfg.coreformation.rho_metal)
-                        )^(1.0 / 3.0)
-                    else
-                        0.0
-                    end
+                core_radius_current = rcore_val
                 stream_telemetry_row!(
                     telemetry_io,
                     timestep,
@@ -3925,6 +3961,7 @@ function simulation_loop(
                     regional_mineral_modes=regional_mineral_modes,
                     DT0=DT0,
                     rplanet=rplanet_val,
+                    rcore=rcore_val,
                     t_accreted=t_accreted,
                     M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                     M_planet_val=M_planet_val,

@@ -266,7 +266,7 @@ function compute_effective_hydrothermal_conductivity(
     Pe_crit::Real=2.0,
     resolution_weighting::Bool=true,
     picard_damping::Real=1.0,
-    k_prev::Real=k_cond,
+    k_prev::Union{Nothing,Real}=nothing,
 )
     if !isfinite(k_cond) || k_cond <= 0.0 || !isfinite(Nu) || Nu < 1.0
         throw(
@@ -292,8 +292,9 @@ function compute_effective_hydrothermal_conductivity(
     if !isfinite(picard_damping) || !(0.0 < picard_damping <= 1.0)
         throw(DomainError(picard_damping, "picard_damping must be in (0, 1] and finite"))
     end
-    if !isfinite(k_prev) || k_prev <= 0.0
-        throw(DomainError(k_prev, "k_prev must be positive and finite"))
+    k_prev_val = k_prev !== nothing ? Float64(k_prev) : Float64(k_cond)
+    if !isfinite(k_prev_val) || k_prev_val <= 0.0
+        throw(DomainError(k_prev_val, "k_prev must be positive and finite"))
     end
 
     # Target convective conductivity
@@ -310,7 +311,7 @@ function compute_effective_hydrothermal_conductivity(
 
     # Picard relaxation damping
     gamma = Float64(picard_damping)
-    k_damped = (1.0 - gamma) * Float64(k_prev) + gamma * Float64(k_res)
+    k_damped = (1.0 - gamma) * k_prev_val + gamma * Float64(k_res)
 
     return Float64(max(k_cond, clamp(k_damped, k_floor, k_cutoff)))
 end
@@ -334,9 +335,11 @@ $(SIGNATURES)
 - `cfg`: HydrothermalConfig parameter set
 - `K`: Local permeability [m²] (default: -1.0, calculates from Kozeny-Carman)
 - `Pe_cell`: Cell-Péclet number for resolved Darcy flow (default: 0.0)
-- `k_prev`: Conductivity iterate from previous Picard step [W/(m K)] (default: k_cond)
+- `k_prev`: Optional conductivity iterate from previous Picard step [W/(m K)] (default: nothing, uses k_cond)
 - `tmfluidphase_val`: Melting temperature of pore fluid [K] (default: 273.15)
-- `H_eff`: Characteristic convective layer thickness [m] (default: cfg.H_layer)
+- `H_eff`: Optional convective layer thickness [m] (default: nothing, uses cfg.H_layer)
+- `gravity`: Optional local gravitational acceleration [m/s²] (default: nothing, uses cfg.gravity)
+- `active`: Boolean toggle to activate convection (default: true)
 
 # Returns
 - `k_eff`: Effective hydrothermal thermal conductivity [W/(m K)]
@@ -349,9 +352,11 @@ function apply_hydrothermal_convection_closure(
     cfg::HydrothermalConfig=HydrothermalConfig(),
     K::Real=-1.0,
     Pe_cell::Real=0.0,
-    k_prev::Real=k_cond,
+    k_prev::Union{Nothing,Real}=nothing,
     tmfluidphase_val::Real=273.15,
-    H_eff::Real=cfg.H_layer,
+    H_eff::Union{Nothing,Real}=nothing,
+    gravity::Union{Nothing,Real}=nothing,
+    active::Bool=true,
 )
     # Physical domain contracts: validate inputs before checking activity or temperature thresholds
     if !isfinite(T) || T <= 0.0
@@ -363,18 +368,43 @@ function apply_hydrothermal_convection_closure(
     if !isfinite(k_cond) || k_cond <= 0.0
         throw(DomainError(k_cond, "Conductive conductivity must be positive and finite"))
     end
+    if H_eff !== nothing
+        if !isfinite(H_eff) || H_eff <= 0.0
+            throw(
+                DomainError(
+                    H_eff, "Convective layer thickness H_eff must be positive and finite"
+                ),
+            )
+        end
+    end
+    if gravity !== nothing
+        if !isfinite(gravity) || gravity < 0.0
+            throw(DomainError(gravity, "Gravity must be non-negative and finite"))
+        end
+    end
 
-    if !cfg.active || tm >= 3
-        return Float64(k_cond)
-    end
-    if T <= tmfluidphase_val || T <= cfg.T_surface_ref
-        return Float64(k_cond)
+    H_layer_val = H_eff !== nothing ? Float64(H_eff) : cfg.H_layer
+    g_val = gravity !== nothing ? Float64(gravity) : cfg.gravity
+
+    # Early returns for non-convecting regimes (inactive, sticky air, sub-freezing, or zero gravity)
+    if !active ||
+        !cfg.active ||
+        tm >= 3 ||
+        T <= tmfluidphase_val ||
+        T <= cfg.T_surface_ref ||
+        g_val <= 0.0
+        k_eff_raw = Float64(k_cond)
+        if k_prev !== nothing && isfinite(k_prev) && k_prev > 0.0
+            k_blend =
+                cfg.picard_damping * k_eff_raw +
+                (1.0 - cfg.picard_damping) * Float64(k_prev)
+            return Float64(max(k_cond, clamp(k_blend, cfg.k_floor, cfg.k_cutoff)))
+        else
+            return k_eff_raw
+        end
     end
 
-    dT = max(0.0, T - cfg.T_surface_ref)
-    if dT <= 0.0
-        return Float64(k_cond)
-    end
+    dT = Float64(T - cfg.T_surface_ref)
 
     # Permeability evaluation: use provided K or compute from Kozeny-Carman
     K_eff = if K >= 0.0
@@ -400,38 +430,12 @@ function apply_hydrothermal_convection_closure(
         tmfluidphase=tmfluidphase_val,
     )
 
-    if H_eff !== nothing
-        if !isfinite(H_eff) || H_eff <= 0.0
-            throw(
-                DomainError(
-                    H_eff, "Convective layer thickness H_eff must be positive and finite"
-                ),
-            )
-        end
-    end
-    H_layer_val = H_eff !== nothing ? Float64(H_eff) : cfg.H_layer
-
     # Rayleigh numbers
     Ra_m = compute_porous_rayleigh_darcy(
-        rho_f,
-        cfg.cp_fluid,
-        cfg.gravity,
-        cfg.alpha_fluid,
-        K_eff,
-        dT,
-        H_layer_val,
-        mu_f,
-        k_cond,
+        rho_f, cfg.cp_fluid, g_val, cfg.alpha_fluid, K_eff, dT, H_layer_val, mu_f, k_cond
     )
     Ra = compute_free_fluid_rayleigh(
-        rho_f,
-        cfg.cp_fluid,
-        cfg.gravity,
-        cfg.alpha_fluid,
-        dT,
-        H_layer_val,
-        mu_f,
-        cfg.k_fluid_ref,
+        rho_f, cfg.cp_fluid, g_val, cfg.alpha_fluid, dT, H_layer_val, mu_f, cfg.k_fluid_ref
     )
 
     # Blended Nusselt number
@@ -468,4 +472,145 @@ function apply_hydrothermal_convection_closure(
         picard_damping=cfg.picard_damping,
         k_prev=k_prev,
     )
+end
+
+"""
+Compute local radial gravitational acceleration at radius r.
+
+In spherical symmetry with planetary radius R_planet and surface gravity g_surface:
+- For r <= R_planet: g(r) = g_surface * (r / R_planet) (linear interior profile)
+- For r > R_planet: g(r) = g_surface * (R_planet / r)^2 (inverse-square exterior profile)
+
+$(SIGNATURES)
+
+# Arguments
+- `r`: Radial distance from planet center [m]
+- `R_planet`: Planetesimal radius [m]
+- `g_surface`: Planetary surface gravity [m/s²]
+
+# Returns
+- `g`: Local gravitational acceleration [m/s²]
+
+# Notes
+- Assumes a uniform-density bulk sphere (M(r) ∝ r³) for interior scaling, providing non-singular regularisation (g → 0 as r → 0).
+"""
+function compute_local_radial_gravity(r::Real, R_planet::Real, g_surface::Real)::Float64
+    if !isfinite(r) ||
+        r < 0.0 ||
+        !isfinite(R_planet) ||
+        R_planet <= 0.0 ||
+        !isfinite(g_surface) ||
+        g_surface < 0.0
+        throw(
+            DomainError(
+                (r, R_planet, g_surface),
+                "Radius r and g_surface must be non-negative, R_planet positive, and all finite",
+            ),
+        )
+    end
+    if g_surface == 0.0 || r == 0.0
+        return 0.0
+    end
+    r_val = Float64(r)
+    R_val = Float64(R_planet)
+    g_val = Float64(g_surface)
+    if r_val <= R_val
+        return g_val * (r_val / R_val)
+    else
+        return g_val * (R_val / r_val)^2
+    end
+end
+
+"""
+Compute cell-Péclet number for resolved Darcy fluid flow across numerical grid cells.
+
+Calculates the dimensionless ratio of advective fluid heat transport to conductive transport:
+    Pe_cell = (v_f * dl * rho_f * cp_f) / k_cond
+
+$(SIGNATURES)
+
+# Arguments
+- `v_f`: Local fluid filtration velocity magnitude [m/s]
+- `dl`: Grid cell characteristic dimension (min(dx, dy)) [m]
+- `k_cond`: Bulk conductive thermal conductivity [W/(m K)]
+- `rho_f`: Fluid density [kg/m³]
+- `cp_f`: Fluid isobaric heat capacity [J/(kg K)]
+
+# Returns
+- `Pe_cell`: Dimensionless cell-Péclet number [-]
+"""
+function compute_cell_peclet_number(
+    v_f::Real, dl::Real, k_cond::Real, rho_f::Real, cp_f::Real
+)::Float64
+    if !isfinite(v_f) ||
+        v_f < 0.0 ||
+        !isfinite(dl) ||
+        dl <= 0.0 ||
+        !isfinite(k_cond) ||
+        k_cond <= 0.0 ||
+        !isfinite(rho_f) ||
+        rho_f <= 0.0 ||
+        !isfinite(cp_f) ||
+        cp_f <= 0.0
+        throw(
+            DomainError(
+                (v_f, dl, k_cond, rho_f, cp_f),
+                "Properties must be strictly positive and finite (v_f >= 0)",
+            ),
+        )
+    end
+    if v_f == 0.0
+        return 0.0
+    end
+    return Float64((v_f * dl * rho_f * cp_f) / k_cond)
+end
+
+"""
+Compute characteristic convective layer thickness H_eff for planetesimal hydrothermal flow.
+
+Evaluates the permeable shell thickness bounded by base radius R_base
+(e.g. core boundary or impermeable basement) and upper surface R_planet:
+    H_eff = clamp(R_planet - R_base, H_min, H_max)
+
+$(SIGNATURES)
+
+# Arguments
+- `r`: Marker radial coordinate [m]
+- `R_planet`: Planetesimal surface radius [m]
+
+# Keyword Arguments
+- `R_base`: Radial coordinate of impermeable basement or core boundary [m] (default: 0.0)
+- `H_max`: Maximum permissible convective layer thickness [m] (default: 10000.0)
+- `H_min`: Minimum convective layer thickness floor [m] (default: 100.0)
+
+# Returns
+- `H_eff`: Convective layer thickness [m]
+"""
+function compute_hydrothermal_layer_thickness(
+    r::Real, R_planet::Real; R_base::Real=0.0, H_max::Real=10000.0, H_min::Real=100.0
+)::Float64
+    if !isfinite(r) ||
+        r < 0.0 ||
+        !isfinite(R_planet) ||
+        R_planet <= 0.0 ||
+        !isfinite(R_base) ||
+        R_base < 0.0 ||
+        R_base > R_planet ||
+        !isfinite(H_max) ||
+        H_max <= 0.0 ||
+        !isfinite(H_min) ||
+        H_min <= 0.0 ||
+        H_min > H_max
+        throw(
+            DomainError(
+                (r, R_planet, R_base, H_max, H_min),
+                "Layer thickness parameters must be positive, finite, R_base <= R_planet, and H_min <= H_max",
+            ),
+        )
+    end
+    if r <= R_base
+        return Float64(H_min)
+    end
+    H_crust = max(0.0, Float64(R_planet - R_base))
+    return Float64(clamp(H_crust, H_min, H_max))
 end
