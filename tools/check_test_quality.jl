@@ -168,9 +168,8 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                end
                 # Check for bare positivity: @test x > 0, @test x >= 0, @test x < 0, etc.
-                if (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
+                elseif (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
                     (arg2 == 0 || arg2 == 0.0 || arg1 == 0 || arg1 == 0.0)
                     push!(
                         violations,

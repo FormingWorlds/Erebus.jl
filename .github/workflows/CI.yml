@@ -44,6 +44,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
@@ -58,6 +59,7 @@ jobs:
           EREBUS_TEST_GROUP: all
       - name: Check Coverage
         run: |
+          julia --project=tools -e 'using Pkg; Pkg.instantiate()'
           julia --project=tools tools/check_coverage.jl
 
   docs:
@@ -65,6 +67,7 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
@@ -83,6 +86,7 @@ jobs:
   format:
     name: Code Style - BlueStyle
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
@@ -97,6 +101,7 @@ jobs:
   test-quality:
     name: Test Quality Standards
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1

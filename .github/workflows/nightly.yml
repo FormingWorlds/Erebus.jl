@@ -7,6 +7,7 @@ jobs:
   test:
     name: Integration Tests - Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -31,4 +32,5 @@ jobs:
         env:
           EREBUS_TEST_GROUP: integration
       - name: Check Coverage
-        run: julia --project=tools tools/check_coverage.jl
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
+        julia --project=tools tools/check_coverage.jl
