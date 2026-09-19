@@ -400,7 +400,16 @@ function apply_hydrothermal_convection_closure(
         tmfluidphase=tmfluidphase_val,
     )
 
-    H_layer_val = (H_eff > 0.0 && isfinite(H_eff)) ? Float64(H_eff) : cfg.H_layer
+    if H_eff !== nothing
+        if !isfinite(H_eff) || H_eff <= 0.0
+            throw(
+                DomainError(
+                    H_eff, "Convective layer thickness H_eff must be positive and finite"
+                ),
+            )
+        end
+    end
+    H_layer_val = H_eff !== nothing ? Float64(H_eff) : cfg.H_layer
 
     # Rayleigh numbers
     Ra_m = compute_porous_rayleigh_darcy(

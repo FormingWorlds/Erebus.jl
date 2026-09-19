@@ -44,12 +44,12 @@ $$T(\pm b, 0^+) = \frac{T_0 + T_c}{2}$$
 
 ### Numerical Verification
 
-The simulation solves the 1D diffusion equation, using a second-order Crank-Nicolson implicit scheme, on a mesh of $N = 201$ nodes ($\Delta y = 2.0$ m).
-At time $t = 5.0 \times 10^8$ s, the characteristic thermal diffusion length, $2\sqrt{\kappa t} \approx 44.7$ m, spans more than 22 grid points.
+The benchmark drives the production `assemble_thermal_lse!` solver over a 1D column with backward Euler time integration on a mesh of $N = 201$ nodes ($\Delta y = 2.0$ m).
+At time $t = 5.0 \times 10^8$ s, the characteristic thermal diffusion length, $2\sqrt{\kappa t} \approx 44.7$ m, spans 22.4 grid cells.
 The test asserts:
 - Relative $L_2$ error norm, $\|T_{\text{num}} - T_{\text{ana}}\|_2 / \|T_{\text{ana}}\|_2$, is less than $0.1\%$ ($< 1.0 \times 10^{-3}$).
 - Maximum point-wise absolute error, $\max |T_{\text{num}} - T_{\text{ana}}|$, is less than $1.0$ K throughout the domain.
-- Agreement at the sill center, $T(0, t_{\text{total}})$, is better than 0.5 K.
+- Centerline temperature agreement at $y = 0$ is within 1.0 K (numerical difference $< 0.75$ K).
 
 ---
 
@@ -68,10 +68,10 @@ $$c_{p,\text{apparent}} = c_p + \frac{L_m}{T_{\text{liq}} - T_{\text{sol}}} = c_
 
 ### Verification Results
 
-With typical silicate melt parameters ($L_m = 4.0 \times 10^5$ J/kg, $c_p = 1000$ J/(kg K), $\Delta T = 200$ K):
+The test evaluates `rhocp_apparent_silicate` directly across subsolidus, mushy, and superliquidus intervals with silicate parameters ($L_m = 4.0 \times 10^5$ J/kg, $c_p = 1000$ J/(kg K), $\Delta T = 200$ K):
 - $\text{Ste} = 0.5$.
-- The effective thermal buffering factor is $1 + \text{Ste}^{-1} = 3.0$.
-- The duration required to cool through the crystallization interval increases by a factor of 3.0, relative to sensible cooling alone.
+- Inside the mushy interval, the apparent heat capacity buffering factor is $1 + \text{Ste}^{-1} = 3.0$.
+- Outside the mushy interval, the apparent heat capacity equals baseline sensible heat capacity ($1.0 \times \rho c_p$).
 
 ---
 
@@ -79,19 +79,18 @@ With typical silicate melt parameters ($L_m = 4.0 \times 10^5$ J/kg, $c_p = 1000
 
 ### Pairwise Flux Discretization
 
-Melt segregation transports sensible enthalpy advectively through cell faces:
+Melt segregation transports sensible heat advectively through cell faces using relative temperature differences between donor and receiver cells:
 
-$$\mathbf{H}_{\text{flux}} = \mathbf{q}_m \rho_m c_{p,m} T_{\text{donor}}$$
+$$\mathbf{H}_{\text{flux}} = \mathbf{q}_m \rho_m c_{p,m} (T_{\text{donor}} - T_{\text{rec}})$$
 
-The volumetric net heating rate, deposited into the energy solver, is:
-
-$$Q_{\text{sens}} = -\nabla \cdot \mathbf{H}_{\text{flux}}$$
+This advective formulation computes the sensible transport term $-\rho_m c_{p,m} (\mathbf{q}_m \cdot \nabla T)$ without spurious divergence artifacts on fixed-capacity Eulerian grids.
+The heating increment is deposited directly onto interior staggered grid nodes $(i+1, j+1)$ to prevent boundary ghost node leakage.
 
 ### Conservation Verification
 
 Tests in `test/test_sill_cooling.jl` verify:
-1. **Machine-Precision Telescoping Cancellation**: Every face enthalpy flux is subtracted from the donor cell, and added to the receiver cell. The domain-integrated net sensible energy satisfies $\sum \Delta H = 0.0$ to machine precision.
-2. **Nodal Source Balance**: Interpolation to staggered grid nodes preserves zero net energy injection: $\int Q_{\text{seg}} \, dV = 0.0$, remaining below $10^{-10}$ W.
+1. **Isothermal Zero Sensible Heating**: In an isothermal domain ($\nabla T = 0$), sensible heating is identically zero ($Q_{\text{seg}} \equiv 0$ to machine precision, $< 10^{-12} \text{ W/m}^3$), preventing unphysical heating from non-solenoidal melt ponding.
+2. **Ghost-Free Nodal Deposition**: All sensible heating is deposited onto interior nodes ($2 \le i \le Ny$, $2 \le j \le Nx$), leaving boundary ghost rims strictly zero.
 3. **Thermal Stratification Extraction**: Upward segregation extracts heat from the deep, hot interior ($Q_{\text{sens}} < 0$), and deposits it in the shallow, cooler lithosphere ($Q_{\text{sens}} > 0$).
 
 ---
@@ -110,7 +109,7 @@ The effective convective layer thickness, $H_{\text{eff}}$, scales the local Ray
 
 ### Contact Metamorphism and Dehydration Aureoles
 
-In hydrated host rock, such as serpentine or chlorite, conductive heat from the sill drives host rock temperatures above the devolatilization limit ($T > 650$ K).
+In hydrated host rock, such as serpentine or chlorite, conductive heat from the sill drives host rock temperatures above the thermodynamic dehydration equilibrium ($T > T_{\text{eq}} = \Delta H / \Delta S$).
 Contact metamorphic dehydration produces water:
 
 $$\text{DQPF} = \frac{\Gamma_{\text{water}}}{\rho_f} > 0$$

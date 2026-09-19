@@ -185,11 +185,11 @@ This latent heat release buffers the sill core against rapid cooling, producing 
 ## Magma-Hydrothermal Convective Coupling
 
 Heat dissipated from cooling crustal intrusions conducts into overlying permeable crustal aquifers.
-When hydrothermal convection is active (`sill_coupling = true`), the temperature contrast between the hot sill roof and cold surface triggers porous Rayleigh-Darcy circulation ($Ra_m > Ra_{m,\text{crit}}$).
+When hydrothermal convection is active, the temperature contrast between the hot intrusion and cold surface triggers porous Rayleigh-Darcy circulation ($Ra_m > Ra_{m,\text{crit}}$), scaled by the permeable aquifer thickness $H_{\text{eff}}$.
 The resulting convective Nusselt enhancement ($Nu > 1$) increases effective thermal conductivity:
 
 $$k_{\text{eff}} = \text{Nu} \cdot k_{\text{cond}}$$
 
 This enhanced heat transfer extracts heat from the underlying sill, accelerating crustal cooling and driving hydrothermal fluid venting.
-Simultaneously, heat conducted into surrounding hydrated host rock (such as serpentine or chlorite) drives contact metamorphic dehydration when $T > 650$ K.
+Simultaneously, heat conducted into surrounding hydrated host rock (such as serpentine or chlorite) drives contact metamorphic dehydration when host temperatures exceed the thermodynamic dehydration equilibrium ($T > T_{\text{eq}} = \Delta H / \Delta S$).
 The devolatilization fluid production rate ($\text{DQPF} > 0$) pressurizes pore fluids in low-permeability contact aureoles, generating overpressures that drive hydrofracturing and fluid discharge into overlying porous layers.

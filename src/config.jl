@@ -411,10 +411,10 @@ Base.@kwdef struct MagmaTransportConfig
     ponding_active::Bool = false
     eruption_active::Bool = false
     tensile_strength::Float64 = 1.0e7
-    sensible_heat_transport::Bool = true
+    sensible_heat_transport::Bool = false
     cp_melt::Float64 = 1200.0
-    sill_cooling_active::Bool = true
-    crystallization_timescale::Float64 = 0.0
+    sill_cooling_active::Bool = false
+    crystallization_timescale::Float64 = 1.0e6
 end
 
 """
@@ -1028,7 +1028,6 @@ Base.@kwdef struct HydrothermalConfig
     rho_fluid_ref::Float64 = 1000.0
     mu_fluid_ref::Float64 = 1.0e-3
     kphi_ref::Float64 = 1.0e-13
-    sill_coupling::Bool = true
 end
 
 """

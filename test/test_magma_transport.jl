@@ -39,10 +39,10 @@ Random.seed!(42)
         @test cfg_def.ponding_active == false
         @test cfg_def.eruption_active == false
         @test isapprox(cfg_def.tensile_strength, 1.0e7; rtol=1e-12)
-        @test cfg_def.sensible_heat_transport == true
+        @test cfg_def.sensible_heat_transport == false
         @test isapprox(cfg_def.cp_melt, 1200.0; rtol=1e-12)
-        @test cfg_def.sill_cooling_active == true
-        @test isapprox(cfg_def.crystallization_timescale, 0.0; rtol=1e-12)
+        @test cfg_def.sill_cooling_active == false
+        @test isapprox(cfg_def.crystallization_timescale, 1.0e6; rtol=1e-12)
 
         # Integration in SimulationConfig
         sim_cfg = default_config()

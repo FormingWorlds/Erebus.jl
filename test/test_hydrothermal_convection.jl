@@ -23,17 +23,11 @@ using TOML
         @test cfg_def.Pe_crit ≈ 2.0
         @test cfg_def.T_surface_ref ≈ 273.15
         @test cfg_def.gravity ≈ 0.5
-        @test cfg_def.sill_coupling == true
 
         # TOML serialization and deserialization roundtrip
         sim_cfg = SimulationConfig(;
             hydrothermal=HydrothermalConfig(;
-                active=true,
-                phi_start=0.25,
-                phi_end=0.65,
-                picard_damping=0.75,
-                c_free=0.10,
-                sill_coupling=true,
+                active=true, phi_start=0.25, phi_end=0.65, picard_damping=0.75, c_free=0.10
             ),
         )
         toml_str = save_config(sim_cfg)
@@ -43,7 +37,6 @@ using TOML
         @test loaded_cfg.hydrothermal.phi_end ≈ 0.65
         @test loaded_cfg.hydrothermal.picard_damping ≈ 0.75
         @test loaded_cfg.hydrothermal.c_free ≈ 0.10
-        @test loaded_cfg.hydrothermal.sill_coupling == true
 
         # Unphysical parameter validation
         @test_throws ArgumentError validate_config(
@@ -424,6 +417,18 @@ using TOML
         )
         @test_throws DomainError apply_hydrothermal_convection_closure(
             k_cond, 200.0, -0.1, tm_crust; cfg=cfg_inactive
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=-500.0
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=0.0
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=NaN
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=Inf
         )
     end
 

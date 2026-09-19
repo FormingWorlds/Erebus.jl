@@ -296,10 +296,10 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 | `ponding_active` | `Bool` | `false` | - | Enable crustal magma sill ponding beneath subsolidus lid | `true` / `false` |
 | `eruption_active` | `Bool` | `false` | - | Enable volcanic overpressure hydrofracture eruption | `true` / `false` |
 | `tensile_strength` | `Float64` | `1.0e7` | Pa | Crustal rock tensile strength threshold for volcanic eruption | $> 0$ |
-| `sensible_heat_transport` | `Bool` | `true` | - | Enable advective sensible enthalpy transport by silicate melt migration | `true` / `false` |
+| `sensible_heat_transport` | `Bool` | `false` | - | Enable advective sensible enthalpy transport by silicate melt migration | `true` / `false` |
 | `cp_melt` | `Float64` | `1200.0` | $\text{J/(kg K)}$ | Specific isobaric heat capacity of liquid silicate melt | $> 0$ |
-| `sill_cooling_active` | `Bool` | `true` | - | Enable dynamic crystallization and latent heat release for ponded crustal magma sills | `true` / `false` |
-| `crystallization_timescale` | `Float64` | `0.0` | s | Characteristic crystallization relaxation timescale (0.0 for instantaneous equilibrium) | $\ge 0$ |
+| `sill_cooling_active` | `Bool` | `false` | - | Enable dynamic crystallization and latent heat release for ponded crustal magma sills | `true` / `false` |
+| `crystallization_timescale` | `Float64` | `1.0e6` | s | Characteristic crystallization relaxation timescale (0.0 for instantaneous equilibrium) | $\ge 0$ |
 
 ---
 
@@ -580,7 +580,6 @@ k_fluid_ref = 0.6
 rho_fluid_ref = 1000.0
 mu_fluid_ref = 1.0e-3
 kphi_ref = 1.0e-13
-sill_coupling = true
 ```
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
@@ -607,7 +606,6 @@ sill_coupling = true
 | `rho_fluid_ref` | `Float64` | `1000.0` | $\text{kg/m}^3$ | Reference fluid density | $> 0$ |
 | `mu_fluid_ref` | `Float64` | `1.0e-3` | $\text{Pa s}$ | Reference dynamic fluid viscosity | $> 0$ |
 | `kphi_ref` | `Float64` | `1.0e-13` | $\text{m}^2$ | Baseline reference permeability | $> 0$ |
-| `sill_coupling` | `Bool` | `true` | - | Enable convective heat extraction coupling above cooling magma sills | `true` / `false` |
 
 ---
 
