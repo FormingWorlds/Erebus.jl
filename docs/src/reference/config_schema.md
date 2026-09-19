@@ -296,6 +296,10 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 | `ponding_active` | `Bool` | `false` | - | Enable crustal magma sill ponding beneath subsolidus lid | `true` / `false` |
 | `eruption_active` | `Bool` | `false` | - | Enable volcanic overpressure hydrofracture eruption | `true` / `false` |
 | `tensile_strength` | `Float64` | `1.0e7` | Pa | Crustal rock tensile strength threshold for volcanic eruption | $> 0$ |
+| `sensible_heat_transport` | `Bool` | `false` | - | Enable advective sensible enthalpy transport by silicate melt migration | `true` / `false` |
+| `cp_melt` | `Float64` | `1200.0` | $\text{J/(kg K)}$ | Specific isobaric heat capacity of liquid silicate melt | $> 0$ |
+| `sill_cooling_active` | `Bool` | `false` | - | Enable dynamic crystallization and latent heat release for ponded crustal magma sills | `true` / `false` |
+| `crystallization_timescale` | `Float64` | `1.0e6` | s | Characteristic crystallization relaxation timescale (0.0 for instantaneous equilibrium) | $\ge 0$ |
 
 ---
 

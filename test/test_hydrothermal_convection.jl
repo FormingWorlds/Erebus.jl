@@ -384,6 +384,15 @@ using TOML
         @test k_at_2_5 >= k_cond
         @test k_at_2_5 < k_at_5_0
 
+        # Layer thickness scaling with H_eff
+        k_h5k = apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.35, tm_crust; cfg=cfg, H_eff=5000.0
+        )
+        k_h10k = apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.35, tm_crust; cfg=cfg, H_eff=10000.0
+        )
+        @test k_h10k > k_h5k > k_cond
+
         # Error handling - warm, cold, and inactive states
         @test_throws DomainError apply_hydrothermal_convection_closure(
             k_cond, 350.0, -0.1, tm_crust; cfg=cfg
@@ -408,6 +417,18 @@ using TOML
         )
         @test_throws DomainError apply_hydrothermal_convection_closure(
             k_cond, 200.0, -0.1, tm_crust; cfg=cfg_inactive
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=-500.0
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=0.0
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=NaN
+        )
+        @test_throws DomainError apply_hydrothermal_convection_closure(
+            k_cond, 350.0, 0.3, tm_crust; cfg=cfg, H_eff=Inf
         )
     end
 

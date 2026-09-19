@@ -126,3 +126,70 @@ When `exsolution_active = true`, decompression drives multi-species volatile exs
 $$\Delta w_v = w_v(P_{\text{deep}}) - w_{v,\text{eq}}(P_{\text{shallow}}, T)$$
 
 Exsolved volatiles enter the marker pore fluid fraction $\phi_m$, increasing fluid pressure and driving cold surface venting or atmospheric accumulation.
+
+---
+
+## Advective Sensible Enthalpy Transport
+
+Ascending silicate melt carries thermal energy advectively through the compacting mantle and crust.
+The sensible enthalpy flux vector is:
+
+$$\mathbf{H}_{\text{sens}} = \mathbf{q}_m \rho_m c_{p,m} T_{\text{donor}}$$
+
+where $\mathbf{q}_m$ is the volumetric segregation flux [$\text{m/s}$], $\rho_m$ is the silicate melt density [$\text{kg/m}^3$], $c_{p,m}$ is the specific heat capacity of liquid melt [$\text{J/(kg K)}$], and $T_{\text{donor}}$ is the upwind donor cell temperature [$\text{K}$].
+
+The net volumetric rate of thermal enthalpy divergence is:
+
+$$Q_{\text{sens}} = -\nabla \cdot \mathbf{H}_{\text{sens}}$$
+
+In the discrete finite-volume implementation, face fluxes are applied pairwise between adjacent cells.
+Heat extracted from donor cells exactly equals heat added to receiver cells, preserving global thermal energy conservation to machine precision.
+Sensible heat deposition is coupled directly into the global thermal Poisson solver alongside radiogenic, shear, and adiabatic heating terms.
+
+---
+
+## Crustal Sill Solidification and Latent Heat Kinetics
+
+When ascending magma accumulates beneath subsolidus thermal lids (`ponding_active = true`), it cools via conductive and convective loss to overlying rocks.
+In `Erebus.jl`, dynamic solidification of ponded melt is governed by thermodynamic equilibrium and kinetic relaxation.
+
+### Thermodynamic Melt Capacity
+
+At local temperature $T$, the equilibrium melt capacity $F_{\text{eq}}(T)$ is determined by the linear solidus-liquidus interval:
+
+$$F_{\text{eq}}(T) = \begin{cases}
+0, & T \le T_{\text{solidus}} \\
+\frac{T - T_{\text{solidus}}}{T_{\text{liquidus}} - T_{\text{solidus}}}, & T_{\text{solidus}} < T < T_{\text{liquidus}} \\
+1, & T \ge T_{\text{liquidus}}
+\end{cases}$$
+
+Any ponded melt in excess of this capacity represents supercooled or crystallizing melt:
+
+$$m_{\text{excess}} = \max(0, m_{\text{melt}} - n_m F_{\text{eq}})$$
+
+### Instantaneous vs Kinetic Solidification
+
+When `crystallization_timescale = 0.0`, solidification proceeds instantaneously to thermodynamic equilibrium ($m_{\text{freeze}} = m_{\text{excess}}$).
+When `crystallization_timescale` $\tau_{\text{cryst}} > 0$, solidification is rate-limited:
+
+$$m_{\text{freeze}} = \min\left( m_{\text{excess}}, \, m_{\text{excess}} \frac{\Delta t_{\text{sub}}}{\tau_{\text{cryst}}} \right)$$
+
+Solidification releases latent heat of fusion $L_m$ [$\text{J/kg}$], generating a positive volumetric thermal source term:
+
+$$Q_{\text{lat}} = \frac{m_{\text{freeze}}}{n_m} \frac{\rho_m L_m}{\Delta t_{\text{sub}}}$$
+
+This latent heat release buffers the sill core against rapid cooling, producing an extended solidification plateau near the solidus.
+
+---
+
+## Magma-Hydrothermal Convective Coupling
+
+Heat dissipated from cooling crustal intrusions conducts into overlying permeable crustal aquifers.
+When hydrothermal convection is active, the temperature contrast between the hot intrusion and cold surface triggers porous Rayleigh-Darcy circulation ($Ra_m > Ra_{m,\text{crit}}$), scaled by the permeable aquifer thickness $H_{\text{eff}}$.
+The resulting convective Nusselt enhancement ($Nu > 1$) increases effective thermal conductivity:
+
+$$k_{\text{eff}} = \text{Nu} \cdot k_{\text{cond}}$$
+
+This enhanced heat transfer extracts heat from the underlying sill, accelerating crustal cooling and driving hydrothermal fluid venting.
+Simultaneously, heat conducted into surrounding hydrated host rock (such as serpentine or chlorite) drives contact metamorphic dehydration when host temperatures exceed the thermodynamic dehydration equilibrium ($T > T_{\text{eq}} = \Delta H / \Delta S$).
+The devolatilization fluid production rate ($\text{DQPF} > 0$) pressurizes pore fluids in low-permeability contact aureoles, generating overpressures that drive hydrofracturing and fluid discharge into overlying porous layers.

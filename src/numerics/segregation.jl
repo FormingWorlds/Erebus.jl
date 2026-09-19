@@ -961,6 +961,7 @@ function apply_silicate_melt_segregation!(
             dt_sub=0.0,
             total_dissipation_energy=0.0,
             total_crystallized_mass=0.0,
+            total_sensible_energy=0.0,
             max_compaction_pressure=0.0,
             mean_compaction_length=0.0,
             total_exsolved_volatiles=0.0,
@@ -1244,6 +1245,7 @@ function apply_silicate_melt_segregation!(
             dt_sub=0.0,
             total_dissipation_energy=0.0,
             total_crystallized_mass=0.0,
+            total_sensible_energy=0.0,
             max_compaction_pressure=max_P_comp,
             mean_compaction_length=count_delta_c > 0 ? sum_delta_c / count_delta_c : 0.0,
             total_exsolved_volatiles=total_exsolved_vol,
@@ -1263,6 +1265,7 @@ function apply_silicate_melt_segregation!(
     m_melt = has_ws ? copyto!(workspace.m_melt, M_melt_cell) : copy(M_melt_cell)
     total_diss_energy = 0.0
     total_cryst_mass = 0.0
+    total_sens_energy = 0.0
 
     req_flux_x =
         has_ws ? fill!(workspace.req_flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
@@ -1270,6 +1273,8 @@ function apply_silicate_melt_segregation!(
         has_ws ? fill!(workspace.req_flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
     flux_x = has_ws ? fill!(workspace.flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
     flux_y = has_ws ? fill!(workspace.flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
+    H_flux_x = has_ws ? fill!(workspace.H_flux_x, 0.0) : zeros(Float64, Ny_val, Nx_val - 1)
+    H_flux_y = has_ws ? fill!(workspace.H_flux_y, 0.0) : zeros(Float64, Ny_val - 1, Nx_val)
     outflow_tot =
         has_ws ? fill!(workspace.outflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
     inflow_tot = has_ws ? fill!(workspace.inflow_tot, 0.0) : zeros(Float64, Ny_val, Nx_val)
@@ -1505,6 +1510,70 @@ function apply_silicate_melt_segregation!(
             m_melt[i, j] += (F_w - F_e + F_n - F_s)
         end
 
+        # 5b. Advective sensible heat enthalpy transport
+        if cfg_magma.sensible_heat_transport && Q_seg_grid !== nothing
+            cp_melt_val = cfg_magma.cp_melt
+            @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+                fx = flux_x[i, j]
+                if !iszero(fx)
+                    donor_j = fx > 0.0 ? j : j + 1
+                    rec_j = fx > 0.0 ? j + 1 : j
+                    n_donor = M_rock_markers[i, donor_j]
+                    if n_donor > 0
+                        T_donor = T_cell[i, donor_j]
+                        T_rec = T_cell[i, rec_j]
+                        H_flux_x[i, j] =
+                            (fx / n_donor) *
+                            (dx_val * dy_val) *
+                            rho_melt *
+                            cp_melt_val *
+                            (T_donor - T_rec)
+                    else
+                        H_flux_x[i, j] = 0.0
+                    end
+                else
+                    H_flux_x[i, j] = 0.0
+                end
+            end
+
+            @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+                fy = flux_y[i, j]
+                if !iszero(fy)
+                    donor_i = fy > 0.0 ? i : i + 1
+                    rec_i = fy > 0.0 ? i + 1 : i
+                    n_donor = M_rock_markers[donor_i, j]
+                    if n_donor > 0
+                        T_donor = T_cell[donor_i, j]
+                        T_rec = T_cell[rec_i, j]
+                        H_flux_y[i, j] =
+                            (fy / n_donor) *
+                            (dx_val * dy_val) *
+                            rho_melt *
+                            cp_melt_val *
+                            (T_donor - T_rec)
+                    else
+                        H_flux_y[i, j] = 0.0
+                    end
+                else
+                    H_flux_y[i, j] = 0.0
+                end
+            end
+
+            @inbounds for j in 1:Nx_val, i in 1:Ny_val
+                H_w = (j > 1 && flux_x[i, j - 1] > 0.0) ? H_flux_x[i, j - 1] : 0.0
+                H_e = (j < Nx_val && flux_x[i, j] < 0.0) ? -H_flux_x[i, j] : 0.0
+                H_n = (i > 1 && flux_y[i - 1, j] > 0.0) ? H_flux_y[i - 1, j] : 0.0
+                H_s = (i < Ny_val && flux_y[i, j] < 0.0) ? -H_flux_y[i, j] : 0.0
+                delta_H = H_w + H_e + H_n + H_s
+                total_sens_energy += abs(delta_H)
+                if !iszero(delta_H)
+                    Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
+                    dQ_sens = Q_sens * (dt_sub / dt)
+                    Q_seg_grid[i + 1, j + 1] += dQ_sens
+                end
+            end
+        end
+
         # 6. Gravitational potential energy dissipation heating
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
             n_m = M_rock_markers[i, j]
@@ -1520,20 +1589,9 @@ function apply_silicate_melt_segregation!(
                     min(F_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
-                if Q_seg_grid !== nothing
-                    dQ = 0.25 * Q_diss * (dt_sub / dt)
-                    if i <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i, j] += dQ
-                    end
-                    if i <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i, j + 1] += dQ
-                    end
-                    if (i + 1) <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i + 1, j] += dQ
-                    end
-                    if (i + 1) <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i + 1, j + 1] += dQ
-                    end
+                if Q_seg_grid !== nothing && cfg_magma.segregation_heating
+                    dQ = Q_diss * (dt_sub / dt)
+                    Q_seg_grid[i + 1, j + 1] += dQ
                 end
             end
         end
@@ -1552,31 +1610,41 @@ function apply_silicate_melt_segregation!(
                             max(T_liquidus_silicate - T_solidus_silicate, 1.0)
                         end
                         m_eq = n_m * F_eq_cell
+                        m_excess = max(0.0, m_melt[i, j] - m_eq)
                         dm_net = m_melt[i, j] - M_melt_cell[i, j]
-                        if dm_net > 0.0 && m_melt[i, j] > m_eq
-                            # Newly arrived melt exceeding thermodynamic equilibrium crystallizes
-                            m_freeze = min(dm_net, m_melt[i, j] - m_eq)
+
+                        m_freeze = if cfg_magma.sill_cooling_active
+                            if cfg_magma.crystallization_timescale > 0.0
+                                min(
+                                    m_excess,
+                                    m_excess *
+                                    (dt_sub / cfg_magma.crystallization_timescale),
+                                )
+                            else
+                                m_excess
+                            end
+                        else
+                            if (dm_net > 0.0 && m_melt[i, j] > m_eq)
+                                min(dm_net, m_excess)
+                            else
+                                0.0
+                            end
+                        end
+
+                        dT_to_liq = max(0.0, T_liquidus_silicate - t_cell_val)
+                        cp_sil = 1000.0
+                        m_freeze_max =
+                            (rho_silicate * cp_sil * dT_to_liq * n_m) / (rho_melt * L_melt)
+                        m_freeze = min(m_freeze, m_freeze_max)
+
+                        if m_freeze > 0.0
                             m_melt[i, j] -= m_freeze
                             total_cryst_mass += m_freeze
                             if Q_lat_grid !== nothing
                                 F_freeze = m_freeze / n_m
                                 Q_cryst = (rho_melt * F_freeze * L_melt) / dt_sub
-                                dQ_lat = 0.25 * Q_cryst * (dt_sub / dt)
-                                if i <= size(Q_lat_grid, 1) && j <= size(Q_lat_grid, 2)
-                                    Q_lat_grid[i, j] += dQ_lat
-                                end
-                                if i <= size(Q_lat_grid, 1) &&
-                                    (j + 1) <= size(Q_lat_grid, 2)
-                                    Q_lat_grid[i, j + 1] += dQ_lat
-                                end
-                                if (i + 1) <= size(Q_lat_grid, 1) &&
-                                    j <= size(Q_lat_grid, 2)
-                                    Q_lat_grid[i + 1, j] += dQ_lat
-                                end
-                                if (i + 1) <= size(Q_lat_grid, 1) &&
-                                    (j + 1) <= size(Q_lat_grid, 2)
-                                    Q_lat_grid[i + 1, j + 1] += dQ_lat
-                                end
+                                dQ_lat = Q_cryst * (dt_sub / dt)
+                                Q_lat_grid[i + 1, j + 1] += dQ_lat
                             end
                         end
                     end
@@ -1674,6 +1742,7 @@ function apply_silicate_melt_segregation!(
         dt_sub=dt_sub,
         total_dissipation_energy=total_diss_energy,
         total_crystallized_mass=total_cryst_mass,
+        total_sensible_energy=total_sens_energy,
         max_compaction_pressure=max_P_comp,
         mean_compaction_length=mean_delta_c,
         total_exsolved_volatiles=total_exsolved_vol,

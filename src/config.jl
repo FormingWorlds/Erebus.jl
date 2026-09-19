@@ -411,6 +411,10 @@ Base.@kwdef struct MagmaTransportConfig
     ponding_active::Bool = false
     eruption_active::Bool = false
     tensile_strength::Float64 = 1.0e7
+    sensible_heat_transport::Bool = false
+    cp_melt::Float64 = 1200.0
+    sill_cooling_active::Bool = false
+    crystallization_timescale::Float64 = 1.0e6
 end
 
 """
@@ -1664,6 +1668,8 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         @check_positive_finite mt.tensile_strength
+        @check_positive_finite mt.cp_melt
+        @check_nonneg_finite mt.crystallization_timescale
         if mt.eruption_active && !mt.compaction_active
             throw(
                 ArgumentError(

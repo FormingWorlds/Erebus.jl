@@ -2904,6 +2904,7 @@ function simulation_loop(
                 # ------------------------------------------------------------------
                 # iron core formation segregation
                 # ------------------------------------------------------------------
+                fill!(Q_seg_grid, 0.0)
                 if coreformation_active_val && Xfe_bulk !== nothing && Xfem !== nothing
                     if Xfe_bulk_step_start !== nothing
                         if length(Xfe_bulk) != length(Xfe_bulk_step_start)
@@ -2943,7 +2944,6 @@ function simulation_loop(
                             copyto!(Xfe_S_m, Xfe_S_m_step_start)
                         end
                     end
-                    fill!(Q_seg_grid, 0.0)
                     seg_res = apply_metal_segregation!(
                         xm,
                         ym,
@@ -3007,9 +3007,6 @@ function simulation_loop(
                         end
                         copyto!(F_extract_m, F_extract_m_step_start)
                     end
-                    if !coreformation_active_val || !cfg.coreformation.segregation_heating
-                        fill!(Q_seg_grid, 0.0)
-                    end
                     magma_res = apply_silicate_melt_segregation!(
                         xm,
                         ym,
@@ -3025,7 +3022,8 @@ function simulation_loop(
                         rplanet=rplanet_val,
                         gx=gx,
                         gy=gy,
-                        Q_seg_grid=if cfg.magma_transport.segregation_heating
+                        Q_seg_grid=if cfg.magma_transport.segregation_heating ||
+                            cfg.magma_transport.sensible_heat_transport
                             Q_seg_grid
                         else
                             nothing
@@ -3059,7 +3057,12 @@ function simulation_loop(
                 Q_seg_val =
                     if (
                         coreformation_active_val && cfg.coreformation.segregation_heating
-                    ) || (magma_active_val && cfg.magma_transport.segregation_heating)
+                    ) || (
+                        magma_active_val && (
+                            cfg.magma_transport.segregation_heating ||
+                            cfg.magma_transport.sensible_heat_transport
+                        )
+                    )
                         Q_seg_grid
                     else
                         nothing
