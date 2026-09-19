@@ -69,7 +69,7 @@ $$c_{p,\text{apparent}} = c_p + \frac{L_m}{T_{\text{liq}} - T_{\text{sol}}} = c_
 ### Verification Results
 
 The test evaluates `rhocp_apparent_silicate` directly across subsolidus, mushy, and superliquidus intervals with silicate parameters ($L_m = 4.0 \times 10^5$ J/kg, $c_p = 1000$ J/(kg K), $\Delta T = 200$ K):
-- $\text{Ste} = 0.5$.
+- Dimensionless Stefan number $\text{Ste} = 0.5$.
 - Inside the mushy interval, the apparent heat capacity buffering factor is $1 + \text{Ste}^{-1} = 3.0$.
 - Outside the mushy interval, the apparent heat capacity equals baseline sensible heat capacity ($1.0 \times \rho c_p$).
 
