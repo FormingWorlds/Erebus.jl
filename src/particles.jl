@@ -1041,6 +1041,16 @@ function compute_marker_properties!(
     track_depletion::Bool=false,
     F_extract_m=nothing,
     deltaIW_m=nothing,
+    xm=nothing,
+    ym=nothing,
+    coords=nothing,
+    rplanet_val=nothing,
+    M_planet_val=nothing,
+    rcore_val=nothing,
+    qxD_val=nothing,
+    qyD_val=nothing,
+    xcenter_val=nothing,
+    ycenter_val=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -1184,6 +1194,88 @@ function compute_marker_properties!(
             )
         end
         if hydrothermal_active && hydrothermal_cfg !== nothing && hydrothermal_cfg.active
+            # Evaluate dynamic local gravity, convective layer thickness, and cell-Péclet number
+            g_hydro = nothing
+            H_eff_hydro = hydrothermal_cfg.H_layer
+            Pe_cell_hydro = 0.0
+            hydro_marker_active = true
+
+            if xm !== nothing &&
+                ym !== nothing &&
+                coords !== nothing &&
+                rplanet_val !== nothing
+                xc = if xcenter_val !== nothing
+                    Float64(xcenter_val)
+                else
+                    (coords !== nothing ? coords.xcenter : 0.0)
+                end
+                yc = if ycenter_val !== nothing
+                    Float64(ycenter_val)
+                else
+                    (coords !== nothing ? coords.ycenter : 0.0)
+                end
+                r_m = sqrt((xm[m] - xc)^2 + (ym[m] - yc)^2)
+                R_pl = Float64(rplanet_val)
+
+                if hydrothermal_cfg.dynamic_gravity && R_pl > 0.0
+                    g_surf = if M_planet_val !== nothing && M_planet_val > 0.0
+                        G * Float64(M_planet_val) / (R_pl^2)
+                    else
+                        hydrothermal_cfg.gravity
+                    end
+                    g_hydro = compute_local_radial_gravity(r_m, R_pl, g_surf)
+                end
+
+                if hydrothermal_cfg.dynamic_layer_depth && R_pl > 0.0
+                    R_base_val = rcore_val !== nothing ? Float64(rcore_val) : 0.0
+                    H_eff_hydro = compute_hydrothermal_layer_thickness(
+                        r_m,
+                        R_pl;
+                        R_base=R_base_val,
+                        H_max=hydrothermal_cfg.H_layer,
+                        H_min=hydrothermal_cfg.H_layer_min,
+                    )
+                end
+
+                # Core suppression: porous rock-water convection does not occur inside metallic core
+                is_in_core =
+                    rcore_val !== nothing &&
+                    Float64(rcore_val) > 0.0 &&
+                    r_m <= Float64(rcore_val)
+                hydro_marker_active = !is_in_core
+
+                if hydrothermal_cfg.dynamic_peclet &&
+                    qxD_val !== nothing &&
+                    qyD_val !== nothing &&
+                    coords.dx > 0.0 &&
+                    coords.dy > 0.0
+                    dl_min = min(coords.dx, coords.dy)
+                    j_c = clamp(Int(floor(xm[m] / coords.dx)) + 1, 1, coords.Nx)
+                    i_c = clamp(Int(floor(ym[m] / coords.dy)) + 1, 1, coords.Ny)
+                    # Staggered grid face averaging to basic cell center (i_c, j_c)
+                    j_1 = clamp(j_c - 1, 1, size(qxD_val, 2))
+                    j_2 = clamp(j_c, 1, size(qxD_val, 2))
+                    i_x = clamp(i_c, 1, size(qxD_val, 1))
+                    q_x = 0.5 * (qxD_val[i_x, j_1] + qxD_val[i_x, j_2])
+
+                    i_1 = clamp(i_c - 1, 1, size(qyD_val, 1))
+                    i_2 = clamp(i_c, 1, size(qyD_val, 1))
+                    j_y = clamp(j_c, 1, size(qyD_val, 2))
+                    q_y = 0.5 * (qyD_val[i_1, j_y] + qyD_val[i_2, j_y])
+
+                    v_darcy = sqrt(q_x^2 + q_y^2)
+                    rho_f_val = compute_rhofluid(
+                        tkm[m],
+                        hydrothermal_cfg.rho_fluid_ref,
+                        hydrothermal_cfg.alpha_fluid,
+                        hydrothermal_cfg.T_surface_ref,
+                    )
+                    Pe_cell_hydro = compute_cell_peclet_number(
+                        v_darcy, dl_min, k_lattice, rho_f_val, hydrothermal_cfg.cp_fluid
+                    )
+                end
+            end
+
             k_hydro = apply_hydrothermal_convection_closure(
                 k_lattice,
                 tkm[m],
@@ -1191,6 +1283,11 @@ function compute_marker_properties!(
                 tm[m];
                 cfg=hydrothermal_cfg,
                 tmfluidphase_val=tmfluidphase_val,
+                gravity=g_hydro,
+                H_eff=H_eff_hydro,
+                Pe_cell=Pe_cell_hydro,
+                k_prev=ktotalm[m],
+                active=hydro_marker_active,
             )
             ktotalm[m] = max(ktotalm[m], k_hydro)
         end

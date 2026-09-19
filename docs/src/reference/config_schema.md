@@ -566,6 +566,10 @@ Ra_crit = 1100.0
 c_porous = 1.0
 c_free = 0.088
 H_layer = 10000.0
+H_layer_min = 100.0
+dynamic_gravity = true
+dynamic_layer_depth = true
+dynamic_peclet = true
 dT_min = 5.0
 k_floor = 1.0e-3
 k_cutoff = 1.0e6
@@ -591,7 +595,11 @@ kphi_ref = 1.0e-13
 | `Ra_crit` | `Float64` | `1100.0` | - | Critical free-fluid Rayleigh number | $> 0$ |
 | `c_porous` | `Float64` | `1.0` | - | Porous convective Nusselt number scaling prefactor | $> 0$ |
 | `c_free` | `Float64` | `0.088` | - | Boundary-layer free-fluid Nusselt number coefficient | $> 0$ |
-| `H_layer` | `Float64` | `10000.0` | m | Characteristic convective layer thickness | $> 0$ |
+| `H_layer` | `Float64` | `10000.0` | m | Characteristic convective layer thickness ceiling | $> 0$ |
+| `H_layer_min` | `Float64` | `100.0` | m | Minimum convective layer thickness floor | $> 0, \le \text{H\_layer}$ |
+| `dynamic_gravity` | `Bool` | `true` | - | Couple local radial gravity to planetesimal mass and radius | `true` / `false` |
+| `dynamic_layer_depth` | `Bool` | `true` | - | Couple convective layer thickness to permeable shell boundary | `true` / `false` |
+| `dynamic_peclet` | `Bool` | `true` | - | Couple resolved Darcy filtration velocity to cell-Péclet damping | `true` / `false` |
 | `dT_min` | `Float64` | `5.0` | K | Temperature contrast for quadratic boundary regularization | $> 0$ |
 | `k_floor` | `Float64` | `1.0e-3` | $\text{W/(m K)}$ | Minimum thermal conductivity floor | $> 0$ |
 | `k_cutoff` | `Float64` | `1.0e6` | $\text{W/(m K)}$ | Maximum enhanced thermal conductivity ceiling | $> \text{k\_floor}$ |
