@@ -176,7 +176,7 @@ $(SIGNATURES)
 - `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
 
 # Returns
-- Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m)`
+- Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m, nC_graphite_m, nCO_m, nCO2_m, nCH4_m)`
 """
 function setup_marker_redox_properties(
     marknum::Integer,
@@ -277,7 +277,6 @@ $(SIGNATURES)
 # Keyword Arguments
 - `Xfem`: Optional marker metal mass fraction array (for core segregation coupling).
 - `XWsolidm`: Optional marker wet solid fraction array (for serpentinization coupling).
-- `X_refr_C_m`: Optional marker refractory carbon array (for pyrolysis coupling).
 
 # Returns
 - `nothing`
@@ -323,16 +322,31 @@ function update_marker_redox!(
             (n_c_gr > 1.0e-12 || n_co > 1.0e-12 || n_co2 > 1.0e-12 || n_ch4 > 1.0e-12)
 
         if has_pyrolyzed
-            # When dynamic redox reactions (e.g. organic pyrolysis) evolve iron oxidation states,
-            # preserve the mutated states rather than resetting to initial ferric fraction.
+            # Preserve mutated iron states from dynamic redox reactions (pyrolysis)
+            n_fe2 = nFe2_m[m]
+            n_fe3 = nFe3_m[m]
+
+            # Incremental serpentinization coupling if hydration occurs on pyrolyzed parcel
+            if cfg.serpentinization_redox && XWsolidm !== nothing
+                x_ferric_target = clamp(x_fe_init + 0.5 * XWsolidm[m], 0.0, 1.0)
+                tot_sil_fe = n_fe2 + n_fe3
+                if tot_sil_fe > 1.0e-12
+                    curr_x_fe3 = n_fe3 / tot_sil_fe
+                    if x_ferric_target > curr_x_fe3
+                        d_fe3 = (x_ferric_target - curr_x_fe3) * tot_sil_fe
+                        n_fe3 += d_fe3
+                        n_fe2 -= d_fe3
+                    end
+                end
+            end
+
+            # Metal segregation coupling: drain metallic Fe(0) as metal segregates to core
             if cfg.segregation_redox && Xfem !== nothing
                 xfe = max(0.0, Xfem[m])
                 n_fe0 = min(nFe0_m[m], xfe / M_Fe)
             else
                 n_fe0 = nFe0_m[m]
             end
-            n_fe2 = nFe2_m[m]
-            n_fe3 = nFe3_m[m]
         else
             # Metal segregation coupling: drain metallic Fe(0) as metal segregates
             if cfg.segregation_redox && Xfem !== nothing
@@ -4263,6 +4277,7 @@ function drain_vented_marker_volatiles!(
     rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     phim::Union{Nothing,AbstractVector{Float64}}=nothing,
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    redox_props=nothing,
 )::@NamedTuple{
     M_vent_H2O::Float64,
     M_vent_C::Float64,
@@ -4383,6 +4398,21 @@ function drain_vented_marker_volatiles!(
                             th_S[tid] += (dC * 1.0e-6) * M_marker_rock
                         end
                     end
+
+                    # 5. Gaseous carbon species drainage from redox inventory (CO, CO2, CH4)
+                    if redox_props !== nothing
+                        if hasproperty(redox_props, :nCO_m) && redox_props.nCO_m !== nothing
+                            redox_props.nCO_m[m] *= (1.0 - drain_fraction)
+                        end
+                        if hasproperty(redox_props, :nCO2_m) &&
+                            redox_props.nCO2_m !== nothing
+                            redox_props.nCO2_m[m] *= (1.0 - drain_fraction)
+                        end
+                        if hasproperty(redox_props, :nCH4_m) &&
+                            redox_props.nCH4_m !== nothing
+                            redox_props.nCH4_m[m] *= (1.0 - drain_fraction)
+                        end
+                    end
                 end
             end
         end
@@ -4464,6 +4494,7 @@ function advance_marker_thermo_porosity_venting!(
     XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
     rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    redox_props=nothing,
 )
     marknum <= 0 && return (delta_m_vent=0.0, vented_vols=nothing)
 
@@ -4610,6 +4641,22 @@ function advance_marker_thermo_porosity_venting!(
                                     dC = C_mob * drain_fraction
                                     XSm[m] = C_cur - dC
                                     th_S[tid] += (dC * 1.0e-6) * M_marker_rock
+                                end
+                            end
+
+                            # Gaseous carbon species drainage from redox inventory (CO, CO2, CH4)
+                            if redox_props !== nothing
+                                if hasproperty(redox_props, :nCO_m) &&
+                                    redox_props.nCO_m !== nothing
+                                    redox_props.nCO_m[m] *= (1.0 - drain_fraction)
+                                end
+                                if hasproperty(redox_props, :nCO2_m) &&
+                                    redox_props.nCO2_m !== nothing
+                                    redox_props.nCO2_m[m] *= (1.0 - drain_fraction)
+                                end
+                                if hasproperty(redox_props, :nCH4_m) &&
+                                    redox_props.nCH4_m !== nothing
+                                    redox_props.nCH4_m[m] *= (1.0 - drain_fraction)
                                 end
                             end
                         end

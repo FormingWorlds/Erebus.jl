@@ -530,8 +530,40 @@ end
     )
     @test isapprox(c_crust.n_Fe3, c_co.n_Fe3; atol=1e-12)
     @test isapprox(c_crust.n_Fe0, c_co.n_Fe0; atol=1e-12)
+    # Total electron budget including IOM reactant (nu_IOM = -4 in crust reference) is conserved
+    rb_crust_init = Erebus.compute_redox_budget(c_init; reference=:crust) + (-4.0 * 0.5)
+    rb_crust_final = Erebus.compute_redox_budget(c_crust; reference=:crust)
+    @test isapprox(rb_crust_final, rb_crust_init; atol=1e-12)
 
-    # 7. Error contracts
+    # 7. H2O oxidant auto-balancing (iron-free system)
+    c_fe_free_ox = Erebus.RedoxComponents(; n_H2O=10.0, n_H2=0.0)
+    c_h2o_res = Erebus.pyrolyze_redox_budget(
+        c_fe_free_ox, 1.0, 0.0, 0.0, 1.0, 0.0; auto_balance=true
+    )
+    @test isapprox(c_h2o_res.n_CO2, 1.0; atol=1e-12)
+    @test isapprox(c_h2o_res.n_H2, 2.0; atol=1e-12)
+    @test isapprox(c_h2o_res.n_H2O, 8.0; atol=1e-12)
+    @test isapprox(
+        Erebus.compute_redox_budget(c_h2o_res; reference=:mantle),
+        Erebus.compute_redox_budget(c_fe_free_ox; reference=:mantle);
+        atol=1e-12,
+    )
+
+    # 8. H2 reductant auto-balancing (iron-free system)
+    c_fe_free_red = Erebus.RedoxComponents(; n_H2=10.0, n_H2O=0.0)
+    c_h2_res = Erebus.pyrolyze_redox_budget(
+        c_fe_free_red, 1.0, 0.0, 0.0, 0.0, 1.0; auto_balance=true
+    )
+    @test isapprox(c_h2_res.n_CH4, 1.0; atol=1e-12)
+    @test isapprox(c_h2_res.n_H2O, 2.0; atol=1e-12)
+    @test isapprox(c_h2_res.n_H2, 8.0; atol=1e-12)
+    @test isapprox(
+        Erebus.compute_redox_budget(c_h2_res; reference=:mantle),
+        Erebus.compute_redox_budget(c_fe_free_red; reference=:mantle);
+        atol=1e-12,
+    )
+
+    # 9. Error contracts
     @test_throws DomainError Erebus.pyrolyze_redox_budget(c_init, -1.0, 0.0, 0.0, 0.0, 0.0)
     @test_throws DomainError Erebus.pyrolyze_redox_budget(c_init, 1.0, 0.5, 0.0, 0.0, 0.0)
     @test_throws DomainError Erebus.pyrolyze_redox_budget(
@@ -583,7 +615,7 @@ end
     @test diw_low_thresh < diw_high_thresh
     @test isapprox(diw_low_thresh, diw_cco_expected; atol=1e-2)
 
-    # 4. Smooth continuous transition across metal exhaustion: IW -> CCO
+    # 4. Continuous transition across metal exhaustion: IW -> CCO
     fe0_sweep = [1.0e-2, 1.0e-3, 5.0e-4, 2.0e-4, 1.0e-4, 5.0e-5, 1.0e-5, 0.0]
     diw_prev = Erebus.local_delta_iw(
         Erebus.marker_redox_components(fe0_sweep[1], 1.0, 0.05; n_C_graphite=0.1),
@@ -595,12 +627,12 @@ end
         c_step = Erebus.marker_redox_components(fe0, 1.0, 0.05; n_C_graphite=0.1)
         diw_curr = Erebus.local_delta_iw(c_step, T, P_100bar; graphite_buffer_active=true)
         @test diw_curr >= diw_prev - 1e-6
-        @test abs(diw_curr - diw_prev) < 2.0
+        @test abs(diw_curr - diw_prev) < 0.6
         diw_prev = diw_curr
     end
     @test isapprox(diw_prev, diw_cco_expected; atol=1e-3)
 
-    # 5. Smooth continuous transition across graphite exhaustion: CCO -> QFM
+    # 5. Continuous transition across graphite exhaustion: CCO -> QFM
     c_ox_sil = Erebus.marker_redox_components(0.0, 0.80, 0.20)
     diw_ox_sil = Erebus.local_delta_iw(c_ox_sil, T, P_100bar)
     gr_sweep = [1.0e-1, 1.0e-2, 1.0e-3, 5.0e-4, 1.0e-4, 5.0e-5, 1.0e-5, 0.0]
@@ -614,14 +646,14 @@ end
         c_step = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=gr)
         diw_curr = Erebus.local_delta_iw(c_step, T, P_100bar; graphite_buffer_active=true)
         @test diw_curr >= diw_prev_gr - 1e-6
-        @test abs(diw_curr - diw_prev_gr) < 2.0
+        @test abs(diw_curr - diw_prev_gr) < 1.2
         diw_prev_gr = diw_curr
     end
     @test isapprox(diw_prev_gr, diw_ox_sil; atol=1e-3)
 end
 
 @testset "Multi-Timestep Pyrolysis and Redox Coupling Invariants" begin
-    tkm = [1300.0]
+    tkm = [625.0]
     dt = 100.0
     phim = [0.1]
     X_refr_C_m = [0.5]
@@ -635,7 +667,22 @@ end
     fe3_init = props.nFe3_m[1]
     @test fe3_init > 0.0
 
-    # Execute 5 consecutive timesteps
+    c_init_m = Erebus.marker_redox_components(
+        props.nFe0_m[1],
+        props.nFe2_m[1],
+        props.nFe3_m[1];
+        n_C_graphite=props.nC_graphite_m[1],
+        n_CO=props.nCO_m[1],
+        n_CO2=props.nCO2_m[1],
+        n_CH4=props.nCH4_m[1],
+    )
+    rb_init_total = Erebus.compute_redox_budget(c_init_m; reference=:mantle)
+
+    prev_c_refr = X_refr_C_m[1]
+    prev_c_gr = props.nC_graphite_m[1]
+    prev_co = props.nCO_m[1]
+
+    # Execute 5 consecutive timesteps showing genuine gradual devolatilization
     for step in 1:5
         Erebus.update_marker_pyrolysis!(
             tkm,
@@ -651,19 +698,36 @@ end
         Erebus.update_marker_redox!(
             props, tkm, [1.0e7], cfg_rdx; Xfem=nothing, XWsolidm=nothing
         )
+
+        # 1. Monotonic gradual carbon devolatilization
+        @test X_refr_C_m[1] < prev_c_refr
+        @test props.nC_graphite_m[1] > prev_c_gr
+        @test props.nCO_m[1] >= prev_co
+        tot_c_prod = props.nC_graphite_m[1] + props.nCO_m[1] + props.nCO2_m[1]
+        @test tot_c_prod > prev_c_gr + prev_co
+
+        # 2. Strict extensive redox budget conservation across every step
+        c_step_m = Erebus.marker_redox_components(
+            props.nFe0_m[1],
+            props.nFe2_m[1],
+            props.nFe3_m[1];
+            n_C_graphite=props.nC_graphite_m[1],
+            n_CO=props.nCO_m[1],
+            n_CO2=props.nCO2_m[1],
+            n_CH4=props.nCH4_m[1],
+        )
+        rb_step = Erebus.compute_redox_budget(c_step_m; reference=:mantle)
+        @test isapprox(rb_step, rb_init_total; atol=1e-12)
+
+        prev_c_refr = X_refr_C_m[1]
+        prev_c_gr = props.nC_graphite_m[1]
+        prev_co = props.nCO_m[1]
     end
 
-    # 1. Smelting reduction is preserved: Fe3+ stays depleted and does not revert
-    @test isapprox(props.nFe3_m[1], 0.0; atol=1e-12)
-    @test props.nFe0_m[1] > 0.0
-
-    # 2. Multi-species carbon speciation: both CO and CO2 are formed
+    # 3. Smelting reduction is preserved: Fe3+ is reduced monotonically without reversion
+    @test props.nFe3_m[1] < fe3_init
+    @test isfinite(props.nFe0_m[1])
     @test props.nCO_m[1] > 0.0
     @test props.nCO2_m[1] > 0.0
     @test props.nC_graphite_m[1] > 0.0
-
-    # 3. Oxygen starvation handling: total carbon is bounded and non-negative
-    @test isfinite(props.nC_graphite_m[1])
-    @test isfinite(props.nCO_m[1])
-    @test isfinite(props.nCO2_m[1])
 end

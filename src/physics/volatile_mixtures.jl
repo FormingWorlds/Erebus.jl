@@ -392,9 +392,14 @@ $(SIGNATURES)
 - `ppm_scale`: True if concentrations are in ppmw, false if mass fraction (default: false).
 - `redox_props`: Optional NamedTuple with marker redox arrays to deposit graphite and gas products.
 - `redox_cfg`: Optional RedoxConfig to govern pyrolysis redox coupling.
+- `Xfem`: Optional marker metallic iron mass fraction array.
 
 # Returns
 - Named tuple `(; total_dC_gas, total_dN_gas, total_dH_gas, total_dC_graphite, total_dH_pyro)`
+
+# Notes
+- Local heat sink `DHP` captures macromolecular organic decomposition endothermicity;
+  secondary high-temperature gas-phase redox recombination enthalpies are neglected.
 """
 function update_marker_pyrolysis!(
     tkm::AbstractVector{Float64},
@@ -414,6 +419,7 @@ function update_marker_pyrolysis!(
     ppm_scale::Bool=false,
     redox_props=nothing,
     redox_cfg=nothing,
+    Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     marknum = length(tkm)
     rho_s = Float64(rhosolid)
@@ -457,12 +463,6 @@ function update_marker_pyrolysis!(
         d_h_gas = res.H_dehydrated_gas
         d_c_gr = res.C_graphite_residue
 
-        tot_dC_gas += d_c_gas
-        tot_dN_gas += d_n_gas
-        tot_dH_gas += d_h_gas
-        tot_dC_graphite += d_c_gr
-        tot_dH_pyro += res.dH_pyro_J_per_kg
-
         if redox_props !== nothing &&
             (redox_cfg === nothing || (redox_cfg.active && redox_cfg.pyrolysis_redox))
             nC_gr_m = if hasproperty(redox_props, :nC_graphite_m)
@@ -499,7 +499,8 @@ function update_marker_pyrolysis!(
                             n_CH4=nCH4_m !== nothing ? nCH4_m[m] : 0.0,
                         )
 
-                        # Determine local equilibrium C-O-H gas speciation based on T and fO2
+                        # Determine local C-O-H gas speciation:
+                        # CO/CO2 follows thermodynamic equilibrium; CH4 follows an empirical closure.
                         d_IW =
                             if hasproperty(redox_props, :deltaIW_m) &&
                                 redox_props.deltaIW_m !== nothing
@@ -531,24 +532,42 @@ function update_marker_pyrolysis!(
                         dn_co2 = dn_c_gas * f_CO2
                         dn_ch4 = dn_c_gas * f_CH4
 
-                        # Rock oxidant capacity: Fe3+ -> Fe2+ (1 e-), Fe2+ -> Fe0 (2 e-), H2O -> H2 (2 e-)
+                        # Bound methane formation by available hydrogen (4 H per CH4)
+                        dn_h_avail = (d_h_gas * scale) / 0.001008 + 2.0 * c_cur.n_H2
+                        max_ch4_from_h = dn_h_avail / 4.0
+                        if dn_ch4 > max_ch4_from_h
+                            dn_ch4 = max(0.0, max_ch4_from_h)
+                            dn_rem = dn_c_gas - dn_ch4
+                            denom_co = 1.0 + r_CO2
+                            dn_co = dn_rem / denom_co
+                            dn_co2 = dn_rem * r_CO2 / denom_co
+                        end
+
+                        # Rock oxidant capacity: Fe3+ -> Fe0 (3 e-), Fe2+ -> Fe0 (2 e-), H2O -> H2 (2 e-)
                         delta_rb_req = 2.0 * dn_co + 4.0 * dn_co2 - 4.0 * dn_ch4
                         if delta_rb_req > 0.0
                             # Carbon oxidation requires rock oxidants
-                            avail_ox = c_cur.n_Fe3 + 2.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2O
+                            avail_ox =
+                                3.0 * c_cur.n_Fe3 + 2.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2O
                             if delta_rb_req > avail_ox
-                                # Oxygen starvation: only available oxidants can oxidize carbon.
-                                # Unoxidized carbon remains as elemental graphite residue (nu = 0, delta_RB = 0).
+                                # Oxygen starvation: available oxidants oxidize carbon;
+                                # unoxidized carbon remains as elemental graphite residue.
                                 scale_ox = max(0.0, avail_ox / delta_rb_req)
                                 unoxidized_gas = dn_c_gas * (1.0 - scale_ox)
                                 dn_c_gr += unoxidized_gas
                                 dn_co *= scale_ox
                                 dn_co2 *= scale_ox
                                 dn_ch4 *= scale_ox
+
+                                # Adjust mass fractions to maintain gas/graphite consistency
+                                unox_mass = (unoxidized_gas * M_C) / scale
+                                d_c_gas = max(0.0, d_c_gas - unox_mass)
+                                d_c_gr += unox_mass
                             end
                         elseif delta_rb_req < 0.0
-                            # Carbon reduction requires rock reductants
-                            avail_red = 2.0 * c_cur.n_Fe0 + c_cur.n_Fe2 + 2.0 * c_cur.n_H2
+                            # Carbon reduction requires rock reductants: Fe0 -> Fe3+ (3 e-), Fe2+ -> Fe3+ (1 e-), H2 -> H2O (2 e-)
+                            avail_red =
+                                3.0 * c_cur.n_Fe0 + 1.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2
                             req_red = -delta_rb_req
                             if req_red > avail_red
                                 scale_red = max(0.0, avail_red / req_red)
@@ -557,6 +576,11 @@ function update_marker_pyrolysis!(
                                 dn_co *= scale_red
                                 dn_co2 *= scale_red
                                 dn_ch4 *= scale_red
+
+                                # Adjust mass fractions to maintain gas/graphite consistency
+                                unred_mass = (unreduced_gas * M_C) / scale
+                                d_c_gas = max(0.0, d_c_gas - unred_mass)
+                                d_c_gr += unred_mass
                             end
                         end
 
@@ -571,6 +595,13 @@ function update_marker_pyrolysis!(
                             auto_balance=true,
                             reference=ref_sym,
                         )
+
+                        # Synchronize newly smelted metallic Fe0 to Xfem if present
+                        dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
+                        if Xfem !== nothing && dn_fe0_smelted > 0.0
+                            Xfem[m] += dn_fe0_smelted * 0.055845
+                        end
+
                         nFe0_m[m] = c_up.n_Fe0
                         nFe2_m[m] = c_up.n_Fe2
                         nFe3_m[m] = c_up.n_Fe3
@@ -593,6 +624,12 @@ function update_marker_pyrolysis!(
                 end
             end
         end
+
+        tot_dC_gas += d_c_gas
+        tot_dN_gas += d_n_gas
+        tot_dH_gas += d_h_gas
+        tot_dC_graphite += d_c_gr
+        tot_dH_pyro += res.dH_pyro_J_per_kg
 
         dw_gas = (d_c_gas + d_n_gas + d_h_gas) * scale
         if dw_gas > 0.0

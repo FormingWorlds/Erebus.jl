@@ -113,18 +113,22 @@ Thermal breakdown of refractory insoluble organic matter (IOM, elemental oxidati
 $$\Delta n_{\text{C, IOM}} = \Delta n_{\text{gr}} + \Delta n_{\text{CO}} + \Delta n_{\text{CO2}} + \Delta n_{\text{CH4}}$$
 
 Under the Evans (2012) mantle reference state ($\text{C}^0, \text{Fe}^{2+}, \text{H}^+$):
+- Reactant organic carbon ($\text{C}^0$): $\nu = 0$.
 - Graphite residue ($\text{C}^0$): $\nu = 0$.
 - Carbon monoxide ($\text{C}^{2+}$): $\nu = +2$ (oxidation of carbon).
 - Carbon dioxide ($\text{C}^{4+}$): $\nu = +4$ (oxidation of carbon).
 - Methane ($\text{C}^{4-}$): $\nu = -4$ (reduction of carbon).
 
-The net change in extensive electron budget from carbon speciation is:
+The net change in extensive electron budget from carbon speciation relative to precursor $\text{C}^0$ is:
 
 $$\Delta RB_C = 2 \Delta n_{\text{CO}} + 4 \Delta n_{\text{CO2}} - 4 \Delta n_{\text{CH4}}$$
 
-When carbon is oxidized ($\Delta RB_C > 0$), oxygen is acquired by reduction of rock oxidants ($\text{Fe}^{3+} \to \text{Fe}^{2+}$, then $\text{Fe}^{2+} \to \text{Fe}^0$, and $\text{H}_2\text{O} \to \text{H}_2$), maintaining exact global electron conservation:
+When carbon is oxidized ($\Delta RB_C > 0$), oxygen is acquired by reduction of rock oxidants ($\text{Fe}^{3+} \to \text{Fe}^{2+}$, then $\text{Fe}^{2+} \to \text{Fe}^0$, and $\text{H}_2\text{O} \to \text{H}_2$). In the mantle reference frame, reactant IOM has $\nu = 0$, so exact global electron conservation holds:
 
 $$\Delta RB_{\text{total}} = \Delta RB_C + \Delta RB_{\text{rock}} = 0$$
+
+In alternative reference frames (e.g. crust reference where reference carbon is $\text{C}^{4+}$, $\nu_{\text{C}^0} = -4$), inclusion of the precursor IOM valence ensures identical physical stoichiometry and gauge invariance.
+Gas speciation pairs thermodynamic $\text{CO}/\text{CO}_2$ equilibrium with an empirical low-temperature methanation closure bounded by available hydrogen. Thermal coupling accounts for macromolecular decomposition enthalpy in the grid latent heat sink ($\Delta H_{\text{pyro}}$), while secondary gas-phase redox recombination enthalpies are neglected.
 
 ### 3.5 Multi-Buffer Petrologic Hierarchy and Transitions
 
@@ -133,7 +137,7 @@ Local oxygen fugacity in each parcel is governed by a petrologic hierarchy that 
 2. **Graphite-Saturated Regime ($\text{CCO}$)**: As metallic iron depletes during core segregation ($w_{\text{metal}} \to 0$) in the presence of pyrolyzed graphite residue ($w_{\text{graphite}} > 10^{-6}$), the parcel buffers along the Graphite-CO-CO2 (CCO) equilibrium.
 3. **Silicate-Buffered Regime ($\text{QFM}$)**: When both metal and graphite are depleted or consumed by oxidation, the parcel transitions to silicate melt ferric/ferrous equilibrium ($\text{Fe}^{3+}/\text{Fe}^{2+}$).
 
-To eliminate discontinuous jumps during differentiation, smooth weighting links the regimes:
+To eliminate discontinuous jumps during differentiation, continuous piecewise-linear ($C^0$) weighting links the regimes:
 
 $$\Delta\mathrm{IW} = w_{\text{metal}} \Delta\mathrm{IW}_{\text{metal}} + (1 - w_{\text{metal}}) \left[ w_{\text{gr}} \Delta\mathrm{IW}_{\text{CCO}} + (1 - w_{\text{gr}}) \Delta\mathrm{IW}_{\text{silicate}} \right]$$
 

@@ -2399,6 +2399,7 @@ function simulation_loop(
                         rhosolid=cfg.materials.rhosolidm,
                         redox_props=redox_props,
                         redox_cfg=cfg.redox,
+                        Xfem=Xfem,
                     )
                 end
 
@@ -3235,6 +3236,7 @@ function simulation_loop(
                 XSm=cfg.volatiles.active ? XSm : nothing,
                 rhosolid=cfg.materials.rhosolidm,
                 Fm=Fm,
+                redox_props=redox_props,
             )
 
             delta_m_vent = marker_results.delta_m_vent

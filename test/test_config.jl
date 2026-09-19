@@ -532,8 +532,8 @@ include("test_helpers.jl")
         deltaIW_min = -5.0
         deltaIW_max = 5.0
         initial_x_ferric = 0.08
-        pyrolysis_redox = true
-        graphite_buffer_active = true
+        pyrolysis_redox = false
+        graphite_buffer_active = false
         w_graphite_threshold = 2.0e-5
 
         [refractory]
@@ -551,8 +551,8 @@ include("test_helpers.jl")
         @test isapprox(cfg_parsed.redox.deltaIW_min, -5.0)
         @test isapprox(cfg_parsed.redox.deltaIW_max, 5.0)
         @test isapprox(cfg_parsed.redox.initial_x_ferric, 0.08)
-        @test cfg_parsed.redox.pyrolysis_redox == true
-        @test cfg_parsed.redox.graphite_buffer_active == true
+        @test cfg_parsed.redox.pyrolysis_redox == false
+        @test cfg_parsed.redox.graphite_buffer_active == false
         @test isapprox(cfg_parsed.redox.w_graphite_threshold, 2.0e-5)
         @test cfg_parsed.refractory.active == true
         @test cfg_parsed.refractory.kinetics_active == true
@@ -566,8 +566,8 @@ include("test_helpers.jl")
         @test haskey(dict_cfg, "redox")
         @test haskey(dict_cfg, "refractory")
         @test dict_cfg["redox"]["reference"] == "crust"
-        @test dict_cfg["redox"]["pyrolysis_redox"] == true
-        @test dict_cfg["redox"]["graphite_buffer_active"] == true
+        @test dict_cfg["redox"]["pyrolysis_redox"] == false
+        @test dict_cfg["redox"]["graphite_buffer_active"] == false
         @test isapprox(dict_cfg["redox"]["w_graphite_threshold"], 2.0e-5; atol=1e-12)
         @test isapprox(dict_cfg["refractory"]["T_pyro_min"], 320.0; atol=1e-12)
     end
