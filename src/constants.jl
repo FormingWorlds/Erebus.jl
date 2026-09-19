@@ -456,4 +456,3 @@ const cache_kwargs = (;
 const SPECIATION_SPECIES = Set{Symbol}([
     :H2, :H2O, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2
 ])
-

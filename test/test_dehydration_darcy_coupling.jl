@@ -609,7 +609,7 @@ Random.seed!(42)
         @test rates_co2[:H2O] ≈ (vented_vols.M_vent_H2O * L_3D_equiv) / dt_val
         @test rates_co2[:CO2] ≈
             (delta_m_vent_3d + vented_vols.M_vent_C * L_3D_equiv * (44.0095 / 12.011)) /
-            dt_val
+              dt_val
 
         # 4. Speciation active: thermodynamic speciation of full additive inventory
         cfg_spec = SimulationConfig(

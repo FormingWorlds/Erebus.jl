@@ -138,10 +138,10 @@ function compute_surface_venting_rates(
     else
         vent_sp = cfg.venting.species
         vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + m_pore_H2O / dt
-        vent_rates[:H2O]    = get(vent_rates, :H2O, 0.0)    + m_mineral_H2O / dt
+        vent_rates[:H2O] = get(vent_rates, :H2O, 0.0) + m_mineral_H2O / dt
         # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
         vent_rates[:CO2] = get(vent_rates, :CO2, 0.0) + (m_C_step * (44.0095 / 12.011)) / dt
-        vent_rates[:N2]  = get(vent_rates, :N2, 0.0)  + m_N_step / dt
+        vent_rates[:N2] = get(vent_rates, :N2, 0.0) + m_N_step / dt
         # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
         vent_rates[:H2S] = get(vent_rates, :H2S, 0.0) + (m_S_step * (34.08 / 32.06)) / dt
     end
@@ -3335,7 +3335,12 @@ function simulation_loop(
                                 cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
                             for m in 1:marknum
                                 if tm[m] < 3 &&
-                                    (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
+                                    (
+                                        (
+                                            (xm[m] - xcenter_val)^2 +
+                                            (ym[m] - ycenter_val)^2
+                                        ) <= rplanet_val^2
+                                    ) &&
                                     Fm[m] >= cfg.magma_degassing.F_melt_threshold
                                     m_melt_tot += Fm[m] * m_marker
                                     m_H_melt +=
@@ -3399,7 +3404,12 @@ function simulation_loop(
 
                                 for m in 1:marknum
                                     if tm[m] < 3 &&
-                                        (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
+                                        (
+                                            (
+                                                (xm[m] - xcenter_val)^2 +
+                                                (ym[m] - ycenter_val)^2
+                                            ) <= rplanet_val^2
+                                        ) &&
                                         Fm[m] >= cfg.magma_degassing.F_melt_threshold
                                         XH2Om[m] = new_XH2O_wtpct
                                         XCm[m] = new_XC_ppm
