@@ -943,7 +943,7 @@ using Random
             @test haskey(data2, "M_vent_H2O_total")
             @test data2["M_vent_total"] > 0.0
             @test data2["M_vent_H2O_total"] > 0.0
-            # Both pore water and mineral water contribute additively to atmospheric H2O budget
+            # Darcy pore water and drained mineral water contribute additively to atmospheric H2O
             @test isapprox(
                 data2["atm_M_atm"][:H2O],
                 data2["M_vent_total"] + data2["M_vent_H2O_total"],

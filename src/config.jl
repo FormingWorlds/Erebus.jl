@@ -298,6 +298,7 @@ Base.@kwdef struct ReactionConfig
     p_cavitation::Float64 = 1.0e7
     cfl_reaction::Float64 = 0.5
     dphi_reaction_max::Float64 = 0.01
+    fluid_overpressure_coupling::Bool = true
 end
 
 """
@@ -1803,6 +1804,37 @@ function validate_config(cfg::SimulationConfig)
                 ),
             )
         end
+    end
+    if cfg.venting.active && cfg.volatiles.speciation_active
+        cfg.venting.species == :H2O || throw(
+            ArgumentError(
+                "venting.species must be :H2O when volatiles.speciation_active=true (received :$(cfg.venting.species))",
+            ),
+        )
+    end
+    if cfg.escape.active && cfg.volatiles.speciation_active
+        cfg.escape.multi_species || throw(
+            ArgumentError(
+                "escape.multi_species must be true when volatiles.speciation_active=true",
+            ),
+        )
+        issubset(SPECIATION_SPECIES, Set(cfg.escape.species_list)) || throw(
+            ArgumentError(
+                "escape.species_list must contain all thermodynamic speciation species when volatiles.speciation_active=true",
+            ),
+        )
+    end
+    if cfg.escape.active &&
+        cfg.escape.multi_species &&
+        cfg.retention.active &&
+        cfg.retention.venting_drainage_active &&
+        !cfg.volatiles.speciation_active
+        required_drain_species = Set([:H2O, :CO2, :N2, :H2S, cfg.venting.species])
+        issubset(required_drain_species, Set(cfg.escape.species_list)) || throw(
+            ArgumentError(
+                "escape.species_list must contain :H2O, :CO2, :N2, :H2S, and $(cfg.venting.species) when retention.venting_drainage_active=true",
+            ),
+        )
     end
 
     # Retention checks

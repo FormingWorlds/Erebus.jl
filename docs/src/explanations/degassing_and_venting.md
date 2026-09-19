@@ -276,6 +276,51 @@ These increments are scaled from 2D Cartesian cross-sectional geometry to 3D sph
 
 ---
 
+## Dehydration-Darcy Fluid Overpressure Coupling and Unified Venting Speciation
+
+### 1. Two-Way Hydromechanical Dehydration Coupling
+
+Prograde metamorphic dehydration of hydrated phyllosilicates (e.g., serpentine breakdown) generates free aqueous pore fluid. This fluid volume production rate $\Delta Q^f$ [$\text{s}^{-1}$] acts as a direct volumetric source term in the fluid continuity equation of the two-phase Stokes-Darcy system:
+
+$$\nabla \cdot \mathbf{v}_D = \Delta Q^f - \frac{1 - \phi}{\rho_s} \frac{D\rho_s}{Dt} - \frac{\phi}{\rho_f} \frac{D\rho_f}{Dt}$$
+
+where $\mathbf{v}_D = -\frac{k}{\eta_f} \nabla P_f$ is the Darcy filtration velocity.
+
+In the condensed four-variable and six-variable hydromechanical linear system formulations, this source term enters the fluid pressure equation at pressure nodes $(i, j)$:
+
+$$R_{\text{fluid}}(i, j) = \Delta Q^f(i, j) - \beta_{\text{eff}} \frac{P_f^{n+1} - P_f^n}{\Delta t}$$
+
+When `ReactionConfig.fluid_overpressure_coupling = true`, prograde dehydration injects positive fluid volume production into the pore space. Because matrix permeability $k$ is finite, this generation drives local pore fluid pressure upward into strong overpressure pulses ($\Delta P_f > 0$). The steep fluid pressure gradient $\nabla P_f$ accelerates outward Darcy filtration toward the planetary surface.
+
+### 2. Unified Surface Venting Water Mass Budget
+
+Water released from the planetesimal surface couples both Darcy pore fluid drainage and near-surface mineral volatile drainage:
+
+1. **Darcy Pore Fluid Drainage**: When surface Darcy venting is active, pore water discharging through surface Darcy sinks enters the venting flux:
+   $$m_{\text{pore}} = \Delta M_{\text{vent}} \cdot L_{\text{3D}}$$
+2. **Mobile Mineral Volatile Drainage**: When near-surface volatile retention drainage is active, lattice-bound water released from hydrated phyllosilicate markers provides an additional physical source:
+   $$m_{\text{mineral}} = M_{\text{vent}}^{\text{H}_2\text{O}} \cdot L_{\text{3D}}$$
+
+Because pore fluid (porosity $\phi$) and mineral lattice water ($X_{\text{H}_2\text{O}}$) are distinct physical reservoirs tracked on the markers, the total water mass entering surface speciation and atmospheric accumulation is additive:
+
+$$m_{\text{H}_2\text{O}} = m_{\text{pore}} + m_{\text{mineral}}$$
+
+This unified additive budget preserves both reservoirs and feeds all mobile water into dynamic chemical speciation alongside mobile C, N, and S.
+
+### 3. Dynamic Gas Speciation Under Variable Oxygen Fugacity
+
+Mobile elemental volatiles vented at the planetesimal surface ($m_{\text{H}_2\text{O}}$, $m_{\text{C}}$, $m_{\text{N}}$, $m_{\text{S}}$) are partitioned into chemical gas species via thermodynamic equilibrium speciation:
+
+$$\mathbf{m}_{\text{species}} = \text{speciate\_vented\_volatiles}(m_{\text{H}_2\text{O}}, m_{\text{C}}, m_{\text{N}}, m_{\text{S}}, P_{\text{surf}}, T_{\text{surf}}, \Delta\text{IW})$$
+
+Under reducing interior conditions ($\Delta\text{IW} \le 0$), water reacts with elemental carbon to generate substantial molecular hydrogen ($\text{H}_2$) and carbon monoxide ($\text{CO}$):
+
+$$\text{C} + \text{H}_2\text{O} \rightleftharpoons \text{CO} + \text{H}_2$$
+
+This multi-component speciation feeds directly into both coupled atmosphere evolution (`AtmosphereConfig`) and standalone multi-species hydrodynamic and crossover escape (`EscapeConfig`) to determine physical species inventories across all simulation modes.
+
+---
+
 ## Atmospheric Accumulation and Jeans Kinetic Escape
 
 Volatiles released through cold surface venting or magma degassing collect above the solid surface, forming a transient or steady-state atmosphere. For low-mass planetesimals, thermal effusion (Jeans escape) strips this vapor envelope to space.
