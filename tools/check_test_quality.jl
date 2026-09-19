@@ -59,13 +59,6 @@ function contains_float_literal(x)
     return false
 end
 
-function is_suspected_float_var(x)
-    if isa(x, Symbol)
-        s = string(x)
-        return s == "v_zero" || s == "heat_solid_off"
-    end
-    return false
-end
 
 function contains_float_equality(node)
     if Meta.isexpr(node, :call) && length(node.args) == 3
@@ -74,10 +67,8 @@ function contains_float_equality(node)
         arg2 = node.args[3]
         if (op === :(==) || op === :.==)
             has_float_literal = contains_float_literal(arg1) || contains_float_literal(arg2)
-            has_float_var = is_suspected_float_var(arg1) || is_suspected_float_var(arg2)
             # If there's a literal float, flag it.
-            # If both are variables/refs and one matches the float heuristic, flag it.
-            if has_float_literal || (has_float_var && !isa(arg1, String) && !isa(arg2, String) && !isa(arg1, Integer) && !isa(arg2, Integer))
+            if has_float_literal
                 return true
             end
         end
@@ -87,8 +78,7 @@ function contains_float_equality(node)
                 left = node.args[i - 1]
                 right = node.args[i + 1]
                 has_float_literal = contains_float_literal(left) || contains_float_literal(right)
-                has_float_var = is_suspected_float_var(left) || is_suspected_float_var(right)
-                if has_float_literal || (has_float_var && !isa(left, String) && !isa(right, String) && !isa(left, Integer) && !isa(right, Integer))
+                if has_float_literal
                     return true
                 end
             end
@@ -204,13 +194,16 @@ end
 
 function collect_assertions_in_testset(block_ex)
     assert_count = 0
+    throws_count = 0
     has_sub_testsets = false
 
     function walk_inner(node)
         if Meta.isexpr(node, :macrocall) && length(node.args) >= 1
             macroname = node.args[1]
-            if macroname === Symbol("@test") ||
-                macroname === Symbol("@test_throws") ||
+            if macroname === Symbol("@test_throws")
+                assert_count += 1
+                throws_count += 1
+            elseif macroname === Symbol("@test") ||
                 macroname === Symbol("@test_broken") ||
                 macroname === Symbol("@reject_config")
                 assert_count += 1
@@ -225,10 +218,10 @@ function collect_assertions_in_testset(block_ex)
             end
         end
     end
-
     walk_inner(block_ex)
-    return assert_count, has_sub_testsets
+    return assert_count, has_sub_testsets, throws_count
 end
+
 
 function check_testsets(ex, file::String, line::Int, violations::Vector{Violation})
     if Meta.isexpr(ex, :macrocall) && length(ex.args) >= 3
@@ -236,8 +229,8 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
         if macroname === Symbol("@testset")
             for arg in ex.args[3:end]
                 if Meta.isexpr(arg, :block)
-                    assert_count, has_sub_testsets = collect_assertions_in_testset(arg)
-                    if (assert_count == 1 && !has_sub_testsets) || (!has_sub_testsets && assert_count == 0)
+                    assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(arg)
+                    if (assert_count == 1 && throws_count == 0 && !has_sub_testsets) || (!has_sub_testsets && assert_count == 0)
                         push!(
                             violations,
                             Violation(

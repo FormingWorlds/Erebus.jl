@@ -24,7 +24,6 @@
     "test_numerics.jl:weak_assert": 13,
     "test_p2m_tiled.jl:weak_assert": 1,
     "test_particles.jl:weak_assert": 12,
-    "test_physics.jl:float_equality": 7,
     "test_physics.jl:weak_assert": 30,
     "test_reaction_pathways.jl:weak_assert": 5,
     "test_redox.jl:weak_assert": 12,
