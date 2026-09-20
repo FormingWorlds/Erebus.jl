@@ -59,7 +59,6 @@ function contains_float_literal(x)
     return false
 end
 
-
 function contains_float_equality(node)
     if Meta.isexpr(node, :call) && length(node.args) == 3
         op = node.args[1]
@@ -77,7 +76,8 @@ function contains_float_equality(node)
             if node.args[i] === :(==) || node.args[i] === :.==
                 left = node.args[i - 1]
                 right = node.args[i + 1]
-                has_float_literal = contains_float_literal(left) || contains_float_literal(right)
+                has_float_literal =
+                    contains_float_literal(left) || contains_float_literal(right)
                 if has_float_literal
                     return true
                 end
@@ -158,7 +158,7 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                # Check for bare positivity: @test x > 0, @test x >= 0, @test x < 0, etc.
+                    # Check for bare positivity: @test x > 0, @test x >= 0, @test x < 0, etc.
                 elseif (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
                     (arg2 == 0 || arg2 == 0.0 || arg1 == 0 || arg1 == 0.0)
                     push!(
@@ -171,7 +171,7 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                         ),
                     )
                 end
-                
+
                 # Check for: typeof(x) == Type or typeof(x) === Type
                 if (op === :(==) || op === :(===)) &&
                     Meta.isexpr(arg1, :call) &&
@@ -222,15 +222,17 @@ function collect_assertions_in_testset(block_ex)
     return assert_count, has_sub_testsets, throws_count
 end
 
-
 function check_testsets(ex, file::String, line::Int, violations::Vector{Violation})
     if Meta.isexpr(ex, :macrocall) && length(ex.args) >= 3
         macroname = ex.args[1]
         if macroname === Symbol("@testset")
             for arg in ex.args[3:end]
                 if Meta.isexpr(arg, :block)
-                    assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(arg)
-                    if (assert_count == 1 && throws_count == 0 && !has_sub_testsets) || (!has_sub_testsets && assert_count == 0)
+                    assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(
+                        arg
+                    )
+                    if (assert_count == 1 && throws_count == 0 && !has_sub_testsets) ||
+                        (!has_sub_testsets && assert_count == 0)
                         push!(
                             violations,
                             Violation(

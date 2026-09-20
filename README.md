@@ -41,7 +41,7 @@
 
 ## Installation
 
-Ensure you have Julia 1.10 or later installed. Install `Erebus.jl` via the Julia package manager:
+Ensure you have Julia 1.12 or later installed. Install `Erebus.jl` via the Julia package manager:
 
 ```julia
 using Pkg
@@ -154,7 +154,7 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
    ```bash
    julia --project=. test/runtests.jl
    ```
-3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.10 and 1.11, and enforces formatting and documentation builds on Julia 1.10.
+3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12.
 
 ---
 

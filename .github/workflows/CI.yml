@@ -14,13 +14,13 @@ jobs:
   test:
     name: Tests - Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
-          - '1.11'
+          - '1.12'
+          - '1.13'
         os:
           - ubuntu-latest
         arch:
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.10'
+          version: '1.12'
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.10'
+          version: '1.12'
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.10'
+          version: '1.12'
       - name: Install JuliaFormatter
         run: julia -e 'using Pkg; Pkg.add("JuliaFormatter")'
       - name: Check code formatting
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.10'
+          version: '1.12'
       - name: Check test quality against baseline
         run: julia tools/check_test_quality.jl --check
       - name: Verify literature references
