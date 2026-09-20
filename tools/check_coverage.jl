@@ -9,7 +9,9 @@ if total == 0
 end
 
 ratio = covered / total
-println("Test coverage: ", round(ratio * 100, digits=2), "% (", covered, "/", total, " lines)")
+println(
+    "Test coverage: ", round(ratio * 100; digits=2), "% (", covered, "/", total, " lines)"
+)
 
 if ratio < 0.90 || isnan(ratio)
     println(stderr, "Error: Coverage is below 90.0% floor!")
