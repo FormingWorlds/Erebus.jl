@@ -6,7 +6,7 @@ This guide provides instructions for installing and setting up `Erebus.jl` on yo
 
 ## Prerequisites
 
-- **Julia**: Version 1.10 or higher. You can download and install Julia via [juliaup](https://github.com/JuliaLang/juliaup):
+- **Julia**: Version 1.13 or higher. You can download and install Julia via [juliaup](https://github.com/JuliaLang/juliaup):
   ```bash
   curl -fsSL https://install.julialang.org | sh
   ```
