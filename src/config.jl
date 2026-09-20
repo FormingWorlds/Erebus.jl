@@ -108,6 +108,8 @@ Base.@kwdef struct SolverConfig
     etaphikoef::Float64 = 1.0
     etamin::Float64 = 1.0e+12
     etamax::Float64 = 1.0e+23
+    dsubgridt::Float64 = 0.0
+    dsubgrids::Float64 = 0.0
     p2m_mode::Symbol = :tiled
     tile_size::Int = 4
     hydromech_solver::Symbol = :direct

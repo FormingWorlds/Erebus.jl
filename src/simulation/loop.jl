@@ -348,18 +348,18 @@ function simulation_loop(
         dtreaction_dehydration = dtr_deh_val,
         pfcoeff = pfcoeff_val,
         pferrmax = pferrmax_val,
-        start_time,
-        start_step,
-        endtime,
-        dsubgrids,
-        dsubgridt,
-        dt_longest,
-        dphimax,
-        dxymax,
-        vpratio,
-        seed
+        start_time = cfg.time.start_time,
+        start_step = start_step_val,
+        endtime = cfg.time.endtime,
+        dsubgrids = cfg.solver.dsubgrids,
+        dsubgridt = cfg.solver.dsubgridt,
+        dt_longest = cfg.time.dt_longest,
+        dphimax = cfg.solver.dphimax,
+        dxymax = cfg.time.dxymax,
+        vpratio = cfg.time.vpratio,
+        seed = cfg.solver.seed
     )
-    @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
+    @info "Solver" use_pardiso=cfg.solver.use_pardiso BLAS.get_config() BLAS.get_num_threads()
 
     # -------------------------------------------------------------------------
     # set up staggered grid"
@@ -1073,7 +1073,7 @@ function simulation_loop(
                 M_planet_val=M_planet_val,
                 telescope_level=telescope_level,
                 hcnspo_props=hcnspo_props,
-                atm_state=atm_state,
+                atm_state=atm_state, cfg=cfg,
             )
         end
     end
@@ -2456,7 +2456,7 @@ function simulation_loop(
                 pf0 .= pf
 
                 # perform plastic iterations
-                for iplast in 1:1:titermax_val
+                for iplast in 1:1:cfg.solver.nplast
                     @info("thermochemical iter $titer - hydromechanical iter $iplast")
                     # recompute bulk viscosity at pressure nodes
                     recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
@@ -2755,11 +2755,11 @@ function simulation_loop(
                         dt,
                         aphimax;
                         coords=coords,
-                        dxymax_val=dxymax,
-                        dphimax_val=dphimax,
+                        dxymax_val=cfg.time.dxymax,
+                        cfg.solver.dphimax=cfg.solver.dphimax,
                         dt_ref=dt_step_initial,
                         maxDTcurrent=maxDTcurrent,
-                        DTmax_val=DTmax,
+                        DTmax_val=cfg.time.DTmax,
                         dt_longest_val=dt_longest_val,
                         max_v_seg=max_v_seg_prev,
                         max_subcycles=cfg.coreformation.max_subcycles,
@@ -2832,14 +2832,21 @@ function simulation_loop(
                         YERRNOD,
                         DSY,
                         dt,
-                        iplast,
+                        iplast;
+                        etawt = cfg.solver.etawt,
+                        etamax = cfg.solver.etamax,
+                        etamin = cfg.solver.etamin,
+                        yerrmax = cfg.solver.yerrmax,
+                        nplast = cfg.solver.nplast
                     )
                         # exit plastic iterations loop    
                         break
                     else
                         # prepare next pass of plastic iteration 
                         dt = finalize_plastic_iteration_pass!(
-                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
+                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
+                            dtstep = cfg.time.dtstep,
+                            dtcoefdn = cfg.time.dtcoefdn
                         )
                     end
                 end # for iplast=1:1:nplast
@@ -3208,7 +3215,13 @@ function simulation_loop(
                 dt,
                 marknum;
                 coords=coords,
-                dsubgrids=dsubgrids,
+                DTmax_val=cfg.time.DTmax,
+                dsubgrids=cfg.solver.dsubgrids,
+            )
+
+            # interpolate temperature to markers
+            compute_marker_temperature!(
+                xm, ym, tkm, tk1, tk2; coords=coords, dsubgridt=cfg.solver.dsubgridt
             )
 
             # ---------------------------------------------------------------------
@@ -3968,7 +3981,7 @@ function simulation_loop(
                     telescope_level=telescope_level,
                     hcnspo_props=hcnspo_props,
                     redox_props=redox_props,
-                    atm_state=atm_state,
+                    atm_state=atm_state, cfg=cfg,
                 )
             end
             # ---------------------------------------------------------------------
