@@ -1,0 +1,5 @@
+[deps]
+Coverage = "a2441ebe-4560-5f21-9d90-b141ea2f57a3"
+
+[compat]
+Coverage = "1"

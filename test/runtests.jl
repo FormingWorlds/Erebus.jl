@@ -11,55 +11,90 @@ include("../src/test_constants.jl")
 include("test_helpers.jl")
 const rgen = MersenneTwister(seed)
 
+test_group = get(ENV, "EREBUS_TEST_GROUP", "all")
+
+unit_tests = [
+    "test_config.jl",
+    "test_geometry.jl",
+    "test_dynamic_grid.jl",
+    "test_threading.jl",
+    "test_solver_optimization.jl",
+    "test_darcy_elimination.jl",
+    "test_iterative_solver.jl",
+    "test_multigrid.jl",
+    "test_gpu_acceleration.jl",
+    "test_distributed_mpi.jl",
+    "test_physics.jl",
+    "test_particles.jl",
+    "test_numerics.jl",
+    "test_simulation.jl",
+    "test_workspace.jl",
+    "test_numerical_accelerations.jl",
+    "test_geometry_radiation.jl",
+    "test_reaction_pathways.jl",
+    "test_stefan_benchmark.jl",
+    "test_melting.jl",
+    "test_soft_turbulence.jl",
+    "test_magma_transport.jl",
+    "test_sill_cooling.jl",
+    "test_venting_thermodynamics.jl",
+    "test_venting_darcy_sink.jl",
+    "test_hydrofracture_venting.jl",
+    "test_volatile_solubility.jl",
+    "test_volatile_solubility_hcns.jl",
+    "test_volatile_retention.jl",
+    "test_redox.jl",
+    "test_meteorite_suite.jl",
+    "test_jeans_escape.jl",
+    "test_core_formation.jl",
+    "test_core_volatile_partitioning.jl",
+    "test_normative_accessory_minerals.jl",
+    "test_hydrothermal_convection.jl",
+    "test_accretion.jl",
+    "test_multistage_accretion.jl",
+    "test_volatile_mixtures.jl",
+    "test_atmosphere.jl",
+    "test_dehydration_darcy_coupling.jl",
+    "test_magma_degassing.jl",
+    "test_xuv_escape.jl",
+    "test_telescoping.jl",
+    "test_p2m_tiled.jl",
+    "test_telemetry.jl",
+]
+
+integration_tests = [
+    "test_venting_integration.jl",
+    "test_ensemble.jl",
+    "test_tutorial_lunar_growth.jl",
+    "test_integration.jl"
+]
+
+all_test_files = filter(f -> endswith(f, ".jl") && f != "runtests.jl", readdir(@__DIR__))
+listed_tests = Set(vcat(unit_tests, integration_tests))
+for f in all_test_files
+    if f ∉ listed_tests && f != "test_helpers.jl" && f != "test_constants.jl" && f != "mpi_worker_tests.jl"
+        error("Test file $f is not listed in runtests.jl (neither unit nor integration group).")
+    end
+end
+
+files_to_run = String[]
+if test_group == "all"
+    append!(files_to_run, unit_tests)
+    append!(files_to_run, integration_tests)
+elseif test_group == "unit"
+    append!(files_to_run, unit_tests)
+elseif test_group == "integration"
+    append!(files_to_run, integration_tests)
+else
+    error("Unknown EREBUS_TEST_GROUP: $test_group")
+end
+
+if isempty(files_to_run)
+    error("No tests found to run!")
+end
+
 @testset verbose=true "Erebus.jl" begin
-    include("test_config.jl")
-    include("test_geometry.jl")
-    include("test_dynamic_grid.jl")
-    include("test_threading.jl")
-    include("test_solver_optimization.jl")
-    include("test_darcy_elimination.jl")
-    include("test_iterative_solver.jl")
-    include("test_multigrid.jl")
-    include("test_gpu_acceleration.jl")
-    include("test_distributed_mpi.jl")
-    include("test_physics.jl")
-    include("test_particles.jl")
-    include("test_numerics.jl")
-    include("test_simulation.jl")
-    include("test_workspace.jl")
-    include("test_numerical_accelerations.jl")
-    include("test_geometry_radiation.jl")
-    include("test_reaction_pathways.jl")
-    include("test_stefan_benchmark.jl")
-    include("test_melting.jl")
-    include("test_soft_turbulence.jl")
-    include("test_magma_transport.jl")
-    include("test_sill_cooling.jl")
-    include("test_venting_thermodynamics.jl")
-    include("test_venting_darcy_sink.jl")
-    include("test_venting_integration.jl")
-    include("test_hydrofracture_venting.jl")
-    include("test_volatile_solubility.jl")
-    include("test_volatile_solubility_hcns.jl")
-    include("test_volatile_retention.jl")
-    include("test_redox.jl")
-    include("test_meteorite_suite.jl")
-    include("test_jeans_escape.jl")
-    include("test_core_formation.jl")
-    include("test_core_volatile_partitioning.jl")
-    include("test_normative_accessory_minerals.jl")
-    include("test_hydrothermal_convection.jl")
-    include("test_accretion.jl")
-    include("test_multistage_accretion.jl")
-    include("test_volatile_mixtures.jl")
-    include("test_atmosphere.jl")
-    include("test_dehydration_darcy_coupling.jl")
-    include("test_magma_degassing.jl")
-    include("test_xuv_escape.jl")
-    include("test_telescoping.jl")
-    include("test_p2m_tiled.jl")
-    include("test_telemetry.jl")
-    include("test_ensemble.jl")
-    include("test_tutorial_lunar_growth.jl")
-    include("test_integration.jl")
+    for f in files_to_run
+        include(f)
+    end
 end

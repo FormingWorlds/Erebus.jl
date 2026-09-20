@@ -59,21 +59,26 @@ function contains_float_literal(x)
     return false
 end
 
+
 function contains_float_equality(node)
     if Meta.isexpr(node, :call) && length(node.args) == 3
         op = node.args[1]
         arg1 = node.args[2]
         arg2 = node.args[3]
-        if (op === :(==) || op === :.==) &&
-            (contains_float_literal(arg1) || contains_float_literal(arg2))
-            return true
+        if (op === :(==) || op === :.==)
+            has_float_literal = contains_float_literal(arg1) || contains_float_literal(arg2)
+            # If there's a literal float, flag it.
+            if has_float_literal
+                return true
+            end
         end
     elseif Meta.isexpr(node, :comparison)
         for i in 2:2:length(node.args)
             if node.args[i] === :(==) || node.args[i] === :.==
                 left = node.args[i - 1]
                 right = node.args[i + 1]
-                if contains_float_literal(left) || contains_float_literal(right)
+                has_float_literal = contains_float_literal(left) || contains_float_literal(right)
+                if has_float_literal
                     return true
                 end
             end
@@ -153,19 +158,32 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                end
-                # Check for: typeof(x) == Type or typeof(x) === Type
-                if (op === :(==) || op === :(===)) &&
-                    Meta.isexpr(arg1, :call) &&
-                    length(arg1.args) >= 1 &&
-                    arg1.args[1] === :typeof
+                # Check for bare positivity: @test x > 0, @test x >= 0, @test x < 0, etc.
+                elseif (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
+                    (arg2 == 0 || arg2 == 0.0 || arg1 == 0 || arg1 == 0.0)
                     push!(
                         violations,
                         Violation(
                             file,
                             line,
                             :weak_assert,
-                            "Weak assertion testing `typeof(x) == Type`",
+                            "Weak assertion testing bare positivity (e.g. `x > 0`)",
+                        ),
+                    )
+                end
+                
+                # Check for: typeof(x) == Type or typeof(x) === Type
+                if (op === :(==) || op === :(===)) &&
+                    Meta.isexpr(arg1, :call) &&
+                    length(arg1.args) >= 1 &&
+                    (arg1.args[1] === :typeof || arg1.args[1] === :eltype)
+                    push!(
+                        violations,
+                        Violation(
+                            file,
+                            line,
+                            :weak_assert,
+                            "Weak assertion testing `typeof(x) == Type` or `eltype(x) == Type`",
                         ),
                     )
                 end
@@ -176,13 +194,16 @@ end
 
 function collect_assertions_in_testset(block_ex)
     assert_count = 0
+    throws_count = 0
     has_sub_testsets = false
 
     function walk_inner(node)
         if Meta.isexpr(node, :macrocall) && length(node.args) >= 1
             macroname = node.args[1]
-            if macroname === Symbol("@test") ||
-                macroname === Symbol("@test_throws") ||
+            if macroname === Symbol("@test_throws")
+                assert_count += 1
+                throws_count += 1
+            elseif macroname === Symbol("@test") ||
                 macroname === Symbol("@test_broken") ||
                 macroname === Symbol("@reject_config")
                 assert_count += 1
@@ -197,10 +218,10 @@ function collect_assertions_in_testset(block_ex)
             end
         end
     end
-
     walk_inner(block_ex)
-    return assert_count, has_sub_testsets
+    return assert_count, has_sub_testsets, throws_count
 end
+
 
 function check_testsets(ex, file::String, line::Int, violations::Vector{Violation})
     if Meta.isexpr(ex, :macrocall) && length(ex.args) >= 3
@@ -208,8 +229,8 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
         if macroname === Symbol("@testset")
             for arg in ex.args[3:end]
                 if Meta.isexpr(arg, :block)
-                    assert_count, has_sub_testsets = collect_assertions_in_testset(arg)
-                    if !has_sub_testsets && assert_count < 2
+                    assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(arg)
+                    if (assert_count == 1 && throws_count == 0 && !has_sub_testsets) || (!has_sub_testsets && assert_count == 0)
                         push!(
                             violations,
                             Violation(
@@ -270,10 +291,11 @@ function lint_all_tests()
 end
 
 function count_by_rule(violations::Vector{Violation})
-    counts = Dict{String,Int}("float_equality" => 0, "weak_assert" => 0, "min_asserts" => 0)
+    counts = Dict{String,Int}()
     for v in violations
-        rule_str = string(v.rule)
-        counts[rule_str] = get(counts, rule_str, 0) + 1
+        file_basename = basename(v.file)
+        key = string(file_basename, ":", v.rule)
+        counts[key] = get(counts, key, 0) + 1
     end
     return counts
 end
@@ -348,10 +370,13 @@ function main()
 
         if has_regression
             println("\nRegressions detected:")
+            # To avoid printing every violation in a file that regressed, 
+            # we just print the file-level regression summary, or all violations in that file.
             for v in violations
-                rule_str = string(v.rule)
-                base_count = get(baseline, rule_str, 0)
-                if counts[rule_str] > base_count
+                file_basename = basename(v.file)
+                key = string(file_basename, ":", v.rule)
+                base_count = get(baseline, key, 0)
+                if counts[key] > base_count
                     rel_path = relpath(v.file, normpath(joinpath(TEST_DIR, "..")))
                     println("  ", rel_path, ":", v.line, " [", v.rule, "] ", v.message)
                 end

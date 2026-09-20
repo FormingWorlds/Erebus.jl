@@ -14,6 +14,7 @@ jobs:
   test:
     name: Tests - Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -37,12 +38,36 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: false
+        env:
+          EREBUS_TEST_GROUP: unit
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v1
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: true
+        env:
+          EREBUS_TEST_GROUP: all
+      - name: Check Coverage
+        run: |
+          julia --project=tools -e 'using Pkg; Pkg.instantiate()'
+          julia --project=tools tools/check_coverage.jl
 
   docs:
     name: Documentation
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
@@ -61,6 +86,7 @@ jobs:
   format:
     name: Code Style - BlueStyle
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
@@ -75,6 +101,7 @@ jobs:
   test-quality:
     name: Test Quality Standards
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
