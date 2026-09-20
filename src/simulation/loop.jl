@@ -3250,7 +3250,7 @@ function simulation_loop(
                 marknum,
                 marker_property_mode;
                 coords=coords,
-                dsubgridt=dsubgridt,
+                dsubgridt=cfg.solver.dsubgridt,
             )
 
             # ---------------------------------------------------------------------
