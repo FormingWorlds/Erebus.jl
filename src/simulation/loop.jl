@@ -2462,7 +2462,7 @@ function simulation_loop(
                 pf0 .= pf
 
                 # perform plastic iterations
-                for iplast in 1:1:cfg.solver.nplast
+                for iplast in 1:1:titermax_val
                     @info("thermochemical iter $titer - hydromechanical iter $iplast")
                     # recompute bulk viscosity at pressure nodes
                     recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
