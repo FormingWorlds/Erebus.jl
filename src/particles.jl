@@ -993,6 +993,8 @@ function compute_marker_properties!(
     alpha_eta_val::Real=28.0,
     phi_crit_val::Real=0.4,
     eta_melt_val::Real=10.0,
+    etamin::Real=1.0e12,
+    etamax::Real=1.0e23,
     dpdt_clapeyron_val::Real=0.0,
     soft_turbulence::Bool=false,
     turb_exponent_val::Real=1.0 / 3.0,
@@ -1487,6 +1489,8 @@ function update_marker_viscosity!(
     alpha_eta_val::Real=28.0,
     phi_crit_val::Real=0.4,
     eta_melt_val::Real=10.0,
+    etamin::Real=1.0e12,
+    etamax::Real=1.0e23,
 )
     @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     @inbounds i, j, weights = fix_weights(

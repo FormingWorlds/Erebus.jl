@@ -1,3 +1,5 @@
+etamin = 1.0e+12
+
 @testset "Physics" begin
     @testset "distance(): metric axioms and invariants" begin
         # 1. Identity of indiscernibles

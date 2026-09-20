@@ -336,18 +336,13 @@ export Geometry, Physics, Particles, Numerics, Simulation
 include("constants.jl")
 # include("test_constants.jl")
 
-if use_pardiso
-    using Pardiso
-else
-    if Sys.isapple()
-        using AppleAccelerate
-    else
-        # using MKL
-    end
+import Pardiso
+if Sys.isapple()
+    using AppleAccelerate
 end
 
 const to = TimerOutput()
-const rgen = MersenneTwister(seed)
+const rgen = MersenneTwister(42)
 
 # Core modular components
 include("config.jl")

@@ -323,58 +323,58 @@ const brk4 = SVector{4,Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
 const crk4 = SVector{3,Float64}([0.5, 0.5, 1.0])
 # timestepping parameters
 # output storage periodicity
-const savematstep = 10
+# const savematstep = 10
 # longest allowed computational timestep [s]
-const dt_longest = 1.0e+11
+# const dt_longest = 1.0e+11
 # coefficient to decrease computational timestep
-const dtcoefdn = 0.5
+# const dtcoefdn = 0.5
 # coefficient to increase computational timestep
-const dtcoefup = 1.2
+# const dtcoefup = 1.2
 # number of iterations before changing computational timestep
-const dtstep = 200
+# const dtstep = 200
 # max marker movement per time step [grid steps]
-const dxymax = 0.05
+# const dxymax = 0.05
 # weight of averaged velocity for moving markers
-const vpratio = 1 / 3
+# const vpratio = 1 / 3
 # max temperature change per time step [K]
-const DTmax = 20.0
+# const DTmax = 20.0
 # subgrid temperature diffusion parameter
-const dsubgridt = 0.0
+# const dsubgridt = 0.0
 # subgrid stress diffusion parameter
-const dsubgrids = 0.0
+# const dsubgrids = 0.0
 # length of year [s]
-const yearlength = 365.25 * 24 * 3600
+# const yearlength = 365.25 * 24 * 3600
 # time sum (start) [s]
-const start_time = 2.25e6 * yearlength
+# const start_time = 2.25e6 * yearlength
 # time sum (end) [s]
-const endtime = 15.0e6 * yearlength
+# const endtime = 15.0e6 * yearlength
 # lower viscosity cut-off [Pa s]	
-const etamin = 1e+12
+# const etamin = 1e+12
 # upper viscosity cut-off [Pa s]
-const etamax = 1e+23
+# const etamax = 1e+23
 # maximum number of plastic iterations
-const nplast = 100_000
+# const nplast = 100_000
 # maximum number of global iterations
-const titermax = 10_000
+# const titermax = 10_000
 # periodicity of visualization
-const visstep = 1
+# const visstep = 1
 # tolerance level for yielding error()
-const yerrmax = 1e+2
+# const yerrmax = 1e+2
 # weight for old viscosity
-const etawt = 0.0
+# const etawt = 0.0
 # max porosity ratio change per time step
-const dphimax = 100.01
+# const dphimax = 100.01
 # const dphimax = 0.01
 # starting timestep
-const start_step = 1
+# const start_step = 1
 # maximum number of timesteps to run
-const n_steps = 10
-# const n_steps = 100 
+# const n_steps = 10
+# # const n_steps = 100 
 # const n_steps = 30_000 
 # random number generator seed
-const seed = 42
+# const seed = 42
 # using MKL Pardiso solver
-const use_pardiso = false
+# const use_pardiso = false
 # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
 # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
 const iparms_dict = Dict([

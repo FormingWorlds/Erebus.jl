@@ -6,10 +6,9 @@ using Random
 using StaticArrays
 using Test
 
-include("../src/test_constants.jl")
-# include("../src/constants.jl")
+include("../src/constants.jl")
 include("test_helpers.jl")
-const rgen = MersenneTwister(seed)
+const rgen = MersenneTwister(42)
 
 test_group = get(ENV, "EREBUS_TEST_GROUP", "all")
 

@@ -26,8 +26,8 @@ function compute_displacement_timestep(
     coords=nothing,
     dx_val=coords === nothing ? dx : coords.dx,
     dy_val=coords === nothing ? dy : coords.dy,
-    dxymax_val=dxymax,
-    dphimax_val=dphimax,
+    dxymax_val::Real=0.05,
+    dphimax_val::Real=100.01,
 )
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
@@ -53,11 +53,11 @@ end # function compute_displacement_timestep
         coords=nothing,
         dx_val=coords === nothing ? dx : coords.dx,
         dy_val=coords === nothing ? dy : coords.dy,
-        dxymax_val=dxymax,
-        dphimax_val=dphimax,
+        dxymax_val::Real=0.05,
+        dphimax_val::Real=100.01,
         maxDTcurrent=0.0,
-        DTmax_val=DTmax,
-        dt_longest_val=dt_longest,
+        DTmax_val::Real=20.0,
+        dt_longest_val::Real=1.0e11,
         dt_min=1.0,
     )
 
@@ -74,12 +74,12 @@ function compute_adaptive_timestep(
     coords=nothing,
     dx_val=coords === nothing ? dx : coords.dx,
     dy_val=coords === nothing ? dy : coords.dy,
-    dxymax_val=dxymax,
-    dphimax_val=dphimax,
+    dxymax_val::Real=0.05,
+    dphimax_val::Real=100.01,
     dt_ref=nothing,
     maxDTcurrent=0.0,
-    DTmax_val=DTmax,
-    dt_longest_val=dt_longest,
+    DTmax_val::Real=20.0,
+    dt_longest_val::Real=1.0e11,
     dt_min=1.0,
     max_v_seg::Real=0.0,
     max_subcycles::Integer=2000,

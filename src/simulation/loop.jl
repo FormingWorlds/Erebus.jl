@@ -1709,6 +1709,8 @@ function simulation_loop(
                                 k_metal_val=k_metal_val,
                                 rhocp_metal_val=rhocp_metal_val,
                                 volatiles_active=cfg.volatiles.active,
+                                etamin=cfg.solver.etamin,
+                                etamax=cfg.solver.etamax,
                                 volatiles_cfg=cfg.volatiles,
                                 retention_cfg=cfg.retention,
                                 XH2Om=XH2Om,
@@ -1871,6 +1873,8 @@ function simulation_loop(
                             k_metal_val=k_metal_val,
                             rhocp_metal_val=rhocp_metal_val,
                             volatiles_active=cfg.volatiles.active,
+                                etamin=cfg.solver.etamin,
+                                etamax=cfg.solver.etamax,
                             volatiles_cfg=cfg.volatiles,
                             retention_cfg=cfg.retention,
                             XH2Om=XH2Om,
@@ -2085,6 +2089,8 @@ function simulation_loop(
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
+                                etamin=cfg.solver.etamin,
+                                etamax=cfg.solver.etamax,
                         volatiles_cfg=cfg.volatiles,
                         retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
@@ -2756,7 +2762,7 @@ function simulation_loop(
                         aphimax;
                         coords=coords,
                         dxymax_val=cfg.time.dxymax,
-                        cfg.solver.dphimax=cfg.solver.dphimax,
+                        dphimax_val=cfg.solver.dphimax,
                         dt_ref=dt_step_initial,
                         maxDTcurrent=maxDTcurrent,
                         DTmax_val=cfg.time.DTmax,
@@ -3156,7 +3162,7 @@ function simulation_loop(
                 maxDTcurrent = maximum(abs, DT)
                 @info "max DT = $maxDTcurrent K"
                 # prepare next pass of thermochemical iteration
-                dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
+                dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer, cfg.time.DTmax)
                 # evaluate iteration outcome
                 if compute_thermochemical_iteration_outcome(
                     DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
@@ -3187,6 +3193,8 @@ function simulation_loop(
                     YNY_inv_ETA;
                     coords=coords,
                     Fm=Fm,
+                    etamin=cfg.solver.etamin,
+                    etamax=cfg.solver.etamax,
                     melting_active=melting_active_val,
                     alpha_eta_val=alpha_eta_val,
                     phi_crit_val=phi_crit_val,
