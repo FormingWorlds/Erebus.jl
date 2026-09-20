@@ -154,7 +154,7 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
    ```bash
    julia --project=. test/runtests.jl
    ```
-3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12 and 1.13.
+3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12.
 
 ---
 
