@@ -3223,14 +3223,9 @@ function simulation_loop(
                 dt,
                 marknum;
                 coords=coords,
-                DTmax_val=cfg.time.DTmax,
                 dsubgrids=cfg.solver.dsubgrids,
             )
 
-            # interpolate temperature to markers
-            compute_marker_temperature!(
-                xm, ym, tkm, tk1, tk2; coords=coords, dsubgridt=cfg.solver.dsubgridt
-            )
 
             # ---------------------------------------------------------------------
             # interpolate DSXX, DSXY to markers
