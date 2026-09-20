@@ -1836,7 +1836,7 @@ etamin = 1.0e+12
             ST,
             dt;
             coords=coords,
-            DTmax=DTmax,
+            DTmax_val=DTmax,
         )
 
         # 1. Monotonic heating across subcycles
