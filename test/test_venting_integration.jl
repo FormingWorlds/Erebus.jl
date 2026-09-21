@@ -7,6 +7,7 @@ using StaticArrays
 using Test
 
 
+const seed = 42
 const rgen = MersenneTwister(seed)
 
 @testset "Cold Surface Venting Integration" begin
