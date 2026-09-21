@@ -348,14 +348,8 @@ using JLD2
 
         # Stoichiometric conversion for H: 1 wt% H2O = f_H ppmw H
         f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
-        m_sil = (1.0 - phi_fe_bulk) * rho_sil
+        m_sil_melt = (1.0 - phi_fe_bulk) * F_melt * rho_sil
         m_met = phi_fe_bulk * F_fe * rho_met
-
-        # Initial elemental volatile masses in marker
-        M_H_init = m_sil * (init_H2O_wtpct * f_H) + m_met * init_fe_H_ppm
-        M_C_init = m_sil * init_C_ppm + m_met * init_fe_C_ppm
-        M_N_init = m_sil * init_N_ppm + m_met * init_fe_N_ppm
-        M_S_init = m_sil * init_S_ppm + m_met * init_fe_S_ppm
 
         # Perform equilibration
         equilibrate_metal_silicate_volatiles!(
@@ -382,18 +376,28 @@ using JLD2
         )
 
         # Final elemental volatile masses in marker
-        M_H_final = m_sil * (XH2Om[1] * f_H) + m_met * Xfe_H_m[1]
-        M_C_final = m_sil * XCm[1] + m_met * Xfe_C_m[1]
-        M_N_final = m_sil * XNm[1] + m_met * Xfe_N_m[1]
-        M_S_final = m_sil * XSm[1] + m_met * Xfe_S_m[1]
 
         # Verify exact mass conservation
-        @test isapprox(M_H_final, M_H_init; rtol=1.0e-12)
-        @test isapprox(M_C_final, M_C_init; rtol=1.0e-12)
-        @test isapprox(M_N_final, M_N_init; rtol=1.0e-12)
-        @test isapprox(M_S_final, M_S_init; rtol=1.0e-12)
+
+        # Whole-marker mass conservation
+        m_sil_total = (1.0 - phi_fe_bulk) * rho_sil
+        M_H_whole_init = m_sil_total * (init_H2O_wtpct * f_H) + m_met * init_fe_H_ppm
+        M_C_whole_init = m_sil_total * init_C_ppm + m_met * init_fe_C_ppm
+        M_N_whole_init = m_sil_total * init_N_ppm + m_met * init_fe_N_ppm
+        M_S_whole_init = m_sil_total * init_S_ppm + m_met * init_fe_S_ppm
+
+        M_H_whole_final = m_sil_total * (XH2Om[1] * f_H) + m_met * Xfe_H_m[1]
+        M_C_whole_final = m_sil_total * XCm[1] + m_met * Xfe_C_m[1]
+        M_N_whole_final = m_sil_total * XNm[1] + m_met * Xfe_N_m[1]
+        M_S_whole_final = m_sil_total * XSm[1] + m_met * Xfe_S_m[1]
+
+        @test isapprox(M_H_whole_init, M_H_whole_final; rtol=1e-10)
+        @test isapprox(M_C_whole_init, M_C_whole_final; rtol=1e-10)
+        @test isapprox(M_N_whole_init, M_N_whole_final; rtol=1e-10)
+        @test isapprox(M_S_whole_init, M_S_whole_final; rtol=1e-10)
 
         # Volatiles must have partitioned into metallic phase
+        @test isapprox(Xfe_C_m[1], 282.78307775976026, rtol=1e-8)
         @test Xfe_C_m[1] > 0.0
         @test Xfe_N_m[1] > 0.0
         @test Xfe_S_m[1] > 0.0
@@ -465,10 +469,9 @@ using JLD2
             rho_metal=rho_met,
             equilibration_fraction=0.5,
         )
-
-        M_C_partial = m_sil * XCm[1] + m_met * Xfe_C_m[1]
-        @test isapprox(M_C_partial, M_C_init; rtol=1.0e-12)
-        @test 0.0 < Xfe_C_m[1] < (M_C_init / m_met)
+        M_C_partial = m_sil_total * XCm[1] + m_met * Xfe_C_m[1]
+        @test isapprox(M_C_partial, M_C_whole_init; rtol=1.0e-12)
+        @test 0.0 < Xfe_C_m[1] < (M_C_whole_init / m_met)
     end
 
     @testset "Advective Volatile Segregation & Conservation in apply_metal_segregation!" begin

@@ -1,0 +1,33 @@
+I have verified the substantive points directly. Here is my adversarial review.
+
+## Adversarial review: Julia 1.10/1.11 → 1.12/1.13 version bump
+
+**Scope.** The diff changes CI matrices, pinned tool versions, `Project.toml` compat, and two doc files. It also removes the nightly coverage step. This is a mechanical version bump plus one behavioral change (nightly coverage). No `src/` logic changes.
+
+### What I verified (facts, not reasoning)
+
+1. All three current workflow files parse: `nightly.yml`, `CI.yml`, `Coverage.yml` all load without error (Python `yaml.safe_load`).
+2. The removed nightly "Check Coverage" step was invalid YAML. I reconstructed it from the diff and the parser failed with `could not find expected ':'` at the bare `julia --project=tools tools/check_coverage.jl` line. That line sat at the same indent as `run:`, so it was a scalar where a mapping key was expected.
+3. No leftover `1.10`/`1.11` references exist in `README.md` or `docs/src/howto/installation.md`. The remaining grep hits are scratch files (`patch_*.jl`, `rip_*.txt`, `pr_diff.txt`) and numeric coincidences (solubility constant `1.1008`, mass `1.1124e21`).
+4. `[compat] julia = "1.12"` resolves to `>=1.12, <2` under Julia semver, so the `1.13` matrix entry is allowed. Compat and matrix are consistent.
+5. The 90% coverage floor still exists in `CI.yml`'s `coverage` job (`EREBUS_TEST_GROUP: all`, then `check_coverage.jl`). `all` = unit + integration per `test/runtests.jl:81-90`. The diff does not touch that job.
+
+### Findings, most severe first
+
+**F1. Julia 1.13 availability is unverified and is the highest-impact risk (must verify).**
+Every 1.13 matrix entry in `CI.yml` and `nightly.yml` calls `setup-julia@v1` with `version: '1.13'`. If 1.13 is not a released stable version that the action can resolve, every 1.13 job fails at setup. The pinned `1.12` jobs (coverage, docs, format, test-quality) have the same dependency on 1.12 being resolvable. I cannot confirm the Julia release state from this sandbox, and my knowledge cutoff is January 2026, so I do not know whether 1.13 reached general availability by 2026-09-20. Action: confirm 1.13 is GA (not only a release candidate) before you trust this CI, for example run `setup-julia` once or check the Julia release list. Confidence: this is a real failure mode; I did not verify whether it triggers.
+
+**F2. Dependency support on 1.12/1.13 is not checked by the diff (verify by resolving).**
+The bump raises the floor to 1.12 but does not prove the `[deps]` resolve on 1.12 or 1.13. Several deps carry tight caps: `AMD = "0.5.0 - 0.5.3"`, `AppleAccelerate = "0.4, 0.7"`, `Pardiso = "0.5, 1"`, `ExtendableSparse = "1, 2"`. If any of these caps its own `julia` compat below 1.13, the resolver drops it or fails. Action: run `Pkg.resolve()` / `Pkg.instantiate()` on both 1.12 and 1.13 before merge. I did not run this; the sandbox has no matching Julia toolchain set up for it. Confidence: unverified risk, not a confirmed bug.
+
+**F3. Nightly no longer produces any coverage signal (low severity; the "regression" reading is wrong).**
+The diff sets `coverage: false` and deletes the check step, so the nightly schedule collects no coverage. This is not a real loss of a working guarantee, for two verified reasons: (a) the old step was invalid YAML (F-fact 2), so the nightly workflow could not run successfully before this change; (b) the old check ran on `EREBUS_TEST_GROUP: integration` (4 files) but `check_coverage.jl` measures all of `src/` and demands 90%, so it could never pass. The floor stays enforced in `CI.yml`'s `coverage` job. Net: this is a cleanup. The one true consequence is that nightly now gives no coverage number, which is the correct outcome given the above.
+
+**F4. Consistency checks pass; no bug found in the mechanical bump.**
+Docs, README, matrices, pinned versions, and compat are internally consistent. Dropping 1.10 (an LTS line) is a policy choice, not a defect; the matrix still exercises the compat lower bound (1.12). I found no correctness or logic error in the changed lines themselves.
+
+### Out of scope but worth noting
+The working tree holds many untracked scratch files (`patch_*.jl`, `fix_*.jl`, `rip_*.txt`, `pr_*.txt`, `run_*.sh`). They are not part of this diff. Confirm they stay out of any commit.
+
+### Boundary of what I checked
+I verified YAML validity, text consistency, and compat/matrix logic directly. I did NOT verify: that Julia 1.12 and 1.13 are resolvable by the CI action (F1), that all package dependencies resolve on 1.12/1.13 (F2), or that the test suite passes on these versions. Those need a real toolchain run, which this read-only sandbox cannot do.

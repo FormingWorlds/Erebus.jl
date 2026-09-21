@@ -4,6 +4,18 @@
 
 using DocStringExtensions
 
+function partial_pressures_to_masses(
+    p_dict::Dict{Symbol,Float64},
+    P_total::Float64,
+    col_coeff::Float64,
+    amu_dict::Dict{Symbol,Float64},
+)
+    mu_bar = sum(p_dict[k] * amu_dict[k] for k in keys(p_dict)) / P_total
+    return Dict{Symbol,Float64}(
+        k => (p_dict[k] * amu_dict[k] / mu_bar) * col_coeff for k in keys(p_dict)
+    )
+end
+
 """
     solve_magma_ocean_volatile_partitioning(
         M_melt::Real,
@@ -220,7 +232,9 @@ function solve_magma_ocean_volatile_partitioning(
                 p_dict[k] = p_dict[k] * (p_surf_pure / p_tot_spec)
             end
         end
-        m_atm_dict = Dict{Symbol,Float64}(k => v * col_coeff for (k, v) in p_dict)
+        m_atm_dict = partial_pressures_to_masses(
+            p_dict, p_surf_pure, col_coeff, SPECIES_AMU
+        )
         return (
             P_surf=p_surf_pure,
             p_i=p_dict,
@@ -265,7 +279,7 @@ function solve_magma_ocean_volatile_partitioning(
             :S2 => spec.p_S2_Pa,
             :SO2 => spec.p_SO2_Pa,
         )
-        # Rescale partial pressures to sum exactly to P_trial
+        # Normalize partial pressures to sum to P_trial
         p_tot_spec = sum(values(p_dict))
         if p_tot_spec > 0.0
             for k in keys(p_dict)
@@ -273,7 +287,7 @@ function solve_magma_ocean_volatile_partitioning(
             end
         end
 
-        m_atm_dict = Dict{Symbol,Float64}(k => v * col_coeff for (k, v) in p_dict)
+        m_atm_dict = partial_pressures_to_masses(p_dict, P_trial, col_coeff, SPECIES_AMU)
 
         # Atmospheric elemental mass contributions
         m_atm_H = (
@@ -369,7 +383,7 @@ function solve_magma_ocean_volatile_partitioning(
     P_high = max(1.0e8, 10.0 * (total_volatile_mass / col_coeff))
     best_res = nothing
 
-    for outer_iter in 1:8
+    for outer_iter in 1:100
         # Monotonic 1D bisection/Brent search for P_surf
         P_a = P_low
         P_b = P_high
@@ -416,10 +430,10 @@ function solve_magma_ocean_volatile_partitioning(
             ) < 1.0e-5
                 break
             end
-            z_H = 0.5 * (z_H + z_H_new)
-            z_C = 0.5 * (z_C + z_C_new)
-            z_N = 0.5 * (z_N + z_N_new)
-            z_S = 0.5 * (z_S + z_S_new)
+            z_H = 0.2 * z_H_new + 0.8 * z_H
+            z_C = 0.2 * z_C_new + 0.8 * z_C
+            z_N = 0.2 * z_N_new + 0.8 * z_N
+            z_S = 0.2 * z_S_new + 0.8 * z_S
         else
             break
         end
@@ -427,7 +441,7 @@ function solve_magma_ocean_volatile_partitioning(
 
     # Enforce strict conservation of elemental mass across melt and atmosphere
     final_atm_i = copy(best_res.m_atm_dict)
-    final_p_i = Dict{Symbol,Float64}(k => v / col_coeff for (k, v) in final_atm_i)
+    final_p_i = copy(best_res.p_dict)
     final_P_surf = sum(values(final_p_i))
     final_atm_tot = sum(values(final_atm_i))
 
@@ -456,24 +470,11 @@ function solve_magma_ocean_volatile_partitioning(
     scale_C = m_atm_C > mC ? mC / max(m_atm_C, 1.0e-30) : 1.0
     scale_N = m_atm_N > mN ? mN / max(m_atm_N, 1.0e-30) : 1.0
     scale_S = m_atm_S > mS ? mS / max(m_atm_S, 1.0e-30) : 1.0
+    scale_global = min(scale_H, scale_C, scale_N, scale_S)
 
-    if min(scale_H, scale_C, scale_N, scale_S) < 1.0
+    if scale_global < 1.0
         for (sp, mass) in final_atm_i
-            if sp in (:H2, :H2O)
-                final_atm_i[sp] = mass * scale_H
-            elseif sp in (:CO, :CO2)
-                final_atm_i[sp] = mass * scale_C
-            elseif sp === :CH4
-                final_atm_i[sp] = mass * min(scale_H, scale_C)
-            elseif sp === :N2
-                final_atm_i[sp] = mass * scale_N
-            elseif sp === :NH3
-                final_atm_i[sp] = mass * min(scale_H, scale_N)
-            elseif sp in (:SO2, :S2)
-                final_atm_i[sp] = mass * scale_S
-            elseif sp === :H2S
-                final_atm_i[sp] = mass * min(scale_H, scale_S)
-            end
+            final_atm_i[sp] = mass * scale_global
         end
         m_atm_H = (
             get(final_atm_i, :H2, 0.0) * 1.0 +
@@ -496,7 +497,9 @@ function solve_magma_ocean_volatile_partitioning(
             get(final_atm_i, :SO2, 0.0) * (32.060 / 64.066) +
             get(final_atm_i, :S2, 0.0) * 1.0
         )
-        final_p_i = Dict{Symbol,Float64}(k => v / col_coeff for (k, v) in final_atm_i)
+        for (sp, p) in final_p_i
+            final_p_i[sp] = p * scale_global
+        end
         final_P_surf = sum(values(final_p_i))
         final_atm_tot = sum(values(final_atm_i))
     end
@@ -615,7 +618,7 @@ function degas_magma_ocean_markers!(
     rho_s = Float64(rho_solid)
     v_m = Float64(marker_volume)
     m_marker = rho_s * v_m
-    L_3D = 2.0 * Rp # 2D Cartesian to 3D spherical metric factor
+    L_3D = (4.0 / 3.0) * Rp # 2D Cartesian to 3D spherical metric factor
     delta_IW_eff = cfg.redox_coupled ? Float64(delta_IW) : 0.0
     T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
     spec_surf = solve_chnos_speciation(psurf_val, T_surf_ref, delta_IW_eff)
@@ -639,7 +642,7 @@ function degas_magma_ocean_markers!(
         F_prev = Fm_old[m]
 
         # Check degassing activation: molten magma ocean (F >= F_thresh) or near-surface ascending melt
-        is_degassing_zone = (r_sq >= r_degas_sq) && (F_curr >= F_thresh || F_curr > 0.01)
+        is_degassing_zone = (r_sq >= r_degas_sq) && (F_curr >= F_thresh || F_curr > 0.01) && F_curr > 0.0
         if !is_degassing_zone
             continue
         end
@@ -695,11 +698,11 @@ function degas_magma_ocean_markers!(
         w_N_m = XNm[m] * 1.0e-6
         w_S_m = XSm[m] * 1.0e-6
 
-        # Supersaturated volatile extraction
-        ex_H2O = max(0.0, w_H2O_m - w_H2O_sat) * eff
-        ex_C = max(0.0, w_C_m - w_C_sat) * eff
-        ex_N = max(0.0, w_N_m - w_N_sat) * eff
-        ex_S = max(0.0, w_S_m - w_S_sat) * eff
+        # Supersaturated volatile extraction (evaluating supersaturation in the melt volume)
+        ex_H2O = max(0.0, w_H2O_m / F_curr - w_H2O_sat) * F_curr * eff
+        ex_C = max(0.0, w_C_m / F_curr - w_C_sat) * F_curr * eff
+        ex_N = max(0.0, w_N_m / F_curr - w_N_sat) * F_curr * eff
+        ex_S = max(0.0, w_S_m / F_curr - w_S_sat) * F_curr * eff
 
         if ex_H2O > 0.0
             XH2Om[m] = max(0.0, (w_H2O_m - ex_H2O) * 100.0)

@@ -167,8 +167,8 @@ include("test_helpers.jl")
         h2_h2o_ox = sol_ox.p_i[:H2] / max(sol_ox.p_i[:H2O], 1e-30)
         @test h2_h2o_red > h2_h2o_ox
 
-        # Under reducing conditions, nitrogen dissolves chemically as nitride in melt
-        # Hence, dissolved N in melt must be higher under reducing conditions
+        # Under reducing conditions, Nitrogen dissolves chemically as nitride (N3-), which vastly
+        # increases its solubility in the melt compared to physical dissolution under oxidizing conditions.
         @test sol_red.M_melt_N > sol_ox.M_melt_N
     end
 

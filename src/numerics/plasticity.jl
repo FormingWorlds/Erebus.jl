@@ -418,8 +418,17 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_plastic_iteration_pass!(
-    ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
-    dtstep::Int=200, dtcoefdn::Real=0.5
+    ETA,
+    ETA5,
+    ETA00,
+    YNY,
+    YNY5,
+    YNY00,
+    YNY_inv_ETA,
+    dt,
+    iplast;
+    dtstep::Int=200,
+    dtcoefdn::Real=0.5,
 )
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:

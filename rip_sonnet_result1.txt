@@ -1,0 +1,32 @@
+All three workflow YAML files parse cleanly after the diff. Here is the review.
+
+## Findings
+
+**1. README.md now makes a false claim about CI coverage (confirmed, verified against the actual workflow file)**
+
+`README.md` line 157 was changed to:
+
+> "Continuous Integration verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12 and 1.13."
+
+I read the resulting `.github/workflows/CI.yml`. The `docs`, `format`, and `test-quality` jobs each pin a single fixed version:
+
+```yaml
+- uses: julia-actions/setup-julia@v1
+  with:
+    version: '1.12'
+```
+
+None of these three jobs use a matrix; they never run on 1.13. Before this diff the README correctly said "enforces formatting and documentation builds on Julia 1.10" (singular, matching the single-version jobs of that time). The diff changed the version number but also changed "Julia 1.10" to "Julia 1.12 **and 1.13**", turning a previously accurate sentence into a false one. The "test execution on Julia 1.12 and 1.13" half of the sentence is accurate (the `test` job matrix really does include both), so this is a targeted inaccuracy in the second clause only.
+
+Failure scenario: a contributor reads the README, believes formatting/doc-build failures are caught on 1.13, and doesn't test doc builds under 1.13 before merging — the actual CI can't catch that.
+
+**2. `nightly.yml`'s coverage step was deleted rather than fixed — plausible but not a functional regression**
+
+I compared against the pre-diff file (`git show 5eb612d:.github/workflows/nightly.yml`) and confirmed with `yaml.safe_load` that the old "Check Coverage" step was already invalid YAML (`run:` scalar followed by a second unindented command line with no key — "could not find expected ':'"). So the nightly workflow's coverage check was already broken before this diff; it likely never ran.
+
+This diff removes the step and sets `coverage: false` instead of fixing the syntax. I checked `test/runtests.jl`: `EREBUS_TEST_GROUP=all` (used by `CI.yml`'s dedicated `coverage` job on every push/PR to `main`) already runs both `unit_tests` and `integration_tests` together with `coverage: true` and `tools/check_coverage.jl`. So integration-test coverage is still enforced elsewhere, and removing the broken, redundant step doesn't leave a coverage gap. I'm flagging this only because the diff silently drops behavior instead of repairing it, with no note that it's already covered by a different job — worth a one-line justification if this is reviewed by someone unfamiliar with `CI.yml`.
+
+## What I checked vs. did not check
+
+- Verified: all three post-diff workflow YAML files parse without error; the pre-diff `nightly.yml` "Check Coverage" step does not parse; `test/runtests.jl` group semantics (`all` = `unit` + `integration`); the exact jobs/versions in the current `CI.yml`; no leftover `1.10`/`1.11` references in README.md or `docs/src/howto/installation.md`.
+- Not checked: whether the package actually builds and its test suite passes under Julia 1.12/1.13 (no Julia toolchain run) — I have not verified the compat floor bump (`julia = "1"` → `"1.12"` in `Project.toml`) is technically justified by any version-gated code, only that the syntax is valid semver-caret notation.

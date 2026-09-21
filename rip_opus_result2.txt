@@ -1,0 +1,37 @@
+I have enough to report. Network verification of 1.13 was denied, so I flag that as an open item rather than assert it.
+
+## Adversarial review report: Julia 1.12/1.13 version bump
+
+**Scope reviewed**: the diff only. It moves CI, docs, and compat from Julia 1.10/1.11 to 1.12/1.13 across `.github/workflows/CI.yml`, `Coverage.yml`, `nightly.yml`, `Project.toml`, `README.md`, and `docs/src/howto/installation.md`. I ignored the many untracked `patch_*.jl` and `rip_*.txt` files in the tree; they are scratch artifacts from earlier runs, not part of this diff.
+
+### What I verified directly
+- Local Julia is 1.12.7, so 1.12 is a real, resolvable version.
+- `test/runtests.jl:14` defaults `EREBUS_TEST_GROUP` to `"all"`, so `Coverage.yml` (no group set) still runs the full suite for coverage.
+- No stale `1.10` or `1.11` string remains in any git-tracked CI or docs file. The only `1.1*` hits in tracked files are physics constants and untracked scratch files.
+- Version strings are internally consistent: `Project.toml` floor `1.12`; README states tests on 1.12 and 1.13 and docs/format on 1.12; installation says 1.12+. These match the workflows.
+
+### Findings
+
+**1. [Medium] The compat floor `julia = "1.12"` drops the LTS and 1.11 with no stated reason.**
+`Project.toml:50` changes `julia = "1"` to `julia = "1.12"`. This excludes Julia 1.10 (the current LTS) and 1.11 from install resolution, not just from CI. The diff shows no 1.12-only language feature that forces this floor. If the code does not need a 1.12 feature, this floor is over-restrictive and blocks every LTS-channel user from installing the package. This is a compatibility policy decision. Confirm it is intended, and if so, record the reason. The package `version` is still `1.0.0-DEV`, so the break is pre-release, but the exclusion is real.
+
+**Verify by**: run the suite on Julia 1.10/1.11, or grep `src/` for 1.12-only syntax. If nothing needs 1.12, lower the floor to keep LTS support.
+
+**2. [Verify, high impact if wrong] Julia 1.13 is unverified as a released, resolvable version.**
+`CI.yml:23`, `nightly.yml:16`, and the README claim Julia 1.13. If `julia-actions/setup-julia@v1` cannot resolve `'1.13'`, every `test` matrix job in both workflows fails at the setup step, and the README points users at a version they cannot install. I confirmed 1.12 exists (installed locally). I could NOT confirm 1.13: the network fetch of the Julia versions list was denied by the sandbox. Given today is 2026-09-20 and 1.12 is already released, 1.13 is plausible but unproven.
+
+**Verify by**: check that `1.13.x` exists in `https://julialang-s3.julialang.org/bin/versions.json`, or watch the first CI run resolve the matrix.
+
+**3. [Low, scope creep] `nightly.yml` disables coverage and deletes the "Check Coverage" step inside a version-bump commit.**
+The diff sets `coverage: true` to `coverage: false` and removes the whole Check Coverage step. Two points:
+- The removed step was malformed YAML in the original (a two-line `run:` value without a `run: |` block scalar), so it likely never ran the second command correctly. Removal is defensible cleanup, not a loss.
+- No coverage gap results: `CI.yml:44-63` keeps a `coverage` job that runs `EREBUS_TEST_GROUP: all` with `check_coverage.jl`, and `Coverage.yml` still uploads to Codecov. So the floor still exists elsewhere.
+
+The problem is bundling: a behavior change to the nightly rides inside a commit titled for a Julia version bump, with no note. Confirm the removal is intended and separate it in the commit message.
+
+### What is missing
+- No test or CI check guards the compat-floor claim. If the code does not actually need 1.12, nothing catches the over-restriction in Finding 1.
+- The change does not touch the ageing action pins (`julia-actions/setup-julia@v1`, `julia-actions/cache@v1`). These are outside the diff scope, so not a defect of this change, but an older `setup-julia@v1` is a candidate reason a new version like 1.13 might not resolve. I did not verify this.
+
+### Bottom line
+This is a clean, complete string-level version bump with consistent docs. The two substantive risks are not typos: the LTS drop (Finding 1) is a policy choice that needs a decision, and the existence of Julia 1.13 (Finding 2) is a reachability fact I could not confirm and that will fail the whole matrix if wrong. Verify both before merge.

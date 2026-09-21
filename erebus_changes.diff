@@ -1,0 +1,380 @@
+diff --git a/src/Erebus.jl b/src/Erebus.jl
+index 20074a9..ba651c5 100644
+--- a/src/Erebus.jl
++++ b/src/Erebus.jl
+@@ -336,18 +336,13 @@ export Geometry, Physics, Particles, Numerics, Simulation
+ include("constants.jl")
+ # include("test_constants.jl")
+ 
+-if use_pardiso
+-    using Pardiso
+-else
+-    if Sys.isapple()
+-        using AppleAccelerate
+-    else
+-        # using MKL
+-    end
++import Pardiso
++if Sys.isapple()
++    using AppleAccelerate
+ end
+ 
+ const to = TimerOutput()
+-const rgen = MersenneTwister(seed)
++const rgen = MersenneTwister(42)
+ 
+ # Core modular components
+ include("config.jl")
+diff --git a/src/config.jl b/src/config.jl
+index 44f3a69..4b0ab8c 100644
+--- a/src/config.jl
++++ b/src/config.jl
+@@ -108,6 +108,8 @@ Base.@kwdef struct SolverConfig
+     etaphikoef::Float64 = 1.0
+     etamin::Float64 = 1.0e+12
+     etamax::Float64 = 1.0e+23
++    dsubgridt::Float64 = 0.0
++    dsubgrids::Float64 = 0.0
+     p2m_mode::Symbol = :tiled
+     tile_size::Int = 4
+     hydromech_solver::Symbol = :direct
+diff --git a/src/constants.jl b/src/constants.jl
+index 2b16eaa..8a1afe3 100644
+--- a/src/constants.jl
++++ b/src/constants.jl
+@@ -323,58 +323,58 @@ const brk4 = SVector{4,Rational{Int64}}([1//6, 2//6, 2//6, 1//6])
+ const crk4 = SVector{3,Float64}([0.5, 0.5, 1.0])
+ # timestepping parameters
+ # output storage periodicity
+-const savematstep = 10
++# const savematstep = 10
+ # longest allowed computational timestep [s]
+-const dt_longest = 1.0e+11
++# const dt_longest = 1.0e+11
+ # coefficient to decrease computational timestep
+-const dtcoefdn = 0.5
++# const dtcoefdn = 0.5
+ # coefficient to increase computational timestep
+-const dtcoefup = 1.2
++# const dtcoefup = 1.2
+ # number of iterations before changing computational timestep
+-const dtstep = 200
++# const dtstep = 200
+ # max marker movement per time step [grid steps]
+-const dxymax = 0.05
++# const dxymax = 0.05
+ # weight of averaged velocity for moving markers
+-const vpratio = 1 / 3
++# const vpratio = 1 / 3
+ # max temperature change per time step [K]
+-const DTmax = 20.0
++# const DTmax = 20.0
+ # subgrid temperature diffusion parameter
+-const dsubgridt = 0.0
++# const dsubgridt = 0.0
+ # subgrid stress diffusion parameter
+-const dsubgrids = 0.0
++# const dsubgrids = 0.0
+ # length of year [s]
+-const yearlength = 365.25 * 24 * 3600
++# const yearlength = 365.25 * 24 * 3600
+ # time sum (start) [s]
+-const start_time = 2.25e6 * yearlength
++# const start_time = 2.25e6 * yearlength
+ # time sum (end) [s]
+-const endtime = 15.0e6 * yearlength
++# const endtime = 15.0e6 * yearlength
+ # lower viscosity cut-off [Pa s]	
+-const etamin = 1e+12
++# const etamin = 1e+12
+ # upper viscosity cut-off [Pa s]
+-const etamax = 1e+23
++# const etamax = 1e+23
+ # maximum number of plastic iterations
+-const nplast = 100_000
++# const nplast = 100_000
+ # maximum number of global iterations
+-const titermax = 10_000
++# const titermax = 10_000
+ # periodicity of visualization
+-const visstep = 1
++# const visstep = 1
+ # tolerance level for yielding error()
+-const yerrmax = 1e+2
++# const yerrmax = 1e+2
+ # weight for old viscosity
+-const etawt = 0.0
++# const etawt = 0.0
+ # max porosity ratio change per time step
+-const dphimax = 100.01
++# const dphimax = 100.01
+ # const dphimax = 0.01
+ # starting timestep
+-const start_step = 1
++# const start_step = 1
+ # maximum number of timesteps to run
+-const n_steps = 10
+-# const n_steps = 100 
++# const n_steps = 10
++# # const n_steps = 100 
+ # const n_steps = 30_000 
+ # random number generator seed
+-const seed = 42
++# const seed = 42
+ # using MKL Pardiso solver
+-const use_pardiso = false
++# const use_pardiso = false
+ # MKL Pardiso solver IPARM control parameters -> ∇ATTN: zero-indexed as in docs:
+ # https://www.intel.com/content/www/us/en/develop/documentation/onemkl-developer-reference-c/top/sparse-solver-routines/onemkl-pardiso-parallel-direct-sparse-solver-iface/pardiso-iparm-parameter.html
+ const iparms_dict = Dict([
+diff --git a/src/numerics/plasticity.jl b/src/numerics/plasticity.jl
+index 996296b..3aeffaa 100644
+--- a/src/numerics/plasticity.jl
++++ b/src/numerics/plasticity.jl
+@@ -303,7 +303,12 @@ function compute_nodal_adjustment!(
+     YERRNOD,
+     DSY,
+     dt,
+-    iplast,
++    iplast;
++    etawt::Real=0.0,
++    etamax::Real=1e23,
++    etamin::Real=1e12,
++    yerrmax::Real=1e2,
++    nplast::Int=100_000,
+ )
+     # reset / setup
+     Ny, Nx = size(ETA)
+@@ -413,7 +418,8 @@ $(SIGNATURES)
+     - dt: adjusted next time step
+ """
+ function finalize_plastic_iteration_pass!(
+-    ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
++    ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
++    dtstep::Int=200, dtcoefdn::Real=0.5
+ )
+     if iplast % dtstep == 0
+         # dtstep plastic iterations performed without reaching targets:
+diff --git a/src/numerics/timestep.jl b/src/numerics/timestep.jl
+index c64a7f6..065c6d7 100644
+--- a/src/numerics/timestep.jl
++++ b/src/numerics/timestep.jl
+@@ -26,8 +26,8 @@ function compute_displacement_timestep(
+     coords=nothing,
+     dx_val=coords === nothing ? dx : coords.dx,
+     dy_val=coords === nothing ? dy : coords.dy,
+-    dxymax_val=dxymax,
+-    dphimax_val=dphimax,
++    dxymax_val::Real=0.05,
++    dphimax_val::Real=100.01,
+ )
+     maxvx = maximum(abs, vx)
+     maxvy = maximum(abs, vy)
+@@ -53,11 +53,11 @@ end # function compute_displacement_timestep
+         coords=nothing,
+         dx_val=coords === nothing ? dx : coords.dx,
+         dy_val=coords === nothing ? dy : coords.dy,
+-        dxymax_val=dxymax,
+-        dphimax_val=dphimax,
++        dxymax_val::Real=0.05,
++        dphimax_val::Real=100.01,
+         maxDTcurrent=0.0,
+-        DTmax_val=DTmax,
+-        dt_longest_val=dt_longest,
++        DTmax_val::Real=20.0,
++        dt_longest_val::Real=1.0e11,
+         dt_min=1.0,
+     )
+ 
+@@ -74,12 +74,12 @@ function compute_adaptive_timestep(
+     coords=nothing,
+     dx_val=coords === nothing ? dx : coords.dx,
+     dy_val=coords === nothing ? dy : coords.dy,
+-    dxymax_val=dxymax,
+-    dphimax_val=dphimax,
++    dxymax_val::Real=0.05,
++    dphimax_val::Real=100.01,
+     dt_ref=nothing,
+     maxDTcurrent=0.0,
+-    DTmax_val=DTmax,
+-    dt_longest_val=dt_longest,
++    DTmax_val::Real=20.0,
++    dt_longest_val::Real=1.0e11,
+     dt_min=1.0,
+     max_v_seg::Real=0.0,
+     max_subcycles::Integer=2000,
+diff --git a/src/simulation/checkpoint.jl b/src/simulation/checkpoint.jl
+index a28588c..4454cb0 100644
+--- a/src/simulation/checkpoint.jl
++++ b/src/simulation/checkpoint.jl
+@@ -12,7 +12,7 @@ $(SIGNATURES)
+ 
+     - Ma: period in millions of years
+ """
+-function s_to_Ma(s)
++function s_to_Ma(s::Real; yearlength::Real=31557600.0)
+     return s / (yearlength * 1e6)
+ end
+ 
+@@ -318,6 +318,7 @@ function save_state(
+     redox_props=nothing,
+     atm_state::Union{Nothing,AtmosphereState}=nothing,
+     F_extract_m=nothing,
++    cfg::Union{Nothing,SimulationConfig}=nothing,
+ )
+     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
+     @unpack_coords coords Nx Ny Nx1 Ny1 Nxm Nym dx dy dxm dym
+@@ -343,15 +344,15 @@ function save_state(
+         S_vent=S_vent === nothing ? zeros(Float64, Ny1_val, Nx1_val) : S_vent,
+         ratio_al,
+         t_half_al,
+-        dsubgrids,
+-        dsubgridt,
+-        hr_al,
+-        hr_fe,
++        dsubgrids=cfg === nothing ? 0.0 : cfg.solver.dsubgrids,
++        dsubgridt=cfg === nothing ? 0.0 : cfg.solver.dsubgridt,
++        hr_al=cfg === nothing ? true : cfg.thermal.hr_al,
++        hr_fe=cfg === nothing ? false : cfg.thermal.hr_fe,
+         rplanet=rplanet !== nothing ? Float64(rplanet) : 50000.0,
+         rcore=rcore !== nothing ? Float64(rcore) : 0.0,
+         telescope_level=telescope_level !== nothing ? Int(telescope_level) : 0,
+-        rcrust,
+-        psurface,
++        rcrust=cfg === nothing ? 50000.0 : cfg.geometry.rcrust,
++        psurface=cfg === nothing ? 1000.0 : cfg.geometry.psurface,
+         xsize=xsize_val,
+         ysize=ysize_val,
+         xcenter=xcenter_val,
+diff --git a/src/simulation/loop.jl b/src/simulation/loop.jl
+index 288dbb5..a7e80e9 100644
+--- a/src/simulation/loop.jl
++++ b/src/simulation/loop.jl
+@@ -348,18 +348,18 @@ function simulation_loop(
+         dtreaction_dehydration = dtr_deh_val,
+         pfcoeff = pfcoeff_val,
+         pferrmax = pferrmax_val,
+-        start_time,
+-        start_step,
+-        endtime,
+-        dsubgrids,
+-        dsubgridt,
+-        dt_longest,
+-        dphimax,
+-        dxymax,
+-        vpratio,
+-        seed
++        start_time = cfg.time.start_time,
++        start_step = start_step_val,
++        endtime = cfg.time.endtime,
++        dsubgrids = cfg.solver.dsubgrids,
++        dsubgridt = cfg.solver.dsubgridt,
++        dt_longest = cfg.time.dt_longest,
++        dphimax = dphimax_val,
++        dxymax = cfg.solver.dxymax,
++        vpratio = cfg.solver.vpratio,
++        seed = cfg.solver.seed
+     )
+-    @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
++    @info "Solver" use_pardiso=cfg.solver.use_pardiso BLAS.get_config() BLAS.get_num_threads()
+ 
+     # -------------------------------------------------------------------------
+     # set up staggered grid"
+@@ -1073,7 +1073,7 @@ function simulation_loop(
+                 M_planet_val=M_planet_val,
+                 telescope_level=telescope_level,
+                 hcnspo_props=hcnspo_props,
+-                atm_state=atm_state,
++                atm_state=atm_state, cfg=cfg,
+             )
+         end
+     end
+@@ -2456,7 +2456,7 @@ function simulation_loop(
+                 pf0 .= pf
+ 
+                 # perform plastic iterations
+-                for iplast in 1:1:titermax_val
++                for iplast in 1:1:cfg.solver.nplast
+                     @info("thermochemical iter $titer - hydromechanical iter $iplast")
+                     # recompute bulk viscosity at pressure nodes
+                     recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
+@@ -2755,11 +2755,11 @@ function simulation_loop(
+                         dt,
+                         aphimax;
+                         coords=coords,
+-                        dxymax_val=dxymax,
+-                        dphimax_val=dphimax,
++                        dxymax_val=cfg.solver.dxymax,
++                        dphimax_val=dphimax_val,
+                         dt_ref=dt_step_initial,
+                         maxDTcurrent=maxDTcurrent,
+-                        DTmax_val=DTmax,
++                        DTmax_val=cfg.time.DTmax,
+                         dt_longest_val=dt_longest_val,
+                         max_v_seg=max_v_seg_prev,
+                         max_subcycles=cfg.coreformation.max_subcycles,
+@@ -2832,14 +2832,21 @@ function simulation_loop(
+                         YERRNOD,
+                         DSY,
+                         dt,
+-                        iplast,
++                        iplast;
++                        etawt = cfg.solver.etawt,
++                        etamax = cfg.solver.etamax,
++                        etamin = cfg.solver.etamin,
++                        yerrmax = cfg.solver.yerrmax,
++                        nplast = cfg.solver.nplast
+                     )
+                         # exit plastic iterations loop    
+                         break
+                     else
+                         # prepare next pass of plastic iteration 
+                         dt = finalize_plastic_iteration_pass!(
+-                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
++                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
++                            dtstep = cfg.time.dtstep,
++                            dtcoefdn = cfg.time.dtcoefdn
+                         )
+                     end
+                 end # for iplast=1:1:nplast
+@@ -3208,7 +3215,13 @@ function simulation_loop(
+                 dt,
+                 marknum;
+                 coords=coords,
+-                dsubgrids=dsubgrids,
++                DTmax_val=cfg.time.DTmax,
++                dsubgrids=cfg.solver.dsubgrids,
++            )
++
++            # interpolate temperature to markers
++            compute_marker_temperature!(
++                xm, ym, tkm, tk1, tk2; coords=coords, dsubgridt=cfg.solver.dsubgridt
+             )
+ 
+             # ---------------------------------------------------------------------
+@@ -3968,7 +3981,7 @@ function simulation_loop(
+                     telescope_level=telescope_level,
+                     hcnspo_props=hcnspo_props,
+                     redox_props=redox_props,
+-                    atm_state=atm_state,
++                    atm_state=atm_state, cfg=cfg,
+                 )
+             end
+             # ---------------------------------------------------------------------
+diff --git a/test/runtests.jl b/test/runtests.jl
+index 2dd376c..fdd808f 100644
+--- a/test/runtests.jl
++++ b/test/runtests.jl
+@@ -6,10 +6,9 @@ using Random
+ using StaticArrays
+ using Test
+ 
+-include("../src/test_constants.jl")
+-# include("../src/constants.jl")
++include("../src/constants.jl")
+ include("test_helpers.jl")
+-const rgen = MersenneTwister(seed)
++const rgen = MersenneTwister(42)
+ 
+ test_group = get(ENV, "EREBUS_TEST_GROUP", "all")
+ 

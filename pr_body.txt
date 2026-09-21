@@ -1,0 +1,16 @@
+**What this does**
+Updates the package compatibility floor to Julia 1.12, adds Julia 1.13 to the CI matrix, and removes support for older Julia versions.
+
+**Why**
+We need to update the entire codebase to run on the latest Julia 1.13 release. However, we are keeping 1.12 compatibility to ensure the code remains fully executable on our local machines where the 1.13 build currently has standard library issues. We have no need to retain functionality or support for versions below 1.12 (including the 1.10 LTS).
+
+**Changes**
+- Updated `Project.toml` compatibility bound to `julia = "1.12"`.
+- Added Julia `1.13` to the test matrices in `CI.yml` and `nightly.yml`.
+- Pinned standalone CI jobs (Coverage, Docs, Formatting, Test Quality) strictly to `1.12` to ensure stability.
+- Cleaned up a malformed and redundant coverage step in `nightly.yml`.
+- Updated `README.md` and `installation.md` to reflect the new `1.12 or later` requirement.
+
+**Testing**
+- Ran the full `Erebus.jl` test suite locally on Julia 1.12 (403,315 assertions passed).
+- Verified that all GitHub Actions workflows parse correctly as valid YAML.

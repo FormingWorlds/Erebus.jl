@@ -228,7 +228,7 @@ end
 Equilibrate volatile concentrations between molten metallic iron and silicate melt on marker m.
 
 Conserves total elemental mass of H, C, N, and S across the two interacting reservoirs:
-    M_i = m_sil * C_i_sil + m_met * C_i_met = const
+    M_i = m_sil_melt * C_i_sil + m_met * C_i_met = const
 
 $(SIGNATURES)
 
@@ -301,10 +301,10 @@ function equilibrate_metal_silicate_volatiles!(
         return nothing
     end
 
-    # Interacting phase masses per unit marker volume
+    # Interacting phase masses per unit marker volume (only molten silicate participates)
     m_met = Xfem[m] * max(Float64(rho_metal), 100.0)
-    m_sil = phi_sil * max(Float64(rho_silicate), 100.0)
-    if m_met <= 0.0 || m_sil <= 0.0
+    m_sil_melt = phi_sil * F_melt_val * max(Float64(rho_silicate), 100.0)
+    if m_met <= 0.0 || m_sil_melt <= 0.0
         return nothing
     end
 
@@ -328,26 +328,27 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XCm[m]
+        C_sil_bulk = XCm[m]
         C_met = Xfe_C_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_C * m_met
+        C_sil_melt = C_sil_bulk / F_melt_val
+        M_tot = m_sil_melt * C_sil_melt + m_met * C_met
+        denom = m_sil_melt + D_C * m_met
         if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_C * C_sil_eq
+            C_sil_melt_eq = M_tot / denom
+            C_met_eq = D_C * C_sil_melt_eq
             C_met_C_max = min(Float64(cfg.D_max), 7.0e4)
             if C_met_eq > C_met_C_max
                 C_met_eq = C_met_C_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
+                C_sil_melt_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil_melt)
             end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
+            dC_sil_melt = alpha_eq * (C_sil_melt_eq - C_sil_melt)
+            dC_sil_melt = max(dC_sil_melt, -C_sil_melt)
+            dC_met = -dC_sil_melt * (m_sil_melt / m_met)
             if C_met + dC_met < 0.0
                 dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
+                dC_sil_melt = -dC_met * (m_met / m_sil_melt)
             end
-            XCm[m] = max(0.0, C_sil + dC_sil)
+            XCm[m] = max(0.0, C_sil_bulk + dC_sil_melt * F_melt_val)
             Xfe_C_m[m] = clamp(C_met + dC_met, 0.0, C_met_C_max)
         end
     end
@@ -365,26 +366,27 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XNm[m]
+        C_sil_bulk = XNm[m]
         C_met = Xfe_N_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_N * m_met
+        C_sil_melt = C_sil_bulk / F_melt_val
+        M_tot = m_sil_melt * C_sil_melt + m_met * C_met
+        denom = m_sil_melt + D_N * m_met
         if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_N * C_sil_eq
+            C_sil_melt_eq = M_tot / denom
+            C_met_eq = D_N * C_sil_melt_eq
             C_met_N_max = min(Float64(cfg.D_max), 4.0e4)
             if C_met_eq > C_met_N_max
                 C_met_eq = C_met_N_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
+                C_sil_melt_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil_melt)
             end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
+            dC_sil_melt = alpha_eq * (C_sil_melt_eq - C_sil_melt)
+            dC_sil_melt = max(dC_sil_melt, -C_sil_melt)
+            dC_met = -dC_sil_melt * (m_sil_melt / m_met)
             if C_met + dC_met < 0.0
                 dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
+                dC_sil_melt = -dC_met * (m_met / m_sil_melt)
             end
-            XNm[m] = max(0.0, C_sil + dC_sil)
+            XNm[m] = max(0.0, C_sil_bulk + dC_sil_melt * F_melt_val)
             Xfe_N_m[m] = clamp(C_met + dC_met, 0.0, C_met_N_max)
         end
     end
@@ -402,26 +404,27 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XSm[m]
+        C_sil_bulk = XSm[m]
         C_met = Xfe_S_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_S * m_met
+        C_sil_melt = C_sil_bulk / F_melt_val
+        M_tot = m_sil_melt * C_sil_melt + m_met * C_met
+        denom = m_sil_melt + D_S * m_met
         if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_S * C_sil_eq
+            C_sil_melt_eq = M_tot / denom
+            C_met_eq = D_S * C_sil_melt_eq
             C_met_S_max = min(Float64(cfg.D_max), 3.65e5)
             if C_met_eq > C_met_S_max
                 C_met_eq = C_met_S_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
+                C_sil_melt_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil_melt)
             end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
+            dC_sil_melt = alpha_eq * (C_sil_melt_eq - C_sil_melt)
+            dC_sil_melt = max(dC_sil_melt, -C_sil_melt)
+            dC_met = -dC_sil_melt * (m_sil_melt / m_met)
             if C_met + dC_met < 0.0
                 dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
+                dC_sil_melt = -dC_met * (m_met / m_sil_melt)
             end
-            XSm[m] = max(0.0, C_sil + dC_sil)
+            XSm[m] = max(0.0, C_sil_bulk + dC_sil_melt * F_melt_val)
             Xfe_S_m[m] = clamp(C_met + dC_met, 0.0, C_met_S_max)
         end
     end
@@ -440,27 +443,28 @@ function equilibrate_metal_silicate_volatiles!(
         D_min=cfg.D_min,
         D_max=cfg.D_max,
     )
-    C_sil_H = XH2Om[m] * f_H
+    C_sil_bulk_H = XH2Om[m] * f_H
     C_met_H = Xfe_H_m[m]
-    M_tot_H = m_sil * C_sil_H + m_met * C_met_H
-    denom_H = m_sil + D_H * m_met
+    C_sil_melt_H = C_sil_bulk_H / F_melt_val
+    M_tot_H = m_sil_melt * C_sil_melt_H + m_met * C_met_H
+    denom_H = m_sil_melt + D_H * m_met
     if denom_H > 0.0
-        C_sil_H_eq = M_tot_H / denom_H
-        C_met_H_eq = D_H * C_sil_H_eq
+        C_sil_melt_H_eq = M_tot_H / denom_H
+        C_met_H_eq = D_H * C_sil_melt_H_eq
         C_met_H_max = min(Float64(cfg.D_max), 1.0e4)
         if C_met_H_eq > C_met_H_max
             C_met_H_eq = C_met_H_max
-            C_sil_H_eq = max(0.0, (M_tot_H - m_met * C_met_H_eq) / m_sil)
+            C_sil_melt_H_eq = max(0.0, (M_tot_H - m_met * C_met_H_eq) / m_sil_melt)
         end
-        dC_sil = alpha_eq * (C_sil_H_eq - C_sil_H)
-        dC_sil = max(dC_sil, -C_sil_H)
-        dC_met = -dC_sil * (m_sil / m_met)
+        dC_sil_melt = alpha_eq * (C_sil_melt_H_eq - C_sil_melt_H)
+        dC_sil_melt = max(dC_sil_melt, -C_sil_melt_H)
+        dC_met = -dC_sil_melt * (m_sil_melt / m_met)
         if C_met_H + dC_met < 0.0
             dC_met = -C_met_H
-            dC_sil = -dC_met * (m_met / m_sil)
+            dC_sil_melt = -dC_met * (m_met / m_sil_melt)
         end
-        new_C_sil_H = max(0.0, C_sil_H + dC_sil)
-        XH2Om[m] = clamp(new_C_sil_H / f_H, 0.0, 100.0)
+        new_C_sil_bulk_H = max(0.0, C_sil_bulk_H + dC_sil_melt * F_melt_val)
+        XH2Om[m] = clamp(new_C_sil_bulk_H / f_H, 0.0, 100.0)
         Xfe_H_m[m] = clamp(C_met_H + dC_met, 0.0, C_met_H_max)
     end
 

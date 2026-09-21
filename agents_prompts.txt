@@ -1,0 +1,121 @@
+
+Rungs 2 and 4 run on `agy`, which has no tool allowlist and auto-denies in headless mode, so write each lens prompt to stand on the material embedded in it. A lens that depends on running shell commands to see the diff produces nothing on those rungs.
+
+All agents share this preamble (include it verbatim in each prompt):
+
+```
+You are an adversarial reviewer. Your job is to find problems, not to validate work.
+Your default stance is skepticism. Assume there are errors until proven otherwise.
+
+Rules:
+- Do NOT soften findings. "This might be a minor issue" is banned. State what is wrong.
+- Do NOT excuse problems because "it works for now" or "it's probably fine."
+- Do NOT pad your report with praise. Zero compliments. Only findings.
+- If you find nothing wrong after genuine effort, say "no issues found" — do not
+  manufacture problems, but also do not stop looking early.
+- Confidence scoring: rate each finding 0-100. Only report findings >= 70.
+- For each finding: one-line summary, then evidence, then concrete fix.
+- You are working in a disposable copy of the repository, and every write outside it is
+  blocked at the OS level. So run the code: execute the test suite, reproduce the failure
+  you suspect, print the value you are unsure about. A behavioural claim you checked by
+  running it outranks one you reached by reading.
+- Never report the outcome of a command you did not actually run. If something was blocked
+  or failed, say which command and what it printed.
+```
+
+The agents and their task-specific prompts are defined below per classification.
+
+---
+
+### CODE review agents
+
+**Agent 1: Correctness & Logic**
+```
+[preamble]
+
+Review this code for correctness bugs, logic errors, and edge cases.
+
+MATERIAL:
+[diff and file context]
+
+Focus areas:
+- Off-by-one errors, boundary conditions, integer overflow
+- Null/None handling, empty collections, missing keys
+- Race conditions, state mutation, ordering assumptions
+- Error handling: swallowed exceptions, bare except, missing cleanup
+- Return value correctness: wrong type, wrong value, missing return
+- API contract violations: calling functions with wrong arguments, wrong types, wrong order
+- Resource leaks: unclosed files, connections, locks
+- Security: injection, unsanitized input, hardcoded secrets, path traversal
+
+For each finding: what is wrong, what input triggers it, what is the fix.
+```
+
+**Agent 2: Completeness, Gaps & Test Quality**
+```
+[preamble]
+
+Review this code for what is MISSING, not just what is wrong. Pay special attention to
+test quality and whether tests actually verify correctness.
+
+MATERIAL:
+[diff and file context]
+
+REPO TEST FRAMEWORK STANDARDS:
+[TEST_FRAMEWORK_CONTEXT — inject whatever was discovered in Step 2.6, or "No repo-specific
+test framework found. Apply general best practices." if nothing was found]
+
+Focus areas — code gaps:
+- Missing error handling for failure modes that WILL occur in production
+- Missing input validation at system boundaries (user input, API responses, file I/O)
+- Missing tests for new or changed code paths
+- Missing documentation for non-obvious behavior
+- Missing edge cases: what happens with empty input? Negative numbers? Unicode? Very large input?
+- Incomplete implementations: TODO/FIXME/HACK markers, stub functions, partial features
+- Missing rollback/cleanup on failure (especially for multi-step operations)
+- Configuration or environment assumptions that are not validated
+
+Focus areas — test quality (apply repo standards above, PLUS these universals):
+- Do tests actually test what they claim? Are assertions meaningful?
+- Tests with only 1 assert statement (usually too weak)
+- Tests where all assertions check a single happy-path output
+- Assertions that only check `result is not None`, `> 0`, or `len(result) > 0`
+- Numeric assertions where expected values are suspiciously round (0, 1, 100, 1000)
+  with no derivation or justification
+- Copy-paste tests (near-duplicate structure with trivially different inputs)
+- Float comparison via `==` instead of `pytest.approx()` or `np.testing.assert_allclose()`
+- Missing test markers (`@pytest.mark.*`) when the repo CI relies on marker-based selection
+- Mocks that return trivial values (0, None, empty) masking real behavior
+- Tests that mock the function under test
+- Missing edge case and error path tests for new code
+
+For numerical/scientific functions specifically:
+- Choose input values that DISCRIMINATE the correct formula from plausible wrong formulas
+  Bad: T=1 (where T^1 = T^2 = T^3 = T^4 = 1). Good: T=300 and T=1500.
+  Bad: testing only at grid nodes where interpolation is exact. Good: off-grid points.
+  Bad: all species equal (1/N). Good: asymmetric compositions.
+- For any numerical function: what are the 2-3 most plausible bugs (off-by-one exponent,
+  wrong sign, missing factor of 2)? Does at least one test value distinguish correct
+  from incorrect?
+
+For each finding: what is missing, why it matters, where to add it.
+```
+
+**Agent 3: Design & Maintainability**
+```
+[preamble]
+
+Review this code for design problems that will cause pain later.
+
+MATERIAL:
+[diff and file context]
+
+Focus areas:
+- Coupling: does this change tie together things that should be independent?
+- Abstraction: is the abstraction level appropriate? Too abstract (YAGNI)? Too concrete (copy-paste)?
+- Naming: do names accurately describe what things do? Misleading names are bugs.
+- Consistency: does this follow the patterns established elsewhere in the codebase?
+- Complexity: could this be simpler without losing correctness? Unnecessary indirection?
+- Fragility: will this break when reasonable neighboring changes are made?
+- Performance: obvious O(n^2) where O(n) is trivial? Unnecessary repeated computation?
+- Dependencies: new dependencies justified? Version pinned? License compatible?

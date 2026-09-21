@@ -81,7 +81,7 @@ The extracted mass is summed over markers and scaled to 3D planetary geometry:
 
 $$\Delta M_{\text{vent}} = L_{\text{3D}} \sum_{m} \rho_m V_m \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
 
-where $L_{\text{3D}} = 2 R_{\text{planet}}$ [m] relates 2D planar cross-section markers to the 3D spherical planetesimal volume.
+where $L_{\text{3D}} = (4/3) R_{\text{planet}}$ [m] relates 2D planar cross-section markers to the 3D spherical planetesimal volume.
 
 ### Physical Invariants and Limits
 

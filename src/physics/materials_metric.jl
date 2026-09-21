@@ -97,7 +97,7 @@ function kphi(kphim0m, phimm)
 end
 
 """
-Compute inverse of porosity-dependent permeability (eqn 16.64 in Gerya (2019)) 
+Compute inverse of porosity-dependent permeability (eqn 16.64 in Gerya (2019))
 times current fluid viscosity.
 
 $(SIGNATURES)
@@ -110,7 +110,7 @@ $(SIGNATURES)
 
 # Returns
 
-    - etafluidcur_inv_kphi: inverse empirical porosity-dependent permeability 
+    - etafluidcur_inv_kphi: inverse empirical porosity-dependent permeability
                             times current fluid viscosity
 """
 function ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)
@@ -138,8 +138,8 @@ $(SIGNATURES)
     - tmm: marker type [1, 2]
 
 # Returns
-    
-    - etatotal: rocky marker temperature-dependent total viscosity 
+
+    - etatotal: rocky marker temperature-dependent total viscosity
 """
 function etatotal_rocks(tkmm, tmm; etamin::Real=1.0e12)
     if tkmm <= 0.0
@@ -157,7 +157,7 @@ based on temperature.
 $(SIGNATURES)
 
 # Details
-    
+
         - T: temperature [K]
         - mode: marker property computation mode
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
@@ -165,7 +165,7 @@ $(SIGNATURES)
             - 9: constant parameter rhocpfluidm
 
 # Returns
-    
+
         - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
 """
 function compute_rhocpfluidm(T, mode)
@@ -198,14 +198,14 @@ Compute thermal conductivity of silicate (solid phase) based on temperature.
 $(SIGNATURES)
 
 # Details
-    
+
         - T: temperature [K]
         - mode:
             - 1: dynamic, based on (Gerya, 2019)
             - 9: constant parameter ksolidm
 
 # Returns
-    
+
         - kᶠ: thermal conductivity of solid
 """
 function compute_ksolidm(T, mode)
@@ -228,7 +228,7 @@ Compute thermal conductivity of H₂O (fluid phase) based on temperature.
 $(SIGNATURES)
 
 # Details
-    
+
         - T: temperature [K]
         - mode:
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
@@ -236,7 +236,7 @@ $(SIGNATURES)
             - 9: constant parameter kfluidm
 
 # Returns
-    
+
         - kᶠ: thermal conductivity of fluid
 """
 function compute_kfluidm(T, mode)
@@ -371,4 +371,18 @@ Validate that `v` is in unit interval [0, 1] and finite, otherwise throw `Domain
     (isfinite(v) && 0.0 <= v <= 1.0) ||
         throw(DomainError(v, string(name, " must be in [0, 1] and finite")))
     return v
+end
+
+"""
+    compute_l3d_metric(rplanet::Real)
+
+Compute the scaling factor `L_3D` used to convert a 2D out-of-plane extruded mass inventory [kg/m]
+into a 3D spherical inventory [kg].
+
+Derived from the ratio of spherical volume to 2D disk cross-sectional area:
+`L_3D = (4/3 π R^3) / (π R^2) = (4/3) R`
+"""
+function compute_l3d_metric(rplanet::Real)
+    rplanet <= 0.0 && throw(DomainError(rplanet, "Planet radius must be positive"))
+    return (4.0 / 3.0) * rplanet
 end

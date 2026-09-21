@@ -12,7 +12,14 @@ using TOML
 Random.seed!(42)
 
 @testset "Dehydration-Darcy Fluid Overpressure & Venting Speciation" begin
-    @testset "ReactionConfig Schema & Serialization" begin
+    @testset "Metric L3D Computation" begin
+    # Metric testing: L3D = (4/3)*R
+    @test isapprox(Erebus.compute_l3d_metric(3000.0), 4000.0, rtol=1e-10)
+    @test_throws DomainError Erebus.compute_l3d_metric(0.0)
+    @test_throws DomainError Erebus.compute_l3d_metric(-100.0)
+end
+
+@testset "ReactionConfig Schema & Serialization" begin
         cfg_def = ReactionConfig()
         @test cfg_def.fluid_overpressure_coupling == true
 

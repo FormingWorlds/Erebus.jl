@@ -1,0 +1,1 @@
+seat-run: ok mode=read-only seat=fwl model=claude-sonnet-5 effort=high

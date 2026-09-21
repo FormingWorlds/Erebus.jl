@@ -1,0 +1,32 @@
+## Adversarial review report
+
+**Scope reviewed**: the diff moving CI/compat from Julia 1.10/1.11 to 1.12/1.13 (`.github/workflows/CI.yml`, `Coverage.yml`, `nightly.yml`, `Project.toml`, `README.md`, `docs/src/howto/installation.md`). Cross-checked against git history (`5eb612d` → `e92eeb5` → `e36cdac`) and the current working tree.
+
+### Finding 1 — Nightly coverage enforcement silently removed, not fixed (confirmed by execution)
+
+The diff changes `coverage: true` → `false` in `nightly.yml` and deletes the whole "Check Coverage" step (the one calling `tools/check_coverage.jl`, which enforces the 90% floor). Nothing in the diff or the commit context explains this; it rides along inside a commit titled "Update to Julia 1.13 and remove older compatibility."
+
+I checked why: the pre-diff "Check Coverage" step was invalid YAML. I extracted it and the full pre-diff file and parsed both with PyYAML:
+```
+yaml.scanner.ScannerError: while scanning a simple key ... could not find expected ':'
+```
+It fails on both the isolated step and the full file (`git show 5eb612d:.github/workflows/nightly.yml`). The `run:` value was written on two lines without a `run: |` block scalar, so the second line (`julia --project=tools tools/check_coverage.jl`) is not attached to `run:` at all — the file cannot be parsed as YAML. I confirmed the current `nightly.yml`, `CI.yml`, and `Coverage.yml` all parse cleanly now.
+
+So the pre-existing nightly workflow was non-functional (GitHub Actions would reject the whole file, not just fail one step) since `5eb612d` (#75, "enforce strict coverage floor"). The diff under review does make the file valid again — but only by deleting the check outright, rather than fixing the syntax (`run: |`) and keeping coverage enforcement on the nightly integration run. The correct fix (`CI.yml`'s own "coverage" job already shows the right pattern, `run: |` + two lines) was sitting right there in the same repo.
+
+Net effect: the nightly schedule (Julia 1.12/1.13, `EREBUS_TEST_GROUP: integration`) no longer collects or checks coverage at all. Project-wide 90% floor enforcement still exists via `CI.yml`'s separate `coverage` job (`EREBUS_TEST_GROUP: all`, runs on every push/PR), so this is not a total loss of the floor — but it is an undisclosed regression of a guarantee a very recent PR (#75) explicitly added, bundled into an unrelated version-bump commit.
+
+### Finding 2 — Julia 1.13 is untested by most non-matrix jobs (confirmed by reading)
+
+`CI.yml`'s `test` job matrix now covers `1.12` and `1.13`, but `docs`, `format`/lint, `test-quality`, and `Coverage.yml`'s `coverage` job are all pinned to `'1.12'` only. So JuliaFormatter checks, the test-quality linter (`check_test_quality.jl`), doc builds, and the coverage floor are never exercised under 1.13 — only the plain test run is. If 1.13 support is a real goal, this leaves a gap; if it's just "make sure tests pass," it should probably not be advertised as full 1.13 CI coverage in the README ("CI verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12 and 1.13" — the README's own new wording overstates this, since formatting/docs are 1.12-only).
+
+### Finding 3 — No demonstrated reason for the 1.12 compat floor (informational)
+
+`Project.toml`'s `julia` compat moved from `"1"` to `"1.12"`, and 1.10/1.11 were dropped from the test matrix entirely (not just left untested-but-allowed). I grepped `src/` for `VERSION` checks, `@static`, `pkgversion` — none exist. Nothing in this diff shows a technical reason 1.10/1.11 no longer work; it reads as a policy choice ("remove older compatibility") with no changelog entry or justification, meaning downstream users pinned to 1.10/1.11 LTS get a hard `Pkg` resolution failure with no explanation of why.
+
+### What I did and did not verify
+
+- Verified by execution: the pre-diff nightly.yml step (and full file) fails YAML parsing; the post-diff `CI.yml`/`Coverage.yml`/`nightly.yml` all parse.
+- Verified by reading: version pins across all four workflow files, `Project.toml` compat line, README/docs wording, absence of version-gated code in `src/`.
+- Not verified: I did not actually run the GitHub Actions workflows (no CI execution available here), so I cannot confirm the jobs succeed end-to-end on 1.12/1.13, only that the YAML is now syntactically valid and internally consistent with the stated matrix.
+- Out of scope: I did not review the many untracked scratch files in the working tree (`patch_*.jl`, `rip_*` files, etc.) — those aren't part of the diff under review.

@@ -846,7 +846,9 @@ $(SIGNATURES)
 
     - dt: adjusted next time step
 """
-function finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer, DTmax_val::Real=20.0)
+function finalize_thermochemical_iteration_pass(
+    maxDTcurrent, dt, titer, DTmax_val::Real=20.0
+)
     if titer == 1
         if maxDTcurrent > DTmax_val
             dt *= (DTmax_val * inv(maxDTcurrent))

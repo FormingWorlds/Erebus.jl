@@ -6,9 +6,6 @@ using Random
 using StaticArrays
 using Test
 
-
-const rgen = MersenneTwister(seed)
-
 @testset "Cold Surface Venting Integration" begin
     @testset "Runtime loop with venting inactive (baseline)" begin
         output_dir = mktempdir()

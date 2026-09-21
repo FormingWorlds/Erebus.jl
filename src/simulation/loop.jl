@@ -1073,7 +1073,8 @@ function simulation_loop(
                 M_planet_val=M_planet_val,
                 telescope_level=telescope_level,
                 hcnspo_props=hcnspo_props,
-                atm_state=atm_state, cfg=cfg,
+                atm_state=atm_state,
+                cfg=cfg,
             )
         end
     end
@@ -1873,8 +1874,8 @@ function simulation_loop(
                             k_metal_val=k_metal_val,
                             rhocp_metal_val=rhocp_metal_val,
                             volatiles_active=cfg.volatiles.active,
-                                etamin=cfg.solver.etamin,
-                                etamax=cfg.solver.etamax,
+                            etamin=cfg.solver.etamin,
+                            etamax=cfg.solver.etamax,
                             volatiles_cfg=cfg.volatiles,
                             retention_cfg=cfg.retention,
                             XH2Om=XH2Om,
@@ -2089,8 +2090,8 @@ function simulation_loop(
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
-                                etamin=cfg.solver.etamin,
-                                etamax=cfg.solver.etamax,
+                        etamin=cfg.solver.etamin,
+                        etamax=cfg.solver.etamax,
                         volatiles_cfg=cfg.volatiles,
                         retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
@@ -2839,20 +2840,28 @@ function simulation_loop(
                         DSY,
                         dt,
                         iplast;
-                        etawt = cfg.solver.etawt,
-                        etamax = cfg.solver.etamax,
-                        etamin = cfg.solver.etamin,
-                        yerrmax = cfg.solver.yerrmax,
-                        nplast = cfg.solver.nplast
+                        etawt=cfg.solver.etawt,
+                        etamax=cfg.solver.etamax,
+                        etamin=cfg.solver.etamin,
+                        yerrmax=cfg.solver.yerrmax,
+                        nplast=cfg.solver.nplast,
                     )
                         # exit plastic iterations loop    
                         break
                     else
                         # prepare next pass of plastic iteration 
                         dt = finalize_plastic_iteration_pass!(
-                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
-                            dtstep = cfg.time.dtstep,
-                            dtcoefdn = cfg.time.dtcoefdn
+                            ETA,
+                            ETA5,
+                            ETA00,
+                            YNY,
+                            YNY5,
+                            YNY00,
+                            YNY_inv_ETA,
+                            dt,
+                            iplast;
+                            dtstep=cfg.time.dtstep,
+                            dtcoefdn=cfg.time.dtcoefdn,
                         )
                     end
                 end # for iplast=1:1:nplast
@@ -3162,7 +3171,9 @@ function simulation_loop(
                 maxDTcurrent = maximum(abs, DT)
                 @info "max DT = $maxDTcurrent K"
                 # prepare next pass of thermochemical iteration
-                dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer, cfg.time.DTmax)
+                dt = finalize_thermochemical_iteration_pass(
+                    maxDTcurrent, dt, titer, cfg.time.DTmax
+                )
                 # evaluate iteration outcome
                 if compute_thermochemical_iteration_outcome(
                     DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
@@ -3225,7 +3236,6 @@ function simulation_loop(
                 coords=coords,
                 dsubgrids=cfg.solver.dsubgrids,
             )
-
 
             # ---------------------------------------------------------------------
             # interpolate DSXX, DSXY to markers
@@ -3296,7 +3306,7 @@ function simulation_loop(
 
             if cfg.venting.active
                 # Area flux geometric scaling: 4πR² / 2πR = 2 * R_planet
-                L_3D_equiv = 2.0 * rplanet_val
+                L_3D_equiv = compute_l3d_metric(rplanet_val)
                 delta_m_vent_3d = delta_m_vent * L_3D_equiv
                 M_vent_total += delta_m_vent_3d
 
@@ -3309,7 +3319,7 @@ function simulation_loop(
             end
 
             if cfg.atmosphere.active && atm_state !== nothing
-                L_3D_equiv = 2.0 * rplanet_val
+                L_3D_equiv = compute_l3d_metric(rplanet_val)
                 p_surf_val = max(atm_state.P_surf, P_amb_eff)
                 T_surf_val = atm_state.T_surf_eq > 0.0 ? atm_state.T_surf_eq : T_amb
                 vent_rates = compute_surface_venting_rates(
@@ -3390,7 +3400,7 @@ function simulation_loop(
                             m_N_melt = 0.0
                             m_S_melt = 0.0
                             m_marker =
-                                cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
+                                cfg.materials.rhosolidm[1] * v_m * (compute_l3d_metric(rplanet_val))
                             for m in 1:marknum
                                 if tm[m] < 3 &&
                                     (
@@ -3526,7 +3536,7 @@ function simulation_loop(
                     end
                 end
             elseif cfg.escape.active
-                L_3D_equiv = 2.0 * rplanet_val
+                L_3D_equiv = compute_l3d_metric(rplanet_val)
                 R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
                 T_surf_esc = compute_mean_surface_temperature(
                     tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
@@ -3984,7 +3994,8 @@ function simulation_loop(
                     telescope_level=telescope_level,
                     hcnspo_props=hcnspo_props,
                     redox_props=redox_props,
-                    atm_state=atm_state, cfg=cfg,
+                    atm_state=atm_state,
+                    cfg=cfg,
                 )
             end
             # ---------------------------------------------------------------------
