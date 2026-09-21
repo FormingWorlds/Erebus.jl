@@ -2843,7 +2843,7 @@ function simulation_loop(
                         etamax = cfg.solver.etamax,
                         etamin = cfg.solver.etamin,
                         yerrmax = cfg.solver.yerrmax,
-                        nplast = cfg.solver.nplast
+                        nplast = titermax_val
                     )
                         # exit plastic iterations loop    
                         break
