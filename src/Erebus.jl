@@ -336,7 +336,7 @@ export Geometry, Physics, Particles, Numerics, Simulation
 include("constants.jl")
 # include("test_constants.jl")
 
-import Pardiso
+using Pardiso: Pardiso
 if Sys.isapple()
     using AppleAccelerate
 end

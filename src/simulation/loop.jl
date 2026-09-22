@@ -1073,7 +1073,8 @@ function simulation_loop(
                 M_planet_val=M_planet_val,
                 telescope_level=telescope_level,
                 hcnspo_props=hcnspo_props,
-                atm_state=atm_state, cfg=cfg,
+                atm_state=atm_state,
+                cfg=cfg,
             )
         end
     end
@@ -1873,8 +1874,8 @@ function simulation_loop(
                             k_metal_val=k_metal_val,
                             rhocp_metal_val=rhocp_metal_val,
                             volatiles_active=cfg.volatiles.active,
-                                etamin=cfg.solver.etamin,
-                                etamax=cfg.solver.etamax,
+                            etamin=cfg.solver.etamin,
+                            etamax=cfg.solver.etamax,
                             volatiles_cfg=cfg.volatiles,
                             retention_cfg=cfg.retention,
                             XH2Om=XH2Om,
@@ -2089,8 +2090,8 @@ function simulation_loop(
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
-                                etamin=cfg.solver.etamin,
-                                etamax=cfg.solver.etamax,
+                        etamin=cfg.solver.etamin,
+                        etamax=cfg.solver.etamax,
                         volatiles_cfg=cfg.volatiles,
                         retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
@@ -2839,20 +2840,28 @@ function simulation_loop(
                         DSY,
                         dt,
                         iplast;
-                        etawt = cfg.solver.etawt,
-                        etamax = cfg.solver.etamax,
-                        etamin = cfg.solver.etamin,
-                        yerrmax = cfg.solver.yerrmax,
-                        nplast = titermax_val
+                        etawt=cfg.solver.etawt,
+                        etamax=cfg.solver.etamax,
+                        etamin=cfg.solver.etamin,
+                        yerrmax=cfg.solver.yerrmax,
+                        nplast=titermax_val,
                     )
                         # exit plastic iterations loop    
                         break
                     else
                         # prepare next pass of plastic iteration 
                         dt = finalize_plastic_iteration_pass!(
-                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast;
-                            dtstep = cfg.time.dtstep,
-                            dtcoefdn = cfg.time.dtcoefdn
+                            ETA,
+                            ETA5,
+                            ETA00,
+                            YNY,
+                            YNY5,
+                            YNY00,
+                            YNY_inv_ETA,
+                            dt,
+                            iplast;
+                            dtstep=cfg.time.dtstep,
+                            dtcoefdn=cfg.time.dtcoefdn,
                         )
                     end
                 end # for iplast=1:1:nplast
@@ -3162,7 +3171,9 @@ function simulation_loop(
                 maxDTcurrent = maximum(abs, DT)
                 @info "max DT = $maxDTcurrent K"
                 # prepare next pass of thermochemical iteration
-                dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer, cfg.time.DTmax)
+                dt = finalize_thermochemical_iteration_pass(
+                    maxDTcurrent, dt, titer, cfg.time.DTmax
+                )
                 # evaluate iteration outcome
                 if compute_thermochemical_iteration_outcome(
                     DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
@@ -3225,7 +3236,6 @@ function simulation_loop(
                 coords=coords,
                 dsubgrids=cfg.solver.dsubgrids,
             )
-
 
             # ---------------------------------------------------------------------
             # interpolate DSXX, DSXY to markers
@@ -3984,7 +3994,8 @@ function simulation_loop(
                     telescope_level=telescope_level,
                     hcnspo_props=hcnspo_props,
                     redox_props=redox_props,
-                    atm_state=atm_state, cfg=cfg,
+                    atm_state=atm_state,
+                    cfg=cfg,
                 )
             end
             # ---------------------------------------------------------------------

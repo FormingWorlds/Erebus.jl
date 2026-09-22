@@ -1,6 +1,4 @@
 
-
-
 @testset "Numerics" begin
     dphimax = 100.01
     dtcoefdn = 0.5
@@ -2035,15 +2033,49 @@
 
         # With the shipped config's behavior (nplast=100000), it returns false at max iterations
         res_fail = Erebus.Numerics.compute_nodal_adjustment!(
-            ETA, ETA0, ETA5, GGG, SXX, SXY, pr, pf, COH, TEN, FRI, YNY, YNY5, YERRNOD, DSY, dt_initial, iplast;
-            yerrmax=1e-15, nplast=100000
+            ETA,
+            ETA0,
+            ETA5,
+            GGG,
+            SXX,
+            SXY,
+            pr,
+            pf,
+            COH,
+            TEN,
+            FRI,
+            YNY,
+            YNY5,
+            YERRNOD,
+            DSY,
+            dt_initial,
+            iplast;
+            yerrmax=1e-15,
+            nplast=100000,
         )
         @test res_fail == false
 
         # The sentinel fix uses titermax as the actual bound
         res_pass = Erebus.Numerics.compute_nodal_adjustment!(
-            ETA, ETA0, ETA5, GGG, SXX, SXY, pr, pf, COH, TEN, FRI, YNY, YNY5, YERRNOD, DSY, dt_initial, iplast;
-            yerrmax=1e-15, nplast=cfg.solver.titermax
+            ETA,
+            ETA0,
+            ETA5,
+            GGG,
+            SXX,
+            SXY,
+            pr,
+            pf,
+            COH,
+            TEN,
+            FRI,
+            YNY,
+            YNY5,
+            YERRNOD,
+            DSY,
+            dt_initial,
+            iplast;
+            yerrmax=1e-15,
+            nplast=cfg.solver.titermax,
         )
         @test res_pass == true
 
@@ -2054,11 +2086,19 @@
         if !res_pass
             # if we didn't break, dt would be reduced
             dt_final = Erebus.Numerics.finalize_plastic_iteration_pass!(
-                ETA, ETA5, ETA0, YNY, YNY5, YNY, YNY, dt_initial, iplast;
-                dtstep = cfg.time.dtstep, dtcoefdn = cfg.time.dtcoefdn
+                ETA,
+                ETA5,
+                ETA0,
+                YNY,
+                YNY5,
+                YNY,
+                YNY,
+                dt_initial,
+                iplast;
+                dtstep=cfg.time.dtstep,
+                dtcoefdn=cfg.time.dtcoefdn,
             )
         end
         @test dt_final == dt_initial
     end
-
 end
