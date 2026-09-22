@@ -2017,7 +2017,7 @@
         ETA0 = fill(1e22, Ny, Nx)
         ETA5 = fill(1e22, Ny, Nx)
         GGG = fill(1e10, Ny, Nx)
-        SXX = fill(1e8, Ny, Nx)
+        SXX = fill(1e8, Ny+1, Nx+1)
         SXY = fill(1e8, Ny, Nx)
         pr = fill(1e6, Ny+1, Nx+1)
         pf = fill(1e5, Ny+1, Nx+1)
