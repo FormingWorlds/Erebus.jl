@@ -1,17 +1,16 @@
-dphimax = 100.01
-dtcoefdn = 0.5
-dtcoefup = 1.2
 
-dxymax = 0.05
-nplast = 100_000
 
-dtstep = 200
-
-dt_longest = 1.0e11 / 3.15576e7
-DTmax = 20.0
-etamin = 1.0e+12
 
 @testset "Numerics" begin
+    dphimax = 100.01
+    dtcoefdn = 0.5
+    dtcoefup = 1.2
+    dxymax = 0.05
+    nplast = 100_000
+    dtstep = 200
+    dt_longest = 1.0e11 / 3.15576e7
+    DTmax = 20.0
+    etamin = 1.0e+12
     @testset "assemble_gravitational_lse!(): operator structure and discrete Poisson invariants" begin
         RP = zeros(Float64, Nx1 * Ny1)
         RHO = zeros(Float64, Ny1, Nx1)

@@ -303,8 +303,8 @@ function simulation_loop(
         "Parameters",
         random_markers,
         marker_property_mode,
-        hr_al,
-        hr_fe,
+        hr_al = hr_al_val,
+        hr_fe = hr_fe_val,
         reaction_active = reaction_active_val,
         reaction_rate_coeff_mode,
         log_completion_rate,
@@ -1137,8 +1137,8 @@ function simulation_loop(
             (:marknum, marknum),
             (:maxT_K, maxT),
             (:dt_s, dt),
-            (:timesum_Ma, s_to_Ma(timesum)),
-            (:to_go_Ma, s_to_Ma(endtime_val - timesum)),
+            (:timesum_Ma, s_to_Ma(timesum; yearlength=cfg.time.yearlength)),
+            (:to_go_Ma, s_to_Ma(endtime_val - timesum; yearlength=cfg.time.yearlength)),
         ]
     p = Progress(
         n_steps_val;
@@ -3802,7 +3802,7 @@ function simulation_loop(
                 stream_telemetry_row!(
                     telemetry_io,
                     timestep,
-                    s_to_Ma(timesum),
+                    s_to_Ma(timesum; yearlength=cfg.time.yearlength),
                     dt / cfg.time.yearlength,
                     rplanet_val,
                     core_radius_current,
@@ -4002,7 +4002,7 @@ function simulation_loop(
                 Dates.CompoundPeriod(timestep_end-timestep_begin)
             )
         )"
-            @info "total time = $(s_to_Ma(timesum)) Ma"
+            @info "total time = $(s_to_Ma(timesum; yearlength=cfg.time.yearlength)) Ma"
             @info "markers in use = $marknum"
             @info "max T = $maxT K"
             next!(p; showvalues=generate_showvalues(timestep, marknum, maxT, dt, timesum))

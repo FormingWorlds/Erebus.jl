@@ -1316,6 +1316,8 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.poroelasticity.k_frac_max
 
     # Solver checks
+    @check_nonneg_finite cfg.solver.dsubgridt
+    @check_nonneg_finite cfg.solver.dsubgrids
     @check_ge cfg.solver.titermax 1
     @check_ge cfg.solver.nplast 1
     cfg.solver.titermax <= cfg.solver.nplast || throw(
