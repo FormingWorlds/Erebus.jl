@@ -1,4 +1,5 @@
 @testset "Particles" begin
+    etamin = 1.0e+12
     @testset "setup_interpolated_properties(): dimensions and zero-initialization" begin
         props = Erebus.setup_interpolated_properties()
         (

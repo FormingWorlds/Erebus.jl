@@ -303,8 +303,8 @@ function simulation_loop(
         "Parameters",
         random_markers,
         marker_property_mode,
-        hr_al,
-        hr_fe,
+        hr_al = hr_al_val,
+        hr_fe = hr_fe_val,
         reaction_active = reaction_active_val,
         reaction_rate_coeff_mode,
         log_completion_rate,
@@ -348,18 +348,18 @@ function simulation_loop(
         dtreaction_dehydration = dtr_deh_val,
         pfcoeff = pfcoeff_val,
         pferrmax = pferrmax_val,
-        start_time,
-        start_step,
-        endtime,
-        dsubgrids,
-        dsubgridt,
-        dt_longest,
-        dphimax,
-        dxymax,
-        vpratio,
-        seed
+        start_time = cfg.time.start_time,
+        start_step = start_step_val,
+        endtime = cfg.time.endtime,
+        dsubgrids = cfg.solver.dsubgrids,
+        dsubgridt = cfg.solver.dsubgridt,
+        dt_longest = cfg.time.dt_longest,
+        dphimax = cfg.solver.dphimax,
+        dxymax = cfg.time.dxymax,
+        vpratio = cfg.time.vpratio,
+        seed = cfg.solver.seed
     )
-    @info "Solver" use_pardiso BLAS.get_config() BLAS.get_num_threads()
+    @info "Solver" use_pardiso=cfg.solver.use_pardiso BLAS.get_config() BLAS.get_num_threads()
 
     # -------------------------------------------------------------------------
     # set up staggered grid"
@@ -1074,6 +1074,7 @@ function simulation_loop(
                 telescope_level=telescope_level,
                 hcnspo_props=hcnspo_props,
                 atm_state=atm_state,
+                cfg=cfg,
             )
         end
     end
@@ -1137,8 +1138,8 @@ function simulation_loop(
             (:marknum, marknum),
             (:maxT_K, maxT),
             (:dt_s, dt),
-            (:timesum_Ma, s_to_Ma(timesum)),
-            (:to_go_Ma, s_to_Ma(endtime_val - timesum)),
+            (:timesum_Ma, s_to_Ma(timesum; yearlength=cfg.time.yearlength)),
+            (:to_go_Ma, s_to_Ma(endtime_val - timesum; yearlength=cfg.time.yearlength)),
         ]
     p = Progress(
         n_steps_val;
@@ -1709,6 +1710,8 @@ function simulation_loop(
                                 k_metal_val=k_metal_val,
                                 rhocp_metal_val=rhocp_metal_val,
                                 volatiles_active=cfg.volatiles.active,
+                                etamin=cfg.solver.etamin,
+                                etamax=cfg.solver.etamax,
                                 volatiles_cfg=cfg.volatiles,
                                 retention_cfg=cfg.retention,
                                 XH2Om=XH2Om,
@@ -1871,6 +1874,8 @@ function simulation_loop(
                             k_metal_val=k_metal_val,
                             rhocp_metal_val=rhocp_metal_val,
                             volatiles_active=cfg.volatiles.active,
+                            etamin=cfg.solver.etamin,
+                            etamax=cfg.solver.etamax,
                             volatiles_cfg=cfg.volatiles,
                             retention_cfg=cfg.retention,
                             XH2Om=XH2Om,
@@ -2085,6 +2090,8 @@ function simulation_loop(
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
+                        etamin=cfg.solver.etamin,
+                        etamax=cfg.solver.etamax,
                         volatiles_cfg=cfg.volatiles,
                         retention_cfg=cfg.retention,
                         XH2Om=XH2Om,
@@ -2755,11 +2762,11 @@ function simulation_loop(
                         dt,
                         aphimax;
                         coords=coords,
-                        dxymax_val=dxymax,
-                        dphimax_val=dphimax,
+                        dxymax_val=cfg.time.dxymax,
+                        dphimax_val=cfg.solver.dphimax,
                         dt_ref=dt_step_initial,
                         maxDTcurrent=maxDTcurrent,
-                        DTmax_val=DTmax,
+                        DTmax_val=cfg.time.DTmax,
                         dt_longest_val=dt_longest_val,
                         max_v_seg=max_v_seg_prev,
                         max_subcycles=cfg.coreformation.max_subcycles,
@@ -2832,14 +2839,29 @@ function simulation_loop(
                         YERRNOD,
                         DSY,
                         dt,
-                        iplast,
+                        iplast;
+                        etawt=cfg.solver.etawt,
+                        etamax=cfg.solver.etamax,
+                        etamin=cfg.solver.etamin,
+                        yerrmax=cfg.solver.yerrmax,
+                        nplast=titermax_val,
                     )
                         # exit plastic iterations loop    
                         break
                     else
                         # prepare next pass of plastic iteration 
                         dt = finalize_plastic_iteration_pass!(
-                            ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
+                            ETA,
+                            ETA5,
+                            ETA00,
+                            YNY,
+                            YNY5,
+                            YNY00,
+                            YNY_inv_ETA,
+                            dt,
+                            iplast;
+                            dtstep=cfg.time.dtstep,
+                            dtcoefdn=cfg.time.dtcoefdn,
                         )
                     end
                 end # for iplast=1:1:nplast
@@ -3149,7 +3171,9 @@ function simulation_loop(
                 maxDTcurrent = maximum(abs, DT)
                 @info "max DT = $maxDTcurrent K"
                 # prepare next pass of thermochemical iteration
-                dt = finalize_thermochemical_iteration_pass(maxDTcurrent, dt, titer)
+                dt = finalize_thermochemical_iteration_pass(
+                    maxDTcurrent, dt, titer, cfg.time.DTmax
+                )
                 # evaluate iteration outcome
                 if compute_thermochemical_iteration_outcome(
                     DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
@@ -3180,6 +3204,8 @@ function simulation_loop(
                     YNY_inv_ETA;
                     coords=coords,
                     Fm=Fm,
+                    etamin=cfg.solver.etamin,
+                    etamax=cfg.solver.etamax,
                     melting_active=melting_active_val,
                     alpha_eta_val=alpha_eta_val,
                     phi_crit_val=phi_crit_val,
@@ -3208,7 +3234,7 @@ function simulation_loop(
                 dt,
                 marknum;
                 coords=coords,
-                dsubgrids=dsubgrids,
+                dsubgrids=cfg.solver.dsubgrids,
             )
 
             # ---------------------------------------------------------------------
@@ -3234,7 +3260,7 @@ function simulation_loop(
                 marknum,
                 marker_property_mode;
                 coords=coords,
-                dsubgridt=dsubgridt,
+                dsubgridt=cfg.solver.dsubgridt,
             )
 
             # ---------------------------------------------------------------------
@@ -3786,7 +3812,7 @@ function simulation_loop(
                 stream_telemetry_row!(
                     telemetry_io,
                     timestep,
-                    s_to_Ma(timesum),
+                    s_to_Ma(timesum; yearlength=cfg.time.yearlength),
                     dt / cfg.time.yearlength,
                     rplanet_val,
                     core_radius_current,
@@ -3969,6 +3995,7 @@ function simulation_loop(
                     hcnspo_props=hcnspo_props,
                     redox_props=redox_props,
                     atm_state=atm_state,
+                    cfg=cfg,
                 )
             end
             # ---------------------------------------------------------------------
@@ -3986,7 +4013,7 @@ function simulation_loop(
                 Dates.CompoundPeriod(timestep_end-timestep_begin)
             )
         )"
-            @info "total time = $(s_to_Ma(timesum)) Ma"
+            @info "total time = $(s_to_Ma(timesum; yearlength=cfg.time.yearlength)) Ma"
             @info "markers in use = $marknum"
             @info "max T = $maxT K"
             next!(p; showvalues=generate_showvalues(timestep, marknum, maxT, dt, timesum))

@@ -1,4 +1,6 @@
 @testset "Simulation" begin
+    nplast = 100_000
+    yearlength = Erebus.default_config().time.yearlength
     @testset "setup_dynamic_simulation_parameters(): initial state physical invariants" begin
         # Baseline default configuration
         (timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD) = Erebus.setup_dynamic_simulation_parameters()

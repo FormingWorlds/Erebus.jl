@@ -141,7 +141,7 @@ $(SIGNATURES)
     
     - etatotal: rocky marker temperature-dependent total viscosity 
 """
-function etatotal_rocks(tkmm, tmm)
+function etatotal_rocks(tkmm, tmm; etamin::Real=1.0e12)
     if tkmm <= 0.0
         throw(DomainError(tkmm, "Absolute temperature must be positive"))
     end

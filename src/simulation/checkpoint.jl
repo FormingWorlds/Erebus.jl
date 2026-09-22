@@ -12,7 +12,7 @@ $(SIGNATURES)
 
     - Ma: period in millions of years
 """
-function s_to_Ma(s)
+function s_to_Ma(s::Real; yearlength::Real=31557600.0)
     return s / (yearlength * 1e6)
 end
 
@@ -318,6 +318,7 @@ function save_state(
     redox_props=nothing,
     atm_state::Union{Nothing,AtmosphereState}=nothing,
     F_extract_m=nothing,
+    cfg::Union{Nothing,SimulationConfig}=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     @unpack_coords coords Nx Ny Nx1 Ny1 Nxm Nym dx dy dxm dym
@@ -343,15 +344,15 @@ function save_state(
         S_vent=S_vent === nothing ? zeros(Float64, Ny1_val, Nx1_val) : S_vent,
         ratio_al,
         t_half_al,
-        dsubgrids,
-        dsubgridt,
-        hr_al,
-        hr_fe,
+        dsubgrids=cfg === nothing ? 0.0 : cfg.solver.dsubgrids,
+        dsubgridt=cfg === nothing ? 0.0 : cfg.solver.dsubgridt,
+        hr_al=cfg === nothing ? true : cfg.thermodynamics.hr_al,
+        hr_fe=cfg === nothing ? false : cfg.thermodynamics.hr_fe,
         rplanet=rplanet !== nothing ? Float64(rplanet) : 50000.0,
         rcore=rcore !== nothing ? Float64(rcore) : 0.0,
         telescope_level=telescope_level !== nothing ? Int(telescope_level) : 0,
-        rcrust,
-        psurface,
+        rcrust=cfg === nothing ? 50000.0 : cfg.geometry.rcrust,
+        psurface=cfg === nothing ? 1000.0 : cfg.geometry.psurface,
         xsize=xsize_val,
         ysize=ysize_val,
         xcenter=xcenter_val,

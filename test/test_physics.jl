@@ -1,4 +1,5 @@
 @testset "Physics" begin
+    etamin = 1.0e+12
     @testset "distance(): metric axioms and invariants" begin
         # 1. Identity of indiscernibles
         @test Erebus.distance(0.0, 0.0, 0.0, 0.0) ≈ 0.0 atol=1e-12

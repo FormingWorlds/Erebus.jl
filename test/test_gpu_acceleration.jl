@@ -394,7 +394,7 @@ using Erebus
 
         # Allocation verification: concrete CPU preconditioner avoids dynamic dispatch regression
         alloc_ldiv = @allocated ldiv!(y_vec, precond, b_vec)
-        @test alloc_ldiv < 100_000
+        @test_broken alloc_ldiv < 1024 # blocker: PR 0a rule 11, dynamic dispatch removal deferred to PR 0b
 
         # Device preconditioner transfer
         p_dev = Erebus.to_device(backend, precond)

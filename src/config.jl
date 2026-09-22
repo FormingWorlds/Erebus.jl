@@ -108,6 +108,8 @@ Base.@kwdef struct SolverConfig
     etaphikoef::Float64 = 1.0
     etamin::Float64 = 1.0e+12
     etamax::Float64 = 1.0e+23
+    dsubgridt::Float64 = 0.0
+    dsubgrids::Float64 = 0.0
     p2m_mode::Symbol = :tiled
     tile_size::Int = 4
     hydromech_solver::Symbol = :direct
@@ -1314,6 +1316,8 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.poroelasticity.k_frac_max
 
     # Solver checks
+    @check_nonneg_finite cfg.solver.dsubgridt
+    @check_nonneg_finite cfg.solver.dsubgrids
     @check_ge cfg.solver.titermax 1
     @check_ge cfg.solver.nplast 1
     cfg.solver.titermax <= cfg.solver.nplast || throw(

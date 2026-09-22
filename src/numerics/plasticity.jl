@@ -303,7 +303,12 @@ function compute_nodal_adjustment!(
     YERRNOD,
     DSY,
     dt,
-    iplast,
+    iplast;
+    etawt::Real=0.0,
+    etamax::Real=1e23,
+    etamin::Real=1e12,
+    yerrmax::Real=1e2,
+    nplast::Int=100_000,
 )
     # reset / setup
     Ny, Nx = size(ETA)
@@ -413,7 +418,17 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_plastic_iteration_pass!(
-    ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt, iplast
+    ETA,
+    ETA5,
+    ETA00,
+    YNY,
+    YNY5,
+    YNY00,
+    YNY_inv_ETA,
+    dt,
+    iplast;
+    dtstep::Int=200,
+    dtcoefdn::Real=0.5,
 )
     if iplast % dtstep == 0
         # dtstep plastic iterations performed without reaching targets:

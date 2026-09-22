@@ -6,7 +6,7 @@ using Random
 using StaticArrays
 using Test
 
-include("../src/test_constants.jl")
+const seed = 42
 const rgen = MersenneTwister(seed)
 
 @testset "Cold Surface Venting Integration" begin
