@@ -1,6 +1,6 @@
 # Unit tests for GPU acceleration via KernelAbstractions.jl
 
-using Test, InteractiveUtils
+using Test
 using LinearAlgebra
 using Random
 using KernelAbstractions
