@@ -444,3 +444,54 @@ function apply_insulating_boundary_conditions!(t)
     end
     return nothing
 end
+
+"""
+    marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Real)
+
+Compute the effective out-of-plane spherical integration length `2 * r` for a marker at `(x, y)` relative to planetary center `(xcenter, ycenter)`.
+
+# Details
+Throws `DomainError` if any coordinate is non-finite (`NaN` or `Inf`).
+
+# Returns
+- `2 * hypot(x - xcenter, y - ycenter)`: Out-of-plane integration length [m].
+"""
+function marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Real)
+    (isfinite(x) && isfinite(y) && isfinite(xcenter) && isfinite(ycenter)) || throw(
+        DomainError(
+            (x, y, xcenter, ycenter),
+            "Marker coordinates and planetary center must be finite",
+        ),
+    )
+    return 2 * hypot(x - xcenter, y - ycenter)
+end
+
+"""
+    marker_out_of_plane_length(x::Real, y::Real, coords::GridCoordinates)
+
+Compute the effective out-of-plane spherical integration length `2 * r` for a marker at `(x, y)` relative to planetary center in `coords`.
+
+# Details
+- `coords`: GridCoordinates struct carrying `xcenter` and `ycenter`.
+
+# Returns
+- `2 * hypot(x - coords.xcenter, y - coords.ycenter)`: Out-of-plane integration length [m].
+"""
+function marker_out_of_plane_length(x::Real, y::Real, coords::GridCoordinates)
+    return marker_out_of_plane_length(x, y, coords.xcenter, coords.ycenter)
+end
+
+"""
+    marker_area(coords::GridCoordinates)
+
+Return the differential cross-sectional area of a marker cell `coords.dxm * coords.dym` on a uniform marker grid.
+
+# Details
+- `coords`: GridCoordinates struct with uniform marker spacing `dxm` and `dym`.
+
+# Returns
+- `coords.dxm * coords.dym`: Marker differential area [m²].
+"""
+function marker_area(coords::GridCoordinates)
+    return coords.dxm * coords.dym
+end

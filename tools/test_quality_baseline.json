@@ -8,7 +8,7 @@
     "test_dehydration_darcy_coupling.jl:weak_assert": 12,
     "test_distributed_mpi.jl:weak_assert": 1,
     "test_dynamic_grid.jl:weak_assert": 1,
-    "test_geometry.jl:weak_assert": 6,
+    "test_geometry.jl:weak_assert": 4,
     "test_geometry_radiation.jl:weak_assert": 7,
     "test_gpu_acceleration.jl:weak_assert": 4,
     "test_hydrofracture_venting.jl:weak_assert": 6,

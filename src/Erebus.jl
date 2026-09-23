@@ -330,7 +330,9 @@ export Config,
     lerp,
     require_positive_finite,
     require_nonneg_finite,
-    require_unit_interval
+    require_unit_interval,
+    marker_out_of_plane_length,
+    marker_area
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -365,13 +367,17 @@ module Geometry
         grid_vector,
         dot4,
         grid_average,
-        apply_insulating_boundary_conditions!
+        apply_insulating_boundary_conditions!,
+        marker_out_of_plane_length,
+        marker_area
     export setup_staggered_grid_properties,
         setup_staggered_grid_properties_helpers,
         grid_vector,
         dot4,
         grid_average,
-        apply_insulating_boundary_conditions!
+        apply_insulating_boundary_conditions!,
+        marker_out_of_plane_length,
+        marker_area
 end
 
 module Physics
