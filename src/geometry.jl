@@ -467,12 +467,27 @@ function marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Re
 end
 
 """
-    marker_area(coords::GridCoordinates)
+    marker_out_of_plane_length(x::Real, y::Real, coords::GridCoordinates)
 
-Return the differential cross-sectional area of a marker cell `coords.dxm * coords.dym`.
+Compute the effective out-of-plane spherical integration length `2 * r` for a marker at `(x, y)` relative to planetary center in `coords`.
 
 # Details
-- `coords`: GridCoordinates struct.
+- `coords`: GridCoordinates struct carrying `xcenter` and `ycenter`.
+
+# Returns
+- `2 * hypot(x - coords.xcenter, y - coords.ycenter)`: Out-of-plane integration length [m].
+"""
+function marker_out_of_plane_length(x::Real, y::Real, coords::GridCoordinates)
+    return marker_out_of_plane_length(x, y, coords.xcenter, coords.ycenter)
+end
+
+"""
+    marker_area(coords::GridCoordinates)
+
+Return the differential cross-sectional area of a marker cell `coords.dxm * coords.dym` on a uniform marker grid.
+
+# Details
+- `coords`: GridCoordinates struct with uniform marker spacing `dxm` and `dym`.
 
 # Returns
 - `coords.dxm * coords.dym`: Marker differential area [m²].

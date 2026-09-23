@@ -105,7 +105,7 @@ Under the assumption of spherical symmetry, this geometric mapping reinterprets 
 V_{\text{3D}} = \int_{\text{disk}} L(r) \, dA = \int_0^{2\pi} d\theta \int_0^R (2r) \, r \, dr = 4\pi \int_0^R r^2 \, dr = \frac{4}{3} \pi R^3
 \]
 
-Mass increments and volatile transfers map between the 2D planar sums and 3D spherical inventories via:
+For spherically symmetric or radially averaged distributions, mass increments and volatile transfers map between 2D planar sums and 3D spherical inventories via:
 
 \[
 \Delta M = \sum_m \rho_m A_m L(r_m) \Delta C_m, \quad L(r_m) = 2 r_m, \quad A_m = \Delta x_m \cdot \Delta y_m
@@ -122,12 +122,12 @@ The out-of-plane weighting function $L(r) = 2r$ exhibits three characteristic li
 
 ### Dynamic Flow and Conservation
 
-Strict conserved bookkeeping is maintained in the 2D Cartesian frame during hydromechanical Stokes flow, Darcy filtration, and marker transport. Because 2D Cartesian divergence-free velocity fields ($\nabla \cdot \mathbf{v} = 0$) do not preserve the axisymmetric volume element $r \, dr$, advection in the 2D plane does not automatically conserve the 3D-weighted inventory $\sum_m \rho_m A_m (2 r_m)$. Conserved physical transfers (such as volatile degassing, fluid drainage, and core metal growth) explicitly record both the 2D cross-sectional quantities and their 3D spherical projections.
+Hydromechanical Stokes flow, Darcy filtration, and marker transport operate in the 2D Cartesian cross-section. Because 2D Cartesian divergence-free velocity fields ($\nabla \cdot \mathbf{v} = 0$) do not preserve the axisymmetric volume element $r \, dr$, planar advection does not automatically conserve the 3D-weighted inventory $\sum_m \rho_m A_m (2 r_m)$. The helper functions `marker_out_of_plane_length` and `marker_area` provide the geometric primitives to evaluate 3D spherical projections alongside 2D cross-sectional quantities.
 
 Thermal conduction incorporates an optional radial geometric metric term to account for spherical divergence in conductive heat flow in the cross-section.
 
 ### Gravitational Source Term
 
-The Poisson solver evaluates gravitational potential from the 2D density field using an effective source term $(8/3) \pi G \rho$. This source coefficient reproduces the exact radial gravitational acceleration at the surface of a uniform-density sphere of radius $R$. For differentiated bodies with strong radial density variations (such as a dense metallic core surrounded by a lower-density silicate mantle), radial gravity modes can evaluate the enclosed spherical mass directly from radial density fields.
+The Poisson solver evaluates gravitational potential from the 2D density field using an effective source term $(8/3) \pi G \rho$. This source coefficient reproduces the exact radial gravitational acceleration at the surface of a uniform-density sphere of radius $R$.
 
 

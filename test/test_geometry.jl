@@ -409,9 +409,13 @@
         end
         @test isapprox(ring2_3d_mass, ring2_2d_mass * (1.6 * R_planet); rtol=1e-12)
 
-        # 4. Physical edge cases, coordinate ordering, and non-finite input validation
+        # Physical edge cases, coordinate ordering, and non-finite input validation
         @test isapprox(marker_out_of_plane_length(xc, yc, xc, yc), 0.0; atol=1e-12)
         @test isapprox(marker_out_of_plane_length(4.0, 0.0, 1.0, 4.0), 10.0; rtol=1e-12)
+        @test isapprox(marker_out_of_plane_length(xc, yc, coords), 0.0; atol=1e-12)
+        @test isapprox(
+            marker_out_of_plane_length(xc + 3.0, yc + 4.0, coords), 10.0; rtol=1e-12
+        )
 
         # Type preservation and extreme value handling
         @test marker_out_of_plane_length(3.0f0, 4.0f0, 0.0f0, 0.0f0) isa Float32
