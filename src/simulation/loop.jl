@@ -169,9 +169,7 @@ function simulation_loop(
     restart_from::AbstractString=cfg.output.restart_from,
 )
     if cfg.mpi.enable
-        error(
-            "Distributed multi-node orchestration for simulation_loop is not supported.",
-        )
+        error("Distributed multi-node orchestration for simulation_loop is not supported.")
     end
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
     isdir(output_path) || mkpath(output_path)
@@ -4072,13 +4070,13 @@ function simulation_loop(
         (
             if Xmin_troilite_m !== nothing
                 (;
-                Xmin_troilite_m,
-                Xmin_schreibersite_m,
-                Xmin_cohenite_m,
-                Xmin_graphite_m,
-                Xmin_nitride_m,
-                Xmin_metal_matrix_m,
-            )
+                    Xmin_troilite_m,
+                    Xmin_schreibersite_m,
+                    Xmin_cohenite_m,
+                    Xmin_graphite_m,
+                    Xmin_nitride_m,
+                    Xmin_metal_matrix_m,
+                )
             else
                 (;)
             end

@@ -195,54 +195,56 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                     # Check for bare positivity or comparison against numeric threshold:
                     # e.g. x > 0, x >= 0, x > 1e-5, or 0 < x, 1e-5 <= x
                 elseif (
-                    (op === :(>) || op === :(>=)) &&
-                    isa(arg2, Real) &&
-                    arg2 >= 0 &&
-                    !(
-                        Meta.isexpr(arg1, :call) && arg1.args[1] in (
-                            :count,
-                            :length,
-                            :size,
-                            :sizeof,
-                            :firstindex,
-                            :lastindex,
-                            :ndims,
-                            :axes,
+                        (op === :(>) || op === :(>=)) &&
+                        isa(arg2, Real) &&
+                        arg2 >= 0 &&
+                        !(
+                            Meta.isexpr(arg1, :call) && arg1.args[1] in (
+                                :count,
+                                :length,
+                                :size,
+                                :sizeof,
+                                :firstindex,
+                                :lastindex,
+                                :ndims,
+                                :axes,
+                            )
+                        )
+                    ) ||
+                    (
+                        (op === :(<) || op === :(<=)) &&
+                        isa(arg1, Real) &&
+                        arg1 >= 0 &&
+                        !(
+                            Meta.isexpr(arg2, :call) && arg2.args[1] in (
+                                :count,
+                                :length,
+                                :size,
+                                :sizeof,
+                                :firstindex,
+                                :lastindex,
+                                :ndims,
+                                :axes,
+                            )
+                        )
+                    ) ||
+                    (
+                        (op === :(<) || op === :(<=)) &&
+                        isa(arg2, Real) &&
+                        (arg2 == 0 || arg2 == 0.0) &&
+                        !(
+                            Meta.isexpr(arg1, :call) && arg1.args[1] in (
+                                :count,
+                                :length,
+                                :size,
+                                :sizeof,
+                                :firstindex,
+                                :lastindex,
+                                :ndims,
+                                :axes,
+                            )
                         )
                     )
-                ) || (
-                    (op === :(<) || op === :(<=)) &&
-                    isa(arg1, Real) &&
-                    arg1 >= 0 &&
-                    !(
-                        Meta.isexpr(arg2, :call) && arg2.args[1] in (
-                            :count,
-                            :length,
-                            :size,
-                            :sizeof,
-                            :firstindex,
-                            :lastindex,
-                            :ndims,
-                            :axes,
-                        )
-                    )
-                ) || (
-                    (op === :(<) || op === :(<=)) &&
-                    isa(arg2, Real) &&
-                    (arg2 == 0 || arg2 == 0.0) &&
-                    !(
-                        Meta.isexpr(arg1, :call) && arg1.args[1] in (
-                            :count,
-                            :length,
-                            :size,
-                            :sizeof,
-                            :firstindex,
-                            :lastindex,
-                            :ndims,
-                            :axes,
-                        )
-                    )
-                )
                     push!(
                         violations,
                         Violation(

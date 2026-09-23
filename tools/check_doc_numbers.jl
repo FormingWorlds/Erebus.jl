@@ -20,9 +20,7 @@ Verify each documented number entry against test files and documentation pages.
 - `Tuple{Bool, Vector{String}}`: Status flag and list of validation error messages.
 """
 function check_doc_numbers(
-    map_path::String=DEFAULT_MAP_PATH;
-    docs_dir::String=DOCS_DIR,
-    test_dir::String=TEST_DIR,
+    map_path::String=DEFAULT_MAP_PATH; docs_dir::String=DOCS_DIR, test_dir::String=TEST_DIR
 )
     if !isfile(map_path)
         return false, ["Number map file not found: $map_path"]
