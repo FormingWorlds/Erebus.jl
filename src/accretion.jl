@@ -260,7 +260,7 @@ The radial pressure gradient of disk gas drives sub-Keplerian rotation with
 fractional deviation parameter \$\\eta \\approx 1.5 (c_s / v_K)^2\$, producing a headwind
 velocity \$v_{\\mathrm{hw}} = \\eta v_K = 1.5 c_s^2 / v_K\$.
 
-\$(SIGNATURES)
+$(SIGNATURES)
 
 # Arguments
 - `c_s`: Gas sound speed [m/s]
@@ -295,7 +295,7 @@ distance per stopping time: \$R_B = G M / v_{\\mathrm{hw}}^2 \\ge v_{\\mathrm{hw
 \$t_s = \\mathrm{St} / \\Omega_K\$, yielding:
 \$\$M_{\\mathrm{onset}} = f_{\\mathrm{onset}} \\frac{v_{\\mathrm{hw}}^3 \\mathrm{St}}{G \\Omega_K}\$\$
 
-\$(SIGNATURES)
+$(SIGNATURES)
 
 # Arguments
 - `M_star`: Stellar mass [kg]
@@ -352,7 +352,7 @@ Bitsch et al. 2018), its gravitational perturbation creates an exterior pressure
 maximum in the gas disk that traps inward-drifting pebbles:
 \$\$M_{\\mathrm{iso}} = f_{\\mathrm{iso}} M_{\\star} \\left(\\frac{H_g}{a}\\right)^3 = f_{\\mathrm{iso}} M_{\\star} \\left(\\frac{c_s}{v_K}\\right)^3\$\$
 
-\$(SIGNATURES)
+$(SIGNATURES)
 
 # Arguments
 - `M_star`: Stellar mass [kg]
@@ -718,7 +718,7 @@ function advance_accretion_boundary!(
     n_converted = Threads.Atomic{Int}(0)
     marknum = length(tm)
 
-    Threads.@threads :static for m in 1:marknum
+    Threads.@threads :dynamic for m in 1:marknum
         # Only convert sticky air / space markers (tm == 3)
         if @inbounds tm[m] == 3
             dx_m = Float64(@inbounds(xm[m])) - xc

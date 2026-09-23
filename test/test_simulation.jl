@@ -5,11 +5,11 @@
         # Baseline default configuration
         (timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD) = Erebus.setup_dynamic_simulation_parameters()
 
-        # Invariant Family 2: Positivity and Boundedness
-        @test timestep >= 0
-        @test dt > 0.0
-        @test timesum >= 0.0
-        @test marknum > 0
+        cfg_default = Erebus.default_config()
+        @test timestep == 1
+        @test dt ≈ cfg_default.time.dt_initial * cfg_default.time.yearlength rtol=1e-12
+        @test timesum ≈ cfg_default.time.start_time * cfg_default.time.yearlength rtol=1e-12
+        @test marknum == Erebus.start_marknum
 
         # Radiogenic decay heat vector positivity
         @test length(hrsolidm) == 3
@@ -30,7 +30,7 @@
         @test ts_c == 7
         @test dt_c ≈ 50.0 * cfg.time.yearlength rtol=1e-12
         @test time_c ≈ 3.5 * cfg.time.yearlength rtol=1e-12
-        @test mark_c == start_marknum
+        @test mark_c == Erebus.start_marknum
     end # testset "setup_dynamic_simulation_parameters()"
 
     @testset "s_to_Ma(): time conversion physical invariants and benchmarks" begin
@@ -194,6 +194,47 @@
             state2 = load_state(ckpt2_path)
             @test isfinite(state2["atm_T_surf_eq"])
             @test state2["atm_T_surf_eq"] > 0.0
+        end
+    end
+
+    @testset "Simulation loop return value (§3 and golden harness requirement)" begin
+        mktempdir() do tmpdir
+            quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+            cfg = load_config(quick_toml)
+            cfg_run = SimulationConfig(
+                grid=cfg.grid,
+                time=cfg.time,
+                poroelasticity=cfg.poroelasticity,
+                output=OutputConfig(
+                    output_dir=tmpdir, mode=:both, savematstep=2, telemetrystep=1
+                ),
+            )
+            res = Erebus.simulation_loop(cfg_run; output_path=tmpdir)
+            @test res isa NamedTuple
+            @test haskey(res, :markers)
+            @test haskey(res, :grids)
+            @test haskey(res, :atm)
+            @test haskey(res, :timesum)
+            @test haskey(res, :dt)
+            @test haskey(res, :timestep)
+
+            # Checkpoint written at step 2
+            ckpt2_path = joinpath(tmpdir, "output_00002.jld2")
+            @test isfile(ckpt2_path)
+            state2 = load_state(ckpt2_path)
+            @test res.markers.xm == state2["xm"]
+            @test res.timestep == 2
+
+            # Telemetry verification: timesum equals start_time + sum of accepted dt values
+            telem_path = joinpath(tmpdir, "telemetry.csv")
+            @test isfile(telem_path)
+            lines = readlines(telem_path)
+            @test length(lines) >= 3
+            dt1_yr = parse(Float64, split(lines[2], ",")[3])
+            dt2_yr = parse(Float64, split(lines[3], ",")[3])
+            dt_sum_s = (dt1_yr + dt2_yr) * cfg.time.yearlength
+            initial_timesum = cfg.time.start_time * cfg.time.yearlength
+            @test res.timesum ≈ initial_timesum + dt_sum_s rtol=1e-12
         end
     end
 end

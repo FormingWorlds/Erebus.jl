@@ -59,6 +59,7 @@ unit_tests = [
     "test_telescoping.jl",
     "test_p2m_tiled.jl",
     "test_telemetry.jl",
+    "test_tooling.jl",
 ]
 
 integration_tests = [
@@ -73,6 +74,7 @@ listed_tests = Set(vcat(unit_tests, integration_tests))
 for f in all_test_files
     if f ∉ listed_tests &&
         f != "test_helpers.jl" &&
+        f != "golden_helpers.jl" &&
         f != "test_constants.jl" &&
         f != "mpi_worker_tests.jl"
         error(

@@ -155,8 +155,8 @@ function restrict_4var!(
     Nx1_c = Nx_c + 1
     Ny1_f = Ny_f + 1
     Nx1_f = Nx_f + 1
-    rc_mat = reshape(r_c, (4, Ny1_c, Nx1_c))
-    rf_mat = reshape(r_f, (4, Ny1_f, Nx1_f))
+    rc_mat = LinearBlockView(r_c, 4, Ny1_c, Nx1_c)
+    rf_mat = LinearBlockView(r_f, 4, Ny1_f, Nx1_f)
 
     fill!(r_c, zero(T))
 
@@ -238,8 +238,8 @@ function prolongate_4var!(
     Nx1_c = Nx_c + 1
     Ny1_f = Ny_f + 1
     Nx1_f = Nx_f + 1
-    ef_mat = reshape(e_f, (4, Ny1_f, Nx1_f))
-    ec_mat = reshape(e_c, (4, Ny1_c, Nx1_c))
+    ef_mat = LinearBlockView(e_f, 4, Ny1_f, Nx1_f)
+    ec_mat = LinearBlockView(e_c, 4, Ny1_c, Nx1_c)
 
     @inbounds for fj in 2:Nx_f, fi in 2:Ny_f
         # 1. Prolongate Vx (normal to vertical faces)
@@ -342,16 +342,16 @@ function smooth_velocity!(
 ) where {T<:AbstractFloat}
     Ny1 = op.Ny1
     Nx1 = op.Nx1
-    x4_mat = reshape(x4, (4, Ny1, Nx1))
-    inv_mat = reshape(inv_d, (4, Ny1, Nx1))
+    x4_mat = LinearBlockView(x4, 4, Ny1, Nx1)
+    inv_mat = LinearBlockView(inv_d, 4, Ny1, Nx1)
+    res_mat = LinearBlockView(res_buf, 4, Ny1, Nx1)
     omega_T = T(omega)
     b_stride = length(b) == 2 * Ny1 * Nx1 ? 2 : 4
-    b_mat = reshape(b, (b_stride, Ny1, Nx1))
+    b_mat = LinearBlockView(b, b_stride, Ny1, Nx1)
 
     if smoother == :redblack_gauss_seidel
         for _ in 1:iterations
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if iseven(i + j)
                     if !is_boundary_vx(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
@@ -365,7 +365,6 @@ function smooth_velocity!(
                 end
             end
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if isodd(i + j)
                     if !is_boundary_vx(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
@@ -382,7 +381,6 @@ function smooth_velocity!(
     else
         for _ in 1:iterations
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if !is_boundary_vx(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
                     rvx = b_mat[1, i, j] - res_mat[1, i, j]
@@ -415,17 +413,17 @@ function smooth_darcy!(
 ) where {T<:AbstractFloat}
     Ny1 = op.Ny1
     Nx1 = op.Nx1
-    x4_mat = reshape(x4, (4, Ny1, Nx1))
-    inv_mat = reshape(inv_d, (4, Ny1, Nx1))
+    x4_mat = LinearBlockView(x4, 4, Ny1, Nx1)
+    inv_mat = LinearBlockView(inv_d, 4, Ny1, Nx1)
+    res_mat = LinearBlockView(res_buf, 4, Ny1, Nx1)
     omega_T = T(omega)
     b_stride = length(bpf) == Ny1 * Nx1 ? 1 : 4
-    b_mat = reshape(bpf, (b_stride, Ny1, Nx1))
+    b_mat = LinearBlockView(bpf, b_stride, Ny1, Nx1)
     b_idx = b_stride == 1 ? 1 : 4
 
     if smoother == :redblack_gauss_seidel
         for _ in 1:iterations
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if iseven(i + j) && !is_boundary_p(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
                     rpf = b_mat[b_idx, i, j] - res_mat[4, i, j]
@@ -433,7 +431,6 @@ function smooth_darcy!(
                 end
             end
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if isodd(i + j) && !is_boundary_p(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
                     rpf = b_mat[b_idx, i, j] - res_mat[4, i, j]
@@ -444,7 +441,6 @@ function smooth_darcy!(
     else
         for _ in 1:iterations
             LinearAlgebra.mul!(res_buf, op, x4)
-            res_mat = reshape(res_buf, (4, Ny1, Nx1))
             @inbounds for j in 1:Nx1, i in 1:Ny1
                 if !is_boundary_p(i, j, op.Ny_val, op.Nx_val, Ny1, Nx1)
                     rpf = b_mat[b_idx, i, j] - res_mat[4, i, j]
@@ -483,12 +479,16 @@ function v_cycle_velocity!(
         r4 = curr.r_buf
         fill!(x4, zero(T))
         fill!(r4, zero(T))
-        x4_mat = reshape(x4, (4, Ny1, Nx1))
-        r4_mat = reshape(r4, (4, Ny1, Nx1))
-        xv_mat = reshape(xv, (2, Ny1, Nx1))
-        bv_mat = reshape(bv, (2, Ny1, Nx1))
-        x4_mat[1:2, :, :] .= xv_mat
-        r4_mat[1:2, :, :] .= bv_mat
+        x4_mat = LinearBlockView(x4, 4, Ny1, Nx1)
+        r4_mat = LinearBlockView(r4, 4, Ny1, Nx1)
+        xv_mat = LinearBlockView(xv, 2, Ny1, Nx1)
+        bv_mat = LinearBlockView(bv, 2, Ny1, Nx1)
+        @inbounds for j in 1:Nx1, i in 1:Ny1
+            x4_mat[1, i, j] = xv_mat[1, i, j]
+            x4_mat[2, i, j] = xv_mat[2, i, j]
+            r4_mat[1, i, j] = bv_mat[1, i, j]
+            r4_mat[2, i, j] = bv_mat[2, i, j]
+        end
         b_use = r4
         x_use = x4
     else
@@ -524,18 +524,21 @@ function v_cycle_velocity!(
             smoother=smoother,
         )
         if is_2var
-            xv_mat = reshape(xv, (2, Ny1, Nx1))
-            x4_mat = reshape(x_use, (4, Ny1, Nx1))
-            xv_mat .= x4_mat[1:2, :, :]
+            xv_mat = LinearBlockView(xv, 2, Ny1, Nx1)
+            x4_mat = LinearBlockView(x_use, 4, Ny1, Nx1)
+            @inbounds for j in 1:Nx1, i in 1:Ny1
+                xv_mat[1, i, j] = x4_mat[1, i, j]
+                xv_mat[2, i, j] = x4_mat[2, i, j]
+            end
         end
         return xv
     end
 
     # 2. Residual computation: r = b - A * x directly into curr.r_buf
     LinearAlgebra.mul!(curr.res_buf, curr.op, x_use)
-    res_mat = reshape(curr.res_buf, (4, Ny1, Nx1))
-    r_mat = reshape(curr.r_buf, (4, Ny1, Nx1))
-    b_mat = reshape(b_use, (4, Ny1, Nx1))
+    res_mat = LinearBlockView(curr.res_buf, 4, Ny1, Nx1)
+    r_mat = LinearBlockView(curr.r_buf, 4, Ny1, Nx1)
+    b_mat = LinearBlockView(b_use, 4, Ny1, Nx1)
 
     @inbounds for j in 1:Nx1, i in 1:Ny1
         if !is_boundary_vx(i, j, Ny_val, Nx_val, Ny1, Nx1)
@@ -589,9 +592,12 @@ function v_cycle_velocity!(
     )
 
     if is_2var
-        xv_mat = reshape(xv, (2, Ny1, Nx1))
-        x4_mat = reshape(x_use, (4, Ny1, Nx1))
-        xv_mat .= x4_mat[1:2, :, :]
+        xv_mat = LinearBlockView(xv, 2, Ny1, Nx1)
+        x4_mat = LinearBlockView(x_use, 4, Ny1, Nx1)
+        @inbounds for j in 1:Nx1, i in 1:Ny1
+            xv_mat[1, i, j] = x4_mat[1, i, j]
+            xv_mat[2, i, j] = x4_mat[2, i, j]
+        end
     end
 
     return xv
@@ -624,12 +630,13 @@ function v_cycle_darcy!(
         r4 = curr.r_buf
         fill!(x4, zero(T))
         fill!(r4, zero(T))
-        x4_mat = reshape(x4, (4, Ny1, Nx1))
-        r4_mat = reshape(r4, (4, Ny1, Nx1))
-        xpf_mat = reshape(xpf, (Ny1, Nx1))
-        bpf_mat = reshape(bpf, (Ny1, Nx1))
-        x4_mat[4, :, :] .= xpf_mat
-        r4_mat[4, :, :] .= bpf_mat
+        x4_mat = LinearBlockView(x4, 4, Ny1, Nx1)
+        r4_mat = LinearBlockView(r4, 4, Ny1, Nx1)
+        @inbounds for j in 1:Nx1, i in 1:Ny1
+            idx_1var = i + (j - 1) * Ny1
+            x4_mat[4, i, j] = xpf[idx_1var]
+            r4_mat[4, i, j] = bpf[idx_1var]
+        end
         b_use = r4
         x_use = x4
     else
@@ -665,18 +672,20 @@ function v_cycle_darcy!(
             smoother=smoother,
         )
         if is_1var
-            xpf_mat = reshape(xpf, (Ny1, Nx1))
-            x4_mat = reshape(x_use, (4, Ny1, Nx1))
-            xpf_mat .= x4_mat[4, :, :]
+            x4_mat = LinearBlockView(x_use, 4, Ny1, Nx1)
+            @inbounds for j in 1:Nx1, i in 1:Ny1
+                idx_1var = i + (j - 1) * Ny1
+                xpf[idx_1var] = x4_mat[4, i, j]
+            end
         end
         return xpf
     end
 
     # 2. Residual computation: r = b - A * x directly into curr.r_buf
     LinearAlgebra.mul!(curr.res_buf, curr.op, x_use)
-    res_mat = reshape(curr.res_buf, (4, Ny1, Nx1))
-    r_mat = reshape(curr.r_buf, (4, Ny1, Nx1))
-    b_mat = reshape(b_use, (4, Ny1, Nx1))
+    res_mat = LinearBlockView(curr.res_buf, 4, Ny1, Nx1)
+    r_mat = LinearBlockView(curr.r_buf, 4, Ny1, Nx1)
+    b_mat = LinearBlockView(b_use, 4, Ny1, Nx1)
 
     @inbounds for j in 1:Nx1, i in 1:Ny1
         r_mat[1, i, j] = zero(T)
@@ -726,9 +735,11 @@ function v_cycle_darcy!(
     )
 
     if is_1var
-        xpf_mat = reshape(xpf, (Ny1, Nx1))
-        x4_mat = reshape(x_use, (4, Ny1, Nx1))
-        xpf_mat .= x4_mat[4, :, :]
+        x4_mat = LinearBlockView(x_use, 4, Ny1, Nx1)
+        @inbounds for j in 1:Nx1, i in 1:Ny1
+            idx_1var = i + (j - 1) * Ny1
+            xpf[idx_1var] = x4_mat[4, i, j]
+        end
     end
 
     return xpf

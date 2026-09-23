@@ -170,7 +170,7 @@ function simulation_loop(
 )
     if cfg.mpi.enable
         error(
-            "Distributed multi-node orchestration for simulation_loop is scheduled for Milestone 4/5.",
+            "Distributed multi-node orchestration for simulation_loop is not supported.",
         )
     end
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
@@ -1153,8 +1153,10 @@ function simulation_loop(
             output_path, cfg.output.telemetry_file; append=is_restart
         )
     end
+    last_timestep = start_step_val - 1
     try
         for timestep in start_step_val:1:n_steps_val
+            last_timestep = timestep
             timestep_begin = now()
             # ---------------------------------------------------------------------
             # reset interpolation arrays
@@ -1208,7 +1210,7 @@ function simulation_loop(
             end
             P_amb_eff = P_amb + P_atm
             if disk_enabled_val || surface_radiation_val
-                @threads :static for m in 1:marknum
+                @threads :dynamic for m in 1:marknum
                     if tm[m] >= 3
                         tkm[m] = T_amb
                     end
@@ -1808,7 +1810,7 @@ function simulation_loop(
             elseif use_threading
                 reset_thread_buffers!(thread_buffers)
                 nchunks = length(thread_buffers)
-                Threads.@threads :static for c in 1:nchunks
+                Threads.@threads :dynamic for c in 1:nchunks
                     buf = thread_buffers[c]
                     lo = (c - 1) * div(marknum, nchunks) + 1
                     hi = c == nchunks ? marknum : c * div(marknum, nchunks)
@@ -3191,7 +3193,7 @@ function simulation_loop(
             # ---------------------------------------------------------------------
             # interpolate updated viscoplastic viscosity to markers
             # ---------------------------------------------------------------------
-            @threads :static for m in 1:1:marknum
+            @threads :dynamic for m in 1:1:marknum
                 update_marker_viscosity!(
                     m,
                     xm,
@@ -4034,6 +4036,142 @@ function simulation_loop(
             pardiso(pardiso_solver)
         end
     end
+
+    markers = (;
+        xm,
+        ym,
+        tm,
+        tkm,
+        sxxm,
+        sxym,
+        etavpm,
+        phim,
+        phinewm,
+        pfm0,
+        XWsolidm,
+        XWsolidm0,
+        Fm,
+        rhototalm,
+        rhocptotalm,
+        etatotalm,
+        hrtotalm,
+        ktotalm,
+        tkm_rhocptotalm,
+        etafluidcur_inv_kphim,
+        inv_gggtotalm,
+        fricttotalm,
+        cohestotalm,
+        tenstotalm,
+        rhofluidcur,
+        alphasolidcur,
+        alphafluidcur,
+        (F_extract_m !== nothing ? (; F_extract_m) : (;))...,
+        (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
+        (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
+        (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
+        (
+            if Xmin_troilite_m !== nothing
+                (;
+                Xmin_troilite_m,
+                Xmin_schreibersite_m,
+                Xmin_cohenite_m,
+                Xmin_graphite_m,
+                Xmin_nitride_m,
+                Xmin_metal_matrix_m,
+            )
+            else
+                (;)
+            end
+        )...,
+        (t_accreted !== nothing ? (; t_accreted) : (;))...,
+        (hcnspo_props !== nothing ? (; hcnspo_props) : (;))...,
+        (redox_props !== nothing ? (; redox_props) : (;))...,
+    )
+
+    grids = (;
+        ETA,
+        ETA0,
+        GGG,
+        EXY,
+        SXY,
+        SXY0,
+        wyx,
+        COH,
+        TEN,
+        FRI,
+        YNY,
+        RHOX,
+        RHOFX,
+        KX,
+        PHIX,
+        vx,
+        vxf,
+        RX,
+        qxD,
+        gx,
+        RHOY,
+        RHOFY,
+        KY,
+        PHIY,
+        vy,
+        vyf,
+        RY,
+        qyD,
+        gy,
+        RHO,
+        RHOCP,
+        ALPHA,
+        ALPHAF,
+        HR,
+        HA,
+        HS,
+        ETAP,
+        GGGP,
+        EXX,
+        SXX,
+        SXX0,
+        tk1,
+        tk2,
+        DT,
+        DT0,
+        vxp,
+        vyp,
+        vxpf,
+        vypf,
+        pr,
+        pf,
+        ps,
+        pr0,
+        pf0,
+        ps0,
+        ETAPHI,
+        BETAPHI,
+        PHI,
+        APHI,
+        FI,
+        DMP,
+        DHP,
+        XWS,
+        ETA5,
+        ETA00,
+        YNY5,
+        YNY00,
+        YNY_inv_ETA,
+        DSXY,
+        DSY,
+        EII,
+        SII,
+        DSXX,
+        tk0,
+        DQPF,
+        DQPFSUM,
+        S_vent_grid,
+        Q_lat_grid,
+        Q_seg_grid,
+        (Q_metric !== nothing ? (; Q_metric) : (;))...,
+    )
+
+    return (; markers, grids, atm=atm_state, timesum, dt, timestep=last_timestep)
 end # function simulation loop
 
 """

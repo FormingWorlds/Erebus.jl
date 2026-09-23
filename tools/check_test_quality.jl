@@ -1,7 +1,6 @@
 #!/usr/bin/env julia
 # AST-based test-quality linter for the Erebus.jl test suite.
-#
-# Enforces the test quality standards defined in .github/.claude/rules/erebus-tests.md:
+# Enforces test quality standards:
 # 1. No float equality comparisons with `==` (use `≈` or `isapprox`).
 # 2. No standalone weak assertions (`!== nothing`, `length > 0`, etc.).
 # 3. Leaf testsets must contain at least 2 assertions (no single-assert tests).
@@ -46,14 +45,22 @@ end
 function contains_float_literal(x)
     if isa(x, AbstractFloat)
         return true
-    elseif isa(x, Expr)
-        if Meta.isexpr(x, :call) && length(x.args) >= 1
-            fn = x.args[1]
-            if fn in
-                (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)
-                return false
-            end
+    elseif Meta.isexpr(x, :(::)) && length(x.args) >= 2
+        T = x.args[end]
+        if T in (:Float64, :Float32, :Float16, :AbstractFloat)
+            return true
         end
+    elseif Meta.isexpr(x, :call) && length(x.args) >= 1
+        fn = x.args[1]
+        if fn in (:Float64, :Float32, :Float16, :float)
+            return true
+        elseif fn === :parse && length(x.args) >= 2 && x.args[2] in (:Float64, :Float32, :Float16)
+            return true
+        elseif fn in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)
+            return false
+        end
+        return any(contains_float_literal, x.args)
+    elseif isa(x, Expr)
         return any(contains_float_literal, x.args)
     end
     return false
@@ -158,16 +165,18 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                    # Check for bare positivity: @test x > 0, @test x >= 0, @test x < 0, etc.
+                    # Check for bare positivity or comparison against numeric threshold: @test x > 0, @test x >= 0, @test x < 100, etc.
                 elseif (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
-                    (arg2 == 0 || arg2 == 0.0 || arg1 == 0 || arg1 == 0.0)
+                    (isa(arg2, Real) || isa(arg1, Real)) &&
+                    !(Meta.isexpr(arg1, :call) && arg1.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)) &&
+                    !(Meta.isexpr(arg2, :call) && arg2.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes))
                     push!(
                         violations,
                         Violation(
                             file,
                             line,
                             :weak_assert,
-                            "Weak assertion testing bare positivity (e.g. `x > 0`)",
+                            "Weak assertion testing bare positivity or comparison against numeric threshold",
                         ),
                     )
                 end

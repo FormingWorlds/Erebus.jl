@@ -271,12 +271,12 @@ using Erebus
         y_f32 = zeros(Float32, Ny1 * Nx1 * 4)
 
         Erebus.mul_device!(y_f32, op_f32, x_f32; backend=backend)
-        @test eltype(y_f32) === Float32
+        @test y_f32 isa Vector{Float32}
         @test all(isfinite, y_f32)
         @test norm(y_f32) > 0.0f0
 
         d_f32 = Erebus.compute_operator_diagonal_device(op_f32; backend=backend)
-        @test eltype(d_f32) === Float32
+        @test d_f32 isa Vector{Float32}
         @test all(isfinite, d_f32)
 
         y_cpu_f32 = zeros(Float32, Ny1 * Nx1 * 4)
@@ -394,7 +394,7 @@ using Erebus
 
         # Allocation verification: concrete CPU preconditioner avoids dynamic dispatch regression
         alloc_ldiv = @allocated ldiv!(y_vec, precond, b_vec)
-        @test_broken alloc_ldiv < 1024 # blocker: PR 0a rule 11, dynamic dispatch removal deferred to PR 0b
+        @test alloc_ldiv < 1024
 
         # Device preconditioner transfer
         p_dev = Erebus.to_device(backend, precond)

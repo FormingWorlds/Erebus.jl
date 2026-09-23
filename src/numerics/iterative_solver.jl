@@ -310,6 +310,36 @@ Base.size(op::MatrixFreeStokesDarcyOperator) = (op.Ny1 * op.Nx1 * 4, op.Ny1 * op
 Base.size(op::MatrixFreeStokesDarcyOperator, d::Int) = d in (1, 2) ? op.Ny1 * op.Nx1 * 4 : 1
 Base.eltype(::MatrixFreeStokesDarcyOperator{T}) where {T} = T
 
+"""
+    LinearBlockView{T,V<:AbstractVector{T}} <: AbstractArray{T,3}
+
+Stack-allocated 3D view wrapping a contiguous 1D vector partitioned into blocks.
+Avoids heap allocations and dynamic dispatch when accessing interleaved grid unknowns.
+
+# Parameters
+- `data::V`: Underlying flat vector.
+- `stride::Int`: Leading component stride.
+- `Ny1::Int`: Vertical node count.
+- `Nx1::Int`: Horizontal node count.
+"""
+struct LinearBlockView{T,V<:AbstractVector{T}} <: AbstractArray{T,3}
+    data::V
+    stride::Int
+    Ny1::Int
+    Nx1::Int
+end
+
+Base.size(A::LinearBlockView) = (A.stride, A.Ny1, A.Nx1)
+Base.IndexStyle(::Type{<:LinearBlockView}) = IndexCartesian()
+
+@inline function Base.getindex(A::LinearBlockView, var::Int, i::Int, j::Int)
+    @inbounds return A.data[var + A.stride * ((i - 1) + A.Ny1 * (j - 1))]
+end
+
+@inline function Base.setindex!(A::LinearBlockView, val, var::Int, i::Int, j::Int)
+    @inbounds A.data[var + A.stride * ((i - 1) + A.Ny1 * (j - 1))] = val
+end
+
 @inline function is_boundary_vx(
     i::Int,
     j::Int,
@@ -405,8 +435,8 @@ function LinearAlgebra.mul!(
     Ny_val = op.Ny_val
     dt = op.dt
 
-    x_mat = reshape(x, (4, Ny1, Nx1))
-    y_mat = reshape(y, (4, Ny1, Nx1))
+    x_mat = LinearBlockView(x, 4, Ny1, Nx1)
+    y_mat = LinearBlockView(y, 4, Ny1, Nx1)
 
     Kcont = op.Kcont
     bctop = op.bctop
@@ -433,8 +463,8 @@ function LinearAlgebra.mul!(
     gx = op.gx
     gy = op.gy
 
-    # Node-disjoint updates allow thread-parallel execution over columns.
-    Threads.@threads for j in 1:Nx1
+    # Serial column traversal avoids task allocations and preserves zero-allocation guarantees.
+    for j in 1:Nx1
         @inbounds for i in 1:Ny1
             pt = evaluate_stokes_darcy_point(
                 i,

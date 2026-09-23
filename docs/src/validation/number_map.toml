@@ -1,0 +1,12 @@
+# docs/src/validation/number_map.toml
+# Maps documented numeric values in validation pages to test assertions.
+# Columns:
+# page: relative path to the documentation page under docs/src/
+# number: numeric value (string or float representation) as documented
+# test_name: relative path to the test file under test/ containing the assertion verifying this number
+
+# Example format:
+# [[entry]]
+# page = "validation/terzaghi_consolidation.md"
+# number = "1.0"
+# test_name = "test_terzaghi_benchmark.jl"

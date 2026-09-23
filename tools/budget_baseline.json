@@ -1,0 +1,22 @@
+{
+    "configs/core_formation_benchmark.toml": {
+        "allocated_bytes": 1237667408,
+        "wall_seconds": 1.785054417
+    },
+    "configs/hydrothermal_benchmark.toml": {
+        "allocated_bytes": 597206592,
+        "wall_seconds": 0.953282167
+    },
+    "configs/lunar_growth_tutorial.toml": {
+        "allocated_bytes": 1312324144,
+        "wall_seconds": 1.417996958
+    },
+    "configs/magma_ocean_cooling_turb_on_32.toml": {
+        "allocated_bytes": 642168976,
+        "wall_seconds": 0.518069708
+    },
+    "configs/test_quick.toml": {
+        "allocated_bytes": 612513536,
+        "wall_seconds": 0.672980792
+    }
+}
