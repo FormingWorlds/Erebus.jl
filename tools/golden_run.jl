@@ -19,12 +19,17 @@ function run_golden(config_path::String, out_jld2_path::String)
 
     # Enforce deterministic single-thread execution
     LinearAlgebra.BLAS.set_num_threads(1)
+    if Threads.nthreads() > 1
+        error(
+            "golden_run must be executed with a single Julia thread: " *
+            "run with `julia -t 1` or `JULIA_NUM_THREADS=1` " *
+            "(found Threads.nthreads() = $(Threads.nthreads()))",
+        )
+    end
 
     cfg_base = load_config(config_path)
     overrides = Dict{String,Any}(
-        "time.n_steps" => 5,
-        "solver.p2m_mode" => :tiled,
-        "solver.seed" => 42,
+        "time.n_steps" => 5, "solver.p2m_mode" => :tiled, "solver.seed" => 42
     )
     cfg = Erebus.override_config(cfg_base, overrides)
 
@@ -68,7 +73,7 @@ function run_golden(config_path::String, out_jld2_path::String)
             # 4. Time accumulators
             f["timesum"] = res.timesum
             f["dt"] = res.dt
-            f["timestep"] = res.timestep
+            return f["timestep"] = res.timestep
         end
     end
     println("Golden run written successfully to: $out_jld2_path")
@@ -83,7 +88,7 @@ function main()
     config_path = ARGS[1]
     out_jld2_path = ARGS[2]
     run_golden(config_path, out_jld2_path)
-    exit(0)
+    return exit(0)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

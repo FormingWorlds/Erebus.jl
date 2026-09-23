@@ -77,9 +77,9 @@ end
 function write_baseline(baseline_data::Dict{String,Any})
     open(BASELINE_PATH, "w") do io
         JSON.print(io, baseline_data, 4)
-        println(io)
+        return println(io)
     end
-    println("Saved budget baseline to $BASELINE_PATH")
+    return println("Saved budget baseline to $BASELINE_PATH")
 end
 
 function read_baseline()
@@ -97,10 +97,11 @@ function main()
         for cfg_rel in SHIPPED_CONFIGS
             println("Profiling budget baseline for $cfg_rel...")
             res = measure_config_budget(cfg_rel)
-            @printf("  %s: %.3f s, %d bytes\n", cfg_rel, res.wall_seconds, res.allocated_bytes)
+            @printf(
+                "  %s: %.3f s, %d bytes\n", cfg_rel, res.wall_seconds, res.allocated_bytes
+            )
             data[cfg_rel] = Dict(
-                "wall_seconds" => res.wall_seconds,
-                "allocated_bytes" => res.allocated_bytes,
+                "wall_seconds" => res.wall_seconds, "allocated_bytes" => res.allocated_bytes
             )
         end
         write_baseline(data)
@@ -108,7 +109,10 @@ function main()
     elseif mode == "--check"
         baseline = read_baseline()
         if isempty(baseline)
-            println(stderr, "No baseline file found at $BASELINE_PATH. Run with --baseline first.")
+            println(
+                stderr,
+                "No baseline file found at $BASELINE_PATH. Run with --baseline first.",
+            )
             exit(2)
         end
 
@@ -155,7 +159,9 @@ function main()
         end
 
         if has_regression
-            println(stderr, "Performance budget regression detected (>10% threshold exceeded).")
+            println(
+                stderr, "Performance budget regression detected (>10% threshold exceeded)."
+            )
             exit(1)
         else
             println("All configurations satisfied performance budget.")

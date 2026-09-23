@@ -37,7 +37,10 @@ function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
         test_name = get(entry, "test_name", nothing)
 
         if page === nothing || number === nothing || test_name === nothing
-            push!(errors, "Entry $i is missing required keys (page, number, test_name): $entry")
+            push!(
+                errors,
+                "Entry $i is missing required keys (page, number, test_name): $entry",
+            )
             continue
         end
 
@@ -49,7 +52,10 @@ function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
         else
             page_content = read(page_path, String)
             if !occursin(num_str, page_content)
-                push!(errors, "Documentation page $page does not contain number '$num_str' (entry $i)")
+                push!(
+                    errors,
+                    "Documentation page $page does not contain number '$num_str' (entry $i)",
+                )
             end
         end
 
@@ -59,7 +65,10 @@ function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
         else
             test_content = read(test_path, String)
             if !occursin(num_str, test_content)
-                push!(errors, "Test file $test_name does not contain number '$num_str' (entry $i)")
+                push!(
+                    errors,
+                    "Test file $test_name does not contain number '$num_str' (entry $i)",
+                )
             end
         end
     end
@@ -78,7 +87,7 @@ function main()
         exit(1)
     end
     println("check_doc_numbers: all entries verified successfully.")
-    exit(0)
+    return exit(0)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

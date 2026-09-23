@@ -54,9 +54,12 @@ function contains_float_literal(x)
         fn = x.args[1]
         if fn in (:Float64, :Float32, :Float16, :float)
             return true
-        elseif fn === :parse && length(x.args) >= 2 && x.args[2] in (:Float64, :Float32, :Float16)
+        elseif fn === :parse &&
+            length(x.args) >= 2 &&
+            x.args[2] in (:Float64, :Float32, :Float16)
             return true
-        elseif fn in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)
+        elseif fn in
+            (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)
             return false
         end
         return any(contains_float_literal, x.args)
@@ -155,10 +158,30 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                 end
                 # Check for: length(x) > 0 or length(x) >= 1 (or 0 < length(x), 1 <= length(x))
                 if (
-                    (op === :(>) && Meta.isexpr(arg1, :call) && arg1.args[1] === :length && arg2 == 0) ||
-                    (op === :(>=) && Meta.isexpr(arg1, :call) && arg1.args[1] === :length && arg2 == 1) ||
-                    (op === :(<) && Meta.isexpr(arg2, :call) && arg2.args[1] === :length && arg1 == 0) ||
-                    (op === :(<=) && Meta.isexpr(arg2, :call) && arg2.args[1] === :length && arg1 == 1)
+                    (
+                        op === :(>) &&
+                        Meta.isexpr(arg1, :call) &&
+                        arg1.args[1] === :length &&
+                        arg2 == 0
+                    ) ||
+                    (
+                        op === :(>=) &&
+                        Meta.isexpr(arg1, :call) &&
+                        arg1.args[1] === :length &&
+                        arg2 == 1
+                    ) ||
+                    (
+                        op === :(<) &&
+                        Meta.isexpr(arg2, :call) &&
+                        arg2.args[1] === :length &&
+                        arg1 == 0
+                    ) ||
+                    (
+                        op === :(<=) &&
+                        Meta.isexpr(arg2, :call) &&
+                        arg2.args[1] === :length &&
+                        arg1 == 1
+                    )
                 )
                     push!(
                         violations,
@@ -169,12 +192,41 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                # Check for bare positivity or comparison against numeric threshold:
-                # e.g. x > 0, x >= 0, x > 1e-5, or 0 < x, 1e-5 <= x
-                elseif ((op === :(>) || op === :(>=)) && isa(arg2, Real) && arg2 >= 0 &&
-                    !(Meta.isexpr(arg1, :call) && arg1.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes))) ||
-                    ((op === :(<) || op === :(<=)) && isa(arg1, Real) && arg1 >= 0 &&
-                    !(Meta.isexpr(arg2, :call) && arg2.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)))
+                    # Check for bare positivity or comparison against numeric threshold:
+                    # e.g. x > 0, x >= 0, x > 1e-5, or 0 < x, 1e-5 <= x
+                elseif (
+                    (op === :(>) || op === :(>=)) &&
+                    isa(arg2, Real) &&
+                    arg2 >= 0 &&
+                    !(
+                        Meta.isexpr(arg1, :call) && arg1.args[1] in (
+                            :count,
+                            :length,
+                            :size,
+                            :sizeof,
+                            :firstindex,
+                            :lastindex,
+                            :ndims,
+                            :axes,
+                        )
+                    )
+                ) || (
+                    (op === :(<) || op === :(<=)) &&
+                    isa(arg1, Real) &&
+                    arg1 >= 0 &&
+                    !(
+                        Meta.isexpr(arg2, :call) && arg2.args[1] in (
+                            :count,
+                            :length,
+                            :size,
+                            :sizeof,
+                            :firstindex,
+                            :lastindex,
+                            :ndims,
+                            :axes,
+                        )
+                    )
+                )
                     push!(
                         violations,
                         Violation(
@@ -188,8 +240,15 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
 
                 # Check for: typeof(x) == Type or typeof(x) === Type, or Type === typeof(x)
                 if (op === :(==) || op === :(===)) && (
-                    (Meta.isexpr(arg1, :call) && length(arg1.args) >= 1 && (arg1.args[1] === :typeof || arg1.args[1] === :eltype)) ||
-                    (Meta.isexpr(arg2, :call) && length(arg2.args) >= 1 && (arg2.args[1] === :typeof || arg2.args[1] === :eltype))
+                    (
+                        Meta.isexpr(arg1, :call) &&
+                        length(arg1.args) >= 1 &&
+                        (arg1.args[1] === :typeof || arg1.args[1] === :eltype)
+                    ) || (
+                        Meta.isexpr(arg2, :call) &&
+                        length(arg2.args) >= 1 &&
+                        (arg2.args[1] === :typeof || arg2.args[1] === :eltype)
+                    )
                 )
                     push!(
                         violations,
@@ -257,7 +316,9 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
                             ),
                         )
                     end
-                elseif Meta.isexpr(arg, :for) && length(arg.args) >= 2 && Meta.isexpr(arg.args[2], :block)
+                elseif Meta.isexpr(arg, :for) &&
+                    length(arg.args) >= 2 &&
+                    Meta.isexpr(arg.args[2], :block)
                     assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(
                         arg.args[2]
                     )
@@ -272,11 +333,11 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
                                 "Leaf testset contains only $(assert_count) assertion(s); minimum is 2",
                             ),
                         )
+                    end
                 end
             end
         end
     end
-end
 end
 
 function walk_ast(

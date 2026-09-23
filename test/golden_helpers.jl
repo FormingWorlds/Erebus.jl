@@ -57,7 +57,7 @@ function _get_field(container::AbstractDict, k::AbstractString)
     elseif haskey(container, Symbol(k))
         return container[Symbol(k)]
     end
-    error("Key '$k' not found in Dict")
+    return error("Key '$k' not found in Dict")
 end
 
 function _get_field(container::AbstractDict, k::Symbol)
@@ -69,29 +69,38 @@ function _get_field(container::NamedTuple, k::AbstractString)
     if haskey(container, sym)
         return getfield(container, sym)
     end
-    error("Key '$k' not found in NamedTuple")
+    return error("Key '$k' not found in NamedTuple")
 end
 
 function _get_field(container::NamedTuple, k::Symbol)
     return _get_field(container, string(k))
 end
 
-function _compare_field(val_a::Union{AbstractDict,NamedTuple}, val_b::Union{AbstractDict,NamedTuple}, field_name::String)
-    compare_golden(val_a, val_b; prefix=field_name)
+function _compare_field(
+    val_a::Union{AbstractDict,NamedTuple},
+    val_b::Union{AbstractDict,NamedTuple},
+    field_name::String,
+)
+    return compare_golden(val_a, val_b; prefix=field_name)
 end
 
 function _compare_field(val_a::AbstractArray, val_b::AbstractArray, field_name::String)
     if eltype(val_a) !== eltype(val_b)
-        error("Type mismatch for field '$(field_name)': eltype(a) = $(eltype(val_a)), eltype(b) = $(eltype(val_b))")
+        error(
+            "Type mismatch for field '$(field_name)': eltype(a) = $(eltype(val_a)), eltype(b) = $(eltype(val_b))",
+        )
     end
     if size(val_a) != size(val_b)
-        error("Size mismatch for field '$(field_name)': size(a) = $(size(val_a)), size(b) = $(size(val_b))")
+        error(
+            "Size mismatch for field '$(field_name)': size(a) = $(size(val_a)), size(b) = $(size(val_b))",
+        )
     end
 
     for idx in eachindex(val_a, val_b)
         elem_a = val_a[idx]
         elem_b = val_b[idx]
-        if elem_a isa Union{AbstractDict,NamedTuple} && elem_b isa Union{AbstractDict,NamedTuple}
+        if elem_a isa Union{AbstractDict,NamedTuple} &&
+            elem_b isa Union{AbstractDict,NamedTuple}
             compare_golden(elem_a, elem_b; prefix="$(field_name)[$(idx)]")
         elseif !_bitwise_equal(elem_a, elem_b)
             error(

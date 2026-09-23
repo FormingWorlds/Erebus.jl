@@ -66,7 +66,7 @@ function generate_manifest()
 
     open(MANIFEST_PATH, "w") do io
         JSON.print(io, manifest, 4)
-        println(io)
+        return println(io)
     end
     println("Successfully generated golden manifest: $MANIFEST_PATH")
     return manifest
@@ -74,7 +74,7 @@ end
 
 function main()
     generate_manifest()
-    exit(0)
+    return exit(0)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

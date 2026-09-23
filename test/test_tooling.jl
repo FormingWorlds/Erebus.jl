@@ -123,7 +123,9 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
         @test length(violations_isa) == 0
 
         # 3. Testset assertion count verification
-        expr_single_assert_testset = Meta.parse("@testset \"Single\" begin @test 1 == 1 end")
+        expr_single_assert_testset = Meta.parse(
+            "@testset \"Single\" begin @test 1 == 1 end"
+        )
         violations_testset = Violation[]
         check_testsets(expr_single_assert_testset, "planted.jl", 80, violations_testset)
         @test length(violations_testset) == 1

@@ -34,7 +34,9 @@ function check_determinism()
 
         try
             compare_golden(state1, state2)
-            println("Bitwise determinism check PASSED: both runs produced identical fields across all markers and grids.")
+            println(
+                "Bitwise determinism check PASSED: both runs produced identical fields across all markers and grids.",
+            )
             return true
         catch err
             println(stderr, "Bitwise determinism check FAILED:")
@@ -47,7 +49,7 @@ end
 
 function main()
     success = check_determinism()
-    exit(success ? 0 : 1)
+    return exit(success ? 0 : 1)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
