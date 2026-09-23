@@ -448,13 +448,13 @@ end
 """
     marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Real)
 
-Compute the effective out-of-plane cylindrical/spherical length `2 * r` for a marker at `(x, y)` relative to planetary center `(xcenter, ycenter)`.
+Compute the effective out-of-plane spherical integration length `2 * r` for a marker at `(x, y)` relative to planetary center `(xcenter, ycenter)`.
 
 # Details
 Throws `DomainError` if any coordinate is non-finite (`NaN` or `Inf`).
 
 # Returns
-- `2 * sqrt((x - xcenter)^2 + (y - ycenter)^2)`: Out-of-plane integration length [m].
+- `2 * hypot(x - xcenter, y - ycenter)`: Out-of-plane integration length [m].
 """
 function marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Real)
     (isfinite(x) && isfinite(y) && isfinite(xcenter) && isfinite(ycenter)) || throw(
@@ -463,7 +463,7 @@ function marker_out_of_plane_length(x::Real, y::Real, xcenter::Real, ycenter::Re
             "Marker coordinates and planetary center must be finite",
         ),
     )
-    return 2.0 * sqrt((x - xcenter)^2 + (y - ycenter)^2)
+    return 2 * hypot(x - xcenter, y - ycenter)
 end
 
 """

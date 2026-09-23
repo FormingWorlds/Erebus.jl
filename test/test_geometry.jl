@@ -1,8 +1,6 @@
 @testset "Geometry" begin
     @testset "setup_staggered_grid_geometry(): metric monotonicity and staggered topology" begin
-        # 1. Grid spacing positivity and scale
-        @test dx > 0.0
-        @test dy > 0.0
+        # 1. Grid spacing scale
         @test isapprox(dx, xsize / (Nx - 1); rtol=1e-12)
         @test isapprox(dy, ysize / (Ny - 1); rtol=1e-12)
 
@@ -332,7 +330,7 @@
     end # testset "apply_insulating_boundary_conditions!()"
 
     @testset "Marker out-of-plane weight" begin
-        # 1. Sanity anchor: uniform-density markers on the shipped seeding lattice inside a disk of radius R.
+        # 1. Uniform-density markers on a regular seeding lattice without jitter inside a disk of radius R.
         # Sum of rho * marker_area * L(r) equals (4/3)*pi*R^3*rho to lattice tolerance 2*dxm/R.
         coords = GridCoordinates(65, 65; xsize=140_000.0, ysize=140_000.0, Nxmc=4, Nymc=4)
         R_planet = 50_000.0
@@ -356,9 +354,8 @@
         exact_3d_disk = (4.0 / 3.0) * pi * R_planet^3 * rho_ref
         @test isapprox(sum_3d_disk, exact_3d_disk; rtol=tol_lattice)
 
-        # 2. Shell 0.9R..R: sum equals (4/3)*pi*(R^3 - (0.9R)^3)*rho to lattice tolerance,
-        # and the ratio to 2D shell mass equals (4/3)*(R^3 - r^3)/(R^2 - r^2) = 1.90175... * R (~1.902R to 1%).
-        # This excludes both uniform (4/3)R (-29.9%) and uniform 2R (+5.2%) errors.
+        # 2. Shell 0.9R..R: sum equals (4/3)*pi*(R^3 - (0.9R)^3)*rho to lattice tolerance.
+        # Ratio to 2D shell mass matches theoretical ratio (4/3)*(R^3 - r^3)/(R^2 - r^2).
         r_inner = 0.9 * R_planet
         sum_3d_shell = 0.0
         sum_2d_shell = 0.0
@@ -380,10 +377,8 @@
         ratio_shell = sum_3d_shell / sum_2d_shell
         expected_ratio = (4.0 / 3.0) * (R_planet^3 - r_inner^3) / (R_planet^2 - r_inner^2)
         @test isapprox(ratio_shell, expected_ratio; rtol=0.01)
-        @test isapprox(ratio_shell / R_planet, 1.902; rtol=0.01)
 
-        # 3. Ring at r = 0.5R: the 3D mass equals the 2D mass times R to 1e-12 (exact).
-        # A uniform 2R error gives 2R, while a uniform (4/3)R error gives (4/3)R.
+        # 3. Rings at fixed radii: 3D mass equals 2D mass times 2*r to 1e-12.
         n_ring = 100
         r_ring = 0.5 * R_planet
         theta_ring = range(0.0, 2.0 * pi; length=n_ring + 1)[1:n_ring]
@@ -400,9 +395,30 @@
         end
         @test isapprox(ring_3d_mass, ring_2d_mass * R_planet; rtol=1e-12)
 
-        # 4. Physical edge cases and non-finite input validation
-        # Marker at the center has out-of-plane length 0
+        r_ring_2 = 0.8 * R_planet
+        ring2_3d_mass = 0.0
+        ring2_2d_mass = 0.0
+        for th in theta_ring
+            x_ring = xc + r_ring_2 * cos(th)
+            y_ring = yc + r_ring_2 * sin(th)
+            ring2_3d_mass +=
+                rho_ref *
+                marker_area(coords) *
+                marker_out_of_plane_length(x_ring, y_ring, xc, yc)
+            ring2_2d_mass += rho_ref * marker_area(coords)
+        end
+        @test isapprox(ring2_3d_mass, ring2_2d_mass * (1.6 * R_planet); rtol=1e-12)
+
+        # 4. Physical edge cases, coordinate ordering, and non-finite input validation
         @test isapprox(marker_out_of_plane_length(xc, yc, xc, yc), 0.0; atol=1e-12)
+        @test isapprox(marker_out_of_plane_length(4.0, 0.0, 1.0, 4.0), 10.0; rtol=1e-12)
+
+        # Type preservation and extreme value handling
+        @test marker_out_of_plane_length(3.0f0, 4.0f0, 0.0f0, 0.0f0) isa Float32
+        @test isapprox(
+            marker_out_of_plane_length(3.0f0, 4.0f0, 0.0f0, 0.0f0), 10.0f0; rtol=1e-6
+        )
+        @test isfinite(marker_out_of_plane_length(1e200, 0.0, 0.0, 0.0))
 
         # Non-finite coordinates throw DomainError
         @test_throws DomainError marker_out_of_plane_length(NaN, yc, xc, yc)
