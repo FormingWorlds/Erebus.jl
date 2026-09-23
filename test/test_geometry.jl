@@ -330,4 +330,93 @@
         Erebus.apply_insulating_boundary_conditions!(t_double)
         @test t_double ≈ t_field
     end # testset "apply_insulating_boundary_conditions!()"
+
+    @testset "Marker out-of-plane weight" begin
+        # 1. Sanity anchor: uniform-density markers on the shipped seeding lattice inside a disk of radius R.
+        # Sum of rho * marker_area * L(r) equals (4/3)*pi*R^3*rho to lattice tolerance 2*dxm/R.
+        coords = GridCoordinates(65, 65; xsize=140_000.0, ysize=140_000.0, Nxmc=4, Nymc=4)
+        R_planet = 50_000.0
+        rho_ref = 3000.0
+        xc, yc = coords.xcenter, coords.ycenter
+        dxm, dym = coords.dxm, coords.dym
+        tol_lattice = 2.0 * dxm / R_planet
+
+        sum_3d_disk = 0.0
+        for jm in 1:coords.Nxm, im in 1:coords.Nym
+            xm = dxm / 2.0 + (jm - 1) * dxm
+            ym = dym / 2.0 + (im - 1) * dym
+            r = sqrt((xm - xc)^2 + (ym - yc)^2)
+            if r <= R_planet
+                sum_3d_disk +=
+                    rho_ref *
+                    marker_area(coords) *
+                    marker_out_of_plane_length(xm, ym, xc, yc)
+            end
+        end
+        exact_3d_disk = (4.0 / 3.0) * pi * R_planet^3 * rho_ref
+        @test isapprox(sum_3d_disk, exact_3d_disk; rtol=tol_lattice)
+
+        # 2. Shell 0.9R..R: sum equals (4/3)*pi*(R^3 - (0.9R)^3)*rho to lattice tolerance,
+        # and the ratio to 2D shell mass equals (4/3)*(R^3 - r^3)/(R^2 - r^2) = 1.90175... * R (~1.902R to 1%).
+        # This excludes both uniform (4/3)R (-29.9%) and uniform 2R (+5.2%) errors.
+        r_inner = 0.9 * R_planet
+        sum_3d_shell = 0.0
+        sum_2d_shell = 0.0
+        for jm in 1:coords.Nxm, im in 1:coords.Nym
+            xm = dxm / 2.0 + (jm - 1) * dxm
+            ym = dym / 2.0 + (im - 1) * dym
+            r = sqrt((xm - xc)^2 + (ym - yc)^2)
+            if r_inner <= r <= R_planet
+                sum_3d_shell +=
+                    rho_ref *
+                    marker_area(coords) *
+                    marker_out_of_plane_length(xm, ym, xc, yc)
+                sum_2d_shell += rho_ref * marker_area(coords)
+            end
+        end
+        exact_3d_shell = (4.0 / 3.0) * pi * (R_planet^3 - r_inner^3) * rho_ref
+        @test isapprox(sum_3d_shell, exact_3d_shell; rtol=tol_lattice)
+
+        ratio_shell = sum_3d_shell / sum_2d_shell
+        expected_ratio = (4.0 / 3.0) * (R_planet^3 - r_inner^3) / (R_planet^2 - r_inner^2)
+        @test isapprox(ratio_shell, expected_ratio; rtol=0.01)
+        @test isapprox(ratio_shell / R_planet, 1.902; rtol=0.01)
+
+        # 3. Ring at r = 0.5R: the 3D mass equals the 2D mass times R to 1e-12 (exact).
+        # A uniform 2R error gives 2R, while a uniform (4/3)R error gives (4/3)R.
+        n_ring = 100
+        r_ring = 0.5 * R_planet
+        theta_ring = range(0.0, 2.0 * pi; length=n_ring + 1)[1:n_ring]
+        ring_3d_mass = 0.0
+        ring_2d_mass = 0.0
+        for th in theta_ring
+            x_ring = xc + r_ring * cos(th)
+            y_ring = yc + r_ring * sin(th)
+            ring_3d_mass +=
+                rho_ref *
+                marker_area(coords) *
+                marker_out_of_plane_length(x_ring, y_ring, xc, yc)
+            ring_2d_mass += rho_ref * marker_area(coords)
+        end
+        @test isapprox(ring_3d_mass, ring_2d_mass * R_planet; rtol=1e-12)
+
+        # 4. Physical edge cases and non-finite input validation
+        # Marker at the center has out-of-plane length 0
+        @test isapprox(marker_out_of_plane_length(xc, yc, xc, yc), 0.0; atol=1e-12)
+
+        # Non-finite coordinates throw DomainError
+        @test_throws DomainError marker_out_of_plane_length(NaN, yc, xc, yc)
+        @test_throws DomainError marker_out_of_plane_length(xc, Inf, xc, yc)
+        @test_throws DomainError marker_out_of_plane_length(xc, yc, -Inf, yc)
+        @test_throws DomainError marker_out_of_plane_length(xc, yc, xc, NaN)
+
+        # Non-square grid marker area: dx*dy/(Nxmc*Nymc)
+        coords_nonsquare = GridCoordinates(
+            33, 65; xsize=100_000.0, ysize=200_000.0, Nxmc=3, Nymc=5
+        )
+        expected_nonsquare_area =
+            (coords_nonsquare.dx * coords_nonsquare.dy) /
+            (coords_nonsquare.Nxmc * coords_nonsquare.Nymc)
+        @test isapprox(marker_area(coords_nonsquare), expected_nonsquare_area; rtol=1e-12)
+    end
 end
