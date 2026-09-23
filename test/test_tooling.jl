@@ -85,6 +85,37 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
         @test length(violations5) == 1
         @test violations5[1].rule === :weak_assert
 
+        # Valid error bound and memory allocation checks do NOT produce weak_assert violations
+        expr_err_bound = Meta.parse("@test rel_diff < 1e-12")
+        violations_err = Violation[]
+        check_weak_asserts(expr_err_bound, "planted.jl", 65, violations_err)
+        @test length(violations_err) == 0
+
+        expr_alloc_bound = Meta.parse("@test alloc_ldiv < 1024")
+        violations_alloc = Violation[]
+        check_weak_asserts(expr_alloc_bound, "planted.jl", 66, violations_alloc)
+        @test length(violations_alloc) == 0
+
+        # Reversed operand checks
+        expr_rev_pos = Meta.parse("@test 0 < speed")
+        violations_rev_pos = Violation[]
+        check_weak_asserts(expr_rev_pos, "planted.jl", 67, violations_rev_pos)
+        @test length(violations_rev_pos) == 1
+        @test violations_rev_pos[1].rule === :weak_assert
+
+        expr_rev_type = Meta.parse("@test Float64 === typeof(val)")
+        violations_rev_type = Violation[]
+        check_weak_asserts(expr_rev_type, "planted.jl", 68, violations_rev_type)
+        @test length(violations_rev_type) == 1
+        @test violations_rev_type[1].rule === :weak_assert
+
+        # Macro kwargs support (e.g. broken=true)
+        expr_broken_float = Meta.parse("@test broken=true x == 1.0")
+        violations_broken = Violation[]
+        check_float_equality(expr_broken_float, "planted.jl", 69, violations_broken)
+        @test length(violations_broken) == 1
+        @test violations_broken[1].rule === :float_equality
+
         # Valid concrete type assert produces zero violations
         expr_isa = Meta.parse("@test res isa NamedTuple")
         violations_isa = Violation[]
@@ -97,5 +128,44 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
         check_testsets(expr_single_assert_testset, "planted.jl", 80, violations_testset)
         @test length(violations_testset) == 1
         @test violations_testset[1].rule === :min_asserts
+
+        # Parameterized testset with single assertion triggers :min_asserts
+        expr_for_testset = Meta.parse("@testset \"Loop\" for i in 1:3 @test i == i end")
+        violations_for_testset = Violation[]
+        check_testsets(expr_for_testset, "planted.jl", 85, violations_for_testset)
+        @test length(violations_for_testset) == 1
+        @test violations_for_testset[1].rule === :min_asserts
+    end
+
+    @testset "GoldenHelpers bitwise comparator self-tests" begin
+        include(joinpath(@__DIR__, "golden_helpers.jl"))
+        using .GoldenHelpers: compare_golden
+
+        # Identical NamedTuples match
+        nt1 = (; a=1.0, b=[2.0, NaN], c="test")
+        nt2 = (; a=1.0, b=[2.0, NaN], c="test")
+        @test compare_golden(nt1, nt2) == true
+
+        # NamedTuple vs Dict with same string/symbol keys matches
+        dict_rep = Dict("a" => 1.0, "b" => [2.0, NaN], "c" => "test")
+        @test compare_golden(nt1, dict_rep) == true
+        @test compare_golden(dict_rep, nt1) == true
+
+        # Key set mismatch throws
+        dict_mismatch = Dict("a" => 1.0, "b" => [2.0, NaN])
+        @test_throws ErrorException compare_golden(nt1, dict_mismatch)
+
+        # Array size mismatch throws
+        nt_size_mismatch = (; a=1.0, b=[2.0], c="test")
+        @test_throws ErrorException compare_golden(nt1, nt_size_mismatch)
+
+        # Array eltype mismatch throws
+        nt_eltype_mismatch = (; a=1.0, b=Float32[2.0, NaN], c="test")
+        @test_throws ErrorException compare_golden(nt1, nt_eltype_mismatch)
+
+        # Signed zero (+0.0 vs -0.0) throws
+        nt_pos_zero = (; z=0.0)
+        nt_neg_zero = (; z=-0.0)
+        @test_throws ErrorException compare_golden(nt_pos_zero, nt_neg_zero)
     end
 end

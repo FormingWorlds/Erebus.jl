@@ -838,18 +838,18 @@ output_*/
 *.jld2
 
 # Temporary script, patch, review and scratch patterns
-patch_*
-patch.jl
-fix_*
-rip_*
-run_*.sh
-wait_*.sh
-*.diff
-*_plan.md
-agents_prompts.txt
-walkthrough.md
-pr_*.txt
-restore.jl
-get_val.jl
+/patch_*
+/patch.jl
+/fix_*
+/rip_*
+/run_*.sh
+/wait_*.sh
+/*.diff
+/*_plan.md
+/agents_prompts.txt
+/walkthrough.md
+/pr_*.txt
+/restore.jl
+/get_val.jl
 /*.log
-.claude/
+/.claude/

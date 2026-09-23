@@ -4084,8 +4084,8 @@ function simulation_loop(
             end
         )...,
         (t_accreted !== nothing ? (; t_accreted) : (;))...,
-        (hcnspo_props !== nothing ? (; hcnspo_props) : (;))...,
-        (redox_props !== nothing ? (; redox_props) : (;))...,
+        (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
+        (redox_props !== nothing ? (; redox_props...) : (;))...,
     )
 
     grids = (;

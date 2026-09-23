@@ -101,12 +101,21 @@ function contains_float_equality(node)
     return false
 end
 
+function get_test_expr(ex)
+    for arg in reverse(ex.args[3:end])
+        if !(Meta.isexpr(arg, :(=)) || Meta.isexpr(arg, :kw))
+            return arg
+        end
+    end
+    return ex.args[end]
+end
+
 function check_float_equality(ex, file::String, line::Int, violations::Vector{Violation})
-    # Look for @test with float equality
+    # Look for @test or @test_broken with float equality
     if Meta.isexpr(ex, :macrocall) && length(ex.args) >= 3
         macroname = ex.args[1]
-        if macroname === Symbol("@test")
-            test_arg = ex.args[3]
+        if macroname in (Symbol("@test"), Symbol("@test_broken"))
+            test_arg = get_test_expr(ex)
             if contains_float_equality(test_arg)
                 push!(
                     violations,
@@ -125,8 +134,8 @@ end
 function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Violation})
     if Meta.isexpr(ex, :macrocall) && length(ex.args) >= 3
         macroname = ex.args[1]
-        if macroname === Symbol("@test")
-            test_arg = ex.args[3]
+        if macroname in (Symbol("@test"), Symbol("@test_broken"))
+            test_arg = get_test_expr(ex)
             # Check for: x !== nothing, x != nothing
             if Meta.isexpr(test_arg, :call) && length(test_arg.args) == 3
                 op = test_arg.args[1]
@@ -144,17 +153,12 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                         ),
                     )
                 end
-                # Check for: length(x) > 0 or length(x) >= 1
+                # Check for: length(x) > 0 or length(x) >= 1 (or 0 < length(x), 1 <= length(x))
                 if (
-                    op === :(>) &&
-                    Meta.isexpr(arg1, :call) &&
-                    arg1.args[1] === :length &&
-                    arg2 == 0
-                ) || (
-                    op === :(>=) &&
-                    Meta.isexpr(arg1, :call) &&
-                    arg1.args[1] === :length &&
-                    arg2 == 1
+                    (op === :(>) && Meta.isexpr(arg1, :call) && arg1.args[1] === :length && arg2 == 0) ||
+                    (op === :(>=) && Meta.isexpr(arg1, :call) && arg1.args[1] === :length && arg2 == 1) ||
+                    (op === :(<) && Meta.isexpr(arg2, :call) && arg2.args[1] === :length && arg1 == 0) ||
+                    (op === :(<=) && Meta.isexpr(arg2, :call) && arg2.args[1] === :length && arg1 == 1)
                 )
                     push!(
                         violations,
@@ -165,11 +169,12 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             "Weak assertion testing `length(x) > 0`",
                         ),
                     )
-                    # Check for bare positivity or comparison against numeric threshold: @test x > 0, @test x >= 0, @test x < 100, etc.
-                elseif (op === :(>) || op === :(>=) || op === :(<) || op === :(<=)) &&
-                    (isa(arg2, Real) || isa(arg1, Real)) &&
-                    !(Meta.isexpr(arg1, :call) && arg1.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)) &&
-                    !(Meta.isexpr(arg2, :call) && arg2.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes))
+                # Check for bare positivity or comparison against numeric threshold:
+                # e.g. x > 0, x >= 0, x > 1e-5, or 0 < x, 1e-5 <= x
+                elseif ((op === :(>) || op === :(>=)) && isa(arg2, Real) && arg2 >= 0 &&
+                    !(Meta.isexpr(arg1, :call) && arg1.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes))) ||
+                    ((op === :(<) || op === :(<=)) && isa(arg1, Real) && arg1 >= 0 &&
+                    !(Meta.isexpr(arg2, :call) && arg2.args[1] in (:count, :length, :size, :sizeof, :firstindex, :lastindex, :ndims, :axes)))
                     push!(
                         violations,
                         Violation(
@@ -181,11 +186,11 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                     )
                 end
 
-                # Check for: typeof(x) == Type or typeof(x) === Type
-                if (op === :(==) || op === :(===)) &&
-                    Meta.isexpr(arg1, :call) &&
-                    length(arg1.args) >= 1 &&
-                    (arg1.args[1] === :typeof || arg1.args[1] === :eltype)
+                # Check for: typeof(x) == Type or typeof(x) === Type, or Type === typeof(x)
+                if (op === :(==) || op === :(===)) && (
+                    (Meta.isexpr(arg1, :call) && length(arg1.args) >= 1 && (arg1.args[1] === :typeof || arg1.args[1] === :eltype)) ||
+                    (Meta.isexpr(arg2, :call) && length(arg2.args) >= 1 && (arg2.args[1] === :typeof || arg2.args[1] === :eltype))
+                )
                     push!(
                         violations,
                         Violation(
@@ -248,14 +253,30 @@ function check_testsets(ex, file::String, line::Int, violations::Vector{Violatio
                                 file,
                                 line,
                                 :min_asserts,
-                                "Testset contains fewer than 2 assertions (contains $assert_count assertion(s); minimum 2 required)",
+                                "Leaf testset contains only $(assert_count) assertion(s); minimum is 2",
                             ),
                         )
                     end
+                elseif Meta.isexpr(arg, :for) && length(arg.args) >= 2 && Meta.isexpr(arg.args[2], :block)
+                    assert_count, has_sub_testsets, throws_count = collect_assertions_in_testset(
+                        arg.args[2]
+                    )
+                    if (assert_count == 1 && throws_count == 0 && !has_sub_testsets) ||
+                        (!has_sub_testsets && assert_count == 0)
+                        push!(
+                            violations,
+                            Violation(
+                                file,
+                                line,
+                                :min_asserts,
+                                "Leaf testset contains only $(assert_count) assertion(s); minimum is 2",
+                            ),
+                        )
                 end
             end
         end
     end
+end
 end
 
 function walk_ast(
