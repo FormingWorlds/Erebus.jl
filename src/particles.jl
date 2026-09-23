@@ -3020,7 +3020,7 @@ function move_markers_rk4!(
     @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
     @unpack_coords coords jmin_vx jmax_vx imin_vx imax_vx jmin_vy jmax_vy imin_vy imax_vy Nx Ny
     @inbounds begin
-        Threads.@threads :static for m in 1:1:marknum
+        Threads.@threads :dynamic for m in 1:1:marknum
             xmm = xmrk4 = xm[m]
             ymm = ymrk4 = ym[m]
             i, j, weights = fix_weights(
@@ -4007,7 +4007,7 @@ function update_marker_stress!(
 )
     Ny, Nx = size(DSXY)
     @unpack_coords coords xp yp x y dx dy
-    @threads :static for m in 1:1:marknum
+    @threads :dynamic for m in 1:1:marknum
         @inbounds i_p, j_p, weights_p = fix_weights(
             xm[m], ym[m], xp_val, yp_val, dx_val, dy_val, 2, Nx-1, 2, Ny-1
         )
@@ -4147,7 +4147,7 @@ function update_marker_temperature!(
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     if timestep == 1
         # interpolate tk2 to markers instead of DT for first time step        
-        @threads :static for m in 1:1:marknum
+        @threads :dynamic for m in 1:1:marknum
             @inbounds i, j, weights = fix_weights(
                 xm[m],
                 ym[m],
@@ -4164,7 +4164,7 @@ function update_marker_temperature!(
         end
     else
         # interpolate and apply DT to markers for subsequent time steps
-        @threads :static for m in 1:1:marknum
+        @threads :dynamic for m in 1:1:marknum
             @inbounds i, j, weights = fix_weights(
                 xm[m],
                 ym[m],
@@ -4217,7 +4217,7 @@ function update_marker_porosity!(
     # update porosity for compaction
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     @inbounds begin
-        @threads :static for m in 1:1:marknum
+        @threads :dynamic for m in 1:1:marknum
             if tm[m] < 3
                 # rocks
                 i, j, weights = fix_weights(
@@ -4296,7 +4296,7 @@ function sink_vented_marker_porosity!(
     thread_mass = zeros(Float64, nthreads)
 
     @inbounds begin
-        @threads :static for m in 1:marknum
+        @threads :dynamic for m in 1:marknum
             if tm[m] < 3
                 i, j, weights = fix_weights(
                     xm[m],
@@ -4420,7 +4420,7 @@ function drain_vented_marker_volatiles!(
     th_S = zeros(Float64, nthreads)
 
     @inbounds begin
-        @threads :static for m in 1:marknum
+        @threads :dynamic for m in 1:marknum
             if tm[m] < 3
                 rho_m = if rhosolid isa Real
                     Float64(rhosolid)
@@ -4634,7 +4634,7 @@ function advance_marker_thermo_porosity_venting!(
     th_S = zeros(Float64, nthreads)
 
     @inbounds begin
-        @threads :static for m in 1:marknum
+        @threads :dynamic for m in 1:marknum
             i, j, weights = fix_weights(
                 xm[m],
                 ym[m],

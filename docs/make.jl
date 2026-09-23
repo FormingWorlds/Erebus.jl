@@ -20,10 +20,11 @@ makedocs(;
     sitename="Erebus.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", nothing) == "true",
-        canonical="https://proteus-framework.org/Erebus.jl/stable/",
+        canonical="https://formingworlds.github.io/Erebus.jl/stable/",
         edit_link="main",
-        size_threshold_warn=600 * 1024,
-        size_threshold=800 * 1024,
+        size_threshold_warn=800 * 1024,
+        size_threshold=1200 * 1024,
+        search_size_threshold_warn=1200 * 1024,
     ),
     pages=[
         "Home" => "index.md",
@@ -95,9 +96,11 @@ makedocs(;
     warnonly=[:cross_references],
 )
 
-deploydocs(;
-    repo="github.com/FormingWorlds/Erebus.jl.git",
-    devbranch="main",
-    push_preview=true,
-    versions=["stable" => "dev", "dev" => "dev"],
-)
+if get(ENV, "CI", nothing) == "true"
+    deploydocs(;
+        repo="github.com/FormingWorlds/Erebus.jl.git",
+        devbranch="main",
+        push_preview=true,
+        versions=["stable" => "dev", "dev" => "dev"],
+    )
+end
