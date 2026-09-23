@@ -161,7 +161,7 @@ $(SIGNATURES)
 
 # Returns
     
-    - nothing
+    - `NamedTuple`: State container `(; markers, grids, atm, timesum, dt, timestep)`.
 """
 function simulation_loop(
     cfg::SimulationConfig=default_config();

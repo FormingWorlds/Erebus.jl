@@ -113,6 +113,12 @@ function _compare_field(val_a::AbstractArray, val_b::AbstractArray, field_name::
 end
 
 function _compare_field(val_a, val_b, field_name::String)
+    if isstructtype(typeof(val_a)) && !isbitstype(typeof(val_a)) && typeof(val_a) === typeof(val_b)
+        for fname in fieldnames(typeof(val_a))
+            _compare_field(getfield(val_a, fname), getfield(val_b, fname), "$(field_name).$(fname)")
+        end
+        return nothing
+    end
     if !_bitwise_equal(val_a, val_b)
         error(
             "Bitwise mismatch in field '$(field_name)':\n" *

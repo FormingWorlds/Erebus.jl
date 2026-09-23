@@ -23,27 +23,54 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
             @test valid_missing == false
             @test length(errors_missing) == 1
 
-            # Planted invalid entry with non-existent number
-            planted_map = joinpath(tmpdir, "planted_map.toml")
-            # Point to an existing doc page and test file, but with an impossible number
-            doc_file = joinpath(tmpdir, "doc.md")
-            test_file = joinpath(tmpdir, "test.jl")
-            write(doc_file, "This page documents speed = 999999.987654321 m/s.\n")
-            write(test_file, "@test speed ≈ 123456.0\n")
-
-            # We create the planted map pointing to these files relative to root dirs
-            open(planted_map, "w") do io
+            # Valid passing map using custom docs_dir and test_dir
+            mock_doc = joinpath(tmpdir, "mock_page.md")
+            mock_test = joinpath(tmpdir, "mock_test.jl")
+            write(mock_doc, "Documented speed = 299792458 m/s.\n")
+            write(mock_test, "@test speed == 299792458\n")
+            valid_map = joinpath(tmpdir, "valid_map.toml")
+            open(valid_map, "w") do io
                 println(io, "[[entry]]")
-                println(io, "page = \"validation/core_geochemistry.md\"")
-                println(io, "number = \"999999999999999.999999999\"")
-                println(io, "test_name = \"test_config.jl\"")
+                println(io, "page = \"mock_page.md\"")
+                println(io, "number = \"299792458\"")
+                println(io, "test_name = \"mock_test.jl\"")
             end
+            valid_res, errors_res = check_doc_numbers(
+                valid_map; docs_dir=tmpdir, test_dir=tmpdir
+            )
+            @test valid_res == true
+            @test isempty(errors_res)
 
-            valid_planted, errors_planted = check_doc_numbers(planted_map)
-            @test valid_planted == false
-            @test length(errors_planted) == 2
-            @test any(occursin("Documentation page", err) for err in errors_planted)
-            @test any(occursin("Test file", err) for err in errors_planted)
+            # Planted invalid entry with non-existent number in existing files
+            planted_map_num = joinpath(tmpdir, "planted_num_map.toml")
+            open(planted_map_num, "w") do io
+                println(io, "[[entry]]")
+                println(io, "page = \"mock_page.md\"")
+                println(io, "number = \"999999999999\"")
+                println(io, "test_name = \"mock_test.jl\"")
+            end
+            valid_p_num, errors_p_num = check_doc_numbers(
+                planted_map_num; docs_dir=tmpdir, test_dir=tmpdir
+            )
+            @test valid_p_num == false
+            @test length(errors_p_num) == 2
+            @test any(occursin("does not contain number", err) for err in errors_p_num)
+
+            # Planted invalid entry with missing documentation and test files
+            missing_file_map = joinpath(tmpdir, "missing_file_map.toml")
+            open(missing_file_map, "w") do io
+                println(io, "[[entry]]")
+                println(io, "page = \"nonexistent_doc.md\"")
+                println(io, "number = \"299792458\"")
+                println(io, "test_name = \"nonexistent_test.jl\"")
+            end
+            valid_mf, errors_mf = check_doc_numbers(
+                missing_file_map; docs_dir=tmpdir, test_dir=tmpdir
+            )
+            @test valid_mf == false
+            @test length(errors_mf) == 2
+            @test any(occursin("Documentation page not found", err) for err in errors_mf)
+            @test any(occursin("Test file not found", err) for err in errors_mf)
         end
     end
 
@@ -96,25 +123,45 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
         check_weak_asserts(expr_alloc_bound, "planted.jl", 66, violations_alloc)
         @test length(violations_alloc) == 0
 
+        # Negativity / zero upper bound assertions
+        expr_neg_zero = Meta.parse("@test x < 0")
+        violations_neg = Violation[]
+        check_weak_asserts(expr_neg_zero, "planted.jl", 67, violations_neg)
+        @test length(violations_neg) == 1
+        @test violations_neg[1].rule === :weak_assert
+
+        expr_neg_zero_f = Meta.parse("@test x <= 0.0")
+        violations_neg_f = Violation[]
+        check_weak_asserts(expr_neg_zero_f, "planted.jl", 68, violations_neg_f)
+        @test length(violations_neg_f) == 1
+        @test violations_neg_f[1].rule === :weak_assert
+
         # Reversed operand checks
         expr_rev_pos = Meta.parse("@test 0 < speed")
         violations_rev_pos = Violation[]
-        check_weak_asserts(expr_rev_pos, "planted.jl", 67, violations_rev_pos)
+        check_weak_asserts(expr_rev_pos, "planted.jl", 69, violations_rev_pos)
         @test length(violations_rev_pos) == 1
         @test violations_rev_pos[1].rule === :weak_assert
 
         expr_rev_type = Meta.parse("@test Float64 === typeof(val)")
         violations_rev_type = Violation[]
-        check_weak_asserts(expr_rev_type, "planted.jl", 68, violations_rev_type)
+        check_weak_asserts(expr_rev_type, "planted.jl", 70, violations_rev_type)
         @test length(violations_rev_type) == 1
         @test violations_rev_type[1].rule === :weak_assert
 
         # Macro kwargs support (e.g. broken=true)
         expr_broken_float = Meta.parse("@test broken=true x == 1.0")
         violations_broken = Violation[]
-        check_float_equality(expr_broken_float, "planted.jl", 69, violations_broken)
+        check_float_equality(expr_broken_float, "planted.jl", 71, violations_broken)
         @test length(violations_broken) == 1
         @test violations_broken[1].rule === :float_equality
+
+        # @test_broken macro support
+        expr_tb_float = Meta.parse("@test_broken x == 1.0")
+        violations_tb = Violation[]
+        check_float_equality(expr_tb_float, "planted.jl", 72, violations_tb)
+        @test length(violations_tb) == 1
+        @test violations_tb[1].rule === :float_equality
 
         # Valid concrete type assert produces zero violations
         expr_isa = Meta.parse("@test res isa NamedTuple")

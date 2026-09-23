@@ -9,4 +9,4 @@
 # [[entry]]
 # page = "validation/terzaghi_consolidation.md"
 # number = "1.0"
-# test_name = "test_terzaghi_benchmark.jl"
+# test_name = "test_numerics.jl"

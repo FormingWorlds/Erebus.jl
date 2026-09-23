@@ -197,7 +197,7 @@
         end
     end
 
-    @testset "Simulation loop return value (§3 and golden harness requirement)" begin
+    @testset "Simulation loop return value and state verification" begin
         mktempdir() do tmpdir
             quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
             cfg = load_config(quick_toml)

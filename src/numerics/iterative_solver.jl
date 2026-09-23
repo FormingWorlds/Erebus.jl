@@ -327,16 +327,30 @@ struct LinearBlockView{T,V<:AbstractVector{T}} <: AbstractArray{T,3}
     stride::Int
     Ny1::Int
     Nx1::Int
+
+    function LinearBlockView(
+        data::V, stride::Int, Ny1::Int, Nx1::Int
+    ) where {T,V<:AbstractVector{T}}
+        expected_len = stride * Ny1 * Nx1
+        length(data) == expected_len || throw(
+            DimensionMismatch(
+                "LinearBlockView: vector length $(length(data)) does not match expected size $stride × $Ny1 × $Nx1 ($expected_len)",
+            ),
+        )
+        return new{T,V}(data, stride, Ny1, Nx1)
+    end
 end
 
 Base.size(A::LinearBlockView) = (A.stride, A.Ny1, A.Nx1)
 Base.IndexStyle(::Type{<:LinearBlockView}) = IndexCartesian()
 
 @inline function Base.getindex(A::LinearBlockView, var::Int, i::Int, j::Int)
+    @boundscheck checkbounds(A, var, i, j)
     @inbounds return A.data[var + A.stride * ((i - 1) + A.Ny1 * (j - 1))]
 end
 
 @inline function Base.setindex!(A::LinearBlockView, val, var::Int, i::Int, j::Int)
+    @boundscheck checkbounds(A, var, i, j)
     @inbounds A.data[var + A.stride * ((i - 1) + A.Ny1 * (j - 1))] = val
 end
 

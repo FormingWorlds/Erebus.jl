@@ -107,12 +107,20 @@ jobs:
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.12'
+      - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
+      - uses: julia-actions/julia-buildpkg@v1
       - name: Check test quality against baseline
         run: julia tools/check_test_quality.jl --check
       - name: Verify literature references
         run: julia tools/verify_references.jl
       - name: Check documentation formatting
         run: julia tools/check_docs_formatting.jl
+      - name: Verify documentation numbers
+        run: julia tools/check_doc_numbers.jl
+      - name: Verify bitwise determinism
+        run: julia -t 1 tools/check_determinism.jl
 
 
 

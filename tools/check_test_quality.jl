@@ -226,6 +226,22 @@ function check_weak_asserts(ex, file::String, line::Int, violations::Vector{Viol
                             :axes,
                         )
                     )
+                ) || (
+                    (op === :(<) || op === :(<=)) &&
+                    isa(arg2, Real) &&
+                    (arg2 == 0 || arg2 == 0.0) &&
+                    !(
+                        Meta.isexpr(arg1, :call) && arg1.args[1] in (
+                            :count,
+                            :length,
+                            :size,
+                            :sizeof,
+                            :firstindex,
+                            :lastindex,
+                            :ndims,
+                            :axes,
+                        )
+                    )
                 )
                     push!(
                         violations,

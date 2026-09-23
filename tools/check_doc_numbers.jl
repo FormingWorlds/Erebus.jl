@@ -19,7 +19,11 @@ Verify each documented number entry against test files and documentation pages.
 # Returns
 - `Tuple{Bool, Vector{String}}`: Status flag and list of validation error messages.
 """
-function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
+function check_doc_numbers(
+    map_path::String=DEFAULT_MAP_PATH;
+    docs_dir::String=DOCS_DIR,
+    test_dir::String=TEST_DIR,
+)
     if !isfile(map_path)
         return false, ["Number map file not found: $map_path"]
     end
@@ -46,7 +50,7 @@ function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
 
         num_str = string(number)
 
-        page_path = joinpath(DOCS_DIR, page)
+        page_path = joinpath(docs_dir, page)
         if !isfile(page_path)
             push!(errors, "Documentation page not found: $page_path (entry $i)")
         else
@@ -59,7 +63,7 @@ function check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
             end
         end
 
-        test_path = joinpath(TEST_DIR, test_name)
+        test_path = joinpath(test_dir, test_name)
         if !isfile(test_path)
             push!(errors, "Test file not found: $test_path (entry $i)")
         else
