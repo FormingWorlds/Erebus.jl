@@ -111,7 +111,7 @@ Mass increments and volatile transfers map between the 2D planar sums and 3D sph
 \Delta M = \sum_m \rho_m A_m L(r_m) \Delta C_m, \quad L(r_m) = 2 r_m, \quad A_m = \Delta x_m \cdot \Delta y_m
 \]
 
-where $\rho_m$ is the marker density, $A_m$ is the marker differential area, and $\Delta C_m$ is the local concentration or phase change increment.
+where $\rho_m$ is the marker density, $A_m$ is the marker differential area, and $\Delta C_m$ is the dimensionless mass fraction or phase change increment.
 
 ### Weighting Limits
 
