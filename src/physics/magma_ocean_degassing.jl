@@ -765,10 +765,19 @@ function degas_magma_ocean_markers!(
         w_S_m = XSm[m] * 1.0e-6
 
         # Supersaturated volatile extraction (evaluating supersaturation in the melt volume, bounded by retention floors)
-        ex_H2O = min(max(0.0, w_H2O_m - ret_H2O), max(0.0, w_H2O_m / F_curr - w_H2O_sat) * F_curr * eff)
-        ex_C = min(max(0.0, w_C_m - ret_C), max(0.0, w_C_m / F_curr - w_C_sat) * F_curr * eff)
-        ex_N = min(max(0.0, w_N_m - ret_N), max(0.0, w_N_m / F_curr - w_N_sat) * F_curr * eff)
-        ex_S = min(max(0.0, w_S_m - ret_S), max(0.0, w_S_m / F_curr - w_S_sat) * F_curr * eff)
+        ex_H2O = min(
+            max(0.0, w_H2O_m - ret_H2O),
+            max(0.0, w_H2O_m / F_curr - w_H2O_sat) * F_curr * eff,
+        )
+        ex_C = min(
+            max(0.0, w_C_m - ret_C), max(0.0, w_C_m / F_curr - w_C_sat) * F_curr * eff
+        )
+        ex_N = min(
+            max(0.0, w_N_m - ret_N), max(0.0, w_N_m / F_curr - w_N_sat) * F_curr * eff
+        )
+        ex_S = min(
+            max(0.0, w_S_m - ret_S), max(0.0, w_S_m / F_curr - w_S_sat) * F_curr * eff
+        )
 
         w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
 

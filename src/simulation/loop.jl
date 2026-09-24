@@ -3429,14 +3429,17 @@ function simulation_loop(
                             continue
                         end
                         f_m = Fm[m]
-                        if (r_sq >= r_degas_sq) && (f_m >= f_thresh || f_m > 0.01) && (f_m > 0.0)
+                        if (r_sq >= r_degas_sq) &&
+                            (f_m >= f_thresh || f_m > 0.01) &&
+                            (f_m > 0.0)
                             w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
                             m_wt = rho_rock * v_m * w3d
                             sum_t_mass += tkm[m] * m_wt
                             sum_degas_mass += m_wt
                         end
                     end
-                    T_melt_ref = sum_degas_mass > 0.0 ? (sum_t_mass / sum_degas_mass) : 1500.0
+                    T_melt_ref =
+                        sum_degas_mass > 0.0 ? (sum_t_mass / sum_degas_mass) : 1500.0
 
                     if cfg.magma_degassing.mode === :dynamic_flux
                         degas_res = degas_magma_ocean_markers!(

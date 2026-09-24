@@ -657,7 +657,9 @@ include("test_helpers.jl")
 
     @testset "PR 1b: MagmaOceanDegassingConfig deprecation and rejection" begin
         # 1. Direct constructor with crystallization_degassing throws ArgumentError
-        @test_throws ArgumentError MagmaOceanDegassingConfig(; crystallization_degassing=true)
+        @test_throws ArgumentError MagmaOceanDegassingConfig(;
+            crystallization_degassing=true
+        )
 
         # 2. TOML parser rejects crystallization_degassing key with descriptive error naming it
         bad_degas_toml = """
@@ -671,7 +673,10 @@ include("test_helpers.jl")
             e
         end
         @test err isa ArgumentError
-        @test occursin("crystallization_degassing has been removed; saturation is evaluated in the melt frame", sprint(showerror, err))
+        @test occursin(
+            "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
+            sprint(showerror, err),
+        )
     end
 
     @testset "SolverConfig Validation, Cross-Validation, and TOML Roundtrip" begin

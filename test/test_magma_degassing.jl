@@ -556,8 +556,22 @@ include("test_helpers.jl")
         XS = [2.0 * S_S]
 
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            Fm_old,
+            XH,
+            XC,
+            XN,
+            XS,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
 
@@ -575,8 +589,22 @@ include("test_helpers.jl")
         XS2 = [2.0 * S_S]
 
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm2, Fm_old2, XH2, XC2, XN2, XS2,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm2,
+            Fm_old2,
+            XH2,
+            XC2,
+            XN2,
+            XS2,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
 
@@ -616,8 +644,22 @@ include("test_helpers.jl")
         XS_1 = [0.0]
 
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm_1, Fm_old_1, XH_1, XC_1, XN_1, XS_1,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm_1,
+            Fm_old_1,
+            XH_1,
+            XC_1,
+            XN_1,
+            XS_1,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
         @test isapprox(XH_1[1], S_H2O; rtol=1e-6)
@@ -631,8 +673,22 @@ include("test_helpers.jl")
         XS_half = [0.0]
 
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm_half, Fm_old_half, XH_half, XC_half, XN_half, XS_half,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm_half,
+            Fm_old_half,
+            XH_half,
+            XC_half,
+            XN_half,
+            XS_half,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
         @test isapprox(XH_half[1], 0.5 * S_H2O; rtol=1e-6)
@@ -668,8 +724,22 @@ include("test_helpers.jl")
             XS = [5000.0]
 
             degas_magma_ocean_markers!(
-                xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
-                1, 1000.0, P_surf, R_p, cfg, T_melt;
+                xm,
+                ym,
+                tm,
+                tkm,
+                Fm,
+                Fm_old,
+                XH,
+                XC,
+                XN,
+                XS,
+                1,
+                1000.0,
+                P_surf,
+                R_p,
+                cfg,
+                T_melt;
                 marker_volume=1.0,
             )
             @test 0.0 <= XH[1] <= X_init
@@ -688,9 +758,22 @@ include("test_helpers.jl")
         XN_zero = [100.0]
         XS_zero = [1000.0]
         res_zero = degas_magma_ocean_markers!(
-            xm_zero, ym_zero, tm_zero, tkm_zero, Fm_zero, Fm_old_zero,
-            XH_zero, XC_zero, XN_zero, XS_zero,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm_zero,
+            ym_zero,
+            tm_zero,
+            tkm_zero,
+            Fm_zero,
+            Fm_old_zero,
+            XH_zero,
+            XC_zero,
+            XN_zero,
+            XS_zero,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
         @test isapprox(XH_zero[1], 2.0; rtol=1e-12)
@@ -704,9 +787,22 @@ include("test_helpers.jl")
         XN_sub = [0.0]
         XS_sub = [0.0]
         res_sub = degas_magma_ocean_markers!(
-            xm_zero, ym_zero, tm_zero, tkm_zero, Fm_sub, Fm_old_sub,
-            XH_sub, XC_sub, XN_sub, XS_sub,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm_zero,
+            ym_zero,
+            tm_zero,
+            tkm_zero,
+            Fm_sub,
+            Fm_old_sub,
+            XH_sub,
+            XC_sub,
+            XN_sub,
+            XS_sub,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
         )
         @test isapprox(XH_sub[1], 0.25 * S_H2O; rtol=1e-12)
@@ -729,11 +825,15 @@ include("test_helpers.jl")
 
         # Negative P_total throws DomainError
         p_normal = Dict{Symbol,Float64}(:H2O => 1.0e4, :CO2 => 9.0e4)
-        @test_throws DomainError Erebus.partial_pressures_to_masses(p_normal, -1.0, col_c, amu)
+        @test_throws DomainError Erebus.partial_pressures_to_masses(
+            p_normal, -1.0, col_c, amu
+        )
 
         # Negative species partial pressure throws DomainError
         p_neg = Dict{Symbol,Float64}(:H2O => -1.0, :CO2 => 1.0e5)
-        @test_throws DomainError Erebus.partial_pressures_to_masses(p_neg, 1.0e5, col_c, amu)
+        @test_throws DomainError Erebus.partial_pressures_to_masses(
+            p_neg, 1.0e5, col_c, amu
+        )
     end
 
     @testset "PR 1b: Retention floor enforcement with linear melt blend" begin
@@ -770,8 +870,22 @@ include("test_helpers.jl")
         XS = [1000.0]
 
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
-            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            Fm_old,
+            XH,
+            XC,
+            XN,
+            XS,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            T_melt;
             marker_volume=1.0,
             retention_cfg=ret_cfg,
         )
@@ -820,8 +934,22 @@ include("test_helpers.jl")
         XN1 = [0.0]
         XS1 = [0.0]
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm1, Fm_old1, XH1, XC1, XN1, XS1,
-            1, 1000.0, P_surf, R_p, cfg, 1500.0;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm1,
+            Fm_old1,
+            XH1,
+            XC1,
+            XN1,
+            XS1,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            1500.0;
             marker_volume=1.0,
         )
         @test isapprox(XH1[1], Fm1[1] * S_1500; rtol=1e-6)
@@ -834,8 +962,22 @@ include("test_helpers.jl")
         XN2 = [0.0]
         XS2 = [0.0]
         degas_magma_ocean_markers!(
-            xm, ym, tm, tkm, Fm2, Fm_old2, XH2, XC2, XN2, XS2,
-            1, 1000.0, P_surf, R_p, cfg, 1200.0;
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm2,
+            Fm_old2,
+            XH2,
+            XC2,
+            XN2,
+            XS2,
+            1,
+            1000.0,
+            P_surf,
+            R_p,
+            cfg,
+            1200.0;
             marker_volume=1.0,
         )
         @test isapprox(XH2[1], Fm2[1] * S_1200; rtol=1e-6)

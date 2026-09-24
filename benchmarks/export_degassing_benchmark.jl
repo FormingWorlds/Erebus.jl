@@ -58,8 +58,22 @@ for F_val in F_sim
     XSm = [0.0]
 
     degas_magma_ocean_markers!(
-        xm, ym, tm, tkm, Fm, Fm_old, XH2Om, XCm, XNm, XSm,
-        1, 1000.0, P_SURF, R_PLANET, cfg, T_MELT_REF;
+        xm,
+        ym,
+        tm,
+        tkm,
+        Fm,
+        Fm_old,
+        XH2Om,
+        XCm,
+        XNm,
+        XSm,
+        1,
+        1000.0,
+        P_SURF,
+        R_PLANET,
+        cfg,
+        T_MELT_REF;
         marker_volume=1.0,
     )
 
@@ -96,6 +110,6 @@ data = Dict(
 )
 
 open(output_path, "w") do f
-    JSON.print(f, data, 2)
+    return JSON.print(f, data, 2)
 end
 println("Exported benchmark data to: $(output_path)")
