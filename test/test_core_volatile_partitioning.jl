@@ -724,4 +724,248 @@ using JLD2
             rm(output_dir; recursive=true, force=true)
         end
     end
+
+    @testset "3D Spherical Volume Weighting for Core Budgets" begin
+        # Shipped grid lattice with 65x65 nodes and 4x4 markers per cell
+        coords = GridCoordinates(65, 65; xsize=140_000.0, ysize=140_000.0, Nxmc=4, Nymc=4)
+        R_planet = 50_000.0
+        R_core = 0.5 * R_planet
+        rho_metal = 7000.0
+        xc, yc = coords.xcenter, coords.ycenter
+        dxm, dym = coords.dxm, coords.dym
+        tol_lattice = 2.0 * dxm / R_core
+
+        xm = Float64[]
+        ym = Float64[]
+        tm = Int[]
+        Xfe_bulk_core = Float64[]
+        Xfe_bulk_shell = Float64[]
+        Xfe_H_m = Float64[]
+        Xfe_C_m = Float64[]
+        Xfe_N_m = Float64[]
+        Xfe_S_m = Float64[]
+
+        r_inner = 0.9 * R_planet
+
+        for jm in 1:coords.Nxm, im in 1:coords.Nym
+            x = dxm / 2.0 + (jm - 1) * dxm
+            y = dym / 2.0 + (im - 1) * dym
+            r = hypot(x - xc, y - yc)
+            if r <= R_planet
+                push!(xm, x)
+                push!(ym, y)
+                push!(tm, 1)
+                push!(Xfe_bulk_core, r <= R_core ? 1.0 : 0.0)
+                push!(Xfe_bulk_shell, (r >= r_inner && r <= R_planet) ? 1.0 : 0.0)
+                push!(Xfe_H_m, 10.0)
+                push!(Xfe_C_m, 200.0)
+                push!(Xfe_N_m, 30.0)
+                push!(Xfe_S_m, 15000.0)
+            end
+        end
+        marknum = length(xm)
+        w3d_m = [marker_out_of_plane_length(xm[m], ym[m], xc, yc) for m in 1:marknum]
+
+        # Test 1: Core of radius 0.5R with metal fraction 1 returns (4/3)*pi*(0.5R)^3*rho_metal
+        exact_core_mass = (4.0 / 3.0) * pi * R_core^3 * rho_metal
+        wrong_core_mass_2d = 2.0 * exact_core_mass
+        budgets_core = compute_core_volatile_budgets(
+            xm,
+            ym,
+            tm,
+            Xfe_bulk_core,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            marknum;
+            coords=coords,
+            w3d_m=w3d_m,
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=R_planet,
+            rho_metal=rho_metal,
+            core_radius_fraction=0.5,
+        )
+        @test isapprox(budgets_core.M_core_metal, exact_core_mass; rtol=tol_lattice)
+        @test abs(budgets_core.M_core_metal - wrong_core_mass_2d) > 0.5 * exact_core_mass
+        @test 1.0e17 < budgets_core.M_core_metal < 1.0e18
+
+        # Test 2: Metal confined to shell 0.9R..R yields metal mass matching analytic shell volume * rho_metal to 1%
+        exact_shell_mass = (4.0 / 3.0) * pi * (R_planet^3 - r_inner^3) * rho_metal
+        # 2D area fraction is (1 - 0.9^2) = 0.19 vs 3D spherical shell fraction (1 - 0.9^3) = 0.271.
+        wrong_shell_mass_2d = (0.19 / 0.271) * exact_shell_mass
+        budgets_shell = compute_core_volatile_budgets(
+            xm,
+            ym,
+            tm,
+            Xfe_bulk_shell,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            marknum;
+            coords=coords,
+            w3d_m=w3d_m,
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=R_planet,
+            rho_metal=rho_metal,
+            core_radius_fraction=0.5,
+        )
+        @test isapprox(budgets_shell.M_total_metal, exact_shell_mass; rtol=0.01)
+        @test abs(budgets_shell.M_total_metal - wrong_shell_mass_2d) >
+            0.1 * exact_shell_mass
+        @test 5.0e17 < budgets_shell.M_total_metal < 2.0e18
+
+        # Test 3: DomainError for rplanet <= 0.0, and zero markers inside planet returns zeros
+        @test_throws DomainError compute_core_volatile_budgets(
+            xm,
+            ym,
+            tm,
+            Xfe_bulk_core,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            marknum;
+            coords=coords,
+            rplanet=-1000.0,
+        )
+        @test_throws DomainError compute_core_volatile_budgets(
+            xm,
+            ym,
+            tm,
+            Xfe_bulk_core,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            marknum;
+            coords=coords,
+            rplanet=0.0,
+        )
+
+        # Empty planet bounds returns zeroed budgets
+        empty_budgets = compute_core_volatile_budgets(
+            [200_000.0],
+            [200_000.0],
+            [1],
+            [1.0],
+            [0.0],
+            [0.0],
+            [0.0],
+            [0.0],
+            1;
+            coords=coords,
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=R_planet,
+        )
+        @test iszero(empty_budgets.M_core_metal)
+        @test iszero(empty_budgets.M_total_metal)
+        @test iszero(empty_budgets.M_core_C)
+        @test iszero(empty_budgets.w_core_C_ppm)
+
+        # DimensionMismatch when w3d_m is shorter than marknum
+        @test_throws DimensionMismatch compute_core_volatile_budgets(
+            xm,
+            ym,
+            tm,
+            Xfe_bulk_core,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            marknum;
+            coords=coords,
+            w3d_m=w3d_m[1:(marknum - 1)],
+            rplanet=R_planet,
+        )
+
+        # Test 4: compute_regional_mineral_modes domain errors, dimension checks, and analytical mass
+        @test_throws DimensionMismatch compute_regional_mineral_modes(
+            xm,
+            ym,
+            tm,
+            fill(1200.0, marknum),
+            Xfe_bulk_core,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            coords=coords,
+            w3d_m=w3d_m[1:(marknum - 1)],
+            rplanet=R_planet,
+        )
+        @test_throws DomainError compute_regional_mineral_modes(
+            xm,
+            ym,
+            tm,
+            fill(1200.0, marknum),
+            Xfe_bulk_core,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            coords=coords,
+            rplanet=-500.0,
+        )
+        @test_throws DomainError compute_regional_mineral_modes(
+            xm,
+            ym,
+            tm,
+            fill(1200.0, marknum),
+            Xfe_bulk_core,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            coords=coords,
+            rplanet=0.0,
+        )
+
+        modes_core = compute_regional_mineral_modes(
+            xm,
+            ym,
+            tm,
+            fill(1200.0, marknum),
+            Xfe_bulk_core,
+            Xfe_S_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            marknum;
+            coords=coords,
+            w3d_m=w3d_m,
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=R_planet,
+            rho_metal=rho_metal,
+            cfg=PhaseTrackingConfig(r_core_norm=0.5, r_mantle_norm=0.85),
+        )
+        @test isapprox(modes_core.M_core_metal, exact_core_mass; rtol=tol_lattice)
+        @test isapprox(modes_core.M_total_metal, exact_core_mass; rtol=tol_lattice)
+        @test iszero(modes_core.M_mantle_metal)
+        @test iszero(modes_core.M_crust_metal)
+
+        empty_modes = compute_regional_mineral_modes(
+            [200_000.0],
+            [200_000.0],
+            [1],
+            [1200.0],
+            [1.0],
+            [0.0],
+            [0.0],
+            [0.0],
+            1;
+            coords=coords,
+            xcenter=xc,
+            ycenter=yc,
+            rplanet=R_planet,
+        )
+        @test iszero(empty_modes.M_total_metal)
+        @test iszero(empty_modes.M_core_metal)
+        @test iszero(empty_modes.M_mantle_metal)
+        @test iszero(empty_modes.M_crust_metal)
+    end
 end

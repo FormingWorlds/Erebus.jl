@@ -484,14 +484,15 @@ $(SIGNATURES)
 - `marknum::Integer`: Marker count
 
 # Keyword Arguments
-- `xcenter::Real`: Planet center x [m] (default: 70000.0)
-- `ycenter::Real`: Planet center y [m] (default: 70000.0)
+- `coords::Union{Nothing,GridCoordinates}`: Grid coordinate geometry struct for marker differential area
+- `w3d_m::Union{Nothing,AbstractVector{<:Real}}`: Precomputed out-of-plane spherical weights [m]
+- `xcenter::Real`: Planet center x [m] (default: coords.xcenter or 70000.0)
+- `ycenter::Real`: Planet center y [m] (default: coords.ycenter or 70000.0)
 - `rplanet::Real`: Planet radius [m] (default: 50000.0)
 - `rho_metal::Real`: Metal density [kg/m^3] (default: 7000.0)
 - `core_radius_fraction::Real`: Fractional radius defining central core region (default: 0.5)
 - `phi_core_threshold::Real`: Metal volume fraction threshold for core membership (default: 0.40)
-- `V_marker::Union{Nothing,Real}`: Explicit marker volume [m³] (default: derived from planetary volume)
-- `use_3d_volume::Bool`: If true (default), use 3D spherical equivalent volume (4/3 π R³); if false, use 2D area (π R²)
+- `V_marker::Union{Nothing,Real}`: Explicit marker cross-sectional area [m²]
 
 # Returns
 - NamedTuple containing:
@@ -521,15 +522,30 @@ function compute_core_volatile_budgets(
     Xfe_N_m::Union{Nothing,AbstractVector{Float64}},
     Xfe_S_m::Union{Nothing,AbstractVector{Float64}},
     marknum::Integer;
-    xcenter::Real=70000.0,
-    ycenter::Real=70000.0,
+    coords::Union{Nothing,GridCoordinates}=nothing,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
+    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
     rplanet::Real=50000.0,
     rho_metal::Real=7000.0,
     core_radius_fraction::Real=0.5,
     phi_core_threshold::Real=0.40,
     V_marker::Union{Nothing,Real}=nothing,
-    use_3d_volume::Bool=true,
 )
+    marknum >= 0 || throw(ArgumentError("marknum must be non-negative, got $marknum"))
+    length(xm) >= marknum || throw(DimensionMismatch("length(xm) must be >= marknum"))
+    length(ym) >= marknum || throw(DimensionMismatch("length(ym) must be >= marknum"))
+    length(tm) >= marknum || throw(DimensionMismatch("length(tm) must be >= marknum"))
+    length(Xfe_bulk) >= marknum ||
+        throw(DimensionMismatch("length(Xfe_bulk) must be >= marknum"))
+    w3d_m !== nothing &&
+        length(w3d_m) < marknum &&
+        throw(DimensionMismatch("length(w3d_m) must be >= marknum"))
+    (rplanet > 0.0 && isfinite(rplanet)) ||
+        throw(DomainError(rplanet, "rplanet must be strictly positive and finite"))
+    (rho_metal > 0.0 && isfinite(rho_metal)) ||
+        throw(DomainError(rho_metal, "rho_metal must be strictly positive and finite"))
+
     M_core_metal = 0.0
     M_core_H = 0.0
     M_core_C = 0.0
@@ -542,40 +558,40 @@ function compute_core_volatile_budgets(
     M_total_N_met = 0.0
     M_total_S_met = 0.0
 
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
     rc_cut = Float64(rplanet) * clamp(Float64(core_radius_fraction), 0.0, 1.0)
     phi_cut = clamp(Float64(phi_core_threshold), 0.0, 1.0)
-    rho_m = max(Float64(rho_metal), 100.0)
+    rho_m = Float64(rho_metal)
 
-    N_planet = 0
-    @inbounds for m in 1:marknum
-        if tm[m] < 3
-            dx = xm[m] - xcenter
-            dy = ym[m] - ycenter
-            if sqrt(dx^2 + dy^2) <= rplanet
+    v_area = if coords !== nothing
+        marker_area(coords)
+    elseif V_marker !== nothing
+        Float64(V_marker)
+    else
+        N_planet = 0
+        @inbounds for m in 1:marknum
+            if tm[m] < 3 && hypot(xm[m] - xc, ym[m] - yc) <= rplanet
                 N_planet += 1
             end
         end
-    end
-
-    r_p = Float64(rplanet)
-    V_tot = use_3d_volume ? (4.0 / 3.0) * pi * r_p^3 : pi * r_p^2
-    V_m = if V_marker !== nothing
-        Float64(V_marker)
-    elseif N_planet > 0
-        V_tot / N_planet
-    else
-        1.0
+        N_planet > 0 ? (pi * Float64(rplanet)^2) / Float64(N_planet) : 0.0
     end
 
     @inbounds for m in 1:marknum
         if tm[m] < 3
-            dx = xm[m] - xcenter
-            dy = ym[m] - ycenter
-            rmark = sqrt(dx^2 + dy^2)
+            dx = xm[m] - xc
+            dy = ym[m] - yc
+            rmark = hypot(dx, dy)
             if rmark <= rplanet
                 fe_frac = Xfe_bulk[m]
                 if fe_frac > 0.0
-                    dM_fe = fe_frac * rho_m * V_m
+                    w3d = if w3d_m !== nothing
+                        Float64(w3d_m[m])
+                    else
+                        marker_out_of_plane_length(xm[m], ym[m], xc, yc)
+                    end
+                    dM_fe = fe_frac * rho_m * (v_area * w3d)
                     dH = Xfe_H_m !== nothing ? dM_fe * (Xfe_H_m[m] * 1.0e-6) : 0.0
                     dC = Xfe_C_m !== nothing ? dM_fe * (Xfe_C_m[m] * 1.0e-6) : 0.0
                     dN = Xfe_N_m !== nothing ? dM_fe * (Xfe_N_m[m] * 1.0e-6) : 0.0
@@ -947,13 +963,14 @@ end
 """
     compute_regional_mineral_modes(
         xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
+        coords=nothing,
+        w3d_m=nothing,
         cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
         rplanet::Real=50000.0,
         xcenter::Real=70000.0,
         ycenter::Real=70000.0,
         rho_metal::Real=7800.0,
         V_marker=nothing,
-        use_3d_volume::Bool=true,
     )
 
 Aggregate modal accessory mineral abundances across planetesimal core, mantle, and crust regions.
@@ -966,6 +983,16 @@ Parameters
 - `Xfe_bulk`: Marker bulk metal volume fraction array [-].
 - `Xfe_S_m, Xfe_C_m, Xfe_N_m`: Marker volatile concentration arrays in metal [ppmw].
 - `marknum`: Number of markers.
+
+Keyword Arguments
+-----------------
+- `coords`: Grid coordinate geometry struct for marker differential area.
+- `w3d_m`: Precomputed out-of-plane spherical weights [m].
+- `cfg`: Phase tracking configuration struct.
+- `rplanet`: Planetesimal radius [m].
+- `xcenter, ycenter`: Planet center coordinates [m].
+- `rho_metal`: Metal density [kg/m³].
+- `V_marker`: Explicit marker cross-sectional area [m²].
 
 Returns
 -------
@@ -981,13 +1008,14 @@ function compute_regional_mineral_modes(
     Xfe_C_m,
     Xfe_N_m,
     marknum;
+    coords::Union{Nothing,GridCoordinates}=nothing,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
     cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
     rplanet::Real=50000.0,
-    xcenter::Real=70000.0,
-    ycenter::Real=70000.0,
+    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
+    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
     rho_metal::Real=7800.0,
     V_marker=nothing,
-    use_3d_volume::Bool=true,
 )
     M_total_metal = 0.0
     M_total_troilite = 0.0
@@ -1030,47 +1058,53 @@ function compute_regional_mineral_modes(
     length(ym) >= marknum || throw(DimensionMismatch("length(ym) must be >= marknum"))
     length(tm) >= marknum || throw(DimensionMismatch("length(tm) must be >= marknum"))
     length(tkm) >= marknum || throw(DimensionMismatch("length(tkm) must be >= marknum"))
+    w3d_m !== nothing &&
+        length(w3d_m) < marknum &&
+        throw(DimensionMismatch("length(w3d_m) must be >= marknum"))
     (cfg.r_core_norm < cfg.r_mantle_norm) ||
         throw(ArgumentError("r_core_norm must be strictly less than r_mantle_norm"))
+    (rplanet > 0.0 && isfinite(rplanet)) ||
+        throw(DomainError(rplanet, "rplanet must be strictly positive and finite"))
+    (rho_metal > 0.0 && isfinite(rho_metal)) ||
+        throw(DomainError(rho_metal, "rho_metal must be strictly positive and finite"))
 
     r_p = Float64(rplanet)
     rc_cut = r_p * clamp(cfg.r_core_norm, 0.0, 1.0)
     rm_cut = r_p * clamp(cfg.r_mantle_norm, 0.0, 1.0)
-    (rho_metal > 0.0 && isfinite(rho_metal)) ||
-        throw(DomainError(rho_metal, "rho_metal must be strictly positive and finite"))
     rho_m = Float64(rho_metal)
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
 
-    N_planet = 0
-    @inbounds for m in 1:marknum
-        if tm[m] < 3
-            dx = xm[m] - xcenter
-            dy = ym[m] - ycenter
-            if sqrt(dx^2 + dy^2) <= rplanet
+    v_area = if coords !== nothing
+        marker_area(coords)
+    elseif V_marker !== nothing
+        Float64(V_marker)
+    else
+        N_planet = 0
+        @inbounds for m in 1:marknum
+            if tm[m] < 3 && hypot(xm[m] - xc, ym[m] - yc) <= rplanet
                 N_planet += 1
             end
         end
-    end
-
-    V_tot = use_3d_volume ? (4.0 / 3.0) * pi * r_p^3 : pi * r_p^2
-    V_m = if V_marker !== nothing
-        Float64(V_marker)
-    elseif N_planet > 0
-        V_tot / N_planet
-    else
-        1.0
+        N_planet > 0 ? (pi * Float64(rplanet)^2) / Float64(N_planet) : 0.0
     end
 
     w_P = cfg.bulk_P_ppm * 1.0e-6
 
     @inbounds for m in 1:marknum
         if tm[m] < 3
-            dx = xm[m] - xcenter
-            dy = ym[m] - ycenter
-            rmark = sqrt(dx^2 + dy^2)
+            dx = xm[m] - xc
+            dy = ym[m] - yc
+            rmark = hypot(dx, dy)
             if rmark <= rplanet
                 fe_frac = Xfe_bulk !== nothing ? Xfe_bulk[m] : 0.0
                 if fe_frac > 0.0
-                    dM_fe = fe_frac * rho_m * V_m
+                    w3d = if w3d_m !== nothing
+                        Float64(w3d_m[m])
+                    else
+                        marker_out_of_plane_length(xm[m], ym[m], xc, yc)
+                    end
+                    dM_fe = fe_frac * rho_m * (v_area * w3d)
                     w_S = Xfe_S_m !== nothing ? Xfe_S_m[m] * 1.0e-6 : 0.0
                     w_C = Xfe_C_m !== nothing ? Xfe_C_m[m] * 1.0e-6 : 0.0
                     w_N = Xfe_N_m !== nothing ? Xfe_N_m[m] * 1.0e-6 : 0.0
