@@ -198,6 +198,7 @@ def check_all_benchmarks() -> int:
         ("benchmarks/generate_volatile_mixture_benchmarks.py", "main"),
         ("benchmarks/generate_multistage_accretion_benchmarks.py", "main"),
         ("benchmarks/generate_lunar_growth_benchmarks.py", "main"),
+        ("benchmarks/generate_degassing_benchmark.py", "main"),
     ]
 
     for bf, func in bench_targets:

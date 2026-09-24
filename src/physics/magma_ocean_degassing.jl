@@ -5,6 +5,49 @@
 using DocStringExtensions
 
 """
+    partial_pressures_to_masses(
+        p_dict::Dict{Symbol,Float64},
+        P_total::Real,
+        col_coeff::Real,
+        amu_dict::Dict{Symbol,Float64}=SPECIES_AMU,
+    )
+
+Convert species partial pressures to atmospheric column masses [kg].
+...
+"""
+function partial_pressures_to_masses(
+    p_dict::Dict{Symbol,Float64},
+    P_total::Real,
+    col_coeff::Real,
+    amu_dict::Dict{Symbol,Float64}=SPECIES_AMU,
+)
+    P_tot = Float64(P_total)
+    col_c = Float64(col_coeff)
+    if P_tot < 0.0
+        throw(DomainError(P_tot, "Total pressure P_total must be non-negative"))
+    end
+    if col_c < 0.0
+        throw(DomainError(col_c, "Column coefficient must be non-negative"))
+    end
+    for (k, v) in p_dict
+        if v < 0.0
+            throw(DomainError(v, "Species partial pressure for $k must be non-negative"))
+        end
+    end
+    if P_tot == 0.0
+        return Dict{Symbol,Float64}(k => 0.0 for k in keys(p_dict))
+    end
+    numerator = sum(p_dict[k] * amu_dict[k] for k in keys(p_dict))
+    mu_bar = numerator / P_tot
+    if mu_bar <= 0.0
+        return Dict{Symbol,Float64}(k => 0.0 for k in keys(p_dict))
+    end
+    return Dict{Symbol,Float64}(
+        k => (p_dict[k] * amu_dict[k] / mu_bar) * col_c for k in keys(p_dict)
+    )
+end
+
+"""
     solve_magma_ocean_volatile_partitioning(
         M_melt::Real,
         M_tot_H::Real,
@@ -548,7 +591,7 @@ species-resolved degassing rates [kg/s].
 - `tm`: Marker material types (tm < 3 for rock).
 - `tkm`: Marker temperatures [K].
 - `Fm`: Current marker silicate melt fractions.
-- `Fm_old`: Previous step marker silicate melt fractions.
+- `Fm_old`: Previous step marker silicate melt fractions (retained for signature compatibility).
 - `XH2Om`: Marker dissolved water mass fractions.
 - `XCm`: Marker dissolved carbon mass fractions.
 - `XNm`: Marker dissolved nitrogen mass fractions.
@@ -558,6 +601,7 @@ species-resolved degassing rates [kg/s].
 - `P_surf`: Current atmospheric surface pressure [Pa].
 - `R_planet`: Planetary surface radius [m].
 - `cfg`: Magma ocean degassing configuration (`MagmaOceanDegassingConfig`).
+- `T_melt_ref`: Reference melt temperature for saturation evaluation [K] (default: 1500.0).
 
 # Keyword Arguments
 - `xcenter`: Planetary center horizontal coordinate [m] (default: 0.0).
@@ -587,7 +631,8 @@ function degas_magma_ocean_markers!(
     dt::Real,
     P_surf::Real,
     R_planet::Real,
-    cfg::MagmaOceanDegassingConfig;
+    cfg::MagmaOceanDegassingConfig,
+    T_melt_ref::Real=1500.0;
     xcenter::Real=0.0,
     ycenter::Real=0.0,
     w3d_m::Union{Nothing,AbstractVector{Float64}}=nothing,
@@ -634,8 +679,21 @@ function degas_magma_ocean_markers!(
     v_m = Float64(marker_volume)
     m_marker = rho_s * v_m
     delta_IW_eff = cfg.redox_coupled ? Float64(delta_IW) : 0.0
-    T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
-    spec_surf = solve_chnos_speciation(psurf_val, T_surf_ref, delta_IW_eff)
+    T_ref = Float64(T_melt_ref)
+    spec_surf = solve_chnos_speciation(psurf_val, T_ref, delta_IW_eff)
+
+    # Evaluate equilibrium solubilities once at surface ambient partial pressures and reference melt temperature
+    S_H2O_wtpct = compute_water_solubility_melt(spec_surf.p_H2O_Pa; As=cfg.water_As)
+    w_H2O_sat = S_H2O_wtpct * 0.01
+
+    S_N_res = compute_nitrogen_solubility_melt(spec_surf.p_N2_Pa, delta_IW_eff)
+    w_N_sat = S_N_res.total_ppm * 1.0e-6
+
+    S_C_res = compute_carbon_solubility_melt(psurf_val, T_ref, delta_IW_eff)
+    w_C_sat = S_C_res.total_ppm * 1.0e-6
+
+    S_S_ppm = compute_sulfur_solubility_melt(spec_surf.p_S2_Pa, T_ref, delta_IW_eff)
+    w_S_sat = S_S_ppm * 1.0e-6
 
     tot_ex_H2O_2D = 0.0
     tot_ex_H2O_3D = 0.0
@@ -666,7 +724,9 @@ function degas_magma_ocean_markers!(
         end
 
         F_curr = Fm[m]
-        F_prev = Fm_old[m]
+        if F_curr <= 0.0
+            continue
+        end
 
         # Check degassing activation
         is_degassing_zone = (r_sq >= r_degas_sq) && (F_curr >= F_thresh || F_curr > 0.01)
@@ -674,49 +734,28 @@ function degas_magma_ocean_markers!(
             continue
         end
 
-        T_m = tkm[m]
-        F_sol_factor = (cfg.crystallization_degassing && F_curr < F_prev) ? F_curr : 1.0
-
-        # Evaluate equilibrium solubilities at surface ambient partial pressures
-        # 1. Water solubility
-        S_H2O_wtpct = compute_water_solubility_melt(spec_surf.p_H2O_Pa)
-        S_H2O_frac = S_H2O_wtpct * 0.01
-        w_H2O_sat = F_sol_factor * S_H2O_frac
-
-        # 2. Nitrogen solubility
-        S_N_res = compute_nitrogen_solubility_melt(spec_surf.p_N2_Pa, delta_IW_eff)
-        w_N_sat = F_sol_factor * (S_N_res.total_ppm * 1.0e-6)
-
-        # 3. Carbon solubility
-        S_C_res = compute_carbon_solubility_melt(psurf_val, T_m, delta_IW_eff)
-        w_C_sat = F_sol_factor * (S_C_res.total_ppm * 1.0e-6)
-
-        # 4. Sulfur solubility
-        S_S_ppm = compute_sulfur_solubility_melt(spec_surf.p_S2_Pa, T_m, delta_IW_eff)
-        w_S_sat = F_sol_factor * (S_S_ppm * 1.0e-6)
-
-        # Retention floors (if enabled)
+        # Retention floor bounds (if enabled)
+        ret_H2O = 0.0
+        ret_C = 0.0
+        ret_N = 0.0
+        ret_S = 0.0
         if retention_cfg !== nothing && retention_cfg.active
             ret_H2O =
                 compute_h2o_retention_floor(
-                    T_m, retention_cfg; F_melt=F_curr, P_val=psurf_val
+                    tkm[m], retention_cfg; F_melt=F_curr, P_val=psurf_val
                 ) * 1.0e-6
             ret_N =
                 compute_nitrogen_retention_floor(
-                    T_m, retention_cfg; F_melt=F_curr, P_val=psurf_val
+                    tkm[m], retention_cfg; F_melt=F_curr, P_val=psurf_val
                 ) * 1.0e-6
             ret_C =
                 compute_carbon_retention_floor(
-                    T_m, retention_cfg; F_melt=F_curr, P_val=psurf_val
+                    tkm[m], retention_cfg; F_melt=F_curr, P_val=psurf_val
                 ) * 1.0e-6
             ret_S =
                 compute_sulfur_retention_floor(
-                    T_m, retention_cfg; F_melt=F_curr, P_val=psurf_val
+                    tkm[m], retention_cfg; F_melt=F_curr, P_val=psurf_val
                 ) * 1.0e-6
-            w_H2O_sat = max(w_H2O_sat, ret_H2O)
-            w_N_sat = max(w_N_sat, ret_N)
-            w_C_sat = max(w_C_sat, ret_C)
-            w_S_sat = max(w_S_sat, ret_S)
         end
 
         # Marker volatile concentrations converted to dimensionless mass fractions
@@ -725,11 +764,11 @@ function degas_magma_ocean_markers!(
         w_N_m = XNm[m] * 1.0e-6
         w_S_m = XSm[m] * 1.0e-6
 
-        # Supersaturated volatile extraction
-        ex_H2O = max(0.0, w_H2O_m - w_H2O_sat) * eff
-        ex_C = max(0.0, w_C_m - w_C_sat) * eff
-        ex_N = max(0.0, w_N_m - w_N_sat) * eff
-        ex_S = max(0.0, w_S_m - w_S_sat) * eff
+        # Supersaturated volatile extraction (evaluating supersaturation in the melt volume, bounded by retention floors)
+        ex_H2O = min(max(0.0, w_H2O_m - ret_H2O), max(0.0, w_H2O_m / F_curr - w_H2O_sat) * F_curr * eff)
+        ex_C = min(max(0.0, w_C_m - ret_C), max(0.0, w_C_m / F_curr - w_C_sat) * F_curr * eff)
+        ex_N = min(max(0.0, w_N_m - ret_N), max(0.0, w_N_m / F_curr - w_N_sat) * F_curr * eff)
+        ex_S = min(max(0.0, w_S_m - ret_S), max(0.0, w_S_m / F_curr - w_S_sat) * F_curr * eff)
 
         w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
 
@@ -799,14 +838,13 @@ function degas_magma_ocean_markers!(
     end
 
     # Thermodynamic gas speciation of degassed volatile mixture
-    T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
     spec_dict = speciate_vented_volatiles(
         tot_ex_H2O_3D,
         tot_ex_C_3D,
         tot_ex_N_3D,
         tot_ex_S_3D,
         psurf_val,
-        T_surf_ref,
+        T_ref,
         delta_IW_eff;
         graphite_saturation=true,
     )

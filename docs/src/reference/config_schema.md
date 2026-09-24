@@ -876,7 +876,7 @@ active = false
 mode = "dynamic_flux"
 F_melt_threshold = 0.40
 degas_depth_fraction = 0.90
-crystallization_degassing = true
+water_As = 0.40
 redox_coupled = true
 efficiency = 1.0
 ```
@@ -887,7 +887,7 @@ efficiency = 1.0
 | `mode` | `Symbol` | `:dynamic_flux` | - | Degassing mode | `:dynamic_flux`, `:equilibrium` |
 | `F_melt_threshold` | `Float64` | `0.40` | - | Silicate melt fraction threshold for active magma ocean degassing | $\in [0, 1]$ |
 | `degas_depth_fraction` | `Float64` | `0.90` | - | Planetary radius fraction above which ascending melt degasses | $\in [0, 1]$ |
-| `crystallization_degassing` | `Bool` | `true` | - | Enable incompatible volatile concentration upon crystallization | `true` / `false` |
+| `water_As` | `Float64` | `0.40` | $\text{wt}\% / \text{MPa}^{0.5}$ | Burnham/Dixon water solubility coefficient | $> 0$ |
 | `redox_coupled` | `Bool` | `true` | - | Couple degassing speciation to local marker redox $\Delta\mathrm{IW}$ state | `true` / `false` |
 | `efficiency` | `Float64` | `1.0` | - | Volatile exsolution kinetics efficiency factor | $\in (0, 1]$ |
 

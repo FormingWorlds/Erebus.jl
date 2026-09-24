@@ -250,7 +250,6 @@ include("test_helpers.jl")
             mode=:dynamic_flux,
             F_melt_threshold=0.40,
             degas_depth_fraction=0.90,
-            crystallization_degassing=true,
             efficiency=1.0,
         )
 
@@ -521,5 +520,324 @@ include("test_helpers.jl")
         # 3. Ring at 0.85R (below degas_depth_fraction) returns zero rates
         @test all(iszero, values(res_deep.rates))
         @test isempty(res_deep.records)
+    end
+
+    @testset "PR 1b: V2 Crystallising marker melt-frame saturation" begin
+        R_p = 50_000.0
+        P_surf = 1.0e5
+        T_melt = 1500.0
+        d_IW = 0.0
+        cfg = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            water_As=0.40,
+            efficiency=1.0,
+        )
+
+        spec = solve_chnos_speciation(P_surf, T_melt, d_IW)
+        p_H2O_MPa = spec.p_H2O_Pa * 1.0e-6
+        S_H2O = cfg.water_As * sqrt(p_H2O_MPa)
+        S_N = compute_nitrogen_solubility_melt(spec.p_N2_Pa, d_IW).total_ppm
+        S_C = compute_carbon_solubility_melt(P_surf, T_melt, d_IW).total_ppm
+        S_S = compute_sulfur_solubility_melt(spec.p_S2_Pa, T_melt, d_IW)
+
+        # 1. Crystallising marker: Fm_old = 0.8 -> Fm = 0.5
+        xm = [0.0]
+        ym = [0.95 * R_p]
+        tm = [2]
+        tkm = [T_melt]
+        Fm = [0.5]
+        Fm_old = [0.8]
+        XH = [2.0 * S_H2O]
+        XC = [2.0 * S_C]
+        XN = [2.0 * S_N]
+        XS = [2.0 * S_S]
+
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+
+        @test isapprox(XH[1] / (Fm[1] * S_H2O), 1.0; rtol=1e-6)
+        @test isapprox(XC[1] / (Fm[1] * S_C), 1.0; rtol=1e-6)
+        @test isapprox(XN[1] / (Fm[1] * S_N), 1.0; rtol=1e-6)
+        @test isapprox(XS[1] / (Fm[1] * S_S), 1.0; rtol=1e-6)
+
+        # 2. Crystallising marker: Fm_old = 0.8 -> Fm = 0.25
+        Fm2 = [0.25]
+        Fm_old2 = [0.8]
+        XH2 = [2.0 * S_H2O]
+        XC2 = [2.0 * S_C]
+        XN2 = [2.0 * S_N]
+        XS2 = [2.0 * S_S]
+
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm2, Fm_old2, XH2, XC2, XN2, XS2,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+
+        @test isapprox(XH2[1] / (Fm2[1] * S_H2O), 1.0; rtol=1e-6)
+        @test isapprox(XC2[1] / (Fm2[1] * S_C), 1.0; rtol=1e-6)
+        @test isapprox(XN2[1] / (Fm2[1] * S_N), 1.0; rtol=1e-6)
+        @test isapprox(XS2[1] / (Fm2[1] * S_S), 1.0; rtol=1e-6)
+    end
+
+    @testset "PR 1b: Steady supersaturated marker" begin
+        R_p = 50_000.0
+        P_surf = 1.0e5
+        T_melt = 1500.0
+        d_IW = 0.0
+        cfg = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            water_As=0.40,
+            efficiency=1.0,
+        )
+
+        spec = solve_chnos_speciation(P_surf, T_melt, d_IW)
+        S_H2O = cfg.water_As * sqrt(spec.p_H2O_Pa * 1.0e-6)
+
+        # 1. Steady fully molten marker: Fm = Fm_old = 1.0 extracts down to S
+        xm = [0.0]
+        ym = [0.95 * R_p]
+        tm = [2]
+        tkm = [T_melt]
+        Fm_1 = [1.0]
+        Fm_old_1 = [1.0]
+        XH_1 = [2.5 * S_H2O]
+        XC_1 = [0.0]
+        XN_1 = [0.0]
+        XS_1 = [0.0]
+
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm_1, Fm_old_1, XH_1, XC_1, XN_1, XS_1,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH_1[1], S_H2O; rtol=1e-6)
+
+        # 2. Steady partially molten marker: Fm = Fm_old = 0.5 with bulk above F*S extracts down to F*S
+        Fm_half = [0.5]
+        Fm_old_half = [0.5]
+        XH_half = [0.75 * S_H2O]
+        XC_half = [0.0]
+        XN_half = [0.0]
+        XS_half = [0.0]
+
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm_half, Fm_old_half, XH_half, XC_half, XN_half, XS_half,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH_half[1], 0.5 * S_H2O; rtol=1e-6)
+    end
+
+    @testset "PR 1b: Physical bounds and skip invariants" begin
+        R_p = 50_000.0
+        P_surf = 1.0e5
+        T_melt = 1500.0
+        cfg = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            water_As=0.40,
+            efficiency=1.0,
+        )
+        spec = solve_chnos_speciation(P_surf, T_melt, 0.0)
+        S_H2O = cfg.water_As * sqrt(spec.p_H2O_Pa * 1.0e-6)
+
+        # Extraction never exceeds bulk inventory for F in {0.011, 0.5, 1.0}
+        for F_val in (0.011, 0.5, 1.0)
+            xm = [0.0]
+            ym = [0.95 * R_p]
+            tm = [2]
+            tkm = [T_melt]
+            Fm = [F_val]
+            Fm_old = [F_val]
+            X_init = 5.0
+            XH = [X_init]
+            XC = [5000.0]
+            XN = [500.0]
+            XS = [5000.0]
+
+            degas_magma_ocean_markers!(
+                xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
+                1, 1000.0, P_surf, R_p, cfg, T_melt;
+                marker_volume=1.0,
+            )
+            @test 0.0 <= XH[1] <= X_init
+            @test isapprox(XH[1], F_val * S_H2O; rtol=1e-6)
+        end
+
+        # F = 0 markers are skipped
+        xm_zero = [0.0]
+        ym_zero = [0.95 * R_p]
+        tm_zero = [2]
+        tkm_zero = [T_melt]
+        Fm_zero = [0.0]
+        Fm_old_zero = [0.0]
+        XH_zero = [2.0]
+        XC_zero = [1000.0]
+        XN_zero = [100.0]
+        XS_zero = [1000.0]
+        res_zero = degas_magma_ocean_markers!(
+            xm_zero, ym_zero, tm_zero, tkm_zero, Fm_zero, Fm_old_zero,
+            XH_zero, XC_zero, XN_zero, XS_zero,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH_zero[1], 2.0; rtol=1e-12)
+        @test all(iszero, values(res_zero.rates))
+
+        # Marker below saturation extracts nothing
+        Fm_sub = [0.5]
+        Fm_old_sub = [0.5]
+        XH_sub = [0.25 * S_H2O]
+        XC_sub = [0.0]
+        XN_sub = [0.0]
+        XS_sub = [0.0]
+        res_sub = degas_magma_ocean_markers!(
+            xm_zero, ym_zero, tm_zero, tkm_zero, Fm_sub, Fm_old_sub,
+            XH_sub, XC_sub, XN_sub, XS_sub,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH_sub[1], 0.25 * S_H2O; rtol=1e-12)
+        @test all(iszero, values(res_sub.rates))
+    end
+
+    @testset "PR 1b: V7 partial_pressures_to_masses and mu_bar guard" begin
+        amu = Erebus.SPECIES_AMU
+        col_c = 1.0e10
+
+        # All-zero partial pressures returns finite zeros (no NaN)
+        p_zeros = Dict{Symbol,Float64}(:H2O => 0.0, :CO2 => 0.0, :N2 => 0.0)
+        m_zero_p0 = Erebus.partial_pressures_to_masses(p_zeros, 0.0, col_c, amu)
+        @test all(iszero, values(m_zero_p0))
+        @test all(isfinite, values(m_zero_p0))
+
+        m_zero_p_pos = Erebus.partial_pressures_to_masses(p_zeros, 1.0e5, col_c, amu)
+        @test all(iszero, values(m_zero_p_pos))
+        @test all(isfinite, values(m_zero_p_pos))
+
+        # Negative P_total throws DomainError
+        p_normal = Dict{Symbol,Float64}(:H2O => 1.0e4, :CO2 => 9.0e4)
+        @test_throws DomainError Erebus.partial_pressures_to_masses(p_normal, -1.0, col_c, amu)
+
+        # Negative species partial pressure throws DomainError
+        p_neg = Dict{Symbol,Float64}(:H2O => -1.0, :CO2 => 1.0e5)
+        @test_throws DomainError Erebus.partial_pressures_to_masses(p_neg, 1.0e5, col_c, amu)
+    end
+
+    @testset "PR 1b: Retention floor enforcement with linear melt blend" begin
+        R_p = 50_000.0
+        P_surf = 1.0e5
+        T_melt = 1500.0
+        cfg = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            water_As=0.40,
+            efficiency=1.0,
+        )
+        ret_cfg = RetentionConfig(;
+            active=true,
+            retention_law=:linear_melt_blend,
+            h2o_retention_ppm=1000.0,
+            carbon_retention_ppm=500.0,
+            nitrogen_retention_ppm=50.0,
+            sulfur_retention_ppm=500.0,
+        )
+
+        # Marker with F = 0.2: retention floor is 1000 * (1 - 0.2) = 800 ppmw = 0.08 wt%
+        xm = [0.0]
+        ym = [0.95 * R_p]
+        tm = [2]
+        tkm = [T_melt]
+        Fm = [0.2]
+        Fm_old = [0.2]
+        XH = [0.20] # 2000 ppm bulk water
+        XC = [1000.0]
+        XN = [100.0]
+        XS = [1000.0]
+
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm, Fm_old, XH, XC, XN, XS,
+            1, 1000.0, P_surf, R_p, cfg, T_melt;
+            marker_volume=1.0,
+            retention_cfg=ret_cfg,
+        )
+
+        expected_ret_floor_wtpct = 1000.0 * (1.0 - 0.2) * 1.0e-4 # 0.08 wt%
+        expected_ret_c_ppm = 500.0 * (1.0 - 0.2) # 400 ppm
+        expected_ret_n_ppm = 50.0 * (1.0 - 0.2)  # 40 ppm
+        expected_ret_s_ppm = 500.0 * (1.0 - 0.2) # 400 ppm
+
+        @test isapprox(XH[1], expected_ret_floor_wtpct; rtol=1e-6)
+        @test isapprox(XC[1], expected_ret_c_ppm; rtol=1e-6)
+        @test isapprox(XN[1], expected_ret_n_ppm; rtol=1e-6)
+        @test isapprox(XS[1], expected_ret_s_ppm; rtol=1e-6)
+    end
+
+    @testset "PR 1b: Reference temperature discrimination" begin
+        R_p = 50_000.0
+        P_surf = 1.0e5
+        d_IW = 0.0
+        cfg = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            water_As=0.40,
+            efficiency=1.0,
+        )
+
+        spec_1500 = solve_chnos_speciation(P_surf, 1500.0, d_IW)
+        S_1500 = cfg.water_As * sqrt(spec_1500.p_H2O_Pa * 1.0e-6)
+
+        spec_1200 = solve_chnos_speciation(P_surf, 1200.0, d_IW)
+        S_1200 = cfg.water_As * sqrt(spec_1200.p_H2O_Pa * 1.0e-6)
+
+        @test !isapprox(S_1500, S_1200; rtol=1e-3)
+
+        # Test at 1500 K
+        xm = [0.0]
+        ym = [0.95 * R_p]
+        tm = [2]
+        tkm = [1800.0]
+        Fm1 = [0.5]
+        Fm_old1 = [0.5]
+        XH1 = [2.0 * S_1500]
+        XC1 = [0.0]
+        XN1 = [0.0]
+        XS1 = [0.0]
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm1, Fm_old1, XH1, XC1, XN1, XS1,
+            1, 1000.0, P_surf, R_p, cfg, 1500.0;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH1[1], Fm1[1] * S_1500; rtol=1e-6)
+
+        # Test at 1200 K
+        Fm2 = [0.5]
+        Fm_old2 = [0.5]
+        XH2 = [2.0 * S_1200]
+        XC2 = [0.0]
+        XN2 = [0.0]
+        XS2 = [0.0]
+        degas_magma_ocean_markers!(
+            xm, ym, tm, tkm, Fm2, Fm_old2, XH2, XC2, XN2, XS2,
+            1, 1000.0, P_surf, R_p, cfg, 1200.0;
+            marker_volume=1.0,
+        )
+        @test isapprox(XH2[1], Fm2[1] * S_1200; rtol=1e-6)
     end
 end
