@@ -1,3 +1,7 @@
+using Test
+using Erebus
+using JLD2
+
 @testset "Simulation" begin
     nplast = 100_000
     yearlength = Erebus.default_config().time.yearlength
@@ -214,6 +218,7 @@
             @test haskey(res, :markers)
             @test haskey(res, :grids)
             @test haskey(res, :atm)
+            @test haskey(res, :transfers)
             @test haskey(res, :timesum)
             @test haskey(res, :dt)
             @test haskey(res, :timestep)
@@ -235,6 +240,76 @@
             dt_sum_s = (dt1_yr + dt2_yr) * cfg.time.yearlength
             initial_timesum = cfg.time.start_time * cfg.time.yearlength
             @test res.timesum ≈ initial_timesum + dt_sum_s rtol=1e-12
+        end
+    end
+
+    @testset "Degassing transfers and 2D water mass conservation" begin
+        mktempdir() do tmpdir
+            cfg_path = joinpath(
+                @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"
+            )
+            cfg = load_config(cfg_path)
+            cfg_run = SimulationConfig(
+                grid=cfg.grid,
+                geometry=cfg.geometry,
+                time=TimeConfig(
+                    dt_initial=cfg.time.dt_initial,
+                    dt_longest=cfg.time.dt_longest,
+                    dtcoefdn=cfg.time.dtcoefdn,
+                    dtcoefup=cfg.time.dtcoefup,
+                    dtstep=cfg.time.dtstep,
+                    dxymax=cfg.time.dxymax,
+                    vpratio=cfg.time.vpratio,
+                    DTmax=cfg.time.DTmax,
+                    start_time=cfg.time.start_time,
+                    endtime=cfg.time.endtime,
+                    start_step=1,
+                    n_steps=2,
+                ),
+                solver=cfg.solver,
+                poroelasticity=cfg.poroelasticity,
+                thermodynamics=cfg.thermodynamics,
+                reaction=cfg.reaction,
+                materials=cfg.materials,
+                output=OutputConfig(output_dir=tmpdir, savematstep=2),
+                disk=cfg.disk,
+                melting=cfg.melting,
+                volatiles=VolatilesConfig(initial_water_wtpct=2.0),
+                magma_degassing=MagmaOceanDegassingConfig(active=true, mode=:dynamic_flux),
+            )
+            res = Erebus.simulation_loop(cfg_run; output_path=tmpdir)
+            @test haskey(res, :transfers)
+            @test res.transfers isa Vector{TransferRecord}
+            degas_h = filter(
+                r -> r.channel === :degassing && r.element === :H, res.transfers
+            )
+            @test !isempty(degas_h)
+            sum_dM2_H = sum(r -> r.dM2, degas_h)
+            @test !iszero(sum_dM2_H)
+
+            coords = GridCoordinates(cfg.grid)
+            Am = marker_area(coords)
+            rho_s = cfg.materials.rhosolidm[1]
+            H_ratio = 2.01588 / 18.01528
+
+            init_data = load_state(joinpath(tmpdir, "output_00000.jld2"))
+            init_XH2O = init_data["XH2Om"]
+            init_tm = init_data["tm"]
+            final_XH2O = res.markers.XH2Om
+
+            delta_H_markers = 0.0
+            for m in 1:length(init_XH2O)
+                if init_tm[m] < 3
+                    w_init = init_XH2O[m] * 0.01
+                    w_final = final_XH2O[m] * 0.01
+                    dw = w_init - w_final
+                    if dw > 0.0
+                        delta_H_markers += dw * (rho_s * Am) * H_ratio
+                    end
+                end
+            end
+
+            @test isapprox(sum_dM2_H, delta_H_markers; rtol=1e-8)
         end
     end
 end

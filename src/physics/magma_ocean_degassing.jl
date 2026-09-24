@@ -560,13 +560,17 @@ species-resolved degassing rates [kg/s].
 - `cfg`: Magma ocean degassing configuration (`MagmaOceanDegassingConfig`).
 
 # Keyword Arguments
+- `xcenter`: Planetary center horizontal coordinate [m] (default: 0.0).
+- `ycenter`: Planetary center vertical coordinate [m] (default: 0.0).
+- `w3d_m`: Optional precomputed out-of-plane spherical integration lengths [m].
 - `rho_solid`: Reference solid rock density [kg/m^3] (default: 3000.0).
 - `marker_volume`: Marker 2D volume / cross-sectional area [m^2].
 - `delta_IW`: Oxygen fugacity offset relative to IW (default: 0.0).
 - `retention_cfg`: Volatile retention configuration (optional).
+- `step`: Simulation step index for TransferRecord provenance (default: 0).
 
 # Returns
-- `Dict{Symbol,Float64}`: Species degassing rates [kg/s].
+- `NamedTuple`: `(; rates, dM_2D, dM_3D, records)` containing species rates [kg/s], 2D planar masses [kg/m], 3D spherical masses [kg], and transfer audit records.
 """
 function degas_magma_ocean_markers!(
     xm::AbstractVector{Float64},
@@ -584,11 +588,15 @@ function degas_magma_ocean_markers!(
     P_surf::Real,
     R_planet::Real,
     cfg::MagmaOceanDegassingConfig;
+    xcenter::Real=0.0,
+    ycenter::Real=0.0,
+    w3d_m::Union{Nothing,AbstractVector{Float64}}=nothing,
     rho_solid::Real=3000.0,
     marker_volume::Real=1.0,
     delta_IW::Real=0.0,
     retention_cfg=nothing,
-)::Dict{Symbol,Float64}
+    step::Int=0,
+)
     empty_rates = Dict{Symbol,Float64}(
         :H2 => 0.0,
         :H2O => 0.0,
@@ -601,10 +609,20 @@ function degas_magma_ocean_markers!(
         :S2 => 0.0,
         :SO2 => 0.0,
     )
+    empty_dM = Dict{Symbol,Float64}(:H => 0.0, :C => 0.0, :N => 0.0, :S => 0.0, :H2O => 0.0)
+    empty_res = (;
+        rates=empty_rates, dM_2D=empty_dM, dM_3D=copy(empty_dM), records=TransferRecord[]
+    )
 
     if !cfg.active || dt <= 0.0 || marknum == 0
-        return empty_rates
+        return empty_res
     end
+
+    (w3d_m === nothing || length(w3d_m) >= marknum) || throw(
+        DimensionMismatch(
+            "length(w3d_m) must be >= marknum (got $(length(w3d_m)), expected $marknum)"
+        ),
+    )
 
     Rp = Float64(R_planet)
     r_degas_sq = (cfg.degas_depth_fraction * Rp)^2
@@ -615,22 +633,34 @@ function degas_magma_ocean_markers!(
     rho_s = Float64(rho_solid)
     v_m = Float64(marker_volume)
     m_marker = rho_s * v_m
-    L_3D = 2.0 * Rp # 2D Cartesian to 3D spherical metric factor
     delta_IW_eff = cfg.redox_coupled ? Float64(delta_IW) : 0.0
     T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
     spec_surf = solve_chnos_speciation(psurf_val, T_surf_ref, delta_IW_eff)
 
-    tot_ex_H2O = 0.0
-    tot_ex_C = 0.0
-    tot_ex_N = 0.0
-    tot_ex_S = 0.0
+    tot_ex_H2O_2D = 0.0
+    tot_ex_H2O_3D = 0.0
+    tot_ex_H_2D = 0.0
+    tot_ex_H_3D = 0.0
+    tot_ex_C_2D = 0.0
+    tot_ex_C_3D = 0.0
+    tot_ex_N_2D = 0.0
+    tot_ex_N_3D = 0.0
+    tot_ex_S_2D = 0.0
+    tot_ex_S_3D = 0.0
+    records = TransferRecord[]
+
+    xc_val = Float64(xcenter)
+    yc_val = Float64(ycenter)
+    h_conv = 2.01588 / 18.01528
 
     @inbounds for m in 1:marknum
         if tm[m] >= 3
             continue
         end
 
-        r_sq = xm[m]^2 + ym[m]^2
+        dx = xm[m] - xc_val
+        dy = ym[m] - yc_val
+        r_sq = dx * dx + dy * dy
         if r_sq > Rp_sq
             continue
         end
@@ -638,7 +668,7 @@ function degas_magma_ocean_markers!(
         F_curr = Fm[m]
         F_prev = Fm_old[m]
 
-        # Check degassing activation: molten magma ocean (F >= F_thresh) or near-surface ascending melt
+        # Check degassing activation
         is_degassing_zone = (r_sq >= r_degas_sq) && (F_curr >= F_thresh || F_curr > 0.01)
         if !is_degassing_zone
             continue
@@ -701,41 +731,80 @@ function degas_magma_ocean_markers!(
         ex_N = max(0.0, w_N_m - w_N_sat) * eff
         ex_S = max(0.0, w_S_m - w_S_sat) * eff
 
+        w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
+
         if ex_H2O > 0.0
             XH2Om[m] = max(0.0, (w_H2O_m - ex_H2O) * 100.0)
-            tot_ex_H2O += ex_H2O * m_marker
+            dM2_h2o = ex_H2O * m_marker
+            dM3_h2o = dM2_h2o * w3d
+            tot_ex_H2O_2D += dM2_h2o
+            tot_ex_H2O_3D += dM3_h2o
+            dM2_h = dM2_h2o * h_conv
+            dM3_h = dM3_h2o * h_conv
+            tot_ex_H_2D += dM2_h
+            tot_ex_H_3D += dM3_h
+            push!(
+                records, TransferRecord(step, :degassing, :H, m, xm[m], ym[m], dM2_h, dM3_h)
+            )
         end
         if ex_C > 0.0
             XCm[m] = max(0.0, (w_C_m - ex_C) * 1.0e6)
-            tot_ex_C += ex_C * m_marker
+            dM2_c = ex_C * m_marker
+            dM3_c = dM2_c * w3d
+            tot_ex_C_2D += dM2_c
+            tot_ex_C_3D += dM3_c
+            push!(
+                records, TransferRecord(step, :degassing, :C, m, xm[m], ym[m], dM2_c, dM3_c)
+            )
         end
         if ex_N > 0.0
             XNm[m] = max(0.0, (w_N_m - ex_N) * 1.0e6)
-            tot_ex_N += ex_N * m_marker
+            dM2_n = ex_N * m_marker
+            dM3_n = dM2_n * w3d
+            tot_ex_N_2D += dM2_n
+            tot_ex_N_3D += dM3_n
+            push!(
+                records, TransferRecord(step, :degassing, :N, m, xm[m], ym[m], dM2_n, dM3_n)
+            )
         end
         if ex_S > 0.0
             XSm[m] = max(0.0, (w_S_m - ex_S) * 1.0e6)
-            tot_ex_S += ex_S * m_marker
+            dM2_s = ex_S * m_marker
+            dM3_s = dM2_s * w3d
+            tot_ex_S_2D += dM2_s
+            tot_ex_S_3D += dM3_s
+            push!(
+                records, TransferRecord(step, :degassing, :S, m, xm[m], ym[m], dM2_s, dM3_s)
+            )
         end
     end
 
-    # Scale 2D extracted mass increments to 3D spherical geometry
-    m_H2O_3D = tot_ex_H2O * L_3D
-    m_C_3D = tot_ex_C * L_3D
-    m_N_3D = tot_ex_N * L_3D
-    m_S_3D = tot_ex_S * L_3D
+    dM_2D = Dict{Symbol,Float64}(
+        :H => tot_ex_H_2D,
+        :C => tot_ex_C_2D,
+        :N => tot_ex_N_2D,
+        :S => tot_ex_S_2D,
+        :H2O => tot_ex_H2O_2D,
+    )
+    dM_3D = Dict{Symbol,Float64}(
+        :H => tot_ex_H_3D,
+        :C => tot_ex_C_3D,
+        :N => tot_ex_N_3D,
+        :S => tot_ex_S_3D,
+        :H2O => tot_ex_H2O_3D,
+    )
 
-    if (m_H2O_3D + m_C_3D + m_N_3D + m_S_3D) == 0.0
-        return empty_rates
+    if (tot_ex_H2O_3D + tot_ex_C_3D + tot_ex_N_3D + tot_ex_S_3D) == 0.0
+        return (; rates=empty_rates, dM_2D=dM_2D, dM_3D=dM_3D, records=records)
     end
 
     # Thermodynamic gas speciation of degassed volatile mixture
     T_surf_ref = max(1000.0, psurf_val > 1.0e5 ? 1500.0 : 1200.0)
     spec_dict = speciate_vented_volatiles(
-        m_H2O_3D,
-        m_C_3D,
-        m_N_3D,
-        m_S_3D,
+        tot_ex_H2O_3D,
+        tot_ex_C_3D,
+        tot_ex_N_3D,
+        tot_ex_S_3D,
         psurf_val,
         T_surf_ref,
         delta_IW_eff;
@@ -748,5 +817,5 @@ function degas_magma_ocean_markers!(
         rates[sp] = mass / dt_val
     end
 
-    return rates
+    return (; rates=rates, dM_2D=dM_2D, dM_3D=dM_3D, records=records)
 end

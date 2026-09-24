@@ -1,6 +1,6 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "20374135f5a9d9c41a1a418993f7c8854d58798f",
+    "commit": "012ac5605bd3e388241a0ded51071b658498fa2b",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
@@ -33,7 +33,7 @@
             "size_bytes": 4257105
         }
     },
-    "generated_at": "2026-09-23T09:58:28Z",
+    "generated_at": "2026-09-24T03:40:05Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }

@@ -4291,7 +4291,7 @@ function sink_vented_marker_porosity!(
     imax_p_val = coords.imax_p
 
     marknum <= 0 && return 0.0
-    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    V_marker = marker_area(coords)
     nthreads = max(Threads.nthreads(), Threads.maxthreadid())
     thread_mass = zeros(Float64, nthreads)
 
@@ -4409,7 +4409,7 @@ function drain_vented_marker_volatiles!(
     imin_p_val = coords.imin_p
     imax_p_val = coords.imax_p
 
-    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    V_marker = marker_area(coords)
     chi = ret_cfg.chi_vent
     dt_val = Float64(dt)
 
@@ -4566,9 +4566,11 @@ $(SIGNATURES)
 - `XSm`: Optional marker dissolved sulfur array [ppmw]
 - `rhosolid`: Reference solid rock density [kg/m³]
 - `Fm`: Optional marker melt fraction array
+- `redox_props`: Optional redox volatile properties
+- `w3d_m`: Optional precomputed out-of-plane spherical integration lengths [m]
 
 # Returns
-- Named tuple with `delta_m_vent` [kg] and `vented_vols` NamedTuple or nothing
+- Named tuple with `delta_m_vent` [kg/m], `delta_m_vent_2d` [kg/m], `delta_m_vent_3d` [kg], `vented_vols` NamedTuple or nothing, and `records::Vector{TransferRecord}`
 """
 function advance_marker_thermo_porosity_venting!(
     xm::AbstractVector{Float64},
@@ -4596,8 +4598,21 @@ function advance_marker_thermo_porosity_venting!(
     rhosolid::Union{Real,AbstractVector{<:Real}}=3000.0,
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
     redox_props=nothing,
+    w3d_m::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
-    marknum <= 0 && return (delta_m_vent=0.0, vented_vols=nothing)
+    (w3d_m === nothing || length(w3d_m) >= marknum) || throw(
+        DimensionMismatch(
+            "length(w3d_m) must be >= marknum (got $(length(w3d_m)), expected $marknum)"
+        ),
+    )
+
+    marknum <= 0 && return (
+        delta_m_vent=0.0,
+        delta_m_vent_2d=0.0,
+        delta_m_vent_3d=0.0,
+        vented_vols=nothing,
+        records=TransferRecord[],
+    )
 
     xp_val = coords.xp
     yp_val = coords.yp
@@ -4608,11 +4623,12 @@ function advance_marker_thermo_porosity_venting!(
     imin_p_val = coords.imin_p
     imax_p_val = coords.imax_p
 
-    V_marker = (coords.xsize * coords.ysize) / Float64(marknum)
+    V_marker = marker_area(coords)
     dt_val = Float64(dt)
     phimin_val = Float64(phimin)
     phimax_val = Float64(phimax)
     rhofluid_val = Float64(rhofluidcur)
+    h_conv = 2.01588 / 18.01528
 
     venting_active = venting && S_vent_grid !== nothing
     drain_volatiles =
@@ -4627,11 +4643,17 @@ function advance_marker_thermo_porosity_venting!(
     chi = drain_volatiles ? ret_cfg.chi_vent : 0.0
 
     nthreads = max(Threads.nthreads(), Threads.maxthreadid())
-    th_vent = zeros(Float64, nthreads)
-    th_H2O = zeros(Float64, nthreads)
-    th_C = zeros(Float64, nthreads)
-    th_N = zeros(Float64, nthreads)
-    th_S = zeros(Float64, nthreads)
+    th_vent_2d = zeros(Float64, nthreads)
+    th_vent_3d = zeros(Float64, nthreads)
+    th_H2O_2d = zeros(Float64, nthreads)
+    th_H2O_3d = zeros(Float64, nthreads)
+    th_C_2d = zeros(Float64, nthreads)
+    th_C_3d = zeros(Float64, nthreads)
+    th_N_2d = zeros(Float64, nthreads)
+    th_N_3d = zeros(Float64, nthreads)
+    th_S_2d = zeros(Float64, nthreads)
+    th_S_3d = zeros(Float64, nthreads)
+    th_records = [TransferRecord[] for _ in 1:nthreads]
 
     @inbounds begin
         @threads :dynamic for m in 1:marknum
@@ -4672,8 +4694,30 @@ function advance_marker_thermo_porosity_venting!(
                         phim[m] = phi_new
                         dphi_actual = phi_old - phi_new
                         tid = Threads.threadid()
+                        w3d = if w3d_m !== nothing
+                            w3d_m[m]
+                        else
+                            2.0 * hypot(xm[m] - coords.xcenter, ym[m] - coords.ycenter)
+                        end
+
                         if dphi_actual > 0.0
-                            th_vent[tid] += rhofluid_val * dphi_actual * V_marker
+                            dm_pore_2d = rhofluid_val * dphi_actual * V_marker
+                            dm_pore_3d = dm_pore_2d * w3d
+                            th_vent_2d[tid] += dm_pore_2d
+                            th_vent_3d[tid] += dm_pore_3d
+                            push!(
+                                th_records[tid],
+                                TransferRecord(
+                                    timestep,
+                                    :venting,
+                                    :H,
+                                    m,
+                                    xm[m],
+                                    ym[m],
+                                    dm_pore_2d * h_conv,
+                                    dm_pore_3d * h_conv,
+                                ),
+                            )
                         end
 
                         if drain_volatiles
@@ -4700,7 +4744,23 @@ function advance_marker_thermo_porosity_venting!(
                                 w_mob = w_cur - w_ret_H2O
                                 dw = w_mob * drain_fraction
                                 XH2Om[m] = w_cur - dw
-                                th_H2O[tid] += (dw * 0.01) * M_marker_rock
+                                dm_h2o_2d = (dw * 0.01) * M_marker_rock
+                                dm_h2o_3d = dm_h2o_2d * w3d
+                                th_H2O_2d[tid] += dm_h2o_2d
+                                th_H2O_3d[tid] += dm_h2o_3d
+                                push!(
+                                    th_records[tid],
+                                    TransferRecord(
+                                        timestep,
+                                        :venting,
+                                        :H,
+                                        m,
+                                        xm[m],
+                                        ym[m],
+                                        dm_h2o_2d * h_conv,
+                                        dm_h2o_3d * h_conv,
+                                    ),
+                                )
                             end
 
                             # Carbon drainage
@@ -4713,7 +4773,23 @@ function advance_marker_thermo_porosity_venting!(
                                     C_mob = C_cur - C_ret_C
                                     dC = C_mob * drain_fraction
                                     XCm[m] = C_cur - dC
-                                    th_C[tid] += (dC * 1.0e-6) * M_marker_rock
+                                    dm_c_2d = (dC * 1.0e-6) * M_marker_rock
+                                    dm_c_3d = dm_c_2d * w3d
+                                    th_C_2d[tid] += dm_c_2d
+                                    th_C_3d[tid] += dm_c_3d
+                                    push!(
+                                        th_records[tid],
+                                        TransferRecord(
+                                            timestep,
+                                            :venting,
+                                            :C,
+                                            m,
+                                            xm[m],
+                                            ym[m],
+                                            dm_c_2d,
+                                            dm_c_3d,
+                                        ),
+                                    )
                                 end
                             end
 
@@ -4727,7 +4803,23 @@ function advance_marker_thermo_porosity_venting!(
                                     C_mob = C_cur - C_ret_N
                                     dC = C_mob * drain_fraction
                                     XNm[m] = C_cur - dC
-                                    th_N[tid] += (dC * 1.0e-6) * M_marker_rock
+                                    dm_n_2d = (dC * 1.0e-6) * M_marker_rock
+                                    dm_n_3d = dm_n_2d * w3d
+                                    th_N_2d[tid] += dm_n_2d
+                                    th_N_3d[tid] += dm_n_3d
+                                    push!(
+                                        th_records[tid],
+                                        TransferRecord(
+                                            timestep,
+                                            :venting,
+                                            :N,
+                                            m,
+                                            xm[m],
+                                            ym[m],
+                                            dm_n_2d,
+                                            dm_n_3d,
+                                        ),
+                                    )
                                 end
                             end
 
@@ -4741,7 +4833,23 @@ function advance_marker_thermo_porosity_venting!(
                                     C_mob = C_cur - C_ret_S
                                     dC = C_mob * drain_fraction
                                     XSm[m] = C_cur - dC
-                                    th_S[tid] += (dC * 1.0e-6) * M_marker_rock
+                                    dm_s_2d = (dC * 1.0e-6) * M_marker_rock
+                                    dm_s_3d = dm_s_2d * w3d
+                                    th_S_2d[tid] += dm_s_2d
+                                    th_S_3d[tid] += dm_s_3d
+                                    push!(
+                                        th_records[tid],
+                                        TransferRecord(
+                                            timestep,
+                                            :venting,
+                                            :S,
+                                            m,
+                                            xm[m],
+                                            ym[m],
+                                            dm_s_2d,
+                                            dm_s_3d,
+                                        ),
+                                    )
                                 end
                             end
 
@@ -4767,23 +4875,46 @@ function advance_marker_thermo_porosity_venting!(
         end
     end
 
-    delta_m_vent = sum(th_vent)
+    delta_m_vent_2d = sum(th_vent_2d)
+    delta_m_vent_3d = sum(th_vent_3d)
     vented_vols = if drain_volatiles
-        m_H2O = sum(th_H2O)
-        m_C = sum(th_C)
-        m_N = sum(th_N)
-        m_S = sum(th_S)
-        m_tot = m_H2O + m_C + m_N + m_S
+        m_H2O_2d = sum(th_H2O_2d)
+        m_H2O_3d = sum(th_H2O_3d)
+        m_C_2d = sum(th_C_2d)
+        m_C_3d = sum(th_C_3d)
+        m_N_2d = sum(th_N_2d)
+        m_N_3d = sum(th_N_3d)
+        m_S_2d = sum(th_S_2d)
+        m_S_3d = sum(th_S_3d)
+        m_tot_2d = m_H2O_2d + m_C_2d + m_N_2d + m_S_2d
+        m_tot_3d = m_H2O_3d + m_C_3d + m_N_3d + m_S_3d
         (
-            M_vent_H2O=m_H2O,
-            M_vent_C=m_C,
-            M_vent_N=m_N,
-            M_vent_S=m_S,
-            M_vent_volatiles_total=m_tot,
+            M_vent_H2O=m_H2O_2d,
+            M_vent_H2O_2d=m_H2O_2d,
+            M_vent_H2O_3d=m_H2O_3d,
+            M_vent_C=m_C_2d,
+            M_vent_C_2d=m_C_2d,
+            M_vent_C_3d=m_C_3d,
+            M_vent_N=m_N_2d,
+            M_vent_N_2d=m_N_2d,
+            M_vent_N_3d=m_N_3d,
+            M_vent_S=m_S_2d,
+            M_vent_S_2d=m_S_2d,
+            M_vent_S_3d=m_S_3d,
+            M_vent_volatiles_total=m_tot_2d,
+            M_vent_volatiles_total_2d=m_tot_2d,
+            M_vent_volatiles_total_3d=m_tot_3d,
         )
     else
         nothing
     end
 
-    return (delta_m_vent=delta_m_vent, vented_vols=vented_vols)
+    total_records = reduce(vcat, th_records)
+    return (
+        delta_m_vent=delta_m_vent_2d,
+        delta_m_vent_2d=delta_m_vent_2d,
+        delta_m_vent_3d=delta_m_vent_3d,
+        vented_vols=vented_vols,
+        records=total_records,
+    )
 end
