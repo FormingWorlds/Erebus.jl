@@ -47,7 +47,6 @@ $(SIGNATURES)
 - `cfg`: Simulation configuration.
 - `delta_m_vent_3d`: 3D-equivalent pore fluid water mass vented from surface Darcy sink [kg].
 - `vented_vols`: Drained mobile mineral volatiles NamedTuple or nothing.
-- `L_3D_equiv`: 3D geometric cross-section factor [m].
 - `dt`: Current timestep [s].
 - `P_surf`: Surface boundary pressure [Pa].
 - `T_surf`: Surface boundary temperature [K].
@@ -67,7 +66,6 @@ function compute_surface_venting_rates(
     cfg::SimulationConfig,
     delta_m_vent_3d::Float64,
     vented_vols,
-    L_3D_equiv::Float64,
     dt::Float64,
     P_surf::Float64,
     T_surf::Float64,
@@ -97,12 +95,52 @@ function compute_surface_venting_rates(
         cfg.retention.venting_drainage_active
     )
     m_pore_H2O = cfg.venting.active ? delta_m_vent_3d : 0.0
-    m_mineral_H2O = drain_on ? vented_vols.M_vent_H2O * L_3D_equiv : 0.0
+    m_mineral_H2O = if drain_on
+        (
+            if hasproperty(vented_vols, :M_vent_H2O_3d)
+                vented_vols.M_vent_H2O_3d
+            else
+                throw(ArgumentError("vented_vols must contain :M_vent_H2O_3d"))
+            end
+        )
+    else
+        0.0
+    end
     m_H2O_step = m_pore_H2O + m_mineral_H2O
 
-    m_C_step = drain_on ? vented_vols.M_vent_C * L_3D_equiv : 0.0
-    m_N_step = drain_on ? vented_vols.M_vent_N * L_3D_equiv : 0.0
-    m_S_step = drain_on ? vented_vols.M_vent_S * L_3D_equiv : 0.0
+    m_C_step = if drain_on
+        (
+            if hasproperty(vented_vols, :M_vent_C_3d)
+                vented_vols.M_vent_C_3d
+            else
+                throw(ArgumentError("vented_vols must contain :M_vent_C_3d"))
+            end
+        )
+    else
+        0.0
+    end
+    m_N_step = if drain_on
+        (
+            if hasproperty(vented_vols, :M_vent_N_3d)
+                vented_vols.M_vent_N_3d
+            else
+                throw(ArgumentError("vented_vols must contain :M_vent_N_3d"))
+            end
+        )
+    else
+        0.0
+    end
+    m_S_step = if drain_on
+        (
+            if hasproperty(vented_vols, :M_vent_S_3d)
+                vented_vols.M_vent_S_3d
+            else
+                throw(ArgumentError("vented_vols must contain :M_vent_S_3d"))
+            end
+        )
+    else
+        0.0
+    end
 
     (m_H2O_step + m_C_step + m_N_step + m_S_step) <= 0.0 && return vent_rates
 
@@ -161,7 +199,7 @@ $(SIGNATURES)
 
 # Returns
     
-    - `NamedTuple`: State container `(; markers, grids, atm, timesum, dt, timestep)`.
+    - `NamedTuple`: State container `(; markers, grids, atm, transfers, timesum, dt, timestep)`.
 """
 function simulation_loop(
     cfg::SimulationConfig=default_config();
@@ -169,7 +207,7 @@ function simulation_loop(
     restart_from::AbstractString=cfg.output.restart_from,
 )
     if cfg.mpi.enable
-        error("Distributed multi-node orchestration for simulation_loop is not supported.")
+        error("Distributed execution of simulation_loop is not available in this release.")
     end
     output_path = endswith(output_path, "/") ? output_path : output_path * "/"
     isdir(output_path) || mkpath(output_path)
@@ -685,7 +723,7 @@ function simulation_loop(
             Xfe_bulk_step_start = zeros(Float64, marknum)
             Xfem_step_start = zeros(Float64, marknum)
         end
-        if cfg.volatiles.active
+        if cfg.volatiles.active || cfg.magma_degassing.active
             if haskey(ckpt, "XH2Om")
                 XH2Om = Vector{Float64}(ckpt["XH2Om"])
                 XCm = Vector{Float64}(ckpt["XCm"])
@@ -818,7 +856,7 @@ function simulation_loop(
             F_extract_m_step_start = zeros(Float64, marknum)
             Fm_step_start = zeros(Float64, marknum)
         end
-        if cfg.volatiles.active
+        if cfg.volatiles.active || cfg.magma_degassing.active
             (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
                 marknum;
                 initial_water_wtpct=cfg.volatiles.initial_water_wtpct,
@@ -1146,12 +1184,17 @@ function simulation_loop(
         barglyphs=BarGlyphs('|', '█', ['▁', '▂', '▃', '▄', '▅', '▆', '▇'], ' ', '|'),
         barlen=10,
     )
+    last_timestep = start_step_val - 1
+    transfer_log = TransferRecord[]
+    w3d_m = [
+        marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
+        m in 1:marknum
+    ]
     if (cfg.output.mode in (:telemetry, :both))
         telemetry_io = init_telemetry(
             output_path, cfg.output.telemetry_file; append=is_restart
         )
     end
-    last_timestep = start_step_val - 1
     try
         for timestep in start_step_val:1:n_steps_val
             last_timestep = timestep
@@ -1552,10 +1595,26 @@ function simulation_loop(
                     Xfem=Xfem,
                     Xfem0=Xfem0,
                     Xfe_bulk=Xfe_bulk,
-                    XH2Om=cfg.volatiles.active ? XH2Om : nothing,
-                    XCm=cfg.volatiles.active ? XCm : nothing,
-                    XNm=cfg.volatiles.active ? XNm : nothing,
-                    XSm=cfg.volatiles.active ? XSm : nothing,
+                    XH2Om=if (cfg.volatiles.active || cfg.magma_degassing.active)
+                        XH2Om
+                    else
+                        nothing
+                    end,
+                    XCm=if (cfg.volatiles.active || cfg.magma_degassing.active)
+                        XCm
+                    else
+                        nothing
+                    end,
+                    XNm=if (cfg.volatiles.active || cfg.magma_degassing.active)
+                        XNm
+                    else
+                        nothing
+                    end,
+                    XSm=if (cfg.volatiles.active || cfg.magma_degassing.active)
+                        XSm
+                    else
+                        nothing
+                    end,
                     Xfe_H_m=Xfe_H_m,
                     Xfe_C_m=Xfe_C_m,
                     Xfe_N_m=Xfe_N_m,
@@ -3272,6 +3331,13 @@ function simulation_loop(
                 Xfem0 .= Xfem
             end
 
+            if length(w3d_m) != marknum
+                w3d_m = [
+                    marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
+                    m in 1:marknum
+                ]
+            end
+
             marker_results = advance_marker_thermo_porosity_venting!(
                 xm,
                 ym,
@@ -3298,35 +3364,281 @@ function simulation_loop(
                 rhosolid=cfg.materials.rhosolidm,
                 Fm=Fm,
                 redox_props=redox_props,
+                w3d_m=w3d_m,
             )
+            append!(transfer_log, marker_results.records)
 
             delta_m_vent = marker_results.delta_m_vent
-            delta_m_vent_3d = 0.0
+            delta_m_vent_3d = marker_results.delta_m_vent_3d
             vented_vols = marker_results.vented_vols
 
             if cfg.venting.active
-                # Area flux geometric scaling: 4πR² / 2πR = 2 * R_planet
-                L_3D_equiv = 2.0 * rplanet_val
-                delta_m_vent_3d = delta_m_vent * L_3D_equiv
                 M_vent_total += delta_m_vent_3d
 
                 if vented_vols !== nothing
-                    M_vent_H2O_total += vented_vols.M_vent_H2O * L_3D_equiv
-                    M_vent_C_total += vented_vols.M_vent_C * L_3D_equiv
-                    M_vent_N_total += vented_vols.M_vent_N * L_3D_equiv
-                    M_vent_S_total += vented_vols.M_vent_S * L_3D_equiv
+                    M_vent_H2O_total += vented_vols.M_vent_H2O_3d
+                    M_vent_C_total += vented_vols.M_vent_C_3d
+                    M_vent_N_total += vented_vols.M_vent_N_3d
+                    M_vent_S_total += vented_vols.M_vent_S_3d
                 end
             end
 
+            # Surface degassing from magma ocean
+            degas_rates =
+                if cfg.magma_degassing.active && XH2Om !== nothing && Fm !== nothing
+                    p_surf_mo =
+                        if (
+                            cfg.atmosphere.active &&
+                            atm_state !== nothing &&
+                            atm_state.P_surf > 0.0
+                        )
+                            atm_state.P_surf
+                        else
+                            P_amb_eff
+                        end
+                    fO2_diw_mo = compute_surface_mean_delta_iw(
+                        redox_props,
+                        tm,
+                        xm,
+                        ym,
+                        marknum,
+                        xcenter_val,
+                        ycenter_val,
+                        rplanet_val,
+                        cfg.volatiles.fO2_delta_IW,
+                    )
+                    v_m = marker_area(coords)
+                    Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
+
+                    if cfg.magma_degassing.mode === :dynamic_flux
+                        degas_res = degas_magma_ocean_markers!(
+                            xm,
+                            ym,
+                            tm,
+                            tkm,
+                            Fm,
+                            Fm_prev,
+                            XH2Om,
+                            XCm,
+                            XNm,
+                            XSm,
+                            marknum,
+                            dt,
+                            p_surf_mo,
+                            rplanet_val,
+                            cfg.magma_degassing;
+                            xcenter=xcenter_val,
+                            ycenter=ycenter_val,
+                            w3d_m=w3d_m,
+                            rho_solid=cfg.materials.rhosolidm[1],
+                            marker_volume=v_m,
+                            delta_IW=fO2_diw_mo,
+                            retention_cfg=cfg.retention,
+                            step=timestep,
+                        )
+                        append!(transfer_log, degas_res.records)
+                        degas_res.rates
+                    elseif cfg.atmosphere.active && atm_state !== nothing
+                        # Equilibrium partitioning mode across molten magma ocean
+                        T_int_val = compute_mean_surface_temperature(
+                            tk1,
+                            coords,
+                            rplanet_val,
+                            xcenter_val,
+                            ycenter_val;
+                            T_default=T_amb,
+                        )
+                        m_melt_tot = 0.0
+                        m_H_melt = 0.0
+                        m_C_melt = 0.0
+                        m_N_melt = 0.0
+                        m_S_melt = 0.0
+                        for m in 1:marknum
+                            if tm[m] < 3 &&
+                                (
+                                    ((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <=
+                                    rplanet_val^2
+                                ) &&
+                                Fm[m] >= cfg.magma_degassing.F_melt_threshold
+                                w3d = if w3d_m !== nothing
+                                    w3d_m[m]
+                                else
+                                    2.0 * hypot(xm[m] - xcenter_val, ym[m] - ycenter_val)
+                                end
+                                m_marker_3d = cfg.materials.rhosolidm[1] * v_m * w3d
+                                m_melt_tot += Fm[m] * m_marker_3d
+                                m_H_melt +=
+                                    (XH2Om[m] * 0.01) * (2.01588 / 18.01528) * m_marker_3d
+                                m_C_melt += (XCm[m] * 1.0e-6) * m_marker_3d
+                                m_N_melt += (XNm[m] * 1.0e-6) * m_marker_3d
+                                m_S_melt += (XSm[m] * 1.0e-6) * m_marker_3d
+                            end
+                        end
+
+                        # Atmospheric elemental inventories
+                        m_H_atm =
+                            get(atm_state.M_atm, :H2, 0.0) * 1.0 +
+                            get(atm_state.M_atm, :H2O, 0.0) * (2.01588 / 18.01528) +
+                            get(atm_state.M_atm, :CH4, 0.0) * (4.03176 / 16.04246) +
+                            get(atm_state.M_atm, :NH3, 0.0) * (3.02382 / 17.03052) +
+                            get(atm_state.M_atm, :H2S, 0.0) * (2.01588 / 34.08088)
+
+                        m_C_atm =
+                            get(atm_state.M_atm, :CO, 0.0) * (12.011 / 28.0101) +
+                            get(atm_state.M_atm, :CO2, 0.0) * (12.011 / 44.0095) +
+                            get(atm_state.M_atm, :CH4, 0.0) * (12.011 / 16.04246)
+
+                        m_N_atm =
+                            get(atm_state.M_atm, :N2, 0.0) * 1.0 +
+                            get(atm_state.M_atm, :NH3, 0.0) * (14.007 / 17.03052)
+
+                        m_S_atm =
+                            get(atm_state.M_atm, :H2S, 0.0) * (32.060 / 34.08088) +
+                            get(atm_state.M_atm, :SO2, 0.0) * (32.060 / 64.066) +
+                            get(atm_state.M_atm, :S2, 0.0) * 1.0
+
+                        m_H_tot = m_H_melt + m_H_atm
+                        m_C_tot = m_C_melt + m_C_atm
+                        m_N_tot = m_N_melt + m_N_atm
+                        m_S_tot = m_S_melt + m_S_atm
+
+                        if m_melt_tot > 0.0 && (m_H_tot + m_C_tot + m_N_tot + m_S_tot) > 0.0
+                            g_surf = GRAVITATIONAL_CONSTANT * M_planet_val / (rplanet_val^2)
+                            sol_eq = solve_magma_ocean_volatile_partitioning(
+                                m_melt_tot,
+                                m_H_tot,
+                                m_C_tot,
+                                m_N_tot,
+                                m_S_tot,
+                                rplanet_val,
+                                g_surf,
+                                T_int_val,
+                                fO2_diw_mo,
+                            )
+
+                            # Deplete molten markers according to residual melt volatile concentration
+                            new_XH2O_wtpct =
+                                (sol_eq.M_melt_H * (18.01528 / 2.01588) / m_melt_tot) *
+                                100.0
+                            new_XC_ppm = (sol_eq.M_melt_C / m_melt_tot) * 1.0e6
+                            new_XN_ppm = (sol_eq.M_melt_N / m_melt_tot) * 1.0e6
+                            new_XS_ppm = (sol_eq.M_melt_S / m_melt_tot) * 1.0e6
+
+                            for m in 1:marknum
+                                if tm[m] < 3 &&
+                                    (
+                                        (
+                                            (xm[m] - xcenter_val)^2 +
+                                            (ym[m] - ycenter_val)^2
+                                        ) <= rplanet_val^2
+                                    ) &&
+                                    Fm[m] >= cfg.magma_degassing.F_melt_threshold
+                                    old_XH2O = XH2Om[m]
+                                    old_XC = XCm[m]
+                                    old_XN = XNm[m]
+                                    old_XS = XSm[m]
+                                    XH2Om[m] = new_XH2O_wtpct
+                                    XCm[m] = new_XC_ppm
+                                    XNm[m] = new_XN_ppm
+                                    XSm[m] = new_XS_ppm
+                                    m_rock_2d = cfg.materials.rhosolidm[1] * v_m
+                                    w3d = if w3d_m !== nothing
+                                        w3d_m[m]
+                                    else
+                                        2.0 * hypot(xm[m] - xcenter_val, ym[m] - ycenter_val)
+                                    end
+                                    if old_XH2O > new_XH2O_wtpct
+                                        dm_h2o_2d =
+                                            (old_XH2O - new_XH2O_wtpct) * 0.01 * m_rock_2d
+                                        dm_h_2d = dm_h2o_2d * (2.01588 / 18.01528)
+                                        push!(
+                                            transfer_log,
+                                            TransferRecord(
+                                                timestep,
+                                                :degassing,
+                                                :H,
+                                                m,
+                                                xm[m],
+                                                ym[m],
+                                                dm_h_2d,
+                                                dm_h_2d * w3d,
+                                            ),
+                                        )
+                                    end
+                                    if old_XC > new_XC_ppm
+                                        dm_c_2d = (old_XC - new_XC_ppm) * 1.0e-6 * m_rock_2d
+                                        push!(
+                                            transfer_log,
+                                            TransferRecord(
+                                                timestep,
+                                                :degassing,
+                                                :C,
+                                                m,
+                                                xm[m],
+                                                ym[m],
+                                                dm_c_2d,
+                                                dm_c_2d * w3d,
+                                            ),
+                                        )
+                                    end
+                                    if old_XN > new_XN_ppm
+                                        dm_n_2d = (old_XN - new_XN_ppm) * 1.0e-6 * m_rock_2d
+                                        push!(
+                                            transfer_log,
+                                            TransferRecord(
+                                                timestep,
+                                                :degassing,
+                                                :N,
+                                                m,
+                                                xm[m],
+                                                ym[m],
+                                                dm_n_2d,
+                                                dm_n_2d * w3d,
+                                            ),
+                                        )
+                                    end
+                                    if old_XS > new_XS_ppm
+                                        dm_s_2d = (old_XS - new_XS_ppm) * 1.0e-6 * m_rock_2d
+                                        push!(
+                                            transfer_log,
+                                            TransferRecord(
+                                                timestep,
+                                                :degassing,
+                                                :S,
+                                                m,
+                                                xm[m],
+                                                ym[m],
+                                                dm_s_2d,
+                                                dm_s_2d * w3d,
+                                            ),
+                                        )
+                                    end
+                                end
+                            end
+
+                            rates = Dict{Symbol,Float64}()
+                            for (sp, m_atm_eq) in sol_eq.M_atm_i
+                                m_atm_cur = get(atm_state.M_atm, sp, 0.0)
+                                rates[sp] = max(0.0, m_atm_eq - m_atm_cur) / dt
+                            end
+                            rates
+                        else
+                            nothing
+                        end
+                    else
+                        nothing
+                    end
+                else
+                    nothing
+                end
+
             if cfg.atmosphere.active && atm_state !== nothing
-                L_3D_equiv = 2.0 * rplanet_val
                 p_surf_val = max(atm_state.P_surf, P_amb_eff)
                 T_surf_val = atm_state.T_surf_eq > 0.0 ? atm_state.T_surf_eq : T_amb
                 vent_rates = compute_surface_venting_rates(
                     cfg,
                     delta_m_vent_3d,
                     vented_vols,
-                    L_3D_equiv,
                     dt,
                     p_surf_val,
                     T_surf_val,
@@ -3352,153 +3664,6 @@ function simulation_loop(
                 T_int_val = compute_mean_surface_temperature(
                     tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
                 )
-
-                degas_rates =
-                    if cfg.magma_degassing.active && XH2Om !== nothing && Fm !== nothing
-                        p_surf_mo = atm_state.P_surf > 0.0 ? atm_state.P_surf : P_amb_eff
-                        fO2_diw_mo = compute_surface_mean_delta_iw(
-                            redox_props,
-                            tm,
-                            xm,
-                            ym,
-                            marknum,
-                            xcenter_val,
-                            ycenter_val,
-                            rplanet_val,
-                            cfg.volatiles.fO2_delta_IW,
-                        )
-                        v_m = (coords.xsize * coords.ysize) / max(1, marknum)
-                        Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
-
-                        if cfg.magma_degassing.mode === :dynamic_flux
-                            degas_magma_ocean_markers!(
-                                xm,
-                                ym,
-                                tm,
-                                tkm,
-                                Fm,
-                                Fm_prev,
-                                XH2Om,
-                                XCm,
-                                XNm,
-                                XSm,
-                                marknum,
-                                dt,
-                                p_surf_mo,
-                                rplanet_val,
-                                cfg.magma_degassing;
-                                rho_solid=cfg.materials.rhosolidm[1],
-                                marker_volume=v_m,
-                                delta_IW=fO2_diw_mo,
-                                retention_cfg=cfg.retention,
-                            )
-                        else
-                            # Equilibrium partitioning mode across molten magma ocean
-                            m_melt_tot = 0.0
-                            m_H_melt = 0.0
-                            m_C_melt = 0.0
-                            m_N_melt = 0.0
-                            m_S_melt = 0.0
-                            m_marker =
-                                cfg.materials.rhosolidm[1] * v_m * (2.0 * rplanet_val)
-                            for m in 1:marknum
-                                if tm[m] < 3 &&
-                                    (
-                                        (
-                                            (xm[m] - xcenter_val)^2 +
-                                            (ym[m] - ycenter_val)^2
-                                        ) <= rplanet_val^2
-                                    ) &&
-                                    Fm[m] >= cfg.magma_degassing.F_melt_threshold
-                                    m_melt_tot += Fm[m] * m_marker
-                                    m_H_melt +=
-                                        (XH2Om[m] * 0.01) * (2.01588 / 18.01528) * m_marker
-                                    m_C_melt += (XCm[m] * 1.0e-6) * m_marker
-                                    m_N_melt += (XNm[m] * 1.0e-6) * m_marker
-                                    m_S_melt += (XSm[m] * 1.0e-6) * m_marker
-                                end
-                            end
-
-                            # Atmospheric elemental inventories
-                            m_H_atm =
-                                get(atm_state.M_atm, :H2, 0.0) * 1.0 +
-                                get(atm_state.M_atm, :H2O, 0.0) * (2.01588 / 18.01528) +
-                                get(atm_state.M_atm, :CH4, 0.0) * (4.03176 / 16.04246) +
-                                get(atm_state.M_atm, :NH3, 0.0) * (3.02382 / 17.03052) +
-                                get(atm_state.M_atm, :H2S, 0.0) * (2.01588 / 34.08088)
-
-                            m_C_atm =
-                                get(atm_state.M_atm, :CO, 0.0) * (12.011 / 28.0101) +
-                                get(atm_state.M_atm, :CO2, 0.0) * (12.011 / 44.0095) +
-                                get(atm_state.M_atm, :CH4, 0.0) * (12.011 / 16.04246)
-
-                            m_N_atm =
-                                get(atm_state.M_atm, :N2, 0.0) * 1.0 +
-                                get(atm_state.M_atm, :NH3, 0.0) * (14.007 / 17.03052)
-
-                            m_S_atm =
-                                get(atm_state.M_atm, :H2S, 0.0) * (32.060 / 34.08088) +
-                                get(atm_state.M_atm, :SO2, 0.0) * (32.060 / 64.066) +
-                                get(atm_state.M_atm, :S2, 0.0) * 1.0
-
-                            m_H_tot = m_H_melt + m_H_atm
-                            m_C_tot = m_C_melt + m_C_atm
-                            m_N_tot = m_N_melt + m_N_atm
-                            m_S_tot = m_S_melt + m_S_atm
-
-                            if m_melt_tot > 0.0 &&
-                                (m_H_tot + m_C_tot + m_N_tot + m_S_tot) > 0.0
-                                g_surf =
-                                    GRAVITATIONAL_CONSTANT * M_planet_val / (rplanet_val^2)
-                                sol_eq = solve_magma_ocean_volatile_partitioning(
-                                    m_melt_tot,
-                                    m_H_tot,
-                                    m_C_tot,
-                                    m_N_tot,
-                                    m_S_tot,
-                                    rplanet_val,
-                                    g_surf,
-                                    T_int_val,
-                                    fO2_diw_mo,
-                                )
-
-                                # Deplete molten markers according to residual melt volatile concentration
-                                new_XH2O_wtpct =
-                                    (sol_eq.M_melt_H * (18.01528 / 2.01588) / m_melt_tot) *
-                                    100.0
-                                new_XC_ppm = (sol_eq.M_melt_C / m_melt_tot) * 1.0e6
-                                new_XN_ppm = (sol_eq.M_melt_N / m_melt_tot) * 1.0e6
-                                new_XS_ppm = (sol_eq.M_melt_S / m_melt_tot) * 1.0e6
-
-                                for m in 1:marknum
-                                    if tm[m] < 3 &&
-                                        (
-                                            (
-                                                (xm[m] - xcenter_val)^2 +
-                                                (ym[m] - ycenter_val)^2
-                                            ) <= rplanet_val^2
-                                        ) &&
-                                        Fm[m] >= cfg.magma_degassing.F_melt_threshold
-                                        XH2Om[m] = new_XH2O_wtpct
-                                        XCm[m] = new_XC_ppm
-                                        XNm[m] = new_XN_ppm
-                                        XSm[m] = new_XS_ppm
-                                    end
-                                end
-
-                                rates = Dict{Symbol,Float64}()
-                                for (sp, m_atm_eq) in sol_eq.M_atm_i
-                                    m_atm_cur = get(atm_state.M_atm, sp, 0.0)
-                                    rates[sp] = max(0.0, m_atm_eq - m_atm_cur) / dt
-                                end
-                                rates
-                            else
-                                nothing
-                            end
-                        end
-                    else
-                        nothing
-                    end
 
                 evolve_coupled_atmosphere_step!(
                     atm_state,
@@ -3536,7 +3701,6 @@ function simulation_loop(
                     end
                 end
             elseif cfg.escape.active
-                L_3D_equiv = 2.0 * rplanet_val
                 R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
                 T_surf_esc = compute_mean_surface_temperature(
                     tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
@@ -3546,7 +3710,6 @@ function simulation_loop(
                     cfg,
                     delta_m_vent_3d,
                     vented_vols,
-                    L_3D_equiv,
                     dt,
                     P_amb_eff,
                     T_surf_esc,
@@ -3751,6 +3914,11 @@ function simulation_loop(
                     resize!(Xfe_S_m_step_start, marknum)
                 end
             end
+
+            w3d_m = [
+                marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
+                m in 1:marknum
+            ]
 
             # ---------------------------------------------------------------------
             # update timesum
@@ -4169,7 +4337,15 @@ function simulation_loop(
         (Q_metric !== nothing ? (; Q_metric) : (;))...,
     )
 
-    return (; markers, grids, atm=atm_state, timesum, dt, timestep=last_timestep)
+    return (;
+        markers,
+        grids,
+        atm=atm_state,
+        transfers=transfer_log,
+        timesum,
+        dt,
+        timestep=last_timestep,
+    )
 end # function simulation loop
 
 """

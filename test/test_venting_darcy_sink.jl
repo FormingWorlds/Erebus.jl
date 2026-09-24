@@ -72,7 +72,8 @@ using StaticArrays
                 # RHS must contain P_vent contribution
                 @test R[kpf] > 0.0
                 # Surface nodes must lie in a shell around rplanet
-                @test 0.5 * rplanet <= r <= 1.2 * rplanet
+                r_max_shell = rplanet * 1.2
+                @test 0.5 * rplanet <= r <= r_max_shell
             else
                 # Deep interior nodes (r < 0.4 * rplanet) must have zero S_vent
                 if r < 0.4 * rplanet
@@ -247,9 +248,9 @@ using StaticArrays
         @test isapprox(phim[1], 0.19; rtol=1e-6)
         @test delta_m_vent > 0.0
 
-        # Total fluid mass drained from markers must equal rho_f * Δϕ * total_volume
-        V_total = xsize * ysize
-        expected_mass = rhofluidcur * (phim0 - 0.19) * V_total
+        # Total fluid mass drained from markers must equal rho_f * Δϕ * total_marker_area
+        total_marker_area = marknum * marker_area(coords)
+        expected_mass = rhofluidcur * (phim0 - 0.19) * total_marker_area
         @test isapprox(delta_m_vent, expected_mass; rtol=1e-4)
 
         # Extreme drainage: porosity must clamp to phimin, not below

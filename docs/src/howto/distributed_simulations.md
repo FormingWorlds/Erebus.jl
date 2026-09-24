@@ -123,4 +123,4 @@ migrated_out, migrated_in = migrate_markers!(topo, xm, ym, material_type)
 
 ## Current Status and Integration Roadmap
 
-The distributed memory primitives in `ErebusMPIExt` implement domain decomposition, halo communication, distributed operator evaluation, and marker migration. Full multi-node orchestration of the top-level time integration loop (`simulation_loop`) for cluster nodes is under active development.
+The distributed memory primitives in `ErebusMPIExt` implement domain decomposition, halo communication, distributed operator evaluation, and marker migration. Full multi-node orchestration of the top-level time integration loop (`simulation_loop`) for cluster nodes is under active development. Passing `cfg.mpi.enable = true` to `simulation_loop` throws an error: `"Distributed execution of simulation_loop is not available in this release."`

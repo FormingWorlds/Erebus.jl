@@ -793,4 +793,205 @@ using TOML
             rm(output_dir; recursive=true, force=true)
         end
     end
+
+    @testset "Channel consistency: mineral drainage vs degassing" begin
+        R_planet = 50000.0
+        xc = 70000.0
+        yc = 70000.0
+        xm = [xc + 0.95 * R_planet]
+        ym = [yc]
+        tm = [1]
+        tkm = [1500.0]
+        phim = [0.0]
+        marknum = 1
+        coords = GridCoordinates(65, 65; xsize=140000.0, ysize=140000.0)
+        Am = marker_area(coords)
+        rho_rock = 3000.0
+        w3d_m = [marker_out_of_plane_length(xm[1], ym[1], xc, yc)]
+        @test isapprox(w3d_m[1], 1.9 * R_planet; rtol=1e-12)
+
+        # 1. Venting mineral drainage decrement
+        XCm_vent = [1000.0]
+        XH2Om_vent = [0.0]
+        DT = zeros(coords.Ny, coords.Nx)
+        tk2 = fill(1500.0, coords.Ny, coords.Nx)
+        APHI = zeros(coords.Ny, coords.Nx)
+        S_vent = fill(1.0e-5, coords.Ny, coords.Nx)
+        ret_cfg = RetentionConfig(
+            active=true,
+            venting_drainage_active=true,
+            carbon_retention_ppm=800.0,
+            chi_vent=1.0,
+        )
+        dt = 1.0e5
+        res_vent = advance_marker_thermo_porosity_venting!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            phim,
+            DT,
+            tk2,
+            APHI,
+            dt,
+            1,
+            marknum;
+            coords=coords,
+            phimin=0.0,
+            venting=true,
+            S_vent_grid=S_vent,
+            rhofluidcur=1000.0,
+            ret_cfg=ret_cfg,
+            XH2Om=XH2Om_vent,
+            XCm=XCm_vent,
+            rhosolid=rho_rock,
+            w3d_m=w3d_m,
+        )
+
+        dC_vent = 1000.0 - XCm_vent[1]
+        rec_vent = filter(r -> r.channel === :venting && r.element === :C, res_vent.records)
+        @test length(rec_vent) == 1
+
+        # 2. Degassing decrement of identical magnitude dC_vent
+        cfg_degas = MagmaOceanDegassingConfig(
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+            efficiency=1.0,
+        )
+        Fm = [1.0]
+        Fm_old = [1.0]
+        XH_degas = [0.0]
+        XN_degas = [0.0]
+        XS_degas = [0.0]
+        S_C = Erebus.compute_carbon_solubility_melt(1.0e5, 1500.0, 0.0).total_ppm
+        XC_degas = [S_C + dC_vent]
+        res_degas = degas_magma_ocean_markers!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            Fm_old,
+            XH_degas,
+            XC_degas,
+            XN_degas,
+            XS_degas,
+            1,
+            dt,
+            1.0e5,
+            R_planet,
+            cfg_degas;
+            xcenter=xc,
+            ycenter=yc,
+            w3d_m=w3d_m,
+            rho_solid=rho_rock,
+            marker_volume=Am,
+        )
+        rec_degas = filter(
+            r -> r.channel === :degassing && r.element === :C, res_degas.records
+        )
+        @test length(rec_degas) == 1
+
+        @test isapprox(rec_vent[1].dM2, rec_degas[1].dM2; rtol=1e-12)
+        @test isapprox(rec_vent[1].dM3, rec_degas[1].dM3; rtol=1e-12)
+        @test isapprox(rec_vent[1].dM3, rec_vent[1].dM2 * 1.9 * R_planet; rtol=1e-12)
+        @test isapprox(rec_degas[1].dM3, rec_degas[1].dM2 * 1.9 * R_planet; rtol=1e-12)
+    end
+
+    @testset "Marker area: sticky air density independence" begin
+        R_planet = 50000.0
+        xc = 70000.0
+        yc = 70000.0
+        x_planet = xc + 0.95 * R_planet
+        y_planet = yc
+
+        coords = GridCoordinates(65, 65; xsize=140000.0, ysize=140000.0)
+        rho_rock = 3000.0
+        dt = 1.0e5
+        DT = zeros(coords.Ny, coords.Nx)
+        tk2 = fill(1500.0, coords.Ny, coords.Nx)
+        APHI = zeros(coords.Ny, coords.Nx)
+        S_vent = fill(1.0e-5, coords.Ny, coords.Nx)
+        ret_cfg = RetentionConfig(
+            active=true,
+            venting_drainage_active=true,
+            carbon_retention_ppm=800.0,
+            chi_vent=1.0,
+        )
+
+        # Case A: 1 planet marker + 100 air markers (tm = 3) -> marknum = 101
+        xm_a = vcat([x_planet], fill(1000.0, 100))
+        ym_a = vcat([y_planet], fill(1000.0, 100))
+        tm_a = vcat([1], fill(3, 100))
+        tkm_a = fill(1500.0, 101)
+        phim_a = zeros(101)
+        XCm_a = vcat([1000.0], zeros(100))
+        XH_a = zeros(101)
+        w3d_a = [marker_out_of_plane_length(xm_a[m], ym_a[m], xc, yc) for m in 1:101]
+
+        res_a = advance_marker_thermo_porosity_venting!(
+            xm_a,
+            ym_a,
+            tm_a,
+            tkm_a,
+            phim_a,
+            DT,
+            tk2,
+            APHI,
+            dt,
+            1,
+            101;
+            coords=coords,
+            venting=true,
+            S_vent_grid=S_vent,
+            rhofluidcur=1000.0,
+            ret_cfg=ret_cfg,
+            XH2Om=XH_a,
+            XCm=XCm_a,
+            rhosolid=rho_rock,
+            w3d_m=w3d_a,
+        )
+
+        # Case B: 1 planet marker + 200 air markers (tm = 3) -> marknum = 201
+        xm_b = vcat([x_planet], fill(1000.0, 200))
+        ym_b = vcat([y_planet], fill(1000.0, 200))
+        tm_b = vcat([1], fill(3, 200))
+        tkm_b = fill(1500.0, 201)
+        phim_b = zeros(201)
+        XCm_b = vcat([1000.0], zeros(200))
+        XH_b = zeros(201)
+        w3d_b = [marker_out_of_plane_length(xm_b[m], ym_b[m], xc, yc) for m in 1:201]
+
+        res_b = advance_marker_thermo_porosity_venting!(
+            xm_b,
+            ym_b,
+            tm_b,
+            tkm_b,
+            phim_b,
+            DT,
+            tk2,
+            APHI,
+            dt,
+            1,
+            201;
+            coords=coords,
+            venting=true,
+            S_vent_grid=S_vent,
+            rhofluidcur=1000.0,
+            ret_cfg=ret_cfg,
+            XH2Om=XH_b,
+            XCm=XCm_b,
+            rhosolid=rho_rock,
+            w3d_m=w3d_b,
+        )
+
+        rec_a = filter(r -> r.channel === :venting && r.element === :C, res_a.records)
+        rec_b = filter(r -> r.channel === :venting && r.element === :C, res_b.records)
+        @test isapprox(rec_a[1].dM3, rec_b[1].dM3; rtol=1e-12)
+        @test isapprox(
+            res_a.vented_vols.M_vent_C_3d, res_b.vented_vols.M_vent_C_3d; rtol=1e-12
+        )
+    end
 end

@@ -18,6 +18,7 @@ using TimerOutputs
 using TOML
 
 export run_simulation, load_state, simulation_loop
+export TransferRecord
 export MetalSegregationWorkspace,
     MagmaSegregationWorkspace,
     HydromechanicalLSEWorkspace,
@@ -953,7 +954,8 @@ module Simulation
         MetalSegregationWorkspace,
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
-        ThermalLSEWorkspace
+        ThermalLSEWorkspace,
+        TransferRecord
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
@@ -966,7 +968,8 @@ module Simulation
         MetalSegregationWorkspace,
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
-        ThermalLSEWorkspace
+        ThermalLSEWorkspace,
+        TransferRecord
 end
 
 module Config

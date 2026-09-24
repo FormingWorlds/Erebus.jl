@@ -485,12 +485,16 @@ Random.seed!(42)
         delta_m_vent_3d = 5.0e14
         vented_vols = (
             M_vent_H2O=3.0e14,
+            M_vent_H2O_3d=3.0e14,
             M_vent_C=2.0e13,
+            M_vent_C_3d=2.0e13,
             M_vent_N=5.0e12,
+            M_vent_N_3d=5.0e12,
             M_vent_S=1.0e13,
+            M_vent_S_3d=1.0e13,
             M_vent_volatiles_total=3.35e14,
+            M_vent_volatiles_total_3d=3.35e14,
         )
-        L_3D_equiv = 1.2
         dt_val = 1000.0
         P_surf = 1.0e5
         T_surf = 1200.0
@@ -512,7 +516,6 @@ Random.seed!(42)
             cfg_nospec,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -523,13 +526,11 @@ Random.seed!(42)
             ym,
             rplanet,
         )
-        expected_H2O_step = delta_m_vent_3d + vented_vols.M_vent_H2O * L_3D_equiv
+        expected_H2O_step = delta_m_vent_3d + vented_vols.M_vent_H2O_3d
         @test rates_add[:H2O] ≈ expected_H2O_step / dt_val
-        @test rates_add[:CO2] ≈
-            (vented_vols.M_vent_C * L_3D_equiv * (44.0095 / 12.011)) / dt_val
-        @test rates_add[:N2] ≈ (vented_vols.M_vent_N * L_3D_equiv) / dt_val
-        @test rates_add[:H2S] ≈
-            (vented_vols.M_vent_S * L_3D_equiv * (34.08 / 32.06)) / dt_val
+        @test rates_add[:CO2] ≈ (vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
+        @test rates_add[:N2] ≈ vented_vols.M_vent_N_3d / dt_val
+        @test rates_add[:H2S] ≈ (vented_vols.M_vent_S_3d * (34.08 / 32.06)) / dt_val
 
         # 2. Pore water only (mineral drainage inactive)
         cfg_pore_only = SimulationConfig(
@@ -542,7 +543,6 @@ Random.seed!(42)
             cfg_pore_only,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -569,7 +569,6 @@ Random.seed!(42)
             cfg_drain_only,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -580,9 +579,8 @@ Random.seed!(42)
             ym,
             rplanet,
         )
-        @test rates_drain[:H2O] ≈ (vented_vols.M_vent_H2O * L_3D_equiv) / dt_val
-        @test rates_drain[:CO2] ≈
-            (vented_vols.M_vent_C * L_3D_equiv * (44.0095 / 12.011)) / dt_val
+        @test rates_drain[:H2O] ≈ vented_vols.M_vent_H2O_3d / dt_val
+        @test rates_drain[:CO2] ≈ (vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
 
         # 3b. Non-speciation venting with non-water pore species (:CO2)
         cfg_co2_vent = SimulationConfig(
@@ -594,7 +592,6 @@ Random.seed!(42)
             cfg_co2_vent,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -606,10 +603,9 @@ Random.seed!(42)
             rplanet,
         )
         # Mineral water routes to :H2O, pore fluid routes to :CO2 (plus mineral C)
-        @test rates_co2[:H2O] ≈ (vented_vols.M_vent_H2O * L_3D_equiv) / dt_val
+        @test rates_co2[:H2O] ≈ vented_vols.M_vent_H2O_3d / dt_val
         @test rates_co2[:CO2] ≈
-            (delta_m_vent_3d + vented_vols.M_vent_C * L_3D_equiv * (44.0095 / 12.011)) /
-              dt_val
+            (delta_m_vent_3d + vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
 
         # 4. Speciation active: thermodynamic speciation of full additive inventory
         cfg_spec = SimulationConfig(
@@ -622,7 +618,6 @@ Random.seed!(42)
             cfg_spec,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -646,9 +641,9 @@ Random.seed!(42)
         mSO2 = rates_spec[:SO2] * dt_val
 
         nH_in = 2.0 * expected_H2O_step / 18.01528e-3
-        nC_in = (vented_vols.M_vent_C * L_3D_equiv) / 12.011e-3
-        nN_in = (vented_vols.M_vent_N * L_3D_equiv) / 14.007e-3
-        nS_in = (vented_vols.M_vent_S * L_3D_equiv) / 32.06e-3
+        nC_in = vented_vols.M_vent_C_3d / 12.011e-3
+        nN_in = vented_vols.M_vent_N_3d / 14.007e-3
+        nS_in = vented_vols.M_vent_S_3d / 32.06e-3
 
         nH_out =
             2.0 * (mH2 / 2.01588e-3) +
@@ -670,7 +665,6 @@ Random.seed!(42)
             cfg_spec,
             delta_m_vent_3d,
             vented_vols,
-            L_3D_equiv,
             0.0,
             P_surf,
             T_surf,
@@ -689,7 +683,6 @@ Random.seed!(42)
             ),
             delta_m_vent_3d,
             nothing,
-            L_3D_equiv,
             dt_val,
             P_surf,
             T_surf,
@@ -706,7 +699,6 @@ Random.seed!(42)
             cfg_spec,
             0.0,
             nothing,
-            L_3D_equiv,
             dt_val,
             0.0,
             0.0,

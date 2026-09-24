@@ -21,7 +21,7 @@ Key constitutive relations validated on this page include:
 - **Unified Surface Venting Water Mass Budget:**
   Surface water venting couples both Darcy pore fluid drainage ($m_{\text{pore}}$) and mobile mineral volatile drainage ($m_{\text{mineral}}$) additively, preserving distinct physical reservoirs on markers:
   $$m_{\text{H}_2\text{O}} = m_{\text{pore}} + m_{\text{mineral}}$$
-  where $m_{\text{pore}} = \Delta M_{\text{vent}} \cdot L_{\text{3D}}$ when Darcy surface venting is active, and $m_{\text{mineral}} = M_{\text{vent}}^{\text{H}_2\text{O}} \cdot L_{\text{3D}}$ when retention drainage is active.
+  where $m_{\text{pore}} = \sum_{m} \rho_f \Delta\phi_m A_m w_{3\text{D}, m}$ when Darcy surface venting is active, and $m_{\text{mineral}} = \sum_{m} \rho_m A_m \Delta X_m (1 - \phi_m) w_{3\text{D}, m}$ when retention drainage is active, with marker area $A_m = \text{marker\_area}(\text{coords})$ and out-of-plane spherical integration length $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$.
 
 - **Dynamic Gas Speciation at the Surface:**
   Vented volatile elemental masses ($m_{\text{H}_2\text{O}}, m_{\text{C}}, m_{\text{N}}, m_{\text{S}}$) are partitioned into chemical equilibrium gas species ($\text{H}_2, \text{H}_2\text{O}, \text{CO}, \text{CO}_2, \text{CH}_4, \text{N}_2, \text{NH}_3, \text{H}_2\text{S}, \text{S}_2, \text{SO}_2$) evaluated at local surface conditions:

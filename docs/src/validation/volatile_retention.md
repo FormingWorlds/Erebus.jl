@@ -77,11 +77,11 @@ The updated bulk concentration is:
 
 $$C_{\text{bulk}}(t + \Delta t) = C_{\text{ret}}(T) + C_{\text{mob}}(t + \Delta t)$$
 
-The extracted mass is summed over markers and scaled to 3D planetary geometry:
+The extracted 3D mass is summed over markers with their out-of-plane spherical integration length:
 
-$$\Delta M_{\text{vent}} = L_{\text{3D}} \sum_{m} \rho_m V_m \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
+$$\Delta M_{\text{vent,3D}} = \sum_{m} \rho_m A_m w_{3\text{D}, m} \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
 
-where $L_{\text{3D}} = 2 R_{\text{planet}}$ [m] relates 2D planar cross-section markers to the 3D spherical planetesimal volume.
+where $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$ [m] and $A_m = \text{marker\_area}(\text{coords})$ [$\text{m}^2$].
 
 ### Physical Invariants and Limits
 

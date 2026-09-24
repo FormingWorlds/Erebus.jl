@@ -272,7 +272,7 @@ The incremental mass of volatiles extracted from marker $m$ during the timestep 
 
 $$\Delta M_{\text{vent}, m} = \rho_m V_m \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
 
-These increments are scaled from 2D Cartesian cross-sectional geometry to 3D spherical geometry using the planetary metric factor $L_{\text{3D}} = 2 R_{\text{planet}}$, and accumulated into cumulative species inventories ($M_{\text{vent}}^{\text{H2O}}$, $M_{\text{vent}}^{\text{C}}$, $M_{\text{vent}}^{\text{N}}$, $M_{\text{vent}}^{\text{S}}$). This mechanism couples low-temperature hydrothermal fluid discharge directly to marker chemistry while preserving solid retention floors against exhaustive depletion.
+These increments are evaluated in 3D using the marker out-of-plane out-of-plane spherical integration length $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$, and accumulated into cumulative species inventories ($M_{\text{vent}}^{\text{H2O}}$, $M_{\text{vent}}^{\text{C}}$, $M_{\text{vent}}^{\text{N}}$, $M_{\text{vent}}^{\text{S}}$). This mechanism couples low-temperature hydrothermal fluid discharge directly to marker chemistry while preserving solid retention floors against exhaustive depletion.
 
 ---
 
@@ -297,9 +297,10 @@ When `ReactionConfig.fluid_overpressure_coupling = true`, prograde dehydration i
 Water released from the planetesimal surface couples both Darcy pore fluid drainage and near-surface mineral volatile drainage:
 
 1. **Darcy Pore Fluid Drainage**: When surface Darcy venting is active, pore water discharging through surface Darcy sinks enters the venting flux:
-   $$m_{\text{pore}} = \Delta M_{\text{vent}} \cdot L_{\text{3D}}$$
+   $$m_{\text{pore}} = \sum_m \rho_f \Delta\phi_m A_m w_{3\text{D}, m}$$
 2. **Mobile Mineral Volatile Drainage**: When near-surface volatile retention drainage is active, lattice-bound water released from hydrated phyllosilicate markers provides an additional physical source:
-   $$m_{\text{mineral}} = M_{\text{vent}}^{\text{H}_2\text{O}} \cdot L_{\text{3D}}$$
+   $$m_{\text{mineral}} = \sum_m \rho_m A_m \Delta X_m (1 - \phi_m) w_{3\text{D}, m}$$
+where $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$ and $A_m = \text{marker\_area}(\text{coords})$.
 
 Because pore fluid (porosity $\phi$) and mineral lattice water ($X_{\text{H}_2\text{O}}$) are distinct physical reservoirs tracked on the markers, the total water mass entering surface speciation and atmospheric accumulation is additive:
 
@@ -365,7 +366,7 @@ The time evolution of atmospheric mass subject to surface venting flux $\dot{M}_
 
 $$\frac{d M_{\text{atm}}}{dt} = \dot{M}_{\text{vent}} - k_{\text{escape}} M_{\text{atm}}$$
 
-In the 2D Cartesian cross-sectional domain, marker fluid drainage is evaluated per unit out-of-plane length ($[\text{kg/m}]$). Before coupling with the 3D spherical atmosphere, this 2D surface boundary flux is scaled to 3D by the ratio of spherical surface area to 2D circular boundary perimeter: $L_{\text{3D}} = A_{\text{sphere}} / P_{\text{2D}} = \frac{4 \pi R_{\text{planet}}^2}{2 \pi R_{\text{planet}}} = 2 R_{\text{planet}}$ [m]; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
+In the 2D Cartesian cross-sectional domain, marker fluid drainage evaluates using each marker's out-of-plane spherical integration length $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$. The 3D surface venting flux evaluates as $\dot{M}_{\text{vent}} = \Delta M_{\text{vent,3D}} / \Delta t$; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
 
 For a constant computational timestep $\Delta t$, the analytical solution yields:
 

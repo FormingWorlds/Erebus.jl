@@ -258,7 +258,7 @@ include("test_helpers.jl")
         P_surf = 1.0e5 # 1 bar
 
         # Decompression degassing pass
-        rates = degas_magma_ocean_markers!(
+        res_degas = degas_magma_ocean_markers!(
             xm,
             ym,
             tm,
@@ -278,6 +278,7 @@ include("test_helpers.jl")
             marker_volume=marker_vol,
             delta_IW=0.0,
         )
+        rates = res_degas.rates
 
         @test rates isa Dict{Symbol,Float64}
         @test haskey(rates, :H2O)
@@ -285,6 +286,9 @@ include("test_helpers.jl")
         @test rates[:CO] > 0.0 || rates[:CO2] > 0.0
         @test rates[:N2] > 0.0
         @test rates[:H2S] > 0.0 || rates[:SO2] > 0.0 || rates[:S2] > 0.0
+        @test res_degas.dM_2D isa Dict{Symbol,Float64}
+        @test res_degas.dM_3D isa Dict{Symbol,Float64}
+        @test res_degas.records isa Vector{TransferRecord}
 
         # Marker volatiles must have decreased due to degassing
         @test all(XH2Om .< 2.0)
@@ -297,7 +301,7 @@ include("test_helpers.jl")
         Fm_prev = fill(0.8, N_markers)
         XH2O_pre_cryst = copy(XH2Om)
 
-        rates_cryst = degas_magma_ocean_markers!(
+        res_cryst = degas_magma_ocean_markers!(
             xm,
             ym,
             tm,
@@ -317,6 +321,7 @@ include("test_helpers.jl")
             marker_volume=marker_vol,
             delta_IW=0.0,
         )
+        rates_cryst = res_cryst.rates
 
         @test rates_cryst[:H2O] > 0.0
         @test all(XH2Om .<= XH2O_pre_cryst)
@@ -394,5 +399,127 @@ include("test_helpers.jl")
                 @test haskey(data2, "atm_P_surf")
             end
         end
+    end
+
+    @testset "V1: Center-relative degassing coordinate invariance" begin
+        cfg_degas = MagmaOceanDegassingConfig(;
+            active=true,
+            mode=:dynamic_flux,
+            degas_depth_fraction=0.90,
+            F_melt_threshold=0.40,
+        )
+        R_val = 50000.0
+        xc_val = 70000.0
+        yc_val = 70000.0
+        n_m = 400
+        th = range(0, 2π; length=n_m + 1)[1:n_m]
+
+        # Ring at 0.95R around (70km, 70km)
+        xm_c = xc_val .+ 0.95 * R_val .* cos.(th)
+        ym_c = yc_val .+ 0.95 * R_val .* sin.(th)
+        # Same ring around origin (0, 0)
+        xm_o = 0.95 * R_val .* cos.(th)
+        ym_o = 0.95 * R_val .* sin.(th)
+        # Ring at 0.85R around (70km, 70km) (below degas_depth_fraction 0.90)
+        xm_deep = xc_val .+ 0.85 * R_val .* cos.(th)
+        ym_deep = yc_val .+ 0.85 * R_val .* sin.(th)
+
+        tm_ring = fill(1, n_m)
+        tkm_ring = fill(1900.0, n_m)
+        Fm_ring = fill(1.0, n_m)
+        Fm_old_ring = fill(1.0, n_m)
+
+        mk_vols() = (fill(5.0, n_m), fill(2000.0, n_m), fill(500.0, n_m), fill(3000.0, n_m))
+
+        w3d_c = [
+            marker_out_of_plane_length(xm_c[m], ym_c[m], xc_val, yc_val) for m in 1:n_m
+        ]
+        w3d_o = [marker_out_of_plane_length(xm_o[m], ym_o[m], 0.0, 0.0) for m in 1:n_m]
+        w3d_deep = [
+            marker_out_of_plane_length(xm_deep[m], ym_deep[m], xc_val, yc_val) for
+            m in 1:n_m
+        ]
+
+        XH_c, XC_c, XN_c, XS_c = mk_vols()
+        res_c = degas_magma_ocean_markers!(
+            xm_c,
+            ym_c,
+            tm_ring,
+            tkm_ring,
+            Fm_ring,
+            Fm_old_ring,
+            XH_c,
+            XC_c,
+            XN_c,
+            XS_c,
+            n_m,
+            1.0e6,
+            1.0e5,
+            R_val,
+            cfg_degas;
+            xcenter=xc_val,
+            ycenter=yc_val,
+            w3d_m=w3d_c,
+            rho_solid=3000.0,
+            marker_volume=1.0e7,
+        )
+
+        XH_o, XC_o, XN_o, XS_o = mk_vols()
+        res_o = degas_magma_ocean_markers!(
+            xm_o,
+            ym_o,
+            tm_ring,
+            tkm_ring,
+            Fm_ring,
+            Fm_old_ring,
+            XH_o,
+            XC_o,
+            XN_o,
+            XS_o,
+            n_m,
+            1.0e6,
+            1.0e5,
+            R_val,
+            cfg_degas;
+            xcenter=0.0,
+            ycenter=0.0,
+            w3d_m=w3d_o,
+            rho_solid=3000.0,
+            marker_volume=1.0e7,
+        )
+
+        XH_deep, XC_deep, XN_deep, XS_deep = mk_vols()
+        res_deep = degas_magma_ocean_markers!(
+            xm_deep,
+            ym_deep,
+            tm_ring,
+            tkm_ring,
+            Fm_ring,
+            Fm_old_ring,
+            XH_deep,
+            XC_deep,
+            XN_deep,
+            XS_deep,
+            n_m,
+            1.0e6,
+            1.0e5,
+            R_val,
+            cfg_degas;
+            xcenter=xc_val,
+            ycenter=yc_val,
+            w3d_m=w3d_deep,
+            rho_solid=3000.0,
+            marker_volume=1.0e7,
+        )
+
+        # 1. Ring around (70km, 70km) degases at rate > 0
+        @test any(!iszero, values(res_c.rates))
+        # 2. Ring around (70km, 70km) and ring around origin give identical rates to 1e-12
+        for sp in keys(res_c.rates)
+            @test isapprox(res_c.rates[sp], res_o.rates[sp]; atol=1.0e-12, rtol=1.0e-12)
+        end
+        # 3. Ring at 0.85R (below degas_depth_fraction) returns zero rates
+        @test all(iszero, values(res_deep.rates))
+        @test isempty(res_deep.records)
     end
 end
