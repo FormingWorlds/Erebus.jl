@@ -615,7 +615,7 @@ include("test_helpers.jl")
         mode = "equilibrium"
         F_melt_threshold = 0.35
         degas_depth_fraction = 0.92
-        crystallization_degassing = true
+        water_As = 0.45
         redox_coupled = true
         efficiency = 0.85
 
@@ -635,7 +635,7 @@ include("test_helpers.jl")
         @test cfg_loaded.magma_degassing.mode === :equilibrium
         @test isapprox(cfg_loaded.magma_degassing.F_melt_threshold, 0.35)
         @test isapprox(cfg_loaded.magma_degassing.degas_depth_fraction, 0.92)
-        @test cfg_loaded.magma_degassing.crystallization_degassing == true
+        @test isapprox(cfg_loaded.magma_degassing.water_As, 0.45)
         @test isapprox(cfg_loaded.magma_degassing.efficiency, 0.85)
 
         @test cfg_loaded.escape.active == true
@@ -653,6 +653,30 @@ include("test_helpers.jl")
         @test haskey(dict_repr, "escape")
         @test dict_repr["magma_degassing"]["mode"] == "equilibrium"
         @test isapprox(dict_repr["escape"]["epsilon_xuv"], 0.20)
+    end
+
+    @testset "PR 1b: MagmaOceanDegassingConfig deprecation and rejection" begin
+        # 1. Direct constructor with crystallization_degassing throws ArgumentError
+        @test_throws ArgumentError MagmaOceanDegassingConfig(;
+            crystallization_degassing=true
+        )
+
+        # 2. TOML parser rejects crystallization_degassing key with descriptive error naming it
+        bad_degas_toml = """
+        [magma_degassing]
+        crystallization_degassing = true
+        """
+        err = try
+            load_config(bad_degas_toml)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin(
+            "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
+            sprint(showerror, err),
+        )
     end
 
     @testset "SolverConfig Validation, Cross-Validation, and TOML Roundtrip" begin

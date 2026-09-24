@@ -338,23 +338,23 @@ and overlying atmosphere across magma ocean differentiation and melt crystalliza
 
 $(FIELDS)
 """
-Base.@kwdef struct MagmaOceanDegassingConfig
-    active::Bool = false
-    mode::Symbol = :dynamic_flux
-    F_melt_threshold::Float64 = 0.40
-    degas_depth_fraction::Float64 = 0.90
-    crystallization_degassing::Bool = true
-    redox_coupled::Bool = true
-    efficiency::Float64 = 1.0
+struct MagmaOceanDegassingConfig
+    active::Bool
+    mode::Symbol
+    F_melt_threshold::Float64
+    degas_depth_fraction::Float64
+    redox_coupled::Bool
+    efficiency::Float64
+    water_As::Float64
 
     function MagmaOceanDegassingConfig(
         active::Bool,
         mode::Symbol,
         F_melt_threshold::Real,
         degas_depth_fraction::Real,
-        crystallization_degassing::Bool,
         redox_coupled::Bool,
         efficiency::Real,
+        water_As::Real=0.40,
     )
         (mode === :equilibrium || mode === :dynamic_flux) ||
             throw(ArgumentError("mode must be :equilibrium or :dynamic_flux, got '$mode'"))
@@ -365,16 +365,48 @@ Base.@kwdef struct MagmaOceanDegassingConfig
         )
         (0.0 < efficiency <= 1.0) ||
             throw(DomainError(efficiency, "efficiency must be in (0, 1]"))
+        (water_As > 0.0 && isfinite(water_As)) ||
+            throw(DomainError(water_As, "water_As must be > 0 and finite"))
         return new(
             active,
             mode,
             Float64(F_melt_threshold),
             Float64(degas_depth_fraction),
-            crystallization_degassing,
             redox_coupled,
             Float64(efficiency),
+            Float64(water_As),
         )
     end
+end
+
+function MagmaOceanDegassingConfig(;
+    active::Bool=false,
+    mode::Symbol=:dynamic_flux,
+    F_melt_threshold::Real=0.40,
+    degas_depth_fraction::Real=0.90,
+    redox_coupled::Bool=true,
+    efficiency::Real=1.0,
+    water_As::Real=0.40,
+    kwargs...,
+)
+    if haskey(kwargs, :crystallization_degassing)
+        throw(
+            ArgumentError(
+                "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
+            ),
+        )
+    elseif !isempty(kwargs)
+        throw(ArgumentError("Unknown keyword arguments: $(keys(kwargs))"))
+    end
+    return MagmaOceanDegassingConfig(
+        active,
+        mode,
+        Float64(F_melt_threshold),
+        Float64(degas_depth_fraction),
+        redox_coupled,
+        Float64(efficiency),
+        Float64(water_As),
+    )
 end
 
 """
@@ -2423,6 +2455,7 @@ function validate_config(cfg::SimulationConfig)
                 "magma_degassing.efficiency must be in (0, 1], got $(cfg.magma_degassing.efficiency)",
             ),
         )
+        @check_positive_finite cfg.magma_degassing.water_As
     end
 
     # EscapeConfig validation
@@ -2445,6 +2478,13 @@ Helper function to convert TOML-parsed dictionary into a typed struct with defau
 function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
     # Check for unknown / misspelled keys
     for k in keys(d)
+        if T === MagmaOceanDegassingConfig && k == "crystallization_degassing"
+            throw(
+                ArgumentError(
+                    "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
+                ),
+            )
+        end
         if !hasfield(T, Symbol(k))
             throw(
                 ArgumentError("Unknown configuration key '$k' in [$(nameof(T))] section.")

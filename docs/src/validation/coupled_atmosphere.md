@@ -146,6 +146,28 @@ The 4 panels above verify the numerical implementation against analytical limits
 - *Panel (c) Greenhouse Thermal Blanketing*. Illustrates the rapid attenuation of effective surface heat transfer coefficient $h_{\text{rad,eff}}$ with longwave optical depth $\tau_{\text{LW}}$, reducing surface heat loss by more than a factor of 10 for $\tau_{\text{LW}} > 10$.
 - *Panel (d) Zahnle-Kasting Crossover Drag*. Evaluates drag efficiencies $x_j$ for common planetary volatiles ($\mathrm{CH_4}, \mathrm{H_2O}, \mathrm{CO}, \mathrm{CO_2}, \mathrm{SO_2}$) as a function of carrier hydrogen escape flux $\Phi_{\mathrm{H}_2}$. At low fluxes ($\Phi_{\mathrm{H}_2} < 10^{18}\text{ m}^{-2}\text{s}^{-1}$), heavy species remain completely retained ($x_j = 0$). At extreme fluxes ($\Phi_{\mathrm{H}_2} \ge 10^{20}\text{ m}^{-2}\text{s}^{-1}$), even sulfur dioxide experiences substantial hydrodynamic drag.
 
+### Magma-Ocean Degassing
+
+Dynamic magma ocean volatile release from Lagrangian markers evaluates equilibrium saturation in the melt frame at the reference melt temperature $T_{\text{melt\_ref}}$.
+For a marker with silicate melt fraction $F \in (0, 1]$, bulk dissolved volatile mass fraction $w$, and equilibrium solubility $w_{\text{sat}}$, the extracted mass fraction is:
+
+$$ex = \min\left(w, \max\left(0, \frac{w}{F} - w_{\text{sat}}\right) \cdot F \cdot \epsilon_{\text{eff}}\right)$$
+
+where $\epsilon_{\text{eff}}$ is degassing efficiency.
+For water solubility obeying the Burnham (1979) / Dixon et al. (1995) law:
+
+$$w_{\text{sat}} = A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
+
+the retained water mass fraction in a degassed marker is:
+
+$$w_{\text{retained}} = F \cdot A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
+
+![Retained water mass fraction versus melt fraction](../assets/degassing_benchmark.png)
+
+Retained water mass fraction versus melt fraction $F \in [0.1, 1.0]$ at constant surface partial pressure $p_{\mathrm{H}_2\mathrm{O}}$.
+The solid curve shows the analytical Burnham (1979) / Dixon et al. (1995) law, while circles show values retained in Lagrangian markers.
+Panel (b) confirms numerical agreement to relative tolerance $10^{-6}$.
+
 ---
 
 ## 4. Configuration Schema
@@ -183,7 +205,9 @@ SO2 = 2.0e-3
 ## 5. References
 
 - **Attia, O., & Lichtenberg, T. (2026)**. A convex active-set closure for multi-species atmospheric escape. *arXiv preprint*, arXiv:2608.30106.
+- **Burnham, C. W. (1979)**. The importance of volatile constituents. In *The Evolution of the Igneous Rocks: Fiftieth Anniversary Perspectives*, Princeton University Press, 439-482.
 - **Chassefière, E. (1996)**. Hydrodynamic escape of hydrogen from a hot water-rich atmosphere: The case of Venus. *Journal of Geophysical Research: Planets*, 101(E11), 26039-26056.
+- **Dixon, J. E., Stolper, E., & Holloway, J. R. (1995)**. An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids at low pressures. *Journal of Petrology*, 36(6), 1607-1646.
 - **Gu, Y., & Chen, J. (2023)**. Mass fractionation in multi-species hydrodynamic escape. *The Astrophysical Journal*, 959(2), 112.
 - **Guillot, T. (2010)**. On the radiative equilibrium of irradiated planetary atmospheres. *Astronomy & Astrophysics*, 520, A27.  
   [https://doi.org/10.1051/0004-6361/200913396](https://doi.org/10.1051/0004-6361/200913396)

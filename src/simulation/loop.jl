@@ -3410,6 +3410,37 @@ function simulation_loop(
                     v_m = marker_area(coords)
                     Fm_prev = Fm_step_start !== nothing ? Fm_step_start : Fm
 
+                    # Mass-weighted mean temperature over degassing-zone markers
+                    sum_t_mass = 0.0
+                    sum_degas_mass = 0.0
+                    r_degas_sq = (cfg.magma_degassing.degas_depth_fraction * rplanet_val)^2
+                    r_planet_sq = rplanet_val^2
+                    f_thresh = cfg.magma_degassing.F_melt_threshold
+                    rho_rock = cfg.materials.rhosolidm[1]
+
+                    @inbounds for m in 1:marknum
+                        if tm[m] >= 3
+                            continue
+                        end
+                        dx = xm[m] - xcenter_val
+                        dy = ym[m] - ycenter_val
+                        r_sq = dx * dx + dy * dy
+                        if r_sq > r_planet_sq
+                            continue
+                        end
+                        f_m = Fm[m]
+                        if (r_sq >= r_degas_sq) &&
+                            (f_m >= f_thresh || f_m > 0.01) &&
+                            (f_m > 0.0)
+                            w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
+                            m_wt = rho_rock * v_m * w3d
+                            sum_t_mass += tkm[m] * m_wt
+                            sum_degas_mass += m_wt
+                        end
+                    end
+                    T_melt_ref =
+                        sum_degas_mass > 0.0 ? (sum_t_mass / sum_degas_mass) : 1500.0
+
                     if cfg.magma_degassing.mode === :dynamic_flux
                         degas_res = degas_magma_ocean_markers!(
                             xm,
@@ -3426,7 +3457,8 @@ function simulation_loop(
                             dt,
                             p_surf_mo,
                             rplanet_val,
-                            cfg.magma_degassing;
+                            cfg.magma_degassing,
+                            T_melt_ref;
                             xcenter=xcenter_val,
                             ycenter=ycenter_val,
                             w3d_m=w3d_m,
