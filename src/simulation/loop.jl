@@ -3954,6 +3954,8 @@ function simulation_loop(
                     Xfe_N_m,
                     Xfe_S_m,
                     marknum;
+                    coords=coords,
+                    w3d_m=w3d_m,
                     xcenter=xcenter_val,
                     ycenter=ycenter_val,
                     rplanet=rplanet_val,
@@ -4014,6 +4016,8 @@ function simulation_loop(
                         Xfe_C_m,
                         Xfe_N_m,
                         marknum;
+                        coords=coords,
+                        w3d_m=w3d_m,
                         cfg=cfg.phase_tracking,
                         xcenter=xcenter_val,
                         ycenter=ycenter_val,

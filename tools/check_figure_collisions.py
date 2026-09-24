@@ -192,6 +192,7 @@ def check_all_benchmarks() -> int:
         ("benchmarks/generate_hydrothermal_convection_benchmarks.py", "main"),
         ("benchmarks/generate_accretion_benchmarks.py", "main"),
         ("benchmarks/generate_telescoping_benchmarks.py", "main"),
+        ("benchmarks/generate_core_formation_benchmark.py", "main"),
         ("benchmarks/generate_core_geochemistry_benchmarks.py", "generate_benchmark_figure"),
         ("benchmarks/generate_mineral_assemblage_benchmarks.py", "generate_benchmark_figure"),
         ("benchmarks/generate_volatile_mixture_benchmarks.py", "main"),

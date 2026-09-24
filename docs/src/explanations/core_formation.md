@@ -274,9 +274,11 @@ Sulfur-poor metal differentiates faster due to its higher density contrast, wher
 
 ### Integrated Core Volatile Budgets
 
-Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets`:
+Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets` with canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$:
 
-$$M_{\text{core}, k} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
+$$M_{\text{core}, k} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
+
+$$M_{\text{core}, \text{metal}} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m$$
 
 The resulting mean core volatile concentrations $w_{\text{core}, k} = M_{\text{core}, k} / M_{\text{core}, \text{metal}}$ are compared with empirical concentrations measured in magmatic iron meteorites (groups IIAB, IIIAB, IVA, IVB).
 

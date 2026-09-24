@@ -179,7 +179,8 @@ Examine the benchmark checkpoint using `load_state`:
 ```julia
 using Erebus
 
-# Load checkpoint
+# Load configuration and checkpoint
+cfg = parse_config("configs/core_formation_benchmark.toml")
 data = load_state("output_core_benchmark/output_00005.jld2")
 
 # Temperature field on staggered grid [K]
@@ -194,6 +195,33 @@ println("Max core metal volume fraction: ", round(maximum(Xfe), digits=3))
 # Marker porosity
 phim = data["phim"]
 println("Mean marker porosity: ", round(sum(phim) / length(phim), digits=3))
+
+# Integrated 3D core mass using canonical per-marker volume weighting
+coords = GridCoordinates(cfg.grid)
+marknum = length(data["xm"])
+w3d_m = [
+    marker_out_of_plane_length(
+        data["xm"][m], data["ym"][m], coords.xcenter, coords.ycenter
+    ) for m in 1:marknum
+]
+budgets = compute_core_volatile_budgets(
+    data["xm"],
+    data["ym"],
+    data["tm"],
+    Xfe,
+    nothing,
+    nothing,
+    nothing,
+    nothing,
+    marknum;
+    coords=coords,
+    w3d_m=w3d_m,
+    xcenter=coords.xcenter,
+    ycenter=coords.ycenter,
+    rplanet=cfg.geometry.rplanet,
+    rho_metal=cfg.coreformation.rho_metal,
+)
+println("Integrated core metal mass: ", round(budgets.M_core_metal, sigdigits=4), " kg")
 ```
 
 In full-scale production simulations integrated through the entire 3.5 Ma differentiation history, the planetesimal evolves into three distinct physical zones:
