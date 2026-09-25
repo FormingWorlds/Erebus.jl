@@ -393,11 +393,58 @@ using JLD2
         @test isapprox(M_N_final, M_N_init; rtol=1.0e-12)
         @test isapprox(M_S_final, M_S_init; rtol=1.0e-12)
 
-        # Volatiles must have partitioned into metallic phase
-        @test Xfe_C_m[1] > 0.0
-        @test Xfe_N_m[1] > 0.0
-        @test Xfe_S_m[1] > 0.0
-        @test Xfe_H_m[1] > 0.0
+        # Unconstrained melt-frame equilibrium: C_met_eq = D · C_sil_melt_eq
+        w_S_calc = clamp(init_fe_S_ppm * 1.0e-6, 0.0, 0.365)
+        D_C_test = compute_metal_silicate_partition_coefficient(
+            :C,
+            T_val,
+            P_val,
+            fO2_val,
+            w_S_calc;
+            model=cfg.model_carbon,
+            D_min=cfg.D_min,
+            D_max=cfg.D_max,
+        )
+        D_N_test = compute_metal_silicate_partition_coefficient(
+            :N,
+            T_val,
+            P_val,
+            fO2_val,
+            w_S_calc;
+            model=cfg.model_nitrogen,
+            D_min=cfg.D_min,
+            D_max=cfg.D_max,
+        )
+        D_S_test = compute_metal_silicate_partition_coefficient(
+            :S,
+            T_val,
+            P_val,
+            fO2_val,
+            w_S_calc;
+            model=cfg.model_sulfur,
+            D_min=cfg.D_min,
+            D_max=cfg.D_max,
+        )
+        D_H_test = compute_metal_silicate_partition_coefficient(
+            :H,
+            T_val,
+            P_val,
+            fO2_val,
+            w_S_calc;
+            model=cfg.model_hydrogen,
+            D_min=cfg.D_min,
+            D_max=cfg.D_max,
+        )
+
+        @test isapprox(Xfe_C_m[1], D_C_test * (XCm[1] / F_melt); rtol=1.0e-12)
+        @test isapprox(Xfe_N_m[1], D_N_test * (XNm[1] / F_melt); rtol=1.0e-12)
+        @test isapprox(Xfe_S_m[1], D_S_test * (XSm[1] / F_melt); rtol=1.0e-12)
+        @test isapprox(Xfe_H_m[1], D_H_test * ((XH2Om[1] * f_H) / F_melt); rtol=1.0e-12)
+
+        # Direct analytical verification from M_tot / (m_sil * F_melt + m_met * D)
+        C_sil_melt_C_expected = M_C_init / (m_sil * F_melt + m_met * D_C_test)
+        @test isapprox(Xfe_C_m[1], D_C_test * C_sil_melt_C_expected; rtol=1.0e-12)
+        @test isapprox(XCm[1], F_melt * C_sil_melt_C_expected; rtol=1.0e-12)
 
         # Silicate concentrations must have dropped accordingly
         @test XCm[1] < init_C_ppm
@@ -469,6 +516,734 @@ using JLD2
         M_C_partial = m_sil * XCm[1] + m_met * Xfe_C_m[1]
         @test isapprox(M_C_partial, M_C_init; rtol=1.0e-12)
         @test 0.0 < Xfe_C_m[1] < (M_C_init / m_met)
+    end
+
+    @testset "Metal-Silicate Cap-Firing Mirrored Silicate Write (V8)" begin
+        m = 1
+        rho_sil = 3000.0
+        rho_met = 7000.0
+        F_fe = 0.50
+        F_melt = 0.50
+        phi_fe_bulk = 0.20
+        phi_fe_liq = phi_fe_bulk * F_fe
+        m_sil = (1.0 - phi_fe_bulk) * rho_sil
+        m_met = phi_fe_bulk * F_fe * rho_met
+
+        T_val = 1800.0
+        P_val = 2.0e8
+        fO2_val = -2.5
+
+        # Carbon saturation cap in liquid metal: 7.0e4 ppmw
+        C_met_C_max = 7.0e4
+        init_C_sil = 3.0e4
+        init_C_met = 0.0
+        M_C_tot = m_sil * init_C_sil + m_met * init_C_met
+
+        cfg = MetalPartitionConfig(;
+            active=true, model_carbon=:constant, D_C_const=500.0, equilibration_rate=1.0
+        )
+
+        Xfe_bulk = [phi_fe_bulk]
+        Xfem = [phi_fe_liq]
+        XH2Om = [0.0]
+        XCm = [init_C_sil]
+        Xfe_H_m = [0.0]
+        Xfe_C_m = [init_C_met]
+        Xfe_N_m = [0.0]
+        Xfe_S_m = [0.0]
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+
+        # Metal must sit exactly at the ceiling
+        @test isapprox(Xfe_C_m[1], C_met_C_max; atol=1.0e-12)
+        # Silicate update mirrors applied metal change
+        dC_met_applied = Xfe_C_m[1] - init_C_met
+        dC_sil_expected = -dC_met_applied * (m_met / m_sil)
+        @test isapprox(XCm[1] - init_C_sil, dC_sil_expected; atol=1.0e-12)
+        # Whole-marker mass is invariant to 1.0e-12
+        M_C_final = m_sil * XCm[1] + m_met * Xfe_C_m[1]
+        @test isapprox(M_C_final, M_C_tot; rtol=1.0e-12)
+
+        # Kinetic approach (alpha_eq = 0.4) under metal cap firing
+        XCm[1] = init_C_sil
+        Xfe_C_m[1] = init_C_met
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=0.4,
+        )
+        dC_met_kinetic = Xfe_C_m[1] - init_C_met
+        @test isapprox(dC_met_kinetic, 0.4 * (C_met_C_max - init_C_met); atol=1.0e-12)
+        @test isapprox(XCm[1] - init_C_sil, -dC_met_kinetic * (m_met / m_sil); atol=1.0e-12)
+        @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_tot; rtol=1.0e-12)
+    end
+
+    @testset "Metal-Silicate Silicate Melt Ceilings and Multi-Cap Saturation (V9)" begin
+        m = 1
+        rho_sil = 3000.0
+        rho_met = 7000.0
+        F_fe = 0.50
+        F_melt = 0.02
+        phi_fe_bulk = 0.20
+        phi_fe_liq = phi_fe_bulk * F_fe
+        m_sil = (1.0 - phi_fe_bulk) * rho_sil
+        m_met = phi_fe_bulk * F_fe * rho_met
+
+        T_val = 1800.0
+        P_val = 1.0e8
+        fO2_val = -2.0
+        f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
+
+        # -------------------------------------------------------------
+        # Case 1: Silicate cap binds only (D is small, metal absorbs excess)
+        # -------------------------------------------------------------
+        reset_metal_silicate_cap_warning_count!()
+        cfg_sil_only = MetalPartitionConfig(;
+            active=true,
+            model_carbon=:constant,
+            D_C_const=0.01,
+            model_hydrogen=:constant,
+            D_H_const=0.001,
+            equilibration_rate=1.0,
+        )
+
+        init_C = 3.0e4
+        M_C_tot = m_sil * init_C
+        Xfe_bulk = [phi_fe_bulk]
+        Xfem = [phi_fe_liq]
+        XH2Om = [0.1]
+        XCm = [init_C]
+        XNm = [0.0]
+        XSm = [0.0]
+        Xfe_H_m = [0.0]
+        Xfe_C_m = [0.0]
+        Xfe_N_m = [0.0]
+        Xfe_S_m = [0.0]
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_sil_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(XCm[1], 0.02 * 1.0e6; atol=1.0e-12)
+        @test isapprox(Xfe_C_m[1], (M_C_tot - m_sil * 2.0e4) / m_met; atol=1.0e-12)
+        @test Xfe_C_m[1] < 7.0e4
+        @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 0
+
+        # Hydrogen test for Case 1 (initial H2O = 3.0 wt% > 2.0 wt% ceiling)
+        init_H2O = 3.0
+        M_H_tot = m_sil * (init_H2O * f_H)
+        XH2Om[1] = init_H2O
+        Xfe_H_m[1] = 0.0
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            nothing,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_sil_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(XH2Om[1], 0.02 * 100.0; atol=1.0e-12)
+        expected_fe_H = (M_H_tot - m_sil * (2.0 * f_H)) / m_met
+        @test isapprox(Xfe_H_m[1], expected_fe_H; atol=1.0e-12)
+        @test Xfe_H_m[1] < 1.0e4
+        @test isapprox(m_sil * (XH2Om[1] * f_H) + m_met * Xfe_H_m[1], M_H_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 0
+
+        # -------------------------------------------------------------
+        # Case 2: Metal cap binds only (D is large, metal reaches ceiling)
+        # -------------------------------------------------------------
+        cfg_met_only = MetalPartitionConfig(;
+            active=true,
+            model_carbon=:constant,
+            D_C_const=1000.0,
+            model_nitrogen=:constant,
+            D_N_const=1000.0,
+            model_sulfur=:constant,
+            D_S_const=1000.0,
+            model_hydrogen=:constant,
+            D_H_const=1000.0,
+            equilibration_rate=1.0,
+        )
+
+        init_C = 2.5e4
+        M_C_tot = m_sil * init_C
+        XCm[1] = init_C
+        Xfe_C_m[1] = 0.0
+        XH2Om[1] = 0.0
+        Xfe_H_m[1] = 0.0
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_met_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(Xfe_C_m[1], 7.0e4; atol=1.0e-12)
+        @test isapprox(XCm[1], (M_C_tot - m_met * 7.0e4) / m_sil; atol=1.0e-12)
+        @test (XCm[1] / F_melt) < 1.0e6
+        @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 0
+
+        # -------------------------------------------------------------
+        # Case 3: Both caps bind (M_tot > M_sil_max + M_met_max)
+        # -------------------------------------------------------------
+        reset_metal_silicate_cap_warning_count!()
+        @test get_metal_silicate_cap_warning_count() == 0
+
+        # Carbon dual saturation
+        init_C_dual = 1.0e5
+        M_C_dual_tot = m_sil * init_C_dual
+        XCm[1] = init_C_dual
+        Xfe_C_m[1] = 0.0
+        XH2Om[1] = 0.0
+        Xfe_H_m[1] = 0.0
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_met_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(Xfe_C_m[1], 7.0e4; atol=1.0e-12)
+        expected_sil_C_dual = (M_C_dual_tot - m_met * 7.0e4) / m_sil
+        @test isapprox(XCm[1], expected_sil_C_dual; atol=1.0e-12)
+        @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_dual_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 1
+
+        # Hydrogen dual saturation
+        init_H2O_dual = 15.0
+        M_H_dual_tot = m_sil * (init_H2O_dual * f_H)
+        XH2Om[1] = init_H2O_dual
+        Xfe_H_m[1] = 0.0
+        Xfe_C_m[1] = 0.0
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            nothing,
+            nothing,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_met_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(Xfe_H_m[1], 1.0e4; atol=1.0e-12)
+        expected_sil_H_dual = (M_H_dual_tot - m_met * 1.0e4) / m_sil
+        @test isapprox(XH2Om[1] * f_H, expected_sil_H_dual; rtol=1.0e-12)
+        @test isapprox(
+            m_sil * (XH2Om[1] * f_H) + m_met * Xfe_H_m[1], M_H_dual_tot; rtol=1.0e-12
+        )
+        @test get_metal_silicate_cap_warning_count() == 2
+
+        # Nitrogen dual saturation
+        init_N_dual = 1.0e5
+        M_N_dual_tot = m_sil * init_N_dual
+        XNm[1] = init_N_dual
+        Xfe_N_m[1] = 0.0
+        XH2Om[1] = 0.0
+        Xfe_H_m[1] = 0.0
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            nothing,
+            XNm,
+            nothing,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_met_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(Xfe_N_m[1], 4.0e4; atol=1.0e-12)
+        expected_sil_N_dual = (M_N_dual_tot - m_met * 4.0e4) / m_sil
+        @test isapprox(XNm[1], expected_sil_N_dual; rtol=1.0e-12)
+        @test isapprox(m_sil * XNm[1] + m_met * Xfe_N_m[1], M_N_dual_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 3
+
+        # Sulfur dual saturation
+        init_S_dual = 5.0e5
+        M_S_dual_tot = m_sil * init_S_dual
+        XSm[1] = init_S_dual
+        Xfe_S_m[1] = 0.0
+        XH2Om[1] = 0.0
+        Xfe_H_m[1] = 0.0
+
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            F_fe,
+            F_melt,
+            T_val,
+            P_val,
+            fO2_val,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            nothing,
+            nothing,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg_met_only;
+            rho_silicate=rho_sil,
+            rho_metal=rho_met,
+            equilibration_fraction=1.0,
+        )
+        @test isapprox(Xfe_S_m[1], 3.65e5; atol=1.0e-12)
+        expected_sil_S_dual = (M_S_dual_tot - m_met * 3.65e5) / m_sil
+        @test isapprox(XSm[1], expected_sil_S_dual; rtol=1.0e-12)
+        @test isapprox(m_sil * XSm[1] + m_met * Xfe_S_m[1], M_S_dual_tot; rtol=1.0e-12)
+        @test get_metal_silicate_cap_warning_count() == 4
+    end
+
+    @testset "Metal-Silicate Domain Validation Contracts" begin
+        m = 1
+        Xfe_bulk = [0.2]
+        Xfem = [0.1]
+        XH2Om = [1.0]
+        XCm = [100.0]
+        XNm = [10.0]
+        XSm = [200.0]
+        Xfe_H_m = [0.0]
+        Xfe_C_m = [0.0]
+        Xfe_N_m = [0.0]
+        Xfe_S_m = [0.0]
+        cfg = MetalPartitionConfig(; active=true)
+
+        # Negative F_melt must throw DomainError
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            -0.01,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # Negative F_fe must throw DomainError
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            -0.01,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # Non-positive or non-finite temperature
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            0.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            -100.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            NaN,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # Negative or non-finite pressure
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            -1.0,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            Inf,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # Non-finite fO2
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            1.0e8,
+            NaN,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # F_melt and F_fe upper bounds (> 1.0)
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            1.2,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            1.2,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+
+        # Equilibration fraction bounds
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            equilibration_fraction=-0.1,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            equilibration_fraction=1.5,
+        )
+
+        # Density bounds
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            rho_silicate=0.0,
+        )
+        @test_throws DomainError equilibrate_metal_silicate_volatiles!(
+            m,
+            0.5,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg;
+            rho_metal=-100.0,
+        )
+
+        # Zero or sub-threshold melt fraction is a safe no-op
+        init_C_val = XCm[1]
+        equilibrate_metal_silicate_volatiles!(
+            m,
+            0.0,
+            0.5,
+            1500.0,
+            1.0e8,
+            -2.0,
+            Xfe_bulk,
+            Xfem,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            cfg,
+        )
+        @test isapprox(XCm[1], init_C_val; atol=1.0e-12)
     end
 
     @testset "Advective Volatile Segregation & Conservation in apply_metal_segregation!" begin
