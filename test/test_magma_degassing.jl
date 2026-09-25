@@ -181,11 +181,12 @@ include("test_helpers.jl")
             (
                 Erebus.compute_co_solubility_melt(
                     sol1.p_i[:CO], sol1.P_surf; law=:armstrong2015
-                ) +
+                ) * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO]) +
                 Erebus.compute_ch4_solubility_melt(
                     sol1.p_i[:CH4], sol1.P_surf; law=:ardia2013
-                ) +
-                Erebus.compute_co2_solubility_melt(sol1.p_i[:CO2], T_mo; law=:dixon1995)
+                ) * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CH4]) +
+                Erebus.compute_co2_solubility_melt(sol1.p_i[:CO2], T_mo; law=:dixon1995) *
+                (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO2])
             ) * 1.0e-6
         m_melt_C_calc = M_melt * w_C
 
@@ -199,6 +200,20 @@ include("test_helpers.jl")
         )
         m_melt_S_calc = M_melt * (S_S * 1.0e-6)
 
+        w_O_calc = (
+            w_H2O * (Erebus.SPECIES_AMU[:O] / Erebus.SPECIES_AMU[:H2O]) +
+            (
+                Erebus.compute_co_solubility_melt(
+                    sol1.p_i[:CO], sol1.P_surf; law=:armstrong2015
+                ) * 1.0e-6
+            ) * (Erebus.SPECIES_AMU[:O] / Erebus.SPECIES_AMU[:CO]) +
+            (
+                Erebus.compute_co2_solubility_melt(sol1.p_i[:CO2], T_mo; law=:dixon1995) *
+                1.0e-6
+            ) * (2.0 * Erebus.SPECIES_AMU[:O] / Erebus.SPECIES_AMU[:CO2])
+        )
+        m_melt_O_calc = M_melt * w_O_calc
+
         # Assert elemental closures to rtol 1e-9
         @test isapprox(m_melt_H_calc + m_atm_H_calc, M_H1; rtol=1e-9)
         @test isapprox(m_melt_C_calc + m_atm_C_calc, M_C1; rtol=1e-9)
@@ -210,6 +225,8 @@ include("test_helpers.jl")
         @test isapprox(sol1.M_melt_C, m_melt_C_calc; rtol=1e-12)
         @test isapprox(sol1.M_melt_N, m_melt_N_calc; rtol=1e-12)
         @test isapprox(sol1.M_melt_S, m_melt_S_calc; rtol=1e-12)
+        @test isapprox(sol1.M_melt_O, m_melt_O_calc; rtol=1e-12)
+        @test isapprox(sol1.dO_buffer, sol1.M_atm_O + sol1.M_melt_O; rtol=1e-12)
 
         # Perturb returned p_H2O by 1% and assert residual exceeds 1e-3 (instrument sensitivity)
         p_pert = copy(sol1.p_i)
@@ -253,7 +270,10 @@ include("test_helpers.jl")
             dIW_sat;
             graphite_saturation=true,
         )
-        @test isapprox(sol2.p_i[:CO], f_CO_max_Pa; rtol=1e-5)
+        logK_CO2_sat = 14800.0 / T_mo - 4.58
+        r_CO2_sat = 10.0^clamp(logK_CO2_sat + 0.5 * log10_fO2_sat, -100.0, 100.0)
+        @test isapprox(sol2.p_i[:CO], sol2.p_i[:CO2] / r_CO2_sat; rtol=1e-12)
+        @test isapprox(sol2.p_i[:CO], f_CO_max_Pa; rtol=0.02)
         @test isapprox(sol2.p_i[:CO2], f_CO2_max_Pa; rtol=1e-5)
         @test sol2.is_graphite_sat
         @test isapprox(
@@ -273,6 +293,15 @@ include("test_helpers.jl")
         # Test 4: Negative mass and iteration limitation fallbacks
         @test_throws DomainError solve_magma_ocean_volatile_partitioning(
             M_melt, -1.0, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0
+        )
+        @test_throws DomainError solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0; M_tot_O=-1.0
+        )
+        @test_throws DomainError solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0; max_newton_iter=0
+        )
+        @test_throws DomainError solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0; max_picard_iter=0
         )
         Erebus.reset_picard_warning_count!()
         sol_picard = solve_magma_ocean_volatile_partitioning(

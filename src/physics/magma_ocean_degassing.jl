@@ -47,14 +47,14 @@ function partial_pressures_to_masses(
     )
 end
 
-const PICARD_WARNING_COUNTER = Ref{Int}(0)
+const PICARD_WARNING_COUNTER = Threads.Atomic{Int}(0)
 
 """
     get_picard_warning_count()
 
 Return the number of times the magma ocean volatile partitioning solver fell back to Picard iteration.
 """
-function get_picard_warning_count()
+function get_picard_warning_count()::Int
     return PICARD_WARNING_COUNTER[]
 end
 
@@ -63,8 +63,8 @@ end
 
 Reset the Picard fallback warning counter to zero.
 """
-function reset_picard_warning_count!()
-    PICARD_WARNING_COUNTER[] = 0
+function reset_picard_warning_count!()::Int
+    Threads.atomic_xchg!(PICARD_WARNING_COUNTER, 0)
     return 0
 end
 
@@ -188,6 +188,7 @@ function solve_magma_ocean_volatile_partitioning(
     is_graphite_sat::Bool,
     dO_buffer::Float64,
     M_atm_O::Float64,
+    M_melt_O::Float64,
     warning_counter::Int,
 }
     M_m = Float64(M_melt)
@@ -195,6 +196,7 @@ function solve_magma_ocean_volatile_partitioning(
     mC = Float64(M_tot_C)
     mN = Float64(M_tot_N)
     mS = Float64(M_tot_S)
+    mO = Float64(M_tot_O)
     Rp = Float64(R_planet)
     grav = Float64(g)
     T = Float64(T_mo)
@@ -214,6 +216,15 @@ function solve_magma_ocean_volatile_partitioning(
     end
     if mS < 0.0 || !isfinite(mS)
         throw(DomainError(mS, "Sulfur mass must be non-negative and finite"))
+    end
+    if mO < 0.0 || !isfinite(mO)
+        throw(DomainError(mO, "Oxygen mass must be non-negative and finite"))
+    end
+    if max_newton_iter <= 0
+        throw(DomainError(max_newton_iter, "max_newton_iter must be positive"))
+    end
+    if max_picard_iter <= 0
+        throw(DomainError(max_picard_iter, "max_picard_iter must be positive"))
     end
     if Rp <= 0.0 || !isfinite(Rp)
         throw(DomainError(Rp, "Planetary radius must be > 0 and finite"))
@@ -263,9 +274,10 @@ function solve_magma_ocean_volatile_partitioning(
             C_diss_S_ppm=0.0,
             M_graphite=0.0,
             is_graphite_sat=false,
-            dO_buffer=0.0,
+            dO_buffer=(-mO),
             M_atm_O=0.0,
-            warning_counter=PICARD_WARNING_COUNTER[],
+            M_melt_O=0.0,
+            warning_counter=get_picard_warning_count(),
         )
     end
 
@@ -302,13 +314,6 @@ function solve_magma_ocean_volatile_partitioning(
         p_CO2 = p_CO2_raw
         p_CO = p_CO2 / r_CO2
         is_graphite_sat = false
-        if graphite_saturation && mC > 0.0
-            if p_CO >= f_CO_max_Pa || p_CO2 >= f_CO2_max_Pa
-                is_graphite_sat = true
-                p_CO = f_CO_max_Pa
-                p_CO2 = f_CO2_max_Pa
-            end
-        end
 
         p_H2_bar = p_H2 * 1.0e-5
         p_CH4 = 0.0
@@ -428,14 +433,31 @@ function solve_magma_ocean_volatile_partitioning(
         M_melt_H = M_m * w_diss_H
 
         C_diss_C_ppm = 0.0
+        w_diss_C = 0.0
+        co_ppm = 0.0
+        ch4_ppm = 0.0
+        co2_ppm = 0.0
         if carbon_active && mC > 0.0
             co_ppm = compute_co_solubility_melt(p_dict[:CO], P_surf; law=co_law)
             ch4_ppm = compute_ch4_solubility_melt(p_dict[:CH4], P_surf; law=ch4_law)
             co2_ppm = compute_co2_solubility_melt(p_dict[:CO2], T; law=co2_law)
-            C_diss_C_ppm = co_ppm + ch4_ppm + co2_ppm
+            C_diss_C_ppm = (
+                co_ppm * (SPECIES_AMU[:C] / SPECIES_AMU[:CO]) +
+                ch4_ppm * (SPECIES_AMU[:C] / SPECIES_AMU[:CH4]) +
+                co2_ppm * (SPECIES_AMU[:C] / SPECIES_AMU[:CO2])
+            )
+            w_diss_C = C_diss_C_ppm * 1.0e-6
         end
-        w_diss_C = C_diss_C_ppm * 1.0e-6
         M_melt_C = M_m * w_diss_C
+
+        w_diss_O = 0.0
+        if M_m > 0.0
+            w_O_H2O = w_H2O * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O])
+            w_O_CO = (co_ppm * 1.0e-6) * (SPECIES_AMU[:O] / SPECIES_AMU[:CO])
+            w_O_CO2 = (co2_ppm * 1.0e-6) * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2])
+            w_diss_O = w_O_H2O + w_O_CO + w_O_CO2
+        end
+        M_melt_O = M_m * w_diss_O
 
         C_diss_N_ppm = 0.0
         if mN > 0.0
@@ -457,13 +479,16 @@ function solve_magma_ocean_volatile_partitioning(
         M_melt_S = M_m * w_diss_S
 
         M_graphite = 0.0
-        if graphite_saturation && mC > 0.0
-            if is_graphite_sat || (
-                (M_melt_C + M_atm_C) < mC &&
-                (p_CO >= f_CO_max_Pa * 0.999999 || p_CO2 >= f_CO2_max_Pa * 0.999999)
-            )
-                is_graphite_sat = true
-                M_graphite = max(0.0, mC - (M_melt_C + M_atm_C))
+        if graphite_saturation && carbon_active && mC > 0.0
+            if (p_CO >= f_CO_max_Pa * 0.999999 || p_CO2 >= f_CO2_max_Pa * 0.999999)
+                if (M_melt_C + M_atm_C) < mC
+                    is_graphite_sat = true
+                    p_CO2 = f_CO2_max_Pa
+                    p_CO = f_CO2_max_Pa / r_CO2
+                    p_dict[:CO2] = p_CO2
+                    p_dict[:CO] = p_CO
+                    M_graphite = max(0.0, mC - (M_melt_C + M_atm_C))
+                end
             end
         end
 
@@ -491,6 +516,7 @@ function solve_magma_ocean_volatile_partitioning(
             M_melt_C=M_melt_C,
             M_melt_N=M_melt_N,
             M_melt_S=M_melt_S,
+            M_melt_O=M_melt_O,
             w_diss_H2O_wtpct=w_diss_H2O_wtpct,
             C_diss_C_ppm=C_diss_C_ppm,
             C_diss_N_ppm=C_diss_N_ppm,
@@ -628,7 +654,7 @@ function solve_magma_ocean_volatile_partitioning(
     end
 
     if !converged
-        PICARD_WARNING_COUNTER[] += 1
+        Threads.atomic_add!(PICARD_WARNING_COUNTER, 1)
         for picard_iter in 1:max_picard_iter
             res_vec = [state.R_H, state.R_C, state.R_N, state.R_S]
             norm_0 = maximum(abs(res_vec[i]) / tols[i] for i in 1:4)
@@ -683,7 +709,8 @@ function solve_magma_ocean_volatile_partitioning(
     end
 
     M_atm_O = state.M_atm_O
-    dO_buffer = M_atm_O - Float64(M_tot_O)
+    M_melt_O = state.M_melt_O
+    dO_buffer = (M_atm_O + M_melt_O) - mO
 
     return (
         P_surf=state.P_surf,
@@ -707,7 +734,8 @@ function solve_magma_ocean_volatile_partitioning(
         is_graphite_sat=state.is_graphite_sat,
         dO_buffer=dO_buffer,
         M_atm_O=M_atm_O,
-        warning_counter=PICARD_WARNING_COUNTER[],
+        M_melt_O=M_melt_O,
+        warning_counter=get_picard_warning_count(),
     )
 end
 

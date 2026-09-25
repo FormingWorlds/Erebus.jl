@@ -230,7 +230,7 @@ where $\bar{\mu} = \sum_i p_i \mu_i / P_{\text{surf}}$ is the mean atmospheric m
 
 Melt volatile masses $M_{\text{melt}, E}$ are evaluated directly from physical solubility laws at the converged partial pressures and melt temperature:
 - $M_{\text{melt}, \mathrm{H}} = M_{\text{melt}} \left[w_{\text{diss}}^{\mathrm{H}_2\mathrm{O}}(p_{\mathrm{H}_2\mathrm{O}}) \frac{2 \mu_{\mathrm{H}}}{\mu_{\mathrm{H}_2\mathrm{O}}} + w_{\text{diss}}^{\mathrm{H}_2}(p_{\mathrm{H}_2})\right]$
-- $M_{\text{melt}, \mathrm{C}} = M_{\text{melt}} \left[C_{\text{diss}}^{\mathrm{CO}}(p_{\mathrm{CO}}, P_{\text{surf}}) + C_{\text{diss}}^{\mathrm{CH}_4}(p_{\mathrm{CH}_4}, P_{\text{surf}}) + C_{\text{diss}}^{\mathrm{CO}_2}(p_{\mathrm{CO}_2}, T)\right] \times 10^{-6}$
+- $M_{\text{melt}, \mathrm{C}} = M_{\text{melt}} \left[C_{\text{diss}}^{\mathrm{CO}}(p_{\mathrm{CO}}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}}} + C_{\text{diss}}^{\mathrm{CH}_4}(p_{\mathrm{CH}_4}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CH}_4}} + C_{\text{diss}}^{\mathrm{CO}_2}(p_{\mathrm{CO}_2}, T) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}_2}}\right] \times 10^{-6}$
 - $M_{\text{melt}, \mathrm{N}} = M_{\text{melt}} \left[S_{\text{N}}(p_{\mathrm{N}_2}, \Delta\text{IW})\right] \times 10^{-6}$
 - $M_{\text{melt}, \mathrm{S}} = M_{\text{melt}} \left[C_{\text{S}}(p_{\mathrm{S}_2}, T, \Delta\text{IW})\right] \times 10^{-6}$
 
@@ -253,6 +253,17 @@ The 4-variable non-linear system is solved via Newton-Raphson iteration with Arm
    with relative tolerance $\text{rtol} = 10^{-10}$ and absolute floor $\text{atol}_E = 10^{-12} \sum M_{\text{tot}}$.
 4. If Newton iteration fails to converge within `max_newton_iter`, the solver falls back to a Picard fixed-point iteration on atmospheric mass fractions $f_E = M_{\text{atm}, E} / M_{\text{tot}, E}$ (up to `max_picard_iter = 500` iterations) and increments `PICARD_WARNING_COUNTER` in telemetry.
 5. If Picard iteration also fails, the solver throws a typed `ConvergenceError` carrying the elemental residuals.
+
+#### Literature Grounding and Verification
+
+Thermodynamic equilibria and solubility parameterizations are grounded in:
+- French, B. M. (1966). Some geological implications of equilibrium between graphite and a C-H-O gas at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253. DOI: [10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
+- Holloway, J. R., Pan, V., & Gudmundsson, G. (1992). High-pressure fluid-absent melting in mantle systems: an experimental study. *European Journal of Mineralogy*, 4(1), 105-114. DOI: [10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)
+- Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995). An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. DOI: [10.1093/petrology/36.6.1607](https://doi.org/10.1093/petrology/36.6.1607)
+- Armstrong, L. S., Hirschmann, M. M., Withers, A. C., & Kohlstedt, D. L. (2015). Solubility of carbon monoxide in basaltic melt at low pressure and its role in planetary degassing. *Geochimica et Cosmochimica Acta*, 171, 283-302. DOI: [10.1016/j.gca.2015.07.007](https://doi.org/10.1016/j.gca.2015.07.007)
+- Boulliung, J., Dalou, C., & Tissandier, L. (2023). Magma ocean degassing and the origin of Earth's volatile inventory. *Elements*, 19(5), 288-294. DOI: [10.2138/gselements.19.5.288](https://doi.org/10.2138/gselements.19.5.288)
+
+Verification test suite: `@testset "Roadmap PR 1c-ii: Coupled Magma Ocean Solve"` in `test/test_magma_degassing.jl`.
 
 ---
 
