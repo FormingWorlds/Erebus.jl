@@ -1249,7 +1249,7 @@ function solve_chnos_speciation(
     p_H2O = 0.0
 
     # Simultaneous element conservation and Dalton law iteration
-    for outer_iter in 1:100
+    for dalton_iter in 1:100
         for inner_iter in 1:40
             log_pH2 = pH2 > 0.0 ? log10(max(pH2, 1.0e-30)) : -100.0
             r_CH4 = if pH2 > 0.0
