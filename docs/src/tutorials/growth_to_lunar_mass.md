@@ -83,7 +83,8 @@ Radioactive decay ($^{26}\text{Al}$ and $^{60}\text{Fe}$) heats the interior pas
 - Liquid pore water drives Darcy hydrothermal circulation.
 - High pore fluid pressures trigger hydraulic fracturing and volatile venting.
 - Magma ocean formation enables multi-species volatile solubility and exsolution ($\text{H}_2\text{O}, \text{CO}_2, \text{CO}, \text{CH}_4, \text{N}_2, \text{NH}_3, \text{H}_2\text{S}$).
-- Iron redox equilibrium ($f\text{O}_2 \sim \text{IW}-2$ to $\text{IW}-1$) partitions siderophile and volatile species between mantle silicates and liquid metal.
+- Volatiles enter the atmosphere as elemental inventories (`ElementInventory`), where closed-system speciation calculates atmospheric gas partial pressures and oxygen fugacity (`SpeciesInventory`).
+- Iron redox equilibrium ($f\text{O}_2 \sim \text{IW}-2$ to $\text{IW}-1$) partitions siderophile species into the metallic core and exchanges buffer oxygen $\Delta O_{\text{buffer}}$ with the mantle.
 
 ### 5. Disk Dispersal and Transonic Hydrodynamic Boil-Off
 
@@ -248,6 +249,18 @@ println("Telescope Level: $telescope_level (Domain: $domain_size_km km)")
 # Peak internal temperature and melt fraction
 max_T = maximum(data["tk2"])
 println("Peak Mantle Temperature: $(round(max_T, digits=1)) K")
+
+# Atmospheric elemental state and speciation
+atm_elem = data["atm_elem"]       # ElementInventory(H, C, N, S, O)
+atm_species = data["atm_species"] # SpeciesInventory(H2, H2O, CH4, CO, CO2, ...)
+atm_escaped = data["atm_escaped"] # Cumulative escaped ElementInventory
+dO_buffer = data["atm_dO_buffer"] # Cumulative buffer oxygen exchanged [kg]
+log10_fO2 = data["atm_log10_fO2"] # Atmospheric oxygen fugacity
+
+println("Atmospheric H Mass:   $(atm_elem.H) kg")
+println("Atmospheric H2O:      $(atm_species.H2O) kg")
+println("Cumulative Escaped H: $(atm_escaped.H) kg")
+println("Buffer Oxygen Shift:  $dO_buffer kg (log10 fO2 = $log10_fO2)")
 ```
 
 ---

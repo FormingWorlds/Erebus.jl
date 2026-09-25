@@ -10,43 +10,467 @@ This module models:
 6. Zahnle & Kasting (1986) hydrodynamic crossover escape for multi-species outgassing.
 """
 
+# -----------------------------------------------------------------------------
+# Elemental & Species Inventories
+# -----------------------------------------------------------------------------
+
+"""
+Standard elemental mass fractions within atmospheric gas species.
+"""
+const W_H_H2 = 1.0
+const W_H_H2O = SPECIES_AMU[:H2] / SPECIES_AMU[:H2O]
+const W_O_H2O = 1.0 - W_H_H2O
+const W_C_CO = SPECIES_AMU[:C] / SPECIES_AMU[:CO]
+const W_O_CO = 1.0 - W_C_CO
+const W_C_CO2 = SPECIES_AMU[:C] / SPECIES_AMU[:CO2]
+const W_O_CO2 = 1.0 - W_C_CO2
+const W_C_CH4 = SPECIES_AMU[:C] / SPECIES_AMU[:CH4]
+const W_H_CH4 = 1.0 - W_C_CH4
+const W_N_N2 = 1.0
+const W_N_NH3 = SPECIES_AMU[:N] / SPECIES_AMU[:NH3]
+const W_H_NH3 = 1.0 - W_N_NH3
+const W_H_H2S = SPECIES_AMU[:H2] / SPECIES_AMU[:H2S]
+const W_S_H2S = 1.0 - W_H_H2S
+const W_S_S2 = 1.0
+const W_S_SO2 = SPECIES_AMU[:S] / SPECIES_AMU[:SO2]
+const W_O_SO2 = 1.0 - W_S_SO2
+
+"""
+Atmospheric elemental inventory [kg].
+
+$(FIELDS)
+"""
+struct ElementInventory
+    H::Float64
+    C::Float64
+    N::Float64
+    S::Float64
+    O::Float64
+
+    function ElementInventory(H::Real, C::Real, N::Real, S::Real, O::Real)
+        h = Float64(H)
+        c = Float64(C)
+        n = Float64(N)
+        s = Float64(S)
+        o = Float64(O)
+        if !isfinite(h) || h < 0.0
+            throw(DomainError(h, "H mass must be non-negative and finite"))
+        end
+        if !isfinite(c) || c < 0.0
+            throw(DomainError(c, "C mass must be non-negative and finite"))
+        end
+        if !isfinite(n) || n < 0.0
+            throw(DomainError(n, "N mass must be non-negative and finite"))
+        end
+        if !isfinite(s) || s < 0.0
+            throw(DomainError(s, "S mass must be non-negative and finite"))
+        end
+        if !isfinite(o) || o < 0.0
+            throw(DomainError(o, "O mass must be non-negative and finite"))
+        end
+        return new(h, c, n, s, o)
+    end
+end
+
+function ElementInventory(; H::Real=0.0, C::Real=0.0, N::Real=0.0, S::Real=0.0, O::Real=0.0)
+    return ElementInventory(H, C, N, S, O)
+end
+
+function ElementInventory(d::AbstractDict)
+    return ElementInventory(;
+        H=get(d, :H, get(d, "H", 0.0)),
+        C=get(d, :C, get(d, "C", 0.0)),
+        N=get(d, :N, get(d, "N", 0.0)),
+        S=get(d, :S, get(d, "S", 0.0)),
+        O=get(d, :O, get(d, "O", 0.0)),
+    )
+end
+
+function Base.:+(a::ElementInventory, b::ElementInventory)
+    return ElementInventory(a.H + b.H, a.C + b.C, a.N + b.N, a.S + b.S, a.O + b.O)
+end
+function Base.:-(a::ElementInventory, b::ElementInventory)
+    return ElementInventory(
+        max(0.0, a.H - b.H),
+        max(0.0, a.C - b.C),
+        max(0.0, a.N - b.N),
+        max(0.0, a.S - b.S),
+        max(0.0, a.O - b.O),
+    )
+end
+function Base.:*(a::ElementInventory, s::Real)
+    return ElementInventory(
+        a.H * Float64(s),
+        a.C * Float64(s),
+        a.N * Float64(s),
+        a.S * Float64(s),
+        a.O * Float64(s),
+    )
+end
+Base.:*(s::Real, a::ElementInventory) = a * s
+function Base.:/(a::ElementInventory, s::Real)
+    return ElementInventory(
+        a.H / Float64(s),
+        a.C / Float64(s),
+        a.N / Float64(s),
+        a.S / Float64(s),
+        a.O / Float64(s),
+    )
+end
+function Base.isapprox(a::ElementInventory, b::ElementInventory; kwargs...)
+    return (
+        isapprox(a.H, b.H; kwargs...) &&
+        isapprox(a.C, b.C; kwargs...) &&
+        isapprox(a.N, b.N; kwargs...) &&
+        isapprox(a.S, b.S; kwargs...) &&
+        isapprox(a.O, b.O; kwargs...)
+    )
+end
+total_mass(inv::ElementInventory)::Float64 = inv.H + inv.C + inv.N + inv.S + inv.O
+Base.Dict(inv::ElementInventory)::Dict{Symbol,Float64} =
+    Dict{Symbol,Float64}(:H => inv.H, :C => inv.C, :N => inv.N, :S => inv.S, :O => inv.O)
+
+"""
+Atmospheric 10-species inventory [kg].
+
+$(FIELDS)
+"""
+struct SpeciesInventory
+    H2::Float64
+    H2O::Float64
+    CO::Float64
+    CO2::Float64
+    CH4::Float64
+    N2::Float64
+    NH3::Float64
+    H2S::Float64
+    S2::Float64
+    SO2::Float64
+
+    function SpeciesInventory(
+        H2::Real,
+        H2O::Real,
+        CO::Real,
+        CO2::Real,
+        CH4::Real,
+        N2::Real,
+        NH3::Real,
+        H2S::Real,
+        S2::Real,
+        SO2::Real,
+    )
+        fields = (H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2)
+        for v in fields
+            vf = Float64(v)
+            if !isfinite(vf) || vf < 0.0
+                throw(DomainError(vf, "Species mass must be non-negative and finite"))
+            end
+        end
+        return new(
+            Float64(H2),
+            Float64(H2O),
+            Float64(CO),
+            Float64(CO2),
+            Float64(CH4),
+            Float64(N2),
+            Float64(NH3),
+            Float64(H2S),
+            Float64(S2),
+            Float64(SO2),
+        )
+    end
+end
+
+function SpeciesInventory(;
+    H2::Real=0.0,
+    H2O::Real=0.0,
+    CO::Real=0.0,
+    CO2::Real=0.0,
+    CH4::Real=0.0,
+    N2::Real=0.0,
+    NH3::Real=0.0,
+    H2S::Real=0.0,
+    S2::Real=0.0,
+    SO2::Real=0.0,
+)
+    return SpeciesInventory(H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2)
+end
+
+function SpeciesInventory(d::AbstractDict)
+    return SpeciesInventory(;
+        H2=get(d, :H2, get(d, "H2", 0.0)),
+        H2O=get(d, :H2O, get(d, "H2O", 0.0)),
+        CO=get(d, :CO, get(d, "CO", 0.0)),
+        CO2=get(d, :CO2, get(d, "CO2", 0.0)),
+        CH4=get(d, :CH4, get(d, "CH4", 0.0)),
+        N2=get(d, :N2, get(d, "N2", 0.0)),
+        NH3=get(d, :NH3, get(d, "NH3", 0.0)),
+        H2S=get(d, :H2S, get(d, "H2S", 0.0)),
+        S2=get(d, :S2, get(d, "S2", 0.0)),
+        SO2=get(d, :SO2, get(d, "SO2", 0.0)),
+    )
+end
+
+total_mass(inv::SpeciesInventory)::Float64 = (
+    inv.H2 +
+    inv.H2O +
+    inv.CO +
+    inv.CO2 +
+    inv.CH4 +
+    inv.N2 +
+    inv.NH3 +
+    inv.H2S +
+    inv.S2 +
+    inv.SO2
+)
+
+Base.Dict(inv::SpeciesInventory)::Dict{Symbol,Float64} = Dict{Symbol,Float64}(
+    :H2 => inv.H2,
+    :H2O => inv.H2O,
+    :CO => inv.CO,
+    :CO2 => inv.CO2,
+    :CH4 => inv.CH4,
+    :N2 => inv.N2,
+    :NH3 => inv.NH3,
+    :H2S => inv.H2S,
+    :S2 => inv.S2,
+    :SO2 => inv.SO2,
+)
+
+"""
+Convert 10-species inventory to elemental inventory using stoichiometry.
+"""
+function to_element_inventory(sp::SpeciesInventory)::ElementInventory
+    h = (
+        sp.H2 * W_H_H2 +
+        sp.H2O * W_H_H2O +
+        sp.CH4 * W_H_CH4 +
+        sp.NH3 * W_H_NH3 +
+        sp.H2S * W_H_H2S
+    )
+    c = sp.CO * W_C_CO + sp.CO2 * W_C_CO2 + sp.CH4 * W_C_CH4
+    n = sp.N2 * W_N_N2 + sp.NH3 * W_N_NH3
+    s = sp.H2S * W_S_H2S + sp.S2 * W_S_S2 + sp.SO2 * W_S_SO2
+    o = sp.H2O * W_O_H2O + sp.CO * W_O_CO + sp.CO2 * W_O_CO2 + sp.SO2 * W_O_SO2
+    return ElementInventory(h, c, n, s, o)
+end
+
 """
 Coupled 1D atmosphere and envelope dynamic state.
 
 $(FIELDS)
 """
 mutable struct AtmosphereState
-    M_atm::Dict{Symbol,Float64}
-    M_escaped::Dict{Symbol,Float64}
+    elem::ElementInventory
+    species::SpeciesInventory
+    escaped::ElementInventory
+    dO_buffer::Float64
+    log10_fO2::Float64
     P_surf::Float64
     T_surf_eq::Float64
     tau_LW::Float64
     M_env_bound::Float64
     F_net_rad::Float64
     h_rad_eff::Float64
+    M_atm::Dict{Symbol,Float64}
+    M_escaped::Dict{Symbol,Float64}
 end
 
 function AtmosphereState(;
-    M_atm::Dict{Symbol,Float64}=Dict{Symbol,Float64}(),
-    M_escaped::Dict{Symbol,Float64}=Dict{Symbol,Float64}(),
+    elem::ElementInventory=ElementInventory(),
+    species::SpeciesInventory=SpeciesInventory(),
+    escaped::ElementInventory=ElementInventory(),
+    dO_buffer::Real=0.0,
+    log10_fO2::Real=-40.0,
     P_surf::Real=0.0,
     T_surf_eq::Real=0.0,
     tau_LW::Real=0.0,
     M_env_bound::Real=0.0,
     F_net_rad::Real=0.0,
     h_rad_eff::Real=0.0,
+    M_atm::Union{Nothing,AbstractDict{Symbol,<:Real}}=nothing,
+    M_escaped::Union{Nothing,AbstractDict{Symbol,<:Real}}=nothing,
 )
+    sp = if M_atm !== nothing
+        SpeciesInventory(M_atm)
+    else
+        species
+    end
+    el = if M_atm !== nothing && total_mass(elem) == 0.0 && total_mass(sp) > 0.0
+        to_element_inventory(sp)
+    else
+        elem
+    end
+    atm_dict = Dict{Symbol,Float64}(sp_k => 0.0 for sp_k in SPECIATION_SPECIES)
+    if M_atm !== nothing
+        for (k, v) in pairs(M_atm)
+            atm_dict[Symbol(k)] = Float64(v)
+        end
+    else
+        for sp_k in SPECIATION_SPECIES
+            atm_dict[sp_k] = getproperty(sp, sp_k)
+        end
+    end
+    esc_dict = Dict{Symbol,Float64}(sp_k => 0.0 for sp_k in SPECIATION_SPECIES)
+    if M_escaped !== nothing
+        for (k, v) in pairs(M_escaped)
+            esc_dict[Symbol(k)] = Float64(v)
+        end
+    end
+    esc = if M_escaped !== nothing && total_mass(escaped) == 0.0
+        esc_sp = SpeciesInventory(M_escaped)
+        esc_el = to_element_inventory(esc_sp)
+        esc_h = esc_el.H + get(M_escaped, :H, get(M_escaped, "H", 0.0))
+        esc_c = esc_el.C + get(M_escaped, :C, get(M_escaped, "C", 0.0))
+        esc_n = esc_el.N + get(M_escaped, :N, get(M_escaped, "N", 0.0))
+        esc_s = esc_el.S + get(M_escaped, :S, get(M_escaped, "S", 0.0))
+        esc_o = esc_el.O + get(M_escaped, :O, get(M_escaped, "O", 0.0))
+        ElementInventory(esc_h, esc_c, esc_n, esc_s, esc_o)
+    else
+        escaped
+    end
     return AtmosphereState(
-        M_atm,
-        M_escaped,
+        el,
+        sp,
+        esc,
+        Float64(dO_buffer),
+        Float64(log10_fO2),
         Float64(P_surf),
         Float64(T_surf_eq),
         Float64(tau_LW),
         Float64(M_env_bound),
         Float64(F_net_rad),
         Float64(h_rad_eff),
+        atm_dict,
+        esc_dict,
     )
 end
+
+function AtmosphereState(
+    M_atm::AbstractDict{Symbol,<:Real},
+    M_escaped::AbstractDict{Symbol,<:Real},
+    P_surf::Real=0.0,
+    T_surf_eq::Real=0.0,
+    tau_LW::Real=0.0,
+    M_env_bound::Real=0.0,
+    F_net_rad::Real=0.0,
+    h_rad_eff::Real=0.0;
+    kwargs...,
+)
+    return AtmosphereState(;
+        M_atm=M_atm,
+        M_escaped=M_escaped,
+        P_surf=P_surf,
+        T_surf_eq=T_surf_eq,
+        tau_LW=tau_LW,
+        M_env_bound=M_env_bound,
+        F_net_rad=F_net_rad,
+        h_rad_eff=h_rad_eff,
+        kwargs...,
+    )
+end
+
+function Base.propertynames(atm::AtmosphereState, private::Bool=false)
+    return (
+        :elem,
+        :species,
+        :escaped,
+        :dO_buffer,
+        :log10_fO2,
+        :P_surf,
+        :T_surf_eq,
+        :tau_LW,
+        :M_env_bound,
+        :F_net_rad,
+        :h_rad_eff,
+        :M_atm,
+        :M_escaped,
+    )
+end
+
+@inline function Base.getproperty(atm::AtmosphereState, sym::Symbol)
+    if sym === :elem
+        return getfield(atm, :elem)
+    elseif sym === :species
+        return getfield(atm, :species)
+    elseif sym === :escaped
+        return getfield(atm, :escaped)
+    elseif sym === :dO_buffer
+        return getfield(atm, :dO_buffer)
+    elseif sym === :log10_fO2
+        return getfield(atm, :log10_fO2)
+    elseif sym === :P_surf
+        return getfield(atm, :P_surf)
+    elseif sym === :T_surf_eq
+        return getfield(atm, :T_surf_eq)
+    elseif sym === :tau_LW
+        return getfield(atm, :tau_LW)
+    elseif sym === :M_env_bound
+        return getfield(atm, :M_env_bound)
+    elseif sym === :F_net_rad
+        return getfield(atm, :F_net_rad)
+    elseif sym === :h_rad_eff
+        return getfield(atm, :h_rad_eff)
+    elseif sym === :M_atm
+        return getfield(atm, :M_atm)
+    elseif sym === :M_escaped
+        return getfield(atm, :M_escaped)
+    else
+        return getfield(atm, sym)
+    end
+end
+
+function Base.setproperty!(atm::AtmosphereState, sym::Symbol, val)
+    if sym === :M_atm
+        atm_d = getfield(atm, :M_atm)
+        empty!(atm_d)
+        if val isa SpeciesInventory
+            for sp_k in SPECIATION_SPECIES
+                atm_d[sp_k] = getproperty(val, sp_k)
+            end
+            setfield!(atm, :species, val)
+            setfield!(atm, :elem, to_element_inventory(val))
+        elseif val isa AbstractDict
+            for (k, v) in pairs(val)
+                atm_d[Symbol(k)] = Float64(v)
+            end
+            sp = SpeciesInventory(atm_d)
+            setfield!(atm, :species, sp)
+            setfield!(atm, :elem, to_element_inventory(sp))
+        end
+    elseif sym === :M_escaped
+        if val isa ElementInventory
+            setfield!(atm, :escaped, val)
+        elseif val isa AbstractDict
+            esc_d = getfield(atm, :M_escaped)
+            empty!(esc_d)
+            for (k, v) in pairs(val)
+                esc_d[Symbol(k)] = Float64(v)
+            end
+            esc_sp = SpeciesInventory(val)
+            esc_el = to_element_inventory(esc_sp)
+            esc_h = esc_el.H + get(val, :H, get(val, "H", 0.0))
+            esc_c = esc_el.C + get(val, :C, get(val, "C", 0.0))
+            esc_n = esc_el.N + get(val, :N, get(val, "N", 0.0))
+            esc_s = esc_el.S + get(val, :S, get(val, "S", 0.0))
+            esc_o = esc_el.O + get(val, :O, get(val, "O", 0.0))
+            setfield!(atm, :escaped, ElementInventory(esc_h, esc_c, esc_n, esc_s, esc_o))
+        end
+    else
+        setfield!(atm, sym, val)
+    end
+end
+
+"""
+$(SIGNATURES)
+
+Accessor functions for `AtmosphereState`.
+"""
+get_elem(atm::AtmosphereState)::ElementInventory = atm.elem
+get_species(atm::AtmosphereState)::SpeciesInventory = atm.species
+get_escaped(atm::AtmosphereState)::ElementInventory = atm.escaped
+get_dO_buffer(atm::AtmosphereState)::Float64 = atm.dO_buffer
+get_log10_fO2(atm::AtmosphereState)::Float64 = atm.log10_fO2
 
 """
     compute_gravitational_capture_radius(M::Real, M_star::Real, a::Real, c_s::Real)::Float64
@@ -397,8 +821,11 @@ function compute_boiloff_rate(M_env::Real, M_env_target::Real, tau_boil::Real)::
     if M_t < 0.0 || !isfinite(M_t)
         throw(DomainError(M_t, "Target envelope mass must be >= 0 and finite"))
     end
-    if tau <= 0.0 || !isfinite(tau)
-        throw(DomainError(tau, "Boil-off timescale must be > 0 and finite"))
+    if tau <= 0.0 || isnan(tau)
+        throw(DomainError(tau, "Boil-off timescale must be > 0 and non-NaN"))
+    end
+    if isinf(tau)
+        return 0.0
     end
 
     excess = max(0.0, M_e - M_t)
@@ -1163,7 +1590,7 @@ Advance the atmospheric species inventory, gas envelope capture/boil-off, radiat
 """
 function evolve_coupled_atmosphere_step!(
     atm_state::AtmosphereState,
-    vent_rates::AbstractDict{Symbol,<:Real},
+    vent_rates::Union{ElementInventory,AbstractDict{Symbol,<:Real}},
     dt_s::Real,
     M_planet::Real,
     R_planet::Real,
@@ -1181,7 +1608,7 @@ function evolve_coupled_atmosphere_step!(
     escape_active::Bool=true,
     escape_cfg::Union{Nothing,EscapeConfig}=nothing,
     sim_time_s::Real=0.0,
-    degas_rates::Union{Nothing,AbstractDict{Symbol,<:Real}}=nothing,
+    degas_rates::Union{Nothing,ElementInventory,AbstractDict{Symbol,<:Real}}=nothing,
 )
     dt = Float64(dt_s)
     if !isfinite(dt)
@@ -1217,15 +1644,41 @@ function evolve_coupled_atmosphere_step!(
     area_exo = 4.0 * π * (R_exo^2)
 
     # 1. Influx from interior venting and magma ocean degassing
-    for (sp, rate) in vent_rates
-        M_influx = Float64(rate) * dt
-        atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + M_influx
-    end
-    if degas_rates !== nothing
-        for (sp, rate) in degas_rates
-            M_influx = Float64(rate) * dt
-            atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + M_influx
+    is_elemental = (
+        vent_rates isa ElementInventory ||
+        (degas_rates !== nothing && degas_rates isa ElementInventory)
+    )
+
+    if is_elemental
+        d_elem_vent = if vent_rates isa ElementInventory
+            vent_rates * dt
+        else
+            to_element_inventory(SpeciesInventory(vent_rates)) * dt
         end
+        atm_state.elem = atm_state.elem + d_elem_vent
+        if degas_rates !== nothing
+            d_elem_degas = if degas_rates isa ElementInventory
+                degas_rates * dt
+            else
+                to_element_inventory(SpeciesInventory(degas_rates)) * dt
+            end
+            atm_state.elem = atm_state.elem + d_elem_degas
+        end
+    else
+        if vent_rates isa AbstractDict
+            for (sp, rate) in pairs(vent_rates)
+                val = Float64(rate) * dt
+                atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + val
+            end
+        end
+        if degas_rates !== nothing && degas_rates isa AbstractDict
+            for (sp, rate) in pairs(degas_rates)
+                val = Float64(rate) * dt
+                atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + val
+            end
+        end
+        atm_state.species = SpeciesInventory(atm_state.M_atm)
+        atm_state.elem = to_element_inventory(atm_state.species)
     end
 
     # 2. Disk envelope capture and boil-off if embedded in disk or clearing
@@ -1237,32 +1690,83 @@ function evolve_coupled_atmosphere_step!(
             0.0
         end
         if M_env_target > atm_state.M_env_bound
-            # Envelope growth from disk gas capture (assumed H2)
             dM_cap = M_env_target - atm_state.M_env_bound
             atm_state.M_env_bound = M_env_target
+            atm_state.elem = ElementInventory(
+                atm_state.elem.H + dM_cap,
+                atm_state.elem.C,
+                atm_state.elem.N,
+                atm_state.elem.S,
+                atm_state.elem.O,
+            )
             atm_state.M_atm[:H2] = get(atm_state.M_atm, :H2, 0.0) + dM_cap
+            atm_state.species = SpeciesInventory(atm_state.M_atm)
         elseif M_env_target < atm_state.M_env_bound
-            # Envelope boil-off during disk dispersal
             dM_boil_rate = compute_boiloff_rate(
                 atm_state.M_env_bound, M_env_target, cfg.tau_boil
             )
             dM_boil = min(atm_state.M_env_bound - M_env_target, dM_boil_rate * dt)
-            dM_loss_actual = min(get(atm_state.M_atm, :H2, 0.0), dM_boil)
-            atm_state.M_atm[:H2] = get(atm_state.M_atm, :H2, 0.0) - dM_loss_actual
+            h2_avail = min(atm_state.species.H2, get(atm_state.M_atm, :H2, 0.0))
+            dM_loss_actual = min(h2_avail, dM_boil)
+            dM_loss_actual = min(atm_state.elem.H, dM_loss_actual)
+            atm_state.elem = ElementInventory(
+                max(0.0, atm_state.elem.H - dM_loss_actual),
+                atm_state.elem.C,
+                atm_state.elem.N,
+                atm_state.elem.S,
+                atm_state.elem.O,
+            )
+            atm_state.escaped = ElementInventory(
+                atm_state.escaped.H + dM_loss_actual,
+                atm_state.escaped.C,
+                atm_state.escaped.N,
+                atm_state.escaped.S,
+                atm_state.escaped.O,
+            )
+            atm_state.M_atm[:H2] = max(0.0, get(atm_state.M_atm, :H2, 0.0) - dM_loss_actual)
             atm_state.M_escaped[:H2] = get(atm_state.M_escaped, :H2, 0.0) + dM_loss_actual
-            atm_state.M_env_bound -= dM_loss_actual
+            atm_state.species = SpeciesInventory(atm_state.M_atm)
+            atm_state.M_env_bound = max(0.0, atm_state.M_env_bound - dM_loss_actual)
         end
     end
 
-    # 3. Hydrodynamic escape and multispecies closure (active once disk disperses)
-    if escape_active && rho_disk <= 0.0
-        present_species = Symbol[sp for (sp, mass) in atm_state.M_atm if mass > 0.0]
+    # 3. Speciation before escape (only in elemental mode)
+    M_tot_curr = total_mass(atm_state.elem)
+    P_surf_est = max(1.0, compute_surface_atmospheric_pressure(M_tot_curr, M_p, R_p))
+    T_surf_est = max(273.15, atm_state.T_surf_eq > 0.0 ? atm_state.T_surf_eq : Tamb)
+
+    if is_elemental
+        if M_tot_curr > 0.0
+            spec_res = speciate_closed_system(atm_state.elem, T_surf_est, P_surf_est)
+            atm_state.species = spec_res.species
+            atm_state.log10_fO2 = spec_res.log10_fO2
+        else
+            atm_state.species = SpeciesInventory()
+            atm_state.log10_fO2 = -40.0
+        end
+        for sp in SPECIATION_SPECIES
+            atm_state.M_atm[sp] = getproperty(atm_state.species, sp)
+        end
+    end
+
+    # 4. Hydrodynamic escape and multispecies closure (active once disk disperses)
+    M_tot_sp = is_elemental ? total_mass(atm_state.species) : sum(values(atm_state.M_atm))
+    if escape_active && rho_disk <= 0.0 && M_tot_sp > 0.0
+        present_species = if is_elemental
+            Symbol[sp for sp in SPECIATION_SPECIES if getproperty(atm_state.species, sp) > 0.0]
+        else
+            Symbol[sp for (sp, v) in pairs(atm_state.M_atm) if v > 0.0]
+        end
         if !isempty(present_species)
             m_species = [get_species_molecular_mass(sp) for sp in present_species]
             min_idx = argmin(m_species)
             carrier_sp = present_species[min_idx]
             m_carrier = m_species[min_idx]
-            M_carrier = atm_state.M_atm[carrier_sp]
+            M_carrier = if is_elemental
+                getproperty(atm_state.species, carrier_sp)
+            else
+                atm_state.M_atm[carrier_sp]
+            end
 
             # Unconstrained thermal / blow-off escape of lightest species
             esc_carrier = evolve_atmospheric_species_inventory(
@@ -1311,21 +1815,28 @@ function evolve_coupled_atmosphere_step!(
 
             phi_base = max(phi_thermal, phi_xuv)
 
+            dM_esc_dict = Dict{Symbol,Float64}(sp => 0.0 for sp in present_species)
             if !cfg.crossover_active || length(present_species) == 1
                 dM_esc_base = min(M_carrier, phi_base * area_exo * dt)
-                atm_state.M_atm[carrier_sp] -= dM_esc_base
-                atm_state.M_escaped[carrier_sp] =
-                    get(atm_state.M_escaped, carrier_sp, 0.0) + dM_esc_base
-                if carrier_sp === :H2
-                    atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
-                end
+                dM_esc_dict[carrier_sp] = dM_esc_base
             elseif phi_base > 0.0 && dt > 0.0 && area_exo > 0.0
                 total_moles = sum(
-                    atm_state.M_atm[sp] / m_species[idx] for
-                    (idx, sp) in enumerate(present_species)
+                    (
+                        if is_elemental
+                            getproperty(atm_state.species, sp)
+                        else
+                            atm_state.M_atm[sp]
+                        end
+                    ) / m_species[idx] for (idx, sp) in enumerate(present_species)
                 )
                 X_vec = [
-                    (atm_state.M_atm[sp] / m_species[idx]) / total_moles for
+                    ((
+                        if is_elemental
+                            getproperty(atm_state.species, sp)
+                        else
+                            atm_state.M_atm[sp]
+                        end
+                    ) / m_species[idx]) / total_moles for
                     (idx, sp) in enumerate(present_species)
                 ]
                 b_mat = assemble_binary_diffusion_matrix(present_species, T_exo)
@@ -1336,21 +1847,74 @@ function evolve_coupled_atmosphere_step!(
 
                 for (idx, sp) in enumerate(present_species)
                     Phi_j = Phi_vec[idx]
-                    dM_esc_j = min(
-                        atm_state.M_atm[sp], Phi_j * m_species[idx] * area_exo * dt
+                    curr_sp_m = if is_elemental
+                        getproperty(atm_state.species, sp)
+                    else
+                        atm_state.M_atm[sp]
+                    end
+                    dM_esc_j = min(curr_sp_m, Phi_j * m_species[idx] * area_exo * dt)
+                    dM_esc_dict[sp] = dM_esc_j
+                end
+            end
+
+            # Update species and escaped in M_atm and M_escaped
+            for (sp, dM) in pairs(dM_esc_dict)
+                atm_state.M_atm[sp] = max(0.0, get(atm_state.M_atm, sp, 0.0) - dM)
+                atm_state.M_escaped[sp] = get(atm_state.M_escaped, sp, 0.0) + dM
+            end
+
+            # Debiting elem and crediting escaped through species stoichiometry
+            dM_esc_sp_inv = SpeciesInventory(dM_esc_dict)
+            dM_esc_elem = to_element_inventory(dM_esc_sp_inv)
+
+            loss_H = min(atm_state.elem.H, dM_esc_elem.H)
+            loss_C = min(atm_state.elem.C, dM_esc_elem.C)
+            loss_N = min(atm_state.elem.N, dM_esc_elem.N)
+            loss_S = min(atm_state.elem.S, dM_esc_elem.S)
+            loss_O = min(atm_state.elem.O, dM_esc_elem.O)
+
+            atm_state.elem = ElementInventory(
+                max(0.0, atm_state.elem.H - loss_H),
+                max(0.0, atm_state.elem.C - loss_C),
+                max(0.0, atm_state.elem.N - loss_N),
+                max(0.0, atm_state.elem.S - loss_S),
+                max(0.0, atm_state.elem.O - loss_O),
+            )
+            atm_state.escaped = ElementInventory(
+                atm_state.escaped.H + loss_H,
+                atm_state.escaped.C + loss_C,
+                atm_state.escaped.N + loss_N,
+                atm_state.escaped.S + loss_S,
+                atm_state.escaped.O + loss_O,
+            )
+
+            if haskey(dM_esc_dict, :H2) && dM_esc_dict[:H2] > 0.0
+                atm_state.M_env_bound = max(0.0, atm_state.M_env_bound - dM_esc_dict[:H2])
+            end
+
+            # Refresh species and log10_fO2 after escape
+            if is_elemental
+                if total_mass(atm_state.elem) > 0.0
+                    spec_after = speciate_closed_system(
+                        atm_state.elem, T_surf_est, P_surf_est
                     )
-                    atm_state.M_atm[sp] -= dM_esc_j
-                    atm_state.M_escaped[sp] = get(atm_state.M_escaped, sp, 0.0) + dM_esc_j
+                    atm_state.species = spec_after.species
+                    atm_state.log10_fO2 = spec_after.log10_fO2
+                else
+                    atm_state.species = SpeciesInventory()
+                    atm_state.log10_fO2 = -40.0
                 end
-                if haskey(atm_state.M_atm, :H2)
-                    atm_state.M_env_bound = min(atm_state.M_env_bound, atm_state.M_atm[:H2])
+                for sp in SPECIATION_SPECIES
+                    atm_state.M_atm[sp] = getproperty(atm_state.species, sp)
                 end
+            else
+                atm_state.species = SpeciesInventory(atm_state.M_atm)
             end
         end
     end
 
-    # 4. Update surface diagnostics: P_surf, tau_LW, T_surf_eq, h_rad_eff, F_net_rad
-    M_tot = sum(values(atm_state.M_atm))
+    # 5. Update surface diagnostics: P_surf, tau_LW, T_surf_eq, h_rad_eff, F_net_rad
+    M_tot = max(total_mass(atm_state.elem), sum(values(atm_state.M_atm)))
     atm_state.P_surf = compute_surface_atmospheric_pressure(M_tot, M_p, R_p)
     atm_state.tau_LW = compute_atmospheric_optical_depth(
         atm_state.M_atm, R_p, cfg.opacities; kappa_default=cfg.kappa_ir_default
@@ -1368,7 +1932,6 @@ function evolve_coupled_atmosphere_step!(
     elseif cfg.mode === :isothermal
         Tamb
     else
-        # Simple Eddington grey approximation
         Tamb * (1.0 + 0.75 * atm_state.tau_LW)^0.25
     end
 

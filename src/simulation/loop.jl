@@ -547,6 +547,21 @@ function simulation_loop(
             if haskey(ckpt, "atm_F_net_rad")
                 atm_state.F_net_rad = Float64(ckpt["atm_F_net_rad"])
             end
+            if haskey(ckpt, "atm_elem")
+                atm_state.elem = ckpt["atm_elem"]
+            end
+            if haskey(ckpt, "atm_species")
+                atm_state.species = ckpt["atm_species"]
+            end
+            if haskey(ckpt, "atm_escaped")
+                atm_state.escaped = ckpt["atm_escaped"]
+            end
+            if haskey(ckpt, "atm_dO_buffer")
+                atm_state.dO_buffer = Float64(ckpt["atm_dO_buffer"])
+            end
+            if haskey(ckpt, "atm_log10_fO2")
+                atm_state.log10_fO2 = Float64(ckpt["atm_log10_fO2"])
+            end
             if haskey(ckpt, "atm_h_rad_eff")
                 atm_state.h_rad_eff = Float64(ckpt["atm_h_rad_eff"])
             end
@@ -3579,7 +3594,7 @@ function simulation_loop(
                                     else
                                         2.0 * hypot(xm[m] - xcenter_val, ym[m] - ycenter_val)
                                     end
-                                    if old_XH2O > new_XH2O_wtpct
+                                    if old_XH2O != new_XH2O_wtpct
                                         dm_h2o_2d =
                                             (old_XH2O - new_XH2O_wtpct) * 0.01 * m_rock_2d
                                         dm_h_2d = dm_h2o_2d * (2.01588 / 18.01528)
@@ -3597,7 +3612,7 @@ function simulation_loop(
                                             ),
                                         )
                                     end
-                                    if old_XC > new_XC_ppm
+                                    if old_XC != new_XC_ppm
                                         dm_c_2d = (old_XC - new_XC_ppm) * 1.0e-6 * m_rock_2d
                                         push!(
                                             transfer_log,
@@ -3613,7 +3628,7 @@ function simulation_loop(
                                             ),
                                         )
                                     end
-                                    if old_XN > new_XN_ppm
+                                    if old_XN != new_XN_ppm
                                         dm_n_2d = (old_XN - new_XN_ppm) * 1.0e-6 * m_rock_2d
                                         push!(
                                             transfer_log,
@@ -3629,7 +3644,7 @@ function simulation_loop(
                                             ),
                                         )
                                     end
-                                    if old_XS > new_XS_ppm
+                                    if old_XS != new_XS_ppm
                                         dm_s_2d = (old_XS - new_XS_ppm) * 1.0e-6 * m_rock_2d
                                         push!(
                                             transfer_log,

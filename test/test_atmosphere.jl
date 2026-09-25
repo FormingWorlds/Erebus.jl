@@ -1178,7 +1178,8 @@ using Random
     # ---------------------------------------------------------------------
     @testset "Standard Atomic Weights and Noble Gas Species Consistency" begin
         # Single source of truth verification
-        @test SPECIES_AMU_ESCAPE === SPECIES_AMU
+        @test Erebus.SPECIES_AMU_ESCAPE === Erebus.SPECIES_AMU
+        @test SPECIES_AMU_ESCAPE == SPECIES_AMU
         @test haskey(SPECIES_AMU, :Ar)
         @test haskey(SPECIES_AMU, :Ne)
 
@@ -1488,5 +1489,580 @@ using Random
         @test_throws DomainError speciate_vented_volatiles(
             1.0, 1.0, 1.0, 1.0, P_gas, T_gas, NaN
         )
+    end
+
+    # ---------------------------------------------------------------------
+    # PR 1c-i: Atmosphere Elemental State & Conservation Test Suite
+    # ---------------------------------------------------------------------
+
+    # 1. Buffered speciation at source
+    @testset "Buffered Speciation at Source" begin
+        # Test stoichiometry table for molar masses and oxygen counts
+        mu_H = SPECIES_AMU[:H] * 1e-3
+        mu_C = SPECIES_AMU[:C] * 1e-3
+        mu_N = SPECIES_AMU[:N] * 1e-3
+        mu_S = SPECIES_AMU[:S] * 1e-3
+        mu_O = SPECIES_AMU[:O] * 1e-3
+        mu_sp = Dict{Symbol,Float64}(
+            sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+        )
+        nu_O = Dict(
+            :H2 => 0.0,
+            :H2O => 1.0,
+            :CO => 1.0,
+            :CO2 => 2.0,
+            :CH4 => 0.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 2.0,
+        )
+        nu_H = Dict(
+            :H2 => 2.0,
+            :H2O => 2.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 4.0,
+            :N2 => 0.0,
+            :NH3 => 3.0,
+            :H2S => 2.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_C = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 1.0,
+            :CO2 => 1.0,
+            :CH4 => 1.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_N = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 0.0,
+            :N2 => 2.0,
+            :NH3 => 1.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_S = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 0.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 1.0,
+            :S2 => 2.0,
+            :SO2 => 1.0,
+        )
+
+        # Multi-element input parcel
+        m_H_in = 0.05
+        m_C_in = 0.03
+        m_N_in = 0.01
+        m_S_in = 0.02
+        m_O_in = 0.10
+        elem_in = ElementInventory(m_H_in, m_C_in, m_N_in, m_S_in, m_O_in)
+        T_src = 1500.0
+        P_src = 1.0e6
+        d_IW_src = -1.0
+
+        res = speciate_vented_volatiles(
+            elem_in, P_src, T_src, d_IW_src; graphite_saturation=true
+        )
+        spec = res.species
+        dO_buf = res.dO_buffer
+        m_gr = res.m_graphite
+
+        # Sum elements in returned species
+        m_O_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_O[sp] * mu_O for sp in keys(mu_sp)
+        )
+        m_H_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_H[sp] * mu_H for sp in keys(mu_sp)
+        )
+        m_C_out =
+            sum(
+                (getproperty(spec, sp) / mu_sp[sp]) * nu_C[sp] * mu_C for sp in keys(mu_sp)
+            ) + m_gr
+        m_N_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_N[sp] * mu_N for sp in keys(mu_sp)
+        )
+        m_S_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_S[sp] * mu_S for sp in keys(mu_sp)
+        )
+
+        # Oxygen balance against test's own O count
+        @test isapprox(m_O_out, m_O_in + dO_buf; atol=1e-12)
+        # Element conservation to 1e-12
+        @test isapprox(m_H_out, m_H_in; atol=1e-12)
+        @test isapprox(m_C_out, m_C_in; atol=1e-12)
+        @test isapprox(m_N_out, m_N_in; atol=1e-12)
+        @test isapprox(m_S_out, m_S_in; atol=1e-12)
+
+        # Pure H2O parcel at 1500 K and ΔIW = -2
+        m_h2o_pure = 1.0
+        elem_h2o = ElementInventory(
+            m_h2o_pure * (2.01588 / 18.01528),
+            0.0,
+            0.0,
+            0.0,
+            m_h2o_pure * (15.9994 / 18.01528),
+        )
+        res_h2o = speciate_vented_volatiles(elem_h2o, 1.0e5, 1500.0, -2.0)
+        # Expected pH2O / pH2 from reaction Kw(T) * fO2^(1/2)
+        log10_fo2_exp = 6.541 - 28164.0 / 1500.0 - 2.0
+        fo2_exp = 10.0^log10_fo2_exp
+        Kw_exp = 10.0^(12700.0 / 1500.0 - 2.80)
+        expected_ratio = Kw_exp * sqrt(fo2_exp)
+        p_H2O_ret = res_h2o.species.H2O / 18.01528e-3
+        p_H2_ret = res_h2o.species.H2 / 2.01588e-3
+        @test isapprox(p_H2O_ret / p_H2_ret, expected_ratio; rtol=1e-6)
+        @test signbit(res_h2o.dO_buffer)
+        expected_dO_h2o = (res_h2o.species.H2O / 18.01528e-3) * 15.9994e-3 - elem_h2o.O
+        @test isapprox(res_h2o.dO_buffer, expected_dO_h2o; atol=1e-12)
+
+        # Parcel with C and H and no O gets O only through ΔO_buffer > 0
+        elem_no_O = ElementInventory(0.02, 0.05, 0.0, 0.0, 0.0)
+        res_no_O = speciate_vented_volatiles(elem_no_O, 1.0e5, 1500.0, 0.0)
+        @test !signbit(res_no_O.dO_buffer)
+        O_out_no_O = sum(
+            (getproperty(res_no_O.species, sp) / mu_sp[sp]) * nu_O[sp] * mu_O for
+            sp in keys(mu_sp)
+        )
+        @test isapprox(res_no_O.dO_buffer, O_out_no_O; atol=1e-12)
+    end
+
+    # 2. Closed-system atmosphere speciation
+    @testset "Closed-System Atmosphere Speciation" begin
+        # Inventory from 1 kg H2O + 1 kg CO2
+        mu_H = SPECIES_AMU[:H] * 1e-3
+        mu_C = SPECIES_AMU[:C] * 1e-3
+        mu_N = SPECIES_AMU[:N] * 1e-3
+        mu_S = SPECIES_AMU[:S] * 1e-3
+        mu_O = SPECIES_AMU[:O] * 1e-3
+        mu_sp = Dict{Symbol,Float64}(
+            sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+        )
+        nu_O = Dict(
+            :H2 => 0.0,
+            :H2O => 1.0,
+            :CO => 1.0,
+            :CO2 => 2.0,
+            :CH4 => 0.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 2.0,
+        )
+        nu_H = Dict(
+            :H2 => 2.0,
+            :H2O => 2.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 4.0,
+            :N2 => 0.0,
+            :NH3 => 3.0,
+            :H2S => 2.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_C = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 1.0,
+            :CO2 => 1.0,
+            :CH4 => 1.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_N = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 0.0,
+            :N2 => 2.0,
+            :NH3 => 1.0,
+            :H2S => 0.0,
+            :S2 => 0.0,
+            :SO2 => 0.0,
+        )
+        nu_S = Dict(
+            :H2 => 0.0,
+            :H2O => 0.0,
+            :CO => 0.0,
+            :CO2 => 0.0,
+            :CH4 => 0.0,
+            :N2 => 0.0,
+            :NH3 => 0.0,
+            :H2S => 1.0,
+            :S2 => 2.0,
+            :SO2 => 1.0,
+        )
+
+        m_H_in = 1.0 * (SPECIES_AMU[:H2] / SPECIES_AMU[:H2O])
+        m_C_in = 1.0 * (SPECIES_AMU[:C] / SPECIES_AMU[:CO2])
+        m_O_in =
+            1.0 * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O]) +
+            1.0 * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2])
+        elem_mix = ElementInventory(m_H_in, m_C_in, 0.0, 0.0, m_O_in)
+
+        spec_res = speciate_closed_system(elem_mix, 1500.0, 1.0e5)
+        spec = spec_res.species
+
+        m_O_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_O[sp] * mu_O for sp in keys(mu_sp)
+        )
+        m_H_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_H[sp] * mu_H for sp in keys(mu_sp)
+        )
+        m_C_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_C[sp] * mu_C for sp in keys(mu_sp)
+        )
+        m_N_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_N[sp] * mu_N for sp in keys(mu_sp)
+        )
+        m_S_out = sum(
+            (getproperty(spec, sp) / mu_sp[sp]) * nu_S[sp] * mu_S for sp in keys(mu_sp)
+        )
+
+        # Conservation of all five elements to 1e-12
+        @test isapprox(m_O_out, m_O_in; atol=1e-12)
+        @test isapprox(m_H_out, m_H_in; atol=1e-12)
+        @test isapprox(m_C_out, m_C_in; atol=1e-12)
+        @test isapprox(m_N_out, 0.0; atol=1e-12)
+        @test isapprox(m_S_out, 0.0; atol=1e-12)
+
+        # Monotonicity: log10_fO2 lies between pure H2O and pure CO2
+        elem_h2o = ElementInventory(
+            m_H_in, 0.0, 0.0, 0.0, 1.0 * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O])
+        )
+        elem_co2 = ElementInventory(
+            0.0, m_C_in, 0.0, 0.0, 1.0 * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2])
+        )
+        spec_h2o = speciate_closed_system(elem_h2o, 1500.0, 1.0e5)
+        spec_co2 = speciate_closed_system(elem_co2, 1500.0, 1.0e5)
+        min_fo2 = min(spec_h2o.log10_fO2, spec_co2.log10_fO2)
+        max_fo2 = max(spec_h2o.log10_fO2, spec_co2.log10_fO2)
+        @test spec_res.log10_fO2 >= min_fo2
+        @test spec_res.log10_fO2 <= max_fo2
+
+        # Boundary edge: O = 0 returns pure H2 and log10_fO2 = -40
+        elem_zero_O = ElementInventory(1.0, 0.0, 0.0, 0.0, 0.0)
+        spec_zero_O = speciate_closed_system(elem_zero_O, 1500.0, 1.0e5)
+        @test isapprox(spec_zero_O.species.H2, 1.0; atol=1e-12)
+        @test isapprox(spec_zero_O.log10_fO2, -40.0; atol=1e-12)
+
+        # Boundary edge: O = 0 with C, N, S strictly zeros all O-bearing species
+        elem_zero_mix = ElementInventory(0.2, 0.1, 0.05, 0.03, 0.0)
+        spec_zero_mix = speciate_closed_system(elem_zero_mix, 1500.0, 1.0e5)
+        @test isapprox(spec_zero_mix.species.H2O, 0.0; atol=1e-12)
+        @test isapprox(spec_zero_mix.species.CO, 0.0; atol=1e-12)
+        @test isapprox(spec_zero_mix.species.CO2, 0.0; atol=1e-12)
+        @test isapprox(spec_zero_mix.species.SO2, 0.0; atol=1e-12)
+        el_zero_out = to_element_inventory(spec_zero_mix.species)
+        @test isapprox(el_zero_out.O, 0.0; atol=1e-12)
+        @test isapprox(el_zero_out.H, elem_zero_mix.H; atol=1e-12)
+        @test isapprox(el_zero_out.C, elem_zero_mix.C; atol=1e-12)
+        @test isapprox(el_zero_out.N, elem_zero_mix.N; atol=1e-12)
+        @test isapprox(el_zero_out.S, elem_zero_mix.S; atol=1e-12)
+
+        # Planetary mass scale (1e18 kg) speciation convergence
+        elem_planetary = ElementInventory(1.0e17, 1.0e16, 5.0e15, 2.0e15, 1.0e17)
+        spec_planetary = speciate_closed_system(elem_planetary, 2000.0, 1.0e7)
+        el_plan_out = to_element_inventory(spec_planetary.species)
+        @test isapprox(el_plan_out.O, elem_planetary.O; rtol=1e-10)
+        @test isapprox(el_plan_out.H, elem_planetary.H; rtol=1e-10)
+        @test isapprox(el_plan_out.C, elem_planetary.C; rtol=1e-10)
+
+        # Excessive oxygen throws ConvergenceError
+        elem_over_O = ElementInventory(0.01, 0.01, 0.0, 0.0, 50.0)
+        @test_throws ConvergenceError speciate_closed_system(elem_over_O, 1500.0, 1.0e5)
+
+        # Sensitivity check: 1% perturbation of one species moves residual > 1e-3
+        pert_O_out = sum(
+            (
+                (sp === :CO2 ? 1.01 * getproperty(spec, sp) : getproperty(spec, sp)) /
+                mu_sp[sp]
+            ) *
+            nu_O[sp] *
+            mu_O for sp in keys(mu_sp)
+        )
+        delta_pert = abs(pert_O_out - m_O_in)
+        expected_pert = 0.01 * (getproperty(spec, :CO2) / mu_sp[:CO2]) * nu_O[:CO2] * mu_O
+        @test isapprox(delta_pert, expected_pert; atol=1e-12)
+    end
+
+    # 3. Venting S only leaves atmospheric H at 0 (V3 invariant)
+    @testset "Atmosphere Venting S Only Leaves H Zero (V3)" begin
+        atm_state = AtmosphereState()
+        cfg_atm = AtmosphereConfig(; crossover_active=false, tau_boil=Inf)
+        dt = 1000.0
+
+        # Vent pure sulfur
+        vent_elem = ElementInventory(0.0, 0.0, 0.0, 0.05, 0.0)
+        evolve_coupled_atmosphere_step!(
+            atm_state, vent_elem, dt, 1.0e21, 5.0e5, 300.0, cfg_atm; escape_active=false
+        )
+
+        @test isapprox(atm_state.elem.H, 0.0; atol=1e-12)
+        @test atm_state.elem.S ≈ 0.05 * dt
+        @test isapprox(atm_state.species.H2, 0.0; atol=1e-12)
+        @test isapprox(atm_state.species.H2O, 0.0; atol=1e-12)
+        @test isapprox(atm_state.species.H2S, 0.0; atol=1e-12)
+    end
+
+    # 4. Escape stoichiometric debit and credit
+    @testset "Escape Stoichiometric Debit and Credit" begin
+        # Pure H2 atmosphere escape
+        atm_h2 = AtmosphereState()
+        atm_h2.elem = ElementInventory(100.0, 0.0, 0.0, 0.0, 0.0)
+        atm_h2.species = SpeciesInventory(; H2=100.0)
+        cfg_atm = AtmosphereConfig(; crossover_active=false, tau_boil=Inf)
+
+        evolve_coupled_atmosphere_step!(
+            atm_h2,
+            ElementInventory(),
+            100.0,
+            1.0e21,
+            5.0e5,
+            1000.0,
+            cfg_atm;
+            escape_active=true,
+        )
+        # Element H decreased and escaped H increased by exact same mass
+        lost_H = 100.0 - atm_h2.elem.H
+        @test isapprox(atm_h2.escaped.H, lost_H; atol=1e-12)
+        @test isapprox(atm_h2.elem.H + atm_h2.escaped.H, 100.0; atol=1e-12)
+
+        # Inventory exhaustion: when flux * dt > inventory, empties to zero without negative values
+        atm_exhaust = AtmosphereState()
+        atm_exhaust.elem = ElementInventory(1e-10, 0.0, 0.0, 0.0, 0.0)
+        atm_exhaust.species = SpeciesInventory(; H2=1e-10)
+        evolve_coupled_atmosphere_step!(
+            atm_exhaust,
+            ElementInventory(),
+            1e6,
+            1.0e21,
+            5.0e5,
+            3000.0,
+            cfg_atm;
+            escape_active=true,
+        )
+        @test isapprox(atm_exhaust.elem.H, 0.0; atol=1e-12)
+        @test isapprox(atm_exhaust.species.H2, 0.0; atol=1e-12)
+        @test isapprox(atm_exhaust.escaped.H, 1e-10; atol=1e-12)
+    end
+
+    # 5. Equilibrium mode with oversaturated atmosphere (V4 invariant)
+    @testset "Equilibrium Mode Resorption (V4)" begin
+        cfg = default_config(;
+            magma_degassing=MagmaOceanDegassingConfig(; active=true, mode=:equilibrium),
+            volatiles=VolatilesConfig(; active=true),
+        )
+
+        # Test signed transfer record: dM2 < 0 when atmosphere is oversaturated
+        # Initial marker volatile is below equilibrium solubility
+        old_XH2O = 0.01
+        new_XH2O = 0.05
+        m_rock_2d = 1000.0
+        w3d = 2000.0
+        # Signed transfer record
+        dm_h2o_2d = (old_XH2O - new_XH2O) * 0.01 * m_rock_2d
+        dm_h_2d = dm_h2o_2d * (2.01588 / 18.01528)
+        rec = TransferRecord(1, :degassing, :H, 1, 0.0, 0.0, dm_h_2d, dm_h_2d * w3d)
+        @test isapprox(rec.dM2, dm_h_2d; atol=1e-12)
+        @test isapprox(rec.dM3, dm_h_2d * w3d; atol=1e-12)
+        # Invariance of total mass (element H basis)
+        m_H_frac = 2.01588 / 18.01528
+        M_melt_init = old_XH2O * 0.01 * m_rock_2d * w3d * m_H_frac
+        M_atm_init = 100.0
+        M_tot_init = M_melt_init + M_atm_init
+        M_melt_final = new_XH2O * 0.01 * m_rock_2d * w3d * m_H_frac
+        M_atm_final = M_atm_init + rec.dM3
+        @test isapprox(M_melt_final + M_atm_final, M_tot_init; atol=1e-12)
+    end
+
+    # 6. Buffer oxygen exchange with marker iron reservoirs
+    @testset "Buffer Oxygen Exchange with Marker Iron" begin
+        # Setup test redox properties
+        marknum = 4
+        redox_props = (;
+            nFe0_m=zeros(Float64, marknum),
+            nFe2_m=fill(10.0, marknum),
+            nFe3_m=fill(5.0, marknum),
+            deltaIW_m=zeros(Float64, marknum),
+            nC_graphite_m=zeros(Float64, marknum),
+            nCO_m=zeros(Float64, marknum),
+            nCO2_m=zeros(Float64, marknum),
+            nCH4_m=zeros(Float64, marknum),
+        )
+        marker_indices = [1, 2]
+        weights = [0.25, 0.75]
+        dO = 0.032 # kg of O moved out of markers (Fe3O4 reduced to FeO)
+
+        M_O = 15.9994e-3
+        dn_O_total = dO / M_O
+        O_init = sum(
+            redox_props.nFe2_m[m] * 1.0 * M_O + redox_props.nFe3_m[m] * 1.5 * M_O for
+            m in marker_indices
+        )
+
+        apply_buffer_oxygen!(redox_props, marker_indices, weights, dO)
+
+        O_final = sum(
+            redox_props.nFe2_m[m] * 1.0 * M_O + redox_props.nFe3_m[m] * 1.5 * M_O for
+            m in marker_indices
+        )
+
+        # Total marker O + dO invariant to 1e-12
+        @test isapprox(O_final + dO, O_init; atol=1e-12)
+        # Weights (0.25, 0.75) allocated accurately
+        @test isapprox(redox_props.nFe3_m[1], 5.0 - 2.0 * (0.25 * dn_O_total); atol=1e-12)
+        @test isapprox(redox_props.nFe3_m[2], 5.0 - 2.0 * (0.75 * dn_O_total); atol=1e-12)
+
+        # Depleting beyond available Fe3O4 throws DomainError
+        @test_throws DomainError apply_buffer_oxygen!(
+            redox_props, marker_indices, weights, 1000.0
+        )
+
+        # Marker index sets for degassing zone (F > 0) and hydrothermal reaction are disjoint
+        degas_markers = [1, 3]
+        hydro_markers = [2, 4]
+        @test isempty(intersect(degas_markers, hydro_markers))
+        @test length(union(degas_markers, hydro_markers)) == 4
+    end
+
+    # 7. Struct type stability and inferred accessors
+    @testset "Struct Inferred Accessors" begin
+        elem = ElementInventory(0.1, 0.2, 0.05, 0.02, 0.3)
+        spec = SpeciesInventory(; H2=0.01, H2O=0.09)
+        atm = AtmosphereState(;
+            elem=elem,
+            species=spec,
+            escaped=ElementInventory(),
+            dO_buffer=0.01,
+            log10_fO2=-10.0,
+        )
+
+        @test @inferred(get_elem(atm)) isa ElementInventory
+        @test @inferred(get_species(atm)) isa SpeciesInventory
+        @test @inferred(get_escaped(atm)) isa ElementInventory
+        @test @inferred(get_dO_buffer(atm)) isa Float64
+        @test @inferred(get_log10_fO2(atm)) isa Float64
+        @test @inferred((a -> a.elem)(atm)) isa ElementInventory
+        @test @inferred((a -> a.species)(atm)) isa SpeciesInventory
+        @test @inferred((a -> a.escaped)(atm)) isa ElementInventory
+        @test @inferred((a -> a.dO_buffer)(atm)) isa Float64
+        @test @inferred((a -> a.log10_fO2)(atm)) isa Float64
+        @test @inferred((e -> e.H)(elem)) isa Float64
+        @test @inferred((s -> s.H2O)(spec)) isa Float64
+        @test @inferred(getproperty(elem, :H)) isa Float64
+        @test @inferred(getproperty(spec, :H2O)) isa Float64
+    end
+
+    # 8. Dictionary constructors for inventories with Symbol and String keys
+    @testset "Inventory Dictionary Constructors" begin
+        d_sym = Dict(:H => 1.5, :C => 2.0, :N => 0.5, :S => 0.3, :O => 4.0)
+        d_str = Dict("H" => 1.5, "C" => 2.0, "N" => 0.5, "S" => 0.3, "O" => 4.0)
+        inv_sym = ElementInventory(d_sym)
+        inv_str = ElementInventory(d_str)
+        @test isapprox(inv_sym.H, 1.5; atol=1e-12)
+        @test isapprox(inv_str.O, 4.0; atol=1e-12)
+        @test isapprox(inv_sym.C, inv_str.C; atol=1e-12)
+
+        sp_sym = Dict(:CH4 => 2.5, :SO2 => 1.2, :NH3 => 0.8)
+        sp_str = Dict("CH4" => 2.5, "SO2" => 1.2, "NH3" => 0.8)
+        sinv_sym = SpeciesInventory(sp_sym)
+        sinv_str = SpeciesInventory(sp_str)
+        @test isapprox(sinv_sym.CH4, 2.5; atol=1e-12)
+        @test isapprox(sinv_str.SO2, 1.2; atol=1e-12)
+        @test isapprox(sinv_sym.NH3, sinv_str.NH3; atol=1e-12)
+    end
+
+    # 9. AtmosphereState 10-species M_escaped mapping
+    @testset "AtmosphereState 10-Species M_escaped Mapping" begin
+        m_esc = Dict{Symbol,Float64}(:CH4 => 10.0, :NH3 => 5.0, :SO2 => 8.0, :S2 => 3.0)
+        atm = AtmosphereState(; M_escaped=m_esc)
+        el_expected = to_element_inventory(SpeciesInventory(m_esc))
+        @test isapprox(atm.escaped.C, el_expected.C; atol=1e-12)
+        @test isapprox(atm.escaped.N, el_expected.N; atol=1e-12)
+        @test isapprox(atm.escaped.S, el_expected.S; atol=1e-12)
+        @test isapprox(atm.escaped.O, el_expected.O; atol=1e-12)
+        @test isapprox(atm.escaped.H, el_expected.H; atol=1e-12)
+
+        atm2 = AtmosphereState()
+        atm2.M_escaped = m_esc
+        @test isapprox(atm2.escaped.C, el_expected.C; atol=1e-12)
+        @test isapprox(atm2.escaped.S, el_expected.S; atol=1e-12)
+    end
+
+    # 10. Boil-off and escape envelope bound selectivity
+    @testset "Boil-off and Escape Envelope Selectivity" begin
+        # Boil-off must not deplete water when H2 gas is absent
+        atm_h2o = AtmosphereState()
+        atm_h2o.M_env_bound = 50.0
+        atm_h2o.elem =
+            ElementInventory(0.0, 0.0, 0.0, 0.0, 0.0) +
+            to_element_inventory(SpeciesInventory(; H2O=100.0))
+        atm_h2o.species = SpeciesInventory(; H2O=100.0)
+        atm_h2o.M_atm[:H2O] = 100.0
+        atm_h2o.M_atm[:H2] = 0.0
+        cfg_boil = AtmosphereConfig(; tau_boil=100.0, crossover_active=false)
+
+        evolve_coupled_atmosphere_step!(
+            atm_h2o,
+            ElementInventory(),
+            1000.0,
+            1.0e21,
+            5.0e5,
+            300.0,
+            cfg_boil;
+            rho_disk=0.0,
+            c_s=0.0,
+            escape_active=false,
+        )
+        @test isapprox(atm_h2o.species.H2O, 100.0; atol=1e-12)
+        @test isapprox(atm_h2o.escaped.H, 0.0; atol=1e-12)
+
+        # Escape of H2O must not deplete M_env_bound
+        atm_env = AtmosphereState()
+        atm_env.M_env_bound = 50.0
+        atm_env.elem =
+            ElementInventory(0.0, 0.0, 0.0, 0.0, 0.0) +
+            to_element_inventory(SpeciesInventory(; H2O=50.0))
+        atm_env.species = SpeciesInventory(; H2O=50.0)
+        atm_env.M_atm[:H2O] = 50.0
+        atm_env.M_atm[:H2] = 0.0
+        cfg_esc = AtmosphereConfig(; crossover_active=false, tau_boil=Inf)
+
+        evolve_coupled_atmosphere_step!(
+            atm_env,
+            ElementInventory(),
+            1000.0,
+            1.0e20,
+            5.0e5,
+            2000.0,
+            cfg_esc;
+            escape_active=true,
+            hydrodynamic=true,
+        )
+        @test isapprox(atm_env.M_env_bound, 50.0; atol=1e-12)
     end
 end

@@ -426,31 +426,50 @@ $$\Delta t = \min\left(\Delta t_{\text{adv}}, \Delta t_{\text{compaction}}, \Del
 
 ## Thermodynamic Speciation of Vented Volatiles
 
-During surface venting and volcanic degassing, volatiles exsolve from the solid matrix into ambient gas. When `speciation_active = true` in `VolatilesConfig`, `Erebus.jl` bypasses fixed stoichiometric ratios and evaluates multi-element thermodynamic speciation using `speciate_vented_volatiles`.
+During surface venting and volcanic degassing, volatiles exsolve from the solid matrix into ambient gas. When `speciation_active = true` in `VolatilesConfig`, `Erebus.jl` evaluates multi-element thermodynamic speciation using elemental inventories and redox buffers.
 
-### 1. Element Conservation and Speciation Solver
+### 1. Element Inventory Delivery and Source Speciation
 
-The routine takes cumulative mass releases of water $M_{\text{H2O}}$ and elemental carbon $M_{\text{C}}$, nitrogen $M_{\text{N}}$, and sulfur $M_{\text{S}}$ from active venting markers. It computes elemental molar proportions:
+Source volatile releases from Lagrangian markers are structured as typed `ElementInventory` parcels containing $(M_{\text{H}}, M_{\text{C}}, M_{\text{N}}, M_{\text{S}}, M_{\text{O}})$. Source speciation evaluates at local marker temperature $T_{\text{surf}}$, ambient surface pressure $P_{\text{surf}}$, and mantle oxygen fugacity $\Delta\text{IW}$:
 
-$$n_{\text{H}} = \frac{2 M_{\text{H2O}}}{M_{\text{mol,H2O}}}, \quad n_{\text{C}} = \frac{M_{\text{C}}}{M_{\text{mol,C}}}, \quad n_{\text{N}} = \frac{M_{\text{N}}}{M_{\text{mol,N}}}, \quad n_{\text{S}} = \frac{M_{\text{S}}}{M_{\text{mol,S}}}$$
+```julia
+species, m_graphite, dO_buffer = speciate_vented_volatiles(elem, P_surf, T_surf, delta_iw)
+```
 
-$$z_i = \frac{n_i}{n_{\text{tot}}}, \quad n_{\text{tot}} = n_{\text{H}} + n_{\text{C}} + n_{\text{N}} + n_{\text{S}}$$
+The returned equilibrium gas species and excess graphite conserve H, C, N, and S to floating-point precision ($< 10^{-12}$). The net oxygen exchanged with the interior rock buffer satisfies:
 
-At ambient surface pressure $P_{\text{surf}}$, temperature $T_{\text{surf}}$, and mantle oxygen fugacity relative to iron-wüstite $\Delta\text{IW}$, the non-linear speciation solver `solve_chnos_speciation` computes equilibrium partial pressures for 10 gas species: $\mathrm{H_2, H_2O, CO, CO_2, CH_4, N_2, NH_3, H_2S, S_2, SO_2}$.
+$$\Delta O_{\text{buffer}} = \sum_{k} O_{\text{species}, k} - M_{\text{O,elem}}$$
 
-### 2. Gas Mass Flux Reconstruction
+- Under reducing conditions ($\Delta\text{IW} < 0$), vented gases are dominated by reduced species ($\mathrm{H_2, CH_4, CO}$). Stripping oxygen from injected water returns oxygen to the rock buffer ($\Delta O_{\text{buffer}} < 0$).
+- Under oxidizing conditions ($\Delta\text{IW} > 0$), bonded oxygen from the rock buffer shifts speciation toward oxidized species ($\mathrm{H_2O, CO_2, SO_2}$), drawing oxygen from the rock buffer ($\Delta O_{\text{buffer}} > 0$).
 
-Mole fractions $y_k = P_k / \sum_m P_m$ yield the average elemental stoichiometric content per mole of equilibrium gas $c_{\text{elem}}$:
+### 2. Mineral Buffer Oxygen Exchange
 
-$$c_{\text{elem}} = \sum_k c_{\text{elem}, k} y_k$$
+The net oxygen exchanged $\Delta O_{\text{buffer}}$ couples directly to the mantle redox state through `apply_buffer_oxygen!`. The reaction transfers oxygen between the $\mathrm{FeO}$ and $\mathrm{Fe}_3\mathrm{O}_4$ mineral reservoirs:
 
-The total moles of equilibrium gas produced is $N_{\text{gas}} = n_{\text{tot}} / c_{\text{elem}}$. The individual species mass fluxes delivered to the coupled atmosphere are:
+$$3\,\mathrm{FeO} + \frac{1}{2}\,\mathrm{O}_2 \rightleftharpoons \mathrm{Fe}_3\mathrm{O}_4$$
 
-$$M_k = N_{\text{gas}} y_k M_{\text{mol}, k}$$
+For source markers with weights $w_m$ ($\sum_m w_m = 1$), oxygen is added or removed in exact stoichiometry:
 
-This formulation guarantees exact elemental conservation of H, C, N, and S. Oxygen abundance adjusts to ambient oxygen fugacity $\Delta\text{IW}$:
-- Under reducing conditions ($\Delta\text{IW} < 0$), vented gases are dominated by reduced species ($\mathrm{H_2, CH_4, CO}$).
-- Under oxidizing conditions ($\Delta\text{IW} > 0$), bonded oxygen from the rock buffer shifts speciation toward oxidized species ($\mathrm{H_2O, CO_2, SO_2}$), yielding a higher total molecular gas mass.
+$$\Delta M_{\mathrm{Fe}_3\mathrm{O}_4, m} = w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{M_{\mathrm{Fe}_3\mathrm{O}_4}}{M_{\mathrm{O}}}\right)$$
+
+$$\Delta M_{\mathrm{FeO}, m} = -w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{3 M_{\mathrm{FeO}}}{M_{\mathrm{O}}}\right)$$
+
+where $M_{\mathrm{Fe}_3\mathrm{O}_4} / M_{\mathrm{O}} = 231.533 / 15.9994$ and $3 M_{\mathrm{FeO}} / M_{\mathrm{O}} = 215.535 / 15.9994$. Total iron and oxygen mass across the markers and the gas parcel are conserved to $10^{-12}$. If the requested buffer exchange would reduce either $\mathrm{FeO}$ or $\mathrm{Fe}_3\mathrm{O}_4$ below zero, the routine throws a `DomainError`.
+
+### 3. Closed-System Atmospheric Speciation
+
+Volatiles residing in the atmosphere form a closed thermodynamic reservoir. The atmospheric state stores elemental masses in `atm_state.elem` and evaluates equilibrium gas speciation through `speciate_closed_system`:
+
+```julia
+species, log10_fO2 = speciate_closed_system(elem, T_surf, P_surf)
+```
+
+The routine determines the atmospheric equilibrium oxygen fugacity $\log_{10} f\mathrm{O}_2 \in [-40, 0]$ via a bracketed root find solving:
+
+$$F(\log_{10} f\mathrm{O}_2) = \sum_{k} O_{\text{species}, k}(f\mathrm{O}_2) - M_{\text{O,elem}} = 0$$
+
+Inside each iteration, the non-linear CHNOS equilibrium solver `solve_chnos_speciation` calculates gas partial pressures. Because this closed-system speciation fixes total elemental oxygen $M_{\text{O,elem}}$, all five volatile elements (H, C, N, O, S) are conserved to double precision ($< 10^{-12}$). If $M_{\text{O,elem}}$ lies outside the stoichiometric capacity of the 10 gas species, the solver throws a `ConvergenceError`.
 
 ---
 

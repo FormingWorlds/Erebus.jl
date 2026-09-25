@@ -115,6 +115,22 @@ Figure 1 illustrates the scaling regimes of Jeans escape across planetary body s
 
 *Figure 1: Four-panel diagnostic verification of thermal Jeans escape and atmospheric inventory evolution. (a) Dimensionless Jeans parameter $\lambda = (v_{\text{esc}}/v_{\text{th}})^2$ as a function of planetary radius ($R \in [10, 2000]\text{ km}$) for three volatile species (H₂O, N₂, CO₂) at exobase temperature $T_{\text{exo}} = 200\text{ K}$, which marks the transition from rapid kinetic effusion ($\lambda \ll 1$) on small planetesimals to gravitational retention ($\lambda \gg 10$) on massive embryos. (b) Normalized kinetic escape flux ratio $\Phi_{\text{Jeans}} / \Phi_{\text{eff}} = (1 + \lambda) e^{-\lambda}$ where $\Phi_{\text{eff}} = n_{\text{exo}} v_{\text{th}} / (2 \sqrt{\pi})$, which follows exponential suppression $\propto (1+\lambda) e^{-\lambda}$. (c) Characteristic atmospheric depletion timescale $\tau_{\text{loss}} = 1 / k_{\text{escape}}$ across planetary radius ($R \in [10, 2000]\text{ km}$) for H₂O and CO₂. Small bodies ($R \le 100\text{ km}$) lose their atmospheres within hours to weeks, whereas bodies larger than $1400\text{ km}$ retain heavy species over gigayear timescales. (d) Water vapor inventory partitioning between atmospheric retention and escape to space over 5 years under steady surface venting ($\dot{M}_{\text{vent}} = 100\text{ kg/s}$) for a small planetesimal ($R = 50\text{ km}$, rapid effusion), an intermediate body ($R = 1350\text{ km}$, dynamic partitioning), and a large planetary embryo ($R = 2000\text{ km}$, gravitational retention). On the small planetesimal, low gravity and rapid effusion allow all vented water to escape to space with minimal atmospheric accumulation, whereas the 2000 km embryo retains the vented volatiles in an accumulating atmosphere.*
 
+### Analytical Kinetic Effusion Benchmark
+
+The numerical evaluation of kinetic escape in `compute_jeans_escape_flux` is benchmarked directly against the analytical Maxwell-Boltzmann effusion integral:
+
+$$\Phi_{\text{Jeans}} = \frac{n_{\text{exo}} v_{\text{th}}}{2 \sqrt{\pi}} (1 + \lambda) \exp(-\lambda)$$
+
+evaluated with typed CODATA physical constants ($k_B = 1.380649\times 10^{-23}\text{ J/K}$, $G = 6.67430\times 10^{-11}\text{ m}^3/(\text{kg}\cdot\text{s}^2)$, $m_u = 1.660539\times 10^{-27}\text{ kg}$) for atomic hydrogen over a lunar-like embryo ($R_{\text{exo}} = 1{,}737.4\text{ km}$, $g_{\text{surf}} = 1.62\text{ m/s}^2$, $n_{\text{exo}} = 1.0\times 10^{11}\text{ m}^{-3}$).
+
+In the asymptotic limit where gravitational binding vanishes ($\lambda \to 0$), effusion flux converges to the one-way planar Maxwellian effusion rate:
+$$\lim_{\lambda \to 0} \Phi_{\text{Jeans}} = \frac{n_{\text{exo}} v_{\text{th}}}{2 \sqrt{\pi}}$$
+which the exporter verifies to machine precision (relative error $2.8 \times 10^{-16}$).
+
+![Jeans Kinetic Effusion Benchmark](../assets/jeans_effusion_benchmark.png)
+
+*Figure 2: Analytical verification of atomic hydrogen kinetic escape flux against the Maxwell-Boltzmann exobase effusion integral over exobase temperatures $T_{\text{exo}} \in [200, 3000]\text{ K}$. (a) Comparison between analytical effusion (solid curve, evaluated with `hydrodynamic = false`) and `compute_jeans_escape_flux` (circles). The square marker shows the hydrodynamic branch switch when $\lambda < 2.0$ and `hydrodynamic = true`, where flux exceeds the kinetic effusion value by a factor of 2.97. (b) Relative numerical error through the temperature sweep, confirming agreement to $< 10^{-15}$, well within the tolerance threshold $10^{-6}$.*
+
 ---
 
 ## 5. Mathematical Invariants and Implementation Checks

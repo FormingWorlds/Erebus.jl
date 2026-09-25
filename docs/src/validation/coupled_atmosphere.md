@@ -127,6 +127,44 @@ resolving molecular speciation across $\mathrm{H_2, H_2O, CO, CO_2, CH_4, N_2, N
 
 Both contributions sum additively into $\mathbf{\dot{M}}_{\text{vent}}$ to preserve complete volatile mass conservation between hydromechanical and atmospheric modules.
 
+### Elemental Inventory and Reservoir Tracking
+
+Atmospheric mass is tracked on an elemental basis using typed `ElementInventory` and `SpeciesInventory` structures within `AtmosphereState`:
+
+```julia
+struct ElementInventory
+    H::Float64
+    C::Float64
+    N::Float64
+    S::Float64
+    O::Float64
+end
+
+struct SpeciesInventory
+    H2::Float64
+    H2O::Float64
+    CH4::Float64
+    CO::Float64
+    CO2::Float64
+    NH3::Float64
+    N2::Float64
+    H2S::Float64
+    SO2::Float64
+    S2::Float64
+end
+```
+
+Planetary volatile cycles transfer mass across three core reservoirs: interior rock and melt, the active atmospheric envelope, and space loss via escape:
+
+![Volatile Reservoirs and Mass Flow](../assets/volatile_reservoirs.svg)
+
+1. *Interior to Atmosphere*: Surface venting and volcanic degassing deliver elemental masses $(M_{\text{H}}, M_{\text{C}}, M_{\text{N}}, M_{\text{S}}, M_{\text{O}})$ into the atmospheric reservoir `atm_state.elem`. Degassing at local mantle oxygen fugacity exchanges oxygen $\Delta O_{\text{buffer}}$ with the interior FeO-Fe3O4 mineral buffer via `apply_buffer_oxygen!`.
+2. *Closed-System Speciation*: At each atmospheric timestep, the closed-system speciation solver `speciate_closed_system(elem, T_surf, P_surf)` solves the coupled non-linear equilibrium across all 10 gas species. The solver performs a bracketed root find on oxygen fugacity $\log_{10} f\mathrm{O}_2 \in [-40, 0]$ satisfying:
+   $$O_{\text{species}}(f\mathrm{O}_2) - M_{\text{O,elem}} = 0$$
+   This guarantees exact machine-precision conservation of all five elements (H, C, N, O, S) in the molecular species inventory `atm_state.species`. If the oxygen mass $M_{\text{O,elem}}$ lies outside the stoichiometric capacity of the gas species, the solver throws a `ConvergenceError`.
+3. *Atmosphere to Space*: Atmospheric escape processes (transonic hydrodynamic blow-off, Jeans kinetic effusion, and multi-species active-set crossover drag) remove volatile species from the atmosphere. Escaped species masses are converted back into elemental equivalents via exact molecular stoichiometry, decrementing `atm_state.elem` and incrementing cumulative space loss `atm_state.escaped`. Invariant conservation holds to double precision:
+   $$\mathbf{M}_{\text{elem}}(t + \Delta t) + \Delta \mathbf{M}_{\text{escaped}} = \mathbf{M}_{\text{elem}}(t) + \mathbf{\dot{M}}_{\text{vent,elem}} \Delta t$$
+
 ### Bidirectional Surface Thermal Coupling
 
 Atmosphere and interior thermal solvers interact through a closed boundary coupling loop:

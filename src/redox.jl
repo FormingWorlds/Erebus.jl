@@ -954,3 +954,80 @@ function local_delta_iw(
 
     return clamp(0.0, d_min, d_max)
 end
+
+"""
+    apply_buffer_oxygen!(
+        redox_props,
+        marker_indices::AbstractVector{<:Integer},
+        weights::AbstractVector{<:Real},
+        dO::Real,
+    )
+
+Transfer oxygen mass `dO` [kg] between solid redox buffer reservoirs (FeO and Fe3O4)
+across specified markers in proportion to `weights`.
+Follows the stoichiometry: `3 FeO + 1/2 O2 <=> Fe3O4`.
+Moving `dO > 0` out of markers reduces Fe3O4 to FeO (`n_Fe3 -= 2 dn_O, n_Fe2 += 2 dn_O`).
+Throws `DomainError` if Fe3O4 or FeO would become negative.
+"""
+function apply_buffer_oxygen!(
+    redox_props,
+    marker_indices::AbstractVector{<:Integer},
+    weights::AbstractVector{<:Real},
+    dO::Real,
+)
+    dO_val = Float64(dO)
+    if !isfinite(dO_val)
+        throw(DomainError(dO_val, "dO must be finite"))
+    end
+    if isempty(marker_indices) || dO_val == 0.0
+        return nothing
+    end
+    if length(marker_indices) != length(weights)
+        throw(ArgumentError("marker_indices and weights must have the same length"))
+    end
+
+    sum_w = sum(weights)
+    if sum_w <= 0.0 || !isfinite(sum_w)
+        throw(DomainError(sum_w, "Sum of weights must be strictly positive and finite"))
+    end
+
+    nFe2_m = hasproperty(redox_props, :nFe2_m) ? redox_props.nFe2_m : nothing
+    nFe3_m = hasproperty(redox_props, :nFe3_m) ? redox_props.nFe3_m : nothing
+    if nFe2_m === nothing || nFe3_m === nothing
+        return nothing
+    end
+
+    M_O = 15.9994e-3
+    dn_O_total = dO_val / M_O
+
+    # Validation pass: verify all markers have sufficient reactant
+    for (k, m) in enumerate(marker_indices)
+        w_norm = Float64(weights[k]) / sum_w
+        dn_O_k = dn_O_total * w_norm
+        if dn_O_k > 0.0 && nFe3_m[m] < 2.0 * dn_O_k - 1e-14
+            throw(
+                DomainError(
+                    dO_val,
+                    "Insufficient Fe3O4 in marker $m ($(nFe3_m[m])) to supply oxygen demand $(2.0 * dn_O_k)",
+                ),
+            )
+        elseif dn_O_k < 0.0 && nFe2_m[m] < 2.0 * abs(dn_O_k) - 1e-14
+            throw(
+                DomainError(
+                    dO_val,
+                    "Insufficient FeO in marker $m ($(nFe2_m[m])) to absorb oxygen $(2.0 * abs(dn_O_k))",
+                ),
+            )
+        end
+    end
+
+    # Application pass
+    for (k, m) in enumerate(marker_indices)
+        w_norm = Float64(weights[k]) / sum_w
+        dn_O_k = dn_O_total * w_norm
+        nFe3_m[m] = max(0.0, nFe3_m[m] - 2.0 * dn_O_k)
+        nFe2_m[m] = max(0.0, nFe2_m[m] + 2.0 * dn_O_k)
+    end
+
+    return nothing
+end

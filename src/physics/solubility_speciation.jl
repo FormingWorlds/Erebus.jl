@@ -1,4 +1,29 @@
 """
+Exception thrown when numerical speciation fails to converge or when an input elemental inventory is unphysical.
+
+$(FIELDS)
+"""
+struct ConvergenceError <: Exception
+    msg::String
+    elem::Union{Nothing,ElementInventory}
+    residuals::Any
+end
+
+function ConvergenceError(msg::String; elem=nothing, residuals=nothing)
+    return ConvergenceError(msg, elem, residuals)
+end
+
+function Base.showerror(io::IO, e::ConvergenceError)
+    print(io, "ConvergenceError: ", e.msg)
+    if e.elem !== nothing
+        print(io, " (inventory: ", e.elem, ")")
+    end
+    if e.residuals !== nothing
+        print(io, " (residuals: ", e.residuals, ")")
+    end
+end
+
+"""
 Compute oxygen fugacity of the iron-wüstite (IW) buffer.
 
 $(SIGNATURES)
@@ -1456,6 +1481,181 @@ function solve_chnos_speciation(
     )
 end
 
+# -----------------------------------------------------------------------------
+# Equilibrium Speciation of Vented Volatiles & Closed Atmosphere
+# -----------------------------------------------------------------------------
+
+const SPECIES_MOLAR_MASS = Dict{Symbol,Float64}(
+    sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+)
+
+const SPECIES_O_STOICH = Dict{Symbol,Float64}(
+    :H2 => 0.0,
+    :H2O => 1.0,
+    :CO => 1.0,
+    :CO2 => 2.0,
+    :CH4 => 0.0,
+    :N2 => 0.0,
+    :NH3 => 0.0,
+    :H2S => 0.0,
+    :S2 => 0.0,
+    :SO2 => 2.0,
+)
+
+"""
+    speciate_vented_volatiles(
+        elem::ElementInventory,
+        P_amb_Pa::Real,
+        T_surf_K::Real,
+        delta_IW::Real=0.0;
+        graphite_saturation::Bool=true,
+    )::@NamedTuple{species::SpeciesInventory, m_graphite::Float64, dO_buffer::Float64}
+
+Calculate equilibrium molecular speciation of vented volatile parcel with explicit oxygen and redox buffer exchange.
+Partitions elemental H, C, N, S, O mass releases into gaseous species (H2, H2O, CO,
+CO2, CH4, N2, NH3, H2S, S2, SO2) at source temperature, pressure, and oxygen fugacity.
+When graphite saturation precipitates solid carbon under reducing conditions, gas-phase carbon
+is governed by graphite equilibrium, and excess carbon appears as graphite mass.
+Oxygen incorporated from or released to the solid redox buffer is tracked in `dO_buffer`.
+"""
+function speciate_vented_volatiles(
+    elem::ElementInventory,
+    P_amb_Pa::Real,
+    T_surf_K::Real,
+    delta_IW::Real=0.0;
+    graphite_saturation::Bool=true,
+)::@NamedTuple{species::SpeciesInventory, m_graphite::Float64, dO_buffer::Float64}
+    p_amb = Float64(P_amb_Pa)
+    t_surf = Float64(T_surf_K)
+    d_iw = Float64(delta_IW)
+
+    if p_amb <= 0.0 || !isfinite(p_amb)
+        throw(DomainError(p_amb, "Ambient pressure must be strictly positive and finite"))
+    end
+    if t_surf <= 0.0 || !isfinite(t_surf)
+        throw(
+            DomainError(t_surf, "Surface temperature must be strictly positive and finite")
+        )
+    end
+    if !isfinite(d_iw) || abs(d_iw) > 300.0
+        throw(DomainError(d_iw, "delta_IW must be finite and within [-300, 300]"))
+    end
+
+    if total_mass(elem) <= 0.0
+        return (species=SpeciesInventory(), m_graphite=0.0, dO_buffer=0.0)
+    end
+
+    mu_H = SPECIES_AMU[:H] * 1e-3
+    mu_C = SPECIES_AMU[:C] * 1e-3
+    mu_N = SPECIES_AMU[:N] * 1e-3
+    mu_S = SPECIES_AMU[:S] * 1e-3
+    mu_O = SPECIES_AMU[:O] * 1e-3
+
+    nH = elem.H / mu_H
+    nC = elem.C / mu_C
+    nN = elem.N / mu_N
+    nS = elem.S / mu_S
+    n_non_O = nH + nC + nN + nS
+
+    if n_non_O <= 0.0
+        return (species=SpeciesInventory(), m_graphite=0.0, dO_buffer=(-elem.O))
+    end
+
+    z_H = nH / n_non_O
+    z_C = nC / n_non_O
+    z_N = nN / n_non_O
+    z_S = nS / n_non_O
+
+    p_amb_eval = max(p_amb, 1.0)
+    t_surf_eval = max(t_surf, 273.15)
+
+    spec = solve_chnos_speciation(
+        p_amb_eval,
+        t_surf_eval,
+        d_iw;
+        z_H=z_H,
+        z_C=z_C,
+        z_N=z_N,
+        z_S=z_S,
+        graphite_saturation=graphite_saturation,
+    )
+
+    p_sum = (
+        spec.p_H2_Pa +
+        spec.p_H2O_Pa +
+        spec.p_CO_Pa +
+        spec.p_CO2_Pa +
+        spec.p_CH4_Pa +
+        spec.p_N2_Pa +
+        spec.p_NH3_Pa +
+        spec.p_H2S_Pa +
+        spec.p_S2_Pa +
+        spec.p_SO2_Pa
+    )
+
+    if p_sum <= 0.0
+        sp_deg = SpeciesInventory(; H2=elem.H, N2=elem.N, S2=elem.S)
+        return (species=sp_deg, m_graphite=elem.C, dO_buffer=(-elem.O))
+    end
+
+    y_H2 = spec.p_H2_Pa / p_sum
+    y_H2O = spec.p_H2O_Pa / p_sum
+    y_CO = spec.p_CO_Pa / p_sum
+    y_CO2 = spec.p_CO2_Pa / p_sum
+    y_CH4 = spec.p_CH4_Pa / p_sum
+    y_N2 = spec.p_N2_Pa / p_sum
+    y_NH3 = spec.p_NH3_Pa / p_sum
+    y_H2S = spec.p_H2S_Pa / p_sum
+    y_S2 = spec.p_S2_Pa / p_sum
+    y_SO2 = spec.p_SO2_Pa / p_sum
+
+    c_H = 2.0 * y_H2 + 2.0 * y_H2O + 4.0 * y_CH4 + 3.0 * y_NH3 + 2.0 * y_H2S
+    c_C = y_CO + y_CO2 + y_CH4
+    c_N = 2.0 * y_N2 + y_NH3
+    c_S = y_H2S + 2.0 * y_S2 + y_SO2
+
+    N_gas = if graphite_saturation
+        if nH > 0.0 && c_H > 0.0
+            nH / c_H
+        elseif nN > 0.0 && c_N > 0.0
+            nN / c_N
+        elseif nS > 0.0 && c_S > 0.0
+            nS / c_S
+        elseif nC > 0.0 && c_C > 0.0
+            nC / c_C
+        else
+            0.0
+        end
+    else
+        c_elem = c_H + c_C + c_N + c_S
+        c_elem > 0.0 ? n_non_O / c_elem : 0.0
+    end
+
+    n_C_gas = N_gas * c_C
+    m_graphite = max(0.0, (nC - n_C_gas) * mu_C)
+
+    sp_ret = SpeciesInventory(
+        N_gas * y_H2 * SPECIES_MOLAR_MASS[:H2],
+        N_gas * y_H2O * SPECIES_MOLAR_MASS[:H2O],
+        N_gas * y_CO * SPECIES_MOLAR_MASS[:CO],
+        N_gas * y_CO2 * SPECIES_MOLAR_MASS[:CO2],
+        N_gas * y_CH4 * SPECIES_MOLAR_MASS[:CH4],
+        N_gas * y_N2 * SPECIES_MOLAR_MASS[:N2],
+        N_gas * y_NH3 * SPECIES_MOLAR_MASS[:NH3],
+        N_gas * y_H2S * SPECIES_MOLAR_MASS[:H2S],
+        N_gas * y_S2 * SPECIES_MOLAR_MASS[:S2],
+        N_gas * y_SO2 * SPECIES_MOLAR_MASS[:SO2],
+    )
+
+    m_O_gas = sum(
+        (getproperty(sp_ret, sp) / SPECIES_MOLAR_MASS[sp]) * SPECIES_O_STOICH[sp] * mu_O for
+        sp in SPECIATION_SPECIES
+    )
+    dO_buf = m_O_gas - elem.O
+
+    return (species=sp_ret, m_graphite=m_graphite, dO_buffer=dO_buf)
+end
+
 """
     speciate_vented_volatiles(
         m_H2O::Real,
@@ -1464,15 +1664,12 @@ end
         m_S::Real,
         P_amb_Pa::Real,
         T_surf_K::Real,
-        delta_IW::Real;
+        delta_IW::Real=0.0;
         graphite_saturation::Bool=true,
     )::Dict{Symbol,Float64}
 
 Calculate equilibrium molecular speciation of vented volatile mass fluxes.
-Partitions elemental C, N, S and water mass releases into gaseous species (H2, H2O, CO,
-CO2, CH4, N2, NH3, H2S, S2, SO2) at exsolution temperature, pressure, and oxygen fugacity.
-When graphite saturation precipitates solid carbon under reducing conditions, gas-phase carbon
-is governed by graphite equilibrium, and gas moles are scaled to the non-condensing carrier element.
+Thin conversion wrapper returning a Dict for backwards compatibility.
 """
 function speciate_vented_volatiles(
     m_H2O::Real,
@@ -1526,7 +1723,6 @@ function speciate_vented_volatiles(
         throw(DomainError(delta_IW, "delta_IW must be finite and within [-50, 50]"))
     end
 
-    # Molar elemental amounts released
     nH = 2.0 * m_h2o / 18.01528e-3
     nC = m_c / 12.011e-3
     nN = m_n / 14.007e-3
@@ -1570,7 +1766,6 @@ function speciate_vented_volatiles(
     )
 
     if p_sum <= 0.0
-        # Fallback to simple stoichiometric partition if partial pressures degenerate
         species_dict[:H2O] = m_h2o
         species_dict[:CO2] = m_c * (44.0095 / 12.011)
         species_dict[:N2] = m_n
@@ -1578,7 +1773,6 @@ function speciate_vented_volatiles(
         return species_dict
     end
 
-    # Moles of elements per mole of gas
     y_H2 = spec.p_H2_Pa / p_sum
     y_H2O = spec.p_H2O_Pa / p_sum
     y_CO = spec.p_CO_Pa / p_sum
@@ -1596,7 +1790,6 @@ function speciate_vented_volatiles(
     c_S = y_H2S + 2.0 * y_S2 + y_SO2
     c_elem = c_H + c_C + c_N + c_S
 
-    # Scale gas moles from non-condensing carrier elements when graphite saturation occurs.
     N_gas = if graphite_saturation
         if nH > 0.0 && c_H > 0.0
             nH / c_H
@@ -1625,4 +1818,235 @@ function speciate_vented_volatiles(
     species_dict[:SO2] = N_gas * y_SO2 * 64.066e-3
 
     return species_dict
+end
+
+"""
+    speciate_closed_system(
+        elem::ElementInventory,
+        T_K::Real,
+        P_Pa::Real;
+        tol::Real=1e-12,
+        max_iter::Int=60,
+    )::@NamedTuple{species::SpeciesInventory, log10_fO2::Float64}
+
+Equilibrium speciation of closed-system atmospheric elemental inventory.
+Solves for atmospheric oxygen fugacity `log10_fO2` in [-40, 0] such that the
+10-species equilibrium matches the elemental inventory `elem` with exact conservation.
+Throws `ConvergenceError` if `elem.O` is outside the range that the gas species can hold.
+"""
+function speciate_closed_system(
+    elem::ElementInventory, T_K::Real, P_Pa::Real; tol::Real=1e-12, max_iter::Int=60
+)::@NamedTuple{species::SpeciesInventory, log10_fO2::Float64}
+    T = Float64(T_K)
+    if T <= 0.0 || !isfinite(T)
+        throw(DomainError(T, "Temperature must be > 0 and finite"))
+    end
+    P = Float64(P_Pa)
+    if P <= 0.0 || !isfinite(P)
+        throw(DomainError(P, "Pressure must be > 0 and finite"))
+    end
+
+    if total_mass(elem) <= 0.0
+        return (species=SpeciesInventory(), log10_fO2=-40.0)
+    end
+
+    mu_H = SPECIES_AMU[:H] * 1e-3
+    mu_C = SPECIES_AMU[:C] * 1e-3
+    mu_N = SPECIES_AMU[:N] * 1e-3
+    mu_S = SPECIES_AMU[:S] * 1e-3
+    mu_O = SPECIES_AMU[:O] * 1e-3
+    nH_tot = elem.H / mu_H
+    nC_tot = elem.C / mu_C
+    nN_tot = elem.N / mu_N
+    nS_tot = elem.S / mu_S
+
+    mu_sp = SPECIES_MOLAR_MASS
+
+    if elem.O <= 0.0
+        if nC_tot == 0.0 && nN_tot == 0.0 && nS_tot == 0.0
+            return (species=SpeciesInventory(; H2=elem.H), log10_fO2=-40.0)
+        end
+        d_iw_min = -50.0
+        spec = solve_chnos_speciation(
+            P,
+            T,
+            d_iw_min;
+            z_H=max(1e-12, nH_tot),
+            z_C=max(1e-12, nC_tot),
+            z_N=max(1e-12, nN_tot),
+            z_S=max(1e-12, nS_tot),
+            graphite_saturation=false,
+        )
+        denom_N = 2.0 * spec.p_N2_Pa + spec.p_NH3_Pa
+        f_N2 = denom_N > 0 ? 2.0 * spec.p_N2_Pa / denom_N : 1.0
+        f_NH3 = denom_N > 0 ? spec.p_NH3_Pa / denom_N : 0.0
+
+        denom_S = spec.p_H2S_Pa + 2.0 * spec.p_S2_Pa
+        f_H2S = denom_S > 0 ? spec.p_H2S_Pa / denom_S : 0.0
+        f_S2 = denom_S > 0 ? 2.0 * spec.p_S2_Pa / denom_S : 1.0
+
+        nH_req = 4.0 * nC_tot + 3.0 * (nN_tot * f_NH3) + 2.0 * (nS_tot * f_H2S)
+        if nH_tot >= nH_req
+            n_CH4 = nC_tot
+            n_NH3 = nN_tot * f_NH3
+            n_N2 = 0.5 * (nN_tot * f_N2)
+            n_H2S = nS_tot * f_H2S
+            n_S2 = 0.5 * (nS_tot * f_S2)
+            nH_rem = nH_tot - nH_req
+            n_H2 = 0.5 * nH_rem
+        else
+            n_N2 = 0.5 * nN_tot
+            n_NH3 = 0.0
+            n_S2 = 0.5 * nS_tot
+            n_H2S = 0.0
+            n_CH4 = min(nC_tot, 0.25 * nH_tot)
+            nH_rem = max(0.0, nH_tot - 4.0 * n_CH4)
+            n_H2 = 0.5 * nH_rem
+        end
+        sp_zero_O = SpeciesInventory(
+            n_H2 * mu_sp[:H2],
+            0.0,
+            0.0,
+            0.0,
+            n_CH4 * mu_sp[:CH4],
+            n_N2 * mu_sp[:N2],
+            n_NH3 * mu_sp[:NH3],
+            n_H2S * mu_sp[:H2S],
+            n_S2 * mu_sp[:S2],
+            0.0,
+        )
+        return (species=sp_zero_O, log10_fO2=-40.0)
+    end
+
+    nO_max = 0.5 * nH_tot + 2.0 * nC_tot + 2.0 * nS_tot
+    mO_max = nO_max * mu_O
+    if elem.O > mO_max * (1.0 + 1e-4)
+        throw(
+            ConvergenceError(
+                "Elemental oxygen mass $(elem.O) exceeds maximum stoichiometric capacity ($mO_max kg)",
+                elem,
+                (elem_O=elem.O, mO_max=mO_max),
+            ),
+        )
+    end
+
+    function eval_O(log10_fo2::Float64)
+        d_iw = clamp(log10_fo2 - (6.541 - 28164.0 / T), -50.0, 50.0)
+        spec = solve_chnos_speciation(
+            P,
+            T,
+            d_iw;
+            z_H=max(1e-12, nH_tot),
+            z_C=max(1e-12, nC_tot),
+            z_N=max(1e-12, nN_tot),
+            z_S=max(1e-12, nS_tot),
+            graphite_saturation=false,
+        )
+
+        denom_C = spec.p_CO_Pa + spec.p_CO2_Pa + spec.p_CH4_Pa
+        f_CO = denom_C > 0 ? spec.p_CO_Pa / denom_C : 0.0
+        f_CO2 = denom_C > 0 ? spec.p_CO2_Pa / denom_C : 0.0
+        f_CH4 = denom_C > 0 ? spec.p_CH4_Pa / denom_C : 0.0
+        n_CO = nC_tot * f_CO
+        n_CO2 = nC_tot * f_CO2
+        n_CH4 = nC_tot * f_CH4
+
+        denom_N = 2.0 * spec.p_N2_Pa + spec.p_NH3_Pa
+        f_N2 = denom_N > 0 ? 2.0 * spec.p_N2_Pa / denom_N : 0.0
+        f_NH3 = denom_N > 0 ? spec.p_NH3_Pa / denom_N : 0.0
+        n_N2 = 0.5 * (nN_tot * f_N2)
+        n_NH3 = nN_tot * f_NH3
+
+        denom_S = spec.p_H2S_Pa + 2.0 * spec.p_S2_Pa + spec.p_SO2_Pa
+        f_H2S = denom_S > 0 ? spec.p_H2S_Pa / denom_S : 0.0
+        f_S2 = denom_S > 0 ? 2.0 * spec.p_S2_Pa / denom_S : 0.0
+        f_SO2 = denom_S > 0 ? spec.p_SO2_Pa / denom_S : 0.0
+        n_H2S = nS_tot * f_H2S
+        n_S2 = 0.5 * (nS_tot * f_S2)
+        n_SO2 = nS_tot * f_SO2
+
+        nH_used = 4.0 * n_CH4 + 3.0 * n_NH3 + 2.0 * n_H2S
+        nH_rem = max(0.0, nH_tot - nH_used)
+        denom_H = spec.p_H2_Pa + spec.p_H2O_Pa
+        f_H2 = denom_H > 0 ? spec.p_H2_Pa / denom_H : 0.0
+        f_H2O = denom_H > 0 ? spec.p_H2O_Pa / denom_H : 1.0
+        n_H2 = 0.5 * (nH_rem * f_H2)
+        n_H2O = 0.5 * (nH_rem * f_H2O)
+
+        m_O_gas = (n_H2O + n_CO + 2.0 * n_CO2 + 2.0 * n_SO2) * mu_O
+        sp = SpeciesInventory(
+            n_H2 * mu_sp[:H2],
+            n_H2O * mu_sp[:H2O],
+            n_CO * mu_sp[:CO],
+            n_CO2 * mu_sp[:CO2],
+            n_CH4 * mu_sp[:CH4],
+            n_N2 * mu_sp[:N2],
+            n_NH3 * mu_sp[:NH3],
+            n_H2S * mu_sp[:H2S],
+            n_S2 * mu_sp[:S2],
+            n_SO2 * mu_sp[:SO2],
+        )
+        return m_O_gas - elem.O, sp
+    end
+
+    tol_O = tol * max(1.0, elem.O)
+    a = min(-40.0, compute_iron_wustite_fO2(T; delta_IW=-30.0))
+    b = max(20.0, compute_iron_wustite_fO2(T; delta_IW=50.0))
+
+    R_low, sp_low = eval_O(a)
+    if R_low > tol_O
+        throw(
+            ConvergenceError(
+                "speciate_closed_system: target oxygen $(elem.O) is below minimum bracket capacity",
+                elem,
+                (R_low=R_low,),
+            ),
+        )
+    elseif abs(R_low) <= tol_O
+        return (species=sp_low, log10_fO2=max(-40.0, a))
+    end
+
+    R_high, sp_high = eval_O(b)
+    if abs(R_high) <= tol_O || elem.O >= mO_max * (1.0 - 1e-5)
+        sp_saturated = SpeciesInventory(
+            0.0,
+            0.5 * nH_tot * mu_sp[:H2O],
+            0.0,
+            nC_tot * mu_sp[:CO2],
+            0.0,
+            0.5 * nN_tot * mu_sp[:N2],
+            0.0,
+            0.0,
+            0.0,
+            nS_tot * mu_sp[:SO2],
+        )
+        return (species=sp_saturated, log10_fO2=b)
+    elseif R_high < -tol_O
+        throw(
+            ConvergenceError(
+                "speciate_closed_system: target oxygen $(elem.O) exceeds maximum bracket capacity at log10_fO2=$b",
+                elem,
+                (R_high=R_high, b=b),
+            ),
+        )
+    end
+
+    best_sp = sp_low
+    best_fo2 = a
+    for iter in 1:max_iter
+        mid = 0.5 * (a + b)
+        R_mid, sp_mid = eval_O(mid)
+        best_sp = sp_mid
+        best_fo2 = mid
+        if abs(R_mid) <= tol_O || (b - a) <= 1e-10
+            break
+        end
+        if R_mid < 0.0
+            a = mid
+        else
+            b = mid
+        end
+    end
+
+    return (species=best_sp, log10_fO2=best_fo2)
 end
