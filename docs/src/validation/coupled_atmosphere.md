@@ -206,6 +206,54 @@ Retained water mass fraction versus melt fraction $F \in [0.1, 1.0]$ at constant
 The solid curve shows the analytical Burnham (1979) / Dixon et al. (1995) law, while circles show values retained in Lagrangian markers.
 Panel (b) confirms numerical agreement to relative tolerance $10^{-6}$.
 
+### Coupled Magma Ocean Multi-Component Volatile Partitioning
+
+The planetary-scale volatile equilibrium between the magma ocean melt reservoir and the overlying atmosphere is solved across four independent volatile element systems (H, C, N, S).
+
+#### Mathematical Formulation
+
+The primary unknowns are the log partial pressures of the four master element carriers:
+$$u = \left[\ln p_{\mathrm{H}_2\mathrm{O}}, \; \ln p_{\mathrm{CO}_2}, \; \ln p_{\mathrm{N}_2}, \; \ln p_{\mathrm{SO}_2}\right]$$
+The remaining six equilibrium gas species ($p_{\mathrm{H}_2}, p_{\mathrm{CO}}, p_{\mathrm{CH}_4}, p_{\mathrm{NH}_3}, p_{\mathrm{H}_2\mathrm{S}}, p_{\mathrm{S}_2}$) are derived from high-temperature thermodynamic equilibrium constants evaluated at magma ocean reference melt temperature $T_{\text{melt\_ref}}$ and mantle redox state $\Delta\text{IW}$:
+- $p_{\mathrm{H}_2} = p_{\mathrm{H}_2\mathrm{O}} / r_{\mathrm{H}}$ with $\log_{10} r_{\mathrm{H}} = \frac{12700}{T} - 2.80 + 0.5 \log_{10} f_{\mathrm{O}_2}$
+- $p_{\mathrm{CO}} = p_{\mathrm{CO}_2} / r_{\mathrm{CO}_2}$ with $\log_{10} r_{\mathrm{CO}_2} = \frac{14800}{T} - 4.58 + 0.5 \log_{10} f_{\mathrm{O}_2}$
+- $p_{\mathrm{SO}_2} = r_{\mathrm{SO}_2} \sqrt{p_{\mathrm{S}_2} \cdot 10^{-5}} \cdot 10^5$ with $\log_{10} r_{\mathrm{SO}_2} = \frac{18800}{T} - 3.80 + \log_{10} f_{\mathrm{O}_2}$
+- Reduced hydride species ($p_{\mathrm{CH}_4}, p_{\mathrm{NH}_3}, p_{\mathrm{H}_2\mathrm{S}}$) follow from their corresponding homogeneous gas equilibria.
+
+Total surface atmospheric pressure satisfies Dalton's law:
+$$P_{\text{surf}} = \sum_{i=1}^{10} p_i$$
+with total atmospheric column mass $M_{\text{atm,tot}} = \frac{4\pi R_{\text{planet}}^2}{g} P_{\text{surf}} = \text{col\_coeff} \cdot P_{\text{surf}}$. Individual species atmospheric masses are:
+$$M_{\text{atm}, i} = \text{col\_coeff} \cdot p_i \left(\frac{\mu_i}{\bar{\mu}}\right)$$
+where $\bar{\mu} = \sum_i p_i \mu_i / P_{\text{surf}}$ is the mean atmospheric molecular weight.
+
+#### Physical Solubility and Exact Elemental Conservation
+
+Melt volatile masses $M_{\text{melt}, E}$ are evaluated directly from physical solubility laws at the converged partial pressures and melt temperature:
+- $M_{\text{melt}, \mathrm{H}} = M_{\text{melt}} \left[w_{\text{diss}}^{\mathrm{H}_2\mathrm{O}}(p_{\mathrm{H}_2\mathrm{O}}) \frac{2 \mu_{\mathrm{H}}}{\mu_{\mathrm{H}_2\mathrm{O}}} + w_{\text{diss}}^{\mathrm{H}_2}(p_{\mathrm{H}_2})\right]$
+- $M_{\text{melt}, \mathrm{C}} = M_{\text{melt}} \left[C_{\text{diss}}^{\mathrm{CO}}(p_{\mathrm{CO}}, P_{\text{surf}}) + C_{\text{diss}}^{\mathrm{CH}_4}(p_{\mathrm{CH}_4}, P_{\text{surf}}) + C_{\text{diss}}^{\mathrm{CO}_2}(p_{\mathrm{CO}_2}, T)\right] \times 10^{-6}$
+- $M_{\text{melt}, \mathrm{N}} = M_{\text{melt}} \left[S_{\text{N}}(p_{\mathrm{N}_2}, \Delta\text{IW})\right] \times 10^{-6}$
+- $M_{\text{melt}, \mathrm{S}} = M_{\text{melt}} \left[C_{\text{S}}(p_{\mathrm{S}_2}, T, \Delta\text{IW})\right] \times 10^{-6}$
+
+Melt concentrations are never assigned by difference ($M_{\text{tot}} - M_{\text{atm}}$). Elemental mass conservation requires:
+$$M_{\text{calc}, E}(u) - M_{\text{tot}, E} = 0, \quad E \in \{\mathrm{H}, \mathrm{C}, \mathrm{N}, \mathrm{S}\}$$
+
+#### Graphite Saturation Complementarity
+
+Carbon fugacity is bounded by the CCO buffer ceiling ($p_{\mathrm{CO}} \le f_{\mathrm{CO}}^{\text{max}}$ and $p_{\mathrm{CO}_2} \le f_{\mathrm{CO}_2}^{\text{max}}$). When the total carbon inventory exceeds the combined storage capacity of the silicate melt and atmosphere at the CCO ceiling, the gas partial pressures clamp to their saturation values, and the excess carbon precipitates into the solid graphite reservoir:
+$$M_{\text{graphite}} = \max\left(0, \; M_{\text{tot}, \mathrm{C}} - (M_{\text{melt}, \mathrm{C}} + M_{\text{atm}, \mathrm{C}})\right)$$
+satisfying $M_{\text{calc}, \mathrm{C}} = M_{\text{melt}, \mathrm{C}} + M_{\text{atm}, \mathrm{C}} + M_{\text{graphite}} = M_{\text{tot}, \mathrm{C}}$.
+
+#### Numerical Solver and Convergence Policy
+
+The 4-variable non-linear system is solved via Newton-Raphson iteration with Armijo backtracking line search in $u$:
+1. A numerical Jacobian $J = \partial R / \partial u$ is constructed via forward differences in $u$.
+2. The trial Newton step $\Delta u = -J^{-1} R$ is bounded by a maximum log step ($\|\Delta u\|_\infty \le 4.0$).
+3. Armijo backtracking step halving (up to 30 halvings) ensures monotonic decrease of the normalized residual norm:
+   $$\|R\|_{\text{norm}} = \max_{E \in \{\mathrm{H}, \mathrm{C}, \mathrm{N}, \mathrm{S}\}} \frac{|M_{\text{calc}, E} - M_{\text{tot}, E}|}{\text{rtol} \cdot M_{\text{tot}, E} + \text{atol}_E} \le 1.0$$
+   with relative tolerance $\text{rtol} = 10^{-10}$ and absolute floor $\text{atol}_E = 10^{-12} \sum M_{\text{tot}}$.
+4. If Newton iteration fails to converge within `max_newton_iter`, the solver falls back to a Picard fixed-point iteration on atmospheric mass fractions $f_E = M_{\text{atm}, E} / M_{\text{tot}, E}$ (up to `max_picard_iter = 500` iterations) and increments `PICARD_WARNING_COUNTER` in telemetry.
+5. If Picard iteration also fails, the solver throws a typed `ConvergenceError` carrying the elemental residuals.
+
 ---
 
 ## 4. Configuration Schema

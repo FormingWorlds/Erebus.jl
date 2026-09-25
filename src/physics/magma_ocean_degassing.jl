@@ -47,6 +47,27 @@ function partial_pressures_to_masses(
     )
 end
 
+const PICARD_WARNING_COUNTER = Ref{Int}(0)
+
+"""
+    get_picard_warning_count()
+
+Return the number of times the magma ocean volatile partitioning solver fell back to Picard iteration.
+"""
+function get_picard_warning_count()
+    return PICARD_WARNING_COUNTER[]
+end
+
+"""
+    reset_picard_warning_count!()
+
+Reset the Picard fallback warning counter to zero.
+"""
+function reset_picard_warning_count!()
+    PICARD_WARNING_COUNTER[] = 0
+    return 0
+end
+
 """
     solve_magma_ocean_volatile_partitioning(
         M_melt::Real,
@@ -78,12 +99,12 @@ and the overlying atmosphere:
 - `M_tot_S`: Total elemental sulfur inventory in magma ocean system [kg].
 - `R_planet`: Planetary surface radius [m].
 - `g`: Surface gravitational acceleration [m/s^2].
-- `T_mo`: Magma ocean / surface interface temperature [K].
+- `T_mo`: Magma ocean reference melt temperature [K].
 - `delta_IW`: Oxygen fugacity offset relative to iron-wüstite buffer [log10 units].
 
 # Keyword Arguments
 - `water_As`: Burnham/Dixon water solubility coefficient [wt% / MPa^0.5] (default: 0.40).
-- `water_law`: Water solubility formulation (`:burnham_dixon`, `:sossi_peridotite`, etc.) (default: `:burnham_dixon`).
+- `water_law`: Water solubility formulation (default: `:burnham_dixon`).
 - `carbon_active`: Whether carbon dissolves in melt (default: true).
 - `sulfur_active`: Whether sulfur dissolves in melt (default: true).
 - `co_law`: CO solubility formulation (default: `:armstrong2015`).
@@ -93,6 +114,9 @@ and the overlying atmosphere:
 - `nitrogen_henry`: Physical N2 Henry coefficient [ppm / bar] (default: 0.40).
 - `nitrogen_nitride`: Chemical nitride capacity [wt% / bar^0.5] (default: 1.0e-3).
 - `graphite_saturation`: Whether to cap carbon fugacities at graphite saturation (default: true).
+- `max_newton_iter`: Maximum Newton iterations before Picard fallback (default: 100).
+- `max_picard_iter`: Maximum Picard iterations before throwing ConvergenceError (default: 500).
+- `M_tot_O`: Initial/reference elemental oxygen inventory [kg] (default: 0.0).
 
 # Returns
 - `NamedTuple`:
@@ -100,6 +124,10 @@ and the overlying atmosphere:
   - `p_i`: Dictionary of species partial pressures [Pa].
   - `M_atm_i`: Dictionary of species atmospheric masses [kg].
   - `M_atm_tot`: Total atmospheric mass [kg].
+  - `M_atm_H`: Elemental hydrogen mass in atmosphere [kg].
+  - `M_atm_C`: Elemental carbon mass in atmosphere [kg].
+  - `M_atm_N`: Elemental nitrogen mass in atmosphere [kg].
+  - `M_atm_S`: Elemental sulfur mass in atmosphere [kg].
   - `M_melt_H`: Elemental hydrogen mass retained in silicate melt [kg].
   - `M_melt_C`: Elemental carbon mass retained in silicate melt [kg].
   - `M_melt_N`: Elemental nitrogen mass retained in silicate melt [kg].
@@ -109,6 +137,10 @@ and the overlying atmosphere:
   - `C_diss_C_ppm`: Dissolved carbon concentration in melt [ppmw].
   - `C_diss_N_ppm`: Dissolved nitrogen concentration in melt [ppmw].
   - `C_diss_S_ppm`: Dissolved sulfur concentration in melt [ppmw].
+  - `M_graphite`: Precipitated solid graphite mass [kg].
+  - `dO_buffer`: Net oxygen exchanged with rock/melt buffer [kg].
+  - `M_atm_O`: Elemental oxygen mass in atmosphere [kg].
+  - `warning_counter`: Picard fallback count in telemetry.
 """
 function solve_magma_ocean_volatile_partitioning(
     M_melt::Real,
@@ -131,11 +163,18 @@ function solve_magma_ocean_volatile_partitioning(
     nitrogen_henry::Real=0.40,
     nitrogen_nitride::Real=1.0e-3,
     graphite_saturation::Bool=true,
+    max_newton_iter::Int=100,
+    max_picard_iter::Int=500,
+    M_tot_O::Real=0.0,
 )::@NamedTuple{
     P_surf::Float64,
     p_i::Dict{Symbol,Float64},
     M_atm_i::Dict{Symbol,Float64},
     M_atm_tot::Float64,
+    M_atm_H::Float64,
+    M_atm_C::Float64,
+    M_atm_N::Float64,
+    M_atm_S::Float64,
     M_melt_H::Float64,
     M_melt_C::Float64,
     M_melt_N::Float64,
@@ -145,6 +184,11 @@ function solve_magma_ocean_volatile_partitioning(
     C_diss_C_ppm::Float64,
     C_diss_N_ppm::Float64,
     C_diss_S_ppm::Float64,
+    M_graphite::Float64,
+    is_graphite_sat::Bool,
+    dO_buffer::Float64,
+    M_atm_O::Float64,
+    warning_counter::Int,
 }
     M_m = Float64(M_melt)
     mH = Float64(M_tot_H)
@@ -184,10 +228,6 @@ function solve_magma_ocean_volatile_partitioning(
         throw(DomainError(dIW, "delta_IW must be finite and within [-50, 50]"))
     end
 
-    total_volatile_mass = mH + mC + mN + mS
-    area = 4.0 * π * (Rp^2)
-    col_coeff = area / grav # kg / Pa
-
     empty_p_i = Dict{Symbol,Float64}(
         :H2 => 0.0,
         :H2O => 0.0,
@@ -201,12 +241,17 @@ function solve_magma_ocean_volatile_partitioning(
         :SO2 => 0.0,
     )
 
+    total_volatile_mass = mH + mC + mN + mS
     if total_volatile_mass == 0.0
         return (
             P_surf=0.0,
             p_i=empty_p_i,
             M_atm_i=copy(empty_p_i),
             M_atm_tot=0.0,
+            M_atm_H=0.0,
+            M_atm_C=0.0,
+            M_atm_N=0.0,
+            M_atm_S=0.0,
             M_melt_H=0.0,
             M_melt_C=0.0,
             M_melt_N=0.0,
@@ -216,359 +261,453 @@ function solve_magma_ocean_volatile_partitioning(
             C_diss_C_ppm=0.0,
             C_diss_N_ppm=0.0,
             C_diss_S_ppm=0.0,
+            M_graphite=0.0,
+            is_graphite_sat=false,
+            dO_buffer=0.0,
+            M_atm_O=0.0,
+            warning_counter=PICARD_WARNING_COUNTER[],
         )
     end
 
-    # Elemental molar inventories
-    nH_tot = mH / 1.008e-3
-    nC_tot = mC / 12.011e-3
-    nN_tot = mN / 14.007e-3
-    nS_tot = mS / 32.060e-3
-    n_sum = nH_tot + nC_tot + nN_tot + nS_tot
+    col_coeff = (4.0 * π * (Rp^2)) / grav
+    log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=dIW)
 
-    z_H = n_sum > 0.0 ? nH_tot / n_sum : 0.80
-    z_C = n_sum > 0.0 ? nC_tot / n_sum : 0.15
-    z_N = n_sum > 0.0 ? nN_tot / n_sum : 0.03
-    z_S = n_sum > 0.0 ? nS_tot / n_sum : 0.02
+    logK_H2O = 12700.0 / T - 2.80
+    r_H = 10.0^clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
 
-    # Asymptotic check: If no melt, atmosphere holds 100% of volatiles
-    if M_m == 0.0
-        p_surf_pure = total_volatile_mass / col_coeff
-        spec = solve_chnos_speciation(
-            max(p_surf_pure, 1.0),
-            T,
-            dIW;
-            z_H=z_H,
-            z_C=z_C,
-            z_N=z_N,
-            z_S=z_S,
-            graphite_saturation=graphite_saturation,
-        )
-        p_dict = Dict{Symbol,Float64}(
-            :H2 => spec.p_H2_Pa,
-            :H2O => spec.p_H2O_Pa,
-            :CO => spec.p_CO_Pa,
-            :CO2 => spec.p_CO2_Pa,
-            :CH4 => spec.p_CH4_Pa,
-            :N2 => spec.p_N2_Pa,
-            :NH3 => spec.p_NH3_Pa,
-            :H2S => spec.p_H2S_Pa,
-            :S2 => spec.p_S2_Pa,
-            :SO2 => spec.p_SO2_Pa,
-        )
-        # Normalize partial pressures to sum to p_surf_pure
-        p_tot_spec = sum(values(p_dict))
-        if p_tot_spec > 0.0
-            for k in keys(p_dict)
-                p_dict[k] = p_dict[k] * (p_surf_pure / p_tot_spec)
-            end
-        end
-        m_atm_dict = Dict{Symbol,Float64}(k => v * col_coeff for (k, v) in p_dict)
-        return (
-            P_surf=p_surf_pure,
-            p_i=p_dict,
-            M_atm_i=m_atm_dict,
-            M_atm_tot=total_volatile_mass,
-            M_melt_H=0.0,
-            M_melt_C=0.0,
-            M_melt_N=0.0,
-            M_melt_S=0.0,
-            M_melt_tot=0.0,
-            w_diss_H2O_wtpct=0.0,
-            C_diss_C_ppm=0.0,
-            C_diss_N_ppm=0.0,
-            C_diss_S_ppm=0.0,
-        )
-    end
+    logK_CO2 = 14800.0 / T - 4.58
+    r_CO2 = 10.0^clamp(logK_CO2 + 0.5 * log10_fO2, -100.0, 100.0)
 
-    # Helper function: evaluate mass of volatiles at a given trial surface pressure
-    function eval_partitioning_at_pressure(
-        P_trial::Float64, zH::Float64, zC::Float64, zN::Float64, zS::Float64
-    )
-        P_eval = max(P_trial, 1.0e-3)
-        spec = solve_chnos_speciation(
-            P_eval,
-            T,
-            dIW;
-            z_H=zH,
-            z_C=zC,
-            z_N=zN,
-            z_S=zS,
-            graphite_saturation=graphite_saturation,
-        )
-        p_dict = Dict{Symbol,Float64}(
-            :H2 => spec.p_H2_Pa,
-            :H2O => spec.p_H2O_Pa,
-            :CO => spec.p_CO_Pa,
-            :CO2 => spec.p_CO2_Pa,
-            :CH4 => spec.p_CH4_Pa,
-            :N2 => spec.p_N2_Pa,
-            :NH3 => spec.p_NH3_Pa,
-            :H2S => spec.p_H2S_Pa,
-            :S2 => spec.p_S2_Pa,
-            :SO2 => spec.p_SO2_Pa,
-        )
-        # Rescale partial pressures to sum exactly to P_trial
-        p_tot_spec = sum(values(p_dict))
-        if p_tot_spec > 0.0
-            for k in keys(p_dict)
-                p_dict[k] = p_dict[k] * (P_trial / p_tot_spec)
+    logK_SO2 = 18800.0 / T - 3.80
+    r_SO2 = 10.0^clamp(logK_SO2 + log10_fO2, -100.0, 100.0)
+
+    gr = compute_graphite_saturation_fugacity(T, log10_fO2)
+    f_CO_max_Pa = gr.f_CO_max_bar * 1.0e5
+    f_CO2_max_Pa = gr.f_CO2_max_bar * 1.0e5
+
+    tol_H = 1.0e-10 * mH + 1.0e-12 * total_volatile_mass
+    tol_C = 1.0e-10 * mC + 1.0e-12 * total_volatile_mass
+    tol_N = 1.0e-10 * mN + 1.0e-12 * total_volatile_mass
+    tol_S = 1.0e-10 * mS + 1.0e-12 * total_volatile_mass
+    tols = [tol_H, tol_C, tol_N, tol_S]
+
+    function eval_coupled_state(u_vec::AbstractVector{Float64})
+        p_H2O = mH > 0.0 ? exp(u_vec[1]) : 0.0
+        p_CO2_raw = mC > 0.0 ? exp(u_vec[2]) : 0.0
+        p_N2 = mN > 0.0 ? exp(u_vec[3]) : 0.0
+        p_SO2 = mS > 0.0 ? exp(u_vec[4]) : 0.0
+
+        p_H2 = p_H2O / r_H
+
+        p_CO2 = p_CO2_raw
+        p_CO = p_CO2 / r_CO2
+        is_graphite_sat = false
+        if graphite_saturation && mC > 0.0
+            if p_CO >= f_CO_max_Pa || p_CO2 >= f_CO2_max_Pa
+                is_graphite_sat = true
+                p_CO = f_CO_max_Pa
+                p_CO2 = f_CO2_max_Pa
             end
         end
 
-        m_atm_dict = Dict{Symbol,Float64}(k => v * col_coeff for (k, v) in p_dict)
+        p_H2_bar = p_H2 * 1.0e-5
+        p_CH4 = 0.0
+        if p_H2 > 0.0 && p_CO > 0.0
+            l_pH2 = log10(max(p_H2_bar, 1.0e-30))
+            r_CH4 =
+                10.0^clamp(
+                    11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
+                    -100.0,
+                    100.0,
+                )
+            p_CH4 = r_CH4 * p_CO
+        end
 
-        # Atmospheric elemental mass contributions
-        m_atm_H = (
-            m_atm_dict[:H2] * 1.0 +
-            m_atm_dict[:H2O] * (2.01588 / 18.01528) +
-            m_atm_dict[:CH4] * (4.03176 / 16.04246) +
-            m_atm_dict[:NH3] * (3.02382 / 17.03052) +
-            m_atm_dict[:H2S] * (2.01588 / 34.08088)
-        )
-        m_atm_C = (
-            m_atm_dict[:CO] * (12.011 / 28.0101) +
-            m_atm_dict[:CO2] * (12.011 / 44.0095) +
-            m_atm_dict[:CH4] * (12.011 / 16.04246)
-        )
-        m_atm_N = (m_atm_dict[:N2] * 1.0 + m_atm_dict[:NH3] * (14.007 / 17.03052))
-        m_atm_S = (
-            m_atm_dict[:H2S] * (32.060 / 34.08088) +
-            m_atm_dict[:SO2] * (32.060 / 64.066) +
-            m_atm_dict[:S2] * 1.0
+        p_N2_bar = p_N2 * 1.0e-5
+        p_NH3 = 0.0
+        if p_H2 > 0.0 && p_N2 > 0.0
+            l_pH2 = log10(max(p_H2_bar, 1.0e-30))
+            r_NH3 = 10.0^clamp(2800.0 / T - 5.80 + 1.5 * l_pH2, -100.0, 100.0)
+            p_NH3 = r_NH3 * sqrt(max(p_N2_bar, 0.0)) * 1.0e5
+        end
+
+        p_SO2_bar = p_SO2 * 1.0e-5
+        p_S2 = 0.0
+        p_H2S = 0.0
+        if p_SO2 > 0.0
+            sqrt_pS2_bar = p_SO2_bar / max(r_SO2, 1.0e-30)
+            p_S2 = (sqrt_pS2_bar^2) * 1.0e5
+            if p_H2 > 0.0
+                l_pH2 = log10(max(p_H2_bar, 1.0e-30))
+                r_H2S = 10.0^clamp(4800.0 / T - 2.50 + l_pH2, -100.0, 100.0)
+                p_H2S = r_H2S * sqrt_pS2_bar * 1.0e5
+            end
+        end
+
+        p_dict = Dict{Symbol,Float64}(
+            :H2 => p_H2,
+            :H2O => p_H2O,
+            :CO => p_CO,
+            :CO2 => p_CO2,
+            :CH4 => p_CH4,
+            :N2 => p_N2,
+            :NH3 => p_NH3,
+            :H2S => p_H2S,
+            :S2 => p_S2,
+            :SO2 => p_SO2,
         )
 
-        # Melt dissolved volatile mass fractions
-        # 1. Water & H2
-        w_H2O_wtpct = compute_water_solubility_melt(
+        P_surf = sum(values(p_dict))
+        if P_surf <= 0.0
+            return (;
+                P_surf=0.0,
+                p_dict=p_dict,
+                m_atm_dict=copy(empty_p_i),
+                M_atm_tot=0.0,
+                M_atm_H=0.0,
+                M_atm_C=0.0,
+                M_atm_N=0.0,
+                M_atm_S=0.0,
+                M_atm_O=0.0,
+                M_melt_H=0.0,
+                M_melt_C=0.0,
+                M_melt_N=0.0,
+                M_melt_S=0.0,
+                w_diss_H2O_wtpct=0.0,
+                C_diss_C_ppm=0.0,
+                C_diss_N_ppm=0.0,
+                C_diss_S_ppm=0.0,
+                M_graphite=0.0,
+                is_graphite_sat=false,
+                R_H=(-mH),
+                R_C=(-mC),
+                R_N=(-mN),
+                R_S=(-mS),
+            )
+        end
+
+        mu_bar = sum(p_dict[k] * SPECIES_AMU[k] for k in keys(p_dict)) / P_surf
+        m_atm_dict = Dict{Symbol,Float64}(
+            k => col_coeff * p_dict[k] * (SPECIES_AMU[k] / mu_bar) for k in keys(p_dict)
+        )
+        M_atm_tot = col_coeff * P_surf
+
+        M_atm_H = (
+            m_atm_dict[:H2] +
+            m_atm_dict[:H2O] * (2.0 * SPECIES_AMU[:H] / SPECIES_AMU[:H2O]) +
+            m_atm_dict[:CH4] * (4.0 * SPECIES_AMU[:H] / SPECIES_AMU[:CH4]) +
+            m_atm_dict[:NH3] * (3.0 * SPECIES_AMU[:H] / SPECIES_AMU[:NH3]) +
+            m_atm_dict[:H2S] * (2.0 * SPECIES_AMU[:H] / SPECIES_AMU[:H2S])
+        )
+        M_atm_C = (
+            m_atm_dict[:CO] * (SPECIES_AMU[:C] / SPECIES_AMU[:CO]) +
+            m_atm_dict[:CO2] * (SPECIES_AMU[:C] / SPECIES_AMU[:CO2]) +
+            m_atm_dict[:CH4] * (SPECIES_AMU[:C] / SPECIES_AMU[:CH4])
+        )
+        M_atm_N = (
+            m_atm_dict[:N2] + m_atm_dict[:NH3] * (SPECIES_AMU[:N] / SPECIES_AMU[:NH3])
+        )
+        M_atm_S = (
+            m_atm_dict[:S2] +
+            m_atm_dict[:SO2] * (SPECIES_AMU[:S] / SPECIES_AMU[:SO2]) +
+            m_atm_dict[:H2S] * (SPECIES_AMU[:S] / SPECIES_AMU[:H2S])
+        )
+        M_atm_O = (
+            m_atm_dict[:H2O] * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O]) +
+            m_atm_dict[:CO] * (SPECIES_AMU[:O] / SPECIES_AMU[:CO]) +
+            m_atm_dict[:CO2] * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2]) +
+            m_atm_dict[:SO2] * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:SO2])
+        )
+
+        w_diss_H2O_wtpct = compute_water_solubility_melt(
             p_dict[:H2O]; As=water_As, law=water_law
         )
-        w_H2O_frac = w_H2O_wtpct * 0.01
-        w_H2_frac = compute_h2_solubility_melt(p_dict[:H2]) * 1.0e-6
-        w_diss_H = w_H2O_frac * (2.01588 / 18.01528) + w_H2_frac
-        m_melt_H = M_m * w_diss_H
+        w_H2O = w_diss_H2O_wtpct * 0.01
+        w_H2 = compute_h2_solubility_melt(p_dict[:H2]) * 1.0e-6
+        w_diss_H = w_H2O * (2.0 * SPECIES_AMU[:H] / SPECIES_AMU[:H2O]) + w_H2
+        M_melt_H = M_m * w_diss_H
 
-        # 2. Nitrogen
-        S_N_res = compute_nitrogen_solubility_melt(
-            p_dict[:N2], dIW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
-        )
-        C_N_ppm = S_N_res.total_ppm
-        w_diss_N = C_N_ppm * 1.0e-6
-        m_melt_N = M_m * w_diss_N
+        C_diss_C_ppm = 0.0
+        if carbon_active && mC > 0.0
+            co_ppm = compute_co_solubility_melt(p_dict[:CO], P_surf; law=co_law)
+            ch4_ppm = compute_ch4_solubility_melt(p_dict[:CH4], P_surf; law=ch4_law)
+            co2_ppm = compute_co2_solubility_melt(p_dict[:CO2], T; law=co2_law)
+            C_diss_C_ppm = co_ppm + ch4_ppm + co2_ppm
+        end
+        w_diss_C = C_diss_C_ppm * 1.0e-6
+        M_melt_C = M_m * w_diss_C
 
-        # 3. Carbon
-        C_C_ppm = 0.0
-        if carbon_active
-            S_C_res = compute_carbon_solubility_melt(
-                P_eval,
-                T,
-                dIW;
-                co_law=co_law,
-                ch4_law=ch4_law,
-                co2_law=co2_law,
-                graphite_saturation=graphite_saturation,
+        C_diss_N_ppm = 0.0
+        if mN > 0.0
+            S_N_res = compute_nitrogen_solubility_melt(
+                p_dict[:N2], dIW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
             )
-            # Scale dissolved C to the actual carbon gas mole fraction in the atmosphere
-            f_C_gas = clamp((p_dict[:CO] + p_dict[:CO2] + p_dict[:CH4]) / P_eval, 0.0, 1.0)
-            C_C_ppm = S_C_res.total_ppm * f_C_gas
+            C_diss_N_ppm = S_N_res.total_ppm
         end
-        w_diss_C = C_C_ppm * 1.0e-6
-        m_melt_C = M_m * w_diss_C
+        w_diss_N = C_diss_N_ppm * 1.0e-6
+        M_melt_N = M_m * w_diss_N
 
-        # 4. Sulfur
-        C_S_ppm = 0.0
-        if sulfur_active
-            C_S_ppm = compute_sulfur_solubility_melt(p_dict[:S2], T, dIW; law=sulfide_law)
+        C_diss_S_ppm = 0.0
+        if sulfur_active && mS > 0.0
+            C_diss_S_ppm = compute_sulfur_solubility_melt(
+                p_dict[:S2], T, dIW; law=sulfide_law
+            )
         end
-        w_diss_S = C_S_ppm * 1.0e-6
-        m_melt_S = M_m * w_diss_S
+        w_diss_S = C_diss_S_ppm * 1.0e-6
+        M_melt_S = M_m * w_diss_S
 
-        m_tot_calc =
-            (m_atm_H + m_melt_H) +
-            (m_atm_C + m_melt_C) +
-            (m_atm_N + m_melt_N) +
-            (m_atm_S + m_melt_S)
-        return (
-            m_tot_calc=m_tot_calc,
+        M_graphite = 0.0
+        if graphite_saturation && mC > 0.0
+            if is_graphite_sat || (
+                (M_melt_C + M_atm_C) < mC &&
+                (p_CO >= f_CO_max_Pa * 0.999999 || p_CO2 >= f_CO2_max_Pa * 0.999999)
+            )
+                is_graphite_sat = true
+                M_graphite = max(0.0, mC - (M_melt_C + M_atm_C))
+            end
+        end
+
+        M_calc_H = M_melt_H + M_atm_H
+        M_calc_C = M_melt_C + M_atm_C + M_graphite
+        M_calc_N = M_melt_N + M_atm_N
+        M_calc_S = M_melt_S + M_atm_S
+
+        R_H = mH > 0.0 ? M_calc_H - mH : 0.0
+        R_C = mC > 0.0 ? M_calc_C - mC : 0.0
+        R_N = mN > 0.0 ? M_calc_N - mN : 0.0
+        R_S = mS > 0.0 ? M_calc_S - mS : 0.0
+
+        return (;
+            P_surf=P_surf,
             p_dict=p_dict,
             m_atm_dict=m_atm_dict,
-            m_atm_H=m_atm_H,
-            m_atm_C=m_atm_C,
-            m_atm_N=m_atm_N,
-            m_atm_S=m_atm_S,
-            m_melt_H=m_melt_H,
-            m_melt_C=m_melt_C,
-            m_melt_N=m_melt_N,
-            m_melt_S=m_melt_S,
-            w_H2O_wtpct=w_H2O_wtpct,
-            C_C_ppm=C_C_ppm,
-            C_N_ppm=C_N_ppm,
-            C_S_ppm=C_S_ppm,
+            M_atm_tot=M_atm_tot,
+            M_atm_H=M_atm_H,
+            M_atm_C=M_atm_C,
+            M_atm_N=M_atm_N,
+            M_atm_S=M_atm_S,
+            M_atm_O=M_atm_O,
+            M_melt_H=M_melt_H,
+            M_melt_C=M_melt_C,
+            M_melt_N=M_melt_N,
+            M_melt_S=M_melt_S,
+            w_diss_H2O_wtpct=w_diss_H2O_wtpct,
+            C_diss_C_ppm=C_diss_C_ppm,
+            C_diss_N_ppm=C_diss_N_ppm,
+            C_diss_S_ppm=C_diss_S_ppm,
+            M_graphite=M_graphite,
+            is_graphite_sat=is_graphite_sat,
+            R_H=R_H,
+            R_C=R_C,
+            R_N=R_N,
+            R_S=R_S,
         )
     end
 
-    # Outer iteration to converge elemental atmospheric gas fractions
-    P_low = 1.0e-4
-    P_high = max(1.0e8, 10.0 * (total_volatile_mass / col_coeff))
-    best_res = nothing
+    P_max = total_volatile_mass / col_coeff
+    p_H2O_0 = if mH > 0.0
+        max(1.0e-5, (mH / total_volatile_mass) * P_max * (r_H / (1.0 + r_H)))
+    else
+        1.0e-20
+    end
+    p_CO2_0 = if mC > 0.0
+        max(1.0e-5, (mC / total_volatile_mass) * P_max * (r_CO2 / (1.0 + r_CO2)))
+    else
+        1.0e-20
+    end
+    if graphite_saturation && p_CO2_0 > f_CO2_max_Pa
+        p_CO2_0 = f_CO2_max_Pa
+    end
+    p_N2_0 = mN > 0.0 ? max(1.0e-5, (mN / total_volatile_mass) * P_max) : 1.0e-20
+    p_SO2_0 = if mS > 0.0
+        max(1.0e-5, (mS / total_volatile_mass) * P_max * (r_SO2 / (1.0 + r_SO2)))
+    else
+        1.0e-20
+    end
 
-    for outer_iter in 1:8
-        # Monotonic 1D bisection/Brent search for P_surf
-        P_a = P_low
-        P_b = P_high
+    u = [log(p_H2O_0), log(p_CO2_0), log(p_N2_0), log(p_SO2_0)]
+    active_indices = Int[]
+    mH > 0.0 && push!(active_indices, 1)
+    mC > 0.0 && push!(active_indices, 2)
+    mN > 0.0 && push!(active_indices, 3)
+    mS > 0.0 && push!(active_indices, 4)
 
-        # Ensure bracket
-        res_b = eval_partitioning_at_pressure(P_b, z_H, z_C, z_N, z_S)
-        while res_b.m_tot_calc < total_volatile_mass && P_b < 1.0e11
-            P_b *= 10.0
-            res_b = eval_partitioning_at_pressure(P_b, z_H, z_C, z_N, z_S)
-        end
+    state = eval_coupled_state(u)
+    converged = false
 
-        for _ in 1:60
-            P_mid = 0.5 * (P_a + P_b)
-            res_mid = eval_partitioning_at_pressure(P_mid, z_H, z_C, z_N, z_S)
-            diff = res_mid.m_tot_calc - total_volatile_mass
-            if abs(diff) / total_volatile_mass < 1.0e-7 || (P_b - P_a) / P_mid < 1.0e-7
-                best_res = res_mid
+    res_vec = [state.R_H, state.R_C, state.R_N, state.R_S]
+    norm_0 = maximum(abs(res_vec[i]) / tols[i] for i in 1:4)
+    if norm_0 <= 1.0
+        converged = true
+    end
+
+    if !converged
+        for iter in 1:max_newton_iter
+            curr_active = Int[]
+            for idx in active_indices
+                if idx == 2 && state.is_graphite_sat
+                    continue
+                end
+                push!(curr_active, idx)
+            end
+
+            n_act = length(curr_active)
+            if n_act == 0
+                converged = true
                 break
             end
-            if diff > 0.0
-                P_b = P_mid
+
+            F_curr = [res_vec[idx] for idx in curr_active]
+            J = zeros(Float64, n_act, n_act)
+            h = 1.0e-6
+
+            for col in 1:n_act
+                idx = curr_active[col]
+                u_pert = copy(u)
+                u_pert[idx] += h
+                state_pert = eval_coupled_state(u_pert)
+                res_pert = [state_pert.R_H, state_pert.R_C, state_pert.R_N, state_pert.R_S]
+                for row in 1:n_act
+                    row_idx = curr_active[row]
+                    J[row, col] = (res_pert[row_idx] - F_curr[row]) / h
+                end
+            end
+
+            delta_u_act = try
+                J \ (-F_curr)
+            catch
+                break
+            end
+
+            if any(!isfinite, delta_u_act)
+                break
+            end
+
+            max_step = maximum(abs.(delta_u_act))
+            if max_step > 4.0
+                delta_u_act .*= (4.0 / max_step)
+            end
+
+            alpha = 1.0
+            step_halvings = 0
+            u_trial = copy(u)
+            for (col, idx) in enumerate(curr_active)
+                u_trial[idx] += alpha * delta_u_act[col]
+            end
+            state_trial = eval_coupled_state(u_trial)
+            res_trial = [state_trial.R_H, state_trial.R_C, state_trial.R_N, state_trial.R_S]
+            norm_trial = maximum(abs(res_trial[i]) / tols[i] for i in 1:4)
+
+            while norm_trial >= norm_0 && step_halvings < 30
+                alpha *= 0.5
+                step_halvings += 1
+                u_trial = copy(u)
+                for (col, idx) in enumerate(curr_active)
+                    u_trial[idx] += alpha * delta_u_act[col]
+                end
+                state_trial = eval_coupled_state(u_trial)
+                res_trial = [
+                    state_trial.R_H, state_trial.R_C, state_trial.R_N, state_trial.R_S
+                ]
+                norm_trial = maximum(abs(res_trial[i]) / tols[i] for i in 1:4)
+            end
+
+            if norm_trial < norm_0
+                u = u_trial
+                state = state_trial
+                res_vec = res_trial
+                norm_0 = norm_trial
+                if norm_0 <= 1.0
+                    converged = true
+                    break
+                end
             else
-                P_a = P_mid
-            end
-            best_res = res_mid
-        end
-
-        # Update elemental fractions in gas for next outer iteration based on target exsolved inventories
-        nH_atm = max(0.0, mH - best_res.m_melt_H) / 1.008e-3
-        nC_atm = max(0.0, mC - best_res.m_melt_C) / 12.011e-3
-        nN_atm = max(0.0, mN - best_res.m_melt_N) / 14.007e-3
-        nS_atm = max(0.0, mS - best_res.m_melt_S) / 32.060e-3
-        n_atm_tot = nH_atm + nC_atm + nN_atm + nS_atm
-        if n_atm_tot > 0.0
-            z_H_new = nH_atm / n_atm_tot
-            z_C_new = nC_atm / n_atm_tot
-            z_N_new = nN_atm / n_atm_tot
-            z_S_new = nS_atm / n_atm_tot
-            if max(
-                abs(z_H_new - z_H),
-                abs(z_C_new - z_C),
-                abs(z_N_new - z_N),
-                abs(z_S_new - z_S),
-            ) < 1.0e-5
                 break
             end
-            z_H = 0.5 * (z_H + z_H_new)
-            z_C = 0.5 * (z_C + z_C_new)
-            z_N = 0.5 * (z_N + z_N_new)
-            z_S = 0.5 * (z_S + z_S_new)
-        else
-            break
         end
     end
 
-    # Enforce strict conservation of elemental mass across melt and atmosphere
-    final_atm_i = copy(best_res.m_atm_dict)
-    final_p_i = Dict{Symbol,Float64}(k => v / col_coeff for (k, v) in final_atm_i)
-    final_P_surf = sum(values(final_p_i))
-    final_atm_tot = sum(values(final_atm_i))
-
-    m_atm_H = (
-        get(final_atm_i, :H2, 0.0) * 1.0 +
-        get(final_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
-        get(final_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
-        get(final_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
-        get(final_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
-    )
-    m_atm_C = (
-        get(final_atm_i, :CO, 0.0) * (12.011 / 28.0101) +
-        get(final_atm_i, :CO2, 0.0) * (12.011 / 44.0095) +
-        get(final_atm_i, :CH4, 0.0) * (12.011 / 16.04246)
-    )
-    m_atm_N = (
-        get(final_atm_i, :N2, 0.0) * 1.0 + get(final_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
-    )
-    m_atm_S = (
-        get(final_atm_i, :H2S, 0.0) * (32.060 / 34.08088) +
-        get(final_atm_i, :SO2, 0.0) * (32.060 / 64.066) +
-        get(final_atm_i, :S2, 0.0) * 1.0
-    )
-
-    scale_H = m_atm_H > mH ? mH / max(m_atm_H, 1.0e-30) : 1.0
-    scale_C = m_atm_C > mC ? mC / max(m_atm_C, 1.0e-30) : 1.0
-    scale_N = m_atm_N > mN ? mN / max(m_atm_N, 1.0e-30) : 1.0
-    scale_S = m_atm_S > mS ? mS / max(m_atm_S, 1.0e-30) : 1.0
-
-    if min(scale_H, scale_C, scale_N, scale_S) < 1.0
-        for (sp, mass) in final_atm_i
-            if sp in (:H2, :H2O)
-                final_atm_i[sp] = mass * scale_H
-            elseif sp in (:CO, :CO2)
-                final_atm_i[sp] = mass * scale_C
-            elseif sp === :CH4
-                final_atm_i[sp] = mass * min(scale_H, scale_C)
-            elseif sp === :N2
-                final_atm_i[sp] = mass * scale_N
-            elseif sp === :NH3
-                final_atm_i[sp] = mass * min(scale_H, scale_N)
-            elseif sp in (:SO2, :S2)
-                final_atm_i[sp] = mass * scale_S
-            elseif sp === :H2S
-                final_atm_i[sp] = mass * min(scale_H, scale_S)
+    if !converged
+        PICARD_WARNING_COUNTER[] += 1
+        for picard_iter in 1:max_picard_iter
+            res_vec = [state.R_H, state.R_C, state.R_N, state.R_S]
+            norm_0 = maximum(abs(res_vec[i]) / tols[i] for i in 1:4)
+            if norm_0 <= 1.0
+                converged = true
+                break
             end
+
+            curr_active = Int[]
+            for idx in active_indices
+                if idx == 2 && state.is_graphite_sat
+                    continue
+                end
+                push!(curr_active, idx)
+            end
+
+            m_tot_targets = [mH, mC, mN, mS]
+            m_calc_current = [
+                state.M_melt_H + state.M_atm_H,
+                state.M_melt_C + state.M_atm_C + state.M_graphite,
+                state.M_melt_N + state.M_atm_N,
+                state.M_melt_S + state.M_atm_S,
+            ]
+
+            for idx in curr_active
+                target = m_tot_targets[idx]
+                curr = m_calc_current[idx]
+                if curr > 0.0 && target > 0.0
+                    ratio = target / curr
+                    damping = 0.5
+                    u[idx] += damping * log(clamp(ratio, 0.05, 20.0))
+                end
+            end
+            state = eval_coupled_state(u)
         end
-        m_atm_H = (
-            get(final_atm_i, :H2, 0.0) * 1.0 +
-            get(final_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
-            get(final_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
-            get(final_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
-            get(final_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
-        )
-        m_atm_C = (
-            get(final_atm_i, :CO, 0.0) * (12.011 / 28.0101) +
-            get(final_atm_i, :CO2, 0.0) * (12.011 / 44.0095) +
-            get(final_atm_i, :CH4, 0.0) * (12.011 / 16.04246)
-        )
-        m_atm_N = (
-            get(final_atm_i, :N2, 0.0) * 1.0 +
-            get(final_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
-        )
-        m_atm_S = (
-            get(final_atm_i, :H2S, 0.0) * (32.060 / 34.08088) +
-            get(final_atm_i, :SO2, 0.0) * (32.060 / 64.066) +
-            get(final_atm_i, :S2, 0.0) * 1.0
-        )
-        final_p_i = Dict{Symbol,Float64}(k => v / col_coeff for (k, v) in final_atm_i)
-        final_P_surf = sum(values(final_p_i))
-        final_atm_tot = sum(values(final_atm_i))
+        res_vec = [state.R_H, state.R_C, state.R_N, state.R_S]
+        norm_0 = maximum(abs(res_vec[i]) / tols[i] for i in 1:4)
+        if norm_0 <= 1.0
+            converged = true
+        end
     end
 
-    final_melt_H = max(0.0, mH - m_atm_H)
-    final_melt_C = max(0.0, mC - m_atm_C)
-    final_melt_N = max(0.0, mN - m_atm_N)
-    final_melt_S = max(0.0, mS - m_atm_S)
-    final_melt_tot = final_melt_H + final_melt_C + final_melt_N + final_melt_S
+    if !converged
+        throw(
+            ConvergenceError(
+                "Magma ocean volatile partitioning failed to converge after Newton and Picard iterations";
+                residuals=Dict(
+                    :H => state.R_H, :C => state.R_C, :N => state.R_N, :S => state.R_S
+                ),
+            ),
+        )
+    end
 
-    w_diss_H2O = M_m > 0.0 ? (final_melt_H * (18.01528 / 2.01588) / M_m) * 100.0 : 0.0
-    C_diss_C = M_m > 0.0 ? (final_melt_C / M_m) * 1.0e6 : 0.0
-    C_diss_N = M_m > 0.0 ? (final_melt_N / M_m) * 1.0e6 : 0.0
-    C_diss_S = M_m > 0.0 ? (final_melt_S / M_m) * 1.0e6 : 0.0
+    M_atm_O = state.M_atm_O
+    dO_buffer = M_atm_O - Float64(M_tot_O)
 
     return (
-        P_surf=final_P_surf,
-        p_i=final_p_i,
-        M_atm_i=final_atm_i,
-        M_atm_tot=final_atm_tot,
-        M_melt_H=final_melt_H,
-        M_melt_C=final_melt_C,
-        M_melt_N=final_melt_N,
-        M_melt_S=final_melt_S,
-        M_melt_tot=final_melt_tot,
-        w_diss_H2O_wtpct=w_diss_H2O,
-        C_diss_C_ppm=C_diss_C,
-        C_diss_N_ppm=C_diss_N,
-        C_diss_S_ppm=C_diss_S,
+        P_surf=state.P_surf,
+        p_i=state.p_dict,
+        M_atm_i=state.m_atm_dict,
+        M_atm_tot=state.M_atm_tot,
+        M_atm_H=state.M_atm_H,
+        M_atm_C=state.M_atm_C,
+        M_atm_N=state.M_atm_N,
+        M_atm_S=state.M_atm_S,
+        M_melt_H=state.M_melt_H,
+        M_melt_C=state.M_melt_C,
+        M_melt_N=state.M_melt_N,
+        M_melt_S=state.M_melt_S,
+        M_melt_tot=state.M_melt_H + state.M_melt_C + state.M_melt_N + state.M_melt_S,
+        w_diss_H2O_wtpct=state.w_diss_H2O_wtpct,
+        C_diss_C_ppm=state.C_diss_C_ppm,
+        C_diss_N_ppm=state.C_diss_N_ppm,
+        C_diss_S_ppm=state.C_diss_S_ppm,
+        M_graphite=state.M_graphite,
+        is_graphite_sat=state.is_graphite_sat,
+        dO_buffer=dO_buffer,
+        M_atm_O=M_atm_O,
+        warning_counter=PICARD_WARNING_COUNTER[],
     )
 end
 

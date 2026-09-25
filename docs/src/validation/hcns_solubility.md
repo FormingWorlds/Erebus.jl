@@ -66,6 +66,8 @@ $$\log_{10}(f_{\text{CO}}^{\text{max}} [\text{bar}]) = \frac{5785.0}{T} + 4.545 
 
 $$\log_{10}(f_{\text{CO}_2}^{\text{max}} [\text{bar}]) = \frac{20590.0}{T} - 0.043 + \log_{10}(f_{\text{O}_2})$$
 
+In coupled magma ocean volatile partitioning, carbon satisfies the complementarity condition: dissolved carbon is bounded by the CCO graphite ceiling ($p_{\text{CO}} \le f_{\text{CO}}^{\text{max}}$ and $p_{\text{CO}_2} \le f_{\text{CO}_2}^{\text{max}}$), and any excess carbon inventory precipitates into the solid graphite reservoir $M_{\text{graphite}}$, closing total carbon mass conservation to machine precision.
+
 ### Multi-Species Nitrogen Solubility Partitioning
 
 `Erebus.jl` provides two nitrogen solubility models:

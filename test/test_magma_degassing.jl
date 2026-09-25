@@ -52,37 +52,38 @@ include("test_helpers.jl")
 
         # Strict elemental mass conservation across melt and atmosphere:
         # 1. Hydrogen conservation (elemental H mass in melt + atmosphere)
-        # H2O is 2.01588 / 18.01528 H by mass; H2 is 1.0 H by mass; CH4 is 4.032 / 16.042 H; NH3 is 3.024 / 17.031 H; H2S is 2.016 / 34.08 H
+        amu_sp = Erebus.SPECIES_AMU
         M_atm_H = (
             get(sol.M_atm_i, :H2, 0.0) +
-            get(sol.M_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
-            get(sol.M_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
-            get(sol.M_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
-            get(sol.M_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
+            get(sol.M_atm_i, :H2O, 0.0) * (2.0 * amu_sp[:H] / amu_sp[:H2O]) +
+            get(sol.M_atm_i, :CH4, 0.0) * (4.0 * amu_sp[:H] / amu_sp[:CH4]) +
+            get(sol.M_atm_i, :NH3, 0.0) * (3.0 * amu_sp[:H] / amu_sp[:NH3]) +
+            get(sol.M_atm_i, :H2S, 0.0) * (2.0 * amu_sp[:H] / amu_sp[:H2S])
         )
         M_melt_H = sol.M_melt_H
         @test isapprox(M_melt_H + M_atm_H, M_tot_H; rtol=1e-6)
 
         # 2. Carbon conservation
         M_atm_C = (
-            get(sol.M_atm_i, :CO, 0.0) * (12.011 / 28.0101) +
-            get(sol.M_atm_i, :CO2, 0.0) * (12.011 / 44.0095) +
-            get(sol.M_atm_i, :CH4, 0.0) * (12.011 / 16.04246)
+            get(sol.M_atm_i, :CO, 0.0) * (amu_sp[:C] / amu_sp[:CO]) +
+            get(sol.M_atm_i, :CO2, 0.0) * (amu_sp[:C] / amu_sp[:CO2]) +
+            get(sol.M_atm_i, :CH4, 0.0) * (amu_sp[:C] / amu_sp[:CH4])
         )
         M_melt_C = sol.M_melt_C
         @test isapprox(M_melt_C + M_atm_C, M_tot_C; rtol=1e-6)
 
         # 3. Nitrogen conservation
         M_atm_N = (
-            get(sol.M_atm_i, :N2, 0.0) + get(sol.M_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
+            get(sol.M_atm_i, :N2, 0.0) +
+            get(sol.M_atm_i, :NH3, 0.0) * (amu_sp[:N] / amu_sp[:NH3])
         )
         M_melt_N = sol.M_melt_N
         @test isapprox(M_melt_N + M_atm_N, M_tot_N; rtol=1e-6)
 
         # 4. Sulfur conservation
         M_atm_S = (
-            get(sol.M_atm_i, :H2S, 0.0) * (32.06 / 34.08088) +
-            get(sol.M_atm_i, :SO2, 0.0) * (32.06 / 64.066) +
+            get(sol.M_atm_i, :H2S, 0.0) * (amu_sp[:S] / amu_sp[:H2S]) +
+            get(sol.M_atm_i, :SO2, 0.0) * (amu_sp[:S] / amu_sp[:SO2]) +
             get(sol.M_atm_i, :S2, 0.0)
         )
         M_melt_S = sol.M_melt_S
@@ -122,6 +123,189 @@ include("test_helpers.jl")
         )
         @test sol_more_melt.P_surf < sol.P_surf
         @test sol_more_melt.M_melt_tot > sol.M_melt_tot
+    end
+
+    # -------------------------------------------------------------------------
+    # 1b. Roadmap PR 1c-ii: Coupled Magma Ocean Solve & Exact Mass Conservation
+    # -------------------------------------------------------------------------
+    @testset "Roadmap PR 1c-ii: Coupled Magma Ocean Solve" begin
+        # Test 1: Graphite-undersaturated case: closure to 1e-9, unblinded perturbation, laws equality to 1e-12
+        M_H1 = 1.0e15
+        M_C1 = 1.0e14
+        M_N1 = 1.0e13
+        M_S1 = 1.0e14
+        sol1 = solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0
+        )
+
+        col_c = 4.0 * π * (R_p^2) / g_surf
+        P_surf_calc = sum(values(sol1.p_i))
+        @test isapprox(sol1.P_surf, P_surf_calc; rtol=1e-12)
+
+        mu_bar_calc =
+            sum(sol1.p_i[k] * Erebus.SPECIES_AMU[k] for k in keys(sol1.p_i)) / P_surf_calc
+        m_atm_sp = Dict{Symbol,Float64}(
+            k => col_c * sol1.p_i[k] * (Erebus.SPECIES_AMU[k] / mu_bar_calc) for
+            k in keys(sol1.p_i)
+        )
+
+        m_atm_H_calc = (
+            m_atm_sp[:H2] +
+            m_atm_sp[:H2O] * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2O]) +
+            m_atm_sp[:CH4] * (4.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:CH4]) +
+            m_atm_sp[:NH3] * (3.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:NH3]) +
+            m_atm_sp[:H2S] * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2S])
+        )
+        m_atm_C_calc = (
+            m_atm_sp[:CO] * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO]) +
+            m_atm_sp[:CO2] * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO2]) +
+            m_atm_sp[:CH4] * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CH4])
+        )
+        m_atm_N_calc = (
+            m_atm_sp[:N2] +
+            m_atm_sp[:NH3] * (Erebus.SPECIES_AMU[:N] / Erebus.SPECIES_AMU[:NH3])
+        )
+        m_atm_S_calc = (
+            m_atm_sp[:S2] +
+            m_atm_sp[:SO2] * (Erebus.SPECIES_AMU[:S] / Erebus.SPECIES_AMU[:SO2]) +
+            m_atm_sp[:H2S] * (Erebus.SPECIES_AMU[:S] / Erebus.SPECIES_AMU[:H2S])
+        )
+
+        w_H2O = Erebus.compute_water_solubility_melt(sol1.p_i[:H2O]; As=0.40) * 0.01
+        w_H2 = Erebus.compute_h2_solubility_melt(sol1.p_i[:H2]) * 1.0e-6
+        m_melt_H_calc =
+            M_melt *
+            (w_H2O * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2O]) + w_H2)
+
+        w_C =
+            (
+                Erebus.compute_co_solubility_melt(
+                    sol1.p_i[:CO], sol1.P_surf; law=:armstrong2015
+                ) +
+                Erebus.compute_ch4_solubility_melt(
+                    sol1.p_i[:CH4], sol1.P_surf; law=:ardia2013
+                ) +
+                Erebus.compute_co2_solubility_melt(sol1.p_i[:CO2], T_mo; law=:dixon1995)
+            ) * 1.0e-6
+        m_melt_C_calc = M_melt * w_C
+
+        S_N = Erebus.compute_nitrogen_solubility_melt(
+            sol1.p_i[:N2], 0.0; Kh=0.40, C_nitride=1.0e-3
+        )
+        m_melt_N_calc = M_melt * (S_N.total_ppm * 1.0e-6)
+
+        S_S = Erebus.compute_sulfur_solubility_melt(
+            sol1.p_i[:S2], T_mo, 0.0; law=:boulliung2023
+        )
+        m_melt_S_calc = M_melt * (S_S * 1.0e-6)
+
+        # Assert elemental closures to rtol 1e-9
+        @test isapprox(m_melt_H_calc + m_atm_H_calc, M_H1; rtol=1e-9)
+        @test isapprox(m_melt_C_calc + m_atm_C_calc, M_C1; rtol=1e-9)
+        @test isapprox(m_melt_N_calc + m_atm_N_calc, M_N1; rtol=1e-9)
+        @test isapprox(m_melt_S_calc + m_atm_S_calc, M_S1; rtol=1e-9)
+
+        # Assert melt concentrations equal physical laws at returned p to 1e-12
+        @test isapprox(sol1.M_melt_H, m_melt_H_calc; rtol=1e-12)
+        @test isapprox(sol1.M_melt_C, m_melt_C_calc; rtol=1e-12)
+        @test isapprox(sol1.M_melt_N, m_melt_N_calc; rtol=1e-12)
+        @test isapprox(sol1.M_melt_S, m_melt_S_calc; rtol=1e-12)
+
+        # Perturb returned p_H2O by 1% and assert residual exceeds 1e-3 (instrument sensitivity)
+        p_pert = copy(sol1.p_i)
+        p_pert[:H2O] *= 1.01
+        P_surf_pert = sum(values(p_pert))
+        mu_bar_pert =
+            sum(p_pert[k] * Erebus.SPECIES_AMU[k] for k in keys(p_pert)) / P_surf_pert
+        m_atm_H2O_pert = col_c * p_pert[:H2O] * (Erebus.SPECIES_AMU[:H2O] / mu_bar_pert)
+        m_atm_H_pert = (
+            m_atm_sp[:H2] +
+            m_atm_H2O_pert * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2O]) +
+            m_atm_sp[:CH4] * (4.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:CH4]) +
+            m_atm_sp[:NH3] * (3.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:NH3]) +
+            m_atm_sp[:H2S] * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2S])
+        )
+        w_H2O_pert = Erebus.compute_water_solubility_melt(p_pert[:H2O]; As=0.40) * 0.01
+        m_melt_H_pert =
+            M_melt *
+            (w_H2O_pert * (2.0 * Erebus.SPECIES_AMU[:H] / Erebus.SPECIES_AMU[:H2O]) + w_H2)
+        pert_threshold = 1.0e-3
+        @test abs((m_melt_H_pert + m_atm_H_pert) - M_H1) / M_H1 > pert_threshold
+
+        # Test 2: Graphite-saturated case
+        dIW_sat = 0.0
+        log10_fO2_sat = Erebus.compute_iron_wustite_fO2(T_mo; delta_IW=dIW_sat)
+        gr = Erebus.compute_graphite_saturation_fugacity(T_mo, log10_fO2_sat)
+        f_CO_max_Pa = gr.f_CO_max_bar * 1.0e5
+        f_CO2_max_Pa = gr.f_CO2_max_bar * 1.0e5
+        M_C_sat_est =
+            col_c * f_CO_max_Pa * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO])
+        M_C_high = 3.0 * M_C_sat_est
+        sol2 = solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_H1,
+            M_C_high,
+            M_N1,
+            M_S1,
+            R_p,
+            g_surf,
+            T_mo,
+            dIW_sat;
+            graphite_saturation=true,
+        )
+        @test isapprox(sol2.p_i[:CO], f_CO_max_Pa; rtol=1e-5)
+        @test isapprox(sol2.p_i[:CO2], f_CO2_max_Pa; rtol=1e-5)
+        @test sol2.is_graphite_sat
+        @test isapprox(
+            sol2.M_graphite, M_C_high - (sol2.M_melt_C + sol2.M_atm_C); rtol=1e-9
+        )
+        @test isapprox(sol2.M_melt_C + sol2.M_atm_C + sol2.M_graphite, M_C_high; rtol=1e-9)
+
+        # Test 3: Zero-nitrogen input
+        sol3 = solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, 0.0, M_S1, R_p, g_surf, T_mo, 0.0
+        )
+        @test iszero(sol3.p_i[:N2])
+        @test iszero(sol3.p_i[:NH3])
+        @test iszero(sol3.M_melt_N)
+        @test iszero(sol3.M_atm_N)
+
+        # Test 4: Negative mass and iteration limitation fallbacks
+        @test_throws DomainError solve_magma_ocean_volatile_partitioning(
+            M_melt, -1.0, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0
+        )
+        Erebus.reset_picard_warning_count!()
+        sol_picard = solve_magma_ocean_volatile_partitioning(
+            M_melt, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0; max_newton_iter=1
+        )
+        @test isapprox(sol_picard.P_surf, sol1.P_surf; rtol=1e-8)
+        @test isapprox(sol_picard.p_i[:H2O], sol1.p_i[:H2O]; rtol=1e-8)
+        @test Erebus.get_picard_warning_count() == 1
+
+        @test_throws Erebus.ConvergenceError solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_H1,
+            M_C1,
+            M_N1,
+            M_S1,
+            R_p,
+            g_surf,
+            T_mo,
+            0.0;
+            max_newton_iter=1,
+            max_picard_iter=1,
+        )
+
+        # Test 5: Monotonicity across two orders of magnitude in M_melt
+        M_melt_vals = [0.01 * M_p, 0.1 * M_p, 1.0 * M_p]
+        frac_H_atm = Float64[]
+        for M_m_val in M_melt_vals
+            s = solve_magma_ocean_volatile_partitioning(
+                M_m_val, M_H1, M_C1, M_N1, M_S1, R_p, g_surf, T_mo, 0.0
+            )
+            push!(frac_H_atm, (s.M_atm_tot > 0 ? (M_H1 - s.M_melt_H) / M_H1 : 0.0))
+        end
+        @test frac_H_atm[1] > frac_H_atm[2] > frac_H_atm[3]
     end
 
     # -------------------------------------------------------------------------
@@ -192,7 +376,12 @@ include("test_helpers.jl")
         )
         @test sol_no_melt.M_melt_tot ≈ 0.0 atol=1e-12
         @test isapprox(
-            sol_no_melt.M_atm_tot, M_tot_H + M_tot_C + M_tot_N + M_tot_S; rtol=1e-4
+            sol_no_melt.M_atm_H +
+            sol_no_melt.M_atm_C +
+            sol_no_melt.M_atm_N +
+            sol_no_melt.M_atm_S,
+            M_tot_H + M_tot_C + M_tot_N + M_tot_S;
+            rtol=1e-4,
         )
 
         # Zero volatile inventory -> Zero surface pressure
