@@ -301,7 +301,18 @@ export Config,
     compute_telescoped_coordinates,
     remap_staggered_grid_array,
     telescope_marker_arrays!,
+    ElementInventory,
+    SpeciesInventory,
+    to_element_inventory,
+    speciate_closed_system,
+    apply_buffer_oxygen!,
+    ConvergenceError,
     AtmosphereState,
+    get_elem,
+    get_species,
+    get_escaped,
+    get_dO_buffer,
+    get_log10_fO2,
     compute_gravitational_capture_radius,
     compute_disk_envelope_mass,
     compute_atmospheric_optical_depth,
@@ -352,11 +363,11 @@ const rgen = MersenneTwister(42)
 include("config.jl")
 include("coordinates.jl")
 include("geometry.jl")
+include("atmosphere.jl")
 include("physics.jl")
 include("redox.jl")
 include("particles.jl")
 include("accretion.jl")
-include("atmosphere.jl")
 include("telescoping.jl")
 include("numerics.jl")
 include("simulation.jl")

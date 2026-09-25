@@ -501,6 +501,11 @@ function save_state(
         (
             if atm_state !== nothing
                 (;
+                    atm_elem=atm_state.elem,
+                    atm_species=atm_state.species,
+                    atm_escaped=atm_state.escaped,
+                    atm_dO_buffer=atm_state.dO_buffer,
+                    atm_log10_fO2=atm_state.log10_fO2,
                     atm_M_atm=atm_state.M_atm,
                     atm_M_escaped=atm_state.M_escaped,
                     atm_P_surf=atm_state.P_surf,

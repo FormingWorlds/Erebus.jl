@@ -1191,8 +1191,8 @@ Returns the default simulation configuration matching baseline constants.
 
 $(SIGNATURES)
 """
-function default_config()::SimulationConfig
-    return SimulationConfig()
+function default_config(; kwargs...)::SimulationConfig
+    return SimulationConfig(; kwargs...)
 end
 
 function _config_field_name(ex)

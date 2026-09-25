@@ -456,3 +456,36 @@ const cache_kwargs = (;
 const SPECIATION_SPECIES = Set{Symbol}([
     :H2, :H2O, :CO, :CO2, :CH4, :N2, :NH3, :H2S, :S2, :SO2
 ])
+
+"""
+Standard atomic and molecular weights for planetary volatile and escape species [amu].
+Values follow IUPAC standard atomic weights (Meija et al. 2016).
+"""
+const SPECIES_AMU = Dict{Symbol,Float64}(
+    :H => 1.00794,
+    :D => 2.0141,
+    :He => 4.0026,
+    :C => 12.011,
+    :N => 14.0067,
+    :O => 15.9994,
+    :Ne => 20.1797,
+    :Na => 22.990,
+    :Mg => 24.305,
+    :Si => 28.085,
+    :S => 32.065,
+    :Ar => 39.948,
+    :Fe => 55.845,
+    :Kr => 83.798,
+    :Xe => 131.293,
+    :H2 => 2.01588,
+    :H2O => 18.01528,
+    :CO => 28.0104,
+    :CO2 => 44.0098,
+    :CH4 => 16.04276,
+    :N2 => 28.0134,
+    :NH3 => 17.03052,
+    :O2 => 31.9988,
+    :H2S => 34.08088,
+    :SO2 => 64.0638,
+    :S2 => 64.130,
+)

@@ -22,39 +22,6 @@ Unified atomic mass unit (amu, Dalton) in kilograms [kg] (CODATA 2018).
 """
 const ATOMIC_MASS_UNIT = 1.66053906660e-27
 
-"""
-Standard atomic and molecular weights for planetary volatile and escape species [amu].
-Values follow IUPAC standard atomic weights (Meija et al. 2016).
-"""
-const SPECIES_AMU = Dict{Symbol,Float64}(
-    :H => 1.008,
-    :D => 2.0141,
-    :He => 4.0026,
-    :C => 12.011,
-    :N => 14.007,
-    :O => 15.999,
-    :Ne => 20.1797,
-    :Na => 22.990,
-    :Mg => 24.305,
-    :Si => 28.085,
-    :S => 32.060,
-    :Ar => 39.948,
-    :Fe => 55.845,
-    :Kr => 83.798,
-    :Xe => 131.293,
-    :H2 => 2.01588,
-    :H2O => 18.01528,
-    :CO => 28.0101,
-    :CO2 => 44.0095,
-    :CH4 => 16.04246,
-    :N2 => 28.0134,
-    :NH3 => 17.03052,
-    :O2 => 31.998,
-    :H2S => 34.08088,
-    :SO2 => 64.066,
-    :S2 => 64.130,
-)
-
 # Volatile molecular masses [kg] (Standard atomic weights divided by Avogadro constant)
 """
 Molecular mass of water (H2O) in kilograms [kg], with molar mass 18.01528 g/mol.
