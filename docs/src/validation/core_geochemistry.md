@@ -33,8 +33,24 @@ Key constitutive relations validated on this page include:
 - **Hydrogen (Clesi et al., 2018) and Sulfur (Boujibar et al., 2014) Partitioning:**
   $$\log_{10} D_H = -0.80 + \frac{300}{T} + 5.0 \times 10^{-8} \frac{P}{T} + 0.05 \, \Delta\text{IW}$$
   $$\log_{10} D_S = 2.80 - \frac{800}{T} + 1.0 \times 10^{-10} P - 0.20 \, \Delta\text{IW}$$
-- **Phase Equilibration and Strict Mass Conservation:**
-  $$C_{i,\text{sil}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} + D_i m_{\text{met}}}, \quad \Delta C_{i,\text{sil}} = \alpha_{\text{eq}} \left(C_{i,\text{sil}}^{\text{eq}} - C_{i,\text{sil}}\right)$$
+- **Phase Equilibration in the Silicate Melt Frame:**
+  Metal-silicate volatile partitioning occurs between liquid metal and molten silicate:
+  $$C_{i,\text{sil\_melt}} = \frac{C_{i,\text{sil\_bulk}}}{F_{\text{melt}}}$$
+  For an unconstrained system with total volatile mass $M_{i,\text{tot}} = m_{\text{sil}} C_{i,\text{sil\_bulk}} + m_{\text{met}} C_{i,\text{met}}$, the thermodynamic equilibrium concentrations satisfy:
+  $$C_{i,\text{sil\_melt}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} F_{\text{melt}} + m_{\text{met}} D_i}, \quad C_{i,\text{met}}^{\text{eq}} = D_i \cdot C_{i,\text{sil\_melt}}^{\text{eq}}, \quad C_{i,\text{sil\_bulk}}^{\text{eq}} = F_{\text{melt}} \cdot C_{i,\text{sil\_melt}}^{\text{eq}}$$
+- **Physical Saturation Ceilings and Four-Case Resolution:**
+  Both reservoirs possess physical saturation limits:
+  - Silicate melt ceilings ($C_{i,\text{sil\_melt\_max}}$): $1.0 \times 10^6\text{ ppmw}$ for C, N, and S; $100.0\text{ wt}\%$ for $\text{H}_2\text{O}$ ($= 100.0 \times f_H\text{ ppmw H}$).
+  - Metal alloy ceilings ($C_{i,\text{met\_max}}$): $7.0 \times 10^4\text{ ppmw}$ for C, $4.0 \times 10^4\text{ ppmw}$ for N, $3.65 \times 10^5\text{ ppmw}$ for S (Fe-FeS eutectic), and $1.0 \times 10^4\text{ ppmw}$ for H.
+  The solver resolves saturation across four mutually exclusive regimes:
+  1. *Unconstrained*: Neither ceiling binds; concentrations follow the Nernst law.
+  2. *Metal saturation only*: Metal alloy saturates at $C_{i,\text{met\_max}}$; the remainder resides in the silicate melt.
+  3. *Silicate saturation only*: Silicate melt saturates at $C_{i,\text{sil\_melt\_max}}$; excess volatile mass partitions into the metallic liquid up to $C_{i,\text{met\_max}}$.
+  4. *Dual saturation ($M_{i,\text{tot}} > M_{i,\text{sil\_max}} + M_{i,\text{met\_max}}$)*: Liquid metal saturates at $C_{i,\text{met\_max}}$, while excess volatile mass is retained within the silicate array. An atomic warning counter (`METAL_SILICATE_CAP_WARNING_COUNTER`) records the event in telemetry.
+- **Strict Mass Conservation via Mirrored Writes:**
+  Kinetic relaxation with rate $\alpha_{\text{eq}} \in [0, 1]$ updates the metal concentration by $\Delta C_{i,\text{met}} = \alpha_{\text{eq}} (C_{i,\text{met}}^{\text{eq}} - C_{i,\text{met}})$. Silicate concentration updates mirror the applied metal change:
+  $$\Delta C_{i,\text{sil\_bulk}} = -\Delta C_{i,\text{met}} \left(\frac{m_{\text{met}}}{m_{\text{sil}}}\right)$$
+  This guarantees whole-marker elemental mass invariance to machine precision ($< 10^{-12}$) across all saturation regimes.
 - **Dynamic Sulfur Density Feedback:**
   $$\rho_{\text{metal}}(w_S) = 7020.0 - 5050.0 \cdot w_S \quad [\text{kg/m}^3]$$
 
@@ -61,13 +77,13 @@ Key constitutive relations validated on this page include:
 
 | Component | Source File | Functions & Structs |
 |:---|:---|:---|
-| Configuration Schema | `src/config.jl` | `MetalPartitionConfig`, `validate_config` |
-| Partition Thermodynamics | `src/physics.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
-| Marker Phase Equilibration | `src/physics.jl` | `equilibrate_metal_silicate_volatiles!` |
-| Core Inventory Integration | `src/physics.jl` | `compute_core_volatile_budgets` |
+| Configuration Schema | `src/config/metal_partition.jl` | `MetalPartitionConfig`, `validate_config` |
+| Partition Thermodynamics | `src/physics/metal_partitioning.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
+| Marker Phase Equilibration | `src/physics/metal_partitioning.jl` | `equilibrate_metal_silicate_volatiles!`, `get_metal_silicate_cap_warning_count`, `reset_metal_silicate_cap_warning_count!` |
+| Core Inventory Integration | `src/physics/metal_partitioning.jl` | `compute_core_volatile_budgets` |
 | Marker Arrays & Properties | `src/particles.jl` | `setup_marker_metal_volatile_properties`, `compute_marker_properties!`, `replenish_markers!` |
-| Advective Transport | `src/numerics.jl` | `apply_metal_segregation!` |
-| Simulation Integration | `src/simulation.jl` | Caching, equilibration calls, and checkpoint persistence |
+| Advective Transport | `src/numerics/darcy.jl` | `apply_metal_segregation!` |
+| Simulation Integration | `src/simulation/step.jl` | Caching, equilibration calls, and checkpoint persistence |
 
 ---
 

@@ -224,11 +224,43 @@ function compute_metal_silicate_partition_coefficients(
     return (; D_H, D_C, D_N, D_S)
 end
 
+const METAL_SILICATE_CAP_WARNING_COUNTER = Threads.Atomic{Int}(0)
+
+"""
+    get_metal_silicate_cap_warning_count()
+
+Get cumulative counter of metal-silicate simultaneous ceiling warnings in telemetry.
+
+# Returns
+- `Int`: Cumulative warning count.
+"""
+function get_metal_silicate_cap_warning_count()::Int
+    return METAL_SILICATE_CAP_WARNING_COUNTER[]
+end
+
+"""
+    reset_metal_silicate_cap_warning_count!()
+
+Reset the metal-silicate simultaneous ceiling warning counter to zero.
+
+# Returns
+- `Int`: Warning count prior to reset.
+"""
+function reset_metal_silicate_cap_warning_count!()::Int
+    return Threads.atomic_xchg!(METAL_SILICATE_CAP_WARNING_COUNTER, 0)
+end
+
 """
 Equilibrate volatile concentrations between molten metallic iron and silicate melt on marker m.
 
 Conserves total elemental mass of H, C, N, and S across the two interacting reservoirs:
     M_i = m_sil * C_i_sil + m_met * C_i_met = const
+
+Partitioning operates in the silicate melt frame with concentration C_sil_melt = C_sil_bulk / F_melt.
+Applies physical ceilings to silicate melt (1.0e6 ppmw for C, N, S; 100 wt% for H2O) and metal alloy
+(7.0e4 ppmw C, 4.0e4 ppmw N, 3.65e5 ppmw S, 1.0e4 ppmw H). When metal saturation binds, silicate
+updates mirror the metal change exactly. When both ceilings bind, excess volatile remains in the
+silicate array and increments telemetry warning counter.
 
 $(SIGNATURES)
 
@@ -255,6 +287,9 @@ $(SIGNATURES)
 - `rho_silicate::Real`: Silicate reference density [kg/m^3] (default: 3000.0)
 - `rho_metal::Real`: Liquid metal reference density [kg/m^3] (default: 7000.0)
 - `equilibration_fraction::Real`: Kinetic equilibration factor in [0, 1] (default: cfg.equilibration_rate)
+
+# Raises
+- `DomainError`: If `T_val <= 0`, `P_val < 0`, `F_fe < 0`, `F_melt < 0`, or inputs are non-finite.
 """
 function equilibrate_metal_silicate_volatiles!(
     m::Integer,
@@ -269,10 +304,10 @@ function equilibrate_metal_silicate_volatiles!(
     XCm::Union{Nothing,AbstractVector{Float64}},
     XNm::Union{Nothing,AbstractVector{Float64}},
     XSm::Union{Nothing,AbstractVector{Float64}},
-    Xfe_H_m::AbstractVector{Float64},
-    Xfe_C_m::AbstractVector{Float64},
-    Xfe_N_m::AbstractVector{Float64},
-    Xfe_S_m::AbstractVector{Float64},
+    Xfe_H_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_C_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_N_m::Union{Nothing,AbstractVector{Float64}},
+    Xfe_S_m::Union{Nothing,AbstractVector{Float64}},
     cfg::MetalPartitionConfig;
     rho_silicate::Real=3000.0,
     rho_metal::Real=7000.0,
@@ -287,23 +322,51 @@ function equilibrate_metal_silicate_volatiles!(
     if !isfinite(ΔIW)
         throw(DomainError(ΔIW, "Oxygen fugacity ΔIW must be finite"))
     end
+    F_fe_val = Float64(F_fe)
+    if !isfinite(F_fe_val) || !(0.0 <= F_fe_val <= 1.0)
+        throw(DomainError(F_fe_val, "Metal melt fraction must be in [0, 1] and finite"))
+    end
+    F_melt_val = Float64(F_melt)
+    if !isfinite(F_melt_val) || !(0.0 <= F_melt_val <= 1.0)
+        throw(
+            DomainError(F_melt_val, "Silicate melt fraction must be in [0, 1] and finite")
+        )
+    end
+    alpha_raw = Float64(equilibration_fraction)
+    if !isfinite(alpha_raw) || !(0.0 <= alpha_raw <= 1.0)
+        throw(DomainError(alpha_raw, "Equilibration fraction must be in [0, 1] and finite"))
+    end
+    rho_sil_val = Float64(rho_silicate)
+    if !isfinite(rho_sil_val) || rho_sil_val <= 0.0
+        throw(
+            DomainError(
+                rho_sil_val, "Silicate reference density must be positive and finite"
+            ),
+        )
+    end
+    rho_met_val = Float64(rho_metal)
+    if !isfinite(rho_met_val) || rho_met_val <= 0.0
+        throw(
+            DomainError(
+                rho_met_val, "Liquid metal reference density must be positive and finite"
+            ),
+        )
+    end
 
     phi_fe = Xfe_bulk[m]
     phi_sil = max(1.0 - phi_fe, 0.0)
-    F_fe_val = Float64(F_fe)
-    F_melt_val = Float64(F_melt)
-    if phi_fe <= 1.0e-7 || phi_sil <= 1.0e-7 || F_fe_val <= 0.0 || F_melt_val <= 0.0
+    if phi_fe <= 1.0e-7 || phi_sil <= 1.0e-7 || F_fe_val <= 1.0e-7 || F_melt_val <= 1.0e-7
         return nothing
     end
 
-    alpha_eq = clamp(Float64(equilibration_fraction), 0.0, 1.0)
+    alpha_eq = clamp(alpha_raw, 0.0, 1.0)
     if alpha_eq <= 0.0
         return nothing
     end
 
     # Interacting phase masses per unit marker volume
-    m_met = Xfem[m] * max(Float64(rho_metal), 100.0)
-    m_sil = phi_sil * max(Float64(rho_silicate), 100.0)
+    m_met = Xfem[m] * max(rho_met_val, 100.0)
+    m_sil = phi_sil * max(rho_sil_val, 100.0)
     if m_met <= 0.0 || m_sil <= 0.0
         return nothing
     end
@@ -313,10 +376,60 @@ function equilibrate_metal_silicate_volatiles!(
     ΔIW_m = Float64(ΔIW)
 
     # Current metal sulfur mass fraction
-    w_S = clamp(Xfe_S_m[m] * 1.0e-6, 0.0, 0.365)
+    w_S = if Xfe_S_m !== nothing
+        clamp(Float64(Xfe_S_m[m]) * 1.0e-6, 0.0, 0.365)
+    else
+        0.0
+    end
 
-    # 1. Carbon equilibration (graphite saturation ceiling in liquid Fe: ~7 wt% = 70,000 ppmw)
-    if XCm !== nothing
+    function partition_single_species(
+        C_sil_bulk::Real, C_met::Real, D_val::Real, C_sil_melt_max::Real, C_met_max::Real
+    )
+        c_sil_b = Float64(C_sil_bulk)
+        c_met_val = Float64(C_met)
+        d_val = Float64(D_val)
+        c_sil_max = Float64(C_sil_melt_max)
+        c_met_max_val = Float64(C_met_max)
+
+        M_tot = m_sil * c_sil_b + m_met * c_met_val
+        denom = m_sil * F_melt_val + m_met * d_val
+        if denom <= 0.0
+            return c_sil_b, c_met_val
+        end
+
+        C_sil_melt_eq = M_tot / denom
+        C_met_eq = d_val * C_sil_melt_eq
+        M_sil_max = m_sil * (F_melt_val * c_sil_max)
+        M_met_max = m_met * c_met_max_val
+
+        if M_tot > M_sil_max + M_met_max
+            # Both ceilings bind; excess beyond both limits remains in silicate array
+            C_met_eq = c_met_max_val
+            Threads.atomic_add!(METAL_SILICATE_CAP_WARNING_COUNTER, 1)
+        elseif C_met_eq > c_met_max_val
+            # Metal saturation ceiling binds only
+            C_met_eq = c_met_max_val
+        elseif C_sil_melt_eq > c_sil_max
+            # Silicate melt saturation ceiling binds only; excess partitions to metal
+            M_met_eq = M_tot - m_sil * (F_melt_val * c_sil_max)
+            C_met_eq = max(0.0, M_met_eq / m_met)
+        end
+
+        dC_met = alpha_eq * (C_met_eq - c_met_val)
+        dC_sil = -dC_met * (m_met / m_sil)
+        if c_met_val + dC_met < 0.0
+            dC_met = -c_met_val
+            dC_sil = -dC_met * (m_met / m_sil)
+        elseif c_sil_b + dC_sil < 0.0
+            dC_sil = -c_sil_b
+            dC_met = -dC_sil * (m_sil / m_met)
+        end
+
+        return max(0.0, c_sil_b + dC_sil), max(0.0, c_met_val + dC_met)
+    end
+
+    # 1. Carbon equilibration
+    if XCm !== nothing && Xfe_C_m !== nothing
         D_C = compute_metal_silicate_partition_coefficient(
             :C,
             T_m,
@@ -328,32 +441,16 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XCm[m]
-        C_met = Xfe_C_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_C * m_met
-        if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_C * C_sil_eq
-            C_met_C_max = min(Float64(cfg.D_max), 7.0e4)
-            if C_met_eq > C_met_C_max
-                C_met_eq = C_met_C_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
-            end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
-            if C_met + dC_met < 0.0
-                dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
-            end
-            XCm[m] = max(0.0, C_sil + dC_sil)
-            Xfe_C_m[m] = clamp(C_met + dC_met, 0.0, C_met_C_max)
-        end
+        C_met_C_max = 7.0e4
+        new_sil_C, new_met_C = partition_single_species(
+            XCm[m], Xfe_C_m[m], D_C, 1.0e6, C_met_C_max
+        )
+        XCm[m] = new_sil_C
+        Xfe_C_m[m] = new_met_C
     end
 
-    # 2. Nitrogen equilibration (nitrogen saturation ceiling in liquid Fe: ~4 wt% = 40,000 ppmw)
-    if XNm !== nothing
+    # 2. Nitrogen equilibration
+    if XNm !== nothing && Xfe_N_m !== nothing
         D_N = compute_metal_silicate_partition_coefficient(
             :N,
             T_m,
@@ -365,32 +462,16 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XNm[m]
-        C_met = Xfe_N_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_N * m_met
-        if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_N * C_sil_eq
-            C_met_N_max = min(Float64(cfg.D_max), 4.0e4)
-            if C_met_eq > C_met_N_max
-                C_met_eq = C_met_N_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
-            end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
-            if C_met + dC_met < 0.0
-                dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
-            end
-            XNm[m] = max(0.0, C_sil + dC_sil)
-            Xfe_N_m[m] = clamp(C_met + dC_met, 0.0, C_met_N_max)
-        end
+        C_met_N_max = 4.0e4
+        new_sil_N, new_met_N = partition_single_species(
+            XNm[m], Xfe_N_m[m], D_N, 1.0e6, C_met_N_max
+        )
+        XNm[m] = new_sil_N
+        Xfe_N_m[m] = new_met_N
     end
 
-    # 3. Sulfur equilibration (troilite/FeS saturation ceiling: ~36.5 wt% = 365,000 ppmw)
-    if XSm !== nothing
+    # 3. Sulfur equilibration
+    if XSm !== nothing && Xfe_S_m !== nothing
         D_S = compute_metal_silicate_partition_coefficient(
             :S,
             T_m,
@@ -402,66 +483,36 @@ function equilibrate_metal_silicate_volatiles!(
             D_min=cfg.D_min,
             D_max=cfg.D_max,
         )
-        C_sil = XSm[m]
-        C_met = Xfe_S_m[m]
-        M_tot = m_sil * C_sil + m_met * C_met
-        denom = m_sil + D_S * m_met
-        if denom > 0.0
-            C_sil_eq = M_tot / denom
-            C_met_eq = D_S * C_sil_eq
-            C_met_S_max = min(Float64(cfg.D_max), 3.65e5)
-            if C_met_eq > C_met_S_max
-                C_met_eq = C_met_S_max
-                C_sil_eq = max(0.0, (M_tot - m_met * C_met_eq) / m_sil)
-            end
-            dC_sil = alpha_eq * (C_sil_eq - C_sil)
-            dC_sil = max(dC_sil, -C_sil)
-            dC_met = -dC_sil * (m_sil / m_met)
-            if C_met + dC_met < 0.0
-                dC_met = -C_met
-                dC_sil = -dC_met * (m_met / m_sil)
-            end
-            XSm[m] = max(0.0, C_sil + dC_sil)
-            Xfe_S_m[m] = clamp(C_met + dC_met, 0.0, C_met_S_max)
-        end
+        C_met_S_max = 3.65e5
+        new_sil_S, new_met_S = partition_single_species(
+            XSm[m], Xfe_S_m[m], D_S, 1.0e6, C_met_S_max
+        )
+        XSm[m] = new_sil_S
+        Xfe_S_m[m] = new_met_S
     end
 
-    # 4. Hydrogen equilibration (stoichiometric conversion: H2O [wt%] <-> H [ppmw])
-    # (2 * 1.00794 / 18.01528) * 1.0e4 = 1118.9834407236524
-    f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
-    D_H = compute_metal_silicate_partition_coefficient(
-        :H,
-        T_m,
-        P_m,
-        ΔIW_m,
-        w_S;
-        model=cfg.model_hydrogen,
-        D_const=cfg.D_H_const,
-        D_min=cfg.D_min,
-        D_max=cfg.D_max,
-    )
-    C_sil_H = XH2Om[m] * f_H
-    C_met_H = Xfe_H_m[m]
-    M_tot_H = m_sil * C_sil_H + m_met * C_met_H
-    denom_H = m_sil + D_H * m_met
-    if denom_H > 0.0
-        C_sil_H_eq = M_tot_H / denom_H
-        C_met_H_eq = D_H * C_sil_H_eq
-        C_met_H_max = min(Float64(cfg.D_max), 1.0e4)
-        if C_met_H_eq > C_met_H_max
-            C_met_H_eq = C_met_H_max
-            C_sil_H_eq = max(0.0, (M_tot_H - m_met * C_met_H_eq) / m_sil)
-        end
-        dC_sil = alpha_eq * (C_sil_H_eq - C_sil_H)
-        dC_sil = max(dC_sil, -C_sil_H)
-        dC_met = -dC_sil * (m_sil / m_met)
-        if C_met_H + dC_met < 0.0
-            dC_met = -C_met_H
-            dC_sil = -dC_met * (m_met / m_sil)
-        end
-        new_C_sil_H = max(0.0, C_sil_H + dC_sil)
-        XH2Om[m] = clamp(new_C_sil_H / f_H, 0.0, 100.0)
-        Xfe_H_m[m] = clamp(C_met_H + dC_met, 0.0, C_met_H_max)
+    # 4. Hydrogen equilibration
+    if XH2Om !== nothing && Xfe_H_m !== nothing
+        f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
+        D_H = compute_metal_silicate_partition_coefficient(
+            :H,
+            T_m,
+            P_m,
+            ΔIW_m,
+            w_S;
+            model=cfg.model_hydrogen,
+            D_const=cfg.D_H_const,
+            D_min=cfg.D_min,
+            D_max=cfg.D_max,
+        )
+        C_met_H_max = 1.0e4
+        C_sil_melt_H_max = 100.0 * f_H
+        C_sil_bulk_H = XH2Om[m] * f_H
+        new_sil_H, new_met_H = partition_single_species(
+            C_sil_bulk_H, Xfe_H_m[m], D_H, C_sil_melt_H_max, C_met_H_max
+        )
+        XH2Om[m] = new_sil_H / f_H
+        Xfe_H_m[m] = new_met_H
     end
 
     return nothing
