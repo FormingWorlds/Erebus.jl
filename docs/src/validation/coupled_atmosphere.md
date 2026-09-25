@@ -215,9 +215,9 @@ The planetary-scale volatile equilibrium between the magma ocean melt reservoir 
 The primary unknowns are the log partial pressures of the four master element carriers:
 $$u = \left[\ln p_{\mathrm{H}_2\mathrm{O}}, \; \ln p_{\mathrm{CO}_2}, \; \ln p_{\mathrm{N}_2}, \; \ln p_{\mathrm{SO}_2}\right]$$
 The remaining six equilibrium gas species ($p_{\mathrm{H}_2}, p_{\mathrm{CO}}, p_{\mathrm{CH}_4}, p_{\mathrm{NH}_3}, p_{\mathrm{H}_2\mathrm{S}}, p_{\mathrm{S}_2}$) are derived from high-temperature thermodynamic equilibrium constants evaluated at magma ocean reference melt temperature $T_{\text{melt\_ref}}$ and mantle redox state $\Delta\text{IW}$:
-- $p_{\mathrm{H}_2} = p_{\mathrm{H}_2\mathrm{O}} / r_{\mathrm{H}}$ with $\log_{10} r_{\mathrm{H}} = \frac{12700}{T} - 2.80 + 0.5 \log_{10} f_{\mathrm{O}_2}$
-- $p_{\mathrm{CO}} = p_{\mathrm{CO}_2} / r_{\mathrm{CO}_2}$ with $\log_{10} r_{\mathrm{CO}_2} = \frac{14800}{T} - 4.58 + 0.5 \log_{10} f_{\mathrm{O}_2}$
-- $p_{\mathrm{SO}_2} = r_{\mathrm{SO}_2} \sqrt{p_{\mathrm{S}_2} \cdot 10^{-5}} \cdot 10^5$ with $\log_{10} r_{\mathrm{SO}_2} = \frac{18800}{T} - 3.80 + \log_{10} f_{\mathrm{O}_2}$
+- Hydrogen ratio: $p_{\mathrm{H}_2} = p_{\mathrm{H}_2\mathrm{O}} / r_{\mathrm{H}}$ with $\log_{10} r_{\mathrm{H}} = \frac{12700}{T} - 2.80 + 0.5 \log_{10} f_{\mathrm{O}_2}$
+- Carbon ratio: $p_{\mathrm{CO}} = p_{\mathrm{CO}_2} / r_{\mathrm{CO}_2}$ with $\log_{10} r_{\mathrm{CO}_2} = \frac{14800}{T} - 4.58 + 0.5 \log_{10} f_{\mathrm{O}_2}$
+- Sulfur ratio: $p_{\mathrm{SO}_2} = r_{\mathrm{SO}_2} \sqrt{p_{\mathrm{S}_2} \cdot 10^{-5}} \cdot 10^5$ with $\log_{10} r_{\mathrm{SO}_2} = \frac{18800}{T} - 3.80 + \log_{10} f_{\mathrm{O}_2}$
 - Reduced hydride species ($p_{\mathrm{CH}_4}, p_{\mathrm{NH}_3}, p_{\mathrm{H}_2\mathrm{S}}$) follow from their corresponding homogeneous gas equilibria.
 
 Total surface atmospheric pressure satisfies Dalton's law:
@@ -229,10 +229,10 @@ where $\bar{\mu} = \sum_i p_i \mu_i / P_{\text{surf}}$ is the mean atmospheric m
 #### Physical Solubility and Exact Elemental Conservation
 
 Melt volatile masses $M_{\text{melt}, E}$ are evaluated directly from physical solubility laws at the converged partial pressures and melt temperature:
-- $M_{\text{melt}, \mathrm{H}} = M_{\text{melt}} \left[w_{\text{diss}}^{\mathrm{H}_2\mathrm{O}}(p_{\mathrm{H}_2\mathrm{O}}) \frac{2 \mu_{\mathrm{H}}}{\mu_{\mathrm{H}_2\mathrm{O}}} + w_{\text{diss}}^{\mathrm{H}_2}(p_{\mathrm{H}_2})\right]$
-- $M_{\text{melt}, \mathrm{C}} = M_{\text{melt}} \left[C_{\text{diss}}^{\mathrm{CO}}(p_{\mathrm{CO}}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}}} + C_{\text{diss}}^{\mathrm{CH}_4}(p_{\mathrm{CH}_4}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CH}_4}} + C_{\text{diss}}^{\mathrm{CO}_2}(p_{\mathrm{CO}_2}, T) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}_2}}\right] \times 10^{-6}$
-- $M_{\text{melt}, \mathrm{N}} = M_{\text{melt}} \left[S_{\text{N}}(p_{\mathrm{N}_2}, \Delta\text{IW})\right] \times 10^{-6}$
-- $M_{\text{melt}, \mathrm{S}} = M_{\text{melt}} \left[C_{\text{S}}(p_{\mathrm{S}_2}, T, \Delta\text{IW})\right] \times 10^{-6}$
+- Hydrogen mass: $M_{\text{melt}, \mathrm{H}} = M_{\text{melt}} \left[w_{\text{diss}}^{\mathrm{H}_2\mathrm{O}}(p_{\mathrm{H}_2\mathrm{O}}) \frac{2 \mu_{\mathrm{H}}}{\mu_{\mathrm{H}_2\mathrm{O}}} + w_{\text{diss}}^{\mathrm{H}_2}(p_{\mathrm{H}_2})\right]$
+- Carbon mass: $M_{\text{melt}, \mathrm{C}} = M_{\text{melt}} \left[C_{\text{diss}}^{\mathrm{CO}}(p_{\mathrm{CO}}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}}} + C_{\text{diss}}^{\mathrm{CH}_4}(p_{\mathrm{CH}_4}, P_{\text{surf}}) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CH}_4}} + C_{\text{diss}}^{\mathrm{CO}_2}(p_{\mathrm{CO}_2}, T) \frac{\mu_{\mathrm{C}}}{\mu_{\mathrm{CO}_2}}\right] \times 10^{-6}$
+- Nitrogen mass: $M_{\text{melt}, \mathrm{N}} = M_{\text{melt}} \left[S_{\text{N}}(p_{\mathrm{N}_2}, \Delta\text{IW})\right] \times 10^{-6}$
+- Sulfur mass: $M_{\text{melt}, \mathrm{S}} = M_{\text{melt}} \left[C_{\text{S}}(p_{\mathrm{S}_2}, T, \Delta\text{IW})\right] \times 10^{-6}$
 
 Melt concentrations are never assigned by difference ($M_{\text{tot}} - M_{\text{atm}}$). Elemental mass conservation requires:
 $$M_{\text{calc}, E}(u) - M_{\text{tot}, E} = 0, \quad E \in \{\mathrm{H}, \mathrm{C}, \mathrm{N}, \mathrm{S}\}$$
@@ -259,9 +259,9 @@ The 4-variable non-linear system is solved via Newton-Raphson iteration with Arm
 Thermodynamic equilibria and solubility parameterizations are grounded in:
 - French, B. M. (1966). Some geological implications of equilibrium between graphite and a C-H-O gas at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253. DOI: [10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
 - Holloway, J. R., Pan, V., & Gudmundsson, G. (1992). High-pressure fluid-absent melting in mantle systems: an experimental study. *European Journal of Mineralogy*, 4(1), 105-114. DOI: [10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)
-- Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995). An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. DOI: [10.1093/petrology/36.6.1607](https://doi.org/10.1093/petrology/36.6.1607)
-- Armstrong, L. S., Hirschmann, M. M., Withers, A. C., & Kohlstedt, D. L. (2015). Solubility of carbon monoxide in basaltic melt at low pressure and its role in planetary degassing. *Geochimica et Cosmochimica Acta*, 171, 283-302. DOI: [10.1016/j.gca.2015.07.007](https://doi.org/10.1016/j.gca.2015.07.007)
-- Boulliung, J., Dalou, C., & Tissandier, L. (2023). Magma ocean degassing and the origin of Earth's volatile inventory. *Elements*, 19(5), 288-294. DOI: [10.2138/gselements.19.5.288](https://doi.org/10.2138/gselements.19.5.288)
+- Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995). An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. DOI: [10.1093/oxfordjournals.petrology.a037267](https://doi.org/10.1093/oxfordjournals.petrology.a037267)
+- Armstrong, L. S., Hirschmann, M. M., Stanley, B. D., Falksen, E. G., & Jacobsen, S. D. (2015). Speciation and solubility of reduced C-O-H-N volatiles in mafic melt: Implications for volcanism, atmospheric evolution, and deep volatile cycles in the terrestrial planets. *Geochimica et Cosmochimica Acta*, 171, 283-302. DOI: [10.1016/j.gca.2015.07.007](https://doi.org/10.1016/j.gca.2015.07.007)
+- Boulliung, J., & Wood, B. J. (2023). Sulfur oxidation state and solubility in silicate melts. *Contributions to Mineralogy and Petrology*, 178(8), 56. DOI: [10.1007/s00410-023-02033-9](https://doi.org/10.1007/s00410-023-02033-9)
 
 Verification test suite: `@testset "Roadmap PR 1c-ii: Coupled Magma Ocean Solve"` in `test/test_magma_degassing.jl`.
 
