@@ -4,7 +4,7 @@
     dtcoefdn = 0.5
     dtcoefup = 1.2
     dxymax = 0.05
-    nplast = 100_000
+    max_plastic_iterations = 10_000
     dtstep = 200
     dt_longest = 1.0e11 / 3.15576e7
     DTmax = 20.0
@@ -1030,7 +1030,7 @@
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = zeros(Bool, Ny, Nx)
         DSY = zeros(Ny, Nx)
-        YERRNOD = zeros(nplast)
+        YERRNOD = zeros(max_plastic_iterations)
 
         # 1. Stable Regime: very high confining pressure (pr = 300 MPa, pf = 0) suppresses yielding (syield >= siiel)
         pr_high = fill(3.0e8, Ny1, Nx1)
@@ -1099,7 +1099,7 @@
         YNY_mixed[2, 3] = false  # newly yielding node
         YNY5_mixed = zeros(Bool, Ny, Nx)
         DSY_mixed = zeros(Ny, Nx)
-        YERRNOD_mixed = zeros(nplast)
+        YERRNOD_mixed = zeros(max_plastic_iterations)
         Erebus.compute_nodal_adjustment!(
             ETA,
             ETA0,
@@ -1146,15 +1146,14 @@
         @test all(YNY .== YNY5)
         @test isapprox(YNY_inv_ETA, YNY5 ./ ETA5; rtol=1e-12)
 
-        # 2. Stalled divergence recovery pass (iplast % dtstep == 0)
+        # 2. Iteration pass at dtstep (iplast % dtstep == 0) preserves dt and adopts ETA5 (no internal halving/rollback)
         iplast_stalled = dtstep
         dt_out_stalled = Erebus.finalize_plastic_iteration_pass!(
             ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt_init, iplast_stalled
         )
-        @test isapprox(dt_out_stalled, dt_init * dtcoefdn; rtol=1e-12) # dt decelerated
-        @test dt_out_stalled < dt_init
-        @test isapprox(ETA, ETA00; rtol=1e-12) # viscosity rolled back
-        @test all(YNY .== YNY00)
+        @test isapprox(dt_out_stalled, dt_init; rtol=1e-12) # dt preserved
+        @test isapprox(ETA, ETA5; rtol=1e-12) # new viscosity adopted without rollback
+        @test all(YNY .== YNY5)
     end
 
     @testset "finalize_thermochemical_iteration_pass(): thermal relaxation step control" begin
@@ -2116,13 +2115,14 @@
         FRI = fill(0.5, Ny, Nx)
         YNY = zeros(Int, Ny, Nx)
         YNY5 = zeros(Int, Ny, Nx)
-        YERRNOD = zeros(cfg.solver.titermax)
+        YERRNOD = zeros(cfg.solver.max_plastic_iterations)
         DSY = zeros(Ny, Nx)
+        YNY_inv_ETA = zeros(Float64, Ny, Nx)
         dt_initial = 1e6
-        iplast = cfg.solver.titermax
+        max_iters = 100
 
-        # With the shipped config's behavior (nplast=100000), it returns false at max iterations
-        res_fail = Erebus.Numerics.compute_nodal_adjustment!(
+        # At max iterations with non-converged residual (yerrmax=1e-15), compute_nodal_adjustment! must return false
+        res = Erebus.compute_nodal_adjustment!(
             ETA,
             ETA0,
             ETA5,
@@ -2139,56 +2139,78 @@
             YERRNOD,
             DSY,
             dt_initial,
-            iplast;
+            max_iters;
             yerrmax=1e-15,
-            nplast=100000,
+            max_plastic_iterations=max_iters,
         )
-        @test res_fail == false
+        @test res == false
 
-        # The sentinel fix uses titermax as the actual bound
-        res_pass = Erebus.Numerics.compute_nodal_adjustment!(
+        # finalize_plastic_iteration_pass! never reduces dt or rolls back ETA
+        dt_pass = Erebus.finalize_plastic_iteration_pass!(
             ETA,
-            ETA0,
             ETA5,
-            GGG,
-            SXX,
-            SXY,
-            pr,
-            pf,
-            COH,
-            TEN,
-            FRI,
+            ETA0,
             YNY,
             YNY5,
-            YERRNOD,
-            DSY,
+            YNY,
+            YNY_inv_ETA,
             dt_initial,
-            iplast;
-            yerrmax=1e-15,
-            nplast=cfg.solver.titermax,
+            200;
+            dtstep=200,
+            dtcoefdn=0.5,
         )
-        @test res_pass == true
+        @test dt_pass == dt_initial
+        @test isapprox(ETA, ETA5; rtol=1e-12)
+    end
 
-        # And because it exits (res_pass == true), dt is not passed to finalize_plastic_iteration_pass!
-        # so dt remains unchanged. We can assert that if it breaks, dt == dt_initial
-        # We can just test dt is unchanged logic manually or mock the loop condition.
-        dt_final = dt_initial
-        if !res_pass
-            # if we didn't break, dt would be reduced
-            dt_final = Erebus.Numerics.finalize_plastic_iteration_pass!(
-                ETA,
-                ETA5,
-                ETA0,
-                YNY,
-                YNY5,
-                YNY,
-                YNY,
-                dt_initial,
-                iplast;
-                dtstep=cfg.time.dtstep,
-                dtcoefdn=cfg.time.dtcoefdn,
-            )
+    @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
+        cfg_path = joinpath(
+            @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"
+        )
+        cfg_base = load_config(cfg_path)
+        tmpdir = mktempdir()
+        cfg = SimulationConfig(
+            grid=cfg_base.grid,
+            geometry=cfg_base.geometry,
+            time=TimeConfig(
+                dt_initial=cfg_base.time.dt_initial,
+                dt_longest=cfg_base.time.dt_longest,
+                dtcoefdn=cfg_base.time.dtcoefdn,
+                dtcoefup=cfg_base.time.dtcoefup,
+                dtstep=cfg_base.time.dtstep,
+                dxymax=cfg_base.time.dxymax,
+                vpratio=cfg_base.time.vpratio,
+                DTmax=cfg_base.time.DTmax,
+                start_time=cfg_base.time.start_time,
+                endtime=cfg_base.time.endtime,
+                start_step=1,
+                n_steps=2,
+            ),
+            solver=SolverConfig(
+                max_plastic_iterations=1,
+                max_dt_reductions=3,
+                yerrmax=1e-20,
+            ),
+            poroelasticity=cfg_base.poroelasticity,
+            thermodynamics=cfg_base.thermodynamics,
+            reaction=cfg_base.reaction,
+            materials=cfg_base.materials,
+            output=OutputConfig(mode=:off, output_dir=tmpdir),
+            disk=cfg_base.disk,
+            melting=cfg_base.melting,
+            volatiles=VolatilesConfig(initial_water_wtpct=2.0),
+            magma_degassing=MagmaOceanDegassingConfig(active=true, mode=:dynamic_flux),
+        )
+        err = try
+            simulation_loop(cfg; output_path=tmpdir)
+            nothing
+        catch e
+            e
         end
-        @test dt_final == dt_initial
+        @test err isa PlasticConvergenceError
+        @test err.step == 2
+        @test err.residual > 0.0
+        @test err.dt > 0.0
     end
 end
+

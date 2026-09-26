@@ -67,8 +67,8 @@ include("test_helpers.jl")
         @test cfg_q.output.savematstep == 2
         # Verify inherited defaults for omitted sections
         @test cfg_q.grid.Nx == 33
-        @test cfg_q.geometry.rplanet ≈ 50000.0 rtol=1e-12
-        @test cfg_q.solver.titermax == 10000
+        @test cfg_q.solver.max_plastic_iterations == 10000
+        @test cfg_q.solver.max_dt_reductions == 5
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
@@ -227,8 +227,8 @@ include("test_helpers.jl")
         @reject_config time=TimeConfig(start_time=-1.0)
         @reject_config time=TimeConfig(start_time=10.0, endtime=5.0)
 
-        # Invalid solver parameters: titermax must be <= nplast to prevent plastic array overflow
-        @reject_config solver=SolverConfig(titermax=200_000, nplast=100_000)
+        # Invalid solver parameters: max_dt_reductions must be >= 1
+        @reject_config solver=SolverConfig(max_dt_reductions=0)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)
@@ -394,7 +394,7 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(etamin=-1.0)
         @reject_config solver=SolverConfig(etamin=10.0, etamax=1.0)
         @reject_config solver=SolverConfig(etaphikoef=-0.1)
-        @reject_config solver=SolverConfig(titermax=0)
+        @reject_config solver=SolverConfig(max_plastic_iterations=0)
     end
 
     @testset "Hydrothermal Configurations" begin

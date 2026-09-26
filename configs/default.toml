@@ -29,8 +29,8 @@ start_step = 1               # starting timestep counter
 n_steps = 10                 # total number of timesteps to run
 
 [solver]
-titermax = 10000         # maximum global/plastic iterations
-nplast = 100000          # maximum plastic iterations
+max_plastic_iterations = 10000         # maximum global/plastic iterations
+max_dt_reductions = 5          # maximum dt reductions on non-convergence
 yerrmax = 100.0          # yielding tolerance level
 etawt = 0.0              # weight for old viscosity
 dphimax = 0.1         # max porosity ratio change per timestep

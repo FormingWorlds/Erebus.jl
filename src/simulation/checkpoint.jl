@@ -157,7 +157,7 @@ function setup_dynamic_simulation_parameters(
     # radiogenic heat production fluid phase
     hrfluidm::SVector{3,Float64} = start_hrfluidm
     # nodes yielding error vector of plastic iterations
-    YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.nplast)
+    YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.max_plastic_iterations)
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
 

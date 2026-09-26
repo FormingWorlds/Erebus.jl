@@ -1,4 +1,43 @@
 """
+Take a deep copy snapshot of marker arrays and grid arrays at timestep start.
+
+$(SIGNATURES)
+
+# Arguments
+- `state`: NamedTuple containing arrays and scalars.
+
+# Returns
+- Deep copy of the input state container.
+"""
+function snapshot_step_state(state)
+    return deepcopy(state)
+end
+
+"""
+Restore simulation state in-place from a step-start snapshot.
+
+$(SIGNATURES)
+
+# Arguments
+- `target`: NamedTuple of target arrays.
+- `source`: NamedTuple of source arrays from the snapshot.
+"""
+function restore_step_state!(target, source)
+    for (k, v) in pairs(source)
+        if v isa AbstractArray && haskey(target, k)
+            tgt = target[k]
+            if tgt isa AbstractArray
+                if length(tgt) != length(v)
+                    resize!(tgt, length(v))
+                end
+                copyto!(tgt, v)
+            end
+        end
+    end
+    return target
+end
+
+"""
 Compute surface-mean oxygen fugacity (ΔIW) from near-surface silicate markers.
 
 $(SIGNATURES)
@@ -229,7 +268,8 @@ function simulation_loop(
     n_steps_val = cfg.time.n_steps
     start_step_val = cfg.time.start_step
     savematstep_val = cfg.output.savematstep
-    titermax_val = cfg.solver.titermax
+    max_plastic_iterations_val = cfg.solver.max_plastic_iterations
+    max_dt_reductions_val = cfg.solver.max_dt_reductions
     use_pardiso_val = cfg.solver.use_pardiso
     etaphikoef_val = cfg.solver.etaphikoef
     betasolid_val = cfg.poroelasticity.betasolid
@@ -1229,9 +1269,58 @@ function simulation_loop(
         for timestep in start_step_val:1:n_steps_val
             last_timestep = timestep
             timestep_begin = now()
-            # ---------------------------------------------------------------------
-            # reset interpolation arrays
-            # ---------------------------------------------------------------------
+
+            # Snapshot step state for plastic non-convergence retries (N1)
+            step_state_arrays = (;
+                xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0,
+                XWsolidm, XWsolidm0, Fm, rhototalm, rhocptotalm, etatotalm,
+                hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim,
+                inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm,
+                rhofluidcur, alphasolidcur, alphafluidcur,
+                (F_extract_m !== nothing ? (; F_extract_m) : (;))...,
+                (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
+                (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
+                (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
+                (Xmin_troilite_m !== nothing ? (; Xmin_troilite_m, Xmin_schreibersite_m, Xmin_cohenite_m, Xmin_graphite_m, Xmin_nitride_m, Xmin_metal_matrix_m) : (;))...,
+                (t_accreted !== nothing ? (; t_accreted) : (;))...,
+                (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
+                (redox_props !== nothing ? (; redox_props...) : (;))...,
+                ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY,
+                RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx,
+                RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy,
+                RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0,
+                tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0,
+                ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS, ETA5, ETA00,
+                YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0, DQPF, DQPFSUM,
+                S_vent_grid, Q_lat_grid, Q_seg_grid, YERRNOD,
+            )
+            step_snapshot = snapshot_step_state((;
+                arrays=step_state_arrays,
+                scalars=(;
+                    marknum,
+                    M_planet_val,
+                    M_accreted_total,
+                    telescope_level,
+                    rplanet_val,
+                    rcrust_val,
+                    xcenter_val,
+                    ycenter_val,
+                    coords,
+                ),
+            ))
+            num_dt_reductions = 0
+            dt_step_target = min(dt * dtcoefup_val, dt_longest_val)
+            dt = dt_step_target
+            P_amb_eff = 0.0
+            T_amb = 0.0
+            P_amb = 0.0
+            w_disp = 0.0
+            dt_aphimax_step_max = 0.0
+
+            while true # plastic non-convergence retry loop
+                # ---------------------------------------------------------------------
+                # reset interpolation arrays
+                # ---------------------------------------------------------------------
             reset_interpolated_properties!(
                 ETA0SUM,
                 ETASUM,
@@ -2382,9 +2471,8 @@ function simulation_loop(
             process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
 
             # ---------------------------------------------------------------------
-            # probe increasing computational timestep
+            # computational timestep for current attempt
             # ---------------------------------------------------------------------
-            dt = min(dt*dtcoefup_val, dt_longest_val)
             dt_step_initial = dt
             maxDTcurrent = maximum(abs, DT0)
             @info "\n\n ********** begin timestep $timestep - dt = $dt s **********"
@@ -2486,7 +2574,9 @@ function simulation_loop(
             # perform thermochemical iterations (outer iteration loop)
             # ---------------------------------------------------------------------
             dt_aphimax_step_max = 0.0
-            for titer in 1:1:titermax_val
+            plastic_converged = true
+            last_plastic_residual = 0.0
+            for titer in 1:1:max_plastic_iterations_val
                 # perform thermochemical reaction
                 if reaction_active_val
                     perform_thermochemical_reaction!(
@@ -2556,7 +2646,8 @@ function simulation_loop(
                 pf0 .= pf
 
                 # perform plastic iterations
-                for iplast in 1:1:titermax_val
+                plastic_converged = false
+                for iplast in 1:1:max_plastic_iterations_val
                     @info("thermochemical iter $titer - hydromechanical iter $iplast")
                     # recompute bulk viscosity at pressure nodes
                     recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef_val)
@@ -2938,9 +3029,10 @@ function simulation_loop(
                         etamax=cfg.solver.etamax,
                         etamin=cfg.solver.etamin,
                         yerrmax=cfg.solver.yerrmax,
-                        nplast=titermax_val,
+                        max_plastic_iterations=max_plastic_iterations_val,
                     )
                         # exit plastic iterations loop    
+                        plastic_converged = true
                         break
                     else
                         # prepare next pass of plastic iteration 
@@ -2958,7 +3050,12 @@ function simulation_loop(
                             dtcoefdn=cfg.time.dtcoefdn,
                         )
                     end
-                end # for iplast=1:1:nplast
+                end # for iplast=1:1:max_plastic_iterations_val
+
+                if !plastic_converged
+                    last_plastic_residual = YERRNOD[min(max_plastic_iterations_val, length(YERRNOD))]
+                    break
+                end
 
                 # Refresh venting drainage rate using converged fluid pressure
                 if cfg.venting.active
@@ -3275,7 +3372,37 @@ function simulation_loop(
                     # exit thermochemical iterations loop
                     break
                 end
-            end # for titer=1:1:ntiter
+            end # for titer=1:1:max_plastic_iterations_val
+
+            if !plastic_converged
+                num_dt_reductions += 1
+                if num_dt_reductions > max_dt_reductions_val
+                    throw(
+                        PlasticConvergenceError(
+                            timestep,
+                            last_plastic_residual,
+                            dt,
+                            "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions",
+                        ),
+                    )
+                end
+                @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
+                restore_step_state!(step_state_arrays, step_snapshot.arrays)
+                marknum = step_snapshot.scalars.marknum
+                M_planet_val = step_snapshot.scalars.M_planet_val
+                M_accreted_total = step_snapshot.scalars.M_accreted_total
+                telescope_level = step_snapshot.scalars.telescope_level
+                rplanet_val = step_snapshot.scalars.rplanet_val
+                rcrust_val = step_snapshot.scalars.rcrust_val
+                xcenter_val = step_snapshot.scalars.xcenter_val
+                ycenter_val = step_snapshot.scalars.ycenter_val
+                coords = step_snapshot.scalars.coords
+                dt_step_target /= 2.0
+                dt = dt_step_target
+                continue
+            end
+            break # plastic iterations converged, proceed with rest of timestep
+        end # while true plastic non-convergence retry loop
 
             # ---------------------------------------------------------------------
             # advance temperature generation

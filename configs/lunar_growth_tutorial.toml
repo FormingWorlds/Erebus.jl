@@ -29,8 +29,8 @@ start_step = 1
 n_steps = 10            # demonstration step count for test suite
 
 [solver]
-titermax = 10000
-nplast = 100000
+max_plastic_iterations = 10000
+max_dt_reductions = 5
 yerrmax = 100.0
 etawt = 0.0
 dphimax = 0.1

@@ -60,11 +60,11 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 |:---|:---|:---|:---|:---|:---|
 | `dsubgridt` | `Float64` | `0.0` | - | Subgrid thermal diffusion scaling factor | $\ge 0$ |
 | `dsubgrids` | `Float64` | `0.0` | - | Subgrid stress diffusion scaling factor | $\ge 0$ |
-| `titermax` | `Int` | `10000` | - | Maximum global thermochemical iterations | $\ge 1$ |
-| `nplast` | `Int` | `100000` | - | Maximum plastic yielding iterations | $\ge \text{titermax}$ |
+| `max_plastic_iterations` | `Int` | `10000` | - | Maximum plastic yielding iterations | $\ge 1$ |
+| `max_dt_reductions` | `Int` | `5` | - | Maximum timestep reductions on plastic non-convergence | $\ge 1$ |
 | `yerrmax` | `Float64` | `100.0` | - | Plastic yielding relative error tolerance | $> 0$ |
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
-| `dphimax` | `Float64` | `100.01` | - | Maximum porosity change ratio per step | $> 1$ |
+| `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
 | `seed` | `Int` | `42` | - | Random seed for marker initialization | Any `Int` |
 | `use_pardiso` | `Bool` | `false` | - | Enable Pardiso solver instead of UMFPACK | `true` / `false` |
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
