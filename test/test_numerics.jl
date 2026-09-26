@@ -832,14 +832,24 @@
         # 4b. Binding check for dphimax = 0.1 (N3)
         dt_test = 1.0e11
         dt_bound = Erebus.compute_displacement_timestep(
-            zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1),
-            dt_test, 1.0e-11; dphimax_val=0.1
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt_test,
+            1.0e-11;
+            dphimax_val=0.1,
         )
         @test isapprox(dt_bound, 0.1 / 1.0e-11; rtol=1e-12)
         @test dt_bound < dt_test
         dt_unbound = Erebus.compute_displacement_timestep(
-            zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1),
-            dt_test, 1.0e-13; dphimax_val=0.1
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt_test,
+            1.0e-13;
+            dphimax_val=0.1,
         )
         @test isapprox(dt_unbound, dt_test; rtol=1e-12)
 
@@ -1931,9 +1941,13 @@
 
         # 3. finalize_thermochemical_iteration_pass reduces dt unconditionally on any titer
         dt_cand = 1000.0
-        dt_reduced_titer1 = Erebus.finalize_thermochemical_iteration_pass(50.0, dt_cand, 1, 10.0)
+        dt_reduced_titer1 = Erebus.finalize_thermochemical_iteration_pass(
+            50.0, dt_cand, 1, 10.0
+        )
         @test isapprox(dt_reduced_titer1, 1000.0 * (10.0 / 50.0); rtol=1e-12)
-        dt_reduced_titer2 = Erebus.finalize_thermochemical_iteration_pass(50.0, dt_cand, 2, 10.0)
+        dt_reduced_titer2 = Erebus.finalize_thermochemical_iteration_pass(
+            50.0, dt_cand, 2, 10.0
+        )
         @test isapprox(dt_reduced_titer2, 1000.0 * (10.0 / 50.0); rtol=1e-12)
     end
 
@@ -2187,9 +2201,7 @@
                 n_steps=2,
             ),
             solver=SolverConfig(
-                max_plastic_iterations=1,
-                max_dt_reductions=3,
-                yerrmax=1e-20,
+                max_plastic_iterations=1, max_dt_reductions=3, yerrmax=1e-20
             ),
             poroelasticity=cfg_base.poroelasticity,
             thermodynamics=cfg_base.thermodynamics,
@@ -2215,4 +2227,3 @@
         @test occursin("at step 2", sprint(showerror, err))
     end
 end
-

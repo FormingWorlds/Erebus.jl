@@ -21,7 +21,7 @@ function PlasticConvergenceError(
 end
 
 function Base.showerror(io::IO, e::PlasticConvergenceError)
-    print(
+    return print(
         io,
         "PlasticConvergenceError: ",
         e.msg,

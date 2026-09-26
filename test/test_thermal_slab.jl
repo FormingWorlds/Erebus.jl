@@ -52,12 +52,14 @@ using LinearAlgebra
         decay = exp(-lambda * t_target)
         diffs = Float64[]
         for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
-            ana_val = T0 + deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly) * decay
+            ana_val =
+                T0 +
+                deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly) * decay
             push!(diffs, abs(tk[i, j] - ana_val))
         end
 
         linf_rel = maximum(diffs) / deltaT
-        l2_rel = sqrt(sum(diffs.^2) / length(diffs)) / deltaT
+        l2_rel = sqrt(sum(diffs .^ 2) / length(diffs)) / deltaT
         E_final = sum(tk[2:(Ny1 - 1), 2:(Nx1 - 1)]) * rhocp_val * coords.dx * coords.dy
         energy_drift = abs(E_final - E_init) / E_init
 
@@ -82,7 +84,8 @@ using LinearAlgebra
 
         tk1 = zeros(Ny1, Nx1)
         for j in 1:Nx1, i in 1:Ny1
-            tk1[i, j] = T0 + deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly)
+            tk1[i, j] =
+                T0 + deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly)
         end
 
         tk0 = copy(tk1)
@@ -105,14 +108,31 @@ using LinearAlgebra
         dt_macro = 1.0e13 # ~317,000 years
         DTmax = 5.0      # Force subcycling (macro DT would be ~15 K)
         Erebus.perform_thermal_iterations!(
-            tk0, tk1, tk2, DT, DT0, RHOCP, KX, KY, HR, HA, HS, DHP, RT, ST, dt_macro;
-            coords=coords, DTmax_val=DTmax
+            tk0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            RHOCP,
+            KX,
+            KY,
+            HR,
+            HA,
+            HS,
+            DHP,
+            RT,
+            ST,
+            dt_macro;
+            coords=coords,
+            DTmax_val=DTmax,
         )
 
         decay_sub = exp(-lambda * dt_macro)
         diffs_sub = Float64[]
         for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
-            ana_val = T0 + deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly) * decay_sub
+            ana_val =
+                T0 +
+                deltaT * cos(π * coords.xp[j] / Lx) * cos(π * coords.yp[i] / Ly) * decay_sub
             push!(diffs_sub, abs(tk2[i, j] - ana_val))
         end
 
@@ -137,7 +157,9 @@ using LinearAlgebra
 
             tk_n = zeros(Ny1_n, Nx1_n)
             for j in 1:Nx1_n, i in 1:Ny1_n
-                tk_n[i, j] = T0 + deltaT * cos(π * coords_n.xp[j] / Lx) * cos(π * coords_n.yp[i] / Ly)
+                tk_n[i, j] =
+                    T0 +
+                    deltaT * cos(π * coords_n.xp[j] / Lx) * cos(π * coords_n.yp[i] / Ly)
             end
 
             RHOCP_n = fill(rhocp_val, Ny1_n, Nx1_n)
@@ -152,7 +174,17 @@ using LinearAlgebra
             dt_n = t_ref / 10
             for _ in 1:10
                 LT = Erebus.assemble_thermal_lse!(
-                    tk_n, RHOCP_n, KX_n, KY_n, HR_n, HA_n, HS_n, DHP_n, RT_n, dt_n; coords=coords_n
+                    tk_n,
+                    RHOCP_n,
+                    KX_n,
+                    KY_n,
+                    HR_n,
+                    HA_n,
+                    HS_n,
+                    DHP_n,
+                    RT_n,
+                    dt_n;
+                    coords=coords_n,
                 )
                 sol = LT \ RT_n
                 tk_n .= reshape(sol, Ny1_n, Nx1_n)
@@ -160,7 +192,12 @@ using LinearAlgebra
 
             diffs_n = Float64[]
             for j in 2:(Nx1_n - 1), i in 2:(Ny1_n - 1)
-                ana_val = T0 + deltaT * cos(π * coords_n.xp[j] / Lx) * cos(π * coords_n.yp[i] / Ly) * decay_ref
+                ana_val =
+                    T0 +
+                    deltaT *
+                    cos(π * coords_n.xp[j] / Lx) *
+                    cos(π * coords_n.yp[i] / Ly) *
+                    decay_ref
                 push!(diffs_n, abs(tk_n[i, j] - ana_val))
             end
             push!(errors, maximum(diffs_n) / deltaT)

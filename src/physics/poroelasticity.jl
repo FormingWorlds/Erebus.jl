@@ -303,7 +303,11 @@ function compute_hydrofracture_permeability(
     kmax::Real=1.0e-9,
 )
     if kphi < 0.0
-        throw(DomainError(kphi, "Negative matrix permeability kphi is not physically allowed."))
+        throw(
+            DomainError(
+                kphi, "Negative matrix permeability kphi is not physically allowed."
+            ),
+        )
     end
     if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0 || kphi == 0.0
         return Float64(kphi)

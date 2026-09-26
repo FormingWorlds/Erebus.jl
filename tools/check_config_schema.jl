@@ -33,8 +33,8 @@ function parse_markdown_schema(md_path::String)
     isfile(md_path) || error("Documentation schema file not found: $md_path")
     content = read(md_path, String)
     lines = split(content, "\n")
-    
-    schema = Dict{String, Dict{String, Dict{String, String}}}()
+
+    schema = Dict{String,Dict{String,Dict{String,String}}}()
     current_sec = ""
 
     for line in lines
@@ -42,7 +42,7 @@ function parse_markdown_schema(md_path::String)
         m = match(r"^#{2,3}\s+`?\[([a-zA-Z0-9_]+)\]`?", line)
         if m !== nothing
             current_sec = m.captures[1]
-            schema[current_sec] = Dict{String, Dict{String, String}}()
+            schema[current_sec] = Dict{String,Dict{String,String}}()
             continue
         end
 
@@ -59,8 +59,7 @@ function parse_markdown_schema(md_path::String)
                     default_clean = replace(default_str, "`" => "")
                     if param_clean != "Parameter"
                         schema[current_sec][param_clean] = Dict(
-                            "type" => type_clean,
-                            "default" => default_clean,
+                            "type" => type_clean, "default" => default_clean
                         )
                     end
                 end
@@ -90,10 +89,14 @@ Bool
 """
 function check_value_match(jl_val, md_def::String)
     clean_def = strip(md_def)
-    
+
     # Booleans
     if jl_val isa Bool
-        val_parsed = lowercase(clean_def) == "true" ? true : (lowercase(clean_def) == "false" ? false : nothing)
+        val_parsed = if lowercase(clean_def) == "true"
+            true
+        else
+            (lowercase(clean_def) == "false" ? false : nothing)
+        end
         return val_parsed === jl_val
     end
 
@@ -103,7 +106,7 @@ function check_value_match(jl_val, md_def::String)
             return clean_def == "NaN"
         end
         val_parsed = tryparse(Float64, clean_def)
-        return val_parsed !== nothing && isapprox(val_parsed, jl_val, rtol=1e-3)
+        return val_parsed !== nothing && isapprox(val_parsed, jl_val; rtol=1e-3)
     end
 
     # Integers
@@ -147,9 +150,11 @@ Returns
 NamedTuple
     Results containing counts, missing fields, phantom fields, and discrepancies.
 """
-function run_schema_verification(cfg::SimulationConfig, md_schema::Dict; verbose::Bool=false)
+function run_schema_verification(
+    cfg::SimulationConfig, md_schema::Dict; verbose::Bool=false
+)
     jl_sections = String.(fieldnames(typeof(cfg)))
-    
+
     missing_fields = String[]
     phantom_fields = String[]
     discrepancies = String[]
@@ -158,7 +163,7 @@ function run_schema_verification(cfg::SimulationConfig, md_schema::Dict; verbose
     for s in jl_sections
         sub = getfield(cfg, Symbol(s))
         jl_fieldnames = String.(fieldnames(typeof(sub)))
-        
+
         if !haskey(md_schema, s)
             for f in jl_fieldnames
                 push!(missing_fields, "$s.$f")
@@ -189,12 +194,7 @@ function run_schema_verification(cfg::SimulationConfig, md_schema::Dict; verbose
         end
     end
 
-    return (;
-        total_fields,
-        missing_fields,
-        phantom_fields,
-        discrepancies,
-    )
+    return (; total_fields, missing_fields, phantom_fields, discrepancies)
 end
 
 """
@@ -211,8 +211,8 @@ function load_baseline()
     if isfile(BASELINE_PATH)
         return JSON.parsefile(BASELINE_PATH)
     end
-    return Dict{String, Any}(
-        "documented_baseline_exceptions" => Dict{String, Any}(),
+    return Dict{String,Any}(
+        "documented_baseline_exceptions" => Dict{String,Any}(),
         "known_undocumented" => String[],
     )
 end
@@ -230,9 +230,9 @@ data : Dict
 function write_baseline(data::Dict)
     open(BASELINE_PATH, "w") do io
         JSON.print(io, data, 4)
-        println(io)
+        return println(io)
     end
-    println("Saved schema baseline to $BASELINE_PATH")
+    return println("Saved schema baseline to $BASELINE_PATH")
 end
 
 """
@@ -244,7 +244,9 @@ function main()
     mode = length(ARGS) >= 1 ? ARGS[1] : "--check"
     verbose = "--verbose" in ARGS
 
-    println("Verifying Erebus configuration schema against docs/src/reference/config_schema.md...")
+    println(
+        "Verifying Erebus configuration schema against docs/src/reference/config_schema.md...",
+    )
     md_schema = parse_markdown_schema(DOCS_SCHEMA_PATH)
     cfg = default_config()
 
@@ -254,15 +256,20 @@ function main()
 
     actual_missing = setdiff(res.missing_fields, known_undoc)
 
-    @printf("Verified %d configuration fields across %d sections.\n", res.total_fields, length(fieldnames(typeof(cfg))))
+    @printf(
+        "Verified %d configuration fields across %d sections.\n",
+        res.total_fields,
+        length(fieldnames(typeof(cfg)))
+    )
 
     if mode == "--baseline"
-        new_baseline = Dict{String, Any}(
-            "documented_baseline_exceptions" => get(baseline, "documented_baseline_exceptions", Dict{String, Any}()),
+        new_baseline = Dict{String,Any}(
+            "documented_baseline_exceptions" =>
+                get(baseline, "documented_baseline_exceptions", Dict{String,Any}()),
             "known_undocumented" => res.missing_fields,
         )
         write_baseline(new_baseline)
-        return
+        return nothing
     end
 
     if mode == "--check"
@@ -300,7 +307,10 @@ function main()
             exit(0)
         end
     else
-        println(stderr, "Usage: julia tools/check_config_schema.jl [--check | --baseline] [--verbose]")
+        println(
+            stderr,
+            "Usage: julia tools/check_config_schema.jl [--check | --baseline] [--verbose]",
+        )
         exit(2)
     end
 end

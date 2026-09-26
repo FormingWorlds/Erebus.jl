@@ -76,7 +76,10 @@ include("test_helpers.jl")
 
     @testset "all shipped configs have dphimax ≈ 0.1 (N3)" begin
         configs_dir = joinpath(@__DIR__, "..", "configs")
-        toml_files = filter(f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml", readdir(configs_dir))
+        toml_files = filter(
+            f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml",
+            readdir(configs_dir),
+        )
         @test length(toml_files) >= 15
         for f in toml_files
             path = joinpath(configs_dir, f)

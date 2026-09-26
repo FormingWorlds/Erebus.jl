@@ -40,7 +40,8 @@ function main()
     # Setup initial temperature field
     tk_sim = zeros(Ny1, Nx1)
     for j in 1:Nx1, i in 1:Ny1
-        tk_sim[i, j] = T0 + DELTA_T * cos(π * coords_main.xp[j] / LX) * cos(π * coords_main.yp[i] / LY)
+        tk_sim[i, j] =
+            T0 + DELTA_T * cos(π * coords_main.xp[j] / LX) * cos(π * coords_main.yp[i] / LY)
     end
 
     RHOCP = fill(RHOCP_VAL, Ny1, Nx1)
@@ -65,8 +66,9 @@ function main()
     current_time = 0.0
     # Record t = 0
     ana_t0 = [
-        T0 + DELTA_T * cos(π * coords_main.xp[j] / LX) * cos(π * coords_main.yp[mid_i] / LY)
-        for j in 2:(Nx1 - 1)
+        T0 +
+        DELTA_T * cos(π * coords_main.xp[j] / LX) * cos(π * coords_main.yp[mid_i] / LY) for
+        j in 2:(Nx1 - 1)
     ]
     num_t0 = tk_sim[mid_i, 2:(Nx1 - 1)]
     push!(profiles_ana, ana_t0)
@@ -89,8 +91,11 @@ function main()
 
         decay_factor = exp(-LAMBDA * current_time)
         ana_prof = [
-            T0 + DELTA_T * cos(π * coords_main.xp[j] / LX) * cos(π * coords_main.yp[mid_i] / LY) * decay_factor
-            for j in 2:(Nx1 - 1)
+            T0 +
+            DELTA_T *
+            cos(π * coords_main.xp[j] / LX) *
+            cos(π * coords_main.yp[mid_i] / LY) *
+            decay_factor for j in 2:(Nx1 - 1)
         ]
         num_prof = copy(tk_sim[mid_i, 2:(Nx1 - 1)])
         err = maximum(abs.(num_prof .- ana_prof)) / DELTA_T
@@ -98,7 +103,9 @@ function main()
         push!(profiles_ana, ana_prof)
         push!(profiles_num, num_prof)
         push!(max_profile_errors, err)
-        println("Time $(round(current_time / YEARLENGTH / 1.0e6; digits=2)) Ma: max rel error = $err")
+        println(
+            "Time $(round(current_time / YEARLENGTH / 1.0e6; digits=2)) Ma: max rel error = $err",
+        )
     end
 
     # -----------------------------------------------------------------------------
@@ -119,7 +126,9 @@ function main()
 
         tk_res = zeros(Ny1_res, Nx1_res)
         for j in 1:Nx1_res, i in 1:Ny1_res
-            tk_res[i, j] = T0 + DELTA_T * cos(π * coords_res.xp[j] / LX) * cos(π * coords_res.yp[i] / LY)
+            tk_res[i, j] =
+                T0 +
+                DELTA_T * cos(π * coords_res.xp[j] / LX) * cos(π * coords_res.yp[i] / LY)
         end
 
         RHOCP_res = fill(RHOCP_VAL, Ny1_res, Nx1_res)
@@ -131,14 +140,28 @@ function main()
         DHP_res = zeros(Ny1_res, Nx1_res)
         RT_res = zeros(Ny1_res * Nx1_res)
 
-        E_init = sum(tk_res[2:(Ny1_res - 1), 2:(Nx1_res - 1)]) * RHOCP_VAL * coords_res.dx * coords_res.dy
+        E_init =
+            sum(tk_res[2:(Ny1_res - 1), 2:(Nx1_res - 1)]) *
+            RHOCP_VAL *
+            coords_res.dx *
+            coords_res.dy
 
         # 10 steps to reach t_test
         n_steps_conv = 10
         dt_conv = t_test / n_steps_conv
         for _ in 1:n_steps_conv
             LT = Erebus.assemble_thermal_lse!(
-                tk_res, RHOCP_res, KX_res, KY_res, HR_res, HA_res, HS_res, DHP_res, RT_res, dt_conv; coords=coords_res
+                tk_res,
+                RHOCP_res,
+                KX_res,
+                KY_res,
+                HR_res,
+                HA_res,
+                HS_res,
+                DHP_res,
+                RT_res,
+                dt_conv;
+                coords=coords_res,
             )
             sol = LT \ RT_res
             tk_res .= reshape(sol, Ny1_res, Nx1_res)
@@ -147,24 +170,36 @@ function main()
         # Analytical solution
         diffs = Float64[]
         for j in 2:(Nx1_res - 1), i in 2:(Ny1_res - 1)
-            ana_val = T0 + DELTA_T * cos(π * coords_res.xp[j] / LX) * cos(π * coords_res.yp[i] / LY) * decay_test
+            ana_val =
+                T0 +
+                DELTA_T *
+                cos(π * coords_res.xp[j] / LX) *
+                cos(π * coords_res.yp[i] / LY) *
+                decay_test
             push!(diffs, abs(tk_res[i, j] - ana_val))
         end
 
         linf = maximum(diffs) / DELTA_T
-        l2 = sqrt(sum(diffs.^2) / length(diffs)) / DELTA_T
-        E_final = sum(tk_res[2:(Ny1_res - 1), 2:(Nx1_res - 1)]) * RHOCP_VAL * coords_res.dx * coords_res.dy
+        l2 = sqrt(sum(diffs .^ 2) / length(diffs)) / DELTA_T
+        E_final =
+            sum(tk_res[2:(Ny1_res - 1), 2:(Nx1_res - 1)]) *
+            RHOCP_VAL *
+            coords_res.dx *
+            coords_res.dy
         drift = abs(E_final - E_init) / E_init
 
         push!(dx_values_km, coords_res.dx / 1000.0)
         push!(linf_errors, linf)
         push!(l2_errors, l2)
         push!(energy_drifts, drift)
-        println("Grid N=$N (dx=$(coords_res.dx/1000.0) km): Linf=$linf, L2=$l2, energy drift=$drift")
+        println(
+            "Grid N=$N (dx=$(coords_res.dx/1000.0) km): Linf=$linf, L2=$l2, energy drift=$drift",
+        )
     end
 
     # Verification criteria
-    pass_criterion = maximum(max_profile_errors) < 1.0e-3 && maximum(energy_drifts) < 1.0e-12
+    pass_criterion =
+        maximum(max_profile_errors) < 1.0e-3 && maximum(energy_drifts) < 1.0e-12
     println("Pass criterion (< 1e-3 error, < 1e-12 energy drift): $pass_criterion")
     if !pass_criterion
         error("Thermal slab benchmark verification failed")
@@ -199,7 +234,7 @@ function main()
     open(output_path, "w") do f
         return JSON.print(f, data, 2)
     end
-    println("Exported benchmark data to: $(output_path)")
+    return println("Exported benchmark data to: $(output_path)")
 end
 
 main()
