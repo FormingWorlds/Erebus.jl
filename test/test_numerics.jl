@@ -680,14 +680,14 @@
         dt = dt_longest
         APHI = zeros(Ny1, Nx1)
         ETAPHI = fill(1.0e16, Ny1, Nx1)
-        BETTAPHI = fill(1.0e-10, Ny1, Nx1)
+        BETAPHI = fill(1.0e-10, Ny1, Nx1)
         PHI = fill(0.15, Ny1, Nx1)
 
         # 1. Compaction Equilibrium: when pr == pf and steady state, Aphi = 0
         pr_eq = fill(5.0e6, Ny1, Nx1)
         pf_eq = fill(5.0e6, Ny1, Nx1)
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_eq, pf_eq, pr_eq, pf_eq, dt
+            APHI, ETAPHI, BETAPHI, PHI, pr_eq, pf_eq, pr_eq, pf_eq, dt
         )
         @test isapprox(aphimax, 0.0; atol=1e-12)
         @test all(isapprox.(APHI[2:Ny, 2:Nx], 0.0; atol=1e-12))
@@ -696,7 +696,7 @@
         pr_high = fill(10.0e6, Ny1, Nx1)
         pf_low = fill(2.0e6, Ny1, Nx1)
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_high, pf_low, pr_high, pf_low, dt
+            APHI, ETAPHI, BETAPHI, PHI, pr_high, pf_low, pr_high, pf_low, dt
         )
         expected_aphi = (10.0e6 - 2.0e6) / (ETAPHI[2, 2] * (1.0 - PHI[2, 2]) * PHI[2, 2])
         @test isapprox(aphimax, expected_aphi; rtol=1e-12)
@@ -704,7 +704,7 @@
 
         # 3. Underpressure: pr < pf drives dilation rate Aphi < 0
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pf_low, pr_high, pf_low, pr_high, dt
+            APHI, ETAPHI, BETAPHI, PHI, pf_low, pr_high, pf_low, pr_high, dt
         )
         @test all(APHI[2:Ny, 2:Nx] .< 0.0)
 
@@ -715,10 +715,10 @@
         pr0_t = fill(9.0e6, Ny1, Nx1)
         pf0_t = fill(1.5e6, Ny1, Nx1)
         aphimax_poro = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_t, pf_t, pr0_t, pf0_t, dt; betasolid=betasolid
+            APHI, ETAPHI, BETAPHI, PHI, pr_t, pf_t, pr0_t, pf0_t, dt; betasolid=betasolid
         )
         for j in 2:Nx, i in 2:Ny
-            bd = (BETTAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
+            bd = (BETAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
             kbw = 1.0 - betasolid / bd
             comp =
                 (pr_t[i, j] - pf_t[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
@@ -737,7 +737,7 @@
         pr_spike[3, 3] = 6.0e6
         pf_spike[3, 3] = 5.0e6
         aphimax_spike = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_spike, pf_spike, pr_spike, pf_spike, dt
+            APHI, ETAPHI, BETAPHI, PHI, pr_spike, pf_spike, pr_spike, pf_spike, dt
         )
         expected_interior = abs(APHI[3, 3])
         @test isapprox(aphimax_spike, expected_interior; rtol=1e-12)
@@ -2211,7 +2211,8 @@
         @test err.step == 2
         @test isfinite(err.residual)
         @test isfinite(err.dt)
-        @test occursin("Step 2 plastic solver failed to converge", sprint(showerror, err))
+        @test occursin("Plastic iterations failed to converge", sprint(showerror, err))
+        @test occursin("at step 2", sprint(showerror, err))
     end
 end
 

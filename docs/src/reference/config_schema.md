@@ -83,7 +83,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `mg_post_smooth` | `Int` | `2` | - | Post-smoothing relaxation sweeps per level | $\ge 1$ |
 | `mg_smoother` | `String` / `Symbol` | `"damped_jacobi"` | - | Multigrid relaxation smoother method | `"damped_jacobi"`, `"redblack_gauss_seidel"` |
 | `mg_omega` | `Float64` | `0.67` | - | Relaxation damping parameter $\omega$ | $\in (0, 1]$ |
-| `p2m_mode` | `Symbol` | `:tiled` | - | Particle-to-mesh interpolation mode | `:global`, `:tiled` |
+| `p2m_mode` | `Symbol` | `:tiled` | - | Particle-to-mesh interpolation mode | `:tiled`, `:buffered` |
 | `tile_size` | `Int` | `4` | - | Tile dimension for tiled particle-to-mesh interpolation | $\ge 1$ |
 
 ---
