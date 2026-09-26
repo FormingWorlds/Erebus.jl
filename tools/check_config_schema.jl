@@ -3,9 +3,10 @@
 # Automated configuration schema verification tool for Erebus.jl.
 # Compares SimulationConfig structs and defaults against docs/src/reference/config_schema.md.
 
-using Pkg
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
-Pkg.activate(ROOT_DIR; io=devnull)
+if Base.find_package("Erebus") === nothing
+    pushfirst!(LOAD_PATH, ROOT_DIR)
+end
 
 using Erebus
 using JSON
