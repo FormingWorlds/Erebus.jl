@@ -10,7 +10,6 @@ end
 
 using Erebus
 using JSON
-using Printf
 
 const DOCS_SCHEMA_PATH = joinpath(ROOT_DIR, "docs", "src", "reference", "config_schema.md")
 const BASELINE_PATH = joinpath(@__DIR__, "config_schema_baseline.json")
@@ -257,10 +256,8 @@ function main()
 
     actual_missing = setdiff(res.missing_fields, known_undoc)
 
-    @printf(
-        "Verified %d configuration fields across %d sections.\n",
-        res.total_fields,
-        length(fieldnames(typeof(cfg)))
+    println(
+        "Verified $(res.total_fields) configuration fields across $(length(fieldnames(typeof(cfg)))) sections.",
     )
 
     if mode == "--baseline"
