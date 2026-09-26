@@ -2209,8 +2209,9 @@
         end
         @test err isa PlasticConvergenceError
         @test err.step == 2
-        @test err.residual > 0.0
-        @test err.dt > 0.0
+        @test isfinite(err.residual)
+        @test err.dt ≈ (cfg.time.dt_initial * cfg.time.yearlength) / 8.0
+        @test occursin("Step 2 plastic solver failed to converge", sprint(showerror, err))
     end
 end
 

@@ -26,7 +26,7 @@ include("test_helpers.jl")
         @test cfg.time.endtime ≈ 15.0e6 rtol=1e-12
         @test cfg.time.n_steps == 10
         @test cfg.solver.use_pardiso == false
-        @test cfg.solver.dphimax == 0.1
+        @test cfg.solver.dphimax ≈ 0.1
 
         # Material arrays must match constants.jl element-by-element
         @test cfg.materials.rhosolidm ≈ SVector{3,Float64}([3300.0, 3300.0, 1.0])
@@ -74,14 +74,14 @@ include("test_helpers.jl")
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
     end
 
-    @testset "all shipped configs have dphimax == 0.1 (N3)" begin
+    @testset "all shipped configs have dphimax ≈ 0.1 (N3)" begin
         configs_dir = joinpath(@__DIR__, "..", "configs")
-        for f in readdir(configs_dir)
-            if endswith(f, ".toml") && f != "test_ensemble_sweep.toml"
-                path = joinpath(configs_dir, f)
-                cfg = load_config(path)
-                @test cfg.solver.dphimax == 0.1
-            end
+        toml_files = filter(f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml", readdir(configs_dir))
+        @test length(toml_files) >= 15
+        for f in toml_files
+            path = joinpath(configs_dir, f)
+            cfg = load_config(path)
+            @test cfg.solver.dphimax ≈ 0.1
         end
     end
 
@@ -795,5 +795,12 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(mg_omega=0.0)
         @reject_config solver=SolverConfig(mg_omega=1.5)
         @reject_config solver=SolverConfig(mg_smoother=:invalid_smoother)
+    end
+
+    @testset "tools/check_config_schema.jl" begin
+        cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
+        out = read(cmd, String)
+        @test occursin("Schema verification passed", out)
+        @test occursin("485 configuration fields", out)
     end
 end

@@ -70,7 +70,7 @@ simulation_loop(cfg)
 
 During simulation execution, Erebus emits structured log messages:
 - Initial grid dimensions, domain sizes, and physical parameters.
-- Thermochemical iteration progress (`titer`) and hydromechanical solver iterations (`iplast`).
+- Thermochemical iteration progress (`titer`), plastic yielding iterations (`iplast`), and timestep reductions on non-convergence.
 - Timestep duration (`dt`), CFL displacement bounds, and convergence metrics (`pferrcur`, `DMPmax`).
 - Runtime duration per timestep and total elapsed simulation time (in Ma).
 
