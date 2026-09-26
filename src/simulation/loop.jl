@@ -2485,6 +2485,7 @@ function simulation_loop(
             # ---------------------------------------------------------------------
             # perform thermochemical iterations (outer iteration loop)
             # ---------------------------------------------------------------------
+            dt_aphimax_step_max = 0.0
             for titer in 1:1:titermax_val
                 # perform thermochemical reaction
                 if reaction_active_val
@@ -2839,6 +2840,7 @@ function simulation_loop(
                         phimax=phimax_val,
                         S_vent=cfg.venting.active ? S_vent_grid : nothing,
                     )
+                    dt_aphimax_step_max = max(dt_aphimax_step_max, dt * aphimax)
 
                     # compute fluid velocities
                     compute_fluid_velocities!(
@@ -4073,6 +4075,7 @@ function simulation_loop(
                     M_escaped_total,
                     Fm !== nothing ? maximum(Fm) : 0.0,
                     Fm !== nothing ? (sum(Fm) / length(Fm)) : 0.0,
+                    dt_aphimax_step_max,
                 )
             end
 

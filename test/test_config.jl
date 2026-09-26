@@ -26,6 +26,7 @@ include("test_helpers.jl")
         @test cfg.time.endtime ≈ 15.0e6 rtol=1e-12
         @test cfg.time.n_steps == 10
         @test cfg.solver.use_pardiso == false
+        @test cfg.solver.dphimax == 0.1
 
         # Material arrays must match constants.jl element-by-element
         @test cfg.materials.rhosolidm ≈ SVector{3,Float64}([3300.0, 3300.0, 1.0])
@@ -71,6 +72,17 @@ include("test_helpers.jl")
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
+    end
+
+    @testset "all shipped configs have dphimax == 0.1 (N3)" begin
+        configs_dir = joinpath(@__DIR__, "..", "configs")
+        for f in readdir(configs_dir)
+            if endswith(f, ".toml") && f != "test_ensemble_sweep.toml"
+                path = joinpath(configs_dir, f)
+                cfg = load_config(path)
+                @test cfg.solver.dphimax == 0.1
+            end
+        end
     end
 
     @testset "load_config() from string with partial overlays" begin

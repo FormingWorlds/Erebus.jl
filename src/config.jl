@@ -102,7 +102,7 @@ Base.@kwdef struct SolverConfig
     nplast::Int = 100_000
     yerrmax::Float64 = 1.0e+2
     etawt::Float64 = 0.0
-    dphimax::Float64 = 100.01
+    dphimax::Float64 = 0.1
     seed::Int = 42
     use_pardiso::Bool = false
     etaphikoef::Float64 = 1.0
@@ -1361,6 +1361,7 @@ function validate_config(cfg::SimulationConfig)
     cfg.solver.etamax >= cfg.solver.etamin ||
         throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.solver.etaphikoef
+    @check_positive_finite cfg.solver.dphimax
     cfg.solver.p2m_mode in (:tiled, :buffered) || throw(
         ArgumentError(
             "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.solver.p2m_mode)"

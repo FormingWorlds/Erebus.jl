@@ -1,6 +1,6 @@
 
 @testset "Numerics" begin
-    dphimax = 100.01
+    dphimax = 0.1
     dtcoefdn = 0.5
     dtcoefup = 1.2
     dxymax = 0.05
@@ -828,6 +828,20 @@
         )
         @test dt_phi * aphi_fast ≈ dphimax rtol=1e-12
         @test dt_phi < dt
+
+        # 4b. Binding check for dphimax = 0.1 (N3)
+        dt_test = 1.0e11
+        dt_bound = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1),
+            dt_test, 1.0e-11; dphimax_val=0.1
+        )
+        @test isapprox(dt_bound, 0.1 / 1.0e-11; rtol=1e-12)
+        @test dt_bound < dt_test
+        dt_unbound = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1), zeros(Ny1, Nx1),
+            dt_test, 1.0e-13; dphimax_val=0.1
+        )
+        @test isapprox(dt_unbound, dt_test; rtol=1e-12)
 
         # 5. Monotonicity and positivity under combined random loads
         aphimax = rand(rgen)
