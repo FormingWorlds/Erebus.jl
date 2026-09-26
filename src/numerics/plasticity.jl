@@ -1,4 +1,41 @@
 """
+Exception thrown when plastic iterations fail to converge within `max_plastic_iterations`
+after exceeding the maximum allowable timestep reductions (`max_dt_reductions`).
+
+$(FIELDS)
+"""
+struct PlasticConvergenceError <: Exception
+    step::Int
+    residual::Float64
+    dt::Float64
+    msg::String
+end
+
+function PlasticConvergenceError(
+    step::Int,
+    residual::Float64,
+    dt::Float64;
+    msg::String="Plastic iterations failed to converge",
+)
+    return PlasticConvergenceError(step, residual, dt, msg)
+end
+
+function Base.showerror(io::IO, e::PlasticConvergenceError)
+    return print(
+        io,
+        "PlasticConvergenceError: ",
+        e.msg,
+        " at step ",
+        e.step,
+        " (residual: ",
+        e.residual,
+        ", dt: ",
+        e.dt,
+        " s)",
+    )
+end
+
+"""
 Compute viscosities, stresses, and density gradients
 for hydromechanical solver.
 
@@ -308,7 +345,8 @@ function compute_nodal_adjustment!(
     etamax::Real=1e23,
     etamin::Real=1e12,
     yerrmax::Real=1e2,
-    nplast::Int=100_000,
+    max_plastic_iterations::Int=10_000,
+    nplast::Union{Int,Nothing}=nothing,
 )
     # reset / setup
     Ny, Nx = size(ETA)
@@ -368,8 +406,7 @@ function compute_nodal_adjustment!(
             YERRNOD[iplast] = sqrt(ddd/ynpl)
         end
         # return plastic iteration completeness
-        @info "end plastic iter $iplast: ynpl=$ynpl, YERRNOD=$(YERRNOD[iplast])"
-        return ynpl==0 || YERRNOD[iplast]<yerrmax || iplast==nplast
+        return ynpl == 0 || YERRNOD[iplast] < yerrmax
     end # @inbounds
 end # function compute_nodal_adjustment!
 
@@ -430,18 +467,8 @@ function finalize_plastic_iteration_pass!(
     dtstep::Int=200,
     dtcoefdn::Real=0.5,
 )
-    if iplast % dtstep == 0
-        # dtstep plastic iterations performed without reaching targets:
-        # decrease time step and reset to previous viscoplastic viscosity
-        dt *= dtcoefdn
-        @info "reducing dt due to plastic iteration limit: dt=$dt s"
-        ETA .= ETA00
-        YNY .= YNY00
-    else
-        # perform next plastic iteration pass with new viscoplastic viscosity
-        ETA .= ETA5
-        YNY .= YNY5
-    end
+    ETA .= ETA5
+    YNY .= YNY5
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
 end # function finalize_plastic_iteration_pass

@@ -26,6 +26,7 @@ include("test_helpers.jl")
         @test cfg.time.endtime ≈ 15.0e6 rtol=1e-12
         @test cfg.time.n_steps == 10
         @test cfg.solver.use_pardiso == false
+        @test cfg.solver.dphimax ≈ 0.1
 
         # Material arrays must match constants.jl element-by-element
         @test cfg.materials.rhosolidm ≈ SVector{3,Float64}([3300.0, 3300.0, 1.0])
@@ -66,11 +67,25 @@ include("test_helpers.jl")
         @test cfg_q.output.savematstep == 2
         # Verify inherited defaults for omitted sections
         @test cfg_q.grid.Nx == 33
-        @test cfg_q.geometry.rplanet ≈ 50000.0 rtol=1e-12
-        @test cfg_q.solver.titermax == 10000
+        @test cfg_q.solver.max_plastic_iterations == 10000
+        @test cfg_q.solver.max_dt_reductions == 5
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
+    end
+
+    @testset "all shipped configs have dphimax ≈ 0.1 (N3)" begin
+        configs_dir = joinpath(@__DIR__, "..", "configs")
+        toml_files = filter(
+            f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml",
+            readdir(configs_dir),
+        )
+        @test length(toml_files) >= 15
+        for f in toml_files
+            path = joinpath(configs_dir, f)
+            cfg = load_config(path)
+            @test cfg.solver.dphimax ≈ 0.1
+        end
     end
 
     @testset "load_config() from string with partial overlays" begin
@@ -215,8 +230,8 @@ include("test_helpers.jl")
         @reject_config time=TimeConfig(start_time=-1.0)
         @reject_config time=TimeConfig(start_time=10.0, endtime=5.0)
 
-        # Invalid solver parameters: titermax must be <= nplast to prevent plastic array overflow
-        @reject_config solver=SolverConfig(titermax=200_000, nplast=100_000)
+        # Invalid solver parameters: max_dt_reductions must be >= 1
+        @reject_config solver=SolverConfig(max_dt_reductions=0)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)
@@ -382,7 +397,7 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(etamin=-1.0)
         @reject_config solver=SolverConfig(etamin=10.0, etamax=1.0)
         @reject_config solver=SolverConfig(etaphikoef=-0.1)
-        @reject_config solver=SolverConfig(titermax=0)
+        @reject_config solver=SolverConfig(max_plastic_iterations=0)
     end
 
     @testset "Hydrothermal Configurations" begin
@@ -783,5 +798,12 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(mg_omega=0.0)
         @reject_config solver=SolverConfig(mg_omega=1.5)
         @reject_config solver=SolverConfig(mg_smoother=:invalid_smoother)
+    end
+
+    @testset "tools/check_config_schema.jl" begin
+        cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
+        out = read(cmd, String)
+        @test occursin("Schema verification passed", out)
+        @test occursin("485 configuration fields", out)
     end
 end

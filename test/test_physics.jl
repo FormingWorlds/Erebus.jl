@@ -1205,6 +1205,17 @@
         @test Erebus.compute_hydrofracture_factor(Peff_over, NaN) ≈ 1.0 rtol=1e-12
         @test Erebus.compute_hydrofracture_factor(Peff_over, -1.0e7) ≈ 1.0 rtol=1e-12
         @test Erebus.compute_hydrofracture_permeability(k0, NaN, sigma_t) ≈ k0 rtol=1e-12
+
+        # Case 8: Inversion protection when kphi > kmax (N6)
+        @test Erebus.compute_hydrofracture_permeability(
+            2.0e-9, -1.0e8, sigma_t; kmax=1.0e-9
+        ) ≈ 2.0e-9 rtol=1e-12
+        @test Erebus.compute_hydrofracture_permeability(
+            1.0e-12, -1.0e8, sigma_t; kmax=1.0e-9
+        ) ≈ 1.0e-9 rtol=1e-12
+        @test_throws DomainError Erebus.compute_hydrofracture_permeability(
+            -1.0e-12, -1.0e8, sigma_t; kmax=1.0e-9
+        )
     end
 
     @testset "compute_liquid_metal_density(): sulfur content, EOS models, and thermodynamic scaling" begin

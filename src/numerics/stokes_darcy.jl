@@ -1414,6 +1414,7 @@ function compute_Aϕ!(
     Nx = Nx1 - 1
     Ny = Ny1 - 1
     @inbounds begin
+        aphimax = 0.0
         for j in 2:Nx, i in 2:Ny
             betadrained = compute_drained_compressibility(
                 BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -1431,10 +1432,13 @@ function compute_Aϕ!(
                 end
             end
             APHI[i, j] = compaction / PHI[i, j]
+            # Exclude the pressure anchor cell at (2, 2) from aphimax.
+            if !(i == 2 && j == 2)
+                aphimax = max(aphimax, abs(APHI[i, j]))
+            end
         end
-        return maximum(abs, @view APHI[2:Ny, 2:Nx]) # includes [2, 2] anchor abberation
+        return aphimax
     end # @inbounds
-    # return maximum(abs, APHI[3:Ny-1, 3:Nx-1]) # no abberation
 end # function compute_Aϕ!
 
 """

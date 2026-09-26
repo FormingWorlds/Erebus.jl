@@ -32,11 +32,11 @@ n_steps = 5                  # total number of timesteps to run
 tkm0 = [1350.0, 1350.0, 170.0]  # planet interior preheated above Fe-FeS eutectic (1213 K)
 
 [solver]
-titermax = 10000         # maximum global/plastic iterations
-nplast = 100000          # maximum plastic iterations
+max_plastic_iterations = 10000         # maximum global/plastic iterations
+max_dt_reductions = 5          # maximum dt reductions on non-convergence
 yerrmax = 100.0          # yielding tolerance level
 etawt = 0.0              # weight for old viscosity
-dphimax = 100.01         # max porosity ratio change per timestep
+dphimax = 0.1         # max porosity ratio change per timestep
 seed = 42                # random seed for marker initialization
 use_pardiso = false      # direct sparse solver selection
 etaphikoef = 1.0         # bulk viscosity scaling factor

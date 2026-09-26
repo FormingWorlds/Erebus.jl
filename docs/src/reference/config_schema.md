@@ -60,11 +60,11 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 |:---|:---|:---|:---|:---|:---|
 | `dsubgridt` | `Float64` | `0.0` | - | Subgrid thermal diffusion scaling factor | $\ge 0$ |
 | `dsubgrids` | `Float64` | `0.0` | - | Subgrid stress diffusion scaling factor | $\ge 0$ |
-| `titermax` | `Int` | `10000` | - | Maximum global thermochemical iterations | $\ge 1$ |
-| `nplast` | `Int` | `100000` | - | Maximum plastic yielding iterations | $\ge \text{titermax}$ |
+| `max_plastic_iterations` | `Int` | `10000` | - | Maximum plastic yielding iterations | $\ge 1$ |
+| `max_dt_reductions` | `Int` | `5` | - | Maximum timestep reductions on plastic non-convergence | $\ge 1$ |
 | `yerrmax` | `Float64` | `100.0` | - | Plastic yielding relative error tolerance | $> 0$ |
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
-| `dphimax` | `Float64` | `100.01` | - | Maximum porosity change ratio per step | $> 1$ |
+| `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
 | `seed` | `Int` | `42` | - | Random seed for marker initialization | Any `Int` |
 | `use_pardiso` | `Bool` | `false` | - | Enable Pardiso solver instead of UMFPACK | `true` / `false` |
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
@@ -83,6 +83,8 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `mg_post_smooth` | `Int` | `2` | - | Post-smoothing relaxation sweeps per level | $\ge 1$ |
 | `mg_smoother` | `String` / `Symbol` | `"damped_jacobi"` | - | Multigrid relaxation smoother method | `"damped_jacobi"`, `"redblack_gauss_seidel"` |
 | `mg_omega` | `Float64` | `0.67` | - | Relaxation damping parameter $\omega$ | $\in (0, 1]$ |
+| `p2m_mode` | `Symbol` | `:tiled` | - | Particle-to-mesh interpolation mode | `:tiled`, `:buffered` |
+| `tile_size` | `Int` | `4` | - | Tile dimension for tiled particle-to-mesh interpolation | $\ge 1$ |
 
 ---
 
@@ -169,6 +171,10 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `savematstep` | `Int` | `10` | - | Checkpoint saving frequency | $\ge 1$ |
 | `visstep` | `Int` | `1` | - | Visualization step cadence | $\ge 1$ |
 | `restart_from` | `String` | `""` | - | Checkpoint JLD2 file path to resume simulation from | File path or empty string |
+| `mode` | `Symbol` | `:snapshots` | - | Output storage mode | `:snapshots`, `:timeseries` |
+| `telemetrystep` | `Int` | `1` | - | Step cadence for telemetry record streaming | $\ge 1$ |
+| `telemetry_file` | `String` | `"telemetry.csv"` | - | Filename for telemetry log output | Non-empty string |
+| `save_final` | `Bool` | `true` | - | Save final state checkpoint at simulation termination | `true` / `false` |
 
 ---
 
@@ -233,6 +239,8 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `pfcoeff` | `Float64` | `0.5` | - | Fluid pressure relaxation coefficient | $\in [0, 1]$ |
 | `pferrmax` | `Float64` | `1.0e5` | Pa | Maximum fluid pressure iteration residual | $> 0$ |
 | `p_cavitation` | `Float64` | `1.0e7` | Pa | Cavitation pressure limit | $> 0$ |
+| `cfl_reaction` | `Float64` | `0.5` | - | CFL safety factor for reaction rate substepping | $\in (0, 1]$ |
+| `dphi_reaction_max` | `Float64` | `0.01` | - | Maximum porosity change per reaction substep | $> 0$ |
 
 ---
 
@@ -362,6 +370,7 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `x_sio2` | `Float64` | `0.56` | - | Silicate melt $\text{SiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
 | `x_al2o3` | `Float64` | `0.11` | - | Silicate melt $\text{Al}_2\text{O}_3$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
 | `x_tio2` | `Float64` | `0.01` | - | Silicate melt $\text{TiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
+| `speciation_active` | `Bool` | `false` | - | Enable thermodynamic chemical equilibrium speciation in pore fluid | `true` / `false` |
 
 ---
 
@@ -470,7 +479,7 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 
 ---
 
-### `[metal_partition]` - Metal-Silicate Volatile Partitioning & Transport
+## `[metal_partition]`
 
 The `[metal_partition]` section controls thermodynamic volatile exchange between molten iron alloy and silicate melt, donor-cell advective volatile transport during core segregation, and dynamic liquid metal density coupling.
 
@@ -769,6 +778,17 @@ T_dehydrate_H = 750.0
 | `f_refr_H` | `Float64` | `0.05` | - | Refractory hydrogen fraction in organics | $\in [0, 1]$ |
 | `T_pyrolysis_C` | `Float64` | `600.0` | K | Thermal pyrolysis threshold for insoluble organic matter | $\ge 0$ |
 | `T_dehydrate_H` | `Float64` | `750.0` | K | Thermal dehydration threshold for refractory hydroxyl phases | $\ge 0$ |
+| `kinetics_active` | `Bool` | `false` | - | Enable kinetic pyrolysis rates for organic matter | `true` / `false` |
+| `A_C` | `Float64` | `1.0e14` | $\text{s}^{-1}$ | Frequency pre-exponential factor for carbon pyrolysis | $> 0$ |
+| `Ea_C` | `Float64` | `2.0e5` | J/mol | Activation energy for carbon pyrolysis | $> 0$ |
+| `A_N` | `Float64` | `1.0e14` | $\text{s}^{-1}$ | Frequency pre-exponential factor for nitrogen pyrolysis | $> 0$ |
+| `Ea_N` | `Float64` | `2.0e5` | J/mol | Activation energy for nitrogen pyrolysis | $> 0$ |
+| `A_H` | `Float64` | `1.0e14` | $\text{s}^{-1}$ | Frequency pre-exponential factor for hydrogen pyrolysis | $> 0$ |
+| `Ea_H` | `Float64` | `1.8e5` | J/mol | Activation energy for hydrogen pyrolysis | $> 0$ |
+| `dh_pyro_C` | `Float64` | `5.0e5` | J/kg | Latent heat of carbon pyrolysis | $\ge 0$ |
+| `dh_pyro_N` | `Float64` | `5.0e5` | J/kg | Latent heat of nitrogen pyrolysis | $\ge 0$ |
+| `dh_pyro_H` | `Float64` | `5.0e5` | J/kg | Latent heat of hydrogen pyrolysis | $\ge 0$ |
+| `T_pyro_min` | `Float64` | `300.0` | K | Minimum temperature cutoff for pyrolysis | $\ge 0$ |
 
 ---
 

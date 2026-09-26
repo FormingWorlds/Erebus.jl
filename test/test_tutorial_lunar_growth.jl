@@ -116,7 +116,7 @@ using JLD2: JLD2
                     start_step=1,
                     n_steps=2,
                 ),
-                solver=SolverConfig(titermax=2, nplast=2),
+                solver=SolverConfig(max_plastic_iterations=2),
                 poroelasticity=cfg_run.poroelasticity,
                 thermodynamics=cfg_run.thermodynamics,
                 materials=cfg_run.materials,

@@ -27,7 +27,7 @@ function compute_displacement_timestep(
     dx_val=coords === nothing ? dx : coords.dx,
     dy_val=coords === nothing ? dy : coords.dy,
     dxymax_val::Real=0.05,
-    dphimax_val::Real=100.01,
+    dphimax_val::Real=0.1,
 )
     maxvx = maximum(abs, vx)
     maxvy = maximum(abs, vy)
@@ -54,7 +54,7 @@ end # function compute_displacement_timestep
         dx_val=coords === nothing ? dx : coords.dx,
         dy_val=coords === nothing ? dy : coords.dy,
         dxymax_val::Real=0.05,
-        dphimax_val::Real=100.01,
+        dphimax_val::Real=0.1,
         maxDTcurrent=0.0,
         DTmax_val::Real=20.0,
         dt_longest_val::Real=1.0e11,
@@ -75,7 +75,7 @@ function compute_adaptive_timestep(
     dx_val=coords === nothing ? dx : coords.dx,
     dy_val=coords === nothing ? dy : coords.dy,
     dxymax_val::Real=0.05,
-    dphimax_val::Real=100.01,
+    dphimax_val::Real=0.1,
     dt_ref=nothing,
     maxDTcurrent=0.0,
     DTmax_val::Real=20.0,
