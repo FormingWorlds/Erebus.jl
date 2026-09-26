@@ -229,6 +229,8 @@ using JLD2
             state2 = load_state(ckpt2_path)
             @test res.markers.xm == state2["xm"]
             @test res.timestep == 2
+            @test haskey(state2, "transfer_log")
+            @test state2["transfer_log"] isa Vector{TransferRecord}
 
             # Telemetry verification: timesum equals start_time + sum of accepted dt values
             telem_path = joinpath(tmpdir, "telemetry.csv")

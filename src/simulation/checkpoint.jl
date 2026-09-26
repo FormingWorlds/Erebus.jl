@@ -319,6 +319,7 @@ function save_state(
     atm_state::Union{Nothing,AtmosphereState}=nothing,
     F_extract_m=nothing,
     cfg::Union{Nothing,SimulationConfig}=nothing,
+    transfer_log=nothing,
 )
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     @unpack_coords coords Nx Ny Nx1 Ny1 Nxm Nym dx dy dxm dym
@@ -484,7 +485,6 @@ function save_state(
                     Xmin_troilite_m,
                     Xmin_schreibersite_m,
                     Xmin_cohenite_m,
-                    Xmin_graphite_m,
                     Xmin_nitride_m,
                     Xmin_metal_matrix_m,
                 )
@@ -492,12 +492,14 @@ function save_state(
                 (;)
             end
         )...,
+        (Xmin_graphite_m !== nothing ? (; Xmin_graphite_m) : (;))...,
         (regional_mineral_modes !== nothing ? (; regional_mineral_modes) : (;))...,
         (t_accreted !== nothing ? (; t_accreted) : (;))...,
         (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
         (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
         (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
         (redox_props !== nothing ? (; redox_props...) : (;))...,
+        (transfer_log !== nothing ? (; transfer_log) : (;))...,
         (
             if atm_state !== nothing
                 (;

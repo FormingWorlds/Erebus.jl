@@ -175,7 +175,12 @@ function compute_surface_venting_rates(
         end
     else
         vent_sp = cfg.venting.species
-        vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + m_pore_H2O / dt
+        if vent_sp === :H2
+            vent_rates[:H2] =
+                get(vent_rates, :H2, 0.0) + (m_pore_H2O * (2.01588 / 18.01528)) / dt
+        else
+            vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + m_pore_H2O / dt
+        end
         vent_rates[:H2O] = get(vent_rates, :H2O, 0.0) + m_mineral_H2O / dt
         # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
         vent_rates[:CO2] = get(vent_rates, :CO2, 0.0) + (m_C_step * (44.0095 / 12.011)) / dt
@@ -454,6 +459,7 @@ function simulation_loop(
     F_extract_m = nothing
     F_extract_m_step_start = nothing
     Fm_step_start = nothing
+    transfer_log = TransferRecord[]
     M_atm_species = if cfg.escape.multi_species || cfg.atmosphere.active
         Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
     else
@@ -853,8 +859,15 @@ function simulation_loop(
             F_extract_m_step_start = zeros(Float64, marknum)
             Fm_step_start = zeros(Float64, marknum)
         end
+        if haskey(ckpt, "transfer_log")
+            transfer_log = Vector{TransferRecord}(ckpt["transfer_log"])
+        end
+        if haskey(ckpt, "Xmin_graphite_m") && Xmin_graphite_m === nothing
+            Xmin_graphite_m = Vector{Float64}(ckpt["Xmin_graphite_m"])
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
+        Random.seed!(rgen, cfg.solver.seed)
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
             marknum, coords
         )
@@ -1200,7 +1213,9 @@ function simulation_loop(
         barlen=10,
     )
     last_timestep = start_step_val - 1
-    transfer_log = TransferRecord[]
+    if !is_restart
+        transfer_log = TransferRecord[]
+    end
     w3d_m = [
         marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
         m in 1:marknum
@@ -1784,6 +1799,7 @@ function simulation_loop(
                                 k_metal_val=k_metal_val,
                                 rhocp_metal_val=rhocp_metal_val,
                                 volatiles_active=cfg.volatiles.active,
+                                magma_degassing_active=cfg.magma_degassing.active,
                                 etamin=cfg.solver.etamin,
                                 etamax=cfg.solver.etamax,
                                 volatiles_cfg=cfg.volatiles,
@@ -1948,6 +1964,7 @@ function simulation_loop(
                             k_metal_val=k_metal_val,
                             rhocp_metal_val=rhocp_metal_val,
                             volatiles_active=cfg.volatiles.active,
+                            magma_degassing_active=cfg.magma_degassing.active,
                             etamin=cfg.solver.etamin,
                             etamax=cfg.solver.etamax,
                             volatiles_cfg=cfg.volatiles,
@@ -2164,6 +2181,7 @@ function simulation_loop(
                         k_metal_val=k_metal_val,
                         rhocp_metal_val=rhocp_metal_val,
                         volatiles_active=cfg.volatiles.active,
+                        magma_degassing_active=cfg.magma_degassing.active,
                         etamin=cfg.solver.etamin,
                         etamax=cfg.solver.etamax,
                         volatiles_cfg=cfg.volatiles,
@@ -3380,6 +3398,7 @@ function simulation_loop(
                 Fm=Fm,
                 redox_props=redox_props,
                 w3d_m=w3d_m,
+                Xfe_bulk=Xfe_bulk,
             )
             append!(transfer_log, marker_results.records)
 
@@ -3482,9 +3501,20 @@ function simulation_loop(
                             delta_IW=fO2_diw_mo,
                             retention_cfg=cfg.retention,
                             step=timestep,
+                            Xfe_bulk=Xfe_bulk,
                         )
                         append!(transfer_log, degas_res.records)
-                        degas_res.rates
+                        if cfg.atmosphere.active
+                            ElementInventory(
+                                degas_res.dM_3D[:H] / dt,
+                                degas_res.dM_3D[:C] / dt,
+                                degas_res.dM_3D[:N] / dt,
+                                degas_res.dM_3D[:S] / dt,
+                                degas_res.dM_3D[:H2O] * (15.9994 / 18.01528) / dt,
+                            )
+                        else
+                            degas_res.rates
+                        end
                     elseif cfg.atmosphere.active && atm_state !== nothing
                         # Equilibrium partitioning mode across molten magma ocean
                         T_int_val = compute_mean_surface_temperature(
@@ -4215,6 +4245,7 @@ function simulation_loop(
                     redox_props=redox_props,
                     atm_state=atm_state,
                     cfg=cfg,
+                    transfer_log=transfer_log,
                 )
             end
             # ---------------------------------------------------------------------

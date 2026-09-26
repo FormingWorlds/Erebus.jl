@@ -1040,6 +1040,7 @@ function compute_marker_properties!(
     hydrothermal_active::Bool=false,
     hydrothermal_cfg::Union{Nothing,HydrothermalConfig}=nothing,
     magma_transport_active::Bool=false,
+    magma_degassing_active::Bool=false,
     track_depletion::Bool=false,
     F_extract_m=nothing,
     deltaIW_m=nothing,
@@ -1122,6 +1123,7 @@ function compute_marker_properties!(
             )
 
             if volatiles_active &&
+                !magma_degassing_active &&
                 F_melt > 0.0 &&
                 XH2Om !== nothing &&
                 volatiles_cfg !== nothing
@@ -4599,6 +4601,7 @@ function advance_marker_thermo_porosity_venting!(
     Fm::Union{Nothing,AbstractVector{Float64}}=nothing,
     redox_props=nothing,
     w3d_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     (w3d_m === nothing || length(w3d_m) >= marknum) || throw(
         DimensionMismatch(
@@ -4709,7 +4712,7 @@ function advance_marker_thermo_porosity_venting!(
                                 th_records[tid],
                                 TransferRecord(
                                     timestep,
-                                    :venting,
+                                    :pore_venting,
                                     :H,
                                     m,
                                     xm[m],
@@ -4730,8 +4733,12 @@ function advance_marker_thermo_porosity_venting!(
                             else
                                 Float64(rhosolid[tm[m]])
                             end
-                            M_marker_rock =
+                            M_marker_rock = if Xfe_bulk !== nothing
+                                max(0.0, 1.0 - clamp(Float64(Xfe_bulk[m]), 0.0, 1.0)) *
+                                (rho_m * V_marker)
+                            else
                                 rho_m * V_marker * (1.0 - clamp(phim[m], 0.0, 1.0))
+                            end
                             F_m = Fm === nothing ? 0.0 : clamp(Fm[m], 0.0, 1.0)
 
                             # Water drainage
