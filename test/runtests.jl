@@ -67,6 +67,8 @@ integration_tests = [
     "test_ensemble.jl",
     "test_tutorial_lunar_growth.jl",
     "test_integration.jl",
+    "test_conservation_closure.jl",
+    "test_switch_sensitivity.jl",
 ]
 
 all_test_files = filter(f -> endswith(f, ".jl") && f != "runtests.jl", readdir(@__DIR__))

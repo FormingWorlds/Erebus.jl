@@ -263,7 +263,7 @@ Thermodynamic equilibria and solubility parameterizations are grounded in:
 - Armstrong, L. S., Hirschmann, M. M., Stanley, B. D., Falksen, E. G., & Jacobsen, S. D. (2015). Speciation and solubility of reduced C-O-H-N volatiles in mafic melt: Implications for volcanism, atmospheric evolution, and deep volatile cycles in the terrestrial planets. *Geochimica et Cosmochimica Acta*, 171, 283-302. DOI: [10.1016/j.gca.2015.07.007](https://doi.org/10.1016/j.gca.2015.07.007)
 - Boulliung, J., & Wood, B. J. (2023). Sulfur oxidation state and solubility in silicate melts. *Contributions to Mineralogy and Petrology*, 178(8), 56. DOI: [10.1007/s00410-023-02033-9](https://doi.org/10.1007/s00410-023-02033-9)
 
-Verification test suite: `@testset "Roadmap PR 1c-ii: Coupled Magma Ocean Solve"` in `test/test_magma_degassing.jl`.
+Verification test suite: `@testset "Coupled Magma Ocean Solve"` in `test/test_magma_degassing.jl`.
 
 ---
 

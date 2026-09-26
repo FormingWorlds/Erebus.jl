@@ -808,6 +808,7 @@ function degas_magma_ocean_markers!(
     delta_IW::Real=0.0,
     retention_cfg=nothing,
     step::Int=0,
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     empty_rates = Dict{Symbol,Float64}(
         :H2 => 0.0,
@@ -947,10 +948,15 @@ function degas_magma_ocean_markers!(
         )
 
         w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
+        m_sil = if Xfe_bulk !== nothing
+            max(0.0, 1.0 - clamp(Float64(Xfe_bulk[m]), 0.0, 1.0)) * m_marker
+        else
+            m_marker
+        end
 
         if ex_H2O > 0.0
             XH2Om[m] = max(0.0, (w_H2O_m - ex_H2O) * 100.0)
-            dM2_h2o = ex_H2O * m_marker
+            dM2_h2o = ex_H2O * m_sil
             dM3_h2o = dM2_h2o * w3d
             tot_ex_H2O_2D += dM2_h2o
             tot_ex_H2O_3D += dM3_h2o
@@ -964,7 +970,7 @@ function degas_magma_ocean_markers!(
         end
         if ex_C > 0.0
             XCm[m] = max(0.0, (w_C_m - ex_C) * 1.0e6)
-            dM2_c = ex_C * m_marker
+            dM2_c = ex_C * m_sil
             dM3_c = dM2_c * w3d
             tot_ex_C_2D += dM2_c
             tot_ex_C_3D += dM3_c
@@ -974,7 +980,7 @@ function degas_magma_ocean_markers!(
         end
         if ex_N > 0.0
             XNm[m] = max(0.0, (w_N_m - ex_N) * 1.0e6)
-            dM2_n = ex_N * m_marker
+            dM2_n = ex_N * m_sil
             dM3_n = dM2_n * w3d
             tot_ex_N_2D += dM2_n
             tot_ex_N_3D += dM3_n
@@ -984,7 +990,7 @@ function degas_magma_ocean_markers!(
         end
         if ex_S > 0.0
             XSm[m] = max(0.0, (w_S_m - ex_S) * 1.0e6)
-            dM2_s = ex_S * m_marker
+            dM2_s = ex_S * m_sil
             dM3_s = dM2_s * w3d
             tot_ex_S_2D += dM2_s
             tot_ex_S_3D += dM3_s
