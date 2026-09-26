@@ -4,7 +4,6 @@
 # that all arrays remain finite, and that monotonic responses follow expected signs.
 
 using Test
-using Statistics
 using Erebus
 using Erebus.Config
 
