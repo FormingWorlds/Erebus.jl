@@ -726,6 +726,22 @@
             @test isapprox(APHI[i, j], comp / PHI[i, j]; rtol=1e-12)
         end
         @test aphimax_poro != aphimax
+
+        # 5. Anchor cell exclusion: spike at anchor cell (2, 2) is excluded from returned aphimax (N7)
+        pr_spike = fill(5.0e6, Ny1, Nx1)
+        pf_spike = fill(5.0e6, Ny1, Nx1)
+        # Induce a large compaction rate specifically at anchor cell (2, 2)
+        pr_spike[2, 2] = 50.0e6
+        pf_spike[2, 2] = 1.0e6
+        # And a modest, known rate at cell (3, 3)
+        pr_spike[3, 3] = 6.0e6
+        pf_spike[3, 3] = 5.0e6
+        aphimax_spike = Erebus.compute_Aϕ!(
+            APHI, ETAPHI, BETTAPHI, PHI, pr_spike, pf_spike, pr_spike, pf_spike, dt
+        )
+        expected_interior = abs(APHI[3, 3])
+        @test isapprox(aphimax_spike, expected_interior; rtol=1e-12)
+        @test abs(APHI[2, 2]) > 10.0 * aphimax_spike
     end
 
     @testset "compute_fluid_velocities!(): two-phase relative velocity and Galilean invariance" begin
