@@ -1168,11 +1168,11 @@
         @test dt_cut ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
         @test dt_cut < dt_longest
 
-        # 3. Subsequent iterations (titer > 1): dt is preserved regardless of DT magnitude
+        # 3. Subsequent iterations (titer > 1): dt is reduced on any titer when exceeding DTmax
         dt_iter2 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 2)
         dt_iter3 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 3)
-        @test dt_iter2 ≈ dt_longest rtol=1e-12
-        @test dt_iter3 ≈ dt_longest rtol=1e-12
+        @test dt_iter2 ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
+        @test dt_iter3 ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
 
         # 4. Positivity and monotonicity: larger excess DT produces strictly smaller dt in titer 1
         dt_cut_larger = Erebus.finalize_thermochemical_iteration_pass(
@@ -1876,6 +1876,66 @@
         @test isapprox(tk1, tk2; rtol=1e-12)
         # 5. Total heating exceeds DTmax (verifying subcycling occurred)
         @test maximum(DT) > DTmax
+    end
+
+    @testset "perform_thermal_iterations!(): DTmax enforcement on every substep and closed-box energy balance (N4)" begin
+        coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=50000.0, ysize=50000.0))
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        Ny, Nx = coords.Ny, coords.Nx
+        dx, dy = coords.dx, coords.dy
+
+        tk0 = fill(300.0, Ny1, Nx1)
+        tk1 = fill(300.0, Ny1, Nx1)
+        tk2 = zeros(Ny1, Nx1)
+        DT = zeros(Ny1, Nx1)
+        DT0 = zeros(Ny1, Nx1)
+        RHOCP = fill(3.3e6, Ny1, Nx1)
+        KX = fill(3.0, Ny1, Nx1)
+        KY = fill(3.0, Ny1, Nx1)
+        HR = fill(50.0, Ny1, Nx1)
+        HA = zeros(Ny1, Nx1)
+        HS = zeros(Ny1, Nx1)
+        DHP = zeros(Ny1, Nx1)
+        RT = zeros(Ny1 * Nx1)
+        ST = zeros(Ny1 * Nx1)
+        dt = 2.0e6
+        DTmax = 5.0
+
+        Erebus.perform_thermal_iterations!(
+            tk0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            RHOCP,
+            KX,
+            KY,
+            HR,
+            HA,
+            HS,
+            DHP,
+            RT,
+            ST,
+            dt;
+            coords=coords,
+            DTmax_val=DTmax,
+        )
+
+        # 1. Total temperature change exceeds DTmax (subcycling occurred)
+        @test maximum(DT) > DTmax
+
+        # 2. Closed-box energy balance: sum(RHOCP * DT * V) == sum(HR * V * dt) to 1e-10
+        vol = dx * dy
+        delta_E = sum(RHOCP[2:Ny, 2:Nx] .* DT[2:Ny, 2:Nx]) * vol
+        Q_input = sum(HR[2:Ny, 2:Nx]) * vol * dt
+        @test isapprox(delta_E, Q_input; rtol=1e-10)
+
+        # 3. finalize_thermochemical_iteration_pass reduces dt unconditionally on any titer
+        dt_cand = 1000.0
+        dt_reduced_titer1 = Erebus.finalize_thermochemical_iteration_pass(50.0, dt_cand, 1, 10.0)
+        @test isapprox(dt_reduced_titer1, 1000.0 * (10.0 / 50.0); rtol=1e-12)
+        dt_reduced_titer2 = Erebus.finalize_thermochemical_iteration_pass(50.0, dt_cand, 2, 10.0)
+        @test isapprox(dt_reduced_titer2, 1000.0 * (10.0 / 50.0); rtol=1e-12)
     end
 
     @testset "assemble_hydromechanical_lse!() and compute_adaptive_timestep: DQPF coupling and reaction CFL" begin
