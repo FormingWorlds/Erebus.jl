@@ -1356,11 +1356,11 @@ using JLD2
         final_total_N = sum(Xfe_bulk .* rho_m .* (Xfe_N_m .* 1.0e-6))
         final_total_S = sum(Xfe_bulk .* rho_m .* (Xfe_S_m .* 1.0e-6))
 
-        @test isapprox(final_total_metal, init_total_metal; rtol=1.0e-11)
-        @test isapprox(final_total_H, init_total_H; rtol=1.0e-11)
-        @test isapprox(final_total_C, init_total_C; rtol=1.0e-11)
-        @test isapprox(final_total_N, init_total_N; rtol=1.0e-11)
-        @test isapprox(final_total_S, init_total_S; rtol=1.0e-11)
+        @test isapprox(final_total_metal, init_total_metal; rtol=1.0e-12)
+        @test isapprox(final_total_H, init_total_H; rtol=1.0e-12)
+        @test isapprox(final_total_C, init_total_C; rtol=1.0e-12)
+        @test isapprox(final_total_N, init_total_N; rtol=1.0e-12)
+        @test isapprox(final_total_S, init_total_S; rtol=1.0e-12)
 
         @test all(x -> x >= 0.0, Xfe_H_m)
         @test all(x -> x >= 0.0, Xfe_C_m)

@@ -156,6 +156,40 @@ Base.@kwdef struct PoroelasticConfig
     kappa_frac::Float64 = 1.0e3
     gamma_frac::Float64 = 1.0
     k_frac_max::Float64 = 1.0e-9
+    theta_frac::Float64 = 1.0
+    ramp_width::Float64 = 0.0
+    rx_floor_prefactor::Float64 = 1.0e-5
+
+    function PoroelasticConfig(
+        betasolid::Real,
+        betafluid::Real,
+        phimin::Real,
+        phimax::Real,
+        hydrofracture::Bool,
+        kappa_frac::Real,
+        gamma_frac::Real,
+        k_frac_max::Real,
+        theta_frac::Real,
+        ramp_width::Real,
+        rx_floor_prefactor::Real,
+    )
+        (0.0 < theta_frac <= 1.0) || throw(DomainError(theta_frac, "theta_frac must be in (0, 1]"))
+        (0.0 <= ramp_width <= 1.0) || throw(DomainError(ramp_width, "ramp_width must be in [0, 1]"))
+        (rx_floor_prefactor > 0.0) || throw(DomainError(rx_floor_prefactor, "rx_floor_prefactor must be > 0"))
+        new(
+            Float64(betasolid),
+            Float64(betafluid),
+            Float64(phimin),
+            Float64(phimax),
+            hydrofracture,
+            Float64(kappa_frac),
+            Float64(gamma_frac),
+            Float64(k_frac_max),
+            Float64(theta_frac),
+            Float64(ramp_width),
+            Float64(rx_floor_prefactor),
+        )
+    end
 end
 
 """
@@ -449,6 +483,76 @@ Base.@kwdef struct MagmaTransportConfig
     cp_melt::Float64 = 1200.0
     sill_cooling_active::Bool = false
     crystallization_timescale::Float64 = 1.0e6
+    eta_solid_floor::Float64 = 1.0e-3
+
+    function MagmaTransportConfig(
+        active::Bool,
+        k_melt_ref::Real,
+        perm_exponent::Real,
+        phi0::Real,
+        phi_residual::Real,
+        phi_crit::Real,
+        phi_pack::Real,
+        eta_melt::Real,
+        r_grain::Real,
+        hindered_exponent::Real,
+        F_perc_end::Real,
+        F_settle_start::Real,
+        cfl_melt::Real,
+        max_subcycles::Integer,
+        segregation_heating::Bool,
+        latent_crystallization::Bool,
+        exsolution_active::Bool,
+        track_depletion::Bool,
+        compaction_active::Bool,
+        bulk_viscosity_ratio::Real,
+        min_bulk_porosity::Real,
+        compaction_length_min::Real,
+        compaction_length_max::Real,
+        ponding_active::Bool,
+        eruption_active::Bool,
+        tensile_strength::Real,
+        sensible_heat_transport::Bool,
+        cp_melt::Real,
+        sill_cooling_active::Bool,
+        crystallization_timescale::Real,
+        eta_solid_floor::Real,
+    )
+        (eta_solid_floor > 0.0) || throw(DomainError(eta_solid_floor, "eta_solid_floor must be > 0"))
+        new(
+            active,
+            Float64(k_melt_ref),
+            Float64(perm_exponent),
+            Float64(phi0),
+            Float64(phi_residual),
+            Float64(phi_crit),
+            Float64(phi_pack),
+            Float64(eta_melt),
+            Float64(r_grain),
+            Float64(hindered_exponent),
+            Float64(F_perc_end),
+            Float64(F_settle_start),
+            Float64(cfl_melt),
+            Int(max_subcycles),
+            segregation_heating,
+            latent_crystallization,
+            exsolution_active,
+            track_depletion,
+            compaction_active,
+            Float64(bulk_viscosity_ratio),
+            Float64(min_bulk_porosity),
+            Float64(compaction_length_min),
+            Float64(compaction_length_max),
+            ponding_active,
+            eruption_active,
+            Float64(tensile_strength),
+            sensible_heat_transport,
+            Float64(cp_melt),
+            sill_cooling_active,
+            Float64(crystallization_timescale),
+            Float64(eta_solid_floor),
+        )
+    end
 end
 
 """
@@ -977,6 +1081,11 @@ Base.@kwdef struct CoreFormationConfig
     phi0::Float64 = 0.1
     droplet_size_mode::Symbol = :capillary_mean
     droplet_diameter_fixed::Float64 = 5.0e-3
+    droplet_radius_min::Float64 = 1.0e-4
+    droplet_radius_max::Float64 = 5.0e-2
+    settling_drhog_floor::Float64 = 1.0e-8
+    g_acc_floor_settling::Float64 = 1.0e-5
+    v_rel_floor::Float64 = 1.0e-6
     sigma_metal_silicate::Float64 = 1.0
     We_crit::Float64 = 10.0
     hindered_exponent::Float64 = 4.5
@@ -986,6 +1095,87 @@ Base.@kwdef struct CoreFormationConfig
     segregation_heating::Bool = true
     cfl_settling::Float64 = 0.5
     max_subcycles::Int = 2000
+
+    function CoreFormationConfig(
+        percolation_active::Bool,
+        settling_active::Bool,
+        sulfur_fraction::Real,
+        metal_density_mode::Symbol,
+        rho_metal::Real,
+        rho_metal_solid::Real,
+        L_metal::Real,
+        eta_metal::Real,
+        k_metal::Real,
+        rhocp_metal::Real,
+        Xfe_bulk::Real,
+        phi_pack::Real,
+        T_eutectic::Real,
+        dT_metal::Real,
+        k_metal_ref::Real,
+        perm_exponent::Real,
+        phi_crit_perc::Real,
+        phi_residual::Real,
+        phi0::Real,
+        droplet_size_mode::Symbol,
+        droplet_diameter_fixed::Real,
+        droplet_radius_min::Real,
+        droplet_radius_max::Real,
+        settling_drhog_floor::Real,
+        g_acc_floor_settling::Real,
+        v_rel_floor::Real,
+        sigma_metal_silicate::Real,
+        We_crit::Real,
+        hindered_exponent::Real,
+        hadamard_rybczynski::Bool,
+        F_settle_start::Real,
+        F_perc_end::Real,
+        segregation_heating::Bool,
+        cfl_settling::Real,
+        max_subcycles::Integer,
+    )
+        (droplet_radius_min > 0.0) || throw(DomainError(droplet_radius_min, "droplet_radius_min must be > 0"))
+        (droplet_radius_max > droplet_radius_min) || throw(DomainError(droplet_radius_max, "droplet_radius_max must be > droplet_radius_min"))
+        (settling_drhog_floor > 0.0) || throw(DomainError(settling_drhog_floor, "settling_drhog_floor must be > 0"))
+        (g_acc_floor_settling > 0.0) || throw(DomainError(g_acc_floor_settling, "g_acc_floor_settling must be > 0"))
+        (v_rel_floor > 0.0) || throw(DomainError(v_rel_floor, "v_rel_floor must be > 0"))
+        new(
+            percolation_active,
+            settling_active,
+            Float64(sulfur_fraction),
+            metal_density_mode,
+            Float64(rho_metal),
+            Float64(rho_metal_solid),
+            Float64(L_metal),
+            Float64(eta_metal),
+            Float64(k_metal),
+            Float64(rhocp_metal),
+            Float64(Xfe_bulk),
+            Float64(phi_pack),
+            Float64(T_eutectic),
+            Float64(dT_metal),
+            Float64(k_metal_ref),
+            Float64(perm_exponent),
+            Float64(phi_crit_perc),
+            Float64(phi_residual),
+            Float64(phi0),
+            droplet_size_mode,
+            Float64(droplet_diameter_fixed),
+            Float64(droplet_radius_min),
+            Float64(droplet_radius_max),
+            Float64(settling_drhog_floor),
+            Float64(g_acc_floor_settling),
+            Float64(v_rel_floor),
+            Float64(sigma_metal_silicate),
+            Float64(We_crit),
+            Float64(hindered_exponent),
+            hadamard_rybczynski,
+            Float64(F_settle_start),
+            Float64(F_perc_end),
+            segregation_heating,
+            Float64(cfl_settling),
+            Int(max_subcycles),
+        )
+    end
 end
 
 """
@@ -1346,6 +1536,13 @@ function validate_config(cfg::SimulationConfig)
     @check_nonneg_finite cfg.poroelasticity.kappa_frac
     @check_positive_finite cfg.poroelasticity.gamma_frac
     @check_positive_finite cfg.poroelasticity.k_frac_max
+    (0.0 < cfg.poroelasticity.theta_frac <= 1.0) || throw(
+        ArgumentError("poroelasticity.theta_frac must be in (0, 1], got $(cfg.poroelasticity.theta_frac)")
+    )
+    (0.0 <= cfg.poroelasticity.ramp_width <= 1.0) || throw(
+        ArgumentError("poroelasticity.ramp_width must be in [0, 1], got $(cfg.poroelasticity.ramp_width)")
+    )
+    @check_positive_finite cfg.poroelasticity.rx_floor_prefactor
 
     # Solver checks
     @check_nonneg_finite cfg.solver.dsubgridt
@@ -1718,6 +1915,7 @@ function validate_config(cfg::SimulationConfig)
         @check_positive_finite mt.tensile_strength
         @check_positive_finite mt.cp_melt
         @check_nonneg_finite mt.crystallization_timescale
+        @check_positive_finite mt.eta_solid_floor
         if mt.eruption_active && !mt.compaction_active
             throw(
                 ArgumentError(
@@ -1973,6 +2171,15 @@ function validate_config(cfg::SimulationConfig)
         @check_positive_finite cf.sigma_metal_silicate
         @check_positive_finite cf.We_crit
         @check_nonneg_finite cf.hindered_exponent
+        @check_positive_finite cf.droplet_radius_min
+        cf.droplet_radius_max > cf.droplet_radius_min || throw(
+            ArgumentError(
+                "droplet_radius_max ($(cf.droplet_radius_max)) must exceed droplet_radius_min ($(cf.droplet_radius_min))",
+            ),
+        )
+        @check_positive_finite cf.settling_drhog_floor
+        @check_positive_finite cf.g_acc_floor_settling
+        @check_positive_finite cf.v_rel_floor
     end
 
     if cfg.coreformation.percolation_active

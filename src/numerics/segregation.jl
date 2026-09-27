@@ -276,24 +276,24 @@ function apply_metal_segregation!(
                 # Gravity-capillary (Bond) balance: d = sqrt(We_crit * sigma / (drho * g))
                 d_cap = sqrt(
                     cfg_core.We_crit * cfg_core.sigma_metal_silicate /
-                    max(drho * g_acc, 1.0e-8),
+                    max(drho * g_acc, cfg_core.settling_drhog_floor),
                 )
-                clamp(d_cap / 2.0, 1.0e-4, 5.0e-2)
+                clamp(d_cap / 2.0, cfg_core.droplet_radius_min, cfg_core.droplet_radius_max)
             else # :weber_turbulent
                 v_est = stokes_settling_velocity(
                     cfg_core.droplet_diameter_fixed / 2.0,
                     drho,
-                    max(g_acc, 1.0e-5),
+                    max(g_acc, cfg_core.g_acc_floor_settling),
                     eta_susp,
                 )
-                v_rel = max(v_est, 1.0e-6)
+                v_rel = max(v_est, cfg_core.v_rel_floor)
                 d_weber = weber_equilibrium_diameter(
                     rho_silicate,
                     v_rel,
                     cfg_core.sigma_metal_silicate;
                     We_crit=cfg_core.We_crit,
                 )
-                clamp(d_weber / 2.0, 1.0e-4, 5.0e-2)
+                clamp(d_weber / 2.0, cfg_core.droplet_radius_min, cfg_core.droplet_radius_max)
             end
 
             v_seg_cell[i, j] = metal_segregation_velocity(
@@ -646,25 +646,25 @@ function apply_metal_segregation!(
                 F_H_e = (j < Nx_val) ? flux_H_x[i, j] : 0.0
                 F_H_n = (i > 1) ? flux_H_y[i - 1, j] : 0.0
                 F_H_s = (i < Ny_val) ? flux_H_y[i, j] : 0.0
-                m_fe_H[i, j] = max(0.0, m_fe_H[i, j] + (F_H_w - F_H_e + F_H_n - F_H_s))
+                m_fe_H[i, j] += (F_H_w - F_H_e + F_H_n - F_H_s)
 
                 F_C_w = (j > 1) ? flux_C_x[i, j - 1] : 0.0
                 F_C_e = (j < Nx_val) ? flux_C_x[i, j] : 0.0
                 F_C_n = (i > 1) ? flux_C_y[i - 1, j] : 0.0
                 F_C_s = (i < Ny_val) ? flux_C_y[i, j] : 0.0
-                m_fe_C[i, j] = max(0.0, m_fe_C[i, j] + (F_C_w - F_C_e + F_C_n - F_C_s))
+                m_fe_C[i, j] += (F_C_w - F_C_e + F_C_n - F_C_s)
 
                 F_N_w = (j > 1) ? flux_N_x[i, j - 1] : 0.0
                 F_N_e = (j < Nx_val) ? flux_N_x[i, j] : 0.0
                 F_N_n = (i > 1) ? flux_N_y[i - 1, j] : 0.0
                 F_N_s = (i < Ny_val) ? flux_N_y[i, j] : 0.0
-                m_fe_N[i, j] = max(0.0, m_fe_N[i, j] + (F_N_w - F_N_e + F_N_n - F_N_s))
+                m_fe_N[i, j] += (F_N_w - F_N_e + F_N_n - F_N_s)
 
                 F_S_w = (j > 1) ? flux_S_x[i, j - 1] : 0.0
                 F_S_e = (j < Nx_val) ? flux_S_x[i, j] : 0.0
                 F_S_n = (i > 1) ? flux_S_y[i - 1, j] : 0.0
                 F_S_s = (i < Ny_val) ? flux_S_y[i, j] : 0.0
-                m_fe_S[i, j] = max(0.0, m_fe_S[i, j] + (F_S_w - F_S_e + F_S_n - F_S_s))
+                m_fe_S[i, j] += (F_S_w - F_S_e + F_S_n - F_S_s)
             end
         end
 
@@ -701,6 +701,26 @@ function apply_metal_segregation!(
     initial_sum = 0.0
     @inbounds for m in 1:marknum
         initial_sum += Xfe_bulk[m]
+    end
+    initial_sum_H = 0.0
+    initial_sum_C = 0.0
+    initial_sum_N = 0.0
+    initial_sum_S = 0.0
+    if track_volatiles
+        rplanet_sq = rplanet^2
+        @inbounds for m in 1:marknum
+            if tm[m] < 3
+                dx = xm[m] - xcenter
+                dy = ym[m] - ycenter
+                if dx^2 + dy^2 <= rplanet_sq
+                    fe_b = Xfe_bulk[m]
+                    initial_sum_H += fe_b * Xfe_H_m[m]
+                    initial_sum_C += fe_b * Xfe_C_m[m]
+                    initial_sum_N += fe_b * Xfe_N_m[m]
+                    initial_sum_S += fe_b * Xfe_S_m[m]
+                end
+            end
+        end
     end
 
     @inbounds for m in 1:marknum
@@ -740,10 +760,10 @@ function apply_metal_segregation!(
                     if track_volatiles
                         X_new = Xfe_bulk[m]
                         if X_new > 0.0 && m_target > 0.0
-                            Xfe_H_m[m] = m_fe_H[i_c, j_c] / m_target
-                            Xfe_C_m[m] = m_fe_C[i_c, j_c] / m_target
-                            Xfe_N_m[m] = m_fe_N[i_c, j_c] / m_target
-                            Xfe_S_m[m] = m_fe_S[i_c, j_c] / m_target
+                            Xfe_H_m[m] = max(0.0, m_fe_H[i_c, j_c] / m_target)
+                            Xfe_C_m[m] = max(0.0, m_fe_C[i_c, j_c] / m_target)
+                            Xfe_N_m[m] = max(0.0, m_fe_N[i_c, j_c] / m_target)
+                            Xfe_S_m[m] = max(0.0, m_fe_S[i_c, j_c] / m_target)
                         else
                             Xfe_H_m[m] = 0.0
                             Xfe_C_m[m] = 0.0
@@ -782,6 +802,55 @@ function apply_metal_segregation!(
                         Xfe_bulk[m] = min(Xfe_bulk[m] + corr, cfg_core.phi_pack)
                     elseif diff_sum < 0.0 && Xfe_bulk[m] > 0.0
                         Xfe_bulk[m] = max(Xfe_bulk[m] + corr, 0.0)
+                    end
+                end
+            end
+        end
+    end
+
+    # Enforce volatile mass conservation across planet markers
+    if track_volatiles
+        rplanet_sq = rplanet^2
+        cur_sum_H = 0.0
+        cur_sum_C = 0.0
+        cur_sum_N = 0.0
+        cur_sum_S = 0.0
+        @inbounds for m in 1:marknum
+            if tm[m] < 3
+                dx = xm[m] - xcenter
+                dy = ym[m] - ycenter
+                if dx^2 + dy^2 <= rplanet_sq
+                    fe_b = Xfe_bulk[m]
+                    cur_sum_H += fe_b * Xfe_H_m[m]
+                    cur_sum_C += fe_b * Xfe_C_m[m]
+                    cur_sum_N += fe_b * Xfe_N_m[m]
+                    cur_sum_S += fe_b * Xfe_S_m[m]
+                end
+            end
+        end
+        scale_H = (initial_sum_H > 0.0 && cur_sum_H > 0.0) ? (initial_sum_H / cur_sum_H) : 1.0
+        scale_C = (initial_sum_C > 0.0 && cur_sum_C > 0.0) ? (initial_sum_C / cur_sum_C) : 1.0
+        scale_N = (initial_sum_N > 0.0 && cur_sum_N > 0.0) ? (initial_sum_N / cur_sum_N) : 1.0
+        scale_S = (initial_sum_S > 0.0 && cur_sum_S > 0.0) ? (initial_sum_S / cur_sum_S) : 1.0
+
+        if scale_H != 1.0 || scale_C != 1.0 || scale_N != 1.0 || scale_S != 1.0
+            @inbounds for m in 1:marknum
+                if tm[m] < 3
+                    dx = xm[m] - xcenter
+                    dy = ym[m] - ycenter
+                    if dx^2 + dy^2 <= rplanet_sq
+                        if scale_H != 1.0
+                            Xfe_H_m[m] = clamp(Xfe_H_m[m] * scale_H, 0.0, 1.0e6)
+                        end
+                        if scale_C != 1.0
+                            Xfe_C_m[m] = clamp(Xfe_C_m[m] * scale_C, 0.0, 1.0e6)
+                        end
+                        if scale_N != 1.0
+                            Xfe_N_m[m] = clamp(Xfe_N_m[m] * scale_N, 0.0, 1.0e6)
+                        end
+                        if scale_S != 1.0
+                            Xfe_S_m[m] = clamp(Xfe_S_m[m] * scale_S, 0.0, 1.0e6)
+                        end
                     end
                 end
             end
@@ -1122,7 +1191,7 @@ function apply_silicate_melt_segregation!(
                 end
                 P_comp_cell[i, j] = compaction_pressure(
                     div_v_cell[i, j],
-                    max(eta_s, 1.0e-3),
+                    max(eta_s, cfg_magma.eta_solid_floor),
                     F_m;
                     bulk_ratio=cfg_magma.bulk_viscosity_ratio,
                     phi_min=cfg_magma.min_bulk_porosity,
@@ -1154,7 +1223,7 @@ function apply_silicate_melt_segregation!(
                     eta_silicate
                 end
                 delta_c = compaction_length(
-                    max(eta_s, 1.0e-3),
+                    max(eta_s, cfg_magma.eta_solid_floor),
                     cfg_magma.eta_melt,
                     km,
                     F_m;

@@ -228,11 +228,44 @@ function compute_fluid_viscosity(
 end
 
 """
+    hydrofracture_overpressure_ramp(x::Real, delta::Real=0.0) -> Float64
+
+Evaluate C¹ continuous overpressure regularisation ramp for dynamic hydrofracturing.
+
+# Arguments
+- `x::Real`: Normalised tensile fluid overpressure `(-Peff - sigma_t) / sigma_t` [-].
+- `delta::Real`: Regularisation ramp half-width delta in [0, 1] [-] (default: 0.0).
+
+# Returns
+- `Float64`: Regularised effective overpressure value `s(x)`.
+"""
+@inline function hydrofracture_overpressure_ramp(x::Real, delta::Real=0.0)
+    d = Float64(delta)
+    if !isfinite(d) || d < 0.0
+        throw(DomainError(delta, "ramp_width delta must be finite and >= 0"))
+    end
+    xv = Float64(x)
+    if isnan(xv)
+        return NaN
+    elseif xv <= 0.0
+        return 0.0
+    elseif xv == Inf
+        return Inf
+    end
+    if d == 0.0 || xv >= d
+        return xv - 0.5 * d
+    else
+        return (xv^2) / (2.0 * d)
+    end
+end
+
+"""
     compute_hydrofracture_factor(Peff::Real, sigma_t::Real;
                                  active::Bool = true,
                                  kappa_frac::Real = 1.0e3,
                                  gamma::Real = 1.0,
-                                 max_factor::Real = Inf)
+                                 max_factor::Real = Inf,
+                                 ramp_width::Real = 0.0)
 
 Compute dimensionless permeability enhancement factor from dynamic hydrofracturing.
 
@@ -240,27 +273,30 @@ When pore fluid pressure exceeds total confining pressure plus tensile strength
 (Terzaghi effective pressure Peff = Pt - Pf <= -sigma_t), hydraulic tensile
 fractures open and increase effective permeability:
 
-    factor = 1.0 + kappa_frac * ((-Peff - sigma_t) / sigma_t)^gamma
+    factor = 1.0 + kappa_frac * s(x)^gamma
 
 clamped to [1.0, max_factor].
 """
-function compute_hydrofracture_factor(
+@inline function compute_hydrofracture_factor(
     Peff::Real,
     sigma_t::Real;
     active::Bool=true,
     kappa_frac::Real=1.0e3,
     gamma::Real=1.0,
     max_factor::Real=Inf,
+    ramp_width::Real=0.0,
 )
     if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0
         return 1.0
     end
     overpressure = -Peff - sigma_t
-    if overpressure <= 0.0
+    norm_overpressure = overpressure / sigma_t
+    s = hydrofracture_overpressure_ramp(norm_overpressure, ramp_width)
+    if s <= 0.0
         return 1.0
     end
-    norm_overpressure = overpressure / sigma_t
-    factor = 1.0 + kappa_frac * (norm_overpressure ^ gamma)
+    sg = gamma == 1.0 ? s : (gamma == 2.0 ? abs2(s) : (s ^ gamma))
+    factor = 1.0 + kappa_frac * sg
     return clamp(Float64(factor), 1.0, Float64(max_factor))
 end
 
@@ -269,7 +305,8 @@ end
                                        active::Bool = true,
                                        kappa_frac::Real = 1.0e3,
                                        gamma::Real = 1.0,
-                                       kmax::Real = 1.0e-9)
+                                       kmax::Real = 1.0e-9,
+                                       ramp_width::Real = 0.0)
 
 Compute effective permeability k_eff [m²] with dynamic hydrofracturing enhancement.
 
@@ -279,7 +316,7 @@ When pore fluid pressure exceeds total confining pressure plus rock tensile stre
 
 tensile microcracks open and enhance permeability according to:
 
-    k_eff = min(kphi * compute_hydrofracture_factor(Peff, sigma_t; active, kappa_frac, gamma), kmax)
+    k_eff = min(kphi * compute_hydrofracture_factor(Peff, sigma_t; active, kappa_frac, gamma, ramp_width), kmax)
 
 # Arguments
 - `kphi`: baseline matrix permeability [m²]
@@ -289,6 +326,7 @@ tensile microcracks open and enhance permeability according to:
 - `kappa_frac`: dimensionless enhancement multiplier (default: 1.0e3)
 - `gamma`: power-law exponent (default: 1.0)
 - `kmax`: maximum permeability ceiling [m²] (default: 1.0e-9)
+- `ramp_width`: C¹ regularisation ramp half-width [0, 1] [-] (default: 0.0)
 
 # Returns
 - `k_eff`: effective permeability [m²]
@@ -301,6 +339,7 @@ function compute_hydrofracture_permeability(
     kappa_frac::Real=1.0e3,
     gamma::Real=1.0,
     kmax::Real=1.0e-9,
+    ramp_width::Real=0.0,
 )
     if kphi < 0.0
         throw(
@@ -313,7 +352,7 @@ function compute_hydrofracture_permeability(
         return Float64(kphi)
     end
     factor = compute_hydrofracture_factor(
-        Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma
+        Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma, ramp_width=ramp_width
     )
     k_enhanced = Float64(kphi * factor)
     kphi_f = Float64(kphi)

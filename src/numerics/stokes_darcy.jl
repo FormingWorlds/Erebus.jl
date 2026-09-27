@@ -70,6 +70,13 @@ function assemble_hydromechanical_lse!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
+    theta_frac::Real=1.0,
+    rx_floor_prefactor::Real=1.0e-5,
+    rx_eff_prev=nothing,
+    ry_eff_prev=nothing,
+    rx_eff_out=nothing,
+    ry_eff_out=nothing,
     coords=nothing,
     L=nothing,
     venting::Bool=false,
@@ -121,6 +128,12 @@ function assemble_hydromechanical_lse!(
     end
     # reset RHS coefficient vector
     R .= 0.0
+    if rx_eff_out !== nothing
+        rx_eff_out .= RX
+    end
+    if ry_eff_out !== nothing
+        ry_eff_out .= RY
+    end
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             # define global indices in algebraic space
@@ -424,6 +437,7 @@ function assemble_hydromechanical_lse!(
                             kappa_frac=kappa_frac,
                             gamma=gamma_frac,
                             kmax=k_frac_max,
+                            ramp_width=ramp_width,
                         )
                         rx_val = RX[i, j] * (kphi_x / keff_x)
                     else
@@ -433,10 +447,17 @@ function assemble_hydromechanical_lse!(
                             active=true,
                             kappa_frac=kappa_frac,
                             gamma=gamma_frac,
+                            ramp_width=ramp_width,
                         )
-                        rx_floor = 1.0e-5 / k_frac_max
+                        rx_floor = rx_floor_prefactor / k_frac_max
                         rx_val = max(RX[i, j] / ffrac_x, rx_floor)
                     end
+                    if rx_eff_prev !== nothing && theta_frac < 1.0
+                        rx_val = theta_frac * rx_val + (1.0 - theta_frac) * rx_eff_prev[i, j]
+                    end
+                end
+                if rx_eff_out !== nothing
+                    rx_eff_out[i, j] = rx_val
                 end
                 updateindex!(L, +, rx_val, kqx, kqx) # qxD
                 updateindex!(L, +, -Kcont*inv(dx_val), kqx, kpf) # P₁
@@ -475,6 +496,7 @@ function assemble_hydromechanical_lse!(
                             kappa_frac=kappa_frac,
                             gamma=gamma_frac,
                             kmax=k_frac_max,
+                            ramp_width=ramp_width,
                         )
                         ry_val = RY[i, j] * (kphi_y / keff_y)
                     else
@@ -484,10 +506,17 @@ function assemble_hydromechanical_lse!(
                             active=true,
                             kappa_frac=kappa_frac,
                             gamma=gamma_frac,
+                            ramp_width=ramp_width,
                         )
-                        ry_floor = 1.0e-5 / k_frac_max
+                        ry_floor = rx_floor_prefactor / k_frac_max
                         ry_val = max(RY[i, j] / ffrac_y, ry_floor)
                     end
+                    if ry_eff_prev !== nothing && theta_frac < 1.0
+                        ry_val = theta_frac * ry_val + (1.0 - theta_frac) * ry_eff_prev[i, j]
+                    end
+                end
+                if ry_eff_out !== nothing
+                    ry_eff_out[i, j] = ry_val
                 end
                 updateindex!(L, +, ry_val, kqy, kqy) # qyD
                 updateindex!(L, +, -Kcont*inv(dy_val), kqy, kpf) # P₁
@@ -567,6 +596,7 @@ function assemble_hydromechanical_lse!(
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
+            ramp_width=ramp_width,
             pr=pr,
             pf=pf,
             TEN=TEN,
@@ -673,6 +703,13 @@ function assemble_hydromechanical_4var_lse!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
+    theta_frac::Real=1.0,
+    rx_floor_prefactor::Real=1.0e-5,
+    rx_eff_prev=nothing,
+    ry_eff_prev=nothing,
+    rx_eff_out=nothing,
+    ry_eff_out=nothing,
     coords=nothing,
     L=nothing,
     venting::Bool=false,
@@ -722,6 +759,110 @@ function assemble_hydromechanical_4var_lse!(
         L_target
     end
     fill!(R, 0.0)
+
+    rx_eff_prev_use = rx_eff_prev !== nothing ? rx_eff_prev : (
+        workspace !== nothing && hasproperty(workspace, :rx_eff_prev) ? workspace.rx_eff_prev : nothing
+    )
+    ry_eff_prev_use = ry_eff_prev !== nothing ? ry_eff_prev : (
+        workspace !== nothing && hasproperty(workspace, :ry_eff_prev) ? workspace.ry_eff_prev : nothing
+    )
+    rx_eff_out_use = rx_eff_out !== nothing ? rx_eff_out : (
+        workspace !== nothing && hasproperty(workspace, :rx_eff) ? workspace.rx_eff : nothing
+    )
+    ry_eff_out_use = ry_eff_out !== nothing ? ry_eff_out : (
+        workspace !== nothing && hasproperty(workspace, :ry_eff) ? workspace.ry_eff : nothing
+    )
+    if rx_eff_out_use !== nothing
+        rx_eff_out_use .= RX
+    end
+    if ry_eff_out_use !== nothing
+        ry_eff_out_use .= RY
+    end
+
+    rx_eff_calc = if rx_eff_out_use !== nothing
+        rx_eff_out_use
+    elseif hydrofracture
+        copy(RX)
+    else
+        RX
+    end
+    ry_eff_calc = if ry_eff_out_use !== nothing
+        ry_eff_out_use
+    elseif hydrofracture
+        copy(RY)
+    else
+        RY
+    end
+
+    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
+        @inbounds for j in 2:(Nx_val - 1), i in 2:(Ny1 - 1)
+            Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
+            sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+            kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
+            if kphi_x > 0.0
+                keff_x = compute_hydrofracture_permeability(
+                    kphi_x,
+                    Peff_x,
+                    sigma_t_x;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                    ramp_width=ramp_width,
+                )
+                rx_val = RX[i, j] * (kphi_x / keff_x)
+            else
+                ffrac_x = compute_hydrofracture_factor(
+                    Peff_x,
+                    sigma_t_x;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    ramp_width=ramp_width,
+                )
+                rx_floor = rx_floor_prefactor / k_frac_max
+                rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+            end
+            if rx_eff_prev_use !== nothing && theta_frac < 1.0
+                rx_val = theta_frac * rx_val + (1.0 - theta_frac) * rx_eff_prev_use[i, j]
+            end
+            rx_eff_calc[i, j] = rx_val
+        end
+
+        @inbounds for j in 2:(Nx1 - 1), i in 2:(Ny_val - 1)
+            Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
+            sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+            kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
+            if kphi_y > 0.0
+                keff_y = compute_hydrofracture_permeability(
+                    kphi_y,
+                    Peff_y,
+                    sigma_t_y;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    kmax=k_frac_max,
+                    ramp_width=ramp_width,
+                )
+                ry_val = RY[i, j] * (kphi_y / keff_y)
+            else
+                ffrac_y = compute_hydrofracture_factor(
+                    Peff_y,
+                    sigma_t_y;
+                    active=true,
+                    kappa_frac=kappa_frac,
+                    gamma=gamma_frac,
+                    ramp_width=ramp_width,
+                )
+                ry_floor = rx_floor_prefactor / k_frac_max
+                ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+            end
+            if ry_eff_prev_use !== nothing && theta_frac < 1.0
+                ry_val = theta_frac * ry_val + (1.0 - theta_frac) * ry_eff_prev_use[i, j]
+            end
+            ry_eff_calc[i, j] = ry_val
+        end
+    end
 
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -1002,34 +1143,7 @@ function assemble_hydromechanical_4var_lse!(
 
                 # qxD divergence elimination: (qxD[i, j] - qxD[i, j-1]) / dx
                 if 1 < i < Ny1 && 1 < j < Nx_val
-                    rx2 = RX[i, j]
-                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                        Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
-                        sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
-                        kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
-                        if kphi_x > 0.0
-                            keff_x = compute_hydrofracture_permeability(
-                                kphi_x,
-                                Peff_x,
-                                sigma_t_x;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                                kmax=k_frac_max,
-                            )
-                            rx2 = RX[i, j] * (kphi_x / keff_x)
-                        else
-                            ffrac_x = compute_hydrofracture_factor(
-                                Peff_x,
-                                sigma_t_x;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                            )
-                            rx_floor = 1.0e-5 / k_frac_max
-                            rx2 = max(RX[i, j] / ffrac_x, rx_floor)
-                        end
-                    end
+                    rx2 = rx_eff_calc[i, j]
                     coeff_x2 = Kcont / (dx_val^2 * rx2)
                     diag_pf += coeff_x2
                     updateindex!(L, +, -coeff_x2, kpf, kpf + 4 * Ny1)
@@ -1037,34 +1151,7 @@ function assemble_hydromechanical_4var_lse!(
                 end
 
                 if 1 < i < Ny1 && 2 < j <= Nx_val
-                    rx1 = RX[i, j - 1]
-                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                        Peff_x = 0.5 * (pr[i, j - 1] + pr[i, j] - pf[i, j - 1] - pf[i, j])
-                        sigma_t_x = 0.5 * (TEN[i, j - 1] + TEN[i - 1, j - 1])
-                        kphi_x = (KX !== nothing) ? KX[i, j - 1] : 0.0
-                        if kphi_x > 0.0
-                            keff_x = compute_hydrofracture_permeability(
-                                kphi_x,
-                                Peff_x,
-                                sigma_t_x;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                                kmax=k_frac_max,
-                            )
-                            rx1 = RX[i, j - 1] * (kphi_x / keff_x)
-                        else
-                            ffrac_x = compute_hydrofracture_factor(
-                                Peff_x,
-                                sigma_t_x;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                            )
-                            rx_floor = 1.0e-5 / k_frac_max
-                            rx1 = max(RX[i, j - 1] / ffrac_x, rx_floor)
-                        end
-                    end
+                    rx1 = rx_eff_calc[i, j - 1]
                     coeff_x1 = Kcont / (dx_val^2 * rx1)
                     diag_pf += coeff_x1
                     updateindex!(L, +, -coeff_x1, kpf, kpf - 4 * Ny1)
@@ -1073,34 +1160,7 @@ function assemble_hydromechanical_4var_lse!(
 
                 # qyD divergence elimination: (qyD[i, j] - qyD[i-1, j]) / dy
                 if 1 < j < Nx1 && 1 < i < Ny_val
-                    ry2 = RY[i, j]
-                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                        Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
-                        sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
-                        kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
-                        if kphi_y > 0.0
-                            keff_y = compute_hydrofracture_permeability(
-                                kphi_y,
-                                Peff_y,
-                                sigma_t_y;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                                kmax=k_frac_max,
-                            )
-                            ry2 = RY[i, j] * (kphi_y / keff_y)
-                        else
-                            ffrac_y = compute_hydrofracture_factor(
-                                Peff_y,
-                                sigma_t_y;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                            )
-                            ry_floor = 1.0e-5 / k_frac_max
-                            ry2 = max(RY[i, j] / ffrac_y, ry_floor)
-                        end
-                    end
+                    ry2 = ry_eff_calc[i, j]
                     coeff_y2 = Kcont / (dy_val^2 * ry2)
                     diag_pf += coeff_y2
                     updateindex!(L, +, -coeff_y2, kpf, kpf + 4)
@@ -1108,34 +1168,7 @@ function assemble_hydromechanical_4var_lse!(
                 end
 
                 if 1 < j < Nx1 && 2 < i <= Ny_val
-                    ry1 = RY[i - 1, j]
-                    if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
-                        Peff_y = 0.5 * (pr[i - 1, j] + pr[i, j] - pf[i - 1, j] - pf[i, j])
-                        sigma_t_y = 0.5 * (TEN[i - 1, j] + TEN[i - 1, j - 1])
-                        kphi_y = (KY !== nothing) ? KY[i - 1, j] : 0.0
-                        if kphi_y > 0.0
-                            keff_y = compute_hydrofracture_permeability(
-                                kphi_y,
-                                Peff_y,
-                                sigma_t_y;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                                kmax=k_frac_max,
-                            )
-                            ry1 = RY[i - 1, j] * (kphi_y / keff_y)
-                        else
-                            ffrac_y = compute_hydrofracture_factor(
-                                Peff_y,
-                                sigma_t_y;
-                                active=true,
-                                kappa_frac=kappa_frac,
-                                gamma=gamma_frac,
-                            )
-                            ry_floor = 1.0e-5 / k_frac_max
-                            ry1 = max(RY[i - 1, j] / ffrac_y, ry_floor)
-                        end
-                    end
+                    ry1 = ry_eff_calc[i - 1, j]
                     coeff_y1 = Kcont / (dy_val^2 * ry1)
                     diag_pf += coeff_y1
                     updateindex!(L, +, -coeff_y1, kpf, kpf - 4)
@@ -1170,6 +1203,7 @@ function assemble_hydromechanical_4var_lse!(
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
+            ramp_width=ramp_width,
             pr=pr,
             pf=pf,
             TEN=TEN,
@@ -1220,6 +1254,10 @@ function reconstruct_darcy_fluxes!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
+    rx_floor_prefactor::Real=1.0e-5,
+    rx_eff::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    ry_eff::Union{AbstractMatrix{<:Real},Nothing}=nothing,
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx_val = coords.dx
@@ -1235,35 +1273,42 @@ function reconstruct_darcy_fluxes!(
     @inbounds for j in 1:Nx1, i in 1:Ny1
         # Internal qxD nodes: 1 < i < Ny1 and 1 < j < Nx_val
         if !(i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1)
-            rx_val = RX[i, j]
-            if hydrofracture && pr !== nothing && TEN !== nothing
-                Peff_x =
-                    0.5 *
-                    (pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] - pf_eff_use[i, j + 1])
-                sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
-                kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
-                if kphi_x > 0.0
-                    keff_x = compute_hydrofracture_permeability(
-                        kphi_x,
-                        Peff_x,
-                        sigma_t_x;
-                        active=true,
-                        kappa_frac=kappa_frac,
-                        gamma=gamma_frac,
-                        kmax=k_frac_max,
-                    )
-                    rx_val = RX[i, j] * (kphi_x / keff_x)
-                else
-                    ffrac_x = compute_hydrofracture_factor(
-                        Peff_x,
-                        sigma_t_x;
-                        active=true,
-                        kappa_frac=kappa_frac,
-                        gamma=gamma_frac,
-                    )
-                    rx_floor = 1.0e-5 / k_frac_max
-                    rx_val = max(RX[i, j] / ffrac_x, rx_floor)
+            rx_val = if rx_eff !== nothing
+                rx_eff[i, j]
+            else
+                rx_tmp = RX[i, j]
+                if hydrofracture && pr !== nothing && TEN !== nothing
+                    Peff_x =
+                        0.5 *
+                        (pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] - pf_eff_use[i, j + 1])
+                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                    kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
+                    if kphi_x > 0.0
+                        keff_x = compute_hydrofracture_permeability(
+                            kphi_x,
+                            Peff_x,
+                            sigma_t_x;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            kmax=k_frac_max,
+                            ramp_width=ramp_width,
+                        )
+                        rx_tmp = RX[i, j] * (kphi_x / keff_x)
+                    else
+                        ffrac_x = compute_hydrofracture_factor(
+                            Peff_x,
+                            sigma_t_x;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            ramp_width=ramp_width,
+                        )
+                        rx_floor = rx_floor_prefactor / k_frac_max
+                        rx_tmp = max(RX[i, j] / ffrac_x, rx_floor)
+                    end
                 end
+                rx_tmp
             end
             qxD[i, j] =
                 (RHOFX[i, j] * gx[i, j] + (pf[i, j] - pf[i, j + 1]) / dx_val) / rx_val
@@ -1271,35 +1316,42 @@ function reconstruct_darcy_fluxes!(
 
         # Internal qyD nodes: 1 < j < Nx1 and 1 < i < Ny_val
         if !(i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1)
-            ry_val = RY[i, j]
-            if hydrofracture && pr !== nothing && TEN !== nothing
-                Peff_y =
-                    0.5 *
-                    (pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] - pf_eff_use[i + 1, j])
-                sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
-                kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
-                if kphi_y > 0.0
-                    keff_y = compute_hydrofracture_permeability(
-                        kphi_y,
-                        Peff_y,
-                        sigma_t_y;
-                        active=true,
-                        kappa_frac=kappa_frac,
-                        gamma=gamma_frac,
-                        kmax=k_frac_max,
-                    )
-                    ry_val = RY[i, j] * (kphi_y / keff_y)
-                else
-                    ffrac_y = compute_hydrofracture_factor(
-                        Peff_y,
-                        sigma_t_y;
-                        active=true,
-                        kappa_frac=kappa_frac,
-                        gamma=gamma_frac,
-                    )
-                    ry_floor = 1.0e-5 / k_frac_max
-                    ry_val = max(RY[i, j] / ffrac_y, ry_floor)
+            ry_val = if ry_eff !== nothing
+                ry_eff[i, j]
+            else
+                ry_tmp = RY[i, j]
+                if hydrofracture && pr !== nothing && TEN !== nothing
+                    Peff_y =
+                        0.5 *
+                        (pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] - pf_eff_use[i + 1, j])
+                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                    kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
+                    if kphi_y > 0.0
+                        keff_y = compute_hydrofracture_permeability(
+                            kphi_y,
+                            Peff_y,
+                            sigma_t_y;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            kmax=k_frac_max,
+                            ramp_width=ramp_width,
+                        )
+                        ry_tmp = RY[i, j] * (kphi_y / keff_y)
+                    else
+                        ffrac_y = compute_hydrofracture_factor(
+                            Peff_y,
+                            sigma_t_y;
+                            active=true,
+                            kappa_frac=kappa_frac,
+                            gamma=gamma_frac,
+                            ramp_width=ramp_width,
+                        )
+                        ry_floor = rx_floor_prefactor / k_frac_max
+                        ry_tmp = max(RY[i, j] / ffrac_y, ry_floor)
+                    end
                 end
+                ry_tmp
             end
             qyD[i, j] =
                 (RHOFY[i, j] * gy[i, j] + (pf[i, j] - pf[i + 1, j]) / dy_val) / ry_val
