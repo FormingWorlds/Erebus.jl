@@ -639,10 +639,8 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
                 disk=DiskConfig(enabled=true, model=:monotonic, orbital_distance_au=2.5),
                 output=OutputConfig(output_dir=output_dir_norad, savematstep=1),
             )
-            Random.seed!(Erebus.rgen, 42)
             res_sim1 = run_simulation(cfg_sim1)
             @test res_sim1 isa NamedTuple
-            Random.seed!(Erebus.rgen, 42)
             res_norad = run_simulation(cfg_norad)
             @test res_norad isa NamedTuple
             files1 = readdir(output_dir1)
@@ -721,10 +719,8 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
                 disk=DiskConfig(enabled=false),
                 output=OutputConfig(output_dir=output_dir_b, savematstep=1),
             )
-            Random.seed!(Erebus.rgen, 42)
             res_a = run_simulation(cfg_a)
             @test res_a isa NamedTuple
-            Random.seed!(Erebus.rgen, 42)
             res_b = run_simulation(cfg_b)
             @test res_b isa NamedTuple
             data_a = JLD2.load(joinpath(output_dir_a, "output_00002.jld2"))

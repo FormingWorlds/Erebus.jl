@@ -27,6 +27,9 @@ function parse_commandline()
         help = "show timing results?"
         arg_type = Bool
         default = false
+        "--force-restart-config"
+        help = "override configuration parameters recorded in restart checkpoint"
+        action = :store_true
     end
     return parse_args(s)
 end

@@ -113,6 +113,8 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Check test quality against baseline
         run: julia tools/check_test_quality.jl --check
+      - name: Verify architecture ratchet
+        run: julia --project=tools tools/check_architecture.jl --check
       - name: Verify literature references
         run: julia tools/verify_references.jl
       - name: Check documentation formatting

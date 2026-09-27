@@ -369,7 +369,7 @@ function simulation_loop(
     nthreads = Threads.nthreads()
 
     use_threading = nthreads > 1
-    num_buffers = nthreads
+    num_buffers = 16
     use_tiled_p2m = cfg.solver.p2m_mode == :tiled
     thread_buffers = if (!use_tiled_p2m && use_threading)
         allocate_thread_interpolation_buffers(num_buffers, coords)
@@ -441,15 +441,16 @@ function simulation_loop(
         seed = cfg.solver.seed
     )
     @info "Solver" use_pardiso=cfg.solver.use_pardiso BLAS.get_config() BLAS.get_num_threads()
+    rng = MersenneTwister(cfg.solver.seed)
 
     # -------------------------------------------------------------------------
     # set up staggered grid"
     # -------------------------------------------------------------------------
     (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties(
-        coords
+        coords; rng=rng
     )
     (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers(
-        coords
+        coords; rng=rng
     )
     Q_metric = spherical_metric_val ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
     DQPF = zeros(Float64, coords.Ny1, coords.Nx1)
@@ -907,12 +908,11 @@ function simulation_loop(
         end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
-        Random.seed!(rgen, cfg.solver.seed)
         (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
-            marknum, coords
+            marknum, coords; rng=rng
         )
         (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
-            marknum
+            marknum; rng=rng
         )
         if coreformation_active_val || hr_fe_val
             Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
@@ -1006,6 +1006,7 @@ function simulation_loop(
             T_eutectic_val=T_eutectic_val,
             dT_metal_val=dT_metal_val,
             tkm0_val=cfg.materials.tkm0,
+            rng=rng,
         )
         # copy thermodynamic marker properties to next generation for initial setup
         XWsolidm .= XWsolidm0
@@ -4342,6 +4343,7 @@ function simulation_loop(
                 t_accreted=t_accreted,
                 hcnspo_props=hcnspo_props,
                 F_extract_m=F_extract_m,
+                rng=rng,
             )
             if t_accreted !== nothing && length(t_accreted) != marknum
                 resize!(t_accreted, marknum)

@@ -607,40 +607,41 @@ function setup_marker_properties(
     randomized=false,
     coords::Union{Nothing,GridCoordinates}=nothing,
     include_metal::Bool=false,
+    rng::AbstractRNG=Random.default_rng(),
 )
     @unpack_coords coords dx dy xsize ysize
     # horizontal marker coordinate [m]
     xm = if randomized
-        rand(rgen, (-dx_val):0.1:(xsize_val + dx_val), marknum)
+        rand(rng, (-dx_val):0.1:(xsize_val + dx_val), marknum)
     else
         zeros(marknum)
     end
     # vertical marker coordinate [m]
     ym = if randomized
-        rand(rgen, (-dy_val):0.1:(ysize_val + dy_val), marknum)
+        rand(rng, (-dy_val):0.1:(ysize_val + dy_val), marknum)
     else
         zeros(marknum)
     end
     # marker material type
-    tm = randomized ? rand(rgen, 1:3, marknum) : zeros(Int, marknum)
+    tm = randomized ? rand(rng, 1:3, marknum) : zeros(Int, marknum)
     # marker temperature [K]
-    tkm = randomized ? rand(rgen, 273:300, marknum) : zeros(marknum)
+    tkm = randomized ? rand(rng, 273:300, marknum) : zeros(marknum)
     # marker σ′xx [Pa]
-    sxxm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    sxxm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker σxy [Pa]
-    sxym = randomized ? rand(rgen, marknum) : zeros(marknum)
+    sxym = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker viscoplastic viscosity [Pa]
-    etavpm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    etavpm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker porosity
-    phim = randomized ? rand(rgen, marknum) : zeros(marknum)
+    phim = randomized ? rand(rng, marknum) : zeros(marknum)
     # reacted marker porosity
-    phinewm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    phinewm = randomized ? rand(rng, marknum) : zeros(marknum)
     # previous marker fluid pressure
-    pfm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
+    pfm0 = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker melt molar fraction
-    XWsolidm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    XWsolidm = randomized ? rand(rng, marknum) : zeros(marknum)
     # previous marker melt molar fraction
-    XWsolidm0 = randomized ? rand(rgen, marknum) : zeros(marknum)
+    XWsolidm0 = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker silicate melt fraction Fm [-]
     Fm = zeros(marknum)
     if include_metal
@@ -685,10 +686,14 @@ function setup_marker_properties(
 end # function setup_marker_properties()
 
 function setup_marker_properties(
-    marknum, coords::GridCoordinates; randomized=false, include_metal::Bool=false
+    marknum,
+    coords::GridCoordinates;
+    randomized=false,
+    include_metal::Bool=false,
+    rng::AbstractRNG=Random.default_rng(),
 )
     return setup_marker_properties(
-        marknum; randomized=randomized, coords=coords, include_metal=include_metal
+        marknum; randomized=randomized, coords=coords, include_metal=include_metal, rng=rng
     )
 end
 
@@ -718,35 +723,37 @@ $(SIGNATURES)
     - alphasolidcur: solid thermal expansion coefficient of markers
     - alphafluidcur: fluid thermal expansion coefficient of markers
 """
-function setup_marker_properties_helpers(marknum; randomized=false)
+function setup_marker_properties_helpers(
+    marknum; randomized=false, rng::AbstractRNG=Random.default_rng()
+)
     # marker total density
-    rhototalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    rhototalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total volumetric heat capacity
-    rhocptotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    rhocptotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total viscosity
-    etatotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    etatotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total radiogenic heat production
-    hrtotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    hrtotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total thermal conductivity
-    ktotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    ktotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total thermal energy
-    tkm_rhocptotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    tkm_rhocptotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker fluid viscosity over permeability
-    etafluidcur_inv_kphim = randomized ? rand(rgen, marknum) : zeros(marknum)
+    etafluidcur_inv_kphim = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker inverse of total shear modulus
-    inv_gggtotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    inv_gggtotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total friction coefficient
-    fricttotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    fricttotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total compressive strength
-    cohestotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    cohestotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker total tensile strength
-    tenstotalm = randomized ? rand(rgen, marknum) : zeros(marknum)
+    tenstotalm = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker fluid density
-    rhofluidcur = randomized ? rand(rgen, marknum) : zeros(marknum)
+    rhofluidcur = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker solid thermal expansion coefficient
-    alphasolidcur = randomized ? rand(rgen, marknum) : zeros(marknum)
+    alphasolidcur = randomized ? rand(rng, marknum) : zeros(marknum)
     # marker fluid thermal expansion coefficient
-    alphafluidcur = randomized ? rand(rgen, marknum) : zeros(marknum)
+    alphafluidcur = randomized ? rand(rng, marknum) : zeros(marknum)
     return (
         rhototalm,
         rhocptotalm,
@@ -856,6 +863,7 @@ function define_markers!(
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
     tkm0_val=tkm0,
+    rng::AbstractRNG=Random.default_rng(),
 )
     @unpack_coords coords Nxm Nym dxm dym
     for jm in 1:1:Nxm_val, im in 1:1:Nym_val
@@ -866,8 +874,8 @@ function define_markers!(
         ym[m] = dym_val/2 + (im-1) * dym_val
         # random marker position within cell
         if randomized
-            xm[m] += (rand(rgen)-0.5) * dxm_val
-            ym[m] += (rand(rgen)-0.5) * dym_val
+            xm[m] += (rand(rng)-0.5) * dxm_val
+            ym[m] += (rand(rng)-0.5) * dym_val
         end
         # primary marker properties 
         rmark = distance(xm[m], ym[m], xcenter_val, ycenter_val)
@@ -877,14 +885,14 @@ function define_markers!(
             # porosity
             phim[m] = phim0_val
             if randomized
-                phim[m] += phim0_val * (rand(rgen)-0.5)
+                phim[m] += phim0_val * (rand(rng)-0.5)
             end
             # matrix viscosity
             etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
             # wet solid molar fraction
             XWsolidm0[m] = XWsolidm_init_val[tm[m]]
             if randomized
-                XWsolidm0[m] += XWsolidm_init_val[tm[m]] * (rand(rgen)-0.5)
+                XWsolidm0[m] += XWsolidm_init_val[tm[m]] * (rand(rng)-0.5)
             end
             if Xfe_bulk !== nothing
                 Xfe_bulk[m] = Xfe_bulk_val
@@ -1701,9 +1709,7 @@ end
 """
 Allocate a vector of per-thread interpolation buffers.
 """
-function allocate_thread_interpolation_buffers(
-    nthreads::Int=max(Threads.nthreads(), Threads.maxthreadid()), Nx::Int=Nx, Ny::Int=Ny
-)
+function allocate_thread_interpolation_buffers(nthreads::Int=16, Nx::Int=Nx, Ny::Int=Ny)
     Nx1 = Nx + 1
     Ny1 = Ny + 1
     return [
@@ -1745,9 +1751,7 @@ function allocate_thread_interpolation_buffers(nthreads::Int, coords::GridCoordi
     return allocate_thread_interpolation_buffers(nthreads, coords.Nx, coords.Ny)
 end
 function allocate_thread_interpolation_buffers(coords::GridCoordinates)
-    return allocate_thread_interpolation_buffers(
-        max(Threads.nthreads(), Threads.maxthreadid()), coords.Nx, coords.Ny
-    )
+    return allocate_thread_interpolation_buffers(16, coords.Nx, coords.Ny)
 end
 
 """
@@ -2095,9 +2099,17 @@ $(SIGNATURES)
     - i: top (with reference to y) node index on y-grid axis
     - j: left (with reference to x) node index on x-grid axis
 """
-function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax)
-    @inbounds j = unsafe_trunc(Int, (x-x_axis[1])*inv(dx)) + 1
-    @inbounds i = unsafe_trunc(Int, (y-y_axis[1])*inv(dy)) + 1
+function fix(x, y, x_axis, y_axis, dx, dy, jmin, jmax, imin, imax, m=nothing)
+    if !(isfinite(x) && isfinite(y))
+        msg = if m === nothing
+            "marker position ($x, $y) is not finite"
+        else
+            "marker $m position ($x, $y) is not finite"
+        end
+        throw(DomainError((x, y), msg))
+    end
+    @inbounds j = unsafe_trunc(Int, (x - x_axis[1]) * inv(dx)) + 1
+    @inbounds i = unsafe_trunc(Int, (y - y_axis[1]) * inv(dy)) + 1
     if j < jmin
         j = jmin
     elseif j > jmax
@@ -3715,6 +3727,7 @@ function replenish_markers!(
     t_accreted=nothing,
     hcnspo_props=nothing,
     F_extract_m=nothing,
+    rng::AbstractRNG=Random.default_rng(),
 )
     Nym_val, Nxm_val = size(mnum)
     @unpack_coords coords xxm yym dxm dym jmin_m jmax_m imin_m imax_m Nxmc Nymc
@@ -3761,8 +3774,8 @@ function replenish_markers!(
                     # add marker
                     if randomized
                         # production runs
-                        push!(xm, xxm_val[j] + (rand(rgen)-0.5)*dxm_val)
-                        push!(ym, yym_val[i] + (rand(rgen)-0.5)*dym_val)
+                        push!(xm, xxm_val[j] + (rand(rng)-0.5)*dxm_val)
+                        push!(ym, yym_val[i] + (rand(rng)-0.5)*dym_val)
                     else
                         # for testing
                         push!(xm, xxm_val[j])

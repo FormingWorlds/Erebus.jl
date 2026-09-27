@@ -44,6 +44,14 @@ To print detailed performance diagnostics at the end of the simulation:
 julia --project=. launch.jl configs/default.toml --show_timer true
 ```
 
+### Forcing Restart Configuration Overrides
+
+When you resume execution from a checkpoint with `--restart`, pass `--force-restart-config` to apply new configuration parameters on restart:
+
+```bash
+julia --project=. launch.jl configs/default.toml --restart output/output_00010.jld2 --force-restart-config
+```
+
 ---
 
 ## Interactive Julia REPL Workflow

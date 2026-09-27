@@ -6,6 +6,7 @@ using TOML
 
 include(joinpath(@__DIR__, "..", "tools", "check_doc_numbers.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
+include(joinpath(@__DIR__, "..", "tools", "check_architecture.jl"))
 
 @testset "Tooling Infrastructure Verification" begin
     @testset "check_doc_numbers validation and rejection self-tests" begin
@@ -216,5 +217,121 @@ include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
         nt_pos_zero = (; z=0.0)
         nt_neg_zero = (; z=-0.0)
         @test_throws ErrorException compare_golden(nt_pos_zero, nt_neg_zero)
+    end
+
+    @testset "check_architecture ratchet self-tests" begin
+        mktempdir() do tmpdir
+            mock_src = joinpath(tmpdir, "src")
+            mkdir(mock_src)
+            mock_allowlist = joinpath(tmpdir, "allowlist.txt")
+            mock_baseline = joinpath(tmpdir, "baseline.json")
+
+            write(mock_allowlist, "approved_const\n")
+            write(
+                mock_baseline,
+                """
+{
+    "coords_guard_count": 0,
+    "includes": [],
+    "function_max_positional_args": {},
+    "function_line_spans": {}
+}
+""",
+            )
+
+            # 1. Clean code passes
+            clean_file = joinpath(mock_src, "clean.jl")
+            write(
+                clean_file,
+                """
+const approved_const = 42
+function safe_func(x, y)
+    return x + y
+end
+""",
+            )
+            ok1, errs1 = check_architecture(;
+                src_dir=mock_src,
+                baseline_path=mock_baseline,
+                allowlist_path=mock_allowlist,
+                exit_on_failure=false,
+            )
+            @test ok1 == true
+            @test isempty(errs1)
+
+            # 2. Planted unapproved global binding
+            write(
+                clean_file,
+                """
+const approved_const = 42
+unapproved_var = 100
+""",
+            )
+            ok2, errs2 = check_architecture(;
+                src_dir=mock_src,
+                baseline_path=mock_baseline,
+                allowlist_path=mock_allowlist,
+                exit_on_failure=false,
+            )
+            @test ok2 == false
+            @test any(occursin("[GLOBAL_BINDING]", e) for e in errs2)
+
+            # 3. Planted mutable const
+            write(
+                clean_file,
+                """
+const approved_const = zeros(3)
+""",
+            )
+            ok3, errs3 = check_architecture(;
+                src_dir=mock_src,
+                baseline_path=mock_baseline,
+                allowlist_path=mock_allowlist,
+                exit_on_failure=false,
+            )
+            @test ok3 == false
+            @test any(occursin("[MUTABLE_GLOBAL]", e) for e in errs3)
+
+            # 4. Planted unapproved rand() call
+            write(
+                clean_file,
+                """
+const approved_const = 42
+function unapproved_rand_caller()
+    return rand()
+end
+""",
+            )
+            ok4, errs4 = check_architecture(;
+                src_dir=mock_src,
+                baseline_path=mock_baseline,
+                allowlist_path=mock_allowlist,
+                exit_on_failure=false,
+            )
+            @test ok4 == false
+            @test any(occursin("[RNG_THREAD_SAFETY]", e) for e in errs4)
+
+            # 5. Planted coords guard exceeds baseline
+            write(
+                clean_file,
+                """
+const approved_const = 42
+function check_c(coords)
+    if isnothing(coords)
+        return 0
+    end
+    return 1
+end
+""",
+            )
+            ok5, errs5 = check_architecture(;
+                src_dir=mock_src,
+                baseline_path=mock_baseline,
+                allowlist_path=mock_allowlist,
+                exit_on_failure=false,
+            )
+            @test ok5 == false
+            @test any(occursin("[COORDS_GUARD_RATCHET]", e) for e in errs5)
+        end
     end
 end
