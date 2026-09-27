@@ -352,7 +352,12 @@ function compute_hydrofracture_permeability(
         return Float64(kphi)
     end
     factor = compute_hydrofracture_factor(
-        Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma, ramp_width=ramp_width
+        Peff,
+        sigma_t;
+        active=active,
+        kappa_frac=kappa_frac,
+        gamma=gamma,
+        ramp_width=ramp_width,
     )
     k_enhanced = Float64(kphi * factor)
     kphi_f = Float64(kphi)

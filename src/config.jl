@@ -173,9 +173,12 @@ Base.@kwdef struct PoroelasticConfig
         ramp_width::Real,
         rx_floor_prefactor::Real,
     )
-        (0.0 < theta_frac <= 1.0) || throw(DomainError(theta_frac, "theta_frac must be in (0, 1]"))
-        (0.0 <= ramp_width <= 1.0) || throw(DomainError(ramp_width, "ramp_width must be in [0, 1]"))
-        (rx_floor_prefactor > 0.0) || throw(DomainError(rx_floor_prefactor, "rx_floor_prefactor must be > 0"))
+        (0.0 < theta_frac <= 1.0) ||
+            throw(DomainError(theta_frac, "theta_frac must be in (0, 1]"))
+        (0.0 <= ramp_width <= 1.0) ||
+            throw(DomainError(ramp_width, "ramp_width must be in [0, 1]"))
+        (rx_floor_prefactor > 0.0) ||
+            throw(DomainError(rx_floor_prefactor, "rx_floor_prefactor must be > 0"))
         new(
             Float64(betasolid),
             Float64(betafluid),
@@ -518,7 +521,8 @@ Base.@kwdef struct MagmaTransportConfig
         crystallization_timescale::Real,
         eta_solid_floor::Real,
     )
-        (eta_solid_floor > 0.0) || throw(DomainError(eta_solid_floor, "eta_solid_floor must be > 0"))
+        (eta_solid_floor > 0.0) ||
+            throw(DomainError(eta_solid_floor, "eta_solid_floor must be > 0"))
         new(
             active,
             Float64(k_melt_ref),
@@ -1133,10 +1137,17 @@ Base.@kwdef struct CoreFormationConfig
         cfl_settling::Real,
         max_subcycles::Integer,
     )
-        (droplet_radius_min > 0.0) || throw(DomainError(droplet_radius_min, "droplet_radius_min must be > 0"))
-        (droplet_radius_max > droplet_radius_min) || throw(DomainError(droplet_radius_max, "droplet_radius_max must be > droplet_radius_min"))
-        (settling_drhog_floor > 0.0) || throw(DomainError(settling_drhog_floor, "settling_drhog_floor must be > 0"))
-        (g_acc_floor_settling > 0.0) || throw(DomainError(g_acc_floor_settling, "g_acc_floor_settling must be > 0"))
+        (droplet_radius_min > 0.0) ||
+            throw(DomainError(droplet_radius_min, "droplet_radius_min must be > 0"))
+        (droplet_radius_max > droplet_radius_min) || throw(
+            DomainError(
+                droplet_radius_max, "droplet_radius_max must be > droplet_radius_min"
+            ),
+        )
+        (settling_drhog_floor > 0.0) ||
+            throw(DomainError(settling_drhog_floor, "settling_drhog_floor must be > 0"))
+        (g_acc_floor_settling > 0.0) ||
+            throw(DomainError(g_acc_floor_settling, "g_acc_floor_settling must be > 0"))
         (v_rel_floor > 0.0) || throw(DomainError(v_rel_floor, "v_rel_floor must be > 0"))
         new(
             percolation_active,
@@ -1537,10 +1548,14 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.poroelasticity.gamma_frac
     @check_positive_finite cfg.poroelasticity.k_frac_max
     (0.0 < cfg.poroelasticity.theta_frac <= 1.0) || throw(
-        ArgumentError("poroelasticity.theta_frac must be in (0, 1], got $(cfg.poroelasticity.theta_frac)")
+        ArgumentError(
+            "poroelasticity.theta_frac must be in (0, 1], got $(cfg.poroelasticity.theta_frac)",
+        ),
     )
     (0.0 <= cfg.poroelasticity.ramp_width <= 1.0) || throw(
-        ArgumentError("poroelasticity.ramp_width must be in [0, 1], got $(cfg.poroelasticity.ramp_width)")
+        ArgumentError(
+            "poroelasticity.ramp_width must be in [0, 1], got $(cfg.poroelasticity.ramp_width)",
+        ),
     )
     @check_positive_finite cfg.poroelasticity.rx_floor_prefactor
 

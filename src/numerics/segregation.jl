@@ -293,7 +293,11 @@ function apply_metal_segregation!(
                     cfg_core.sigma_metal_silicate;
                     We_crit=cfg_core.We_crit,
                 )
-                clamp(d_weber / 2.0, cfg_core.droplet_radius_min, cfg_core.droplet_radius_max)
+                clamp(
+                    d_weber / 2.0,
+                    cfg_core.droplet_radius_min,
+                    cfg_core.droplet_radius_max,
+                )
             end
 
             v_seg_cell[i, j] = metal_segregation_velocity(
@@ -828,10 +832,14 @@ function apply_metal_segregation!(
                 end
             end
         end
-        scale_H = (initial_sum_H > 0.0 && cur_sum_H > 0.0) ? (initial_sum_H / cur_sum_H) : 1.0
-        scale_C = (initial_sum_C > 0.0 && cur_sum_C > 0.0) ? (initial_sum_C / cur_sum_C) : 1.0
-        scale_N = (initial_sum_N > 0.0 && cur_sum_N > 0.0) ? (initial_sum_N / cur_sum_N) : 1.0
-        scale_S = (initial_sum_S > 0.0 && cur_sum_S > 0.0) ? (initial_sum_S / cur_sum_S) : 1.0
+        scale_H =
+            (initial_sum_H > 0.0 && cur_sum_H > 0.0) ? (initial_sum_H / cur_sum_H) : 1.0
+        scale_C =
+            (initial_sum_C > 0.0 && cur_sum_C > 0.0) ? (initial_sum_C / cur_sum_C) : 1.0
+        scale_N =
+            (initial_sum_N > 0.0 && cur_sum_N > 0.0) ? (initial_sum_N / cur_sum_N) : 1.0
+        scale_S =
+            (initial_sum_S > 0.0 && cur_sum_S > 0.0) ? (initial_sum_S / cur_sum_S) : 1.0
 
         if scale_H != 1.0 || scale_C != 1.0 || scale_N != 1.0 || scale_S != 1.0
             @inbounds for m in 1:marknum

@@ -453,7 +453,8 @@ function assemble_hydromechanical_lse!(
                         rx_val = max(RX[i, j] / ffrac_x, rx_floor)
                     end
                     if rx_eff_prev !== nothing && theta_frac < 1.0
-                        rx_val = theta_frac * rx_val + (1.0 - theta_frac) * rx_eff_prev[i, j]
+                        rx_val =
+                            theta_frac * rx_val + (1.0 - theta_frac) * rx_eff_prev[i, j]
                     end
                 end
                 if rx_eff_out !== nothing
@@ -512,7 +513,8 @@ function assemble_hydromechanical_lse!(
                         ry_val = max(RY[i, j] / ffrac_y, ry_floor)
                     end
                     if ry_eff_prev !== nothing && theta_frac < 1.0
-                        ry_val = theta_frac * ry_val + (1.0 - theta_frac) * ry_eff_prev[i, j]
+                        ry_val =
+                            theta_frac * ry_val + (1.0 - theta_frac) * ry_eff_prev[i, j]
                     end
                 end
                 if ry_eff_out !== nothing
@@ -760,18 +762,50 @@ function assemble_hydromechanical_4var_lse!(
     end
     fill!(R, 0.0)
 
-    rx_eff_prev_use = rx_eff_prev !== nothing ? rx_eff_prev : (
-        workspace !== nothing && hasproperty(workspace, :rx_eff_prev) ? workspace.rx_eff_prev : nothing
-    )
-    ry_eff_prev_use = ry_eff_prev !== nothing ? ry_eff_prev : (
-        workspace !== nothing && hasproperty(workspace, :ry_eff_prev) ? workspace.ry_eff_prev : nothing
-    )
-    rx_eff_out_use = rx_eff_out !== nothing ? rx_eff_out : (
-        workspace !== nothing && hasproperty(workspace, :rx_eff) ? workspace.rx_eff : nothing
-    )
-    ry_eff_out_use = ry_eff_out !== nothing ? ry_eff_out : (
-        workspace !== nothing && hasproperty(workspace, :ry_eff) ? workspace.ry_eff : nothing
-    )
+    rx_eff_prev_use = if rx_eff_prev !== nothing
+        rx_eff_prev
+    else
+        (
+            if workspace !== nothing && hasproperty(workspace, :rx_eff_prev)
+                workspace.rx_eff_prev
+            else
+                nothing
+            end
+        )
+    end
+    ry_eff_prev_use = if ry_eff_prev !== nothing
+        ry_eff_prev
+    else
+        (
+            if workspace !== nothing && hasproperty(workspace, :ry_eff_prev)
+                workspace.ry_eff_prev
+            else
+                nothing
+            end
+        )
+    end
+    rx_eff_out_use = if rx_eff_out !== nothing
+        rx_eff_out
+    else
+        (
+            if workspace !== nothing && hasproperty(workspace, :rx_eff)
+                workspace.rx_eff
+            else
+                nothing
+            end
+        )
+    end
+    ry_eff_out_use = if ry_eff_out !== nothing
+        ry_eff_out
+    else
+        (
+            if workspace !== nothing && hasproperty(workspace, :ry_eff)
+                workspace.ry_eff
+            else
+                nothing
+            end
+        )
+    end
     if rx_eff_out_use !== nothing
         rx_eff_out_use .= RX
     end
@@ -1279,8 +1313,10 @@ function reconstruct_darcy_fluxes!(
                 rx_tmp = RX[i, j]
                 if hydrofracture && pr !== nothing && TEN !== nothing
                     Peff_x =
-                        0.5 *
-                        (pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] - pf_eff_use[i, j + 1])
+                        0.5 * (
+                            pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] -
+                            pf_eff_use[i, j + 1]
+                        )
                     sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
                     kphi_x = (KX !== nothing) ? KX[i, j] : 0.0
                     if kphi_x > 0.0
@@ -1322,8 +1358,10 @@ function reconstruct_darcy_fluxes!(
                 ry_tmp = RY[i, j]
                 if hydrofracture && pr !== nothing && TEN !== nothing
                     Peff_y =
-                        0.5 *
-                        (pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] - pf_eff_use[i + 1, j])
+                        0.5 * (
+                            pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] -
+                            pf_eff_use[i + 1, j]
+                        )
                     sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
                     kphi_y = (KY !== nothing) ? KY[i, j] : 0.0
                     if kphi_y > 0.0

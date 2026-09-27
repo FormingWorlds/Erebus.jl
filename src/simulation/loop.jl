@@ -2819,11 +2819,14 @@ function simulation_loop(
                     n_flips_last = 0
                     n_flips_step_total = 0
                     for j in 1:coords.Nx, i in 1:coords.Ny
-                        peff_c = 0.25 * (
-                            pr[i, j] + pr[i + 1, j] + pr[i, j + 1] + pr[i + 1, j + 1] -
-                            pf[i, j] - pf[i + 1, j] - pf[i, j + 1] - pf[i + 1, j + 1]
+                        peff_c =
+                            0.25 * (
+                                pr[i, j] + pr[i + 1, j] + pr[i, j + 1] + pr[i + 1, j + 1] -
+                                pf[i, j] - pf[i + 1, j] - pf[i, j + 1] - pf[i + 1, j + 1]
+                            )
+                        fractured_cells_prev[i, j] = is_hydrofracture_breached(
+                            peff_c, TEN[i, j]
                         )
-                        fractured_cells_prev[i, j] = is_hydrofracture_breached(peff_c, TEN[i, j])
                     end
 
                     # perform plastic iterations
@@ -2976,8 +2979,16 @@ function simulation_loop(
                             hydromech_ws.pf_presolve .= pf
                         end
                         if cfg.solver.hydromech_solver == :matrix_free
-                            rx_mf = hydrofracture_val && hydromech_ws.rx_eff !== nothing ? hydromech_ws.rx_eff : RX
-                            ry_mf = hydrofracture_val && hydromech_ws.ry_eff !== nothing ? hydromech_ws.ry_eff : RY
+                            rx_mf = if hydrofracture_val && hydromech_ws.rx_eff !== nothing
+                                hydromech_ws.rx_eff
+                            else
+                                RX
+                            end
+                            ry_mf = if hydrofracture_val && hydromech_ws.ry_eff !== nothing
+                                hydromech_ws.ry_eff
+                            else
+                                RY
+                            end
                             op_mf = MatrixFreeStokesDarcyOperator(
                                 ETA,
                                 ETAP,
@@ -3118,10 +3129,14 @@ function simulation_loop(
 
                         n_flips_iter = 0
                         for j in 1:coords.Nx, i in 1:coords.Ny
-                            peff_c = 0.25 * (
-                                pr[i, j] + pr[i + 1, j] + pr[i, j + 1] + pr[i + 1, j + 1] -
-                                pf[i, j] - pf[i + 1, j] - pf[i, j + 1] - pf[i + 1, j + 1]
-                            )
+                            peff_c =
+                                0.25 * (
+                                    pr[i, j] +
+                                    pr[i + 1, j] +
+                                    pr[i, j + 1] +
+                                    pr[i + 1, j + 1] - pf[i, j] - pf[i + 1, j] -
+                                    pf[i, j + 1] - pf[i + 1, j + 1]
+                                )
                             is_breached = is_hydrofracture_breached(peff_c, TEN[i, j])
                             if is_breached != fractured_cells_prev[i, j]
                                 n_flips_iter += 1

@@ -44,7 +44,14 @@ using LinearAlgebra
         x_mid = 0.5 * delta
         val_mid = Erebus.hydrofracture_overpressure_ramp(x_mid, delta)
         @test isapprox(val_mid, (x_mid^2) / (2.0 * delta); rtol=1.0e-12)
-        f_mid = Erebus.compute_hydrofracture_factor(-sigma_t * (1.0 + x_mid), sigma_t; active=true, kappa_frac=kappa, gamma=gamma, ramp_width=delta)
+        f_mid = Erebus.compute_hydrofracture_factor(
+            -sigma_t * (1.0 + x_mid),
+            sigma_t;
+            active=true,
+            kappa_frac=kappa,
+            gamma=gamma,
+            ramp_width=delta,
+        )
         @test isapprox(f_mid, 1.0 + kappa * val_mid^gamma; rtol=1.0e-12)
 
         # Continuity of value at x = delta
@@ -53,8 +60,10 @@ using LinearAlgebra
 
         # C1 Continuity: left and right numerical derivatives at x = delta
         h = 1.0e-7
-        d_left = (val_at_delta - Erebus.hydrofracture_overpressure_ramp(delta - h, delta)) / h
-        d_right = (Erebus.hydrofracture_overpressure_ramp(delta + h, delta) - val_at_delta) / h
+        d_left =
+            (val_at_delta - Erebus.hydrofracture_overpressure_ramp(delta - h, delta)) / h
+        d_right =
+            (Erebus.hydrofracture_overpressure_ramp(delta + h, delta) - val_at_delta) / h
         @test isapprox(d_left, 1.0; atol=1.0e-5)
         @test isapprox(d_right, 1.0; atol=1.0e-5)
         @test isapprox(d_left, d_right; atol=1.0e-5)
@@ -70,14 +79,18 @@ using LinearAlgebra
         @test Erebus.hydrofracture_overpressure_ramp(0.42, 0.0) === 0.42
 
         # Compressive / intact state -> factor 1.0
-        f_intact = Erebus.compute_hydrofracture_factor(1.0e7, sigma_t; active=true, kappa_frac=kappa, gamma=gamma, ramp_width=delta)
+        f_intact = Erebus.compute_hydrofracture_factor(
+            1.0e7, sigma_t; active=true, kappa_frac=kappa, gamma=gamma, ramp_width=delta
+        )
         @test f_intact === 1.0
 
         # Overpressured state with ramp
         peff_over = -1.5e7
         norm_over = (-peff_over - sigma_t) / sigma_t # 0.5
         s_expected = Erebus.hydrofracture_overpressure_ramp(norm_over, delta)
-        f_ramp = Erebus.compute_hydrofracture_factor(peff_over, sigma_t; active=true, kappa_frac=kappa, gamma=gamma, ramp_width=delta)
+        f_ramp = Erebus.compute_hydrofracture_factor(
+            peff_over, sigma_t; active=true, kappa_frac=kappa, gamma=gamma, ramp_width=delta
+        )
         @test isapprox(f_ramp, 1.0 + kappa * s_expected^gamma; rtol=1.0e-12)
     end
 
@@ -123,12 +136,40 @@ using LinearAlgebra
         ry_eff_prev = fill(2.0 * eta_f / k_perm, Ny1, Nx1)
 
         L = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R;
-            pr=pr, pf=pf, TEN=TEN, KX=KX, KY=KY,
-            hydrofracture=true, theta_frac=0.5, ramp_width=0.05,
-            rx_eff_prev=rx_eff_prev, ry_eff_prev=ry_eff_prev,
-            rx_eff_out=rx_eff_out, ry_eff_out=ry_eff_out,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            hydrofracture=true,
+            theta_frac=0.5,
+            ramp_width=0.05,
+            rx_eff_prev=rx_eff_prev,
+            ry_eff_prev=ry_eff_prev,
+            rx_eff_out=rx_eff_out,
+            ry_eff_out=ry_eff_out,
             coords=coords,
         )
 
@@ -147,12 +188,40 @@ using LinearAlgebra
         rx_eff_out_inf = zeros(Ny1, Nx1)
         rx_eff_prev_inf = fill(Inf, Ny1, Nx1)
         Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R;
-            pr=pr, pf=pf, TEN=TEN, KX=KX, KY=KY,
-            hydrofracture=true, theta_frac=1.0, ramp_width=0.05,
-            rx_eff_prev=rx_eff_prev_inf, ry_eff_prev=rx_eff_prev_inf,
-            rx_eff_out=rx_eff_out_inf, ry_eff_out=zeros(Ny1, Nx1),
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R;
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            hydrofracture=true,
+            theta_frac=1.0,
+            ramp_width=0.05,
+            rx_eff_prev=rx_eff_prev_inf,
+            ry_eff_prev=rx_eff_prev_inf,
+            rx_eff_out=rx_eff_out_inf,
+            ry_eff_out=zeros(Ny1, Nx1),
             coords=coords,
         )
         @test all(!isnan, rx_eff_out_inf)
@@ -162,9 +231,23 @@ using LinearAlgebra
         qxD = zeros(Ny1, Nx1)
         qyD = zeros(Ny1, Nx1)
         Erebus.reconstruct_darcy_fluxes!(
-            qxD, qyD, pf, RHOFX, RHOFY, RX, RY, gx, gy, coords;
-            hydrofracture=true, pr=pr, TEN=TEN, KX=KX, KY=KY,
-            rx_eff=rx_eff_out, ry_eff=ry_eff_out,
+            qxD,
+            qyD,
+            pf,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            gx,
+            gy,
+            coords;
+            hydrofracture=true,
+            pr=pr,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            rx_eff=rx_eff_out,
+            ry_eff=ry_eff_out,
         )
         @test all(isfinite, qxD)
         @test all(isfinite, qyD)
@@ -212,12 +295,40 @@ using LinearAlgebra
         ry_eff_prev = fill(2.0 * eta_f / k_perm, Ny1, Nx1)
 
         L4 = Erebus.assemble_hydromechanical_4var_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R4;
-            pr=pr, pf=pf, TEN=TEN, KX=KX, KY=KY,
-            hydrofracture=true, theta_frac=0.5, ramp_width=0.05,
-            rx_eff_prev=rx_eff_prev, ry_eff_prev=ry_eff_prev,
-            rx_eff_out=rx_eff_out_4, ry_eff_out=ry_eff_out_4,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R4;
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            hydrofracture=true,
+            theta_frac=0.5,
+            ramp_width=0.05,
+            rx_eff_prev=rx_eff_prev,
+            ry_eff_prev=ry_eff_prev,
+            rx_eff_out=rx_eff_out_4,
+            ry_eff_out=ry_eff_out_4,
             coords=coords,
         )
 
@@ -239,12 +350,40 @@ using LinearAlgebra
         ry_eff_out_inf = zeros(Ny1, Nx1)
         rx_eff_prev_inf = fill(Inf, Ny1, Nx1)
         Erebus.assemble_hydromechanical_4var_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R4;
-            pr=pr, pf=pf, TEN=TEN, KX=KX, KY=KY,
-            hydrofracture=true, theta_frac=1.0, ramp_width=0.05,
-            rx_eff_prev=rx_eff_prev_inf, ry_eff_prev=rx_eff_prev_inf,
-            rx_eff_out=rx_eff_out_inf, ry_eff_out=ry_eff_out_inf,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R4;
+            pr=pr,
+            pf=pf,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            hydrofracture=true,
+            theta_frac=1.0,
+            ramp_width=0.05,
+            rx_eff_prev=rx_eff_prev_inf,
+            ry_eff_prev=rx_eff_prev_inf,
+            rx_eff_out=rx_eff_out_inf,
+            ry_eff_out=ry_eff_out_inf,
             coords=coords,
         )
         @test all(!isnan, rx_eff_out_inf)
@@ -255,9 +394,23 @@ using LinearAlgebra
         qxD = zeros(Ny1, Nx1)
         qyD = zeros(Ny1, Nx1)
         Erebus.reconstruct_darcy_fluxes!(
-            qxD, qyD, pf, RHOFX, RHOFY, RX, RY, gx, gy, coords;
-            hydrofracture=true, pr=pr, TEN=TEN, KX=KX, KY=KY,
-            rx_eff=rx_eff_out_4, ry_eff=ry_eff_out_4,
+            qxD,
+            qyD,
+            pf,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            gx,
+            gy,
+            coords;
+            hydrofracture=true,
+            pr=pr,
+            TEN=TEN,
+            KX=KX,
+            KY=KY,
+            rx_eff=rx_eff_out_4,
+            ry_eff=ry_eff_out_4,
         )
         @test all(isfinite, qxD)
         @test all(isfinite, qyD)
@@ -279,7 +432,9 @@ using LinearAlgebra
 
         # CoreFormationConfig limiter validation
         @test_throws DomainError CoreFormationConfig(; droplet_radius_min=-1.0e-4)
-        @test_throws DomainError CoreFormationConfig(; droplet_radius_min=0.1, droplet_radius_max=0.05)
+        @test_throws DomainError CoreFormationConfig(;
+            droplet_radius_min=0.1, droplet_radius_max=0.05
+        )
         @test_throws DomainError CoreFormationConfig(; settling_drhog_floor=0.0)
         @test_throws DomainError CoreFormationConfig(; g_acc_floor_settling=0.0)
         @test_throws DomainError CoreFormationConfig(; v_rel_floor=0.0)
