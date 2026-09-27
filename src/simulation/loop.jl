@@ -1212,9 +1212,13 @@ function simulation_loop(
     thermal_cache = nothing
     # gravitational solver
     RP, SP = setup_gravitational_lse(coords)
-    # precompute gravitational Poisson operator (invariant across timesteps)
-    LP = assemble_gravitational_lse!(zeros(coords.Ny1, coords.Nx1), RP; coords=coords)
-    F_grav = lu(LP.cscmatrix)
+    # precompute gravitational Poisson operator when running in :poisson2d mode
+    F_grav = if cfg.geometry.gravity_mode === :poisson2d
+        LP = assemble_gravitational_lse!(zeros(coords.Ny1, coords.Nx1), RP; coords=coords)
+        lu(LP.cscmatrix)
+    else
+        nothing
+    end
     # Pardiso MKL solver
     pardiso_solver = nothing
     pardiso_last_nnz = 0
@@ -1906,10 +1910,12 @@ function simulation_loop(
                     thermal_cache = nothing
 
                     RP, SP = setup_gravitational_lse(coords)
-                    LP = assemble_gravitational_lse!(
-                        zeros(coords.Ny1, coords.Nx1), RP; coords=coords
-                    )
-                    F_grav = lu(LP.cscmatrix)
+                    if cfg.geometry.gravity_mode === :poisson2d
+                        LP = assemble_gravitational_lse!(
+                            zeros(coords.Ny1, coords.Nx1), RP; coords=coords
+                        )
+                        F_grav = lu(LP.cscmatrix)
+                    end
 
                     if use_pardiso_val && pardiso_solver !== nothing
                         set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
@@ -2634,9 +2640,24 @@ function simulation_loop(
                 # compute gravity solution
                 # compute gravitational acceleration
                 # ---------------------------------------------------------------------
-                assemble_gravitational_rhs!(RHO, RP; coords=coords)
-                SP = F_grav \ RP
-                process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
+                if cfg.geometry.gravity_mode === :enclosed_mass
+                    compute_gravity_enclosed_mass!(
+                        gx,
+                        gy;
+                        xm=xm,
+                        ym=ym,
+                        rhototalm=rhototalm,
+                        tm=tm,
+                        coords=coords,
+                        gravity_nr_factor=cfg.geometry.gravity_nr_factor,
+                        rplanet=cfg.geometry.rplanet,
+                        FI=FI,
+                    )
+                else
+                    assemble_gravitational_rhs!(RHO, RP; coords=coords)
+                    SP = F_grav \ RP
+                    process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
+                end
 
                 # ---------------------------------------------------------------------
                 # computational timestep for current attempt

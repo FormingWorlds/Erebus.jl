@@ -245,5 +245,58 @@ $$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
 
 where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $g$ is local gravity, and $\phi_m$ is the molten metal fraction. This source directly enters the thermal energy equation.
 
+---
+
+## Self-Gravity Formulations
+
+`Erebus.jl` supports two formulations for calculating the gravitational acceleration field $\mathbf{g} = (g_x, g_y)$ in `geometry.gravity_mode`:
+
+### 1. 2D Poisson Formulation (`:poisson2d`)
+
+The standard 2D Cartesian solver solves the Poisson equation for gravitational potential $\Phi$:
+
+$$\nabla^2 \Phi = 4 \pi G \rho_{\text{scaled}}$$
+
+where $\rho_{\text{scaled}} = (2/3) \rho$ applies the geometric correction factor to match the interior radial gravity gradient $(4/3) \pi G \rho r$ of a uniform sphere (Gerya, 2019). The gravitational acceleration is obtained from the gradient of potential at staggered velocity nodes:
+
+$$g_x = -\frac{\partial \Phi}{\partial x}, \qquad g_y = -\frac{\partial \Phi}{\partial y}$$
+
+**Physical limitation for differentiated bodies:** In 2D Cartesian geometry, the Poisson operator corresponds to infinite cylindrical mass distributions. Outside a central density anomaly of radius $r_c$, the 2D Green's function produces a logarithmic potential with gravitational acceleration decaying as $1/r$ rather than $1/r^2$. For a differentiated body with a dense core ($\rho_c$) and lighter mantle ($\rho_m$), the core-excess surface gravity is overpredicted by a factor of $R/r_c$, and the total surface gravity ratio relative to true 3D spherical gravity is:
+
+$$\frac{g_{\text{poisson2d}}(R)}{g_{3D}(R)} \approx \frac{\rho_m R + (\rho_c - \rho_m) r_c^2 / R}{\rho_m R + (\rho_c - \rho_m) r_c^3 / R^2}$$
+
+For a planetesimal with $r_c = 0.5 R$, $\rho_c = 7000\text{ kg/m}^3$, and $\rho_m = 3000\text{ kg/m}^3$, this overpredicts core-excess surface gravity by a factor of 2.0 and total surface gravity by 14.3%.
+
+### 2. 3D Enclosed-Mass Formulation (`:enclosed_mass`)
+
+To eliminate cylindrical artifacts in differentiated bodies, the enclosed-mass mode calculates the true spherically symmetric 3D mass distribution from Lagrangian markers. The domain is divided into $N_r = \text{gravity\_nr\_factor} \times N_x$ radial bins centered at $(x_c, y_c)$ up to the planet radius $R$:
+
+$$M_{3D}(<r) = \sum_{r_m < r, \, \mathrm{tm}_m < 3} \rho_{(m)} A_m 2 r_m$$
+
+where $A_m = dx_m dy_m$ is the marker area, $2 r_m$ is the out-of-plane geometric weight integrating the cylindrical cross-section to a spherical shell, $\rho_{(m)}$ is the marker bulk density, and sticky-air markers ($\mathrm{tm} \ge 3$) are excluded. The radial gravitational acceleration is computed as:
+
+$$g(r) = \begin{cases}
+g(r_1) \frac{r}{r_1}, & r < r_1 \\
+\frac{G M_{3D}(<r)}{r^2}, & r_1 \le r \le R \\
+\frac{G M_{\text{total}}}{r^2}, & r > R
+\end{cases}$$
+
+where $r_1 = R / N_r$ is the radius of the first radial bin. Inside the first bin ($r < r_1$), linear core regularisation guarantees $g(0) = 0$ without numerical singularity. The radial acceleration is applied vectorially to staggered velocity nodes:
+
+$$g_x(x, y) = -g(r) \frac{x - x_c}{r}, \qquad g_y(x, y) = -g(r) \frac{y - y_c}{r}$$
+
+with $g_x = 0, g_y = 0$ at $r = 0$.
+
+When the potential array $\Phi$ (`FI`) is requested at P nodes, the potential is reconstructed by radial integration inward from the boundary condition $\Phi(r_{\max}) = -G M_{\text{total}} / r_{\max}$:
+
+$$\Phi(r) = \Phi(r_{\max}) - \int_r^{r_{\max}} g(r')\,dr'$$
+
+satisfying $\nabla\Phi = -g(r)\mathbf{\hat{r}}$ and forming a potential well with minimum $\Phi(0) \approx -1.5 G M_{\text{total}} / R$ for a uniform sphere.
+
+![Two-layer differentiated body self-gravity benchmark](../assets/gravity_two_layer_benchmark.png)
+
+*Figure 1: Self-gravity radial acceleration and core-excess anomaly profiles for a differentiated two-layer body ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$). (a) Total radial acceleration $g(r)$ comparing the analytical 3D spherical profile, the discrete marker enclosed-mass formulation (`:enclosed_mass`), and the 2D Cartesian Poisson solution (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r) = g(r) - \frac{4}{3}\pi G \rho_m r$ outside the core ($r_c \le r \le R$), showing the 3D $1/r^2$ attenuation versus the 2D cylindrical $1/r$ excess.*
+
+
 
 

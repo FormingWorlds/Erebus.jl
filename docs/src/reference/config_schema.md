@@ -28,6 +28,8 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `psurface` | `Float64` | `1.0e+3` | Pa | Surface pressure anchor | $\ge 0$ |
 | `spherical_metric` | `Bool` | `false` | - | Enable 3D spherical geometric metric heat source term in 2D Cartesian solver | `true` / `false` |
 | `metric_regularization_cells` | `Float64` | `0.5` | grid units | Regularization radius at center $r \to 0$ in units of grid cell spacing $\Delta$ | $> 0$ |
+| `gravity_mode` | `Symbol` | `:poisson2d` | - | Self-gravity solver mode: `:poisson2d` (2D Cartesian Poisson) or `:enclosed_mass` (3D spherical enclosed mass) | `:poisson2d`, `:enclosed_mass` |
+| `gravity_nr_factor` | `Int` | `4` | - | Number of radial bins per grid dimension ($N_r = \text{gravity\_nr\_factor} \times N_x$) for `:enclosed_mass` solver | $\ge 1$ |
 
 ---
 

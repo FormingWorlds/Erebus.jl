@@ -202,6 +202,7 @@ def check_all_benchmarks() -> int:
         ("benchmarks/generate_jeans_effusion_benchmark.py", "generate_benchmark_figure"),
         ("benchmarks/generate_thermal_slab_benchmark.py", "main"),
         ("benchmarks/generate_hydrofracture_ramp_benchmark.py", "main"),
+        ("benchmarks/generate_gravity_two_layer_benchmark.py", "main"),
     ]
 
     for bf, func in bench_targets:
