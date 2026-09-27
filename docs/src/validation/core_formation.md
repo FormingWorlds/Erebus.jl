@@ -107,6 +107,22 @@ The animation below displays the 2D Cartesian revolved core formation benchmark 
 
 A high-framerate MP4 video is available at `../assets/core_formation_differentiation.mp4`.
 
+### Self-Gravity in Differentiated Bodies (`:poisson2d` vs `:enclosed_mass`)
+
+To validate self-gravitational acceleration in differentiated planetesimals, `Erebus.jl` compares the 2D Cartesian Poisson solver against the 3D enclosed-mass formulation on a two-layer planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$):
+
+![Self-Gravity in Differentiated Bodies](../assets/gravity_two_layer_benchmark.png)
+
+*Figure 2: Self-gravity acceleration and core-excess comparisons for a differentiated planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$). (a) Total radial acceleration $g(r)$ comparing the 3D analytical solution, the discrete marker enclosed-mass mode (`:enclosed_mass`), and the 2D Cartesian Poisson mode (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r)$ outside the core ($r_c \le r \le R$).*
+
+1. **Analytical 3D Spherical Profile:**
+   Outside the central core ($r \ge r_c$), true 3D spherical gravity follows:
+   $$g_{3D}(r) = \frac{4}{3} \pi G \left[ \rho_m r + (\rho_c - \rho_m) \frac{r_c^3}{r^2} \right]$$
+   The 3D enclosed-mass mode (`geometry.gravity_mode = :enclosed_mass`) reproduces the analytical profile to within 0.21% across the mantle, with a surface relative error of 0.036%.
+2. **2D Poisson Distortion:**
+   Under `:poisson2d`, the cylindrical Green's function causes the core-excess gravity $g_{\text{excess}}(r) = g(r) - (4/3) \pi G \rho_m r$ to fall off as $1/r$ instead of $1/r^2$. At the planet surface $r = R$, the continuum analytical limit overpredicts the core-excess anomaly by a factor of:
+   $$\frac{g_{\text{excess, poisson2d}}(R)}{g_{\text{excess, 3D}}(R)} \approx \frac{R}{r_c} = 2.0$$
+   (1.92 on the discrete $65 \times 65$ grid due to domain boundary Dirichlet grounding) and increases total surface gravity by 14.3% (13.2% on grid). The enclosed-mass formulation removes this cylindrical artifact.
 
 ---
 

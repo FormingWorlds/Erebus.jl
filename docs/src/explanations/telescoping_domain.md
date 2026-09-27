@@ -109,9 +109,9 @@ When the computational box doubles in each dimension, the total area quadruples 
 
 Grid doubling alters the sparsity structure and dimensions of discrete differential operators:
 
-### Gravitational Poisson Equation
+### Gravitational Poisson Equation and Enclosed-Mass Mode
 
-Self-gravitational potential $\Phi$ satisfies the 2D Poisson equation with cylindrical/spherical geometric correction factor $2/3$ (Gerya, 2019):
+Under `geometry.gravity_mode = :poisson2d`, the self-gravitational potential $\Phi$ satisfies the 2D Poisson equation with cylindrical/spherical geometric correction factor $2/3$ (Gerya, 2019):
 
 $$\nabla^2 \Phi = \frac{8}{3} \pi G \rho_{\text{total}}$$
 
@@ -120,6 +120,8 @@ where $8/3 \pi G = (2/3) \times 4 \pi G$. On the expanded grid:
 2. Boundary potentials are updated to enforce homogeneous Dirichlet conditions along the computational box boundary and outside the inscribed circle:
    $$\Phi_{\partial\Omega} = 0$$
 3. The sparse matrix $L$ is refactored via sparse LU decomposition (UMFPACK or Pardiso). Because domain doubling occurs only a few times throughout a multimillion-year simulation, the one-time factorization cost is negligible compared to regular timestepping.
+
+**Limitation for differentiated bodies:** The $(8/3)\pi G$ scaling is exact for a uniform-density sphere. For differentiated planetesimals with dense iron cores, the 2D cylindrical Green's function overpredicts surface core-excess gravity by a factor of $R / r_c$ ($R$ planet radius, $r_c$ core radius). To avoid this limitation, `geometry.gravity_mode = :enclosed_mass` computes $g(r) = G M_{3D}(<r)/r^2$ from radial bins of rock and metal markers. Under `:enclosed_mass`, the radial bins update continuously as the planet accretes, and no sparse matrix refactorization is required upon domain doubling.
 
 ---
 

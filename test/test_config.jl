@@ -162,6 +162,11 @@ include("test_helpers.jl")
             ),
         )
 
+        # Invalid gravity parameters
+        @reject_config geometry=GeometryConfig(gravity_mode=:unknown_mode)
+        @reject_config geometry=GeometryConfig(gravity_nr_factor=0)
+        @reject_config geometry=GeometryConfig(gravity_nr_factor=-1)
+
         # Invalid poroelastic parameters
         @reject_config poroelasticity=PoroelasticConfig(
             betasolid=-1.0e-11, betafluid=4e-10, phimin=1e-4, phimax=0.9999
@@ -808,6 +813,6 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("494 configuration fields", out)
+        @test occursin("496 configuration fields", out)
     end
 end

@@ -34,6 +34,8 @@ Base.@kwdef struct GeometryConfig
     psurface::Float64 = 1.0e+3
     spherical_metric::Bool = false
     metric_regularization_cells::Float64 = 0.5
+    gravity_mode::Symbol = :poisson2d
+    gravity_nr_factor::Int = 4
 end
 
 """
@@ -1505,6 +1507,12 @@ function validate_config(cfg::SimulationConfig)
     @check_positive cfg.geometry.rcrust "Crust radius"
     cfg.geometry.rcrust <= cfg.geometry.rplanet ||
         throw(ArgumentError("Crust radius must be <= planet radius"))
+    cfg.geometry.gravity_mode in (:poisson2d, :enclosed_mass) || throw(
+        ArgumentError(
+            "geometry.gravity_mode must be :poisson2d or :enclosed_mass, got $(cfg.geometry.gravity_mode)",
+        ),
+    )
+    @check_ge cfg.geometry.gravity_nr_factor 1
     @check_positive_finite cfg.geometry.metric_regularization_cells
     min_dist_to_boundary = min(
         cfg.geometry.xcenter,
