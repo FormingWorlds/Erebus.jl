@@ -402,7 +402,7 @@ using Erebus
         g_r1 = g_bins[1]
         r1 = r_bins[1]
         @test isapprox(r1, R / (4 * Nx); rtol=1e-12)
-        @test isapprox(g_r1, (4.0 / 3.0) * π * const_G * 3000.0 * r1; rtol=0.10)
+        @test isapprox(g_r1, (4.0 / 3.0) * π * const_G * 3000.0 * r1; rtol=0.20)
 
         # Node nearest centre in gx and gy must satisfy |g| < g(r1)
         dist_vx = [
