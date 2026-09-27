@@ -27,7 +27,7 @@ function restore_step_state!(target, source)
         if v isa AbstractArray && haskey(target, k)
             tgt = target[k]
             if tgt isa AbstractArray
-                if length(tgt) != length(v)
+                if tgt isa Vector && length(tgt) != length(v)
                     resize!(tgt, length(v))
                 end
                 copyto!(tgt, v)
