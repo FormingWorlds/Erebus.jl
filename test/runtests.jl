@@ -40,6 +40,7 @@ unit_tests = [
     "test_venting_thermodynamics.jl",
     "test_venting_darcy_sink.jl",
     "test_hydrofracture_venting.jl",
+    "test_hydrofracture_stability.jl",
     "test_volatile_solubility.jl",
     "test_volatile_solubility_hcns.jl",
     "test_volatile_retention.jl",

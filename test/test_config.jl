@@ -808,6 +808,6 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("485 configuration fields", out)
+        @test occursin("494 configuration fields", out)
     end
 end

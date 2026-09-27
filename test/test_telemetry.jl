@@ -35,18 +35,22 @@ using JLD2
             @test length(lines) == 2
 
             header_cols = split(lines[1], ",")
-            @test length(header_cols) == 16
+            @test length(header_cols) == 18
             @test header_cols[1] == "step"
             @test header_cols[2] == "time_Ma"
             @test header_cols[10] == "M_outgassed_total"
             @test header_cols[15] == "F_melt_mean"
             @test header_cols[16] == "dt_aphimax_max"
+            @test header_cols[17] == "n_flips_last"
+            @test header_cols[18] == "n_flips_total"
 
             row_cols = split(lines[2], ",")
             @test parse(Int, row_cols[1]) == 1
             @test isapprox(parse(Float64, row_cols[2]), 0.01; atol=1e-6)
             @test isapprox(parse(Float64, row_cols[4]), 50000.0; atol=1e-3)
             @test isapprox(parse(Float64, row_cols[10]), 1.5e15; rtol=1e-6)
+            @test parse(Int, row_cols[17]) == 0
+            @test parse(Int, row_cols[18]) == 0
 
             # Test append=true on existing file
             io_append = init_telemetry(tmpdir, "test_telemetry.csv"; append=true)

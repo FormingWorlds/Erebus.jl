@@ -48,6 +48,8 @@ function init_telemetry(
             "F_melt_max",
             "F_melt_mean",
             "dt_aphimax_max",
+            "n_flips_last",
+            "n_flips_total",
         ],
         ",",
     )
@@ -81,6 +83,8 @@ function stream_telemetry_row!(
     F_melt_max::Real,
     F_melt_mean::Real,
     dt_aphimax_max::Real=0.0,
+    n_flips_last::Integer=0,
+    n_flips_total::Integer=0,
 )
     println(
         io,
@@ -116,6 +120,10 @@ function stream_telemetry_row!(
             F_melt_mean,
             ",",
             dt_aphimax_max,
+            ",",
+            n_flips_last,
+            ",",
+            n_flips_total,
         ),
     )
     flush(io)

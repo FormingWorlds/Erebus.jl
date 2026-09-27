@@ -100,6 +100,9 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `kappa_frac` | `Float64` | `1.0e+3` | - | Dimensionless hydrofracture permeability multiplier | $\ge 0$ |
 | `gamma_frac` | `Float64` | `1.0` | - | Power-law exponent for overpressure scaling | $> 0$ |
 | `k_frac_max` | `Float64` | `1.0e-9` | $\text{m}^2$ | Maximum fractured permeability ceiling | $> 0$ |
+| `theta_frac` | `Float64` | `1.0` | - | Under-relaxation factor for effective Darcy resistance across plastic iterations | $\in (0, 1]$ |
+| `ramp_width` | `Float64` | `0.0` | - | Transition width $\delta$ of $C^1$ overpressure regularisation ramp | $\in [0, 1]$ |
+| `rx_floor_prefactor` | `Float64` | `1.0e-5` | - | Prefactor scale for minimum Darcy resistance floor | $> 0$ |
 
 ---
 
@@ -310,6 +313,7 @@ Parameters controlling two-phase silicate melt segregation, porous Darcy percola
 | `cp_melt` | `Float64` | `1200.0` | $\text{J/(kg K)}$ | Specific isobaric heat capacity of liquid silicate melt | $> 0$ |
 | `sill_cooling_active` | `Bool` | `false` | - | Enable dynamic crystallization and latent heat release for ponded crustal magma sills | `true` / `false` |
 | `crystallization_timescale` | `Float64` | `1.0e6` | s | Characteristic crystallization relaxation timescale (0.0 for instantaneous equilibrium) | $\ge 0$ |
+| `eta_solid_floor` | `Float64` | `1.0e-3` | Pa s | Minimum solid matrix shear viscosity floor in compaction equations | $> 0$ |
 
 ---
 
@@ -467,6 +471,11 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `phi0` | `Float64` | `0.1` | - | Reference porosity for liquid metal Kozeny-Carman permeability | $\in (0, 1)$ |
 | `droplet_size_mode` | `Symbol` | `:capillary_mean` | - | Metal droplet diameter calculation mode (`:capillary_mean`, `:bond_mean`, `:weber_mean`, `:weber_turbulent`, `:fixed`) | valid symbol |
 | `droplet_diameter_fixed` | `Float64` | `5.0e-3` | m | Fixed droplet diameter when `droplet_size_mode = :fixed` | $> 0$ |
+| `droplet_radius_min` | `Float64` | `1.0e-4` | m | Minimum physical metal droplet radius clamp | $> 0$ |
+| `droplet_radius_max` | `Float64` | `5.0e-2` | m | Maximum physical metal droplet radius clamp | $> r_{\text{drop},\min}$ |
+| `settling_drhog_floor` | `Float64` | `1.0e-8` | $\text{N/m}^3$ | Minimum buoyant force density floor for capillary droplet size | $> 0$ |
+| `g_acc_floor_settling` | `Float64` | `1.0e-5` | $\text{m/s}^2$ | Minimum gravitational acceleration floor for Stokes settling | $> 0$ |
+| `v_rel_floor` | `Float64` | `1.0e-6` | m/s | Minimum relative settling velocity floor for Weber droplet size | $> 0$ |
 | `sigma_metal_silicate` | `Float64` | `1.0` | N/m | Metal-silicate interfacial surface tension | $> 0$ |
 | `We_crit` | `Float64` | `10.0` | - | Critical Weber number for droplet breakup | $> 0$ |
 | `hindered_exponent` | `Float64` | `4.5` | - | Richardson-Zaki hindered settling power-law exponent | $\ge 0$ |

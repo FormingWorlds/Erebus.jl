@@ -301,6 +301,7 @@ tensile hydrofracture breaching or cryogenic pore ice sealing.
 - `kappa_frac::Real`: Hydrofracture multiplier (default: 1.0e3).
 - `gamma_frac::Real`: Hydrofracture power-law exponent (default: 1.0).
 - `k_frac_max::Real`: Maximum fractured permeability ceiling [m^2] (default: 1.0e-9).
+- `ramp_width::Real`: Overpressure regularisation ramp width [-] (default: 0.0).
 
 # Returns
 - Effective face permeability [m^2].
@@ -319,6 +320,7 @@ function compute_face_venting_permeability(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
 )
     if breached
         return compute_hydrofracture_permeability(
@@ -329,6 +331,7 @@ function compute_face_venting_permeability(
             kappa_frac=kappa_frac,
             gamma=gamma_frac,
             kmax=k_frac_max,
+            ramp_width=ramp_width,
         )
     elseif ice_sealing && (species === :H2O || species === :water)
         return compute_ice_sealed_permeability(
@@ -349,7 +352,7 @@ end
         k_vent=1.0e-11, conductance_factor=1.0, mode=:darcy_sink,
         hydrofracture=false,
         ice_sealing=false, t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
-        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9,
+        kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9, ramp_width=0.0,
         pr=nothing, pf=nothing, TEN=nothing, PHI=nothing, phimin=1.0e-4, dt=1.0e10,
         eta_fluid_surf=1.0e-3, L_sub=2.83e6, Kcont=1.0e20, S_vent_out=nothing
     )
@@ -388,6 +391,7 @@ function apply_venting_surface_boundary!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
     pr::Union{AbstractMatrix{Float64},Nothing}=nothing,
     pf::Union{AbstractMatrix{Float64},Nothing}=nothing,
     TEN::Union{AbstractMatrix{Float64},Nothing}=nothing,
@@ -497,6 +501,7 @@ function apply_venting_surface_boundary!(
                         kappa_frac=kappa_frac,
                         gamma_frac=gamma_frac,
                         k_frac_max=k_frac_max,
+                        ramp_width=ramp_width,
                     )
 
                     C_face = (k_face / (eta_f * dx^2)) * c_factor
@@ -609,6 +614,7 @@ function apply_venting_surface_boundary!(
                         kappa_frac=kappa_frac,
                         gamma_frac=gamma_frac,
                         k_frac_max=k_frac_max,
+                        ramp_width=ramp_width,
                     )
 
                     C_face = (k_face / (eta_f * dy^2)) * c_factor

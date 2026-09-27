@@ -116,6 +116,81 @@ using Test
         @test rel_d_err < 1.0e-15
     end
 
+    @testset "Operator Equivalence with Compressibility and Variable Porosity (N8)" begin
+        betasolid_val = 2.5e-11
+        betafluid_val = 4.0e-10
+        # Non-uniform porosity field
+        PHI_var = [
+            0.05 + 0.15 * sin(pi * i / Ny1) * cos(pi * j / Nx1) for i in 1:Ny1, j in 1:Nx1
+        ]
+        BETAPHI_var = betasolid_val .* (1.0 .- PHI_var) .+ betafluid_val .* PHI_var
+
+        R4_comp = zeros(Ny1 * Nx1 * 4)
+        L4_comp = assemble_hydromechanical_4var_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI_var,
+            PHI_var,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R4_comp;
+            coords=coords,
+            betasolid=betasolid_val,
+            betafluid=betafluid_val,
+        )
+
+        op_comp = MatrixFreeStokesDarcyOperator(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI_var,
+            PHI_var,
+            gx,
+            gy,
+            dt;
+            coords=coords,
+            betasolid=betasolid_val,
+            betafluid=betafluid_val,
+        )
+
+        dof_total = Ny1 * Nx1 * 4
+        x_test = rand(dof_total)
+        y_csc_comp = L4_comp * x_test
+        y_op_comp = zeros(dof_total)
+        mul!(y_op_comp, op_comp, x_test)
+
+        rel_err = norm(y_op_comp - y_csc_comp) / norm(y_csc_comp)
+        @test rel_err < 1.0e-11
+
+        d_csc_comp = diag(L4_comp)
+        d_op_comp = compute_operator_diagonal(op_comp)
+        rel_diag_err = norm(d_op_comp - d_csc_comp) / norm(d_csc_comp)
+        @test rel_diag_err < 1.0e-11
+    end
+
     @testset "Preconditioner Construction and Application" begin
         # Diagonal Preconditioner
         P_diag = build_diagonal_preconditioner(op)

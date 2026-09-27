@@ -89,3 +89,51 @@ In `src/physics.jl`, the constitutive poroelastic functions are verified against
 ### Verification Test Suite
 - `test/test_physics.jl`: Poroelastic constitutive functions and asymptotic limits
 
+---
+
+## 4. Hydrofracture Regularisation and Darcy Resistance Under-Relaxation
+
+### Governing Formulation
+
+Dynamic hydrofracturing permeability enhancement introduces non-linear threshold activation at $P_{\text{eff}} \le -\sigma_t$. In discrete cell systems, discontinuous transitions between intact ($k_\phi$) and breached ($k_\phi^{\text{eff}}$) permeability can induce numerical chattering during plastic iterations. To ensure numerical stability, Erebus implements two complementary stabilization mechanisms:
+
+1. **$C^1$ Continuous Overpressure Regularisation**:
+   Let normalized fluid overpressure be defined as:
+   $$x = \frac{-P_{\text{eff}} - \sigma_t}{\sigma_t}$$
+   For regularisation ramp width $\delta \ge 0$, the $C^1$ continuous overpressure function $s(x; \delta)$ replaces the hard kink function $\max(0, x)$:
+   $$s(x; \delta) = \begin{cases}
+   0, & x \le 0 \\
+   \frac{x^2}{2\delta}, & 0 < x < \delta \\
+   x - \frac{\delta}{2}, & x \ge \delta
+   \end{cases}$$
+   The continuous first derivative satisfies:
+   $$s'(x; \delta) = \begin{cases}
+   0, & x \le 0 \\
+   \frac{x}{\delta}, & 0 < x < \delta \\
+   1, & x \ge \delta
+   \end{cases}$$
+   In the limit $\delta \to 0$, $s(x; 0) \equiv \max(0, x)$, preserving the unregularised threshold formulation bitwise. For $x \ge \delta$, the linear branch $s(x; \delta) = x - \delta / 2$ introduces a constant deficit of $\kappa_{\text{frac}} \delta / 2$ relative to the unregularised enhancement factor at $\gamma = 1$. The combined effective permeability $k_\phi^{\text{eff}}(x)$ maintains $C^1$ continuity at $x = 0$ for all power-law exponents $\gamma > 0.5$.
+
+2. **Darcy Effective Resistance Under-Relaxation**:
+   During non-linear plastic iterations $k \ge 1$, the effective Darcy resistance tensor $r^{(k)} = \eta_f / k_{\text{eff}}^{(k)}$ is relaxed against resistance from iteration $k - 1$ using relaxation parameter $\theta \in (0, 1]$:
+   $$r^{(k)} = \theta r_{\text{target}}^{(k)} + (1 - \theta) r^{(k-1)}$$
+   For constant target resistance $r_{\text{target}}$, the error satisfies geometric decay:
+   $$r^{(k)} - r_{\text{target}} = (1 - \theta)^k (r^{(0)} - r_{\text{target}})$$
+   Setting $\theta = 1.0$ recovers the unrelaxed solver bitwise.
+
+### Invariants and Limits
+1. **$C^1$ Continuity**: $s(x; \delta)$ and $s'(x; \delta)$ are continuous at $x = 0$ and $x = \delta$. Effective permeability $k_\phi^{\text{eff}}$ satisfies $C^1$ continuity for $\gamma > 0.5$.
+2. **Asymptotic Slope Matching**: For $x \ge \delta$, $s'(x; \delta) \equiv 1$ and $s(x; \delta) - x = -\delta / 2$, which introduces a constant offset of $-\kappa_{\text{frac}} \delta / 2$ for linear scaling $\gamma = 1$.
+3. **Geometric Convergence**: Darcy resistance under-relaxation converges monotonically for all $\theta \in (0, 1]$.
+4. **Identity at Neutral Settings**: When $\delta = 0.0$ and $\theta = 1.0$, all equations reproduce unregularised, unrelaxed solvers bitwise.
+
+### Parameterization Behavior
+
+![Hydrofracture Regularisation and Under-Relaxation Verification](../assets/hydrofracture_ramp_benchmark.png)
+
+*Figure 3: Numerical regularisation and relaxation behavior of the dynamic hydrofracture solver in Erebus. (a) Regularised overpressure function $s(x)$ as a function of normalized overpressure $x = (-P_{\text{eff}} - \sigma_t)/\sigma_t$ for regularisation ramp widths $\delta \in \{0.0, 0.02, 0.05, 0.10\}$. (b) Regularised derivative $s'(x) = \mathrm{d}s/\mathrm{d}x$, which shows $C^1$ continuity and linear transition within the regularisation interval $[0, \delta]$. (c) Normalized Darcy resistance error $|r^{(k)} - r_{\text{new}}| / |r^{(0)} - r_{\text{new}}|$ as a function of plastic iteration $k$ for relaxation parameter values $\theta \in \{0.1, 0.3, 0.5, 1.0\}$, which confirms geometric convergence toward machine precision.*
+
+### Verification Test Suite
+- `test/test_hydrofracture_stability.jl`: $C^1$ continuity, derivative matching, geometric convergence, solver assembly relaxation, and configuration bounds validation
+
+

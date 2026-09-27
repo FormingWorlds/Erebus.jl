@@ -1201,6 +1201,10 @@ function simulation_loop(
     hydromech_ws = HydromechanicalLSEWorkspace(coords; dof_per_node=dof_per_node_val)
     L_hydromech = hydromech_ws.L
     hydromech_cache = nothing
+    fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
+    fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
+    n_flips_last = 0
+    n_flips_step_total = 0
     # thermal solver
     RT, ST = setup_thermal_lse(coords)
     thermal_ws = ThermalLSEWorkspace(coords)
@@ -1922,6 +1926,8 @@ function simulation_loop(
                     if magma_seg_ws !== nothing
                         magma_seg_ws = MagmaSegregationWorkspace(coords.Ny, coords.Nx)
                     end
+                    fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
+                    fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
                     @info "Telescoping complete" level=telescope_level Nx=coords.Nx Ny=coords.Ny marknum=marknum
                 end
 
@@ -2806,6 +2812,22 @@ function simulation_loop(
                     # advance pressure generation inside thermochemical iteration
                     pr0 .= pr
                     pf0 .= pf
+                    hydromech_ws.rx_eff .= RX
+                    hydromech_ws.ry_eff .= RY
+                    hydromech_ws.rx_eff_prev .= RX
+                    hydromech_ws.ry_eff_prev .= RY
+                    n_flips_last = 0
+                    n_flips_step_total = 0
+                    for j in 1:coords.Nx, i in 1:coords.Ny
+                        peff_c =
+                            0.25 * (
+                                pr[i, j] + pr[i + 1, j] + pr[i, j + 1] + pr[i + 1, j + 1] -
+                                pf[i, j] - pf[i + 1, j] - pf[i, j + 1] - pf[i + 1, j + 1]
+                            )
+                        fractured_cells_prev[i, j] = is_hydrofracture_breached(
+                            peff_c, TEN[i, j]
+                        )
+                    end
 
                     # perform plastic iterations
                     plastic_converged = false
@@ -2853,6 +2875,13 @@ function simulation_loop(
                                 kappa_frac=kappa_frac_val,
                                 gamma_frac=gamma_frac_val,
                                 k_frac_max=k_frac_max_val,
+                                ramp_width=cfg.poroelasticity.ramp_width,
+                                theta_frac=cfg.poroelasticity.theta_frac,
+                                rx_floor_prefactor=cfg.poroelasticity.rx_floor_prefactor,
+                                rx_eff_prev=hydromech_ws.rx_eff_prev,
+                                ry_eff_prev=hydromech_ws.ry_eff_prev,
+                                rx_eff_out=hydromech_ws.rx_eff,
+                                ry_eff_out=hydromech_ws.ry_eff,
                                 L=L_hydromech,
                                 venting=cfg.venting.active,
                                 venting_mode=cfg.venting.mode,
@@ -2913,6 +2942,13 @@ function simulation_loop(
                                 kappa_frac=kappa_frac_val,
                                 gamma_frac=gamma_frac_val,
                                 k_frac_max=k_frac_max_val,
+                                ramp_width=cfg.poroelasticity.ramp_width,
+                                theta_frac=cfg.poroelasticity.theta_frac,
+                                rx_floor_prefactor=cfg.poroelasticity.rx_floor_prefactor,
+                                rx_eff_prev=hydromech_ws.rx_eff_prev,
+                                ry_eff_prev=hydromech_ws.ry_eff_prev,
+                                rx_eff_out=hydromech_ws.rx_eff,
+                                ry_eff_out=hydromech_ws.ry_eff,
                                 L=L_hydromech,
                                 venting=cfg.venting.active,
                                 venting_mode=cfg.venting.mode,
@@ -2943,6 +2979,16 @@ function simulation_loop(
                             hydromech_ws.pf_presolve .= pf
                         end
                         if cfg.solver.hydromech_solver == :matrix_free
+                            rx_mf = if hydrofracture_val && hydromech_ws.rx_eff !== nothing
+                                hydromech_ws.rx_eff
+                            else
+                                RX
+                            end
+                            ry_mf = if hydrofracture_val && hydromech_ws.ry_eff !== nothing
+                                hydromech_ws.ry_eff
+                            else
+                                RY
+                            end
                             op_mf = MatrixFreeStokesDarcyOperator(
                                 ETA,
                                 ETAP,
@@ -2952,8 +2998,8 @@ function simulation_loop(
                                 RHOY,
                                 RHOFX,
                                 RHOFY,
-                                RX,
-                                RY,
+                                rx_mf,
+                                ry_mf,
                                 ETAPHI,
                                 BETAPHI,
                                 PHI,
@@ -3070,12 +3116,39 @@ function simulation_loop(
                                 kappa_frac=kappa_frac_val,
                                 gamma_frac=gamma_frac_val,
                                 k_frac_max=k_frac_max_val,
+                                ramp_width=cfg.poroelasticity.ramp_width,
+                                rx_floor_prefactor=cfg.poroelasticity.rx_floor_prefactor,
+                                rx_eff=hydromech_ws.rx_eff,
+                                ry_eff=hydromech_ws.ry_eff,
                             )
                         else
                             process_hydromechanical_solution!(
                                 S, vx, vy, pr, qxD, qyD, pf; coords=coords
                             )
                         end
+
+                        n_flips_iter = 0
+                        for j in 1:coords.Nx, i in 1:coords.Ny
+                            peff_c =
+                                0.25 * (
+                                    pr[i, j] +
+                                    pr[i + 1, j] +
+                                    pr[i, j + 1] +
+                                    pr[i + 1, j + 1] - pf[i, j] - pf[i + 1, j] -
+                                    pf[i, j + 1] - pf[i + 1, j + 1]
+                                )
+                            is_breached = is_hydrofracture_breached(peff_c, TEN[i, j])
+                            if is_breached != fractured_cells_prev[i, j]
+                                n_flips_iter += 1
+                            end
+                            fractured_cells[i, j] = is_breached
+                        end
+                        n_flips_last = n_flips_iter
+                        n_flips_step_total += n_flips_iter
+                        fractured_cells_prev .= fractured_cells
+                        @debug "hydrofracture iter $iplast: cell flips = $n_flips_iter, total fractured = $(count(fractured_cells))"
+                        hydromech_ws.rx_eff_prev .= hydromech_ws.rx_eff
+                        hydromech_ws.ry_eff_prev .= hydromech_ws.ry_eff
 
                         # compute Aϕ = Dln[(1-PHI)/PHI]/Dt
                         aphimax = compute_Aϕ!(
@@ -3170,7 +3243,7 @@ function simulation_loop(
                         # DSXY0 .= DSXY
 
                         # nodal adjustment
-                        if compute_nodal_adjustment!(
+                        adjustment_ok = compute_nodal_adjustment!(
                             ETA,
                             ETA0,
                             ETA5,
@@ -3194,6 +3267,8 @@ function simulation_loop(
                             yerrmax=cfg.solver.yerrmax,
                             max_plastic_iterations=max_plastic_iterations_val,
                         )
+                        @debug "plastic iter $iplast residual = $(YERRNOD[iplast]), yerrmax = $(cfg.solver.yerrmax)"
+                        if adjustment_ok
                             # exit plastic iterations loop    
                             plastic_converged = true
                             break
@@ -3245,6 +3320,7 @@ function simulation_loop(
                             kappa_frac=kappa_frac_val,
                             gamma_frac=gamma_frac_val,
                             k_frac_max=k_frac_max_val,
+                            ramp_width=cfg.poroelasticity.ramp_width,
                             pr=pr,
                             pf=pf,
                             TEN=TEN,
@@ -4370,6 +4446,8 @@ function simulation_loop(
                     Fm !== nothing ? maximum(Fm) : 0.0,
                     Fm !== nothing ? (sum(Fm) / length(Fm)) : 0.0,
                     dt_aphimax_step_max,
+                    n_flips_last,
+                    n_flips_step_total,
                 )
             end
 
