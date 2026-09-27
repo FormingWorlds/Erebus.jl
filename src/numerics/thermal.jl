@@ -804,21 +804,15 @@ function perform_thermal_iterations!(
         tk2 .= reshape(ST, Ny1, Nx1)
         # compute ΔT
         DT .= tk2 .- tk1
-        if titer == 1
-            # during first thermal iteration pass:
-            # apply thermal timestepping stability condition
-            maxDTcurrent = maximum(abs, DT)
-            if maxDTcurrent > DTmax_val
-                dtt *= DTmax_val * inv(maxDTcurrent)
-            else
-                dttsum += dtt
-                tk1 .= tk2
-            end
+        maxDTcurrent = maximum(abs, DT)
+        if maxDTcurrent > DTmax_val
+            dtt *= DTmax_val * inv(maxDTcurrent)
         else
-            # second+ thermal iteration passes:
-            # update dttsum and adjust timestep
             dttsum += dtt
             tk1 .= tk2
+            if dttsum >= dt || (dt - dttsum) <= 1e-14 * dt
+                break
+            end
             dtt = min(dtt, dt - dttsum)
         end
         # increase thermal iteration counter
@@ -849,11 +843,9 @@ $(SIGNATURES)
 function finalize_thermochemical_iteration_pass(
     maxDTcurrent, dt, titer, DTmax_val::Real=20.0
 )
-    if titer == 1
-        if maxDTcurrent > DTmax_val
-            dt *= (DTmax_val * inv(maxDTcurrent))
-            @info "titer 1: reducing dt due to maxDT: dt=$dt s"
-        end
+    if maxDTcurrent > DTmax_val
+        dt *= (DTmax_val * inv(maxDTcurrent))
+        @info "titer $titer: reducing dt due to maxDT: dt=$dt s"
     end
     return dt
 end # function finalize_thermochemical_iteration_pass

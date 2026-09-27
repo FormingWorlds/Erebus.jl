@@ -26,11 +26,11 @@ start_step = 1
 n_steps = 1000000
 
 [solver]
-titermax = 10000
-nplast = 100000
+max_plastic_iterations = 10000
+max_dt_reductions = 5
 yerrmax = 100.0
 etawt = 0.0
-dphimax = 100.01
+dphimax = 0.1
 seed = 42
 use_pardiso = false
 etaphikoef = 1.0

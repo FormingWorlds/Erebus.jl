@@ -1,10 +1,10 @@
 
 @testset "Numerics" begin
-    dphimax = 100.01
+    dphimax = 0.1
     dtcoefdn = 0.5
     dtcoefup = 1.2
     dxymax = 0.05
-    nplast = 100_000
+    max_plastic_iterations = 10_000
     dtstep = 200
     dt_longest = 1.0e11 / 3.15576e7
     DTmax = 20.0
@@ -680,14 +680,14 @@
         dt = dt_longest
         APHI = zeros(Ny1, Nx1)
         ETAPHI = fill(1.0e16, Ny1, Nx1)
-        BETTAPHI = fill(1.0e-10, Ny1, Nx1)
+        BETAPHI = fill(1.0e-10, Ny1, Nx1)
         PHI = fill(0.15, Ny1, Nx1)
 
         # 1. Compaction Equilibrium: when pr == pf and steady state, Aphi = 0
         pr_eq = fill(5.0e6, Ny1, Nx1)
         pf_eq = fill(5.0e6, Ny1, Nx1)
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_eq, pf_eq, pr_eq, pf_eq, dt
+            APHI, ETAPHI, BETAPHI, PHI, pr_eq, pf_eq, pr_eq, pf_eq, dt
         )
         @test isapprox(aphimax, 0.0; atol=1e-12)
         @test all(isapprox.(APHI[2:Ny, 2:Nx], 0.0; atol=1e-12))
@@ -696,7 +696,7 @@
         pr_high = fill(10.0e6, Ny1, Nx1)
         pf_low = fill(2.0e6, Ny1, Nx1)
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_high, pf_low, pr_high, pf_low, dt
+            APHI, ETAPHI, BETAPHI, PHI, pr_high, pf_low, pr_high, pf_low, dt
         )
         expected_aphi = (10.0e6 - 2.0e6) / (ETAPHI[2, 2] * (1.0 - PHI[2, 2]) * PHI[2, 2])
         @test isapprox(aphimax, expected_aphi; rtol=1e-12)
@@ -704,7 +704,7 @@
 
         # 3. Underpressure: pr < pf drives dilation rate Aphi < 0
         aphimax = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pf_low, pr_high, pf_low, pr_high, dt
+            APHI, ETAPHI, BETAPHI, PHI, pf_low, pr_high, pf_low, pr_high, dt
         )
         @test all(APHI[2:Ny, 2:Nx] .< 0.0)
 
@@ -715,10 +715,10 @@
         pr0_t = fill(9.0e6, Ny1, Nx1)
         pf0_t = fill(1.5e6, Ny1, Nx1)
         aphimax_poro = Erebus.compute_Aϕ!(
-            APHI, ETAPHI, BETTAPHI, PHI, pr_t, pf_t, pr0_t, pf0_t, dt; betasolid=betasolid
+            APHI, ETAPHI, BETAPHI, PHI, pr_t, pf_t, pr0_t, pf0_t, dt; betasolid=betasolid
         )
         for j in 2:Nx, i in 2:Ny
-            bd = (BETTAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
+            bd = (BETAPHI[i, j] + betasolid) / (1.0 - PHI[i, j])
             kbw = 1.0 - betasolid / bd
             comp =
                 (pr_t[i, j] - pf_t[i, j]) / (ETAPHI[i, j] * (1.0 - PHI[i, j])) +
@@ -726,6 +726,22 @@
             @test isapprox(APHI[i, j], comp / PHI[i, j]; rtol=1e-12)
         end
         @test aphimax_poro != aphimax
+
+        # 5. Anchor cell exclusion: spike at anchor cell (2, 2) is excluded from returned aphimax (N7)
+        pr_spike = fill(5.0e6, Ny1, Nx1)
+        pf_spike = fill(5.0e6, Ny1, Nx1)
+        # Induce a large compaction rate specifically at anchor cell (2, 2)
+        pr_spike[2, 2] = 50.0e6
+        pf_spike[2, 2] = 1.0e6
+        # And a modest, known rate at cell (3, 3)
+        pr_spike[3, 3] = 6.0e6
+        pf_spike[3, 3] = 5.0e6
+        aphimax_spike = Erebus.compute_Aϕ!(
+            APHI, ETAPHI, BETAPHI, PHI, pr_spike, pf_spike, pr_spike, pf_spike, dt
+        )
+        expected_interior = abs(APHI[3, 3])
+        @test isapprox(aphimax_spike, expected_interior; rtol=1e-12)
+        @test abs(APHI[2, 2]) > 10.0 * aphimax_spike
     end
 
     @testset "compute_fluid_velocities!(): two-phase relative velocity and Galilean invariance" begin
@@ -812,6 +828,30 @@
         )
         @test dt_phi * aphi_fast ≈ dphimax rtol=1e-12
         @test dt_phi < dt
+
+        # 4b. Binding check for dphimax = 0.1 (N3)
+        dt_test = 1.0e11
+        dt_bound = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt_test,
+            1.0e-11;
+            dphimax_val=0.1,
+        )
+        @test isapprox(dt_bound, 0.1 / 1.0e-11; rtol=1e-12)
+        @test dt_bound < dt_test
+        dt_unbound = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt_test,
+            1.0e-13;
+            dphimax_val=0.1,
+        )
+        @test isapprox(dt_unbound, dt_test; rtol=1e-12)
 
         # 5. Monotonicity and positivity under combined random loads
         aphimax = rand(rgen)
@@ -1000,7 +1040,7 @@
         YNY = zeros(Bool, Ny, Nx)
         YNY5 = zeros(Bool, Ny, Nx)
         DSY = zeros(Ny, Nx)
-        YERRNOD = zeros(nplast)
+        YERRNOD = zeros(max_plastic_iterations)
 
         # 1. Stable Regime: very high confining pressure (pr = 300 MPa, pf = 0) suppresses yielding (syield >= siiel)
         pr_high = fill(3.0e8, Ny1, Nx1)
@@ -1069,7 +1109,7 @@
         YNY_mixed[2, 3] = false  # newly yielding node
         YNY5_mixed = zeros(Bool, Ny, Nx)
         DSY_mixed = zeros(Ny, Nx)
-        YERRNOD_mixed = zeros(nplast)
+        YERRNOD_mixed = zeros(max_plastic_iterations)
         Erebus.compute_nodal_adjustment!(
             ETA,
             ETA0,
@@ -1116,15 +1156,14 @@
         @test all(YNY .== YNY5)
         @test isapprox(YNY_inv_ETA, YNY5 ./ ETA5; rtol=1e-12)
 
-        # 2. Stalled divergence recovery pass (iplast % dtstep == 0)
+        # 2. Iteration pass at dtstep (iplast % dtstep == 0) preserves dt and adopts ETA5 (no internal halving/rollback)
         iplast_stalled = dtstep
         dt_out_stalled = Erebus.finalize_plastic_iteration_pass!(
             ETA, ETA5, ETA00, YNY, YNY5, YNY00, YNY_inv_ETA, dt_init, iplast_stalled
         )
-        @test isapprox(dt_out_stalled, dt_init * dtcoefdn; rtol=1e-12) # dt decelerated
-        @test dt_out_stalled < dt_init
-        @test isapprox(ETA, ETA00; rtol=1e-12) # viscosity rolled back
-        @test all(YNY .== YNY00)
+        @test isapprox(dt_out_stalled, dt_init; rtol=1e-12) # dt preserved
+        @test isapprox(ETA, ETA5; rtol=1e-12) # new viscosity adopted without rollback
+        @test all(YNY .== YNY5)
     end
 
     @testset "finalize_thermochemical_iteration_pass(): thermal relaxation step control" begin
@@ -1138,11 +1177,11 @@
         @test dt_cut ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
         @test dt_cut < dt_longest
 
-        # 3. Subsequent iterations (titer > 1): dt is preserved regardless of DT magnitude
+        # 3. Subsequent iterations (titer > 1): dt is reduced on any titer when exceeding DTmax
         dt_iter2 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 2)
         dt_iter3 = Erebus.finalize_thermochemical_iteration_pass(maxDT_large, dt_longest, 3)
-        @test dt_iter2 ≈ dt_longest rtol=1e-12
-        @test dt_iter3 ≈ dt_longest rtol=1e-12
+        @test dt_iter2 ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
+        @test dt_iter3 ≈ dt_longest * (DTmax / maxDT_large) rtol=1e-12
 
         # 4. Positivity and monotonicity: larger excess DT produces strictly smaller dt in titer 1
         dt_cut_larger = Erebus.finalize_thermochemical_iteration_pass(
@@ -1848,6 +1887,70 @@
         @test maximum(DT) > DTmax
     end
 
+    @testset "perform_thermal_iterations!(): DTmax enforcement on every substep and closed-box energy balance (N4)" begin
+        coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=50000.0, ysize=50000.0))
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        Ny, Nx = coords.Ny, coords.Nx
+        dx, dy = coords.dx, coords.dy
+
+        tk0 = fill(300.0, Ny1, Nx1)
+        tk1 = fill(300.0, Ny1, Nx1)
+        tk2 = zeros(Ny1, Nx1)
+        DT = zeros(Ny1, Nx1)
+        DT0 = zeros(Ny1, Nx1)
+        RHOCP = fill(3.3e6, Ny1, Nx1)
+        KX = fill(3.0, Ny1, Nx1)
+        KY = fill(3.0, Ny1, Nx1)
+        HR = fill(50.0, Ny1, Nx1)
+        HA = zeros(Ny1, Nx1)
+        HS = zeros(Ny1, Nx1)
+        DHP = zeros(Ny1, Nx1)
+        RT = zeros(Ny1 * Nx1)
+        ST = zeros(Ny1 * Nx1)
+        dt = 2.0e6
+        DTmax = 5.0
+
+        Erebus.perform_thermal_iterations!(
+            tk0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            RHOCP,
+            KX,
+            KY,
+            HR,
+            HA,
+            HS,
+            DHP,
+            RT,
+            ST,
+            dt;
+            coords=coords,
+            DTmax_val=DTmax,
+        )
+
+        # 1. Total temperature change exceeds DTmax (subcycling occurred)
+        @test maximum(DT) > DTmax
+
+        # 2. Closed-box energy balance: sum(RHOCP * DT * V) == sum(HR * V * dt) to 1e-10
+        vol = dx * dy
+        delta_E = sum(RHOCP[2:Ny, 2:Nx] .* DT[2:Ny, 2:Nx]) * vol
+        Q_input = sum(HR[2:Ny, 2:Nx]) * vol * dt
+        @test isapprox(delta_E, Q_input; rtol=1e-10)
+
+        # 3. finalize_thermochemical_iteration_pass reduces dt unconditionally on any titer
+        dt_cand = 1000.0
+        dt_reduced_titer1 = Erebus.finalize_thermochemical_iteration_pass(
+            50.0, dt_cand, 1, 10.0
+        )
+        @test isapprox(dt_reduced_titer1, 1000.0 * (10.0 / 50.0); rtol=1e-12)
+        dt_reduced_titer2 = Erebus.finalize_thermochemical_iteration_pass(
+            50.0, dt_cand, 2, 10.0
+        )
+        @test isapprox(dt_reduced_titer2, 1000.0 * (10.0 / 50.0); rtol=1e-12)
+    end
+
     @testset "assemble_hydromechanical_lse!() and compute_adaptive_timestep: DQPF coupling and reaction CFL" begin
         coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=50000.0, ysize=50000.0))
         Ny, Nx = coords.Ny, coords.Nx
@@ -2026,13 +2129,14 @@
         FRI = fill(0.5, Ny, Nx)
         YNY = zeros(Int, Ny, Nx)
         YNY5 = zeros(Int, Ny, Nx)
-        YERRNOD = zeros(cfg.solver.titermax)
+        YERRNOD = zeros(cfg.solver.max_plastic_iterations)
         DSY = zeros(Ny, Nx)
+        YNY_inv_ETA = zeros(Float64, Ny, Nx)
         dt_initial = 1e6
-        iplast = cfg.solver.titermax
+        max_iters = 100
 
-        # With the shipped config's behavior (nplast=100000), it returns false at max iterations
-        res_fail = Erebus.Numerics.compute_nodal_adjustment!(
+        # At max iterations with non-converged residual (yerrmax=1e-15), compute_nodal_adjustment! must return false
+        res = Erebus.compute_nodal_adjustment!(
             ETA,
             ETA0,
             ETA5,
@@ -2049,56 +2153,77 @@
             YERRNOD,
             DSY,
             dt_initial,
-            iplast;
+            max_iters;
             yerrmax=1e-15,
-            nplast=100000,
+            max_plastic_iterations=max_iters,
         )
-        @test res_fail == false
+        @test res == false
 
-        # The sentinel fix uses titermax as the actual bound
-        res_pass = Erebus.Numerics.compute_nodal_adjustment!(
+        # finalize_plastic_iteration_pass! never reduces dt or rolls back ETA
+        dt_pass = Erebus.finalize_plastic_iteration_pass!(
             ETA,
-            ETA0,
             ETA5,
-            GGG,
-            SXX,
-            SXY,
-            pr,
-            pf,
-            COH,
-            TEN,
-            FRI,
+            ETA0,
             YNY,
             YNY5,
-            YERRNOD,
-            DSY,
+            YNY,
+            YNY_inv_ETA,
             dt_initial,
-            iplast;
-            yerrmax=1e-15,
-            nplast=cfg.solver.titermax,
+            200;
+            dtstep=200,
+            dtcoefdn=0.5,
         )
-        @test res_pass == true
+        @test dt_pass == dt_initial
+        @test isapprox(ETA, ETA5; rtol=1e-12)
+    end
 
-        # And because it exits (res_pass == true), dt is not passed to finalize_plastic_iteration_pass!
-        # so dt remains unchanged. We can assert that if it breaks, dt == dt_initial
-        # We can just test dt is unchanged logic manually or mock the loop condition.
-        dt_final = dt_initial
-        if !res_pass
-            # if we didn't break, dt would be reduced
-            dt_final = Erebus.Numerics.finalize_plastic_iteration_pass!(
-                ETA,
-                ETA5,
-                ETA0,
-                YNY,
-                YNY5,
-                YNY,
-                YNY,
-                dt_initial,
-                iplast;
-                dtstep=cfg.time.dtstep,
-                dtcoefdn=cfg.time.dtcoefdn,
-            )
+    @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
+        cfg_path = joinpath(
+            @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"
+        )
+        cfg_base = load_config(cfg_path)
+        tmpdir = mktempdir()
+        cfg = SimulationConfig(
+            grid=cfg_base.grid,
+            geometry=cfg_base.geometry,
+            time=TimeConfig(
+                dt_initial=cfg_base.time.dt_initial,
+                dt_longest=cfg_base.time.dt_longest,
+                dtcoefdn=cfg_base.time.dtcoefdn,
+                dtcoefup=cfg_base.time.dtcoefup,
+                dtstep=cfg_base.time.dtstep,
+                dxymax=cfg_base.time.dxymax,
+                vpratio=cfg_base.time.vpratio,
+                DTmax=cfg_base.time.DTmax,
+                start_time=cfg_base.time.start_time,
+                endtime=cfg_base.time.endtime,
+                start_step=1,
+                n_steps=2,
+            ),
+            solver=SolverConfig(
+                max_plastic_iterations=1, max_dt_reductions=3, yerrmax=1e-20
+            ),
+            poroelasticity=cfg_base.poroelasticity,
+            thermodynamics=cfg_base.thermodynamics,
+            reaction=cfg_base.reaction,
+            materials=cfg_base.materials,
+            output=OutputConfig(mode=:off, output_dir=tmpdir),
+            disk=cfg_base.disk,
+            melting=cfg_base.melting,
+            volatiles=VolatilesConfig(initial_water_wtpct=2.0),
+            magma_degassing=MagmaOceanDegassingConfig(active=true, mode=:dynamic_flux),
+        )
+        err = try
+            simulation_loop(cfg; output_path=tmpdir)
+            nothing
+        catch e
+            e
         end
-        @test dt_final == dt_initial
+        @test err isa PlasticConvergenceError
+        @test err.step == 2
+        @test isfinite(err.residual)
+        @test isfinite(err.dt)
+        @test occursin("Plastic iterations failed to converge", sprint(showerror, err))
+        @test occursin("at step 2", sprint(showerror, err))
     end
 end

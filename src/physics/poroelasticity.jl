@@ -302,12 +302,21 @@ function compute_hydrofracture_permeability(
     gamma::Real=1.0,
     kmax::Real=1.0e-9,
 )
-    if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0 || kphi <= 0.0
+    if kphi < 0.0
+        throw(
+            DomainError(
+                kphi, "Negative matrix permeability kphi is not physically allowed."
+            ),
+        )
+    end
+    if !active || !isfinite(Peff) || !isfinite(sigma_t) || sigma_t <= 0.0 || kphi == 0.0
         return Float64(kphi)
     end
     factor = compute_hydrofracture_factor(
         Peff, sigma_t; active=active, kappa_frac=kappa_frac, gamma=gamma
     )
-    k_enhanced = kphi * factor
-    return clamp(Float64(k_enhanced), Float64(kphi), Float64(kmax))
+    k_enhanced = Float64(kphi * factor)
+    kphi_f = Float64(kphi)
+    kmax_f = Float64(kmax)
+    return min(max(k_enhanced, kphi_f), max(kphi_f, kmax_f))
 end

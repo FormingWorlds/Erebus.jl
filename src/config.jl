@@ -98,11 +98,11 @@ Nonlinear iterations and solver control parameters.
 $(FIELDS)
 """
 Base.@kwdef struct SolverConfig
-    titermax::Int = 10_000
-    nplast::Int = 100_000
+    max_plastic_iterations::Int = 10_000
+    max_dt_reductions::Int = 5
     yerrmax::Float64 = 1.0e+2
     etawt::Float64 = 0.0
-    dphimax::Float64 = 100.01
+    dphimax::Float64 = 0.1
     seed::Int = 42
     use_pardiso::Bool = false
     etaphikoef::Float64 = 1.0
@@ -1350,17 +1350,13 @@ function validate_config(cfg::SimulationConfig)
     # Solver checks
     @check_nonneg_finite cfg.solver.dsubgridt
     @check_nonneg_finite cfg.solver.dsubgrids
-    @check_ge cfg.solver.titermax 1
-    @check_ge cfg.solver.nplast 1
-    cfg.solver.titermax <= cfg.solver.nplast || throw(
-        ArgumentError(
-            "titermax ($(cfg.solver.titermax)) must be <= nplast ($(cfg.solver.nplast)) to prevent array bounds overflow in plastic convergence tracking",
-        ),
-    )
+    @check_ge cfg.solver.max_plastic_iterations 1
+    @check_ge cfg.solver.max_dt_reductions 1
     @check_positive cfg.solver.etamin
     cfg.solver.etamax >= cfg.solver.etamin ||
         throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.solver.etaphikoef
+    @check_positive_finite cfg.solver.dphimax
     cfg.solver.p2m_mode in (:tiled, :buffered) || throw(
         ArgumentError(
             "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.solver.p2m_mode)"

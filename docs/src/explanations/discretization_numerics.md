@@ -244,6 +244,54 @@ Because effective viscosities $\eta(\dot{\varepsilon}_{\text{II}}, P_{\text{eff}
 
 ---
 
+## Iteration Control and Numerical Limiters
+
+To maintain numerical stability, `Erebus.jl` limits timesteps, plastic iterations, and field rates:
+
+### 1. Plastic Yielding and Timestep Cut Retry
+
+The plastic loop iterates until the maximum relative yield error drops below `yerrmax`:
+
+$$\text{YERRNOD} = \max_i \frac{|\sigma_{\text{yield}} - \sigma_{\text{II}}|}{\sigma_{\text{yield}}} < \text{yerrmax}$$
+
+If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
+- The solver rejects the candidate timestep.
+- The system restores state from a start-of-step snapshot.
+- The computational timestep halves ($dt \leftarrow 0.5 dt$).
+- The step retries from the restored state.
+
+If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
+
+### 2. Porosity Change Rate Limiter
+
+Rapid pore collapse or opening can destabilize Darcy fluid flow. The maximum displacement timestep limits relative porosity change per step:
+
+$$\Delta t_{\phi} \le \frac{d\phi_{\text{max}}}{\max_{\text{interior}} |a\phi|}$$
+
+where `dphimax` defaults to `0.1` (10% relative porosity change per step), and $a\phi$ is the fluid continuity divergence source term. The check omits the fixed pressure anchor cell $(i=2, j=2)$ to avoid false timestep limits at boundary cells.
+
+### 3. Thermal Subcycles and Temperature Change Limit
+
+Within the thermal solver, thermal subcycles advance with local timestep $dt_t \le dt$. On every substep, the solver tracks the maximum temperature change:
+
+$$\Delta T_{\text{max}} = \max |T - T_{\text{old}}|$$
+
+If $\Delta T_{\text{max}} > \text{DTmax}$ (default: `20.0 K`), the subcycle timestep scales down:
+
+$$dt_t \leftarrow dt_t \frac{\text{DTmax}}{\Delta T_{\text{max}}}$$
+
+This prevents thermal spikes from concentrated radiogenic decay or rapid phase change.
+
+### 4. Hydrofracture Permeability Bounds
+
+Dynamic hydrofracturing increases matrix permeability when pore fluid pressure exceeds the minimum compressive stress plus tensile rock strength:
+
+$$k_{\text{eff}} = \min\left( \max(k_{\text{enhanced}}, k_\phi), \max(k_\phi, k_{\text{frac\_max}}) \right)$$
+
+This two-sided clamp ensures that enhanced permeability cannot fall below matrix permeability $k_\phi$ or exceed ceiling $k_{\text{frac\_max}}$.
+
+---
+
 ## Boundary Conditions
 
 - **Mechanical**: Free-slip solid boundary conditions on the outer domain boundaries.

@@ -47,6 +47,7 @@ function init_telemetry(
             "M_escaped",
             "F_melt_max",
             "F_melt_mean",
+            "dt_aphimax_max",
         ],
         ",",
     )
@@ -58,7 +59,7 @@ end
 """
     stream_telemetry_row!(io, step, time_Ma, dt_yr, rplanet, rcore, T_peak, T_mean,
                           phi_max, phi_mean, M_outgassed, M_vent_H2O, M_atm, M_escaped,
-                          F_melt_max, F_melt_mean)
+                          F_melt_max, F_melt_mean, dt_aphimax_max)
 
 Stream a single row of scalar diagnostic telemetry to the given IO stream.
 """
@@ -79,6 +80,7 @@ function stream_telemetry_row!(
     M_escaped::Real,
     F_melt_max::Real,
     F_melt_mean::Real,
+    dt_aphimax_max::Real=0.0,
 )
     println(
         io,
@@ -112,6 +114,8 @@ function stream_telemetry_row!(
             F_melt_max,
             ",",
             F_melt_mean,
+            ",",
+            dt_aphimax_max,
         ),
     )
     flush(io)
@@ -153,7 +157,7 @@ function setup_dynamic_simulation_parameters(
     # radiogenic heat production fluid phase
     hrfluidm::SVector{3,Float64} = start_hrfluidm
     # nodes yielding error vector of plastic iterations
-    YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.nplast)
+    YERRNOD::Vector{Float64} = zeros(Float64, cfg.solver.max_plastic_iterations)
     return timestep, dt, timesum, marknum, hrsolidm, hrfluidm, YERRNOD
 end # function setup_dynamic_simulation_parameters()
 

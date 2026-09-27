@@ -544,7 +544,7 @@ using JLD2
                     start_step=1,
                     n_steps=2,
                 ),
-                solver=SolverConfig(titermax=2, nplast=1),
+                solver=SolverConfig(max_plastic_iterations=2),
                 output=OutputConfig(output_dir=output_dir, savematstep=1, visstep=0),
                 accretion=AccretionConfig(
                     active=true,
@@ -604,7 +604,7 @@ using JLD2
                         start_step=1,
                         n_steps=2,
                     ),
-                    solver=SolverConfig(titermax=2, nplast=1),
+                    solver=SolverConfig(max_plastic_iterations=2),
                     output=OutputConfig(
                         output_dir=restart_output_dir, savematstep=1, visstep=0
                     ),

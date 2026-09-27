@@ -32,6 +32,7 @@ unit_tests = [
     "test_geometry_radiation.jl",
     "test_reaction_pathways.jl",
     "test_stefan_benchmark.jl",
+    "test_thermal_slab.jl",
     "test_melting.jl",
     "test_soft_turbulence.jl",
     "test_magma_transport.jl",

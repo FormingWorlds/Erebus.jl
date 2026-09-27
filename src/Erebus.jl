@@ -17,7 +17,7 @@ using StaticArrays
 using TimerOutputs
 using TOML
 
-export run_simulation, load_state, simulation_loop
+export run_simulation, load_state, simulation_loop, PlasticConvergenceError
 export TransferRecord
 export MetalSegregationWorkspace,
     MagmaSegregationWorkspace,
@@ -894,6 +894,7 @@ module Numerics
         compute_nodal_adjustment!,
         positive_max!,
         finalize_plastic_iteration_pass!,
+        PlasticConvergenceError,
         assemble_thermal_lse!,
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,
@@ -942,6 +943,7 @@ module Numerics
         compute_nodal_adjustment!,
         positive_max!,
         finalize_plastic_iteration_pass!,
+        PlasticConvergenceError,
         assemble_thermal_lse!,
         perform_thermal_iterations!,
         finalize_thermochemical_iteration_pass,

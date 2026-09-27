@@ -3,7 +3,7 @@ using Erebus
 using JLD2
 
 @testset "Simulation" begin
-    nplast = 100_000
+    max_plastic_iterations = Erebus.default_config().solver.max_plastic_iterations
     yearlength = Erebus.default_config().time.yearlength
     @testset "setup_dynamic_simulation_parameters(): initial state physical invariants" begin
         # Baseline default configuration
@@ -22,7 +22,7 @@ using JLD2
         @test all(hrfluidm .>= 0.0)
 
         # Plastic yielding error vector initialization
-        @test length(YERRNOD) == nplast
+        @test length(YERRNOD) == max_plastic_iterations
         @test all(iszero, YERRNOD)
 
         # Explicit custom configuration propagation

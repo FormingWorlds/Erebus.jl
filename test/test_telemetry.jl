@@ -35,11 +35,12 @@ using JLD2
             @test length(lines) == 2
 
             header_cols = split(lines[1], ",")
-            @test length(header_cols) == 15
+            @test length(header_cols) == 16
             @test header_cols[1] == "step"
             @test header_cols[2] == "time_Ma"
             @test header_cols[10] == "M_outgassed_total"
             @test header_cols[15] == "F_melt_mean"
+            @test header_cols[16] == "dt_aphimax_max"
 
             row_cols = split(lines[2], ",")
             @test parse(Int, row_cols[1]) == 1

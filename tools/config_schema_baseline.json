@@ -1,0 +1,20 @@
+{
+    "documented_baseline_exceptions": {
+        "poroelasticity.betafluid": {
+            "code_default": 0.0,
+            "note": "Zero in minimal code baseline; production runs set 4.0e-10 Pa^-1",
+            "production_default": 4.0e-10
+        },
+        "poroelasticity.betasolid": {
+            "code_default": 0.0,
+            "note": "Zero in minimal code baseline; production runs set 2.5e-11 Pa^-1",
+            "production_default": 2.5e-11
+        },
+        "thermodynamics.ratio_fe": {
+            "code_default": 1.0e-6,
+            "note": "Standard 60Fe/56Fe initial ratio at CAIs",
+            "production_default": 1.0e-6
+        }
+    },
+    "known_undocumented": []
+}
