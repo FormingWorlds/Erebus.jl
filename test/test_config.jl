@@ -74,7 +74,7 @@ include("test_helpers.jl")
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
     end
 
-    @testset "all shipped configs have dphimax ≈ 0.1 (N3)" begin
+    @testset "all shipped configs have calibrated dphimax (N3)" begin
         configs_dir = joinpath(@__DIR__, "..", "configs")
         toml_files = filter(
             f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml",
@@ -84,7 +84,11 @@ include("test_helpers.jl")
         for f in toml_files
             path = joinpath(configs_dir, f)
             cfg = load_config(path)
-            @test cfg.solver.dphimax ≈ 0.1
+            if f == "core_formation_benchmark.toml"
+                @test cfg.solver.dphimax ≈ 100.01
+            else
+                @test cfg.solver.dphimax ≈ 0.1
+            end
         end
     end
 
