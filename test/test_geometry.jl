@@ -1,5 +1,18 @@
 @testset "Geometry" begin
+    rng_geom = MersenneTwister(42)
+    coords_geom = default_grid_coordinates()
+
     @testset "setup_staggered_grid_geometry(): metric monotonicity and staggered topology" begin
+        coords = coords_geom
+        dx, dy = coords.dx, coords.dy
+        xsize, ysize = coords.xsize, coords.ysize
+        Nx, Ny = coords.Nx, coords.Ny
+        Nx1, Ny1 = coords.Nx1, coords.Ny1
+        x, y = coords.x, coords.y
+        xp, yp = coords.xp, coords.yp
+        xvx, yvx = coords.xvx, coords.yvx
+        xvy, yvy = coords.xvy, coords.yvy
+
         # 1. Grid spacing scale
         @test isapprox(dx, xsize / (Nx - 1); rtol=1e-12)
         @test isapprox(dy, ysize / (Ny - 1); rtol=1e-12)
@@ -64,7 +77,7 @@
     end # testset "setup_staggered_grid_geometry()"
 
     @testset "setup_staggered_grid_properties(): tensor dimension conformance" begin
-        props = Erebus.setup_staggered_grid_properties()
+        props = Erebus.setup_staggered_grid_properties(coords_geom)
         (
             ETA,
             ETA0,
@@ -130,6 +143,8 @@
             DHP,
             XWS,
         ) = props
+        Nx, Ny = coords_geom.Nx, coords_geom.Ny
+        Nx1, Ny1 = coords_geom.Nx1, coords_geom.Ny1
 
         # 1. Basic node tensor dimensions: (Ny, Nx)
         basic_tensors = [ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY]
@@ -200,7 +215,9 @@
     end # testset "setup_staggered_grid_properties()"
 
     @testset "setup_staggered_grid_properties(randomized=true): broadcasting and field variance" begin
-        props_rand = Erebus.setup_staggered_grid_properties(; randomized=true)
+        props_rand = Erebus.setup_staggered_grid_properties(
+            coords_geom; randomized=true, rng=rng_geom
+        )
         SXX_rand = props_rand[40]
         SXX0_rand = props_rand[41]
         FI_rand = props_rand[60]
@@ -222,8 +239,10 @@
     end
 
     @testset "setup_staggered_grid_properties_helpers(): helper array dimensions" begin
-        helpers = Erebus.setup_staggered_grid_properties_helpers()
+        helpers = Erebus.setup_staggered_grid_properties_helpers(coords_geom)
         (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = helpers
+        Ny, Nx = coords_geom.Ny, coords_geom.Nx
+        Ny1, Nx1 = coords_geom.Ny1, coords_geom.Nx1
 
         # Basic helpers (Ny, Nx)
         for h in [ETA5, ETA00, DSXY, DSY]
@@ -246,7 +265,7 @@
     end # testset "setup_staggered_grid_properties_helpers()"
 
     @testset "grid_vector(): 4-point cell stencil ordering" begin
-        grid = rand(rgen, 8, 8)
+        grid = rand(rng_geom, 8, 8)
 
         # 1. Stencil ordering: [top-left (i, j), bottom-left (i+1, j), top-right (i, j+1), bottom-right (i+1, j+1)]
         v11 = Erebus.grid_vector(1, 1, grid)
@@ -261,7 +280,7 @@
         @test v34[4] ≈ grid[4, 5]
 
         # 3. Positivity preservation
-        grid_pos = rand(rgen, 5, 5) .+ 1.0
+        grid_pos = rand(rng_geom, 5, 5) .+ 1.0
         v_pos = Erebus.grid_vector(2, 2, grid_pos)
         @test all(v_pos .> 0.0)
     end # testset "grid_vector()"
@@ -274,7 +293,7 @@
         @test isapprox(Erebus.grid_average(3, 3, grid_const), const_val; rtol=1e-12)
 
         # 2. Convex hull invariant: min(cell) <= average <= max(cell)
-        grid_rand = rand(rgen, 6, 6)
+        grid_rand = rand(rng_geom, 6, 6)
         for j in 1:5, i in 1:5
             cell_vals = [
                 grid_rand[i, j],
@@ -287,8 +306,8 @@
         end
 
         # 3. Linearity: avg(a*G1 + b*G2) == a*avg(G1) + b*avg(G2)
-        g1 = rand(rgen, 6, 6)
-        g2 = rand(rgen, 6, 6)
+        g1 = rand(rng_geom, 6, 6)
+        g2 = rand(rng_geom, 6, 6)
         a, b = 2.5, -1.8
         comb = a .* g1 .+ b .* g2
         avg_comb = Erebus.grid_average(2, 2, comb)
@@ -306,7 +325,7 @@
     @testset "apply_insulating_boundary_conditions!(): zero Neumann flux and idempotency" begin
         # 1. Zero Neumann flux: normal derivative across boundary is zero (ghost cell == adjacent interior cell)
         ny_test, nx_test = 8, 8
-        t_field = rand(rgen, ny_test, nx_test)
+        t_field = rand(rng_geom, ny_test, nx_test)
         t_orig = copy(t_field)
 
         Erebus.apply_insulating_boundary_conditions!(t_field)

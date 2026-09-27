@@ -150,7 +150,8 @@ $(SIGNATURES)
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
 """
 function setup_dynamic_simulation_parameters(
-    cfg::SimulationConfig=default_config(); coords::Union{Nothing,GridCoordinates}=nothing
+    cfg::SimulationConfig=default_config();
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     # timestep counter (current), init to startstep
     timestep::Int64 = cfg.time.start_step
@@ -159,7 +160,7 @@ function setup_dynamic_simulation_parameters(
     # time sum (current), init to start_time [s]
     timesum::Float64 = cfg.time.start_time * cfg.time.yearlength
     # current number of markers, init to startmarknum
-    marknum::Int64 = coords === nothing ? start_marknum : coords.start_marknum
+    marknum::Int64 = coords.start_marknum
     # radiogenic heat production solid phase
     hrsolidm::SVector{3,Float64} = start_hrsolidm
     # radiogenic heat production fluid phase
@@ -287,7 +288,7 @@ function save_state(
     rhofluidcur,
     alphasolidcur,
     alphafluidcur;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     phim0_val=phim0,
     M_vent_total::Real=0.0,
     M_vent_H2O_total::Real=0.0,

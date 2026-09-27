@@ -1,7 +1,7 @@
 @testset "Particles" begin
     etamin = 1.0e+12
     @testset "setup_interpolated_properties(): dimensions and zero-initialization" begin
-        props = Erebus.setup_interpolated_properties()
+        props = Erebus.setup_interpolated_properties(default_grid_coordinates())
         (
             ETA0SUM,
             ETASUM,
@@ -79,7 +79,7 @@
     end # testset "setup_interpolated_properties()"
 
     @testset "reset_interpolated_properties!(): zeroing guarantees" begin
-        props = Erebus.setup_interpolated_properties()
+        props = Erebus.setup_interpolated_properties(default_grid_coordinates())
         (
             ETA0SUM,
             ETASUM,

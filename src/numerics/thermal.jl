@@ -34,7 +34,7 @@ function assemble_thermal_lse!(
     DHP,
     RT,
     dt;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     LT=nothing,
     Q_metric=nothing,
     Q_lat=nothing,
@@ -774,7 +774,7 @@ function perform_thermal_iterations!(
     RT,
     ST,
     dt;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     Q_metric=nothing,
     Q_lat=nothing,
     DTmax_val::Real=20.0,

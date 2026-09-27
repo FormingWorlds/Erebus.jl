@@ -77,7 +77,7 @@ function assemble_hydromechanical_lse!(
     ry_eff_prev=nothing,
     rx_eff_out=nothing,
     ry_eff_out=nothing,
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     L=nothing,
     venting::Bool=false,
     venting_mode::Symbol=:darcy_sink,
@@ -134,6 +134,10 @@ function assemble_hydromechanical_lse!(
     if ry_eff_out !== nothing
         ry_eff_out .= RY
     end
+    vxleft_val = strainrate * coords.xsize / 2.0
+    vxright_val = -strainrate * coords.xsize / 2.0
+    vytop_val = -strainrate * coords.ysize / 2.0
+    vybottom_val = strainrate * coords.ysize / 2.0
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
             # define global indices in algebraic space
@@ -151,11 +155,11 @@ function assemble_hydromechanical_lse!(
                 # R[kvx] = 0.0 # already done with initialization
                 # left boundary
                 if j == 1
-                    R[kvx] = vxleft
+                    R[kvx] = vxleft_val
                 end
                 # right boundary
                 if j == Nx_val
-                    R[kvx] = vxright
+                    R[kvx] = vxright_val
                 end
                 # top boundary
                 if i==1 && 1<j<Nx_val
@@ -255,11 +259,11 @@ function assemble_hydromechanical_lse!(
                 # R[kvy] = 0.0 # already done with initialization
                 # top boundary
                 if i == 1
-                    R[kvy] = vytop
+                    R[kvy] = vytop_val
                 end
                 # bottom boundary
                 if i == Ny_val
-                    R[kvy] = vybottom
+                    R[kvy] = vybottom_val
                 end
                 # left boundary
                 if j==1 && 1<i<Ny_val
@@ -576,7 +580,7 @@ function assemble_hydromechanical_lse!(
         end # for j=1:1:Nx1, i=1:1:Ny1
     end # @inbounds 
 
-    if venting && tk !== nothing && coords !== nothing
+    if venting && tk !== nothing
         apply_venting_surface_boundary!(
             L,
             R,
@@ -644,7 +648,9 @@ $(SIGNATURES)
 
     - nothing
 """
-function process_hydromechanical_solution!(S, vx, vy, pr, qxD, qyD, pf; coords=nothing)
+function process_hydromechanical_solution!(
+    S, vx, vy, pr, qxD, qyD, pf; coords::GridCoordinates=default_grid_coordinates()
+)
     Ny1, Nx1 = size(vx)
     S_mat = reshape(S, (:, Ny1, Nx1))
     @inbounds begin
@@ -712,7 +718,7 @@ function assemble_hydromechanical_4var_lse!(
     ry_eff_prev=nothing,
     rx_eff_out=nothing,
     ry_eff_out=nothing,
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     L=nothing,
     venting::Bool=false,
     venting_mode::Symbol=:darcy_sink,
@@ -897,6 +903,10 @@ function assemble_hydromechanical_4var_lse!(
             ry_eff_calc[i, j] = ry_val
         end
     end
+    vxleft_val = strainrate * coords.xsize / 2.0
+    vxright_val = -strainrate * coords.xsize / 2.0
+    vytop_val = -strainrate * coords.ysize / 2.0
+    vybottom_val = strainrate * coords.ysize / 2.0
 
     @inbounds begin
         for j in 1:1:Nx1, i in 1:1:Ny1
@@ -909,10 +919,10 @@ function assemble_hydromechanical_4var_lse!(
             if i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1
                 updateindex!(L, +, 1.0, kvx, kvx)
                 if j == 1
-                    R[kvx] = vxleft
+                    R[kvx] = vxleft_val
                 end
                 if j == Nx_val
-                    R[kvx] = vxright
+                    R[kvx] = vxright_val
                 end
                 if i == 1 && 1 < j < Nx_val
                     updateindex!(L, +, bctop, kvx, kvx + 4)
@@ -1003,10 +1013,10 @@ function assemble_hydromechanical_4var_lse!(
             if i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1
                 updateindex!(L, +, 1.0, kvy, kvy)
                 if i == 1
-                    R[kvy] = vytop
+                    R[kvy] = vytop_val
                 end
                 if i == Ny_val
-                    R[kvy] = vybottom
+                    R[kvy] = vybottom_val
                 end
                 if j == 1 && 1 < i < Ny_val
                     updateindex!(L, +, bcleft, kvy, kvy + 4 * Ny1)
@@ -1215,7 +1225,7 @@ function assemble_hydromechanical_4var_lse!(
         end
     end
 
-    if venting && tk !== nothing && coords !== nothing
+    if venting && tk !== nothing
         apply_venting_surface_boundary!(
             L,
             R,
@@ -1416,7 +1426,9 @@ Process condensed 4-variable hydromechanical solution vector to output physical 
 
 $(SIGNATURES)
 """
-function process_hydromechanical_4var_solution!(S, vx, vy, pr, pf; coords=nothing)
+function process_hydromechanical_4var_solution!(
+    S, vx, vy, pr, pf; coords::GridCoordinates=default_grid_coordinates()
+)
     Ny1, Nx1 = size(vx)
     S_mat = reshape(S, (4, Ny1, Nx1))
     @inbounds begin
@@ -1493,7 +1505,7 @@ function compute_Aϕ!(
     pr0,
     pf0,
     dt;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     betasolid=betasolid,
     phimin=phimin,
     phimax=phimax,
@@ -1556,7 +1568,17 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_fluid_velocities!(PHIX, PHIY, qxD, qyD, vx, vy, vxf, vyf; coords=nothing)
+function compute_fluid_velocities!(
+    PHIX,
+    PHIY,
+    qxD,
+    qyD,
+    vx,
+    vy,
+    vxf,
+    vyf;
+    coords::GridCoordinates=default_grid_coordinates(),
+)
     Ny1, Nx1 = size(vxf)
     Nx = Nx1 - 1
     Ny = Ny1 - 1

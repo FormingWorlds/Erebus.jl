@@ -64,6 +64,7 @@ unit_tests = [
     "test_telemetry.jl",
     "test_tooling.jl",
     "test_determinism_ratchet.jl",
+    "test_grid_ssot.jl",
 ]
 
 integration_tests = [

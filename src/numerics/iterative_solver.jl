@@ -843,13 +843,13 @@ Build a `BlockSchurPreconditioner` from a sparse matrix or matrix-free operator.
 """
 function build_block_schur_preconditioner(
     A::AbstractMatrix{T};
-    coords::Union{GridCoordinates,Nothing}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     dof_stride::Int=4,
     tol::Real=1.0e-30,
 ) where {T}
     d = diag(A)
     inv_d = [abs(v) > tol ? inv(v) : one(T) for v in d]
-    if (dof_stride == 4 || dof_stride == 6) && coords !== nothing
+    if dof_stride == 4 || dof_stride == 6
         Ny1 = coords.Ny1
         Nx1 = coords.Nx1
         Nx_val = coords.Nx
@@ -878,7 +878,7 @@ end
 
 function build_block_schur_preconditioner(
     op::MatrixFreeStokesDarcyOperator{T};
-    coords::Union{GridCoordinates,Nothing}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     dof_stride::Int=4,
     tol::Real=1.0e-30,
 ) where {T}
@@ -935,7 +935,7 @@ function solve_hydromechanical_iterative!(
     A,
     b::AbstractVector{T},
     S::AbstractVector{T};
-    coords::Union{GridCoordinates,Nothing}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     method::Symbol=:gmres,
     rtol::Real=1.0e-6,
     atol::Real=1.0e-10,
@@ -976,7 +976,7 @@ function solve_hydromechanical_iterative!(
             )
         else
             @warn "preconditioner=:multigrid is only supported for MatrixFreeStokesDarcyOperator; falling back to :block_schur"
-            stride = if coords !== nothing && coords.Ny1 * coords.Nx1 > 0
+            stride = if coords.Ny1 * coords.Nx1 > 0
                 Int(size(A, 1) ÷ (coords.Ny1 * coords.Nx1))
             else
                 4
@@ -986,7 +986,7 @@ function solve_hydromechanical_iterative!(
     elseif preconditioner == :block_schur
         stride = if A isa MatrixFreeStokesDarcyOperator
             4
-        elseif coords !== nothing && coords.Ny1 * coords.Nx1 > 0
+        elseif coords.Ny1 * coords.Nx1 > 0
             Int(size(A, 1) ÷ (coords.Ny1 * coords.Nx1))
         else
             4

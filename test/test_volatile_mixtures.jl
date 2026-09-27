@@ -582,19 +582,8 @@ using Erebus.Particles
         @test m_phim[3] > m_phim[2]
 
         # 8. Localized DHP latent heat coupling test
-        coords_mock = (;
-            Nx1=10,
-            Ny1=10,
-            xp=collect(range(0.0, 10000.0; length=10)),
-            yp=collect(range(0.0, 10000.0; length=10)),
-            dx=10000.0 / 9,
-            dy=10000.0 / 9,
-            jmin_p=1,
-            jmax_p=10,
-            imin_p=1,
-            imax_p=10,
-        )
-        dhp_grid = zeros(Float64, 10, 10)
+        coords_mock = GridCoordinates(9, 9; xsize=10000.0, ysize=10000.0)
+        dhp_grid = zeros(Float64, coords_mock.Ny1, coords_mock.Nx1)
         xm_mock = [1000.0, 5000.0, 8000.0]
         ym_mock = [1000.0, 5000.0, 8000.0]
         m_C2 = [C_init, C_init, C_init]

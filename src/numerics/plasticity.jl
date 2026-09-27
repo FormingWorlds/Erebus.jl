@@ -90,7 +90,7 @@ function get_viscosities_stresses_density_gradients!(
     dRHOXdy,
     dRHOYdx,
     dRHOYdy;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     Ny1, Nx1 = size(RHOX)
     Nx_val = Nx1 - 1
@@ -210,7 +210,7 @@ function compute_stress_strainrate!(
     EII,
     SII,
     dt;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     Ny, Nx = size(EXY)
     @unpack_coords coords dx dy

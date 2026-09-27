@@ -168,28 +168,23 @@ end
 """
     default_grid_coordinates()
 
-Construct the baseline `GridCoordinates` corresponding to compiled default constants.
+Construct the baseline `GridCoordinates` with standard default grid dimensions.
 """
 function default_grid_coordinates()
-    return GridCoordinates(Nx, Ny; xsize=xsize, ysize=ysize, Nxmc=Nxmc, Nymc=Nymc)
+    return GridCoordinates(33, 33; xsize=140_000.0, ysize=140_000.0, Nxmc=4, Nymc=4)
 end
 
 """
     @unpack_coords coords fields...
 
-Unpack grid coordinate fields from `coords::Union{GridCoordinates, Nothing}`.
-When `coords === nothing`, falls back to global variables with the same names.
+Unpack grid coordinate fields from `coords::GridCoordinates`.
 Defines `<field>_val` for each symbol in `fields`.
 """
 macro unpack_coords(coords, fields...)
     c_var = gensym("coords")
     assigns = map(fields) do f
         val = Symbol(f, "_val")
-        return :($(esc(val)) = if $c_var === nothing
-            $(esc(f))
-        else
-            getfield($c_var, $(QuoteNode(f)))
-        end)
+        return :($(esc(val)) = getfield($c_var, $(QuoteNode(f))))
     end
     return quote
         $c_var = $(esc(coords))

@@ -27,9 +27,9 @@ References:
 - `cfg_core::CoreFormationConfig`: Core formation configuration parameters
 
 # Keyword Arguments
-- `coords=nothing`: `GridCoordinates` domain geometry struct
-- `xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0`: Planet center x [m]
-- `ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0`: Planet center y [m]
+- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
+- `xcenter::Real=coords.xcenter`: Planet center x [m]
+- `ycenter::Real=coords.ycenter`: Planet center y [m]
 - `rplanet::Real=50000.0`: Planet radius [m]
 - `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
 - `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
@@ -56,9 +56,9 @@ function apply_metal_segregation!(
     marknum::Integer,
     dt::Real,
     cfg_core::CoreFormationConfig;
-    coords=nothing,
-    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
-    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
+    coords::GridCoordinates=default_grid_coordinates(),
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
     rplanet::Real=50000.0,
     g_surf::Real=0.1,
     gx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
@@ -110,18 +110,10 @@ function apply_metal_segregation!(
         end
     end
 
-    Nx_val = coords !== nothing ? coords.Nx : 32
-    Ny_val = coords !== nothing ? coords.Ny : 32
-    dx_val = if coords !== nothing
-        coords.dx
-    else
-        (coords !== nothing ? coords.xsize / Nx_val : 4375.0)
-    end
-    dy_val = if coords !== nothing
-        coords.dy
-    else
-        (coords !== nothing ? coords.ysize / Ny_val : 4375.0)
-    end
+    Nx_val = coords.Nx
+    Ny_val = coords.Ny
+    dx_val = coords.dx
+    dy_val = coords.dy
 
     has_ws = (
         workspace !== nothing &&
@@ -913,9 +905,9 @@ References:
 - `cfg_magma::MagmaTransportConfig`: Magma transport configuration parameters
 
 # Keyword Arguments
-- `coords=nothing`: `GridCoordinates` domain geometry struct
-- `xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0`: Planet center x [m]
-- `ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0`: Planet center y [m]
+- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
+- `xcenter::Real=coords.xcenter`: Planet center x [m]
+- `ycenter::Real=coords.ycenter`: Planet center y [m]
 - `rplanet::Real=50000.0`: Planet radius [m]
 - `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
 - `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
@@ -1002,9 +994,9 @@ function apply_silicate_melt_segregation!(
     marknum::Integer,
     dt::Real,
     cfg_magma::MagmaTransportConfig;
-    coords=nothing,
-    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
-    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
+    coords::GridCoordinates=default_grid_coordinates(),
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
     rplanet::Real=50000.0,
     g_surf::Real=0.1,
     gx::Union{Nothing,AbstractMatrix{Float64}}=nothing,
@@ -1062,18 +1054,10 @@ function apply_silicate_melt_segregation!(
         end
     end
 
-    Nx_val = coords !== nothing ? coords.Nx : 32
-    Ny_val = coords !== nothing ? coords.Ny : 32
-    dx_val = if coords !== nothing
-        coords.dx
-    else
-        (coords !== nothing ? coords.xsize / Nx_val : 4375.0)
-    end
-    dy_val = if coords !== nothing
-        coords.dy
-    else
-        (coords !== nothing ? coords.ysize / Ny_val : 4375.0)
-    end
+    Nx_val = coords.Nx
+    Ny_val = coords.Ny
+    dx_val = coords.dx
+    dy_val = coords.dy
 
     has_ws = (workspace !== nothing && size(workspace.M_melt_cell) == (Ny_val, Nx_val))
 

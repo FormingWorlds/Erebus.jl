@@ -94,8 +94,8 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
-| `betasolid` | `Float64` | `0.0` | $\text{Pa}^{-1}$ | Solid silicate matrix compressibility (production: `2.5e-11`) | $\ge 0$ |
-| `betafluid` | `Float64` | `0.0` | $\text{Pa}^{-1}$ | Pore fluid compressibility (production: `4.0e-10`) | $\ge 0$ |
+| `betasolid` | `Float64` | `2.5e-11` | $\text{Pa}^{-1}$ | Solid silicate matrix compressibility | $\ge 0$ |
+| `betafluid` | `Float64` | `4.0e-10` | $\text{Pa}^{-1}$ | Pore fluid compressibility | $\ge 0$ |
 | `phimin` | `Float64` | `1.0e-4` | - | Minimum porosity floor threshold | $0 < \phi_{\text{min}} < \phi_{\text{max}}$ |
 | `phimax` | `Float64` | `0.9999` | - | Maximum porosity ceiling threshold | $\phi_{\text{min}} < \phi_{\text{max}} < 1$ |
 | `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false` |

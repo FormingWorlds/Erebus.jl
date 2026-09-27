@@ -259,7 +259,7 @@ function perform_thermochemical_reaction!(
     Δt,
     timestep,
     titer;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     DQPF=nothing,
     DQPFSUM=nothing,
     cfg=nothing,

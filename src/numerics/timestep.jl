@@ -23,9 +23,9 @@ function compute_displacement_timestep(
     vyf,
     dt,
     aphimax;
-    coords=nothing,
-    dx_val=coords === nothing ? dx : coords.dx,
-    dy_val=coords === nothing ? dy : coords.dy,
+    coords::GridCoordinates=default_grid_coordinates(),
+    dx_val=coords.dx,
+    dy_val=coords.dy,
     dxymax_val::Real=0.05,
     dphimax_val::Real=0.1,
 )
@@ -50,9 +50,9 @@ end # function compute_displacement_timestep
 """
     compute_adaptive_timestep(
         vx, vy, vxf, vyf, dt, aphimax;
-        coords=nothing,
-        dx_val=coords === nothing ? dx : coords.dx,
-        dy_val=coords === nothing ? dy : coords.dy,
+        coords::GridCoordinates=default_grid_coordinates(),
+        dx_val=coords.dx,
+        dy_val=coords.dy,
         dxymax_val::Real=0.05,
         dphimax_val::Real=0.1,
         maxDTcurrent=0.0,
@@ -71,9 +71,9 @@ function compute_adaptive_timestep(
     vyf,
     dt,
     aphimax;
-    coords=nothing,
-    dx_val=coords === nothing ? dx : coords.dx,
-    dy_val=coords === nothing ? dy : coords.dy,
+    coords::GridCoordinates=default_grid_coordinates(),
+    dx_val=coords.dx,
+    dy_val=coords.dy,
     dxymax_val::Real=0.05,
     dphimax_val::Real=0.1,
     dt_ref=nothing,

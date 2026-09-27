@@ -15,9 +15,9 @@ include("test_helpers.jl")
         @test cfg.grid.ysize ≈ 140000.0 rtol=1e-12
         @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12
         @test cfg.geometry.rcrust ≈ 50000.0 rtol=1e-12
-        # Poroelastic baseline default matches constants.jl test baseline (0.0)
-        @test iszero(cfg.poroelasticity.betasolid)
-        @test iszero(cfg.poroelasticity.betafluid)
+        # Poroelastic production defaults
+        @test cfg.poroelasticity.betasolid ≈ 2.5e-11 rtol=1e-12
+        @test cfg.poroelasticity.betafluid ≈ 4.0e-10 rtol=1e-12
         @test cfg.poroelasticity.phimin ≈ 1.0e-4 rtol=1e-12
         @test cfg.poroelasticity.phimax ≈ 0.9999 rtol=1e-12
         @test cfg.time.dt_longest ≈ 1.0e11 / cfg.time.yearlength
@@ -104,7 +104,7 @@ include("test_helpers.jl")
         @test cfg.grid.Nx == 33
         @test cfg.grid.Ny == 33
         @test cfg.poroelasticity.betasolid ≈ 1.0e-10 rtol=1e-12
-        @test iszero(cfg.poroelasticity.betafluid) # baseline default preserved
+        @test cfg.poroelasticity.betafluid ≈ 4.0e-10 rtol=1e-12 # default preserved
         @test cfg.time.n_steps == 5
         @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12 # default preserved
     end
@@ -514,17 +514,16 @@ include("test_helpers.jl")
         # 2. Test @unpack_coords with concrete GridCoordinates
         test_coords = GridCoordinates(33, 33; xsize=100000.0, ysize=100000.0)
         @unpack_coords test_coords dx dy Nx Ny
-        @test isapprox(dx_val, test_coords.dx; atol=1e-12)
-        @test isapprox(dy_val, test_coords.dy; atol=1e-12)
+        @test isapprox(dx_val, 100000.0 / 32; atol=1e-12)
+        @test isapprox(dy_val, 100000.0 / 32; atol=1e-12)
         @test Nx_val == 33
         @test Ny_val == 33
 
-        # 3. Test @unpack_coords with nothing (falls back to caller variables)
-        dx, dy = 1000.0, 2000.0
-        no_coords = nothing
-        @unpack_coords no_coords dx dy
-        @test isapprox(dx_val, 1000.0; atol=1e-12)
-        @test isapprox(dy_val, 2000.0; atol=1e-12)
+        # 3. Test @unpack_coords with default_grid_coordinates()
+        default_coords = default_grid_coordinates()
+        @unpack_coords default_coords dx dy
+        @test isapprox(dx_val, 140000.0 / 32; atol=1e-12)
+        @test isapprox(dy_val, 140000.0 / 32; atol=1e-12)
     end
 
     @testset "RedoxConfig & RefractoryConfig Validation and TOML Roundtrip" begin
