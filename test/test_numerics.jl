@@ -597,9 +597,9 @@
         for j in 1:Nx1, i in 1:Ny1
             kvy = ((j - 1) * Ny1 + i - 1) * 6 + 2
             if i == 1
-                @test isapprox(R_act[kvy], vytop; rtol=1e-12)
+                @test isapprox(R_act[kvy], 0.0; atol=1e-12)
             elseif i == Ny
-                @test isapprox(R_act[kvy], vybottom; rtol=1e-12)
+                @test isapprox(R_act[kvy], 0.0; atol=1e-12)
             end
             kpm = ((j - 1) * Ny1 + i - 1) * 6 + 3
             kpf = ((j - 1) * Ny1 + i - 1) * 6 + 6

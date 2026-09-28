@@ -79,3 +79,7 @@ const jmin_m = coords_test_default.jmin_m
 const imin_m = coords_test_default.imin_m
 const jmax_m = coords_test_default.jmax_m
 const imax_m = coords_test_default.imax_m
+const vxleft = 0.0
+const vxright = 0.0
+const vytop = 0.0
+const vybottom = 0.0
