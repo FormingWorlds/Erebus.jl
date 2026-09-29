@@ -10,7 +10,19 @@ $(SIGNATURES)
 - Deep copy of the input state container.
 """
 function snapshot_step_state(state)
-    return deepcopy(state)
+    if hasproperty(state, :markers) && state.markers isa MarkerArrays
+        return (;
+            markers=copy(state.markers),
+            arrays=if hasproperty(state, :arrays)
+                deepcopy(state.arrays)
+            else
+                (hasproperty(state, :grids) ? deepcopy(state.grids) : (;))
+            end,
+            scalars=deepcopy(state.scalars),
+        )
+    else
+        return deepcopy(state)
+    end
 end
 
 """
@@ -229,6 +241,239 @@ function compute_surface_venting_rates(
     end
 
     return vent_rates
+end
+
+function _reconstruct_checkpoint_marker_arrays(
+    core::CoreGroup, optional_tuple::NamedTuple, marknum::Int
+)
+    group_pairs = Pair{Symbol,Any}[]
+    o = optional_tuple
+    if o.Xfem !== nothing
+        push!(
+            group_pairs,
+            :metal => MetalGroup(
+                o.Xfem,
+                o.Xfem0,
+                o.Xfe_bulk,
+                o.Xfe_H_m !== nothing ? o.Xfe_H_m : zeros(Float64, marknum),
+                o.Xfe_C_m !== nothing ? o.Xfe_C_m : zeros(Float64, marknum),
+                o.Xfe_N_m !== nothing ? o.Xfe_N_m : zeros(Float64, marknum),
+                o.Xfe_S_m !== nothing ? o.Xfe_S_m : zeros(Float64, marknum),
+            ),
+        )
+    end
+    if o.XH2Om !== nothing || o.F_extract_m !== nothing
+        push!(
+            group_pairs,
+            :volatiles => VolatilesGroup(
+                o.XH2Om !== nothing ? o.XH2Om : zeros(Float64, marknum),
+                o.XCm !== nothing ? o.XCm : zeros(Float64, marknum),
+                o.XNm !== nothing ? o.XNm : zeros(Float64, marknum),
+                o.XSm !== nothing ? o.XSm : zeros(Float64, marknum),
+                o.X_graphite_m !== nothing ? o.X_graphite_m : zeros(Float64, marknum),
+                o.F_extract_m !== nothing ? o.F_extract_m : zeros(Float64, marknum),
+            ),
+        )
+    end
+    if o.redox_props !== nothing
+        rp = o.redox_props
+        push!(
+            group_pairs,
+            :redox => RedoxGroup(
+                rp.nFe0_m,
+                rp.nFe2_m,
+                rp.nFe3_m,
+                rp.deltaIW_m,
+                rp.nC_graphite_m,
+                rp.nCO_m,
+                rp.nCO2_m,
+                rp.nCH4_m,
+            ),
+        )
+    end
+    if o.hcnspo_props !== nothing
+        hp = o.hcnspo_props
+        push!(
+            group_pairs,
+            :hcnspo => HcnspoGroup(
+                hp.X_ice_H2O_m,
+                hp.X_ice_NH3_m,
+                hp.X_ice_CO2_m,
+                hp.X_ice_CO_m,
+                hp.X_ice_CH4_m,
+                hp.X_ice_N2_m,
+                hp.X_ice_H2S_m,
+                hp.X_ice_PH3_m,
+                hp.X_refr_C_m,
+                hp.X_refr_S_m,
+                hp.X_refr_N_m,
+                hp.X_refr_P_m,
+                hp.X_refr_H_m,
+            ),
+        )
+    end
+    if o.Xmin_troilite_m !== nothing
+        push!(
+            group_pairs,
+            :phase => PhaseGroup(
+                o.Xmin_troilite_m,
+                o.Xmin_schreibersite_m,
+                o.Xmin_cohenite_m,
+                o.Xmin_graphite_m,
+                o.Xmin_nitride_m,
+                o.Xmin_metal_matrix_m,
+            ),
+        )
+    end
+    if o.t_accreted !== nothing
+        push!(group_pairs, :accretion => AccretionGroup(o.t_accreted))
+    end
+    return MarkerArrays(core, NamedTuple(group_pairs))
+end
+
+function _unpack_core_arrays(core::CoreGroup)
+    return (
+        core.xm,
+        core.ym,
+        core.w3d_m,
+        core.tm,
+        core.tkm,
+        core.phim,
+        core.phinewm,
+        core.pfm0,
+        core.XWsolidm,
+        core.XWsolidm0,
+        core.Fm,
+        core.etavpm,
+        core.sxxm,
+        core.sxym,
+        core.inv_gggtotalm,
+        core.fricttotalm,
+        core.cohestotalm,
+        core.tenstotalm,
+        core.rhototalm,
+        core.rhocptotalm,
+        core.etatotalm,
+        core.hrtotalm,
+        core.ktotalm,
+        core.tkm_rhocptotalm,
+        core.etafluidcur_inv_kphim,
+        core.rhofluidcur,
+        core.alphasolidcur,
+        core.alphafluidcur,
+    )
+end
+
+function _extract_optional_marker_arrays(
+    markers::MarkerArrays, cfg::SimulationConfig, marknum::Int, magma_active_val::Bool
+)
+    metal = haskey(markers.groups, :metal) ? markers.groups.metal : nothing
+    volatiles = haskey(markers.groups, :volatiles) ? markers.groups.volatiles : nothing
+    phase = haskey(markers.groups, :phase) ? markers.groups.phase : nothing
+    accretion = haskey(markers.groups, :accretion) ? markers.groups.accretion : nothing
+
+    Xfem = metal !== nothing ? metal.Xfem : nothing
+    Xfem0 = metal !== nothing ? metal.Xfem0 : nothing
+    Xfe_bulk = metal !== nothing ? metal.Xfe_bulk : nothing
+    Xfe_bulk_step_start = Xfe_bulk !== nothing ? zeros(Float64, marknum) : nothing
+    Xfem_step_start = Xfem !== nothing ? zeros(Float64, marknum) : nothing
+
+    F_extract_m = if volatiles !== nothing
+        volatiles.F_extract_m
+    else
+        (magma_active_val ? setup_marker_magma_properties(marknum)[1] : nothing)
+    end
+    F_extract_m_step_start = F_extract_m !== nothing ? zeros(Float64, marknum) : nothing
+    Fm_step_start = magma_active_val ? zeros(Float64, marknum) : nothing
+
+    XH2Om = volatiles !== nothing ? volatiles.XH2Om : nothing
+    XCm = volatiles !== nothing ? volatiles.XCm : nothing
+    XNm = volatiles !== nothing ? volatiles.XNm : nothing
+    XSm = volatiles !== nothing ? volatiles.XSm : nothing
+    X_graphite_m = volatiles !== nothing ? volatiles.X_graphite_m : nothing
+
+    has_metal_part = metal !== nothing && cfg.metal_partition.active
+    Xfe_H_m = has_metal_part ? metal.Xfe_H_m : nothing
+    Xfe_C_m = has_metal_part ? metal.Xfe_C_m : nothing
+    Xfe_N_m = has_metal_part ? metal.Xfe_N_m : nothing
+    Xfe_S_m = has_metal_part ? metal.Xfe_S_m : nothing
+    Xfe_H_m_step_start = Xfe_H_m !== nothing ? zeros(Float64, marknum) : nothing
+    Xfe_C_m_step_start = Xfe_C_m !== nothing ? zeros(Float64, marknum) : nothing
+    Xfe_N_m_step_start = Xfe_N_m !== nothing ? zeros(Float64, marknum) : nothing
+    Xfe_S_m_step_start = Xfe_S_m !== nothing ? zeros(Float64, marknum) : nothing
+
+    Xmin_troilite_m = phase !== nothing ? phase.Xmin_troilite_m : nothing
+    Xmin_schreibersite_m = phase !== nothing ? phase.Xmin_schreibersite_m : nothing
+    Xmin_cohenite_m = phase !== nothing ? phase.Xmin_cohenite_m : nothing
+    Xmin_graphite_m = phase !== nothing ? phase.Xmin_graphite_m : nothing
+    Xmin_nitride_m = phase !== nothing ? phase.Xmin_nitride_m : nothing
+    Xmin_metal_matrix_m = phase !== nothing ? phase.Xmin_metal_matrix_m : nothing
+
+    t_accreted = accretion !== nothing ? accretion.t_accreted : nothing
+    hcnspo_props = haskey(markers.groups, :hcnspo) ? markers.groups.hcnspo : nothing
+    redox_props = haskey(markers.groups, :redox) ? markers.groups.redox : nothing
+
+    return (;
+        Xfem,
+        Xfem0,
+        Xfe_bulk,
+        Xfe_bulk_step_start,
+        Xfem_step_start,
+        F_extract_m,
+        F_extract_m_step_start,
+        Fm_step_start,
+        XH2Om,
+        XCm,
+        XNm,
+        XSm,
+        X_graphite_m,
+        Xfe_H_m,
+        Xfe_C_m,
+        Xfe_N_m,
+        Xfe_S_m,
+        Xfe_H_m_step_start,
+        Xfe_C_m_step_start,
+        Xfe_N_m_step_start,
+        Xfe_S_m_step_start,
+        Xmin_troilite_m,
+        Xmin_schreibersite_m,
+        Xmin_cohenite_m,
+        Xmin_graphite_m,
+        Xmin_nitride_m,
+        Xmin_metal_matrix_m,
+        t_accreted,
+        hcnspo_props,
+        redox_props,
+    )
+end
+
+function _init_fresh_hcnspo_markers!(
+    hcnspo_props, tm::Vector{Int}, marknum::Int, cfg::SimulationConfig
+)
+    if hcnspo_props !== nothing
+        for m in 1:marknum
+            if tm[m] == 2
+                if cfg.volatile_mixture.active
+                    hcnspo_props.X_ice_H2O_m[m] = cfg.volatile_mixture.X_ice_H2O
+                    hcnspo_props.X_ice_NH3_m[m] = cfg.volatile_mixture.X_ice_NH3
+                    hcnspo_props.X_ice_CO2_m[m] = cfg.volatile_mixture.X_ice_CO2
+                    hcnspo_props.X_ice_CO_m[m] = cfg.volatile_mixture.X_ice_CO
+                    hcnspo_props.X_ice_CH4_m[m] = cfg.volatile_mixture.X_ice_CH4
+                    hcnspo_props.X_ice_N2_m[m] = cfg.volatile_mixture.X_ice_N2
+                    hcnspo_props.X_ice_H2S_m[m] = cfg.volatile_mixture.X_ice_H2S
+                    hcnspo_props.X_ice_PH3_m[m] = cfg.volatile_mixture.X_ice_PH3
+                end
+                if cfg.refractory.active
+                    hcnspo_props.X_refr_C_m[m] = cfg.refractory.f_refr_C
+                    hcnspo_props.X_refr_S_m[m] = cfg.refractory.f_refr_S
+                    hcnspo_props.X_refr_N_m[m] = cfg.refractory.f_refr_N
+                    hcnspo_props.X_refr_P_m[m] = cfg.refractory.f_refr_P
+                    hcnspo_props.X_refr_H_m[m] = cfg.refractory.f_refr_H
+                end
+            end
+        end
+    end
+    return nothing
 end
 
 """
@@ -493,6 +738,7 @@ function simulation_loop(
     Xmin_schreibersite_m = nothing
     Xmin_cohenite_m = nothing
     Xmin_graphite_m = nothing
+    X_graphite_m = nothing
     Xmin_nitride_m = nothing
     Xmin_metal_matrix_m = nothing
     regional_mineral_modes = nothing
@@ -791,6 +1037,11 @@ function simulation_loop(
                 XCm = Vector{Float64}(ckpt["XCm"])
                 XNm = Vector{Float64}(ckpt["XNm"])
                 XSm = Vector{Float64}(ckpt["XSm"])
+                X_graphite_m = if haskey(ckpt, "X_graphite_m")
+                    Vector{Float64}(ckpt["X_graphite_m"])
+                else
+                    zeros(Float64, marknum)
+                end
             else
                 (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
                     marknum;
@@ -799,6 +1050,7 @@ function simulation_loop(
                     initial_nitrogen_ppm=cfg.volatiles.initial_nitrogen_ppm,
                     initial_sulfur_ppm=cfg.volatiles.initial_sulfur_ppm,
                 )
+                X_graphite_m = zeros(Float64, marknum)
             end
         end
         if cfg.metal_partition.active
@@ -906,92 +1158,22 @@ function simulation_loop(
         if haskey(ckpt, "Xmin_graphite_m") && Xmin_graphite_m === nothing
             Xmin_graphite_m = Vector{Float64}(ckpt["Xmin_graphite_m"])
         end
+        if haskey(ckpt, "X_graphite_m") && X_graphite_m === nothing
+            X_graphite_m = Vector{Float64}(ckpt["X_graphite_m"])
+        end
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val-1) (running to $n_steps_val)"
     else
-        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = setup_marker_properties(
-            marknum, coords; rng=rng
+        markers = init_marker_arrays(marknum, cfg, coords; rng=rng, initial_time=timesum)
+        (xm, ym, w3d_m, tm, tkm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm, etavpm, sxxm, sxym, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, rhofluidcur, alphasolidcur, alphafluidcur) = _unpack_core_arrays(
+            markers.core
         )
-        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = setup_marker_properties_helpers(
-            marknum; rng=rng
+
+        (; Xfem, Xfem0, Xfe_bulk, Xfe_bulk_step_start, Xfem_step_start, F_extract_m, F_extract_m_step_start, Fm_step_start, XH2Om, XCm, XNm, XSm, X_graphite_m, Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m, Xfe_H_m_step_start, Xfe_C_m_step_start, Xfe_N_m_step_start, Xfe_S_m_step_start, Xmin_troilite_m, Xmin_schreibersite_m, Xmin_cohenite_m, Xmin_graphite_m, Xmin_nitride_m, Xmin_metal_matrix_m, t_accreted, hcnspo_props, redox_props) = _extract_optional_marker_arrays(
+            markers, cfg, marknum, magma_active_val
         )
-        if coreformation_active_val || hr_fe_val
-            Xfem, Xfem0, Xfe_bulk = setup_marker_metal_properties(marknum)
-            Xfe_bulk_step_start = zeros(Float64, marknum)
-            Xfem_step_start = zeros(Float64, marknum)
-        end
-        if magma_active_val
-            F_extract_m = setup_marker_magma_properties(marknum)[1]
-            F_extract_m_step_start = zeros(Float64, marknum)
-            Fm_step_start = zeros(Float64, marknum)
-        end
-        if cfg.volatiles.active || cfg.magma_degassing.active
-            (XH2Om, XCm, XNm, XSm) = setup_marker_volatile_properties(
-                marknum;
-                initial_water_wtpct=cfg.volatiles.initial_water_wtpct,
-                initial_carbon_ppm=cfg.volatiles.initial_carbon_ppm,
-                initial_nitrogen_ppm=cfg.volatiles.initial_nitrogen_ppm,
-                initial_sulfur_ppm=cfg.volatiles.initial_sulfur_ppm,
-            )
-        end
-        if cfg.metal_partition.active
-            (Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) = setup_marker_metal_volatile_properties(
-                marknum;
-                initial_h_ppm=cfg.metal_partition.initial_metal_h_ppm,
-                initial_c_ppm=cfg.metal_partition.initial_metal_c_ppm,
-                initial_n_ppm=cfg.metal_partition.initial_metal_n_ppm,
-                initial_s_ppm=cfg.metal_partition.initial_metal_s_ppm,
-            )
-            Xfe_H_m_step_start = zeros(Float64, marknum)
-            Xfe_C_m_step_start = zeros(Float64, marknum)
-            Xfe_N_m_step_start = zeros(Float64, marknum)
-            Xfe_S_m_step_start = zeros(Float64, marknum)
-        end
-        if cfg.phase_tracking.active
-            phase_arrays = setup_marker_phase_tracking_properties(
-                marknum, cfg.phase_tracking
-            )
-            Xmin_troilite_m = phase_arrays.Xmin_troilite_m
-            Xmin_schreibersite_m = phase_arrays.Xmin_schreibersite_m
-            Xmin_cohenite_m = phase_arrays.Xmin_cohenite_m
-            Xmin_graphite_m = phase_arrays.Xmin_graphite_m
-            Xmin_nitride_m = phase_arrays.Xmin_nitride_m
-            Xmin_metal_matrix_m = phase_arrays.Xmin_metal_matrix_m
-        end
-        t_accreted = setup_marker_accretion_properties(
-            marknum, cfg.accretion; initial_time=timesum
-        )
-        hcnspo_props = if cfg.volatile_mixture.active || cfg.refractory.active
-            setup_marker_hcnspo_properties(marknum, cfg.volatile_mixture, cfg.refractory)
-        else
-            nothing
-        end
-        redox_props = if cfg.redox.active
-            setup_marker_redox_properties(
-                marknum, cfg.redox; initial_xfe_bulk=Xfe_bulk, tkm=tkm, pfm=pfm0
-            )
-        else
-            nothing
-        end
+
         define_markers!(
-            xm,
-            ym,
-            tm,
-            phim,
-            etavpm,
-            rhototalm,
-            rhocptotalm,
-            etatotalm,
-            hrtotalm,
-            ktotalm,
-            tkm,
-            inv_gggtotalm,
-            fricttotalm,
-            cohestotalm,
-            tenstotalm,
-            rhofluidcur,
-            alphasolidcur,
-            alphafluidcur,
-            XWsolidm0;
+            markers;
             coords=coords,
             xcenter_val=xcenter_val,
             ycenter_val=ycenter_val,
@@ -999,9 +1181,6 @@ function simulation_loop(
             rcrust_val=rcrust_val,
             XWsolidm_init_val=cfg.materials.XWsolidm_init,
             phim0_val=phim0_val,
-            Xfe_bulk=Xfe_bulk,
-            Xfem=Xfem,
-            Xfem0=Xfem0,
             Xfe_bulk_val=Xfe_bulk_val,
             T_eutectic_val=T_eutectic_val,
             dT_metal_val=dT_metal_val,
@@ -1012,29 +1191,7 @@ function simulation_loop(
         XWsolidm .= XWsolidm0
         phinewm .= phim
 
-        if hcnspo_props !== nothing
-            for m in 1:marknum
-                if tm[m] == 2
-                    if cfg.volatile_mixture.active
-                        hcnspo_props.X_ice_H2O_m[m] = cfg.volatile_mixture.X_ice_H2O
-                        hcnspo_props.X_ice_NH3_m[m] = cfg.volatile_mixture.X_ice_NH3
-                        hcnspo_props.X_ice_CO2_m[m] = cfg.volatile_mixture.X_ice_CO2
-                        hcnspo_props.X_ice_CO_m[m] = cfg.volatile_mixture.X_ice_CO
-                        hcnspo_props.X_ice_CH4_m[m] = cfg.volatile_mixture.X_ice_CH4
-                        hcnspo_props.X_ice_N2_m[m] = cfg.volatile_mixture.X_ice_N2
-                        hcnspo_props.X_ice_H2S_m[m] = cfg.volatile_mixture.X_ice_H2S
-                        hcnspo_props.X_ice_PH3_m[m] = cfg.volatile_mixture.X_ice_PH3
-                    end
-                    if cfg.refractory.active
-                        hcnspo_props.X_refr_C_m[m] = cfg.refractory.f_refr_C
-                        hcnspo_props.X_refr_S_m[m] = cfg.refractory.f_refr_S
-                        hcnspo_props.X_refr_N_m[m] = cfg.refractory.f_refr_N
-                        hcnspo_props.X_refr_P_m[m] = cfg.refractory.f_refr_P
-                        hcnspo_props.X_refr_H_m[m] = cfg.refractory.f_refr_H
-                    end
-                end
-            end
-        end
+        _init_fresh_hcnspo_markers!(hcnspo_props, tm, marknum, cfg)
 
         # save initial state
         if cfg.output.mode != :telemetry
@@ -1149,36 +1306,18 @@ function simulation_loop(
                 M_escaped_total=M_escaped_total,
                 P_amb=cfg.disk.p_amb_disk,
                 S_vent=S_vent_grid,
-                Xfem=Xfem,
-                Xfem0=Xfem0,
-                Xfe_bulk=Xfe_bulk,
                 M_atm_species=M_atm_species,
                 M_escaped_species=M_escaped_species,
-                XH2Om=XH2Om,
-                XCm=XCm,
-                XNm=XNm,
-                XSm=XSm,
-                Xfe_H_m=Xfe_H_m,
-                Xfe_C_m=Xfe_C_m,
-                Xfe_N_m=Xfe_N_m,
-                Xfe_S_m=Xfe_S_m,
                 core_budgets=core_budgets,
-                Xmin_troilite_m=Xmin_troilite_m,
-                Xmin_schreibersite_m=Xmin_schreibersite_m,
-                Xmin_cohenite_m=Xmin_cohenite_m,
-                Xmin_graphite_m=Xmin_graphite_m,
-                Xmin_nitride_m=Xmin_nitride_m,
-                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                 regional_mineral_modes=regional_mineral_modes,
                 DT0=DT0,
                 rplanet=rplanet_val,
                 rcore=rcore_val,
-                t_accreted=t_accreted,
                 M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                 M_planet_val=M_planet_val,
                 telescope_level=telescope_level,
-                hcnspo_props=hcnspo_props,
                 atm_state=atm_state,
+                markers=markers,
                 cfg=cfg,
             )
         end
@@ -1264,11 +1403,76 @@ function simulation_loop(
     last_timestep = start_step_val - 1
     if !is_restart
         transfer_log = TransferRecord[]
+        resize!(markers.core.w3d_m, marknum)
+        for m in 1:marknum
+            markers.core.w3d_m[m] = marker_out_of_plane_length(
+                xm[m], ym[m], xcenter_val, ycenter_val
+            )
+        end
+        w3d_m = markers.core.w3d_m
+    else
+        w3d_m = [
+            marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
+            m in 1:marknum
+        ]
     end
-    w3d_m = [
-        marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
-        m in 1:marknum
-    ]
+    if is_restart
+        core = CoreGroup(
+            xm,
+            ym,
+            w3d_m,
+            tm,
+            tkm,
+            phim,
+            phinewm,
+            pfm0,
+            XWsolidm,
+            XWsolidm0,
+            Fm,
+            etavpm,
+            sxxm,
+            sxym,
+            inv_gggtotalm,
+            fricttotalm,
+            cohestotalm,
+            tenstotalm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            rhofluidcur,
+            alphasolidcur,
+            alphafluidcur,
+        )
+        opt = (;
+            Xfem,
+            Xfem0,
+            Xfe_bulk,
+            Xfe_H_m,
+            Xfe_C_m,
+            Xfe_N_m,
+            Xfe_S_m,
+            XH2Om,
+            XCm,
+            XNm,
+            XSm,
+            X_graphite_m,
+            F_extract_m,
+            redox_props,
+            hcnspo_props,
+            Xmin_troilite_m,
+            Xmin_schreibersite_m,
+            Xmin_cohenite_m,
+            Xmin_graphite_m,
+            Xmin_nitride_m,
+            Xmin_metal_matrix_m,
+            t_accreted,
+        )
+        markers = _reconstruct_checkpoint_marker_arrays(core, opt, marknum)
+    end
     if (cfg.output.mode in (:telemetry, :both))
         telemetry_io = init_telemetry(
             output_path, cfg.output.telemetry_file; append=is_restart
@@ -1411,6 +1615,7 @@ function simulation_loop(
                 YERRNOD,
             )
             step_snapshot = snapshot_step_state((;
+                markers=markers,
                 arrays=step_state_arrays,
                 scalars=(;
                     marknum,
@@ -1564,33 +1769,19 @@ function simulation_loop(
                         advance_accretion_boundary!(
                             rplanet_val,
                             dR_acc,
-                            xm,
-                            ym,
-                            tm,
-                            tkm,
-                            phim,
-                            XWsolidm0,
-                            Xfe_bulk,
-                            Xfem;
+                            markers;
                             xcenter=xcenter_val,
                             ycenter=ycenter_val,
                             T_accreted=T_acc,
                             phi_accreted=cfg.accretion.phi_accreted,
                             XWsolid_accreted=XW_acc,
                             Xfe_accreted=cfg.accretion.Xfe_bulk_accreted,
-                            t_accreted=t_accreted,
                             current_time=timesum,
-                            XWsolidm=XWsolidm,
-                            phinewm=phinewm,
-                            XH2Om=cfg.volatiles.active ? XH2Om : nothing,
-                            XCm=cfg.volatiles.active ? XCm : nothing,
-                            XNm=cfg.volatiles.active ? XNm : nothing,
-                            XSm=cfg.volatiles.active ? XSm : nothing,
                             XH2O_accreted=H2O_acc,
                             XC_accreted=cfg.accretion.XC_accreted_ppm,
                             XN_accreted=cfg.accretion.XN_accreted_ppm,
                             XS_accreted=cfg.accretion.XS_accreted_ppm,
-                            hcnspo_props=hcnspo_props,
+                            cfg=cfg,
                             disk_state=cond_state_acc,
                         )
                         rplanet_val += dR_acc
@@ -3652,6 +3843,10 @@ function simulation_loop(
                         )
                     end
                     @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
+                    if hasproperty(step_snapshot, :markers) &&
+                        step_snapshot.markers isa MarkerArrays
+                        restore_marker_arrays!(markers, step_snapshot.markers)
+                    end
                     restore_step_state!(step_state_arrays, step_snapshot.arrays)
                     marknum = step_snapshot.scalars.marknum
                     M_planet_val = step_snapshot.scalars.M_planet_val
@@ -3759,10 +3954,13 @@ function simulation_loop(
             end
 
             if length(w3d_m) != marknum
-                w3d_m = [
-                    marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
-                    m in 1:marknum
-                ]
+                resize!(markers.core.w3d_m, marknum)
+                for m in 1:marknum
+                    markers.core.w3d_m[m] = marker_out_of_plane_length(
+                        xm[m], ym[m], xcenter_val, ycenter_val
+                    )
+                end
+                w3d_m = markers.core.w3d_m
             end
 
             marker_results = advance_marker_thermo_porosity_venting!(
@@ -4292,69 +4490,14 @@ function simulation_loop(
             # replenish sparse areas with additional markers
             # ---------------------------------------------------------------------
             marknum = replenish_markers!(
-                xm,
-                ym,
-                tm,
-                tkm,
-                phim,
-                sxxm,
-                sxym,
-                etavpm,
-                phinewm,
-                pfm0,
-                XWsolidm,
-                XWsolidm0,
-                rhototalm,
-                rhocptotalm,
-                etatotalm,
-                hrtotalm,
-                ktotalm,
-                inv_gggtotalm,
-                fricttotalm,
-                cohestotalm,
-                tenstotalm,
-                rhofluidcur,
-                alphasolidcur,
-                alphafluidcur,
-                tkm_rhocptotalm,
-                etafluidcur_inv_kphim,
+                markers,
                 mdis,
                 mnum;
-                Fm=Fm,
                 randomized=random_markers,
                 coords=coords,
-                Xfem=Xfem,
-                Xfem0=Xfem0,
-                Xfe_bulk=Xfe_bulk,
-                XH2Om=XH2Om,
-                XCm=XCm,
-                XNm=XNm,
-                XSm=XSm,
-                Xfe_H_m=Xfe_H_m,
-                Xfe_C_m=Xfe_C_m,
-                Xfe_N_m=Xfe_N_m,
-                Xfe_S_m=Xfe_S_m,
-                Xmin_troilite_m=Xmin_troilite_m,
-                Xmin_schreibersite_m=Xmin_schreibersite_m,
-                Xmin_cohenite_m=Xmin_cohenite_m,
-                Xmin_graphite_m=Xmin_graphite_m,
-                Xmin_nitride_m=Xmin_nitride_m,
-                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-                t_accreted=t_accreted,
-                hcnspo_props=hcnspo_props,
-                F_extract_m=F_extract_m,
+                cfg=cfg,
                 rng=rng,
             )
-            if t_accreted !== nothing && length(t_accreted) != marknum
-                resize!(t_accreted, marknum)
-            end
-            if hcnspo_props !== nothing
-                for prop in values(hcnspo_props)
-                    if length(prop) != marknum
-                        resize!(prop, marknum)
-                    end
-                end
-            end
             if coreformation_active_val
                 if Xfe_bulk_step_start !== nothing && length(Xfe_bulk_step_start) != marknum
                     resize!(Xfe_bulk_step_start, marknum)
@@ -4387,10 +4530,13 @@ function simulation_loop(
                 end
             end
 
-            w3d_m = [
-                marker_out_of_plane_length(xm[m], ym[m], xcenter_val, ycenter_val) for
-                m in 1:marknum
-            ]
+            resize!(markers.core.w3d_m, marknum)
+            for m in 1:marknum
+                markers.core.w3d_m[m] = marker_out_of_plane_length(
+                    xm[m], ym[m], xcenter_val, ycenter_val
+                )
+            end
+            w3d_m = markers.core.w3d_m
 
             # ---------------------------------------------------------------------
             # update timesum
@@ -4611,37 +4757,18 @@ function simulation_loop(
                     M_escaped_total=M_escaped_total,
                     P_amb=P_amb_eff,
                     S_vent=S_vent_grid,
-                    Xfem=Xfem,
-                    Xfem0=Xfem0,
-                    Xfe_bulk=Xfe_bulk,
                     M_atm_species=M_atm_species,
                     M_escaped_species=M_escaped_species,
-                    XH2Om=XH2Om,
-                    XCm=XCm,
-                    XNm=XNm,
-                    XSm=XSm,
-                    Xfe_H_m=Xfe_H_m,
-                    Xfe_C_m=Xfe_C_m,
-                    Xfe_N_m=Xfe_N_m,
-                    Xfe_S_m=Xfe_S_m,
                     core_budgets=core_budgets,
-                    Xmin_troilite_m=Xmin_troilite_m,
-                    Xmin_schreibersite_m=Xmin_schreibersite_m,
-                    Xmin_cohenite_m=Xmin_cohenite_m,
-                    Xmin_graphite_m=Xmin_graphite_m,
-                    Xmin_nitride_m=Xmin_nitride_m,
-                    Xmin_metal_matrix_m=Xmin_metal_matrix_m,
                     regional_mineral_modes=regional_mineral_modes,
                     DT0=DT0,
                     rplanet=rplanet_val,
                     rcore=rcore_val,
-                    t_accreted=t_accreted,
                     M_accreted_total=cfg.accretion.active ? M_accreted_total : nothing,
                     M_planet_val=M_planet_val,
                     telescope_level=telescope_level,
-                    hcnspo_props=hcnspo_props,
-                    redox_props=redox_props,
                     atm_state=atm_state,
+                    markers=markers,
                     cfg=cfg,
                     transfer_log=transfer_log,
                 )
@@ -4682,57 +4809,6 @@ function simulation_loop(
             pardiso(pardiso_solver)
         end
     end
-
-    markers = (;
-        xm,
-        ym,
-        tm,
-        tkm,
-        sxxm,
-        sxym,
-        etavpm,
-        phim,
-        phinewm,
-        pfm0,
-        XWsolidm,
-        XWsolidm0,
-        Fm,
-        rhototalm,
-        rhocptotalm,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm_rhocptotalm,
-        etafluidcur_inv_kphim,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur,
-        (F_extract_m !== nothing ? (; F_extract_m) : (;))...,
-        (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
-        (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
-        (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
-        (
-            if Xmin_troilite_m !== nothing
-                (;
-                    Xmin_troilite_m,
-                    Xmin_schreibersite_m,
-                    Xmin_cohenite_m,
-                    Xmin_graphite_m,
-                    Xmin_nitride_m,
-                    Xmin_metal_matrix_m,
-                )
-            else
-                (;)
-            end
-        )...,
-        (t_accreted !== nothing ? (; t_accreted) : (;))...,
-        (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
-        (redox_props !== nothing ? (; redox_props...) : (;))...,
-    )
 
     grids = (;
         ETA,

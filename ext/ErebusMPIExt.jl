@@ -583,4 +583,21 @@ function Erebus.migrate_markers!(topo::DistributedGridTopology2D, markers::Named
     return Erebus.migrate_markers!(topo, xm, ym, other_props...)
 end
 
+function Erebus.migrate_markers!(
+    topo::DistributedGridTopology2D, markers::Erebus.MarkerArrays;
+)
+    props = Any[]
+    for fn in fieldnames(Erebus.CoreGroup)
+        if fn !== :xm && fn !== :ym
+            push!(props, getfield(markers.core, fn))
+        end
+    end
+    for grp in values(markers.groups)
+        for fn in fieldnames(typeof(grp))
+            push!(props, getfield(grp, fn))
+        end
+    end
+    return Erebus.migrate_markers!(topo, markers.xm, markers.ym, props...)
+end
+
 end # module ErebusMPIExt

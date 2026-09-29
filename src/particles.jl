@@ -938,6 +938,77 @@ function define_markers!(
 end
 
 """
+    define_markers!(markers::MarkerArrays; kwargs...)
+
+Initialize properties on a `MarkerArrays` container across core and active groups.
+"""
+function define_markers!(
+    markers::MarkerArrays;
+    randomized::Bool=random_markers,
+    coords::GridCoordinates=default_grid_coordinates(),
+    xcenter_val::Real=coords.xcenter,
+    ycenter_val::Real=coords.ycenter,
+    rplanet_val::Real=rplanet,
+    rcrust_val::Real=rcrust,
+    XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN]),
+    phim0_val::Real=phim0,
+    Xfe_bulk_val::Real=0.0,
+    T_eutectic_val::Real=1213.0,
+    dT_metal_val::Real=50.0,
+    tkm0_val=tkm0,
+    rng::AbstractRNG=Random.default_rng(),
+)
+    Xfe_bulk = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk : nothing
+    Xfem = haskey(markers.groups, :metal) ? markers.groups.metal.Xfem : nothing
+    Xfem0 = haskey(markers.groups, :metal) ? markers.groups.metal.Xfem0 : nothing
+
+    define_markers!(
+        markers.xm,
+        markers.ym,
+        markers.tm,
+        markers.phim,
+        markers.etavpm,
+        markers.rhototalm,
+        markers.rhocptotalm,
+        markers.etatotalm,
+        markers.hrtotalm,
+        markers.ktotalm,
+        markers.tkm,
+        markers.inv_gggtotalm,
+        markers.fricttotalm,
+        markers.cohestotalm,
+        markers.tenstotalm,
+        markers.rhofluidcur,
+        markers.alphasolidcur,
+        markers.alphafluidcur,
+        markers.XWsolidm0;
+        randomized=randomized,
+        coords=coords,
+        xcenter_val=xcenter_val,
+        ycenter_val=ycenter_val,
+        rplanet_val=rplanet_val,
+        rcrust_val=rcrust_val,
+        XWsolidm_init_val=XWsolidm_init_val,
+        phim0_val=phim0_val,
+        Xfe_bulk=Xfe_bulk,
+        Xfem=Xfem,
+        Xfem0=Xfem0,
+        Xfe_bulk_val=Xfe_bulk_val,
+        T_eutectic_val=T_eutectic_val,
+        dT_metal_val=dT_metal_val,
+        tkm0_val=tkm0_val,
+        rng=rng,
+    )
+
+    for m in 1:length(markers)
+        markers.w3d_m[m] = marker_out_of_plane_length(
+            markers.xm[m], markers.ym[m], xcenter_val, ycenter_val
+        )
+    end
+    return nothing
+end
+
+"""
 Compute properties of given marker and save them to corresponding arrays.
 
 $(SIGNATURES)
@@ -3764,6 +3835,8 @@ function replenish_markers!(
     t_accreted=nothing,
     hcnspo_props=nothing,
     F_extract_m=nothing,
+    X_graphite_m=nothing,
+    redox_props=nothing,
     rng::AbstractRNG=Random.default_rng(),
 )
     Nym_val, Nxm_val = size(mnum)
@@ -3909,12 +3982,140 @@ function replenish_markers!(
                             push!(prop, prop[m])
                         end
                     end
+                    if X_graphite_m !== nothing
+                        push!(X_graphite_m, X_graphite_m[m])
+                    end
+                    if redox_props !== nothing
+                        for prop in values(redox_props)
+                            push!(prop, prop[m])
+                        end
+                    end
                 end
             end
         end
     end # @inbounds  
     return length(xm)
 end # function replenish_markers!
+
+"""
+    replenish_markers!(markers::MarkerArrays, mdis, mnum; kwargs...)
+
+Replenish markers in underpopulated cells across core and all active groups in `markers.groups`.
+"""
+function replenish_markers!(
+    markers::MarkerArrays,
+    mdis::AbstractMatrix{<:Real},
+    mnum::AbstractMatrix{<:Integer};
+    randomized::Bool=random_markers,
+    coords::GridCoordinates=default_grid_coordinates(),
+    cfg::Union{Nothing,SimulationConfig}=nothing,
+    rng::AbstractRNG=Random.default_rng(),
+)
+    Fm = markers.Fm
+    Xfem = haskey(markers.groups, :metal) ? markers.groups.metal.Xfem : nothing
+    Xfem0 = haskey(markers.groups, :metal) ? markers.groups.metal.Xfem0 : nothing
+    Xfe_bulk = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk : nothing
+    Xfe_H_m = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_H_m : nothing
+    Xfe_C_m = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_C_m : nothing
+    Xfe_N_m = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_N_m : nothing
+    Xfe_S_m = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_S_m : nothing
+
+    XH2Om = haskey(markers.groups, :volatiles) ? markers.groups.volatiles.XH2Om : nothing
+    XCm = haskey(markers.groups, :volatiles) ? markers.groups.volatiles.XCm : nothing
+    XNm = haskey(markers.groups, :volatiles) ? markers.groups.volatiles.XNm : nothing
+    XSm = haskey(markers.groups, :volatiles) ? markers.groups.volatiles.XSm : nothing
+    X_graphite_m =
+        haskey(markers.groups, :volatiles) ? markers.groups.volatiles.X_graphite_m : nothing
+    F_extract_m =
+        haskey(markers.groups, :volatiles) ? markers.groups.volatiles.F_extract_m : nothing
+
+    Xmin_troilite_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_troilite_m : nothing
+    Xmin_schreibersite_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_schreibersite_m : nothing
+    Xmin_cohenite_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_cohenite_m : nothing
+    Xmin_graphite_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_graphite_m : nothing
+    Xmin_nitride_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_nitride_m : nothing
+    Xmin_metal_matrix_m =
+        haskey(markers.groups, :phase) ? markers.groups.phase.Xmin_metal_matrix_m : nothing
+
+    t_accreted =
+        haskey(markers.groups, :accretion) ? markers.groups.accretion.t_accreted : nothing
+    hcnspo_props = haskey(markers.groups, :hcnspo) ? markers.groups.hcnspo : nothing
+    redox_props = haskey(markers.groups, :redox) ? markers.groups.redox : nothing
+
+    old_len = length(markers)
+    marknum_new = replenish_markers!(
+        markers.xm,
+        markers.ym,
+        markers.tm,
+        markers.tkm,
+        markers.phim,
+        markers.sxxm,
+        markers.sxym,
+        markers.etavpm,
+        markers.phinewm,
+        markers.pfm0,
+        markers.XWsolidm,
+        markers.XWsolidm0,
+        markers.rhototalm,
+        markers.rhocptotalm,
+        markers.etatotalm,
+        markers.hrtotalm,
+        markers.ktotalm,
+        markers.inv_gggtotalm,
+        markers.fricttotalm,
+        markers.cohestotalm,
+        markers.tenstotalm,
+        markers.rhofluidcur,
+        markers.alphasolidcur,
+        markers.alphafluidcur,
+        markers.tkm_rhocptotalm,
+        markers.etafluidcur_inv_kphim,
+        mdis,
+        mnum;
+        Fm=Fm,
+        randomized=randomized,
+        coords=coords,
+        Xfem=Xfem,
+        Xfem0=Xfem0,
+        Xfe_bulk=Xfe_bulk,
+        XH2Om=XH2Om,
+        XCm=XCm,
+        XNm=XNm,
+        XSm=XSm,
+        Xfe_H_m=Xfe_H_m,
+        Xfe_C_m=Xfe_C_m,
+        Xfe_N_m=Xfe_N_m,
+        Xfe_S_m=Xfe_S_m,
+        Xmin_troilite_m=Xmin_troilite_m,
+        Xmin_schreibersite_m=Xmin_schreibersite_m,
+        Xmin_cohenite_m=Xmin_cohenite_m,
+        Xmin_graphite_m=Xmin_graphite_m,
+        Xmin_nitride_m=Xmin_nitride_m,
+        Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+        t_accreted=t_accreted,
+        hcnspo_props=hcnspo_props,
+        F_extract_m=F_extract_m,
+        X_graphite_m=X_graphite_m,
+        redox_props=redox_props,
+        rng=rng,
+    )
+
+    if marknum_new > old_len
+        resize!(markers.w3d_m, marknum_new)
+        for m in (old_len + 1):marknum_new
+            markers.w3d_m[m] = marker_out_of_plane_length(
+                markers.xm[m], markers.ym[m], coords.xcenter, coords.ycenter
+            )
+        end
+    end
+
+    return marknum_new
+end
 
 """
 Apply xy (basic grid) and xx (P grid) subgrid stress diffusion to markers.

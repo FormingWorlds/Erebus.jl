@@ -65,6 +65,7 @@ unit_tests = [
     "test_tooling.jl",
     "test_determinism_ratchet.jl",
     "test_grid_ssot.jl",
+    "test_marker_container.jl",
 ]
 
 integration_tests = [
