@@ -573,10 +573,10 @@ function compute_core_volatile_budgets(
     Xfe_N_m::Union{Nothing,AbstractVector{Float64}},
     Xfe_S_m::Union{Nothing,AbstractVector{Float64}},
     marknum::Integer;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::Union{GridCoordinates,Nothing}=nothing,
     w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
-    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
-    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
+    xcenter::Real=coords isa GridCoordinates ? coords.xcenter : 70000.0,
+    ycenter::Real=coords isa GridCoordinates ? coords.ycenter : 70000.0,
     rplanet::Real=50000.0,
     rho_metal::Real=7000.0,
     core_radius_fraction::Real=0.5,
@@ -615,10 +615,10 @@ function compute_core_volatile_budgets(
     phi_cut = clamp(Float64(phi_core_threshold), 0.0, 1.0)
     rho_m = Float64(rho_metal)
 
-    v_area = if coords !== nothing
-        marker_area(coords)
-    elseif V_marker !== nothing
+    v_area = if V_marker !== nothing
         Float64(V_marker)
+    elseif coords isa GridCoordinates
+        marker_area(coords)
     else
         N_planet = 0
         @inbounds for m in 1:marknum
@@ -1014,7 +1014,7 @@ end
 """
     compute_regional_mineral_modes(
         xm, ym, tm, tkm, Xfe_bulk, Xfe_S_m, Xfe_C_m, Xfe_N_m, marknum;
-        coords=nothing,
+        coords=default_grid_coordinates(),
         w3d_m=nothing,
         cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
         rplanet::Real=50000.0,
@@ -1059,12 +1059,12 @@ function compute_regional_mineral_modes(
     Xfe_C_m,
     Xfe_N_m,
     marknum;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::Union{GridCoordinates,Nothing}=nothing,
     w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
     cfg::PhaseTrackingConfig=PhaseTrackingConfig(),
     rplanet::Real=50000.0,
-    xcenter::Real=coords !== nothing ? coords.xcenter : 70000.0,
-    ycenter::Real=coords !== nothing ? coords.ycenter : 70000.0,
+    xcenter::Real=coords isa GridCoordinates ? coords.xcenter : 70000.0,
+    ycenter::Real=coords isa GridCoordinates ? coords.ycenter : 70000.0,
     rho_metal::Real=7800.0,
     V_marker=nothing,
 )
@@ -1126,10 +1126,10 @@ function compute_regional_mineral_modes(
     xc = Float64(xcenter)
     yc = Float64(ycenter)
 
-    v_area = if coords !== nothing
-        marker_area(coords)
-    elseif V_marker !== nothing
+    v_area = if V_marker !== nothing
         Float64(V_marker)
+    elseif coords isa GridCoordinates
+        marker_area(coords)
     else
         N_planet = 0
         @inbounds for m in 1:marknum

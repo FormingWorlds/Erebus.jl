@@ -144,14 +144,13 @@ end
 """
 Poroelastic constitutive parameters and porosity limits.
 
-Default compressibilities default to 0.0 to match the test baseline in `constants.jl`.
-Production runs should set `betasolid = 2.5e-11` and `betafluid = 4.0e-10`.
+Compressibilities default to production values: `betasolid = 2.5e-11` and `betafluid = 4.0e-10`.
 
 $(FIELDS)
 """
 Base.@kwdef struct PoroelasticConfig
-    betasolid::Float64 = 0.0
-    betafluid::Float64 = 0.0
+    betasolid::Float64 = 2.5e-11
+    betafluid::Float64 = 4.0e-10
     phimin::Float64 = 1.0e-4
     phimax::Float64 = 0.9999
     hydrofracture::Bool = false
@@ -1547,6 +1546,9 @@ function validate_config(cfg::SimulationConfig)
     # Poroelasticity checks
     @check_nonneg_finite cfg.poroelasticity.betasolid
     @check_nonneg_finite cfg.poroelasticity.betafluid
+    if cfg.poroelasticity.betasolid == 0.0 && cfg.poroelasticity.betafluid == 0.0
+        @warn "Both poroelasticity.betasolid and betafluid are 0.0; production runs should set positive compressibilities (e.g. 2.5e-11 and 4.0e-10)"
+    end
     0.0 < cfg.poroelasticity.phimin < cfg.poroelasticity.phimax < 1.0 || throw(
         ArgumentError(
             "Porosity bounds must satisfy 0 < phimin < phimax < 1, got phimin=$(cfg.poroelasticity.phimin), phimax=$(cfg.poroelasticity.phimax)",

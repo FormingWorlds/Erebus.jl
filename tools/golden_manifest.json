@@ -1,39 +1,39 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "81b690929301f719aacfd7cf0e2f937265c326eb",
+    "commit": "0008165b2f605b5b340a9266ed42829520c79348",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "a20d832e53c5b6b6742ec151b3c93aabadfcfe86f9fac73b495c2df197e9971d",
+            "sha256": "374e74d073aef455912f53b1403bb97d270de2e4184e02bed61d1f8940fa5902",
             "size_bytes": 4650698
         },
         "hydrothermal_benchmark": {
             "config_path": "configs/hydrothermal_benchmark.toml",
             "filename": "hydrothermal_benchmark.jld2",
-            "sha256": "5cada58ec426c02ac30dd0a8dedf016185c975971acfdff3ab261dc13568b800",
+            "sha256": "d40465189ab34e867c087199f82ca822506cc1cfde93aafb0ae3b4876f04511a",
             "size_bytes": 4257105
         },
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "2e56b562cb85d6f13fd1d43a8cb7e7870529d66157f11fe75071d63684eec2b1",
+            "sha256": "48e65274ee3fe1ea524af756e67fd69bd5689927291e65f8bc4f9ae82407aa65",
             "size_bytes": 10699720
         },
         "magma_ocean_cooling_turb_on_32": {
             "config_path": "configs/magma_ocean_cooling_turb_on_32.toml",
             "filename": "magma_ocean_cooling_turb_on_32.jld2",
-            "sha256": "53bfc4eb83d5af40e1739b374d0f6c945114093ef68aa3c1114dfb849056a4b4",
+            "sha256": "e24230d724b417e9d2f3b06fc6c444da13ed67be96b1a6293fe07b61a9ffb0dc",
             "size_bytes": 4257105
         },
         "test_quick": {
             "config_path": "configs/test_quick.toml",
             "filename": "test_quick.jld2",
-            "sha256": "d55132b023a9c8e4e521cf488391b1ebbb2d3c56fd7ddf48fb4f496483fc8cf4",
+            "sha256": "7eacf4c0faada0fe57425aae119d0c72fff33771c5a44257d71f741cc9d74f21",
             "size_bytes": 4257105
         }
     },
-    "generated_at": "2026-09-27T13:47:18Z",
+    "generated_at": "2026-09-27T22:13:10Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }

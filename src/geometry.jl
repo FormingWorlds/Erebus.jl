@@ -74,7 +74,7 @@ $(SIGNATURES)
     - XWS: wet solid fraction at P nodes
 """
 function setup_staggered_grid_properties(
-    Nx::Int=Nx, Ny::Int=Ny; randomized=false, rng::AbstractRNG=Random.default_rng()
+    Nx::Int, Ny::Int; randomized=false, rng::AbstractRNG=Random.default_rng()
 )
     Nx1 = Nx + 1
     Ny1 = Ny + 1
@@ -306,7 +306,7 @@ $(SIGNATURES)
     - tk0: previous temperature at P nodes [K]
 """
 function setup_staggered_grid_properties_helpers(
-    Nx::Int=Nx, Ny::Int=Ny; randomized=false, rng::AbstractRNG=Random.default_rng()
+    Nx::Int, Ny::Int; randomized=false, rng::AbstractRNG=Random.default_rng()
 )
     Nx1 = Nx + 1
     Ny1 = Ny + 1

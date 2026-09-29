@@ -16,11 +16,13 @@ $(SIGNATURES)
     - LP: LHS sparse coefficient matrix
 
 """
-function assemble_gravitational_lse!(RHO, RP; coords=nothing, LP=nothing)
+function assemble_gravitational_lse!(
+    RHO, RP; coords::GridCoordinates=default_grid_coordinates(), LP=nothing
+)
     Ny1, Nx1 = size(RHO)
     @unpack_coords coords dx dy xp yp
-    xc_val = coords === nothing ? xcenter : coords.xcenter
-    yc_val = coords === nothing ? ycenter : coords.ycenter
+    xc_val = coords.xcenter
+    yc_val = coords.ycenter
     r_limit = min(xc_val, yc_val)
 
     L = if LP === nothing
@@ -73,11 +75,13 @@ $(SIGNATURES)
 
     - RP
 """
-function assemble_gravitational_rhs!(RHO, RP; coords=nothing)
+function assemble_gravitational_rhs!(
+    RHO, RP; coords::GridCoordinates=default_grid_coordinates()
+)
     Ny1, Nx1 = size(RHO)
     @unpack_coords coords xp yp
-    xc_val = coords === nothing ? xcenter : coords.xcenter
-    yc_val = coords === nothing ? ycenter : coords.ycenter
+    xc_val = coords.xcenter
+    yc_val = coords.ycenter
     r_limit = min(xc_val, yc_val)
 
     RP .= zero(0.0)
@@ -108,7 +112,9 @@ $(SIGNATURES)
 
     - nothing
 """
-function process_gravitational_solution!(SP, FI, gx, gy; coords=nothing)
+function process_gravitational_solution!(
+    SP, FI, gx, gy; coords::GridCoordinates=default_grid_coordinates()
+)
     Ny1, Nx1 = size(FI)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
@@ -138,7 +144,9 @@ $(SIGNATURES)
 
 - nothing
 """
-function compute_gravity_solution!(SP, RP, RHO, FI, gx, gy; coords=nothing)
+function compute_gravity_solution!(
+    SP, RP, RHO, FI, gx, gy; coords::GridCoordinates=default_grid_coordinates()
+)
     LP = assemble_gravitational_lse!(RHO, RP; coords=coords)
     SP .= LP \ RP
     process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
@@ -174,23 +182,23 @@ function compute_gravity_enclosed_mass!(
     ym::AbstractVector{Float64},
     rhototalm::AbstractVector{Float64},
     tm::AbstractVector{<:Integer},
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     gravity_nr_factor::Int=4,
     rplanet::Union{Nothing,Real}=nothing,
     FI::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
-    xc = coords === nothing ? xcenter : coords.xcenter
-    yc = coords === nothing ? ycenter : coords.ycenter
-    Nx_val = coords === nothing ? Nx : coords.Nx
-    dxm_val = coords === nothing ? dxm : coords.dxm
-    dym_val = coords === nothing ? dym : coords.dym
+    xc = coords.xcenter
+    yc = coords.ycenter
+    Nx_val = coords.Nx
+    dxm_val = coords.dxm
+    dym_val = coords.dym
     Am = dxm_val * dym_val
 
     # Determine maximum radius for enclosed radial bins
     r_max = if rplanet !== nothing
         Float64(rplanet)
     else
-        (coords === nothing ? min(xc, yc) : coords.xsize / 2.0)
+        coords.xsize / 2.0
     end
     for m in eachindex(xm, ym, tm)
         if @inbounds tm[m] < 3

@@ -605,7 +605,7 @@ $(SIGNATURES)
 function setup_marker_properties(
     marknum;
     randomized=false,
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     include_metal::Bool=false,
     rng::AbstractRNG=Random.default_rng(),
 )
@@ -786,13 +786,13 @@ $(SIGNATURES)
     - mdis: minimum distance of marker launch anchor points to nearest marker
     - mnum: number of marker nearest to marker launch anchor positions
 """
-function setup_marker_geometry_helpers(Nxm::Int=Nxm, Nym::Int=Nym)
+function setup_marker_geometry_helpers(coords::GridCoordinates=default_grid_coordinates())
+    return setup_marker_geometry_helpers(coords.Nxm, coords.Nym)
+end
+function setup_marker_geometry_helpers(Nxm::Int, Nym::Int)
     mdis = fill(mdis_init, Nym, Nxm)
     mnum = zeros(Int, Nym, Nxm)
     return mdis, mnum
-end
-function setup_marker_geometry_helpers(coords::GridCoordinates)
-    return setup_marker_geometry_helpers(coords.Nxm, coords.Nym)
 end
 
 """
@@ -849,9 +849,9 @@ function define_markers!(
     alphafluidcur,
     XWsolidm0;
     randomized=random_markers,
-    coords=nothing,
-    xcenter_val=coords === nothing ? xcenter : coords.xcenter,
-    ycenter_val=coords === nothing ? ycenter : coords.ycenter,
+    coords=default_grid_coordinates(),
+    xcenter_val=coords.xcenter,
+    ycenter_val=coords.ycenter,
     rplanet_val=rplanet,
     rcrust_val=rcrust,
     XWsolidm_init_val=SVector{3,Float64}([0.5, 0.5, NaN]),
@@ -1054,7 +1054,7 @@ function compute_marker_properties!(
     deltaIW_m=nothing,
     xm=nothing,
     ym=nothing,
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     rplanet_val=nothing,
     M_planet_val=nothing,
     rcore_val=nothing,
@@ -1212,19 +1212,16 @@ function compute_marker_properties!(
             Pe_cell_hydro = 0.0
             hydro_marker_active = true
 
-            if xm !== nothing &&
-                ym !== nothing &&
-                coords !== nothing &&
-                rplanet_val !== nothing
+            if xm !== nothing && ym !== nothing && rplanet_val !== nothing
                 xc = if xcenter_val !== nothing
                     Float64(xcenter_val)
                 else
-                    (coords !== nothing ? coords.xcenter : 0.0)
+                    coords.xcenter
                 end
                 yc = if ycenter_val !== nothing
                     Float64(ycenter_val)
                 else
-                    (coords !== nothing ? coords.ycenter : 0.0)
+                    coords.ycenter
                 end
                 r_m = sqrt((xm[m] - xc)^2 + (ym[m] - yc)^2)
                 R_pl = Float64(rplanet_val)
@@ -1493,7 +1490,7 @@ function update_marker_viscosity!(
     etavpm,
     YNY,
     YNY_inv_ETA;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     Fm=nothing,
     melting_active::Bool=false,
     alpha_eta_val::Real=28.0,
@@ -1590,7 +1587,7 @@ $(SIGNATURES)
     - XWSSUM: interpolation of XWS at P nodes
     - WTPSUM: interpolation weights at P nodes
 """
-function setup_interpolated_properties(Nx::Int=Nx, Ny::Int=Ny)
+function setup_interpolated_properties(Nx::Int, Ny::Int)
     Nx1 = Nx + 1
     Ny1 = Ny + 1
     # basic nodes
@@ -1709,7 +1706,7 @@ end
 """
 Allocate a vector of per-thread interpolation buffers.
 """
-function allocate_thread_interpolation_buffers(nthreads::Int=16, Nx::Int=Nx, Ny::Int=Ny)
+function allocate_thread_interpolation_buffers(nthreads::Int, Nx::Int, Ny::Int)
     Nx1 = Nx + 1
     Ny1 = Ny + 1
     return [
@@ -2272,7 +2269,7 @@ function marker_to_basic_nodes!(
     TENSUM,
     FRISUM,
     WTSUM;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     i, j, weights = fix_weights(
@@ -2341,7 +2338,7 @@ function marker_to_vx_nodes!(
     PHIXSUM,
     RXSUM,
     WTXSUM;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xvx yvx dx dy jmin_vx jmax_vx imin_vx imax_vx
     i, j, weights = fix_weights(
@@ -2408,7 +2405,7 @@ function marker_to_vy_nodes!(
     PHIYSUM,
     RYSUM,
     WTYSUM;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xvy yvy dx dy jmin_vy jmax_vy imin_vy imax_vy
     i, j, weights = fix_weights(
@@ -2491,7 +2488,7 @@ function marker_to_p_nodes!(
     PHISUM,
     TKSUM,
     WTPSUM;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     i, j, weights = fix_weights(
@@ -2540,7 +2537,13 @@ $(SIGNATURES)
     - nothing
 """
 function molarfraction_marker_to_p_nodes!(
-    m, xmm, ymm, XWsolidm0, XWSSUM, WTPSUM; coords=nothing
+    m,
+    xmm,
+    ymm,
+    XWsolidm0,
+    XWSSUM,
+    WTPSUM;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     i, j, weights = fix_weights(
@@ -2582,7 +2585,14 @@ $(SIGNATURES)
     - nothing
 """
 function update_p_nodes_melt_composition!(
-    xm, ym, XWsolidm0, XWS, XWSSUM, WTPSUM, marknum; coords=nothing
+    xm,
+    ym,
+    XWsolidm0,
+    XWS,
+    XWSSUM,
+    WTPSUM,
+    marknum;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     XWSSUM .= zero(0.0)
     WTPSUM .= zero(0.0)
@@ -2899,10 +2909,24 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=nothing)
+function compute_velocities!(
+    vx,
+    vy,
+    vxf,
+    vyf,
+    vxp,
+    vyp,
+    vxpf,
+    vypf;
+    coords::GridCoordinates=default_grid_coordinates(),
+)
     Ny1, Nx1 = size(vxp)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
+    vxleft_val = strainrate * coords.xsize / 2.0
+    vxright_val = -strainrate * coords.xsize / 2.0
+    vytop_val = -strainrate * coords.ysize / 2.0
+    vybottom_val = strainrate * coords.ysize / 2.0
     @inbounds begin
         # compute solid velocities at P nodes
         for j in 2:1:Nx, i in 2:1:Ny
@@ -2918,36 +2942,36 @@ function compute_velocities!(vx, vy, vxf, vyf, vxp, vyp, vxpf, vypf; coords=noth
         # bottom: free slip
         @views @. vxp[Ny1, 2:(Nx - 1)] = - bcbottom * vxp[Ny, 2:(Nx - 1)]
         # left
-        @views @. vxp[:, 1] = 2.0*vxleft - vxp[:, 2]
+        @views @. vxp[:, 1] = 2.0*vxleft_val - vxp[:, 2]
         # right
-        @views @. vxp[:, Nx1] = 2.0*vxright - vxp[:, Nx]
+        @views @. vxp[:, Nx1] = 2.0*vxright_val - vxp[:, Nx]
         # vyp
         # left: free slip
         @views @. vyp[2:(Ny - 1), 1] = - bcleft * vyp[2:(Ny - 1), 2]
         # right: free slip
         @views @. vyp[2:(Ny - 1), Nx1] = - bcright * vyp[2:(Ny - 1), Nx]
         # top
-        @views @. vyp[1, :] = 2.0*vytop - vyp[2, :]
+        @views @. vyp[1, :] = 2.0*vytop_val - vyp[2, :]
         # bottom
-        @views @. vyp[Ny1, :] = 2.0*vybottom - vyp[Ny, :]
+        @views @. vyp[Ny1, :] = 2.0*vybottom_val - vyp[Ny, :]
         # vxpf
         # top: free slip
         @views @. vxpf[1, 2:(Nx - 1)] = - bcftop * vxpf[2, 2:(Nx - 1)]
         # bottom: free slip
         @views @. vxpf[Ny1, 2:(Nx - 1)] = - bcfbottom * vxpf[Ny, 2:(Nx - 1)]
         # left
-        @views @. vxpf[:, 1] = 2.0*vxleft - vxpf[:, 2]
+        @views @. vxpf[:, 1] = 2.0*vxleft_val - vxpf[:, 2]
         # right
-        @views @. vxpf[:, Nx1] = 2.0*vxright - vxpf[:, Nx]
+        @views @. vxpf[:, Nx1] = 2.0*vxright_val - vxpf[:, Nx]
         # vypf
         # left: free slip
         @views @. vypf[2:(Ny - 1), 1] = - bcfleft * vypf[2:(Ny - 1), 2]
         # right: free slip
         @views @. vypf[2:(Ny - 1), Nx1] = - bcfright * vypf[2:(Ny - 1), Nx]
         # top
-        @views @. vypf[1, :] = 2.0*vytop - vypf[2, :]
+        @views @. vypf[1, :] = 2.0*vytop_val - vypf[2, :]
         # bottom
-        @views @. vypf[Ny1, :] = 2.0*vybottom - vypf[Ny, :]
+        @views @. vypf[Ny1, :] = 2.0*vybottom_val - vypf[Ny, :]
     end # @inbounds
     return nothing
 end # function compute_velocities!
@@ -2968,7 +2992,9 @@ $(SIGNATURES)
 
     - nothing
 """
-function compute_rotation_rate!(vx, vy, wyx; coords=nothing)
+function compute_rotation_rate!(
+    vx, vy, wyx; coords::GridCoordinates=default_grid_coordinates()
+)
     Ny, Nx = size(wyx)
     @unpack_coords coords dx dy
     for j in 1:1:Nx, i in 1:1:Ny
@@ -3028,7 +3054,7 @@ function move_markers_rk4!(
     marknum,
     dt,
     mode;
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xp yp x y xvx yvx xvy yvy dx dy
     @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
@@ -3339,7 +3365,18 @@ $(SIGNATURES)
     - nothing
 """
 function backtrace_pressures_rk4!(
-    pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=nothing
+    pr,
+    pr0,
+    ps,
+    ps0,
+    pf,
+    pf0,
+    vx,
+    vy,
+    vxf,
+    vyf,
+    dt;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xp yp xvx yvx xvy yvy dx dy
     @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_vx jmax_vx imin_vx imax_vx
@@ -3706,7 +3743,7 @@ function replenish_markers!(
     mnum;
     Fm=nothing,
     randomized=random_markers,
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     Xfem=nothing,
     Xfem0=nothing,
     Xfe_bulk=nothing,
@@ -3924,7 +3961,7 @@ function apply_subgrid_stress_diffusion!(
     WTSUM,
     dt,
     marknum;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     dsubgrids::Real=dsubgrids,
 )
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
@@ -4018,7 +4055,14 @@ $(SIGNATURES)
     - nothing
 """
 function update_marker_stress!(
-    xm, ym, sxxm, sxym, DSXX, DSXY, marknum; coords::Union{Nothing,GridCoordinates}=nothing
+    xm,
+    ym,
+    sxxm,
+    sxym,
+    DSXX,
+    DSXY,
+    marknum;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     Ny, Nx = size(DSXY)
     @unpack_coords coords xp yp x y dx dy
@@ -4076,7 +4120,7 @@ function apply_subgrid_temperature_diffusion!(
     dt,
     marknum,
     mode;
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     dsubgridt::Real=dsubgridt,
 )
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
@@ -4157,7 +4201,14 @@ $(SIGNATURES)
     - nothing
 # """
 function update_marker_temperature!(
-    xm, ym, tkm, DT, tk2, timestep, marknum; coords::Union{Nothing,GridCoordinates}=nothing
+    xm,
+    ym,
+    tkm,
+    DT,
+    tk2,
+    timestep,
+    marknum;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     if timestep == 1
@@ -4227,7 +4278,7 @@ function update_marker_porosity!(
     marknum;
     phimin=phimin,
     phimax=phimax,
-    coords::Union{Nothing,GridCoordinates}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     # update porosity for compaction
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p

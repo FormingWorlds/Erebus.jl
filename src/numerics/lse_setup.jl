@@ -13,7 +13,7 @@ $(SIGNATURES)
     - RP: gravitational linear system of equations: RHS vector
     - SP: gravitational linear system of equations: solution vector
 """
-function setup_gravitational_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
+function setup_gravitational_lse(Nx1::Int, Ny1::Int)
     RP = Vector{Float64}(undef, Ny1*Nx1)
     SP = Vector{Float64}(undef, Ny1*Nx1)
     return RP, SP
@@ -36,7 +36,7 @@ $(SIGNATURES)
     - R: hydromechanical linear system of equations: RHS vector
     - S: hydromechanical linear system of equations: solution vector
 """
-function setup_hydromechanical_lse(Nx1::Int=Nx1, Ny1::Int=Ny1; dof_per_node::Int=6)
+function setup_hydromechanical_lse(Nx1::Int, Ny1::Int; dof_per_node::Int=6)
     R = Vector{Float64}(undef, Ny1*Nx1*dof_per_node)
     S = Vector{Float64}(undef, Ny1*Nx1*dof_per_node)
     return R, S
@@ -59,7 +59,7 @@ $(SIGNATURES)
     - RT: thermal linear system of equations: RHS vector
     - ST: thermal linear system of equations: solution vector
 """
-function setup_thermal_lse(Nx1::Int=Nx1, Ny1::Int=Ny1)
+function setup_thermal_lse(Nx1::Int, Ny1::Int)
     RT = Vector{Float64}(undef, Ny1*Nx1)
     ST = Vector{Float64}(undef, Ny1*Nx1)
     return RT, ST

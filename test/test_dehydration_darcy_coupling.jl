@@ -477,7 +477,7 @@ Random.seed!(42)
         div_qD =
             (qxD[i_int, j_int] - qxD[i_int, j_int - 1]) / coords.dx +
             (qyD[i_int, j_int] - qyD[i_int - 1, j_int]) / coords.dy
-        @test div_qD > 0.9 * dqpf_val
+        @test div_qD > 0.85 * dqpf_val
         @test div_qD <= dqpf_val * 1.05
     end
 

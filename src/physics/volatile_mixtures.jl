@@ -411,7 +411,7 @@ function update_marker_pyrolysis!(
     cfg::RefractoryConfig;
     xm::Union{Nothing,AbstractVector{Float64}}=nothing,
     ym::Union{Nothing,AbstractVector{Float64}}=nothing,
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
     DHP::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     rhosolid::Real=3000.0,
     rhofluid::Real=1000.0,
@@ -434,12 +434,14 @@ function update_marker_pyrolysis!(
     tot_dC_graphite = 0.0
     tot_dH_pyro = 0.0
 
-    apply_dhp =
-        DHP !== nothing &&
-        xm !== nothing &&
-        ym !== nothing &&
-        coords !== nothing &&
-        dt_val > 0.0
+    apply_dhp = DHP !== nothing && xm !== nothing && ym !== nothing && dt_val > 0.0
+    if apply_dhp && size(DHP) != (coords.Ny1, coords.Nx1)
+        throw(
+            DimensionMismatch(
+                "DHP size $(size(DHP)) must match grid dimensions ($(coords.Ny1), $(coords.Nx1))",
+            ),
+        )
+    end
     DHP_pyro_sum = apply_dhp ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
     WT_pyro_sum = apply_dhp ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
 

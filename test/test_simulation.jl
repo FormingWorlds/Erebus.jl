@@ -13,7 +13,7 @@ using JLD2
         @test timestep == 1
         @test dt ≈ cfg_default.time.dt_initial * cfg_default.time.yearlength rtol=1e-12
         @test timesum ≈ cfg_default.time.start_time * cfg_default.time.yearlength rtol=1e-12
-        @test marknum == Erebus.start_marknum
+        @test marknum == Erebus.default_grid_coordinates().start_marknum
 
         # Radiogenic decay heat vector positivity
         @test length(hrsolidm) == 3
@@ -34,7 +34,7 @@ using JLD2
         @test ts_c == 7
         @test dt_c ≈ 50.0 * cfg.time.yearlength rtol=1e-12
         @test time_c ≈ 3.5 * cfg.time.yearlength rtol=1e-12
-        @test mark_c == Erebus.start_marknum
+        @test mark_c == Erebus.default_grid_coordinates().start_marknum
     end # testset "setup_dynamic_simulation_parameters()"
 
     @testset "s_to_Ma(): time conversion physical invariants and benchmarks" begin

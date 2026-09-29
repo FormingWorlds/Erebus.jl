@@ -44,7 +44,7 @@ function compute_shear_heating!(
     kappa_frac::Real=1.0e3,
     gamma_frac::Real=1.0,
     k_frac_max::Real=1.0e-9,
-    coords=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     Ny1, Nx1 = size(HS)
     Nx = Nx1 - 1
@@ -177,7 +177,18 @@ $(SIGNATURES)
     - nothing
 """
 function compute_adiabatic_heating!(
-    HA, tk1, ALPHA, ALPHAF, PHI, vx, vy, vxf, vyf, ps, pf; coords=nothing
+    HA,
+    tk1,
+    ALPHA,
+    ALPHAF,
+    PHI,
+    vx,
+    vy,
+    vxf,
+    vyf,
+    ps,
+    pf;
+    coords::GridCoordinates=default_grid_coordinates(),
 )
     Ny1, Nx1 = size(HA)
     Nx = Nx1 - 1

@@ -10,125 +10,8 @@ const rplanet = 50_000.0
 const rcrust = 50_000.0
 # surface pressure [Pa]
 const psurface = 1.0e+3
-# model size, geometry, and resolution
-# horizontal model size [m]
-const xsize = 140_000.0
-# vertical model size [m]
-const ysize = 140_000.0
-# horizontal center of model
-const xcenter = xsize / 2
-# vertical center of model
-const ycenter = ysize / 2
-# basic grid resolution in x direction (horizontal)
-const Nx = 33
-# const Nx = 141
-# basic grid resolution in y direction (vertical)	
-const Ny = 33
-# const Ny = 141
-# Vx, Vy, P grid resolution in x direction (horizontal)
-const Nx1 = Nx + 1
-# Vx/Vy/P grid resolution in y direction (vertical)
-const Ny1 = Ny + 1
-# horizontal grid step [m]
-const dx = xsize / (Nx-1)
-# vertical grid step [m]
-const dy = ysize / (Ny-1)
-# basic nodes
-# horizontal coordinates of basic grid points [m]
-const x = SVector{Nx,Float64}([j for j in 0:dx:xsize])
-#  const x = [j for j = 0:dx:xsize]
-# vertical coordinates of basic grid points [m]
-const y = SVector{Ny,Float64}([i for i in 0:dy:ysize])
-#  const y = [i for i = 0:dy:ysize]
-# Vx nodes
-# horizontal coordinates of vx grid points [m]
-const xvx = SVector{Ny1,Float64}([j for j in 0:dx:(xsize + dy)])
-#  const xvx = [j for j = 0:dx:xsize+dy]
-# vertical coordinates of vx grid points [m]
-const yvx = SVector{Nx1,Float64}([i for i in (-dy / 2):dy:(ysize + dy / 2)])
-#  const yvx = [i for i = -dy/2:dy:ysize+dy/2]
-# Vy nodes
-# horizontal coordinates of vy grid points [m]
-const xvy = SVector{Nx1,Float64}([j for j in (-dx / 2):dx:(xsize + dx / 2)])
-#  const xvy = [j for j = -dx/2:dx:xsize+dx/2]
-# vertical coordinates of vy grid points [m]
-const yvy = SVector{Ny1,Float64}([i for i in 0:dy:(ysize + dy)])
-#  const yvy = [i for i = 0:dy:ysize+dy]
-# P nodes
-# horizontal coordinates of p grid points [m]
-const xp = SVector{Nx1,Float64}([j for j in (-dx / 2):dx:(xsize + dx / 2)])
-#  const xp = [j for j = -dx/2:dx:xsize+dx/2]
-# vertical coordinates of p grid points [m]
-const yp = SVector{Ny1,Float64}([i for i in (-dy / 2):dy:(ysize + dy / 2)])
-#  const yp = [i for i = -dy/2:dy:ysize+dy/2]
-# basic grid min/max assignables indices
-# minimum assignable basic grid index in x direction
-const jmin_basic = 1
-# minimum assignable basic grid index in y direction
-const imin_basic = 1
-# maximum assignable basic grid index in x direction
-const jmax_basic = Nx - 1
-# maximum assignable basic grid index in y direction
-const imax_basic = Ny - 1
-# Vx grid min/max assignables indices
-# minimum assignable Vx grid index in x direction
-const jmin_vx = 1
-# minimum assignable Vx grid index in y direction
-const imin_vx = 1
-# maximum assignable Vx grid index in x direction
-const jmax_vx = Nx - 1
-# maximum assignable Vx grid index in y direction
-const imax_vx = Ny
-# Vy grid min/max assignables indices
-# minimum assignable Vy grid index in x direction
-const jmin_vy = 1
-# minimum assignable Vy grid index in y direction
-const imin_vy = 1
-# maximum assignable Vy grid index in x direction
-const jmax_vy = Nx
-# maximum assignable Vy grid index in y direction
-const imax_vy = Ny - 1
-# P grid min/max assignables indices
-# minimum assignable P grid index in x direction
-const jmin_p = 1
-# minimum assignable P grid index in y direction
-const imin_p = 1
-# maximum assignable P grid index in x direction
-const jmax_p = Nx
-# maximum assignable P grid index in y direction
-const imax_p = Ny
-# marker count and initial spacing
-# number of markers per cell in horizontal direction
-const Nxmc = 4
-# number of markers per cell in vertical direction
-const Nymc = 4
-# marker grid resolution in horizontal direction
-const Nxm = (Nx - 1) * Nxmc
-# marker grid resolution in vertical direction
-const Nym = (Ny - 1) * Nymc
-# marker grid step in horizontal direction
-const dxm = xsize / Nxm
-# marker grid step in vertical direction
-const dym = ysize / Nym
-# horizontal coordinates of marker grid/launch anchor points [m]
-const xxm = SVector{Nxm,Float64}([j for j in (dxm / 2):dxm:(xsize - dxm / 2)])
-#  const xxm = [j for j = dxm/2:dxm:xsize-dxm/2]
-# vertical coordinates of marker grid/launch anchor points [m]
-const yym = SVector{Nxm,Float64}([i for i in (dym / 2):dym:(ysize - dym / 2)])
-#  const yym = [i for i = dym/2:dym:ysize-dym/2]
 # initialization distance of nearest marker to launch anchor point [m]
 const mdis_init = 1.0e30
-# number of markers at start
-const start_marknum = Nxm * Nym
-# marker grid min/max assignables indices
-# minimum assignable marker grid index in x direction
-const jmin_m = 1
-# minimum assignable marker grid index in y direction
-const imin_m = 1
-# maximum assignable marker grid index in x direction
-const jmax_m = Nxm - 1
-# maximum assignable marker grid index in y direction
-const imax_m = Nym - 1
 # marker randomized positions and porosity for testing
 const random_markers = true
 # const random_markers = false
@@ -178,10 +61,10 @@ const frictsolidm = SVector{3,Float64}([0.6, 0.6, 0.0])
 const cohessolidm = SVector{3,Float64}([1.0e+08, 1.0e+08, 1.0e+08])
 # solid tensile strength [Pa]
 const tenssolidm = SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
-# solid matrix compressibility [1/Pa] (default 0.0 for test baseline, 2.5e-11 for production)
-const betasolid = 0.0
-# fluid compressibility [1/Pa] (default 0.0 for test baseline, 4.0e-10 for production)
-const betafluid = 0.0
+# solid matrix compressibility [1/Pa]
+const betasolid = 2.5e-11
+# fluid compressibility [1/Pa]
+const betafluid = 4.0e-10
 # standard permeability [m^2]
 const kphim0 = SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
 # initial temperature [K]
@@ -305,17 +188,8 @@ const bcfright = -1
 const bcftop = -1
 # hydraulic boundary condition bottom
 const bcfbottom = -1
-# extension/shortening velocities
 # shortening strain rate
 const strainrate = 0.0e-13
-# x extension/shortening velocity left
-const vxleft = strainrate * xsize / 2
-# x extension/shortening velocity right
-const vxright = -strainrate * xsize / 2
-# y extension/shortening velocity top
-const vytop = - strainrate * ysize / 2
-# y extension/shortening velocity bottom
-const vybottom = strainrate * ysize / 2
 # Runge-Kutta integration parameters
 # bⱼ Butcher coefficients for RK4
 const brk4 = SVector{4,Rational{Int64}}([1//6, 2//6, 2//6, 1//6])

@@ -368,19 +368,20 @@
 
     @testset "setup_*_lse() constructors: dimensions and dynamic coordinates" begin
         # 1. Default grid sizes
-        R_h, S_h = Erebus.setup_hydromechanical_lse()
-        @test size(R_h) == (Nx1 * Ny1 * 6,)
-        @test size(S_h) == (Nx1 * Ny1 * 6,)
+        coords_lse = Erebus.default_grid_coordinates()
+        R_h, S_h = Erebus.setup_hydromechanical_lse(coords_lse)
+        @test size(R_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
+        @test size(S_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
         @test eltype(R_h) === Float64
         @test eltype(S_h) === Float64
 
-        RP_t, SP_t = Erebus.setup_thermal_lse()
-        @test size(RP_t) == (Nx1 * Ny1,)
-        @test size(SP_t) == (Nx1 * Ny1,)
+        RP_t, SP_t = Erebus.setup_thermal_lse(coords_lse)
+        @test size(RP_t) == (coords_lse.Nx1 * coords_lse.Ny1,)
+        @test size(SP_t) == (coords_lse.Nx1 * coords_lse.Ny1,)
 
-        RT_g, ST_g = Erebus.setup_gravitational_lse()
-        @test size(RT_g) == (Nx1 * Ny1,)
-        @test size(ST_g) == (Nx1 * Ny1,)
+        RT_g, ST_g = Erebus.setup_gravitational_lse(coords_lse)
+        @test size(RT_g) == (coords_lse.Nx1 * coords_lse.Ny1,)
+        @test size(ST_g) == (coords_lse.Nx1 * coords_lse.Ny1,)
 
         # 2. Dynamic grid coordinates
         dyn_coords = Erebus.GridCoordinates(15, 15; xsize=100000.0, ysize=100000.0)
@@ -596,9 +597,9 @@
         for j in 1:Nx1, i in 1:Ny1
             kvy = ((j - 1) * Ny1 + i - 1) * 6 + 2
             if i == 1
-                @test isapprox(R_act[kvy], vytop; rtol=1e-12)
+                @test isapprox(R_act[kvy], 0.0; atol=1e-12)
             elseif i == Ny
-                @test isapprox(R_act[kvy], vybottom; rtol=1e-12)
+                @test isapprox(R_act[kvy], 0.0; atol=1e-12)
             end
             kpm = ((j - 1) * Ny1 + i - 1) * 6 + 3
             kpf = ((j - 1) * Ny1 + i - 1) * 6 + 6
@@ -1292,8 +1293,9 @@
     end
 
     @testset "poroelastic hydromechanical coupling" begin
-        Ny, Nx = Erebus.Ny, Erebus.Nx
-        Ny1, Nx1 = Erebus.Ny1, Erebus.Nx1
+        coords_poro = Erebus.default_grid_coordinates()
+        Ny, Nx = coords_poro.Ny, coords_poro.Nx
+        Ny1, Nx1 = coords_poro.Ny1, coords_poro.Nx1
         dt = 10.0
 
         ETA = fill(1e22, Ny, Nx)
@@ -1382,9 +1384,10 @@
     end # testset "poroelastic hydromechanical coupling"
 
     @testset "Terzaghi 1D consolidation numerical simulation verification" begin
-        Ny, Nx = Erebus.Ny, Erebus.Nx
-        Ny1, Nx1 = Erebus.Ny1, Erebus.Nx1
-        dy = Erebus.dy
+        coords_terz = Erebus.default_grid_coordinates()
+        Ny, Nx = coords_terz.Ny, coords_terz.Nx
+        Ny1, Nx1 = coords_terz.Ny1, coords_terz.Nx1
+        dy = coords_terz.dy
 
         # Height between draining boundary anchors i=2 and i=Ny
         H = (Ny - 2) * dy

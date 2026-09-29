@@ -4,8 +4,8 @@
 [grid]
 xsize = 140000.0        # horizontal domain size [m]
 ysize = 140000.0        # vertical domain size [m]
-Nx = 33                  # basic grid resolution in x (must match compiled constants)
-Ny = 33                  # basic grid resolution in y (must match compiled constants)
+Nx = 33                  # basic grid resolution in x
+Ny = 33                  # basic grid resolution in y
 
 [geometry]
 rplanet = 50000.0       # planetesimal radius [m]
