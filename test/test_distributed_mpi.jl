@@ -261,6 +261,21 @@ end
         @test in_nt == 0
         @test length(markers_nt.xm) == 4
         @test markers_nt.tkm[2] ≈ 290.0
+
+        # MarkerArrays interface
+        cfg_mpi = Erebus.override_config(
+            default_config(),
+            Dict("coreformation.percolation_active" => true, "volatiles.active" => true),
+        )
+        coords_mpi = default_grid_coordinates()
+        markers_ma = init_marker_arrays(4, cfg_mpi, coords_mpi)
+        markers_ma.core.xm .= [10.0, 25.0, 50.0, 90.0]
+        markers_ma.core.ym .= [15.0, 30.0, 60.0, 85.0]
+        out_ma, in_ma = migrate_markers!(topo, markers_ma)
+        @test out_ma == 0
+        @test in_ma == 0
+        @test length(markers_ma) == 4
+        @test markers_ma.core.xm[1] ≈ 10.0
     end
 
     function run_mpi_test_with_timeout(cmd::Cmd; timeout_secs::Real=90.0)

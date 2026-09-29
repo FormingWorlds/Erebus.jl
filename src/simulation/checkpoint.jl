@@ -171,6 +171,140 @@ function setup_dynamic_simulation_parameters(
 end # function setup_dynamic_simulation_parameters()
 
 """
+    _collect_checkpoint_marker_dict(markers; kwargs...)
+
+Collect marker arrays and optional simulation properties into a dictionary for checkpointing.
+"""
+function _collect_checkpoint_marker_dict(
+    markers::Union{Nothing,MarkerArrays};
+    xm=nothing,
+    ym=nothing,
+    tm=nothing,
+    tkm=nothing,
+    sxxm=nothing,
+    sxym=nothing,
+    etavpm=nothing,
+    phim=nothing,
+    rhototalm=nothing,
+    rhocptotalm=nothing,
+    etatotalm=nothing,
+    hrtotalm=nothing,
+    ktotalm=nothing,
+    tkm_rhocptotalm=nothing,
+    etafluidcur_inv_kphim=nothing,
+    inv_gggtotalm=nothing,
+    fricttotalm=nothing,
+    cohestotalm=nothing,
+    tenstotalm=nothing,
+    rhofluidcur=nothing,
+    alphasolidcur=nothing,
+    alphafluidcur=nothing,
+    XWsolidm0=nothing,
+    F_extract_m=nothing,
+    Xfem=nothing,
+    Xfem0=nothing,
+    Xfe_bulk=nothing,
+    XH2Om=nothing,
+    XCm=nothing,
+    XNm=nothing,
+    XSm=nothing,
+    Xfe_H_m=nothing,
+    Xfe_C_m=nothing,
+    Xfe_N_m=nothing,
+    Xfe_S_m=nothing,
+    core_budgets=nothing,
+    M_atm_species=nothing,
+    M_escaped_species=nothing,
+    Xmin_troilite_m=nothing,
+    Xmin_schreibersite_m=nothing,
+    Xmin_cohenite_m=nothing,
+    Xmin_nitride_m=nothing,
+    Xmin_metal_matrix_m=nothing,
+    Xmin_graphite_m=nothing,
+    X_graphite_m=nothing,
+    regional_mineral_modes=nothing,
+    t_accreted=nothing,
+    M_accreted_total=nothing,
+    M_planet_val=nothing,
+    hcnspo_props=nothing,
+    redox_props=nothing,
+)
+    dict = Dict{Symbol,Any}()
+    if markers !== nothing
+        for fn in fieldnames(CoreGroup)
+            dict[fn] = getfield(markers.core, fn)
+        end
+        for grp in values(markers.groups)
+            for fn in fieldnames(typeof(grp))
+                dict[fn] = getfield(grp, fn)
+            end
+        end
+    else
+        dict[:xm] = xm
+        dict[:ym] = ym
+        dict[:tm] = tm
+        dict[:tkm] = tkm
+        dict[:sxxm] = sxxm
+        dict[:sxym] = sxym
+        dict[:etavpm] = etavpm
+        dict[:phim] = phim
+        dict[:rhototalm] = rhototalm
+        dict[:rhocptotalm] = rhocptotalm
+        dict[:etatotalm] = etatotalm
+        dict[:hrtotalm] = hrtotalm
+        dict[:ktotalm] = ktotalm
+        dict[:tkm_rhocptotalm] = tkm_rhocptotalm
+        dict[:etafluidcur_inv_kphim] = etafluidcur_inv_kphim
+        dict[:inv_gggtotalm] = inv_gggtotalm
+        dict[:fricttotalm] = fricttotalm
+        dict[:cohestotalm] = cohestotalm
+        dict[:tenstotalm] = tenstotalm
+        dict[:rhofluidcur] = rhofluidcur
+        dict[:alphasolidcur] = alphasolidcur
+        dict[:alphafluidcur] = alphafluidcur
+        dict[:XWsolidm0] = XWsolidm0
+        F_extract_m !== nothing && (dict[:F_extract_m] = F_extract_m)
+        Xfem !== nothing && (dict[:Xfem]=Xfem; dict[:Xfem0]=Xfem0; dict[:Xfe_bulk]=Xfe_bulk)
+        XH2Om !== nothing &&
+            (dict[:XH2Om]=XH2Om; dict[:XCm]=XCm; dict[:XNm]=XNm; dict[:XSm]=XSm)
+        Xfe_H_m !== nothing && (
+            dict[:Xfe_H_m]=Xfe_H_m;
+            dict[:Xfe_C_m]=Xfe_C_m;
+            dict[:Xfe_N_m]=Xfe_N_m;
+            dict[:Xfe_S_m]=Xfe_S_m
+        )
+        Xmin_troilite_m !== nothing && (
+            dict[:Xmin_troilite_m]=Xmin_troilite_m;
+            dict[:Xmin_schreibersite_m]=Xmin_schreibersite_m;
+            dict[:Xmin_cohenite_m]=Xmin_cohenite_m;
+            dict[:Xmin_nitride_m]=Xmin_nitride_m;
+            dict[:Xmin_metal_matrix_m]=Xmin_metal_matrix_m
+        )
+        Xmin_graphite_m !== nothing && (dict[:Xmin_graphite_m] = Xmin_graphite_m)
+        X_graphite_m !== nothing && (dict[:X_graphite_m] = X_graphite_m)
+        t_accreted !== nothing && (dict[:t_accreted] = t_accreted)
+        if hcnspo_props !== nothing
+            for fn in fieldnames(typeof(hcnspo_props))
+                dict[fn] = getfield(hcnspo_props, fn)
+            end
+        end
+        if redox_props !== nothing
+            for fn in fieldnames(typeof(redox_props))
+                dict[fn] = getfield(redox_props, fn)
+            end
+        end
+    end
+    regional_mineral_modes !== nothing &&
+        (dict[:regional_mineral_modes] = regional_mineral_modes)
+    core_budgets !== nothing && (dict[:core_budgets] = core_budgets)
+    M_atm_species !== nothing &&
+        (dict[:M_atm_species]=M_atm_species; dict[:M_escaped_species]=M_escaped_species)
+    M_accreted_total !== nothing && (dict[:M_accreted_total] = M_accreted_total)
+    M_planet_val !== nothing && (dict[:M_planet_val] = M_planet_val)
+    return dict
+end
+
+"""
 Save simulation state to JLD2 output file named after current timestep.
 
 $(SIGNATURES)
@@ -331,9 +465,66 @@ function save_state(
     redox_props=nothing,
     atm_state::Union{Nothing,AtmosphereState}=nothing,
     F_extract_m=nothing,
+    X_graphite_m=nothing,
+    markers::Union{Nothing,MarkerArrays}=nothing,
     cfg::Union{Nothing,SimulationConfig}=nothing,
     transfer_log=nothing,
 )
+    marker_props = _collect_checkpoint_marker_dict(
+        markers;
+        xm=xm,
+        ym=ym,
+        tm=tm,
+        tkm=tkm,
+        sxxm=sxxm,
+        sxym=sxym,
+        etavpm=etavpm,
+        phim=phim,
+        rhototalm=rhototalm,
+        rhocptotalm=rhocptotalm,
+        etatotalm=etatotalm,
+        hrtotalm=hrtotalm,
+        ktotalm=ktotalm,
+        tkm_rhocptotalm=tkm_rhocptotalm,
+        etafluidcur_inv_kphim=etafluidcur_inv_kphim,
+        inv_gggtotalm=inv_gggtotalm,
+        fricttotalm=fricttotalm,
+        cohestotalm=cohestotalm,
+        tenstotalm=tenstotalm,
+        rhofluidcur=rhofluidcur,
+        alphasolidcur=alphasolidcur,
+        alphafluidcur=alphafluidcur,
+        XWsolidm0=XWsolidm0,
+        F_extract_m=F_extract_m,
+        Xfem=Xfem,
+        Xfem0=Xfem0,
+        Xfe_bulk=Xfe_bulk,
+        XH2Om=XH2Om,
+        XCm=XCm,
+        XNm=XNm,
+        XSm=XSm,
+        Xfe_H_m=Xfe_H_m,
+        Xfe_C_m=Xfe_C_m,
+        Xfe_N_m=Xfe_N_m,
+        Xfe_S_m=Xfe_S_m,
+        core_budgets=core_budgets,
+        M_atm_species=M_atm_species,
+        M_escaped_species=M_escaped_species,
+        Xmin_troilite_m=Xmin_troilite_m,
+        Xmin_schreibersite_m=Xmin_schreibersite_m,
+        Xmin_cohenite_m=Xmin_cohenite_m,
+        Xmin_nitride_m=Xmin_nitride_m,
+        Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+        Xmin_graphite_m=Xmin_graphite_m,
+        X_graphite_m=X_graphite_m,
+        regional_mineral_modes=regional_mineral_modes,
+        t_accreted=t_accreted,
+        M_accreted_total=M_accreted_total,
+        M_planet_val=M_planet_val,
+        hcnspo_props=hcnspo_props,
+        redox_props=redox_props,
+    )
+
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
     @unpack_coords coords Nx Ny Nx1 Ny1 Nxm Nym dx dy dxm dym
     @unpack_coords coords x y xvx yvx xvy yvy xp yp xxm yym xsize ysize xcenter ycenter
@@ -464,54 +655,7 @@ function save_state(
         DQPF,
         XWS,
         XWsolidm0,
-        xm,
-        ym,
-        tm,
-        tkm,
-        sxxm,
-        sxym,
-        etavpm,
-        phim,
-        rhototalm,
-        rhocptotalm,
-        etatotalm,
-        hrtotalm,
-        ktotalm,
-        tkm_rhocptotalm,
-        etafluidcur_inv_kphim,
-        inv_gggtotalm,
-        fricttotalm,
-        cohestotalm,
-        tenstotalm,
-        rhofluidcur,
-        alphasolidcur,
-        alphafluidcur,
-        (F_extract_m !== nothing ? (; F_extract_m) : (;))...,
-        (Xfem !== nothing ? (; Xfem, Xfem0, Xfe_bulk) : (;))...,
-        (XH2Om !== nothing ? (; XH2Om, XCm, XNm, XSm) : (;))...,
-        (Xfe_H_m !== nothing ? (; Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m) : (;))...,
-        (core_budgets !== nothing ? (; core_budgets) : (;))...,
-        (M_atm_species !== nothing ? (; M_atm_species, M_escaped_species) : (;))...,
-        (
-            if Xmin_troilite_m !== nothing
-                (;
-                    Xmin_troilite_m,
-                    Xmin_schreibersite_m,
-                    Xmin_cohenite_m,
-                    Xmin_nitride_m,
-                    Xmin_metal_matrix_m,
-                )
-            else
-                (;)
-            end
-        )...,
-        (Xmin_graphite_m !== nothing ? (; Xmin_graphite_m) : (;))...,
-        (regional_mineral_modes !== nothing ? (; regional_mineral_modes) : (;))...,
-        (t_accreted !== nothing ? (; t_accreted) : (;))...,
-        (M_accreted_total !== nothing ? (; M_accreted_total) : (;))...,
-        (M_planet_val !== nothing ? (; M_planet_val) : (;))...,
-        (hcnspo_props !== nothing ? (; hcnspo_props...) : (;))...,
-        (redox_props !== nothing ? (; redox_props...) : (;))...,
+        marker_props...,
         (transfer_log !== nothing ? (; transfer_log) : (;))...,
         (
             if atm_state !== nothing

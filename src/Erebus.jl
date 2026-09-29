@@ -353,7 +353,21 @@ export Config,
     require_nonneg_finite,
     require_unit_interval,
     marker_out_of_plane_length,
-    marker_area
+    marker_area,
+    MarkerArrays,
+    CoreGroup,
+    MetalGroup,
+    VolatilesGroup,
+    RedoxGroup,
+    HcnspoGroup,
+    PhaseGroup,
+    AccretionGroup,
+    init_marker_arrays,
+    push_marker!,
+    all_marker_array_names,
+    serialize_marker_arrays,
+    restore_marker_arrays!,
+    replenish_markers!
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -373,6 +387,7 @@ include("geometry.jl")
 include("atmosphere.jl")
 include("physics.jl")
 include("redox.jl")
+include("markers.jl")
 include("particles.jl")
 include("accretion.jl")
 include("telescoping.jl")
@@ -827,6 +842,18 @@ module Particles
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
         define_markers!,
+        MarkerArrays,
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        init_marker_arrays,
+        push_marker!,
+        all_marker_array_names,
+        serialize_marker_arrays,
         compute_marker_properties!,
         update_marker_viscosity!,
         setup_interpolated_properties,

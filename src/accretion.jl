@@ -785,6 +785,187 @@ function advance_accretion_boundary!(
     return n_converted[]
 end
 
+function _init_accreted_marker!(
+    markers::MarkerArrays,
+    m::Int,
+    params::NamedTuple;
+    cfg::Union{Nothing,SimulationConfig}=nothing,
+    disk_state=nothing,
+)
+    @inbounds markers.tm[m] = 2
+    @inbounds markers.tkm[m] = params.T_accreted
+    @inbounds markers.phim[m] = params.phi_accreted
+    @inbounds markers.phinewm[m] = params.phi_accreted
+    @inbounds markers.XWsolidm0[m] = params.XW_acc
+    @inbounds markers.XWsolidm[m] = params.XW_acc
+
+    if haskey(markers.groups, :metal)
+        metal = markers.groups.metal
+        @inbounds metal.Xfe_bulk[m] = params.Xfe_accreted
+        @inbounds metal.Xfem[m] = 0.0
+        @inbounds metal.Xfem0[m] = 0.0
+        @inbounds metal.Xfe_H_m[m] = 0.0
+        @inbounds metal.Xfe_C_m[m] = 0.0
+        @inbounds metal.Xfe_N_m[m] = 0.0
+        @inbounds metal.Xfe_S_m[m] = 0.0
+    end
+
+    if haskey(markers.groups, :volatiles)
+        vol = markers.groups.volatiles
+        @inbounds vol.XH2Om[m] = params.H2O_acc
+        @inbounds vol.XCm[m] = params.XC_accreted
+        @inbounds vol.XNm[m] = params.XN_accreted
+        @inbounds vol.XSm[m] = params.XS_accreted
+        @inbounds vol.X_graphite_m[m] = 0.0
+        @inbounds vol.F_extract_m[m] = 0.0
+    end
+
+    if haskey(markers.groups, :redox)
+        rdx = markers.groups.redox
+        M_Fe = 0.055845
+        w_FeO_silicate = 0.15
+        M_FeO = 0.071844
+        xfe = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk[m] : 0.0
+        n_fe0 = max(0.0, xfe) / M_Fe
+        w_sil = max(0.0, 1.0 - xfe)
+        n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
+        x_ferric = cfg !== nothing ? clamp(cfg.redox.initial_x_ferric, 0.0, 1.0) : 0.05
+        n_fe3 = n_fe_sil * x_ferric
+        n_fe2 = n_fe_sil * (1.0 - x_ferric)
+
+        @inbounds rdx.nFe0_m[m] = n_fe0
+        @inbounds rdx.nFe2_m[m] = n_fe2
+        @inbounds rdx.nFe3_m[m] = n_fe3
+        @inbounds rdx.nC_graphite_m[m] = 0.0
+        @inbounds rdx.nCO_m[m] = 0.0
+        @inbounds rdx.nCO2_m[m] = 0.0
+        @inbounds rdx.nCH4_m[m] = 0.0
+
+        T_val = max(100.0, markers.core.tkm[m])
+        P_val = max(0.0, markers.core.pfm0[m])
+        c = marker_redox_components(
+            n_fe0, n_fe2, n_fe3; n_C_graphite=0.0, n_CO=0.0, n_CO2=0.0, n_CH4=0.0
+        )
+        @inbounds rdx.deltaIW_m[m] = if cfg !== nothing
+            local_delta_iw(
+                c,
+                T_val,
+                P_val;
+                deltaIW_min=cfg.redox.deltaIW_min,
+                deltaIW_max=cfg.redox.deltaIW_max,
+                initial_x_ferric=cfg.redox.initial_x_ferric,
+                graphite_buffer_active=cfg.redox.graphite_buffer_active,
+                w_graphite_threshold=cfg.redox.w_graphite_threshold,
+            )
+        else
+            -2.0
+        end
+    end
+
+    if haskey(markers.groups, :hcnspo) && disk_state !== nothing
+        hcn = markers.groups.hcnspo
+        @inbounds hcn.X_ice_H2O_m[m] = Float64(disk_state.X_ice_H2O)
+        @inbounds hcn.X_ice_NH3_m[m] = Float64(disk_state.X_ice_NH3)
+        @inbounds hcn.X_ice_CO2_m[m] = Float64(disk_state.X_ice_CO2)
+        @inbounds hcn.X_ice_CO_m[m] = Float64(disk_state.X_ice_CO)
+        @inbounds hcn.X_ice_CH4_m[m] = Float64(disk_state.X_ice_CH4)
+        @inbounds hcn.X_ice_N2_m[m] = Float64(disk_state.X_ice_N2)
+        @inbounds hcn.X_ice_H2S_m[m] = Float64(disk_state.X_ice_H2S)
+        @inbounds hcn.X_ice_PH3_m[m] = Float64(disk_state.X_ice_PH3)
+        @inbounds hcn.X_refr_C_m[m] = Float64(disk_state.f_refr_C)
+        @inbounds hcn.X_refr_S_m[m] = Float64(disk_state.f_refr_S)
+        @inbounds hcn.X_refr_N_m[m] = Float64(disk_state.f_refr_N)
+        @inbounds hcn.X_refr_P_m[m] = Float64(disk_state.f_refr_P)
+        @inbounds hcn.X_refr_H_m[m] = Float64(disk_state.f_refr_H)
+    end
+
+    if haskey(markers.groups, :phase)
+        ph = markers.groups.phase
+        @inbounds ph.Xmin_troilite_m[m] = 0.0
+        @inbounds ph.Xmin_schreibersite_m[m] = 0.0
+        @inbounds ph.Xmin_cohenite_m[m] = 0.0
+        @inbounds ph.Xmin_graphite_m[m] = 0.0
+        @inbounds ph.Xmin_nitride_m[m] = 0.0
+        @inbounds ph.Xmin_metal_matrix_m[m] = 0.0
+    end
+
+    if haskey(markers.groups, :accretion)
+        @inbounds markers.groups.accretion.t_accreted[m] = params.current_time
+    end
+    return nothing
+end
+
+"""
+    advance_accretion_boundary!(R_current, delta_R, markers::MarkerArrays; kwargs...)
+
+Convert sticky-air markers to crust and initialize properties across core and all active groups in `markers.groups`.
+"""
+function advance_accretion_boundary!(
+    R_current::Real,
+    delta_R::Real,
+    markers::MarkerArrays;
+    cfg::Union{Nothing,SimulationConfig}=nothing,
+    coords::GridCoordinates=default_grid_coordinates(),
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
+    disk_state=nothing,
+    current_time::Real=0.0,
+    T_accreted::Real=200.0,
+    phi_accreted::Real=cfg !== nothing ? cfg.accretion.phi_accreted : 0.35,
+    XWsolid_accreted::Real=cfg !== nothing ? cfg.accretion.XWsolid_dry : 0.40,
+    Xfe_accreted::Real=cfg !== nothing ? cfg.accretion.Xfe_bulk_accreted : 0.10,
+    XH2O_accreted::Real=cfg !== nothing ? cfg.accretion.XH2O_dry_wtpct : 10.0,
+    XC_accreted::Real=cfg !== nothing ? cfg.accretion.XC_accreted_ppm : 1000.0,
+    XN_accreted::Real=cfg !== nothing ? cfg.accretion.XN_accreted_ppm : 100.0,
+    XS_accreted::Real=cfg !== nothing ? cfg.accretion.XS_accreted_ppm : 10000.0,
+)::Int
+    R_new = Float64(R_current) + Float64(delta_R)
+    R_new_sq = R_new^2
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
+
+    XW_acc = XWsolid_accreted
+    H2O_acc = XH2O_accreted
+
+    if cfg !== nothing && cfg.volatile_mixture.active && disk_state !== nothing
+        if disk_state.condensed_H2O
+            XW_acc = cfg.volatile_mixture.X_ice_H2O
+            H2O_acc = cfg.volatile_mixture.X_ice_H2O * 100.0
+        else
+            XW_acc = cfg.accretion.XWsolid_dry
+            H2O_acc = cfg.accretion.XH2O_dry_wtpct
+        end
+    end
+
+    params = (;
+        T_accreted=Float64(T_accreted),
+        phi_accreted=Float64(phi_accreted),
+        XW_acc=Float64(XW_acc),
+        Xfe_accreted=Float64(Xfe_accreted),
+        H2O_acc=Float64(H2O_acc),
+        XC_accreted=Float64(XC_accreted),
+        XN_accreted=Float64(XN_accreted),
+        XS_accreted=Float64(XS_accreted),
+        current_time=Float64(current_time),
+    )
+
+    n_converted = Threads.Atomic{Int}(0)
+    marknum = length(markers)
+
+    Threads.@threads :dynamic for m in 1:marknum
+        if @inbounds markers.tm[m] == 3
+            dx_m = Float64(@inbounds(markers.xm[m])) - xc
+            dy_m = Float64(@inbounds(markers.ym[m])) - yc
+            if dx_m^2 + dy_m^2 <= R_new_sq
+                _init_accreted_marker!(markers, m, params; cfg=cfg, disk_state=disk_state)
+                Threads.atomic_add!(n_converted, 1)
+            end
+        end
+    end
+
+    return n_converted[]
+end
+
 """
 Compute multi-stage accretion rate across planetesimal collision, pebble accretion, and late impact regimes.
 
