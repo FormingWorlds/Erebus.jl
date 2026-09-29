@@ -73,139 +73,141 @@ $(SIGNATURES)
     - DHP: enthalpy transfer/latent heating term at P nodes
     - XWS: wet solid fraction at P nodes
 """
-function setup_staggered_grid_properties(Nx::Int=Nx, Ny::Int=Ny; randomized=false)
+function setup_staggered_grid_properties(
+    Nx::Int=Nx, Ny::Int=Ny; randomized=false, rng::AbstractRNG=Random.default_rng()
+)
     Nx1 = Nx + 1
     Ny1 = Ny + 1
     # basic nodes
     # viscoplastic viscosity [Pa*s]
-    ETA = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
+    ETA = randomized ? rand(rng, Ny, Nx)*1e16 : zeros(Ny, Nx)
     # viscous viscosity [Pa*s]
-    ETA0 = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
+    ETA0 = randomized ? rand(rng, Ny, Nx)*1e16 : zeros(Ny, Nx)
     # shear modulus [Pa]
-    GGG = randomized ? rand(rgen, Ny, Nx)*1e10 : zeros(Ny, Nx)
+    GGG = randomized ? rand(rng, Ny, Nx)*1e10 : zeros(Ny, Nx)
     # epsilonxy [1/s]
-    EXY = randomized ? rand(rgen, Ny, Nx)*2e-13 .- 1e-13 : zeros(Ny, Nx)
+    EXY = randomized ? rand(rng, Ny, Nx)*2e-13 .- 1e-13 : zeros(Ny, Nx)
     # σxy [1/s]
-    SXY = randomized ? rand(rgen, Ny, Nx)*1e4 : zeros(Ny, Nx)
+    SXY = randomized ? rand(rng, Ny, Nx)*1e4 : zeros(Ny, Nx)
     # σ₀xy [1/s]
-    SXY0 = randomized ? rand(rgen, Ny, Nx)*1e4 : zeros(Ny, Nx)
+    SXY0 = randomized ? rand(rng, Ny, Nx)*1e4 : zeros(Ny, Nx)
     # rotation rate [1/s]
-    wyx = randomized ? rand(rgen, Ny, Nx)*2e-14 .- 1e-14 : zeros(Ny, Nx)
+    wyx = randomized ? rand(rng, Ny, Nx)*2e-14 .- 1e-14 : zeros(Ny, Nx)
     # compressive strength [Pa]
-    COH = randomized ? rand(rgen, Ny, Nx)*1e8 : zeros(Ny, Nx)
+    COH = randomized ? rand(rng, Ny, Nx)*1e8 : zeros(Ny, Nx)
     # tensile strength [Pa]
-    TEN = randomized ? rand(rgen, Ny, Nx)*1e8 : zeros(Ny, Nx)
+    TEN = randomized ? rand(rng, Ny, Nx)*1e8 : zeros(Ny, Nx)
     # friction
-    FRI = randomized ? rand(rgen, Ny, Nx) : zeros(Ny, Nx)
+    FRI = randomized ? rand(rng, Ny, Nx) : zeros(Ny, Nx)
     # plastic yielding node property
-    YNY = randomized ? rand(rgen, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    YNY = randomized ? rand(rng, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # Vx nodes
     # density [kg/m^3]
-    RHOX = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    RHOX = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # fluid density [kg/m^3]
-    RHOFX = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    RHOFX = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # thermal conductivity [W/m/K]
-    KX = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    KX = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # porosity
-    PHIX = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    PHIX = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vx-velocity [m/s]
-    vx = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vx = randomized ? rand(rng, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vx-velocity [m/s]
-    vxf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vxf = randomized ? rand(rng, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # etafluid/kphi ratio [kg m⁻³s⁻¹]
-    RX = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
+    RX = randomized ? rand(rng, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qx-darcy flux [m/s]
-    qxD = randomized ? rand(rgen, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
+    qxD = randomized ? rand(rng, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
     # gx-gravity [m/s^2]
-    gx = randomized ? rand(rgen, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
+    gx = randomized ? rand(rng, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
     # Vy nodes
     # density [kg/m^3]
-    RHOY = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    RHOY = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # fluid density [kg/m^3]
-    RHOFY = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    RHOFY = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # thermal conductivity [W/m/K]
-    KY = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    KY = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # porosity
-    PHIY = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    PHIY = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     # solid vy-velocity [m/s]
-    vy = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vy = randomized ? rand(rng, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vy-velocity [m/s]
-    vyf = randomized ? rand(rgen, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vyf = randomized ? rand(rng, Ny1, Nx1)*2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # etafluid/kphi ratio [kg m⁻³s⁻¹]
-    RY = randomized ? rand(rgen, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
+    RY = randomized ? rand(rng, Ny1, Nx1)*1e39 : zeros(Ny1, Nx1)
     # qy-Darcy flux [m/s]
-    qyD = randomized ? rand(rgen, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
+    qyD = randomized ? rand(rng, Ny1, Nx1)*2e-10 .- 1e-10 : zeros(Ny1, Nx1)
     # gy-gravity [m/s^2]
-    gy = randomized ? rand(rgen, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
+    gy = randomized ? rand(rng, Ny1, Nx1)*2e-1 .- 1e-1 : zeros(Ny1, Nx1)
     # P nodes
     # density [kg/m^3]
-    RHO = randomized ? rand(rgen, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
+    RHO = randomized ? rand(rng, Ny1, Nx1)*1e4 : zeros(Ny1, Nx1)
     # volumetric heat capacity [J/m^3/K]
-    RHOCP = randomized ? rand(rgen, Ny1, Nx1)*1e6 : zeros(Ny1, Nx1)
+    RHOCP = randomized ? rand(rng, Ny1, Nx1)*1e6 : zeros(Ny1, Nx1)
     # thermal expansion [J/m^3/K]
-    ALPHA = randomized ? rand(rgen, Ny1, Nx1)*1e-4 : zeros(Ny1, Nx1)
+    ALPHA = randomized ? rand(rng, Ny1, Nx1)*1e-4 : zeros(Ny1, Nx1)
     # fluid thermal expansion [J/m^3/K]
-    ALPHAF = randomized ? rand(rgen, Ny1, Nx1)*1e-4 : zeros(Ny1, Nx1)
+    ALPHAF = randomized ? rand(rng, Ny1, Nx1)*1e-4 : zeros(Ny1, Nx1)
     # radioactive heating [W/m^3]
-    HR = randomized ? rand(rgen, Ny1, Nx1)*1e-3 : zeros(Ny1, Nx1)
+    HR = randomized ? rand(rng, Ny1, Nx1)*1e-3 : zeros(Ny1, Nx1)
     # adiabatic heating [W/m^3]
-    HA = randomized ? rand(rgen, Ny1, Nx1)*1e-10 : zeros(Ny1, Nx1)
+    HA = randomized ? rand(rng, Ny1, Nx1)*1e-10 : zeros(Ny1, Nx1)
     # shear heating [W/m^3]
-    HS = randomized ? rand(rgen, Ny1, Nx1)*1e-9 : zeros(Ny1, Nx1)
+    HS = randomized ? rand(rng, Ny1, Nx1)*1e-9 : zeros(Ny1, Nx1)
     # viscosity [Pa*s]
-    ETAP = randomized ? rand(rgen, Ny1, Nx1)*1e16 : zeros(Ny1, Nx1)
+    ETAP = randomized ? rand(rng, Ny1, Nx1)*1e16 : zeros(Ny1, Nx1)
     # shear modulus [Pa]
-    GGGP = randomized ? rand(rgen, Ny1, Nx1)*1e10 : zeros(Ny1, Nx1)
+    GGGP = randomized ? rand(rng, Ny1, Nx1)*1e10 : zeros(Ny1, Nx1)
     # EPSILONxx [1/s]
-    EXX = randomized ? rand(rgen, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
+    EXX = randomized ? rand(rng, Ny1, Nx1)*2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # σ′xx [1/s]
-    SXX = randomized ? rand(rgen, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
+    SXX = randomized ? rand(rng, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
     # σ₀′ (SIGMA0'xx) [1/s]
-    SXX0 = randomized ? rand(rgen, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
+    SXX0 = randomized ? rand(rng, Ny1, Nx1) * 2e3 .- 1e3 : zeros(Ny1, Nx1)
     # current temperature [K]
-    tk1 = randomized ? rand(rgen, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
+    tk1 = randomized ? rand(rng, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
     # next temperature [K]
-    tk2 = randomized ? rand(rgen, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
+    tk2 = randomized ? rand(rng, Ny1, Nx1) * 1e3 : zeros(Ny1, Nx1)
     # temperature difference at P nodes [K]
-    DT = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
+    DT = randomized ? rand(rng, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # previous temperature difference at P nodes [K]
-    DT0 = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
+    DT0 = randomized ? rand(rng, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # solid vx in pressure nodes [m/s]
-    vxp = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vxp = randomized ? rand(rng, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # solid vy in pressure nodes [m/s]
-    vyp = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vyp = randomized ? rand(rng, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vx in pressure nodes [m/s]
-    vxpf = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vxpf = randomized ? rand(rng, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # fluid vy in pressure nodes [m/s]
-    vypf = randomized ? rand(rgen, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
+    vypf = randomized ? rand(rng, Ny1, Nx1) * 2e-9 .- 1e-9 : zeros(Ny1, Nx1)
     # total pressure [Pa]
-    pr = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    pr = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # fluid pressure [Pa]
-    pf = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    pf = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # solid pressure [Pa]
-    ps = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    ps = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous total pressure [Pa]
-    pr0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    pr0 = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous fluid pressure [Pa]
-    pf0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    pf0 = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # previous solid pressure [Pa]
-    ps0 = randomized ? rand(rgen, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
+    ps0 = randomized ? rand(rng, Ny1, Nx1) * 1e4 : zeros(Ny1, Nx1)
     # bulk viscosity [Pa*s]
-    ETAPHI = randomized ? rand(rgen, Ny1, Nx1) * 1e14 : zeros(Ny1, Nx1)
+    ETAPHI = randomized ? rand(rng, Ny1, Nx1) * 1e14 : zeros(Ny1, Nx1)
     # bulk compressibility [Pa*s]
-    BETAPHI = randomized ? rand(rgen, Ny1, Nx1) * 1e-10 : zeros(Ny1, Nx1)
+    BETAPHI = randomized ? rand(rng, Ny1, Nx1) * 1e-10 : zeros(Ny1, Nx1)
     # porosity
-    PHI = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    PHI = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     # Dln[(1-ϕ)/ϕ]/Dt
-    APHI = randomized ? rand(rgen, Ny1, Nx1) * 2e-12 .- 1e-12 : zeros(Ny1, Nx1)
+    APHI = randomized ? rand(rng, Ny1, Nx1) * 2e-12 .- 1e-12 : zeros(Ny1, Nx1)
     # gravity potential [J/kg]
-    FI = randomized ? rand(rgen, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
+    FI = randomized ? rand(rng, Ny1, Nx1) * 2e2 .- 1e2 : zeros(Ny1, Nx1)
     # mass transfer term
-    DMP = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    DMP = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     # enthalpy transfer/latent heating term
-    DHP = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    DHP = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     # wet solid fraction
-    XWS = randomized ? rand(rgen, Ny1, Nx1) : zeros(Ny1, Nx1)
+    XWS = randomized ? rand(rng, Ny1, Nx1) : zeros(Ny1, Nx1)
     return (
         ETA,
         ETA0,
@@ -273,8 +275,12 @@ function setup_staggered_grid_properties(Nx::Int=Nx, Ny::Int=Ny; randomized=fals
     )
 end # function setup_staggered_grid_properties()
 
-function setup_staggered_grid_properties(coords::GridCoordinates; randomized=false)
-    return setup_staggered_grid_properties(coords.Nx, coords.Ny; randomized=randomized)
+function setup_staggered_grid_properties(
+    coords::GridCoordinates; randomized=false, rng::AbstractRNG=Random.default_rng()
+)
+    return setup_staggered_grid_properties(
+        coords.Nx, coords.Ny; randomized=randomized, rng=rng
+    )
 end
 
 """
@@ -299,38 +305,42 @@ $(SIGNATURES)
     - DSXX :stress change Δσ′xx at P nodes [Pa]
     - tk0: previous temperature at P nodes [K]
 """
-function setup_staggered_grid_properties_helpers(Nx::Int=Nx, Ny::Int=Ny; randomized=false)
+function setup_staggered_grid_properties_helpers(
+    Nx::Int=Nx, Ny::Int=Ny; randomized=false, rng::AbstractRNG=Random.default_rng()
+)
     Nx1 = Nx + 1
     Ny1 = Ny + 1
     # basic nodes
     # plastic iterations viscoplastic viscosity at basic nodes [Pa⋅s]
-    ETA5 = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
+    ETA5 = randomized ? rand(rng, Ny, Nx)*1e16 : zeros(Ny, Nx)
     # previous viscous viscosity at basic nodes [Pa⋅s]
-    ETA00 = randomized ? rand(rgen, Ny, Nx)*1e16 : zeros(Ny, Nx)
+    ETA00 = randomized ? rand(rng, Ny, Nx)*1e16 : zeros(Ny, Nx)
     # plastic iterations plastic yielding node property at basic nodes
-    YNY5 = randomized ? rand(rgen, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    YNY5 = randomized ? rand(rng, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # previous plastic yielding node property at basic nodes
-    YNY00 = randomized ? rand(rgen, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
+    YNY00 = randomized ? rand(rng, Bool, Ny, Nx) : zeros(Bool, Ny, Nx)
     # inverse viscoplastic viscosity at yielding basic nodes [1/(Pa⋅s)]
-    YNY_inv_ETA = randomized ? rand(rgen, Ny, Nx)*1e-16 : zeros(Ny, Nx)
+    YNY_inv_ETA = randomized ? rand(rng, Ny, Nx)*1e-16 : zeros(Ny, Nx)
     # stress change Δσxy at basic nodes [Pa]
-    DSXY = randomized ? rand(rgen, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
+    DSXY = randomized ? rand(rng, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
     # (SIIB-syield) at basic nodes
-    DSY = randomized ? rand(rgen, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
+    DSY = randomized ? rand(rng, Ny, Nx)*2e3 .- 1e3 : zeros(Ny, Nx)
     # second strain rate invariant at P nodes [1/s]
-    EII = randomized ? rand(rgen, Ny1, Nx1)*1e-12 : zeros(Ny1, Nx1)
+    EII = randomized ? rand(rng, Ny1, Nx1)*1e-12 : zeros(Ny1, Nx1)
     # second stress invariant at P nodes [Pa]
-    SII = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
+    SII = randomized ? rand(rng, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
     # stress change Δσ′xx at P nodes [Pa]
-    DSXX = randomized ? rand(rgen, Ny1, Nx1)*2e3 .- 1e3 : zeros(Ny1, Nx1)
+    DSXX = randomized ? rand(rng, Ny1, Nx1)*2e3 .- 1e3 : zeros(Ny1, Nx1)
     # previous temperature at P nodes [K]
-    tk0 = randomized ? rand(rgen, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
+    tk0 = randomized ? rand(rng, Ny1, Nx1)*1e3 : zeros(Ny1, Nx1)
     return (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0)
 end # function setup_staggered_grid_properties_helpers()
 
-function setup_staggered_grid_properties_helpers(coords::GridCoordinates; randomized=false)
+function setup_staggered_grid_properties_helpers(
+    coords::GridCoordinates; randomized=false, rng::AbstractRNG=Random.default_rng()
+)
     return setup_staggered_grid_properties_helpers(
-        coords.Nx, coords.Ny; randomized=randomized
+        coords.Nx, coords.Ny; randomized=randomized, rng=rng
     )
 end
 

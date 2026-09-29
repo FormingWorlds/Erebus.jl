@@ -3,6 +3,7 @@ module Erebus
 using ArgParse
 using Base.Threads
 using Dates
+using Distributed
 using DocStringExtensions
 using ExtendableSparse
 using JLD2
@@ -364,7 +365,6 @@ if Sys.isapple()
 end
 
 const to = TimerOutput()
-const rgen = MersenneTwister(42)
 
 # Core modular components
 include("config.jl")

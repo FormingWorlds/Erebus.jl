@@ -33,8 +33,7 @@ function run_golden(config_path::String, out_jld2_path::String)
     )
     cfg = Erebus.override_config(cfg_base, overrides)
 
-    # Seed RNGs deterministically for golden run reproducibility
-    Random.seed!(Erebus.rgen, cfg.solver.seed)
+    # Seed RNG deterministically for golden run reproducibility
     Random.seed!(cfg.solver.seed)
 
     mktempdir() do tmpdir

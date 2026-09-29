@@ -1568,6 +1568,8 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.poroelasticity.rx_floor_prefactor
 
     # Solver checks
+    cfg.solver.seed >= 0 ||
+        throw(ArgumentError("solver.seed must be >= 0, got $(cfg.solver.seed)"))
     @check_nonneg_finite cfg.solver.dsubgridt
     @check_nonneg_finite cfg.solver.dsubgrids
     @check_ge cfg.solver.max_plastic_iterations 1

@@ -1,29 +1,29 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "012ac5605bd3e388241a0ded51071b658498fa2b",
+    "commit": "81b690929301f719aacfd7cf0e2f937265c326eb",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "88093d9a128791240d117a1c16693bccb66199a51c01af8869d3c0c2077bd306",
+            "sha256": "a20d832e53c5b6b6742ec151b3c93aabadfcfe86f9fac73b495c2df197e9971d",
             "size_bytes": 4650698
         },
         "hydrothermal_benchmark": {
             "config_path": "configs/hydrothermal_benchmark.toml",
             "filename": "hydrothermal_benchmark.jld2",
-            "sha256": "0bed924ef83384c8b7c612f831fa56c50d5aea47c4a6c0558a619e71a115d190",
+            "sha256": "5cada58ec426c02ac30dd0a8dedf016185c975971acfdff3ab261dc13568b800",
             "size_bytes": 4257105
         },
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "779fed249945d73553f06f076200264eafb1bdaec006dd8cdd1eceb02a2385f8",
+            "sha256": "2e56b562cb85d6f13fd1d43a8cb7e7870529d66157f11fe75071d63684eec2b1",
             "size_bytes": 10699720
         },
         "magma_ocean_cooling_turb_on_32": {
             "config_path": "configs/magma_ocean_cooling_turb_on_32.toml",
             "filename": "magma_ocean_cooling_turb_on_32.jld2",
-            "sha256": "b1ecc08963eee2d720ee9a44452ad0e92badd7c7d9b3b99f382dc4ec952d7679",
+            "sha256": "53bfc4eb83d5af40e1739b374d0f6c945114093ef68aa3c1114dfb849056a4b4",
             "size_bytes": 4257105
         },
         "test_quick": {
@@ -33,7 +33,7 @@
             "size_bytes": 4257105
         }
     },
-    "generated_at": "2026-09-24T03:40:05Z",
+    "generated_at": "2026-09-27T13:47:18Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }

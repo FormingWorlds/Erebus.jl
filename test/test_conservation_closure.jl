@@ -158,13 +158,13 @@ using Erebus.Simulation
         end
 
         # Initial 2D inventories recomputed from seed 42
-        Random.seed!(Erebus.rgen, cfg.solver.seed)
+        rng_i = MersenneTwister(cfg.solver.seed)
         (xm_i, ym_i, tm_i, tkm_i, sxxm_i, sxym_i, etavpm_i, phim_i, phinewm_i, pfm0_i, XWsolidm_i, XWsolidm0_i, Fm_i) = setup_marker_properties(
-            marknum, coords
+            marknum, coords; rng=rng_i
         )
         (Xfem_i, Xfem0_i, Xfe_bulk_i) = setup_marker_metal_properties(marknum)
         (rhotot_i, rhocptot_i, etatot_i, hrtot_i, ktot_i, tkm_rhocptot_i, etafluid_inv_k_i, inv_ggg_i, frict_i, cohes_i, tens_i, rhofluid_i, alphasolid_i, alphafluid_i) = setup_marker_properties_helpers(
-            marknum
+            marknum; rng=rng_i
         )
         define_markers!(
             xm_i,
@@ -198,6 +198,7 @@ using Erebus.Simulation
             Xfem0=Xfem0_i,
             Xfe_bulk_val=cfg.coreformation.Xfe_bulk,
             tkm0_val=cfg.materials.tkm0,
+            rng=rng_i,
         )
 
         H_init = 0.0
@@ -252,12 +253,9 @@ using Erebus.Simulation
             H_fin + elem_dM2[:H] + H_compaction_unvented, H_init; rtol=1.0e-8, atol=1.0e-6
         )
 
-        # 5. Oxygen accounting in redox-off regime
-        # Delivered water oxygen = degas H2O (delivered as H2O) + mineral H2O (delivered as H2O) + pore H2O (converted to H2)
-        # In redox-off mode:
-        # - Vented pore water converted to H2 leaves O in the rock buffer: dO_buffer = pore_H_3D * (15.9994 / 2.01588)
-        # - Vented mineral water enters atmosphere as H2O (both H and O enter atmosphere)
-        # - Degassed water enters atmosphere as H2O (both H and O enter atmosphere)
+        # Oxygen accounting in redox-off regime:
+        # Vented pore water converted to H2 leaves O in the rock buffer,
+        # while mineral and degassed water deliver H2O directly.
         total_atm_esc_O = res.atm.elem.O + res.atm.escaped.O
         total_transfer_O = sum(
             r.dM3 * (15.9994 / 2.01588) for r in res.transfers if r.element === :H

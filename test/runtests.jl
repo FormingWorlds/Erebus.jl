@@ -63,6 +63,7 @@ unit_tests = [
     "test_p2m_tiled.jl",
     "test_telemetry.jl",
     "test_tooling.jl",
+    "test_determinism_ratchet.jl",
 ]
 
 integration_tests = [

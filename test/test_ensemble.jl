@@ -1,5 +1,9 @@
 using Test
-using Erebus
+using Distributed
+if Distributed.nprocs() < 2
+    addprocs(1)
+end
+@everywhere using Erebus
 
 @testset "Ensemble Parameter Sweeps" begin
     @testset "Configuration Override Mechanism" begin
@@ -134,11 +138,19 @@ using Erebus
                 seed=100,
             )
 
-            catalog = run_ensemble(spec; max_workers=2, verbose=false)
+            @test_throws ArgumentError run_ensemble(
+                spec; max_workers=Distributed.nprocs() + 1, verbose=false
+            )
+            catalog = run_ensemble(spec; max_workers=1, verbose=false)
             @test length(catalog) == 2
             @test catalog[1]["status"] == "success"
             @test catalog[2]["status"] == "success"
             @test haskey(catalog[1], "walltime_s")
+
+            catalog_dist = run_ensemble(spec; max_workers=2, verbose=false)
+            @test length(catalog_dist) == 2
+            @test catalog_dist[1]["status"] == "success"
+            @test catalog_dist[2]["status"] == "success"
 
             catalog_csv = joinpath(ens_dir, "catalog.csv")
             @test isfile(catalog_csv)
@@ -172,4 +184,8 @@ using Erebus
             @test occursin("\"Test \"\"quoted\"\" value\nwith newline\"", content)
         end
     end
+end
+
+if Distributed.nprocs() > 1
+    Distributed.rmprocs(Distributed.workers())
 end

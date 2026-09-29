@@ -243,12 +243,55 @@ function save_ensemble_catalog(
 end
 
 """
+Execute one ensemble member simulation and record its status.
+"""
+function _execute_ensemble_member(
+    run_id::String, params::Dict{String,Any}, cfg::SimulationConfig, verbose::Bool
+)
+    if verbose
+        @info "Executing ensemble member: $run_id"
+    end
+    t_start = time()
+    status = :success
+    err_msg = ""
+    try
+        simulation_loop(cfg)
+    catch e
+        status = :failed
+        err_msg = sprint(showerror, e)
+        @warn "Ensemble member $run_id failed" exception = (e, catch_backtrace())
+    end
+    elapsed = time() - t_start
+
+    record = Dict{String,Any}(
+        "run_id" => run_id,
+        "status" => String(status),
+        "walltime_s" => round(elapsed; digits=3),
+        "error_msg" => err_msg,
+    )
+    for (k, v) in params
+        record[k] = v
+    end
+    return record
+end
+
+"""
     run_ensemble(spec; max_workers=1, verbose=true)
 
 Execute all simulations specified by `spec`, streaming scalar telemetry and compiling
 an ensemble catalog file `catalog.csv` in `spec.output_dir`.
+
+When `max_workers > 1`, worker processes must be initialized beforehand (for example via
+`Distributed.addprocs`) and `Erebus` loaded on all workers (`@everywhere using Erebus`).
 """
 function run_ensemble(spec::EnsembleSweepSpec; max_workers::Integer=1, verbose::Bool=true)
+    max_workers >= 1 || throw(ArgumentError("max_workers must be >= 1, got $max_workers"))
+    max_workers <= Distributed.nprocs() || throw(
+        ArgumentError(
+            "max_workers ($max_workers) exceeds available Distributed processes ($(Distributed.nprocs()))",
+        ),
+    )
+
     mkpath(spec.output_dir)
     runs = sample_parameters(spec)
     N_runs = length(runs)
@@ -259,46 +302,30 @@ function run_ensemble(spec::EnsembleSweepSpec; max_workers::Integer=1, verbose::
             spec.output_dir max_workers = max_workers
     end
 
-    if max_workers > 1 && Threads.nthreads() == 1
-        @warn "max_workers > 1 requested ($max_workers), but Julia was started with 1 thread. Executing sequentially."
-    end
-
-    execute_member = function (idx)
-        run_id, params, cfg = runs[idx]
-        if verbose
-            @info "Executing ensemble member $idx/$N_runs: $run_id"
+    if max_workers > 1
+        workers_list = Distributed.workers()
+        available_workers = if length(workers_list) >= max_workers
+            workers_list[1:max_workers]
+        else
+            Distributed.procs()[1:max_workers]
         end
-        t_start = time()
-        status = :success
-        err_msg = ""
-        try
-            simulation_loop(cfg)
-        catch e
-            status = :failed
-            err_msg = sprint(showerror, e)
-            @warn "Ensemble member $run_id failed" exception = (e, catch_backtrace())
-        end
-        elapsed = time() - t_start
-
-        record = Dict{String,Any}(
-            "run_id" => run_id,
-            "status" => String(status),
-            "walltime_s" => round(elapsed; digits=3),
-            "error_msg" => err_msg,
+        pool = Distributed.WorkerPool(available_workers)
+        results = Distributed.pmap(
+            run_entry -> begin
+                run_id, params, cfg = run_entry
+                return _execute_ensemble_member(run_id, params, cfg, verbose)
+            end,
+            pool,
+            runs;
+            batch_size=1,
         )
-        for (k, v) in params
-            record[k] = v
-        end
-        return record
-    end
-
-    if max_workers > 1 && Threads.nthreads() > 1
-        Threads.@threads :dynamic for idx in 1:N_runs
-            catalog[idx] = execute_member(idx)
+        for idx in 1:N_runs
+            catalog[idx] = results[idx]
         end
     else
         for idx in 1:N_runs
-            catalog[idx] = execute_member(idx)
+            run_id, params, cfg = runs[idx]
+            catalog[idx] = _execute_ensemble_member(run_id, params, cfg, verbose)
         end
     end
 

@@ -67,7 +67,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `yerrmax` | `Float64` | `100.0` | - | Plastic yielding relative error tolerance | $> 0$ |
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
 | `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
-| `seed` | `Int` | `42` | - | Random seed for marker initialization | Any `Int` |
+| `seed` | `Int` | `42` | - | Random seed for marker initialization | $\ge 0$ |
 | `use_pardiso` | `Bool` | `false` | - | Enable Pardiso solver instead of UMFPACK | `true` / `false` |
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
 | `etamin` | `Float64` | `1.0e+12` | Pa s | Lower shear viscosity cutoff | $> 0$ |

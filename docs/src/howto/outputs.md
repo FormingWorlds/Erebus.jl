@@ -115,4 +115,46 @@ cfg = load_config("configs/hydrothermal_benchmark.toml")
 run_simulation(cfg; restart_from="output_hydrothermal/output_00010.jld2")
 ```
 
-When resuming, the solver reloads all grid fields and marker positions directly into memory, bypasses marker seeding, and resumes stepping forward from `timestep = loaded_step + 1`. The resumed run matches an uninterrupted continuous execution within relative tolerance `rtol ≈ 1e-8`.
+When resuming, the solver reloads all grid fields and marker positions directly into memory, bypasses marker seeding, and resumes stepping forward from `timestep = loaded_step + 1`.
+
+---
+
+## Reproducibility and Restart
+
+Erebus provides a determinism contract for simulation reproducibility and restart operations.
+
+### Determinism Contract
+
+Single-threaded runs and multi-threaded runs guarantee bitwise reproducibility under fixed seed values:
+- Pseudo-random generation: setting `cfg.solver.seed` initializes the generator. Identical seeds generate identical initial marker positions and property assignments. Different seeds generate different realizations.
+- Thread count invariance: particle-to-mesh interpolation (`p2m_mode = :buffered`) uses 16 fixed logical chunks. The accumulation order is invariant to `Threads.nthreads()`. Simulations run with 2 threads or 4 threads produce bitwise identical results.
+- Process isolation: when running parameter sweeps with `run_ensemble`, each ensemble member executes in an isolated worker process with an independent seed (`spec.seed + i`).
+
+### Checkpoint Contents and Schema
+
+Binary checkpoint files (`.jld2`) store complete simulation state:
+- Grid fields include total pressure `pr`, fluid pressure `pf`, velocities `vx` and `vy`, Darcy fluxes `qxD` and `qyD`, temperature `tk1`, porosity `PHI`, and deviatoric stresses `SXX` and `SXY`.
+- Marker arrays store coordinates `xm` and `ym`, temperature `tkm`, phase assignments, and volatile inventories.
+- Progress metrics record physical time `timesum`, timestep duration `dt`, active marker count `marknum`, and current step number.
+- State records save progress metrics and grid and marker field data.
+
+
+### Restart Semantics and Config Differences
+
+When you resume from a checkpoint:
+- The solver loads grid arrays, marker arrays, and progress metrics directly into memory.
+- Marker generation and seeding routines do not run; marker replenishment draws use a reseeded generator (`MersenneTwister(cfg.solver.seed)`).
+- Time integration resumes from `timestep = loaded_step + 1`.
+- Grid resolution (`Nx`, `Ny`) and domain geometry (`xsize`, `ysize`) must match the checkpoint, or the solver raises a `DimensionMismatch`.
+- Execution parameters can differ between the checkpoint and restart configuration:
+  - Output intervals (`savematstep`, `visstep`)
+  - End conditions (`time.n_steps`, `time.endtime`)
+- Pass the `--force-restart-config` command-line option to apply configuration overrides on restart.
+
+### Recomputed Fields Upon Resume
+
+On the first timestep after restart, Erebus recomputes derived quantities and solver workspace arrays:
+- Linear system matrices and preconditioners assemble fresh from the loaded state.
+- Coordinate arrays and boundary condition stencils rebuild from geometry parameters.
+- Hydrofracture and reaction rate limiters initialize from current field values.
+
