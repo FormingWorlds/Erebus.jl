@@ -2,12 +2,12 @@
 # AST-based architecture ratchet verifying global bindings, argument budgets,
 # RNG safety, coords guards, and function line spans against baseline.
 
-using Pkg
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
-Pkg.activate(ROOT_DIR; io=devnull)
+if Base.find_package("JSON") === nothing
+    pushfirst!(LOAD_PATH, ROOT_DIR)
+end
 
-@eval using JSON
-@eval using Printf
+using JSON
 
 const SRC_DIR = joinpath(ROOT_DIR, "src")
 const BASELINE_PATH = joinpath(@__DIR__, "architecture_baseline.json")
