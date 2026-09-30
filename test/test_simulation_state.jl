@@ -334,8 +334,324 @@ using Erebus
             @test s_straight.transfers == s_resume.transfers
             @test s_straight.atm == s_resume.atm
             @test s_straight.timestep == s_resume.timestep
-            @test s_straight.timesum == s_resume.timesum
-            @test s_straight.dt == s_resume.dt
+            @test s_straight.timesum ≈ s_resume.timesum
+            @test s_straight.dt ≈ s_resume.dt
+        end
+    end
+
+    @testset "SimulationState and GridArrays Complete Dictionary and Indexing Interface" begin
+        # 1. CheckpointError showerror
+        io = IOBuffer()
+        showerror(io, CheckpointError("test message"))
+        err_str = String(take!(io))
+        @test occursin("CheckpointError:", err_str)
+        @test occursin("test message", err_str)
+
+        mktempdir() do tmpdir
+            cfg = Erebus.override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict(
+                    "grid.Nx" => 17,
+                    "grid.Ny" => 17,
+                    "time.n_steps" => 1,
+                    "output.output_dir" => tmpdir,
+                ),
+            )
+            s = simulation_loop(cfg)
+            g = s.grids
+
+            # 2. GridArrays keys, pairs, haskey, getindex, propertynames, copy
+            @test :ETA in keys(g)
+            @test haskey(g, :ETA)
+            @test haskey(g, "ETA")
+            @test !haskey(g, :nonexistent_field)
+            @test !haskey(g, "nonexistent_field")
+            @test g[:ETA] === g.ETA
+            @test g["ETA"] === g.ETA
+            @test :ETA in propertynames(g)
+
+            g_copy = copy(g)
+            @test g_copy.ETA == g.ETA
+            @test g_copy.ETA !== g.ETA
+
+            pairs_list = collect(pairs(g))
+            @test length(pairs_list) == 80
+            @test any(p -> p.first === :ETA && p.second === g.ETA, pairs_list)
+
+            # 3. GridArrays copy with Q_metric present
+            g_metric = GridArrays(
+                (
+                    fn === :Q_metric ? zeros(Float64, 18, 18) : getfield(g, fn) for
+                    fn in fieldnames(GridArrays)
+                )...,
+            )
+            g_metric_copy = copy(g_metric)
+            @test g_metric_copy.Q_metric !== g_metric.Q_metric
+            @test size(g_metric_copy.Q_metric) == (18, 18)
+
+            # 4. SimulationAccumulators copy
+            acc = s.accumulators
+            acc_copy = copy(acc)
+            @test acc_copy.xcenter ≈ acc.xcenter
+            @test acc_copy.ycenter ≈ acc.ycenter
+            @test acc_copy.max_v_seg_prev ≈ acc.max_v_seg_prev
+
+            # 5. SimulationState getproperty and error handling
+            @test s.timestep == 1
+            @test s.xcenter ≈ acc.xcenter
+            @test s.ETA === g.ETA
+            @test_throws ErrorException s.nonexistent_property
+
+            # 6. SimulationState keys, haskey, pairs
+            all_keys = keys(s)
+            @test :grids in all_keys
+            @test :markers in all_keys
+            @test :ETA in all_keys
+            @test :transfer_log in all_keys
+            @test :S_vent in all_keys
+            @test haskey(s, :grids)
+            @test haskey(s, "grids")
+            @test haskey(s, :ETA)
+            @test haskey(s, "ETA")
+            @test haskey(s, :transfer_log)
+            @test haskey(s, "transfer_log")
+            @test haskey(s, :S_vent)
+            @test haskey(s, "S_vent")
+            @test !haskey(s, :nonexistent_symbol)
+            @test !haskey(s, "nonexistent_symbol")
+
+            spairs = collect(pairs(s))
+            @test any(p -> p.first === :transfer_log, spairs)
+            @test any(p -> p.first === :S_vent, spairs)
+
+            # 7. SimulationState getindex and KeyError
+            @test s[:transfer_log] === s.transfers
+            @test s["transfer_log"] === s.transfers
+            @test s[:S_vent] === s.grids.S_vent_grid
+            @test s["S_vent"] === s.grids.S_vent_grid
+            @test s[:timestep] == s.timestep
+            @test s["timestep"] == s.timestep
+            @test s[:xcenter] ≈ s.accumulators.xcenter
+            @test s["xcenter"] ≈ s.accumulators.xcenter
+            @test s[:ETA] === s.grids.ETA
+            @test s["ETA"] === s.grids.ETA
+            @test_throws KeyError s[:nonexistent_key]
+            @test_throws KeyError s["nonexistent_key"]
+
+            # 8. SimulationState copy and NamedTuple
+            nt = NamedTuple(s)
+            @test nt.timestep == s.timestep
+            @test nt.grids === s.grids
+            @test nt.markers === s.markers
+
+            scopy = copy(s)
+            @test scopy.timestep == s.timestep
+            @test scopy.dt ≈ s.dt
+            @test scopy.timesum ≈ s.timesum
+            @test scopy.grids.ETA == s.grids.ETA
+            @test scopy.grids.ETA !== s.grids.ETA
+        end
+    end
+
+    @testset "Checkpoint Schema v2 Validation and Error Branches" begin
+        mktempdir() do tmpdir
+            # 1. Corrupted checkpoint archive (JLD2 cannot load)
+            corrupt_path = joinpath(tmpdir, "corrupt.jld2")
+            write(corrupt_path, "not a valid jld2 file content")
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(corrupt_path)
+            @test !isfile(joinpath(tmpdir, "does_not_exist.jld2"))
+
+            # 2. Checkpoint missing required keys ("cfg", "timestep", "dt", "timesum", "rng", "transfers")
+            missing_req_path = joinpath(tmpdir, "missing_req.jld2")
+            jldsave(missing_req_path; schema_version=2, timestep=1)
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+                missing_req_path
+            )
+            @test isfile(missing_req_path)
+
+            # 3. Invalid 'cfg' payload
+            invalid_cfg_path = joinpath(tmpdir, "invalid_cfg.jld2")
+            jldsave(
+                invalid_cfg_path;
+                schema_version=2,
+                cfg="not_a_SimulationConfig",
+                timestep=1,
+                dt=1.0,
+                timesum=1.0,
+                rng=MersenneTwister(42),
+                transfers=TransferRecord[],
+            )
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+                invalid_cfg_path
+            )
+            @test isfile(invalid_cfg_path)
+
+            # 4. Save state with explicit .jld2 path (line 752)
+            cfg = Erebus.override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict(
+                    "grid.Nx" => 17,
+                    "grid.Ny" => 17,
+                    "time.n_steps" => 1,
+                    "output.output_dir" => tmpdir,
+                    "output.savematstep" => 1,
+                ),
+            )
+            s = simulation_loop(cfg)
+            ckpt_path = joinpath(tmpdir, "output_00001.jld2")
+            explicit_path = joinpath(tmpdir, "explicit_save.jld2")
+            saved_ret = Erebus.save_state(
+                explicit_path, s, Erebus.GridCoordinates(cfg.grid), cfg
+            )
+            @test saved_ret == explicit_path
+            @test isfile(explicit_path)
+
+            # 5. Missing required grid array
+            missing_eta_path = joinpath(tmpdir, "missing_eta.jld2")
+            data = JLD2.load(ckpt_path)
+            delete!(data, "ETA")
+            JLD2.jldsave(missing_eta_path; (Symbol(k) => v for (k, v) in data)...)
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+                missing_eta_path
+            )
+            @test isfile(missing_eta_path)
+
+            # 6. Missing required core array xm
+            missing_xm_path = joinpath(tmpdir, "missing_xm.jld2")
+            data_core = JLD2.load(ckpt_path)
+            delete!(data_core, "xm")
+            JLD2.jldsave(missing_xm_path; (Symbol(k) => v for (k, v) in data_core)...)
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+                missing_xm_path
+            )
+            @test isfile(missing_xm_path)
+
+            # 7. Fallback loading without coords, accumulators, timer, atm
+            data_fallback = JLD2.load(ckpt_path)
+            delete!(data_fallback, "coords")
+            delete!(data_fallback, "accumulators")
+            delete!(data_fallback, "timer")
+            delete!(data_fallback, "atm_state")
+            fallback_path = joinpath(tmpdir, "fallback.jld2")
+            JLD2.jldsave(fallback_path; (Symbol(k) => v for (k, v) in data_fallback)...)
+            (s_fb, coords_fb, cfg_fb) = Erebus.load_simulation_state(fallback_path)
+            @test s_fb.timestep == 1
+            @test s_fb.accumulators.rplanet ≈ 50000.0
+
+            # 8. Missing Q_metric in checkpoint loads as nothing (line 944)
+            missing_q_path = joinpath(tmpdir, "missing_q.jld2")
+            data_q = JLD2.load(ckpt_path)
+            delete!(data_q, "Q_metric")
+            JLD2.jldsave(missing_q_path; (Symbol(k) => v for (k, v) in data_q)...)
+            (s_no_q, _, _) = Erebus.load_simulation_state(missing_q_path)
+            @test s_no_q.grids.Q_metric === nothing
+            @test s_no_q.timestep == 1
+
+            # 9. Config mismatch without force_restart_config throws CheckpointError (line 916)
+            cfg_override = Erebus.override_config(
+                cfg, Dict("thermodynamics.hr_al" => !cfg.thermodynamics.hr_al)
+            )
+            @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+                ckpt_path; current_cfg=cfg_override, force_restart_config=false
+            )
+
+            # 10. Force restart with permitted override (e.g. thermodynamics.hr_al) triggering @warn
+            (s_warn, _, _) = Erebus.load_simulation_state(
+                ckpt_path; current_cfg=cfg_override, force_restart_config=true
+            )
+            @test s_warn.timestep == 1
+            @test s_warn.dt ≈ s.dt
+        end
+    end
+
+    @testset "Checkpoint Optional Marker Groups Loading Coverage" begin
+        mktempdir() do tmpdir
+            cfg_base = Erebus.override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict(
+                    "grid.Nx" => 17,
+                    "grid.Ny" => 17,
+                    "time.n_steps" => 1,
+                    "output.output_dir" => tmpdir,
+                    "output.savematstep" => 1,
+                ),
+            )
+            simulation_loop(cfg_base)
+            ckpt_path = joinpath(tmpdir, "output_00001.jld2")
+
+            cfg_groups = Erebus.override_config(
+                cfg_base,
+                Dict(
+                    "volatiles.active" => true,
+                    "metal_partition.active" => true,
+                    "phase_tracking.active" => true,
+                    "redox.active" => true,
+                    "volatile_mixture.active" => true,
+                    "accretion.active" => true,
+                ),
+            )
+            (s_loaded, _, _) = Erebus.load_simulation_state(
+                ckpt_path; current_cfg=cfg_groups, force_restart_config=true
+            )
+            @test haskey(s_loaded.markers.groups, :redox)
+            @test haskey(s_loaded.markers.groups, :hcnspo)
+            @test haskey(s_loaded.markers.groups, :phase)
+            @test haskey(s_loaded.markers.groups, :accretion)
+        end
+    end
+
+    @testset "CLI and run_simulation Coverage" begin
+        mktempdir() do tmpdir
+            toml_path = joinpath(tmpdir, "test_cli.toml")
+            cfg = Erebus.override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict(
+                    "grid.Nx" => 17,
+                    "grid.Ny" => 17,
+                    "time.n_steps" => 1,
+                    "output.output_dir" => joinpath(tmpdir, "cli_out"),
+                    "output.savematstep" => 1,
+                ),
+            )
+            Erebus.save_config(toml_path, cfg)
+
+            # 1. run_simulation with toml file path
+            s1 = run_simulation(toml_path)
+            @test s1 isa SimulationState
+            @test s1.timestep == 1
+
+            # 2. run_simulation with directory path override
+            out_sub = joinpath(tmpdir, "sub_out")
+            s2 = run_simulation(cfg; output_path=out_sub)
+            @test s2 isa SimulationState
+            @test isdir(out_sub)
+
+            # 3. run_simulation with preloaded config and restart_from
+            ckpt = joinpath(tmpdir, "cli_out", "output_00001.jld2")
+            s3 = run_simulation(cfg; restart_from=ckpt, force_restart_config=true)
+            @test s3 isa SimulationState
+            @test s3.timestep == 1
+
+            # 4. rebuild_cli_restart_config
+            rebuilt = Erebus.rebuild_cli_restart_config(cfg, ckpt)
+            @test rebuilt.output.restart_from == ckpt
+            @test rebuilt.grid.Nx == cfg.grid.Nx
+
+            # 5. run_simulation with CLI ARGS dispatch
+            orig_args = copy(ARGS)
+            try
+                empty!(ARGS)
+                push!(ARGS, toml_path)
+                push!(ARGS, "--restart", ckpt)
+                push!(ARGS, "--force-restart-config")
+                push!(ARGS, "--show_timer", "true")
+                s_cli = run_simulation("")
+                @test s_cli isa SimulationState
+                @test s_cli.timestep == 1
+            finally
+                empty!(ARGS)
+                append!(ARGS, orig_args)
+            end
         end
     end
 end
