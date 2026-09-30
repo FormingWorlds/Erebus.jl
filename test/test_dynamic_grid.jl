@@ -140,7 +140,7 @@ using Test
                 time=TimeConfig(n_steps=3, start_step=1),
                 output=OutputConfig(savematstep=1, output_dir=tmpdir),
             )
-            @test_throws DimensionMismatch Erebus.simulation_loop(
+            @test_throws CheckpointError Erebus.simulation_loop(
                 cfg33;
                 output_path=tmpdir,
                 restart_from=joinpath(tmpdir, "output_00002.jld2"),
@@ -159,7 +159,7 @@ using Test
                 time=TimeConfig(n_steps=3, start_step=1),
                 output=OutputConfig(savematstep=1, output_dir=tmpdir),
             )
-            @test_throws DimensionMismatch Erebus.simulation_loop(
+            @test_throws CheckpointError Erebus.simulation_loop(
                 cfg_wrong_size;
                 output_path=tmpdir,
                 restart_from=joinpath(tmpdir, "output_00002.jld2"),

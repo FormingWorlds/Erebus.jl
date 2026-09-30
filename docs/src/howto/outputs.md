@@ -129,32 +129,25 @@ Single-threaded runs and multi-threaded runs guarantee bitwise reproducibility u
 - Pseudo-random generation: setting `cfg.solver.seed` initializes the generator. Identical seeds generate identical initial marker positions and property assignments. Different seeds generate different realizations.
 - Thread count invariance: particle-to-mesh interpolation (`p2m_mode = :buffered`) uses 16 fixed logical chunks. The accumulation order is invariant to `Threads.nthreads()`. Simulations run with 2 threads or 4 threads produce bitwise identical results.
 - Process isolation: when running parameter sweeps with `run_ensemble`, each ensemble member executes in an isolated worker process with an independent seed (`spec.seed + i`).
+- Checkpoint restart continuity: a run resumed from a checkpoint reproduces the continuous run bitwise across all marker arrays, grid fields, atmosphere state, transfer log, RNG state, and time accumulators.
 
-### Checkpoint Contents and Schema
+### Checkpoint Contents and Schema v2
 
-Binary checkpoint files (`.jld2`) store complete simulation state:
-- Grid fields include total pressure `pr`, fluid pressure `pf`, velocities `vx` and `vy`, Darcy fluxes `qxD` and `qyD`, temperature `tk1`, porosity `PHI`, and deviatoric stresses `SXX` and `SXY`.
-- Marker arrays store coordinates `xm` and `ym`, temperature `tkm`, phase assignments, and volatile inventories.
-- Progress metrics record physical time `timesum`, timestep duration `dt`, active marker count `marknum`, and current step number.
-- State records save progress metrics and grid and marker field data.
-
+Binary checkpoint files (`.jld2`) use `schema_version = 2` and store the complete `SimulationState`:
+- Staggered grid fields (`GridArrays`): all 80 mesh arrays including pressure, velocities, Darcy fluxes, stresses, temperatures, and source terms.
+- Marker arrays (`MarkerArrays`): core arrays (positions, temperatures, stresses, properties) and all optional chemical/mineral groups.
+- Accumulators (`SimulationAccumulators`): volatile inventories, planetary mass and radius, and core budgets.
+- Atmospheric state (`AtmosphereState`), volatile transfer log (`TransferRecord` vector), exact `rng` generator state, and execution `timer`.
+- Current `timestep`, time increment `dt`, and cumulative simulation time `timesum`.
 
 ### Restart Semantics and Config Differences
 
 When you resume from a checkpoint:
-- The solver loads grid arrays, marker arrays, and progress metrics directly into memory.
-- Marker generation and seeding routines do not run; marker replenishment draws use a reseeded generator (`MersenneTwister(cfg.solver.seed)`).
+- The solver loads the `SimulationState` and `GridCoordinates` directly into memory.
+- Marker generation and seeding routines do not run; the exact pseudo-random generator state (`rng`) restores from the checkpoint.
 - Time integration resumes from `timestep = loaded_step + 1`.
-- Grid resolution (`Nx`, `Ny`) and domain geometry (`xsize`, `ysize`) must match the checkpoint, or the solver raises a `DimensionMismatch`.
-- Execution parameters can differ between the checkpoint and restart configuration:
-  - Output intervals (`savematstep`, `visstep`)
-  - End conditions (`time.n_steps`, `time.endtime`)
-- Pass the `--force-restart-config` command-line option to apply configuration overrides on restart.
-
-### Recomputed Fields Upon Resume
-
-On the first timestep after restart, Erebus recomputes derived quantities and solver workspace arrays:
-- Linear system matrices and preconditioners assemble fresh from the loaded state.
-- Coordinate arrays and boundary condition stencils rebuild from geometry parameters.
-- Hydrofracture and reaction rate limiters initialize from current field values.
+- Grid resolution (`Nx`, `Ny`) and domain geometry (`xsize`, `ysize`) must match the checkpoint, or the solver raises a `CheckpointError`.
+- Configuration comparison verifies configuration compatibility:
+  - Differences in `[output]` settings and time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`) are permitted.
+  - Differences in physics or solver sections raise a typed `CheckpointError` unless `--force-restart-config` is provided.
 

@@ -1464,7 +1464,7 @@ using JLD2
             )
 
             res_sim = run_simulation(cfg)
-            @test res_sim isa NamedTuple
+            @test res_sim isa SimulationState
 
             ckpt1 = joinpath(output_dir, "output_00001.jld2")
             ckpt2 = joinpath(output_dir, "output_00002.jld2")
@@ -1493,7 +1493,7 @@ using JLD2
                 ),
             )
             res_resume = run_simulation(cfg_resume)
-            @test res_resume isa NamedTuple
+            @test res_resume isa SimulationState
             @test isfile(ckpt2)
         finally
             rm(output_dir; recursive=true, force=true)

@@ -617,6 +617,7 @@ function assemble_hydromechanical_lse!(
     end
 
     flush!(L) # finalize CSC matrix
+    dropzeros!(L.cscmatrix)
     if workspace !== nothing &&
         hasproperty(workspace, :Ny1) &&
         hasproperty(workspace, :Nx1) &&
@@ -1262,6 +1263,7 @@ function assemble_hydromechanical_4var_lse!(
     end
 
     flush!(L)
+    dropzeros!(L.cscmatrix)
     if workspace !== nothing &&
         hasproperty(workspace, :Ny1) &&
         hasproperty(workspace, :Nx1) &&

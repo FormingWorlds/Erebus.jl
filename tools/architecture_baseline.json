@@ -937,6 +937,7 @@
         "simulation/cli.jl",
         "simulation/ensemble.jl",
         "simulation/loop.jl",
+        "simulation/state.jl",
         "simulation/transfers.jl",
         "simulation/workspace.jl"
     ]

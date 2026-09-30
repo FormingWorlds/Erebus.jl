@@ -135,7 +135,7 @@ The test suite covers:
 - Unit verification: Grid metrics, particle interpolation kernels, constitutive relations, and TOML schema validators.
 - Terzaghi 1D consolidation benchmark: Verifies poroelastic compressibility against the analytical Fourier series solution.
 - 2D hydrothermal benchmark: Verifies coupled Darcy thermal buoyancy, fluid viscosity transitions, and hydrofracturing.
-- Checkpoint restart continuity: Asserts exact numerical state matching across checkpoint save and resume boundaries.
+- Checkpoint restart continuity: asserts that a run resumed from a checkpoint reproduces the straight-through run bitwise for all marker arrays, grid fields, the atmosphere state, the RNG state, the transfer log and the time accumulators.
 
 Consult the [online documentation](https://formingworlds.github.io/Erebus.jl/dev) for tutorials and mathematical derivations.
 
