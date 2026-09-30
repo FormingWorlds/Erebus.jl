@@ -131,6 +131,7 @@ function assemble_thermal_lse!(
     end # @inbounds
 
     flush!(LT) # finalize CSC matrix
+    dropzeros!(LT.cscmatrix)
     if workspace !== nothing &&
         hasproperty(workspace, :Ny1) &&
         hasproperty(workspace, :Nx1) &&

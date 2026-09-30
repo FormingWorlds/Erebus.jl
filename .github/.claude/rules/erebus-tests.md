@@ -166,3 +166,19 @@ A native Julia AST linter enforces these rules in CI. The linter parses all test
 - Blocks standalone weak assertions (`weak_assert`).
 - Flags float comparisons using `==` or `.==` (`float_equality`).
 - Compares violation counts against `tools/test_quality_baseline.json` as a one-way ratchet: violation counts cannot increase.
+
+---
+
+## 7. Mandatory Test Coverage (>90%)
+
+Standing rule: ALWAYS verify test coverage for any new branch and pull request is strictly greater than 90%.
+
+1. **Patch and Project Coverage**:
+   - Patch coverage (coverage on new or modified lines) must exceed 90%.
+   - Overall project coverage must not decrease and must stay above the required threshold.
+2. **Pre-PR Verification**:
+   - Run coverage tests locally before opening any PR or pushing final commits.
+   - Test all new functions, fallback routines, error paths, and CLI wrappers.
+3. **No Uncovered Production Code**:
+   - If coverage falls below 90%, identify uncovered branches and write targeted unit tests in `test/`.
+   - Never merge or open a pull request without verifying that coverage meets this threshold.

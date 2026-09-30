@@ -367,7 +367,14 @@ export Config,
     all_marker_array_names,
     serialize_marker_arrays,
     restore_marker_arrays!,
-    replenish_markers!
+    replenish_markers!,
+    GridArrays,
+    SimulationAccumulators,
+    SimulationState,
+    CheckpointError,
+    load_simulation_state,
+    compare_restart_configs,
+    rebuild_cli_restart_config
 export Geometry, Physics, Particles, Numerics, Simulation
 
 include("constants.jl")
@@ -377,8 +384,6 @@ using Pardiso: Pardiso
 if Sys.isapple()
     using AppleAccelerate
 end
-
-const to = TimerOutput()
 
 # Core modular components
 include("config.jl")

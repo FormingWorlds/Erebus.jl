@@ -4,10 +4,6 @@
 # Mutable bindings (MersenneTwister, Array, Dict, Ref, TimerOutput) are rejected,
 # except explicitly documented legacy exceptions.
 
-# --- Core Legacy Bindings ---
-# Allowed legacy TimerOutput binding to be removed in PR 3d
-to
-
 # --- src/config.jl ---
 VALID_SECTIONS
 

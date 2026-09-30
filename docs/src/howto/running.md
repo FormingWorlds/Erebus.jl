@@ -46,7 +46,7 @@ julia --project=. launch.jl configs/default.toml --show_timer true
 
 ### Forcing Restart Configuration Overrides
 
-When you resume execution from a checkpoint with `--restart`, pass `--force-restart-config` to apply new configuration parameters on restart:
+When you resume execution from a checkpoint with `--restart`, Erebus compares the current configuration against the configuration saved in the checkpoint. Differences in `[output]` settings and time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`) are allowed. Any other differences raise a `CheckpointError` unless `--force-restart-config` is provided to allow the override:
 
 ```bash
 julia --project=. launch.jl configs/default.toml --restart output/output_00010.jld2 --force-restart-config

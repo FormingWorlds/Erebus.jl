@@ -2325,7 +2325,7 @@ using JLD2
                     output=OutputConfig(; output_dir=output_dir, savematstep=1),
                 )
                 res_fe = run_simulation(cfg_fe_only)
-                @test res_fe isa NamedTuple
+                @test res_fe isa SimulationState
                 final_state = load_state(joinpath(output_dir, "output_00002.jld2"))
                 @test haskey(final_state, "Xfe_bulk")
                 @test maximum(final_state["tk2"]) > 150.0

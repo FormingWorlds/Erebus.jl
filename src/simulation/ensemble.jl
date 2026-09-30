@@ -81,6 +81,8 @@ function override_config(
             throw(ArgumentError("Override key must be in format 'section.field', got '$k'"))
         sec, fld = parts
         haskey(d, sec) || throw(ArgumentError("Unknown section '$sec' in override '$k'"))
+        haskey(d[sec], fld) ||
+            throw(ArgumentError("Unknown field '$fld' in section '$sec'"))
         d[sec][fld] = v isa Symbol ? String(v) : v
     end
 

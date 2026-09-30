@@ -616,7 +616,7 @@ using Erebus
                 ),
             )
             res = Erebus.simulation_loop(cfg_run; output_path=tmpdir)
-            @test res isa NamedTuple
+            @test res isa SimulationState
             @test res.timestep == 1
             @test haskey(res, :grids)
             @test all(isfinite, res.grids.gx)

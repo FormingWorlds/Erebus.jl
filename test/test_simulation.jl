@@ -68,7 +68,7 @@ using JLD2
         bad_restart_cfg = SimulationConfig(
             output=OutputConfig(restart_from="nonexistent_checkpoint.jld2")
         )
-        @test_throws ArgumentError run_simulation(bad_restart_cfg)
+        @test_throws CheckpointError run_simulation(bad_restart_cfg)
 
         # Dynamic coordinates support in setup_dynamic_simulation_parameters
         coords = Erebus.GridCoordinates(15, 15; xsize=100000.0, ysize=100000.0)
@@ -214,7 +214,7 @@ using JLD2
                 ),
             )
             res = Erebus.simulation_loop(cfg_run; output_path=tmpdir)
-            @test res isa NamedTuple
+            @test res isa SimulationState
             @test haskey(res, :markers)
             @test haskey(res, :grids)
             @test haskey(res, :atm)

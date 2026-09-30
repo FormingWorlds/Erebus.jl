@@ -700,3 +700,380 @@ function load_state(checkpoint_path::AbstractString)
         throw(ArgumentError("Checkpoint file does not exist: $checkpoint_path"))
     return JLD2.load(checkpoint_path)
 end
+
+"""
+    compare_restart_configs(cfg_saved::SimulationConfig, cfg_current::SimulationConfig)::Vector{String}
+
+Compare configuration of saved checkpoint against restart configuration.
+Differences in `[output]`, `time.{n_steps, endtime, start_step}`, and `solver.seed` are allowed.
+All other differences return as `\"section.field\"` strings.
+"""
+function compare_restart_configs(
+    cfg_saved::SimulationConfig, cfg_current::SimulationConfig
+)::Vector{String}
+    d_saved = config_to_dict(cfg_saved)
+    d_curr = config_to_dict(cfg_current)
+    diffs = String[]
+
+    all_secs = sort(collect(union(keys(d_saved), keys(d_curr))))
+    for sec in all_secs
+        sec == "output" && continue
+        s_saved = get(d_saved, sec, Dict{String,Any}())
+        s_curr = get(d_curr, sec, Dict{String,Any}())
+        all_flds = sort(collect(union(keys(s_saved), keys(s_curr))))
+        for fld in all_flds
+            if (sec == "time" && fld in ("n_steps", "endtime", "start_step")) ||
+                (sec == "solver" && fld == "seed")
+                continue
+            end
+            val_saved = get(s_saved, fld, nothing)
+            val_curr = get(s_curr, fld, nothing)
+            if !isequal(val_saved, val_curr)
+                push!(diffs, "$sec.$fld")
+            end
+        end
+    end
+    return diffs
+end
+
+"""
+    save_state(output_dir::AbstractString, state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig)
+
+Serialize simulation state, grid coordinates, and configuration to a JLD2 checkpoint archive.
+Emits checkpoint schema version 2.
+"""
+function save_state(
+    output_dir::AbstractString,
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+)
+    filepath = if endswith(output_dir, ".jld2")
+        output_dir
+    else
+        joinpath(output_dir, "output_" * lpad(state.timestep, 5, "0") * ".jld2")
+    end
+    mkpath(dirname(filepath))
+
+    grid_dict = Dict{String,Any}(
+        string(fn) => getfield(state.grids, fn) for fn in fieldnames(GridArrays)
+    )
+
+    marker_dict = Dict{String,Any}()
+    for fn in fieldnames(CoreGroup)
+        marker_dict[string(fn)] = getfield(state.markers.core, fn)
+    end
+    for grp in values(state.markers.groups)
+        for fn in fieldnames(typeof(grp))
+            marker_dict[string(fn)] = getfield(grp, fn)
+        end
+    end
+
+    coord_dict = Dict{String,Any}(
+        string(fn) => getfield(coords, fn) for fn in fieldnames(GridCoordinates)
+    )
+
+    acc = state.accumulators
+
+    jldopen(filepath, "w") do f
+        f["schema_version"] = 2
+        f["cfg"] = cfg
+        f["coords"] = coords
+        f["timestep"] = state.timestep
+        f["dt"] = state.dt
+        f["timesum"] = state.timesum
+        f["marknum"] = length(state.markers)
+        f["rng"] = copy(state.rng)
+        f["transfers"] = deepcopy(state.transfers)
+        f["transfer_log"] = deepcopy(state.transfers)
+        f["S_vent"] = state.grids.S_vent_grid
+        f["accumulators"] = copy(state.accumulators)
+        clean_timer = copy(state.timer)
+        empty!(clean_timer.timer_stack)
+        f["timer"] = clean_timer
+
+        for fn in (
+            :M_vent_total,
+            :M_vent_H2O_total,
+            :M_vent_C_total,
+            :M_vent_N_total,
+            :M_vent_S_total,
+            :M_atm_total,
+            :M_escaped_total,
+            :P_amb,
+            :rplanet,
+            :rcore,
+            :telescope_level,
+            :M_accreted_total,
+            :M_planet_val,
+            :max_v_seg_prev,
+        )
+            f[string(fn)] = getfield(acc, fn)
+        end
+        f["planet_xcenter"] = acc.xcenter
+        f["planet_ycenter"] = acc.ycenter
+        acc.M_atm_species !== nothing && (f["M_atm_species"] = acc.M_atm_species)
+        acc.M_escaped_species !== nothing &&
+            (f["M_escaped_species"] = acc.M_escaped_species)
+        acc.core_budgets !== nothing && (f["core_budgets"] = acc.core_budgets)
+        acc.regional_mineral_modes !== nothing &&
+            (f["regional_mineral_modes"] = acc.regional_mineral_modes)
+
+        for (k, v) in grid_dict
+            f[k] = v
+        end
+        for (k, v) in marker_dict
+            f[k] = v
+        end
+        for (k, v) in coord_dict
+            f[k] = v
+        end
+
+        if state.atm !== nothing
+            f["atm_state"] = state.atm
+            for fn in (
+                :elem,
+                :species,
+                :escaped,
+                :dO_buffer,
+                :log10_fO2,
+                :M_atm,
+                :M_escaped,
+                :P_surf,
+                :T_surf_eq,
+                :tau_LW,
+                :M_env_bound,
+                :F_net_rad,
+                :h_rad_eff,
+            )
+                f["atm_" * string(fn)] = getfield(state.atm, fn)
+            end
+        end
+    end
+
+    return filepath
+end
+
+"""
+    load_simulation_state(path::AbstractString; force_restart_config::Bool=false, current_cfg::Union{Nothing,SimulationConfig}=nothing)
+
+Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
+Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::SimulationConfig)`.
+
+# Throws
+- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+"""
+function load_simulation_state(
+    path::AbstractString;
+    force_restart_config::Bool=false,
+    current_cfg::Union{Nothing,SimulationConfig}=nothing,
+)
+    isfile(path) || throw(CheckpointError("Checkpoint file does not exist: $path"))
+
+    data = try
+        JLD2.load(path)
+    catch err
+        throw(CheckpointError("Failed to open checkpoint archive '$path': $err"))
+    end
+
+    schema_ver = get(data, "schema_version", 0)
+    if schema_ver < 2
+        throw(
+            CheckpointError(
+                "Unsupported checkpoint schema version: got $schema_ver, expected >= 2"
+            ),
+        )
+    end
+
+    for req in ("cfg", "timestep", "dt", "timesum", "rng", "transfers")
+        haskey(data, req) ||
+            throw(CheckpointError("Missing required checkpoint key: '$req'"))
+    end
+
+    cfg_saved = if data["cfg"] isa SimulationConfig
+        data["cfg"]
+    else
+        throw(CheckpointError("Invalid 'cfg' payload in checkpoint archive"))
+    end
+
+    if current_cfg !== nothing
+        diffs = compare_restart_configs(cfg_saved, current_cfg)
+        if !isempty(diffs)
+            # Grid geometry and dimension mismatches cannot be overridden (unsupported regridding)
+            grid_diffs = filter(
+                d -> startswith(d, "grid.") || startswith(d, "geometry."), diffs
+            )
+            if !isempty(grid_diffs)
+                throw(
+                    CheckpointError(
+                        "Unsupported grid geometry override: " *
+                        join(grid_diffs, ", ") *
+                        ". Grid dimensions and geometry cannot be changed on restart.",
+                    ),
+                )
+            end
+            if !force_restart_config
+                throw(
+                    CheckpointError(
+                        "Configuration mismatch between checkpoint and restart config: " *
+                        join(diffs, ", ") *
+                        ". Pass --force-restart-config to override.",
+                    ),
+                )
+            else
+                for d in diffs
+                    @warn "Restart configuration override: $d"
+                end
+            end
+        end
+    end
+
+    effective_cfg = current_cfg !== nothing ? current_cfg : cfg_saved
+
+    coords = if haskey(data, "coords") && data["coords"] isa GridCoordinates
+        data["coords"]
+    else
+        GridCoordinates(effective_cfg.grid)
+    end
+
+    grid_vals = Any[]
+    for fn in fieldnames(GridArrays)
+        sfn = string(fn)
+        if !haskey(data, sfn)
+            if fn === :Q_metric
+                push!(grid_vals, nothing)
+            else
+                throw(CheckpointError("Missing required grid array in checkpoint: '$sfn'"))
+            end
+        else
+            push!(grid_vals, data[sfn])
+        end
+    end
+    grids = GridArrays(grid_vals...)
+
+    core_vals = Any[]
+    for fn in fieldnames(CoreGroup)
+        sfn = string(fn)
+        haskey(data, sfn) || throw(
+            CheckpointError("Missing required core marker array in checkpoint: '$sfn'")
+        )
+        push!(core_vals, data[sfn])
+    end
+    core = CoreGroup(core_vals...)
+
+    group_pairs = Pair{Symbol,Any}[]
+    marknum = length(core.xm)
+
+    # Optional marker groups
+    if effective_cfg.metal_partition.active || haskey(data, "Xfem")
+        metal_vals = Any[]
+        for k in fieldnames(MetalGroup)
+            sk = string(k)
+            v = get(data, sk, nothing)
+            push!(metal_vals, v !== nothing ? v : zeros(Float64, marknum))
+        end
+        push!(group_pairs, :metal => MetalGroup(metal_vals...))
+    end
+
+    if effective_cfg.volatiles.active || haskey(data, "XH2Om")
+        vol_vals = Any[]
+        for k in fieldnames(VolatilesGroup)
+            sk = string(k)
+            v = get(data, sk, nothing)
+            push!(vol_vals, v !== nothing ? v : zeros(Float64, marknum))
+        end
+        push!(group_pairs, :volatiles => VolatilesGroup(vol_vals...))
+    end
+
+    if effective_cfg.redox.active || haskey(data, "nFe0_m")
+        redox_vals = Any[]
+        for k in fieldnames(RedoxGroup)
+            sk = string(k)
+            v = get(data, sk, nothing)
+            push!(redox_vals, v !== nothing ? v : zeros(Float64, marknum))
+        end
+        push!(group_pairs, :redox => RedoxGroup(redox_vals...))
+    end
+
+    if haskey(data, "X_ice_H2O_m") ||
+        effective_cfg.volatile_mixture.active ||
+        effective_cfg.refractory.active
+        hcnspo_vals = Any[]
+        for k in fieldnames(HcnspoGroup)
+            sk = string(k)
+            v = get(data, sk, nothing)
+            push!(hcnspo_vals, v !== nothing ? v : zeros(Float64, marknum))
+        end
+        push!(group_pairs, :hcnspo => HcnspoGroup(hcnspo_vals...))
+    end
+
+    if effective_cfg.phase_tracking.active || haskey(data, "Xmin_troilite_m")
+        phase_vals = Any[]
+        for k in fieldnames(PhaseGroup)
+            sk = string(k)
+            v = get(data, sk, nothing)
+            push!(phase_vals, v !== nothing ? v : zeros(Float64, marknum))
+        end
+        push!(group_pairs, :phase => PhaseGroup(phase_vals...))
+    end
+
+    if effective_cfg.accretion.active || haskey(data, "t_accreted")
+        v = get(data, "t_accreted", zeros(Float64, marknum))
+        push!(group_pairs, :accretion => AccretionGroup(v))
+    end
+
+    markers = MarkerArrays(core, NamedTuple(group_pairs))
+
+    accumulators =
+        if haskey(data, "accumulators") && data["accumulators"] isa SimulationAccumulators
+            copy(data["accumulators"])
+        else
+            SimulationAccumulators(
+                Float64(get(data, "M_vent_total", 0.0)),
+                Float64(get(data, "M_vent_H2O_total", 0.0)),
+                Float64(get(data, "M_vent_C_total", 0.0)),
+                Float64(get(data, "M_vent_N_total", 0.0)),
+                Float64(get(data, "M_vent_S_total", 0.0)),
+                Float64(get(data, "M_atm_total", 0.0)),
+                Float64(get(data, "M_escaped_total", 0.0)),
+                Float64(get(data, "P_amb", 10.0)),
+                Float64(get(data, "rplanet", 50000.0)),
+                Float64(get(data, "rcore", 0.0)),
+                Int(get(data, "telescope_level", 0)),
+                Float64(get(data, "M_accreted_total", 0.0)),
+                Float64(get(data, "M_planet_val", 0.0)),
+                Float64(get(data, "planet_xcenter", get(data, "xcenter", coords.xcenter))),
+                Float64(get(data, "planet_ycenter", get(data, "ycenter", coords.ycenter))),
+                Float64(get(data, "max_v_seg_prev", 0.0)),
+                get(data, "M_atm_species", nothing),
+                get(data, "M_escaped_species", nothing),
+                get(data, "core_budgets", nothing),
+                get(data, "regional_mineral_modes", nothing),
+            )
+        end
+
+    atm = if haskey(data, "atm_state") && data["atm_state"] isa AtmosphereState
+        copy(data["atm_state"])
+    else
+        nothing
+    end
+
+    transfers = haskey(data, "transfers") ? deepcopy(data["transfers"]) : TransferRecord[]
+    rng = data["rng"]
+    timer = if haskey(data, "timer") && data["timer"] isa TimerOutput
+        t = copy(data["timer"])
+        empty!(t.timer_stack)
+        t
+    else
+        TimerOutput()
+    end
+    timestep = Int(data["timestep"])
+    dt = Float64(data["dt"])
+    timesum = Float64(data["timesum"])
+
+    state = SimulationState(
+        grids, markers, accumulators, transfers, atm, rng, timer, timestep, dt, timesum
+    )
+
+    return (state, coords, cfg_saved)
+end

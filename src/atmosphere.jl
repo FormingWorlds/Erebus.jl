@@ -461,6 +461,40 @@ function Base.setproperty!(atm::AtmosphereState, sym::Symbol, val)
     end
 end
 
+function Base.copy(atm::AtmosphereState)
+    return AtmosphereState(
+        atm.elem,
+        atm.species,
+        atm.escaped,
+        atm.dO_buffer,
+        atm.log10_fO2,
+        atm.P_surf,
+        atm.T_surf_eq,
+        atm.tau_LW,
+        atm.M_env_bound,
+        atm.F_net_rad,
+        atm.h_rad_eff,
+        copy(atm.M_atm),
+        copy(atm.M_escaped),
+    )
+end
+
+function Base.:(==)(a::AtmosphereState, b::AtmosphereState)
+    return a.elem == b.elem &&
+           a.species == b.species &&
+           a.escaped == b.escaped &&
+           a.dO_buffer == b.dO_buffer &&
+           a.log10_fO2 == b.log10_fO2 &&
+           a.P_surf == b.P_surf &&
+           a.T_surf_eq == b.T_surf_eq &&
+           a.tau_LW == b.tau_LW &&
+           a.M_env_bound == b.M_env_bound &&
+           a.F_net_rad == b.F_net_rad &&
+           a.h_rad_eff == b.h_rad_eff &&
+           a.M_atm == b.M_atm &&
+           a.M_escaped == b.M_escaped
+end
+
 """
 $(SIGNATURES)
 
