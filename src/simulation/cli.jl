@@ -112,27 +112,31 @@ function run_simulation(
 
     io = open(actual_output * "Erebus_run.log", "w+")
     logger = SimpleLogger(io)
-    global_logger(logger)
-    @info "=========== Erebus simulation run ==========="
-    @info "system information: Apple=$(Sys.isapple()) Linux=$(Sys.islinux()) Win=$(Sys.iswindows())" Sys.cpu_info()
-    @info "writing results to $actual_output"
-    t1 = now()
-    @info "start time = $t1"
-    state = simulation_loop(
-        cfg;
-        output_path=actual_output,
-        restart_from=cfg.output.restart_from,
-        force_restart_config=force_restart,
-    )
-    t2 = now()
-    @info "end time = $t2"
-    @info "total run time = $(Dates.canonicalize(
-        Dates.CompoundPeriod(t2-t1)))"
-    if show_timer && state isa SimulationState
-        show(state.timer)
+    old_logger = global_logger(logger)
+    try
+        @info "=========== Erebus simulation run ==========="
+        @info "system information: Apple=$(Sys.isapple()) Linux=$(Sys.islinux()) Win=$(Sys.iswindows())" Sys.cpu_info()
+        @info "writing results to $actual_output"
+        t1 = now()
+        @info "start time = $t1"
+        state = simulation_loop(
+            cfg;
+            output_path=actual_output,
+            restart_from=cfg.output.restart_from,
+            force_restart_config=force_restart,
+        )
+        t2 = now()
+        @info "end time = $t2"
+        @info "total run time = $(Dates.canonicalize(
+            Dates.CompoundPeriod(t2-t1)))"
+        if show_timer && state isa SimulationState
+            show(state.timer)
+        end
+        return state
+    finally
+        close(io)
+        global_logger(old_logger)
     end
-    close(io)
-    return state
 end
 
 """
