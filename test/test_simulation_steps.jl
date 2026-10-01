@@ -52,11 +52,21 @@ function create_mock_simulation_state(;
     Nx1 = coords.Nx1
     Ny1 = coords.Ny1
 
-    # Allocate GridArrays with zeroes of size (Ny1, Nx1)
+    # Allocate GridArrays with appropriate staggered grid dimensions
+    basic_node_fields = (
+        :ETA, :ETA0, :GGG, :EXY, :SXY, :SXY0, :wyx, :COH, :TEN, :FRI, :YNY,
+        :ETA5, :ETA00, :YNY5, :YNY00, :YNY_inv_ETA, :DSXY, :DSY,
+    )
     g_args = Any[]
     for fn in fieldnames(GridArrays)
         if fn === :Q_metric
             push!(g_args, nothing)
+        elseif fn in basic_node_fields
+            if fn === :YNY || fn === :YNY5 || fn === :YNY00
+                push!(g_args, zeros(Bool, Ny, Nx))
+            else
+                push!(g_args, zeros(Float64, Ny, Nx))
+            end
         else
             push!(g_args, zeros(Float64, Ny1, Nx1))
         end
