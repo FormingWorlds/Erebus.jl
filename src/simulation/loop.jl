@@ -481,6 +481,16 @@ Main simulation loop: run calculations with timestepping.
 
 $(SIGNATURES)
 
+# Operator-Splitting Sequence
+1. Accretion & mass addition (`accrete!`)
+2. Radionuclide decay heating (`radiogenic_heating!`)
+3. Marker-to-mesh interpolation (`interpolate_markers_to_grid!`)
+4. Gravitational field solve (`solve_gravity!`)
+5. Hydro-mechanical Stokes-Darcy solve (`assemble_hydromechanical_lse!`)
+6. Thermal energy & convection solve
+7. Fluid-silicate reactions, venting & degassing
+8. Marker advection & subgrid diffusion
+
 # Details
 
     - output_path: Absolute path where to save simulation output files
@@ -1102,9 +1112,42 @@ function simulation_loop(
     # ---------------------------------------------------------------------
     # set up interpolation arrays"
     # ---------------------------------------------------------------------
-    (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties(
-        coords
-    )
+    interp_arrays = setup_interpolated_properties(coords)
+    (
+        ETA0SUM,
+        ETASUM,
+        GGGSUM,
+        SXYSUM,
+        COHSUM,
+        TENSUM,
+        FRISUM,
+        WTSUM,
+        RHOXSUM,
+        RHOFXSUM,
+        KXSUM,
+        PHIXSUM,
+        RXSUM,
+        WTXSUM,
+        RHOYSUM,
+        RHOFYSUM,
+        KYSUM,
+        PHIYSUM,
+        RYSUM,
+        WTYSUM,
+        RHOSUM,
+        RHOCPSUM,
+        ALPHASUM,
+        ALPHAFSUM,
+        HRSUM,
+        GGGPSUM,
+        SXXSUM,
+        TKSUM,
+        PHISUM,
+        DMPSUM,
+        DHPSUM,
+        XWSSUM,
+        WTPSUM,
+    ) = interp_arrays
 
     # -------------------------------------------------------------------------
     # set up of matrices for global grav/thermal/hydromechanical solvers"
@@ -1408,94 +1451,13 @@ function simulation_loop(
                     end
 
                     # ---------------------------------------------------------------------
-                    # planetesimal accretion engine: mass addition, heating, boundary advance
+                    # 1. planetesimal accretion engine: mass addition, heating, boundary advance
                     # ---------------------------------------------------------------------
-                    if cfg.accretion.active
-                        dM_dt_acc = compute_accretion_rate(
-                            timesum, M_planet_val, rplanet_val, cfg.accretion, cfg.disk
-                        )
-                        # Clamp mass increment so M_planet_val does not overshoot M_target
-                        dM_remain = max(0.0, cfg.accretion.M_target - M_planet_val)
-                        dM_acc = min(dM_dt_acc * dt, dM_remain)
-
-                        if dM_acc > 0.0 && rplanet_val < cfg.accretion.R_target
-                            dR_acc = compute_radius_increment(
-                                rplanet_val, dM_acc, cfg.accretion.rho_bulk
-                            )
-                            # Clamp radius increment so rplanet_val does not overshoot R_target
-                            dR_remain = max(0.0, cfg.accretion.R_target - rplanet_val)
-                            dR_acc = min(dR_acc, dR_remain)
-                            T_acc = T_amb
-                            if cfg.accretion.h_impact > 0.0
-                                _, delta_T_imp = compute_impact_heating(
-                                    M_planet_val,
-                                    rplanet_val;
-                                    h_impact=cfg.accretion.h_impact,
-                                    c_p=cfg.accretion.cp_rock,
-                                    v_inf=cfg.accretion.v_inf,
-                                )
-                                T_acc += delta_T_imp
-                            end
-                            XW_acc = cfg.accretion.XWsolid_dry
-                            H2O_acc = cfg.accretion.XH2O_dry_wtpct
-                            if cfg.accretion.snowline_coupling
-                                XW_acc, H2O_acc = evaluate_snowline_water_content(
-                                    T_amb;
-                                    T_snowline_cond=cfg.accretion.T_snowline_cond,
-                                    XW_wet=cfg.accretion.XWsolid_wet,
-                                    XW_dry=cfg.accretion.XWsolid_dry,
-                                    H2O_wet_wtpct=cfg.accretion.XH2O_wet_wtpct,
-                                    H2O_dry_wtpct=cfg.accretion.XH2O_dry_wtpct,
-                                )
-                            end
-
-                            cond_state_acc =
-                                if (cfg.volatile_mixture.active || cfg.refractory.active)
-                                    evaluate_disk_volatile_condensation(
-                                        T_amb,
-                                        P_amb,
-                                        cfg.volatile_mixture,
-                                        cfg.refractory;
-                                        P_ref=cfg.volatile_mixture.P_ref,
-                                        alpha_P=cfg.volatile_mixture.alpha_P,
-                                    )
-                                else
-                                    nothing
-                                end
-
-                            if cfg.volatile_mixture.active && cond_state_acc !== nothing
-                                if cond_state_acc.condensed_H2O
-                                    XW_acc = cfg.volatile_mixture.X_ice_H2O
-                                    H2O_acc = cfg.volatile_mixture.X_ice_H2O * 100.0
-                                else
-                                    XW_acc = cfg.accretion.XWsolid_dry
-                                    H2O_acc = cfg.accretion.XH2O_dry_wtpct
-                                end
-                            end
-
-                            advance_accretion_boundary!(
-                                rplanet_val,
-                                dR_acc,
-                                markers;
-                                xcenter=xcenter_val,
-                                ycenter=ycenter_val,
-                                T_accreted=T_acc,
-                                phi_accreted=cfg.accretion.phi_accreted,
-                                XWsolid_accreted=XW_acc,
-                                Xfe_accreted=cfg.accretion.Xfe_bulk_accreted,
-                                current_time=timesum,
-                                XH2O_accreted=H2O_acc,
-                                XC_accreted=cfg.accretion.XC_accreted_ppm,
-                                XN_accreted=cfg.accretion.XN_accreted_ppm,
-                                XS_accreted=cfg.accretion.XS_accreted_ppm,
-                                cfg=cfg,
-                                disk_state=cond_state_acc,
-                            )
-                            rplanet_val += dR_acc
-                            M_planet_val += dM_acc
-                            M_accreted_total += dM_acc
-                        end
-                    end
+                    state = _create_current_state(timestep, dt, timesum, P_amb_eff)
+                    accrete!(state, coords, cfg)
+                    rplanet_val = state.accumulators.rplanet
+                    M_planet_val = state.accumulators.M_planet_val
+                    M_accreted_total = state.accumulators.M_accreted_total
 
                     # ---------------------------------------------------------------------
                     # telescoping domain expansion
@@ -1722,9 +1684,42 @@ function simulation_loop(
 
                         # Helper geometries and buffers
                         mdis, mnum = setup_marker_geometry_helpers(coords)
-                        (ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM, RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM, RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM, RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM, SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM) = setup_interpolated_properties(
-                            coords
-                        )
+                        interp_arrays = setup_interpolated_properties(coords)
+                        (
+                            ETA0SUM,
+                            ETASUM,
+                            GGGSUM,
+                            SXYSUM,
+                            COHSUM,
+                            TENSUM,
+                            FRISUM,
+                            WTSUM,
+                            RHOXSUM,
+                            RHOFXSUM,
+                            KXSUM,
+                            PHIXSUM,
+                            RXSUM,
+                            WTXSUM,
+                            RHOYSUM,
+                            RHOFYSUM,
+                            KYSUM,
+                            PHIYSUM,
+                            RYSUM,
+                            WTYSUM,
+                            RHOSUM,
+                            RHOCPSUM,
+                            ALPHASUM,
+                            ALPHAFSUM,
+                            HRSUM,
+                            GGGPSUM,
+                            SXXSUM,
+                            TKSUM,
+                            PHISUM,
+                            DMPSUM,
+                            DHPSUM,
+                            XWSSUM,
+                            WTPSUM,
+                        ) = interp_arrays
                         if !use_tiled_p2m && use_threading
                             thread_buffers = allocate_thread_interpolation_buffers(
                                 num_buffers, coords
@@ -1851,726 +1846,21 @@ function simulation_loop(
                     end
 
                     # ---------------------------------------------------------------------
-                    # calculate radioactive heating
+                    # 2. calculate radioactive heating
+                    # 3. compute marker properties and interpolate to staggered grid
+                    # 4. compute gravity solution
                     # ---------------------------------------------------------------------
-                    hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
-                        hr_al_val,
-                        hr_fe_val,
-                        timesum;
-                        ratio_al=ratio_al_val,
-                        E_al=E_al_val,
-                        f_al=f_al_val,
-                        tau_al=tau_al_val,
-                        ratio_fe=ratio_fe_val,
-                        E_fe=E_fe_val,
-                        f_fe=f_fe_val,
-                        tau_fe=tau_fe_val,
-                        rho_metal=rho_metal_val,
+                    state = _create_current_state(timestep, dt, timesum, P_amb_eff)
+                    radiogenic_heating!(state, coords, cfg)
+                    interpolate_markers_to_grid!(
+                        state,
+                        coords,
+                        cfg;
+                        p2m_workspace=p2m_workspace,
+                        thread_buffers=thread_buffers,
+                        interp_arrays=interp_arrays,
                     )
-
-                    # ---------------------------------------------------------------------
-                    # compute marker properties and interpolate to staggered grid
-                    # ---------------------------------------------------------------------
-                    if cfg.redox.active && redox_props !== nothing
-                        update_marker_redox!(
-                            redox_props, tkm, pfm0, cfg.redox; Xfem=Xfem, XWsolidm=XWsolidm
-                        )
-                    end
-
-                    if use_tiled_p2m
-                        p2m_workspace = ensure_workspace_compatible(
-                            p2m_workspace, coords, marknum, cfg.solver.tile_size
-                        )
-                        bin_markers_into_tiles!(p2m_workspace, xm, ym, coords, marknum)
-                        for color in 1:4
-                            tiles = p2m_workspace.tiles_by_color[color]
-                            Threads.@threads :dynamic for t in tiles
-                                lo = p2m_workspace.tile_offsets[t]
-                                hi = p2m_workspace.tile_offsets[t + 1] - 1
-                                lo > hi && continue
-                                for idx in lo:hi
-                                    m = p2m_workspace.tile_markers[idx]
-                                    compute_marker_properties!(
-                                        m,
-                                        tm,
-                                        tkm,
-                                        rhototalm,
-                                        rhocptotalm,
-                                        etatotalm,
-                                        hrtotalm,
-                                        ktotalm,
-                                        tkm_rhocptotalm,
-                                        etafluidcur_inv_kphim,
-                                        hrsolidm,
-                                        hrfluidm,
-                                        phim,
-                                        XWsolidm0,
-                                        marker_property_mode,
-                                        rhofluidcur;
-                                        thermal_buoyancy=thermal_buoyancy_val,
-                                        alphafluid=alphafluid_val,
-                                        tmfluidphase_val=tmfluidphase_val,
-                                        fluid_viscosity_mode=fluid_viscosity_mode_val,
-                                        fluid_viscosity_Ea=fluid_viscosity_Ea_val,
-                                        fluid_viscosity_T0=fluid_viscosity_T0_val,
-                                        fluid_viscosity_eta0=fluid_viscosity_eta0_val,
-                                        pm=pfm0,
-                                        Fm=Fm,
-                                        melting_active=melting_active_val,
-                                        magma_transport_active=magma_active_val,
-                                        track_depletion=cfg.magma_transport.track_depletion,
-                                        F_extract_m=F_extract_m,
-                                        T_solidus_val=T_solidus_val,
-                                        T_liquidus_val=T_liquidus_val,
-                                        L_melt_val=L_melt_val,
-                                        rho_melt_val=rho_melt_val,
-                                        alpha_eta_val=alpha_eta_val,
-                                        phi_crit_val=phi_crit_val,
-                                        eta_melt_val=eta_melt_val,
-                                        dpdt_clapeyron_val=dpdt_clapeyron_val,
-                                        soft_turbulence=soft_turbulence_val,
-                                        eta_fluid_silicate_val=eta_fluid_silicate_val,
-                                        F_turb_start_val=F_turb_start_val,
-                                        F_turb_end_val=F_turb_end_val,
-                                        turb_exponent_val=turb_exponent_val,
-                                        dT_turb_min_val=dT_turb_min_val,
-                                        T_surface_ref_val=T_surface_ref_val,
-                                        k_turb_cutoff_val=k_turb_cutoff_val,
-                                        k_turb_floor_val=k_turb_floor_val,
-                                        Xfe_bulk=Xfe_bulk,
-                                        Xfem=Xfem,
-                                        coreformation_active=coreformation_active_val,
-                                        hrmetalm=hrmetalm,
-                                        sulfur_fraction_val=sulfur_fraction_val,
-                                        metal_density_mode_val=metal_density_mode_val,
-                                        T_eutectic_val=T_eutectic_val,
-                                        dT_metal_val=dT_metal_val,
-                                        rho_metal_val=rho_metal_val,
-                                        rho_metal_solid_val=rho_metal_solid_val,
-                                        L_metal_val=L_metal_val,
-                                        k_metal_val=k_metal_val,
-                                        rhocp_metal_val=rhocp_metal_val,
-                                        volatiles_active=cfg.volatiles.active,
-                                        magma_degassing_active=cfg.magma_degassing.active,
-                                        etamin=cfg.solver.etamin,
-                                        etamax=cfg.solver.etamax,
-                                        volatiles_cfg=cfg.volatiles,
-                                        retention_cfg=cfg.retention,
-                                        XH2Om=XH2Om,
-                                        XCm=XCm,
-                                        XNm=XNm,
-                                        XSm=XSm,
-                                        metal_partition_cfg=cfg.metal_partition,
-                                        Xfe_H_m=Xfe_H_m,
-                                        Xfe_C_m=Xfe_C_m,
-                                        Xfe_N_m=Xfe_N_m,
-                                        Xfe_S_m=Xfe_S_m,
-                                        phase_tracking_cfg=cfg.phase_tracking,
-                                        Xmin_troilite_m=Xmin_troilite_m,
-                                        Xmin_schreibersite_m=Xmin_schreibersite_m,
-                                        Xmin_cohenite_m=Xmin_cohenite_m,
-                                        Xmin_graphite_m=Xmin_graphite_m,
-                                        Xmin_nitride_m=Xmin_nitride_m,
-                                        Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-                                        hydrothermal_active=cfg.hydrothermal.active,
-                                        hydrothermal_cfg=cfg.hydrothermal,
-                                        deltaIW_m=if redox_props !== nothing
-                                            redox_props.deltaIW_m
-                                        else
-                                            nothing
-                                        end,
-                                        xm=xm,
-                                        ym=ym,
-                                        coords=coords,
-                                        rplanet_val=rplanet_val,
-                                        M_planet_val=M_planet_val,
-                                        rcore_val=rcore_val,
-                                        qxD_val=qxD,
-                                        qyD_val=qyD,
-                                        xcenter_val=xcenter_val,
-                                        ycenter_val=ycenter_val,
-                                    )
-                                    scatter_marker_to_master_grids!(
-                                        m,
-                                        xm[m],
-                                        ym[m],
-                                        coords,
-                                        etatotalm,
-                                        etavpm,
-                                        inv_gggtotalm,
-                                        sxym,
-                                        cohestotalm,
-                                        tenstotalm,
-                                        fricttotalm,
-                                        ETA0SUM,
-                                        ETASUM,
-                                        GGGSUM,
-                                        SXYSUM,
-                                        COHSUM,
-                                        TENSUM,
-                                        FRISUM,
-                                        WTSUM,
-                                        rhototalm,
-                                        rhofluidcur,
-                                        ktotalm,
-                                        phim,
-                                        etafluidcur_inv_kphim,
-                                        RHOXSUM,
-                                        RHOFXSUM,
-                                        KXSUM,
-                                        PHIXSUM,
-                                        RXSUM,
-                                        WTXSUM,
-                                        RHOYSUM,
-                                        RHOFYSUM,
-                                        KYSUM,
-                                        PHIYSUM,
-                                        RYSUM,
-                                        WTYSUM,
-                                        sxxm,
-                                        rhocptotalm,
-                                        alphasolidcur,
-                                        alphafluidcur,
-                                        hrtotalm,
-                                        tkm_rhocptotalm,
-                                        GGGPSUM,
-                                        SXXSUM,
-                                        RHOSUM,
-                                        RHOCPSUM,
-                                        ALPHASUM,
-                                        ALPHAFSUM,
-                                        HRSUM,
-                                        PHISUM,
-                                        TKSUM,
-                                        WTPSUM,
-                                    )
-                                end
-                            end
-                        end
-                    elseif use_threading
-                        reset_thread_buffers!(thread_buffers)
-                        nchunks = length(thread_buffers)
-                        Threads.@threads :dynamic for c in 1:nchunks
-                            buf = thread_buffers[c]
-                            lo = (c - 1) * div(marknum, nchunks) + 1
-                            hi = c == nchunks ? marknum : c * div(marknum, nchunks)
-                            for m in lo:hi
-                                compute_marker_properties!(
-                                    m,
-                                    tm,
-                                    tkm,
-                                    rhototalm,
-                                    rhocptotalm,
-                                    etatotalm,
-                                    hrtotalm,
-                                    ktotalm,
-                                    tkm_rhocptotalm,
-                                    etafluidcur_inv_kphim,
-                                    hrsolidm,
-                                    hrfluidm,
-                                    phim,
-                                    XWsolidm0,
-                                    marker_property_mode,
-                                    rhofluidcur;
-                                    thermal_buoyancy=thermal_buoyancy_val,
-                                    alphafluid=alphafluid_val,
-                                    tmfluidphase_val=tmfluidphase_val,
-                                    fluid_viscosity_mode=fluid_viscosity_mode_val,
-                                    fluid_viscosity_Ea=fluid_viscosity_Ea_val,
-                                    fluid_viscosity_T0=fluid_viscosity_T0_val,
-                                    fluid_viscosity_eta0=fluid_viscosity_eta0_val,
-                                    pm=pfm0,
-                                    Fm=Fm,
-                                    melting_active=melting_active_val,
-                                    magma_transport_active=magma_active_val,
-                                    track_depletion=cfg.magma_transport.track_depletion,
-                                    F_extract_m=F_extract_m,
-                                    T_solidus_val=T_solidus_val,
-                                    T_liquidus_val=T_liquidus_val,
-                                    L_melt_val=L_melt_val,
-                                    rho_melt_val=rho_melt_val,
-                                    alpha_eta_val=alpha_eta_val,
-                                    phi_crit_val=phi_crit_val,
-                                    eta_melt_val=eta_melt_val,
-                                    dpdt_clapeyron_val=dpdt_clapeyron_val,
-                                    soft_turbulence=soft_turbulence_val,
-                                    eta_fluid_silicate_val=eta_fluid_silicate_val,
-                                    F_turb_start_val=F_turb_start_val,
-                                    F_turb_end_val=F_turb_end_val,
-                                    turb_exponent_val=turb_exponent_val,
-                                    dT_turb_min_val=dT_turb_min_val,
-                                    T_surface_ref_val=T_surface_ref_val,
-                                    k_turb_cutoff_val=k_turb_cutoff_val,
-                                    k_turb_floor_val=k_turb_floor_val,
-                                    Xfe_bulk=Xfe_bulk,
-                                    Xfem=Xfem,
-                                    coreformation_active=coreformation_active_val,
-                                    hrmetalm=hrmetalm,
-                                    sulfur_fraction_val=sulfur_fraction_val,
-                                    metal_density_mode_val=metal_density_mode_val,
-                                    T_eutectic_val=T_eutectic_val,
-                                    dT_metal_val=dT_metal_val,
-                                    rho_metal_val=rho_metal_val,
-                                    rho_metal_solid_val=rho_metal_solid_val,
-                                    L_metal_val=L_metal_val,
-                                    k_metal_val=k_metal_val,
-                                    rhocp_metal_val=rhocp_metal_val,
-                                    volatiles_active=cfg.volatiles.active,
-                                    magma_degassing_active=cfg.magma_degassing.active,
-                                    etamin=cfg.solver.etamin,
-                                    etamax=cfg.solver.etamax,
-                                    volatiles_cfg=cfg.volatiles,
-                                    retention_cfg=cfg.retention,
-                                    XH2Om=XH2Om,
-                                    XCm=XCm,
-                                    XNm=XNm,
-                                    XSm=XSm,
-                                    metal_partition_cfg=cfg.metal_partition,
-                                    Xfe_H_m=Xfe_H_m,
-                                    Xfe_C_m=Xfe_C_m,
-                                    Xfe_N_m=Xfe_N_m,
-                                    Xfe_S_m=Xfe_S_m,
-                                    phase_tracking_cfg=cfg.phase_tracking,
-                                    Xmin_troilite_m=Xmin_troilite_m,
-                                    Xmin_schreibersite_m=Xmin_schreibersite_m,
-                                    Xmin_cohenite_m=Xmin_cohenite_m,
-                                    Xmin_graphite_m=Xmin_graphite_m,
-                                    Xmin_nitride_m=Xmin_nitride_m,
-                                    Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-                                    hydrothermal_active=cfg.hydrothermal.active,
-                                    hydrothermal_cfg=cfg.hydrothermal,
-                                    deltaIW_m=if redox_props !== nothing
-                                        redox_props.deltaIW_m
-                                    else
-                                        nothing
-                                    end,
-                                    xm=xm,
-                                    ym=ym,
-                                    coords=coords,
-                                    rplanet_val=rplanet_val,
-                                    M_planet_val=M_planet_val,
-                                    rcore_val=rcore_val,
-                                    qxD_val=qxD,
-                                    qyD_val=qyD,
-                                    xcenter_val=xcenter_val,
-                                    ycenter_val=ycenter_val,
-                                )
-                                @inbounds marker_to_basic_nodes!(
-                                    m,
-                                    xm[m],
-                                    ym[m],
-                                    etatotalm,
-                                    etavpm,
-                                    inv_gggtotalm,
-                                    sxym,
-                                    cohestotalm,
-                                    tenstotalm,
-                                    fricttotalm,
-                                    buf.ETA0SUM,
-                                    buf.ETASUM,
-                                    buf.GGGSUM,
-                                    buf.SXYSUM,
-                                    buf.COHSUM,
-                                    buf.TENSUM,
-                                    buf.FRISUM,
-                                    buf.WTSUM;
-                                    coords=coords,
-                                )
-                                @inbounds marker_to_vx_nodes!(
-                                    m,
-                                    xm[m],
-                                    ym[m],
-                                    rhototalm,
-                                    rhofluidcur,
-                                    ktotalm,
-                                    phim,
-                                    etafluidcur_inv_kphim,
-                                    buf.RHOXSUM,
-                                    buf.RHOFXSUM,
-                                    buf.KXSUM,
-                                    buf.PHIXSUM,
-                                    buf.RXSUM,
-                                    buf.WTXSUM;
-                                    coords=coords,
-                                )
-                                @inbounds marker_to_vy_nodes!(
-                                    m,
-                                    xm[m],
-                                    ym[m],
-                                    rhototalm,
-                                    rhofluidcur,
-                                    ktotalm,
-                                    phim,
-                                    etafluidcur_inv_kphim,
-                                    buf.RHOYSUM,
-                                    buf.RHOFYSUM,
-                                    buf.KYSUM,
-                                    buf.PHIYSUM,
-                                    buf.RYSUM,
-                                    buf.WTYSUM;
-                                    coords=coords,
-                                )
-                                @inbounds marker_to_p_nodes!(
-                                    m,
-                                    xm[m],
-                                    ym[m],
-                                    inv_gggtotalm,
-                                    sxxm,
-                                    rhototalm,
-                                    rhocptotalm,
-                                    alphasolidcur,
-                                    alphafluidcur,
-                                    hrtotalm,
-                                    phim,
-                                    tkm_rhocptotalm,
-                                    buf.GGGPSUM,
-                                    buf.SXXSUM,
-                                    buf.RHOSUM,
-                                    buf.RHOCPSUM,
-                                    buf.ALPHASUM,
-                                    buf.ALPHAFSUM,
-                                    buf.HRSUM,
-                                    buf.PHISUM,
-                                    buf.TKSUM,
-                                    buf.WTPSUM;
-                                    coords=coords,
-                                )
-                            end
-                        end
-                        reduce_thread_buffers!(
-                            ETA0SUM,
-                            ETASUM,
-                            GGGSUM,
-                            SXYSUM,
-                            COHSUM,
-                            TENSUM,
-                            FRISUM,
-                            WTSUM,
-                            RHOXSUM,
-                            RHOFXSUM,
-                            KXSUM,
-                            PHIXSUM,
-                            RXSUM,
-                            WTXSUM,
-                            RHOYSUM,
-                            RHOFYSUM,
-                            KYSUM,
-                            PHIYSUM,
-                            RYSUM,
-                            WTYSUM,
-                            RHOSUM,
-                            RHOCPSUM,
-                            ALPHASUM,
-                            ALPHAFSUM,
-                            HRSUM,
-                            GGGPSUM,
-                            SXXSUM,
-                            TKSUM,
-                            PHISUM,
-                            WTPSUM,
-                            thread_buffers,
-                        )
-                    else
-                        for m in 1:1:marknum
-                            compute_marker_properties!(
-                                m,
-                                tm,
-                                tkm,
-                                rhototalm,
-                                rhocptotalm,
-                                etatotalm,
-                                hrtotalm,
-                                ktotalm,
-                                tkm_rhocptotalm,
-                                etafluidcur_inv_kphim,
-                                hrsolidm,
-                                hrfluidm,
-                                phim,
-                                XWsolidm0,
-                                marker_property_mode,
-                                rhofluidcur;
-                                thermal_buoyancy=thermal_buoyancy_val,
-                                alphafluid=alphafluid_val,
-                                tmfluidphase_val=tmfluidphase_val,
-                                fluid_viscosity_mode=fluid_viscosity_mode_val,
-                                fluid_viscosity_Ea=fluid_viscosity_Ea_val,
-                                fluid_viscosity_T0=fluid_viscosity_T0_val,
-                                fluid_viscosity_eta0=fluid_viscosity_eta0_val,
-                                pm=pfm0,
-                                Fm=Fm,
-                                melting_active=melting_active_val,
-                                magma_transport_active=magma_active_val,
-                                track_depletion=cfg.magma_transport.track_depletion,
-                                F_extract_m=F_extract_m,
-                                T_solidus_val=T_solidus_val,
-                                T_liquidus_val=T_liquidus_val,
-                                L_melt_val=L_melt_val,
-                                rho_melt_val=rho_melt_val,
-                                alpha_eta_val=alpha_eta_val,
-                                phi_crit_val=phi_crit_val,
-                                eta_melt_val=eta_melt_val,
-                                dpdt_clapeyron_val=dpdt_clapeyron_val,
-                                soft_turbulence=soft_turbulence_val,
-                                eta_fluid_silicate_val=eta_fluid_silicate_val,
-                                F_turb_start_val=F_turb_start_val,
-                                F_turb_end_val=F_turb_end_val,
-                                turb_exponent_val=turb_exponent_val,
-                                dT_turb_min_val=dT_turb_min_val,
-                                T_surface_ref_val=T_surface_ref_val,
-                                k_turb_cutoff_val=k_turb_cutoff_val,
-                                k_turb_floor_val=k_turb_floor_val,
-                                Xfe_bulk=Xfe_bulk,
-                                Xfem=Xfem,
-                                coreformation_active=coreformation_active_val,
-                                hrmetalm=hrmetalm,
-                                sulfur_fraction_val=sulfur_fraction_val,
-                                metal_density_mode_val=metal_density_mode_val,
-                                T_eutectic_val=T_eutectic_val,
-                                dT_metal_val=dT_metal_val,
-                                rho_metal_val=rho_metal_val,
-                                rho_metal_solid_val=rho_metal_solid_val,
-                                L_metal_val=L_metal_val,
-                                k_metal_val=k_metal_val,
-                                rhocp_metal_val=rhocp_metal_val,
-                                volatiles_active=cfg.volatiles.active,
-                                magma_degassing_active=cfg.magma_degassing.active,
-                                etamin=cfg.solver.etamin,
-                                etamax=cfg.solver.etamax,
-                                volatiles_cfg=cfg.volatiles,
-                                retention_cfg=cfg.retention,
-                                XH2Om=XH2Om,
-                                XCm=XCm,
-                                XNm=XNm,
-                                XSm=XSm,
-                                metal_partition_cfg=cfg.metal_partition,
-                                Xfe_H_m=Xfe_H_m,
-                                Xfe_C_m=Xfe_C_m,
-                                Xfe_N_m=Xfe_N_m,
-                                Xfe_S_m=Xfe_S_m,
-                                phase_tracking_cfg=cfg.phase_tracking,
-                                Xmin_troilite_m=Xmin_troilite_m,
-                                Xmin_schreibersite_m=Xmin_schreibersite_m,
-                                Xmin_cohenite_m=Xmin_cohenite_m,
-                                Xmin_graphite_m=Xmin_graphite_m,
-                                Xmin_nitride_m=Xmin_nitride_m,
-                                Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-                                hydrothermal_active=cfg.hydrothermal.active,
-                                hydrothermal_cfg=cfg.hydrothermal,
-                                deltaIW_m=if redox_props !== nothing
-                                    redox_props.deltaIW_m
-                                else
-                                    nothing
-                                end,
-                                xm=xm,
-                                ym=ym,
-                                coords=coords,
-                                rplanet_val=rplanet_val,
-                                M_planet_val=M_planet_val,
-                                rcore_val=rcore_val,
-                                qxD_val=qxD,
-                                qyD_val=qyD,
-                                xcenter_val=xcenter_val,
-                                ycenter_val=ycenter_val,
-                            )
-                            # interpolate marker properties to basic nodes
-                            @inbounds marker_to_basic_nodes!(
-                                m,
-                                xm[m],
-                                ym[m],
-                                etatotalm,
-                                etavpm,
-                                inv_gggtotalm,
-                                sxym,
-                                cohestotalm,
-                                tenstotalm,
-                                fricttotalm,
-                                ETA0SUM,
-                                ETASUM,
-                                GGGSUM,
-                                SXYSUM,
-                                COHSUM,
-                                TENSUM,
-                                FRISUM,
-                                WTSUM;
-                                coords=coords,
-                            )
-                            # interpolate marker properties to Vx nodes
-                            @inbounds marker_to_vx_nodes!(
-                                m,
-                                xm[m],
-                                ym[m],
-                                rhototalm,
-                                rhofluidcur,
-                                ktotalm,
-                                phim,
-                                etafluidcur_inv_kphim,
-                                RHOXSUM,
-                                RHOFXSUM,
-                                KXSUM,
-                                PHIXSUM,
-                                RXSUM,
-                                WTXSUM;
-                                coords=coords,
-                            )
-                            # interpolate marker properties to Vy nodes
-                            @inbounds marker_to_vy_nodes!(
-                                m,
-                                xm[m],
-                                ym[m],
-                                rhototalm,
-                                rhofluidcur,
-                                ktotalm,
-                                phim,
-                                etafluidcur_inv_kphim,
-                                RHOYSUM,
-                                RHOFYSUM,
-                                KYSUM,
-                                PHIYSUM,
-                                RYSUM,
-                                WTYSUM;
-                                coords=coords,
-                            )
-                            # interpolate marker properties to P nodes
-                            @inbounds marker_to_p_nodes!(
-                                m,
-                                xm[m],
-                                ym[m],
-                                inv_gggtotalm,
-                                sxxm,
-                                rhototalm,
-                                rhocptotalm,
-                                alphasolidcur,
-                                alphafluidcur,
-                                hrtotalm,
-                                phim,
-                                tkm_rhocptotalm,
-                                GGGPSUM,
-                                SXXSUM,
-                                RHOSUM,
-                                RHOCPSUM,
-                                ALPHASUM,
-                                ALPHAFSUM,
-                                HRSUM,
-                                PHISUM,
-                                TKSUM,
-                                WTPSUM;
-                                coords=coords,
-                            )
-                        end # for m=1:1:marknum
-                    end
-
-                    # ---------------------------------------------------------------------
-                    # compute physical properties of basic nodes
-                    # ---------------------------------------------------------------------
-                    compute_basic_node_properties!(
-                        ETA0SUM,
-                        ETASUM,
-                        GGGSUM,
-                        SXYSUM,
-                        COHSUM,
-                        TENSUM,
-                        FRISUM,
-                        WTSUM,
-                        ETA0,
-                        ETA,
-                        GGG,
-                        SXY0,
-                        COH,
-                        TEN,
-                        FRI,
-                        YNY,
-                    )
-
-                    # ---------------------------------------------------------------------
-                    # compute physical properties of Vx nodes
-                    # ---------------------------------------------------------------------
-                    compute_vx_node_properties!(
-                        RHOXSUM,
-                        RHOFXSUM,
-                        KXSUM,
-                        PHIXSUM,
-                        RXSUM,
-                        WTXSUM,
-                        RHOX,
-                        RHOFX,
-                        KX,
-                        PHIX,
-                        RX,
-                    )
-
-                    # ---------------------------------------------------------------------
-                    # compute physical properties of Vy nodes
-                    # ---------------------------------------------------------------------
-                    compute_vy_node_properties!(
-                        RHOYSUM,
-                        RHOFYSUM,
-                        KYSUM,
-                        PHIYSUM,
-                        RYSUM,
-                        WTYSUM,
-                        RHOY,
-                        RHOFY,
-                        KY,
-                        PHIY,
-                        RY,
-                    )
-
-                    # ---------------------------------------------------------------------
-                    # compute physical properties of P nodes
-                    # ---------------------------------------------------------------------
-                    compute_p_node_properties!(
-                        RHOSUM,
-                        RHOCPSUM,
-                        ALPHASUM,
-                        ALPHAFSUM,
-                        HRSUM,
-                        GGGPSUM,
-                        SXXSUM,
-                        TKSUM,
-                        PHISUM,
-                        WTPSUM,
-                        RHO,
-                        RHOCP,
-                        ALPHA,
-                        ALPHAF,
-                        HR,
-                        GGGP,
-                        SXX0,
-                        tk1,
-                        PHI,
-                        BETAPHI,
-                    )
-
-                    # ---------------------------------------------------------------------
-                    # apply thermal boundary conditions for interpolated temperature
-                    # ---------------------------------------------------------------------
-                    apply_insulating_boundary_conditions!(tk1)
-                    # Initialize tk2 from tk1 so thermochemical iterations before
-                    # the thermal Poisson solve receive valid physical temperatures (T > 0).
-                    tk2 .= tk1
-
-                    # ---------------------------------------------------------------------
-                    # compute gravity solution
-                    # compute gravitational acceleration
-                    # ---------------------------------------------------------------------
-                    if cfg.geometry.gravity_mode === :enclosed_mass
-                        compute_gravity_enclosed_mass!(
-                            gx,
-                            gy;
-                            xm=xm,
-                            ym=ym,
-                            rhototalm=rhototalm,
-                            tm=tm,
-                            coords=coords,
-                            gravity_nr_factor=cfg.geometry.gravity_nr_factor,
-                            rplanet=cfg.geometry.rplanet,
-                            FI=FI,
-                        )
-                    else
-                        assemble_gravitational_rhs!(RHO, RP; coords=coords)
-                        SP = F_grav \ RP
-                        process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
-                    end
+                    solve_gravity!(state, coords, cfg; F_grav=F_grav, RP=RP, SP=SP)
 
                     # ---------------------------------------------------------------------
                     # computational timestep for current attempt

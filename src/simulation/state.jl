@@ -23,7 +23,7 @@ struct GridArrays
     COH::Matrix{Float64}
     TEN::Matrix{Float64}
     FRI::Matrix{Float64}
-    YNY::Matrix{Float64}
+    YNY::Union{Matrix{Bool},Matrix{Float64}}
     RHOX::Matrix{Float64}
     RHOFX::Matrix{Float64}
     KX::Matrix{Float64}
@@ -78,8 +78,8 @@ struct GridArrays
     XWS::Matrix{Float64}
     ETA5::Matrix{Float64}
     ETA00::Matrix{Float64}
-    YNY5::Matrix{Float64}
-    YNY00::Matrix{Float64}
+    YNY5::Union{Matrix{Bool},Matrix{Float64}}
+    YNY00::Union{Matrix{Bool},Matrix{Float64}}
     YNY_inv_ETA::Matrix{Float64}
     DSXY::Matrix{Float64}
     DSY::Matrix{Float64}
