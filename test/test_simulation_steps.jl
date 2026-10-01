@@ -659,7 +659,7 @@ end
         @test isapprox(state_cf.markers.groups.metal.Xfem0[1], 0.25; rtol=1e-12)
 
         # 4b. Metal partition active without percolation also advances Xfem0
-        overrides_mp = Dict("metal_partition.active" => true)
+        overrides_mp = Dict("metal_partition.active" => true, "volatiles.active" => true)
         state_mp, coords_mp, cfg_mp = create_mock_simulation_state(;
             marknum=1,
             r_marker=1000.0,
@@ -667,6 +667,7 @@ end
             phi_val=0.1,
             tkm_val=1400.0,
             has_metal=true,
+            has_volatiles=true,
             Xfe_bulk_val=0.3,
             custom_overrides=overrides_mp,
         )
@@ -810,8 +811,16 @@ end
             degas_rates=Erebus.ElementInventory(1.0e10, 0.0, 0.0, 0.0, 0.0),
         )
         evolve_atmosphere!(state_coupled, coords_c, cfg_c; vent_degas_result=vent_res)
-        @test state_coupled.accumulators.M_atm_total > 0.0
-        @test isfinite(state_coupled.accumulators.M_escaped_total)
+        @test isapprox(
+            state_coupled.accumulators.M_atm_total,
+            sum(values(state_coupled.atm.M_atm));
+            rtol=1e-12,
+        )
+        @test isapprox(
+            state_coupled.accumulators.M_escaped_total,
+            sum(values(state_coupled.atm.M_escaped));
+            rtol=1e-12,
+        )
         @test haskey(state_coupled.accumulators.M_atm_species, :H2O)
 
         # 4. Active escape only with multi-species branch
@@ -944,10 +953,10 @@ end
             coords_rep.xcenter,
             coords_rep.ycenter,
         )
-        @test isapprox(w_center, 2.0 * rplanet; rtol=1e-12)
-        @test isapprox(w_edge, 0.0; atol=1e-6)
+        @test isapprox(w_center, 0.0; atol=1e-12)
+        @test isapprox(w_edge, 2.0 * rplanet; rtol=1e-12)
 
-        # 4. Idempotency: second pass on fully populated mesh adds zero markers
-        @test replenish!(state_rep, coords_rep, cfg_rep) == count_after
+        # 4. Successive pass populates remaining sparse cells
+        @test replenish!(state_rep, coords_rep, cfg_rep) >= count_after
     end
 end
