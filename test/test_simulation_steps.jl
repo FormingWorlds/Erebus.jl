@@ -54,8 +54,24 @@ function create_mock_simulation_state(;
 
     # Allocate GridArrays with appropriate staggered grid dimensions
     basic_node_fields = (
-        :ETA, :ETA0, :GGG, :EXY, :SXY, :SXY0, :wyx, :COH, :TEN, :FRI, :YNY,
-        :ETA5, :ETA00, :YNY5, :YNY00, :YNY_inv_ETA, :DSXY, :DSY,
+        :ETA,
+        :ETA0,
+        :GGG,
+        :EXY,
+        :SXY,
+        :SXY0,
+        :wyx,
+        :COH,
+        :TEN,
+        :FRI,
+        :YNY,
+        :ETA5,
+        :ETA00,
+        :YNY5,
+        :YNY00,
+        :YNY_inv_ETA,
+        :DSXY,
+        :DSY,
     )
     g_args = Any[]
     for fn in fieldnames(GridArrays)
