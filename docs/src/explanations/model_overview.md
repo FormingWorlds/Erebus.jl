@@ -49,29 +49,39 @@ The full simulation lifecycle, coupling between Eulerian staggered grids and Lag
 
 ### Numerical Execution Pipeline
 
-1. **Simulation Initialization**:
-   - Parses and validates configuration settings via `SimulationConfig`.
-   - Allocates staggered Eulerian finite-difference grids for momentum, mass conservation, Darcy filtration, and energy equations.
-   - Populates Lagrangian markers with initial thermochemical, phase, porosity, metal fraction, and volatile budgets across planetary layers and surrounding sticky air.
+The simulation loop advances physical time via a 10-stage operator-splitting sequence:
 
-2. **Adaptive Time Stepping & Boundary Pre-Solve**:
-   - Determines the global timestep $\Delta t = \min(\Delta t_{\text{CFL}}, \Delta t_{\text{diff}}, \Delta t_{\text{thermal}}, \Delta t_{\text{max}})$, with adaptive subcycling for metal segregation CFL constraints.
-   - Evaluates ambient protoplanetary disk thermal conditions ($T_{\text{amb}}, P_{\text{amb}}$), disk dispersal weighting $w_{\text{disp}}(t)$, gas envelope capture, Guillot semi-grey greenhouse atmosphere, and non-linear Stefan-Boltzmann surface radiation.
-   - Ingests volumetric radiogenic heating ($^{26}\text{Al}, ^{60}\text{Fe}$), accretion impact heating, and dissipation source terms.
+1. **Mass Accretion & Domain Telescoping (`accrete!`)**:
+   Accretes pebbles or embryos onto the body, advances planetary radius $R(t)$, deposits impact kinetic energy in the outer shell, updates sticky air boundaries, and executes telescoping domain expansion ($x_{\text{size}} \to 2 x_{\text{size}}$) when the body exceeds 70% of domain half-width.
 
-3. **Coupled Multi-Physics Core Solvers**:
-   - **Thermochemical & Phase State**: Evaluates pressure-dependent silicate solidus/liquidus, apparent heat capacity latent heat buffering, Solomatov (2007) sub-grid soft turbulence scaling ($k_{\text{turb}} \sim \text{Ra}^{1/3}$), hydrothermal Rayleigh-Darcy porous convection closures, Costa / Gerya rheological weakening, and clay dehydration.
-   - **Stokes-Darcy Hydromechanics**: Monolithic linear system assembly ($K \mathbf{u} = \mathbf{f}$) solving solid matrix deformation, Darcy fluid filtration, poroelastic compaction/dilation, and Terzaghi effective stress plasticity with tensile hydrofracturing.
-   - **Metal & Magma Segregation**: Dual-regime metal drift-flux solver transitioning from porous Darcy percolation ($F_m \le 0.40$) to hindered Stokes droplet settling ($F_m \ge 0.50$) via cubic Hermite blending, coupled with buoyant silicate melt migration, accessory mineral crystallization, and gravitational dissipation heating ($Q_{\text{seg}}$).
-   - **Thermal Energy Solve**: Implicit sparse solve for temperature $T^{n+1}$ incorporating conduction, advection, latent heats, radiogenic sources, and segregation dissipation.
+2. **Radiogenic Decay Heating (`radiogenic_heating!`)**:
+   Computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$), adds volumetric heat sources to markers, and updates isotope inventories.
 
-4. **Transport, Atmosphere & Mesh Advancement**:
-   - Advects Lagrangian markers via 4th-order Runge-Kutta velocity interpolation, applying local particle replenishment in under-resolved cells.
-   - Evaluates multi-species HCNS volatile degassing, cold surface venting, ice cold-trap clamping, and atmospheric escape.
-   - Executes telescoping domain coordinate doubling ($x_{\text{size}} \to 2 x_{\text{size}}$) with invariant resolution ($dx = \text{const}$) and odd-parity remapping when the planetesimal exceeds 70% of the domain half-width.
+3. **Marker-in-Cell Mapping (`interpolate_markers_to_grid!`)**:
+   Interpolates marker properties (density $\rho$, viscosity $\eta$, thermal conductivity $k$, heat capacity $\rho c_p$, and porosity $\phi$) to staggered grid nodes using bilinear distance weights or tiled thread-local workspaces.
 
-5. **State Persistence & Time Advancement**:
-   - Updates simulation time $t \leftarrow t + \Delta t$, exports JLD2 checkpoint snapshots and core budget metrics, and advances to the next time step until reaching target epoch or maximum steps.
+4. **Self-Gravity (`solve_gravity!`)**:
+   Solves for gravitational potential $\Phi$ and gravitational acceleration components $(g_x, g_y)$ via 2D Poisson solver or 3D spherical enclosed-mass proxy with linear regularization.
+
+5. **Hydro-Mechanical Stokes-Darcy Solve**:
+   Assembles and solves the monolithic linear system for solid matrix velocities $(v_x, v_y)$, total pressure $P_t$, fluid Darcy flux $(q_x, q_y)$, fluid pressure $P_f$, and Terzaghi effective stress plasticity.
+
+6. **Thermochemical Energy Solve**:
+   Advances temperature through implicit sparse solve incorporating conduction, advection, latent heats of dehydration and melting, radiogenic sources, sub-grid soft turbulence convection, and gravitational segregation heating.
+
+7. **Fluid Venting & Magma Degassing (`vent_and_degas!`)**:
+   Evaluates matrix compaction, hydrofracture tensile failure venting, volatile drainage, and dynamic flux or equilibrium volatile exsolution across partially molten mantle and magma ocean zones.
+
+8. **Surface Atmosphere & Escape (`evolve_atmosphere!`)**:
+   Couples vented and degassed volatile inventories into surface atmospheric pressure and equilibrium temperature, and computes multi-species hydrodynamic and kinetic escape losses.
+
+9. **Marker Advection (`advect_markers!`)**:
+   Advects Lagrangian marker coordinates $(x_m, y_m)$ using a 4th-order Runge-Kutta scheme, backtracks nodal total and fluid pressures, and updates porosity state.
+
+10. **Marker Replenishment (`replenish!`)**:
+    Detects under-populated grid cells, injects replacement markers with interpolated thermochemical properties, and recomputes out-of-plane geometric integration lengths $L(r_m)$.
+
+Following stage 10, the simulation advances physical time $t \leftarrow t + \Delta t$, exports JLD2 checkpoint snapshots, and streams telemetry records.
 
 ---
 

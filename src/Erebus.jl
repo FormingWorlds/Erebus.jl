@@ -20,6 +20,7 @@ using TOML
 
 export run_simulation, load_state, simulation_loop, PlasticConvergenceError
 export accrete!, radiogenic_heating!, interpolate_markers_to_grid!, solve_gravity!
+export vent_and_degas!, evolve_atmosphere!, advect_markers!, replenish!
 export TransferRecord
 export MetalSegregationWorkspace,
     MagmaSegregationWorkspace,
@@ -1027,7 +1028,11 @@ module Simulation
         accrete!,
         radiogenic_heating!,
         interpolate_markers_to_grid!,
-        solve_gravity!
+        solve_gravity!,
+        vent_and_degas!,
+        evolve_atmosphere!,
+        advect_markers!,
+        replenish!
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
@@ -1045,7 +1050,11 @@ module Simulation
         accrete!,
         radiogenic_heating!,
         interpolate_markers_to_grid!,
-        solve_gravity!
+        solve_gravity!,
+        vent_and_degas!,
+        evolve_atmosphere!,
+        advect_markers!,
+        replenish!
 end
 
 module Config
