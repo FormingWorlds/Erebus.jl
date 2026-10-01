@@ -14,6 +14,7 @@ test_group = get(ENV, "EREBUS_TEST_GROUP", "all")
 
 unit_tests = [
     "test_config.jl",
+    "test_constants.jl",
     "test_geometry.jl",
     "test_dynamic_grid.jl",
     "test_threading.jl",

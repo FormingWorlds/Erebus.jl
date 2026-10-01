@@ -213,9 +213,7 @@ function compute_fluid_viscosity(
     if mode === :constant || Ea <= 0.0
         return Float64(eta0)
     elseif mode === :arrhenius
-        # Universal gas constant R [J/(mol K)]
-        R_gas = 8.31446261815324
-        log_ratio = (Ea / R_gas) * (inv(T) - inv(T0))
+        log_ratio = (Ea / R_GAS) * (inv(T) - inv(T0))
         val = eta0 * exp(log_ratio)
         return clamp(val, Float64(etamin), Float64(etamax))
     else

@@ -11,12 +11,12 @@ using Erebus.Physics
         kB_const = 1.380649e-23
         NA_const = 6.02214076e23
 
-        # Species molecular masses against standard atomic weights [kg]
-        @test isapprox(MASS_H2O_KG, 18.01528e-3 / NA_const; rtol=1e-5)
-        @test isapprox(MASS_N2_KG, 28.0134e-3 / NA_const; rtol=1e-5)
-        @test isapprox(MASS_NH3_KG, 17.03052e-3 / NA_const; rtol=1e-5)
-        @test isapprox(MASS_CO_KG, 28.0101e-3 / NA_const; rtol=1e-5)
-        @test isapprox(MASS_CO2_KG, 44.0095e-3 / NA_const; rtol=1e-5)
+        # Species molecular masses against canonical constants [kg]
+        @test isapprox(MASS_H2O_KG, M_H2O / NA_const; rtol=1e-5)
+        @test isapprox(MASS_N2_KG, M_N2 / NA_const; rtol=1e-5)
+        @test isapprox(MASS_NH3_KG, M_NH3 / NA_const; rtol=1e-5)
+        @test isapprox(MASS_CO_KG, M_CO / NA_const; rtol=1e-5)
+        @test isapprox(MASS_CO2_KG, M_CO2 / NA_const; rtol=1e-5)
 
         # Species lookup function
         @test get_species_molecular_mass(:H2O) == MASS_H2O_KG
@@ -330,13 +330,13 @@ using Erebus.Physics
         @test iszero(res_zero_dt.M_escaped_step)
 
         # Quantitative closed-form check in the small planetesimal regime (λ < 1)
-        g_50 = 6.67430e-11 * M_50km / (R_50km^2)
-        H_50 = (1.380649e-23 * T_200) / (MASS_H2O_KG * g_50)
-        v_th_50 = sqrt(2.0 * 1.380649e-23 * T_200 / MASS_H2O_KG)
+        g_50 = GRAVITATIONAL_CONSTANT * M_50km / (R_50km^2)
+        H_50 = (BOLTZMANN_CONSTANT * T_200) / (MASS_H2O_KG * g_50)
+        v_th_50 = sqrt(2.0 * BOLTZMANN_CONSTANT * T_200 / MASS_H2O_KG)
         lam_50 = compute_jeans_parameter(M_50km, R_50km, T_200, MASS_H2O_KG)
         k_expected = (v_th_50 / (2.0 * sqrt(π) * H_50)) * (1.0 + lam_50) * exp(-lam_50)
-        @test isapprox(lam_50, 0.01893002; rtol=1e-5)
-        @test isapprox(k_expected, 4.5880267e-5; rtol=1e-5)
+        @test isapprox(lam_50, 0.01892973; rtol=1e-5)
+        @test isapprox(k_expected, 4.58799e-5; rtol=1e-5)
 
         # Steady-state atmospheric mass under continuous venting: M_ss = M_dot / k_escape
         M_ss_expected = vent_rate / k_expected

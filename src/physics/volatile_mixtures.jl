@@ -115,7 +115,7 @@ $(SIGNATURES)
 - `eta_liquid_ref`: Reference liquid viscosity at reference temperature [Pa s] (default: 1.0e-3).
 - `eta_ice`: Solid ice effective viscosity [Pa s] (default: 1.0e12).
 - `E_act`: Activation energy for liquid viscous flow [J/mol] (default: 1.5e4).
-- `R_gas`: Universal gas constant [J/mol/K] (default: 8.31446).
+- `R_gas`: Universal gas constant [J/mol/K] (default: R_GAS).
 - `T_ref`: Reference temperature [K] (default: 293.15).
 
 # Returns
@@ -131,7 +131,7 @@ function compute_mixture_fluid_viscosity(
     eta_liquid_ref::Real=1.0e-3,
     eta_ice::Real=1.0e12,
     E_act::Real=1.5e4,
-    R_gas::Real=8.31446,
+    R_gas::Real=R_GAS,
     T_ref::Real=293.15,
 )::Float64
     (isnan(T) || T < 0.0) && throw(DomainError(T, "Temperature must be non-negative"))
@@ -282,7 +282,7 @@ $(SIGNATURES)
 
 # Keyword Arguments
 - `f_graphite`: Fraction of pyrolyzed carbon retained as solid graphite residue (default: `cfg.f_refr_C`).
-- `R_gas`: Universal gas constant [J/(mol K)] (default: 8.314462618).
+- `R_gas`: Universal gas constant [J/(mol K)] (default: R_GAS).
 
 # Returns
 - Named tuple with fields:
@@ -306,7 +306,7 @@ function step_refractory_pyrolysis_kinetic(
     H_refr::Real,
     cfg::RefractoryConfig=RefractoryConfig();
     f_graphite::Real=cfg.f_refr_C,
-    R_gas::Real=8.314462618,
+    R_gas::Real=R_GAS,
 )
     (isnan(T) || T <= 0.0) &&
         throw(DomainError(T, "Temperature must be positive and finite"))
@@ -477,7 +477,6 @@ function update_marker_pyrolysis!(
             nCH4_m = hasproperty(redox_props, :nCH4_m) ? redox_props.nCH4_m : nothing
 
             if nC_gr_m !== nothing
-                M_C = 0.012011
                 dn_c_gr = (d_c_gr * scale) / M_C
                 dn_c_gas = (d_c_gas * scale) / M_C
                 dn_c_iom = dn_c_gr + dn_c_gas
@@ -535,7 +534,7 @@ function update_marker_pyrolysis!(
                         dn_ch4 = dn_c_gas * f_CH4
 
                         # Bound methane formation by available hydrogen (4 H per CH4)
-                        dn_h_avail = (d_h_gas * scale) / 0.001008 + 2.0 * c_cur.n_H2
+                        dn_h_avail = (d_h_gas * scale) / M_H + 2.0 * c_cur.n_H2
                         max_ch4_from_h = dn_h_avail / 4.0
                         if dn_ch4 > max_ch4_from_h
                             dn_ch4 = max(0.0, max_ch4_from_h)
@@ -601,7 +600,7 @@ function update_marker_pyrolysis!(
                         # Synchronize newly smelted metallic Fe0 to Xfem if present
                         dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
                         if Xfem !== nothing && dn_fe0_smelted > 0.0
-                            Xfem[m] += dn_fe0_smelted * 0.055845
+                            Xfem[m] += dn_fe0_smelted * M_Fe
                         end
 
                         nFe0_m[m] = c_up.n_Fe0

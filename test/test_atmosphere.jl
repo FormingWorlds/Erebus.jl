@@ -955,13 +955,13 @@ using Random
             @test data2["atm_M_atm"][:H2S] > 0.0
             @test isapprox(
                 data2["atm_M_atm"][:CO2],
-                data2["M_vent_C_total"] * (44.0095 / 12.011),
+                data2["M_vent_C_total"] * (M_CO2 / M_C),
                 rtol=1e-10,
             )
             @test isapprox(data2["atm_M_atm"][:N2], data2["M_vent_N_total"], rtol=1e-10)
             @test isapprox(
                 data2["atm_M_atm"][:H2S],
-                data2["M_vent_S_total"] * (34.08 / 32.06),
+                data2["M_vent_S_total"] * (M_H2S / M_S),
                 rtol=1e-10,
             )
         finally
@@ -1283,47 +1283,47 @@ using Random
 
         # Elemental mole conservation
         n_elem_in = (
-            2.0 * m_H2O_rel / 18.01528e-3 +
-            m_C_rel / 12.011e-3 +
-            m_N_rel / 14.007e-3 +
-            m_S_rel / 32.06e-3
+            2.0 * m_H2O_rel / M_H2O +
+            m_C_rel / M_C +
+            m_N_rel / M_N +
+            m_S_rel / M_S
         )
 
         n_elem_out_red = (
-            2.0 * (red_spec[:H2] / 2.01588e-3) +
-            2.0 * (red_spec[:H2O] / 18.01528e-3) +
-            1.0 * (red_spec[:CO] / 28.0101e-3) +
-            1.0 * (red_spec[:CO2] / 44.0095e-3) +
-            5.0 * (red_spec[:CH4] / 16.0425e-3) +
-            2.0 * (red_spec[:N2] / 28.0134e-3) +
-            4.0 * (red_spec[:NH3] / 17.0305e-3) +
-            3.0 * (red_spec[:H2S] / 34.0809e-3) +
-            2.0 * (red_spec[:S2] / 64.12e-3) +
-            1.0 * (red_spec[:SO2] / 64.066e-3)
+            2.0 * (red_spec[:H2] / (2.0 * M_H)) +
+            2.0 * (red_spec[:H2O] / M_H2O) +
+            1.0 * (red_spec[:CO] / M_CO) +
+            1.0 * (red_spec[:CO2] / M_CO2) +
+            5.0 * (red_spec[:CH4] / M_CH4) +
+            2.0 * (red_spec[:N2] / M_N2) +
+            4.0 * (red_spec[:NH3] / M_NH3) +
+            3.0 * (red_spec[:H2S] / M_H2S) +
+            2.0 * (red_spec[:S2] / M_S2) +
+            1.0 * (red_spec[:SO2] / M_SO2)
         )
         @test isapprox(n_elem_out_red, n_elem_in, rtol=1e-10)
 
-        nH_in = 2.0 * m_H2O_rel / 18.01528e-3
-        nC_in = m_C_rel / 12.011e-3
-        nN_in = m_N_rel / 14.007e-3
-        nS_in = m_S_rel / 32.06e-3
+        nH_in = (2.0 * m_H2O_rel) / M_H2O
+        nC_in = m_C_rel / M_C
+        nN_in = m_N_rel / M_N
+        nS_in = m_S_rel / M_S
 
         nH_out_red = (
-            2.0 * (red_spec[:H2] / 2.01588e-3) +
-            2.0 * (red_spec[:H2O] / 18.01528e-3) +
-            4.0 * (red_spec[:CH4] / 16.0425e-3) +
-            3.0 * (red_spec[:NH3] / 17.0305e-3) +
-            2.0 * (red_spec[:H2S] / 34.0809e-3)
+            2.0 * (red_spec[:H2] / (2.0 * M_H)) +
+            2.0 * (red_spec[:H2O] / M_H2O) +
+            4.0 * (red_spec[:CH4] / M_CH4) +
+            3.0 * (red_spec[:NH3] / M_NH3) +
+            2.0 * (red_spec[:H2S] / M_H2S)
         )
         nC_out_red =
-            red_spec[:CO] / 28.0101e-3 +
-            red_spec[:CO2] / 44.0095e-3 +
-            red_spec[:CH4] / 16.0425e-3
-        nN_out_red = 2.0 * (red_spec[:N2] / 28.0134e-3) + red_spec[:NH3] / 17.0305e-3
+            red_spec[:CO] / M_CO +
+            red_spec[:CO2] / M_CO2 +
+            red_spec[:CH4] / M_CH4
+        nN_out_red = 2.0 * (red_spec[:N2] / M_N2) + red_spec[:NH3] / M_NH3
         nS_out_red =
-            red_spec[:H2S] / 34.0809e-3 +
-            2.0 * (red_spec[:S2] / 64.12e-3) +
-            red_spec[:SO2] / 64.066e-3
+            red_spec[:H2S] / M_H2S +
+            2.0 * (red_spec[:S2] / M_S2) +
+            red_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out_red, nH_in, rtol=1e-10)
         @test isapprox(nC_out_red, nC_in, rtol=1e-10)
@@ -1340,35 +1340,35 @@ using Random
         )
 
         n_elem_out_ox = (
-            2.0 * (ox_spec[:H2] / 2.01588e-3) +
-            2.0 * (ox_spec[:H2O] / 18.01528e-3) +
-            1.0 * (ox_spec[:CO] / 28.0101e-3) +
-            1.0 * (ox_spec[:CO2] / 44.0095e-3) +
-            5.0 * (ox_spec[:CH4] / 16.0425e-3) +
-            2.0 * (ox_spec[:N2] / 28.0134e-3) +
-            4.0 * (ox_spec[:NH3] / 17.0305e-3) +
-            3.0 * (ox_spec[:H2S] / 34.0809e-3) +
-            2.0 * (ox_spec[:S2] / 64.12e-3) +
-            1.0 * (ox_spec[:SO2] / 64.066e-3)
+            2.0 * (ox_spec[:H2] / (2.0 * M_H)) +
+            2.0 * (ox_spec[:H2O] / M_H2O) +
+            1.0 * (ox_spec[:CO] / M_CO) +
+            1.0 * (ox_spec[:CO2] / M_CO2) +
+            5.0 * (ox_spec[:CH4] / M_CH4) +
+            2.0 * (ox_spec[:N2] / M_N2) +
+            4.0 * (ox_spec[:NH3] / M_NH3) +
+            3.0 * (ox_spec[:H2S] / M_H2S) +
+            2.0 * (ox_spec[:S2] / M_S2) +
+            1.0 * (ox_spec[:SO2] / M_SO2)
         )
         @test isapprox(n_elem_out_ox, n_elem_in, rtol=1e-10)
 
         nH_out_ox = (
-            2.0 * (ox_spec[:H2] / 2.01588e-3) +
-            2.0 * (ox_spec[:H2O] / 18.01528e-3) +
-            4.0 * (ox_spec[:CH4] / 16.0425e-3) +
-            3.0 * (ox_spec[:NH3] / 17.0305e-3) +
-            2.0 * (ox_spec[:H2S] / 34.0809e-3)
+            2.0 * (ox_spec[:H2] / (2.0 * M_H)) +
+            2.0 * (ox_spec[:H2O] / M_H2O) +
+            4.0 * (ox_spec[:CH4] / M_CH4) +
+            3.0 * (ox_spec[:NH3] / M_NH3) +
+            2.0 * (ox_spec[:H2S] / M_H2S)
         )
         nC_out_ox =
-            ox_spec[:CO] / 28.0101e-3 +
-            ox_spec[:CO2] / 44.0095e-3 +
-            ox_spec[:CH4] / 16.0425e-3
-        nN_out_ox = 2.0 * (ox_spec[:N2] / 28.0134e-3) + ox_spec[:NH3] / 17.0305e-3
+            ox_spec[:CO] / M_CO +
+            ox_spec[:CO2] / M_CO2 +
+            ox_spec[:CH4] / M_CH4
+        nN_out_ox = 2.0 * (ox_spec[:N2] / M_N2) + ox_spec[:NH3] / M_NH3
         nS_out_ox =
-            ox_spec[:H2S] / 34.0809e-3 +
-            2.0 * (ox_spec[:S2] / 64.12e-3) +
-            ox_spec[:SO2] / 64.066e-3
+            ox_spec[:H2S] / M_H2S +
+            2.0 * (ox_spec[:S2] / M_S2) +
+            ox_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out_ox, nH_in, rtol=1e-10)
         @test isapprox(nC_out_ox, nC_in, rtol=1e-10)
@@ -1388,21 +1388,21 @@ using Random
                 graphite_saturation=true,
             )
             nH_deep = (
-                2.0 * (spec_deep[:H2] / 2.01588e-3) +
-                2.0 * (spec_deep[:H2O] / 18.01528e-3) +
-                4.0 * (spec_deep[:CH4] / 16.0425e-3) +
-                3.0 * (spec_deep[:NH3] / 17.0305e-3) +
-                2.0 * (spec_deep[:H2S] / 34.0809e-3)
+                2.0 * (spec_deep[:H2] / (2.0 * M_H)) +
+                2.0 * (spec_deep[:H2O] / M_H2O) +
+                4.0 * (spec_deep[:CH4] / M_CH4) +
+                3.0 * (spec_deep[:NH3] / M_NH3) +
+                2.0 * (spec_deep[:H2S] / M_H2S)
             )
             nC_deep =
-                spec_deep[:CO] / 28.0101e-3 +
-                spec_deep[:CO2] / 44.0095e-3 +
-                spec_deep[:CH4] / 16.0425e-3
-            nN_deep = 2.0 * (spec_deep[:N2] / 28.0134e-3) + spec_deep[:NH3] / 17.0305e-3
+                spec_deep[:CO] / M_CO +
+                spec_deep[:CO2] / M_CO2 +
+                spec_deep[:CH4] / M_CH4
+            nN_deep = 2.0 * (spec_deep[:N2] / M_N2) + spec_deep[:NH3] / M_NH3
             nS_deep =
-                spec_deep[:H2S] / 34.0809e-3 +
-                2.0 * (spec_deep[:S2] / 64.12e-3) +
-                spec_deep[:SO2] / 64.066e-3
+                spec_deep[:H2S] / M_H2S +
+                2.0 * (spec_deep[:S2] / M_S2) +
+                spec_deep[:SO2] / M_SO2
 
             @test isapprox(nH_deep, nH_in, rtol=1e-10)
             @test nC_deep < nC_in
@@ -1498,13 +1498,22 @@ using Random
     # 1. Buffered speciation at source
     @testset "Buffered Speciation at Source" begin
         # Test stoichiometry table for molar masses and oxygen counts
-        mu_H = SPECIES_AMU[:H] * 1e-3
-        mu_C = SPECIES_AMU[:C] * 1e-3
-        mu_N = SPECIES_AMU[:N] * 1e-3
-        mu_S = SPECIES_AMU[:S] * 1e-3
-        mu_O = SPECIES_AMU[:O] * 1e-3
+        mu_H = M_H
+        mu_C = M_C
+        mu_N = M_N
+        mu_S = M_S
+        mu_O = M_O
         mu_sp = Dict{Symbol,Float64}(
-            sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+            :H2 => 2.0 * M_H,
+            :H2O => M_H2O,
+            :CO => M_CO,
+            :CO2 => M_CO2,
+            :CH4 => M_CH4,
+            :N2 => M_N2,
+            :NH3 => M_NH3,
+            :H2S => M_H2S,
+            :S2 => M_S2,
+            :SO2 => M_SO2,
         )
         nu_O = Dict(
             :H2 => 0.0,
@@ -1614,11 +1623,11 @@ using Random
         # Pure H2O parcel at 1500 K and ΔIW = -2
         m_h2o_pure = 1.0
         elem_h2o = ElementInventory(
-            m_h2o_pure * (2.01588 / 18.01528),
+            m_h2o_pure * ((2.0 * M_H) / M_H2O),
             0.0,
             0.0,
             0.0,
-            m_h2o_pure * (15.9994 / 18.01528),
+            m_h2o_pure * (M_O / M_H2O),
         )
         res_h2o = speciate_vented_volatiles(elem_h2o, 1.0e5, 1500.0, -2.0)
         # Expected pH2O / pH2 from reaction Kw(T) * fO2^(1/2)
@@ -1626,11 +1635,11 @@ using Random
         fo2_exp = 10.0^log10_fo2_exp
         Kw_exp = 10.0^(12700.0 / 1500.0 - 2.80)
         expected_ratio = Kw_exp * sqrt(fo2_exp)
-        p_H2O_ret = res_h2o.species.H2O / 18.01528e-3
-        p_H2_ret = res_h2o.species.H2 / 2.01588e-3
+        p_H2O_ret = res_h2o.species.H2O / M_H2O
+        p_H2_ret = res_h2o.species.H2 / (2.0 * M_H)
         @test isapprox(p_H2O_ret / p_H2_ret, expected_ratio; rtol=1e-6)
         @test signbit(res_h2o.dO_buffer)
-        expected_dO_h2o = (res_h2o.species.H2O / 18.01528e-3) * 15.9994e-3 - elem_h2o.O
+        expected_dO_h2o = (res_h2o.species.H2O / M_H2O) * M_O - elem_h2o.O
         @test isapprox(res_h2o.dO_buffer, expected_dO_h2o; atol=1e-12)
 
         # Parcel with C and H and no O gets O only through ΔO_buffer > 0
@@ -1647,13 +1656,22 @@ using Random
     # 2. Closed-system atmosphere speciation
     @testset "Closed-System Atmosphere Speciation" begin
         # Inventory from 1 kg H2O + 1 kg CO2
-        mu_H = SPECIES_AMU[:H] * 1e-3
-        mu_C = SPECIES_AMU[:C] * 1e-3
-        mu_N = SPECIES_AMU[:N] * 1e-3
-        mu_S = SPECIES_AMU[:S] * 1e-3
-        mu_O = SPECIES_AMU[:O] * 1e-3
+        mu_H = M_H
+        mu_C = M_C
+        mu_N = M_N
+        mu_S = M_S
+        mu_O = M_O
         mu_sp = Dict{Symbol,Float64}(
-            sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+            :H2 => 2.0 * M_H,
+            :H2O => M_H2O,
+            :CO => M_CO,
+            :CO2 => M_CO2,
+            :CH4 => M_CH4,
+            :N2 => M_N2,
+            :NH3 => M_NH3,
+            :H2S => M_H2S,
+            :S2 => M_S2,
+            :SO2 => M_SO2,
         )
         nu_O = Dict(
             :H2 => 0.0,
@@ -1716,11 +1734,11 @@ using Random
             :SO2 => 1.0,
         )
 
-        m_H_in = 1.0 * (SPECIES_AMU[:H2] / SPECIES_AMU[:H2O])
-        m_C_in = 1.0 * (SPECIES_AMU[:C] / SPECIES_AMU[:CO2])
+        m_H_in = 1.0 * ((2.0 * M_H) / M_H2O)
+        m_C_in = 1.0 * (M_C / M_CO2)
         m_O_in =
-            1.0 * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O]) +
-            1.0 * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2])
+            1.0 * (M_O / M_H2O) +
+            1.0 * ((2.0 * M_O) / M_CO2)
         elem_mix = ElementInventory(m_H_in, m_C_in, 0.0, 0.0, m_O_in)
 
         spec_res = speciate_closed_system(elem_mix, 1500.0, 1.0e5)
@@ -1751,10 +1769,10 @@ using Random
 
         # Monotonicity: log10_fO2 lies between pure H2O and pure CO2
         elem_h2o = ElementInventory(
-            m_H_in, 0.0, 0.0, 0.0, 1.0 * (SPECIES_AMU[:O] / SPECIES_AMU[:H2O])
+            m_H_in, 0.0, 0.0, 0.0, 1.0 * (M_O / M_H2O)
         )
         elem_co2 = ElementInventory(
-            0.0, m_C_in, 0.0, 0.0, 1.0 * (2.0 * SPECIES_AMU[:O] / SPECIES_AMU[:CO2])
+            0.0, m_C_in, 0.0, 0.0, 1.0 * ((2.0 * M_O) / M_CO2)
         )
         spec_h2o = speciate_closed_system(elem_h2o, 1500.0, 1.0e5)
         spec_co2 = speciate_closed_system(elem_co2, 1500.0, 1.0e5)
@@ -1885,12 +1903,12 @@ using Random
         w3d = 2000.0
         # Signed transfer record
         dm_h2o_2d = (old_XH2O - new_XH2O) * 0.01 * m_rock_2d
-        dm_h_2d = dm_h2o_2d * (2.01588 / 18.01528)
+        dm_h_2d = dm_h2o_2d * ((2.0 * M_H) / M_H2O)
         rec = TransferRecord(1, :degassing, :H, 1, 0.0, 0.0, dm_h_2d, dm_h_2d * w3d)
         @test isapprox(rec.dM2, dm_h_2d; atol=1e-12)
         @test isapprox(rec.dM3, dm_h_2d * w3d; atol=1e-12)
         # Invariance of total mass (element H basis)
-        m_H_frac = 2.01588 / 18.01528
+        m_H_frac = (2.0 * M_H) / M_H2O
         M_melt_init = old_XH2O * 0.01 * m_rock_2d * w3d * m_H_frac
         M_atm_init = 100.0
         M_tot_init = M_melt_init + M_atm_init
@@ -1917,17 +1935,17 @@ using Random
         weights = [0.25, 0.75]
         dO = 0.032 # kg of O moved out of markers (Fe3O4 reduced to FeO)
 
-        M_O = 15.9994e-3
-        dn_O_total = dO / M_O
+        M_O_val = M_O
+        dn_O_total = dO / M_O_val
         O_init = sum(
-            redox_props.nFe2_m[m] * 1.0 * M_O + redox_props.nFe3_m[m] * 1.5 * M_O for
+            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val for
             m in marker_indices
         )
 
         apply_buffer_oxygen!(redox_props, marker_indices, weights, dO)
 
         O_final = sum(
-            redox_props.nFe2_m[m] * 1.0 * M_O + redox_props.nFe3_m[m] * 1.5 * M_O for
+            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val for
             m in marker_indices
         )
 

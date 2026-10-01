@@ -434,11 +434,11 @@ using JLD2
     end
 
     @testset "Species Molecular Masses and Constants" begin
-        @test isapprox(MASS_H2_KG, 2.01588 / (6.02214076e23 * 1000.0); rtol=1e-4)
-        @test isapprox(MASS_CH4_KG, 16.04246 / (6.02214076e23 * 1000.0); rtol=1e-4)
-        @test isapprox(MASS_H2S_KG, 34.08088 / (6.02214076e23 * 1000.0); rtol=1e-4)
-        @test isapprox(MASS_S2_KG, 64.130 / (6.02214076e23 * 1000.0); rtol=1e-4)
-        @test isapprox(MASS_SO2_KG, 64.066 / (6.02214076e23 * 1000.0); rtol=1e-4)
+        @test isapprox(MASS_H2_KG, (2.0 * M_H) / 6.02214076e23; rtol=1e-4)
+        @test isapprox(MASS_CH4_KG, M_CH4 / 6.02214076e23; rtol=1e-4)
+        @test isapprox(MASS_H2S_KG, M_H2S / 6.02214076e23; rtol=1e-4)
+        @test isapprox(MASS_S2_KG, M_S2 / 6.02214076e23; rtol=1e-4)
+        @test isapprox(MASS_SO2_KG, M_SO2 / 6.02214076e23; rtol=1e-4)
 
         # get_species_molecular_mass lookups
         @test isapprox(get_species_molecular_mass(:H2), MASS_H2_KG; rtol=1e-12)

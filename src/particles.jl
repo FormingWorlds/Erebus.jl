@@ -199,7 +199,6 @@ function setup_marker_redox_properties(
     end
     marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
 
-    M_Fe = 0.055845
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
 
@@ -306,7 +305,6 @@ function update_marker_redox!(
     (nFe0_m === nothing || nFe2_m === nothing || nFe3_m === nothing) && return nothing
 
     marknum = length(tkm)
-    M_Fe = 0.055845
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
     x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
@@ -4896,7 +4894,7 @@ function advance_marker_thermo_porosity_venting!(
     phimin_val = Float64(phimin)
     phimax_val = Float64(phimax)
     rhofluid_val = Float64(rhofluidcur)
-    h_conv = 2.01588 / 18.01528
+    h_conv = (2.0 * M_H) / M_H2O
 
     venting_active = venting && S_vent_grid !== nothing
     drain_volatiles =

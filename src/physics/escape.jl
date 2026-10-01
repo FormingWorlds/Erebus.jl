@@ -4,74 +4,58 @@
 
 using DocStringExtensions
 
-# Fundamental physical constants
-# Note: GRAVITATIONAL_CONSTANT is defined in constants.jl and test_constants.jl (CODATA 2018)
-
-"""
-Boltzmann constant k_B in J / K (SI exact definition).
-"""
-const BOLTZMANN_CONSTANT = 1.380649e-23
-
-"""
-Avogadro constant N_A in 1/mol (SI exact definition).
-"""
-const AVOGADRO_CONSTANT = 6.02214076e23
-
-"""
-Unified atomic mass unit (amu, Dalton) in kilograms [kg] (CODATA 2018).
-"""
-const ATOMIC_MASS_UNIT = 1.66053906660e-27
+# Fundamental physical constants are defined canonically in src/constants.jl.
 
 # Volatile molecular masses [kg] (Standard atomic weights divided by Avogadro constant)
 """
-Molecular mass of water (H2O) in kilograms [kg], with molar mass 18.01528 g/mol.
+Molecular mass of water (H2O) in kilograms [kg].
 """
-const MASS_H2O_KG = 2.991507e-26
+const MASS_H2O_KG = M_H2O / AVOGADRO_CONSTANT
 
 """
-Molecular mass of molecular hydrogen (H2) in kilograms [kg], with molar mass 2.01588 g/mol.
+Molecular mass of molecular hydrogen (H2) in kilograms [kg].
 """
-const MASS_H2_KG = 3.347447e-27
+const MASS_H2_KG = (2.0 * M_H) / AVOGADRO_CONSTANT
 
 """
-Molecular mass of molecular nitrogen (N2) in kilograms [kg], with molar mass 28.01340 g/mol.
+Molecular mass of molecular nitrogen (N2) in kilograms [kg].
 """
-const MASS_N2_KG = 4.651735e-26
+const MASS_N2_KG = M_N2 / AVOGADRO_CONSTANT
 
 """
-Molecular mass of ammonia (NH3) in kilograms [kg], with molar mass 17.03052 g/mol.
+Molecular mass of ammonia (NH3) in kilograms [kg].
 """
-const MASS_NH3_KG = 2.827986e-26
+const MASS_NH3_KG = M_NH3 / AVOGADRO_CONSTANT
 
 """
-Molecular mass of carbon monoxide (CO) in kilograms [kg], with molar mass 28.01010 g/mol.
+Molecular mass of carbon monoxide (CO) in kilograms [kg].
 """
-const MASS_CO_KG = 4.651187e-26
+const MASS_CO_KG = M_CO / AVOGADRO_CONSTANT
 
 """
-Molecular mass of carbon dioxide (CO2) in kilograms [kg], with molar mass 44.00950 g/mol.
+Molecular mass of carbon dioxide (CO2) in kilograms [kg].
 """
-const MASS_CO2_KG = 7.307950e-26
+const MASS_CO2_KG = M_CO2 / AVOGADRO_CONSTANT
 
 """
-Molecular mass of methane (CH4) in kilograms [kg], with molar mass 16.04246 g/mol.
+Molecular mass of methane (CH4) in kilograms [kg].
 """
-const MASS_CH4_KG = 2.663920e-26
+const MASS_CH4_KG = M_CH4 / AVOGADRO_CONSTANT
 
 """
-Molecular mass of hydrogen sulfide (H2S) in kilograms [kg], with molar mass 34.08088 g/mol.
+Molecular mass of hydrogen sulfide (H2S) in kilograms [kg].
 """
-const MASS_H2S_KG = 5.659267e-26
+const MASS_H2S_KG = M_H2S / AVOGADRO_CONSTANT
 
 """
-Molecular mass of disulfur (S2) in kilograms [kg], with molar mass 64.130 g/mol.
+Molecular mass of disulfur (S2) in kilograms [kg].
 """
-const MASS_S2_KG = 1.064904e-25
+const MASS_S2_KG = M_S2 / AVOGADRO_CONSTANT
 
 """
-Molecular mass of sulfur dioxide (SO2) in kilograms [kg], with molar mass 64.066 g/mol.
+Molecular mass of sulfur dioxide (SO2) in kilograms [kg].
 """
-const MASS_SO2_KG = 1.063841e-25
+const MASS_SO2_KG = M_SO2 / AVOGADRO_CONSTANT
 
 """
 Upper threshold on the Jeans parameter λ above which kinetic effusion is numerically negligible.

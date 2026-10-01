@@ -5,8 +5,8 @@
 # - Trieloff, M. et al. (2003), Nature, 422, 502-506
 # - Huss, G. R. et al. (2006), Meteorites and the Early Solar System II, 567-586
 
-const SEC_PER_MYR_MET = 3.15576e13
-const SEC_PER_YEAR_MET = 3.15576e7
+const SEC_PER_MYR_MET = 1.0e6 * SECONDS_PER_YEAR
+const SEC_PER_YEAR_MET = SECONDS_PER_YEAR
 
 """
 Synthetic meteorite sample record for planetesimal thermal and petrologic history.

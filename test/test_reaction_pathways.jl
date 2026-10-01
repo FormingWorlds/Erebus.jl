@@ -230,7 +230,7 @@ _mean(x) = sum(x) / length(x)
         @test maximum(DQPF) <= 1e-15
 
         # 5. Closed-box exact water mass conservation
-        MH2O_mol = 0.018
+        MH2O_mol = M_H2O
         MD_mol = 0.120
         delta_m_mineral_water = sum(
             begin
@@ -363,7 +363,7 @@ _mean(x) = sum(x) / length(x)
         @test minimum(DQPF) >= -1e-15
 
         # 5. Closed-box exact water mass conservation
-        MH2O_mol = 0.018
+        MH2O_mol = M_H2O
         MD_mol = 0.120
         delta_m_mineral_water = sum(
             begin

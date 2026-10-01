@@ -347,7 +347,7 @@ using JLD2
         Xfe_S_m = [init_fe_S_ppm]
 
         # Stoichiometric conversion for H: 1 wt% H2O = f_H ppmw H
-        f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
+        f_H = (2.0 * M_H / M_H2O) * 1.0e4
         m_sil = (1.0 - phi_fe_bulk) * rho_sil
         m_met = phi_fe_bulk * F_fe * rho_met
 
@@ -630,7 +630,7 @@ using JLD2
         T_val = 1800.0
         P_val = 1.0e8
         fO2_val = -2.0
-        f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
+        f_H = (2.0 * M_H / M_H2O) * 1.0e4
 
         # -------------------------------------------------------------
         # Case 1: Silicate cap binds only (D is small, metal absorbs excess)

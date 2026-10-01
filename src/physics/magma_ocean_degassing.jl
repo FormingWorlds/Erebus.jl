@@ -877,7 +877,7 @@ function degas_magma_ocean_markers!(
 
     xc_val = Float64(xcenter)
     yc_val = Float64(ycenter)
-    h_conv = 2.01588 / 18.01528
+    h_conv = (2.0 * M_H) / M_H2O
 
     @inbounds for m in 1:marknum
         if tm[m] >= 3

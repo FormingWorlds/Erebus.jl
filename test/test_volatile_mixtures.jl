@@ -499,7 +499,7 @@ using Erebus.Particles
         @test res_mid.dH_pyro_J_per_kg < 0.0
 
         # Analytic check for carbon rate constant: k = A * exp(-Ea / (R * T))
-        R_gas = 8.314462618
+        R_gas = R_GAS
         k_C = refr_cfg.A_C * exp(-refr_cfg.Ea_C / (R_gas * 420.0))
         expected_C_rem = C_init * exp(-k_C * dt_s)
         @test isapprox(res_mid.C_refr_remaining, expected_C_rem; rtol=1e-10)

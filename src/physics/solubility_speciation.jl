@@ -394,7 +394,7 @@ function compute_co_solubility_melt(
         return 10.0^log_co
     elseif law === :yoshioka2019_morb
         co_wtp = 10.0^(-5.20 + 0.80 * log10(p_co_bar))
-        return co_wtp * 1.0e4 * (28.0101 / 12.011)
+        return co_wtp * 1.0e4 * (M_CO / M_C)
     else
         throw(ArgumentError("Unknown CO solubility law: $law"))
     end
@@ -717,7 +717,7 @@ function compute_sulfur_solubility_melt(
             end
             logC_s6 = -12.948 + slope_s6 / T
             so4_wtp = 10.0^(logC_s6 + 0.5 * log10(p_s2_bar) + 1.5 * log10_fO2)
-            s_base += (so4_wtp * (32.065 / 96.06)) * 1.0e4
+            s_base += (so4_wtp * (M_S / (M_S + 4.0 * M_O))) * 1.0e4
         end
         s_base
     elseif law === :gaillard2022
@@ -1107,10 +1107,10 @@ function compute_volatile_exsolution(
     w_total_ex = w_H2O_ex + w_C_ex + w_N_ex + w_S_ex
 
     # Elemental atom counts of exsolved gas
-    mol_H = 2.0 * (w_H2O_ex / 0.01801528)
-    mol_C = w_C_ex / 0.012011
-    mol_N = w_N_ex / 0.014007
-    mol_S = w_S_ex / 0.032065
+    mol_H = 2.0 * (w_H2O_ex / M_H2O)
+    mol_C = w_C_ex / M_C
+    mol_N = w_N_ex / M_N
+    mol_S = w_S_ex / M_S
     mol_tot = mol_H + mol_C + mol_N + mol_S
 
     z_H, z_C, z_N, z_S = if mol_tot > 0.0
@@ -1486,7 +1486,16 @@ end
 # -----------------------------------------------------------------------------
 
 const SPECIES_MOLAR_MASS = Dict{Symbol,Float64}(
-    sp => SPECIES_AMU[sp] * 1e-3 for sp in SPECIATION_SPECIES
+    :H2 => 2.0 * M_H,
+    :H2O => M_H2O,
+    :CO => M_CO,
+    :CO2 => M_CO2,
+    :CH4 => M_CH4,
+    :N2 => M_N2,
+    :NH3 => M_NH3,
+    :H2S => M_H2S,
+    :S2 => M_S2,
+    :SO2 => M_SO2,
 )
 
 const SPECIES_O_STOICH = Dict{Symbol,Float64}(
@@ -1545,11 +1554,11 @@ function speciate_vented_volatiles(
         return (species=SpeciesInventory(), m_graphite=0.0, dO_buffer=0.0)
     end
 
-    mu_H = SPECIES_AMU[:H] * 1e-3
-    mu_C = SPECIES_AMU[:C] * 1e-3
-    mu_N = SPECIES_AMU[:N] * 1e-3
-    mu_S = SPECIES_AMU[:S] * 1e-3
-    mu_O = SPECIES_AMU[:O] * 1e-3
+    mu_H = M_H
+    mu_C = M_C
+    mu_N = M_N
+    mu_S = M_S
+    mu_O = M_O
 
     nH = elem.H / mu_H
     nC = elem.C / mu_C
@@ -1723,10 +1732,10 @@ function speciate_vented_volatiles(
         throw(DomainError(delta_IW, "delta_IW must be finite and within [-50, 50]"))
     end
 
-    nH = 2.0 * m_h2o / 18.01528e-3
-    nC = m_c / 12.011e-3
-    nN = m_n / 14.007e-3
-    nS = m_s / 32.06e-3
+    nH = (2.0 * m_h2o) / M_H2O
+    nC = m_c / M_C
+    nN = m_n / M_N
+    nS = m_s / M_S
     n_tot = nH + nC + nN + nS
 
     if n_tot <= 0.0
@@ -1767,9 +1776,9 @@ function speciate_vented_volatiles(
 
     if p_sum <= 0.0
         species_dict[:H2O] = m_h2o
-        species_dict[:CO2] = m_c * (44.0095 / 12.011)
+        species_dict[:CO2] = m_c * (M_CO2 / M_C)
         species_dict[:N2] = m_n
-        species_dict[:H2S] = m_s * (34.08 / 32.06)
+        species_dict[:H2S] = m_s * (M_H2S / M_S)
         return species_dict
     end
 
@@ -1806,16 +1815,16 @@ function speciate_vented_volatiles(
         c_elem > 0.0 ? n_tot / c_elem : 0.0
     end
 
-    species_dict[:H2] = N_gas * y_H2 * 2.01588e-3
-    species_dict[:H2O] = N_gas * y_H2O * 18.01528e-3
-    species_dict[:CO] = N_gas * y_CO * 28.0101e-3
-    species_dict[:CO2] = N_gas * y_CO2 * 44.0095e-3
-    species_dict[:CH4] = N_gas * y_CH4 * 16.0425e-3
-    species_dict[:N2] = N_gas * y_N2 * 28.0134e-3
-    species_dict[:NH3] = N_gas * y_NH3 * 17.0305e-3
-    species_dict[:H2S] = N_gas * y_H2S * 34.0809e-3
-    species_dict[:S2] = N_gas * y_S2 * 64.12e-3
-    species_dict[:SO2] = N_gas * y_SO2 * 64.066e-3
+    species_dict[:H2] = N_gas * y_H2 * (2.0 * M_H)
+    species_dict[:H2O] = N_gas * y_H2O * M_H2O
+    species_dict[:CO] = N_gas * y_CO * M_CO
+    species_dict[:CO2] = N_gas * y_CO2 * M_CO2
+    species_dict[:CH4] = N_gas * y_CH4 * M_CH4
+    species_dict[:N2] = N_gas * y_N2 * M_N2
+    species_dict[:NH3] = N_gas * y_NH3 * M_NH3
+    species_dict[:H2S] = N_gas * y_H2S * M_H2S
+    species_dict[:S2] = N_gas * y_S2 * M_S2
+    species_dict[:SO2] = N_gas * y_SO2 * M_SO2
 
     return species_dict
 end
@@ -1850,11 +1859,11 @@ function speciate_closed_system(
         return (species=SpeciesInventory(), log10_fO2=-40.0)
     end
 
-    mu_H = SPECIES_AMU[:H] * 1e-3
-    mu_C = SPECIES_AMU[:C] * 1e-3
-    mu_N = SPECIES_AMU[:N] * 1e-3
-    mu_S = SPECIES_AMU[:S] * 1e-3
-    mu_O = SPECIES_AMU[:O] * 1e-3
+    mu_H = M_H
+    mu_C = M_C
+    mu_N = M_N
+    mu_S = M_S
+    mu_O = M_O
     nH_tot = elem.H / mu_H
     nC_tot = elem.C / mu_C
     nN_tot = elem.N / mu_N
