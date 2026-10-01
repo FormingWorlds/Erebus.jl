@@ -51,11 +51,11 @@ The full simulation lifecycle, coupling between Eulerian staggered grids and Lag
 
 The simulation loop advances physical time via a 10-stage operator-splitting sequence:
 
-1. **Mass Accretion & Domain Telescoping (`accrete!`)**:
-   Accretes pebbles or embryos onto the body, advances planetary radius $R(t)$, deposits impact kinetic energy in the outer shell, updates sticky air boundaries, and executes telescoping domain expansion ($x_{\text{size}} \to 2 x_{\text{size}}$) when the body exceeds 70% of domain half-width.
+1. **Mass Accretion (`accrete!`)**:
+   Accretes pebbles or embryos onto the body, advances planetary radius $R(t)$, deposits impact kinetic energy in the outer shell, and updates sticky air boundaries. Telescoping domain expansion ($x_{\text{size}} \to 2 x_{\text{size}}$) executes subsequently when the body exceeds 70% of domain half-width.
 
 2. **Radiogenic Decay Heating (`radiogenic_heating!`)**:
-   Computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$), adds volumetric heat sources to markers, and updates isotope inventories.
+   Computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$) and adds volumetric heat sources to markers.
 
 3. **Marker-in-Cell Mapping (`interpolate_markers_to_grid!`)**:
    Interpolates marker properties (density $\rho$, viscosity $\eta$, thermal conductivity $k$, heat capacity $\rho c_p$, and porosity $\phi$) to staggered grid nodes using bilinear distance weights or tiled thread-local workspaces.
