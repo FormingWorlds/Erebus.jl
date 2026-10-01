@@ -139,8 +139,8 @@
     <g transform="translate(756, 38)">
       <rect width="345" height="76" rx="6" fill="#1C101E" stroke="#DE7037" stroke-width="1" stroke-opacity="0.5" />
       <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Radiogenic &amp; Accretion Sources</text>
-      <text class="box-body" x="14" y="38">• Short-lived radionuclides: <tspan class="box-code" fill="#F0BA5E">²⁶Al (0.717 Ma)</tspan> &amp; <tspan class="box-code" fill="#A23E3C">⁶⁰Fe (2.62 Ma)</tspan></text>
-      <text class="box-body" x="14" y="54">• Accretion impact shock heating on outer shells</text>
+      <text class="box-body" x="14" y="38">• Decay heating: <tspan class="box-code" fill="#F0BA5E">radiogenic_heating!</tspan> (²⁶Al, ⁶⁰Fe)</text>
+      <text class="box-body" x="14" y="54">• Mass accretion: <tspan class="box-code" fill="#F0BA5E">accrete!</tspan> &amp; impact heating</text>
       <text class="box-body" x="14" y="70">• Gravitational potential energy dissipation: <tspan class="box-code" fill="#F0BA5E">Qseg</tspan></text>
     </g>
   </g>
@@ -284,19 +284,19 @@
     <!-- Card 1: Marker Advection -->
     <g transform="translate(18, 40)">
       <rect width="345" height="84" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1" stroke-opacity="0.6" />
-      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Marker-in-Cell Advection</text>
-      <text class="box-body" x="14" y="38">• 4th-order Runge-Kutta velocity interpolation</text>
-      <text class="box-body" x="14" y="55">• Subgrid dispersion &amp; marker-to-grid remapping</text>
-      <text class="box-body" x="14" y="72">• Local marker replenishment in depleted cells</text>
+      <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Marker Advection &amp; Replenishment</text>
+      <text class="box-body" x="14" y="38">• RK4 advection: <tspan class="box-code" fill="#F0BA5E">advect_markers!</tspan></text>
+      <text class="box-body" x="14" y="55">• Pressure backtracking: <tspan class="box-code" fill="#E6DAB6">Pt, Pf</tspan></text>
+      <text class="box-body" x="14" y="72">• Cell replenishment: <tspan class="box-code" fill="#F0BA5E">replenish!</tspan></text>
     </g>
 
     <!-- Card 2: Volatiles & Escape -->
     <g transform="translate(387, 40)">
       <rect width="345" height="84" rx="6" fill="#1C101E" stroke="#6A2A4D" stroke-width="1" stroke-opacity="0.6" />
       <text class="box-title" x="14" y="20" font-size="12.5" fill="#F2EAD3">Volatiles, Venting &amp; Atmosphere</text>
-      <text class="box-body" x="14" y="38">• Multi-species HCNS solubility &amp; gas speciation</text>
-      <text class="box-body" x="14" y="55">• Cold surface venting &amp; ice cold-trap clamping</text>
-      <text class="box-body" x="14" y="72">• Hydrodynamic boil-off &amp; Jeans kinetic escape</text>
+      <text class="box-body" x="14" y="38">• Venting &amp; degassing: <tspan class="box-code" fill="#F0BA5E">vent_and_degas!</tspan></text>
+      <text class="box-body" x="14" y="55">• Atmosphere evolution: <tspan class="box-code" fill="#F0BA5E">evolve_atmosphere!</tspan></text>
+      <text class="box-body" x="14" y="72">• Hydrodynamic boil-off &amp; kinetic escape</text>
     </g>
 
     <!-- Card 3: Telescoping Domain -->
