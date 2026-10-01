@@ -67,6 +67,7 @@ unit_tests = [
     "test_grid_ssot.jl",
     "test_marker_container.jl",
     "test_simulation_state.jl",
+    "test_simulation_steps.jl",
 ]
 
 integration_tests = [

@@ -19,6 +19,7 @@ using TimerOutputs
 using TOML
 
 export run_simulation, load_state, simulation_loop, PlasticConvergenceError
+export accrete!, radiogenic_heating!, interpolate_markers_to_grid!, solve_gravity!
 export TransferRecord
 export MetalSegregationWorkspace,
     MagmaSegregationWorkspace,
@@ -1022,7 +1023,11 @@ module Simulation
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
         ThermalLSEWorkspace,
-        TransferRecord
+        TransferRecord,
+        accrete!,
+        radiogenic_heating!,
+        interpolate_markers_to_grid!,
+        solve_gravity!
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
@@ -1036,7 +1041,11 @@ module Simulation
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
         ThermalLSEWorkspace,
-        TransferRecord
+        TransferRecord,
+        accrete!,
+        radiogenic_heating!,
+        interpolate_markers_to_grid!,
+        solve_gravity!
 end
 
 module Config
