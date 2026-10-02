@@ -121,7 +121,7 @@ using Erebus.Simulation
             cfg.grid.Nx, cfg.grid.Ny; xsize=cfg.grid.xsize, ysize=cfg.grid.ysize
         )
         Am = marker_area(coords)
-        h_conv = 2.01588 / 18.01528
+        h_conv = (2.0 * M_H) / M_H2O
         rho_sil = cfg.materials.rhosolidm[1]
         rho_met = cfg.coreformation.rho_metal
         rho_fluid = cfg.materials.rhofluidm[2]
@@ -258,10 +258,10 @@ using Erebus.Simulation
         # while mineral and degassed water deliver H2O directly.
         total_atm_esc_O = res.atm.elem.O + res.atm.escaped.O
         total_transfer_O = sum(
-            r.dM3 * (15.9994 / 2.01588) for r in res.transfers if r.element === :H
+            r.dM3 * (M_O / (2.0 * M_H)) for r in res.transfers if r.element === :H
         )
         dO_buffer = sum(
-            r.dM3 * (15.9994 / 2.01588) for
+            r.dM3 * (M_O / (2.0 * M_H)) for
             r in res.transfers if r.channel === :pore_venting && r.element === :H
         )
         @test isapprox(
@@ -330,10 +330,10 @@ using Erebus.Simulation
         # Oxygen accounting in redox-on regime
         total_atm_esc_O = res.atm.elem.O + res.atm.escaped.O
         total_transfer_O = sum(
-            r.dM3 * (15.9994 / 2.01588) for r in res.transfers if r.element === :H
+            r.dM3 * (M_O / (2.0 * M_H)) for r in res.transfers if r.element === :H
         )
         dO_buffer = sum(
-            r.dM3 * (15.9994 / 2.01588) for
+            r.dM3 * (M_O / (2.0 * M_H)) for
             r in res.transfers if r.channel === :pore_venting && r.element === :H
         )
         @test isapprox(

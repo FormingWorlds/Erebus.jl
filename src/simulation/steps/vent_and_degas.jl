@@ -239,7 +239,7 @@ function vent_and_degas!(
                     degas_res.dM_3D[:C] / dt,
                     degas_res.dM_3D[:N] / dt,
                     degas_res.dM_3D[:S] / dt,
-                    degas_res.dM_3D[:H2O] * (15.9994 / 18.01528) / dt,
+                    degas_res.dM_3D[:H2O] * (M_O / M_H2O) / dt,
                 )
             else
                 degas_res.rates
@@ -330,7 +330,7 @@ function _degas_magma_ocean_equilibrium!(
             end
             m_marker_3d = cfg.materials.rhosolidm[1] * v_m * w3d
             m_melt_tot += Fm[m] * m_marker_3d
-            m_H_melt += (XH2Om[m] * 0.01) * (2.01588 / 18.01528) * m_marker_3d
+            m_H_melt += (XH2Om[m] * 0.01) * ((2.0 * M_H) / M_H2O) * m_marker_3d
             m_C_melt += (XCm[m] * 1.0e-6) * m_marker_3d
             m_N_melt += (XNm[m] * 1.0e-6) * m_marker_3d
             m_S_melt += (XSm[m] * 1.0e-6) * m_marker_3d
@@ -340,23 +340,23 @@ function _degas_magma_ocean_equilibrium!(
     # Atmospheric elemental inventories
     m_H_atm =
         get(atm_state.M_atm, :H2, 0.0) * 1.0 +
-        get(atm_state.M_atm, :H2O, 0.0) * (2.01588 / 18.01528) +
-        get(atm_state.M_atm, :CH4, 0.0) * (4.03176 / 16.04246) +
-        get(atm_state.M_atm, :NH3, 0.0) * (3.02382 / 17.03052) +
-        get(atm_state.M_atm, :H2S, 0.0) * (2.01588 / 34.08088)
+        get(atm_state.M_atm, :H2O, 0.0) * ((2.0 * M_H) / M_H2O) +
+        get(atm_state.M_atm, :CH4, 0.0) * ((4.0 * M_H) / M_CH4) +
+        get(atm_state.M_atm, :NH3, 0.0) * ((3.0 * M_H) / M_NH3) +
+        get(atm_state.M_atm, :H2S, 0.0) * ((2.0 * M_H) / M_H2S)
 
     m_C_atm =
-        get(atm_state.M_atm, :CO, 0.0) * (12.011 / 28.0101) +
-        get(atm_state.M_atm, :CO2, 0.0) * (12.011 / 44.0095) +
-        get(atm_state.M_atm, :CH4, 0.0) * (12.011 / 16.04246)
+        get(atm_state.M_atm, :CO, 0.0) * (M_C / M_CO) +
+        get(atm_state.M_atm, :CO2, 0.0) * (M_C / M_CO2) +
+        get(atm_state.M_atm, :CH4, 0.0) * (M_C / M_CH4)
 
     m_N_atm =
         get(atm_state.M_atm, :N2, 0.0) * 1.0 +
-        get(atm_state.M_atm, :NH3, 0.0) * (14.007 / 17.03052)
+        get(atm_state.M_atm, :NH3, 0.0) * (M_N / M_NH3)
 
     m_S_atm =
-        get(atm_state.M_atm, :H2S, 0.0) * (32.060 / 34.08088) +
-        get(atm_state.M_atm, :SO2, 0.0) * (32.060 / 64.066) +
+        get(atm_state.M_atm, :H2S, 0.0) * (M_S / M_H2S) +
+        get(atm_state.M_atm, :SO2, 0.0) * (M_S / M_SO2) +
         get(atm_state.M_atm, :S2, 0.0) * 1.0
 
     m_H_tot = m_H_melt + m_H_atm
@@ -379,7 +379,7 @@ function _degas_magma_ocean_equilibrium!(
         )
 
         # Deplete molten markers according to residual melt volatile concentration
-        new_XH2O_wtpct = (sol_eq.M_melt_H * (18.01528 / 2.01588) / m_melt_tot) * 100.0
+        new_XH2O_wtpct = (sol_eq.M_melt_H * (M_H2O / (2.0 * M_H)) / m_melt_tot) * 100.0
         new_XC_ppm = (sol_eq.M_melt_C / m_melt_tot) * 1.0e6
         new_XN_ppm = (sol_eq.M_melt_N / m_melt_tot) * 1.0e6
         new_XS_ppm = (sol_eq.M_melt_S / m_melt_tot) * 1.0e6
@@ -404,7 +404,7 @@ function _degas_magma_ocean_equilibrium!(
                 end
                 if old_XH2O != new_XH2O_wtpct
                     dm_h2o_2d = (old_XH2O - new_XH2O_wtpct) * 0.01 * m_rock_2d
-                    dm_h_2d = dm_h2o_2d * (2.01588 / 18.01528)
+                    dm_h_2d = dm_h2o_2d * ((2.0 * M_H) / M_H2O)
                     push!(
                         transfer_log,
                         TransferRecord(

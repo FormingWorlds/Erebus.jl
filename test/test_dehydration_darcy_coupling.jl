@@ -528,9 +528,9 @@ Random.seed!(42)
         )
         expected_H2O_step = delta_m_vent_3d + vented_vols.M_vent_H2O_3d
         @test rates_add[:H2O] ≈ expected_H2O_step / dt_val
-        @test rates_add[:CO2] ≈ (vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
+        @test rates_add[:CO2] ≈ (vented_vols.M_vent_C_3d * (M_CO2 / M_C)) / dt_val
         @test rates_add[:N2] ≈ vented_vols.M_vent_N_3d / dt_val
-        @test rates_add[:H2S] ≈ (vented_vols.M_vent_S_3d * (34.08 / 32.06)) / dt_val
+        @test rates_add[:H2S] ≈ (vented_vols.M_vent_S_3d * (M_H2S / M_S)) / dt_val
 
         # 2. Pore water only (mineral drainage inactive)
         cfg_pore_only = SimulationConfig(
@@ -580,7 +580,7 @@ Random.seed!(42)
             rplanet,
         )
         @test rates_drain[:H2O] ≈ vented_vols.M_vent_H2O_3d / dt_val
-        @test rates_drain[:CO2] ≈ (vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
+        @test rates_drain[:CO2] ≈ (vented_vols.M_vent_C_3d * (M_CO2 / M_C)) / dt_val
 
         # 3b. Non-speciation venting with non-water pore species (:CO2)
         cfg_co2_vent = SimulationConfig(
@@ -605,7 +605,7 @@ Random.seed!(42)
         # Mineral water routes to :H2O, pore fluid routes to :CO2 (plus mineral C)
         @test rates_co2[:H2O] ≈ vented_vols.M_vent_H2O_3d / dt_val
         @test rates_co2[:CO2] ≈
-            (delta_m_vent_3d + vented_vols.M_vent_C_3d * (44.0095 / 12.011)) / dt_val
+            (delta_m_vent_3d + vented_vols.M_vent_C_3d * (M_CO2 / M_C)) / dt_val
 
         # 4. Speciation active: thermodynamic speciation of full additive inventory
         cfg_spec = SimulationConfig(
@@ -640,20 +640,20 @@ Random.seed!(42)
         mS2 = rates_spec[:S2] * dt_val
         mSO2 = rates_spec[:SO2] * dt_val
 
-        nH_in = 2.0 * expected_H2O_step / 18.01528e-3
-        nC_in = vented_vols.M_vent_C_3d / 12.011e-3
-        nN_in = vented_vols.M_vent_N_3d / 14.007e-3
-        nS_in = vented_vols.M_vent_S_3d / 32.06e-3
+        nH_in = (2.0 * expected_H2O_step) / M_H2O
+        nC_in = vented_vols.M_vent_C_3d / M_C
+        nN_in = vented_vols.M_vent_N_3d / M_N
+        nS_in = vented_vols.M_vent_S_3d / M_S
 
         nH_out =
-            2.0 * (mH2 / 2.01588e-3) +
-            2.0 * (mH2O / 18.01528e-3) +
-            4.0 * (mCH4 / 16.0425e-3) +
-            3.0 * (mNH3 / 17.0305e-3) +
-            2.0 * (mH2S / 34.0809e-3)
-        nC_out = mCO / 28.0101e-3 + mCO2 / 44.0095e-3 + mCH4 / 16.0425e-3
-        nN_out = 2.0 * (mN2 / 28.0134e-3) + mNH3 / 17.0305e-3
-        nS_out = mH2S / 34.0809e-3 + 2.0 * (mS2 / 64.12e-3) + mSO2 / 64.066e-3
+            2.0 * (mH2 / (2.0 * M_H)) +
+            2.0 * (mH2O / M_H2O) +
+            4.0 * (mCH4 / M_CH4) +
+            3.0 * (mNH3 / M_NH3) +
+            2.0 * (mH2S / M_H2S)
+        nC_out = mCO / M_CO + mCO2 / M_CO2 + mCH4 / M_CH4
+        nN_out = 2.0 * (mN2 / M_N2) + mNH3 / M_NH3
+        nS_out = mH2S / M_H2S + 2.0 * (mS2 / M_S2) + mSO2 / M_SO2
 
         @test isapprox(nH_out, nH_in; rtol=1.0e-10)
         @test isapprox(nC_out, nC_in; rtol=1.0e-10)
@@ -769,29 +769,24 @@ Random.seed!(42)
         @test gas_spec[:H2] > gas_spec[:H2O]
         @test gas_spec[:CO] > gas_spec[:CO2]
 
-        nH_in = 2.0 * m_H2O / 18.01528e-3
-        nC_in = m_C / 12.011e-3
-        nN_in = m_N / 14.007e-3
-        nS_in = m_S / 32.06e-3
+        nH_in = (2.0 * m_H2O) / M_H2O
+        nC_in = m_C / M_C
+        nN_in = m_N / M_N
+        nS_in = m_S / M_S
 
         nH_out =
-            2.0 * (gas_spec[:H2] / 2.01588e-3) +
-            2.0 * (gas_spec[:H2O] / 18.01528e-3) +
-            4.0 * (gas_spec[:CH4] / 16.0425e-3) +
-            3.0 * (gas_spec[:NH3] / 17.0305e-3) +
-            2.0 * (gas_spec[:H2S] / 34.0809e-3)
+            2.0 * (gas_spec[:H2] / (2.0 * M_H)) +
+            2.0 * (gas_spec[:H2O] / M_H2O) +
+            4.0 * (gas_spec[:CH4] / M_CH4) +
+            3.0 * (gas_spec[:NH3] / M_NH3) +
+            2.0 * (gas_spec[:H2S] / M_H2S)
 
-        nC_out =
-            gas_spec[:CO] / 28.0101e-3 +
-            gas_spec[:CO2] / 44.0095e-3 +
-            gas_spec[:CH4] / 16.0425e-3
+        nC_out = gas_spec[:CO] / M_CO + gas_spec[:CO2] / M_CO2 + gas_spec[:CH4] / M_CH4
 
-        nN_out = 2.0 * (gas_spec[:N2] / 28.0134e-3) + gas_spec[:NH3] / 17.0305e-3
+        nN_out = 2.0 * (gas_spec[:N2] / M_N2) + gas_spec[:NH3] / M_NH3
 
         nS_out =
-            gas_spec[:H2S] / 34.0809e-3 +
-            2.0 * (gas_spec[:S2] / 64.12e-3) +
-            gas_spec[:SO2] / 64.066e-3
+            gas_spec[:H2S] / M_H2S + 2.0 * (gas_spec[:S2] / M_S2) + gas_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out, nH_in; rtol=1.0e-10)
         @test isapprox(nC_out, nC_in; rtol=1.0e-10)
@@ -804,10 +799,7 @@ Random.seed!(42)
         )
         @test sat_spec[:H2] > 0.0
         @test sat_spec[:CO] > 0.0
-        nC_sat =
-            sat_spec[:CO] / 28.0101e-3 +
-            sat_spec[:CO2] / 44.0095e-3 +
-            sat_spec[:CH4] / 16.0425e-3
+        nC_sat = sat_spec[:CO] / M_CO + sat_spec[:CO2] / M_CO2 + sat_spec[:CH4] / M_CH4
         @test nC_sat < nC_in
     end
 end

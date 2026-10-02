@@ -20,6 +20,55 @@ const random_markers = true
 const G = 6.67430e-11
 const GRAVITATIONAL_CONSTANT = G
 const G_GRAV = G
+
+# Boltzmann constant [J/K] (CODATA 2018 exact definition)
+const BOLTZMANN_CONSTANT = 1.380649e-23
+const K_BOLTZMANN = BOLTZMANN_CONSTANT
+
+# Avogadro constant [1/mol] (CODATA 2018 exact definition)
+const AVOGADRO_CONSTANT = 6.02214076e23
+
+# Unified atomic mass unit (amu, Dalton) [kg] (CODATA 2018)
+const ATOMIC_MASS_UNIT = 1.66053906660e-27
+
+# Proton mass [kg] (CODATA 2018)
+const M_PROTON = 1.67262192e-27
+
+# Universal gas constant [J/(mol*K)] (CODATA 2018 exact definition: R = N_A * k_B)
+const R_GAS = 8.31446261815324
+const RG = R_GAS
+
+# Astronomical unit [m] (IAU 2012 exact definition)
+const AU_METERS = 1.495978707e11
+
+# Solar mass [kg] (IAU standard nominal solar mass)
+const M_SUN_KG = 1.98847e30
+
+# Julian year length [s] (IAU standard: 365.25 days * 86,400 s/day)
+const SECONDS_PER_YEAR = 31_557_600.0
+const SEC_PER_YEAR = SECONDS_PER_YEAR
+
+# Molar masses [kg/mol] (IUPAC 2013 standard atomic weights / conventional values)
+const M_H = 0.001008
+const M_C = 0.012011
+const M_N = 0.014007
+const M_O = 0.015999
+const M_S = 0.03206
+const M_Fe = 0.055845
+
+# Compound species molar masses [kg/mol] (exact stoichiometric sums of constituent elements)
+const M_H2O = 2.0 * M_H + M_O
+const MH₂O = M_H2O
+const MH2O = M_H2O
+const M_CO = M_C + M_O
+const M_CO2 = M_C + 2.0 * M_O
+const M_CH4 = M_C + 4.0 * M_H
+const M_N2 = 2.0 * M_N
+const M_NH3 = M_N + 3.0 * M_H
+const M_H2S = 2.0 * M_H + M_S
+const M_S2 = 2.0 * M_S
+const M_SO2 = M_S + 2.0 * M_O
+const M_FeS = M_Fe + M_S
 # scaled pressure    
 # pressure scaling coefficient (eqn 7.19-7.21 in Gerya(2019))
 # const Kcont = 2.0 * 1.0e15 * inv(dx+dy)
@@ -114,10 +163,6 @@ const phimin = 1.0e-4
 # max porosity
 const phimax = 1.0 - phimin
 # thermodynamic parameters: silicate dehydration reaction Wˢ = Dˢ + H₂O
-# molar gas constant [JK⁻¹mol⁻¹]
-const RG = 8.314#46261815324
-# molar mass of water [kg/mol]
-const MH₂O = 0.018
 # molar mass of dry silicate [kg/mol]
 const MD = 0.120
 # density of dry silicate [kg/m³]
@@ -336,30 +381,30 @@ Standard atomic and molecular weights for planetary volatile and escape species 
 Values follow IUPAC standard atomic weights (Meija et al. 2016).
 """
 const SPECIES_AMU = Dict{Symbol,Float64}(
-    :H => 1.00794,
+    :H => M_H * 1000.0,
     :D => 2.0141,
     :He => 4.0026,
-    :C => 12.011,
-    :N => 14.0067,
-    :O => 15.9994,
+    :C => M_C * 1000.0,
+    :N => M_N * 1000.0,
+    :O => M_O * 1000.0,
     :Ne => 20.1797,
     :Na => 22.990,
     :Mg => 24.305,
     :Si => 28.085,
-    :S => 32.065,
+    :S => M_S * 1000.0,
     :Ar => 39.948,
-    :Fe => 55.845,
+    :Fe => M_Fe * 1000.0,
     :Kr => 83.798,
     :Xe => 131.293,
-    :H2 => 2.01588,
-    :H2O => 18.01528,
-    :CO => 28.0104,
-    :CO2 => 44.0098,
-    :CH4 => 16.04276,
-    :N2 => 28.0134,
-    :NH3 => 17.03052,
-    :O2 => 31.9988,
-    :H2S => 34.08088,
-    :SO2 => 64.0638,
-    :S2 => 64.130,
+    :H2 => 2.0 * M_H * 1000.0,
+    :H2O => M_H2O * 1000.0,
+    :CO => M_CO * 1000.0,
+    :CO2 => M_CO2 * 1000.0,
+    :CH4 => M_CH4 * 1000.0,
+    :N2 => M_N2 * 1000.0,
+    :NH3 => M_NH3 * 1000.0,
+    :O2 => 2.0 * M_O * 1000.0,
+    :H2S => M_H2S * 1000.0,
+    :SO2 => M_SO2 * 1000.0,
+    :S2 => M_S2 * 1000.0,
 )

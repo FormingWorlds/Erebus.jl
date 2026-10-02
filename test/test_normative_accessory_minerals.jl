@@ -200,15 +200,15 @@ using JLD2
         # S molar mass: 32.065, Fe: 55.845, FeS: 87.910 => factor ~ 2.7416
         w_S = 0.05 # 5 wt% S in metallic alloy
         w_troilite, w_fe_consumed_S = compute_troilite_stoichiometry(w_S)
-        @test w_troilite ≈ w_S * (87.910 / 32.065) atol=1e-5
-        @test w_fe_consumed_S ≈ w_S * (55.845 / 32.065) atol=1e-5
+        @test w_troilite ≈ w_S * (M_FeS / M_S) atol=1e-5
+        @test w_fe_consumed_S ≈ w_S * (M_Fe / M_S) atol=1e-5
         @test w_troilite ≈ w_S + w_fe_consumed_S atol=1e-12
 
         # 2. Schreibersite ((Fe,Ni)3P)
         # P molar mass: 30.97376, Ni frac: 0.25 => 3 * (0.75*55.845 + 0.25*58.6934) + 30.97376
         w_P = 0.002 # 2000 ppmw P
         w_schreib, w_met_consumed_P = compute_schreibersite_stoichiometry(w_P; ni_frac=0.25)
-        M_metal_avg = 0.75 * 55.845 + 0.25 * 58.6934
+        M_metal_avg = 0.75 * (M_Fe * 1000.0) + 0.25 * 58.6934
         M_schreib_calc = 3.0 * M_metal_avg + 30.97376
         f_schreib = M_schreib_calc / 30.97376
         @test w_schreib ≈ w_P * f_schreib atol=1e-6
@@ -220,7 +220,7 @@ using JLD2
         w_cohenite, w_graphite, w_fe_consumed_C = compute_cohenite_graphite_stoichiometry(
             w_C_low; carbide_max=0.0667
         )
-        f_cohenite = (3.0 * 55.845 + 12.011) / 12.011 # ~ 14.948
+        f_cohenite = (3.0 * M_Fe + M_C) / M_C # ~ 14.948
         @test w_cohenite ≈ w_C_low * f_cohenite atol=1e-5
         @test iszero(w_graphite)
         @test w_cohenite ≈ w_C_low + w_fe_consumed_C atol=1e-12
@@ -261,15 +261,15 @@ using JLD2
         # 4. Nitrides (Roaldite, Carlsbergite, Osbornite)
         w_N = 0.0001 # 100 ppmw N
         w_roaldite, _ = compute_nitride_stoichiometry(w_N; mode=:roaldite)
-        f_roaldite = (4.0 * 55.845 + 14.007) / 14.007 # ~ 16.948
+        f_roaldite = (4.0 * M_Fe + M_N) / M_N # ~ 16.948
         @test w_roaldite ≈ w_N * f_roaldite atol=1e-5
 
         w_carlsbergite, _ = compute_nitride_stoichiometry(w_N; mode=:carlsbergite)
-        f_carlsbergite = (51.996 + 14.007) / 14.007 # ~ 4.712
+        f_carlsbergite = (0.051996 + M_N) / M_N # ~ 4.712
         @test w_carlsbergite ≈ w_N * f_carlsbergite atol=1e-5
 
         w_osbornite, _ = compute_nitride_stoichiometry(w_N; mode=:osbornite)
-        f_osbornite = (47.867 + 14.007) / 14.007 # ~ 4.417
+        f_osbornite = (0.047867 + M_N) / M_N # ~ 4.417
         @test w_osbornite ≈ w_N * f_osbornite atol=1e-5
 
         # Schreibersite non-default ni_frac
@@ -354,10 +354,43 @@ using JLD2
         )
         @test total_mid ≈ 1.0 atol=1e-12
 
+        # Non-default nitride modes in normative assemblage
+        cfg_carl = PhaseTrackingConfig(; nitride_mode=:carlsbergite)
+        res_carl = compute_normative_mineral_assemblage(
+            1000.0, 0.01, 0.005, 0.002, 0.001, cfg_carl
+        )
+        @test res_carl.w_nitride ≈ 0.0094242878 atol=1e-6
+        tot_carl = (
+            res_carl.w_troilite +
+            res_carl.w_schreibersite +
+            res_carl.w_cohenite +
+            res_carl.w_graphite +
+            res_carl.w_nitride +
+            res_carl.w_metal_matrix +
+            res_carl.w_liquid_alloy
+        )
+        @test tot_carl ≈ 1.0 atol=1e-12
+
+        cfg_osb = PhaseTrackingConfig(; nitride_mode=:osbornite)
+        res_osb = compute_normative_mineral_assemblage(
+            1000.0, 0.01, 0.005, 0.002, 0.001, cfg_osb
+        )
+        @test res_osb.w_nitride ≈ 0.0088347255 atol=1e-6
+        tot_osb = (
+            res_osb.w_troilite +
+            res_osb.w_schreibersite +
+            res_osb.w_cohenite +
+            res_osb.w_graphite +
+            res_osb.w_nitride +
+            res_osb.w_metal_matrix +
+            res_osb.w_liquid_alloy
+        )
+        @test tot_osb ≈ 1.0 atol=1e-12
+
         # High sulfur (w_S = 0.50): troilite limited by available metallic iron (0.50 Fe)
         res_high_S = compute_normative_mineral_assemblage(1100.0, 0.50, 0.0, 0.0, 0.0, cfg)
-        f_fe_S = 55.845 / 32.065
-        f_troilite = 87.910 / 32.065
+        f_fe_S = M_Fe / M_S
+        f_troilite = f_fe_S + 1.0
         expected_troilite = (0.50 / f_fe_S) * f_troilite
         @test res_high_S.w_troilite ≈ expected_troilite atol=1e-5
         @test iszero(res_high_S.w_metal_matrix)
@@ -392,7 +425,7 @@ using JLD2
         @test total_solid_multi ≈ res_multi_high.F_solid atol=1e-12
         @test (total_solid_multi + res_multi_high.w_liquid_alloy) ≈ 1.0 atol=1e-12
         # Carbon strictly conserved in cohenite + graphite
-        C_in_coh = res_multi_high.w_cohenite * (12.011 / (3.0 * 55.845 + 12.011))
+        C_in_coh = res_multi_high.w_cohenite * (M_C / (3.0 * M_Fe + M_C))
         @test (C_in_coh + res_multi_high.w_graphite) ≈ 0.05 atol=1e-12
 
         # Strict input domain checking

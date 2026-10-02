@@ -93,9 +93,8 @@ function compute_metal_silicate_partition_coefficient(
     end
 
     # Fe-S molar conversion for sulfur-alloy interaction terms
-    # M_S = 32.065 g/mol, M_Fe = 55.845 g/mol
-    n_S = w_val / 32.065
-    n_Fe = (1.0 - w_val) / 55.845
+    n_S = w_val / M_S
+    n_Fe = (1.0 - w_val) / M_Fe
     X_S = (n_S + n_Fe) > 0.0 ? n_S / (n_S + n_Fe) : 0.0
     # Guard against singular log(1 - X_S) when alloy approaches pure sulfur
     ln_1_minus_XS = log(max(1.0 - min(X_S, 0.999), 1.0e-6))
@@ -493,7 +492,7 @@ function equilibrate_metal_silicate_volatiles!(
 
     # 4. Hydrogen equilibration
     if XH2Om !== nothing && Xfe_H_m !== nothing
-        f_H = (2.0 * 1.00794 / 18.01528) * 1.0e4
+        f_H = (2.0 * M_H / M_H2O) * 1.0e4
         D_H = compute_metal_silicate_partition_coefficient(
             :H,
             T_m,
@@ -711,14 +710,14 @@ Raises
 
 Notes
 -----
-Molar masses: S = 32.065 g/mol, Fe = 55.845 g/mol, FeS = 87.910 g/mol.
+Molar masses: S = 32.06 g/mol, Fe = 55.845 g/mol, FeS = 87.905 g/mol.
 """
 function compute_troilite_stoichiometry(w_S::Real)
     (0.0 <= w_S <= 1.0 && isfinite(w_S)) ||
         throw(DomainError(w_S, "w_S must be in [0, 1] and finite"))
     w_S_f = Float64(w_S)
-    f_troilite = 87.910 / 32.065
-    f_fe = 55.845 / 32.065
+    f_fe = M_Fe / M_S
+    f_troilite = f_fe + 1.0
     S_fe_limit = (1.0 - w_S_f) / f_fe
     S_troilite = min(w_S_f, S_fe_limit)
     w_troilite = S_troilite * f_troilite
@@ -756,7 +755,7 @@ function compute_schreibersite_stoichiometry(w_P::Real; ni_frac::Real=0.25)
         throw(DomainError(ni_frac, "ni_frac must be in [0, 1]"))
     w_P_f = Float64(w_P)
     x_ni = Float64(ni_frac)
-    M_metal_avg = (1.0 - x_ni) * 55.845 + x_ni * 58.6934
+    M_metal_avg = (1.0 - x_ni) * (M_Fe * 1000.0) + x_ni * 58.6934
     M_P = 30.97376
     M_schreib = 3.0 * M_metal_avg + M_P
     f_schreib = M_schreib / M_P
@@ -799,7 +798,7 @@ function compute_cohenite_graphite_stoichiometry(w_C::Real; carbide_max::Real=0.
         throw(DomainError(carbide_max, "carbide_max must be in (0, 1]"))
     w_C_f = Float64(w_C)
     c_max = Float64(carbide_max)
-    f_fe = (3.0 * 55.845) / 12.011
+    f_fe = (3.0 * M_Fe) / M_C
     f_cohenite = f_fe + 1.0
     C_fe_limit = (1.0 - w_C_f) / f_fe
     C_carbide = min(w_C_f, c_max, C_fe_limit)
@@ -837,15 +836,13 @@ function compute_nitride_stoichiometry(w_N::Real; mode::Symbol=:roaldite)
     (0.0 <= w_N <= 1.0 && isfinite(w_N)) ||
         throw(DomainError(w_N, "w_N must be in [0, 1] and finite"))
     w_N_f = Float64(w_N)
-    M_N = 14.007
     f_nitride, f_metal = if mode === :roaldite
-        M_Fe = 55.845
         (4.0 * M_Fe + M_N) / M_N, (4.0 * M_Fe) / M_N
     elseif mode === :carlsbergite
-        M_Cr = 51.996
+        M_Cr = 0.051996
         (M_Cr + M_N) / M_N, M_Cr / M_N
     elseif mode === :osbornite
-        M_Ti = 47.867
+        M_Ti = 0.047867
         (M_Ti + M_N) / M_N, M_Ti / M_N
     else
         throw(
@@ -938,15 +935,15 @@ function compute_normative_mineral_assemblage(
     w_metal_avail = 1.0 - w_volatiles
 
     # 1. Troilite (FeS): sulfide has highest affinity for metallic iron
-    f_troilite = 87.910 / 32.065
-    f_fe_S = 55.845 / 32.065
+    f_fe_S = M_Fe / M_S
+    f_troilite = f_fe_S + 1.0
     S_troilite = min(w_S_f, w_metal_avail / f_fe_S)
     w_troilite_0 = S_troilite * f_troilite
     w_metal_avail = max(0.0, w_metal_avail - S_troilite * f_fe_S)
 
     # 2. Schreibersite ((Fe,Ni)3P)
     x_ni = Float64(cfg.schreibersite_ni_frac)
-    M_metal_avg = (1.0 - x_ni) * 55.845 + x_ni * 58.6934
+    M_metal_avg = (1.0 - x_ni) * (M_Fe * 1000.0) + x_ni * 58.6934
     M_P = 30.97376
     f_schreib = (3.0 * M_metal_avg + M_P) / M_P
     f_metal_P = (3.0 * M_metal_avg) / M_P
@@ -955,15 +952,13 @@ function compute_normative_mineral_assemblage(
     w_metal_avail = max(0.0, w_metal_avail - P_schreib * f_metal_P)
 
     # 3. Nitride
-    M_N = 14.007
     f_nitride, f_metal_N = if cfg.nitride_mode === :roaldite
-        M_Fe = 55.845
         (4.0 * M_Fe + M_N) / M_N, (4.0 * M_Fe) / M_N
     elseif cfg.nitride_mode === :carlsbergite
-        M_Cr = 51.996
+        M_Cr = 0.051996
         (M_Cr + M_N) / M_N, M_Cr / M_N
     elseif cfg.nitride_mode === :osbornite
-        M_Ti = 47.867
+        M_Ti = 0.047867
         (M_Ti + M_N) / M_N, M_Ti / M_N
     else
         throw(
@@ -978,7 +973,7 @@ function compute_normative_mineral_assemblage(
 
     # 4. Cohenite (Fe3C) and crystalline Graphite (C):
     # Cohenite forms up to carbide saturation and available iron; excess carbon precipitates as graphite
-    f_fe_C = (3.0 * 55.845) / 12.011
+    f_fe_C = (3.0 * M_Fe) / M_C
     f_cohenite = f_fe_C + 1.0
     c_max = Float64(cfg.cohenite_carbide_max)
     C_fe_limit = w_metal_avail / f_fe_C

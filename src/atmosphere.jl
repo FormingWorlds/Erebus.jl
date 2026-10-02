@@ -18,22 +18,22 @@ This module models:
 Standard elemental mass fractions within atmospheric gas species.
 """
 const W_H_H2 = 1.0
-const W_H_H2O = SPECIES_AMU[:H2] / SPECIES_AMU[:H2O]
-const W_O_H2O = 1.0 - W_H_H2O
-const W_C_CO = SPECIES_AMU[:C] / SPECIES_AMU[:CO]
-const W_O_CO = 1.0 - W_C_CO
-const W_C_CO2 = SPECIES_AMU[:C] / SPECIES_AMU[:CO2]
-const W_O_CO2 = 1.0 - W_C_CO2
-const W_C_CH4 = SPECIES_AMU[:C] / SPECIES_AMU[:CH4]
-const W_H_CH4 = 1.0 - W_C_CH4
-const W_N_N2 = 1.0
-const W_N_NH3 = SPECIES_AMU[:N] / SPECIES_AMU[:NH3]
-const W_H_NH3 = 1.0 - W_N_NH3
-const W_H_H2S = SPECIES_AMU[:H2] / SPECIES_AMU[:H2S]
-const W_S_H2S = 1.0 - W_H_H2S
-const W_S_S2 = 1.0
-const W_S_SO2 = SPECIES_AMU[:S] / SPECIES_AMU[:SO2]
-const W_O_SO2 = 1.0 - W_S_SO2
+const W_H_H2O = (2.0 * M_H) / M_H2O
+const W_O_H2O = M_O / M_H2O
+const W_C_CO = M_C / M_CO
+const W_O_CO = M_O / M_CO
+const W_C_CO2 = M_C / M_CO2
+const W_O_CO2 = (2.0 * M_O) / M_CO2
+const W_C_CH4 = M_C / M_CH4
+const W_H_CH4 = (4.0 * M_H) / M_CH4
+const W_N_N2 = (2.0 * M_N) / M_N2
+const W_N_NH3 = M_N / M_NH3
+const W_H_NH3 = (3.0 * M_H) / M_NH3
+const W_H_H2S = (2.0 * M_H) / M_H2S
+const W_S_H2S = M_S / M_H2S
+const W_S_S2 = (2.0 * M_S) / M_S2
+const W_S_SO2 = M_S / M_SO2
+const W_O_SO2 = (2.0 * M_O) / M_SO2
 
 """
 Atmospheric elemental inventory [kg].

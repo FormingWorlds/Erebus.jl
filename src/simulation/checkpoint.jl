@@ -12,7 +12,7 @@ $(SIGNATURES)
 
     - Ma: period in millions of years
 """
-function s_to_Ma(s::Real; yearlength::Real=31557600.0)
+function s_to_Ma(s::Real; yearlength::Real=SECONDS_PER_YEAR)
     return s / (yearlength * 1e6)
 end
 

@@ -292,7 +292,7 @@ using JLD2
             coords = GridCoordinates(cfg.grid)
             Am = marker_area(coords)
             rho_s = cfg.materials.rhosolidm[1]
-            H_ratio = 2.01588 / 18.01528
+            H_ratio = (2.0 * M_H) / M_H2O
 
             init_data = load_state(joinpath(tmpdir, "output_00000.jld2"))
             init_XH2O = init_data["XH2Om"]

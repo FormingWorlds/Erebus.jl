@@ -228,16 +228,16 @@ function compute_surface_venting_rates(
         vent_sp = cfg.venting.species
         if vent_sp === :H2
             vent_rates[:H2] =
-                get(vent_rates, :H2, 0.0) + (m_pore_H2O * (2.01588 / 18.01528)) / dt
+                get(vent_rates, :H2, 0.0) + (m_pore_H2O * ((2.0 * M_H) / M_H2O)) / dt
         else
             vent_rates[vent_sp] = get(vent_rates, vent_sp, 0.0) + m_pore_H2O / dt
         end
         vent_rates[:H2O] = get(vent_rates, :H2O, 0.0) + m_mineral_H2O / dt
-        # Stoichiometric conversion: elemental C to CO2 (44.0095 / 12.011)
-        vent_rates[:CO2] = get(vent_rates, :CO2, 0.0) + (m_C_step * (44.0095 / 12.011)) / dt
+        # Stoichiometric conversion: elemental C to CO2 (M_CO2 / M_C)
+        vent_rates[:CO2] = get(vent_rates, :CO2, 0.0) + (m_C_step * (M_CO2 / M_C)) / dt
         vent_rates[:N2] = get(vent_rates, :N2, 0.0) + m_N_step / dt
-        # Stoichiometric conversion: elemental S to H2S (34.08 / 32.06)
-        vent_rates[:H2S] = get(vent_rates, :H2S, 0.0) + (m_S_step * (34.08 / 32.06)) / dt
+        # Stoichiometric conversion: elemental S to H2S (M_H2S / M_S)
+        vent_rates[:H2S] = get(vent_rates, :H2S, 0.0) + (m_S_step * (M_H2S / M_S)) / dt
     end
 
     return vent_rates

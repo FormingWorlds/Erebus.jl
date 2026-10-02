@@ -914,7 +914,7 @@ function local_delta_iw(
 
     # Target non-metal buffer: graphite (CCO) or silicate ferric/ferrous
     delta_target = if delta_cco !== nothing && delta_sil !== nothing
-        w_gr_thresh = max(1.0e-12, Float64(w_graphite_threshold) / 0.012011)
+        w_gr_thresh = max(1.0e-12, Float64(w_graphite_threshold) / M_C)
         w_gr = clamp(c.n_C_graphite / w_gr_thresh, 0.0, 1.0)
         w_gr * delta_cco + (1.0 - w_gr) * delta_sil
     elseif delta_cco !== nothing
@@ -997,7 +997,6 @@ function apply_buffer_oxygen!(
         return nothing
     end
 
-    M_O = 15.9994e-3
     dn_O_total = dO_val / M_O
 
     # Validation pass: verify all markers have sufficient reactant

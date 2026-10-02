@@ -6,20 +6,7 @@ impact heating thermodynamics, and marker boundary expansion.
 using DocStringExtensions
 using LinearAlgebra
 
-# Boltzmann constant [J / K] (SI exact definition)
-const K_BOLTZMANN = BOLTZMANN_CONSTANT
-
-# Proton mass [kg]
-const M_PROTON = 1.67262192e-27
-
-# Astronomical unit [m]
-const AU_METERS = 1.495978707e11
-
-# Solar mass [kg]
-const M_SUN_KG = 1.98847e30
-
-# Seconds per year [s]
-const SEC_PER_YEAR = 3.15576e7
+# Constants K_BOLTZMANN, M_PROTON, AU_METERS, M_SUN_KG are defined in src/constants.jl.
 
 # Dispersal weight threshold at which disk pebble flux is truncated to zero
 const DISPERSAL_TERMINATION_WEIGHT_THRESHOLD = 1.0 - 1.0e-4
@@ -822,7 +809,6 @@ function _init_accreted_marker!(
 
     if haskey(markers.groups, :redox)
         rdx = markers.groups.redox
-        M_Fe = 0.055845
         w_FeO_silicate = 0.15
         M_FeO = 0.071844
         xfe = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk[m] : 0.0

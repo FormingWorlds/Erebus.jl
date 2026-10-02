@@ -552,15 +552,14 @@ include("test_helpers.jl")
             M_melt, 1.0e10, 1.0e15, 1.0e8, 1.0e11, R_p, g_surf, T_mo, 3.0;
         )
         m_atm_N =
-            get(sol_ext.M_atm_i, :N2, 0.0) +
-            get(sol_ext.M_atm_i, :NH3, 0.0) * (14.007 / 17.03052)
+            get(sol_ext.M_atm_i, :N2, 0.0) + get(sol_ext.M_atm_i, :NH3, 0.0) * (M_N / M_NH3)
         @test isapprox(m_atm_N + sol_ext.M_melt_N, 1.0e8; rtol=1e-5)
         m_atm_H =
             get(sol_ext.M_atm_i, :H2, 0.0) * 1.0 +
-            get(sol_ext.M_atm_i, :H2O, 0.0) * (2.01588 / 18.01528) +
-            get(sol_ext.M_atm_i, :CH4, 0.0) * (4.03176 / 16.04246) +
-            get(sol_ext.M_atm_i, :NH3, 0.0) * (3.02382 / 17.03052) +
-            get(sol_ext.M_atm_i, :H2S, 0.0) * (2.01588 / 34.08088)
+            get(sol_ext.M_atm_i, :H2O, 0.0) * ((2.0 * M_H) / M_H2O) +
+            get(sol_ext.M_atm_i, :CH4, 0.0) * ((4.0 * M_H) / M_CH4) +
+            get(sol_ext.M_atm_i, :NH3, 0.0) * ((3.0 * M_H) / M_NH3) +
+            get(sol_ext.M_atm_i, :H2S, 0.0) * ((2.0 * M_H) / M_H2S)
         @test isapprox(m_atm_H + sol_ext.M_melt_H, 1.0e10; rtol=1e-5)
     end
 

@@ -63,15 +63,15 @@ struct TimeConfig
 end
 
 function TimeConfig(;
-    dt_initial::Real=1.0e11 / (365.25 * 24 * 3600),
-    dt_longest::Real=1.0e11 / (365.25 * 24 * 3600),
+    dt_initial::Real=1.0e11 / SECONDS_PER_YEAR,
+    dt_longest::Real=1.0e11 / SECONDS_PER_YEAR,
     dtcoefdn::Real=0.5,
     dtcoefup::Real=1.2,
     dtstep::Integer=200,
     dxymax::Real=0.05,
     vpratio::Real=1.0 / 3.0,
     DTmax::Real=20.0,
-    yearlength::Real=365.25 * 24 * 3600,
+    yearlength::Real=SECONDS_PER_YEAR,
     start_time::Real=2.25e6,
     endtime::Real=15.0e6,
     start_step::Integer=1,
@@ -974,7 +974,7 @@ Base.@kwdef struct AtmosphereConfig
     gamma_guillot::Float64 = 0.10
     T_skin_floor::Float64 = 50.0
     f_rec::Float64 = 0.10
-    tau_boil::Float64 = 1.0e4 * SEC_PER_YEAR
+    tau_boil::Float64 = 1.0e4 * SECONDS_PER_YEAR
     crossover_active::Bool = true
     b_diff_ref::Float64 = 1.0e21
 end
