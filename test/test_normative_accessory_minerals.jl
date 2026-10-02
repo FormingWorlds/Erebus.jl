@@ -354,6 +354,39 @@ using JLD2
         )
         @test total_mid ≈ 1.0 atol=1e-12
 
+        # Non-default nitride modes in normative assemblage
+        cfg_carl = PhaseTrackingConfig(; nitride_mode=:carlsbergite)
+        res_carl = compute_normative_mineral_assemblage(
+            1000.0, 0.01, 0.005, 0.002, 0.001, cfg_carl
+        )
+        @test res_carl.w_nitride ≈ 0.0094242878 atol=1e-6
+        tot_carl = (
+            res_carl.w_troilite +
+            res_carl.w_schreibersite +
+            res_carl.w_cohenite +
+            res_carl.w_graphite +
+            res_carl.w_nitride +
+            res_carl.w_metal_matrix +
+            res_carl.w_liquid_alloy
+        )
+        @test tot_carl ≈ 1.0 atol=1e-12
+
+        cfg_osb = PhaseTrackingConfig(; nitride_mode=:osbornite)
+        res_osb = compute_normative_mineral_assemblage(
+            1000.0, 0.01, 0.005, 0.002, 0.001, cfg_osb
+        )
+        @test res_osb.w_nitride ≈ 0.0088347255 atol=1e-6
+        tot_osb = (
+            res_osb.w_troilite +
+            res_osb.w_schreibersite +
+            res_osb.w_cohenite +
+            res_osb.w_graphite +
+            res_osb.w_nitride +
+            res_osb.w_metal_matrix +
+            res_osb.w_liquid_alloy
+        )
+        @test tot_osb ≈ 1.0 atol=1e-12
+
         # High sulfur (w_S = 0.50): troilite limited by available metallic iron (0.50 Fe)
         res_high_S = compute_normative_mineral_assemblage(1100.0, 0.50, 0.0, 0.0, 0.0, cfg)
         f_fe_S = M_Fe / M_S

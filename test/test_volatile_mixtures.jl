@@ -623,6 +623,7 @@ using Erebus.Particles
         m_N3 = [N_init, N_init, N_init]
         m_H3 = [H_init, H_init, H_init]
         m_phim3 = [0.01, 0.01, 0.01]
+        m_Xfem3 = [0.0, 0.0, 0.0]
 
         update_marker_pyrolysis!(
             m_tkm,
@@ -635,11 +636,13 @@ using Erebus.Particles
             ppm_scale=true,
             redox_props=props_rdx,
             redox_cfg=rdx_cfg,
+            Xfem=m_Xfem3,
         )
 
         @test isapprox(props_rdx.nC_graphite_m[1], 0.0; atol=1e-12)
         @test props_rdx.nC_graphite_m[3] > 0.0
         @test props_rdx.nCO_m[3] > 0.0
+        @test m_Xfem3[3] ≈ props_rdx.nFe0_m[3] * Erebus.M_Fe atol=1e-12
 
         # Before core segregation: carbothermic smelting reduces FeO to Fe0 (metal-buffered)
         update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)

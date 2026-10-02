@@ -781,17 +781,12 @@ Random.seed!(42)
             3.0 * (gas_spec[:NH3] / M_NH3) +
             2.0 * (gas_spec[:H2S] / M_H2S)
 
-        nC_out =
-            gas_spec[:CO] / M_CO +
-            gas_spec[:CO2] / M_CO2 +
-            gas_spec[:CH4] / M_CH4
+        nC_out = gas_spec[:CO] / M_CO + gas_spec[:CO2] / M_CO2 + gas_spec[:CH4] / M_CH4
 
         nN_out = 2.0 * (gas_spec[:N2] / M_N2) + gas_spec[:NH3] / M_NH3
 
         nS_out =
-            gas_spec[:H2S] / M_H2S +
-            2.0 * (gas_spec[:S2] / M_S2) +
-            gas_spec[:SO2] / M_SO2
+            gas_spec[:H2S] / M_H2S + 2.0 * (gas_spec[:S2] / M_S2) + gas_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out, nH_in; rtol=1.0e-10)
         @test isapprox(nC_out, nC_in; rtol=1.0e-10)
@@ -804,10 +799,7 @@ Random.seed!(42)
         )
         @test sat_spec[:H2] > 0.0
         @test sat_spec[:CO] > 0.0
-        nC_sat =
-            sat_spec[:CO] / M_CO +
-            sat_spec[:CO2] / M_CO2 +
-            sat_spec[:CH4] / M_CH4
+        nC_sat = sat_spec[:CO] / M_CO + sat_spec[:CO2] / M_CO2 + sat_spec[:CH4] / M_CH4
         @test nC_sat < nC_in
     end
 end

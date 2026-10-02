@@ -72,14 +72,26 @@ using Erebus
         @test isapprox(Erebus.SPECIES_AMU[:O], Erebus.M_O * 1000.0; atol=0.0, rtol=1e-15)
         @test isapprox(Erebus.SPECIES_AMU[:S], Erebus.M_S * 1000.0; atol=0.0, rtol=1e-15)
         @test isapprox(Erebus.SPECIES_AMU[:Fe], Erebus.M_Fe * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:H2O], Erebus.M_H2O * 1000.0; atol=0.0, rtol=1e-15)
+        @test isapprox(
+            Erebus.SPECIES_AMU[:H2O], Erebus.M_H2O * 1000.0; atol=0.0, rtol=1e-15
+        )
         @test isapprox(Erebus.SPECIES_AMU[:CO], Erebus.M_CO * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:CO2], Erebus.M_CO2 * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:CH4], Erebus.M_CH4 * 1000.0; atol=0.0, rtol=1e-15)
+        @test isapprox(
+            Erebus.SPECIES_AMU[:CO2], Erebus.M_CO2 * 1000.0; atol=0.0, rtol=1e-15
+        )
+        @test isapprox(
+            Erebus.SPECIES_AMU[:CH4], Erebus.M_CH4 * 1000.0; atol=0.0, rtol=1e-15
+        )
         @test isapprox(Erebus.SPECIES_AMU[:N2], Erebus.M_N2 * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:NH3], Erebus.M_NH3 * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:H2S], Erebus.M_H2S * 1000.0; atol=0.0, rtol=1e-15)
-        @test isapprox(Erebus.SPECIES_AMU[:SO2], Erebus.M_SO2 * 1000.0; atol=0.0, rtol=1e-15)
+        @test isapprox(
+            Erebus.SPECIES_AMU[:NH3], Erebus.M_NH3 * 1000.0; atol=0.0, rtol=1e-15
+        )
+        @test isapprox(
+            Erebus.SPECIES_AMU[:H2S], Erebus.M_H2S * 1000.0; atol=0.0, rtol=1e-15
+        )
+        @test isapprox(
+            Erebus.SPECIES_AMU[:SO2], Erebus.M_SO2 * 1000.0; atol=0.0, rtol=1e-15
+        )
         @test isapprox(Erebus.SPECIES_AMU[:S2], Erebus.M_S2 * 1000.0; atol=0.0, rtol=1e-15)
     end
 
@@ -97,10 +109,7 @@ using Erebus
             rtol=1e-15,
         )
         @test isapprox(
-            Erebus.MASS_N2_KG,
-            Erebus.M_N2 / Erebus.AVOGADRO_CONSTANT;
-            atol=0.0,
-            rtol=1e-15,
+            Erebus.MASS_N2_KG, Erebus.M_N2 / Erebus.AVOGADRO_CONSTANT; atol=0.0, rtol=1e-15
         )
         @test isapprox(
             Erebus.MASS_NH3_KG,
@@ -109,10 +118,7 @@ using Erebus
             rtol=1e-15,
         )
         @test isapprox(
-            Erebus.MASS_CO_KG,
-            Erebus.M_CO / Erebus.AVOGADRO_CONSTANT;
-            atol=0.0,
-            rtol=1e-15,
+            Erebus.MASS_CO_KG, Erebus.M_CO / Erebus.AVOGADRO_CONSTANT; atol=0.0, rtol=1e-15
         )
         @test isapprox(
             Erebus.MASS_CO2_KG,
@@ -133,10 +139,7 @@ using Erebus
             rtol=1e-15,
         )
         @test isapprox(
-            Erebus.MASS_S2_KG,
-            Erebus.M_S2 / Erebus.AVOGADRO_CONSTANT;
-            atol=0.0,
-            rtol=1e-15,
+            Erebus.MASS_S2_KG, Erebus.M_S2 / Erebus.AVOGADRO_CONSTANT; atol=0.0, rtol=1e-15
         )
         @test isapprox(
             Erebus.MASS_SO2_KG,

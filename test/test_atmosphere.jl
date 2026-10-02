@@ -1283,10 +1283,7 @@ using Random
 
         # Elemental mole conservation
         n_elem_in = (
-            2.0 * m_H2O_rel / M_H2O +
-            m_C_rel / M_C +
-            m_N_rel / M_N +
-            m_S_rel / M_S
+            2.0 * m_H2O_rel / M_H2O + m_C_rel / M_C + m_N_rel / M_N + m_S_rel / M_S
         )
 
         n_elem_out_red = (
@@ -1315,15 +1312,10 @@ using Random
             3.0 * (red_spec[:NH3] / M_NH3) +
             2.0 * (red_spec[:H2S] / M_H2S)
         )
-        nC_out_red =
-            red_spec[:CO] / M_CO +
-            red_spec[:CO2] / M_CO2 +
-            red_spec[:CH4] / M_CH4
+        nC_out_red = red_spec[:CO] / M_CO + red_spec[:CO2] / M_CO2 + red_spec[:CH4] / M_CH4
         nN_out_red = 2.0 * (red_spec[:N2] / M_N2) + red_spec[:NH3] / M_NH3
         nS_out_red =
-            red_spec[:H2S] / M_H2S +
-            2.0 * (red_spec[:S2] / M_S2) +
-            red_spec[:SO2] / M_SO2
+            red_spec[:H2S] / M_H2S + 2.0 * (red_spec[:S2] / M_S2) + red_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out_red, nH_in, rtol=1e-10)
         @test isapprox(nC_out_red, nC_in, rtol=1e-10)
@@ -1360,15 +1352,10 @@ using Random
             3.0 * (ox_spec[:NH3] / M_NH3) +
             2.0 * (ox_spec[:H2S] / M_H2S)
         )
-        nC_out_ox =
-            ox_spec[:CO] / M_CO +
-            ox_spec[:CO2] / M_CO2 +
-            ox_spec[:CH4] / M_CH4
+        nC_out_ox = ox_spec[:CO] / M_CO + ox_spec[:CO2] / M_CO2 + ox_spec[:CH4] / M_CH4
         nN_out_ox = 2.0 * (ox_spec[:N2] / M_N2) + ox_spec[:NH3] / M_NH3
         nS_out_ox =
-            ox_spec[:H2S] / M_H2S +
-            2.0 * (ox_spec[:S2] / M_S2) +
-            ox_spec[:SO2] / M_SO2
+            ox_spec[:H2S] / M_H2S + 2.0 * (ox_spec[:S2] / M_S2) + ox_spec[:SO2] / M_SO2
 
         @test isapprox(nH_out_ox, nH_in, rtol=1e-10)
         @test isapprox(nC_out_ox, nC_in, rtol=1e-10)
@@ -1395,9 +1382,7 @@ using Random
                 2.0 * (spec_deep[:H2S] / M_H2S)
             )
             nC_deep =
-                spec_deep[:CO] / M_CO +
-                spec_deep[:CO2] / M_CO2 +
-                spec_deep[:CH4] / M_CH4
+                spec_deep[:CO] / M_CO + spec_deep[:CO2] / M_CO2 + spec_deep[:CH4] / M_CH4
             nN_deep = 2.0 * (spec_deep[:N2] / M_N2) + spec_deep[:NH3] / M_NH3
             nS_deep =
                 spec_deep[:H2S] / M_H2S +
@@ -1623,11 +1608,7 @@ using Random
         # Pure H2O parcel at 1500 K and ΔIW = -2
         m_h2o_pure = 1.0
         elem_h2o = ElementInventory(
-            m_h2o_pure * ((2.0 * M_H) / M_H2O),
-            0.0,
-            0.0,
-            0.0,
-            m_h2o_pure * (M_O / M_H2O),
+            m_h2o_pure * ((2.0 * M_H) / M_H2O), 0.0, 0.0, 0.0, m_h2o_pure * (M_O / M_H2O)
         )
         res_h2o = speciate_vented_volatiles(elem_h2o, 1.0e5, 1500.0, -2.0)
         # Expected pH2O / pH2 from reaction Kw(T) * fO2^(1/2)
@@ -1736,9 +1717,7 @@ using Random
 
         m_H_in = 1.0 * ((2.0 * M_H) / M_H2O)
         m_C_in = 1.0 * (M_C / M_CO2)
-        m_O_in =
-            1.0 * (M_O / M_H2O) +
-            1.0 * ((2.0 * M_O) / M_CO2)
+        m_O_in = 1.0 * (M_O / M_H2O) + 1.0 * ((2.0 * M_O) / M_CO2)
         elem_mix = ElementInventory(m_H_in, m_C_in, 0.0, 0.0, m_O_in)
 
         spec_res = speciate_closed_system(elem_mix, 1500.0, 1.0e5)
@@ -1768,12 +1747,8 @@ using Random
         @test isapprox(m_S_out, 0.0; atol=1e-12)
 
         # Monotonicity: log10_fO2 lies between pure H2O and pure CO2
-        elem_h2o = ElementInventory(
-            m_H_in, 0.0, 0.0, 0.0, 1.0 * (M_O / M_H2O)
-        )
-        elem_co2 = ElementInventory(
-            0.0, m_C_in, 0.0, 0.0, 1.0 * ((2.0 * M_O) / M_CO2)
-        )
+        elem_h2o = ElementInventory(m_H_in, 0.0, 0.0, 0.0, 1.0 * (M_O / M_H2O))
+        elem_co2 = ElementInventory(0.0, m_C_in, 0.0, 0.0, 1.0 * ((2.0 * M_O) / M_CO2))
         spec_h2o = speciate_closed_system(elem_h2o, 1500.0, 1.0e5)
         spec_co2 = speciate_closed_system(elem_co2, 1500.0, 1.0e5)
         min_fo2 = min(spec_h2o.log10_fO2, spec_co2.log10_fO2)
@@ -1938,15 +1913,15 @@ using Random
         M_O_val = M_O
         dn_O_total = dO / M_O_val
         O_init = sum(
-            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val for
-            m in marker_indices
+            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val
+            for m in marker_indices
         )
 
         apply_buffer_oxygen!(redox_props, marker_indices, weights, dO)
 
         O_final = sum(
-            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val for
-            m in marker_indices
+            redox_props.nFe2_m[m] * 1.0 * M_O_val + redox_props.nFe3_m[m] * 1.5 * M_O_val
+            for m in marker_indices
         )
 
         # Total marker O + dO invariant to 1e-12

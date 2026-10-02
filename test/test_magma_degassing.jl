@@ -552,8 +552,7 @@ include("test_helpers.jl")
             M_melt, 1.0e10, 1.0e15, 1.0e8, 1.0e11, R_p, g_surf, T_mo, 3.0;
         )
         m_atm_N =
-            get(sol_ext.M_atm_i, :N2, 0.0) +
-            get(sol_ext.M_atm_i, :NH3, 0.0) * (M_N / M_NH3)
+            get(sol_ext.M_atm_i, :N2, 0.0) + get(sol_ext.M_atm_i, :NH3, 0.0) * (M_N / M_NH3)
         @test isapprox(m_atm_N + sol_ext.M_melt_N, 1.0e8; rtol=1e-5)
         m_atm_H =
             get(sol_ext.M_atm_i, :H2, 0.0) * 1.0 +
