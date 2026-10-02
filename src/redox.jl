@@ -947,7 +947,7 @@ function local_delta_iw(
 
     if c.n_H2 > 1.0e-12 && c.n_H2O > 1.0e-12
         lfo2_iw = log10_fo2_of_buffer(:IW, T, P)
-        log_k = 12760.0 / T - 2.84
+        log_k = LOGK_H2O[1] / T + LOGK_H2O[2]
         lfo2_gas = 2.0 * (log10(c.n_H2O / c.n_H2) - log_k)
         return clamp(lfo2_gas - lfo2_iw, d_min, d_max)
     end

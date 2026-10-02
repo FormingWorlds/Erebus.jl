@@ -50,8 +50,8 @@ phimax = 0.9999
 hr_al = true            # 26Al radioactive decay heating active
 hr_fe = true            # 60Fe radioactive decay heating active
 ratio_al = 5.0e-5       # initial 26Al/27Al isotope ratio
-ratio_fe = 1.0e-6       # initial 60Fe/56Fe isotope ratio
-tmsolidphase = 1416.0
+ratio_fe = 1.15e-8       # initial 60Fe/56Fe isotope ratio
+tmsolidphase = 1400.0
 tmfluidphase = 273.0
 phim0 = 0.2
 

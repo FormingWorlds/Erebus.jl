@@ -160,6 +160,7 @@ function solve_magma_ocean_volatile_partitioning(
     ch4_law::Symbol=:ardia2013,
     co2_law::Symbol=:dixon1995,
     sulfide_law::Symbol=:boulliung2023,
+    nitrogen_law::Symbol=:libourel2003,
     nitrogen_henry::Real=0.40,
     nitrogen_nitride::Real=1.0e-3,
     graphite_saturation::Bool=true,
@@ -284,7 +285,7 @@ function solve_magma_ocean_volatile_partitioning(
     col_coeff = (4.0 * π * (Rp^2)) / grav
     log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=dIW)
 
-    logK_H2O = 12700.0 / T - 2.80
+    logK_H2O = LOGK_H2O[1] / T + LOGK_H2O[2]
     r_H = 10.0^clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
 
     logK_CO2 = 14800.0 / T - 4.58
@@ -461,9 +462,19 @@ function solve_magma_ocean_volatile_partitioning(
 
         C_diss_N_ppm = 0.0
         if mN > 0.0
-            S_N_res = compute_nitrogen_solubility_melt(
-                p_dict[:N2], dIW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
-            )
+            S_N_res = if nitrogen_law === :dasgupta2022
+                compute_nitrogen_solubility_dasgupta(p_dict[:N2], P_surf, T, dIW)
+            elseif nitrogen_law === :libourel2003
+                compute_nitrogen_solubility_melt(
+                    p_dict[:N2], dIW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
+                )
+            else
+                throw(
+                    ArgumentError(
+                        "Unknown nitrogen solubility law :$nitrogen_law. Supported laws: :dasgupta2022, :libourel2003",
+                    ),
+                )
+            end
             C_diss_N_ppm = S_N_res.total_ppm
         end
         w_diss_N = C_diss_N_ppm * 1.0e-6
@@ -854,7 +865,17 @@ function degas_magma_ocean_markers!(
     S_H2O_wtpct = compute_water_solubility_melt(spec_surf.p_H2O_Pa; As=cfg.water_As)
     w_H2O_sat = S_H2O_wtpct * 0.01
 
-    S_N_res = compute_nitrogen_solubility_melt(spec_surf.p_N2_Pa, delta_IW_eff)
+    S_N_res = if cfg.nitrogen_law === :dasgupta2022
+        compute_nitrogen_solubility_dasgupta(spec_surf.p_N2_Pa, psurf_val, T_ref, delta_IW_eff)
+    elseif cfg.nitrogen_law === :libourel2003
+        compute_nitrogen_solubility_melt(spec_surf.p_N2_Pa, delta_IW_eff)
+    else
+        throw(
+            ArgumentError(
+                "Unknown nitrogen solubility law :$(cfg.nitrogen_law). Supported laws: :dasgupta2022, :libourel2003",
+            ),
+        )
+    end
     w_N_sat = S_N_res.total_ppm * 1.0e-6
 
     S_C_res = compute_carbon_solubility_melt(psurf_val, T_ref, delta_IW_eff)

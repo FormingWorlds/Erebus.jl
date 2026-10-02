@@ -1,7 +1,7 @@
 # radioactive switches
 # solid phase radioactive heating from 26Al active
 const hr_al = true
-# fluid phase radioactive heating from 60Fe active	
+# metallic phase radioactive heating from 60Fe active
 const hr_fe = false
 # planetary parameters
 # planetary radius [m]
@@ -135,22 +135,22 @@ const tau_al = t_half_al / log(2)
 const ratio_al = 5.0e-5
 # E 26Al [J]
 const E_al = 5.0470e-13
-# 26Al atoms/kg
+# 27Al atoms/kg bulk rock
 const f_al = 1.9e23
 # 60Fe decay
 # 60Fe half life [s]	
 const t_half_fe = 2_620_000 * 31_540_000
 # 60Fe decay constant
 const tau_fe = t_half_fe / log(2)
-# initial ratio of 60Fe and 56Fe isotopes	
-const ratio_fe = 1.0e-6
+# initial ratio of 60Fe and 56Fe isotopes (Tang & Dauphas 2012)
+const ratio_fe = 1.15e-8
 # E 60Fe [J]	
 const E_fe = 4.34e-13
-# 60Fe atoms/kg	
+# 56Fe atoms/kg bulk rock (18.2 wt% Fe in CI chondrite)
 const f_fe = 1.957e24
+# Reference iron mass fraction in bulk CI chondrite
+const X_FE_REF_CHONDRITE = 0.182
 # melting
-# solid phase (silicate) melting temperature [K]
-const tmsolidphase = 1416.0#1.0e+6
 # fluid phase (H₂O) melting temperature [K]
 const tmfluidphase = 273.0
 # fluid phase (H₂O) heat of fusion of ice [J/kg]
@@ -210,11 +210,6 @@ c_I = 543.0
 Sxo_B = 2.0e-11;
 Tscl_B = 10.0;
 To_B = 293.0
-# reaction constant parameters mode 3 [Travis et al., 2018]
-# (Sxo_T: reaction rate at ref T, To_T: reaction ref T, Ea_T: reaction activation energy)
-Sxo_T = 2.0e-11;
-To_T = 293.0;
-Ea_T = 63.8e3
 # mechanical boundary conditions: free slip=-1 / no slip=1
 # mechanical boundary condition left
 const bcleft = -1
@@ -370,6 +365,13 @@ const iparms = collect(
 const cache_kwargs = (;
     nprocs=4, verbose=true, abstol=1e-8, reltol=1e-8, maxiter=30, iparm=iparms
 )
+
+"""
+Equilibrium constant parameters (a, b) for water formation:
+    H2 + 0.5 O2 <=> H2O, log10 K = a / T + b
+Source: Holloway (1987), Frost (1991) Table 1.
+"""
+const LOGK_H2O = (12760.0, -2.84)
 
 # Volatile species set in thermodynamic equilibrium surface speciation
 const SPECIATION_SPECIES = Set{Symbol}([

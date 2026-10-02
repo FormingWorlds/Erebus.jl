@@ -62,7 +62,10 @@ function radiogenic_heating!(
                     hrtotalm[m] = hr_rock
                 end
             else
-                hrtotalm[m] = hr_rock
+                phi_fe_bulk =
+                    X_FE_REF_CHONDRITE * cfg.materials.rhosolidm[t_m] /
+                    cfg.coreformation.rho_metal
+                hrtotalm[m] = hr_rock + (1.0 - phim[m]) * phi_fe_bulk * hrmetalm[t_m]
             end
         else
             # Sticky air / space

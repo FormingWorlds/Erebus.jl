@@ -95,9 +95,9 @@ tau_fe
 ratio_fe
 E_fe
 f_fe
+X_FE_REF_CHONDRITE
 
 # --- src/constants.jl: Thermodynamics and Reaction Kinetics ---
-tmsolidphase
 tmfluidphase
 phim0
 phimin
@@ -124,6 +124,7 @@ crk4
 iparms_dict
 iparms
 cache_kwargs
+LOGK_H2O
 SPECIATION_SPECIES
 SPECIES_AMU
 

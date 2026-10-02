@@ -55,6 +55,36 @@ _mean(x) = sum(x) / length(x)
         )
     end
 
+    @testset "Travis et al. (2018) Mode 3 Reaction Parameters" begin
+        # Literature calibration: Travis et al. (2018) [DOI: 10.1016/j.icarus.2017.12.038]
+        # Kinetic parameters: Sxo_T = 2.0e-11 s^-1, To_T = 293.0 K, Ea_T = 63.8 kJ/mol
+        cfg_t4 = ReactionConfig()
+        @test hasproperty(cfg_t4, :Sxo_T)
+        @test hasproperty(cfg_t4, :To_T)
+        @test hasproperty(cfg_t4, :Ea_T)
+        @test isapprox(cfg_t4.Sxo_T, 2.0e-11; rtol=1e-12)
+        @test isapprox(cfg_t4.To_T, 293.0; rtol=1e-12)
+        @test isapprox(cfg_t4.Ea_T, 63.8e3; rtol=1e-12)
+
+        # Validation rejects unphysical parameters (Ea_T < 0, Sxo_T <= 0, To_T <= 0)
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(; reaction=ReactionConfig(; Ea_T=-1.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(; reaction=ReactionConfig(; Sxo_T=0.0))
+        )
+        @test_throws ArgumentError validate_config(
+            SimulationConfig(; reaction=ReactionConfig(; To_T=-10.0))
+        )
+
+        # Mode 3 reaction rate scaling with Sxo_T
+        # Reaction characteristic timescale Delta_tr scales inversely with Sxo_T
+        dt_base = Erebus.compute_Δtreaction(400.0, 0.1, 3; cfg=cfg_t4)
+        cfg_double_sxo = ReactionConfig(; Sxo_T=4.0e-11)
+        dt_double = Erebus.compute_Δtreaction(400.0, 0.1, 3; cfg=cfg_double_sxo)
+        @test isapprox(dt_base / dt_double, 2.0; rtol=1e-10)
+    end
+
     @testset "ReactionConfig TOML Serialization Round-Trip" begin
         sim_cfg = default_config()
         custom_react = ReactionConfig(;

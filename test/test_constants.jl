@@ -148,4 +148,43 @@ using Erebus
             rtol=1e-15,
         )
     end
+
+    @testset "Radionuclide 60Fe Constants and Literature Anchors" begin
+        # Literature constants from Tang & Dauphas (2012) [DOI: 10.1016/j.epsl.2012.10.011]
+        # 60Fe half life: 2.62 Myr; decay energy: 4.34e-13 J (2.71 MeV)
+        # Reference CI chondrite Fe mass fraction: 18.2 wt% (0.182 kg Fe / kg bulk rock)
+        # 56Fe atoms per kg bulk rock: f_fe = 0.182 * N_A / M_Fe ≈ 1.957e24 atoms/kg
+        # Canonical initial 60Fe/56Fe ratio: 1.15e-8
+        t_half_fe_lit = 2.62e6 * 31_540_000.0
+        tau_fe_lit = t_half_fe_lit / log(2.0)
+        E_fe_lit = 4.34e-13
+        f_fe_lit = 1.957e24
+        ratio_fe_lit = 1.15e-8
+
+        Q0_expected = (f_fe_lit * ratio_fe_lit * E_fe_lit) / tau_fe_lit
+        Q0_actual = Erebus.Q_radiogenic(
+            Erebus.f_fe, Erebus.ratio_fe, Erebus.E_fe, Erebus.tau_fe, 0.0
+        )
+        @test isapprox(Erebus.ratio_fe, ratio_fe_lit; rtol=1e-12)
+        @test isapprox(Erebus.X_FE_REF_CHONDRITE, 0.182; rtol=1e-12)
+        @test isapprox(Q0_actual, Q0_expected; rtol=1e-3)
+    end
+
+    @testset "Water Formation Equilibrium Constant LOGK_H2O" begin
+        # Literature calibration: Holloway (1987) / Frost (1991) Table 1
+        # H2 + 0.5 O2 <=> H2O: log10 K = 12760 / T - 2.84
+        @test isdefined(Erebus, :LOGK_H2O)
+        logK_1500 = Erebus.LOGK_H2O[1] / 1500.0 + Erebus.LOGK_H2O[2]
+        @test isapprox(logK_1500, 12760.0 / 1500.0 - 2.84; rtol=1e-12)
+        @test isapprox(Erebus.LOGK_H2O[1], 12760.0; rtol=1e-12)
+    end
+
+    @testset "Dead Switch and Mutable Global Removal" begin
+        # tmsolidphase is removed from constants.jl in favor of cfg.thermodynamics.tmsolidphase
+        @test !isdefined(Erebus, :tmsolidphase)
+        # Sxo_T, To_T, Ea_T are removed from constants.jl in favor of ReactionConfig
+        @test !isdefined(Erebus, :Sxo_T)
+        @test !isdefined(Erebus, :To_T)
+        @test !isdefined(Erebus, :Ea_T)
+    end
 end

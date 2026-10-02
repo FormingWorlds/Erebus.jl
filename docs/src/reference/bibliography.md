@@ -284,3 +284,11 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Zahnle, K. J., & Kasting, J. F. (1986)**. Mass fractionation during transonic escape and implications for loss of water from Mars and Venus. *Icarus*, 68(3), 462-480.  
   [https://doi.org/10.1016/0019-1035(86)90051-5](https://doi.org/10.1016/0019-1035(86)90051-5)  
   *Multi-component hydrodynamic escape and crossover mass formulation for heavy volatile drag by escaping light carrier gases.*
+
+---
+
+## Radionuclides and Early Solar System Geochronology
+
+- **Tang, H., & Dauphas, N. (2012)**. Abundance, distribution, and origin of 60Fe in the solar protoplanetary disk. *Earth and Planetary Science Letters*, 359-360, 248-263.
+  [https://doi.org/10.1016/j.epsl.2012.10.011](https://doi.org/10.1016/j.epsl.2012.10.011)
+  *High-precision determination of initial Solar System 60Fe/56Fe abundance ratio ((1.15 ± 0.26) × 10⁻⁸) at CAI formation.*

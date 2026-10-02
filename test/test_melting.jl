@@ -108,10 +108,13 @@ using TOML
             dpdt_clapeyron=1.3e-7,
             latent_heat_mode=:apparent_cp,
         )
-        sim_cfg = SimulationConfig(; melting=custom_melting)
+        sim_cfg = SimulationConfig(;
+            melting=custom_melting, thermodynamics=ThermalConfig(; tmsolidphase=1350.0)
+        )
         toml_str = Erebus.Config.save_config(sim_cfg)
         loaded_cfg = Erebus.Config.load_config(toml_str)
 
+        @test isapprox(loaded_cfg.thermodynamics.tmsolidphase, 1350.0; atol=1e-6)
         @test loaded_cfg.melting.active == true
         @test isapprox(loaded_cfg.melting.T_solidus[1], 1350.0; rtol=1e-12)
         @test isapprox(loaded_cfg.melting.T_liquidus[1], 1850.0; rtol=1e-12)

@@ -37,6 +37,9 @@ function compute_Δtreaction(
     Sxo_B_val = cfg === nothing ? Sxo_B : cfg.Sxo_B
     Tscl_B_val = cfg === nothing ? Tscl_B : cfg.Tscl_B
     To_B_val = cfg === nothing ? To_B : cfg.To_B
+    Sxo_T_val = cfg === nothing ? 2.0e-11 : cfg.Sxo_T
+    To_T_val = cfg === nothing ? 293.0 : cfg.To_T
+    Ea_T_val = cfg === nothing ? 63.8e3 : cfg.Ea_T
     dtreaction_val = if cfg === nothing
         Δtreaction
     else
@@ -50,7 +53,8 @@ function compute_Δtreaction(
         Δtr = -log_completion_rate / (Sxo_B_val * ϕ) * 2.0^((To_B_val - T) / Tscl_B_val)
     elseif mode == 3
         Δtr =
-            -log_completion_rate / (Sxo_B_val * ϕ) * exp(Ea_T / RG * (1.0 / T - 1.0 / To_T))
+            -log_completion_rate / (Sxo_T_val * ϕ) *
+            exp(Ea_T_val / R_GAS * (1.0 / T - 1.0 / To_T_val))
     elseif mode == 9
         Δtr = dtreaction_val
     else

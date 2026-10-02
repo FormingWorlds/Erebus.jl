@@ -1199,4 +1199,56 @@ include("test_helpers.jl")
         )
         @test isapprox(XH2[1], Fm2[1] * S_1200; rtol=1e-6)
     end
+
+    @testset "Nitrogen Solubility Law Branching in Magma Ocean Degassing" begin
+        R_p = 50_000.0
+        M_p = (4.0 / 3.0) * π * (R_p^3) * 3300.0
+        g_surf = Erebus.G_GRAV * M_p / (R_p^2)
+        T_mo = 1800.0
+        M_melt = 0.8 * M_p
+
+        # Test solve_magma_ocean_volatile_partitioning branching
+        sol_lib = solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_p * 1e-3,
+            0.0,
+            M_p * 2e-4,
+            0.0,
+            R_p,
+            g_surf,
+            T_mo,
+            0.0;
+            nitrogen_law=:libourel2003,
+        )
+        sol_dasg = solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_p * 1e-3,
+            0.0,
+            M_p * 2e-4,
+            0.0,
+            R_p,
+            g_surf,
+            T_mo,
+            0.0;
+            nitrogen_law=:dasgupta2022,
+        )
+        @test isapprox(sum(values(sol_lib.p_i)), sol_lib.P_surf; rtol=1e-10)
+        @test isapprox(sum(values(sol_dasg.p_i)), sol_dasg.P_surf; rtol=1e-10)
+        @test isfinite(sol_dasg.M_melt_N)
+        @test sol_dasg.M_melt_N != sol_lib.M_melt_N
+
+        # Unknown nitrogen law throws ArgumentError
+        @test_throws ArgumentError solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_p * 1e-3,
+            0.0,
+            M_p * 2e-4,
+            0.0,
+            R_p,
+            g_surf,
+            T_mo,
+            0.0;
+            nitrogen_law=:invalid_n_law,
+        )
+    end
 end

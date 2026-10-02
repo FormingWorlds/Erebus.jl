@@ -123,6 +123,49 @@ using JLD2
         )
     end
 
+    @testset "Nitrogen Solubility Law Branching and Temperature Dependence" begin
+        # Literature calibration: Dasgupta et al. (2022) [DOI: 10.1016/j.gca.2022.09.009]
+        # Chemical nitride term scales with exp(5908 * sqrt(P_tot)/T); physical term is isothermal
+        T1 = 1400.0
+        T2 = 1800.0
+        p_N2_val = 1.0e7
+        p_tot_val = 1.0e8
+        d_IW_val = -2.0
+        ptot_GPa = p_tot_val * 1e-9
+
+        res_T1 = compute_nitrogen_solubility_dasgupta(p_N2_val, p_tot_val, T1, d_IW_val)
+        res_T2 = compute_nitrogen_solubility_dasgupta(p_N2_val, p_tot_val, T2, d_IW_val)
+
+        expected_chem_ratio = exp(5908.0 * sqrt(ptot_GPa) * (1.0 / T1 - 1.0 / T2))
+        actual_chem_ratio = res_T1.chemical_ppm / res_T2.chemical_ppm
+        @test isapprox(actual_chem_ratio, expected_chem_ratio; rtol=1e-6)
+        @test isapprox(res_T1.physical_ppm, res_T2.physical_ppm; atol=1e-12)
+
+        # Branching in compute_volatile_exsolution
+        # When nitrogen_law == :dasgupta2022, dissolved N depends on temperature
+        ex_dasg_1400 = compute_volatile_exsolution(
+            1.0, 1.0e7, 1400.0, 0.0, 0.0, 50.0, 0.0, -2.0; nitrogen_law=:dasgupta2022
+        )
+        ex_dasg_1800 = compute_volatile_exsolution(
+            1.0, 1.0e7, 1800.0, 0.0, 0.0, 50.0, 0.0, -2.0; nitrogen_law=:dasgupta2022
+        )
+        @test ex_dasg_1400.C_N_diss_ppm != ex_dasg_1800.C_N_diss_ppm
+
+        # When nitrogen_law == :libourel2003, dissolved N is isothermal
+        ex_lib_1400 = compute_volatile_exsolution(
+            1.0, 1.0e7, 1400.0, 0.0, 0.0, 50.0, 0.0, -2.0; nitrogen_law=:libourel2003
+        )
+        ex_lib_1800 = compute_volatile_exsolution(
+            1.0, 1.0e7, 1800.0, 0.0, 0.0, 50.0, 0.0, -2.0; nitrogen_law=:libourel2003
+        )
+        @test isapprox(ex_lib_1400.C_N_diss_ppm, ex_lib_1800.C_N_diss_ppm; atol=1e-12)
+
+        # Unknown nitrogen law throws ArgumentError
+        @test_throws ArgumentError compute_volatile_exsolution(
+            1.0, 1.0e7, 1400.0, -2.0, 0.0, 0.0, 50.0, 0.0; nitrogen_law=:unknown
+        )
+    end
+
     @testset "Carbon Species Solubility Laws (CO, CH4, CO2)" begin
         p_co_Pa = 1.0e6   # 10 bar
         p_ch4_Pa = 1.0e6  # 10 bar
@@ -571,10 +614,10 @@ using JLD2
         @test dw > 0.0
         # Dissolved water retains melt capacity: 0.5 * 0.40 * sqrt(10) ≈ 0.6325 wt%
         @test all(isapprox.(XH2Om, 0.6324555; rtol=1e-4))
-        # Total exsolved fraction per marker ~ 0.0144, for 100 markers dw ~ 1.442
-        @test isapprox(dw, 1.44238; rtol=1e-3)
-        # Porosity increases by dw_step * (3000/1000) from 0.05 to ~0.0933
-        @test all(isapprox.(phim, 0.09327; rtol=1e-3))
+        # Total exsolved fraction per marker ~ 0.0145, for 100 markers dw ~ 1.450
+        @test isapprox(dw, 1.45014; rtol=1e-3)
+        # Porosity increases by dw_step * (3000/1000) from 0.05 to ~0.0935
+        @test all(isapprox.(phim, 0.09350; rtol=1e-3))
 
         # Idempotency test: subsequent call under same conditions yields zero additional exsolution
         dw_repeat = update_marker_volatile_exsolution!(
