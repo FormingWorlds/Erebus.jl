@@ -292,3 +292,26 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Tang, H., & Dauphas, N. (2012)**. Abundance, distribution, and origin of 60Fe in the solar protoplanetary disk. *Earth and Planetary Science Letters*, 359-360, 248-263.
   [https://doi.org/10.1016/j.epsl.2012.10.011](https://doi.org/10.1016/j.epsl.2012.10.011)
   *High-precision determination of initial Solar System 60Fe/56Fe abundance ratio ((1.15 ± 0.26) × 10⁻⁸) at CAI formation.*
+
+---
+
+## Thermodynamics, Redox Buffers, and Gas Speciation
+
+- **French, B. M. (1966)**. Some geological implications of equilibrium between graphite and a C-H-O gas at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253.
+  [https://doi.org/10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
+  *Equilibrium thermodynamics of graphite saturation and C-H-O fluid speciation in geological systems.*
+
+- **Frost, B. R. (1991)**. Introduction to oxygen fugacity and its petrologic importance. In *Reviews in Mineralogy and Geochemistry* (Vol. 25, pp. 1-9). Mineralogical Society of America.
+  [https://doi.org/10.1515/9781501508684-004](https://doi.org/10.1515/9781501508684-004)
+  *Standard free energies of formation, equilibrium constant parameterizations, and oxygen fugacity buffer calibrations.*
+
+- **Holloway, J. R. (1987)**. Igneous fluids. In *Reviews in Mineralogy* (Vol. 17, pp. 211-233). Mineralogical Society of America.
+  *Thermodynamic formulations of gas speciation, dehydration equilibria, and fluid-melt volatile partitioning.*
+
+- **Holloway, J. R., Pan, V., & Gudmundsson, G. (1992)**. High-pressure fluid-absent melting experiments in the presence of graphite: oxygen fugacity, ferric/ferrous ratio and dissolved CO2. *European Journal of Mineralogy*, 4(1), 105-114.
+  [https://doi.org/10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)
+  *Calibration of graphite-CO-CO2 equilibria, carbon saturation fugacity surfaces, and mantle melting relations.*
+
+- **Robie, R. A., & Hemingway, B. S. (1995)**. *Thermodynamic Properties of Minerals and Related Substances at 298.15 K and 1 Bar (10^5 Pascals) Pressure and at Higher Temperatures*. U.S. Geological Survey Bulletin 2131.
+  [https://doi.org/10.3133/b2131](https://doi.org/10.3133/b2131)
+  *Standard state thermodynamic data for minerals and gas species.*

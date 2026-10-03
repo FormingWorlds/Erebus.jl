@@ -121,15 +121,40 @@ When `scss_active = true`, the routine caps dissolved sulfur at the saturation c
 
 $$S_{\text{melt}} = \min(S_{\text{solubility}}, \text{SCSS})$$
 
+### Homogeneous Gas Speciation Equilibria
+
+Gas speciation in the C-H-O-N-S volatile system is evaluated in `solve_chnos_speciation` under simultaneous Dalton partial pressure and atomic element conservation. The reaction equilibrium constants (temperature $T$ in Kelvin, gas fugacities in bar) follow established thermodynamic calibrations:
+
+1. **Water formation** (Holloway 1987; Frost 1991 Table 1):
+   $$\text{H}_2 + \frac{1}{2}\text{O}_2 \rightleftharpoons \text{H}_2\text{O}, \quad \log_{10} K_{\text{H}_2\text{O}} = \frac{12760.0}{T} - 2.84$$
+
+2. **Carbon dioxide formation** (Robie & Hemingway 1995; Frost 1991; Holloway 1987):
+   $$\text{CO} + \frac{1}{2}\text{O}_2 \rightleftharpoons \text{CO}_2, \quad \log_{10} K_{\text{CO}_2} = \frac{14800.0}{T} - 4.58$$
+
+3. **Sulfur dioxide formation** (Robie & Hemingway 1995; Holloway 1987):
+   $$\frac{1}{2}\text{S}_2 + \text{O}_2 \rightleftharpoons \text{SO}_2, \quad \log_{10} K_{\text{SO}_2} = \frac{18800.0}{T} - 3.80$$
+
+4. **Methanation** (French 1966; Holloway 1987):
+   $$\text{CO} + 3\text{H}_2 \rightleftharpoons \text{CH}_4 + \text{H}_2\text{O}, \quad \log_{10} K_{\text{CH}_4} = \frac{11500.0}{T} - 12.0$$
+
+5. **Ammonia formation** (Holloway 1987):
+   $$\frac{1}{2}\text{N}_2 + \frac{3}{2}\text{H}_2 \rightleftharpoons \text{NH}_3, \quad \log_{10} K_{\text{NH}_3} = \frac{2800.0}{T} - 5.80$$
+
+6. **Hydrogen sulfide formation** (Holloway 1987):
+   $$\frac{1}{2}\text{S}_2 + \text{H}_2 \rightleftharpoons \text{H}_2\text{S}, \quad \log_{10} K_{\text{H}_2\text{S}} = \frac{4800.0}{T} - 2.50$$
+
 ---
 
 ## 3. Literature Anchors
 
 - **French, B. M. (1966)**. Some geological implications of equilibrium between graphite and a C-H-O gas phase at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253. [https://doi.org/10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
 - **Burnham, C. W. (1979)**. The importance of volatile constituents. In *The Evolution of the Igneous Rocks: Fiftieth Anniversary Perspectives*, Princeton University Press, 439-482.
+- **Holloway, J. R. (1987)**. Igneous fluids. In *Reviews in Mineralogy* (Vol. 17, pp. 211-233). Mineralogical Society of America.
 - **O'Neill, H. S. C. (1988)**. Systems Fe-O and Cu-O: thermodynamic data for the equilibria Fe-"FeO", Fe-Fe3O4, "FeO"-Fe3O4, Fe-SiO2-Fe2SiO4, and Cu-Cu2O. *American Mineralogist*, 73(5-6), 470-486.
+- **Frost, B. R. (1991)**. Introduction to oxygen fugacity and its petrologic importance. In *Reviews in Mineralogy and Geochemistry* (Vol. 25, pp. 1-9). Mineralogical Society of America. [https://doi.org/10.1515/9781501508684-004](https://doi.org/10.1515/9781501508684-004)
 - **Holloway, J. R., Pan, V., & Gudmundsson, G. (1992)**. High-pressure fluid-absent melting experiments in the presence of graphite: oxygen fugacity, ferric/ferrous ratio and dissolved CO₂. *European Journal of Mineralogy*, 4(1), 105-114. [https://doi.org/10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)
 - **Dixon, J. E., Stolper, E. M., & Holloway, J. R. (1995)**. An experimental study of water and carbon dioxide solubilities in mid-ocean ridge basaltic liquids. Part I: Calibration and solubility models. *Journal of Petrology*, 36(6), 1607-1631. [https://doi.org/10.1093/oxfordjournals.petrology.a037267](https://doi.org/10.1093/oxfordjournals.petrology.a037267)
+- **Robie, R. A., & Hemingway, B. S. (1995)**. *Thermodynamic Properties of Minerals and Related Substances at 298.15 K and 1 Bar (10^5 Pascals) Pressure and at Higher Temperatures*. U.S. Geological Survey Bulletin 2131. [https://doi.org/10.3133/b2131](https://doi.org/10.3133/b2131)
 - **O'Neill, H. S. C., & Mavrogenes, J. A. (2002)**. The sulfide capacity and the sulfur content at sulfide saturation of silicate melts at 1400 C and 1 bar. *Journal of Petrology*, 43(6), 1049-1087. [https://doi.org/10.1093/petrology/43.6.1049](https://doi.org/10.1093/petrology/43.6.1049)
 - **Gaillard, F., Schmidt, B. C., Mackwell, S., & McCammon, C. (2003)**. Rate of hydrogen-iron redox exchange in silicate melts and glasses. *Geochimica et Cosmochimica Acta*, 67(13), 2427-2441. [https://doi.org/10.1016/S0016-7037(02)01407-2](https://doi.org/10.1016/S0016-7037(02)01407-2)
 - **Libourel, G., Marty, B., & Humbert, F. (2003)**. Nitrogen solubility in basaltic melt. Part I. Effect of oxygen fugacity. *Geochimica et Cosmochimica Acta*, 67(21), 4123-4135. [https://doi.org/10.1016/S0016-7037(03)00259-X](https://doi.org/10.1016/S0016-7037(03)00259-X)

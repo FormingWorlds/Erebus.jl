@@ -279,6 +279,49 @@ using JLD2
         @test isapprox(batch.D_N, D_N_fe; atol=1.0e-12)
         @test isapprox(batch.D_H, D_H_val; atol=1.0e-12)
         @test isapprox(batch.D_S, D_S_val; atol=1.0e-12)
+
+        # 10. Reference condition evaluation (T, P, ΔIW, X_S)
+        # Reference conditions for metal-silicate volatile partitioning models:
+        # T = 1873 K (1600 °C), P = 1.5 GPa (1.5e9 Pa), ΔIW = -2.0, w_S = 0.0 (X_S = 0.0)
+        T_exp = 1873.0
+        P_exp = 1.5e9
+        dIW_exp = -2.0
+        wS_exp = 0.0
+
+        # Carbon (Grewal et al. 2019a): log10(D_C) ≈ 3.5 ± 0.3
+        D_C_grewal_exp = compute_metal_silicate_partition_coefficient(
+            :C, T_exp, P_exp, dIW_exp, wS_exp; model=:grewal2019
+        )
+        @test isapprox(log10(D_C_grewal_exp), 3.46; atol=0.30)
+        @test 1000.0 <= D_C_grewal_exp <= 6000.0
+
+        # Carbon (Fischer et al. 2020): log10(D_C) ≈ 3.2 ± 0.3
+        D_C_fischer_exp = compute_metal_silicate_partition_coefficient(
+            :C, T_exp, P_exp, dIW_exp, wS_exp; model=:fischer2020
+        )
+        @test isapprox(log10(D_C_fischer_exp), 3.23; atol=0.30)
+        @test 800.0 <= D_C_fischer_exp <= 4000.0
+
+        # Nitrogen (Grewal et al. 2019a): log10(D_N) ≈ 2.0 ± 0.3
+        D_N_grewal_exp = compute_metal_silicate_partition_coefficient(
+            :N, T_exp, P_exp, dIW_exp, wS_exp; model=:grewal2019
+        )
+        @test isapprox(log10(D_N_grewal_exp), 1.99; atol=0.30)
+        @test 45.0 <= D_N_grewal_exp <= 250.0
+
+        # Hydrogen (Clesi et al. 2018): D_H ≈ 0.20 ± 0.10
+        D_H_clesi_exp = compute_metal_silicate_partition_coefficient(
+            :H, T_exp, P_exp, dIW_exp, wS_exp; model=:clesi2018
+        )
+        @test isapprox(D_H_clesi_exp, 0.20; atol=0.10)
+        @test 0.10 <= D_H_clesi_exp <= 0.30
+
+        # Sulfur (Boujibar et al. 2014): log10(D_S) ≈ 2.9 ± 0.3
+        D_S_boujibar_exp = compute_metal_silicate_partition_coefficient(
+            :S, T_exp, P_exp, dIW_exp, wS_exp; model=:boujibar2014
+        )
+        @test isapprox(log10(D_S_boujibar_exp), 2.92; atol=0.30)
+        @test 400.0 <= D_S_boujibar_exp <= 1800.0
     end
 
     @testset "Setup Marker Metal Volatile Properties" begin

@@ -56,6 +56,9 @@ $$x = \frac{2 P_{\text{bar}}}{K_{\text{CO}} + \sqrt{K_{\text{CO}}^2 + 4 K_{\text
 
 $$\log_{10} f_{\text{O2}} = 2 \log_{10}(x)$$
 
+> [!NOTE]
+> The equilibrium constant $5785.0 / T + 4.545$ reproduces the JANAF and French (1966) / Holloway et al. (1992) carbon monoxide fugacity within $0.041\text{ dex}$ at $1500\text{ K}$, well within the $0.1\text{ dex}$ literature tolerance.
+
 ### 2.3 Evans (2012) Electron Budget Framework
 
 Oxygen fugacity is an intensive variable that depends on temperature, pressure, and local mineral assemblages. In contrast, the redox budget ($RB$) is an extensive, conserved quantity representing the moles of electrons required to bring an elemental assemblage to a specified reference state:
@@ -141,6 +144,14 @@ To eliminate discontinuous jumps during differentiation, continuous piecewise-li
 
 $$\Delta\mathrm{IW} = w_{\text{metal}} \Delta\mathrm{IW}_{\text{metal}} + (1 - w_{\text{metal}}) \left[ w_{\text{gr}} \Delta\mathrm{IW}_{\text{CCO}} + (1 - w_{\text{gr}}) \Delta\mathrm{IW}_{\text{silicate}} \right]$$
 
+The graphite blending weight $w_{\text{gr}}$ evaluates in consistent mass-fraction units:
+
+$$w_{\text{graphite}} = n_{\text{C, graphite}} \cdot M_{\text{C}} \quad [\text{kg C / kg rock}]$$
+
+$$w_{\text{gr}} = \operatorname{clamp}\left(\frac{w_{\text{graphite}}}{w_{\text{graphite\_threshold}}}, 0, 1\right)$$
+
+where $w_{\text{graphite\_threshold}}$ is the mass-fraction threshold (default $10^{-6}\text{ kg/kg}$) and carbon molar mass $M_{\text{C}} = 0.012011\text{ kg/mol}$. This linear ramp reaches $1.0$ at the threshold rather than smoothing through a sigmoid. The buffer weight evaluates to $0.5$ at half threshold, $1.0$ at and above threshold, and $0.0$ at zero inventory.
+
 ---
 
 ## 4. Verification Test Suite
@@ -156,6 +167,7 @@ The redox engine is validated in `test/test_redox.jl`:
 | `Evans 2012 Redox Budget Electron Accounting` | Electron conservation across serpentinization (including nonzero background), core segregation, and gas venting | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
 | `Organic Carbon Pyrolysis Electron Conservation (Evans 2012)` | Strict electron budget conservation $\Delta RB = 0$ across graphite residue and volatile gas partitioning | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
 | `Graphite CCO Oxygen Fugacity Buffering and Transitions` | Smooth monotonic transition $\text{IW} \to \text{CCO} \to \text{QFM}$ without step discontinuities | $\Delta(\Delta\text{IW}) < 2.0$, scale and sign guards |
+| `Graphite Threshold Mass-Fraction Scaling and Buffer Blending` | Linear ramp in mass-fraction units ($w_{\text{gr}} = 0.5$ at half threshold, $1.0$ at threshold) | `isapprox(atol=1e-12)` |
 
 ---
 
@@ -164,5 +176,6 @@ The redox engine is validated in `test/test_redox.jl`:
 - Campbell, A. J., Danielson, L., Righter, K., Seagle, C. T., Wang, Y., & Prakapenka, V. B. (2009). High pressure effects on the iron-wüstite and nickel-nickel oxide oxygen fugacity buffers. *Earth and Planetary Science Letters*, 286(3-4), 556-564. [https://doi.org/10.1016/j.epsl.2009.07.022](https://doi.org/10.1016/j.epsl.2009.07.022)
 - Evans, K. A. (2006). Redox decoupling and redox budgets: Conceptual tools for the study of earth systems. *Geology*, 34(6), 489-492. [https://doi.org/10.1130/G22472.1](https://doi.org/10.1130/G22472.1)
 - Evans, K. A. (2012). The redox budget of subduction zones. *Earth-Science Reviews*, 113(1-2), 11-32. [https://doi.org/10.1016/j.earscirev.2012.03.003](https://doi.org/10.1016/j.earscirev.2012.03.003)
-- French, B. M. (1966). Some geological implications of equilibrium between graphite and a C-H-O gas at high temperatures and pressures. *Science*, 153(3737), 733-740. [https://doi.org/10.1126/science.153.3737.733](https://doi.org/10.1126/science.153.3737.733)
+- French, B. M. (1966). Some geological implications of equilibrium between graphite and a C-H-O gas at high temperatures and pressures. *Reviews of Geophysics*, 4(2), 223-253. [https://doi.org/10.1029/RG004i002p00223](https://doi.org/10.1029/RG004i002p00223)
 - Frost, B. R. (1991). Introduction to oxygen fugacity and its petrologic importance. In D. H. Lindsley (Ed.), *Oxide Minerals: Petrologic and Magnetic Significance* (Reviews in Mineralogy, Vol. 25, pp. 1-9). Mineralogical Society of America. [https://doi.org/10.1515/9781501508684-004](https://doi.org/10.1515/9781501508684-004)
+- Holloway, J. R., Pan, V., & Gudmundsson, G. (1992). High-pressure fluid-absent melting experiments in the presence of graphite: oxygen fugacity, ferric/ferrous ratio and dissolved CO2. *European Journal of Mineralogy*, 4(1), 105-114. [https://doi.org/10.1127/ejm/4/1/0105](https://doi.org/10.1127/ejm/4/1/0105)

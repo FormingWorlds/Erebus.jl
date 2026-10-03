@@ -838,4 +838,30 @@ _mean(x) = sum(x) / length(x)
         @test any(DHP .> 0.0)
         @test any(DQPF .< 0.0)
     end
+
+    @testset "Hydrothermal Reaction Thermodynamic Anchors (Gerya 2019)" begin
+        # Verify reaction enthalpy and entropy match Gerya (2019, Chapter 16) schematic demonstration values
+        @test isapprox(Erebus.ΔHWD, 40000.0; atol=1e-12)
+        @test isapprox(Erebus.ΔSWD, 60.0; atol=1e-12)
+
+        # Equilibrium Clapeyron phase boundary: Teq(P) = (ΔH + P*ΔV) / ΔS
+        # At P = 0: Teq = ΔH / ΔS = 40000 / 60 = 666.666... K
+        T_eq_zero_p = Erebus.ΔHWD / Erebus.ΔSWD
+        @test isapprox(T_eq_zero_p, 40000.0 / 60.0; atol=1e-12)
+        @test isapprox(
+            Erebus.compute_gibbs_free_energy(T_eq_zero_p, 0.0, 0.5, 0.5, 0.0, 1.0),
+            0.0;
+            atol=1e-10,
+        )
+
+        # At nonzero pore pressure P = 30 MPa (3.0e7 Pa):
+        P_test = 3.0e7
+        T_eq_p = (Erebus.ΔHWD + P_test * Erebus.ΔVWD) / Erebus.ΔSWD
+        @test isapprox(T_eq_p, (40000.0 + 3.0e7 * Erebus.ΔVWD) / 60.0; atol=1e-12)
+        @test isapprox(
+            Erebus.compute_gibbs_free_energy(T_eq_p, P_test, 0.5, 0.5, 0.0, 1.0),
+            0.0;
+            atol=1e-10,
+        )
+    end
 end

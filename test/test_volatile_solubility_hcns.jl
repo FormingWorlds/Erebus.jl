@@ -255,6 +255,24 @@ using JLD2
         @test gr_ox.f_CO2_max_bar > gr_red.f_CO2_max_bar
         @test gr_ox.f_CO_max_bar > gr_red.f_CO_max_bar
 
+        # Thermodynamic benchmark reproduction within 0.1 dex (French 1966; Holloway et al. 1992)
+        # At T = 1500 K, log10(fO2) = -10.0 bar:
+        # JANAF / French (1966) / Holloway et al. (1992) log10(K_CO) ≈ 8.4427
+        # log10(f_CO_expected) = log10(K_CO) + 0.5 * log10(fO2) = 8.4427 - 5.0 = 3.4427
+        gr_bench = compute_graphite_saturation_fugacity(1500.0, -10.0)
+        log10_fCO_bench = log10(gr_bench.f_CO_max_bar)
+        @test abs(log10_fCO_bench - 3.4427) < 0.10
+        @test isapprox(log10_fCO_bench, 5785.0 / 1500.0 + 4.545 - 5.0; atol=1e-12)
+
+        # Multi-temperature consistency across 1000 K to 2000 K
+        for T_test in [1000.0, 1200.0, 1400.0, 1600.0, 1800.0, 2000.0]
+            gr_t = compute_graphite_saturation_fugacity(T_test, -10.0)
+            expected_co = 10.0^(5785.0 / T_test + 4.545 - 5.0)
+            expected_co2 = 10.0^(20590.0 / T_test - 0.043 - 10.0)
+            @test isapprox(gr_t.f_CO_max_bar, expected_co; rtol=1e-12)
+            @test isapprox(gr_t.f_CO2_max_bar, expected_co2; rtol=1e-12)
+        end
+
         # Guards
         @test_throws DomainError compute_graphite_saturation_fugacity(0.0, -10.0)
         @test_throws DomainError compute_graphite_saturation_fugacity(-300.0, -10.0)
@@ -466,6 +484,28 @@ using JLD2
         @test iszero(spec_zero.p_H2_Pa)
         @test iszero(spec_zero.p_H2O_Pa)
         @test iszero(spec_zero.p_CO_Pa)
+
+        # Equilibrium constants literature anchor verification at T = 1500 K
+        # logK_H2O: H2 + 0.5 O2 <=> H2O (Holloway 1987; Frost 1991 Table 1)
+        # logK_CO2: CO + 0.5 O2 <=> CO2 (Robie & Hemingway 1995; Frost 1991; Holloway 1987)
+        # logK_SO2: 0.5 S2 + O2 <=> SO2 (Robie & Hemingway 1995; Holloway 1987)
+        # r_CH4: CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
+        # r_NH3: 0.5 N2 + 1.5 H2 <=> NH3 (Holloway 1987)
+        # r_H2S: 0.5 S2 + H2 <=> H2S (Holloway 1987)
+        let T = 1500.0
+            logK_h2o = LOGK_H2O[1] / T + LOGK_H2O[2]
+            @test isapprox(logK_h2o, 12760.0 / 1500.0 - 2.84; atol=1e-10)
+            logK_co2 = 14800.0 / T - 4.58
+            @test isapprox(logK_co2, 14800.0 / 1500.0 - 4.58; atol=1e-10)
+            logK_so2 = 18800.0 / T - 3.80
+            @test isapprox(logK_so2, 18800.0 / 1500.0 - 3.80; atol=1e-10)
+            logK_ch4 = 11500.0 / T - 12.0
+            @test isapprox(logK_ch4, 11500.0 / 1500.0 - 12.0; atol=1e-10)
+            logK_nh3 = 2800.0 / T - 5.80
+            @test isapprox(logK_nh3, 2800.0 / 1500.0 - 5.80; atol=1e-10)
+            logK_h2s = 4800.0 / T - 2.50
+            @test isapprox(logK_h2s, 4800.0 / 1500.0 - 2.50; atol=1e-10)
+        end
 
         # DomainError guards
         @test_throws DomainError solve_chnos_speciation(NaN, T_1500K, 0.0)

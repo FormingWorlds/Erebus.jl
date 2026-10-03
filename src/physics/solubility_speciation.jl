@@ -1156,6 +1156,14 @@ and oxygen fugacity offset `delta_IW`, solves for partial pressures of major out
 `H2, H2O, CO, CO2, CH4, N2, NH3, H2S, S2, SO2` while enforcing Dalton's law of partial
 pressures (∑ p_i = p_total) and simultaneous atomic mass conservation for H, C, N, and S.
 
+Equilibrium constant parameterizations (T in K, gas fugacities in bar):
+- `logK_H2O`: H2 + 0.5 O2 <=> H2O, log10 K = a / T + b (Holloway 1987; Frost 1991 Table 1)
+- `logK_CO2`: CO + 0.5 O2 <=> CO2, log10 K = 14800 / T - 4.58 (Robie & Hemingway 1995; Frost 1991; Holloway 1987)
+- `logK_SO2`: 0.5 S2 + O2 <=> SO2, log10 K = 18800 / T - 3.80 (Robie & Hemingway 1995; Holloway 1987)
+- `r_CH4`: CO + 3 H2 <=> CH4 + H2O, log10 K = 11500 / T - 12.0 (French 1966; Holloway 1987)
+- `r_NH3`: 0.5 N2 + 1.5 H2 <=> NH3, log10 K = 2800 / T - 5.80 (Holloway 1987)
+- `r_H2S`: 0.5 S2 + H2 <=> H2S, log10 K = 4800 / T - 2.50 (Holloway 1987)
+
 # Arguments
 - `p_total_Pa`: Total gas pressure [Pa]
 - `T_K`: Gas temperature [K]
@@ -1235,12 +1243,15 @@ function solve_chnos_speciation(
     log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=d_IW)
     p_tot_bar = p_tot * 1.0e-5
 
+    # H2 + 0.5 O2 <=> H2O (Holloway 1987; Frost 1991 Table 1)
     logK_H2O = LOGK_H2O[1] / T + LOGK_H2O[2]
     r_H = 10.0^clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
 
+    # CO + 0.5 O2 <=> CO2 (Robie & Hemingway 1995; Frost 1991; Holloway 1987)
     logK_CO2 = 14800.0 / T - 4.58
     r_CO2 = 10.0^clamp(logK_CO2 + 0.5 * log10_fO2, -100.0, 100.0)
 
+    # 0.5 S2 + O2 <=> SO2 (Robie & Hemingway 1995; Holloway 1987)
     logK_SO2 = 18800.0 / T - 3.80
     r_SO2 = 10.0^clamp(logK_SO2 + log10_fO2, -100.0, 100.0)
 
@@ -1262,6 +1273,7 @@ function solve_chnos_speciation(
     for dalton_iter in 1:100
         for inner_iter in 1:40
             log_pH2 = pH2 > 0.0 ? log10(max(pH2, 1.0e-30)) : -100.0
+            # CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
             r_CH4 = if pH2 > 0.0
                 10.0^clamp(
                     11500.0 / T - 12.0 + 2.0 * log_pH2 - log10(max(r_H, 1.0e-30)),
@@ -1271,11 +1283,13 @@ function solve_chnos_speciation(
             else
                 0.0
             end
+            # 0.5 N2 + 1.5 H2 <=> NH3 (Holloway 1987)
             r_NH3 = if pH2 > 0.0
                 10.0^clamp(2800.0 / T - 5.80 + 1.5 * log_pH2, -100.0, 100.0)
             else
                 0.0
             end
+            # 0.5 S2 + H2 <=> H2S (Holloway 1987)
             r_H2S = pH2 > 0.0 ? 10.0^clamp(4800.0 / T - 2.50 + log_pH2, -100.0, 100.0) : 0.0
 
             if nC > 0.0
@@ -1369,6 +1383,7 @@ function solve_chnos_speciation(
             # Solve for pH2 with monotonic 1D bisection
             function _sat_residual(test_pH2_bar)
                 l_pH2 = test_pH2_bar > 0.0 ? log10(max(test_pH2_bar, 1.0e-30)) : -100.0
+                # CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
                 r_ch4_test = if test_pH2_bar > 0.0
                     10.0^clamp(
                         11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
@@ -1408,6 +1423,7 @@ function solve_chnos_speciation(
             end
             best_pH2_bar = 0.5 * (lo_sat + hi_sat)
             l_pH2_final = best_pH2_bar > 0.0 ? log10(max(best_pH2_bar, 1.0e-30)) : -100.0
+            # CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
             r_ch4_final = if best_pH2_bar > 0.0
                 10.0^clamp(
                     11500.0 / T - 12.0 + 2.0 * l_pH2_final - log10(max(r_H, 1.0e-30)),
