@@ -1,69 +1,16 @@
 # API Reference
 
-This page contains the auto-generated API documentation for all public functions and types exported by `Erebus.jl` and its internal submodules.
+This page contains the auto-generated API documentation for all public functions, types, and constants in `Erebus.jl`.
 
 ```@index
 ```
 
 ---
 
-## Core Functions and Types (`Erebus`)
+## Functions, Types, and Constants (`Erebus`)
 
 ```@autodocs
 Modules = [Erebus]
 Order = [:type, :function, :constant, :macro]
 ```
 
----
-
-## Configuration Submodule (`Erebus.Config`)
-
-```@autodocs
-Modules = [Erebus.Config]
-Order = [:type, :function, :constant]
-```
-
----
-
-## Physics Submodule (`Erebus.Physics`)
-
-```@autodocs
-Modules = [Erebus.Physics]
-Order = [:type, :function, :constant]
-```
-
----
-
-## Numerics Submodule (`Erebus.Numerics`)
-
-```@autodocs
-Modules = [Erebus.Numerics]
-Order = [:type, :function]
-```
-
----
-
-## Particles Submodule (`Erebus.Particles`)
-
-```@autodocs
-Modules = [Erebus.Particles]
-Order = [:type, :function]
-```
-
----
-
-## Geometry Submodule (`Erebus.Geometry`)
-
-```@autodocs
-Modules = [Erebus.Geometry]
-Order = [:type, :function]
-```
-
----
-
-## Simulation Loop Submodule (`Erebus.Simulation`)
-
-```@autodocs
-Modules = [Erebus.Simulation]
-Order = [:type, :function]
-```

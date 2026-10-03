@@ -91,7 +91,7 @@ Binary checkpoints (`.jld2`) are saved to the designated `output_dir` at interva
 To benchmark execution runtime and memory allocation across repeated runs:
 
 ```bash
-julia --project tools/profile_simulation.jl configs/test_quick.toml
+julia --project=tools tools/profile_simulation.jl configs/test_quick.toml
 ```
 
 The profiling harness:

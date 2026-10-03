@@ -142,34 +142,45 @@ Base.fill!(v::DistributedVector, val) = (fill!(v.local_vec, val); v)
     exchange_halos!(topo::AbstractGridTopology, fields...; kwargs...)
 
 Exchange ghost cell / halo margins between neighbor subdomains.
-Serial topology performs a no-op.
+Serial topology performs a no-op. Unknown topology types throw `ArgumentError`.
 """
 exchange_halos!(::SerialTopology, fields...; kwargs...) = nothing
-exchange_halos!(::Any, fields...; kwargs...) = nothing
+function exchange_halos!(topo::Any, fields...; kwargs...)
+    return throw(ArgumentError("Unsupported or unknown topology type: $(typeof(topo))"))
+end
 
 """
     migrate_markers!(topo::AbstractGridTopology, args...; kwargs...)
 
 Migrate marker particles that cross subdomain boundaries to the owning process ranks.
 Serial topology performs a no-op and returns `(0, 0)` for `(migrated_out, migrated_in)`.
+Unknown topology types throw `ArgumentError`.
 """
 migrate_markers!(::SerialTopology, args...; kwargs...) = (0, 0)
-migrate_markers!(::Any, args...; kwargs...) = (0, 0)
+function migrate_markers!(topo::Any, args...; kwargs...)
+    return throw(ArgumentError("Unsupported or unknown topology type: $(typeof(topo))"))
+end
 
 """
     distributed_dot(topo::AbstractGridTopology, x, y)
 
 Compute global inner product for distributed subdomains.
 Serial topology falls back to `LinearAlgebra.dot(x, y)`.
+Unknown topology types throw `ArgumentError`.
 """
 distributed_dot(::SerialTopology, x, y) = dot(x, y)
-distributed_dot(::Any, x, y) = dot(x, y)
+function distributed_dot(topo::Any, x, y)
+    return throw(ArgumentError("Unsupported or unknown topology type: $(typeof(topo))"))
+end
 
 """
     distributed_norm(topo::AbstractGridTopology, x)
 
 Compute global Euclidean norm for distributed subdomains.
 Serial topology falls back to `LinearAlgebra.norm(x)`.
+Unknown topology types throw `ArgumentError`.
 """
 distributed_norm(::SerialTopology, x) = norm(x)
-distributed_norm(::Any, x) = norm(x)
+function distributed_norm(topo::Any, x)
+    return throw(ArgumentError("Unsupported or unknown topology type: $(typeof(topo))"))
+end

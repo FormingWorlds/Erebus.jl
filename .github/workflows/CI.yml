@@ -14,7 +14,7 @@ jobs:
   test:
     name: Tests - Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -35,11 +35,45 @@ jobs:
         with:
           cache-registries: "true"
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: false
         env:
-          EREBUS_TEST_GROUP: unit
+          EREBUS_TEST_GROUP: all
+
+  macos-test:
+    name: macOS Quick Simulation - AppleAccelerate
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Run 3-step simulation with AppleAccelerate
+        run: |
+          julia --project -e '
+            using Erebus, LinearAlgebra
+            cfg = override_config(
+                load_config("configs/test_quick.toml"),
+                Dict{String,Any}(
+                    "time.n_steps" => 3,
+                    "solver.hydromech_solver" => "direct",
+                    "solver.use_pardiso" => false,
+                ),
+            )
+            @assert cfg.solver.hydromech_solver == :direct
+            @assert cfg.solver.use_pardiso == false
+            @assert any(lib -> occursin("Accelerate", lib.libname), BLAS.get_config().loaded_libs) "AppleAccelerate BLAS library is not loaded"
+            state = run_simulation(cfg)
+            @assert state.timestep == 3 "Expected 3 steps completed, got $(state.timestep)"
+          '
 
   coverage:
     name: Coverage
@@ -52,15 +86,15 @@ jobs:
           version: '1.12'
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: true
         env:
           EREBUS_TEST_GROUP: all
       - name: Check Coverage
-        run: |
-          julia --project=tools -e 'using Pkg; Pkg.instantiate()'
-          julia --project=tools tools/check_coverage.jl
+        run: julia --project=tools tools/check_coverage.jl
 
   docs:
     name: Documentation
@@ -98,6 +132,58 @@ jobs:
         run: |
           julia -e 'using JuliaFormatter; if !format(".", BlueStyle(); overwrite=false, verbose=true) error("Code style check failed: files are not formatted according to BlueStyle! Run using JuliaFormatter; format(\".\", BlueStyle()) locally to fix.") end'
 
+  check_architecture:
+    name: Architecture Ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
+      - name: Verify architecture ratchet
+        run: julia --project=tools tools/check_architecture.jl --check
+
+  check_budget:
+    name: Performance Budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
+      - name: Verify performance budget
+        run: julia --project=tools tools/check_budget.jl --check
+
+  check_determinism:
+    name: Bitwise Determinism
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v1
+        with:
+          cache-registries: "true"
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Verify bitwise determinism
+        run: julia -t 1 tools/check_determinism.jl
+
   test-quality:
     name: Test Quality Standards
     runs-on: ubuntu-latest
@@ -111,18 +197,18 @@ jobs:
         with:
           cache-registries: "true"
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
       - name: Check test quality against baseline
-        run: julia tools/check_test_quality.jl --check
-      - name: Verify architecture ratchet
-        run: julia --project=tools tools/check_architecture.jl --check
+        run: julia --project=tools tools/check_test_quality.jl --check
       - name: Verify literature references
         run: julia tools/verify_references.jl
       - name: Check documentation formatting
         run: julia tools/check_docs_formatting.jl
       - name: Verify documentation numbers
         run: julia tools/check_doc_numbers.jl
-      - name: Verify bitwise determinism
-        run: julia -t 1 tools/check_determinism.jl
+      - name: Verify README CI description
+        run: julia --project=tools tools/check_readme_ci.jl --check
 
 
 

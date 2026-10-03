@@ -43,6 +43,16 @@ end
         mig = migrate_markers!(topo, [1.0], [2.0])
         @test mig == (0, 0)
         @test is_distributed(topo) == false
+
+        # Unknown topology types throw ArgumentError
+        struct UnknownCustomTopology <: Erebus.AbstractGridTopology end
+        unknown_topo = UnknownCustomTopology()
+        for bad_topo in (:invalid_topology, unknown_topo)
+            @test_throws ArgumentError distributed_dot(bad_topo, v1, v2)
+            @test_throws ArgumentError distributed_norm(bad_topo, v1)
+            @test_throws ArgumentError exchange_halos!(bad_topo, A)
+            @test_throws ArgumentError migrate_markers!(bad_topo, [1.0], [2.0])
+        end
     end
 
     @testset "MPI Configuration & Validation" begin

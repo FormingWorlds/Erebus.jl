@@ -30,7 +30,7 @@ julia -e 'using JuliaFormatter; format(".", BlueStyle())'
 julia --project=docs docs/make.jl
 
 # Check test quality linter
-julia --project tools/check_test_quality.jl --check
+julia --project=tools tools/check_test_quality.jl --check
 ```
 
 ## Testing Standards

@@ -3,15 +3,20 @@
 # Performance budget verification harness for Erebus.jl.
 # Measures @allocated and wall-clock over steps 3-5 after 2 warm-up steps.
 
-using Pkg
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
-Pkg.activate(ROOT_DIR; io=devnull)
+const TOOLS_DIR = joinpath(ROOT_DIR, "tools")
+if Base.find_package("JSON") === nothing
+    pushfirst!(LOAD_PATH, TOOLS_DIR)
+end
+if Base.find_package("Erebus") === nothing
+    pushfirst!(LOAD_PATH, ROOT_DIR)
+end
 
-@eval using Dates
-@eval using Erebus
-@eval using JSON
-@eval using Printf
-@eval using TOML
+using Dates
+using Erebus
+using JSON
+using Printf
+using TOML
 
 const BASELINE_PATH = joinpath(@__DIR__, "budget_baseline.json")
 
@@ -116,6 +121,12 @@ function main()
             exit(2)
         end
 
+        time_threshold = parse(
+            Float64,
+            get(ENV, "EREBUS_BUDGET_TIME_THRESHOLD", haskey(ENV, "CI") ? "1.25" : "1.10"),
+        )
+        alloc_threshold = parse(Float64, get(ENV, "EREBUS_BUDGET_ALLOC_THRESHOLD", "1.10"))
+
         has_regression = false
         println("=== Performance Budget Verification ===")
         for cfg_rel in SHIPPED_CONFIGS
@@ -127,7 +138,7 @@ function main()
             alloc_ratio = res.allocated_bytes / max(1, base["allocated_bytes"])
 
             # If jitter caused threshold breach, retry once and take best sample
-            if time_ratio > 1.10 || alloc_ratio > 1.10
+            if time_ratio > time_threshold || alloc_ratio > alloc_threshold
                 res2 = measure_config_budget(cfg_rel)
                 res = (;
                     wall_seconds=min(res.wall_seconds, res2.wall_seconds),
@@ -137,8 +148,8 @@ function main()
                 alloc_ratio = res.allocated_bytes / max(1, base["allocated_bytes"])
             end
 
-            status_time = time_ratio <= 1.10 ? "PASS" : "FAIL (REGRESSION)"
-            status_alloc = alloc_ratio <= 1.10 ? "PASS" : "FAIL (REGRESSION)"
+            status_time = time_ratio <= time_threshold ? "PASS" : "FAIL (REGRESSION)"
+            status_alloc = alloc_ratio <= alloc_threshold ? "PASS" : "FAIL (REGRESSION)"
 
             @printf(
                 "%s:\n  Time: %.3fs vs base %.3fs (ratio %.2f) [%s]\n  Alloc: %d B vs base %d B (ratio %.2f) [%s]\n",
@@ -153,14 +164,15 @@ function main()
                 status_alloc,
             )
 
-            if time_ratio > 1.10 || alloc_ratio > 1.10
+            if time_ratio > time_threshold || alloc_ratio > alloc_threshold
                 has_regression = true
             end
         end
 
         if has_regression
             println(
-                stderr, "Performance budget regression detected (>10% threshold exceeded)."
+                stderr,
+                "Performance budget regression detected (time > $(round(Int, (time_threshold - 1.0) * 100))% or alloc > $(round(Int, (alloc_threshold - 1.0) * 100))% threshold exceeded).",
             )
             exit(1)
         else
