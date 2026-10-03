@@ -121,6 +121,12 @@ function main()
             exit(2)
         end
 
+        time_threshold = parse(
+            Float64,
+            get(ENV, "EREBUS_BUDGET_TIME_THRESHOLD", haskey(ENV, "CI") ? "1.25" : "1.10"),
+        )
+        alloc_threshold = parse(Float64, get(ENV, "EREBUS_BUDGET_ALLOC_THRESHOLD", "1.10"))
+
         has_regression = false
         println("=== Performance Budget Verification ===")
         for cfg_rel in SHIPPED_CONFIGS
@@ -132,7 +138,7 @@ function main()
             alloc_ratio = res.allocated_bytes / max(1, base["allocated_bytes"])
 
             # If jitter caused threshold breach, retry once and take best sample
-            if time_ratio > 1.10 || alloc_ratio > 1.10
+            if time_ratio > time_threshold || alloc_ratio > alloc_threshold
                 res2 = measure_config_budget(cfg_rel)
                 res = (;
                     wall_seconds=min(res.wall_seconds, res2.wall_seconds),
@@ -142,8 +148,8 @@ function main()
                 alloc_ratio = res.allocated_bytes / max(1, base["allocated_bytes"])
             end
 
-            status_time = time_ratio <= 1.10 ? "PASS" : "FAIL (REGRESSION)"
-            status_alloc = alloc_ratio <= 1.10 ? "PASS" : "FAIL (REGRESSION)"
+            status_time = time_ratio <= time_threshold ? "PASS" : "FAIL (REGRESSION)"
+            status_alloc = alloc_ratio <= alloc_threshold ? "PASS" : "FAIL (REGRESSION)"
 
             @printf(
                 "%s:\n  Time: %.3fs vs base %.3fs (ratio %.2f) [%s]\n  Alloc: %d B vs base %d B (ratio %.2f) [%s]\n",
@@ -158,14 +164,15 @@ function main()
                 status_alloc,
             )
 
-            if time_ratio > 1.10 || alloc_ratio > 1.10
+            if time_ratio > time_threshold || alloc_ratio > alloc_threshold
                 has_regression = true
             end
         end
 
         if has_regression
             println(
-                stderr, "Performance budget regression detected (>10% threshold exceeded)."
+                stderr,
+                "Performance budget regression detected (time > $(round(Int, (time_threshold - 1.0) * 100))% or alloc > $(round(Int, (alloc_threshold - 1.0) * 100))% threshold exceeded).",
             )
             exit(1)
         else

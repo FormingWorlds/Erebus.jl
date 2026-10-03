@@ -25,6 +25,8 @@ jobs:
         with:
           cache-registries: "true"
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate tools environment
+        run: julia --project=tools -e 'using Pkg; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: true
