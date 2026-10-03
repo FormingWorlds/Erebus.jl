@@ -651,10 +651,10 @@ function simulation_loop(
         ratio_al,
         E_al,
         f_al,
-        t_half_fe,
-        ratio_fe,
-        E_fe,
-        f_fe,
+        t_half_fe = cfg.thermodynamics.t_half_fe,
+        ratio_fe = cfg.thermodynamics.ratio_fe,
+        E_fe = cfg.thermodynamics.E_fe,
+        f_fe = cfg.thermodynamics.f_fe,
         rhosolidm,
         rhofluidm,
         etasolidm,
@@ -675,7 +675,7 @@ function simulation_loop(
         tkm0,
         etaphikoef,
         αη,
-        tmsolidphase,
+        tmsolidphase = cfg.thermodynamics.tmsolidphase,
         tmfluidphase,
         phim0=phim0_val,
         phimin,
@@ -2930,6 +2930,8 @@ function simulation_loop(
                         alpha_eta_val=alpha_eta_val,
                         phi_crit_val=phi_crit_val,
                         eta_melt_val=eta_melt_val,
+                        tmsolidphase=cfg.thermodynamics.tmsolidphase,
+                        tmfluidphase=cfg.thermodynamics.tmfluidphase,
                     )
                 end
 

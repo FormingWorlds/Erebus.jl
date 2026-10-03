@@ -208,11 +208,11 @@ Base.@kwdef struct ThermalConfig
     E_al::Float64 = 5.0470e-13
     f_al::Float64 = 1.9e23
     t_half_al::Float64 = 717_000.0 * 31_540_000.0
-    ratio_fe::Float64 = 1.0e-6
+    ratio_fe::Float64 = 1.15e-8
     E_fe::Float64 = 4.34e-13
     f_fe::Float64 = 1.957e24
     t_half_fe::Float64 = 2_620_000.0 * 31_540_000.0
-    tmsolidphase::Float64 = 1416.0
+    tmsolidphase::Float64 = 1400.0
     tmfluidphase::Float64 = 273.0
     Lᶠ::Float64 = 333.55e3
     phim0::Float64 = 0.2
@@ -332,6 +332,9 @@ Base.@kwdef struct ReactionConfig
     Sxo_B::Float64 = 2.0e-11
     Tscl_B::Float64 = 10.0
     To_B::Float64 = 293.0
+    Sxo_T::Float64 = 2.0e-11
+    To_T::Float64 = 293.0
+    Ea_T::Float64 = 63.8e3
     alpha_relaxation::Float64 = 0.5
     pfcoeff::Float64 = 0.5
     pferrmax::Float64 = 1.0e5
@@ -384,6 +387,7 @@ struct MagmaOceanDegassingConfig
     redox_coupled::Bool
     efficiency::Float64
     water_As::Float64
+    nitrogen_law::Symbol
 
     function MagmaOceanDegassingConfig(
         active::Bool,
@@ -392,10 +396,16 @@ struct MagmaOceanDegassingConfig
         degas_depth_fraction::Real,
         redox_coupled::Bool,
         efficiency::Real,
-        water_As::Real=0.40,
+        water_As::Real=0.40;
+        nitrogen_law::Symbol=:libourel2003,
     )
         (mode === :equilibrium || mode === :dynamic_flux) ||
             throw(ArgumentError("mode must be :equilibrium or :dynamic_flux, got '$mode'"))
+        (nitrogen_law === :dasgupta2022 || nitrogen_law === :libourel2003) || throw(
+            ArgumentError(
+                "nitrogen_law must be :dasgupta2022 or :libourel2003, got '$nitrogen_law'",
+            ),
+        )
         (0.0 <= F_melt_threshold <= 1.0) ||
             throw(DomainError(F_melt_threshold, "F_melt_threshold must be in [0, 1]"))
         (0.0 <= degas_depth_fraction <= 1.0) || throw(
@@ -413,6 +423,7 @@ struct MagmaOceanDegassingConfig
             redox_coupled,
             Float64(efficiency),
             Float64(water_As),
+            nitrogen_law,
         )
     end
 end
@@ -425,6 +436,7 @@ function MagmaOceanDegassingConfig(;
     redox_coupled::Bool=true,
     efficiency::Real=1.0,
     water_As::Real=0.40,
+    nitrogen_law::Symbol=:libourel2003,
     kwargs...,
 )
     if haskey(kwargs, :crystallization_degassing)
@@ -443,7 +455,8 @@ function MagmaOceanDegassingConfig(;
         Float64(degas_depth_fraction),
         redox_coupled,
         Float64(efficiency),
-        Float64(water_As),
+        Float64(water_As);
+        nitrogen_law=nitrogen_law,
     )
 end
 
@@ -1757,6 +1770,9 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.reaction.Sxo_B
     @check_positive_finite cfg.reaction.Tscl_B
     @check_positive_finite cfg.reaction.To_B
+    @check_positive_finite cfg.reaction.Sxo_T
+    @check_positive_finite cfg.reaction.To_T
+    @check_nonneg_finite cfg.reaction.Ea_T
     0.0 < cfg.reaction.alpha_relaxation <= 1.0 || throw(
         ArgumentError(
             "alpha_relaxation must be in (0, 1], got $(cfg.reaction.alpha_relaxation)"
@@ -1874,6 +1890,15 @@ function validate_config(cfg::SimulationConfig)
                 ),
             )
         end
+    end
+
+    # Cross-module consistency: thermodynamics solidus must align with melting solidus
+    if isfinite(cfg.melting.T_solidus[1])
+        abs(cfg.thermodynamics.tmsolidphase - cfg.melting.T_solidus[1]) <= 1.0 || throw(
+            ArgumentError(
+                "tmsolidphase ($(cfg.thermodynamics.tmsolidphase)) must match melting.T_solidus[1] ($(cfg.melting.T_solidus[1])) within 1 K",
+            ),
+        )
     end
 
     # Magma transport checks
@@ -2673,6 +2698,11 @@ function validate_config(cfg::SimulationConfig)
         cfg.magma_degassing.mode in Set([:equilibrium, :dynamic_flux]) || throw(
             ArgumentError(
                 "magma_degassing.mode must be :equilibrium or :dynamic_flux, got $(cfg.magma_degassing.mode)",
+            ),
+        )
+        cfg.magma_degassing.nitrogen_law in Set([:dasgupta2022, :libourel2003]) || throw(
+            ArgumentError(
+                "magma_degassing.nitrogen_law must be :dasgupta2022 or :libourel2003, got $(cfg.magma_degassing.nitrogen_law)",
             ),
         )
         @check_unit_interval cfg.magma_degassing.F_melt_threshold

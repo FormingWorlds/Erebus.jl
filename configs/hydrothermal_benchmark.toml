@@ -53,10 +53,10 @@ k_frac_max = 1.0e-9      # strict upper permeability ceiling [m²]
 
 [thermodynamics]
 hr_al = true             # 26Al decay heating active in solid phase
-hr_fe = false            # 60Fe decay heating active in fluid phase
+hr_fe = false            # 60Fe decay heating active in metallic phase
 ratio_al = 5.0e-5        # initial 26Al/27Al isotope ratio
-ratio_fe = 1.0e-6        # initial 60Fe/56Fe isotope ratio
-tmsolidphase = 1416.0    # solid phase melting temperature [K]
+ratio_fe = 1.15e-8        # initial 60Fe/56Fe isotope ratio
+tmsolidphase = 1400.0    # solid phase melting temperature [K]
 tmfluidphase = 273.0     # fluid phase melting temperature [K]
 phim0 = 0.2              # standard reference porosity [-]
 thermal_buoyancy = true  # Darcy thermal buoyancy enabled

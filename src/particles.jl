@@ -1082,6 +1082,7 @@ function compute_marker_properties!(
     T_surface_ref_val::Real=300.0,
     k_turb_cutoff_val::Real=1.0e6,
     k_turb_floor_val::Real=1.0e-3,
+    tmsolidphase_val::Real=1400.0,
     Xfe_bulk=nothing,
     Xfem=nothing,
     coreformation_active::Bool=false,
@@ -1158,7 +1159,9 @@ function compute_marker_properties!(
 
         rhosolid_eff = rhosolidm0
         rhocpsolid_eff = rhocpsolidm[tm[m]]
-        etasolidcur_raw = ifelse(tkm[m]>tmsolidphase, etasolidmm[tm[m]], etasolidm[tm[m]])
+        etasolidcur_raw = ifelse(
+            tkm[m] > tmsolidphase_val, etasolidmm[tm[m]], etasolidm[tm[m]]
+        )
         etasolidcur = etasolidcur_raw
         F_melt = 0.0
 
@@ -1458,11 +1461,18 @@ function compute_marker_properties!(
                     Xfem[m] = 0.0
                 end
             end
-        elseif !coreformation_active && hrmetalm !== nothing && Xfe_bulk !== nothing
-            phi_fe = Xfe_bulk[m]
-            if phi_fe > 0.0
-                hr_metal_term = hrmetalm[tm[m]]
-                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
+        elseif !coreformation_active && hrmetalm !== nothing
+            if Xfe_bulk !== nothing
+                phi_fe = Xfe_bulk[m]
+                if phi_fe > 0.0
+                    hr_metal_term = hrmetalm[tm[m]]
+                    hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
+                end
+            else
+                phi_fe_equiv =
+                    X_FE_REF_CHONDRITE * (tm[m] <= 2 ? rhosolidm[tm[m]] : 0.0) /
+                    (rho_metal_val > 0.0 ? rho_metal_val : 5450.0)
+                hrtotalm[m] += (1.0 - phim[m]) * phi_fe_equiv * hrmetalm[tm[m]]
             end
             if Xfem !== nothing
                 Xfem[m] = 0.0
@@ -1567,6 +1577,8 @@ function update_marker_viscosity!(
     eta_melt_val::Real=10.0,
     etamin::Real=1.0e12,
     etamax::Real=1.0e23,
+    tmsolidphase::Real=1400.0,
+    tmfluidphase::Real=273.0,
 )
     @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     @inbounds i, j, weights = fix_weights(
@@ -1583,7 +1595,9 @@ function update_marker_viscosity!(
     )
     @inbounds if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
-        eta_rock = etatotal_rocks(tkm[m], tm[m])
+        eta_rock = etatotal_rocks(
+            tkm[m], tm[m]; tmsolidphase=tmsolidphase, tmfluidphase=tmfluidphase
+        )
         if melting_active && Fm !== nothing
             eta_rock = compute_melt_weakened_viscosity(
                 eta_rock,

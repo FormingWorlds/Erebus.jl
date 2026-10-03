@@ -113,7 +113,7 @@ tkm0 = [1350.0, 1350.0, 170.0]  # planet interior preheated above Fe-FeS eutecti
 
 [thermodynamics]
 hr_al = true             # 26Al decay heating active in solid phase
-hr_fe = true             # 60Fe decay heating active in solid phase
+hr_fe = true             # 60Fe decay heating active in metallic phase
 
 [melting]
 active = true            # silicate melt tracking active

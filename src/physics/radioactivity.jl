@@ -42,15 +42,16 @@ $(SIGNATURES)
 
     - ratio_al: initial isotopic ratio of 26Al/27Al
     - E_al: decay energy of 26Al [J]
-    - f_al: mass fraction of 27Al in silicate matrix
+    - f_al: abundance of 27Al [atoms/kg bulk rock]
     - tau_al: mean lifetime of 26Al [s]
     - ratio_fe: initial isotopic ratio of 60Fe/56Fe
     - E_fe: decay energy of 60Fe [J]
-    - f_fe: mass fraction of 56Fe in metallic phase
+    - f_fe: abundance of 56Fe [atoms/kg bulk rock]
     - tau_fe: mean lifetime of 60Fe [s]
     - rhosolidm: density vector of solid silicate phases [kg/m^3]
     - rhofluidm: density vector of pore fluid phases [kg/m^3]
     - rho_metal: density of metallic phase [kg/m^3] (default 5450.0)
+    - X_fe_ref: reference Fe mass fraction in bulk rock (default 0.182 for CI chondrite)
 
 # Returns
 
@@ -73,6 +74,7 @@ function calculate_radioactive_heating(
     rhosolidm=rhosolidm,
     rhofluidm=rhofluidm,
     rho_metal=5450.0,
+    X_fe_ref=X_FE_REF_CHONDRITE,
 )
     # 26Al: planet ✓, crust ✓, space × (lithophile, in silicate rock phase)
     if al
@@ -87,11 +89,15 @@ function calculate_radioactive_heating(
     hrfluidm = @SVector zeros(3)
     # 60Fe: planet ✓, crust ✓, space × (siderophile, resides in metallic iron phase)
     if fe
-        # 60Fe radiogenic heat production [W/kg]
+        # 60Fe radiogenic heat production [W/kg bulk rock]
         Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum)
         # Metallic phase 60Fe radiogenic heat production [W/m^3]
         # Silicate mantle (1) and crust (2) metal carries 60Fe; sticky air/space (3) carries zero.
-        @inbounds hrmetalm = @SVector [Q_fe * rho_metal, Q_fe * rho_metal, 0.0]
+        # f_fe is 56Fe atoms per kg of bulk rock for a reference chondrite with 18.2 wt% Fe.
+        # Concentrating 60Fe into the metallic phase gives specific power Q_fe / X_fe_ref [W/kg metal].
+        # Volumetric power of pure metal phase is (Q_fe / X_fe_ref) * rho_metal [W/m^3].
+        Q_fe_metal = X_fe_ref > 0.0 ? Q_fe / X_fe_ref : 0.0
+        @inbounds hrmetalm = @SVector [Q_fe_metal * rho_metal, Q_fe_metal * rho_metal, 0.0]
     else
         hrmetalm = @SVector zeros(3)
     end

@@ -115,14 +115,14 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `hr_al` | `Bool` | `true` | - | Enable 26Al radiogenic decay heating | `true` / `false` |
 | `hr_fe` | `Bool` | `false` | - | Enable 60Fe radiogenic decay heating | `true` / `false` |
 | `ratio_al` | `Float64` | `5.0e-5` | - | Initial 26Al/27Al isotope ratio at CAIs | $\in [0, 1]$ |
-| `ratio_fe` | `Float64` | `1.0e-6` | - | Initial 60Fe/56Fe isotope ratio at CAIs | $\in [0, 1]$ |
+| `ratio_fe` | `Float64` | `1.15e-8` | - | Initial 60Fe/56Fe isotope ratio at CAIs | $\in [0, 1]$ |
 | `E_al` | `Float64` | `5.0470e-13` | J | Decay energy per 26Al atom | $> 0$ |
 | `f_al` | `Float64` | `1.9e+23` | atoms/kg | Abundance of 27Al atoms per unit mass | $> 0$ |
 | `t_half_al` | `Float64` | `2.2614e+13` | s | 26Al half-life (717,000 yr) | $> 0$ |
 | `E_fe` | `Float64` | `4.34e-13` | J | Decay energy per 60Fe atom | $> 0$ |
 | `f_fe` | `Float64` | `1.957e+24` | atoms/kg | Abundance of 56Fe atoms per unit mass | $> 0$ |
 | `t_half_fe` | `Float64` | `8.2635e+13` | s | 60Fe half-life (2.62 Myr) | $> 0$ |
-| `tmsolidphase` | `Float64` | `1416.0` | K | Silicate rock solidus temperature | $> \text{tmfluidphase}$ |
+| `tmsolidphase` | `Float64` | `1400.0` | K | Silicate rock solidus temperature | $> \text{tmfluidphase}$ |
 | `tmfluidphase` | `Float64` | `273.0` | K | Water ice melting temperature | $> 0$ |
 | `Lᶠ` | `Float64` | `333.55e+3` | J/kg | Latent heat of melting for water ice | $> 0$ |
 | `phim0` | `Float64` | `0.2` | - | Standard reference porosity | $\in (0, 1)$ |
@@ -240,6 +240,9 @@ Parameters controlling hydrothermal water-rock hydration and dehydration reactio
 | `Sxo_B` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction scale pre-factor | $> 0$ |
 | `Tscl_B` | `Float64` | `10.0` | K | Temperature scale factor | $> 0$ |
 | `To_B` | `Float64` | `293.0` | K | Reference temperature | $> 0$ |
+| `Sxo_T` | `Float64` | `2.0e-11` | $\text{s}^{-1}$ | Reaction rate pre-factor for Arrhenius mode 3 (Travis et al. 2018) | $> 0$ |
+| `To_T` | `Float64` | `293.0` | K | Reference temperature for Arrhenius mode 3 | $> 0$ |
+| `Ea_T` | `Float64` | `63.8e3` | J/mol | Activation energy for Arrhenius mode 3 | $\ge 0$ |
 | `alpha_relaxation` | `Float64` | `0.5` | - | Reaction rate under-relaxation factor | $\in (0, 1]$ |
 | `pfcoeff` | `Float64` | `0.5` | - | Fluid pressure relaxation coefficient | $\in [0, 1]$ |
 | `pferrmax` | `Float64` | `1.0e5` | Pa | Maximum fluid pressure iteration residual | $> 0$ |
@@ -910,6 +913,7 @@ degas_depth_fraction = 0.90
 water_As = 0.40
 redox_coupled = true
 efficiency = 1.0
+nitrogen_law = "libourel2003"
 ```
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
@@ -921,6 +925,7 @@ efficiency = 1.0
 | `water_As` | `Float64` | `0.40` | $\text{wt}\% / \text{MPa}^{0.5}$ | Burnham/Dixon water solubility coefficient | $> 0$ |
 | `redox_coupled` | `Bool` | `true` | - | Couple degassing speciation to local marker redox $\Delta\mathrm{IW}$ state | `true` / `false` |
 | `efficiency` | `Float64` | `1.0` | - | Volatile exsolution kinetics efficiency factor | $\in (0, 1]$ |
+| `nitrogen_law` | `Symbol` | `:libourel2003` | - | Nitrogen solubility parameterization | `:dasgupta2022`, `:libourel2003` |
 
 ---
 

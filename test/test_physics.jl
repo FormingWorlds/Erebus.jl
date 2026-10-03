@@ -384,14 +384,15 @@
         @test heat_m_fe[3] ≈ 0.0 atol=1e-12
 
         Q_fe_mass = Erebus.Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, 0.0)
-        @test isapprox(heat_m_fe[1], Q_fe_mass * 5450.0; rtol=1e-10)
-        @test isapprox(heat_m_fe[2], Q_fe_mass * 5450.0; rtol=1e-10)
+        Q_fe_metal_ref = Q_fe_mass / Erebus.X_FE_REF_CHONDRITE
+        @test isapprox(heat_m_fe[1], Q_fe_metal_ref * 5450.0; rtol=1e-10)
+        @test isapprox(heat_m_fe[2], Q_fe_metal_ref * 5450.0; rtol=1e-10)
 
         # Custom rho_metal keyword argument
         _, _, heat_m_custom = Erebus.calculate_radioactive_heating(
             false, true, 0.0; rho_metal=7200.0
         )
-        @test isapprox(heat_m_custom[1], Q_fe_mass * 7200.0; rtol=1e-10)
+        @test isapprox(heat_m_custom[1], Q_fe_metal_ref * 7200.0; rtol=1e-10)
 
         # 4. Temporal decay: heating decreases over time
         heat_s_late, _, _ = Erebus.calculate_radioactive_heating(true, false, t_half_al)

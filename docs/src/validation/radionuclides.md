@@ -24,8 +24,20 @@ where $\rho$ is phase density, $f_m$ is elemental mass abundance, and $E_{\text{
   [https://doi.org/10.1126/science.273.5276.757](https://doi.org/10.1126/science.273.5276.757)
 - **Tachibana, S., & Huss, G. R. (2003)**. The initial abundance of $^{60}\text{Fe}$ in the Solar System. *The Astrophysical Journal*, 588(1), L41-L44.  
   [https://doi.org/10.1086/374597](https://doi.org/10.1086/374597)
+- **Tang, H., & Dauphas, N. (2012)**. Abundance, distribution, and origin of 60Fe in the solar protoplanetary disk. *Earth and Planetary Science Letters*, 359-360, 248-263.
+  [https://doi.org/10.1016/j.epsl.2012.10.011](https://doi.org/10.1016/j.epsl.2012.10.011)
 - **Lichtenberg, T., Golabek, G. J., Burn, R., Meyer, M. R., Alibert, Y., Gerya, T. V., & Mordasini, C. (2019)**. A water budget dichotomy of rocky protoplanets from 26Al-heating. *Nature Astronomy*, 3(4), 307-313.  
   [https://doi.org/10.1038/s41550-018-0688-5](https://doi.org/10.1038/s41550-018-0688-5)
+
+---
+
+## Benchmark Comparison
+
+The specific radiogenic decay powers and cumulative energy releases for $^{26}\text{Al}$ and $^{60}\text{Fe}$ are evaluated against analytical solutions:
+
+![Specific radiogenic power decay benchmark](../assets/radiogenic_decay_benchmark.png)
+
+*Specific radiogenic power decay curves and cumulative energy release for $^{26}\text{Al}$ and $^{60}\text{Fe}$ over 10 Myr of planetesimal evolution. Panel (a) shows specific radiogenic power $Q(t)$ as a function of time, comparing Erebus with analytical exponential decay. Dotted vertical lines mark the respective half-lives ($0.717\text{ Myr}$ for $^{26}\text{Al}$ and $2.62\text{ Myr}$ for $^{60}\text{Fe}$). Panel (b) shows the cumulative specific energy release.*
 
 ---
 

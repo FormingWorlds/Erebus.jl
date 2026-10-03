@@ -1066,9 +1066,19 @@ function compute_volatile_exsolution(
     w_H2O_diss = w_ret_act_H2O + min(w_H2O_mob, cap_H2O)
 
     # 2. Nitrogen solubility
-    S_N_res = compute_nitrogen_solubility_melt(
-        P_val, d_IW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
-    )
+    S_N_res = if nitrogen_law === :dasgupta2022
+        compute_nitrogen_solubility_dasgupta(P_val, P_val, T_val, d_IW)
+    elseif nitrogen_law === :libourel2003
+        compute_nitrogen_solubility_melt(
+            P_val, d_IW; Kh=nitrogen_henry, C_nitride=nitrogen_nitride
+        )
+    else
+        throw(
+            ArgumentError(
+                "Unknown nitrogen solubility law :$nitrogen_law. Supported laws: :dasgupta2022, :libourel2003",
+            ),
+        )
+    end
     cap_N = F_m * S_N_res.total_ppm
     C_N_ex = max(0.0, C_N_mob - cap_N)
     C_N_diss = C_ret_act_N + min(C_N_mob, cap_N)
@@ -1225,7 +1235,7 @@ function solve_chnos_speciation(
     log10_fO2 = compute_iron_wustite_fO2(T; delta_IW=d_IW)
     p_tot_bar = p_tot * 1.0e-5
 
-    logK_H2O = 12700.0 / T - 2.80
+    logK_H2O = LOGK_H2O[1] / T + LOGK_H2O[2]
     r_H = 10.0^clamp(logK_H2O + 0.5 * log10_fO2, -100.0, 100.0)
 
     logK_CO2 = 14800.0 / T - 4.58

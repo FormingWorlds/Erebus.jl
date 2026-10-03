@@ -47,6 +47,11 @@ include("test_helpers.jl")
         @test cfg.materials.tenssolidm ≈ SVector{3,Float64}([6.0e+07, 6.0e+07, 6.0e+07])
         @test cfg.materials.kphim0 ≈ SVector{3,Float64}([1.0e-13, 1.0e-13, 1.0e-17])
         @test cfg.materials.tkm0 ≈ SVector{3,Float64}([170.0, 170.0, 170.0])
+
+        # Canonical isotopic ratio and reconciled silicate solidus
+        @test isapprox(cfg.thermodynamics.ratio_fe, 1.15e-8; rtol=1e-12)
+        @test isapprox(cfg.thermodynamics.tmsolidphase, 1400.0; rtol=1e-12)
+        @test isapprox(cfg.thermodynamics.tmsolidphase, cfg.melting.T_solidus[1]; atol=1e-6)
     end
 
     @testset "load_config() from file" begin
@@ -400,6 +405,7 @@ include("test_helpers.jl")
         @reject_config thermodynamics=ThermalConfig(fluid_viscosity_T0=NaN)
         @reject_config thermodynamics=ThermalConfig(fluid_viscosity_eta0=-1.0e-3)
         @reject_config thermodynamics=ThermalConfig(fluid_viscosity_eta0=Inf)
+        @reject_config thermodynamics=ThermalConfig(tmsolidphase=1416.0)
     end
 
     @testset "Unphysical Solver Configurations" begin
@@ -812,6 +818,6 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, ".."))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("496 configuration fields", out)
+        @test occursin("500 configuration fields", out)
     end
 end

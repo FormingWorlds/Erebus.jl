@@ -172,7 +172,10 @@ where $A_s \approx 0.40\text{ wt}\%/\text{MPa}^{0.5}$ is a representative baseli
 
 ### 2. Multi-Species Nitrogen Solubility Under Reducing Conditions
 
-Nitrogen exhibits a dual dissolution mechanism in silicate melts (Libourel et al. 2003; Boulliung et al. 2020). The current parameterization is isothermal at reference magmatic conditions ($T \approx 1673\text{ K}$):
+Nitrogen exhibits a dual dissolution mechanism in silicate melts across physical molecular ($\text{N}_2$) and chemical nitride ($\text{N}^{3-}$) pathways. Two formulations are available via `nitrogen_law`:
+
+- **Dasgupta et al. (2022) (`:dasgupta2022`)**: Temperature- and composition-dependent solubility model (default for `VolatilesConfig`). Physical molecular dissolution depends on silicate melt major oxide composition ($x_{\text{SiO}_2}, x_{\text{Al}_2\text{O}_3}, x_{\text{TiO}_2}$), while chemical nitride dissolution incorporates total pressure $P_{\text{tot}}$ [$\text{GPa}$] and inverse temperature scaling ($5908 \sqrt{P_{\text{tot}}} / T$) alongside redox dependence ($1.6 \Delta\text{IW}$).
+- **Libourel et al. (2003) (`:libourel2003`)**: Reference magmatic parameterization (default for `MagmaOceanDegassingConfig` for backwards compatibility):
 
 1. **Physical Molecular Dissolution ($\text{N}_2$)**: At oxidizing conditions, nitrogen dissolves as molecular dinitrogen, governed by Henry's law:
    $$w_{\text{phys}}^{\text{N}} = K_h \cdot f_{\text{N}_2} \quad [\text{ppm}]$$

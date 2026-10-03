@@ -375,7 +375,8 @@ function _degas_magma_ocean_equilibrium!(
             rplanet_val,
             g_surf,
             T_int_val,
-            fO2_diw_mo,
+            fO2_diw_mo;
+            nitrogen_law=cfg.magma_degassing.nitrogen_law,
         )
 
         # Deplete molten markers according to residual melt volatile concentration
