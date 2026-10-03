@@ -1,10 +1,4 @@
 {
-    "documented_baseline_exceptions": {
-        "thermodynamics.ratio_fe": {
-            "code_default": 1.0e-6,
-            "note": "Standard 60Fe/56Fe initial ratio at CAIs",
-            "production_default": 1.0e-6
-        }
-    },
+    "documented_baseline_exceptions": {},
     "known_undocumented": []
 }
