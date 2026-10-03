@@ -4,14 +4,6 @@
 using Test
 using TOML
 
-if Base.find_package("JSON") === nothing
-    using Pkg: Pkg
-    prev_proj = Base.active_project()
-    Pkg.activate(joinpath(@__DIR__, "..", "tools"))
-    Pkg.instantiate()
-    Pkg.activate(prev_proj)
-end
-
 include(joinpath(@__DIR__, "..", "tools", "check_doc_numbers.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_test_quality.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_architecture.jl"))
