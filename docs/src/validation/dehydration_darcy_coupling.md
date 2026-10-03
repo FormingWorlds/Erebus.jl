@@ -32,8 +32,8 @@ Key constitutive relations validated on this page include:
 ## Invariants and Physical Limits
 
 1. **Fluid Overpressure Positivity:** In a closed or low-permeability domain, positive dehydration volume production ($\text{DQPF} > 0$) strictly generates positive fluid overpressure ($\Delta P_f > 0$) relative to the background boundary pressure.
-2. **Formulation Equivalence:** The condensed 4-variable formulation and the 6-variable formulation produce identical fluid pressure fields under dehydration forcing:
-   $$\frac{\|P_f^{(4)} - P_f^{(6)}\|_\infty}{\|P_f^{(6)}\|_\infty} < 10^{-6}$$
+2. **Formulation Equivalence:** The condensed 4-variable formulation and the 6-variable formulation produce identical fluid pressure fields under dehydration forcing, verified to tolerance `1.0e-8`:
+   $$\frac{\|P_f^{(4)} - P_f^{(6)}\|_\infty}{\|P_f^{(6)}\|_\infty} < 1.0\times 10^{-8}$$
 3. **Outward Darcy Flux Divergence:** The divergence of outward Darcy filtration balances the fluid production rate and transient storage:
    $$\int_{\Omega} \nabla \cdot \mathbf{q}_D \, d\Omega = \int_{\Omega} \text{DQPF} \, d\Omega - \int_{\Omega} S_{\text{storage}} \, d\Omega$$
    approaching exact equivalence in the high-permeability quasi-steady limit.

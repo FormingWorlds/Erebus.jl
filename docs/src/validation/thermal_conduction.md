@@ -25,6 +25,7 @@ where $k_s$ is matrix solid conductivity, $k_f$ is pore fluid conductivity, and 
 3. **Monotonicity**: For $k_s > k_f$, $\partial k_{\text{total}} / \partial \phi < 0$.
 4. **Physical Bounding**: $\min(k_s, k_f) \le k_{\text{total}} \le \max(k_s, k_f)$ for all $\phi \in [0, 1]$.
 5. **Error Contract**: Passing $\phi < 0$, $\phi > 1$, $k_s < 0$, or $k_f < 0$ throws `DomainError`.
+6. **Reference Mixture Benchmark**: For $k_s = 3.0\text{ W/(m K)}$, $k_f = 0.6\text{ W/(m K)}$, and $\phi = 0.20$, the quadratic formulation yields $k_{\text{total}} \approx 2.361\text{ W/(m K)}$, discriminating against the linear average $2.520\text{ W/(m K)}$.
 
 ### Verification Test Suite
 - `test/test_physics.jl`: `@testset "ktotal(): physical limits and non-linear mixture invariants"`
