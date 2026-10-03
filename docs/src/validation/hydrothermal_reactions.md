@@ -13,6 +13,16 @@ The benchmark verifies three core physical mechanisms:
 2. **Latent Heat:** Reactions release heat during hydration and absorb heat during dehydration through the `DHP` term.
 3. **Conserved Mass:** Fluid transfer between pores and mineral lattices conserves total water, tracked by `DQPF`.
 
+### Thermodynamic Reaction Parameters
+
+The hydration and dehydration phase equilibrium in `Erebus.jl` follows the schematic thermodynamic parameterization of Gerya (2019, Chapter 16):
+
+$$\Delta H_{\text{WD}} = 40.0\text{ kJ/mol} \quad (40000.0\text{ J/mol})$$
+
+$$\Delta S_{\text{WD}} = 60.0\text{ J/(mol K)}$$
+
+The equilibrium temperature at zero pore pressure evaluates to $T_0 = \Delta H_{\text{WD}} / \Delta S_{\text{WD}} \approx 666.67\text{ K}$, with the pressure-dependent phase boundary defined by $T_{\text{eq}}(P) = (\Delta H_{\text{WD}} + P \Delta V_{\text{WD}}) / \Delta S_{\text{WD}}$. These values serve as schematic demonstration parameters for the coupled hydro-thermo-chemical benchmark.
+
 ### Benchmark Results
 
 The benchmark tracks thermal state, chemical fronts, and fluid motion:
@@ -82,3 +92,4 @@ Model setup files live in `configs/`:
   - `@testset "Endothermic Dehydration: Physical Invariants & Pore Overpressure"`
   - `@testset "Dynamic Hydrofracture Coupling to Fluid Overpressure"`
   - `@testset "Reaction Activation Switches and Picard Under-Relaxation"`
+  - `@testset "Hydrothermal Reaction Thermodynamic Anchors (Gerya 2019)"`

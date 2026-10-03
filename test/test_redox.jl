@@ -652,6 +652,61 @@ end
     @test isapprox(diw_prev_gr, diw_ox_sil; atol=1e-3)
 end
 
+@testset "Graphite Threshold Mass-Fraction Scaling and Buffer Blending" begin
+    T = 1300.0
+    P_100bar = 1.0e7
+    w_thresh = 1.0e-6
+
+    # Reference buffer levels
+    lfo2_cco = Erebus.log10_fo2_of_buffer(:CCO, T, P_100bar)
+    lfo2_iw = Erebus.log10_fo2_of_buffer(:IW, T, P_100bar)
+    diw_cco = lfo2_cco - lfo2_iw
+
+    c_sil = Erebus.marker_redox_components(0.0, 0.80, 0.20)
+    diw_sil = Erebus.local_delta_iw(c_sil, T, P_100bar)
+
+    # 1. Zero graphite: pure silicate buffer
+    c_zero = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=0.0)
+    diw_zero = Erebus.local_delta_iw(
+        c_zero, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=w_thresh
+    )
+    @test isapprox(diw_zero, diw_sil; atol=1e-12)
+
+    # 2. Half threshold in mass fraction: exactly 0.5 blend
+    n_C_half = (0.5 * w_thresh) / Erebus.M_C
+    c_half = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=n_C_half)
+    diw_half = Erebus.local_delta_iw(
+        c_half, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=w_thresh
+    )
+    diw_expected_half = 0.5 * diw_cco + 0.5 * diw_sil
+    @test isapprox(diw_half, diw_expected_half; atol=1e-12)
+
+    # 3. Full threshold in mass fraction: reaches 1.0 (pure CCO buffer)
+    n_C_full = (1.0 * w_thresh) / Erebus.M_C
+    c_full = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=n_C_full)
+    diw_full = Erebus.local_delta_iw(
+        c_full, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=w_thresh
+    )
+    @test isapprox(diw_full, diw_cco; atol=1e-12)
+
+    # 4. Above threshold: stays clamped at 1.0 (pure CCO buffer)
+    n_C_double = (2.0 * w_thresh) / Erebus.M_C
+    c_double = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=n_C_double)
+    diw_double = Erebus.local_delta_iw(
+        c_double, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=w_thresh
+    )
+    @test isapprox(diw_double, diw_cco; atol=1e-12)
+
+    # 5. Quarter threshold: linear ramp check (0.25 weight)
+    n_C_quarter = (0.25 * w_thresh) / Erebus.M_C
+    c_quarter = Erebus.marker_redox_components(0.0, 0.80, 0.20; n_C_graphite=n_C_quarter)
+    diw_quarter = Erebus.local_delta_iw(
+        c_quarter, T, P_100bar; graphite_buffer_active=true, w_graphite_threshold=w_thresh
+    )
+    diw_expected_quarter = 0.25 * diw_cco + 0.75 * diw_sil
+    @test isapprox(diw_quarter, diw_expected_quarter; atol=1e-12)
+end
+
 @testset "Multi-Timestep Pyrolysis and Redox Coupling Invariants" begin
     tkm = [625.0]
     dt = 100.0

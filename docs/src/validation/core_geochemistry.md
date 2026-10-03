@@ -27,12 +27,17 @@ Key constitutive relations validated on this page include:
 
 - **Nernst Partition Coefficient ($D_i^{\text{met/sil}}$):**
   $$D_i^{\text{met/sil}} = \frac{C_i^{\text{metal}}}{C_i^{\text{silicate}}}$$
-- **Sulfur-Dependent Carbon and Nitrogen Partitioning (Grewal et al., 2019a, 2019b):**
-  $$\log_{10} D_C = 1.80 + \frac{2200}{T} - 1.5 \times 10^{-8} \frac{P}{T} - 0.25 \, \Delta\text{IW} + 4.2 \ln(1 - X_S)$$
+- **Sulfur-Dependent Carbon and Nitrogen Partitioning (Grewal et al., 2019a, 2019b; Fischer et al., 2020):**
+  $$\log_{10} D_C^{\text{grewal2019}} = 1.80 + \frac{2200}{T} - 1.5 \times 10^{-8} \frac{P}{T} - 0.25 \, \Delta\text{IW} + 4.2 \ln(1 - X_S)$$
+  $$\log_{10} D_C^{\text{fischer2020}} = 1.50 + \frac{2500}{T} - 1.2 \times 10^{-8} \frac{P}{T} - 0.20 \, \Delta\text{IW}$$
   $$\log_{10} D_N = 0.85 + \frac{1200}{T} - 0.25 \, \Delta\text{IW} + 0.60 \ln(1 - X_S)$$
 - **Hydrogen (Clesi et al., 2018) and Sulfur (Boujibar et al., 2014) Partitioning:**
   $$\log_{10} D_H = -0.80 + \frac{300}{T} + 5.0 \times 10^{-8} \frac{P}{T} + 0.05 \, \Delta\text{IW}$$
   $$\log_{10} D_S = 2.80 - \frac{800}{T} + 1.0 \times 10^{-10} P - 0.20 \, \Delta\text{IW}$$
+
+> [!NOTE]
+> The empirical polynomial parameterizations for metal-silicate partitioning of H, C, N, and S reference models from Grewal et al. (2019a, 2019b), Fischer et al. (2020), Clesi et al. (2018), and Boujibar et al. (2014). Note that the Fischer et al. (2020) formulation does not include an alloy sulfur dependence term. Full coefficient traceability and regression calibration against primary experimental run tables is tracked in GitHub Issue #98.
+
 - **Phase Equilibration in the Silicate Melt Frame:**
   Metal-silicate volatile partitioning occurs between liquid metal and molten silicate:
   $$C_{i,\text{sil\_melt}} = \frac{C_{i,\text{sil\_bulk}}}{F_{\text{melt}}}$$
@@ -87,7 +92,17 @@ Key constitutive relations validated on this page include:
 
 ---
 
-## 5. References
+## 5. Verification Test Suite
+
+The metal-silicate volatile partitioning engine is validated in `test/test_core_volatile_partitioning.jl`:
+
+- **Partitioning Thermodynamics:** Validates sensitivities to temperature, pressure, redox state, and alloy sulfur content across H, C, N, and S.
+- **Reference Condition Evaluation:** Verifies model evaluations at reference conditions ($T = 1873\text{ K}, P = 1.5\text{ GPa}, \Delta\text{IW} = -2.0, X_S = 0$) for C (Grewal et al. 2019a, Fischer et al. 2020), N (Grewal et al. 2019a), H (Clesi et al. 2018), and S (Boujibar et al. 2014).
+- **Whole-Marker Mass Conservation:** Confirms strict whole-marker mass conservation to machine precision ($< 10^{-12}$) across all four saturation regimes.
+
+---
+
+## 6. References
 
 - Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014). Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54. [https://doi.org/10.1016/j.epsl.2014.01.021](https://doi.org/10.1016/j.epsl.2014.01.021)
 - Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018). Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876. [https://doi.org/10.1126/sciadv.1701876](https://doi.org/10.1126/sciadv.1701876)

@@ -914,8 +914,9 @@ function local_delta_iw(
 
     # Target non-metal buffer: graphite (CCO) or silicate ferric/ferrous
     delta_target = if delta_cco !== nothing && delta_sil !== nothing
-        w_gr_thresh = max(1.0e-12, Float64(w_graphite_threshold) / M_C)
-        w_gr = clamp(c.n_C_graphite / w_gr_thresh, 0.0, 1.0)
+        w_gr_thresh = max(1.0e-12, Float64(w_graphite_threshold))
+        w_graphite = c.n_C_graphite * M_C
+        w_gr = clamp(w_graphite / w_gr_thresh, 0.0, 1.0)
         w_gr * delta_cco + (1.0 - w_gr) * delta_sil
     elseif delta_cco !== nothing
         delta_cco

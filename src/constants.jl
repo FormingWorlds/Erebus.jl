@@ -181,9 +181,9 @@ const VWˢ = (MD+MH₂O) / ρWˢ
 const VH₂Oᶠ = MH₂O / ρH₂Oᶠ
 # molar volume of fluid ice (frozen H₂O) [m³/mol]
 const VH₂Oᶠⁱ = MH₂O / ρH₂Oᶠⁱ
-# enthalpy change for dehydration of the wet silicate [J/mol]
+# Enthalpy change for wet silicate dehydration [J/mol] (schematic value, Gerya 2019, Ch. 16)
 const ΔHWD = 40000.0
-# entropy change for dehydration of the wet silicate [J/K/mol]
+# Entropy change for wet silicate dehydration [J/K/mol] (schematic value, Gerya 2019, Ch. 16)
 const ΔSWD = 60.0
 # volume change for dehydration of the wet silicate [m³/mol]
 const ΔVWD = VDˢ + VH₂Oᶠ - VWˢ

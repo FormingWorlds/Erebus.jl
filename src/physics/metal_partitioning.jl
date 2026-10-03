@@ -27,6 +27,29 @@ $(SIGNATURES)
 # Raises
 - `DomainError`: If `T <= 0.0`, `P < 0.0`, `w_S < 0.0 || w_S > 1.0`, or inputs are non-finite.
 - `ArgumentError`: If `species` or `model` is unsupported.
+
+# Notes
+Equations and units for supported parameterizations (T in K, P in Pa, X_S alloy mole fraction):
+- `:C` (`:grewal2019`): Grewal et al. (2019a).
+  `log10(D_C) = 1.80 + 2200.0 / T - 1.5e-8 * (P / T) - 0.25 * ΔIW + 4.2 * ln(1 - X_S)`
+  Captures strong siderophile behavior and suppression by alloy sulfur.
+  Note: coefficient not traced to source for simplified redox slope (-0.25); tracked in issue #98.
+- `:C` (`:fischer2020`): Fischer et al. (2020).
+  `log10(D_C) = 1.50 + 2500.0 / T - 1.2e-8 * (P / T) - 0.20 * ΔIW`
+  High-pressure core formation parameterization.
+  Note: coefficient not traced to source for simplified redox slope (-0.20); tracked in issue #98.
+- `:N` (`:grewal2019`): Grewal et al. (2019a, 2019b).
+  `log10(D_N) = 0.85 + 1200.0 / T - 0.25 * ΔIW + 0.60 * ln(1 - X_S)`
+  Nitrogen siderophile partitioning with weaker sulfur sensitivity than carbon.
+  Note: coefficient not traced to source for simplified redox slope (-0.25); tracked in issue #98.
+- `:H` (`:clesi2018`): Clesi et al. (2018).
+  `log10(D_H) = -0.80 + 300.0 / T + 5.0e-8 * (P / T) + 0.05 * ΔIW`
+  Low-pressure planetesimal regime (moderately siderophile to slightly lithophile).
+  Note: coefficient not traced to source for linearized temperature slope; tracked in issue #98.
+- `:S` (`:boujibar2014`): Boujibar et al. (2014).
+  `log10(D_S) = 2.80 - 800.0 / T + 1.0e-10 * P - 0.20 * ΔIW`
+  Strong chalcophile partitioning into liquid metal.
+  Note: coefficient not traced to source for linear P slope in Pa and lack of alloy composition term; tracked in issue #98.
 """
 function compute_metal_silicate_partition_coefficient(
     species::Symbol,
