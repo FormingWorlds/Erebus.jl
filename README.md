@@ -13,6 +13,7 @@
 ## Table of Contents
 
 - [Key Capabilities](#key-capabilities)
+- [Experimental Modules](#experimental-modules)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
   - [Run from Configuration](#run-from-configuration)
@@ -36,6 +37,12 @@
 - Computes radiogenic decay heat from 26Al and 60Fe and silicate reaction kinetics.
 - Tracks physical properties with Marker-in-Cell advection (Runge-Kutta 4th-order).
 - Configures geometry, solvers, and physics through validated TOML files.
+
+---
+
+## Experimental Modules
+
+The MPI extension (`ErebusMPIExt`) and the GPU kernels (`ErebusCUDAExt`, `ErebusMetalExt`, `ErebusAMDGPUExt`) are experimental. They are exercised by their own tests and are not reachable from `simulation_loop`; results from them carry no correctness claim.
 
 ---
 
@@ -109,7 +116,7 @@ julia --project scripts/generate_animations.jl output_hydrothermal/
 
 ## Code Architecture
 
-`Erebus.jl` divides numerical responsibilities across focused submodules:
+These names are namespaces within a single flat Erebus module; the table groups functionality, not separate packages.
 
 | Submodule | Responsibilities |
 | :--- | :--- |
@@ -154,7 +161,7 @@ Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.c
    ```bash
    julia --project=. test/runtests.jl
    ```
-3. Open a pull request against `main`. Continuous Integration verifies test execution on Julia 1.12 and 1.13, and enforces formatting and documentation builds on Julia 1.12.
+3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `all`) on Julia 1.12 and 1.13 (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), and test quality standards (`test-quality`).
 
 ---
 

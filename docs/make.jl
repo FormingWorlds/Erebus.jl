@@ -7,15 +7,7 @@ using Erebus
 DocMeta.setdocmeta!(Erebus, :DocTestSetup, :(using Erebus); recursive=true)
 
 makedocs(;
-    modules=[
-        Erebus,
-        Erebus.Config,
-        Erebus.Geometry,
-        Erebus.Physics,
-        Erebus.Particles,
-        Erebus.Numerics,
-        Erebus.Simulation,
-    ],
+    modules=[Erebus],
     authors="Tim Lichtenberg and Forming Worlds Lab contributors",
     sitename="Erebus.jl",
     format=Documenter.HTML(;

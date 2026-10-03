@@ -3,7 +3,11 @@
 # RNG safety, coords guards, and function line spans against baseline.
 
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
+const TOOLS_DIR = joinpath(ROOT_DIR, "tools")
 if Base.find_package("JSON") === nothing
+    pushfirst!(LOAD_PATH, TOOLS_DIR)
+end
+if Base.find_package("Erebus") === nothing
     pushfirst!(LOAD_PATH, ROOT_DIR)
 end
 

@@ -1,5 +1,7 @@
 # Distributed Computations via MPI
 
+The MPI extension (`ErebusMPIExt`) and the GPU kernels (`ErebusCUDAExt`, `ErebusMetalExt`, `ErebusAMDGPUExt`) are experimental. They are exercised by their own tests and are not reachable from `simulation_loop`; results from them carry no correctness claim.
+
 This guide explains how to configure and use distributed-memory primitives in `Erebus.jl` through the `MPI.jl` extension.
 
 ---

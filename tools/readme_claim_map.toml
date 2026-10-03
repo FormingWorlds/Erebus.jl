@@ -1,0 +1,24 @@
+# Mapping from README claims (capabilities, architecture namespaces, restart claims)
+# to corresponding test files or CI jobs.
+# Used by tools/check_readme_ci.jl to ensure all README assertions are verified.
+
+[capabilities]
+"Solves coupled two-phase Stokes-Darcy fluid-solid equations on a staggered Eulerian grid." = "test/test_numerics.jl"
+"Incorporates poroelastic compressibility from Biot theory for solid and fluid phases." = "test/test_numerics.jl"
+"Models visco-elasto-plastic matrix rheology with Drucker-Prager yielding." = "test/test_numerics.jl"
+"Couples fluid thermal expansion and temperature-dependent Arrhenius viscosity to Darcy flux." = "test/test_hydrothermal_convection.jl"
+"Enhances Darcy permeability via dynamic hydrofracturing under fluid overpressure." = "test/test_hydrofracture_venting.jl"
+"Computes radiogenic decay heat from 26Al and 60Fe and silicate reaction kinetics." = "test/test_physics.jl"
+"Tracks physical properties with Marker-in-Cell advection (Runge-Kutta 4th-order)." = "test/test_particles.jl"
+"Configures geometry, solvers, and physics through validated TOML files." = "test/test_config.jl"
+
+[architecture]
+"Erebus.Geometry" = "test/test_geometry.jl"
+"Erebus.Particles" = "test/test_particles.jl"
+"Erebus.Physics" = "test/test_physics.jl"
+"Erebus.Numerics" = "test/test_numerics.jl"
+"Erebus.Simulation" = "test/test_simulation.jl"
+"Erebus.Config" = "test/test_config.jl"
+
+[restart]
+"Checkpoint restart continuity" = "test/test_simulation_state.jl"

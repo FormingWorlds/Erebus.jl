@@ -3,15 +3,20 @@
 # Performance budget verification harness for Erebus.jl.
 # Measures @allocated and wall-clock over steps 3-5 after 2 warm-up steps.
 
-using Pkg
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
-Pkg.activate(ROOT_DIR; io=devnull)
+const TOOLS_DIR = joinpath(ROOT_DIR, "tools")
+if Base.find_package("JSON") === nothing
+    pushfirst!(LOAD_PATH, TOOLS_DIR)
+end
+if Base.find_package("Erebus") === nothing
+    pushfirst!(LOAD_PATH, ROOT_DIR)
+end
 
-@eval using Dates
-@eval using Erebus
-@eval using JSON
-@eval using Printf
-@eval using TOML
+using Dates
+using Erebus
+using JSON
+using Printf
+using TOML
 
 const BASELINE_PATH = joinpath(@__DIR__, "budget_baseline.json")
 

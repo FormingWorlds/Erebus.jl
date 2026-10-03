@@ -3,6 +3,15 @@
 # In-tree profiling harness for Erebus.jl
 # Measures runtime and memory allocation baselines for simulation execution.
 
+const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
+const TOOLS_DIR = joinpath(ROOT_DIR, "tools")
+if Base.find_package("JSON") === nothing
+    pushfirst!(LOAD_PATH, TOOLS_DIR)
+end
+if Base.find_package("Erebus") === nothing
+    pushfirst!(LOAD_PATH, ROOT_DIR)
+end
+
 using Dates
 using Erebus
 using JSON
