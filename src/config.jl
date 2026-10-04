@@ -1526,6 +1526,7 @@ function validate_config(cfg::SimulationConfig)
     )
     @check_ge cfg.geometry.gravity_nr_factor 1
     @check_positive_finite cfg.geometry.metric_regularization_cells
+    @check_nonneg_finite cfg.geometry.psurface
     min_dist_to_boundary = min(
         cfg.geometry.xcenter,
         cfg.grid.xsize - cfg.geometry.xcenter,
@@ -1686,6 +1687,11 @@ function validate_config(cfg::SimulationConfig)
     end
 
     # Thermodynamics checks
+    (0.0 < cfg.thermodynamics.phim0 < 1.0 && isfinite(cfg.thermodynamics.phim0)) || throw(
+        ArgumentError(
+            "thermodynamics.phim0 must be in (0, 1) and finite, got $(cfg.thermodynamics.phim0)",
+        ),
+    )
     @check_unit_interval cfg.thermodynamics.ratio_al
     @check_unit_interval cfg.thermodynamics.ratio_fe
     cfg.thermodynamics.tmfluidphase < cfg.thermodynamics.tmsolidphase || throw(

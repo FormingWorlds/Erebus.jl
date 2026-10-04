@@ -861,6 +861,19 @@ function define_markers!(
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
     tkm0_val=tkm0,
+    gggsolidm_val=gggsolidm,
+    frictsolidm_val=frictsolidm,
+    cohessolidm_val=cohessolidm,
+    tenssolidm_val=tenssolidm,
+    rhosolidm_val=rhosolidm,
+    rhofluidm_val=rhofluidm,
+    etasolidm_val=etasolidm,
+    rhocpsolidm_val=rhocpsolidm,
+    alphasolidm_val=alphasolidm,
+    alphafluidm_val=alphafluidm,
+    ksolidm_val=ksolidm,
+    start_hrsolidm_val=start_hrsolidm,
+    phimin_val::Real=phimin,
     rng::AbstractRNG=Random.default_rng(),
 )
     @unpack_coords coords Nxm Nym dxm dym
@@ -886,7 +899,7 @@ function define_markers!(
                 phim[m] += phim0_val * (rand(rng)-0.5)
             end
             # matrix viscosity
-            etavpm[m] = etasolidm[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
+            etavpm[m] = etasolidm_val[tm[m]] # * exp(-αη*phim[m]) # ∇! CHANGE!!!
             # wet solid molar fraction
             XWsolidm0[m] = XWsolidm_init_val[tm[m]]
             if randomized
@@ -899,28 +912,28 @@ function define_markers!(
             # sticky space ("air") [to have internal free surface]
             tm[m] = 3
             # porosity
-            phim[m] = phimin
+            phim[m] = phimin_val
             # matrix viscosity
-            etavpm[m] = etasolidm[tm[m]]
+            etavpm[m] = etasolidm_val[tm[m]]
             # static properties for air markers
-            rhototalm[m] = rhosolidm[tm[m]]
-            rhocptotalm[m] = rhocpsolidm[tm[m]]
-            etatotalm[m] = etasolidm[tm[m]]
-            hrtotalm[m] = start_hrsolidm[tm[m]]
-            ktotalm[m] = ksolidm[tm[m]]
+            rhototalm[m] = rhosolidm_val[tm[m]]
+            rhocptotalm[m] = rhocpsolidm_val[tm[m]]
+            etatotalm[m] = etasolidm_val[tm[m]]
+            hrtotalm[m] = start_hrsolidm_val[tm[m]]
+            ktotalm[m] = ksolidm_val[tm[m]]
             if Xfe_bulk !== nothing
                 Xfe_bulk[m] = 0.0
             end
         end
         # common initialisations for all marker types
         tkm[m] = tkm0_val[tm[m]]
-        inv_gggtotalm[m] = inv(gggsolidm[tm[m]])
-        fricttotalm[m] = frictsolidm[tm[m]]
-        cohestotalm[m] = cohessolidm[tm[m]]
-        tenstotalm[m] = tenssolidm[tm[m]]
-        rhofluidcur[m] = rhofluidm[tm[m]]
-        alphasolidcur[m] = alphasolidm[tm[m]]
-        alphafluidcur[m] = alphafluidm[tm[m]]
+        inv_gggtotalm[m] = inv(gggsolidm_val[tm[m]])
+        fricttotalm[m] = frictsolidm_val[tm[m]]
+        cohestotalm[m] = cohessolidm_val[tm[m]]
+        tenstotalm[m] = tenssolidm_val[tm[m]]
+        rhofluidcur[m] = rhofluidm_val[tm[m]]
+        alphasolidcur[m] = alphasolidm_val[tm[m]]
+        alphafluidcur[m] = alphafluidm_val[tm[m]]
         if Xfem !== nothing
             F_fe = compute_metal_melt_fraction(
                 tkm[m]; T_eutectic=T_eutectic_val, dT_metal=dT_metal_val
@@ -954,6 +967,19 @@ function define_markers!(
     T_eutectic_val::Real=1213.0,
     dT_metal_val::Real=50.0,
     tkm0_val=tkm0,
+    gggsolidm_val=gggsolidm,
+    frictsolidm_val=frictsolidm,
+    cohessolidm_val=cohessolidm,
+    tenssolidm_val=tenssolidm,
+    rhosolidm_val=rhosolidm,
+    rhofluidm_val=rhofluidm,
+    etasolidm_val=etasolidm,
+    rhocpsolidm_val=rhocpsolidm,
+    alphasolidm_val=alphasolidm,
+    alphafluidm_val=alphafluidm,
+    ksolidm_val=ksolidm,
+    start_hrsolidm_val=start_hrsolidm,
+    phimin_val::Real=phimin,
     rng::AbstractRNG=Random.default_rng(),
 )
     Xfe_bulk = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk : nothing
@@ -995,6 +1021,19 @@ function define_markers!(
         T_eutectic_val=T_eutectic_val,
         dT_metal_val=dT_metal_val,
         tkm0_val=tkm0_val,
+        gggsolidm_val=gggsolidm_val,
+        frictsolidm_val=frictsolidm_val,
+        cohessolidm_val=cohessolidm_val,
+        tenssolidm_val=tenssolidm_val,
+        rhosolidm_val=rhosolidm_val,
+        rhofluidm_val=rhofluidm_val,
+        etasolidm_val=etasolidm_val,
+        rhocpsolidm_val=rhocpsolidm_val,
+        alphasolidm_val=alphasolidm_val,
+        alphafluidm_val=alphafluidm_val,
+        ksolidm_val=ksolidm_val,
+        start_hrsolidm_val=start_hrsolidm_val,
+        phimin_val=phimin_val,
         rng=rng,
     )
 
@@ -1132,13 +1171,26 @@ function compute_marker_properties!(
     qyD_val=nothing,
     xcenter_val=nothing,
     ycenter_val=nothing,
+    kphim0_val=kphim0,
+    phim0_val::Real=phim0,
+    etafluidm_val=etafluidm,
+    rhofluidm_val=rhofluidm,
+    etasolidm_val=etasolidm,
+    etasolidmm_val=etasolidmm,
+    rhocpsolidm_val=rhocpsolidm,
+    rhocpfluidm_val=rhocpfluidm,
+    rhosolidm_val=rhosolidm,
+    alphafluidm_val=alphafluidm,
+    ksolidm_val=ksolidm,
+    kfluidm_val=kfluidm,
+    phimax_val::Real=phimax,
 )
     if tm[m] < 3
         # rocks
         XDˢm₀ = 1.0 - XWˢm₀[m]
         rhosolidm0 = (MD + MH₂O*XWˢm₀[m]) / (VDˢ*XDˢm₀ + VWˢ*XWˢm₀[m]) # (16.161)
         alpha_val = if alphafluid === nothing
-            alphafluidm[tm[m]]
+            alphafluidm_val[tm[m]]
         else
             (alphafluid isa Real ? alphafluid : alphafluid[tm[m]])
         end
@@ -1158,9 +1210,9 @@ function compute_marker_properties!(
         end
 
         rhosolid_eff = rhosolidm0
-        rhocpsolid_eff = rhocpsolidm[tm[m]]
+        rhocpsolid_eff = rhocpsolidm_val[tm[m]]
         etasolidcur_raw = ifelse(
-            tkm[m] > tmsolidphase_val, etasolidmm[tm[m]], etasolidm[tm[m]]
+            tkm[m] > tmsolidphase_val, etasolidmm_val[tm[m]], etasolidm_val[tm[m]]
         )
         etasolidcur = etasolidcur_raw
         F_melt = 0.0
@@ -1182,7 +1234,7 @@ function compute_marker_properties!(
             rhocpsolid_eff = rhocp_apparent_silicate(
                 tkm[m],
                 P_val,
-                rhocpsolidm[tm[m]],
+                rhocpsolidm_val[tm[m]],
                 rhosolidm0,
                 tm[m];
                 T_sol=T_sol,
@@ -1220,7 +1272,7 @@ function compute_marker_properties!(
                     volatiles_cfg;
                     rhosolid=rhosolidm0,
                     rhofluid=rhofluidm0,
-                    phimax=phimax,
+                    phimax=phimax_val,
                     retention_cfg=retention_cfg,
                     delta_IW=deltaIW_m !== nothing ? deltaIW_m[m] : nothing,
                 )
@@ -1230,14 +1282,20 @@ function compute_marker_properties!(
         end
 
         rhototalm[m] = total(rhosolid_eff, rhofluidm0, phim[m])
-        rhocptotalm[m] = total(rhocpsolid_eff, compute_rhocpfluidm(tkm[m], mode), phim[m])
+        rhocptotalm[m] = total(
+            rhocpsolid_eff,
+            compute_rhocpfluidm(
+                tkm[m], mode; rhocpfluidm=rhocpfluidm_val, tmfluidphase=tmfluidphase_val
+            ),
+            phim[m],
+        )
         etafluidcur = compute_fluid_viscosity(
             tkm[m],
             tm[m];
             mode=fluid_viscosity_mode,
             eta0=fluid_viscosity_eta0,
-            eta_ice=etafluidm[tm[m]],
-            eta_air=etafluidm[tm[m]],
+            eta_ice=etafluidm_val[tm[m]],
+            eta_air=etafluidm_val[tm[m]],
             Ea=fluid_viscosity_Ea,
             T0=fluid_viscosity_T0,
             tmfluidphase=tmfluidphase_val,
@@ -1245,7 +1303,11 @@ function compute_marker_properties!(
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
         k_lattice = ktotal(
-            compute_ksolidm(tkm[m], mode), compute_kfluidm(tkm[m], mode), phim[m]
+            compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val),
+            compute_kfluidm(
+                tkm[m], mode; kfluidm=kfluidm_val, tmfluidphase=tmfluidphase_val
+            ),
+            phim[m],
         )
         ktotalm[m] = k_lattice
         if melting_active && soft_turbulence
@@ -1369,6 +1431,7 @@ function compute_marker_properties!(
                 Pe_cell=Pe_cell_hydro,
                 k_prev=ktotalm[m],
                 active=hydro_marker_active,
+                phim0=phim0_val,
             )
             ktotalm[m] = max(ktotalm[m], k_hydro)
         end
@@ -1470,7 +1533,7 @@ function compute_marker_properties!(
                 end
             else
                 phi_fe_equiv =
-                    X_FE_REF_CHONDRITE * (tm[m] <= 2 ? rhosolidm[tm[m]] : 0.0) /
+                    X_FE_REF_CHONDRITE * (tm[m] <= 2 ? rhosolidm_val[tm[m]] : 0.0) /
                     (rho_metal_val > 0.0 ? rho_metal_val : 5450.0)
                 hrtotalm[m] += (1.0 - phim[m]) * phi_fe_equiv * hrmetalm[tm[m]]
             end
@@ -1524,16 +1587,18 @@ function compute_marker_properties!(
             Xmin_nitride_m[m] = 0.0
             Xmin_metal_matrix_m[m] = 0.0
         end
-        etafluidcur = etafluidm[tm[m]]
+        etafluidcur = etafluidm_val[tm[m]]
         if rhofluidcur !== nothing
-            rhofluidcur[m] = rhofluidm[tm[m]]
+            rhofluidcur[m] = rhofluidm_val[tm[m]]
         end
     end
     # common for rocks and air
     tkm_rhocptotalm[m] = tkm[m] * rhocptotalm[m]
     # kphim[m] = kphi(kphim0[tm[m]], phim[m])
     # etafluidcur_inv_kphim[m] = etafluidcur[m] * inv(kphim[m])
-    etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(kphim0[tm[m]], phim[m], etafluidcur)
+    etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(
+        kphim0_val[tm[m]], phim[m], etafluidcur; phim0=phim0_val
+    )
     return nothing
 end # function compute_marker_properties!
 
@@ -1579,6 +1644,10 @@ function update_marker_viscosity!(
     etamax::Real=1.0e23,
     tmsolidphase::Real=1400.0,
     tmfluidphase::Real=273.0,
+    etasolidm=etasolidm,
+    etasolidmm=etasolidmm,
+    etafluidm=etafluidm,
+    etafluidmm=etafluidmm,
 )
     @unpack_coords coords x y dx dy jmin_basic jmax_basic imin_basic imax_basic
     @inbounds i, j, weights = fix_weights(
@@ -1596,7 +1665,15 @@ function update_marker_viscosity!(
     @inbounds if tm[m] < 3
         # rocks: update etatotalm[m] based on current marker temperature
         eta_rock = etatotal_rocks(
-            tkm[m], tm[m]; tmsolidphase=tmsolidphase, tmfluidphase=tmfluidphase
+            tkm[m],
+            tm[m];
+            etamin=etamin,
+            tmsolidphase=tmsolidphase,
+            tmfluidphase=tmfluidphase,
+            etasolidm=etasolidm,
+            etasolidmm=etasolidmm,
+            etafluidm=etafluidm,
+            etafluidmm=etafluidmm,
         )
         if melting_active && Fm !== nothing
             eta_rock = compute_melt_weakened_viscosity(

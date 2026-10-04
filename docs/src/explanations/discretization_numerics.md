@@ -294,6 +294,8 @@ This two-sided clamp ensures that enhanced permeability cannot fall below matrix
 
 ## Boundary Conditions
 
-- **Mechanical**: Free-slip solid boundary conditions on the outer domain boundaries.
-- **Hydraulic**: Draining ($P_f = p_{\text{surface}} = 1000\text{ Pa}$) pore pressure boundary anchors on outer walls.
+- **Mechanical**: Free-slip boundary conditions for the solid velocity field along outer boundary walls ($v_x = 0$ on vertical boundaries, $v_y = 0$ on horizontal boundaries).
+- **Pressure (Total and Fluid)**: Dirichlet boundary conditions for total solid pressure $P_t$ and fluid pore pressure $P_f$ set both pressures to $p_{\text{surface}}$ along the complete computational domain perimeter ($i = 2$, $i = N_y$, $j = 2$, $j = N_x$):
+  $$P_t = P_f = p_{\text{surface}}$$
+  The outer ghost cell layer ($i = 1$, $i = N_y + 1$, $j = 1$, $j = N_x + 1$) satisfies identity algebraic equations to maintain consistency with the staggered node indexing.
 - **Sticky Air Layer**: The domain includes a low-density, low-viscosity buffer layer representing open space above the planetesimal surface, allowing the free surface of the planetesimal to deform naturally.

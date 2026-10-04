@@ -80,19 +80,22 @@ $(SIGNATURES)
 
     - kphim0m: standard (reference) permeability (of marker type) [m^2]
     - phimm: actual (marker) porosity
+    - phim0: reference porosity for Kozeny-Carman relation (default: phim0 constant)
 
 # Returns
 
     - kphim: empirical porosity-dependent permeability [m^2]
 """
-function kphi(kphim0m, phimm)
+function kphi(kphim0m, phimm; phim0::Real=phim0)
     if !(0.0 <= phimm < 1.0)
         throw(DomainError(phimm, "Porosity must be in [0, 1)"))
+    end
+    if !(0.0 < phim0 < 1.0)
+        throw(DomainError(phim0, "Reference porosity must be strictly between 0 and 1"))
     end
     if kphim0m < 0.0
         throw(DomainError(kphim0m, "Reference permeability must be non-negative"))
     end
-    # phim0 is a global constant defined independent of material type
     return kphim0m * (phimm * inv(phim0))^3.0 * ((1.0 - phimm) * inv(1.0 - phim0))^-2.0
 end
 
@@ -107,15 +110,19 @@ $(SIGNATURES)
     - kϕᵣ: reference permeability [m^2]
     - ϕ: current porosity
     - ηᶠcur: current fluid viscosity [Pa s]
+    - phim0: reference porosity for Kozeny-Carman relation (default: phim0 constant)
 
 # Returns
 
     - etafluidcur_inv_kphi: inverse empirical porosity-dependent permeability 
                             times current fluid viscosity
 """
-function ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur)
+function ηᶠcur_inv_kᵠ(kϕᵣ, ϕ, ηᶠcur; phim0::Real=phim0)
     if !(0.0 < ϕ < 1.0)
         throw(DomainError(ϕ, "Porosity must be strictly between 0 and 1"))
+    end
+    if !(0.0 < phim0 < 1.0)
+        throw(DomainError(phim0, "Reference porosity must be strictly between 0 and 1"))
     end
     if kϕᵣ <= 0.0 || ηᶠcur < 0.0
         throw(
@@ -136,13 +143,28 @@ $(SIGNATURES)
 
     - tkmm: marker temperature [K]
     - tmm: marker type [1, 2]
+    - etamin: viscosity floor [Pa s]
+    - tmsolidphase: solid phase transition temperature [K]
+    - tmfluidphase: fluid phase transition temperature [K]
+    - etasolidm: subsolidus solid rock viscosities [Pa s]
+    - etasolidmm: supersolidus solid rock viscosities [Pa s]
+    - etafluidm: subsolidus fluid viscosities [Pa s]
+    - etafluidmm: supersolidus fluid viscosities [Pa s]
 
 # Returns
     
     - etatotal: rocky marker temperature-dependent total viscosity 
 """
 function etatotal_rocks(
-    tkmm, tmm; etamin::Real=1.0e12, tmsolidphase::Real=1400.0, tmfluidphase::Real=273.0
+    tkmm,
+    tmm;
+    etamin::Real=1.0e12,
+    tmsolidphase::Real=1400.0,
+    tmfluidphase::Real=273.0,
+    etasolidm=etasolidm,
+    etasolidmm=etasolidmm,
+    etafluidm=etafluidm,
+    etafluidmm=etafluidmm,
 )
     if tkmm <= 0.0
         throw(DomainError(tkmm, "Absolute temperature must be positive"))
@@ -165,12 +187,17 @@ $(SIGNATURES)
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
                  Travis and Schubert, 2005)
             - 9: constant parameter rhocpfluidm
+        - rhocpfluidm: constant fluid volumetric heat capacity array [J/(m³ K)]
+        - tmfluidphase: fluid phase transition temperature [K]
+        - Lᶠ: latent heat of fluid phase transition [J/kg]
 
 # Returns
     
         - ρᶠCₚᶠ: volumetric isobaric heat capacity of fluid
 """
-function compute_rhocpfluidm(T, mode)
+function compute_rhocpfluidm(
+    T, mode; rhocpfluidm=rhocpfluidm, tmfluidphase::Real=tmfluidphase, Lᶠ::Real=Lᶠ
+)
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -205,12 +232,13 @@ $(SIGNATURES)
         - mode:
             - 1: dynamic, based on (Gerya, 2019)
             - 9: constant parameter ksolidm
+        - ksolidm: constant solid thermal conductivity array [W/(m K)]
 
 # Returns
     
         - kᶠ: thermal conductivity of solid
 """
-function compute_ksolidm(T, mode)
+function compute_ksolidm(T, mode; ksolidm=ksolidm)
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))
@@ -236,12 +264,14 @@ $(SIGNATURES)
             - 1: dynamic, based on (Touloukian, 1970; Hobbs, 1974;
                  Grimm & Mcsween, 1989; Bland & Travis, 2017)
             - 9: constant parameter kfluidm
+        - kfluidm: constant fluid thermal conductivity array [W/(m K)]
+        - tmfluidphase: fluid phase transition temperature [K]
 
 # Returns
     
         - kᶠ: thermal conductivity of fluid
 """
-function compute_kfluidm(T, mode)
+function compute_kfluidm(T, mode; kfluidm=kfluidm, tmfluidphase::Real=tmfluidphase)
     if mode == 1
         if T <= 0.0
             throw(DomainError(T, "Absolute temperature must be positive"))

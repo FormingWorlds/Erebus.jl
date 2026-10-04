@@ -29,6 +29,7 @@ $(SIGNATURES)
     - R: vector to store RHS coefficients
     - coords: grid coordinates
     - L: optional ExtendableSparseMatrix buffer to reuse
+    - psurface: surface pressure boundary condition [Pa]
 
 # Returns
 
@@ -98,6 +99,7 @@ function assemble_hydromechanical_lse!(
     S_vent_out=nothing,
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
     fluid_overpressure_coupling::Bool=true,
+    psurface::Real=psurface,
     workspace=nothing,
 )
     Ny1, Nx1 = size(ETAP)
@@ -675,6 +677,10 @@ $(SIGNATURES)
 
 Eliminates the diagonal Darcy flux variables (qxD, qyD) at order-N cost, reducing the linear system
 from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
+
+# Details
+
+    - psurface: surface pressure boundary condition [Pa]
 """
 function assemble_hydromechanical_4var_lse!(
     ETA,
@@ -740,6 +746,7 @@ function assemble_hydromechanical_4var_lse!(
     S_vent_out=nothing,
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
     fluid_overpressure_coupling::Bool=true,
+    psurface::Real=psurface,
     workspace=nothing,
 )
     Ny1, Nx1 = size(ETAP)
