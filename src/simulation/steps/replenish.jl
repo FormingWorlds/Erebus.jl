@@ -66,5 +66,6 @@ function replenish!(
         )
     end
 
+    assert_marker_arrays_invariants(markers, new_marknum)
     return new_marknum
 end

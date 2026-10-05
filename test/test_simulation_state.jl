@@ -654,7 +654,7 @@ using Erebus
                 push!(ARGS, toml_step2)
                 push!(ARGS, "--restart", ckpt)
                 push!(ARGS, "--force-restart-config")
-                push!(ARGS, "--show_timer", "true")
+                push!(ARGS, "--show_timer")
                 s_cli = run_simulation("")
                 @test s_cli isa SimulationState
                 @test s_cli.timestep == 2

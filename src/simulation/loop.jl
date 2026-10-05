@@ -528,7 +528,6 @@ function simulation_loop(
     savematstep_val = cfg.output.savematstep
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
     max_dt_reductions_val = cfg.solver.max_dt_reductions
-    use_pardiso_val = cfg.solver.use_pardiso
     etaphikoef_val = cfg.solver.etaphikoef
     betasolid_val = cfg.poroelasticity.betasolid
     betafluid_val = cfg.poroelasticity.betafluid
@@ -698,7 +697,7 @@ function simulation_loop(
         vpratio = cfg.time.vpratio,
         seed = cfg.solver.seed
     )
-    @info "Solver" use_pardiso=cfg.solver.use_pardiso BLAS.get_config() BLAS.get_num_threads()
+    @info "Solver" BLAS.get_config() BLAS.get_num_threads()
     rng = MersenneTwister(cfg.solver.seed)
 
     # -------------------------------------------------------------------------
@@ -1193,13 +1192,6 @@ function simulation_loop(
     else
         nothing
     end
-    # Pardiso MKL solver
-    pardiso_solver = nothing
-    pardiso_last_nnz = 0
-    if use_pardiso_val
-        pardiso_solver = Pardiso.MKLPardisoSolver()
-        initialize_pardiso!(pardiso_solver, iparms_dict)
-    end
 
     # Pre-allocated segregation workspaces
     metal_seg_ws = if coreformation_active_val
@@ -1475,398 +1467,42 @@ function simulation_loop(
                     M_accreted_total = state.accumulators.M_accreted_total
 
                     # ---------------------------------------------------------------------
-                    # telescoping domain expansion
-                    # ---------------------------------------------------------------------
-                    if cfg.telescoping.active && should_telescope_domain(
-                        rplanet_val, coords, cfg.telescoping; level=telescope_level
-                    )
-                        @info "Triggering domain telescoping expansion" level=telescope_level +
-                                                                              1 rplanet=rplanet_val old_xsize=coords.xsize new_xsize=2.0 *
-                                                                                                                                     coords.xsize
-                        old_coords = coords
-                        coords = compute_telescoped_coordinates(old_coords)
-                        xcenter_val = coords.xcenter
-                        ycenter_val = coords.ycenter
-
-                        # Remap staggered grid variables
-                        ETA = remap_staggered_grid_array(
-                            ETA,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        ETA0 = remap_staggered_grid_array(
-                            ETA0,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        GGG = remap_staggered_grid_array(
-                            GGG,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.gggsolidm[3],
-                        )
-                        EXY = remap_staggered_grid_array(EXY, (coords.Ny, coords.Nx))
-                        SXY = remap_staggered_grid_array(SXY, (coords.Ny, coords.Nx))
-                        SXY0 = remap_staggered_grid_array(SXY0, (coords.Ny, coords.Nx))
-                        wyx = remap_staggered_grid_array(wyx, (coords.Ny, coords.Nx))
-                        COH = remap_staggered_grid_array(
-                            COH,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.cohessolidm[3],
-                        )
-                        TEN = remap_staggered_grid_array(
-                            TEN,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.tenssolidm[3],
-                        )
-                        FRI = remap_staggered_grid_array(
-                            FRI,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.frictsolidm[3],
-                        )
-                        YNY = remap_staggered_grid_array(YNY, (coords.Ny, coords.Nx))
-                        ETA5 = remap_staggered_grid_array(
-                            ETA5,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        ETA00 = remap_staggered_grid_array(
-                            ETA00,
-                            (coords.Ny, coords.Nx);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        YNY5 = remap_staggered_grid_array(YNY5, (coords.Ny, coords.Nx))
-                        YNY00 = remap_staggered_grid_array(YNY00, (coords.Ny, coords.Nx))
-                        YNY_inv_ETA = remap_staggered_grid_array(
-                            YNY_inv_ETA, (coords.Ny, coords.Nx)
-                        )
-                        DSXY = remap_staggered_grid_array(DSXY, (coords.Ny, coords.Nx))
-                        DSY = remap_staggered_grid_array(DSY, (coords.Ny, coords.Nx))
-
-                        RHOX = remap_staggered_grid_array(
-                            RHOX,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhosolidm[3],
-                        )
-                        RHOFX = remap_staggered_grid_array(
-                            RHOFX,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhofluidm[3],
-                        )
-                        KX = remap_staggered_grid_array(
-                            KX,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.ksolidm[3],
-                        )
-                        PHIX = remap_staggered_grid_array(
-                            PHIX,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.poroelasticity.phimin,
-                        )
-                        vx = remap_staggered_grid_array(vx, (coords.Ny1, coords.Nx1))
-                        vxf = remap_staggered_grid_array(vxf, (coords.Ny1, coords.Nx1))
-                        RX = remap_staggered_grid_array(RX, (coords.Ny1, coords.Nx1))
-                        qxD = remap_staggered_grid_array(qxD, (coords.Ny1, coords.Nx1))
-                        gx = remap_staggered_grid_array(gx, (coords.Ny1, coords.Nx1))
-
-                        RHOY = remap_staggered_grid_array(
-                            RHOY,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhosolidm[3],
-                        )
-                        RHOFY = remap_staggered_grid_array(
-                            RHOFY,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhofluidm[3],
-                        )
-                        KY = remap_staggered_grid_array(
-                            KY,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.ksolidm[3],
-                        )
-                        PHIY = remap_staggered_grid_array(
-                            PHIY,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.poroelasticity.phimin,
-                        )
-                        vy = remap_staggered_grid_array(vy, (coords.Ny1, coords.Nx1))
-                        vyf = remap_staggered_grid_array(vyf, (coords.Ny1, coords.Nx1))
-                        RY = remap_staggered_grid_array(RY, (coords.Ny1, coords.Nx1))
-                        qyD = remap_staggered_grid_array(qyD, (coords.Ny1, coords.Nx1))
-                        gy = remap_staggered_grid_array(gy, (coords.Ny1, coords.Nx1))
-
-                        RHO = remap_staggered_grid_array(
-                            RHO,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhosolidm[3],
-                        )
-                        RHOCP = remap_staggered_grid_array(
-                            RHOCP,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.rhocpsolidm[3],
-                        )
-                        ALPHA = remap_staggered_grid_array(
-                            ALPHA,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.alphasolidm[3],
-                        )
-                        ALPHAF = remap_staggered_grid_array(
-                            ALPHAF,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.alphafluidm[3],
-                        )
-                        HR = remap_staggered_grid_array(HR, (coords.Ny1, coords.Nx1))
-                        HA = remap_staggered_grid_array(HA, (coords.Ny1, coords.Nx1))
-                        HS = remap_staggered_grid_array(HS, (coords.Ny1, coords.Nx1))
-                        ETAP = remap_staggered_grid_array(
-                            ETAP,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        GGGP = remap_staggered_grid_array(
-                            GGGP,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.gggsolidm[3],
-                        )
-                        EXX = remap_staggered_grid_array(EXX, (coords.Ny1, coords.Nx1))
-                        SXX = remap_staggered_grid_array(SXX, (coords.Ny1, coords.Nx1))
-                        SXX0 = remap_staggered_grid_array(SXX0, (coords.Ny1, coords.Nx1))
-                        tk1 = remap_staggered_grid_array(
-                            tk1,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.tkm0[3],
-                        )
-                        tk2 = remap_staggered_grid_array(
-                            tk2,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.tkm0[3],
-                        )
-                        DT = remap_staggered_grid_array(DT, (coords.Ny1, coords.Nx1))
-                        DT0 = remap_staggered_grid_array(DT0, (coords.Ny1, coords.Nx1))
-                        vxp = remap_staggered_grid_array(vxp, (coords.Ny1, coords.Nx1))
-                        vyp = remap_staggered_grid_array(vyp, (coords.Ny1, coords.Nx1))
-                        vxpf = remap_staggered_grid_array(vxpf, (coords.Ny1, coords.Nx1))
-                        vypf = remap_staggered_grid_array(vypf, (coords.Ny1, coords.Nx1))
-                        pr = remap_staggered_grid_array(pr, (coords.Ny1, coords.Nx1))
-                        pf = remap_staggered_grid_array(pf, (coords.Ny1, coords.Nx1))
-                        ps = remap_staggered_grid_array(ps, (coords.Ny1, coords.Nx1))
-                        pr0 = remap_staggered_grid_array(pr0, (coords.Ny1, coords.Nx1))
-                        pf0 = remap_staggered_grid_array(pf0, (coords.Ny1, coords.Nx1))
-                        ps0 = remap_staggered_grid_array(ps0, (coords.Ny1, coords.Nx1))
-                        ETAPHI = remap_staggered_grid_array(
-                            ETAPHI,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.etasolidm[3],
-                        )
-                        BETAPHI = remap_staggered_grid_array(
-                            BETAPHI, (coords.Ny1, coords.Nx1)
-                        )
-                        PHI = remap_staggered_grid_array(
-                            PHI,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.poroelasticity.phimin,
-                        )
-                        APHI = remap_staggered_grid_array(APHI, (coords.Ny1, coords.Nx1))
-                        FI = remap_staggered_grid_array(FI, (coords.Ny1, coords.Nx1))
-                        DMP = remap_staggered_grid_array(DMP, (coords.Ny1, coords.Nx1))
-                        DHP = remap_staggered_grid_array(DHP, (coords.Ny1, coords.Nx1))
-                        XWS = remap_staggered_grid_array(XWS, (coords.Ny1, coords.Nx1))
-                        EII = remap_staggered_grid_array(EII, (coords.Ny1, coords.Nx1))
-                        SII = remap_staggered_grid_array(SII, (coords.Ny1, coords.Nx1))
-                        DSXX = remap_staggered_grid_array(DSXX, (coords.Ny1, coords.Nx1))
-                        tk0 = remap_staggered_grid_array(
-                            tk0,
-                            (coords.Ny1, coords.Nx1);
-                            background_val=cfg.materials.tkm0[3],
-                        )
-                        if Q_metric !== nothing
-                            Q_metric = remap_staggered_grid_array(
-                                Q_metric, (coords.Ny1, coords.Nx1)
-                            )
-                        end
-                        DQPF = remap_staggered_grid_array(DQPF, (coords.Ny1, coords.Nx1))
-                        DQPFSUM = remap_staggered_grid_array(
-                            DQPFSUM, (coords.Ny1, coords.Nx1)
-                        )
-                        S_vent_grid = remap_staggered_grid_array(
-                            S_vent_grid, (coords.Ny1, coords.Nx1)
-                        )
-                        Q_lat_grid = remap_staggered_grid_array(
-                            Q_lat_grid, (coords.Ny1, coords.Nx1)
-                        )
-                        Q_seg_grid = remap_staggered_grid_array(
-                            Q_seg_grid, (coords.Ny1, coords.Nx1)
-                        )
-
-                        # Helper geometries and buffers
-                        mdis, mnum = setup_marker_geometry_helpers(coords)
-                        interp_arrays = setup_interpolated_properties(coords)
-                        (
-                            ETA0SUM,
-                            ETASUM,
-                            GGGSUM,
-                            SXYSUM,
-                            COHSUM,
-                            TENSUM,
-                            FRISUM,
-                            WTSUM,
-                            RHOXSUM,
-                            RHOFXSUM,
-                            KXSUM,
-                            PHIXSUM,
-                            RXSUM,
-                            WTXSUM,
-                            RHOYSUM,
-                            RHOFYSUM,
-                            KYSUM,
-                            PHIYSUM,
-                            RYSUM,
-                            WTYSUM,
-                            RHOSUM,
-                            RHOCPSUM,
-                            ALPHASUM,
-                            ALPHAFSUM,
-                            HRSUM,
-                            GGGPSUM,
-                            SXXSUM,
-                            TKSUM,
-                            PHISUM,
-                            DMPSUM,
-                            DHPSUM,
-                            XWSSUM,
-                            WTPSUM,
-                        ) = interp_arrays
-                        if !use_tiled_p2m && use_threading
-                            thread_buffers = allocate_thread_interpolation_buffers(
-                                num_buffers, coords
-                            )
-                        end
-
-                        # Telescope marker arrays
-                        marknum = telescope_marker_arrays!(
-                            xm,
-                            ym,
-                            tm,
-                            tkm,
-                            sxxm,
-                            sxym,
-                            etavpm,
-                            phim,
-                            phinewm,
-                            pfm0,
-                            XWsolidm,
-                            XWsolidm0,
-                            Fm,
-                            rhototalm,
-                            rhocptotalm,
-                            etatotalm,
-                            hrtotalm,
-                            ktotalm,
-                            inv_gggtotalm,
-                            fricttotalm,
-                            cohestotalm,
-                            tenstotalm,
-                            rhofluidcur,
-                            alphasolidcur,
-                            alphafluidcur,
-                            tkm_rhocptotalm,
-                            etafluidcur_inv_kphim;
-                            old_coords=old_coords,
-                            new_coords=coords,
-                            T_ambient=cfg.materials.tkm0[3],
-                            phi_ambient=cfg.poroelasticity.phimin,
-                            buffer_markers_per_cell=cfg.telescoping.buffer_markers_per_cell,
-                            materials=cfg.materials,
-                            Xfem=Xfem,
-                            Xfem0=Xfem0,
-                            Xfe_bulk=Xfe_bulk,
-                            XH2Om=if (cfg.volatiles.active || cfg.magma_degassing.active)
-                                XH2Om
-                            else
-                                nothing
-                            end,
-                            XCm=if (cfg.volatiles.active || cfg.magma_degassing.active)
-                                XCm
-                            else
-                                nothing
-                            end,
-                            XNm=if (cfg.volatiles.active || cfg.magma_degassing.active)
-                                XNm
-                            else
-                                nothing
-                            end,
-                            XSm=if (cfg.volatiles.active || cfg.magma_degassing.active)
-                                XSm
-                            else
-                                nothing
-                            end,
-                            Xfe_H_m=Xfe_H_m,
-                            Xfe_C_m=Xfe_C_m,
-                            Xfe_N_m=Xfe_N_m,
-                            Xfe_S_m=Xfe_S_m,
-                            Xmin_troilite_m=Xmin_troilite_m,
-                            Xmin_schreibersite_m=Xmin_schreibersite_m,
-                            Xmin_cohenite_m=Xmin_cohenite_m,
-                            Xmin_graphite_m=Xmin_graphite_m,
-                            Xmin_nitride_m=Xmin_nitride_m,
-                            Xmin_metal_matrix_m=Xmin_metal_matrix_m,
-                            t_accreted=t_accreted,
-                            hcnspo_props=hcnspo_props,
-                            F_extract_m=F_extract_m,
-                        )
-
-                        # Re-initialize linear solvers and Poisson operator for new grid size
-                        R, S = setup_hydromechanical_lse(
-                            coords; dof_per_node=dof_per_node_val
-                        )
-                        hydromech_sol = nothing
-                        hydromech_ws = HydromechanicalLSEWorkspace(
-                            coords; dof_per_node=dof_per_node_val
-                        )
-                        L_hydromech = hydromech_ws.L
-                        hydromech_cache = nothing
-
-                        RT, ST = setup_thermal_lse(coords)
-                        thermal_ws = ThermalLSEWorkspace(coords)
-                        LT_thermal = thermal_ws.LT
-                        thermal_cache = nothing
-
-                        RP, SP = setup_gravitational_lse(coords)
-                        if cfg.geometry.gravity_mode === :poisson2d
-                            LP = assemble_gravitational_lse!(
-                                zeros(coords.Ny1, coords.Nx1), RP; coords=coords
-                            )
-                            F_grav = lu(LP.cscmatrix)
-                        end
-
-                        if use_pardiso_val && pardiso_solver !== nothing
-                            set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
-                            pardiso(pardiso_solver)
-                            pardiso_last_nnz = 0
-                        end
-
-                        telescope_level += 1
-                        if metal_seg_ws !== nothing
-                            metal_seg_ws = MetalSegregationWorkspace(
-                                coords.Ny,
-                                coords.Nx;
-                                track_volatiles=cfg.metal_partition.active,
-                            )
-                        end
-                        if magma_seg_ws !== nothing
-                            magma_seg_ws = MagmaSegregationWorkspace(coords.Ny, coords.Nx)
-                        end
-                        fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
-                        fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
-                        @info "Telescoping complete" level=telescope_level Nx=coords.Nx Ny=coords.Ny marknum=marknum
-                    end
-
-                    # ---------------------------------------------------------------------
                     # 2. calculate radioactive heating
                     # 3. compute marker properties and interpolate to staggered grid
                     # 4. compute gravity solution
                     # ---------------------------------------------------------------------
                     state = _create_current_state(timestep, dt, timesum, P_amb_eff)
                     radiogenic_heating!(state, coords, cfg)
+
+                    # Refractory organic pyrolysis
+                    DHP_pyro =
+                        if cfg.refractory.active &&
+                            cfg.refractory.kinetics_active &&
+                            hcnspo_props !== nothing
+                            dhp_p = zeros(Float64, coords.Ny1, coords.Nx1)
+                            update_marker_pyrolysis!(
+                                tkm,
+                                dt,
+                                phim,
+                                hcnspo_props.X_refr_C_m,
+                                hcnspo_props.X_refr_N_m,
+                                hcnspo_props.X_refr_H_m,
+                                cfg.refractory;
+                                tm=tm,
+                                rhosolidm=cfg.materials.rhosolidm,
+                                xm=xm,
+                                ym=ym,
+                                coords=coords,
+                                DHP=dhp_p,
+                                redox_props=redox_props,
+                                redox_cfg=cfg.redox,
+                                Xfem=Xfem,
+                            )
+                            dhp_p
+                        else
+                            nothing
+                        end
+
                     interpolate_markers_to_grid!(
                         state,
                         coords,
@@ -2013,26 +1649,11 @@ function simulation_loop(
                             )
                         end
 
-                        if cfg.refractory.active &&
-                            cfg.refractory.kinetics_active &&
-                            hcnspo_props !== nothing
-                            update_marker_pyrolysis!(
-                                tkm,
-                                dt,
-                                phim,
-                                hcnspo_props.X_refr_C_m,
-                                hcnspo_props.X_refr_N_m,
-                                hcnspo_props.X_refr_H_m,
-                                cfg.refractory;
-                                xm=xm,
-                                ym=ym,
-                                coords=coords,
-                                DHP=DHP,
-                                rhosolid=cfg.materials.rhosolidm,
-                                redox_props=redox_props,
-                                redox_cfg=cfg.redox,
-                                Xfem=Xfem,
-                            )
+                        if !reaction_active_val
+                            fill!(DHP, 0.0)
+                        end
+                        if DHP_pyro !== nothing
+                            DHP .+= DHP_pyro
                         end
 
                         # -----------------------------------------------------------------
@@ -2306,22 +1927,6 @@ function simulation_loop(
                                     error(
                                         "Iterative Krylov solver $(cfg.solver.krylov_method) failed to converge within $(stats.niter) iterations (status: $(stats.status))",
                                     )
-                                end
-                            elseif use_pardiso_val && pardiso_solver !== nothing
-                                L_csc = get_matrix(pardiso_solver, L, :N)
-                                current_nnz = nnz(L_csc)
-                                if current_nnz != pardiso_last_nnz
-                                    set_phase!(
-                                        pardiso_solver,
-                                        Pardiso.ANALYSIS_NUM_FACT_SOLVE_REFINE,
-                                    )
-                                    pardiso(pardiso_solver, S, L_csc, R)
-                                    pardiso_last_nnz = current_nnz
-                                else
-                                    set_phase!(
-                                        pardiso_solver, Pardiso.NUM_FACT_SOLVE_REFINE
-                                    )
-                                    pardiso(pardiso_solver, S, L_csc, R)
                                 end
                             else
                                 if hydromech_cache === nothing
@@ -3065,6 +2670,314 @@ function simulation_loop(
                 w3d_m = markers.core.w3d_m
 
                 # ---------------------------------------------------------------------
+                # Step 11: telescoping domain expansion (post-convergence)
+                # ---------------------------------------------------------------------
+                if cfg.telescoping.active && should_telescope_domain(
+                    rplanet_val, coords, cfg.telescoping; level=telescope_level
+                )
+                    @info "Triggering domain telescoping expansion" level=telescope_level +
+                                                                          1 rplanet=rplanet_val old_xsize=coords.xsize new_xsize=2.0 *
+                                                                                                                                 coords.xsize
+                    old_coords = coords
+                    coords = compute_telescoped_coordinates(old_coords)
+                    xcenter_val = coords.xcenter
+                    ycenter_val = coords.ycenter
+
+                    # Remap staggered grid variables
+                    ETA = remap_staggered_grid_array(
+                        ETA,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    ETA0 = remap_staggered_grid_array(
+                        ETA0,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    GGG = remap_staggered_grid_array(
+                        GGG,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.gggsolidm[3],
+                    )
+                    EXY = remap_staggered_grid_array(EXY, (coords.Ny, coords.Nx))
+                    SXY = remap_staggered_grid_array(SXY, (coords.Ny, coords.Nx))
+                    SXY0 = remap_staggered_grid_array(SXY0, (coords.Ny, coords.Nx))
+                    wyx = remap_staggered_grid_array(wyx, (coords.Ny, coords.Nx))
+                    COH = remap_staggered_grid_array(
+                        COH,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.cohessolidm[3],
+                    )
+                    TEN = remap_staggered_grid_array(
+                        TEN,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.tenssolidm[3],
+                    )
+                    FRI = remap_staggered_grid_array(
+                        FRI,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.frictsolidm[3],
+                    )
+                    YNY = remap_staggered_grid_array(YNY, (coords.Ny, coords.Nx))
+                    ETA5 = remap_staggered_grid_array(
+                        ETA5,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    ETA00 = remap_staggered_grid_array(
+                        ETA00,
+                        (coords.Ny, coords.Nx);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    YNY5 = remap_staggered_grid_array(YNY5, (coords.Ny, coords.Nx))
+                    YNY00 = remap_staggered_grid_array(YNY00, (coords.Ny, coords.Nx))
+                    YNY_inv_ETA = remap_staggered_grid_array(
+                        YNY_inv_ETA, (coords.Ny, coords.Nx)
+                    )
+                    DSXY = remap_staggered_grid_array(DSXY, (coords.Ny, coords.Nx))
+                    DSY = remap_staggered_grid_array(DSY, (coords.Ny, coords.Nx))
+
+                    RHOX = remap_staggered_grid_array(
+                        RHOX,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhosolidm[3],
+                    )
+                    RHOFX = remap_staggered_grid_array(
+                        RHOFX,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhofluidm[3],
+                    )
+                    KX = remap_staggered_grid_array(
+                        KX,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.ksolidm[3],
+                    )
+                    PHIX = remap_staggered_grid_array(
+                        PHIX,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.poroelasticity.phimin,
+                    )
+                    vx = remap_staggered_grid_array(vx, (coords.Ny1, coords.Nx1))
+                    vxf = remap_staggered_grid_array(vxf, (coords.Ny1, coords.Nx1))
+                    RX = remap_staggered_grid_array(RX, (coords.Ny1, coords.Nx1))
+                    qxD = remap_staggered_grid_array(qxD, (coords.Ny1, coords.Nx1))
+                    gx = remap_staggered_grid_array(gx, (coords.Ny1, coords.Nx1))
+
+                    RHOY = remap_staggered_grid_array(
+                        RHOY,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhosolidm[3],
+                    )
+                    RHOFY = remap_staggered_grid_array(
+                        RHOFY,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhofluidm[3],
+                    )
+                    KY = remap_staggered_grid_array(
+                        KY,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.ksolidm[3],
+                    )
+                    PHIY = remap_staggered_grid_array(
+                        PHIY,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.poroelasticity.phimin,
+                    )
+                    vy = remap_staggered_grid_array(vy, (coords.Ny1, coords.Nx1))
+                    vyf = remap_staggered_grid_array(vyf, (coords.Ny1, coords.Nx1))
+                    RY = remap_staggered_grid_array(RY, (coords.Ny1, coords.Nx1))
+                    qyD = remap_staggered_grid_array(qyD, (coords.Ny1, coords.Nx1))
+                    gy = remap_staggered_grid_array(gy, (coords.Ny1, coords.Nx1))
+
+                    RHO = remap_staggered_grid_array(
+                        RHO,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhosolidm[3],
+                    )
+                    RHOCP = remap_staggered_grid_array(
+                        RHOCP,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.rhocpsolidm[3],
+                    )
+                    ALPHA = remap_staggered_grid_array(
+                        ALPHA,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.alphasolidm[3],
+                    )
+                    ALPHAF = remap_staggered_grid_array(
+                        ALPHAF,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.alphafluidm[3],
+                    )
+                    HR = remap_staggered_grid_array(HR, (coords.Ny1, coords.Nx1))
+                    HA = remap_staggered_grid_array(HA, (coords.Ny1, coords.Nx1))
+                    HS = remap_staggered_grid_array(HS, (coords.Ny1, coords.Nx1))
+                    ETAP = remap_staggered_grid_array(
+                        ETAP,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    GGGP = remap_staggered_grid_array(
+                        GGGP,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.gggsolidm[3],
+                    )
+                    EXX = remap_staggered_grid_array(EXX, (coords.Ny1, coords.Nx1))
+                    SXX = remap_staggered_grid_array(SXX, (coords.Ny1, coords.Nx1))
+                    SXX0 = remap_staggered_grid_array(SXX0, (coords.Ny1, coords.Nx1))
+                    tk1 = remap_staggered_grid_array(
+                        tk1, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+                    )
+                    tk2 = remap_staggered_grid_array(
+                        tk2, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+                    )
+                    DT = remap_staggered_grid_array(DT, (coords.Ny1, coords.Nx1))
+                    DT0 = remap_staggered_grid_array(DT0, (coords.Ny1, coords.Nx1))
+                    vxp = remap_staggered_grid_array(vxp, (coords.Ny1, coords.Nx1))
+                    vyp = remap_staggered_grid_array(vyp, (coords.Ny1, coords.Nx1))
+                    vxpf = remap_staggered_grid_array(vxpf, (coords.Ny1, coords.Nx1))
+                    vypf = remap_staggered_grid_array(vypf, (coords.Ny1, coords.Nx1))
+                    pr = remap_staggered_grid_array(pr, (coords.Ny1, coords.Nx1))
+                    pf = remap_staggered_grid_array(pf, (coords.Ny1, coords.Nx1))
+                    ps = remap_staggered_grid_array(ps, (coords.Ny1, coords.Nx1))
+                    pr0 = remap_staggered_grid_array(pr0, (coords.Ny1, coords.Nx1))
+                    pf0 = remap_staggered_grid_array(pf0, (coords.Ny1, coords.Nx1))
+                    ps0 = remap_staggered_grid_array(ps0, (coords.Ny1, coords.Nx1))
+                    ETAPHI = remap_staggered_grid_array(
+                        ETAPHI,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.materials.etasolidm[3],
+                    )
+                    BETAPHI = remap_staggered_grid_array(BETAPHI, (coords.Ny1, coords.Nx1))
+                    PHI = remap_staggered_grid_array(
+                        PHI,
+                        (coords.Ny1, coords.Nx1);
+                        background_val=cfg.poroelasticity.phimin,
+                    )
+                    APHI = remap_staggered_grid_array(APHI, (coords.Ny1, coords.Nx1))
+                    FI = remap_staggered_grid_array(FI, (coords.Ny1, coords.Nx1))
+                    DMP = remap_staggered_grid_array(DMP, (coords.Ny1, coords.Nx1))
+                    DHP = remap_staggered_grid_array(DHP, (coords.Ny1, coords.Nx1))
+                    XWS = remap_staggered_grid_array(XWS, (coords.Ny1, coords.Nx1))
+                    EII = remap_staggered_grid_array(EII, (coords.Ny1, coords.Nx1))
+                    SII = remap_staggered_grid_array(SII, (coords.Ny1, coords.Nx1))
+                    DSXX = remap_staggered_grid_array(DSXX, (coords.Ny1, coords.Nx1))
+                    tk0 = remap_staggered_grid_array(
+                        tk0, (coords.Ny1, coords.Nx1); background_val=cfg.materials.tkm0[3]
+                    )
+                    if Q_metric !== nothing
+                        Q_metric = remap_staggered_grid_array(
+                            Q_metric, (coords.Ny1, coords.Nx1)
+                        )
+                    end
+                    DQPF = remap_staggered_grid_array(DQPF, (coords.Ny1, coords.Nx1))
+                    DQPFSUM = remap_staggered_grid_array(DQPFSUM, (coords.Ny1, coords.Nx1))
+                    S_vent_grid = remap_staggered_grid_array(
+                        S_vent_grid, (coords.Ny1, coords.Nx1)
+                    )
+                    Q_lat_grid = remap_staggered_grid_array(
+                        Q_lat_grid, (coords.Ny1, coords.Nx1)
+                    )
+                    Q_seg_grid = remap_staggered_grid_array(
+                        Q_seg_grid, (coords.Ny1, coords.Nx1)
+                    )
+
+                    # Helper geometries and buffers
+                    mdis, mnum = setup_marker_geometry_helpers(coords)
+                    interp_arrays = setup_interpolated_properties(coords)
+                    (
+                        ETA0SUM,
+                        ETASUM,
+                        GGGSUM,
+                        SXYSUM,
+                        COHSUM,
+                        TENSUM,
+                        FRISUM,
+                        WTSUM,
+                        RHOXSUM,
+                        RHOFXSUM,
+                        KXSUM,
+                        PHIXSUM,
+                        RXSUM,
+                        WTXSUM,
+                        RHOYSUM,
+                        RHOFYSUM,
+                        KYSUM,
+                        PHIYSUM,
+                        RYSUM,
+                        WTYSUM,
+                        RHOSUM,
+                        RHOCPSUM,
+                        ALPHASUM,
+                        ALPHAFSUM,
+                        HRSUM,
+                        GGGPSUM,
+                        SXXSUM,
+                        TKSUM,
+                        PHISUM,
+                        DMPSUM,
+                        DHPSUM,
+                        XWSSUM,
+                        WTPSUM,
+                    ) = interp_arrays
+
+                    # Telescope marker arrays
+                    marknum = telescope_marker_arrays!(
+                        markers;
+                        old_coords=old_coords,
+                        new_coords=coords,
+                        buffer_markers_per_cell=cfg.telescoping.buffer_markers_per_cell,
+                        cfg=cfg,
+                    )
+                    w3d_m = markers.core.w3d_m
+
+                    if use_tiled_p2m
+                        p2m_workspace = P2MTiledWorkspace(
+                            coords, marknum, cfg.solver.tile_size
+                        )
+                    elseif use_threading
+                        thread_buffers = allocate_thread_interpolation_buffers(
+                            num_buffers, coords
+                        )
+                    end
+
+                    # Re-initialize linear solvers and Poisson operator for new grid size
+                    R, S = setup_hydromechanical_lse(coords; dof_per_node=dof_per_node_val)
+                    hydromech_sol = nothing
+                    hydromech_ws = HydromechanicalLSEWorkspace(
+                        coords; dof_per_node=dof_per_node_val
+                    )
+                    L_hydromech = hydromech_ws.L
+                    hydromech_cache = nothing
+
+                    RT, ST = setup_thermal_lse(coords)
+                    thermal_ws = ThermalLSEWorkspace(coords)
+                    LT_thermal = thermal_ws.LT
+                    thermal_cache = nothing
+
+                    RP, SP = setup_gravitational_lse(coords)
+                    if cfg.geometry.gravity_mode === :poisson2d
+                        LP = assemble_gravitational_lse!(
+                            zeros(coords.Ny1, coords.Nx1), RP; coords=coords
+                        )
+                        F_grav = lu(LP.cscmatrix)
+                    end
+
+                    telescope_level += 1
+                    if metal_seg_ws !== nothing
+                        metal_seg_ws = MetalSegregationWorkspace(
+                            coords.Ny, coords.Nx; track_volatiles=cfg.metal_partition.active
+                        )
+                    end
+                    if magma_seg_ws !== nothing
+                        magma_seg_ws = MagmaSegregationWorkspace(coords.Ny, coords.Nx)
+                    end
+                    fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
+                    fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
+                    @info "Telescoping complete" level=telescope_level Nx=coords.Nx Ny=coords.Ny marknum=marknum
+                end
+
+                # ---------------------------------------------------------------------
                 # update timesum
                 # ---------------------------------------------------------------------
                 timesum += dt
@@ -3212,10 +3125,6 @@ function simulation_loop(
     finally
         if telemetry_io !== nothing
             close(telemetry_io)
-        end
-        if use_pardiso_val && pardiso_solver !== nothing
-            set_phase!(pardiso_solver, Pardiso.RELEASE_ALL)
-            pardiso(pardiso_solver)
         end
     end
 

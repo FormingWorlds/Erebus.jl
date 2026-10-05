@@ -68,7 +68,8 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
 | `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
 | `seed` | `Int` | `42` | - | Random seed for marker initialization | $\ge 0$ |
-| `use_pardiso` | `Bool` | `false` | - | Enable Pardiso solver instead of UMFPACK | `true` / `false` |
+| `use_pardiso` | `Bool` | `false` | - | Unsupported setting; must be false | `false` |
+| `experimental` | `Bool` | `false` | - | Enable experimental solver modules (e.g. iterative, matrix_free) | `true` / `false` |
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
 | `etamin` | `Float64` | `1.0e+12` | Pa s | Lower shear viscosity cutoff | $> 0$ |
 | `etamax` | `Float64` | `1.0e+23` | Pa s | Upper shear viscosity cutoff | $\ge \text{etamin}$ |

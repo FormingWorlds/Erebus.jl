@@ -1573,6 +1573,55 @@ function compute_escape_activation_threshold(
 end
 
 """
+    equilibrate_atmospheric_speciation!(
+        atm_state::AtmosphereState,
+        T_surf::Float64,
+        P_surf::Float64;
+        warn_context::String="speciation",
+    )
+
+Equilibrate elemental atmospheric inventory into molecular species and update oxygen buffer.
+"""
+function equilibrate_atmospheric_speciation!(
+    atm_state::AtmosphereState,
+    T_surf::Real,
+    P_surf::Real;
+    warn_context::String="speciation",
+)
+    if total_mass(atm_state.elem) <= 0.0
+        atm_state.species = SpeciesInventory()
+        atm_state.log10_fO2 = -40.0
+        for sp in SPECIATION_SPECIES
+            atm_state.M_atm[sp] = 0.0
+        end
+        return nothing
+    end
+
+    nO_max =
+        0.5 * (atm_state.elem.H / M_H) +
+        2.0 * (atm_state.elem.C / M_C) +
+        2.0 * (atm_state.elem.S / M_S)
+    mO_max = nO_max * M_O
+    if atm_state.elem.O > mO_max
+        surplus_O = max(0.0, atm_state.elem.O - mO_max)
+        atm_state.dO_buffer += surplus_O
+        @warn "Atmospheric oxygen surplus of $(surplus_O) kg transferred to dO_buffer during $(warn_context)" maxlog=5
+        atm_state.elem = ElementInventory(
+            atm_state.elem.H, atm_state.elem.C, atm_state.elem.N, atm_state.elem.S, mO_max
+        )
+    end
+    spec_res = speciate_closed_system(atm_state.elem, T_surf, P_surf; handle_excess_O=true)
+    if spec_res.excess_O > 0.0
+        atm_state.dO_buffer += spec_res.excess_O
+    end
+    atm_state.species = spec_res.species
+    atm_state.log10_fO2 = spec_res.log10_fO2
+    for sp in SPECIATION_SPECIES
+        atm_state.M_atm[sp] = getproperty(atm_state.species, sp)
+    end
+end
+
+"""
     evolve_coupled_atmosphere_step!(
         atm_state::AtmosphereState,
         vent_rates::AbstractDict{Symbol,<:Real},
@@ -1770,17 +1819,9 @@ function evolve_coupled_atmosphere_step!(
     T_surf_est = max(273.15, atm_state.T_surf_eq > 0.0 ? atm_state.T_surf_eq : Tamb)
 
     if is_elemental
-        if M_tot_curr > 0.0
-            spec_res = speciate_closed_system(atm_state.elem, T_surf_est, P_surf_est)
-            atm_state.species = spec_res.species
-            atm_state.log10_fO2 = spec_res.log10_fO2
-        else
-            atm_state.species = SpeciesInventory()
-            atm_state.log10_fO2 = -40.0
-        end
-        for sp in SPECIATION_SPECIES
-            atm_state.M_atm[sp] = getproperty(atm_state.species, sp)
-        end
+        equilibrate_atmospheric_speciation!(
+            atm_state, T_surf_est, P_surf_est; warn_context="speciation"
+        )
     end
 
     # 4. Hydrodynamic escape and multispecies closure (active once disk disperses)
@@ -1928,19 +1969,9 @@ function evolve_coupled_atmosphere_step!(
 
             # Refresh species and log10_fO2 after escape
             if is_elemental
-                if total_mass(atm_state.elem) > 0.0
-                    spec_after = speciate_closed_system(
-                        atm_state.elem, T_surf_est, P_surf_est
-                    )
-                    atm_state.species = spec_after.species
-                    atm_state.log10_fO2 = spec_after.log10_fO2
-                else
-                    atm_state.species = SpeciesInventory()
-                    atm_state.log10_fO2 = -40.0
-                end
-                for sp in SPECIATION_SPECIES
-                    atm_state.M_atm[sp] = getproperty(atm_state.species, sp)
-                end
+                equilibrate_atmospheric_speciation!(
+                    atm_state, T_surf_est, P_surf_est; warn_context="preferential escape"
+                )
             else
                 atm_state.species = SpeciesInventory(atm_state.M_atm)
             end

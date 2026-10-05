@@ -34,7 +34,7 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 This installs all required direct and transitive dependencies:
 - `StaticArrays.jl`: Compile-time sized static arrays for computational stencils.
-- `LinearSolve.jl`: High-performance sparse linear solvers (UMFPACK, Pardiso).
+- `LinearSolve.jl`: High-performance sparse linear solvers (UMFPACK).
 - `ExtendableSparse.jl`: Fast dynamic sparse matrix assembly.
 - `TOML.jl`: Standard library TOML configuration parser.
 - `JLD2.jl`: HDF5-compatible binary checkpoint storage.

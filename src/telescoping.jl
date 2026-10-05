@@ -109,6 +109,30 @@ function remap_staggered_grid_array(
 end
 
 """
+    push_redox_marker!(redox_props, deltaIW_ambient::Float64)
+
+Append sticky-air marker defaults to all active arrays in `redox_props`.
+
+# Parameters
+- `redox_props`: Redox properties container.
+- `deltaIW_ambient`: Ambient delta IW oxygen fugacity buffer value.
+"""
+function push_redox_marker!(redox_props, deltaIW_ambient::Float64)
+    redox_props === nothing && return nothing
+    for fn in fieldnames(RedoxGroup)
+        if hasproperty(redox_props, fn)
+            arr = getproperty(redox_props, fn)
+            if arr !== nothing
+                push!(arr, fn === :deltaIW_m ? deltaIW_ambient : 0.0)
+            end
+        end
+    end
+    return nothing
+end
+
+@inline push_if_not_nothing!(arr, val=0.0) = (arr !== nothing && push!(arr, val); nothing)
+
+"""
     telescope_marker_arrays!(
         xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0,
         XWsolidm, XWsolidm0, Fm, rhototalm, rhocptotalm, etatotalm,
@@ -201,11 +225,30 @@ function telescope_marker_arrays!(
     materials::Union{Nothing,MaterialConfig}=nothing,
     hcnspo_props=nothing,
     F_extract_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    X_graphite_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    redox_props=nothing,
+    deltaIW_ambient::Real=0.0,
+    cfg::Union{Nothing,SimulationConfig}=nothing,
 )::Int
     if iseven(old_coords.Nx) || iseven(old_coords.Ny)
         throw(
             ArgumentError(
                 "Telescoping domain requires odd Nx and Ny for staggered grid centering (got Nx=$(old_coords.Nx), Ny=$(old_coords.Ny))",
+            ),
+        )
+    end
+    if iseven(new_coords.Nx) || iseven(new_coords.Ny)
+        throw(
+            ArgumentError(
+                "Telescoping domain requires odd Nx and Ny for new staggered grid centering (got Nx=$(new_coords.Nx), Ny=$(new_coords.Ny))",
+            ),
+        )
+    end
+    if length(ym) != length(xm)
+        throw(
+            DimensionMismatch(
+                "Coordinate vector lengths do not match: length(xm)=$(length(xm)), length(ym)=$(length(ym))",
             ),
         )
     end
@@ -301,66 +344,41 @@ function telescope_marker_arrays!(
                         push!(tkm_rhocptotalm, tkm_rhocp_air)
                         push!(etafluidcur_inv_kphim, 1.0e14)
 
-                        if Xfem !== nothing
-                            push!(Xfem, 0.0)
+                        push_if_not_nothing!(Xfem)
+                        push_if_not_nothing!(Xfem0)
+                        push_if_not_nothing!(Xfe_bulk)
+                        push_if_not_nothing!(XH2Om)
+                        push_if_not_nothing!(XCm)
+                        push_if_not_nothing!(XNm)
+                        push_if_not_nothing!(XSm)
+                        push_if_not_nothing!(Xfe_H_m)
+                        push_if_not_nothing!(Xfe_C_m)
+                        push_if_not_nothing!(Xfe_N_m)
+                        push_if_not_nothing!(Xfe_S_m)
+                        push_if_not_nothing!(Xmin_troilite_m)
+                        push_if_not_nothing!(Xmin_schreibersite_m)
+                        push_if_not_nothing!(Xmin_cohenite_m)
+                        push_if_not_nothing!(Xmin_graphite_m)
+                        push_if_not_nothing!(Xmin_nitride_m)
+                        push_if_not_nothing!(Xmin_metal_matrix_m)
+                        push_if_not_nothing!(t_accreted)
+                        push_if_not_nothing!(F_extract_m)
+                        if w3d_m !== nothing
+                            push!(
+                                w3d_m,
+                                marker_out_of_plane_length(
+                                    x_marker,
+                                    y_marker,
+                                    new_coords.xcenter,
+                                    new_coords.ycenter,
+                                ),
+                            )
                         end
-                        if Xfem0 !== nothing
-                            push!(Xfem0, 0.0)
-                        end
-                        if Xfe_bulk !== nothing
-                            push!(Xfe_bulk, 0.0)
-                        end
-                        if XH2Om !== nothing
-                            push!(XH2Om, 0.0)
-                        end
-                        if XCm !== nothing
-                            push!(XCm, 0.0)
-                        end
-                        if XNm !== nothing
-                            push!(XNm, 0.0)
-                        end
-                        if XSm !== nothing
-                            push!(XSm, 0.0)
-                        end
-                        if Xfe_H_m !== nothing
-                            push!(Xfe_H_m, 0.0)
-                        end
-                        if Xfe_C_m !== nothing
-                            push!(Xfe_C_m, 0.0)
-                        end
-                        if Xfe_N_m !== nothing
-                            push!(Xfe_N_m, 0.0)
-                        end
-                        if Xfe_S_m !== nothing
-                            push!(Xfe_S_m, 0.0)
-                        end
-                        if Xmin_troilite_m !== nothing
-                            push!(Xmin_troilite_m, 0.0)
-                        end
-                        if Xmin_schreibersite_m !== nothing
-                            push!(Xmin_schreibersite_m, 0.0)
-                        end
-                        if Xmin_cohenite_m !== nothing
-                            push!(Xmin_cohenite_m, 0.0)
-                        end
-                        if Xmin_graphite_m !== nothing
-                            push!(Xmin_graphite_m, 0.0)
-                        end
-                        if Xmin_nitride_m !== nothing
-                            push!(Xmin_nitride_m, 0.0)
-                        end
-                        if Xmin_metal_matrix_m !== nothing
-                            push!(Xmin_metal_matrix_m, 0.0)
-                        end
-                        if t_accreted !== nothing
-                            push!(t_accreted, 0.0)
-                        end
-                        if F_extract_m !== nothing
-                            push!(F_extract_m, 0.0)
-                        end
+                        push_if_not_nothing!(X_graphite_m)
+                        push_redox_marker!(redox_props, Float64(deltaIW_ambient))
                         if hcnspo_props !== nothing
                             for prop in values(hcnspo_props)
-                                push!(prop, 0.0)
+                                push_if_not_nothing!(prop)
                             end
                         end
                     end
@@ -370,4 +388,172 @@ function telescope_marker_arrays!(
     end
 
     return length(xm)
+end
+
+"""
+    telescope_marker_arrays!(
+        markers::MarkerArrays;
+        old_coords::GridCoordinates,
+        new_coords::GridCoordinates,
+        cfg::Union{Nothing,SimulationConfig}=nothing,
+        buffer_markers_per_cell::Integer=4,
+    )::Int
+
+Extend all active arrays in `markers.core` and `markers.groups` following domain telescoping.
+Ensures array length invariants are maintained across all groups.
+"""
+function telescope_marker_arrays!(
+    markers::MarkerArrays;
+    old_coords::GridCoordinates,
+    new_coords::GridCoordinates,
+    cfg::Union{Nothing,SimulationConfig}=nothing,
+    buffer_markers_per_cell::Integer=4,
+)::Int
+    c = markers.core
+    grps = markers.groups
+    mats = cfg !== nothing ? cfg.materials : nothing
+
+    Xfem = haskey(grps, :metal) ? grps[:metal].Xfem : nothing
+    Xfem0 = haskey(grps, :metal) ? grps[:metal].Xfem0 : nothing
+    Xfe_bulk = haskey(grps, :metal) ? grps[:metal].Xfe_bulk : nothing
+    Xfe_H_m = haskey(grps, :metal) ? grps[:metal].Xfe_H_m : nothing
+    Xfe_C_m = haskey(grps, :metal) ? grps[:metal].Xfe_C_m : nothing
+    Xfe_N_m = haskey(grps, :metal) ? grps[:metal].Xfe_N_m : nothing
+    Xfe_S_m = haskey(grps, :metal) ? grps[:metal].Xfe_S_m : nothing
+
+    XH2Om = haskey(grps, :volatiles) ? grps[:volatiles].XH2Om : nothing
+    XCm = haskey(grps, :volatiles) ? grps[:volatiles].XCm : nothing
+    XNm = haskey(grps, :volatiles) ? grps[:volatiles].XNm : nothing
+    XSm = haskey(grps, :volatiles) ? grps[:volatiles].XSm : nothing
+    X_graphite_m = haskey(grps, :volatiles) ? grps[:volatiles].X_graphite_m : nothing
+    F_extract_m = haskey(grps, :volatiles) ? grps[:volatiles].F_extract_m : nothing
+
+    redox_props = haskey(grps, :redox) ? grps[:redox] : nothing
+    hcnspo_props = haskey(grps, :hcnspo) ? grps[:hcnspo] : nothing
+
+    Xmin_troilite_m = haskey(grps, :phase) ? grps[:phase].Xmin_troilite_m : nothing
+    Xmin_schreibersite_m =
+        haskey(grps, :phase) ? grps[:phase].Xmin_schreibersite_m : nothing
+    Xmin_cohenite_m = haskey(grps, :phase) ? grps[:phase].Xmin_cohenite_m : nothing
+    Xmin_graphite_m = haskey(grps, :phase) ? grps[:phase].Xmin_graphite_m : nothing
+    Xmin_nitride_m = haskey(grps, :phase) ? grps[:phase].Xmin_nitride_m : nothing
+    Xmin_metal_matrix_m = haskey(grps, :phase) ? grps[:phase].Xmin_metal_matrix_m : nothing
+
+    t_accreted = haskey(grps, :accretion) ? grps[:accretion].t_accreted : nothing
+
+    d_IW_amb = if cfg !== nothing && hasproperty(cfg, :volatiles)
+        cfg.volatiles.fO2_delta_IW
+    else
+        0.0
+    end
+
+    T_amb =
+        if cfg !== nothing &&
+            hasproperty(cfg, :materials) &&
+            length(cfg.materials.tkm0) >= 3
+            cfg.materials.tkm0[3]
+        else
+            250.0
+        end
+
+    phi_amb = if cfg !== nothing && hasproperty(cfg, :poroelasticity)
+        cfg.poroelasticity.phimin
+    else
+        0.35
+    end
+
+    new_marknum = telescope_marker_arrays!(
+        c.xm,
+        c.ym,
+        c.tm,
+        c.tkm,
+        c.sxxm,
+        c.sxym,
+        c.etavpm,
+        c.phim,
+        c.phinewm,
+        c.pfm0,
+        c.XWsolidm,
+        c.XWsolidm0,
+        c.Fm,
+        c.rhototalm,
+        c.rhocptotalm,
+        c.etatotalm,
+        c.hrtotalm,
+        c.ktotalm,
+        c.inv_gggtotalm,
+        c.fricttotalm,
+        c.cohestotalm,
+        c.tenstotalm,
+        c.rhofluidcur,
+        c.alphasolidcur,
+        c.alphafluidcur,
+        c.tkm_rhocptotalm,
+        c.etafluidcur_inv_kphim;
+        old_coords=old_coords,
+        new_coords=new_coords,
+        T_ambient=T_amb,
+        phi_ambient=phi_amb,
+        buffer_markers_per_cell=buffer_markers_per_cell,
+        materials=mats,
+        w3d_m=c.w3d_m,
+        Xfem=Xfem,
+        Xfem0=Xfem0,
+        Xfe_bulk=Xfe_bulk,
+        XH2Om=XH2Om,
+        XCm=XCm,
+        XNm=XNm,
+        XSm=XSm,
+        Xfe_H_m=Xfe_H_m,
+        Xfe_C_m=Xfe_C_m,
+        Xfe_N_m=Xfe_N_m,
+        Xfe_S_m=Xfe_S_m,
+        Xmin_troilite_m=Xmin_troilite_m,
+        Xmin_schreibersite_m=Xmin_schreibersite_m,
+        Xmin_cohenite_m=Xmin_cohenite_m,
+        Xmin_graphite_m=Xmin_graphite_m,
+        Xmin_nitride_m=Xmin_nitride_m,
+        Xmin_metal_matrix_m=Xmin_metal_matrix_m,
+        t_accreted=t_accreted,
+        hcnspo_props=hcnspo_props,
+        F_extract_m=F_extract_m,
+        X_graphite_m=X_graphite_m,
+        redox_props=redox_props,
+        deltaIW_ambient=d_IW_amb,
+        cfg=cfg,
+    )
+    assert_marker_arrays_invariants(markers, new_marknum)
+    return new_marknum
+end
+
+"""
+    assert_marker_arrays_invariants(markers::MarkerArrays, marknum::Integer)
+
+Assert that all marker vectors in `markers.core` and all active groups in `markers.groups`
+have length equal to `marknum`. Throw `DimensionMismatch` if any vector length deviates.
+"""
+function assert_marker_arrays_invariants(markers::MarkerArrays, marknum::Integer)
+    for fn in fieldnames(CoreGroup)
+        arr = getfield(markers.core, fn)
+        if length(arr) != marknum
+            throw(
+                DimensionMismatch(
+                    "Marker core array :$fn has length $(length(arr)), expected marknum=$marknum",
+                ),
+            )
+        end
+    end
+    for (gname, grp) in pairs(markers.groups)
+        for fn in fieldnames(typeof(grp))
+            arr = getfield(grp, fn)
+            if length(arr) != marknum
+                throw(
+                    DimensionMismatch(
+                        "Marker group :$gname array :$fn has length $(length(arr)), expected marknum=$marknum",
+                    ),
+                )
+            end
+        end
+    end
+    return true
 end

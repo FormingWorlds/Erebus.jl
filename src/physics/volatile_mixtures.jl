@@ -368,6 +368,199 @@ function step_refractory_pyrolysis_kinetic(
 end
 
 """
+    speciate_pyrolysis_carbon_redox!(
+        redox_props, redox_cfg, m::Int, T::Float64, scale::Float64,
+        d_c_gas::Float64, d_c_gr::Float64, d_h_gas::Float64, d_n_gas::Float64, Xfem
+    )
+
+Speciate devolatilized carbon into CO, CO2, and CH4 based on local redox conditions and rock buffer capacity.
+"""
+function speciate_pyrolysis_carbon_redox!(
+    redox_props,
+    redox_cfg,
+    m::Int,
+    T::Float64,
+    scale::Float64,
+    d_c_gas::Float64,
+    d_c_gr::Float64,
+    d_h_gas::Float64,
+    d_n_gas::Float64,
+    Xfem,
+)
+    nC_gr_m = hasproperty(redox_props, :nC_graphite_m) ? redox_props.nC_graphite_m : nothing
+    nCO_m = hasproperty(redox_props, :nCO_m) ? redox_props.nCO_m : nothing
+    nCO2_m = hasproperty(redox_props, :nCO2_m) ? redox_props.nCO2_m : nothing
+    nCH4_m = hasproperty(redox_props, :nCH4_m) ? redox_props.nCH4_m : nothing
+
+    dn_c_gr = (d_c_gr * scale) / M_C
+    dn_c_gas = (d_c_gas * scale) / M_C
+    dn_c_iom = dn_c_gr + dn_c_gas
+
+    def_co2 = d_c_gas * (M_CO2 / M_C)
+    def_h2 = d_h_gas
+    if nC_gr_m === nothing || dn_c_iom <= 0.0
+        return (
+            d_c_gas=d_c_gas,
+            d_c_gr=d_c_gr,
+            m_co=0.0,
+            m_co2=def_co2,
+            m_ch4=0.0,
+            m_h2=def_h2,
+            m_h2o=0.0,
+            m_n2=d_n_gas,
+        )
+    end
+
+    nFe0_m = hasproperty(redox_props, :nFe0_m) ? redox_props.nFe0_m : nothing
+    nFe2_m = hasproperty(redox_props, :nFe2_m) ? redox_props.nFe2_m : nothing
+    nFe3_m = hasproperty(redox_props, :nFe3_m) ? redox_props.nFe3_m : nothing
+
+    if nFe0_m === nothing || nFe2_m === nothing || nFe3_m === nothing
+        nC_gr_m[m] += dn_c_gr
+        if nCO2_m !== nothing
+            nCO2_m[m] += dn_c_gas
+        end
+        return (
+            d_c_gas=d_c_gas,
+            d_c_gr=d_c_gr,
+            m_co=0.0,
+            m_co2=def_co2,
+            m_ch4=0.0,
+            m_h2=def_h2,
+            m_h2o=0.0,
+            m_n2=d_n_gas,
+        )
+    end
+
+    c_cur = marker_redox_components(
+        nFe0_m[m],
+        nFe2_m[m],
+        nFe3_m[m];
+        n_C_graphite=nC_gr_m[m],
+        n_CO=nCO_m !== nothing ? nCO_m[m] : 0.0,
+        n_CO2=nCO2_m !== nothing ? nCO2_m[m] : 0.0,
+        n_CH4=nCH4_m !== nothing ? nCH4_m[m] : 0.0,
+    )
+
+    d_IW = if (hasproperty(redox_props, :deltaIW_m) && redox_props.deltaIW_m !== nothing)
+        redox_props.deltaIW_m[m]
+    else
+        0.0
+    end
+    T_safe = max(100.0, T)
+    log10_fo2 = compute_iron_wustite_fO2(T_safe; delta_IW=d_IW)
+
+    logK_CO2 = 14800.0 / T_safe - 4.58
+    r_CO2 = 10.0^clamp(logK_CO2 + 0.5 * log10_fo2, -50.0, 50.0)
+    r_CH4 = if (T_safe < 900.0 && d_IW < 0.0)
+        10.0^clamp((900.0 - T_safe) / 200.0 - 0.5 * (d_IW + 1.0), -50.0, 50.0)
+    else
+        0.0
+    end
+
+    denom = 1.0 + r_CO2 + r_CH4
+    f_CO = 1.0 / denom
+    f_CO2 = r_CO2 / denom
+    f_CH4 = r_CH4 / denom
+
+    dn_co = dn_c_gas * f_CO
+    dn_co2 = dn_c_gas * f_CO2
+    dn_ch4 = dn_c_gas * f_CH4
+
+    dn_h_avail = (d_h_gas * scale) / M_H + 2.0 * c_cur.n_H2
+    max_ch4_from_h = dn_h_avail / 4.0
+    if dn_ch4 > max_ch4_from_h
+        dn_ch4 = max(0.0, max_ch4_from_h)
+        dn_rem = dn_c_gas - dn_ch4
+        denom_co = 1.0 + r_CO2
+        dn_co = dn_rem / denom_co
+        dn_co2 = dn_rem * r_CO2 / denom_co
+    end
+
+    delta_rb_req = 2.0 * dn_co + 4.0 * dn_co2 - 4.0 * dn_ch4
+    if delta_rb_req > 0.0
+        avail_ox = 3.0 * c_cur.n_Fe3 + 2.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2O
+        if delta_rb_req > avail_ox
+            scale_ox = max(0.0, avail_ox / delta_rb_req)
+            unoxidized_gas = dn_c_gas * (1.0 - scale_ox)
+            dn_c_gr += unoxidized_gas
+            dn_co *= scale_ox
+            dn_co2 *= scale_ox
+            dn_ch4 *= scale_ox
+
+            unox_mass = (unoxidized_gas * M_C) / scale
+            d_c_gas = max(0.0, d_c_gas - unox_mass)
+            d_c_gr += unox_mass
+        end
+    elseif delta_rb_req < 0.0
+        avail_red = 3.0 * c_cur.n_Fe0 + 1.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2
+        req_red = -delta_rb_req
+        if req_red > avail_red
+            scale_red = max(0.0, avail_red / req_red)
+            unreduced_gas = dn_c_gas * (1.0 - scale_red)
+            dn_c_gr += unreduced_gas
+            dn_co *= scale_red
+            dn_co2 *= scale_red
+            dn_ch4 *= scale_red
+
+            unred_mass = (unreduced_gas * M_C) / scale
+            d_c_gas = max(0.0, d_c_gas - unred_mass)
+            d_c_gr += unred_mass
+        end
+    end
+
+    m_co = (dn_co * M_CO) / scale
+    m_co2 = (dn_co2 * M_CO2) / scale
+    m_ch4 = (dn_ch4 * M_CH4) / scale
+    h_in_ch4 = 4.0 * (dn_ch4 * M_H) / scale
+    m_h2 = max(0.0, d_h_gas - h_in_ch4)
+    m_h2o = 0.0
+    m_n2 = d_n_gas
+
+    ref_sym = redox_cfg !== nothing ? redox_cfg.reference : :mantle
+    c_up = pyrolyze_redox_budget(
+        c_cur,
+        dn_c_iom,
+        dn_c_gr,
+        dn_co,
+        dn_co2,
+        dn_ch4;
+        auto_balance=true,
+        reference=ref_sym,
+    )
+
+    dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
+    if Xfem !== nothing && dn_fe0_smelted > 0.0
+        Xfem[m] += dn_fe0_smelted * M_Fe
+    end
+
+    nFe0_m[m] = c_up.n_Fe0
+    nFe2_m[m] = c_up.n_Fe2
+    nFe3_m[m] = c_up.n_Fe3
+    nC_gr_m[m] = c_up.n_C_graphite
+    if nCO_m !== nothing
+        nCO_m[m] = c_up.n_CO
+    end
+    if nCO2_m !== nothing
+        nCO2_m[m] = c_up.n_CO2
+    end
+    if nCH4_m !== nothing
+        nCH4_m[m] = c_up.n_CH4
+    end
+
+    return (
+        d_c_gas=d_c_gas,
+        d_c_gr=d_c_gr,
+        m_co=m_co,
+        m_co2=m_co2,
+        m_ch4=m_ch4,
+        m_h2=m_h2,
+        m_h2o=m_h2o,
+        m_n2=m_n2,
+    )
+end
+
+"""
 Update refractory concentrations, porosity, and gas release from IOM pyrolysis across rock markers.
 
 $(SIGNATURES)
@@ -409,6 +602,8 @@ function update_marker_pyrolysis!(
     X_refr_N_m::AbstractVector{Float64},
     X_refr_H_m::AbstractVector{Float64},
     cfg::RefractoryConfig;
+    tm::Union{Nothing,AbstractVector{<:Integer}}=nothing,
+    rhosolidm::Union{Nothing,AbstractVector{<:Real}}=nothing,
     xm::Union{Nothing,AbstractVector{Float64}}=nothing,
     ym::Union{Nothing,AbstractVector{Float64}}=nothing,
     coords::GridCoordinates=default_grid_coordinates(),
@@ -422,7 +617,6 @@ function update_marker_pyrolysis!(
     Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     marknum = length(tkm)
-    rho_s = Float64(rhosolid)
     rho_f = max(Float64(rhofluid), 100.0)
     phi_max_val = Float64(phimax)
     dt_val = Float64(dt)
@@ -431,6 +625,12 @@ function update_marker_pyrolysis!(
     tot_dC_gas = 0.0
     tot_dN_gas = 0.0
     tot_dH_gas = 0.0
+    tot_dCO_gas = 0.0
+    tot_dCO2_gas = 0.0
+    tot_dCH4_gas = 0.0
+    tot_dH2_gas = 0.0
+    tot_dH2O_gas = 0.0
+    tot_dN2_gas = 0.0
     tot_dC_graphite = 0.0
     tot_dH_pyro = 0.0
 
@@ -467,170 +667,50 @@ function update_marker_pyrolysis!(
 
         if redox_props !== nothing &&
             (redox_cfg === nothing || (redox_cfg.active && redox_cfg.pyrolysis_redox))
-            nC_gr_m = if hasproperty(redox_props, :nC_graphite_m)
-                redox_props.nC_graphite_m
-            else
-                nothing
-            end
-            nCO_m = hasproperty(redox_props, :nCO_m) ? redox_props.nCO_m : nothing
-            nCO2_m = hasproperty(redox_props, :nCO2_m) ? redox_props.nCO2_m : nothing
-            nCH4_m = hasproperty(redox_props, :nCH4_m) ? redox_props.nCH4_m : nothing
-
-            if nC_gr_m !== nothing
-                dn_c_gr = (d_c_gr * scale) / M_C
-                dn_c_gas = (d_c_gas * scale) / M_C
-                dn_c_iom = dn_c_gr + dn_c_gas
-
-                if dn_c_iom > 0.0
-                    nFe0_m =
-                        hasproperty(redox_props, :nFe0_m) ? redox_props.nFe0_m : nothing
-                    nFe2_m =
-                        hasproperty(redox_props, :nFe2_m) ? redox_props.nFe2_m : nothing
-                    nFe3_m =
-                        hasproperty(redox_props, :nFe3_m) ? redox_props.nFe3_m : nothing
-
-                    if nFe0_m !== nothing && nFe2_m !== nothing && nFe3_m !== nothing
-                        c_cur = marker_redox_components(
-                            nFe0_m[m],
-                            nFe2_m[m],
-                            nFe3_m[m];
-                            n_C_graphite=nC_gr_m[m],
-                            n_CO=nCO_m !== nothing ? nCO_m[m] : 0.0,
-                            n_CO2=nCO2_m !== nothing ? nCO2_m[m] : 0.0,
-                            n_CH4=nCH4_m !== nothing ? nCH4_m[m] : 0.0,
-                        )
-
-                        # Determine local C-O-H gas speciation:
-                        # CO/CO2 follows thermodynamic equilibrium; CH4 follows an empirical closure.
-                        d_IW =
-                            if hasproperty(redox_props, :deltaIW_m) &&
-                                redox_props.deltaIW_m !== nothing
-                                redox_props.deltaIW_m[m]
-                            else
-                                0.0
-                            end
-                        T_safe = max(100.0, T)
-                        log10_fo2 = compute_iron_wustite_fO2(T_safe; delta_IW=d_IW)
-
-                        logK_CO2 = 14800.0 / T_safe - 4.58
-                        r_CO2 = 10.0^clamp(logK_CO2 + 0.5 * log10_fo2, -50.0, 50.0)
-                        r_CH4 = if (T_safe < 900.0 && d_IW < 0.0)
-                            10.0^clamp(
-                                (900.0 - T_safe) / 200.0 - 0.5 * (d_IW + 1.0),
-                                -50.0,
-                                50.0,
-                            )
-                        else
-                            0.0
-                        end
-
-                        denom = 1.0 + r_CO2 + r_CH4
-                        f_CO = 1.0 / denom
-                        f_CO2 = r_CO2 / denom
-                        f_CH4 = r_CH4 / denom
-
-                        dn_co = dn_c_gas * f_CO
-                        dn_co2 = dn_c_gas * f_CO2
-                        dn_ch4 = dn_c_gas * f_CH4
-
-                        # Bound methane formation by available hydrogen (4 H per CH4)
-                        dn_h_avail = (d_h_gas * scale) / M_H + 2.0 * c_cur.n_H2
-                        max_ch4_from_h = dn_h_avail / 4.0
-                        if dn_ch4 > max_ch4_from_h
-                            dn_ch4 = max(0.0, max_ch4_from_h)
-                            dn_rem = dn_c_gas - dn_ch4
-                            denom_co = 1.0 + r_CO2
-                            dn_co = dn_rem / denom_co
-                            dn_co2 = dn_rem * r_CO2 / denom_co
-                        end
-
-                        # Rock oxidant capacity: Fe3+ -> Fe0 (3 e-), Fe2+ -> Fe0 (2 e-), H2O -> H2 (2 e-)
-                        delta_rb_req = 2.0 * dn_co + 4.0 * dn_co2 - 4.0 * dn_ch4
-                        if delta_rb_req > 0.0
-                            # Carbon oxidation requires rock oxidants
-                            avail_ox =
-                                3.0 * c_cur.n_Fe3 + 2.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2O
-                            if delta_rb_req > avail_ox
-                                # Oxygen starvation: available oxidants oxidize carbon;
-                                # unoxidized carbon remains as elemental graphite residue.
-                                scale_ox = max(0.0, avail_ox / delta_rb_req)
-                                unoxidized_gas = dn_c_gas * (1.0 - scale_ox)
-                                dn_c_gr += unoxidized_gas
-                                dn_co *= scale_ox
-                                dn_co2 *= scale_ox
-                                dn_ch4 *= scale_ox
-
-                                # Adjust mass fractions to maintain gas/graphite consistency
-                                unox_mass = (unoxidized_gas * M_C) / scale
-                                d_c_gas = max(0.0, d_c_gas - unox_mass)
-                                d_c_gr += unox_mass
-                            end
-                        elseif delta_rb_req < 0.0
-                            # Carbon reduction requires rock reductants: Fe0 -> Fe3+ (3 e-), Fe2+ -> Fe3+ (1 e-), H2 -> H2O (2 e-)
-                            avail_red =
-                                3.0 * c_cur.n_Fe0 + 1.0 * c_cur.n_Fe2 + 2.0 * c_cur.n_H2
-                            req_red = -delta_rb_req
-                            if req_red > avail_red
-                                scale_red = max(0.0, avail_red / req_red)
-                                unreduced_gas = dn_c_gas * (1.0 - scale_red)
-                                dn_c_gr += unreduced_gas
-                                dn_co *= scale_red
-                                dn_co2 *= scale_red
-                                dn_ch4 *= scale_red
-
-                                # Adjust mass fractions to maintain gas/graphite consistency
-                                unred_mass = (unreduced_gas * M_C) / scale
-                                d_c_gas = max(0.0, d_c_gas - unred_mass)
-                                d_c_gr += unred_mass
-                            end
-                        end
-
-                        ref_sym = redox_cfg !== nothing ? redox_cfg.reference : :mantle
-                        c_up = pyrolyze_redox_budget(
-                            c_cur,
-                            dn_c_iom,
-                            dn_c_gr,
-                            dn_co,
-                            dn_co2,
-                            dn_ch4;
-                            auto_balance=true,
-                            reference=ref_sym,
-                        )
-
-                        # Synchronize newly smelted metallic Fe0 to Xfem if present
-                        dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
-                        if Xfem !== nothing && dn_fe0_smelted > 0.0
-                            Xfem[m] += dn_fe0_smelted * M_Fe
-                        end
-
-                        nFe0_m[m] = c_up.n_Fe0
-                        nFe2_m[m] = c_up.n_Fe2
-                        nFe3_m[m] = c_up.n_Fe3
-                        nC_gr_m[m] = c_up.n_C_graphite
-                        if nCO_m !== nothing
-                            nCO_m[m] = c_up.n_CO
-                        end
-                        if nCO2_m !== nothing
-                            nCO2_m[m] = c_up.n_CO2
-                        end
-                        if nCH4_m !== nothing
-                            nCH4_m[m] = c_up.n_CH4
-                        end
-                    else
-                        nC_gr_m[m] += dn_c_gr
-                        if nCO_m !== nothing
-                            nCO_m[m] += dn_c_gas
-                        end
-                    end
-                end
-            end
+            spec = speciate_pyrolysis_carbon_redox!(
+                redox_props, redox_cfg, m, T, scale, d_c_gas, d_c_gr, d_h_gas, d_n_gas, Xfem
+            )
+            d_c_gas = spec.d_c_gas
+            d_c_gr = spec.d_c_gr
+            m_co = spec.m_co
+            m_co2 = spec.m_co2
+            m_ch4 = spec.m_ch4
+            m_h2 = spec.m_h2
+            m_h2o = spec.m_h2o
+            m_n2 = spec.m_n2
+        else
+            m_co = 0.0
+            m_co2 = d_c_gas * (M_CO2 / M_C)
+            m_ch4 = 0.0
+            m_h2 = d_h_gas
+            m_h2o = 0.0
+            m_n2 = d_n_gas
         end
 
         tot_dC_gas += d_c_gas
         tot_dN_gas += d_n_gas
         tot_dH_gas += d_h_gas
+        tot_dCO_gas += m_co
+        tot_dCO2_gas += m_co2
+        tot_dCH4_gas += m_ch4
+        tot_dH2_gas += m_h2
+        tot_dH2O_gas += m_h2o
+        tot_dN2_gas += m_n2
         tot_dC_graphite += d_c_gr
         tot_dH_pyro += res.dH_pyro_J_per_kg
+
+        rho_s = if tm !== nothing && rhosolidm !== nothing && m <= length(tm)
+            m_tm = tm[m]
+            if (m_tm >= 1 && m_tm <= length(rhosolidm))
+                Float64(rhosolidm[m_tm])
+            else
+                (length(rhosolidm) >= 1 ? Float64(rhosolidm[1]) : Float64(rhosolid))
+            end
+        elseif rhosolidm !== nothing && length(rhosolidm) >= 1
+            Float64(rhosolidm[1])
+        else
+            Float64(rhosolid)
+        end
 
         dw_gas = (d_c_gas + d_n_gas + d_h_gas) * scale
         if dw_gas > 0.0
@@ -669,6 +749,12 @@ function update_marker_pyrolysis!(
         total_dC_gas=tot_dC_gas,
         total_dN_gas=tot_dN_gas,
         total_dH_gas=tot_dH_gas,
+        total_dCO_gas=tot_dCO_gas,
+        total_dCO2_gas=tot_dCO2_gas,
+        total_dCH4_gas=tot_dCH4_gas,
+        total_dH2_gas=tot_dH2_gas,
+        total_dH2O_gas=tot_dH2O_gas,
+        total_dN2_gas=tot_dN2_gas,
         total_dC_graphite=tot_dC_graphite,
         total_dH_pyro=tot_dH_pyro,
     )

@@ -11,7 +11,7 @@ $(SIGNATURES)
 
     - parsed_args: parsed command line arguments
 """
-function parse_commandline()
+function parse_commandline(; args::Vector{String}=ARGS)
     s = ArgParseSettings()
     @add_arg_table! s begin
         "config_or_output"
@@ -25,13 +25,12 @@ function parse_commandline()
         default = ""
         "--show_timer"
         help = "show timing results?"
-        arg_type = Bool
-        default = false
+        action = :store_true
         "--force-restart-config"
         help = "override configuration parameters recorded in restart checkpoint"
         action = :store_true
     end
-    return parse_args(s)
+    return parse_args(args, s)
 end
 
 """

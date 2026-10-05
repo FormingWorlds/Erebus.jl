@@ -41,7 +41,7 @@ julia --project=. launch.jl configs/default.toml --output_path custom_run_01
 To print detailed performance diagnostics at the end of the simulation:
 
 ```bash
-julia --project=. launch.jl configs/default.toml --show_timer true
+julia --project=. launch.jl configs/default.toml --show_timer
 ```
 
 ### Forcing Restart Configuration Overrides

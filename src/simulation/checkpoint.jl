@@ -856,127 +856,62 @@ function save_state(
 end
 
 """
-    load_simulation_state(path::AbstractString; force_restart_config::Bool=false, current_cfg::Union{Nothing,SimulationConfig}=nothing)
+    restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::SimulationConfig)
 
-Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
-Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::SimulationConfig)`.
+Restore optional marker groups from checkpoint data and validate array lengths.
 
-# Throws
-- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+# Parameters
+- `data`: Checkpoint archive dictionary or group mapping.
+- `core`: Core marker group.
+- `effective_cfg`: Simulation configuration.
+
+# Returns
+- `MarkerArrays`: Restored marker arrays with validated array lengths.
+
+# Raises
+- `CheckpointError`: If any marker vector length does not match `marknum`.
 """
-function load_simulation_state(
-    path::AbstractString;
-    force_restart_config::Bool=false,
-    current_cfg::Union{Nothing,SimulationConfig}=nothing,
-)
-    isfile(path) || throw(CheckpointError("Checkpoint file does not exist: $path"))
-
-    data = try
-        JLD2.load(path)
-    catch err
-        throw(CheckpointError("Failed to open checkpoint archive '$path': $err"))
-    end
-
-    schema_ver = get(data, "schema_version", 0)
-    if schema_ver < 2
+function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::SimulationConfig)
+    group_pairs = Pair{Symbol,Any}[]
+    marknum = length(core.xm)
+    if length(core.tm) != marknum
         throw(
             CheckpointError(
-                "Unsupported checkpoint schema version: got $schema_ver, expected >= 2"
+                "Checkpoint marker core array 'tm' length $(length(core.tm)) does not match 'xm' length $(marknum)",
             ),
         )
     end
 
-    for req in ("cfg", "timestep", "dt", "timesum", "rng", "transfers")
-        haskey(data, req) ||
-            throw(CheckpointError("Missing required checkpoint key: '$req'"))
-    end
-
-    cfg_saved = if data["cfg"] isa SimulationConfig
-        data["cfg"]
-    else
-        throw(CheckpointError("Invalid 'cfg' payload in checkpoint archive"))
-    end
-
-    if current_cfg !== nothing
-        diffs = compare_restart_configs(cfg_saved, current_cfg)
-        if !isempty(diffs)
-            # Grid geometry and dimension mismatches cannot be overridden (unsupported regridding)
-            grid_diffs = filter(
-                d -> startswith(d, "grid.") || startswith(d, "geometry."), diffs
-            )
-            if !isempty(grid_diffs)
-                throw(
-                    CheckpointError(
-                        "Unsupported grid geometry override: " *
-                        join(grid_diffs, ", ") *
-                        ". Grid dimensions and geometry cannot be changed on restart.",
-                    ),
-                )
-            end
-            if !force_restart_config
-                throw(
-                    CheckpointError(
-                        "Configuration mismatch between checkpoint and restart config: " *
-                        join(diffs, ", ") *
-                        ". Pass --force-restart-config to override.",
-                    ),
-                )
-            else
-                for d in diffs
-                    @warn "Restart configuration override: $d"
-                end
-            end
-        end
-    end
-
-    effective_cfg = current_cfg !== nothing ? current_cfg : cfg_saved
-
-    coords = if haskey(data, "coords") && data["coords"] isa GridCoordinates
-        data["coords"]
-    else
-        GridCoordinates(effective_cfg.grid)
-    end
-
-    grid_vals = Any[]
-    for fn in fieldnames(GridArrays)
-        sfn = string(fn)
-        if !haskey(data, sfn)
-            if fn === :Q_metric
-                push!(grid_vals, nothing)
-            else
-                throw(CheckpointError("Missing required grid array in checkpoint: '$sfn'"))
-            end
-        else
-            push!(grid_vals, data[sfn])
-        end
-    end
-    grids = GridArrays(grid_vals...)
-
-    core_vals = Any[]
-    for fn in fieldnames(CoreGroup)
-        sfn = string(fn)
-        haskey(data, sfn) || throw(
-            CheckpointError("Missing required core marker array in checkpoint: '$sfn'")
-        )
-        push!(core_vals, data[sfn])
-    end
-    core = CoreGroup(core_vals...)
-
-    group_pairs = Pair{Symbol,Any}[]
-    marknum = length(core.xm)
-
-    # Optional marker groups
-    if effective_cfg.metal_partition.active || haskey(data, "Xfem")
+    if effective_cfg.metal_partition.active ||
+        effective_cfg.coreformation.percolation_active ||
+        effective_cfg.coreformation.settling_active ||
+        effective_cfg.thermodynamics.hr_fe ||
+        haskey(data, "Xfem")
         metal_vals = Any[]
         for k in fieldnames(MetalGroup)
             sk = string(k)
             v = get(data, sk, nothing)
-            push!(metal_vals, v !== nothing ? v : zeros(Float64, marknum))
+            if v !== nothing
+                push!(metal_vals, v)
+            elseif k === :Xfe_bulk
+                bulk_init = zeros(Float64, marknum)
+                for m in 1:marknum
+                    if core.tm[m] < 3
+                        bulk_init[m] = effective_cfg.coreformation.Xfe_bulk
+                    end
+                end
+                push!(metal_vals, bulk_init)
+            else
+                push!(metal_vals, zeros(Float64, marknum))
+            end
         end
         push!(group_pairs, :metal => MetalGroup(metal_vals...))
     end
 
-    if effective_cfg.volatiles.active || haskey(data, "XH2Om")
+    if effective_cfg.volatiles.active ||
+        effective_cfg.magma_degassing.active ||
+        effective_cfg.magma_transport.active ||
+        haskey(data, "XH2Om")
         vol_vals = Any[]
         for k in fieldnames(VolatilesGroup)
             sk = string(k)
@@ -1019,11 +954,149 @@ function load_simulation_state(
     end
 
     if effective_cfg.accretion.active || haskey(data, "t_accreted")
-        v = get(data, "t_accreted", zeros(Float64, marknum))
-        push!(group_pairs, :accretion => AccretionGroup(v))
+        v = get(data, "t_accreted", nothing)
+        t_acc = v !== nothing ? v : zeros(Float64, marknum)
+        push!(group_pairs, :accretion => AccretionGroup(t_acc))
     end
 
     markers = MarkerArrays(core, NamedTuple(group_pairs))
+
+    for fn in fieldnames(CoreGroup)
+        arr = getfield(markers.core, fn)
+        if length(arr) != marknum
+            throw(
+                CheckpointError(
+                    "Core marker array :$fn length $(length(arr)) does not match marknum $marknum",
+                ),
+            )
+        end
+    end
+    for (gname, grp) in pairs(markers.groups)
+        for fn in fieldnames(typeof(grp))
+            arr = getfield(grp, fn)
+            if length(arr) != marknum
+                throw(
+                    CheckpointError(
+                        "Marker group :$gname array :$fn length $(length(arr)) does not match marknum $marknum",
+                    ),
+                )
+            end
+        end
+    end
+
+    return markers
+end
+
+"""
+    load_simulation_state(path::AbstractString; force_restart_config::Bool=false, current_cfg::Union{Nothing,SimulationConfig}=nothing)
+
+Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
+Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::SimulationConfig)`.
+
+# Throws
+- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+"""
+function load_simulation_state(
+    path::AbstractString;
+    force_restart_config::Bool=false,
+    current_cfg::Union{Nothing,SimulationConfig}=nothing,
+    cfg::Union{Nothing,SimulationConfig}=nothing,
+)
+    target_cfg = cfg !== nothing ? cfg : current_cfg
+    isfile(path) || throw(CheckpointError("Checkpoint file does not exist: $path"))
+
+    data = try
+        JLD2.load(path)
+    catch err
+        throw(CheckpointError("Failed to open checkpoint archive '$path': $err"))
+    end
+
+    schema_ver = get(data, "schema_version", 0)
+    if schema_ver < 2
+        throw(
+            CheckpointError(
+                "Unsupported checkpoint schema version: got $schema_ver, expected >= 2"
+            ),
+        )
+    end
+
+    for req in ("cfg", "timestep", "dt", "timesum", "rng", "transfers")
+        haskey(data, req) ||
+            throw(CheckpointError("Missing required checkpoint key: '$req'"))
+    end
+
+    cfg_saved = if data["cfg"] isa SimulationConfig
+        data["cfg"]
+    else
+        throw(CheckpointError("Invalid 'cfg' payload in checkpoint archive"))
+    end
+
+    if target_cfg !== nothing
+        diffs = compare_restart_configs(cfg_saved, target_cfg)
+        if !isempty(diffs)
+            # Grid geometry and dimension mismatches cannot be overridden (unsupported regridding)
+            grid_diffs = filter(
+                d -> startswith(d, "grid.") || startswith(d, "geometry."), diffs
+            )
+            if !isempty(grid_diffs)
+                throw(
+                    CheckpointError(
+                        "Unsupported grid geometry override: " *
+                        join(grid_diffs, ", ") *
+                        ". Grid dimensions and geometry cannot be changed on restart.",
+                    ),
+                )
+            end
+            if !force_restart_config
+                throw(
+                    CheckpointError(
+                        "Configuration mismatch between checkpoint and restart config: " *
+                        join(diffs, ", ") *
+                        ". Pass --force-restart-config to override.",
+                    ),
+                )
+            else
+                for d in diffs
+                    @warn "Restart configuration override: $d"
+                end
+            end
+        end
+    end
+
+    effective_cfg = target_cfg !== nothing ? target_cfg : cfg_saved
+
+    coords = if haskey(data, "coords") && data["coords"] isa GridCoordinates
+        data["coords"]
+    else
+        GridCoordinates(effective_cfg.grid)
+    end
+
+    grid_vals = Any[]
+    for fn in fieldnames(GridArrays)
+        sfn = string(fn)
+        if !haskey(data, sfn)
+            if fn === :Q_metric
+                push!(grid_vals, nothing)
+            else
+                throw(CheckpointError("Missing required grid array in checkpoint: '$sfn'"))
+            end
+        else
+            push!(grid_vals, data[sfn])
+        end
+    end
+    grids = GridArrays(grid_vals...)
+
+    core_vals = Any[]
+    for fn in fieldnames(CoreGroup)
+        sfn = string(fn)
+        haskey(data, sfn) || throw(
+            CheckpointError("Missing required core marker array in checkpoint: '$sfn'")
+        )
+        push!(core_vals, data[sfn])
+    end
+    core = CoreGroup(core_vals...)
+
+    markers = restore_checkpoint_markers(data, core, effective_cfg)
 
     accumulators =
         if haskey(data, "accumulators") && data["accumulators"] isa SimulationAccumulators
@@ -1060,7 +1133,12 @@ function load_simulation_state(
     end
 
     transfers = haskey(data, "transfers") ? deepcopy(data["transfers"]) : TransferRecord[]
-    rng = data["rng"]
+    rng = if target_cfg !== nothing && target_cfg.solver.seed != cfg_saved.solver.seed
+        @info "Restart: overriding RNG with solver.seed = $(target_cfg.solver.seed)"
+        Random.MersenneTwister(target_cfg.solver.seed)
+    else
+        data["rng"]
+    end
     timer = if haskey(data, "timer") && data["timer"] isa TimerOutput
         t = copy(data["timer"])
         empty!(t.timer_stack)
@@ -1076,5 +1154,5 @@ function load_simulation_state(
         grids, markers, accumulators, transfers, atm, rng, timer, timestep, dt, timesum
     )
 
-    return (state, coords, cfg_saved)
+    return (state, coords, effective_cfg)
 end
