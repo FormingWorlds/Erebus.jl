@@ -353,4 +353,139 @@ using Test
         )
         @test outcome_ok == true
     end
+
+    @testset "F12 & F33: Marker Radiogenic Property Isolation (compute_hr)" begin
+        @test iszero(Erebus.chondritic_phi_fe(0.0, 5450.0))
+        @test iszero(Erebus.chondritic_phi_fe(-1.0, 5450.0))
+        v_fe = Erebus.X_FE_REF_CHONDRITE / 5450.0
+        v_si = (1.0 - Erebus.X_FE_REF_CHONDRITE) / 3000.0
+        expected_phi = v_fe / (v_fe + v_si)
+        @test isapprox(Erebus.chondritic_phi_fe(3000.0, 0.0), expected_phi; atol=1e-10)
+        @test isapprox(Erebus.chondritic_phi_fe(3000.0, -10.0), expected_phi; atol=1e-10)
+
+        marknum = 3
+        (xm, ym, tm, tkm, sxxm, sxym, etavpm, phim, phinewm, pfm0, XWsolidm, XWsolidm0, Fm) = Erebus.setup_marker_properties(
+            marknum
+        )
+        (rhototalm, rhocptotalm, etatotalm, hrtotalm, ktotalm, tkm_rhocptotalm, etafluidcur_inv_kphim, inv_gggtotalm, fricttotalm, cohestotalm, tenstotalm, rhofluidcur, alphasolidcur, alphafluidcur) = Erebus.setup_marker_properties_helpers(
+            marknum
+        )
+        (Xfem, Xfem0, Xfe_bulk) = Erebus.setup_marker_metal_properties(marknum)
+
+        tm .= 1
+        phim .= 0.1
+        tkm .= 500.0
+        hrsolid = [100.0, 100.0, 0.0]
+        hrfluid = [0.0, 0.0, 0.0]
+        hrmetal = [50.0, 50.0, 0.0]
+
+        # Case 1: coreformation_active = true with metal blending
+        Xfe_bulk[1] = 0.25
+        Erebus.compute_marker_properties!(
+            1,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolid,
+            hrfluid,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            compute_hr=true,
+            coreformation_active=true,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            hrmetalm=hrmetal,
+        )
+        @test isapprox(hrtotalm[1], 80.0; atol=1e-10)
+
+        # Case 2: !coreformation_active with Xfe_bulk array
+        Xfe_bulk[2] = 0.25
+        Erebus.compute_marker_properties!(
+            2,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolid,
+            hrfluid,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            compute_hr=true,
+            coreformation_active=false,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            hrmetalm=hrmetal,
+        )
+        @test isapprox(hrtotalm[2], 80.0; atol=1e-10)
+
+        # Case 3: !coreformation_active with chondritic reference fallback
+        Erebus.compute_marker_properties!(
+            3,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolid,
+            hrfluid,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            compute_hr=true,
+            coreformation_active=false,
+            Xfe_bulk=nothing,
+            Xfem=Xfem,
+            hrmetalm=hrmetal,
+        )
+        phi_fe_3 = Erebus.chondritic_phi_fe(3300.0, 5450.0)
+        expected_3 = (1.0 - 0.1) * ((1.0 - phi_fe_3) * 100.0 + phi_fe_3 * 50.0)
+        @test isapprox(hrtotalm[3], expected_3; atol=1e-10)
+
+        # Case 4: compute_hr = false leaves hrtotalm unchanged
+        hrtotalm[1] = -999.0
+        Erebus.compute_marker_properties!(
+            1,
+            tm,
+            tkm,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolid,
+            hrfluid,
+            phim,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            compute_hr=false,
+            coreformation_active=true,
+            Xfe_bulk=Xfe_bulk,
+            Xfem=Xfem,
+            hrmetalm=hrmetal,
+        )
+        @test isapprox(hrtotalm[1], -999.0; atol=1e-10)
+    end
 end
