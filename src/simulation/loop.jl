@@ -1232,6 +1232,8 @@ function simulation_loop(
             output_path, cfg.output.telemetry_file; append=is_restart
         )
     end
+    dt_reduced_by_maxDT = false
+    dt_next = dt
     try
         for timestep in start_step_val:1:n_steps_val
             last_timestep = timestep
@@ -1385,8 +1387,14 @@ function simulation_loop(
                     ),
                 ))
                 num_dt_reductions = 0
-                dt_step_target = min(dt * dtcoefup_val, dt_longest_val)
+                dt_step_target = if dt_reduced_by_maxDT
+                    min(dt, dt_longest_val)
+                else
+                    min(dt * dtcoefup_val, dt_longest_val)
+                end
                 dt = dt_step_target
+                dt_reduced_by_maxDT = false
+                dt_next = dt
                 P_amb_eff = 0.0
                 T_amb = 0.0
                 P_amb = 0.0
@@ -2478,16 +2486,27 @@ function simulation_loop(
                         @. DT = tk2 - tk1
                         maxDTcurrent = maximum(abs, DT)
                         @info "max DT = $maxDTcurrent K"
-                        # prepare next pass of thermochemical iteration
-                        dt = finalize_thermochemical_iteration_pass(
+                        # prepare next timestep duration
+                        dt_next = finalize_thermochemical_iteration_pass(
                             maxDTcurrent, dt, titer, cfg.time.DTmax
                         )
+                        if dt_next < dt
+                            dt_reduced_by_maxDT = true
+                        end
                         # evaluate iteration outcome
                         if compute_thermochemical_iteration_outcome(
-                            DMP, pf, pf0, titer; pferrmax=cfg.reaction.pferrmax
-                        )
+                            DMP,
+                            pf,
+                            pf0,
+                            titer;
+                            pferrmax=cfg.reaction.pferrmax,
+                            maxDTcurrent=maxDTcurrent,
+                            DTmax=cfg.time.DTmax,
+                        ) || titer == max_plastic_iterations_val
                             # exit thermochemical iterations loop
                             break
+                        else
+                            dt = dt_next
                         end
                     end # for titer=1:1:max_plastic_iterations_val
 
@@ -2518,7 +2537,7 @@ function simulation_loop(
                         xcenter_val = step_snapshot.scalars.xcenter_val
                         ycenter_val = step_snapshot.scalars.ycenter_val
                         coords = step_snapshot.scalars.coords
-                        dt_step_target /= 2.0
+                        dt_step_target = min(dt_step_target / 2.0, dt)
                         dt = dt_step_target
                         continue
                     end
@@ -3113,6 +3132,9 @@ function simulation_loop(
                 next!(
                     p; showvalues=generate_showvalues(timestep, marknum, maxT, dt, timesum)
                 )
+                if dt_reduced_by_maxDT
+                    dt = dt_next
+                end
             end # @timeit timer "step"
 
             # ---------------------------------------------------------------------

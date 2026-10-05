@@ -368,10 +368,11 @@
         @test heat_f_al == v_zero
         @test heat_m_al == v_zero
 
-        # Density scaling invariant: Q_vol = Q_mass * rho
+        # Density scaling invariant: Q_vol = Q_mass * rho (concentrated in silicate phase)
         Q_al_mass = Erebus.Q_radiogenic(f_al, ratio_al, E_al, tau_al, 0.0)
-        @test isapprox(heat_s_al[1], Q_al_mass * rhosolidm[1]; rtol=1e-10)
-        @test isapprox(heat_s_al[2], Q_al_mass * rhosolidm[2]; rtol=1e-10)
+        Q_al_silicate_ref = Q_al_mass / (1.0 - Erebus.X_FE_REF_CHONDRITE)
+        @test isapprox(heat_s_al[1], Q_al_silicate_ref * rhosolidm[1]; rtol=1e-10)
+        @test isapprox(heat_s_al[2], Q_al_silicate_ref * rhosolidm[2]; rtol=1e-10)
 
         # 3. Iron-60 active: metallic phase carries heating (pore fluid carries zero)
         heat_s_fe, heat_f_fe, heat_m_fe = Erebus.calculate_radioactive_heating(
@@ -880,7 +881,7 @@
         )
         @test all(iszero, DMP_air)
         @test all(iszero, DHP_air)
-        @test all(iszero, WTPSUM_air)
+        @test isapprox(sum(WTPSUM_air), Float64(marknum_air); atol=1e-10)
     end # testset "perform_thermochemical_reaction!()"
 
     @testset "compute_shear_heating!(): Second Law non-negativity and symmetry" begin

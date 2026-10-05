@@ -259,6 +259,7 @@ function interpolate_markers_to_grid!(
                         XWsolidm0,
                         marker_property_mode,
                         rhofluidcur;
+                        compute_hr=false,
                         thermal_buoyancy=thermal_buoyancy_val,
                         alphafluid=alphafluid_val,
                         tmfluidphase_val=tmfluidphase_val,
@@ -434,6 +435,7 @@ function interpolate_markers_to_grid!(
                     XWsolidm0,
                     marker_property_mode,
                     rhofluidcur;
+                    compute_hr=false,
                     thermal_buoyancy=thermal_buoyancy_val,
                     alphafluid=alphafluid_val,
                     tmfluidphase_val=tmfluidphase_val,
@@ -662,6 +664,7 @@ function interpolate_markers_to_grid!(
                 XWsolidm0,
                 marker_property_mode,
                 rhofluidcur;
+                compute_hr=false,
                 thermal_buoyancy=thermal_buoyancy_val,
                 alphafluid=alphafluid_val,
                 tmfluidphase_val=tmfluidphase_val,

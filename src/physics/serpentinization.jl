@@ -300,20 +300,20 @@ function perform_thermochemical_reaction!(
     # iterate over markers
     @inbounds begin
         for m in 1:1:marknum
+            i, j, weights = fix_weights(
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
+            )
+            interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
             if tm[m] < 3
-                # for rocks only
-                i, j, weights = fix_weights(
-                    xm[m],
-                    ym[m],
-                    xp_val,
-                    yp_val,
-                    dx_val,
-                    dy_val,
-                    jmin_p_val,
-                    jmax_p_val,
-                    imin_p_val,
-                    imax_p_val,
-                )
                 # interpolate temperature from P nodes
                 tknm = dot4(grid_vector(i, j, tk2), weights)
                 # interpolate fluid pressure from P nodes with cavitation floor
@@ -443,18 +443,19 @@ function perform_thermochemical_reaction!(
                     # compute total mass continuity term (16.112e)
                     ΔMm = (1.0 - RV) / Δt
 
-                    # compute relative enthalpies (16.163)
-                    Hᵗ₀ = compute_relative_enthalpy(Xˢ₀, XWˢm₀_cl; cfg=react_cfg)
-                    Hᵗ₁ = compute_relative_enthalpy(Xˢ₁, XWˢm₁_star; cfg=react_cfg)
-                    ΔHᵗ = Hᵗ₁ - Hᵗ₀
+                    # Specific reaction enthalpy per kg pure water [J/kg]
+                    dh_rxn = (react_cfg === nothing ? ΔHWD : react_cfg.delta_H) / MH₂O
 
                     # Latent heat transfer term DHP:
                     # Hydration is exothermic (heat source, ΔHm > 0).
                     # Dehydration is endothermic (heat sink, ΔHm < 0).
                     if XWˢm₁_star > XWˢm₀_cl
-                        ΔHm = abs(Γmass * ΔHᵗ)
+                        phi_avail = max(0.0, phim[m] - phimin)
+                        gamma_fluid_max = ρᶠ₀ * phi_avail / Δt
+                        Γmass_eff = max(Γmass, -gamma_fluid_max)
+                        ΔHm = -Γmass_eff * dh_rxn
                     elseif XWˢm₁_star < XWˢm₀_cl
-                        ΔHm = -abs(Γmass * ΔHᵗ)
+                        ΔHm = -Γmass * dh_rxn
                     else
                         ΔHm = zero(0.0)
                     end
@@ -480,7 +481,6 @@ function perform_thermochemical_reaction!(
                     if DQPFSUM !== nothing
                         interpolate_add_to_grid!(i, j, weights, ΔQmᶠ, DQPFSUM)
                     end
-                    interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
                 end
             end # if tm[m] < 3
         end # for m=1:1:marknum

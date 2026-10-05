@@ -1046,6 +1046,17 @@ function define_markers!(
 end
 
 """
+Compute chondritic metallic iron volume fraction from phase densities.
+
+$(SIGNATURES)
+"""
+@inline function chondritic_phi_fe(rho_sol::Real, rho_met::Real)
+    rho_sol <= 0.0 && return 0.0
+    v_fe = X_FE_REF_CHONDRITE / (rho_met > 0.0 ? rho_met : 5450.0)
+    return clamp(v_fe / (v_fe + (1.0 - X_FE_REF_CHONDRITE) / rho_sol), 0.0, 1.0)
+end
+
+"""
 Compute properties of given marker and save them to corresponding arrays.
 
 $(SIGNATURES)
@@ -1183,6 +1194,7 @@ function compute_marker_properties!(
     alphafluidm_val=alphafluidm,
     ksolidm_val=ksolidm,
     kfluidm_val=kfluidm,
+    compute_hr::Bool=true,
     phimax_val::Real=phimax,
 )
     if tm[m] < 3
@@ -1301,7 +1313,7 @@ function compute_marker_properties!(
             tmfluidphase=tmfluidphase_val,
         )
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
-        hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m])
+        compute_hr && (hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m]))
         k_lattice = ktotal(
             compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val),
             compute_kfluidm(
@@ -1517,29 +1529,26 @@ function compute_marker_properties!(
                 rhocptotalm[m] = metal_blended_heat_capacity(
                     rhocptotalm[m], rhocp_eff_metal, phi_fe
                 )
-                hr_metal_term = hrmetalm !== nothing ? hrmetalm[tm[m]] : 0.0
-                hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
-            else
-                if Xfem !== nothing
-                    Xfem[m] = 0.0
+                if compute_hr
+                    hr_metal_term = hrmetalm !== nothing ? hrmetalm[tm[m]] : 0.0
+                    hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
                 end
+            else
+                Xfem !== nothing && (Xfem[m] = 0.0)
             end
         elseif !coreformation_active && hrmetalm !== nothing
             if Xfe_bulk !== nothing
                 phi_fe = Xfe_bulk[m]
-                if phi_fe > 0.0
-                    hr_metal_term = hrmetalm[tm[m]]
-                    hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hr_metal_term
+                if compute_hr && phi_fe > 0.0
+                    hrtotalm[m] = (1.0 - phi_fe) * hrtotalm[m] + phi_fe * hrmetalm[tm[m]]
                 end
-            else
-                phi_fe_equiv =
-                    X_FE_REF_CHONDRITE * (tm[m] <= 2 ? rhosolidm_val[tm[m]] : 0.0) /
-                    (rho_metal_val > 0.0 ? rho_metal_val : 5450.0)
-                hrtotalm[m] += (1.0 - phim[m]) * phi_fe_equiv * hrmetalm[tm[m]]
+            elseif compute_hr
+                rho_sol = tm[m] <= 2 ? rhosolidm_val[tm[m]] : 0.0
+                phi_fe = chondritic_phi_fe(rho_sol, rho_metal_val)
+                hr_rock = (1.0 - phi_fe) * hrsolidm[tm[m]] + phi_fe * hrmetalm[tm[m]]
+                hrtotalm[m] = (1.0 - phim[m]) * hr_rock + phim[m] * hrfluidm[tm[m]]
             end
-            if Xfem !== nothing
-                Xfem[m] = 0.0
-            end
+            Xfem !== nothing && (Xfem[m] = 0.0)
         elseif Xfem !== nothing
             Xfem[m] = 0.0
         end

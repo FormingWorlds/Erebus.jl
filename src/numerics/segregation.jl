@@ -1621,12 +1621,12 @@ function apply_silicate_melt_segregation!(
             end
 
             @inbounds for j in 1:Nx_val, i in 1:Ny_val
-                H_w = (j > 1 && flux_x[i, j - 1] > 0.0) ? H_flux_x[i, j - 1] : 0.0
-                H_e = (j < Nx_val && flux_x[i, j] < 0.0) ? -H_flux_x[i, j] : 0.0
-                H_n = (i > 1 && flux_y[i - 1, j] > 0.0) ? H_flux_y[i - 1, j] : 0.0
-                H_s = (i < Ny_val && flux_y[i, j] < 0.0) ? -H_flux_y[i, j] : 0.0
-                delta_H = H_w + H_e + H_n + H_s
-                total_sens_energy += abs(delta_H)
+                H_w = (j > 1) ? H_flux_x[i, j - 1] : 0.0
+                H_e = (j < Nx_val) ? H_flux_x[i, j] : 0.0
+                H_n = (i > 1) ? H_flux_y[i - 1, j] : 0.0
+                H_s = (i < Ny_val) ? H_flux_y[i, j] : 0.0
+                delta_H = H_w - H_e + H_n - H_s
+                total_sens_energy += 0.5 * abs(delta_H)
                 if !iszero(delta_H)
                     Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
                     dQ_sens = Q_sens * (dt_sub / dt)

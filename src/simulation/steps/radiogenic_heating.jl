@@ -24,6 +24,9 @@ function radiogenic_heating!(
     tau_al = cfg.thermodynamics.t_half_al / log(2.0)
     tau_fe = cfg.thermodynamics.t_half_fe / log(2.0)
 
+    has_metal = haskey(state.markers.groups, :metal)
+    X_fe_ref_val = has_metal ? cfg.coreformation.Xfe_bulk : X_FE_REF_CHONDRITE
+
     hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
         hr_al,
         hr_fe,
@@ -39,34 +42,32 @@ function radiogenic_heating!(
         rho_metal=cfg.coreformation.rho_metal,
         rhosolidm=cfg.materials.rhosolidm,
         rhofluidm=cfg.materials.rhofluidm,
+        X_fe_ref=X_fe_ref_val,
     )
 
     core = state.markers.core
     tm = core.tm
     phim = core.phim
     hrtotalm = core.hrtotalm
-    has_metal = haskey(state.markers.groups, :metal)
     Xfe_bulk = has_metal ? state.markers.groups.metal.Xfe_bulk : nothing
 
     @inbounds for m in 1:length(tm)
         t_m = tm[m]
         if t_m < 3
-            # Silicate rock and pore fluid
-            hr_rock = (1.0 - phim[m]) * hrsolidm[t_m] + phim[m] * hrfluidm[t_m]
             if Xfe_bulk !== nothing
-                phi_fe = Xfe_bulk[m]
-                if phi_fe > 0.0
-                    hr_metal = hrmetalm[t_m]
-                    hrtotalm[m] = (1.0 - phi_fe) * hr_rock + phi_fe * hr_metal
-                else
-                    hrtotalm[m] = hr_rock
-                end
+                phi_fe = clamp(Xfe_bulk[m], 0.0, 1.0)
             else
-                phi_fe_bulk =
-                    X_FE_REF_CHONDRITE * cfg.materials.rhosolidm[t_m] /
-                    cfg.coreformation.rho_metal
-                hrtotalm[m] = hr_rock + (1.0 - phim[m]) * phi_fe_bulk * hrmetalm[t_m]
+                rho_sol = cfg.materials.rhosolidm[t_m]
+                rho_met = cfg.coreformation.rho_metal
+                phi_fe = clamp(
+                    (X_FE_REF_CHONDRITE / rho_met) /
+                    (X_FE_REF_CHONDRITE / rho_met + (1.0 - X_FE_REF_CHONDRITE) / rho_sol),
+                    0.0,
+                    1.0,
+                )
             end
+            hr_solid_rock = (1.0 - phi_fe) * hrsolidm[t_m] + phi_fe * hrmetalm[t_m]
+            hrtotalm[m] = (1.0 - phim[m]) * hr_solid_rock + phim[m] * hrfluidm[t_m]
         else
             # Sticky air / space
             hrtotalm[m] = 0.0
