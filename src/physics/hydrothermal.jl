@@ -340,6 +340,7 @@ $(SIGNATURES)
 - `H_eff`: Optional convective layer thickness [m] (default: nothing, uses cfg.H_layer)
 - `gravity`: Optional local gravitational acceleration [m/s²] (default: nothing, uses cfg.gravity)
 - `active`: Boolean toggle to activate convection (default: true)
+- `phim0`: Reference porosity for Kozeny-Carman permeability [-] (default: 0.2)
 
 # Returns
 - `k_eff`: Effective hydrothermal thermal conductivity [W/(m K)]
@@ -357,6 +358,7 @@ function apply_hydrothermal_convection_closure(
     H_eff::Union{Nothing,Real}=nothing,
     gravity::Union{Nothing,Real}=nothing,
     active::Bool=true,
+    phim0::Real=phim0,
 )
     # Physical domain contracts: validate inputs before checking activity or temperature thresholds
     if !isfinite(T) || T <= 0.0
@@ -413,7 +415,7 @@ function apply_hydrothermal_convection_closure(
         if phi <= 0.0
             0.0
         elseif phi < 1.0
-            kphi(cfg.kphi_ref, phi)
+            kphi(cfg.kphi_ref, phi; phim0=phim0)
         else
             cfg.kphi_ref
         end

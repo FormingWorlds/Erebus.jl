@@ -812,6 +812,13 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(mg_omega=0.0)
         @reject_config solver=SolverConfig(mg_omega=1.5)
         @reject_config solver=SolverConfig(mg_smoother=:invalid_smoother)
+
+        @reject_config geometry=GeometryConfig(psurface=-100.0)
+        @reject_config geometry=GeometryConfig(psurface=NaN)
+        @reject_config thermodynamics=ThermalConfig(phim0=0.0)
+        @reject_config thermodynamics=ThermalConfig(phim0=1.0)
+        @reject_config thermodynamics=ThermalConfig(phim0=-0.1)
+        @reject_config thermodynamics=ThermalConfig(phim0=NaN)
     end
 
     @testset "tools/check_config_schema.jl" begin
@@ -819,5 +826,320 @@ include("test_helpers.jl")
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
         @test occursin("500 configuration fields", out)
+    end
+
+    @testset "Materials config overrides constants in marker initialization" begin
+        # Non-default material properties for fields supported by MaterialConfig overrides
+        mod_ggg = SVector{3,Float64}([2.5e10, 2.5e10, 1.0e10])
+        mod_frict = SVector{3,Float64}([0.75, 0.75, 0.0])
+        mod_cohes = SVector{3,Float64}([1.5e8, 1.5e8, 1.0e8])
+        mod_tens = SVector{3,Float64}([8.0e7, 8.0e7, 6.0e7])
+        mod_alphasolid = SVector{3,Float64}([2.5e-5, 2.5e-5, 0.0])
+        mod_alphafluid = SVector{3,Float64}([4.5e-5, 4.5e-5, 0.0])
+        mod_kphim0 = SVector{3,Float64}([2.0e-13, 2.0e-13, 1.0e-17])
+        mod_rhocpsolid = SVector{3,Float64}([3.5e6, 3.5e6, 2.5e6])
+        mod_rhocpfluid = SVector{3,Float64}([4.2e6, 4.2e6, 2.0e6])
+
+        cfg_mat = SimulationConfig(
+            materials=MaterialConfig(
+                gggsolidm=mod_ggg,
+                frictsolidm=mod_frict,
+                cohessolidm=mod_cohes,
+                tenssolidm=mod_tens,
+                alphasolidm=mod_alphasolid,
+                alphafluidm=mod_alphafluid,
+                kphim0=mod_kphim0,
+                rhocpsolidm=mod_rhocpsolid,
+                rhocpfluidm=mod_rhocpfluid,
+            ),
+        )
+        validate_config(cfg_mat)
+
+        coords = GridCoordinates(cfg_mat.grid)
+        marknum = coords.Nxm * coords.Nym
+        markers = init_marker_arrays(marknum, cfg_mat, coords)
+
+        Erebus.define_markers!(
+            markers;
+            coords=coords,
+            xcenter_val=coords.xcenter,
+            ycenter_val=coords.ycenter,
+            rplanet_val=cfg_mat.geometry.rplanet,
+            rcrust_val=cfg_mat.geometry.rcrust,
+            XWsolidm_init_val=cfg_mat.materials.XWsolidm_init,
+            phim0_val=cfg_mat.thermodynamics.phim0,
+            tkm0_val=cfg_mat.materials.tkm0,
+            gggsolidm_val=cfg_mat.materials.gggsolidm,
+            frictsolidm_val=cfg_mat.materials.frictsolidm,
+            cohessolidm_val=cfg_mat.materials.cohessolidm,
+            tenssolidm_val=cfg_mat.materials.tenssolidm,
+            alphasolidm_val=cfg_mat.materials.alphasolidm,
+            alphafluidm_val=cfg_mat.materials.alphafluidm,
+            rhocpsolidm_val=cfg_mat.materials.rhocpsolidm,
+        )
+
+        core = markers.core
+        rock_idx = findfirst(==(1), core.tm)
+        @test isapprox(core.tenstotalm[rock_idx], mod_tens[1]; rtol=1e-12)
+        @test isapprox(core.cohestotalm[rock_idx], mod_cohes[1]; rtol=1e-12)
+        @test isapprox(core.inv_gggtotalm[rock_idx], inv(mod_ggg[1]); rtol=1e-12)
+        @test isapprox(core.fricttotalm[rock_idx], mod_frict[1]; rtol=1e-12)
+        @test isapprox(core.alphasolidcur[rock_idx], mod_alphasolid[1]; rtol=1e-12)
+        air_idx = findfirst(==(3), core.tm)
+        @test isapprox(core.rhocptotalm[air_idx], mod_rhocpsolid[3]; rtol=1e-12)
+
+        # 3-class discrimination guards: ensure marker values differ from baseline module constants
+        @test !isapprox(core.tenstotalm[rock_idx], Erebus.tenssolidm[1]; rtol=0.1)
+        @test !isapprox(core.cohestotalm[rock_idx], Erebus.cohessolidm[1]; rtol=0.1)
+        @test !isapprox(core.inv_gggtotalm[rock_idx], inv(Erebus.gggsolidm[1]); rtol=0.1)
+        @test !isapprox(core.rhocptotalm[air_idx], Erebus.rhocpsolidm[3]; rtol=0.1)
+
+        # Marker property update test with custom kphim0, rhocpsolidm, and rhocpfluidm
+        mode = 9
+        Erebus.compute_marker_properties!(
+            rock_idx,
+            core.tm,
+            core.tkm,
+            core.rhototalm,
+            core.rhocptotalm,
+            core.etatotalm,
+            core.hrtotalm,
+            core.ktotalm,
+            core.tkm_rhocptotalm,
+            core.etafluidcur_inv_kphim,
+            Erebus.start_hrsolidm,
+            Erebus.start_hrfluidm,
+            core.phim,
+            core.XWsolidm0,
+            mode,
+            core.rhofluidcur;
+            coords=coords,
+            kphim0_val=cfg_mat.materials.kphim0,
+            phim0_val=cfg_mat.thermodynamics.phim0,
+            rhocpsolidm_val=cfg_mat.materials.rhocpsolidm,
+            rhocpfluidm_val=cfg_mat.materials.rhocpfluidm,
+        )
+        expected_rhocp = Erebus.total(
+            mod_rhocpsolid[1], mod_rhocpfluid[1], core.phim[rock_idx]
+        )
+        @test isapprox(core.rhocptotalm[rock_idx], expected_rhocp; rtol=1e-12)
+        default_const_rhocp = Erebus.total(
+            Erebus.rhocpsolidm[1], Erebus.rhocpfluidm[1], core.phim[rock_idx]
+        )
+        @test !isapprox(core.rhocptotalm[rock_idx], default_const_rhocp; rtol=0.1)
+        expected_eta_inv_k = Erebus.ηᶠcur_inv_kᵠ(
+            cfg_mat.materials.kphim0[1],
+            core.phim[rock_idx],
+            1.0e12;
+            phim0=cfg_mat.thermodynamics.phim0,
+        )
+        @test isapprox(core.etafluidcur_inv_kphim[rock_idx], expected_eta_inv_k; rtol=1e-10)
+        # Verify it does not equal the default constant calculation
+        default_const_eta_inv_k = Erebus.ηᶠcur_inv_kᵠ(
+            Erebus.kphim0[1], core.phim[rock_idx], 1.0e12; phim0=Erebus.phim0
+        )
+        @test !isapprox(
+            core.etafluidcur_inv_kphim[rock_idx], default_const_eta_inv_k; rtol=0.1
+        )
+    end
+
+    @testset "Permeability reference porosity scaling" begin
+        k_ref = 1.0e-13
+        custom_phim0 = 0.35
+        eta_fluid = 1.0e-3
+
+        # Physical invariant: at phi = phim0, Kozeny-Carman permeability equals k_ref exactly
+        k_at_ref = Erebus.kphi(k_ref, custom_phim0; phim0=custom_phim0)
+        @test isapprox(k_at_ref, k_ref; rtol=1e-12)
+
+        # 3-class discrimination guard: without phim0 kwarg, ratio deviates by > 5x
+        k_wrong = Erebus.kphi(k_ref, custom_phim0) # uses default phim0 = 0.2
+        @test !isapprox(k_wrong, k_at_ref; rtol=0.1)
+
+        # η / k at phi = phim0 must equal eta_fluid / k_ref
+        eta_inv_k_at_ref = Erebus.ηᶠcur_inv_kᵠ(
+            k_ref, custom_phim0, eta_fluid; phim0=custom_phim0
+        )
+        @test isapprox(eta_inv_k_at_ref, eta_fluid / k_ref; rtol=1e-12)
+
+        # Error contracts (DomainError on unphysical reference porosity)
+        @test_throws DomainError Erebus.kphi(k_ref, 0.2; phim0=-0.05)
+        @test_throws DomainError Erebus.kphi(k_ref, 0.2; phim0=1.2)
+        @test_throws DomainError Erebus.ηᶠcur_inv_kᵠ(k_ref, 0.2, eta_fluid; phim0=-0.1)
+        @test_throws DomainError Erebus.ηᶠcur_inv_kᵠ(k_ref, 0.2, eta_fluid; phim0=1.0)
+    end
+
+    @testset "Stokes-Darcy pressure boundary condition uses psurface" begin
+        Nx, Ny = 8, 8
+        coords = GridCoordinates(GridConfig(Nx=Nx, Ny=Ny, xsize=1.0e5, ysize=1.0e5))
+        Nx1, Ny1 = Nx + 1, Ny + 1
+
+        ETA = fill(1.0e20, Ny, Nx)
+        ETAP = fill(1.0e20, Ny1, Nx1)
+        GGG = fill(1.0e10, Ny, Nx)
+        GGGP = fill(1.0e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny1, Nx1)
+        RHOX = fill(3000.0, Ny1, Nx)
+        RHOY = fill(3000.0, Ny, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx)
+        RHOFY = fill(1000.0, Ny, Nx1)
+        RX = fill(1.0e15, Ny1, Nx)
+        RY = fill(1.0e15, Ny, Nx1)
+        ETAPHI = fill(1.0e18, Ny1, Nx1)
+        BETAPHI = fill(1.0e-11, Ny1, Nx1)
+        PHI = fill(0.1, Ny1, Nx1)
+        gx = zeros(Ny1, Nx)
+        gy = fill(10.0, Ny, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = zeros(Ny1, Nx1)
+        DMP = zeros(Ny1, Nx1)
+        dt = 1.0e7
+
+        # 4-var assembly with custom psurface = 5.0e5 Pa vs baseline 1.0e3 Pa
+        p_base = 1.0e3
+        p_custom = 5.0e5
+        R_base = zeros(4 * Ny1 * Nx1)
+        R_custom = zeros(4 * Ny1 * Nx1)
+
+        Erebus.assemble_hydromechanical_4var_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_base;
+            coords=coords,
+            psurface=p_base,
+        )
+        Erebus.assemble_hydromechanical_4var_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R_custom;
+            coords=coords,
+            psurface=p_custom,
+        )
+
+        # 6-var assembly with custom psurface
+        R6_base = zeros(6 * Ny1 * Nx1)
+        R6_custom = zeros(6 * Ny1 * Nx1)
+        Erebus.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R6_base;
+            coords=coords,
+            psurface=p_base,
+        )
+        Erebus.assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R6_custom;
+            coords=coords,
+            psurface=p_custom,
+        )
+
+        # Check all boundary perimeter nodes (top, bottom, left, right)
+        perimeter_nodes = Tuple{Int,Int}[]
+        for j in 2:Nx
+            push!(perimeter_nodes, (2, j))
+            push!(perimeter_nodes, (Ny, j))
+        end
+        for i in 3:(Ny - 1)
+            push!(perimeter_nodes, (i, 2))
+            push!(perimeter_nodes, (i, Nx))
+        end
+
+        for (i, j) in perimeter_nodes
+            # 4-var checks
+            kpm_4 = 4 * ((j - 1) * Ny1 + i) - 1
+            kpf_4 = 4 * ((j - 1) * Ny1 + i)
+            @test isapprox(R_base[kpm_4], p_base; rtol=1e-12)
+            @test isapprox(R_base[kpf_4], p_base; rtol=1e-12)
+            @test isapprox(R_custom[kpm_4], p_custom; rtol=1e-12)
+            @test isapprox(R_custom[kpf_4], p_custom; rtol=1e-12)
+            @test isapprox(R_custom[kpm_4] - R_base[kpm_4], p_custom - p_base; rtol=1e-12)
+
+            # 6-var checks
+            kpm_6 = 6 * ((j - 1) * Ny1 + i) - 3
+            kpf_6 = 6 * ((j - 1) * Ny1 + i)
+            @test isapprox(R6_base[kpm_6], p_base; rtol=1e-12)
+            @test isapprox(R6_base[kpf_6], p_base; rtol=1e-12)
+            @test isapprox(R6_custom[kpm_6], p_custom; rtol=1e-12)
+            @test isapprox(R6_custom[kpf_6], p_custom; rtol=1e-12)
+            @test isapprox(R6_custom[kpm_6] - R6_base[kpm_6], p_custom - p_base; rtol=1e-12)
+        end
     end
 end

@@ -783,6 +783,7 @@ function save_state(
         f["dt"] = state.dt
         f["timesum"] = state.timesum
         f["marknum"] = length(state.markers)
+        f["phim0"] = cfg.thermodynamics.phim0
         f["rng"] = copy(state.rng)
         f["transfers"] = deepcopy(state.transfers)
         f["transfer_log"] = deepcopy(state.transfers)

@@ -655,24 +655,24 @@ function simulation_loop(
         ratio_fe = cfg.thermodynamics.ratio_fe,
         E_fe = cfg.thermodynamics.E_fe,
         f_fe = cfg.thermodynamics.f_fe,
-        rhosolidm,
-        rhofluidm,
-        etasolidm,
-        etasolidmm,
-        etafluidm,
-        etafluidmm,
-        rhocpsolidm,
-        rhocpfluidm,
-        alphasolidm,
-        alphafluidm,
-        ksolidm,
-        kfluidm,
-        gggsolidm,
-        frictsolidm,
-        cohessolidm,
-        tenssolidm,
-        kphim0,
-        tkm0,
+        rhosolidm = cfg.materials.rhosolidm,
+        rhofluidm = cfg.materials.rhofluidm,
+        etasolidm = cfg.materials.etasolidm,
+        etasolidmm = cfg.materials.etasolidmm,
+        etafluidm = cfg.materials.etafluidm,
+        etafluidmm = cfg.materials.etafluidmm,
+        rhocpsolidm = cfg.materials.rhocpsolidm,
+        rhocpfluidm = cfg.materials.rhocpfluidm,
+        alphasolidm = cfg.materials.alphasolidm,
+        alphafluidm = cfg.materials.alphafluidm,
+        ksolidm = cfg.materials.ksolidm,
+        kfluidm = cfg.materials.kfluidm,
+        gggsolidm = cfg.materials.gggsolidm,
+        frictsolidm = cfg.materials.frictsolidm,
+        cohessolidm = cfg.materials.cohessolidm,
+        tenssolidm = cfg.materials.tenssolidm,
+        kphim0 = cfg.materials.kphim0,
+        tkm0 = cfg.materials.tkm0,
         etaphikoef,
         αη,
         tmsolidphase = cfg.thermodynamics.tmsolidphase,
@@ -962,6 +962,19 @@ function simulation_loop(
             T_eutectic_val=T_eutectic_val,
             dT_metal_val=dT_metal_val,
             tkm0_val=cfg.materials.tkm0,
+            gggsolidm_val=cfg.materials.gggsolidm,
+            frictsolidm_val=cfg.materials.frictsolidm,
+            cohessolidm_val=cfg.materials.cohessolidm,
+            tenssolidm_val=cfg.materials.tenssolidm,
+            rhosolidm_val=cfg.materials.rhosolidm,
+            rhofluidm_val=cfg.materials.rhofluidm,
+            etasolidm_val=cfg.materials.etasolidm,
+            rhocpsolidm_val=cfg.materials.rhocpsolidm,
+            alphasolidm_val=cfg.materials.alphasolidm,
+            alphafluidm_val=cfg.materials.alphafluidm,
+            ksolidm_val=cfg.materials.ksolidm,
+            start_hrsolidm_val=start_hrsolidm,
+            phimin_val=cfg.poroelasticity.phimin,
             rng=rng,
         )
         # copy thermodynamic marker properties to next generation for initial setup
@@ -2130,11 +2143,12 @@ function simulation_loop(
                                     P_amb=P_amb_eff,
                                     venting_species=cfg.venting.species,
                                     tk=tk1,
-                                    eta_fluid_surf=etafluidmm[2],
+                                    eta_fluid_surf=cfg.materials.etafluidmm[2],
                                     L_sub=cfg.venting.L_sublimation,
                                     S_vent_out=S_vent_grid,
                                     DQPF=DQPF,
                                     fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
+                                    psurface=psurface_val,
                                     workspace=hydromech_ws,
                                 )
                             else
@@ -2197,11 +2211,12 @@ function simulation_loop(
                                     P_amb=P_amb_eff,
                                     venting_species=cfg.venting.species,
                                     tk=tk1,
-                                    eta_fluid_surf=etafluidmm[2],
+                                    eta_fluid_surf=cfg.materials.etafluidmm[2],
                                     L_sub=cfg.venting.L_sublimation,
                                     S_vent_out=S_vent_grid,
                                     DQPF=DQPF,
                                     fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
+                                    psurface=psurface_val,
                                     workspace=hydromech_ws,
                                 )
                             end
@@ -2566,7 +2581,7 @@ function simulation_loop(
                                 PHI=PHI,
                                 phimin=phimin_val,
                                 dt=dt,
-                                eta_fluid_surf=etafluidmm[2],
+                                eta_fluid_surf=cfg.materials.etafluidmm[2],
                                 L_sub=cfg.venting.L_sublimation,
                                 S_vent_out=S_vent_grid,
                             )
@@ -2710,8 +2725,8 @@ function simulation_loop(
                                 else
                                     nothing
                                 end,
-                                rho_silicate=rhosolidm[1],
-                                eta_silicate=etasolidm[1],
+                                rho_silicate=cfg.materials.rhosolidm[1],
+                                eta_silicate=cfg.materials.etasolidm[1],
                                 ETA=ETA,
                                 Fm=Fm,
                                 T_solidus_silicate=cfg.melting.T_solidus[1],
@@ -2731,7 +2746,9 @@ function simulation_loop(
                         # ------------------------------------------------------------------
                         if cfg.venting.active && cfg.venting.latent_cooling
                             @. Q_lat_grid =
-                                -cfg.venting.L_sublimation * rhofluidm[2] * S_vent_grid
+                                -cfg.venting.L_sublimation *
+                                cfg.materials.rhofluidm[2] *
+                                S_vent_grid
                         else
                             fill!(Q_lat_grid, 0.0)
                         end
@@ -2778,9 +2795,9 @@ function simulation_loop(
                                 else
                                     nothing
                                 end,
-                                rho_silicate=rhosolidm[1],
+                                rho_silicate=cfg.materials.rhosolidm[1],
                                 rho_melt=cfg.melting.rho_melt,
-                                eta_silicate=etasolidm[1],
+                                eta_silicate=cfg.materials.etasolidm[1],
                                 ETA=ETA,
                                 T_solidus_silicate=cfg.melting.T_solidus[1],
                                 T_liquidus_silicate=cfg.melting.T_liquidus[1],
@@ -2932,6 +2949,10 @@ function simulation_loop(
                         eta_melt_val=eta_melt_val,
                         tmsolidphase=cfg.thermodynamics.tmsolidphase,
                         tmfluidphase=cfg.thermodynamics.tmfluidphase,
+                        etasolidm=cfg.materials.etasolidm,
+                        etasolidmm=cfg.materials.etasolidmm,
+                        etafluidm=cfg.materials.etafluidm,
+                        etafluidmm=cfg.materials.etafluidmm,
                     )
                 end
 
