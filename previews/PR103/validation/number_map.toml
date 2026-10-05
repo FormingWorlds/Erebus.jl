@@ -1,0 +1,71 @@
+# docs/src/validation/number_map.toml
+# Maps documented numeric values in validation pages to test assertions.
+# Columns:
+# page: relative path to the documentation page under docs/src/
+# number: numeric value (string or float representation) as documented
+# test_name: relative path to the test file under test/ containing the assertion verifying this number
+
+[[entry]]
+page = "validation/radionuclides.md"
+number = "2.62"
+test_name = "test_constants.jl"
+
+[[entry]]
+page = "validation/core_formation.md"
+number = "1213"
+test_name = "test_core_formation.jl"
+
+[[entry]]
+page = "validation/core_geochemistry.md"
+number = "1873"
+test_name = "test_core_volatile_partitioning.jl"
+
+[[entry]]
+page = "validation/coupled_atmosphere.md"
+number = "44.0095"
+test_name = "test_atmosphere.jl"
+
+[[entry]]
+page = "validation/dehydration_darcy_coupling.md"
+number = "1.0e-8"
+test_name = "test_dehydration_darcy_coupling.jl"
+
+[[entry]]
+page = "validation/hcns_solubility.md"
+number = "12760.0"
+test_name = "test_volatile_solubility_hcns.jl"
+
+[[entry]]
+page = "validation/hydrothermal_reactions.md"
+number = "40000.0"
+test_name = "test_reaction_pathways.jl"
+
+[[entry]]
+page = "validation/jeans_escape.md"
+number = "1.380649"
+test_name = "test_jeans_escape.jl"
+
+[[entry]]
+page = "validation/mineral_assemblages.md"
+number = "58.6934"
+test_name = "test_normative_accessory_minerals.jl"
+
+[[entry]]
+page = "validation/permeability.md"
+number = "0.05"
+test_name = "test_hydrofracture_stability.jl"
+
+[[entry]]
+page = "validation/redox_buffers.md"
+number = "-27489.0"
+test_name = "test_redox.jl"
+
+[[entry]]
+page = "validation/thermal_conduction.md"
+number = "2.520"
+test_name = "test_physics.jl"
+
+[[entry]]
+page = "validation/volatile_retention.md"
+number = "1400.0"
+test_name = "test_volatile_retention.jl"
