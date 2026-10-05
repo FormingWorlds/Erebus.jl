@@ -63,7 +63,7 @@ where the coefficient $8/3 \pi G = (2/3) \times 4 \pi G$ accounts for the 2D geo
    $$L_{(i,j),(i\pm 1, j)} = \frac{1}{dy^2}, \qquad L_{(i,j),(i, j\pm 1)} = \frac{1}{dx^2}$$
 2. **Dirichlet Boundary Re-indexing:** Boundary nodes along the computational box boundary and nodes outside the inscribed circle enforce homogeneous Dirichlet conditions:
    $$\Phi_{\partial\Omega} = 0$$
-3. **LU Re-factorization:** Sparse LU factorization ($P L Q = L_U U_U$) is recomputed via UMFPACK or Pardiso. Re-factorization occurs once per domain doubling event, incurring negligible overhead during an evolutionary run.
+3. **LU Re-factorization:** Sparse LU factorization ($P L Q = L_U U_U$) is recomputed via UMFPACK. Re-factorization occurs once per domain doubling event, incurring negligible overhead during an evolutionary run.
 4. **Acceleration Update:** Gravitational acceleration components $(g_x, g_y) = -\nabla \Phi$ are re-evaluated on the new grid to provide continuous gravitational body forces for Darcy percolation and Stokes diapirism.
 
 ---

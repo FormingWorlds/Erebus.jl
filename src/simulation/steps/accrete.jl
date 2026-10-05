@@ -120,5 +120,6 @@ function accrete!(
         acc.M_accreted_total += dM_acc
     end
 
+    assert_marker_arrays_invariants(markers, length(markers.core.xm))
     return nothing
 end

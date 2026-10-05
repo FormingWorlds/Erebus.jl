@@ -309,6 +309,7 @@ export Config,
     compute_telescoped_coordinates,
     remap_staggered_grid_array,
     telescope_marker_arrays!,
+    assert_marker_arrays_invariants,
     ElementInventory,
     SpeciesInventory,
     to_element_inventory,
@@ -409,7 +410,6 @@ export Geometry, Physics, Particles, Numerics, Simulation
 include("constants.jl")
 # include("test_constants.jl")
 
-using Pardiso: Pardiso
 if Sys.isapple()
     using AppleAccelerate
 end
@@ -991,7 +991,6 @@ module Numerics
         setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
-        initialize_pardiso!,
         get_viscosities_stresses_density_gradients!,
         is_gravitational_boundary,
         assemble_gravitational_lse!,
@@ -1041,7 +1040,6 @@ module Numerics
     export setup_gravitational_lse,
         setup_hydromechanical_lse,
         setup_thermal_lse,
-        initialize_pardiso!,
         get_viscosities_stresses_density_gradients!,
         is_gravitational_boundary,
         assemble_gravitational_lse!,

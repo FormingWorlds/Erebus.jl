@@ -1870,8 +1870,13 @@ Solves for atmospheric oxygen fugacity `log10_fO2` in [-40, 0] such that the
 Throws `ConvergenceError` if `elem.O` is outside the range that the gas species can hold.
 """
 function speciate_closed_system(
-    elem::ElementInventory, T_K::Real, P_Pa::Real; tol::Real=1e-12, max_iter::Int=60
-)::@NamedTuple{species::SpeciesInventory, log10_fO2::Float64}
+    elem::ElementInventory,
+    T_K::Real,
+    P_Pa::Real;
+    tol::Real=1e-12,
+    max_iter::Int=60,
+    handle_excess_O::Bool=false,
+)::@NamedTuple{species::SpeciesInventory, log10_fO2::Float64, excess_O::Float64}
     T = Float64(T_K)
     if T <= 0.0 || !isfinite(T)
         throw(DomainError(T, "Temperature must be > 0 and finite"))
@@ -1882,7 +1887,7 @@ function speciate_closed_system(
     end
 
     if total_mass(elem) <= 0.0
-        return (species=SpeciesInventory(), log10_fO2=-40.0)
+        return (species=SpeciesInventory(), log10_fO2=-40.0, excess_O=0.0)
     end
 
     mu_H = M_H
@@ -1899,7 +1904,7 @@ function speciate_closed_system(
 
     if elem.O <= 0.0
         if nC_tot == 0.0 && nN_tot == 0.0 && nS_tot == 0.0
-            return (species=SpeciesInventory(; H2=elem.H), log10_fO2=-40.0)
+            return (species=SpeciesInventory(; H2=elem.H), log10_fO2=-40.0, excess_O=0.0)
         end
         d_iw_min = -50.0
         spec = solve_chnos_speciation(
@@ -1950,19 +1955,37 @@ function speciate_closed_system(
             n_S2 * mu_sp[:S2],
             0.0,
         )
-        return (species=sp_zero_O, log10_fO2=-40.0)
+        return (species=sp_zero_O, log10_fO2=-40.0, excess_O=0.0)
     end
 
     nO_max = 0.5 * nH_tot + 2.0 * nC_tot + 2.0 * nS_tot
     mO_max = nO_max * mu_O
     if elem.O > mO_max * (1.0 + 1e-4)
-        throw(
-            ConvergenceError(
-                "Elemental oxygen mass $(elem.O) exceeds maximum stoichiometric capacity ($mO_max kg)",
-                elem,
-                (elem_O=elem.O, mO_max=mO_max),
-            ),
-        )
+        if handle_excess_O
+            excess_O = max(0.0, elem.O - mO_max)
+            sp_max_ox = SpeciesInventory(
+                0.0,
+                0.5 * nH_tot * mu_sp[:H2O],
+                0.0,
+                nC_tot * mu_sp[:CO2],
+                0.0,
+                0.5 * nN_tot * mu_sp[:N2],
+                0.0,
+                0.0,
+                0.0,
+                nS_tot * mu_sp[:SO2],
+            )
+            b_high = max(20.0, compute_iron_wustite_fO2(T; delta_IW=50.0))
+            return (species=sp_max_ox, log10_fO2=b_high, excess_O=excess_O)
+        else
+            throw(
+                ConvergenceError(
+                    "Elemental oxygen mass $(elem.O) exceeds maximum stoichiometric capacity ($mO_max kg)",
+                    elem,
+                    (elem_O=elem.O, mO_max=mO_max),
+                ),
+            )
+        end
     end
 
     function eval_O(log10_fo2::Float64)
@@ -2038,7 +2061,7 @@ function speciate_closed_system(
             ),
         )
     elseif abs(R_low) <= tol_O
-        return (species=sp_low, log10_fO2=max(-40.0, a))
+        return (species=sp_low, log10_fO2=max(-40.0, a), excess_O=0.0)
     end
 
     R_high, sp_high = eval_O(b)
@@ -2055,7 +2078,7 @@ function speciate_closed_system(
             0.0,
             nS_tot * mu_sp[:SO2],
         )
-        return (species=sp_saturated, log10_fO2=b)
+        return (species=sp_saturated, log10_fO2=b, excess_O=max(0.0, elem.O - mO_max))
     elseif R_high < -tol_O
         throw(
             ConvergenceError(
@@ -2083,5 +2106,5 @@ function speciate_closed_system(
         end
     end
 
-    return (species=best_sp, log10_fO2=best_fo2)
+    return (species=best_sp, log10_fO2=best_fo2, excess_O=0.0)
 end

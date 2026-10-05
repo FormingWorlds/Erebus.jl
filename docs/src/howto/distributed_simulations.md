@@ -32,6 +32,7 @@ Nx = 1024
 Ny = 1024
 
 [solver]
+experimental = true
 hydromech_solver = "matrix_free"
 darcy_elimination = true
 preconditioner = "block_schur"

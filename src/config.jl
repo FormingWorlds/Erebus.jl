@@ -127,6 +127,7 @@ Base.@kwdef struct SolverConfig
     mg_post_smooth::Int = 2
     mg_smoother::Symbol = :damped_jacobi
     mg_omega::Float64 = 0.67
+    experimental::Bool = false
 end
 
 """
@@ -1601,11 +1602,23 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
     @check_ge cfg.solver.tile_size 2
+    cfg.solver.use_pardiso && throw(
+        ArgumentError(
+            "solver.use_pardiso is unsupported. Use UMFPACK direct solver (use_pardiso = false)",
+        ),
+    )
     cfg.solver.hydromech_solver in (:direct, :iterative, :matrix_free) || throw(
         ArgumentError(
             "solver.hydromech_solver must be :direct, :iterative, or :matrix_free, got :$(cfg.solver.hydromech_solver)",
         ),
     )
+    if cfg.solver.hydromech_solver in (:iterative, :matrix_free) && !cfg.solver.experimental
+        throw(
+            ArgumentError(
+                "solver.hydromech_solver = :$(cfg.solver.hydromech_solver) is experimental and not yet production-ready; set solver.experimental = true to enable",
+            ),
+        )
+    end
     cfg.solver.krylov_method in (:fgmres, :gmres, :bicgstab) || throw(
         ArgumentError(
             "solver.krylov_method must be :fgmres, :gmres, or :bicgstab, got :$(cfg.solver.krylov_method)",

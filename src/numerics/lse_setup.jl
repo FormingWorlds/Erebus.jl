@@ -65,27 +65,3 @@ function setup_thermal_lse(Nx1::Int, Ny1::Int)
     return RT, ST
 end
 setup_thermal_lse(coords::GridCoordinates) = setup_thermal_lse(coords.Nx1, coords.Ny1)
-
-"""
-Initialize `iparm` parameters of Pardiso MKL solver.
-
-$(SIGNATURES)
-
-# Details
-
-    - ps: Instance of pardiso solver
-    - iparms_dict: dictionary of iparm parameters
-
-# Returns
-
-    - nothing
-"""
-function initialize_pardiso!(pardiso_solver, iparms_dict)
-    set_msglvl!(pardiso_solver, Pardiso.MESSAGE_LEVEL_OFF)
-    set_matrixtype!(pardiso_solver, Pardiso.REAL_NONSYM)
-    set_nprocs!(pardiso_solver, cache_kwargs.nprocs)
-    for (i, v) in iparms_dict
-        set_iparm!(pardiso_solver, i+1, v)
-    end
-    return set_phase!(pardiso_solver, Pardiso.ANALYSIS)
-end

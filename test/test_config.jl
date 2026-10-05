@@ -715,18 +715,19 @@ include("test_helpers.jl")
 
         # 2. Matrix-free cross-validation constraints
         @reject_config solver=SolverConfig(
-            hydromech_solver=:matrix_free, darcy_elimination=false
+            hydromech_solver=:matrix_free, darcy_elimination=false, experimental=true
         )
         @reject_config solver=SolverConfig(
-            hydromech_solver=:matrix_free, darcy_elimination=true
+            hydromech_solver=:matrix_free, darcy_elimination=true, experimental=true
         ) poroelasticity=PoroelasticConfig(hydrofracture=true)
         @reject_config solver=SolverConfig(
-            hydromech_solver=:matrix_free, darcy_elimination=true
+            hydromech_solver=:matrix_free, darcy_elimination=true, experimental=true
         ) venting=VentingConfig(active=true)
 
         # 3. Valid configurations pass validation
         cfg_iter = load_config("""
         [solver]
+        experimental = true
         hydromech_solver = "iterative"
         krylov_method = "fgmres"
         krylov_rtol = 1.0e-7
@@ -748,6 +749,7 @@ include("test_helpers.jl")
 
         cfg_mf = load_config("""
         [solver]
+        experimental = true
         hydromech_solver = "matrix_free"
         krylov_method = "gmres"
         darcy_elimination = true
@@ -761,6 +763,7 @@ include("test_helpers.jl")
         # 4. TOML load and roundtrip
         toml_solver = """
         [solver]
+        experimental = true
         hydromech_solver = "iterative"
         krylov_method = "bicgstab"
         krylov_rtol = 1.0e-8
@@ -789,6 +792,7 @@ include("test_helpers.jl")
         # 5. Multigrid configuration and validation
         cfg_mg = load_config("""
         [solver]
+        experimental = true
         hydromech_solver = "iterative"
         krylov_method = "fgmres"
         preconditioner = "multigrid"
@@ -825,7 +829,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("500 configuration fields", out)
+        @test occursin("501 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin
