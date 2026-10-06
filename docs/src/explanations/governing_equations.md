@@ -261,13 +261,11 @@ $$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
 where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $g$ is local gravity, and $\phi_m$ is the molten metal fraction. This source directly enters the thermal energy equation.
 
 ### Melt Segregation Sensible Heat Transfer
-Silicate melt segregation transports sensible heat between adjacent cells. To preserve domain-wide energy conservation, the heat transfer uses conservative face fluxes:
+Silicate melt segregation transports sensible heat into receiver cells. When melt migrates from a donor cell at $T_{\text{donor}}$ into an adjacent receiver cell at $T_{\text{rec}}$, the receiver matrix thermally equilibrates with the incoming melt, receiving thermal energy:
 
-$$\Delta H_i = H_{w,i} - H_{e,i} + H_{n,i} - H_{s,i}$$
+$$\Delta H_{\text{rec}} = m_{\text{melt,in}} \, c_{p,\text{melt}} \, (T_{\text{donor}} - T_{\text{rec}})$$
 
-$$H_{x,j} = q_{x,j} \, \Delta x \, \Delta y \, \rho_{\text{melt}} \, c_{p,\text{melt}} \, (T_{\text{donor}} - T_{\text{rec}})$$
-
-where $T_{\text{donor}}$ is the donor cell temperature and $T_{\text{rec}}$ is the receiver cell temperature. Debiting donor cells and crediting receiver cells guarantees that the domain integral satisfies $\sum_i \Delta H_i \equiv 0$.
+where $m_{\text{melt,in}}$ is the incoming melt mass. Melt departs the donor cell at the donor cell's own temperature $T_{\text{donor}}$, preserving the intensive temperature of the donor matrix without spurious cooling.
 
 ---
 

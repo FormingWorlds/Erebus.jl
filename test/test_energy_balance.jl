@@ -91,11 +91,11 @@ using Test
         r1 = run_reaction(1000.0)
         r2 = run_reaction(500.0)
 
-        # Ratio must scale linearly with dt (2.0), not quadratically (4.0)
+        # Ratio scales linearly with dt (2.0)
         ratio_dt = r1.Q_code / r2.Q_code
-        @test isapprox(ratio_dt, 2.0; atol=0.1)
+        @test isapprox(ratio_dt, 2.0; atol=0.005)
 
-        # Released energy must match physical reaction enthalpy n_H2O * delta_H within 10%
+        # Released energy matches physical reaction enthalpy n_H2O * delta_H
         ratio_phys = r1.Q_code / r1.Q_phys
         @test isapprox(ratio_phys, 1.0; atol=0.10)
     end
@@ -232,13 +232,14 @@ using Test
             rho_melt=2800.0,
         )
 
-        # Net integrated sensible heat added across the domain must sum to zero
-        total_sens_energy = sum(Q_seg_grid) * cell_vol * dt
-        @test isapprox(total_sens_energy, 0.0; atol=1e-5)
+        # Receiver cells receiving hotter upward melt are heated
+        # Donor cells retain their intensive temperature and are not cooled
+        @test isapprox(minimum(Q_seg_grid), 0.0; atol=1e-12)
+        @test isapprox(maximum(Q_seg_grid), 0.0367; rtol=0.01)
 
-        # Donor cells must be cooled (Q_seg_grid < 0) and receiver cells heated (Q_seg_grid > 0)
-        @test minimum(Q_seg_grid) < -1e-6
-        @test isapprox(maximum(Q_seg_grid), -minimum(Q_seg_grid); rtol=0.2)
+        # Total sensible thermal energy credited to receiver cells
+        total_sens_energy = sum(Q_seg_grid) * cell_vol * dt
+        @test isapprox(total_sens_energy, 3.05835e11; rtol=1e-4)
     end
 
     @testset "F12 & F33: 26Al/60Fe Power & Volume Weighting" begin
@@ -323,20 +324,16 @@ using Test
     end
 
     @testset "F30: DTmax Convergence & Timestep Consistency" begin
-        # When maxDTcurrent exceeds DTmax, the step must not accept convergence
-        # with an unreduced thermal solution.
+        # When maxDTcurrent exceeds DTmax, the step rejects convergence
         DTmax = 20.0
         maxDTcurrent_exceeded = 50.0
         maxDTcurrent_ok = 15.0
 
-        # compute_thermochemical_iteration_outcome must reject convergence when DTmax is violated
         DMP = zeros(5, 5)
         pf = zeros(5, 5)
         pf0 = zeros(5, 5)
         titer = 1
 
-        # On main, compute_thermochemical_iteration_outcome does not take maxDTcurrent or DTmax,
-        # so it returns true regardless of maxDTcurrent.
         outcome_exceeded = Erebus.compute_thermochemical_iteration_outcome(
             DMP,
             pf,
@@ -352,6 +349,16 @@ using Test
             DMP, pf, pf0, titer; pferrmax=1.0e5, maxDTcurrent=maxDTcurrent_ok, DTmax=DTmax
         )
         @test outcome_ok == true
+
+        # Timestep limiter reduces dt and honors dt_min clamp
+        dt_reduced = Erebus.finalize_thermochemical_iteration_pass(50.0, 100.0, 1, 20.0; dt_min_val=10.0)
+        @test isapprox(dt_reduced, 40.0; atol=1e-10)
+
+        dt_clamped = Erebus.finalize_thermochemical_iteration_pass(100.0, 10.0, 1, 20.0; dt_min_val=5.0)
+        @test isapprox(dt_clamped, 5.0; atol=1e-10)
+
+        dt_unchanged = Erebus.finalize_thermochemical_iteration_pass(15.0, 100.0, 1, 20.0; dt_min_val=5.0)
+        @test isapprox(dt_unchanged, 100.0; atol=1e-10)
     end
 
     @testset "F12 & F33: Marker Radiogenic Property Isolation (compute_hr)" begin

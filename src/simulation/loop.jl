@@ -1626,6 +1626,7 @@ function simulation_loop(
                     # ---------------------------------------------------------------------
                     dt_aphimax_step_max = 0.0
                     plastic_converged = true
+                    thermochemical_converged = true
                     last_plastic_residual = 0.0
                     for titer in 1:1:max_plastic_iterations_val
                         # perform thermochemical reaction
@@ -2488,13 +2489,13 @@ function simulation_loop(
                         @info "max DT = $maxDTcurrent K"
                         # prepare next timestep duration
                         dt_next = finalize_thermochemical_iteration_pass(
-                            maxDTcurrent, dt, titer, cfg.time.DTmax
+                            maxDTcurrent, dt, titer, cfg.time.DTmax; dt_min_val=cfg.time.dt_min
                         )
                         if dt_next < dt
                             dt_reduced_by_maxDT = true
                         end
                         # evaluate iteration outcome
-                        if compute_thermochemical_iteration_outcome(
+                        thermochemical_converged = compute_thermochemical_iteration_outcome(
                             DMP,
                             pf,
                             pf0,
@@ -2502,27 +2503,37 @@ function simulation_loop(
                             pferrmax=cfg.reaction.pferrmax,
                             maxDTcurrent=maxDTcurrent,
                             DTmax=cfg.time.DTmax,
-                        ) || titer == max_plastic_iterations_val
-                            # exit thermochemical iterations loop
+                        )
+                        if thermochemical_converged
+                            break
+                        elseif titer == max_plastic_iterations_val
+                            # exit iterations without convergence
                             break
                         else
-                            dt = dt_next
+                            dt = max(cfg.time.dt_min, dt_next)
                         end
                     end # for titer=1:1:max_plastic_iterations_val
 
-                    if !plastic_converged
+                    if !plastic_converged || !thermochemical_converged
                         num_dt_reductions += 1
                         if num_dt_reductions > max_dt_reductions_val
+                            err_msg = !plastic_converged ?
+                                "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions" :
+                                "Thermochemical iterations failed to converge after $(max_dt_reductions_val) dt reductions (maxDT=$maxDTcurrent > $(cfg.time.DTmax))"
                             throw(
                                 PlasticConvergenceError(
                                     timestep,
                                     last_plastic_residual,
                                     dt,
-                                    "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions",
+                                    err_msg,
                                 ),
                             )
                         end
-                        @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
+                        if !plastic_converged
+                            @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
+                        else
+                            @warn "Thermochemical iterations failed to converge at step $timestep (maxDT=$maxDTcurrent > $(cfg.time.DTmax)). Repeating step with reduced dt (reduction $num_dt_reductions of $max_dt_reductions_val)."
+                        end
                         if hasproperty(step_snapshot, :markers) &&
                             step_snapshot.markers isa MarkerArrays
                             restore_marker_arrays!(markers, step_snapshot.markers)
@@ -2537,8 +2548,8 @@ function simulation_loop(
                         xcenter_val = step_snapshot.scalars.xcenter_val
                         ycenter_val = step_snapshot.scalars.ycenter_val
                         coords = step_snapshot.scalars.coords
-                        dt_step_target = min(dt_step_target / 2.0, dt)
-                        dt = dt_step_target
+                        dt_step_target = min(dt_step_target / 2.0, dt_next)
+                        dt = max(cfg.time.dt_min, dt_step_target)
                         continue
                     end
                     break # plastic iterations converged, proceed with rest of timestep
