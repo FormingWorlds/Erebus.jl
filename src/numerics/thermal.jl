@@ -848,10 +848,10 @@ $(SIGNATURES)
     - dt: adjusted next time step
 """
 function finalize_thermochemical_iteration_pass(
-    maxDTcurrent, dt, titer, DTmax_val::Real=20.0
+    maxDTcurrent, dt, titer, DTmax_val::Real=20.0; dt_min_val::Real=0.0
 )
     if maxDTcurrent > DTmax_val
-        dt *= (DTmax_val * inv(maxDTcurrent))
+        dt = max(dt_min_val, dt * (DTmax_val * inv(maxDTcurrent)))
         @info "titer $titer: reducing dt due to maxDT: dt=$dt s"
     end
     return dt
@@ -874,9 +874,18 @@ $(SIGNATURES)
 
     - dt: adjusted next time step
 """
-function compute_thermochemical_iteration_outcome(DMP, pf, pf0, titer; pferrmax=1.0e5)
+function compute_thermochemical_iteration_outcome(
+    DMP,
+    pf,
+    pf0,
+    titer;
+    pferrmax=1.0e5,
+    maxDTcurrent::Union{Nothing,Real}=nothing,
+    DTmax::Union{Nothing,Real}=nothing,
+)
     pferrcur = maximum(abs, pf - pf0)
     DMPmax = maximum(abs, DMP)
     @info "end thermochemical iter $titer" pferrcur DMPmax
-    return pferrcur < pferrmax && (titer > 2 || DMPmax <= 0.0)
+    dt_ok = (maxDTcurrent === nothing || DTmax === nothing) ? true : (maxDTcurrent <= DTmax)
+    return pferrcur < pferrmax && (titer > 2 || DMPmax <= 0.0) && dt_ok
 end # function compute_thermochemical_iteration_outcome

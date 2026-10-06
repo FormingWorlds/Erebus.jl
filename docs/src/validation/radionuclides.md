@@ -10,11 +10,17 @@ Radioactive decay generates volumetric heating $Q(t)$ in the solid rock ($^{26}\
 
 $$Q(t) = Q_0 \exp\left(-\frac{t}{\tau}\right) = Q_0 \left(\frac{1}{2}\right)^{t / t_{1/2}}$$
 
-with mean lifetime $\tau = t_{1/2} / \ln 2$. The initial volumetric power density at time of CAI formation ($t = 0$) is:
+with mean lifetime $\tau = t_{1/2} / \ln 2$. The initial volumetric power density at time of CAI formation ($t = 0$) for bulk chondritic composition is:
 
 $$Q_0 = \rho f_m \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}}$$
 
 where $\rho$ is phase density, $f_m$ is elemental mass abundance, and $E_{\text{al}}$ is decay energy per atom.
+
+Because aluminium is lithophile, $^{26}\text{Al}$ concentrates exclusively into the silicate phase. The initial volumetric power density of the silicate phase is scaled by:
+
+$$Q_{0,\text{silicate}} = \frac{Q_0}{1 - X_{\text{fe,ref}}}$$
+
+where $X_{\text{fe,ref}}$ is the reference mass fraction of metallic iron ($0.25$ for standard chondritic composition). Similarly, siderophile $^{60}\text{Fe}$ deposits into the metallic iron phase. Solid volume fraction weighting over silicate and metal phases preserves the exact bulk planetary thermal power budget.
 
 ---
 

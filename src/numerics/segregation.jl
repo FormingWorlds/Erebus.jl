@@ -1583,12 +1583,19 @@ function apply_silicate_melt_segregation!(
                     if n_donor > 0
                         T_donor = T_cell[i, donor_j]
                         T_rec = T_cell[i, rec_j]
-                        H_flux_x[i, j] =
-                            (fx / n_donor) *
-                            (dx_val * dy_val) *
-                            rho_melt *
-                            cp_melt_val *
-                            (T_donor - T_rec)
+                        # Melt enters receiver cell at T_donor, equilibrating with receiver matrix
+                        delta_m = (abs(fx) / n_donor) * (dx_val * dy_val) * rho_melt
+                        delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
+                        H_flux_x[i, j] = delta_H
+                        total_sens_energy += abs(delta_H)
+                        if !iszero(delta_H)
+                            Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
+                            dQ_sens = Q_sens * (dt_sub / dt)
+                            if i + 1 <= size(Q_seg_grid, 1) &&
+                                rec_j + 1 <= size(Q_seg_grid, 2)
+                                Q_seg_grid[i + 1, rec_j + 1] += dQ_sens
+                            end
+                        end
                     else
                         H_flux_x[i, j] = 0.0
                     end
@@ -1606,31 +1613,23 @@ function apply_silicate_melt_segregation!(
                     if n_donor > 0
                         T_donor = T_cell[donor_i, j]
                         T_rec = T_cell[rec_i, j]
-                        H_flux_y[i, j] =
-                            (fy / n_donor) *
-                            (dx_val * dy_val) *
-                            rho_melt *
-                            cp_melt_val *
-                            (T_donor - T_rec)
+                        delta_m = (abs(fy) / n_donor) * (dx_val * dy_val) * rho_melt
+                        delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
+                        H_flux_y[i, j] = delta_H
+                        total_sens_energy += abs(delta_H)
+                        if !iszero(delta_H)
+                            Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
+                            dQ_sens = Q_sens * (dt_sub / dt)
+                            if rec_i + 1 <= size(Q_seg_grid, 1) &&
+                                j + 1 <= size(Q_seg_grid, 2)
+                                Q_seg_grid[rec_i + 1, j + 1] += dQ_sens
+                            end
+                        end
                     else
                         H_flux_y[i, j] = 0.0
                     end
                 else
                     H_flux_y[i, j] = 0.0
-                end
-            end
-
-            @inbounds for j in 1:Nx_val, i in 1:Ny_val
-                H_w = (j > 1 && flux_x[i, j - 1] > 0.0) ? H_flux_x[i, j - 1] : 0.0
-                H_e = (j < Nx_val && flux_x[i, j] < 0.0) ? -H_flux_x[i, j] : 0.0
-                H_n = (i > 1 && flux_y[i - 1, j] > 0.0) ? H_flux_y[i - 1, j] : 0.0
-                H_s = (i < Ny_val && flux_y[i, j] < 0.0) ? -H_flux_y[i, j] : 0.0
-                delta_H = H_w + H_e + H_n + H_s
-                total_sens_energy += abs(delta_H)
-                if !iszero(delta_H)
-                    Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
-                    dQ_sens = Q_sens * (dt_sub / dt)
-                    Q_seg_grid[i + 1, j + 1] += dQ_sens
                 end
             end
         end
@@ -1652,7 +1651,9 @@ function apply_silicate_melt_segregation!(
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing && cfg_magma.segregation_heating
                     dQ = Q_diss * (dt_sub / dt)
-                    Q_seg_grid[i + 1, j + 1] += dQ
+                    if i + 1 <= size(Q_seg_grid, 1) && j + 1 <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i + 1, j + 1] += dQ
+                    end
                 end
             end
         end

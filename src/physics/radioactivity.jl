@@ -80,8 +80,12 @@ function calculate_radioactive_heating(
     if al
         # 26Al radiogenic heat production [W/kg]
         Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum)
+        # Concentrating lithophile 26Al into silicate phase: Q_al / (1 - X_fe_ref) [W/kg silicate]
+        Q_al_silicate = (1.0 - X_fe_ref) > 0.0 ? Q_al / (1.0 - X_fe_ref) : Q_al
         # Solid phase 26Al radiogenic heat production [W/m^3]
-        @inbounds hrsolidm = @SVector [Q_al * rhosolidm[1], Q_al * rhosolidm[2], 0.0]
+        @inbounds hrsolidm = @SVector [
+            Q_al_silicate * rhosolidm[1], Q_al_silicate * rhosolidm[2], 0.0
+        ]
     else
         hrsolidm = @SVector zeros(3)
     end

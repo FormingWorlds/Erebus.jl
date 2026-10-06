@@ -359,9 +359,14 @@ end
         E_al = cfg.thermodynamics.E_al
         tau_al = cfg.thermodynamics.t_half_al / log(2.0)
         rho_rock = cfg.materials.rhosolidm[1]
+        rho_metal = cfg.coreformation.rho_metal
+        phi_fe_ref =
+            (X_FE_REF_CHONDRITE / rho_metal) /
+            (X_FE_REF_CHONDRITE / rho_metal + (1.0 - X_FE_REF_CHONDRITE) / rho_rock)
 
         Q_al_analytic = f_al * ratio_al * E_al * exp(-t_decay / tau_al) / tau_al
-        hr_volumetric_expected = Q_al_analytic * rho_rock
+        Q_al_silicate = Q_al_analytic / (1.0 - X_FE_REF_CHONDRITE)
+        hr_volumetric_expected = (1.0 - phi_fe_ref) * Q_al_silicate * rho_rock
 
         @test isapprox(
             state_one.markers.core.hrtotalm[1], hr_volumetric_expected; rtol=1e-12
@@ -369,7 +374,9 @@ end
         # 3-class discrimination guards
         # Exponent guard: wrong lifetime differs by orders of magnitude
         wrong_decay =
-            f_al * ratio_al * E_al * exp(-t_decay / (2.0 * tau_al)) / (2.0 * tau_al) *
+            f_al * ratio_al * E_al * exp(-t_decay / (2.0 * tau_al)) / (2.0 * tau_al) /
+            (1.0 - X_FE_REF_CHONDRITE) *
+            (1.0 - phi_fe_ref) *
             rho_rock
         @test abs(state_one.markers.core.hrtotalm[1] - wrong_decay) >
             1e-10 * hr_volumetric_expected
@@ -415,8 +422,11 @@ end
         )
         radiogenic_heating!(state_hl, coords, cfg)
         Q_hl_analytic = f_al * ratio_al * E_al * 0.5 / tau_al
+        Q_hl_silicate = Q_hl_analytic / (1.0 - X_FE_REF_CHONDRITE)
         @test isapprox(
-            state_hl.markers.core.hrtotalm[1], Q_hl_analytic * rho_rock; rtol=1e-12
+            state_hl.markers.core.hrtotalm[1],
+            (1.0 - phi_fe_ref) * Q_hl_silicate * rho_rock;
+            rtol=1e-12,
         )
 
         # 6. Branch coverage: metal group contribution (phi_fe > 0 and phi_fe == 0)
@@ -424,15 +434,18 @@ end
             marknum=1, r_marker=0.0, tm_val=1, phi_val=0.0, has_metal=true, Xfe_bulk_val=0.2
         )
         radiogenic_heating!(state_metal, coords, cfg_metal)
-        hr_expected_metal = hr_volumetric_expected * (1.0 - 0.2)
+        # With has_metal=true and Xfe_bulk=0.2, silicate power is Q_al / (1 - 0.2)
+        Q_al_silicate_metal = Q_al_analytic / (1.0 - cfg_metal.coreformation.Xfe_bulk)
+        hr_expected_metal = (1.0 - 0.2) * Q_al_silicate_metal * rho_rock
         @test isapprox(state_metal.markers.core.hrtotalm[1], hr_expected_metal; rtol=1e-12)
 
         state_nometal, coords, cfg_nometal = create_mock_simulation_state(;
             marknum=1, r_marker=0.0, tm_val=1, phi_val=0.0, has_metal=true, Xfe_bulk_val=0.0
         )
         radiogenic_heating!(state_nometal, coords, cfg_nometal)
+        hr_expected_nometal = (1.0 - 0.0) * Q_al_silicate_metal * rho_rock
         @test isapprox(
-            state_nometal.markers.core.hrtotalm[1], hr_volumetric_expected; rtol=1e-12
+            state_nometal.markers.core.hrtotalm[1], hr_expected_nometal; rtol=1e-12
         )
     end
 

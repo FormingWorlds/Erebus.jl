@@ -138,7 +138,22 @@ $$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\r
 
 $$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_{\text{metal}}$$
 
-where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase.
+where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase. Lithophile $^{26}\text{Al}$ partitions exclusively into the silicate phase, yielding the silicate concentration scaling:
+
+$$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{fe,ref}}}$$
+
+where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture ($X_{\text{fe,ref}} = 0.25$ by default). Solid volume weighting over silicate and metal phases preserves total bulk radiogenic power.
+
+### Mineral Hydration and Dehydration Reaction Enthalpy
+Serpentinization and dehydration reactions exchange latent heat proportional to the reaction mass rate and the molar reaction enthalpy:
+
+$$\text{DHP} = -\Gamma_{\text{mass}} \frac{\Delta h_{\text{rxn}}}{M_{\text{H}_2\text{O}}}$$
+
+where $\Delta h_{\text{rxn}}$ is the molar reaction enthalpy [$\text{J/mol}$], $M_{\text{H}_2\text{O}} = 0.018015\text{ kg/mol}$ is the molar mass of water, and $\Gamma_{\text{mass}}$ is the mass rate of dehydration:
+
+$$\Gamma_{\text{mass}} = \frac{\rho_0^s (1 - \phi_0) RV - \rho_1^s (1 - \phi_1)}{\Delta t}$$
+
+Hydration reactions ($\Gamma_{\text{mass}} < 0$) produce exothermic heating ($\text{DHP} > 0$). Dehydration reactions ($\Gamma_{\text{mass}} > 0$) produce endothermic cooling ($\text{DHP} < 0$). Marker reaction enthalpy is regularized over the grid using full-domain volume weighting $\text{WTPSUM}$.
 
 ### Spherical Geometric Metric Weighting (2D Cartesian)
 In 3D spherically symmetric coordinates with radius $r = \sqrt{(x - x_c)^2 + (y - y_c)^2}$, the heat flux divergence is:
@@ -244,6 +259,13 @@ The irreversible dissipation of gravitational potential energy during metal desc
 $$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
 
 where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $g$ is local gravity, and $\phi_m$ is the molten metal fraction. This source directly enters the thermal energy equation.
+
+### Melt Segregation Sensible Heat Transfer
+Silicate melt segregation transports sensible heat into receiver cells. When melt migrates from a donor cell at $T_{\text{donor}}$ into an adjacent receiver cell at $T_{\text{rec}}$, the receiver matrix thermally equilibrates with the incoming melt, receiving thermal energy:
+
+$$\Delta H_{\text{rec}} = m_{\text{melt,in}} \, c_{p,\text{melt}} \, (T_{\text{donor}} - T_{\text{rec}})$$
+
+where $m_{\text{melt,in}}$ is the incoming melt mass. Melt departs the donor cell at the donor cell's own temperature $T_{\text{donor}}$, preserving the intensive temperature of the donor matrix without spurious cooling.
 
 ---
 
