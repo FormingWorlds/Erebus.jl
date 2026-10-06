@@ -466,7 +466,7 @@ include("test_helpers.jl")
         cfg_degas = MagmaOceanDegassingConfig(;
             active=true,
             mode=:dynamic_flux,
-            F_melt_threshold=0.40,
+            F_melt_threshold=0.10,
             degas_depth_fraction=0.90,
             efficiency=1.0,
         )
@@ -748,7 +748,7 @@ include("test_helpers.jl")
             active=true,
             mode=:dynamic_flux,
             degas_depth_fraction=0.90,
-            F_melt_threshold=0.40,
+            F_melt_threshold=0.20,
             water_As=0.40,
             efficiency=1.0,
         )
@@ -919,7 +919,7 @@ include("test_helpers.jl")
             active=true,
             mode=:dynamic_flux,
             degas_depth_fraction=0.90,
-            F_melt_threshold=0.40,
+            F_melt_threshold=0.01,
             water_As=0.40,
             efficiency=1.0,
         )
@@ -1061,7 +1061,7 @@ include("test_helpers.jl")
             active=true,
             mode=:dynamic_flux,
             degas_depth_fraction=0.90,
-            F_melt_threshold=0.40,
+            F_melt_threshold=0.10,
             water_As=0.40,
             efficiency=1.0,
         )

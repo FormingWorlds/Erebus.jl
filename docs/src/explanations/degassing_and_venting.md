@@ -325,6 +325,54 @@ This multi-component speciation feeds directly into both coupled atmosphere evol
 
 ---
 
+## Magma Ocean Equilibrium Degassing and Atmospheric Coupling
+
+When planetesimal temperatures exceed the silicate solidus, partial melting produces magma oceans. If `magma_degassing.active = true`, `Erebus.jl` calculates volatile partitioning between molten silicate and the gas phase.
+
+### 1. Degassing Zone Activation Criterion
+
+A marker particle participates in magma ocean degassing if it satisfies three physical conditions:
+
+1. Radial position: $r_m^2 \ge (R_{\text{planet}} - d_{\text{degas}})^2$
+2. Melt threshold: $F_m[m] \ge F_{\text{thresh}}$
+3. Positive melt: $F_m[m] > 0.0$
+
+Here $R_{\text{planet}}$ is the planetary radius, $d_{\text{degas}}$ is the maximum degassing depth, $F_m[m]$ is the marker melt fraction, and $F_{\text{thresh}}$ is `cfg.magma_degassing.F_melt_threshold`. This condition excludes unmolten interior markers and solid crust from the magma ocean degassing solver.
+
+### 2. Mass-Weighted Melt Temperature
+
+The equilibrium partitioning solver evaluates volatile solubility at the mass-weighted mean melt temperature:
+
+$$T_{\text{melt,mean}} = \frac{\sum_m T_m m_{\text{melt}, m}}{\sum_m m_{\text{melt}, m}}$$
+
+where $m_{\text{melt}, m} = m_m F_m[m]$ is the melt mass of marker $m$. If the total melt mass or temperature sum is non-positive, the solver uses a defensive reference temperature of $1500.0\text{ K}$.
+
+### 3. Melt-Scaled Retained Volatile Concentrations
+
+The equilibrium degassing solver determines the equilibrium volatile concentration in the melt phase, $X_i^{\text{melt}}$ [$\text{wt}\%$]. Because marker arrays store bulk parcel volatile concentrations, the updated marker concentrations scale with local melt fraction:
+
+$$X_i[m] = X_i^{\text{melt}} \cdot F_m[m], \quad i \in \{\text{H}_2\text{O}, \text{C}, \text{N}, \text{S}\}$$
+
+This scaling preserves mass conservation across partially molten parcels. The bulk volatile mass in marker $m$ equals:
+
+$$M_i[m] = m_m X_i[m] = m_m F_m[m] X_i^{\text{melt}} = m_{\text{melt}, m} X_i^{\text{melt}}$$
+
+Solid residue retains zero excess volatile mass above its equilibrium melt fraction.
+
+### 4. Gas Routing for Inactive Atmosphere Configurations
+
+When the coupled atmosphere is inactive (`atmosphere.active = false`) and atmospheric escape is active (`escape.active = true`), the simulation routes degassing fluxes directly to the escape module. The escape solver evaluates kinetic or hydrodynamic loss for escaping species. Escaping mass transfers directly to $M_{\text{escaped}}$. Non-escaping species accumulate in the bulk atmospheric reservoir $M_{\text{atm,total}}$. This routing maintains global volatile conservation across all solver configurations.
+
+### 5. Multi-Species Oxygen Inventory Accounting
+
+The elemental oxygen inventory in `ElementInventory` accounts for all oxygen-carrying gas species:
+
+$$M_{\text{O}} = M_{\text{H}_2\text{O}} \frac{M_{\text{O}}}{M_{\text{H}_2\text{O}}} + M_{\text{CO}} \frac{M_{\text{O}}}{M_{\text{CO}}} + M_{\text{CO}_2} \frac{2 M_{\text{O}}}{M_{\text{CO}_2}} + M_{\text{SO}_2} \frac{2 M_{\text{O}}}{M_{\text{SO}_2}}$$
+
+where atomic and molecular masses follow standard stoichiometric values ($M_{\text{O}} = 15.9994$, $M_{\text{H}_2\text{O}} = 18.01528$, $M_{\text{CO}} = 28.010$, $M_{\text{CO}_2} = 44.010$, $M_{\text{SO}_2} = 64.066\text{ g/mol}$). This multi-species summation maintains elemental oxygen conservation between degassing, atmospheric speciation, and mantle redox buffers.
+
+---
+
 ## Atmospheric Accumulation and Jeans Kinetic Escape
 
 Volatiles released through cold surface venting or magma degassing collect above the solid surface, forming a transient or steady-state atmosphere. For low-mass planetesimals, thermal effusion (Jeans escape) strips this vapor envelope to space.

@@ -768,6 +768,7 @@ end
             atm_state=atm_eq,
             custom_overrides=overrides_eq,
         )
+        state_eq.grids.tk2 .= 1800.0
         vent_and_degas!(state_eq, coords_eq, cfg_eq)
         @test isfinite(state_eq.markers.groups.volatiles.XH2Om[1])
         @test any(r -> r.channel === :degassing, state_eq.transfers)

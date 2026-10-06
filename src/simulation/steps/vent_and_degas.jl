@@ -195,14 +195,18 @@ function vent_and_degas!(
                 continue
             end
             f_m = Fm[m]
-            if (r_sq >= r_degas_sq) && (f_m >= f_thresh || f_m > 0.01) && (f_m > 0.0)
-                w3d = w3d_m !== nothing ? w3d_m[m] : (2.0 * sqrt(r_sq))
+            if (r_sq >= r_degas_sq) && (f_m >= f_thresh) && (f_m > 0.0)
+                w3d = w3d_m[m]
                 m_wt = rho_rock * v_m * w3d
                 sum_t_mass += tkm[m] * m_wt
                 sum_degas_mass += m_wt
             end
         end
-        T_melt_ref = sum_degas_mass > 0.0 ? (sum_t_mass / sum_degas_mass) : 1500.0
+        T_melt_ref = if (sum_degas_mass > 0.0 && sum_t_mass > 0.0)
+            (sum_t_mass / sum_degas_mass)
+        else
+            1500.0
+        end
 
         if cfg.magma_degassing.mode === :dynamic_flux
             degas_res = degas_magma_ocean_markers!(
@@ -234,12 +238,17 @@ function vent_and_degas!(
             )
             append!(transfer_log, degas_res.records)
             if cfg.atmosphere.active
+                rate_O =
+                    (degas_res.dM_3D[:H2O] * (M_O / M_H2O) / dt) +
+                    get(degas_res.rates, :CO, 0.0) * (M_O / M_CO) +
+                    get(degas_res.rates, :CO2, 0.0) * ((2.0 * M_O) / M_CO2) +
+                    get(degas_res.rates, :SO2, 0.0) * ((2.0 * M_O) / M_SO2)
                 ElementInventory(
                     degas_res.dM_3D[:H] / dt,
                     degas_res.dM_3D[:C] / dt,
                     degas_res.dM_3D[:N] / dt,
                     degas_res.dM_3D[:S] / dt,
-                    degas_res.dM_3D[:H2O] * (M_O / M_H2O) / dt,
+                    rate_O,
                 )
             else
                 degas_res.rates
@@ -294,6 +303,7 @@ function _degas_magma_ocean_equilibrium!(
     tm = markers.core.tm
     w3d_m = markers.core.w3d_m
     Fm = markers.core.Fm
+    tkm = markers.core.tkm
 
     has_vols = haskey(markers.groups, :volatiles)
     XH2Om = has_vols ? markers.groups.volatiles.XH2Om : nothing
@@ -311,31 +321,31 @@ function _degas_magma_ocean_equilibrium!(
     M_planet_val = acc.M_planet_val
     tk1 = grids.tk1
 
-    T_int_val = compute_mean_surface_temperature(
-        tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
-    )
     m_melt_tot = 0.0
+    sum_t_melt = 0.0
     m_H_melt = 0.0
     m_C_melt = 0.0
     m_N_melt = 0.0
     m_S_melt = 0.0
+    f_thresh_mo = cfg.magma_degassing.F_melt_threshold
     for m in 1:marknum
         if tm[m] < 3 &&
             (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
-            Fm[m] >= cfg.magma_degassing.F_melt_threshold
-            w3d = if w3d_m !== nothing
-                w3d_m[m]
-            else
-                2.0 * hypot(xm[m] - xcenter_val, ym[m] - ycenter_val)
-            end
+            Fm[m] >= f_thresh_mo &&
+            Fm[m] > 0.0
+            w3d = w3d_m[m]
             m_marker_3d = cfg.materials.rhosolidm[1] * v_m * w3d
-            m_melt_tot += Fm[m] * m_marker_3d
+            m_melt_m = Fm[m] * m_marker_3d
+            m_melt_tot += m_melt_m
+            sum_t_melt += tkm[m] * m_melt_m
             m_H_melt += (XH2Om[m] * 0.01) * ((2.0 * M_H) / M_H2O) * m_marker_3d
             m_C_melt += (XCm[m] * 1.0e-6) * m_marker_3d
             m_N_melt += (XNm[m] * 1.0e-6) * m_marker_3d
             m_S_melt += (XSm[m] * 1.0e-6) * m_marker_3d
         end
     end
+    T_melt_mean =
+        (m_melt_tot > 0.0 && sum_t_melt > 0.0) ? (sum_t_melt / m_melt_tot) : 1500.0
 
     # Atmospheric elemental inventories
     m_H_atm =
@@ -374,7 +384,7 @@ function _degas_magma_ocean_equilibrium!(
             m_S_tot,
             rplanet_val,
             g_surf,
-            T_int_val,
+            T_melt_mean,
             fO2_diw_mo;
             nitrogen_law=cfg.magma_degassing.nitrogen_law,
         )
@@ -388,23 +398,27 @@ function _degas_magma_ocean_equilibrium!(
         for m in 1:marknum
             if tm[m] < 3 &&
                 (((xm[m] - xcenter_val)^2 + (ym[m] - ycenter_val)^2) <= rplanet_val^2) &&
-                Fm[m] >= cfg.magma_degassing.F_melt_threshold
+                Fm[m] >= f_thresh_mo &&
+                Fm[m] > 0.0
                 old_XH2O = XH2Om[m]
                 old_XC = XCm[m]
                 old_XN = XNm[m]
                 old_XS = XSm[m]
-                XH2Om[m] = new_XH2O_wtpct
-                XCm[m] = new_XC_ppm
-                XNm[m] = new_XN_ppm
-                XSm[m] = new_XS_ppm
+
+                f_melt_m = Fm[m]
+                new_XH2O_bulk = new_XH2O_wtpct * f_melt_m
+                new_XC_bulk = new_XC_ppm * f_melt_m
+                new_XN_bulk = new_XN_ppm * f_melt_m
+                new_XS_bulk = new_XS_ppm * f_melt_m
+
+                XH2Om[m] = new_XH2O_bulk
+                XCm[m] = new_XC_bulk
+                XNm[m] = new_XN_bulk
+                XSm[m] = new_XS_bulk
                 m_rock_2d = cfg.materials.rhosolidm[1] * v_m
-                w3d = if w3d_m !== nothing
-                    w3d_m[m]
-                else
-                    2.0 * hypot(xm[m] - xcenter_val, ym[m] - ycenter_val)
-                end
-                if old_XH2O != new_XH2O_wtpct
-                    dm_h2o_2d = (old_XH2O - new_XH2O_wtpct) * 0.01 * m_rock_2d
+                w3d = w3d_m[m]
+                if old_XH2O != new_XH2O_bulk
+                    dm_h2o_2d = (old_XH2O - new_XH2O_bulk) * 0.01 * m_rock_2d
                     dm_h_2d = dm_h2o_2d * ((2.0 * M_H) / M_H2O)
                     push!(
                         transfer_log,
@@ -420,8 +434,8 @@ function _degas_magma_ocean_equilibrium!(
                         ),
                     )
                 end
-                if old_XC != new_XC_ppm
-                    dm_c_2d = (old_XC - new_XC_ppm) * 1.0e-6 * m_rock_2d
+                if old_XC != new_XC_bulk
+                    dm_c_2d = (old_XC - new_XC_bulk) * 1.0e-6 * m_rock_2d
                     push!(
                         transfer_log,
                         TransferRecord(
@@ -436,8 +450,8 @@ function _degas_magma_ocean_equilibrium!(
                         ),
                     )
                 end
-                if old_XN != new_XN_ppm
-                    dm_n_2d = (old_XN - new_XN_ppm) * 1.0e-6 * m_rock_2d
+                if old_XN != new_XN_bulk
+                    dm_n_2d = (old_XN - new_XN_bulk) * 1.0e-6 * m_rock_2d
                     push!(
                         transfer_log,
                         TransferRecord(
@@ -452,8 +466,8 @@ function _degas_magma_ocean_equilibrium!(
                         ),
                     )
                 end
-                if old_XS != new_XS_ppm
-                    dm_s_2d = (old_XS - new_XS_ppm) * 1.0e-6 * m_rock_2d
+                if old_XS != new_XS_bulk
+                    dm_s_2d = (old_XS - new_XS_bulk) * 1.0e-6 * m_rock_2d
                     push!(
                         transfer_log,
                         TransferRecord(

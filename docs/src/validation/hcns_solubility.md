@@ -60,6 +60,12 @@ Dissolved carbon partitions into carbon monoxide ($\text{CO}$), methane ($\text{
   $$x_{\text{CO}_2} = 3.8 \times 10^{-7} p_{\text{CO}_2} [\text{bar}] \exp\left[-\frac{23.0 (p_{\text{CO}_2} - 1)}{83.15 T}\right]$$
   $$X_{\text{CO}_2} [\text{ppmw}] = 10^4 \times \frac{4400.0 x_{\text{CO}_2}}{36.6 - 44.0 x_{\text{CO}_2}}$$
 
+The composite carbon solubility routine `compute_carbon_solubility_melt` converts individual species solubilities to total elemental carbon mass fraction:
+
+$$X_{\text{C}} [\text{ppmw}] = X_{\text{CO}} \frac{M_{\text{C}}}{M_{\text{CO}}} + X_{\text{CH}_4} \frac{M_{\text{C}}}{M_{\text{CH}_4}} + X_{\text{CO}_2} \frac{M_{\text{C}}}{M_{\text{CO}_2}}$$
+
+where $M_{\text{C}} = 12.011$, $M_{\text{CO}} = 28.010$, $M_{\text{CH}_4} = 16.043$, and $M_{\text{CO}_2} = 44.010\text{ g/mol}$. This conversion enforces elemental stoichiometry across gas and melt phases.
+
 At graphite saturation ($a_{\text{C}} = 1$), maximum carbon monoxide and dioxide fugacities are governed by the heterogeneous buffer equilibria of French (1966) and Holloway et al. (1992):
 
 $$\log_{10}(f_{\text{CO}}^{\text{max}} [\text{bar}]) = \frac{5785.0}{T} + 4.545 + 0.5 \log_{10}(f_{\text{O}_2})$$
@@ -116,6 +122,10 @@ $$S_{\text{sulfide}} [\text{wt}\%] = C_{\text{S}^{2-}} \sqrt{\frac{p_{\text{S}_2
 When dissolved sulfur reaches the Sulfur Content at Sulfide Saturation (O'Neill & Mavrogenes 2002; Smythe et al. 2017), an immiscible Fe-S sulfide melt (matte) precipitates:
 
 $$\ln(\text{SCSS} [\text{ppmw}]) = 7.50 - \frac{4500.0}{T} + 0.90 \ln(\max(0.1, x_{\text{FeO}})) - 2.5 \times 10^{-4} \frac{P_{\text{tot}} [\text{bar}]}{T}$$
+
+In `compute_volatile_exsolution`, sulfur solubility evaluates using the speciated sulfur partial pressure $p_{\text{S}_2}$ calculated from equilibrium gas speciation:
+
+$$S_{\text{solubility}} = S_{\text{sulfide}}(p_{\text{S}_2}, f_{\text{O}_2}, T)$$
 
 When `scss_active = true`, the routine caps dissolved sulfur at the saturation ceiling:
 

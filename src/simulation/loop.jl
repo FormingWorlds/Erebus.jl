@@ -730,16 +730,18 @@ function simulation_loop(
     F_extract_m_step_start = nothing
     Fm_step_start = nothing
     transfer_log = TransferRecord[]
-    M_atm_species = if cfg.escape.multi_species || cfg.atmosphere.active
-        Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
-    else
-        nothing
-    end
-    M_escaped_species = if cfg.escape.multi_species || cfg.atmosphere.active
-        Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
-    else
-        nothing
-    end
+    M_atm_species =
+        if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
+            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+        else
+            nothing
+        end
+    M_escaped_species =
+        if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
+            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+        else
+            nothing
+        end
     atm_state = if cfg.atmosphere.active
         AtmosphereState(
             Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list),

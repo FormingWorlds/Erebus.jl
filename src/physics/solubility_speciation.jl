@@ -542,7 +542,8 @@ function compute_carbon_solubility_melt(
     co = compute_co_solubility_melt(p_co, p_total_Pa; law=co_law)
     ch4 = compute_ch4_solubility_melt(p_CH4_Pa, p_total_Pa; law=ch4_law)
     co2 = compute_co2_solubility_melt(p_co2, T_K; law=co2_law)
-    return (total_ppm=co + ch4 + co2, co_ppm=co, ch4_ppm=ch4, co2_ppm=co2)
+    total_c = co * (M_C / M_CO) + ch4 * (M_C / M_CH4) + co2 * (M_C / M_CO2)
+    return (total_ppm=total_c, co_ppm=co, ch4_ppm=ch4, co2_ppm=co2)
 end
 
 """
@@ -907,6 +908,92 @@ compute_sulfur_retention_floor(
 )::Float64 = compute_volatile_retention_floor(T_val, :S, cfg; F_melt=F_melt, P_val=P_val)
 
 """
+Apply retention floors to mobile volatile concentrations during exsolution.
+"""
+function _apply_exsolution_retention_floors(
+    T_val::Float64,
+    P_val::Float64,
+    F_m::Float64,
+    w_H2O::Float64,
+    C_C::Float64,
+    C_N::Float64,
+    C_S::Float64,
+    ret_cfg::RetentionConfig,
+)
+    C_ret_H2O_ppm = compute_h2o_retention_floor(T_val, ret_cfg; F_melt=F_m, P_val=P_val)
+    w_ret_act_H2O = min(w_H2O, C_ret_H2O_ppm * 1.0e-6)
+    w_H2O_mob = max(0.0, w_H2O - w_ret_act_H2O)
+
+    C_ret_N = compute_nitrogen_retention_floor(T_val, ret_cfg; F_melt=F_m, P_val=P_val)
+    C_ret_act_N = min(C_N, C_ret_N)
+    C_N_mob = max(0.0, C_N - C_ret_act_N)
+
+    C_ret_C = compute_carbon_retention_floor(T_val, ret_cfg; F_melt=F_m, P_val=P_val)
+    C_ret_act_C = min(C_C, C_ret_C)
+    C_C_mob = max(0.0, C_C - C_ret_act_C)
+
+    C_ret_S = compute_sulfur_retention_floor(T_val, ret_cfg; F_melt=F_m, P_val=P_val)
+    C_ret_act_S = min(C_S, C_ret_S)
+    C_S_mob = max(0.0, C_S - C_ret_act_S)
+
+    return (
+        w_ret_act_H2O=w_ret_act_H2O,
+        w_H2O_mob=w_H2O_mob,
+        C_ret_act_N=C_ret_act_N,
+        C_N_mob=C_N_mob,
+        C_ret_act_C=C_ret_act_C,
+        C_C_mob=C_C_mob,
+        C_ret_act_S=C_ret_act_S,
+        C_S_mob=C_S_mob,
+    )
+end
+
+"""
+Estimate speciation S2 partial pressure for sulfur solubility in volatile exsolution.
+"""
+function _estimate_exsolution_p_S2(
+    P_val::Float64,
+    T_val::Float64,
+    d_IW::Float64,
+    w_H2O_mob::Float64,
+    C_C_mob::Float64,
+    C_N_mob::Float64,
+    C_S_mob::Float64;
+    carbon_active::Bool=false,
+    graphite_saturation::Bool=true,
+)::Float64
+    if P_val <= 0.0
+        return 0.0
+    end
+    mol_H_est = 2.0 * (w_H2O_mob / M_H2O)
+    mol_C_est = (carbon_active ? (C_C_mob * 1.0e-6) : 0.0) / M_C
+    mol_N_est = (C_N_mob * 1.0e-6) / M_N
+    mol_S_est = (C_S_mob * 1.0e-6) / M_S
+    mol_tot_est = mol_H_est + mol_C_est + mol_N_est + mol_S_est
+    z_H_est, z_C_est, z_N_est, z_S_est = if mol_tot_est > 0.0
+        (
+            mol_H_est / mol_tot_est,
+            mol_C_est / mol_tot_est,
+            mol_N_est / mol_tot_est,
+            mol_S_est / mol_tot_est,
+        )
+    else
+        (0.80, 0.15, 0.03, 0.02)
+    end
+    spec_pre = solve_chnos_speciation(
+        P_val,
+        T_val,
+        d_IW;
+        z_H=z_H_est,
+        z_C=z_C_est,
+        z_N=z_N_est,
+        z_S=z_S_est,
+        graphite_saturation=graphite_saturation,
+    )
+    return spec_pre.p_S2_Pa
+end
+
+"""
 Compute equilibrium volatile exsolution from silicate melt for H-C-N-S volatile species.
 
 $(SIGNATURES)
@@ -1032,30 +1119,17 @@ function compute_volatile_exsolution(
     C_S_mob = C_S
 
     if retention_active && retention_cfg !== nothing && retention_cfg.active
-        C_ret_H2O_ppm = compute_h2o_retention_floor(
-            T_val, retention_cfg; F_melt=F_m, P_val=P_val
+        rf = _apply_exsolution_retention_floors(
+            T_val, P_val, F_m, w_H2O, C_C, C_N, C_S, retention_cfg
         )
-        w_ret_H2O = C_ret_H2O_ppm * 1.0e-6
-        w_ret_act_H2O = min(w_H2O, w_ret_H2O)
-        w_H2O_mob = max(0.0, w_H2O - w_ret_act_H2O)
-
-        C_ret_N = compute_nitrogen_retention_floor(
-            T_val, retention_cfg; F_melt=F_m, P_val=P_val
-        )
-        C_ret_act_N = min(C_N, C_ret_N)
-        C_N_mob = max(0.0, C_N - C_ret_act_N)
-
-        C_ret_C = compute_carbon_retention_floor(
-            T_val, retention_cfg; F_melt=F_m, P_val=P_val
-        )
-        C_ret_act_C = min(C_C, C_ret_C)
-        C_C_mob = max(0.0, C_C - C_ret_act_C)
-
-        C_ret_S = compute_sulfur_retention_floor(
-            T_val, retention_cfg; F_melt=F_m, P_val=P_val
-        )
-        C_ret_act_S = min(C_S, C_ret_S)
-        C_S_mob = max(0.0, C_S - C_ret_act_S)
+        w_ret_act_H2O = rf.w_ret_act_H2O
+        w_H2O_mob = rf.w_H2O_mob
+        C_ret_act_N = rf.C_ret_act_N
+        C_N_mob = rf.C_N_mob
+        C_ret_act_C = rf.C_ret_act_C
+        C_C_mob = rf.C_C_mob
+        C_ret_act_S = rf.C_ret_act_S
+        C_S_mob = rf.C_S_mob
     end
 
     # 1. Water solubility
@@ -1107,7 +1181,20 @@ function compute_volatile_exsolution(
     w_S_ex = 0.0
     C_S_diss = C_S
     if sulfur_active
-        S_S_ppm = compute_sulfur_solubility_melt(P_val, T_val, d_IW; law=sulfide_law)
+        p_S2 = _estimate_exsolution_p_S2(
+            P_val,
+            T_val,
+            d_IW,
+            w_H2O_mob,
+            C_C_mob,
+            C_N_mob,
+            C_S_mob;
+            carbon_active=carbon_active,
+            graphite_saturation=graphite_saturation,
+        )
+        S_S_ppm = compute_sulfur_solubility_melt(
+            p_S2, T_val, d_IW; law=sulfide_law, scss_active=true, p_total_Pa=P_val
+        )
         cap_S = F_m * S_S_ppm
         C_S_ex = max(0.0, C_S_mob - cap_S)
         C_S_diss = C_ret_act_S + min(C_S_mob, cap_S)
