@@ -86,16 +86,6 @@ function accrete!(
             nothing
         end
 
-        if cfg.volatile_mixture.active && cond_state_acc !== nothing
-            if cond_state_acc.condensed_H2O
-                XW_acc = cfg.volatile_mixture.X_ice_H2O
-                H2O_acc = cfg.volatile_mixture.X_ice_H2O * 100.0
-            else
-                XW_acc = cfg.accretion.XWsolid_dry
-                H2O_acc = cfg.accretion.XH2O_dry_wtpct
-            end
-        end
-
         advance_accretion_boundary!(
             rplanet_val,
             dR_acc,

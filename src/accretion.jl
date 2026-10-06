@@ -898,9 +898,37 @@ function advance_accretion_boundary!(
     current_time::Real=0.0,
     T_accreted::Real=200.0,
     phi_accreted::Real=cfg !== nothing ? cfg.accretion.phi_accreted : 0.35,
-    XWsolid_accreted::Real=cfg !== nothing ? cfg.accretion.XWsolid_dry : 0.40,
+    XWsolid_accreted::Real=if cfg !== nothing
+        (
+            if (
+                disk_state !== nothing &&
+                hasproperty(disk_state, :condensed_H2O) &&
+                disk_state.condensed_H2O
+            )
+                cfg.accretion.XWsolid_wet
+            else
+                cfg.accretion.XWsolid_dry
+            end
+        )
+    else
+        0.40
+    end,
     Xfe_accreted::Real=cfg !== nothing ? cfg.accretion.Xfe_bulk_accreted : 0.10,
-    XH2O_accreted::Real=cfg !== nothing ? cfg.accretion.XH2O_dry_wtpct : 10.0,
+    XH2O_accreted::Real=if cfg !== nothing
+        (
+            if (
+                disk_state !== nothing &&
+                hasproperty(disk_state, :condensed_H2O) &&
+                disk_state.condensed_H2O
+            )
+                cfg.accretion.XH2O_wet_wtpct
+            else
+                cfg.accretion.XH2O_dry_wtpct
+            end
+        )
+    else
+        10.0
+    end,
     XC_accreted::Real=cfg !== nothing ? cfg.accretion.XC_accreted_ppm : 1000.0,
     XN_accreted::Real=cfg !== nothing ? cfg.accretion.XN_accreted_ppm : 100.0,
     XS_accreted::Real=cfg !== nothing ? cfg.accretion.XS_accreted_ppm : 10000.0,
@@ -912,16 +940,6 @@ function advance_accretion_boundary!(
 
     XW_acc = XWsolid_accreted
     H2O_acc = XH2O_accreted
-
-    if cfg !== nothing && cfg.volatile_mixture.active && disk_state !== nothing
-        if disk_state.condensed_H2O
-            XW_acc = cfg.volatile_mixture.X_ice_H2O
-            H2O_acc = cfg.volatile_mixture.X_ice_H2O * 100.0
-        else
-            XW_acc = cfg.accretion.XWsolid_dry
-            H2O_acc = cfg.accretion.XH2O_dry_wtpct
-        end
-    end
 
     params = (;
         T_accreted=Float64(T_accreted),
@@ -1413,6 +1431,8 @@ function advance_accretion_boundary_hcnspo!(
     ycenter::Real=70000.0,
     T_accreted::Real=150.0,
     phi_accreted::Real=0.35,
+    XWsolid_accreted::Real=0.40,
+    XH2O_accreted::Real=10.0,
     current_time::Real=0.0,
     t_accreted::Union{Nothing,AbstractVector{<:Real}}=nothing,
 )::Int
@@ -1431,7 +1451,8 @@ function advance_accretion_boundary_hcnspo!(
         ycenter=ycenter,
         T_accreted=T_accreted,
         phi_accreted=phi_accreted,
-        XWsolid_accreted=disk_state.X_ice_H2O,
+        XWsolid_accreted=XWsolid_accreted,
+        XH2O_accreted=XH2O_accreted,
         current_time=current_time,
         t_accreted=t_accreted,
         hcnspo_props=hcnspo_props,

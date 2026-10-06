@@ -540,7 +540,8 @@ make_test_coordinates(Nx=33, Ny=33) = default_grid_coordinates()
         @test markers.tm[1] == 2
         @test markers.tm[2] == 2
         @test markers.groups.metal.Xfe_bulk[1] ≈ 0.15
-        @test markers.groups.volatiles.XH2Om[1] ≈ 85.0
+        @test markers.groups.volatiles.XH2Om[1] ≈ cfg.accretion.XH2O_wet_wtpct
+        @test markers.core.XWsolidm[1] ≈ cfg.accretion.XWsolid_wet
         @test markers.groups.redox.deltaIW_m[1] ≈ -0.80056 rtol = 0.01
         @test markers.groups.hcnspo.X_ice_H2O_m[1] ≈ 0.12
         @test markers.groups.phase.Xmin_troilite_m[1] ≈ 0.0

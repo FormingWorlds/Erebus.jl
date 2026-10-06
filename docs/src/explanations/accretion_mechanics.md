@@ -127,6 +127,8 @@ Disk temperature at heliocentric distance $a$ determines the volatile budget of 
 - **Outside Water Snowline ($T_{\mathrm{disk}} \le 160\text{ K}$):** Converted markers receive hydrated rock ($XW = 0.40$) with $10\text{ wt\%}$ bulk $\mathrm{H}_2\mathrm{O}$, representing carbonaceous chondrite precursors.
 - **Inside Water Snowline ($T_{\mathrm{disk}} > 160\text{ K}$):** Converted markers receive dry anhydrous rock ($XW = 0.0$, $0.1\text{ wt\% H}_2\mathrm{O}$), representing ordinary and enstatite chondrite precursors.
 
+Accreted rock mineral hydration is governed by `accretion.XH2O_wet_wtpct` and `XH2O_dry_wtpct`, with hydration extent `XWsolid_wet` and `XWsolid_dry`. When multi-species volatile mixtures are active (`volatile_mixture.active`), cryogenic ice condensation is tracked separately in the dedicated `hcnspo` marker ice arrays (`X_ice_H2O_m`, `X_ice_CO2_m`, etc.) without inflating the silicate rock mineral water content.
+
 ---
 
 ## Radiogenic Onion-Shell Thermal Structure
