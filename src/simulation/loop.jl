@@ -2489,11 +2489,7 @@ function simulation_loop(
                         @info "max DT = $maxDTcurrent K"
                         # prepare next timestep duration
                         dt_next = finalize_thermochemical_iteration_pass(
-                            maxDTcurrent,
-                            dt,
-                            titer,
-                            cfg.time.DTmax;
-                            dt_min_val=cfg.time.dt_min,
+                            maxDTcurrent, dt, titer, cfg.time.DTmax
                         )
                         if dt_next < dt
                             dt_reduced_by_maxDT = true
@@ -2514,7 +2510,7 @@ function simulation_loop(
                             # exit iterations without convergence
                             break
                         else
-                            dt = max(cfg.time.dt_min, dt_next)
+                            dt = dt_next
                         end
                     end # for titer=1:1:max_plastic_iterations_val
 
@@ -2552,7 +2548,7 @@ function simulation_loop(
                         ycenter_val = step_snapshot.scalars.ycenter_val
                         coords = step_snapshot.scalars.coords
                         dt_step_target = min(dt_step_target / 2.0, dt_next)
-                        dt = max(cfg.time.dt_min, dt_step_target)
+                        dt = dt_step_target
                         continue
                     end
                     break # plastic iterations converged, proceed with rest of timestep
