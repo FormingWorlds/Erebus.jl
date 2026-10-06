@@ -2514,25 +2514,19 @@ function simulation_loop(
                         end
                     end # for titer=1:1:max_plastic_iterations_val
 
-                    if !plastic_converged || !thermochemical_converged
+                    if !plastic_converged
                         num_dt_reductions += 1
                         if num_dt_reductions > max_dt_reductions_val
-                            err_msg = if !plastic_converged
-                                "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions"
-                            else
-                                "Thermochemical iterations failed to converge after $(max_dt_reductions_val) dt reductions (maxDT=$maxDTcurrent > $(cfg.time.DTmax))"
-                            end
                             throw(
                                 PlasticConvergenceError(
-                                    timestep, last_plastic_residual, dt, err_msg
+                                    timestep,
+                                    last_plastic_residual,
+                                    dt,
+                                    "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions",
                                 ),
                             )
                         end
-                        if !plastic_converged
-                            @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
-                        else
-                            @warn "Thermochemical iterations failed to converge at step $timestep (maxDT=$maxDTcurrent > $(cfg.time.DTmax)). Repeating step with reduced dt (reduction $num_dt_reductions of $max_dt_reductions_val)."
-                        end
+                        @warn "Plastic iterations failed to converge at step $timestep (residual=$last_plastic_residual). Repeating step with dt halved (reduction $num_dt_reductions of $max_dt_reductions_val)."
                         if hasproperty(step_snapshot, :markers) &&
                             step_snapshot.markers isa MarkerArrays
                             restore_marker_arrays!(markers, step_snapshot.markers)
