@@ -551,6 +551,17 @@ The convex active-set closure satisfies several exact analytical limits:
 
 ---
 
+## Initial Multi-Species Volatile and Refractory Inventories
+
+When multi-species volatile mixtures (`volatile_mixture.active`) or refractory elements (`refractory.active`) are active, planet rock markers inside the planetesimal domain (`tm < 3`) are initialized with primordial concentrations:
+- Cryogenic ice species ($\mathrm{H_2O, NH_3, CO_2, CO, CH_4, N_2, H_2S, PH_3}$) populate the `hcnspo` marker ice arrays (`X_ice_*_m`).
+- Refractory elemental species ($\mathrm{C, S, N, P, H}$) populate the `hcnspo` refractory arrays (`X_refr_*_m`).
+- Sticky-air markers (`tm == 3`) outside the planetesimal boundary remain unpopulated at $0.0$.
+
+During subsequent thermomechanical evolution, these inventories participate in metamorphic dehydration, hydrothermal circulation, multi-component solubility partitioning, and cold surface venting.
+
+---
+
 ## References
 
 - Attia, O., & Lichtenberg, T. (2026). Atmospheric evolution of rocky protoplanets. *Astronomy & Astrophysics*, in press.

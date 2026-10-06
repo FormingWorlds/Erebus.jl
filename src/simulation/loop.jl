@@ -447,35 +447,6 @@ function _extract_optional_marker_arrays(
     )
 end
 
-function _init_fresh_hcnspo_markers!(
-    hcnspo_props, tm::Vector{Int}, marknum::Int, cfg::SimulationConfig
-)
-    if hcnspo_props !== nothing
-        for m in 1:marknum
-            if tm[m] == 2
-                if cfg.volatile_mixture.active
-                    hcnspo_props.X_ice_H2O_m[m] = cfg.volatile_mixture.X_ice_H2O
-                    hcnspo_props.X_ice_NH3_m[m] = cfg.volatile_mixture.X_ice_NH3
-                    hcnspo_props.X_ice_CO2_m[m] = cfg.volatile_mixture.X_ice_CO2
-                    hcnspo_props.X_ice_CO_m[m] = cfg.volatile_mixture.X_ice_CO
-                    hcnspo_props.X_ice_CH4_m[m] = cfg.volatile_mixture.X_ice_CH4
-                    hcnspo_props.X_ice_N2_m[m] = cfg.volatile_mixture.X_ice_N2
-                    hcnspo_props.X_ice_H2S_m[m] = cfg.volatile_mixture.X_ice_H2S
-                    hcnspo_props.X_ice_PH3_m[m] = cfg.volatile_mixture.X_ice_PH3
-                end
-                if cfg.refractory.active
-                    hcnspo_props.X_refr_C_m[m] = cfg.refractory.f_refr_C
-                    hcnspo_props.X_refr_S_m[m] = cfg.refractory.f_refr_S
-                    hcnspo_props.X_refr_N_m[m] = cfg.refractory.f_refr_N
-                    hcnspo_props.X_refr_P_m[m] = cfg.refractory.f_refr_P
-                    hcnspo_props.X_refr_H_m[m] = cfg.refractory.f_refr_H
-                end
-            end
-        end
-    end
-    return nothing
-end
-
 """
 Main simulation loop: run calculations with timestepping.
 
