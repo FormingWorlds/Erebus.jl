@@ -2,7 +2,7 @@ using Erebus
 using StaticArrays
 using Test
 
-@testset "Energy Balance Consolidation (PR 5)" begin
+@testset "Energy Balance Consolidation" begin
     @testset "F16: Serpentinization Latent Heat Linear Scaling & Magnitude" begin
         cfg = SimulationConfig(
             reaction=ReactionConfig(
@@ -351,13 +351,19 @@ using Test
         @test outcome_ok == true
 
         # Timestep limiter reduces dt and honors dt_min clamp
-        dt_reduced = Erebus.finalize_thermochemical_iteration_pass(50.0, 100.0, 1, 20.0; dt_min_val=10.0)
+        dt_reduced = Erebus.finalize_thermochemical_iteration_pass(
+            50.0, 100.0, 1, 20.0; dt_min_val=10.0
+        )
         @test isapprox(dt_reduced, 40.0; atol=1e-10)
 
-        dt_clamped = Erebus.finalize_thermochemical_iteration_pass(100.0, 10.0, 1, 20.0; dt_min_val=5.0)
+        dt_clamped = Erebus.finalize_thermochemical_iteration_pass(
+            100.0, 10.0, 1, 20.0; dt_min_val=5.0
+        )
         @test isapprox(dt_clamped, 5.0; atol=1e-10)
 
-        dt_unchanged = Erebus.finalize_thermochemical_iteration_pass(15.0, 100.0, 1, 20.0; dt_min_val=5.0)
+        dt_unchanged = Erebus.finalize_thermochemical_iteration_pass(
+            15.0, 100.0, 1, 20.0; dt_min_val=5.0
+        )
         @test isapprox(dt_unchanged, 100.0; atol=1e-10)
     end
 

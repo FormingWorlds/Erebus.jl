@@ -2489,7 +2489,11 @@ function simulation_loop(
                         @info "max DT = $maxDTcurrent K"
                         # prepare next timestep duration
                         dt_next = finalize_thermochemical_iteration_pass(
-                            maxDTcurrent, dt, titer, cfg.time.DTmax; dt_min_val=cfg.time.dt_min
+                            maxDTcurrent,
+                            dt,
+                            titer,
+                            cfg.time.DTmax;
+                            dt_min_val=cfg.time.dt_min,
                         )
                         if dt_next < dt
                             dt_reduced_by_maxDT = true
@@ -2517,15 +2521,14 @@ function simulation_loop(
                     if !plastic_converged || !thermochemical_converged
                         num_dt_reductions += 1
                         if num_dt_reductions > max_dt_reductions_val
-                            err_msg = !plastic_converged ?
-                                "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions" :
+                            err_msg = if !plastic_converged
+                                "Plastic iterations failed to converge after $(max_dt_reductions_val) dt reductions"
+                            else
                                 "Thermochemical iterations failed to converge after $(max_dt_reductions_val) dt reductions (maxDT=$maxDTcurrent > $(cfg.time.DTmax))"
+                            end
                             throw(
                                 PlasticConvergenceError(
-                                    timestep,
-                                    last_plastic_residual,
-                                    dt,
-                                    err_msg,
+                                    timestep, last_plastic_residual, dt, err_msg
                                 ),
                             )
                         end

@@ -1591,7 +1591,10 @@ function apply_silicate_melt_segregation!(
                         if !iszero(delta_H)
                             Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
                             dQ_sens = Q_sens * (dt_sub / dt)
-                            Q_seg_grid[i + 1, rec_j + 1] += dQ_sens
+                            if i + 1 <= size(Q_seg_grid, 1) &&
+                                rec_j + 1 <= size(Q_seg_grid, 2)
+                                Q_seg_grid[i + 1, rec_j + 1] += dQ_sens
+                            end
                         end
                     else
                         H_flux_x[i, j] = 0.0
@@ -1617,7 +1620,10 @@ function apply_silicate_melt_segregation!(
                         if !iszero(delta_H)
                             Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
                             dQ_sens = Q_sens * (dt_sub / dt)
-                            Q_seg_grid[rec_i + 1, j + 1] += dQ_sens
+                            if rec_i + 1 <= size(Q_seg_grid, 1) &&
+                                j + 1 <= size(Q_seg_grid, 2)
+                                Q_seg_grid[rec_i + 1, j + 1] += dQ_sens
+                            end
                         end
                     else
                         H_flux_y[i, j] = 0.0
@@ -1645,7 +1651,9 @@ function apply_silicate_melt_segregation!(
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing && cfg_magma.segregation_heating
                     dQ = Q_diss * (dt_sub / dt)
-                    Q_seg_grid[i + 1, j + 1] += dQ
+                    if i + 1 <= size(Q_seg_grid, 1) && j + 1 <= size(Q_seg_grid, 2)
+                        Q_seg_grid[i + 1, j + 1] += dQ
+                    end
                 end
             end
         end
