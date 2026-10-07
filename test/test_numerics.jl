@@ -8,28 +8,27 @@ using StaticArrays
 
 include("test_helpers.jl")
 
-coords_test = default_grid_coordinates()
-Nx = coords_test.Nx
-Ny = coords_test.Ny
-dx = coords_test.dx
-dy = coords_test.dy
-xsize = coords_test.xsize
-ysize = coords_test.ysize
-xcenter = coords_test.xcenter
-ycenter = coords_test.ycenter
-x = coords_test.x
-y = coords_test.y
-xp = coords_test.xp
-yp = coords_test.yp
-xvx = coords_test.xvx
-yvx = coords_test.yvx
-xvy = coords_test.xvy
-yvy = coords_test.yvy
-Nx1 = coords_test.Nx1
-Ny1 = coords_test.Ny1
-rng = MersenneTwister(42)
-
 @testset "Numerics" begin
+    coords_test = test_grid_coordinates()
+    Nx = coords_test.Nx
+    Ny = coords_test.Ny
+    dx = coords_test.dx
+    dy = coords_test.dy
+    xsize = coords_test.xsize
+    ysize = coords_test.ysize
+    xcenter = coords_test.xcenter
+    ycenter = coords_test.ycenter
+    x = coords_test.x
+    y = coords_test.y
+    xp = coords_test.xp
+    yp = coords_test.yp
+    xvx = coords_test.xvx
+    yvx = coords_test.yvx
+    xvy = coords_test.xvy
+    yvy = coords_test.yvy
+    Nx1 = coords_test.Nx1
+    Ny1 = coords_test.Ny1
+    rng = MersenneTwister(42)
     dphimax = 0.1
     dtcoefdn = 0.5
     dtcoefup = 1.2
@@ -398,7 +397,7 @@ rng = MersenneTwister(42)
 
     @testset "setup_*_lse() constructors: dimensions and dynamic coordinates" begin
         # 1. Default grid sizes
-        coords_lse = Erebus.default_grid_coordinates()
+        coords_lse = test_grid_coordinates()
         R_h, S_h = Erebus.setup_hydromechanical_lse(coords_lse)
         @test size(R_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
         @test size(S_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
@@ -1323,7 +1322,7 @@ rng = MersenneTwister(42)
     end
 
     @testset "poroelastic hydromechanical coupling" begin
-        coords_poro = Erebus.default_grid_coordinates()
+        coords_poro = test_grid_coordinates()
         Ny, Nx = coords_poro.Ny, coords_poro.Nx
         Ny1, Nx1 = coords_poro.Ny1, coords_poro.Nx1
         dt = 10.0
@@ -1414,7 +1413,7 @@ rng = MersenneTwister(42)
     end # testset "poroelastic hydromechanical coupling"
 
     @testset "Terzaghi 1D consolidation numerical simulation verification" begin
-        coords_terz = Erebus.default_grid_coordinates()
+        coords_terz = test_grid_coordinates()
         Ny, Nx = coords_terz.Ny, coords_terz.Nx
         Ny1, Nx1 = coords_terz.Ny1, coords_terz.Nx1
         dy = coords_terz.dy

@@ -7,7 +7,7 @@ include("test_helpers.jl")
 
 @testset "Geometry" begin
     rng_geom = MersenneTwister(42)
-    coords_geom = default_grid_coordinates()
+    coords_geom = test_grid_coordinates()
 
     @testset "setup_staggered_grid_geometry(): metric monotonicity and staggered topology" begin
         coords = coords_geom

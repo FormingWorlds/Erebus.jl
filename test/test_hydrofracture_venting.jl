@@ -187,9 +187,10 @@ using StaticArrays
             S_vent_out=S_vent_gated_open,
         )
         flush!(L_gated_open)
-        @test SparseArrays.nnz(L_gated_open.cscmatrix) > 0
-        @test any(R_gated_open .> 0.0)
-        @test any(S_vent_gated_open .> 0.0)
+        @test SparseArrays.nnz(L_gated_open.cscmatrix) >= 4
+        @test isapprox(sum(R_gated_open), 7.8367e-13; rtol=1e-3)
+        @test isapprox(sum(S_vent_gated_open), 1.5673e-6; rtol=1e-3)
+        @test isapprox(maximum(S_vent_gated_open), 1.3061e-7; rtol=1e-3)
 
         # Case 3: Darcy sink mode with cryogenic ice sealing enabled vs disabled
         # When unbreached, ice sealing must suppress surface venting rate by ~1e-6
@@ -569,8 +570,10 @@ using StaticArrays
         tk_nan[3, 3] = NaN
         tk_nan[2, 2] = -50.0
         S_out = zeros(Float64, Ny + 1, Nx + 1)
-        pf_test = fill(1.0e7, Ny + 1, Nx + 1)
-        phi_test = fill(0.1, Ny + 1, Nx + 1)
+        pf_test = [
+            1.0e7 + 1.0e5 * (j - 1) - 5.0e4 * (i - 1) for i in 1:(Ny + 1), j in 1:(Nx + 1)
+        ]
+        phi_test = [0.08 + 0.01 * (j - 1) for i in 1:(Ny + 1), j in 1:(Nx + 1)]
         # Must execute without throwing DomainError and compute finite positive venting fluxes
         apply_venting_surface_boundary!(
             nothing,
@@ -587,8 +590,9 @@ using StaticArrays
             S_vent_out=S_out,
         )
         @test all(isfinite, S_out)
-        @test any(S_out .> 0.0)
-        @test all(S_out .>= 0.0)
+        @test isapprox(sum(S_out), 5.6580e-15; rtol=1e-3)
+        @test isapprox(maximum(S_out), 1.7900e-15; rtol=1e-3)
+        @test isapprox(minimum(S_out), 0.0; atol=1e-18)
     end
 
     @testset "Species-Dependent Venting and Ice Sealing Bypass" begin

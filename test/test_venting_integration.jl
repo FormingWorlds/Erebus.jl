@@ -7,6 +7,7 @@ using StaticArrays
 using Test
 
 @testset "Cold Surface Venting Integration" begin
+    rng = MersenneTwister(42)
     @testset "Runtime loop with venting inactive (baseline)" begin
         output_dir = mktempdir()
         try

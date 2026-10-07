@@ -5,19 +5,18 @@ using StaticArrays
 
 include("test_helpers.jl")
 
-coords_test = default_grid_coordinates()
-Nx = coords_test.Nx
-Ny = coords_test.Ny
-dx = coords_test.dx
-dy = coords_test.dy
-xsize = coords_test.xsize
-ysize = coords_test.ysize
-Nx1 = coords_test.Nx1
-Ny1 = coords_test.Ny1
-start_marknum = coords_test.start_marknum
-rng = MersenneTwister(42)
-
 @testset "Physics" begin
+    coords_test = test_grid_coordinates()
+    Nx = coords_test.Nx
+    Ny = coords_test.Ny
+    dx = coords_test.dx
+    dy = coords_test.dy
+    xsize = coords_test.xsize
+    ysize = coords_test.ysize
+    Nx1 = coords_test.Nx1
+    Ny1 = coords_test.Ny1
+    start_marknum = coords_test.start_marknum
+    rng = MersenneTwister(42)
     etamin = 1.0e+12
     @testset "distance(): metric axioms and invariants" begin
         # 1. Identity of indiscernibles

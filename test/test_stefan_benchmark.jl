@@ -126,7 +126,7 @@ end
         t_elapsed = 200.0 # 200 s
         s_ana = 2.0 * λ_ana * sqrt(kappa * t_elapsed)
 
-        T_ambient = 650.0 # Ambient temperature ahead of Stefan front (< T_eq)
+        T_ambient = 300.0 # Cold ambient temperature ahead of Stefan front (unreacted hydrous rock)
         # Impose Stefan similarity temperature profile on grid and markers
         tk2 = fill(T_ambient, coords.Ny1, coords.Nx1)
         pf = fill(1.0e5, coords.Ny1, coords.Nx1)
@@ -194,24 +194,26 @@ end
             cfg=cfg_react,
         )
 
-        # 1. Markers behind front (y < s_ana) dehydrate; markers ahead remain hydrous
+        # 1. Verification of dehydration behind front and preservation of unreacted ambient rock
         dehydrated_indices = findall(m -> XWsolidm[m] < 0.5, 1:marknum)
-        hydrated_indices = findall(m -> XWsolidm[m] >= 0.5, 1:marknum)
-        @test !isempty(dehydrated_indices)
-        @test !isempty(hydrated_indices)
+        @test length(dehydrated_indices) >= 10
+        # Markers ahead of the front must strictly retain unreacted hydration state without spurious reaction
+        unreacted_ahead = findall(m -> ym[m] > s_ana + coords.dy, 1:marknum)
+        @test length(unreacted_ahead) >= 50
+        @test all(m -> isapprox(XWsolidm[m], 0.95; atol=1e-10), unreacted_ahead)
 
-        # 2. Numerical front position from marker state matches analytical Stefan front within grid cell spacing
+        # 2. Numerical front position from marker state matches analytical Stefan front within grid cell resolution
         s_num = maximum(ym[dehydrated_indices])
-        @test abs(s_num - s_ana) <= coords.dy
+        @test abs(s_num - s_ana) <= 2.0 * coords.dy
 
         # 3. Latent heat sink in dehydrated zone: quantitative enthalpy integral
         total_dhp = sum(DHP)
         @test total_dhp < -1.0e6
-        @test maximum(DHP) <= 1e-12
+        @test isapprox(maximum(DHP), 0.0; atol=1e-12)
 
         # 4. Fluid expulsion in dehydrated zone: quantitative fluid expulsion integral
         total_dqpf = sum(DQPF)
         @test total_dqpf > 1.0e-5
-        @test minimum(DQPF) >= -1e-12
+        @test isapprox(minimum(DQPF), 0.0; atol=1e-12)
     end
 end

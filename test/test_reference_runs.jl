@@ -68,8 +68,12 @@ end
             @test isapprox(diag["total_mass"], expected["total_mass"]; rtol=1e-3)
             @test isapprox(diag["total_energy"], expected["total_energy"]; rtol=1e-3)
             @test isapprox(diag["max_temperature"], expected["max_temperature"]; rtol=1e-3)
-            @test isapprox(diag["core_radius"], expected["core_radius"]; atol=1e-3)
-            @test isapprox(diag["degassed_mass"], expected["degassed_mass"]; atol=1e-3)
+            @test isapprox(
+                diag["core_radius"], expected["core_radius"]; rtol=1e-3, atol=1e-6
+            )
+            @test isapprox(
+                diag["degassed_mass"], expected["degassed_mass"]; rtol=1e-3, atol=1e-6
+            )
         end
     end
 
@@ -87,8 +91,12 @@ end
             @test isapprox(diag["total_mass"], expected["total_mass"]; rtol=1e-3)
             @test isapprox(diag["total_energy"], expected["total_energy"]; rtol=1e-3)
             @test isapprox(diag["max_temperature"], expected["max_temperature"]; rtol=1e-3)
-            @test isapprox(diag["core_radius"], expected["core_radius"]; atol=1e-3)
-            @test isapprox(diag["degassed_mass"], expected["degassed_mass"]; atol=1e-3)
+            @test isapprox(
+                diag["core_radius"], expected["core_radius"]; rtol=1e-3, atol=1e-6
+            )
+            @test isapprox(
+                diag["degassed_mass"], expected["degassed_mass"]; rtol=1e-3, atol=1e-6
+            )
         end
     end
 
@@ -104,8 +112,12 @@ end
             @test isapprox(diag["total_mass"], expected["total_mass"]; rtol=1e-3)
             @test isapprox(diag["total_energy"], expected["total_energy"]; rtol=1e-3)
             @test isapprox(diag["max_temperature"], expected["max_temperature"]; rtol=1e-3)
-            @test isapprox(diag["core_radius"], expected["core_radius"]; atol=1e-3)
-            @test isapprox(diag["degassed_mass"], expected["degassed_mass"]; atol=1e-3)
+            @test isapprox(
+                diag["core_radius"], expected["core_radius"]; rtol=1e-3, atol=1e-6
+            )
+            @test isapprox(
+                diag["degassed_mass"], expected["degassed_mass"]; rtol=1e-3, atol=1e-6
+            )
         end
     end
 end
