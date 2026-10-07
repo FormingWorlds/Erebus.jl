@@ -461,6 +461,8 @@ function init_marker_arrays(
             initial_xfe_bulk=initial_xfe,
             tkm=tkm,
             pfm=pfm0,
+            tm=tm,
+            rhosolidm=cfg.materials.rhosolidm,
             rhosolid=cfg.materials.rhosolidm[1],
             rho_metal=cfg.coreformation.rho_metal,
         )

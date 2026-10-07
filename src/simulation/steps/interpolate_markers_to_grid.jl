@@ -194,6 +194,8 @@ function interpolate_markers_to_grid!(
             Xfe_bulk=Xfe_bulk,
             Xfem=Xfem,
             XWsolidm=core.XWsolidm,
+            tm=core.tm,
+            rhosolidm=cfg.materials.rhosolidm,
             rhosolid=cfg.materials.rhosolidm[1],
             rho_metal=cfg.coreformation.rho_metal,
         )

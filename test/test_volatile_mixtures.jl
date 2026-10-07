@@ -641,6 +641,7 @@ using Erebus.Particles
 
         @test isapprox(props_rdx.nC_graphite_m[1], 0.0; atol=1e-12)
         @test props_rdx.nC_graphite_m[3] > 0.0
+        @test props_rdx.nCO_m[3] > 0.0
         expected_xfem3 = metal_mass_to_volume_fraction(
             props_rdx.nFe0_m[3] * Erebus.M_Fe, 7000.0, 3000.0
         )

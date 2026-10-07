@@ -163,6 +163,33 @@ function setup_marker_hcnspo_properties(
 end
 
 """
+Evaluate marker silicate matrix density from phase or fallback parameters.
+
+# Parameters
+- `m`: Marker index.
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
+- `rhosolid_fallback`: Fallback silicate density [kg/m^3].
+
+# Returns
+- Silicate density clamped to minimum 100.0 kg/m^3.
+"""
+@inline function _marker_silicate_density(
+    m::Integer,
+    tm::Union{Nothing,AbstractVector{<:Integer}},
+    rhosolidm::Union{Nothing,AbstractVector{Float64}},
+    rhosolid_fallback::Real,
+)
+    if tm !== nothing && rhosolidm !== nothing && tm[m] in 1:length(rhosolidm)
+        return max(Float64(rhosolidm[tm[m]]), 100.0)
+    elseif rhosolidm !== nothing && !isempty(rhosolidm)
+        return max(Float64(rhosolidm[1]), 100.0)
+    else
+        return max(Float64(rhosolid_fallback), 100.0)
+    end
+end
+
+"""
 Set up marker redox state and iron speciation tracking arrays.
 
 $(SIGNATURES)
@@ -173,6 +200,10 @@ $(SIGNATURES)
 
 # Keyword Arguments
 - `initial_xfe_bulk`: Bulk metal volume fraction array (or nothing)
+- `tkm`: Marker temperature array [K] (or nothing)
+- `pfm`: Marker pressure array [Pa] (or nothing)
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
 - `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
 - `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0)
 
@@ -185,6 +216,8 @@ function setup_marker_redox_properties(
     initial_xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     tkm::Union{Nothing,AbstractVector{Float64}}=nothing,
     pfm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    tm::Union{Nothing,AbstractVector{<:Integer}}=nothing,
+    rhosolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
     rhosolid::Real=3000.0,
     rho_metal::Real=7000.0,
 )
@@ -204,7 +237,6 @@ function setup_marker_redox_properties(
 
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
-    rho_s = max(Float64(rhosolid), 100.0)
     rho_m = max(Float64(rho_metal), 100.0)
 
     nFe0_m = zeros(Float64, marknum)
@@ -219,6 +251,7 @@ function setup_marker_redox_properties(
     x_ferric = clamp(cfg.initial_x_ferric, 0.0, 1.0)
 
     for m in 1:marknum
+        rho_s = _marker_silicate_density(m, tm, rhosolidm, rhosolid)
         xfe = initial_xfe_bulk !== nothing ? initial_xfe_bulk[m] : 0.0
         w_fe = metal_volume_to_mass_fraction(xfe, rho_m, rho_s)
         n_fe0 = w_fe / M_Fe
@@ -283,6 +316,10 @@ $(SIGNATURES)
 - `Xfe_bulk`: Optional marker bulk metal volume share array (for core segregation coupling).
 - `Xfem`: Optional marker molten metal volume share array.
 - `XWsolidm`: Optional marker wet solid fraction array (for serpentinization coupling).
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
+- `rhosolid`: Silicate density [kg/m^3] (default: 3000.0).
+- `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0).
 
 # Returns
 - `nothing`
@@ -295,6 +332,8 @@ function update_marker_redox!(
     Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
     XWsolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    tm::Union{Nothing,AbstractVector{<:Integer}}=nothing,
+    rhosolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
     rhosolid::Real=3000.0,
     rho_metal::Real=7000.0,
 )
@@ -318,10 +357,10 @@ function update_marker_redox!(
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
     x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
-    rho_s = max(Float64(rhosolid), 100.0)
     rho_m = max(Float64(rho_metal), 100.0)
 
     for m in 1:marknum
+        rho_s = _marker_silicate_density(m, tm, rhosolidm, rhosolid)
         n_c_gr = nC_graphite_m !== nothing ? nC_graphite_m[m] : 0.0
         n_co = nCO_m !== nothing ? nCO_m[m] : 0.0
         n_co2 = nCO2_m !== nothing ? nCO2_m[m] : 0.0
