@@ -81,17 +81,15 @@ include("test_helpers.jl")
 
     @testset "all shipped configs have calibrated dphimax (N3)" begin
         configs_dir = joinpath(@__DIR__, "..", "configs")
-        toml_files = filter(
-            f -> endswith(f, ".toml") && f != "test_ensemble_sweep.toml",
-            readdir(configs_dir),
-        )
-        @test length(toml_files) >= 15
+        toml_files = filter(f -> endswith(f, ".toml"), readdir(configs_dir))
+        @test length(toml_files) >= 16
         for f in toml_files
             path = joinpath(configs_dir, f)
-            cfg = load_config(path)
-            if f == "core_formation_benchmark.toml"
-                @test cfg.solver.dphimax ≈ 100.01
+            if f == "test_ensemble_sweep.toml"
+                spec = load_ensemble_config(path)
+                @test spec.base_config.solver.dphimax ≈ 0.1
             else
+                cfg = load_config(path)
                 @test cfg.solver.dphimax ≈ 0.1
             end
         end
@@ -561,7 +559,6 @@ include("test_helpers.jl")
         reference = "crust"
         serpentinization_redox = true
         segregation_redox = true
-        venting_redox = true
         deltaIW_min = -5.0
         deltaIW_max = 5.0
         initial_x_ferric = 0.08
@@ -829,7 +826,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("501 configuration fields", out)
+        @test occursin("487 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin

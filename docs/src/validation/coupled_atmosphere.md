@@ -276,14 +276,12 @@ The coupled atmosphere model is configured through the `[atmosphere]` table in s
 active = true
 mode = "guillot"              # "guillot", "grey", "isothermal"
 kappa_ir_default = 1.0e-2     # Specific longwave opacity [m^2/kg]
-kappa_vis_default = 1.0e-3    # Specific shortwave opacity [m^2/kg]
 albedo = 0.20                 # Planetary Bond albedo
 gamma_guillot = 0.10          # Visible to IR opacity ratio
 T_skin_floor = 50.0           # Minimum skin temperature floor [K]
 f_rec = 0.10                  # Ormel et al. (2015) envelope recycling factor
 tau_boil = 3.15576e11         # Hydrodynamic boil-off timescale [s] (1e4 yr)
 crossover_active = true       # Hydrodynamic multispecies crossover drag
-b_diff_ref = 1.0e21           # Binary diffusion parameter reference [m^-1 s^-1]
 
 [atmosphere.opacities]
 H2O = 1.0e-2

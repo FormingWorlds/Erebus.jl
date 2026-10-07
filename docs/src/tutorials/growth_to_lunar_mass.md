@@ -120,7 +120,7 @@ Modeling growth from $R = 50\text{ km}$ to $R = 1{,}737\text{ km}$ on a static C
 R(t) \ge r_{\text{threshold\_fraction}} \cdot r_{\text{max\_domain}} \quad (r_{\text{threshold\_fraction}} = 0.70)
 ```
 2. The domain dimensions double ($L_{k+1} = 2 L_k$):
-   - Level 0: $140\text{ km} \times 140\text{ km}$ (seed $R_0 = 50\text{ km}$)
+   - Level 0: $140\text{ km} \times 140\text{ km}$ ($r_{\text{max}} = 70\text{ km}$, threshold $49\text{ km}$; the initial $50\text{ km}$ seed triggers domain doubling on step 1)
    - Level 1: $280\text{ km} \times 280\text{ km}$
    - Level 2: $560\text{ km} \times 560\text{ km}$
    - Level 3: $1{,}120\text{ km} \times 1{,}120\text{ km}$
@@ -169,7 +169,6 @@ transition_width = 0.10
 active = true
 r_threshold_fraction = 0.70
 max_telescope_levels = 6
-target_radius = 1737000.0
 
 [disk]
 enabled = true
@@ -185,7 +184,6 @@ mode = "guillot"
 tau_boil = 3.15576e11   # 10 kyr characteristic boil-off timescale [s]
 f_rec = 0.10
 crossover_active = true
-b_diff_ref = 1.0e21
 
 [coreformation]
 percolation_active = true

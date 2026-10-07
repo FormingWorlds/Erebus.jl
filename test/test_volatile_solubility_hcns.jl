@@ -542,8 +542,6 @@ using JLD2
         # Default config
         cfg_def = VolatilesConfig()
         @test cfg_def.water_law === :burnham_dixon
-        @test cfg_def.h2_active == false
-        @test cfg_def.h2_law === :hirschmann2012
         @test cfg_def.carbon_active == false
         @test cfg_def.co_law === :armstrong2015
         @test cfg_def.ch4_law === :ardia2013
@@ -555,33 +553,26 @@ using JLD2
         @test cfg_def.include_sulfate == false
         @test cfg_def.scss_active == true
         @test cfg_def.scss_law === :smythe2017
-        @test isapprox(cfg_def.melt_feo_wtpct, 10.0; rtol=1e-12)
 
         # Round-trip serialization
         sim_cfg = SimulationConfig(
             volatiles=VolatilesConfig(
                 water_law=:sossi_peridotite,
-                h2_active=true,
-                h2_law=:gaillard2003,
                 carbon_active=true,
                 co_law=:yoshioka2019_morb,
                 sulfur_active=true,
                 sulfide_law=:gaillard2022,
                 include_sulfate=true,
-                melt_feo_wtpct=12.5,
             ),
         )
         toml_str = save_config(sim_cfg)
         loaded = load_config(toml_str)
         @test loaded.volatiles.water_law === :sossi_peridotite
-        @test loaded.volatiles.h2_active == true
-        @test loaded.volatiles.h2_law === :gaillard2003
         @test loaded.volatiles.carbon_active == true
         @test loaded.volatiles.co_law === :yoshioka2019_morb
         @test loaded.volatiles.sulfur_active == true
         @test loaded.volatiles.sulfide_law === :gaillard2022
         @test loaded.volatiles.include_sulfate == true
-        @test isapprox(loaded.volatiles.melt_feo_wtpct, 12.5; rtol=1e-12)
 
         # Validation errors
         cfg_base = default_config()
@@ -600,23 +591,6 @@ using JLD2
                 melting=cfg_base.melting,
                 venting=cfg_base.venting,
                 volatiles=VolatilesConfig(water_law=:bad_law),
-            ),
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=cfg_base.grid,
-                geometry=cfg_base.geometry,
-                time=cfg_base.time,
-                solver=cfg_base.solver,
-                poroelasticity=cfg_base.poroelasticity,
-                thermodynamics=cfg_base.thermodynamics,
-                reaction=cfg_base.reaction,
-                materials=cfg_base.materials,
-                output=cfg_base.output,
-                disk=cfg_base.disk,
-                melting=cfg_base.melting,
-                venting=cfg_base.venting,
-                volatiles=VolatilesConfig(melt_feo_wtpct=-1.0),
             ),
         )
     end

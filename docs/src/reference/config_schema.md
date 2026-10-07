@@ -269,7 +269,6 @@ Parameters controlling silicate rock melting, latent heat buffering, and melt-we
 | `phi_crit` | `Float64` | `0.4` | - | Critical melt fraction for crystal suspension transition | $\in (0, 1)$ |
 | `eta_melt` | `Float64` | `10.0` | Pa s | Dynamic viscosity of pure silicate melt | $> 0$ |
 | `dpdt_clapeyron` | `Float64` | `0.0` | K/Pa | Clapeyron slope for pressure-dependent solidus and liquidus | $\ge 0$ |
-| `latent_heat_mode` | `Symbol` | `:apparent_cp` | - | Latent heat formulation mode | `:apparent_cp` |
 | `soft_turbulence` | `Bool` | `false` | - | Enable regularized sub-grid soft turbulence thermal conductivity enhancement | `true` / `false` |
 | `turb_exponent` | `Float64` | `0.333333333333` | - | Power-law exponent for viscosity ratio ($1/3$ for Solomatov 2007, $1/2$ for boundary layer scaling) | $> 0$ |
 | `eta_fluid_silicate` | `Float64` | `100.0` | Pa s | Dynamic viscosity of turbulent silicate fluid magma | $> 0$ |
@@ -353,14 +352,9 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `fO2_delta_IW` | `Float64` | `-1.0` | log10 units | Redox state relative to iron-wüstite buffer ($\Delta\text{IW}$) | $\in [-50, 50]$ |
 | `water_solubility_coeff` | `Float64` | `0.40` | $\text{wt}\% / \text{MPa}^{0.5}$ | Burnham low-pressure water solubility coefficient $A_s$ | $> 0$ |
 | `water_law` | `Symbol` | `:burnham_dixon` | - | Water solubility law (`:burnham_dixon`, `:sossi_peridotite`, `:basalt_dixon`, `:newcombe_lunar`) | valid symbol |
-| `h2_active` | `Bool` | `false` | - | Enable molecular $\text{H}_2$ dissolution in silicate melt | `true` / `false` |
-| `h2_law` | `Symbol` | `:hirschmann2012` | - | Molecular $\text{H}_2$ solubility law (`:hirschmann2012`, `:gaillard2003`) | valid symbol |
 | `nitrogen_law` | `Symbol` | `:dasgupta2022` | - | Nitrogen solubility law (`:dasgupta2022`, `:libourel2003`) | valid symbol |
 | `nitrogen_henry_coeff` | `Float64` | `0.40` | ppm / bar | Henry coefficient $K_h$ for molecular $\text{N}_2$ dissolution | $> 0$ |
 | `nitrogen_nitride_capacity` | `Float64` | `1.0e-3` | $\text{wt}\% / \text{bar}^{0.5}$ | Chemical nitride capacity $C_{\text{nitride}}$ | $> 0$ |
-| `t_organic_devol` | `Float64` | `550.0` | K | Characteristic midpoint temperature $T_{\text{devol}}$ for organic devolatilization | $> 0$ |
-| `dt_organic_devol` | `Float64` | `50.0` | K | Transition temperature scale $\Delta T$ for organic devolatilization | $> 0$ |
-| `organic_n_initial_ppm` | `Float64` | `500.0` | ppm | Initial primordial organic nitrogen concentration in rocky core | $\ge 0$ |
 | `initial_water_wtpct` | `Float64` | `1.0` | wt% | Initial water concentration in solid silicate matrix | $\ge 0$ |
 | `initial_carbon_ppm` | `Float64` | `500.0` | ppm | Initial carbon concentration in solid silicate matrix | $\ge 0$ |
 | `initial_nitrogen_ppm` | `Float64` | `50.0` | ppm | Initial dissolved nitrogen concentration in solid silicate matrix | $\ge 0$ |
@@ -376,10 +370,6 @@ Parameters controlling multi-species volatile solubility in silicate melt and pr
 | `include_sulfate` | `Bool` | `false` | - | Include sulfate capacity at oxidizing conditions | `true` / `false` |
 | `scss_active` | `Bool` | `true` | - | Cap dissolved sulfur at sulfide saturation (SCSS) | `true` / `false` |
 | `scss_law` | `Symbol` | `:smythe2017` | - | SCSS formulation (`:smythe2017`, `:oneill2002`) | valid symbol |
-| `melt_feo_wtpct` | `Float64` | `10.0` | wt% | Silicate melt $\text{FeO}$ concentration for SCSS calculation | $\ge 0$ |
-| `x_sio2` | `Float64` | `0.56` | - | Silicate melt $\text{SiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
-| `x_al2o3` | `Float64` | `0.11` | - | Silicate melt $\text{Al}_2\text{O}_3$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
-| `x_tio2` | `Float64` | `0.01` | - | Silicate melt $\text{TiO}_2$ mole fraction for nitrogen solubility | $\in [0, 1]$ |
 | `speciation_active` | `Bool` | `false` | - | Enable thermodynamic chemical equilibrium speciation in pore fluid | `true` / `false` |
 
 ---
@@ -419,7 +409,6 @@ Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas env
 | `active` | `Bool` | `false` | - | Enable coupled 1D atmosphere, disk gas envelope, and crossover escape | `true` / `false` |
 | `mode` | `Symbol` | `:guillot` | - | Radiative transfer equilibrium mode (`:guillot`, `:grey`, `:isothermal`) | valid symbol |
 | `kappa_ir_default` | `Float64` | `1.0e-2` | $\mathrm{m}^2/\mathrm{kg}$ | Default longwave specific opacity | $> 0$ |
-| `kappa_vis_default` | `Float64` | `1.0e-3` | $\mathrm{m}^2/\mathrm{kg}$ | Default shortwave specific opacity | $> 0$ |
 | `opacities` | `Dict{Symbol, Float64}` | *see below* | $\mathrm{m}^2/\mathrm{kg}$ | Species-dependent infrared longwave opacities | non-negative |
 | `albedo` | `Float64` | `0.20` | - | Planetary Bond albedo | $\in [0, 1)$ |
 | `gamma_guillot` | `Float64` | `0.10` | - | Ratio of shortwave to longwave opacity $\kappa_{\mathrm{vis}} / \kappa_{\mathrm{ir}}$ | $> 0$ |
@@ -427,7 +416,6 @@ Parameters controlling 1D coupled proto-atmospheres, protoplanetary disk gas env
 | `f_rec` | `Float64` | `0.10` | - | Ormel et al. (2015) envelope steady-state recycling fraction | $\in (0, 1]$ |
 | `tau_boil` | `Float64` | `3.15576e+11` | s | Hydrodynamic envelope boil-off relaxation timescale (10 kyr) | $> 0$ |
 | `crossover_active` | `Bool` | `true` | - | Enable Zahnle & Kasting (1986) hydrodynamic crossover drag | `true` / `false` |
-| `b_diff_ref` | `Float64` | `1.0e+21` | $\mathrm{m}^{-1}\mathrm{s}^{-1}$ | Binary diffusion coefficient parameter | $> 0$ |
 
 ---
 
@@ -753,7 +741,6 @@ Telescoping domain configuration for dynamic spatial box doubling during planeta
 active = true
 r_threshold_fraction = 0.70
 max_telescope_levels = 10
-target_radius = 1737000.0
 buffer_markers_per_cell = 4
 ```
 
@@ -762,7 +749,6 @@ buffer_markers_per_cell = 4
 | `active` | `Bool` | `false` | - | Enable telescoping domain doubling | `true` / `false` |
 | `r_threshold_fraction` | `Float64` | `0.70` | - | Radius fraction of domain half-width triggering doubling | $\in (0, 1)$ |
 | `max_telescope_levels` | `Int` | `10` | - | Maximum permitted domain doubling levels | $\ge 1$ |
-| `target_radius` | `Float64` | `1737000.0` | m | Target final planetary radius of accretion sequence (e.g. lunar radius 1,737 km) | $> 0$ |
 | `buffer_markers_per_cell` | `Int` | `4` | - | Sticky-air markers injected per outer buffer cell | $\ge 1$ |
 
 ---
@@ -817,7 +803,6 @@ active = false
 reference = "mantle"
 serpentinization_redox = true
 segregation_redox = true
-venting_redox = true
 deltaIW_min = -6.0
 deltaIW_max = 6.0
 initial_x_ferric = 0.05
@@ -832,7 +817,6 @@ w_graphite_threshold = 1.0e-6
 | `reference` | `Symbol` | `:mantle` | - | Reference electron oxidation state | `:mantle`, `:crust` |
 | `serpentinization_redox` | `Bool` | `true` | - | Couple hydrothermal serpentine formation to Fe oxidation and H2 production | `true` / `false` |
 | `segregation_redox` | `Bool` | `true` | - | Couple metallic core segregation to mantle oxidation | `true` / `false` |
-| `venting_redox` | `Bool` | `true` | - | Couple volatile gas venting to rock electron loss | `true` / `false` |
 | `deltaIW_min` | `Float64` | `-6.0` | log10 | Minimum clamped oxygen fugacity relative to Iron-Wüstite ($\Delta\mathrm{IW}$) | $\le \mathrm{deltaIW\_max}$ |
 | `deltaIW_max` | `Float64` | `6.0` | log10 | Maximum clamped oxygen fugacity relative to Iron-Wüstite ($\Delta\mathrm{IW}$) | $\ge \mathrm{deltaIW\_min}$ |
 | `initial_x_ferric` | `Float64` | `0.05` | - | Initial reference ferric iron molar fraction in silicate ($\mathrm{Fe}^{3+}/\Sigma\mathrm{Fe}$) | $\in [0, 1]$ |

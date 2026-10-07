@@ -97,9 +97,10 @@ transition_width = 0.10
 
 [telescoping]
 active = true
+# Domain half-width is 70 km; threshold 0.70 * 70 km = 49 km.
+# The initial seed radius (50 km) exceeds 49 km, triggering mesh expansion on step 1.
 r_threshold_fraction = 0.70
 max_telescope_levels = 6
-target_radius = 1737000.0
 
 [disk]
 enabled = true
@@ -117,7 +118,6 @@ mode = "guillot"
 tau_boil = 3.15576e11   # 10 kyr characteristic boil-off timescale [s]
 f_rec = 0.10
 crossover_active = true
-b_diff_ref = 1.0e21
 
 [volatiles]
 active = true

@@ -661,7 +661,7 @@ using JLD2
                     F_turb_end=0.50,
                     T_surface_ref=300.0,
                 ),
-                solver=SolverConfig(; yerrmax=1.0e8),
+                solver=SolverConfig(; yerrmax=1.0e6),
                 output=OutputConfig(; output_dir="output_soft_turb_test", savematstep=2),
             )
             @test validate_config(cfg_test) === nothing

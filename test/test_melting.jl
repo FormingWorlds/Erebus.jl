@@ -18,7 +18,6 @@ using TOML
         @test isapprox(cfg_def.phi_crit, 0.4; rtol=1e-12)
         @test isapprox(cfg_def.eta_melt, 10.0; rtol=1e-12)
         @test iszero(cfg_def.dpdt_clapeyron)
-        @test cfg_def.latent_heat_mode == :apparent_cp
 
         # Inclusion in SimulationConfig
         sim_cfg = default_config()
@@ -77,18 +76,6 @@ using TOML
             SimulationConfig(; melting=MeltingConfig(; active=true, dpdt_clapeyron=NaN))
         )
 
-        # Validation bounds: invalid latent_heat_mode
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(;
-                melting=MeltingConfig(; active=true, latent_heat_mode=:source_term)
-            ),
-        )
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(;
-                melting=MeltingConfig(; active=true, latent_heat_mode=:invalid_mode)
-            ),
-        )
-
         # Validation bounds: soft_turbulence cannot be true when active=false
         @test_throws ArgumentError validate_config(
             SimulationConfig(; melting=MeltingConfig(; active=false, soft_turbulence=true))
@@ -106,7 +93,6 @@ using TOML
             phi_crit=0.45,
             eta_melt=5.0,
             dpdt_clapeyron=1.3e-7,
-            latent_heat_mode=:apparent_cp,
         )
         sim_cfg = SimulationConfig(;
             melting=custom_melting, thermodynamics=ThermalConfig(; tmsolidphase=1350.0)
@@ -124,7 +110,6 @@ using TOML
         @test isapprox(loaded_cfg.melting.phi_crit, 0.45; rtol=1e-12)
         @test isapprox(loaded_cfg.melting.eta_melt, 5.0; rtol=1e-12)
         @test isapprox(loaded_cfg.melting.dpdt_clapeyron, 1.3e-7; rtol=1e-12)
-        @test loaded_cfg.melting.latent_heat_mode == :apparent_cp
     end
 
     @testset "compute_melt_fraction: Analytical Limits & Monotonicity" begin

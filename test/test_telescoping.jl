@@ -15,7 +15,6 @@ using JLD2
         @test cfg_def.active == false
         @test isapprox(cfg_def.r_threshold_fraction, 0.70; rtol=1e-12)
         @test cfg_def.max_telescope_levels == 10
-        @test isapprox(cfg_def.target_radius, 1_737_000.0; rtol=1e-12)
         @test cfg_def.buffer_markers_per_cell == 4
 
         # Custom config
@@ -23,7 +22,6 @@ using JLD2
             active=true,
             r_threshold_fraction=0.75,
             max_telescope_levels=4,
-            target_radius=1_500_000.0,
             buffer_markers_per_cell=4,
         )
         @test cfg_custom.active == true
@@ -45,11 +43,6 @@ using JLD2
             telescoping=TelescopingConfig(; active=true, max_telescope_levels=0)
         )
         @test_throws ArgumentError validate_config(sim_cfg_bad_levels)
-
-        sim_cfg_bad_radius = SimulationConfig(;
-            telescoping=TelescopingConfig(; active=true, target_radius=-1000.0)
-        )
-        @test_throws ArgumentError validate_config(sim_cfg_bad_radius)
 
         sim_cfg_bad_buffer = SimulationConfig(;
             telescoping=TelescopingConfig(; active=true, buffer_markers_per_cell=0)
