@@ -1491,15 +1491,16 @@ function _validate_time_config(cfg::TimeConfig)
         throw(ArgumentError("dt_longest must be >= dt_initial"))
     @check_ge cfg.n_steps 1
     @check_nonneg cfg.start_time
-    cfg.endtime > cfg.start_time ||
-        throw(ArgumentError("endtime must be > start_time"))
+    cfg.endtime > cfg.start_time || throw(ArgumentError("endtime must be > start_time"))
     @check_ge cfg.start_step 1
     @check_finite cfg.dt_initial
     @check_finite cfg.dt_longest
-    (0.0 < cfg.dtcoefdn < 1.0 && isfinite(cfg.dtcoefdn)) ||
-        throw(ArgumentError("time.dtcoefdn must be in (0, 1) and finite, got $(cfg.dtcoefdn)"))
-    (1.0 <= cfg.dtcoefup <= 10.0 && isfinite(cfg.dtcoefup)) ||
-        throw(ArgumentError("time.dtcoefup must be in [1, 10] and finite, got $(cfg.dtcoefup)"))
+    (0.0 < cfg.dtcoefdn < 1.0 && isfinite(cfg.dtcoefdn)) || throw(
+        ArgumentError("time.dtcoefdn must be in (0, 1) and finite, got $(cfg.dtcoefdn)")
+    )
+    (1.0 <= cfg.dtcoefup <= 10.0 && isfinite(cfg.dtcoefup)) || throw(
+        ArgumentError("time.dtcoefup must be in [1, 10] and finite, got $(cfg.dtcoefup)"),
+    )
     @check_ge cfg.dtstep 1
     (0.0 < cfg.dxymax <= 1.0 && isfinite(cfg.dxymax)) ||
         throw(ArgumentError("time.dxymax must be in (0, 1] and finite, got $(cfg.dxymax)"))
@@ -1513,26 +1514,24 @@ Validates solver configuration parameters against convergence and stability cons
 function _validate_solver_config(
     cfg::SolverConfig, grid_Nx::Int, grid_Ny::Int, hydrofracture::Bool, venting_active::Bool
 )
-    cfg.seed >= 0 ||
-        throw(ArgumentError("solver.seed must be >= 0, got $(cfg.seed)"))
+    cfg.seed >= 0 || throw(ArgumentError("solver.seed must be >= 0, got $(cfg.seed)"))
     @check_nonneg_finite cfg.dsubgridt
     @check_nonneg_finite cfg.dsubgrids
     @check_ge cfg.max_plastic_iterations 1
     @check_ge cfg.max_dt_reductions 1
     @check_positive cfg.etamin
-    cfg.etamax >= cfg.etamin ||
-        throw(ArgumentError("etamax must be >= etamin"))
+    cfg.etamax >= cfg.etamin || throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.etaphikoef
-    (0.0 < cfg.dphimax <= 1.0 && isfinite(cfg.dphimax)) ||
-        throw(ArgumentError("solver.dphimax must be in (0, 1] and finite, got $(cfg.dphimax)"))
-    (0.0 < cfg.yerrmax <= 1.0e6 && isfinite(cfg.yerrmax)) ||
-        throw(ArgumentError("solver.yerrmax must be in (0, 1e6] and finite, got $(cfg.yerrmax)"))
+    (0.0 < cfg.dphimax <= 1.0 && isfinite(cfg.dphimax)) || throw(
+        ArgumentError("solver.dphimax must be in (0, 1] and finite, got $(cfg.dphimax)")
+    )
+    (0.0 < cfg.yerrmax <= 1.0e6 && isfinite(cfg.yerrmax)) || throw(
+        ArgumentError("solver.yerrmax must be in (0, 1e6] and finite, got $(cfg.yerrmax)"),
+    )
     (0.0 <= cfg.etawt < 1.0 && isfinite(cfg.etawt)) ||
         throw(ArgumentError("solver.etawt must be in [0, 1) and finite, got $(cfg.etawt)"))
     cfg.p2m_mode in (:tiled, :buffered) || throw(
-        ArgumentError(
-            "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.p2m_mode)"
-        ),
+        ArgumentError("solver.p2m_mode must be :tiled or :buffered, got :$(cfg.p2m_mode)"),
     )
     @check_ge cfg.tile_size 2
     cfg.use_pardiso && throw(
@@ -1679,7 +1678,11 @@ function validate_config(cfg::SimulationConfig)
 
     # Solver checks
     _validate_solver_config(
-        cfg.solver, cfg.grid.Nx, cfg.grid.Ny, cfg.poroelasticity.hydrofracture, cfg.venting.active
+        cfg.solver,
+        cfg.grid.Nx,
+        cfg.grid.Ny,
+        cfg.poroelasticity.hydrofracture,
+        cfg.venting.active,
     )
 
     # MPI checks
@@ -2763,10 +2766,14 @@ end
 @inline function _is_removed_config_field(::Type{AtmosphereConfig}, k::AbstractString)::Bool
     return k in ("kappa_vis_default", "b_diff_ref")
 end
-@inline function _is_removed_config_field(::Type{TelescopingConfig}, k::AbstractString)::Bool
+@inline function _is_removed_config_field(
+    ::Type{TelescopingConfig}, k::AbstractString
+)::Bool
     return k == "target_radius"
 end
-@inline function _is_removed_config_field(::Type{MagmaOceanDegassingConfig}, k::AbstractString)::Bool
+@inline function _is_removed_config_field(
+    ::Type{MagmaOceanDegassingConfig}, k::AbstractString
+)::Bool
     return k == "crystallization_degassing"
 end
 @inline function _is_removed_config_field(::Type, ::AbstractString)::Bool
@@ -2788,7 +2795,9 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
                 )
             end
             throw(
-                ArgumentError("Configuration key '$k' in [$(nameof(T))] is a removed key and is not supported.")
+                ArgumentError(
+                    "Configuration key '$k' in [$(nameof(T))] is a removed key and is not supported.",
+                ),
             )
         end
         if !hasfield(T, Symbol(k))

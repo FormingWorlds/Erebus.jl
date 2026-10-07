@@ -61,10 +61,7 @@ using StaticArrays
         @test occursin("removed", err_rdx.msg)
 
         # 4. AtmosphereConfig dead fields
-        dead_atm = [
-            ("kappa_vis_default", "1.0e-3"),
-            ("b_diff_ref", "1.0e21"),
-        ]
+        dead_atm = [("kappa_vis_default", "1.0e-3"), ("b_diff_ref", "1.0e21")]
         for (fld, val_str) in dead_atm
             toml_atm = """
             [atmosphere]
@@ -230,7 +227,9 @@ using StaticArrays
         @test occursin("load_ensemble_config", err.msg)
 
         # load_ensemble_config loads and parses successfully
-        spec_path = normpath(joinpath(@__DIR__, "..", "configs", "test_ensemble_sweep.toml"))
+        spec_path = normpath(
+            joinpath(@__DIR__, "..", "configs", "test_ensemble_sweep.toml")
+        )
         spec = load_ensemble_config(spec_path)
         @test spec isa EnsembleSweepSpec
         @test spec.num_samples == 3
@@ -273,10 +272,7 @@ using StaticArrays
             output_dir=mktempdir(),
             sampling_method=:random,
             num_samples=5,
-            parameters=Dict(
-                "grid.Ny" => [33, 65],
-                "time.dtstep" => [50, 200],
-            ),
+            parameters=Dict("grid.Ny" => [33, 65], "time.dtstep" => [50, 200]),
             seed=456,
         )
         runs_rand = sample_parameters(spec_int_rand)
@@ -293,9 +289,7 @@ using StaticArrays
             cfg_base;
             output_dir=mktempdir(),
             sampling_method=:grid,
-            parameters=Dict(
-                "solver.seed" => [777, 888],
-            ),
+            parameters=Dict("solver.seed" => [777, 888]),
             seed=42,
         )
         runs_seed = sample_parameters(spec_seed)
@@ -327,7 +321,8 @@ using StaticArrays
 
         # 6. Integer parameter reflection helper
         @test Erebus._is_integer_parameter(cfg_base, "nonexistent", [1.0, 2.0]) === false
-        @test Erebus._is_integer_parameter(cfg_base, "time.dt_initial", [1.0, 2.0]) === false
+        @test Erebus._is_integer_parameter(cfg_base, "time.dt_initial", [1.0, 2.0]) ===
+            false
         @test Erebus._is_integer_parameter(cfg_base, "time.n_steps", [1.0, 2.0]) === true
         @test Erebus._is_integer_parameter(cfg_base, "custom_key", [1, 2]) === true
     end

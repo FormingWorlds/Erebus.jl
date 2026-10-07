@@ -76,12 +76,13 @@ function load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
         TOML.parse(source)
     end
 
-    haskey(parsed, "base") || throw(
-        ArgumentError("Missing required [base] section in ensemble configuration"),
-    )
+    haskey(parsed, "base") ||
+        throw(ArgumentError("Missing required [base] section in ensemble configuration"))
     base_sec = parsed["base"]
     haskey(base_sec, "config") || throw(
-        ArgumentError("Missing required 'config' key in [base] section of ensemble configuration"),
+        ArgumentError(
+            "Missing required 'config' key in [base] section of ensemble configuration"
+        ),
     )
 
     base_path_raw = String(base_sec["config"])
@@ -105,7 +106,9 @@ function load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
     end
 
     isfile(base_cfg_path) || throw(
-        ArgumentError("Base configuration file not found: '$base_path_raw' (resolved to '$base_cfg_path')"),
+        ArgumentError(
+            "Base configuration file not found: '$base_path_raw' (resolved to '$base_cfg_path')",
+        ),
     )
 
     base_cfg = load_config(base_cfg_path)
@@ -160,8 +163,12 @@ end
 """
 Determines whether a sweep parameter corresponds to an integer quantity.
 """
-function _is_integer_parameter(cfg::SimulationConfig, key::AbstractString, spec_val::Any)::Bool
-    if spec_val isa AbstractVector && length(spec_val) == 2 && all(x -> x isa Integer, spec_val)
+function _is_integer_parameter(
+    cfg::SimulationConfig, key::AbstractString, spec_val::Any
+)::Bool
+    if spec_val isa AbstractVector &&
+        length(spec_val) == 2 &&
+        all(x -> x isa Integer, spec_val)
         return true
     end
     parts = split(String(key), ".")
@@ -223,7 +230,7 @@ end
 Handles sampling when no parameters are swept.
 """
 function _sample_empty_parameters(
-    spec::EnsembleSweepSpec,
+    spec::EnsembleSweepSpec
 )::Vector{Tuple{String,Dict{String,Any},SimulationConfig}}
     N = spec.num_samples
     results = Vector{Tuple{String,Dict{String,Any},SimulationConfig}}()
