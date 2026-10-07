@@ -435,9 +435,9 @@ function apply_metal_segregation!(
                         i <= size(gx, 1) &&
                         j <= size(gx, 2)
                         gx_f = gx[i, j]
-                        gy_f =
-                            0.5 *
-                            (gy[i, j] + (j + 1 <= size(gy, 2) ? gy[i, j + 1] : gy[i, j]))
+                        j_next = min(size(gy, 2), j + 1)
+                        i_next = min(size(gy, 1), i + 1)
+                        gy_f = 0.25 * (gy[i, j] + gy[i, j_next] + gy[i_next, j] + gy[i_next, j_next])
                         g_f = sqrt(gx_f^2 + gy_f^2)
                         g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
                     else
@@ -492,9 +492,9 @@ function apply_metal_segregation!(
                         i <= size(gy, 1) &&
                         j <= size(gy, 2)
                         gy_f = gy[i, j]
-                        gx_f =
-                            0.5 *
-                            (gx[i, j] + (i + 1 <= size(gx, 1) ? gx[i + 1, j] : gx[i, j]))
+                        i_next = min(size(gx, 1), i + 1)
+                        j_next = min(size(gx, 2), j + 1)
+                        gx_f = 0.25 * (gx[i, j] + gx[i, j_next] + gx[i_next, j] + gx[i_next, j_next])
                         g_f = sqrt(gx_f^2 + gy_f^2)
                         g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
                     else
@@ -1368,9 +1368,9 @@ function apply_silicate_melt_segregation!(
                         i <= size(gx, 1) &&
                         j <= size(gx, 2)
                         gx_f = gx[i, j]
-                        gy_f =
-                            0.5 *
-                            (gy[i, j] + (j + 1 <= size(gy, 2) ? gy[i, j + 1] : gy[i, j]))
+                        j_next = min(size(gy, 2), j + 1)
+                        i_next = min(size(gy, 1), i + 1)
+                        gy_f = 0.25 * (gy[i, j] + gy[i, j_next] + gy[i_next, j] + gy[i_next, j_next])
                         g_f = sqrt(gx_f^2 + gy_f^2)
                         g_f > 1.0e-10 ? -gx_f / g_f : dxf / rf
                     else
@@ -1450,9 +1450,9 @@ function apply_silicate_melt_segregation!(
                         i <= size(gy, 1) &&
                         j <= size(gy, 2)
                         gy_f = gy[i, j]
-                        gx_f =
-                            0.5 *
-                            (gx[i, j] + (i + 1 <= size(gx, 1) ? gx[i + 1, j] : gx[i, j]))
+                        i_next = min(size(gx, 1), i + 1)
+                        j_next = min(size(gx, 2), j + 1)
+                        gx_f = 0.25 * (gx[i, j] + gx[i, j_next] + gx[i_next, j] + gx[i_next, j_next])
                         g_f = sqrt(gx_f^2 + gy_f^2)
                         g_f > 1.0e-10 ? -gy_f / g_f : dyf / rf
                     else

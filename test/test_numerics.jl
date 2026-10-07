@@ -1517,6 +1517,7 @@
         kappa_frac = 100.0
         gamma_frac = 1.0
         sigma_t_val = 5.0e6
+        phim0_val = 0.1
 
         ETA = fill(1e22, Ny, Nx)
         ETAP = fill(1e22, Ny1, Nx1)
@@ -1602,6 +1603,8 @@
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
@@ -1642,6 +1645,8 @@
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
@@ -1682,6 +1687,8 @@
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
@@ -1714,6 +1721,8 @@
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,
@@ -1736,6 +1745,8 @@
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             kappa_frac=kappa_frac,
             gamma_frac=gamma_frac,
             k_frac_max=k_frac_max,

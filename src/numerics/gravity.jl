@@ -122,6 +122,8 @@ function process_gravitational_solution!(
     FI .= reshape(SP, Ny1, Nx1)
     @inbounds gx[:, 1:Nx_val] .= -diff(FI, dims=2) ./ dx_val
     @inbounds gy[1:Ny_val, :] .= -diff(FI, dims=1) ./ dy_val
+    @inbounds gx[:, Nx1] .= gx[:, Nx_val]
+    @inbounds gy[Ny1, :] .= gy[Ny_val, :]
     return nothing
 end
 

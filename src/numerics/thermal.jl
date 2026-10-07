@@ -427,6 +427,10 @@ function apply_venting_surface_boundary!(
         S_vent_out .= 0.0
     end
 
+    S_darcy_tot = zeros(Ny1, Nx1)
+    faces = Tuple{Int,Int,Float64,Float64,Float64}[]
+    sizehint!(faces, 4 * (Nx1 + Ny1))
+
     # Horizontal faces between P(i, j) and P(i, j+1)
     @inbounds for j in 1:(Nx1 - 1)
         xj1 = coords.xp[j] - xcenter
@@ -506,34 +510,10 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dx^2)) * c_factor
-                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * dof_stride + dof_stride
-
-                    # If pf and PHI are known, check and cap Darcy rate by available fluid
-                    C_face_eff = C_face
-                    S_vent_actual = 0.0
-                    if pf !== nothing
-                        pf_cur = pf[i_rock, j_rock]
-                        S_darcy = C_face * (pf_cur - P_vent)
-                        if PHI !== nothing
-                            S_max = phi_avail / dt_val
-                            if S_darcy > S_max && S_darcy > 0.0
-                                C_face_eff = C_face * (S_max / S_darcy)
-                                S_vent_actual = S_max
-                            else
-                                S_vent_actual = max(0.0, S_darcy)
-                            end
-                        else
-                            S_vent_actual = max(0.0, S_darcy)
-                        end
-                    end
-
-                    if L !== nothing && R !== nothing
-                        updateindex!(L, +, kcont_val * C_face_eff, kpf, kpf)
-                        R[kpf] += C_face_eff * P_vent
-                    end
-
-                    if S_vent_out !== nothing
-                        S_vent_out[i_rock, j_rock] += S_vent_actual
+                    S_darcy = pf !== nothing ? C_face * (pf[i_rock, j_rock] - P_vent) : 0.0
+                    push!(faces, (i_rock, j_rock, C_face, P_vent, S_darcy))
+                    if S_darcy > 0.0
+                        S_darcy_tot[i_rock, j_rock] += S_darcy
                     end
                 end
             end
@@ -619,37 +599,38 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dy^2)) * c_factor
-                    kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * dof_stride + dof_stride
-
-                    # If pf and PHI are known, check and cap Darcy rate by available fluid
-                    C_face_eff = C_face
-                    S_vent_actual = 0.0
-                    if pf !== nothing
-                        pf_cur = pf[i_rock, j_rock]
-                        S_darcy = C_face * (pf_cur - P_vent)
-                        if PHI !== nothing
-                            S_max = phi_avail / dt_val
-                            if S_darcy > S_max && S_darcy > 0.0
-                                C_face_eff = C_face * (S_max / S_darcy)
-                                S_vent_actual = S_max
-                            else
-                                S_vent_actual = max(0.0, S_darcy)
-                            end
-                        else
-                            S_vent_actual = max(0.0, S_darcy)
-                        end
-                    end
-
-                    if L !== nothing && R !== nothing
-                        updateindex!(L, +, kcont_val * C_face_eff, kpf, kpf)
-                        R[kpf] += C_face_eff * P_vent
-                    end
-
-                    if S_vent_out !== nothing
-                        S_vent_out[i_rock, j_rock] += S_vent_actual
+                    S_darcy = pf !== nothing ? C_face * (pf[i_rock, j_rock] - P_vent) : 0.0
+                    push!(faces, (i_rock, j_rock, C_face, P_vent, S_darcy))
+                    if S_darcy > 0.0
+                        S_darcy_tot[i_rock, j_rock] += S_darcy
                     end
                 end
             end
+        end
+    end
+
+    # Apply scaled face fluxes respecting the single cell drain budget
+    for (i_rock, j_rock, C_face, P_vent, S_darcy) in faces
+        kpf = ((j_rock - 1) * Ny1 + i_rock - 1) * dof_stride + dof_stride
+        tot_darcy = S_darcy_tot[i_rock, j_rock]
+        theta = 1.0
+        if PHI !== nothing
+            phi_avail = max(0.0, PHI[i_rock, j_rock] - phimin_val)
+            S_max = phi_avail / dt_val
+            if tot_darcy > S_max && tot_darcy > 0.0
+                theta = S_max / tot_darcy
+            end
+        end
+        C_face_eff = theta * C_face
+        S_vent_actual = theta * max(0.0, S_darcy)
+
+        if L !== nothing && R !== nothing
+            updateindex!(L, +, kcont_val * C_face_eff, kpf, kpf)
+            R[kpf] += C_face_eff * P_vent
+        end
+
+        if S_vent_out !== nothing
+            S_vent_out[i_rock, j_rock] += S_vent_actual
         end
     end
     return nothing

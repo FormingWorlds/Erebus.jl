@@ -362,3 +362,71 @@ function compute_hydrofracture_permeability(
     kmax_f = Float64(kmax)
     return min(max(k_enhanced, kphi_f), max(kphi_f, kmax_f))
 end
+
+"""
+    evaluate_hydrofracture_resistance(
+        r_base::Real,
+        Peff::Real,
+        sigma_t::Real,
+        phi_face::Real;
+        kphim0::Union{Nothing,Real,AbstractVector}=nothing,
+        phim0_val::Union{Nothing,Real}=nothing,
+        phimin_val::Real=1.0e-4,
+        kappa_frac::Real=1.0e3,
+        gamma_frac::Real=1.0,
+        k_frac_max::Real=1.0e-9,
+        ramp_width::Real=0.0,
+        rx_floor_prefactor::Real=1.0e-5,
+    )
+
+Evaluate hydrofracture-enhanced Darcy resistance R [Pa s / m²] using matrix permeability
+derived from face porosity and reference permeability.
+"""
+function evaluate_hydrofracture_resistance(
+    r_base::Real,
+    Peff::Real,
+    sigma_t::Real,
+    phi_face::Real;
+    kphim0::Union{Nothing,Real,AbstractVector}=nothing,
+    phim0_val::Union{Nothing,Real}=nothing,
+    phimin_val::Real=1.0e-4,
+    kappa_frac::Real=1.0e3,
+    gamma_frac::Real=1.0,
+    k_frac_max::Real=1.0e-9,
+    ramp_width::Real=0.0,
+    rx_floor_prefactor::Real=1.0e-5,
+)
+    phi_eff = clamp(Float64(phi_face), Float64(phimin_val), 1.0 - 1.0e-6)
+    kphim0_ref = if kphim0 !== nothing
+        kphim0 isa AbstractVector ? Float64(kphim0[1]) : Float64(kphim0)
+    else
+        1.0e-13
+    end
+    phim0_eff = phim0_val !== nothing ? Float64(phim0_val) : 0.01
+    kphi_val = max(0.0, kphi(kphim0_ref, phi_eff; phim0=phim0_eff))
+    r_floor = rx_floor_prefactor / k_frac_max
+    if kphi_val > 0.0
+        keff = compute_hydrofracture_permeability(
+            kphi_val,
+            Peff,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma_frac,
+            kmax=k_frac_max,
+            ramp_width=ramp_width,
+        )
+        return max(Float64(r_base) * (kphi_val / keff), r_floor)
+    else
+        ffrac = compute_hydrofracture_factor(
+            Peff,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma_frac,
+            ramp_width=ramp_width,
+        )
+        return max(Float64(r_base) / ffrac, r_floor)
+    end
+end
+

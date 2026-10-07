@@ -119,6 +119,7 @@ using LinearAlgebra
         ETAPHI = fill(1e24, Ny1, Nx1)
         BETAPHI = fill(1e-10, Ny1, Nx1)
         PHI = fill(0.1, Ny1, Nx1)
+        phim0_val = 0.1
         gx = zeros(Ny1, Nx1)
         gy = fill(10.0, Ny1, Nx1)
         pr0 = zeros(Ny1, Nx1)
@@ -163,6 +164,8 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             hydrofracture=true,
             theta_frac=0.5,
             ramp_width=0.05,
@@ -215,6 +218,8 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             hydrofracture=true,
             theta_frac=1.0,
             ramp_width=0.05,
@@ -246,6 +251,9 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            PHI=PHI,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             rx_eff=rx_eff_out,
             ry_eff=ry_eff_out,
         )
@@ -278,6 +286,7 @@ using LinearAlgebra
         ETAPHI = fill(1e24, Ny1, Nx1)
         BETAPHI = fill(1e-10, Ny1, Nx1)
         PHI = fill(0.1, Ny1, Nx1)
+        phim0_val = 0.1
         gx = zeros(Ny1, Nx1)
         gy = fill(10.0, Ny1, Nx1)
         pr0 = zeros(Ny1, Nx1)
@@ -322,6 +331,8 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             hydrofracture=true,
             theta_frac=0.5,
             ramp_width=0.05,
@@ -377,6 +388,8 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             hydrofracture=true,
             theta_frac=1.0,
             ramp_width=0.05,
@@ -409,6 +422,9 @@ using LinearAlgebra
             TEN=TEN,
             KX=KX,
             KY=KY,
+            PHI=PHI,
+            kphim0=k_perm,
+            phim0_val=phim0_val,
             rx_eff=rx_eff_out_4,
             ry_eff=ry_eff_out_4,
         )

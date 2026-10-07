@@ -700,7 +700,7 @@ using TOML
         # Partially molten marker 1 viscosity is weakened relative to sub-solidus marker 2
         @test etatotalm[1] < etatotalm[2]
         expected_eta1 = compute_melt_weakened_viscosity(
-            Erebus.etatotal_rocks(tkm[1], tm[1]),
+            Erebus.etatotal_rocks(tkm[1], tm[1]; melting_active=true),
             Fm[1],
             tm[1];
             alpha_eta=28.0,

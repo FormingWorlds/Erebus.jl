@@ -165,11 +165,27 @@ function etatotal_rocks(
     etasolidmm=etasolidmm,
     etafluidm=etafluidm,
     etafluidmm=etafluidmm,
+    alpha_eta::Real=28.0,
+    T_liquidus::Real=1800.0,
+    melting_active::Bool=false,
 )
     if tkmm <= 0.0
         throw(DomainError(tkmm, "Absolute temperature must be positive"))
     end
-    @inbounds etasolidcur = ifelse(tkmm > tmsolidphase, etasolidmm[tmm], etasolidm[tmm])
+    @inbounds etasolidcur = if tkmm > tmsolidphase
+        if etasolidmm[tmm] < etasolidm[tmm]
+            etasolidmm[tmm]
+        elseif melting_active
+            etasolidm[tmm]
+        else
+            Fm_approx = clamp(
+                (tkmm - tmsolidphase) / max(1.0, T_liquidus - tmsolidphase), 0.0, 1.0
+            )
+            max(Float64(etamin), etasolidm[tmm] * exp(-alpha_eta * Fm_approx))
+        end
+    else
+        etasolidm[tmm]
+    end
     @inbounds etafluidcur = ifelse(tkmm > tmfluidphase, etafluidmm[tmm], etafluidm[tmm])
     return max(etamin, etasolidcur, etafluidcur)
 end
