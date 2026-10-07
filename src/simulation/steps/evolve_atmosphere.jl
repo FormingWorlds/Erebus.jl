@@ -123,71 +123,166 @@ function evolve_atmosphere!(
             end
         end
     elseif cfg.escape.active
-        R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
-        T_surf_esc = compute_mean_surface_temperature(
-            tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+        _evolve_atmosphere_escape_only!(
+            state, coords, cfg, delta_m_vent_3d, vented_vols, degas_rates, T_amb
         )
+    end
 
-        vent_rates_esc = compute_surface_venting_rates(
-            cfg,
-            delta_m_vent_3d,
-            vented_vols,
-            dt,
-            P_amb_eff,
-            T_surf_esc,
-            redox_props,
-            marknum,
-            tm,
-            xm,
-            ym,
-            rplanet_val,
-            xcenter_val,
-            ycenter_val,
-        )
+    return nothing
+end
 
-        if cfg.escape.multi_species &&
-            M_atm_species !== nothing &&
-            M_escaped_species !== nothing
-            for sp in cfg.escape.species_list
-                m_sp = get_species_molecular_mass(sp)
-                v_rate_sp = get(vent_rates_esc, sp, 0.0)
-                prev_sp = get(M_atm_species, sp, 0.0)
-                esc_sp = evolve_atmospheric_species_inventory(
-                    prev_sp,
-                    v_rate_sp,
-                    dt,
-                    M_planet_val,
-                    rplanet_val,
-                    cfg.escape.T_exobase,
-                    m_sp;
-                    R_exobase=R_exo_val,
-                    gamma=cfg.escape.gamma,
-                    hydrodynamic=cfg.escape.hydrodynamic,
-                )
-                M_atm_species[sp] = esc_sp.M_atm
-                M_escaped_species[sp] =
-                    get(M_escaped_species, sp, 0.0) + esc_sp.M_escaped_step
-            end
-            acc.M_atm_total = sum(values(M_atm_species))
-            acc.M_escaped_total = sum(values(M_escaped_species))
-        else
-            M_vent_rate_eff = get(vent_rates_esc, cfg.escape.species, 0.0)
-            esc_res = evolve_atmospheric_species_inventory(
-                acc.M_atm_total,
-                M_vent_rate_eff,
+"""
+Extract species degassing rate from dictionary or named tuple.
+"""
+function _get_degas_species_rate(degas_rates, sp::Symbol)::Float64
+    if degas_rates isa AbstractDict
+        return Float64(get(degas_rates, sp, 0.0))
+    elseif degas_rates isa NamedTuple
+        return hasproperty(degas_rates, sp) ? Float64(getproperty(degas_rates, sp)) : 0.0
+    end
+    return 0.0
+end
+
+"""
+Evolve atmospheric loss and venting/degassing accumulation when atmosphere is inactive but escape is active.
+"""
+function _evolve_atmosphere_escape_only!(
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+    delta_m_vent_3d::Float64,
+    vented_vols,
+    degas_rates,
+    T_amb::Float64,
+)::Nothing
+    acc = state.accumulators
+    grids = state.grids
+    markers = state.markers
+
+    xm = markers.core.xm
+    ym = markers.core.ym
+    tm = markers.core.tm
+    has_redox = haskey(markers.groups, :redox)
+    redox_props = has_redox ? markers.groups.redox : nothing
+
+    dt = state.dt
+    rplanet_val = acc.rplanet
+    xcenter_val = acc.xcenter
+    ycenter_val = acc.ycenter
+    M_planet_val = acc.M_planet_val
+    P_amb_eff = acc.P_amb
+    marknum = length(markers)
+
+    tk1 = grids.tk1
+    if acc.M_atm_species === nothing
+        acc.M_atm_species = Dict{Symbol,Float64}()
+    end
+    M_atm_species = acc.M_atm_species
+
+    if acc.M_escaped_species === nothing
+        acc.M_escaped_species = Dict{Symbol,Float64}()
+    end
+    M_escaped_species = acc.M_escaped_species
+
+    esc_sp_single = cfg.escape.species
+    if !cfg.escape.multi_species && isempty(M_atm_species) && acc.M_atm_total > 0.0
+        M_atm_species[esc_sp_single] = acc.M_atm_total
+    end
+
+    R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
+    T_surf_esc = compute_mean_surface_temperature(
+        tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+    )
+
+    vent_rates_esc = compute_surface_venting_rates(
+        cfg,
+        delta_m_vent_3d,
+        vented_vols,
+        dt,
+        P_amb_eff,
+        T_surf_esc,
+        redox_props,
+        marknum,
+        tm,
+        xm,
+        ym,
+        rplanet_val,
+        xcenter_val,
+        ycenter_val,
+    )
+
+    all_species = Set{Symbol}(keys(vent_rates_esc))
+    if degas_rates isa AbstractDict || degas_rates isa NamedTuple
+        union!(all_species, keys(degas_rates))
+    end
+
+    if cfg.escape.multi_species
+        esc_species_set = Set{Symbol}(cfg.escape.species_list)
+        for sp in cfg.escape.species_list
+            m_sp = get_species_molecular_mass(sp)
+            v_rate_sp = get(vent_rates_esc, sp, 0.0)
+            d_rate_sp = _get_degas_species_rate(degas_rates, sp)
+            total_rate_sp = v_rate_sp + d_rate_sp
+            prev_sp = get(M_atm_species, sp, 0.0)
+            esc_sp = evolve_atmospheric_species_inventory(
+                prev_sp,
+                total_rate_sp,
                 dt,
                 M_planet_val,
                 rplanet_val,
                 cfg.escape.T_exobase,
-                get_species_molecular_mass(cfg.escape.species);
+                m_sp;
                 R_exobase=R_exo_val,
                 gamma=cfg.escape.gamma,
                 hydrodynamic=cfg.escape.hydrodynamic,
             )
-            acc.M_atm_total = esc_res.M_atm
-            acc.M_escaped_total += esc_res.M_escaped_step
+            M_atm_species[sp] = esc_sp.M_atm
+            M_escaped_species[sp] = get(M_escaped_species, sp, 0.0) + esc_sp.M_escaped_step
         end
+        for sp in all_species
+            if !(sp in esc_species_set)
+                v_rate_sp = get(vent_rates_esc, sp, 0.0)
+                d_rate_sp = _get_degas_species_rate(degas_rates, sp)
+                non_esc_mass = (v_rate_sp + d_rate_sp) * dt
+                M_atm_species[sp] = get(M_atm_species, sp, 0.0) + non_esc_mass
+            end
+        end
+    else
+        v_rate_esc = get(vent_rates_esc, esc_sp_single, 0.0)
+        d_rate_esc = _get_degas_species_rate(degas_rates, esc_sp_single)
+        total_esc_rate = v_rate_esc + d_rate_esc
+
+        prev_esc_mass = get(M_atm_species, esc_sp_single, 0.0)
+
+        esc_res = evolve_atmospheric_species_inventory(
+            prev_esc_mass,
+            total_esc_rate,
+            dt,
+            M_planet_val,
+            rplanet_val,
+            cfg.escape.T_exobase,
+            get_species_molecular_mass(esc_sp_single);
+            R_exobase=R_exo_val,
+            gamma=cfg.escape.gamma,
+            hydrodynamic=cfg.escape.hydrodynamic,
+        )
+
+        for sp in all_species
+            if sp !== esc_sp_single
+                v_sp = get(vent_rates_esc, sp, 0.0)
+                d_sp = _get_degas_species_rate(degas_rates, sp)
+                dm = (v_sp + d_sp) * dt
+                M_atm_species[sp] = get(M_atm_species, sp, 0.0) + dm
+            end
+        end
+
+        M_atm_species[esc_sp_single] = esc_res.M_atm
+        M_escaped_species[esc_sp_single] =
+            get(M_escaped_species, esc_sp_single, 0.0) + esc_res.M_escaped_step
     end
+
+    acc.M_atm_total = sum(values(M_atm_species))
+    acc.M_escaped_total = sum(values(M_escaped_species))
 
     return nothing
 end

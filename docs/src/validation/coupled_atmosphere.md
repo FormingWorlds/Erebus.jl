@@ -64,7 +64,7 @@ Following Guillot (2010), the temperature profile of an irradiated semi-grey atm
 
 $$T^4(\tau) = \frac{3}{4} T_{\text{int}}^4 \left(\tau + \frac{2}{3}\right) + \frac{3}{4} T_{\text{eqm}}^4 \left[\frac{2}{3} + \frac{1}{\gamma \sqrt{3}} + \left(\frac{\gamma}{\sqrt{3}} - \frac{1}{\gamma \sqrt{3}}\right) e^{-\gamma \tau \sqrt{3}}\right]$$
 
-where $T_{\text{eqm}}^4 = (1 - A) T_{\text{irr}}^4 / 4$, $\gamma = \kappa_{\text{vis}} / \kappa_{\text{IR}}$ is the visible-to-infrared opacity ratio, and $A$ is Bond albedo.
+where $\gamma = \kappa_{\text{vis}} / \kappa_{\text{IR}}$ is the visible-to-infrared opacity ratio, and $A$ is Bond albedo. For isotropic ambient background radiation with temperature $T_{\text{amb}}$, the absorbed energy scales as $T_{\text{eqm}}^4 = (1 - A) T_{\text{amb}}^4$. For directional stellar irradiation with irradiation temperature $T_{\text{irr}}$, the geometric factor $1/4$ applies: $T_{\text{eqm}}^4 = \frac{1 - A}{4} T_{\text{irr}}^4$. Both limits scale absorbed flux by the factor $(1 - A)$.
 
 In the optically thin limit ($\tau \to 0$), the surface skin temperature asymptotically satisfies:
 

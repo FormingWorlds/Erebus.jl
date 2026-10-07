@@ -201,9 +201,11 @@ using JLD2
         c_comp = compute_carbon_solubility_melt(
             p_co_Pa, p_ch4_Pa, p_co2_Pa, p_tot_Pa, T_1500K
         )
-        @test isapprox(
-            c_comp.total_ppm, c_comp.co_ppm + c_comp.ch4_ppm + c_comp.co2_ppm; rtol=1e-10
-        )
+        expected_c_ppm =
+            c_comp.co_ppm * (Erebus.M_C / Erebus.M_CO) +
+            c_comp.ch4_ppm * (Erebus.M_C / Erebus.M_CH4) +
+            c_comp.co2_ppm * (Erebus.M_C / Erebus.M_CO2)
+        @test isapprox(c_comp.total_ppm, expected_c_ppm; rtol=1e-10)
         @test isapprox(c_comp.co_ppm, co_arm; rtol=1e-10)
         @test isapprox(c_comp.ch4_ppm, ch4_ard; rtol=1e-10)
         @test isapprox(c_comp.co2_ppm, co2_dix; rtol=1e-10)
@@ -654,10 +656,10 @@ using JLD2
         @test dw > 0.0
         # Dissolved water retains melt capacity: 0.5 * 0.40 * sqrt(10) ≈ 0.6325 wt%
         @test all(isapprox.(XH2Om, 0.6324555; rtol=1e-4))
-        # Total exsolved fraction per marker ~ 0.0145, for 100 markers dw ~ 1.450
-        @test isapprox(dw, 1.45014; rtol=1e-3)
-        # Porosity increases by dw_step * (3000/1000) from 0.05 to ~0.0935
-        @test all(isapprox.(phim, 0.09350; rtol=1e-3))
+        # Total exsolved fraction per marker with elemental C and SCSS-capped S exsolution: dw ~ 1.527
+        @test isapprox(dw, 1.52711; rtol=1e-3)
+        # Porosity increases by dw_step * (3000/1000) from 0.05 to ~0.0958
+        @test all(isapprox.(phim, 0.09581; rtol=1e-3))
 
         # Idempotency test: subsequent call under same conditions yields zero additional exsolution
         dw_repeat = update_marker_volatile_exsolution!(

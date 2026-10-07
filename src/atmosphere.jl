@@ -714,7 +714,7 @@ Evaluate analytical surface temperature under semi-grey radiative equilibrium (G
 - `T_irr`: Irradiation / ambient stellar temperature [K].
 
 # Keywords
-- `T_eqm`: Planetary equilibrium temperature [K]. If supplied, T_eqm^4 is scaled by (1 - albedo).
+- `T_eqm`: Planetary equilibrium temperature [K] (incorporates albedo). If supplied, this value is used directly as T_eqm^4.
 - `gamma`: Ratio of visible/shortwave opacity to thermal/longwave opacity κ_vis / κ_th (default: 0.10).
 - `albedo`: Bond albedo (default: 0.20).
 
@@ -1986,11 +1986,12 @@ function evolve_coupled_atmosphere_step!(
     )
 
     T_calc = if cfg.mode === :guillot
+        T_eqm_disk = Tamb * (1.0 - cfg.albedo)^0.25
         compute_guillot_surface_temperature(
             atm_state.tau_LW,
             T_int_actual,
             Tamb;
-            T_eqm=Tamb,
+            T_eqm=T_eqm_disk,
             gamma=cfg.gamma_guillot,
             albedo=cfg.albedo,
         )

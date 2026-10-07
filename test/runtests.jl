@@ -72,6 +72,7 @@ unit_tests = [
     "test_crash_paths.jl",
     "test_energy_balance.jl",
     "test_volatile_init.jl",
+    "test_degassing_budgets.jl",
 ]
 
 integration_tests = [
