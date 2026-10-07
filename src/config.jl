@@ -2790,7 +2790,7 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
             if T === MagmaOceanDegassingConfig && k == "crystallization_degassing"
                 throw(
                     ArgumentError(
-                        "crystallization_degassing is a removed key; saturation is evaluated in the melt frame",
+                        "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
                     ),
                 )
             end
