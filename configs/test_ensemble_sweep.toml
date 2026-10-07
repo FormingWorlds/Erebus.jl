@@ -1,5 +1,5 @@
 [base]
-config = "configs/test_quick.toml"
+config = "test_quick.toml"
 
 [ensemble]
 output_dir = "output_ensemble_test"

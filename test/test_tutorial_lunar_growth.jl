@@ -30,7 +30,6 @@ using JLD2: JLD2
         @test cfg.telescoping.active
         @test cfg.telescoping.max_telescope_levels == 6
         @test isapprox(cfg.telescoping.r_threshold_fraction, 0.70, rtol=1e-12)
-        @test isapprox(cfg.telescoping.target_radius, 1737000.0, rtol=1e-12)
 
         # Protoplanetary disk gas dispersal
         @test cfg.disk.enabled

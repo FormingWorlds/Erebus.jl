@@ -360,7 +360,6 @@ Base.@kwdef struct MeltingConfig
     phi_crit::Float64 = 0.4
     eta_melt::Float64 = 10.0
     dpdt_clapeyron::Float64 = 0.0
-    latent_heat_mode::Symbol = :apparent_cp
     soft_turbulence::Bool = false
     turb_exponent::Float64 = 1.0 / 3.0
     eta_fluid_silicate::Float64 = 100.0
@@ -607,14 +606,9 @@ Base.@kwdef struct VolatilesConfig
     fO2_delta_IW::Float64 = -1.0
     water_solubility_coeff::Float64 = 0.40
     water_law::Symbol = :burnham_dixon
-    h2_active::Bool = false
-    h2_law::Symbol = :hirschmann2012
     nitrogen_law::Symbol = :dasgupta2022
     nitrogen_henry_coeff::Float64 = 0.40
     nitrogen_nitride_capacity::Float64 = 1.0e-3
-    t_organic_devol::Float64 = 550.0
-    dt_organic_devol::Float64 = 50.0
-    organic_n_initial_ppm::Float64 = 500.0
     initial_water_wtpct::Float64 = 1.0
     initial_carbon_ppm::Float64 = 500.0
     initial_nitrogen_ppm::Float64 = 50.0
@@ -634,12 +628,6 @@ Base.@kwdef struct VolatilesConfig
     include_sulfate::Bool = false
     scss_active::Bool = true
     scss_law::Symbol = :smythe2017
-    melt_feo_wtpct::Float64 = 10.0
-
-    # Silicate melt composition mole fractions
-    x_sio2::Float64 = 0.56
-    x_al2o3::Float64 = 0.11
-    x_tio2::Float64 = 0.01
 end
 
 """
@@ -674,7 +662,6 @@ Base.@kwdef struct RedoxConfig
     reference::Symbol = :mantle
     serpentinization_redox::Bool = true
     segregation_redox::Bool = true
-    venting_redox::Bool = true
     deltaIW_min::Float64 = -6.0
     deltaIW_max::Float64 = 6.0
     initial_x_ferric::Float64 = 0.05
@@ -687,7 +674,6 @@ Base.@kwdef struct RedoxConfig
         reference::Symbol,
         serpentinization_redox::Bool,
         segregation_redox::Bool,
-        venting_redox::Bool,
         deltaIW_min::Real,
         deltaIW_max::Real,
         initial_x_ferric::Real,
@@ -712,7 +698,6 @@ Base.@kwdef struct RedoxConfig
             reference,
             serpentinization_redox,
             segregation_redox,
-            venting_redox,
             Float64(deltaIW_min),
             Float64(deltaIW_max),
             Float64(initial_x_ferric),
@@ -972,7 +957,6 @@ Base.@kwdef struct AtmosphereConfig
     active::Bool = false
     mode::Symbol = :guillot
     kappa_ir_default::Float64 = 1.0e-2
-    kappa_vis_default::Float64 = 1.0e-3
     opacities::Dict{Symbol,Float64} = Dict(
         :H2O => 1.0e-2,
         :CO2 => 1.0e-3,
@@ -990,7 +974,6 @@ Base.@kwdef struct AtmosphereConfig
     f_rec::Float64 = 0.10
     tau_boil::Float64 = 1.0e4 * SECONDS_PER_YEAR
     crossover_active::Bool = true
-    b_diff_ref::Float64 = 1.0e21
 end
 
 """
@@ -1362,7 +1345,6 @@ Base.@kwdef struct TelescopingConfig
     active::Bool = false
     r_threshold_fraction::Float64 = 0.70
     max_telescope_levels::Int = 10
-    target_radius::Float64 = 1_737_000.0
     buffer_markers_per_cell::Int = 4
 end
 
@@ -1501,6 +1483,126 @@ macro check_unit_interval(expr, label=nothing)
 end
 
 """
+Validates time configuration parameters against physical bounds and constraints.
+"""
+function _validate_time_config(cfg::TimeConfig)
+    @check_positive cfg.dt_initial "Initial dt"
+    cfg.dt_longest >= cfg.dt_initial ||
+        throw(ArgumentError("dt_longest must be >= dt_initial"))
+    @check_ge cfg.n_steps 1
+    @check_nonneg cfg.start_time
+    cfg.endtime > cfg.start_time ||
+        throw(ArgumentError("endtime must be > start_time"))
+    @check_ge cfg.start_step 1
+    @check_finite cfg.dt_initial
+    @check_finite cfg.dt_longest
+    (0.0 < cfg.dtcoefdn < 1.0 && isfinite(cfg.dtcoefdn)) ||
+        throw(ArgumentError("time.dtcoefdn must be in (0, 1) and finite, got $(cfg.dtcoefdn)"))
+    (1.0 <= cfg.dtcoefup <= 10.0 && isfinite(cfg.dtcoefup)) ||
+        throw(ArgumentError("time.dtcoefup must be in [1, 10] and finite, got $(cfg.dtcoefup)"))
+    @check_ge cfg.dtstep 1
+    (0.0 < cfg.dxymax <= 1.0 && isfinite(cfg.dxymax)) ||
+        throw(ArgumentError("time.dxymax must be in (0, 1] and finite, got $(cfg.dxymax)"))
+    @check_positive_finite cfg.DTmax
+    return nothing
+end
+
+"""
+Validates solver configuration parameters against convergence and stability constraints.
+"""
+function _validate_solver_config(
+    cfg::SolverConfig, grid_Nx::Int, grid_Ny::Int, hydrofracture::Bool, venting_active::Bool
+)
+    cfg.seed >= 0 ||
+        throw(ArgumentError("solver.seed must be >= 0, got $(cfg.seed)"))
+    @check_nonneg_finite cfg.dsubgridt
+    @check_nonneg_finite cfg.dsubgrids
+    @check_ge cfg.max_plastic_iterations 1
+    @check_ge cfg.max_dt_reductions 1
+    @check_positive cfg.etamin
+    cfg.etamax >= cfg.etamin ||
+        throw(ArgumentError("etamax must be >= etamin"))
+    @check_positive cfg.etaphikoef
+    (0.0 < cfg.dphimax <= 1.0 && isfinite(cfg.dphimax)) ||
+        throw(ArgumentError("solver.dphimax must be in (0, 1] and finite, got $(cfg.dphimax)"))
+    (0.0 < cfg.yerrmax <= 1.0e6 && isfinite(cfg.yerrmax)) ||
+        throw(ArgumentError("solver.yerrmax must be in (0, 1e6] and finite, got $(cfg.yerrmax)"))
+    (0.0 <= cfg.etawt < 1.0 && isfinite(cfg.etawt)) ||
+        throw(ArgumentError("solver.etawt must be in [0, 1) and finite, got $(cfg.etawt)"))
+    cfg.p2m_mode in (:tiled, :buffered) || throw(
+        ArgumentError(
+            "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.p2m_mode)"
+        ),
+    )
+    @check_ge cfg.tile_size 2
+    cfg.use_pardiso && throw(
+        ArgumentError(
+            "solver.use_pardiso is unsupported. Use UMFPACK direct solver (use_pardiso = false)",
+        ),
+    )
+    cfg.hydromech_solver in (:direct, :iterative, :matrix_free) || throw(
+        ArgumentError(
+            "solver.hydromech_solver must be :direct, :iterative, or :matrix_free, got :$(cfg.hydromech_solver)",
+        ),
+    )
+    if cfg.hydromech_solver in (:iterative, :matrix_free) && !cfg.experimental
+        throw(
+            ArgumentError(
+                "solver.hydromech_solver = :$(cfg.hydromech_solver) is experimental and not yet production-ready; set solver.experimental = true to enable",
+            ),
+        )
+    end
+    cfg.krylov_method in (:fgmres, :gmres, :bicgstab) || throw(
+        ArgumentError(
+            "solver.krylov_method must be :fgmres, :gmres, or :bicgstab, got :$(cfg.krylov_method)",
+        ),
+    )
+    @check_positive_finite cfg.krylov_rtol
+    @check_nonneg_finite cfg.krylov_atol
+    @check_ge cfg.krylov_maxiter 1
+    @check_ge cfg.krylov_restart 1
+    cfg.preconditioner in (:none, :diagonal, :block_schur, :multigrid) || throw(
+        ArgumentError(
+            "solver.preconditioner must be :none, :diagonal, :block_schur, or :multigrid, got :$(cfg.preconditioner)",
+        ),
+    )
+    @check_ge cfg.mg_levels 1
+    @check_ge cfg.mg_pre_smooth 1
+    @check_ge cfg.mg_post_smooth 1
+    cfg.mg_smoother in (:damped_jacobi, :redblack_gauss_seidel) || throw(
+        ArgumentError(
+            "solver.mg_smoother must be :damped_jacobi or :redblack_gauss_seidel, got :$(cfg.mg_smoother)",
+        ),
+    )
+    @check_positive_finite cfg.mg_omega
+    cfg.mg_omega <= 1.0 ||
+        throw(ArgumentError("solver.mg_omega must be <= 1.0, got $(cfg.mg_omega)"))
+    if cfg.preconditioner == :multigrid &&
+        cfg.mg_levels > 1 &&
+        (isodd(grid_Nx) || isodd(grid_Ny))
+        @warn "solver.preconditioner is :multigrid with mg_levels=$(cfg.mg_levels), but grid.Nx=$grid_Nx or grid.Ny=$grid_Ny is odd; geometric multigrid coarsening requires even dimensions"
+    end
+    if cfg.hydromech_solver == :matrix_free
+        cfg.darcy_elimination || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free requires solver.darcy_elimination = true",
+            ),
+        )
+        !hydrofracture || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free does not currently support poroelasticity.hydrofracture = true; use :direct or :iterative instead",
+            ),
+        )
+        !venting_active || throw(
+            ArgumentError(
+                "solver.hydromech_solver = :matrix_free does not currently support venting.active = true; use :direct or :iterative instead",
+            ),
+        )
+    end
+    return nothing
+end
+
+"""
 Validates physical bounds and numerical consistency of a `SimulationConfig`.
 
 $(SIGNATURES)
@@ -1547,16 +1649,7 @@ function validate_config(cfg::SimulationConfig)
     )
 
     # Time checks
-    @check_positive cfg.time.dt_initial "Initial dt"
-    cfg.time.dt_longest >= cfg.time.dt_initial ||
-        throw(ArgumentError("dt_longest must be >= dt_initial"))
-    @check_ge cfg.time.n_steps 1
-    @check_nonneg cfg.time.start_time
-    cfg.time.endtime > cfg.time.start_time ||
-        throw(ArgumentError("endtime must be > start_time"))
-    @check_ge cfg.time.start_step 1
-    @check_finite cfg.time.dt_initial
-    @check_finite cfg.time.dt_longest
+    _validate_time_config(cfg.time)
 
     # Poroelasticity checks
     @check_nonneg_finite cfg.poroelasticity.betasolid
@@ -1585,87 +1678,9 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.poroelasticity.rx_floor_prefactor
 
     # Solver checks
-    cfg.solver.seed >= 0 ||
-        throw(ArgumentError("solver.seed must be >= 0, got $(cfg.solver.seed)"))
-    @check_nonneg_finite cfg.solver.dsubgridt
-    @check_nonneg_finite cfg.solver.dsubgrids
-    @check_ge cfg.solver.max_plastic_iterations 1
-    @check_ge cfg.solver.max_dt_reductions 1
-    @check_positive cfg.solver.etamin
-    cfg.solver.etamax >= cfg.solver.etamin ||
-        throw(ArgumentError("etamax must be >= etamin"))
-    @check_positive cfg.solver.etaphikoef
-    @check_positive_finite cfg.solver.dphimax
-    cfg.solver.p2m_mode in (:tiled, :buffered) || throw(
-        ArgumentError(
-            "solver.p2m_mode must be :tiled or :buffered, got :$(cfg.solver.p2m_mode)"
-        ),
+    _validate_solver_config(
+        cfg.solver, cfg.grid.Nx, cfg.grid.Ny, cfg.poroelasticity.hydrofracture, cfg.venting.active
     )
-    @check_ge cfg.solver.tile_size 2
-    cfg.solver.use_pardiso && throw(
-        ArgumentError(
-            "solver.use_pardiso is unsupported. Use UMFPACK direct solver (use_pardiso = false)",
-        ),
-    )
-    cfg.solver.hydromech_solver in (:direct, :iterative, :matrix_free) || throw(
-        ArgumentError(
-            "solver.hydromech_solver must be :direct, :iterative, or :matrix_free, got :$(cfg.solver.hydromech_solver)",
-        ),
-    )
-    if cfg.solver.hydromech_solver in (:iterative, :matrix_free) && !cfg.solver.experimental
-        throw(
-            ArgumentError(
-                "solver.hydromech_solver = :$(cfg.solver.hydromech_solver) is experimental and not yet production-ready; set solver.experimental = true to enable",
-            ),
-        )
-    end
-    cfg.solver.krylov_method in (:fgmres, :gmres, :bicgstab) || throw(
-        ArgumentError(
-            "solver.krylov_method must be :fgmres, :gmres, or :bicgstab, got :$(cfg.solver.krylov_method)",
-        ),
-    )
-    @check_positive_finite cfg.solver.krylov_rtol
-    @check_nonneg_finite cfg.solver.krylov_atol
-    @check_ge cfg.solver.krylov_maxiter 1
-    @check_ge cfg.solver.krylov_restart 1
-    cfg.solver.preconditioner in (:none, :diagonal, :block_schur, :multigrid) || throw(
-        ArgumentError(
-            "solver.preconditioner must be :none, :diagonal, :block_schur, or :multigrid, got :$(cfg.solver.preconditioner)",
-        ),
-    )
-    @check_ge cfg.solver.mg_levels 1
-    @check_ge cfg.solver.mg_pre_smooth 1
-    @check_ge cfg.solver.mg_post_smooth 1
-    cfg.solver.mg_smoother in (:damped_jacobi, :redblack_gauss_seidel) || throw(
-        ArgumentError(
-            "solver.mg_smoother must be :damped_jacobi or :redblack_gauss_seidel, got :$(cfg.solver.mg_smoother)",
-        ),
-    )
-    @check_positive_finite cfg.solver.mg_omega
-    cfg.solver.mg_omega <= 1.0 ||
-        throw(ArgumentError("solver.mg_omega must be <= 1.0, got $(cfg.solver.mg_omega)"))
-    if cfg.solver.preconditioner == :multigrid &&
-        cfg.solver.mg_levels > 1 &&
-        (isodd(cfg.grid.Nx) || isodd(cfg.grid.Ny))
-        @warn "solver.preconditioner is :multigrid with mg_levels=$(cfg.solver.mg_levels), but grid.Nx=$(cfg.grid.Nx) or grid.Ny=$(cfg.grid.Ny) is odd; geometric multigrid coarsening requires even dimensions"
-    end
-    if cfg.solver.hydromech_solver == :matrix_free
-        cfg.solver.darcy_elimination || throw(
-            ArgumentError(
-                "solver.hydromech_solver = :matrix_free requires solver.darcy_elimination = true",
-            ),
-        )
-        !cfg.poroelasticity.hydrofracture || throw(
-            ArgumentError(
-                "solver.hydromech_solver = :matrix_free does not currently support poroelasticity.hydrofracture = true; use :direct or :iterative instead",
-            ),
-        )
-        !cfg.venting.active || throw(
-            ArgumentError(
-                "solver.hydromech_solver = :matrix_free does not currently support venting.active = true; use :direct or :iterative instead",
-            ),
-        )
-    end
 
     # MPI checks
     if cfg.mpi.enable
@@ -1884,11 +1899,6 @@ function validate_config(cfg::SimulationConfig)
         )
         @check_positive_finite cfg.melting.eta_melt
         @check_nonneg_finite cfg.melting.dpdt_clapeyron
-        cfg.melting.latent_heat_mode == :apparent_cp || throw(
-            ArgumentError(
-                "Melting latent_heat_mode must be :apparent_cp, got $(cfg.melting.latent_heat_mode)",
-            ),
-        )
 
         if cfg.melting.soft_turbulence
             @check_positive_finite cfg.melting.turb_exponent
@@ -2030,9 +2040,6 @@ function validate_config(cfg::SimulationConfig)
     @check_positive_finite cfg.volatiles.water_solubility_coeff
     @check_positive_finite cfg.volatiles.nitrogen_henry_coeff
     @check_positive_finite cfg.volatiles.nitrogen_nitride_capacity
-    @check_positive_finite cfg.volatiles.t_organic_devol
-    @check_positive_finite cfg.volatiles.dt_organic_devol
-    @check_nonneg_finite cfg.volatiles.organic_n_initial_ppm
     @check_nonneg_finite cfg.volatiles.initial_water_wtpct
     @check_nonneg_finite cfg.volatiles.initial_carbon_ppm
     @check_nonneg_finite cfg.volatiles.initial_nitrogen_ppm
@@ -2041,11 +2048,6 @@ function validate_config(cfg::SimulationConfig)
     Set([:burnham_dixon, :sossi_peridotite, :basalt_dixon, :newcombe_lunar]) || throw(
         ArgumentError(
             "water_law must be :burnham_dixon, :sossi_peridotite, :basalt_dixon, or :newcombe_lunar, got $(cfg.volatiles.water_law)",
-        ),
-    )
-    cfg.volatiles.h2_law in Set([:hirschmann2012, :gaillard2003]) || throw(
-        ArgumentError(
-            "h2_law must be :hirschmann2012 or :gaillard2003, got $(cfg.volatiles.h2_law)",
         ),
     )
     cfg.volatiles.nitrogen_law in Set([:dasgupta2022, :libourel2003]) || throw(
@@ -2077,10 +2079,6 @@ function validate_config(cfg::SimulationConfig)
             "scss_law must be :smythe2017 or :oneill2002, got $(cfg.volatiles.scss_law)"
         ),
     )
-    @check_nonneg_finite cfg.volatiles.melt_feo_wtpct
-    @check_unit_interval cfg.volatiles.x_sio2
-    @check_unit_interval cfg.volatiles.x_al2o3
-    @check_unit_interval cfg.volatiles.x_tio2
 
     # Escape checks
     @check_positive_finite cfg.escape.M_planet
@@ -2601,12 +2599,6 @@ function validate_config(cfg::SimulationConfig)
                 "max_telescope_levels must be between 1 and 30, got $(cfg.telescoping.max_telescope_levels)",
             ),
         )
-        (cfg.telescoping.target_radius > 0.0 && isfinite(cfg.telescoping.target_radius)) ||
-            throw(
-                ArgumentError(
-                    "target_radius must be > 0 and finite, got $(cfg.telescoping.target_radius)",
-                ),
-            )
         (cfg.telescoping.buffer_markers_per_cell >= 1) || throw(
             ArgumentError(
                 "buffer_markers_per_cell must be >= 1, got $(cfg.telescoping.buffer_markers_per_cell)",
@@ -2686,7 +2678,6 @@ function validate_config(cfg::SimulationConfig)
     # AtmosphereConfig validation
     if cfg.atmosphere.active
         @check_positive_finite cfg.atmosphere.kappa_ir_default
-        @check_positive_finite cfg.atmosphere.kappa_vis_default
         cfg.atmosphere.mode in Set([:guillot, :grey, :isothermal]) || throw(
             ArgumentError(
                 "atmosphere.mode must be one of :guillot, :grey, :isothermal, got $(cfg.atmosphere.mode)",
@@ -2705,7 +2696,6 @@ function validate_config(cfg::SimulationConfig)
             ),
         )
         @check_positive_finite cfg.atmosphere.tau_boil
-        @check_positive_finite cfg.atmosphere.b_diff_ref
         for (sp, kap) in cfg.atmosphere.opacities
             (kap >= 0.0 && isfinite(kap)) ||
                 throw(ArgumentError("opacity for $sp must be >= 0 and finite, got $kap"))
@@ -2751,17 +2741,54 @@ function validate_config(cfg::SimulationConfig)
     return nothing
 end
 
+@inline function _is_removed_config_field(::Type{MeltingConfig}, k::AbstractString)::Bool
+    return k == "latent_heat_mode"
+end
+@inline function _is_removed_config_field(::Type{VolatilesConfig}, k::AbstractString)::Bool
+    return k in (
+        "h2_active",
+        "h2_law",
+        "t_organic_devol",
+        "dt_organic_devol",
+        "organic_n_initial_ppm",
+        "melt_feo_wtpct",
+        "x_sio2",
+        "x_al2o3",
+        "x_tio2",
+    )
+end
+@inline function _is_removed_config_field(::Type{RedoxConfig}, k::AbstractString)::Bool
+    return k == "venting_redox"
+end
+@inline function _is_removed_config_field(::Type{AtmosphereConfig}, k::AbstractString)::Bool
+    return k in ("kappa_vis_default", "b_diff_ref")
+end
+@inline function _is_removed_config_field(::Type{TelescopingConfig}, k::AbstractString)::Bool
+    return k == "target_radius"
+end
+@inline function _is_removed_config_field(::Type{MagmaOceanDegassingConfig}, k::AbstractString)::Bool
+    return k == "crystallization_degassing"
+end
+@inline function _is_removed_config_field(::Type, ::AbstractString)::Bool
+    return false
+end
+
 """
 Helper function to convert TOML-parsed dictionary into a typed struct with defaults.
 """
 function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
-    # Check for unknown / misspelled keys
+    # Check for removed, unknown, or misspelled keys
     for k in keys(d)
-        if T === MagmaOceanDegassingConfig && k == "crystallization_degassing"
+        if _is_removed_config_field(T, k)
+            if T === MagmaOceanDegassingConfig && k == "crystallization_degassing"
+                throw(
+                    ArgumentError(
+                        "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
+                    ),
+                )
+            end
             throw(
-                ArgumentError(
-                    "crystallization_degassing has been removed; saturation is evaluated in the melt frame",
-                ),
+                ArgumentError("Configuration key '$k' in [$(nameof(T))] has been removed.")
             )
         end
         if !hasfield(T, Symbol(k))
@@ -2823,7 +2850,7 @@ function _dict_to_struct(::Type{T}, d::Dict{String,Any}, defaults::T) where {T}
     return T(; kwargs...)
 end
 
-const VALID_SECTIONS = Set([
+const VALID_SECTIONS = (
     "grid",
     "geometry",
     "time",
@@ -2852,7 +2879,7 @@ const VALID_SECTIONS = Set([
     "redox",
     "magma_degassing",
     "mpi",
-])
+)
 
 """
 Loads, merges, and validates a `SimulationConfig` from a TOML file or string.
@@ -2882,6 +2909,14 @@ function load_config(source::AbstractString)::SimulationConfig
         throw(SystemError("opening configuration file: '$source'", 2))
     else
         TOML.parse(source)
+    end
+
+    if haskey(parsed, "base") || haskey(parsed, "ensemble")
+        throw(
+            ArgumentError(
+                "Found ensemble section in configuration; use 'load_ensemble_config' to load ensemble sweep specifications.",
+            ),
+        )
     end
 
     for sec in keys(parsed)

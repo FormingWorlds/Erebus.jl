@@ -698,12 +698,6 @@ using Random
         )
         @test_throws ArgumentError validate_config(bad_kir)
 
-        # 7. Non-positive kappa_vis_default
-        bad_kvis = SimulationConfig(;
-            atmosphere=AtmosphereConfig(; active=true, kappa_vis_default=-0.01)
-        )
-        @test_throws ArgumentError validate_config(bad_kvis)
-
         # 8. Invalid f_rec (must be in (0, 1])
         bad_frec_hi = SimulationConfig(;
             atmosphere=AtmosphereConfig(; active=true, f_rec=1.5)

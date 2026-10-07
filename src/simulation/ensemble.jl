@@ -65,6 +65,71 @@ function EnsembleSweepSpec(
 end
 
 """
+    load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
+
+Load an ensemble sweep specification from a TOML file or string.
+"""
+function load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
+    parsed = if isfile(source)
+        TOML.parsefile(source)
+    else
+        TOML.parse(source)
+    end
+
+    haskey(parsed, "base") || throw(
+        ArgumentError("Missing required [base] section in ensemble configuration"),
+    )
+    base_sec = parsed["base"]
+    haskey(base_sec, "config") || throw(
+        ArgumentError("Missing required 'config' key in [base] section of ensemble configuration"),
+    )
+
+    base_path_raw = String(base_sec["config"])
+    base_cfg_path = if isfile(source) && !isabspath(base_path_raw)
+        cand1 = joinpath(dirname(source), base_path_raw)
+        if isfile(cand1)
+            cand1
+        elseif isfile(base_path_raw)
+            base_path_raw
+        else
+            cand_pkg = joinpath(dirname(dirname(@__DIR__)), base_path_raw)
+            isfile(cand_pkg) ? cand_pkg : cand1
+        end
+    else
+        if isfile(base_path_raw)
+            base_path_raw
+        else
+            cand_pkg = joinpath(dirname(dirname(@__DIR__)), base_path_raw)
+            isfile(cand_pkg) ? cand_pkg : base_path_raw
+        end
+    end
+
+    isfile(base_cfg_path) || throw(
+        ArgumentError("Base configuration file not found: '$base_path_raw' (resolved to '$base_cfg_path')"),
+    )
+
+    base_cfg = load_config(base_cfg_path)
+
+    ens_sec = get(parsed, "ensemble", Dict{String,Any}())
+    output_dir = get(ens_sec, "output_dir", "ensemble_output")
+    method_str = get(ens_sec, "method", "lhs")
+    method = Symbol(method_str)
+    num_samples = get(ens_sec, "num_samples", 10)
+    seed = get(ens_sec, "seed", 42)
+
+    params = get(parsed, "parameters", Dict{String,Any}())
+
+    return EnsembleSweepSpec(
+        base_cfg;
+        output_dir=output_dir,
+        sampling_method=method,
+        num_samples=num_samples,
+        parameters=params,
+        seed=seed,
+    )
+end
+
+"""
     override_config(cfg, overrides)
 
 Return a new `SimulationConfig` with nested field overrides applied.
@@ -93,6 +158,88 @@ function override_config(
 end
 
 """
+Determines whether a sweep parameter corresponds to an integer quantity.
+"""
+function _is_integer_parameter(cfg::SimulationConfig, key::AbstractString, spec_val::Any)::Bool
+    if spec_val isa AbstractVector && length(spec_val) == 2 && all(x -> x isa Integer, spec_val)
+        return true
+    end
+    parts = split(String(key), ".")
+    if length(parts) == 2
+        sec_sym = Symbol(parts[1])
+        fld_sym = Symbol(parts[2])
+        if hasfield(SimulationConfig, sec_sym)
+            sec_val = getfield(cfg, sec_sym)
+            T = typeof(sec_val)
+            if hasfield(T, fld_sym)
+                fld_type = fieldtype(T, fld_sym)
+                return fld_type <: Integer
+            end
+        end
+    end
+    return false
+end
+
+"""
+Constructs Cartesian product combinations of parameter lists.
+"""
+function _sample_grid_parameters(
+    param_keys::Vector{String}, parameters::AbstractDict
+)::Vector{Dict{String,Any}}
+    sampled_rows = Vector{Dict{String,Any}}()
+    value_lists = [parameters[k] for k in param_keys]
+    for combo in Iterators.product(value_lists...)
+        row = Dict{String,Any}()
+        for (k, val) in zip(param_keys, combo)
+            row[k] = val
+        end
+        push!(sampled_rows, row)
+    end
+    return sampled_rows
+end
+
+"""
+Generates configurations and run identifiers from sampled parameter combinations.
+"""
+function _build_ensemble_results(
+    spec::EnsembleSweepSpec, sampled_rows::Vector{Dict{String,Any}}
+)::Vector{Tuple{String,Dict{String,Any},SimulationConfig}}
+    results = Vector{Tuple{String,Dict{String,Any},SimulationConfig}}()
+    for (idx, row) in enumerate(sampled_rows)
+        run_id = string(spec.sampling_method, "_", lpad(idx, 4, '0'))
+        run_out_dir = joinpath(spec.output_dir, run_id)
+        overrides = copy(row)
+        overrides["output.output_dir"] = run_out_dir
+        if !haskey(overrides, "solver.seed")
+            overrides["solver.seed"] = spec.seed + idx
+        end
+        run_cfg = override_config(spec.base_config, overrides)
+        push!(results, (run_id, row, run_cfg))
+    end
+    return results
+end
+
+"""
+Handles sampling when no parameters are swept.
+"""
+function _sample_empty_parameters(
+    spec::EnsembleSweepSpec,
+)::Vector{Tuple{String,Dict{String,Any},SimulationConfig}}
+    N = spec.num_samples
+    results = Vector{Tuple{String,Dict{String,Any},SimulationConfig}}()
+    for i in 1:N
+        run_id = string(spec.sampling_method, "_", lpad(i, 4, '0'))
+        run_out_dir = joinpath(spec.output_dir, run_id)
+        overrides = Dict{String,Any}(
+            "output.output_dir" => run_out_dir, "solver.seed" => spec.seed + i
+        )
+        run_cfg = override_config(spec.base_config, overrides)
+        push!(results, (run_id, Dict{String,Any}(), run_cfg))
+    end
+    return results
+end
+
+"""
     sample_parameters(spec)
 
 Sample parameter combinations according to the sweep specification and return
@@ -101,36 +248,17 @@ an array of `(run_id, params_dict, config)` tuples.
 function sample_parameters(spec::EnsembleSweepSpec)
     param_keys = sort(collect(keys(spec.parameters)))
     D = length(param_keys)
+    D == 0 && return _sample_empty_parameters(spec)
 
-    if D == 0
-        N = spec.num_samples
-        results = Vector{Tuple{String,Dict{String,Any},SimulationConfig}}()
-        for i in 1:N
-            run_id = string(spec.sampling_method, "_", lpad(i, 4, '0'))
-            run_out_dir = joinpath(spec.output_dir, run_id)
-            overrides = Dict{String,Any}(
-                "output.output_dir" => run_out_dir, "solver.seed" => spec.seed + i
-            )
-            run_cfg = override_config(spec.base_config, overrides)
-            push!(results, (run_id, Dict{String,Any}(), run_cfg))
-        end
-        return results
+    if spec.sampling_method == :grid
+        sampled_rows = _sample_grid_parameters(param_keys, spec.parameters)
+        return _build_ensemble_results(spec, sampled_rows)
     end
 
     rng = Random.MersenneTwister(spec.seed)
     sampled_rows = Vector{Dict{String,Any}}()
 
-    if spec.sampling_method == :grid
-        # Cartesian product of parameter options
-        value_lists = [spec.parameters[k] for k in param_keys]
-        for combo in Iterators.product(value_lists...)
-            row = Dict{String,Any}()
-            for (k, val) in zip(param_keys, combo)
-                row[k] = val
-            end
-            push!(sampled_rows, row)
-        end
-    elseif spec.sampling_method == :lhs
+    if spec.sampling_method == :lhs
         # Latin Hypercube Sampling across D dimensions
         N = spec.num_samples
         sampled_matrix = zeros(Float64, N, D)
@@ -145,14 +273,28 @@ function sample_parameters(spec::EnsembleSweepSpec)
                     ),
                 )
             end
-            # Stratified bins with random uniform point per bin
-            bin_vals = [lo + (i - 1 + rand(rng)) * (hi - lo) / N for i in 1:N]
-            sampled_matrix[:, j] .= Random.shuffle(rng, bin_vals)
+            if _is_integer_parameter(spec.base_config, k, spec_val)
+                lo_int = Int(round(lo))
+                hi_int = Int(round(hi))
+                span = Float64(hi_int - lo_int + 1)
+                bin_vals = [lo_int - 0.5 + (i - 1 + rand(rng)) * span / N for i in 1:N]
+                sampled_matrix[:, j] .= Random.shuffle(rng, bin_vals)
+            else
+                bin_vals = [lo + (i - 1 + rand(rng)) * (hi - lo) / N for i in 1:N]
+                sampled_matrix[:, j] .= Random.shuffle(rng, bin_vals)
+            end
         end
         for i in 1:N
             row = Dict{String,Any}()
             for (j, k) in enumerate(param_keys)
-                row[k] = sampled_matrix[i, j]
+                spec_val = spec.parameters[k]
+                if _is_integer_parameter(spec.base_config, k, spec_val)
+                    lo_int = Int(round(spec_val[1]))
+                    hi_int = Int(round(spec_val[2]))
+                    row[k] = clamp(round(Int, sampled_matrix[i, j]), lo_int, hi_int)
+                else
+                    row[k] = sampled_matrix[i, j]
+                end
             end
             push!(sampled_rows, row)
         end
@@ -172,7 +314,15 @@ function sample_parameters(spec::EnsembleSweepSpec)
                         ),
                     )
                 end
-                row[k] = lo + rand(rng) * (hi - lo)
+                if _is_integer_parameter(spec.base_config, k, spec_val)
+                    lo_int = Int(round(lo))
+                    hi_int = Int(round(hi))
+                    span = Float64(hi_int - lo_int + 1)
+                    val = clamp(round(Int, lo_int - 0.5 + rand(rng) * span), lo_int, hi_int)
+                    row[k] = val
+                else
+                    row[k] = lo + rand(rng) * (hi - lo)
+                end
             end
             push!(sampled_rows, row)
         end
@@ -184,19 +334,7 @@ function sample_parameters(spec::EnsembleSweepSpec)
         )
     end
 
-    results = Vector{Tuple{String,Dict{String,Any},SimulationConfig}}()
-    for (idx, row) in enumerate(sampled_rows)
-        run_id = string(spec.sampling_method, "_", lpad(idx, 4, '0'))
-        run_out_dir = joinpath(spec.output_dir, run_id)
-        # Apply parameter overrides and set dedicated seed and output dir
-        overrides = copy(row)
-        overrides["output.output_dir"] = run_out_dir
-        overrides["solver.seed"] = spec.seed + idx
-        run_cfg = override_config(spec.base_config, overrides)
-        push!(results, (run_id, row, run_cfg))
-    end
-
-    return results
+    return _build_ensemble_results(spec, sampled_rows)
 end
 
 """

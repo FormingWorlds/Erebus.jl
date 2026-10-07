@@ -166,9 +166,6 @@ using Erebus.Physics
                 water_solubility_coeff=0.45,
                 nitrogen_henry_coeff=0.50,
                 nitrogen_nitride_capacity=2.0e-3,
-                t_organic_devol=520.0,
-                dt_organic_devol=40.0,
-                organic_n_initial_ppm=600.0,
             ),
         )
         @test validate_config(cfg_vol) === nothing
@@ -228,60 +225,6 @@ using Erebus.Physics
                 volatiles=VolatilesConfig(nitrogen_nitride_capacity=-1.0e-4),
             ),
         )
-        # Non-positive t_organic_devol
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=cfg_base.grid,
-                geometry=cfg_base.geometry,
-                time=cfg_base.time,
-                solver=cfg_base.solver,
-                poroelasticity=cfg_base.poroelasticity,
-                thermodynamics=cfg_base.thermodynamics,
-                reaction=cfg_base.reaction,
-                materials=cfg_base.materials,
-                output=cfg_base.output,
-                disk=cfg_base.disk,
-                melting=cfg_base.melting,
-                venting=cfg_base.venting,
-                volatiles=VolatilesConfig(t_organic_devol=0.0),
-            ),
-        )
-        # Non-positive dt_organic_devol
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=cfg_base.grid,
-                geometry=cfg_base.geometry,
-                time=cfg_base.time,
-                solver=cfg_base.solver,
-                poroelasticity=cfg_base.poroelasticity,
-                thermodynamics=cfg_base.thermodynamics,
-                reaction=cfg_base.reaction,
-                materials=cfg_base.materials,
-                output=cfg_base.output,
-                disk=cfg_base.disk,
-                melting=cfg_base.melting,
-                venting=cfg_base.venting,
-                volatiles=VolatilesConfig(dt_organic_devol=-10.0),
-            ),
-        )
-        # Negative organic_n_initial_ppm
-        @test_throws ArgumentError validate_config(
-            SimulationConfig(
-                grid=cfg_base.grid,
-                geometry=cfg_base.geometry,
-                time=cfg_base.time,
-                solver=cfg_base.solver,
-                poroelasticity=cfg_base.poroelasticity,
-                thermodynamics=cfg_base.thermodynamics,
-                reaction=cfg_base.reaction,
-                materials=cfg_base.materials,
-                output=cfg_base.output,
-                disk=cfg_base.disk,
-                melting=cfg_base.melting,
-                venting=cfg_base.venting,
-                volatiles=VolatilesConfig(organic_n_initial_ppm=-10.0),
-            ),
-        )
         # Out-of-bounds fO2_delta_IW
         @test_throws ArgumentError validate_config(
             SimulationConfig(
@@ -310,9 +253,6 @@ using Erebus.Physics
                 water_solubility_coeff=0.42,
                 nitrogen_henry_coeff=0.48,
                 nitrogen_nitride_capacity=2.5e-3,
-                t_organic_devol=530.0,
-                dt_organic_devol=45.0,
-                organic_n_initial_ppm=650.0,
             ),
         )
         toml_str = save_config(cfg_orig)
@@ -334,21 +274,6 @@ using Erebus.Physics
         @test isapprox(
             cfg_loaded.volatiles.nitrogen_nitride_capacity,
             cfg_orig.volatiles.nitrogen_nitride_capacity;
-            rtol=1e-12,
-        )
-        @test isapprox(
-            cfg_loaded.volatiles.t_organic_devol,
-            cfg_orig.volatiles.t_organic_devol;
-            rtol=1e-12,
-        )
-        @test isapprox(
-            cfg_loaded.volatiles.dt_organic_devol,
-            cfg_orig.volatiles.dt_organic_devol;
-            rtol=1e-12,
-        )
-        @test isapprox(
-            cfg_loaded.volatiles.organic_n_initial_ppm,
-            cfg_orig.volatiles.organic_n_initial_ppm;
             rtol=1e-12,
         )
     end
