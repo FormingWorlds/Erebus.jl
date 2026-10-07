@@ -437,7 +437,7 @@ function assemble_hydromechanical_lse!(
                 rx_val = RX[i, j]
                 if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
                     Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
-                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i, j + 1])
                     phi_x = if PHIX !== nothing
                         PHIX[i, j]
                     elseif PHI !== nothing
@@ -493,7 +493,7 @@ function assemble_hydromechanical_lse!(
                 ry_val = RY[i, j]
                 if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
                     Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
-                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i + 1, j])
                     phi_y = if PHIY !== nothing
                         PHIY[i, j]
                     elseif PHI !== nothing
@@ -847,7 +847,7 @@ function assemble_hydromechanical_4var_lse!(
     if hydrofracture && pr !== nothing && pf !== nothing && TEN !== nothing
         @inbounds for j in 2:(Nx_val - 1), i in 2:(Ny1 - 1)
             Peff_x = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
-            sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+            sigma_t_x = 0.5 * (TEN[i, j] + TEN[i, j + 1])
             phi_x = if PHIX !== nothing
                 PHIX[i, j]
             elseif PHI !== nothing
@@ -877,7 +877,7 @@ function assemble_hydromechanical_4var_lse!(
 
         @inbounds for j in 2:(Nx1 - 1), i in 2:(Ny_val - 1)
             Peff_y = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
-            sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+            sigma_t_y = 0.5 * (TEN[i, j] + TEN[i + 1, j])
             phi_y = if PHIY !== nothing
                 PHIY[i, j]
             elseif PHI !== nothing
@@ -1336,7 +1336,7 @@ function reconstruct_darcy_fluxes!(
                             pr[i, j] + pr[i, j + 1] - pf_eff_use[i, j] -
                             pf_eff_use[i, j + 1]
                         )
-                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i - 1, j])
+                    sigma_t_x = 0.5 * (TEN[i, j] + TEN[i, j + 1])
                     phi_x = if PHIX !== nothing
                         PHIX[i, j]
                     elseif PHI !== nothing
@@ -1377,7 +1377,7 @@ function reconstruct_darcy_fluxes!(
                             pr[i, j] + pr[i + 1, j] - pf_eff_use[i, j] -
                             pf_eff_use[i + 1, j]
                         )
-                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i, j - 1])
+                    sigma_t_y = 0.5 * (TEN[i, j] + TEN[i + 1, j])
                     phi_y = if PHIY !== nothing
                         PHIY[i, j]
                     elseif PHI !== nothing

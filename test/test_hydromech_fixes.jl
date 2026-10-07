@@ -94,6 +94,16 @@ using Erebus
         expected_floor = 1.0e-5 / kmax
         @test isapprox(R_floored, expected_floor; rtol=1e-12)
         @test R_floored >= expected_floor
+
+        # 6. Face orientation interpolation of cell-centered tensile strength
+        # X-face (vertical face) averages horizontally across j
+        # Y-face (horizontal face) averages vertically across i
+        TEN_grid = [1.0e6 3.0e6; 5.0e6 7.0e6]
+        sigma_t_x_face = 0.5 * (TEN_grid[1, 1] + TEN_grid[1, 2])
+        sigma_t_y_face = 0.5 * (TEN_grid[1, 1] + TEN_grid[2, 1])
+        @test isapprox(sigma_t_x_face, 2.0e6; rtol=1e-12)
+        @test isapprox(sigma_t_y_face, 3.0e6; rtol=1e-12)
+        @test sigma_t_x_face != sigma_t_y_face
     end
 
     @testset "F11: Venting corner drainage single-budget constraint" begin
