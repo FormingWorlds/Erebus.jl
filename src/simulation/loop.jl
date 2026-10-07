@@ -1601,12 +1601,10 @@ function simulation_loop(
                     plastic_converged = true
                     thermochemical_converged = true
                     last_plastic_residual = 0.0
-                    # Initialize step-start pressures on first timestep
-                    if timestep == 1
-                        pr0 .= pr
-                        pf0 .= pf
-                        ps0 .= ps
-                    end
+                    # Update step-start pressures for this timestep
+                    pr0 .= pr
+                    pf0 .= pf
+                    ps0 .= ps
 
                     for titer in 1:1:max_plastic_iterations_val
                         # perform thermochemical reaction

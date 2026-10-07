@@ -203,6 +203,19 @@ using Erebus
         dt = 1000.0
         dp_dt = (pf_next .- pf0) ./ dt
         @test isapprox(maximum(dp_dt), 250.0; rtol=1e-12)
+
+        # Step-to-step advancement updates step-start baseline for next step
+        pr_step1 = fill(1.05e7, Ny, Nx)
+        pf_step1 = fill(8.25e6, Ny, Nx)
+        pr0 .= pr_step1
+        pf0 .= pf_step1
+        @test all(pr0 .≈ 1.05e7)
+        @test all(pf0 .≈ 8.25e6)
+
+        # Step 2 evaluates compaction against step 1 baseline
+        pf_step2 = fill(8.30e6, Ny, Nx)
+        dp_dt_step2 = (pf_step2 .- pf0) ./ dt
+        @test isapprox(maximum(dp_dt_step2), 50.0; rtol=1e-12)
     end
 
     @testset "F23: Matrix melt softening and suspension transition" begin
