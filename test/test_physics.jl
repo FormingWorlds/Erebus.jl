@@ -1,3 +1,22 @@
+using Test
+using Erebus
+using Random
+using StaticArrays
+
+include("test_helpers.jl")
+
+coords_test = default_grid_coordinates()
+Nx = coords_test.Nx
+Ny = coords_test.Ny
+dx = coords_test.dx
+dy = coords_test.dy
+xsize = coords_test.xsize
+ysize = coords_test.ysize
+Nx1 = coords_test.Nx1
+Ny1 = coords_test.Ny1
+start_marknum = coords_test.start_marknum
+rng = MersenneTwister(42)
+
 @testset "Physics" begin
     etamin = 1.0e+12
     @testset "distance(): metric axioms and invariants" begin
@@ -750,9 +769,9 @@
         tk2 = fill(650.0, Ny1, Nx1)
 
         # Marker setup: mantle rock (tm=1), crust rock (tm=2), and sticky air (tm=3)
-        tm = rand(rgen, 1:3, marknum)
-        xm = rand(rgen, 0.0:0.1:xsize, marknum)
-        ym = rand(rgen, 0.0:0.1:ysize, marknum)
+        tm = rand(rng, 1:3, marknum)
+        xm = rand(rng, 0.0:0.1:xsize, marknum)
+        ym = rand(rng, 0.0:0.1:ysize, marknum)
         XWˢm₀ = fill(0.5, marknum)
         XWˢm = copy(XWˢm₀)
         phim = fill(0.1, marknum)
@@ -886,18 +905,18 @@
 
     @testset "compute_shear_heating!(): Second Law non-negativity and symmetry" begin
         HS = zeros(Ny1, Nx1)
-        ETA = rand(rgen, Ny, Nx) .+ 1.0e20
-        SXY = rand(rgen, Ny, Nx) .* 1.0e6
-        ETAP = rand(rgen, Ny1, Nx1) .+ 1.0e20
-        SXX = rand(rgen, Ny1, Nx1) .* 1.0e6
-        RX = rand(rgen, Ny1, Nx1) .+ 1.0e10
-        RY = rand(rgen, Ny1, Nx1) .+ 1.0e10
-        qxD = rand(rgen, Ny1, Nx1) .* 1.0e-7
-        qyD = rand(rgen, Ny1, Nx1) .* 1.0e-7
+        ETA = rand(rng, Ny, Nx) .+ 1.0e20
+        SXY = rand(rng, Ny, Nx) .* 1.0e6
+        ETAP = rand(rng, Ny1, Nx1) .+ 1.0e20
+        SXX = rand(rng, Ny1, Nx1) .* 1.0e6
+        RX = rand(rng, Ny1, Nx1) .+ 1.0e10
+        RY = rand(rng, Ny1, Nx1) .+ 1.0e10
+        qxD = rand(rng, Ny1, Nx1) .* 1.0e-7
+        qyD = rand(rng, Ny1, Nx1) .* 1.0e-7
         PHI = fill(0.1, Ny1, Nx1)
-        ETAPHI = rand(rgen, Ny1, Nx1) .+ 1.0e20
-        pr = rand(rgen, Ny1, Nx1) .* 1.0e7
-        pf = rand(rgen, Ny1, Nx1) .* 1.0e7
+        ETAPHI = rand(rng, Ny1, Nx1) .+ 1.0e20
+        pr = rand(rng, Ny1, Nx1) .* 1.0e7
+        pf = rand(rng, Ny1, Nx1) .* 1.0e7
 
         Erebus.compute_shear_heating!(
             HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf

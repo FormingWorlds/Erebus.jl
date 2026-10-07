@@ -320,14 +320,27 @@ using StaticArrays
             k_seal_min_ratio=1.0e-6,
         )
         @test k_sealed < k0
-        @test isapprox(
-            k_sealed,
-            compute_ice_sealed_permeability(
-                k0, 200.0; T_freeze=273.15, delta_T_seal=10.0, k_min_ratio=1.0e-6
-            );
-            rtol=1e-12,
+        ratio_analytical = (1.0 - 1.0e-6) * exp(-(273.15 - 200.0) / 10.0) + 1.0e-6
+        k_sealed_analytical = k0 * ratio_analytical
+        @test isapprox(k_sealed, k_sealed_analytical; rtol=1e-12)
+        @test abs(k_sealed - k0) > 0.99 * k0
+
+        # 3. Breached unsaturated -> power-law hydrofracture enhancement below k_frac_max
+        k_breached_unsat = compute_face_venting_permeability(
+            k0,
+            true,
+            true,
+            150.0,
+            -12.0e6,
+            10.0e6;
+            kappa_frac=10.0,
+            gamma_frac=1.0,
+            k_frac_max=1.0e-9,
         )
-        # 3. Breached -> enhanced hydrofracture permeability regardless of ice_sealing
+        @test isapprox(k_breached_unsat, 3.0 * k0; rtol=1e-12)
+        @test k_breached_unsat < 1.0e-9
+
+        # 4. Breached saturated -> clamped to k_frac_max ceiling
         k_breached = compute_face_venting_permeability(
             k0,
             true,
@@ -556,7 +569,9 @@ using StaticArrays
         tk_nan[3, 3] = NaN
         tk_nan[2, 2] = -50.0
         S_out = zeros(Float64, Ny + 1, Nx + 1)
-        # Must execute without throwing DomainError
+        pf_test = fill(1.0e7, Ny + 1, Nx + 1)
+        phi_test = fill(0.1, Ny + 1, Nx + 1)
+        # Must execute without throwing DomainError and compute finite positive venting fluxes
         apply_venting_surface_boundary!(
             nothing,
             nothing,
@@ -567,9 +582,12 @@ using StaticArrays
             50_000.0,
             10.0;
             ice_sealing=true,
+            pf=pf_test,
+            PHI=phi_test,
             S_vent_out=S_out,
         )
         @test all(isfinite, S_out)
+        @test any(S_out .> 0.0)
         @test all(S_out .>= 0.0)
     end
 
@@ -599,6 +617,10 @@ using StaticArrays
 
         # At cryogenic temperature below triple point (T=10 K), H2 sublimates with finite vapor pressure
         P_vent_h2_cryo = compute_venting_pressure(10.0, P_amb; species=:H2)
+        arg_h2 = -(4.54e5 / 4124.0) * (1.0 / 10.0 - 1.0 / 13.8)
+        P_sat_h2_expected = 7.04e3 * exp(arg_h2)
+        P_vent_h2_expected = max(P_amb, P_sat_h2_expected)
+        @test isapprox(P_vent_h2_cryo, P_vent_h2_expected; rtol=1e-12)
         @test P_vent_h2_cryo > P_amb
 
         # H2O at 150 K has negligible vapor pressure, so P_vent equals P_amb

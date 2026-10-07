@@ -8,7 +8,6 @@ using Test
 
 include("../src/constants.jl")
 include("test_helpers.jl")
-const rgen = MersenneTwister(42)
 
 test_group = get(ENV, "EREBUS_TEST_GROUP", "all")
 
@@ -76,6 +75,7 @@ unit_tests = [
     "test_hydromech_fixes.jl",
     "test_redox_metal.jl",
     "test_config_hygiene.jl",
+    "test_mutation.jl",
 ]
 
 integration_tests = [
@@ -85,6 +85,7 @@ integration_tests = [
     "test_integration.jl",
     "test_conservation_closure.jl",
     "test_switch_sensitivity.jl",
+    "test_reference_runs.jl",
 ]
 
 all_test_files = filter(f -> endswith(f, ".jl") && f != "runtests.jl", readdir(@__DIR__))

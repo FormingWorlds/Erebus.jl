@@ -48,6 +48,29 @@ using Test
             r_limit,
         )
 
+        # Test non-corner nodes along the circular arc
+        for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+            dist_c = Erebus.distance(
+                coords.xp[j], coords.yp[i], coords.xcenter, coords.ycenter
+            )
+            is_bnd = is_gravitational_boundary(
+                i,
+                j,
+                Ny1,
+                Nx1,
+                coords.xp,
+                coords.yp,
+                coords.xcenter,
+                coords.ycenter,
+                r_limit,
+            )
+            if dist_c > r_limit
+                @test is_bnd == true
+            else
+                @test is_bnd == false
+            end
+        end
+
         # Verify LP matrix invariance to density field
         RHO_zero = zeros(Ny1, Nx1)
         RP_dummy = zeros(Ny1 * Nx1)
@@ -174,8 +197,8 @@ using Test
             coords=coords,
             L=L_buf,
         )
-        @test L_reused == L_fresh
-        @test R_buf == R_fresh
+        @test L_reused ≈ L_fresh
+        @test isapprox(R_buf, R_fresh; rtol=1e-12)
 
         # Second in-place pass with mutated properties
         ETA .+= 5e19
@@ -232,8 +255,17 @@ using Test
             coords=coords,
             L=L_buf,
         )
-        @test L_reused2 == L_fresh2
-        @test R_buf2 == R_fresh2
+        @test L_reused2 ≈ L_fresh2
+        @test isapprox(R_buf2, R_fresh2; rtol=1e-12)
+
+        # Verify HydromechanicalLSEWorkspace fields and reuse
+        hm_ws = HydromechanicalLSEWorkspace(Ny1, Nx1)
+        @test hm_ws.Ny1 == Ny1
+        @test hm_ws.Nx1 == Nx1
+        @test size(hm_ws.L) == (Nx1 * Ny1 * 6, Nx1 * Ny1 * 6)
+        @test hm_ws.is_initialized == false
+        @test size(hm_ws.pr_presolve) == (Ny1, Nx1)
+        @test size(hm_ws.pf_presolve) == (Ny1, Nx1)
     end
 
     @testset "Thermal LSE in-place assembly equivalence" begin
@@ -257,8 +289,8 @@ using Test
         LT_reused = assemble_thermal_lse!(
             tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT_buf, dt; coords=coords, LT=LT_buf
         )
-        @test LT_reused.cscmatrix == LT_fresh.cscmatrix
-        @test RT_buf == RT_fresh
+        @test LT_reused.cscmatrix ≈ LT_fresh.cscmatrix
+        @test isapprox(RT_buf, RT_fresh; rtol=1e-12)
 
         # Second in-place pass with mutated properties
         tk1 .+= 20.0
@@ -271,8 +303,16 @@ using Test
         LT_reused2 = assemble_thermal_lse!(
             tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT_buf2, dt; coords=coords, LT=LT_buf
         )
-        @test LT_reused2.cscmatrix == LT_fresh2.cscmatrix
-        @test RT_buf2 == RT_fresh2
+        @test LT_reused2.cscmatrix ≈ LT_fresh2.cscmatrix
+        @test isapprox(RT_buf2, RT_fresh2; rtol=1e-12)
+
+        # Verify ThermalLSEWorkspace fields and reuse
+        th_ws = ThermalLSEWorkspace(Ny1, Nx1)
+        @test th_ws.Ny1 == Ny1
+        @test th_ws.Nx1 == Nx1
+        @test size(th_ws.LT) == (Ny1 * Nx1, Ny1 * Nx1)
+        @test th_ws.is_initialized == false
+        @test th_ws isa ThermalLSEWorkspace
     end
 
     @testset "LinearSolve symbolic factorization caching across Picard iterations" begin

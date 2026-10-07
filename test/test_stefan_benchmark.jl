@@ -126,8 +126,9 @@ end
         t_elapsed = 200.0 # 200 s
         s_ana = 2.0 * λ_ana * sqrt(kappa * t_elapsed)
 
+        T_ambient = 650.0 # Ambient temperature ahead of Stefan front (< T_eq)
         # Impose Stefan similarity temperature profile on grid and markers
-        tk2 = fill(T_eq, coords.Ny1, coords.Nx1)
+        tk2 = fill(T_ambient, coords.Ny1, coords.Nx1)
         pf = fill(1.0e5, coords.Ny1, coords.Nx1)
         for j in 1:coords.Nx1, i in 1:coords.Ny1
             y_node = (i - 1) * coords.dy
@@ -137,7 +138,7 @@ end
                     (T_wall - T_eq) * _erf(y_node / (2.0 * sqrt(kappa * t_elapsed))) /
                     _erf(λ_ana)
             else
-                tk2[i, j] = T_eq
+                tk2[i, j] = T_ambient
             end
         end
 
@@ -148,7 +149,7 @@ end
                     (T_wall - T_eq) * _erf(ym[m] / (2.0 * sqrt(kappa * t_elapsed))) /
                     _erf(λ_ana)
             else
-                tkm[m] = T_eq
+                tkm[m] = T_ambient
             end
         end
 
@@ -199,16 +200,18 @@ end
         @test !isempty(dehydrated_indices)
         @test !isempty(hydrated_indices)
 
-        # 2. Numerical front position from marker state matches analytical Stefan front within marker spacing
+        # 2. Numerical front position from marker state matches analytical Stefan front within grid cell spacing
         s_num = maximum(ym[dehydrated_indices])
-        @test abs(s_num - s_ana) <= 2.0 * dy_marker
+        @test abs(s_num - s_ana) <= coords.dy
 
-        # 3. Latent heat sink in dehydrated zone: DHP < 0
-        @test minimum(DHP) < 0.0
+        # 3. Latent heat sink in dehydrated zone: quantitative enthalpy integral
+        total_dhp = sum(DHP)
+        @test total_dhp < -1.0e6
         @test maximum(DHP) <= 1e-12
 
-        # 4. Fluid expulsion in dehydrated zone: DQPF > 0
-        @test maximum(DQPF) > 0.0
+        # 4. Fluid expulsion in dehydrated zone: quantitative fluid expulsion integral
+        total_dqpf = sum(DQPF)
+        @test total_dqpf > 1.0e-5
         @test minimum(DQPF) >= -1e-12
     end
 end

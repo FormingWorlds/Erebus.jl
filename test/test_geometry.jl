@@ -1,3 +1,10 @@
+using Test
+using Erebus
+using Random
+using StaticArrays
+
+include("test_helpers.jl")
+
 @testset "Geometry" begin
     rng_geom = MersenneTwister(42)
     coords_geom = default_grid_coordinates()

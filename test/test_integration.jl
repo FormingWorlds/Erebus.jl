@@ -1,3 +1,10 @@
+using Test
+using Erebus
+using JLD2
+using StaticArrays
+
+include("test_helpers.jl")
+
 @testset "Integration" begin
     @testset "simulation_loop() execution and state persistence" begin
         output_dir = mktempdir()

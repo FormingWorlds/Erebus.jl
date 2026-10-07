@@ -345,11 +345,26 @@ using Erebus.Physics
         # R_exobase keyword argument support and scaling
         R_exo_high = 1.2 * R_50km
         res_exo = evolve_atmospheric_species_inventory(
-            0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG; R_exobase=R_exo_high
+            0.0,
+            vent_rate,
+            dt_1yr,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            R_exobase=R_exo_high,
+            hydrodynamic=false,
         )
         @test res_exo.M_atm > 0.0
         @test isapprox(res_exo.M_atm + res_exo.M_escaped_step, total_vented; rtol=1e-12)
-        @test res_exo.M_atm != res_vent.M_atm
+        H_exo = compute_atmospheric_scale_height(M_50km, R_exo_high, T_200, MASS_H2O_KG)
+        lam_exo = compute_jeans_parameter(M_50km, R_exo_high, T_200, MASS_H2O_KG)
+        k_expected_exo =
+            (v_th_50 / (2.0 * sqrt(π) * H_exo)) * (1.0 + lam_exo) * exp(-lam_exo)
+        M_ss_exo_expected = vent_rate / k_expected_exo
+        @test isapprox(res_exo.M_atm, M_ss_exo_expected; rtol=1e-5)
+        # Scale height and steady-state atmospheric mass scale quadratically with R_exobase
+        @test isapprox(res_exo.M_atm / res_vent.M_atm, (R_exo_high / R_50km)^2; rtol=1e-3)
 
         # Guard: R_exobase < R_planet throws DomainError
         @test_throws DomainError evolve_atmospheric_species_inventory(

@@ -1,3 +1,60 @@
+using Test
+using Erebus
+using Random
+using StaticArrays
+
+include("test_helpers.jl")
+
+coords_test = default_grid_coordinates()
+Nx = coords_test.Nx
+Ny = coords_test.Ny
+dx = coords_test.dx
+dy = coords_test.dy
+xsize = coords_test.xsize
+ysize = coords_test.ysize
+xcenter = coords_test.xcenter
+ycenter = coords_test.ycenter
+x = coords_test.x
+y = coords_test.y
+xp = coords_test.xp
+yp = coords_test.yp
+xvx = coords_test.xvx
+yvx = coords_test.yvx
+xvy = coords_test.xvy
+yvy = coords_test.yvy
+Nx1 = coords_test.Nx1
+Ny1 = coords_test.Ny1
+start_marknum = coords_test.start_marknum
+jmin_basic = coords_test.jmin_basic
+imin_basic = coords_test.imin_basic
+jmax_basic = coords_test.jmax_basic
+imax_basic = coords_test.imax_basic
+jmin_vx = coords_test.jmin_vx
+imin_vx = coords_test.imin_vx
+jmax_vx = coords_test.jmax_vx
+imax_vx = coords_test.imax_vx
+jmin_vy = coords_test.jmin_vy
+imin_vy = coords_test.imin_vy
+jmax_vy = coords_test.jmax_vy
+imax_vy = coords_test.imax_vy
+jmin_p = coords_test.jmin_p
+imin_p = coords_test.imin_p
+jmax_p = coords_test.jmax_p
+imax_p = coords_test.imax_p
+Nxmc = coords_test.Nxmc
+Nymc = coords_test.Nymc
+Nxm = coords_test.Nxm
+Nym = coords_test.Nym
+dxm = coords_test.dxm
+dym = coords_test.dym
+xxm = coords_test.xxm
+yym = coords_test.yym
+jmin_m = coords_test.jmin_m
+imin_m = coords_test.imin_m
+jmax_m = coords_test.jmax_m
+imax_m = coords_test.imax_m
+rng = MersenneTwister(42)
+
 @testset "Particles" begin
     etamin = 1.0e+12
     @testset "setup_interpolated_properties(): dimensions and zero-initialization" begin
@@ -636,7 +693,7 @@
     @testset "reduce_add_3darray!() & interpolate_add_to_grid!(): conservation" begin
         # 1. 3D array reduction sum conservation
         ny_t, nx_t, nth = 5, 5, 4
-        src_3d = rand(rgen, ny_t, nx_t, nth)
+        src_3d = rand(rng, ny_t, nx_t, nth)
         expected_sum = sum(src_3d)
         Erebus.reduce_add_3darray!(src_3d)
         reduced = src_3d[:, :, 1]
@@ -656,7 +713,7 @@
     end # testset "reduce_add_3darray!()"
 
     @testset "interpolate_to_marker!(): convex hull and constant reproduction" begin
-        grid_vals = rand(rgen, 6, 6)
+        grid_vals = rand(rng, 6, 6)
         weights = @SVector [0.15, 0.25, 0.35, 0.25]
         marker_prop = zeros(1)
 
@@ -679,8 +736,8 @@
 
     @testset "marker_to_*_nodes!(): weight and property accumulation" begin
         marknum = 100
-        xm = rand(rgen, (0.1 * xsize):0.01:(0.9 * xsize), marknum)
-        ym = rand(rgen, (0.1 * ysize):0.01:(0.9 * ysize), marknum)
+        xm = rand(rng, (0.1 * xsize):0.01:(0.9 * xsize), marknum)
+        ym = rand(rng, (0.1 * ysize):0.01:(0.9 * ysize), marknum)
         tm = fill(1, marknum)  # All rocks
 
         # Basic nodes accumulation
@@ -787,10 +844,10 @@
     end # testset "marker_to_*_nodes!()"
 
     @testset "compute_velocities!(): staggered averaging and boundary conditions" begin
-        vx = rand(rgen, Ny1, Nx1)
-        vy = rand(rgen, Ny1, Nx1)
-        vxf = rand(rgen, Ny1, Nx1)
-        vyf = rand(rgen, Ny1, Nx1)
+        vx = rand(rng, Ny1, Nx1)
+        vy = rand(rng, Ny1, Nx1)
+        vxf = rand(rng, Ny1, Nx1)
+        vyf = rand(rng, Ny1, Nx1)
         vxp = zeros(Ny1, Nx1)
         vyp = zeros(Ny1, Nx1)
         vxpf = zeros(Ny1, Nx1)
@@ -970,9 +1027,9 @@
     end # testset "move_markers_rk4!()"
 
     @testset "backtrace_pressures_rk4!(): zero-velocity pressure invariance" begin
-        pr = rand(rgen, Ny1, Nx1) .* 1.0e7
-        ps = rand(rgen, Ny1, Nx1) .* 1.0e7
-        pf = rand(rgen, Ny1, Nx1) .* 1.0e7
+        pr = rand(rng, Ny1, Nx1) .* 1.0e7
+        ps = rand(rng, Ny1, Nx1) .* 1.0e7
+        pf = rand(rng, Ny1, Nx1) .* 1.0e7
         pr0 = zeros(Ny1, Nx1)
         ps0 = zeros(Ny1, Nx1)
         pf0 = zeros(Ny1, Nx1)
@@ -1002,8 +1059,8 @@
     @testset "replenish_markers!(): population recovery and domain bounds" begin
         marknum = 100
         # Concentrate markers in one quadrant to simulate a depleted void elsewhere
-        xm = rand(rgen, 0.0:0.1:(xsize / 2.0), marknum)
-        ym = rand(rgen, 0.0:0.1:(ysize / 2.0), marknum)
+        xm = rand(rng, 0.0:0.1:(xsize / 2.0), marknum)
+        ym = rand(rng, 0.0:0.1:(ysize / 2.0), marknum)
         tm = fill(1, marknum)
         tkm = fill(300.0, marknum)
         sxxm = zeros(marknum)
