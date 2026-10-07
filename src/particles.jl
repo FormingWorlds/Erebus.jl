@@ -180,7 +180,10 @@ Evaluate marker silicate matrix density from phase or fallback parameters.
     rhosolidm::Union{Nothing,AbstractVector{Float64}},
     rhosolid_fallback::Real,
 )
-    if tm !== nothing && rhosolidm !== nothing && tm[m] in 1:length(rhosolidm)
+    if tm !== nothing &&
+        rhosolidm !== nothing &&
+        m <= length(tm) &&
+        tm[m] in 1:length(rhosolidm)
         return max(Float64(rhosolidm[tm[m]]), 100.0)
     elseif rhosolidm !== nothing && !isempty(rhosolidm)
         return max(Float64(rhosolidm[1]), 100.0)

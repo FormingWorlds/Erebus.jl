@@ -542,7 +542,7 @@ make_test_coordinates(Nx=33, Ny=33) = default_grid_coordinates()
         @test markers.groups.metal.Xfe_bulk[1] ≈ 0.15
         @test markers.groups.volatiles.XH2Om[1] ≈ cfg.accretion.XH2O_wet_wtpct
         # deltaIW for phi_fe=0.15 via two-phase mass conversion (w_fe = 7/24)
-        @test markers.groups.redox.deltaIW_m[1] ≈ -1.08804 rtol = 0.01
+        @test isapprox(markers.groups.redox.deltaIW_m[1], -1.088035858059; atol=1e-6)
         @test markers.groups.hcnspo.X_ice_H2O_m[1] ≈ 0.12
         @test markers.groups.phase.Xmin_troilite_m[1] ≈ 0.0
         @test markers.groups.accretion.t_accreted[1] ≈ 1.5e6
