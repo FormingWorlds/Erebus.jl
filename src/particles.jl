@@ -172,8 +172,9 @@ $(SIGNATURES)
 - `cfg::RedoxConfig`: Planetesimal redox configuration.
 
 # Keyword Arguments
-- `initial_xfe_bulk`: Bulk metal mass fraction array (or nothing)
+- `initial_xfe_bulk`: Bulk metal volume fraction array (or nothing)
 - `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
+- `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0)
 
 # Returns
 - Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m, nC_graphite_m, nCO_m, nCO2_m, nCH4_m)`
@@ -203,7 +204,8 @@ function setup_marker_redox_properties(
 
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
-    rho_ratio = Float64(rho_metal) / max(Float64(rhosolid), 100.0)
+    rho_s = max(Float64(rhosolid), 100.0)
+    rho_m = max(Float64(rho_metal), 100.0)
 
     nFe0_m = zeros(Float64, marknum)
     nFe2_m = zeros(Float64, marknum)
@@ -218,7 +220,7 @@ function setup_marker_redox_properties(
 
     for m in 1:marknum
         xfe = initial_xfe_bulk !== nothing ? initial_xfe_bulk[m] : 0.0
-        w_fe = clamp(xfe * rho_ratio, 0.0, 1.0)
+        w_fe = metal_volume_to_mass_fraction(xfe, rho_m, rho_s)
         n_fe0 = w_fe / M_Fe
         w_sil = max(0.0, 1.0 - w_fe)
         n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
@@ -316,7 +318,8 @@ function update_marker_redox!(
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
     x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
-    rho_ratio = Float64(rho_metal) / max(Float64(rhosolid), 100.0)
+    rho_s = max(Float64(rhosolid), 100.0)
+    rho_m = max(Float64(rho_metal), 100.0)
 
     for m in 1:marknum
         n_c_gr = nC_graphite_m !== nothing ? nC_graphite_m[m] : 0.0
@@ -336,7 +339,7 @@ function update_marker_redox!(
         else
             nothing
         end
-        w_fe = xfe !== nothing ? clamp(xfe * rho_ratio, 0.0, 1.0) : nothing
+        w_fe = xfe !== nothing ? metal_volume_to_mass_fraction(xfe, rho_m, rho_s) : nothing
 
         if has_pyrolyzed
             # Preserve mutated iron states from dynamic redox reactions (pyrolysis)

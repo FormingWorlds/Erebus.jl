@@ -564,7 +564,7 @@ $(SIGNATURES)
 - `ycenter::Real`: Planet center y [m] (default: coords.ycenter or 70000.0)
 - `rplanet::Real`: Planet radius [m] (default: 50000.0)
 - `rho_metal::Real`: Metal density [kg/m^3] (default: 7000.0)
-- `core_radius_fraction::Real`: Optional radial fraction retained for interface compatibility (default: 0.5)
+- `core_radius_fraction::Real`: Optional radial fraction threshold (default: 0.5)
 - `phi_core_threshold::Real`: Metal volume fraction threshold for core membership [0, 1] (default: 0.40)
 - `V_marker::Union{Nothing,Real}`: Explicit marker cross-sectional area [m²]
 

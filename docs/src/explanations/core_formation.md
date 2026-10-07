@@ -276,7 +276,7 @@ Sulfur-poor metal differentiates faster due to its higher density contrast, wher
 
 ### Integrated Core Volatile Budgets
 
-Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets` with canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$. Core membership is determined by metal concentration threshold $\phi_{\text{fe}, m} \ge \phi_{\text{core\_threshold}}$ ($\phi_{\text{cut}} = 0.40$), identifying concentrated segregated metallic cores without artificial geometric cutoffs or spurious classification of undifferentiated chondritic rock:
+Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets` with canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$. Core membership is evaluated with the metal volume fraction threshold $\phi_{\text{fe}, m} \ge \phi_{\text{core\_threshold}}$, identifying concentrated segregated metallic core markers:
 
 $$M_{\text{core}, k} = \sum_{\phi_{\text{fe}, m} \ge \phi_{\text{cut}}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
 

@@ -534,15 +534,23 @@ function speciate_pyrolysis_carbon_redox!(
 
     dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
     if dn_fe0_smelted > 0.0
-        dphi_fe0 = (dn_fe0_smelted * M_Fe) * (Float64(rho_s) / Float64(rho_metal_val))
+        dw_fe0 = dn_fe0_smelted * M_Fe
+        phi_pack_val = 0.65
         if Xfe_bulk !== nothing
-            Xfe_bulk[m] = min(1.0, Xfe_bulk[m] + dphi_fe0)
-            if T >= 1213.0 && Xfem !== nothing
-                F_fe_local = compute_metal_melt_fraction(T)
-                Xfem[m] = min(1.0, Xfem[m] + dphi_fe0 * F_fe_local)
+            w_cur = metal_volume_to_mass_fraction(Xfe_bulk[m], rho_metal_val, rho_s)
+            w_new = min(1.0, w_cur + dw_fe0)
+            phi_new = metal_mass_to_volume_fraction(w_new, rho_metal_val, rho_s)
+            dphi_fe0 = max(0.0, min(phi_pack_val, phi_new) - Xfe_bulk[m])
+            Xfe_bulk[m] = min(phi_pack_val, phi_new)
+            F_fe_local = compute_metal_melt_fraction(T)
+            if F_fe_local > 0.0 && Xfem !== nothing
+                Xfem[m] = min(phi_pack_val, Xfem[m] + dphi_fe0 * F_fe_local)
             end
         elseif Xfem !== nothing
-            Xfem[m] = min(1.0, Xfem[m] + dphi_fe0)
+            w_cur = metal_volume_to_mass_fraction(Xfem[m], rho_metal_val, rho_s)
+            w_new = min(1.0, w_cur + dw_fe0)
+            phi_new = metal_mass_to_volume_fraction(w_new, rho_metal_val, rho_s)
+            Xfem[m] = min(phi_pack_val, phi_new)
         end
     end
 

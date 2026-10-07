@@ -10,7 +10,6 @@ using Erebus
         Xfem = [0.0] # Sub-eutectic: molten metal volume fraction is zero
         rho_s = 3000.0
         rho_metal = 7000.0
-        rho_ratio = rho_metal / rho_s
         redox_cfg = RedoxConfig(; active=true, segregation_redox=true)
         redox_props = setup_marker_redox_properties(
             1, redox_cfg; initial_xfe_bulk=Xfe_bulk, rhosolid=rho_s, rho_metal=rho_metal
@@ -28,7 +27,8 @@ using Erebus
             rho_metal=rho_metal,
         )
 
-        n_fe0_expected = (0.20 * rho_ratio) / Erebus.M_Fe
+        w_fe_expected = metal_volume_to_mass_fraction(0.20, rho_metal, rho_s)
+        n_fe0_expected = w_fe_expected / Erebus.M_Fe
         @test isapprox(redox_props.nFe0_m[1], n_fe0_expected; atol=1e-12)
 
         # Thermal cycling: heat above Fe-FeS eutectic (1300 K)
@@ -73,9 +73,15 @@ using Erebus
             rhosolid=rho_s,
             rho_metal=rho_metal,
         )
-        n_fe0_drained = (0.05 * rho_ratio) / Erebus.M_Fe
+        w_fe_drained = metal_volume_to_mass_fraction(0.05, rho_metal, rho_s)
+        n_fe0_drained = w_fe_drained / Erebus.M_Fe
         @test isapprox(redox_props.nFe0_m[1], n_fe0_drained; atol=1e-12)
         @test redox_props.nFe0_m[1] < n_fe0_expected
+
+        # Two-phase parcel conversion preserves silicate FeO at phi = 0.50
+        w_fe_50 = metal_volume_to_mass_fraction(0.50, rho_metal, rho_s)
+        @test isapprox(w_fe_50, 0.70; atol=1e-12)
+        @test isapprox(1.0 - w_fe_50, 0.30; atol=1e-12)
     end
 
     @testset "IOM Smelted Iron Preservation and Density Scaling" begin
@@ -95,15 +101,16 @@ using Erebus
         Xfem = [0.0]
         rho_s = 3000.0
         rho_metal = 7000.0
-        rho_ratio = rho_metal / rho_s
         redox_props = setup_marker_redox_properties(
             1, redox_cfg; initial_xfe_bulk=Xfe_bulk, rhosolid=rho_s, rho_metal=rho_metal
         )
 
-        # Initialise iron inventories before smelting (Fe3 = 0 so electrons reduce Fe2 to Fe0)
+        # Initialise iron inventories before smelting
+        # Fe3 = 0 so electrons reduce Fe2 to Fe0
         redox_props.nFe3_m[1] = 0.0
         redox_props.nFe2_m[1] = 2.0
-        redox_props.nFe0_m[1] = (0.05 * rho_ratio) / Erebus.M_Fe
+        w_fe_init = metal_volume_to_mass_fraction(0.05, rho_metal, rho_s)
+        redox_props.nFe0_m[1] = w_fe_init / Erebus.M_Fe
 
         Xfe_bulk_initial = Xfe_bulk[1]
         update_marker_pyrolysis!(
@@ -126,13 +133,17 @@ using Erebus
         @test Xfe_bulk[1] > Xfe_bulk_initial
         @test isapprox(Xfem[1], 0.0; atol=1e-15)
 
-        # Verify density scaling: dphi_fe0 = dw_fe0 * (rho_s / rho_metal)
+        # Verify exact two-phase conversion
         dphi_fe = Xfe_bulk[1] - Xfe_bulk_initial
         smelted_fe0 = redox_props.nFe0_m[1]
-        expected_dphi_fe =
-            (smelted_fe0 - (0.05 * rho_ratio) / Erebus.M_Fe) * Erebus.M_Fe * (rho_s / rho_metal)
+        w_fe_initial = metal_volume_to_mass_fraction(Xfe_bulk_initial, rho_metal, rho_s)
+        dw_fe = (smelted_fe0 - w_fe_initial / Erebus.M_Fe) * Erebus.M_Fe
+        expected_phi_fe = metal_mass_to_volume_fraction(
+            w_fe_initial + dw_fe, rho_metal, rho_s
+        )
+        expected_dphi_fe = expected_phi_fe - Xfe_bulk_initial
         @test isapprox(dphi_fe, expected_dphi_fe; rtol=1e-12)
-        @test isapprox(Xfe_bulk[1], Xfe_bulk_initial + expected_dphi_fe; rtol=1e-12)
+        @test isapprox(Xfe_bulk[1], expected_phi_fe; rtol=1e-12)
 
         # Verify preservation across follow-up update_marker_redox! call
         update_marker_redox!(
@@ -283,7 +294,7 @@ using Erebus
         @test isapprox(M_tot_C_final, M_tot_C_init; rtol=1e-12)
     end
 
-    @testset "Core Membership Classification on Undifferentiated vs Differentiated Bodies" begin
+    @testset "Core Membership on Undifferentiated vs Differentiated Bodies" begin
         # 1. Undifferentiated cold body with uniform chondritic metal (Xfe_bulk = 0.05)
         # All markers are within rplanet, but none exceed phi_core_threshold (0.40)
         marknum = 100
@@ -437,13 +448,13 @@ using Erebus
         Xfem = [0.02]
         rho_s = 3000.0
         rho_metal = 7000.0
-        rho_ratio = rho_metal / rho_s
         redox_props = setup_marker_redox_properties(
             1, redox_cfg; initial_xfe_bulk=Xfe_bulk, rhosolid=rho_s, rho_metal=rho_metal
         )
         redox_props.nFe3_m[1] = 0.0
         redox_props.nFe2_m[1] = 2.0
-        redox_props.nFe0_m[1] = (0.05 * rho_ratio) / Erebus.M_Fe
+        w_fe_init_ht = metal_volume_to_mass_fraction(0.05, rho_metal, rho_s)
+        redox_props.nFe0_m[1] = w_fe_init_ht / Erebus.M_Fe
 
         Xfe_bulk_init = Xfe_bulk[1]
         Xfem_init = Xfem[1]
@@ -471,7 +482,13 @@ using Erebus
 
         F_fe = Erebus.compute_metal_melt_fraction(1300.0)
         dphi_fe = Xfe_bulk[1] - Xfe_bulk_init
-        @test isapprox(dphi_fe, (redox_props.nFe0_m[1] - (0.05 * rho_ratio) / Erebus.M_Fe) * Erebus.M_Fe * (rho_s / rho_metal); rtol=1e-12)
+        w_cur_1 = metal_volume_to_mass_fraction(Xfe_bulk_init, rho_metal, rhosolidm[1])
+        dw_fe_1 = (redox_props.nFe0_m[1] - w_fe_init_ht / Erebus.M_Fe) * Erebus.M_Fe
+        expected_phi_1 = metal_mass_to_volume_fraction(
+            w_cur_1 + dw_fe_1, rho_metal, rhosolidm[1]
+        )
+        expected_dphi_1 = expected_phi_1 - Xfe_bulk_init
+        @test isapprox(dphi_fe, expected_dphi_1; rtol=1e-12)
         @test isapprox(Xfem[1], Xfem_init + dphi_fe * F_fe; rtol=1e-12)
 
         # Case 2: tm with out-of-bounds phase index fallback to rhosolidm[1]
@@ -498,7 +515,12 @@ using Erebus
             tm=tm_oob,
             rhosolidm=rhosolidm,
         )
-        dphi_fe_c2 = (redox_props.nFe0_m[1] - n_fe0_c1) * Erebus.M_Fe * (rhosolidm[1] / rho_metal)
+        w_cur_2 = metal_volume_to_mass_fraction(Xfe_bulk_c1, rho_metal, rhosolidm[1])
+        dw_fe_2 = (redox_props.nFe0_m[1] - n_fe0_c1) * Erebus.M_Fe
+        expected_phi_2 = metal_mass_to_volume_fraction(
+            w_cur_2 + dw_fe_2, rho_metal, rhosolidm[1]
+        )
+        dphi_fe_c2 = expected_phi_2 - Xfe_bulk_c1
         @test isapprox(Xfe_bulk[1], Xfe_bulk_c1 + dphi_fe_c2; rtol=1e-12)
         @test isapprox(Xfem[1], Xfem_c1 + dphi_fe_c2 * F_fe; rtol=1e-12)
 
@@ -525,8 +547,44 @@ using Erebus
             tm=nothing,
             rhosolidm=rhosolidm,
         )
-        dphi_fe_c3 = (redox_props.nFe0_m[1] - n_fe0_c2) * Erebus.M_Fe * (rhosolidm[1] / rho_metal)
+        w_cur_3 = metal_volume_to_mass_fraction(Xfe_bulk_c2, rho_metal, rhosolidm[1])
+        dw_fe_3 = (redox_props.nFe0_m[1] - n_fe0_c2) * Erebus.M_Fe
+        expected_phi_3 = metal_mass_to_volume_fraction(
+            w_cur_3 + dw_fe_3, rho_metal, rhosolidm[1]
+        )
+        dphi_fe_c3 = expected_phi_3 - Xfe_bulk_c2
         @test isapprox(Xfe_bulk[1], Xfe_bulk_c2 + dphi_fe_c3; rtol=1e-12)
         @test isapprox(Xfem[1], Xfem_c2 + dphi_fe_c3 * F_fe; rtol=1e-12)
+
+        # Case 4: Xfe_bulk === nothing and Xfem !== nothing
+        X_refr_C[1] = 0.03
+        redox_props.nFe2_m[1] = 2.0
+        Xfem_c3 = [0.04]
+        n_fe0_c3 = redox_props.nFe0_m[1]
+        update_marker_pyrolysis!(
+            tkm,
+            dt,
+            phim,
+            X_refr_C,
+            X_refr_N,
+            X_refr_H,
+            refractory_cfg;
+            redox_props=redox_props,
+            redox_cfg=redox_cfg,
+            Xfem=Xfem_c3,
+            Xfe_bulk=nothing,
+            rhosolid=rho_s,
+            rho_metal=rho_metal,
+            tm=nothing,
+            rhosolidm=rhosolidm,
+        )
+        w_cur_4 = metal_volume_to_mass_fraction(0.04, rho_metal, rhosolidm[1])
+        dw_fe_4 = (redox_props.nFe0_m[1] - n_fe0_c3) * Erebus.M_Fe
+        expected_phi_4 = metal_mass_to_volume_fraction(
+            w_cur_4 + dw_fe_4, rho_metal, rhosolidm[1]
+        )
+        @test isapprox(Xfem_c3[1], expected_phi_4; rtol=1e-12)
+        w_conv = metal_volume_to_mass_fraction(Xfem_c3[1], rho_metal, rhosolidm[1])
+        @test isapprox(w_conv, w_cur_4 + dw_fe_4; rtol=1e-12)
     end
 end
