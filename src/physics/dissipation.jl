@@ -63,7 +63,7 @@ function compute_shear_heating!(
         ry_i = RY[i, j]
         if hydrofracture && TEN !== nothing
             Peff_x1 = 0.5 * (pr[i, j - 1] + pr[i, j] - pf[i, j - 1] - pf[i, j])
-            sigma_tx1 = 0.5 * (TEN[i, j - 1] + TEN[i, j])
+            sigma_tx1 = 0.5 * (TEN[i, j - 1] + TEN[i - 1, j - 1])
             phi_x1 = if PHIX !== nothing
                 PHIX[i, j - 1]
             elseif PHI !== nothing
@@ -85,7 +85,7 @@ function compute_shear_heating!(
             )
 
             Peff_x2 = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
-            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i, j + 1])
+            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i - 1, j])
             phi_x2 = if PHIX !== nothing
                 PHIX[i, j]
             elseif PHI !== nothing
@@ -107,7 +107,7 @@ function compute_shear_heating!(
             )
 
             Peff_y1 = 0.5 * (pr[i - 1, j] + pr[i, j] - pf[i - 1, j] - pf[i, j])
-            sigma_ty1 = 0.5 * (TEN[i - 1, j] + TEN[i, j])
+            sigma_ty1 = 0.5 * (TEN[i - 1, j] + TEN[i - 1, j - 1])
             phi_y1 = if PHIY !== nothing
                 PHIY[i - 1, j]
             elseif PHI !== nothing
@@ -129,7 +129,7 @@ function compute_shear_heating!(
             )
 
             Peff_y2 = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
-            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i + 1, j])
+            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j - 1])
             phi_y2 = if PHIY !== nothing
                 PHIY[i, j]
             elseif PHI !== nothing

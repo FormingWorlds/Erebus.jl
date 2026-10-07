@@ -22,20 +22,39 @@ using Erebus
 
         # 1. Verification of hydrofracture resistance reduction under overpressure
         R_inactive = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_inactive, sigma_t, phi_f;
-            kphim0=k0, phim0_val=phim0, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_inactive,
+            sigma_t,
+            phi_f;
+            kphim0=k0,
+            phim0_val=phim0,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
         R_active = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_active, sigma_t, phi_f;
-            kphim0=k0, phim0_val=phim0, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_active,
+            sigma_t,
+            phi_f;
+            kphim0=k0,
+            phim0_val=phim0,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
 
         @test isapprox(R_inactive, r_base; rtol=1e-12)
         @test R_active < R_inactive
 
         keff_expected = Erebus.compute_hydrofracture_permeability(
-            kphi_expected, Peff_active, sigma_t;
-            active=true, kappa_frac=kappa_frac, gamma=gamma, kmax=kmax
+            kphi_expected,
+            Peff_active,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma,
+            kmax=kmax,
         )
         expected_ratio = kphi_expected / keff_expected
         @test isapprox(R_active / r_base, expected_ratio; rtol=1e-10)
@@ -49,22 +68,45 @@ using Erebus
 
         # 3. Guard against zero or negative porosity and zero reference permeability
         R_zero_phi = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_active, sigma_t, 0.0;
-            kphim0=k0, phim0_val=phim0, phimin_val=1e-4, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_active,
+            sigma_t,
+            0.0;
+            kphim0=k0,
+            phim0_val=phim0,
+            phimin_val=1e-4,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
         @test isfinite(R_zero_phi)
         @test R_zero_phi <= r_base
 
         R_neg_phi = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_active, sigma_t, -0.05;
-            kphim0=k0, phim0_val=phim0, phimin_val=1e-4, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_active,
+            sigma_t,
+            -0.05;
+            kphim0=k0,
+            phim0_val=phim0,
+            phimin_val=1e-4,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
         @test isfinite(R_neg_phi)
         @test isapprox(R_neg_phi, R_zero_phi; rtol=1e-12)
 
         R_zero_k0 = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_active, sigma_t, phi_f;
-            kphim0=0.0, phim0_val=phim0, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_active,
+            sigma_t,
+            phi_f;
+            kphim0=0.0,
+            phim0_val=phim0,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
         @test isfinite(R_zero_k0)
         ffrac_expected = Erebus.compute_hydrofracture_factor(
@@ -75,34 +117,53 @@ using Erebus
         # 4. Extreme overpressure upper bound capping at kmax
         Peff_extreme = -1.0e11
         R_ext = Erebus.evaluate_hydrofracture_resistance(
-            r_base, Peff_extreme, sigma_t, phi_f;
-            kphim0=k0, phim0_val=phim0, kappa_frac=kappa_frac, gamma_frac=gamma, k_frac_max=kmax
+            r_base,
+            Peff_extreme,
+            sigma_t,
+            phi_f;
+            kphim0=k0,
+            phim0_val=phim0,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
         )
         keff_capped = Erebus.compute_hydrofracture_permeability(
-            kphi_expected, Peff_extreme, sigma_t;
-            active=true, kappa_frac=kappa_frac, gamma=gamma, kmax=kmax
+            kphi_expected,
+            Peff_extreme,
+            sigma_t;
+            active=true,
+            kappa_frac=kappa_frac,
+            gamma=gamma,
+            kmax=kmax,
         )
         @test isapprox(keff_capped, kmax; rtol=1e-10)
         @test isapprox(R_ext, r_base * (kphi_expected / kmax); rtol=1e-10)
 
         # 5. Verification of minimum resistance floor enforcement when kphi > 0
         R_floored = Erebus.evaluate_hydrofracture_resistance(
-            1.0e-10, Peff_active, sigma_t, phi_f;
-            kphim0=k0, phim0_val=phim0, kappa_frac=kappa_frac, gamma_frac=gamma,
-            k_frac_max=kmax, rx_floor_prefactor=1.0e-5
+            1.0e-10,
+            Peff_active,
+            sigma_t,
+            phi_f;
+            kphim0=k0,
+            phim0_val=phim0,
+            kappa_frac=kappa_frac,
+            gamma_frac=gamma,
+            k_frac_max=kmax,
+            rx_floor_prefactor=1.0e-5,
         )
         expected_floor = 1.0e-5 / kmax
         @test isapprox(R_floored, expected_floor; rtol=1e-12)
         @test R_floored >= expected_floor
 
-        # 6. Face orientation interpolation of cell-centered tensile strength
-        # X-face (vertical face) averages horizontally across j
-        # Y-face (horizontal face) averages vertically across i
+        # 6. Face orientation interpolation of basic-node tensile strength
+        # X-face (vertical face) is flanked vertically by basic nodes (i-1, j) and (i, j)
+        # Y-face (horizontal face) is flanked horizontally by basic nodes (i, j-1) and (i, j)
         TEN_grid = [1.0e6 3.0e6; 5.0e6 7.0e6]
-        sigma_t_x_face = 0.5 * (TEN_grid[1, 1] + TEN_grid[1, 2])
-        sigma_t_y_face = 0.5 * (TEN_grid[1, 1] + TEN_grid[2, 1])
-        @test isapprox(sigma_t_x_face, 2.0e6; rtol=1e-12)
-        @test isapprox(sigma_t_y_face, 3.0e6; rtol=1e-12)
+        sigma_t_x_face = 0.5 * (TEN_grid[2, 1] + TEN_grid[1, 1])
+        sigma_t_y_face = 0.5 * (TEN_grid[1, 2] + TEN_grid[1, 1])
+        @test isapprox(sigma_t_x_face, 3.0e6; rtol=1e-12)
+        @test isapprox(sigma_t_y_face, 2.0e6; rtol=1e-12)
         @test sigma_t_x_face != sigma_t_y_face
     end
 
@@ -253,7 +314,9 @@ using Erebus
         @test isapprox(eta_liq, etamin_val; rtol=1e-12)
 
         # Matrix melt softening bypass when melting_active is true (single source of truth)
-        eta_bypassed = Erebus.etatotal_rocks(t_supersolidus_1, type_rock; melting_active=true)
+        eta_bypassed = Erebus.etatotal_rocks(
+            t_supersolidus_1, type_rock; melting_active=true
+        )
         @test isapprox(eta_bypassed, Erebus.etasolidm[type_rock]; rtol=1e-12)
         @test eta_bypassed > eta_super1
     end
@@ -312,33 +375,35 @@ using Erebus
         # Vertical face gravity interpolation from gy: (i, j), (i+1, j), (i, j+1), (i+1, j+1)
         gy_grid = reshape(collect(1.0:Float64(Ny1_g * Nx1_g)), Ny1_g, Nx1_g)
         i_test, j_test = 2, 2
-        gy_f = 0.25 * (
-            gy_grid[i_test, j_test] +
-            gy_grid[i_test + 1, j_test] +
-            gy_grid[i_test, j_test + 1] +
-            gy_grid[i_test + 1, j_test + 1]
-        )
-        expected_gy_f = 0.25 * (
-            gy_grid[2, 2] + gy_grid[3, 2] + gy_grid[2, 3] + gy_grid[3, 3]
-        )
+        gy_f =
+            0.25 * (
+                gy_grid[i_test, j_test] +
+                gy_grid[i_test + 1, j_test] +
+                gy_grid[i_test, j_test + 1] +
+                gy_grid[i_test + 1, j_test + 1]
+            )
+        expected_gy_f =
+            0.25 * (gy_grid[2, 2] + gy_grid[3, 2] + gy_grid[2, 3] + gy_grid[3, 3])
         @test isapprox(gy_f, expected_gy_f; rtol=1e-12)
 
         # Boundary clamping verification at edge cell
         i_edge, j_edge = Ny_g, Nx_g
         i_next = min(i_edge + 1, Ny1_g)
         j_next = min(j_edge + 1, Nx1_g)
-        gy_edge_f = 0.25 * (
-            gy_grid[i_edge, j_edge] +
-            gy_grid[i_next, j_edge] +
-            gy_grid[i_edge, j_next] +
-            gy_grid[i_next, j_next]
-        )
-        expected_edge_f = 0.25 * (
-            gy_grid[Ny_g, Nx_g] +
-            gy_grid[Ny1_g, Nx_g] +
-            gy_grid[Ny_g, Nx1_g] +
-            gy_grid[Ny1_g, Nx1_g]
-        )
+        gy_edge_f =
+            0.25 * (
+                gy_grid[i_edge, j_edge] +
+                gy_grid[i_next, j_edge] +
+                gy_grid[i_edge, j_next] +
+                gy_grid[i_next, j_next]
+            )
+        expected_edge_f =
+            0.25 * (
+                gy_grid[Ny_g, Nx_g] +
+                gy_grid[Ny1_g, Nx_g] +
+                gy_grid[Ny_g, Nx1_g] +
+                gy_grid[Ny1_g, Nx1_g]
+            )
         @test isfinite(gy_edge_f)
         @test isapprox(gy_edge_f, expected_edge_f; rtol=1e-12)
     end
@@ -390,20 +455,70 @@ using Erebus
         # Call with PHIX and PHIY explicitly supplied
         R6 = zeros(Ny1 * Nx1 * 6)
         L6 = Erebus.assemble_hydromechanical_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R6;
-            coords=coords, hydrofracture=true, pr=pr_test, pf=pf_test, TEN=TEN_test,
-            PHIX=PHIX, PHIY=PHIY,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R6;
+            coords=coords,
+            hydrofracture=true,
+            pr=pr_test,
+            pf=pf_test,
+            TEN=TEN_test,
+            PHIX=PHIX,
+            PHIY=PHIY,
         )
         @test size(L6, 1) == Ny1 * Nx1 * 6
         @test isfinite(L6[1, 1])
 
         R4 = zeros(Ny1 * Nx1 * 4)
         L4 = Erebus.assemble_hydromechanical_4var_lse!(
-            ETA, ETAP, GGG, GGGP, SXY0, SXX0, RHOX, RHOY, RHOFX, RHOFY,
-            RX, RY, ETAPHI, BETAPHI, PHI, gx, gy, pr0, pf0, DMP, dt, R4;
-            coords=coords, hydrofracture=true, pr=pr_test, pf=pf_test, TEN=TEN_test,
-            PHIX=PHIX, PHIY=PHIY,
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt,
+            R4;
+            coords=coords,
+            hydrofracture=true,
+            pr=pr_test,
+            pf=pf_test,
+            TEN=TEN_test,
+            PHIX=PHIX,
+            PHIY=PHIY,
         )
         @test size(L4, 1) == Ny1 * Nx1 * 4
         @test isfinite(L4[1, 1])
@@ -411,8 +526,21 @@ using Erebus
         qxD = zeros(Ny1, Nx1)
         qyD = zeros(Ny1, Nx1)
         Erebus.reconstruct_darcy_fluxes!(
-            qxD, qyD, pf_test, RHOFX, RHOFY, RX, RY, gx, gy, coords;
-            hydrofracture=true, pr=pr_test, TEN=TEN_test, PHIX=PHIX, PHIY=PHIY,
+            qxD,
+            qyD,
+            pf_test,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            gx,
+            gy,
+            coords;
+            hydrofracture=true,
+            pr=pr_test,
+            TEN=TEN_test,
+            PHIX=PHIX,
+            PHIY=PHIY,
         )
         @test all(isfinite, qxD)
         @test all(isfinite, qyD)
@@ -421,28 +549,67 @@ using Erebus
         SXY_test = fill(1.0e5, Ny, Nx)
         SXX_test = fill(1.0e5, Ny1, Nx1)
         Erebus.compute_shear_heating!(
-            HS, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD, qyD, PHI, ETAPHI,
-            pr_test, pf_test;
-            hydrofracture=true, TEN=TEN_test, PHIX=PHIX, PHIY=PHIY,
+            HS,
+            ETA,
+            SXY_test,
+            ETAP,
+            SXX_test,
+            RX,
+            RY,
+            qxD,
+            qyD,
+            PHI,
+            ETAPHI,
+            pr_test,
+            pf_test;
+            hydrofracture=true,
+            TEN=TEN_test,
+            PHIX=PHIX,
+            PHIY=PHIY,
         )
         @test all(isfinite, HS)
         @test all(HS .>= 0.0)
 
         # Call with PHIX === nothing and PHI === nothing (fallback to phimin_val)
         Erebus.reconstruct_darcy_fluxes!(
-            qxD, qyD, pf_test, RHOFX, RHOFY, RX, RY, gx, gy, coords;
-            hydrofracture=true, pr=pr_test, TEN=TEN_test,
-            PHI=nothing, PHIX=nothing, PHIY=nothing,
+            qxD,
+            qyD,
+            pf_test,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            gx,
+            gy,
+            coords;
+            hydrofracture=true,
+            pr=pr_test,
+            TEN=TEN_test,
+            PHI=nothing,
+            PHIX=nothing,
+            PHIY=nothing,
         )
         @test all(isfinite, qxD)
 
         Erebus.compute_shear_heating!(
-            HS, ETA, SXY_test, ETAP, SXX_test, RX, RY, qxD, qyD, PHI, ETAPHI,
-            pr_test, pf_test;
-            hydrofracture=true, TEN=TEN_test,
-            PHIX=nothing, PHIY=nothing,
+            HS,
+            ETA,
+            SXY_test,
+            ETAP,
+            SXX_test,
+            RX,
+            RY,
+            qxD,
+            qyD,
+            PHI,
+            ETAPHI,
+            pr_test,
+            pf_test;
+            hydrofracture=true,
+            TEN=TEN_test,
+            PHIX=nothing,
+            PHIY=nothing,
         )
         @test all(isfinite, HS)
     end
 end
-

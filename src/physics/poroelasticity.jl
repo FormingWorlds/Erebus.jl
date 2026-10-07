@@ -429,4 +429,3 @@ function evaluate_hydrofracture_resistance(
         return max(Float64(r_base) / ffrac, r_floor)
     end
 end
-

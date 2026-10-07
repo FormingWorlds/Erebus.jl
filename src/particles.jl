@@ -2822,9 +2822,7 @@ Fill grid nodes with zero marker weight (WT <= 0.0) by averaging non-empty ortho
 neighbours, or assigning background_val if no non-empty neighbours exist.
 """
 function fill_zero_weight_nodes!(
-    A::AbstractMatrix{T},
-    WT::AbstractMatrix{<:Real};
-    background_val::Real,
+    A::AbstractMatrix{T}, WT::AbstractMatrix{<:Real}; background_val::Real
 ) where {T<:Real}
     Ny, Nx = size(WT)
     @inbounds for j in 1:Nx, i in 1:Ny
