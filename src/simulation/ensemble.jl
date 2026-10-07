@@ -70,8 +70,19 @@ end
 Load an ensemble sweep specification from a TOML file or string.
 """
 function load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
-    parsed = if isfile(source)
-        TOML.parsefile(source)
+    has_newlines = occursin('\n', source)
+    resolved_source = if !has_newlines && isfile(source)
+        source
+    elseif !has_newlines && isfile(joinpath(@__DIR__, "..", "..", source))
+        normpath(joinpath(@__DIR__, "..", "..", source))
+    else
+        nothing
+    end
+
+    parsed = if resolved_source !== nothing
+        TOML.parsefile(resolved_source)
+    elseif endswith(source, ".toml")
+        throw(SystemError("opening configuration file: '$source'", 2))
     else
         TOML.parse(source)
     end
@@ -86,22 +97,22 @@ function load_ensemble_config(source::AbstractString)::EnsembleSweepSpec
     )
 
     base_path_raw = String(base_sec["config"])
-    base_cfg_path = if isfile(source) && !isabspath(base_path_raw)
-        cand1 = joinpath(dirname(source), base_path_raw)
+    base_cfg_path = if resolved_source !== nothing && !isabspath(base_path_raw)
+        cand1 = joinpath(dirname(resolved_source), base_path_raw)
         if isfile(cand1)
             cand1
         elseif isfile(base_path_raw)
             base_path_raw
         else
-            cand_pkg = joinpath(dirname(dirname(@__DIR__)), base_path_raw)
-            isfile(cand_pkg) ? cand_pkg : cand1
+            cand_pkg = joinpath(@__DIR__, "..", "..", base_path_raw)
+            isfile(cand_pkg) ? normpath(cand_pkg) : cand1
         end
     else
         if isfile(base_path_raw)
             base_path_raw
         else
-            cand_pkg = joinpath(dirname(dirname(@__DIR__)), base_path_raw)
-            isfile(cand_pkg) ? cand_pkg : base_path_raw
+            cand_pkg = joinpath(@__DIR__, "..", "..", base_path_raw)
+            isfile(cand_pkg) ? normpath(cand_pkg) : base_path_raw
         end
     end
 
