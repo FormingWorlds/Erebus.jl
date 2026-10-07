@@ -332,3 +332,33 @@ const SPECIES_AMU = Dict{Symbol,Float64}(
     :SO2 => M_SO2 * 1000.0,
     :S2 => M_S2 * 1000.0,
 )
+
+"""
+    metal_volume_to_mass_fraction(phi_fe::Real, rho_metal::Real, rho_solid::Real)::Float64
+
+Convert metal volume fraction `phi_fe` to parcel metal mass fraction `w_fe`.
+"""
+@inline function metal_volume_to_mass_fraction(
+    phi_fe::Real, rho_metal::Real, rho_solid::Real
+)::Float64
+    phi = clamp(Float64(phi_fe), 0.0, 1.0)
+    rho_m = max(Float64(rho_metal), 100.0)
+    rho_s = max(Float64(rho_solid), 100.0)
+    denom = phi * rho_m + (1.0 - phi) * rho_s
+    return (phi * rho_m) / denom
+end
+
+"""
+    metal_mass_to_volume_fraction(w_fe::Real, rho_metal::Real, rho_solid::Real)::Float64
+
+Convert parcel metal mass fraction `w_fe` to metal volume fraction `phi_fe`.
+"""
+@inline function metal_mass_to_volume_fraction(
+    w_fe::Real, rho_metal::Real, rho_solid::Real
+)::Float64
+    w = clamp(Float64(w_fe), 0.0, 1.0)
+    rho_m = max(Float64(rho_metal), 100.0)
+    rho_s = max(Float64(rho_solid), 100.0)
+    denom = (w / rho_m) + ((1.0 - w) / rho_s)
+    return (w / rho_m) / denom
+end

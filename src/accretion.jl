@@ -812,8 +812,17 @@ function _init_accreted_marker!(
         w_FeO_silicate = 0.15
         M_FeO = 0.071844
         xfe = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk[m] : 0.0
-        n_fe0 = max(0.0, xfe) / M_Fe
-        w_sil = max(0.0, 1.0 - xfe)
+        rho_s = if cfg !== nothing && markers.tm[m] in 1:length(cfg.materials.rhosolidm)
+            cfg.materials.rhosolidm[markers.tm[m]]
+        elseif cfg !== nothing && !isempty(cfg.materials.rhosolidm)
+            cfg.materials.rhosolidm[1]
+        else
+            3000.0
+        end
+        rho_m = cfg !== nothing ? cfg.coreformation.rho_metal : 7000.0
+        w_fe = metal_volume_to_mass_fraction(xfe, rho_m, rho_s)
+        n_fe0 = w_fe / M_Fe
+        w_sil = max(0.0, 1.0 - w_fe)
         n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
         x_ferric = cfg !== nothing ? clamp(cfg.redox.initial_x_ferric, 0.0, 1.0) : 0.05
         n_fe3 = n_fe_sil * x_ferric

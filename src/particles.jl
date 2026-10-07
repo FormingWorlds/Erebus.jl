@@ -163,6 +163,36 @@ function setup_marker_hcnspo_properties(
 end
 
 """
+Evaluate marker silicate matrix density from phase or fallback parameters.
+
+# Parameters
+- `m`: Marker index.
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
+- `rhosolid_fallback`: Fallback silicate density [kg/m^3].
+
+# Returns
+- Silicate density clamped to minimum 100.0 kg/m^3.
+"""
+@inline function _marker_silicate_density(
+    m::Integer,
+    tm::Union{Nothing,AbstractVector{<:Integer}},
+    rhosolidm::Union{Nothing,AbstractVector{Float64}},
+    rhosolid_fallback::Real,
+)
+    if tm !== nothing &&
+        rhosolidm !== nothing &&
+        m <= length(tm) &&
+        tm[m] in 1:length(rhosolidm)
+        return max(Float64(rhosolidm[tm[m]]), 100.0)
+    elseif rhosolidm !== nothing && !isempty(rhosolidm)
+        return max(Float64(rhosolidm[1]), 100.0)
+    else
+        return max(Float64(rhosolid_fallback), 100.0)
+    end
+end
+
+"""
 Set up marker redox state and iron speciation tracking arrays.
 
 $(SIGNATURES)
@@ -172,8 +202,13 @@ $(SIGNATURES)
 - `cfg::RedoxConfig`: Planetesimal redox configuration.
 
 # Keyword Arguments
-- `initial_xfe_bulk`: Bulk metal mass fraction array (or nothing)
+- `initial_xfe_bulk`: Bulk metal volume fraction array (or nothing)
+- `tkm`: Marker temperature array [K] (or nothing)
+- `pfm`: Marker pressure array [Pa] (or nothing)
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
 - `rhosolid`: Silicate density [kg/m^3] (default: 3000.0)
+- `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0)
 
 # Returns
 - Named tuple `(; nFe0_m, nFe2_m, nFe3_m, deltaIW_m, nC_graphite_m, nCO_m, nCO2_m, nCH4_m)`
@@ -184,6 +219,10 @@ function setup_marker_redox_properties(
     initial_xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     tkm::Union{Nothing,AbstractVector{Float64}}=nothing,
     pfm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    tm::Union{Nothing,AbstractVector{<:Integer}}=nothing,
+    rhosolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    rhosolid::Real=3000.0,
+    rho_metal::Real=7000.0,
 )
     if !cfg.active
         return (;
@@ -201,6 +240,7 @@ function setup_marker_redox_properties(
 
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
+    rho_m = max(Float64(rho_metal), 100.0)
 
     nFe0_m = zeros(Float64, marknum)
     nFe2_m = zeros(Float64, marknum)
@@ -214,9 +254,11 @@ function setup_marker_redox_properties(
     x_ferric = clamp(cfg.initial_x_ferric, 0.0, 1.0)
 
     for m in 1:marknum
+        rho_s = _marker_silicate_density(m, tm, rhosolidm, rhosolid)
         xfe = initial_xfe_bulk !== nothing ? initial_xfe_bulk[m] : 0.0
-        n_fe0 = max(0.0, xfe) / M_Fe
-        w_sil = max(0.0, 1.0 - xfe)
+        w_fe = metal_volume_to_mass_fraction(xfe, rho_m, rho_s)
+        n_fe0 = w_fe / M_Fe
+        w_sil = max(0.0, 1.0 - w_fe)
         n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
 
         n_fe3 = n_fe_sil * x_ferric
@@ -274,8 +316,13 @@ $(SIGNATURES)
 - `cfg`: `RedoxConfig`.
 
 # Keyword Arguments
-- `Xfem`: Optional marker metal mass fraction array (for core segregation coupling).
+- `Xfe_bulk`: Optional marker bulk metal volume share array (for core segregation coupling).
+- `Xfem`: Optional marker molten metal volume share array.
 - `XWsolidm`: Optional marker wet solid fraction array (for serpentinization coupling).
+- `tm`: Optional marker material phase array.
+- `rhosolidm`: Optional material solid density array.
+- `rhosolid`: Silicate density [kg/m^3] (default: 3000.0).
+- `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0).
 
 # Returns
 - `nothing`
@@ -285,8 +332,13 @@ function update_marker_redox!(
     tkm::AbstractVector{Float64},
     pfm::AbstractVector{Float64},
     cfg::RedoxConfig;
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
     XWsolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    tm::Union{Nothing,AbstractVector{<:Integer}}=nothing,
+    rhosolidm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    rhosolid::Real=3000.0,
+    rho_metal::Real=7000.0,
 )
     if !cfg.active || redox_props === nothing || redox_props.deltaIW_m === nothing
         return nothing
@@ -308,8 +360,10 @@ function update_marker_redox!(
     w_FeO_silicate = 0.15
     M_FeO = 0.071844
     x_fe_init = clamp(cfg.initial_x_ferric, 0.0, 1.0)
+    rho_m = max(Float64(rho_metal), 100.0)
 
     for m in 1:marknum
+        rho_s = _marker_silicate_density(m, tm, rhosolidm, rhosolid)
         n_c_gr = nC_graphite_m !== nothing ? nC_graphite_m[m] : 0.0
         n_co = nCO_m !== nothing ? nCO_m[m] : 0.0
         n_co2 = nCO2_m !== nothing ? nCO2_m[m] : 0.0
@@ -318,6 +372,16 @@ function update_marker_redox!(
         has_pyrolyzed =
             cfg.pyrolysis_redox &&
             (n_c_gr > 1.0e-12 || n_co > 1.0e-12 || n_co2 > 1.0e-12 || n_ch4 > 1.0e-12)
+
+        # Metal segregation coupling: evaluate bulk metal volume share
+        xfe = if Xfe_bulk !== nothing
+            max(0.0, Float64(Xfe_bulk[m]))
+        elseif Xfem !== nothing
+            max(0.0, Float64(Xfem[m]))
+        else
+            nothing
+        end
+        w_fe = xfe !== nothing ? metal_volume_to_mass_fraction(xfe, rho_m, rho_s) : nothing
 
         if has_pyrolyzed
             # Preserve mutated iron states from dynamic redox reactions (pyrolysis)
@@ -339,18 +403,16 @@ function update_marker_redox!(
             end
 
             # Metal segregation coupling: drain metallic Fe(0) as metal segregates to core
-            if cfg.segregation_redox && Xfem !== nothing
-                xfe = max(0.0, Xfem[m])
-                n_fe0 = min(nFe0_m[m], xfe / M_Fe)
+            if cfg.segregation_redox && w_fe !== nothing
+                n_fe0 = min(nFe0_m[m], w_fe / M_Fe)
             else
                 n_fe0 = nFe0_m[m]
             end
         else
             # Metal segregation coupling: drain metallic Fe(0) as metal segregates
-            if cfg.segregation_redox && Xfem !== nothing
-                xfe = max(0.0, Xfem[m])
-                n_fe0 = xfe / M_Fe
-                w_sil = max(0.0, 1.0 - xfe)
+            if cfg.segregation_redox && w_fe !== nothing
+                n_fe0 = w_fe / M_Fe
+                w_sil = max(0.0, 1.0 - w_fe)
                 n_fe_sil = (w_sil * w_FeO_silicate) / M_FeO
             else
                 n_fe0 = nFe0_m[m]

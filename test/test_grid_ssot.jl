@@ -174,7 +174,7 @@ using Test
         ym = fill(yc, nmarks)
         tm = fill(1, nmarks)
         tkm = fill(1500.0, nmarks)
-        Xfe = fill(0.1, nmarks)
+        Xfe = fill(0.5, nmarks)
         coords_custom = GridCoordinates(33, 33; xsize=140000.0, ysize=140000.0)
 
         # Passing coords uses marker_area(coords)
@@ -212,7 +212,7 @@ using Test
         expected_coords_area = coords_custom.dxm * coords_custom.dym
         ratio = budgets_with_coords.M_core_metal / budgets_no_coords.M_core_metal
         @test isapprox(ratio, expected_coords_area / expected_empirical_area; rtol=1e-10)
-        expected_total_m_core = (pi * rp^2) * (2.0 * 10000.0) * 7000.0 * 0.1
+        expected_total_m_core = (pi * rp^2) * (2.0 * 10000.0) * 7000.0 * 0.5
         @test isapprox(budgets_no_coords.M_core_metal, expected_total_m_core; rtol=1e-10)
     end
 end

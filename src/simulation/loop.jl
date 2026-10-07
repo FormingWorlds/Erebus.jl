@@ -1478,6 +1478,8 @@ function simulation_loop(
                                 redox_props=redox_props,
                                 redox_cfg=cfg.redox,
                                 Xfem=Xfem,
+                                Xfe_bulk=Xfe_bulk,
+                                rho_metal=rho_metal_val,
                             )
                             dhp_p
                         else

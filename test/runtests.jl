@@ -74,6 +74,7 @@ unit_tests = [
     "test_volatile_init.jl",
     "test_degassing_budgets.jl",
     "test_hydromech_fixes.jl",
+    "test_redox_metal.jl",
 ]
 
 integration_tests = [

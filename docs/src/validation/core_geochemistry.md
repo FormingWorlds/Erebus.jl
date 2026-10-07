@@ -41,8 +41,9 @@ Key constitutive relations validated on this page include:
 - **Phase Equilibration in the Silicate Melt Frame:**
   Metal-silicate volatile partitioning occurs between liquid metal and molten silicate:
   $$C_{i,\text{sil\_melt}} = \frac{C_{i,\text{sil\_bulk}}}{F_{\text{melt}}}$$
-  For an unconstrained system with total volatile mass $M_{i,\text{tot}} = m_{\text{sil}} C_{i,\text{sil\_bulk}} + m_{\text{met}} C_{i,\text{met}}$, the thermodynamic equilibrium concentrations satisfy:
-  $$C_{i,\text{sil\_melt}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} F_{\text{melt}} + m_{\text{met}} D_i}, \quad C_{i,\text{met}}^{\text{eq}} = D_i \cdot C_{i,\text{sil\_melt}}^{\text{eq}}, \quad C_{i,\text{sil\_bulk}}^{\text{eq}} = F_{\text{melt}} \cdot C_{i,\text{sil\_melt}}^{\text{eq}}$$
+  For an unconstrained system with total volatile mass $M_{i,\text{tot}} = m_{\text{sil}} C_{i,\text{sil\_bulk}} + m_{\text{met}} C_{i,\text{met}}$ where interacting metal mass is evaluated from bulk metal volume share $m_{\text{met}} = \phi_{\text{fe}} \rho_{\text{metal}}$ with $\phi_{\text{fe}} = X_{\text{fe,bulk}}$, the thermodynamic equilibrium concentrations satisfy:
+  $$C_{i,\text{sil\_melt}}^{\text{eq}} = \frac{M_{i,\text{tot}}}{m_{\text{sil}} F_{\text{melt,eff}} + m_{\text{met}} D_i}, \quad C_{i,\text{met}}^{\text{eq}} = D_i \cdot C_{i,\text{sil\_melt}}^{\text{eq}}, \quad C_{i,\text{sil\_bulk}}^{\text{eq}} = F_{\text{melt}} \cdot C_{i,\text{sil\_melt}}^{\text{eq}}$$
+  with numerical lower bound $F_{\text{melt,eff}} = \max(F_{\text{melt}}, 10^{-4})$ to prevent singular content spikes at incipient melting.
 - **Physical Saturation Ceilings and Four-Case Resolution:**
   Both reservoirs possess physical saturation limits:
   - Silicate melt ceilings ($C_{i,\text{sil\_melt\_max}}$): $1.0 \times 10^6\text{ ppmw}$ for C, N, and S; $100.0\text{ wt}\%$ for $\text{H}_2\text{O}$ ($= 100.0 \times f_H\text{ ppmw H}$).

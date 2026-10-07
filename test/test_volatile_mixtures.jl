@@ -642,7 +642,10 @@ using Erebus.Particles
         @test isapprox(props_rdx.nC_graphite_m[1], 0.0; atol=1e-12)
         @test props_rdx.nC_graphite_m[3] > 0.0
         @test props_rdx.nCO_m[3] > 0.0
-        @test m_Xfem3[3] ≈ props_rdx.nFe0_m[3] * Erebus.M_Fe atol=1e-12
+        expected_xfem3 = metal_mass_to_volume_fraction(
+            props_rdx.nFe0_m[3] * Erebus.M_Fe, 7000.0, 3000.0
+        )
+        @test isapprox(m_Xfem3[3], expected_xfem3; atol=1e-12)
 
         # Before core segregation: carbothermic smelting reduces FeO to Fe0 (metal-buffered)
         update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)

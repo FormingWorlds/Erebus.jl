@@ -152,6 +152,15 @@ $$w_{\text{gr}} = \operatorname{clamp}\left(\frac{w_{\text{graphite}}}{w_{\text{
 
 where $w_{\text{graphite\_threshold}}$ is the mass-fraction threshold (default $10^{-6}\text{ kg/kg}$) and carbon molar mass $M_{\text{C}} = 0.012011\text{ kg/mol}$. This linear ramp reaches $1.0$ at the threshold rather than smoothing through a sigmoid. The buffer weight evaluates to $0.5$ at half threshold, $1.0$ at and above threshold, and $0.0$ at zero inventory.
 
+### 3.6 Mineral Buffer Oxygen Exchange Scaling
+
+Transfer of oxygen mass $\Delta M_{\text{O}}$ [kg] between solid oxide buffer reservoirs ($\text{FeO}$ and $\text{Fe}_3\text{O}_4$) follows the stoichiometry $3\text{FeO} + \frac{1}{2}\text{O}_2 \rightleftharpoons \text{Fe}_3\text{O}_4$.
+Within `apply_buffer_oxygen!`, total extensive oxygen moles $\Delta n_{\text{O,total}} = \Delta M_{\text{O}} / M_{\text{O}}$ are allocated across parcel markers in proportion to normalized weights $w_k$. The specific molar exchange on marker $k$ with parcel mass $M_k$ [kg] scales as:
+
+$$\Delta n_{\text{O,spec}, k} = \frac{\Delta n_{\text{O,total}} \cdot w_k}{M_k} \quad [\text{mol/kg}]$$
+
+Specific molar iron inventories update via $\Delta n_{\text{Fe3}} = -2 \Delta n_{\text{O,spec}, k}$ and $\Delta n_{\text{Fe2}} = +2 \Delta n_{\text{O,spec}, k}$, maintaining dimensional consistency with specific concentration units. When parcel masses are unsupplied, unit marker mass ($1.0\text{ kg}$) is assumed.
+
 ---
 
 ## 4. Verification Test Suite

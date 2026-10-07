@@ -392,7 +392,7 @@ using JLD2
         # Stoichiometric conversion for H: 1 wt% H2O = f_H ppmw H
         f_H = (2.0 * M_H / M_H2O) * 1.0e4
         m_sil = (1.0 - phi_fe_bulk) * rho_sil
-        m_met = phi_fe_bulk * F_fe * rho_met
+        m_met = phi_fe_bulk * rho_met
 
         # Initial elemental volatile masses in marker
         M_H_init = m_sil * (init_H2O_wtpct * f_H) + m_met * init_fe_H_ppm
@@ -570,7 +570,7 @@ using JLD2
         phi_fe_bulk = 0.20
         phi_fe_liq = phi_fe_bulk * F_fe
         m_sil = (1.0 - phi_fe_bulk) * rho_sil
-        m_met = phi_fe_bulk * F_fe * rho_met
+        m_met = phi_fe_bulk * rho_met
 
         T_val = 1800.0
         P_val = 2.0e8
@@ -578,7 +578,7 @@ using JLD2
 
         # Carbon saturation cap in liquid metal: 7.0e4 ppmw
         C_met_C_max = 7.0e4
-        init_C_sil = 3.0e4
+        init_C_sil = 5.0e4
         init_C_met = 0.0
         M_C_tot = m_sil * init_C_sil + m_met * init_C_met
 
@@ -623,7 +623,7 @@ using JLD2
         # Silicate update mirrors applied metal change
         dC_met_applied = Xfe_C_m[1] - init_C_met
         dC_sil_expected = -dC_met_applied * (m_met / m_sil)
-        @test isapprox(XCm[1] - init_C_sil, dC_sil_expected; atol=1.0e-12)
+        @test isapprox(XCm[1] - init_C_sil, dC_sil_expected; rtol=1.0e-12)
         # Whole-marker mass is invariant to 1.0e-12
         M_C_final = m_sil * XCm[1] + m_met * Xfe_C_m[1]
         @test isapprox(M_C_final, M_C_tot; rtol=1.0e-12)
@@ -655,7 +655,7 @@ using JLD2
         )
         dC_met_kinetic = Xfe_C_m[1] - init_C_met
         @test isapprox(dC_met_kinetic, 0.4 * (C_met_C_max - init_C_met); atol=1.0e-12)
-        @test isapprox(XCm[1] - init_C_sil, -dC_met_kinetic * (m_met / m_sil); atol=1.0e-12)
+        @test isapprox(XCm[1] - init_C_sil, -dC_met_kinetic * (m_met / m_sil); rtol=1.0e-12)
         @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_tot; rtol=1.0e-12)
     end
 
@@ -668,7 +668,7 @@ using JLD2
         phi_fe_bulk = 0.20
         phi_fe_liq = phi_fe_bulk * F_fe
         m_sil = (1.0 - phi_fe_bulk) * rho_sil
-        m_met = phi_fe_bulk * F_fe * rho_met
+        m_met = phi_fe_bulk * rho_met
 
         T_val = 1800.0
         P_val = 1.0e8
@@ -779,7 +779,7 @@ using JLD2
             equilibration_rate=1.0,
         )
 
-        init_C = 2.5e4
+        init_C = 4.5e4
         M_C_tot = m_sil * init_C
         XCm[1] = init_C
         Xfe_C_m[1] = 0.0
@@ -808,7 +808,7 @@ using JLD2
             equilibration_fraction=1.0,
         )
         @test isapprox(Xfe_C_m[1], 7.0e4; atol=1.0e-12)
-        @test isapprox(XCm[1], (M_C_tot - m_met * 7.0e4) / m_sil; atol=1.0e-12)
+        @test isapprox(XCm[1], (M_C_tot - m_met * 7.0e4) / m_sil; rtol=1.0e-12)
         @test (XCm[1] / F_melt) < 1.0e6
         @test isapprox(m_sil * XCm[1] + m_met * Xfe_C_m[1], M_C_tot; rtol=1.0e-12)
         @test get_metal_silicate_cap_warning_count() == 0

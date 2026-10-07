@@ -385,7 +385,11 @@ function speciate_pyrolysis_carbon_redox!(
     d_c_gr::Float64,
     d_h_gas::Float64,
     d_n_gas::Float64,
-    Xfem,
+    Xfem;
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
+    rho_s::Real=3000.0,
+    rho_metal_val::Real=7000.0,
+    phi_pack::Real=0.65,
 )
     nC_gr_m = hasproperty(redox_props, :nC_graphite_m) ? redox_props.nC_graphite_m : nothing
     nCO_m = hasproperty(redox_props, :nCO_m) ? redox_props.nCO_m : nothing
@@ -530,8 +534,26 @@ function speciate_pyrolysis_carbon_redox!(
     )
 
     dn_fe0_smelted = max(0.0, c_up.n_Fe0 - c_cur.n_Fe0)
-    if Xfem !== nothing && dn_fe0_smelted > 0.0
-        Xfem[m] += dn_fe0_smelted * M_Fe
+    if dn_fe0_smelted > 0.0
+        dw_fe0 = dn_fe0_smelted * M_Fe
+        phi_pack_val = Float64(phi_pack)
+        if Xfe_bulk !== nothing
+            w_cur = metal_volume_to_mass_fraction(Xfe_bulk[m], rho_metal_val, rho_s)
+            w_new = min(1.0, w_cur + dw_fe0)
+            phi_new = metal_mass_to_volume_fraction(w_new, rho_metal_val, rho_s)
+            phi_target = max(Xfe_bulk[m], min(phi_pack_val, phi_new))
+            dphi_fe0 = max(0.0, phi_target - Xfe_bulk[m])
+            Xfe_bulk[m] = phi_target
+            F_fe_local = compute_metal_melt_fraction(T)
+            if F_fe_local > 0.0 && Xfem !== nothing
+                Xfem[m] = max(Xfem[m], min(phi_pack_val, Xfem[m] + dphi_fe0 * F_fe_local))
+            end
+        elseif Xfem !== nothing
+            w_cur = metal_volume_to_mass_fraction(Xfem[m], rho_metal_val, rho_s)
+            w_new = min(1.0, w_cur + dw_fe0)
+            phi_new = metal_mass_to_volume_fraction(w_new, rho_metal_val, rho_s)
+            Xfem[m] = max(Xfem[m], min(phi_pack_val, phi_new))
+        end
     end
 
     nFe0_m[m] = c_up.n_Fe0
@@ -585,7 +607,9 @@ $(SIGNATURES)
 - `ppm_scale`: True if concentrations are in ppmw, false if mass fraction (default: false).
 - `redox_props`: Optional NamedTuple with marker redox arrays to deposit graphite and gas products.
 - `redox_cfg`: Optional RedoxConfig to govern pyrolysis redox coupling.
-- `Xfem`: Optional marker metallic iron mass fraction array.
+- `Xfem`: Optional marker molten metallic iron volume fraction array.
+- `Xfe_bulk`: Optional marker bulk metallic iron volume fraction array.
+- `phi_pack`: Maximum metal volume fraction packing limit (default: 0.65).
 
 # Returns
 - Named tuple `(; total_dC_gas, total_dN_gas, total_dH_gas, total_dC_graphite, total_dH_pyro)`
@@ -615,8 +639,18 @@ function update_marker_pyrolysis!(
     redox_props=nothing,
     redox_cfg=nothing,
     Xfem::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
+    rho_metal::Real=7000.0,
+    phi_pack::Real=0.65,
 )
     marknum = length(tkm)
+    Xfe_bulk !== nothing &&
+        length(Xfe_bulk) < marknum &&
+        throw(DimensionMismatch("length(Xfe_bulk) must be >= marknum"))
+    Xfem !== nothing &&
+        length(Xfem) < marknum &&
+        throw(DimensionMismatch("length(Xfem) must be >= marknum"))
+
     rho_f = max(Float64(rhofluid), 100.0)
     phi_max_val = Float64(phimax)
     dt_val = Float64(dt)
@@ -665,10 +699,36 @@ function update_marker_pyrolysis!(
         d_h_gas = res.H_dehydrated_gas
         d_c_gr = res.C_graphite_residue
 
+        rho_s = if tm !== nothing && rhosolidm !== nothing && m <= length(tm)
+            m_tm = tm[m]
+            if (m_tm >= 1 && m_tm <= length(rhosolidm))
+                Float64(rhosolidm[m_tm])
+            else
+                (length(rhosolidm) >= 1 ? Float64(rhosolidm[1]) : Float64(rhosolid))
+            end
+        elseif rhosolidm !== nothing && length(rhosolidm) >= 1
+            Float64(rhosolidm[1])
+        else
+            Float64(rhosolid)
+        end
+
         if redox_props !== nothing &&
             (redox_cfg === nothing || (redox_cfg.active && redox_cfg.pyrolysis_redox))
             spec = speciate_pyrolysis_carbon_redox!(
-                redox_props, redox_cfg, m, T, scale, d_c_gas, d_c_gr, d_h_gas, d_n_gas, Xfem
+                redox_props,
+                redox_cfg,
+                m,
+                T,
+                scale,
+                d_c_gas,
+                d_c_gr,
+                d_h_gas,
+                d_n_gas,
+                Xfem;
+                Xfe_bulk=Xfe_bulk,
+                rho_s=rho_s,
+                rho_metal_val=rho_metal,
+                phi_pack=phi_pack,
             )
             d_c_gas = spec.d_c_gas
             d_c_gr = spec.d_c_gr
@@ -698,19 +758,6 @@ function update_marker_pyrolysis!(
         tot_dN2_gas += m_n2
         tot_dC_graphite += d_c_gr
         tot_dH_pyro += res.dH_pyro_J_per_kg
-
-        rho_s = if tm !== nothing && rhosolidm !== nothing && m <= length(tm)
-            m_tm = tm[m]
-            if (m_tm >= 1 && m_tm <= length(rhosolidm))
-                Float64(rhosolidm[m_tm])
-            else
-                (length(rhosolidm) >= 1 ? Float64(rhosolidm[1]) : Float64(rhosolid))
-            end
-        elseif rhosolidm !== nothing && length(rhosolidm) >= 1
-            Float64(rhosolidm[1])
-        else
-            Float64(rhosolid)
-        end
 
         dw_gas = (d_c_gas + d_n_gas + d_h_gas) * scale
         if dw_gas > 0.0
