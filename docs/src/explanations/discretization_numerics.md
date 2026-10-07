@@ -220,7 +220,7 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    - **Operator Diagonal (`compute_operator_diagonal_device`)**: Evaluates diagonal elements in parallel on device for Jacobi relaxation and Schur complement scaling.
    - **Adjoint Restriction (`restrict_4var_device!`)**: Formulated as a coarse-grid gather operation where each thread computes one coarse cell from sixteen fine staggered nodes. This eliminates race conditions and atomic write instructions on GPUs.
    - **Continuous Prolongation (`prolongate_4var_device!`)**: Bilinear interpolation for velocity nodes ($v_x, v_y$) and piecewise-constant injection for pressure nodes ($P_t, P_f$) matching staggered boundary conditions.
-   - **Relaxation Smoothers (`smooth_velocity_device!`, `smooth_darcy_device!`)**: Executes in-place relaxation sweeps (damped Jacobi or Red-Black Gauss-Seidel) using pre-allocated working buffers on each level to eliminate buffer reallocations during V-cycles. Note that on Julia's host CPU backend `KernelAbstractions.jl` allocates task partition contexts during launch, whereas hardware GPU backends enqueue directly to device streams without host heap allocations.
+   - **Relaxation Smoothers (`smooth_velocity_device!`, `smooth_darcy_device!`)**: Executes in-place relaxation sweeps (damped Jacobi or Red-Black Gauss-Seidel) using pre-allocated working buffers on each level to eliminate buffer reallocations during V-cycles. Note that on Julia's host CPU architecture `KernelAbstractions.jl` allocates task partition contexts during launch, whereas hardware GPU devices enqueue directly to device streams without host heap allocations.
    - **Precision Considerations on Apple Silicon**: Apple Metal GPUs do not provide hardware double-precision (`Float64`) arithmetic. Simulations deployed to Apple Metal hardware must configure single-precision floating point (`Float32`). Transferring `Float64` arrays or operators to Metal devices raises an informative `ArgumentError`.
 
 6. **2D Domain Decomposition and Distributed Memory (MPI)**:
@@ -282,13 +282,29 @@ $$dt_t \leftarrow dt_t \frac{\text{DTmax}}{\Delta T_{\text{max}}}$$
 
 This prevents thermal spikes from concentrated radiogenic decay or rapid phase change.
 
-### 4. Hydrofracture Permeability Bounds
+### 4. Hydrofracture Permeability and Drag Resistance
 
-Dynamic hydrofracturing increases matrix permeability when pore fluid pressure exceeds the minimum compressive stress plus tensile rock strength:
+Dynamic hydrofracturing increases matrix permeability when pore fluid pressure exceeds the minimum compressive stress plus rock tensile strength:
 
 $$k_{\text{eff}} = \min\left( \max(k_{\text{enhanced}}, k_\phi), \max(k_\phi, k_{\text{frac\_max}}) \right)$$
 
-This two-sided clamp ensures that enhanced permeability cannot fall below matrix permeability $k_\phi$ or exceed ceiling $k_{\text{frac\_max}}$.
+The solver evaluates hydrofracture drag resistance $R_x, R_y$ via `evaluate_hydrofracture_resistance`:
+
+$$R_{\text{eff}} = R_{\text{base}} \frac{k_\phi(\phi_f, k_{\phi 0})}{k_{\text{eff}}}$$
+
+Matrix permeability $k_\phi$ is calculated from local face porosity $\phi_f$ and reference permeability $k_{\phi 0}$ via Kozeny-Carman scaling. This ensures that Darcy drag resistance couples to local porosity rather than grid thermal properties.
+
+### 5. Single-Cell Venting Corner Drainage Budget
+
+Boundary cells with multiple exposed faces (such as domain corners) can drain through multiple faces simultaneously. In the discrete fluid continuity equation, surface venting operates as a volumetric divergence sink $S_{\text{vent}}$ [$\text{s}^{-1}$]. To prevent unphysical over-drainage exceeding available pore fluid, the solver enforces a single shared cell drainage budget:
+
+$$S_{\text{max}} = \frac{\max(0, \phi - \phi_{\text{min}})}{\Delta t}$$
+
+When the total unconstrained Darcy flux across all exposed faces exceeds $S_{\text{max}}$, the solver scales fluxes on all exposed faces symmetrically by $S_{\text{max}} / \sum_f S_f$. The corresponding total fluid mass drainage rate is $\dot{M}_{\text{max}} = S_{\text{max}} \rho_f \Delta V$ [$\text{kg/s}$].
+
+### 6. Zero-Weight Grid Node Interpolation
+
+Cells with zero marker weight ($W_T \le 0$) do not receive property contributions during marker-to-grid mapping. The function `fill_zero_weight_nodes!` populates these nodes by computing the arithmetic mean of all non-empty orthogonal neighbouring nodes. If an isolated node has no non-empty neighbours, it receives the specified background property value.
 
 ---
 

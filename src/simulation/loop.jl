@@ -1601,6 +1601,11 @@ function simulation_loop(
                     plastic_converged = true
                     thermochemical_converged = true
                     last_plastic_residual = 0.0
+                    # Update step-start pressures for this timestep
+                    pr0 .= pr
+                    pf0 .= pf
+                    ps0 .= ps
+
                     for titer in 1:1:max_plastic_iterations_val
                         # perform thermochemical reaction
                         if reaction_active_val
@@ -1651,9 +1656,8 @@ function simulation_loop(
                             # no elastic compaction during first timestep
                             BETAPHI .= 0.0
                         end
-                        # advance pressure generation inside thermochemical iteration
-                        pr0 .= pr
-                        pf0 .= pf
+                        # track previous iteration fluid pressure for convergence check
+                        hydromech_ws.pf_prev_iter .= pf
                         hydromech_ws.rx_eff .= RX
                         hydromech_ws.ry_eff .= RY
                         hydromech_ws.rx_eff_prev .= RX
@@ -1721,6 +1725,10 @@ function simulation_loop(
                                     TEN=TEN,
                                     KX=KX,
                                     KY=KY,
+                                    PHIX=PHIX,
+                                    PHIY=PHIY,
+                                    kphim0=cfg.materials.kphim0,
+                                    phim0_val=phim0_val,
                                     kappa_frac=kappa_frac_val,
                                     gamma_frac=gamma_frac_val,
                                     k_frac_max=k_frac_max_val,
@@ -1789,6 +1797,10 @@ function simulation_loop(
                                     TEN=TEN,
                                     KX=KX,
                                     KY=KY,
+                                    PHIX=PHIX,
+                                    PHIY=PHIY,
+                                    kphim0=cfg.materials.kphim0,
+                                    phim0_val=phim0_val,
                                     kappa_frac=kappa_frac_val,
                                     gamma_frac=gamma_frac_val,
                                     k_frac_max=k_frac_max_val,
@@ -1954,6 +1966,11 @@ function simulation_loop(
                                     TEN=TEN,
                                     KX=KX,
                                     KY=KY,
+                                    PHIX=PHIX,
+                                    PHIY=PHIY,
+                                    PHI=PHI,
+                                    kphim0=cfg.materials.kphim0,
+                                    phim0_val=phim0_val,
                                     kappa_frac=kappa_frac_val,
                                     gamma_frac=gamma_frac_val,
                                     k_frac_max=k_frac_max_val,
@@ -2195,20 +2212,15 @@ function simulation_loop(
                             TEN=TEN,
                             KX=KX,
                             KY=KY,
+                            PHIX=PHIX,
+                            PHIY=PHIY,
+                            kphim0=cfg.materials.kphim0,
+                            phim0_val=phim0_val,
                             kappa_frac=kappa_frac_val,
                             gamma_frac=gamma_frac_val,
                             k_frac_max=k_frac_max_val,
                             coords=coords,
                         )
-
-                        # ------------------------------------------------------------------
-                        # no pressure changes for the first time step
-                        # ------------------------------------------------------------------
-                        if timestep == 1
-                            pr0 .= pr
-                            pf0 .= pf
-                            ps0 .= ps
-                        end
 
                         # ------------------------------------------------------------------
                         # compute adiabatic heating HA in P nodes
@@ -2471,7 +2483,7 @@ function simulation_loop(
                         thermochemical_converged = compute_thermochemical_iteration_outcome(
                             DMP,
                             pf,
-                            pf0,
+                            hydromech_ws.pf_prev_iter,
                             titer;
                             pferrmax=cfg.reaction.pferrmax,
                             maxDTcurrent=maxDTcurrent,

@@ -1723,6 +1723,7 @@ function update_marker_viscosity!(
             etasolidmm=etasolidmm,
             etafluidm=etafluidm,
             etafluidmm=etafluidmm,
+            melting_active=melting_active,
         )
         if melting_active && Fm !== nothing
             eta_rock = compute_melt_weakened_viscosity(
@@ -2815,9 +2816,45 @@ function update_p_nodes_melt_composition!(
 end
 
 """
+    fill_zero_weight_nodes!(A::AbstractMatrix{<:Real}, WT::AbstractMatrix{<:Real}; background_val::Real)
+
+Fill grid nodes with zero marker weight (WT <= 0.0) by averaging non-empty orthogonal
+neighbours, or assigning background_val if no non-empty neighbours exist.
+"""
+function fill_zero_weight_nodes!(
+    A::AbstractMatrix{T}, WT::AbstractMatrix{<:Real}; background_val::Real
+) where {T<:Real}
+    Ny, Nx = size(WT)
+    @inbounds for j in 1:Nx, i in 1:Ny
+        if WT[i, j] <= 0.0
+            sum_val = 0.0
+            count = 0
+            if i > 1 && WT[i - 1, j] > 0.0
+                sum_val += A[i - 1, j]
+                count += 1
+            end
+            if i < Ny && WT[i + 1, j] > 0.0
+                sum_val += A[i + 1, j]
+                count += 1
+            end
+            if j > 1 && WT[i, j - 1] > 0.0
+                sum_val += A[i, j - 1]
+                count += 1
+            end
+            if j < Nx && WT[i, j + 1] > 0.0
+                sum_val += A[i, j + 1]
+                count += 1
+            end
+            A[i, j] = count > 0 ? T(sum_val / count) : T(background_val)
+        end
+    end
+    return nothing
+end
+
+"""
 Compute properties of basic nodes based on interpolation arrays.
 
-$(SIGNATURES)
+\$(SIGNATURES)
 
 # Details
 
@@ -2828,11 +2865,11 @@ $(SIGNATURES)
     - COHSUM: COH interpolation array
     - TENSUM: TEN interpolation array
     - FRISUM: FRI interpolation array
-    - WTSUM: WT interpolation array
+    - WTSUM: WT basic node interpolation array
     - ETA0: ETA0 basic node array
     - ETA: ETA basic node array
     - GGG: GGG basic node array
-    - SXY0: SXY basic node array
+    - SXY0: SXY0 basic node array
     - COH: COH basic node array
     - TEN: TEN basic node array
     - FRI: FRI basic node array
@@ -2878,6 +2915,18 @@ function compute_basic_node_properties!(
             end
         end
     end # @inbounds
+    fill_zero_weight_nodes!(ETA0, WTSUM; background_val=1.0e18)
+    fill_zero_weight_nodes!(ETA, WTSUM; background_val=1.0e18)
+    fill_zero_weight_nodes!(GGG, WTSUM; background_val=1.0e9)
+    fill_zero_weight_nodes!(SXY0, WTSUM; background_val=0.0)
+    fill_zero_weight_nodes!(COH, WTSUM; background_val=1.0e8)
+    fill_zero_weight_nodes!(TEN, WTSUM; background_val=1.0e7)
+    fill_zero_weight_nodes!(FRI, WTSUM; background_val=0.0)
+    @inbounds for j in 1:Nx, i in 1:Ny
+        if WTSUM[i, j] <= 0.0
+            YNY[i, j] = false
+        end
+    end
     return nothing
 end # function compute_basic_node_properties!
 
@@ -2920,13 +2969,18 @@ function compute_vx_node_properties!(
             end
         end
     end # @inbounds
+    fill_zero_weight_nodes!(RHOX, WTXSUM; background_val=1.0)
+    fill_zero_weight_nodes!(RHOFX, WTXSUM; background_val=1.0)
+    fill_zero_weight_nodes!(KX, WTXSUM; background_val=2.5)
+    fill_zero_weight_nodes!(PHIX, WTXSUM; background_val=0.0)
+    fill_zero_weight_nodes!(RX, WTXSUM; background_val=1.0e14)
     return nothing
 end # function compute_vx_node_properties!
 
 """
 Compute properties of Vy nodes based on interpolation arrays.
 
-$(SIGNATURES)
+\$(SIGNATURES)
 
 # Details
 
@@ -2962,6 +3016,11 @@ function compute_vy_node_properties!(
             end
         end
     end # @inbounds
+    fill_zero_weight_nodes!(RHOY, WTYSUM; background_val=1.0)
+    fill_zero_weight_nodes!(RHOFY, WTYSUM; background_val=1.0)
+    fill_zero_weight_nodes!(KY, WTYSUM; background_val=2.5)
+    fill_zero_weight_nodes!(PHIY, WTYSUM; background_val=0.0)
+    fill_zero_weight_nodes!(RY, WTYSUM; background_val=1.0e14)
     return nothing
 end # function compute_vy_node_properties!
 
@@ -3037,6 +3096,16 @@ function compute_p_node_properties!(
             end
         end
     end # @inbounds
+    fill_zero_weight_nodes!(RHO, WTPSUM; background_val=1.0)
+    fill_zero_weight_nodes!(RHOCP, WTPSUM; background_val=3.3e6)
+    fill_zero_weight_nodes!(ALPHA, WTPSUM; background_val=3.0e-5)
+    fill_zero_weight_nodes!(ALPHAF, WTPSUM; background_val=1.0e-4)
+    fill_zero_weight_nodes!(HR, WTPSUM; background_val=0.0)
+    fill_zero_weight_nodes!(GGGP, WTPSUM; background_val=1.0e9)
+    fill_zero_weight_nodes!(SXX0, WTPSUM; background_val=0.0)
+    fill_zero_weight_nodes!(tk1, WTPSUM; background_val=300.0)
+    fill_zero_weight_nodes!(PHI, WTPSUM; background_val=0.0)
+    fill_zero_weight_nodes!(BETAPHI, WTPSUM; background_val=0.0)
     return nothing
 end # function compute_p_node_properties!
 

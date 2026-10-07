@@ -69,6 +69,8 @@ function GridCoordinates(
     Ny::Int;
     xsize::Float64=140_000.0,
     ysize::Float64=140_000.0,
+    xcenter::Union{Nothing,Float64}=nothing,
+    ycenter::Union{Nothing,Float64}=nothing,
     Nxmc::Int=4,
     Nymc::Int=4,
 )
@@ -83,25 +85,25 @@ function GridCoordinates(
     Ny1 = Ny + 1
     dx = xsize / (Nx - 1)
     dy = ysize / (Ny - 1)
-    xcenter = xsize / 2.0
-    ycenter = ysize / 2.0
+    xc = xcenter !== nothing ? xcenter : xsize / 2.0
+    yc = ycenter !== nothing ? ycenter : ysize / 2.0
 
-    x = [j for j in 0.0:dx:xsize]
-    y = [i for i in 0.0:dy:ysize]
-    xvx = [j for j in 0.0:dx:(xsize + dx)]
-    yvx = [i for i in (-dy / 2.0):dy:(ysize + dy / 2.0)]
-    xvy = [j for j in (-dx / 2.0):dx:(xsize + dx / 2.0)]
-    yvy = [i for i in 0.0:dy:(ysize + dy)]
-    xp = [j for j in (-dx / 2.0):dx:(xsize + dx / 2.0)]
-    yp = [i for i in (-dy / 2.0):dy:(ysize + dy / 2.0)]
+    x = collect(range(0.0, xsize; length=Nx))
+    y = collect(range(0.0, ysize; length=Ny))
+    xvx = collect(range(0.0, xsize + dx; length=Nx1))
+    yvx = collect(range(-dy / 2.0, ysize + dy / 2.0; length=Ny1))
+    xvy = collect(range(-dx / 2.0, xsize + dx / 2.0; length=Nx1))
+    yvy = collect(range(0.0, ysize + dy; length=Ny1))
+    xp = collect(range(-dx / 2.0, xsize + dx / 2.0; length=Nx1))
+    yp = collect(range(-dy / 2.0, ysize + dy / 2.0; length=Ny1))
 
     Nxm = (Nx - 1) * Nxmc
     Nym = (Ny - 1) * Nymc
     dxm = xsize / Nxm
     dym = ysize / Nym
     start_marknum = Nxm * Nym
-    xxm = [j for j in (dxm / 2.0):dxm:(xsize - dxm / 2.0)]
-    yym = [i for i in (dym / 2.0):dym:(ysize - dym / 2.0)]
+    xxm = collect(range(dxm / 2.0, xsize - dxm / 2.0; length=Nxm))
+    yym = collect(range(dym / 2.0, ysize - dym / 2.0; length=Nym))
 
     return GridCoordinates(;
         Nx=Nx,
@@ -112,8 +114,8 @@ function GridCoordinates(
         ysize=ysize,
         dx=dx,
         dy=dy,
-        xcenter=xcenter,
-        ycenter=ycenter,
+        xcenter=xc,
+        ycenter=yc,
         x=x,
         y=y,
         xvx=xvx,
@@ -155,13 +157,41 @@ function GridCoordinates(
 end
 
 """
-    GridCoordinates(cfg::GridConfig; Nxmc=4, Nymc=4)
+    GridCoordinates(cfg::GridConfig; xcenter=nothing, ycenter=nothing, Nxmc=4, Nymc=4)
 
 Construct a `GridCoordinates` object from a `GridConfig`.
 """
-function GridCoordinates(cfg::GridConfig; Nxmc::Int=4, Nymc::Int=4)
+function GridCoordinates(
+    cfg::GridConfig;
+    xcenter::Union{Nothing,Float64}=nothing,
+    ycenter::Union{Nothing,Float64}=nothing,
+    Nxmc::Int=4,
+    Nymc::Int=4,
+)
     return GridCoordinates(
-        cfg.Nx, cfg.Ny; xsize=cfg.xsize, ysize=cfg.ysize, Nxmc=Nxmc, Nymc=Nymc
+        cfg.Nx,
+        cfg.Ny;
+        xsize=cfg.xsize,
+        ysize=cfg.ysize,
+        xcenter=xcenter,
+        ycenter=ycenter,
+        Nxmc=Nxmc,
+        Nymc=Nymc,
+    )
+end
+
+"""
+    GridCoordinates(cfg::SimulationConfig; Nxmc=4, Nymc=4)
+
+Construct a `GridCoordinates` object from a `SimulationConfig`.
+"""
+function GridCoordinates(cfg::SimulationConfig; Nxmc::Int=4, Nymc::Int=4)
+    return GridCoordinates(
+        cfg.grid;
+        xcenter=cfg.geometry.xcenter,
+        ycenter=cfg.geometry.ycenter,
+        Nxmc=Nxmc,
+        Nymc=Nymc,
     )
 end
 

@@ -294,7 +294,7 @@
         for type in 1:2
             eta_magma = Erebus.etatotal_rocks(t_magma, type)
             @test eta_magma >= etamin
-            @test eta_magma >= etasolidmm[type]
+            @test eta_magma < etasolidm[type]
             @test eta_magma >= etafluidmm[type]
         end
 

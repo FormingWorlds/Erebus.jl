@@ -73,6 +73,7 @@ unit_tests = [
     "test_energy_balance.jl",
     "test_volatile_init.jl",
     "test_degassing_budgets.jl",
+    "test_hydromech_fixes.jl",
 ]
 
 integration_tests = [
