@@ -238,9 +238,11 @@ When molten metal ($F_{\text{fe}} > 0$) coexists with silicate melt ($F_{\text{m
 
 $$M_{i,\text{total}} = m_{\text{sil}} C_{i,\text{sil}} + m_{\text{met}} C_{i,\text{met}}$$
 
-where $m_{\text{sil}} = \phi_{\text{sil}} \rho_{\text{sil}}$ and $m_{\text{met}} = \phi_{\text{fe}} F_{\text{fe}} \rho_{\text{met}}$. The thermodynamic equilibrium concentration in the silicate melt is:
+where $m_{\text{sil}} = \phi_{\text{sil}} \rho_{\text{sil}}$ and interacting metal mass $m_{\text{met}} = \phi_{\text{fe}} \rho_{\text{met}}$ is evaluated from bulk metal volume share $\phi_{\text{fe}} = X_{\text{fe,bulk}}$. The thermodynamic equilibrium concentration in the silicate melt is:
 
-$$C_{i,\text{sil}}^{\text{eq}} = \frac{M_{i,\text{total}}}{m_{\text{sil}} + D_i m_{\text{met}}}$$
+$$C_{i,\text{sil\_melt}}^{\text{eq}} = \frac{M_{i,\text{total}}}{m_{\text{sil}} F_{\text{melt,eff}} + D_i m_{\text{met}}}$$
+
+where $F_{\text{melt,eff}} = \max(F_{\text{melt}}, 10^{-4})$ provides a bounded floor at incipient melting. Equilibrium bulk concentrations follow $C_{i,\text{sil}}^{\text{eq}} = F_{\text{melt}} C_{i,\text{sil\_melt}}^{\text{eq}}$ and $C_{i,\text{met}}^{\text{eq}} = D_i C_{i,\text{sil\_melt}}^{\text{eq}}$.
 
 Kinetic exchange advances toward equilibrium with rate fraction $\alpha_{\text{eq}} \in [0, 1]$ (`equilibration_rate`):
 
@@ -274,11 +276,11 @@ Sulfur-poor metal differentiates faster due to its higher density contrast, wher
 
 ### Integrated Core Volatile Budgets
 
-Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets` with canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$:
+Integrated core mass and volatile budgets are evaluated using `compute_core_volatile_budgets` with canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$. Core membership is determined by metal concentration threshold $\phi_{\text{fe}, m} \ge \phi_{\text{core\_threshold}}$ ($\phi_{\text{cut}} = 0.40$), identifying concentrated segregated metallic cores without artificial geometric cutoffs or spurious classification of undifferentiated chondritic rock:
 
-$$M_{\text{core}, k} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
+$$M_{\text{core}, k} = \sum_{\phi_{\text{fe}, m} \ge \phi_{\text{cut}}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m \, \left(X_{\text{fe}, k, m} \cdot 10^{-6}\right)$$
 
-$$M_{\text{core}, \text{metal}} = \sum_{m \in \text{core}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m$$
+$$M_{\text{core}, \text{metal}} = \sum_{\phi_{\text{fe}, m} \ge \phi_{\text{cut}}} \phi_{\text{fe}, m} \, \rho_{\text{metal}} \, V_m$$
 
 The resulting mean core volatile concentrations $w_{\text{core}, k} = M_{\text{core}, k} / M_{\text{core}, \text{metal}}$ are compared with empirical concentrations measured in magmatic iron meteorites (groups IIAB, IIIAB, IVA, IVB).
 

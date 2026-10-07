@@ -956,12 +956,54 @@ function local_delta_iw(
     return clamp(0.0, d_min, d_max)
 end
 
+function _validate_buffer_oxygen_reactants(
+    nFe2_m,
+    nFe3_m,
+    marker_indices::AbstractVector{<:Integer},
+    weights::AbstractVector{<:Real},
+    sum_w::Float64,
+    dn_O_total::Float64,
+    dO_val::Float64,
+    marker_masses::Union{Nothing,AbstractVector{<:Real}},
+)
+    for (k, m) in enumerate(marker_indices)
+        w_norm = Float64(weights[k]) / sum_w
+        m_mass = if marker_masses !== nothing
+            m_val = Float64(marker_masses[k])
+            if !isfinite(m_val) || m_val <= 0.0
+                throw(DomainError(m_val, "Marker mass must be positive and finite"))
+            end
+            m_val
+        else
+            1.0
+        end
+        dn_O_spec = (dn_O_total * w_norm) / m_mass
+        if dn_O_spec > 0.0 && nFe3_m[m] < 2.0 * dn_O_spec - 1e-14
+            throw(
+                DomainError(
+                    dO_val,
+                    "Insufficient Fe3O4 in marker $m ($(nFe3_m[m])) to supply oxygen demand $(2.0 * dn_O_spec)",
+                ),
+            )
+        elseif dn_O_spec < 0.0 && nFe2_m[m] < 2.0 * abs(dn_O_spec) - 1e-14
+            throw(
+                DomainError(
+                    dO_val,
+                    "Insufficient FeO in marker $m ($(nFe2_m[m])) to absorb oxygen $(2.0 * abs(dn_O_spec))",
+                ),
+            )
+        end
+    end
+    return nothing
+end
+
 """
     apply_buffer_oxygen!(
         redox_props,
         marker_indices::AbstractVector{<:Integer},
         weights::AbstractVector{<:Real},
-        dO::Real,
+        dO::Real;
+        marker_masses::Union{Nothing,AbstractVector{<:Real}}=nothing,
     )
 
 Transfer oxygen mass `dO` [kg] between solid redox buffer reservoirs (FeO and Fe3O4)
@@ -974,7 +1016,8 @@ function apply_buffer_oxygen!(
     redox_props,
     marker_indices::AbstractVector{<:Integer},
     weights::AbstractVector{<:Real},
-    dO::Real,
+    dO::Real;
+    marker_masses::Union{Nothing,AbstractVector{<:Real}}=nothing,
 )
     dO_val = Float64(dO)
     if !isfinite(dO_val)
@@ -985,6 +1028,12 @@ function apply_buffer_oxygen!(
     end
     if length(marker_indices) != length(weights)
         throw(ArgumentError("marker_indices and weights must have the same length"))
+    end
+    if !allunique(marker_indices)
+        throw(ArgumentError("marker_indices must contain unique marker indices"))
+    end
+    if marker_masses !== nothing && length(marker_masses) != length(marker_indices)
+        throw(ArgumentError("marker_indices and marker_masses must have the same length"))
     end
 
     sum_w = sum(weights)
@@ -1001,32 +1050,17 @@ function apply_buffer_oxygen!(
     dn_O_total = dO_val / M_O
 
     # Validation pass: verify all markers have sufficient reactant
-    for (k, m) in enumerate(marker_indices)
-        w_norm = Float64(weights[k]) / sum_w
-        dn_O_k = dn_O_total * w_norm
-        if dn_O_k > 0.0 && nFe3_m[m] < 2.0 * dn_O_k - 1e-14
-            throw(
-                DomainError(
-                    dO_val,
-                    "Insufficient Fe3O4 in marker $m ($(nFe3_m[m])) to supply oxygen demand $(2.0 * dn_O_k)",
-                ),
-            )
-        elseif dn_O_k < 0.0 && nFe2_m[m] < 2.0 * abs(dn_O_k) - 1e-14
-            throw(
-                DomainError(
-                    dO_val,
-                    "Insufficient FeO in marker $m ($(nFe2_m[m])) to absorb oxygen $(2.0 * abs(dn_O_k))",
-                ),
-            )
-        end
-    end
+    _validate_buffer_oxygen_reactants(
+        nFe2_m, nFe3_m, marker_indices, weights, sum_w, dn_O_total, dO_val, marker_masses
+    )
 
     # Application pass
     for (k, m) in enumerate(marker_indices)
         w_norm = Float64(weights[k]) / sum_w
-        dn_O_k = dn_O_total * w_norm
-        nFe3_m[m] = max(0.0, nFe3_m[m] - 2.0 * dn_O_k)
-        nFe2_m[m] = max(0.0, nFe2_m[m] + 2.0 * dn_O_k)
+        m_mass = marker_masses !== nothing ? Float64(marker_masses[k]) : 1.0
+        dn_O_spec = (dn_O_total * w_norm) / m_mass
+        nFe3_m[m] = max(0.0, nFe3_m[m] - 2.0 * dn_O_spec)
+        nFe2_m[m] = max(0.0, nFe2_m[m] + 2.0 * dn_O_spec)
     end
 
     return nothing

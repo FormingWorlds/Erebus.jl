@@ -456,7 +456,13 @@ function init_marker_arrays(
         initial_xfe =
             haskey(Dict(group_pairs), :metal) ? Dict(group_pairs)[:metal].Xfe_bulk : nothing
         rp = setup_marker_redox_properties(
-            marknum, cfg.redox; initial_xfe_bulk=initial_xfe, tkm=tkm, pfm=pfm0
+            marknum,
+            cfg.redox;
+            initial_xfe_bulk=initial_xfe,
+            tkm=tkm,
+            pfm=pfm0,
+            rhosolid=cfg.materials.rhosolidm[1],
+            rho_metal=cfg.coreformation.rho_metal,
         )
         push!(
             group_pairs,

@@ -387,7 +387,7 @@ function equilibrate_metal_silicate_volatiles!(
     end
 
     # Interacting phase masses per unit marker volume
-    m_met = Xfem[m] * max(rho_met_val, 100.0)
+    m_met = phi_fe * max(rho_met_val, 100.0)
     m_sil = phi_sil * max(rho_sil_val, 100.0)
     if m_met <= 0.0 || m_sil <= 0.0
         return nothing
@@ -414,7 +414,8 @@ function equilibrate_metal_silicate_volatiles!(
         c_met_max_val = Float64(C_met_max)
 
         M_tot = m_sil * c_sil_b + m_met * c_met_val
-        denom = m_sil * F_melt_val + m_met * d_val
+        F_melt_eff = max(F_melt_val, 1.0e-4)
+        denom = m_sil * F_melt_eff + m_met * d_val
         if denom <= 0.0
             return c_sil_b, c_met_val
         end
@@ -563,8 +564,8 @@ $(SIGNATURES)
 - `ycenter::Real`: Planet center y [m] (default: coords.ycenter or 70000.0)
 - `rplanet::Real`: Planet radius [m] (default: 50000.0)
 - `rho_metal::Real`: Metal density [kg/m^3] (default: 7000.0)
-- `core_radius_fraction::Real`: Fractional radius defining central core region (default: 0.5)
-- `phi_core_threshold::Real`: Metal volume fraction threshold for core membership (default: 0.40)
+- `core_radius_fraction::Real`: Optional radial fraction retained for interface compatibility (default: 0.5)
+- `phi_core_threshold::Real`: Metal volume fraction threshold for core membership [0, 1] (default: 0.40)
 - `V_marker::Union{Nothing,Real}`: Explicit marker cross-sectional area [m²]
 
 # Returns
@@ -633,7 +634,7 @@ function compute_core_volatile_budgets(
 
     xc = Float64(xcenter)
     yc = Float64(ycenter)
-    rc_cut = Float64(rplanet) * clamp(Float64(core_radius_fraction), 0.0, 1.0)
+    _ = core_radius_fraction
     phi_cut = clamp(Float64(phi_core_threshold), 0.0, 1.0)
     rho_m = Float64(rho_metal)
 
@@ -676,7 +677,7 @@ function compute_core_volatile_budgets(
                     M_total_N_met += dN
                     M_total_S_met += dS
 
-                    if rmark <= rc_cut || fe_frac >= phi_cut
+                    if fe_frac >= phi_cut
                         M_core_metal += dM_fe
                         M_core_H += dH
                         M_core_C += dC
