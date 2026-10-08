@@ -1,5 +1,34 @@
 
+using Test
+using Erebus
+using ExtendableSparse
+using LinearSolve
+using Random
+using StaticArrays
+
+include("test_helpers.jl")
+
 @testset "Numerics" begin
+    coords_test = test_grid_coordinates()
+    Nx = coords_test.Nx
+    Ny = coords_test.Ny
+    dx = coords_test.dx
+    dy = coords_test.dy
+    xsize = coords_test.xsize
+    ysize = coords_test.ysize
+    xcenter = coords_test.xcenter
+    ycenter = coords_test.ycenter
+    x = coords_test.x
+    y = coords_test.y
+    xp = coords_test.xp
+    yp = coords_test.yp
+    xvx = coords_test.xvx
+    yvx = coords_test.yvx
+    xvy = coords_test.xvy
+    yvy = coords_test.yvy
+    Nx1 = coords_test.Nx1
+    Ny1 = coords_test.Ny1
+    rng = MersenneTwister(42)
     dphimax = 0.1
     dtcoefdn = 0.5
     dtcoefup = 1.2
@@ -216,7 +245,7 @@
         end
 
         # 2. Extremum bounding: min(ETA_4) <= ETAP[i, j] <= max(ETA_4)
-        ETA_var = 1.0e17 .+ rand(rgen, Ny, Nx) * 1.0e18
+        ETA_var = 1.0e17 .+ rand(rng, Ny, Nx) * 1.0e18
         Erebus.recompute_bulk_viscosity!(ETA_var, ETAP, ETAPHI, PHI, etaphikoef)
         for j in 2:Nx, i in 2:Ny
             eta_min = min(
@@ -368,7 +397,7 @@
 
     @testset "setup_*_lse() constructors: dimensions and dynamic coordinates" begin
         # 1. Default grid sizes
-        coords_lse = Erebus.default_grid_coordinates()
+        coords_lse = test_grid_coordinates()
         R_h, S_h = Erebus.setup_hydromechanical_lse(coords_lse)
         @test size(R_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
         @test size(S_h) == (coords_lse.Nx1 * coords_lse.Ny1 * 6,)
@@ -855,11 +884,11 @@
         @test isapprox(dt_unbound, dt_test; rtol=1e-12)
 
         # 5. Monotonicity and positivity under combined random loads
-        aphimax = rand(rgen)
-        vx = rand(rgen, Ny1, Nx1)
-        vy = rand(rgen, Ny1, Nx1)
-        vxf = rand(rgen, Ny1, Nx1)
-        vyf = rand(rgen, Ny1, Nx1)
+        aphimax = rand(rng)
+        vx = rand(rng, Ny1, Nx1)
+        vy = rand(rng, Ny1, Nx1)
+        vxf = rand(rng, Ny1, Nx1)
+        vyf = rand(rng, Ny1, Nx1)
         dtm = Erebus.compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
         @test 0.0 < dtm <= dt
         @test dtm * maximum(abs, vx) <= dxymax * dx + 1e-12
@@ -958,11 +987,11 @@
     end
 
     @testset "symmetrize_p_node_observables!(): Neumann symmetry and idempotence" begin
-        SXX = 1.0e6 .* rand(rgen, Ny1, Nx1)
-        APHI = 1.0e-12 .* rand(rgen, Ny1, Nx1)
-        PHI = 0.1 .+ 0.1 .* rand(rgen, Ny1, Nx1)
-        pr = 1.0e6 .* rand(rgen, Ny1, Nx1)
-        pf = 0.5e6 .* rand(rgen, Ny1, Nx1)
+        SXX = 1.0e6 .* rand(rng, Ny1, Nx1)
+        APHI = 1.0e-12 .* rand(rng, Ny1, Nx1)
+        PHI = 0.1 .+ 0.1 .* rand(rng, Ny1, Nx1)
+        pr = 1.0e6 .* rand(rng, Ny1, Nx1)
+        pf = 0.5e6 .* rand(rng, Ny1, Nx1)
         ps = zeros(Ny1, Nx1)
 
         # Record interior values before symmetrization
@@ -994,8 +1023,8 @@
     end
 
     @testset "positive_max(): non-negativity and upper bound axioms" begin
-        A = rand(rgen, -100:0.1:100, 50, 50)
-        B = rand(rgen, -100:0.1:100, 50, 50)
+        A = rand(rng, -100:0.1:100, 50, 50)
+        B = rand(rng, -100:0.1:100, 50, 50)
         R = zeros(50, 50)
         Erebus.positive_max!(A, B, R)
 
@@ -1194,7 +1223,7 @@
 
     @testset "compute_thermochemical_iteration_outcome: convergence decision boundaries" begin
         # 1. Converged case: small pressure error and past titer threshold (titer > 2)
-        pf_converged = rand(rgen, Ny1, Nx1)
+        pf_converged = rand(rng, Ny1, Nx1)
         pf0 = copy(pf_converged) # zero pressure error
         DMP_active = fill(1.0e-5, Ny1, Nx1)
         @test Erebus.compute_thermochemical_iteration_outcome(
@@ -1293,7 +1322,7 @@
     end
 
     @testset "poroelastic hydromechanical coupling" begin
-        coords_poro = Erebus.default_grid_coordinates()
+        coords_poro = test_grid_coordinates()
         Ny, Nx = coords_poro.Ny, coords_poro.Nx
         Ny1, Nx1 = coords_poro.Ny1, coords_poro.Nx1
         dt = 10.0
@@ -1384,7 +1413,7 @@
     end # testset "poroelastic hydromechanical coupling"
 
     @testset "Terzaghi 1D consolidation numerical simulation verification" begin
-        coords_terz = Erebus.default_grid_coordinates()
+        coords_terz = test_grid_coordinates()
         Ny, Nx = coords_terz.Ny, coords_terz.Nx
         Ny1, Nx1 = coords_terz.Ny1, coords_terz.Nx1
         dy = coords_terz.dy

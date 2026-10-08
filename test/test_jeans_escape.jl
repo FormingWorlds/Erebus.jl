@@ -345,11 +345,56 @@ using Erebus.Physics
         # R_exobase keyword argument support and scaling
         R_exo_high = 1.2 * R_50km
         res_exo = evolve_atmospheric_species_inventory(
-            0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG; R_exobase=R_exo_high
+            0.0,
+            vent_rate,
+            dt_1yr,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            R_exobase=R_exo_high,
+            hydrodynamic=false,
         )
-        @test res_exo.M_atm > 0.0
         @test isapprox(res_exo.M_atm + res_exo.M_escaped_step, total_vented; rtol=1e-12)
-        @test res_exo.M_atm != res_vent.M_atm
+        H_exo = compute_atmospheric_scale_height(M_50km, R_exo_high, T_200, MASS_H2O_KG)
+        lam_exo = compute_jeans_parameter(M_50km, R_exo_high, T_200, MASS_H2O_KG)
+        k_expected_exo =
+            (v_th_50 / (2.0 * sqrt(π) * H_exo)) * (1.0 + lam_exo) * exp(-lam_exo)
+        M_ss_exo_expected = vent_rate / k_expected_exo
+        @test isapprox(res_exo.M_atm, M_ss_exo_expected; rtol=1e-5)
+        # Scale height and steady-state atmospheric mass scale quadratically with R_exobase
+        @test isapprox(res_exo.M_atm / res_vent.M_atm, (R_exo_high / R_50km)^2; rtol=1e-3)
+
+        # Escape mass rate scales strictly as (R_exobase / R_planet)^2 for equal exobase density
+        loss_rate_base = compute_jeans_mass_loss_rate(
+            M_50km, R_50km, T_200, MASS_H2O_KG, 1.0e18 * MASS_H2O_KG; hydrodynamic=false
+        )
+        loss_rate_high = compute_jeans_mass_loss_rate(
+            M_50km, R_exo_high, T_200, MASS_H2O_KG, 1.0e18 * MASS_H2O_KG; hydrodynamic=false
+        )
+        @test isapprox(loss_rate_high / loss_rate_base, (R_exo_high / R_50km)^2; rtol=1e-3)
+
+        # Analytical transient depletion test without continuous venting: M_atm(t) = M_0 * exp(-k * t)
+        M0_trans = 1.0e8 # 100,000 tonnes
+        dt_trans = 100.0 # 100 s (dt << 1/k_expected ≈ 21,800 s)
+        res_trans = evolve_atmospheric_species_inventory(
+            M0_trans,
+            0.0,
+            dt_trans,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            R_exobase=R_50km,
+            hydrodynamic=false,
+        )
+        expected_M_atm_trans = M0_trans * exp(-k_expected * dt_trans)
+        expected_M_esc_trans = M0_trans - expected_M_atm_trans
+        @test isapprox(res_trans.M_atm, expected_M_atm_trans; rtol=1e-8)
+        @test isapprox(res_trans.M_escaped_step, expected_M_esc_trans; rtol=1e-8)
+        # First-order Taylor series: M_atm(t) ≈ M_0 - M_dot * t
+        M_dot_initial = k_expected * M0_trans
+        @test isapprox(res_trans.M_atm, M0_trans - M_dot_initial * dt_trans; rtol=1e-4)
 
         # Guard: R_exobase < R_planet throws DomainError
         @test_throws DomainError evolve_atmospheric_species_inventory(

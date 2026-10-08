@@ -1,4 +1,14 @@
+using Test
+using Erebus
+using JLD2
+using StaticArrays
+
+include("test_helpers.jl")
+
 @testset "Integration" begin
+    rng = MersenneTwister(42)
+    coords_test = test_grid_coordinates()
+
     @testset "simulation_loop() execution and state persistence" begin
         output_dir = mktempdir()
         try

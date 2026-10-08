@@ -83,6 +83,33 @@ using Erebus
             @test all(isfinite, lvl.inv_diag)
             @test all(!iszero, lvl.inv_diag)
         end
+
+        # Fine-level inverse diagonal matches Jacobi inverse diagonal and Schur Pt scaling
+        lvl1 = hierarchy.levels[1]
+        d_raw = Erebus.compute_operator_diagonal(op_fine)
+        inv_d_mat = reshape(lvl1.inv_diag, (4, op_fine.Ny1, op_fine.Nx1))
+        d_mat = reshape(d_raw, (4, op_fine.Ny1, op_fine.Nx1))
+        # Direct Jacobi inverse diagonals for velocity and Darcy fluid pressure
+        @test isapprox(
+            inv_d_mat[1, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)],
+            inv.(d_mat[1, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)]);
+            rtol=1e-12,
+        )
+        @test isapprox(
+            inv_d_mat[2, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)],
+            inv.(d_mat[2, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)]);
+            rtol=1e-12,
+        )
+        @test isapprox(
+            inv_d_mat[4, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)],
+            inv.(d_mat[4, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)]);
+            rtol=1e-12,
+        )
+        # Total pressure Pt uses Schur complement scaling: inv_diag < 1/d_raw due to positive stiffness augmentation
+        @test all(
+            inv_d_mat[3, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)] .<
+            inv.(d_mat[3, 2:(op_fine.Ny_val), 2:(op_fine.Nx_val)]),
+        )
     end
 
     @testset "Restriction and Prolongation Invariants" begin
@@ -289,7 +316,7 @@ using Erebus
         end
     end
 
-    @testset "End-to-End Multigrid FGMRES Solve and Mesh Independence" begin
+    @testset "Full Chain Multigrid FGMRES Solve and Mesh Independence" begin
         # 32x32 Grid Solve
         coords_32 = GridCoordinates(32, 32; xsize=xsize, ysize=ysize)
         op_32 = MatrixFreeStokesDarcyOperator(
@@ -314,6 +341,9 @@ using Erebus
 
         x_true_32 = zeros(op_32.Ny1 * op_32.Nx1 * 4)
         x_mat_32 = reshape(x_true_32, (4, op_32.Ny1, op_32.Nx1))
+        rho_solid = 3300.0
+        rho_fluid = 1000.0
+        g_acc = 9.81
         for j in 1:op_32.Nx1, i in 1:op_32.Ny1
             if !Erebus.is_boundary_vx(i, j, 32, 32, op_32.Ny1, op_32.Nx1)
                 x_mat_32[1, i, j] =
@@ -324,8 +354,9 @@ using Erebus
                     cos(2 * pi * i / op_32.Ny1) * sin(2 * pi * j / op_32.Nx1)
             end
             if !Erebus.is_boundary_p(i, j, 32, 32, op_32.Ny1, op_32.Nx1)
-                x_mat_32[3, i, j] = 1.0e6 + 1.0e5 * sin(pi * i / op_32.Ny1)
-                x_mat_32[4, i, j] = 1.0e5 * cos(pi * j / op_32.Nx1)
+                depth = max(0.0, coords_32.yp[i])
+                x_mat_32[3, i, j] = 1.0e6 + rho_solid * g_acc * depth
+                x_mat_32[4, i, j] = 0.5e6 + rho_fluid * g_acc * depth
             end
         end
         b_32 = zeros(length(x_true_32))
@@ -366,8 +397,9 @@ using Erebus
             if !Erebus.is_boundary_p(
                 i, j, op_fine.Ny_val, op_fine.Nx_val, op_fine.Ny1, op_fine.Nx1
             )
-                x_mat_64[3, i, j] = 1.0e6 + 1.0e5 * sin(pi * i / op_fine.Ny1)
-                x_mat_64[4, i, j] = 1.0e5 * cos(pi * j / op_fine.Nx1)
+                depth = max(0.0, coords.yp[i])
+                x_mat_64[3, i, j] = 1.0e6 + rho_solid * g_acc * depth
+                x_mat_64[4, i, j] = 0.5e6 + rho_fluid * g_acc * depth
             end
         end
 
