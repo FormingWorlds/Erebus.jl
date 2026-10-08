@@ -140,7 +140,7 @@ R(t) \ge r_{\text{threshold\_fraction}} \cdot r_{\text{max\_domain}} \quad (r_{\
    - Level 4: $2{,}240\text{ km} \times 2{,}240\text{ km}$
    - Level 5: $4{,}480\text{ km} \times 4{,}480\text{ km}$ ($r_{\text{max}} = 2{,}240\text{ km}$, threshold $1{,}568\text{ km}$)
    - Level 6: $8{,}960\text{ km} \times 8{,}960\text{ km}$ (contains full $1{,}737\text{ km}$ lunar embryo)
-3. Interior markers and physical fields ($T, P, P_f, \phi, X_{\text{Fe}}$) are conserved identically under the coordinate affine scaling $x' = (x - x_c)/2 + x_c$. New exterior cells receive sticky-air boundary conditions.
+3. Interior markers and physical fields ($T, P, P_f, \phi, X_{\text{Fe}}$) preserve their absolute spatial positions and radial distances through coordinate translation offsets (`shift_x`, `shift_y`) at the new grid spacing $\Delta x, \Delta y$. New outer cells receive sticky-air buffer markers with zero initial stress.
 
 ---
 
@@ -221,7 +221,7 @@ cfg = load_config("configs/lunar_growth_tutorial.toml")
 validate_config(cfg)
 
 # Run coupled simulation
-# A standard demonstration run executes in 5 to 15 minutes on a modern workstation
+# The demonstration configuration executes a 10-step demonstration stub (~10 kyr) in ~1 minute for automated testing
 simulation_loop(cfg; output_path="output_lunar_growth")
 ```
 

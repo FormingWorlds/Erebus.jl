@@ -4,7 +4,7 @@ This page documents and validates the silicate rock melting formulation, latent 
 
 ## Theoretical Formulation
 
-The thermodynamics of silicate melting (linear melt fraction $F_m$, apparent heat capacity $\rho c_{p,\text{eff}}$, latent heat buffering), Costa et al. (2009) rheological weakening, and Solomatov (2007) sub-grid soft turbulence scaling are derived in detail in [Silicate Melting & Soft Turbulence](../explanations/rock_melting.md).
+The thermodynamics of silicate melting (linear melt fraction $F_m$, apparent heat capacity $\rho c_{p,\text{eff}}$, latent heat buffering), Costa et al. (2009) rheological weakening, and Solomatov (2007) sub-grid soft turbulence scaling are derived in detail in [Silicate Melting & Soft Turbulence](../../explanations/rock_melting.md).
 
 Key constitutive formulations validated here include:
 
@@ -37,7 +37,7 @@ The benchmark verifies four physical mechanisms:
 
 The benchmark tracks thermal state, phase fraction, and convective heat transport:
 
-![Planetesimal Magma Ocean Benchmark Summary](../assets/magma_ocean_cooling_benchmark.png)
+![Planetesimal Magma Ocean Benchmark Summary](../../assets/magma_ocean_cooling_benchmark.png)
 
 *Figure 1: Class B (1D Finite-Difference Benchmark Solver): Multi-panel summary of the planetesimal magma ocean solidification benchmark. The curves evaluate a 1D spherical finite-difference solver in Python (`benchmarks/render_magma_ocean_movie.py`), revolved into a circular cross-section for 2D visualization. Solver verification is performed by the automated test suite. (a) Revolved thermal field snapshot at $t = 15\text{ kyr}$. (b) Core thermal quenching comparing conduction against soft turbulence. (c) Magma ocean solidification front retreat ($F_m = 0.40$). (d) Radial temperature profiles at $t \in [0, 5, 15, 50]\text{ kyr}$. (e) Convective conductivity profiles. (f) Planetary surface heat loss over time.*
 
@@ -47,7 +47,7 @@ The benchmark tracks thermal state, phase fraction, and convective heat transpor
 
 The animation below displays the benchmark ($N_r = 128$ radial cells, revolved onto a 128x128 visualization mesh, 50 km planetesimal) over 50 kyr. The panels show temperature $T$ (left), silicate melt fraction $F_m$ (center), and effective thermal conductivity $k_{\text{eff}}$ on a logarithmic scale (right). Color limits stay fixed and normalized in all frames.
 
-![Planetesimal Magma Ocean Solidification Animation](../assets/magma_ocean_cooling_128.gif)
+![Planetesimal Magma Ocean Solidification Animation](../../assets/magma_ocean_cooling_128.gif)
 
 *Figure 2: Class B (1D Finite-Difference Benchmark Solver): Solidification animation of the 1D spherical magma ocean model over 50 kyr, revolved onto a 128x128 grid for visualization (`benchmarks/render_magma_ocean_movie.py`). Displays temperature, melt fraction $F_m$, and effective thermal conductivity $k_{\text{eff}}$.*
 
@@ -57,7 +57,7 @@ The animation below displays the benchmark ($N_r = 128$ radial cells, revolved o
 
 To test spatial convergence, simulations compare four radial grid resolutions: $N_r = 32$ ($\Delta r = 1.56\text{ km}$), $N_r = 64$ ($\Delta r = 0.78\text{ km}$), $N_r = 128$ ($\Delta r = 0.39\text{ km}$), and $N_r = 256$ ($\Delta r = 0.20\text{ km}$).
 
-![Grid Convergence Comparison](../assets/magma_ocean_grid_convergence.png)
+![Grid Convergence Comparison](../../assets/magma_ocean_grid_convergence.png)
 
 *Figure 3: Class B (1D Finite-Difference Benchmark Solver): Spatial grid convergence for 32, 64, 128, and 256 radial cells evaluated in `benchmarks/render_magma_ocean_movie.py`. Shows central core temperature convergence within 0.97% between $N_r = 128$ and $N_r = 256$.*
 
@@ -74,7 +74,7 @@ Discontinuous step thresholds at marker state transitions produce numerical arti
  
 `Erebus.jl` resolves this issue with regularized geometric blending:
  
-![Conductivity Regularization](../assets/magma_ocean_regularization.png)
+![Conductivity Regularization](../../assets/magma_ocean_regularization.png)
 
 *Figure 4: Class B (1D Finite-Difference Benchmark Solver / Analytical Formulation): Verification of regularized geometric blending for sub-grid soft turbulence conductivity in `benchmarks/render_magma_ocean_movie.py`. Demonstrates $C^1$ smoothness and elimination of flux spikes.*
 
@@ -131,14 +131,15 @@ Model setup files live in `configs/`:
   - `@testset "Grid Interpolation: KX & KY receive enhanced conductivity"`
   - `@testset "Mini-Simulation Execution with Soft Turbulence"`
 - `test/test_magma_transport.jl`:
-  - `@testset "Magma Transport Configuration & Validation"`
-  - `@testset "Silicate Melt Permeability Formulation"`
-  - `@testset "Silicate Melt Segregation Velocity & Regimes"`
-  - `@testset "Silicate Melt Gravitational Dissipation Heating"`
-  - `@testset "Marker Magma Allocation & Depletion Properties"`
-  - `@testset "Two-Phase Melt Segregation Operator: Mass Conservation & Ascent"`
-  - `@testset "Two-Phase Melt Segregation: Thermal Dissipation & Crystallization Latent Heat"`
-  - `@testset "Two-Phase Melt Segregation: Neutral & Negative Buoyancy Cutoff"`
+  - `@testset "MagmaTransportConfig Schema & Validation"`
+  - `@testset "MagmaTransportConfig TOML Round-Trip"`
+  - `@testset "silicate_melt_permeability: McKenzie (1984) Power Law"`
+  - `@testset "silicate_melt_segregation_velocity: Regime Blending & Limits"`
+  - `@testset "silicate_melt_dissipation_heating: Gravitational Energy Release"`
+  - `@testset "setup_marker_magma_properties Allocation"`
+  - `@testset "apply_silicate_melt_segregation! Conservation & Ascent"`
+  - `@testset "Decompression Volatile Exsolution on Ascending Melt"`
+  - `@testset "Crustal Magma Sill Ponding & Overpressure Hydrofracture Eruption"`
 
 ---
 

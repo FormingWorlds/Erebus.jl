@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 # Reference verification script for Erebus.jl documentation.
 #
-# Verifies that all literature DOIs cited in docs/src/reference/bibliography.md
-# and docs/src/validation/*.md resolve against the official DOI registry (doi.org).
+# Verifies that all literature DOIs cited across docs/src/
+# resolve against the official DOI registry (doi.org).
 #
 # Prevents reference hallucination by ensuring cited works are real, registered publications.
 
@@ -38,16 +38,10 @@ end
 
 function main()
     target_files = String[]
-    bib_file = joinpath(DOCS_DIR, "reference", "bibliography.md")
-    if isfile(bib_file)
-        push!(target_files, bib_file)
-    end
-
-    val_dir = joinpath(DOCS_DIR, "validation")
-    if isdir(val_dir)
-        for f in readdir(val_dir; join=true)
-            if endswith(f, ".md")
-                push!(target_files, f)
+    for (root, _, files) in walkdir(DOCS_DIR)
+        for file in files
+            if endswith(file, ".md")
+                push!(target_files, joinpath(root, file))
             end
         end
     end

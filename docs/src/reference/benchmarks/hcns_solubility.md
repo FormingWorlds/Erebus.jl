@@ -123,13 +123,13 @@ When dissolved sulfur reaches the Sulfur Content at Sulfide Saturation (O'Neill 
 
 $$\ln(\text{SCSS} [\text{ppmw}]) = 7.50 - \frac{4500.0}{T} + 0.90 \ln(\max(0.1, x_{\text{FeO}})) - 2.5 \times 10^{-4} \frac{P_{\text{tot}} [\text{bar}]}{T}$$
 
-In `compute_volatile_exsolution`, sulfur solubility evaluates using the speciated sulfur partial pressure $p_{\text{S}_2}$ calculated from equilibrium gas speciation:
+In `compute_volatile_exsolution`, sulfur solubility evaluates using the speciated sulfur partial pressure $p_{\text{S}_2}$ calculated from equilibrium gas speciation, converted from $\text{wt}\%$ to $\text{ppmw}$ via a factor of $10^4$:
 
-$$S_{\text{solubility}} = S_{\text{sulfide}}(p_{\text{S}_2}, f_{\text{O}_2}, T)$$
+$$S_{\text{solubility}} [\text{ppmw}] = 10^4 \cdot S_{\text{sulfide}}(p_{\text{S}_2}, f_{\text{O}_2}, T)$$
 
-When `scss_active = true`, the routine caps dissolved sulfur at the saturation ceiling:
+When `scss_active = true`, the routine caps dissolved sulfur in the melt at the saturation ceiling:
 
-$$S_{\text{melt}} = \min(S_{\text{solubility}}, \text{SCSS})$$
+$$S_{\text{melt}} [\text{ppmw}] = \min\left(S_{\text{solubility}} [\text{ppmw}], \text{SCSS} [\text{ppmw}]\right)$$
 
 ### Homogeneous Gas Speciation Equilibria
 
@@ -185,11 +185,11 @@ Gas speciation in the C-H-O-N-S volatile system is evaluated in `solve_chnos_spe
 
 Figures 1 and 2 illustrate the operational behavior of the volatile solubility parameterizations, speciation, and saturation limits:
 
-![HCNS Volatile Solubility Benchmark](../assets/hcns_solubility_benchmark.png)
+![HCNS Volatile Solubility Benchmark](../../assets/hcns_solubility_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel diagnostic demonstration of the multi-species H-C-N-S volatile solubility parameterizations. The curves evaluate analytical formulations in Python (`scripts/generate_hcns_solubility_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Dissolved water concentration in silicate melt as a function of pore/surface pressure $P \in [0, 200]\text{ bar}$ across four compositional calibrations: MORB basalt (Dixon et al. 1995), lunar basalt (Newcombe et al. 2017), peridotite (Sossi et al. 2023), and the baseline Burnham-Dixon parameterization. (b) Carbon solubility speciation as a function of species partial pressure up to $100\text{ bar}$ at $T = 1500\text{ K}$, contrasting carbonate dissolution (CO₂), dissolved carbon monoxide (CO), and methane (CH₄). Dotted horizontal lines show the graphite saturation ceiling at $\Delta\text{IW} = -1$. (c) Composition-dependent nitrogen solubility as a function of redox offset $\Delta\text{IW} \in [-4, +2]$ at $p_{\text{N}_2} = 10\text{ bar}$ and $T = 1600\text{ K}$ (Dasgupta et al. 2022), decomposing total dissolved nitrogen into physical molecular (N₂) and chemical nitride (N³⁻) dissolution for Earth mantle and lunar basalt compositions. (d) Sulfur solubility as a function of redox state at $T = 1500\text{ K}$ and $p_{\text{S}_2} = 1\text{ bar}$, showing sulfide and sulfate capacities (Boulliung & Wood 2023) and the sulfur content at sulfide saturation (SCSS) ceiling for $10\text{ wt}\%$ and $20\text{ wt}\%$ FeO (Smythe et al. 2017). The yellow shaded region indicates where raw sulfide solubility exceeds SCSS, causing precipitation of an immiscible Fe-S sulfide liquid (matte).*
 
-![Volatile Solubility Benchmark](../assets/volatile_solubility_benchmark.png)
+![Volatile Solubility Benchmark](../../assets/volatile_solubility_benchmark.png)
 
 *Figure 2: Class C (Analytical / Empirical Reference Formulation): Four-panel illustration of baseline volatile solubility and organic devolatilization parameterizations. The curves evaluate analytical formulations in Python (`scripts/generate_volatile_solubility_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Dissolved water concentration in silicate melt as a function of pore fluid pressure for coefficients $A_s \in \{0.30, 0.40, 0.50\}\text{ wt}\%/\text{MPa}^{0.5}$, with square-root scaling up to $100\text{ MPa}$. (b) Oxygen fugacity $\log_{10}(f_{\text{O}_2}\ [\text{bar}])$ along the iron-wüstite buffer from $800\text{ to }1800\text{ K}$ for redox offsets $\Delta\text{IW} \in \{-3, -2, -1, 0, +1, +2\}$. (c) Nitrogen melt solubility partitioning at $P = 10\text{ MPa}$ ($100\text{ bar}$) across redox offsets $\Delta\text{IW} \in [-4, +4]$, showing the transition from chemical nitride ($\text{N}^{3-}$) dominance under reducing conditions to physical molecular ($\text{N}_2$) dominance under oxidizing conditions (Libourel et al. 2003; Boulliung et al. 2020). (d) Primordial organic nitrogen devolatilization yield $y(T)$ as a function of rock temperature for midpoint values $T_{\text{devol}} \in \{500, 550, 600\}\text{ K}$ with width $\Delta T = 50\text{ K}$.*
 

@@ -4,7 +4,7 @@
 using TOML
 
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
-const DEFAULT_MAP_PATH = joinpath(ROOT_DIR, "docs", "src", "validation", "number_map.toml")
+const DEFAULT_MAP_PATH = joinpath(ROOT_DIR, "docs", "src", "reference", "benchmarks", "number_map.toml")
 const TEST_DIR = joinpath(ROOT_DIR, "test")
 const DOCS_DIR = joinpath(ROOT_DIR, "docs", "src")
 

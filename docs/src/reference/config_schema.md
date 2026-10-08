@@ -87,7 +87,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `mg_smoother` | `String` / `Symbol` | `"damped_jacobi"` | - | Multigrid relaxation smoother method | `"damped_jacobi"`, `"redblack_gauss_seidel"` |
 | `mg_omega` | `Float64` | `0.67` | - | Relaxation damping parameter $\omega$ | $\in (0, 1]$ |
 | `p2m_mode` | `Symbol` | `:tiled` | - | Particle-to-mesh interpolation mode | `:tiled`, `:buffered` |
-| `tile_size` | `Int` | `4` | - | Tile dimension for tiled particle-to-mesh interpolation | $\ge 1$ |
+| `tile_size` | `Int` | `4` | - | Tile dimension for tiled particle-to-mesh interpolation | $\ge 2$ |
 
 ---
 
@@ -143,7 +143,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 3-element vectors representing `[Index 1: Core, Index 2: Crust, Index 3: Sticky Air]`.
 
 > [!WARNING]
-> Eight material arrays are compiled into numerical stencils and cannot be modified without recompiling: `rhosolidm`, `rhofluidm`, `etasolidm`, `etasolidmm`, `etafluidm`, `etafluidmm`, `ksolidm`, and `kfluidm`. `validate_config` throws an `ArgumentError` if custom values differ from `src/constants.jl`. The remaining eleven property arrays can be configured freely.
+> Material property arrays in `[materials]` are validated against compiled constants in `src/constants.jl`. Overriding `[materials]` arrays at runtime is not supported because marker property assignment uses compiled constants. Recompilation is required to modify material properties. `SimulationConfig.materials` supplies sticky-air properties to new buffer markers during domain telescoping.
 
 | Parameter | Type | Default | Units | Status | Bounds | Description |
 |:---|:---|:---|:---|:---|:---|:---|
@@ -155,17 +155,17 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `etafluidmm` | `SVector{3}` | `[1.0e-3, 1.0e-3, 1.0e-3]` | Pa s | Compiled Constant | All $> 0$ | Liquid water dynamic viscosity |
 | `ksolidm` | `SVector{3}` | `[3.0, 3.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Compiled Constant | All $> 0$ | Solid thermal conductivity |
 | `kfluidm` | `SVector{3}` | `[50.0, 50.0, 3000.0]` | $\text{W}/(\text{m}\cdot\text{K})$ | Compiled Constant | All $> 0$ | Fluid thermal conductivity |
-| `rhocpsolidm` | `SVector{3}` | `[3.3e6, 3.3e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Configurable | All $> 0$ | Volumetric solid heat capacity |
-| `rhocpfluidm` | `SVector{3}` | `[1.0e6, 1.0e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Configurable | All $> 0$ | Volumetric fluid heat capacity |
-| `alphasolidm` | `SVector{3}` | `[3.0e-5, 3.0e-5, 0.0]` | $1/\text{K}$ | Configurable | All $\ge 0$ | Solid thermal expansion |
-| `alphafluidm` | `SVector{3}` | `[5.0e-5, 5.0e-5, 0.0]` | $1/\text{K}$ | Configurable | All $\ge 0$ | Fluid thermal expansion |
-| `gggsolidm` | `SVector{3}` | `[1.0e10, 1.0e10, 1.0e10]` | Pa | Configurable | All $> 0$ | Solid shear elastic modulus |
-| `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Configurable | All $\ge 0$ | Internal friction coefficient |
-| `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Configurable | All $> 0$ | Cohesion |
-| `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Configurable | All $> 0$ | Tensile strength |
-| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Configurable | All $> 0$ | Reference permeability |
-| `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Configurable | All $> 0$ | Initial temperature |
-| `XWsolidm_init` | `SVector{3}` | `[0.5, 0.5, NaN]` | - | Configurable | All $\ge 0$ or `NaN` | Initial solid water fraction |
+| `rhocpsolidm` | `SVector{3}` | `[3.3e6, 3.3e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Compiled Constant / Telescoping | All $> 0$ | Volumetric solid heat capacity |
+| `rhocpfluidm` | `SVector{3}` | `[1.0e6, 1.0e6, 3.0e6]` | $\text{J}/(\text{m}^3\cdot\text{K})$ | Compiled Constant / Telescoping | All $> 0$ | Volumetric fluid heat capacity |
+| `alphasolidm` | `SVector{3}` | `[3.0e-5, 3.0e-5, 0.0]` | $1/\text{K}$ | Compiled Constant / Telescoping | All $\ge 0$ | Solid thermal expansion |
+| `alphafluidm` | `SVector{3}` | `[5.0e-5, 5.0e-5, 0.0]` | $1/\text{K}$ | Compiled Constant / Telescoping | All $\ge 0$ | Fluid thermal expansion |
+| `gggsolidm` | `SVector{3}` | `[1.0e10, 1.0e10, 1.0e10]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Solid shear elastic modulus |
+| `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Compiled Constant / Telescoping | All $\ge 0$ | Internal friction coefficient |
+| `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Cohesion |
+| `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Tensile strength |
+| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Compiled Constant / Telescoping | All $> 0$ | Reference permeability |
+| `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Compiled Constant / Telescoping | All $> 0$ | Initial temperature |
+| `XWsolidm_init` | `SVector{3}` | `[0.5, 0.5, NaN]` | - | Compiled Constant / Telescoping | All $\ge 0$ or `NaN` | Initial solid water fraction |
 
 ---
 
@@ -177,7 +177,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `savematstep` | `Int` | `10` | - | Checkpoint saving frequency | $\ge 1$ |
 | `visstep` | `Int` | `1` | - | Visualization step cadence | $\ge 1$ |
 | `restart_from` | `String` | `""` | - | Checkpoint JLD2 file path to resume simulation from | File path or empty string |
-| `mode` | `Symbol` | `:snapshots` | - | Output storage mode | `:snapshots`, `:timeseries` |
+| `mode` | `Symbol` | `:snapshots` | - | Output storage mode | `:snapshots`, `:telemetry`, `:both` |
 | `telemetrystep` | `Int` | `1` | - | Step cadence for telemetry record streaming | $\ge 1$ |
 | `telemetry_file` | `String` | `"telemetry.csv"` | - | Filename for telemetry log output | Non-empty string |
 | `save_final` | `Bool` | `true` | - | Save final state checkpoint at simulation termination | `true` / `false` |

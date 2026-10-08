@@ -17,7 +17,7 @@ To prevent unphysical total degassing under vacuum boundary conditions, `Erebus.
   where $\Delta T_{\text{ret}}$ is the supersolidus melt extraction temperature scale.
 
 - **Linear Melt Blend** (`:linear_melt_blend`):
-  $$C_{\text{ret}}(T) = C_{\text{floor}} \left[1 - \text{clamp}\left(\frac{T - T_{\text{solidus}}}{\Delta T_{\text{ret}}}, 0, 1\right)\right]$$
+  $$C_{\text{ret}}(F_m) = C_{\text{base}} \max(0, 1 - F_m)$$
 
 - **Constant Floor** (`:constant_floor`):
   $$C_{\text{ret}}(T) = C_{\text{floor}}$$
@@ -93,7 +93,7 @@ where $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$ [m] an
 
 ## 3. Four-Panel Verification Benchmark
 
-![Volatile Retention and Venting Benchmark](../assets/volatile_retention_benchmark.png)
+![Volatile Retention and Venting Benchmark](../../assets/volatile_retention_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel verification benchmark for volatile retention floors and venting drainage kinetics. The curves evaluate analytical formulations in Python (`scripts/generate_volatile_retention_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Temperature-dependent solid retention floor comparing constant, linear, and NAMs exponential modes. (b) Decompression exsolution and vacuum retention limit for 500 ppmw bulk H₂O. (c) Low-temperature vent drainage kinetics over 100 kyr. (d) Multi-species vented volatile fractions for H₂O, C, N, and S.*
 

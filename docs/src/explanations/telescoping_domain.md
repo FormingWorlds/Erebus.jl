@@ -116,7 +116,7 @@ Under `geometry.gravity_mode = :poisson2d`, the self-gravitational potential $\P
 $$\nabla^2 \Phi = \frac{8}{3} \pi G \rho_{\text{total}}$$
 
 where $8/3 \pi G = (2/3) \times 4 \pi G$. On the expanded grid:
-1. The 5-point discrete Laplacian matrix $L$ is reassembled with dimensions $(N_x^{\text{new}} N_y^{\text{new}}) \times (N_x^{\text{new}} N_y^{\text{new}})$.
+1. The 5-point discrete Laplacian matrix $L$ is reassembled on pressure nodes with dimensions $((N_x^{\text{new}}+1)(N_y^{\text{new}}+1)) \times ((N_x^{\text{new}}+1)(N_y^{\text{new}}+1))$.
 2. Boundary potentials are updated to enforce homogeneous Dirichlet conditions along the computational box boundary and outside the inscribed circle:
    $$\Phi_{\partial\Omega} = 0$$
 3. The sparse matrix $L$ is refactored via sparse LU decomposition (UMFPACK). Because domain doubling occurs only a few times throughout a multimillion-year simulation, the one-time factorization cost is negligible compared to regular timestepping.

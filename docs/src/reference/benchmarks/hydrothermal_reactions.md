@@ -4,12 +4,12 @@ This page validates the coupled hydro-thermo-chemical module in `Erebus.jl`. The
 
 ## 2D Hydrothermal Benchmark
 
-The benchmark simulates a 50 km radius planetesimal. It resolves Darcy porous flow, thermal buoyancy, and mineral hydration kinetics simultaneously from 1.5 Ma to 15.0 Ma after CAIs (13.5 Myr duration). The interior starts with dry rock and pore ice. Formation starts at 1.5 Ma after CAIs, which keeps peak interior temperatures below the rock solidus (1416 K). During early heating, radioactive decay of short-lived $^{26}\text{Al}$ heats the rock, melts pore ice, and drives fluid flow.
+The benchmark simulates a 50 km radius planetesimal. It resolves Darcy porous flow, thermal buoyancy, and mineral hydration kinetics simultaneously from 1.5 Ma to 15.0 Ma after CAIs (13.5 Myr duration). The interior starts with dry rock and pore ice. Formation starts at 1.5 Ma after CAIs, which keeps peak interior temperatures below the rock solidus (1400 K). During early heating, radioactive decay of short-lived $^{26}\text{Al}$ heats the rock, melts pore ice, and drives fluid flow.
 
 When temperatures exceed 273 K, pore ice melts. Water-rock reactions then bind pore fluid into serpentine minerals.
 
 The benchmark verifies three core physical mechanisms:
-1. **Reaction Rates:** Hydration and dehydration fronts move by Arrhenius kinetics (`hydration_mode = 1`, `dehydration_mode = 2`).
+1. **Reaction Rates:** Hydration and dehydration fronts move by kinetic rate laws (`hydration_mode = 1` for Gaussian kinetics, `dehydration_mode = 2` for pseudo-Arrhenius, and mode 3 for Arrhenius).
 2. **Latent Heat:** Reactions release heat during hydration and absorb heat during dehydration through the `DHP` term.
 3. **Conserved Mass:** Fluid transfer between pores and mineral lattices conserves total water, tracked by `DQPF`.
 
@@ -27,7 +27,7 @@ The equilibrium temperature at zero pore pressure evaluates to $T_0 = \Delta H_{
 
 The benchmark tracks thermal state, chemical fronts, and fluid motion:
 
-![2D Benchmark Summary](../assets/hydrothermal_reaction_128.png)
+![2D Benchmark Summary](../../assets/hydrothermal_reaction_128.png)
 
 *Figure 1: Class A (2D Simulation Output): Multi-panel summary of the coupled hydro-thermo-chemical planetesimal evolution on a 128x128 grid from 1.5 Ma to 15.0 Ma after CAIs (`configs/hydrothermal_reaction_on_128.toml`). (a) Temperature evolution showing radiogenic heating. (b) Global water budget showing mineral-pore water partitioning. (c) Mean Darcy circulation velocity. (d) Final hydration extent ($X_W$) showing a hydrated serpentine shell around an anhydrous core. (e) Fluid source term (DQPF). (f) Latent heat release and consumption (DHP).*
 
@@ -37,7 +37,7 @@ In all 2D maps, the planetesimal center sits at origin $(0, 0)\text{ km}$. Stick
 
 The animation below displays the high-resolution 128x128 benchmark ($1.09\text{ km}$ cells, 262,144 markers) over 15 Ma. The panels show temperature (left), hydration extent $X_W$ with blue indicating hydrous serpentine and yellow indicating dry rock (center), and fluid mass exchange rate `DQPF` (right). Color limits stay fixed and normalized in all frames.
 
-![2D Hydrothermal Benchmark Animation (128x128)](../assets/hydrothermal_reaction_128.gif)
+![2D Hydrothermal Benchmark Animation (128x128)](../../assets/hydrothermal_reaction_128.gif)
 
 *Figure 2: Class A (2D Simulation Output): Evolution movie of the 128x128 hydrothermal reaction benchmark over 15 Ma of evolution. Panels display temperature field, mineral hydration progress $X_W$, and reactive fluid source term DQPF.*
 
@@ -45,12 +45,12 @@ The animation below displays the high-resolution 128x128 benchmark ($1.09\text{ 
 
 To test spatial convergence, simulations compare three grid resolutions over 15 Ma: 32x32 ($4.24\text{ km}$ cells), 64x64 ($2.15\text{ km}$ cells), and 128x128 ($1.09\text{ km}$ cells).
 
-![Grid Convergence Comparison](../assets/hydrothermal_grid_convergence.png)
+![Grid Convergence Comparison](../../assets/hydrothermal_grid_convergence.png)
 
 *Figure 3: Class A (2D Simulation Output): Grid convergence verification for 32x32, 64x64, and 128x128 resolutions (`configs/hydrothermal_reaction_on_*.toml`). Demonstrates peak core temperature agreement within 1.7% and total water conservation within 10%.*
 
 Metrics show close agreement between grid levels:
-- **Thermal Match:** Peak core temperature differs by 1.7% between 32x32 and 128x128 (1160.6 K at 32x32 versus 1180.2 K at 128x128). All resolutions remain below the rock solidus (1416 K).
+- **Thermal Match:** Peak core temperature differs by 1.7% between 32x32 and 128x128 (1160.6 K at 32x32 versus 1180.2 K at 128x128). All resolutions remain below the rock solidus (1400 K).
 - **Reaction Extent:** Final mean hydrous phase fraction $\bar{X}_W$ reaches 0.30 at 32x32, 0.28 at 64x64, and 0.27 at 128x128, differing by at most 12%.
 - **Conserved Water:** Total water mass changes by less than 10% during the simulation on all grids (less than 7.0% initial-to-final).
 - **Flow Velocity:** Mean Darcy flux tracks the same profile. Peak circulation rates differ by less than a factor of 1.5.
@@ -59,7 +59,7 @@ Metrics show close agreement between grid levels:
 
 Initial pore fraction $\phi_0$ tests water supply from 0.20 to 0.50. Starting pore fraction sets ice volume, while the permeability law uses reference pore fraction 0.20. Rock grains remain intact.
 
-![Porosity Parameter Sweep](../assets/hydrothermal_porosity_sweep.png)
+![Porosity Parameter Sweep](../../assets/hydrothermal_porosity_sweep.png)
 
 *Figure 4: Class A (2D Simulation Output): Initial porosity sensitivity sweep ($\phi_0 \in \{0.20, 0.35, 0.50\}$; `configs/hydrothermal_reaction_sweep_phi*.toml`). Shows enhanced convective cooling and deeper serpentinization with increasing pore fluid supply.*
 
@@ -109,3 +109,6 @@ Model setup files live in `configs/`:
   - `@testset "Dynamic Hydrofracture Coupling to Fluid Overpressure"`
   - `@testset "Reaction Activation Switches and Picard Under-Relaxation"`
   - `@testset "Hydrothermal Reaction Thermodynamic Anchors (Gerya 2019)"`
+
+- `test/test_stefan_benchmark.jl`:
+  - `@testset "1D Stefan Moving-Boundary Front Verification"` (validates moving dehydration front position, latent heat consumption, and fluid expulsion against the similarity solution)

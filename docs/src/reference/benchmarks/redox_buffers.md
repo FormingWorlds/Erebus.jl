@@ -136,9 +136,9 @@ Gas speciation pairs thermodynamic $\text{CO}/\text{CO}_2$ equilibrium with an e
 ### 3.5 Multi-Buffer Petrologic Hierarchy and Transitions
 
 Local oxygen fugacity in each parcel is governed by a petrologic hierarchy that transitions continuously as phases are depleted:
-1. **Metal-Saturated Regime ($\text{IW}$)**: When metallic iron is present ($w_{\text{metal}} > 10^{-3}$), the system is buffered by Iron-Wüstite ($\Delta\text{IW} \in [-2, 0]$).
+1. **Metal-Saturated Regime ($\text{IW}$)**: When metallic iron is present ($w_{\text{metal}} > 10^{-3}$ where $w_{\text{metal}} = \operatorname{clamp}((\text{Fe}^0 / \sum\text{Fe}) / 10^{-3}, 0, 1)$ is based on the molar fraction of $\text{Fe}^0$ relative to total iron), the system is buffered by Iron-Wüstite ($\Delta\text{IW} \in [-2, 0]$).
 2. **Graphite-Saturated Regime ($\text{CCO}$)**: As metallic iron depletes during core segregation ($w_{\text{metal}} \to 0$) in the presence of pyrolyzed graphite residue ($w_{\text{graphite}} > 10^{-6}$), the parcel buffers along the Graphite-CO-CO2 (CCO) equilibrium.
-3. **Silicate-Buffered Regime ($\text{QFM}$)**: When both metal and graphite are depleted or consumed by oxidation, the parcel transitions to silicate melt ferric/ferrous equilibrium ($\text{Fe}^{3+}/\text{Fe}^{2+}$).
+3. **Silicate-Buffered Regime**: When both metal and graphite are depleted or consumed by oxidation, the parcel transitions to silicate ferric/ferrous equilibrium ($\text{Fe}^{3+}/\text{Fe}^{2+}$), where `local_delta_iw` evaluates the offset relative to neutral Iron-Wüstite ($\Delta\text{IW} = 0$) at the reference ferric fraction.
 
 To eliminate discontinuous jumps during differentiation, continuous piecewise-linear ($C^0$) weighting links the regimes:
 

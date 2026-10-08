@@ -19,7 +19,7 @@ Simulating planetesimal evolution from seed bodies to protoplanets presents a se
 
 ## 2. Theoretical Formulation and Invariants
 
-The mathematical principles of coordinate doubling, radial distance invariance $r_m^{\text{new}} = r_m^{\text{old}}$, odd-grid parity alignment ($N_x = 2k + 1$), and sticky-air buffer replenishment are derived in detail in [Telescoping Computational Domains](../explanations/telescoping_domain.md).
+The mathematical principles of coordinate doubling, radial distance invariance $r_m^{\text{new}} = r_m^{\text{old}}$, odd-grid parity alignment ($N_x = 2k + 1$), and sticky-air buffer replenishment are derived in detail in [Telescoping Computational Domains](../../explanations/telescoping_domain.md).
 
 Key discrete transformations validated on this page include:
 
@@ -72,7 +72,7 @@ where the coefficient $8/3 \pi G = (2/3) \times 4 \pi G$ accounts for the 2D geo
 
 The 4-panel benchmark suite illustrates the spatial hierarchy, radial invariance, gravitational potential, and accretion trajectory of the telescoping domain engine:
 
-![Telescoping domain benchmark](../assets/telescoping_domain_benchmark.png)
+![Telescoping domain benchmark](../../assets/telescoping_domain_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Telescoping domain benchmark suite for growth from planetesimal seed ($R = 40\text{ km}$) to lunar radius ($R = 1,737\text{ km}$). The curves evaluate analytical domain transformations in Python (`benchmarks/generate_telescoping_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a): Nested computational domain hierarchy across successive doubling levels ($x_{\text{size}} = 140, 280, 560\text{ km}$) with sticky-air buffer regions and the 70% domain threshold circle. Panel (b): Planetesimal radial temperature profile invariance $T(r)$, showing identical radial coordinates for continuum profiles and Lagrangian markers before and after domain translation. Panel (c): Gravitational potential $\Phi(r)$ and gravitational acceleration $g(r)$ across the enlarged computational domain, enforcing homogeneous Dirichlet boundary conditions ($\Phi = 0$ at the domain boundary). Panel (d): Planetesimal accretion growth trajectory to lunar mass ($R_{\text{lunar}} = 1,737\text{ km}$), displaying discrete domain doubling events triggered whenever $R(t) > 0.70 \cdot (x_{\text{size}} / 2)$.*
 

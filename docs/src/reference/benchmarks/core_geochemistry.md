@@ -21,7 +21,7 @@ A realistic geochemical model of core formation must reproduce these geochemical
 
 ## 2. Theoretical Formulation
 
-The thermodynamics of metal-silicate volatile partitioning ($D_i^{\text{met/sil}}$ parameterizations for H, C, N, and S), phase equilibration, normative mineral crystallization, and conservative volatile drift-flux transport are derived in detail in [Iron Core Formation and Metal Segregation](../explanations/core_formation.md).
+The thermodynamics of metal-silicate volatile partitioning ($D_i^{\text{met/sil}}$ parameterizations for H, C, N, and S), phase equilibration, normative mineral crystallization, and conservative volatile drift-flux transport are derived in detail in [Iron Core Formation and Metal Segregation](../../explanations/core_formation.md).
 
 Key constitutive relations validated on this page include:
 
@@ -64,7 +64,7 @@ Key constitutive relations validated on this page include:
 
 ## 3. Benchmark Validation
 
-![Metal-Silicate Volatile Partitioning and Core Geochemistry Benchmark](../assets/core_geochemistry_benchmark.png)
+![Metal-Silicate Volatile Partitioning and Core Geochemistry Benchmark](../../assets/core_geochemistry_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Metal-silicate volatile partitioning and core geochemistry benchmark. The curves and fields evaluate empirical literature parameterizations in Python (`benchmarks/generate_core_geochemistry_benchmarks.py`). Discrete numerical solver partitioning is verified in `test/test_core_volatile_partitioning.jl`. (a) Oxygen fugacity sensitivity of partition coefficients $D_i^{\text{met/sil}}$ over the range $\Delta\text{IW} \in [-4, 0]$ at $T = 1600\text{ K}$, $P = 0.1\text{ GPa}$, and $w_S = 0.05$. (b) Suppression of carbon partition coefficient $D_C$ by dissolved sulfur in metallic liquid for $w_S \in [0, 0.31]$ compared to nitrogen $D_N$, showing a steep drop in $D_C / D_N$ from $>100$ in sulfur-free metal down to $\sim 1$ at the Fe-FeS eutectic. (c) Temperature dependence of partition coefficients from $1300\text{ K}$ to $2200\text{ K}$ at $\Delta\text{IW} = -2.0$ and $w_S = 0.10$. (d) Core carbon versus nitrogen concentrations predicted over varied oxygen fugacities compared against empirical fields for magmatic iron meteorite groups (IIAB, IIIAB, IVA, and IVB). (e) Integrated core volatile delivery timeline during runaway core formation in a $R = 50\text{ km}$ planetesimal. (f) Total planetary elemental mass allocation among segregated core, retained silicate mantle, and degassed/vented losses.*
 
@@ -83,13 +83,13 @@ Key constitutive relations validated on this page include:
 
 | Component | Source File | Functions & Structs |
 |:---|:---|:---|
-| Configuration Schema | `src/config/metal_partition.jl` | `MetalPartitionConfig`, `validate_config` |
+| Configuration Schema | `src/config.jl` | `MetalPartitionConfig`, `validate_config` |
 | Partition Thermodynamics | `src/physics/metal_partitioning.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
 | Marker Phase Equilibration | `src/physics/metal_partitioning.jl` | `equilibrate_metal_silicate_volatiles!`, `get_metal_silicate_cap_warning_count`, `reset_metal_silicate_cap_warning_count!` |
 | Core Inventory Integration | `src/physics/metal_partitioning.jl` | `compute_core_volatile_budgets` |
 | Marker Arrays & Properties | `src/particles.jl` | `setup_marker_metal_volatile_properties`, `compute_marker_properties!`, `replenish_markers!` |
-| Advective Transport | `src/numerics/darcy.jl` | `apply_metal_segregation!` |
-| Simulation Integration | `src/simulation/step.jl` | Caching, equilibration calls, and checkpoint persistence |
+| Advective Transport | `src/numerics/segregation.jl` | `apply_metal_segregation!` |
+| Simulation Integration | `src/simulation/loop.jl` | Caching, equilibration calls, and checkpoint persistence |
 
 ---
 

@@ -18,7 +18,7 @@ Tensile failure ruptures the cold lid, producing hydrofractures that discharge f
 
 ## 2. Theoretical Formulation
 
-The physical theory of cryogenic pore ice sealing, tensile overpressure failure, and episodic hydrofracture venting dynamics is derived in detail in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../explanations/degassing_and_venting.md).
+The physical theory of cryogenic pore ice sealing, tensile overpressure failure, and episodic hydrofracture venting dynamics is derived in detail in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../../explanations/degassing_and_venting.md).
 
 Key constitutive relations validated on this page include:
 
@@ -28,7 +28,8 @@ Key constitutive relations validated on this page include:
 - **Cold Lid Hydrofracture Breaching Criterion ($P_{\text{eff}}$):**
   $$P_{\text{eff}} = P_t - P_f \le -\sigma_t \iff P_f \ge P_t + \sigma_t$$
 - **Fracture Permeability Enhancement ($k_{\text{frac}}$):**
-  $$k_{\text{frac}}(P_{\text{eff}}) = \min\left(k_{\text{max}}, k_v \left[1 + \kappa_{\text{frac}} \left(\frac{-P_{\text{eff}} - \sigma_t}{\sigma_t}\right)^\gamma\right]\right)$$
+  $$k_{\text{frac}}(P_{\text{eff}}) = \begin{cases} k_\phi, & P_{\text{eff}} \ge -\sigma_t \\ \min\left(k_{\text{frac,max}}, k_\phi \left[1 + \kappa_{\text{frac}} (s(x))^\gamma\right]\right), & P_{\text{eff}} < -\sigma_t \end{cases}$$
+  where $x = \frac{-P_{\text{eff}} - \sigma_t}{\sigma_t} > 0$ is the normalized tensile overpressure, $s(x)$ is a $C^1$ regularisation ramp across transition width $\delta$, $k_\phi$ is the baseline matrix permeability floor, and $k_{\text{frac,max}}$ is the maximum permeability ceiling.
 
 ---
 
@@ -47,7 +48,7 @@ Key constitutive relations validated on this page include:
 
 Figure 1 presents an illustrative verification benchmark for the operational regimes and equations of cold lid hydrofracture venting:
 
-![Cold Lid Hydrofracture Venting Benchmark](../assets/hydrofracture_venting_benchmark.png)
+![Cold Lid Hydrofracture Venting Benchmark](../../assets/hydrofracture_venting_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel verification benchmark for cold lid hydrofracture breaching and cryogenic pore ice sealing equations. The curves evaluate analytical formulations in Python (`scripts/generate_hydrofracture_venting_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Permeability ratio $k_{\text{eff}} / k_0$ as a function of surface temperature for transition scales $\Delta T_{\text{seal}} \in \{5, 10, 20\}\text{ K}$, with smooth exponential suppression down to the cryogenic floor ($10^{-6}$). (b) Venting regime map in the plane of surface temperature $T_{\text{surf}}$ and effective pressure $P_{\text{eff}}$, which delineates four quadrants: cryogenically sealed intact lid, breached cold lid hydrofracture vent, warm Darcy permeable sink, and warm hydrofracture. (c) Synthetic time series of episodic dehydration overpressure buildup, tensile rupture ($P_f \ge P_t + \sigma_t$), and subsequent resealing. (d) Resulting pulsed cryovolcanic surface venting mass flux and cumulative fluid mass comparison against continuous unsealed leakage.*
 

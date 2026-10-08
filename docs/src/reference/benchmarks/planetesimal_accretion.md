@@ -9,7 +9,7 @@ This page documents the physical formulations, scaling laws, and numerical verif
 Planetesimals in the early Solar System accreted from pebbles and smaller planetesimals in circumstellar gas disks (Safronov, 1972; Ormel and Klahr, 2010; Lambrechts and Johansen, 2012):
 
 1. **Pebble vs Planetesimal Swarm Regimes:** Small dust grains grow into pebbles that drift through the gas disk. Planetesimals capture these pebbles through aerodynamic drag within their gravitational spheres of influence (Bondi and Hill regimes). Alternatively, planetesimal collisions govern growth in gas-depleted or turbulent disks through Safronov gravitational focusing.
-2. **Accretion Duration and $^{26}\mathrm{Al}$ Clock:** The primary heat source driving early planetesimal melting and differentiation is short-lived $^{26}\mathrm{Al}$ ($t_{1/2} \approx 0.717\text{ Myr}$). Because $^{26}\mathrm{Al}$ decays exponentially, planetesimals that accreted over finite durations (e.g. 1 to 3 Myr) developed concentric "onion-shell" thermal structures (Lichtenberg et al., 2019, 2021). The central primordial core absorbed peak radiogenic heating, whereas outer accreted layers inherited lower radionuclide concentrations and remained colder.
+2. **Accretion Duration and $^{26}\mathrm{Al}$ Clock:** The primary heat source driving early planetesimal melting and differentiation is short-lived $^{26}\mathrm{Al}$ ($t_{1/2} \approx 0.717\text{ Myr}$). Radiogenic heating in `Erebus.jl` evaluates across solid markers using global simulation time `timesum` ($Q(t) = Q_0 \exp(-\lambda t)$). Outer shells added at later accretion times $t_{\mathrm{acc}}$ develop colder temperatures because they experience decayed specific heating over their post-accretion history, establishing an "onion-shell" thermal structure (Lichtenberg et al., 2019, 2021).
 3. **Impact Heating:** As planetesimals grow, accreted projectiles strike the surface with velocity $v_{\mathrm{imp}} \ge v_{\mathrm{esc}} = \sqrt{2GM/R}$. Impact kinetic energy converts to heat, raising the temperature of outer accreted shells and promoting early devolatilization.
 4. **Snowline Volatile Coupling:** Protoplanetary disk temperatures decline with heliocentric distance. Outside the water snowline ($T \le 160\text{ K}$), planetesimals accrete volatile-rich water ice and hydrated silicates. Inside the snowline, accreted material consists of dry anhydrous silicates.
 
@@ -17,7 +17,7 @@ Planetesimals in the early Solar System accreted from pebbles and smaller planet
 
 ## 2. Theoretical Background and Scaling Laws
 
-The physical scaling laws, Keplerian orbital kinematics, Bondi and Hill capture regimes, Safronov gravitational focusing, exact 3D volume mapping, impact heating thermodynamics, and radiogenic onion-shell thermal structure are derived in detail in [Planetesimal Accretion Mechanics](../explanations/accretion_mechanics.md).
+The physical scaling laws, Keplerian orbital kinematics, Bondi and Hill capture regimes, Safronov gravitational focusing, exact 3D volume mapping, impact heating thermodynamics, and radiogenic onion-shell thermal structure are derived in detail in [Planetesimal Accretion Mechanics](../../explanations/accretion_mechanics.md).
 
 Key regime thresholds implemented and verified in the solver include:
 
@@ -36,7 +36,7 @@ Key regime thresholds implemented and verified in the solver include:
 
 The 4-panel verification benchmark illustrates the scaling behaviors and physical invariants of the accretion engine:
 
-![Planetesimal accretion benchmarks](../assets/planetesimal_accretion_benchmark.png)
+![Planetesimal accretion benchmarks](../../assets/planetesimal_accretion_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Planetesimal accretion benchmark suite. The curves evaluate analytical formulations in Python (`benchmarks/generate_accretion_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a): Pebble accretion mass rate versus body mass across Bondi and Hill regimes, which displays the transition at $M_{\mathrm{trans}}$. Panel (b): Safronov gravitational focusing accretion rate versus planetesimal radius for varying velocity dispersions $\sigma_v$. Panel (c): Accretion impact heating temperature rise $\Delta T_{\mathrm{impact}}$ versus planetesimal radius for impact retention efficiencies $h_{\mathrm{impact}} \in [0.2, 1.0]$. Panel (d): Onion-shell radiogenic power profile $Q(t_{\mathrm{acc}})/Q_0$ and step-change in accreted volatile water content across the protoplanetary disk snowline.*
 

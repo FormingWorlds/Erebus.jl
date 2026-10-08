@@ -20,7 +20,7 @@ The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \a
 
 ### 2. Theoretical Formulation
 
-The physical theory, chemical equation of state models (Sanloup et al., 2000; Morard et al., 2014), permeability relations, and droplet breakup mechanics are derived in detail in [Iron Core Formation and Metal Segregation](../explanations/core_formation.md).
+The physical theory, chemical equation of state models (Sanloup et al., 2000; Morard et al., 2014), permeability relations, and droplet breakup mechanics are derived in detail in [Iron Core Formation and Metal Segregation](../../explanations/core_formation.md).
 
 Key constitutive formulations validated on this page include:
 
@@ -47,9 +47,9 @@ Metal segregation is solved on the Eulerian grid using a finite-volume drift-flu
 
 ### Local CFL Subcycling
 
-The Stokes-Darcy hydrodynamic timestep $\Delta t_{\text{hydro}}$ is typically governed by silicate convection and thermal diffusion ($\sim 10^3\text{ yr}$). Settling velocities in low-viscosity magma can produce local Courant numbers exceeding unity. To maintain explicit stability, the segregation solver executes adaptive subcycling:
+The Stokes-Darcy hydrodynamic timestep $\Delta t_{\text{hydro}}$ is typically governed by silicate convection and thermal diffusion ($\sim 10^3\text{ yr}$). Settling velocities in low-viscosity magma can produce local Courant numbers exceeding unity. To maintain explicit stability, the segregation solver executes adaptive subcycling with an isotropic scalar timestep:
 
-$$\Delta t_{\text{CFL}} = \text{cfl} \cdot \min_{i,j} \left( \frac{\Delta x}{|v_{x,\text{seg}}|}, \frac{\Delta y}{|v_{y,\text{seg}}|} \right)$$
+$$\Delta t_{\text{CFL}} = \text{cfl\_settling} \cdot \frac{\min(\Delta x, \Delta y)}{\max_{i,j} \|\mathbf{v}_{\text{seg}}\|}$$
 
 $$N_{\text{sub}} = \min\left( \left\lceil \frac{\Delta t_{\text{hydro}}}{\Delta t_{\text{CFL}}} \right\rceil, N_{\text{max}} \right)$$
 
@@ -60,7 +60,7 @@ $$\Delta t_{\text{sub}} = \frac{\Delta t_{\text{hydro}}}{N_{\text{sub}}}$$
 To guarantee strict non-negativity and prevent exceeding maximum packing fraction $\phi_{\text{pack}}$ on 2D staggered grids:
 
 1. **Outflow Limiter**: For cell $(i, j)$ donating metal across horizontal and vertical faces, total face outflow $Out_{\text{total}} = \sum \Phi_{\text{out}} \Delta t_{\text{sub}}$ must not exceed available metal mass $m_{\text{avail}}$. All outward fluxes are scaled by $\alpha_{\text{out}} = \min(1.0, m_{\text{avail}} / Out_{\text{total}})$.
-2. **Inflow Limiter**: Total incoming flux $In_{\text{total}} = \sum \Phi_{\text{in}} \Delta t_{\text{sub}}$ must not exceed available pore capacity $m_{\text{cap}} = (\phi_{\text{pack}} - \phi_m) V_{\text{cell}} \cdot n_m$. All inward fluxes are scaled by $\alpha_{\text{in}} = \min(1.0, m_{\text{cap}} / In_{\text{total}})$.
+2. **Inflow Limiter**: Total incoming flux $In_{\text{total}} = \sum \Phi_{\text{in}} \Delta t_{\text{sub}}$ must not exceed available metal capacity in marker count units $m_{\text{cap}} = \sum_{m \in \text{cell}} \max(0, \phi_{\text{pack}} - X_{\text{fe,bulk}}[m])$. All inward fluxes are scaled by $\alpha_{\text{in}} = \min(1.0, m_{\text{cap}} / In_{\text{total}})$.
 3. **Capacity-Weighted Marker Update**: When net cell mass changes are distributed back to markers, markers in cells gaining metal receive increments proportional to their remaining room below $\phi_{\text{pack}}$. Markers in cells losing metal scale proportionally. This guarantees that individual markers never violate $[0, \phi_{\text{pack}}]$, even with non-uniform initial distributions.
 
 ### Machine-Precision Conservation
@@ -75,7 +75,7 @@ in the drift-flux solver, and $< 10^{-10}$ in coupled multi-physics simulation l
 
 ## 4. Planetesimal Core Formation Benchmark Suite
 
-The core formation benchmark simulates a 50 km radius planetesimal over 3.5 Ma of early solar system evolution. The benchmark starts from a completely homogeneous, cold primordial mixture of water ice ($\phi_{\text{ice}} = 0.30$), metallic iron ($\phi_{\text{fe}} = 0.12$), and silicate rock matrix ($\phi_{\text{rock}} = 0.58$) throughout the entire body at $T = 150\text{ K}$.
+The core formation benchmark configuration (`configs/core_formation_benchmark.toml`) simulates a 50 km radius planetesimal initialized at $2.25\text{ Ma}$ with preheated interior rock at $1350\text{ K}$ and bulk metal volume fraction $X_{\text{fe,bulk}} = 0.20$. The benchmark runs 5 timesteps ($\sim 16\text{ kyr}$) to verify dynamic metal segregation, local CFL subcycling, and conservative marker updates under coupled thermo-hydro-mechanical evolution.
 
 ### Physical Differentiation Timeline
 
@@ -90,7 +90,7 @@ The planetesimal differentiates in four sequential stages driven by $^{26}\text{
 
 The multi-panel summary figure illustrates the critical physical mechanisms:
 
-![Core Formation Benchmark Suite](../assets/core_formation_benchmark.png)
+![Core Formation Benchmark Suite](../../assets/core_formation_benchmark.png)
 
 *Figure 1: Class B (1D Finite-Difference Benchmark Solver): Multi-panel verification benchmark for iron core formation and metal-silicate segregation. The model executes a 1D spherical finite-difference solver in Julia (`generate_core_formation_benchmarks.jl`) mapped radially onto a 2D mesh in Python (`generate_core_formation_benchmark.py`). Automated 2D solver verification is executed in `test/test_core_formation.jl`. (a) Revolved differentiated body map ($t = 3.0\text{ Ma}$) showing the segregated central iron core (gold), surrounded by an iron-depleted silicate mantle (red), and preserved cold primordial crust (blue). (b) Core thermal runaway: central temperature evolution $T_{\text{core}}(t)$ comparing cases with and without gravitational dissipation heating ($Q_{\text{seg}}$). (c) Differentiation fronts timeline: radial expansion of the metallic core boundary and the magma ocean boundary. (d) Radial metal concentration profiles $\phi_{\text{fe}}(r)$ across evolution epochs. (e) Transport regime comparison: segregation velocities for percolation only, Stokes settling only, and the coupled Hermite transition model. (f) Droplet size physics sensitivity: core radius growth for constant diameter, Weber balance, and turbulent breakup.*
 
@@ -98,17 +98,17 @@ The multi-panel summary figure illustrates the critical physical mechanisms:
 
 The animation below displays the 1D spherical core formation benchmark revolved into 2D Cartesian frames over 3.5 Ma starting from a completely uniform icy mixture. The panels display internal temperature with phase boundaries (left), compositional differentiation regimes (center), and bulk metal volume fraction $\phi_{\text{fe}}$ (right).
 
-![Core Formation 2D Differentiation Animation](../assets/core_formation_differentiation.gif)
+![Core Formation 2D Differentiation Animation](../../assets/core_formation_differentiation.gif)
 
 *Figure 2: Class B (1D Finite-Difference Benchmark Solver): Revolved 1D spherical finite-difference simulation frames over 3.5 Ma of planetesimal evolution, displaying temperature, differentiation regimes, and metal volume fraction.*
 
-A high-framerate MP4 video is available at `../assets/core_formation_differentiation.mp4`.
+A high-framerate MP4 video is available at `../../assets/core_formation_differentiation.mp4`.
 
 ### Self-Gravity in Differentiated Bodies (`:poisson2d` vs `:enclosed_mass`)
 
 To validate self-gravitational acceleration in differentiated planetesimals, `Erebus.jl` compares the 2D Cartesian Poisson solver against the 3D enclosed-mass formulation on a two-layer planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$):
 
-![Self-Gravity in Differentiated Bodies](../assets/gravity_two_layer_benchmark.png)
+![Self-Gravity in Differentiated Bodies](../../assets/gravity_two_layer_benchmark.png)
 
 *Figure 3: Class B (Julia Library Exporter): Self-gravity acceleration and core-excess comparisons for a differentiated planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$) evaluated by `benchmarks/export_gravity_two_layer_benchmark.jl`. (a) Total radial acceleration $g(r)$ comparing the 3D analytical solution, the discrete marker enclosed-mass mode (`:enclosed_mass`), and the 2D Cartesian Poisson mode (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r)$ outside the core ($r_c \le r \le R$).*
 

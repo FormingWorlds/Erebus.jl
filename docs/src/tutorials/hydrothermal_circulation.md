@@ -99,7 +99,7 @@ cfg = load_config("configs/hydrothermal_benchmark.toml")
 run_simulation(cfg)
 ```
 
-During execution, `Erebus.jl` prints convergence statistics at each timestep, reporting temperature extremes, pressure ranges, and iteration counts.
+During execution, `Erebus.jl` logs simulation progress at each timestep, reporting elapsed time, maximum interior temperature, and solver status.
 
 To save and resume runs from intermediate checkpoints, see the [Outputs and Checkpoints Guide](../howto/outputs.md).
 
@@ -111,7 +111,7 @@ After 15 timesteps ($t \approx 0.048\text{ Ma}$ after CAI formation), the temper
 
 ![Hydrothermal Circulation Benchmark](../assets/hydrothermal_circulation_benchmark.png)
 
-*Figure 1: Class A (2D Simulation Output): Verification of 2D hydrothermal circulation in a 100 km diameter planetesimal on a $32 \times 32$ cell grid ($Nx = 33, Ny = 33$) executed with `configs/hydrothermal_benchmark.toml`, exported via `scripts/export_hydrothermal_data.jl` and plotted with `scripts/generate_hydrothermal_benchmark.py`. (a) Temperature field $T(x, y)$ showing central radiogenic heating from fresh $^{26}\text{Al}$ decay reaching $T_{\text{max}} = 371.8\text{ K}$ with conductive cooling toward the surface. (b) Darcy flux magnitude $\|\mathbf{q}^D\|$ in the melted core ($T > 273\text{ K}$). (c) Pore fluid pressure field $P_f$, decreasing from $2.19\text{ MPa}$ at the center to $0\text{ MPa}$ at the outer boundary. (d) Radial profiles from center to surface, showing central lithostatic and pore fluid pressures reaching $P_t \approx P_f \approx 2.19\text{ MPa}$.*
+*Figure 1: Class A (2D Simulation Output): Verification of 2D hydrothermal thermal structure in a 100 km diameter planetesimal on a $32 \times 32$ cell grid ($Nx = 33, Ny = 33$) executed with `configs/hydrothermal_benchmark.toml`, exported via `scripts/export_hydrothermal_data.jl` and plotted with `scripts/generate_hydrothermal_benchmark.py`. (a) Temperature field $T(x, y)$ showing central radiogenic heating from fresh $^{26}\text{Al}$ decay reaching $T_{\text{max}} = 371.8\text{ K}$ with conductive cooling toward the surface. (b) Darcy flux magnitude $\|\mathbf{q}^D\|$ in the melted core ($T > 273\text{ K}$). (c) Pore fluid pressure field $P_f$, decreasing from $2.19\text{ MPa}$ at the center to $0\text{ MPa}$ at the outer boundary. (d) Radial profiles from center to surface, showing central lithostatic and pore fluid pressures reaching $P_t \approx P_f \approx 2.19\text{ MPa}$.*
 
 ---
 
@@ -141,4 +141,4 @@ After 15 timesteps ($t \approx 0.048\text{ Ma}$ after CAI formation), the temper
 - [How to Configure Simulations](../howto/configuration.md): Set boundary conditions, material properties, and physical switches.
 - [Parameter Exploration](../howto/parameter_exploration.md): Script parameter sweeps across planetesimal properties.
 - [Outputs and Checkpoints](../howto/outputs.md): Inspect field data in JLD2 files and resume simulations.
-- [Fluid Viscosity Validation](../validation/fluid_viscosity.md): Review benchmarks for Arrhenius water viscosity against experimental measurements.
+- [Fluid Viscosity Validation](../reference/benchmarks/fluid_viscosity.md): Review benchmarks for Arrhenius water viscosity against experimental measurements.
