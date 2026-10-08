@@ -6,56 +6,72 @@
 [![codecov](https://codecov.io/gh/FormingWorlds/Erebus.jl/branch/main/graph/badge.svg)](https://app.codecov.io/gh/FormingWorlds/Erebus.jl)
 [![Code Style: Blue](https://img.shields.io/badge/code%20style-blue-4495d1.svg)](https://github.com/invenia/BlueStyle)
 
-`Erebus.jl` is a two-dimensional hydro-thermo-mechanical-chemical (HTMC) geodynamic modeling code for planetesimal evolution. It simulates coupled two-phase fluid-solid flow, visco-elasto-plastic rock deformation, radiogenic heating, fluid thermal buoyancy, temperature-dependent Darcy percolation, and dynamic hydrofracturing in early solar system planetesimals.
+`Erebus.jl` models the thermal and physical history of porous planetesimals in the early Solar System. It solves rock and pore fluid flow on a staggered grid with Lagrangian markers.
 
 ---
 
 ## Table of Contents
 
-- [Key Capabilities](#key-capabilities)
+- [Capabilities](#capabilities)
+- [Physical and Numerical Limits](#physical-and-numerical-limits)
 - [Experimental Modules](#experimental-modules)
-- [Installation](#installation)
+- [Setup](#setup)
 - [Quickstart](#quickstart)
-  - [Run from Configuration](#run-from-configuration)
+  - [Run from Command Line](#run-from-command-line)
+  - [Run from Julia](#run-from-julia)
   - [Resume from Checkpoint](#resume-from-checkpoint)
-  - [Post-Processing and Plotting](#post-processing-and-plotting)
-- [Code Architecture](#code-architecture)
-- [Verification and Testing](#verification-and-testing)
-- [Contributing and Code Style](#contributing-and-code-style)
-- [References and Citations](#references-and-citations)
+  - [Run Parameter Sweeps](#run-parameter-sweeps)
+  - [Benchmark Suite](#benchmark-suite)
+- [Execution Pipeline](#execution-pipeline)
+- [Tests and Quality Checks](#tests-and-quality-checks)
+- [Documentation](#documentation)
 - [License](#license)
 
 ---
 
-## Key Capabilities
+## Capabilities
 
-- Solves coupled two-phase Stokes-Darcy fluid-solid equations on a staggered Eulerian grid.
-- Incorporates poroelastic compressibility from Biot theory for solid and fluid phases.
-- Models visco-elasto-plastic matrix rheology with Drucker-Prager yielding.
-- Couples fluid thermal expansion and temperature-dependent Arrhenius viscosity to Darcy flux.
-- Enhances Darcy permeability via dynamic hydrofracturing under fluid overpressure.
-- Computes radiogenic decay heat from 26Al and 60Fe and silicate reaction kinetics.
-- Tracks physical properties with Marker-in-Cell advection (Runge-Kutta 4th-order).
-- Configures geometry, solvers, and physics through validated TOML files.
+- **Marker-in-Cell Grid**: Solves 2D Cartesian flow for planetesimals in sticky air. The out-of-plane length $L(r) = 2r$ acts as a spherical proxy for mass, heat, and volatile budgets.
+- **Two-Phase Stokes-Darcy Flow**: Solves viscous and plastic rock matrix flow coupled to Darcy fluid flow with Biot poroelastic compressibility and Drucker-Prager failure.
+- **Implicit Heat Transport**: Solves heat conduction, fluid flow, radiogenic heat ($^{26}\text{Al}$, $^{60}\text{Fe}$), reaction and melt latent heats, shear heating, and turbulent heat flow.
+- **Serpentine Reactions and Venting**: Tracks rock hydration and dehydration, surface vents, and dynamic hydrofracture permeability when pore fluid pressure exceeds rock strength.
+- **Silicate Melt and Core Formation**: Models rock melting, melt ascent, and liquid metal settling to a central core via Darcy flow and Stokes rain.
+- **Volatile Chemistry**: Conserves elemental budgets (H, C, N, S, O) with ice mixtures, organics, melt solubility, equilibrium gas release, metal-silicate partition, and Iron-Wüstite redox buffers.
+- **Atmosphere and Escape**: Couples a 1D Guillot radiative profile with gas chemistry, photo-evaporative loss, and Jeans escape.
+- **Accretion and Grid Growth**: Models body growth from pebble and embryo impacts, with domain doubling at constant cell size.
+- **Self-Gravity**: Evaluates gravity fields from a 2D Poisson solve or a 3D enclosed-mass radial profile.
+- **Configuration Files and Sweeps**: Reads TOML files, writes restart files, streams run metrics, and executes Latin Hypercube parameter sweeps.
+
+---
+
+## Physical and Numerical Limits
+
+- **2D Geometry Proxy**: Solves momentum and mass conservation in 2D Cartesian coordinates. The out-of-plane length $L(r) = 2r$ enters volume integrals, not spatial derivatives. Flow patterns show 2D slab flow rather than 3D spherical flow.
+- **Gravity Field**: The default 2D Poisson solver yields the field of an infinite cylinder. For differentiated bodies, the enclosed-mass profile gives a closer match to spherical gravity.
+- **Sticky-Air Boundary**: Exterior sticky air has high viscosity ($10^{16}\text{ Pa s}$) compared to silicate melt ($10^{12}\text{ Pa s}$ floor). This forms a rigid lid rather than a free surface.
+- **Linear Solvers**: The direct sparse solver (UMFPACK) is the production path for grids up to $256^2$. Iterative solvers, multigrid, GPU kernels, and MPI paths remain experimental.
+- **Melt Transport**: Silicate melt moves by a kinematic drift step rather than as a separate Darcy fluid phase in the matrix momentum equations.
+- **Pore Fluid Regime**: The code tracks one aqueous fluid phase. Compaction without venting loses pore fluid mass.
+- **Benchmark Provenance**: Documentation figures state their provenance class. Many figures show Python reference models or isolated module outputs rather than full 2D simulation runs. Automated unit and reference tests in `test/` check individual solver components.
 
 ---
 
 ## Experimental Modules
 
-The MPI extension (`ErebusMPIExt`) and the GPU kernels (`ErebusCUDAExt`, `ErebusMetalExt`, `ErebusAMDGPUExt`) are experimental. They are exercised by their own tests and are not reachable from `simulation_loop`; results from them carry no correctness claim.
+The MPI extension (`ErebusMPIExt`) and GPU kernels (`ErebusCUDAExt`, `ErebusMetalExt`, `ErebusAMDGPUExt`) are experimental. They run in dedicated tests and do not enter production runs.
 
 ---
 
-## Installation
+## Setup
 
-Ensure you have Julia 1.12 or later installed. Install `Erebus.jl` via the Julia package manager:
+Install Julia 1.12 or later. Add `Erebus.jl` through the package tool:
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/FormingWorlds/Erebus.jl.git")
 ```
 
-For local development:
+For local work:
 
 ```bash
 git clone https://github.com/FormingWorlds/Erebus.jl.git
@@ -67,121 +83,97 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 ## Quickstart
 
-### Run from Configuration
+### Run from Command Line
 
-Launch simulations directly from the command line using structured TOML input files:
+Run runs with `launch.jl` and a TOML file:
 
 ```bash
-# Run the 2D hydrothermal circulation benchmark (32x32 cells, 100 km diameter planetesimal)
+# Run the 2D hydrothermal benchmark (32x32 cells, 100 km diameter body)
 julia --project launch.jl configs/hydrothermal_benchmark.toml -o output_hydrothermal/
 
-# Run a quick test simulation
+# Run a quick test run (5 timesteps)
 julia --project launch.jl configs/test_quick.toml -o output_test/
 ```
 
-Available pre-configured setups in `configs/`:
+### Run from Julia
 
-- `configs/hydrothermal_benchmark.toml`: 2D hydrothermal circulation benchmark (32x32 cells, 100 km diameter planetesimal, 26Al decay heating, Darcy thermal buoyancy, Arrhenius fluid viscosity, dynamic hydrofracturing).
-- `configs/default.toml`: Default reference configuration with baseline physical properties.
-- `configs/test_quick.toml`: Short-duration configuration (5 timesteps) for rapid execution and sanity checks.
+Load a config, check parameters, and launch the run:
 
+```julia
+using Erebus
+
+# Load and validate configuration
+cfg = load_config("configs/test_quick.toml")
+
+# Execute simulation loop
+state = simulation_loop(cfg)
+```
 
 ### Resume from Checkpoint
 
-`Erebus.jl` saves simulation states to portable JLD2 archives. Resume an interrupted or extended run using the `--restart` (`-r`) flag:
+Resume a run from a saved JLD2 file with the `--restart` (`-r`) flag:
 
 ```bash
 julia --project launch.jl configs/hydrothermal_benchmark.toml -o output_hydrothermal/ -r output_hydrothermal/output_00008.jld2
 ```
 
-### Post-Processing and Plotting
+### Run Parameter Sweeps
 
-Helper scripts in `scripts/` produce publication-ready figures and animations from output files:
+Execute parallel parameter sweeps with Latin Hypercube sampling:
 
 ```bash
-# Export benchmark simulation data to JSON
-julia --project scripts/export_hydrothermal_data.jl output_hydrothermal/
+julia --project tools/run_ensemble.jl configs/test_ensemble_sweep.toml
+```
 
-# Generate the 4-panel hydrothermal circulation benchmark figure
-python3 scripts/generate_hydrothermal_benchmark.py output_hydrothermal/benchmark_plot_data.json
+### Benchmark Suite
 
-# Generate comprehensive multi-panel diagnostic plots (requires PyPlot and StatsBase)
-julia --project scripts/generate_plots.jl output_hydrothermal/
+Build verification figures and benchmark plots:
 
-# Generate time-evolution MP4 animations (requires Plots)
-julia --project scripts/generate_animations.jl output_hydrothermal/
+```bash
+./benchmarks/run_all.sh
 ```
 
 ---
 
-## Code Architecture
+## Execution Pipeline
 
-These names are namespaces within a single flat Erebus module; the table groups functionality, not separate packages.
+`Erebus.jl` couples staggered finite-difference grids with Lagrangian markers in a multi-stage loop:
 
-| Submodule | Responsibilities |
-| :--- | :--- |
-| `Erebus.Geometry` | Staggered grid coordinate vectors, basic/velocity/pressure node indexing, and domain boundary masks. |
-| `Erebus.Particles` | Marker initialization, material property mapping, Marker-in-Cell interpolation, and RK4 advection. |
-| `Erebus.Physics` | Constitutive equations, Arrhenius fluid viscosity, Darcy buoyancy, hydrofracture criteria, 26Al/60Fe heat production, and reaction kinetics. |
-| `Erebus.Numerics` | Discretization and linear assembly of coupled Stokes-Darcy hydromechanics, Poisson gravity, and thermal energy equations. |
-| `Erebus.Simulation` | Global timestep progression, non-linear Picard and plastic iterations, checkpoint serialization, and state resumption. |
-| `Erebus.Config` | Strongly typed configuration structs (`SimulationConfig`), default generation, bounds validation, and TOML serialization. |
+![Erebus.jl Architecture and Execution Flow](docs/src/assets/erebus_architecture_flowchart.svg)
 
 ---
 
-## Verification and Testing
+## Tests and Quality Checks
 
-Execute the automated test suite locally:
+Run the test suite locally:
 
 ```bash
-julia --project=. test/runtests.jl
+julia --project=. -t 4 test/runtests.jl
 ```
 
 The test suite covers:
-
-- Unit verification: Grid metrics, particle interpolation kernels, constitutive relations, and TOML schema validators.
-- Terzaghi 1D consolidation benchmark: Verifies poroelastic compressibility against the analytical Fourier series solution.
-- 2D hydrothermal benchmark: Verifies coupled Darcy thermal buoyancy, fluid viscosity transitions, and hydrofracturing.
-- Checkpoint restart continuity: asserts that a run resumed from a checkpoint reproduces the straight-through run bitwise for all marker arrays, grid fields, the atmosphere state, the RNG state, the transfer log and the time accumulators.
-
-Consult the [online documentation](https://formingworlds.github.io/Erebus.jl/dev) for tutorials and mathematical derivations.
+- Unit tests: grid coordinates, interpolation weights, constitutive laws, and TOML validation.
+- Physical benchmarks: Terzaghi 1D consolidation, 2D hydrothermal convection, Stefan moving front, and radioactive decay.
+- Mutation tests: discriminating physical checks on ten key solver functions.
+- Reference baselines: regression checks for mass, heat, and volatile totals on standard setups.
+- Restart tests: exact bitwise checks for resumed runs on all markers, grid fields, atmosphere, and random seed states.
 
 ---
 
-## Contributing and Code Style
+## Documentation
 
-Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.com/invenia/BlueStyle) code formatting convention:
+Read complete tutorials, how-to guides, equations, and benchmarks online:
 
-1. Format code before committing:
-   ```julia
-   using JuliaFormatter
-   format(".", BlueStyle())
-   ```
-2. Verify that all tests pass:
-   ```bash
-   julia --project=. test/runtests.jl
-   ```
-3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `all`) on Julia 1.12 and 1.13 (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), and test quality standards (`test-quality`).
+[https://formingworlds.github.io/Erebus.jl/dev](https://formingworlds.github.io/Erebus.jl/dev)
 
----
-
-## References and Citations
-
-If you use `Erebus.jl` in your research, please cite:
-
-- Hubmann, B. (2022). *Hydrology of Planetesimals*. Master's thesis, ETH Zurich. [DOI: 10.5281/zenodo.7058229](https://doi.org/10.5281/zenodo.7058229).
-- Gerya, T. (2019). *Introduction to Numerical Geodynamic Modelling* (2nd ed.). Cambridge University Press. [DOI: 10.1017/9781316534243](https://doi.org/10.1017/9781316534243).
-
-### Acknowledgements
-
-`Erebus.jl` was originally created by Beat Hubmann (ETH Zurich). Ongoing development is supported by:
-
-- European Research Council (ERC) Starting Grant *MagmaWorlds* (grant agreement no. 101219807).
-- Dutch Research Council (NWO) NWA *PRELIFE* (grant no. NWA.1630.23.013).
-
+The documentation uses the Diataxis structure:
+- **Tutorials**: Hands-on exercises for core formation and planetary growth.
+- **How-To Guides**: Practical guides for config files, checkpoints, and parameter sweeps.
+- **Explanations**: Physics of fluid flow, porous mechanics, heat flow, and gas chemistry.
+- **Reference**: Config schema, benchmark validation records, and bibliography.
 
 ---
 
 ## License
 
-`Erebus.jl` is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+`Erebus.jl` is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
