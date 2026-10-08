@@ -110,13 +110,8 @@ def generate_benchmark_trajectories():
 
     R = (3.0 * M / (4.0 * np.pi * RHO_BULK)) ** (1.0 / 3.0)
 
-    # Telescoping grid levels (doubles when R > 0.70 * r_max)
-    # Level 0: domain 140 km (r_max = 70 km, threshold 49 km)
-    # Level 1: domain 280 km (r_max = 140 km, threshold 98 km)
-    # Level 2: domain 560 km (r_max = 280 km, threshold 196 km)
-    # Level 3: domain 1,120 km (r_max = 560 km, threshold 392 km)
-    # Level 4: domain 2,240 km (r_max = 1,120 km, threshold 784 km)
-    # Level 5: domain 4,480 km (r_max = 2,240 km, threshold 1,568 km)
+    # Telescoping grid levels double when R > 0.70 * r_max.
+    # Level thresholds correspond to domains from 140 km to 4,480 km.
     telescope_events = []
     thresholds = [49.0e3, 98.0e3, 196.0e3, 392.0e3, 784.0e3, 1568.0e3]
     for lev, th in enumerate(thresholds):

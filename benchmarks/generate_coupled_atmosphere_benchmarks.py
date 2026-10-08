@@ -13,39 +13,38 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.integrate import simpson
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -117,7 +116,7 @@ def main():
     T_int = 100.0 # K
     T_eqm = 250.0 # K
     gamma_list = [0.01, 0.1, 1.0, 5.0]
-    colors_gamma = [STRATA['cobalt'], STRATA['plum'], STRATA['amber'], STRATA['gold']]
+    colors_gamma = [PALETTE["slate_blue"], PALETTE["purple"], PALETTE["amber"], PALETTE["gold"]]
 
     for gamma, col in zip(gamma_list, colors_gamma):
         T_prof = compute_guillot_profile(tau_vals, T_int, T_eqm, gamma)
@@ -125,7 +124,7 @@ def main():
 
     # Skin temperature mark (factor 2^-0.25)
     T_skin_limit = (0.5 * (T_int**4) + 0.5 * (1.0 + 0.1) * (T_eqm**4))**0.25
-    ax.axvline(T_eqm, color=NEUTRALS['graphite'], ls='--', lw=1.2, label=r"$T_{\mathrm{eqm}} = 250\,$K")
+    ax.axvline(T_eqm, color=PALETTE["dark_gray"], ls='--', lw=1.2, label=r"$T_{\mathrm{eqm}} = 250\,$K")
 
     ax.set_yscale('log')
     ax.invert_yaxis()
@@ -154,16 +153,16 @@ def main():
     M_recs = np.array(M_recs)
     R_km = R_planets / 1e3
 
-    ax.plot(R_km, M_recs, label=r"Ormel et al. (2015) Recycling Limit", color=STRATA['magma'], lw=2.2, ls='--')
-    ax.plot(R_km, M_envs, label=r"Captured Bound Envelope $M_{\mathrm{env}}^*$", color=STRATA['cobalt'], lw=2.4)
+    ax.plot(R_km, M_recs, label=r"Ormel et al. (2015) Recycling Limit", color=PALETTE["crimson"], lw=2.2, ls='--')
+    ax.plot(R_km, M_envs, label=r"Captured Bound Envelope $M_{\mathrm{env}}^*$", color=PALETTE["slate_blue"], lw=2.4)
 
     # Annotations for transition points
     idx_500 = np.argmin(np.abs(R_km - 500.0))
     idx_1500 = np.argmin(np.abs(R_km - 1500.0))
     ax.scatter([R_km[idx_500], R_km[idx_1500]], [M_envs[idx_500], M_envs[idx_1500]],
-               color=STRATA['amber'], s=45, zorder=5)
-    ax.text(R_km[idx_500] + 50, M_envs[idx_500] * 2.0, "Vesta-scale", fontsize=9.5, color=NEUTRALS['graphite'])
-    ax.text(R_km[idx_1500] - 350, M_envs[idx_1500] * 1.5, "Lunar embryo", fontsize=9.5, color=NEUTRALS['graphite'])
+               color=PALETTE["amber"], s=45, zorder=5)
+    ax.text(R_km[idx_500] + 50, M_envs[idx_500] * 2.0, "Vesta-scale", fontsize=9.5, color=PALETTE["dark_gray"])
+    ax.text(R_km[idx_1500] - 350, M_envs[idx_1500] * 1.5, "Lunar embryo", fontsize=9.5, color=PALETTE["dark_gray"])
 
     ax.set_yscale('log')
     ax.set_ylim(1e12, 1e20)
@@ -185,15 +184,15 @@ def main():
     h_bare = 4.0 * emissivity * SIGMA_SB * (((T_surf + T_amb) / 2.0)**3)
     h_eff = h_bare / (1.0 + 0.75 * tau_arr)
 
-    ax.plot(tau_arr, h_eff, label=r"Effective Radiative HTC $h_{\mathrm{rad,eff}}$", color=STRATA['amber'], lw=2.4)
-    ax.axhline(h_bare, color=NEUTRALS['graphite'], ls=':', lw=1.2, label=rf"Bare Surface Limit ($h = {h_bare:.2f}\,$W/m$^2$K)")
+    ax.plot(tau_arr, h_eff, label=r"Effective Radiative HTC $h_{\mathrm{rad,eff}}$", color=PALETTE["amber"], lw=2.4)
+    ax.axhline(h_bare, color=PALETTE["dark_gray"], ls=':', lw=1.2, label=rf"Bare Surface Limit ($h = {h_bare:.2f}\,$W/m$^2$K)")
 
     # Secondary y-axis for relative thermal insulation
     ax_sec = ax.twinx()
     insulation_factor = 1.0 + 0.75 * tau_arr
-    ax_sec.plot(tau_arr, insulation_factor, color=STRATA['plum'], lw=1.8, ls='-.', label="Insulation Factor $(1 + 3\\tau/4)$")
-    ax_sec.set_ylabel(r"Thermal Blanket Impedance $R_{\mathrm{blanket}}$", fontsize=11, fontweight='bold', color=STRATA['plum'])
-    ax_sec.tick_params(axis='y', labelcolor=STRATA['plum'])
+    ax_sec.plot(tau_arr, insulation_factor, color=PALETTE["purple"], lw=1.8, ls='-.', label="Insulation Factor $(1 + 3\\tau/4)$")
+    ax_sec.set_ylabel(r"Thermal Blanket Impedance $R_{\mathrm{blanket}}$", fontsize=11, fontweight='bold', color=PALETTE["purple"])
+    ax_sec.tick_params(axis='y', labelcolor=PALETTE["purple"])
 
     ax.set_xlim(0, 20)
     ax.set_ylim(0, h_bare * 1.1)
@@ -224,11 +223,11 @@ def main():
 
     # Fractionation efficiencies for different volatile species
     species_plot = [
-        ('CH4', STRATA['cobalt'], '-'),
-        ('H2O', STRATA['plum'], '-'),
-        ('CO', STRATA['amber'], '-'),
-        ('CO2', STRATA['magma'], '-'),
-        ('SO2', STRATA['ink'], '-')
+        ('CH4', PALETTE["slate_blue"], '-'),
+        ('H2O', PALETTE["purple"], '-'),
+        ('CO', PALETTE["amber"], '-'),
+        ('CO2', PALETTE["crimson"], '-'),
+        ('SO2', PALETTE["charcoal"], '-')
     ]
 
     for sp, col, ls in species_plot:

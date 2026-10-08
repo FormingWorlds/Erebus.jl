@@ -156,7 +156,7 @@ end
     @test buf4 === :QFM
     @test reg4 === :gas_ratio_fallback
 
-    # Boundedness: tolerance threshold gating
+    # Boundedness: tolerance threshold bounds
     buf_tol, _ = Erebus.local_controlling_buffer(1e-7, 0.0, 0.0; tol=1e-6)
     @test buf_tol === :QFM
 
@@ -398,7 +398,7 @@ end
         c_neutral, T, P; deltaIW_min=2.0, deltaIW_max=-2.0
     )
 
-    # 6. Complete End-to-End Differentiation Electron Conservation Test
+    # 6. Complete Differentiation Electron Conservation Test
     # Stage 0: Primordial bulk assemblage (Fe0 metal, silicates, water, organics)
     c_initial = Erebus.RedoxComponents(;
         n_Fe0=50.0,

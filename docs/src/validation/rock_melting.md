@@ -39,12 +39,7 @@ The benchmark tracks thermal state, phase fraction, and convective heat transpor
 
 ![Planetesimal Magma Ocean Benchmark Summary](../assets/magma_ocean_cooling_benchmark.png)
 
-- **(a) Revolved Thermal Field Snapshot ($t = 15\text{ kyr}$):** Planetesimal center sits at origin $(0, 0)\text{ km}$. The interior core cools to 1720 K while maintaining a sharp boundary layer beneath the solid crust. The solidus contour (1400 K) and liquidus contour (1800 K) mark the crystallization zone.
-- **(b) Core Thermal Quenching:** In the baseline conduction model (Soft Turb. OFF), central core temperature stays at 1850 K for 50 kyr because conductive diffusion through 50 km requires $\sim 25\text{ Myr}$. With regularized soft turbulence active (Soft Turb. ON), core temperature drops below liquidus (1800 K) in 2 kyr and reaches 1660 K at 50 kyr.
-- **(c) Magma Ocean Solidification Front:** Tracks the radial retreat of the rheological breakdown front ($F_m = 0.40$). Turbulent mixing delivers heat to the front, controlling the freezing velocity.
-- **(d) Radial Temperature Profiles:** Profiles at $t \in [0, 5, 15, 50]\text{ kyr}$ display convective flattening in the core ($r < 35\text{ km}$) and steep conductive gradients in the outer crust ($r \in [35, 50]\text{ km}$).
-- **(e) Convective Conductivity Profiles:** Effective thermal conductivity reaches $k_{\text{eff}} \approx 7 \times 10^3\text{ W/(m K)}$ in the liquid core, declining smoothly to $k_{\text{cond}} = 3.0\text{ W/(m K)}$ within the mush layer without artificial jumps.
-- **(f) Planetary Heat Loss ($q_{\text{surf}}$):** Surface heat flux starts at $0.23\text{ W/m}^2$, sustaining heat discharge through the conductive lid.
+*Figure 1: Class B (1D Finite-Difference Benchmark Solver): Multi-panel summary of the planetesimal magma ocean solidification benchmark. The curves evaluate a 1D spherical finite-difference solver in Python (`benchmarks/render_magma_ocean_movie.py`), revolved into a circular cross-section for 2D visualization. Solver verification is performed by the automated test suite. (a) Revolved thermal field snapshot at $t = 15\text{ kyr}$. (b) Core thermal quenching comparing conduction against soft turbulence. (c) Magma ocean solidification front retreat ($F_m = 0.40$). (d) Radial temperature profiles at $t \in [0, 5, 15, 50]\text{ kyr}$. (e) Convective conductivity profiles. (f) Planetary surface heat loss over time.*
 
 ---
 
@@ -54,6 +49,8 @@ The animation below displays the benchmark ($N_r = 128$ radial cells, revolved o
 
 ![Planetesimal Magma Ocean Solidification Animation](../assets/magma_ocean_cooling_128.gif)
 
+*Figure 2: Class B (1D Finite-Difference Benchmark Solver): Solidification animation of the 1D spherical magma ocean model over 50 kyr, revolved onto a 128x128 grid for visualization (`benchmarks/render_magma_ocean_movie.py`). Displays temperature, melt fraction $F_m$, and effective thermal conductivity $k_{\text{eff}}$.*
+
 ---
 
 ### Grid Convergence (32, 64, 128, and 256 cells)
@@ -61,6 +58,8 @@ The animation below displays the benchmark ($N_r = 128$ radial cells, revolved o
 To test spatial convergence, simulations compare four radial grid resolutions: $N_r = 32$ ($\Delta r = 1.56\text{ km}$), $N_r = 64$ ($\Delta r = 0.78\text{ km}$), $N_r = 128$ ($\Delta r = 0.39\text{ km}$), and $N_r = 256$ ($\Delta r = 0.20\text{ km}$).
 
 ![Grid Convergence Comparison](../assets/magma_ocean_grid_convergence.png)
+
+*Figure 3: Class B (1D Finite-Difference Benchmark Solver): Spatial grid convergence for 32, 64, 128, and 256 radial cells evaluated in `benchmarks/render_magma_ocean_movie.py`. Shows central core temperature convergence within 0.97% between $N_r = 128$ and $N_r = 256$.*
 
 Metrics demonstrate spatial convergence:
 - **Thermal Match:** Core temperature at 15 kyr reaches 1765.2 K at $N_r = 32$, 1740.1 K at $N_r = 64$, 1721.4 K at $N_r = 128$, and 1704.8 K at $N_r = 256$. The relative difference between $N_r = 128$ and $N_r = 256$ is 0.97%.
@@ -76,11 +75,26 @@ Discontinuous step thresholds at marker state transitions produce numerical arti
 `Erebus.jl` resolves this issue with regularized geometric blending:
  
 ![Conductivity Regularization](../assets/magma_ocean_regularization.png)
- 
+
+*Figure 4: Class B (1D Finite-Difference Benchmark Solver / Analytical Formulation): Verification of regularized geometric blending for sub-grid soft turbulence conductivity in `benchmarks/render_magma_ocean_movie.py`. Demonstrates $C^1$ smoothness and elimination of flux spikes.*
+
 The regularization provides three improvements:
 1. **$C^1$ Smoothness in Mush Interval:** The cubic smoothstep provides continuous first derivatives $d(\log_{10} k_{\text{eff}})/dF_m$ throughout the melting interval $[F_{\text{start}}, F_{\text{end}}]$. This eliminates singular flux spikes.
 2. **Viscosity Matching:** Blending $\eta_{\text{fluid}}$ from matrix viscosity down to liquid silicate viscosity prevents the conductivity dip at melting onset.
 3. **Surface Boundary Weighting:** The quadratic thermal contrast weight $w_T = [\text{clamp}(\Delta T / \Delta T_{\text{min}}, 0, 1)]^2$ forces $k_{\text{eff}} \to k_{\text{cond}}$ smoothly as $\Delta T \to 0$, preventing isothermal boundary artifacts.
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Silicate rock melting fraction ($F_m$), apparent heat capacity latent heat buffering, rheological softening, and Solomatov (2007) soft turbulence |
+| **Reference Standard** | Solomatov (2007); Costa et al. (2009); Gerya (2019, Section 16.6.2) |
+| **Figure Provenance** | Class B (1D Finite-Difference Benchmark Solver; revolved spherical grid) |
+| **Generating Script** | `benchmarks/render_magma_ocean_movie.py` |
+| **Automated Verification Test** | `test/test_melting.jl`, `test/test_soft_turbulence.jl`, `test/test_magma_transport.jl` |
+| **Quantitative Tolerance** | Latent heat enthalpy conservation $< 10^{-6}$; grid convergence core temperature variation $< 1\%$ from 128 to 256 cells; mass conservation $< 10^{-12}$ |
  
 ---
  

@@ -13,39 +13,38 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -94,10 +93,10 @@ def generate_benchmark_figure():
     P_ref = 1.0e8  # 0.1 GPa
     w_S_ref = 0.05  # 5 wt% S
 
-    ax_a.plot(dIW_arr, D_carbon_grewal(T_ref, P_ref, dIW_arr, w_S_ref), '-', color=STRATA['magma'], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$')
-    ax_a.plot(dIW_arr, D_nitrogen_grewal(T_ref, P_ref, dIW_arr, w_S_ref), '-', color=STRATA['cobalt'], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$')
-    ax_a.plot(dIW_arr, D_sulfur_boujibar(T_ref, P_ref, dIW_arr), '-', color=STRATA['gold'], linewidth=2.2, label=r'Sulfur $D_\mathrm{S}$')
-    ax_a.plot(dIW_arr, D_hydrogen_clesi(T_ref, P_ref, dIW_arr), '-', color=STRATA['plum'], linewidth=2.2, label=r'Hydrogen $D_\mathrm{H}$')
+    ax_a.plot(dIW_arr, D_carbon_grewal(T_ref, P_ref, dIW_arr, w_S_ref), '-', color=PALETTE["crimson"], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$')
+    ax_a.plot(dIW_arr, D_nitrogen_grewal(T_ref, P_ref, dIW_arr, w_S_ref), '-', color=PALETTE["slate_blue"], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$')
+    ax_a.plot(dIW_arr, D_sulfur_boujibar(T_ref, P_ref, dIW_arr), '-', color=PALETTE["gold"], linewidth=2.2, label=r'Sulfur $D_\mathrm{S}$')
+    ax_a.plot(dIW_arr, D_hydrogen_clesi(T_ref, P_ref, dIW_arr), '-', color=PALETTE["purple"], linewidth=2.2, label=r'Hydrogen $D_\mathrm{H}$')
 
     ax_a.set_yscale('log')
     ax_a.set_xlim(-4.0, 0.0)
@@ -115,19 +114,19 @@ def generate_benchmark_figure():
     w_S_arr = np.linspace(0.0, 0.31, 100)
     dIW_val = -2.0
 
-    ax_b.plot(w_S_arr * 100, D_carbon_grewal(T_ref, P_ref, dIW_val, w_S_arr), '-', color=STRATA['magma'], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$ (Grewal+ 2019b)')
-    ax_b.plot(w_S_arr * 100, D_nitrogen_grewal(T_ref, P_ref, dIW_val, w_S_arr), '-', color=STRATA['cobalt'], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$ (Grewal+ 2019b)')
+    ax_b.plot(w_S_arr * 100, D_carbon_grewal(T_ref, P_ref, dIW_val, w_S_arr), '-', color=PALETTE["crimson"], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$ (Grewal+ 2019b)')
+    ax_b.plot(w_S_arr * 100, D_nitrogen_grewal(T_ref, P_ref, dIW_val, w_S_arr), '-', color=PALETTE["slate_blue"], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$ (Grewal+ 2019b)')
     
     # C/N partition ratio on twin axis
     ax_b_twin = ax_b.twinx()
     ratio_CN = D_carbon_grewal(T_ref, P_ref, dIW_val, w_S_arr) / D_nitrogen_grewal(T_ref, P_ref, dIW_val, w_S_arr)
-    ax_b_twin.plot(w_S_arr * 100, ratio_CN, ':', color=STRATA['amber'], linewidth=2.0, label=r'$D_\mathrm{C} / D_\mathrm{N}$ Ratio')
-    ax_b_twin.set_ylabel(r'Partition Ratio $D_\mathrm{C} / D_\mathrm{N}$ [-]', fontsize=9.5, color=STRATA['amber'])
-    ax_b_twin.tick_params(axis='y', labelcolor=STRATA['amber'])
+    ax_b_twin.plot(w_S_arr * 100, ratio_CN, ':', color=PALETTE["amber"], linewidth=2.0, label=r'$D_\mathrm{C} / D_\mathrm{N}$ Ratio')
+    ax_b_twin.set_ylabel(r'Partition Ratio $D_\mathrm{C} / D_\mathrm{N}$ [-]', fontsize=9.5, color=PALETTE["amber"])
+    ax_b_twin.tick_params(axis='y', labelcolor=PALETTE["amber"])
     ax_b_twin.set_yscale('log')
     ax_b_twin.set_ylim(0.5, 200.0)
 
-    ax_b.axvline(31.0, color=NEUTRALS['graphite'], linestyle='--', linewidth=1.0, alpha=0.7, label='Fe-FeS Eutectic (~31 wt%)')
+    ax_b.axvline(31.0, color=PALETTE["dark_gray"], linestyle='--', linewidth=1.0, alpha=0.7, label='Fe-FeS Eutectic (~31 wt%)')
     ax_b.set_yscale('log')
     ax_b.set_xlim(0, 32)
     ax_b.set_ylim(5, 5000)
@@ -144,10 +143,10 @@ def generate_benchmark_figure():
     T_arr = np.linspace(1300.0, 2200.0, 100)
     w_S_med = 0.10
 
-    ax_c.plot(T_arr, D_carbon_grewal(T_arr, P_ref, dIW_val, w_S_med), '-', color=STRATA['magma'], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$')
-    ax_c.plot(T_arr, D_nitrogen_grewal(T_arr, P_ref, dIW_val, w_S_med), '-', color=STRATA['cobalt'], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$')
-    ax_c.plot(T_arr, D_sulfur_boujibar(T_arr, P_ref, dIW_val), '-', color=STRATA['gold'], linewidth=2.2, label=r'Sulfur $D_\mathrm{S}$ (Boujibar+ 2014)')
-    ax_c.plot(T_arr, D_hydrogen_clesi(T_arr, P_ref, dIW_val), '-', color=STRATA['plum'], linewidth=2.2, label=r'Hydrogen $D_\mathrm{H}$ (Clesi+ 2018)')
+    ax_c.plot(T_arr, D_carbon_grewal(T_arr, P_ref, dIW_val, w_S_med), '-', color=PALETTE["crimson"], linewidth=2.2, label=r'Carbon $D_\mathrm{C}$')
+    ax_c.plot(T_arr, D_nitrogen_grewal(T_arr, P_ref, dIW_val, w_S_med), '-', color=PALETTE["slate_blue"], linewidth=2.2, label=r'Nitrogen $D_\mathrm{N}$')
+    ax_c.plot(T_arr, D_sulfur_boujibar(T_arr, P_ref, dIW_val), '-', color=PALETTE["gold"], linewidth=2.2, label=r'Sulfur $D_\mathrm{S}$ (Boujibar+ 2014)')
+    ax_c.plot(T_arr, D_hydrogen_clesi(T_arr, P_ref, dIW_val), '-', color=PALETTE["purple"], linewidth=2.2, label=r'Hydrogen $D_\mathrm{H}$ (Clesi+ 2018)')
 
     ax_c.set_yscale('log')
     ax_c.set_xlim(1300, 2200)
@@ -165,10 +164,10 @@ def generate_benchmark_figure():
 
     # Literature fields for magmatic iron meteorites (C ppmw vs N ppmw)
     groups = [
-        {'name': 'IIAB (S-rich)', 'C_range': (100, 350), 'N_range': (15, 35), 'color': STRATA['gold'], 'alpha': 0.35},
-        {'name': 'IIIAB', 'C_range': (250, 550), 'N_range': (10, 26), 'color': STRATA['amber'], 'alpha': 0.35},
-        {'name': 'IVA', 'C_range': (30, 150), 'N_range': (2.0, 8.5), 'color': STRATA['cobalt'], 'alpha': 0.35},
-        {'name': 'IVB (refractory)', 'C_range': (10, 60), 'N_range': (0.5, 2.8), 'color': STRATA['plum'], 'alpha': 0.35},
+        {'name': 'IIAB (S-rich)', 'C_range': (100, 350), 'N_range': (15, 35), 'color': PALETTE["gold"], 'alpha': 0.35},
+        {'name': 'IIIAB', 'C_range': (250, 550), 'N_range': (10, 26), 'color': PALETTE["amber"], 'alpha': 0.35},
+        {'name': 'IVA', 'C_range': (30, 150), 'N_range': (2.0, 8.5), 'color': PALETTE["slate_blue"], 'alpha': 0.35},
+        {'name': 'IVB (refractory)', 'C_range': (10, 60), 'N_range': (0.5, 2.8), 'color': PALETTE["purple"], 'alpha': 0.35},
     ]
 
     for g in groups:
@@ -178,7 +177,7 @@ def generate_benchmark_figure():
                          facecolor=g['color'], edgecolor=g['color'], alpha=g['alpha'], linewidth=1.5, label=g['name'])
         ax_d.add_patch(rect)
         ax_d.text(g['C_range'][0] + 0.08 * w_C, g['N_range'][0] + 0.3 * h_N, g['name'].split()[0],
-                  fontsize=8.5, fontweight='bold', color=NEUTRALS['graphite'])
+                  fontsize=8.5, fontweight='bold', color=PALETTE["dark_gray"])
 
     # Model equilibrium tracks
     dIW_sweep = np.linspace(-3.5, -1.0, 20)
@@ -207,8 +206,8 @@ def generate_benchmark_figure():
         track_S_mod_C.append(C_met_mod)
         track_S_mod_N.append(N_met_mod)
 
-    ax_d.plot(track_S_rich_C, track_S_rich_N, 'o-', color=STRATA['magma'], markersize=4, linewidth=2.0, label=r'Erebus ($w_\mathrm{S} = 0.15$, $\Delta\mathrm{IW} \in [-3.5, -1]$)')
-    ax_d.plot(track_S_mod_C, track_S_mod_N, 's--', color=STRATA['cobalt'], markersize=4, linewidth=2.0, label=r'Erebus ($w_\mathrm{S} = 0.07$, $\Delta\mathrm{IW} \in [-3.5, -1]$)')
+    ax_d.plot(track_S_rich_C, track_S_rich_N, 'o-', color=PALETTE["crimson"], markersize=4, linewidth=2.0, label=r'Erebus ($w_\mathrm{S} = 0.15$, $\Delta\mathrm{IW} \in [-3.5, -1]$)')
+    ax_d.plot(track_S_mod_C, track_S_mod_N, 's--', color=PALETTE["slate_blue"], markersize=4, linewidth=2.0, label=r'Erebus ($w_\mathrm{S} = 0.07$, $\Delta\mathrm{IW} \in [-3.5, -1]$)')
 
     ax_d.set_xscale('log')
     ax_d.set_yscale('log')
@@ -289,12 +288,12 @@ def generate_benchmark_figure():
         M_core_N[i] = m_fe * (N_met * 1e-6)
         M_core_H[i] = m_fe * (H_met * 1e-6)
 
-    ax_e.plot(time_ma, M_core_S / 1e16, '-', color=STRATA['gold'], linewidth=2.2, label=r'Core Sulfur ($M_\mathrm{S} / 10^{16}$ kg)')
-    ax_e.plot(time_ma, M_core_C / 1e14, '-', color=STRATA['magma'], linewidth=2.2, label=r'Core Carbon ($M_\mathrm{C} / 10^{14}$ kg)')
-    ax_e.plot(time_ma, M_core_H / 1e13, '-', color=STRATA['plum'], linewidth=2.2, label=r'Core Hydrogen ($M_\mathrm{H} / 10^{13}$ kg)')
-    ax_e.plot(time_ma, M_core_N / 1e13, '-', color=STRATA['cobalt'], linewidth=2.2, label=r'Core Nitrogen ($M_\mathrm{N} / 10^{13}$ kg)')
+    ax_e.plot(time_ma, M_core_S / 1e16, '-', color=PALETTE["gold"], linewidth=2.2, label=r'Core Sulfur ($M_\mathrm{S} / 10^{16}$ kg)')
+    ax_e.plot(time_ma, M_core_C / 1e14, '-', color=PALETTE["crimson"], linewidth=2.2, label=r'Core Carbon ($M_\mathrm{C} / 10^{14}$ kg)')
+    ax_e.plot(time_ma, M_core_H / 1e13, '-', color=PALETTE["purple"], linewidth=2.2, label=r'Core Hydrogen ($M_\mathrm{H} / 10^{13}$ kg)')
+    ax_e.plot(time_ma, M_core_N / 1e13, '-', color=PALETTE["slate_blue"], linewidth=2.2, label=r'Core Nitrogen ($M_\mathrm{N} / 10^{13}$ kg)')
 
-    ax_e.axvspan(1.05, 1.6, color=NEUTRALS['cream'], alpha=0.5, label='Runaway Core Segregation')
+    ax_e.axvspan(1.05, 1.6, color=PALETTE["white"], alpha=0.5, label='Runaway Core Segregation')
     ax_e.set_xlim(0.5, 3.5)
     ax_e.set_ylim(0.0, 20.0)
     ax_e.set_xlabel('Time [Ma]', fontsize=10)
@@ -345,16 +344,16 @@ def generate_benchmark_figure():
     y_pos = np.arange(len(elements))
     bar_height = 0.55
 
-    ax_f.barh(y_pos, core_pct, height=bar_height, color=STRATA['gold'], edgecolor=NEUTRALS['mist'], label='Segregated Metallic Core')
-    ax_f.barh(y_pos, mantle_pct, height=bar_height, left=core_pct, color=STRATA['cobalt'], edgecolor=NEUTRALS['mist'], label='Retained Silicate Mantle')
-    ax_f.barh(y_pos, degassed_pct, height=bar_height, left=core_pct + mantle_pct, color=STRATA['magma'], edgecolor=NEUTRALS['mist'], label='Degassed & Vented Loss')
+    ax_f.barh(y_pos, core_pct, height=bar_height, color=PALETTE["gold"], edgecolor=PALETTE["grid_gray"], label='Segregated Metallic Core')
+    ax_f.barh(y_pos, mantle_pct, height=bar_height, left=core_pct, color=PALETTE["slate_blue"], edgecolor=PALETTE["grid_gray"], label='Retained Silicate Mantle')
+    ax_f.barh(y_pos, degassed_pct, height=bar_height, left=core_pct + mantle_pct, color=PALETTE["crimson"], edgecolor=PALETTE["grid_gray"], label='Degassed & Vented Loss')
 
     for i in range(len(elements)):
         c = core_pct[i]
         m = mantle_pct[i]
         d = degassed_pct[i]
         if c > 8:
-            ax_f.text(c / 2, y_pos[i], f'{c:.0f}%', ha='center', va='center', fontsize=8.5, fontweight='bold', color=NEUTRALS['graphite'] if c < 60 else 'white')
+            ax_f.text(c / 2, y_pos[i], f'{c:.0f}%', ha='center', va='center', fontsize=8.5, fontweight='bold', color=PALETTE["dark_gray"] if c < 60 else 'white')
         if m > 8:
             ax_f.text(c + m / 2, y_pos[i], f'{m:.0f}%', ha='center', va='center', fontsize=8.5, fontweight='bold', color='white')
         if d > 8:

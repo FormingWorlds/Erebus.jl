@@ -57,6 +57,19 @@ Key constitutive relations validated on this page include:
 
 ---
 
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Two-phase Stokes-Darcy fluid continuity with dehydration volumetric source term ($\Delta Q^f$), condensed 4-variable vs 6-variable equivalence, and unified non-double-counted surface venting |
+| **Reference Standard** | McKenzie (1984); Young et al. (1999); Hubmann (2022) |
+| **Figure Provenance** | Class B (Discretized 2D Stokes-Darcy Solve Verification; no static figure) |
+| **Generating Script** | Evaluated directly in numerical tests |
+| **Automated Verification Test** | `test/test_dehydration_darcy_coupling.jl`, `test/test_atmosphere.jl` |
+| **Quantitative Tolerance** | Fluid pressure equivalence $\|P_f^{(4)} - P_f^{(6)}\|_\infty / \|P_f^{(6)}\|_\infty < 10^{-8}$; elemental mass conservation closed to $< 10^{-12}$ |
+
+---
+
 ## Verification Test Suite
  
 - `test/test_dehydration_darcy_coupling.jl`:

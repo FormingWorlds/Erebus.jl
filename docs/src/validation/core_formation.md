@@ -92,18 +92,15 @@ The multi-panel summary figure illustrates the critical physical mechanisms:
 
 ![Core Formation Benchmark Suite](../assets/core_formation_benchmark.png)
 
-- **(a) Differentiated Body Map ($t = 3.0\text{ Ma}$)**: 2D Cartesian slice showing the segregated central iron core (gold), surrounded by an iron-depleted silicate mantle (red), and preserved cold primordial crust (blue).
-- **(b) Core Thermal Runaway**: Shows central temperature evolution $T_{\text{core}}(t)$. Gravitational dissipation heating ($Q_{\text{seg}}$ ON) releases potential energy as metal settles, boosting peak core temperatures above the case without dissipation heating ($Q_{\text{seg}}$ OFF).
-- **(c) Differentiation Fronts Timeline**: Traces the radial expansion of the metallic core boundary ($\phi_{\text{fe}} \ge 0.50$, reaching $27\text{ km}$) and the magma ocean boundary ($F_m \ge 0.40$).
-- **(d) Radial Metal Concentration Profiles**: Shows $\phi_{\text{fe}}(r)$ at $t = 0.0, 1.0, 1.5,$ and $3.0\text{ Ma}$. Bulk iron begins uniformly at $0.12$, depletes to the residual threshold $0.02$ in the mantle, and ponds up to $\phi_{\text{pack}} = 0.65$ in the central core.
-- **(e) Transport Regime Comparison**: Compares segregation velocities for three configurations: porous percolation only (slow, $\sim 10^{-7}\text{ m/s}$), Stokes droplet settling only, and the coupled Hermite transition model.
-- **(f) Droplet Size Physics Sensitivity**: Compares core radius growth for constant droplet diameter ($0.5\text{ cm}$), Weber equilibrium balance ($d \propto \sqrt{\sigma / g}$), and dynamic turbulent breakup ($d \propto v^{-2}$).
+*Figure 1: Class B (1D Finite-Difference Benchmark Solver): Multi-panel verification benchmark for iron core formation and metal-silicate segregation. The model executes a 1D spherical finite-difference solver in Julia (`generate_core_formation_benchmarks.jl`) mapped radially onto a 2D mesh in Python (`generate_core_formation_benchmark.py`). Automated 2D solver verification is executed in `test/test_core_formation.jl`. (a) Revolved differentiated body map ($t = 3.0\text{ Ma}$) showing the segregated central iron core (gold), surrounded by an iron-depleted silicate mantle (red), and preserved cold primordial crust (blue). (b) Core thermal runaway: central temperature evolution $T_{\text{core}}(t)$ comparing cases with and without gravitational dissipation heating ($Q_{\text{seg}}$). (c) Differentiation fronts timeline: radial expansion of the metallic core boundary and the magma ocean boundary. (d) Radial metal concentration profiles $\phi_{\text{fe}}(r)$ across evolution epochs. (e) Transport regime comparison: segregation velocities for percolation only, Stokes settling only, and the coupled Hermite transition model. (f) Droplet size physics sensitivity: core radius growth for constant diameter, Weber balance, and turbulent breakup.*
 
-### 2D Simulation Video
+### Revolved Simulation Animation
 
-The animation below displays the 2D Cartesian revolved core formation benchmark over 3.5 Ma starting from a completely uniform icy mixture. The panels display internal temperature with phase boundaries (left), compositional differentiation regimes (center), and bulk metal volume fraction $\phi_{\text{fe}}$ (right).
+The animation below displays the 1D spherical core formation benchmark revolved into 2D Cartesian frames over 3.5 Ma starting from a completely uniform icy mixture. The panels display internal temperature with phase boundaries (left), compositional differentiation regimes (center), and bulk metal volume fraction $\phi_{\text{fe}}$ (right).
 
 ![Core Formation 2D Differentiation Animation](../assets/core_formation_differentiation.gif)
+
+*Figure 2: Class B (1D Finite-Difference Benchmark Solver): Revolved 1D spherical finite-difference simulation frames over 3.5 Ma of planetesimal evolution, displaying temperature, differentiation regimes, and metal volume fraction.*
 
 A high-framerate MP4 video is available at `../assets/core_formation_differentiation.mp4`.
 
@@ -113,7 +110,7 @@ To validate self-gravitational acceleration in differentiated planetesimals, `Er
 
 ![Self-Gravity in Differentiated Bodies](../assets/gravity_two_layer_benchmark.png)
 
-*Figure 2: Self-gravity acceleration and core-excess comparisons for a differentiated planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$). (a) Total radial acceleration $g(r)$ comparing the 3D analytical solution, the discrete marker enclosed-mass mode (`:enclosed_mass`), and the 2D Cartesian Poisson mode (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r)$ outside the core ($r_c \le r \le R$).*
+*Figure 3: Class B (Julia Library Exporter): Self-gravity acceleration and core-excess comparisons for a differentiated planetesimal ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$) evaluated by `benchmarks/export_gravity_two_layer_benchmark.jl`. (a) Total radial acceleration $g(r)$ comparing the 3D analytical solution, the discrete marker enclosed-mass mode (`:enclosed_mass`), and the 2D Cartesian Poisson mode (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r)$ outside the core ($r_c \le r \le R$).*
 
 1. **Analytical 3D Spherical Profile:**
    Outside the central core ($r \ge r_c$), true 3D spherical gravity follows:
@@ -126,7 +123,20 @@ To validate self-gravitational acceleration in differentiated planetesimals, `Er
 
 ---
 
-## 5. Literature Anchors
+## 5. Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Porous Fe-FeS percolation, Stokes droplet settling, mush transition handover, dissipation heating, and self-gravity in differentiated bodies |
+| **Reference Standard** | Rubie et al. (2015); Monteux et al. (2009); Lichtenberg et al. (2019) |
+| **Figure Provenance** | Class B (1D Finite-Difference Benchmark Solver / Julia Library Exporter) |
+| **Generating Script** | `benchmarks/generate_core_formation_benchmarks.jl`, `benchmarks/render_core_formation_movie.py`, `benchmarks/export_gravity_two_layer_benchmark.jl` |
+| **Automated Verification Test** | `test/test_core_formation.jl`, `test/test_reference_runs.jl` |
+| **Quantitative Tolerance** | Analytical 1D gravity $L_2 < 1.0\times 10^{-4}$; core metal conservation closed to machine precision $< 10^{-12}$ |
+
+---
+
+## 6. Literature Anchors
 
 - **Yoshino, T., Walter, M. J., & Katsura, T. (2003)**. Core formation in planetesimals triggered by permeable flow. *Nature*, 422(6928), 154-157.  
   [https://doi.org/10.1038/nature01524](https://doi.org/10.1038/nature01524)

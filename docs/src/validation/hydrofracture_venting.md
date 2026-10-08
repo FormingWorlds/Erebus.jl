@@ -49,7 +49,20 @@ Figure 1 presents an illustrative verification benchmark for the operational reg
 
 ![Cold Lid Hydrofracture Venting Benchmark](../assets/hydrofracture_venting_benchmark.png)
 
-*Figure 1: Four-panel verification benchmark schematic for cold lid hydrofracture breaching and cryogenic pore ice sealing equations. (a) Permeability ratio $k_{\text{eff}} / k_0$ as a function of surface temperature for transition scales $\Delta T_{\text{seal}} \in \{5, 10, 20\}\text{ K}$, with smooth exponential suppression down to the cryogenic floor ($10^{-6}$). (b) Venting regime map in the plane of surface temperature $T_{\text{surf}}$ and effective pressure $P_{\text{eff}}$, which delineates four quadrants: cryogenically sealed intact lid, breached cold lid hydrofracture vent, warm Darcy permeable sink, and warm hydrofracture. (c) Synthetic time series of episodic dehydration overpressure buildup, tensile rupture ($P_f \ge P_t + \sigma_t$), and subsequent resealing. (d) Resulting pulsed cryovolcanic surface venting mass flux and cumulative fluid mass comparison against continuous unsealed leakage.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel verification benchmark for cold lid hydrofracture breaching and cryogenic pore ice sealing equations. The curves evaluate analytical formulations in Python (`scripts/generate_hydrofracture_venting_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Permeability ratio $k_{\text{eff}} / k_0$ as a function of surface temperature for transition scales $\Delta T_{\text{seal}} \in \{5, 10, 20\}\text{ K}$, with smooth exponential suppression down to the cryogenic floor ($10^{-6}$). (b) Venting regime map in the plane of surface temperature $T_{\text{surf}}$ and effective pressure $P_{\text{eff}}$, which delineates four quadrants: cryogenically sealed intact lid, breached cold lid hydrofracture vent, warm Darcy permeable sink, and warm hydrofracture. (c) Synthetic time series of episodic dehydration overpressure buildup, tensile rupture ($P_f \ge P_t + \sigma_t$), and subsequent resealing. (d) Resulting pulsed cryovolcanic surface venting mass flux and cumulative fluid mass comparison against continuous unsealed leakage.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Cold lid hydrofracture breaching criterion, cryogenic pore ice permeability sealing, episodic venting cycles |
+| **Reference Standard** | Fu & Elkins-Tanton (2014); Neveu et al. (2015); Manga & Wang (2007) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `scripts/generate_hydrofracture_venting_benchmark.py` |
+| **Automated Verification Test** | `test/test_hydrofracture_venting.jl` |
+| **Quantitative Tolerance** | Cryogenic exponential permeability match $< 10^{-12}$; tensile breaching threshold exact to machine precision; fluid mass conservation $< 10^{-12}$ |
 
 ---
 
@@ -68,8 +81,8 @@ Figure 1 presents an illustrative verification benchmark for the operational reg
 - `test/test_hydrofracture_venting.jl`:
   - `@testset "compute_ice_sealed_permeability Invariants & Asymptotics"`
   - `@testset "is_hydrofracture_breached Invariants"`
-  - `@testset "Surface Boundary Hydrofracture Gating & Cryogenic Sealing Assembly"`
+  - `@testset "Surface Boundary Hydrofracture Permeability & Cryogenic Sealing Assembly"`
   - `@testset "compute_face_venting_permeability Invariants"`
   - `@testset "VentingConfig Validation on Ice Sealing Parameters"`
   - `@testset "Episodic Hydrofracture Breaching & Lid Resealing Dynamics"`
-  - `@testset "Simulation Loop with Hydrofracture-Gated & Ice Sealed Venting"`
+  - `@testset "Simulation Loop with Hydrofracture-Controlled & Ice Sealed Venting"`

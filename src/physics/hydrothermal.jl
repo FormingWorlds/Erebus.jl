@@ -339,7 +339,7 @@ $(SIGNATURES)
 - `tmfluidphase_val`: Melting temperature of pore fluid [K] (default: 273.15)
 - `H_eff`: Optional convective layer thickness [m] (default: nothing, uses cfg.H_layer)
 - `gravity`: Optional local gravitational acceleration [m/s²] (default: nothing, uses cfg.gravity)
-- `active`: Boolean toggle to activate convection (default: true)
+- `active`: Boolean flag to activate convection (default: true)
 - `phim0`: Reference porosity for Kozeny-Carman permeability [-] (default: 0.2)
 
 # Returns

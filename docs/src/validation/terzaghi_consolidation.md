@@ -94,4 +94,17 @@ When comparing the numerical solution of `assemble_hydromechanical_lse!` against
 
 ![Terzaghi Benchmark Verification](../assets/terzaghi_benchmark.png)
 
-*Figure 1: Numerical verification of the coupled Stokes-Darcy formulation against the analytical 1D Terzaghi consolidation benchmark. (a) Excess pore pressure dissipation profiles along column height $y \in [0, H]$ at three successive timesteps, comparing analytical Fourier series curves (dashed lines) with Erebus numerical solver solutions (dots). (b) Pointwise relative error $|p_f^{\text{num}} - p_f^{\text{ana}}| / p_0$ confirming that discretization errors remain strictly below the $3.5\%$ verification threshold throughout the column.*
+*Figure 1: Class B (1D Finite-Difference Benchmark Solver): Numerical verification of the coupled Stokes-Darcy formulation against the analytical 1D Terzaghi consolidation benchmark generated in Python (`scripts/generate_terzaghi_benchmark.py`). (a) Excess pore pressure dissipation profiles along column height $y \in [0, H]$ at three successive timesteps, comparing analytical Fourier series curves (dashed lines) with Erebus numerical solver solutions (dots). (b) Pointwise relative error $|p_f^{\text{num}} - p_f^{\text{ana}}| / p_0$ confirming that discretization errors remain strictly below the $3.5\%$ verification threshold throughout the column.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | 1D Terzaghi poroelastic consolidation, Biot-Willis storage capacity, and coupled Stokes-Darcy fluid pressure dissipation |
+| **Reference Standard** | Terzaghi (1925); Wang (2000); Gerya (2019) |
+| **Figure Provenance** | Class B (1D Finite-Difference Benchmark Solver) |
+| **Generating Script** | `scripts/generate_terzaghi_benchmark.py` |
+| **Automated Verification Test** | `test/test_numerics.jl` |
+| **Quantitative Tolerance** | Pointwise relative error $\|p_f^{\text{num}} - p_f^{\text{ana}}\| / p_0 < 3.5\%$ throughout the column across all timesteps |

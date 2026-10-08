@@ -12,39 +12,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -130,14 +129,14 @@ def main():
     x_nh3 = np.linspace(0.0, 0.40, 300)
     t_freeze = compute_freezing_curve(x_nh3)
 
-    ax_a.plot(x_nh3 * 100.0, t_freeze, color=STRATA['cobalt'], lw=2.5,
+    ax_a.plot(x_nh3 * 100.0, t_freeze, color=PALETTE["slate_blue"], lw=2.5,
               label="Equilibrium liquidus $T_{\\mathrm{freeze}}$")
-    ax_a.axhline(273.15, color=NEUTRALS['graphite'], ls="--", lw=1.5,
+    ax_a.axhline(273.15, color=PALETTE["dark_gray"], ls="--", lw=1.5,
                  label="Pure $\\mathrm{H_2O}$ melting (273.15 K)")
-    ax_a.axhline(176.0, color=STRATA['magma'], ls=":", lw=1.8,
+    ax_a.axhline(176.0, color=PALETTE["crimson"], ls=":", lw=1.8,
                  label="Eutectic floor $T_{\\mathrm{eutectic}}$ (176 K)")
 
-    ax_a.fill_between(x_nh3 * 100.0, t_freeze, 273.15, color=STRATA['cobalt'], alpha=0.15)
+    ax_a.fill_between(x_nh3 * 100.0, t_freeze, 273.15, color=PALETTE["slate_blue"], alpha=0.15)
 
     ax_a.set_xlim(0.0, 40.0)
     ax_a.set_ylim(160.0, 290.0)
@@ -155,12 +154,12 @@ def main():
     condensed, t_conds = evaluate_condensation_profile(t_disk)
 
     colors = {
-        'H2O': STRATA['cobalt'],
-        'CO2': STRATA['amber'],
-        'NH3': STRATA['plum'],
-        'CH4': STRATA['gold'],
-        'CO': STRATA['magma'],
-        'N2': STRATA['ink']
+        'H2O': PALETTE["slate_blue"],
+        'CO2': PALETTE["amber"],
+        'NH3': PALETTE["purple"],
+        'CH4': PALETTE["gold"],
+        'CO': PALETTE["crimson"],
+        'N2': PALETTE["charcoal"]
     }
 
     for sp in ['H2O', 'CO2', 'NH3', 'CH4', 'CO', 'N2']:
@@ -189,13 +188,13 @@ def main():
     s_refr = np.full_like(t_disk_wide, 0.89)
     s_ice_cond = np.where(t_disk_wide <= 75.0, 0.11, 0.0)
 
-    ax_c.plot(t_disk_wide, c_refr * 100.0, color=STRATA['ink'], lw=2.2,
+    ax_c.plot(t_disk_wide, c_refr * 100.0, color=PALETTE["charcoal"], lw=2.2,
               label="Refractory Carbon (Bergin+ 2026)")
-    ax_c.plot(t_disk_wide, (c_refr + c_ice_cond) * 100.0, color=STRATA['ink'], lw=1.8, ls="--",
+    ax_c.plot(t_disk_wide, (c_refr + c_ice_cond) * 100.0, color=PALETTE["charcoal"], lw=1.8, ls="--",
               label="Total Carbon (Refractory + Ice)")
-    ax_c.plot(t_disk_wide, s_refr * 100.0, color=STRATA['amber'], lw=2.2,
+    ax_c.plot(t_disk_wide, s_refr * 100.0, color=PALETTE["amber"], lw=2.2,
               label="Refractory FeS Sulfur (Kama+ 2019)")
-    ax_c.plot(t_disk_wide, (s_refr + s_ice_cond) * 100.0, color=STRATA['amber'], lw=1.8, ls="--",
+    ax_c.plot(t_disk_wide, (s_refr + s_ice_cond) * 100.0, color=PALETTE["amber"], lw=1.8, ls="--",
               label="Total Sulfur (FeS + H2S Ice)")
 
     ax_c.set_xlim(10.0, 300.0)
@@ -213,18 +212,18 @@ def main():
     t_body = np.linspace(300.0, 1100.0, 400)
     c_rem, c_graph, c_gas, n_rem, n_gas = evaluate_pyrolysis_profile(t_body)
 
-    ax_d.plot(t_body, c_rem * 100.0, color=STRATA['cobalt'], lw=2.2,
+    ax_d.plot(t_body, c_rem * 100.0, color=PALETTE["slate_blue"], lw=2.2,
               label="IOM Carbon ($C_{\\mathrm{refr}}$)")
-    ax_d.plot(t_body, c_graph * 100.0, color=NEUTRALS['graphite'], lw=2.2,
+    ax_d.plot(t_body, c_graph * 100.0, color=PALETTE["dark_gray"], lw=2.2,
               label="Graphite residue ($C_{\\mathrm{graph}}$)")
-    ax_d.plot(t_body, c_gas * 100.0, color=STRATA['amber'], lw=2.2,
+    ax_d.plot(t_body, c_gas * 100.0, color=PALETTE["amber"], lw=2.2,
               label="Devolatilized gas ($C_{\\mathrm{gas}}$)")
-    ax_d.plot(t_body, n_gas * 100.0, color=STRATA['magma'], lw=1.8, ls=":",
+    ax_d.plot(t_body, n_gas * 100.0, color=PALETTE["crimson"], lw=1.8, ls=":",
               label="Devolatilized gas ($N_{\\mathrm{gas}}$)")
 
     # Mass conservation verification curve
     c_tot = (c_rem + c_graph + c_gas) * 100.0
-    ax_d.plot(t_body, c_tot, color=NEUTRALS['graphite'], ls="--", lw=1.0, alpha=0.6,
+    ax_d.plot(t_body, c_tot, color=PALETTE["dark_gray"], ls="--", lw=1.0, alpha=0.6,
               label="Total carbon balance (100%)")
 
     ax_d.set_xlim(300.0, 1100.0)

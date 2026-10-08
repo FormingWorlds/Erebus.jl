@@ -14,38 +14,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -85,21 +85,21 @@ def generate_benchmark_figure():
     ax_a = axes[0]
     ax_a.text(
         0.04, 0.92, '(a)', transform=ax_a.transAxes, fontsize=11, fontweight='bold',
-        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9)
+        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9)
     )
     ax_a.plot(
-        T_sweep, phi_ref, '-', color=STRATA['cobalt'], linewidth=2.2,
+        T_sweep, phi_ref, '-', color=PALETTE["slate_blue"], linewidth=2.2,
         label=r'Maxwell-Boltzmann: $\frac{n v_{\mathrm{th}}}{2\sqrt{\pi}}(1+\lambda)e^{-\lambda}$'
     )
     # Plot subsampled points for clarity
     step = max(1, len(T_sweep) // 15)
     ax_a.plot(
-        T_sweep[::step], phi_code[::step], 'o', color=STRATA['magma'], markersize=6.0,
+        T_sweep[::step], phi_code[::step], 'o', color=PALETTE["crimson"], markersize=6.0,
         markeredgewidth=1.2, markeredgecolor='white', label='Erebus.jl (kinetic mode)'
     )
     # Highlight branch switch point
     ax_a.plot(
-        [T_hot], [flux_hydro_hot], 's', color=STRATA['amber'], markersize=7.0,
+        [T_hot], [flux_hydro_hot], 's', color=PALETTE["amber"], markersize=7.0,
         markeredgewidth=1.2, markeredgecolor='white', label=r'Hydrodynamic branch ($\lambda < 2$)'
     )
 
@@ -114,16 +114,16 @@ def generate_benchmark_figure():
     ax_b = axes[1]
     ax_b.text(
         0.04, 0.92, '(b)', transform=ax_b.transAxes, fontsize=11, fontweight='bold',
-        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9)
+        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9)
     )
     # Guard against exact zeros in log scale
     err_plot = np.maximum(rel_errors, 1.0e-17)
     ax_b.semilogy(
-        T_sweep, err_plot, '.-', color=STRATA['plum'], linewidth=1.5,
+        T_sweep, err_plot, '.-', color=PALETTE["purple"], linewidth=1.5,
         markersize=4.0, label=r'Relative Error $|\Phi_{\mathrm{code}} - \Phi_{\mathrm{ref}}| / \Phi_{\mathrm{ref}}$'
     )
     ax_b.axhline(
-        1.0e-6, color=STRATA['magma'], linestyle='--', linewidth=1.2,
+        1.0e-6, color=PALETTE["crimson"], linestyle='--', linewidth=1.2,
         label=r'Quality Threshold ($10^{-6}$)'
     )
 

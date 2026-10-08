@@ -13,39 +13,38 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, Rectangle
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -126,15 +125,15 @@ def generate_benchmark_figure():
     w_P_arr = np.linspace(0.0, 0.01, 200) # 0 to 10,000 ppmw P
     w_sch, _ = compute_schreibersite_stoichiometry(w_P_arr, ni_frac=0.25)
 
-    ax_a.plot(w_S_arr * 100.0, w_tro * 100.0, color=STRATA['amber'], lw=2.2, label=r'Troilite $\mathrm{FeS}$ ($f \approx 2.742$)')
-    ax_a.plot(w_C_arr * 100.0, w_coh * 100.0, color=STRATA['magma'], lw=2.2, label=r'Cohenite $(\mathrm{Fe,Ni})_3\mathrm{C}$ (sat. @ 6.67 wt%)')
-    ax_a.plot(w_C_arr * 100.0, w_gra * 100.0, color=STRATA['ink'], lw=2.0, ls='--', label=r'Graphite $\mathrm{C}$ (excess carbon)')
-    ax_a.plot(w_P_arr * 100.0, w_sch * 100.0, color=STRATA['cobalt'], lw=2.0, ls='-.', label=r'Schreibersite $(\mathrm{Fe,Ni})_3\mathrm{P}$ ($x_{\mathrm{Ni}}=0.25$)')
+    ax_a.plot(w_S_arr * 100.0, w_tro * 100.0, color=PALETTE["amber"], lw=2.2, label=r'Troilite $\mathrm{FeS}$ ($f \approx 2.742$)')
+    ax_a.plot(w_C_arr * 100.0, w_coh * 100.0, color=PALETTE["crimson"], lw=2.2, label=r'Cohenite $(\mathrm{Fe,Ni})_3\mathrm{C}$ (sat. @ 6.67 wt%)')
+    ax_a.plot(w_C_arr * 100.0, w_gra * 100.0, color=PALETTE["charcoal"], lw=2.0, ls='--', label=r'Graphite $\mathrm{C}$ (excess carbon)')
+    ax_a.plot(w_P_arr * 100.0, w_sch * 100.0, color=PALETTE["slate_blue"], lw=2.0, ls='-.', label=r'Schreibersite $(\mathrm{Fe,Ni})_3\mathrm{P}$ ($x_{\mathrm{Ni}}=0.25$)')
 
-    ax_a.axvline(6.67, color=STRATA['plum'], ls=':', lw=1.2, alpha=0.8)
+    ax_a.axvline(6.67, color=PALETTE["purple"], ls=':', lw=1.2, alpha=0.8)
     ax_a.annotate('Carbide Saturation\n(6.67 wt% C)', xy=(6.67, 75.0), xytext=(7.5, 80.0),
-                  arrowprops=dict(arrowstyle="->", color=STRATA['plum'], lw=1.0),
-                  fontsize=9, color=STRATA['plum'], fontweight='bold')
+                  arrowprops=dict(arrowstyle="->", color=PALETTE["purple"], lw=1.0),
+                  fontsize=9, color=PALETTE["purple"], fontweight='bold')
 
     ax_a.set_xlabel('Precursor Element Content [wt% in metallic alloy]', fontsize=11, fontweight='bold')
     ax_a.set_ylabel('Accessory Phase Abundance [wt%]', fontsize=11, fontweight='bold')
@@ -161,20 +160,20 @@ def generate_benchmark_figure():
     w_acc_0 = w_tro_0 + w_sch_0 + w_coh_0 + w_gra_0 + w_nit_0
     w_matrix_0 = max(0.0, 1.0 - w_acc_0)
 
-    ax_b.plot(T_arr, F_sol, color=STRATA['cobalt'], lw=2.5, label=r'Solid Metal Fraction $F_{\mathrm{solid}}$')
-    ax_b.plot(T_arr, F_liq, color=STRATA['magma'], lw=2.5, label=r'Molten Alloy Fraction $F_{\mathrm{liquid}}$')
-    ax_b.plot(T_arr, F_sol * w_tro_0 * 100.0 / 10.0, color=STRATA['amber'], lw=2.0, ls='--',
+    ax_b.plot(T_arr, F_sol, color=PALETTE["slate_blue"], lw=2.5, label=r'Solid Metal Fraction $F_{\mathrm{solid}}$')
+    ax_b.plot(T_arr, F_liq, color=PALETTE["crimson"], lw=2.5, label=r'Molten Alloy Fraction $F_{\mathrm{liquid}}$')
+    ax_b.plot(T_arr, F_sol * w_tro_0 * 100.0 / 10.0, color=PALETTE["amber"], lw=2.0, ls='--',
               label=r'Troilite $\times 10^{-1}$ [wt%]')
-    ax_b.plot(T_arr, F_sol * w_sch_0 * 100.0, color=STRATA['gold'], lw=2.0, ls='-.',
+    ax_b.plot(T_arr, F_sol * w_sch_0 * 100.0, color=PALETTE["gold"], lw=2.0, ls='-.',
               label=r'Schreibersite [wt%]')
-    ax_b.plot(T_arr, F_sol * w_coh_0 * 100.0 / 10.0, color=STRATA['plum'], lw=2.0, ls=':',
+    ax_b.plot(T_arr, F_sol * w_coh_0 * 100.0 / 10.0, color=PALETTE["purple"], lw=2.0, ls=':',
               label=r'Cohenite $\times 10^{-1}$ [wt%]')
 
-    ax_b.axvspan(T_eut, T_eut + dT_trans, color=NEUTRALS['cream'], alpha=0.5, label='Eutectic Transition Interval')
-    ax_b.axvline(T_eut, color=STRATA['magma'], ls='--', lw=1.2)
+    ax_b.axvspan(T_eut, T_eut + dT_trans, color=PALETTE["white"], alpha=0.5, label='Eutectic Transition Interval')
+    ax_b.axvline(T_eut, color=PALETTE["crimson"], ls='--', lw=1.2)
     ax_b.annotate(r'$T_{\mathrm{eutectic}} = 1213\ \mathrm{K}$', xy=(T_eut, 0.85), xytext=(T_eut - 75.0, 0.88),
-                  arrowprops=dict(arrowstyle="->", color=STRATA['magma'], lw=1.0),
-                  fontsize=9, color=STRATA['magma'], fontweight='bold')
+                  arrowprops=dict(arrowstyle="->", color=PALETTE["crimson"], lw=1.0),
+                  fontsize=9, color=PALETTE["crimson"], fontweight='bold')
 
     ax_b.set_xlabel('Alloy Temperature $T$ [K]', fontsize=11, fontweight='bold')
     ax_b.set_ylabel('Phase Fraction / Abundance [- / wt%]', fontsize=11, fontweight='bold')
@@ -213,18 +212,18 @@ def generate_benchmark_figure():
     w_coh_prof = phi_fe_prof * (F_sol_prof * w_coh_0) * 100.0
     w_liq_prof = phi_fe_prof * F_liq_prof * 100.0
 
-    ax_c.plot(r_arr, w_liq_prof, color=STRATA['magma'], lw=2.5, label='Molten Fe-FeS Core Liquid [wt%]')
-    ax_c.plot(r_arr, w_tro_prof, color=STRATA['amber'], lw=2.2, label='Preserved Solid Troilite [wt%]')
-    ax_c.plot(r_arr, w_sch_prof * 10.0, color=STRATA['cobalt'], lw=2.0, ls='-.', label=r'Schreibersite $\times 10$ [wt%]')
-    ax_c.plot(r_arr, w_coh_prof * 10.0, color=STRATA['plum'], lw=2.0, ls=':', label=r'Cohenite $\times 10$ [wt%]')
+    ax_c.plot(r_arr, w_liq_prof, color=PALETTE["crimson"], lw=2.5, label='Molten Fe-FeS Core Liquid [wt%]')
+    ax_c.plot(r_arr, w_tro_prof, color=PALETTE["amber"], lw=2.2, label='Preserved Solid Troilite [wt%]')
+    ax_c.plot(r_arr, w_sch_prof * 10.0, color=PALETTE["slate_blue"], lw=2.0, ls='-.', label=r'Schreibersite $\times 10$ [wt%]')
+    ax_c.plot(r_arr, w_coh_prof * 10.0, color=PALETTE["purple"], lw=2.0, ls=':', label=r'Cohenite $\times 10$ [wt%]')
 
-    ax_c.axvspan(0.0, r_core, color=NEUTRALS['bone'], alpha=0.35)
-    ax_c.axvspan(r_core, r_mantle, color=NEUTRALS['cream'], alpha=0.35)
-    ax_c.axvspan(r_mantle, R_p, color=NEUTRALS['paper'], alpha=0.6)
+    ax_c.axvspan(0.0, r_core, color=PALETTE["off_white"], alpha=0.35)
+    ax_c.axvspan(r_core, r_mantle, color=PALETTE["white"], alpha=0.35)
+    ax_c.axvspan(r_mantle, R_p, color=PALETTE["white"], alpha=0.6)
 
-    ax_c.text(12.5, 96.0, 'Core', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
-    ax_c.text(33.7, 96.0, 'Mantle', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
-    ax_c.text(46.2, 96.0, 'Crust', ha='center', fontsize=9, fontweight='bold', color=NEUTRALS['graphite'])
+    ax_c.text(12.5, 96.0, 'Core', ha='center', fontsize=9, fontweight='bold', color=PALETTE["dark_gray"])
+    ax_c.text(33.7, 96.0, 'Mantle', ha='center', fontsize=9, fontweight='bold', color=PALETTE["dark_gray"])
+    ax_c.text(46.2, 96.0, 'Crust', ha='center', fontsize=9, fontweight='bold', color=PALETTE["dark_gray"])
 
     ax_c.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11, fontweight='bold')
     ax_c.set_ylabel('Bulk Planetesimal Phase Abundance [wt%]', fontsize=11, fontweight='bold')
@@ -240,9 +239,9 @@ def generate_benchmark_figure():
     ax_d = axes[1, 1]
     
     # Classification fields
-    rect_magmatic = Rectangle((0.80, 0.0), 0.20, 0.5, facecolor=STRATA['magma'], alpha=0.25, lw=1.2, edgecolor=STRATA['magma'])
-    rect_primitive = Rectangle((0.0, 1.0), 0.60, 9.0, facecolor=STRATA['gold'], alpha=0.25, lw=1.2, edgecolor=STRATA['gold'])
-    rect_trans = Rectangle((0.0, 0.0), 1.0, 10.0, facecolor=NEUTRALS['mist'], alpha=0.15, lw=1.0, ls='--', edgecolor=NEUTRALS['graphite'])
+    rect_magmatic = Rectangle((0.80, 0.0), 0.20, 0.5, facecolor=PALETTE["crimson"], alpha=0.25, lw=1.2, edgecolor=PALETTE["crimson"])
+    rect_primitive = Rectangle((0.0, 1.0), 0.60, 9.0, facecolor=PALETTE["gold"], alpha=0.25, lw=1.2, edgecolor=PALETTE["gold"])
+    rect_trans = Rectangle((0.0, 0.0), 1.0, 10.0, facecolor=PALETTE["grid_gray"], alpha=0.15, lw=1.0, ls='--', edgecolor=PALETTE["dark_gray"])
 
     ax_d.add_patch(rect_trans)
     ax_d.add_patch(rect_primitive)
@@ -265,9 +264,9 @@ def generate_benchmark_figure():
     trans_y = [0.018, 0.012, 0.024]
     trans_labels = ['IIICD', 'Ureilite metal', 'Tombigbee']
 
-    ax_d.scatter(magmatic_x, np.array(magmatic_y) * 100.0, s=70, color=STRATA['magma'], marker='o', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Magmatic Irons (IIIAB, IVA, IVB, IC)')
-    ax_d.scatter(primitive_x, np.array(primitive_y) * 100.0, s=75, color=STRATA['gold'], marker='s', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Primitive Complex (IAB / Winonaites)')
-    ax_d.scatter(trans_x, np.array(trans_y) * 100.0, s=70, color=STRATA['plum'], marker='^', edgecolors=STRATA['ink'], lw=1.2, zorder=5, label='Transitional Incomplete Segregations')
+    ax_d.scatter(magmatic_x, np.array(magmatic_y) * 100.0, s=70, color=PALETTE["crimson"], marker='o', edgecolors=PALETTE["charcoal"], lw=1.2, zorder=5, label='Magmatic Irons (IIIAB, IVA, IVB, IC)')
+    ax_d.scatter(primitive_x, np.array(primitive_y) * 100.0, s=75, color=PALETTE["gold"], marker='s', edgecolors=PALETTE["charcoal"], lw=1.2, zorder=5, label='Primitive Complex (IAB / Winonaites)')
+    ax_d.scatter(trans_x, np.array(trans_y) * 100.0, s=70, color=PALETTE["purple"], marker='^', edgecolors=PALETTE["charcoal"], lw=1.2, zorder=5, label='Transitional Incomplete Segregations')
 
     magmatic_annot = [
         ('IIAB', (0.89, 0.0018 * 100.0), (0.83, 1.6)),
@@ -278,11 +277,11 @@ def generate_benchmark_figure():
     ]
     for lbl, xy_pt, xy_txt in magmatic_annot:
         ax_d.annotate(lbl, xy=xy_pt, xytext=xy_txt,
-                      arrowprops=dict(arrowstyle="->", color=STRATA['magma'], lw=0.8),
-                      fontsize=8, color=STRATA['magma'], fontweight='bold', ha='center', va='bottom')
+                      arrowprops=dict(arrowstyle="->", color=PALETTE["crimson"], lw=0.8),
+                      fontsize=8, color=PALETTE["crimson"], fontweight='bold', ha='center', va='bottom')
 
     for x, y, lbl in zip(primitive_x, primitive_y, primitive_labels):
-        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.04, y * 100.0 + 0.35), fontsize=8, color=STRATA['ink'], fontweight='bold')
+        ax_d.annotate(lbl, xy=(x, y * 100.0), xytext=(x - 0.04, y * 100.0 + 0.35), fontsize=8, color=PALETTE["charcoal"], fontweight='bold')
 
     trans_annot = [
         ('Tombigbee', (0.64, 0.024 * 100.0), (0.52, 3.0), 'left', 'bottom'),
@@ -291,8 +290,8 @@ def generate_benchmark_figure():
     ]
     for lbl, xy_pt, xy_txt, ha_val, va_val in trans_annot:
         ax_d.annotate(lbl, xy=xy_pt, xytext=xy_txt,
-                      arrowprops=dict(arrowstyle="->", color=STRATA['plum'], lw=0.8),
-                      fontsize=8, color=STRATA['plum'], fontweight='bold', ha=ha_val, va=va_val)
+                      arrowprops=dict(arrowstyle="->", color=PALETTE["purple"], lw=0.8),
+                      fontsize=8, color=PALETTE["purple"], fontweight='bold', ha=ha_val, va=va_val)
 
     ax_d.set_xlabel(r'Molten Core Metal Fraction $f_{\mathrm{molten,core}}$ [-]', fontsize=11, fontweight='bold')
     ax_d.set_ylabel(r'Crustal Solid Accessory Retention $f_{\mathrm{solid,crust}}$ [wt%]', fontsize=11, fontweight='bold')

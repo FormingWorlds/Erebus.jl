@@ -109,7 +109,7 @@ using Test
         @test_throws ArgumentError GridCoordinates(17, 17; Nymc=-1)
     end
 
-    @testset "End-to-end simulation on non-33x33 grid (17x17)" begin
+    @testset "Full simulation loop on non-33x33 grid (17x17)" begin
         mktempdir() do tmpdir
             cfg17 = SimulationConfig(
                 grid=GridConfig(Nx=17, Ny=17, xsize=140_000.0, ysize=140_000.0),

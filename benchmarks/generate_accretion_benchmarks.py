@@ -12,39 +12,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -140,12 +139,12 @@ def main():
     M_trans = np.sqrt(1.0 / 3.0) * (v_rel**3) / (G_GRAV * Omega_K)
 
     ax_a.loglog(M_arr, dM_bondi, label=r'Bondi Pebble Accretion ($\dot{M}_{\rm B}$)',
-                color=STRATA['cobalt'], linestyle='--', linewidth=1.8)
+                color=PALETTE["slate_blue"], linestyle='--', linewidth=1.8)
     ax_a.loglog(M_arr, dM_hill, label=r'Hill Pebble Accretion ($\dot{M}_{\rm H}$)',
-                color=STRATA['amber'], linestyle='--', linewidth=1.8)
+                color=PALETTE["amber"], linestyle='--', linewidth=1.8)
     ax_a.loglog(M_arr, dM_auto, label=r'Auto Transition (:pebble_auto)',
-                color=STRATA['magma'], linewidth=2.4)
-    ax_a.axvline(M_trans, color=NEUTRALS['graphite'], linestyle=':', linewidth=1.5,
+                color=PALETTE["crimson"], linewidth=2.4)
+    ax_a.axvline(M_trans, color=PALETTE["dark_gray"], linestyle=':', linewidth=1.5,
                  label=r'Transition Mass $M_{\rm trans}$')
 
     ax_a.set_xlabel('Planetesimal Mass $M$ [kg]', fontsize=11)
@@ -162,7 +161,7 @@ def main():
     rho_bulk = 3000.0
     Sigma_pl = 100.0
     v_disps = [50.0, 100.0, 200.0, 500.0]
-    colors = [STRATA['cobalt'], STRATA['gold'], STRATA['amber'], STRATA['magma']]
+    colors = [PALETTE["slate_blue"], PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"]]
 
     for vd, col in zip(v_disps, colors):
         rates = []
@@ -175,7 +174,7 @@ def main():
     # Geometric limit (no focusing, Theta -> 0)
     geom_rates = [np.pi * (r**2) * Sigma_pl * Omega_K / 1.0e12 for r in R_arr]
     ax_b.plot(R_arr / 1000.0, geom_rates, label='Geometric limit ($F_g = 1$)',
-              color=NEUTRALS['graphite'], linestyle=':', linewidth=1.6)
+              color=PALETTE["dark_gray"], linestyle=':', linewidth=1.6)
 
     ax_b.set_xlabel('Planetesimal Radius $R$ [km]', fontsize=11)
     ax_b.set_ylabel(r'Accretion Rate $\dot{M}$ [$10^{12}$ kg / s]', fontsize=11)
@@ -189,7 +188,7 @@ def main():
     ax_c = axes[1, 0]
     R_vals_km = np.linspace(10.0, 150.0, 200)
     h_efficiencies = [0.2, 0.5, 0.8, 1.0]
-    h_colors = [STRATA['cobalt'], STRATA['gold'], STRATA['amber'], STRATA['magma']]
+    h_colors = [PALETTE["slate_blue"], PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"]]
 
     for h_eff, col in zip(h_efficiencies, h_colors):
         dT_vals = []
@@ -222,19 +221,19 @@ def main():
     H2O_wtpct = np.where(r_coords_km < 45.0, 0.1, 10.0)
 
     ax_d1 = ax_d
-    line1 = ax_d1.plot(r_coords_km, Q_norm, color=STRATA['magma'], linewidth=2.2,
+    line1 = ax_d1.plot(r_coords_km, Q_norm, color=PALETTE["crimson"], linewidth=2.2,
                        label=r'Radiogenic Power $Q(t_{\rm acc})/Q_0$')
     ax_d1.set_xlabel('Planetesimal Radius $r$ [km]', fontsize=11)
-    ax_d1.set_ylabel(r'Radiogenic Power $Q_{\rm rad} / Q_0$ [-]', color=STRATA['magma'], fontsize=11)
-    ax_d1.tick_params(axis='y', labelcolor=STRATA['magma'])
+    ax_d1.set_ylabel(r'Radiogenic Power $Q_{\rm rad} / Q_0$ [-]', color=PALETTE["crimson"], fontsize=11)
+    ax_d1.tick_params(axis='y', labelcolor=PALETTE["crimson"])
     ax_d1.set_ylim(-0.05, 1.15)
     ax_d1.grid(True)
 
     ax_d2 = ax_d1.twinx()
-    line2 = ax_d2.plot(r_coords_km, H2O_wtpct, color=STRATA['cobalt'], linewidth=2.0,
+    line2 = ax_d2.plot(r_coords_km, H2O_wtpct, color=PALETTE["slate_blue"], linewidth=2.0,
                        linestyle='--', label=r'Accreted $\mathrm{H_2O}$ Content [wt%]')
-    ax_d2.set_ylabel(r'Water Content [wt%]', color=STRATA['cobalt'], fontsize=11)
-    ax_d2.tick_params(axis='y', labelcolor=STRATA['cobalt'])
+    ax_d2.set_ylabel(r'Water Content [wt%]', color=PALETTE["slate_blue"], fontsize=11)
+    ax_d2.tick_params(axis='y', labelcolor=PALETTE["slate_blue"])
     ax_d2.set_ylim(-0.5, 12.0)
 
     lines = line1 + line2

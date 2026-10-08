@@ -114,7 +114,22 @@ For each zone, volume-weighted mean abundances of accessory phases and metallic 
 
 ![Normative Accessory Mineral Tracking and Meteorite Diagnostics Benchmark](../assets/mineral_assemblage_benchmark.png)
 
-*Figure: Benchmark results for normative accessory mineral tracking and meteorite diagnostics in Erebus.jl. Panel (a) shows stoichiometric accessory mineral conversion factors as a function of precursor element content in metallic alloy. Panel (b) shows thermal eutectic phase dissolution showing progressive melting of troilite, schreibersite, and cohenite through the eutectic transition ($T_{\text{eutectic}} = 1213\text{ K}$, $\Delta T = 50\text{ K}$). Panel (c) shows the radial mineral assemblage in a differentiated 50 km radius planetesimal, displaying the molten metallic core, depleted mantle, and accessory-rich primitive crust. Panel (d) shows meteorite parent body diagnostic regimes comparing core melt fraction against crustal accessory retention, with petrologic fields for magmatic iron groups (IIIAB, IVA, IVB) and primitive complexes (IAB, winonaites).*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Benchmark results for normative accessory mineral tracking and meteorite diagnostics. The curves evaluate analytical formulations in Python (`benchmarks/generate_mineral_assemblage_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a) shows stoichiometric accessory mineral conversion factors as a function of precursor element content in metallic alloy. Panel (b) shows thermal eutectic phase dissolution showing progressive melting of troilite, schreibersite, and cohenite through the eutectic transition ($T_{\text{eutectic}} = 1213\text{ K}$, $\Delta T = 50\text{ K}$). Panel (c) shows the radial mineral assemblage in a differentiated 50 km radius planetesimal, displaying the molten metallic core, depleted mantle, and accessory-rich primitive crust. Panel (d) shows meteorite parent body diagnostic regimes comparing core melt fraction against crustal accessory retention, with petrologic fields for magmatic iron groups (IIIAB, IVA, IVB) and primitive complexes (IAB, winonaites).*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Stoichiometric accessory mineral allocation (FeS, (Fe,Ni)₃P, (Fe,Ni)₃C, C, nitrides), eutectic phase dissolution, and regional meteorite parent body classification |
+| **Reference Standard** | Benedix et al. (1998, 2000); Chabot & Drake (1999); Goldstein et al. (2009); Wasson & Kallemeyn (2002) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_mineral_assemblage_benchmarks.py` |
+| **Automated Verification Test** | `test/test_normative_accessory_minerals.jl` |
+| **Quantitative Tolerance** | Stoichiometric mass conservation closed to $< 10^{-12}$; eutectic phase dissolution exact to machine precision |
+
+---
 
 ### Analysis of Benchmark Results
 
@@ -174,7 +189,7 @@ The 13 discrete meteorite groups and specimens plotted in Panel (d) are represen
 - Stoichiometric carbon mass conservation: Cohenite ($\text{Fe}_3\text{C}$) forms up to `cohenite_carbide_max` and the available metallic iron limit, with excess carbon precipitated as crystalline graphite. Both carbon and iron masses are strictly conserved across all concentration regimes.
 - Spherical volume weighting: Regional integrated phase masses ($M_{\text{core}}$, $M_{\text{mantle}}$, $M_{\text{crust}}$) are evaluated using canonical per-marker 3D volume weighting $V_m = A_m L(r_m) = A_m (2 r_m)$, matching the convention used in the core volatile budget diagnostics.
 - Shared dissolution interval: All accessory minerals (troilite, schreibersite, cohenite, graphite, and nitrides) dissolve across the shared temperature interval $[T_{\text{eutectic}}, T_{\text{eutectic}} + \Delta T_{\text{transition}}]$. In multicomponent metallic systems, refractory graphite and carbides exhibit higher thermal stability than sulfides and dissolve according to composition-dependent liquidus curves.
-- Linear melt fraction parameterization: Solid metal fraction scales linearly across the melting interval rather than following non-linear thermodynamic lever-rule trajectories.
+- Linear melt fraction parameterization: Solid metal fraction scales linearly across the melting interval rather than following non-linear thermodynamic phase fraction trajectories.
 
 ---
 

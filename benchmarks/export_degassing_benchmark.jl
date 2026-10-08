@@ -35,7 +35,7 @@ cfg = MagmaOceanDegassingConfig(;
     active=true,
     mode=:dynamic_flux,
     degas_depth_fraction=0.90,
-    F_melt_threshold=0.40,
+    F_melt_threshold=0.05,
     water_As=WATER_AS,
     efficiency=1.0,
 )
@@ -87,9 +87,11 @@ end
 max_rel_error = maximum(rel_errors)
 println("Maximum relative error vs analytical law: $(max_rel_error)")
 pass_criterion = max_rel_error < 1.0e-6
-println("Pass criterion (< 1e-6): $(pass_criterion)")
+println("Pass criterion (< 1.0e-6): $(pass_criterion)")
 if !pass_criterion
-    error("Degassing benchmark verification failed: max rel error $(max_rel_error) >= 1e-6")
+    error(
+        "Degassing benchmark verification failed: max rel error $(max_rel_error) >= 1.0e-6"
+    )
 end
 
 output_dir = normpath(joinpath(@__DIR__, "..", "output_files"))

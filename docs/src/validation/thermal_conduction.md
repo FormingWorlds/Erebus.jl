@@ -72,7 +72,7 @@ $$|q_{yD}| = \frac{k_\phi}{\eta_f} \rho_{f0} \alpha_f \Delta T g$$
 
 ![Darcy Thermal Buoyancy Verification](../assets/darcy_buoyancy_verification.png)
 
-*Figure 1: Thermal buoyancy and fluid equation of state verification in Erebus. (a) Temperature-dependent fluid density $\rho_f(T)$ over the range $T \in [240, 700]\text{ K}$ displaying sub-freezing ice density ($\rho_{\text{ice}} = 917\text{ kg/m}^3$), liquid water density at $T_{\text{melt}} = 273.0\text{ K}$ ($\rho_{\text{water}} = 1000\text{ kg/m}^3$), and linear density decrease above melting. Curves compare the code baseline ($\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$) against ambient water and hydrothermal regimes. (b) Upward buoyant Darcy discharge velocity $|q_{yD}|$ as a function of thermal contrast $\Delta T$ for representative crustal permeabilities ($k_\phi \in [10^{-14}, 10^{-12}]\text{ m}^2$) at the code baseline $\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Thermal buoyancy and fluid equation of state verification. The curves evaluate analytical formulations in Python (`scripts/generate_buoyancy_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Temperature-dependent fluid density $\rho_f(T)$ over the range $T \in [240, 700]\text{ K}$ displaying sub-freezing ice density ($\rho_{\text{ice}} = 917\text{ kg/m}^3$), liquid water density at $T_{\text{melt}} = 273.0\text{ K}$ ($\rho_{\text{water}} = 1000\text{ kg/m}^3$), and linear density decrease above melting. Curves compare the code baseline ($\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$) against ambient water and hydrothermal regimes. (b) Upward buoyant Darcy discharge velocity $|q_{yD}|$ as a function of thermal contrast $\Delta T$ for representative crustal permeabilities ($k_\phi \in [10^{-14}, 10^{-12}]\text{ m}^2$) at the code baseline $\alpha_f = 5\times 10^{-5}\text{ K}^{-1}$.*
 
 ### Verification Test Suite
 - `test/test_physics.jl`: Thermal expansion and buoyancy driving forces
@@ -109,7 +109,22 @@ $$\frac{d}{dt} \int_\Omega \rho c_p T \, dx \, dy = \oint_{\partial \Omega} k \n
 
 ![Thermal Slab Benchmark](../assets/thermal_slab_benchmark.png)
 
-*Figure 2: 2D thermal slab conduction benchmark in Erebus. (a) Centerline temperature profiles $T(x, y = L_y/2)$ along horizontal distance $x \in [0, 100]\text{ km}$ at four decay epochs ($t = 0.0, 1.6, 4.0, 8.0\text{ Ma}$, corresponding to $0, 0.1\tau, 0.25\tau, 0.5\tau$). Solid curves show the analytical cosine decay solution; circles show the numerical solution. (b) Spatial grid convergence of the $L_\infty$ and $L_2$ relative errors at $t = 0.1\tau$ for grid resolutions $N \in [17, 33, 65]$ ($\Delta x \in [6.25, 3.125, 1.5625]\text{ km}$); errors converge monotonically below the $10^{-3}$ target tolerance.*
+*Figure 2: Class B (Julia Library Exporter / Benchmark Script): 2D thermal slab conduction benchmark exported via `benchmarks/export_thermal_slab_benchmark.jl` and plotted with `benchmarks/generate_thermal_slab_benchmark.py`. (a) Centerline temperature profiles $T(x, y = L_y/2)$ along horizontal distance $x \in [0, 100]\text{ km}$ at four decay epochs ($t = 0.0, 1.6, 4.0, 8.0\text{ Ma}$, corresponding to $0, 0.1\tau, 0.25\tau, 0.5\tau$). Solid curves show the analytical cosine decay solution; circles show the numerical solution. (b) Spatial grid convergence of the $L_\infty$ and $L_2$ relative errors at $t = 0.1\tau$ for grid resolutions $N \in [17, 33, 65]$ ($\Delta x \in [6.25, 3.125, 1.5625]\text{ km}$); errors converge monotonically below the $10^{-3}$ target tolerance.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Porous mixture bulk thermal conductivity, spherical metric divergence ($Q_{\text{metric}}$), Darcy thermal buoyancy, and 2D slab diffusion |
+| **Reference Standard** | Gerya (2019, Section 10.3); Hubmann (2022); Carslaw & Jaeger (1959) |
+| **Figure Provenance** | Class C (Figure 1: Analytical / Empirical Reference Formulation); Class B (Figure 2: Julia Library Exporter / Benchmark Script) |
+| **Generating Script** | `scripts/generate_buoyancy_benchmark.py` (Fig 1), `benchmarks/export_thermal_slab_benchmark.jl` / `benchmarks/generate_thermal_slab_benchmark.py` (Fig 2) |
+| **Automated Verification Test** | `test/test_geometry_radiation.jl`, `test/test_physics.jl`, `test/test_thermal_slab.jl` |
+| **Quantitative Tolerance** | Slab diffusion relative error $L_\infty < 10^{-3}$, $L_2 < 5\times 10^{-4}$; closed-box energy conservation $< 10^{-12}$; spherical metric ratio $2/3$ within $1\%$ |
+
+---
 
 ### Verification Test Suite
 - `test/test_thermal_slab.jl`: `@testset "Analytical 2D Thermal Slab Conduction Benchmark"`

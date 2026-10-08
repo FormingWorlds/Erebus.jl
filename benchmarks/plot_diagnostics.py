@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Diagnostic plotting script for Erebus.jl Soft Turbulence Model and Magma Ocean Benchmarks.
-Applies Interra visual identity guidelines (palette, fonts, clean layout).
+Applies clean neutral scientific plotting style.
 """
 
 import json
@@ -11,38 +11,38 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-# Interra palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -69,11 +69,11 @@ fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 4.8), constrained_layout=
 
 # Panel (a): keff vs Fm
 # Plot i2elvis reference (discontinuous step at Fm = 0.40)
-ax1.plot(Fm, data["k_i2elvis_curves"]["100"], '--', color=NEUTRALS['mist'], linewidth=2.0,
+ax1.plot(Fm, data["k_i2elvis_curves"]["100"], '--', color=PALETTE["grid_gray"], linewidth=2.0,
          label=r'Raw i2elvis ($F_m=0.40$ step)')
 
 # Plot Erebus smooth regularized curves for different eta_fluid
-colors_eta = {'10': STRATA['gold'], '100': STRATA['amber'], '1000': STRATA['magma']}
+colors_eta = {'10': PALETTE["gold"], '100': PALETTE["amber"], '1000': PALETTE["crimson"]}
 labels_eta = {
     '10': r'Erebus ($\eta_\mathrm{fluid} = 10\ \mathrm{Pa\cdot s}$)',
     '100': r'Erebus ($\eta_\mathrm{fluid} = 100\ \mathrm{Pa\cdot s}$, baseline)',
@@ -84,7 +84,7 @@ for key in ['10', '100', '1000']:
     ax1.plot(Fm, data["k_erebus_curves"][key], '-', color=colors_eta[key], linewidth=2.2, label=labels_eta[key])
 
 # Shaded transition zone
-ax1.axvspan(0.30, 0.50, color=STRATA['gold'], alpha=0.12, label=r'Transition window $[0.30, 0.50]$')
+ax1.axvspan(0.30, 0.50, color=PALETTE["gold"], alpha=0.12, label=r'Transition window $[0.30, 0.50]$')
 
 ax1.set_yscale('log')
 ax1.set_xlim(0.0, 1.0)
@@ -100,7 +100,7 @@ for key in ['10', '100', '1000']:
     ax2.plot(Fm, data["dk_dFm_erebus"][key], '-', color=colors_eta[key], linewidth=2.2, label=labels_eta[key])
 
 # Mark i2elvis delta singularity
-ax2.axvline(0.40, color=STRATA['ink'], linestyle=':', linewidth=2.0, label=r'i2elvis Dirac $\delta$-spike at $0.40$')
+ax2.axvline(0.40, color=PALETTE["charcoal"], linestyle=':', linewidth=2.0, label=r'i2elvis Dirac $\delta$-spike at $0.40$')
 
 ax2.set_xlim(0.20, 0.60)
 ax2.set_ylim(-2, 45)
@@ -111,9 +111,9 @@ ax2.grid(True)
 ax2.legend(loc='upper right', fontsize=8.5)
 
 # Panel (c): Surface temperature difference weighting
-ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Boundary weight $w_T(\Delta T)$')
-ax3.axvline(10.0, color=STRATA['amber'], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
-ax3.axhspan(0, 1, color=STRATA['cobalt'], alpha=0.08)
+ax3.plot(dT, w_T, '-', color=PALETTE["slate_blue"], linewidth=2.4, label=r'Boundary weight $w_T(\Delta T)$')
+ax3.axvline(10.0, color=PALETTE["amber"], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
+ax3.axhspan(0, 1, color=PALETTE["slate_blue"], alpha=0.08)
 
 ax3.set_xlim(0.0, 30.0)
 ax3.set_ylim(-0.05, 1.05)
@@ -141,10 +141,10 @@ t_off = np.array(res_off["times_yr"])
 t_on = np.array(res_on["times_yr"])
 
 # Panel (a): Core Temperature Evolution T_core(t)
-ax1.plot(t_off / 1000.0, res_off["T_core_hist"], '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
-ax1.plot(t_on / 1000.0, res_on["T_core_hist"], '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
-ax1.axhline(1800.0, color=STRATA['gold'], linestyle=':', linewidth=1.5, label='Liquidus $T_l = 1800$ K')
-ax1.axhline(1400.0, color=STRATA['ink'], linestyle=':', linewidth=1.5, label='Solidus $T_s = 1400$ K')
+ax1.plot(t_off / 1000.0, res_off["T_core_hist"], '-', color=PALETTE["slate_blue"], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
+ax1.plot(t_on / 1000.0, res_on["T_core_hist"], '-', color=PALETTE["crimson"], linewidth=2.2, label='Regularized Soft Turb. ON')
+ax1.axhline(1800.0, color=PALETTE["gold"], linestyle=':', linewidth=1.5, label='Liquidus $T_l = 1800$ K')
+ax1.axhline(1400.0, color=PALETTE["charcoal"], linestyle=':', linewidth=1.5, label='Solidus $T_s = 1400$ K')
 
 ax1.set_xlim(0, 50.0)
 ax1.set_ylim(1200, 2050)
@@ -156,7 +156,7 @@ ax1.legend(loc='lower right', bbox_to_anchor=(0.98, 0.05), fontsize=8.5)
 
 # Panel (b): Radial Temperature Profiles T(r) at Selected Times
 times_to_plot = ["0.0", "5000.0", "15000.0", "50000.0"]
-time_colors = [STRATA['gold'], STRATA['amber'], STRATA['magma'], STRATA['plum']]
+time_colors = [PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"], PALETTE["purple"]]
 
 for t_key, col in zip(times_to_plot, time_colors):
     t_kyr = float(t_key) / 1000.0
@@ -166,8 +166,8 @@ for t_key, col in zip(times_to_plot, time_colors):
         ax2.plot(r_km, res_on["snapshot_T"][t_key], '-', color=col, linewidth=2.2, label=f'$t = {t_kyr:.0f}$ kyr')
 
 # Dummy lines for legend
-ax2.plot([], [], '-', color=NEUTRALS['graphite'], linewidth=2.0, label='Soft Turb. ON')
-ax2.plot([], [], ':', color=NEUTRALS['graphite'], linewidth=1.6, label='Soft Turb. OFF')
+ax2.plot([], [], '-', color=PALETTE["dark_gray"], linewidth=2.0, label='Soft Turb. ON')
+ax2.plot([], [], ':', color=PALETTE["dark_gray"], linewidth=1.6, label='Soft Turb. OFF')
 
 ax2.set_xlim(0, 50)
 ax2.set_ylim(200, 1900)
@@ -178,8 +178,8 @@ ax2.grid(True)
 ax2.legend(loc='lower left', fontsize=8.5)
 
 # Panel (c): Magma Ocean Solidification Front r_melt(t)
-ax3.plot(t_off / 1000.0, np.array(res_off["melt_radius_hist"]) / 1000.0, '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
-ax3.plot(t_on / 1000.0, np.array(res_on["melt_radius_hist"]) / 1000.0, '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
+ax3.plot(t_off / 1000.0, np.array(res_off["melt_radius_hist"]) / 1000.0, '-', color=PALETTE["slate_blue"], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
+ax3.plot(t_on / 1000.0, np.array(res_on["melt_radius_hist"]) / 1000.0, '-', color=PALETTE["crimson"], linewidth=2.2, label='Regularized Soft Turb. ON')
 
 ax3.set_xlim(0, 50.0)
 ax3.set_ylim(0, 45.0)
@@ -208,9 +208,9 @@ r_128_km = np.array(res_128["r"]) / 1000.0
 r_256_km = np.array(res_256["r"]) / 1000.0
 
 # Panel (a): Radial Temperature at t = 15 kyr across Resolutions
-ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$ cells ($\Delta r = 1.56$ km)')
-ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$ cells ($\Delta r = 0.39$ km)')
-ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$ cells ($\Delta r = 0.20$ km)')
+ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], '--', color=PALETTE["slate_blue"], linewidth=2.0, label=r'$N_r = 32$ cells ($\Delta r = 1.56$ km)')
+ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=PALETTE["amber"], linewidth=2.0, label=r'$N_r = 128$ cells ($\Delta r = 0.39$ km)')
+ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], ':', color=PALETTE["crimson"], linewidth=2.2, label=r'$N_r = 256$ cells ($\Delta r = 0.20$ km)')
 
 ax1.set_xlim(0, 50)
 ax1.set_ylim(250, 1900)
@@ -221,10 +221,10 @@ ax1.grid(True)
 ax1.legend(loc='lower left', fontsize=8.5)
 
 # Panel (b): Melt Fraction Profile Fm(r) at t = 15 kyr
-ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], '--', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$')
-ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$')
-ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], ':', color=STRATA['magma'], linewidth=2.2, label=r'$N_r = 256$')
-ax2.axhline(0.40, color=STRATA['ink'], linestyle=':', linewidth=1.5, label=r'Rheological Transition $F_\mathrm{crit} = 0.40$')
+ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], '--', color=PALETTE["slate_blue"], linewidth=2.0, label=r'$N_r = 32$')
+ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=PALETTE["amber"], linewidth=2.0, label=r'$N_r = 128$')
+ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], ':', color=PALETTE["crimson"], linewidth=2.2, label=r'$N_r = 256$')
+ax2.axhline(0.40, color=PALETTE["charcoal"], linestyle=':', linewidth=1.5, label=r'Rheological Transition $F_\mathrm{crit} = 0.40$')
 
 ax2.set_xlim(0, 40)
 ax2.set_ylim(-0.05, 1.05)
@@ -242,8 +242,8 @@ err_32 = np.abs(np.array(res_32["snapshot_T"]["15000.0"]) - T_ref)
 T_ref_128 = np.interp(r_128_km, r_256_km, res_256["snapshot_T"]["15000.0"])
 err_128 = np.abs(np.array(res_128["snapshot_T"]["15000.0"]) - T_ref_128)
 
-ax3.plot(r_32_km, err_32, '-', color=STRATA['cobalt'], linewidth=2.0, label=r'$|T_{32} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_32):.1f}' + r'\ \mathrm{K}$)')
-ax3.plot(r_128_km, err_128, '-', color=STRATA['amber'], linewidth=2.0, label=r'$|T_{128} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_128):.1f}' + r'\ \mathrm{K}$)')
+ax3.plot(r_32_km, err_32, '-', color=PALETTE["slate_blue"], linewidth=2.0, label=r'$|T_{32} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_32):.1f}' + r'\ \mathrm{K}$)')
+ax3.plot(r_128_km, err_128, '-', color=PALETTE["amber"], linewidth=2.0, label=r'$|T_{128} - T_{256}|$ ($\mathrm{max} = ' + f'{np.max(err_128):.1f}' + r'\ \mathrm{K}$)')
 
 ax3.set_xlim(0, 50)
 ax3.set_ylim(0, max(np.max(err_32)*1.6, 10.0))

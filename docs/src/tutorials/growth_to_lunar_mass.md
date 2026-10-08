@@ -106,7 +106,20 @@ The figure below shows the synthesized multi-stage evolutionary sequence compute
 
 ![Flagship Tutorial: Growth to Lunar Mass](../assets/lunar_growth_tutorial.png)
 
-*Figure 1: Analytical multi-stage evolutionary sequence from a 50 km planetesimal seed to a 1,737 km lunar embryo. Panel (a) shows analytical radius and mass trajectories across the three accretion regimes (Safronov, pebble settling, and late giant impacts), along with telescoping grid doubling events (L1 through L6). Panel (b) illustrates thermal heating, Fe-FeS core segregation reaching a 350 km core, and magma ocean melt fraction. Panel (c) displays protoplanetary disk ambient pressure decay and gas envelope boil-off during disk dispersal at 2.0 Ma. Panel (d) traces cumulative retained versus escaped volatile inventories under hydrodynamic crossover escape.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Analytical multi-stage evolutionary sequence from a 50 km planetesimal seed to a 1,737 km lunar embryo. The curves evaluate analytical trajectory equations in Python (`benchmarks/generate_lunar_growth_benchmarks.py`). 2D numerical solver integration is verified by the automated test suite. Panel (a) shows analytical radius and mass trajectories across the three accretion regimes (Safronov, pebble settling, and late giant impacts), along with telescoping grid doubling events (L1 through L6). Panel (b) illustrates thermal heating, Fe-FeS core segregation reaching a 350 km core, and magma ocean melt fraction. Panel (c) displays protoplanetary disk ambient pressure decay and gas envelope boil-off during disk dispersal at 2.0 Ma. Panel (d) traces cumulative retained versus escaped volatile inventories under hydrodynamic crossover escape.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Multi-stage accretion ($50\text{ km} \to 1{,}737\text{ km}$), telescoping domain expansion, disk envelope boil-off, and crossover hydrodynamic escape |
+| **Reference Standard** | Safronov (1972); Lambrechts & Johansen (2012); Ormel et al. (2015); Visser & Ormel (2016); Zahnle & Kasting (1986) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_lunar_growth_benchmarks.py` |
+| **Automated Verification Test** | `test/test_tutorial_lunar_growth.jl` |
+| **Quantitative Tolerance** | Mass conservation across telescoping levels $< 10^{-14}$; accretion regime boundary match $< 10^{-12}$ |
 
 ---
 

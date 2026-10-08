@@ -160,7 +160,7 @@ using Erebus.Config
     end
 
     # ---------------------------------------------------------------------
-    # 5. Analytical Growth Modes & Timing Gating
+    # 5. Analytical Growth Modes & Timing Activation
     # ---------------------------------------------------------------------
     @testset "Growth Modes & Saturation" begin
         acc_cfg = AccretionConfig(

@@ -14,20 +14,20 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    "gold": "#F0BA5E",
-    "amber": "#DE7037",
-    "magma": "#A23E3C",
-    "plum": "#6A2A4D",
-    "cobalt": "#3E5B86",
-    "ink": "#15101C",
-}
-NEUTRALS = {
-    "paper": "#FAF5E6",
-    "mist": "#C8BCA9",
-    "graphite": "#3A3140",
-    "bone": "#E6DAB6",
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update(
@@ -35,18 +35,18 @@ mpl.rcParams.update(
         "font.family": "sans-serif",
         "font.sans-serif": ["DejaVu Sans", "Arial", "Helvetica"],
         "mathtext.fontset": "stixsans",
-        "axes.edgecolor": NEUTRALS["mist"],
-        "axes.linewidth": 1.0,
-        "axes.labelcolor": NEUTRALS["graphite"],
+        "axes.edgecolor": "#333333",
+        "axes.linewidth": 0.8,
+        "axes.labelcolor": "#222222",
         "axes.facecolor": "#FFFFFF",
-        "xtick.color": NEUTRALS["graphite"],
-        "ytick.color": NEUTRALS["graphite"],
-        "grid.color": NEUTRALS["mist"],
+        "xtick.color": "#222222",
+        "ytick.color": "#222222",
+        "grid.color": "#E0E0E0",
         "grid.linestyle": ":",
-        "grid.linewidth": 0.8,
+        "grid.linewidth": 0.6,
         "legend.frameon": True,
         "legend.facecolor": "#FFFFFF",
-        "legend.edgecolor": NEUTRALS["mist"],
+        "legend.edgecolor": "#CCCCCC",
         "figure.facecolor": "#FFFFFF",
     }
 )
@@ -88,13 +88,13 @@ def generate_benchmark_figure():
     # Panel (a): Radial gravity profiles
     ax_a = axes[0]
     ax_a.plot(
-        r_eval_km, g_ana, "-", color=STRATA["ink"], linewidth=2.0, label="3D Analytical"
+        r_eval_km, g_ana, "-", color=PALETTE["charcoal"], linewidth=2.0, label="3D Analytical"
     )
     ax_a.plot(
         r_bins_km[::4],
         g_bins[::4],
         "o",
-        color=STRATA["cobalt"],
+        color=PALETTE["slate_blue"],
         markersize=4.0,
         markeredgewidth=0.8,
         markeredgecolor="white",
@@ -104,19 +104,19 @@ def generate_benchmark_figure():
         r_eval_km,
         g_p2d,
         "--",
-        color=STRATA["amber"],
+        color=PALETTE["amber"],
         linewidth=1.8,
         label="2D Poisson (:poisson2d)",
     )
 
     # Structural boundaries
-    ax_a.axvline(R_c, color=STRATA["plum"], linestyle=":", linewidth=1.2)
-    ax_a.axvline(R_p, color=STRATA["magma"], linestyle=":", linewidth=1.2)
+    ax_a.axvline(R_c, color=PALETTE["purple"], linestyle=":", linewidth=1.2)
+    ax_a.axvline(R_p, color=PALETTE["crimson"], linestyle=":", linewidth=1.2)
     ax_a.text(
         R_c - 1.5,
         0.058,
         r"$r_c$",
-        color=STRATA["plum"],
+        color=PALETTE["purple"],
         fontsize=10,
         ha="right",
         va="top",
@@ -125,7 +125,7 @@ def generate_benchmark_figure():
         R_p - 1.5,
         0.058,
         r"$R$",
-        color=STRATA["magma"],
+        color=PALETTE["crimson"],
         fontsize=10,
         ha="right",
         va="top",
@@ -168,7 +168,7 @@ def generate_benchmark_figure():
         r_sub,
         g_excess_ana * 1000.0,
         "-",
-        color=STRATA["ink"],
+        color=PALETTE["charcoal"],
         linewidth=2.0,
         label="3D Analytical",
     )
@@ -176,7 +176,7 @@ def generate_benchmark_figure():
         r_bins_sub[::2],
         g_excess_enc[::2] * 1000.0,
         "o",
-        color=STRATA["cobalt"],
+        color=PALETTE["slate_blue"],
         markersize=4.0,
         markeredgewidth=0.8,
         markeredgecolor="white",
@@ -186,13 +186,13 @@ def generate_benchmark_figure():
         r_sub,
         g_excess_p2d * 1000.0,
         "--",
-        color=STRATA["amber"],
+        color=PALETTE["amber"],
         linewidth=1.8,
         label=r"2D Poisson ($R/r_c \approx 2\times$)",
     )
 
-    ax_b.axvline(R_c, color=STRATA["plum"], linestyle=":", linewidth=1.2)
-    ax_b.axvline(R_p, color=STRATA["magma"], linestyle=":", linewidth=1.2)
+    ax_b.axvline(R_c, color=PALETTE["purple"], linestyle=":", linewidth=1.2)
+    ax_b.axvline(R_p, color=PALETTE["crimson"], linestyle=":", linewidth=1.2)
 
     ax_b.set_xlabel("Radial Distance $r$ [km]", fontsize=10.0)
     ax_b.set_ylabel(

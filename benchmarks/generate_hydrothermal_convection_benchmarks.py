@@ -11,39 +11,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -124,14 +123,14 @@ def main():
     ax_a = axs[0, 0]
     K_vals = np.logspace(-15, -11, 200)
     dT_targets = [10.0, 25.0, 50.0, 100.0]
-    colors_a = [STRATA['cobalt'], STRATA['gold'], STRATA['amber'], STRATA['magma']]
+    colors_a = [PALETTE["slate_blue"], PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"]]
 
     for dT_val, col in zip(dT_targets, colors_a):
         Ra_m_arr = [compute_porous_rayleigh_darcy(rho_f, cp_f, g, alpha_f, K, dT_val, H, mu_f, k_cond)
                     for K in K_vals]
         ax_a.loglog(K_vals, Ra_m_arr, label=f"ΔT = {int(dT_val)} K", color=col, lw=2.0)
 
-    ax_a.axhline(Ra_m_crit, color=NEUTRALS['graphite'], linestyle='--', lw=1.5,
+    ax_a.axhline(Ra_m_crit, color=PALETTE["dark_gray"], linestyle='--', lw=1.5,
                  label=r"Onset threshold $Ra_{m,\mathrm{crit}} = 4\pi^2$")
     ax_a.set_xlabel(r"Aquifer permeability $K$ [$\mathrm{m}^2$]", fontsize=11, fontweight='medium')
     ax_a.set_ylabel(r"Porous Rayleigh-Darcy number $Ra_m$ [-]", fontsize=11, fontweight='medium')
@@ -150,26 +149,26 @@ def main():
     dT_fixed = 50.0
     Ra_free_fixed = compute_free_fluid_rayleigh(rho_f, cp_f, g, alpha_f, dT_fixed, H, mu_f, k_f)
 
-    for K_perm, st, col in zip(permeabilities, styles_b, [STRATA['cobalt'], STRATA['amber'], STRATA['magma']]):
+    for K_perm, st, col in zip(permeabilities, styles_b, [PALETTE["slate_blue"], PALETTE["amber"], PALETTE["crimson"]]):
         Ra_m_fixed = compute_porous_rayleigh_darcy(rho_f, cp_f, g, alpha_f, K_perm, dT_fixed, H, mu_f, k_cond)
         Nu_vals = [compute_hydrothermal_nusselt(Ra_m_fixed, Ra_free_fixed, p) for p in phi_arr]
         ax_b.semilogy(phi_arr, Nu_vals, label=f"$K = {K_perm:.0e}$ m²", color=col, linestyle=st, lw=2.0)
 
     # Transition zone highlight
-    ax_b.axvspan(0.30, 0.70, color=NEUTRALS['bone'], alpha=0.35,
+    ax_b.axvspan(0.30, 0.70, color=PALETTE["off_white"], alpha=0.35,
                  label="Transition $[0.3, 0.7]$")
-    ax_b.axvline(0.30, color=STRATA['plum'], linestyle=':', lw=1.2)
-    ax_b.axvline(0.70, color=STRATA['plum'], linestyle=':', lw=1.2)
+    ax_b.axvline(0.30, color=PALETTE["purple"], linestyle=':', lw=1.2)
+    ax_b.axvline(0.70, color=PALETTE["purple"], linestyle=':', lw=1.2)
 
     ax_b.set_ylim(0.5, 5.0e7)
     ax_b.set_xlim(0.0, 1.0)
 
     ax_b.text(0.15, 0.88, "Porous Darcy\nRegime", transform=ax_b.transAxes,
-              color=STRATA['cobalt'], fontsize=9.5, ha='center', fontweight='bold')
+              color=PALETTE["slate_blue"], fontsize=9.5, ha='center', fontweight='bold')
     ax_b.text(0.50, 0.88, "Smoothstep Blending\nTransition", transform=ax_b.transAxes,
-              color=STRATA['plum'], fontsize=9.5, ha='center', fontweight='bold')
+              color=PALETTE["purple"], fontsize=9.5, ha='center', fontweight='bold')
     ax_b.text(0.85, 0.12, "Free Fluid\nBoundary Layer", transform=ax_b.transAxes,
-              color=STRATA['amber'], fontsize=9.5, ha='center', fontweight='bold')
+              color=PALETTE["amber"], fontsize=9.5, ha='center', fontweight='bold')
 
     ax_b.set_xlabel(r"Porosity $\phi$ [-]", fontsize=11, fontweight='medium')
     ax_b.set_ylabel(r"Effective Nusselt number $Nu$ [-]", fontsize=11, fontweight='medium')
@@ -219,16 +218,16 @@ def main():
     ax_d = axs[1, 1]
     Pe_vals = np.linspace(0.0, 3.0, 200)
     Nu_targets = [2.0, 5.0, 10.0, 25.0, 50.0]
-    colors_d = [STRATA['cobalt'], STRATA['gold'], STRATA['amber'], STRATA['magma'], STRATA['plum']]
+    colors_d = [PALETTE["slate_blue"], PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"], PALETTE["purple"]]
 
     for Nu_t, col in zip(Nu_targets, colors_d):
         keff_ratio_pe = [compute_effective_hydrothermal_conductivity(k_cond, Nu_t, Pe_cell=pe, Pe_crit=2.0) / k_cond
                          for pe in Pe_vals]
         ax_d.plot(Pe_vals, keff_ratio_pe, label=f"$Nu = {int(Nu_t)}$", color=col, lw=2.0)
 
-    ax_d.axvline(2.0, color=NEUTRALS['graphite'], linestyle='--', lw=1.5,
+    ax_d.axvline(2.0, color=PALETTE["dark_gray"], linestyle='--', lw=1.5,
                  label=r"Resolved grid threshold $Pe_{\mathrm{crit}} = 2.0$")
-    ax_d.axhline(1.0, color=NEUTRALS['mist'], linestyle=':', lw=1.2)
+    ax_d.axhline(1.0, color=PALETTE["grid_gray"], linestyle=':', lw=1.2)
     ax_d.set_xlabel(r"Cell-Péclet number $Pe_{\mathrm{cell}} = v_{\mathrm{Darcy}} \Delta x / \kappa_f$ [-]",
                     fontsize=11, fontweight='medium')
     ax_d.set_ylabel(r"Realized enhancement factor $k_{\mathrm{eff}} / k_{\mathrm{cond}}$ [-]",
