@@ -298,7 +298,7 @@ using Erebus.Particles
         @test st_lo_P.condensed_H2O == false
         @test st_hi_P.condensed_H2O == true
 
-        # Case I: Independent active gating
+        # Case I: Independent active flags
         st_mix_off = evaluate_disk_volatile_condensation(
             10.0,
             P_midplane,

@@ -1130,7 +1130,7 @@ include("test_helpers.jl")
         @test all(ETA5 .> 0.0) # apparent viscosity remains positive
 
         # 3. Persistent yielding node single-counting invariant:
-        # Verify that previously yielding nodes (YNY > 0) are not double-counted in ynpl or YERRNOD.
+        # Verify that already yielding nodes (YNY > 0) are not double-counted in ynpl or YERRNOD.
         COH_high = fill(1.0e14, Ny, Nx)
         COH_high[2, 2] = 1.0e6
         COH_high[2, 3] = 2.0e6

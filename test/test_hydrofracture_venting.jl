@@ -248,7 +248,7 @@ using StaticArrays
         @test max_sealed < max_unsealed
         @test isapprox(max_sealed / max_unsealed, expected_seal_ratio; rtol=1e-5)
 
-        # Case 4: Darcy sink mode with breached pressure - hydrofracture flag gating
+        # Case 4: Darcy sink mode with breached pressure - hydrofracture flag condition
         # When hydrofracture=false (default), Darcy sink retains reference k_vent even if Peff <= -sigma_t
         # When hydrofracture=true, permeability enhances to hydrofracture value
         S_vent_darcy_plain = zeros(Float64, Ny1, Nx1)

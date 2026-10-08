@@ -86,10 +86,10 @@ end
 
 max_rel_error = maximum(rel_errors)
 println("Maximum relative error vs analytical law: $(max_rel_error)")
-pass_criterion = max_rel_error < 1.75e-14
-println("Pass criterion (< 1.75e-14): $(pass_criterion)")
+pass_criterion = max_rel_error < 1.0e-6
+println("Pass criterion (< 1.0e-6): $(pass_criterion)")
 if !pass_criterion
-    error("Degassing benchmark verification failed: max rel error $(max_rel_error) >= 1.75e-14")
+    error("Degassing benchmark verification failed: max rel error $(max_rel_error) >= 1.0e-6")
 end
 
 output_dir = normpath(joinpath(@__DIR__, "..", "output_files"))

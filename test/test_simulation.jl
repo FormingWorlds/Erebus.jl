@@ -159,7 +159,7 @@ using JLD2
         end
     end
 
-    @testset "End-to-end speciation and surface thermal coupling in simulation_loop" begin
+    @testset "Full speciation and surface thermal coupling in simulation_loop" begin
         mktempdir() do tmpdir
             quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
             cfg = load_config(quick_toml)
