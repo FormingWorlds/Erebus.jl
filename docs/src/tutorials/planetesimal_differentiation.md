@@ -111,6 +111,24 @@ n_steps = 5                  # total number of timesteps to run
 [materials]
 tkm0 = [1350.0, 1350.0, 170.0]  # planet interior preheated above Fe-FeS eutectic (1213 K)
 
+[solver]
+max_plastic_iterations = 10000         # maximum global/plastic iterations
+max_dt_reductions = 5          # maximum dt reductions on non-convergence
+yerrmax = 100.0         # yielding tolerance level
+etawt = 0.0              # weight for old viscosity
+dphimax = 0.1        # max porosity ratio change per timestep
+seed = 42                # random seed for marker initialization
+use_pardiso = false      # direct sparse solver selection
+etaphikoef = 1.0         # bulk viscosity scaling factor
+etamin = 1.0e+12         # lower viscosity cut-off [Pa s]
+etamax = 1.0e+23         # upper viscosity cut-off [Pa s]
+
+[poroelasticity]
+betasolid = 2.5e-11      # solid silicate matrix compressibility [1/Pa]
+betafluid = 4.0e-10      # pore fluid compressibility [1/Pa]
+phimin = 1.0e-4          # minimum porosity floor [-]
+phimax = 0.9999          # maximum porosity ceiling [-]
+
 [thermodynamics]
 hr_al = true             # 26Al decay heating active in solid phase
 hr_fe = true             # 60Fe decay heating active in metallic phase
@@ -180,7 +198,7 @@ Examine the benchmark checkpoint using `load_state`:
 using Erebus
 
 # Load configuration and checkpoint
-cfg = parse_config("configs/core_formation_benchmark.toml")
+cfg = load_config("configs/core_formation_benchmark.toml")
 data = load_state("output_core_benchmark/output_00005.jld2")
 
 # Temperature field on staggered grid [K]
@@ -244,7 +262,7 @@ To simulate the complete 0 to 3.5 Ma sequence from a primordial cold start:
 ## Related Documentation
 
 - [Iron Core Formation & Metal Segregation (Explanations)](../explanations/core_formation.md)
-- [Iron Core Formation Verification (Validation)](../validation/core_formation.md)
+- [Iron Core Formation Verification (Physical Benchmarks)](../reference/benchmarks/core_formation.md)
 - [Silicate Melting & Soft Turbulence (Explanations)](../explanations/rock_melting.md)
 - [Degassing & Cold Venting (Explanations)](../explanations/degassing_and_venting.md)
 - [Configuration Schema Reference](../reference/config_schema.md)

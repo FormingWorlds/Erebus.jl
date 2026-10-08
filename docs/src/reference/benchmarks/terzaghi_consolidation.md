@@ -2,7 +2,7 @@
 
 This page documents the 1D Terzaghi analytical consolidation benchmark used to verify poroelastic compressibility and coupled Stokes-Darcy flow in `Erebus.jl`.
 
-For the underlying physical equations and poroelastic coefficients, see [Governing Equations](../explanations/governing_equations.md) and [Discretization & Numerics](../explanations/discretization_numerics.md).
+For the underlying physical equations and poroelastic coefficients, see [Governing Equations](../../explanations/governing_equations.md) and [Discretization & Numerics](../../explanations/discretization_numerics.md).
 
 ---
 
@@ -47,7 +47,7 @@ $$M = (2m + 1)\pi$$
 
 ## Numerical Verification in Erebus.jl
 
-To verify that the coupled Stokes-Darcy system in `Erebus.jl` accurately captures this physical process, we discretize a column on a staggered grid with draining boundary anchors and step the system forward in time:
+To verify that the coupled Stokes-Darcy system in `Erebus.jl` accurately captures this physical process, the test suite in `test/test_numerics.jl` sets up a staggered grid column with draining boundary anchors, evaluates poroelastic consolidation coefficients, and solves the hydromechanical system with `assemble_hydromechanical_lse!`. The following script evaluates the theoretical consolidation coefficients and analytical Fourier series:
 
 ```julia
 using Erebus
@@ -65,7 +65,7 @@ function analytical_2drain(y, t, H_col, c_coeff, p0, psurf=1000.0; nterms=100)
 end
 
 # Physical parameters matching test/test_numerics.jl
-H = 13000.0          # Column height between draining anchors: (Ny - 2) * dy [m]
+H = 135625.0         # Column height between draining anchors: (Ny - 2) * dy [m]
 k_perm = 1.0e-13     # Permeability [m^2]
 eta_f = 1.0e-3       # Water viscosity [Pa s]
 beta_s = 2.5e-11     # Solid compressibility [1/Pa]
@@ -92,7 +92,7 @@ When comparing the numerical solution of `assemble_hydromechanical_lse!` against
 
 ## Benchmark Verification Results
 
-![Terzaghi Benchmark Verification](../assets/terzaghi_benchmark.png)
+![Terzaghi Benchmark Verification](../../assets/terzaghi_benchmark.png)
 
 *Figure 1: Class B (1D Finite-Difference Benchmark Solver): Numerical verification of the coupled Stokes-Darcy formulation against the analytical 1D Terzaghi consolidation benchmark generated in Python (`scripts/generate_terzaghi_benchmark.py`). (a) Excess pore pressure dissipation profiles along column height $y \in [0, H]$ at three successive timesteps, comparing analytical Fourier series curves (dashed lines) with Erebus numerical solver solutions (dots). (b) Pointwise relative error $|p_f^{\text{num}} - p_f^{\text{ana}}| / p_0$ confirming that discretization errors remain strictly below the $3.5\%$ verification threshold throughout the column.*
 

@@ -56,12 +56,12 @@ To model volatile drainage across a cold planetesimal lid and couple it to kinet
 
 ```toml
 [venting]
-active      = true                  # Enable surface boundary venting
-mode        = "hydrofracture_gated" # Only vent when pore pressure breaches rock strength
-k_vent      = 1.0e-11               # Surface boundary permeability [m^2]
-ice_sealing = true                  # Cryogenic permeability reduction below freezing
-t_freeze    = 273.15                # Freezing temperature [K]
-dt_seal     = 10.0                  # Freezing transition width [K]
+active      = true      # Enable surface boundary venting
+mode        = "robin"   # Conductance-based boundary drainage ("robin" or "hydrofracture_gated")
+k_vent      = 1.0e-11   # Surface boundary permeability [m^2]
+ice_sealing = true      # Cryogenic conductance reduction below freezing
+t_freeze    = 273.15    # Freezing temperature [K]
+dt_seal     = 10.0      # Freezing transition width [K]
 
 [escape]
 active    = true   # Enable kinetic atmospheric escape
@@ -69,7 +69,7 @@ species   = "H2O"  # Volatile species ("H2O", "CO2", "N2", "CH4", "CO", "H2")
 T_exobase = 200.0  # Exobase temperature [K]
 ```
 
-When `ice_sealing = true`, cryogenic pore ice reduces matrix permeability below $273.15\text{ K}$. Venting activates only when pore fluid pressure breaches the cold lid.
+When `ice_sealing = true`, cryogenic pore ice reduces surface boundary conductance below $273.15\text{ K}$, choking fluid expulsion across cold exterior faces.
 
 ---
 
@@ -124,6 +124,7 @@ To simulate a planetesimal embedded in an evolving protoplanetary disk, configur
 ```toml
 [disk]
 enabled             = true                 # Enable disk temperature evolution
+dispersal_active    = true                 # Enable smooth transition to vacuum space
 model               = "class1_to_class2"   # Two-stage accretion-to-clearing model
 orbital_distance_au = 2.5                  # Planetesimal semi-major axis [AU]
 stellar_mass_msun   = 1.0                  # Central star mass [Solar masses]

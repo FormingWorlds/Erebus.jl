@@ -54,7 +54,7 @@ $$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \l
 
 ### Parameterization Behavior
 
-![Dynamic Hydrofracturing Verification](../assets/hydrofracture_verification.png)
+![Dynamic Hydrofracturing Verification](../../assets/hydrofracture_verification.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Verification of dynamic hydrofracturing permeability enhancement. The curves evaluate analytical formulations in Python (`scripts/generate_hydrofracture_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Effective permeability $k_\phi^{\text{eff}}$ as a function of Terzaghi effective stress $P_{\text{eff}} = P_t - P_f$ for compressive ($P_{\text{eff}} > 0$), intact tensile ($-\sigma_t < P_{\text{eff}} \le 0$), and hydrofractured ($P_{\text{eff}} \le -\sigma_t$) regimes for representative matrix permeabilities ($k_0 \in [10^{-16}, 10^{-14}]\text{ m}^2$) at tensile strength $\sigma_t = 10\text{ MPa}$. (b) Permeability enhancement factor $k_{\text{eff}} / k_0$ as a function of normalized overpressure for scaling exponents $\gamma \in \{0.5, 1.0, 2.0\}$ at $\kappa_{\text{frac}} = 10^3$.*
 
@@ -82,7 +82,7 @@ In `src/physics.jl`, the constitutive poroelastic functions are verified against
 
 ### Parameterization Behavior
 
-![Poroelastic Constitutive Limits Verification](../assets/poroelastic_verification.png)
+![Poroelastic Constitutive Limits Verification](../../assets/poroelastic_verification.png)
 
 *Figure 2: Class C (Analytical / Empirical Reference Formulation): Theoretical behavior of derived poroelastic coefficients in Erebus. The curves evaluate analytical formulations in Python (`scripts/generate_poroelastic_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Biot-Willis coefficient $K_{\text{BW}}$ as a function of porosity $\phi$ for varied solid grain compressibility $\beta_s$ to confirm asymptotic convergence toward unity ($K_{\text{BW}} \equiv 1$) in the incompressible solid grain limit. (b) Skempton pore pressure coefficient $B$ as a function of fluid compressibility $\beta_f$ for representative porosity values to display undrained response transitions.*
 
@@ -129,7 +129,7 @@ Dynamic hydrofracturing permeability enhancement introduces non-linear threshold
 
 ### Parameterization Behavior
 
-![Hydrofracture Regularisation and Under-Relaxation Verification](../assets/hydrofracture_ramp_benchmark.png)
+![Hydrofracture Regularisation and Under-Relaxation Verification](../../assets/hydrofracture_ramp_benchmark.png)
 
 *Figure 3: Class B (Julia Library Exporter / Benchmark Script): Numerical regularisation and relaxation behavior of the dynamic hydrofracture solver in Erebus. Evaluated via `benchmarks/generate_hydrofracture_ramp_benchmark.py`. (a) Regularised overpressure function $s(x)$ as a function of normalized overpressure $x = (-P_{\text{eff}} - \sigma_t)/\sigma_t$ for regularisation ramp widths $\delta \in \{0.0, 0.02, 0.05, 0.10\}$. (b) Regularised derivative $s'(x) = \mathrm{d}s/\mathrm{d}x$, which shows $C^1$ continuity and linear transition within the regularisation interval $[0, \delta]$. (c) Normalized Darcy resistance error $|r^{(k)} - r_{\text{new}}| / |r^{(0)} - r_{\text{new}}|$ as a function of plastic iteration $k$ for relaxation parameter values $\theta \in \{0.1, 0.3, 0.5, 1.0\}$, which confirms geometric convergence toward machine precision.*
 

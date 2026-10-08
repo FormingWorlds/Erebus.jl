@@ -50,7 +50,7 @@ where reference viscosity is $\eta_{f0} = 1.0\times 10^{-3}\text{ Pa}\cdot\text{
 
 This single-activation energy law tracks experimental liquid water data, taken from IAPWS and NIST tables, with less than $13\%$ error across the sub-boiling range $T \in [273, 373]\text{ K}$. At higher temperatures ($T \approx 470\text{ to }570\text{ K}$), liquid water curvature follows a Vogel-Fulcher-Tammann profile, where the single Arrhenius fit underestimates viscosity by $\approx 29\text{ to }43\%$, prior to entering the supercritical regime ($T > 647\text{ K}$).
 
-![Temperature-Dependent Fluid Viscosity Benchmarking](../assets/fluid_viscosity_temperature.png)
+![Temperature-Dependent Fluid Viscosity Benchmarking](../../assets/fluid_viscosity_temperature.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Benchmarking of temperature-dependent pore fluid viscosity $\eta_f(T)$. The curves evaluate analytical Arrhenius formulas, as well as NIST comparison points, in Python (`scripts/generate_viscosity_benchmark.py`). Compiled library code is verified in `test/test_physics.jl`. (a) Dynamic fluid viscosity plotted over the range $T \in [270, 650]\text{ K}$, on a logarithmic scale, comparing the default Arrhenius model ($E_a = 15.0\text{ kJ/mol}$, blue curve) against experimental liquid water data from IAPWS and NIST standards (red circles). (b) Hydrothermal Darcy mobility ratio $\eta_{f0} / \eta_f(T)$, which illustrates how fluid percolation speed increases by $5\times\text{ to }24\times$ as interior temperatures rise under liquid hydrothermal conditions ($273\text{ to }600\text{ K}$).*
 

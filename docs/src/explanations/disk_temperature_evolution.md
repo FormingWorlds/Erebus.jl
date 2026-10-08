@@ -16,11 +16,19 @@ During star and planet formation, circumstellar disks transition through evoluti
 
 ---
 
+## Configuration Requirement
+
+Protoplanetary disk evolution is governed by the `[disk]` table. Note that `cfg.disk.enabled` defaults to `false` in `DiskConfig`. Unless `enabled = true` is explicitly configured in `[disk]`, `Erebus.jl` applies a constant ambient temperature (`t_ambient = 170.0 K`).
+
+---
+
 ## Model 1: Monotonic Viscous Clearing (`model = :monotonic`)
 
 When planetesimal formation or simulation integration begins after cloud infall has completed, viscous clearing governs the ambient temperature evolution (Chambers 2009; Johansen et al. 2015; Drążkowska & Alibert 2017):
 
-$$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{irr}}(r, M_\star)^4 + \left(T_{\text{peak}}(r, M_\star)^4 - T_{\text{irr}}(r, M_\star)^4\right) \left( 1 + \frac{t}{t_{\text{visc}}(M_\star)} \right)^{-\gamma} \right]^{1/4}$$
+$$T_{\text{disk}}(t, r, M_\star) = \max\left(T_{\text{cloud}}, \left[ T_{\text{irr}}(r, M_\star)^4 + \max\left(0, T_{\text{peak}}(r, M_\star)^4 - T_{\text{irr}}(r, M_\star)^4\right) \left( 1 + \frac{t}{t_{\text{visc}}(M_\star)} \right)^{-\gamma} \right]^{1/4}\right)$$
+
+where $T_{\text{cloud}} = 10.0\text{ K}$ enforces a background molecular cloud temperature floor, and the $\max(0, \cdot)$ clamp prevents unphysical roots at large orbital radii where $T_{\text{irr}} > T_{\text{peak}}$.
 
 | Parameter | Description | Scaling / Definition | Units |
 |:---|:---|:---|:---|
@@ -37,7 +45,7 @@ In this model, $T_{\text{disk}}$ decreases monotonically from $T_{\text{peak}}$ 
 
 To simulate the full timeline of planetesimal formation and early hydrothermal evolution from disk buildup through viscous clearing, `Erebus.jl` incorporates a closed-form algebraic formulation calibrated against the multi-zone hydrodynamical and dust coagulation models of Drążkowska & Dullemond (2018), Lichtenberg et al. (2021), and Williams et al. (2026):
 
-$$T_{\text{disk}}(t, r, M_\star) = \left[ T_{\text{eff, irr}}(t, r, M_\star)^4 + \left(T_{\text{peak}}(r, M_\star)^4 - T_{\text{irr}}(r, M_\star)^4\right) f_{\text{acc}}(t, r, M_\star) \right]^{1/4}$$
+$$T_{\text{disk}}(t, r, M_\star) = \max\left(T_{\text{cloud}}, \left[ T_{\text{eff, irr}}(t, r, M_\star)^4 + \max\left(0, T_{\text{peak}}(r, M_\star)^4 - T_{\text{irr}}(r, M_\star)^4\right) f_{\text{acc}}(t, r, M_\star) \right]^{1/4}\right)$$
 
 The symbol `:class0_to_class2` is supported as an equivalent configuration alias.
 

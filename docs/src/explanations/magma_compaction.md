@@ -11,9 +11,8 @@ Because liquid silicate melt is less dense than the crystalline silicate matrix 
 As melt percolates through permeable crystalline grain networks, the solid rock matrix must compact to accommodate the departure of melt.
 Conversely, regions where melt accumulates must expand or generate dynamic compaction overpressure.
 
-McKenzie (1984) formulated the fundamental two-phase continuum equations governing the flow of melt through a deformable, viscous solid matrix.
-In contrast to passive Darcy percolation through rigid porous media, matrix compaction couples the liquid pressure field directly to matrix deformation.
-This coupling produces dynamic compaction pressure gradients, determines the characteristic compaction length scale, and governs the propagation of non-linear solitary porosity waves.
+McKenzie (1984) formulated the two-phase continuum equations governing the flow of melt through a deformable, viscous solid matrix.
+In `Erebus.jl`, dynamic compaction overpressure gradients $\nabla P_{\text{comp}} = -\nabla (\zeta_m \nabla \cdot \mathbf{v}_s)$ drive Darcy segregation filtration velocities across staggered cell faces, coupling liquid melt migration to solid matrix compaction.
 
 ---
 

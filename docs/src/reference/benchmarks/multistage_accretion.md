@@ -2,7 +2,7 @@
 
 This page documents the physical formulation and numerical verification of the multi-stage planetesimal accretion sequence in `Erebus.jl`. The model implements chronological growth regimes driven by aerodynamic onset and pebble isolation: planetesimal-planetesimal collisions (Safronov gravitational focusing) prior to the settling regime, followed by efficient pebble capture (Bondi and Hill accretion), and terminating in late embryo collisions beyond the pebble isolation mass.
 
-For the underlying orbital kinematics and pebble accretion regimes, see [Planetesimal Accretion Mechanics](../explanations/accretion_mechanics.md).
+For the underlying orbital kinematics and pebble accretion regimes, see [Planetesimal Accretion Mechanics](../../explanations/accretion_mechanics.md).
 
 ---
 
@@ -77,7 +77,7 @@ Internal sub-regime transitions within Stage 2 (such as the Bondi-to-Hill transi
 
 ## 3. Quantitative Verification Benchmarks
 
-![Multi-Stage Accretion Benchmark](../assets/multistage_accretion_benchmark.png)
+![Multi-Stage Accretion Benchmark](../../assets/multistage_accretion_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Benchmark suite for multi-stage planetesimal accretion sequence. The curves evaluate analytical formulations in Python (`benchmarks/generate_multistage_accretion_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Settling onset mass $M_{\mathrm{onset}}$ as a function of orbital distance for different Stokes numbers $\tau_s \in \{0.01, 0.05, 0.10\}$. (b) Pebble isolation mass $M_{\mathrm{iso}}$ throughout the disk compared to the canonical Lambrechts et al. (2014) scaling. (c) Accretion rate $\dot{M}(M)$ for the three stages comparing sharp transitions and smoothstep blending. (d) Growth trajectory $R(t)$ from planetesimal seed ($R \approx 30\text{ km}$) to embryo ($R > 1000\text{ km}$). All text labels and legends are positioned in unoccupied space with zero line collisions.*
 
@@ -91,7 +91,7 @@ Internal sub-regime transitions within Stage 2 (such as the Bondi-to-Hill transi
 | **Reference Standard** | Safronov (1972); Chambers (2006); Lambrechts & Johansen (2012); Lambrechts et al. (2014); Visser & Ormel (2016); Bitsch et al. (2018); Liu et al. (2019) |
 | **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
 | **Generating Script** | `benchmarks/generate_multistage_accretion_benchmarks.py` |
-| **Automated Verification Test** | `test/test_multistage_accretion.jl` |
+| **Automated Verification Test** | `test/test_multistage_accretion.jl`, `test/test_accretion.jl` |
 | **Quantitative Tolerance** | Analytical onset mass match $< 10^{-12}$; smoothstep transition $C^1$ continuity exact to machine precision |
 
 ---
@@ -101,7 +101,7 @@ Internal sub-regime transitions within Stage 2 (such as the Bondi-to-Hill transi
 The numerical implementation verifies:
 1. **Analytic Limit Consistency:** In the limit of negligible Stokes number ($\\tau_s \to 0$), $M_{\mathrm{onset}} \to 0$, recovering pure pebble accretion at all body masses.
 2. **Positivity and Rate Continuity:** $\dot{M} > 0$ for all physical states, and smoothstep interpolation guarantees continuous rate transitions without overshoot across stage boundaries.
-3. **Reproducibility:** Benchmark dataset values are archived in `output_files/multistage_accretion_benchmark_data.json` and validated during test suite execution.
+3. **Automated Verification:** Multi-stage accretion rate continuity, physical invariants, and stage transition limits are directly verified against analytical benchmarks in `test/test_multistage_accretion.jl` and `test/test_accretion.jl`.
 
 ---
 

@@ -103,9 +103,10 @@ y = similar(x)
 # Evaluate matrix-vector product without mutating x
 mul!(y, dist_op, x)
 
-# Compute global inner product and norm
-dot_val = distributed_dot(topo, x, y)
-norm_val = distributed_norm(topo, x)
+# Compute global inner product and norm from local sub-domain arrays
+# distributed_dot and distributed_norm execute a global MPI reduction
+dot_val = distributed_dot(topo, x.local_data, y.local_data)
+norm_val = distributed_norm(topo, x.local_data)
 ```
 
 ### Migrating Marker Particles

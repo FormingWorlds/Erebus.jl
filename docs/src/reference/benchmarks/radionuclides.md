@@ -6,21 +6,21 @@ This module validates the radiogenic heating rate calculations from short-lived 
 
 ## Governing Formulation
 
-Radioactive decay generates volumetric heating $Q(t)$ in the solid rock ($^{26}\text{Al}$) and metallic iron ($^{60}\text{Fe}$) phases:
+Radioactive decay generates specific heating power $q(t)$ [W/kg] (or volumetric heating $Q(t) = \rho q(t)$ [W/m$^3$]) in the solid rock ($^{26}\text{Al}$) and metallic iron ($^{60}\text{Fe}$) phases:
 
-$$Q(t) = Q_0 \exp\left(-\frac{t}{\tau}\right) = Q_0 \left(\frac{1}{2}\right)^{t / t_{1/2}}$$
+$$q(t) = q_0 \exp\left(-\frac{t}{\tau}\right) = q_0 \left(\frac{1}{2}\right)^{t / t_{1/2}}$$
 
-with mean lifetime $\tau = t_{1/2} / \ln 2$. The initial volumetric power density at time of CAI formation ($t = 0$) for bulk chondritic composition is:
+with mean lifetime $\tau = t_{1/2} / \ln 2$. The initial specific power at the time of CAI formation ($t = 0$) for bulk chondritic composition is:
 
-$$Q_0 = \rho f_m \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}}$$
+$$q_0 = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}}$$
 
-where $\rho$ is phase density, $f_m$ is elemental mass abundance, and $E_{\text{al}}$ is decay energy per atom.
+where $f_{\text{al}}$ is the atomic abundance of $^{27}\text{Al}$ per unit mass of bulk chondrite [atoms/kg], $E_{\text{al}}$ is decay energy per atom [J], and $(^{26}\text{Al}/^{27}\text{Al})_0$ is the canonical initial isotope ratio.
 
-Because aluminium is lithophile, $^{26}\text{Al}$ concentrates exclusively into the silicate phase. The initial volumetric power density of the silicate phase is scaled by:
+Because aluminium is lithophile, $^{26}\text{Al}$ concentrates exclusively into the silicate phase. The initial specific power of the silicate phase is scaled by:
 
-$$Q_{0,\text{silicate}} = \frac{Q_0}{1 - X_{\text{fe,ref}}}$$
+$$q_{0,\text{silicate}} = \frac{q_0}{1 - X_{\text{fe,ref}}}$$
 
-where $X_{\text{fe,ref}}$ is the reference mass fraction of metallic iron ($0.25$ for standard chondritic composition). Similarly, siderophile $^{60}\text{Fe}$ deposits into the metallic iron phase. Solid volume fraction weighting over silicate and metal phases preserves the exact bulk planetary thermal power budget.
+where $X_{\text{fe,ref}}$ is the reference mass fraction of metallic iron ($0.25$ for standard chondritic composition). Similarly, siderophile $^{60}\text{Fe}$ deposits into the metallic iron phase with specific power scaled by $q_0 / X_{\text{fe,ref}}$. Volumetric heating in the thermal solver evaluates as $Q(t) = \rho q(t)$ [$\text{W/m}^3$]. Solid volume fraction weighting over silicate and metal phases preserves the exact bulk planetary thermal power budget.
 
 ---
 
@@ -41,7 +41,7 @@ where $X_{\text{fe,ref}}$ is the reference mass fraction of metallic iron ($0.25
 
 The specific radiogenic decay powers and cumulative energy releases for $^{26}\text{Al}$ and $^{60}\text{Fe}$ are evaluated against analytical solutions:
 
-![Specific radiogenic power decay benchmark](../assets/radiogenic_decay_benchmark.png)
+![Specific radiogenic power decay benchmark](../../assets/radiogenic_decay_benchmark.png)
 
 *Figure 1: Class B (Julia Library Exporter / Benchmark Script): Specific radiogenic power decay curves and cumulative energy release for $^{26}\text{Al}$ and $^{60}\text{Fe}$ over 10 Myr of planetesimal evolution, exported via `benchmarks/export_radiogenic_decay_benchmark.jl` and plotted with `benchmarks/generate_radiogenic_decay_benchmark.py`. Panel (a) shows specific radiogenic power $Q(t)$ as a function of time, comparing Erebus with analytical exponential decay. Dotted vertical lines mark the respective half-lives ($0.717\text{ Myr}$ for $^{26}\text{Al}$ and $2.62\text{ Myr}$ for $^{60}\text{Fe}$). Panel (b) shows the cumulative specific energy release.*
 

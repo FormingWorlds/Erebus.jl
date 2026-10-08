@@ -67,13 +67,17 @@ Nitrogen allocates to accessory nitrides based on the selected `nitride_mode`:
 2. `:carlsbergite` ($\text{CrN}$): $w_{\text{nitride}} = w_N \cdot (M_{\text{Cr}} + M_N) / M_N \approx 4.712 \cdot w_N$.
 3. `:osbornite` ($\text{TiN}$): $w_{\text{nitride}} = w_N \cdot (M_{\text{Ti}} + M_N) / M_N \approx 4.417 \cdot w_N$.
 
-#### Residual Metal Matrix and Mass Normalization
+#### Sequential Metal Allocation and Residual Matrix
 
-The remaining fraction of the solid metallic phase forms the metallic iron-nickel matrix:
+Volatile elements are allocated sequentially to available metallic iron according to chemical affinity, requiring $\sum w_{\text{volatiles}} \le 1.0$ (the solver throws a `DomainError` if exceeded):
+1. **Troilite ($\text{FeS}$)** consumes available metal first.
+2. **Schreibersite ($(\text{Fe,Ni})_3\text{P}$)** consumes remaining metal.
+3. **Nitride** consumes remaining metal.
+4. **Cohenite ($\text{Fe}_3\text{C}$)** consumes remaining metal up to carbide saturation, with any excess carbon precipitating as crystalline graphite.
 
-$$w_{\text{matrix}} = \max\left(0.0, 1.0 - (w_{\text{troilite}} + w_{\text{schreibersite}} + w_{\text{cohenite}} + w_{\text{graphite}} + w_{\text{nitride}})\right)$$
+The remaining unreacted metal forms the metallic iron-nickel matrix:
 
-When the sum of accessory mineral mass fractions exceeds $1.0$ (for extreme volatile enrichments), mineral fractions scale by $1.0 / \sum w_i$ so their total equals $1.0$, and $w_{\text{matrix}} = 0.0$.
+$$w_{\text{matrix}} = w_{\text{metal,avail}} \ge 0.0$$
 
 ---
 
@@ -112,7 +116,7 @@ For each zone, volume-weighted mean abundances of accessory phases and metallic 
 
 ## 3. Benchmark Validation
 
-![Normative Accessory Mineral Tracking and Meteorite Diagnostics Benchmark](../assets/mineral_assemblage_benchmark.png)
+![Normative Accessory Mineral Tracking and Meteorite Diagnostics Benchmark](../../assets/mineral_assemblage_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Benchmark results for normative accessory mineral tracking and meteorite diagnostics. The curves evaluate analytical formulations in Python (`benchmarks/generate_mineral_assemblage_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a) shows stoichiometric accessory mineral conversion factors as a function of precursor element content in metallic alloy. Panel (b) shows thermal eutectic phase dissolution showing progressive melting of troilite, schreibersite, and cohenite through the eutectic transition ($T_{\text{eutectic}} = 1213\text{ K}$, $\Delta T = 50\text{ K}$). Panel (c) shows the radial mineral assemblage in a differentiated 50 km radius planetesimal, displaying the molten metallic core, depleted mantle, and accessory-rich primitive crust. Panel (d) shows meteorite parent body diagnostic regimes comparing core melt fraction against crustal accessory retention, with petrologic fields for magmatic iron groups (IIIAB, IVA, IVB) and primitive complexes (IAB, winonaites).*
 

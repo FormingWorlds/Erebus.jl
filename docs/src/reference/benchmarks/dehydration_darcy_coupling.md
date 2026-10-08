@@ -6,13 +6,13 @@ This module validates the two-way coupling between prograde metamorphic dehydrat
 
 ## Theoretical Formulation
 
-The physical theory of hydrothermal reactions, two-phase Stokes-Darcy porous flow, surface venting, and volatile speciation is detailed in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../explanations/degassing_and_venting.md).
+The physical theory of hydrothermal reactions, two-phase Stokes-Darcy porous flow, surface venting, and volatile speciation is detailed in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../../explanations/degassing_and_venting.md).
 
 Key constitutive relations validated on this page include:
 
 - **Stokes-Darcy Fluid Continuity with Dehydration Source Term ($\Delta Q^f$):**
-  $$\nabla \cdot \mathbf{v}_D = \Delta Q^f - \frac{1 - \phi}{\rho_s} \frac{D\rho_s}{Dt} - \frac{\phi}{\rho_f} \frac{D\rho_f}{Dt}$$
-  where $\mathbf{v}_D = -\frac{k}{\eta_f} \nabla P_f$ is the Darcy filtration velocity and $\Delta Q^f = \text{DQPF}$ [$\text{s}^{-1}$] is the volumetric fluid production rate from mineral dehydration.
+  $$\nabla \cdot \mathbf{v}_D = \Delta Q^f - \frac{P_t - P_f}{\eta_\phi (1 - \phi)} - S_{\text{storage}} \frac{\partial}{\partial t}\left(P_t - \frac{P_f}{K_{\text{sk}}}\right)$$
+  where $\mathbf{v}_D = -\frac{k}{\eta_f} \nabla P_f$ is the Darcy filtration velocity, $\Delta Q^f = \text{DQPF}$ [$\text{s}^{-1}$] is the volumetric fluid production rate from mineral dehydration, $\frac{P_t - P_f}{\eta_\phi(1-\phi)}$ represents viscous matrix compaction, and the final term accounts for poroelastic pressure storage.
 
 - **Condensed Hydromechanical Assembly (4-Variable and 6-Variable):**
   In both the classical 6-variable formulation ($v_x, v_y, P_t, v_{x}^D, v_{y}^D, P_f$) and the condensed 4-variable formulation ($v_x, v_y, P_t, P_f$), dehydration fluid production injects into the fluid continuity residual at internal pressure cell centers:

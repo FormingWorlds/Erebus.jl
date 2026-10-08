@@ -225,11 +225,15 @@ Silicate melt migration spans two physical regimes separated by the rheologicall
    Below the disaggregation threshold, solid silicate grains form a continuous, compacting framework.
    Buoyant melt percolates through interconnected channels following Darcy's law (McKenzie, 1984):
 
-   $$\mathbf{v}_{\text{perc}} = \frac{k_\phi}{\eta_{\text{melt}} F_m} \Delta\rho \, \mathbf{g}$$
+   $$\mathbf{v}_{\text{perc}} = -\frac{k_\phi}{\eta_{\text{melt}} F_m} \Delta\rho \, \mathbf{g}$$
 
-   where the matrix permeability $k_\phi$ follows a McKenzie power-law relation modified with a residual melt retention threshold $\phi_{\text{residual}}$:
+   where the matrix permeability $k_\phi$ follows a McKenzie power-law relation modified with a residual melt retention threshold $\phi_{\text{residual}}$ and a post-disaggregation linear branch:
 
-   $$k_\phi = k_{\text{ref}} \left[ \frac{\max\left(0, F_m - \phi_{\text{residual}}\right)}{\phi_0} \right]^n$$
+   $$k_\phi = \begin{cases}
+   0, & F_m \le \phi_{\text{residual}} \\
+   k_{\text{ref}} \left[ \frac{F_m - \phi_{\text{residual}}}{\phi_0 - \phi_{\text{residual}}} \right]^n, & \phi_{\text{residual}} < F_m \le \phi_{\text{crit}} \\
+   k_{\text{crit}} + k_{\text{ref}} \left( \frac{F_m - \phi_{\text{crit}}}{\phi_0 - \phi_{\text{residual}}} \right), & F_m > \phi_{\text{crit}}
+   \end{cases}$$
 
    When $F_m \le \phi_{\text{residual}}$, permeability vanishes ($k_\phi = 0$), retaining a trapped melt fraction within the crystalline matrix.
 
@@ -240,7 +244,7 @@ Silicate melt migration spans two physical regimes separated by the rheologicall
 
    $$\mathbf{v}_{\text{susp}} = \mathbf{v}_{\text{Stokes}} F_m^n$$
 
-   $$\mathbf{v}_{\text{Stokes}} = \frac{2 r_{\text{grain}}^2 \Delta\rho \, \mathbf{g}}{9 \eta_{\text{melt}}}$$
+   $$\mathbf{v}_{\text{Stokes}} = -\frac{2 r_{\text{grain}}^2 \Delta\rho \, \mathbf{g}}{9 \eta_{\text{melt}}}$$
 
    As melt fraction approaches unity ($F_m \to 1.0$), hindered settling approaches the unhindered Stokes velocity limit.
 
@@ -316,8 +320,9 @@ The melting and soft turbulence system operates on both Lagrangian markers and E
 
 ## Configuration Controls
 
-Melting and turbulence parameters are set in the `[melting]` table of simulation configuration files. Key controls include:
+### Silicate Melting Parameters (`[melting]`)
 
+Melting and turbulence parameters are set in the `[melting]` table:
 - `active`: Enables silicate melting thermodynamics and apparent heat capacity buffering.
 - `soft_turbulence`: Enables regularized sub-grid soft turbulence convection.
 - `turb_exponent`: Convective heat flux scaling exponent ($\beta = 1/3$ for Solomatov 2007 soft turbulence; $\beta = 1/2$ for laminar boundary layers).
@@ -325,5 +330,15 @@ Melting and turbulence parameters are set in the `[melting]` table of simulation
 - `F_turb_start` and `F_turb_end`: Melt fraction bounds for smoothstep conductivity blending ($[0.30, 0.50]$).
 - `T_solidus` and `T_liquidus`: Phase-dependent solidus and liquidus temperatures.
 - `dpdt_clapeyron`: Pressure-dependent melting slope $dT/dP$ (default $0.0\text{ K/Pa}$; typical $1.2\times 10^{-7}\text{ K/Pa}$).
+
+### Two-Phase Magma Transport Parameters (`[magma_transport]`)
+
+Two-phase buoyant melt segregation is configured in the `[magma_transport]` table:
+- `segregation_active`: Activates buoyant melt segregation advection.
+- `percolation_active`: Enables porous Darcy melt percolation for $F_m \le F_{\text{perc\_end}}$.
+- `settling_active`: Enables hindered Stokes crystal settling for $F_m \ge F_{\text{settle\_start}}$.
+- `k_ref`: Reference matrix permeability ($1.0\times 10^{-9}\text{ m}^2$).
+- `phi_residual`: Residual melt fraction retained in pores ($0.01$).
+- `cfl_segregation`: Sub-cycling CFL Courant number ($0.5$).
 
 For complete schema details, default values, and data types, see the [Configuration Schema Reference](../reference/config_schema.md#melting).

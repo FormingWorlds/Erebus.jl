@@ -143,20 +143,20 @@ end
 struct SpeciesInventory
     H2::Float64
     H2O::Float64
-    CH4::Float64
     CO::Float64
     CO2::Float64
-    NH3::Float64
+    CH4::Float64
     N2::Float64
+    NH3::Float64
     H2S::Float64
-    SO2::Float64
     S2::Float64
+    SO2::Float64
 end
 ```
 
 Planetary volatile cycles transfer mass across three core reservoirs: interior rock and melt, the active atmospheric envelope, and space loss via escape:
 
-![Volatile Reservoirs and Mass Flow](../assets/volatile_reservoirs.svg)
+![Volatile Reservoirs and Mass Flow](../../assets/volatile_reservoirs.svg)
 
 *Figure 1: Class D (Schematic Diagram): Volatile reservoirs and mass flow channels across interior rock and melt, the active atmospheric envelope, and space loss via escape.*
 
@@ -177,7 +177,7 @@ Atmosphere and interior thermal solvers interact through a closed boundary coupl
 
 ## 3. Benchmark Verification
 
-![Coupled 1D Atmosphere Benchmark](../assets/coupled_atmosphere_benchmark.png)
+![Coupled 1D Atmosphere Benchmark](../../assets/coupled_atmosphere_benchmark.png)
 
 *Figure 2: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for coupled 1D proto-atmosphere formulations. The curves evaluate analytical models in Python (`benchmarks/generate_coupled_atmosphere_benchmarks.py`). Discretized atmospheric integration is verified in `test/test_atmosphere.jl`. (a) Semi-grey radiative equilibrium temperature profiles $T(\tau)$. (b) Protoplanetary disk gas envelope capture and Ormel et al. (2015) recycling limit. (c) Greenhouse thermal blanketing attenuation of radiative heat transfer. (d) Multi-species crossover hydrodynamic escape drag efficiencies.*
 
@@ -189,15 +189,15 @@ For a marker with silicate melt fraction $F \in (0, 1]$, bulk dissolved volatile
 $$ex = \min\left(w, \max\left(0, \frac{w}{F} - w_{\text{sat}}\right) \cdot F \cdot \epsilon_{\text{eff}}\right)$$
 
 where $\epsilon_{\text{eff}}$ is degassing efficiency.
-For water solubility obeying the Burnham (1979) / Dixon et al. (1995) law:
+For water solubility obeying the Burnham (1979) / Dixon et al. (1995) law with solubility coefficient $A_s$ in $\text{wt}\%/\sqrt{\text{MPa}}$ converted to dimensionless mass fraction:
 
-$$w_{\text{sat}} = A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
+$$w_{\text{sat}} = 0.01 \cdot A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
 
 the retained water mass fraction in a degassed marker is:
 
-$$w_{\text{retained}} = F \cdot A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
+$$w_{\text{retained}} = F \cdot 0.01 \cdot A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}$$
 
-![Retained water mass fraction versus melt fraction](../assets/degassing_benchmark.png)
+![Retained water mass fraction versus melt fraction](../../assets/degassing_benchmark.png)
 
 *Figure 3: Class B (Julia Library Exporter): Retained water mass fraction versus melt fraction $F \in [0.1, 1.0]$ evaluated by `benchmarks/export_degassing_benchmark.jl`. (a) Burnham (1979) analytical law compared with Lagrangian markers. (b) Relative numerical residual confirming agreement below $10^{-6}$.*
 

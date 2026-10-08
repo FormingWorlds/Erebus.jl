@@ -220,7 +220,7 @@ Beyond water and nitrogen, the complete volatile inventory includes carbon and s
 
 The multi-species H-C-N-S solubility, speciation, and organic devolatilization routines are implemented in the physics module of `Erebus.jl` (`Erebus.Physics`). The simulation pipeline couples marker volatile exsolution to multi-species gas speciation, species-resolved atmospheric accumulation, and kinetic escape.
 
-For benchmark comparisons across all four elemental systems, see the validation chapter [Multi-Species H-C-N-S Volatile Solubility, Speciation, and Saturation Ceilings](../validation/hcns_solubility.md).
+For benchmark comparisons across all four elemental systems, see the benchmark chapter [Multi-Species H-C-N-S Volatile Solubility, Speciation, and Saturation Ceilings](../reference/benchmarks/hcns_solubility.md).
 
 ---
 
@@ -230,14 +230,15 @@ For benchmark comparisons across all four elemental systems, see the validation 
 
 In classical melt solubility formulations (e.g., Burnham, 1979; Dixon et al., 1995), volatile solubility in silicate melt scales with pressure as $S_{\text{eq}} \propto \sqrt{P}$ or $S_{\text{eq}} \propto P$. Under decompression toward near-vacuum surface environments ($P \to 0$), these classical parameterizations predict that all dissolved volatiles exsolve into the fluid or vapor phase. However, laboratory analyses of natural mantle xenoliths, meteorites, and high-pressure experiments demonstrate that crystalline silicates retain trace volatile concentrations in crystal lattice defects within nominally anhydrous minerals (NAMs: olivine, pyroxenes) and refractory carbonaceous grains (Hirschmann et al., 2006; Peslier et al., 2017; Shcheka et al., 2006; Hirschmann, 2018; Li et al., 2013).
 
-To capture this physical behavior, `Erebus.jl` incorporates thermodynamic volatile retention floors. For each volatile species (H2O, C, N, S), a temperature-dependent retention floor $C_{\text{ret}}(T)$ defines the minimum volatile concentration retained in the solid matrix. Below the reference solidus temperature $T_{\text{solidus}}$, volatiles are locked in the crystalline lattice at nominal concentration $C_{\text{floor}}$:
+To capture this physical behavior, `Erebus.jl` incorporates thermodynamic volatile retention floors. For each volatile species (H2O, C, N, S), a retention floor $C_{\text{ret}}$ defines the minimum volatile concentration retained in the solid matrix:
 
 - **Nominally Anhydrous Minerals (NAMs) Exponential Decay** (`:nams_exponential`, default):
   $$C_{\text{ret}}(T) = \begin{cases} C_{\text{floor}}, & T \le T_{\text{solidus}} \\ C_{\text{floor}} \exp\left(-\frac{T - T_{\text{solidus}}}{\Delta T_{\text{ret}}}\right), & T > T_{\text{solidus}} \end{cases}$$
   where $\Delta T_{\text{ret}}$ is the characteristic temperature scale for melt extraction of lattice-bound volatiles.
 
 - **Linear Melt Blend** (`:linear_melt_blend`):
-  $$C_{\text{ret}}(T) = C_{\text{floor}} \left[1 - \text{clamp}\left(\frac{T - T_{\text{solidus}}}{\Delta T_{\text{ret}}}, 0, 1\right)\right]$$
+  $$C_{\text{ret}}(F_m) = C_{\text{floor}} \max(0, 1 - F_m)$$
+  where $F_m = F_{\text{melt}}$ is the silicate melt fraction.
 
 - **Constant Floor** (`:constant_floor`):
   $$C_{\text{ret}}(T) = C_{\text{floor}}$$
@@ -500,11 +501,11 @@ The net oxygen exchanged $\Delta O_{\text{buffer}}$ couples directly to the mant
 
 $$3\,\mathrm{FeO} + \frac{1}{2}\,\mathrm{O}_2 \rightleftharpoons \mathrm{Fe}_3\mathrm{O}_4$$
 
-For source markers with weights $w_m$ ($\sum_m w_m = 1$), oxygen is added or removed in exact stoichiometry:
+For source markers with weights $w_m$ ($\sum_m w_m = 1$), drawing oxygen into the gas ($\Delta O_{\text{buffer}} > 0$) reduces magnetite to wüstite in exact stoichiometry:
 
-$$\Delta M_{\mathrm{Fe}_3\mathrm{O}_4, m} = w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{M_{\mathrm{Fe}_3\mathrm{O}_4}}{M_{\mathrm{O}}}\right)$$
+$$\Delta M_{\mathrm{Fe}_3\mathrm{O}_4, m} = -w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{M_{\mathrm{Fe}_3\mathrm{O}_4}}{M_{\mathrm{O}}}\right)$$
 
-$$\Delta M_{\mathrm{FeO}, m} = -w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{3 M_{\mathrm{FeO}}}{M_{\mathrm{O}}}\right)$$
+$$\Delta M_{\mathrm{FeO}, m} = +w_m \cdot \Delta O_{\text{buffer}} \cdot \left(\frac{3 M_{\mathrm{FeO}}}{M_{\mathrm{O}}}\right)$$
 
 where $M_{\mathrm{Fe}_3\mathrm{O}_4} / M_{\mathrm{O}} = 231.533 / 15.9994$ and $3 M_{\mathrm{FeO}} / M_{\mathrm{O}} = 215.535 / 15.9994$. Total iron and oxygen mass across the markers and the gas parcel are conserved to $10^{-12}$. If the requested buffer exchange would reduce either $\mathrm{FeO}$ or $\mathrm{Fe}_3\mathrm{O}_4$ below zero, the routine throws a `DomainError`.
 
@@ -581,13 +582,9 @@ with reference temperature $T_{\text{ref}} = 1000\text{ K}$ and temperature expo
    $$b_{ij}(1000\text{ K}) = b_{\text{anchor}} \sqrt{\frac{\mu_{\text{anchor}}}{\mu_{ij}}} \left(\frac{d_{\text{anchor}}}{d_i + d_j}\right)^2$$
    anchored to the $\mathrm{H_2}$ and $\mathrm{CO_2}$ reference pair ($b_{\text{anchor}} = 4.09\times 10^{21}\text{ m}^{-1}\text{s}^{-1}$, $d_{\mathrm{H}_2} = 289\text{ pm}$, $d_{\mathrm{CO}_2} = 330\text{ pm}$).
 
-### 4. Two-Sided Matrix Equilibration
+### 4. Linear System Solution
 
-Because diffusion parameters and mole fractions span multiple orders of magnitude (from $10^{20}$ to $10^{23}\text{ m}^{-1}\text{s}^{-1}$ and $10^{-6}$ to $1.0$), the linear system $M \mathbf{y} = \mathbf{r}$ can be ill-conditioned. `Erebus.jl` solves the fixed-active system with two-sided diagonal matrix equilibration:
-
-$$D_r M D_c \mathbf{z} = D_r \mathbf{r}, \quad \mathbf{y} = D_c \mathbf{z}$$
-
-where $D_r = \text{diag}(1 / \max_c |M_{rc}|)$ scales rows and $D_c = \text{diag}(1 / \max_r |(D_r M)_{rc}|)$ scales columns. This equilibration maintains numerical stability across high dynamic ranges of composition and molecular weight.
+For each candidate active set $\mathcal{A}$, `Erebus.jl` solves the fixed-active KKT equality system $M \mathbf{y} = \mathbf{r}$ directly with Gaussian elimination ($M \backslash \mathbf{r}$), obtaining the drift velocities $\mathbf{w}_{\mathcal{A}}$ and scale factor $C$ before checking retention stability $R_k \le 0$ for inactive species.
 
 ### 5. Classical Limits and Conservation Properties
 

@@ -6,12 +6,12 @@ This module validates the cold surface venting boundary condition, ice cold-trap
 
 ## Theoretical Formulation
 
-The physical theory of porous surface drainage, ice cold-trap vapor pressure thermodynamics, disk dispersal transitions, and marker porosity drainage with latent cooling is derived in detail in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../explanations/degassing_and_venting.md).
+The physical theory of porous surface drainage, ice cold-trap vapor pressure thermodynamics, disk dispersal transitions, and marker porosity drainage with latent cooling is derived in detail in [Volatile Degassing, Cold Surface Venting, and Atmospheric Escape](../../explanations/degassing_and_venting.md).
 
 Key constitutive relations validated on this page include:
 
 - **Darcy Surface Drainage Boundary ($q_{\text{vent}}$):**
-  $$q_{\text{vent}} = \frac{k_{\text{vent}}}{\eta_f} \frac{P_f - P_{\text{vent}}}{\Delta}, \quad S_{\text{vent}} = \frac{C_{\text{face}}}{\Delta} \max\left(0, P_f - P_{\text{vent}}\right)$$
+  $$q_{\text{vent}} = \frac{k_{\text{vent}}}{\eta_f} \frac{P_f - P_{\text{vent}}}{\Delta y}, \quad S_{\text{darcy}} = C_{\text{face}} \max\left(0, P_f - P_{\text{vent}}\right), \quad C_{\text{face}} = \frac{k_{\text{vent}}}{\eta_f \Delta x^2} c_{\text{factor}}$$
 - **Clausius-Clapeyron Ice Cold Trap ($P_{\text{sat,ice}}$):**
   $$P_{\text{sat,ice}}(T) = P_0 \exp\left[-\frac{L_{\text{sub}}}{R_v}\left(\frac{1}{T} - \frac{1}{T_0}\right)\right], \quad P_{\text{vent}} = \max\left(P_{\text{amb}}, P_{\text{sat,ice}}(T_{\text{surf}})\right)$$
 - **Disk Dispersal Sigmoid Transition ($w_{\text{disp}}$):**
@@ -41,7 +41,7 @@ Key constitutive relations validated on this page include:
 
 Figure 1 illustrates the coupled performance of cold surface venting across disk dispersal:
 
-![Cold Surface Venting Benchmark](../assets/cold_surface_venting_benchmark.png)
+![Cold Surface Venting Benchmark](../../assets/cold_surface_venting_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for cold surface venting and ice cold-trap vapor pressure thermodynamics. The curves evaluate analytical formulations in Python (`scripts/generate_cold_venting_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Ambient temperature transition from disk accretion heating to solar radiative equilibrium ($T_{\text{eq}} \approx 166.8\text{ K}$ for default $A = 0.06$) during disk dispersal. (b) Water ice equilibrium vapor pressure $P_{\text{sat,ice}}(T)$ across the cold-trap regime ($100\text{ to }273\text{ K}$). (c) Evolution of boundary pore fluid pressure and surface venting flux. (d) Cumulative vented fluid mass and thermostatic latent cooling rate.*
 

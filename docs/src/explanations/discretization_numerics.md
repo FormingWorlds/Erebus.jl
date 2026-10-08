@@ -223,8 +223,8 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    - **Relaxation Smoothers (`smooth_velocity_device!`, `smooth_darcy_device!`)**: Executes in-place relaxation sweeps (damped Jacobi or Red-Black Gauss-Seidel) using pre-allocated working buffers on each level to eliminate buffer reallocations during V-cycles. Note that on Julia's host CPU architecture `KernelAbstractions.jl` allocates task partition contexts during launch, whereas hardware GPU devices enqueue directly to device streams without host heap allocations.
    - **Precision Considerations on Apple Silicon**: Apple Metal GPUs do not provide hardware double-precision (`Float64`) arithmetic. Simulations deployed to Apple Metal hardware must configure single-precision floating point (`Float32`). Transferring `Float64` arrays or operators to Metal devices raises an informative `ArgumentError`.
 
-6. **2D Domain Decomposition and Distributed Memory (MPI)**:
-   For extreme-resolution simulations on High-Performance Computing (HPC) clusters, `Erebus.jl` integrates domain decomposition via `MPI.jl` (v0.20):
+6. **2D Domain Decomposition and Distributed Memory (MPI, Experimental)**:
+   For cluster research, `Erebus.jl` contains experimental domain decomposition primitives via `MPI.jl` (v0.20). Core primitives (topology, halo buffers, matrix-free operators, and marker migration) are implemented; orchestrating the full `simulation_loop` over MPI ranks is under active development (setting `cfg.mpi.enable = true` currently raises an informative error).
    - **2D Cartesian Process Grid (`DistributedGridTopology2D`)**: Organizes compute nodes into a 2D Cartesian mesh ($P_y \times P_x$) using `MPI.Cart_create` with automatic surface-to-volume ratio optimization ($P_y \approx P_x \approx \sqrt{P}$). Identifies cardinal (North, South, East, West) and diagonal corner neighbors.
    - **Asynchronous Halo Exchange (`exchange_halos!`)**: Non-blocking peer-to-peer ghost cell communication using pre-allocated buffers (`HaloBuffer`) with non-blocking `MPI.Isend` and `MPI.Irecv!` followed by `MPI.Waitall`. Dimensional 2-step exchange ensures corners are communicated without diagonal message overhead.
    - **Distributed Matrix-Free Operator (`DistributedStokesDarcyOperator`)**: Evaluates $\mathbf{y} = \mathbf{A} \mathbf{x}$ for distributed subdomains with overlapped interior computation and boundary halo exchange.
@@ -250,11 +250,11 @@ To maintain numerical stability, `Erebus.jl` limits timesteps, plastic iteration
 
 ### 1. Plastic Yielding and Timestep Cut Retry
 
-The plastic loop iterates until the maximum relative yield error drops below `yerrmax`:
+The plastic loop iterates until the RMS dimensional stress error drops below `yerrmax` [Pa]:
 
-$$\text{YERRNOD} = \max_i \frac{|\sigma_{\text{yield}} - \sigma_{\text{II}}|}{\sigma_{\text{yield}}} < \text{yerrmax}$$
+$$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \left(\sigma_{\text{II}, i} - \sigma_{\text{yield}, i}\right)^2} < \text{yerrmax}$$
 
-If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
+with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
 - The solver rejects the candidate timestep.
 - The system restores state from a start-of-step snapshot.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).

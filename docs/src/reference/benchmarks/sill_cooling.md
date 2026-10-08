@@ -53,25 +53,27 @@ The test asserts:
 
 ---
 
-## 2. Stefan Latent Heat Buffering Benchmark
+## 2. Dynamic Crystallization Latent Heat Freezing
 
 ### Solidification Phase Change Formulation
 
-When ponded magma cools between the liquidus, $T_{\text{liq}}$, and solidus, $T_{\text{sol}}$, crystallization releases latent heat of fusion, $L_m$ [$\text{J/kg}$].
-The phase change is characterized by the dimensionless Stefan number:
+When ponded magma in a crustal sill cools below liquidus $T_{\text{liq}}$, crystallization releases latent heat of fusion $L_{\text{melt}}$ [$\text{J/kg}$]. In `Erebus.jl`, crustal sill crystallization is evaluated dynamically in `apply_silicate_melt_segregation!` using freezing mass increment $m_{\text{freeze}}$ and volumetric latent heat grid `Q_lat_grid`:
 
-$$\text{Ste} = \frac{c_p (T_{\text{liq}} - T_{\text{sol}})}{L_m}$$
+$$Q_{\text{cryst}} = \frac{\rho_{\text{melt}} F_{\text{freeze}} L_{\text{melt}}}{\Delta t_{\text{sub}}}$$
 
-In the mushy crystallization interval, latent heat release increases the apparent heat capacity:
+where $F_{\text{freeze}} = m_{\text{freeze}} / n_m$ and $m_{\text{freeze}}$ relaxes excess liquid toward local equilibrium melt mass over the configured crystallization timescale $\tau_{\text{cryst}}$.
+
+In background mantle melting on Lagrangian markers, thermodynamic enthalpy buffering uses the apparent heat capacity formulation:
 
 $$c_{p,\text{apparent}} = c_p + \frac{L_m}{T_{\text{liq}} - T_{\text{sol}}} = c_p \left( 1 + \frac{1}{\text{Ste}} \right)$$
 
+where the Stefan number is $\text{Ste} = \frac{c_p (T_{\text{liq}} - T_{\text{sol}})}{L_m}$.
+
 ### Verification Results
 
-The test evaluates `rhocp_apparent_silicate` directly across subsolidus, mushy, and superliquidus intervals with silicate parameters ($L_m = 4.0 \times 10^5$ J/kg, $c_p = 1000$ J/(kg K), $\Delta T = 200$ K):
-- Dimensionless Stefan number $\text{Ste} = 0.5$.
-- Inside the mushy interval, the apparent heat capacity buffering factor is $1 + \text{Ste}^{-1} = 3.0$.
-- Outside the mushy interval, the apparent heat capacity equals baseline sensible heat capacity ($1.0 \times \rho c_p$).
+The test suite validates dynamic sill crystallization and latent heat release:
+- `apply_silicate_melt_segregation!` deposits crystallization latent heat $Q_{\text{cryst}} \ge 0$ into `Q_lat_grid` without energy creation.
+- Background mantle enthalpy is verified in `rhocp_apparent_silicate` across subsolidus, mushy, and superliquidus intervals with Stefan buffering factor $1 + \text{Ste}^{-1} = 3.0$ ($\text{Ste} = 0.5$).
 
 ---
 

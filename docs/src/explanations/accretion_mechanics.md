@@ -2,7 +2,7 @@
 
 This section explains the physical principles, orbital dynamics, thermodynamic formulations, and numerical implementation of planetesimal accretion in `Erebus.jl`.
 
-For numerical benchmark comparisons, scaling figures, and verification test suites, see [Planetesimal Accretion & Impact Heating](../validation/planetesimal_accretion.md).
+For numerical benchmark comparisons, scaling figures, and verification test suites, see [Planetesimal Accretion & Impact Heating](../reference/benchmarks/planetesimal_accretion.md).
 
 ---
 
@@ -169,6 +169,23 @@ When the growing protoplanet perturbs the surrounding gas disk, spiral density w
 $$M_{\text{iso}} = f_{\text{iso}} M_\star \left(\frac{H_g}{a}\right)^3 = f_{\text{iso}} M_\star \left(\frac{c_s}{v_K}\right)^3$$
 
 where $H_g = c_s / \Omega_K$ is the disk scale height, $M_\star$ is stellar mass, and $f_{\text{iso}} \approx 0.5$ matches the standard hydrodynamic threshold of $\approx 20 M_\oplus (H_g / 0.05 a)^3$. Beyond $M_{\text{iso}}$, planet growth transitions to giant impact collisions between isolated embryos.
+
+### Configuration Controls for Multi-Stage Growth
+
+To activate dynamic multi-stage accretion transitions ($M_{\text{onset}}$ and $M_{\text{iso}}$), set `mode = :multistage` in `[accretion]`:
+
+```toml
+[accretion]
+active               = true
+mode                 = :multistage
+stage1_mode          = :planetesimal
+stage2_mode          = :pebble_hill
+stage3_mode          = :giant_impact
+transition_smoothing = :smoothstep
+transition_width     = 0.1
+```
+
+In default mode (`:pebble_hill`) or `:pebble_auto`, accretion operates under a single physical regime, and $M_{\text{onset}}$ and $M_{\text{iso}}$ thresholds are not evaluated.
 
 ---
 

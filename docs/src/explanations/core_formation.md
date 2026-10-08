@@ -317,15 +317,15 @@ Marker phase distributions are integrated across radial domains (core, mantle, c
 | Physical Component | Source File | Key Functions |
 |:---|:---|:---|
 | Parameter definition | `src/config.jl` | `CoreFormationConfig`, `MetalPartitionConfig`, `PhaseTrackingConfig` |
-| Partition coefficients | `src/physics.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
-| Volatile equilibration | `src/physics.jl` | `equilibrate_metal_silicate_volatiles!` |
-| Accessory minerals | `src/physics.jl` | `compute_troilite_stoichiometry`, `compute_schreibersite_stoichiometry`, `compute_cohenite_graphite_stoichiometry`, `compute_nitride_stoichiometry`, `compute_normative_mineral_assemblage` |
-| Regional modes | `src/physics.jl` | `compute_regional_mineral_modes` |
-| Core budget integration | `src/physics.jl` | `compute_core_volatile_budgets` |
-| Melt fraction and velocity | `src/physics.jl` | `compute_metal_melt_fraction`, `metal_segregation_velocity`, `segregation_dissipation_heating` |
+| Partition coefficients | `src/physics/metal_partitioning.jl` | `compute_metal_silicate_partition_coefficient`, `compute_metal_silicate_partition_coefficients` |
+| Volatile equilibration | `src/physics/metal_partitioning.jl` | `equilibrate_metal_silicate_volatiles!` |
+| Accessory minerals | `src/physics/normative_minerals.jl` | `compute_troilite_stoichiometry`, `compute_schreibersite_stoichiometry`, `compute_cohenite_graphite_stoichiometry`, `compute_nitride_stoichiometry`, `compute_normative_mineral_assemblage` |
+| Regional modes | `src/physics/normative_minerals.jl` | `compute_regional_mineral_modes` |
+| Core budget integration | `src/physics/metal_partitioning.jl` | `compute_core_volatile_budgets` |
+| Melt fraction and velocity | `src/physics/core_dynamics.jl` | `compute_metal_melt_fraction`, `metal_segregation_velocity`, `segregation_dissipation_heating` |
 | Marker tracking and properties | `src/particles.jl` | `compute_marker_properties!`, `setup_marker_metal_properties`, `setup_marker_metal_volatile_properties`, `setup_marker_phase_tracking_properties`, `replenish_markers!` |
-| Conservative transport | `src/numerics.jl` | `apply_metal_segregation!`, `assemble_thermal_lse!` |
-| Main simulation integration | `src/simulation.jl` | Timestep loop sequence and checkpoint persistence |
+| Conservative transport | `src/numerics/segregation.jl`, `src/numerics/thermal.jl` | `apply_metal_segregation!`, `assemble_thermal_lse!` |
+| Main simulation integration | `src/simulation/loop.jl` | Timestep loop sequence and checkpoint persistence |
 
 ---
 

@@ -138,11 +138,13 @@ $$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\r
 
 $$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_{\text{metal}}$$
 
-where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase. Lithophile $^{26}\text{Al}$ partitions exclusively into the silicate phase, yielding the silicate concentration scaling:
+where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase, while lithophile $^{26}\text{Al}$ partitions into the silicate phase:
 
 $$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{fe,ref}}}$$
 
-where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture ($X_{\text{fe,ref}} = 0.25$ by default). Solid volume weighting over silicate and metal phases preserves total bulk radiogenic power.
+$$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{fe,ref}}}$$
+
+where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture. Phase volume weighting over silicate and metal components preserves total bulk radiogenic power.
 
 ### Mineral Hydration and Dehydration Reaction Enthalpy
 Serpentinization and dehydration reactions exchange latent heat proportional to the reaction mass rate and the molar reaction enthalpy:

@@ -125,7 +125,7 @@ where $\gamma \in (0, 1]$ is the damping factor (default: $0.5$).
 
 The benchmark figure below illustrates scaling behavior in all four operational regimes:
 
-![Hydrothermal Convection Benchmark](../assets/hydrothermal_convection_benchmark.png)
+![Hydrothermal Convection Benchmark](../../assets/hydrothermal_convection_benchmark.png)
 
 *Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for subgrid hydrothermal convection scaling laws. The curves evaluate analytical formulations in Python (`benchmarks/generate_hydrothermal_convection_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Porous convection onset and scaling: $Ra_m$ versus medium permeability $K$ for thermal driving scales $\Delta T \in [10, 25, 50, 100]\text{ K}$, initiating at $Ra_{m,\mathrm{crit}} = 4\pi^2$. (b) Nusselt scaling across porosity regimes: continuous transition from linear porous Darcy scaling to asymptotic boundary-layer scaling through the smoothstep transition zone $[0.30, 0.70]$. (c) Conductivity ratio $k_{\mathrm{eff}} / k_{\mathrm{cond}}$ across state space of porosity and temperature contrast. (d) Grid-resolution damping: attenuation of subgrid enhancement as cell-Péclet number $Pe_{\mathrm{cell}}$ approaches $Pe_{\mathrm{crit}} = 2.0$.*
 

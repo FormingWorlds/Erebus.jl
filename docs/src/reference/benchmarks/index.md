@@ -65,7 +65,7 @@ Discrete finite-difference operators are tested independently before assembling 
 - **Stokes-Darcy Schur Coupling**: Coupling sub-blocks in `assemble_hydromechanical_lse!` satisfy cross-coupling consistency ($L[P_t, P_f] = L[P_f, P_t]$).
 - **Nonlinear Picard Convergence**: Visco-elasto-plastic yielding iterations monitor Euclidean norm residuals until mechanical yielding errors fall below user-specified tolerances.
 
-For discretization details and finite-difference stencils, see [Discretization & Numerics](../explanations/discretization_numerics.md).
+For discretization details and finite-difference stencils, see [Discretization & Numerics](../../explanations/discretization_numerics.md).
 
 ---
 

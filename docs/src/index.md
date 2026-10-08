@@ -24,8 +24,8 @@
 - **Radiogenic Decay Kinetics**:
   Time-dependent volumetric heating from short-lived radionuclides ($^{26}\text{Al}$ and $^{60}\text{Fe}$), driving water ice melting, hydrothermal circulation, and dehydration reactions.
 
-- **Marker-in-Cell Advection**:
-  Conservative transport of composition, temperature, melt fraction, and porosity on moving lagrangian markers interpolated onto the Eulerian staggered grid.
+- **Marker-in-Cell Tracking**:
+  Point Lagrangian RK4 advection of composition, temperature, and porosity on markers interpolated onto the Eulerian staggered grid, with thermodynamic evaluation of silicate melt fractions.
 
 - **Metallic Core Formation & Diapir Segregation**:
   Coupled Darcy porous percolation of liquid Fe-FeS through solid silicate matrix, Stokes gravitational settling through magma oceans with Richardson-Zaki hindrance, Weber droplet breakup, dynamic density EOS, and gravitational dissipation heating.
@@ -48,29 +48,25 @@
 
 ## Documentation Structure
 
-The documentation follows the Diataxis framework, structured into learning, task, theoretical, validation, and reference categories:
+The documentation follows the Diataxis framework, structured into four quadrants:
 
 ```@raw html
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 20px;">
-  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
-    <h3 style="margin-top: 0;"><a href="tutorials/quickstart/" style="color: #DE7037;">Tutorials</a></h3>
-    <p style="color: #E6DAB6; font-size: 14px;">Workflow-oriented guides taking you through a complete simulation run, hydrothermal circulation, differentiation, and growth to lunar mass.</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 20px;">
+  <div style="border: 1px solid #D0D7DE; border-radius: 8px; padding: 16px; background: #F6F8FA;">
+    <h3 style="margin-top: 0;"><a href="tutorials/quickstart/" style="color: #0969DA;">Tutorials</a></h3>
+    <p style="color: #1F2328; font-size: 14px;">Learning-oriented walkthroughs taking you through a complete simulation run, hydrothermal circulation, differentiation, and growth to lunar mass.</p>
   </div>
-  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
-    <h3 style="margin-top: 0;"><a href="howto/installation/" style="color: #DE7037;">How-To Guides</a></h3>
-    <p style="color: #E6DAB6; font-size: 14px;">Task-oriented instructions for configuring simulation setups, tuning numerical solvers, and post-processing outputs.</p>
+  <div style="border: 1px solid #D0D7DE; border-radius: 8px; padding: 16px; background: #F6F8FA;">
+    <h3 style="margin-top: 0;"><a href="howto/installation/" style="color: #0969DA;">How-To Guides</a></h3>
+    <p style="color: #1F2328; font-size: 14px;">Task-oriented instructions for configuring simulation setups, tuning numerical solvers, and post-processing outputs.</p>
   </div>
-  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
-    <h3 style="margin-top: 0;"><a href="explanations/model_overview/" style="color: #DE7037;">Explanations</a></h3>
-    <p style="color: #E6DAB6; font-size: 14px;">In-depth theoretical derivations of governing Stokes-Darcy equations, melting rheology, core segregation, and atmospheric loss.</p>
+  <div style="border: 1px solid #D0D7DE; border-radius: 8px; padding: 16px; background: #F6F8FA;">
+    <h3 style="margin-top: 0;"><a href="explanations/model_overview/" style="color: #0969DA;">Explanations</a></h3>
+    <p style="color: #1F2328; font-size: 14px;">Understanding-oriented theoretical derivations of governing Stokes-Darcy balance laws, melting rheology, core segregation, and atmospheric loss.</p>
   </div>
-  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
-    <h3 style="margin-top: 0;"><a href="validation/" style="color: #DE7037;">Validation</a></h3>
-    <p style="color: #E6DAB6; font-size: 14px;">Closed-form analytical benchmarks, grid convergence tests, and observational meteorite matching for all physical modules.</p>
-  </div>
-  <div style="border: 1px solid #3A3140; border-radius: 8px; padding: 16px; background: #1C101E;">
-    <h3 style="margin-top: 0;"><a href="reference/config_schema/" style="color: #DE7037;">Reference</a></h3>
-    <p style="color: #E6DAB6; font-size: 14px;">Technical specifications for all TOML configuration options, public API functions, and source literature citations.</p>
+  <div style="border: 1px solid #D0D7DE; border-radius: 8px; padding: 16px; background: #F6F8FA;">
+    <h3 style="margin-top: 0;"><a href="reference/config_schema/" style="color: #0969DA;">Reference</a></h3>
+    <p style="color: #1F2328; font-size: 14px;">Information-oriented technical specifications for TOML configuration schema, public API functions, physical benchmarks, and literature citations.</p>
   </div>
 </div>
 ```
