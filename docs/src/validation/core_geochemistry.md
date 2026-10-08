@@ -66,7 +66,7 @@ Key constitutive relations validated on this page include:
 
 ![Metal-Silicate Volatile Partitioning and Core Geochemistry Benchmark](../assets/core_geochemistry_benchmark.png)
 
-*Figure: Metal-silicate volatile partitioning and core geochemistry benchmark in Erebus.jl. (a) Oxygen fugacity sensitivity of partition coefficients $D_i^{\text{met/sil}}$ over the range $\Delta\text{IW} \in [-4, 0]$ at $T = 1600\text{ K}$, $P = 0.1\text{ GPa}$, and $w_S = 0.05$. (b) Suppression of carbon partition coefficient $D_C$ by dissolved sulfur in metallic liquid for $w_S \in [0, 0.31]$ compared to nitrogen $D_N$, showing a steep drop in $D_C / D_N$ from $>100$ in sulfur-free metal down to $\sim 1$ at the Fe-FeS eutectic. (c) Temperature dependence of partition coefficients from $1300\text{ K}$ to $2200\text{ K}$ at $\Delta\text{IW} = -2.0$ and $w_S = 0.10$. (d) Core carbon versus nitrogen concentrations predicted by Erebus.jl over varied oxygen fugacities compared against empirical fields for magmatic iron meteorite groups (IIAB, IIIAB, IVA, and IVB). (e) Integrated core volatile delivery timeline during runaway core formation in a $R = 50\text{ km}$ planetesimal. (f) Total planetary elemental mass allocation among segregated core, retained silicate mantle, and degassed/vented losses.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Metal-silicate volatile partitioning and core geochemistry benchmark. The curves and fields evaluate empirical literature parameterizations in Python (`benchmarks/generate_core_geochemistry_benchmarks.py`). Discrete numerical solver partitioning is verified in `test/test_core_volatile_partitioning.jl`. (a) Oxygen fugacity sensitivity of partition coefficients $D_i^{\text{met/sil}}$ over the range $\Delta\text{IW} \in [-4, 0]$ at $T = 1600\text{ K}$, $P = 0.1\text{ GPa}$, and $w_S = 0.05$. (b) Suppression of carbon partition coefficient $D_C$ by dissolved sulfur in metallic liquid for $w_S \in [0, 0.31]$ compared to nitrogen $D_N$, showing a steep drop in $D_C / D_N$ from $>100$ in sulfur-free metal down to $\sim 1$ at the Fe-FeS eutectic. (c) Temperature dependence of partition coefficients from $1300\text{ K}$ to $2200\text{ K}$ at $\Delta\text{IW} = -2.0$ and $w_S = 0.10$. (d) Core carbon versus nitrogen concentrations predicted over varied oxygen fugacities compared against empirical fields for magmatic iron meteorite groups (IIAB, IIIAB, IVA, and IVB). (e) Integrated core volatile delivery timeline during runaway core formation in a $R = 50\text{ km}$ planetesimal. (f) Total planetary elemental mass allocation among segregated core, retained silicate mantle, and degassed/vented losses.*
 
 ### Analysis of Benchmark Results
 
@@ -93,7 +93,20 @@ Key constitutive relations validated on this page include:
 
 ---
 
-## 5. Verification Test Suite
+## 5. Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Siderophile volatile partitioning ($D_i^{\text{met/sil}}$ for H, C, N, S), sulfur suppression of carbon, saturation ceilings, and iron meteorite field matching |
+| **Reference Standard** | Grewal et al. (2019a, 2019b); Clesi et al. (2018); Boujibar et al. (2014); Fischer et al. (2020) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_core_geochemistry_benchmarks.py` |
+| **Automated Verification Test** | `test/test_core_volatile_partitioning.jl`, `test/test_redox_metal.jl` |
+| **Quantitative Tolerance** | Partition mass balance closed to machine precision $< 10^{-12}$; $D_i$ match literature formulas $< 10^{-6}$ |
+
+---
+
+## 6. Verification Test Suite
 
 The metal-silicate volatile partitioning engine is validated in `test/test_core_volatile_partitioning.jl`:
 
@@ -103,7 +116,7 @@ The metal-silicate volatile partitioning engine is validated in `test/test_core_
 
 ---
 
-## 6. References
+## 7. References
 
 - Boujibar, A., Andrault, D., Bolfan-Casanova, N., Bouhifd, M. A., & Kawamoto, T. (2014). Metal-silicate partitioning of sulphur, new experimental constraints by EMPA and SIMS. *Earth and Planetary Science Letters*, 391, 42-54. [https://doi.org/10.1016/j.epsl.2014.01.021](https://doi.org/10.1016/j.epsl.2014.01.021)
 - Clesi, V., Bouhifd, M. A., Bolfan-Casanova, N., Manthilake, G., Schiavi, F., Kawamoto, T., & Andrault, D. (2018). Low hydrogen contents in Earth's core. *Science Advances*, 4(3), e1701876. [https://doi.org/10.1126/sciadv.1701876](https://doi.org/10.1126/sciadv.1701876)

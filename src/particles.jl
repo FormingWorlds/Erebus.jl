@@ -2916,7 +2916,7 @@ end
 """
 Compute properties of basic nodes based on interpolation arrays.
 
-\$(SIGNATURES)
+$(SIGNATURES)
 
 # Details
 
@@ -3042,7 +3042,7 @@ end # function compute_vx_node_properties!
 """
 Compute properties of Vy nodes based on interpolation arrays.
 
-\$(SIGNATURES)
+$(SIGNATURES)
 
 # Details
 

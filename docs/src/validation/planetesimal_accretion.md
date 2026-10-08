@@ -38,7 +38,20 @@ The 4-panel verification benchmark illustrates the scaling behaviors and physica
 
 ![Planetesimal accretion benchmarks](../assets/planetesimal_accretion_benchmark.png)
 
-*Figure 1: Planetesimal accretion benchmark suite. Panel (a): Pebble accretion mass rate versus body mass across Bondi and Hill regimes, which displays the transition at $M_{\mathrm{trans}}$. Panel (b): Safronov gravitational focusing accretion rate versus planetesimal radius for varying velocity dispersions $\sigma_v$. Panel (c): Accretion impact heating temperature rise $\Delta T_{\mathrm{impact}}$ versus planetesimal radius for impact retention efficiencies $h_{\mathrm{impact}} \in [0.2, 1.0]$. Panel (d): Onion-shell radiogenic power profile $Q(t_{\mathrm{acc}})/Q_0$ and step-change in accreted volatile water content across the protoplanetary disk snowline.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Planetesimal accretion benchmark suite. The curves evaluate analytical formulations in Python (`benchmarks/generate_accretion_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a): Pebble accretion mass rate versus body mass across Bondi and Hill regimes, which displays the transition at $M_{\mathrm{trans}}$. Panel (b): Safronov gravitational focusing accretion rate versus planetesimal radius for varying velocity dispersions $\sigma_v$. Panel (c): Accretion impact heating temperature rise $\Delta T_{\mathrm{impact}}$ versus planetesimal radius for impact retention efficiencies $h_{\mathrm{impact}} \in [0.2, 1.0]$. Panel (d): Onion-shell radiogenic power profile $Q(t_{\mathrm{acc}})/Q_0$ and step-change in accreted volatile water content across the protoplanetary disk snowline.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Bondi and Hill pebble accretion rates, Safronov gravitational focusing, impact heating thermodynamics, and snowline volatile coupling |
+| **Reference Standard** | Safronov (1972); Ormel & Klahr (2010); Lambrechts & Johansen (2012); Lichtenberg et al. (2019, 2021) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_accretion_benchmarks.py` |
+| **Automated Verification Test** | `test/test_accretion.jl` |
+| **Quantitative Tolerance** | 3D spherical shell volume conservation $< 10^{-14}$; Bondi/Hill transition threshold match $< 10^{-12}$ |
 
 ---
 

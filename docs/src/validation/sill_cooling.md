@@ -115,3 +115,16 @@ Contact metamorphic dehydration produces water:
 $$\text{DQPF} = \frac{\Gamma_{\text{water}}}{\rho_f} > 0$$
 
 In low-permeability rock, this dehydration fluid source creates dynamic pore fluid overpressures ($\Delta P = P_f - P_r > 50\text{ kPa}$), driving hydrofracturing, and fluid venting, into overlying porous layers.
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Jaeger (1957) 1D analytical sill cooling, Stefan latent heat buffering, sensible enthalpy advection, and contact dehydration |
+| **Reference Standard** | Jaeger (1957); Stefan (1891); Turcotte & Schubert (2014) |
+| **Figure Provenance** | Class B (1D Discretized Thermal Solve; no standalone figure on page) |
+| **Generating Script** | Automated test suite in `test/test_sill_cooling.jl` |
+| **Automated Verification Test** | `test/test_sill_cooling.jl`, `test/test_physics.jl` |
+| **Quantitative Tolerance** | Relative $L_2$ error norm $< 0.1\%$ ($< 10^{-3}$); maximum pointwise temperature error $< 1.0\text{ K}$; isothermal sensible flux $< 10^{-12}\text{ W/m}^3$ |

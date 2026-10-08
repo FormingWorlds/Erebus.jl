@@ -13,39 +13,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -112,7 +111,7 @@ def main():
     T_midplane = 200.0 * (a_au_vals**(-0.5))
     c_s_vals = compute_sound_speed(T_midplane)
 
-    st_colors = [STRATA['cobalt'], STRATA['amber'], STRATA['magma']]
+    st_colors = [PALETTE["slate_blue"], PALETTE["amber"], PALETTE["crimson"]]
     st_labels = [r'$	au_s = 0.01$', r'$	au_s = 0.05$', r'$	au_s = 0.10$']
 
     for St, col, lbl in zip([0.01, 0.05, 0.10], st_colors, st_labels):
@@ -134,8 +133,8 @@ def main():
     M_iso_vals = np.array([compute_isolation_mass(M_SUN, a, cs) for a, cs in zip(a_m_vals, c_s_vals)])
     M_iso_earth = M_iso_vals / M_EARTH
 
-    ax_b.plot(a_au_vals, M_iso_earth, color=STRATA['plum'], lw=2.5, label=r'$M_{\mathrm{iso}}$ (Lambrechts et al. 2014)')
-    ax_b.plot(a_au_vals, M_iso_earth * 0.5, color=STRATA['gold'], lw=1.8, linestyle='--', label=r'$0.5 	imes M_{\mathrm{iso}}$')
+    ax_b.plot(a_au_vals, M_iso_earth, color=PALETTE["purple"], lw=2.5, label=r'$M_{\mathrm{iso}}$ (Lambrechts et al. 2014)')
+    ax_b.plot(a_au_vals, M_iso_earth * 0.5, color=PALETTE["gold"], lw=1.8, linestyle='--', label=r'$0.5 	imes M_{\mathrm{iso}}$')
     ax_b.set_xlabel('Orbital Distance a [AU]', fontsize=11, fontweight='bold')
     ax_b.set_ylabel(r'Pebble Isolation Mass [$M_{\oplus}$]', fontsize=11, fontweight='bold')
     ax_b.set_title('(b) Pebble Isolation Mass (Lambrechts et al. 2014)', fontsize=11, fontweight='bold', pad=10)
@@ -215,8 +214,8 @@ def main():
             s2 = smoothstep((M_val - M_iso_low) / (M_iso_high - M_iso_low))
             rate_smooth.append((1.0 - s2) * r_12 + s2 * r_saf)
 
-    ax_c.plot(mass_grid, rate_sharp, color=NEUTRALS['mist'], lw=1.8, linestyle='--', label='Sharp step')
-    ax_c.plot(mass_grid, rate_smooth, color=STRATA['magma'], lw=2.4, label='Smoothstep blended')
+    ax_c.plot(mass_grid, rate_sharp, color=PALETTE["grid_gray"], lw=1.8, linestyle='--', label='Sharp step')
+    ax_c.plot(mass_grid, rate_smooth, color=PALETTE["crimson"], lw=2.4, label='Smoothstep blended')
     ax_c.set_xscale('log')
     ax_c.set_yscale('log')
     ax_c.set_xlabel('Planetesimal Mass M [kg]', fontsize=11, fontweight='bold')
@@ -235,7 +234,7 @@ def main():
     t_norm = time_kyr / 1000.0
     R_traj = 30.0 + 70.0 * (t_norm / 0.30) * (t_norm < 0.30) +              (70.0 + 800.0 * smoothstep((t_norm - 0.30) / 0.40)) * (t_norm >= 0.30) * (t_norm < 0.70) +              (870.0 + 130.0 * ((t_norm - 0.70) / 0.30)) * (t_norm >= 0.70)
 
-    ax_d.plot(time_kyr, R_traj, color=STRATA['cobalt'], lw=2.5, label='Planetary radius R(t)')
+    ax_d.plot(time_kyr, R_traj, color=PALETTE["slate_blue"], lw=2.5, label='Planetary radius R(t)')
     ax_d.set_xlabel('Elapsed Time [kyr]', fontsize=11, fontweight='bold')
     ax_d.set_ylabel('Body Radius R [km]', fontsize=11, fontweight='bold')
     ax_d.set_title('(d) Growth Evolution Across Regimes', fontsize=11, fontweight='bold', pad=10)

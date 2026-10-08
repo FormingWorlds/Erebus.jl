@@ -487,13 +487,8 @@ using JLD2
         @test iszero(spec_zero.p_H2O_Pa)
         @test iszero(spec_zero.p_CO_Pa)
 
-        # Equilibrium constants literature anchor verification at T = 1500 K
-        # logK_H2O: H2 + 0.5 O2 <=> H2O (Holloway 1987; Frost 1991 Table 1)
-        # logK_CO2: CO + 0.5 O2 <=> CO2 (Robie & Hemingway 1995; Frost 1991; Holloway 1987)
-        # logK_SO2: 0.5 S2 + O2 <=> SO2 (Robie & Hemingway 1995; Holloway 1987)
-        # r_CH4: CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
-        # r_NH3: 0.5 N2 + 1.5 H2 <=> NH3 (Holloway 1987)
-        # r_H2S: 0.5 S2 + H2 <=> H2S (Holloway 1987)
+        # Equilibrium constants literature anchor verification at T = 1500 K.
+        # Reactions follow Holloway (1987), Frost (1991), and Robie & Hemingway (1995).
         let T = 1500.0
             logK_h2o = LOGK_H2O[1] / T + LOGK_H2O[2]
             @test isapprox(logK_h2o, 12760.0 / 1500.0 - 2.84; atol=1e-10)

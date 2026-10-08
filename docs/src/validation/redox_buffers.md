@@ -176,7 +176,18 @@ The redox engine is validated in `test/test_redox.jl`:
 | `Evans 2012 Redox Budget Electron Accounting` | Electron conservation across serpentinization (including nonzero background), core segregation, and gas venting | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
 | `Organic Carbon Pyrolysis Electron Conservation (Evans 2012)` | Strict electron budget conservation $\Delta RB = 0$ across graphite residue and volatile gas partitioning | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
 | `Graphite CCO Oxygen Fugacity Buffering and Transitions` | Smooth monotonic transition $\text{IW} \to \text{CCO} \to \text{QFM}$ without step discontinuities | $\Delta(\Delta\text{IW}) < 2.0$, scale and sign guards |
-| `Graphite Threshold Mass-Fraction Scaling and Buffer Blending` | Linear ramp in mass-fraction units ($w_{\text{gr}} = 0.5$ at half threshold, $1.0$ at threshold) | `isapprox(atol=1e-12)` |
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Solid-oxide redox buffers (IW, QFM, NNO, MH, WM, QIF), graphite CCO equilibrium, and Evans (2012) electron budget accounting |
+| **Reference Standard** | Frost (1991); Campbell et al. (2009); French (1966); Holloway et al. (1992); Evans (2006, 2012) |
+| **Figure Provenance** | Class B (Discretized Electron Balance / Discrete Solve; no standalone figure on page) |
+| **Generating Script** | Automated test suite in `test/test_redox.jl`, `test/test_redox_metal.jl` |
+| **Automated Verification Test** | `test/test_redox.jl`, `test/test_redox_metal.jl` |
+| **Quantitative Tolerance** | Buffer triangle closure $< 10^{-12}$; Evans (2012) electron budget conservation closed to machine precision $< 10^{-12}$; CCO inversion $< 10^{-6}$ |
 
 ---
 

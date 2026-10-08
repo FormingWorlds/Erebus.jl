@@ -44,7 +44,7 @@ Key temperature evolution models validated on this page include:
 
 ### Invariants and Limits
 1. **Asymptotic Convergence**: For both models, $\lim_{t \to \infty} T_{\text{disk}}(t, r) = T_{\text{irr}}(r)$.
-2. **Molecular Cloud Floor**: $T_{\text{disk}} \ge T_{\text{cloud}} = 30.0\text{ K}$ across all radial distances and times.
+2. **Molecular Cloud Floor**: $T_{\text{disk}} \ge T_{\text{cloud}} = 30.0\text{ K}$ for all radial distances and times.
 3. **Viscous Peak Heating**: For Model 2, $T_{\text{disk}}(t_{\text{peak}}) = T_{\text{peak}}$ when $T_{\text{peak}} \ge T_{\text{irr}}$.
 4. **Snowline Migration**: The water snowline ($T = 170\text{ K}$ for disk sublimation, configurable via `T_sub`; cf. $T_{\text{cond}} = 160\text{ K}$ for pebble accretion condensation) expands outward during accretion peak and retreats inward during viscous clearing.
 
@@ -56,11 +56,24 @@ Figure 1 illustrates the operational behavior of the two-stage protoplanetary di
 
 ![Protoplanetary Disk Temperature Evolution and Snowline Dynamics](../assets/disk_temperature_multidistance_multimass.png)
 
-*Figure 1: Protoplanetary disk midplane temperature evolution across orbital distances and stellar masses in Erebus.jl. (a) Thermal history at orbital distances $r \in \{0.5, 1.0, 2.5, 5.0\}\text{ AU}$ around a solar-mass star ($1.0\,M_\odot$), showing early accretion heating rising to peak temperatures followed by viscous clearing decay toward the flared irradiation floor. (b) Midplane temperature profiles across central star masses $M_\star \in \{0.5, 1.0, 2.0\}\,M_\odot$ at $r = 2.5\text{ AU}$. Dotted horizontal lines mark the water snowline ($T = 170\text{ K}$).*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Protoplanetary disk midplane temperature evolution over orbital distances and stellar masses. The curves evaluate analytical disk models in Python (`scripts/generate_disk_temperature_plots.py`). Numerical integration and snowline tracking are verified in `test/test_geometry_radiation.jl`. (a) Thermal history at orbital distances $r \in \{0.5, 1.0, 2.5, 5.0\}\text{ AU}$ around a solar-mass star ($1.0\,M_\odot$), showing early accretion heating rising to peak temperatures followed by viscous clearing decay toward the flared irradiation floor. (b) Midplane temperature profiles for central star masses $M_\star \in \{0.5, 1.0, 2.0\}\,M_\odot$ at $r = 2.5\text{ AU}$. Dotted horizontal lines mark the water snowline ($T = 170\text{ K}$).*
 
 ---
 
-## 4. Verification Test Suite
+## 4. Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Stefan-Boltzmann radiative boundary, protoplanetary disk midplane temperature evolution, and water snowline dynamics |
+| **Reference Standard** | Chiang & Goldreich (1997); Drążkowska & Dullemond (2018); Gerya (2019) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `scripts/generate_disk_temperature_plots.py` |
+| **Automated Verification Test** | `test/test_geometry_radiation.jl` |
+| **Quantitative Tolerance** | Analytical temperature profile $T_{\text{disk}}(r, t)$ match $< 10^{-12}$; 2D conduction gradient match $< 1.0\%$ |
+
+---
+
+## 5. Verification Test Suite
 
 - `test/test_geometry_radiation.jl`:
   - `@testset "Stefan-Boltzmann Surface Radiation Physics"`

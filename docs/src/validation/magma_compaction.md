@@ -102,3 +102,16 @@ Exsolved gas enters marker pore space $\phi_m$, conserving volatile mass such th
 
 1. **Subsolidus Crustal Sill Ponding**: When `ponding_active = true`, ascending melt stops beneath a cold crustal lid ($T < T_{\text{solidus}}$) and pools into a sill layer without crossing the lid.
 2. **Hydrofracture Eruption Threshold**: When `eruption_active = true` and dynamic compaction overpressure exceeds crustal tensile strength ($P_{\text{comp}} > \sigma_t$), fracture conduits open, letting melt breach the cold lid.
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | McKenzie (1984) bulk viscosity, compaction length, Scott & Stevenson (1984) 1D compaction column boundary layer, and decompression volatile exsolution |
+| **Reference Standard** | McKenzie (1984); Scott & Stevenson (1984, 1986) |
+| **Figure Provenance** | Class B (1D Finite-Difference Benchmark Solver; no standalone figure on page) |
+| **Generating Script** | Automated test suite in `test/test_magma_transport.jl` |
+| **Automated Verification Test** | `test/test_magma_transport.jl` |
+| **Quantitative Tolerance** | Compaction length $\delta_c$ within $5\%$ of analytical formula; mass conservation $< 10^{-12}$; phase speed ratio relative error $< 10^{-12}$ |

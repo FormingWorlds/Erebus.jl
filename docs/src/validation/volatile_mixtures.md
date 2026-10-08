@@ -107,7 +107,22 @@ The multi-phase volatile mixture and refractory engine is verified against analy
 
 ![Volatile Mixtures and Refractory Phases Benchmark](../assets/volatile_mixtures_benchmark.png)
 
-*Figure 1: Benchmark verification for multi-phase HCNSPO volatile mixtures and refractory phases. (a) Ammonia-water freezing point depression curve showing the subfreezing hydrothermal mobility window and invariant eutectic floor at 176 K. (b) Multi-snowline disk volatile ice condensation sequence from 10 K to 200 K. (c) Refractory carbon and sulfur delivery fractions in the protoplanetary disk. Solid delivery continues inside the volatile snowlines. (d) Thermal pyrolysis kinetics of refractory organic matter (IOM), verifying exact mass conservation and graphite residue formation.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Benchmark verification for multi-phase HCNSPO volatile mixtures and refractory phases. The curves evaluate analytical formulations in Python (`benchmarks/generate_volatile_mixture_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Ammonia-water freezing point depression curve showing the subfreezing hydrothermal mobility window and invariant eutectic floor at 176 K. (b) Multi-snowline disk volatile ice condensation sequence from 10 K to 200 K. (c) Refractory carbon and sulfur delivery fractions in the protoplanetary disk. Solid delivery continues inside the volatile snowlines. (d) Thermal pyrolysis kinetics of refractory organic matter (IOM), verifying exact mass conservation and graphite residue formation.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Multi-snowline volatile condensation, ammonia-water freezing point depression with 176 K eutectic floor, and IOM pyrolysis kinetics |
+| **Reference Standard** | Bergin et al. (2026); Kama et al. (2019); Leliwa-Kopystyński et al. (2002) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_volatile_mixture_benchmarks.py` |
+| **Automated Verification Test** | `test/test_volatile_mixtures.jl` |
+| **Quantitative Tolerance** | Eutectic floor exact to machine precision; elemental pyrolysis mass conservation $< 10^{-14}$; dilute depression $< 10^{-6}\text{ K}$ |
+
+---
 
 ### Benchmark Results and Invariant Verification
 

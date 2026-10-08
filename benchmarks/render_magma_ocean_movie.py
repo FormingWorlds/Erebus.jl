@@ -16,38 +16,38 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.colors import Normalize, LogNorm
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -102,11 +102,11 @@ def render_single_frame(task):
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.0), dpi=120, constrained_layout=True)
     fig.suptitle(f"Erebus Planetesimal Magma Ocean Benchmark (1D Revolved, 128 Cells)  |  Time = {t_kyr:5.1f} kyr",
-                 fontsize=14, fontweight='bold', color=NEUTRALS['graphite'])
+                 fontsize=14, fontweight='bold', color=PALETTE["dark_gray"])
 
     def format_ax(ax, title, has_ylabel=True):
         ax.set_facecolor('white')
-        ax.add_patch(Circle((0.0, 0.0), R_PLANET_KM, fill=False, edgecolor=NEUTRALS['graphite'], lw=1.2, ls='-'))
+        ax.add_patch(Circle((0.0, 0.0), R_PLANET_KM, fill=False, edgecolor=PALETTE["dark_gray"], lw=1.2, ls='-'))
         ax.set_aspect('equal')
         ax.set_title(title, fontsize=12, fontweight='bold', pad=8)
         ax.set_xlabel("x [km]", fontsize=10)
@@ -120,7 +120,7 @@ def render_single_frame(task):
     format_ax(ax, "Temperature $T$", has_ylabel=True)
     t_levels = np.linspace(200.0, 1900.0, 35)
     cf1 = ax.contourf(X, Y, T_2d, levels=t_levels, cmap='viridis', extend='both')
-    ax.contour(X, Y, T_2d, levels=[1400.0, 1800.0], colors=['white', STRATA['gold']], linewidths=1.2, linestyles=['--', ':'])
+    ax.contour(X, Y, T_2d, levels=[1400.0, 1800.0], colors=['white', PALETTE["gold"]], linewidths=1.2, linestyles=['--', ':'])
     fig.colorbar(cf1, ax=ax, ticks=[300, 600, 900, 1200, 1500, 1800], label="Temperature [K]", fraction=0.046, pad=0.04)
 
     # Panel 2: Melt Fraction Fm
@@ -128,12 +128,12 @@ def render_single_frame(task):
     format_ax(ax, "Silicate Melt Fraction $F_m$", has_ylabel=False)
     fm_levels = np.linspace(0.0, 1.0, 21)
     cf2 = ax.contourf(X, Y, Fm_2d, levels=fm_levels, cmap='magma', vmin=0.0, vmax=1.0)
-    ax.contour(X, Y, Fm_2d, levels=[0.30, 0.40, 0.50], colors=['white', STRATA['gold'], 'cyan'], linewidths=1.2, linestyles=[':', '-', ':'])
+    ax.contour(X, Y, Fm_2d, levels=[0.30, 0.40, 0.50], colors=['white', PALETTE["gold"], 'cyan'], linewidths=1.2, linestyles=[':', '-', ':'])
     fig.colorbar(cf2, ax=ax, ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0], label="Melt Fraction [-]", fraction=0.046, pad=0.04)
 
     # Panel 3: Effective Thermal Conductivity keff
     ax = axes[2]
-    format_ax(ax, "Effective Conductivity $k_\mathrm{eff}$", has_ylabel=False)
+    format_ax(ax, r"Effective Conductivity $k_\mathrm{eff}$", has_ylabel=False)
     log_k_levels = np.logspace(0, 5, 26)
     cf3 = ax.contourf(X, Y, k_2d, levels=log_k_levels, norm=LogNorm(vmin=1.0, vmax=1.0e5), cmap='inferno')
     fig.colorbar(cf3, ax=ax, ticks=[1e0, 1e1, 1e2, 1e3, 1e4, 1e5], label=r"$k_\mathrm{eff}$ [$\mathrm{W/(m\cdot K)}$]", fraction=0.046, pad=0.04)
@@ -156,34 +156,46 @@ def generate_video():
     env = dict(os.environ)
     env["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/Cellar/x265/4.2/lib"
 
-    print("Encoding MP4 video...")
-    cmd_mp4 = [
-        "ffmpeg", "-y", "-framerate", "20",
-        "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
-        mp4_out
-    ]
-    subprocess.run(cmd_mp4, check=True, env=env)
-    print(f"Saved {mp4_out}")
+    print("Encoding video and animation...")
+    try:
+        cmd_mp4 = [
+            "ffmpeg", "-y", "-framerate", "20",
+            "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
+            mp4_out
+        ]
+        subprocess.run(cmd_mp4, check=True, env=env)
+        print(f"Saved {mp4_out}")
 
-    print("Encoding GIF animation...")
-    palette_png = "/tmp/erebus_magma_palette.png"
-    cmd_pal = [
-        "ffmpeg", "-y", "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
-        "-vf", "fps=15,scale=960:-1:flags=lanczos,palettegen=stats_mode=diff",
-        palette_png
-    ]
-    subprocess.run(cmd_pal, check=True, env=env)
+        palette_png = "/tmp/erebus_magma_palette.png"
+        cmd_pal = [
+            "ffmpeg", "-y", "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
+            "-vf", "fps=15,scale=960:-1:flags=lanczos,palettegen=stats_mode=diff",
+            palette_png
+        ]
+        subprocess.run(cmd_pal, check=True, env=env)
 
-    cmd_gif = [
-        "ffmpeg", "-y", "-framerate", "15",
-        "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
-        "-i", palette_png,
-        "-lavfi", "fps=15,scale=960:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=3",
-        gif_out
-    ]
-    subprocess.run(cmd_gif, check=True, env=env)
-    print(f"Saved {gif_out}")
+        cmd_gif = [
+            "ffmpeg", "-y", "-framerate", "15",
+            "-i", os.path.join(FRAME_DIR, "frame_%04d.png"),
+            "-i", palette_png,
+            "-lavfi", "fps=15,scale=960:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=3",
+            gif_out
+        ]
+        subprocess.run(cmd_gif, check=True, env=env)
+        print(f"Saved {gif_out}")
+    except Exception as e:
+        print(f"ffmpeg encoding skipped: {e}")
+        try:
+            from PIL import Image
+            import glob
+            frames = sorted(glob.glob(os.path.join(FRAME_DIR, "frame_*.png")))
+            if frames:
+                imgs = [Image.open(f).resize((960, 540)) for f in frames[::2]]
+                imgs[0].save(gif_out, save_all=True, append_images=imgs[1:], duration=70, loop=0)
+                print(f"Saved fallback GIF: {gif_out}")
+        except Exception as e_pil:
+            print(f"Pillow GIF fallback failed: {e_pil}")
 
 def generate_summary_figure():
     print("Generating 6-panel summary figure...")
@@ -199,13 +211,13 @@ def generate_summary_figure():
     # Panel (a): 2D Snapshot of Magma Ocean at t = 15 kyr
     ax_a = axes[0, 0]
     ax_a.text(0.04, 0.93, '(a)', transform=ax_a.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
     T_15_1d = np.array(res_on["snapshot_T"]["15000.0"])
     T_15_2d = np.interp(R, r_1d, T_15_1d, right=300.0)
     T_15_2d[R > R_PLANET_KM] = np.nan
     cf_a = ax_a.contourf(X, Y, T_15_2d, levels=np.linspace(200, 1900, 35), cmap='viridis')
-    ax_a.contour(X, Y, T_15_2d, levels=[1400.0, 1800.0], colors=['white', STRATA['gold']], linewidths=1.2, linestyles=['--', ':'])
-    ax_a.add_patch(Circle((0.0, 0.0), R_PLANET_KM, fill=False, edgecolor=NEUTRALS['graphite'], lw=1.2))
+    ax_a.contour(X, Y, T_15_2d, levels=[1400.0, 1800.0], colors=['white', PALETTE["gold"]], linewidths=1.2, linestyles=['--', ':'])
+    ax_a.add_patch(Circle((0.0, 0.0), R_PLANET_KM, fill=False, edgecolor=PALETTE["dark_gray"], lw=1.2))
     ax_a.set_aspect('equal')
     ax_a.set_title(r'Revolved Thermal Field at $t = 15$ kyr', fontsize=12, fontweight='bold')
     ax_a.set_xlabel('x [km]')
@@ -215,11 +227,11 @@ def generate_summary_figure():
     # Panel (b): Central Temperature Evolution T_core(t)
     ax_b = axes[0, 1]
     ax_b.text(0.04, 0.93, '(b)', transform=ax_b.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax_b.plot(t_off_kyr, res_off["T_core_hist"], '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
-    ax_b.plot(t_on_kyr, res_on["T_core_hist"], '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
-    ax_b.axhline(1800.0, color=STRATA['gold'], linestyle=':', linewidth=1.5, label='Liquidus $T_l = 1800$ K')
-    ax_b.axhline(1400.0, color=STRATA['ink'], linestyle='--', linewidth=1.5, label='Solidus $T_s = 1400$ K')
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax_b.plot(t_off_kyr, res_off["T_core_hist"], '-', color=PALETTE["slate_blue"], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
+    ax_b.plot(t_on_kyr, res_on["T_core_hist"], '-', color=PALETTE["crimson"], linewidth=2.2, label='Regularized Soft Turb. ON')
+    ax_b.axhline(1800.0, color=PALETTE["gold"], linestyle=':', linewidth=1.5, label='Liquidus $T_l = 1800$ K')
+    ax_b.axhline(1400.0, color=PALETTE["charcoal"], linestyle='--', linewidth=1.5, label='Solidus $T_s = 1400$ K')
     ax_b.set_xlim(0, 50.0)
     ax_b.set_ylim(1300, 1900)
     ax_b.set_xlabel('Time [kyr]')
@@ -231,9 +243,9 @@ def generate_summary_figure():
     # Panel (c): Solidification Front Retreat r_melt(t)
     ax_c = axes[0, 2]
     ax_c.text(0.04, 0.93, '(c)', transform=ax_c.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax_c.plot(t_off_kyr, np.array(res_off["melt_radius_hist"]) / 1000.0, '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
-    ax_c.plot(t_on_kyr, np.array(res_on["melt_radius_hist"]) / 1000.0, '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax_c.plot(t_off_kyr, np.array(res_off["melt_radius_hist"]) / 1000.0, '-', color=PALETTE["slate_blue"], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
+    ax_c.plot(t_on_kyr, np.array(res_on["melt_radius_hist"]) / 1000.0, '-', color=PALETTE["crimson"], linewidth=2.2, label='Regularized Soft Turb. ON')
     ax_c.set_xlim(0, 50.0)
     ax_c.set_ylim(0, 35.0)
     ax_c.set_xlabel('Time [kyr]')
@@ -245,15 +257,15 @@ def generate_summary_figure():
     # Panel (d): Radial Temperature Profiles T(r)
     ax_d = axes[1, 0]
     ax_d.text(0.04, 0.93, '(d)', transform=ax_d.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
     times_to_plot = ["0.0", "5000.0", "15000.0", "50000.0"]
-    time_colors = [STRATA['gold'], STRATA['amber'], STRATA['magma'], STRATA['plum']]
+    time_colors = [PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"], PALETTE["purple"]]
     for t_key, col in zip(times_to_plot, time_colors):
         t_val = float(t_key) / 1000.0
         ax_d.plot(r_km, res_off["snapshot_T"][t_key], ':', color=col, linewidth=1.6)
         ax_d.plot(r_km, res_on["snapshot_T"][t_key], '-', color=col, linewidth=2.2, label=f'$t = {t_val:.0f}$ kyr')
-    ax_d.plot([], [], '-', color=NEUTRALS['graphite'], linewidth=2.0, label='Soft Turb. ON')
-    ax_d.plot([], [], ':', color=NEUTRALS['graphite'], linewidth=1.6, label='Soft Turb. OFF')
+    ax_d.plot([], [], '-', color=PALETTE["dark_gray"], linewidth=2.0, label='Soft Turb. ON')
+    ax_d.plot([], [], ':', color=PALETTE["dark_gray"], linewidth=1.6, label='Soft Turb. OFF')
     ax_d.set_xlim(0, 50)
     ax_d.set_ylim(200, 1900)
     ax_d.set_xlabel('Radius $r$ [km]')
@@ -265,11 +277,11 @@ def generate_summary_figure():
     # Panel (e): Effective Thermal Conductivity keff(r)
     ax_e = axes[1, 1]
     ax_e.text(0.04, 0.93, '(e)', transform=ax_e.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    for t_key, col in zip(["0.0", "5000.0", "15000.0"], [STRATA['gold'], STRATA['amber'], STRATA['magma']]):
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    for t_key, col in zip(["0.0", "5000.0", "15000.0"], [PALETTE["gold"], PALETTE["amber"], PALETTE["crimson"]]):
         t_val = float(t_key) / 1000.0
         ax_e.plot(r_km, res_on["snapshot_k"][t_key], '-', color=col, linewidth=2.2, label=f'$t = {t_val:.0f}$ kyr')
-    ax_e.axhline(3.0, color=NEUTRALS['graphite'], linestyle=':', linewidth=1.5, label=r'$k_\mathrm{cond} = 3.0\ \mathrm{W/(m\cdot K)}$')
+    ax_e.axhline(3.0, color=PALETTE["dark_gray"], linestyle=':', linewidth=1.5, label=r'$k_\mathrm{cond} = 3.0\ \mathrm{W/(m\cdot K)}$')
     ax_e.set_yscale('log')
     ax_e.set_xlim(0, 50)
     ax_e.set_ylim(1.0, 5e5)
@@ -282,11 +294,11 @@ def generate_summary_figure():
     # Panel (f): Surface Heat Flux Evolution q_surf(t)
     ax_f = axes[1, 2]
     ax_f.text(0.04, 0.93, '(f)', transform=ax_f.transAxes, fontsize=12, fontweight='bold',
-              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
+              bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
     q_off = np.array(res_off["q_surf_hist"])
     q_on = np.array(res_on["q_surf_hist"])
-    ax_f.plot(t_off_kyr, q_off, '-', color=STRATA['cobalt'], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
-    ax_f.plot(t_on_kyr, q_on, '-', color=STRATA['magma'], linewidth=2.2, label='Regularized Soft Turb. ON')
+    ax_f.plot(t_off_kyr, q_off, '-', color=PALETTE["slate_blue"], linewidth=2.2, label='Conduction only (Soft Turb. OFF)')
+    ax_f.plot(t_on_kyr, q_on, '-', color=PALETTE["crimson"], linewidth=2.2, label='Regularized Soft Turb. ON')
     ax_f.set_xlim(0, 50.0)
     ax_f.set_ylim(0, max(np.max(q_on), np.max(q_off)) * 1.1)
     ax_f.set_xlabel('Time [kyr]')
@@ -320,11 +332,11 @@ def generate_convergence_figure():
 
     # Panel (a): Radial Temperature at t = 15 kyr across Resolutions
     ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], ':', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$ ($\Delta r = 1.56$ km)')
-    ax1.plot(r_64_km, res_64["snapshot_T"]["15000.0"], '--', color=STRATA['gold'], linewidth=2.0, label=r'$N_r = 64$ ($\Delta r = 0.78$ km)')
-    ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$ ($\Delta r = 0.39$ km)')
-    ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], '-', color=STRATA['magma'], linewidth=1.5, label=r'$N_r = 256$ ($\Delta r = 0.20$ km)')
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax1.plot(r_32_km, res_32["snapshot_T"]["15000.0"], ':', color=PALETTE["slate_blue"], linewidth=2.0, label=r'$N_r = 32$ ($\Delta r = 1.56$ km)')
+    ax1.plot(r_64_km, res_64["snapshot_T"]["15000.0"], '--', color=PALETTE["gold"], linewidth=2.0, label=r'$N_r = 64$ ($\Delta r = 0.78$ km)')
+    ax1.plot(r_128_km, res_128["snapshot_T"]["15000.0"], '-', color=PALETTE["amber"], linewidth=2.0, label=r'$N_r = 128$ ($\Delta r = 0.39$ km)')
+    ax1.plot(r_256_km, res_256["snapshot_T"]["15000.0"], '-', color=PALETTE["crimson"], linewidth=1.5, label=r'$N_r = 256$ ($\Delta r = 0.20$ km)')
     ax1.set_xlim(0, 50)
     ax1.set_ylim(250, 1900)
     ax1.set_xlabel('Planetesimal Radius $r$ [km]')
@@ -335,12 +347,12 @@ def generate_convergence_figure():
 
     # Panel (b): Melt Fraction Profile Fm(r) at t = 15 kyr
     ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], ':', color=STRATA['cobalt'], linewidth=2.0, label=r'$N_r = 32$')
-    ax2.plot(r_64_km, res_64["snapshot_Fm"]["15000.0"], '--', color=STRATA['gold'], linewidth=2.0, label=r'$N_r = 64$')
-    ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=STRATA['amber'], linewidth=2.0, label=r'$N_r = 128$')
-    ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], '-', color=STRATA['magma'], linewidth=1.5, label=r'$N_r = 256$')
-    ax2.axhline(0.40, color=NEUTRALS['graphite'], linestyle=':', linewidth=1.2, label=r'$\phi_\mathrm{crit} = 0.40$')
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax2.plot(r_32_km, res_32["snapshot_Fm"]["15000.0"], ':', color=PALETTE["slate_blue"], linewidth=2.0, label=r'$N_r = 32$')
+    ax2.plot(r_64_km, res_64["snapshot_Fm"]["15000.0"], '--', color=PALETTE["gold"], linewidth=2.0, label=r'$N_r = 64$')
+    ax2.plot(r_128_km, res_128["snapshot_Fm"]["15000.0"], '-', color=PALETTE["amber"], linewidth=2.0, label=r'$N_r = 128$')
+    ax2.plot(r_256_km, res_256["snapshot_Fm"]["15000.0"], '-', color=PALETTE["crimson"], linewidth=1.5, label=r'$N_r = 256$')
+    ax2.axhline(0.40, color=PALETTE["dark_gray"], linestyle=':', linewidth=1.2, label=r'$\phi_\mathrm{crit} = 0.40$')
     ax2.set_xlim(0, 40)
     ax2.set_ylim(-0.05, 1.05)
     ax2.set_xlabel('Planetesimal Radius $r$ [km]')
@@ -351,7 +363,7 @@ def generate_convergence_figure():
 
     # Panel (c): Core Temperature vs Grid Resolution
     ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
     dr_vals = np.array([50.0 / 32, 50.0 / 64, 50.0 / 128, 50.0 / 256])
     t_cores = np.array([
         res_32["snapshot_T"]["15000.0"][0],
@@ -359,7 +371,7 @@ def generate_convergence_figure():
         res_128["snapshot_T"]["15000.0"][0],
         res_256["snapshot_T"]["15000.0"][0],
     ])
-    ax3.plot(dr_vals, t_cores, 'o-', color=STRATA['magma'], linewidth=2.2, markersize=7, label=r'Core $T$ at 15 kyr [K]')
+    ax3.plot(dr_vals, t_cores, 'o-', color=PALETTE["crimson"], linewidth=2.2, markersize=7, label=r'Core $T$ at 15 kyr [K]')
     ax3.set_xlabel(r'Grid Cell Size $\Delta r$ [km]')
     ax3.set_ylabel(r'Central Temperature $T_\mathrm{core}$ [K]')
     ax3.set_title('Grid Resolution Convergence', fontsize=12, fontweight='bold')
@@ -381,10 +393,10 @@ def generate_regularization_figure():
 
     # Panel (a): keff vs Fm
     ax1.text(0.04, 0.93, '(a)', transform=ax1.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax1.plot(Fm, data["k_i2elvis_curves"]["100"], '--', color=NEUTRALS['mist'], linewidth=2.0,
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax1.plot(Fm, data["k_i2elvis_curves"]["100"], '--', color=PALETTE["grid_gray"], linewidth=2.0,
              label=r'Raw i2elvis ($F_m=0.40$ step)')
-    colors_eta = {'10': STRATA['gold'], '100': STRATA['amber'], '1000': STRATA['magma']}
+    colors_eta = {'10': PALETTE["gold"], '100': PALETTE["amber"], '1000': PALETTE["crimson"]}
     labels_eta = {
         '10': r'Erebus ($\eta_\mathrm{fluid} = 10\ \mathrm{Pa\cdot s}$)',
         '100': r'Erebus ($\eta_\mathrm{fluid} = 100\ \mathrm{Pa\cdot s}$, baseline)',
@@ -392,7 +404,7 @@ def generate_regularization_figure():
     }
     for key in ['10', '100', '1000']:
         ax1.plot(Fm, data["k_erebus_curves"][key], '-', color=colors_eta[key], linewidth=2.2, label=labels_eta[key])
-    ax1.axvspan(0.30, 0.50, color=STRATA['gold'], alpha=0.12, label=r'Transition window $[0.30, 0.50]$')
+    ax1.axvspan(0.30, 0.50, color=PALETTE["gold"], alpha=0.12, label=r'Transition window $[0.30, 0.50]$')
     ax1.set_yscale('log')
     ax1.set_xlim(0.0, 1.0)
     ax1.set_ylim(1.0, 5e6)
@@ -404,10 +416,10 @@ def generate_regularization_figure():
 
     # Panel (b): Logarithmic derivative d(log10 k)/dFm
     ax2.text(0.04, 0.93, '(b)', transform=ax2.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
     for key in ['10', '100', '1000']:
         ax2.plot(Fm, data["dk_dFm_erebus"][key], '-', color=colors_eta[key], linewidth=2.2, label=labels_eta[key])
-    ax2.axvline(0.40, color=STRATA['ink'], linestyle=':', linewidth=2.0, label=r'i2elvis Dirac $\delta$-spike at $0.40$')
+    ax2.axvline(0.40, color=PALETTE["charcoal"], linestyle=':', linewidth=2.0, label=r'i2elvis Dirac $\delta$-spike at $0.40$')
     ax2.set_xlim(0.20, 0.60)
     ax2.set_ylim(-2, 45)
     ax2.set_xlabel(r'Silicate Melt Fraction $F_m$ [-]')
@@ -418,10 +430,10 @@ def generate_regularization_figure():
 
     # Panel (c): Surface temperature difference weighting
     ax3.text(0.04, 0.93, '(c)', transform=ax3.transAxes, fontsize=12, fontweight='bold',
-             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=NEUTRALS['mist'], alpha=0.9))
-    ax3.plot(dT, w_T, '-', color=STRATA['cobalt'], linewidth=2.4, label=r'Weighting factor $w_T = [\mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)]^2$')
-    ax3.axvline(10.0, color=STRATA['amber'], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
-    ax3.axhspan(0, 1, color=STRATA['cobalt'], alpha=0.08)
+             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=PALETTE["grid_gray"], alpha=0.9))
+    ax3.plot(dT, w_T, '-', color=PALETTE["slate_blue"], linewidth=2.4, label=r'Weighting factor $w_T = [\mathrm{clamp}(\Delta T / \Delta T_\mathrm{min}, 0, 1)]^2$')
+    ax3.axvline(10.0, color=PALETTE["amber"], linestyle='--', linewidth=1.5, label=r'$\Delta T_\mathrm{min} = 10\ \mathrm{K}$ anchor')
+    ax3.axhspan(0, 1, color=PALETTE["slate_blue"], alpha=0.08)
     ax3.set_xlim(0.0, 30.0)
     ax3.set_ylim(-0.05, 1.05)
     ax3.set_xlabel(r'Temperature Difference $\Delta T = T - T_\mathrm{surface}$ [K]')
@@ -436,8 +448,8 @@ def generate_regularization_figure():
     print(f"Saved {reg_png_assets}")
 
 if __name__ == "__main__":
-    generate_video()
     generate_summary_figure()
     generate_convergence_figure()
     generate_regularization_figure()
+    generate_video()
     print("All benchmark assets generated successfully.")

@@ -95,7 +95,24 @@ where $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$ [m] an
 
 ![Volatile Retention and Venting Benchmark](../assets/volatile_retention_benchmark.png)
 
-The verification figure illustrates the four key physical regimes:
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel verification benchmark for volatile retention floors and venting drainage kinetics. The curves evaluate analytical formulations in Python (`scripts/generate_volatile_retention_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Temperature-dependent solid retention floor comparing constant, linear, and NAMs exponential modes. (b) Decompression exsolution and vacuum retention limit for 500 ppmw bulk H₂O. (c) Low-temperature vent drainage kinetics over 100 kyr. (d) Multi-species vented volatile fractions for H₂O, C, N, and S.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Thermodynamic volatile retention floors in nominally anhydrous minerals (NAMs), vacuum exsolution clamping, and hydrothermal drainage kinetics |
+| **Reference Standard** | Hirschmann et al. (2006); Shcheka et al. (2006); Li et al. (2013); Peslier et al. (2017); Hirschmann (2018) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `scripts/generate_volatile_retention_benchmark.py` |
+| **Automated Verification Test** | `test/test_volatile_retention.jl` |
+| **Quantitative Tolerance** | Mass conservation $C_{\text{sol}} + C_{\text{exs}} = C_{\text{bulk}}$ closed to $< 10^{-14}$; retention floor lower bound exact to machine precision |
+
+---
+
+### Detailed Regime Descriptions
 
 1. **Panel (a) - Temperature-Dependent Solid Retention Floor**: Compares the three functional laws (`:constant_floor`, `:linear_melt_blend`, and `:nams_exponential`) under subsolidus and supersolidus conditions ($T \in [1000, 1800]\text{ K}$ with $T_{\text{solidus}} = 1400.0\text{ K}$, $\Delta T_{\text{ret}} = 200\text{ K}$). NAMs exponential decay preserves the retention floor below the solidus and smoothly transitions toward zero via supersolidus exponential decay as temperature increases.
 2. **Panel (b) - Decompression Exsolution and Vacuum Retention Limit**: Contrasts isothermal decompression curves ($P \in [10^{-5}\text{ Pa}, 100\text{ MPa}]$) with and without retention floors for an initial bulk inventory of $500\text{ ppmw}$ $\text{H}_2\text{O}$. Without the floor, classical solubility approaches zero at vacuum; with the floor ($50\text{ ppmw}$), dissolved volatiles plateau at the NAMs lattice retention limit.

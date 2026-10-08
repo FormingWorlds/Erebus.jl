@@ -13,39 +13,38 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'cream': '#F2EAD3',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -68,11 +67,11 @@ def main():
 
     # Domain levels: Level 0 (140 km), Level 1 (280 km), Level 2 (560 km)
     # Centers aligned at (0, 0) for comparative visualization
-    rect_l2 = patches.Rectangle((-280, -280), 560, 560, linewidth=1.5, edgecolor=STRATA['plum'],
+    rect_l2 = patches.Rectangle((-280, -280), 560, 560, linewidth=1.5, edgecolor=PALETTE["purple"],
                                 facecolor='#F5EFF7', label=r'Level 2 Domain ($560 \times 560$ km, $N_x=129$)')
-    rect_l1 = patches.Rectangle((-140, -140), 280, 280, linewidth=1.8, edgecolor=STRATA['cobalt'],
+    rect_l1 = patches.Rectangle((-140, -140), 280, 280, linewidth=1.8, edgecolor=PALETTE["slate_blue"],
                                 facecolor='#EBF2FA', label=r'Level 1 Domain ($280 \times 280$ km, $N_x=65$)')
-    rect_l0 = patches.Rectangle((-70, -70), 140, 140, linewidth=2.0, edgecolor=STRATA['amber'],
+    rect_l0 = patches.Rectangle((-70, -70), 140, 140, linewidth=2.0, edgecolor=PALETTE["amber"],
                                 facecolor='#FDF3E7', label=r'Level 0 Domain ($140 \times 140$ km, $N_x=33$)')
 
     ax_a.add_patch(rect_l2)
@@ -80,14 +79,14 @@ def main():
     ax_a.add_patch(rect_l0)
 
     # Growing planetesimal at center
-    circle_p0 = patches.Circle((0, 0), 49, linewidth=1.5, edgecolor=STRATA['magma'],
-                               facecolor=STRATA['gold'], alpha=0.8,
+    circle_p0 = patches.Circle((0, 0), 49, linewidth=1.5, edgecolor=PALETTE["crimson"],
+                               facecolor=PALETTE["gold"], alpha=0.8,
                                label=r'Planetesimal Boundary ($R = 49$ km, $r / r_{\rm max} = 0.70$)')
     ax_a.add_patch(circle_p0)
 
     # Threshold buffer indicator
     thresh_circle = patches.Circle((0, 0), 70 * 0.70, linewidth=1.2, linestyle='--',
-                                   edgecolor=STRATA['magma'], facecolor='none',
+                                   edgecolor=PALETTE["crimson"], facecolor='none',
                                    label=r'Trigger Threshold ($0.70 \cdot x_{\rm size} / 2$)')
     ax_a.add_patch(thresh_circle)
 
@@ -122,13 +121,13 @@ def main():
     r_markers_l1 = r_markers_l0.copy()
     T_markers_l1 = T_markers_l0.copy()
 
-    ax_b.plot(r_km, T_profile, color=STRATA['ink'], linewidth=2.0, label='Analytical Continuum $T(r)$')
-    ax_b.scatter(r_markers_l0, T_markers_l0, color=STRATA['amber'], s=25, alpha=0.7,
+    ax_b.plot(r_km, T_profile, color=PALETTE["charcoal"], linewidth=2.0, label='Analytical Continuum $T(r)$')
+    ax_b.scatter(r_markers_l0, T_markers_l0, color=PALETTE["amber"], s=25, alpha=0.7,
                  label='Level 0 Markers ($x_{\\rm size} = 140$ km)')
-    ax_b.scatter(r_markers_l1, T_markers_l1, color=STRATA['cobalt'], s=15, marker='x',
+    ax_b.scatter(r_markers_l1, T_markers_l1, color=PALETTE["slate_blue"], s=15, marker='x',
                  label='Level 1 Shifted Markers ($x_{\\rm size} = 280$ km)')
 
-    ax_b.axvline(50.0, color=STRATA['magma'], linestyle='--', linewidth=1.2, label='Planetesimal Surface ($R_p = 50$ km)')
+    ax_b.axvline(50.0, color=PALETTE["crimson"], linestyle='--', linewidth=1.2, label='Planetesimal Surface ($R_p = 50$ km)')
     ax_b.set_xlabel('Radial Distance from Center $r$ [km]', fontsize=11)
     ax_b.set_ylabel('Temperature $T$ [K]', fontsize=11)
     ax_b.set_title('(b) Marker Radial Profile Invariance', fontsize=12, fontweight='bold')
@@ -159,18 +158,18 @@ def main():
     g_total = np.where(r_domain_m <= R_p, g_int, g_ext)
 
     ax_c1 = ax_c
-    l1 = ax_c1.plot(r_domain_km, Phi_total * 1e-4, color=STRATA['cobalt'], linewidth=2.2,
+    l1 = ax_c1.plot(r_domain_km, Phi_total * 1e-4, color=PALETTE["slate_blue"], linewidth=2.2,
                     label=r'Gravitational Potential $\Phi(r)$ [$10^4$ J/kg]')
     ax_c1.set_xlabel('Radial Distance $r$ [km]', fontsize=11)
-    ax_c1.set_ylabel(r'Gravitational Potential $\Phi$ [$10^4$ J/kg]', color=STRATA['cobalt'], fontsize=11)
-    ax_c1.tick_params(axis='y', labelcolor=STRATA['cobalt'])
+    ax_c1.set_ylabel(r'Gravitational Potential $\Phi$ [$10^4$ J/kg]', color=PALETTE["slate_blue"], fontsize=11)
+    ax_c1.tick_params(axis='y', labelcolor=PALETTE["slate_blue"])
     ax_c1.grid(True)
 
     ax_c2 = ax_c1.twinx()
-    l2 = ax_c2.plot(r_domain_km, g_total, color=STRATA['magma'], linewidth=2.0, linestyle='--',
+    l2 = ax_c2.plot(r_domain_km, g_total, color=PALETTE["crimson"], linewidth=2.0, linestyle='--',
                     label=r'Gravitational Acceleration $g(r)$ [m/s$^2$]')
-    ax_c2.set_ylabel(r'Gravity Acceleration $g$ [m/s$^2$]', color=STRATA['magma'], fontsize=11)
-    ax_c2.tick_params(axis='y', labelcolor=STRATA['magma'])
+    ax_c2.set_ylabel(r'Gravity Acceleration $g$ [m/s$^2$]', color=PALETTE["crimson"], fontsize=11)
+    ax_c2.tick_params(axis='y', labelcolor=PALETTE["crimson"])
 
     lines_c = l1 + l2
     labels_c = [l.get_label() for l in lines_c]
@@ -204,16 +203,16 @@ def main():
             telescoping_radii.append(r_val)
         half_domain_history.append(current_half_domain)
 
-    ax_d.plot(time_myr, R_growth, color=STRATA['magma'], linewidth=2.4, label='Planetesimal Radius $R(t)$ [km]')
-    ax_d.plot(time_myr, np.array(half_domain_history), color=STRATA['cobalt'], linewidth=2.0, linestyle='-.',
+    ax_d.plot(time_myr, R_growth, color=PALETTE["crimson"], linewidth=2.4, label='Planetesimal Radius $R(t)$ [km]')
+    ax_d.plot(time_myr, np.array(half_domain_history), color=PALETTE["slate_blue"], linewidth=2.0, linestyle='-.',
               label=r'Domain Half-Width $x_{\rm size} / 2$ [km]')
-    ax_d.plot(time_myr, 0.70 * np.array(half_domain_history), color=STRATA['gold'], linewidth=1.6, linestyle=':',
+    ax_d.plot(time_myr, 0.70 * np.array(half_domain_history), color=PALETTE["gold"], linewidth=1.6, linestyle=':',
               label=r'Expansion Trigger $0.70 \cdot x_{\rm size} / 2$ [km]')
 
     for t_step, r_step in zip(telescoping_times, telescoping_radii):
-        ax_d.plot(t_step, r_step, marker='o', markersize=6, color=STRATA['plum'])
+        ax_d.plot(t_step, r_step, marker='o', markersize=6, color=PALETTE["purple"])
 
-    ax_d.axhline(R_lunar, color=NEUTRALS['graphite'], linestyle='--', linewidth=1.2,
+    ax_d.axhline(R_lunar, color=PALETTE["dark_gray"], linestyle='--', linewidth=1.2,
                  label=r'Lunar Target Radius ($R = 1737$ km)')
     ax_d.set_yscale('log')
     ax_d.set_ylim(30.0, 10000.0)

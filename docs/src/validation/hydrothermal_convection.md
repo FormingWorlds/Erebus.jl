@@ -127,12 +127,20 @@ The benchmark figure below illustrates scaling behavior in all four operational 
 
 ![Hydrothermal Convection Benchmark](../assets/hydrothermal_convection_benchmark.png)
 
-### Panel Descriptions
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for subgrid hydrothermal convection scaling laws. The curves evaluate analytical formulations in Python (`benchmarks/generate_hydrothermal_convection_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Porous convection onset and scaling: $Ra_m$ versus medium permeability $K$ for thermal driving scales $\Delta T \in [10, 25, 50, 100]\text{ K}$, initiating at $Ra_{m,\mathrm{crit}} = 4\pi^2$. (b) Nusselt scaling across porosity regimes: continuous transition from linear porous Darcy scaling to asymptotic boundary-layer scaling through the smoothstep transition zone $[0.30, 0.70]$. (c) Conductivity ratio $k_{\mathrm{eff}} / k_{\mathrm{cond}}$ across state space of porosity and temperature contrast. (d) Grid-resolution damping: attenuation of subgrid enhancement as cell-Péclet number $Pe_{\mathrm{cell}}$ approaches $Pe_{\mathrm{crit}} = 2.0$.*
 
-- **(a) Porous Convection Onset and Scaling:** $Ra_m$ versus medium permeability $K$ for thermal driving scales $\Delta T \in [10, 25, 50, 100]\text{ K}$. Convection initiates once permeability exceeds $K \approx 5 \times 10^{-14}\text{ m}^2$, matching analytical Horton-Rogers-Lapwood criteria ($Ra_{m,\mathrm{crit}} = 4\pi^2$).
-- **(b) Nusselt Scaling in Porosity Regimes:** Continuous transition from linear porous Darcy scaling ($Nu_{\mathrm{porous}} \propto Ra_m$) to asymptotic boundary-layer scaling ($Nu_{\mathrm{free}} \propto Ra^{1/3}$) through the smoothstep transition zone $[0.30, 0.70]$.
-- **(c) Conductivity Ratio $k_{\mathrm{eff}} / k_{\mathrm{cond}}$:** State space contour map of porosity $\phi$ and temperature contrast $\Delta T$. Convective enhancement factors exceed $10^2$ in permeable aquifers and approach $10^3$ in open fluid lenses.
-- **(d) Grid-Resolution Damping:** Attenuation of subgrid enhancement as cell-Péclet number $Pe_{\mathrm{cell}}$ approaches $Pe_{\mathrm{crit}} = 2.0$. Resolved Darcy advection replaces subgrid conduction smoothly without flux jumps.
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Porous Rayleigh-Darcy ($Ra_m$) and free-fluid Rayleigh ($Ra$) scaling, smoothstep porosity transition, and cell-Péclet damping |
+| **Reference Standard** | Horton & Rogers (1945); Lapwood (1948); Kraichnan (1962); Howard (1966); Turcotte & Schubert (2014) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_hydrothermal_convection_benchmarks.py` |
+| **Automated Verification Test** | `test/test_hydrothermal_convection.jl` |
+| **Quantitative Tolerance** | Onset critical threshold $Ra_{m,\mathrm{crit}} = 4\pi^2$ exact to $< 10^{-12}$; smoothstep $C^1$ derivative continuity exact to machine precision |
 
 ---
 

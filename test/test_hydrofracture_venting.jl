@@ -113,7 +113,7 @@ using StaticArrays
         @test !is_hydrofracture_breached(Peff_severe, -1.0e7)
     end
 
-    @testset "Surface Boundary Hydrofracture Gating & Cryogenic Sealing Assembly" begin
+    @testset "Surface Boundary Hydrofracture Permeability & Cryogenic Sealing Assembly" begin
         Nx, Ny = 9, 9
         Nx1, Ny1 = Nx + 1, Ny + 1
         coords = GridCoordinates(Nx, Ny; xsize=140_000.0, ysize=140_000.0)
@@ -488,7 +488,7 @@ using StaticArrays
         @test all(iszero, S_vent_pulse2)
     end
 
-    @testset "Simulation Loop with Hydrofracture-Gated & Ice Sealed Venting" begin
+    @testset "Simulation Loop with Hydrofracture-Controlled & Ice Sealed Venting" begin
         output_dir = mktempdir()
         try
             quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")

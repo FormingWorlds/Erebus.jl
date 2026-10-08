@@ -158,6 +158,8 @@ Planetary volatile cycles transfer mass across three core reservoirs: interior r
 
 ![Volatile Reservoirs and Mass Flow](../assets/volatile_reservoirs.svg)
 
+*Figure 1: Class D (Schematic Diagram): Volatile reservoirs and mass flow channels across interior rock and melt, the active atmospheric envelope, and space loss via escape.*
+
 1. *Interior to Atmosphere*: Surface venting and volcanic degassing deliver elemental masses $(M_{\text{H}}, M_{\text{C}}, M_{\text{N}}, M_{\text{S}}, M_{\text{O}})$ into the atmospheric reservoir `atm_state.elem`. Degassing at local mantle oxygen fugacity exchanges oxygen $\Delta O_{\text{buffer}}$ with the interior FeO-Fe3O4 mineral buffer via `apply_buffer_oxygen!`.
 2. *Closed-System Speciation*: At each atmospheric timestep, the closed-system speciation solver `speciate_closed_system(elem, T_surf, P_surf)` solves the coupled non-linear equilibrium across all 10 gas species. The solver performs a bracketed root find on oxygen fugacity $\log_{10} f\mathrm{O}_2 \in [-40, 0]$ satisfying:
    $$O_{\text{species}}(f\mathrm{O}_2) - M_{\text{O,elem}} = 0$$
@@ -177,12 +179,7 @@ Atmosphere and interior thermal solvers interact through a closed boundary coupl
 
 ![Coupled 1D Atmosphere Benchmark](../assets/coupled_atmosphere_benchmark.png)
 
-The 4 panels above verify the numerical implementation against analytical limits and published benchmarks:
-
-- *Panel (a) Semi-Grey Radiative Equilibrium*. Shows $T(\tau)$ profiles for $\gamma \in [0.01, 5.0]$. For $\gamma < 1$, visible radiation penetrates deeper than thermal emission, establishing a strong greenhouse temperature inversion in the deep atmosphere. At low optical depth ($\tau \to 0$), temperatures converge to the skin temperature limit.
-- *Panel (b) Disk Gas Envelope Capture & Recycling*. Compares the captured isothermal envelope mass to the Ormel et al. (2015) recycling limit for planetesimal radii from $100\text{ km}$ to $2000\text{ km}$. For sub-Ceres bodies ($R \le 200\text{ km}$), $R_{\text{cap}} \le R_{\text{planet}}$, preventing gas capture. For embryos exceeding $R \sim 1500\text{ km}$, bound envelope mass reaches $10^{18}\text{ to }10^{19}\text{ kg}$.
-- *Panel (c) Greenhouse Thermal Blanketing*. Illustrates the rapid attenuation of effective surface heat transfer coefficient $h_{\text{rad,eff}}$ with longwave optical depth $\tau_{\text{LW}}$, reducing surface heat loss by more than a factor of 10 for $\tau_{\text{LW}} > 10$.
-- *Panel (d) Zahnle-Kasting Crossover Drag*. Evaluates drag efficiencies $x_j$ for common planetary volatiles ($\mathrm{CH_4}, \mathrm{H_2O}, \mathrm{CO}, \mathrm{CO_2}, \mathrm{SO_2}$) as a function of carrier hydrogen escape flux $\Phi_{\mathrm{H}_2}$. At low fluxes ($\Phi_{\mathrm{H}_2} < 10^{18}\text{ m}^{-2}\text{s}^{-1}$), heavy species remain completely retained ($x_j = 0$). At extreme fluxes ($\Phi_{\mathrm{H}_2} \ge 10^{20}\text{ m}^{-2}\text{s}^{-1}$), even sulfur dioxide experiences substantial hydrodynamic drag.
+*Figure 2: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for coupled 1D proto-atmosphere formulations. The curves evaluate analytical models in Python (`benchmarks/generate_coupled_atmosphere_benchmarks.py`). Discretized atmospheric integration is verified in `test/test_atmosphere.jl`. (a) Semi-grey radiative equilibrium temperature profiles $T(\tau)$. (b) Protoplanetary disk gas envelope capture and Ormel et al. (2015) recycling limit. (c) Greenhouse thermal blanketing attenuation of radiative heat transfer. (d) Multi-species crossover hydrodynamic escape drag efficiencies.*
 
 ### Magma-Ocean Degassing
 
@@ -202,9 +199,7 @@ $$w_{\text{retained}} = F \cdot A_s \sqrt{p_{\mathrm{H}_2\mathrm{O},\text{MPa}}}
 
 ![Retained water mass fraction versus melt fraction](../assets/degassing_benchmark.png)
 
-Retained water mass fraction versus melt fraction $F \in [0.1, 1.0]$ at constant surface partial pressure $p_{\mathrm{H}_2\mathrm{O}}$.
-The solid curve shows the analytical Burnham (1979) / Dixon et al. (1995) law, while circles show values retained in Lagrangian markers.
-Panel (b) confirms numerical agreement to relative tolerance $10^{-6}$.
+*Figure 3: Class B (Julia Library Exporter): Retained water mass fraction versus melt fraction $F \in [0.1, 1.0]$ evaluated by `benchmarks/export_degassing_benchmark.jl`. (a) Burnham (1979) analytical law compared with Lagrangian markers. (b) Relative numerical residual confirming agreement below $10^{-6}$.*
 
 ### Coupled Magma Ocean Multi-Component Volatile Partitioning
 
@@ -297,7 +292,20 @@ SO2 = 2.0e-3
 
 ---
 
-## 5. References
+## 5. Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Semi-grey radiative equilibrium, greenhouse blanketing, gas envelope boil-off, multi-species crossover escape, and magma ocean volatile degassing |
+| **Reference Standard** | Guillot (2010); Ormel et al. (2015); Zahnle & Kasting (1986); Attia & Lichtenberg (2026); Burnham (1979) |
+| **Figure Provenance** | Class D (Schematic) / Class C (Analytical Reference) / Class B (Julia Library Exporter) |
+| **Generating Script** | `benchmarks/generate_reservoir_diagram.py`, `benchmarks/generate_coupled_atmosphere_benchmarks.py`, `benchmarks/export_degassing_benchmark.jl` |
+| **Automated Verification Test** | `test/test_atmosphere.jl`, `test/test_volatile_solubility.jl` |
+| **Quantitative Tolerance** | Radiative profile $L_\infty < 1.0\times 10^{-4}$; CHNOS speciation equilibrium $< 1.0\times 10^{-5}$; degassing relative error $< 10^{-6}$ |
+
+---
+
+## 6. References
 
 - **Attia, O., & Lichtenberg, T. (2026)**. A convex active-set closure for multi-species atmospheric escape. *arXiv preprint*, arXiv:2608.30106.
 - **Burnham, C. W. (1979)**. The importance of volatile constituents. In *The Evolution of the Igneous Rocks: Fiftieth Anniversary Perspectives*, Princeton University Press, 439-482.

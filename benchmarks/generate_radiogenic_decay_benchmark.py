@@ -14,39 +14,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'teal': '#2A7B88',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -89,13 +88,13 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.5, 4.6))
 
     # --- Panel (a): Specific Power Decay ---
-    ax1.plot(t_Myr, Q_al, color=STRATA['cobalt'], lw=2.2, label=r'$^{26}\mathrm{Al}$ (Erebus)')
-    ax1.plot(t_Myr, Q_al_ana, color=STRATA['ink'], lw=1.2, ls='--', label=r'$^{26}\mathrm{Al}$ analytical')
-    ax1.plot(t_Myr, Q_fe, color=STRATA['amber'], lw=2.2, label=r'$^{60}\mathrm{Fe}$ (Erebus)')
-    ax1.plot(t_Myr, Q_fe_ana, color=STRATA['magma'], lw=1.2, ls='--', label=r'$^{60}\mathrm{Fe}$ analytical')
+    ax1.plot(t_Myr, Q_al, color=PALETTE["slate_blue"], lw=2.2, label=r'$^{26}\mathrm{Al}$ (Erebus)')
+    ax1.plot(t_Myr, Q_al_ana, color=PALETTE["charcoal"], lw=1.2, ls='--', label=r'$^{26}\mathrm{Al}$ analytical')
+    ax1.plot(t_Myr, Q_fe, color=PALETTE["amber"], lw=2.2, label=r'$^{60}\mathrm{Fe}$ (Erebus)')
+    ax1.plot(t_Myr, Q_fe_ana, color=PALETTE["crimson"], lw=1.2, ls='--', label=r'$^{60}\mathrm{Fe}$ analytical')
 
-    ax1.axvline(t_half_al, color=STRATA['cobalt'], ls=':', lw=0.9, alpha=0.7)
-    ax1.axvline(t_half_fe, color=STRATA['amber'], ls=':', lw=0.9, alpha=0.7)
+    ax1.axvline(t_half_al, color=PALETTE["slate_blue"], ls=':', lw=0.9, alpha=0.7)
+    ax1.axvline(t_half_fe, color=PALETTE["amber"], ls=':', lw=0.9, alpha=0.7)
 
     ax1.set_yscale('log')
     ax1.set_xlim(0.0, 10.0)
@@ -107,9 +106,9 @@ def main():
     ax1.legend(loc='upper right', fontsize=9.5)
 
     # --- Panel (b): Cumulative Energy Release ---
-    ax2.plot(t_Myr, E_tot_MJ, color=STRATA['plum'], lw=2.2, label=r'Total ($^{26}\mathrm{Al} + {}^{60}\mathrm{Fe}$)')
-    ax2.plot(t_Myr, E_al_MJ, color=STRATA['cobalt'], lw=1.8, ls='-', label=r'$^{26}\mathrm{Al}$ cumulative')
-    ax2.plot(t_Myr, E_fe_MJ, color=STRATA['amber'], lw=1.8, ls='-', label=r'$^{60}\mathrm{Fe}$ cumulative')
+    ax2.plot(t_Myr, E_tot_MJ, color=PALETTE["purple"], lw=2.2, label=r'Total ($^{26}\mathrm{Al} + {}^{60}\mathrm{Fe}$)')
+    ax2.plot(t_Myr, E_al_MJ, color=PALETTE["slate_blue"], lw=1.8, ls='-', label=r'$^{26}\mathrm{Al}$ cumulative')
+    ax2.plot(t_Myr, E_fe_MJ, color=PALETTE["amber"], lw=1.8, ls='-', label=r'$^{60}\mathrm{Fe}$ cumulative')
 
     ax2.set_xlim(0.0, 10.0)
     ax2.set_ylim(0.0, max(E_tot_MJ) * 1.1)

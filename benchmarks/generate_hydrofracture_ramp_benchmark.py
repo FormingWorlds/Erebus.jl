@@ -16,38 +16,38 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-# Interra visual palette
-STRATA = {
-    'gold': '#F0BA5E',
-    'amber': '#DE7037',
-    'magma': '#A23E3C',
-    'plum': '#6A2A4D',
-    'cobalt': '#3E5B86',
-    'ink': '#15101C'
-}
-NEUTRALS = {
-    'paper': '#FAF5E6',
-    'mist': '#C8BCA9',
-    'graphite': '#3A3140',
-    'bone': '#E6DAB6'
+# Neutral scientific palette
+PALETTE = {
+    "slate_blue": "#1F4E79",
+    "crimson": "#C0392B",
+    "green": "#27AE60",
+    "amber": "#D97706",
+    "gold": "#D4AC0D",
+    "purple": "#6C3483",
+    "teal": "#16A085",
+    "charcoal": "#1A1A1A",
+    "dark_gray": "#222222",
+    "grid_gray": "#E0E0E0",
+    "off_white": "#F5F5F5",
+    "white": "#FFFFFF",
 }
 
 mpl.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'mathtext.fontset': 'stixsans',
-    'axes.edgecolor': NEUTRALS['mist'],
-    'axes.linewidth': 1.0,
-    'axes.labelcolor': NEUTRALS['graphite'],
+    'axes.edgecolor': '#333333',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': '#222222',
     'axes.facecolor': '#FFFFFF',
-    'xtick.color': NEUTRALS['graphite'],
-    'ytick.color': NEUTRALS['graphite'],
-    'grid.color': NEUTRALS['mist'],
+    'xtick.color': '#222222',
+    'ytick.color': '#222222',
+    'grid.color': '#E0E0E0',
     'grid.linestyle': ':',
-    'grid.linewidth': 0.8,
+    'grid.linewidth': 0.6,
     'legend.frameon': True,
     'legend.facecolor': '#FFFFFF',
-    'legend.edgecolor': NEUTRALS['mist'],
+    'legend.edgecolor': '#CCCCCC',
     'figure.facecolor': '#FFFFFF',
 })
 
@@ -83,10 +83,10 @@ def generate_benchmark_figure():
     fig, (ax_a, ax_b, ax_c) = plt.subplots(1, 3, figsize=(14.0, 4.2), dpi=200)
 
     delta_colors = {
-        "0.0": STRATA['ink'],
-        "0.02": STRATA['cobalt'],
-        "0.05": STRATA['amber'],
-        "0.1": STRATA['magma'],
+        "0.0": PALETTE["charcoal"],
+        "0.02": PALETTE["slate_blue"],
+        "0.05": PALETTE["amber"],
+        "0.1": PALETTE["crimson"],
     }
     delta_styles = {
         "0.0": (':', 2.0, "Kink law ($\\delta = 0$)"),
@@ -101,7 +101,7 @@ def generate_benchmark_figure():
             s_vals = np.array(ramp_curves[key]["s"])
             ax_a.plot(x_sweep, s_vals, ls, color=delta_colors[key], linewidth=lw, label=label)
 
-    ax_a.axvline(0.0, color=NEUTRALS['graphite'], linestyle='--', linewidth=0.8, alpha=0.6)
+    ax_a.axvline(0.0, color=PALETTE["dark_gray"], linestyle='--', linewidth=0.8, alpha=0.6)
     ax_a.set_xlabel("Normalized Overpressure $x = (-P_\\mathrm{eff} - \\sigma_t) / \\sigma_t$", fontsize=9.5)
     ax_a.set_ylabel("Regularised Overpressure $s(x)$", fontsize=9.5)
     ax_a.set_title("(a) $C^1$ Overpressure Function", fontsize=10.5, fontweight='bold', loc='left')
@@ -116,7 +116,7 @@ def generate_benchmark_figure():
             ds_vals = np.array(ramp_curves[key]["ds"])
             ax_b.plot(x_sweep, ds_vals, ls, color=delta_colors[key], linewidth=lw, label=label)
 
-    ax_b.axvline(0.0, color=NEUTRALS['graphite'], linestyle='--', linewidth=0.8, alpha=0.6)
+    ax_b.axvline(0.0, color=PALETTE["dark_gray"], linestyle='--', linewidth=0.8, alpha=0.6)
     ax_b.set_xlabel("Normalized Overpressure $x = (-P_\\mathrm{eff} - \\sigma_t) / \\sigma_t$", fontsize=9.5)
     ax_b.set_ylabel("Derivative $s'(x) = \\mathrm{d}s / \\mathrm{d}x$", fontsize=9.5)
     ax_b.set_title("(b) Regularised Derivative Continuity", fontsize=10.5, fontweight='bold', loc='left')
@@ -127,10 +127,10 @@ def generate_benchmark_figure():
 
     # Panel (c): Darcy resistance under-relaxation convergence
     theta_colors = {
-        "0.1": STRATA['plum'],
-        "0.3": STRATA['amber'],
-        "0.5": STRATA['cobalt'],
-        "1.0": STRATA['ink'],
+        "0.1": PALETTE["purple"],
+        "0.3": PALETTE["amber"],
+        "0.5": PALETTE["slate_blue"],
+        "1.0": PALETTE["charcoal"],
     }
     theta_styles = {
         "0.1": ('--', 1.8, "$\\theta = 0.1$"),

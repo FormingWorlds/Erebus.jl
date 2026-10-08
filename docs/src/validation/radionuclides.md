@@ -43,7 +43,20 @@ The specific radiogenic decay powers and cumulative energy releases for $^{26}\t
 
 ![Specific radiogenic power decay benchmark](../assets/radiogenic_decay_benchmark.png)
 
-*Specific radiogenic power decay curves and cumulative energy release for $^{26}\text{Al}$ and $^{60}\text{Fe}$ over 10 Myr of planetesimal evolution. Panel (a) shows specific radiogenic power $Q(t)$ as a function of time, comparing Erebus with analytical exponential decay. Dotted vertical lines mark the respective half-lives ($0.717\text{ Myr}$ for $^{26}\text{Al}$ and $2.62\text{ Myr}$ for $^{60}\text{Fe}$). Panel (b) shows the cumulative specific energy release.*
+*Figure 1: Class B (Julia Library Exporter / Benchmark Script): Specific radiogenic power decay curves and cumulative energy release for $^{26}\text{Al}$ and $^{60}\text{Fe}$ over 10 Myr of planetesimal evolution, exported via `benchmarks/export_radiogenic_decay_benchmark.jl` and plotted with `benchmarks/generate_radiogenic_decay_benchmark.py`. Panel (a) shows specific radiogenic power $Q(t)$ as a function of time, comparing Erebus with analytical exponential decay. Dotted vertical lines mark the respective half-lives ($0.717\text{ Myr}$ for $^{26}\text{Al}$ and $2.62\text{ Myr}$ for $^{60}\text{Fe}$). Panel (b) shows the cumulative specific energy release.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Radiogenic volumetric heating rates ($^{26}\text{Al}$ and $^{60}\text{Fe}$), exponential decay half-lives, and cumulative energy release |
+| **Reference Standard** | Russell et al. (1996); Tachibana & Huss (2003); Tang & Dauphas (2012); Lichtenberg et al. (2019) |
+| **Figure Provenance** | Class B (Julia Library Exporter / Benchmark Script) |
+| **Generating Script** | `benchmarks/export_radiogenic_decay_benchmark.jl` / `benchmarks/generate_radiogenic_decay_benchmark.py` |
+| **Automated Verification Test** | `test/test_physics.jl` |
+| **Quantitative Tolerance** | Half-life consistency $< 10^{-14}$; time-integrated energy closure $\int_0^\infty Q(t) dt = Q_0 \tau$ within $< 10^{-12}$ |
 
 ---
 

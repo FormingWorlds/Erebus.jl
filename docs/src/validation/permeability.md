@@ -56,7 +56,7 @@ $$k_\phi^{\text{eff}} = \min\left(k_\phi \cdot \left[1 + \kappa_{\text{frac}} \l
 
 ![Dynamic Hydrofracturing Verification](../assets/hydrofracture_verification.png)
 
-*Figure 1: Verification of dynamic hydrofracturing permeability enhancement in Erebus. (a) Effective permeability $k_\phi^{\text{eff}}$ as a function of Terzaghi effective stress $P_{\text{eff}} = P_t - P_f$ for compressive ($P_{\text{eff}} > 0$), intact tensile ($-\sigma_t < P_{\text{eff}} \le 0$), and hydrofractured ($P_{\text{eff}} \le -\sigma_t$) regimes for representative matrix permeabilities ($k_0 \in [10^{-16}, 10^{-14}]\text{ m}^2$) at tensile strength $\sigma_t = 10\text{ MPa}$. (b) Permeability enhancement factor $k_{\text{eff}} / k_0$ as a function of normalized overpressure for scaling exponents $\gamma \in \{0.5, 1.0, 2.0\}$ at $\kappa_{\text{frac}} = 10^3$.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Verification of dynamic hydrofracturing permeability enhancement. The curves evaluate analytical formulations in Python (`scripts/generate_hydrofracture_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Effective permeability $k_\phi^{\text{eff}}$ as a function of Terzaghi effective stress $P_{\text{eff}} = P_t - P_f$ for compressive ($P_{\text{eff}} > 0$), intact tensile ($-\sigma_t < P_{\text{eff}} \le 0$), and hydrofractured ($P_{\text{eff}} \le -\sigma_t$) regimes for representative matrix permeabilities ($k_0 \in [10^{-16}, 10^{-14}]\text{ m}^2$) at tensile strength $\sigma_t = 10\text{ MPa}$. (b) Permeability enhancement factor $k_{\text{eff}} / k_0$ as a function of normalized overpressure for scaling exponents $\gamma \in \{0.5, 1.0, 2.0\}$ at $\kappa_{\text{frac}} = 10^3$.*
 
 ### Verification Test Suite
 - `test/test_physics.jl`: Hydrofracturing permeability bounds
@@ -84,7 +84,7 @@ In `src/physics.jl`, the constitutive poroelastic functions are verified against
 
 ![Poroelastic Constitutive Limits Verification](../assets/poroelastic_verification.png)
 
-*Figure 2: Theoretical behavior of derived poroelastic coefficients in Erebus. (a) Biot-Willis coefficient $K_{\text{BW}}$ as a function of porosity $\phi$ for varied solid grain compressibility $\beta_s$ to confirm asymptotic convergence toward unity ($K_{\text{BW}} \equiv 1$) in the incompressible solid grain limit. (b) Skempton pore pressure coefficient $B$ as a function of fluid compressibility $\beta_f$ for representative porosity values to display undrained response transitions.*
+*Figure 2: Class C (Analytical / Empirical Reference Formulation): Theoretical behavior of derived poroelastic coefficients in Erebus. The curves evaluate analytical formulations in Python (`scripts/generate_poroelastic_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Biot-Willis coefficient $K_{\text{BW}}$ as a function of porosity $\phi$ for varied solid grain compressibility $\beta_s$ to confirm asymptotic convergence toward unity ($K_{\text{BW}} \equiv 1$) in the incompressible solid grain limit. (b) Skempton pore pressure coefficient $B$ as a function of fluid compressibility $\beta_f$ for representative porosity values to display undrained response transitions.*
 
 ### Verification Test Suite
 - `test/test_physics.jl`: Poroelastic constitutive functions and asymptotic limits
@@ -131,7 +131,22 @@ Dynamic hydrofracturing permeability enhancement introduces non-linear threshold
 
 ![Hydrofracture Regularisation and Under-Relaxation Verification](../assets/hydrofracture_ramp_benchmark.png)
 
-*Figure 3: Numerical regularisation and relaxation behavior of the dynamic hydrofracture solver in Erebus. (a) Regularised overpressure function $s(x)$ as a function of normalized overpressure $x = (-P_{\text{eff}} - \sigma_t)/\sigma_t$ for regularisation ramp widths $\delta \in \{0.0, 0.02, 0.05, 0.10\}$. (b) Regularised derivative $s'(x) = \mathrm{d}s/\mathrm{d}x$, which shows $C^1$ continuity and linear transition within the regularisation interval $[0, \delta]$. (c) Normalized Darcy resistance error $|r^{(k)} - r_{\text{new}}| / |r^{(0)} - r_{\text{new}}|$ as a function of plastic iteration $k$ for relaxation parameter values $\theta \in \{0.1, 0.3, 0.5, 1.0\}$, which confirms geometric convergence toward machine precision.*
+*Figure 3: Class B (Julia Library Exporter / Benchmark Script): Numerical regularisation and relaxation behavior of the dynamic hydrofracture solver in Erebus. Evaluated via `benchmarks/generate_hydrofracture_ramp_benchmark.py`. (a) Regularised overpressure function $s(x)$ as a function of normalized overpressure $x = (-P_{\text{eff}} - \sigma_t)/\sigma_t$ for regularisation ramp widths $\delta \in \{0.0, 0.02, 0.05, 0.10\}$. (b) Regularised derivative $s'(x) = \mathrm{d}s/\mathrm{d}x$, which shows $C^1$ continuity and linear transition within the regularisation interval $[0, \delta]$. (c) Normalized Darcy resistance error $|r^{(k)} - r_{\text{new}}| / |r^{(0)} - r_{\text{new}}|$ as a function of plastic iteration $k$ for relaxation parameter values $\theta \in \{0.1, 0.3, 0.5, 1.0\}$, which confirms geometric convergence toward machine precision.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Kozeny-Carman permeability, Terzaghi hydrofracturing enhancement, poroelastic constitutive limits, and $C^1$ overpressure regularisation |
+| **Reference Standard** | Terzaghi (1925); Carman (1937); Wang (2000); Gerya (2019); Hubmann (2022) |
+| **Figure Provenance** | Class C (Figures 1 and 2: Analytical / Empirical Reference Formulation); Class B (Figure 3: Julia Library Exporter / Benchmark Script) |
+| **Generating Script** | `scripts/generate_hydrofracture_benchmark.py` (Fig 1), `scripts/generate_poroelastic_benchmark.py` (Fig 2), `benchmarks/generate_hydrofracture_ramp_benchmark.py` (Fig 3) |
+| **Automated Verification Test** | `test/test_physics.jl`, `test/test_hydrofracture_stability.jl`, `test/test_numerics.jl` |
+| **Quantitative Tolerance** | Poroelastic asymptotes exact to machine precision $< 10^{-12}$; $C^1$ continuous derivative continuity $< 10^{-14}$; Picard resistance relaxation geometric decay |
+
+---
 
 ### Verification Test Suite
 - `test/test_hydrofracture_stability.jl`: $C^1$ continuity, derivative matching, geometric convergence, solver assembly relaxation, and configuration bounds validation

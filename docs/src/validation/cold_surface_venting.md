@@ -43,7 +43,20 @@ Figure 1 illustrates the coupled performance of cold surface venting across disk
 
 ![Cold Surface Venting Benchmark](../assets/cold_surface_venting_benchmark.png)
 
-*Figure 1: Four-panel benchmark validation for cold surface venting. (a) Ambient temperature transition from disk accretion heating to solar radiative equilibrium ($T_{\text{eq}} \approx 166.8\text{ K}$ for default $A = 0.06$) during disk dispersal. (b) Water ice equilibrium vapor pressure $P_{\text{sat,ice}}(T)$ across the cold-trap regime ($100\text{ to }273\text{ K}$). (c) Evolution of boundary pore fluid pressure and surface venting flux. (d) Cumulative vented fluid mass and thermostatic latent cooling rate.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Four-panel benchmark validation for cold surface venting and ice cold-trap vapor pressure thermodynamics. The curves evaluate analytical formulations in Python (`scripts/generate_cold_venting_benchmark.py`). Numerical integration of the 2D solver is verified by the automated test suite. (a) Ambient temperature transition from disk accretion heating to solar radiative equilibrium ($T_{\text{eq}} \approx 166.8\text{ K}$ for default $A = 0.06$) during disk dispersal. (b) Water ice equilibrium vapor pressure $P_{\text{sat,ice}}(T)$ across the cold-trap regime ($100\text{ to }273\text{ K}$). (c) Evolution of boundary pore fluid pressure and surface venting flux. (d) Cumulative vented fluid mass and thermostatic latent cooling rate.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Surface Robin venting flux, Clausius-Clapeyron cold trap, disk dispersal transition, and latent sublimation heat sink |
+| **Reference Standard** | Washburn (1924); Young et al. (1999); Hubmann (2022) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `scripts/generate_cold_venting_benchmark.py` |
+| **Automated Verification Test** | `test/test_venting_thermodynamics.jl`, `test/test_venting_darcy_sink.jl`, `test/test_venting_integration.jl` |
+| **Quantitative Tolerance** | Clausius-Clapeyron vapor pressure match $< 10^{-6}$; mass conservation closed to machine precision $< 10^{-12}$ |
 
 ---
 
@@ -66,3 +79,4 @@ Figure 1 illustrates the coupled performance of cold surface venting across disk
 - `test/test_venting_integration.jl`:
   - `@testset "Runtime loop with venting inactive (baseline)"`
   - `@testset "Runtime loop with cold surface venting active"`
+

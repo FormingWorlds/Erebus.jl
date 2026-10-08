@@ -74,7 +74,20 @@ The 4-panel benchmark suite illustrates the spatial hierarchy, radial invariance
 
 ![Telescoping domain benchmark](../assets/telescoping_domain_benchmark.png)
 
-*Figure 1: Telescoping domain benchmark suite for growth from planetesimal seed ($R = 40\text{ km}$) to lunar radius ($R = 1,737\text{ km}$). Panel (a): Nested computational domain hierarchy across successive doubling levels ($x_{\text{size}} = 140, 280, 560\text{ km}$) with sticky-air buffer regions and the 70% domain threshold circle. Panel (b): Planetesimal radial temperature profile invariance $T(r)$, showing identical radial coordinates for continuum profiles and Lagrangian markers before and after domain translation. Panel (c): Gravitational potential $\Phi(r)$ and gravitational acceleration $g(r)$ across the enlarged computational domain, enforcing homogeneous Dirichlet boundary conditions ($\Phi = 0$ at the domain boundary). Panel (d): Planetesimal accretion growth trajectory to lunar mass ($R_{\text{lunar}} = 1,737\text{ km}$), displaying discrete domain doubling events triggered whenever $R(t) > 0.70 \cdot (x_{\text{size}} / 2)$.*
+*Figure 1: Class C (Analytical / Empirical Reference Formulation): Telescoping domain benchmark suite for growth from planetesimal seed ($R = 40\text{ km}$) to lunar radius ($R = 1,737\text{ km}$). The curves evaluate analytical domain transformations in Python (`benchmarks/generate_telescoping_benchmarks.py`). Numerical integration of the 2D solver is verified by the automated test suite. Panel (a): Nested computational domain hierarchy across successive doubling levels ($x_{\text{size}} = 140, 280, 560\text{ km}$) with sticky-air buffer regions and the 70% domain threshold circle. Panel (b): Planetesimal radial temperature profile invariance $T(r)$, showing identical radial coordinates for continuum profiles and Lagrangian markers before and after domain translation. Panel (c): Gravitational potential $\Phi(r)$ and gravitational acceleration $g(r)$ across the enlarged computational domain, enforcing homogeneous Dirichlet boundary conditions ($\Phi = 0$ at the domain boundary). Panel (d): Planetesimal accretion growth trajectory to lunar mass ($R_{\text{lunar}} = 1,737\text{ km}$), displaying discrete domain doubling events triggered whenever $R(t) > 0.70 \cdot (x_{\text{size}} / 2)$.*
+
+---
+
+## Validation and Provenance Summary
+
+| Attribute | Specification |
+|:---|:---|
+| **Target Physics / Diagnostic** | Domain doubling coordinate transformation, grid parity preservation, marker radial distance invariance, and solid mass/energy conservation |
+| **Reference Standard** | Gerya (2019, Chapter 8) |
+| **Figure Provenance** | Class C (Analytical / Empirical Reference Formulation) |
+| **Generating Script** | `benchmarks/generate_telescoping_benchmarks.py` |
+| **Automated Verification Test** | `test/test_telescoping.jl` |
+| **Quantitative Tolerance** | Marker radial distance invariance $< 10^{-14}$; solid rock mass conservation closed to machine precision $< 10^{-15}$; thermal energy conservation $< 10^{-14}$ |
 
 ---
 
