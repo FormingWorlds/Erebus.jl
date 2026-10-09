@@ -166,14 +166,14 @@ def generate_svg():
   <text x="245" y="360" class="arrow-sub">Signed Resorption (dM &lt; 0)</text>
 
   <!-- Mantle Venting -> Atmosphere -->
-  <path d="M 480 390 L 480 340" fill="none" stroke="{PALETTE["purple"]}" stroke-width="2.5" marker-end="url(#arrow)" />
-  <text x="490" y="365" class="arrow-text" fill="{PALETTE["purple"]}">Hydrothermal Venting</text>
-  <text x="490" y="380" class="arrow-sub">Darcy Pore &amp; Drainage</text>
+  <path d="M 425 390 L 425 338" fill="none" stroke="{PALETTE["purple"]}" stroke-width="2.5" marker-end="url(#arrow)" />
+  <text x="432" y="358" class="arrow-text" fill="{PALETTE["purple"]}">Hydrothermal Venting</text>
+  <text x="432" y="373" class="arrow-sub">Darcy Pore &amp; Drainage</text>
 
   <!-- Mantle <-> Atmosphere Redox Buffer Exchange -->
-  <path d="M 530 390 L 530 340" fill="none" stroke="{PALETTE["charcoal"]}" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arrow)" />
-  <text x="540" y="365" class="arrow-text">ΔO_buffer</text>
-  <text x="540" y="380" class="arrow-sub">3 FeO + ½ O₂ ↔ Fe₃O₄</text>
+  <path d="M 575 390 L 575 338" fill="none" stroke="{PALETTE["charcoal"]}" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arrow)" />
+  <text x="582" y="358" class="arrow-text">ΔO_buffer</text>
+  <text x="582" y="373" class="arrow-sub">3 FeO + ½ O₂ ↔ Fe₃O₄</text>
 
   <!-- Mantle -> Core Differentiation -->
   <path d="M 640 470 L 700 470" fill="none" stroke="{PALETTE["dark_gray"]}" stroke-width="2.2" marker-end="url(#arrow)" />
