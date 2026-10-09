@@ -31,8 +31,7 @@ function advance_step_diagnostics!(
     end
 
     need_telemetry = (
-        telemetry_io !== nothing &&
-        (
+        telemetry_io !== nothing && (
             (cfg.output.telemetrystep > 0 && timestep % cfg.output.telemetrystep == 0) ||
             timestep == n_steps_val
         )
@@ -62,10 +61,9 @@ function advance_step_diagnostics!(
         state.accumulators.core_budgets = core_budgets
         if (core_budgets !== nothing && core_budgets.M_core_metal > 0.0)
             state.accumulators.rcore =
-                (
-                    3.0 * core_budgets.M_core_metal /
-                    (4.0 * π * cfg.coreformation.rho_metal)
-                )^(1.0 / 3.0)
+                (3.0 * core_budgets.M_core_metal / (4.0 * π * cfg.coreformation.rho_metal))^(
+                    1.0 / 3.0
+                )
         else
             state.accumulators.rcore = 0.0
         end
@@ -128,18 +126,15 @@ function advance_step_diagnostics!(
                 rho_metal=cfg.coreformation.rho_metal,
             )
         end
-        save_state(
-            output_path,
-            state,
-            coords,
-            cfg,
-        )
+        save_state(output_path, state, coords, cfg)
     end
 
     maxT = maximum(state.grids.tk2)
     marknum = length(state.markers)
     if timestep_begin !== nothing
-        duration_str = Dates.canonicalize(Dates.CompoundPeriod(Dates.now() - timestep_begin))
+        duration_str = Dates.canonicalize(
+            Dates.CompoundPeriod(Dates.now() - timestep_begin)
+        )
         @info "timestep $timestep computed in $duration_str"
     else
         @info "timestep $timestep computed"
@@ -150,14 +145,18 @@ function advance_step_diagnostics!(
 
     if progress_bar !== nothing
         endtime_val = cfg.time.endtime * cfg.time.yearlength
-        showvals = () -> [
-            (:timestep, timestep),
-            (:markers, marknum),
-            (:maxT_K, maxT),
-            (:dt_s, state.dt),
-            (:timesum_Ma, s_to_Ma(state.timesum; yearlength=cfg.time.yearlength)),
-            (:to_go_Ma, s_to_Ma(endtime_val - state.timesum; yearlength=cfg.time.yearlength)),
-        ]
+        showvals =
+            () -> [
+                (:timestep, timestep),
+                (:markers, marknum),
+                (:maxT_K, maxT),
+                (:dt_s, state.dt),
+                (:timesum_Ma, s_to_Ma(state.timesum; yearlength=cfg.time.yearlength)),
+                (
+                    :to_go_Ma,
+                    s_to_Ma(endtime_val - state.timesum; yearlength=cfg.time.yearlength),
+                ),
+            ]
         next!(progress_bar; showvalues=showvals)
     end
 

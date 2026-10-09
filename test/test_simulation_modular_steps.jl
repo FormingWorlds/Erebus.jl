@@ -182,8 +182,10 @@ using Erebus
     @testset "Simulation Step Ambient and Surface Radiation with Atmosphere" begin
         cfg = default_config()
         cfg_atm = SimulationConfig(;
-            (f => (f === :atmosphere ? AtmosphereConfig(active=true) : getfield(cfg, f))
-             for f in fieldnames(SimulationConfig))...
+            (
+                f => (f === :atmosphere ? AtmosphereConfig(active=true) : getfield(cfg, f))
+                for f in fieldnames(SimulationConfig)
+            )...,
         )
         coords = GridCoordinates(cfg_atm.grid)
         state_atm, coords_actual, ws, _, _ = init_simulation(cfg_atm)
@@ -211,8 +213,15 @@ using Erebus
 
         marknum = length(state.markers)
         cfg_pyro = SimulationConfig(;
-            (f => (f === :refractory ? RefractoryConfig(active=true, kinetics_active=true) : getfield(cfg, f))
-             for f in fieldnames(SimulationConfig))...
+            (
+                f => (
+                    if f === :refractory
+                        RefractoryConfig(active=true, kinetics_active=true)
+                    else
+                        getfield(cfg, f)
+                    end
+                ) for f in fieldnames(SimulationConfig)
+            )...,
         )
         hcnspo_props = setup_marker_hcnspo_properties(
             marknum, cfg_pyro.volatile_mixture, cfg_pyro.refractory
@@ -241,46 +250,54 @@ using Erebus
         state, coords_actual, ws, _, _ = init_simulation(cfg)
 
         interpolate_markers_to_grid!(
-            state, coords_actual, cfg;
+            state,
+            coords_actual,
+            cfg;
             p2m_workspace=ws.p2m,
             thread_buffers=ws.thread_buffers,
             interp_arrays=ws.interp_arrays,
         )
-        solve_gravity!(
-            state, coords_actual, cfg;
-            F_grav=ws.F_grav,
-            RP=ws.RP,
-            SP=ws.SP,
-        )
+        solve_gravity!(state, coords_actual, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
         apply_surface_radiation!(state, coords_actual, cfg)
         snapshot_step_start_inventories!(ws, state, cfg)
         update_step_start_pressures!(state)
 
         Erebus.assemble_and_solve_hydromechanical!(
-            state, coords_actual, cfg, ws;
-            titer=1, iplast=1, cur_betasolid=0.0, cur_betafluid=0.0,
+            state,
+            coords_actual,
+            cfg,
+            ws;
+            titer=1,
+            iplast=1,
+            cur_betasolid=0.0,
+            cur_betafluid=0.0,
         )
         @test all(isfinite, ws.S)
 
         res_post = Erebus.postprocess_hydromechanical_solution!(
-            state, coords_actual, cfg, ws;
-            titer=1, iplast=1, dt_step_initial=state.dt, cur_betasolid=0.0, cur_betafluid=0.0,
+            state,
+            coords_actual,
+            cfg,
+            ws;
+            titer=1,
+            iplast=1,
+            dt_step_initial=state.dt,
+            cur_betasolid=0.0,
+            cur_betafluid=0.0,
         )
         @test haskey(res_post, :adjustment_ok)
         @test haskey(res_post, :aphimax)
         @test haskey(res_post, :n_flips_iter)
 
         res_therm = Erebus.solve_thermal_energy!(
-            state, coords_actual, cfg, ws;
-            titer=1, DHP_pyro=nothing,
+            state, coords_actual, cfg, ws; titer=1, DHP_pyro=nothing
         )
         @test haskey(res_therm, :thermochemical_converged)
         @test haskey(res_therm, :maxDTcurrent)
         @test haskey(res_therm, :dt_next)
 
         res_outer = Erebus.solve_thermomechanical_iterations!(
-            state, coords_actual, cfg, ws;
-            DHP_pyro=nothing, dt_step_initial=state.dt,
+            state, coords_actual, cfg, ws; DHP_pyro=nothing, dt_step_initial=state.dt
         )
         @test haskey(res_outer, :plastic_converged)
         @test haskey(res_outer, :thermochemical_converged)

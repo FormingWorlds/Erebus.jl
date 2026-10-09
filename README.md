@@ -24,6 +24,7 @@
   - [Benchmark Suite](#benchmark-suite)
 - [Execution Pipeline](#execution-pipeline)
 - [Tests and Quality Checks](#tests-and-quality-checks)
+- [Contributing and Code Style](#contributing-and-code-style)
 - [Documentation](#documentation)
 - [License](#license)
 
@@ -157,6 +158,23 @@ The test suite covers:
 - Mutation tests: discriminating physical checks on ten key solver functions.
 - Reference baselines: regression checks for mass, heat, and volatile totals on standard setups.
 - Restart tests: exact bitwise checks for resumed runs on all markers, grid fields, atmosphere, and random seed states.
+
+---
+
+## Contributing and Code Style
+
+Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.com/invenia/BlueStyle) code formatting convention:
+
+1. Format code before committing:
+   ```julia
+   using JuliaFormatter
+   format(".", BlueStyle())
+   ```
+2. Verify that all tests pass:
+   ```bash
+   julia --project=. test/runtests.jl
+   ```
+3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `all`) on Julia 1.12 and 1.13 (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), and test quality standards (`test-quality`).
 
 ---
 

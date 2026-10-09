@@ -8,14 +8,16 @@ $(SIGNATURES)
 function update_pyrolysis!(
     state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig
 )::Union{Nothing,Matrix{Float64}}
-    hcnspo_props = haskey(state.markers.groups, :hcnspo) ? state.markers.groups.hcnspo : nothing
+    hcnspo_props =
+        haskey(state.markers.groups, :hcnspo) ? state.markers.groups.hcnspo : nothing
     if !cfg.refractory.active || !cfg.refractory.kinetics_active || hcnspo_props === nothing
         return nothing
     end
 
     core = state.markers.core
     metal = haskey(state.markers.groups, :metal) ? state.markers.groups.metal : nothing
-    redox_props = haskey(state.markers.groups, :redox) ? state.markers.groups.redox : nothing
+    redox_props =
+        haskey(state.markers.groups, :redox) ? state.markers.groups.redox : nothing
 
     Xfem = metal !== nothing ? metal.Xfem : nothing
     Xfe_bulk = metal !== nothing ? metal.Xfe_bulk : nothing

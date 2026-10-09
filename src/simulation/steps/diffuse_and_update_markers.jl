@@ -45,13 +45,42 @@ function diffuse_and_update_markers!(
         )
     end
 
-    interp_arrays = ws !== nothing ? ws.interp_arrays : setup_interpolated_properties(coords)
+    interp_arrays =
+        ws !== nothing ? ws.interp_arrays : setup_interpolated_properties(coords)
     (
-        ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM,
-        RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM,
-        RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM,
-        RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM,
-        SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM,
+        ETA0SUM,
+        ETASUM,
+        GGGSUM,
+        SXYSUM,
+        COHSUM,
+        TENSUM,
+        FRISUM,
+        WTSUM,
+        RHOXSUM,
+        RHOFXSUM,
+        KXSUM,
+        PHIXSUM,
+        RXSUM,
+        WTXSUM,
+        RHOYSUM,
+        RHOFYSUM,
+        KYSUM,
+        PHIYSUM,
+        RYSUM,
+        WTYSUM,
+        RHOSUM,
+        RHOCPSUM,
+        ALPHASUM,
+        ALPHAFSUM,
+        HRSUM,
+        GGGPSUM,
+        SXXSUM,
+        TKSUM,
+        PHISUM,
+        DMPSUM,
+        DHPSUM,
+        XWSSUM,
+        WTPSUM,
     ) = interp_arrays
 
     apply_subgrid_stress_diffusion!(

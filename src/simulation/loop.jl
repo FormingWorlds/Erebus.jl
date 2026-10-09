@@ -264,7 +264,11 @@ function simulation_loop(
 
                 while true
                     # Determine target timestep duration for this attempt
-                    dt_step_target = dt_reduced_by_maxDT ? min(state.dt, dt_longest) : min(state.dt * cfg.time.dtcoefup, dt_longest)
+                    dt_step_target = if dt_reduced_by_maxDT
+                        min(state.dt, dt_longest)
+                    else
+                        min(state.dt * cfg.time.dtcoefup, dt_longest)
+                    end
                     state.dt = dt_step_target
                     dt_reduced_by_maxDT = false
                     dt_step_initial = state.dt
@@ -281,7 +285,9 @@ function simulation_loop(
 
                     # Step 3: P2M interpolation
                     interpolate_markers_to_grid!(
-                        state, coords_ref[], cfg;
+                        state,
+                        coords_ref[],
+                        cfg;
                         p2m_workspace=ws.p2m,
                         thread_buffers=ws.thread_buffers,
                         interp_arrays=ws.interp_arrays,
@@ -289,10 +295,7 @@ function simulation_loop(
 
                     # Step 4: Gravity solve
                     solve_gravity!(
-                        state, coords_ref[], cfg;
-                        F_grav=ws.F_grav,
-                        RP=ws.RP,
-                        SP=ws.SP,
+                        state, coords_ref[], cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP
                     )
 
                     # Step 4b: Surface radiation boundary condition
@@ -304,7 +307,10 @@ function simulation_loop(
 
                     # Steps 5 & 6: Thermomechanical outer iteration loop
                     res = solve_thermomechanical_iterations!(
-                        state, coords_ref[], cfg, ws;
+                        state,
+                        coords_ref[],
+                        cfg,
+                        ws;
                         DHP_pyro=DHP_pyro,
                         dt_step_initial=dt_step_initial,
                     )
@@ -318,10 +324,14 @@ function simulation_loop(
                     if !res.plastic_converged
                         num_dt_reductions += 1
                         if num_dt_reductions > cfg.solver.max_dt_reductions
-                            throw(PlasticConvergenceError(
-                                timestep, res.last_plastic_residual, state.dt,
-                                "Plastic iterations failed to converge after $(cfg.solver.max_dt_reductions) dt reductions",
-                            ))
+                            throw(
+                                PlasticConvergenceError(
+                                    timestep,
+                                    res.last_plastic_residual,
+                                    state.dt,
+                                    "Plastic iterations failed to converge after $(cfg.solver.max_dt_reductions) dt reductions",
+                                ),
+                            )
                         end
                         restore_step_state!(state, coords_ref, ws, snapshot)
                         dt_step_target = min(dt_step_target / 2.0, dt_next)
@@ -337,8 +347,7 @@ function simulation_loop(
 
                 # Step 7: Venting and degassing
                 vent_res = vent_and_degas!(
-                    state, coords_ref[], cfg;
-                    Fm_step_start=ws.Fm_step_start,
+                    state, coords_ref[], cfg; Fm_step_start=ws.Fm_step_start
                 )
 
                 # Step 8: Coupled surface atmosphere and escape
@@ -349,11 +358,22 @@ function simulation_loop(
 
                 # Step 10: Replenishment
                 replenish!(
-                    state, coords_ref[], cfg;
+                    state,
+                    coords_ref[],
+                    cfg;
                     mdis=ws.mdis,
                     mnum=ws.mnum,
                     randomized=random_markers,
-                    step_start_buffers=(ws.Xfe_bulk_step_start, ws.Xfem_step_start, ws.F_extract_m_step_start, ws.Fm_step_start, ws.Xfe_H_m_step_start, ws.Xfe_C_m_step_start, ws.Xfe_N_m_step_start, ws.Xfe_S_m_step_start),
+                    step_start_buffers=(
+                        ws.Xfe_bulk_step_start,
+                        ws.Xfem_step_start,
+                        ws.F_extract_m_step_start,
+                        ws.Fm_step_start,
+                        ws.Xfe_H_m_step_start,
+                        ws.Xfe_C_m_step_start,
+                        ws.Xfe_N_m_step_start,
+                        ws.Xfe_S_m_step_start,
+                    ),
                 )
 
                 # Step 11: Telescoping domain doubling (post-convergence)
@@ -364,7 +384,10 @@ function simulation_loop(
 
                 # Step diagnostics, telemetry, checkpoints, progress
                 advance_step_diagnostics!(
-                    state, coords_ref[], cfg, ws;
+                    state,
+                    coords_ref[],
+                    cfg,
+                    ws;
                     output_path=output_path,
                     telemetry_io=telemetry_io,
                     dt_aphimax_step_max=dt_aphimax_step_max,

@@ -223,20 +223,16 @@ function setup_simulation_markers_and_state(
         )
         @info "Resumed simulation from checkpoint: $restart_from at timestep $(start_step_val - 1)"
     else
-        (
-            ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY,
-            RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx,
-            RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy,
-            RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP,
-            EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf,
-            pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS
-        ) = setup_staggered_grid_properties(coords; rng=rng)
+        (ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY, RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx, RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy, RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP, EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf, pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS) = setup_staggered_grid_properties(
+            coords; rng=rng
+        )
 
         (ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0) = setup_staggered_grid_properties_helpers(
             coords; rng=rng
         )
 
-        Q_metric = cfg.geometry.spherical_metric ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
+        Q_metric =
+            cfg.geometry.spherical_metric ? zeros(Float64, coords.Ny1, coords.Nx1) : nothing
         DQPF = zeros(Float64, coords.Ny1, coords.Nx1)
         DQPFSUM = zeros(Float64, coords.Ny1, coords.Nx1)
         S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
@@ -244,27 +240,93 @@ function setup_simulation_markers_and_state(
         Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
 
         grids = GridArrays(
-            ETA, ETA0, GGG, EXY, SXY, SXY0, wyx, COH, TEN, FRI, YNY,
-            RHOX, RHOFX, KX, PHIX, vx, vxf, RX, qxD, gx,
-            RHOY, RHOFY, KY, PHIY, vy, vyf, RY, qyD, gy,
-            RHO, RHOCP, ALPHA, ALPHAF, HR, HA, HS, ETAP, GGGP,
-            EXX, SXX, SXX0, tk1, tk2, DT, DT0, vxp, vyp, vxpf, vypf,
-            pr, pf, ps, pr0, pf0, ps0, ETAPHI, BETAPHI, PHI, APHI, FI, DMP, DHP, XWS,
-            ETA5, ETA00, YNY5, YNY00, YNY_inv_ETA, DSXY, DSY, EII, SII, DSXX, tk0,
-            DQPF, DQPFSUM, S_vent_grid, Q_lat_grid, Q_seg_grid, Q_metric,
+            ETA,
+            ETA0,
+            GGG,
+            EXY,
+            SXY,
+            SXY0,
+            wyx,
+            COH,
+            TEN,
+            FRI,
+            YNY,
+            RHOX,
+            RHOFX,
+            KX,
+            PHIX,
+            vx,
+            vxf,
+            RX,
+            qxD,
+            gx,
+            RHOY,
+            RHOFY,
+            KY,
+            PHIY,
+            vy,
+            vyf,
+            RY,
+            qyD,
+            gy,
+            RHO,
+            RHOCP,
+            ALPHA,
+            ALPHAF,
+            HR,
+            HA,
+            HS,
+            ETAP,
+            GGGP,
+            EXX,
+            SXX,
+            SXX0,
+            tk1,
+            tk2,
+            DT,
+            DT0,
+            vxp,
+            vyp,
+            vxpf,
+            vypf,
+            pr,
+            pf,
+            ps,
+            pr0,
+            pf0,
+            ps0,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            APHI,
+            FI,
+            DMP,
+            DHP,
+            XWS,
+            ETA5,
+            ETA00,
+            YNY5,
+            YNY00,
+            YNY_inv_ETA,
+            DSXY,
+            DSY,
+            EII,
+            SII,
+            DSXX,
+            tk0,
+            DQPF,
+            DQPFSUM,
+            S_vent_grid,
+            Q_lat_grid,
+            Q_seg_grid,
+            Q_metric,
         )
 
         markers = init_marker_arrays(marknum, cfg, coords; rng=rng, initial_time=timesum)
         core = markers.core
-        (;
-            Xfem, Xfem0, Xfe_bulk, Xfe_bulk_step_start, Xfem_step_start,
-            F_extract_m, F_extract_m_step_start, Fm_step_start,
-            XH2Om, XCm, XNm, XSm, X_graphite_m,
-            Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m,
-            Xmin_troilite_m, Xmin_schreibersite_m, Xmin_cohenite_m,
-            Xmin_graphite_m, Xmin_nitride_m, Xmin_metal_matrix_m,
-            t_accreted, hcnspo_props, redox_props,
-        ) = _extract_optional_marker_arrays(markers, cfg, marknum, cfg.magma_transport.active)
+        (; Xfem, Xfem0, Xfe_bulk, Xfe_bulk_step_start, Xfem_step_start, F_extract_m, F_extract_m_step_start, Fm_step_start, XH2Om, XCm, XNm, XSm, X_graphite_m, Xfe_H_m, Xfe_C_m, Xfe_N_m, Xfe_S_m, Xmin_troilite_m, Xmin_schreibersite_m, Xmin_cohenite_m, Xmin_graphite_m, Xmin_nitride_m, Xmin_metal_matrix_m, t_accreted, hcnspo_props, redox_props) = _extract_optional_marker_arrays(
+            markers, cfg, marknum, cfg.magma_transport.active
+        )
 
         define_markers!(
             markers;
@@ -301,22 +363,32 @@ function setup_simulation_markers_and_state(
 
         resize!(core.w3d_m, marknum)
         for m in 1:marknum
-            core.w3d_m[m] = marker_out_of_plane_length(core.xm[m], core.ym[m], xcenter_val, ycenter_val)
+            core.w3d_m[m] = marker_out_of_plane_length(
+                core.xm[m], core.ym[m], xcenter_val, ycenter_val
+            )
         end
 
-        M_atm_species = if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
-            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
-        else
-            nothing
-        end
-        M_escaped_species = if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
-            Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
-        else
-            nothing
-        end
+        M_atm_species =
+            if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
+                Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+            else
+                nothing
+            end
+        M_escaped_species =
+            if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
+                Dict{Symbol,Float64}(sp => 0.0 for sp in cfg.escape.species_list)
+            else
+                nothing
+            end
 
         accumulators = SimulationAccumulators(
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
             Float64(cfg.disk.p_amb_disk),
             Float64(rplanet_val),
             0.0,
@@ -466,9 +538,12 @@ function init_simulation(
     restart_from::AbstractString=cfg.output.restart_from,
     force_restart_config::Bool=false,
 )
-    coords, formatted_output_path = setup_simulation_grid_and_coords(cfg; output_path=output_path)
+    coords, formatted_output_path = setup_simulation_grid_and_coords(
+        cfg; output_path=output_path
+    )
     state, coords_actual, start_step_val, is_restart = setup_simulation_markers_and_state(
-        cfg, coords;
+        cfg,
+        coords;
         output_path=formatted_output_path,
         restart_from=restart_from,
         force_restart_config=force_restart_config,
@@ -580,4 +655,3 @@ function _reconstruct_checkpoint_marker_arrays(
     end
     return MarkerArrays(core, NamedTuple(group_pairs))
 end
-

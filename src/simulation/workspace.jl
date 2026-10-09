@@ -263,10 +263,7 @@ Reset workspace arrays and solver caches when grid coordinates change.
 $(SIGNATURES)
 """
 function reset_workspaces_for_grid!(
-    ws::SimulationWorkspaces,
-    coords::GridCoordinates,
-    cfg::SimulationConfig,
-    marknum::Int,
+    ws::SimulationWorkspaces, coords::GridCoordinates, cfg::SimulationConfig, marknum::Int
 )
     darcy_elim_val = cfg.solver.darcy_elimination
     dof_per_node_val = darcy_elim_val ? 4 : 6
@@ -280,7 +277,9 @@ function reset_workspaces_for_grid!(
 
     ws.RP, ws.SP = setup_gravitational_lse(coords)
     if cfg.geometry.gravity_mode === :poisson2d
-        LP = assemble_gravitational_lse!(zeros(coords.Ny1, coords.Nx1), ws.RP; coords=coords)
+        LP = assemble_gravitational_lse!(
+            zeros(coords.Ny1, coords.Nx1), ws.RP; coords=coords
+        )
         ws.F_grav = lu(LP.cscmatrix)
     else
         ws.F_grav = nothing

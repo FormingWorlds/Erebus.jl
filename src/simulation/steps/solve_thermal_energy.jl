@@ -147,7 +147,8 @@ function solve_thermal_energy!(
     end
 
     if cfg.venting.active && cfg.venting.latent_cooling
-        @. g.Q_lat_grid = -cfg.venting.L_sublimation * cfg.materials.rhofluidm[2] * g.S_vent_grid
+        @. g.Q_lat_grid =
+            -cfg.venting.L_sublimation * cfg.materials.rhofluidm[2] * g.S_vent_grid
     else
         fill!(g.Q_lat_grid, 0.0)
     end
@@ -173,10 +174,26 @@ function solve_thermal_energy!(
             F_extract_m = vols.F_extract_m
         end
 
-        XH2Om = haskey(state.markers.groups, :volatiles) ? state.markers.groups.volatiles.XH2Om : nothing
-        XCm = haskey(state.markers.groups, :volatiles) ? state.markers.groups.volatiles.XCm : nothing
-        XNm = haskey(state.markers.groups, :volatiles) ? state.markers.groups.volatiles.XNm : nothing
-        XSm = haskey(state.markers.groups, :volatiles) ? state.markers.groups.volatiles.XSm : nothing
+        XH2Om = if haskey(state.markers.groups, :volatiles)
+            state.markers.groups.volatiles.XH2Om
+        else
+            nothing
+        end
+        XCm = if haskey(state.markers.groups, :volatiles)
+            state.markers.groups.volatiles.XCm
+        else
+            nothing
+        end
+        XNm = if haskey(state.markers.groups, :volatiles)
+            state.markers.groups.volatiles.XNm
+        else
+            nothing
+        end
+        XSm = if haskey(state.markers.groups, :volatiles)
+            state.markers.groups.volatiles.XSm
+        else
+            nothing
+        end
 
         apply_silicate_melt_segregation!(
             core.xm,
@@ -193,7 +210,14 @@ function solve_thermal_energy!(
             rplanet=state.accumulators.rplanet,
             gx=g.gx,
             gy=g.gy,
-            Q_seg_grid=(cfg.magma_transport.segregation_heating || cfg.magma_transport.sensible_heat_transport) ? g.Q_seg_grid : nothing,
+            Q_seg_grid=if (
+                cfg.magma_transport.segregation_heating ||
+                cfg.magma_transport.sensible_heat_transport
+            )
+                g.Q_seg_grid
+            else
+                nothing
+            end,
             Q_lat_grid=cfg.magma_transport.latent_crystallization ? g.Q_lat_grid : nothing,
             rho_silicate=cfg.materials.rhosolidm[1],
             rho_melt=cfg.melting.rho_melt,
@@ -216,12 +240,17 @@ function solve_thermal_energy!(
         )
     end
 
-    Q_seg_val = if (coreformation_active_val && cfg.coreformation.segregation_heating) ||
-        (magma_active_val && (cfg.magma_transport.segregation_heating || cfg.magma_transport.sensible_heat_transport))
-        g.Q_seg_grid
-    else
-        nothing
-    end
+    Q_seg_val =
+        if (coreformation_active_val && cfg.coreformation.segregation_heating) || (
+            magma_active_val && (
+                cfg.magma_transport.segregation_heating ||
+                cfg.magma_transport.sensible_heat_transport
+            )
+        )
+            g.Q_seg_grid
+        else
+            nothing
+        end
 
     LT = assemble_thermal_lse!(
         g.tk1,
@@ -244,15 +273,14 @@ function solve_thermal_energy!(
 
     if ws.thermal_cache === nothing
         thermal_prob = LinearProblem(LT.cscmatrix, ws.RT)
-        ws.thermal_cache = init(
-            thermal_prob, UMFPACKFactorization(; reuse_symbolic=true)
-        )
+        ws.thermal_cache = init(thermal_prob, UMFPACKFactorization(; reuse_symbolic=true))
     else
         ws.thermal_cache.A = LT.cscmatrix
         ws.thermal_cache.b = ws.RT
     end
     thermal_sol = solve!(ws.thermal_cache)
-    if !LinearSolve.SciMLBase.successful_retcode(thermal_sol) || !all(isfinite, thermal_sol.u)
+    if !LinearSolve.SciMLBase.successful_retcode(thermal_sol) ||
+        !all(isfinite, thermal_sol.u)
         error("Thermal solver failed with retcode $(thermal_sol.retcode)")
     end
 

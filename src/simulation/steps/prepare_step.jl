@@ -13,24 +13,78 @@ function prepare_step_ambient!(
 )
     if ws !== nothing
         (
-            ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM,
-            RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM,
-            RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM,
-            RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM,
-            SXXSUM, TKSUM, PHISUM, DMPSUM, DHPSUM, XWSSUM, WTPSUM,
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            DMPSUM,
+            DHPSUM,
+            XWSSUM,
+            WTPSUM,
         ) = ws.interp_arrays
 
         reset_interpolated_properties!(
-            ETA0SUM, ETASUM, GGGSUM, SXYSUM, COHSUM, TENSUM, FRISUM, WTSUM,
-            RHOXSUM, RHOFXSUM, KXSUM, PHIXSUM, RXSUM, WTXSUM,
-            RHOYSUM, RHOFYSUM, KYSUM, PHIYSUM, RYSUM, WTYSUM,
-            RHOSUM, RHOCPSUM, ALPHASUM, ALPHAFSUM, HRSUM, GGGPSUM,
-            SXXSUM, TKSUM, PHISUM, WTPSUM,
+            ETA0SUM,
+            ETASUM,
+            GGGSUM,
+            SXYSUM,
+            COHSUM,
+            TENSUM,
+            FRISUM,
+            WTSUM,
+            RHOXSUM,
+            RHOFXSUM,
+            KXSUM,
+            PHIXSUM,
+            RXSUM,
+            WTXSUM,
+            RHOYSUM,
+            RHOFYSUM,
+            KYSUM,
+            PHIYSUM,
+            RYSUM,
+            WTYSUM,
+            RHOSUM,
+            RHOCPSUM,
+            ALPHASUM,
+            ALPHAFSUM,
+            HRSUM,
+            GGGPSUM,
+            SXXSUM,
+            TKSUM,
+            PHISUM,
+            WTPSUM,
         )
     end
 
     T_amb, P_amb, _ = compute_ambient_conditions(state.timesum, cfg.disk)
-    isfinite(T_amb) || throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
+    isfinite(T_amb) ||
+        throw(DomainError(T_amb, "Ambient disk temperature must be finite, got $T_amb"))
 
     P_atm = if cfg.atmosphere.active && state.atm !== nothing
         state.atm.P_surf
@@ -69,12 +123,14 @@ function apply_surface_radiation!(
 )
     if cfg.thermodynamics.surface_radiation
         T_amb, _, _ = compute_ambient_conditions(state.timesum, cfg.disk)
-        tau_LW_val = (cfg.atmosphere.active && state.atm !== nothing) ? state.atm.tau_LW : 0.0
-        T_amb_rad = if cfg.atmosphere.active && state.atm !== nothing && state.atm.T_surf_eq > 0.0
-            state.atm.T_surf_eq
-        else
-            T_amb
-        end
+        tau_LW_val =
+            (cfg.atmosphere.active && state.atm !== nothing) ? state.atm.tau_LW : 0.0
+        T_amb_rad =
+            if cfg.atmosphere.active && state.atm !== nothing && state.atm.T_surf_eq > 0.0
+                state.atm.T_surf_eq
+            else
+                T_amb
+            end
         apply_radiative_surface_boundary!(
             state.grids.KX,
             state.grids.KY,

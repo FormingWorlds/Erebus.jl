@@ -120,14 +120,18 @@ $(SIGNATURES)
 @generated function copy_grid_arrays!(dst::GridArrays, src::GridArrays)
     exprs = Expr[]
     for fn in fieldnames(GridArrays)
-        push!(exprs, quote
-            let v_src = getfield(src, $(QuoteNode(fn))),
-                v_dst = getfield(dst, $(QuoteNode(fn)))
-                if v_src !== nothing && v_dst !== nothing
-                    copyto!(v_dst, v_src)
+        push!(
+            exprs,
+            quote
+                let v_src = getfield(src, $(QuoteNode(fn))),
+                    v_dst = getfield(dst, $(QuoteNode(fn)))
+
+                    if v_src !== nothing && v_dst !== nothing
+                        copyto!(v_dst, v_src)
+                    end
                 end
-            end
-        end)
+            end,
+        )
     end
     return Expr(:block, exprs..., :(return dst))
 end

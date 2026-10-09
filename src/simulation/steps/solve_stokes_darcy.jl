@@ -262,7 +262,8 @@ function assemble_and_solve_hydromechanical!(
             ws.hydromech_cache.b = ws.R
         end
         hydromech_sol = solve!(ws.hydromech_cache)
-        if !LinearSolve.SciMLBase.successful_retcode(hydromech_sol) || !all(isfinite, hydromech_sol.u)
+        if !LinearSolve.SciMLBase.successful_retcode(hydromech_sol) ||
+            !all(isfinite, hydromech_sol.u)
             error("LinearSolve failed with retcode $(hydromech_sol.retcode)")
         end
         ws.S .= hydromech_sol.u
@@ -292,7 +293,16 @@ function postprocess_hydromechanical_solution!(
     if darcy_elim_val
         process_hydromechanical_4var_solution!(ws.S, g.vx, g.vy, g.pr, g.pf; coords=coords)
         reconstruct_darcy_fluxes!(
-            g.qxD, g.qyD, g.pf, g.RHOFX, g.RHOFY, g.RX, g.RY, g.gx, g.gy, coords;
+            g.qxD,
+            g.qyD,
+            g.pf,
+            g.RHOFX,
+            g.RHOFY,
+            g.RX,
+            g.RY,
+            g.gx,
+            g.gy,
+            coords;
             hydrofracture=cfg.poroelasticity.hydrofracture,
             pr=ws.hydromech.pr_presolve,
             pf_eff=ws.hydromech.pf_presolve,
@@ -320,10 +330,11 @@ function postprocess_hydromechanical_solution!(
 
     n_flips_iter = 0
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c = 0.25 * (
-            g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-            g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-        )
+        peff_c =
+            0.25 * (
+                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
+                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+            )
         is_breached = is_hydrofracture_breached(peff_c, g.TEN[i, j])
         if is_breached != ws.fractured_cells_prev[i, j]
             n_flips_iter += 1
@@ -335,7 +346,15 @@ function postprocess_hydromechanical_solution!(
     ws.hydromech.ry_eff_prev .= ws.hydromech.ry_eff
 
     aphimax = compute_Aϕ!(
-        g.APHI, g.ETAPHI, g.BETAPHI, g.PHI, g.pr, g.pf, g.pr0, g.pf0, state.dt;
+        g.APHI,
+        g.ETAPHI,
+        g.BETAPHI,
+        g.PHI,
+        g.pr,
+        g.pf,
+        g.pr0,
+        g.pf0,
+        state.dt;
         coords=coords,
         betasolid=cur_betasolid,
         phimin=cfg.poroelasticity.phimin,
@@ -349,7 +368,12 @@ function postprocess_hydromechanical_solution!(
 
     maxDTcurrent = maximum(abs, g.DT0)
     state.dt = compute_adaptive_timestep(
-        g.vx, g.vy, g.vxf, g.vyf, state.dt, aphimax;
+        g.vx,
+        g.vy,
+        g.vxf,
+        g.vyf,
+        state.dt,
+        aphimax;
         coords=coords,
         dxymax_val=cfg.time.dxymax,
         dphimax_val=cfg.solver.dphimax,
@@ -366,14 +390,36 @@ function postprocess_hydromechanical_solution!(
     )
 
     compute_stress_strainrate!(
-        g.vx, g.vy, g.ETA, g.GGG, g.ETAP, g.GGGP,
-        g.SXX0, g.SXY0, g.EXX, g.EXY, g.SXX, g.SXY,
-        g.DSXX, g.DSXY, g.EII, g.SII, state.dt;
+        g.vx,
+        g.vy,
+        g.ETA,
+        g.GGG,
+        g.ETAP,
+        g.GGGP,
+        g.SXX0,
+        g.SXY0,
+        g.EXX,
+        g.EXY,
+        g.SXX,
+        g.SXY,
+        g.DSXX,
+        g.DSXY,
+        g.EII,
+        g.SII,
+        state.dt;
         coords=coords,
     )
 
     _ = compute_Aϕ!(
-        g.APHI, g.ETAPHI, g.BETAPHI, g.PHI, g.pr, g.pf, g.pr0, g.pf0, state.dt;
+        g.APHI,
+        g.ETAPHI,
+        g.BETAPHI,
+        g.PHI,
+        g.pr,
+        g.pf,
+        g.pr0,
+        g.pf0,
+        state.dt;
         coords=coords,
         betasolid=cur_betasolid,
         phimin=cfg.poroelasticity.phimin,
@@ -383,8 +429,23 @@ function postprocess_hydromechanical_solution!(
     symmetrize_p_node_observables!(g.SXX, g.APHI, g.PHI, g.pr, g.pf, g.ps)
 
     adjustment_ok = compute_nodal_adjustment!(
-        g.ETA, g.ETA0, g.ETA5, g.GGG, g.SXX, g.SXY, g.pr, g.pf,
-        g.COH, g.TEN, g.FRI, g.YNY, g.YNY5, ws.YERRNOD, g.DSY, state.dt, iplast;
+        g.ETA,
+        g.ETA0,
+        g.ETA5,
+        g.GGG,
+        g.SXX,
+        g.SXY,
+        g.pr,
+        g.pf,
+        g.COH,
+        g.TEN,
+        g.FRI,
+        g.YNY,
+        g.YNY5,
+        ws.YERRNOD,
+        g.DSY,
+        state.dt,
+        iplast;
         etawt=cfg.solver.etawt,
         etamax=cfg.solver.etamax,
         etamin=cfg.solver.etamin,
@@ -394,7 +455,15 @@ function postprocess_hydromechanical_solution!(
 
     if !adjustment_ok
         state.dt = finalize_plastic_iteration_pass!(
-            g.ETA, g.ETA5, g.ETA00, g.YNY, g.YNY5, g.YNY00, g.YNY_inv_ETA, state.dt, iplast;
+            g.ETA,
+            g.ETA5,
+            g.ETA00,
+            g.YNY,
+            g.YNY5,
+            g.YNY00,
+            g.YNY_inv_ETA,
+            state.dt,
+            iplast;
             dtstep=cfg.time.dtstep,
             dtcoefdn=cfg.time.dtcoefdn,
         )
@@ -432,10 +501,11 @@ function solve_stokes_darcy!(
     ws.hydromech.ry_eff_prev .= g.RY
 
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c = 0.25 * (
-            g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-            g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-        )
+        peff_c =
+            0.25 * (
+                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
+                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+            )
         ws.fractured_cells_prev[i, j] = is_hydrofracture_breached(peff_c, g.TEN[i, j])
     end
 
@@ -447,14 +517,25 @@ function solve_stokes_darcy!(
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
-            state, coords, cfg, ws;
-            titer=titer, iplast=iplast,
-            cur_betasolid=cur_betasolid, cur_betafluid=cur_betafluid,
+            state,
+            coords,
+            cfg,
+            ws;
+            titer=titer,
+            iplast=iplast,
+            cur_betasolid=cur_betasolid,
+            cur_betafluid=cur_betafluid,
         )
         res = postprocess_hydromechanical_solution!(
-            state, coords, cfg, ws;
-            titer=titer, iplast=iplast, dt_step_initial=dt_step_initial,
-            cur_betasolid=cur_betasolid, cur_betafluid=cur_betafluid,
+            state,
+            coords,
+            cfg,
+            ws;
+            titer=titer,
+            iplast=iplast,
+            dt_step_initial=dt_step_initial,
+            cur_betasolid=cur_betasolid,
+            cur_betafluid=cur_betafluid,
         )
         dt_aphimax_step_max = max(dt_aphimax_step_max, state.dt * res.aphimax)
         n_flips_last = res.n_flips_iter
@@ -467,7 +548,9 @@ function solve_stokes_darcy!(
     end
 
     if !plastic_converged
-        last_plastic_residual = ws.YERRNOD[min(max_plastic_iterations_val, length(ws.YERRNOD))]
+        last_plastic_residual = ws.YERRNOD[min(
+            max_plastic_iterations_val, length(ws.YERRNOD)
+        )]
         return (;
             plastic_converged=false,
             last_plastic_residual=last_plastic_residual,
