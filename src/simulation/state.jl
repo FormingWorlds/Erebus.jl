@@ -113,6 +113,30 @@ function Base.copy(g::GridArrays)
 end
 
 """
+Copy all grid arrays in-place from source to destination.
+
+$(SIGNATURES)
+"""
+@generated function copy_grid_arrays!(dst::GridArrays, src::GridArrays)
+    exprs = Expr[]
+    for fn in fieldnames(GridArrays)
+        push!(
+            exprs,
+            quote
+                let v_src = getfield(src, $(QuoteNode(fn))),
+                    v_dst = getfield(dst, $(QuoteNode(fn)))
+
+                    if v_src !== nothing && v_dst !== nothing
+                        copyto!(v_dst, v_src)
+                    end
+                end
+            end,
+        )
+    end
+    return Expr(:block, exprs..., :(return dst))
+end
+
+"""
 Diagnostic and physical mass accumulators across global simulation evolution.
 """
 mutable struct SimulationAccumulators
@@ -166,7 +190,7 @@ end
 """
 Complete physical, numerical, and diagnostic simulation state.
 """
-struct SimulationState{G<:NamedTuple,R<:Random.AbstractRNG,T<:AbstractVector}
+mutable struct SimulationState{G<:NamedTuple,R<:Random.AbstractRNG,T<:AbstractVector}
     grids::GridArrays
     markers::MarkerArrays{G}
     accumulators::SimulationAccumulators
@@ -264,4 +288,118 @@ function Base.NamedTuple(s::SimulationState)
         dt=s.dt,
         timestep=s.timestep,
     )
+end
+
+function Base.setproperty!(s::SimulationState, sym::Symbol, val)
+    if sym in fieldnames(SimulationState)
+        return setfield!(s, sym, val)
+    elseif hasfield(SimulationAccumulators, sym)
+        return setfield!(getfield(s, :accumulators), sym, val)
+    else
+        error("type SimulationState has no field or delegated mutable property '$sym'")
+    end
+end
+
+"""
+Snapshot of simulation state at timestep start for plastic retry rollback.
+
+$(FIELDS)
+"""
+struct StepSnapshot{G<:NamedTuple}
+    grids::GridArrays
+    markers::MarkerArrays{G}
+    scalars::NamedTuple
+    YERRNOD::Vector{Float64}
+    coords::GridCoordinates
+end
+
+"""
+Capture simulation state snapshot at timestep start.
+
+$(SIGNATURES)
+"""
+function snapshot_step_state(
+    state::SimulationState, coords::GridCoordinates, ws::SimulationWorkspaces
+)
+    return StepSnapshot(
+        copy(state.grids),
+        copy(state.markers),
+        (;
+            marknum=length(state.markers),
+            M_planet_val=state.accumulators.M_planet_val,
+            M_accreted_total=state.accumulators.M_accreted_total,
+            telescope_level=state.accumulators.telescope_level,
+            rplanet_val=state.accumulators.rplanet,
+            xcenter_val=state.accumulators.xcenter,
+            ycenter_val=state.accumulators.ycenter,
+        ),
+        copy(ws.YERRNOD),
+        coords,
+    )
+end
+
+"""
+Snapshot step state generic fallback for NamedTuple or dict state representations.
+
+$(SIGNATURES)
+"""
+function snapshot_step_state(state)
+    if hasproperty(state, :markers) && state.markers isa MarkerArrays
+        return (;
+            markers=copy(state.markers),
+            arrays=if hasproperty(state, :arrays)
+                deepcopy(state.arrays)
+            else
+                (hasproperty(state, :grids) ? deepcopy(state.grids) : (;))
+            end,
+            scalars=deepcopy(state.scalars),
+        )
+    else
+        return deepcopy(state)
+    end
+end
+
+"""
+Restore simulation state in-place from a step-start snapshot.
+
+$(SIGNATURES)
+"""
+function restore_step_state!(
+    state::SimulationState,
+    coords_ref::Ref{GridCoordinates},
+    ws::SimulationWorkspaces,
+    snapshot::StepSnapshot,
+)
+    copy_grid_arrays!(state.grids, snapshot.grids)
+    restore_marker_arrays!(state.markers, snapshot.markers)
+    acc = state.accumulators
+    acc.M_planet_val = snapshot.scalars.M_planet_val
+    acc.M_accreted_total = snapshot.scalars.M_accreted_total
+    acc.telescope_level = snapshot.scalars.telescope_level
+    acc.rplanet = snapshot.scalars.rplanet_val
+    acc.xcenter = snapshot.scalars.xcenter_val
+    acc.ycenter = snapshot.scalars.ycenter_val
+    copyto!(ws.YERRNOD, snapshot.YERRNOD)
+    coords_ref[] = snapshot.coords
+    return state
+end
+
+"""
+Restore simulation state generic fallback for NamedTuple representations.
+
+$(SIGNATURES)
+"""
+function restore_step_state!(target, source)
+    for (k, v) in pairs(source)
+        if v isa AbstractArray && haskey(target, k)
+            tgt = target[k]
+            if tgt isa AbstractArray
+                if tgt isa Vector && length(tgt) != length(v)
+                    resize!(tgt, length(v))
+                end
+                copyto!(tgt, v)
+            end
+        end
+    end
+    return target
 end
