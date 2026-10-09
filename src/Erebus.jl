@@ -21,6 +21,12 @@ using TOML
 export run_simulation, load_state, simulation_loop, PlasticConvergenceError
 export accrete!, radiogenic_heating!, interpolate_markers_to_grid!, solve_gravity!
 export vent_and_degas!, evolve_atmosphere!, advect_markers!, replenish!
+export init_simulation, prepare_step_ambient!, apply_surface_radiation!
+export snapshot_step_start_inventories!, update_step_start_pressures!, update_pyrolysis!
+export solve_stokes_darcy!, solve_thermal_energy!, solve_thermomechanical_iterations!
+export diffuse_and_update_markers!, telescope_domain!, advance_step_diagnostics!
+export StepSnapshot, snapshot_step_state, restore_step_state!, copy_grid_arrays!
+export SimulationWorkspaces, reset_workspaces_for_grid!
 export TransferRecord
 export MetalSegregationWorkspace,
     MagmaSegregationWorkspace,
@@ -1108,6 +1114,12 @@ module Simulation
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
         ThermalLSEWorkspace,
+        SimulationWorkspaces,
+        reset_workspaces_for_grid!,
+        StepSnapshot,
+        snapshot_step_state,
+        restore_step_state!,
+        copy_grid_arrays!,
         TransferRecord,
         accrete!,
         radiogenic_heating!,
@@ -1116,7 +1128,19 @@ module Simulation
         vent_and_degas!,
         evolve_atmosphere!,
         advect_markers!,
-        replenish!
+        replenish!,
+        init_simulation,
+        prepare_step_ambient!,
+        apply_surface_radiation!,
+        snapshot_step_start_inventories!,
+        update_step_start_pressures!,
+        update_pyrolysis!,
+        solve_stokes_darcy!,
+        solve_thermal_energy!,
+        solve_thermomechanical_iterations!,
+        diffuse_and_update_markers!,
+        telescope_domain!,
+        advance_step_diagnostics!
     export s_to_Ma,
         setup_dynamic_simulation_parameters,
         save_state,
@@ -1130,6 +1154,12 @@ module Simulation
         MagmaSegregationWorkspace,
         HydromechanicalLSEWorkspace,
         ThermalLSEWorkspace,
+        SimulationWorkspaces,
+        reset_workspaces_for_grid!,
+        StepSnapshot,
+        snapshot_step_state,
+        restore_step_state!,
+        copy_grid_arrays!,
         TransferRecord,
         accrete!,
         radiogenic_heating!,
@@ -1138,7 +1168,19 @@ module Simulation
         vent_and_degas!,
         evolve_atmosphere!,
         advect_markers!,
-        replenish!
+        replenish!,
+        init_simulation,
+        prepare_step_ambient!,
+        apply_surface_radiation!,
+        snapshot_step_start_inventories!,
+        update_step_start_pressures!,
+        update_pyrolysis!,
+        solve_stokes_darcy!,
+        solve_thermal_energy!,
+        solve_thermomechanical_iterations!,
+        diffuse_and_update_markers!,
+        telescope_domain!,
+        advance_step_diagnostics!
 end
 
 module Config
