@@ -548,9 +548,11 @@ function solve_stokes_darcy!(
     end
 
     if !plastic_converged
-        last_plastic_residual = ws.YERRNOD[min(
-            max_plastic_iterations_val, length(ws.YERRNOD)
-        )]
+        last_plastic_residual = if max_plastic_iterations_val > 0
+            ws.YERRNOD[min(max_plastic_iterations_val, length(ws.YERRNOD))]
+        else
+            0.0
+        end
         return (;
             plastic_converged=false,
             last_plastic_residual=last_plastic_residual,

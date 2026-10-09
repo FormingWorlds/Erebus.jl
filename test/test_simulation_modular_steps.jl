@@ -303,4 +303,62 @@ using Erebus
         @test haskey(res_outer, :thermochemical_converged)
         @test res_outer.plastic_converged == true
     end
+
+    @testset "Coupled Physics Simulation Step Integration" begin
+        cfg_base = load_config("configs/test_quick.toml")
+        cfg_coupled = override_config(
+            cfg_base,
+            Dict{String,Any}(
+                "time.n_steps" => 1,
+                "volatiles.active" => true,
+                "melting.active" => true,
+                "coreformation.percolation_active" => true,
+                "coreformation.settling_active" => true,
+                "coreformation.segregation_heating" => true,
+                "metal_partition.active" => true,
+                "magma_transport.active" => true,
+                "venting.active" => true,
+                "venting.latent_cooling" => true,
+            ),
+        )
+        state_coupled = simulation_loop(cfg_coupled)
+        @test state_coupled.timestep == 1
+        @test all(isfinite, state_coupled.grids.Q_seg_grid)
+        @test all(isfinite, state_coupled.grids.Q_lat_grid)
+    end
+
+    @testset "Stokes-Darcy Plastic Non-Convergence Branch" begin
+        cfg_base = default_config()
+        coords = GridCoordinates(cfg_base.grid)
+        state, coords_actual, ws, _, _ = init_simulation(cfg_base)
+
+        cfg_noconv = SimulationConfig(;
+            (
+                f => (
+                    if f === :solver
+                        SolverConfig(max_plastic_iterations=0)
+                    else
+                        getfield(cfg_base, f)
+                    end
+                ) for f in fieldnames(SimulationConfig)
+            )...,
+        )
+
+        res_noconv = Erebus.solve_stokes_darcy!(
+            state, coords_actual, cfg_noconv, ws; titer=1, dt_step_initial=state.dt
+        )
+        @test res_noconv.plastic_converged == false
+        @test iszero(res_noconv.last_plastic_residual)
+        @test res_noconv.n_flips_step_total == 0
+    end
+
+    @testset "Setup Simulation Checkpoint Error Handling" begin
+        cfg = default_config()
+        @test_throws Erebus.CheckpointError init_simulation(
+            cfg; restart_from="nonexistent_checkpoint.jld2"
+        )
+        @test_throws Erebus.CheckpointError init_simulation(
+            cfg; restart_from="invalid_path.jld2"
+        )
+    end
 end
