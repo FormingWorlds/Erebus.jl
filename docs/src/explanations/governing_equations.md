@@ -112,6 +112,17 @@ $$P_{\text{eff}} \le -\sigma_t$$
 
 tensile hydrofracturing occurs, limiting the sustainable pore overpressure.
 
+### 3. Maxwell Viscoelastic Deviatoric Stress Evolution
+Solid matrix deformation combines linear elasticity, characterized by the shear modulus $G$, and non-linear creep or plastic viscosity $\eta$, through a Maxwell viscoelastic constitutive relation:
+
+$$\dot{\varepsilon}_{ij}' = \frac{1}{2\eta} \sigma_{ij}' + \frac{1}{2G} \frac{\mathcal{D}\sigma_{ij}'}{\mathcal{D}t}$$
+
+Over a discrete computational timestep $\Delta t$, the updated deviatoric stress tensor is:
+
+$$\sigma_{ij}' = 2 \eta_{\text{eff}} \dot{\varepsilon}_{ij}' + Z_{\text{visc}} \sigma_{ij}'^{(0)}$$
+
+where $\eta_{\text{eff}} = \frac{\eta G \Delta t}{\eta + G \Delta t}$ is the effective viscoelastic viscosity, and $Z_{\text{visc}} = \frac{\eta}{\eta + G \Delta t}$ is the elastic stress memory factor. Subgrid stress relaxation on Lagrangian markers, controlled by $d_{\text{subgrids}}$, decays subgrid stress oscillations over the local Maxwell relaxation time, $\tau_{\text{Maxwell}} = \eta_{vp,m} / G_m$.
+
 ---
 
 ## Thermal Energy Conservation

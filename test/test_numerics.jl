@@ -2269,4 +2269,62 @@ include("test_helpers.jl")
         @test occursin("Plastic iterations failed to converge", sprint(showerror, err))
         @test occursin("at step 2", sprint(showerror, err))
     end
+
+    @testset "compute_fluid_velocities!(): ghost boundary reset idempotence" begin
+        c_fv = GridCoordinates(GridConfig(Nx=8, Ny=8, xsize=80000.0, ysize=80000.0))
+        PHIX_fv = fill(0.1, c_fv.Ny1, c_fv.Nx1)
+        PHIY_fv = fill(0.1, c_fv.Ny1, c_fv.Nx1)
+        qxD_fv = fill(1.0e-10, c_fv.Ny1, c_fv.Nx1)
+        qyD_fv = fill(-2.0e-10, c_fv.Ny1, c_fv.Nx1)
+        vx_fv = fill(3.0e-9, c_fv.Ny1, c_fv.Nx1)
+        vy_fv = fill(-4.0e-9, c_fv.Ny1, c_fv.Nx1)
+        vxf_fv = fill(99.0, c_fv.Ny1, c_fv.Nx1)
+        vyf_fv = fill(-99.0, c_fv.Ny1, c_fv.Nx1)
+
+        Erebus.compute_fluid_velocities!(
+            PHIX_fv, PHIY_fv, qxD_fv, qyD_fv, vx_fv, vy_fv, vxf_fv, vyf_fv; coords=c_fv
+        )
+        vxf_pass1 = copy(vxf_fv)
+        vyf_pass1 = copy(vyf_fv)
+
+        Erebus.compute_fluid_velocities!(
+            PHIX_fv, PHIY_fv, qxD_fv, qyD_fv, vx_fv, vy_fv, vxf_fv, vyf_fv; coords=c_fv
+        )
+        @test isapprox(vxf_fv, vxf_pass1; rtol=1e-12, atol=1e-20)
+        @test isapprox(vyf_fv, vyf_pass1; rtol=1e-12, atol=1e-20)
+        @test all(x -> isapprox(x, 3.0e-9; rtol=1e-12), vxf_fv[:, c_fv.Nx1])
+        @test all(x -> isapprox(x, -4.0e-9; rtol=1e-12), vyf_fv[c_fv.Ny1, :])
+    end
+
+    @testset "compute_adiabatic_heating!(): zero pressure gradient and ghost reset" begin
+        c_ha = GridCoordinates(GridConfig(Nx=8, Ny=8, xsize=80000.0, ysize=80000.0))
+        HA_test = fill(42.0, c_ha.Ny1, c_ha.Nx1)
+        tk1_ha = fill(1200.0, c_ha.Ny1, c_ha.Nx1)
+        ALPHA_ha = fill(3.0e-5, c_ha.Ny1, c_ha.Nx1)
+        ALPHAF_ha = fill(2.0e-4, c_ha.Ny1, c_ha.Nx1)
+        PHI_ha = fill(0.05, c_ha.Ny1, c_ha.Nx1)
+        vx_ha = [1.0e-8 * j for i in 1:c_ha.Ny1, j in 1:c_ha.Nx1]
+        vy_ha = [-2.0e-8 * i for i in 1:c_ha.Ny1, j in 1:c_ha.Nx1]
+        vxf_ha = 2.0 .* vx_ha
+        vyf_ha = 2.0 .* vy_ha
+        ps_ha = fill(1.0e7, c_ha.Ny1, c_ha.Nx1)
+        pf_ha = fill(5.0e6, c_ha.Ny1, c_ha.Nx1)
+
+        ret_ha = Erebus.compute_adiabatic_heating!(
+            HA_test,
+            tk1_ha,
+            ALPHA_ha,
+            ALPHAF_ha,
+            PHI_ha,
+            vx_ha,
+            vy_ha,
+            vxf_ha,
+            vyf_ha,
+            ps_ha,
+            pf_ha;
+            coords=c_ha,
+        )
+        @test ret_ha === nothing
+        @test all(iszero, HA_test)
+    end
 end

@@ -102,6 +102,8 @@ function diffuse_and_update_markers!(
         marknum;
         coords=coords,
         dsubgrids=cfg.solver.dsubgrids,
+        etavpm=core.etavpm,
+        etasolidm=cfg.materials.etasolidm,
     )
 
     update_marker_stress!(

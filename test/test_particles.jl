@@ -1275,4 +1275,95 @@ include("test_helpers.jl")
         @test any(DT_p .> 0.0)
         @test all(isfinite, DT_p)
     end
+
+    @testset "apply_subgrid_stress_diffusion!(): Maxwell viscoelastic relaxation" begin
+        coords_s = GridCoordinates(GridConfig(Nx=10, Ny=10, xsize=100000.0, ysize=100000.0))
+        Ny1_s, Nx1_s = coords_s.Ny1, coords_s.Nx1
+        Ny_s, Nx_s = coords_s.Ny, coords_s.Nx
+        marknum_s = 4
+        xm_s = fill(0.5 * coords_s.xsize, marknum_s)
+        ym_s = fill(0.5 * coords_s.ysize, marknum_s)
+        tm_s = fill(1, marknum_s)
+        inv_ggg_s = fill(1.0e-10, marknum_s)
+        eta_val = 1.0e21
+        etavpm_s = fill(eta_val, marknum_s)
+        sxx0_val = 1.0e6
+        sxy0_val = 5.0e5
+        sxxm_s = fill(sxx0_val, marknum_s)
+        sxym_s = fill(sxy0_val, marknum_s)
+        SXX0_s = zeros(Ny1_s, Nx1_s)
+        SXY0_s = zeros(Ny_s, Nx_s)
+        DSXX_s = zeros(Ny1_s, Nx1_s)
+        DSXY_s = zeros(Ny_s, Nx_s)
+        SXXSUM_s = zeros(Ny1_s, Nx1_s)
+        SXYSUM_s = zeros(Ny_s, Nx_s)
+        WTPSUM_s = zeros(Ny1_s, Nx1_s)
+        WTSUM_s = zeros(Ny_s, Nx_s)
+        dt_s = 1.0e11
+
+        Erebus.apply_subgrid_stress_diffusion!(
+            xm_s,
+            ym_s,
+            tm_s,
+            inv_ggg_s,
+            sxxm_s,
+            sxym_s,
+            SXX0_s,
+            SXY0_s,
+            DSXX_s,
+            DSXY_s,
+            SXXSUM_s,
+            SXYSUM_s,
+            WTPSUM_s,
+            WTSUM_s,
+            dt_s,
+            marknum_s;
+            coords=coords_s,
+            dsubgrids=1.0,
+            etavpm=etavpm_s,
+        )
+
+        # Analytical Maxwell decay factor exp(-dsubgrids * dt * G / eta) = exp(-1.0)
+        decay_expected = exp(-1.0)
+        delta_sxx_expected = sxx0_val * (decay_expected - 1.0)
+        delta_sxy_expected = sxy0_val * (decay_expected - 1.0)
+        for m in 1:marknum_s
+            @test isapprox(sxxm_s[m], sxx0_val * decay_expected; rtol=1e-12)
+            @test isapprox(sxym_s[m], sxy0_val * decay_expected; rtol=1e-12)
+        end
+        @test isapprox(maximum(DSXX_s), -delta_sxx_expected; rtol=1e-12)
+        @test isapprox(maximum(DSXY_s), -delta_sxy_expected; rtol=1e-12)
+
+        # Test fallback when etavpm=nothing or etavpm[m] == 0.0 (falls back to etasolidm[tm[m]])
+        fill!(sxxm_s, sxx0_val)
+        fill!(sxym_s, sxy0_val)
+        fill!(etavpm_s, 0.0)
+        etasolidm_custom = [eta_val, eta_val, eta_val]
+        Erebus.apply_subgrid_stress_diffusion!(
+            xm_s,
+            ym_s,
+            tm_s,
+            inv_ggg_s,
+            sxxm_s,
+            sxym_s,
+            SXX0_s,
+            SXY0_s,
+            DSXX_s,
+            DSXY_s,
+            SXXSUM_s,
+            SXYSUM_s,
+            WTPSUM_s,
+            WTSUM_s,
+            dt_s,
+            marknum_s;
+            coords=coords_s,
+            dsubgrids=1.0,
+            etavpm=etavpm_s,
+            etasolidm=etasolidm_custom,
+        )
+        for m in 1:marknum_s
+            @test isapprox(sxxm_s[m], sxx0_val * decay_expected; rtol=1e-12)
+            @test isapprox(sxym_s[m], sxy0_val * decay_expected; rtol=1e-12)
+        end
+    end
 end

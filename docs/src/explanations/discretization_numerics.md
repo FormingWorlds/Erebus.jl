@@ -35,9 +35,18 @@ Material properties, temperature, hydration state, and porosity are carried on t
 
 2. **Subgrid Diffusion**:
    Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
+   When `dsubgrids > 0`, `apply_subgrid_stress_diffusion!` relaxes marker deviatoric stresses ($\sigma_{xx,m}, \sigma_{xy,m}$) toward interpolated staggered-grid stresses over the local Maxwell viscoelastic relaxation timescale $\tau_{\text{Maxwell},m} = \eta_{vp,m} / G_m$:
+   $$\Delta \sigma_{\text{subgrid},m} = \left(\sigma_{\text{grid}}(x_m, y_m) - \sigma_m\right) \left[1 - \exp\left(-d_{\text{subgrids}} \frac{\Delta t \, G_m}{\eta_{vp,m}}\right)\right]$$
+   where $\eta_{vp,m}$ is the marker viscoelastic viscosity (`etavpm`, falling back to the phase viscosity `etasolidm[tm]`) and $1 / G_m$ is the inverse marker shear modulus (`inv_gggtotalm[m]`, initialized from `gggsolidm[tm]`).
 
 3. **Marker Advection**:
    Markers move with the solid velocity field using a 4th-order Runge-Kutta scheme (`move_markers_rk4!`) with 2nd-order continuity-based parabolic spatial velocity corrections.
+
+4. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
+   At simulation initialization (`setup_simulation_markers_and_state`), interior planetesimal markers ($\mathrm{tm} < 3$) are initialized with an analytical hydrostatic pressure profile in `pfm0`:
+   $$P_{\text{hydro}}(r) = P_{\text{amb}} + c_{\text{grav}} \pi G \rho_s^2 \left(R_p^2 - r^2\right)$$
+   with $c_{\text{grav}} = 2/3$ for `:enclosed_mass` spherical gravity and $c_{\text{grav}} = 1$ for unscaled `:poisson2d` cylindrical initialization, where $\rho_s = \rho_{\text{grain},m}(1 - \phi_m)$ is the local marker bulk solid density (`rhosolidm[tm[m]] * (1 - phim[m])`).
+   At the completion of every Stokes-Darcy solve, `update_marker_pressures!` interpolates the solved P-node pressure field `pf` onto `pfm0` for all active markers using 4-point bilinear weights. This updates the pressure state for phase equilibria, melting curves, and volatile solubility laws even when hydration reactions (`reaction.active`) are disabled.
 
 ---
 
@@ -262,13 +271,15 @@ with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_
 
 If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
 
-### 2. Porosity Change Rate Limiter
+### 2. Porosity Change Rate Limiter and Adaptive Timestep Consistency
 
 Rapid pore collapse or opening can destabilize Darcy fluid flow. The maximum displacement timestep limits relative porosity change per step:
 
 $$\Delta t_{\phi} \le \frac{d\phi_{\text{max}}}{\max_{\text{interior}} |a\phi|}$$
 
 where `dphimax` defaults to `0.1` (10% relative porosity change per step), and $a\phi$ is the fluid continuity divergence source term. The check omits the fixed pressure anchor cell $(i=2, j=2)$ to avoid false timestep limits at boundary cells.
+
+Because the Stokes-Darcy linear operator depends explicitly on the timestep $\Delta t$ through effective viscoelastic viscosities $\eta_{\text{eff}} = \eta G \Delta t / (\eta + G \Delta t)$, elastic stress memory factors $Z_{\text{visc}} = \eta / (\eta + G \Delta t)$, and poroelastic compressibility rates $1 / \Delta t$, any reduction of $\Delta t$ by `compute_adaptive_timestep` (from velocity Courant or porosity-change constraints, $\Delta t < \Delta t_{\text{solve}}$) triggers an immediate re-assembly and re-solve of the Stokes-Darcy system at the clamped $\Delta t$ in `postprocess_hydromechanical_solution!`. This guarantees that velocities, pressures, Darcy fluxes, and stress rates remain mutually consistent with the accepted timestep $\Delta t$.
 
 ### 3. Thermal Subcycles and Temperature Change Limit
 

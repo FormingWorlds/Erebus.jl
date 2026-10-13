@@ -24,6 +24,9 @@ function assemble_and_solve_hydromechanical!(
     )
     fill!(state.grids.S_vent_grid, 0.0)
 
+    ws.hydromech.pr_presolve .= state.grids.pr
+    ws.hydromech.pf_presolve .= state.grids.pf
+
     darcy_elim_val = cfg.solver.darcy_elimination
     if darcy_elim_val
         L = assemble_hydromechanical_4var_lse!(
@@ -171,11 +174,6 @@ function assemble_and_solve_hydromechanical!(
         )
     end
 
-    if darcy_elim_val
-        ws.hydromech.pr_presolve .= state.grids.pr
-        ws.hydromech.pf_presolve .= state.grids.pf
-    end
-
     if cfg.solver.hydromech_solver == :matrix_free
         rx_mf = if cfg.poroelasticity.hydrofracture && ws.hydromech.rx_eff !== nothing
             ws.hydromech.rx_eff
@@ -273,24 +271,27 @@ function assemble_and_solve_hydromechanical!(
 end
 
 """
-Postprocess hydromechanical solution, adapt timestep, and check plastic convergence.
+Unpack hydromechanical linear system solution vector into staggered grid velocity, pressure, and Darcy flux fields.
 
 $(SIGNATURES)
+
+# Arguments
+- `state`: Current simulation state.
+- `coords`: Staggered grid coordinates.
+- `cfg`: Simulation configuration.
+- `ws`: Simulation workspaces.
+
+# Returns
+- `nothing`
 """
-function postprocess_hydromechanical_solution!(
+function _unpack_hydromechanical_solution!(
     state::SimulationState,
     coords::GridCoordinates,
     cfg::SimulationConfig,
-    ws::SimulationWorkspaces;
-    titer::Int,
-    iplast::Int,
-    dt_step_initial::Float64,
-    cur_betasolid::Float64,
-    cur_betafluid::Float64,
+    ws::SimulationWorkspaces,
 )
     g = state.grids
-    darcy_elim_val = cfg.solver.darcy_elimination
-    if darcy_elim_val
+    if cfg.solver.darcy_elimination
         process_hydromechanical_4var_solution!(ws.S, g.vx, g.vy, g.pr, g.pf; coords=coords)
         reconstruct_darcy_fluxes!(
             g.qxD,
@@ -327,23 +328,86 @@ function postprocess_hydromechanical_solution!(
             ws.S, g.vx, g.vy, g.pr, g.qxD, g.qyD, g.pf; coords=coords
         )
     end
+    return nothing
+end
 
-    n_flips_iter = 0
-    for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c =
-            0.25 * (
-                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+"""
+Interpolate P-node pressure field onto planetesimal markers.
+
+$(SIGNATURES)
+
+# Arguments
+- `pfm0`: Marker pressure vector [Pa], updated in-place.
+- `xm`: Marker x-coordinates [m].
+- `ym`: Marker y-coordinates [m].
+- `tm`: Marker phase indices.
+- `pf`: Fluid pressure at P nodes [Pa].
+- `pr`: Total solid pressure at P nodes [Pa].
+- `marknum`: Number of active markers.
+- `coords`: Staggered grid coordinates.
+- `p_cavitation`: Cavitation lower pressure bound [Pa].
+- `pfcoeff`: Under-relaxation blending coefficient in `[0, 1)`.
+
+# Returns
+- `nothing`
+"""
+function update_marker_pressures!(
+    pfm0::AbstractVector{Float64},
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    pf::AbstractMatrix{Float64},
+    pr::AbstractMatrix{Float64},
+    marknum::Int;
+    coords::GridCoordinates=default_grid_coordinates(),
+    p_cavitation::Float64=1.0e7,
+    pfcoeff::Float64=0.0,
+)
+    p_grid = any(!iszero, pf) ? pf : pr
+    any(!iszero, p_grid) || return nothing
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            i, j, weights = fix_weights(
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
             )
-        is_breached = is_hydrofracture_breached(peff_c, g.TEN[i, j])
-        if is_breached != ws.fractured_cells_prev[i, j]
-            n_flips_iter += 1
+            p_interp = max(-p_cavitation, dot4(grid_vector(i, j, p_grid), weights))
+            pfm0[m] =
+                pfcoeff > 0.0 ? (p_interp * (1.0 - pfcoeff) + pfm0[m] * pfcoeff) : p_interp
+        else
+            pfm0[m] = 0.0
         end
-        ws.fractured_cells[i, j] = is_breached
     end
-    ws.fractured_cells_prev .= ws.fractured_cells
-    ws.hydromech.rx_eff_prev .= ws.hydromech.rx_eff
-    ws.hydromech.ry_eff_prev .= ws.hydromech.ry_eff
+    return nothing
+end
+
+"""
+Postprocess hydromechanical solution, adapt timestep, and check plastic convergence.
+
+$(SIGNATURES)
+"""
+function postprocess_hydromechanical_solution!(
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+    ws::SimulationWorkspaces;
+    titer::Int,
+    iplast::Int,
+    dt_step_initial::Float64,
+    cur_betasolid::Float64,
+    cur_betafluid::Float64,
+)
+    g = state.grids
+    _unpack_hydromechanical_solution!(state, coords, cfg, ws)
 
     aphimax = compute_Aϕ!(
         g.APHI,
@@ -366,6 +430,7 @@ function postprocess_hydromechanical_solution!(
         g.PHIX, g.PHIY, g.qxD, g.qyD, g.vx, g.vy, g.vxf, g.vyf; coords=coords
     )
 
+    dt_solve = state.dt
     maxDTcurrent = maximum(abs, g.DT0)
     state.dt = compute_adaptive_timestep(
         g.vx,
@@ -389,6 +454,43 @@ function postprocess_hydromechanical_solution!(
         dphi_reaction_max=cfg.reaction.dphi_reaction_max,
     )
 
+    # Re-solve viscoelastic-poroelastic system when adaptive timestep shrinks state.dt
+    if state.dt < dt_solve * (1.0 - 1.0e-12)
+        g.pr .= ws.hydromech.pr_presolve
+        g.pf .= ws.hydromech.pf_presolve
+        assemble_and_solve_hydromechanical!(
+            state,
+            coords,
+            cfg,
+            ws;
+            titer=titer,
+            iplast=iplast,
+            cur_betasolid=cur_betasolid,
+            cur_betafluid=cur_betafluid,
+        )
+        _unpack_hydromechanical_solution!(state, coords, cfg, ws)
+        compute_fluid_velocities!(
+            g.PHIX, g.PHIY, g.qxD, g.qyD, g.vx, g.vy, g.vxf, g.vyf; coords=coords
+        )
+    end
+
+    n_flips_iter = 0
+    for j in 1:coords.Nx, i in 1:coords.Ny
+        peff_c =
+            0.25 * (
+                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
+                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+            )
+        is_breached = is_hydrofracture_breached(peff_c, g.TEN[i, j])
+        if is_breached != ws.fractured_cells_prev[i, j]
+            n_flips_iter += 1
+        end
+        ws.fractured_cells[i, j] = is_breached
+    end
+    ws.fractured_cells_prev .= ws.fractured_cells
+    ws.hydromech.rx_eff_prev .= ws.hydromech.rx_eff
+    ws.hydromech.ry_eff_prev .= ws.hydromech.ry_eff
+
     compute_stress_strainrate!(
         g.vx,
         g.vy,
@@ -410,7 +512,7 @@ function postprocess_hydromechanical_solution!(
         coords=coords,
     )
 
-    _ = compute_Aϕ!(
+    aphimax = compute_Aϕ!(
         g.APHI,
         g.ETAPHI,
         g.BETAPHI,
@@ -559,6 +661,21 @@ function solve_stokes_darcy!(
             dt_aphimax_step_max=dt_aphimax_step_max,
             n_flips_last=n_flips_last,
             n_flips_step_total=n_flips_step_total,
+        )
+    end
+
+    if !cfg.reaction.active || titer == 1
+        update_marker_pressures!(
+            state.markers.core.pfm0,
+            state.markers.core.xm,
+            state.markers.core.ym,
+            state.markers.core.tm,
+            g.pf,
+            g.pr,
+            length(state.markers);
+            coords=coords,
+            p_cavitation=cfg.reaction.p_cavitation,
+            pfcoeff=0.0,
         )
     end
 

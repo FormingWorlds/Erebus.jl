@@ -204,6 +204,10 @@ function compute_adiabatic_heating!(
     Ny = Ny1 - 1
     @unpack_coords coords dx dy
     @inbounds begin
+        @views HA[1, :] .= 0.0
+        @views HA[Ny1, :] .= 0.0
+        @views HA[:, 1] .= 0.0
+        @views HA[:, Nx1] .= 0.0
         for j in 2:1:Nx, i in 2:1:Ny
             # indirect calculation of DP/Dt ≈ (∂P/∂x)⋅vx + (∂P/∂y)⋅vy (eq. 9.23)
             # average vy, vx, vxf, vyf
@@ -242,4 +246,5 @@ function compute_adiabatic_heating!(
             )
         end
     end # @inbounds
+    return nothing
 end # function compute_adiabatic_heating!

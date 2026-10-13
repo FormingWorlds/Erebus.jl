@@ -4409,6 +4409,10 @@ $(SIGNATURES)
     - WTSUM: interpolation weights at basic nodes
     - dt: computational time step
     - marknum: total number of markers in use
+    - coords: staggered grid coordinates
+    - dsubgrids: subgrid stress diffusion damping coefficient
+    - etavpm: optional marker viscoelastic viscosity vector [Pa s]
+    - etasolidm: phase solid viscosity vector [Pa s]
 
 # Returns
     
@@ -4433,6 +4437,8 @@ function apply_subgrid_stress_diffusion!(
     marknum;
     coords::GridCoordinates=default_grid_coordinates(),
     dsubgrids::Real=dsubgrids,
+    etavpm=nothing,
+    etasolidm=etasolidm,
 )
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
@@ -4440,8 +4446,6 @@ function apply_subgrid_stress_diffusion!(
     end
     Ny, Nx = size(SXYSUM)
     @unpack_coords coords xp yp x y dx dy jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
-    # fix etam[tm[m]] RMK: It's a temporary fix, not yet implemented in source
-    etam = @SVector ones(3)
     # reset interpolation arrays
     SXXSUM .= 0.0
     WTPSUM .= 0.0
@@ -4473,11 +4477,16 @@ function apply_subgrid_stress_diffusion!(
             imin_basic_val,
             imax_basic_val,
         )
+        @inbounds eta_m =
+            (etavpm !== nothing && etavpm[m] > 0.0) ? etavpm[m] : etasolidm[tm[m]]
+        @inbounds denom_m = eta_m * inv_gggtotalm[m]
+        @inbounds relax_factor =
+            denom_m > 0.0 ? (exp(-dsubgrids * dt / denom_m) - 1.0) : 0.0
         # σ₀′xx at P nodes
         # compute marker-node σ′xx difference
         @inbounds δσxxm₀ = sxxm[m] - dot4(grid_vector(i_p, j_p, SXX0), weights_p)
         # time-relax σ′xx difference
-        @inbounds δσxxm₀ *= (exp(-dsubgrids*dt/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0)
+        @inbounds δσxxm₀ *= relax_factor
         # correct marker stress
         @inbounds sxxm[m] += δσxxm₀
         # update subgrid diffusion on P nodes
@@ -4487,7 +4496,7 @@ function apply_subgrid_stress_diffusion!(
         # compute marker-node σxy difference
         @inbounds δσxy₀ = sxym[m] - dot4(grid_vector(i_basic, j_basic, SXY0), weights_basic)
         # time-relax σxy difference
-        @inbounds δσxy₀ *= (exp(-dsubgrids*dt/(etam[tm[m]]*inv_gggtotalm[m])) - 1.0)
+        @inbounds δσxy₀ *= relax_factor
         # correct marker stress
         @inbounds sxym[m] += δσxy₀
         # update subgrid diffusion on basic nodes
