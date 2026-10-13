@@ -727,7 +727,13 @@ Random.seed!(42)
         Q_lat_grid = zeros(Float64, Ny, Nx)
         dt = 5.0e10 # Transport timestep (~1500 years)
 
-        M_melt_initial = sum(Fm)
+        r_floor_magma = 0.5e-12 * min(dx, dy)
+        weighted_fm_sum(arr) = sum(
+            arr[m] * 2.0 * max(distance(xm[m], ym[m], xcenter, ycenter), r_floor_magma)
+            for m in 1:marknum if
+            tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
+        )
+        M_melt_initial = weighted_fm_sum(Fm)
         @test M_melt_initial > 0.0
 
         # Run silicate melt segregation
@@ -756,7 +762,7 @@ Random.seed!(42)
         )
 
         # Machine-precision mass conservation: remaining melt + crystallized melt
-        M_melt_final = sum(Fm)
+        M_melt_final = weighted_fm_sum(Fm)
         M_conserved = M_melt_final + res.total_crystallized_mass
         relative_mass_drift = abs(M_conserved - M_melt_initial) / M_melt_initial
         @test relative_mass_drift < 1.0e-12
@@ -769,14 +775,9 @@ Random.seed!(42)
         @test res.total_dissipation_energy > 0.0
         @test maximum(Q_seg_grid) > 0.0
 
-        # Latent heat release matches crystallized mass to machine precision
+        # Latent heat release populated Q_lat_grid
         @test res.total_crystallized_mass > 0.0
         @test maximum(Q_lat_grid) > 0.0
-        dV_cell = dx * dy
-        E_lat_grid = sum(Q_lat_grid) * dt * dV_cell
-        # Total crystallized mass on markers: each unit of Fm represents dV_cell / 4 mass equivalent
-        E_lat_expected = res.total_crystallized_mass * (dV_cell / 4) * 2800.0 * 4.0e5
-        @test maximum(Q_seg_grid) > 0.0
 
         # Depletion tracking accumulated on donor markers
         @test maximum(F_extract_m) > 0.0
@@ -1052,6 +1053,7 @@ Random.seed!(42)
             ETA=ETA_mat,
             rho_silicate=3000.0,
             rho_melt=3000.0 - drho,
+            spherical_metric=false,
         )
 
         @test res.n_subcycles >= 1
@@ -1336,5 +1338,262 @@ Random.seed!(42)
             melting=MeltingConfig(active=true),
         )
         @test_throws ArgumentError validate_config(cfg_invalid)
+    end
+
+    @testset "Depletion Tracking Symmetry Across Consecutive Thermal and Segregation Steps" begin
+        coords = GridCoordinates(8, 8; xsize=20000.0, ysize=20000.0)
+        dx = coords.dx
+        dy = coords.dy
+        marknum = 8 * 8 * 4
+        xm = zeros(Float64, marknum)
+        ym = zeros(Float64, marknum)
+        tm = ones(Int, marknum)
+        tkm = fill(1550.0, marknum)
+        Fm = zeros(Float64, marknum)
+        F_extract_m = zeros(Float64, marknum)
+        w3d_m = zeros(Float64, marknum)
+        r_floor = 0.5e-12 * min(dx, dy)
+        idx = 1
+        for j in 1:8, i in 1:8
+            for kx in (0.25, 0.75), ky in (0.25, 0.75)
+                xm[idx] = (j - 1 + kx) * dx
+                ym[idx] = (i - 1 + ky) * dy
+                rm = distance(xm[idx], ym[idx], 10000.0, 10000.0)
+                w3d_m[idx] = 2.0 * max(rm, r_floor)
+                if i >= 5
+                    tkm[idx] = 1600.0
+                    Fm[idx] = 0.50
+                else
+                    tkm[idx] = 1400.0
+                    Fm[idx] = 0.0
+                end
+                idx += 1
+            end
+        end
+        gx_col = zeros(Float64, 8, 8)
+        gy_col = fill(1.0, 8, 8)
+        cfg_dep = MagmaTransportConfig(;
+            active=true,
+            track_depletion=true,
+            latent_crystallization=false,
+            segregation_heating=false,
+            k_melt_ref=1.0e-9,
+        )
+        init_vol = sum(Fm .* w3d_m)
+        (_, _, _, _, _, _, _, phm, _, pfm0_dep, _, xw0_dep, _) = Erebus.setup_marker_properties(
+            marknum
+        )
+        phm .= 0.01
+        (rhot_dep, rhocpt_dep, etat_dep, hrt_dep, kt_dep, tkr_dep, etak_dep, _, _, _, _, rhof_dep, _, _) = Erebus.setup_marker_properties_helpers(
+            marknum
+        )
+        hrsol_dep = [0.0, 0.0, 0.0]
+        hrfl_dep = [0.0, 0.0, 0.0]
+        for step in 1:3
+            apply_silicate_melt_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                Fm,
+                marknum,
+                2.0e6,
+                cfg_dep;
+                coords=coords,
+                xcenter=10000.0,
+                ycenter=10000.0,
+                rplanet=30000.0,
+                gx=gx_col,
+                gy=gy_col,
+                F_extract_m=F_extract_m,
+                w3d_m=w3d_m,
+            )
+            for m in 1:marknum
+                Erebus.compute_marker_properties!(
+                    m,
+                    tm,
+                    tkm,
+                    rhot_dep,
+                    rhocpt_dep,
+                    etat_dep,
+                    hrt_dep,
+                    kt_dep,
+                    tkr_dep,
+                    etak_dep,
+                    hrsol_dep,
+                    hrfl_dep,
+                    phm,
+                    xw0_dep,
+                    9,
+                    rhof_dep;
+                    melting_active=true,
+                    T_solidus_val=1400.0,
+                    T_liquidus_val=1800.0,
+                    Fm=Fm,
+                    magma_transport_active=true,
+                    track_depletion=true,
+                    F_extract_m=F_extract_m,
+                )
+            end
+            @test isapprox(sum(Fm .* w3d_m), init_vol; rtol=1.0e-12)
+        end
+        @test 0.0 < maximum(F_extract_m) <= 1.0
+        @test -1.0 <= minimum(F_extract_m) < 0.0
+
+        # Direct verification of _conserve_weighted_marker_fraction! deficit and surplus branches
+        arr_test = [0.2, 0.5, 0.8]
+        w_test = [1.0, 2.0, 1.0]
+        xm_test = [100.0, 200.0, 300.0]
+        ym_test = [100.0, 200.0, 300.0]
+        tm_test = [1, 1, 1]
+        fext_test = zeros(Float64, 3)
+        init_test = sum(arr_test .* w_test)
+        target_high = init_test + 0.2
+        Erebus._conserve_weighted_marker_fraction!(
+            arr_test,
+            fext_test,
+            xm_test,
+            ym_test,
+            tm_test,
+            3,
+            target_high,
+            init_test,
+            1.0;
+            xcenter=0.0,
+            ycenter=0.0,
+            rplanet=1000.0,
+            dr_min=10.0,
+            spherical_metric=true,
+            w3d_m=w_test,
+        )
+        @test isapprox(sum(arr_test .* w_test), target_high; rtol=1.0e-12)
+        target_low = target_high - 0.3
+        Erebus._conserve_weighted_marker_fraction!(
+            arr_test,
+            fext_test,
+            xm_test,
+            ym_test,
+            tm_test,
+            3,
+            target_low,
+            target_high,
+            1.0;
+            xcenter=0.0,
+            ycenter=0.0,
+            rplanet=1000.0,
+            dr_min=10.0,
+            spherical_metric=true,
+            w3d_m=w_test,
+        )
+        @test isapprox(sum(arr_test .* w_test), target_low; rtol=1.0e-12)
+
+        # Metal volatile co-transport conservation under 3D shell volume weighting
+        xfe_b = fill(0.20, marknum)
+        xfe_m = fill(0.20, marknum)
+        xh_fe = [10.0 + 0.1 * m for m in 1:marknum]
+        xc_fe = [100.0 + 1.0 * m for m in 1:marknum]
+        xn_fe = [20.0 + 0.2 * m for m in 1:marknum]
+        xs_fe = [500.0 + 2.0 * m for m in 1:marknum]
+        init_h = sum(xfe_b .* w3d_m .* xh_fe)
+        init_c = sum(xfe_b .* w3d_m .* xc_fe)
+        init_n = sum(xfe_b .* w3d_m .* xn_fe)
+        init_s = sum(xfe_b .* w3d_m .* xs_fe)
+        cfg_core_vol = CoreFormationConfig(; percolation_active=true, settling_active=false)
+        apply_metal_segregation!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            phm,
+            xfe_b,
+            xfe_m,
+            marknum,
+            1.0e8,
+            cfg_core_vol;
+            coords=coords,
+            xcenter=10000.0,
+            ycenter=10000.0,
+            rplanet=30000.0,
+            gx=gx_col,
+            gy=gy_col,
+            Xfe_H_m=xh_fe,
+            Xfe_C_m=xc_fe,
+            Xfe_N_m=xn_fe,
+            Xfe_S_m=xs_fe,
+            cfg_partition=MetalPartitionConfig(; active=true),
+            w3d_m=w3d_m,
+        )
+        @test isapprox(sum(xfe_b .* w3d_m .* xh_fe), init_h; rtol=1.0e-12)
+        @test isapprox(sum(xfe_b .* w3d_m .* xc_fe), init_c; rtol=1.0e-12)
+        @test isapprox(sum(xfe_b .* w3d_m .* xn_fe), init_n; rtol=1.0e-12)
+        @test isapprox(sum(xfe_b .* w3d_m .* xs_fe), init_s; rtol=1.0e-12)
+    end
+
+    @testset "Dynamic Subcycle Cell Temperature Update Limits Latent Crystallization" begin
+        coords = GridCoordinates(5, 5; xsize=10000.0, ysize=10000.0)
+        dx = coords.dx
+        dy = coords.dy
+        marknum = 4 * 4 * 4
+        xm = zeros(Float64, marknum)
+        ym = zeros(Float64, marknum)
+        tm = ones(Int, marknum)
+        tkm = zeros(Float64, marknum)
+        Fm = zeros(Float64, marknum)
+        idx = 1
+        for j in 1:4, i in 1:4
+            for kx in (0.25, 0.75), ky in (0.25, 0.75)
+                xm[idx] = (j - 1 + kx) * dx
+                ym[idx] = (i - 1 + ky) * dy
+                if i == 2
+                    tkm[idx] = 1350.0
+                    Fm[idx] = 0.0
+                else
+                    tkm[idx] = 1750.0
+                    Fm[idx] = 0.35
+                end
+                idx += 1
+            end
+        end
+        gx_col = zeros(Float64, 6, 6)
+        gy_col = fill(1.0, 6, 6)
+        Q_lat_sub = zeros(Float64, 6, 6)
+        cfg_sub = MagmaTransportConfig(;
+            active=true,
+            latent_crystallization=true,
+            segregation_heating=false,
+            k_melt_ref=5.0e-9,
+            cfl_melt=0.1,
+            cp_melt=1000.0,
+        )
+        dt_sub_test = 2.0e8
+        res_cryst = apply_silicate_melt_segregation!(
+            xm,
+            ym,
+            tm,
+            tkm,
+            Fm,
+            marknum,
+            dt_sub_test,
+            cfg_sub;
+            coords=coords,
+            xcenter=5000.0,
+            ycenter=5000.0,
+            rplanet=20000.0,
+            gx=gx_col,
+            gy=gy_col,
+            Q_lat_grid=Q_lat_sub,
+            rho_silicate=3300.0,
+            rho_melt=2800.0,
+            T_solidus_silicate=1400.0,
+            T_liquidus_silicate=1800.0,
+            L_melt=4.0e5,
+            spherical_metric=false,
+        )
+        @test 3 <= res_cryst.n_subcycles <= 2000
+        @test all(iszero, Q_lat_sub[1, :])
+        @test all(iszero, Q_lat_sub[:, 1])
+        # Maximum latent heating in cold row i=2 (P-node row 3) cannot exceed heat capacity to liquidus
+        q_lat_ceil = 3300.0 * 1000.0 * (1800.0 - 1350.0) / dt_sub_test
+        @test 0.0 < maximum(Q_lat_sub) <= q_lat_ceil * (1.0 + 1.0e-10)
     end
 end

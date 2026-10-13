@@ -1339,7 +1339,7 @@ function compute_marker_properties!(
                 tkm[m], P_val, tm[m]; T_sol=T_sol, T_liq=T_liq, dpdt=dpdt_clapeyron_val
             )
             if magma_transport_active && track_depletion && F_extract_m !== nothing
-                F_melt = max(0.0, F_melt - F_extract_m[m])
+                F_melt = clamp(F_melt - F_extract_m[m], 0.0, 1.0)
             end
             if Fm !== nothing
                 Fm[m] = F_melt

@@ -1273,6 +1273,15 @@ using JLD2
             dT_metal_val=50.0,
         )
 
+        r_floor_seg = 0.5e-12 * min(coords.dx, coords.dy)
+        weighted_metal_sum(Xfe_arr) = sum(
+            Xfe_arr[m] *
+            2.0 *
+            max(distance(xm[m], ym[m], coords.xcenter, coords.ycenter), r_floor_seg) for
+            m in 1:marknum if tm[m] < 3 &&
+                distance(xm[m], ym[m], coords.xcenter, coords.ycenter) <= 50000.0
+        )
+
         @testset "Inactive and Early Guard Conditions" begin
             cfg_inactive = CoreFormationConfig(
                 percolation_active=false, settling_active=false
@@ -1317,7 +1326,7 @@ using JLD2
             # Set temperature below eutectic (1000 K < 1213 K)
             fill!(tkm, 1000.0)
             fill!(Xfem, 0.0)
-            initial_sum = sum(Xfe_bulk)
+            initial_sum = weighted_metal_sum(Xfe_bulk)
 
             cfg_perc = CoreFormationConfig(percolation_active=true, settling_active=false)
             res_cold = apply_metal_segregation!(
@@ -1335,7 +1344,7 @@ using JLD2
             )
             @test iszero(res_cold.max_v_seg)
             @test iszero(res_cold.n_subcycles)
-            @test isapprox(sum(Xfe_bulk), initial_sum; atol=1e-14)
+            @test isapprox(weighted_metal_sum(Xfe_bulk), initial_sum; atol=1e-14)
         end
 
         @testset "Machine-Precision Mass Conservation under Percolation" begin
@@ -1349,7 +1358,7 @@ using JLD2
                 end
             end
 
-            initial_sum = sum(Xfe_bulk)
+            initial_sum = weighted_metal_sum(Xfe_bulk)
             @test initial_sum > 0.0
 
             cfg_perc = CoreFormationConfig(
@@ -1376,8 +1385,8 @@ using JLD2
                 rplanet=50000.0,
             )
 
-            final_sum = sum(Xfe_bulk)
-            # Mass conservation must hold to machine precision (10^-12)
+            final_sum = weighted_metal_sum(Xfe_bulk)
+            # 3D shell volume-weighted mass conservation holds to machine precision
             rel_err = abs(final_sum - initial_sum) / initial_sum
             @test rel_err < 1.0e-12
             @test res.max_v_seg > 0.0
@@ -1422,7 +1431,7 @@ using JLD2
                 segregation_heating=true,
             )
 
-            initial_sum = sum(Xfe_bulk)
+            initial_sum = weighted_metal_sum(Xfe_bulk)
             res_sub = apply_metal_segregation!(
                 xm,
                 ym,
@@ -1446,7 +1455,7 @@ using JLD2
             @test maximum(Q_seg) > 0.0
 
             # Mass conservation across all subcycles
-            final_sum = sum(Xfe_bulk)
+            final_sum = weighted_metal_sum(Xfe_bulk)
             @test abs(final_sum - initial_sum) / initial_sum < 1.0e-12
         end
 
@@ -1469,7 +1478,7 @@ using JLD2
                 droplet_diameter_fixed=1.0e-2,
             )
 
-            initial_sum = sum(Xfe_bulk)
+            initial_sum = weighted_metal_sum(Xfe_bulk)
             res_settle = apply_metal_segregation!(
                 xm,
                 ym,
@@ -1486,7 +1495,7 @@ using JLD2
             )
 
             @test res_settle.max_v_seg > 0.0
-            @test abs(sum(Xfe_bulk) - initial_sum) / initial_sum < 1.0e-12
+            @test abs(weighted_metal_sum(Xfe_bulk) - initial_sum) / initial_sum < 1.0e-12
             @test all(x -> 0.0 <= x <= 1.0, Xfe_bulk)
         end
 
@@ -1510,7 +1519,7 @@ using JLD2
                 cfl_settling=0.5,
             )
 
-            base_sum = sum(Xfe_bulk)
+            base_sum = weighted_metal_sum(Xfe_bulk)
             for step in 1:5
                 apply_metal_segregation!(
                     xm,
@@ -1526,7 +1535,7 @@ using JLD2
                     coords=coords,
                     rplanet=50000.0,
                 )
-                curr_sum = sum(Xfe_bulk)
+                curr_sum = weighted_metal_sum(Xfe_bulk)
                 # Exact conservation at every single timestep
                 @test abs(curr_sum - base_sum) / base_sum < 1.0e-12
                 # Packing fraction invariant
@@ -1536,7 +1545,7 @@ using JLD2
         end
 
         @testset "Non-Uniform Marker Initialization and Packing Invariant" begin
-            # Alternating high/low metal markers in shared cells (Sonnet finding 1 repro)
+            # Alternating high/low metal markers in shared cells
             fill!(Xfe_bulk, 0.0)
             for m in 1:marknum
                 if tm[m] < 3 &&
@@ -1555,7 +1564,7 @@ using JLD2
                 cfl_settling=0.5,
             )
 
-            initial_hetero_sum = sum(Xfe_bulk)
+            initial_hetero_sum = weighted_metal_sum(Xfe_bulk)
             for step in 1:20
                 apply_metal_segregation!(
                     xm,
@@ -1571,7 +1580,7 @@ using JLD2
                     coords=coords,
                     rplanet=50000.0,
                 )
-                curr_sum = sum(Xfe_bulk)
+                curr_sum = weighted_metal_sum(Xfe_bulk)
                 # Exact conservation
                 @test abs(curr_sum - initial_hetero_sum) / initial_hetero_sum < 1.0e-12
                 # Strict marker-level packing fraction ceiling: NO marker can exceed phi_pack
@@ -1685,6 +1694,135 @@ using JLD2
             @test res_low_s.max_v_seg > res_high_s.max_v_seg
             @test res_low_s.max_v_seg > 0.0
             @test res_high_s.max_v_seg > 0.0
+        end
+
+        @testset "3D Spherical Volume Conservation vs 2D Slab Mode" begin
+            fill!(Xfe_bulk, 0.0)
+            w3d_vec = zeros(Float64, marknum)
+            for m in 1:marknum
+                rm = distance(xm[m], ym[m], coords.xcenter, coords.ycenter)
+                w3d_vec[m] = 2.0 * max(rm, r_floor_seg)
+                if tm[m] < 3 && rm <= 50000.0
+                    Xfe_bulk[m] = 0.20
+                    tkm[m] = 1400.0
+                    Xfem[m] = 0.20
+                    phim[m] = 0.02
+                end
+            end
+            cfg_mode = CoreFormationConfig(;
+                percolation_active=true, settling_active=false, phi_pack=0.90
+            )
+            Xfe_3d = copy(Xfe_bulk)
+            Xfem_3d = copy(Xfem)
+            init_3d = weighted_metal_sum(Xfe_3d)
+            init_2d_unweighted = sum(Xfe_3d)
+            apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_3d,
+                Xfem_3d,
+                marknum,
+                2.0e10,
+                cfg_mode;
+                coords=coords,
+                rplanet=50000.0,
+                spherical_metric=true,
+                w3d_m=w3d_vec,
+            )
+            @test isapprox(weighted_metal_sum(Xfe_3d), init_3d; rtol=1.0e-12)
+            # Inward radial transport into smaller spherical shells increases 2D cross-sectional area fraction
+            @test sum(Xfe_3d) > init_2d_unweighted
+
+            Xfe_2d = copy(Xfe_bulk)
+            Xfem_2d = copy(Xfem)
+            apply_metal_segregation!(
+                xm,
+                ym,
+                tm,
+                tkm,
+                phim,
+                Xfe_2d,
+                Xfem_2d,
+                marknum,
+                2.0e10,
+                cfg_mode;
+                coords=coords,
+                rplanet=50000.0,
+                spherical_metric=false,
+            )
+            @test isapprox(sum(Xfe_2d), init_2d_unweighted; rtol=1.0e-12)
+        end
+
+        @testset "Staggered Gravity Symmetry and P-Node Dissipation Indexing" begin
+            coords_sym = GridCoordinates(5, 5; xsize=40000.0, ysize=40000.0)
+            xc_sym = 20000.0
+            yc_sym = 20000.0
+            dx_sym = coords_sym.dx
+            dy_sym = coords_sym.dy
+            n_sym = 16 * 4
+            xm_sym = zeros(Float64, n_sym)
+            ym_sym = zeros(Float64, n_sym)
+            tm_sym = ones(Int, n_sym)
+            tkm_sym = fill(1400.0, n_sym)
+            phim_sym = fill(0.02, n_sym)
+            Xfe_sym = fill(0.20, n_sym)
+            Xfem_sym = fill(0.20, n_sym)
+            idx_s = 1
+            for j in 1:4, i in 1:4
+                for kx in (0.25, 0.75), ky in (0.25, 0.75)
+                    xm_sym[idx_s] = (j - 1 + kx) * dx_sym
+                    ym_sym[idx_s] = (i - 1 + ky) * dy_sym
+                    idx_s += 1
+                end
+            end
+            gx_stag = zeros(Float64, 6, 6)
+            gy_stag = zeros(Float64, 6, 6)
+            for j in 1:5, i in 1:6
+                rx = coords_sym.xvx[j] - xc_sym
+                ry = coords_sym.yvx[i] - yc_sym
+                rm = hypot(rx, ry)
+                gx_stag[i, j] = rm > 0.0 ? -1.0 * (rx / rm) : 0.0
+            end
+            for j in 1:6, i in 1:5
+                rx = coords_sym.xvy[j] - xc_sym
+                ry = coords_sym.yvy[i] - yc_sym
+                rm = hypot(rx, ry)
+                gy_stag[i, j] = rm > 0.0 ? -1.0 * (ry / rm) : 0.0
+            end
+            Q_seg_sym = zeros(Float64, 6, 6)
+            cfg_sym = CoreFormationConfig(;
+                percolation_active=true, settling_active=false, segregation_heating=true
+            )
+            apply_metal_segregation!(
+                xm_sym,
+                ym_sym,
+                tm_sym,
+                tkm_sym,
+                phim_sym,
+                Xfe_sym,
+                Xfem_sym,
+                n_sym,
+                5.0e9,
+                cfg_sym;
+                coords=coords_sym,
+                xcenter=xc_sym,
+                ycenter=yc_sym,
+                rplanet=25000.0,
+                gx=gx_stag,
+                gy=gy_stag,
+                Q_seg_grid=Q_seg_sym,
+            )
+            @test all(iszero, Q_seg_sym[1, :])
+            @test all(iszero, Q_seg_sym[:, 1])
+            @test all(iszero, Q_seg_sym[6, :])
+            @test all(iszero, Q_seg_sym[:, 6])
+            @test isapprox(Q_seg_sym[2, 2], Q_seg_sym[5, 5]; rtol=1.0e-12)
+            @test isapprox(Q_seg_sym[2, 5], Q_seg_sym[5, 2]; rtol=1.0e-12)
+            @test isapprox(Q_seg_sym[3, 3], Q_seg_sym[4, 4]; rtol=1.0e-12)
+            @test isapprox(Q_seg_sym[3, 4], Q_seg_sym[4, 3]; rtol=1.0e-12)
         end
     end
 
@@ -2261,8 +2399,22 @@ using JLD2
             @test sum(abs.(Xfe_unrestored .- Xfe_bulk_t)) >
                 sum(abs.(Xfe_pass1 .- Xfe_bulk_t))
             # Restored snapshot matches single pass to exact floating-point precision
+            r_floor_t = 0.5e-12 * min(coords_titer.dx, coords_titer.dy)
+            weighted_sum_t(arr) = sum(
+                arr[m] *
+                2.0 *
+                max(
+                    distance(xm_t[m], ym_t[m], coords_titer.xcenter, coords_titer.ycenter),
+                    r_floor_t,
+                ) for m in 1:marknum_t if tm_t[m] < 3 &&
+                    distance(
+                        xm_t[m], ym_t[m], coords_titer.xcenter, coords_titer.ycenter
+                    ) <= 50000.0
+            )
             @test isapprox(Xfe_restored, Xfe_pass1; atol=1e-14)
-            @test isapprox(sum(Xfe_restored), sum(Xfe_bulk_t); rtol=1e-12)
+            @test isapprox(
+                weighted_sum_t(Xfe_restored), weighted_sum_t(Xfe_bulk_t); rtol=1e-12
+            )
             # Verify Xfem is updated consistently with newly segregated bulk metal
             @test isapprox(
                 Xfe_pass1 .* compute_metal_melt_fraction.(

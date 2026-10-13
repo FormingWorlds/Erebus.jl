@@ -232,14 +232,40 @@ using Test
             rho_melt=2800.0,
         )
 
-        # Receiver cells receiving hotter upward melt are heated
-        # Donor cells retain their intensive temperature and are not cooled
-        @test isapprox(minimum(Q_seg_grid), 0.0; atol=1e-12)
+        # Receiver cells gain sensible heat (+dQ_sens) and donor cells lose (-dQ_sens)
+        @test isapprox(minimum(Q_seg_grid), -0.0367; rtol=0.01)
         @test isapprox(maximum(Q_seg_grid), 0.0367; rtol=0.01)
 
-        # Total sensible thermal energy credited to receiver cells
+        # Net domain-integrated sensible heat source is identically zero
         total_sens_energy = sum(Q_seg_grid) * cell_vol * dt
-        @test isapprox(total_sens_energy, 3.05835e11; rtol=1e-4)
+        @test isapprox(total_sens_energy, 0.0; atol=1e-10)
+
+        # Horizontal sensible heat transport (flux_x)
+        tkm_x = [
+            1500.0 + 300.0 * ((floor(x / dx) * dx + dx / 2) / coords.xsize) for x in xm
+        ]
+        Fm_x = fill(0.25, marknum)
+        gx_x = fill(1.0, coords.Ny, coords.Nx)
+        gy_x = zeros(coords.Ny, coords.Nx)
+        Q_seg_x = zeros(coords.Ny, coords.Nx)
+        Erebus.apply_silicate_melt_segregation!(
+            xm,
+            ym,
+            tm,
+            tkm_x,
+            Fm_x,
+            marknum,
+            dt,
+            cfg_magma;
+            coords=coords,
+            gx=gx_x,
+            gy=gy_x,
+            Q_seg_grid=Q_seg_x,
+            rho_melt=2800.0,
+        )
+        @test isapprox(minimum(Q_seg_x), -0.0367; rtol=0.01)
+        @test isapprox(maximum(Q_seg_x), 0.0367; rtol=0.01)
+        @test isapprox(sum(Q_seg_x), 0.0; atol=1e-14)
     end
 
     @testset "F12 & F33: 26Al/60Fe Power & Volume Weighting" begin

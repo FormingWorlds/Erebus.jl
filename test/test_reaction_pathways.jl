@@ -990,8 +990,7 @@ _mean(x) = sum(x) / length(x)
                 rho_s1 = (Erebus.MD + M_H2O * xw_mean) / vs1
                 rho1 = rho_s1 * (1.0 - phi_mean) + rho_f0 * phi_mean
                 RV = rho1 / rho0
-                gamma_mass =
-                    (rho_s0 * (1.0 - phi0) * RV - rho_s1 * (1.0 - phi_mean)) / dt
+                gamma_mass = (rho_s0 * (1.0 - phi0) * RV - rho_s1 * (1.0 - phi_mean)) / dt
                 @test isapprox(maximum(DMP), -gamma_mass / rho_s1; rtol=1e-12)
                 @test isapprox(minimum(DQPF), gamma_mass / rho_f0; rtol=1e-12)
                 @test isapprox(

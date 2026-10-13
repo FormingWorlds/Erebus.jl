@@ -10,6 +10,7 @@ mutable struct MetalSegregationWorkspace
     Nx::Int
     M_fe_cell::Matrix{Float64}
     M_rock_markers::Matrix{Int}
+    W_cell::Matrix{Float64}
     v_seg_cell::Matrix{Float64}
     phi_m_cell::Matrix{Float64}
     F_m_cell::Matrix{Float64}
@@ -62,6 +63,7 @@ mutable struct MetalSegregationWorkspace
             zeros(Float64, Ny_val, Nx_val),
             zeros(Float64, Ny_val, Nx_val),
             zeros(Float64, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
             track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0),
             track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0),
             track_volatiles ? zeros(Float64, Ny_val, Nx_val) : zeros(Float64, 0, 0),
@@ -101,6 +103,7 @@ mutable struct MagmaSegregationWorkspace
     Nx::Int
     M_melt_cell::Matrix{Float64}
     M_rock_markers::Matrix{Int}
+    W_cell::Matrix{Float64}
     v_seg_cell::Matrix{Float64}
     Fm_cell::Matrix{Float64}
     T_cell::Matrix{Float64}
@@ -129,6 +132,7 @@ mutable struct MagmaSegregationWorkspace
             Nx_val,
             zeros(Float64, Ny_val, Nx_val),
             zeros(Int, Ny_val, Nx_val),
+            zeros(Float64, Ny_val, Nx_val),
             zeros(Float64, Ny_val, Nx_val),
             zeros(Float64, Ny_val, Nx_val),
             zeros(Float64, Ny_val, Nx_val),

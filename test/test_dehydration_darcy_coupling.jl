@@ -870,10 +870,8 @@ Random.seed!(42)
             (rho_s1_deh * (1.0 - phi1_deh[1]) + 1000.0 * phi1_deh[1]) /
             (rho_s0_deh * (1.0 - phi0_deh[1]) + 1000.0 * phi0_deh[1])
         gamma_deh =
-            (
-                rho_s0_deh * (1.0 - phi0_deh[1]) * RV_deh -
-                rho_s1_deh * (1.0 - phi1_deh[1])
-            ) / dt_val
+            (rho_s0_deh * (1.0 - phi0_deh[1]) * RV_deh - rho_s1_deh * (1.0 - phi1_deh[1])) /
+            dt_val
 
         @test isapprox(DMP[i_int, j_int], -gamma_deh / rho_s1_deh; rtol=1.0e-12)
         @test isapprox(DQPF[i_int, j_int], gamma_deh / 1000.0; rtol=1.0e-12)
@@ -996,9 +994,7 @@ Random.seed!(42)
         @test isapprox(div_vs_deh, DMP[i_int, j_int]; rtol=1.0e-4)
         @test isapprox(div_qD_deh, DQPF[i_int, j_int]; rtol=1.0e-4)
         @test isapprox(
-            div_vs_deh + div_qD_deh,
-            DMP[i_int, j_int] + DQPF[i_int, j_int];
-            rtol=1.0e-10,
+            div_vs_deh + div_qD_deh, DMP[i_int, j_int] + DQPF[i_int, j_int]; rtol=1.0e-10
         )
     end
 end

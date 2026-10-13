@@ -1339,11 +1339,15 @@ using JLD2
         end
 
         rho_m = cfg_core.rho_metal
-        init_total_metal = sum(Xfe_bulk .* rho_m)
-        init_total_H = sum(Xfe_bulk .* rho_m .* (Xfe_H_m .* 1.0e-6))
-        init_total_C = sum(Xfe_bulk .* rho_m .* (Xfe_C_m .* 1.0e-6))
-        init_total_N = sum(Xfe_bulk .* rho_m .* (Xfe_N_m .* 1.0e-6))
-        init_total_S = sum(Xfe_bulk .* rho_m .* (Xfe_S_m .* 1.0e-6))
+        r_floor_part = 0.5e-12 * min(coords.dx, coords.dy)
+        w3d_seg = [
+            2.0 * max(distance(xm[m], ym[m], xc, yc), r_floor_part) for m in 1:nmarks
+        ]
+        init_total_metal = sum(Xfe_bulk .* rho_m .* w3d_seg)
+        init_total_H = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_H_m .* 1.0e-6))
+        init_total_C = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_C_m .* 1.0e-6))
+        init_total_N = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_N_m .* 1.0e-6))
+        init_total_S = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_S_m .* 1.0e-6))
 
         @test init_total_metal > 0.0
         @test init_total_C > 0.0
@@ -1393,11 +1397,11 @@ using JLD2
 
         @test seg_res.max_v_seg >= 0.0
 
-        final_total_metal = sum(Xfe_bulk .* rho_m)
-        final_total_H = sum(Xfe_bulk .* rho_m .* (Xfe_H_m .* 1.0e-6))
-        final_total_C = sum(Xfe_bulk .* rho_m .* (Xfe_C_m .* 1.0e-6))
-        final_total_N = sum(Xfe_bulk .* rho_m .* (Xfe_N_m .* 1.0e-6))
-        final_total_S = sum(Xfe_bulk .* rho_m .* (Xfe_S_m .* 1.0e-6))
+        final_total_metal = sum(Xfe_bulk .* rho_m .* w3d_seg)
+        final_total_H = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_H_m .* 1.0e-6))
+        final_total_C = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_C_m .* 1.0e-6))
+        final_total_N = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_N_m .* 1.0e-6))
+        final_total_S = sum(Xfe_bulk .* rho_m .* w3d_seg .* (Xfe_S_m .* 1.0e-6))
 
         @test isapprox(final_total_metal, init_total_metal; rtol=1.0e-12)
         @test isapprox(final_total_H, init_total_H; rtol=1.0e-12)

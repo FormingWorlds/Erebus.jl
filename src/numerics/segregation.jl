@@ -1,4 +1,231 @@
 """
+Evaluate the out-of-plane volume weight for marker segregation transport.
+
+$(SIGNATURES)
+
+Parameters
+----------
+m : Integer
+    Marker index.
+rmark : Float64
+    Radial distance of marker from planet center [m].
+dr_min : Float64
+    Minimum grid spacing `min(dx, dy)` [m].
+spherical_metric : Bool
+    Whether 3D spherical shell volume weighting `2 * r` is active.
+w3d_m : Union{Nothing,AbstractVector{<:Real}}
+    Optional precomputed marker out-of-plane weights [m].
+
+Returns
+-------
+Float64
+    Marker volume weight [m] (or 1.0 when `spherical_metric == false`).
+"""
+@inline function _marker_segregation_weight(
+    m::Integer,
+    rmark::Float64,
+    dr_min::Float64,
+    spherical_metric::Bool,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}},
+)
+    if !spherical_metric
+        return 1.0
+    elseif w3d_m !== nothing
+        return max(Float64(w3d_m[m]), 1.0e-12 * dr_min)
+    else
+        return 2.0 * max(rmark, 0.5e-12 * dr_min)
+    end
+end
+
+"""
+Evaluate the gravitational acceleration magnitude at cell center `(i, j)`.
+
+$(SIGNATURES)
+
+Parameters
+----------
+gx : AbstractMatrix{Float64}
+    Horizontal gravitational acceleration grid [m/s^2].
+gy : AbstractMatrix{Float64}
+    Vertical gravitational acceleration grid [m/s^2].
+i : Int
+    Row index of the physical cell (`1 <= i <= Ny_val`).
+j : Int
+    Column index of the physical cell (`1 <= j <= Nx_val`).
+Ny_val : Int
+    Number of physical cells in the vertical direction.
+Nx_val : Int
+    Number of physical cells in the horizontal direction.
+
+Returns
+-------
+Float64
+    Gravitational acceleration magnitude at cell center [m/s^2].
+"""
+@inline function _cell_gravity_magnitude(
+    gx::AbstractMatrix{Float64},
+    gy::AbstractMatrix{Float64},
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+)
+    if size(gx, 1) >= Ny_val + 1 &&
+        size(gx, 2) >= Nx_val + 1 &&
+        size(gy, 1) >= Ny_val + 1 &&
+        size(gy, 2) >= Nx_val + 1
+        @inbounds gx_c = 0.5 * (gx[i + 1, j] + gx[i + 1, j + 1])
+        @inbounds gy_c = 0.5 * (gy[i, j + 1] + gy[i + 1, j + 1])
+        return hypot(gx_c, gy_c)
+    else
+        @inbounds return hypot(gx[i, j], gy[i, j])
+    end
+end
+
+"""
+Evaluate the gravitational acceleration components at East-West cell face `(i, j)`.
+
+$(SIGNATURES)
+
+Parameters
+----------
+gx : AbstractMatrix{Float64}
+    Horizontal gravitational acceleration grid [m/s^2].
+gy : AbstractMatrix{Float64}
+    Vertical gravitational acceleration grid [m/s^2].
+i : Int
+    Row index of the physical cell (`1 <= i <= Ny_val`).
+j : Int
+    Column index of the physical cell (`1 <= j <= Nx_val - 1`).
+Ny_val : Int
+    Number of physical cells in the vertical direction.
+Nx_val : Int
+    Number of physical cells in the horizontal direction.
+
+Returns
+-------
+Tuple{Float64,Float64}
+    Tuple `(gx_f, gy_f)` of gravitational acceleration components at the East-West face [m/s^2].
+"""
+@inline function _face_gravity_ew(
+    gx::AbstractMatrix{Float64},
+    gy::AbstractMatrix{Float64},
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+)
+    if size(gx, 1) >= Ny_val + 1 &&
+        size(gx, 2) >= Nx_val + 1 &&
+        size(gy, 1) >= Ny_val + 1 &&
+        size(gy, 2) >= Nx_val + 1
+        @inbounds gx_f = gx[i + 1, j + 1]
+        j_p2 = min(size(gy, 2), j + 2)
+        @inbounds gy_f =
+            0.25 * (gy[i, j + 1] + gy[i, j_p2] + gy[i + 1, j + 1] + gy[i + 1, j_p2])
+        return (gx_f, gy_f)
+    else
+        @inbounds gx_f = gx[i, j]
+        j_next = min(size(gy, 2), j + 1)
+        i_next = min(size(gy, 1), i + 1)
+        @inbounds gy_f =
+            0.25 * (gy[i, j] + gy[i, j_next] + gy[i_next, j] + gy[i_next, j_next])
+        return (gx_f, gy_f)
+    end
+end
+
+"""
+Evaluate the gravitational acceleration components at North-South cell face `(i, j)`.
+
+$(SIGNATURES)
+
+Parameters
+----------
+gx : AbstractMatrix{Float64}
+    Horizontal gravitational acceleration grid [m/s^2].
+gy : AbstractMatrix{Float64}
+    Vertical gravitational acceleration grid [m/s^2].
+i : Int
+    Row index of the physical cell (`1 <= i <= Ny_val - 1`).
+j : Int
+    Column index of the physical cell (`1 <= j <= Nx_val`).
+Ny_val : Int
+    Number of physical cells in the vertical direction.
+Nx_val : Int
+    Number of physical cells in the horizontal direction.
+
+Returns
+-------
+Tuple{Float64,Float64}
+    Tuple `(gx_f, gy_f)` of gravitational acceleration components at the North-South face [m/s^2].
+"""
+@inline function _face_gravity_ns(
+    gx::AbstractMatrix{Float64},
+    gy::AbstractMatrix{Float64},
+    i::Int,
+    j::Int,
+    Ny_val::Int,
+    Nx_val::Int,
+)
+    if size(gx, 1) >= Ny_val + 1 &&
+        size(gx, 2) >= Nx_val + 1 &&
+        size(gy, 1) >= Ny_val + 1 &&
+        size(gy, 2) >= Nx_val + 1
+        @inbounds gy_f = gy[i + 1, j + 1]
+        i_p2 = min(size(gx, 1), i + 2)
+        @inbounds gx_f =
+            0.25 * (gx[i + 1, j] + gx[i + 1, j + 1] + gx[i_p2, j] + gx[i_p2, j + 1])
+        return (gx_f, gy_f)
+    else
+        @inbounds gy_f = gy[i, j]
+        i_next = min(size(gx, 1), i + 1)
+        j_next = min(size(gx, 2), j + 1)
+        @inbounds gx_f =
+            0.25 * (gx[i, j] + gx[i, j_next] + gx[i_next, j] + gx[i_next, j_next])
+        return (gx_f, gy_f)
+    end
+end
+
+"""
+Accumulate a cell volumetric heat source contribution onto the P-node thermal grid.
+
+$(SIGNATURES)
+
+Parameters
+----------
+Q_grid : AbstractMatrix{Float64}
+    Target volumetric heat source grid [W/m^3].
+i : Int
+    Row index of the physical cell (`1 <= i <= Ny_val`).
+j : Int
+    Column index of the physical cell (`1 <= j <= Nx_val`).
+Ny_val : Int
+    Number of physical cells in the vertical direction.
+Nx_val : Int
+    Number of physical cells in the horizontal direction.
+val : Float64
+    Volumetric heat source increment [W/m^3].
+
+Returns
+-------
+Nothing
+    Mutates `Q_grid` in place.
+"""
+@inline function _add_cell_source_to_p_grid!(
+    Q_grid::AbstractMatrix{Float64}, i::Int, j::Int, Ny_val::Int, Nx_val::Int, val::Float64
+)
+    nr, nc = size(Q_grid)
+    if nr >= Ny_val + 1 && nc >= Nx_val + 1
+        if 1 <= i < Ny_val && 1 <= j < Nx_val
+            @inbounds Q_grid[i + 1, j + 1] += val
+        end
+    elseif i <= nr && j <= nc
+        @inbounds Q_grid[i, j] += val
+    end
+    return nothing
+end
+
+"""
 Apply iron metal segregation via sub-cycled conservative drift-flux transport.
 
 $(SIGNATURES)
@@ -41,6 +268,8 @@ References:
 - `Fm::Union{Nothing,AbstractVector{Float64}}=nothing`: Marker silicate melt fraction [-]
 - `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
 - `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
+- `spherical_metric::Bool=true`: Weight marker and cell inventories by 3D spherical shell weight
+- `w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing`: Optional precomputed marker out-of-plane weights [m]
 
 # Returns
 - NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy)` where `total_dissipation_energy` is in [J/m].
@@ -75,6 +304,8 @@ function apply_metal_segregation!(
     Xfe_N_m::Union{Nothing,AbstractVector{Float64}}=nothing,
     Xfe_S_m::Union{Nothing,AbstractVector{Float64}}=nothing,
     cfg_partition::Union{Nothing,MetalPartitionConfig}=nothing,
+    spherical_metric::Bool=true,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
     workspace=nothing,
 )
     if (!cfg_core.percolation_active && !cfg_core.settling_active) ||
@@ -114,6 +345,7 @@ function apply_metal_segregation!(
     Ny_val = coords.Ny
     dx_val = coords.dx
     dy_val = coords.dy
+    dr_min = min(dx_val, dy_val)
 
     has_ws = (
         workspace !== nothing &&
@@ -125,6 +357,7 @@ function apply_metal_segregation!(
     M_fe_cell = has_ws ? fill!(workspace.M_fe_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     M_rock_markers =
         has_ws ? fill!(workspace.M_rock_markers, 0) : zeros(Int, Ny_val, Nx_val)
+    W_cell = has_ws ? fill!(workspace.W_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     v_seg_cell = has_ws ? fill!(workspace.v_seg_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     phi_m_cell = has_ws ? fill!(workspace.phi_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     F_m_cell = has_ws ? fill!(workspace.F_m_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
@@ -164,11 +397,13 @@ function apply_metal_segregation!(
             if rmark <= rplanet
                 j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
                 i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
                 fe_m = Xfe_bulk[m]
-                M_fe_cell[i_c, j_c] += fe_m
+                M_fe_cell[i_c, j_c] += fe_m * w_m
                 M_rock_markers[i_c, j_c] += 1
-                phi_m_cell[i_c, j_c] += Xfem[m]
-                T_cell[i_c, j_c] += tkm[m]
+                W_cell[i_c, j_c] += w_m
+                phi_m_cell[i_c, j_c] += Xfem[m] * w_m
+                T_cell[i_c, j_c] += tkm[m] * w_m
                 F_m_val = if Fm !== nothing
                     Fm[m]
                 elseif tkm[m] >= T_solidus_silicate &&
@@ -182,14 +417,14 @@ function apply_metal_segregation!(
                 else
                     0.0
                 end
-                F_m_cell[i_c, j_c] += F_m_val
-                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - fe_m, 0.0)
+                F_m_cell[i_c, j_c] += F_m_val * w_m
+                cap_cell[i_c, j_c] += max(cfg_core.phi_pack - fe_m, 0.0) * w_m
 
                 if track_volatiles
-                    M_fe_H_cell[i_c, j_c] += fe_m * Xfe_H_m[m]
-                    M_fe_C_cell[i_c, j_c] += fe_m * Xfe_C_m[m]
-                    M_fe_N_cell[i_c, j_c] += fe_m * Xfe_N_m[m]
-                    M_fe_S_cell[i_c, j_c] += fe_m * Xfe_S_m[m]
+                    M_fe_H_cell[i_c, j_c] += fe_m * w_m * Xfe_H_m[m]
+                    M_fe_C_cell[i_c, j_c] += fe_m * w_m * Xfe_C_m[m]
+                    M_fe_N_cell[i_c, j_c] += fe_m * w_m * Xfe_N_m[m]
+                    M_fe_S_cell[i_c, j_c] += fe_m * w_m * Xfe_S_m[m]
                 end
             end
         end
@@ -197,12 +432,12 @@ function apply_metal_segregation!(
 
     # Normalize cell averages
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
-        n_m = M_rock_markers[i, j]
-        if n_m > 0
-            phi_fe_cell[i, j] = M_fe_cell[i, j] / n_m
-            phi_m_cell[i, j] /= n_m
-            F_m_cell[i, j] /= n_m
-            T_cell[i, j] /= n_m
+        w_c = W_cell[i, j]
+        if w_c > 0.0
+            phi_fe_cell[i, j] = M_fe_cell[i, j] / w_c
+            phi_m_cell[i, j] /= w_c
+            F_m_cell[i, j] /= w_c
+            T_cell[i, j] /= w_c
             m_bulk = phi_fe_cell[i, j]
             Xfem_cell[i, j] =
                 m_bulk > 0.0 ? clamp(phi_m_cell[i, j] / m_bulk, 0.0, 1.0) : 0.0
@@ -211,8 +446,7 @@ function apply_metal_segregation!(
 
     # Compute cell segregation velocities
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
-        n_m = M_rock_markers[i, j]
-        if n_m == 0
+        if W_cell[i, j] <= 0.0
             continue
         end
         xc = (j - 0.5) * dx_val
@@ -222,8 +456,8 @@ function apply_metal_segregation!(
             continue
         end
 
-        g_acc = if gx !== nothing && gy !== nothing && i <= size(gx, 1) && j <= size(gx, 2)
-            g_mag = sqrt(gx[i, j]^2 + gy[i, j]^2)
+        g_acc = if gx !== nothing && gy !== nothing
+            g_mag = _cell_gravity_magnitude(gx, gy, i, j, Ny_val, Nx_val)
             g_mag > 0.0 ? g_mag : g_surf * min(rc / rplanet, 1.0)
         else
             g_surf * min(rc / rplanet, 1.0)
@@ -429,22 +663,13 @@ function apply_metal_segregation!(
                 end
 
                 # Determine transport direction
-                nx =
-                    if gx !== nothing &&
-                        gy !== nothing &&
-                        i <= size(gx, 1) &&
-                        j <= size(gx, 2)
-                        gx_f = gx[i, j]
-                        j_next = min(size(gy, 2), j + 1)
-                        i_next = min(size(gy, 1), i + 1)
-                        gy_f =
-                            0.25 *
-                            (gy[i, j] + gy[i, j_next] + gy[i_next, j] + gy[i_next, j_next])
-                        g_f = sqrt(gx_f^2 + gy_f^2)
-                        g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
-                    else
-                        -dxf / rf
-                    end
+                nx = if gx !== nothing && gy !== nothing
+                    gx_f, gy_f = _face_gravity_ew(gx, gy, i, j, Ny_val, Nx_val)
+                    g_f = hypot(gx_f, gy_f)
+                    g_f > 1.0e-10 ? gx_f / g_f : -dxf / rf
+                else
+                    -dxf / rf
+                end
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i, j + 1])
                 uf = vf * nx
@@ -452,15 +677,15 @@ function apply_metal_segregation!(
                 donor_j = uf > 0.0 ? j : j + 1
                 rec_j = uf > 0.0 ? j + 1 : j
 
-                n_donor = M_rock_markers[i, donor_j]
-                n_rec = M_rock_markers[i, rec_j]
-                if n_donor == 0 || n_rec == 0
+                w_donor = W_cell[i, donor_j]
+                w_rec = W_cell[i, rec_j]
+                if w_donor <= 0.0 || w_rec <= 0.0
                     continue
                 end
 
-                X_donor = m_fe[i, donor_j] / n_donor
+                X_donor = m_fe[i, donor_j] / w_donor
                 X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[i, donor_j]
-                m_avail = X_mob * n_donor
+                m_avail = X_mob * w_donor
 
                 fx = abs(uf) * (dt_sub / dx_val) * m_avail
                 fx_req = uf > 0.0 ? fx : -fx
@@ -488,22 +713,13 @@ function apply_metal_segregation!(
                     continue
                 end
 
-                ny =
-                    if gx !== nothing &&
-                        gy !== nothing &&
-                        i <= size(gy, 1) &&
-                        j <= size(gy, 2)
-                        gy_f = gy[i, j]
-                        i_next = min(size(gx, 1), i + 1)
-                        j_next = min(size(gx, 2), j + 1)
-                        gx_f =
-                            0.25 *
-                            (gx[i, j] + gx[i, j_next] + gx[i_next, j] + gx[i_next, j_next])
-                        g_f = sqrt(gx_f^2 + gy_f^2)
-                        g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
-                    else
-                        -dyf / rf
-                    end
+                ny = if gx !== nothing && gy !== nothing
+                    gx_f, gy_f = _face_gravity_ns(gx, gy, i, j, Ny_val, Nx_val)
+                    g_f = hypot(gx_f, gy_f)
+                    g_f > 1.0e-10 ? gy_f / g_f : -dyf / rf
+                else
+                    -dyf / rf
+                end
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i + 1, j])
                 wf = vf * ny
@@ -511,15 +727,15 @@ function apply_metal_segregation!(
                 donor_i = wf > 0.0 ? i : i + 1
                 rec_i = wf > 0.0 ? i + 1 : i
 
-                n_donor = M_rock_markers[donor_i, j]
-                n_rec = M_rock_markers[rec_i, j]
-                if n_donor == 0 || n_rec == 0
+                w_donor = W_cell[donor_i, j]
+                w_rec = W_cell[rec_i, j]
+                if w_donor <= 0.0 || w_rec <= 0.0
                     continue
                 end
 
-                X_donor = m_fe[donor_i, j] / n_donor
+                X_donor = m_fe[donor_i, j] / w_donor
                 X_mob = max(X_donor - cfg_core.phi_residual, 0.0) * Xfem_cell[donor_i, j]
-                m_avail = X_mob * n_donor
+                m_avail = X_mob * w_donor
 
                 fy = abs(wf) * (dt_sub / dy_val) * m_avail
                 fy_req = wf > 0.0 ? fy : -fy
@@ -537,11 +753,11 @@ function apply_metal_segregation!(
 
         # 3. Multi-dimensional flux limiters per cell
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            n_m = M_rock_markers[i, j]
-            if n_m > 0
-                X_c = m_fe[i, j] / n_m
-                m_avail = max(X_c - cfg_core.phi_residual, 0.0) * Xfem_cell[i, j] * n_m
-                m_cap = max(cfg_core.phi_pack - X_c, 0.0) * n_m
+            w_c = W_cell[i, j]
+            if w_c > 0.0
+                X_c = m_fe[i, j] / w_c
+                m_avail = max(X_c - cfg_core.phi_residual, 0.0) * Xfem_cell[i, j] * w_c
+                m_cap = max(cfg_core.phi_pack - X_c, 0.0) * w_c
                 alpha_out[i, j] = if outflow_tot[i, j] > m_avail && m_avail > 0.0
                     m_avail / outflow_tot[i, j]
                 else
@@ -670,28 +886,17 @@ function apply_metal_segregation!(
 
         # 6. Gravitational potential energy dissipation heating
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            n_m = M_rock_markers[i, j]
+            w_c = W_cell[i, j]
             v_s = v_seg_cell[i, j]
-            if n_m > 0 && v_s > 0.0
-                phi_m_curr = (m_fe[i, j] / n_m) * Xfem_cell[i, j]
+            if w_c > 0.0 && v_s > 0.0
+                phi_m_curr = (m_fe[i, j] / w_c) * Xfem_cell[i, j]
                 Q_diss = segregation_dissipation_heating(
                     min(phi_m_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing
-                    dQ = 0.25 * Q_diss * (dt_sub / dt)
-                    if i <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i, j] += dQ
-                    end
-                    if i <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i, j + 1] += dQ
-                    end
-                    if (i + 1) <= size(Q_seg_grid, 1) && j <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i + 1, j] += dQ
-                    end
-                    if (i + 1) <= size(Q_seg_grid, 1) && (j + 1) <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i + 1, j + 1] += dQ
-                    end
+                    dQ = Q_diss * (dt_sub / dt)
+                    _add_cell_source_to_p_grid!(Q_seg_grid, i, j, Ny_val, Nx_val, dQ)
                 end
             end
         end
@@ -699,21 +904,18 @@ function apply_metal_segregation!(
 
     # Distribute net cell mass changes to markers in each cell
     initial_sum = 0.0
-    @inbounds for m in 1:marknum
-        initial_sum += Xfe_bulk[m]
-    end
     initial_sum_H = 0.0
     initial_sum_C = 0.0
     initial_sum_N = 0.0
     initial_sum_S = 0.0
-    if track_volatiles
-        rplanet_sq = rplanet^2
-        @inbounds for m in 1:marknum
-            if tm[m] < 3
-                dx = xm[m] - xcenter
-                dy = ym[m] - ycenter
-                if dx^2 + dy^2 <= rplanet_sq
-                    fe_b = Xfe_bulk[m]
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
+                fe_b = Xfe_bulk[m] * w_m
+                initial_sum += fe_b
+                if track_volatiles
                     initial_sum_H += fe_b * Xfe_H_m[m]
                     initial_sum_C += fe_b * Xfe_C_m[m]
                     initial_sum_N += fe_b * Xfe_N_m[m]
@@ -729,12 +931,10 @@ function apply_metal_segregation!(
             if rmark <= rplanet
                 j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
                 i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
-                n_m = M_rock_markers[i_c, j_c]
-                if n_m > 0
+                if W_cell[i_c, j_c] > 0.0
                     m_target = m_fe[i_c, j_c]
                     m_init = M_fe_cell[i_c, j_c]
                     dm_cell = m_target - m_init
-                    dX = 0.0
                     if dm_cell > 0.0
                         c_tot = cap_cell[i_c, j_c]
                         if c_tot > 0.0
@@ -777,50 +977,38 @@ function apply_metal_segregation!(
     end
 
     # Enforce floating point conservation without creating out-of-bounds markers
-    final_sum = 0.0
-    @inbounds for m in 1:marknum
-        final_sum += Xfe_bulk[m]
-    end
-
-    diff_sum = initial_sum - final_sum
-    if abs(diff_sum) > 1.0e-12 * initial_sum
-        eligible_count = 0
-        @inbounds for m in 1:marknum
-            if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
-                if diff_sum > 0.0 && Xfe_bulk[m] < cfg_core.phi_pack
-                    eligible_count += 1
-                elseif diff_sum < 0.0 && Xfe_bulk[m] > 0.0
-                    eligible_count += 1
-                end
-            end
-        end
-        if eligible_count > 0
-            corr = diff_sum / eligible_count
-            @inbounds for m in 1:marknum
-                if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
-                    if diff_sum > 0.0 && Xfe_bulk[m] < cfg_core.phi_pack
-                        Xfe_bulk[m] = min(Xfe_bulk[m] + corr, cfg_core.phi_pack)
-                    elseif diff_sum < 0.0 && Xfe_bulk[m] > 0.0
-                        Xfe_bulk[m] = max(Xfe_bulk[m] + corr, 0.0)
-                    end
-                end
-            end
-        end
-    end
+    _conserve_weighted_marker_fraction!(
+        Xfe_bulk,
+        nothing,
+        xm,
+        ym,
+        tm,
+        marknum,
+        initial_sum,
+        initial_sum,
+        cfg_core.phi_pack;
+        xcenter=xcenter,
+        ycenter=ycenter,
+        rplanet=rplanet,
+        dr_min=dr_min,
+        spherical_metric=spherical_metric,
+        w3d_m=w3d_m,
+    )
 
     # Enforce volatile mass conservation across planet markers
     if track_volatiles
-        rplanet_sq = rplanet^2
         cur_sum_H = 0.0
         cur_sum_C = 0.0
         cur_sum_N = 0.0
         cur_sum_S = 0.0
         @inbounds for m in 1:marknum
             if tm[m] < 3
-                dx = xm[m] - xcenter
-                dy = ym[m] - ycenter
-                if dx^2 + dy^2 <= rplanet_sq
-                    fe_b = Xfe_bulk[m]
+                rmark = distance(xm[m], ym[m], xcenter, ycenter)
+                if rmark <= rplanet
+                    w_m = _marker_segregation_weight(
+                        m, rmark, dr_min, spherical_metric, w3d_m
+                    )
+                    fe_b = Xfe_bulk[m] * w_m
                     cur_sum_H += fe_b * Xfe_H_m[m]
                     cur_sum_C += fe_b * Xfe_C_m[m]
                     cur_sum_N += fe_b * Xfe_N_m[m]
@@ -840,9 +1028,8 @@ function apply_metal_segregation!(
         if scale_H != 1.0 || scale_C != 1.0 || scale_N != 1.0 || scale_S != 1.0
             @inbounds for m in 1:marknum
                 if tm[m] < 3
-                    dx = xm[m] - xcenter
-                    dy = ym[m] - ycenter
-                    if dx^2 + dy^2 <= rplanet_sq
+                    rmark = distance(xm[m], ym[m], xcenter, ycenter)
+                    if rmark <= rplanet
                         if scale_H != 1.0
                             Xfe_H_m[m] = clamp(Xfe_H_m[m] * scale_H, 0.0, 1.0e6)
                         end
@@ -882,53 +1069,41 @@ function apply_metal_segregation!(
 end
 
 """
-Apply silicate melt segregation via sub-cycled conservative drift-flux transport.
+Exsolve dissolved magma volatiles into marker pore fluid during silicate melt segregation.
 
 $(SIGNATURES)
 
-Solves the conservative drift-flux transport equation for buoyant silicate melt
-percolation through a solid silicate mantle matrix and Stokes crystal settling through
-magma mush and suspension regimes. Subcycles explicit finite-volume transport using
-a local CFL criterion and applies multi-dimensional donor-receiver flux limiters.
-Guarantees mass conservation of total silicate melt to machine precision when input
-marker melt fractions satisfy 0 <= Fm <= phi_pack and subsolidus freezing is inactive.
+Parameters
+----------
+xm : AbstractVector{Float64}
+    Marker horizontal coordinates [m].
+ym : AbstractVector{Float64}
+    Marker vertical coordinates [m].
+tm : AbstractVector{<:Integer}
+    Marker material phase identifiers.
+tkm : AbstractVector{Float64}
+    Marker temperatures [K].
+Fm : AbstractVector{Float64}
+    Marker silicate melt fractions.
+marknum : Integer
+    Number of active markers.
+XH2Om : AbstractVector{Float64}
+    Marker dissolved water mass fractions [wt%].
+XCm : Union{Nothing,AbstractVector{Float64}}
+    Optional marker dissolved carbon concentrations [ppmw].
+XNm : Union{Nothing,AbstractVector{Float64}}
+    Optional marker dissolved nitrogen concentrations [ppmw].
+XSm : Union{Nothing,AbstractVector{Float64}}
+    Optional marker dissolved sulfur concentrations [ppmw].
+phim : AbstractVector{Float64}
+    Marker pore fluid volume fractions.
+cfg_volatiles : VolatilesConfig
+    Volatile solubility configuration.
 
-References:
-- McKenzie (1984), J. Petrol., 25(3), 713-765.
-- Bercovici & Ricard (2003), J. Geophys. Res., 108(B5), 2258.
-- Katz (2008), J. Petrol., 49(12), 2099-2121.
-
-# Arguments
-- `xm::AbstractVector{Float64}`: Marker x-coordinates [m]
-- `ym::AbstractVector{Float64}`: Marker y-coordinates [m]
-- `tm::AbstractVector{<:Integer}`: Marker material phase type
-- `tkm::AbstractVector{Float64}`: Marker temperature [K]
-- `Fm::AbstractVector{Float64}`: Marker silicate melt volume fraction [-]
-- `marknum::Integer`: Number of markers
-- `dt::Real`: Timestep duration [s]
-- `cfg_magma::MagmaTransportConfig`: Magma transport configuration parameters
-
-# Keyword Arguments
-- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
-- `xcenter::Real=coords.xcenter`: Planet center x [m]
-- `ycenter::Real=coords.ycenter`: Planet center y [m]
-- `rplanet::Real=50000.0`: Planet radius [m]
-- `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
-- `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
-- `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
-- `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Grid for dissipation heating [W/m^3]
-- `Q_lat_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Grid for crystallization latent heat [W/m^3]
-- `rho_silicate::Real=3000.0`: Reference solid rock density [kg/m^3]
-- `rho_melt::Real=2800.0`: Reference silicate melt density [kg/m^3]
-- `eta_silicate::Real=1.0e18`: Reference solid rock dynamic viscosity [Pa s]
-- `ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Matrix viscosity on grid [Pa s]
-- `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
-- `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
-- `L_melt::Real=4.0e5`: Latent heat of silicate melting [J/kg]
-- `F_extract_m::Union{Nothing,AbstractVector{Float64}}=nothing`: Extracted melt fraction array
-
-# Returns
-- NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy, total_crystallized_mass)`
+Returns
+-------
+Float64
+    Total mass fraction of volatiles exsolved across all markers.
 """
 function exsolve_magma_volatiles!(
     xm::AbstractVector{Float64},
@@ -989,6 +1164,57 @@ function exsolve_magma_volatiles!(
     return total_exsolved_vol
 end
 
+"""
+Apply silicate melt segregation via sub-cycled conservative drift-flux transport.
+
+$(SIGNATURES)
+
+Solves the conservative drift-flux transport equation for buoyant silicate melt
+percolation through a solid silicate mantle matrix and Stokes crystal settling through
+magma mush and suspension regimes. Subcycles explicit finite-volume transport using
+a local CFL criterion and applies multi-dimensional donor-receiver flux limiters.
+Guarantees mass conservation of total silicate melt to machine precision when input
+marker melt fractions satisfy 0 <= Fm <= phi_pack.
+
+References:
+- McKenzie (1984), J. Petrol., 25(3), 713-765.
+- Bercovici & Ricard (2003), J. Geophys. Res., 108(B5), 2258.
+- Katz (2008), J. Petrol., 49(12), 2099-2121.
+
+# Arguments
+- `xm::AbstractVector{Float64}`: Marker x-coordinates [m]
+- `ym::AbstractVector{Float64}`: Marker y-coordinates [m]
+- `tm::AbstractVector{<:Integer}`: Marker material phase type
+- `tkm::AbstractVector{Float64}`: Marker temperature [K]
+- `Fm::AbstractVector{Float64}`: Marker silicate melt volume fraction [-]
+- `marknum::Integer`: Number of markers
+- `dt::Real`: Timestep duration [s]
+- `cfg_magma::MagmaTransportConfig`: Magma transport configuration parameters
+
+# Keyword Arguments
+- `coords::GridCoordinates=default_grid_coordinates()`: `GridCoordinates` domain geometry struct
+- `xcenter::Real=coords.xcenter`: Planet center x [m]
+- `ycenter::Real=coords.ycenter`: Planet center y [m]
+- `rplanet::Real=50000.0`: Planet radius [m]
+- `g_surf::Real=0.1`: Reference surface gravity magnitude [m/s^2]
+- `gx::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional x-gravity on grid [m/s^2]
+- `gy::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Optional y-gravity on grid [m/s^2]
+- `Q_seg_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Grid for dissipation heating [W/m^3]
+- `Q_lat_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Grid for crystallization latent heat [W/m^3]
+- `rho_silicate::Real=3000.0`: Reference solid rock density [kg/m^3]
+- `rho_melt::Real=2800.0`: Reference silicate melt density [kg/m^3]
+- `eta_silicate::Real=1.0e18`: Reference solid rock dynamic viscosity [Pa s]
+- `ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing`: Matrix viscosity on grid [Pa s]
+- `T_solidus_silicate::Real=1400.0`: Reference silicate solidus temperature [K]
+- `T_liquidus_silicate::Real=1800.0`: Reference silicate liquidus temperature [K]
+- `L_melt::Real=4.0e5`: Latent heat of silicate melting [J/kg]
+- `F_extract_m::Union{Nothing,AbstractVector{Float64}}=nothing`: Extracted melt fraction array
+- `spherical_metric::Bool=true`: Weight marker and cell inventories by 3D spherical shell weight
+- `w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing`: Optional precomputed marker out-of-plane weights [m]
+
+# Returns
+- NamedTuple `(; max_v_seg, n_subcycles, dt_sub, total_dissipation_energy, total_crystallized_mass, total_sensible_energy, max_compaction_pressure, mean_compaction_length, total_exsolved_volatiles)`
+"""
 function apply_silicate_melt_segregation!(
     xm::AbstractVector{Float64},
     ym::AbstractVector{Float64},
@@ -1025,6 +1251,8 @@ function apply_silicate_melt_segregation!(
     XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
     phim::Union{Nothing,AbstractVector{Float64}}=nothing,
     cfg_volatiles::Union{Nothing,VolatilesConfig}=nothing,
+    spherical_metric::Bool=true,
+    w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
     workspace=nothing,
 )
     if !cfg_magma.active || dt <= 0.0 || marknum <= 0
@@ -1062,6 +1290,7 @@ function apply_silicate_melt_segregation!(
     Ny_val = coords.Ny
     dx_val = coords.dx
     dy_val = coords.dy
+    dr_min = min(dx_val, dy_val)
 
     has_ws = (workspace !== nothing && size(workspace.M_melt_cell) == (Ny_val, Nx_val))
 
@@ -1070,6 +1299,7 @@ function apply_silicate_melt_segregation!(
         has_ws ? fill!(workspace.M_melt_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     M_rock_markers =
         has_ws ? fill!(workspace.M_rock_markers, 0) : zeros(Int, Ny_val, Nx_val)
+    W_cell = has_ws ? fill!(workspace.W_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     v_seg_cell = has_ws ? fill!(workspace.v_seg_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     F_m_cell = has_ws ? fill!(workspace.Fm_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
     g_acc_cell = has_ws ? fill!(workspace.g_acc_cell, 0.0) : zeros(Float64, Ny_val, Nx_val)
@@ -1086,21 +1316,23 @@ function apply_silicate_melt_segregation!(
             if rmark <= rplanet
                 j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
                 i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
                 fm_val = Fm[m]
-                M_melt_cell[i_c, j_c] += fm_val
+                M_melt_cell[i_c, j_c] += fm_val * w_m
                 M_rock_markers[i_c, j_c] += 1
-                T_cell[i_c, j_c] += tkm[m]
-                cap_cell[i_c, j_c] += max(cfg_magma.phi_pack - fm_val, 0.0)
+                W_cell[i_c, j_c] += w_m
+                T_cell[i_c, j_c] += tkm[m] * w_m
+                cap_cell[i_c, j_c] += max(cfg_magma.phi_pack - fm_val, 0.0) * w_m
             end
         end
     end
 
     # Normalize cell averages
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
-        n_m = M_rock_markers[i, j]
-        if n_m > 0
-            F_m_cell[i, j] = M_melt_cell[i, j] / n_m
-            T_cell[i, j] /= n_m
+        w_c = W_cell[i, j]
+        if w_c > 0.0
+            F_m_cell[i, j] = M_melt_cell[i, j] / w_c
+            T_cell[i, j] /= w_c
         end
     end
 
@@ -1110,7 +1342,7 @@ function apply_silicate_melt_segregation!(
         yc = (i - 0.5) * dy_val
         r_c = distance(xc, yc, xcenter, ycenter)
         g_acc = if gx !== nothing && gy !== nothing
-            hypot(gx[i, j], gy[i, j])
+            _cell_gravity_magnitude(gx, gy, i, j, Ny_val, Nx_val)
         else
             g_surf * (r_c / rplanet)
         end
@@ -1147,10 +1379,7 @@ function apply_silicate_melt_segregation!(
             end
         elseif vx !== nothing && vy !== nothing
             @inbounds for j in 1:Nx_val, i in 1:Ny_val
-                # On Gerya staggered grid (size Ny1 x Nx1):
-                # Cell (i, j) center is at xp[j+1], yp[i+1].
-                # Horizontal velocity Vx is along row i+1, across faces j (left) and j+1 (right).
-                # Vertical velocity Vy is along col j+1, across faces i (top) and i+1 (bottom).
+                # Cell (i, j) center is at P-node (i+1, j+1); Vx faces at j and j+1, Vy faces at i and i+1.
                 dvx = if size(vx, 2) >= Nx_val + 1 && size(vx, 1) >= Ny_val + 1
                     (vx[i + 1, j + 1] - vx[i + 1, j]) / dx_val
                 elseif size(vx, 2) >= Nx_val + 1
@@ -1366,22 +1595,13 @@ function apply_silicate_melt_segregation!(
                 end
 
                 # Outward buoyancy unit normal: opposite to gravity
-                nx =
-                    if gx !== nothing &&
-                        gy !== nothing &&
-                        i <= size(gx, 1) &&
-                        j <= size(gx, 2)
-                        gx_f = gx[i, j]
-                        j_next = min(size(gy, 2), j + 1)
-                        i_next = min(size(gy, 1), i + 1)
-                        gy_f =
-                            0.25 *
-                            (gy[i, j] + gy[i, j_next] + gy[i_next, j] + gy[i_next, j_next])
-                        g_f = sqrt(gx_f^2 + gy_f^2)
-                        g_f > 1.0e-10 ? -gx_f / g_f : dxf / rf
-                    else
-                        dxf / rf
-                    end
+                nx = if gx !== nothing && gy !== nothing
+                    gx_f, gy_f = _face_gravity_ew(gx, gy, i, j, Ny_val, Nx_val)
+                    g_f = hypot(gx_f, gy_f)
+                    g_f > 1.0e-10 ? -gx_f / g_f : dxf / rf
+                else
+                    dxf / rf
+                end
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i, j + 1])
                 uf = vf * nx
@@ -1414,15 +1634,15 @@ function apply_silicate_melt_segregation!(
                 donor_j = uf > 0.0 ? j : j + 1
                 rec_j = uf > 0.0 ? j + 1 : j
 
-                n_donor = M_rock_markers[i, donor_j]
-                n_rec = M_rock_markers[i, rec_j]
-                if n_donor == 0 || n_rec == 0
+                w_donor = W_cell[i, donor_j]
+                w_rec = W_cell[i, rec_j]
+                if w_donor <= 0.0 || w_rec <= 0.0
                     continue
                 end
 
-                F_donor = m_melt[i, donor_j] / n_donor
+                F_donor = m_melt[i, donor_j] / w_donor
                 F_mob = max(F_donor - cfg_magma.phi_residual, 0.0)
-                m_avail = F_mob * n_donor
+                m_avail = F_mob * w_donor
 
                 fx = abs(uf) * (dt_sub / dx_val) * m_avail
                 fx_req = uf > 0.0 ? fx : -fx
@@ -1450,22 +1670,13 @@ function apply_silicate_melt_segregation!(
                     continue
                 end
 
-                ny =
-                    if gx !== nothing &&
-                        gy !== nothing &&
-                        i <= size(gy, 1) &&
-                        j <= size(gy, 2)
-                        gy_f = gy[i, j]
-                        i_next = min(size(gx, 1), i + 1)
-                        j_next = min(size(gx, 2), j + 1)
-                        gx_f =
-                            0.25 *
-                            (gx[i, j] + gx[i, j_next] + gx[i_next, j] + gx[i_next, j_next])
-                        g_f = sqrt(gx_f^2 + gy_f^2)
-                        g_f > 1.0e-10 ? -gy_f / g_f : dyf / rf
-                    else
-                        dyf / rf
-                    end
+                ny = if gx !== nothing && gy !== nothing
+                    gx_f, gy_f = _face_gravity_ns(gx, gy, i, j, Ny_val, Nx_val)
+                    g_f = hypot(gx_f, gy_f)
+                    g_f > 1.0e-10 ? -gy_f / g_f : dyf / rf
+                else
+                    dyf / rf
+                end
 
                 vf = 0.5 * (v_seg_cell[i, j] + v_seg_cell[i + 1, j])
                 wf = vf * ny
@@ -1498,15 +1709,15 @@ function apply_silicate_melt_segregation!(
                 donor_i = wf > 0.0 ? i : i + 1
                 rec_i = wf > 0.0 ? i + 1 : i
 
-                n_donor = M_rock_markers[donor_i, j]
-                n_rec = M_rock_markers[rec_i, j]
-                if n_donor == 0 || n_rec == 0
+                w_donor = W_cell[donor_i, j]
+                w_rec = W_cell[rec_i, j]
+                if w_donor <= 0.0 || w_rec <= 0.0
                     continue
                 end
 
-                F_donor = m_melt[donor_i, j] / n_donor
+                F_donor = m_melt[donor_i, j] / w_donor
                 F_mob = max(F_donor - cfg_magma.phi_residual, 0.0)
-                m_avail = F_mob * n_donor
+                m_avail = F_mob * w_donor
 
                 fy = abs(wf) * (dt_sub / dy_val) * m_avail
                 fy_req = wf > 0.0 ? fy : -fy
@@ -1524,11 +1735,11 @@ function apply_silicate_melt_segregation!(
 
         # 3. Multi-dimensional flux limiters per cell
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            n_m = M_rock_markers[i, j]
-            if n_m > 0
-                F_c = m_melt[i, j] / n_m
-                m_avail = max(F_c - cfg_magma.phi_residual, 0.0) * n_m
-                m_cap = max(cfg_magma.phi_pack - F_c, 0.0) * n_m
+            w_c = W_cell[i, j]
+            if w_c > 0.0
+                F_c = m_melt[i, j] / w_c
+                m_avail = max(F_c - cfg_magma.phi_residual, 0.0) * w_c
+                m_cap = max(cfg_magma.phi_pack - F_c, 0.0) * w_c
                 alpha_out[i, j] = if outflow_tot[i, j] > m_avail && m_avail > 0.0
                     m_avail / outflow_tot[i, j]
                 else
@@ -1581,87 +1792,43 @@ function apply_silicate_melt_segregation!(
 
         # 5b. Advective sensible heat enthalpy transport
         if cfg_magma.sensible_heat_transport && Q_seg_grid !== nothing
-            cp_melt_val = cfg_magma.cp_melt
-            @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
-                fx = flux_x[i, j]
-                if !iszero(fx)
-                    donor_j = fx > 0.0 ? j : j + 1
-                    rec_j = fx > 0.0 ? j + 1 : j
-                    n_donor = M_rock_markers[i, donor_j]
-                    if n_donor > 0
-                        T_donor = T_cell[i, donor_j]
-                        T_rec = T_cell[i, rec_j]
-                        # Melt enters receiver cell at T_donor, equilibrating with receiver matrix
-                        delta_m = (abs(fx) / n_donor) * (dx_val * dy_val) * rho_melt
-                        delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
-                        H_flux_x[i, j] = delta_H
-                        total_sens_energy += abs(delta_H)
-                        if !iszero(delta_H)
-                            Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
-                            dQ_sens = Q_sens * (dt_sub / dt)
-                            if i + 1 <= size(Q_seg_grid, 1) &&
-                                rec_j + 1 <= size(Q_seg_grid, 2)
-                                Q_seg_grid[i + 1, rec_j + 1] += dQ_sens
-                            end
-                        end
-                    else
-                        H_flux_x[i, j] = 0.0
-                    end
-                else
-                    H_flux_x[i, j] = 0.0
-                end
-            end
-
-            @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
-                fy = flux_y[i, j]
-                if !iszero(fy)
-                    donor_i = fy > 0.0 ? i : i + 1
-                    rec_i = fy > 0.0 ? i + 1 : i
-                    n_donor = M_rock_markers[donor_i, j]
-                    if n_donor > 0
-                        T_donor = T_cell[donor_i, j]
-                        T_rec = T_cell[rec_i, j]
-                        delta_m = (abs(fy) / n_donor) * (dx_val * dy_val) * rho_melt
-                        delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
-                        H_flux_y[i, j] = delta_H
-                        total_sens_energy += abs(delta_H)
-                        if !iszero(delta_H)
-                            Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
-                            dQ_sens = Q_sens * (dt_sub / dt)
-                            if rec_i + 1 <= size(Q_seg_grid, 1) &&
-                                j + 1 <= size(Q_seg_grid, 2)
-                                Q_seg_grid[rec_i + 1, j + 1] += dQ_sens
-                            end
-                        end
-                    else
-                        H_flux_y[i, j] = 0.0
-                    end
-                else
-                    H_flux_y[i, j] = 0.0
-                end
-            end
+            total_sens_energy += _update_magma_sensible_heat!(
+                Q_seg_grid,
+                H_flux_x,
+                H_flux_y,
+                flux_x,
+                flux_y,
+                W_cell,
+                T_cell,
+                cfg_magma.cp_melt,
+                rho_melt,
+                dx_val,
+                dy_val,
+                dt_sub;
+                dt=dt,
+                Ny_val=Ny_val,
+                Nx_val=Nx_val,
+            )
         end
 
         # 6. Gravitational potential energy dissipation heating
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
-            n_m = M_rock_markers[i, j]
+            w_c = W_cell[i, j]
             v_s = v_seg_cell[i, j]
             F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
             F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
             F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
             F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
             flux_thru = 0.5 * (abs(F_w) + abs(F_e) + abs(F_n) + abs(F_s))
-            if n_m > 0 && v_s > 0.0 && flux_thru > 0.0
-                F_curr = m_melt[i, j] / n_m
+            if w_c > 0.0 && v_s > 0.0 && flux_thru > 0.0
+                F_curr = m_melt[i, j] / w_c
                 Q_diss = silicate_melt_dissipation_heating(
                     min(F_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing && cfg_magma.segregation_heating
                     dQ = Q_diss * (dt_sub / dt)
-                    if i + 1 <= size(Q_seg_grid, 1) && j + 1 <= size(Q_seg_grid, 2)
-                        Q_seg_grid[i + 1, j + 1] += dQ
-                    end
+                    _add_cell_source_to_p_grid!(Q_seg_grid, i, j, Ny_val, Nx_val, dQ)
                 end
             end
         end
@@ -1669,8 +1836,8 @@ function apply_silicate_melt_segregation!(
         # 7. Subsolidus/subliquidus crystallization and latent heat release
         if cfg_magma.latent_crystallization
             @inbounds for j in 1:Nx_val, i in 1:Ny_val
-                n_m = M_rock_markers[i, j]
-                if n_m > 0
+                w_c = W_cell[i, j]
+                if w_c > 0.0
                     t_cell_val = T_cell[i, j]
                     if t_cell_val < T_liquidus_silicate
                         F_eq_cell = if t_cell_val <= T_solidus_silicate
@@ -1679,7 +1846,7 @@ function apply_silicate_melt_segregation!(
                             (t_cell_val - T_solidus_silicate) /
                             max(T_liquidus_silicate - T_solidus_silicate, 1.0)
                         end
-                        m_eq = n_m * F_eq_cell
+                        m_eq = w_c * F_eq_cell
                         m_excess = max(0.0, m_melt[i, j] - m_eq)
                         dm_net = m_melt[i, j] - M_melt_cell[i, j]
 
@@ -1704,17 +1871,22 @@ function apply_silicate_melt_segregation!(
                         dT_to_liq = max(0.0, T_liquidus_silicate - t_cell_val)
                         cp_sil = 1000.0
                         m_freeze_max =
-                            (rho_silicate * cp_sil * dT_to_liq * n_m) / (rho_melt * L_melt)
+                            (rho_silicate * cp_sil * dT_to_liq * w_c) / (rho_melt * L_melt)
                         m_freeze = min(m_freeze, m_freeze_max)
 
                         if m_freeze > 0.0
                             m_melt[i, j] -= m_freeze
                             total_cryst_mass += m_freeze
+                            F_freeze = m_freeze / w_c
+                            dT_lat =
+                                (rho_melt * F_freeze * L_melt) / (rho_silicate * cp_sil)
+                            T_cell[i, j] = min(T_liquidus_silicate, t_cell_val + dT_lat)
                             if Q_lat_grid !== nothing
-                                F_freeze = m_freeze / n_m
                                 Q_cryst = (rho_melt * F_freeze * L_melt) / dt_sub
                                 dQ_lat = Q_cryst * (dt_sub / dt)
-                                Q_lat_grid[i + 1, j + 1] += dQ_lat
+                                _add_cell_source_to_p_grid!(
+                                    Q_lat_grid, i, j, Ny_val, Nx_val, dQ_lat
+                                )
                             end
                         end
                     end
@@ -1723,87 +1895,30 @@ function apply_silicate_melt_segregation!(
         end
     end
 
-    # Distribute net cell mass changes to markers in each cell
-    initial_sum = 0.0
-    @inbounds for m in 1:marknum
-        initial_sum += Fm[m]
-    end
-
-    @inbounds for m in 1:marknum
-        if tm[m] < 3
-            rmark = distance(xm[m], ym[m], xcenter, ycenter)
-            if rmark <= rplanet
-                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
-                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
-                n_m = M_rock_markers[i_c, j_c]
-                if n_m > 0
-                    m_target = m_melt[i_c, j_c]
-                    m_init = M_melt_cell[i_c, j_c]
-                    dm_cell = m_target - m_init
-                    if dm_cell > 0.0
-                        c_tot = cap_cell[i_c, j_c]
-                        if c_tot > 0.0
-                            frac_gain = min(dm_cell / c_tot, 1.0)
-                            dX = frac_gain * max(cfg_magma.phi_pack - Fm[m], 0.0)
-                            Fm[m] = clamp(Fm[m] + dX, 0.0, 1.0)
-                        else
-                            Fm[m] = clamp(Fm[m], 0.0, 1.0)
-                        end
-                    elseif dm_cell < 0.0
-                        if m_init > 0.0
-                            scale_loss = max(m_target / m_init, 0.0)
-                            dF_lost = Fm[m] * (1.0 - scale_loss)
-                            Fm[m] = clamp(Fm[m] * scale_loss, 0.0, 1.0)
-                            if F_extract_m !== nothing
-                                F_extract_m[m] = clamp(F_extract_m[m] + dF_lost, 0.0, 1.0)
-                            end
-                        else
-                            if F_extract_m !== nothing
-                                F_extract_m[m] = clamp(F_extract_m[m] + Fm[m], 0.0, 1.0)
-                            end
-                            Fm[m] = 0.0
-                        end
-                    else
-                        Fm[m] = clamp(Fm[m], 0.0, 1.0)
-                    end
-                end
-            end
-        end
-    end
-
-    # Enforce floating point conservation without creating out-of-bounds markers
-    if iszero(total_cryst_mass)
-        final_sum = 0.0
-        @inbounds for m in 1:marknum
-            final_sum += Fm[m]
-        end
-
-        diff_sum = initial_sum - final_sum
-        if abs(diff_sum) > 1.0e-12 * initial_sum && initial_sum > 0.0
-            eligible_count = 0
-            @inbounds for m in 1:marknum
-                if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
-                    if diff_sum > 0.0 && Fm[m] < 1.0
-                        eligible_count += 1
-                    elseif diff_sum < 0.0 && Fm[m] > 0.0
-                        eligible_count += 1
-                    end
-                end
-            end
-            if eligible_count > 0
-                corr = diff_sum / eligible_count
-                @inbounds for m in 1:marknum
-                    if tm[m] < 3 && distance(xm[m], ym[m], xcenter, ycenter) <= rplanet
-                        if diff_sum > 0.0 && Fm[m] < 1.0
-                            Fm[m] = min(Fm[m] + corr, 1.0)
-                        elseif diff_sum < 0.0 && Fm[m] > 0.0
-                            Fm[m] = max(Fm[m] + corr, 0.0)
-                        end
-                    end
-                end
-            end
-        end
-    end
+    _redistribute_and_conserve_magma_markers!(
+        Fm,
+        F_extract_m,
+        xm,
+        ym,
+        tm,
+        marknum,
+        W_cell,
+        m_melt,
+        M_melt_cell,
+        cap_cell,
+        total_cryst_mass,
+        cfg_magma.phi_pack;
+        xcenter=xcenter,
+        ycenter=ycenter,
+        rplanet=rplanet,
+        dx_val=dx_val,
+        dy_val=dy_val,
+        Nx_val=Nx_val,
+        Ny_val=Ny_val,
+        dr_min=dr_min,
+        spherical_metric=spherical_metric,
+        w3d_m=w3d_m,
+    )
 
     mean_delta_c = count_delta_c > 0 ? sum_delta_c / count_delta_c : 0.0
     return (;
@@ -1817,4 +1932,354 @@ function apply_silicate_melt_segregation!(
         mean_compaction_length=mean_delta_c,
         total_exsolved_volatiles=total_exsolved_vol,
     )
+end
+
+"""
+Update advective sensible heat enthalpy transport across staggered cell faces for one subcycle.
+
+$(SIGNATURES)
+
+Parameters
+----------
+Q_seg_grid : AbstractMatrix{Float64}
+    Target volumetric heat source grid [W/m^3].
+H_flux_x : AbstractMatrix{Float64}
+    Horizontal enthalpy flux workspace [J/m].
+H_flux_y : AbstractMatrix{Float64}
+    Vertical enthalpy flux workspace [J/m].
+flux_x : AbstractMatrix{Float64}
+    Horizontal volume-weighted melt flux workspace [m].
+flux_y : AbstractMatrix{Float64}
+    Vertical volume-weighted melt flux workspace [m].
+W_cell : AbstractMatrix{Float64}
+    Cell total marker volume weights [m].
+T_cell : AbstractMatrix{Float64}
+    Cell mean temperatures [K].
+cp_melt_val : Float64
+    Specific heat capacity of silicate melt [J/(kg*K)].
+rho_melt : Float64
+    Density of silicate melt [kg/m^3].
+dx_val : Float64
+    Horizontal cell spacing [m].
+dy_val : Float64
+    Vertical cell spacing [m].
+dt_sub : Float64
+    Subcycle timestep [s].
+
+Returns
+-------
+Float64
+    Total absolute sensible enthalpy transferred during the subcycle [J/m].
+"""
+function _update_magma_sensible_heat!(
+    Q_seg_grid::AbstractMatrix{Float64},
+    H_flux_x::AbstractMatrix{Float64},
+    H_flux_y::AbstractMatrix{Float64},
+    flux_x::AbstractMatrix{Float64},
+    flux_y::AbstractMatrix{Float64},
+    W_cell::AbstractMatrix{Float64},
+    T_cell::AbstractMatrix{Float64},
+    cp_melt_val::Float64,
+    rho_melt::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    dt_sub::Float64;
+    dt::Float64,
+    Ny_val::Int,
+    Nx_val::Int,
+)::Float64
+    sub_sens_energy = 0.0
+    @inbounds for j in 1:(Nx_val - 1), i in 1:Ny_val
+        fx = flux_x[i, j]
+        if !iszero(fx)
+            donor_j = fx > 0.0 ? j : j + 1
+            rec_j = fx > 0.0 ? j + 1 : j
+            w_donor = W_cell[i, donor_j]
+            if w_donor > 0.0
+                T_donor = T_cell[i, donor_j]
+                T_rec = T_cell[i, rec_j]
+                delta_m = (abs(fx) / w_donor) * (dx_val * dy_val) * rho_melt
+                delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
+                H_flux_x[i, j] = delta_H
+                sub_sens_energy += abs(delta_H)
+                if !iszero(delta_H)
+                    Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
+                    dQ_sens = Q_sens * (dt_sub / dt)
+                    _add_cell_source_to_p_grid!(
+                        Q_seg_grid, i, rec_j, Ny_val, Nx_val, dQ_sens
+                    )
+                    _add_cell_source_to_p_grid!(
+                        Q_seg_grid, i, donor_j, Ny_val, Nx_val, -dQ_sens
+                    )
+                end
+            end
+        else
+            H_flux_x[i, j] = 0.0
+        end
+    end
+
+    @inbounds for j in 1:Nx_val, i in 1:(Ny_val - 1)
+        fy = flux_y[i, j]
+        if !iszero(fy)
+            donor_i = fy > 0.0 ? i : i + 1
+            rec_i = fy > 0.0 ? i + 1 : i
+            w_donor = W_cell[donor_i, j]
+            if w_donor > 0.0
+                T_donor = T_cell[donor_i, j]
+                T_rec = T_cell[rec_i, j]
+                delta_m = (abs(fy) / w_donor) * (dx_val * dy_val) * rho_melt
+                delta_H = delta_m * cp_melt_val * (T_donor - T_rec)
+                H_flux_y[i, j] = delta_H
+                sub_sens_energy += abs(delta_H)
+                if !iszero(delta_H)
+                    Q_sens = delta_H / ((dx_val * dy_val) * dt_sub)
+                    dQ_sens = Q_sens * (dt_sub / dt)
+                    _add_cell_source_to_p_grid!(
+                        Q_seg_grid, rec_i, j, Ny_val, Nx_val, dQ_sens
+                    )
+                    _add_cell_source_to_p_grid!(
+                        Q_seg_grid, donor_i, j, Ny_val, Nx_val, -dQ_sens
+                    )
+                end
+            end
+        else
+            H_flux_y[i, j] = 0.0
+        end
+    end
+    return sub_sens_energy
+end
+
+"""
+Redistribute net cell melt changes to Lagrangian markers and enforce machine-precision conservation.
+
+$(SIGNATURES)
+
+Parameters
+----------
+Fm : AbstractVector{Float64}
+    Marker silicate melt fractions.
+F_extract_m : Union{AbstractVector{Float64},Nothing}
+    Optional marker cumulative melt extraction fractions.
+xm : AbstractVector{Float64}
+    Marker horizontal coordinates [m].
+ym : AbstractVector{Float64}
+    Marker vertical coordinates [m].
+tm : AbstractVector{<:Integer}
+    Marker material phase identifiers.
+marknum : Int
+    Number of active markers.
+W_cell : AbstractMatrix{Float64}
+    Cell total marker volume weights [m].
+m_melt : AbstractMatrix{Float64}
+    Updated cell volume-weighted melt inventories [m].
+M_melt_cell : AbstractMatrix{Float64}
+    Initial cell volume-weighted melt inventories [m].
+cap_cell : AbstractMatrix{Float64}
+    Cell remaining volume-weighted melt capacities [m].
+total_cryst_mass : Float64
+    Total volume-weighted melt crystallized during subcycling [m].
+phi_pack : Float64
+    Maximum melt packing fraction ceiling.
+
+Returns
+-------
+Nothing
+    Mutates `Fm` and `F_extract_m` in place.
+"""
+function _redistribute_and_conserve_magma_markers!(
+    Fm::AbstractVector{Float64},
+    F_extract_m::Union{AbstractVector{Float64},Nothing},
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    marknum::Int,
+    W_cell::AbstractMatrix{Float64},
+    m_melt::AbstractMatrix{Float64},
+    M_melt_cell::AbstractMatrix{Float64},
+    cap_cell::AbstractMatrix{Float64},
+    total_cryst_mass::Float64,
+    phi_pack::Float64;
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet::Float64,
+    dx_val::Float64,
+    dy_val::Float64,
+    Nx_val::Int,
+    Ny_val::Int,
+    dr_min::Float64,
+    spherical_metric::Bool,
+    w3d_m::Union{AbstractVector{Float64},Nothing},
+)
+    initial_sum = 0.0
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
+                initial_sum += Fm[m] * w_m
+            end
+        end
+    end
+
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                j_c = clamp(Int(floor(xm[m] / dx_val)) + 1, 1, Nx_val)
+                i_c = clamp(Int(floor(ym[m] / dy_val)) + 1, 1, Ny_val)
+                if W_cell[i_c, j_c] > 0.0
+                    m_target = m_melt[i_c, j_c]
+                    m_init = M_melt_cell[i_c, j_c]
+                    dm_cell = m_target - m_init
+                    fm_prev = Fm[m]
+                    if dm_cell > 0.0
+                        c_tot = cap_cell[i_c, j_c]
+                        frac_gain = c_tot > 0.0 ? min(dm_cell / c_tot, 1.0) : 0.0
+                        dX = frac_gain * max(phi_pack - fm_prev, 0.0)
+                        Fm[m] = clamp(fm_prev + dX, 0.0, 1.0)
+                    elseif dm_cell < 0.0
+                        scale_loss = m_init > 0.0 ? max(m_target / m_init, 0.0) : 0.0
+                        Fm[m] = clamp(fm_prev * scale_loss, 0.0, 1.0)
+                    else
+                        Fm[m] = clamp(fm_prev, 0.0, 1.0)
+                    end
+                    if F_extract_m !== nothing
+                        F_extract_m[m] = clamp(
+                            F_extract_m[m] - (Fm[m] - fm_prev), -1.0, 1.0
+                        )
+                    end
+                end
+            end
+        end
+    end
+
+    target_sum = max(0.0, initial_sum - total_cryst_mass)
+    _conserve_weighted_marker_fraction!(
+        Fm,
+        F_extract_m,
+        xm,
+        ym,
+        tm,
+        marknum,
+        target_sum,
+        initial_sum,
+        phi_pack;
+        xcenter=xcenter,
+        ycenter=ycenter,
+        rplanet=rplanet,
+        dr_min=dr_min,
+        spherical_metric=spherical_metric,
+        w3d_m=w3d_m,
+    )
+    return nothing
+end
+
+"""
+Enforce volume-weighted marker fraction conservation across eligible interior markers.
+
+$(SIGNATURES)
+
+Parameters
+----------
+X_m : AbstractVector{Float64}
+    Marker volume fraction array (`Xfe_bulk` or `Fm`).
+F_extract_m : Union{AbstractVector{Float64},Nothing}
+    Optional marker cumulative melt extraction fractions.
+xm : AbstractVector{Float64}
+    Marker horizontal coordinates [m].
+ym : AbstractVector{Float64}
+    Marker vertical coordinates [m].
+tm : AbstractVector{<:Integer}
+    Marker material phase identifiers.
+marknum : Int
+    Number of active markers.
+target_sum : Float64
+    Target volume-weighted marker fraction sum [m].
+initial_sum : Float64
+    Initial volume-weighted marker fraction sum [m].
+phi_pack : Float64
+    Maximum packing fraction ceiling.
+
+Returns
+-------
+Nothing
+    Mutates `X_m` and `F_extract_m` in place.
+"""
+function _conserve_weighted_marker_fraction!(
+    X_m::AbstractVector{Float64},
+    F_extract_m::Union{AbstractVector{Float64},Nothing},
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    marknum::Int,
+    target_sum::Float64,
+    initial_sum::Float64,
+    phi_pack::Float64;
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet::Float64,
+    dr_min::Float64,
+    spherical_metric::Bool,
+    w3d_m::Union{AbstractVector{Float64},Nothing},
+)
+    final_sum = 0.0
+    @inbounds for m in 1:marknum
+        if tm[m] < 3
+            rmark = distance(xm[m], ym[m], xcenter, ycenter)
+            if rmark <= rplanet
+                w_m = _marker_segregation_weight(m, rmark, dr_min, spherical_metric, w3d_m)
+                final_sum += X_m[m] * w_m
+            end
+        end
+    end
+
+    diff_sum = target_sum - final_sum
+    if abs(diff_sum) > 1.0e-12 * max(initial_sum, 1.0e-30) && initial_sum > 0.0
+        eligible_weight = 0.0
+        @inbounds for m in 1:marknum
+            if tm[m] < 3
+                rmark = distance(xm[m], ym[m], xcenter, ycenter)
+                if rmark <= rplanet
+                    if (diff_sum > 0.0 && X_m[m] < phi_pack) ||
+                        (diff_sum < 0.0 && X_m[m] > 0.0)
+                        eligible_weight += _marker_segregation_weight(
+                            m, rmark, dr_min, spherical_metric, w3d_m
+                        )
+                    end
+                end
+            end
+        end
+        if eligible_weight > 0.0
+            rem_diff = diff_sum
+            rem_weight = eligible_weight
+            @inbounds for m in 1:marknum
+                if tm[m] < 3
+                    rmark = distance(xm[m], ym[m], xcenter, ycenter)
+                    if rmark <= rplanet
+                        if (diff_sum > 0.0 && X_m[m] < phi_pack) ||
+                            (diff_sum < 0.0 && X_m[m] > 0.0)
+                            w_m = _marker_segregation_weight(
+                                m, rmark, dr_min, spherical_metric, w3d_m
+                            )
+                            corr = rem_diff / rem_weight
+                            old_val = X_m[m]
+                            new_val = clamp(old_val + corr, 0.0, phi_pack)
+                            X_m[m] = new_val
+                            if F_extract_m !== nothing
+                                F_extract_m[m] = clamp(
+                                    F_extract_m[m] - (new_val - old_val), -1.0, 1.0
+                                )
+                            end
+                            rem_diff -= (new_val - old_val) * w_m
+                            rem_weight = max(0.0, rem_weight - w_m)
+                            if abs(rem_diff) <= 1.0e-15 * initial_sum || rem_weight <= 0.0
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nothing
 end
