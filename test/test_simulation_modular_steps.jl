@@ -485,6 +485,7 @@ using Erebus
 
         # 4. Verify perform_thermochemical_reaction! fallback to pfm0 when grid pf is all zeros
         fill!(state.grids.pf, 0.0)
+        fill!(state.grids.tk2, 500.0)
         fill!(core.pfm0, 3.0e6)
         Erebus.perform_thermochemical_reaction!(
             state.grids.DMP,
@@ -509,9 +510,13 @@ using Erebus
             coords=coords_actual,
             DQPF=state.grids.DQPF,
             DQPFSUM=state.grids.DQPFSUM,
-            cfg=cfg_dry.reaction,
+            cfg=ReactionConfig(active=true),
         )
-        @test all(x -> isapprox(x, 3.0e6; rtol=1e-12), core.pfm0)
+        for m in 1:marknum
+            if core.tm[m] < 3
+                @test isapprox(core.pfm0[m], 3.0e6; rtol=1e-12)
+            end
+        end
     end
 
     @testset "Stokes-Darcy Adaptive Timestep Reduction Re-Solve Consistency" begin
