@@ -88,7 +88,9 @@ function solve_thermomechanical_iterations!(
                 cfg=cfg.reaction,
             )
         else
+            fill!(state.grids.DMP, 0.0)
             fill!(state.grids.DHP, 0.0)
+            fill!(state.grids.DQPF, 0.0)
         end
 
         if DHP_pyro !== nothing

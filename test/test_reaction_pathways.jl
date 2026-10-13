@@ -259,9 +259,28 @@ _mean(x) = sum(x) / length(x)
         @test min_dqpf < 0.0
         @test maximum(DQPF) <= 1e-15
 
-        # 5. Closed-box exact water mass conservation
+        # 5. Closed-box exact water mass conservation and decoupled phase volume rates
         MH2O_mol = M_H2O
         MD_mol = 0.120
+        rho_s0_ref =
+            (MD_mol + MH2O_mol * XWsolidm0[1]) /
+            (Erebus.VDˢ * (1.0 - XWsolidm0[1]) + Erebus.VWˢ * XWsolidm0[1])
+        rho_s1_ref =
+            (MD_mol + MH2O_mol * XWsolidm[1]) /
+            (Erebus.VDˢ * (1.0 - XWsolidm[1]) + Erebus.VWˢ * XWsolidm[1])
+        rho0_ref = rho_s0_ref * (1.0 - phim[1]) + 1000.0 * phim[1]
+        rho1_ref = rho_s1_ref * (1.0 - phinewm[1]) + 1000.0 * phinewm[1]
+        RV_ref = rho1_ref / rho0_ref
+        gamma_mass_ref =
+            (rho_s0_ref * (1.0 - phim[1]) * RV_ref - rho_s1_ref * (1.0 - phinewm[1])) / dt
+        @test isapprox(maximum(DMP), -gamma_mass_ref / rho_s1_ref; rtol=1e-12)
+        @test isapprox(min_dqpf, gamma_mass_ref / 1000.0; rtol=1e-12)
+        @test isapprox(
+            maximum(DMP) + min_dqpf,
+            gamma_mass_ref * (1.0 / 1000.0 - 1.0 / rho_s1_ref);
+            rtol=1e-12,
+        )
+
         delta_m_mineral_water = sum(
             begin
                 rho_s0 =
@@ -392,9 +411,27 @@ _mean(x) = sum(x) / length(x)
         @test max_dqpf > 0.0
         @test minimum(DQPF) >= -1e-15
 
-        # 5. Closed-box exact water mass conservation
+        # 5. Closed-box exact water mass conservation and decoupled phase volume rates
         MH2O_mol = M_H2O
         MD_mol = 0.120
+        rho_s0_deh =
+            (MD_mol + MH2O_mol * XWsolidm0[1]) /
+            (Erebus.VDˢ * (1.0 - XWsolidm0[1]) + Erebus.VWˢ * XWsolidm0[1])
+        rho_s1_deh =
+            (MD_mol + MH2O_mol * XWsolidm[1]) /
+            (Erebus.VDˢ * (1.0 - XWsolidm[1]) + Erebus.VWˢ * XWsolidm[1])
+        rho0_deh = rho_s0_deh * (1.0 - phim[1]) + 1000.0 * phim[1]
+        rho1_deh = rho_s1_deh * (1.0 - phinewm[1]) + 1000.0 * phinewm[1]
+        RV_deh = rho1_deh / rho0_deh
+        gamma_mass_deh =
+            (rho_s0_deh * (1.0 - phim[1]) * RV_deh - rho_s1_deh * (1.0 - phinewm[1])) / dt
+        @test isapprox(minimum(DMP), -gamma_mass_deh / rho_s1_deh; rtol=1e-12)
+        @test isapprox(max_dqpf, gamma_mass_deh / 1000.0; rtol=1e-12)
+        @test isapprox(
+            minimum(DMP) + max_dqpf,
+            gamma_mass_deh * (1.0 / 1000.0 - 1.0 / rho_s1_deh);
+            rtol=1e-12,
+        )
         delta_m_mineral_water = sum(
             begin
                 rho_s0 =
@@ -863,5 +900,164 @@ _mean(x) = sum(x) / length(x)
             0.0;
             atol=1e-10,
         )
+    end
+
+    @testset "Pore-Water-Limited Hydration Ceiling and Legacy Volume Mode" begin
+        c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
+        marknum = 16
+        tk_cold = fill(450.0, c17.Ny1, c17.Nx1)
+        pf_high = fill(1.0e8, c17.Ny1, c17.Nx1)
+        dt = 1.0e6
+        cfg_fast = ReactionConfig(;
+            hydration_mode=9,
+            dtreaction_hydration=100.0,
+            alpha_relaxation=1.0,
+            fluid_overpressure_coupling=true,
+        )
+
+        xm = fill(5000.0, marknum)
+        ym = fill(5000.0, marknum)
+        tm = fill(Int32(1), marknum)
+        DMP = zeros(Float64, c17.Ny1, c17.Nx1)
+        DHP = zeros(Float64, c17.Ny1, c17.Nx1)
+        DQPF = zeros(Float64, c17.Ny1, c17.Nx1)
+        DMPSUM = zeros(Float64, c17.Ny1, c17.Nx1)
+        DHPSUM = zeros(Float64, c17.Ny1, c17.Nx1)
+        DQPFSUM = zeros(Float64, c17.Ny1, c17.Nx1)
+        WTPSUM = zeros(Float64, c17.Ny1, c17.Nx1)
+
+        VH2O_val = M_H2O / 1000.0
+        xw0_base = 1.0e-4
+        prev_xw = xw0_base
+        for phi0 in (1.0e-4, 0.01, 0.02, 0.05)
+            XW0 = fill(xw0_base, marknum)
+            XW1 = fill(xw0_base, marknum)
+            phim = fill(phi0, marknum)
+            phinewm = fill(phi0, marknum)
+            pfm0 = fill(1.0e8, marknum)
+
+            perform_thermochemical_reaction!(
+                DMP,
+                DHP,
+                DMPSUM,
+                DHPSUM,
+                WTPSUM,
+                pf_high,
+                tk_cold,
+                tm,
+                xm,
+                ym,
+                XW0,
+                XW1,
+                phim,
+                phinewm,
+                pfm0,
+                marknum,
+                dt,
+                2,
+                1;
+                coords=c17,
+                DQPF=DQPF,
+                DQPFSUM=DQPFSUM,
+                cfg=cfg_fast,
+            )
+
+            xw_mean = _mean(XW1)
+            phi_mean = _mean(phinewm)
+            @test isapprox(phi_mean, Erebus.phimin; atol=1e-12)
+
+            if phi0 <= Erebus.phimin
+                @test isapprox(xw_mean, xw0_base; rtol=1e-12)
+                @test all(iszero, DMP)
+                @test all(iszero, DHP)
+                @test all(iszero, DQPF)
+            else
+                vs0 = Erebus.VDˢ * (1.0 - xw0_base) + Erebus.VWˢ * xw0_base
+                xf0 = phi0 * vs0 / ((1.0 - phi0) * Erebus.VH₂Oᶠ + phi0 * vs0)
+                xs0 = 1.0 - xf0
+                xh2ot = (xw0_base * xs0 + xf0) / (1.0 + xw0_base * xs0)
+                xdt = 1.0 - xh2ot
+                xw_ceil = Erebus._max_hydration_wet_fraction(
+                    xw0_base, xh2ot, xdt, phi0, Erebus.VH₂Oᶠ, xw0_base
+                )
+                @test isapprox(xw_mean, xw_ceil; rtol=1e-12)
+                @test xw_mean > prev_xw
+
+                rho_s0 = (Erebus.MD + M_H2O * xw0_base) / vs0
+                rho_f0 = 1000.0
+                rho0 = rho_s0 * (1.0 - phi0) + rho_f0 * phi0
+                vs1 = Erebus.VDˢ * (1.0 - xw_mean) + Erebus.VWˢ * xw_mean
+                rho_s1 = (Erebus.MD + M_H2O * xw_mean) / vs1
+                rho1 = rho_s1 * (1.0 - phi_mean) + rho_f0 * phi_mean
+                RV = rho1 / rho0
+                gamma_mass =
+                    (rho_s0 * (1.0 - phi0) * RV - rho_s1 * (1.0 - phi_mean)) / dt
+                @test isapprox(maximum(DMP), -gamma_mass / rho_s1; rtol=1e-12)
+                @test isapprox(minimum(DQPF), gamma_mass / rho_f0; rtol=1e-12)
+                @test isapprox(
+                    maximum(DHP), -gamma_mass * (cfg_fast.delta_H / M_H2O); rtol=1e-12
+                )
+                @test isapprox(
+                    maximum(DMP) + minimum(DQPF),
+                    gamma_mass * (1.0 / rho_f0 - 1.0 / rho_s1);
+                    rtol=1e-12,
+                )
+                dm_solid_h2o =
+                    (1.0 - phi_mean) * (1.0 / RV) * (xw_mean * M_H2O) / vs1 -
+                    (1.0 - phi0) * (xw0_base * M_H2O) / vs0
+                dm_pore_h2o = rho_f0 * (phi_mean / RV - phi0)
+                @test isapprox(dm_solid_h2o + dm_pore_h2o, 0.0; atol=1e-11)
+            end
+            prev_xw = xw_mean
+        end
+
+        # Uncoupled legacy volume mode (fluid_overpressure_coupling = false)
+        cfg_uncoupled = ReactionConfig(;
+            hydration_mode=9,
+            dtreaction_hydration=100.0,
+            alpha_relaxation=1.0,
+            fluid_overpressure_coupling=false,
+        )
+        XW0_unc = fill(xw0_base, marknum)
+        XW1_unc = fill(xw0_base, marknum)
+        phim_unc = fill(0.05, marknum)
+        phinewm_unc = fill(0.05, marknum)
+        pfm0_unc = fill(1.0e8, marknum)
+        perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf_high,
+            tk_cold,
+            tm,
+            xm,
+            ym,
+            XW0_unc,
+            XW1_unc,
+            phim_unc,
+            phinewm_unc,
+            pfm0_unc,
+            marknum,
+            dt,
+            2,
+            1;
+            coords=c17,
+            DQPF=DQPF,
+            DQPFSUM=DQPFSUM,
+            cfg=cfg_uncoupled,
+        )
+        xw_unc = _mean(XW1_unc)
+        phi_unc = _mean(phinewm_unc)
+        vs0_u = Erebus.VDˢ * (1.0 - xw0_base) + Erebus.VWˢ * xw0_base
+        rho_s0_u = (Erebus.MD + M_H2O * xw0_base) / vs0_u
+        rho_s1_u =
+            (Erebus.MD + M_H2O * xw_unc) /
+            (Erebus.VDˢ * (1.0 - xw_unc) + Erebus.VWˢ * xw_unc)
+        RV_unc =
+            (rho_s1_u * (1.0 - phi_unc) + 1000.0 * phi_unc) /
+            (rho_s0_u * 0.95 + 1000.0 * 0.05)
+        @test isapprox(minimum(DMP), (1.0 - RV_unc) / dt; rtol=1e-12)
     end
 end
