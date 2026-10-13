@@ -125,6 +125,21 @@ function solve_thermomechanical_iterations!(
         end
     end
 
+    if plastic_converged
+        update_marker_pressures!(
+            state.markers.core.pfm0,
+            state.markers.core.xm,
+            state.markers.core.ym,
+            state.markers.core.tm,
+            state.grids.pf,
+            state.grids.pr,
+            length(state.markers);
+            coords=coords,
+            p_cavitation=cfg.reaction.p_cavitation,
+            pfcoeff=0.0,
+        )
+    end
+
     return (;
         plastic_converged=plastic_converged,
         last_plastic_residual=last_plastic_residual,

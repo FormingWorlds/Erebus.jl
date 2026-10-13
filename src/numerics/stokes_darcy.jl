@@ -1586,12 +1586,14 @@ function compute_fluid_velocities!(
     @inbounds begin
         # vx velocity
         @views @. vxf[2:Ny, 1:Nx] = qxD[2:Ny, 1:Nx] / PHIX[2:Ny, 1:Nx]
+        @views vxf[:, Nx1] .= 0.0
         # top boundary
         @views @. vxf[1, :] = -bcftop * vxf[2, :]
         # bottom boundary
         @views @. vxf[Ny1, :] = -bcfbottom * vxf[Ny, :]
         # vy velocity
         @views @. vyf[1:Ny, 2:Nx] = qyD[1:Ny, 2:Nx] / PHIY[1:Ny, 2:Nx]
+        @views vyf[Ny1, :] .= 0.0
         # left boundary
         @views @. vyf[:, 1] = -bcfleft * vyf[:, 2]
         # right boundary

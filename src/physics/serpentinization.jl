@@ -296,6 +296,7 @@ function perform_thermochemical_reaction!(
     p_cav = react_cfg.p_cavitation
     alpha_rel = react_cfg.alpha_relaxation
     eps_comp = 1.0e-4
+    has_grid_pf = any(!iszero, pf)
 
     # iterate over markers
     @inbounds begin
@@ -317,7 +318,11 @@ function perform_thermochemical_reaction!(
                 # interpolate temperature from P nodes
                 tknm = dot4(grid_vector(i, j, tk2), weights)
                 # interpolate fluid pressure from P nodes with cavitation floor
-                pfnm = max(-p_cav, dot4(grid_vector(i, j, pf), weights))
+                pfnm = if has_grid_pf
+                    max(-p_cav, dot4(grid_vector(i, j, pf), weights))
+                else
+                    max(-p_cav, pfm₀[m])
+                end
                 # factor in previous iteration marker fluid pressure
                 if titer > 2
                     pfnm = pfnm * (1.0 - pfcoeff_val) + pfm₀[m] * pfcoeff_val

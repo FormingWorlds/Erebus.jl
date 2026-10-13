@@ -360,13 +360,9 @@ function setup_simulation_markers_and_state(
         core.XWsolidm .= core.XWsolidm0
         core.phinewm .= core.phim
         _init_fresh_hcnspo_markers!(hcnspo_props, core.tm, marknum, cfg)
-
-        resize!(core.w3d_m, marknum)
-        for m in 1:marknum
-            core.w3d_m[m] = marker_out_of_plane_length(
-                core.xm[m], core.ym[m], xcenter_val, ycenter_val
-            )
-        end
+        _init_hydrostatic_marker_pressure!(
+            core, cfg, marknum, xcenter_val, ycenter_val, rplanet_val
+        )
 
         M_atm_species =
             if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
@@ -654,4 +650,47 @@ function _reconstruct_checkpoint_marker_arrays(
         push!(group_pairs, :accretion => AccretionGroup(o.t_accreted))
     end
     return MarkerArrays(core, NamedTuple(group_pairs))
+end
+
+"""
+Initialize 3D out-of-plane shell weights and analytical hydrostatic pressure on fresh planetesimal markers.
+
+$(SIGNATURES)
+
+# Arguments
+- `core`: Marker core arrays, updated in-place.
+- `cfg`: Simulation configuration.
+- `marknum`: Number of active markers.
+- `xcenter`: Planetesimal x-center coordinate [m].
+- `ycenter`: Planetesimal y-center coordinate [m].
+- `rplanet`: Planetesimal outer radius [m].
+
+# Returns
+- `nothing`
+"""
+function _init_hydrostatic_marker_pressure!(
+    core::CoreGroup,
+    cfg::SimulationConfig,
+    marknum::Int,
+    xcenter::Float64,
+    ycenter::Float64,
+    rplanet::Float64,
+)
+    p_amb_init = max(Float64(cfg.geometry.psurface), Float64(cfg.disk.p_amb_disk))
+    c_grav = cfg.geometry.gravity_mode === :enclosed_mass ? (2.0 / 3.0) : 1.0
+    rplanet_sq = rplanet^2
+    resize!(core.w3d_m, marknum)
+    @inbounds for m in 1:marknum
+        core.w3d_m[m] = marker_out_of_plane_length(core.xm[m], core.ym[m], xcenter, ycenter)
+        tm_m = core.tm[m]
+        if tm_m < 3
+            rho_s = cfg.materials.rhosolidm[tm_m] * (1.0 - core.phim[m])
+            r_sq = (core.xm[m] - xcenter)^2 + (core.ym[m] - ycenter)^2
+            core.pfm0[m] =
+                p_amb_init + c_grav * pi * G_GRAV * (rho_s^2) * max(0.0, rplanet_sq - r_sq)
+        else
+            core.pfm0[m] = 0.0
+        end
+    end
+    return nothing
 end

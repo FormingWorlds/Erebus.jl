@@ -361,4 +361,213 @@ using Erebus
             cfg; restart_from="invalid_path.jld2"
         )
     end
+
+    @testset "Unconditional Marker Pressure Interpolation and Hydrostatic Init" begin
+        cfg_dry = SimulationConfig(
+            grid=GridConfig(Nx=25, Ny=25, xsize=140000.0, ysize=140000.0),
+            geometry=GeometryConfig(
+                rplanet=50000.0,
+                rcrust=50000.0,
+                xcenter=70000.0,
+                ycenter=70000.0,
+                gravity_mode=:enclosed_mass,
+            ),
+            reaction=ReactionConfig(active=false),
+        )
+        state, coords_actual, ws, _, _ = init_simulation(cfg_dry)
+        core = state.markers.core
+        marknum = length(state.markers)
+
+        # 1. Step-0 hydrostatic pressure initialization for interior and sticky-air markers
+        r_p = cfg_dry.geometry.rplanet
+        p_amb = max(cfg_dry.geometry.psurface, cfg_dry.disk.p_amb_disk)
+        for m in 1:marknum
+            tm_m = core.tm[m]
+            if tm_m < 3
+                rho_s = cfg_dry.materials.rhosolidm[tm_m] * (1.0 - core.phim[m])
+                r_sq =
+                    (core.xm[m] - cfg_dry.geometry.xcenter)^2 +
+                    (core.ym[m] - cfg_dry.geometry.ycenter)^2
+                p_expected =
+                    p_amb +
+                    (2.0 / 3.0) * pi * Erebus.G_GRAV * (rho_s^2) * max(0.0, r_p^2 - r_sq)
+                @test isapprox(core.pfm0[m], p_expected; rtol=1e-10)
+            else
+                @test iszero(core.pfm0[m])
+            end
+        end
+
+        # Verify :poisson2d branch of _init_hydrostatic_marker_pressure!
+        cfg_p2d = SimulationConfig(
+            grid=GridConfig(Nx=15, Ny=15, xsize=140000.0, ysize=140000.0),
+            geometry=GeometryConfig(
+                rplanet=50000.0,
+                rcrust=50000.0,
+                xcenter=70000.0,
+                ycenter=70000.0,
+                gravity_mode=:poisson2d,
+            ),
+        )
+        state_p2d, _, _, _, _ = init_simulation(cfg_p2d)
+        core_p2d = state_p2d.markers.core
+        for m in 1:length(state_p2d.markers)
+            tm_m = core_p2d.tm[m]
+            if tm_m < 3
+                rho_s = cfg_p2d.materials.rhosolidm[tm_m] * (1.0 - core_p2d.phim[m])
+                r_sq =
+                    (core_p2d.xm[m] - cfg_p2d.geometry.xcenter)^2 +
+                    (core_p2d.ym[m] - cfg_p2d.geometry.ycenter)^2
+                p_expected = p_amb + pi * Erebus.G_GRAV * (rho_s^2) * max(0.0, r_p^2 - r_sq)
+                @test isapprox(core_p2d.pfm0[m], p_expected; rtol=1e-10)
+            else
+                @test iszero(core_p2d.pfm0[m])
+            end
+        end
+
+        # 2. Unconditional grid-to-marker pressure update when reaction.active == false
+        fill!(core.pfm0, 0.0)
+        state.timestep = 1
+        Erebus.prepare_step_ambient!(state, coords_actual, cfg_dry, ws)
+        Erebus.interpolate_markers_to_grid!(
+            state,
+            coords_actual,
+            cfg_dry;
+            p2m_workspace=ws.p2m,
+            thread_buffers=ws.thread_buffers,
+            interp_arrays=ws.interp_arrays,
+        )
+        Erebus.solve_gravity!(
+            state, coords_actual, cfg_dry; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP
+        )
+        Erebus.update_step_start_pressures!(state)
+        sd_res = Erebus.solve_stokes_darcy!(
+            state, coords_actual, cfg_dry, ws; titer=1, dt_step_initial=state.dt
+        )
+        @test sd_res.plastic_converged == true
+        @test isapprox(maximum(core.pfm0), maximum(state.grids.pf); rtol=0.08)
+
+        # 3. Direct branch tests for update_marker_pressures! (pr fallback, zero early return, pfcoeff, cavitation)
+        pf_zero = zeros(Float64, coords_actual.Ny1, coords_actual.Nx1)
+        pr_zero = zeros(Float64, coords_actual.Ny1, coords_actual.Nx1)
+        pfm_test = fill(123.0, marknum)
+        Erebus.update_marker_pressures!(
+            pfm_test,
+            core.xm,
+            core.ym,
+            core.tm,
+            pf_zero,
+            pr_zero,
+            marknum;
+            coords=coords_actual,
+        )
+        @test all(x -> isapprox(x, 123.0; rtol=1e-12), pfm_test)
+
+        pr_const = fill(2.0e6, coords_actual.Ny1, coords_actual.Nx1)
+        fill!(pfm_test, 1.0e6)
+        Erebus.update_marker_pressures!(
+            pfm_test,
+            core.xm,
+            core.ym,
+            core.tm,
+            pf_zero,
+            pr_const,
+            marknum;
+            coords=coords_actual,
+            pfcoeff=0.4,
+        )
+        for m in 1:marknum
+            if core.tm[m] < 3
+                @test isapprox(pfm_test[m], 0.6 * 2.0e6 + 0.4 * 1.0e6; rtol=1e-12)
+            else
+                @test iszero(pfm_test[m])
+            end
+        end
+
+        # 4. Verify perform_thermochemical_reaction! fallback to pfm0 when grid pf is all zeros
+        fill!(state.grids.pf, 0.0)
+        fill!(state.grids.tk2, 500.0)
+        fill!(core.pfm0, 3.0e6)
+        Erebus.perform_thermochemical_reaction!(
+            state.grids.DMP,
+            state.grids.DHP,
+            zeros(Float64, coords_actual.Ny1, coords_actual.Nx1),
+            zeros(Float64, coords_actual.Ny1, coords_actual.Nx1),
+            zeros(Float64, coords_actual.Ny1, coords_actual.Nx1),
+            state.grids.pf,
+            state.grids.tk2,
+            core.tm,
+            core.xm,
+            core.ym,
+            core.XWsolidm0,
+            core.XWsolidm,
+            core.phim,
+            core.phinewm,
+            core.pfm0,
+            marknum,
+            state.dt,
+            1,
+            1;
+            coords=coords_actual,
+            DQPF=state.grids.DQPF,
+            DQPFSUM=state.grids.DQPFSUM,
+            cfg=ReactionConfig(active=true),
+        )
+        for m in 1:marknum
+            if core.tm[m] < 3
+                @test isapprox(core.pfm0[m], 3.0e6; rtol=1e-12)
+            end
+        end
+    end
+
+    @testset "Stokes-Darcy Adaptive Timestep Reduction Re-Solve Consistency" begin
+        cfg_sd = SimulationConfig(
+            grid=GridConfig(Nx=17, Ny=17, xsize=140000.0, ysize=140000.0),
+            poroelasticity=PoroelasticConfig(betasolid=2.5e-11, betafluid=4.0e-10),
+            reaction=ReactionConfig(active=false),
+        )
+        state, coords_actual, ws, _, _ = init_simulation(cfg_sd)
+        state.timestep = 1
+        Erebus.prepare_step_ambient!(state, coords_actual, cfg_sd, ws)
+        Erebus.interpolate_markers_to_grid!(
+            state,
+            coords_actual,
+            cfg_sd;
+            p2m_workspace=ws.p2m,
+            thread_buffers=ws.thread_buffers,
+            interp_arrays=ws.interp_arrays,
+        )
+        Erebus.solve_gravity!(
+            state, coords_actual, cfg_sd; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP
+        )
+        Erebus.update_step_start_pressures!(state)
+        Erebus.solve_stokes_darcy!(
+            state, coords_actual, cfg_sd, ws; titer=1, dt_step_initial=state.dt
+        )
+
+        # Advance to step 2 where poroelasticity is active (cur_betasolid > 0)
+        state.timestep = 2
+        Erebus.update_step_start_pressures!(state)
+        # Perturb baseline pressure pr0 so poroelastic storage (pr - pr0)/dt is non-zero
+        state.grids.pr0 .+= 5.0e5
+        dt_huge = 1.0e15
+        state.dt = dt_huge
+        sd_res2 = Erebus.solve_stokes_darcy!(
+            state, coords_actual, cfg_sd, ws; titer=1, dt_step_initial=dt_huge
+        )
+        @test sd_res2.plastic_converged == true
+        dt_longest_sec = cfg_sd.time.dt_longest * cfg_sd.time.yearlength
+        @test isapprox(min(state.dt, dt_longest_sec), state.dt; rtol=1e-12)
+
+        # Verify discrete solid continuity equation on interior cells (3:Ny-1, 3:Nx-1)
+        g = state.grids
+        dx_val = coords_actual.dx
+        dy_val = coords_actual.dy
+        for j in 3:(coords_actual.Nx - 1), i in 3:(coords_actual.Ny - 1)
+            div_vs =
+                (g.vx[i, j] - g.vx[i, j - 1]) / dx_val +
+                (g.vy[i, j] - g.vy[i - 1, j]) / dy_val
+            rhs_cont = -g.PHI[i, j] * g.APHI[i, j] + g.DMP[i, j]
+            @test isapprox(div_vs, rhs_cont; atol=1.0e-22, rtol=1.0e-10)
+        end
+    end
 end
