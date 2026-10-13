@@ -63,7 +63,7 @@ Conservation of pore fluid mass with fluid compressibility is:
 
 $$\nabla \cdot \mathbf{q}_D = \frac{D \ln \phi}{Dt} + \phi \beta_f \frac{D P_f}{Dt}$$
 
-where $\beta_f$ is the fluid compressibility [$\text{Pa}^{-1}$]. In the discrete numerical system, the total mechanical continuity equation also incorporates the volumetric expansion rate $\text{DMP}$ [$1/\text{s}$] from mineral dehydration reactions.
+where $\beta_f$ is the fluid compressibility [$\text{Pa}^{-1}$]. When `reaction.fluid_overpressure_coupling = true`, the solid continuity equation incorporates the solid matrix volumetric reaction rate $\text{DMP} = -\Gamma_{\text{mass}}/\rho_s^1$ [$1/\text{s}$] and the Darcy fluid continuity equation incorporates the fluid volumetric production rate $\text{DQPF} = +\Gamma_{\text{mass}}/\rho_f^1$ [$1/\text{s}$], so that the combined two-phase volume divergence equals $\text{DMP} + \text{DQPF} = \Gamma_{\text{mass}}(1/\rho_f^1 - 1/\rho_s^1)$. When `reaction.fluid_overpressure_coupling = false`, $\text{DQPF} = 0$ and $\text{DMP} = (1 - RV)/\Delta t$ represents the net volumetric strain rate.
 
 ---
 
@@ -166,7 +166,7 @@ where $\Delta h_{\text{rxn}}$ is the molar reaction enthalpy [$\text{J/mol}$], $
 
 $$\Gamma_{\text{mass}} = \frac{\rho_0^s (1 - \phi_0) RV - \rho_1^s (1 - \phi_1)}{\Delta t}$$
 
-Hydration reactions ($\Gamma_{\text{mass}} < 0$) produce exothermic heating ($\text{DHP} > 0$). Dehydration reactions ($\Gamma_{\text{mass}} > 0$) produce endothermic cooling ($\text{DHP} < 0$). Marker reaction enthalpy is regularized over the grid using full-domain volume weighting $\text{WTPSUM}$.
+During hydration ($X_{W,1}^s > X_{W,0}^s$), reacted wet solid molar fraction is bounded above by the pore-water supply ceiling $X_{W,\max}^s = \frac{(X_{\text{H}_2\text{O}}^t / X_D^t) V_{\text{H}_2\text{O}} - \xi_{\min} V_D^s}{V_{\text{H}_2\text{O}} + \xi_{\min}(V_W^s - V_D^s)}$ with $\xi_{\min} = \phi_{\min}/(1 - \phi_{\min})$, preserving $\phi_1 \ge \phi_{\min}$. Hydration reactions ($\Gamma_{\text{mass}} < 0$) produce exothermic heating ($\text{DHP} > 0$). Dehydration reactions ($\Gamma_{\text{mass}} > 0$) produce endothermic cooling ($\text{DHP} < 0$). Marker reaction enthalpy is regularized over the grid using full-domain volume weighting $\text{WTPSUM}$.
 
 ### Spherical Geometric Metric Weighting (2D Cartesian)
 In 3D spherically symmetric coordinates with radius $r = \sqrt{(x - x_c)^2 + (y - y_c)^2}$, the heat flux divergence is:

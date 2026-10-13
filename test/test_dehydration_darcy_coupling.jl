@@ -802,4 +802,203 @@ Random.seed!(42)
         nC_sat = sat_spec[:CO] / M_CO + sat_spec[:CO2] / M_CO2 + sat_spec[:CH4] / M_CH4
         @test nC_sat < nC_in
     end
+
+    @testset "Coupled Two-Phase Volume Balance with Reaction DMP and DQPF" begin
+        coords = GridCoordinates(GridConfig(Nx=7, Ny=7, xsize=35000.0, ysize=35000.0))
+        Ny, Nx = coords.Ny, coords.Nx
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+
+        marknum = 16
+        i_int, j_int = 4, 4
+        # Place markers at pressure cell center (i_int=4, j_int=4)
+        xc_p = (j_int - 1.5) * coords.dx
+        yc_p = (i_int - 1.5) * coords.dy
+        xm = fill(xc_p, marknum)
+        ym = fill(yc_p, marknum)
+        tm = fill(Int32(1), marknum)
+
+        DMP = zeros(Ny1, Nx1)
+        DHP = zeros(Ny1, Nx1)
+        DQPF = zeros(Ny1, Nx1)
+        DMPSUM = zeros(Ny1, Nx1)
+        DHPSUM = zeros(Ny1, Nx1)
+        DQPFSUM = zeros(Ny1, Nx1)
+        WTPSUM = zeros(Ny1, Nx1)
+
+        # 1. Dehydration reaction source terms (T = 750 K, XW0 = 0.95)
+        tk_deh = fill(750.0, Ny1, Nx1)
+        pf_bg = fill(3.0e7, Ny1, Nx1)
+        XW0_deh = fill(0.95, marknum)
+        XW1_deh = fill(0.95, marknum)
+        phi0_deh = fill(0.10, marknum)
+        phi1_deh = fill(0.10, marknum)
+        pfm0_deh = fill(3.0e7, marknum)
+        dt_val = 1.0e6
+
+        perform_thermochemical_reaction!(
+            DMP,
+            DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            pf_bg,
+            tk_deh,
+            tm,
+            xm,
+            ym,
+            XW0_deh,
+            XW1_deh,
+            phi0_deh,
+            phi1_deh,
+            pfm0_deh,
+            marknum,
+            dt_val,
+            2,
+            1;
+            coords=coords,
+            DQPF=DQPF,
+            DQPFSUM=DQPFSUM,
+        )
+
+        rho_s0_deh =
+            (Erebus.MD + M_H2O * XW0_deh[1]) /
+            (Erebus.VDˢ * (1.0 - XW0_deh[1]) + Erebus.VWˢ * XW0_deh[1])
+        rho_s1_deh =
+            (Erebus.MD + M_H2O * XW1_deh[1]) /
+            (Erebus.VDˢ * (1.0 - XW1_deh[1]) + Erebus.VWˢ * XW1_deh[1])
+        RV_deh =
+            (rho_s1_deh * (1.0 - phi1_deh[1]) + 1000.0 * phi1_deh[1]) /
+            (rho_s0_deh * (1.0 - phi0_deh[1]) + 1000.0 * phi0_deh[1])
+        gamma_deh =
+            (
+                rho_s0_deh * (1.0 - phi0_deh[1]) * RV_deh -
+                rho_s1_deh * (1.0 - phi1_deh[1])
+            ) / dt_val
+
+        @test isapprox(DMP[i_int, j_int], -gamma_deh / rho_s1_deh; rtol=1.0e-12)
+        @test isapprox(DQPF[i_int, j_int], gamma_deh / 1000.0; rtol=1.0e-12)
+        @test isapprox(
+            DMP[i_int, j_int] + DQPF[i_int, j_int],
+            gamma_deh * (1.0 / 1000.0 - 1.0 / rho_s1_deh);
+            rtol=1.0e-12,
+        )
+
+        # Solve coupled Stokes-Darcy in the incompressible-grain, uncompacted limit
+        ETA = fill(1.0e20, Ny, Nx)
+        ETAP = fill(1.0e20, Ny1, Nx1)
+        GGG = fill(1.0e10, Ny, Nx)
+        GGGP = fill(1.0e10, Ny1, Nx1)
+        SXY0 = zeros(Ny, Nx)
+        SXX0 = zeros(Ny, Nx)
+        RHOX = fill(3000.0, Ny1, Nx1)
+        RHOY = fill(3000.0, Ny1, Nx1)
+        RHOFX = fill(1000.0, Ny1, Nx1)
+        RHOFY = fill(1000.0, Ny1, Nx1)
+        RX = fill(1.0e6, Ny1, Nx1)
+        RY = fill(1.0e6, Ny1, Nx1)
+        PHI = fill(0.10, Ny1, Nx1)
+        ETAPHI = fill(1.0e32, Ny1, Nx1)
+        BETAPHI = zeros(Ny1, Nx1)
+        gx = zeros(Ny1, Nx1)
+        gy = zeros(Ny1, Nx1)
+        pr0 = zeros(Ny1, Nx1)
+        pf0 = zeros(Ny1, Nx1)
+
+        R6 = zeros(Nx1 * Ny1 * 6)
+        L6 = assemble_hydromechanical_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt_val,
+            R6;
+            betasolid=0.0,
+            betafluid=0.0,
+            coords=coords,
+            DQPF=DQPF,
+            fluid_overpressure_coupling=true,
+        )
+        S6 = L6 \ R6
+        pr_6 = zeros(Ny1, Nx1)
+        pf_6 = zeros(Ny1, Nx1)
+        vx_6 = zeros(Ny1, Nx1)
+        vy_6 = zeros(Ny1, Nx1)
+        qx_6 = zeros(Ny1, Nx1)
+        qy_6 = zeros(Ny1, Nx1)
+        process_hydromechanical_solution!(
+            S6, vx_6, vy_6, pr_6, qx_6, qy_6, pf_6; coords=coords
+        )
+
+        R4 = zeros(Nx1 * Ny1 * 4)
+        L4 = assemble_hydromechanical_4var_lse!(
+            ETA,
+            ETAP,
+            GGG,
+            GGGP,
+            SXY0,
+            SXX0,
+            RHOX,
+            RHOY,
+            RHOFX,
+            RHOFY,
+            RX,
+            RY,
+            ETAPHI,
+            BETAPHI,
+            PHI,
+            gx,
+            gy,
+            pr0,
+            pf0,
+            DMP,
+            dt_val,
+            R4;
+            betasolid=0.0,
+            betafluid=0.0,
+            coords=coords,
+            DQPF=DQPF,
+            fluid_overpressure_coupling=true,
+        )
+        S4 = L4 \ R4
+        pr_4 = zeros(Ny1, Nx1)
+        pf_4 = zeros(Ny1, Nx1)
+        vx_4 = zeros(Ny1, Nx1)
+        vy_4 = zeros(Ny1, Nx1)
+        process_hydromechanical_4var_solution!(S4, vx_4, vy_4, pr_4, pf_4; coords=coords)
+
+        @test isapprox(pf_4, pf_6; rtol=1.0e-8)
+        @test isapprox(vx_4, vx_6; rtol=1.0e-8)
+        @test isapprox(vy_4, vy_6; rtol=1.0e-8)
+
+        div_vs_deh =
+            (vx_6[i_int, j_int] - vx_6[i_int, j_int - 1]) / coords.dx +
+            (vy_6[i_int, j_int] - vy_6[i_int - 1, j_int]) / coords.dy
+        div_qD_deh =
+            (qx_6[i_int, j_int] - qx_6[i_int, j_int - 1]) / coords.dx +
+            (qy_6[i_int, j_int] - qy_6[i_int - 1, j_int]) / coords.dy
+
+        @test isapprox(div_vs_deh, DMP[i_int, j_int]; rtol=1.0e-4)
+        @test isapprox(div_qD_deh, DQPF[i_int, j_int]; rtol=1.0e-4)
+        @test isapprox(
+            div_vs_deh + div_qD_deh,
+            DMP[i_int, j_int] + DQPF[i_int, j_int];
+            rtol=1.0e-10,
+        )
+    end
 end

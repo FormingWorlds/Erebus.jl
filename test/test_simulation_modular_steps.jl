@@ -302,6 +302,23 @@ using Erebus
         @test haskey(res_outer, :plastic_converged)
         @test haskey(res_outer, :thermochemical_converged)
         @test res_outer.plastic_converged == true
+
+        cfg_noreact = override_config(cfg, Dict{String,Any}("reaction.active" => false))
+        fill!(state.grids.DMP, 1.0e-9)
+        fill!(state.grids.DQPF, 2.0e-9)
+        fill!(state.grids.DHP, 3.0)
+        res_noreact = Erebus.solve_thermomechanical_iterations!(
+            state,
+            coords_actual,
+            cfg_noreact,
+            ws;
+            DHP_pyro=nothing,
+            dt_step_initial=state.dt,
+        )
+        @test res_noreact.thermochemical_converged == true
+        @test all(iszero, state.grids.DMP)
+        @test all(iszero, state.grids.DQPF)
+        @test all(iszero, state.grids.DHP)
     end
 
     @testset "Coupled Physics Simulation Step Integration" begin

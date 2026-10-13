@@ -213,6 +213,37 @@ function compute_thermodynamic_xfer!(
 end # function compute_thermodynamic_xfer!
 
 """
+Compute the maximum wet solid molar fraction reachable by consuming available pore water.
+
+$(SIGNATURES)
+
+# Arguments
+- `XW0_cl`: Clamped initial wet solid molar fraction [-].
+- `XH2Ot`: Total system water molar fraction [-].
+- `XDt`: Total system dry silicate molar fraction [-].
+- `phi_m`: Initial marker porosity [-].
+- `VH2O`: Molar volume of pore water or ice [m^3/mol].
+- `eps_comp`: Composition boundary buffer [-].
+
+# Returns
+- `XW_max`: Maximum wet solid molar fraction leaving residual porosity `phimin` [-].
+"""
+@inline function _max_hydration_wet_fraction(
+    XW0_cl::Float64,
+    XH2Ot::Float64,
+    XDt::Float64,
+    phi_m::Float64,
+    VH2O::Float64,
+    eps_comp::Float64,
+)
+    phi_m <= phimin && return XW0_cl
+    r0_wd = XH2Ot / XDt
+    xi_min = phimin / (1.0 - phimin)
+    XW_lim = (r0_wd * VH2O - xi_min * VDˢ) / (VH2O + xi_min * (VWˢ - VDˢ))
+    return clamp(XW_lim, XW0_cl, 1.0 - eps_comp)
+end
+
+"""
 Perform hydrothermomechanical iterations to time step thermal field at P nodes.
 
 $(SIGNATURES)
@@ -404,16 +435,25 @@ function perform_thermochemical_reaction!(
                     XWˢm₁ = inv(KWD_star + 1.0)
                 end
 
-                # Clamp reacted fraction to interior
-                XWˢm₁ = clamp(XWˢm₁, eps_comp, 1.0 - eps_comp)
+                # Clamp reacted fraction to interior and available pore water ceiling
+                XW_max = _max_hydration_wet_fraction(
+                    XWˢm₀_cl, XH₂Oᵗ, XDᵗ, phim[m], VH₂O, eps_comp
+                )
+                XWˢm₁ = clamp(
+                    XWˢm₁, eps_comp, ifelse(XWˢm₁ > XWˢm₀_cl, XW_max, 1.0 - eps_comp)
+                )
 
                 # Picard under-relaxation on reacted wet silicate fraction across iterations
-                if titer > 1
-                    XWˢm₁_rel = alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XWˢm[m]
+                XWˢm₁_rel = if titer > 1
+                    alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XWˢm[m]
                 else
-                    XWˢm₁_rel = XWˢm₁
+                    XWˢm₁
                 end
-                XWˢm₁_star = clamp(XWˢm₁_rel, eps_comp, 1.0 - eps_comp)
+                XWˢm₁_star = clamp(
+                    XWˢm₁_rel,
+                    eps_comp,
+                    ifelse(XWˢm₁_rel > XWˢm₀_cl, XW_max, 1.0 - eps_comp),
+                )
                 XDˢm₁_star = 1.0 - XWˢm₁_star
 
                 # compute reacted total solid molar fraction (16.154)
@@ -427,13 +467,7 @@ function perform_thermochemical_reaction!(
                     ϕ₁ =
                         Xᶠ₁ * VH₂O /
                         (Xᶠ₁ * VH₂O + Xˢ₁ * (XWˢm₁_star * VWˢ + XDˢm₁_star * VDˢ))
-                    # under-relax porosity across iterations
-                    if titer > 1
-                        ϕ_rel = alpha_rel * ϕ₁ + (1.0 - alpha_rel) * phinewm[m]
-                    else
-                        ϕ_rel = ϕ₁
-                    end
-                    ϕ_new = clamp(ϕ_rel, phimin, phimax)
+                    ϕ_new = clamp(ϕ₁, phimin, phimax)
 
                     # compute equilibrium solid density (16.161)
                     ρˢ₁ = (MD + MH₂O * XWˢm₁_star) / (VDˢ * XDˢm₁_star + VWˢ * XWˢm₁_star)
@@ -445,25 +479,18 @@ function perform_thermochemical_reaction!(
                         (ρˢ₀ * (1.0 - phim[m]) + ρᶠ₀ * phim[m])
                     # compute mass transfer rate (16.103)
                     Γmass = (ρˢ₀ * RV * (1.0 - phim[m]) - ρˢ₁ * (1.0 - ϕ_new)) / Δt
-                    # compute total mass continuity term (16.112e)
-                    ΔMm = (1.0 - RV) / Δt
+                    # compute solid or bulk continuity source term
+                    ΔMm = if react_cfg.fluid_overpressure_coupling
+                        -Γmass / ρˢ₁
+                    else
+                        (1.0 - RV) / Δt
+                    end
 
                     # Specific reaction enthalpy per kg pure water [J/kg]
                     dh_rxn = (react_cfg === nothing ? ΔHWD : react_cfg.delta_H) / MH₂O
 
-                    # Latent heat transfer term DHP:
-                    # Hydration is exothermic (heat source, ΔHm > 0).
-                    # Dehydration is endothermic (heat sink, ΔHm < 0).
-                    if XWˢm₁_star > XWˢm₀_cl
-                        phi_avail = max(0.0, phim[m] - phimin)
-                        gamma_fluid_max = ρᶠ₀ * phi_avail / Δt
-                        Γmass_eff = max(Γmass, -gamma_fluid_max)
-                        ΔHm = -Γmass_eff * dh_rxn
-                    elseif XWˢm₁_star < XWˢm₀_cl
-                        ΔHm = -Γmass * dh_rxn
-                    else
-                        ΔHm = zero(0.0)
-                    end
+                    # Latent heat transfer term DHP (positive for exothermic hydration)
+                    ΔHm = ifelse(XWˢm₁_star == XWˢm₀_cl, zero(0.0), -Γmass * dh_rxn)
 
                     # Fluid continuity exchange diagnostic DQPF (water mass exchange into pore space)
                     Γwater = Γmass

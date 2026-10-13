@@ -109,6 +109,7 @@ Model setup files live in `configs/`:
   - `@testset "Dynamic Hydrofracture Coupling to Fluid Overpressure"`
   - `@testset "Reaction Activation Switches and Picard Under-Relaxation"`
   - `@testset "Hydrothermal Reaction Thermodynamic Anchors (Gerya 2019)"`
+  - `@testset "Pore-Water-Limited Hydration Ceiling and Legacy Volume Mode"`
 
 - `test/test_stefan_benchmark.jl`:
   - `@testset "1D Stefan Moving-Boundary Front Verification"` (validates moving dehydration front position, latent heat consumption, and fluid expulsion against the similarity solution)

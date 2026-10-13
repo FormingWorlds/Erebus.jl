@@ -10,9 +10,10 @@ The physical theory of hydrothermal reactions, two-phase Stokes-Darcy porous flo
 
 Key constitutive relations validated on this page include:
 
-- **Stokes-Darcy Fluid Continuity with Dehydration Source Term ($\Delta Q^f$):**
-  $$\nabla \cdot \mathbf{v}_D = \Delta Q^f - \frac{P_t - P_f}{\eta_\phi (1 - \phi)} - S_{\text{storage}} \frac{\partial}{\partial t}\left(P_t - \frac{P_f}{K_{\text{sk}}}\right)$$
-  where $\mathbf{v}_D = -\frac{k}{\eta_f} \nabla P_f$ is the Darcy filtration velocity, $\Delta Q^f = \text{DQPF}$ [$\text{s}^{-1}$] is the volumetric fluid production rate from mineral dehydration, $\frac{P_t - P_f}{\eta_\phi(1-\phi)}$ represents viscous matrix compaction, and the final term accounts for poroelastic pressure storage.
+- **Stokes-Darcy Solid and Fluid Continuity with Reaction Source Terms ($\Delta M_m, \Delta Q^f$):**
+  $$\nabla \cdot \mathbf{v}_s = \Delta M_m - \frac{P_t - P_f}{\eta_\phi (1 - \phi)} - \beta_d \frac{\partial}{\partial t}\left(P_t - K_{\text{bw}} P_f\right)$$
+  $$\nabla \cdot \mathbf{v}_D = \Delta Q^f + \frac{P_t - P_f}{\eta_\phi (1 - \phi)} + \beta_d K_{\text{bw}} \frac{\partial}{\partial t}\left(P_t - \frac{P_f}{K_{\text{sk}}}\right)$$
+  where $\mathbf{v}_D = -\frac{k}{\eta_f} \nabla P_f$ is the Darcy filtration velocity, $\Delta M_m = \text{DMP} = -\Gamma_{\text{mass}}/\rho_s^1$ [$\text{s}^{-1}$] is the solid matrix volumetric reaction rate, and $\Delta Q^f = \text{DQPF} = +\Gamma_{\text{mass}}/\rho_f^1$ [$\text{s}^{-1}$] is the volumetric fluid production rate from mineral dehydration. Summing the two continuity equations cancels the viscous compaction term and gives the net two-phase volume change rate $\text{DMP} + \text{DQPF} = \Gamma_{\text{mass}}(1/\rho_f^1 - 1/\rho_s^1)$.
 
 - **Condensed Hydromechanical Assembly (4-Variable and 6-Variable):**
   In both the classical 6-variable formulation ($v_x, v_y, P_t, v_{x}^D, v_{y}^D, P_f$) and the condensed 4-variable formulation ($v_x, v_y, P_t, P_f$), dehydration fluid production injects into the fluid continuity residual at internal pressure cell centers:
@@ -79,6 +80,7 @@ Key constitutive relations validated on this page include:
   - `@testset "Outward Darcy Filtration Driven by Dehydration Overpressure"`
   - `@testset "Unified Surface Venting Water Mass Balance & Speciation"`
   - `@testset "Dynamic Equilibrium Gas Speciation Under Reducing Surface Venting"`
+  - `@testset "Coupled Two-Phase Volume Balance with Reaction DMP and DQPF"`
 
 - `test/test_atmosphere.jl`:
   - `@testset "Simulation Loop Integration with Coupled Atmosphere"` verifies additive atmospheric H2O budget.
