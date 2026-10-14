@@ -469,4 +469,139 @@ using Erebus.Simulation
             @test isapprox(h2o_2d_after, h2o_2d_before; rtol=1.0e-12)
         end
     end
+
+    @testset "Refractory Organic Pyrolysis and Surface Venting Conservation" begin
+        cfg_base = load_config(
+            normpath(
+                joinpath(@__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml")
+            ),
+        )
+        cfg = Erebus.override_config(
+            cfg_base,
+            Dict(
+                "grid.Nx" => 17,
+                "grid.Ny" => 17,
+                "time.n_steps" => 3,
+                "time.dt_initial" => 0.01,
+                "time.dt_longest" => 0.01,
+                "solver.p2m_mode" => :tiled,
+                "solver.hydromech_solver" => :direct,
+                "solver.seed" => 42,
+                "melting.active" => false,
+                "melting.soft_turbulence" => false,
+                "volatiles.active" => true,
+                "volatiles.initial_water_wtpct" => 0.5,
+                "volatiles.initial_carbon_ppm" => 200.0,
+                "volatiles.initial_nitrogen_ppm" => 20.0,
+                "volatiles.initial_sulfur_ppm" => 100.0,
+                "volatile_mixture.active" => true,
+                "refractory.active" => true,
+                "refractory.kinetics_active" => true,
+                "venting.active" => true,
+                "retention.active" => true,
+                "retention.venting_drainage_active" => true,
+                "magma_degassing.active" => false,
+                "atmosphere.active" => true,
+                "escape.active" => true,
+                "escape.multi_species" => true,
+                "metal_partition.active" => false,
+                "reaction.active" => false,
+                "accretion.active" => false,
+                "telescoping.active" => false,
+                "magma_transport.active" => false,
+                "coreformation.percolation_active" => true,
+                "coreformation.settling_active" => false,
+                "hydrothermal.active" => false,
+                "phase_tracking.active" => false,
+                "disk.enabled" => false,
+                "mpi.enable" => false,
+                "redox.active" => true,
+                "redox.pyrolysis_redox" => true,
+                "output.mode" => :telemetry,
+                "output.save_final" => false,
+                "output.output_dir" => tempname(),
+            ),
+        )
+        (st_p, coords_p, ws_p, tel_p, _) = Erebus.init_simulation(cfg)
+        tel_p !== nothing && close(tel_p)
+
+        Am = marker_area(coords_p)
+        rho_sil = cfg.materials.rhosolidm[1]
+        h_conv = (2.0 * M_H) / M_H2O
+        core = st_p.markers.core
+        vols = st_p.markers.groups.volatiles
+        hcnspo = st_p.markers.groups.hcnspo
+        rdx = st_p.markers.groups.redox
+        Xfe_bulk = st_p.markers.groups.metal.Xfe_bulk
+        core.tkm .= 750.0
+        st_p.grids.tk2 .= 750.0
+        st_p.grids.S_vent_grid .= 1.0e-5
+
+        c_init = 0.0
+        n_init = 0.0
+        for m in 1:length(st_p.markers)
+            if core.tm[m] < 3
+                phi_sil = Erebus._marker_silicate_fraction(Xfe_bulk, m)
+                m_sil_2d = phi_sil * rho_sil * Am
+                c_init +=
+                    (
+                        hcnspo.X_refr_C_m[m] +
+                        vols.XCm[m] * 1.0e-6 +
+                        vols.X_graphite_m[m] +
+                        (
+                            rdx.nC_graphite_m[m] +
+                            rdx.nCO_m[m] +
+                            rdx.nCO2_m[m] +
+                            rdx.nCH4_m[m]
+                        ) * M_C
+                    ) * m_sil_2d
+                n_init += (hcnspo.X_refr_N_m[m] + vols.XNm[m] * 1.0e-6) * m_sil_2d
+            end
+        end
+
+        for step in 1:3
+            st_p.timestep = step
+            Erebus.update_pyrolysis!(st_p, coords_p, cfg)
+            Erebus.vent_and_degas!(st_p, coords_p, cfg; Fm_step_start=ws_p.Fm_step_start)
+            copyto!(core.phinewm, core.phim)
+        end
+
+        vent_c_2d = sum(
+            r.dM2 for r in st_p.transfers if r.channel === :venting && r.element === :C;
+            init=0.0,
+        )
+        vent_n_2d = sum(
+            r.dM2 for r in st_p.transfers if r.channel === :venting && r.element === :N;
+            init=0.0,
+        )
+
+        c_fin = vent_c_2d
+        n_fin = vent_n_2d
+        for m in 1:length(st_p.markers)
+            if core.tm[m] < 3
+                phi_sil = Erebus._marker_silicate_fraction(Xfe_bulk, m)
+                m_sil_2d = phi_sil * rho_sil * Am
+                c_fin +=
+                    (
+                        hcnspo.X_refr_C_m[m] +
+                        vols.XCm[m] * 1.0e-6 +
+                        vols.X_graphite_m[m] +
+                        (
+                            rdx.nC_graphite_m[m] +
+                            rdx.nCO_m[m] +
+                            rdx.nCO2_m[m] +
+                            rdx.nCH4_m[m]
+                        ) * M_C
+                    ) * m_sil_2d
+                n_fin += (hcnspo.X_refr_N_m[m] + vols.XNm[m] * 1.0e-6) * m_sil_2d
+            end
+        end
+
+        c_rem = c_fin - vent_c_2d
+        n_rem = n_fin - vent_n_2d
+        @test c_rem < c_init
+        @test n_rem < n_init
+        @test isapprox(c_fin, c_init; rtol=1.0e-11)
+        @test isapprox(n_fin, n_init; rtol=1.0e-11)
+    end
 end

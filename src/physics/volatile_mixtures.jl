@@ -583,6 +583,96 @@ function speciate_pyrolysis_carbon_redox!(
 end
 
 """
+Deposit devolatilized pyrolysis products into marker volatile arrays and rescale for silicate mass fraction changes.
+
+$(SIGNATURES)
+
+# Parameters
+- `m`: Marker index.
+- `scale`: Unit conversion factor (`1.0e-6` for ppmw input, `1.0` for mass fraction).
+- `has_redox_pyro`: Whether redox-coupled carbon speciation is active.
+- `d_c_gas`: Devolatilized carbon gas increment in input units.
+- `d_c_gr`: Precipitated graphite residue increment in input units.
+- `d_n_gas`: Devolatilized nitrogen gas increment in input units.
+- `m_h2`: Unreacted molecular hydrogen increment in input units.
+- `phi_fe_old`: Marker metallic volume fraction prior to carbothermal smelting.
+
+# Returns
+- `Nothing`: Mutates marker volatile and refractory arrays in place.
+"""
+@inline function _deposit_pyrolysis_volatiles_on_marker!(
+    m::Int,
+    scale::Float64,
+    has_redox_pyro::Bool,
+    d_c_gas::Float64,
+    d_c_gr::Float64,
+    d_n_gas::Float64,
+    m_h2::Float64,
+    phi_fe_old::Float64;
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
+    X_refr_C_m::AbstractVector{Float64},
+    X_refr_N_m::AbstractVector{Float64},
+    X_refr_H_m::AbstractVector{Float64},
+    XH2Om::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XCm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XNm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    X_graphite_m::Union{Nothing,AbstractVector{Float64}}=nothing,
+    redox_props=nothing,
+)
+    if !has_redox_pyro
+        if XCm !== nothing && d_c_gas > 0.0
+            XCm[m] += (d_c_gas * scale) * 1.0e6
+        end
+        if X_graphite_m !== nothing && d_c_gr > 0.0
+            X_graphite_m[m] += d_c_gr * scale
+        end
+    end
+    if XNm !== nothing && d_n_gas > 0.0
+        XNm[m] += (d_n_gas * scale) * 1.0e6
+    end
+    if XH2Om !== nothing && m_h2 > 0.0
+        XH2Om[m] += (m_h2 * scale) * (M_H2O / (2.0 * M_H)) * 100.0
+    end
+
+    has_vols =
+        XH2Om !== nothing ||
+        XCm !== nothing ||
+        XNm !== nothing ||
+        XSm !== nothing ||
+        X_graphite_m !== nothing
+    if has_vols && Xfe_bulk !== nothing
+        phi_fe_new = clamp(Float64(Xfe_bulk[m]), 0.0, 1.0)
+        if phi_fe_new > phi_fe_old && (1.0 - phi_fe_new) > 1.0e-12
+            scale_sil = (1.0 - phi_fe_old) / (1.0 - phi_fe_new)
+            X_refr_C_m[m] *= scale_sil
+            X_refr_N_m[m] *= scale_sil
+            X_refr_H_m[m] *= scale_sil
+            XH2Om !== nothing && (XH2Om[m] *= scale_sil)
+            XCm !== nothing && (XCm[m] *= scale_sil)
+            XNm !== nothing && (XNm[m] *= scale_sil)
+            XSm !== nothing && (XSm[m] *= scale_sil)
+            X_graphite_m !== nothing && (X_graphite_m[m] *= scale_sil)
+            if redox_props !== nothing
+                hasproperty(redox_props, :nC_graphite_m) &&
+                    redox_props.nC_graphite_m !== nothing &&
+                    (redox_props.nC_graphite_m[m] *= scale_sil)
+                hasproperty(redox_props, :nCO_m) &&
+                    redox_props.nCO_m !== nothing &&
+                    (redox_props.nCO_m[m] *= scale_sil)
+                hasproperty(redox_props, :nCO2_m) &&
+                    redox_props.nCO2_m !== nothing &&
+                    (redox_props.nCO2_m[m] *= scale_sil)
+                hasproperty(redox_props, :nCH4_m) &&
+                    redox_props.nCH4_m !== nothing &&
+                    (redox_props.nCH4_m[m] *= scale_sil)
+            end
+        end
+    end
+    return nothing
+end
+
+"""
 Update refractory concentrations, porosity, and gas release from IOM pyrolysis across rock markers.
 
 $(SIGNATURES)
@@ -609,7 +699,13 @@ $(SIGNATURES)
 - `redox_cfg`: Optional RedoxConfig to govern pyrolysis redox coupling.
 - `Xfem`: Optional marker molten metallic iron volume fraction array.
 - `Xfe_bulk`: Optional marker bulk metallic iron volume fraction array.
+- `rho_metal`: Metallic iron density [kg/m^3] (default: 7000.0).
 - `phi_pack`: Maximum metal volume fraction packing limit (default: 0.65).
+- `XH2Om`: Optional marker silicate water concentration array [wt%].
+- `XCm`: Optional marker silicate carbon concentration array [ppmw].
+- `XNm`: Optional marker silicate nitrogen concentration array [ppmw].
+- `XSm`: Optional marker silicate sulfur concentration array [ppmw].
+- `X_graphite_m`: Optional marker solid graphite mass fraction array.
 
 # Returns
 - Named tuple `(; total_dC_gas, total_dN_gas, total_dH_gas, total_dC_graphite, total_dH_pyro)`
@@ -642,6 +738,11 @@ function update_marker_pyrolysis!(
     Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     rho_metal::Real=7000.0,
     phi_pack::Real=0.65,
+    XH2Om::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XCm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XNm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
+    X_graphite_m::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     marknum = length(tkm)
     Xfe_bulk !== nothing &&
@@ -688,6 +789,7 @@ function update_marker_pyrolysis!(
         c_h = X_refr_H_m[m]
         (c_c == 0.0 && c_n == 0.0 && c_h == 0.0) && continue
 
+        phi_fe_old = Xfe_bulk !== nothing ? clamp(Float64(Xfe_bulk[m]), 0.0, 1.0) : 0.0
         res = step_refractory_pyrolysis_kinetic(T, dt_val, c_c, c_n, c_h, cfg)
 
         X_refr_C_m[m] = res.C_refr_remaining
@@ -712,8 +814,11 @@ function update_marker_pyrolysis!(
             Float64(rhosolid)
         end
 
-        if redox_props !== nothing &&
+        has_redox_pyro =
+            redox_props !== nothing &&
             (redox_cfg === nothing || (redox_cfg.active && redox_cfg.pyrolysis_redox))
+
+        if has_redox_pyro
             spec = speciate_pyrolysis_carbon_redox!(
                 redox_props,
                 redox_cfg,
@@ -747,6 +852,27 @@ function update_marker_pyrolysis!(
             m_n2 = d_n_gas
         end
 
+        _deposit_pyrolysis_volatiles_on_marker!(
+            m,
+            scale,
+            has_redox_pyro,
+            d_c_gas,
+            d_c_gr,
+            d_n_gas,
+            m_h2,
+            phi_fe_old;
+            Xfe_bulk=Xfe_bulk,
+            X_refr_C_m=X_refr_C_m,
+            X_refr_N_m=X_refr_N_m,
+            X_refr_H_m=X_refr_H_m,
+            XH2Om=XH2Om,
+            XCm=XCm,
+            XNm=XNm,
+            XSm=XSm,
+            X_graphite_m=X_graphite_m,
+            redox_props=redox_props,
+        )
+
         tot_dC_gas += d_c_gas
         tot_dN_gas += d_n_gas
         tot_dH_gas += d_h_gas
@@ -759,10 +885,12 @@ function update_marker_pyrolysis!(
         tot_dC_graphite += d_c_gr
         tot_dH_pyro += res.dH_pyro_J_per_kg
 
-        dw_gas = (d_c_gas + d_n_gas + d_h_gas) * scale
-        if dw_gas > 0.0
-            dphi = dw_gas * (rho_s / rho_f)
-            phim[m] = min(phi_max_val, phim[m] + dphi)
+        if XH2Om === nothing
+            dw_gas = (d_c_gas + d_n_gas + d_h_gas) * scale
+            if dw_gas > 0.0
+                dphi = dw_gas * (rho_s / rho_f)
+                phim[m] = min(phi_max_val, phim[m] + dphi)
+            end
         end
 
         if apply_dhp && res.dH_pyro_J_per_kg < 0.0

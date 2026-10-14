@@ -264,6 +264,10 @@ mutable struct SimulationWorkspaces
     XNm_step_start::Union{Nothing,Vector{Float64}}
     XSm_step_start::Union{Nothing,Vector{Float64}}
     phim_step_start::Union{Nothing,Vector{Float64}}
+    nFe0_m_step_start::Union{Nothing,Vector{Float64}}
+    nFe2_m_step_start::Union{Nothing,Vector{Float64}}
+    nFe3_m_step_start::Union{Nothing,Vector{Float64}}
+    deltaIW_m_step_start::Union{Nothing,Vector{Float64}}
 end
 
 """

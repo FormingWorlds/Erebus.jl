@@ -161,6 +161,16 @@ $$\Delta n_{\text{O,spec}, k} = \frac{\Delta n_{\text{O,total}} \cdot w_k}{M_k} 
 
 Specific molar iron inventories update via $\Delta n_{\text{Fe3}} = -2 \Delta n_{\text{O,spec}, k}$ and $\Delta n_{\text{Fe2}} = +2 \Delta n_{\text{O,spec}, k}$, maintaining dimensional consistency with specific concentration units. When parcel masses are unsupplied, unit marker mass ($1.0\text{ kg}$) is assumed.
 
+### 3.7 Melt Ferric-Ferrous Comproportionation and Persistent Marker Redox State
+
+Marker iron speciation arrays (`nFe0_m`, `nFe2_m`, `nFe3_m`) are persistent prognostic variables from step to step:
+- **Irreversible Serpentinization Oxidation**: Prograde hydration ($X_W^s > 0$) oxidizes $\text{Fe}^{2+}$ toward the target ferric fraction $x_{\text{Fe,init}} + 0.5 X_W^s$. Subsequent dehydration ($X_W^s \to 0$) retains the oxidized magnetite $\text{Fe}^{3+}$ inventory rather than reverting it to $\text{Fe}^{2+}$.
+- **Melt Comproportionation and Disproportionation**: In partially or fully molten silicate markers ($F_{\text{melt}} > 0$), `compute_melt_ferric_ferrous_ratio` validates $(T, P)$ and evaluates the equilibrium melt ferric/ferrous molar ratio from $\Delta\text{IW}$ via $f_{\text{O}_2}^{1/4}$ scaling anchored to `initial_x_ferric` at $\Delta\text{IW} = 0$, and `equilibrate_melt_redox_fe!` equilibrates the molten fraction via the closed-system reaction:
+
+$$2\text{Fe}^{3+} + \text{Fe}^0 \rightleftharpoons 3\text{Fe}^{2+}$$
+
+This reaction strictly conserves total iron atoms ($\Delta n_{\text{Fe}^0} + \Delta n_{\text{Fe}^{2+}} + \Delta n_{\text{Fe}^{3+}} = 0$), bound oxygen ($\Delta n_{\text{Fe}^{2+}} + 1.5 \Delta n_{\text{Fe}^{3+}} = 0$), and the Evans (2012) electron budget ($\Delta RB = 0$).
+
 ---
 
 ## 4. Verification Test Suite
@@ -173,9 +183,11 @@ The redox engine is validated in `test/test_redox.jl`:
 | `Graphite CCO Buffer Inversion Physics` | Inversion recovers total gas pressure $f_{\text{CO}} + f_{\text{CO2}} = P_{\text{bar}}$; stable root at low P | `isapprox(rtol=1e-6)` |
 | `Bidirectional Buffer Translation and Invariants` | Exact round-trip identity; Triangle closure IW $\to$ QFM $\to$ NNO $\to$ IW | `isapprox(atol=1e-12)` |
 | `Local Controlling Buffer Regime Selection` | Phase-dependent buffer selection; domain contract validation | Symbolic equality (`===`), `@test_throws DomainError` |
-| `Evans 2012 Redox Budget Electron Accounting` | Electron conservation across serpentinization (including nonzero background), core segregation, and gas venting | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
-| `Organic Carbon Pyrolysis Electron Conservation (Evans 2012)` | Strict electron budget conservation $\Delta RB = 0$ across graphite residue and volatile gas partitioning | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
+| `Evans 2012 Redox Budget Electron Accounting` | Electron conservation during serpentinization (including nonzero background), core segregation, and gas venting | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
+| `Organic Carbon Pyrolysis Electron Conservation (Evans 2012)` | Strict electron budget conservation $\Delta RB = 0$ for graphite residue and volatile gas partitioning | `isapprox(atol=1e-12)`, `@test_throws DomainError` |
 | `Graphite CCO Oxygen Fugacity Buffering and Transitions` | Smooth monotonic transition $\text{IW} \to \text{CCO} \to \text{QFM}$ without step discontinuities | $\Delta(\Delta\text{IW}) < 2.0$, scale and sign guards |
+| `Melt Ferric-Ferrous Ratio and Comproportionation Equilibration` | Exact Fe, O, and Evans (2012) electron conservation in $2\text{Fe}^{3+} + \text{Fe}^0 \rightleftharpoons 3\text{Fe}^{2+}$ | `isapprox(atol=1e-13)` |
+| `Persistent Marker Redox State Under Buffer Oxygen Exchange and Dehydration` | Persistence of `apply_buffer_oxygen!` and oxidized $\text{Fe}^{3+}$ during dehydration and melt equilibration | `isapprox(atol=1e-14)` |
 ---
 
 ## Validation and Provenance Summary

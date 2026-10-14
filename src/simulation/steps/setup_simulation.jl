@@ -478,10 +478,11 @@ function setup_simulation_workspaces(
     fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
     fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
 
-    has_metal = coreformation_active_val
+    has_metal = coreformation_active_val || cfg.redox.active
     has_metal_part = cfg.metal_partition.active
     magma_on = cfg.magma_transport.active
     magma_vols_on = magma_on && cfg.volatiles.active
+    redox_on = cfg.redox.active
     alloc_if(cond::Bool) = cond ? zeros(Float64, marknum) : nothing
 
     return SimulationWorkspaces(
@@ -519,6 +520,10 @@ function setup_simulation_workspaces(
         alloc_if(magma_vols_on),
         alloc_if(magma_vols_on),
         alloc_if(magma_on),
+        alloc_if(redox_on),
+        alloc_if(redox_on),
+        alloc_if(redox_on),
+        alloc_if(redox_on),
     )
 end
 

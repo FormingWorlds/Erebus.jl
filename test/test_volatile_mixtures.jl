@@ -613,7 +613,7 @@ using Erebus.Particles
             active=true, pyrolysis_redox=true, graphite_buffer_active=true
         )
         props_rdx = setup_marker_redox_properties(3, rdx_cfg)
-        props_rdx.nFe2_m .= 1.0
+        props_rdx.nFe2_m .= 0.95
         props_rdx.nFe3_m .= 0.05
         p_lith = [1.0e7, 1.0e7, 1.0e7]
         update_marker_redox!(props_rdx, m_tkm, p_lith, rdx_cfg)
@@ -876,5 +876,220 @@ using Erebus.Particles
             @test isapprox(loaded_cfg.volatile_mixture.lambda_nh3_depression, 280.0)
             @test isapprox(loaded_cfg.volatile_mixture.T_freeze_floor, 178.0)
         end
+    end
+
+    @testset "Pyrolysis Volatile Deposition and Vented Redox Gas Closure" begin
+        refr_cfg = RefractoryConfig(; active=true, kinetics_active=true, f_refr_C=0.6)
+        rdx_cfg = RedoxConfig(; active=true, pyrolysis_redox=true)
+        tkm = [750.0]
+        dt = 1.0e5
+
+        # 1. Without redox_props (ppm_scale = false): all C, N, H deposited on marker volatile arrays
+        phim_a = [0.05]
+        c_refr_a = [0.02]
+        n_refr_a = [0.002]
+        h_refr_a = [0.001]
+        xh2o_a = [0.5]
+        xc_a = [100.0]
+        xn_a = [10.0]
+        xs_a = [50.0]
+        xgr_a = [0.0]
+        s_refr_a = [0.003]
+
+        c_tot_before_a = c_refr_a[1] + xc_a[1] * 1.0e-6 + xgr_a[1]
+        n_tot_before_a = n_refr_a[1] + xn_a[1] * 1.0e-6
+        h_tot_before_a =
+            h_refr_a[1] + (xh2o_a[1] * 0.01) * (2.0 * Erebus.M_H / Erebus.M_H2O)
+
+        update_marker_pyrolysis!(
+            tkm,
+            dt,
+            phim_a,
+            c_refr_a,
+            n_refr_a,
+            h_refr_a,
+            refr_cfg;
+            XH2Om=xh2o_a,
+            XCm=xc_a,
+            XNm=xn_a,
+            XSm=xs_a,
+            X_graphite_m=xgr_a,
+            ppm_scale=false,
+        )
+
+        c_tot_after_a = c_refr_a[1] + xc_a[1] * 1.0e-6 + xgr_a[1]
+        n_tot_after_a = n_refr_a[1] + xn_a[1] * 1.0e-6
+        h_tot_after_a = h_refr_a[1] + (xh2o_a[1] * 0.01) * (2.0 * Erebus.M_H / Erebus.M_H2O)
+
+        @test c_refr_a[1] < c_tot_before_a
+        @test isapprox(c_tot_after_a, c_tot_before_a; rtol=1.0e-12)
+        @test isapprox(n_tot_after_a, n_tot_before_a; rtol=1.0e-12)
+        @test isapprox(h_tot_after_a, h_tot_before_a; rtol=1.0e-12)
+
+        # 2. With redox_props (ppm_scale = true) and Xfe_bulk: C splits between redox_props and refractory, N and H in volatile arrays
+        props_b = setup_marker_redox_properties(1, rdx_cfg; tkm=tkm, pfm=[1.0e7])
+        props_b.nFe3_m[1] = 0.0
+        props_b.nFe2_m[1] = 1.0
+        phim_b = [0.05]
+        c_refr_b = [20000.0]
+        n_refr_b = [2000.0]
+        h_refr_b = [1000.0]
+        xh2o_b = [0.5]
+        xc_b = [100.0]
+        xn_b = [10.0]
+        xs_b = [50.0]
+        xgr_b = [0.0]
+        xfe_init_b = 0.05
+        xfe_bulk_b = [xfe_init_b]
+        phi_sil_0 = 1.0 - xfe_bulk_b[1]
+
+        c_tot_before_b =
+            (
+                c_refr_b[1] * 1.0e-6 +
+                xc_b[1] * 1.0e-6 +
+                xgr_b[1] +
+                (
+                    props_b.nC_graphite_m[1] +
+                    props_b.nCO_m[1] +
+                    props_b.nCO2_m[1] +
+                    props_b.nCH4_m[1]
+                ) * Erebus.M_C
+            ) * phi_sil_0
+        n_tot_before_b = (n_refr_b[1] * 1.0e-6 + xn_b[1] * 1.0e-6) * phi_sil_0
+        h_tot_before_b =
+            (
+                h_refr_b[1] * 1.0e-6 +
+                (xh2o_b[1] * 0.01) * (2.0 * Erebus.M_H / Erebus.M_H2O) +
+                4.0 * props_b.nCH4_m[1] * Erebus.M_H
+            ) * phi_sil_0
+
+        update_marker_pyrolysis!(
+            tkm,
+            dt,
+            phim_b,
+            c_refr_b,
+            n_refr_b,
+            h_refr_b,
+            refr_cfg;
+            XH2Om=xh2o_b,
+            XCm=xc_b,
+            XNm=xn_b,
+            XSm=xs_b,
+            X_graphite_m=xgr_b,
+            Xfe_bulk=xfe_bulk_b,
+            ppm_scale=true,
+            redox_props=props_b,
+            redox_cfg=rdx_cfg,
+        )
+        phi_sil_1 = 1.0 - xfe_bulk_b[1]
+
+        c_tot_after_b =
+            (
+                c_refr_b[1] * 1.0e-6 +
+                xc_b[1] * 1.0e-6 +
+                (
+                    props_b.nC_graphite_m[1] +
+                    props_b.nCO_m[1] +
+                    props_b.nCO2_m[1] +
+                    props_b.nCH4_m[1]
+                ) * Erebus.M_C
+            ) * phi_sil_1
+        n_tot_after_b = (n_refr_b[1] * 1.0e-6 + xn_b[1] * 1.0e-6) * phi_sil_1
+        h_tot_after_b =
+            (
+                h_refr_b[1] * 1.0e-6 +
+                (xh2o_b[1] * 0.01) * (2.0 * Erebus.M_H / Erebus.M_H2O) +
+                4.0 * props_b.nCH4_m[1] * Erebus.M_H
+            ) * phi_sil_1
+
+        @test xfe_bulk_b[1] > xfe_init_b
+        @test isapprox(c_tot_after_b, c_tot_before_b; rtol=1.0e-12)
+        @test isapprox(n_tot_after_b, n_tot_before_b; rtol=1.0e-12)
+        @test isapprox(h_tot_after_b, h_tot_before_b; rtol=1.0e-12)
+
+        # 3. Surface venting drainage of redox gases (nCO_m, nCO2_m, nCH4_m) into vented_vols and transfer_log
+        coords_v = GridCoordinates(5, 5; xsize=1000.0, ysize=1000.0)
+        S_vent = fill(1.0e-3, coords_v.Ny1, coords_v.Nx1)
+        ret_cfg = RetentionConfig(; active=true, venting_drainage_active=true, chi_vent=1.0)
+        props_b.nCH4_m[1] = 0.01
+        co_before = props_b.nCO_m[1]
+        co2_before = props_b.nCO2_m[1]
+        ch4_before = props_b.nCH4_m[1]
+        c_rdx_before = (co_before + co2_before + ch4_before) * Erebus.M_C
+        h2o_rdx_before = 2.0 * ch4_before * Erebus.M_H2O
+        drain_frac = 1.0 - exp(-1.0e-3 * 1.0e4)
+
+        res_drain = drain_vented_marker_volatiles!(
+            [500.0],
+            [500.0],
+            Int[1],
+            tkm,
+            [0.0],
+            [0.0],
+            [0.0],
+            [0.0],
+            S_vent,
+            1.0e4,
+            1,
+            ret_cfg;
+            coords=coords_v,
+            rhosolid=3000.0,
+            redox_props=props_b,
+        )
+        Am = marker_area(coords_v)
+        m_rock_2d = 3000.0 * Am
+        @test isapprox(props_b.nCO_m[1], co_before * (1.0 - drain_frac); rtol=1e-12)
+        @test isapprox(props_b.nCO2_m[1], co2_before * (1.0 - drain_frac); rtol=1e-12)
+        @test isapprox(props_b.nCH4_m[1], ch4_before * (1.0 - drain_frac); rtol=1e-12)
+        @test isapprox(
+            res_drain.M_vent_C, drain_frac * c_rdx_before * m_rock_2d; rtol=1e-12
+        )
+        @test isapprox(
+            res_drain.M_vent_H2O, drain_frac * h2o_rdx_before * m_rock_2d; rtol=1e-12
+        )
+
+        # Also verify advance_marker_thermo_porosity_venting! drains redox gases and logs TransferRecords
+        props_b.nCO_m[1] = co_before
+        props_b.nCO2_m[1] = co2_before
+        props_b.nCH4_m[1] = ch4_before
+        DT_grid = zeros(Float64, coords_v.Ny1, coords_v.Nx1)
+        tk2_grid = fill(850.0, coords_v.Ny1, coords_v.Nx1)
+        APHI_grid = zeros(Float64, coords_v.Ny1, coords_v.Nx1)
+        res_adv = advance_marker_thermo_porosity_venting!(
+            [500.0],
+            [500.0],
+            Int[1],
+            [850.0],
+            [0.05],
+            DT_grid,
+            tk2_grid,
+            APHI_grid,
+            1.0e4,
+            1,
+            1;
+            coords=coords_v,
+            venting=true,
+            S_vent_grid=S_vent,
+            ret_cfg=ret_cfg,
+            XH2Om=[0.0],
+            XCm=[0.0],
+            XNm=[0.0],
+            XSm=[0.0],
+            rhosolid=3000.0,
+            redox_props=props_b,
+            Xfe_bulk=[0.0],
+        )
+        @test isapprox(
+            res_adv.vented_vols.M_vent_C_2d,
+            drain_frac * c_rdx_before * m_rock_2d;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            res_adv.vented_vols.M_vent_H2O_2d,
+            drain_frac * h2o_rdx_before * m_rock_2d;
+            rtol=1e-12,
+        )
+        @test any(r -> r.channel === :venting && r.element === :C, res_adv.records)
+        @test any(r -> r.channel === :venting && r.element === :H, res_adv.records)
     end
 end

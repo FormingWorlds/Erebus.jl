@@ -720,7 +720,7 @@ end
 
     props = Erebus.setup_marker_redox_properties(1, cfg_rdx; tkm=tkm, pfm=[1.0e7])
     fe3_init = props.nFe3_m[1]
-    @test fe3_init > 0.0
+    @test isapprox(fe3_init, 0.05 * (props.nFe2_m[1] + props.nFe3_m[1]); rtol=1e-12)
 
     c_init_m = Erebus.marker_redox_components(
         props.nFe0_m[1],
@@ -782,7 +782,198 @@ end
     # 3. Smelting reduction is preserved: Fe3+ is reduced monotonically without reversion
     @test props.nFe3_m[1] < fe3_init
     @test isfinite(props.nFe0_m[1])
-    @test props.nCO_m[1] > 0.0
-    @test props.nCO2_m[1] > 0.0
-    @test props.nC_graphite_m[1] > 0.0
+    @test props.nCO_m[1] > c_init_m.n_CO
+    @test props.nCO2_m[1] > c_init_m.n_CO2
+    @test props.nC_graphite_m[1] > c_init_m.n_C_graphite
+end
+
+@testset "Melt Ferric-Ferrous Ratio and Comproportionation Equilibration" begin
+    # 1. Anchor pin at T = 1800 K, P = 0 Pa, delta_IW = 0.0: returns molar ratio n_Fe3 / n_Fe2
+    r_ref = 0.05 / 0.95
+    r_0 = compute_melt_ferric_ferrous_ratio(1800.0, 0.0, 0.0; initial_x_ferric=0.05)
+    @test isapprox(r_0, r_ref; atol=1e-14)
+
+    # 2. Oxygen fugacity scaling (1/4 power law on fO2 / fO2_IW)
+    r_red = compute_melt_ferric_ferrous_ratio(1800.0, 0.0, -4.0; initial_x_ferric=0.05)
+    r_ox = compute_melt_ferric_ferrous_ratio(1800.0, 0.0, 4.0; initial_x_ferric=0.05)
+    @test r_red < r_0 < r_ox
+    @test isapprox(r_red, 0.1 * r_ref; rtol=1e-12)
+    @test isapprox(r_ox, 10.0 * r_ref; rtol=1e-12)
+
+    # 3. Continuity with local_delta_iw across metal exhaustion at delta_IW = 0
+    n_fe2_iw = 0.95
+    n_fe3_iw = n_fe2_iw * r_0
+    c_trace_metal = Erebus.marker_redox_components(1.0e-10, n_fe2_iw, n_fe3_iw)
+    c_no_metal = Erebus.marker_redox_components(0.0, n_fe2_iw, n_fe3_iw)
+    @test isapprox(
+        Erebus.local_delta_iw(c_trace_metal, 1800.0, 1.0e7; initial_x_ferric=0.05),
+        Erebus.local_delta_iw(c_no_metal, 1800.0, 1.0e7; initial_x_ferric=0.05);
+        atol=1e-5,
+    )
+    @test isapprox(
+        Erebus.local_delta_iw(c_no_metal, 1800.0, 1.0e7; initial_x_ferric=0.05),
+        0.0;
+        atol=1e-12,
+    )
+
+    # 4. Domain error contracts
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(0.0, 0.0, 0.0)
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(-100.0, 0.0, 0.0)
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(1800.0, -1.0, 0.0)
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(1800.0, 0.0, NaN)
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(
+        1800.0, 0.0, 0.0; initial_x_ferric=0.0
+    )
+    @test_throws DomainError compute_melt_ferric_ferrous_ratio(
+        1800.0, 0.0, 0.0; initial_x_ferric=1.0
+    )
+
+    # 5. Forward comproportionation: 2 Fe3+ + Fe0 -> 3 Fe2+ (oxidized silicate + metal)
+    c_ox_m = Erebus.RedoxComponents(; n_Fe0=1.0, n_Fe2=0.70, n_Fe3=0.30)
+    c_eq = equilibrate_melt_redox_fe(
+        c_ox_m, 1800.0, 1.0e8, 1.0; delta_IW=-2.0, initial_x_ferric=0.05
+    )
+    @test c_eq.n_Fe3 < c_ox_m.n_Fe3
+    @test c_eq.n_Fe0 < c_ox_m.n_Fe0
+    @test c_eq.n_Fe2 > c_ox_m.n_Fe2
+    # Total Fe atoms and bound O atoms are conserved to machine precision
+    @test isapprox(
+        c_eq.n_Fe0 + c_eq.n_Fe2 + c_eq.n_Fe3,
+        c_ox_m.n_Fe0 + c_ox_m.n_Fe2 + c_ox_m.n_Fe3;
+        atol=1e-14,
+    )
+    @test isapprox(
+        c_eq.n_Fe2 + 1.5 * c_eq.n_Fe3, c_ox_m.n_Fe2 + 1.5 * c_ox_m.n_Fe3; atol=1e-14
+    )
+    # Evans (2012) electron budget conserved in both :mantle and :crust frames
+    @test isapprox(
+        compute_redox_budget(c_eq; reference=:mantle),
+        compute_redox_budget(c_ox_m; reference=:mantle);
+        atol=1e-13,
+    )
+    @test isapprox(
+        compute_redox_budget(c_eq; reference=:crust),
+        compute_redox_budget(c_ox_m; reference=:crust);
+        atol=1e-13,
+    )
+
+    # 6. Reverse disproportionation: 3 Fe2+ -> 2 Fe3+ + Fe0
+    c_red_m = Erebus.RedoxComponents(; n_Fe0=0.0, n_Fe2=1.0, n_Fe3=0.005)
+    c_dis = equilibrate_melt_redox_fe(
+        c_red_m, 1600.0, 1.0e7, 1.0; delta_IW=2.0, initial_x_ferric=0.05
+    )
+    @test c_dis.n_Fe3 > c_red_m.n_Fe3
+    @test c_dis.n_Fe0 > c_red_m.n_Fe0
+    @test c_dis.n_Fe2 < c_red_m.n_Fe2
+    @test isapprox(
+        c_dis.n_Fe0 + c_dis.n_Fe2 + c_dis.n_Fe3,
+        c_red_m.n_Fe0 + c_red_m.n_Fe2 + c_red_m.n_Fe3;
+        atol=1e-14,
+    )
+    @test isapprox(
+        c_dis.n_Fe2 + 1.5 * c_dis.n_Fe3, c_red_m.n_Fe2 + 1.5 * c_red_m.n_Fe3; atol=1e-14
+    )
+    @test isapprox(
+        compute_redox_budget(c_dis; reference=:mantle),
+        compute_redox_budget(c_red_m; reference=:mantle);
+        atol=1e-13,
+    )
+
+    # 7. Partial melt scaling, solid fast-path, and zero silicate iron fast-path
+    c_half = equilibrate_melt_redox_fe(
+        c_ox_m, 1800.0, 1.0e8, 0.5; delta_IW=-2.0, initial_x_ferric=0.05
+    )
+    @test c_ox_m.n_Fe3 > c_half.n_Fe3 > c_eq.n_Fe3
+    @test equilibrate_melt_redox_fe(c_ox_m, 1800.0, 1.0e8, 0.0) === c_ox_m
+    c_no_sil = Erebus.RedoxComponents(; n_Fe0=1.0, n_Fe2=0.0, n_Fe3=0.0)
+    @test equilibrate_melt_redox_fe(c_no_sil, 1800.0, 1.0e8, 1.0) === c_no_sil
+    @test_throws DomainError equilibrate_melt_redox_fe(c_ox_m, 1800.0, 1.0e8, -0.1)
+    @test_throws DomainError equilibrate_melt_redox_fe(c_ox_m, 1800.0, 1.0e8, 1.1)
+
+    # 8. In-place marker equilibration helper equilibrate_melt_redox_fe!
+    cfg_rdx = RedoxConfig(; active=true, initial_x_ferric=0.05)
+    props_m = setup_marker_redox_properties(1, cfg_rdx)
+    props_m.nFe0_m[1] = 1.0
+    props_m.nFe2_m[1] = 0.70
+    props_m.nFe3_m[1] = 0.30
+    props_m.deltaIW_m[1] = -2.0
+    @test iszero(equilibrate_melt_redox_fe!(props_m, 1, 1800.0, 1.0e8, 0.0))
+    dn_fe0 = equilibrate_melt_redox_fe!(
+        props_m, 1, 1800.0, 1.0e8, 1.0; delta_IW=-2.0, initial_x_ferric=0.05
+    )
+    @test isapprox(dn_fe0, c_eq.n_Fe0 - c_ox_m.n_Fe0; atol=1e-14)
+    @test isapprox(props_m.nFe0_m[1], c_eq.n_Fe0; atol=1e-14)
+    @test isapprox(props_m.nFe2_m[1], c_eq.n_Fe2; atol=1e-14)
+    @test isapprox(props_m.nFe3_m[1], c_eq.n_Fe3; atol=1e-14)
+end
+
+@testset "Persistent Marker Redox State Across Buffer Oxygen Exchange and Dehydration" begin
+    cfg_rdx = RedoxConfig(; active=true, initial_x_ferric=0.05)
+    tkm = [1200.0]
+    pfm = [1.0e8]
+    Xfe_bulk = [0.10]
+    XWsolidm = [0.0]
+    tm = Int8[1]
+
+    props = setup_marker_redox_properties(
+        1, cfg_rdx; initial_xfe_bulk=Xfe_bulk, tkm=tkm, pfm=pfm, tm=tm
+    )
+    fe2_0 = props.nFe2_m[1]
+    fe3_0 = props.nFe3_m[1]
+
+    # 1. Buffer oxygen exchange persists across repeated update_marker_redox! calls
+    apply_buffer_oxygen!(props, [1], [1.0], -1.0e-3; marker_masses=[1.0])
+    @test props.nFe3_m[1] > fe3_0
+    @test props.nFe2_m[1] < fe2_0
+    fe2_after_buf = props.nFe2_m[1]
+    fe3_after_buf = props.nFe3_m[1]
+
+    for _ in 1:5
+        update_marker_redox!(
+            props, tkm, pfm, cfg_rdx; Xfe_bulk=Xfe_bulk, XWsolidm=XWsolidm, tm=tm
+        )
+    end
+    @test isapprox(props.nFe2_m[1], fe2_after_buf; atol=1e-14)
+    @test isapprox(props.nFe3_m[1], fe3_after_buf; atol=1e-14)
+
+    # 2. Prograde hydration oxidizes Fe2+ to Fe3+, and subsequent dehydration retains Fe3+
+    XWsolidm[1] = 0.5
+    update_marker_redox!(
+        props, tkm, pfm, cfg_rdx; Xfe_bulk=Xfe_bulk, XWsolidm=XWsolidm, tm=tm
+    )
+    fe3_hydrated = props.nFe3_m[1]
+    fe2_hydrated = props.nFe2_m[1]
+    @test fe3_hydrated > fe3_after_buf
+    @test isapprox(fe2_hydrated + fe3_hydrated, fe2_0 + fe3_0; atol=1e-14)
+
+    # Dehydration (XWsolidm drops back to 0.0) does not reduce magnetite back to Fe2+
+    XWsolidm[1] = 0.0
+    update_marker_redox!(
+        props, tkm, pfm, cfg_rdx; Xfe_bulk=Xfe_bulk, XWsolidm=XWsolidm, tm=tm
+    )
+    @test isapprox(props.nFe3_m[1], fe3_hydrated; atol=1e-14)
+    @test isapprox(props.nFe2_m[1], fe2_hydrated; atol=1e-14)
+
+    # 3. Molten marker equilibration inside update_marker_redox! updates Fe speciation and Xfe_bulk
+    Fm = [1.0]
+    tkm_melt = [1800.0]
+    fe0_before_melt = props.nFe0_m[1]
+    xfe_before_melt = Xfe_bulk[1]
+    update_marker_redox!(
+        props, tkm_melt, pfm, cfg_rdx; Xfe_bulk=Xfe_bulk, XWsolidm=XWsolidm, Fm=Fm, tm=tm
+    )
+    @test props.nFe3_m[1] < fe3_hydrated
+    @test props.nFe0_m[1] < fe0_before_melt
+    @test Xfe_bulk[1] < xfe_before_melt
+
+    # 4. Uninitialized silicate iron fallback when nFe2 + nFe3 == 0.0
+    props_zero = setup_marker_redox_properties(1, cfg_rdx)
+    props_zero.nFe2_m[1] = 0.0
+    props_zero.nFe3_m[1] = 0.0
+    update_marker_redox!(props_zero, tkm, pfm, cfg_rdx; Xfe_bulk=[0.10], tm=tm)
+    @test isapprox(
+        props_zero.nFe3_m[1] / (props_zero.nFe2_m[1] + props_zero.nFe3_m[1]),
+        0.05;
+        rtol=1e-12,
+    )
 end

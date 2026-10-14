@@ -162,7 +162,8 @@ function snapshot_step_start_inventories!(
     coreformation_active_val =
         cfg.coreformation.percolation_active ||
         cfg.coreformation.settling_active ||
-        cfg.metal_partition.active
+        cfg.metal_partition.active ||
+        cfg.redox.active
 
     if coreformation_active_val && haskey(state.markers.groups, :metal)
         metal = state.markers.groups.metal
@@ -209,6 +210,14 @@ function snapshot_step_start_inventories!(
             _sync_step_start_vec!(ws.XNm_step_start, vols.XNm)
             _sync_step_start_vec!(ws.XSm_step_start, vols.XSm)
         end
+    end
+
+    if cfg.redox.active && haskey(state.markers.groups, :redox)
+        redox = state.markers.groups.redox
+        _sync_step_start_vec!(ws.nFe0_m_step_start, redox.nFe0_m)
+        _sync_step_start_vec!(ws.nFe2_m_step_start, redox.nFe2_m)
+        _sync_step_start_vec!(ws.nFe3_m_step_start, redox.nFe3_m)
+        _sync_step_start_vec!(ws.deltaIW_m_step_start, redox.deltaIW_m)
     end
 
     return nothing

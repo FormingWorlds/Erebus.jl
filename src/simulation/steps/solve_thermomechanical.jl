@@ -1,6 +1,98 @@
 # Thermomechanical iteration driver coordinating Stokes-Darcy and thermal energy solves
 
 """
+Restore marker redox speciation and bulk metal fraction from step-start snapshots on outer iterations.
+
+$(SIGNATURES)
+
+# Parameters
+- `state`: Simulation state container.
+- `cfg`: Simulation configuration struct.
+- `ws`: Preallocated simulation workspaces.
+
+# Returns
+- `Nothing`: Restores marker redox vectors and `Xfe_bulk` in place.
+"""
+function _restore_step_start_redox!(
+    state::SimulationState, cfg::SimulationConfig, ws::SimulationWorkspaces
+)::Nothing
+    if cfg.redox.active && haskey(state.markers.groups, :redox)
+        redox = state.markers.groups.redox
+        _sync_step_start_vec!(redox.nFe0_m, ws.nFe0_m_step_start)
+        _sync_step_start_vec!(redox.nFe2_m, ws.nFe2_m_step_start)
+        _sync_step_start_vec!(redox.nFe3_m, ws.nFe3_m_step_start)
+        _sync_step_start_vec!(redox.deltaIW_m, ws.deltaIW_m_step_start)
+        if haskey(state.markers.groups, :metal)
+            _sync_step_start_vec!(
+                state.markers.groups.metal.Xfe_bulk, ws.Xfe_bulk_step_start
+            )
+        end
+    end
+    return nothing
+end
+
+"""
+Execute one outer iteration of fluid-silicate thermochemical hydration/dehydration or zero source grids.
+
+$(SIGNATURES)
+
+# Parameters
+- `state`: Simulation state container.
+- `coords`: Grid coordinates struct.
+- `cfg`: Simulation configuration struct.
+- `ws`: Preallocated simulation workspaces.
+- `titer`: Current outer thermomechanical iteration index.
+
+# Returns
+- `Nothing`: Mutates `state.grids.DMP`, `state.grids.DHP`, and `state.grids.DQPF` in place.
+"""
+function _step_thermochemical_reaction!(
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+    ws::SimulationWorkspaces,
+    titer::Int,
+)::Nothing
+    if cfg.reaction.active
+        core = state.markers.core
+        copyto!(core.phinewm, core.phim)
+        DMPSUM = ws.interp_arrays[30]
+        DHPSUM = ws.interp_arrays[31]
+        WTPSUM = ws.interp_arrays[33]
+        perform_thermochemical_reaction!(
+            state.grids.DMP,
+            state.grids.DHP,
+            DMPSUM,
+            DHPSUM,
+            WTPSUM,
+            state.grids.pf,
+            state.grids.tk2,
+            core.tm,
+            core.xm,
+            core.ym,
+            core.XWsolidm0,
+            core.XWsolidm,
+            core.phim,
+            core.phinewm,
+            core.pfm0,
+            length(state.markers),
+            state.dt,
+            state.timestep,
+            titer;
+            coords=coords,
+            DQPF=state.grids.DQPF,
+            DQPFSUM=state.grids.DQPFSUM,
+            cfg=cfg.reaction,
+        )
+    else
+        fill!(state.grids.DMP, 0.0)
+        fill!(state.grids.DHP, 0.0)
+        fill!(state.grids.DQPF, 0.0)
+    end
+    return nothing
+end
+
+"""
 Coordinate thermochemical iterations, Stokes-Darcy iterations, and thermal energy updates.
 
 $(SIGNATURES)
@@ -24,77 +116,9 @@ function solve_thermomechanical_iterations!(
 
     max_iters = cfg.solver.max_plastic_iterations
     for titer in 1:max_iters
-        if cfg.reaction.active
-            core = state.markers.core
-            copyto!(core.phinewm, core.phim)
-            (
-                ETA0SUM,
-                ETASUM,
-                GGGSUM,
-                SXYSUM,
-                COHSUM,
-                TENSUM,
-                FRISUM,
-                WTSUM,
-                RHOXSUM,
-                RHOFXSUM,
-                KXSUM,
-                PHIXSUM,
-                RXSUM,
-                WTXSUM,
-                RHOYSUM,
-                RHOFYSUM,
-                KYSUM,
-                PHIYSUM,
-                RYSUM,
-                WTYSUM,
-                RHOSUM,
-                RHOCPSUM,
-                ALPHASUM,
-                ALPHAFSUM,
-                HRSUM,
-                GGGPSUM,
-                SXXSUM,
-                TKSUM,
-                PHISUM,
-                DMPSUM,
-                DHPSUM,
-                XWSSUM,
-                WTPSUM,
-            ) = ws.interp_arrays
-
-            perform_thermochemical_reaction!(
-                state.grids.DMP,
-                state.grids.DHP,
-                DMPSUM,
-                DHPSUM,
-                WTPSUM,
-                state.grids.pf,
-                state.grids.tk2,
-                core.tm,
-                core.xm,
-                core.ym,
-                core.XWsolidm0,
-                core.XWsolidm,
-                core.phim,
-                core.phinewm,
-                core.pfm0,
-                length(state.markers),
-                state.dt,
-                state.timestep,
-                titer;
-                coords=coords,
-                DQPF=state.grids.DQPF,
-                DQPFSUM=state.grids.DQPFSUM,
-                cfg=cfg.reaction,
-            )
-        else
-            fill!(state.grids.DMP, 0.0)
-            fill!(state.grids.DHP, 0.0)
-            fill!(state.grids.DQPF, 0.0)
-        end
-
-        if DHP_pyro !== nothing
+        titer > 1 && _restore_step_start_redox!(state, cfg, ws)
+        _step_thermochemical_reaction!(state, coords, cfg, ws, titer)
+        if DHP_pyro !== nothing && size(DHP_pyro) == size(state.grids.DHP)
             state.grids.DHP .+= DHP_pyro
         end
 

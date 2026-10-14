@@ -378,6 +378,10 @@ function simulation_loop(
                         ws.XNm_step_start,
                         ws.XSm_step_start,
                         ws.phim_step_start,
+                        ws.nFe0_m_step_start,
+                        ws.nFe2_m_step_start,
+                        ws.nFe3_m_step_start,
+                        ws.deltaIW_m_step_start,
                     ),
                 )
 
