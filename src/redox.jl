@@ -956,6 +956,159 @@ function local_delta_iw(
     return clamp(0.0, d_min, d_max)
 end
 
+"""
+Compute equilibrium molar ferric-to-ferrous ratio in silicate melt at a given ΔIW offset.
+
+$(SIGNATURES)
+
+# Arguments
+- `T_K`: Temperature [K]
+- `P_Pa`: Pressure [Pa]
+- `delta_IW`: Oxygen fugacity offset relative to Iron-Wüstite buffer [log10 units]
+
+# Keyword Arguments
+- `initial_x_ferric`: Reference ferric iron molar fraction at ΔIW = 0 (default: 0.05)
+
+# Returns
+- `Float64`: Equilibrium molar ratio `n_Fe3 / n_Fe2`
+
+# Raises
+- `DomainError`: If `T_K <= 0`, `P_Pa < 0`, or inputs are non-finite
+"""
+function compute_melt_ferric_ferrous_ratio(
+    T_K::Real, P_Pa::Real, delta_IW::Real; initial_x_ferric::Real=0.05
+)::Float64
+    T = Float64(T_K)
+    (isfinite(T) && T > 0.0) || throw(DomainError(T, "T_K must be positive and finite"))
+    P = Float64(P_Pa)
+    (isfinite(P) && P >= 0.0) ||
+        throw(DomainError(P, "P_Pa must be non-negative and finite"))
+    d_iw = Float64(delta_IW)
+    isfinite(d_iw) || throw(DomainError(d_iw, "delta_IW must be finite"))
+
+    x_fe_ref = Float64(initial_x_ferric)
+    (isfinite(x_fe_ref) && 0.0 < x_fe_ref < 1.0) ||
+        throw(DomainError(x_fe_ref, "initial_x_ferric must be in (0, 1) and finite"))
+    ratio_ref = x_fe_ref / (1.0 - x_fe_ref)
+    return ratio_ref * 10.0^(0.25 * clamp(d_iw, -50.0, 50.0))
+end
+
+"""
+Equilibrate molten silicate iron species with metallic iron via comproportionation.
+
+$(SIGNATURES)
+
+Models the reaction `2 Fe3+ + Fe0 <=> 3 Fe2+` across melt fraction `F_melt`,
+conserving total iron atoms, oxygen atoms, and Evans (2012) electron budget `RB`.
+
+# Arguments
+- `c`: Initial `RedoxComponents` inventory
+- `T_K`: Temperature [K]
+- `P_Pa`: Pressure [Pa]
+- `F_melt`: Silicate melt fraction in [0, 1]
+
+# Keyword Arguments
+- `delta_IW`: Optional target ΔIW offset (default: `0.0` at Iron-Wüstite equilibrium)
+- `initial_x_ferric`: Reference ferric iron molar fraction at ΔIW = 0 (default: 0.05)
+
+# Returns
+- `RedoxComponents`: Updated redox component inventory
+"""
+function equilibrate_melt_redox_fe(
+    c::RedoxComponents,
+    T_K::Real,
+    P_Pa::Real,
+    F_melt::Real;
+    delta_IW::Union{Nothing,Real}=nothing,
+    initial_x_ferric::Real=0.05,
+)::RedoxComponents
+    F_m = Float64(F_melt)
+    (isfinite(F_m) && 0.0 <= F_m <= 1.0) ||
+        throw(DomainError(F_m, "F_melt must be in [0, 1] and finite"))
+
+    tot_sil_fe = c.n_Fe2 + c.n_Fe3
+    if F_m <= 0.0 || tot_sil_fe <= 1.0e-12 || (c.n_Fe0 <= 1.0e-12 && delta_IW === nothing)
+        return c
+    end
+
+    target_diw = delta_IW !== nothing ? Float64(delta_IW) : 0.0
+    r_eq = compute_melt_ferric_ferrous_ratio(
+        T_K, P_Pa, target_diw; initial_x_ferric=initial_x_ferric
+    )
+    x_eq = r_eq / (1.0 + r_eq)
+
+    # Reaction extent xi for 2 Fe3+ + Fe0 -> 3 Fe2+
+    xi_star = (F_m * (c.n_Fe3 - x_eq * tot_sil_fe)) / (2.0 + F_m * x_eq)
+    xi = if xi_star >= 0.0
+        min(xi_star, c.n_Fe0, 0.5 * c.n_Fe3)
+    else
+        max(xi_star, -c.n_Fe2 / 3.0)
+    end
+
+    return RedoxComponents(;
+        n_Fe0=max(0.0, c.n_Fe0 - xi),
+        n_Fe2=max(0.0, c.n_Fe2 + 3.0 * xi),
+        n_Fe3=max(0.0, c.n_Fe3 - 2.0 * xi),
+        n_H2=c.n_H2,
+        n_H2O=c.n_H2O,
+        n_C_graphite=c.n_C_graphite,
+        n_CO=c.n_CO,
+        n_CO2=c.n_CO2,
+        n_CH4=c.n_CH4,
+        n_Fe3C=c.n_Fe3C,
+        n_S_sulfide=c.n_S_sulfide,
+        n_S2=c.n_S2,
+        n_SO2=c.n_SO2,
+        n_SO4=c.n_SO4,
+        n_P_phosphide=c.n_P_phosphide,
+        n_P_phosphate=c.n_P_phosphate,
+    )
+end
+
+"""
+Equilibrate marker iron redox species in place for a partially molten silicate marker.
+
+$(SIGNATURES)
+
+# Arguments
+- `redox_props`: NamedTuple or `RedoxGroup` holding marker redox arrays
+- `m`: Marker index
+- `T_K`: Marker temperature [K]
+- `P_Pa`: Marker pressure [Pa]
+- `F_melt`: Silicate melt fraction in [0, 1]
+
+# Keyword Arguments
+- `delta_IW`: Optional target ΔIW offset (default: `nothing`)
+- `initial_x_ferric`: Reference ferric iron molar fraction at ΔIW = 0 (default: 0.05)
+
+# Returns
+- `Float64`: Change in metallic iron moles `dn_Fe0` [mol/kg]
+"""
+function equilibrate_melt_redox_fe!(
+    redox_props,
+    m::Integer,
+    T_K::Real,
+    P_Pa::Real,
+    F_melt::Real;
+    delta_IW::Union{Nothing,Real}=nothing,
+    initial_x_ferric::Real=0.05,
+)::Float64
+    nFe0_m = hasproperty(redox_props, :nFe0_m) ? redox_props.nFe0_m : nothing
+    nFe2_m = hasproperty(redox_props, :nFe2_m) ? redox_props.nFe2_m : nothing
+    nFe3_m = hasproperty(redox_props, :nFe3_m) ? redox_props.nFe3_m : nothing
+    (nFe0_m === nothing || nFe2_m === nothing || nFe3_m === nothing) && return 0.0
+
+    n_fe0_old = nFe0_m[m]
+    c_in = marker_redox_components(n_fe0_old, nFe2_m[m], nFe3_m[m])
+    c_out = equilibrate_melt_redox_fe(
+        c_in, T_K, P_Pa, F_melt; delta_IW=delta_IW, initial_x_ferric=initial_x_ferric
+    )
+    nFe0_m[m] = c_out.n_Fe0
+    nFe2_m[m] = c_out.n_Fe2
+    nFe3_m[m] = c_out.n_Fe3
+    return c_out.n_Fe0 - n_fe0_old
+end
+
 function _validate_buffer_oxygen_reactants(
     nFe2_m,
     nFe3_m,

@@ -226,9 +226,20 @@ using Erebus
         hcnspo_props = setup_marker_hcnspo_properties(
             marknum, cfg_pyro.volatile_mixture, cfg_pyro.refractory
         )
+        hcnspo_props.X_refr_C_m .= 0.01
+        hcnspo_props.X_refr_N_m .= 0.001
+        hcnspo_props.X_refr_H_m .= 0.002
+        vols_grp = VolatilesGroup(
+            zeros(Float64, marknum),
+            zeros(Float64, marknum),
+            zeros(Float64, marknum),
+            zeros(Float64, marknum),
+            zeros(Float64, marknum),
+            zeros(Float64, marknum),
+        )
         state_pyro = SimulationState(
             state.grids,
-            MarkerArrays(state.markers.core, (; hcnspo=hcnspo_props)),
+            MarkerArrays(state.markers.core, (; hcnspo=hcnspo_props, volatiles=vols_grp)),
             state.accumulators,
             state.transfers,
             state.atm,
@@ -238,10 +249,14 @@ using Erebus
             state.dt,
             state.timesum,
         )
+        state_pyro.markers.core.tkm .= 800.0
         res_active = Erebus.update_pyrolysis!(state_pyro, coords_actual, cfg_pyro)
         @test res_active isa Matrix{Float64}
         @test size(res_active) == (coords_actual.Ny1, coords_actual.Nx1)
         @test all(isfinite, res_active)
+        @test any(>(0.0), vols_grp.XCm)
+        @test any(>(0.0), vols_grp.XNm)
+        @test any(>(0.0), vols_grp.X_graphite_m)
     end
 
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
@@ -319,6 +334,45 @@ using Erebus
         @test all(iszero, state.grids.DMP)
         @test all(iszero, state.grids.DQPF)
         @test all(iszero, state.grids.DHP)
+
+        cfg_rdx_melt = override_config(
+            load_config("configs/test_quick.toml"),
+            Dict{String,Any}(
+                "redox.active" => true,
+                "melting.active" => true,
+                "magma_transport.active" => true,
+                "magma_transport.track_depletion" => true,
+                "solver.max_plastic_iterations" => 2,
+            ),
+        )
+        st_rm, coords_rm, ws_rm, tel_rm, _ = init_simulation(cfg_rdx_melt)
+        tel_rm !== nothing && close(tel_rm)
+        st_rm.markers.core.tkm .= 1700.0
+        interpolate_markers_to_grid!(
+            st_rm,
+            coords_rm,
+            cfg_rdx_melt;
+            p2m_workspace=ws_rm.p2m,
+            thread_buffers=ws_rm.thread_buffers,
+            interp_arrays=ws_rm.interp_arrays,
+        )
+        snapshot_step_start_inventories!(ws_rm, st_rm, cfg_rdx_melt)
+        @test ws_rm.nFe0_m_step_start isa Vector{Float64}
+        @test isapprox(
+            ws_rm.nFe2_m_step_start, st_rm.markers.groups.redox.nFe2_m; rtol=1.0e-12
+        )
+        # Mutate redox array before outer iteration to verify titer > 1 restoration
+        nfe2_saved = copy(st_rm.markers.groups.redox.nFe2_m)
+        st_rm.markers.groups.redox.nFe2_m .*= 0.5
+        Erebus.solve_thermomechanical_iterations!(
+            st_rm,
+            coords_rm,
+            cfg_rdx_melt,
+            ws_rm;
+            DHP_pyro=nothing,
+            dt_step_initial=st_rm.dt,
+        )
+        @test isapprox(st_rm.markers.groups.redox.nFe2_m, nfe2_saved; rtol=1.0e-12)
     end
 
     @testset "Coupled Physics Simulation Step Integration" begin

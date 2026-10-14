@@ -1,6 +1,77 @@
 # Marker property computation and particle-to-mesh (P2M) grid interpolation
 
 """
+Pre-evaluate marker melt fractions and update marker redox speciation before grid interpolation.
+
+$(SIGNATURES)
+
+# Parameters
+- `redox_props`: Marker redox property container.
+- `core`: Core marker array container.
+- `cfg`: Simulation configuration struct.
+- `marknum`: Number of active markers.
+- `Xfe_bulk`: Optional marker bulk metal volume fraction vector.
+- `Xfem`: Optional marker molten metal volume fraction vector.
+- `F_extract_m`: Optional marker cumulative extracted melt fraction vector.
+
+# Returns
+- `Nothing`: Mutates `core.Fm`, `redox_props`, and `Xfe_bulk` in place.
+"""
+function _preupdate_marker_redox!(
+    redox_props,
+    core,
+    cfg::SimulationConfig,
+    marknum::Int;
+    Xfe_bulk=nothing,
+    Xfem=nothing,
+    F_extract_m=nothing,
+)::Nothing
+    if cfg.melting.active
+        tm = core.tm
+        tkm = core.tkm
+        pfm0 = core.pfm0
+        Fm = core.Fm
+        for m in 1:marknum
+            tm_m = tm[m]
+            if tm_m < 3
+                P_val = max(0.0, pfm0[m])
+                F_m = compute_melt_fraction(
+                    tkm[m],
+                    P_val,
+                    tm_m;
+                    T_sol=cfg.melting.T_solidus[tm_m],
+                    T_liq=cfg.melting.T_liquidus[tm_m],
+                    dpdt=cfg.melting.dpdt_clapeyron,
+                )
+                if cfg.magma_transport.active &&
+                    cfg.magma_transport.track_depletion &&
+                    F_extract_m !== nothing
+                    F_m = clamp(F_m - F_extract_m[m], 0.0, 1.0)
+                end
+                Fm[m] = F_m
+            else
+                Fm[m] = 0.0
+            end
+        end
+    end
+    update_marker_redox!(
+        redox_props,
+        core.tkm,
+        core.pfm0,
+        cfg.redox;
+        Xfe_bulk=Xfe_bulk,
+        Xfem=Xfem,
+        XWsolidm=core.XWsolidm,
+        Fm=core.Fm,
+        tm=core.tm,
+        rhosolidm=cfg.materials.rhosolidm,
+        rhosolid=cfg.materials.rhosolidm[1],
+        rho_metal=cfg.coreformation.rho_metal,
+    )
+    return nothing
+end
+
+"""
     interpolate_markers_to_grid!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; p2m_workspace=nothing, thread_buffers=nothing, interp_arrays=nothing)::Nothing
 
 Interpolate marker properties to staggered Eulerian mesh and normalize nodal properties.
@@ -186,18 +257,14 @@ function interpolate_markers_to_grid!(
     deltaIW_m = has_redox ? markers.groups.redox.deltaIW_m : nothing
 
     if cfg.redox.active && redox_props !== nothing
-        update_marker_redox!(
+        _preupdate_marker_redox!(
             redox_props,
-            tkm,
-            pfm0,
-            cfg.redox;
+            core,
+            cfg,
+            marknum;
             Xfe_bulk=Xfe_bulk,
             Xfem=Xfem,
-            XWsolidm=core.XWsolidm,
-            tm=core.tm,
-            rhosolidm=cfg.materials.rhosolidm,
-            rhosolid=cfg.materials.rhosolidm[1],
-            rho_metal=cfg.coreformation.rho_metal,
+            F_extract_m=F_extract_m,
         )
     end
 

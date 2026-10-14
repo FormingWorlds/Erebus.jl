@@ -278,6 +278,8 @@ The incremental mass of volatiles extracted from marker $m$ during the timestep 
 
 $$\Delta M_{\text{vent}, m} = \rho_m V_m \left[C_{\text{bulk}, m}(t) - C_{\text{bulk}, m}(t + \Delta t)\right]$$
 
+When refractory organic pyrolysis (`update_pyrolysis!`) is active, evolved nitrogen, hydrogen, and unbuffered carbon gases are deposited onto the marker volatile arrays (`XNm`, `XH2Om`, `XCm`, and `X_graphite_m`), while redox-buffered pyrolysis gases (`nCO_m`, `nCO2_m`, and `nCH4_m`) are stored on `redox_props`. During surface venting drainage, `nCO_m`, `nCO2_m`, and `nCH4_m` drain alongside mobile dissolved volatiles using the same exponential decay factor $\exp(-S_{\text{vent}} \chi_{\text{vent}} \Delta t)$, contributing their elemental carbon and hydrogen masses to the vented volatile totals and `TransferRecord` log.
+
 These increments are evaluated in 3D using the marker out-of-plane spherical integration length $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$, and accumulated into cumulative species inventories ($M_{\text{vent}}^{\text{H2O}}$, $M_{\text{vent}}^{\text{C}}$, $M_{\text{vent}}^{\text{N}}$, $M_{\text{vent}}^{\text{S}}$). This mechanism couples low-temperature hydrothermal fluid discharge directly to marker chemistry while preserving solid retention floors against exhaustive depletion.
 
 ---
