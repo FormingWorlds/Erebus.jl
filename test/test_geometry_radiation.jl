@@ -401,6 +401,84 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         @test all(KY_dyn .> 0.0)
     end
 
+    @testset "Surface Heat Flux and Internal Temperature Extraction" begin
+        coords_hf = GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        Ny1_hf, Nx1_hf = coords_hf.Ny1, coords_hf.Nx1
+        rplanet_hf = 50_000.0
+        xc_hf = 70_000.0
+        yc_hf = 70_000.0
+        KX_hf = fill(3.0, Ny1_hf, Nx1_hf)
+        KY_hf = fill(3.0, Ny1_hf, coords_hf.Nx1)
+
+        # Isothermal field has zero outward heat flux and zero internal temperature
+        tk_iso = fill(500.0, Ny1_hf, Nx1_hf)
+        @test iszero(
+            compute_mean_surface_heat_flux(
+                tk_iso, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf
+            ),
+        )
+        @test iszero(
+            compute_surface_internal_temperature(
+                tk_iso, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf
+            ),
+        )
+
+        # Step temperature jump across rplanet: T_in = 500 K, T_out = 200 K
+        tk_step = fill(200.0, Ny1_hf, Nx1_hf)
+        for j in 1:Nx1_hf, i in 1:Ny1_hf
+            if (coords_hf.xp[j] - xc_hf)^2 + (coords_hf.yp[i] - yc_hf)^2 <= rplanet_hf^2
+                tk_step[i, j] = 500.0
+            end
+        end
+        F_expected = 3.0 * (500.0 - 200.0) / coords_hf.dx
+        F_calc = compute_mean_surface_heat_flux(
+            tk_step, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf
+        )
+        @test isapprox(F_calc, F_expected; rtol=1e-12)
+
+        sigma_val = 5.670374419e-8
+        T_int_calc = compute_surface_internal_temperature(
+            tk_step, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf; sigma_sb=sigma_val
+        )
+        @test isapprox(T_int_calc, (F_expected / sigma_val)^0.25; rtol=1e-12)
+
+        # Inward heat flux (cold interior, hot exterior) clamps to zero outward internal flux
+        tk_inv = fill(500.0, Ny1_hf, Nx1_hf)
+        for j in 1:Nx1_hf, i in 1:Ny1_hf
+            if (coords_hf.xp[j] - xc_hf)^2 + (coords_hf.yp[i] - yc_hf)^2 <= rplanet_hf^2
+                tk_inv[i, j] = 200.0
+            end
+        end
+        @test iszero(
+            compute_mean_surface_heat_flux(
+                tk_inv, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf
+            ),
+        )
+        @test iszero(
+            compute_surface_internal_temperature(
+                tk_inv, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf
+            ),
+        )
+
+        # Edge cases and error contracts
+        @test iszero(
+            compute_mean_surface_heat_flux(
+                tk_step, KX_hf, KY_hf, coords_hf, 0.0, xc_hf, yc_hf
+            ),
+        )
+        @test iszero(
+            compute_mean_surface_heat_flux(
+                tk_step, KX_hf, KY_hf, coords_hf, 1.0e9, xc_hf, yc_hf
+            ),
+        )
+        @test_throws DomainError compute_surface_internal_temperature(
+            tk_step, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf; sigma_sb=0.0
+        )
+        @test_throws DomainError compute_surface_internal_temperature(
+            tk_step, KX_hf, KY_hf, coords_hf, rplanet_hf, xc_hf, yc_hf; sigma_sb=NaN
+        )
+    end
+
     @testset "Spherical Geometric Metric Divergence" begin
         coords = default_grid_coordinates()
         Ny1, Nx1 = coords.Ny1, coords.Nx1

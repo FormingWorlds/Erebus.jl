@@ -287,8 +287,8 @@ using Erebus.Physics
         # Exact mass conservation: M_atm + M_escaped == M_init
         @test isapprox(res_decay.M_atm + res_decay.M_escaped_step, M_init; rtol=1e-12)
 
-        # Case 2: Steady venting influx into small body (pure effusion)
-        vent_rate = 100.0 # kg / s
+        # Case 2: Steady venting influx into small body in thin-exosphere regime (M_ss < M_exo_col)
+        vent_rate = 0.05 # kg / s (M_ss ≈ 1089.8 kg < M_exo_col ≈ 3132.7 kg)
         res_vent = evolve_atmospheric_species_inventory(
             0.0, vent_rate, dt_1yr, M_50km, R_50km, T_200, MASS_H2O_KG; hydrodynamic=false
         )
@@ -374,8 +374,8 @@ using Erebus.Physics
         )
         @test isapprox(loss_rate_high / loss_rate_base, (R_exo_high / R_50km)^2; rtol=1e-3)
 
-        # Analytical transient depletion test without continuous venting: M_atm(t) = M_0 * exp(-k * t)
-        M0_trans = 1.0e8 # 100,000 tonnes
+        # Analytical transient depletion test in thin-exosphere regime (M_0 < M_exo_col): M_atm(t) = M_0 * exp(-k * t)
+        M0_trans = 1.0e3 # 1,000 kg (< M_exo_col ≈ 3,132.7 kg)
         dt_trans = 100.0 # 100 s (dt << 1/k_expected ≈ 21,800 s)
         res_trans = evolve_atmospheric_species_inventory(
             M0_trans,
@@ -395,6 +395,141 @@ using Erebus.Physics
         # First-order Taylor series: M_atm(t) ≈ M_0 - M_dot * t
         M_dot_initial = k_expected * M0_trans
         @test isapprox(res_trans.M_atm, M0_trans - M_dot_initial * dt_trans; rtol=1e-4)
+
+        # Small-x Taylor-expansion regime (x = k_escape * dt < 1.0e-6) in thin exosphere
+        dt_tiny = 1.0e-3
+        res_tiny = evolve_atmospheric_species_inventory(
+            M0_trans,
+            vent_rate,
+            dt_tiny,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            R_exobase=R_50km,
+            hydrodynamic=false,
+        )
+        @test isapprox(
+            res_tiny.M_atm + res_tiny.M_escaped_step,
+            M0_trans + vent_rate * dt_tiny;
+            rtol=1e-12,
+        )
+
+        # Exobase column mass and thick-atmosphere pressure-independent escape regime (M > M_exo_col)
+        M_exo_50km = compute_exobase_column_mass(R_50km, MASS_H2O_KG)
+        @test isapprox(
+            M_exo_50km,
+            4.0 * π * R_50km^2 * MASS_H2O_KG / COLLISION_CROSS_SECTION_M2;
+            rtol=1e-12,
+        )
+        @test isapprox(
+            compute_exobase_column_mass(2.0 * R_50km, MASS_H2O_KG),
+            4.0 * M_exo_50km;
+            rtol=1e-12,
+        )
+        @test_throws DomainError compute_exobase_column_mass(0.0, MASS_H2O_KG)
+        @test_throws DomainError compute_exobase_column_mass(R_50km, 0.0)
+        @test_throws DomainError compute_exobase_column_mass(
+            R_50km, MASS_H2O_KG; sigma_coll=0.0
+        )
+
+        # Thick atmosphere on 600 km protoplanet: escape rate depends only on exobase column mass
+        R_600km = 600_000.0
+        M_600km = 1.0e21
+        T_exo_500 = 500.0
+        dt_3kyr = 1.0e11
+        M_exo_600km = compute_exobase_column_mass(R_600km, MASS_H2O_KG)
+        res_thick_1e13 = evolve_atmospheric_species_inventory(
+            1.0e13,
+            0.0,
+            dt_3kyr,
+            M_600km,
+            R_600km,
+            T_exo_500,
+            MASS_H2O_KG;
+            hydrodynamic=false,
+        )
+        res_thick_1e19 = evolve_atmospheric_species_inventory(
+            1.0e19,
+            0.0,
+            dt_3kyr,
+            M_600km,
+            R_600km,
+            T_exo_500,
+            MASS_H2O_KG;
+            hydrodynamic=false,
+        )
+        # Escaped mass is identical across 6 orders of magnitude in surface pressure when M > M_exo_col
+        @test res_thick_1e13.M_atm > M_exo_600km
+        @test isapprox(
+            res_thick_1e13.M_escaped_step, res_thick_1e19.M_escaped_step; rtol=1e-10
+        )
+        H_600 = compute_atmospheric_scale_height(M_600km, R_600km, T_exo_500, MASS_H2O_KG)
+        n_exo_600 = 1.0 / (COLLISION_CROSS_SECTION_M2 * H_600)
+        lam_600 = compute_jeans_parameter(M_600km, R_600km, T_exo_500, MASS_H2O_KG)
+        F_jeans_600 = compute_jeans_escape_flux(
+            n_exo_600, T_exo_500, MASS_H2O_KG, lam_600; hydrodynamic=false
+        )
+        expected_esc_thick = 4.0 * π * R_600km^2 * MASS_H2O_KG * F_jeans_600 * dt_3kyr
+        @test isapprox(res_thick_1e19.M_escaped_step, expected_esc_thick; rtol=1e-10)
+        @test res_thick_1e19.M_atm > 0.9999 * 1.0e19
+
+        # Piecewise-linear crossing invariance (thick -> thin and thin -> thick)
+        dt_cross = 2.5 / k_expected
+        M0_cross_down = 2.0 * M_exo_50km
+        res_down_1 = evolve_atmospheric_species_inventory(
+            M0_cross_down,
+            0.0,
+            dt_cross,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            hydrodynamic=false,
+        )
+        @test res_down_1.M_atm < M_exo_50km
+        m_sub_down = M0_cross_down
+        for _ in 1:10
+            m_sub_down = evolve_atmospheric_species_inventory(
+                m_sub_down,
+                0.0,
+                dt_cross / 10.0,
+                M_50km,
+                R_50km,
+                T_200,
+                MASS_H2O_KG;
+                hydrodynamic=false,
+            ).M_atm
+        end
+        @test isapprox(res_down_1.M_atm, m_sub_down; rtol=1e-12)
+
+        M0_cross_up = 0.5 * M_exo_50km
+        vent_high = 2.0 * k_expected * M_exo_50km
+        res_up_1 = evolve_atmospheric_species_inventory(
+            M0_cross_up,
+            vent_high,
+            dt_cross,
+            M_50km,
+            R_50km,
+            T_200,
+            MASS_H2O_KG;
+            hydrodynamic=false,
+        )
+        @test res_up_1.M_atm > M_exo_50km
+        m_sub_up = M0_cross_up
+        for _ in 1:10
+            m_sub_up = evolve_atmospheric_species_inventory(
+                m_sub_up,
+                vent_high,
+                dt_cross / 10.0,
+                M_50km,
+                R_50km,
+                T_200,
+                MASS_H2O_KG;
+                hydrodynamic=false,
+            ).M_atm
+        end
+        @test isapprox(res_up_1.M_atm, m_sub_up; rtol=1e-12)
 
         # Guard: R_exobase < R_planet throws DomainError
         @test_throws DomainError evolve_atmospheric_species_inventory(

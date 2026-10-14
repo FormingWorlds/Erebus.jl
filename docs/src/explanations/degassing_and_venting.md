@@ -408,23 +408,31 @@ where $n_{\text{exo}}$ is the number density of the species at the exobase [$\te
 
 When $\lambda \ll 1$ (typical for small asteroids with $R < 100\text{ km}$ and $v_{\text{esc}} < 100\text{ m/s}$), thermal velocities exceed the escape velocity. Escape operates in the rapid effusion regime, and vented gases depart into the interplanetary medium within hours to weeks. Conversely, when $\lambda \gg 10$ (massive planetary embryos or giant planets), the exponential factor $\exp(-\lambda)$ suppresses kinetic escape, and vented volatiles accumulate into an enduring atmosphere.
 
-### 3. Integrated Atmospheric Mass Loss Rate
+### 3. Exobase Column Mass and Integrated Mass Loss Rate
 
-Relating the exobase density $n_{\text{exo}}$ to the total atmospheric inventory $M_{\text{atm}}$ [$\text{kg}$] through the atmospheric scale height $H = k_B T / (m g)$, the total planetary mass loss rate $\dot{M}_{\text{escape}}$ [$\text{kg/s}$] can be written in linear relaxation form:
+At the exobase (where the vertical mean free path equals the atmospheric scale height $H = k_B T_{\text{exo}} / (m g)$), the gas number density is bounded above by the collision cross section $\sigma_{\text{coll}} = 3.0\times 10^{-19}\text{ m}^2$:
 
-$$\dot{M}_{\text{escape}} = 4 \pi R_{\text{exo}}^2 m \Phi_{\text{Jeans}} = k_{\text{escape}} M_{\text{atm}}$$
+$$n_{\text{exo,max}} = \frac{1}{\sigma_{\text{coll}} H}$$
 
-where $k_{\text{escape}} = \frac{v_{\text{th}}}{2 \sqrt{\pi} H} (1 + \lambda) \exp(-\lambda)$ [$\text{s}^{-1}$] is the effective escape rate coefficient. The exobase density closure $M_{\text{atm}} \approx 4 \pi R_{\text{exo}}^2 \rho_{\text{exo}} H$ represents an upper bound on loss for bound atmospheres ($\lambda > 1$), because true exobase density falls below the column-averaged density.
+corresponding to an active exobase column mass (`compute_exobase_column_mass`):
+
+$$M_{\text{exo,col}} = 4 \pi R_{\text{exo}}^2 \rho_{\text{exo,max}} H = \frac{4 \pi R_{\text{exo}}^2 m}{\sigma_{\text{coll}}}$$
+
+Relating the active escaping column $\min(M_{\text{atm}}, M_{\text{exo,col}})$ to the rate coefficient $k_{\text{escape}} = \frac{v_{\text{th}}}{2 \sqrt{\pi} H} (1 + \lambda) \exp(-\lambda)$ [$\text{s}^{-1}$], the planetary mass loss rate $\dot{M}_{\text{escape}}$ [$\text{kg/s}$] satisfies:
+
+$$\dot{M}_{\text{escape}} = k_{\text{escape}} \min\left(M_{\text{atm}}, M_{\text{exo,col}}\right)$$
+
+In optically thin exospheres ($M_{\text{atm}} \le M_{\text{exo,col}}$), the loss rate scales linearly with $M_{\text{atm}}$. In collisionally thick atmospheres ($M_{\text{atm}} > M_{\text{exo,col}}$), the exobase saturates at $n_{\text{exo,max}}$ and the loss rate $k_{\text{escape}} M_{\text{exo,col}}$ is independent of surface pressure.
 
 ### 4. Atmospheric Mass Conservation and Evolution
 
-The time evolution of atmospheric mass subject to surface venting flux $\dot{M}_{\text{vent}}$ [$\text{kg/s}$] and kinetic escape is governed by:
+The time evolution of atmospheric mass subject to surface venting flux $\dot{M}_{\text{vent}}$ [$\text{kg/s}$] and exobase-bounded escape is governed by the piecewise-linear differential equation:
 
-$$\frac{d M_{\text{atm}}}{dt} = \dot{M}_{\text{vent}} - k_{\text{escape}} M_{\text{atm}}$$
+$$\frac{d M_{\text{atm}}}{dt} = \dot{M}_{\text{vent}} - k_{\text{escape}} \min\left(M_{\text{atm}}, M_{\text{exo,col}}\right)$$
 
 In the 2D Cartesian cross-sectional domain, marker fluid drainage evaluates using each marker's out-of-plane spherical integration length $w_{3\text{D}, m} = 2 r_m = 2 \sqrt{(x_m - x_c)^2 + (y_m - y_c)^2}$. The 3D surface venting flux evaluates as $\dot{M}_{\text{vent}} = \Delta M_{\text{vent,3D}} / \Delta t$; this ensures that atmospheric inventory $M_{\text{atm}}$ has units of kilograms and surface pressure evaluates in true Pascals.
 
-For a constant computational timestep $\Delta t$, the analytical solution yields:
+For a constant computational timestep $\Delta t$, `evolve_atmospheric_species_inventory` integrates the piecewise-linear equation analytically across thin ($M_{\text{atm}} \le M_{\text{exo,col}}$) and thick ($M_{\text{atm}} > M_{\text{exo,col}}$) regimes, computing the exact crossing time $t_{\text{cross}} \in (0, \Delta t)$ whenever the trajectory crosses $M_{\text{exo,col}}$. Within the thin regime, the analytical solution yields:
 
 $$M_{\text{atm}}(t + \Delta t) = M_{\text{atm}}(t) \exp(-x) + \frac{\dot{M}_{\text{vent}}}{k_{\text{escape}}} \left[1 - \exp(-x)\right]$$
 
@@ -432,7 +440,7 @@ where $x = k_{\text{escape}} \Delta t$. For small loss rates ($x < 10^{-6}$), nu
 
 $$\frac{1 - \exp(-x)}{k_{\text{escape}}} = \Delta t \left(1 - \frac{x}{2} + \frac{x^2}{6}\right)$$
 
-The cumulative mass lost to space during the step is determined from exact conservation:
+Within the thick regime ($M_{\text{atm}} > M_{\text{exo,col}}$), the inventory evolves at constant net rate $\dot{M}_{\text{net}} = \dot{M}_{\text{vent}} - k_{\text{escape}} M_{\text{exo,col}}$. The cumulative mass lost to space during the step is determined from exact conservation:
 
 $$\Delta M_{\text{escaped}} = M_{\text{atm}}(t) + \dot{M}_{\text{vent}} \Delta t - M_{\text{atm}}(t + \Delta t)$$
 

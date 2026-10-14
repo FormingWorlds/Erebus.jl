@@ -170,8 +170,8 @@ Planetary volatile cycles transfer mass across three core reservoirs: interior r
 ### Bidirectional Surface Thermal Coupling
 
 Atmosphere and interior thermal solvers interact through a closed boundary coupling loop:
-1. *Interior to Atmosphere*. The mean surface rock temperature $T_{\text{int}}$ is computed by averaging rock temperatures along the physical planetesimal boundary ($r \approx R_{\text{planet}}$) via `compute_mean_surface_temperature`. This value supplies the internal heat source term $T_{\text{int}}$ to `evolve_coupled_atmosphere_step!`.
-2. *Atmosphere to Interior*. The resulting atmospheric equilibrium surface temperature $T_{\text{surf,eq}}$ replaces the far-field ambient disk temperature $T_{\text{amb}}$ in `apply_radiative_surface_boundary!`, self-consistently adjusting internal conductive heat loss to atmospheric greenhouse blanketing.
+1. *Interior to Atmosphere*. The outward internal heat flux $F_{\text{int}}$ is computed across the planetesimal boundary ($r = R_{\text{planet}}$) via `compute_mean_surface_heat_flux`, yielding the internal heat source temperature $T_{\text{int}} = (F_{\text{int}} / \sigma_{\text{SB}})^{1/4}$ via `compute_surface_internal_temperature` for the Guillot (2010) radiative equilibrium profile, while the mean surface rock temperature $T_{\text{surf}}$ evaluated via `compute_mean_surface_temperature` drives the linearized surface radiative exchange $F_{\text{net,rad}} = h_{\text{rad,eff}} (T_{\text{surf}} - T_{\text{amb}})$ in `evolve_coupled_atmosphere_step!`.
+2. *Atmosphere to Interior*. The resulting atmospheric equilibrium surface temperature $T_{\text{surf,eq}}$ replaces the far-field ambient disk temperature $T_{\text{amb}}$ in `apply_radiative_surface_boundary!` and sets the ambient temperature of sticky-air markers (`tm >= 3`) in `prepare_step_ambient!`, self-consistently coupling internal conductive heat loss to atmospheric greenhouse blanketing.
 
 ---
 
