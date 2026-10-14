@@ -1,6 +1,121 @@
 # Thermal energy equation assembly, solve, and convergence assessment step
 
 """
+Restore step-start magma segregation and volatile arrays and apply silicate melt segregation.
+
+$(SIGNATURES)
+
+Parameters
+----------
+state : SimulationState
+    Mutable simulation state container.
+coords : GridCoordinates
+    Staggered grid coordinate specification.
+cfg : SimulationConfig
+    Master simulation configuration.
+ws : SimulationWorkspaces
+    Preallocated solver workspaces and step-start buffers.
+marknum : Int
+    Number of active markers.
+
+Returns
+-------
+Nothing
+    Mutates marker melt fractions, porosities, volatile inventories, and grid heat sources in place.
+"""
+function _run_magma_segregation_step!(
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+    ws::SimulationWorkspaces,
+    marknum::Int,
+)
+    g = state.grids
+    core = state.markers.core
+    _sync_step_start_vec!(core.Fm, ws.Fm_step_start)
+
+    exsolve_vols =
+        cfg.magma_transport.exsolution_active &&
+        cfg.volatiles.active &&
+        !cfg.magma_degassing.active
+
+    (exsolve_vols && !cfg.reaction.active) &&
+        _sync_step_start_vec!(core.phim, ws.phim_step_start)
+
+    has_vols = haskey(state.markers.groups, :volatiles)
+    F_extract_m = nothing
+    if has_vols
+        vols = state.markers.groups.volatiles
+        _sync_step_start_vec!(vols.F_extract_m, ws.F_extract_m_step_start)
+        if exsolve_vols
+            _sync_step_start_vec!(vols.XH2Om, ws.XH2Om_step_start)
+            _sync_step_start_vec!(vols.XCm, ws.XCm_step_start)
+            _sync_step_start_vec!(vols.XNm, ws.XNm_step_start)
+            _sync_step_start_vec!(vols.XSm, ws.XSm_step_start)
+        end
+        F_extract_m = vols.F_extract_m
+    end
+
+    XH2Om = has_vols ? state.markers.groups.volatiles.XH2Om : nothing
+    Xfe_bulk_seg =
+        haskey(state.markers.groups, :metal) ? state.markers.groups.metal.Xfe_bulk : nothing
+
+    apply_silicate_melt_segregation!(
+        core.xm,
+        core.ym,
+        core.tm,
+        core.tkm,
+        core.Fm,
+        marknum,
+        state.dt,
+        cfg.magma_transport;
+        coords=coords,
+        xcenter=state.accumulators.xcenter,
+        ycenter=state.accumulators.ycenter,
+        rplanet=state.accumulators.rplanet,
+        gx=g.gx,
+        gy=g.gy,
+        Q_seg_grid=if (
+            cfg.magma_transport.segregation_heating ||
+            cfg.magma_transport.sensible_heat_transport
+        )
+            g.Q_seg_grid
+        else
+            nothing
+        end,
+        Q_lat_grid=cfg.magma_transport.latent_crystallization ? g.Q_lat_grid : nothing,
+        rho_silicate=cfg.materials.rhosolidm[1],
+        rho_melt=cfg.melting.rho_melt,
+        rho_fluid=cfg.materials.rhofluidm[2],
+        phimax=cfg.poroelasticity.phimax,
+        eta_silicate=cfg.materials.etasolidm[1],
+        ETA=g.ETA,
+        T_solidus_silicate=cfg.melting.T_solidus[1],
+        T_liquidus_silicate=cfg.melting.T_liquidus[1],
+        L_melt=cfg.melting.L_melt,
+        F_extract_m=F_extract_m,
+        vx=g.vx,
+        vy=g.vy,
+        pr=g.pr,
+        XH2Om=exsolve_vols ? XH2Om : nothing,
+        XCm=nothing,
+        XNm=nothing,
+        XSm=nothing,
+        phim=exsolve_vols ? (cfg.reaction.active ? core.phinewm : core.phim) : nothing,
+        Xfe_bulk=Xfe_bulk_seg,
+        cfg_volatiles=cfg.volatiles,
+        spherical_metric=cfg.geometry.spherical_metric,
+        w3d_m=core.w3d_m,
+        workspace=ws.magma_segregation,
+    )
+
+    if exsolve_vols && !cfg.reaction.active
+        copyto!(core.phinewm, core.phim)
+    end
+    return nothing
+end
+
+"""
 Solve the thermal energy conservation equation with segregation sources and convection.
 
 $(SIGNATURES)
@@ -157,91 +272,7 @@ function solve_thermal_energy!(
 
     magma_active_val = cfg.magma_transport.active
     if magma_active_val
-        if ws.Fm_step_start !== nothing
-            if length(core.Fm) != length(ws.Fm_step_start)
-                resize!(core.Fm, length(ws.Fm_step_start))
-            end
-            copyto!(core.Fm, ws.Fm_step_start)
-        end
-
-        F_extract_m = nothing
-        if haskey(state.markers.groups, :volatiles)
-            vols = state.markers.groups.volatiles
-            if ws.F_extract_m_step_start !== nothing && vols.F_extract_m !== nothing
-                if length(vols.F_extract_m) != length(ws.F_extract_m_step_start)
-                    resize!(vols.F_extract_m, length(ws.F_extract_m_step_start))
-                end
-                copyto!(vols.F_extract_m, ws.F_extract_m_step_start)
-            end
-            F_extract_m = vols.F_extract_m
-        end
-
-        XH2Om = if haskey(state.markers.groups, :volatiles)
-            state.markers.groups.volatiles.XH2Om
-        else
-            nothing
-        end
-        XCm = if haskey(state.markers.groups, :volatiles)
-            state.markers.groups.volatiles.XCm
-        else
-            nothing
-        end
-        XNm = if haskey(state.markers.groups, :volatiles)
-            state.markers.groups.volatiles.XNm
-        else
-            nothing
-        end
-        XSm = if haskey(state.markers.groups, :volatiles)
-            state.markers.groups.volatiles.XSm
-        else
-            nothing
-        end
-
-        apply_silicate_melt_segregation!(
-            core.xm,
-            core.ym,
-            core.tm,
-            core.tkm,
-            core.Fm,
-            marknum,
-            state.dt,
-            cfg.magma_transport;
-            coords=coords,
-            xcenter=state.accumulators.xcenter,
-            ycenter=state.accumulators.ycenter,
-            rplanet=state.accumulators.rplanet,
-            gx=g.gx,
-            gy=g.gy,
-            Q_seg_grid=if (
-                cfg.magma_transport.segregation_heating ||
-                cfg.magma_transport.sensible_heat_transport
-            )
-                g.Q_seg_grid
-            else
-                nothing
-            end,
-            Q_lat_grid=cfg.magma_transport.latent_crystallization ? g.Q_lat_grid : nothing,
-            rho_silicate=cfg.materials.rhosolidm[1],
-            rho_melt=cfg.melting.rho_melt,
-            eta_silicate=cfg.materials.etasolidm[1],
-            ETA=g.ETA,
-            T_solidus_silicate=cfg.melting.T_solidus[1],
-            T_liquidus_silicate=cfg.melting.T_liquidus[1],
-            L_melt=cfg.melting.L_melt,
-            F_extract_m=F_extract_m,
-            vx=g.vx,
-            vy=g.vy,
-            pr=g.pr,
-            XH2Om=cfg.volatiles.active ? XH2Om : nothing,
-            XCm=cfg.volatiles.active ? XCm : nothing,
-            XNm=cfg.volatiles.active ? XNm : nothing,
-            XSm=cfg.volatiles.active ? XSm : nothing,
-            phim=core.phim,
-            cfg_volatiles=cfg.volatiles,
-            spherical_metric=cfg.geometry.spherical_metric,
-            w3d_m=core.w3d_m,
-            workspace=ws.magma_segregation,
-        )
+        _run_magma_segregation_step!(state, coords, cfg, ws, marknum)
     end
 
     Q_seg_val =

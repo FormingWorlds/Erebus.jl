@@ -1234,6 +1234,152 @@ function compute_volatile_exsolution(
 end
 
 """
+Solve gas-phase H-N-S partial pressures when carbon is buffered at graphite saturation.
+
+$(SIGNATURES)
+
+Parameters
+----------
+p_tot_bar : Float64
+    Total gas pressure [bar].
+T : Float64
+    Gas temperature [K].
+p_CO : Float64
+    Graphite-buffered carbon monoxide partial pressure [bar].
+p_CO2 : Float64
+    Graphite-buffered carbon dioxide partial pressure [bar].
+r_H : Float64
+    Equilibrium H2O/H2 partial pressure ratio.
+r_SO2 : Float64
+    Equilibrium SO2/sqrt(S2) partial pressure ratio [bar^0.5].
+z_H : Real
+    Input atomic hydrogen fraction.
+z_N : Real
+    Input atomic nitrogen fraction.
+z_S : Real
+    Input atomic sulfur fraction.
+
+Returns
+-------
+NTuple{8,Float64}
+    Partial pressures `(p_H2, p_H2O, p_CH4, p_N2, p_NH3, p_H2S, p_S2, p_SO2)` in bar.
+"""
+function _solve_graphite_saturated_hns(
+    p_tot_bar::Float64,
+    T::Float64,
+    p_CO::Float64,
+    p_CO2::Float64,
+    r_H::Float64,
+    r_SO2::Float64,
+    z_H::Real,
+    z_N::Real,
+    z_S::Real,
+)
+    dp_rem = p_tot_bar - (p_CO + p_CO2)
+    z_HNS = Float64(z_H) + Float64(z_N) + Float64(z_S)
+    if z_HNS <= 0.0 || dp_rem <= 0.0
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    end
+    nH_s = Float64(z_H) / z_HNS
+    nN_s = Float64(z_N) / z_HNS
+    nS_s = Float64(z_S) / z_HNS
+    A_lo = dp_rem
+    A_hi = 4.0 * dp_rem
+    pH2 = 0.0
+    p_H2O = 0.0
+    p_CH4 = 0.0
+    p_N2 = 0.0
+    p_NH3 = 0.0
+    p_S2 = 0.0
+    p_H2S = 0.0
+    p_SO2 = 0.0
+    for _ in 1:60
+        A_HNS = 0.5 * (A_lo + A_hi)
+        if nH_s > 0.0
+            pH2_lo = 0.0
+            pH2_hi = (nH_s * A_HNS) / (2.0 * (1.0 + r_H))
+            for _ in 1:50
+                pH2 = 0.5 * (pH2_lo + pH2_hi)
+                l_pH2 = log10(max(pH2, 1.0e-30))
+                r_CH4 =
+                    10.0^clamp(
+                        11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
+                        -100.0,
+                        100.0,
+                    )
+                r_NH3 = 10.0^clamp(2800.0 / T - 5.80 + 1.5 * l_pH2, -100.0, 100.0)
+                r_H2S = 10.0^clamp(4800.0 / T - 2.50 + l_pH2, -100.0, 100.0)
+                p_CH4 = r_CH4 * p_CO
+                p_NH3 = if nN_s > 0.0
+                    A_N = nN_s * A_HNS
+                    r_NH3 * (2.0 * A_N) / max(r_NH3 + sqrt(r_NH3^2 + 8.0 * A_N), 1.0e-30)
+                else
+                    0.0
+                end
+                p_H2S = if nS_s > 0.0
+                    A_S = nS_s * A_HNS
+                    B_S = r_H2S + r_SO2
+                    r_H2S * (2.0 * A_S) / max(B_S + sqrt(B_S^2 + 8.0 * A_S), 1.0e-30)
+                else
+                    0.0
+                end
+                H_tot = 2.0 * (1.0 + r_H) * pH2 + 4.0 * p_CH4 + 3.0 * p_NH3 + 2.0 * p_H2S
+                if H_tot > nH_s * A_HNS
+                    pH2_hi = pH2
+                else
+                    pH2_lo = pH2
+                end
+            end
+            pH2 = 0.5 * (pH2_lo + pH2_hi)
+        else
+            pH2 = 0.0
+        end
+        l_pH2 = pH2 > 0.0 ? log10(max(pH2, 1.0e-30)) : -100.0
+        r_CH4 = if pH2 > 0.0
+            10.0^clamp(
+                11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
+                -100.0,
+                100.0,
+            )
+        else
+            0.0
+        end
+        r_NH3 = pH2 > 0.0 ? 10.0^clamp(2800.0 / T - 5.80 + 1.5 * l_pH2, -100.0, 100.0) : 0.0
+        r_H2S = pH2 > 0.0 ? 10.0^clamp(4800.0 / T - 2.50 + l_pH2, -100.0, 100.0) : 0.0
+        p_H2O = r_H * pH2
+        p_CH4 = r_CH4 * p_CO
+        if nN_s > 0.0
+            A_N = nN_s * A_HNS
+            u_N = (2.0 * A_N) / max(r_NH3 + sqrt(r_NH3^2 + 8.0 * A_N), 1.0e-30)
+            p_N2 = u_N^2
+            p_NH3 = r_NH3 * u_N
+        else
+            p_N2 = 0.0
+            p_NH3 = 0.0
+        end
+        if nS_s > 0.0
+            A_S = nS_s * A_HNS
+            B_S = r_H2S + r_SO2
+            v_S = (2.0 * A_S) / max(B_S + sqrt(B_S^2 + 8.0 * A_S), 1.0e-30)
+            p_S2 = v_S^2
+            p_H2S = r_H2S * v_S
+            p_SO2 = r_SO2 * v_S
+        else
+            p_S2 = 0.0
+            p_H2S = 0.0
+            p_SO2 = 0.0
+        end
+        p_calc = pH2 + p_H2O + p_CO + p_CO2 + p_CH4 + p_N2 + p_NH3 + p_H2S + p_S2 + p_SO2
+        if p_calc > p_tot_bar
+            A_hi = A_HNS
+        else
+            A_lo = A_HNS
+        end
+    end
+    return (pH2, p_H2O, p_CH4, p_N2, p_NH3, p_S2, p_H2S, p_SO2)
+end
+
+"""
 Solve homogeneous gas-phase chemical equilibrium for the C-H-O-N-S volatile system.
 
 $(SIGNATURES)
@@ -1438,129 +1584,17 @@ function solve_chnos_speciation(
         A_atoms *= (p_tot_bar / p_calc)
     end
 
-    # If graphite saturation is enabled, verify carbon activity a_C <= 1.
     # When uncapped p_CO exceeds the graphite saturation ceiling, elemental carbon precipitates
-    # as solid graphite. The gas phase carbon partial pressures are fixed by equilibrium with graphite,
-    # and the remaining pressure is partitioned among volatile elements (H, N, S) preserving their
-    # relative abundances and satisfying Dalton's law exactly.
+    # as solid graphite. Gas-phase CO and CO2 are fixed by graphite equilibrium, while remaining
+    # pressure is partitioned among H, N, and S preserving total gas-phase H:N:S ratios.
     if graphite_saturation && nC > 0.0
         gr = compute_graphite_saturation_fugacity(T, log10_fO2)
         f_co_max_bar = gr.f_CO_max_bar
         if p_CO > f_co_max_bar
-            p_CO_sat_bar = f_co_max_bar
-            p_CO2_sat_bar = r_CO2 * p_CO_sat_bar
-            z_HNS = Float64(z_H) + Float64(z_N) + Float64(z_S)
-            if z_HNS <= 0.0
-                p_C_tot_bar = p_CO_sat_bar + p_CO2_sat_bar
-                scale_sat = p_tot_bar / max(p_C_tot_bar, 1.0e-30)
-                return (
-                    p_H2_Pa=0.0,
-                    p_H2O_Pa=0.0,
-                    p_CO_Pa=p_CO_sat_bar * scale_sat * 1.0e5,
-                    p_CO2_Pa=p_CO2_sat_bar * scale_sat * 1.0e5,
-                    p_CH4_Pa=0.0,
-                    p_N2_Pa=0.0,
-                    p_NH3_Pa=0.0,
-                    p_H2S_Pa=0.0,
-                    p_S2_Pa=0.0,
-                    p_SO2_Pa=0.0,
-                )
-            end
-
-            # Solve for pH2 with monotonic 1D bisection
-            function _sat_residual(test_pH2_bar)
-                l_pH2 = test_pH2_bar > 0.0 ? log10(max(test_pH2_bar, 1.0e-30)) : -100.0
-                # CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
-                r_ch4_test = if test_pH2_bar > 0.0
-                    10.0^clamp(
-                        11500.0 / T - 12.0 + 2.0 * l_pH2 - log10(max(r_H, 1.0e-30)),
-                        -100.0,
-                        100.0,
-                    )
-                else
-                    0.0
-                end
-                p_C_test = p_CO_sat_bar + p_CO2_sat_bar + r_ch4_test * p_CO_sat_bar
-                p_rem_test = p_tot_bar - p_C_test
-                if p_rem_test <= 0.0
-                    return p_C_test - p_tot_bar
-                end
-                hns_res = solve_chnos_speciation(
-                    p_rem_test * 1.0e5,
-                    T,
-                    d_IW;
-                    z_H=z_H,
-                    z_C=0.0,
-                    z_N=z_N,
-                    z_S=z_S,
-                    graphite_saturation=false,
-                )
-                return test_pH2_bar - (hns_res.p_H2_Pa * 1.0e-5)
-            end
-
-            lo_sat = 0.0
-            hi_sat = p_tot_bar
-            for _ in 1:60
-                mid_sat = 0.5 * (lo_sat + hi_sat)
-                if _sat_residual(mid_sat) > 0.0
-                    hi_sat = mid_sat
-                else
-                    lo_sat = mid_sat
-                end
-            end
-            best_pH2_bar = 0.5 * (lo_sat + hi_sat)
-            l_pH2_final = best_pH2_bar > 0.0 ? log10(max(best_pH2_bar, 1.0e-30)) : -100.0
-            # CO + 3 H2 <=> CH4 + H2O (French 1966; Holloway 1987)
-            r_ch4_final = if best_pH2_bar > 0.0
-                10.0^clamp(
-                    11500.0 / T - 12.0 + 2.0 * l_pH2_final - log10(max(r_H, 1.0e-30)),
-                    -100.0,
-                    100.0,
-                )
-            else
-                0.0
-            end
-            p_CH4_sat_bar = r_ch4_final * p_CO_sat_bar
-            p_C_final = p_CO_sat_bar + p_CO2_sat_bar + p_CH4_sat_bar
-
-            if p_C_final >= p_tot_bar
-                scale_sat = p_tot_bar / p_C_final
-                return (
-                    p_H2_Pa=0.0,
-                    p_H2O_Pa=0.0,
-                    p_CO_Pa=p_CO_sat_bar * scale_sat * 1.0e5,
-                    p_CO2_Pa=p_CO2_sat_bar * scale_sat * 1.0e5,
-                    p_CH4_Pa=p_CH4_sat_bar * scale_sat * 1.0e5,
-                    p_N2_Pa=0.0,
-                    p_NH3_Pa=0.0,
-                    p_H2S_Pa=0.0,
-                    p_S2_Pa=0.0,
-                    p_SO2_Pa=0.0,
-                )
-            end
-
-            p_rem_final_bar = p_tot_bar - p_C_final
-            hns_final = solve_chnos_speciation(
-                p_rem_final_bar * 1.0e5,
-                T,
-                d_IW;
-                z_H=z_H,
-                z_C=0.0,
-                z_N=z_N,
-                z_S=z_S,
-                graphite_saturation=false,
-            )
-            return (
-                p_H2_Pa=hns_final.p_H2_Pa,
-                p_H2O_Pa=hns_final.p_H2O_Pa,
-                p_CO_Pa=p_CO_sat_bar * 1.0e5,
-                p_CO2_Pa=p_CO2_sat_bar * 1.0e5,
-                p_CH4_Pa=p_CH4_sat_bar * 1.0e5,
-                p_N2_Pa=hns_final.p_N2_Pa,
-                p_NH3_Pa=hns_final.p_NH3_Pa,
-                p_H2S_Pa=hns_final.p_H2S_Pa,
-                p_S2_Pa=hns_final.p_S2_Pa,
-                p_SO2_Pa=hns_final.p_SO2_Pa,
+            p_CO = f_co_max_bar
+            p_CO2 = r_CO2 * p_CO
+            pH2, p_H2O, p_CH4, p_N2, p_NH3, p_S2, p_H2S, p_SO2 = _solve_graphite_saturated_hns(
+                p_tot_bar, T, p_CO, p_CO2, r_H, r_SO2, z_H, z_N, z_S
             )
         end
     end

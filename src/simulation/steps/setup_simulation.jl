@@ -481,14 +481,8 @@ function setup_simulation_workspaces(
     has_metal = coreformation_active_val
     has_metal_part = cfg.metal_partition.active
     magma_on = cfg.magma_transport.active
-    Xfe_bulk_step_start = has_metal ? zeros(Float64, marknum) : nothing
-    Xfem_step_start = has_metal ? zeros(Float64, marknum) : nothing
-    Fm_step_start = magma_on ? zeros(Float64, marknum) : nothing
-    F_extract_m_step_start = magma_on ? zeros(Float64, marknum) : nothing
-    Xfe_H_m_step_start = has_metal_part ? zeros(Float64, marknum) : nothing
-    Xfe_C_m_step_start = has_metal_part ? zeros(Float64, marknum) : nothing
-    Xfe_N_m_step_start = has_metal_part ? zeros(Float64, marknum) : nothing
-    Xfe_S_m_step_start = has_metal_part ? zeros(Float64, marknum) : nothing
+    magma_vols_on = magma_on && cfg.volatiles.active
+    alloc_if(cond::Bool) = cond ? zeros(Float64, marknum) : nothing
 
     return SimulationWorkspaces(
         hydromech,
@@ -512,14 +506,19 @@ function setup_simulation_workspaces(
         YERRNOD,
         fractured_cells,
         fractured_cells_prev,
-        Xfe_bulk_step_start,
-        Xfem_step_start,
-        Fm_step_start,
-        F_extract_m_step_start,
-        Xfe_H_m_step_start,
-        Xfe_C_m_step_start,
-        Xfe_N_m_step_start,
-        Xfe_S_m_step_start,
+        alloc_if(has_metal),
+        alloc_if(has_metal),
+        alloc_if(magma_on),
+        alloc_if(magma_on),
+        alloc_if(has_metal_part),
+        alloc_if(has_metal_part),
+        alloc_if(has_metal_part),
+        alloc_if(has_metal_part),
+        alloc_if(magma_vols_on),
+        alloc_if(magma_vols_on),
+        alloc_if(magma_vols_on),
+        alloc_if(magma_vols_on),
+        alloc_if(magma_on),
     )
 end
 

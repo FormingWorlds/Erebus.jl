@@ -341,4 +341,132 @@ using Erebus.Simulation
         )
         @test count(>(1.0e10), (total_atm_esc_O,)) >= 1
     end
+
+    @testset "Magma Segregation and Pore-Fluid Exsolution Multi-Iteration Conservation" begin
+        cfg_base = load_config(
+            normpath(
+                joinpath(@__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml")
+            ),
+        )
+        for rxn_active in (false, true)
+            cfg = Erebus.override_config(
+                cfg_base,
+                Dict(
+                    "grid.Nx" => 21,
+                    "grid.Ny" => 21,
+                    "time.n_steps" => 2,
+                    "time.dt_initial" => 0.01,
+                    "time.dt_longest" => 0.01,
+                    "solver.p2m_mode" => :tiled,
+                    "solver.hydromech_solver" => :direct,
+                    "solver.seed" => 42,
+                    "melting.active" => true,
+                    "volatiles.active" => true,
+                    "volatiles.initial_water_wtpct" => 1.0,
+                    "volatiles.initial_carbon_ppm" => 500.0,
+                    "volatiles.initial_nitrogen_ppm" => 50.0,
+                    "volatiles.initial_sulfur_ppm" => 1000.0,
+                    "volatiles.carbon_active" => true,
+                    "volatiles.sulfur_active" => true,
+                    "venting.active" => false,
+                    "retention.active" => false,
+                    "magma_degassing.active" => false,
+                    "atmosphere.active" => false,
+                    "escape.active" => false,
+                    "metal_partition.active" => false,
+                    "reaction.active" => rxn_active,
+                    "accretion.active" => false,
+                    "telescoping.active" => false,
+                    "magma_transport.active" => true,
+                    "magma_transport.exsolution_active" => true,
+                    "coreformation.percolation_active" => true,
+                    "coreformation.settling_active" => false,
+                    "coreformation.Xfe_bulk" => 0.20,
+                    "hydrothermal.active" => false,
+                    "phase_tracking.active" => false,
+                    "disk.enabled" => false,
+                    "volatile_mixture.active" => false,
+                    "refractory.active" => false,
+                    "mpi.enable" => false,
+                    "redox.active" => false,
+                    "output.mode" => :telemetry,
+                    "output.save_final" => false,
+                    "output.output_dir" => tempname(),
+                ),
+            )
+            res = simulation_loop(cfg)
+            coords = GridCoordinates(
+                cfg.grid.Nx, cfg.grid.Ny; xsize=cfg.grid.xsize, ysize=cfg.grid.ysize
+            )
+            Am = marker_area(coords)
+            rho_sil = cfg.materials.rhosolidm[1]
+            tm = res.markers.tm
+            marknum = length(tm)
+            Xfe_bulk = res.markers.Xfe_bulk
+
+            C_fin = 0.0
+            N_fin = 0.0
+            S_fin = 0.0
+            C_init = 0.0
+            N_init = 0.0
+            S_init = 0.0
+            for m in 1:marknum
+                if tm[m] < 3
+                    phi_sil = max(0.0, 1.0 - clamp(Float64(Xfe_bulk[m]), 0.0, 1.0))
+                    m_sil_2d = phi_sil * rho_sil * Am
+                    C_fin += res.markers.XCm[m] * 1.0e-6 * m_sil_2d
+                    N_fin += res.markers.XNm[m] * 1.0e-6 * m_sil_2d
+                    S_fin += res.markers.XSm[m] * 1.0e-6 * m_sil_2d
+                    C_init += cfg.volatiles.initial_carbon_ppm * 1.0e-6 * m_sil_2d
+                    N_init += cfg.volatiles.initial_nitrogen_ppm * 1.0e-6 * m_sil_2d
+                    S_init += cfg.volatiles.initial_sulfur_ppm * 1.0e-6 * m_sil_2d
+                end
+            end
+            # In pore-fluid exsolution mode (magma_degassing.active = false), C, N, S remain in the silicate matrix
+            @test isapprox(C_fin, C_init; rtol=1.0e-12)
+            @test isapprox(N_fin, N_init; rtol=1.0e-12)
+            @test isapprox(S_fin, S_init; rtol=1.0e-12)
+
+            # Verify multi-iteration idempotence and exact H2O mass conservation across _run_magma_segregation_step!
+            (st_id, coords_id, ws_id, tel_io, _) = Erebus.init_simulation(cfg)
+            tel_io !== nothing && close(tel_io)
+            st_id.markers.core.Fm .= 0.5
+            copyto!(st_id.markers.core.phinewm, st_id.markers.core.phim)
+            Erebus.snapshot_step_start_inventories!(ws_id, st_id, cfg)
+            rho_fl = cfg.materials.rhofluidm[2]
+            h2o_2d_before = 0.0
+            for m in 1:length(st_id.markers)
+                if st_id.markers.core.tm[m] < 3
+                    phi_sil = Erebus._marker_silicate_fraction(
+                        st_id.markers.groups.metal.Xfe_bulk, m
+                    )
+                    m_sil_2d = phi_sil * rho_sil * Am
+                    h2o_2d_before +=
+                        st_id.markers.groups.volatiles.XH2Om[m] * 0.01 * m_sil_2d +
+                        st_id.markers.core.phinewm[m] * rho_fl * Am
+                end
+            end
+            for iter in 1:2
+                if rxn_active
+                    copyto!(st_id.markers.core.phinewm, st_id.markers.core.phim)
+                end
+                Erebus._run_magma_segregation_step!(
+                    st_id, coords_id, cfg, ws_id, length(st_id.markers)
+                )
+            end
+            h2o_2d_after = 0.0
+            for m in 1:length(st_id.markers)
+                if st_id.markers.core.tm[m] < 3
+                    phi_sil = Erebus._marker_silicate_fraction(
+                        st_id.markers.groups.metal.Xfe_bulk, m
+                    )
+                    m_sil_2d = phi_sil * rho_sil * Am
+                    h2o_2d_after +=
+                        st_id.markers.groups.volatiles.XH2Om[m] * 0.01 * m_sil_2d +
+                        st_id.markers.core.phinewm[m] * rho_fl * Am
+                end
+            end
+            @test isapprox(h2o_2d_after, h2o_2d_before; rtol=1.0e-12)
+        end
+    end
 end

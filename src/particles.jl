@@ -560,25 +560,30 @@ function update_single_marker_volatile_exsolution!(
         retention_cfg=retention_cfg,
     )
 
-    XH2Om[m] = ex.w_H2O_diss * 100.0
-    if XCm !== nothing
-        XCm[m] = ex.C_C_diss_ppm
-    end
-    if XNm !== nothing
-        XNm[m] = ex.C_N_diss_ppm
-    end
-    if XSm !== nothing
-        XSm[m] = ex.C_S_diss_ppm
-    end
-
     dw_step = ex.w_total_ex
     if dw_step > 0.0
         rho_s = Float64(rhosolid)
         rho_f = max(Float64(rhofluid), 100.0)
-        dphi = dw_step * (rho_s / rho_f)
-        phim[m] = min(Float64(phimax), phim[m] + dphi)
+        dphi_req = dw_step * (rho_s / rho_f)
+        dphi_avail = max(0.0, Float64(phimax) - phim[m])
+        if dphi_req <= dphi_avail
+            XH2Om[m] = ex.w_H2O_diss * 100.0
+            XCm !== nothing && (XCm[m] = ex.C_C_diss_ppm)
+            XNm !== nothing && (XNm[m] = ex.C_N_diss_ppm)
+            XSm !== nothing && (XSm[m] = ex.C_S_diss_ppm)
+            phim[m] = min(Float64(phimax), phim[m] + dphi_req)
+            return dw_step
+        elseif dphi_avail > 0.0
+            f_accom = clamp(dphi_avail / dphi_req, 0.0, 1.0)
+            XH2Om[m] = (w_H2O_in - ex.w_H2O_ex * f_accom) * 100.0
+            XCm !== nothing && (XCm[m] = C_C_in - ex.w_C_ex * 1.0e6 * f_accom)
+            XNm !== nothing && (XNm[m] = C_N_in - ex.w_N_ex * 1.0e6 * f_accom)
+            XSm !== nothing && (XSm[m] = C_S_in - ex.w_S_ex * 1.0e6 * f_accom)
+            phim[m] = Float64(phimax)
+            return dw_step * f_accom
+        end
     end
-    return dw_step
+    return 0.0
 end
 
 """
@@ -1159,6 +1164,31 @@ $(SIGNATURES)
 end
 
 """
+Compute marker silicate volume/mass fraction accounting for bulk metal fraction.
+
+$(SIGNATURES)
+
+Parameters
+----------
+Xfe_bulk : Union{Nothing,AbstractVector{<:Real}}
+    Marker bulk metal fraction array or `nothing`.
+m : Int
+    Marker index.
+
+Returns
+-------
+Float64
+    Silicate fraction in `[0.0, 1.0]`.
+"""
+@inline function _marker_silicate_fraction(Xfe_bulk, m::Int)
+    return if Xfe_bulk === nothing
+        1.0
+    else
+        max(0.0, 1.0 - clamp(Float64(Xfe_bulk[m]), 0.0, 1.0))
+    end
+end
+
+"""
 Compute properties of given marker and save them to corresponding arrays.
 
 $(SIGNATURES)
@@ -1373,19 +1403,20 @@ function compute_marker_properties!(
                 F_melt > 0.0 &&
                 XH2Om !== nothing &&
                 volatiles_cfg !== nothing
+                phi_sil_ex = _marker_silicate_fraction(Xfe_bulk, m)
                 update_single_marker_volatile_exsolution!(
                     m,
                     F_melt,
                     P_val,
                     tkm[m],
                     XH2Om,
-                    XCm,
-                    XNm,
-                    XSm,
+                    nothing,
+                    nothing,
+                    nothing,
                     phim,
                     volatiles_cfg;
-                    rhosolid=rhosolidm0,
-                    rhofluid=rhofluidm0,
+                    rhosolid=rhosolidm_val[tm[m]] * phi_sil_ex,
+                    rhofluid=rhofluidm_val[tm[m]],
                     phimax=phimax_val,
                     retention_cfg=retention_cfg,
                     delta_IW=deltaIW_m !== nothing ? deltaIW_m[m] : nothing,

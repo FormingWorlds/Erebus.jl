@@ -373,6 +373,11 @@ function simulation_loop(
                         ws.Xfe_C_m_step_start,
                         ws.Xfe_N_m_step_start,
                         ws.Xfe_S_m_step_start,
+                        ws.XH2Om_step_start,
+                        ws.XCm_step_start,
+                        ws.XNm_step_start,
+                        ws.XSm_step_start,
+                        ws.phim_step_start,
                     ),
                 )
 

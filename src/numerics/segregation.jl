@@ -1127,7 +1127,10 @@ function exsolve_magma_volatiles!(
     Nx_val::Integer=32,
     Ny_val::Integer=32,
     rho_silicate::Real=3000.0,
+    rho_fluid::Real=1000.0,
+    phimax::Real=0.9999,
     g_surf::Real=1.0,
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
 )
     total_exsolved_vol = 0.0
     @inbounds for m in 1:marknum
@@ -1143,6 +1146,7 @@ function exsolve_magma_volatiles!(
                 rho_silicate * g_surf * max(rplanet - rmark, 0.0)
             end
             T_marker = tkm[m]
+            phi_sil_ex = _marker_silicate_fraction(Xfe_bulk, m)
             dw = update_single_marker_volatile_exsolution!(
                 m,
                 Fm[m],
@@ -1154,9 +1158,9 @@ function exsolve_magma_volatiles!(
                 XSm,
                 phim,
                 cfg_volatiles;
-                rhosolid=rho_silicate,
-                rhofluid=1000.0,
-                phimax=0.9999,
+                rhosolid=Float64(rho_silicate) * phi_sil_ex,
+                rhofluid=Float64(rho_fluid),
+                phimax=Float64(phimax),
             )
             total_exsolved_vol += dw
         end
@@ -1235,6 +1239,8 @@ function apply_silicate_melt_segregation!(
     Q_lat_grid::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     rho_silicate::Real=3000.0,
     rho_melt::Real=2800.0,
+    rho_fluid::Real=1000.0,
+    phimax::Real=0.9999,
     eta_silicate::Real=1.0e18,
     ETA::Union{Nothing,AbstractMatrix{Float64}}=nothing,
     T_solidus_silicate::Real=1400.0,
@@ -1250,6 +1256,7 @@ function apply_silicate_melt_segregation!(
     XNm::Union{Nothing,AbstractVector{Float64}}=nothing,
     XSm::Union{Nothing,AbstractVector{Float64}}=nothing,
     phim::Union{Nothing,AbstractVector{Float64}}=nothing,
+    Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
     cfg_volatiles::Union{Nothing,VolatilesConfig}=nothing,
     spherical_metric::Bool=true,
     w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
@@ -1528,7 +1535,10 @@ function apply_silicate_melt_segregation!(
             Nx_val=Nx_val,
             Ny_val=Ny_val,
             rho_silicate=rho_silicate,
+            rho_fluid=rho_fluid,
+            phimax=phimax,
             g_surf=g_surf,
+            Xfe_bulk=Xfe_bulk,
         )
     end
 

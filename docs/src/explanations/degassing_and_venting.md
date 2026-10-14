@@ -258,6 +258,8 @@ This formulation enforces two fundamental physical invariants:
 1. **Vacuum Retention Floor Invariant**: As $P \to 0$ (implying $S_{\text{eq}} \to 0$), the exsolved concentration satisfies $C_{\text{exs}} \to C_{\text{mob}}$, while the dissolved concentration asymptotes to $C_{\text{sol}} \to C_{\text{ret}}(T) > 0$. Unphysical total degassing of cold crustal planetesimal rocks is strictly prevented.
 2. **Sub-Floor Invariance**: When $C_{\text{bulk}} \le C_{\text{ret}}(T)$, mobile volatile concentration $C_{\text{mob}} = 0$, yielding $C_{\text{sol}} = C_{\text{bulk}}$ and $C_{\text{exs}} = 0$ identically, regardless of the local ambient pressure.
 
+When marker decompression exsolution feeds directly into the aqueous Darcy pore-fluid reservoir (`magma_degassing.active = false`), only water ($\text{H}_2\text{O}$) transfers into marker porosity $\phi_m$, whereas carbon, nitrogen, and sulfur remain in the silicate matrix until extracted by magma ocean degassing or surface venting. For metal-bearing markers, the solid silicate density is weighted by the silicate volume fraction $\phi_{\text{sil}, m} = 1 - X_{\text{Fe,bulk}}[m]$. If the requested porosity increment $\Delta\phi_{\text{req}} = \Delta w_{\text{H}_2\text{O}} (\rho_{\text{sil}, m} / \rho_f)$ exceeds the available pore capacity $\Delta\phi_{\text{avail}} = \max(0, \phi_{\max} - \phi_m)$, the exsolved fraction scales by $f_{\text{accom}} = \Delta\phi_{\text{avail}} / \Delta\phi_{\text{req}}$ so that clamping at $\phi_{\max}$ retains unaccommodated volatiles in the solid matrix and conserves mass.
+
 ### 3. Low-Temperature Hydrothermal Venting and Mobile Volatile Drainage
 
 During early planetesimal evolution, fluid release through porous Darcy flow and hydrofracture networks vents fluids into space or the surrounding nebula. In `Erebus.jl`, when surface venting is active ($S_{\text{vent}} > 0$) on marker particles, mobile dissolved volatiles drain at a rate proportional to the local venting volumetric sink rate:
@@ -346,19 +348,19 @@ The equilibrium partitioning solver evaluates volatile solubility at the mass-we
 
 $$T_{\text{melt,mean}} = \frac{\sum_m T_m m_{\text{melt}, m}}{\sum_m m_{\text{melt}, m}}$$
 
-where $m_{\text{melt}, m} = m_m F_m[m]$ is the melt mass of marker $m$. If the total melt mass or temperature sum is non-positive, the solver uses a defensive reference temperature of $1500.0\text{ K}$.
+where $m_{\text{melt}, m} = m_{\text{sil}, m} F_m[m]$ is the silicate melt mass of marker $m$, with $m_{\text{sil}, m} = \rho_{\text{sil}} (1 - X_{\text{Fe,bulk}}[m]) V_m$. If the total melt mass or temperature sum is non-positive, the solver uses a defensive reference temperature of $1500.0\text{ K}$.
 
 ### 3. Melt-Scaled Retained Volatile Concentrations
 
-The equilibrium degassing solver determines the equilibrium volatile concentration in the melt phase, $X_i^{\text{melt}}$ [$\text{wt}\%$]. Because marker arrays store bulk parcel volatile concentrations, the updated marker concentrations scale with local melt fraction:
+The equilibrium degassing solver determines the equilibrium volatile concentration in the melt phase, $X_i^{\text{melt}}$ [$\text{wt}\%$ or $\text{ppm}$]. When graphite saturation occurs ($M_{\text{graphite}} > 0$), precipitated graphite remains suspended in the magma ocean reservoir, so $X_{\text{C}}^{\text{melt}} = (M_{\text{melt,C}} + M_{\text{graphite}}) / M_{\text{melt,tot}} \times 10^6\text{ ppm}$. Because marker arrays store bulk silicate volatile concentrations, the updated marker concentrations scale with local melt fraction:
 
 $$X_i[m] = X_i^{\text{melt}} \cdot F_m[m], \quad i \in \{\text{H}_2\text{O}, \text{C}, \text{N}, \text{S}\}$$
 
 This scaling preserves mass conservation across partially molten parcels. The bulk volatile mass in marker $m$ equals:
 
-$$M_i[m] = m_m X_i[m] = m_m F_m[m] X_i^{\text{melt}} = m_{\text{melt}, m} X_i^{\text{melt}}$$
+$$M_i[m] = m_{\text{sil}, m} X_i[m] = m_{\text{sil}, m} F_m[m] X_i^{\text{melt}} = m_{\text{melt}, m} X_i^{\text{melt}}$$
 
-Solid residue retains zero excess volatile mass above its equilibrium melt fraction.
+Solid residue retains zero excess volatile mass above its equilibrium melt fraction. Equilibrium partitioning evaluates signed exchange rates $\dot{M}_{\text{degas}, k} = (M_{\text{atm,eq}, k} - M_{\text{atm,cur}, k}) / \Delta t$, accommodating both net outgassing and net ingassing or chemical re-speciation between the magma ocean and the overlying atmosphere.
 
 ### 4. Gas Routing for Inactive Atmosphere Configurations
 

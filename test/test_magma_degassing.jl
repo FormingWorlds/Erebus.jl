@@ -276,10 +276,39 @@ include("test_helpers.jl")
         @test isapprox(sol2.p_i[:CO], f_CO_max_Pa; rtol=0.02)
         @test isapprox(sol2.p_i[:CO2], f_CO2_max_Pa; rtol=1e-5)
         @test sol2.is_graphite_sat
+        @test isapprox(sol2.P_surf, sum(values(sol2.p_i)); rtol=1e-12)
+        w_C_sat_expected =
+            (
+                Erebus.compute_co_solubility_melt(
+                    sol2.p_i[:CO], sol2.P_surf; law=:armstrong2015
+                ) * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO]) +
+                Erebus.compute_ch4_solubility_melt(
+                    sol2.p_i[:CH4], sol2.P_surf; law=:ardia2013
+                ) * (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CH4]) +
+                Erebus.compute_co2_solubility_melt(sol2.p_i[:CO2], T_mo; law=:dixon1995) *
+                (Erebus.SPECIES_AMU[:C] / Erebus.SPECIES_AMU[:CO2])
+            ) * 1.0e-6
+        @test isapprox(sol2.C_diss_C_ppm, w_C_sat_expected * 1.0e6; rtol=1e-12)
+        @test isapprox(sol2.M_melt_C, M_melt * w_C_sat_expected; rtol=1e-12)
         @test isapprox(
             sol2.M_graphite, M_C_high - (sol2.M_melt_C + sol2.M_atm_C); rtol=1e-9
         )
         @test isapprox(sol2.M_melt_C + sol2.M_atm_C + sol2.M_graphite, M_C_high; rtol=1e-9)
+        sol2_picard = solve_magma_ocean_volatile_partitioning(
+            M_melt,
+            M_H1,
+            M_C_high,
+            M_N1,
+            M_S1,
+            R_p,
+            g_surf,
+            T_mo,
+            dIW_sat;
+            graphite_saturation=true,
+            max_newton_iter=1,
+        )
+        @test sol2_picard.is_graphite_sat
+        @test isapprox(sol2_picard.P_surf, sol2.P_surf; rtol=1e-8)
 
         # Test 3: Zero-nitrogen input
         sol3 = solve_magma_ocean_volatile_partitioning(
@@ -1250,5 +1279,109 @@ include("test_helpers.jl")
             0.0;
             nitrogen_law=:invalid_n_law,
         )
+    end
+
+    @testset "Equilibrium Magma Ocean Graphite Retention, Metal Weighting, and Signed Ingassing" begin
+        # 1. Signed degas_rates in evolve_coupled_atmosphere_step! (elemental and species modes)
+        atm_elem = Erebus.AtmosphereState(;
+            M_atm=Dict{Symbol,Float64}(:H2O => 5.0e14, :CO2 => 2.0e14),
+            elem=Erebus.to_element_inventory(
+                Erebus.SpeciesInventory(
+                    Dict{Symbol,Float64}(:H2O => 5.0e14, :CO2 => 2.0e14)
+                ),
+            ),
+        )
+        C_init_elem = atm_elem.elem.C
+        H_init_elem = atm_elem.elem.H
+        dt_step = 100.0
+        signed_degas = Dict{Symbol,Float64}(:H2O => 1.0e11, :CO2 => -5.0e10)
+        Erebus.evolve_coupled_atmosphere_step!(
+            atm_elem,
+            Erebus.ElementInventory(),
+            dt_step,
+            M_p,
+            R_p,
+            300.0,
+            AtmosphereConfig(active=true);
+            degas_rates=signed_degas,
+            escape_active=false,
+        )
+        @test isapprox(
+            atm_elem.elem.H, H_init_elem + 1.0e11 * dt_step * (2.0 * M_H / M_H2O); rtol=1e-9
+        )
+        @test isapprox(
+            atm_elem.elem.C, C_init_elem - 5.0e10 * dt_step * (M_C / M_CO2); rtol=1e-9
+        )
+
+        atm_sp = Erebus.AtmosphereState(;
+            M_atm=Dict{Symbol,Float64}(:H2O => 5.0e14, :CO2 => 2.0e14)
+        )
+        Erebus.evolve_coupled_atmosphere_step!(
+            atm_sp,
+            Dict{Symbol,Float64}(),
+            dt_step,
+            M_p,
+            R_p,
+            300.0,
+            AtmosphereConfig(active=true);
+            degas_rates=signed_degas,
+            escape_active=false,
+        )
+        @test isapprox(atm_sp.M_atm[:H2O], 5.0e14 + 1.0e11 * dt_step; rtol=1e-12)
+        @test isapprox(atm_sp.M_atm[:CO2], 2.0e14 - 5.0e10 * dt_step; rtol=1e-12)
+
+        # 2. Equilibrium magma ocean run with high carbon (graphite precipitation) and metal fraction
+        quick_toml = joinpath(@__DIR__, "..", "configs", "test_quick.toml")
+        cfg_base = load_config(quick_toml)
+        cfg_eq = Erebus.override_config(
+            cfg_base,
+            Dict(
+                "time.n_steps" => 1,
+                "melting.active" => true,
+                "materials.tkm0" => [1900.0, 1900.0, 200.0],
+                "volatiles.active" => true,
+                "volatiles.initial_water_wtpct" => 1.0,
+                "volatiles.initial_carbon_ppm" => 25000.0,
+                "volatiles.initial_nitrogen_ppm" => 100.0,
+                "volatiles.initial_sulfur_ppm" => 500.0,
+                "coreformation.percolation_active" => true,
+                "coreformation.Xfe_bulk" => 0.20,
+                "magma_degassing.active" => true,
+                "magma_degassing.mode" => :equilibrium,
+                "magma_degassing.F_melt_threshold" => 0.10,
+                "venting.active" => false,
+                "escape.active" => false,
+                "atmosphere.active" => true,
+                "output.mode" => :telemetry,
+                "output.save_final" => false,
+                "output.output_dir" => tempname(),
+            ),
+        )
+        res_eq = simulation_loop(cfg_eq)
+        coords_eq = GridCoordinates(
+            cfg_eq.grid.Nx, cfg_eq.grid.Ny; xsize=cfg_eq.grid.xsize, ysize=cfg_eq.grid.ysize
+        )
+        Am_eq = marker_area(coords_eq)
+        rho_sil_eq = cfg_eq.materials.rhosolidm[1]
+        xc_eq = cfg_eq.geometry.xcenter
+        yc_eq = cfg_eq.geometry.ycenter
+        dm_degas_c = sum(
+            r.dM3 for r in res_eq.transfers if r.channel == :degassing && r.element == :C;
+            init=0.0,
+        )
+        @test isapprox(dm_degas_c, res_eq.atm.elem.C; rtol=1.0e-10)
+        C_markers_3d_fin = 0.0
+        C_markers_3d_init = 0.0
+        for m in 1:length(res_eq.markers.tm)
+            if res_eq.markers.tm[m] < 3
+                phi_sil = 1.0 - clamp(Float64(res_eq.markers.Xfe_bulk[m]), 0.0, 1.0)
+                w3d =
+                    2.0 * hypot(res_eq.markers.xm[m] - xc_eq, res_eq.markers.ym[m] - yc_eq)
+                m_sil_3d = rho_sil_eq * phi_sil * Am_eq * w3d
+                C_markers_3d_fin += res_eq.markers.XCm[m] * 1.0e-6 * m_sil_3d
+                C_markers_3d_init += cfg_eq.volatiles.initial_carbon_ppm * 1.0e-6 * m_sil_3d
+            end
+        end
+        @test isapprox(C_markers_3d_fin + res_eq.atm.elem.C, C_markers_3d_init; rtol=2.0e-5)
     end
 end

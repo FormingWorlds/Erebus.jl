@@ -825,6 +825,10 @@ function interpolate_markers_to_grid!(
         end
     end
 
+    if cfg.volatiles.active && !cfg.magma_degassing.active
+        copyto!(core.phinewm, core.phim)
+    end
+
     # Normalize basic node properties
     compute_basic_node_properties!(
         ETA0SUM,

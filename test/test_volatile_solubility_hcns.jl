@@ -465,6 +465,116 @@ using JLD2
             @test isapprox(A_S / A_tot, 0.02; rtol=1e-10)
         end
 
+        # Graphite-saturated speciation: Dalton's law and H:N:S atomic ratio conservation
+        p_sat_test = 1.0e8
+        spec_gsat = solve_chnos_speciation(
+            p_sat_test,
+            1200.0,
+            -2.0;
+            z_H=0.50,
+            z_C=0.40,
+            z_N=0.05,
+            z_S=0.05,
+            graphite_saturation=true,
+        )
+        sum_p_gsat =
+            spec_gsat.p_H2_Pa +
+            spec_gsat.p_H2O_Pa +
+            spec_gsat.p_CO_Pa +
+            spec_gsat.p_CO2_Pa +
+            spec_gsat.p_CH4_Pa +
+            spec_gsat.p_N2_Pa +
+            spec_gsat.p_NH3_Pa +
+            spec_gsat.p_H2S_Pa +
+            spec_gsat.p_S2_Pa +
+            spec_gsat.p_SO2_Pa
+        @test isapprox(sum_p_gsat, p_sat_test; rtol=1e-10)
+        A_H_gsat =
+            2.0 * (spec_gsat.p_H2_Pa + spec_gsat.p_H2O_Pa) +
+            4.0 * spec_gsat.p_CH4_Pa +
+            3.0 * spec_gsat.p_NH3_Pa +
+            2.0 * spec_gsat.p_H2S_Pa
+        A_N_gsat = 2.0 * spec_gsat.p_N2_Pa + spec_gsat.p_NH3_Pa
+        A_S_gsat = 2.0 * spec_gsat.p_S2_Pa + spec_gsat.p_H2S_Pa + spec_gsat.p_SO2_Pa
+        A_HNS_gsat = A_H_gsat + A_N_gsat + A_S_gsat
+        @test isapprox(A_H_gsat / A_HNS_gsat, 0.50 / 0.60; rtol=1e-10)
+        @test isapprox(A_N_gsat / A_HNS_gsat, 0.05 / 0.60; rtol=1e-10)
+        @test isapprox(A_S_gsat / A_HNS_gsat, 0.05 / 0.60; rtol=1e-10)
+
+        # Graphite-saturated edge case: hydrogen-free (z_H = 0, z_N > 0, z_S > 0)
+        spec_gsat_noH = solve_chnos_speciation(
+            p_sat_test,
+            1200.0,
+            -2.0;
+            z_H=0.0,
+            z_C=0.80,
+            z_N=0.10,
+            z_S=0.10,
+            graphite_saturation=true,
+        )
+        @test iszero(spec_gsat_noH.p_H2_Pa)
+        @test iszero(spec_gsat_noH.p_H2O_Pa)
+        @test iszero(spec_gsat_noH.p_CH4_Pa)
+        @test isapprox(
+            spec_gsat_noH.p_CO_Pa +
+            spec_gsat_noH.p_CO2_Pa +
+            spec_gsat_noH.p_N2_Pa +
+            spec_gsat_noH.p_S2_Pa +
+            spec_gsat_noH.p_SO2_Pa,
+            p_sat_test;
+            rtol=1e-10,
+        )
+        @test isapprox(
+            (2.0 * spec_gsat_noH.p_N2_Pa) /
+            (2.0 * spec_gsat_noH.p_S2_Pa + spec_gsat_noH.p_SO2_Pa),
+            1.0;
+            rtol=1e-10,
+        )
+
+        # Graphite-saturated edge case: C-H-O only (z_H > 0, z_N = 0, z_S = 0)
+        spec_gsat_HC = solve_chnos_speciation(
+            p_sat_test,
+            1200.0,
+            -2.0;
+            z_H=0.50,
+            z_C=0.50,
+            z_N=0.0,
+            z_S=0.0,
+            graphite_saturation=true,
+        )
+        @test iszero(spec_gsat_HC.p_N2_Pa)
+        @test iszero(spec_gsat_HC.p_NH3_Pa)
+        @test iszero(spec_gsat_HC.p_H2S_Pa)
+        @test iszero(spec_gsat_HC.p_S2_Pa)
+        @test iszero(spec_gsat_HC.p_SO2_Pa)
+        @test isapprox(
+            spec_gsat_HC.p_CO_Pa +
+            spec_gsat_HC.p_CO2_Pa +
+            spec_gsat_HC.p_H2_Pa +
+            spec_gsat_HC.p_H2O_Pa +
+            spec_gsat_HC.p_CH4_Pa,
+            p_sat_test;
+            rtol=1e-10,
+        )
+
+        # Graphite-saturated edge case: pure carbon (z_HNS = 0) and dp_rem <= 0
+        spec_gsat_pureC = solve_chnos_speciation(
+            p_sat_test,
+            1200.0,
+            -2.0;
+            z_H=0.0,
+            z_C=1.0,
+            z_N=0.0,
+            z_S=0.0,
+            graphite_saturation=true,
+        )
+        @test iszero(spec_gsat_pureC.p_N2_Pa)
+        @test iszero(spec_gsat_pureC.p_S2_Pa)
+        res_dp_zero = Erebus._solve_graphite_saturated_hns(
+            10.0, 1200.0, 6.0, 5.0, 1.0, 1.0, 0.5, 0.25, 0.25
+        )
+        @test all(iszero, res_dp_zero)
+
         # Low temperature stability (no NaN, all non-negative and finite)
         spec_cold5 = solve_chnos_speciation(1.0e7, 5.0, 0.0)
         spec_cold50 = solve_chnos_speciation(1.0e7, 50.0, 0.0)
@@ -753,6 +863,150 @@ using JLD2
         )
         @test iszero(Fm_m[2])
         @test XH2O_m[2] ≈ 3.0 rtol=1e-12
+
+        # 3b. Pore-fluid capacity limiting (phimax clamping conservation) and Xfe_bulk weighting
+        XH2O_cap = [5.0]
+        XC_cap = [1000.0]
+        XN_cap = [100.0]
+        XS_cap = [1500.0]
+        phi_cap = [0.98]
+        phimax_test = 0.99
+        dw_cap = update_single_marker_volatile_exsolution!(
+            1,
+            0.8,
+            1.0e6,
+            1600.0,
+            XH2O_cap,
+            XC_cap,
+            XN_cap,
+            XS_cap,
+            phi_cap,
+            cfg_vol;
+            rhosolid=3000.0,
+            rhofluid=1000.0,
+            phimax=phimax_test,
+        )
+        @test isapprox(dw_cap, (0.99 - 0.98) * (1000.0 / 3000.0); rtol=1e-12)
+        @test isapprox(phi_cap[1], phimax_test; rtol=1e-12)
+        # When already at phimax, dphi_avail == 0 and zero additional mass exsolves
+        XH2O_before_at_max = XH2O_cap[1]
+        dw_at_max = update_single_marker_volatile_exsolution!(
+            1,
+            0.8,
+            1.0e6,
+            1600.0,
+            XH2O_cap,
+            XC_cap,
+            XN_cap,
+            XS_cap,
+            phi_cap,
+            cfg_vol;
+            rhosolid=3000.0,
+            rhofluid=1000.0,
+            phimax=phimax_test,
+        )
+        @test iszero(dw_at_max)
+        @test isapprox(XH2O_cap[1], XH2O_before_at_max; rtol=1e-12)
+
+        # Water-only exsolution at phimax limit conserves exact water mass
+        XH2O_w = [5.0]
+        phi_w = [0.98]
+        dw_w = update_single_marker_volatile_exsolution!(
+            1,
+            0.8,
+            1.0e6,
+            1600.0,
+            XH2O_w,
+            nothing,
+            nothing,
+            nothing,
+            phi_w,
+            VolatilesConfig(active=true, carbon_active=false, sulfur_active=false);
+            rhosolid=3000.0,
+            rhofluid=1000.0,
+            phimax=0.99,
+        )
+        @test isapprox(phi_w[1], 0.99; rtol=1e-12)
+        @test isapprox(
+            (5.0 - XH2O_w[1]) * 0.01 * 3000.0, (0.99 - 0.98) * 1000.0; rtol=1e-12
+        )
+        @test isapprox(dw_w * 3000.0, (0.99 - 0.98) * 1000.0; rtol=1e-12)
+
+        # compute_marker_properties! with Xfe_bulk weights silicate density and leaves C, N, S intact
+        tm[3] = 1
+        tkm_m[3] = 1800.0
+        pfm0_m[3] = 1.0e7
+        phim_m[3] = 0.01
+        XH2O_m[3] = 3.0
+        XC_m[3] = 750.0
+        XN_m[3] = 80.0
+        XS_m[3] = 1200.0
+        Xfe_bulk_m = fill(0.25, 10)
+        compute_marker_properties!(
+            3,
+            tm,
+            tkm_m,
+            rhototalm,
+            rhocptotalm,
+            etatotalm,
+            hrtotalm,
+            ktotalm,
+            tkm_rhocptotalm,
+            etafluidcur_inv_kphim,
+            hrsolidm_dummy,
+            hrfluidm_dummy,
+            phim_m,
+            XWsolidm0,
+            9,
+            rhofluidcur;
+            pm=pfm0_m,
+            Fm=Fm_m,
+            melting_active=true,
+            T_solidus_val=1400.0,
+            T_liquidus_val=2000.0,
+            volatiles_active=true,
+            volatiles_cfg=cfg_vol,
+            XH2Om=XH2O_m,
+            XCm=XC_m,
+            XNm=XN_m,
+            XSm=XS_m,
+            Xfe_bulk=Xfe_bulk_m,
+        )
+        @test isapprox(
+            (3.0 - XH2O_m[3]) * 0.01 * (3300.0 * 0.75),
+            (phim_m[3] - 0.01) * 1000.0;
+            rtol=1e-12,
+        )
+        @test isapprox(XC_m[3], 750.0; rtol=1e-12)
+        @test isapprox(XN_m[3], 80.0; rtol=1e-12)
+        @test isapprox(XS_m[3], 1200.0; rtol=1e-12)
+
+        # exsolve_magma_volatiles! with Xfe_bulk and phimax
+        XH2O_seg = [3.0]
+        phi_seg = [0.02]
+        Erebus.exsolve_magma_volatiles!(
+            [0.0],
+            [0.0],
+            [1],
+            [1700.0],
+            [0.5],
+            1,
+            XH2O_seg,
+            nothing,
+            nothing,
+            nothing,
+            phi_seg,
+            cfg_vol;
+            rho_silicate=3000.0,
+            rho_fluid=1000.0,
+            phimax=0.9999,
+            Xfe_bulk=[0.20],
+        )
+        @test isapprox(
+            (3.0 - XH2O_seg[1]) * 0.01 * (3000.0 * 0.80),
+            (phi_seg[1] - 0.02) * 1000.0;
+            rtol=1e-12,
+        )
 
         # 4. Multi-species atmospheric evolution & differential loss
         M_atm_species = Dict{Symbol,Float64}(:H2 => 1.0e12, :CO2 => 1.0e12)
