@@ -264,17 +264,18 @@ Resolving simultaneous Stokes matrix flow, aqueous fluid Darcy flow, and silicat
 
 $$\frac{\partial (\rho_m F_m)}{\partial t} + \nabla \cdot \left(\rho_m F_m \mathbf{v}_{\text{seg}}\right) = -\dot{M}_{\text{cryst}}$$
 
-To preserve mass to machine precision ($< 10^{-12}$ relative drift) and maintain numerical monotonicity:
+To preserve 3D spherical volume-weighted melt mass $\sum_m F_m w_{3\text{D},m}$ to machine precision ($< 10^{-12}$ relative drift) and maintain numerical monotonicity:
+- Each marker has a spherical shell weight $w_{3\text{D},m} = 2 r_m$ when `spherical_metric = true`, with cell weight $W_{i,j} = \sum_{m \in (i, j)} w_{3\text{D},m}$ and cell melt inventory $M_{\text{melt},i,j} = \sum_{m \in (i, j)} F_m w_{3\text{D},m}$.
 - Explicit subcycling subdivides each global timestep $\Delta t$ into $N_{\text{sub}}$ subcycles constrained by the Courant-Friedrichs-Lewy (CFL) limit:
 
   $$\Delta t_{\text{sub}} \le C_{\text{cfl}} \min\left( \frac{\Delta x}{|v_{x,\text{seg}}|}, \frac{\Delta y}{|v_{y,\text{seg}}|} \right)$$
 
-- Multidimensional donor-receiver flux limiters clamp outgoing fluxes so no donor cell drains below zero or exceeds the physical packing ceiling $\phi_{\text{pack}}$.
-- Subcycle flux increments are accumulated on grid faces and redistributed proportionally among Lagrangian markers within each cell.
+- Multidimensional donor-receiver flux limiters clamp outgoing fluxes so no donor cell drains below $\phi_{\text{residual}} W_{\text{donor}}$ or exceeds the physical packing ceiling $\phi_{\text{pack}} W_{\text{recv}}$.
+- Subcycle flux increments are accumulated across staggered velocity faces and redistributed proportionally to $w_{3\text{D},m}$ among Lagrangian markers within each cell.
 
 ### 3. Energetics and Phase Coupling
 
-Silicate melt migration couples to the thermal energy equation through two mechanisms:
+Silicate melt migration couples to the thermal energy equation through three mechanisms accumulated onto staggered pressure nodes $(i+1, j+1)$:
 
 1. **Gravitational Energy Dissipation:**
    Segregation releases gravitational potential energy as heat through viscous shear dissipation:
@@ -283,23 +284,26 @@ Silicate melt migration couples to the thermal energy equation through two mecha
 
    This volumetric heating rate is accumulated into the Eulerian thermal source grid $Q_{\text{seg}}$ and passed to the implicit energy solver.
 
-2. **Subsolidus Crystallization Latent Heat:**
-   When buoyant melt migrates into cooler regions where temperature drops below the local silicate solidus or thermodynamic equilibrium melt fraction ($T < T_{\text{sol}}$), the excess liquid melt crystallizes.
+2. **Advective Sensible Heat Transport:**
+   When `sensible_heat_transport = true`, ascending melt transfers sensible enthalpy $\Delta E_{\text{sens}} = \Delta m_{\text{melt}} c_{p,\text{melt}} (T_{\text{donor}} - T_{\text{recv}})$ across cell faces, crediting $+\Delta Q_{\text{sens}}$ to the receiver cell and $-\Delta Q_{\text{sens}}$ to the donor cell so net sensible energy is conserved.
+
+3. **Subsolidus Crystallization Latent Heat:**
+   When buoyant melt migrates into cooler regions where temperature drops below the local silicate solidus or thermodynamic equilibrium melt fraction ($T < T_{\text{sol}}$), excess liquid melt crystallizes up to the local thermal capacity ceiling $\Delta T_{\max} = T_{\text{liq}} - T_{\text{cell}}$.
    Crystallization releases latent heat of fusion $L_m$:
 
    $$\dot{Q}_{\text{lat}} = \rho_m \dot{F}_{\text{freeze}} L_m$$
 
-   Latent heat release buffers local temperatures, preventing discontinuous quenching and maintaining thermodynamic equilibrium.
+   During subcycling, the local cell temperature $T_{\text{cell}}$ is updated dynamically by the latent temperature rise $\Delta T_{\text{lat}} = \dot{Q}_{\text{lat}} \Delta t / (\rho_s c_{p,s})$ so cumulative crystallization across subcycles never exceeds the sensible heat deficit to reach the liquidus.
 
-### 4. Mantle Depletion Tracking
+### 4. Mantle Depletion and Enrichment Tracking
 
-When melt segregates outward, the residual solid mantle residue becomes depleted in basaltic components.
-`Erebus.jl` tracks cumulative melt extraction on each Lagrangian marker $m$ through the depletion state variable $F_{\text{extract}}[m]$.
-The net available melt fraction is bounded by the thermodynamic equilibrium melt fraction:
+When melt segregates outward, the residual solid mantle becomes depleted in melt while shallower receiver regions become enriched.
+`Erebus.jl` tracks cumulative melt extraction and arrival on each Lagrangian marker $m$ through the signed state variable $F_{\text{extract}}[m] \in [-1, 1]$ (positive for melt-depleted donor markers, negative for melt-enriched receiver markers).
+The net local melt fraction is bounded by $[0.0, 1.0]$:
 
-$$F_m[m] = \max\left(0.0, F_{\text{eq}}(T, P) - F_{\text{extract}}[m]\right)$$
+$$F_m[m] = \text{clamp}\left(F_{\text{eq}}(T, P) - F_{\text{extract}}[m], \, 0.0, \, 1.0\right)$$
 
-This tracking prevents remelting of already depleted residues under subsequent isobaric reheating.
+This bidirectional tracking preserves segregated melt on receiver markers across subsequent thermal and mechanical steps while preventing remelting of depleted donor residues at constant temperature.
 
 ---
 
@@ -334,11 +338,10 @@ Melting and turbulence parameters are set in the `[melting]` table:
 ### Two-Phase Magma Transport Parameters (`[magma_transport]`)
 
 Two-phase buoyant melt segregation is configured in the `[magma_transport]` table:
-- `segregation_active`: Activates buoyant melt segregation advection.
-- `percolation_active`: Enables porous Darcy melt percolation for $F_m \le F_{\text{perc\_end}}$.
-- `settling_active`: Enables hindered Stokes crystal settling for $F_m \ge F_{\text{settle\_start}}$.
-- `k_ref`: Reference matrix permeability ($1.0\times 10^{-9}\text{ m}^2$).
+- `active`: Activates buoyant silicate melt segregation advection.
+- `F_perc_end` and `F_settle_start`: Melt fraction bounds separating Darcy percolation and hindered Stokes crystal settling ($[0.35, 0.45]$).
+- `k_melt_ref`: Reference matrix permeability ($1.0\times 10^{-11}\text{ m}^2$).
 - `phi_residual`: Residual melt fraction retained in pores ($0.01$).
-- `cfl_segregation`: Sub-cycling CFL Courant number ($0.5$).
+- `cfl_melt`: Sub-cycling CFL Courant number ($0.5$).
 
 For complete schema details, default values, and data types, see the [Configuration Schema Reference](../reference/config_schema.md#melting).

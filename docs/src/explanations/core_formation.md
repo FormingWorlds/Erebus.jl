@@ -172,11 +172,12 @@ $$\Delta t_{\text{cfl}} = \text{CFL} \cdot \frac{\min(\Delta x, \Delta y)}{\max 
 $$N_{\text{sub}} = \min\left(\left\lceil \frac{\Delta t}{\Delta t_{\text{cfl}}} \right\rceil, N_{\text{max}}\right), \quad \Delta t_{\text{sub}} = \frac{\Delta t}{N_{\text{sub}}}$$
 
 During each subcycle:
-1. Unscaled requested fluxes across cell faces are computed using donor-cell upwinding based on the gravity direction.
-2. Multi-dimensional flux limiters prevent donor cells from evacuating below residual fraction $\phi_{\text{res}}$ and receiver cells from overfilling beyond maximum packing $\phi_{\text{pack}}$.
-3. The cell metal mass is updated conservatively.
-4. Net cell mass increments are distributed back to Lagrangian markers within each cell.
-5. Floating-point roundoff conservation correction maintains total metal mass conservation to machine precision ($< 10^{-12}$).
+1. Each interior marker $m$ has a 3D spherical shell weight $w_{3\text{D},m} = 2 r_m$ when `spherical_metric = true` (or $w_{3\text{D},m} = 1$ in 2D Cartesian slab mode), and each cell $(i, j)$ accumulates total weight $W_{i,j} = \sum_{m \in (i, j)} w_{3\text{D},m}$ and weighted metal inventory $M_{\text{fe},i,j} = \sum_{m \in (i, j)} \phi_m w_{3\text{D},m}$.
+2. Unscaled requested fluxes across east-west (`vx`) and north-south (`vy`) staggered cell faces are computed using donor-cell upwinding scaled by the donor cell 3D shell weight $W_{\text{donor}}$ and face-aligned gravitational acceleration.
+3. Multi-dimensional flux limiters prevent donor cells from evacuating below residual fraction $\phi_{\text{res}} W_{\text{donor}}$ and receiver cells from overfilling beyond maximum packing $\phi_{\text{pack}} W_{\text{recv}}$.
+4. The cell metal inventory and co-transported siderophile volatile inventories are updated conservatively.
+5. Net cell metal increments are distributed back to Lagrangian markers within each cell proportionally to $w_{3\text{D},m}$, respecting marker capacity limits $[0, \phi_{\text{pack}}]$.
+6. Floating-point roundoff conservation correction maintains total 3D volume-weighted metal mass conservation $\sum_m X_{\text{fe,bulk},m} w_{3\text{D},m}$ to machine precision ($< 10^{-12}$).
 
 ---
 
@@ -186,7 +187,7 @@ Core formation releases gravitational potential energy as heavy iron drops towar
 
 $$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
 
-This volumetric dissipation acts as a thermal source in the planetary energy balance:
+Cell-averaged dissipation is accumulated onto the corresponding staggered pressure node $(i+1, j+1)$ of `Q_seg_grid` and acts as a thermal source in the planetary energy balance:
 
 $$\rho C_p \frac{DT}{dt} = \nabla \cdot (K \nabla T) + H_{\text{radio}} + Q_{\text{seg}} + Q_{\text{shear}}$$
 

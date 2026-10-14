@@ -141,6 +141,8 @@ function solve_thermal_energy!(
             Xfe_C_m=metal.Xfe_C_m,
             Xfe_N_m=metal.Xfe_N_m,
             Xfe_S_m=metal.Xfe_S_m,
+            spherical_metric=cfg.geometry.spherical_metric,
+            w3d_m=core.w3d_m,
             workspace=ws.metal_segregation,
         )
         state.accumulators.max_v_seg_prev = seg_res.max_v_seg
@@ -236,6 +238,8 @@ function solve_thermal_energy!(
             XSm=cfg.volatiles.active ? XSm : nothing,
             phim=core.phim,
             cfg_volatiles=cfg.volatiles,
+            spherical_metric=cfg.geometry.spherical_metric,
+            w3d_m=core.w3d_m,
             workspace=ws.magma_segregation,
         )
     end
