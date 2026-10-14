@@ -199,21 +199,42 @@ function snapshot_step_start_inventories!(
 
     if cfg.magma_transport.active
         core = state.markers.core
-        if ws.Fm_step_start !== nothing
-            if length(ws.Fm_step_start) != length(core.Fm)
-                resize!(ws.Fm_step_start, length(core.Fm))
-            end
-            copyto!(ws.Fm_step_start, core.Fm)
-        end
-        if haskey(state.markers.groups, :volatiles) && ws.F_extract_m_step_start !== nothing
+        _sync_step_start_vec!(ws.Fm_step_start, core.Fm)
+        _sync_step_start_vec!(ws.phim_step_start, core.phim)
+        if haskey(state.markers.groups, :volatiles)
             vols = state.markers.groups.volatiles
-            if length(ws.F_extract_m_step_start) != length(vols.F_extract_m)
-                resize!(ws.F_extract_m_step_start, length(vols.F_extract_m))
-            end
-            copyto!(ws.F_extract_m_step_start, vols.F_extract_m)
+            _sync_step_start_vec!(ws.F_extract_m_step_start, vols.F_extract_m)
+            _sync_step_start_vec!(ws.XH2Om_step_start, vols.XH2Om)
+            _sync_step_start_vec!(ws.XCm_step_start, vols.XCm)
+            _sync_step_start_vec!(ws.XNm_step_start, vols.XNm)
+            _sync_step_start_vec!(ws.XSm_step_start, vols.XSm)
         end
     end
 
+    return nothing
+end
+
+"""
+Copy step-start vector `src` into `dst`, resizing `dst` if needed.
+
+$(SIGNATURES)
+
+Parameters
+----------
+dst : Union{Nothing,AbstractVector}
+    Destination vector or `nothing`.
+src : Union{Nothing,AbstractVector}
+    Source vector or `nothing`.
+
+Returns
+-------
+Nothing
+    Mutates `dst` in place when both vectors are non-nothing.
+"""
+@inline function _sync_step_start_vec!(dst, src)
+    (dst === nothing || src === nothing) && return nothing
+    length(dst) != length(src) && resize!(dst, length(src))
+    copyto!(dst, src)
     return nothing
 end
 

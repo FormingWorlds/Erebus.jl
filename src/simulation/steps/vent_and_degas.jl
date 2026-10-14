@@ -310,6 +310,7 @@ function _degas_magma_ocean_equilibrium!(
     XCm = has_vols ? markers.groups.volatiles.XCm : nothing
     XNm = has_vols ? markers.groups.volatiles.XNm : nothing
     XSm = has_vols ? markers.groups.volatiles.XSm : nothing
+    Xfe_bulk = haskey(markers.groups, :metal) ? markers.groups.metal.Xfe_bulk : nothing
 
     (XH2Om === nothing || Fm === nothing) && return nothing
 
@@ -334,7 +335,8 @@ function _degas_magma_ocean_equilibrium!(
             Fm[m] >= f_thresh_mo &&
             Fm[m] > 0.0
             w3d = w3d_m[m]
-            m_marker_3d = cfg.materials.rhosolidm[1] * v_m * w3d
+            phi_sil = _marker_silicate_fraction(Xfe_bulk, m)
+            m_marker_3d = cfg.materials.rhosolidm[1] * phi_sil * v_m * w3d
             m_melt_m = Fm[m] * m_marker_3d
             m_melt_tot += m_melt_m
             sum_t_melt += tkm[m] * m_melt_m
@@ -389,9 +391,9 @@ function _degas_magma_ocean_equilibrium!(
             nitrogen_law=cfg.magma_degassing.nitrogen_law,
         )
 
-        # Deplete molten markers according to residual melt volatile concentration
+        # Retain dissolved volatiles and precipitated graphite in molten markers
         new_XH2O_wtpct = (sol_eq.M_melt_H * (M_H2O / (2.0 * M_H)) / m_melt_tot) * 100.0
-        new_XC_ppm = (sol_eq.M_melt_C / m_melt_tot) * 1.0e6
+        new_XC_ppm = ((sol_eq.M_melt_C + sol_eq.M_graphite) / m_melt_tot) * 1.0e6
         new_XN_ppm = (sol_eq.M_melt_N / m_melt_tot) * 1.0e6
         new_XS_ppm = (sol_eq.M_melt_S / m_melt_tot) * 1.0e6
 
@@ -415,7 +417,8 @@ function _degas_magma_ocean_equilibrium!(
                 XCm[m] = new_XC_bulk
                 XNm[m] = new_XN_bulk
                 XSm[m] = new_XS_bulk
-                m_rock_2d = cfg.materials.rhosolidm[1] * v_m
+                phi_sil = _marker_silicate_fraction(Xfe_bulk, m)
+                m_rock_2d = cfg.materials.rhosolidm[1] * phi_sil * v_m
                 w3d = w3d_m[m]
                 if old_XH2O != new_XH2O_bulk
                     dm_h2o_2d = (old_XH2O - new_XH2O_bulk) * 0.01 * m_rock_2d
@@ -488,7 +491,7 @@ function _degas_magma_ocean_equilibrium!(
         rates = Dict{Symbol,Float64}()
         for (sp, m_atm_eq) in sol_eq.M_atm_i
             m_atm_cur = get(atm_state.M_atm, sp, 0.0)
-            rates[sp] = max(0.0, m_atm_eq - m_atm_cur) / dt
+            rates[sp] = (m_atm_eq - m_atm_cur) / dt
         end
         return rates
     else

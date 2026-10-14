@@ -26,6 +26,7 @@ function solve_thermomechanical_iterations!(
     for titer in 1:max_iters
         if cfg.reaction.active
             core = state.markers.core
+            copyto!(core.phinewm, core.phim)
             (
                 ETA0SUM,
                 ETASUM,

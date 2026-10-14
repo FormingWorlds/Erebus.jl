@@ -312,7 +312,11 @@ function solve_magma_ocean_volatile_partitioning(
 
         p_H2 = p_H2O / r_H
 
-        p_CO2 = p_CO2_raw
+        p_CO2 = if graphite_saturation && carbon_active && mC > 0.0
+            min(p_CO2_raw, f_CO2_max_Pa)
+        else
+            p_CO2_raw
+        end
         p_CO = p_CO2 / r_CO2
         is_graphite_sat = false
 
@@ -491,15 +495,9 @@ function solve_magma_ocean_volatile_partitioning(
 
         M_graphite = 0.0
         if graphite_saturation && carbon_active && mC > 0.0
-            if (p_CO >= f_CO_max_Pa * 0.999999 || p_CO2 >= f_CO2_max_Pa * 0.999999)
-                if (M_melt_C + M_atm_C) < mC
-                    is_graphite_sat = true
-                    p_CO2 = f_CO2_max_Pa
-                    p_CO = f_CO2_max_Pa / r_CO2
-                    p_dict[:CO2] = p_CO2
-                    p_dict[:CO] = p_CO
-                    M_graphite = max(0.0, mC - (M_melt_C + M_atm_C))
-                end
+            if (p_CO2_raw >= f_CO2_max_Pa * 0.999999) && ((M_melt_C + M_atm_C) < mC)
+                is_graphite_sat = true
+                M_graphite = max(0.0, mC - (M_melt_C + M_atm_C))
             end
         end
 
@@ -509,7 +507,11 @@ function solve_magma_ocean_volatile_partitioning(
         M_calc_S = M_melt_S + M_atm_S
 
         R_H = mH > 0.0 ? M_calc_H - mH : 0.0
-        R_C = mC > 0.0 ? M_calc_C - mC : 0.0
+        R_C = if is_graphite_sat
+            mC * (u_vec[2] - log(max(f_CO2_max_Pa, 1.0e-30)))
+        else
+            mC > 0.0 ? M_calc_C - mC : 0.0
+        end
         R_N = mN > 0.0 ? M_calc_N - mN : 0.0
         R_S = mS > 0.0 ? M_calc_S - mS : 0.0
 
@@ -580,13 +582,7 @@ function solve_magma_ocean_volatile_partitioning(
 
     if !converged
         for iter in 1:max_newton_iter
-            curr_active = Int[]
-            for idx in active_indices
-                if idx == 2 && state.is_graphite_sat
-                    continue
-                end
-                push!(curr_active, idx)
-            end
+            curr_active = active_indices
 
             n_act = length(curr_active)
             if n_act == 0
@@ -677,6 +673,7 @@ function solve_magma_ocean_volatile_partitioning(
             curr_active = Int[]
             for idx in active_indices
                 if idx == 2 && state.is_graphite_sat
+                    u[2] = log(max(f_CO2_max_Pa, 1.0e-30))
                     continue
                 end
                 push!(curr_active, idx)

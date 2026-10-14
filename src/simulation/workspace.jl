@@ -259,6 +259,11 @@ mutable struct SimulationWorkspaces
     Xfe_C_m_step_start::Union{Nothing,Vector{Float64}}
     Xfe_N_m_step_start::Union{Nothing,Vector{Float64}}
     Xfe_S_m_step_start::Union{Nothing,Vector{Float64}}
+    XH2Om_step_start::Union{Nothing,Vector{Float64}}
+    XCm_step_start::Union{Nothing,Vector{Float64}}
+    XNm_step_start::Union{Nothing,Vector{Float64}}
+    XSm_step_start::Union{Nothing,Vector{Float64}}
+    phim_step_start::Union{Nothing,Vector{Float64}}
 end
 
 """

@@ -1740,24 +1740,31 @@ function evolve_coupled_atmosphere_step!(
         end
         atm_state.elem = atm_state.elem + d_elem_vent
         if degas_rates !== nothing
-            d_elem_degas = if degas_rates isa ElementInventory
-                degas_rates * dt
+            if degas_rates isa ElementInventory
+                atm_state.elem = atm_state.elem + degas_rates * dt
             else
-                to_element_inventory(SpeciesInventory(degas_rates)) * dt
+                sp_pos = SpeciesInventory(
+                    Dict(k => max(0.0, Float64(v)) for (k, v) in pairs(degas_rates))
+                )
+                sp_neg = SpeciesInventory(
+                    Dict(k => max(0.0, -Float64(v)) for (k, v) in pairs(degas_rates))
+                )
+                atm_state.elem =
+                    (atm_state.elem + to_element_inventory(sp_pos) * dt) -
+                    to_element_inventory(sp_neg) * dt
             end
-            atm_state.elem = atm_state.elem + d_elem_degas
         end
     else
         if vent_rates isa AbstractDict
             for (sp, rate) in pairs(vent_rates)
                 val = Float64(rate) * dt
-                atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + val
+                atm_state.M_atm[sp] = max(0.0, get(atm_state.M_atm, sp, 0.0) + val)
             end
         end
         if degas_rates !== nothing && degas_rates isa AbstractDict
             for (sp, rate) in pairs(degas_rates)
                 val = Float64(rate) * dt
-                atm_state.M_atm[sp] = get(atm_state.M_atm, sp, 0.0) + val
+                atm_state.M_atm[sp] = max(0.0, get(atm_state.M_atm, sp, 0.0) + val)
             end
         end
         atm_state.species = SpeciesInventory(atm_state.M_atm)
