@@ -83,8 +83,19 @@ function evolve_atmosphere!(
         a_orb_val = cfg.disk.orbital_distance_au * AU_METERS
         M_star_val = cfg.disk.stellar_mass_msun * M_SUN_KG
         R_exo_val = max(cfg.escape.R_exobase, rplanet_val)
-        T_int_val = compute_mean_surface_temperature(
-            tk1, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+        tk_surf_field = any(!iszero, grids.tk2) ? grids.tk2 : tk1
+        T_surf_grid = compute_mean_surface_temperature(
+            tk_surf_field, coords, rplanet_val, xcenter_val, ycenter_val; T_default=T_amb
+        )
+        T_int_val = compute_surface_internal_temperature(
+            tk_surf_field,
+            grids.KX,
+            grids.KY,
+            coords,
+            rplanet_val,
+            xcenter_val,
+            ycenter_val;
+            sigma_sb=cfg.thermodynamics.sigma_sb,
         )
 
         evolve_coupled_atmosphere_step!(
@@ -100,6 +111,7 @@ function evolve_atmosphere!(
             M_star=M_star_val,
             a_orb=a_orb_val,
             T_int=T_int_val,
+            T_surf=T_surf_grid,
             T_exobase=cfg.escape.T_exobase,
             R_exobase=R_exo_val,
             hydrodynamic=cfg.escape.hydrodynamic,

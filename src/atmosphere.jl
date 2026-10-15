@@ -1635,6 +1635,7 @@ end
         M_star::Real=1.98847e30,
         a_orb::Real=1.495978707e11,
         T_int::Real=T_amb,
+        T_surf::Union{Nothing,Real}=nothing,
         T_exobase::Real=T_amb,
         R_exobase::Real=R_planet,
         hydrodynamic::Bool=true,
@@ -1658,7 +1659,8 @@ Advance the atmospheric species inventory, gas envelope capture/boil-off, radiat
 - `c_s`: Disk sound speed [m/s] (default: 300.0).
 - `M_star`: Central star mass [kg] (default: 1.98847e30).
 - `a_orb`: Planetary semi-major axis [m] (default: 1.495978707e11).
-- `T_int`: Interior temperature [K] (default: T_amb).
+- `T_int`: Effective internal conductive temperature [K] for Guillot radiative equilibrium (default: T_amb).
+- `T_surf`: Surface rock temperature [K] for linearized radiative exchange (default: `nothing`, which falls back to `T_int`).
 - `T_exobase`: Exobase temperature [K] (default: T_amb).
 - `R_exobase`: Exobase radius [m] (default: R_planet).
 - `hydrodynamic`: Whether to include hydrodynamic blow-off (default: true).
@@ -1684,6 +1686,7 @@ function evolve_coupled_atmosphere_step!(
     M_star::Real=1.98847e30,
     a_orb::Real=1.495978707e11,
     T_int::Real=T_amb,
+    T_surf::Union{Nothing,Real}=nothing,
     T_exobase::Real=T_amb,
     R_exobase::Real=R_planet,
     hydrodynamic::Bool=true,
@@ -2008,11 +2011,21 @@ function evolve_coupled_atmosphere_step!(
         Tamb * (1.0 + 0.75 * atm_state.tau_LW)^0.25
     end
 
+    T_surf_actual = if T_surf !== nothing
+        ts = Float64(T_surf)
+        if ts < 0.0 || !isfinite(ts)
+            throw(DomainError(ts, "Surface temperature T_surf must be >= 0 and finite"))
+        end
+        ts
+    else
+        T_int_actual
+    end
+
     atm_state.T_surf_eq = max(cfg.T_skin_floor, T_calc)
     atm_state.h_rad_eff = compute_effective_radiation_htc(
         atm_state.T_surf_eq, Tamb, atm_state.tau_LW
     )
-    atm_state.F_net_rad = atm_state.h_rad_eff * (T_int_actual - Tamb)
+    atm_state.F_net_rad = atm_state.h_rad_eff * (T_surf_actual - Tamb)
 
     return atm_state
 end

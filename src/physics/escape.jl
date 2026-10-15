@@ -73,6 +73,11 @@ Upper threshold on the Jeans parameter λ above which escape transitions fully t
 const HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF = 2.0
 
 """
+Standard hard-sphere neutral-neutral collision cross-section [m^2] defining the atmospheric exobase (Chamberlain & Hunten 1987).
+"""
+const COLLISION_CROSS_SECTION_M2 = 3.0e-19
+
+"""
     get_species_molecular_mass(species::Symbol)::Float64
 
 Retrieve molecular mass in kilograms for standard planetary volatile species.
@@ -390,16 +395,196 @@ function compute_surface_atmospheric_pressure(
 end
 
 """
+Compute the collisionless exobase column mass for a volatile species.
+
+$(SIGNATURES)
+
+    M_exo_col = (4 * π * R_exo^2 * m_species) / σ_coll
+
+# Arguments
+- `R_exo_m::Real`: Exobase radius [m]
+- `m_species_kg::Real`: Particle molecular mass [kg]
+
+# Keyword Arguments
+- `sigma_coll::Real`: Neutral collision cross-section [m^2] (default: `COLLISION_CROSS_SECTION_M2`)
+
+# Returns
+- `M_exo_col`: Exobase column mass [kg]
+"""
+function compute_exobase_column_mass(
+    R_exo_m::Real, m_species_kg::Real; sigma_coll::Real=COLLISION_CROSS_SECTION_M2
+)::Float64
+    R_val = require_positive_finite(Float64(R_exo_m), "Exobase radius")
+    m_val = require_positive_finite(Float64(m_species_kg), "Molecular mass")
+    sig_val = require_positive_finite(Float64(sigma_coll), "Collision cross-section")
+    return (4.0 * π * (R_val^2) * m_val) / sig_val
+end
+
+"""
+    _integrate_thin_atmosphere(M0, M_dot_vent, k_escape, dt) -> Float64
+
+Integrate the thin-atmosphere linear ODE `dM/dt = M_dot_vent - k_escape * M` over `dt`.
+
+Parameters
+----------
+M0 : Float64
+    Initial species mass in the thin regime [kg].
+M_dot_vent : Float64
+    Constant mass venting source rate [kg/s].
+k_escape : Float64
+    Escape rate coefficient [s^-1].
+dt : Float64
+    Integration interval [s].
+
+Returns
+-------
+Float64
+    Analytical species mass after `dt` [kg].
+"""
+@inline function _integrate_thin_atmosphere(
+    M0::Float64, M_dot_vent::Float64, k_escape::Float64, dt::Float64
+)::Float64
+    x = k_escape * dt
+    if x < 1.0e-6
+        int_factor = dt * (1.0 - 0.5 * x + (x^2) / 6.0)
+        return M0 * exp(-x) + M_dot_vent * int_factor
+    elseif x > 40.0
+        return M_dot_vent / k_escape
+    else
+        return M0 * exp(-x) + (M_dot_vent / k_escape) * (1.0 - exp(-x))
+    end
+end
+
+"""
+    _compute_escape_rate_coefficient(M_planet, R_exo_val, T_exo, m_species, lam, v_th, gamma, hydrodynamic) -> Float64
+
+Compute effective escape rate coefficient `k_escape` [s^-1] across hydrodynamic and Jeans regimes.
+
+Parameters
+----------
+M_planet : Real
+    Planetary mass [kg].
+R_exo_val : Float64
+    Exobase radius [m].
+T_exo : Real
+    Exobase temperature [K].
+m_species : Real
+    Molecular mass [kg].
+lam : Float64
+    Jeans escape parameter `λ` [-].
+v_th : Float64
+    Most probable thermal velocity [m/s].
+gamma : Real
+    Adiabatic index [-].
+hydrodynamic : Bool
+    Flag enabling hydrodynamic Parker wind crossover for small `λ`.
+
+Returns
+-------
+Float64
+    Effective escape rate coefficient `k_escape` [s^-1].
+"""
+@inline function _compute_escape_rate_coefficient(
+    M_planet::Real,
+    R_exo_val::Float64,
+    T_exo::Real,
+    m_species::Real,
+    lam::Float64,
+    v_th::Float64,
+    gamma::Real,
+    hydrodynamic::Bool,
+)::Float64
+    if lam > JEANS_LAMBDA_CUTOFF
+        return 0.0
+    elseif hydrodynamic && lam < HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF
+        c_s = sqrt(
+            Float64(gamma) * BOLTZMANN_CONSTANT * Float64(T_exo) / Float64(m_species)
+        )
+        k_hydro = c_s / R_exo_val
+        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
+        k_eff = (v_th / (2.0 * sqrt(π) * H)) * (1.0 + lam) * exp(-lam)
+        w = smoothstep(
+            HYDRODYNAMIC_ESCAPE_LAMBDA_LOW, HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF, lam
+        )
+        return lerp(k_hydro, k_eff, w)
+    else
+        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
+        return (v_th / (2.0 * sqrt(π) * H)) * (1.0 + lam) * exp(-lam)
+    end
+end
+
+"""
+    _integrate_exobase_bounded_inventory(M_prev, M_dot_vent, k_escape, M_exo_col, dt) -> Tuple{Float64, Float64}
+
+Integrate the piecewise-linear exobase-bounded ODE `dM/dt = M_dot_vent - k_escape * min(M, M_exo_col)`
+over `dt`, returning `(M_next, M_escaped)`.
+
+Parameters
+----------
+M_prev : Float64
+    Initial atmospheric species mass [kg].
+M_dot_vent : Float64
+    Mass venting source rate [kg/s].
+k_escape : Float64
+    Escape rate coefficient [s^-1].
+M_exo_col : Float64
+    Exobase column mass ceiling [kg].
+dt : Float64
+    Time step [s].
+
+Returns
+-------
+Tuple{Float64, Float64}
+    Updated atmospheric mass `M_next` [kg] and cumulative escaped mass `M_escaped` [kg].
+"""
+function _integrate_exobase_bounded_inventory(
+    M_prev::Float64, M_dot_vent::Float64, k_escape::Float64, M_exo_col::Float64, dt::Float64
+)::Tuple{Float64,Float64}
+    total_available = M_prev + M_dot_vent * dt
+    if k_escape <= 0.0
+        return (total_available, 0.0)
+    elseif M_prev <= M_exo_col
+        M_thin = _integrate_thin_atmosphere(M_prev, M_dot_vent, k_escape, dt)
+        if M_thin <= M_exo_col
+            M_next = max(0.0, M_thin)
+            return (M_next, max(0.0, total_available - M_next))
+        else
+            M_eq = M_dot_vent / k_escape
+            r_cross = (M_eq - M_prev) / max(1.0e-300, M_eq - M_exo_col)
+            t_cross = clamp(log(r_cross) / k_escape, 0.0, dt)
+            dt_rem = dt - t_cross
+            M_next = max(0.0, M_exo_col + (M_dot_vent - k_escape * M_exo_col) * dt_rem)
+            return (M_next, max(0.0, total_available - M_next))
+        end
+    else
+        loss_rate_thick = k_escape * M_exo_col
+        net_rate = M_dot_vent - loss_rate_thick
+        if net_rate >= 0.0
+            M_escaped = min(total_available, loss_rate_thick * dt)
+            return (max(0.0, total_available - M_escaped), M_escaped)
+        else
+            t_cross = (M_prev - M_exo_col) / (-net_rate)
+            if t_cross >= dt
+                M_escaped = min(total_available, loss_rate_thick * dt)
+                return (max(0.0, total_available - M_escaped), M_escaped)
+            else
+                dt_rem = dt - t_cross
+                M_next = max(
+                    0.0, _integrate_thin_atmosphere(M_exo_col, M_dot_vent, k_escape, dt_rem)
+                )
+                return (M_next, max(0.0, total_available - M_next))
+            end
+        end
+    end
+end
+
+"""
 Evolve atmospheric species mass inventory over a time step dt under venting and Jeans escape.
 
 $(SIGNATURES)
 
-Integrates the first-order ODE:
-    dM_atm / dt = M_vent_rate - k_escape * M_atm
-
-where k_escape is determined from Jeans kinetic flux and effective atmospheric column scale.
-Mass is conserved to machine precision:
-    M_atm(t + dt) + M_escaped_step == M_atm(t) + M_vent_rate * dt
+Integrates the exobase-bounded first-order ODE `dM_atm/dt = M_vent_rate - k_escape * min(M_atm, M_exo_col)`,
+conserving total mass `M_atm(t + dt) + M_escaped_step == M_atm(t) + M_vent_rate * dt`.
 
 # Arguments
 - `M_atm_prev::Real`: Initial atmospheric mass of species [kg]
@@ -414,6 +599,7 @@ Mass is conserved to machine precision:
 # Keyword Arguments
 - `gamma::Real`: Adiabatic index for hydrodynamic blow-off regime (default: 1.4)
 - `hydrodynamic::Bool`: Enable hydrodynamic blow-off when λ < 2.0 (default: true)
+- `sigma_coll::Real`: Neutral collision cross-section [m^2] (default: `COLLISION_CROSS_SECTION_M2`)
 
 # Returns
 - `NamedTuple`: `(; M_atm, M_escaped_step, escape_rate)`
@@ -429,6 +615,7 @@ function evolve_atmospheric_species_inventory(
     R_exobase::Real=R_planet,
     gamma::Real=1.4,
     hydrodynamic::Bool=true,
+    sigma_coll::Real=COLLISION_CROSS_SECTION_M2,
 )::@NamedTuple{M_atm::Float64, M_escaped_step::Float64, escape_rate::Float64}
     M_prev = Float64(M_atm_prev)
     if !isfinite(M_prev) || M_prev < 0.0
@@ -448,10 +635,7 @@ function evolve_atmospheric_species_inventory(
         return (M_atm=M_prev, M_escaped_step=0.0, escape_rate=0.0)
     end
 
-    R_val = Float64(R_planet)
-    if R_val <= 0.0 || !isfinite(R_val)
-        throw(DomainError(R_val, "Planetary radius must be > 0 and finite"))
-    end
+    R_val = require_positive_finite(Float64(R_planet), "Planetary radius")
     R_exo_val = Float64(R_exobase)
     if R_exo_val < R_val || !isfinite(R_exo_val)
         throw(
@@ -461,46 +645,14 @@ function evolve_atmospheric_species_inventory(
 
     lam = compute_jeans_parameter(M_planet, R_exo_val, T_exo, m_species)
     v_th = compute_thermal_velocity(T_exo, m_species)
-
-    # Compute loss rate coefficient k_escape [s^-1]
-    k_escape = if lam > JEANS_LAMBDA_CUTOFF
-        0.0
-    elseif hydrodynamic && lam < HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF
-        c_s = sqrt(Float64(gamma) * BOLTZMANN_CONSTANT * Float64(T_exo) / Float64(m_species))
-        k_hydro = c_s / R_exo_val
-        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
-        effusion_factor = (1.0 + lam) * exp(-lam)
-        k_eff = (v_th / (2.0 * sqrt(π) * H)) * effusion_factor
-        w = smoothstep(
-            HYDRODYNAMIC_ESCAPE_LAMBDA_LOW, HYDRODYNAMIC_ESCAPE_LAMBDA_CUTOFF, lam
-        )
-        lerp(k_hydro, k_eff, w)
-    else
-        H = compute_atmospheric_scale_height(M_planet, R_exo_val, T_exo, m_species)
-        effusion_factor = (1.0 + lam) * exp(-lam)
-        (v_th / (2.0 * sqrt(π) * H)) * effusion_factor
-    end
-
-    x = k_escape * dt
-    # Analytical solution of dM/dt = S - k*M
-    M_next = if x < 1.0e-6
-        # Taylor expansion to prevent cancellation or divide-by-zero
-        int_factor = dt * (1.0 - 0.5 * x + (x^2) / 6.0)
-        M_prev * exp(-x) + M_dot_vent * int_factor
-    elseif x > 40.0
-        # Fully decoupled rapid escape regime
-        M_dot_vent / k_escape
-    else
-        M_prev * exp(-x) + (M_dot_vent / k_escape) * (1.0 - exp(-x))
-    end
-
-    # Guarantee non-negative mass
-    M_next = max(0.0, M_next)
-
-    # Mass balance: escaped mass is exactly influx plus initial minus final
-    total_available = M_prev + M_dot_vent * dt
-    M_escaped = max(0.0, total_available - M_next)
-    current_escape_rate = k_escape * M_next
+    M_exo_col = compute_exobase_column_mass(R_exo_val, m_species; sigma_coll=sigma_coll)
+    k_escape = _compute_escape_rate_coefficient(
+        M_planet, R_exo_val, T_exo, m_species, lam, v_th, gamma, hydrodynamic
+    )
+    M_next, M_escaped = _integrate_exobase_bounded_inventory(
+        M_prev, M_dot_vent, k_escape, M_exo_col, dt
+    )
+    current_escape_rate = k_escape * min(M_next, M_exo_col)
 
     return (M_atm=M_next, M_escaped_step=M_escaped, escape_rate=current_escape_rate)
 end

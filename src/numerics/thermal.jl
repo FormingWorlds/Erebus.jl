@@ -714,6 +714,153 @@ function compute_mean_surface_temperature(
 end
 
 """
+Compute mean outward conductive/radiative heat flux across the planetesimal surface.
+
+$(SIGNATURES)
+
+Identifies all grid cell faces (both horizontal and vertical) that straddle the
+planetesimal boundary at radius `rplanet` from `(xcenter, ycenter)` and averages
+the outward heat flux `q_out = k_face * (T_in - T_out) / ds` across those faces.
+
+Parameters
+----------
+tk : AbstractMatrix{<:Real}
+    Nodal temperature field on pressure nodes [K] (`Ny1 x Nx1`).
+KX : AbstractMatrix{<:Real}
+    Horizontal thermal conductivity field [W/(m*K)] (`Ny1 x Nx1`).
+KY : AbstractMatrix{<:Real}
+    Vertical thermal conductivity field [W/(m*K)] (`Ny1 x Nx1`).
+coords : GridCoordinates
+    Grid coordinate specification.
+rplanet : Real
+    Planetesimal radius [m].
+xcenter : Real
+    Horizontal center coordinate [m].
+ycenter : Real
+    Vertical center coordinate [m].
+
+Returns
+-------
+Float64
+    Mean outward surface heat flux [W/m^2] (clamped to `>= 0.0`).
+"""
+function compute_mean_surface_heat_flux(
+    tk::AbstractMatrix{<:Real},
+    KX::AbstractMatrix{<:Real},
+    KY::AbstractMatrix{<:Real},
+    coords::GridCoordinates,
+    rplanet::Real,
+    xcenter::Real,
+    ycenter::Real,
+)::Float64
+    if rplanet <= 0.0
+        return 0.0
+    end
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    xp, yp = coords.xp, coords.yp
+    dx, dy = Float64(coords.dx), Float64(coords.dy)
+    r_sq_max = Float64(rplanet)^2
+
+    flux_sum = 0.0
+    n_faces = 0
+
+    # Horizontal faces KX[i, j] between P(i, j) and P(i, j + 1)
+    @inbounds for j in 1:(Nx1 - 1), i in 2:(Ny1 - 1)
+        r_sq_left = (xp[j] - xcenter)^2 + (yp[i] - ycenter)^2
+        r_sq_right = (xp[j + 1] - xcenter)^2 + (yp[i] - ycenter)^2
+        in_left = r_sq_left <= r_sq_max
+        in_right = r_sq_right <= r_sq_max
+        if in_left != in_right
+            T_in = Float64(in_left ? tk[i, j] : tk[i, j + 1])
+            T_out = Float64(in_left ? tk[i, j + 1] : tk[i, j])
+            k_face = Float64(KX[i, j])
+            if isfinite(T_in) && isfinite(T_out) && isfinite(k_face)
+                flux_sum += k_face * (T_in - T_out) / dx
+                n_faces += 1
+            end
+        end
+    end
+
+    # Vertical faces KY[i, j] between P(i, j) and P(i + 1, j)
+    @inbounds for j in 2:(Nx1 - 1), i in 1:(Ny1 - 1)
+        r_sq_top = (xp[j] - xcenter)^2 + (yp[i] - ycenter)^2
+        r_sq_bot = (xp[j] - xcenter)^2 + (yp[i + 1] - ycenter)^2
+        in_top = r_sq_top <= r_sq_max
+        in_bot = r_sq_bot <= r_sq_max
+        if in_top != in_bot
+            T_in = Float64(in_top ? tk[i, j] : tk[i + 1, j])
+            T_out = Float64(in_top ? tk[i + 1, j] : tk[i, j])
+            k_face = Float64(KY[i, j])
+            if isfinite(T_in) && isfinite(T_out) && isfinite(k_face)
+                flux_sum += k_face * (T_in - T_out) / dy
+                n_faces += 1
+            end
+        end
+    end
+
+    if n_faces == 0
+        return 0.0
+    end
+    return max(0.0, flux_sum / n_faces)
+end
+
+"""
+Compute effective internal heat flux temperature `T_int = (F_int / sigma_sb)^(1/4)` at the planetesimal surface.
+
+$(SIGNATURES)
+
+Evaluates the mean outward conductive/radiative surface heat flux `F_int` across
+planetesimal boundary faces via `compute_mean_surface_heat_flux` and converts it to
+the intrinsic effective temperature `T_int` required by the Guillot (2010) radiative
+equilibrium formulation.
+
+Parameters
+----------
+tk : AbstractMatrix{<:Real}
+    Nodal temperature field on pressure nodes [K] (`Ny1 x Nx1`).
+KX : AbstractMatrix{<:Real}
+    Horizontal thermal conductivity field [W/(m*K)] (`Ny1 x Nx1`).
+KY : AbstractMatrix{<:Real}
+    Vertical thermal conductivity field [W/(m*K)] (`Ny1 x Nx1`).
+coords : GridCoordinates
+    Grid coordinate specification.
+rplanet : Real
+    Planetesimal radius [m].
+xcenter : Real
+    Horizontal center coordinate [m].
+ycenter : Real
+    Vertical center coordinate [m].
+sigma_sb : Real, optional
+    Stefan-Boltzmann constant [W/(m^2*K^4)]. Default is `5.670374419e-8`.
+
+Returns
+-------
+Float64
+    Intrinsic internal temperature `T_int` [K] (non-negative).
+"""
+function compute_surface_internal_temperature(
+    tk::AbstractMatrix{<:Real},
+    KX::AbstractMatrix{<:Real},
+    KY::AbstractMatrix{<:Real},
+    coords::GridCoordinates,
+    rplanet::Real,
+    xcenter::Real,
+    ycenter::Real;
+    sigma_sb::Real=5.670374419e-8,
+)::Float64
+    sig_val = Float64(sigma_sb)
+    if sig_val <= 0.0 || !isfinite(sig_val)
+        throw(
+            DomainError(
+                sig_val, "Stefan-Boltzmann constant sigma_sb must be > 0 and finite"
+            ),
+        )
+    end
+    F_int = compute_mean_surface_heat_flux(tk, KX, KY, coords, rplanet, xcenter, ycenter)
+    return (F_int / sig_val)^0.25
+end
+
+"""
 Perform thermal iterations to time step thermal field at P nodes.
 
 $(SIGNATURES)

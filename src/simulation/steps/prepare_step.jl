@@ -100,12 +100,18 @@ function prepare_step_ambient!(
     P_amb_eff = P_amb + P_atm
     state.accumulators.P_amb = P_amb_eff
 
-    if cfg.disk.enabled || cfg.thermodynamics.surface_radiation
+    if cfg.disk.enabled || cfg.thermodynamics.surface_radiation || cfg.atmosphere.active
+        T_sticky_air =
+            if cfg.atmosphere.active && state.atm !== nothing && state.atm.T_surf_eq > 0.0
+                state.atm.T_surf_eq
+            else
+                T_amb
+            end
         core = state.markers.core
         marknum = length(state.markers)
         @threads :dynamic for m in 1:marknum
             if core.tm[m] >= 3
-                core.tkm[m] = T_amb
+                core.tkm[m] = T_sticky_air
             end
         end
     end

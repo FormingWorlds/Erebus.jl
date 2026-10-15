@@ -2052,4 +2052,135 @@ using Random
         )
         @test isapprox(atm_env.M_env_bound, 50.0; atol=1e-12)
     end
+
+    # 11. Guillot internal flux stability and sticky-air greenhouse boundary coupling
+    @testset "Guillot Internal Flux Stability and Sticky-Air Coupling" begin
+        coords_g = GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        Ny1_g, Nx1_g = coords_g.Ny1, coords_g.Nx1
+        rplanet_g = 50_000.0
+        xc_g = 70_000.0
+        yc_g = 70_000.0
+        T_irr_g = 200.0
+        tau_target = 5.0
+        area_g = 4.0 * π * rplanet_g^2
+        kappa_h2o = 1.0e-2
+        M_h2o_target = tau_target * area_g / kappa_h2o
+
+        # Internally isothermal body at 500 K (F_int = 0 -> T_int = 0)
+        tk_iso = fill(500.0, Ny1_g, Nx1_g)
+        KX_g = fill(3.0, Ny1_g, Nx1_g)
+        KY_g = fill(3.0, Ny1_g, Nx1_g)
+        T_int_zero = compute_surface_internal_temperature(
+            tk_iso, KX_g, KY_g, coords_g, rplanet_g, xc_g, yc_g
+        )
+        @test iszero(T_int_zero)
+
+        atm_g = AtmosphereState(
+            Dict(:H2O => M_h2o_target), Dict(:H2O => 0.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        )
+        cfg_g = AtmosphereConfig(;
+            active=true,
+            mode=:guillot,
+            opacities=Dict(:H2O => kappa_h2o),
+            gamma_guillot=0.10,
+            albedo=0.20,
+        )
+        evolve_coupled_atmosphere_step!(
+            atm_g,
+            Dict(:H2O => 0.0),
+            1000.0,
+            M_50km,
+            rplanet_g,
+            T_irr_g,
+            cfg_g;
+            T_int=T_int_zero,
+            T_surf=500.0,
+            escape_active=false,
+        )
+
+        T_eqm_disk = T_irr_g * (1.0 - cfg_g.albedo)^0.25
+        T_guillot_expected = compute_guillot_surface_temperature(
+            tau_target,
+            0.0,
+            T_irr_g;
+            T_eqm=T_eqm_disk,
+            gamma=cfg_g.gamma_guillot,
+            albedo=cfg_g.albedo,
+        )
+        @test isapprox(atm_g.T_surf_eq, T_guillot_expected; rtol=1e-12)
+        @test isapprox(atm_g.T_surf_eq, 249.4914567; rtol=1e-6)
+        @test isapprox(atm_g.F_net_rad, atm_g.h_rad_eff * (500.0 - T_irr_g); rtol=1e-12)
+
+        # Error contracts for invalid T_surf
+        @test_throws DomainError evolve_coupled_atmosphere_step!(
+            atm_g,
+            Dict(:H2O => 0.0),
+            1000.0,
+            M_50km,
+            rplanet_g,
+            T_irr_g,
+            cfg_g;
+            T_int=0.0,
+            T_surf=-1.0,
+            escape_active=false,
+        )
+        @test_throws DomainError evolve_coupled_atmosphere_step!(
+            atm_g,
+            Dict(:H2O => 0.0),
+            1000.0,
+            M_50km,
+            rplanet_g,
+            T_irr_g,
+            cfg_g;
+            T_int=0.0,
+            T_surf=NaN,
+            escape_active=false,
+        )
+
+        # Sticky-air marker temperature synchronization in prepare_step_ambient! and evolve_atmosphere!
+        cfg_sim_g = SimulationConfig(;
+            grid=GridConfig(; Nx=9, Ny=9, xsize=140_000.0, ysize=140_000.0),
+            geometry=GeometryConfig(; rplanet=50_000.0, xcenter=70_000.0, ycenter=70_000.0),
+            thermodynamics=ThermalConfig(; surface_radiation=true),
+            atmosphere=AtmosphereConfig(; active=true, mode=:guillot),
+        )
+        state_g, coords_sim_g, _ = Erebus.init_simulation(cfg_sim_g)
+        state_g.atm.T_surf_eq = 425.0
+        Erebus.prepare_step_ambient!(state_g, coords_sim_g, cfg_sim_g)
+        air_idx = findall(t -> t >= 3, state_g.markers.core.tm)
+        @test !isempty(air_idx)
+        @test all(isapprox(state_g.markers.core.tkm[m], 425.0; rtol=1e-12) for m in air_idx)
+
+        T_int_g = Erebus.compute_surface_internal_temperature(
+            state_g.grids.tk1,
+            state_g.grids.KX,
+            state_g.grids.KY,
+            coords_sim_g,
+            cfg_sim_g.geometry.rplanet,
+            cfg_sim_g.geometry.xcenter,
+            cfg_sim_g.geometry.ycenter,
+        )
+        Erebus.evolve_atmosphere!(state_g, coords_sim_g, cfg_sim_g)
+        T_amb_sim_g, _, _ = Erebus.compute_ambient_conditions(
+            state_g.timesum, cfg_sim_g.disk
+        )
+        T_eqm_sim_g = T_amb_sim_g * (1.0 - cfg_sim_g.atmosphere.albedo)^0.25
+        @test isapprox(
+            state_g.atm.T_surf_eq,
+            compute_guillot_surface_temperature(
+                state_g.atm.tau_LW,
+                T_int_g,
+                T_amb_sim_g;
+                T_eqm=T_eqm_sim_g,
+                gamma=cfg_sim_g.atmosphere.gamma_guillot,
+                albedo=cfg_sim_g.atmosphere.albedo,
+            );
+            rtol=1e-12,
+        )
+        Erebus.prepare_step_ambient!(state_g, coords_sim_g, cfg_sim_g)
+        @test all(
+            isapprox(state_g.markers.core.tkm[m], state_g.atm.T_surf_eq; rtol=1e-12) for
+            m in air_idx
+        )
+    end
 end

@@ -426,9 +426,7 @@ end
         # H2O participates in escape, CO2 is fully retained
         expected_co2_mass_step1 = 5.0 * dt
         @test state_ss.accumulators.M_atm_species[:CO2] == expected_co2_mass_step1
-        @test isapprox(
-            state_ss.accumulators.M_escaped_total, 5.127446801073695e13; rtol=1e-8
-        )
+        @test isapprox(state_ss.accumulators.M_escaped_total, 2252.272595994767; rtol=1e-8)
         @test isapprox(
             state_ss.accumulators.M_atm_total,
             state_ss.accumulators.M_atm_species[:H2O] + expected_co2_mass_step1;
@@ -466,7 +464,7 @@ end
             state_ms.accumulators.M_atm_species[:CO2], expected_co2_mass_step1; rtol=1e-10
         )
         @test isapprox(
-            state_ms.accumulators.M_escaped_species[:H2O], 5.127446801073695e13; rtol=1e-8
+            state_ms.accumulators.M_escaped_species[:H2O], 2252.272595994767; rtol=1e-8
         )
     end
 
@@ -532,12 +530,10 @@ end
         @test haskey(state_track.accumulators.M_atm_species, :CO2)
         @test isapprox(state_track.accumulators.M_atm_species[:CO2], 500.0; atol=1.0e-10)
         @test isapprox(
-            state_track.accumulators.M_escaped_species[:H2O],
-            5.127446801073695e13;
-            rtol=1e-8,
+            state_track.accumulators.M_escaped_species[:H2O], 2252.272595994767; rtol=1e-8
         )
         @test isapprox(
-            state_track.accumulators.M_escaped_total, 5.127446801073695e13; rtol=1e-8
+            state_track.accumulators.M_escaped_total, 2252.272595994767; rtol=1e-8
         )
     end
 
