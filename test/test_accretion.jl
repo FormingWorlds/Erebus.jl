@@ -472,4 +472,265 @@ using Erebus.Config
         @test length(t_acc) == new_marknum
         @test length(t_acc) == length(xm)
     end
+
+    @testset "Accreted Marker Constitutive Properties and Metal Melt Initialization" begin
+        cfg = SimulationConfig(;
+            grid=GridConfig(Nx=5, Ny=5, xsize=40_000.0, ysize=40_000.0),
+            geometry=GeometryConfig(
+                rplanet=8_000.0, rcrust=8_000.0, xcenter=20_000.0, ycenter=20_000.0
+            ),
+            accretion=AccretionConfig(
+                active=true,
+                mode=:constant_rate,
+                R_initial=8_000.0,
+                R_target=18_000.0,
+                M_initial=1.0e18,
+                M_target=1.0e20,
+                dM_dt_constant=1.0e14,
+                phi_accreted=0.25,
+                Xfe_bulk_accreted=0.12,
+            ),
+            coreformation=CoreFormationConfig(
+                percolation_active=true, Xfe_bulk=0.12, T_eutectic=1213.0, dT_metal=50.0
+            ),
+            redox=RedoxConfig(active=true),
+        )
+        coords = GridCoordinates(cfg.grid)
+        markers = init_marker_arrays(2, cfg, coords)
+        markers.core.xm[1] = 20_000.0 + 10_000.0
+        markers.core.ym[1] = 20_000.0
+        markers.core.tm[1] = 3
+        markers.core.etavpm[1] = cfg.materials.etasolidm[3]
+        markers.core.fricttotalm[1] = 0.0
+        markers.core.alphasolidcur[1] = 0.0
+        markers.core.alphafluidcur[1] = 0.0
+        markers.core.sxxm[1] = 5.0e5
+        markers.core.sxym[1] = -2.0e5
+        markers.core.Fm[1] = 0.4
+
+        markers.core.xm[2] = 20_000.0 + 16_000.0
+        markers.core.ym[2] = 20_000.0
+        markers.core.tm[2] = 3
+
+        T_hot = 1238.0
+        n_conv = advance_accretion_boundary!(
+            8_000.0,
+            4_000.0,
+            markers;
+            cfg=cfg,
+            coords=coords,
+            xcenter=20_000.0,
+            ycenter=20_000.0,
+            T_accreted=T_hot,
+            phi_accreted=0.25,
+            Xfe_accreted=0.12,
+        )
+        @test n_conv == 1
+        @test markers.core.tm[1] == 2
+        @test markers.core.tm[2] == 3
+        @test isapprox(markers.core.etavpm[1], cfg.materials.etasolidm[2]; rtol=1e-12)
+        @test isapprox(
+            markers.core.inv_gggtotalm[1], inv(cfg.materials.gggsolidm[2]); rtol=1e-12
+        )
+        @test isapprox(
+            markers.core.fricttotalm[1], cfg.materials.frictsolidm[2]; rtol=1e-12
+        )
+        @test isapprox(
+            markers.core.cohestotalm[1], cfg.materials.cohessolidm[2]; rtol=1e-12
+        )
+        @test isapprox(markers.core.tenstotalm[1], cfg.materials.tenssolidm[2]; rtol=1e-12)
+        @test isapprox(
+            markers.core.alphasolidcur[1], cfg.materials.alphasolidm[2]; rtol=1e-12
+        )
+        @test isapprox(
+            markers.core.alphafluidcur[1], cfg.materials.alphafluidm[2]; rtol=1e-12
+        )
+        @test isapprox(markers.core.rhofluidcur[1], cfg.materials.rhofluidm[2]; rtol=1e-12)
+        expected_rho = cfg.materials.rhosolidm[2] * 0.75 + cfg.materials.rhofluidm[2] * 0.25
+        expected_rhocp =
+            cfg.materials.rhocpsolidm[2] * 0.75 + cfg.materials.rhocpfluidm[2] * 0.25
+        expected_k = cfg.materials.ksolidm[2] * 0.75 + cfg.materials.kfluidm[2] * 0.25
+        @test isapprox(markers.core.rhototalm[1], expected_rho; rtol=1e-12)
+        @test isapprox(markers.core.rhocptotalm[1], expected_rhocp; rtol=1e-12)
+        @test isapprox(markers.core.ktotalm[1], expected_k; rtol=1e-12)
+        @test isapprox(
+            markers.core.etatotalm[1],
+            cfg.materials.etasolidm[2] * exp(-28.0 * 0.25);
+            rtol=1e-12,
+        )
+        @test isapprox(markers.core.tkm_rhocptotalm[1], T_hot * expected_rhocp; rtol=1e-12)
+        @test isapprox(
+            markers.core.pfm0[1],
+            max(cfg.geometry.psurface, cfg.disk.p_amb_disk);
+            rtol=1e-12,
+        )
+        @test isapprox(markers.core.Fm[1], 0.0; atol=1e-15)
+        @test isapprox(markers.core.sxxm[1], 0.0; atol=1e-15)
+        @test isapprox(markers.core.sxym[1], 0.0; atol=1e-15)
+        @test isapprox(markers.core.hrtotalm[1], 0.0; atol=1e-15)
+        @test isapprox(
+            markers.core.etafluidcur_inv_kphim[1],
+            Erebus.ηᶠcur_inv_kᵠ(
+                cfg.materials.kphim0[2],
+                0.25,
+                cfg.materials.etafluidm[2];
+                phim0=cfg.thermodynamics.phim0,
+            );
+            rtol=1e-12,
+        )
+
+        expected_F_fe = compute_metal_melt_fraction(T_hot; T_eutectic=1213.0, dT_metal=50.0)
+        @test isapprox(expected_F_fe, 0.5; rtol=1e-12)
+        @test isapprox(markers.groups.metal.Xfem[1], 0.12 * expected_F_fe; rtol=1e-12)
+        @test isapprox(markers.groups.metal.Xfem0[1], 0.12 * expected_F_fe; rtol=1e-12)
+
+        # Fallback path when cfg === nothing
+        n_conv_nocfg = advance_accretion_boundary!(
+            12_000.0,
+            6_000.0,
+            markers;
+            cfg=nothing,
+            coords=coords,
+            xcenter=20_000.0,
+            ycenter=20_000.0,
+            T_accreted=300.0,
+            phi_accreted=0.20,
+            Xfe_accreted=0.10,
+        )
+        @test n_conv_nocfg == 1
+        @test markers.core.tm[2] == 2
+        @test isapprox(markers.core.fricttotalm[2], Erebus.frictsolidm[2]; rtol=1e-12)
+        @test isapprox(markers.core.alphasolidcur[2], Erebus.alphasolidm[2]; rtol=1e-12)
+        @test isapprox(markers.groups.metal.Xfem[2], 0.0; atol=1e-15)
+    end
+
+    @testset "Chondritic Metal Mass-to-Volume Fraction Conversion" begin
+        phi_2arg = chondritic_phi_fe(3500.0, 5450.0)
+        phi_kw = chondritic_phi_fe(3500.0, 5450.0; w_fe=X_FE_REF_CHONDRITE)
+        @test isapprox(phi_2arg, phi_kw; rtol=1e-15)
+        @test isapprox(
+            metal_volume_to_mass_fraction(phi_kw, 5450.0, 3500.0),
+            X_FE_REF_CHONDRITE;
+            rtol=1e-14,
+        )
+        @test isapprox(chondritic_phi_fe(3500.0, 5450.0; w_fe=0.0), 0.0; atol=1e-15)
+        @test isapprox(chondritic_phi_fe(3500.0, 5450.0; w_fe=1.0), 1.0; rtol=1e-15)
+        @test isapprox(chondritic_phi_fe(0.0, 5450.0; w_fe=0.2), 0.0; atol=1e-15)
+        @test isapprox(
+            chondritic_phi_fe(3500.0, 0.0; w_fe=0.2),
+            chondritic_phi_fe(3500.0, 5450.0; w_fe=0.2);
+            rtol=1e-15,
+        )
+    end
+
+    @testset "Accretion Timestep Synchronization and Reconciliation" begin
+        cfg = SimulationConfig(;
+            grid=GridConfig(Nx=7, Ny=7, xsize=40_000.0, ysize=40_000.0),
+            geometry=GeometryConfig(
+                rplanet=8_000.0, rcrust=8_000.0, xcenter=20_000.0, ycenter=20_000.0
+            ),
+            time=TimeConfig(start_time=0.0),
+            accretion=AccretionConfig(
+                active=true,
+                mode=:constant_rate,
+                t_start_myr=0.0,
+                R_initial=8_000.0,
+                R_target=18_000.0,
+                M_initial=1.0e18,
+                M_target=1.0e20,
+                dM_dt_constant=1.0e12,
+                rho_bulk=3000.0,
+            ),
+            coreformation=CoreFormationConfig(percolation_active=true, Xfe_bulk=0.10),
+        )
+        mktempdir() do tmp_dir
+            state, coords, ws, telemetry_io, _ = init_simulation(cfg; output_path=tmp_dir)
+            telemetry_io !== nothing && close(telemetry_io)
+
+            state.dt = 1000.0
+            snapshot = snapshot_step_state(state, coords, ws)
+            accrete!(state, coords, cfg)
+            dM_trial = 1.0e12 * 1000.0
+            dR_trial = compute_radius_increment(8_000.0, dM_trial, 3000.0)
+            @test isapprox(state.accumulators.M_planet_val, 1.0e18 + dM_trial; rtol=1e-12)
+            @test isapprox(state.accumulators.rplanet, 8_000.0 + dR_trial; rtol=1e-12)
+
+            # Place a test marker between r(dt=250) and r(dt=1000) that was converted on trial
+            dM_final = 1.0e12 * 250.0
+            dR_final = compute_radius_increment(8_000.0, dM_final, 3000.0)
+            r_mid = 8_000.0 + 0.5 * (dR_final + dR_trial)
+            state.markers.core.xm[1] = 20_000.0 + r_mid
+            state.markers.core.ym[1] = 20_000.0
+            snapshot.markers.core.xm[1] = 20_000.0 + r_mid
+            snapshot.markers.core.ym[1] = 20_000.0
+            snapshot.markers.core.tm[1] = 3
+            state.markers.core.tm[1] = 2
+
+            # Shrink state.dt to 250.0 s and reconcile
+            state.dt = 250.0
+            reconcile_accretion_timestep!(state, snapshot, cfg)
+            @test isapprox(state.accumulators.M_planet_val, 1.0e18 + dM_final; rtol=1e-12)
+            @test isapprox(state.accumulators.M_accreted_total, dM_final; rtol=1e-12)
+            @test isapprox(state.accumulators.rplanet, 8_000.0 + dR_final; rtol=1e-12)
+            @test state.markers.core.tm[1] == 3
+
+            # Verify zero-growth branch when dM_acc == 0
+            state.dt = 0.0
+            reconcile_accretion_timestep!(state, snapshot, cfg)
+            @test isapprox(state.accumulators.M_planet_val, 1.0e18; rtol=1e-12)
+            @test isapprox(state.accumulators.M_accreted_total, 0.0; atol=1e-15)
+            @test isapprox(state.accumulators.rplanet, 8_000.0; rtol=1e-12)
+
+            # Verify no-op early return when accretion is inactive
+            state.accumulators.rplanet = 9_500.0
+            reconcile_accretion_timestep!(state, snapshot, SimulationConfig())
+            @test isapprox(state.accumulators.rplanet, 9_500.0; rtol=1e-12)
+        end
+
+        # Full simulation_loop integration where adaptive timestep shrinks state.dt
+        mktempdir() do tmp_dir2
+            cfg_loop = SimulationConfig(;
+                grid=GridConfig(Nx=9, Ny=9, xsize=40_000.0, ysize=40_000.0),
+                geometry=GeometryConfig(
+                    rplanet=10_000.0, rcrust=10_000.0, xcenter=20_000.0, ycenter=20_000.0
+                ),
+                time=TimeConfig(
+                    dt_initial=1.0e4,
+                    dt_longest=1.0e4,
+                    dxymax=1.0e-6,
+                    start_time=0.0,
+                    endtime=1.0e7,
+                    start_step=1,
+                    n_steps=1,
+                ),
+                solver=SolverConfig(max_plastic_iterations=2),
+                output=OutputConfig(output_dir=tmp_dir2, savematstep=0, visstep=0),
+                accretion=AccretionConfig(
+                    active=true,
+                    mode=:constant_rate,
+                    t_start_myr=0.0,
+                    R_initial=10_000.0,
+                    R_target=18_000.0,
+                    M_initial=1.0e18,
+                    M_target=1.0e22,
+                    dM_dt_constant=1.0e7,
+                    rho_bulk=3000.0,
+                ),
+            )
+            state_loop = simulation_loop(cfg_loop; output_path=tmp_dir2)
+            dt_trial_sec = cfg_loop.time.dt_initial * cfg_loop.time.yearlength
+            @test state_loop.timesum < dt_trial_sec
+            expected_dM = cfg_loop.accretion.dM_dt_constant * state_loop.timesum
+            expected_dR = compute_radius_increment(10_000.0, expected_dM, 3000.0)
+            @test isapprox(
+                state_loop.accumulators.M_accreted_total, expected_dM; rtol=1e-12
+            )
+            @test isapprox(
+                state_loop.accumulators.M_planet_val, 1.0e18 + expected_dM; rtol=1e-12
+            )
+            @test isapprox(
+                state_loop.accumulators.rplanet, 10_000.0 + expected_dR; rtol=1e-12
+            )
+        end
+    end
 end

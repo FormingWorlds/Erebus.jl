@@ -741,7 +741,7 @@ Telescoping domain configuration for dynamic spatial box doubling during planeta
 active = true
 r_threshold_fraction = 0.70
 max_telescope_levels = 10
-buffer_markers_per_cell = 4
+buffer_markers_per_cell = 16
 ```
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
@@ -749,7 +749,7 @@ buffer_markers_per_cell = 4
 | `active` | `Bool` | `false` | - | Enable telescoping domain doubling | `true` / `false` |
 | `r_threshold_fraction` | `Float64` | `0.70` | - | Radius fraction of domain half-width triggering doubling | $\in (0, 1)$ |
 | `max_telescope_levels` | `Int` | `10` | - | Maximum permitted domain doubling levels | $\ge 1$ |
-| `buffer_markers_per_cell` | `Int` | `4` | - | Sticky-air markers injected per outer buffer cell | $\ge 1$ |
+| `buffer_markers_per_cell` | `Int` | `16` | - | Sticky-air markers injected per outer buffer cell | $\ge 1$ |
 
 ---
 
