@@ -257,6 +257,33 @@ function assemble_and_solve_hydromechanical!(
 end
 
 """
+Check whether 0-based `UmfpackLU` CSC indices match 1-based `SparseMatrixCSC` indices.
+
+$(SIGNATURES)
+
+# Parameters
+- `F`: existing UMFPACK LU factorization
+- `L`: sparse coefficient matrix in 1-based CSC format
+
+# Returns
+- `Bool`: `true` when dimensions and nonzero sparsity pattern match identically
+"""
+function _same_csc_pattern(
+    F::SparseArrays.UMFPACK.UmfpackLU{Float64,Int64}, L::SparseMatrixCSC{Float64,Int64}
+)
+    (F.m == size(L, 1) && F.n == size(L, 2)) || return false
+    (length(F.colptr) == length(L.colptr) && length(F.rowval) == length(L.rowval)) ||
+        return false
+    @inbounds for i in eachindex(F.colptr, L.colptr)
+        F.colptr[i] + 1 == L.colptr[i] || return false
+    end
+    @inbounds for i in eachindex(F.rowval, L.rowval)
+        F.rowval[i] + 1 == L.rowval[i] || return false
+    end
+    return true
+end
+
+"""
 Solve sparse linear system `L * S = R` in-place via UMFPACK, reusing symbolic factorization when `cache` matches the CSC sparsity pattern of `L`.
 
 $(SIGNATURES)
@@ -278,8 +305,7 @@ function _solve_direct_umfpack!(
 )
     F =
         if cache isa SparseArrays.UMFPACK.UmfpackLU{Float64,Int64} &&
-            cache.colptr == L.colptr &&
-            cache.rowval == L.rowval
+            _same_csc_pattern(cache, L)
             lu!(cache, L; check=false)
             issuccess(cache) ? cache : lu(L)
         else

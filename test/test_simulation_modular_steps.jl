@@ -580,7 +580,16 @@ using Erebus
         L_tiny2 = 2.0 .* L_tiny
         cache_tiny2 = Erebus._solve_direct_umfpack!(S_tiny, L_tiny2, R_ones, cache_tiny)
         @test cache_tiny2 === cache_tiny
+        @test Erebus._same_csc_pattern(cache_tiny, L_tiny2)
         @test isapprox(S_tiny, fill(0.5, 4); rtol=1e-12)
+        L_tiny_offdiag = copy(L_tiny2)
+        L_tiny_offdiag[1, 2] = 0.5
+        @test !Erebus._same_csc_pattern(cache_tiny, L_tiny_offdiag)
+        cache_tiny3 = Erebus._solve_direct_umfpack!(
+            S_tiny, L_tiny_offdiag, R_ones, cache_tiny2
+        )
+        @test isapprox(L_tiny_offdiag * S_tiny, R_ones; rtol=1e-12)
+        @test Erebus._same_csc_pattern(cache_tiny3, L_tiny_offdiag)
         R_nan = fill(NaN, 4)
         @test_throws ErrorException Erebus._solve_direct_umfpack!(
             S_tiny, L_tiny, R_nan, cache_tiny
