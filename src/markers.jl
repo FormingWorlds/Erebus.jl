@@ -281,30 +281,48 @@ end
 
 Copy all vector contents from `source` to `target` in-place, resizing target arrays if needed.
 """
-function restore_marker_arrays!(target::MarkerArrays, source::MarkerArrays)
+@generated function restore_marker_arrays!(
+    target::MarkerArrays{G1}, source::MarkerArrays{G2}
+) where {G1,G2}
+    exprs = Expr[]
     for fn in fieldnames(CoreGroup)
-        tgt_vec = getfield(target.core, fn)
-        src_vec = getfield(source.core, fn)
-        if length(tgt_vec) != length(src_vec)
-            resize!(tgt_vec, length(src_vec))
-        end
-        copyto!(tgt_vec, src_vec)
-    end
-    for (k, src_grp) in pairs(source.groups)
-        if haskey(target.groups, k)
-            tgt_grp = target.groups[k]
-            T = typeof(src_grp)
-            for fn in fieldnames(T)
-                tgt_vec = getfield(tgt_grp, fn)
-                src_vec = getfield(src_grp, fn)
-                if length(tgt_vec) != length(src_vec)
-                    resize!(tgt_vec, length(src_vec))
+        qfn = QuoteNode(fn)
+        push!(
+            exprs,
+            quote
+                let tgt_vec = getfield(target.core, $qfn),
+                    src_vec = getfield(source.core, $qfn)
+
+                    length(tgt_vec) != length(src_vec) && resize!(tgt_vec, length(src_vec))
+                    copyto!(tgt_vec, src_vec)
                 end
-                copyto!(tgt_vec, src_vec)
+            end,
+        )
+    end
+    tgt_gnames = fieldnames(G1)
+    for (k, T_src) in zip(fieldnames(G2), fieldtypes(G2))
+        if k in tgt_gnames
+            qk = QuoteNode(k)
+            for fn in fieldnames(T_src)
+                qfn = QuoteNode(fn)
+                push!(
+                    exprs,
+                    quote
+                        let tgt_grp = getfield(target.groups, $qk),
+                            src_grp = getfield(source.groups, $qk),
+                            tgt_vec = getfield(tgt_grp, $qfn),
+                            src_vec = getfield(src_grp, $qfn)
+
+                            length(tgt_vec) != length(src_vec) &&
+                                resize!(tgt_vec, length(src_vec))
+                            copyto!(tgt_vec, src_vec)
+                        end
+                    end,
+                )
             end
         end
     end
-    return target
+    return Expr(:block, exprs..., :(return target))
 end
 
 """

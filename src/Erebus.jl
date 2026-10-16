@@ -29,7 +29,8 @@ export init_simulation, prepare_step_ambient!, apply_surface_radiation!
 export snapshot_step_start_inventories!, update_step_start_pressures!, update_pyrolysis!
 export solve_stokes_darcy!, solve_thermal_energy!, solve_thermomechanical_iterations!
 export diffuse_and_update_markers!, telescope_domain!, advance_step_diagnostics!
-export StepSnapshot, snapshot_step_state, restore_step_state!, copy_grid_arrays!
+export StepSnapshot,
+    snapshot_step_state, snapshot_step_state!, restore_step_state!, copy_grid_arrays!
 export SimulationWorkspaces, reset_workspaces_for_grid!
 export TransferRecord
 export MetalSegregationWorkspace,
@@ -1164,6 +1165,7 @@ module Simulation
         reset_workspaces_for_grid!,
         StepSnapshot,
         snapshot_step_state,
+        snapshot_step_state!,
         restore_step_state!,
         copy_grid_arrays!,
         TransferRecord,
@@ -1205,6 +1207,7 @@ module Simulation
         reset_workspaces_for_grid!,
         StepSnapshot,
         snapshot_step_state,
+        snapshot_step_state!,
         restore_step_state!,
         copy_grid_arrays!,
         TransferRecord,

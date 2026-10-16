@@ -250,24 +250,72 @@ function assemble_and_solve_hydromechanical!(
             error("Iterative Krylov solver failed: $(stats.status)")
         end
     else
-        if ws.hydromech_cache === nothing
-            hydromech_prob = LinearProblem(L, ws.R)
-            ws.hydromech_cache = init(
-                hydromech_prob, UMFPACKFactorization(; reuse_symbolic=true)
-            )
-        else
-            ws.hydromech_cache.A = L
-            ws.hydromech_cache.b = ws.R
-        end
-        hydromech_sol = solve!(ws.hydromech_cache)
-        if !LinearSolve.SciMLBase.successful_retcode(hydromech_sol) ||
-            !all(isfinite, hydromech_sol.u)
-            error("LinearSolve failed with retcode $(hydromech_sol.retcode)")
-        end
-        ws.S .= hydromech_sol.u
+        ws.hydromech_cache = _solve_direct_umfpack!(ws.S, L, ws.R, ws.hydromech_cache)
     end
 
     return nothing
+end
+
+"""
+Check whether 0-based `UmfpackLU` CSC indices match 1-based `SparseMatrixCSC` indices.
+
+$(SIGNATURES)
+
+# Parameters
+- `F`: existing UMFPACK LU factorization
+- `L`: sparse coefficient matrix in 1-based CSC format
+
+# Returns
+- `Bool`: `true` when dimensions and nonzero sparsity pattern match identically
+"""
+function _same_csc_pattern(
+    F::SparseArrays.UMFPACK.UmfpackLU{Float64,Int64}, L::SparseMatrixCSC{Float64,Int64}
+)
+    (F.m == size(L, 1) && F.n == size(L, 2)) || return false
+    (length(F.colptr) == length(L.colptr) && length(F.rowval) == length(L.rowval)) ||
+        return false
+    @inbounds for i in eachindex(F.colptr, L.colptr)
+        F.colptr[i] + 1 == L.colptr[i] || return false
+    end
+    @inbounds for i in eachindex(F.rowval, L.rowval)
+        F.rowval[i] + 1 == L.rowval[i] || return false
+    end
+    return true
+end
+
+"""
+Solve sparse linear system `L * S = R` in-place via UMFPACK, reusing symbolic factorization when `cache` matches the CSC sparsity pattern of `L`.
+
+$(SIGNATURES)
+
+# Parameters
+- `S`: preallocated solution vector modified in-place
+- `L`: sparse coefficient matrix in CSC format
+- `R`: right-hand-side vector
+- `cache`: previous `UmfpackLU` factorization or `nothing`
+
+# Returns
+- `SparseArrays.UMFPACK.UmfpackLU{Float64,Int64}`: updated LU factorization
+"""
+function _solve_direct_umfpack!(
+    S::Vector{Float64},
+    L::SparseMatrixCSC{Float64,Int64},
+    R::Vector{Float64},
+    @nospecialize(cache),
+)
+    F =
+        if cache isa SparseArrays.UMFPACK.UmfpackLU{Float64,Int64} &&
+            _same_csc_pattern(cache, L)
+            lu!(cache, L; check=false)
+            issuccess(cache) ? cache : lu(L)
+        else
+            lu(L)
+        end
+    ldiv!(S, F, R)
+    if !all(isfinite, S)
+        error("Direct UMFPACK solver produced non-finite solution")
+    end
+    return F
 end
 
 """

@@ -306,15 +306,36 @@ import Erebus:
             end
         end
 
-        # Assert equivalence across grids within floating-point tolerance
+        # Assert equivalence across all 30 scattered grid accumulators
         @test isapprox(ETA0_buf, ETA0_til; rtol=1e-12, atol=1e-12)
         @test isapprox(ETA_buf, ETA_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(GGG_buf, GGG_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(SXY_buf, SXY_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(COH_buf, COH_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(TEN_buf, TEN_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(FRI_buf, FRI_til; rtol=1e-12, atol=1e-12)
         @test isapprox(WT_buf, WT_til; rtol=1e-12, atol=1e-12)
         @test isapprox(RHOX_buf, RHOX_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(RHOFX_buf, RHOFX_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(KX_buf, KX_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(PHIX_buf, PHIX_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(RX_buf, RX_til; rtol=1e-12, atol=1e-12)
         @test isapprox(WTX_buf, WTX_til; rtol=1e-12, atol=1e-12)
         @test isapprox(RHOY_buf, RHOY_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(RHOFY_buf, RHOFY_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(KY_buf, KY_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(PHIY_buf, PHIY_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(RY_buf, RY_til; rtol=1e-12, atol=1e-12)
         @test isapprox(WTY_buf, WTY_til; rtol=1e-12, atol=1e-12)
         @test isapprox(RHO_buf, RHO_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(RHOCP_buf, RHOCP_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(ALPHA_buf, ALPHA_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(ALPHAF_buf, ALPHAF_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(HR_buf, HR_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(GGGP_buf, GGGP_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(SXX_buf, SXX_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(TK_buf, TK_til; rtol=1e-12, atol=1e-12)
+        @test isapprox(PHI_buf, PHI_til; rtol=1e-12, atol=1e-12)
         @test isapprox(WTP_buf, WTP_til; rtol=1e-12, atol=1e-12)
     end
 
@@ -409,5 +430,101 @@ import Erebus:
         @test RHO_1 == RHO_2
         @test WTP_1 == WTP_2
         @test sum(WTP_1) > 0.0
+    end
+
+    @testset "Full-Step Tiled vs Buffered P2M Equivalence & Zero Allocations" begin
+        cfg_til = override_config(
+            default_config(),
+            Dict(
+                "grid.Nx" => 17,
+                "grid.Ny" => 17,
+                "solver.p2m_mode" => "tiled",
+                "solver.tile_size" => 4,
+            ),
+        )
+        cfg_buf = override_config(cfg_til, Dict("solver.p2m_mode" => "buffered"))
+
+        state_t, coords_t, ws_t, _, _ = init_simulation(cfg_til)
+        state_b, coords_b, ws_b, _, _ = init_simulation(cfg_buf)
+
+        interpolate_markers_to_grid!(
+            state_t,
+            coords_t,
+            cfg_til;
+            p2m_workspace=ws_t.p2m,
+            thread_buffers=ws_t.thread_buffers,
+            interp_arrays=ws_t.interp_arrays,
+        )
+        interpolate_markers_to_grid!(
+            state_b,
+            coords_b,
+            cfg_buf;
+            p2m_workspace=ws_b.p2m,
+            thread_buffers=ws_b.thread_buffers,
+            interp_arrays=ws_b.interp_arrays,
+        )
+
+        for fn in (
+            :ETA0,
+            :ETA,
+            :GGG,
+            :SXY0,
+            :COH,
+            :TEN,
+            :FRI,
+            :RHOX,
+            :RHOFX,
+            :KX,
+            :PHIX,
+            :RX,
+            :RHOY,
+            :RHOFY,
+            :KY,
+            :PHIY,
+            :RY,
+            :RHO,
+            :RHOCP,
+            :ALPHA,
+            :ALPHAF,
+            :HR,
+            :GGGP,
+            :SXX0,
+            :tk1,
+            :PHI,
+            :BETAPHI,
+        )
+            @test isapprox(
+                getfield(state_t.grids, fn),
+                getfield(state_b.grids, fn);
+                rtol=1e-12,
+                atol=1e-12,
+            )
+        end
+
+        alloc_bin =
+            let ws_loc = ws_t.p2m,
+                xm_loc = state_t.markers.core.xm,
+                ym_loc = state_t.markers.core.ym,
+                c_loc = coords_t,
+                n_loc = length(state_t.markers)
+
+                bin_markers_into_tiles!(ws_loc, xm_loc, ym_loc, c_loc, n_loc)
+                @allocated bin_markers_into_tiles!(ws_loc, xm_loc, ym_loc, c_loc, n_loc)
+            end
+        @test alloc_bin == 0
+
+        if Threads.nthreads() == 1
+            alloc_p2m = let st = state_t, co = coords_t, cf = cfg_til, w = ws_t
+                @allocated interpolate_markers_to_grid!(
+                    st,
+                    co,
+                    cf;
+                    p2m_workspace=w.p2m,
+                    thread_buffers=w.thread_buffers,
+                    interp_arrays=w.interp_arrays,
+                )
+            end
+            @test alloc_p2m == 0
+        end
     end
 end

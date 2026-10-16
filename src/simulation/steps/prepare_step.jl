@@ -109,9 +109,17 @@ function prepare_step_ambient!(
             end
         core = state.markers.core
         marknum = length(state.markers)
-        @threads :dynamic for m in 1:marknum
-            if core.tm[m] >= 3
-                core.tkm[m] = T_sticky_air
+        if Threads.nthreads() > 1
+            @threads :dynamic for m in 1:marknum
+                if core.tm[m] >= 3
+                    core.tkm[m] = T_sticky_air
+                end
+            end
+        else
+            @inbounds for m in 1:marknum
+                if core.tm[m] >= 3
+                    core.tkm[m] = T_sticky_air
+                end
             end
         end
     end

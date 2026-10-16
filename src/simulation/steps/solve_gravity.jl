@@ -55,7 +55,7 @@ function solve_gravity!(
             lu(LP.cscmatrix)
         end
         assemble_gravitational_rhs!(grids.RHO, RP_vec; coords=coords)
-        SP_vec = F_fact \ RP_vec
+        ldiv!(SP_vec, F_fact, RP_vec)
         process_gravitational_solution!(SP_vec, FI, gx, gy; coords=coords)
     else
         throw(

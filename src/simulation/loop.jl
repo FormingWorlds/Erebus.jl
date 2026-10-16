@@ -236,6 +236,7 @@ function simulation_loop(
         force_restart_config=force_restart_config,
     )
     coords_ref = Ref(coords)
+    snapshot = snapshot_step_state(state, coords_ref[], ws)
     dt_step_target = state.dt
     dt_reduced_by_maxDT = false
     dt_next = state.dt
@@ -258,7 +259,7 @@ function simulation_loop(
                 timestep_begin = Dates.now()
                 num_dt_reductions = 0
                 accretion_dt_resynced = false
-                snapshot = snapshot_step_state(state, coords_ref[], ws)
+                snapshot_step_state!(snapshot, state, coords_ref[], ws)
                 dt_aphimax_step_max = 0.0
                 n_flips_last = 0
                 n_flips_step_total = 0
@@ -367,7 +368,13 @@ function simulation_loop(
                 evolve_atmosphere!(state, coords_ref[], cfg; vent_degas_result=vent_res)
 
                 # Step 9: Marker advection
-                advect_markers!(state, coords_ref[], cfg)
+                advect_markers!(
+                    state,
+                    coords_ref[],
+                    cfg;
+                    XWSSUM=ws.interp_arrays[32],
+                    WTPSUM=ws.interp_arrays[33],
+                )
 
                 # Step 10: Replenishment
                 replenish!(
