@@ -206,22 +206,22 @@ Following the solution of the 4-variable linear system, the Darcy velocity field
 
 At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.6 \times 10^7$ degrees of freedom), storing a global sparse matrix in Compressed Sparse Column (CSC) format requires gigabytes of memory, and sparse direct factorization requires tens to hundreds of gigabytes of RAM.
 
-`Erebus.jl` provides matrix-free operator evaluation (`MatrixFreeStokesDarcyOperator`) and iterative Krylov solvers (`solve_hydromechanical_iterative!`):
+`Erebus.jl` provides matrix-free operator evaluation (`MatrixFreeStokesDarcyOperator`, `MatrixFreeThermalOperator`) and iterative Krylov solvers (`solve_hydromechanical_iterative!`, `solve_thermal_iterative!`) when `cfg.solver.experimental = true` and `cfg.solver.hydromech_solver` is set to `:matrix_free` or `:iterative`:
 
 1. **Matrix-Free Operator Evaluation**:
-   The operator action $\mathbf{y} = \mathbf{A} \mathbf{x}$ is evaluated directly on 2D grid property arrays without allocating sparse matrix indices or non-zero value arrays. Thread-parallel column execution yields high cache locality and eliminates memory allocation during solver iterations.
+   The Stokes-Darcy operator action $\mathbf{y} = \mathbf{A} \mathbf{x}$ (`MatrixFreeStokesDarcyOperator`) and the backward-Euler heat conduction operator action (`MatrixFreeThermalOperator`, `apply_thermal_A!`) are evaluated directly on 2D grid property arrays without allocating sparse matrix indices or non-zero value arrays. Thread-parallel column execution yields high cache locality and eliminates memory allocation during solver iterations.
 
-2. **Block-Schur Preconditioning**:
-   Decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence over diverse permeability and viscosity regimes.
+2. **Block-Schur and Diagonal Preconditioning**:
+   For the coupled Stokes-Darcy system, `BlockSchurPreconditioner` decouples the velocity and pressure blocks using a Schur complement approximation. The inverse diagonal of the velocity momentum block scales the velocity fields, while a discrete Laplacian approximation scales the pressure Schur complement block to maintain fast convergence over diverse permeability and viscosity regimes. For the scalar thermal system, `compute_thermal_diag_precond!` and `build_diagonal_preconditioner` construct an exact Jacobi diagonal preconditioner from the 5-point heat conduction stencil.
 
 3. **Geometric Multigrid (GMG) Preconditioning**:
    At high grid resolutions, geometric multigrid provides fast error damping across spatial scales:
-   - **Grid Hierarchy**: The grid spacing doubles at each coarser level ($\Delta x_{l+1} = 2 \Delta x_l, \Delta y_{l+1} = 2 \Delta y_l$). Rheological viscosities and hydraulic drag coarsen with harmonic averaging. Densities and body forces coarsen with arithmetic averaging.
+   - **Grid Hierarchy**: The grid spacing doubles at each coarser level ($\Delta x_{l+1} = 2 \Delta x_l, \Delta y_{l+1} = 2 \Delta y_l$). Rheological viscosities and hydraulic drag coarsen with harmonic averaging (`coarsen_property_harmonic`), excluding zero or non-finite ghost boundary nodes. Densities, porosities, and body forces coarsen with arithmetic averaging (`coarsen_property_arithmetic`).
    - **Restriction and Prolongation**: Volume-weighted conservative restriction ($R = \frac{1}{4} P^T$) transfers fine residuals to coarse grids. Continuous staggered prolongation prolongates coarse corrections to fine grids with boundary condition guards.
-   - **Decoupled V-Cycles**: Damped Jacobi or Red-Black Gauss-Seidel relaxation smoothers operate separately on the elliptic velocity momentum block ($v_x, v_y$) and the elliptic fluid Darcy pressure block ($P_f$). Total solid pressure ($P_t$) scales with the discrete Schur complement diagonal.
+   - **Decoupled V-Cycles**: Damped Jacobi or Red-Black Gauss-Seidel relaxation smoothers operate separately on the elliptic velocity momentum block ($v_x, v_y$) and the elliptic fluid Darcy pressure block ($P_f$). Total solid pressure ($P_t$) scales with the discrete Schur complement diagonal, preserving non-zero initial iterates across repeated V-cycles.
 
 4. **Krylov Solvers**:
-   Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl`.
+   Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl` (`Krylov.jl`) for both the Stokes-Darcy and thermal systems.
 
 5. **Hardware Acceleration (GPU via `KernelAbstractions.jl`)**:
    Device-agnostic parallel kernels support multi-threaded CPUs and hardware accelerators (NVIDIA GPUs via `CUDA.jl`, Apple Silicon via `Metal.jl`, and AMD GPUs via `AMDGPU.jl`):
@@ -233,7 +233,7 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    - **Precision Considerations on Apple Silicon**: Apple Metal GPUs do not provide hardware double-precision (`Float64`) arithmetic. Simulations deployed to Apple Metal hardware must configure single-precision floating point (`Float32`). Transferring `Float64` arrays or operators to Metal devices raises an informative `ArgumentError`.
 
 6. **2D Domain Decomposition and Distributed Memory (MPI, Experimental)**:
-   For cluster research, `Erebus.jl` contains experimental domain decomposition primitives via `MPI.jl` (v0.20). Core primitives (topology, halo buffers, matrix-free operators, and marker migration) are implemented; orchestrating the full `simulation_loop` over MPI ranks is under active development (setting `cfg.mpi.enable = true` currently raises an informative error).
+   For cluster research, `Erebus.jl` contains experimental domain decomposition primitives via `MPI.jl` (v0.20). Core primitives (topology, halo buffers, matrix-free operators, and marker migration) are implemented; orchestrating `init_simulation` and `simulation_loop` over MPI ranks is not yet supported (setting `cfg.mpi.enable = true` raises an `ArgumentError` at initialization and runtime).
    - **2D Cartesian Process Grid (`DistributedGridTopology2D`)**: Organizes compute nodes into a 2D Cartesian mesh ($P_y \times P_x$) using `MPI.Cart_create` with automatic surface-to-volume ratio optimization ($P_y \approx P_x \approx \sqrt{P}$). Identifies cardinal (North, South, East, West) and diagonal corner neighbors.
    - **Asynchronous Halo Exchange (`exchange_halos!`)**: Non-blocking peer-to-peer ghost cell communication using pre-allocated buffers (`HaloBuffer`) with non-blocking `MPI.Isend` and `MPI.Irecv!` followed by `MPI.Waitall`. Dimensional 2-step exchange ensures corners are communicated without diagonal message overhead.
    - **Distributed Matrix-Free Operator (`DistributedStokesDarcyOperator`)**: Evaluates $\mathbf{y} = \mathbf{A} \mathbf{x}$ for distributed subdomains with overlapped interior computation and boundary halo exchange.

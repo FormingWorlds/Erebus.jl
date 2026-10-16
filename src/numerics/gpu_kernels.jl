@@ -1852,12 +1852,20 @@ function apply_multigrid_vcycle_device!(
     Ny1 = curr.Ny1
     Nx1 = curr.Nx1
 
-    scale_k! = diag_scale_4var_kernel!(backend, workgroupsize)
     e_mat = reshape(e, (4, Ny1, Nx1))
     r_mat = reshape(r, (4, Ny1, Nx1))
     inv_mat = reshape(curr.inv_diag, (4, Ny1, Nx1))
-    scale_k!(e_mat, r_mat, inv_mat, Ny1, Nx1; ndrange=(Ny1, Nx1))
-    KernelAbstractions.synchronize(backend)
+    if all(iszero, e)
+        scale_k! = diag_scale_4var_kernel!(backend, workgroupsize)
+        scale_k!(e_mat, r_mat, inv_mat, Ny1, Nx1; ndrange=(Ny1, Nx1))
+        KernelAbstractions.synchronize(backend)
+    else
+        mul_device!(curr.res_buf, curr.op, e; backend=backend, workgroupsize=workgroupsize)
+        res_mat = reshape(curr.res_buf, (4, Ny1, Nx1))
+        update_k! = smooth_jacobi_update_kernel!(backend, workgroupsize)
+        update_k!(e_mat, r_mat, res_mat, inv_mat, T(omega), Ny1, Nx1; ndrange=(Ny1, Nx1))
+        KernelAbstractions.synchronize(backend)
+    end
 
     v_cycle_velocity_device!(
         e,

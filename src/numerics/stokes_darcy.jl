@@ -1465,7 +1465,9 @@ function recompute_bulk_viscosity!(ETA, ETAP, ETAPHI, PHI, etaphikoef)
                 inv(ETA[1:(end - 1), 2:end]) +
                 inv(ETA[2:end, 2:end])
             )
-        @views @. ETAPHI = etaphikoef * ETAP * inv(PHI)
+        @views @. ETAPHI = ifelse(
+            PHI > 0.0, etaphikoef * ETAP * inv(PHI), ifelse(ETAP > 0.0, Inf, 0.0)
+        )
     end # @inbounds
     return nothing
 end

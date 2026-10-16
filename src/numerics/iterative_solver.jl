@@ -1067,3 +1067,401 @@ function solve_hydromechanical_iterative!(
     S .= sol
     return S, stats
 end
+
+"""
+    MatrixFreeThermalOperator{T,M}
+
+Matrix-free linear operator representing the implicit 2D heat conduction stencil
+assembled by `assemble_thermal_lse!`.
+"""
+struct MatrixFreeThermalOperator{T<:AbstractFloat,M<:AbstractMatrix{T}}
+    Ny1::Int
+    Nx1::Int
+    dx::T
+    dy::T
+    Nx_val::Int
+    Ny_val::Int
+    RHOCP::M
+    KX::M
+    KY::M
+    dt::T
+    bctop::T
+    bcbottom::T
+    bcleft::T
+    bcright::T
+end
+
+"""
+    MatrixFreeThermalOperator(RHOCP, KX, KY, dt; coords, kwargs...)
+
+Construct a `MatrixFreeThermalOperator` from grid arrays and geometry.
+
+Parameters
+----------
+RHOCP : AbstractMatrix{T}
+    Volumetric heat capacity at P-nodes [J/(m^3 K)].
+KX : AbstractMatrix{T}
+    Horizontal thermal conductivity at Vx-nodes [W/(m K)].
+KY : AbstractMatrix{T}
+    Vertical thermal conductivity at Vy-nodes [W/(m K)].
+dt : Real
+    Timestep size [s].
+coords : GridCoordinates
+    Staggered grid coordinate specification.
+bctop, bcbottom, bcleft, bcright : Real
+    Boundary stencil coefficients (1.0 for zero-gradient / Neumann).
+
+Returns
+-------
+MatrixFreeThermalOperator{T,M}
+    Matrix-free backward-Euler heat conduction operator.
+"""
+function MatrixFreeThermalOperator(
+    RHOCP::M,
+    KX::M,
+    KY::M,
+    dt::Real;
+    coords::GridCoordinates=default_grid_coordinates(),
+    bctop::Real=1.0,
+    bcbottom::Real=1.0,
+    bcleft::Real=1.0,
+    bcright::Real=1.0,
+) where {T<:AbstractFloat,M<:AbstractMatrix{T}}
+    return MatrixFreeThermalOperator{T,M}(
+        coords.Ny1,
+        coords.Nx1,
+        T(coords.dx),
+        T(coords.dy),
+        coords.Nx,
+        coords.Ny,
+        RHOCP,
+        KX,
+        KY,
+        T(dt),
+        T(bctop),
+        T(bcbottom),
+        T(bcleft),
+        T(bcright),
+    )
+end
+
+Base.eltype(::Type{<:MatrixFreeThermalOperator{T}}) where {T} = T
+Base.eltype(::MatrixFreeThermalOperator{T}) where {T} = T
+
+function Base.size(op::MatrixFreeThermalOperator)
+    n = op.Ny1 * op.Nx1
+    return (n, n)
+end
+
+function Base.size(op::MatrixFreeThermalOperator, d::Int)
+    return d in (1, 2) ? (op.Ny1 * op.Nx1) : 1
+end
+
+"""
+    apply_thermal_A!(y, op, x)
+
+Evaluate the matrix-free thermal conduction stencil `y = op * x` in-place.
+
+Parameters
+----------
+y : AbstractVector{T}
+    Output destination vector of length `Ny1 * Nx1`.
+op : MatrixFreeThermalOperator{T}
+    Matrix-free thermal operator.
+x : AbstractVector{T}
+    Input temperature vector of length `Ny1 * Nx1`.
+
+Returns
+-------
+AbstractVector{T}
+    Mutated destination vector `y`.
+"""
+function apply_thermal_A!(
+    y::AbstractVector{T}, op::MatrixFreeThermalOperator{T}, x::AbstractVector{T}
+) where {T<:AbstractFloat}
+    Ny1 = op.Ny1
+    Nx1 = op.Nx1
+    Nx_val = op.Nx_val
+    Ny_val = op.Ny_val
+    inv_dt = inv(op.dt)
+    inv_dx2 = inv(op.dx^2)
+    inv_dy2 = inv(op.dy^2)
+
+    x_mat = reshape(x, (Ny1, Nx1))
+    y_mat = reshape(y, (Ny1, Nx1))
+
+    @inbounds begin
+        # Left and right boundary columns (including corners)
+        for i in 1:Ny1
+            y_mat[i, 1] = x_mat[i, 1] - op.bcleft * x_mat[i, 2]
+            y_mat[i, Nx1] = x_mat[i, Nx1] - op.bcright * x_mat[i, Nx1 - 1]
+        end
+
+        # Top and bottom inner boundary rows
+        for j in 2:Nx_val
+            y_mat[1, j] = x_mat[1, j] - op.bctop * x_mat[2, j]
+            y_mat[Ny1, j] = x_mat[Ny1, j] - op.bcbottom * x_mat[Ny1 - 1, j]
+        end
+
+        # Interior P-nodes
+        for j in 2:Nx_val, i in 2:Ny_val
+            kx_w = op.KX[i, j - 1] * inv_dx2
+            kx_e = op.KX[i, j] * inv_dx2
+            ky_n = op.KY[i - 1, j] * inv_dy2
+            ky_s = op.KY[i, j] * inv_dy2
+            diag_val = op.RHOCP[i, j] * inv_dt + kx_w + kx_e + ky_n + ky_s
+            y_mat[i, j] =
+                diag_val * x_mat[i, j] - kx_w * x_mat[i, j - 1] - kx_e * x_mat[i, j + 1] -
+                ky_n * x_mat[i - 1, j] - ky_s * x_mat[i + 1, j]
+        end
+    end
+    return y
+end
+
+function LinearAlgebra.mul!(
+    y::AbstractVector{T}, op::MatrixFreeThermalOperator{T}, x::AbstractVector{T}
+) where {T<:AbstractFloat}
+    return apply_thermal_A!(y, op, x)
+end
+
+function LinearAlgebra.mul!(
+    y::AbstractVector{T},
+    op::MatrixFreeThermalOperator{T},
+    x::AbstractVector{T},
+    alpha::Number,
+    beta::Number,
+) where {T<:AbstractFloat}
+    if iszero(beta)
+        apply_thermal_A!(y, op, x)
+        if !isone(alpha)
+            y .*= T(alpha)
+        end
+    else
+        tmp = similar(y)
+        apply_thermal_A!(tmp, op, x)
+        y .= T(alpha) .* tmp .+ T(beta) .* y
+    end
+    return y
+end
+
+"""
+    compute_operator_diagonal(op::MatrixFreeThermalOperator)
+
+Extract diagonal entries of `MatrixFreeThermalOperator`.
+
+Parameters
+----------
+op : MatrixFreeThermalOperator{T}
+    Matrix-free thermal operator.
+
+Returns
+-------
+Vector{T}
+    Diagonal entries of length `Ny1 * Nx1`.
+"""
+function compute_operator_diagonal(
+    op::MatrixFreeThermalOperator{T}
+) where {T<:AbstractFloat}
+    Ny1 = op.Ny1
+    Nx1 = op.Nx1
+    Nx_val = op.Nx_val
+    Ny_val = op.Ny_val
+    inv_dt = inv(op.dt)
+    inv_dx2 = inv(op.dx^2)
+    inv_dy2 = inv(op.dy^2)
+
+    d = ones(T, Ny1 * Nx1)
+    d_mat = reshape(d, (Ny1, Nx1))
+    @inbounds for j in 2:Nx_val, i in 2:Ny_val
+        d_mat[i, j] =
+            op.RHOCP[i, j] * inv_dt +
+            (op.KX[i, j - 1] + op.KX[i, j]) * inv_dx2 +
+            (op.KY[i - 1, j] + op.KY[i, j]) * inv_dy2
+    end
+    return d
+end
+
+"""
+    compute_thermal_diag_precond!(inv_diag, op; tol=1.0e-30)
+
+Populate `inv_diag` with the inverse diagonal entries of `op` for Jacobi preconditioning.
+
+Parameters
+----------
+inv_diag : AbstractVector{T}
+    Destination vector of length `Ny1 * Nx1`.
+op : MatrixFreeThermalOperator{T}
+    Matrix-free thermal operator.
+tol : Real
+    Minimum magnitude threshold for inversion.
+
+Returns
+-------
+AbstractVector{T}
+    Mutated inverse diagonal vector `inv_diag`.
+"""
+function compute_thermal_diag_precond!(
+    inv_diag::AbstractVector{T}, op::MatrixFreeThermalOperator{T}; tol::Real=1.0e-30
+) where {T<:AbstractFloat}
+    d = compute_operator_diagonal(op)
+    @inbounds for i in eachindex(inv_diag, d)
+        inv_diag[i] = abs(d[i]) > tol ? inv(d[i]) : one(T)
+    end
+    return inv_diag
+end
+
+"""
+    build_diagonal_preconditioner(op::MatrixFreeThermalOperator; tol=1.0e-30)
+
+Construct a `DiagonalPreconditioner` from a `MatrixFreeThermalOperator`.
+
+Parameters
+----------
+op : MatrixFreeThermalOperator{T}
+    Matrix-free thermal operator.
+tol : Real
+    Minimum magnitude threshold for inversion.
+
+Returns
+-------
+DiagonalPreconditioner{T}
+    Jacobi diagonal preconditioner.
+"""
+function build_diagonal_preconditioner(
+    op::MatrixFreeThermalOperator{T}; tol::Real=1.0e-30
+) where {T<:AbstractFloat}
+    inv_d = zeros(T, op.Ny1 * op.Nx1)
+    compute_thermal_diag_precond!(inv_d, op; tol=tol)
+    return DiagonalPreconditioner{T}(inv_d)
+end
+
+"""
+    solve_thermal_iterative!(
+        A, b, ST;
+        method = :gmres,
+        rtol = 1.0e-8,
+        atol = 1.0e-10,
+        maxiter = 200,
+        restart = 50,
+        preconditioner = :diagonal,
+        P = nothing,
+    )
+
+Solve the thermal conduction linear system `A * ST = b` using a preconditioned Krylov method.
+
+Parameters
+----------
+A : Union{MatrixFreeThermalOperator, AbstractMatrix}
+    Thermal linear operator.
+b : AbstractVector{T}
+    Right-hand side vector.
+ST : AbstractVector{T}
+    Solution vector updated in-place.
+method : Symbol
+    Krylov solver method (`:gmres`, `:fgmres`, or `:bicgstab`).
+rtol, atol : Real
+    Relative and absolute residual convergence tolerances.
+maxiter, restart : Int
+    Maximum Krylov iterations and GMRES restart subspace dimension.
+preconditioner : Symbol
+    Preconditioner type (`:diagonal` or `:none`).
+P : Any
+    Optional custom preconditioner overriding `preconditioner`.
+
+Returns
+-------
+Tuple{AbstractVector{T}, Any}
+    Solution vector `ST` and `Krylov.jl` convergence statistics.
+"""
+function solve_thermal_iterative!(
+    A,
+    b::AbstractVector{T},
+    ST::AbstractVector{T};
+    method::Symbol=:gmres,
+    rtol::Real=1.0e-8,
+    atol::Real=1.0e-10,
+    maxiter::Int=200,
+    restart::Int=50,
+    preconditioner::Symbol=:diagonal,
+    P=nothing,
+) where {T<:AbstractFloat}
+    if method ∉ (:gmres, :fgmres, :bicgstab)
+        throw(
+            ArgumentError(
+                "Unknown Krylov method: $(method). Choose :gmres, :fgmres, or :bicgstab."
+            ),
+        )
+    end
+    if P === nothing && preconditioner ∉ (:diagonal, :none)
+        throw(ArgumentError("Unknown thermal preconditioner: $(preconditioner)"))
+    end
+
+    prec = if P !== nothing
+        P
+    elseif preconditioner == :diagonal
+        build_diagonal_preconditioner(A)
+    else
+        nothing
+    end
+
+    K = LinearSolve.Krylov
+    sol, stats = if method == :gmres
+        if prec !== nothing
+            K.gmres(
+                A,
+                b;
+                N=prec,
+                rtol=T(rtol),
+                atol=T(atol),
+                itmax=maxiter,
+                restart=true,
+                memory=restart,
+            )
+        else
+            K.gmres(
+                A,
+                b;
+                rtol=T(rtol),
+                atol=T(atol),
+                itmax=maxiter,
+                restart=true,
+                memory=restart,
+            )
+        end
+    elseif method == :fgmres
+        if prec !== nothing
+            K.fgmres(
+                A,
+                b;
+                N=prec,
+                rtol=T(rtol),
+                atol=T(atol),
+                itmax=maxiter,
+                restart=true,
+                memory=restart,
+            )
+        else
+            K.fgmres(
+                A,
+                b;
+                rtol=T(rtol),
+                atol=T(atol),
+                itmax=maxiter,
+                restart=true,
+                memory=restart,
+            )
+        end
+    else
+        if prec !== nothing
+            K.bicgstab(A, b; N=prec, rtol=T(rtol), atol=T(atol), itmax=maxiter)
+        else
+            K.bicgstab(A, b; rtol=T(rtol), atol=T(atol), itmax=maxiter)
+        end
+    end
+
+    if !stats.solved
+        @warn "Thermal Krylov solver $(method) did not converge within $(stats.niter) iterations: $(stats.status)"
+    end
+    ST .= sol
+    return ST, stats
+end

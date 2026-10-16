@@ -763,9 +763,17 @@ function v_cycle!(
     levels = hierarchy.levels
     curr = levels[level_idx]
 
-    # Base diagonal scaling across all components (Schur Pt scaling)
-    @inbounds @simd for i in eachindex(x, b, curr.inv_diag)
-        x[i] = curr.inv_diag[i] * b[i]
+    # Preserve non-zero initial guess x with damped residual pre-update
+    if all(iszero, x)
+        @inbounds @simd for i in eachindex(x, b, curr.inv_diag)
+            x[i] = curr.inv_diag[i] * b[i]
+        end
+    else
+        LinearAlgebra.mul!(curr.res_buf, curr.op, x)
+        omega_T = T(omega)
+        @inbounds @simd for i in eachindex(x, b, curr.inv_diag, curr.res_buf)
+            x[i] += omega_T * curr.inv_diag[i] * (b[i] - curr.res_buf[i])
+        end
     end
 
     # Apply decoupled V-cycles: velocity on [vx, vy], darcy on Pf
@@ -885,22 +893,18 @@ function coarsen_property_harmonic(
 
     @inbounds for j in 1:Nx1_c, i in 1:Ny1_c
         if i == 1 || i == Ny1_c || j == 1 || j == Nx1_c
-            fi = clamp(2 * i - 1, 1, Ny1_f)
-            fj = clamp(2 * j - 1, 1, Nx1_f)
-            A_c[i, j] = A_f[fi, fj]
+            fi, fj = clamp(2 * i - 1, 1, Ny1_f), clamp(2 * j - 1, 1, Nx1_f)
+            vb = A_f[fi, fj]
+            if (isnan(vb) || abs(vb) <= tol) && Ny1_f >= 3 && Nx1_f >= 3
+                vb = A_f[clamp(fi, 2, Ny1_f - 1), clamp(fj, 2, Nx1_f - 1)]
+            end
+            A_c[i, j] = !isnan(vb) ? vb : zero(T)
         else
-            fi = 2 * i - 1
-            fj = 2 * j - 1
-            v1 = A_f[fi - 1, fj - 1]
-            v2 = A_f[fi - 1, fj]
-            v3 = A_f[fi, fj - 1]
-            v4 = A_f[fi, fj]
-            inv_sum =
-                (abs(v1) > tol ? inv(v1) : one(T)) +
-                (abs(v2) > tol ? inv(v2) : one(T)) +
-                (abs(v3) > tol ? inv(v3) : one(T)) +
-                (abs(v4) > tol ? inv(v4) : one(T))
-            A_c[i, j] = inv(0.25 * inv_sum)
+            fi, fj = clamp(2 * i - 1, 2, Ny1_f), clamp(2 * j - 1, 2, Nx1_f)
+            vals = (A_f[fi - 1, fj - 1], A_f[fi - 1, fj], A_f[fi, fj - 1], A_f[fi, fj])
+            n_val = count(v -> !isnan(v) && abs(v) > tol, vals)
+            inv_sum = sum(v -> (!isnan(v) && abs(v) > tol) ? inv(v) : zero(T), vals)
+            A_c[i, j] = n_val > 0 ? T(n_val) / inv_sum : zero(T)
         end
     end
     return A_c
@@ -919,15 +923,18 @@ function coarsen_property_arithmetic(
 
     @inbounds for j in 1:Nx1_c, i in 1:Ny1_c
         if i == 1 || i == Ny1_c || j == 1 || j == Nx1_c
-            fi = clamp(2 * i - 1, 1, Ny1_f)
-            fj = clamp(2 * j - 1, 1, Nx1_f)
-            A_c[i, j] = A_f[fi, fj]
+            fi, fj = clamp(2 * i - 1, 1, Ny1_f), clamp(2 * j - 1, 1, Nx1_f)
+            vb = A_f[fi, fj]
+            if (!isfinite(vb) || iszero(vb)) && Ny1_f >= 3 && Nx1_f >= 3
+                vb = A_f[clamp(fi, 2, Ny1_f - 1), clamp(fj, 2, Nx1_f - 1)]
+            end
+            A_c[i, j] = isfinite(vb) ? vb : zero(T)
         else
-            fi = 2 * i - 1
-            fj = 2 * j - 1
-            A_c[i, j] =
-                0.25 *
-                (A_f[fi - 1, fj - 1] + A_f[fi - 1, fj] + A_f[fi, fj - 1] + A_f[fi, fj])
+            fi, fj = clamp(2 * i - 1, 2, Ny1_f), clamp(2 * j - 1, 2, Nx1_f)
+            vals = (A_f[fi - 1, fj - 1], A_f[fi - 1, fj], A_f[fi, fj - 1], A_f[fi, fj])
+            n_val = count(isfinite, vals)
+            val_sum = sum(v -> isfinite(v) ? v : zero(T), vals)
+            A_c[i, j] = n_val > 0 ? val_sum / T(n_val) : zero(T)
         end
     end
     return A_c
