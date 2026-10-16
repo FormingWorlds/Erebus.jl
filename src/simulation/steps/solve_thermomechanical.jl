@@ -105,6 +105,8 @@ function solve_thermomechanical_iterations!(
     DHP_pyro=nothing,
     dt_step_initial::Float64,
 )
+    ws.hydromech_cache = nothing
+    ws.thermal_cache = nothing
     dt_aphimax_step_max = 0.0
     plastic_converged = true
     thermochemical_converged = true

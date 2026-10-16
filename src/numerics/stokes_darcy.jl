@@ -619,7 +619,7 @@ function assemble_hydromechanical_lse!(
 end # function assemble_hydromechanical_lse!
 
 """
-Flush `ExtendableSparseMatrix` into CSC format and prune structural zeros on initial assembly.
+Flush `ExtendableSparseMatrix` into CSC format and prune structural zeros so the CSC pattern depends only on the current state.
 
 $(SIGNATURES)
 
@@ -636,18 +636,14 @@ function _finalize_assembled_lse!(
     L::ExtendableSparseMatrix{Float64,Int64}, workspace, Ny1::Int, Nx1::Int
 )
     flush!(L)
+    dropzeros!(L.cscmatrix)
     if workspace !== nothing &&
         hasproperty(workspace, :Ny1) &&
         hasproperty(workspace, :Nx1) &&
         hasproperty(workspace, :is_initialized) &&
         workspace.Ny1 == Ny1 &&
         workspace.Nx1 == Nx1
-        if !workspace.is_initialized
-            dropzeros!(L.cscmatrix)
-            workspace.is_initialized = true
-        end
-    else
-        dropzeros!(L.cscmatrix)
+        workspace.is_initialized = true
     end
     return L.cscmatrix
 end

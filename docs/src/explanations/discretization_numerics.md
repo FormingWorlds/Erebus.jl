@@ -65,7 +65,7 @@ $$\mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ P_t \\ q_{xD} \\ q_{yD} \\ P_f \end
 - **$q_{xD}, q_{yD}$ Rows**: Discretized Darcy flux relations.
 - **$P_f$ Row**: Discretized fluid continuity with matrix and fluid compressibility terms.
 
-The sparse system is assembled into a preallocated `ExtendableSparseMatrix` workspace (`HydromechanicalLSEWorkspace`) whose compressed sparse column (CSC) sparsity pattern is preserved across subsequent solves, and solved using direct sparse LU factorization (`SparseArrays.UMFPACK.UmfpackLU`) with in-place symbolic-factorization reuse (`lu!`) and preallocated solution buffers (`ldiv!`).
+The sparse system is assembled into a preallocated `ExtendableSparseMatrix` workspace (`HydromechanicalLSEWorkspace`), finalized via `flush!` and `dropzeros!` so the CSC sparsity pattern depends only on the current state, and solved using direct sparse LU factorization (`SparseArrays.UMFPACK.UmfpackLU`) with in-place symbolic-factorization reuse (`lu!`) across nonlinear iterations and preallocated solution buffers (`ldiv!`).
 
 ### Stencil Topologies
 

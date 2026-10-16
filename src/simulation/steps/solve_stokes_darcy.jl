@@ -257,7 +257,7 @@ function assemble_and_solve_hydromechanical!(
 end
 
 """
-Solve sparse linear system `L * S = R` in-place via UMFPACK, reusing symbolic factorization when `cache` matches `nnz(L)`.
+Solve sparse linear system `L * S = R` in-place via UMFPACK, reusing symbolic factorization when `cache` matches the CSC sparsity pattern of `L`.
 
 $(SIGNATURES)
 
@@ -278,7 +278,8 @@ function _solve_direct_umfpack!(
 )
     F =
         if cache isa SparseArrays.UMFPACK.UmfpackLU{Float64,Int64} &&
-            length(cache.nzval) == nnz(L)
+            cache.colptr == L.colptr &&
+            cache.rowval == L.rowval
             lu!(cache, L; check=false)
             issuccess(cache) ? cache : lu(L)
         else
