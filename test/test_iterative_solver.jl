@@ -359,4 +359,161 @@ using Test
         )
         @test stats_fail.solved == false
     end
+
+    @testset "MatrixFreeThermalOperator and solve_thermal_iterative!" begin
+        tk1 = fill(300.0, Ny1, Nx1)
+        for j in 2:coords.Nx, i in 2:coords.Ny
+            tk1[i, j] =
+                300.0 +
+                500.0 * sin(pi * (i - 1) / coords.Ny) * sin(pi * (j - 1) / coords.Nx)
+        end
+        RHOCP = fill(3.3e6, Ny1, Nx1)
+        KX = fill(3.0, Ny1, Nx1)
+        KY = fill(3.0, Ny1, Nx1)
+        HR = fill(1.0e-7, Ny1, Nx1)
+        HA = zeros(Ny1, Nx1)
+        HS = zeros(Ny1, Nx1)
+        DHP = zeros(Ny1, Nx1)
+        RT = zeros(Ny1 * Nx1)
+
+        LT = Erebus.assemble_thermal_lse!(
+            tk1, RHOCP, KX, KY, HR, HA, HS, DHP, RT, dt; coords=coords
+        )
+        op_t = MatrixFreeThermalOperator(RHOCP, KX, KY, dt; coords=coords)
+
+        n_t = Ny1 * Nx1
+        @test size(op_t) == (n_t, n_t)
+        @test size(op_t, 1) == n_t
+        @test size(op_t, 2) == n_t
+        @test size(op_t, 3) == 1
+        e1 = eltype(op_t)
+        e2 = eltype(typeof(op_t))
+        @test (e1, e2) == (Float64, Float64)
+
+        x_t = rand(n_t)
+        y_csc_t = LT.cscmatrix * x_t
+        y_op_t = zeros(n_t)
+        apply_thermal_A!(y_op_t, op_t, x_t)
+        @test norm(y_op_t - y_csc_t) / norm(y_csc_t) < 1.0e-14
+
+        y_mul_t = zeros(n_t)
+        mul!(y_mul_t, op_t, x_t)
+        @test norm(y_mul_t - y_csc_t) / norm(y_csc_t) < 1.0e-14
+
+        y_5_zero = ones(n_t)
+        mul!(y_5_zero, op_t, x_t, 2.5, 0.0)
+        @test norm(y_5_zero - 2.5 .* y_csc_t) / norm(y_csc_t) < 1.0e-14
+
+        y_5_one = ones(n_t)
+        mul!(y_5_one, op_t, x_t, 1.0, 0.0)
+        @test norm(y_5_one - y_csc_t) / norm(y_csc_t) < 1.0e-14
+
+        y_5_full = copy(y_csc_t)
+        mul!(y_5_full, op_t, x_t, 1.5, 0.5)
+        @test norm(y_5_full - 2.0 .* y_csc_t) / norm(y_csc_t) < 1.0e-14
+
+        d_csc_t = diag(LT.cscmatrix)
+        d_op_t = compute_operator_diagonal(op_t)
+        @test norm(d_op_t - d_csc_t) / norm(d_csc_t) < 1.0e-14
+
+        inv_d_t = zeros(n_t)
+        compute_thermal_diag_precond!(inv_d_t, op_t)
+        @test norm(inv_d_t - inv.(d_csc_t)) / norm(inv.(d_csc_t)) < 1.0e-14
+
+        P_t = build_diagonal_preconditioner(op_t)
+        @test norm(P_t.inv_diag - inv_d_t) < 1.0e-14
+
+        ST_direct = LT.cscmatrix \ RT
+
+        for m_sym in (:gmres, :fgmres, :bicgstab), prec_sym in (:diagonal, :none)
+            ST_iter = zeros(n_t)
+            _, stats_t = solve_thermal_iterative!(
+                op_t,
+                RT,
+                ST_iter;
+                method=m_sym,
+                preconditioner=prec_sym,
+                rtol=1.0e-10,
+                atol=1.0e-12,
+                maxiter=200,
+                restart=50,
+            )
+            @test stats_t.solved
+            @test norm(ST_iter - ST_direct) / norm(ST_direct) < 1.0e-7
+        end
+
+        ST_custom_p = zeros(n_t)
+        _, stats_cp = solve_thermal_iterative!(
+            op_t, RT, ST_custom_p; method=:gmres, P=P_t, rtol=1.0e-10
+        )
+        @test stats_cp.solved
+        @test norm(ST_custom_p - ST_direct) / norm(ST_direct) < 1.0e-7
+
+        @test_throws ArgumentError solve_thermal_iterative!(
+            op_t, RT, ST_custom_p; method=:invalid_method
+        )
+        @test_throws ArgumentError solve_thermal_iterative!(
+            op_t, RT, ST_custom_p; preconditioner=:invalid_precond
+        )
+
+        ST_unsolved = zeros(n_t)
+        _, stats_unsolved = solve_thermal_iterative!(
+            op_t, RT, ST_unsolved; method=:gmres, rtol=1.0e-30, atol=1.0e-30, maxiter=1
+        )
+        @test !stats_unsolved.solved
+
+        # Integration with solve_thermal_energy! under :direct, :matrix_free, and :iterative
+        tk2_ref = nothing
+        for mode_sym in (:direct, :matrix_free, :iterative)
+            cfg_t = override_config(
+                cfg,
+                Dict(
+                    "solver.hydromech_solver" => mode_sym,
+                    "solver.darcy_elimination" => true,
+                    "solver.experimental" => true,
+                    "solver.krylov_rtol" => 1.0e-10,
+                    "solver.krylov_atol" => 1.0e-12,
+                ),
+            )
+            st_t, coords_t, ws_t, _, _ = init_simulation(cfg_t; output_path=mktempdir())
+            Erebus.interpolate_markers_to_grid!(
+                st_t,
+                coords_t,
+                cfg_t;
+                p2m_workspace=ws_t.p2m,
+                thread_buffers=ws_t.thread_buffers,
+                interp_arrays=ws_t.interp_arrays,
+            )
+            Erebus.recompute_bulk_viscosity!(
+                st_t.grids.ETA,
+                st_t.grids.ETAP,
+                st_t.grids.ETAPHI,
+                st_t.grids.PHI,
+                cfg_t.solver.etaphikoef,
+            )
+            Erebus.snapshot_step_start_inventories!(ws_t, st_t, cfg_t)
+            res_t = Erebus.solve_thermal_energy!(
+                st_t, coords_t, cfg_t, ws_t; titer=1, DHP_pyro=nothing
+            )
+            @test all(isfinite, st_t.grids.tk2)
+            @test isfinite(res_t.dt_next)
+            if mode_sym == :direct
+                tk2_ref = copy(st_t.grids.tk2)
+            else
+                @test isapprox(st_t.grids.tk2, tk2_ref; rtol=1e-7)
+                cfg_fail = override_config(
+                    cfg_t,
+                    Dict(
+                        "solver.krylov_rtol" => 1.0e-30,
+                        "solver.krylov_atol" => 1.0e-30,
+                        "solver.krylov_maxiter" => 1,
+                    ),
+                )
+                st_t.grids.HR .= 1.0e-4
+                @test_throws ErrorException Erebus.solve_thermal_energy!(
+                    st_t, coords_t, cfg_fail, ws_t; titer=1, DHP_pyro=nothing
+                )
+            end
+        end
+    end
 end

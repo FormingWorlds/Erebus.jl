@@ -235,18 +235,25 @@ function Base.iterate(m::MarkerArrays, state...)
     return iterate(pairs(m), state...)
 end
 
+function _resize_zero_init!(v::AbstractVector{T}, new_len::Integer) where {T}
+    old_len = length(v)
+    resize!(v, new_len)
+    new_len > old_len && fill!(view(v, (old_len + 1):new_len), zero(T))
+    return v
+end
+
 """
     Base.resize!(m::MarkerArrays, new_len::Integer)
 
-Resize all vectors in core and active groups to `new_len`.
+Resize all vectors in core and active groups to `new_len`, zero-initializing grown elements.
 """
 function Base.resize!(m::MarkerArrays, new_len::Integer)
     for fn in fieldnames(CoreGroup)
-        resize!(getfield(m.core, fn), new_len)
+        _resize_zero_init!(getfield(m.core, fn), new_len)
     end
     for grp in values(m.groups)
         for fn in fieldnames(typeof(grp))
-            resize!(getfield(grp, fn), new_len)
+            _resize_zero_init!(getfield(grp, fn), new_len)
         end
     end
     return m

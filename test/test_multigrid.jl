@@ -486,4 +486,77 @@ using Erebus
         LinearAlgebra.mul!(res_jump, op_jump, S_jump)
         @test norm(b_jump - res_jump) / norm(b_jump) < 1.0e-5
     end
+
+    @testset "Repeated V-Cycle Initial Guess Preservation and Ghost Boundary Coarsening" begin
+        coords_16 = GridCoordinates(16, 16; xsize=xsize, ysize=ysize)
+        Ny_16, Nx_16 = coords_16.Ny, coords_16.Nx
+        Ny1_16, Nx1_16 = coords_16.Ny1, coords_16.Nx1
+
+        ETA_16 = fill(1.0e19, Ny_16, Nx_16)
+        ETAP_16 = zeros(Ny1_16, Nx1_16)
+        ETAPHI_16 = zeros(Ny1_16, Nx1_16)
+        PHI_16 = zeros(Ny1_16, Nx1_16)
+        PHI_16[2:Ny_16, 2:Nx_16] .= 0.02
+
+        Erebus.recompute_bulk_viscosity!(ETA_16, ETAP_16, ETAPHI_16, PHI_16, 1.0)
+        @test all(isfinite, ETAPHI_16)
+
+        ETAP_c = Erebus.coarsen_property_harmonic(ETAP_16, 9, 9)
+        ETAPHI_c = Erebus.coarsen_property_harmonic(ETAPHI_16, 9, 9)
+        PHI_c = Erebus.coarsen_property_arithmetic(PHI_16, 9, 9)
+
+        @test all(isfinite, ETAP_c)
+        @test all(x -> isapprox(x, 1.0e19; rtol=1e-12), ETAP_c)
+        @test all(isfinite, ETAPHI_c)
+        @test all(x -> isapprox(x, 5.0e20; rtol=1e-12), ETAPHI_c)
+        @test all(isfinite, PHI_c)
+        @test all(x -> isapprox(x, 0.02; rtol=1e-12), PHI_c)
+
+        zero_harm = Erebus.coarsen_property_harmonic(zeros(Ny1_16, Nx1_16), 9, 9)
+        @test all(iszero, zero_harm)
+        nan_arith = Erebus.coarsen_property_arithmetic(fill(NaN, Ny1_16, Nx1_16), 9, 9)
+        @test all(iszero, nan_arith)
+
+        # Repeated v_cycle! calls preserve non-zero x and reduce residual monotonically
+        h_16 = build_staggered_multigrid_hierarchy(op_fine; max_levels=3)
+        b_rep = zeros(op_fine.Ny1 * op_fine.Nx1 * 4)
+        x_true_rep = zeros(length(b_rep))
+        xm_rep = reshape(x_true_rep, (4, op_fine.Ny1, op_fine.Nx1))
+        for j in 2:op_fine.Nx_val, i in 2:op_fine.Ny_val
+            if !Erebus.is_boundary_vx(
+                i, j, op_fine.Ny_val, op_fine.Nx_val, op_fine.Ny1, op_fine.Nx1
+            )
+                xm_rep[1, i, j] =
+                    sin(2 * pi * i / op_fine.Ny1) * cos(2 * pi * j / op_fine.Nx1)
+            end
+            if !Erebus.is_boundary_vy(
+                i, j, op_fine.Ny_val, op_fine.Nx_val, op_fine.Ny1, op_fine.Nx1
+            )
+                xm_rep[2, i, j] =
+                    cos(2 * pi * i / op_fine.Ny1) * sin(2 * pi * j / op_fine.Nx1)
+            end
+            if !Erebus.is_boundary_p(
+                i, j, op_fine.Ny_val, op_fine.Nx_val, op_fine.Ny1, op_fine.Nx1
+            )
+                xm_rep[3, i, j] = 1.0e6
+                xm_rep[4, i, j] = 0.5e6
+            end
+        end
+        LinearAlgebra.mul!(b_rep, op_fine, x_true_rep)
+
+        x_rep = zeros(length(b_rep))
+        r_rep = zeros(length(b_rep))
+        v_cycle!(x_rep, b_rep, h_16, 1)
+        LinearAlgebra.mul!(r_rep, op_fine, x_rep)
+        res_1 = norm(b_rep - r_rep) / norm(b_rep)
+
+        x_dev_rep = copy(x_rep)
+        v_cycle!(x_rep, b_rep, h_16, 1)
+        Erebus.apply_multigrid_vcycle_device!(x_dev_rep, b_rep, h_16)
+        @test isapprox(x_rep, x_dev_rep; rtol=1e-12, atol=1e-14)
+
+        LinearAlgebra.mul!(r_rep, op_fine, x_rep)
+        res_2 = norm(b_rep - r_rep) / norm(b_rep)
+        @test res_2 < res_1
+    end
 end

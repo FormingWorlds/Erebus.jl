@@ -306,20 +306,53 @@ function solve_thermal_energy!(
         workspace=ws.thermal,
     )
 
-    if ws.thermal_cache === nothing
-        thermal_prob = LinearProblem(LT.cscmatrix, ws.RT)
-        ws.thermal_cache = init(thermal_prob, UMFPACKFactorization(; reuse_symbolic=true))
+    if cfg.solver.hydromech_solver == :matrix_free
+        op_thermal = MatrixFreeThermalOperator(g.RHOCP, g.KX, g.KY, state.dt; coords=coords)
+        _, stats_t = solve_thermal_iterative!(
+            op_thermal,
+            ws.RT,
+            ws.ST;
+            method=cfg.solver.krylov_method,
+            rtol=cfg.solver.krylov_rtol,
+            atol=cfg.solver.krylov_atol,
+            maxiter=cfg.solver.krylov_maxiter,
+            restart=cfg.solver.krylov_restart,
+        )
+        if !stats_t.solved || !all(isfinite, ws.ST)
+            error("Matrix-free thermal Krylov solver failed: $(stats_t.status)")
+        end
+    elseif cfg.solver.hydromech_solver == :iterative
+        _, stats_t = solve_thermal_iterative!(
+            LT.cscmatrix,
+            ws.RT,
+            ws.ST;
+            method=cfg.solver.krylov_method,
+            rtol=cfg.solver.krylov_rtol,
+            atol=cfg.solver.krylov_atol,
+            maxiter=cfg.solver.krylov_maxiter,
+            restart=cfg.solver.krylov_restart,
+        )
+        if !stats_t.solved || !all(isfinite, ws.ST)
+            error("Iterative thermal Krylov solver failed: $(stats_t.status)")
+        end
     else
-        ws.thermal_cache.A = LT.cscmatrix
-        ws.thermal_cache.b = ws.RT
-    end
-    thermal_sol = solve!(ws.thermal_cache)
-    if !LinearSolve.SciMLBase.successful_retcode(thermal_sol) ||
-        !all(isfinite, thermal_sol.u)
-        error("Thermal solver failed with retcode $(thermal_sol.retcode)")
-    end
+        if ws.thermal_cache === nothing
+            thermal_prob = LinearProblem(LT.cscmatrix, ws.RT)
+            ws.thermal_cache = init(
+                thermal_prob, UMFPACKFactorization(; reuse_symbolic=true)
+            )
+        else
+            ws.thermal_cache.A = LT.cscmatrix
+            ws.thermal_cache.b = ws.RT
+        end
+        thermal_sol = solve!(ws.thermal_cache)
+        if !LinearSolve.SciMLBase.successful_retcode(thermal_sol) ||
+            !all(isfinite, thermal_sol.u)
+            error("Thermal solver failed with retcode $(thermal_sol.retcode)")
+        end
 
-    ws.ST .= thermal_sol.u
+        ws.ST .= thermal_sol.u
+    end
     g.tk2 .= reshape(ws.ST, coords.Ny1, coords.Nx1)
     @. g.DT = g.tk2 - g.tk1
     maxDTcurrent = maximum(abs, g.DT)

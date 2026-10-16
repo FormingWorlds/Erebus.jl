@@ -321,5 +321,11 @@ end
         cfg_mpi = SimulationConfig(; mpi=MPIConfig(; enable=true))
         @test cfg_mpi.mpi.enable
         @test_throws ErrorException simulation_loop(cfg_mpi)
+        @test_throws ArgumentError init_simulation(cfg_mpi; output_path=mktempdir())
+
+        cfg_exp = SimulationConfig(;
+            solver=SolverConfig(; hydromech_solver=:iterative, experimental=false)
+        )
+        @test_throws ArgumentError init_simulation(cfg_exp; output_path=mktempdir())
     end
 end

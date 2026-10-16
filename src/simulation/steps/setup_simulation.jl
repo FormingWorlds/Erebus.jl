@@ -538,6 +538,20 @@ function init_simulation(
     restart_from::AbstractString=cfg.output.restart_from,
     force_restart_config::Bool=false,
 )
+    if cfg.mpi.enable
+        throw(
+            ArgumentError(
+                "Distributed MPI execution in init_simulation is not supported; set mpi.enable = false",
+            ),
+        )
+    end
+    if cfg.solver.hydromech_solver in (:iterative, :matrix_free) && !cfg.solver.experimental
+        throw(
+            ArgumentError(
+                "solver.hydromech_solver = :$(cfg.solver.hydromech_solver) is experimental; set solver.experimental = true to enable",
+            ),
+        )
+    end
     coords, formatted_output_path = setup_simulation_grid_and_coords(
         cfg; output_path=output_path
     )
