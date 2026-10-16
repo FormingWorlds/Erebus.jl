@@ -727,7 +727,8 @@ function advance_accretion_boundary!(
                     @inbounds Xfe_bulk[m] = Float64(Xfe_accreted)
                 end
                 if Xfem !== nothing
-                    @inbounds Xfem[m] = 0.0  # Cold accreted metal is solid
+                    F_fe = compute_metal_melt_fraction(Float64(T_accreted))
+                    @inbounds Xfem[m] = Float64(Xfe_accreted) * F_fe
                 end
 
                 if XH2Om !== nothing
@@ -772,6 +773,107 @@ function advance_accretion_boundary!(
     return n_converted[]
 end
 
+"""
+Initialize core constitutive, thermal, and mechanical properties on a newly accreted rock marker.
+
+$(SIGNATURES)
+
+Parameters
+----------
+core : CoreGroup
+    Core marker property arrays.
+m : Int
+    Marker index.
+params : NamedTuple
+    Accreted shell state parameters (`phi_accreted`, `T_accreted`, `XW_acc`).
+cfg : Union{Nothing, SimulationConfig}
+    Simulation configuration, or `nothing` to use module material defaults.
+
+Returns
+-------
+Nothing
+"""
+function _init_accreted_marker_core!(
+    core, m::Int, params::NamedTuple, cfg::Union{Nothing,SimulationConfig}
+)
+    mat_eta = cfg !== nothing ? cfg.materials.etasolidm[2] : etasolidm[2]
+    mat_etaf = cfg !== nothing ? cfg.materials.etafluidm[2] : etafluidm[2]
+    mat_kphi0 = cfg !== nothing ? cfg.materials.kphim0[2] : kphim0[2]
+    phim0_val = cfg !== nothing ? cfg.thermodynamics.phim0 : phim0
+    mat_ggg = cfg !== nothing ? cfg.materials.gggsolidm[2] : gggsolidm[2]
+    mat_frict = cfg !== nothing ? cfg.materials.frictsolidm[2] : frictsolidm[2]
+    mat_cohes = cfg !== nothing ? cfg.materials.cohessolidm[2] : cohessolidm[2]
+    mat_tens = cfg !== nothing ? cfg.materials.tenssolidm[2] : tenssolidm[2]
+    mat_rhos = cfg !== nothing ? cfg.materials.rhosolidm[2] : rhosolidm[2]
+    mat_rhof = cfg !== nothing ? cfg.materials.rhofluidm[2] : rhofluidm[2]
+    mat_rhocps = cfg !== nothing ? cfg.materials.rhocpsolidm[2] : rhocpsolidm[2]
+    mat_rhocpf = cfg !== nothing ? cfg.materials.rhocpfluidm[2] : rhocpfluidm[2]
+    mat_ks = cfg !== nothing ? cfg.materials.ksolidm[2] : ksolidm[2]
+    mat_kf = cfg !== nothing ? cfg.materials.kfluidm[2] : kfluidm[2]
+    mat_alphas = cfg !== nothing ? cfg.materials.alphasolidm[2] : alphasolidm[2]
+    mat_alphaf = cfg !== nothing ? cfg.materials.alphafluidm[2] : alphafluidm[2]
+    p_surf = if cfg !== nothing
+        max(Float64(cfg.geometry.psurface), Float64(cfg.disk.p_amb_disk))
+    else
+        0.0
+    end
+
+    phi_val = params.phi_accreted
+    T_acc_val = params.T_accreted
+    rhocp_val = mat_rhocps * (1.0 - phi_val) + mat_rhocpf * phi_val
+
+    @inbounds core.tm[m] = 2
+    @inbounds core.tkm[m] = T_acc_val
+    @inbounds core.phim[m] = phi_val
+    @inbounds core.phinewm[m] = phi_val
+    @inbounds core.pfm0[m] = p_surf
+    @inbounds core.XWsolidm0[m] = params.XW_acc
+    @inbounds core.XWsolidm[m] = params.XW_acc
+    @inbounds core.Fm[m] = 0.0
+    @inbounds core.etavpm[m] = mat_eta
+    @inbounds core.sxxm[m] = 0.0
+    @inbounds core.sxym[m] = 0.0
+    @inbounds core.inv_gggtotalm[m] = inv(mat_ggg)
+    @inbounds core.fricttotalm[m] = mat_frict
+    @inbounds core.cohestotalm[m] = mat_cohes
+    @inbounds core.tenstotalm[m] = mat_tens
+    @inbounds core.rhototalm[m] = mat_rhos * (1.0 - phi_val) + mat_rhof * phi_val
+    @inbounds core.rhocptotalm[m] = rhocp_val
+    @inbounds core.etatotalm[m] = mat_eta * exp(-28.0 * phi_val)
+    @inbounds core.ktotalm[m] = mat_ks * (1.0 - phi_val) + mat_kf * phi_val
+    @inbounds core.hrtotalm[m] = 0.0
+    @inbounds core.tkm_rhocptotalm[m] = T_acc_val * rhocp_val
+    @inbounds core.etafluidcur_inv_kphim[m] = ηᶠcur_inv_kᵠ(
+        mat_kphi0, phi_val, mat_etaf; phim0=phim0_val
+    )
+    @inbounds core.rhofluidcur[m] = mat_rhof
+    @inbounds core.alphasolidcur[m] = mat_alphas
+    @inbounds core.alphafluidcur[m] = mat_alphaf
+    return nothing
+end
+
+"""
+Initialize core and active optional group properties on a newly accreted rock marker.
+
+$(SIGNATURES)
+
+Parameters
+----------
+markers : MarkerArrays
+    Marker container holding `core` and optional `groups`.
+m : Int
+    Marker index.
+params : NamedTuple
+    Accreted shell state parameters.
+cfg : Union{Nothing, SimulationConfig}, optional
+    Simulation configuration (default: `nothing`).
+disk_state : Any, optional
+    Local protoplanetary disk state for ice and refractory volatile condensation.
+
+Returns
+-------
+Nothing
+"""
 function _init_accreted_marker!(
     markers::MarkerArrays,
     m::Int,
@@ -779,18 +881,19 @@ function _init_accreted_marker!(
     cfg::Union{Nothing,SimulationConfig}=nothing,
     disk_state=nothing,
 )
-    @inbounds markers.tm[m] = 2
-    @inbounds markers.tkm[m] = params.T_accreted
-    @inbounds markers.phim[m] = params.phi_accreted
-    @inbounds markers.phinewm[m] = params.phi_accreted
-    @inbounds markers.XWsolidm0[m] = params.XW_acc
-    @inbounds markers.XWsolidm[m] = params.XW_acc
+    _init_accreted_marker_core!(markers.core, m, params, cfg)
 
     if haskey(markers.groups, :metal)
         metal = markers.groups.metal
+        T_eut = cfg !== nothing ? cfg.coreformation.T_eutectic : 1213.0
+        dT_met = cfg !== nothing ? cfg.coreformation.dT_metal : 50.0
+        F_fe = compute_metal_melt_fraction(
+            params.T_accreted; T_eutectic=T_eut, dT_metal=dT_met
+        )
+        xfem_val = params.Xfe_accreted * F_fe
         @inbounds metal.Xfe_bulk[m] = params.Xfe_accreted
-        @inbounds metal.Xfem[m] = 0.0
-        @inbounds metal.Xfem0[m] = 0.0
+        @inbounds metal.Xfem[m] = xfem_val
+        @inbounds metal.Xfem0[m] = xfem_val
         @inbounds metal.Xfe_H_m[m] = 0.0
         @inbounds metal.Xfe_C_m[m] = 0.0
         @inbounds metal.Xfe_N_m[m] = 0.0

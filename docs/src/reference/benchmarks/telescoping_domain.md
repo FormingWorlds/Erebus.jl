@@ -100,7 +100,7 @@ The TOML configuration snippet below enables the telescoping domain engine:
 active = true
 r_threshold_fraction = 0.70      # Trigger doubling when R > 0.70 * (xsize / 2)
 max_telescope_levels = 10        # Maximum allowable doubling levels
-buffer_markers_per_cell = 4      # Sticky-air markers injected per outer cell
+buffer_markers_per_cell = 16     # Sticky-air markers injected per outer cell
 
 [accretion]
 active = true

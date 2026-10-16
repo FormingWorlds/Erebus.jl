@@ -1345,7 +1345,7 @@ Base.@kwdef struct TelescopingConfig
     active::Bool = false
     r_threshold_fraction::Float64 = 0.70
     max_telescope_levels::Int = 10
-    buffer_markers_per_cell::Int = 4
+    buffer_markers_per_cell::Int = 16
 end
 
 """

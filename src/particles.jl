@@ -1156,14 +1156,31 @@ function define_markers!(
 end
 
 """
-Compute chondritic metallic iron volume fraction from phase densities.
+Compute chondritic metallic iron volume fraction from phase densities and metal mass fraction.
 
 $(SIGNATURES)
+
+Parameters
+----------
+rho_sol : Real
+    Silicate solid density [kg/m^3].
+rho_met : Real
+    Metallic phase density [kg/m^3].
+w_fe : Real, optional
+    Bulk metallic iron mass fraction [-] (default: `X_FE_REF_CHONDRITE`).
+
+Returns
+-------
+Float64
+    Metallic iron volume fraction in `[0, 1]`.
 """
-@inline function chondritic_phi_fe(rho_sol::Real, rho_met::Real)
+@inline function chondritic_phi_fe(
+    rho_sol::Real, rho_met::Real; w_fe::Real=X_FE_REF_CHONDRITE
+)
     rho_sol <= 0.0 && return 0.0
-    v_fe = X_FE_REF_CHONDRITE / (rho_met > 0.0 ? rho_met : 5450.0)
-    return clamp(v_fe / (v_fe + (1.0 - X_FE_REF_CHONDRITE) / rho_sol), 0.0, 1.0)
+    w_clamped = clamp(Float64(w_fe), 0.0, 1.0)
+    v_fe = w_clamped / (rho_met > 0.0 ? Float64(rho_met) : 5450.0)
+    return clamp(v_fe / (v_fe + (1.0 - w_clamped) / Float64(rho_sol)), 0.0, 1.0)
 end
 
 """

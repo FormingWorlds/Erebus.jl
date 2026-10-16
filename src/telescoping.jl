@@ -143,7 +143,7 @@ end
         new_coords::GridCoordinates,
         T_ambient::Real=250.0,
         phi_ambient::Real=0.35,
-        buffer_markers_per_cell::Integer=4,
+        buffer_markers_per_cell::Integer=16,
         Xfem=nothing,
         Xfem0=nothing,
         Xfe_bulk=nothing,
@@ -203,7 +203,7 @@ function telescope_marker_arrays!(
     new_coords::GridCoordinates,
     T_ambient::Real=250.0,
     phi_ambient::Real=0.35,
-    buffer_markers_per_cell::Integer=4,
+    buffer_markers_per_cell::Integer=16,
     Xfem::Union{Nothing,AbstractVector{<:Real}}=nothing,
     Xfem0::Union{Nothing,AbstractVector{<:Real}}=nothing,
     Xfe_bulk::Union{Nothing,AbstractVector{<:Real}}=nothing,
@@ -396,7 +396,7 @@ end
         old_coords::GridCoordinates,
         new_coords::GridCoordinates,
         cfg::Union{Nothing,SimulationConfig}=nothing,
-        buffer_markers_per_cell::Integer=4,
+        buffer_markers_per_cell::Integer=cfg !== nothing ? cfg.telescoping.buffer_markers_per_cell : 16,
     )::Int
 
 Extend all active arrays in `markers.core` and `markers.groups` following domain telescoping.
@@ -407,7 +407,11 @@ function telescope_marker_arrays!(
     old_coords::GridCoordinates,
     new_coords::GridCoordinates,
     cfg::Union{Nothing,SimulationConfig}=nothing,
-    buffer_markers_per_cell::Integer=4,
+    buffer_markers_per_cell::Integer=if cfg !== nothing
+        cfg.telescoping.buffer_markers_per_cell
+    else
+        16
+    end,
 )::Int
     c = markers.core
     grps = markers.groups

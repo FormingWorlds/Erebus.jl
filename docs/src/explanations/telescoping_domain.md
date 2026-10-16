@@ -99,7 +99,7 @@ The marker-in-cell method simulates internal free surfaces using the sticky-air 
 
 When the computational box doubles in each dimension, the total area quadruples ($A_{\text{new}} = 4 A_{\text{old}}$). The outer annular zone of area $3 A_{\text{old}}$ contains no preexisting markers. To maintain uniform marker resolution, new sticky-air markers are synthesized:
 
-- Each outer grid cell receives $n_{\text{buffer}} = \text{buffer\_markers\_per\_cell}$ markers placed on a regular sub-grid.
+- Each outer grid cell receives $n_{\text{buffer}} = \text{buffer\_markers\_per\_cell}$ markers (default $16$, a $4 \times 4$ sub-grid matching the interior seeding density) placed on a regular sub-grid.
 - Newly created buffer markers receive neutral ambient properties ($tm = 3$, $T = T_{\text{ambient}}$, $hr = 0$, zero volatiles, zero metal).
 - Preexisting solid rock and core markers are unmodified; this preserves exact physical conservation.
 

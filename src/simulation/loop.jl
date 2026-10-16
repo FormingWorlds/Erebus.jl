@@ -257,20 +257,22 @@ function simulation_loop(
             @timeit state.timer "step" begin
                 timestep_begin = Dates.now()
                 num_dt_reductions = 0
+                accretion_dt_resynced = false
                 snapshot = snapshot_step_state(state, coords_ref[], ws)
                 dt_aphimax_step_max = 0.0
                 n_flips_last = 0
                 n_flips_step_total = 0
 
+                # Determine initial target timestep duration for this step
+                dt_step_target = if dt_reduced_by_maxDT
+                    min(state.dt, dt_longest)
+                else
+                    min(state.dt * cfg.time.dtcoefup, dt_longest)
+                end
+                dt_reduced_by_maxDT = false
+
                 while true
-                    # Determine target timestep duration for this attempt
-                    dt_step_target = if dt_reduced_by_maxDT
-                        min(state.dt, dt_longest)
-                    else
-                        min(state.dt * cfg.time.dtcoefup, dt_longest)
-                    end
                     state.dt = dt_step_target
-                    dt_reduced_by_maxDT = false
                     dt_step_initial = state.dt
 
                     # Step preparation: ambient conditions and sticky air
@@ -334,13 +336,24 @@ function simulation_loop(
                             )
                         end
                         restore_step_state!(state, coords_ref, ws, snapshot)
-                        dt_step_target = min(dt_step_target / 2.0, dt_next)
-                        state.dt = dt_step_target
+                        accretion_dt_resynced = false
+                        state.dt = dt_step_target = min(dt_step_target / 2.0, dt_next)
+                        continue
+                    end
+
+                    if cfg.accretion.active &&
+                        !accretion_dt_resynced &&
+                        state.dt < dt_step_initial * (1.0 - 1.0e-12)
+                        dt_step_target = state.dt
+                        restore_step_state!(state, coords_ref, ws, snapshot)
+                        accretion_dt_resynced = true
                         continue
                     end
 
                     break # Plastic iterations converged
                 end
+
+                reconcile_accretion_timestep!(state, snapshot, cfg)
 
                 # Post-convergence: marker viscoelasticity and subgrid diffusion
                 diffuse_and_update_markers!(state, coords_ref[], cfg, ws)

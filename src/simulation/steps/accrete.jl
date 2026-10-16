@@ -113,3 +113,106 @@ function accrete!(
     assert_marker_arrays_invariants(markers, length(markers.core.xm))
     return nothing
 end
+
+"""
+Restore a single marker at index `m` in `dst` from `src` across core and active groups.
+
+$(SIGNATURES)
+
+Parameters
+----------
+dst : MarkerArrays
+    Destination marker container to restore into.
+src : MarkerArrays
+    Source snapshot marker container to restore from.
+m : Int
+    Marker index.
+
+Returns
+-------
+Nothing
+"""
+function _restore_single_marker!(dst::MarkerArrays, src::MarkerArrays, m::Int)::Nothing
+    dc = dst.core
+    sc = src.core
+    for fname in fieldnames(CoreGroup)
+        @inbounds getfield(dc, fname)[m] = getfield(sc, fname)[m]
+    end
+    for (gname, dgrp) in pairs(dst.groups)
+        if haskey(src.groups, gname)
+            sgrp = src.groups[gname]
+            for fname in fieldnames(typeof(dgrp))
+                @inbounds getfield(dgrp, fname)[m] = getfield(sgrp, fname)[m]
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    reconcile_accretion_timestep!(
+        state::SimulationState, snapshot::StepSnapshot, cfg::SimulationConfig
+    )::Nothing
+
+Synchronize step-end planetesimal mass, radius, and converted shell markers with the
+final converged timestep `state.dt` when adaptive timestepping reduces `state.dt`
+below the initial trial step duration.
+
+Parameters
+----------
+state : SimulationState
+    Active simulation state at the end of the converged step.
+snapshot : StepSnapshot
+    Step-start state snapshot recorded prior to accretion.
+cfg : SimulationConfig
+    Simulation configuration.
+
+Returns
+-------
+Nothing
+"""
+function reconcile_accretion_timestep!(
+    state::SimulationState, snapshot::StepSnapshot, cfg::SimulationConfig
+)::Nothing
+    (!cfg.accretion.active || length(state.markers) == 0) && return nothing
+
+    rplanet_0 = Float64(snapshot.scalars.rplanet_val)
+    M_planet_0 = Float64(snapshot.scalars.M_planet_val)
+    M_accreted_0 = Float64(snapshot.scalars.M_accreted_total)
+
+    dM_dt_acc = compute_accretion_rate(
+        state.timesum, M_planet_0, rplanet_0, cfg.accretion, cfg.disk
+    )
+    dM_remain = max(0.0, cfg.accretion.M_target - M_planet_0)
+    dM_acc = min(dM_dt_acc * state.dt, dM_remain)
+
+    dR_acc = if dM_acc > 0.0 && rplanet_0 < cfg.accretion.R_target
+        dR_raw = compute_radius_increment(rplanet_0, dM_acc, cfg.accretion.rho_bulk)
+        min(dR_raw, max(0.0, cfg.accretion.R_target - rplanet_0))
+    else
+        0.0
+    end
+
+    rplanet_new = rplanet_0 + dR_acc
+    rplanet_new_sq = rplanet_new^2
+    xc = state.accumulators.xcenter
+    yc = state.accumulators.ycenter
+
+    n_check = min(length(state.markers), length(snapshot.markers))
+    core = state.markers.core
+    snap_core = snapshot.markers.core
+    for m in 1:n_check
+        if @inbounds(snap_core.tm[m]) == 3 && @inbounds(core.tm[m]) == 2
+            dx_m = @inbounds(core.xm[m]) - xc
+            dy_m = @inbounds(core.ym[m]) - yc
+            if dx_m^2 + dy_m^2 > rplanet_new_sq
+                _restore_single_marker!(state.markers, snapshot.markers, m)
+            end
+        end
+    end
+
+    state.accumulators.rplanet = rplanet_new
+    state.accumulators.M_planet_val = M_planet_0 + dM_acc
+    state.accumulators.M_accreted_total = M_accreted_0 + dM_acc
+    return nothing
+end

@@ -99,8 +99,8 @@ Accretion occurs within the time window $t \in [t_{\mathrm{start}}, t_{\mathrm{s
 2. **Exact 3D Spherical Volume Mapping:** A mass increment $\Delta M = \dot{M} \, \Delta t$ expands the planetesimal radius by:
    $$\Delta R = \left( R^3 + \frac{3\,\Delta M}{4\pi\,\rho_{\mathrm{bulk}}} \right)^{1/3} - R$$
    This formula conserves 3D spherical volume $\Delta V = \Delta M / \rho_{\mathrm{bulk}}$ without accumulating first-order truncation error. All sticky-air markers in the shell $r \le R + \Delta R$ convert to solid crust markers ($tm = 2$).
-3. **Property Initialization:** Converted markers receive accreted shell porosity $\phi_{\mathrm{accreted}}$, bulk iron fraction $X_{\mathrm{fe,bulk}}$, volatile mass fractions ($\mathrm{H}_2\mathrm{O}, \mathrm{C}, \mathrm{N}, \mathrm{S}$), and impact temperature $T_{\mathrm{accreted}}$.
-4. **Accretion Epoch Tracking:** Converted markers store their accretion timestamp $t_{\mathrm{acc}} = t$.
+3. **Property Initialization:** Converted markers receive accreted shell porosity $\phi_{\mathrm{accreted}}$, bulk iron volume fraction $X_{\mathrm{fe,bulk}}$, equilibrium molten metal fraction $X_{\mathrm{fe,m}}(T_{\mathrm{accreted}})$, volatile concentrations ($\mathrm{H}_2\mathrm{O}, \mathrm{C}, \mathrm{N}, \mathrm{S}$), impact temperature $T_{\mathrm{accreted}}$, and rock ($tm = 2$) constitutive properties (viscosity, shear modulus, friction angle, cohesion, tensile strength, density, volumetric heat capacity, thermal conductivity, and solid/fluid thermal expansion coefficients).
+4. **Accretion Epoch and Timestep Synchronization:** Converted markers store their accretion timestamp $t_{\mathrm{acc}} = t$. When adaptive hydromechanical or thermal timestepping reduces $\Delta t$ below the initial trial step duration, the accreted mass increment $\Delta M$, radius increment $\Delta R$, and shell marker conversion are synchronized with the converged timestep $\Delta t$.
 
 ---
 

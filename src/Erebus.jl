@@ -19,7 +19,11 @@ using TimerOutputs
 using TOML
 
 export run_simulation, load_state, simulation_loop, PlasticConvergenceError
-export accrete!, radiogenic_heating!, interpolate_markers_to_grid!, solve_gravity!
+export accrete!,
+    reconcile_accretion_timestep!,
+    radiogenic_heating!,
+    interpolate_markers_to_grid!,
+    solve_gravity!
 export vent_and_degas!, evolve_atmosphere!, advect_markers!, replenish!
 export init_simulation, prepare_step_ambient!, apply_surface_radiation!
 export snapshot_step_start_inventories!, update_step_start_pressures!, update_pyrolysis!
@@ -393,6 +397,7 @@ export Config,
     M_FeS,
     LOGK_H2O,
     X_FE_REF_CHONDRITE,
+    chondritic_phi_fe,
     metal_volume_to_mass_fraction,
     metal_mass_to_volume_fraction,
     smoothstep,
@@ -902,6 +907,7 @@ module Particles
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
         define_markers!,
+        chondritic_phi_fe,
         compute_marker_properties!,
         update_marker_viscosity!,
         setup_interpolated_properties,
@@ -958,6 +964,7 @@ module Particles
         setup_marker_properties_helpers,
         setup_marker_geometry_helpers,
         define_markers!,
+        chondritic_phi_fe,
         MarkerArrays,
         CoreGroup,
         MetalGroup,
@@ -1143,6 +1150,7 @@ module Simulation
         copy_grid_arrays!,
         TransferRecord,
         accrete!,
+        reconcile_accretion_timestep!,
         radiogenic_heating!,
         interpolate_markers_to_grid!,
         solve_gravity!,
@@ -1183,6 +1191,7 @@ module Simulation
         copy_grid_arrays!,
         TransferRecord,
         accrete!,
+        reconcile_accretion_timestep!,
         radiogenic_heating!,
         interpolate_markers_to_grid!,
         solve_gravity!,

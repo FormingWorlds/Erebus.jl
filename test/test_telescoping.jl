@@ -15,7 +15,7 @@ using JLD2
         @test cfg_def.active == false
         @test isapprox(cfg_def.r_threshold_fraction, 0.70; rtol=1e-12)
         @test cfg_def.max_telescope_levels == 10
-        @test cfg_def.buffer_markers_per_cell == 4
+        @test cfg_def.buffer_markers_per_cell == 16
 
         # Custom config
         cfg_custom = TelescopingConfig(;
@@ -459,9 +459,9 @@ using JLD2
         @test isapprox(water_inventory_new, water_inventory_old; rtol=1e-14)
 
         # STRUCTURAL BUFFER INVARIANTS:
-        # 1. Total marker count matches old plus outer cell injection
+        # 1. Total marker count matches old plus outer cell injection (default 16 markers/cell)
         n_outer_cells = ((c33.Nx - 1) * (c33.Ny - 1)) - ((c17.Nx - 1) * (c17.Ny - 1))
-        @test new_marknum == N_m + n_outer_cells * 4
+        @test new_marknum == N_m + n_outer_cells * 16
 
         # 2. Every newly added buffer marker lies inside [0, xsize_new] x [0, ysize_new]
         #    and outside the shifted inner rectangle [shift_x, shift_x + xsize_old]
@@ -714,5 +714,16 @@ using JLD2
         end
         # Existing markers preserve values
         @test isapprox(hcnspo.X_ice_H2O_m[1:N_m], h2o_init; rtol=1e-12)
+
+        # Verify MarkerArrays overload default buffer_markers_per_cell when cfg === nothing
+        cfg_ma = SimulationConfig(;
+            grid=GridConfig(Nx=5, Ny=5, xsize=40_000.0, ysize=40_000.0)
+        )
+        c5 = GridCoordinates(5, 5; xsize=40_000.0, ysize=40_000.0)
+        c9 = compute_telescoped_coordinates(c5)
+        markers_ma = init_marker_arrays(64, cfg_ma, c5)
+        n_before = length(markers_ma)
+        n_after = telescope_marker_arrays!(markers_ma; old_coords=c5, new_coords=c9)
+        @test n_after == n_before + ((8 * 8) - (4 * 4)) * 16
     end
 end
