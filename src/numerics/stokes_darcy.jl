@@ -615,19 +615,42 @@ function assemble_hydromechanical_lse!(
         )
     end
 
-    flush!(L) # finalize CSC matrix
-    dropzeros!(L.cscmatrix)
+    return _finalize_assembled_lse!(L, workspace, Ny1, Nx1)
+end # function assemble_hydromechanical_lse!
+
+"""
+Flush `ExtendableSparseMatrix` into CSC format and prune structural zeros on initial assembly.
+
+$(SIGNATURES)
+
+# Parameters
+- `L`: assembled `ExtendableSparseMatrix{Float64,Int64}`
+- `workspace`: optional LSE workspace tracking `Ny1`, `Nx1`, and `is_initialized`
+- `Ny1`: number of vertical grid nodes
+- `Nx1`: number of horizontal grid nodes
+
+# Returns
+- `SparseMatrixCSC{Float64,Int64}`: finalized CSC matrix
+"""
+function _finalize_assembled_lse!(
+    L::ExtendableSparseMatrix{Float64,Int64}, workspace, Ny1::Int, Nx1::Int
+)
+    flush!(L)
     if workspace !== nothing &&
         hasproperty(workspace, :Ny1) &&
         hasproperty(workspace, :Nx1) &&
         hasproperty(workspace, :is_initialized) &&
         workspace.Ny1 == Ny1 &&
         workspace.Nx1 == Nx1
-        workspace.is_initialized = true
+        if !workspace.is_initialized
+            dropzeros!(L.cscmatrix)
+            workspace.is_initialized = true
+        end
+    else
+        dropzeros!(L.cscmatrix)
     end
-    # return L
     return L.cscmatrix
-end # function assemble_hydromechanical_lse!
+end
 
 """
 Process hydromechanical solution vector to output physical observables.
@@ -1263,17 +1286,7 @@ function assemble_hydromechanical_4var_lse!(
         )
     end
 
-    flush!(L)
-    dropzeros!(L.cscmatrix)
-    if workspace !== nothing &&
-        hasproperty(workspace, :Ny1) &&
-        hasproperty(workspace, :Nx1) &&
-        hasproperty(workspace, :is_initialized) &&
-        workspace.Ny1 == Ny1 &&
-        workspace.Nx1 == Nx1
-        workspace.is_initialized = true
-    end
-    return L.cscmatrix
+    return _finalize_assembled_lse!(L, workspace, Ny1, Nx1)
 end
 
 """

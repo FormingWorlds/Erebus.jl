@@ -32,6 +32,7 @@ Material properties, temperature, hydration state, and porosity are carried on t
 1. **Marker to Grid Interpolation**:
    Marker properties are projected onto adjacent staggered grid nodes using 4-point bilinear weighting:
    $$w_{ij} = \left(1 - \frac{|\Delta x|}{\Delta x_{\text{cell}}}\right) \left(1 - \frac{|\Delta y|}{\Delta y_{\text{cell}}}\right)$$
+   By default (`solver.p2m_mode = :tiled`), `interpolate_markers_to_grid!` executes a two-phase 4-color tiled scatter (`bin_markers_into_tiles!` and `_scatter_tiled_p2m_tile!`). Markers are binned into coarse tiles of $T \times T$ cells (`solver.tile_size`, default $T = 4$) and processed in four independent color passes ($2 \times 2$ stride) so adjacent tiles never share staggered boundary nodes, scattering directly into the master grid arrays without thread-local grid duplication.
 
 2. **Subgrid Diffusion**:
    Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
@@ -64,7 +65,7 @@ $$\mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ P_t \\ q_{xD} \\ q_{yD} \\ P_f \end
 - **$q_{xD}, q_{yD}$ Rows**: Discretized Darcy flux relations.
 - **$P_f$ Row**: Discretized fluid continuity with matrix and fluid compressibility terms.
 
-The sparse system is solved using direct sparse LU factorization (UMFPACK via `LinearSolve.jl`).
+The sparse system is assembled into a preallocated `ExtendableSparseMatrix` workspace (`HydromechanicalLSEWorkspace`) whose compressed sparse column (CSC) sparsity pattern is preserved across subsequent solves, and solved using direct sparse LU factorization (`SparseArrays.UMFPACK.UmfpackLU`) with in-place symbolic-factorization reuse (`lu!`) and preallocated solution buffers (`ldiv!`).
 
 ### Stencil Topologies
 
@@ -265,7 +266,7 @@ $$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \l
 
 with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
 - The solver rejects the candidate timestep.
-- The system restores state from a start-of-step snapshot.
+- The system restores grid, marker, and workspace state in place (`restore_step_state!`) from a preallocated start-of-step `StepSnapshot` updated via `snapshot_step_state!`.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).
 - The step retries from the restored state.
 

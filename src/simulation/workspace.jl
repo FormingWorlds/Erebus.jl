@@ -245,7 +245,7 @@ mutable struct SimulationWorkspaces
     ST::Vector{Float64}
     RP::Vector{Float64}
     SP::Vector{Float64}
-    F_grav::Any
+    F_grav::Union{Nothing,SparseArrays.UMFPACK.UmfpackLU{Float64,Int64}}
     mdis::Matrix{Float64}
     mnum::Matrix{Int}
     YERRNOD::Vector{Float64}

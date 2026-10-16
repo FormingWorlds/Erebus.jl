@@ -31,6 +31,53 @@ using Erebus
         @test isapprox(state.accumulators.rplanet, 1.05e5; rtol=1e-12)
         @test isapprox(state.accumulators.M_planet_val, 5.67e19; rtol=1e-12)
         @test isapprox(ws.YERRNOD[1], 9.87e3; rtol=1e-12)
+
+        state.grids.pr .= 3.456e6
+        state.accumulators.rplanet = 1.15e5
+        snapshot_step_state!(snapshot, state, coords_actual, ws)
+        @test isapprox(snapshot.grids.pr[1, 1], 3.456e6; rtol=1e-12)
+        @test isapprox(snapshot.scalars.rplanet_val, 1.15e5; rtol=1e-12)
+
+        alloc_snap, alloc_rest =
+            let snap_loc = snapshot,
+                st_loc = state,
+                co_loc = coords_actual,
+                cref_loc = coords_ref,
+                ws_loc = ws
+
+                snapshot_step_state!(snap_loc, st_loc, co_loc, ws_loc)
+                restore_step_state!(st_loc, cref_loc, ws_loc, snap_loc)
+                a_s = @allocated snapshot_step_state!(snap_loc, st_loc, co_loc, ws_loc)
+                a_r = @allocated restore_step_state!(st_loc, cref_loc, ws_loc, snap_loc)
+                (a_s, a_r)
+            end
+        @test alloc_snap == 0
+        @test alloc_rest == 0
+
+        # Grid resize fallback branch in snapshot_step_state! (e.g. after telescoping)
+        cfg_big = SimulationConfig(grid=GridConfig(Nx=21, Ny=21))
+        state_big, coords_big, ws_big, _, _ = init_simulation(cfg_big)
+        state_big.grids.pr .= 7.89e6
+        ws_big.YERRNOD[end] = 42.0
+        snapshot_step_state!(snapshot, state_big, coords_big, ws_big)
+        @test size(snapshot.grids.pr) == size(state_big.grids.pr)
+        @test isapprox(snapshot.grids.pr[1, 1], 7.89e6; rtol=1e-12)
+        @test length(snapshot.YERRNOD) == length(ws_big.YERRNOD)
+        @test isapprox(snapshot.YERRNOD[end], 42.0; rtol=1e-12)
+
+        # Single-marker restore with optional groups
+        cfg_grp = load_config("configs/core_formation_benchmark.toml")
+        state_grp, _, _, _, _ = init_simulation(cfg_grp)
+        snap_grp = copy(state_grp.markers)
+        state_grp.markers.core.tkm[1] = 9999.0
+        state_grp.markers.groups.metal.Xfe_bulk[1] = 0.99
+        Erebus._restore_single_marker!(state_grp.markers, snap_grp, 1)
+        @test isapprox(state_grp.markers.core.tkm[1], snap_grp.core.tkm[1]; rtol=1e-12)
+        @test isapprox(
+            state_grp.markers.groups.metal.Xfe_bulk[1],
+            snap_grp.groups.metal.Xfe_bulk[1];
+            rtol=1e-12,
+        )
     end
 
     @testset "In-Place copy_grid_arrays! Accuracy" begin
@@ -479,7 +526,7 @@ using Erebus
                 gravity_mode=:poisson2d,
             ),
         )
-        state_p2d, _, _, _, _ = init_simulation(cfg_p2d)
+        state_p2d, coords_p2d, ws_p2d, _, _ = init_simulation(cfg_p2d)
         core_p2d = state_p2d.markers.core
         for m in 1:length(state_p2d.markers)
             tm_m = core_p2d.tm[m]
@@ -494,6 +541,50 @@ using Erebus
                 @test iszero(core_p2d.pfm0[m])
             end
         end
+        Erebus.interpolate_markers_to_grid!(
+            state_p2d,
+            coords_p2d,
+            cfg_p2d;
+            p2m_workspace=ws_p2d.p2m,
+            thread_buffers=ws_p2d.thread_buffers,
+            interp_arrays=ws_p2d.interp_arrays,
+        )
+        alloc_proc_grav = let st_g = state_p2d, co_g = coords_p2d, ws_g = ws_p2d
+            Erebus.process_gravitational_solution!(
+                ws_g.SP, st_g.grids.FI, st_g.grids.gx, st_g.grids.gy; coords=co_g
+            )
+            @allocated Erebus.process_gravitational_solution!(
+                ws_g.SP, st_g.grids.FI, st_g.grids.gx, st_g.grids.gy; coords=co_g
+            )
+        end
+        if Base.JLOptions().code_coverage == 0
+            @test alloc_proc_grav == 0
+        end
+        alloc_grav_p2d =
+            let st_g = state_p2d, co_g = coords_p2d, cfg_g = cfg_p2d, ws_g = ws_p2d
+                Erebus.solve_gravity!(
+                    st_g, co_g, cfg_g; F_grav=ws_g.F_grav, RP=ws_g.RP, SP=ws_g.SP
+                )
+                @allocated Erebus.solve_gravity!(
+                    st_g, co_g, cfg_g; F_grav=ws_g.F_grav, RP=ws_g.RP, SP=ws_g.SP
+                )
+            end
+        @test alloc_grav_p2d < 16384
+
+        # Initial factorization, in-place lu! reuse, and non-finite RHS guard in _solve_direct_umfpack!
+        L_tiny = Erebus.SparseMatrixCSC{Float64,Int64}(Matrix{Float64}(I, 4, 4))
+        S_tiny = zeros(Float64, 4)
+        R_ones = ones(Float64, 4)
+        cache_tiny = Erebus._solve_direct_umfpack!(S_tiny, L_tiny, R_ones, nothing)
+        @test isapprox(S_tiny, R_ones; rtol=1e-12)
+        L_tiny2 = 2.0 .* L_tiny
+        cache_tiny2 = Erebus._solve_direct_umfpack!(S_tiny, L_tiny2, R_ones, cache_tiny)
+        @test cache_tiny2 === cache_tiny
+        @test isapprox(S_tiny, fill(0.5, 4); rtol=1e-12)
+        R_nan = fill(NaN, 4)
+        @test_throws ErrorException Erebus._solve_direct_umfpack!(
+            S_tiny, L_tiny, R_nan, cache_tiny
+        )
 
         # 2. Unconditional grid-to-marker pressure update when reaction.active == false
         fill!(core.pfm0, 0.0)

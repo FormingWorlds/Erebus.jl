@@ -118,12 +118,23 @@ function process_gravitational_solution!(
     Ny1, Nx1 = size(FI)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    @unpack_coords coords dx dy
-    FI .= reshape(SP, Ny1, Nx1)
-    @inbounds gx[:, 1:Nx_val] .= -diff(FI, dims=2) ./ dx_val
-    @inbounds gy[1:Ny_val, :] .= -diff(FI, dims=1) ./ dy_val
-    @inbounds gx[:, Nx1] .= gx[:, Nx_val]
-    @inbounds gy[Ny1, :] .= gy[Ny_val, :]
+    inv_dx = inv(coords.dx)
+    inv_dy = inv(coords.dy)
+    @inbounds for j in 1:Nx1, i in 1:Ny1
+        FI[i, j] = SP[(j - 1) * Ny1 + i]
+    end
+    @inbounds for j in 1:Nx_val, i in 1:Ny1
+        gx[i, j] = -(FI[i, j + 1] - FI[i, j]) * inv_dx
+    end
+    @inbounds for j in 1:Nx1, i in 1:Ny_val
+        gy[i, j] = -(FI[i + 1, j] - FI[i, j]) * inv_dy
+    end
+    @inbounds for i in 1:Ny1
+        gx[i, Nx1] = gx[i, Nx_val]
+    end
+    @inbounds for j in 1:Nx1
+        gy[Ny1, j] = gy[Ny_val, j]
+    end
     return nothing
 end
 
@@ -154,6 +165,92 @@ function compute_gravity_solution!(
     process_gravitational_solution!(SP, FI, gx, gy; coords=coords)
     return nothing
 end # function compute_gravity_solution!
+
+"""
+Evaluate piecewise-linear radial gravitational acceleration magnitude `g(r)` with linear core regularization below `r1`.
+
+$(SIGNATURES)
+
+# Parameters
+- `r`: radial distance from body center [m]
+- `r1`: outer radius of innermost radial shell [m]
+- `r_max`: maximum radial shell boundary [m]
+- `dr`: radial shell thickness [m]
+- `Nr`: number of radial shells
+- `g1`: gravitational acceleration at `r1` [m/s^2]
+- `M_tot`: total enclosed planetary mass [kg]
+- `g_bins`: radial shell gravitational acceleration vector [m/s^2]
+
+# Returns
+- `Float64`: radial gravitational acceleration magnitude [m/s^2]
+"""
+@inline function _eval_radial_gravity(
+    r::Float64,
+    r1::Float64,
+    r_max::Float64,
+    dr::Float64,
+    Nr::Int,
+    g1::Float64,
+    M_tot::Float64,
+    g_bins::Vector{Float64},
+)::Float64
+    if r <= 0.0
+        return 0.0
+    elseif r < r1
+        return g1 * (r / r1)
+    elseif r >= r_max
+        return G * M_tot / (r^2)
+    else
+        k = clamp(floor(Int, r / dr), 1, Nr - 1)
+        rk_prev = k * dr
+        frac = (r - rk_prev) / dr
+        return @inbounds g_bins[k] + frac * (g_bins[k + 1] - g_bins[k])
+    end
+end
+
+"""
+Evaluate piecewise-linear radial gravitational potential `phi(r)` with parabolic core regularization below `r1`.
+
+$(SIGNATURES)
+
+# Parameters
+- `r`: radial distance from body center [m]
+- `r1`: outer radius of innermost radial shell [m]
+- `r_max`: maximum radial shell boundary [m]
+- `dr`: radial shell thickness [m]
+- `Nr`: number of radial shells
+- `g1`: gravitational acceleration at `r1` [m/s^2]
+- `phi0`: gravitational potential at body center `r = 0` [J/kg]
+- `M_tot`: total enclosed planetary mass [kg]
+- `phi_bins`: radial shell gravitational potential vector [J/kg]
+
+# Returns
+- `Float64`: gravitational potential [J/kg]
+"""
+@inline function _eval_radial_potential(
+    r::Float64,
+    r1::Float64,
+    r_max::Float64,
+    dr::Float64,
+    Nr::Int,
+    g1::Float64,
+    phi0::Float64,
+    M_tot::Float64,
+    phi_bins::Vector{Float64},
+)::Float64
+    if r >= r_max
+        return -G * M_tot / r
+    elseif r <= 0.0
+        return phi0
+    elseif r < r1
+        return @inbounds phi_bins[1] - 0.5 * g1 * (r1 - r^2 / r1)
+    else
+        k = clamp(floor(Int, r / dr), 1, Nr - 1)
+        rk_prev = k * dr
+        frac = (r - rk_prev) / dr
+        return @inbounds phi_bins[k] + frac * (phi_bins[k + 1] - phi_bins[k])
+    end
+end
 
 """
 Compute gravitational acceleration using the 3D spherical enclosed-mass formulation.
@@ -246,45 +343,31 @@ function compute_gravity_enclosed_mass!(
     end
     g1 = g_bins[1]
 
-    # Evaluate radial gravity profile with linear core regularization at r < r1
-    eval_g = (r::Float64) -> begin
-        if r <= 0.0
-            return 0.0
-        elseif r < r1
-            return g1 * (r / r1)
-        elseif r >= r_max
-            return G * M_tot / (r^2)
-        else
-            k = clamp(floor(Int, r / dr), 1, Nr - 1)
-            rk_prev = k * dr
-            frac = (r - rk_prev) / dr
-            return g_bins[k] + frac * (g_bins[k + 1] - g_bins[k])
-        end
-    end
-
     # Apply radial gravity vector to Vx nodes (gx) and Vy nodes (gy)
     Ny1, Nx1 = size(gx)
     @unpack_coords coords xvx yvx xvy yvy xp yp
 
-    for j in 1:Nx1, i in 1:Ny1
+    @inbounds for j in 1:Nx1, i in 1:Ny1
         dx_val = xvx_val[j] - xc
         dy_val = yvx_val[i] - yc
         r_node = hypot(dx_val, dy_val)
         if r_node == 0.0
             gx[i, j] = 0.0
         else
-            gx[i, j] = -eval_g(r_node) * (dx_val / r_node)
+            g_mag = _eval_radial_gravity(r_node, r1, r_max, dr, Nr, g1, M_tot, g_bins)
+            gx[i, j] = -g_mag * (dx_val / r_node)
         end
     end
 
-    for j in 1:Nx1, i in 1:Ny1
+    @inbounds for j in 1:Nx1, i in 1:Ny1
         dx_val = xvy_val[j] - xc
         dy_val = yvy_val[i] - yc
         r_node = hypot(dx_val, dy_val)
         if r_node == 0.0
             gy[i, j] = 0.0
         else
-            gy[i, j] = -eval_g(r_node) * (dy_val / r_node)
+            g_mag = _eval_radial_gravity(r_node, r1, r_max, dr, Nr, g1, M_tot, g_bins)
+            gy[i, j] = -g_mag * (dy_val / r_node)
         end
     end
 
@@ -299,25 +382,11 @@ function compute_gravity_enclosed_mass!(
         end
         phi0 = phi_bins[1] - 0.5 * g1 * r1
 
-        eval_phi =
-            (r::Float64) -> begin
-                if r >= r_max
-                    return -G * M_tot / r
-                elseif r <= 0.0
-                    return phi0
-                elseif r < r1
-                    return phi_bins[1] - 0.5 * g1 * (r1 - r^2 / r1)
-                else
-                    k = clamp(floor(Int, r / dr), 1, Nr - 1)
-                    rk_prev = k * dr
-                    frac = (r - rk_prev) / dr
-                    return phi_bins[k] + frac * (phi_bins[k + 1] - phi_bins[k])
-                end
-            end
-
-        for j in 1:Nx1, i in 1:Ny1
+        @inbounds for j in 1:Nx1, i in 1:Ny1
             r_node = hypot(xp_val[j] - xc, yp_val[i] - yc)
-            FI[i, j] = eval_phi(r_node)
+            FI[i, j] = _eval_radial_potential(
+                r_node, r1, r_max, dr, Nr, g1, phi0, M_tot, phi_bins
+            )
         end
     end
 

@@ -1658,6 +1658,7 @@ function compute_marker_properties!(
                     P_val = pm === nothing ? 0.0 : max(0.0, pm[m])
                     w_S_eff =
                         if metal_partition_cfg !== nothing &&
+                            metal_partition_cfg.active &&
                             metal_partition_cfg.dynamic_sulfur_density &&
                             Xfe_S_m !== nothing
                             clamp(Xfe_S_m[m] * 1.0e-6, 0.0, 0.40)

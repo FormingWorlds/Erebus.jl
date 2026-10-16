@@ -132,21 +132,30 @@ Returns
 -------
 Nothing
 """
-function _restore_single_marker!(dst::MarkerArrays, src::MarkerArrays, m::Int)::Nothing
-    dc = dst.core
-    sc = src.core
+@generated function _restore_single_marker!(
+    dst::MarkerArrays{G1}, src::MarkerArrays{G2}, m::Int
+)::Nothing where {G1,G2}
+    exprs = Expr[]
     for fname in fieldnames(CoreGroup)
-        @inbounds getfield(dc, fname)[m] = getfield(sc, fname)[m]
+        qfn = QuoteNode(fname)
+        push!(exprs, :(@inbounds getfield(dst.core, $qfn)[m] = getfield(src.core, $qfn)[m]))
     end
-    for (gname, dgrp) in pairs(dst.groups)
-        if haskey(src.groups, gname)
-            sgrp = src.groups[gname]
-            for fname in fieldnames(typeof(dgrp))
-                @inbounds getfield(dgrp, fname)[m] = getfield(sgrp, fname)[m]
+    src_gnames = fieldnames(G2)
+    for (gname, TDst) in zip(fieldnames(G1), fieldtypes(G1))
+        if gname in src_gnames
+            qg = QuoteNode(gname)
+            for fname in fieldnames(TDst)
+                qfn = QuoteNode(fname)
+                push!(
+                    exprs,
+                    :(@inbounds getfield(getfield(dst.groups, $qg), $qfn)[m] = getfield(
+                        getfield(src.groups, $qg), $qfn
+                    )[m]),
+                )
             end
         end
     end
-    return nothing
+    return Expr(:block, exprs..., :(return nothing))
 end
 
 """

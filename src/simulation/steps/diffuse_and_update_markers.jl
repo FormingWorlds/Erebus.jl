@@ -17,32 +17,62 @@ function diffuse_and_update_markers!(
 
     g.DT0 .= g.DT
 
-    @threads :dynamic for m in 1:marknum
-        update_marker_viscosity!(
-            m,
-            core.xm,
-            core.ym,
-            core.tm,
-            core.tkm,
-            core.etatotalm,
-            core.etavpm,
-            g.YNY,
-            g.YNY_inv_ETA;
-            coords=coords,
-            Fm=core.Fm,
-            etamin=cfg.solver.etamin,
-            etamax=cfg.solver.etamax,
-            melting_active=cfg.melting.active,
-            alpha_eta_val=cfg.melting.alpha_eta,
-            phi_crit_val=cfg.melting.phi_crit,
-            eta_melt_val=cfg.melting.eta_melt,
-            tmsolidphase=cfg.thermodynamics.tmsolidphase,
-            tmfluidphase=cfg.thermodynamics.tmfluidphase,
-            etasolidm=cfg.materials.etasolidm,
-            etasolidmm=cfg.materials.etasolidmm,
-            etafluidm=cfg.materials.etafluidm,
-            etafluidmm=cfg.materials.etafluidmm,
-        )
+    if Threads.nthreads() > 1
+        @threads :dynamic for m in 1:marknum
+            update_marker_viscosity!(
+                m,
+                core.xm,
+                core.ym,
+                core.tm,
+                core.tkm,
+                core.etatotalm,
+                core.etavpm,
+                g.YNY,
+                g.YNY_inv_ETA;
+                coords=coords,
+                Fm=core.Fm,
+                etamin=cfg.solver.etamin,
+                etamax=cfg.solver.etamax,
+                melting_active=cfg.melting.active,
+                alpha_eta_val=cfg.melting.alpha_eta,
+                phi_crit_val=cfg.melting.phi_crit,
+                eta_melt_val=cfg.melting.eta_melt,
+                tmsolidphase=cfg.thermodynamics.tmsolidphase,
+                tmfluidphase=cfg.thermodynamics.tmfluidphase,
+                etasolidm=cfg.materials.etasolidm,
+                etasolidmm=cfg.materials.etasolidmm,
+                etafluidm=cfg.materials.etafluidm,
+                etafluidmm=cfg.materials.etafluidmm,
+            )
+        end
+    else
+        for m in 1:marknum
+            update_marker_viscosity!(
+                m,
+                core.xm,
+                core.ym,
+                core.tm,
+                core.tkm,
+                core.etatotalm,
+                core.etavpm,
+                g.YNY,
+                g.YNY_inv_ETA;
+                coords=coords,
+                Fm=core.Fm,
+                etamin=cfg.solver.etamin,
+                etamax=cfg.solver.etamax,
+                melting_active=cfg.melting.active,
+                alpha_eta_val=cfg.melting.alpha_eta,
+                phi_crit_val=cfg.melting.phi_crit,
+                eta_melt_val=cfg.melting.eta_melt,
+                tmsolidphase=cfg.thermodynamics.tmsolidphase,
+                tmfluidphase=cfg.thermodynamics.tmfluidphase,
+                etasolidm=cfg.materials.etasolidm,
+                etasolidmm=cfg.materials.etasolidmm,
+                etafluidm=cfg.materials.etafluidm,
+                etafluidmm=cfg.materials.etafluidmm,
+            )
+        end
     end
 
     interp_arrays =

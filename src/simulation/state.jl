@@ -305,10 +305,18 @@ Snapshot of simulation state at timestep start for plastic retry rollback.
 
 $(FIELDS)
 """
-struct StepSnapshot{G<:NamedTuple}
+mutable struct StepSnapshot{G<:NamedTuple}
     grids::GridArrays
     markers::MarkerArrays{G}
-    scalars::NamedTuple
+    scalars::@NamedTuple{
+        marknum::Int,
+        M_planet_val::Float64,
+        M_accreted_total::Float64,
+        telescope_level::Int,
+        rplanet_val::Float64,
+        xcenter_val::Float64,
+        ycenter_val::Float64,
+    }
     YERRNOD::Vector{Float64}
     coords::GridCoordinates
 end
@@ -336,6 +344,51 @@ function snapshot_step_state(
         copy(ws.YERRNOD),
         coords,
     )
+end
+
+"""
+Update preallocated `StepSnapshot` in-place from current simulation state, coordinates, and workspaces.
+
+$(SIGNATURES)
+
+# Parameters
+- `snap`: preallocated `StepSnapshot` target
+- `state`: current `SimulationState`
+- `coords`: current `GridCoordinates`
+- `ws`: current `SimulationWorkspaces`
+
+# Returns
+- `StepSnapshot`: updated snapshot `snap`
+"""
+function snapshot_step_state!(
+    snap::StepSnapshot{G},
+    state::SimulationState{G},
+    coords::GridCoordinates,
+    ws::SimulationWorkspaces,
+) where {G}
+    if size(snap.grids.pr) != size(state.grids.pr) ||
+        (snap.grids.Q_metric === nothing) != (state.grids.Q_metric === nothing)
+        snap.grids = copy(state.grids)
+    else
+        copy_grid_arrays!(snap.grids, state.grids)
+    end
+    restore_marker_arrays!(snap.markers, state.markers)
+    acc = state.accumulators
+    snap.scalars = (;
+        marknum=length(state.markers),
+        M_planet_val=acc.M_planet_val,
+        M_accreted_total=acc.M_accreted_total,
+        telescope_level=acc.telescope_level,
+        rplanet_val=acc.rplanet,
+        xcenter_val=acc.xcenter,
+        ycenter_val=acc.ycenter,
+    )
+    if length(snap.YERRNOD) != length(ws.YERRNOD)
+        resize!(snap.YERRNOD, length(ws.YERRNOD))
+    end
+    copyto!(snap.YERRNOD, ws.YERRNOD)
+    snap.coords = coords
+    return snap
 end
 
 """
