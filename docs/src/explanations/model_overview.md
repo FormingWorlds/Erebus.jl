@@ -30,7 +30,7 @@ When the Terzaghi effective stress became tensile ($\sigma_{\text{eff}} \le -\si
 
 ### 6. Silicate Rock Melting, Magma Ascent, and Magma Ocean Formation
 In planetesimals that accreted early, decay heating drove temperatures past the silicate solidus ($T_{\text{sol}} \approx 1400\text{ K}$).
-Rock melted into a crystal-liquid mush and transitioned into a magma ocean above the rheological threshold ($F_{\text{crit}} \approx 0.40$).
+Silicate rock melts into a crystal-liquid mush and transitions into a magma ocean above the rheological threshold ($F_{\text{crit}} \approx 0.40$).
 Buoyant silicate melt segregates outward via porous Darcy percolation and hindered Stokes crystal settling, releasing gravitational shear dissipation and latent heat of crystallization.
 Sub-grid soft turbulence convection transported heat outward to the surface, buffering interior temperatures and governing core segregation.
 
@@ -57,8 +57,8 @@ Figure 1 shows the 10-stage execution pipeline and the governing equations of th
 
 Table 1 defines the symbols in the Figure 1 equation cards.
 Each 2-D cell is weighted by $w_\mathrm{3D} = 2r$, so the slice volume equals the sphere volume $\frac{4}{3}\pi R^3$ (`src/geometry.jl`, `marker_out_of_plane_length`).
-Volumetric radiogenic heating $H_\mathrm{r}$ weights isotope decay powers by phase mass fractions and phase densities (`src/simulation/steps/radiogenic_heating.jl`, `radiogenic_heating!`).
-$$H_\mathrm{r} = (1 - \phi) [(1 - X_\mathrm{Fe}) \rho_\mathrm{sil} Q_{^{26}\mathrm{Al}} + X_\mathrm{Fe} \rho_\mathrm{Fe} Q_{^{60}\mathrm{Fe}}]$$
+Volumetric radiogenic heating $H_\mathrm{r}$ weights isotope decay powers by phase volume fractions and phase densities (`src/simulation/steps/radiogenic_heating.jl`, `radiogenic_heating!`).
+$$H_\mathrm{r} = (1 - \phi) \left[ (1 - \phi_\mathrm{Fe})\,\rho_\mathrm{sil}\,\frac{Q_{^{26}\mathrm{Al}}}{1 - X_\mathrm{ref}} + \phi_\mathrm{Fe}\,\rho_\mathrm{Fe}\,\frac{Q_{^{60}\mathrm{Fe}}}{X_\mathrm{ref}} \right]$$
 The 2-D Poisson equation uses factor $\frac{8}{3}\pi G\rho$ to match the interior gravity of a 3-D sphere (see [Telescoping Domain](telescoping_domain.md)).
 
 *Table 1: Symbols in Figure 1 equation cards.*
@@ -77,7 +77,8 @@ The 2-D Poisson equation uses factor $\frac{8}{3}\pi G\rho$ to match the interio
 | $t$ | Elapsed physical simulation time | $\text{s}$ | `src/physics/radioactivity.jl` (`Q_radiogenic`) |
 | $H_\mathrm{r}$ | Volumetric radiogenic heating rate | $\text{W/m}^3$ | `src/simulation/steps/radiogenic_heating.jl` (`radiogenic_heating!`) |
 | $\phi$ | Matrix porosity | - | `src/simulation/steps/radiogenic_heating.jl` (`radiogenic_heating!`) |
-| $X_\mathrm{Fe}$ | Iron metal mass fraction | - | `src/simulation/steps/radiogenic_heating.jl` (`radiogenic_heating!`) |
+| $\phi_\mathrm{Fe}$ | Metal volume fraction in solid matrix | - | `src/simulation/steps/radiogenic_heating.jl` (`radiogenic_heating!`) |
+| $X_\mathrm{ref}$ | Reference chondrite Fe mass fraction | - | `src/constants.jl` (`X_FE_REF_CHONDRITE`) |
 | $\rho_\mathrm{sil}$ | Silicate grain density | $\text{kg/m}^3$ | `src/physics/radioactivity.jl` (`calculate_radioactive_heating`) |
 | $\rho_\mathrm{Fe}$ | Iron metal density | $\text{kg/m}^3$ | `src/physics/radioactivity.jl` (`calculate_radioactive_heating`) |
 | $\mathrm{W_{sil}}$ | Hydrous silicate phase (serpentine) | - | `src/physics/serpentinization.jl` (`perform_thermochemical_reaction!`) |
@@ -182,8 +183,8 @@ Figure 2 summarizes these stages and links them to the physical processes in Ere
 
 In Figure 2:
 - **Stage I (Cold Accretion)**: Low temperatures preserve porous ice and pristine rock. Accretion flux $\dot{M}_\mathrm{acc}$ delivers pebbles and volatile ices to the surface.
-- **Stage II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy percolation $\mathbf{q}_\mathrm{D}$ drives hydrothermal circulation, serpentinization, and dehydration reactions through permeable crust.
-- **Stage III (Magma Ocean & Core Formation)**: Heating drives silicate melting above the critical rheological threshold ($F_\mathrm{m} > F_\mathrm{crit} \approx 0.40$, configured via `phi_crit`). Molten iron drift-flux $\mathbf{J}_\mathrm{Fe}$ descends to form a metallic core. This descent releases gravitational segregation dissipation heating $Q_\mathrm{seg}$ (`src/numerics/thermal.jl`, `src/numerics/segregation.jl`). Surface radiative heat flux $F_\mathrm{rad}$ radiates into space and drives atmospheric escape.
+- **Stage II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy flow $\mathbf{q}_\mathrm{D}$ carries pore water through the permeable crust. Heating drives serpentinization and later dehydration.
+- **Stage III (Magma Ocean & Core Formation)**: Heating drives silicate melting above the critical rheological threshold ($F_\mathrm{m} > F_\mathrm{crit} \approx 0.40$, configured via `phi_crit`). Molten iron drift-flux $\mathbf{J}_\mathrm{Fe}$ descends to form a metallic core. This descent releases gravitational segregation dissipation heating $Q_\mathrm{seg}$ (`src/numerics/thermal.jl`, `src/numerics/segregation.jl`). Surface radiative heat flux $F_\mathrm{rad}$ radiates into space.
 
 **Where this is checked.** The [Benchmark Reference Suite](../reference/benchmarks/index.md) documents analytical benchmarks for these physical regimes. Tests in `test/test_hydrothermal_convection.jl`, `test/test_core_formation.jl`, and `test/test_magma_transport.jl` verify these solutions.
 
