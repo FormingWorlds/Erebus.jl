@@ -4,11 +4,10 @@
 
 ---
 
-## The Physical Scenario and Evolution Phases
+## The Physical Scenario
 
-### How does a planetesimal evolve from a cold porous body into a differentiated world?
-
-Planetesimals evolve across 3 physical phases driven by radiogenic decay heating: Phase I (cold accretion), Phase II (hydrothermal alteration), and Phase III (magma ocean and core formation).
+Planetesimals formed in the solar protoplanetary disk through the gravitational collapse of pebble swarms or streaming instabilities.
+Bodies that accreted during the first 2 to 3 million years after the formation of Calcium-Aluminum-rich Inclusions (CAIs) incorporated substantial quantities of short-lived radioactive isotopes, predominantly $^{26}\text{Al}$ (half-life $t_{1/2} \approx 0.717\text{ Ma}$) and $^{60}\text{Fe}$ ($t_{1/2} \approx 2.62\text{ Ma}$).
 
 Figure 2 shows these physical phases and links them to the active processes in Erebus.
 
@@ -17,62 +16,20 @@ Figure 2 shows these physical phases and links them to the active processes in E
 *Figure 2: Planetesimal evolution across three physical phases. Sectors show successive phases of 1 body; sector widths do not scale with time. Left and right cards show physical processes that Erebus solves. Active modules depend on configuration switches; all modules are shown active. Flux arrows are schematic. (IW: Iron-Wüstite buffer; QFM: Quartz-Fayalite-Magnetite buffer; XUV: extreme-ultraviolet irradiation). Schematic (hand-built diagram, not simulation output).*
 
 In Figure 2:
-- **Phase I (Cold Accretion)**: Low temperatures preserve porous ice and pristine rock. Accretion flux $\dot{M}_\mathrm{acc}$ delivers pebbles and volatile ices to the surface.
-- **Phase II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy percolation $\mathbf{q}_\mathrm{D}$ drives hydrothermal circulation, serpentinization, and dehydration reactions through permeable crust.
+- **Phase I (Cold Accretion)**: Low temperatures preserve porous ice and pristine rock. Accretion delivers pebbles and volatile ices to the surface.
+- **Phase II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy flow carries pore water through the permeable crust; heating drives serpentinization and later dehydration.
 - **Phase III (Magma Ocean & Core Segregation)**: Deep heating drives silicate melting above the silicate solidus ($T_\mathrm{s}$). Above the critical rheological transition ($F_\mathrm{m} > F_\mathrm{crit} \approx 0.40$), the mixture behaves as a liquid magma ocean. Liquid metal droplets segregate to form a metallic core, releasing segregation heating. Magma ocean surface heat flux $F_\mathrm{rad}$ radiates into space.
 
-### Physical Scenario Sequence
-
-Planetesimals form in the protoplanetary disk through gravitational collapse of pebble swarms or streaming instabilities.
-Bodies that accrete during the first 2 to 3 million years after Calcium-Aluminum-rich Inclusions (CAIs) incorporate short-lived radioactive isotopes: $^{26}\text{Al}$ (half-life $t_{1/2} \approx 0.717\text{ Ma}$) and $^{60}\text{Fe}$ ($t_{1/2} \approx 2.62\text{ Ma}$).
-As radionuclides decay, volumetric heating drives 7 physical processes:
-
-1. **Ice Melting (Phase I to II)**:
-   Initial temperatures of $\approx 170\text{ K}$ rise.
-   At $273\text{ K}$, primordial water ice melts, absorbing latent heat ($L^f \approx 333\text{ kJ/kg}$) and generating mobile pore water in the porous silicate matrix.
-
-2. **Hydrothermal Circulation (Phase II)**:
-   Liquid water percolates through the pore network under Darcy flow.
-   Flow is driven by thermal buoyancy and compaction-induced fluid pressure gradients.
-
-3. **Clay Dehydration and Gas Generation (Phase II)**:
-   At elevated temperatures ($T \approx 500\text{ to } 900\text{ K}$), hydrous phyllosilicates (such as serpentine) undergo thermal dehydration reactions, releasing structurally bound water into the pore fluid.
-
-4. **Matrix Compaction and Pore Overpressure (Phase II)**:
-   Viscous, elastic, and plastic deformation of the silicate matrix reduces porosity $\phi$.
-   When matrix compaction exceeds fluid escape via Darcy percolation, pore fluid pressure $P_\mathrm{f}$ rises toward total pressure $P_\mathrm{t}$.
-
-5. **Failure and Hydrofracture (Phase II)**:
-   When Terzaghi effective stress becomes tensile ($\sigma_\text{eff} \le -\sigma_\text{tensile}$), the silicate matrix fractures.
-   This creates high-permeability pathways that vent pore fluids to the planetesimal surface.
-
-6. **Silicate Rock Melting and Magma Ocean (Phase III)**:
-   In bodies with early accretion, decay heating raises temperatures past the silicate solidus ($T_\mathrm{s} \approx 1400\text{ K}$).
-   Silicate rock melts into a crystal-liquid mixture.
-   Above critical melt fraction $F_\mathrm{crit} \approx 0.40$ (`melting.phi_crit`), the mixture behaves as a liquid magma ocean.
-   Soft turbulence convection transports heat outward to the surface, where the magma ocean radiates heat flux $F_\mathrm{rad}$ into space.
-
-7. **Iron Core Formation and Metal Segregation (Phase III)**:
-   Metal means liquid Fe-FeS alloy (iron plus iron sulfide).
-   At temperatures above the Fe-FeS eutectic ($T_\text{eut} \approx 1213\text{ K}$), dense metallic liquid melts before silicate rock melts completely.
-   Metal moves by one of two methods, depending on the silicate melt fraction $F_\mathrm{m}$.
-   Below 0.40, metal trickles through solid rock via porous percolation.
-   Above 0.50, metal droplets sink through magma via Stokes settling.
-   Between 0.40 and 0.50, the code smoothly blends the two methods (`coreformation.F_settle_start` and `coreformation.F_perc_end`).
-   Liquid metal droplets segregate to form a metallic core, releasing gravitational dissipation heating that accelerates core growth.
-
-### Summary of Physical Processes by Evolution Phase
-
-Table 2 lists the symbols in Figure 2.
+The table below lists the symbols in Figure 2.
 
 | Phase | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|:---|
 | **Phase I** | $\dot{M}_\mathrm{acc}$ | Pebble and embryo accretion mass rate | $\text{kg/s}$ | `accrete!` (`src/simulation/steps/accrete.jl`) |
 | | $T_\mathrm{amb}$ | Protoplanetary disk ambient gas temperature | $\text{K}$ | `prepare_step_ambient!` (`src/simulation/steps/prepare_step.jl`) |
-| **Phase II** | $\mathbf{q}_\mathrm{D}$ | Darcy pore fluid velocity vector | $\text{m/s}$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
-| | $^{26}\text{Al}, ^{60}\text{Fe}$ | Short-lived radionuclides driving decay heating | dimensionless | `thermodynamics.f_al`, `thermodynamics.f_fe` (`src/config.jl`) |
+| **Phase II** | $\mathbf{q}_\mathrm{D}$ | Darcy fluid volume flux vector | $\text{m/s}$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
+| | $f_i$ | Number of host-element atoms per kg of rock ($^{26}\text{Al}$, $^{60}\text{Fe}$) | $\text{kg}^{-1}$ | `thermodynamics.f_al`, `thermodynamics.f_fe` (`src/config.jl`) |
 | **Phase III** | $\mathbf{J}_\mathrm{Fe}$ | Metal segregation volume flux vector | $\text{m/s}$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
-| | $D_i$ | Metal-silicate trace element partition coefficients | dimensionless | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
+| | $D_i$ | Metal-silicate volatile partition coefficients ($i \in \{\mathrm{H}, \mathrm{C}, \mathrm{N}, \mathrm{S}\}$) | dimensionless | `compute_metal_silicate_partition_coefficients` (`src/physics/metal_partitioning.jl`) |
 | | $F_\mathrm{m}$ | Silicate melt fraction | dimensionless | `compute_melt_fraction` (`src/physics/melting_convection.jl`) |
 | | $F_\mathrm{crit}$ | Critical rheological melt fraction threshold | dimensionless | `melting.phi_crit` (`src/config.jl`) |
 | | $k_\mathrm{eff}$ | Turbulent convective thermal conductivity | $\text{W/}(\text{m}\cdot\text{K})$ | `regularized_soft_turbulence_conductivity` (`src/physics/melting_convection.jl`) |
@@ -80,25 +37,49 @@ Table 2 lists the symbols in Figure 2.
 | | $T(\tau_\mathrm{IR})$ | Atmospheric temperature at infrared optical depth $\tau_\mathrm{IR}$ | $\text{K}$ | `compute_guillot_surface_temperature` (`src/atmosphere.jl`) |
 | | $\tau_\mathrm{IR}$ | Thermal infrared optical depth | dimensionless | `compute_guillot_surface_temperature` (`src/atmosphere.jl`) |
 
+As these radionuclides decayed, they generated intense internal volumetric heating:
+
+### 1. Ice Melting
+Initial temperatures of $\approx 170\text{ K}$ rose rapidly.
+Once internal temperatures reached $273\text{ K}$, primordial water ice melted, absorbing latent heat ($L^f \approx 333\text{ kJ/kg}$) and generating mobile pore water in the porous silicate matrix.
+
+### 2. Hydrothermal Circulation
+Liquid water percolated through the interconnected pore network under Darcy flow, driven by thermal buoyancy and compaction-induced fluid pressure gradients.
+
+### 3. Clay Dehydration and Gas Generation
+At elevated temperatures ($T \approx 500\text{--}900\text{ K}$), hydrous phyllosilicates, such as serpentine, underwent thermal dehydration reactions, releasing bound hydroxyl groups as free supercritical fluid.
+
+### 4. Matrix Compaction and Pore Overpressure
+Viscous, elastic, and plastic deformation of the silicate matrix reduced porosity ($\phi$).
+When the compaction rate exceeded the rate of fluid escape via Darcy percolation, pore fluid pressure ($P_f$) rose to match or exceed the lithostatic solid pressure ($P_t$).
+
+### 5. Failure and Hydrofracture
+When the Terzaghi effective stress became tensile ($\sigma_{\text{eff}} \le -\sigma_{\text{tensile}}$), the silicate matrix experienced hydrofracturing, creating high-permeability pathways that vented fluids to the planetesimal surface.
+
+### 6. Silicate Rock Melting, Magma Ascent, and Magma Ocean Formation
+In planetesimals that accreted early, decay heating drove temperatures past the silicate solidus ($T_{\text{sol}} \approx 1400\text{ K}$).
+Rock melted into a crystal-liquid mush and transitioned into a vigorously convecting magma ocean above the rheological disaggregation threshold ($F_{\text{crit}} \approx 0.40$).
+Buoyant silicate melt segregates outward via porous Darcy percolation and hindered Stokes crystal settling, releasing gravitational shear dissipation and latent heat of crystallization.
+Sub-grid soft turbulence convection transported heat outward to the surface, buffering interior temperatures and governing core segregation.
+
+### 7. Iron Core Formation and Metal Segregation
+At temperatures exceeding the Fe-FeS eutectic ($T_{\text{eut}} \approx 1213\text{ K}$), dense metallic liquid melts and segregates inward toward the center.
+In partially molten rock, metal trickles downward by porous Darcy percolation.
+In magma oceans, metal droplets rain downward via Stokes settling, releasing gravitational potential energy that accelerates core formation.
+
 ---
 
-## Global Architecture and Execution Pipeline
+## Global Architecture & Execution Flow
 
-### What does the code do in one time step?
+The full simulation lifecycle, coupling between Eulerian staggered grids and Lagrangian markers, and the sequence of physical solvers are visualized below:
 
-The simulation loop advances physical time by executing 10 operator-splitting stages per time step.
-Each stage updates temperatures, mechanical flows, or geochemical states.
-Figure 1 shows the 10 stages and their governing balance equations.
-
-### Execution Pipeline and Governing Equations
-
-![Erebus.jl Execution Pipeline and Governing Equations](../assets/erebus_execution_pipeline.svg)
+![Erebus.jl Architecture & Execution Flow](../assets/erebus_execution_pipeline.svg)
 
 *Figure 1: Execution pipeline and governing equations in Erebus. The center column shows the full run, where the boxes inside the frame form 1 time step. Side cards show governing equations and physical modules for each stage. The configuration file switches each module on or off; all modules are shown active. The outer iteration repeats stages 4, 5, and 6 until fields converge. If the plastic Stokes-Darcy iteration fails to converge, the step restarts from stage 1 with a reduced time step. Schematic (hand-built diagram, not simulation output).*
 
 Each marker carries the out-of-plane spherical weight $w_\mathrm{3D} = 2r$; see [Geometry Convention](#geometry-convention) for derivation and limits.
 
-### Numerical Execution Pipeline Stages
+### Numerical Execution Pipeline
 
 The simulation loop advances physical time in 10 sequential stages:
 
@@ -127,27 +108,27 @@ The simulation loop advances physical time in 10 sequential stages:
    The solver assembles and solves the linear system for solid velocities, total pressure, fluid Darcy flux, and fluid pressure.
    It updates matrix compaction and plastic yielding.
 
-6. **Thermal & Segregation (`solve_thermal_energy!`, `apply_metal_segregation!`)**:
+6. **Thermal & Segregation (`solve_thermal_energy!`, `apply_metal_segregation!`, `apply_silicate_melt_segregation!`, outer iteration)**:
    The code solves the thermal energy equation with conduction and latent heat.
    In Stage 9, marker advection transports matrix and Darcy pore fluid heat.
    Turbulent convection and optional hydrothermal circulation enter through effective thermal conductivity $k_\mathrm{eff}$.
-   The code computes metal droplet settling and silicate melt ascent using conservative drift-flux transport.
-   It adds heat $H_\mathrm{seg}$ released by metal segregation.
+   The code computes downward iron drainage (`apply_metal_segregation!`, `src/numerics/segregation.jl`) and upward silicate melt ascent (`apply_silicate_melt_segregation!`, `src/numerics/segregation.jl`) using conservative drift-flux transport.
+   Segregation releases gravitational dissipation heating $H_\mathrm{seg}$.
 
-7. **Marker Stress & Subgrid Diffusion (`diffuse_and_update_markers!`)**:
-   The code interpolates grid stresses to markers and applies Maxwell viscoelastic relaxation.
-   It updates marker dynamic viscosity.
-   When $d_s > 0$ (`solver.dsubgrids`), it applies subgrid stress diffusion; $d_s = 0$ (default) switches stress diffusion off.
-   The code also applies subgrid temperature diffusion (`solver.dsubgridt`).
+7. **Marker Stress & Diffusion (`diffuse_and_update_markers!`)**:
+   The code interpolates grid stress increments to markers and updates marker viscosity.
+   When `solver.dsubgrids` > 0, it relaxes marker stress toward grid stress (Maxwell time $\tau_\mathrm{M}$).
+   When `solver.dsubgridt` > 0, it does the same for temperature.
+   Both are 0 by default.
 
-8. **Fluid Venting & Atmosphere (`vent_and_degas!`, `evolve_atmosphere!`)**:
+8. **Fluid Venting & Atmosphere (`vent_and_degas!`, `advance_marker_thermo_porosity_venting!`, `evolve_atmosphere!`)**:
    The code computes hydrofracture fluid venting and volatile exsolution from magma.
    Venting drainage rate $S_\mathrm{vent}$ is computed from surface Darcy flux in Stage 5 (`apply_venting_surface_boundary!`) and applied to drain marker pores in Stage 8.
    It calls `advance_marker_thermo_porosity_venting!` to update marker temperatures and compaction porosity.
    It couples vented volatiles into surface atmospheric pressure and equilibrium temperature.
    It computes photo-evaporative and Jeans escape losses to space.
 
-9. **Marker Advection, Replenish & Domain Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)**:
+9. **Marker Advection & Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)**:
    The code advects markers with a 4th-order Runge-Kutta scheme (RK4).
    It transports matrix heat and Darcy pore fluid heat along marker paths.
    It updates nodal total and fluid pressures.
@@ -167,15 +148,13 @@ Stages 4, 5, and 6 form an outer iteration loop that repeats up to $n_\mathrm{it
   3. The maximum temperature change is at most $\Delta T_\mathrm{max}$ (`time.DTmax`).
   If the loop does not converge within `solver.max_plastic_iterations`, the step continues with `thermochemical_converged = false`.
 - **Plastic convergence and retries**: The code saves a snapshot (a copy of the state at the start of the step) before the outer loop. If plastic iterations fail to converge, the step restores the snapshot, sets $\Delta t = \min(\Delta t/2, \Delta t_\mathrm{next})$, and restarts from Stage 1. The simulation stops after `solver.max_dt_reductions` reductions.
-- **Accretion timestep resync**: If `cfg.accretion.active` is true and $\Delta t$ changed during the step, the code restores the snapshot and restarts the step once at the reduced $\Delta t$ to preserve accretion rate synchronization.
+- **Accretion timestep resync**: If `cfg.accretion.active` is true and $\Delta t$ was reduced during the step, the code restores the snapshot and restarts the step once at the reduced $\Delta t$ to preserve accretion rate synchronization.
 
 ---
 
 ## Model Capabilities and Scope
 
-### Which physical and numerical capabilities does Erebus include?
-
-Erebus simulates the coupled thermo-hydro-mechanical evolution of porous planetesimals. Key capabilities include:
+Key capabilities include:
 
 - Solves 2-D Cartesian flow for planetesimals in sticky air.
 - Solves viscous and plastic rock matrix flow coupled to Darcy fluid flow with Biot poroelastic compressibility and Drucker-Prager failure.
@@ -193,8 +172,6 @@ Erebus simulates the coupled thermo-hydro-mechanical evolution of porous planete
 
 ## Symbols and Governing Equations by Stage
 
-### What do the symbols and equations in Figure 1 represent?
-
 The tables below list the symbols in Figure 1, grouped by execution stage.
 
 #### Stage 1: Ambient & Accretion
@@ -205,7 +182,7 @@ Module: `src/simulation/steps/prepare_step.jl`, `src/simulation/steps/accrete.jl
 | $w_\mathrm{3D}$ | Out-of-plane cylindrical-to-spherical marker weighting factor ($2r$) | $\text{m}$ | `marker_out_of_plane_length` (`src/geometry.jl`) |
 | $r$ | Radial distance from planetesimal center | $\text{m}$ | `marker_out_of_plane_length` (`src/geometry.jl`) |
 | $A$ | Cross-sectional computational area | $\text{m}^2$ | `marker_area` (`src/geometry.jl`) |
-| $R$ | Outer planetesimal radius | $\text{m}$ | `geometry.rplanet` (`src/config.jl`) |
+| $R$ | Outer planetesimal radius | $\text{m}$ | `geometry.rplanet` (`src/config.jl`, initial value), `state.accumulators.rplanet` (`src/simulation/steps/accrete.jl`) |
 
 #### Stage 2: Radiogenic Heating
 Module: `src/physics/radioactivity.jl`, `src/simulation/steps/radiogenic_heating.jl`
@@ -221,11 +198,11 @@ Module: `src/physics/radioactivity.jl`, `src/simulation/steps/radiogenic_heating
 | $i$ | Radionuclide system index ($^{26}\text{Al}$, $^{60}\text{Fe}$) | dimensionless | `radiogenic_heating!` (`src/simulation/steps/radiogenic_heating.jl`) |
 
 #### Stage 3: Marker Mapping & Gravity
-Module: `src/simulation/steps/interpolate_markers_to_grid.jl`, `src/numerics/gravity.jl`, `src/physics/melting_convection.jl`, `src/config.jl`
+Module: `src/simulation/steps/interpolate_markers_to_grid.jl`, `src/simulation/steps/solve_gravity.jl`, `src/physics/melting_convection.jl`, `src/config.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
-| $\Phi$ | Gravitational potential | $\text{m}^2/\text{s}^2$ | `solve_gravity!` (`src/numerics/gravity.jl`) |
+| $\Phi$ | Gravitational potential | $\text{m}^2/\text{s}^2$ | `solve_gravity!` (`src/simulation/steps/solve_gravity.jl`) |
 | $G$ | Newtonian gravitational constant | $\text{m}^3/(\text{kg}\cdot\text{s}^2)$ | `constants.jl` |
 | $\rho$ | Bulk mixture density | $\text{kg/m}^3$ | `interpolate_markers_to_grid!` (`src/simulation/steps/interpolate_markers_to_grid.jl`) |
 | $F_\mathrm{m}$ | Silicate melt fraction | dimensionless | `compute_melt_fraction` (`src/physics/melting_convection.jl`) |
@@ -251,71 +228,74 @@ Module: `src/physics/serpentinization.jl`, `src/constants.jl`
 | $R_\mathrm{gas}$ | Universal gas constant | $\text{J/}(\text{mol}\cdot\text{K})$ | `constants.jl` |
 | $X_\mathrm{D}, X_\mathrm{W}$ | Molar fractions of dry and wet silicate phases | dimensionless | `perform_thermochemical_reaction!` (`src/physics/serpentinization.jl`) |
 
-#### Outer Iteration Loop (Stages 4–6)
+#### Outer Iteration Loop (Stages 4 to 6)
 Module: `src/simulation/loop.jl`, `src/config.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
-| $n_\mathrm{iter}$ | Maximum plastic iterations per step | dimensionless | `solver.max_plastic_iterations` (`src/config.jl`) |
-| $\text{iter}$ | Outer iteration loop counter | dimensionless | `simulation_loop` (`src/simulation/loop.jl`) |
+| $n_\mathrm{iter}$ | Maximum outer nonlinear iteration count | dimensionless | `solver.max_plastic_iterations` (`src/config.jl`) |
 
 #### Stage 5: Hydro-Mechanical Stokes-Darcy
-Module: `src/numerics/stokes_darcy.jl`, `src/simulation/steps/solve_stokes_darcy.jl`
+Module: `src/numerics/stokes_darcy.jl`, `src/physics/serpentinization.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
-| $\mathbf{v}_\mathrm{s}$ | Solid rock matrix velocity vector | $\text{m/s}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $\mathbf{v}_\mathrm{s}$ | Solid rock velocity vector | $\text{m/s}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
 | $P_\mathrm{t}$ | Total pressure (solid plus fluid) | $\text{Pa}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $P_\mathrm{f}$ | Pore fluid pressure | $\text{Pa}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $P_\mathrm{f}$ | Fluid pore pressure | $\text{Pa}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
 | $\eta_\phi$ | Bulk compaction viscosity | $\text{Pa}\cdot\text{s}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\phi$ | Porosity (pore volume fraction) | dimensionless | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\beta_\mathrm{d}$ | Drained matrix compressibility | $\text{Pa}^{-1}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $K_\mathrm{BW}$ | Biot-Willis poroelastic coefficient | dimensionless | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $\phi$ | Porosity | dimensionless | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $\beta_\mathrm{d}$ | Drained bulk rock compressibility | $\text{Pa}^{-1}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $K_\mathrm{BW}$ | Bulk pore water compressibility coupling factor | dimensionless | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
 | $\Delta t$ | Computational time step | $\text{s}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\Delta P_\mathrm{t}$ | Total pressure increment | $\text{Pa}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\Delta P_\mathrm{f}$ | Pore fluid pressure increment | $\text{Pa}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\Gamma_\mathrm{r}$ | Reaction volume source rate ($DMP$) | $\text{s}^{-1}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\mathbf{q}_\mathrm{D}$ | Darcy fluid discharge velocity vector | $\text{m/s}$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
-| $k$ | Dynamic matrix permeability | $\text{m}^2$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\eta_\mathrm{f}$ | Pore fluid dynamic viscosity | $\text{Pa}\cdot\text{s}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\rho_\mathrm{f}$ | Pore fluid density | $\text{kg/m}^3$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
-| $\mathbf{g}$ | Gravitational acceleration vector | $\text{m/s}^2$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $\Gamma_\mathrm{r}$ | Reaction fluid volume generation rate ($DMP$) | $\text{s}^{-1}$ | `assemble_hydromechanical_lse!` (`src/numerics/stokes_darcy.jl`) |
+| $\mathbf{q}_\mathrm{D}$ | Darcy fluid volume flux vector | $\text{m/s}$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
+| $k$ | Dynamic permeability | $\text{m}^2$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
+| $\eta_\mathrm{f}$ | Pore fluid dynamic viscosity | $\text{Pa}\cdot\text{s}$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
+| $\rho_\mathrm{f}$ | Pore fluid density | $\text{kg/m}^3$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
+| $\mathbf{g}$ | Gravitational acceleration vector | $\text{m/s}^2$ | `reconstruct_darcy_fluxes!` (`src/numerics/stokes_darcy.jl`) |
 
 #### Stage 6: Thermal & Segregation
-Module: `src/numerics/thermal.jl`, `src/simulation/steps/solve_thermal_energy.jl`, `src/numerics/segregation.jl`
+Module: `src/numerics/thermal.jl`, `src/numerics/segregation.jl`, `src/physics/core_dynamics.jl`, `src/physics/melting_convection.jl`, `src/config.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
-| $\rho c_{p,\mathrm{app}}$ | Apparent volumetric heat capacity including melting | $\text{J/}(\text{m}^3\cdot\text{K})$ | `rhocp_apparent_silicate` (`src/physics/melting_convection.jl`) |
-| $\mathrm{D}/\mathrm{D}t$ | Material derivative along marker trajectory | $\text{s}^{-1}$ | `solve_thermal_energy!` (`src/simulation/steps/solve_thermal_energy.jl`) |
-| $T$ | Temperature | $\text{K}$ | `solve_thermal_energy!` (`src/simulation/steps/solve_thermal_energy.jl`) |
-| $k_\mathrm{eff}$ | Effective thermal conductivity with convective scaling | $\text{W/}(\text{m}\cdot\text{K})$ | `regularized_soft_turbulence_conductivity` (`src/physics/melting_convection.jl`) |
-| $H_\mathrm{r}$ | Volumetric radiogenic heating rate | $\text{W/m}^3$ | `assemble_thermal_lse!` (`src/numerics/thermal.jl`) |
-| $H_\mathrm{s}$ | Volumetric shear heating dissipation | $\text{W/m}^3$ | `assemble_thermal_lse!` (`src/numerics/thermal.jl`) |
-| $H_\mathrm{a}$ | Volumetric adiabatic work heating | $\text{W/m}^3$ | `assemble_thermal_lse!` (`src/numerics/thermal.jl`) |
-| $H_\mathrm{seg}$ | Volumetric segregation dissipation heating | $\text{W/m}^3$ | `assemble_thermal_lse!` (`src/numerics/thermal.jl`) |
-| $H_\mathrm{L}$ | Latent heat of reactions, crystallization, and venting | $\text{W/m}^3$ | `assemble_thermal_lse!` (`src/numerics/thermal.jl`) |
+| $\rho c_{p,\mathrm{app}}$ | Apparent volumetric heat capacity | $\text{J/}(\text{m}^3\cdot\text{K})$ | `rhocp_apparent_silicate` (`src/physics/melting_convection.jl`) |
+| $T$ | Temperature | $\text{K}$ | `solve_thermal_energy!` (`src/numerics/thermal.jl`) |
+| $t$ | Simulation physical time | $\text{s}$ | `solve_thermal_energy!` (`src/numerics/thermal.jl`) |
+| $k_\mathrm{eff}$ | Effective thermal conductivity with soft turbulence | $\text{W/}(\text{m}\cdot\text{K})$ | `regularized_soft_turbulence_conductivity` (`src/physics/melting_convection.jl`) |
+| $H_\mathrm{r}$ | Radiogenic decay volumetric heating | $\text{W/m}^3$ | `radiogenic_heating!` (`src/simulation/steps/radiogenic_heating.jl`) |
+| $H_\mathrm{s}$ | Viscoplastic shear and compaction dissipation | $\text{W/m}^3$ | `solve_thermal_energy!` (`src/numerics/thermal.jl`) |
+| $H_\mathrm{a}$ | Adiabatic compaction work rate | $\text{W/m}^3$ | `solve_thermal_energy!` (`src/numerics/thermal.jl`) |
+| $H_\mathrm{seg}$ | Gravitational dissipation from metal and melt segregation | $\text{W/m}^3$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
+| $H_\mathrm{L}$ | Latent heat of reactions, melting, and phase changes | $\text{W/m}^3$ | `solve_thermal_energy!` (`src/numerics/thermal.jl`) |
 | $\mathbf{J}_\mathrm{Fe}$ | Metal segregation volume flux vector | $\text{m/s}$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
-| $X_\mathrm{Fe}$ | Local metal volume fraction on markers | dimensionless | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
-| $\phi_\mathrm{res}$ | Residual trapped metal volume fraction floor | dimensionless | `coreformation.phi_residual` (`src/config.jl`) |
-| $\mathbf{v}_\mathrm{seg}$ | Metal segregation velocity | $\text{m/s}$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
-| $v_\mathrm{perc}$ | Porous percolation metal segregation velocity | $\text{m/s}$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
-| $k_\mathrm{Fe}$ | Permeability of molten metal through silicate matrix | $\text{m}^2$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
-| $\eta_\mathrm{Fe}$ | Liquid metal dynamic viscosity | $\text{Pa}\cdot\text{s}$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
-| $\Delta\rho$ | Metal-silicate density contrast ($\rho_\mathrm{Fe} - \rho_\mathrm{sil}$) | $\text{kg/m}^3$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
-| $g$ | Magnitude of gravitational acceleration | $\text{m/s}^2$ | `metal_segregation_velocity` (`src/numerics/segregation.jl`) |
+| $X_\mathrm{Fe}$ | Molten metal volume fraction | dimensionless | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
+| $X_\mathrm{fem}$ | Marker molten metal fraction | dimensionless | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
+| $\phi_\mathrm{residual}$ | Residual metal retention threshold | dimensionless | `coreformation.phi_residual` (`src/config.jl`) |
+| $\mathbf{v}_\mathrm{seg}$ | Metal segregation velocity vector | $\text{m/s}$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
+| $v_\mathrm{perc}$ | Darcy porous percolation velocity | $\text{m/s}$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
+| $k_\mathrm{Fe}$ | Molten metal permeability | $\text{m}^2$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
+| $\eta_\mathrm{Fe}$ | Liquid metal dynamic viscosity | $\text{Pa}\cdot\text{s}$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
+| $\Delta\rho$ | Density contrast ($\rho_\mathrm{Fe} - \rho_\mathrm{sil}$) | $\text{kg/m}^3$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
+| $g$ | Magnitude of gravitational acceleration | $\text{m/s}^2$ | `metal_segregation_velocity` (`src/physics/core_dynamics.jl`) |
 
-#### Stage 7: Marker Stress & Subgrid Diffusion
-Module: `src/simulation/steps/diffuse_and_update_markers.jl`, `src/config.jl`
+#### Stages 7 and 9: Marker Stress & Doubling
+Module: `src/simulation/steps/diffuse_and_update_markers.jl`, `src/simulation/steps/advect_markers.jl`, `src/simulation/steps/replenish.jl`, `src/simulation/steps/telescope_domain.jl`, `src/config.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
+| $\mathbf{x}_m$ | Marker coordinate position vector in 2-D | $\text{m}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
+| $t$ | Elapsed simulation physical time | $\text{s}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
+| $\mathbf{v}(\mathbf{x}_m)$ | Velocity field interpolated to marker position | $\text{m/s}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
+| $\text{RK4}$ | Fourth-order Runge-Kutta integration scheme | dimensionless | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
 | $\Delta \sigma_m$ | Subgrid stress diffusion increment on marker $m$ | $\text{Pa}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $\sigma_\mathrm{grid}$ | Deviatoric stress interpolated from grid nodes | $\text{Pa}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $\sigma_m$ | Marker deviatoric stress state | $\text{Pa}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $d_s$ | Subgrid stress diffusion damping parameter | dimensionless | `solver.dsubgrids` (`src/config.jl`) |
-| $\Delta t$ | Computational time step | $\text{s}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
 | $\tau_\mathrm{M}$ | Maxwell viscoelastic relaxation timescale | $\text{s}$ | `diffuse_and_update_markers!` (`src/simulation/steps/diffuse_and_update_markers.jl`) |
+| $r_\mathrm{max}$ | Maximum radial distance of active markers | $\text{m}$ | `telescope_domain!` (`src/simulation/steps/telescope_domain.jl`) |
+| $R_\mathrm{tel}$ | Domain doubling threshold ($0.70 \cdot x_\mathrm{size}/2$) | $\text{m}$ | `telescoping.r_threshold_fraction` (`src/config.jl`) |
 
 #### Stage 8: Fluid Venting & Atmosphere
 Module: `src/numerics/thermal.jl`, `src/atmosphere.jl`, `src/simulation/steps/vent_and_degas.jl`
@@ -334,25 +314,13 @@ Module: `src/numerics/thermal.jl`, `src/atmosphere.jl`, `src/simulation/steps/ve
 | $\phi_\mathrm{min}$ | Minimum residual porosity floor | dimensionless | `poroelasticity.phimin` (`src/config.jl`) |
 | $\Delta t$ | Computational time step | $\text{s}$ | `apply_venting_surface_boundary!` (`src/numerics/thermal.jl`) |
 
-#### Stage 9: Marker Advection, Replenish & Domain Doubling
-Module: `src/simulation/steps/advect_markers.jl`, `src/simulation/steps/replenish.jl`, `src/simulation/steps/telescope_domain.jl`
-
-| Symbol | Meaning | Unit | Where in the code |
-|:---|:---|:---|:---|
-| $\mathbf{x}_m$ | Marker coordinate position vector in 2-D | $\text{m}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
-| $t$ | Elapsed simulation physical time | $\text{s}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
-| $\mathbf{v}(\mathbf{x}_m)$ | Velocity field interpolated to marker position | $\text{m/s}$ | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
-| $\text{RK4}$ | Fourth-order Runge-Kutta integration scheme | dimensionless | `advect_markers!` (`src/simulation/steps/advect_markers.jl`) |
-| $r_\mathrm{max}$ | Maximum radial distance of active markers | $\text{m}$ | `telescope_domain!` (`src/simulation/steps/telescope_domain.jl`) |
-| $R_\mathrm{tel}$ | Domain doubling threshold ($0.70 \cdot x_\mathrm{size}/2$) | $\text{m}$ | `telescoping.r_threshold_fraction` (`src/config.jl`) |
-
 #### Stage 10: Diagnostics & Output
 Module: `src/simulation/steps/diagnostics_and_output.jl`, `src/config.jl`
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
 | $t$ | Elapsed simulation physical time | $\text{s}$ | `simulation_loop` (`src/simulation/loop.jl`) |
-| $t_\mathrm{end}$ | Simulation termination physical time | $\text{s}$ | `time.endtime` (`src/config.jl`) |
+| $t_\mathrm{end}$ | Simulation termination physical time | $\text{yr}$ | `time.endtime` (`src/config.jl`; converted to $\text{s}$ in code) |
 | $\text{step}$ | Current simulation time step index | dimensionless | `simulation_loop` (`src/simulation/loop.jl`) |
 | $n_\mathrm{steps}$ | Maximum allowed simulation time step count | dimensionless | `time.n_steps` (`src/config.jl`) |
 
@@ -371,61 +339,55 @@ Module: `src/simulation/steps/diagnostics_and_output.jl`, `src/config.jl`
 
 ## Thermo-Hydro-Mechanical Coupling
 
-### How do mechanics, fluids, and thermodynamics exchange properties across stages?
-
-The 10 operator stages couple through staggered grid fields and Lagrangian markers:
-
-1. **Hydration to Mechanics**:
-   Serpentinization reactions produce or consume pore fluid, injecting volume source rate $\Gamma_\mathrm{r} = DMP$ into the Stokes-Darcy fluid mass balance.
-   Dehydration generates pore overpressure ($P_\mathrm{f} \to P_\mathrm{t}$), which triggers plastic yielding and dynamic hydrofracture.
-
-2. **Mechanics to Heat**:
-   Plastic shear deformation dissipates mechanical energy into shear heating $H_\mathrm{s} = \boldsymbol{\sigma}' : \dot{\boldsymbol{\epsilon}}_\mathrm{pl}$.
-   Volumetric compaction generates adiabatic heating $H_\mathrm{a} = -P_\mathrm{t} (\nabla \cdot \mathbf{v}_\mathrm{s})$.
-
-3. **Thermodynamics to Mechanics**:
-   Temperature fields control solid rock viscosities via Arrhenius activation laws and mineral reaction rates via Gibbs free energy $\Delta G(T, P_\mathrm{f})$.
-   Silicate melting reduces matrix viscosity by up to 10 orders of magnitude across the rheological transition $F_\mathrm{crit} \approx 0.40$.
-
-4. **Fluids to Atmosphere**:
-   Darcy fluid flux reaching the planetesimal surface vents pore water and volatiles into the atmospheric reservoir, supplying gases that govern greenhouse warming and surface pressure.
+`Erebus.jl` resolves these interacting regimes through a fully coupled numerical framework:
+- Thermal solver calculates conduction, radioactive decay, latent heat buffering, fluid advective heat transport, and segregation dissipation heating.
+- Hydromechanical solver simultaneously solves coupled Stokes solid deformation, Darcy fluid flux, and poroelastic volume changes in a monolithic linear system.
+- Marker-in-Cell advects material phases, temperature, composition, and porosity without numerical diffusion across moving boundaries.
+- Melting and soft turbulence routines evaluate pressure-dependent silicate melting, apparent heat capacity latent heat buffering, suspension rheology, and regularized sub-grid convective conductivity.
+- Magma transport drift-flux solver tracks conservative outward buoyant migration of silicate melt, couples Darcy percolation and hindered Stokes crystal settling, models subsolidus crystallization and dissipation heating, and tracks mantle depletion.
+- Metal segregation drift-flux solver tracks conservative downward migration of molten iron, couples percolation and Stokes droplet settling through the rheological transition, and computes gravitational dissipation heating.
 
 ---
 
-## Geometry Convention and Cylindrical-to-Spherical Mapping
+## Geometry Convention
 
-### How does a 2-D cross-section represent a 3-D spherical planetesimal?
+Erebus.jl models the planetesimal as a 2D Cartesian cross-section passing through the planetary center $(x_{\text{center}}, y_{\text{center}})$.
 
-`Erebus.jl` solves conservation laws on a 2-D Cartesian grid $(x, y) \in [0, W_\mathrm{box}] \times [0, H_\mathrm{box}]$ with coordinates centered at $(x_c, y_c)$.
-Radial distance from the center is:
+### Two-Dimensional Form and Three-Dimensional Mapping
 
-$$r = \sqrt{(x - x_c)^2 + (y - y_c)^2}$$
+The computational domain represents a planar slice through a spherical body. To evaluate three-dimensional integral quantities (such as total mass, component inventories, and integrated volatile degassing) from planar marker positions, each Lagrangian marker $m$ at distance $r_m = \sqrt{(x_m - x_{\text{center}})^2 + (y_m - y_{\text{center}})^2}$ carries an effective out-of-plane spherical integration length $L(r_m)$:
 
-For spherically symmetric distributions, mass increments and volatile transfers map between 2-D planar sums and 3-D spherical inventories via:
+\[
+L(r_m) = 2 r_m
+\]
 
-$$\Delta M = \sum_m \rho_m A_m w_\mathrm{3D}(r_m) \Delta C_m, \quad w_\mathrm{3D}(r_m) = 2 r_m, \quad A_m = \Delta x_m \cdot \Delta y_m$$
+Under the assumption of spherical symmetry, this geometric mapping reinterprets each concentric ring at radius $r_m$ as a spherical shell of radius $r_m$. Integrating over a circular disk of radius $R$ in the 2D Cartesian cross-section with differential marker area $A_m = \Delta x_m \Delta y_m$ recovers the exact volume of a sphere:
 
-where $\rho_m$ is marker density, $A_m$ is marker differential area, and $\Delta C_m$ is the dimensionless mass fraction or phase change increment.
+\[
+V_{\text{3D}} = \int_{\text{disk}} L(r) \, dA = \int_0^{2\pi} d\theta \int_0^R (2r) \, r \, dr = 4\pi \int_0^R r^2 \, dr = \frac{4}{3} \pi R^3
+\]
+
+For spherically symmetric or radially averaged distributions, mass increments and volatile transfers map between 2D planar sums and 3D spherical inventories via:
+
+\[
+\Delta M = \sum_m \rho_m A_m L(r_m) \Delta C_m, \quad L(r_m) = 2 r_m, \quad A_m = \Delta x_m \cdot \Delta y_m
+\]
+
+where $\rho_m$ is the marker density, $A_m$ is the marker differential area, and $\Delta C_m$ is the dimensionless mass fraction or phase change increment.
 
 ### Weighting Limits
 
-The out-of-plane weighting function $w_\mathrm{3D}(r) = 2r$ exhibits 3 characteristic limits:
-1. **Planetary surface limit ($r \to R$)**: Near the outer planetary radius, $w_\mathrm{3D}(R) = 2R$. Surface flux and atmospheric exchange scale with diameter $2R$.
-2. **Finite shell mean ($r \in [r_\text{inner}, R]$)**: For an outer spherical shell, the ratio of integrated 3-D shell mass to 2-D planar shell mass equals $\frac{4}{3} \frac{R^3 - r_\text{inner}^3}{R^2 - r_\text{inner}^2}$. For a near-surface shell spanning $0.9R \le r \le R$, this ratio equals approximately $1.902 R$.
-3. **Full spherical volume mean**: Integrating over the entire circular section yields full spherical volume $\frac{4}{3} \pi R^3$, corresponding to an area-weighted mean out-of-plane thickness of $\frac{4}{3} R$.
+The out-of-plane weighting function $L(r) = 2r$ exhibits three characteristic limits in planetary structures:
+1. **Planetary surface limit ($r \to R$)**: Near the outer planetary radius, $L(R) = 2R$. Surface flux and atmospheric exchange calculations scale with out-of-plane diameter $2R$.
+2. **Finite shell mean ($r \in [r_{\text{inner}}, R]$)**: For an outer spherical shell, the ratio of integrated 3D shell mass to 2D planar shell mass equals $\frac{4}{3} \frac{R^3 - r_{\text{inner}}^3}{R^2 - r_{\text{inner}}^2}$. For a near-surface shell spanning $0.9R \le r \le R$, this ratio evaluates to approximately $1.902 R$.
+3. **Full spherical volume mean**: Integrating over the entire circular section yields the full spherical volume $\frac{4}{3} \pi R^3$, corresponding to an area-weighted mean out-of-plane thickness of $\frac{4}{3} R$.
 
 ### Dynamic Flow and Conservation
 
-Hydromechanical Stokes flow, Darcy filtration, and marker transport operate in the 2-D Cartesian cross-section.
-Because 2-D Cartesian divergence-free velocity fields ($\nabla \cdot \mathbf{v} = 0$) do not preserve the axisymmetric volume element $r \,\mathrm{d}r$, planar advection does not automatically conserve the 3-D weighted inventory $\sum_m \rho_m A_m (2 r_m)$.
-The helper functions `marker_out_of_plane_length` and `marker_area` provide geometric primitives to evaluate 3-D spherical projections alongside 2-D cross-sectional quantities.
+Hydromechanical Stokes flow, Darcy filtration, and marker transport operate in the 2D Cartesian cross-section. Because 2D Cartesian divergence-free velocity fields ($\nabla \cdot \mathbf{v} = 0$) do not preserve the axisymmetric volume element $r \, dr$, planar advection does not automatically conserve the 3D-weighted inventory $\sum_m \rho_m A_m (2 r_m)$. The helper functions `marker_out_of_plane_length` and `marker_area` provide the geometric primitives to evaluate 3D spherical projections alongside 2D cross-sectional quantities.
 
-Thermal conduction incorporates an optional radial metric term ($H_\mathrm{metric}$) to account for spherical divergence in conductive heat flow when `cfg.geometry.spherical_metric` is active.
-It also applies spherical metric weighting ($w_\mathrm{3D}$) to marker segregation.
+Thermal conduction incorporates an optional radial geometric metric term to account for spherical divergence in conductive heat flow in the cross-section.
 
-### Gravitational Potential
+### Gravitational Source Term
 
-The 2-D Poisson equation uses the source term $\frac{8}{3}\pi G\rho$.
-For a uniform sphere, this term yields exact gravity at every radius inside the body ($r \le R$).
-Outside the body ($r > R$), 2-D cylindrical gravity drops as $1/r$ (potential $\propto \ln r$), not as $1/r^2$.
-For differentiated bodies with dense metallic cores, select `geometry.gravity_mode = :enclosed_mass` (see [Telescoping Domain](telescoping_domain.md)).
+The Poisson solver evaluates gravitational potential from the 2D density field using an effective source term $(8/3) \pi G \rho$. This source coefficient reproduces the exact radial gravitational acceleration at the surface of a uniform-density sphere of radius $R$.

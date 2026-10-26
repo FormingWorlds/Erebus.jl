@@ -21,7 +21,7 @@
   </a>
 </p>
 
-`Erebus.jl` is a Julia code for the thermal and chemical history of porous planetesimals. It solves 3 coupled processes: the deformation of solid rock (Stokes flow), the flow of pore fluid through the rock (Darcy flow), and heat transport. Radioactive decay is the heat source. It uses a staggered finite-difference grid and Lagrangian markers (particles that carry material properties). The code simulates ice melting, hydrothermal circulation, serpentinization reactions, metallic core segregation, and volatile degassing.
+`Erebus.jl` is a Julia code for the thermal and chemical history of porous planetesimals. It solves 3 coupled processes: the deformation of solid rock (Stokes flow), the flow of pore fluid through the rock (Darcy flow), and heat transport. Radioactive decay, accretion, and segregation generate heat. It uses a staggered finite-difference grid and Lagrangian markers (particles that carry material properties). The code simulates ice melting, hydrothermal circulation, serpentinization reactions, metallic core segregation, and volatile degassing.
 
 ## Get started
 
@@ -53,7 +53,7 @@ The [quickstart tutorial](https://formingworlds.github.io/Erebus.jl/dev/tutorial
 Full documentation: **[formingworlds.github.io/Erebus.jl/dev](https://formingworlds.github.io/Erebus.jl/dev/)**
 
 - [Model Overview](https://formingworlds.github.io/Erebus.jl/dev/explanations/model_overview/): physical scope, governing equations, and execution stages
-- [Model Limits](https://formingworlds.github.io/Erebus.jl/dev/explanations/discretization_numerics/#limits-and-approximations): physical and numerical limits of the 2-D solver
+- [Model Limits](https://formingworlds.github.io/Erebus.jl/dev/explanations/discretization_numerics/#Physical-and-Numerical-Limits): physical and numerical limits of the 2-D solver
 - [Running Tests](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/#running-the-test-suite): test execution commands and validation assertions
 - [Quickstart Tutorial](https://formingworlds.github.io/Erebus.jl/dev/tutorials/quickstart/): initial simulation run and output inspection
 - [Installation Guide](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/): package setup, environment flags, and multi-threading

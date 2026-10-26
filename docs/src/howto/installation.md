@@ -63,7 +63,7 @@ To verify that your installation functions properly and all numerical routines p
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-All unit tests (geometry, physics, particles, numerics, simulation, config, and integration) should pass cleanly.
+All unit tests (geometry, physics, particles, numerics, simulation, config, and integration) must pass cleanly.
 
 ---
 

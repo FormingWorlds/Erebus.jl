@@ -205,9 +205,9 @@ $(SIGNATURES)
 4. Hydration Reactions (`perform_thermochemical_reaction!`, outer iteration)
 5. Hydro-Mechanical Stokes-Darcy (`assemble_hydromechanical_lse!`, outer iteration)
 6. Thermal & Segregation (`solve_thermal_energy!`, calling `apply_metal_segregation!` and `apply_silicate_melt_segregation!`, outer iteration)
-7. Marker Stress & Subgrid Diffusion (`diffuse_and_update_markers!`)
+7. Marker Stress & Diffusion (`diffuse_and_update_markers!`)
 8. Fluid Venting & Atmosphere (`vent_and_degas!`, `advance_marker_thermo_porosity_venting!`, `evolve_atmosphere!`)
-9. Marker Advection, Replenish & Domain Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)
+9. Marker Advection & Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)
 10. Diagnostics & Output (`advance_step_diagnostics!`, time advance `timesum += dt`)
 
 # Timestep Retries
@@ -283,7 +283,7 @@ function simulation_loop(
                     prepare_step_ambient!(state, coords_ref[], cfg, ws)
                     accrete!(state, coords_ref[], cfg)
 
-                    # Stage 2: Radiogenic Heating & Pyrolysis
+                    # Stage 2: Radiogenic Heating
                     radiogenic_heating!(state, coords_ref[], cfg)
                     DHP_pyro = update_pyrolysis!(state, coords_ref[], cfg)
 
@@ -353,7 +353,7 @@ function simulation_loop(
 
                 reconcile_accretion_timestep!(state, snapshot, cfg)
 
-                # Stage 7: Marker Stress & Subgrid Diffusion
+                # Stage 7: Marker Stress & Diffusion
                 diffuse_and_update_markers!(state, coords_ref[], cfg, ws)
 
                 # Stage 8: Fluid Venting & Atmosphere
@@ -362,7 +362,7 @@ function simulation_loop(
                 )
                 evolve_atmosphere!(state, coords_ref[], cfg; vent_degas_result=vent_res)
 
-                # Stage 9: Marker Advection, Replenish & Domain Doubling
+                # Stage 9: Marker Advection & Doubling
                 advect_markers!(
                     state,
                     coords_ref[],
