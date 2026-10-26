@@ -21,7 +21,7 @@ The benchmark suite separates numerical data output from plotting:
 
 2. **Python Plotting and Diagram Scripts**:
    - Python scripts (`generate_*_benchmarks.py`, `render_*_movie.py`) load the JSON datasets or evaluate analytical reference models.
-   - Procedural diagram scripts (`generate_architecture_diagram.py`, `generate_reservoir_diagram.py`) draw light, brand-free vector diagrams.
+   - Procedural diagram scripts (such as `benchmarks/generate_reservoir_diagram.py` and `scripts/generate_architecture_figures.py`) draw light vector diagrams.
    - Plots, diagrams, and animations are saved directly to `docs/src/assets/`.
 
 ## Provenance Taxonomy
@@ -31,7 +31,7 @@ All figures from this suite follow a four-tier grouping:
 - **Class A (2D Simulation Output)**: Figures from multi-dimensional `Erebus.jl` simulation runs.
 - **Class B (Julia Library Exporter / 1D Benchmark Solver)**: Figures from Julia exporters that evaluate compiled `Erebus.jl` modules or 1D finite-difference benchmark solvers.
 - **Class C (Analytical / Empirical Reference)**: Figures displaying closed-form mathematical formulas or published fits evaluated in Python for checks against discrete simulation behavior.
-- **Class D (Schematic Diagram)**: Procedural vector graphics drawn by Python scripts (`generate_architecture_diagram.py` and `generate_reservoir_diagram.py`) showing system layouts and reservoir networks.
+- **Class D (Schematic Diagram)**: Procedural vector graphics drawn by Python scripts (such as `benchmarks/generate_reservoir_diagram.py` and `scripts/generate_architecture_figures.py`) showing system layouts and reservoir networks.
 
 Captions and documentation pages state the provenance tier for every figure.
 
@@ -45,7 +45,7 @@ Julia benchmark exporters require the packages defined in `benchmarks/Project.to
 julia --project=benchmarks -e 'using Pkg; Pkg.instantiate()'
 ```
 
-Python scripts require Python 3 with `numpy`, `matplotlib`, and `Pillow`.
+Python scripts require Python 3 with `numpy`, `matplotlib`, and `Pillow`. The architecture figure generator `scripts/generate_architecture_figures.py` additionally requires `fwl-mpl` and `fwl-visual-language`.
 
 ### Execution
 

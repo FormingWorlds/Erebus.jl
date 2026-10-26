@@ -36,8 +36,14 @@ python3 "$SCRIPT_DIR/generate_lunar_growth_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_mineral_assemblage_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_multistage_accretion_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_radiogenic_decay_benchmark.py"
-python3 "$SCRIPT_DIR/generate_architecture_diagram.py"
 python3 "$SCRIPT_DIR/generate_reservoir_diagram.py"
+SKIPPED_FIGURES=0
+if python3 -c "import fwl_mpl, fwl_visual_language" 2>/dev/null; then
+    python3 "$SCRIPT_DIR/../scripts/generate_architecture_figures.py"
+else
+    echo "Notice: Skipping architecture figures (fwl_mpl or fwl_visual_language not installed)."
+    SKIPPED_FIGURES=1
+fi
 python3 "$SCRIPT_DIR/generate_telescoping_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_thermal_slab_benchmark.py"
 python3 "$SCRIPT_DIR/generate_volatile_mixture_benchmarks.py"
@@ -46,4 +52,8 @@ python3 "$SCRIPT_DIR/render_core_formation_movie.py"
 python3 "$SCRIPT_DIR/render_magma_ocean_movie.py"
 
 echo ""
-echo "=== All benchmark exporters and generators completed successfully ==="
+if [ "$SKIPPED_FIGURES" -ne 0 ]; then
+    echo "=== Benchmark exporters completed (architecture figures skipped) ==="
+else
+    echo "=== All benchmark exporters and generators completed successfully ==="
+fi

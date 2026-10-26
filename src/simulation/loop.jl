@@ -199,17 +199,20 @@ Main simulation loop: run calculations with timestepping.
 $(SIGNATURES)
 
 # Operator-Splitting Sequence
-1. Accretion & mass addition (`accrete!`)
-2. Radionuclide decay heating (`radiogenic_heating!`)
-3. Marker-to-mesh interpolation (`interpolate_markers_to_grid!`)
-4. Gravitational field solve (`solve_gravity!`)
-5. Hydro-mechanical Stokes-Darcy solve (`assemble_hydromechanical_lse!`)
-6. Thermal energy & convection solve
-7. Fluid-silicate reactions, venting & degassing (`vent_and_degas!`)
-8. Coupled atmosphere & escape evolution (`evolve_atmosphere!`)
-9. Marker advection & pressure backtracking (`advect_markers!`)
-10. Marker replenishment & weight updates (`replenish!`)
-11. Telescoping domain doubling (`telescope_domain!`)
+1. Ambient & Accretion (`prepare_step_ambient!`, `accrete!`)
+2. Radiogenic Heating (`radiogenic_heating!`, `update_pyrolysis!`)
+3. Marker Mapping & Gravity (`interpolate_markers_to_grid!`, `solve_gravity!`, `apply_surface_radiation!`)
+4. Hydration Reactions (`perform_thermochemical_reaction!`, outer iteration)
+5. Hydro-Mechanical Stokes-Darcy (`assemble_hydromechanical_lse!`, outer iteration)
+6. Thermal & Segregation (`solve_thermal_energy!`, calling `apply_metal_segregation!` and `apply_silicate_melt_segregation!`, outer iteration)
+7. Marker Stress & Diffusion (`diffuse_and_update_markers!`)
+8. Fluid Venting & Atmosphere (`vent_and_degas!`, `advance_marker_thermo_porosity_venting!`, `evolve_atmosphere!`)
+9. Marker Advection & Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)
+10. Diagnostics & Output (`advance_step_diagnostics!`, time advance `timesum += dt`)
+
+# Timestep Retries
+- Plastic convergence failure: restores step snapshot, sets `dt = min(dt/2, dt_next)`, and restarts from Stage 1 (aborts after `cfg.solver.max_dt_reductions`).
+- Accretion timestep resync: if `cfg.accretion.active` is true and `dt` was reduced during the step, restores the snapshot and restarts once at the reduced `dt`.
 
 # Details
 - `output_path`: Absolute path where to save simulation output files
@@ -276,17 +279,15 @@ function simulation_loop(
                     state.dt = dt_step_target
                     dt_step_initial = state.dt
 
-                    # Step preparation: ambient conditions and sticky air
+                    # Stage 1: Ambient & Accretion
                     prepare_step_ambient!(state, coords_ref[], cfg, ws)
-
-                    # Step 1: Accretion
                     accrete!(state, coords_ref[], cfg)
 
-                    # Step 2: Radioactive heating and pyrolysis
+                    # Stage 2: Radiogenic Heating
                     radiogenic_heating!(state, coords_ref[], cfg)
                     DHP_pyro = update_pyrolysis!(state, coords_ref[], cfg)
 
-                    # Step 3: P2M interpolation
+                    # Stage 3: Marker Mapping & Gravity
                     interpolate_markers_to_grid!(
                         state,
                         coords_ref[],
@@ -295,20 +296,16 @@ function simulation_loop(
                         thread_buffers=ws.thread_buffers,
                         interp_arrays=ws.interp_arrays,
                     )
-
-                    # Step 4: Gravity solve
                     solve_gravity!(
                         state, coords_ref[], cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP
                     )
-
-                    # Step 4b: Surface radiation boundary condition
                     apply_surface_radiation!(state, coords_ref[], cfg)
 
-                    # Step 4c: Step-start inventory snapshots and pressure baselines for outer iterations
+                    # Snapshot inventories and pressures at step start for outer iterations
                     snapshot_step_start_inventories!(ws, state, cfg)
                     update_step_start_pressures!(state)
 
-                    # Steps 5 & 6: Thermomechanical outer iteration loop
+                    # Stages 4, 5, 6: Outer iteration loop (Hydration, Stokes-Darcy, Thermal)
                     res = solve_thermomechanical_iterations!(
                         state,
                         coords_ref[],
@@ -356,18 +353,16 @@ function simulation_loop(
 
                 reconcile_accretion_timestep!(state, snapshot, cfg)
 
-                # Post-convergence: marker viscoelasticity and subgrid diffusion
+                # Stage 7: Marker Stress & Diffusion
                 diffuse_and_update_markers!(state, coords_ref[], cfg, ws)
 
-                # Step 7: Venting and degassing
+                # Stage 8: Fluid Venting & Atmosphere
                 vent_res = vent_and_degas!(
                     state, coords_ref[], cfg; Fm_step_start=ws.Fm_step_start
                 )
-
-                # Step 8: Coupled surface atmosphere and escape
                 evolve_atmosphere!(state, coords_ref[], cfg; vent_degas_result=vent_res)
 
-                # Step 9: Marker advection
+                # Stage 9: Marker Advection & Doubling
                 advect_markers!(
                     state,
                     coords_ref[],
@@ -375,8 +370,6 @@ function simulation_loop(
                     XWSSUM=ws.interp_arrays[32],
                     WTPSUM=ws.interp_arrays[33],
                 )
-
-                # Step 10: Replenishment
                 replenish!(
                     state,
                     coords_ref[],
@@ -404,14 +397,12 @@ function simulation_loop(
                         ws.deltaIW_m_step_start,
                     ),
                 )
-
-                # Step 11: Telescoping domain doubling (post-convergence)
                 telescope_domain!(state, coords_ref, cfg, ws)
 
                 # Time progression
                 state.timesum += state.dt
 
-                # Step diagnostics, telemetry, checkpoints, progress
+                # Stage 10: Diagnostics & Output
                 advance_step_diagnostics!(
                     state,
                     coords_ref[],

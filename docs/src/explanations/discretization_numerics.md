@@ -222,7 +222,7 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
    - **Decoupled V-Cycles**: Damped Jacobi or Red-Black Gauss-Seidel relaxation smoothers operate separately on the elliptic velocity momentum block ($v_x, v_y$) and the elliptic fluid Darcy pressure block ($P_f$). Total solid pressure ($P_t$) scales with the discrete Schur complement diagonal, preserving non-zero initial iterates across repeated V-cycles.
 
 4. **Krylov Solvers**:
-   Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl` (`Krylov.jl`) for both the Stokes-Darcy and thermal systems.
+   Supports Flexible GMRES (`fgmres`), restarted GMRES (`gmres`), and stabilized Bi-conjugate Gradient (`bicgstab`) through `LinearSolve.jl` for both the Stokes-Darcy and thermal systems.
 
 5. **Hardware Acceleration (GPU via `KernelAbstractions.jl`)**:
    Device-agnostic parallel kernels support multi-threaded CPUs and hardware accelerators (NVIDIA GPUs via `CUDA.jl`, Apple Silicon via `Metal.jl`, and AMD GPUs via `AMDGPU.jl`):
@@ -323,7 +323,48 @@ Cells with zero marker weight ($W_T \le 0$) do not receive property contribution
 ## Boundary Conditions
 
 - **Mechanical**: Free-slip boundary conditions for the solid velocity field along outer boundary walls ($v_x = 0$ on vertical boundaries, $v_y = 0$ on horizontal boundaries).
-- **Pressure (Total and Fluid)**: Dirichlet boundary conditions for total solid pressure $P_t$ and fluid pore pressure $P_f$ set both pressures to $p_{\text{surface}}$ along the complete computational domain perimeter ($i = 2$, $i = N_y$, $j = 2$, $j = N_x$):
+- **Pressure (Total and Fluid)**: Dirichlet boundary conditions for total pressure $P_t$ (solid plus fluid) and fluid pore pressure $P_f$ set both pressures to $p_{\text{surface}}$ along the complete computational domain perimeter ($i = 2$, $i = N_y$, $j = 2$, $j = N_x$):
   $$P_t = P_f = p_{\text{surface}}$$
   The outer ghost cell layer ($i = 1$, $i = N_y + 1$, $j = 1$, $j = N_x + 1$) satisfies identity algebraic equations to maintain consistency with the staggered node indexing.
-- **Sticky Air Layer**: The domain includes a low-density, low-viscosity buffer layer representing open space above the planetesimal surface, allowing the free surface of the planetesimal to deform naturally.
+- **Sticky Air Layer**: The domain includes a low-density buffer layer representing space above the planetesimal surface. Its viscosity ($10^{16}\text{ Pa}\cdot\text{s}$) is lower than solid rock ($10^{19}\text{ Pa}\cdot\text{s}$), which allows solid rock to deform naturally.
+
+---
+
+## Physical and Numerical Limits
+
+### Which physical and numerical limits does Erebus have?
+
+Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phase. The list below specifies the physical limits and approximations:
+
+- **2-D Geometry Proxy**:
+  The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
+  The out-of-plane length $w_{\text{3D}} = 2r$ enters volume integrals rather than spatial derivatives, except when `cfg.geometry.spherical_metric` activates radial metric conduction.
+  Flow patterns represent 2-D slab flow rather than 3-D spherical convection.
+
+- **Gravity Field Approximations**:
+  The 2-D Poisson solver computes the potential of an infinite cylinder with the source scaled to $\frac{8}{3}\pi G \rho$, which yields exact gravity for uniform spherical bodies ($r \le R$).
+  Outside the body ($r > R$), 2-D cylindrical gravity drops as $1/r$ (potential $\propto \ln r$), not as $1/r^2$.
+  For differentiated bodies, the enclosed-mass profile provides a closer match to spherical gravity.
+
+- **Sticky-Air Boundary**:
+  Sticky air is a layer of artificial air above the planetesimal.
+  It has low density and a viscosity of $10^{16}\text{ Pa}\cdot\text{s}$ (`cfg.materials.etasolidm[3]`).
+  This value is lower than the viscosity of solid rock ($10^{19}\text{ Pa}\cdot\text{s}$), but $10^4$ times higher than the melt floor `cfg.solver.etamin` ($10^{12}\text{ Pa}\cdot\text{s}$).
+  The layer provides a soft top boundary for deforming solid rock, while acting as a stiff lid relative to low-viscosity silicate melt.
+
+- **Linear Solvers**:
+  Use the direct sparse solver (UMFPACK) for grids up to $256 \times 256$ cells. Larger grids need too much memory for the LU factorization.
+  Setting `cfg.solver.experimental = true` enables only the iterative and matrix-free solvers with their preconditioners; MPI and GPU are not reachable from `simulation_loop`.
+
+- **Melt Transport**:
+  The code moves silicate melt in small sub-steps with a drift flux.
+  The melt is not a second Darcy fluid in the matrix momentum equations.
+  See `apply_silicate_melt_segregation!` (`src/numerics/segregation.jl`; tested in `test/test_magma_transport.jl`).
+
+- **Pore Fluid Phase**:
+  The formulation tracks 1 aqueous fluid phase.
+  When interior rock compacts and no vent exists, the pore fluid disappears without transfer to adjacent cells (`advance_marker_thermo_porosity_venting!` in `src/particles.jl`; tested in `test/test_conservation_closure.jl`).
+
+- **Benchmark Provenance**:
+  Documentation figures state their provenance class as defined in the benchmark suite (Class A for 2-D simulation output, Class B for Julia library exports, Class C for analytical references, and Class D for schematic diagrams).
+  Automated unit and integration tests in `test/` verify solver components.

@@ -4,11 +4,13 @@ This directory contains standalone plotting scripts that generate benchmark, ver
 
 ## Master Regeneration Script
 
-To regenerate all documentation figures in a single command, run:
+To regenerate simulation benchmark figures, run:
 
 ```bash
 ./scripts/replot_all_benchmarks.sh
 ```
+
+Architecture vector figures (`erebus_execution_pipeline.svg`, `erebus_planetesimal_stages.svg`) are generated separately with `python3 scripts/generate_architecture_figures.py` (or via `benchmarks/run_all.sh`) because they require `fwl-mpl`.
 
 ## Figure Catalog
 
@@ -29,10 +31,11 @@ To regenerate all documentation figures in a single command, run:
 | `hydrothermal_grid_convergence.png` | `compare_grid_convergence.py` | Numerical grid convergence comparison across mesh resolutions ($16\times 16$, $32\times 32$, $64\times 64$, $128\times 128$). |
 | `hydrothermal_porosity_sweep.png` | `compare_porosity_sweep.py` | Hydrothermal circulation regime transitions across initial matrix porosity values. |
 | `hydrothermal_reaction_*.png` | `plot_reaction_benchmark.py` | Serpentinization reaction progress, fluid consumption, and heat generation fields. |
+| `erebus_execution_pipeline.svg` / `erebus_planetesimal_stages.svg` | `generate_architecture_figures.py` | Procedural vector execution pipeline and 3-phase evolution cutaway figures for documentation. Requires `fwl-mpl` and `fwl-visual-language`. |
 
 ## Running Individual Scripts
 
-Each Python script is self-contained and uses standard scientific libraries (`numpy`, `matplotlib`):
+Most Python scripts are self-contained and use standard scientific libraries (`numpy`, `matplotlib`):
 
 ```bash
 python3 scripts/generate_hcns_solubility_benchmark.py
@@ -40,4 +43,11 @@ python3 scripts/generate_jeans_escape_benchmark.py
 python3 scripts/generate_hydrofracture_venting_benchmark.py
 python3 scripts/generate_terzaghi_benchmark.py
 python3 scripts/generate_poroelastic_benchmark.py
+```
+
+To run `generate_architecture_figures.py`, install the Forming Worlds styling packages:
+
+```bash
+pip install git+https://github.com/FormingWorlds/fwl-mpl.git git+https://github.com/FormingWorlds/fwl-visual-language.git
+python3 scripts/generate_architecture_figures.py
 ```

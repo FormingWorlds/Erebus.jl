@@ -42,7 +42,9 @@
 
 `Erebus.jl` couples Eulerian staggered finite-difference grids with Lagrangian Marker-in-Cell particles in an adaptive multi-physics execution pipeline:
 
-![Erebus.jl Architecture & Execution Flow](assets/erebus_architecture_flowchart.svg)
+![Erebus.jl Execution Pipeline and Governing Equations](assets/erebus_execution_pipeline.svg)
+
+*Figure 1: Execution pipeline and governing equations of Erebus. Boxes inside the frame form 1 time step. Symbols: see [Model Overview](explanations/model_overview.md) page. Schematic (hand-built diagram, not simulation output).*
 
 ---
 

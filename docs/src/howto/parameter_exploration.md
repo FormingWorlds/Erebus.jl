@@ -89,3 +89,17 @@ save_config("job_config.toml", custom_cfg)
 reloaded_cfg = load_config("job_config.toml")
 simulation_loop(reloaded_cfg)
 ```
+
+---
+
+## Ensemble Sweeps via Command Line
+
+An ensemble is a set of simulation runs with varied parameter values. The script samples parameter space using Latin Hypercube sampling, where each parameter interval is divided into equal segments and sampled once.
+
+To run parameter sweeps from the command line:
+
+```bash
+julia --project tools/run_ensemble.jl configs/test_ensemble_sweep.toml
+```
+
+The script parses parameter ranges from `configs/test_ensemble_sweep.toml`, generates sample configurations, executes the ensemble simulations, and writes simulation outputs along with a summary `catalog.csv` to the configured `output_dir`.

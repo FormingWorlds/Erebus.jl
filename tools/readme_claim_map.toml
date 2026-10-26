@@ -1,9 +1,11 @@
-# Mapping from README claims (capabilities, architecture namespaces, restart claims)
+# Mapping from documentation claims (capabilities, architecture namespaces, restart claims)
 # to corresponding test files or CI jobs.
-# Used by tools/check_readme_ci.jl to ensure all README assertions are verified.
+# Used by tools/check_readme_ci.jl to ensure all model assertions are verified.
+
+target_doc = "docs/src/explanations/model_overview.md"
 
 [capabilities]
-"Solves 2D Cartesian flow for planetesimals in sticky air." = "test/test_geometry.jl"
+"Solves 2-D Cartesian flow for planetesimals in sticky air." = "test/test_geometry.jl"
 "Solves viscous and plastic rock matrix flow coupled to Darcy fluid flow with Biot poroelastic compressibility and Drucker-Prager failure." = "test/test_numerics.jl"
 "Solves heat conduction, fluid flow, radiogenic heat" = "test/test_physics.jl"
 "Tracks rock hydration and dehydration, surface vents, and dynamic hydrofracture permeability" = "test/test_hydrofracture_venting.jl"
@@ -11,7 +13,7 @@
 "Conserves elemental budgets (H, C, N, S, O) with ice mixtures" = "test/test_physics.jl"
 "Couples a 1D Guillot radiative profile with gas chemistry" = "test/test_atmosphere.jl"
 "Models body growth from pebble and embryo impacts" = "test/test_accretion.jl"
-"Evaluates gravity fields from a 2D Poisson solve" = "test/test_physics.jl"
+"Computes gravity fields from a 2-D Poisson solve" = "test/test_physics.jl"
 "Reads TOML files, writes restart files, streams run metrics" = "test/test_config.jl"
 
 [restart]
