@@ -21,26 +21,32 @@
   </a>
 </p>
 
-**Two-dimensional thermo-hydro-mechanical evolution of early planetesimals.**
-
-`Erebus.jl` is a Julia code for the thermal, chemical, and physical history of porous planetesimals. It couples solid matrix Stokes deformation, Darcy pore fluid flow, and radiogenic heat transport on a staggered finite-difference grid with Lagrangian markers. The code simulates ice melting, hydrothermal circulation, serpentinization reactions, metallic core segregation, and volatile degassing.
+`Erebus.jl` is a Julia code for the thermal and chemical history of porous planetesimals. It solves 3 coupled processes: the deformation of the solid rock (Stokes flow), the flow of the pore fluid (Darcy flow), and the transport of heat from radioactive decay. It uses a staggered finite-difference grid and Lagrangian markers (particles that carry material properties). The code simulates ice melting, hydrothermal circulation, serpentinization reactions, metallic core segregation, and volatile degassing.
 
 ## Get started
 
-Install `Erebus.jl` through the Julia package manager:
+Install Julia 1.12 or later. Clone the repository and instantiate dependencies:
+
+```bash
+git clone https://github.com/FormingWorlds/Erebus.jl.git
+cd Erebus.jl
+julia --project=. -e "using Pkg; Pkg.instantiate()"
+```
+
+Run a test simulation from the command line:
+
+```bash
+julia --project launch.jl configs/test_quick.toml -o output_test/
+```
+
+To call `Erebus.jl` from your own Julia scripts without cloning the repository, install the package directly:
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/FormingWorlds/Erebus.jl.git")
 ```
 
-Run a test simulation with the command line interface:
-
-```bash
-julia --project launch.jl configs/test_quick.toml -o output_test/
-```
-
-See the [quickstart tutorial](https://formingworlds.github.io/Erebus.jl/dev/tutorials/quickstart/) for output inspection and next steps.
+The [quickstart tutorial](https://formingworlds.github.io/Erebus.jl/dev/tutorials/quickstart/) shows how to read the output.
 
 ## Documentation
 
@@ -51,7 +57,22 @@ Full documentation: **[formingworlds.github.io/Erebus.jl/dev](https://formingwor
 - [Installation Guide](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/): package setup, environment flags, and multi-threading
 - [Configuration Schema](https://formingworlds.github.io/Erebus.jl/dev/reference/config_schema/): complete parameter reference for TOML configuration files
 - [Benchmark Suite](https://formingworlds.github.io/Erebus.jl/dev/reference/benchmarks/): physical verifications against analytical and reference solutions
-- [Contributing Guide](https://formingworlds.github.io/Erebus.jl/dev/community/contributing/): code style, test gates, and architecture ratchets
+- [Contributing Guide](https://formingworlds.github.io/Erebus.jl/dev/community/contributing/): code style, tests, and architecture checks
+
+## Contributing and Code Style
+
+Contributions are welcome. `Erebus.jl` enforces the [BlueStyle](https://github.com/invenia/BlueStyle) code formatting convention:
+
+1. Format code before committing:
+   ```julia
+   using JuliaFormatter
+   format(".", BlueStyle())
+   ```
+2. Verify that all tests pass:
+   ```bash
+   julia --project=. test/runtests.jl
+   ```
+3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `all`) on Julia 1.12 and 1.13 (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), and test quality standards (`test-quality`).
 
 ## Community and citation
 

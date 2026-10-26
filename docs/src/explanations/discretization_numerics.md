@@ -323,41 +323,44 @@ Cells with zero marker weight ($W_T \le 0$) do not receive property contribution
 ## Boundary Conditions
 
 - **Mechanical**: Free-slip boundary conditions for the solid velocity field along outer boundary walls ($v_x = 0$ on vertical boundaries, $v_y = 0$ on horizontal boundaries).
-- **Pressure (Total and Fluid)**: Dirichlet boundary conditions for total solid pressure $P_t$ and fluid pore pressure $P_f$ set both pressures to $p_{\text{surface}}$ along the complete computational domain perimeter ($i = 2$, $i = N_y$, $j = 2$, $j = N_x$):
+- **Pressure (Total and Fluid)**: Dirichlet boundary conditions for total pressure $P_t$ (solid plus fluid) and fluid pore pressure $P_f$ set both pressures to $p_{\text{surface}}$ along the complete computational domain perimeter ($i = 2$, $i = N_y$, $j = 2$, $j = N_x$):
   $$P_t = P_f = p_{\text{surface}}$$
   The outer ghost cell layer ($i = 1$, $i = N_y + 1$, $j = 1$, $j = N_x + 1$) satisfies identity algebraic equations to maintain consistency with the staggered node indexing.
-- **Sticky Air Layer**: The domain includes a low-density, low-viscosity buffer layer representing open space above the planetesimal surface, allowing the free surface of the planetesimal to deform naturally.
+- **Sticky Air Layer**: The domain includes a low-density buffer layer representing space above the planetesimal surface. Its viscosity ($10^{16}\text{ Pa}\cdot\text{s}$) is lower than solid rock ($10^{19}\text{ Pa}\cdot\text{s}$), which allows solid rock to deform naturally.
 
 ---
 
 ## Physical and Numerical Limits
 
-The physical approximations and numerical boundaries in `Erebus.jl` include:
+### Which physical and numerical limits does Erebus have?
 
-- **2D Geometry Proxy**:
-  The solver computes momentum and mass conservation in 2D Cartesian coordinates.
-  The out-of-plane length $w_{\text{3D}} = 2r$ enters volume integrals rather than spatial derivatives.
-  Flow patterns represent 2D slab flow rather than 3D spherical convection.
+Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phase. The list below specifies the physical limits and approximations:
+
+- **2-D Geometry Proxy**:
+  The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
+  The out-of-plane length $w_{\text{3D}} = 2r$ enters volume integrals rather than spatial derivatives, except when `cfg.geometry.spherical_metric` activates radial metric conduction.
+  Flow patterns represent 2-D slab flow rather than 3-D spherical convection.
 
 - **Gravity Field Approximations**:
-  The 2D Poisson solver computes the potential of an infinite cylinder.
+  The 2-D Poisson solver computes the potential of an infinite cylinder, which yields exact gravity for uniform bodies ($r \le R$).
   For differentiated bodies, the enclosed-mass profile provides a closer match to spherical gravity.
 
 - **Sticky-Air Boundary**:
-  The exterior sticky-air layer has solid viscosity `cfg.materials.etasolidm[3]` ($10^{16}\text{ Pa}\cdot\text{s}$), four orders of magnitude above the global solver viscosity floor `cfg.solver.etamin` ($10^{12}\text{ Pa}\cdot\text{s}$) applied to melted rock.
-  This contrast creates a rigid mechanical lid rather than an unconstrained free surface.
+  The exterior sticky-air layer has solid viscosity `cfg.materials.etasolidm[3]` ($10^{16}\text{ Pa}\cdot\text{s}$).
+  This is four orders of magnitude above the global solver viscosity floor `cfg.solver.etamin` ($10^{12}\text{ Pa}\cdot\text{s}$) applied to melted rock.
+  This contrast creates a rigid lid relative to silicate melt, while solid rock ($10^{19}\text{ Pa}\cdot\text{s}$) deforms under the lower viscosity air buffer.
 
 - **Linear Solvers**:
-  The direct sparse solver (UMFPACK) is the primary solver for grids up to $256 \times 256$ cells.
-  Iterative solvers, multigrid preconditioners, GPU kernels, and distributed MPI pathways remain experimental.
+  The direct sparse solver (UMFPACK) is the recommended production solver for grids up to $256 \times 256$ cells due to memory requirements of direct sparse LU factorization.
+  Iterative solvers, multigrid preconditioners, GPU kernels, and distributed MPI pathways require `cfg.solver.experimental = true`.
 
 - **Melt Transport**:
   Silicate melt moves through a sub-cycled conservative drift-flux transport step (`apply_silicate_melt_segregation!` in `src/numerics/segregation.jl`; tested in `test/test_magma_transport.jl`) rather than as a two-phase Darcy fluid coupled to the matrix momentum equations.
 
 - **Pore Fluid Phase**:
-  The formulation tracks 1 aqueous fluid phase; unvented porosity compaction in interior rock markers reduces pore volume and fluid mass without transfer to adjacent cells (`advance_marker_thermal_compaction_venting!` in `src/particles.jl`; tested in `test/test_conservation_closure.jl`).
+  The formulation tracks 1 aqueous fluid phase.
+  Unvented porosity compaction in interior rock markers reduces pore volume and fluid mass without transfer to adjacent cells (`advance_marker_thermo_porosity_venting!` in `src/particles.jl`; tested in `test/test_conservation_closure.jl`).
 
 - **Benchmark Provenance**:
-  Documentation figures state their provenance class.
-  Several figures display 1D analytical solutions, reference box models, or unit test baselines rather than full 2D evolutions.
-  Automated tests in `test/` verify individual solver components.
+  Documentation figures state their provenance class as defined in the benchmark suite (Class A for 2-D simulation output, Class B for Julia library exports, Class C for analytical references, and Class D for schematic diagrams).
+  Automated unit and integration tests in `test/` verify solver components.

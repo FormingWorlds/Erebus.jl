@@ -138,12 +138,24 @@ function check_readme_ci(; rewrite::Bool=false)
     # 4. Verify claim mappings if claim map exists
     if isfile(CLAIM_MAP_PATH)
         claim_map = TOML.parsefile(CLAIM_MAP_PATH)
+        target_doc_rel = get(claim_map, "target_doc", "")
+        claim_target_path = if !isempty(target_doc_rel)
+            joinpath(ROOT_DIR, target_doc_rel)
+        else
+            README_PATH
+        end
+        isfile(claim_target_path) ||
+            error("Claim target file not found: $claim_target_path")
+        claim_content = read(claim_target_path, String)
 
         # Verify capabilities
         if haskey(claim_map, "capabilities")
             for (claim, test_target) in claim_map["capabilities"]
-                if !occursin(claim, readme_content)
-                    println(stderr, "FAIL: Capability claim not found in README: '$claim'")
+                if !occursin(claim, claim_content)
+                    println(
+                        stderr,
+                        "FAIL: Capability claim not found in $(claim_target_path): '$claim'",
+                    )
                     all_ok = false
                 end
                 target_path = joinpath(ROOT_DIR, test_target)
@@ -160,9 +172,10 @@ function check_readme_ci(; rewrite::Bool=false)
         # Verify architecture
         if haskey(claim_map, "architecture")
             for (mod_name, test_target) in claim_map["architecture"]
-                if !occursin(mod_name, readme_content)
+                if !occursin(mod_name, claim_content)
                     println(
-                        stderr, "FAIL: Architecture module '$mod_name' not found in README"
+                        stderr,
+                        "FAIL: Architecture module '$mod_name' not found in $(claim_target_path)",
                     )
                     all_ok = false
                 end
@@ -180,8 +193,11 @@ function check_readme_ci(; rewrite::Bool=false)
         # Verify restart
         if haskey(claim_map, "restart")
             for (claim, test_target) in claim_map["restart"]
-                if !occursin(claim, readme_content)
-                    println(stderr, "FAIL: Restart claim '$claim' not found in README")
+                if !occursin(claim, claim_content)
+                    println(
+                        stderr,
+                        "FAIL: Restart claim '$claim' not found in $(claim_target_path)",
+                    )
                     all_ok = false
                 end
                 target_path = joinpath(ROOT_DIR, test_target)

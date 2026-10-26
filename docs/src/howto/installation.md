@@ -19,9 +19,11 @@ This guide provides instructions for installing and setting up `Erebus.jl` on yo
 
 ## Installing Erebus.jl
 
+Use the package route to call Erebus from your own Julia scripts. Use the local route to run simulations from the command line, to edit the code, and to run the test suite.
+
 ### Package Manager Installation
 
-Add `Erebus.jl` using Julia's package manager:
+Add `Erebus.jl` using the Julia package manager (Pkg):
 
 ```julia
 using Pkg
@@ -37,7 +39,7 @@ git clone https://github.com/FormingWorlds/Erebus.jl.git
 cd Erebus.jl
 ```
 
-Instantiate the package dependencies using Julia's package manager:
+Instantiate package dependencies using the Julia package manager:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.instantiate()'

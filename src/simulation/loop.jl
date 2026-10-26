@@ -204,11 +204,15 @@ $(SIGNATURES)
 3. Marker Mapping & Gravity (`interpolate_markers_to_grid!`, `solve_gravity!`, `apply_surface_radiation!`)
 4. Hydration Reactions (`perform_thermochemical_reaction!`, outer iteration)
 5. Hydro-Mechanical Stokes-Darcy (`assemble_hydromechanical_lse!`, outer iteration)
-6. Thermal Energy & Metal Segregation (`solve_thermal_energy!`, outer iteration)
-7. Marker Viscoelasticity & Subgrid Diffusion (`diffuse_and_update_markers!`)
-8. Fluid Venting & Coupled Atmosphere (`vent_and_degas!`, `evolve_atmosphere!`)
+6. Thermal & Segregation (`solve_thermal_energy!`, calling `apply_metal_segregation!` and `apply_silicate_melt_segregation!`, outer iteration)
+7. Marker Stress & Subgrid Diffusion (`diffuse_and_update_markers!`)
+8. Fluid Venting & Atmosphere (`vent_and_degas!`, `advance_marker_thermo_porosity_venting!`, `evolve_atmosphere!`)
 9. Marker Advection, Replenish & Domain Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)
-10. Diagnostics & Output (`advance_step_diagnostics!`)
+10. Diagnostics & Output (`advance_step_diagnostics!`, time advance `timesum += dt`)
+
+# Timestep Retries
+- Plastic convergence failure: restores step snapshot, sets `dt = min(dt/2, dt_next)`, and restarts from Stage 1 (aborts after `cfg.solver.max_dt_reductions`).
+- Accretion timestep resync: if `cfg.accretion.active` is true and `dt` was reduced during the step, restores the snapshot and restarts once at the reduced `dt`.
 
 # Details
 - `output_path`: Absolute path where to save simulation output files
@@ -297,6 +301,7 @@ function simulation_loop(
                     )
                     apply_surface_radiation!(state, coords_ref[], cfg)
 
+                    # Snapshot inventories and pressures at step start for outer iterations
                     snapshot_step_start_inventories!(ws, state, cfg)
                     update_step_start_pressures!(state)
 
@@ -351,7 +356,7 @@ function simulation_loop(
                 # Stage 7: Marker Viscoelasticity & Subgrid Diffusion
                 diffuse_and_update_markers!(state, coords_ref[], cfg, ws)
 
-                # Stage 8: Fluid Venting & Coupled Atmosphere
+                # Stage 8: Fluid Venting & Atmosphere
                 vent_res = vent_and_degas!(
                     state, coords_ref[], cfg; Fm_step_start=ws.Fm_step_start
                 )

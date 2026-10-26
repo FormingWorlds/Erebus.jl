@@ -194,6 +194,7 @@ def get_palette_hues(
     """
 
     def c_hue(name: str) -> dict:
+        """Generate tone dictionary for a named palette hue."""
         acc = tok["hues"][name]
         return {
             "accent": acc,
@@ -733,6 +734,7 @@ def render_figure_1(out_path: Path):
 
     # Spine execution boxes
     def node(key, label, col):
+        """Draw a spine execution box with label."""
         y = y1[key]
         draw_box(
             ax,
@@ -759,6 +761,7 @@ def render_figure_1(out_path: Path):
         )
 
     def down(y_start, y_end):
+        """Draw a vertical arrow between spine execution boxes."""
         draw_arrow(ax, cx1, y_start, cx1, y_end, color=ink, lw=2.0, scale=13, zorder=8)
 
     draw_box(
@@ -782,12 +785,12 @@ def render_figure_1(out_path: Path):
         ax, x, y, w, h, facecolor=surface, edgecolor=ink, lw=2.2, radius=18, zorder=1
     )
     ax.text(
-        x + w - 14,
-        y + h - 18,
+        x + 18,
+        y + 18,
         "simulation_loop",
         fontsize=11.5,
         color=muted,
-        ha="right",
+        ha="left",
         va="center",
         fontfamily="Geist Mono",
         zorder=3,
@@ -862,7 +865,7 @@ def render_figure_1(out_path: Path):
     ax.text(
         (ix + 16 + cx1 - 70) / 2,
         544.0,
-        r"iter $< \mathrm{max\_iters}$",
+        r"iter $< n_\mathrm{iter}$",
         fontsize=11.0,
         fontweight="medium",
         color=inner_loop_col,
@@ -878,7 +881,7 @@ def render_figure_1(out_path: Path):
     down(y1["mk"] + nh1, y1["vent"])
     node("vent", "8. Fluid Venting & Atmosphere", pal["iris"])
     down(y1["vent"] + nh1, y1["adv"])
-    node("adv", "9. Advect, Replenish & Telescope", pal["ink"])
+    node("adv", "9. Marker Advection & Doubling", pal["ink"])
 
     # Time advance: t <- t + dt between Stage 9 and Stage 10
     down(y1["adv"] + nh1, 770.0)
@@ -1026,53 +1029,16 @@ def render_figure_1(out_path: Path):
         scale=13,
         zorder=8,
     )
-    # Retry label placed along horizontal path above Stage 1, completely clear of boxes
-    rx_mid = (cx1 + 70 + retry_x1) / 2
+    # 1 label "retry" placed in free space beside the path (no line, tick, or box under text)
     ax.text(
-        rx_mid,
-        top_y1 - 10,
-        "plastic not converged:",
-        fontsize=9.5,
-        fontweight="medium",
-        color=pal["magma"]["text"],
-        ha="center",
-        va="bottom",
-        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
-        zorder=9,
-    )
-    ax.text(
-        rx_mid,
-        top_y1 + 13,
-        r"restore, $\Delta t \leftarrow \min(\Delta t/2, \Delta t_\mathrm{next})$",
-        fontsize=9.5,
-        color=pal["magma"]["text"],
-        ha="center",
-        va="top",
-        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
-        zorder=9,
-    )
-    ax.text(
-        rx_mid,
-        top_y1 + 25,
-        r"(abort: max_dt_reductions)",
-        fontsize=9.0,
-        color=muted,
-        ha="center",
-        va="top",
-        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
-        zorder=9,
-    )
-    # Tag at Stage 5 exit
-    ax.text(
-        sr1 + 10,
-        y1["sd"] + nh1 / 2 - 8,
+        (cx1 + 70 + retry_x1) / 2,
+        top_y1 - 12,
         "retry",
-        fontsize=10.5,
+        fontsize=11.5,
         fontweight="medium",
         color=pal["magma"]["text"],
-        ha="left",
+        ha="center",
         va="bottom",
-        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
         zorder=9,
     )
 
@@ -1244,16 +1210,16 @@ def render_figure_1(out_path: Path):
             ["Hydration", "Dehydration"],
         ),
         "vent": (
-            "8. Venting & Atmosphere",
-            "atmosphere.jl",
+            "8. Fluid Venting & Atmosphere",
+            "thermal.jl, atmosphere.jl",
             [
                 r"$T^4(\tau_\mathrm{IR}) = \frac{3}{4}T_\mathrm{int}^4\left(\frac{2}{3}+\tau_\mathrm{IR}\right) + \frac{3}{4}T_\mathrm{eq}^4\,f_\gamma(\tau_\mathrm{IR})$",
-                r"$S_\mathrm{vent} = \max(0, \phi - \phi_\mathrm{min})/\Delta t$",
+                r"$S_\mathrm{vent} = \min\left[\frac{q_{D,\mathrm{face}}}{\Delta x}, \frac{(\phi - \phi_\mathrm{min})^+}{\Delta t}\right]$",
             ],
             ["H, C, N, S Degassing", "Jeans, XUV Escape"],
         ),
         "p2m": (
-            "3. Mapping & Gravity",
+            "3. Marker Mapping & Gravity",
             "melting_convection.jl, gravity.jl",
             [
                 r"$\nabla^2\Phi = \frac{8}{3}\pi G\rho \quad (F_\mathrm{grav})$",
@@ -1262,10 +1228,10 @@ def render_figure_1(out_path: Path):
             ["Marker to Grid", r"Surface $\sigma_\mathrm{SB} T^4$"],
         ),
         "sd": (
-            "5. Stokes-Darcy Solve",
+            "5. Hydro-Mechanical Stokes-Darcy",
             "stokes_darcy.jl",
             [
-                r"$\nabla\cdot\mathbf{v}_\mathrm{s} + \frac{P_\mathrm{t}-P_\mathrm{f}}{\eta_\phi(1-\phi)} + \frac{\beta_\mathrm{d} K_\mathrm{BW}}{\Delta t}(\dots) = 0$",
+                r"$\nabla\cdot\mathbf{v}_\mathrm{s} + \frac{P_\mathrm{t}-P_\mathrm{f}}{\eta_\phi(1-\phi)} + \frac{\beta_\mathrm{d}}{\Delta t}[\Delta P_\mathrm{t} - K_\mathrm{BW}\Delta P_\mathrm{f}] = \Gamma_\mathrm{r}$",
                 r"$\mathbf{q}_\mathrm{D} = -\frac{k}{\eta_\mathrm{f}}(\nabla P_\mathrm{f} - \rho_\mathrm{f}\mathbf{g})$",
             ],
             [r"Darcy $\mathbf{q}_\mathrm{D}$", "Plastic Yielding"],
@@ -1275,9 +1241,9 @@ def render_figure_1(out_path: Path):
             "thermal.jl, segregation.jl",
             [
                 r"$\rho c_{p,\mathrm{app}}\,\frac{\mathrm{D}T}{\mathrm{D}t} = \nabla\cdot(k_\mathrm{eff}\nabla T) + H_\mathrm{r} + H_\mathrm{s} + H_\mathrm{a} + H_\mathrm{seg} + H_\mathrm{L}$",
-                r"$\mathbf{J}_\mathrm{Fe} = -\frac{k_\mathrm{Fe}}{\eta_\mathrm{Fe}}(\nabla P_\mathrm{t} - \rho_\mathrm{Fe}\mathbf{g})$",
+                r"$\mathbf{J}_\mathrm{Fe} = (X_\mathrm{Fe} - \phi_\mathrm{res})\mathbf{v}_\mathrm{seg}, \quad v_\mathrm{perc} = \frac{k_\mathrm{Fe}}{\phi\eta_\mathrm{Fe}}\Delta\rho g$",
             ],
-            ["Metal & Melt Seg.", r"Soft-Turb. $k_\mathrm{eff}$"],
+            ["Metal & Melt Seg.", r"Soft turbulence $k_\mathrm{eff}$"],
         ),
         "mk": (
             "7 & 9. Markers & Doubling",
@@ -2226,7 +2192,7 @@ def main():
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     mpl.rcParams["svg.fonttype"] = args.fonttype
-    mpl.rcParams["svg.hashsalt"] = "erebus_reproducible_hash_2026"
+    mpl.rcParams["svg.hashsalt"] = "erebus_architecture_figures_hash"
 
     if args.fig in ("1", "all"):
         f1_path = args.outdir / "erebus_execution_pipeline.svg"

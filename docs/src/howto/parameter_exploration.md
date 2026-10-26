@@ -94,10 +94,12 @@ simulation_loop(reloaded_cfg)
 
 ## Ensemble Sweeps via Command Line
 
-To execute Latin Hypercube parameter sweeps across worker processes:
+Run multiple simulations with varied parameter combinations (an ensemble). The script samples parameters using Latin Hypercube sampling, where each parameter interval is divided into equal segments and sampled once.
+
+To run parameter sweeps in parallel across worker processes:
 
 ```bash
-julia --project tools/run_ensemble.jl configs/test_ensemble_sweep.toml
+julia -p 4 --project tools/run_ensemble.jl configs/test_ensemble_sweep.toml --workers 4
 ```
 
-The script parses parameter ranges from the sweep configuration, generates sample runs, and executes ensemble members in parallel.
+The script parses parameter ranges from `configs/test_ensemble_sweep.toml`, generates sample configurations, and executes ensemble simulations in parallel. Output files are saved to the directories specified in the sweep configuration file.
