@@ -44,6 +44,8 @@
 
 ![Erebus.jl Execution Pipeline and Governing Equations](assets/erebus_execution_pipeline.svg)
 
+*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations across 1 time step.*
+
 ---
 
 ## Documentation Structure

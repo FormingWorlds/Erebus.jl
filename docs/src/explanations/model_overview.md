@@ -43,7 +43,9 @@ In magma oceans, metal droplets rain downward via Stokes settling, releasing gra
 
 ## Global Architecture & Execution Flow
 
-The full simulation lifecycle, coupling between Eulerian staggered grids and Lagrangian markers, and the sequence of multi-physics solvers are visualized in the diagrams below.
+How does the simulation loop advance physical time, and which governing equations does it solve?
+The simulation loop couples Eulerian staggered grids with Lagrangian markers.
+In each time step, the solver evaluates 10 sequential stages to model thermal, mechanical, chemical, and atmospheric processes.
 
 ### Execution Pipeline and Governing Equations
 
@@ -51,7 +53,7 @@ Figure 1 shows the discrete execution spine and governing equations of the 10-st
 
 ![Erebus.jl Execution Pipeline and Governing Equations](../assets/erebus_execution_pipeline.svg)
 
-*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations. The center spine shows one time step in simulation call order. Side cards show governing equations and physical modules for each step. Module activation depends on configuration switches; all modules are shown active. Outer iterations solve coupled hydration, Stokes-Darcy fluid-matrix mechanics, and thermal energy equations. The non-convergence path restores state and halves the time step.*
+*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations. The center spine shows 1 time step in simulation call order. Side cards show governing equations and physical modules for each step. Module activation depends on configuration switches; all modules are shown active. Outer iterations solve coupled hydration, Stokes-Darcy fluid-matrix mechanics, and thermal energy equations. The non-convergence path restores state and halves the time step.*
 
 Every symbol in the Figure 1 equation cards is defined as follows:
 - **Accretion & Ambient**: Out-of-plane cylindrical integration width $w_\mathrm{3D} = 2r$ [$\text{m}$] at radius $r$ [`src/geometry.jl`] projects the 2D Cartesian domain into a 3D spherical planetesimal with exact volume $\int w_\mathrm{3D}\,\mathrm{d}A = \frac{4}{3}\pi R^3$ [$\text{m}^3$] over a planar disk of radius $R$ for mass accretion deposition [`src/accretion.jl`].
@@ -97,20 +99,26 @@ The simulation loop advances physical time via a 10-stage operator sequence:
 10. **Diagnostics & Telemetry (`advance_step_diagnostics!`)**:
     Advances simulation physical time $t \leftarrow t + \Delta t$, logs conservation metrics and solver convergence, exports JLD2 checkpoint snapshots, and streams telemetry records.
 
+**Where this is checked.** The execution pipeline and solver convergence loops are tested in `test/test_integration.jl`, `test/test_simulation.jl`, and `test/test_conservation_closure.jl`.
+
 ---
 
 ## Planetesimal Evolution Across Physical Stages
 
-Figure 2 illustrates the physical evolution of a planetesimal across three successive evolutionary stages, synthesizing the interior physical mechanisms resolved by Erebus:
+How does a planetesimal evolve from a cold dust aggregate into a differentiated body?
+Planetesimals undergo 3 successive physical stages as radiogenic decay heats their interiors.
+Figure 2 summarizes these stages and links them to the physical processes in Erebus.
 
 ![Erebus.jl Planetesimal Evolution in Three Stages](../assets/erebus_planetesimal_stages.svg)
 
-*Figure 2: Class D (Schematic Diagram): Planetesimal evolution across three physical stages. Sectors show successive stages of one body; sector widths do not scale with time. Left and right cards show physical processes that Erebus solves. Active modules depend on configuration switches; all modules are shown active. Flux arrows are schematic.*
+*Figure 2: Class D (Schematic Diagram): Planetesimal evolution across 3 physical stages. Sectors show successive stages of 1 body; sector widths do not scale with time. Left and right cards show physical processes that Erebus solves. Active modules depend on configuration switches; all modules are shown active. Flux arrows are schematic.*
 
 In Figure 2:
 - **Stage I (Cold Accretion)**: Low temperatures preserve porous ice and pristine rock. Accretion flux $\dot{M}_\mathrm{acc}$ delivers pebbles and volatile ices to the surface.
 - **Stage II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy percolation $\mathbf{q}_\mathrm{D}$ drives hydrothermal circulation, serpentinization, and dehydration reactions through permeable crust.
 - **Stage III (Magma Ocean & Core Formation)**: Deep heating drives silicate melting above the critical rheological transition ($F_\mathrm{m} > \phi_\mathrm{crit} \approx 0.40$). Molten iron metal drift-flux $\mathbf{J}_\mathrm{Fe}$ descends to form a metallic core, releasing segregation dissipation heating $Q_\mathrm{seg}$ (`segregation.jl:897, 1839`, `thermal.jl:137`). Surface radiative heat flux $F_\mathrm{rad}$ radiates into space and drives atmospheric escape.
+
+**Where this is checked.** Benchmark comparisons and analytical solutions for these physical regimes are documented in the [Benchmark Reference Suite](../reference/benchmarks/index.md) and verified in `test/test_hydrothermal_convection.jl`, `test/test_core_formation.jl`, and `test/test_magma_transport.jl`.
 
 ## Thermo-Hydro-Mechanical Coupling
 

@@ -142,6 +142,8 @@ Build verification figures and benchmark plots:
 
 ![Erebus.jl Execution Pipeline and Governing Equations](docs/src/assets/erebus_execution_pipeline.svg)
 
+*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations across 1 time step.*
+
 ---
 
 ## Tests and Quality Checks
