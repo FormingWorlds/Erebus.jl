@@ -634,7 +634,7 @@ def render_figure_1(out_path: Path):
     iter1 = (504.0, 324.0, 292.0, 238.0)
     dia_y1, dia_hw1, dia_hh1 = 896.0, 92.0, 28.0
     loop_x1, retry_x1, top_y1 = 494.0, 810.0, 110.0
-    fs_node1, fs_title1, fs_badge1, fs_eq1, fs_pill1 = 13.5, 14.5, 11.5, 13.0, 12.0
+    fs_node1, fs_title1, fs_badge1, fs_eq1, fs_pill1 = 13.5, 13.0, 9.8, 13.0, 12.0
 
     left_x1, right_x1, bw1, bh1 = 24.0, 856.0, 420.0, 168.0
     le1, re1 = 462.0, 838.0
@@ -860,15 +860,16 @@ def render_figure_1(out_path: Path):
         zorder=8,
     )
     ax.text(
-        ix + 20,
-        y1["sd"] + nh1 / 2,
+        (ix + 16 + cx1 - 70) / 2,
+        544.0,
         r"iter $< \mathrm{max\_iters}$",
-        fontsize=10.5,
+        fontsize=11.0,
+        fontweight="medium",
         color=inner_loop_col,
-        rotation=90,
         ha="center",
         va="center",
-        zorder=6,
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
+        zorder=9,
     )
 
     down(iy + ih, y1["mk"])
@@ -1025,36 +1026,53 @@ def render_figure_1(out_path: Path):
         scale=13,
         zorder=8,
     )
+    # Retry label placed along horizontal path above Stage 1, completely clear of boxes
+    rx_mid = (cx1 + 70 + retry_x1) / 2
     ax.text(
-        (cx1 + 70 + retry_x1) / 2,
-        top_y1 + 17,
-        "retry",
-        fontsize=12.0,
+        rx_mid,
+        top_y1 - 10,
+        "plastic not converged:",
+        fontsize=9.5,
         fontweight="medium",
         color=pal["magma"]["text"],
         ha="center",
-        va="center",
-        zorder=9,
-    )
-    ax.text(
-        retry_x1 - 10,
-        y1["sd"] + nh1 / 2 - 12,
-        r"plastic not converged: restore, $\Delta t \leftarrow \min(\Delta t/2, \Delta t_\mathrm{next})$",
-        fontsize=10.5,
-        color=pal["magma"]["text"],
-        fontstyle="italic",
-        ha="right",
         va="bottom",
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
         zorder=9,
     )
     ax.text(
-        retry_x1 - 10,
-        y1["sd"] + nh1 / 2 + 12,
-        r"(abort after solver.max_dt_reductions)",
-        fontsize=10.0,
-        color=muted,
-        ha="right",
+        rx_mid,
+        top_y1 + 13,
+        r"restore, $\Delta t \leftarrow \min(\Delta t/2, \Delta t_\mathrm{next})$",
+        fontsize=9.5,
+        color=pal["magma"]["text"],
+        ha="center",
         va="top",
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
+        zorder=9,
+    )
+    ax.text(
+        rx_mid,
+        top_y1 + 25,
+        r"(abort: max_dt_reductions)",
+        fontsize=9.0,
+        color=muted,
+        ha="center",
+        va="top",
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
+        zorder=9,
+    )
+    # Tag at Stage 5 exit
+    ax.text(
+        sr1 + 10,
+        y1["sd"] + nh1 / 2 - 8,
+        "retry",
+        fontsize=10.5,
+        fontweight="medium",
+        color=pal["magma"]["text"],
+        ha="left",
+        va="bottom",
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
         zorder=9,
     )
 
@@ -1070,14 +1088,15 @@ def render_figure_1(out_path: Path):
         zorder=8,
     )
     ax.text(
-        cx1 + 14,
-        944.0,
+        cx1 + 24,
+        938.0,
         "Yes",
         fontsize=13.0,
         fontweight="medium",
         color=pal["fern"]["text"],
         ha="left",
         va="center",
+        path_effects=[pe.Stroke(linewidth=3.0, foreground=bg), pe.Normal()],
         zorder=9,
     )
     draw_box(
@@ -1195,16 +1214,6 @@ def render_figure_1(out_path: Path):
         zorder=4,
     )
 
-    draw_polyline(
-        ax,
-        [(394, y0 + 37), (430, y0 + 37)],
-        pal["fern"]["accent"],
-        bg,
-        lw=2.2,
-        z=3,
-        bridge=False,
-    )
-
     # 8 Equation Cards
     cards1 = {
         "acc": (
@@ -1235,7 +1244,7 @@ def render_figure_1(out_path: Path):
             ["Hydration", "Dehydration"],
         ),
         "vent": (
-            "8. Fluid Venting & Atmosphere",
+            "8. Venting & Atmosphere",
             "atmosphere.jl",
             [
                 r"$T^4(\tau_\mathrm{IR}) = \frac{3}{4}T_\mathrm{int}^4\left(\frac{2}{3}+\tau_\mathrm{IR}\right) + \frac{3}{4}T_\mathrm{eq}^4\,f_\gamma(\tau_\mathrm{IR})$",
@@ -1244,7 +1253,7 @@ def render_figure_1(out_path: Path):
             ["H, C, N, S Degassing", "Jeans, XUV Escape"],
         ),
         "p2m": (
-            "3. Marker Mapping & Gravity",
+            "3. Mapping & Gravity",
             "melting_convection.jl, gravity.jl",
             [
                 r"$\nabla^2\Phi = \frac{8}{3}\pi G\rho \quad (F_\mathrm{grav})$",
@@ -1253,7 +1262,7 @@ def render_figure_1(out_path: Path):
             ["Marker to Grid", r"Surface $\sigma_\mathrm{SB} T^4$"],
         ),
         "sd": (
-            "5. Hydro-Mechanical Stokes-Darcy",
+            "5. Stokes-Darcy Solve",
             "stokes_darcy.jl",
             [
                 r"$\nabla\cdot\mathbf{v}_\mathrm{s} + \frac{P_\mathrm{t}-P_\mathrm{f}}{\eta_\phi(1-\phi)} + \frac{\beta_\mathrm{d} K_\mathrm{BW}}{\Delta t}(\dots) = 0$",
@@ -1271,7 +1280,7 @@ def render_figure_1(out_path: Path):
             ["Metal & Melt Seg.", r"Soft-Turb. $k_\mathrm{eff}$"],
         ),
         "mk": (
-            "7 & 9. Markers, Diffusion & Doubling",
+            "7 & 9. Markers & Doubling",
             "particles.jl, advect_markers.jl",
             [
                 r"$\mathrm{d}\mathbf{x}_m/\mathrm{d}t = \mathbf{v}(\mathbf{x}_m) \quad(\text{RK4})$",
@@ -1296,9 +1305,10 @@ def render_figure_1(out_path: Path):
             radius=16,
             zorder=2,
         )
+        # Line 1: Title (left-aligned across card width)
         ax.text(
-            x_card + 18,
-            y_card + 26,
+            x_card + 16,
+            y_card + 17,
             title,
             fontsize=fs_title1,
             fontweight="semibold",
@@ -1307,22 +1317,23 @@ def render_figure_1(out_path: Path):
             va="center",
             zorder=4,
         )
-        bw = len(mod) * 7.5 + 18
+        # Line 2: File badge (on its own line under the title)
+        bw = len(mod) * 6.6 + 16
         draw_box(
             ax,
-            x_card + bw1 - bw - 14,
-            y_card + 12,
+            x_card + 16,
+            y_card + 27,
             bw,
-            28,
+            20,
             facecolor=bg,
             edgecolor=col["border"],
-            lw=1.2,
-            radius=6,
+            lw=1.1,
+            radius=5,
             zorder=3,
         )
         ax.text(
-            x_card + bw1 - bw / 2 - 14,
-            y_card + 26,
+            x_card + 16 + bw / 2,
+            y_card + 37,
             mod,
             fontsize=fs_badge1,
             color=muted,
@@ -1331,12 +1342,13 @@ def render_figure_1(out_path: Path):
             va="center",
             zorder=4,
         )
+        # Middle: Equation Box
         draw_box(
             ax,
             x_card + 14,
-            y_card + 48,
+            y_card + 51,
             bw1 - 28,
-            68,
+            67,
             facecolor=bg,
             edgecolor=col["border"],
             lw=1.5,
@@ -1346,7 +1358,7 @@ def render_figure_1(out_path: Path):
         for j, eq in enumerate(eqs):
             ax.text(
                 x_card + bw1 / 2,
-                y_card + 67 + j * 29,
+                y_card + 69 + j * 28,
                 eq,
                 fontsize=fs_eq1,
                 fontweight="normal",
@@ -1355,6 +1367,7 @@ def render_figure_1(out_path: Path):
                 va="center",
                 zorder=4,
             )
+        # Bottom: Pills
         pw = (bw1 - 28 - 12) / 2
         for i, lbl in enumerate(pills):
             px = x_card + 14 + pw / 2 + i * (pw + 12)
@@ -1363,7 +1376,7 @@ def render_figure_1(out_path: Path):
                 px,
                 y_card + 142,
                 pw,
-                34,
+                32,
                 lbl,
                 facecolor=bg,
                 edgecolor=col["accent"],
@@ -1898,8 +1911,8 @@ def render_figure_2(out_path: Path):
     polar_label(
         ax,
         c,
-        278,
-        248,
+        252,
+        260,
         r"$\dot{M}_\mathrm{acc}$",
         fs_flux2,
         lag["text"],
