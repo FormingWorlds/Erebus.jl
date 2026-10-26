@@ -327,3 +327,38 @@ Cells with zero marker weight ($W_T \le 0$) do not receive property contribution
   $$P_t = P_f = p_{\text{surface}}$$
   The outer ghost cell layer ($i = 1$, $i = N_y + 1$, $j = 1$, $j = N_x + 1$) satisfies identity algebraic equations to maintain consistency with the staggered node indexing.
 - **Sticky Air Layer**: The domain includes a low-density, low-viscosity buffer layer representing open space above the planetesimal surface, allowing the free surface of the planetesimal to deform naturally.
+
+---
+
+## Physical and Numerical Limits
+
+The physical approximations and numerical boundaries in `Erebus.jl` include:
+
+- **2D Geometry Proxy**:
+  The solver computes momentum and mass conservation in 2D Cartesian coordinates.
+  The out-of-plane length $w_{\text{3D}} = 2r$ enters volume integrals rather than spatial derivatives.
+  Flow patterns represent 2D slab flow rather than 3D spherical convection.
+
+- **Gravity Field Approximations**:
+  The 2D Poisson solver computes the potential of an infinite cylinder.
+  For differentiated bodies, the enclosed-mass profile provides a closer match to spherical gravity.
+
+- **Sticky-Air Boundary**:
+  The exterior sticky-air layer has a high viscosity floor ($10^{16}\text{ Pa}\cdot\text{s}$) relative to silicate melt ($10^{12}\text{ Pa}\cdot\text{s}$).
+  This contrast creates a rigid mechanical lid rather than an unconstrained free surface.
+
+- **Linear Solvers**:
+  The direct sparse solver (UMFPACK) is the primary solver for grids up to $256 \times 256$ cells.
+  Iterative solvers, multigrid preconditioners, GPU kernels, and distributed MPI pathways remain experimental.
+
+- **Melt Transport**:
+  Silicate melt moves through an advective drift step rather than as a separate Darcy fluid phase in the matrix momentum equations.
+
+- **Pore Fluid Phase**:
+  The formulation tracks 1 aqueous fluid phase.
+  Compaction without fluid expulsion or venting decreases pore fluid mass.
+
+- **Benchmark Provenance**:
+  Documentation figures state their provenance class.
+  Several figures display 1D analytical solutions, reference box models, or unit test baselines rather than full 2D evolutions.
+  Automated tests in `test/` verify individual solver components.

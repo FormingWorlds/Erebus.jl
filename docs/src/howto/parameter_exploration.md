@@ -89,3 +89,15 @@ save_config("job_config.toml", custom_cfg)
 reloaded_cfg = load_config("job_config.toml")
 simulation_loop(reloaded_cfg)
 ```
+
+---
+
+## Ensemble Sweeps via Command Line
+
+To execute Latin Hypercube parameter sweeps across worker processes:
+
+```bash
+julia --project tools/run_ensemble.jl configs/test_ensemble_sweep.toml
+```
+
+The script parses parameter ranges from the sweep configuration, generates sample runs, and executes ensemble members in parallel.

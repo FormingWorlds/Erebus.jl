@@ -19,6 +19,17 @@ This guide provides instructions for installing and setting up `Erebus.jl` on yo
 
 ## Installing Erebus.jl
 
+### Package Manager Installation
+
+Add `Erebus.jl` using Julia's package manager:
+
+```julia
+using Pkg
+Pkg.add(url="https://github.com/FormingWorlds/Erebus.jl.git")
+```
+
+### Local Development Installation
+
 Clone the repository from GitHub:
 
 ```bash
