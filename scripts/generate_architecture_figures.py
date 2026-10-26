@@ -19,16 +19,16 @@ Usage:
 
 import argparse
 from pathlib import Path
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib import patheffects as pe
-from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Polygon, Wedge
-import numpy as np
 
 import fwl_mpl
 import fwl_visual_language as fvl
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
 from fwl_visual_language._web import mix, text_safe
 from fwl_visual_language.documenter import _tokens
+from matplotlib import patheffects as pe
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Polygon, Wedge
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = REPO_ROOT / "docs" / "src" / "assets"
@@ -302,7 +302,7 @@ def draw_block_arrow(ax, x1, y1, x2, y2, facecolor=SUB, edgecolor=INK, width=12.
     dy = y2 - y1
     length = np.hypot(dx, dy)
     if length < 1e-6:
-        return None
+        return
     ux, uy = dx / length, dy / length
     nx, ny = -uy, ux
     shaft_len = max(0.0, length - head_len)
@@ -860,13 +860,13 @@ def render_figure_2(out_path: Path):
     ax.add_patch(Wedge(c, R_OUT, 270, 390, width=R_OUT - R_MID, facecolor=fern["mid"], edgecolor=INK, lw=1.6, zorder=2))
     ax.add_patch(Wedge(c, R_MID, 270, 390, width=R_MID - R_IN, facecolor=fern["tint"], edgecolor=INK, lw=1.6, zorder=2))
     ax.add_patch(Wedge(c, R_IN, 270, 390, facecolor=och["tint"], edgecolor=INK, lw=1.6, zorder=2))
-    polar_label(ax, c, (R_OUT + R_MID) / 2, 300, "Crust", FS_LAYER2, fern["text"], fern["mid"])
-    polar_label(ax, c, (R_MID + R_IN) / 2, 302, "Serpentinization", FS_LAYER2, fern["text"], fern["tint"])
-    polar_label(ax, c, 60, 326, "Dehydration", FS_LAYER2 - 1.0, och["text"], och["tint"], tangent=False)
-    convection(ax, c, (R_MID + R_IN) / 2, 352, color=fern["text"])
+    polar_label(ax, c, (R_OUT + R_MID) / 2, 295, "Crust", FS_LAYER2, fern["text"], fern["mid"])
+    polar_label(ax, c, (R_MID + R_IN) / 2, 292, "Serpentinization", FS_LAYER2, fern["text"], fern["tint"])
+    polar_label(ax, c, 60, 330, "Dehydration", FS_LAYER2 - 1.0, och["text"], och["tint"], tangent=False)
     # Darcy percolation vector confined within permeable solid crust
-    radial_block(ax, c, 330, R_IN + 20, R_OUT - 12, fern["tint"], fern["text"])
-    polar_label(ax, c, (R_IN + 20 + R_OUT - 12) / 2, 322, r"$\mathbf{q}_\mathrm{D}$", FS_FLUX2, fern["text"], fern["tint"], tangent=False)
+    radial_block(ax, c, 336, R_IN + 20, R_OUT - 12, fern["tint"], fern["text"])
+    polar_label(ax, c, (R_IN + 20 + R_OUT - 12) / 2, 347, r"$\mathbf{q}_\mathrm{D}$", FS_FLUX2, fern["text"], fern["tint"], tangent=False)
+    convection(ax, c, (R_MID + R_IN) / 2, 370, color=fern["text"])
 
     # Sector III: magma ocean and core (30..150)
     mag, gar, iris = C_MAGMA, C_GARNET, C_IRIS
@@ -908,7 +908,7 @@ def render_figure_2(out_path: Path):
     group_box(ax, L, 655.0 + DY2, BW, BH, iris, "Volatiles & Redox", ["H, C, N, S", "IW / QFM"])
     group_box(ax, R, 175.0 + DY2, BW, BH, fern, "Hydrothermal", [r"Darcy $\mathbf{q}_\mathrm{D}$", "Hydrofracture"])
     group_box(ax, R, 335.0 + DY2, BW, BH, och, "Heating & Pyrolysis", [r"$^{26}$Al, $^{60}$Fe", "C, N, H Pyrolysis"])
-    group_box(ax, R, 495.0 + DY2, BW, BH, mag, "Magma Ocean", [r"$F_\mathrm{m} > \phi_\mathrm{crit}$", r"Soft-Turb. $k_\mathrm{eff}$"])
+    group_box(ax, R, 495.0 + DY2, BW, BH, mag, "Magma Ocean", [r"$F_\mathrm{m} > F_\mathrm{crit}$", r"Soft-Turb. $k_\mathrm{eff}$"])
     group_box(ax, R, 655.0 + DY2, BW, BH, iris, "Atmosphere & Loss", [r"Guillot $T(\tau)$", "Jeans, XUV"])
 
     legend2(ax, 995, 820.0 + DY2)
