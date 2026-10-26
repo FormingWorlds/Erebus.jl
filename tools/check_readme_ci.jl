@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # tools/check_readme_ci.jl
 # Verifies that README.md accurately describes the CI workflow defined in .github/workflows/CI.yml,
-# and verifies that all README capability, architecture, and restart claims map to real test files
+# and verifies that all documentation capability, architecture, and restart claims map to real test files
 # or CI jobs as defined in tools/readme_claim_map.toml.
 
 using TOML
@@ -220,7 +220,7 @@ function main()
     ok = check_readme_ci(; rewrite=rewrite)
 
     if ok
-        println("All README CI description and claim checks passed.")
+        println("All documentation CI description and claim checks passed.")
         exit(0)
     else
         println(stderr, "README CI check failed.")

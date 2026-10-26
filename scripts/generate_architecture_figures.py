@@ -634,7 +634,7 @@ def render_figure_1(out_path: Path):
     cont1 = (480.0, 92.0, 340.0, 856.0)
     iter1 = (504.0, 324.0, 292.0, 238.0)
     dia_y1, dia_hw1, dia_hh1 = 896.0, 92.0, 28.0
-    loop_x1, retry_x1, top_y1 = 494.0, 810.0, 110.0
+    loop_x1, retry_x1, top_y1 = 494.0, 810.0, 122.0
     fs_node1, fs_title1, fs_badge1, fs_eq1, fs_pill1 = 13.5, 13.0, 9.8, 13.0, 12.0
 
     left_x1, right_x1, bw1, bh1 = 24.0, 856.0, 420.0, 168.0
@@ -786,7 +786,7 @@ def render_figure_1(out_path: Path):
     )
     ax.text(
         x + 18,
-        y + 18,
+        y + 14,
         "simulation_loop",
         fontsize=11.5,
         color=muted,
@@ -819,7 +819,7 @@ def render_figure_1(out_path: Path):
     ax.text(
         cx1,
         iy + 16,
-        r"Outer iteration ($\leq \mathrm{max\_iters}$)",
+        r"Outer iteration ($\leq n_\mathrm{iter}$)",
         fontsize=12.5,
         fontweight="semibold",
         color=pal["magma"]["text"],
@@ -1038,7 +1038,8 @@ def render_figure_1(out_path: Path):
         fontweight="medium",
         color=pal["magma"]["text"],
         ha="center",
-        va="bottom",
+        va="center",
+        path_effects=[pe.Stroke(linewidth=2.5, foreground=bg), pe.Normal()],
         zorder=9,
     )
 
@@ -1195,7 +1196,7 @@ def render_figure_1(out_path: Path):
             "2. Radiogenic Heating",
             "radioactivity.jl",
             [
-                r"$Q_i = \frac{f_i r_i E_i}{\tau_{1/2, i}/\ln 2} e^{-t\ln 2/\tau_{1/2, i}}$",
+                r"$Q_i = \frac{f_i r_i E_i}{t_{1/2, i}/\ln 2} e^{-t\ln 2/t_{1/2, i}}$",
                 r"$i \in \{^{26}\mathrm{Al},\, ^{60}\mathrm{Fe}\}$",
             ],
             ["Radiogenic Decay", "C, N, H Pyrolysis"],
@@ -1222,7 +1223,7 @@ def render_figure_1(out_path: Path):
             "3. Marker Mapping & Gravity",
             "melting_convection.jl, gravity.jl",
             [
-                r"$\nabla^2\Phi = \frac{8}{3}\pi G\rho \quad (F_\mathrm{grav})$",
+                r"$\nabla^2\Phi = \frac{8}{3}\pi G\rho$",
                 r"$F_\mathrm{m} = (T - T_\mathrm{s})\,/\,(T_\mathrm{l} - T_\mathrm{s})$",
             ],
             ["Marker to Grid", r"Surface $\sigma_\mathrm{SB} T^4$"],
@@ -1243,7 +1244,7 @@ def render_figure_1(out_path: Path):
                 r"$\rho c_{p,\mathrm{app}}\,\frac{\mathrm{D}T}{\mathrm{D}t} = \nabla\cdot(k_\mathrm{eff}\nabla T) + H_\mathrm{r} + H_\mathrm{s} + H_\mathrm{a} + H_\mathrm{seg} + H_\mathrm{L}$",
                 r"$\mathbf{J}_\mathrm{Fe} = (X_\mathrm{Fe} - \phi_\mathrm{res})\mathbf{v}_\mathrm{seg}, \quad v_\mathrm{perc} = \frac{k_\mathrm{Fe}}{\phi\eta_\mathrm{Fe}}\Delta\rho g$",
             ],
-            ["Metal & Melt Seg.", r"Soft turbulence $k_\mathrm{eff}$"],
+            ["Metal & Melt Segregation", r"Turbulent $k_\mathrm{eff}$"],
         ),
         "mk": (
             "7 & 9. Markers & Doubling",
@@ -2047,9 +2048,9 @@ def render_figure_2(out_path: Path):
         ax.plot([c[0], x2], [c[1], y2], color=ink, lw=2.6, zorder=8)
 
     for x_pill, y_pill, col, s in [
-        (470, 82.0, sig, "I. Cold Accretion"),
-        (930, 82.0, fern, "II. Hydrothermal Alteration"),
-        (700, 782.0, mag, "III. Magma Ocean & Core"),
+        (470, 82.0, sig, "Phase I. Cold Accretion"),
+        (930, 82.0, fern, "Phase II. Hydrothermal Alteration"),
+        (700, 782.0, mag, "Phase III. Magma Ocean & Core"),
     ]:
         draw_pill(
             ax,
@@ -2066,7 +2067,7 @@ def render_figure_2(out_path: Path):
             lw=2.0,
         )
 
-    # 8 Process group boxes with Stage tags
+    # 8 Process group boxes with Phase tags
     left_col, right_col, box_w, box_h = 24, 1051, 325, 112
     group_box(
         ax,
@@ -2076,7 +2077,7 @@ def render_figure_2(out_path: Path):
         box_h,
         lag,
         bg,
-        "[Stage I] Accretion & Disk",
+        "[Phase I] Accretion & Disk",
         ["Pebbles", r"Disk $T_\mathrm{amb}$"],
     )
     group_box(
@@ -2087,7 +2088,7 @@ def render_figure_2(out_path: Path):
         box_h,
         sig,
         bg,
-        "[Stage I] Porous Ice & Rock",
+        "[Phase I] Porous Ice & Rock",
         ["Accreted Ices", "Pore Sealing"],
     )
     group_box(
@@ -2098,7 +2099,7 @@ def render_figure_2(out_path: Path):
         box_h,
         gar,
         bg,
-        "[Stage III] Core Formation",
+        "[Phase III] Core Formation",
         ["Segregation", r"Partition $D_i$"],
     )
     group_box(
@@ -2109,7 +2110,7 @@ def render_figure_2(out_path: Path):
         box_h,
         iris,
         bg,
-        "[Stage III] Volatiles & Redox",
+        "[Phase III] Volatiles & Redox",
         ["H, C, N, S", "IW / QFM"],
     )
     group_box(
@@ -2120,7 +2121,7 @@ def render_figure_2(out_path: Path):
         box_h,
         fern,
         bg,
-        "[Stage II] Hydrothermal",
+        "[Phase II] Hydrothermal",
         [r"Darcy $\mathbf{q}_\mathrm{D}$", "Hydrofracture"],
     )
     group_box(
@@ -2131,7 +2132,7 @@ def render_figure_2(out_path: Path):
         box_h,
         och,
         bg,
-        "[Stage II] Heating & Pyrolysis",
+        "[Phase II] Heating & Pyrolysis",
         [r"$^{26}$Al, $^{60}$Fe", "C, N, H Pyrolysis"],
     )
     group_box(
@@ -2142,8 +2143,8 @@ def render_figure_2(out_path: Path):
         box_h,
         mag,
         bg,
-        "[Stage III] Magma Ocean",
-        [r"$F_\mathrm{m} > F_\mathrm{crit}$", r"Soft-Turb. $k_\mathrm{eff}$"],
+        "[Phase III] Magma Ocean",
+        [r"$F_\mathrm{m} > F_\mathrm{crit}$", r"Turbulent $k_\mathrm{eff}$"],
     )
     group_box(
         ax,
@@ -2153,7 +2154,7 @@ def render_figure_2(out_path: Path):
         box_h,
         iris,
         bg,
-        "[Stage III] Atmosphere & Loss",
+        "[Phase III] Atmosphere & Loss",
         [r"Guillot $T(\tau_\mathrm{IR})$", "Jeans, XUV"],
     )
 

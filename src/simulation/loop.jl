@@ -353,7 +353,7 @@ function simulation_loop(
 
                 reconcile_accretion_timestep!(state, snapshot, cfg)
 
-                # Stage 7: Marker Viscoelasticity & Subgrid Diffusion
+                # Stage 7: Marker Stress & Subgrid Diffusion
                 diffuse_and_update_markers!(state, coords_ref[], cfg, ws)
 
                 # Stage 8: Fluid Venting & Atmosphere

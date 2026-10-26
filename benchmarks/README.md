@@ -45,7 +45,7 @@ Julia benchmark exporters require the packages defined in `benchmarks/Project.to
 julia --project=benchmarks -e 'using Pkg; Pkg.instantiate()'
 ```
 
-Python scripts require Python 3 with `numpy`, `matplotlib`, and `Pillow`.
+Python scripts require Python 3 with `numpy`, `matplotlib`, and `Pillow`. The architecture figure generator `scripts/generate_architecture_figures.py` additionally requires `fwl-mpl` and `fwl-visual-language`.
 
 ### Execution
 

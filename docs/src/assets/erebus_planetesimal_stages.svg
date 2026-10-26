@@ -312,8 +312,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #f8ede9; stroke: #b74b21; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="text_1">
-    <!-- [Stage I] Accretion &amp; Disk -->
-    <g style="fill: #124f54" transform="translate(55.675969 141.549) scale(0.15 -0.15)">
+    <!-- [Phase I] Accretion &amp; Disk -->
+    <g style="fill: #124f54" transform="translate(54.918937 141.549) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-30e" d="M 2317 -704 
 L 512 -704 
@@ -326,62 +326,43 @@ L 2317 -51
 L 2317 -704 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-SemiBold-7e" d="M 2227 -102 
-Q 1664 -102 1254 96 
-Q 845 294 611 649 
-Q 378 1005 339 1478 
-L 1184 1530 
-Q 1242 1088 1504 851 
-Q 1766 614 2240 614 
-Q 2643 614 2864 764 
-Q 3085 915 3085 1203 
-Q 3085 1376 3001 1510 
-Q 2918 1645 2681 1760 
-Q 2445 1875 1978 1984 
-Q 1414 2112 1075 2275 
-Q 736 2438 582 2684 
-Q 429 2931 429 3302 
-Q 429 3699 627 4003 
-Q 826 4307 1190 4476 
-Q 1555 4646 2067 4646 
-Q 2611 4646 2992 4451 
-Q 3373 4256 3587 3917 
-Q 3802 3578 3853 3136 
-L 3014 3098 
-Q 2970 3469 2726 3699 
-Q 2483 3930 2054 3930 
-Q 1696 3930 1488 3763 
-Q 1280 3597 1280 3334 
-Q 1280 3149 1366 3027 
-Q 1453 2906 1677 2816 
-Q 1901 2726 2304 2637 
-Q 2912 2502 3270 2307 
-Q 3629 2112 3782 1849 
-Q 3936 1587 3936 1248 
-Q 3936 832 3721 528 
-Q 3507 224 3126 61 
-Q 2746 -102 2227 -102 
+      <path id="Geist-SemiBold-77" d="M 512 0 
+L 512 4544 
+L 2272 4544 
+Q 3066 4544 3517 4160 
+Q 3968 3776 3968 3098 
+Q 3968 2413 3517 2025 
+Q 3066 1638 2272 1638 
+L 1344 1638 
+L 1344 0 
+L 512 0 
+z
+M 1344 2362 
+L 2234 2362 
+Q 2656 2362 2883 2547 
+Q 3110 2733 3110 3098 
+Q 3110 3456 2883 3638 
+Q 2656 3821 2234 3821 
+L 1344 3821 
+L 1344 2362 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-SemiBold-169" d="M 1818 0 
-Q 1306 0 1066 233 
-Q 826 467 826 979 
-L 826 2784 
-L 288 2784 
-L 288 3418 
-L 826 3418 
-L 826 4218 
-L 1645 4218 
-L 1645 3418 
-L 2547 3418 
-L 2547 2784 
-L 1645 2784 
-L 1645 1056 
-Q 1645 813 1750 723 
-Q 1856 634 2067 634 
-L 2547 634 
-L 2547 0 
-L 1818 0 
+      <path id="Geist-SemiBold-121" d="M 448 0 
+L 448 4544 
+L 1267 4544 
+L 1267 2963 
+Q 1408 3232 1664 3363 
+Q 1920 3494 2240 3494 
+Q 2810 3494 3104 3132 
+Q 3398 2771 3398 2195 
+L 3398 0 
+L 2579 0 
+L 2579 1997 
+Q 2579 2829 1997 2829 
+Q 1658 2829 1462 2611 
+Q 1267 2394 1267 1978 
+L 1267 0 
+L 448 0 
 z
 " transform="scale(0.015625)"/>
       <path id="Geist-SemiBold-e3" d="M 1440 -77 
@@ -420,40 +401,37 @@ Q 1101 1114 1101 934
 Q 1101 518 1606 518 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-SemiBold-119" d="M 1907 -1037 
-Q 1235 -1037 851 -768 
-Q 467 -499 352 -64 
-L 1197 -6 
-Q 1261 -205 1417 -310 
-Q 1574 -416 1907 -416 
-Q 2285 -416 2489 -246 
-Q 2694 -77 2694 282 
-L 2694 717 
-Q 2573 467 2304 316 
-Q 2035 166 1702 166 
-Q 1280 166 950 374 
-Q 621 582 435 956 
-Q 250 1331 250 1824 
-Q 250 2317 435 2691 
-Q 621 3066 944 3280 
-Q 1267 3494 1690 3494 
-Q 2054 3494 2323 3328 
-Q 2592 3162 2720 2886 
-L 2720 3418 
-L 3520 3418 
-L 3520 301 
-Q 3520 -358 3078 -697 
-Q 2637 -1037 1907 -1037 
-z
-M 1894 806 
-Q 2259 806 2480 1078 
-Q 2701 1350 2701 1830 
-Q 2707 2304 2486 2579 
-Q 2266 2854 1894 2854 
-Q 1517 2854 1309 2576 
-Q 1101 2298 1101 1830 
-Q 1101 1363 1315 1084 
-Q 1530 806 1894 806 
+      <path id="Geist-SemiBold-162" d="M 1837 -77 
+Q 1056 -77 672 249 
+Q 288 576 250 1075 
+L 1088 1114 
+Q 1133 845 1302 697 
+Q 1472 550 1843 550 
+Q 2131 550 2281 643 
+Q 2432 736 2432 934 
+Q 2432 1050 2377 1126 
+Q 2323 1203 2166 1260 
+Q 2010 1318 1709 1376 
+Q 1190 1466 896 1597 
+Q 602 1728 483 1926 
+Q 365 2125 365 2419 
+Q 365 2893 733 3193 
+Q 1101 3494 1811 3494 
+Q 2304 3494 2621 3337 
+Q 2938 3181 3101 2921 
+Q 3264 2662 3290 2342 
+L 2458 2304 
+Q 2445 2547 2291 2707 
+Q 2138 2867 1798 2867 
+Q 1510 2867 1360 2752 
+Q 1210 2637 1210 2445 
+Q 1210 2240 1354 2141 
+Q 1498 2042 1882 1978 
+Q 2406 1901 2713 1766 
+Q 3021 1632 3152 1430 
+Q 3283 1229 3283 947 
+Q 3283 454 2889 188 
+Q 2496 -77 1837 -77 
 z
 " transform="scale(0.015625)"/>
       <path id="Geist-SemiBold-106" d="M 1926 -77 
@@ -554,6 +532,27 @@ Q 1658 2714 1462 2538
 Q 1267 2362 1267 1971 
 L 1267 0 
 L 448 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-SemiBold-169" d="M 1818 0 
+Q 1306 0 1066 233 
+Q 826 467 826 979 
+L 826 2784 
+L 288 2784 
+L 288 3418 
+L 826 3418 
+L 826 4218 
+L 1645 4218 
+L 1645 3418 
+L 2547 3418 
+L 2547 2784 
+L 1645 2784 
+L 1645 1056 
+Q 1645 813 1750 723 
+Q 1856 634 2067 634 
+L 2547 634 
+L 2547 0 
+L 1818 0 
 z
 " transform="scale(0.015625)"/>
       <path id="Geist-SemiBold-124" d="M 448 0 
@@ -674,39 +673,6 @@ L 1344 3821
 L 1344 723 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-SemiBold-162" d="M 1837 -77 
-Q 1056 -77 672 249 
-Q 288 576 250 1075 
-L 1088 1114 
-Q 1133 845 1302 697 
-Q 1472 550 1843 550 
-Q 2131 550 2281 643 
-Q 2432 736 2432 934 
-Q 2432 1050 2377 1126 
-Q 2323 1203 2166 1260 
-Q 2010 1318 1709 1376 
-Q 1190 1466 896 1597 
-Q 602 1728 483 1926 
-Q 365 2125 365 2419 
-Q 365 2893 733 3193 
-Q 1101 3494 1811 3494 
-Q 2304 3494 2621 3337 
-Q 2938 3181 3101 2921 
-Q 3264 2662 3290 2342 
-L 2458 2304 
-Q 2445 2547 2291 2707 
-Q 2138 2867 1798 2867 
-Q 1510 2867 1360 2752 
-Q 1210 2637 1210 2445 
-Q 1210 2240 1354 2141 
-Q 1498 2042 1882 1978 
-Q 2406 1901 2713 1766 
-Q 3021 1632 3152 1430 
-Q 3283 1229 3283 947 
-Q 3283 454 2889 188 
-Q 2496 -77 1837 -77 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-SemiBold-135" d="M 448 0 
 L 448 4544 
 L 1267 4544 
@@ -724,31 +690,31 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(373.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(411.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-1" transform="translate(434.984375 0)"/>
-     <use xlink:href="#Geist-SemiBold-fc" transform="translate(503.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-fc" transform="translate(560.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(617.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(654.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(710.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(752.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(778.109375 0)"/>
-     <use xlink:href="#Geist-SemiBold-13e" transform="translate(837.40625 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(897.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-332" transform="translate(921.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(988.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-20" transform="translate(1012.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(1084.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(1110 0)"/>
-     <use xlink:href="#Geist-SemiBold-135" transform="translate(1164.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(383.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(421.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-1" transform="translate(445.078125 0)"/>
+     <use xlink:href="#Geist-SemiBold-fc" transform="translate(513.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-fc" transform="translate(570.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(627.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(664.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(720.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(762.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(788.203125 0)"/>
+     <use xlink:href="#Geist-SemiBold-13e" transform="translate(847.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(907.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-332" transform="translate(931.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(998.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-20" transform="translate(1022.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(1094.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(1120.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-135" transform="translate(1174.390625 0)"/>
     </g>
    </g>
    <g id="patch_24">
@@ -778,30 +744,9 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #124f54; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_2">
-    <!-- [Stage I] Porous Ice &amp; Rock -->
-    <g style="fill: #0071a0" transform="translate(50.427141 268.269) scale(0.15 -0.15)">
+    <!-- [Phase I] Porous Ice &amp; Rock -->
+    <g style="fill: #0071a0" transform="translate(49.670109 268.269) scale(0.15 -0.15)">
      <defs>
-      <path id="Geist-SemiBold-77" d="M 512 0 
-L 512 4544 
-L 2272 4544 
-Q 3066 4544 3517 4160 
-Q 3968 3776 3968 3098 
-Q 3968 2413 3517 2025 
-Q 3066 1638 2272 1638 
-L 1344 1638 
-L 1344 0 
-L 512 0 
-z
-M 1344 2362 
-L 2234 2362 
-Q 2656 2362 2883 2547 
-Q 3110 2733 3110 3098 
-Q 3110 3456 2883 3638 
-Q 2656 3821 2234 3821 
-L 1344 3821 
-L 1344 2362 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-SemiBold-16e" d="M 1574 -77 
 Q 1050 -77 749 262 
 Q 448 602 448 1216 
@@ -850,32 +795,32 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(373.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(411.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-77" transform="translate(434.984375 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(498.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(557.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(594.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-16e" transform="translate(654.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(712.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(768.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(791.6875 0)"/>
-     <use xlink:href="#Geist-SemiBold-fc" transform="translate(819.6875 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(876.6875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(935.78125 0)"/>
-     <use xlink:href="#Geist-SemiBold-332" transform="translate(959.375 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1027.078125 0)"/>
-     <use xlink:href="#Geist-SemiBold-7a" transform="translate(1050.671875 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(1117.984375 0)"/>
-     <use xlink:href="#Geist-SemiBold-fc" transform="translate(1177.28125 0)"/>
-     <use xlink:href="#Geist-SemiBold-135" transform="translate(1234.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(383.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(421.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(445.078125 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(508.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(567.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(604.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-16e" transform="translate(664.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(722.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(778.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(801.78125 0)"/>
+     <use xlink:href="#Geist-SemiBold-fc" transform="translate(829.78125 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(886.78125 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(945.875 0)"/>
+     <use xlink:href="#Geist-SemiBold-332" transform="translate(969.46875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1037.171875 0)"/>
+     <use xlink:href="#Geist-SemiBold-7a" transform="translate(1060.765625 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(1128.078125 0)"/>
+     <use xlink:href="#Geist-SemiBold-fc" transform="translate(1187.375 0)"/>
+     <use xlink:href="#Geist-SemiBold-135" transform="translate(1244.375 0)"/>
     </g>
    </g>
    <g id="patch_26">
@@ -905,8 +850,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #0072a1; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_3">
-    <!-- [Stage III] Core Formation -->
-    <g style="fill: #741721" transform="translate(56.005266 394.989) scale(0.15 -0.15)">
+    <!-- [Phase III] Core Formation -->
+    <g style="fill: #741721" transform="translate(55.248234 394.989) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-1a" d="M 2381 -102 
 Q 1760 -102 1286 182 
@@ -975,31 +920,31 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(399.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(428.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(466.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-1a" transform="translate(489.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(561.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(620.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(657.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(716.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-36" transform="translate(740.1875 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(797.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(856.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-13d" transform="translate(894.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(982.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(1036 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(1077.40625 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(1103.3125 0)"/>
-     <use xlink:href="#Geist-SemiBold-13e" transform="translate(1162.609375 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(409.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(438.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(476.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-1a" transform="translate(499.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(571.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(630.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(667.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(726.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-36" transform="translate(750.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(807.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(866.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-13d" transform="translate(904.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(992.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(1046.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(1087.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(1113.40625 0)"/>
+     <use xlink:href="#Geist-SemiBold-13e" transform="translate(1172.703125 0)"/>
     </g>
    </g>
    <g id="patch_28">
@@ -1029,8 +974,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #741721; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_4">
-    <!-- [Stage III] Volatiles &amp; Redox -->
-    <g style="fill: #4e2585" transform="translate(48.175969 521.709) scale(0.15 -0.15)">
+    <!-- [Phase III] Volatiles &amp; Redox -->
+    <g style="fill: #4e2585" transform="translate(47.418937 521.709) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-9d" d="M 1766 0 
 L 122 4544 
@@ -1099,34 +1044,34 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(399.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(428.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(466.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-9d" transform="translate(489.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(555.90625 0)"/>
-     <use xlink:href="#Geist-SemiBold-138" transform="translate(615.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(645.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(698.609375 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(740.015625 0)"/>
-     <use xlink:href="#Geist-SemiBold-138" transform="translate(766.21875 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(795.125 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(853.21875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(908.515625 0)"/>
-     <use xlink:href="#Geist-SemiBold-332" transform="translate(932.109375 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(999.8125 0)"/>
-     <use xlink:href="#Geist-SemiBold-7a" transform="translate(1023.40625 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(1090.71875 0)"/>
-     <use xlink:href="#Geist-SemiBold-102" transform="translate(1148.8125 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(1209.90625 0)"/>
-     <use xlink:href="#Geist-SemiBold-187" transform="translate(1264.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(409.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(438.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(476.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-9d" transform="translate(499.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(566 0)"/>
+     <use xlink:href="#Geist-SemiBold-138" transform="translate(625.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(655.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(708.703125 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(750.109375 0)"/>
+     <use xlink:href="#Geist-SemiBold-138" transform="translate(776.3125 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(805.21875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(863.3125 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(918.609375 0)"/>
+     <use xlink:href="#Geist-SemiBold-332" transform="translate(942.203125 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1009.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-7a" transform="translate(1033.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(1100.8125 0)"/>
+     <use xlink:href="#Geist-SemiBold-102" transform="translate(1158.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(1220 0)"/>
+     <use xlink:href="#Geist-SemiBold-187" transform="translate(1274.390625 0)"/>
     </g>
    </g>
    <g id="patch_30">
@@ -1156,8 +1101,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #4e2585; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_5">
-    <!-- [Stage II] Hydrothermal -->
-    <g style="fill: #1b7859" transform="translate(877.444734 141.549) scale(0.15 -0.15)">
+    <!-- [Phase II] Hydrothermal -->
+    <g style="fill: #1b7859" transform="translate(876.687703 141.549) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-3f" d="M 512 0 
 L 512 4544 
@@ -1192,48 +1137,30 @@ Q 1645 -960 1274 -960
 L 691 -960 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-SemiBold-121" d="M 448 0 
-L 448 4544 
-L 1267 4544 
-L 1267 2963 
-Q 1408 3232 1664 3363 
-Q 1920 3494 2240 3494 
-Q 2810 3494 3104 3132 
-Q 3398 2771 3398 2195 
-L 3398 0 
-L 2579 0 
-L 2579 1997 
-Q 2579 2829 1997 2829 
-Q 1658 2829 1462 2611 
-Q 1267 2394 1267 1978 
-L 1267 0 
-L 448 0 
-z
-" transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(401.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(438.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-3f" transform="translate(462.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-188" transform="translate(533.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-102" transform="translate(587.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(650.1875 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(687.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(744.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-121" transform="translate(786 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(844.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(902.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-13d" transform="translate(940.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(1028.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-138" transform="translate(1085.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(411.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(448.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-3f" transform="translate(472.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-188" transform="translate(543.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-102" transform="translate(597.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(660.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(697.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(754.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(796.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(854.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(912.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-13d" transform="translate(950.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(1038.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-138" transform="translate(1095.6875 0)"/>
     </g>
    </g>
    <g id="patch_32">
@@ -1263,38 +1190,76 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #20a976; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_6">
-    <!-- [Stage II] Heating &amp; Pyrolysis -->
-    <g style="fill: #80650f" transform="translate(857.4045 268.269) scale(0.15 -0.15)">
+    <!-- [Phase II] Heating &amp; Pyrolysis -->
+    <g style="fill: #80650f" transform="translate(856.647469 268.269) scale(0.15 -0.15)">
+     <defs>
+      <path id="Geist-SemiBold-119" d="M 1907 -1037 
+Q 1235 -1037 851 -768 
+Q 467 -499 352 -64 
+L 1197 -6 
+Q 1261 -205 1417 -310 
+Q 1574 -416 1907 -416 
+Q 2285 -416 2489 -246 
+Q 2694 -77 2694 282 
+L 2694 717 
+Q 2573 467 2304 316 
+Q 2035 166 1702 166 
+Q 1280 166 950 374 
+Q 621 582 435 956 
+Q 250 1331 250 1824 
+Q 250 2317 435 2691 
+Q 621 3066 944 3280 
+Q 1267 3494 1690 3494 
+Q 2054 3494 2323 3328 
+Q 2592 3162 2720 2886 
+L 2720 3418 
+L 3520 3418 
+L 3520 301 
+Q 3520 -358 3078 -697 
+Q 2637 -1037 1907 -1037 
+z
+M 1894 806 
+Q 2259 806 2480 1078 
+Q 2701 1350 2701 1830 
+Q 2707 2304 2486 2579 
+Q 2266 2854 1894 2854 
+Q 1517 2854 1309 2576 
+Q 1101 2298 1101 1830 
+Q 1101 1363 1315 1084 
+Q 1530 806 1894 806 
+z
+" transform="scale(0.015625)"/>
+     </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(401.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(438.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-3f" transform="translate(462.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(533.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(592.1875 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(645.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(687 0)"/>
-     <use xlink:href="#Geist-SemiBold-13e" transform="translate(714.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(773.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(835.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-332" transform="translate(858.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(926.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-77" transform="translate(950.1875 0)"/>
-     <use xlink:href="#Geist-SemiBold-188" transform="translate(1014.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(1069.390625 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(1106.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-138" transform="translate(1166.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-188" transform="translate(1192.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(1247 0)"/>
-     <use xlink:href="#Geist-SemiBold-124" transform="translate(1301.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(1327.203125 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(411.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(448.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-3f" transform="translate(472.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(543.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(602.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(655.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(697.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-13e" transform="translate(724.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-119" transform="translate(783.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(845.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-332" transform="translate(868.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(936.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(960.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-188" transform="translate(1024.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(1079.484375 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(1116.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-138" transform="translate(1176.1875 0)"/>
+     <use xlink:href="#Geist-SemiBold-188" transform="translate(1202.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(1257.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-124" transform="translate(1311.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(1337.296875 0)"/>
     </g>
    </g>
    <g id="patch_34">
@@ -1324,8 +1289,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #bc8d03; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_7">
-    <!-- [Stage III] Magma Ocean -->
-    <g style="fill: #b04921" transform="translate(872.683406 394.989) scale(0.15 -0.15)">
+    <!-- [Phase III] Magma Ocean -->
+    <g style="fill: #b04921" transform="translate(871.926375 394.989) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-59" d="M 512 0 
 L 512 4544 
@@ -1370,28 +1335,28 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(399.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(428.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(466.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-59" transform="translate(489.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(579 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(636.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-13d" transform="translate(698.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(786.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(844.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-60" transform="translate(867.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-fc" transform="translate(945 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(1002 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(1060.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-13e" transform="translate(1118.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(409.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(438.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(476.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-59" transform="translate(499.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(589.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-119" transform="translate(646.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-13d" transform="translate(708.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(796.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(854.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-60" transform="translate(877.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-fc" transform="translate(955.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(1012.09375 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(1070.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-13e" transform="translate(1128.78125 0)"/>
     </g>
    </g>
    <g id="patch_36">
@@ -1421,8 +1386,8 @@ z
 " clip-path="url(#pa146a90ccd)" style="fill: #ffffff; stroke: #b74b21; stroke-width: 1.6; stroke-linejoin: miter"/>
    </g>
    <g id="text_8">
-    <!-- [Stage III] Atmosphere &amp; Loss -->
-    <g style="fill: #4e2585" transform="translate(855.209578 521.709) scale(0.15 -0.15)">
+    <!-- [Phase III] Atmosphere &amp; Loss -->
+    <g style="fill: #4e2585" transform="translate(854.452547 521.709) scale(0.15 -0.15)">
      <defs>
       <path id="Geist-SemiBold-15b" d="M 448 -960 
 L 448 3418 
@@ -1463,34 +1428,34 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Geist-SemiBold-30e"/>
-     <use xlink:href="#Geist-SemiBold-7e" transform="translate(37.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(102.09375 0)"/>
-     <use xlink:href="#Geist-SemiBold-e3" transform="translate(144 0)"/>
-     <use xlink:href="#Geist-SemiBold-119" transform="translate(201.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(262.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(321.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(344.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(372.296875 0)"/>
-     <use xlink:href="#Geist-SemiBold-42" transform="translate(399.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-30f" transform="translate(428.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(466.203125 0)"/>
-     <use xlink:href="#Geist-SemiBold-1" transform="translate(489.796875 0)"/>
-     <use xlink:href="#Geist-SemiBold-169" transform="translate(553.90625 0)"/>
-     <use xlink:href="#Geist-SemiBold-13d" transform="translate(597.109375 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(685.015625 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(744.3125 0)"/>
-     <use xlink:href="#Geist-SemiBold-15b" transform="translate(798.609375 0)"/>
-     <use xlink:href="#Geist-SemiBold-121" transform="translate(859.703125 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(918.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-15e" transform="translate(976.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-106" transform="translate(1013.5 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1072.59375 0)"/>
-     <use xlink:href="#Geist-SemiBold-332" transform="translate(1096.1875 0)"/>
-     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1163.890625 0)"/>
-     <use xlink:href="#Geist-SemiBold-54" transform="translate(1187.484375 0)"/>
-     <use xlink:href="#Geist-SemiBold-144" transform="translate(1242.875 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(1302.171875 0)"/>
-     <use xlink:href="#Geist-SemiBold-162" transform="translate(1356.46875 0)"/>
+     <use xlink:href="#Geist-SemiBold-77" transform="translate(37.5 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(101.90625 0)"/>
+     <use xlink:href="#Geist-SemiBold-e3" transform="translate(160.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(218 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(272.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(331.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(354.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(382.390625 0)"/>
+     <use xlink:href="#Geist-SemiBold-42" transform="translate(409.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-30f" transform="translate(438.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(476.296875 0)"/>
+     <use xlink:href="#Geist-SemiBold-1" transform="translate(499.890625 0)"/>
+     <use xlink:href="#Geist-SemiBold-169" transform="translate(564 0)"/>
+     <use xlink:href="#Geist-SemiBold-13d" transform="translate(607.203125 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(695.109375 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(754.40625 0)"/>
+     <use xlink:href="#Geist-SemiBold-15b" transform="translate(808.703125 0)"/>
+     <use xlink:href="#Geist-SemiBold-121" transform="translate(869.796875 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(928.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-15e" transform="translate(986.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-106" transform="translate(1023.59375 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1082.6875 0)"/>
+     <use xlink:href="#Geist-SemiBold-332" transform="translate(1106.28125 0)"/>
+     <use xlink:href="#Geist-SemiBold-2e1" transform="translate(1173.984375 0)"/>
+     <use xlink:href="#Geist-SemiBold-54" transform="translate(1197.578125 0)"/>
+     <use xlink:href="#Geist-SemiBold-144" transform="translate(1252.96875 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(1312.265625 0)"/>
+     <use xlink:href="#Geist-SemiBold-162" transform="translate(1366.5625 0)"/>
     </g>
    </g>
    <g id="patch_38">
@@ -2369,9 +2334,145 @@ z
     </g>
    </g>
    <g id="text_14">
-    <!-- I. Cold Accretion -->
-    <g style="fill: #0072a1" transform="translate(318.784062 70.706) scale(0.14 -0.14)">
+    <!-- Phase I. Cold Accretion -->
+    <g style="fill: #0072a1" transform="translate(296.9375 70.706) scale(0.14 -0.14)">
      <defs>
+      <path id="Geist-Medium-77" d="M 550 0 
+L 550 4544 
+L 2246 4544 
+Q 3021 4544 3459 4169 
+Q 3898 3795 3898 3130 
+Q 3898 2464 3459 2083 
+Q 3021 1702 2246 1702 
+L 1242 1702 
+L 1242 0 
+L 550 0 
+z
+M 1242 2330 
+L 2227 2330 
+Q 3181 2330 3181 3130 
+Q 3181 3910 2227 3910 
+L 1242 3910 
+L 1242 2330 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-Medium-121" d="M 480 0 
+L 480 4544 
+L 1158 4544 
+L 1158 2912 
+Q 1293 3206 1558 3344 
+Q 1824 3482 2157 3482 
+Q 2714 3482 3008 3120 
+Q 3302 2758 3302 2189 
+L 3302 0 
+L 2624 0 
+L 2624 2010 
+Q 2624 2912 1978 2912 
+Q 1600 2912 1379 2678 
+Q 1158 2445 1158 1997 
+L 1158 0 
+L 480 0 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-Medium-e3" d="M 1434 -77 
+Q 902 -77 585 166 
+Q 269 410 269 851 
+Q 269 1286 534 1536 
+Q 800 1786 1357 1894 
+L 2528 2118 
+Q 2528 2906 1792 2906 
+Q 1466 2906 1280 2758 
+Q 1094 2611 1024 2336 
+L 326 2381 
+Q 422 2893 803 3187 
+Q 1184 3482 1792 3482 
+Q 2483 3482 2844 3114 
+Q 3206 2746 3206 2080 
+L 3206 755 
+Q 3206 634 3248 586 
+Q 3290 538 3386 538 
+L 3507 538 
+L 3507 0 
+Q 3418 -19 3258 -19 
+Q 2970 -19 2800 99 
+Q 2630 218 2586 506 
+L 2586 525 
+Q 2458 256 2144 89 
+Q 1830 -77 1434 -77 
+z
+M 1542 461 
+Q 2003 461 2265 723 
+Q 2528 986 2528 1389 
+L 2528 1606 
+L 1530 1414 
+Q 1222 1357 1097 1232 
+Q 973 1107 973 915 
+Q 973 698 1123 579 
+Q 1274 461 1542 461 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-Medium-162" d="M 1792 -77 
+Q 1050 -77 678 246 
+Q 307 570 269 1075 
+L 966 1107 
+Q 1011 826 1196 659 
+Q 1382 493 1792 493 
+Q 2112 493 2281 595 
+Q 2451 698 2451 922 
+Q 2451 1050 2393 1133 
+Q 2336 1216 2169 1277 
+Q 2003 1338 1677 1395 
+Q 1178 1491 899 1622 
+Q 621 1754 505 1949 
+Q 390 2144 390 2426 
+Q 390 2886 742 3184 
+Q 1094 3482 1760 3482 
+Q 2227 3482 2528 3325 
+Q 2829 3168 2982 2912 
+Q 3136 2656 3168 2362 
+L 2470 2323 
+Q 2451 2566 2288 2739 
+Q 2125 2912 1747 2912 
+Q 1414 2912 1254 2784 
+Q 1094 2656 1094 2451 
+Q 1094 2227 1244 2115 
+Q 1395 2003 1811 1939 
+Q 2330 1856 2621 1725 
+Q 2912 1594 3033 1398 
+Q 3155 1203 3155 928 
+Q 3155 448 2777 185 
+Q 2400 -77 1792 -77 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-Medium-106" d="M 1882 -77 
+Q 1382 -77 1020 144 
+Q 659 365 464 765 
+Q 269 1165 269 1702 
+Q 269 2240 464 2640 
+Q 659 3040 1017 3261 
+Q 1376 3482 1862 3482 
+Q 2323 3482 2675 3267 
+Q 3027 3053 3222 2649 
+Q 3418 2246 3418 1677 
+L 3418 1504 
+L 973 1504 
+Q 998 1005 1238 755 
+Q 1478 506 1888 506 
+Q 2189 506 2384 643 
+Q 2579 781 2662 1024 
+L 3366 979 
+Q 3232 499 2838 211 
+Q 2445 -77 1882 -77 
+z
+M 973 2016 
+L 2701 2016 
+Q 2669 2470 2438 2688 
+Q 2208 2906 1862 2906 
+Q 1498 2906 1264 2678 
+Q 1030 2451 973 2016 
+z
+" transform="scale(0.015625)"/>
+      <path id="Geist-Medium-2e1" transform="scale(0.015625)"/>
       <path id="Geist-Medium-42" d="M 550 0 
 L 550 4544 
 L 1242 4544 
@@ -2386,7 +2487,6 @@ L 1094 0
 L 269 0 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-Medium-2e1" transform="scale(0.015625)"/>
       <path id="Geist-Medium-1a" d="M 2355 -102 
 Q 1741 -102 1273 182 
 Q 806 467 544 998 
@@ -2531,34 +2631,6 @@ L 1158 0
 L 480 0 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-Medium-106" d="M 1882 -77 
-Q 1382 -77 1020 144 
-Q 659 365 464 765 
-Q 269 1165 269 1702 
-Q 269 2240 464 2640 
-Q 659 3040 1017 3261 
-Q 1376 3482 1862 3482 
-Q 2323 3482 2675 3267 
-Q 3027 3053 3222 2649 
-Q 3418 2246 3418 1677 
-L 3418 1504 
-L 973 1504 
-Q 998 1005 1238 755 
-Q 1478 506 1888 506 
-Q 2189 506 2384 643 
-Q 2579 781 2662 1024 
-L 3366 979 
-Q 3232 499 2838 211 
-Q 2445 -77 1882 -77 
-z
-M 973 2016 
-L 2701 2016 
-Q 2669 2470 2438 2688 
-Q 2208 2906 1862 2906 
-Q 1498 2906 1264 2678 
-Q 1030 2451 973 2016 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-Medium-169" d="M 1786 0 
 Q 1299 0 1068 221 
 Q 838 442 838 922 
@@ -2614,28 +2686,34 @@ L 480 0
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Geist-Medium-42"/>
-     <use xlink:href="#Geist-Medium-2e8" transform="translate(28 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(49.296875 0)"/>
-     <use xlink:href="#Geist-Medium-1a" transform="translate(73.59375 0)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(144.09375 0)"/>
-     <use xlink:href="#Geist-Medium-138" transform="translate(202.390625 0)"/>
-     <use xlink:href="#Geist-Medium-102" transform="translate(229.890625 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(290.6875 0)"/>
-     <use xlink:href="#Geist-Medium-1" transform="translate(314.984375 0)"/>
-     <use xlink:href="#Geist-Medium-fc" transform="translate(381.890625 0)"/>
-     <use xlink:href="#Geist-Medium-fc" transform="translate(437.1875 0)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(492.484375 0)"/>
-     <use xlink:href="#Geist-Medium-106" transform="translate(527.890625 0)"/>
-     <use xlink:href="#Geist-Medium-169" transform="translate(582.578125 0)"/>
-     <use xlink:href="#Geist-Medium-124" transform="translate(622.171875 0)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(646.765625 0)"/>
-     <use xlink:href="#Geist-Medium-13e" transform="translate(704.5625 0)"/>
+     <use xlink:href="#Geist-Medium-77"/>
+     <use xlink:href="#Geist-Medium-121" transform="translate(63.703125 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(121.703125 0)"/>
+     <use xlink:href="#Geist-Medium-162" transform="translate(177.5 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(230.203125 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(287.796875 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(312.09375 0)"/>
+     <use xlink:href="#Geist-Medium-2e8" transform="translate(340.09375 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(361.390625 0)"/>
+     <use xlink:href="#Geist-Medium-1a" transform="translate(385.6875 0)"/>
+     <use xlink:href="#Geist-Medium-144" transform="translate(456.1875 0)"/>
+     <use xlink:href="#Geist-Medium-138" transform="translate(514.484375 0)"/>
+     <use xlink:href="#Geist-Medium-102" transform="translate(541.984375 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(602.78125 0)"/>
+     <use xlink:href="#Geist-Medium-1" transform="translate(627.078125 0)"/>
+     <use xlink:href="#Geist-Medium-fc" transform="translate(693.984375 0)"/>
+     <use xlink:href="#Geist-Medium-fc" transform="translate(749.28125 0)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(804.578125 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(839.984375 0)"/>
+     <use xlink:href="#Geist-Medium-169" transform="translate(894.671875 0)"/>
+     <use xlink:href="#Geist-Medium-124" transform="translate(934.265625 0)"/>
+     <use xlink:href="#Geist-Medium-144" transform="translate(958.859375 0)"/>
+     <use xlink:href="#Geist-Medium-13e" transform="translate(1016.65625 0)"/>
     </g>
    </g>
    <g id="text_15">
-    <!-- II. Hydrothermal Alteration -->
-    <g style="fill: #19865e" transform="translate(651.470625 70.706) scale(0.14 -0.14)">
+    <!-- Phase II. Hydrothermal Alteration -->
+    <g style="fill: #19865e" transform="translate(629.624062 70.706) scale(0.14 -0.14)">
      <defs>
       <path id="Geist-Medium-3f" d="M 550 0 
 L 550 4544 
@@ -2670,24 +2748,6 @@ Q 1542 -960 1184 -960
 L 672 -960 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-Medium-121" d="M 480 0 
-L 480 4544 
-L 1158 4544 
-L 1158 2912 
-Q 1293 3206 1558 3344 
-Q 1824 3482 2157 3482 
-Q 2714 3482 3008 3120 
-Q 3302 2758 3302 2189 
-L 3302 0 
-L 2624 0 
-L 2624 2010 
-Q 2624 2912 1978 2912 
-Q 1600 2912 1379 2678 
-Q 1158 2445 1158 1997 
-L 1158 0 
-L 480 0 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-Medium-13d" d="M 480 0 
 L 480 3405 
 L 1101 3405 
@@ -2717,76 +2777,45 @@ L 1158 0
 L 480 0 
 z
 " transform="scale(0.015625)"/>
-      <path id="Geist-Medium-e3" d="M 1434 -77 
-Q 902 -77 585 166 
-Q 269 410 269 851 
-Q 269 1286 534 1536 
-Q 800 1786 1357 1894 
-L 2528 2118 
-Q 2528 2906 1792 2906 
-Q 1466 2906 1280 2758 
-Q 1094 2611 1024 2336 
-L 326 2381 
-Q 422 2893 803 3187 
-Q 1184 3482 1792 3482 
-Q 2483 3482 2844 3114 
-Q 3206 2746 3206 2080 
-L 3206 755 
-Q 3206 634 3248 586 
-Q 3290 538 3386 538 
-L 3507 538 
-L 3507 0 
-Q 3418 -19 3258 -19 
-Q 2970 -19 2800 99 
-Q 2630 218 2586 506 
-L 2586 525 
-Q 2458 256 2144 89 
-Q 1830 -77 1434 -77 
-z
-M 1542 461 
-Q 2003 461 2265 723 
-Q 2528 986 2528 1389 
-L 2528 1606 
-L 1530 1414 
-Q 1222 1357 1097 1232 
-Q 973 1107 973 915 
-Q 973 698 1123 579 
-Q 1274 461 1542 461 
-z
-" transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Geist-Medium-42"/>
-     <use xlink:href="#Geist-Medium-42" transform="translate(26.203125 0)"/>
-     <use xlink:href="#Geist-Medium-2e8" transform="translate(54.203125 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(75.5 0)"/>
-     <use xlink:href="#Geist-Medium-3f" transform="translate(99.796875 0)"/>
-     <use xlink:href="#Geist-Medium-188" transform="translate(170.390625 0)"/>
-     <use xlink:href="#Geist-Medium-102" transform="translate(222.984375 0)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(284.375 0)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(319.78125 0)"/>
-     <use xlink:href="#Geist-Medium-169" transform="translate(375.671875 0)"/>
-     <use xlink:href="#Geist-Medium-121" transform="translate(415.265625 0)"/>
-     <use xlink:href="#Geist-Medium-106" transform="translate(473.15625 0)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(529.75 0)"/>
-     <use xlink:href="#Geist-Medium-13d" transform="translate(565.5625 0)"/>
-     <use xlink:href="#Geist-Medium-e3" transform="translate(652.96875 0)"/>
-     <use xlink:href="#Geist-Medium-138" transform="translate(708.46875 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(736.671875 0)"/>
-     <use xlink:href="#Geist-Medium-1" transform="translate(760.96875 0)"/>
-     <use xlink:href="#Geist-Medium-138" transform="translate(827.671875 0)"/>
-     <use xlink:href="#Geist-Medium-169" transform="translate(851.078125 0)"/>
-     <use xlink:href="#Geist-Medium-106" transform="translate(890.578125 0)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(947.171875 0)"/>
-     <use xlink:href="#Geist-Medium-e3" transform="translate(982.78125 0)"/>
-     <use xlink:href="#Geist-Medium-169" transform="translate(1034.484375 0)"/>
-     <use xlink:href="#Geist-Medium-124" transform="translate(1074.078125 0)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(1098.671875 0)"/>
-     <use xlink:href="#Geist-Medium-13e" transform="translate(1156.46875 0)"/>
+     <use xlink:href="#Geist-Medium-77"/>
+     <use xlink:href="#Geist-Medium-121" transform="translate(63.703125 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(121.703125 0)"/>
+     <use xlink:href="#Geist-Medium-162" transform="translate(177.5 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(230.203125 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(287.796875 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(312.09375 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(338.296875 0)"/>
+     <use xlink:href="#Geist-Medium-2e8" transform="translate(366.296875 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(387.59375 0)"/>
+     <use xlink:href="#Geist-Medium-3f" transform="translate(411.890625 0)"/>
+     <use xlink:href="#Geist-Medium-188" transform="translate(482.484375 0)"/>
+     <use xlink:href="#Geist-Medium-102" transform="translate(535.078125 0)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(596.46875 0)"/>
+     <use xlink:href="#Geist-Medium-144" transform="translate(631.875 0)"/>
+     <use xlink:href="#Geist-Medium-169" transform="translate(687.765625 0)"/>
+     <use xlink:href="#Geist-Medium-121" transform="translate(727.359375 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(785.25 0)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(841.84375 0)"/>
+     <use xlink:href="#Geist-Medium-13d" transform="translate(877.65625 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(965.0625 0)"/>
+     <use xlink:href="#Geist-Medium-138" transform="translate(1020.5625 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(1048.765625 0)"/>
+     <use xlink:href="#Geist-Medium-1" transform="translate(1073.0625 0)"/>
+     <use xlink:href="#Geist-Medium-138" transform="translate(1139.765625 0)"/>
+     <use xlink:href="#Geist-Medium-169" transform="translate(1163.171875 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(1202.671875 0)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(1259.265625 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(1294.875 0)"/>
+     <use xlink:href="#Geist-Medium-169" transform="translate(1346.578125 0)"/>
+     <use xlink:href="#Geist-Medium-124" transform="translate(1386.171875 0)"/>
+     <use xlink:href="#Geist-Medium-144" transform="translate(1410.765625 0)"/>
+     <use xlink:href="#Geist-Medium-13e" transform="translate(1468.5625 0)"/>
     </g>
    </g>
    <g id="text_16">
-    <!-- III. Magma Ocean &amp; Core -->
-    <g style="fill: #b74b21" transform="translate(474.734531 625.106) scale(0.14 -0.14)">
+    <!-- Phase III. Magma Ocean &amp; Core -->
+    <g style="fill: #b74b21" transform="translate(452.887969 625.106) scale(0.14 -0.14)">
      <defs>
       <path id="Geist-Medium-59" d="M 550 0 
 L 550 4544 
@@ -2911,54 +2940,41 @@ Q 1363 518 1792 518
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Geist-Medium-42"/>
-     <use xlink:href="#Geist-Medium-42" transform="translate(26.203125 0)"/>
-     <use xlink:href="#Geist-Medium-42" transform="translate(52.40625 0)"/>
-     <use xlink:href="#Geist-Medium-2e8" transform="translate(80.40625 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(101.703125 0)"/>
-     <use xlink:href="#Geist-Medium-59" transform="translate(126 0)"/>
-     <use xlink:href="#Geist-Medium-e3" transform="translate(214 0)"/>
-     <use xlink:href="#Geist-Medium-119" transform="translate(269.796875 0)"/>
-     <use xlink:href="#Geist-Medium-13d" transform="translate(330.5 0)"/>
-     <use xlink:href="#Geist-Medium-e3" transform="translate(417.90625 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(474.40625 0)"/>
-     <use xlink:href="#Geist-Medium-60" transform="translate(498.703125 0)"/>
-     <use xlink:href="#Geist-Medium-fc" transform="translate(575 0)"/>
-     <use xlink:href="#Geist-Medium-106" transform="translate(630.296875 0)"/>
-     <use xlink:href="#Geist-Medium-e3" transform="translate(687.984375 0)"/>
-     <use xlink:href="#Geist-Medium-13e" transform="translate(744.1875 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(803.28125 0)"/>
-     <use xlink:href="#Geist-Medium-332" transform="translate(827.578125 0)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(892.484375 0)"/>
-     <use xlink:href="#Geist-Medium-1a" transform="translate(916.78125 0)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(987.28125 0)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(1045.078125 0)"/>
-     <use xlink:href="#Geist-Medium-106" transform="translate(1080.484375 0)"/>
+     <use xlink:href="#Geist-Medium-77"/>
+     <use xlink:href="#Geist-Medium-121" transform="translate(63.703125 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(121.703125 0)"/>
+     <use xlink:href="#Geist-Medium-162" transform="translate(177.5 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(230.203125 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(287.796875 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(312.09375 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(338.296875 0)"/>
+     <use xlink:href="#Geist-Medium-42" transform="translate(364.5 0)"/>
+     <use xlink:href="#Geist-Medium-2e8" transform="translate(392.5 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(413.796875 0)"/>
+     <use xlink:href="#Geist-Medium-59" transform="translate(438.09375 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(526.09375 0)"/>
+     <use xlink:href="#Geist-Medium-119" transform="translate(581.890625 0)"/>
+     <use xlink:href="#Geist-Medium-13d" transform="translate(642.59375 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(730 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(786.5 0)"/>
+     <use xlink:href="#Geist-Medium-60" transform="translate(810.796875 0)"/>
+     <use xlink:href="#Geist-Medium-fc" transform="translate(887.09375 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(942.390625 0)"/>
+     <use xlink:href="#Geist-Medium-e3" transform="translate(1000.078125 0)"/>
+     <use xlink:href="#Geist-Medium-13e" transform="translate(1056.28125 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(1115.375 0)"/>
+     <use xlink:href="#Geist-Medium-332" transform="translate(1139.671875 0)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(1204.578125 0)"/>
+     <use xlink:href="#Geist-Medium-1a" transform="translate(1228.875 0)"/>
+     <use xlink:href="#Geist-Medium-144" transform="translate(1299.375 0)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(1357.171875 0)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(1392.578125 0)"/>
     </g>
    </g>
    <g id="text_17">
     <!-- Pebbles -->
     <g style="fill: #124f54" transform="translate(61.599609 185.191) scale(0.13 -0.13)">
      <defs>
-      <path id="Geist-Medium-77" d="M 550 0 
-L 550 4544 
-L 2246 4544 
-Q 3021 4544 3459 4169 
-Q 3898 3795 3898 3130 
-Q 3898 2464 3459 2083 
-Q 3021 1702 2246 1702 
-L 1242 1702 
-L 1242 0 
-L 550 0 
-z
-M 1242 2330 
-L 2227 2330 
-Q 3181 2330 3181 3130 
-Q 3181 3910 2227 3910 
-L 1242 3910 
-L 1242 2330 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-Medium-fb" d="M 2176 -77 
 Q 1818 -77 1546 76 
 Q 1274 230 1133 512 
@@ -2985,39 +3001,6 @@ Q 1645 2893 1401 2579
 Q 1158 2266 1158 1702 
 Q 1158 1152 1398 832 
 Q 1638 512 2067 512 
-z
-" transform="scale(0.015625)"/>
-      <path id="Geist-Medium-162" d="M 1792 -77 
-Q 1050 -77 678 246 
-Q 307 570 269 1075 
-L 966 1107 
-Q 1011 826 1196 659 
-Q 1382 493 1792 493 
-Q 2112 493 2281 595 
-Q 2451 698 2451 922 
-Q 2451 1050 2393 1133 
-Q 2336 1216 2169 1277 
-Q 2003 1338 1677 1395 
-Q 1178 1491 899 1622 
-Q 621 1754 505 1949 
-Q 390 2144 390 2426 
-Q 390 2886 742 3184 
-Q 1094 3482 1760 3482 
-Q 2227 3482 2528 3325 
-Q 2829 3168 2982 2912 
-Q 3136 2656 3168 2362 
-L 2470 2323 
-Q 2451 2566 2288 2739 
-Q 2125 2912 1747 2912 
-Q 1414 2912 1254 2784 
-Q 1094 2656 1094 2451 
-Q 1094 2227 1244 2115 
-Q 1395 2003 1811 1939 
-Q 2330 1856 2621 1725 
-Q 2912 1594 3033 1398 
-Q 3155 1203 3155 928 
-Q 3155 448 2777 185 
-Q 2400 -77 1792 -77 
 z
 " transform="scale(0.015625)"/>
      </defs>
@@ -3853,16 +3836,9 @@ z
     </g>
    </g>
    <g id="text_30">
-    <!-- Soft-Turb. $k_\mathrm{eff}$ -->
-    <g style="fill: #b04921" transform="translate(979.77 438.631) scale(0.13 -0.13)">
+    <!-- Turbulent $k_\mathrm{eff}$ -->
+    <g style="fill: #b04921" transform="translate(981.395 438.631) scale(0.13 -0.13)">
      <defs>
-      <path id="Geist-Medium-305" d="M 269 1568 
-L 269 2163 
-L 2413 2163 
-L 2413 1568 
-L 269 1568 
-z
-" transform="scale(0.015625)"/>
       <path id="Geist-Medium-85" d="M 1472 0 
 L 1472 3910 
 L 77 3910 
@@ -3945,21 +3921,20 @@ L 2119 3494
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Geist-Medium-7e" transform="translate(0 0.25)"/>
-     <use xlink:href="#Geist-Medium-144" transform="translate(65.399933 0.25)"/>
-     <use xlink:href="#Geist-Medium-118" transform="translate(124.199875 0.25)"/>
-     <use xlink:href="#Geist-Medium-169" transform="translate(165.399841 0.25)"/>
-     <use xlink:href="#Geist-Medium-305" transform="translate(206.399796 0.25)"/>
-     <use xlink:href="#Geist-Medium-85" transform="translate(248.199753 0.25)"/>
-     <use xlink:href="#Geist-Medium-16e" transform="translate(304.999695 0.25)"/>
-     <use xlink:href="#Geist-Medium-15e" transform="translate(363.59964 0.25)"/>
-     <use xlink:href="#Geist-Medium-fb" transform="translate(402.999603 0.25)"/>
-     <use xlink:href="#Geist-Medium-2e8" transform="translate(463.799545 0.25)"/>
-     <use xlink:href="#Geist-Medium-2e1" transform="translate(485.099518 0.25)"/>
-     <use xlink:href="#Inter-Italic-2b8" transform="translate(509.39949 0.25)"/>
-     <use xlink:href="#Inter-Regular-266" transform="translate(564.331131 -16.128125) scale(0.7)"/>
-     <use xlink:href="#Inter-Regular-287" transform="translate(605.141678 -16.128125) scale(0.7)"/>
-     <use xlink:href="#Inter-Regular-287" transform="translate(631.049881 -16.128125) scale(0.7)"/>
+     <use xlink:href="#Geist-Medium-85" transform="translate(0 0.25)"/>
+     <use xlink:href="#Geist-Medium-16e" transform="translate(56.799942 0.25)"/>
+     <use xlink:href="#Geist-Medium-15e" transform="translate(115.399887 0.25)"/>
+     <use xlink:href="#Geist-Medium-fb" transform="translate(154.79985 0.25)"/>
+     <use xlink:href="#Geist-Medium-16e" transform="translate(215.599792 0.25)"/>
+     <use xlink:href="#Geist-Medium-138" transform="translate(274.199738 0.25)"/>
+     <use xlink:href="#Geist-Medium-106" transform="translate(302.399704 0.25)"/>
+     <use xlink:href="#Geist-Medium-13e" transform="translate(359.999649 0.25)"/>
+     <use xlink:href="#Geist-Medium-169" transform="translate(419.099594 0.25)"/>
+     <use xlink:href="#Geist-Medium-2e1" transform="translate(460.099548 0.25)"/>
+     <use xlink:href="#Inter-Italic-2b8" transform="translate(484.399521 0.25)"/>
+     <use xlink:href="#Inter-Regular-266" transform="translate(539.331161 -16.128125) scale(0.7)"/>
+     <use xlink:href="#Inter-Regular-287" transform="translate(580.141708 -16.128125) scale(0.7)"/>
+     <use xlink:href="#Inter-Regular-287" transform="translate(606.049911 -16.128125) scale(0.7)"/>
     </g>
    </g>
    <g id="text_31">

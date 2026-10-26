@@ -19,7 +19,7 @@ This guide provides instructions for installing and setting up `Erebus.jl` on yo
 
 ## Installing Erebus.jl
 
-Use the package route to call Erebus from your own Julia scripts. Use the local route to run simulations from the command line, to edit the code, and to run the test suite.
+Choose one method. Package Manager Installation lets you call `Erebus.jl` from your own scripts. Local Development Installation lets you run `launch.jl`, edit the code, and run the test suite.
 
 ### Package Manager Installation
 
