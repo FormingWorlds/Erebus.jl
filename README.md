@@ -25,10 +25,6 @@
 
 `Erebus.jl` is a Julia code for the thermal, chemical, and physical history of porous planetesimals. It couples solid matrix Stokes deformation, Darcy pore fluid flow, and radiogenic heat transport on a staggered finite-difference grid with Lagrangian markers. The code simulates ice melting, hydrothermal circulation, serpentinization reactions, metallic core segregation, and volatile degassing.
 
-![Erebus.jl Execution Pipeline](docs/src/assets/erebus_execution_pipeline.svg)
-
-*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations across 1 time step.*
-
 ## Get started
 
 Install `Erebus.jl` through the Julia package manager:

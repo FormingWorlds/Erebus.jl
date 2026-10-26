@@ -29,6 +29,7 @@ To regenerate all documentation figures in a single command, run:
 | `hydrothermal_grid_convergence.png` | `compare_grid_convergence.py` | Numerical grid convergence comparison across mesh resolutions ($16\times 16$, $32\times 32$, $64\times 64$, $128\times 128$). |
 | `hydrothermal_porosity_sweep.png` | `compare_porosity_sweep.py` | Hydrothermal circulation regime transitions across initial matrix porosity values. |
 | `hydrothermal_reaction_*.png` | `plot_reaction_benchmark.py` | Serpentinization reaction progress, fluid consumption, and heat generation fields. |
+| `erebus_execution_pipeline.svg` / `erebus_planetesimal_stages.svg` | `generate_architecture_figures.py` | Procedural vector architecture and 3-stage evolution cutaway figures for documentation. |
 
 ## Running Individual Scripts
 

@@ -344,7 +344,7 @@ The physical approximations and numerical boundaries in `Erebus.jl` include:
   For differentiated bodies, the enclosed-mass profile provides a closer match to spherical gravity.
 
 - **Sticky-Air Boundary**:
-  The exterior sticky-air layer has a high viscosity floor ($10^{16}\text{ Pa}\cdot\text{s}$) relative to silicate melt ($10^{12}\text{ Pa}\cdot\text{s}$).
+  The exterior sticky-air layer has solid viscosity `cfg.materials.etasolidm[3]` ($10^{16}\text{ Pa}\cdot\text{s}$), four orders of magnitude above the global solver viscosity floor `cfg.solver.etamin` ($10^{12}\text{ Pa}\cdot\text{s}$) applied to melted rock.
   This contrast creates a rigid mechanical lid rather than an unconstrained free surface.
 
 - **Linear Solvers**:
@@ -352,11 +352,10 @@ The physical approximations and numerical boundaries in `Erebus.jl` include:
   Iterative solvers, multigrid preconditioners, GPU kernels, and distributed MPI pathways remain experimental.
 
 - **Melt Transport**:
-  Silicate melt moves through an advective drift step rather than as a separate Darcy fluid phase in the matrix momentum equations.
+  Silicate melt moves through a sub-cycled conservative drift-flux transport step (`apply_silicate_melt_segregation!` in `src/numerics/segregation.jl`; tested in `test/test_magma_transport.jl`) rather than as a two-phase Darcy fluid coupled to the matrix momentum equations.
 
 - **Pore Fluid Phase**:
-  The formulation tracks 1 aqueous fluid phase.
-  Compaction without fluid expulsion or venting decreases pore fluid mass.
+  The formulation tracks 1 aqueous fluid phase; unvented porosity compaction in interior rock markers reduces pore volume and fluid mass without transfer to adjacent cells (`advance_marker_thermal_compaction_venting!` in `src/particles.jl`; tested in `test/test_conservation_closure.jl`).
 
 - **Benchmark Provenance**:
   Documentation figures state their provenance class.

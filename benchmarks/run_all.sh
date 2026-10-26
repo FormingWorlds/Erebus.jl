@@ -37,7 +37,11 @@ python3 "$SCRIPT_DIR/generate_mineral_assemblage_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_multistage_accretion_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_radiogenic_decay_benchmark.py"
 python3 "$SCRIPT_DIR/generate_reservoir_diagram.py"
-python3 "$SCRIPT_DIR/../scripts/generate_architecture_figures.py"
+if python3 -c "import fwl_mpl, fwl_visual_language" 2>/dev/null; then
+    python3 "$SCRIPT_DIR/../scripts/generate_architecture_figures.py"
+else
+    echo "Skipping architecture figures: fwl_mpl / fwl_visual_language not installed in environment."
+fi
 python3 "$SCRIPT_DIR/generate_telescoping_benchmarks.py"
 python3 "$SCRIPT_DIR/generate_thermal_slab_benchmark.py"
 python3 "$SCRIPT_DIR/generate_volatile_mixture_benchmarks.py"
