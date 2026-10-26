@@ -54,7 +54,7 @@ Full documentation: **[formingworlds.github.io/Erebus.jl/dev](https://formingwor
 
 - [Model Overview](https://formingworlds.github.io/Erebus.jl/dev/explanations/model_overview/): physical scope, governing equations, and execution stages
 - [Model Limits](https://formingworlds.github.io/Erebus.jl/dev/explanations/discretization_numerics/#Physical-and-Numerical-Limits): physical and numerical limits of the 2-D solver
-- [Running Tests](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/#running-the-test-suite): test execution commands and validation assertions
+- [Running Tests](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/#Running-the-Test-Suite): test execution commands and validation assertions
 - [Quickstart Tutorial](https://formingworlds.github.io/Erebus.jl/dev/tutorials/quickstart/): initial simulation run and output inspection
 - [Installation Guide](https://formingworlds.github.io/Erebus.jl/dev/howto/installation/): package setup, environment flags, and multi-threading
 - [Configuration Schema](https://formingworlds.github.io/Erebus.jl/dev/reference/config_schema/): complete parameter reference for TOML configuration files

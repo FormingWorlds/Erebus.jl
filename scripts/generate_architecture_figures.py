@@ -1242,7 +1242,7 @@ def render_figure_1(out_path: Path):
             "thermal.jl, segregation.jl",
             [
                 r"$\rho c_{p,\mathrm{app}}\,\frac{\mathrm{D}T}{\mathrm{D}t} = \nabla\cdot(k_\mathrm{eff}\nabla T) + H_\mathrm{r} + H_\mathrm{s} + H_\mathrm{a} + H_\mathrm{seg} + H_\mathrm{L}$",
-                r"$\mathbf{J}_\mathrm{Fe} = (X_\mathrm{Fe} - \phi_\mathrm{res})^+ X_\mathrm{fem}\mathbf{v}_\mathrm{seg}, \quad v_\mathrm{perc} = \frac{k_\mathrm{Fe}(X_\mathrm{Fe}-\phi_\mathrm{res})}{X_\mathrm{Fe}^2 \eta_\mathrm{Fe}}\Delta\rho g$",
+                r"$\mathbf{J}_\mathrm{Fe} = (X_\mathrm{Fe} - \phi_\mathrm{res})^+ X_\mathrm{fem}\mathbf{v}_\mathrm{seg}, \quad v_\mathrm{perc} = \frac{k_\mathrm{Fe}(\phi_\mathrm{m}-\phi_\mathrm{res})}{\phi_\mathrm{m}^2 \eta_\mathrm{Fe}}\Delta\rho g$",
             ],
             ["Metal & Melt Segregation", r"Turbulent $k_\mathrm{eff}$"],
         ),
