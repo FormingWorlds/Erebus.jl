@@ -140,7 +140,7 @@ Build verification figures and benchmark plots:
 
 `Erebus.jl` couples staggered finite-difference grids with Lagrangian markers in a multi-stage loop:
 
-![Erebus.jl Architecture and Execution Flow](docs/src/assets/erebus_architecture_flowchart.svg)
+![Erebus.jl Execution Pipeline and Governing Equations](docs/src/assets/erebus_execution_pipeline.svg)
 
 ---
 

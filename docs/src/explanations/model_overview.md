@@ -43,47 +43,74 @@ In magma oceans, metal droplets rain downward via Stokes settling, releasing gra
 
 ## Global Architecture & Execution Flow
 
-The full simulation lifecycle, coupling between Eulerian staggered grids and Lagrangian markers, and the nested sequence of multi-physics solvers are visualized in the flowchart below:
+The full simulation lifecycle, coupling between Eulerian staggered grids and Lagrangian markers, and the sequence of multi-physics solvers are visualized in the diagrams below.
 
-![Erebus.jl Architecture & Execution Flow](../assets/erebus_architecture_flowchart.svg)
+### Execution Pipeline and Governing Equations
+
+Figure 1 shows the discrete execution spine and governing equations of the 10-stage simulation loop:
+
+![Erebus.jl Execution Pipeline and Governing Equations](../assets/erebus_execution_pipeline.svg)
+
+*Figure 1: Class D (Schematic Diagram): Erebus execution pipeline and governing equations. The center spine shows one time step in simulation call order. Side cards show governing equations and physical modules for each step. Module activation depends on configuration switches; all modules are shown active. Outer iterations solve coupled hydration, Stokes-Darcy fluid-matrix mechanics, and thermal energy equations. The non-convergence path restores state and halves the time step.*
+
+Every symbol in the Figure 1 equation cards is defined as follows:
+- **Accretion & Ambient**: Out-of-plane cylindrical integration width $w_\mathrm{3D} = 2r$ [$\text{m}$] at radius $r$ [`src/geometry.jl`] projects the 2D Cartesian domain into a 3D spherical planetesimal with exact volume $\int w_\mathrm{3D}\,\mathrm{d}A = \frac{4}{3}\pi R^3$ [$\text{m}^3$] over a planar disk of radius $R$ for mass accretion deposition [`src/accretion.jl`].
+- **Heating & Pyrolysis**: $Q_i = \frac{f_i r_i E_i}{\tau_i} e^{-t/\tau_i}$ is the specific radiogenic heat production rate [$\text{W/kg}$] for radionuclide $i \in \{^{26}\mathrm{Al},\, ^{60}\mathrm{Fe}\}$, with reference isotope abundance $f_i$ [$\text{atoms/kg}$], initial isotopic ratio $r_i$ [-], decay energy $E_i$ [$\text{J}$], and mean lifetime $\tau_i$ [$\text{s}$] (`src/physics/radioactivity.jl:28`). Volumetric radiogenic heating rate $H_\mathrm{r}$ [$\text{W/m}^3$] is formed by weighting isotopic decay power by phase mass fractions and phase densities: $H_\mathrm{r} = (1 - \phi) [(1 - X_\mathrm{Fe}) \rho_\mathrm{sil} Q_{^{26}\mathrm{Al}} + X_\mathrm{Fe} \rho_\mathrm{Fe} Q_{^{60}\mathrm{Fe}}]$, where $\phi$ is matrix porosity [-], $X_\mathrm{Fe}$ is iron mass fraction [-], $\rho_\mathrm{sil}$ is silicate density [$\text{kg/m}^3$], and $\rho_\mathrm{Fe}$ is iron density [$\text{kg/m}^3$] (`src/physics/radioactivity.jl:70-98`, `src/simulation/steps/radiogenic_heating.jl:74-75`).
+- **Hydration Reaction**: $\mathrm{W_{sil}} \rightleftharpoons \mathrm{D_{sil}} + \mathrm{H_2O}$ is the reversible reaction between hydrous silicate $\mathrm{W_{sil}}$, dry silicate $\mathrm{D_{sil}}$, and pore fluid $\mathrm{H_2O}$. $\Delta G = \Delta H - T\Delta S + P_\mathrm{f}\Delta V + RT\ln(X_\mathrm{D}/X_\mathrm{W})$ is the molar Gibbs free energy change [$\text{J/mol}$], with reaction enthalpy $\Delta H$ [$\text{J/mol}$], temperature $T$ [$\text{K}$], reaction entropy $\Delta S$ [$\text{J/(mol}\cdot\text{K)}$], pore fluid pressure $P_\mathrm{f}$ [$\text{Pa}$], reaction volume change $\Delta V$ [$\text{m}^3/\text{mol}$], universal gas constant $R$ [$\text{J/(mol}\cdot\text{K)}$], and solid molar fractions $X_\mathrm{D}, X_\mathrm{W}$ [-].
+- **Venting & Atmosphere**: Semi-grey radiative equilibrium determines the atmospheric temperature profile $T(\tau)$ [$\text{K}$] via $T^4(\tau) = \frac{3}{4}T_\mathrm{int}^4\left(\frac{2}{3}+\tau\right) + \frac{3}{4}T_\mathrm{eq}^4\,f_\gamma(\tau)$, where $\tau$ is thermal optical depth [-], $T_\mathrm{int}$ is interior effective temperature [$\text{K}$], and $T_\mathrm{eq}$ is planetary equilibrium temperature [$\text{K}$]. $f_\gamma(\tau) = \frac{2}{3} + \frac{1}{\gamma\sqrt{3}} + \left(\frac{\gamma}{\sqrt{3}} - \frac{1}{\gamma\sqrt{3}}\right) e^{-\gamma\tau\sqrt{3}}$ is the analytical greenhouse profile [-] with visible-to-thermal opacity ratio $\gamma$ [-].
+- **P2M, Melt & Gravity**: $\nabla^2\Phi = \frac{8}{3}\pi G\rho$ is the 2D Cartesian Poisson equation proxy for gravitational potential $\Phi$ [$\text{m}^2/\text{s}^2$] (calibrated with factor $\frac{2}{3} \cdot 4\pi G = \frac{8}{3}\pi G$ to recover exact radial interior gravity $g(r) = \frac{4}{3}\pi G\rho r$ of a uniform 3D sphere; see `telescoping_domain.md:118`), with gravitational constant $G$ [$\text{m}^3/(\text{kg}\cdot\text{s}^2)$] and bulk density $\rho$ [$\text{kg/m}^3$]. $F_\mathrm{m} = (T - T_\mathrm{s})\,/\,(T_\mathrm{l} - T_\mathrm{s})$ is the equilibrium melt fraction [-] between solidus $T_\mathrm{s}$ [$\text{K}$] and liquidus $T_\mathrm{l}$ [$\text{K}$].
+- **Stokes-Darcy**: $\nabla\cdot\boldsymbol{\sigma}' - \nabla P + \rho\mathbf{g} = 0$ is solid momentum conservation with deviatoric stress tensor $\boldsymbol{\sigma}'$ [$\text{Pa}$], total mixture pressure $P$ [$\text{Pa}$], mixture density $\rho$ [$\text{kg/m}^3$], and gravitational acceleration $\mathbf{g}$ [$\text{m/s}^2$]. $\nabla\cdot\mathbf{v}_\mathrm{s} = -D\ln(1-\phi)/Dt$ is solid mass conservation with matrix velocity $\mathbf{v}_\mathrm{s}$ [$\text{m/s}$] and matrix porosity $\phi$ [-].
+- **Thermal & Segregation**: $\rho c_p\, \partial T/\partial t = \nabla\cdot(k_\mathrm{eff}\nabla T) + H_\mathrm{r} + H_\mathrm{s} + H_\mathrm{a} + Q_\mathrm{seg} + H_\mathrm{L}$ is thermal energy conservation with volumetric heat capacity $\rho c_p$ [$\text{J/(m}^3\cdot\text{K)}$], effective thermal conductivity $k_\mathrm{eff}$ [$\text{W/(m}\cdot\text{K)}$], radiogenic heat $H_\mathrm{r}$ [$\text{W/m}^3$], shear heating $H_\mathrm{s}$ [$\text{W/m}^3$], adiabatic heating $H_\mathrm{a}$ [$\text{W/m}^3$], segregation dissipation heating $Q_\mathrm{seg}$ [$\text{W/m}^3$] (`thermal.jl:137`, `solve_thermal_energy.jl:305`), and reaction/phase-change latent heat $H_\mathrm{L}$ [$\text{W/m}^3$].
+- **Markers & Domain**: $\mathrm{d}\mathbf{x}_m/\mathrm{d}t = \mathbf{v}(\mathbf{x}_m)$ is marker advection for marker position $\mathbf{x}_m$ [$\text{m}$] evaluated with a fourth-order Runge-Kutta scheme in velocity field $\mathbf{v}$ [$\text{m/s}$].
 
 ### Numerical Execution Pipeline
 
-The simulation loop advances physical time via a 10-stage operator-splitting sequence:
+The simulation loop advances physical time via a 10-stage operator sequence:
 
-1. **Mass Accretion (`accrete!`)**:
-   Accretes pebbles or embryos onto the body, advances planetary radius $R(t)$, deposits impact kinetic energy in the outer shell, and updates sticky air boundaries. Telescoping domain expansion ($x_{\text{size}} \to 2 x_{\text{size}}$) executes subsequently when the body exceeds 70% of domain half-width.
+1. **Accretion & Ambient (`prepare_step_ambient!`, `accrete!`)**:
+   Computes disk ambient temperature and pressure, deposits accreted pebbles or embryos onto the body, advances planetary radius $R(t)$, injects impact kinetic energy into the outer shell, and updates sticky air boundaries.
 
-2. **Radiogenic Decay Heating (`radiogenic_heating!`)**:
-   Computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$) and adds volumetric heat sources to markers.
+2. **Heating & Pyrolysis (`radiogenic_heating!`, `update_pyrolysis!`)**:
+   Computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$), adds volumetric heat sources to markers, and updates volatile release from organic macromolecular carbon (pyrolysis).
 
-3. **Marker-in-Cell Mapping (`interpolate_markers_to_grid!`)**:
-   Interpolates marker properties (density $\rho$, viscosity $\eta$, thermal conductivity $k$, heat capacity $\rho c_p$, and porosity $\phi$) to staggered grid nodes using bilinear distance weights or tiled thread-local workspaces.
+3. **Marker-in-Cell Mapping & Gravity (`interpolate_markers_to_grid!`, `solve_gravity!`, `apply_surface_radiation!`)**:
+   Interpolates marker properties (density $\rho$, viscosity $\eta$, thermal conductivity $k$, heat capacity $\rho c_p$, and porosity $\phi$) to staggered grid nodes using bilinear distance weights or tiled thread-local workspaces; solves the Poisson equation for gravitational potential $\Phi$ and gravity acceleration $\mathbf{g}$; and applies radiative surface boundary conditions.
 
-4. **Self-Gravity (`solve_gravity!`)**:
-   Solves for gravitational potential $\Phi$ and gravitational acceleration components $(g_x, g_y)$ via 2D Poisson solver or 3D spherical enclosed-mass proxy with linear regularization.
+4. **Hydration Reaction (`solve_hydration_iteration!`)**:
+   Solves reversible serpentinization and dehydration reactions ($\mathrm{W_{sil}} \rightleftharpoons \mathrm{D_{sil}} + \mathrm{H_2O}$) based on Gibbs free energy minimization, updating mineral hydration states, fluid production, and chemical latent heat.
 
-5. **Hydro-Mechanical Stokes-Darcy Solve**:
-   Assembles and solves the monolithic linear system for solid matrix velocities $(v_x, v_y)$, total pressure $P_t$, fluid Darcy flux $(q_x, q_y)$, fluid pressure $P_f$, and Terzaghi effective stress plasticity.
+5. **Hydro-Mechanical Stokes-Darcy Solve (`assemble_hydromechanical_lse!`)**:
+   Assembles and solves the monolithic linear system for solid matrix velocities $(v_x, v_y)$, total pressure $P_t$, fluid Darcy flux $(q_x, q_y)$, fluid pressure $P_\mathrm{f}$, matrix compaction, and Terzaghi effective stress plasticity.
 
-6. **Thermochemical Energy Solve**:
-   Advances temperature through implicit sparse solve incorporating conduction, advection, latent heats of dehydration and melting, radiogenic sources, sub-grid soft turbulence convection, and gravitational segregation heating.
+6. **Thermal Energy & Metal Segregation (`solve_thermal_energy!`, `run_metal_segregation!`)**:
+   Solves the thermal energy equation incorporating conduction, advection, latent heats of dehydration and melting, radiogenic sources, sub-grid soft turbulence convection, and gravitational segregation dissipation heating $Q_\mathrm{seg}$ from conservative iron metal drift-flux transport.
 
-7. **Fluid Venting & Magma Degassing (`vent_and_degas!`)**:
-   Evaluates matrix compaction, hydrofracture tensile failure venting, volatile drainage, and dynamic flux or equilibrium volatile exsolution across partially molten mantle and magma ocean zones.
+7. **Marker Viscoelasticity & Subgrid Diffusion (`diffuse_and_update_markers!`)**:
+   Evaluates viscoelastic stress relaxation and performs subgrid thermal diffusion between grid nodes and markers following convergence of the thermomechanical outer iteration loop.
 
-8. **Surface Atmosphere & Escape (`evolve_atmosphere!`)**:
-   Couples vented and degassed volatile inventories into surface atmospheric pressure and equilibrium temperature, and computes multi-species hydrodynamic and kinetic escape losses.
+8. **Fluid Venting & Coupled Atmosphere (`vent_and_degas!`, `evolve_atmosphere!`)**:
+   Evaluates matrix compaction, hydrofracture tensile failure venting, volatile drainage, and dynamic/equilibrium volatile exsolution across magma ocean zones; couples vented volatile inventories into surface atmospheric pressure and equilibrium temperature; and computes multi-species hydrodynamic and kinetic escape losses.
 
-9. **Marker Advection (`advect_markers!`)**:
-   Advects Lagrangian marker coordinates $(x_m, y_m)$ using a 4th-order Runge-Kutta scheme, backtracks nodal total and fluid pressures, and updates porosity state.
+9. **Marker Advection & Replenishment (`advect_markers!`, `replenish!`, `telescope_domain!`)**:
+   Advects Lagrangian marker coordinates $(x_m, y_m)$ using a fourth-order Runge-Kutta scheme, backtracks nodal total and fluid pressures, updates porosity state, replenishes under-populated grid cells, and executes telescoping domain doubling ($x_{\text{size}} \to 2 x_{\text{size}}$) when the body exceeds 70% of domain half-width.
 
-10. **Marker Replenishment (`replenish!`)**:
-    Detects under-populated grid cells, injects replacement markers with interpolated thermochemical properties, and recomputes out-of-plane geometric integration lengths $L(r_m)$.
-
-Following stage 10, the simulation advances physical time $t \leftarrow t + \Delta t$, exports JLD2 checkpoint snapshots, and streams telemetry records.
+10. **Diagnostics & Telemetry (`advance_step_diagnostics!`)**:
+    Advances simulation physical time $t \leftarrow t + \Delta t$, logs conservation metrics and solver convergence, exports JLD2 checkpoint snapshots, and streams telemetry records.
 
 ---
+
+## Planetesimal Evolution Across Physical Stages
+
+Figure 2 illustrates the physical evolution of a planetesimal across three successive evolutionary stages, synthesizing the interior physical mechanisms resolved by Erebus:
+
+![Erebus.jl Planetesimal Evolution in Three Stages](../assets/erebus_planetesimal_stages.svg)
+
+*Figure 2: Class D (Schematic Diagram): Planetesimal evolution across three physical stages. Sectors show successive stages of one body; sector widths do not scale with time. Left and right cards show physical processes that Erebus solves. Active modules depend on configuration switches; all modules are shown active. Flux arrows are schematic.*
+
+In Figure 2:
+- **Stage I (Cold Accretion)**: Low temperatures preserve porous ice and pristine rock. Accretion flux $\dot{M}_\mathrm{acc}$ delivers pebbles and volatile ices to the surface.
+- **Stage II (Hydrothermal Alteration)**: Radiogenic decay warms the interior. Ice melts into pore water. Darcy percolation $\mathbf{q}_\mathrm{D}$ drives hydrothermal circulation, serpentinization, and dehydration reactions through permeable crust.
+- **Stage III (Magma Ocean & Core Formation)**: Deep heating drives silicate melting above the critical rheological transition ($F_\mathrm{m} > \phi_\mathrm{crit} \approx 0.40$). Molten iron metal drift-flux $\mathbf{J}_\mathrm{Fe}$ descends to form a metallic core, releasing segregation dissipation heating $Q_\mathrm{seg}$ (`segregation.jl:897, 1839`, `thermal.jl:137`). Surface radiative heat flux $F_\mathrm{rad}$ radiates into space and drives atmospheric escape.
 
 ## Thermo-Hydro-Mechanical Coupling
 
