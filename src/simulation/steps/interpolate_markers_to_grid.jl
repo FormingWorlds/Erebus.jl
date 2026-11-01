@@ -270,10 +270,12 @@ function interpolate_markers_to_grid!(
     tau_al = cfg.thermodynamics.t_half_al / log(2.0)
     tau_fe = cfg.thermodynamics.t_half_fe / log(2.0)
 
+    # Unused when compute_hr=false (the step loop projects state.markers.core.hrtotalm instead).
     hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
         cfg.thermodynamics.hr_al,
         cfg.thermodynamics.hr_fe,
         state.timesum;
+        dt=state.dt,
         ratio_al=cfg.thermodynamics.ratio_al,
         E_al=cfg.thermodynamics.E_al,
         f_al=cfg.thermodynamics.f_al,

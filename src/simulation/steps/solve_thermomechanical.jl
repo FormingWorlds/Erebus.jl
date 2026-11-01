@@ -159,6 +159,13 @@ function _update_radiogenic_heating_for_dt!(
     marknum = length(state.markers)
     marknum == 0 && return nothing
     (cfg.thermodynamics.hr_al || cfg.thermodynamics.hr_fe) || return nothing
+    if ws.hr_step_start_timestep != state.timestep || ws.phim_hr_step_start === nothing
+        throw(
+            ArgumentError(
+                "Radiogenic step-start state was not snapshotted for timestep $(state.timestep) (hr_step_start_timestep=$(ws.hr_step_start_timestep))",
+            ),
+        )
+    end
 
     core = state.markers.core
     Xfe_bulk = if haskey(state.markers.groups, :metal)
@@ -191,6 +198,17 @@ function _update_radiogenic_heating_for_dt!(
 
     if cfg.solver.p2m_mode == :tiled && ws.p2m !== nothing
         ws_p2m = ws.p2m
+        if ws_p2m.Ncx != coords.Nx - 1 ||
+            ws_p2m.Ncy != coords.Ny - 1 ||
+            length(ws_p2m.tile_markers) < marknum ||
+            length(ws_p2m.tile_offsets) != ws_p2m.Ntiles + 1 ||
+            ws_p2m.tile_offsets[ws_p2m.Ntiles + 1] - 1 != marknum
+            throw(
+                DimensionMismatch(
+                    "Tiled P2M workspace binning does not match grid ($(coords.Ny)x$(coords.Nx)) or marker count ($marknum)",
+                ),
+            )
+        end
         @inbounds for color in 1:4
             for t in ws_p2m.tiles_by_color[color]
                 lo = ws_p2m.tile_offsets[t]

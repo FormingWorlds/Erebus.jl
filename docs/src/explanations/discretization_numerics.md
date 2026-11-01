@@ -248,7 +248,7 @@ At grid resolutions exceeding $1024 \times 1024$ ($> 4 \times 10^6$ nodes, $> 1.
 Because effective viscosities $\eta(\dot{\varepsilon}_{\text{II}}, P_{\text{eff}})$, permeabilities $k_\phi(\phi)$, and bulk viscosities $\eta_\phi(\phi)$ depend non-linearly on the state variables, each timestep executes nested Picard iteration loops:
 
 1. **Global Thermochemical Loop (`titer`)**:
-   Updates temperature, phase changes, step-averaged radiogenic decay heating $H_r$ (recomputing marker and P-node `HR` whenever `state.dt` is reduced between outer iterations), and mass/enthalpy source terms ($DMP$, $DHP$).
+   Updates temperature, phase changes, step-averaged radiogenic decay heating $H_r$ (recomputing marker and P-node `HR` whenever `state.dt` changes), and mass/enthalpy source terms ($DMP$, $DHP$).
 2. **Plastic Yielding Loop (`iplast`)**:
    Checks Mohr-Coulomb stress invariants $\sigma_{\text{II}}$ against yield surfaces, adjusting effective viscosity and bulk compaction viscosity until stress changes drop below `yerrmax`.
 

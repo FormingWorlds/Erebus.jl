@@ -155,7 +155,7 @@ $$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{fe,ref}}}$$
 
 $$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{fe,ref}}}$$
 
-where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture. Phase volume weighting over silicate and metal components preserves total bulk radiogenic power. Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $\phi(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
+where $X_{\text{fe,ref}}$ is the reference iron fraction (`X_FE_REF_CHONDRITE = 0.182` for total iron mass fraction in bulk CI chondrite without a `:metal` marker group, or `cfg.coreformation.Xfe_bulk` when a `:metal` group is present). Phase volume weighting over silicate and metal components preserves total bulk radiogenic power. Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $f_{\text{avg}}(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
 
 $$\overline{Q}_i(t_n, \Delta t) = \frac{1}{\Delta t} \int_{t_n}^{t_n + \Delta t} Q_i(t)\,\mathrm{d}t = Q_i(t_n)\,\frac{1 - \exp(-\Delta t / \tau_i)}{\Delta t / \tau_i}$$
 

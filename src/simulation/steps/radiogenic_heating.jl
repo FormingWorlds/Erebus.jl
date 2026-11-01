@@ -110,5 +110,6 @@ function snapshot_radiogenic_step_start!(
             ws.Xfe_bulk_hr_step_start, state.markers.groups.metal.Xfe_bulk
         )
     end
+    ws.hr_step_start_timestep = state.timestep
     return nothing
 end

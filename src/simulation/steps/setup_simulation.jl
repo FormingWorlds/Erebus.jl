@@ -527,6 +527,7 @@ function setup_simulation_workspaces(
         alloc_if(redox_on),
         alloc_if(has_hr),
         alloc_if(has_hr && has_metal),
+        -1,
     )
 end
 

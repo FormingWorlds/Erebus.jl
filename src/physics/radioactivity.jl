@@ -146,7 +146,8 @@ function calculate_radioactive_heating(
     if fe
         # 60Fe radiogenic heat production [W/kg bulk rock]
         Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum; dt=dt)
-        # Concentrate bulk-rock 60Fe power into the metallic phase [W/m^3].
+        # f_fe is 56Fe atoms/kg bulk CI chondrite (18.2 wt% Fe); divide by X_fe_ref for W/kg metal
+        # and multiply by rho_metal for volumetric heating [W/m^3] in mantle (1) and crust (2).
         Q_fe_metal = X_fe_ref > 0.0 ? Q_fe / X_fe_ref : 0.0
         @inbounds hrmetalm = @SVector [Q_fe_metal * rho_metal, Q_fe_metal * rho_metal, 0.0]
     else

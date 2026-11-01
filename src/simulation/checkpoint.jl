@@ -316,7 +316,7 @@ $(SIGNATURES)
     - dt: time step
     - timesum: total simulation time
     - marknum: number of markers
-    - ETA... : simulation state variables (`HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`)
+    - ETA... : simulation state variables (in the step-0 file `output_00000.jld2`, `hrtotalm` holds initial `start_hrsolidm` values and `HR` is zero; for per-step saves with `timestep >= 1`, `HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`)
 
 # Returns
 

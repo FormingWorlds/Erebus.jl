@@ -270,6 +270,7 @@ mutable struct SimulationWorkspaces
     deltaIW_m_step_start::Union{Nothing,Vector{Float64}}
     phim_hr_step_start::Union{Nothing,Vector{Float64}}
     Xfe_bulk_hr_step_start::Union{Nothing,Vector{Float64}}
+    hr_step_start_timestep::Int
 end
 
 """
@@ -319,6 +320,7 @@ function reset_workspaces_for_grid!(
     ws.interp_arrays = setup_interpolated_properties(coords)
     ws.fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
     ws.fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
+    ws.hr_step_start_timestep = -1
 
     return ws
 end
