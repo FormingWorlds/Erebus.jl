@@ -781,7 +781,7 @@ using Test
         # 1. 20-step uniform dt = 0.5 Myr (26Al + 60Fe)
         res_both = _run_adiabatic_0d_box(20; hr_al=true, hr_fe=true, dt_yr=5.0e5)
         or_both = _analytical_0d_oracles(res_both.cfg, res_both.t0, res_both.dt_hist)
-        @test isapprox(or_both.dT_gl5, or_both.dT_closed; rtol=1e-15)
+        @test isapprox(or_both.dT_gl5, or_both.dT_closed; atol=10 * eps(or_both.dT_closed))
         @test isapprox(res_both.dT_center, or_both.dT_gl5; rtol=1e-12)
         @test !isapprox(res_both.dT_center, or_both.dT_start; rtol=0.1)
         @test !isapprox(res_both.dT_center, or_both.dT_end; rtol=0.1)

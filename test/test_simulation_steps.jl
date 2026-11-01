@@ -1270,7 +1270,7 @@ end
         )
         @test isapprox(state_buf_a.grids.HR, state_buf_b.grids.HR; rtol=1e-14, atol=1e-22)
 
-        # 3. Exception safety (try/finally restoration) and DimensionMismatch contract
+        # 3. Exception safety (try/finally restoration) and guard contracts
         @test_throws DimensionMismatch Erebus._swap_step_start_vec!([1.0, 2.0], [1.0])
         phim_before_err = copy(state_a.markers.core.phim)
         xfe_before_err = copy(state_a.markers.groups.metal.Xfe_bulk)
@@ -1278,7 +1278,152 @@ end
         @test_throws DomainError Erebus._update_radiogenic_heating_for_dt!(
             state_a, coords_cut, cfg_cut, ws_a
         )
+        state_a.dt = dt_cut
         @test isapprox(state_a.markers.core.phim, phim_before_err; rtol=1e-15)
         @test isapprox(state_a.markers.groups.metal.Xfe_bulk, xfe_before_err; rtol=1e-15)
+
+        # Missing step-start snapshot for the current timestep throws ArgumentError
+        state_uninit, ws_uninit = _init_cut_state(dt_step)
+        state_uninit.timestep = 7
+        Erebus.radiogenic_heating!(state_uninit, coords_cut, cfg_cut)
+        Erebus.interpolate_markers_to_grid!(
+            state_uninit,
+            coords_cut,
+            cfg_cut;
+            p2m_workspace=ws_uninit.p2m,
+            thread_buffers=ws_uninit.thread_buffers,
+            interp_arrays=ws_uninit.interp_arrays,
+        )
+        Erebus.snapshot_step_start_inventories!(ws_uninit, state_uninit, cfg_cut)
+        Erebus.update_step_start_pressures!(state_uninit)
+        @test_throws ArgumentError Base.CoreLogging.with_logger(
+            Base.CoreLogging.NullLogger()
+        ) do
+            Erebus.solve_thermomechanical_iterations!(
+                state_uninit, coords_cut, cfg_cut, ws_uninit; dt_step_initial=dt_step
+            )
+        end
+
+        # Stale or unbinned tiled P2M workspace throws DimensionMismatch before @inbounds loop
+        saved_end_offset = ws_a.p2m.tile_offsets[end]
+        try
+            ws_a.p2m.tile_offsets[end] = 0
+            @test_throws DimensionMismatch Erebus._update_radiogenic_heating_for_dt!(
+                state_a, coords_cut, cfg_cut, ws_a
+            )
+        finally
+            ws_a.p2m.tile_offsets[end] = saved_end_offset
+        end
+
+        # 4. Accretion-on simulation_loop with forced DTmax cut snapshots post-accretion state
+        dt_acc_init_yr = 2.0e6
+        cfg_acc = SimulationConfig(;
+            grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
+            geometry=GeometryConfig(;
+                rplanet=50_000.0, rcrust=50_000.0, xcenter=100_000.0, ycenter=100_000.0
+            ),
+            time=TimeConfig(;
+                n_steps=1,
+                start_time=0.0,
+                dt_initial=dt_acc_init_yr,
+                dt_longest=1.0e7,
+                DTmax=10.0,
+                yearlength=yr,
+            ),
+            thermodynamics=ThermalConfig(; hr_al=true, hr_fe=true, phim0=0.20),
+            accretion=AccretionConfig(;
+                active=true,
+                mode=:linear_radius,
+                R_initial=50_000.0,
+                R_target=90_000.0,
+                M_target=1.0e25,
+                t_start_myr=0.0,
+                t_duration_myr=10.0,
+                dR_dt_constant=35_000.0 / (5.0e4 * yr),
+                phi_accreted=0.35,
+                Xfe_bulk_accreted=0.25,
+            ),
+            reaction=ReactionConfig(; active=false),
+            melting=MeltingConfig(; active=false),
+            coreformation=CoreFormationConfig(;
+                percolation_active=false, settling_active=false, Xfe_bulk=0.15
+            ),
+            redox=RedoxConfig(; active=false),
+            venting=VentingConfig(; active=false),
+            solver=SolverConfig(; p2m_mode=:tiled, max_plastic_iterations=2),
+            output=OutputConfig(;
+                mode=:snapshots, savematstep=1, visstep=100, save_final=false
+            ),
+        )
+        Erebus.Config.validate_config(cfg_acc)
+        mktempdir() do tmpdir
+            out_dir = tmpdir * "/"
+            Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+                Erebus.simulation_loop(cfg_acc; output_path=out_dir)
+            end
+            d0 = JLD2.load(joinpath(tmpdir, "output_00000.jld2"))
+            d1 = JLD2.load(joinpath(tmpdir, "output_00001.jld2"))
+            dt_acc_final = d1["dt"]
+            @test dt_acc_final < dt_acc_init_yr * yr
+            accreted_idx = findall(
+                m -> d0["tm"][m] == 3 && d1["tm"][m] == 2, eachindex(d0["tm"])
+            )
+            @test !isempty(accreted_idx)
+
+            st_f, coords_f, ws_f = mktempdir() do tmp_f
+                s, c, w, tel_io, _ = Erebus.init_simulation(cfg_acc; output_path=tmp_f)
+                tel_io !== nothing && close(tel_io)
+                return s, c, w
+            end
+            st_f.timestep = 1
+            st_f.timesum = 0.0
+            st_f.dt = dt_acc_final
+            for m in accreted_idx
+                st_f.markers.core.tm[m] = Int8(2)
+                st_f.markers.core.phim[m] = cfg_acc.accretion.phi_accreted
+                st_f.markers.core.phinewm[m] = cfg_acc.accretion.phi_accreted
+                st_f.markers.groups.metal.Xfe_bulk[m] = cfg_acc.accretion.Xfe_bulk_accreted
+            end
+            Erebus.radiogenic_heating!(st_f, coords_f, cfg_acc)
+            Erebus.interpolate_markers_to_grid!(
+                st_f,
+                coords_f,
+                cfg_acc;
+                p2m_workspace=ws_f.p2m,
+                thread_buffers=ws_f.thread_buffers,
+                interp_arrays=ws_f.interp_arrays,
+            )
+
+            hrs_acc, hrf_acc, hrm_acc = Erebus.calculate_radioactive_heating(
+                cfg_acc.thermodynamics.hr_al,
+                cfg_acc.thermodynamics.hr_fe,
+                0.0;
+                dt=dt_acc_final,
+                ratio_al=cfg_acc.thermodynamics.ratio_al,
+                E_al=cfg_acc.thermodynamics.E_al,
+                f_al=cfg_acc.thermodynamics.f_al,
+                tau_al=cfg_acc.thermodynamics.t_half_al / log(2.0),
+                ratio_fe=cfg_acc.thermodynamics.ratio_fe,
+                E_fe=cfg_acc.thermodynamics.E_fe,
+                f_fe=cfg_acc.thermodynamics.f_fe,
+                tau_fe=cfg_acc.thermodynamics.t_half_fe / log(2.0),
+                rho_metal=cfg_acc.coreformation.rho_metal,
+                rhosolidm=cfg_acc.materials.rhosolidm,
+                rhofluidm=cfg_acc.materials.rhofluidm,
+                X_fe_ref=cfg_acc.coreformation.Xfe_bulk,
+            )
+            phi_acc = cfg_acc.accretion.phi_accreted
+            xfe_acc = cfg_acc.accretion.Xfe_bulk_accreted
+            hr_acc_oracle =
+                (1.0 - phi_acc) * ((1.0 - xfe_acc) * hrs_acc[2] + xfe_acc * hrm_acc[2]) +
+                phi_acc * hrf_acc[2]
+            phi_air = cfg_acc.poroelasticity.phimin
+            hr_acc_stale = (1.0 - phi_air) * hrs_acc[2] + phi_air * hrf_acc[2]
+
+            @test isapprox(d1["hrtotalm"][accreted_idx[1]], hr_acc_oracle; rtol=1e-14)
+            @test !isapprox(d1["hrtotalm"][accreted_idx[1]], hr_acc_stale; rtol=0.5)
+            @test isapprox(d1["hrtotalm"], st_f.markers.core.hrtotalm; rtol=1e-14)
+            @test isapprox(d1["HR"], st_f.grids.HR; rtol=1e-14, atol=1e-22)
+        end
     end
 end

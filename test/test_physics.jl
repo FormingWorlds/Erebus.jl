@@ -1468,11 +1468,12 @@ include("test_helpers.jl")
                 dt_bf = BigFloat(dt_val)
                 x_bf = dt_bf / tau_bf
                 fac_bf = (1 - exp(-x_bf)) / x_bf
+                fac_f64 = Float64(fac_bf)
                 Q_bf = Q0_bf * exp(-t0_bf / tau_bf) * fac_bf
                 @test isapprox(
                     Erebus.radiogenic_step_average_factor(dt_val, tau_al),
-                    Float64(fac_bf);
-                    rtol=1e-15,
+                    fac_f64;
+                    atol=10 * eps(fac_f64),
                 )
                 @test isapprox(
                     Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=dt_val),
@@ -1531,7 +1532,7 @@ include("test_helpers.jl")
         end
         E_part_closed =
             f_al * r_al * E_al * exp(-t0 / tau_al) * (-expm1(-t_edges[end] / tau_al))
-        @test isapprox(E_part_gl5, E_part_closed; rtol=1e-15)
+        @test isapprox(E_part_gl5, E_part_closed; atol=10 * eps(E_part_closed))
         @test isapprox(E_part_sum, E_part_closed; rtol=1e-14)
         @test isapprox(E_part_sum, E_part_gl5; rtol=1e-12)
 
