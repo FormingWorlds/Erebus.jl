@@ -364,7 +364,9 @@ end
             (X_FE_REF_CHONDRITE / rho_metal) /
             (X_FE_REF_CHONDRITE / rho_metal + (1.0 - X_FE_REF_CHONDRITE) / rho_rock)
 
-        Q_al_analytic = f_al * ratio_al * E_al * exp(-t_decay / tau_al) / tau_al
+        fac_al_step = -expm1(-state_one.dt / tau_al) / (state_one.dt / tau_al)
+        Q_al_analytic =
+            f_al * ratio_al * E_al * exp(-t_decay / tau_al) / tau_al * fac_al_step
         Q_al_silicate = Q_al_analytic / (1.0 - X_FE_REF_CHONDRITE)
         hr_volumetric_expected = (1.0 - phi_fe_ref) * Q_al_silicate * rho_rock
 
@@ -421,7 +423,7 @@ end
             cfg.thermodynamics.t_half_al,
         )
         radiogenic_heating!(state_hl, coords, cfg)
-        Q_hl_analytic = f_al * ratio_al * E_al * 0.5 / tau_al
+        Q_hl_analytic = f_al * ratio_al * E_al * 0.5 / tau_al * fac_al_step
         Q_hl_silicate = Q_hl_analytic / (1.0 - X_FE_REF_CHONDRITE)
         @test isapprox(
             state_hl.markers.core.hrtotalm[1],
@@ -998,5 +1000,285 @@ end
 
         # 4. Successive pass populates remaining sparse cells
         @test replenish!(state_rep, coords_rep, cfg_rep) >= count_after
+    end
+
+    @testset "radiogenic_heating! Step-Average and Mid-Step dt Refresh" begin
+        yr = Erebus.SECONDS_PER_YEAR
+        t0 = 2.0e6 * yr
+        dt_step = 5.0e5 * yr
+
+        cfg = SimulationConfig(;
+            grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
+            geometry=GeometryConfig(;
+                rplanet=90_000.0, rcrust=90_000.0, xcenter=100_000.0, ycenter=100_000.0
+            ),
+            time=TimeConfig(;
+                n_steps=1, dt_initial=500_000.0, dt_longest=1.0e7, DTmax=20.0, yearlength=yr
+            ),
+            thermodynamics=ThermalConfig(; hr_al=true, hr_fe=false, phim0=0.2),
+            reaction=ReactionConfig(; active=false),
+            solver=SolverConfig(; p2m_mode=:tiled),
+            output=OutputConfig(;
+                mode=:telemetry, savematstep=100, visstep=100, save_final=false
+            ),
+        )
+        Erebus.Config.validate_config(cfg)
+        state, coords, ws = mktempdir() do tmpdir
+            st, co, w, tel_io, _ = Erebus.init_simulation(cfg; output_path=tmpdir)
+            tel_io !== nothing && close(tel_io)
+            return st, co, w
+        end
+        state.timesum = t0
+        state.dt = dt_step
+
+        # Find first interior planet marker (tm < 3)
+        m_idx = findfirst(t -> t < 3, state.markers.core.tm)
+        @test m_idx isa Int
+        t_m = state.markers.core.tm[m_idx]
+        phi_m = state.markers.core.phim[m_idx]
+        rho_sol = cfg.materials.rhosolidm[t_m]
+        rho_met = cfg.coreformation.rho_metal
+        X_fe = Erebus.X_FE_REF_CHONDRITE
+        v_fe = X_fe / rho_met
+        phi_fe = clamp(v_fe / (v_fe + (1.0 - X_fe) / rho_sol), 0.0, 1.0)
+        tau_al = cfg.thermodynamics.t_half_al / log(2.0)
+        Q_al_0 =
+            cfg.thermodynamics.f_al *
+            cfg.thermodynamics.ratio_al *
+            cfg.thermodynamics.E_al *
+            exp(-t0 / tau_al) / tau_al
+        fac_al_oracle = -expm1(-dt_step / tau_al) / (dt_step / tau_al)
+        hr_start_oracle = (1.0 - phi_m) * (1.0 - phi_fe) * (Q_al_0 / (1.0 - X_fe)) * rho_sol
+        hr_step_avg_oracle = hr_start_oracle * fac_al_oracle
+
+        Erebus.radiogenic_heating!(state, coords, cfg)
+        @test isapprox(state.markers.core.hrtotalm[m_idx], hr_step_avg_oracle; rtol=1e-13)
+        @test !isapprox(state.markers.core.hrtotalm[m_idx], hr_start_oracle; rtol=0.1)
+
+        # Zero-step instantaneous identity (dt = 0.0)
+        state.dt = 0.0
+        Erebus.radiogenic_heating!(state, coords, cfg)
+        @test isapprox(state.markers.core.hrtotalm[m_idx], hr_start_oracle; rtol=1e-13)
+
+        # DomainError on negative or NaN state.dt
+        state.dt = -1.0
+        @test_throws DomainError Erebus.radiogenic_heating!(state, coords, cfg)
+        state.dt = NaN
+        @test_throws DomainError Erebus.radiogenic_heating!(state, coords, cfg)
+
+        # 1. Mid-step dt cut refresh invariance (:tiled) with pyrolysis kinetics, pyrolysis redox, and hydration backload
+        cfg_cut = SimulationConfig(;
+            grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
+            geometry=GeometryConfig(;
+                rplanet=90_000.0, rcrust=90_000.0, xcenter=100_000.0, ycenter=100_000.0
+            ),
+            time=TimeConfig(;
+                n_steps=1, dt_initial=500_000.0, dt_longest=1.0e7, DTmax=20.0, yearlength=yr
+            ),
+            materials=MaterialConfig(;
+                tkm0=Erebus.SVector{3,Float64}([1100.0, 1100.0, 200.0]),
+                XWsolidm_init=Erebus.SVector{3,Float64}([0.01, 0.01, NaN]),
+            ),
+            thermodynamics=ThermalConfig(; hr_al=true, hr_fe=true, phim0=0.2),
+            reaction=ReactionConfig(;
+                active=true,
+                hydration_active=true,
+                hydration_mode=9,
+                dtreaction_hydration=1.0e11,
+            ),
+            refractory=RefractoryConfig(; active=true, kinetics_active=true),
+            redox=RedoxConfig(; active=true, pyrolysis_redox=true),
+            coreformation=CoreFormationConfig(; percolation_active=true),
+            solver=SolverConfig(; p2m_mode=:tiled, max_plastic_iterations=2),
+            output=OutputConfig(;
+                mode=:telemetry, savematstep=100, visstep=100, save_final=false
+            ),
+        )
+        Erebus.Config.validate_config(cfg_cut)
+        coords_cut = GridCoordinates(cfg_cut.grid)
+
+        function _init_cut_state(dt_val::Float64)
+            st, w = mktempdir() do tmpdir
+                s, _, wk, tel_io, _ = Erebus.init_simulation(cfg_cut; output_path=tmpdir)
+                tel_io !== nothing && close(tel_io)
+                return s, wk
+            end
+            st.timestep = 1
+            st.timesum = 0.0
+            st.dt = dt_val
+            fill!(st.markers.core.tkm, 1100.0)
+            fill!(st.grids.tk1, 1100.0)
+            fill!(st.grids.tk2, 1100.0)
+            for m in 1:length(st.markers)
+                if st.markers.core.tm[m] < 3
+                    st.markers.core.phim[m] = 0.15 + 0.05 * sin(0.1 * m)
+                    st.markers.core.phinewm[m] = st.markers.core.phim[m]
+                    st.markers.core.XWsolidm0[m] = 0.01
+                    st.markers.core.XWsolidm[m] = 0.01
+                    st.markers.groups.metal.Xfe_bulk[m] = 0.08 + 0.02 * cos(0.1 * m)
+                    st.markers.groups.hcnspo.X_refr_C_m[m] = 0.05
+                end
+            end
+            return st, w
+        end
+
+        state_a, ws_a = _init_cut_state(dt_step)
+        phim_ref = copy(state_a.markers.core.phim)
+        xfe_ref = copy(state_a.markers.groups.metal.Xfe_bulk)
+
+        Erebus.prepare_step_ambient!(state_a, coords_cut, cfg_cut, ws_a)
+        Erebus.radiogenic_heating!(state_a, coords_cut, cfg_cut)
+        DHP_a = Erebus.update_pyrolysis!(state_a, coords_cut, cfg_cut)
+        # Pyrolysis kinetics and carbothermal redox mutate both phim and Xfe_bulk before line 305
+        @test !isapprox(state_a.markers.core.phim, phim_ref; rtol=0.05)
+        @test !isapprox(state_a.markers.groups.metal.Xfe_bulk, xfe_ref; rtol=0.05)
+
+        Erebus.interpolate_markers_to_grid!(
+            state_a,
+            coords_cut,
+            cfg_cut;
+            p2m_workspace=ws_a.p2m,
+            thread_buffers=ws_a.thread_buffers,
+            interp_arrays=ws_a.interp_arrays,
+        )
+        Erebus.snapshot_step_start_inventories!(ws_a, state_a, cfg_cut)
+        Erebus.update_step_start_pressures!(state_a)
+        Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+            Erebus.solve_thermomechanical_iterations!(
+                state_a, coords_cut, cfg_cut, ws_a; DHP_pyro=DHP_a, dt_step_initial=dt_step
+            )
+        end
+
+        dt_cut = state_a.dt
+        @test dt_cut < dt_step
+
+        # Fresh step-start call directly at dt_cut
+        state_b, ws_b = _init_cut_state(dt_cut)
+        Erebus.prepare_step_ambient!(state_b, coords_cut, cfg_cut, ws_b)
+        Erebus.radiogenic_heating!(state_b, coords_cut, cfg_cut)
+        Erebus.update_pyrolysis!(state_b, coords_cut, cfg_cut)
+        Erebus.interpolate_markers_to_grid!(
+            state_b,
+            coords_cut,
+            cfg_cut;
+            p2m_workspace=ws_b.p2m,
+            thread_buffers=ws_b.thread_buffers,
+            interp_arrays=ws_b.interp_arrays,
+        )
+
+        # Closed-form oracle at dt_cut using pre-pyrolysis step-start phim and Xfe_bulk on marker m_c
+        m_c = findfirst(t -> t < 3, state_a.markers.core.tm)
+        t_mc = state_a.markers.core.tm[m_c]
+        tau_fe = cfg_cut.thermodynamics.t_half_fe / log(2.0)
+        Q_al_t0 =
+            cfg_cut.thermodynamics.f_al *
+            cfg_cut.thermodynamics.ratio_al *
+            cfg_cut.thermodynamics.E_al / tau_al
+        Q_fe_t0 =
+            cfg_cut.thermodynamics.f_fe *
+            cfg_cut.thermodynamics.ratio_fe *
+            cfg_cut.thermodynamics.E_fe / tau_fe
+        fac_al_cut = -expm1(-dt_cut / tau_al) / (dt_cut / tau_al)
+        fac_fe_cut = -expm1(-dt_cut / tau_fe) / (dt_cut / tau_fe)
+        X_fe_cfg = cfg_cut.coreformation.Xfe_bulk
+        hr_sol_cut =
+            (Q_al_t0 * fac_al_cut / (1.0 - X_fe_cfg)) * cfg_cut.materials.rhosolidm[t_mc]
+        hr_met_cut = (Q_fe_t0 * fac_fe_cut / X_fe_cfg) * cfg_cut.coreformation.rho_metal
+        pf_mc = clamp(xfe_ref[m_c], 0.0, 1.0)
+        hr_cut_oracle =
+            (1.0 - phim_ref[m_c]) * ((1.0 - pf_mc) * hr_sol_cut + pf_mc * hr_met_cut)
+
+        @test isapprox(state_a.markers.core.hrtotalm[m_c], hr_cut_oracle; rtol=1e-13)
+        @test size(state_a.grids.HR) == (coords_cut.Ny1, coords_cut.Nx1)
+        @test isapprox(state_a.grids.HR, state_b.grids.HR; rtol=1e-14, atol=1e-22)
+        @test !isapprox(state_a.markers.core.phim, phim_ref; rtol=0.05)
+        @test !isapprox(state_a.markers.groups.metal.Xfe_bulk, xfe_ref; rtol=0.05)
+
+        # 2. Buffered P2M branch (p2m_mode = :buffered) and Xfe_bulk === nothing branch
+        cfg_buf = SimulationConfig(;
+            grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
+            geometry=GeometryConfig(;
+                rplanet=90_000.0, rcrust=90_000.0, xcenter=100_000.0, ycenter=100_000.0
+            ),
+            time=TimeConfig(;
+                n_steps=1, dt_initial=500_000.0, dt_longest=1.0e7, DTmax=20.0, yearlength=yr
+            ),
+            thermodynamics=ThermalConfig(; hr_al=true, hr_fe=false, phim0=0.2),
+            reaction=ReactionConfig(; active=false),
+            coreformation=CoreFormationConfig(;
+                percolation_active=false, settling_active=false
+            ),
+            redox=RedoxConfig(; active=false),
+            solver=SolverConfig(; p2m_mode=:buffered, max_plastic_iterations=2),
+            output=OutputConfig(;
+                mode=:telemetry, savematstep=100, visstep=100, save_final=false
+            ),
+        )
+        Erebus.Config.validate_config(cfg_buf)
+        coords_buf = GridCoordinates(cfg_buf.grid)
+
+        function _init_buf_state(dt_val::Float64)
+            st, w = mktempdir() do tmpdir
+                s, _, wk, tel_io, _ = Erebus.init_simulation(cfg_buf; output_path=tmpdir)
+                tel_io !== nothing && close(tel_io)
+                return s, wk
+            end
+            st.timestep = 1
+            st.timesum = 0.0
+            st.dt = dt_val
+            for m in 1:length(st.markers)
+                if st.markers.core.tm[m] < 3
+                    st.markers.core.phim[m] = 0.15 + 0.05 * sin(0.1 * m)
+                    st.markers.core.phinewm[m] = st.markers.core.phim[m]
+                end
+            end
+            return st, w
+        end
+
+        state_buf_a, ws_buf_a = _init_buf_state(dt_step)
+        @test !haskey(state_buf_a.markers.groups, :metal)
+        Erebus.prepare_step_ambient!(state_buf_a, coords_buf, cfg_buf, ws_buf_a)
+        Erebus.radiogenic_heating!(state_buf_a, coords_buf, cfg_buf)
+        Erebus.interpolate_markers_to_grid!(
+            state_buf_a,
+            coords_buf,
+            cfg_buf;
+            p2m_workspace=ws_buf_a.p2m,
+            thread_buffers=ws_buf_a.thread_buffers,
+            interp_arrays=ws_buf_a.interp_arrays,
+        )
+        Erebus.snapshot_step_start_inventories!(ws_buf_a, state_buf_a, cfg_buf)
+        Erebus.update_step_start_pressures!(state_buf_a)
+        Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+            Erebus.solve_thermomechanical_iterations!(
+                state_buf_a, coords_buf, cfg_buf, ws_buf_a; dt_step_initial=dt_step
+            )
+        end
+        dt_buf_cut = state_buf_a.dt
+        @test dt_buf_cut < dt_step
+
+        state_buf_b, ws_buf_b = _init_buf_state(dt_buf_cut)
+        Erebus.prepare_step_ambient!(state_buf_b, coords_buf, cfg_buf, ws_buf_b)
+        Erebus.radiogenic_heating!(state_buf_b, coords_buf, cfg_buf)
+        Erebus.interpolate_markers_to_grid!(
+            state_buf_b,
+            coords_buf,
+            cfg_buf;
+            p2m_workspace=ws_buf_b.p2m,
+            thread_buffers=ws_buf_b.thread_buffers,
+            interp_arrays=ws_buf_b.interp_arrays,
+        )
+        @test isapprox(state_buf_a.grids.HR, state_buf_b.grids.HR; rtol=1e-14, atol=1e-22)
+
+        # 3. Exception safety (try/finally restoration) and DimensionMismatch contract
+        @test_throws DimensionMismatch Erebus._swap_step_start_vec!([1.0, 2.0], [1.0])
+        phim_before_err = copy(state_a.markers.core.phim)
+        xfe_before_err = copy(state_a.markers.groups.metal.Xfe_bulk)
+        state_a.dt = -1.0
+        @test_throws DomainError Erebus._update_radiogenic_heating_for_dt!(
+            state_a, coords_cut, cfg_cut, ws_a
+        )
+        @test isapprox(state_a.markers.core.phim, phim_before_err; rtol=1e-15)
+        @test isapprox(state_a.markers.groups.metal.Xfe_bulk, xfe_before_err; rtol=1e-15)
     end
 end

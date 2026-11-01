@@ -1424,4 +1424,141 @@ include("test_helpers.jl")
         )
         @test isapprox(HA_neg[3, 3], HA_fluid_neg[3, 3]; rtol=1e-12)
     end
+
+    @testset "Radiogenic Step-Average Factor and Step-Integrated Heating" begin
+        tau_al = Erebus.tau_al
+        tau_fe = Erebus.tau_fe
+        f_al = Erebus.f_al
+        r_al = Erebus.ratio_al
+        E_al = Erebus.E_al
+        f_fe = Erebus.f_fe
+        ratio_fe = Erebus.ratio_fe
+        E_fe = Erebus.E_fe
+        t0 = 2.0 * 1.0e6 * Erebus.SECONDS_PER_YEAR
+
+        # Zero-step identity
+        @test isapprox(Erebus.radiogenic_step_average_factor(0.0, tau_al), 1.0; rtol=1e-15)
+
+        # Positivity and strict monotonicity in dt and tau
+        f_dt1 = Erebus.radiogenic_step_average_factor(1.0e10, tau_al)
+        f_dt2 = Erebus.radiogenic_step_average_factor(1.0e12, tau_al)
+        f_dt3 = Erebus.radiogenic_step_average_factor(1.0e13, tau_al)
+        f_dt4 = Erebus.radiogenic_step_average_factor(1.0e14, tau_al)
+        @test 1.0 > f_dt1 > f_dt2 > f_dt3 > f_dt4 > 0.0
+        @test Erebus.radiogenic_step_average_factor(1.0e13, tau_fe) >
+            Erebus.radiogenic_step_average_factor(1.0e13, tau_al)
+
+        # Small-argument Taylor branch (dt / tau = 1e-10 < 1e-8) against 256-bit BigFloat exact formula
+        dt_tiny = 1.0e-10 * tau_al
+        f_tiny_bf = setprecision(BigFloat, 256) do
+            x_bf = BigFloat(dt_tiny) / BigFloat(tau_al)
+            return Float64((1 - exp(-x_bf)) / x_bf)
+        end
+        f_tiny = Erebus.radiogenic_step_average_factor(dt_tiny, tau_al)
+        @test f_tiny < 1.0
+        @test isapprox(f_tiny, f_tiny_bf; rtol=1e-15)
+
+        # BigFloat 256-bit precision oracle across log10(dt / tau) in -12:2:2
+        setprecision(BigFloat, 256) do
+            tau_bf = BigFloat(tau_al)
+            t0_bf = BigFloat(t0)
+            Q0_bf = BigFloat(f_al) * BigFloat(r_al) * BigFloat(E_al) / tau_bf
+            for log10_x in -12:2:2
+                dt_val = tau_al * (10.0^log10_x)
+                dt_bf = BigFloat(dt_val)
+                x_bf = dt_bf / tau_bf
+                fac_bf = (1 - exp(-x_bf)) / x_bf
+                Q_bf = Q0_bf * exp(-t0_bf / tau_bf) * fac_bf
+                @test isapprox(
+                    Erebus.radiogenic_step_average_factor(dt_val, tau_al),
+                    Float64(fac_bf);
+                    rtol=1e-15,
+                )
+                @test isapprox(
+                    Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=dt_val),
+                    Float64(Q_bf);
+                    rtol=5e-15,
+                )
+            end
+        end
+
+        # Exact step energy identity and 3-class discrimination at dt = 0.5 Myr
+        dt_step = 5.0e5 * Erebus.SECONDS_PER_YEAR
+        Q_avg = Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=dt_step)
+        Q_start = Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=0.0)
+        Q_end = Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0 + dt_step; dt=0.0)
+        E_exact = f_al * r_al * E_al * exp(-t0 / tau_al) * (-expm1(-dt_step / tau_al))
+        @test isapprox(Q_avg * dt_step, E_exact; rtol=1e-14)
+        @test Q_end < Q_avg < Q_start
+        @test !isapprox(Q_avg, Q_start; rtol=0.1)
+        @test !isapprox(Q_avg, Q_end; rtol=0.1)
+        Q_wrong_lambda =
+            Q_start * Erebus.radiogenic_step_average_factor(dt_step, tau_al / log(2.0))
+        @test !isapprox(Q_avg, Q_wrong_lambda; rtol=0.05)
+
+        # Multi-step partition-of-unity closure against closed-form and 5-point Gauss-Legendre
+        t_edges = [0.0, 1.0e3, 1.0e7, 5.0e11, 2.5e12, 6.0e12, 1.2e13, 2.0e13]
+        gl5_xi = [
+            -sqrt(5.0 + 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            -sqrt(5.0 - 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            0.0,
+            sqrt(5.0 - 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            sqrt(5.0 + 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+        ]
+        gl5_w = [
+            (322.0 - 13.0 * sqrt(70.0)) / 900.0,
+            (322.0 + 13.0 * sqrt(70.0)) / 900.0,
+            128.0 / 225.0,
+            (322.0 + 13.0 * sqrt(70.0)) / 900.0,
+            (322.0 - 13.0 * sqrt(70.0)) / 900.0,
+        ]
+        E_part_sum = 0.0
+        E_part_gl5 = 0.0
+        for k in 1:(length(t_edges) - 1)
+            a = t_edges[k]
+            b = t_edges[k + 1]
+            dt_k = b - a
+            Q_k = Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0 + a; dt=dt_k)
+            E_part_sum += Q_k * dt_k
+            half_len = 0.5 * dt_k
+            mid = t0 + 0.5 * (a + b)
+            sub = 0.0
+            for q in 1:5
+                t_q = mid + half_len * gl5_xi[q]
+                sub += gl5_w[q] * Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t_q; dt=0.0)
+            end
+            E_part_gl5 += half_len * sub
+        end
+        E_part_closed =
+            f_al * r_al * E_al * exp(-t0 / tau_al) * (-expm1(-t_edges[end] / tau_al))
+        @test isapprox(E_part_gl5, E_part_closed; rtol=1e-15)
+        @test isapprox(E_part_sum, E_part_closed; rtol=1e-14)
+        @test isapprox(E_part_sum, E_part_gl5; rtol=1e-12)
+
+        # calculate_radioactive_heating step-average scaling for 26Al and 60Fe
+        hrs_0, hrf_0, hrm_0 = Erebus.calculate_radioactive_heating(true, true, t0; dt=0.0)
+        hrs_dt, hrf_dt, hrm_dt = Erebus.calculate_radioactive_heating(
+            true, true, t0; dt=dt_step
+        )
+        fac_al = Erebus.radiogenic_step_average_factor(dt_step, tau_al)
+        fac_fe = Erebus.radiogenic_step_average_factor(dt_step, tau_fe)
+        @test isapprox(hrs_dt[1], hrs_0[1] * fac_al; rtol=1e-14)
+        @test isapprox(hrs_dt[2], hrs_0[2] * fac_al; rtol=1e-14)
+        @test isapprox(hrs_dt[3], 0.0; atol=1e-30)
+        @test all(iszero, hrf_0) && all(iszero, hrf_dt)
+        @test isapprox(hrm_dt[1], hrm_0[1] * fac_fe; rtol=1e-14)
+        @test isapprox(hrm_dt[2], hrm_0[2] * fac_fe; rtol=1e-14)
+        @test isapprox(hrm_dt[3], 0.0; atol=1e-30)
+
+        # DomainError contracts including NaN and Inf
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(-1.0, tau_al)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(1.0, 0.0)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(1.0, -tau_al)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(NaN, tau_al)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(Inf, tau_al)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(1.0, NaN)
+        @test_throws DomainError Erebus.radiogenic_step_average_factor(1.0, Inf)
+        @test_throws DomainError Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=-1.0)
+        @test_throws DomainError Erebus.Q_radiogenic(f_al, r_al, E_al, tau_al, t0; dt=NaN)
+    end
 end
