@@ -316,7 +316,7 @@ $(SIGNATURES)
     - dt: time step
     - timesum: total simulation time
     - marknum: number of markers
-    - ETA... : simulation state variables (in the step-0 file `output_00000.jld2`, `hrtotalm` holds initial `start_hrsolidm` values and `HR` is zero; for per-step saves with `timestep >= 1`, `HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`)
+    - ETA... : simulation state variables (at step 0 in `output_00000.jld2`, `HR` and `hrtotalm` of planet markers are zero while air markers hold `start_hrsolidm[3]`; for per-step saves with `timestep >= 1`, `HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`, except on steps where `replenish!` or `telescope_domain!` remaps markers or grids after the thermal solve)
 
 # Returns
 
