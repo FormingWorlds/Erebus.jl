@@ -155,7 +155,11 @@ $$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{fe,ref}}}$$
 
 $$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{fe,ref}}}$$
 
-where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture. Phase volume weighting over silicate and metal components preserves total bulk radiogenic power.
+where $X_{\text{fe,ref}}$ is the reference metallic iron mass fraction of the chondritic bulk mixture. Phase volume weighting over silicate and metal components preserves total bulk radiogenic power. Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $\phi(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
+
+$$\overline{Q}_i(t_n, \Delta t) = \frac{1}{\Delta t} \int_{t_n}^{t_n + \Delta t} Q_i(t)\,\mathrm{d}t = Q_i(t_n)\,\frac{1 - \exp(-\Delta t / \tau_i)}{\Delta t / \tau_i}$$
+
+with a 4-term Taylor polynomial when $\Delta t / \tau_i < 10^{-8}$ and $\overline{Q}_i(t_n, 0) = Q_i(t_n)$.
 
 ### Mineral Hydration and Dehydration Reaction Enthalpy
 Serpentinization and dehydration reactions exchange latent heat proportional to the reaction mass rate and the molar reaction enthalpy:

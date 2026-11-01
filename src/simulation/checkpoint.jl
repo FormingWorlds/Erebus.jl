@@ -316,7 +316,7 @@ $(SIGNATURES)
     - dt: time step
     - timesum: total simulation time
     - marknum: number of markers
-    - ETA... : simulation state variables
+    - ETA... : simulation state variables (`HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`)
 
 # Returns
 

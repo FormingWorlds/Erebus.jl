@@ -89,8 +89,8 @@ The simulation loop advances physical time in 10 sequential stages:
    It advances planetary radius $R(t)$ and updates sticky air boundaries.
 
 2. **Radiogenic Heating (`radiogenic_heating!`, `update_pyrolysis!`)**:
-   The code computes analytical decay rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$).
-   It adds volumetric heat sources to markers.
+   The code computes step-averaged decay heating rates of short-lived radionuclides ($^{26}\text{Al}$, $^{60}\text{Fe}$) over $[t, t + \Delta t]$.
+   It adds volumetric heat sources to markers and snapshots step-start porosity and bulk iron fractions before pyrolysis.
    It tracks volatile release from organic carbon pyrolysis.
 
 3. **Marker Mapping & Gravity (`interpolate_markers_to_grid!`, `solve_gravity!`, `apply_surface_radiation!`)**:
@@ -189,7 +189,7 @@ Module: `src/physics/radioactivity.jl`, `src/simulation/steps/radiogenic_heating
 
 | Symbol | Meaning | Unit | Where in the code |
 |:---|:---|:---|:---|
-| $Q_i$ | Specific radiogenic decay heating for isotope $i$ | $\text{W/kg}$ | `Q_radiogenic` (`src/physics/radioactivity.jl`) |
+| $Q_i$ | Step-averaged specific radiogenic decay heating for isotope $i$ over $[t, t + \Delta t]$ | $\text{W/kg}$ | `Q_radiogenic`, `radiogenic_step_average_factor` (`src/physics/radioactivity.jl`) |
 | $f_i$ | Number of host-element atoms per kg of bulk rock | $\text{kg}^{-1}$ | `thermodynamics.f_al`, `thermodynamics.f_fe` (`src/config.jl`) |
 | $r_i$ | Initial isotopic abundance ratio ($^{26}\text{Al}/^{27}\text{Al}$, $^{60}\text{Fe}/^{56}\text{Fe}$) | dimensionless | `thermodynamics.ratio_al`, `thermodynamics.ratio_fe` (`src/config.jl`) |
 | $E_i$ | Decay energy per decay event | $\text{J}$ | `thermodynamics.E_al`, `thermodynamics.E_fe` (`src/config.jl`) |
@@ -268,7 +268,7 @@ Module: `src/simulation/steps/solve_thermal_energy.jl`, `src/numerics/thermal.jl
 | $T$ | Temperature | $\text{K}$ | `solve_thermal_energy!` (`src/simulation/steps/solve_thermal_energy.jl`) |
 | $t$ | Simulation physical time | $\text{s}$ | `solve_thermal_energy!` (`src/simulation/steps/solve_thermal_energy.jl`) |
 | $k_\mathrm{eff}$ | Effective thermal conductivity with soft turbulence | $\text{W/}(\text{m}\cdot\text{K})$ | `regularized_soft_turbulence_conductivity` (`src/physics/melting_convection.jl`) |
-| $H_\mathrm{r}$ | Radiogenic decay volumetric heating | $\text{W/m}^3$ | `radiogenic_heating!` (`src/simulation/steps/radiogenic_heating.jl`) |
+| $H_\mathrm{r}$ | Step-averaged radiogenic decay volumetric heating over $[t, t + \Delta t]$ | $\text{W/m}^3$ | `radiogenic_heating!` (`src/simulation/steps/radiogenic_heating.jl`) |
 | $H_\mathrm{s}$ | Viscous shear, compaction and Darcy friction dissipation | $\text{W/m}^3$ | `compute_shear_heating!` (`src/physics/dissipation.jl`) |
 | $H_\mathrm{a}$ | Adiabatic heating from solid and fluid pressure change | $\text{W/m}^3$ | `compute_adiabatic_heating!` (`src/physics/dissipation.jl`) |
 | $H_\mathrm{seg}$ | Gravitational dissipation from metal and melt segregation | $\text{W/m}^3$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
