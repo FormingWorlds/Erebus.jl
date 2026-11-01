@@ -322,7 +322,7 @@ using Erebus
         solve_gravity!(state, coords_actual, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
         apply_surface_radiation!(state, coords_actual, cfg)
         snapshot_step_start_inventories!(ws, state, cfg)
-        snapshot_radiogenic_step_start!(ws, state, cfg)
+        Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
         update_step_start_pressures!(state)
 
         Erebus.assemble_and_solve_hydromechanical!(
@@ -405,7 +405,8 @@ using Erebus
             interp_arrays=ws_rm.interp_arrays,
         )
         snapshot_step_start_inventories!(ws_rm, st_rm, cfg_rdx_melt)
-        snapshot_radiogenic_step_start!(ws_rm, st_rm, cfg_rdx_melt)
+        Erebus.snapshot_radiogenic_step_start!(ws_rm, st_rm, cfg_rdx_melt)
+        @test ws_rm.hr_step_start_timestep == st_rm.timestep
         @test ws_rm.nFe0_m_step_start isa Vector{Float64}
         @test isapprox(
             ws_rm.nFe2_m_step_start, st_rm.markers.groups.redox.nFe2_m; rtol=1.0e-12

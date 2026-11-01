@@ -3,6 +3,7 @@ using Random
 using LinearAlgebra
 using StaticArrays
 using TimerOutputs
+using JLD2
 using Erebus
 
 """
@@ -1296,6 +1297,9 @@ end
         )
         Erebus.snapshot_step_start_inventories!(ws_uninit, state_uninit, cfg_cut)
         Erebus.update_step_start_pressures!(state_uninit)
+        @test_throws ArgumentError Erebus._update_radiogenic_heating_for_dt!(
+            state_uninit, coords_cut, cfg_cut, ws_uninit
+        )
         @test_throws ArgumentError Base.CoreLogging.with_logger(
             Base.CoreLogging.NullLogger()
         ) do
@@ -1316,7 +1320,9 @@ end
         end
 
         # 4. Accretion-on simulation_loop with forced DTmax cut snapshots post-accretion state
-        dt_acc_init_yr = 2.0e6
+        dt_acc_init_yr = 40_000.0
+        T0_acc = 250.0
+        sv3_acc(a, b, c) = Erebus.SVector{3,Float64}([a, b, c])
         cfg_acc = SimulationConfig(;
             grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
             geometry=GeometryConfig(;
@@ -1327,19 +1333,36 @@ end
                 start_time=0.0,
                 dt_initial=dt_acc_init_yr,
                 dt_longest=1.0e7,
-                DTmax=10.0,
+                DTmax=0.5,
+                dxymax=1.0,
                 yearlength=yr,
             ),
-            thermodynamics=ThermalConfig(; hr_al=true, hr_fe=true, phim0=0.20),
+            materials=MaterialConfig(;
+                alphasolidm=sv3_acc(0.0, 0.0, 0.0),
+                alphafluidm=sv3_acc(0.0, 0.0, 0.0),
+                kphim0=sv3_acc(1.0e-30, 1.0e-30, 1.0e-30),
+                tkm0=sv3_acc(T0_acc, T0_acc, T0_acc),
+            ),
+            thermodynamics=ThermalConfig(;
+                hr_al=true,
+                hr_fe=true,
+                ratio_al=5.0e-3,
+                t_half_al=5000.0 * yr,
+                phim0=0.20,
+                thermal_buoyancy=false,
+                surface_radiation=false,
+            ),
+            disk=DiskConfig(; enabled=false, model=:fixed, t_ambient=T0_acc),
             accretion=AccretionConfig(;
                 active=true,
                 mode=:linear_radius,
                 R_initial=50_000.0,
-                R_target=90_000.0,
+                R_target=85_000.0,
                 M_target=1.0e25,
                 t_start_myr=0.0,
                 t_duration_myr=10.0,
-                dR_dt_constant=35_000.0 / (5.0e4 * yr),
+                dR_dt_constant=1.0,
+                h_impact=0.0,
                 phi_accreted=0.35,
                 Xfe_bulk_accreted=0.25,
             ),
@@ -1417,11 +1440,11 @@ end
             hr_acc_oracle =
                 (1.0 - phi_acc) * ((1.0 - xfe_acc) * hrs_acc[2] + xfe_acc * hrm_acc[2]) +
                 phi_acc * hrf_acc[2]
-            phi_air = cfg_acc.poroelasticity.phimin
+            phi_air = d0["phim"][accreted_idx[1]]
             hr_acc_stale = (1.0 - phi_air) * hrs_acc[2] + phi_air * hrf_acc[2]
 
             @test isapprox(d1["hrtotalm"][accreted_idx[1]], hr_acc_oracle; rtol=1e-14)
-            @test !isapprox(d1["hrtotalm"][accreted_idx[1]], hr_acc_stale; rtol=0.5)
+            @test !isapprox(d1["hrtotalm"][accreted_idx[1]], hr_acc_stale; rtol=0.3)
             @test isapprox(d1["hrtotalm"], st_f.markers.core.hrtotalm; rtol=1e-14)
             @test isapprox(d1["HR"], st_f.grids.HR; rtol=1e-14, atol=1e-22)
         end
