@@ -93,6 +93,159 @@ function _step_thermochemical_reaction!(
 end
 
 """
+Swap contents of `vec` and `step_start_vec` in place when both vectors are non-nothing.
+
+$(SIGNATURES)
+
+Parameters
+----------
+vec : Union{Nothing,AbstractVector}
+    Active marker property vector or `nothing`.
+step_start_vec : Union{Nothing,AbstractVector}
+    Step-start snapshot vector or `nothing`.
+
+Returns
+-------
+Nothing
+    Swaps elements of `vec` and `step_start_vec` in place.
+
+Raises
+------
+DimensionMismatch
+    If `vec` and `step_start_vec` have different lengths.
+"""
+@inline function _swap_step_start_vec!(vec, step_start_vec)::Nothing
+    (vec === nothing || step_start_vec === nothing) && return nothing
+    if length(vec) != length(step_start_vec)
+        throw(
+            DimensionMismatch(
+                "Marker vector length $(length(vec)) does not match step-start snapshot length $(length(step_start_vec))",
+            ),
+        )
+    end
+    @inbounds for m in eachindex(vec, step_start_vec)
+        vec[m], step_start_vec[m] = step_start_vec[m], vec[m]
+    end
+    return nothing
+end
+
+"""
+Recompute step-averaged marker radiogenic heating and re-project `HR` onto P-nodes for a new `state.dt`.
+
+$(SIGNATURES)
+
+Parameters
+----------
+state : SimulationState
+    Mutable simulation state container.
+coords : GridCoordinates
+    Staggered grid coordinate specification.
+cfg : SimulationConfig
+    Master simulation configuration.
+ws : SimulationWorkspaces
+    Preallocated solver workspaces and step-start buffers.
+
+Returns
+-------
+Nothing
+    Updates `state.markers.core.hrtotalm` and `state.grids.HR` in place using pre-pyrolysis step-start `phim` and `Xfe_bulk`.
+"""
+function _update_radiogenic_heating_for_dt!(
+    state::SimulationState,
+    coords::GridCoordinates,
+    cfg::SimulationConfig,
+    ws::SimulationWorkspaces,
+)::Nothing
+    marknum = length(state.markers)
+    marknum == 0 && return nothing
+    (cfg.thermodynamics.hr_al || cfg.thermodynamics.hr_fe) || return nothing
+
+    core = state.markers.core
+    Xfe_bulk = if haskey(state.markers.groups, :metal)
+        state.markers.groups.metal.Xfe_bulk
+    else
+        nothing
+    end
+
+    _swap_step_start_vec!(core.phim, ws.phim_hr_step_start)
+    try
+        _swap_step_start_vec!(Xfe_bulk, ws.Xfe_bulk_hr_step_start)
+        try
+            radiogenic_heating!(state, coords, cfg)
+        finally
+            _swap_step_start_vec!(Xfe_bulk, ws.Xfe_bulk_hr_step_start)
+        end
+    finally
+        _swap_step_start_vec!(core.phim, ws.phim_hr_step_start)
+    end
+
+    HRSUM = ws.interp_arrays[25]
+    WTPSUM = ws.interp_arrays[33]
+    fill!(HRSUM, 0.0)
+    fill!(WTPSUM, 0.0)
+
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
+    xm = core.xm
+    ym = core.ym
+    hrtotalm = core.hrtotalm
+
+    if cfg.solver.p2m_mode == :tiled && ws.p2m !== nothing
+        ws_p2m = ws.p2m
+        @inbounds for color in 1:4
+            for t in ws_p2m.tiles_by_color[color]
+                lo = ws_p2m.tile_offsets[t]
+                hi = ws_p2m.tile_offsets[t + 1] - 1
+                for idx in lo:hi
+                    m = ws_p2m.tile_markers[idx]
+                    i, j, weights = fix_weights(
+                        xm[m],
+                        ym[m],
+                        xp_val,
+                        yp_val,
+                        dx_val,
+                        dy_val,
+                        jmin_p_val,
+                        jmax_p_val,
+                        imin_p_val,
+                        imax_p_val,
+                    )
+                    interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
+                    interpolate_add_to_grid!(i, j, weights, 1.0, WTPSUM)
+                end
+            end
+        end
+    else
+        @inbounds for m in 1:marknum
+            i, j, weights = fix_weights(
+                xm[m],
+                ym[m],
+                xp_val,
+                yp_val,
+                dx_val,
+                dy_val,
+                jmin_p_val,
+                jmax_p_val,
+                imin_p_val,
+                imax_p_val,
+            )
+            interpolate_add_to_grid!(i, j, weights, hrtotalm[m], HRSUM)
+            interpolate_add_to_grid!(i, j, weights, 1.0, WTPSUM)
+        end
+    end
+
+    HR = state.grids.HR
+    Ny1, Nx1 = size(WTPSUM)
+    @inbounds for j in 1:Nx1, i in 1:Ny1
+        wt = WTPSUM[i, j]
+        if wt > 0.0
+            HR[i, j] = HRSUM[i, j] * inv(wt)
+        end
+    end
+    fill_zero_weight_nodes!(HR, WTPSUM; background_val=0.0)
+    return nothing
+end
+
+"""
 Coordinate thermochemical iterations, Stokes-Darcy iterations, and thermal energy updates.
 
 $(SIGNATURES)
@@ -113,6 +266,7 @@ function solve_thermomechanical_iterations!(
     last_plastic_residual = 0.0
     dt_reduced_by_maxDT = false
     dt_next = state.dt
+    dt_hr = dt_step_initial
     n_flips_last = 0
     n_flips_step_total = 0
 
@@ -137,6 +291,10 @@ function solve_thermomechanical_iterations!(
             break
         end
 
+        if state.dt != dt_hr
+            _update_radiogenic_heating_for_dt!(state, coords, cfg, ws)
+            dt_hr = state.dt
+        end
         th_res = solve_thermal_energy!(
             state, coords, cfg, ws; titer=titer, DHP_pyro=DHP_pyro
         )

@@ -268,6 +268,8 @@ mutable struct SimulationWorkspaces
     nFe2_m_step_start::Union{Nothing,Vector{Float64}}
     nFe3_m_step_start::Union{Nothing,Vector{Float64}}
     deltaIW_m_step_start::Union{Nothing,Vector{Float64}}
+    phim_hr_step_start::Union{Nothing,Vector{Float64}}
+    Xfe_bulk_hr_step_start::Union{Nothing,Vector{Float64}}
 end
 
 """

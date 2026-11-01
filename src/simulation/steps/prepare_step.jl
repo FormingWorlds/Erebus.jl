@@ -80,6 +80,7 @@ function prepare_step_ambient!(
             PHISUM,
             WTPSUM,
         )
+        snapshot_radiogenic_step_start!(ws, state, cfg)
     end
 
     T_amb, P_amb, _ = compute_ambient_conditions(state.timesum, cfg.disk)
