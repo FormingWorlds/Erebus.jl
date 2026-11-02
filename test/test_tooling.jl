@@ -72,6 +72,22 @@ include(joinpath(@__DIR__, "..", "tools", "check_architecture.jl"))
             @test length(errors_mf) == 2
             @test any(occursin("Documentation page not found", err) for err in errors_mf)
             @test any(occursin("Test file not found", err) for err in errors_mf)
+
+            # Entry with missing required key
+            incomplete_map = joinpath(tmpdir, "incomplete_map.toml")
+            write(incomplete_map, "[[entry]]\npage = \"mock_page.md\"\n")
+            valid_inc, errors_inc = check_doc_numbers(
+                incomplete_map; docs_dir=tmpdir, test_dir=tmpdir
+            )
+            @test valid_inc == false
+            @test any(occursin("missing required keys", err) for err in errors_inc)
+
+            # CLI wrapper verification
+            empty_rec_dir = joinpath(tmpdir, "empty_records")
+            mkpath(empty_rec_dir)
+            @test run_doc_numbers_cli(String[]) == 0
+            @test run_doc_numbers_cli([missing_map]) == 1
+            @test run_doc_numbers_cli(String[]; records_dir=empty_rec_dir) == 1
         end
     end
 

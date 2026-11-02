@@ -3,6 +3,8 @@
 
 using TOML
 
+include(joinpath(@__DIR__, "validation_records.jl"))
+
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
 const DEFAULT_MAP_PATH = joinpath(
     ROOT_DIR, "docs", "src", "reference", "benchmarks", "number_map.toml"
@@ -11,15 +13,23 @@ const TEST_DIR = joinpath(ROOT_DIR, "test")
 const DOCS_DIR = joinpath(ROOT_DIR, "docs", "src")
 
 """
-    check_doc_numbers(map_path::String=DEFAULT_MAP_PATH)
+    check_doc_numbers(map_path::String=DEFAULT_MAP_PATH; docs_dir::String=DOCS_DIR, test_dir::String=TEST_DIR) -> Tuple{Bool,Vector{String}}
 
 Verify each documented number entry against test files and documentation pages.
 
-# Parameters
-- `map_path::String`: Path to the TOML mapping file.
+Parameters
+----------
+map_path : String, optional
+    Path to the TOML mapping file.
+docs_dir : String, optional
+    Root directory of documentation markdown files.
+test_dir : String, optional
+    Root directory of test files.
 
-# Returns
-- `Tuple{Bool, Vector{String}}`: Status flag and list of validation error messages.
+Returns
+-------
+Tuple{Bool,Vector{String}}
+    Status flag and list of validation error messages.
 """
 function check_doc_numbers(
     map_path::String=DEFAULT_MAP_PATH; docs_dir::String=DOCS_DIR, test_dir::String=TEST_DIR
@@ -80,20 +90,43 @@ function check_doc_numbers(
     return isempty(errors), errors
 end
 
-function main()
-    map_path = length(ARGS) >= 1 ? ARGS[1] : DEFAULT_MAP_PATH
+"""
+    run_doc_numbers_cli(args::Vector{String}=ARGS; records_dir::String=DEFAULT_RECORDS_DIR) -> Int
+
+Run the CLI check for documented numbers and validation records.
+
+Parameters
+----------
+args : Vector{String}, optional
+    Command-line arguments (optional custom path to `number_map.toml`).
+records_dir : String, optional
+    Directory containing validation record `.toml` files.
+
+Returns
+-------
+Int
+    Exit code (`0` on success, `1` on validation failure).
+"""
+function run_doc_numbers_cli(
+    args::Vector{String}=ARGS; records_dir::String=DEFAULT_RECORDS_DIR
+)::Int
+    map_path = length(args) >= 1 ? args[1] : DEFAULT_MAP_PATH
     valid, errors = check_doc_numbers(map_path)
     if !valid
         println(stderr, "check_doc_numbers failed with $(length(errors)) error(s):")
         for err in errors
             println(stderr, "  - ", err)
         end
-        exit(1)
+        return 1
     end
-    println("check_doc_numbers: all entries verified successfully.")
-    return exit(0)
+    if !check_validation_records(records_dir)
+        println(stderr, "check_doc_numbers: validation records check failed.")
+        return 1
+    end
+    println("check_doc_numbers: all entries and validation records verified successfully.")
+    return 0
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    exit(run_doc_numbers_cli(ARGS))
 end
