@@ -194,12 +194,23 @@ function validate_record_dict(
         end
         push!(seen_ids, mid)
 
+        if !(
+            m["value"] isa Real &&
+            m["reference"] isa Real &&
+            m["atol"] isa Real &&
+            m["rtol"] isa Real
+        )
+            push!(
+                errors, "Metric '$mid' must have numeric value, reference, atol, and rtol"
+            )
+            continue
+        end
         val = Float64(m["value"])
         ref = Float64(m["reference"])
         atol = Float64(m["atol"])
         rtol = Float64(m["rtol"])
-        comp = String(m["comparison"])
-        status = String(m["status"])
+        comp = string(m["comparison"])
+        status = string(m["status"])
 
         if status != "PASS"
             push!(errors, "Metric '$mid' has status '$status' (expected 'PASS')")
@@ -213,7 +224,7 @@ function validate_record_dict(
                     "Metric '$mid' with comparison 'le_atol' must have reference = 0.0 (got $ref)",
                 )
             end
-            isfinite(val) && val <= atol
+            isfinite(val) && 0.0 <= val <= atol
         else
             push!(errors, "Metric '$mid' has unsupported comparison '$comp'")
             false

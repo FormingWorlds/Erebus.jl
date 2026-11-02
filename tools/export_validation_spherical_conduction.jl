@@ -34,7 +34,7 @@ function _compute_metric_status(
     passed = if comparison == "isapprox"
         isapprox(value, reference; atol=atol, rtol=rtol)
     elseif comparison == "le_atol"
-        reference == 0.0 && isfinite(value) && value <= atol
+        reference == 0.0 && isfinite(value) && 0.0 <= value <= atol
     else
         false
     end

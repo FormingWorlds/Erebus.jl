@@ -431,7 +431,7 @@ function analytical_T_BE(
     for m in 1:n_modes
         mu_m = KAPPA * (m * pi / R_b)^2
         p = 1.0 / (1.0 + mu_m * dt_s)
-        I_m = if abs(p - q) < 1.0e-12
+        I_m = if abs(p - q) < 1.0e-12 * max(p, q)
             S0 * p * n_steps * (0.5 * (p + q))^(n_steps - 1)
         else
             S0 * p * (p^n_steps - q^n_steps) / (p - q)
@@ -983,17 +983,31 @@ function check_physics_regression_bands(
         return (false, ["Validation record not found: $record_path"])
     end
     raw = TOML.parsefile(record_path)
-    errors = String[]
+    recorded_by_id = Dict{String,Float64}()
     for m in get(raw, "metrics", Any[])
-        mid = String(m["id"])
-        !haskey(PHYSICS_REGRESSION_BANDS, mid) && continue
+        if m isa AbstractDict &&
+            haskey(m, "id") &&
+            haskey(m, "value") &&
+            m["value"] isa Real
+            recorded_by_id[String(m["id"])] = Float64(m["value"])
+        end
+    end
+    errors = String[]
+    for mid in sort!(collect(keys(PHYSICS_REGRESSION_BANDS)))
+        if !haskey(recorded_by_id, mid)
+            push!(
+                errors,
+                "Validation record missing metric '$mid' for physics regression band",
+            )
+            continue
+        end
         if !haskey(metrics, mid)
             push!(errors, "Measured metrics missing '$mid' for physics regression band")
             continue
         end
         band = PHYSICS_REGRESSION_BANDS[mid]
         measured = metrics[mid]
-        recorded = Float64(m["value"])
+        recorded = recorded_by_id[mid]
         if !isapprox(measured, recorded; atol=band.atol, rtol=band.rtol)
             push!(
                 errors,
@@ -1111,7 +1125,7 @@ function check_validation_reproducibility(
         tol_ok = if comp == "isapprox"
             isapprox(measured, ref; atol=atol, rtol=rtol)
         elseif comp == "le_atol"
-            isfinite(measured) && measured <= atol
+            isfinite(measured) && 0.0 <= measured <= atol
         else
             false
         end

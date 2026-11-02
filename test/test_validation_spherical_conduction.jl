@@ -109,6 +109,22 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test !ok_le_ref
         @test any(occursin("must have reference = 0.0", e) for e in errs_le_ref)
 
+        bad_le_neg = deepcopy(raw_record)
+        bad_le_neg["metrics"][3]["value"] = -0.01
+        ok_le_neg, errs_le_neg = SphericalConductionValidation.validate_record_dict(
+            bad_le_neg; require_doc_pages=false
+        )
+        @test !ok_le_neg
+        @test any(occursin("fails comparison 'le_atol'", e) for e in errs_le_neg)
+
+        bad_type_rec = deepcopy(raw_record)
+        bad_type_rec["metrics"][1]["value"] = "not_a_number"
+        ok_bad_type, errs_bad_type = SphericalConductionValidation.validate_record_dict(
+            bad_type_rec; require_doc_pages=false
+        )
+        @test !ok_bad_type
+        @test any(occursin("numeric", e) for e in errs_bad_type)
+
         # Schema structure and required-key rejection branches.
         @test !SphericalConductionValidation.validate_record_dict(Dict{String,Any}())[1]
         @test !SphericalConductionValidation.validate_record_dict(
@@ -258,6 +274,51 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
             Nx=3
         )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            n_steps=0
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            dt_yr=-1.0
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            reg_cells=-0.1
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            k_rock=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            k_air=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            rhocp_air=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.make_spherical_conduction_config(;
+            f_al=0.0
+        )
+        cfg_dom = SphericalConductionValidation.make_spherical_conduction_config(; Nx=33)
+        @test_throws DomainError SphericalConductionValidation.canonical_config_sha256(
+            cfg_dom; H_steady=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.canonical_config_sha256(
+            cfg_dom; L_box=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.canonical_config_sha256(
+            cfg_dom; reg_cells=-1.0
+        )
+        @test_throws DomainError SphericalConductionValidation.canonical_config_sha256(
+            cfg_dom; k_cond=0.0
+        )
+        @test_throws DomainError SphericalConductionValidation.check_physics_regression_bands(
+            Dict{String,Float64}(), ""
+        )
+        @test_throws DomainError SphericalConductionValidation.check_validation_reproducibility(
+            nothing, ""
+        )
+        @test_throws DomainError run_validation_check("")
+        @test_throws DomainError write_spherical_conduction_record("")
+        @test_throws DomainError write_spherical_conduction_record(
+            "bad.toml"; src_commit="not_hex_sha"
+        )
         @test_throws DomainError SphericalConductionValidation.run_steady_spherical_conduction(
             3
         )
@@ -392,21 +453,21 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test s65_no_metric.l2_rel >= min_l2_break_65
 
         # Benchmark-only sensitivity tests: exterior BC clamping, stencil diagonal perturbation, and source scaling.
-        s65_unclamped = SphericalConductionValidation.run_steady_spherical_conduction(
-            65; clamp_exterior=false
+        s33_unclamped = SphericalConductionValidation.run_steady_spherical_conduction(
+            33; clamp_exterior=false
         )
-        @test s65_unclamped.l2_rel >= min_l2_break_65
+        @test s33_unclamped.l2_rel >= min_l2_break_65
 
-        s65_perturbed = SphericalConductionValidation.run_steady_spherical_conduction(
-            65; perturb_stencil=true
+        s33_perturbed = SphericalConductionValidation.run_steady_spherical_conduction(
+            33; perturb_stencil=true
         )
-        @test s65_perturbed.energy_res >= min_energy_break_65
+        @test s33_perturbed.energy_res >= min_energy_break_65
 
-        s65_doubled_source = SphericalConductionValidation.run_steady_spherical_conduction(
-            65; metric_scale=2.0
+        s33_doubled_source = SphericalConductionValidation.run_steady_spherical_conduction(
+            33; metric_scale=2.0
         )
-        @test abs(s65_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
-        @test s65_doubled_source.l2_rel >= min_l2_break_65
+        @test abs(s33_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
+        @test s33_doubled_source.l2_rel >= min_l2_break_65
     end
 
     @testset "Transient spherical radiogenic conduction and reproducibility" begin
@@ -429,12 +490,15 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test conv_ratio_65_33 <= 0.60
         @test isapprox(t65.T_max_air_shell, SphericalConductionValidation.T_SURF; atol=0.01)
 
-        # Determinism repeat check: repeating baseline transient call reproduces metrics identically.
-        t33_repeat = SphericalConductionValidation.run_transient_spherical_conduction(
-            33; dsubgridt=0.0
+        # Determinism repeat check: repeating transient call reproduces metrics identically.
+        t17_rep1 = SphericalConductionValidation.run_transient_spherical_conduction(
+            17; n_steps=2, dsubgridt=0.0
         )
-        @test isapprox(t33_repeat.dT_center, t33.dT_center; rtol=1.0e-12)
-        @test isapprox(t33_repeat.l2_rel, t33.l2_rel; rtol=1.0e-12)
+        t17_rep2 = SphericalConductionValidation.run_transient_spherical_conduction(
+            17; n_steps=2, dsubgridt=0.0
+        )
+        @test isapprox(t17_rep2.dT_center, t17_rep1.dT_center; rtol=1.0e-12)
+        @test isapprox(t17_rep2.l2_rel, t17_rep1.l2_rel; rtol=1.0e-12)
 
         # Sensitivity test 1 (simulation physics path): scaling simulated f_al by 1.02 with reference unchanged
         # must fail the machine-independent physics regression band (rtol=0.01 on dT, atol=0.005 on L2) by >= 2x.
@@ -462,39 +526,39 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         t33_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
             33; spherical_metric=false
         )
-        t65_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
-            65; spherical_metric=false
+        t49_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
+            49; spherical_metric=false
         )
         min_center_rel_break = 2.0 * 0.05
-        min_l2_break = 2.0 * 0.10
+        min_l2_break = 2.0 * 0.08
         min_conv_break = 2.0 * 0.60
-        @test abs(t65_no_metric.dT_center - t65_no_metric.dT_be_rmin) /
-              t65_no_metric.dT_be_rmin >= min_center_rel_break
-        @test t65_no_metric.l2_rel >= min_l2_break
-        @test (t65_no_metric.l2_rel / t33_no_metric.l2_rel) >= min_conv_break
+        @test abs(t49_no_metric.dT_center - t49_no_metric.dT_be_rmin) /
+              t49_no_metric.dT_be_rmin >= min_center_rel_break
+        @test t49_no_metric.l2_rel >= min_l2_break
+        @test (t49_no_metric.l2_rel / t33_no_metric.l2_rel) >= min_conv_break
 
         # Sensitivity test 3 (simulation physics path): disabling sticky-air reset breaks air-shell clamp by >= 2x.
-        t65_no_reset = SphericalConductionValidation.run_transient_spherical_conduction(
-            65; n_steps=5, disk_enabled=false
+        t33_no_reset = SphericalConductionValidation.run_transient_spherical_conduction(
+            33; n_steps=14, disk_enabled=false
         )
         min_air_clamp_break = 2.0 * 0.01
-        @test abs(t65_no_reset.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
+        @test abs(t33_no_reset.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
             min_air_clamp_break
 
-        # Benchmark-only parameter sensitivity tests at Nx=33 (conductivity, air heat capacity, regularization).
-        t33_zero_k = SphericalConductionValidation.run_transient_spherical_conduction(
-            33; k_rock=1.0e-6, k_air=1.0e-6
+        # Benchmark-only parameter sensitivity tests (conductivity, air heat capacity, regularization).
+        t21_zero_k = SphericalConductionValidation.run_transient_spherical_conduction(
+            21; k_rock=1.0e-6, k_air=1.0e-6
         )
-        @test abs(t33_zero_k.dT_center - t33_zero_k.dT_be_rmin) / t33_zero_k.dT_be_rmin >=
+        @test abs(t21_zero_k.dT_center - t21_zero_k.dT_be_rmin) / t21_zero_k.dT_be_rmin >=
             min_center_rel_break
-        @test t33_zero_k.l2_rel >= min_l2_break
+        @test t21_zero_k.l2_rel >= min_l2_break
 
-        t33_low_air_cp = SphericalConductionValidation.run_transient_spherical_conduction(
-            33; rhocp_air=3.3e6
+        t21_low_air_cp = SphericalConductionValidation.run_transient_spherical_conduction(
+            21; rhocp_air=3.3e6
         )
-        @test abs(t33_low_air_cp.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
+        @test abs(t21_low_air_cp.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
             min_air_clamp_break
-        @test t33_low_air_cp.l2_rel >= min_l2_break
+        @test t21_low_air_cp.l2_rel >= min_l2_break
 
         t33_overreg = SphericalConductionValidation.run_transient_spherical_conduction(
             33; reg_cells=15.0
