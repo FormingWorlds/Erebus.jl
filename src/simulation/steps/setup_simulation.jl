@@ -478,6 +478,7 @@ function setup_simulation_workspaces(
     fractured_cells = zeros(Bool, coords.Ny, coords.Nx)
     fractured_cells_prev = zeros(Bool, coords.Ny, coords.Nx)
 
+    has_hr = cfg.thermodynamics.hr_al || cfg.thermodynamics.hr_fe
     has_metal = coreformation_active_val || cfg.redox.active
     has_metal_part = cfg.metal_partition.active
     magma_on = cfg.magma_transport.active
@@ -524,6 +525,9 @@ function setup_simulation_workspaces(
         alloc_if(redox_on),
         alloc_if(redox_on),
         alloc_if(redox_on),
+        alloc_if(has_hr),
+        alloc_if(has_hr && has_metal),
+        -1,
     )
 end
 

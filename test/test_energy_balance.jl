@@ -527,4 +527,275 @@ using Test
         )
         @test isapprox(hrtotalm[1], -999.0; atol=1e-10)
     end
+
+    @testset "Adiabatic 0D Multi-Nuclide Step-Integral Energy Conservation" begin
+        # 5-point Gauss-Legendre nodes and weights on [-1, 1]
+        gl5_xi = [
+            -sqrt(5.0 + 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            -sqrt(5.0 - 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            0.0,
+            sqrt(5.0 - 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+            sqrt(5.0 + 2.0 * sqrt(10.0 / 7.0)) / 3.0,
+        ]
+        gl5_w = [
+            (322.0 - 13.0 * sqrt(70.0)) / 900.0,
+            (322.0 + 13.0 * sqrt(70.0)) / 900.0,
+            128.0 / 225.0,
+            (322.0 + 13.0 * sqrt(70.0)) / 900.0,
+            (322.0 - 13.0 * sqrt(70.0)) / 900.0,
+        ]
+
+        function _gl5_decay_integral(Q0::Float64, tau::Float64, t_edges::Vector{Float64})
+            total = 0.0
+            for k in 1:(length(t_edges) - 1)
+                a = t_edges[k]
+                b = t_edges[k + 1]
+                half_len = 0.5 * (b - a)
+                mid = 0.5 * (a + b)
+                sub = 0.0
+                for q in 1:5
+                    t_q = mid + half_len * gl5_xi[q]
+                    sub += gl5_w[q] * Q0 * exp(-t_q / tau)
+                end
+                total += half_len * sub
+            end
+            return total
+        end
+
+        function _make_subinterval_edges(dt_hist::Vector{Float64})
+            edges = Float64[0.0]
+            t_cur = 0.0
+            for dt_k in dt_hist
+                push!(edges, t_cur + 0.5 * dt_k)
+                t_cur += dt_k
+                push!(edges, t_cur)
+            end
+            return edges
+        end
+
+        function _run_adiabatic_0d_box(
+            nsteps::Int;
+            hr_al::Bool=true,
+            hr_fe::Bool=true,
+            dt_yr::Float64=500_000.0,
+            DTmax::Float64=1.0e6,
+        )
+            yr = Erebus.SECONDS_PER_YEAR
+            T0 = 200.0
+            sv3(a, b, c) = Erebus.SVector{3,Float64}([a, b, c])
+            cfg = SimulationConfig(;
+                grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
+                geometry=GeometryConfig(;
+                    rplanet=90_000.0, rcrust=90_000.0, xcenter=100_000.0, ycenter=100_000.0
+                ),
+                time=TimeConfig(;
+                    n_steps=nsteps,
+                    dt_initial=dt_yr,
+                    dt_longest=dt_yr,
+                    DTmax=DTmax,
+                    yearlength=yr,
+                ),
+                materials=MaterialConfig(;
+                    alphasolidm=sv3(0.0, 0.0, 0.0),
+                    alphafluidm=sv3(0.0, 0.0, 0.0),
+                    kphim0=sv3(1.0e-30, 1.0e-30, 1.0e-30),
+                    tkm0=sv3(T0, T0, T0),
+                ),
+                thermodynamics=ThermalConfig(;
+                    hr_al=hr_al,
+                    hr_fe=hr_fe,
+                    phim0=1.0e-4,
+                    thermal_buoyancy=false,
+                    surface_radiation=false,
+                ),
+                poroelasticity=PoroelasticConfig(;
+                    phimin=1.0e-4, phimax=0.9999, hydrofracture=false
+                ),
+                reaction=ReactionConfig(; active=false),
+                melting=MeltingConfig(; active=false),
+                coreformation=CoreFormationConfig(;
+                    percolation_active=false,
+                    settling_active=false,
+                    Xfe_bulk=Erebus.X_FE_REF_CHONDRITE,
+                ),
+                venting=VentingConfig(; active=false),
+                disk=DiskConfig(; enabled=false, model=:fixed, t_ambient=T0),
+                solver=SolverConfig(;
+                    dsubgridt=0.0, dsubgrids=0.0, p2m_mode=:tiled, max_plastic_iterations=4
+                ),
+                output=OutputConfig(;
+                    mode=:telemetry, savematstep=100, visstep=100, save_final=false
+                ),
+            )
+            Erebus.Config.validate_config(cfg)
+            state, coords, ws = mktempdir() do tmpdir
+                st, co, w, tel_io, _ = Erebus.init_simulation(cfg; output_path=tmpdir)
+                tel_io !== nothing && close(tel_io)
+                return st, co, w
+            end
+
+            fill!(state.markers.core.tm, Int8(1))
+            if haskey(state.markers.groups, :metal)
+                X_fe = Erebus.X_FE_REF_CHONDRITE
+                rho_sol = cfg.materials.rhosolidm[1]
+                rho_met = cfg.coreformation.rho_metal
+                phi_fe_chond = clamp(
+                    (X_fe / rho_met) / (X_fe / rho_met + (1.0 - X_fe) / rho_sol), 0.0, 1.0
+                )
+                fill!(state.markers.groups.metal.Xfe_bulk, phi_fe_chond)
+            end
+            fill!(state.markers.core.phim, cfg.thermodynamics.phim0)
+            fill!(state.markers.core.phinewm, cfg.thermodynamics.phim0)
+            fill!(state.markers.core.pfm0, 0.0)
+            fill!(state.markers.core.tkm, T0)
+            fill!(state.grids.tk1, T0)
+            fill!(state.grids.tk2, T0)
+            fill!(state.grids.pr, 0.0)
+            fill!(state.grids.pf, 0.0)
+            fill!(state.grids.ps, 0.0)
+            fill!(state.grids.pr0, 0.0)
+            fill!(state.grids.pf0, 0.0)
+            fill!(state.grids.ps0, 0.0)
+            fill!(state.grids.gx, 0.0)
+            fill!(state.grids.gy, 0.0)
+
+            t0 = 2.0e6 * yr
+            state.timesum = t0
+            state.dt = dt_yr * yr
+            dt_hist = Float64[]
+            t_hist = Float64[t0]
+
+            for step in 1:nsteps
+                state.timestep = step
+                dt_step_target = state.dt
+                Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+                Erebus.radiogenic_heating!(state, coords, cfg)
+                Erebus.interpolate_markers_to_grid!(
+                    state,
+                    coords,
+                    cfg;
+                    p2m_workspace=ws.p2m,
+                    thread_buffers=ws.thread_buffers,
+                    interp_arrays=ws.interp_arrays,
+                )
+                state.grids.gx .= 0.0
+                state.grids.gy .= 0.0
+                Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+                Erebus.update_step_start_pressures!(state)
+                res = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+                    Erebus.solve_thermomechanical_iterations!(
+                        state, coords, cfg, ws; dt_step_initial=dt_step_target
+                    )
+                end
+                Erebus.diffuse_and_update_markers!(state, coords, cfg, ws)
+                Erebus.vent_and_degas!(state, coords, cfg; Fm_step_start=ws.Fm_step_start)
+                state.timesum += state.dt
+                push!(dt_hist, state.dt)
+                push!(t_hist, state.timesum)
+                if res.dt_reduced_by_maxDT
+                    state.dt = res.dt_next
+                else
+                    state.dt = min(state.dt * cfg.time.dtcoefup, cfg.time.dt_longest * yr)
+                end
+            end
+
+            dT_center = state.grids.tk2[5, 5] - T0
+            return (; cfg, t0, t_end=state.timesum, dt_hist, t_hist, dT_center)
+        end
+
+        function _analytical_0d_oracles(cfg, t0::Float64, dt_hist::Vector{Float64})
+            phim0 = cfg.thermodynamics.phim0
+            rho_sol = cfg.materials.rhosolidm[1]
+            rho_met = cfg.coreformation.rho_metal
+            rhocp_eff =
+                (1.0 - phim0) * cfg.materials.rhocpsolidm[1] +
+                phim0 * cfg.materials.rhocpfluidm[1]
+            X_fe = Erebus.X_FE_REF_CHONDRITE
+            phi_fe = clamp(
+                (X_fe / rho_met) / (X_fe / rho_met + (1.0 - X_fe) / rho_sol), 0.0, 1.0
+            )
+            tau_al = cfg.thermodynamics.t_half_al / log(2.0)
+            tau_fe = cfg.thermodynamics.t_half_fe / log(2.0)
+
+            H0_al = if cfg.thermodynamics.hr_al
+                Q0_al =
+                    cfg.thermodynamics.f_al *
+                    cfg.thermodynamics.ratio_al *
+                    cfg.thermodynamics.E_al / tau_al
+                (1.0 - phim0) *
+                (1.0 - phi_fe) *
+                (Q0_al / (1.0 - X_fe)) *
+                rho_sol *
+                exp(-t0 / tau_al)
+            else
+                0.0
+            end
+            H0_fe = if cfg.thermodynamics.hr_fe
+                Q0_fe =
+                    cfg.thermodynamics.f_fe *
+                    cfg.thermodynamics.ratio_fe *
+                    cfg.thermodynamics.E_fe / tau_fe
+                (1.0 - phim0) * phi_fe * (Q0_fe / X_fe) * rho_met * exp(-t0 / tau_fe)
+            else
+                0.0
+            end
+
+            t_total = sum(dt_hist)
+            edges = _make_subinterval_edges(dt_hist)
+            E_gl5 =
+                _gl5_decay_integral(H0_al, tau_al, edges) +
+                _gl5_decay_integral(H0_fe, tau_fe, edges)
+            E_closed =
+                H0_al * tau_al * (-expm1(-t_total / tau_al)) +
+                H0_fe * tau_fe * (-expm1(-t_total / tau_fe))
+
+            E_start = 0.0
+            E_end = 0.0
+            E_wrong_lambda = 0.0
+            t_cur = 0.0
+            for dt_k in dt_hist
+                H_t = H0_al * exp(-t_cur / tau_al) + H0_fe * exp(-t_cur / tau_fe)
+                E_start += H_t * dt_k
+                E_end +=
+                    (
+                        H0_al * exp(-(t_cur + dt_k) / tau_al) +
+                        H0_fe * exp(-(t_cur + dt_k) / tau_fe)
+                    ) * dt_k
+                tau_al_w = tau_al / log(2.0)
+                tau_fe_w = tau_fe / log(2.0)
+                E_wrong_lambda +=
+                    H0_al * exp(-t_cur / tau_al) * tau_al_w * (-expm1(-dt_k / tau_al_w)) +
+                    H0_fe * exp(-t_cur / tau_fe) * tau_fe_w * (-expm1(-dt_k / tau_fe_w))
+                t_cur += dt_k
+            end
+
+            return (;
+                dT_gl5=E_gl5 / rhocp_eff,
+                dT_closed=E_closed / rhocp_eff,
+                dT_start=E_start / rhocp_eff,
+                dT_end=E_end / rhocp_eff,
+                dT_wrong_lambda=E_wrong_lambda / rhocp_eff,
+            )
+        end
+
+        # 1. 20-step uniform dt = 0.5 Myr (26Al + 60Fe)
+        res_both = _run_adiabatic_0d_box(20; hr_al=true, hr_fe=true, dt_yr=5.0e5)
+        or_both = _analytical_0d_oracles(res_both.cfg, res_both.t0, res_both.dt_hist)
+        @test isapprox(or_both.dT_gl5, or_both.dT_closed; atol=10 * eps(or_both.dT_closed))
+        @test isapprox(res_both.dT_center, or_both.dT_gl5; rtol=1e-12)
+        @test !isapprox(res_both.dT_center, or_both.dT_start; rtol=0.1)
+        @test !isapprox(res_both.dT_center, or_both.dT_end; rtol=0.1)
+        @test !isapprox(res_both.dT_center, or_both.dT_wrong_lambda; rtol=0.05)
+
+        # 2. 20-step uniform dt = 0.5 Myr (26Al only)
+        res_al = _run_adiabatic_0d_box(20; hr_al=true, hr_fe=false, dt_yr=5.0e5)
+        or_al = _analytical_0d_oracles(res_al.cfg, res_al.t0, res_al.dt_hist)
+        @test isapprox(res_al.dT_center, or_al.dT_gl5; rtol=1e-12)
+
+        # 3. 5-step variable-dt with valid DTmax = 20.0 K mid-step dt cut
+        res_cut = _run_adiabatic_0d_box(5; hr_al=true, hr_fe=true, dt_yr=5.0e5, DTmax=20.0)
+        or_cut = _analytical_0d_oracles(res_cut.cfg, res_cut.t0, res_cut.dt_hist)
+        @test res_cut.dt_hist[1] < 500_000.0 * Erebus.SECONDS_PER_YEAR
+        @test isapprox(res_cut.dT_center, or_cut.dT_gl5; rtol=1e-12)
+    end
 end

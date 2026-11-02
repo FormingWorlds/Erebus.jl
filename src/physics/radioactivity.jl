@@ -15,16 +15,66 @@ $(SIGNATURES)
 
     - Q: radiogenic heat production [W/kg]
 """
-function Q_radiogenic(f, ratio, E, tau, time)
-    if time < 0.0 || tau <= 0.0 || f < 0.0 || ratio < 0.0
+function Q_radiogenic(f, ratio, E, tau, time; dt=0.0)
+    if !isfinite(time) ||
+        !isfinite(tau) ||
+        !isfinite(dt) ||
+        time < 0.0 ||
+        tau <= 0.0 ||
+        f < 0.0 ||
+        ratio < 0.0 ||
+        dt < 0.0
         throw(
             DomainError(
-                (f, ratio, E, tau, time),
-                "Decay time, abundance, and ratio must be non-negative, and lifetime must be positive",
+                (f, ratio, E, tau, time, dt),
+                "Decay time, timestep, abundance, and ratio must be finite and non-negative, and lifetime must be positive",
             ),
         )
     end
-    return f * ratio * E * exp(-time * inv(tau)) * inv(tau)
+    Q_inst = f * ratio * E * exp(-time * inv(tau)) * inv(tau)
+    return Q_inst * radiogenic_step_average_factor(dt, tau)
+end
+
+"""
+Compute dimensionless step-average decay factor over `[t, t + dt]`.
+
+$(SIGNATURES)
+
+Parameters
+----------
+dt : Real
+    Timestep duration [s]. Must be finite and non-negative.
+tau : Real
+    Mean decay lifetime `t_half / log(2)` [s]. Must be finite and positive.
+
+Returns
+-------
+factor : AbstractFloat
+    Step-average multiplier `(1 - exp(-dt / tau)) / (dt / tau)`, or `1` when `dt == 0`.
+
+Raises
+------
+DomainError
+    If `dt < 0`, `tau <= 0`, or either input is non-finite.
+"""
+@inline function radiogenic_step_average_factor(dt::Real, tau::Real)
+    if !isfinite(dt) || !isfinite(tau) || dt < zero(dt) || tau <= zero(tau)
+        throw(
+            DomainError(
+                (dt, tau),
+                "Timestep dt must be finite and non-negative and lifetime tau must be finite and positive",
+            ),
+        )
+    end
+    T = promote_type(typeof(float(dt)), typeof(float(tau)))
+    dt_f = T(dt)
+    tau_f = T(tau)
+    iszero(dt_f) && return one(T)
+    x = dt_f * inv(tau_f)
+    if x < T(1.0e-8)
+        return evalpoly(x, (one(T), -inv(T(2)), inv(T(6)), -inv(T(24))))
+    end
+    return -expm1(-x) * inv(x)
 end
 
 """
@@ -63,6 +113,7 @@ function calculate_radioactive_heating(
     al,
     fe,
     timesum;
+    dt=0.0,
     ratio_al=ratio_al,
     E_al=E_al,
     f_al=f_al,
@@ -79,7 +130,7 @@ function calculate_radioactive_heating(
     # 26Al: planet ✓, crust ✓, space × (lithophile, in silicate rock phase)
     if al
         # 26Al radiogenic heat production [W/kg]
-        Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum)
+        Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum; dt=dt)
         # Concentrating lithophile 26Al into silicate phase: Q_al / (1 - X_fe_ref) [W/kg silicate]
         Q_al_silicate = (1.0 - X_fe_ref) > 0.0 ? Q_al / (1.0 - X_fe_ref) : Q_al
         # Solid phase 26Al radiogenic heat production [W/m^3]
@@ -94,12 +145,9 @@ function calculate_radioactive_heating(
     # 60Fe: planet ✓, crust ✓, space × (siderophile, resides in metallic iron phase)
     if fe
         # 60Fe radiogenic heat production [W/kg bulk rock]
-        Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum)
-        # Metallic phase 60Fe radiogenic heat production [W/m^3]
-        # Silicate mantle (1) and crust (2) metal carries 60Fe; sticky air/space (3) carries zero.
-        # f_fe is 56Fe atoms per kg of bulk rock for a reference chondrite with 18.2 wt% Fe.
-        # Concentrating 60Fe into the metallic phase gives specific power Q_fe / X_fe_ref [W/kg metal].
-        # Volumetric power of pure metal phase is (Q_fe / X_fe_ref) * rho_metal [W/m^3].
+        Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum; dt=dt)
+        # f_fe is 56Fe atoms/kg bulk CI chondrite (18.2 wt% Fe); divide by X_fe_ref (0.182 mass
+        # fraction without :metal, or Xfe_bulk volume fraction with :metal) and scale by rho_metal.
         Q_fe_metal = X_fe_ref > 0.0 ? Q_fe / X_fe_ref : 0.0
         @inbounds hrmetalm = @SVector [Q_fe_metal * rho_metal, Q_fe_metal * rho_metal, 0.0]
     else

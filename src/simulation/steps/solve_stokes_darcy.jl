@@ -301,7 +301,7 @@ function _solve_direct_umfpack!(
     S::Vector{Float64},
     L::SparseMatrixCSC{Float64,Int64},
     R::Vector{Float64},
-    @nospecialize(cache),
+    @nospecialize(cache)
 )
     F =
         if cache isa SparseArrays.UMFPACK.UmfpackLU{Float64,Int64} &&

@@ -267,25 +267,8 @@ function interpolate_markers_to_grid!(
         )
     end
 
-    tau_al = cfg.thermodynamics.t_half_al / log(2.0)
-    tau_fe = cfg.thermodynamics.t_half_fe / log(2.0)
-
-    hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
-        cfg.thermodynamics.hr_al,
-        cfg.thermodynamics.hr_fe,
-        state.timesum;
-        ratio_al=cfg.thermodynamics.ratio_al,
-        E_al=cfg.thermodynamics.E_al,
-        f_al=cfg.thermodynamics.f_al,
-        tau_al=tau_al,
-        ratio_fe=cfg.thermodynamics.ratio_fe,
-        E_fe=cfg.thermodynamics.E_fe,
-        f_fe=cfg.thermodynamics.f_fe,
-        tau_fe=tau_fe,
-        rho_metal=cfg.coreformation.rho_metal,
-        rhosolidm=cfg.materials.rhosolidm,
-        rhofluidm=cfg.materials.rhofluidm,
-    )
+    # compute_marker_properties! runs with compute_hr=false; hrtotalm is precomputed in radiogenic_heating!
+    hrsolidm = hrfluidm = hrmetalm = @SVector zeros(3)
 
     thermal_buoyancy_val = cfg.thermodynamics.thermal_buoyancy
     alphafluid_val = cfg.materials.alphafluidm

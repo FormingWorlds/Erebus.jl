@@ -127,7 +127,7 @@ jobs:
         with:
           version: '1.12'
       - name: Install JuliaFormatter
-        run: julia -e 'using Pkg; Pkg.add("JuliaFormatter")'
+        run: julia -e 'using Pkg; Pkg.add(name="JuliaFormatter", version="2.14.5")'
       - name: Check code formatting
         run: |
           julia -e 'using JuliaFormatter; if !format(".", BlueStyle(); overwrite=false, verbose=true) error("Code style check failed: files are not formatted according to BlueStyle! Run using JuliaFormatter; format(\".\", BlueStyle()) locally to fix.") end'

@@ -1,39 +1,39 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "0008165b2f605b5b340a9266ed42829520c79348",
+    "commit": "d0d53154e91e79005150d9b882bddbc593b660a2",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "374e74d073aef455912f53b1403bb97d270de2e4184e02bed61d1f8940fa5902",
-            "size_bytes": 4650698
+            "sha256": "37717219125ec67926a34032369899658459c05de1842acc1092f10bdea2ebbc",
+            "size_bytes": 5306691
         },
         "hydrothermal_benchmark": {
             "config_path": "configs/hydrothermal_benchmark.toml",
             "filename": "hydrothermal_benchmark.jld2",
-            "sha256": "d40465189ab34e867c087199f82ca822506cc1cfde93aafb0ae3b4876f04511a",
-            "size_bytes": 4257105
+            "sha256": "8f3466dcf3c7af42b1310cd4dd2a9ad461dad3a2315049503ad318e3007ebab5",
+            "size_bytes": 4388302
         },
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "48e65274ee3fe1ea524af756e67fd69bd5689927291e65f8bc4f9ae82407aa65",
-            "size_bytes": 10699720
+            "sha256": "abb919064fe6ddaafabe1fdb55654ced385e18bbee347b53a3ebd94c07db9e4d",
+            "size_bytes": 24692552
         },
         "magma_ocean_cooling_turb_on_32": {
             "config_path": "configs/magma_ocean_cooling_turb_on_32.toml",
             "filename": "magma_ocean_cooling_turb_on_32.jld2",
-            "sha256": "e24230d724b417e9d2f3b06fc6c444da13ed67be96b1a6293fe07b61a9ffb0dc",
-            "size_bytes": 4257105
+            "sha256": "6fee3f78db9d6a51e750a6546bd654a62af03e30556a2639b7b410cb98566a37",
+            "size_bytes": 4388302
         },
         "test_quick": {
             "config_path": "configs/test_quick.toml",
             "filename": "test_quick.jld2",
-            "sha256": "7eacf4c0faada0fe57425aae119d0c72fff33771c5a44257d71f741cc9d74f21",
-            "size_bytes": 4257105
+            "sha256": "32e13c69a4c92b328b84e53b08006a437fb29f0c2122bac9e9c70e7f2c2f15dd",
+            "size_bytes": 4388302
         }
     },
-    "generated_at": "2026-09-27T22:13:10Z",
+    "generated_at": "2026-11-01T04:37:25Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }

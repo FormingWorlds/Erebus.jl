@@ -15,8 +15,11 @@ function radiogenic_heating!(
     length(state.markers) == 0 && return nothing
 
     timesum = state.timesum
-    timesum < 0.0 &&
+    (!isfinite(timesum) || timesum < 0.0) &&
         throw(DomainError(timesum, "Decay time must be non-negative, got $timesum"))
+    dt = state.dt
+    (!isfinite(dt) || dt < 0.0) &&
+        throw(DomainError(dt, "Timestep dt must be finite and non-negative, got $dt"))
 
     hr_al = cfg.thermodynamics.hr_al
     hr_fe = cfg.thermodynamics.hr_fe
@@ -31,6 +34,7 @@ function radiogenic_heating!(
         hr_al,
         hr_fe,
         timesum;
+        dt=dt,
         ratio_al=cfg.thermodynamics.ratio_al,
         E_al=cfg.thermodynamics.E_al,
         f_al=cfg.thermodynamics.f_al,
@@ -74,5 +78,38 @@ function radiogenic_heating!(
         end
     end
 
+    return nothing
+end
+
+"""
+Snapshot pre-pyrolysis marker porosity and bulk iron fraction for mid-step radiogenic heating refresh.
+
+$(SIGNATURES)
+
+Parameters
+----------
+ws : SimulationWorkspaces
+    Preallocated solver workspaces and step-start buffers.
+state : SimulationState
+    Mutable simulation state container.
+cfg : SimulationConfig
+    Master simulation configuration.
+
+Returns
+-------
+Nothing
+    Copies `state.markers.core.phim` into `ws.phim_hr_step_start` and `Xfe_bulk` into `ws.Xfe_bulk_hr_step_start`.
+"""
+function snapshot_radiogenic_step_start!(
+    ws::SimulationWorkspaces, state::SimulationState, cfg::SimulationConfig
+)::Nothing
+    (cfg.thermodynamics.hr_al || cfg.thermodynamics.hr_fe) || return nothing
+    _sync_step_start_vec!(ws.phim_hr_step_start, state.markers.core.phim)
+    if haskey(state.markers.groups, :metal)
+        _sync_step_start_vec!(
+            ws.Xfe_bulk_hr_step_start, state.markers.groups.metal.Xfe_bulk
+        )
+    end
+    ws.hr_step_start_timestep = state.timestep
     return nothing
 end

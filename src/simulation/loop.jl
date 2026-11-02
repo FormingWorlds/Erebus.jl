@@ -285,6 +285,7 @@ function simulation_loop(
 
                     # Stage 2: Radiogenic Heating
                     radiogenic_heating!(state, coords_ref[], cfg)
+                    snapshot_radiogenic_step_start!(ws, state, cfg)
                     DHP_pyro = update_pyrolysis!(state, coords_ref[], cfg)
 
                     # Stage 3: Marker Mapping & Gravity
@@ -395,6 +396,8 @@ function simulation_loop(
                         ws.nFe2_m_step_start,
                         ws.nFe3_m_step_start,
                         ws.deltaIW_m_step_start,
+                        ws.phim_hr_step_start,
+                        ws.Xfe_bulk_hr_step_start,
                     ),
                 )
                 telescope_domain!(state, coords_ref, cfg, ws)
