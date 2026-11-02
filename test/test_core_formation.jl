@@ -2084,8 +2084,8 @@ using JLD2
                 res_packed = run_body!(packed, cfg_e, 1.0e9; spherical=spherical)
                 free = metal_body(; X0=0.20)
                 run_body!(free, cfg_e, 1.0e9; spherical=spherical)
-                @test res_packed.max_v_seg > 0.0
-                @test maximum(free.Q) > 0.0
+                @test !iszero(res_packed.max_v_seg)
+                @test !iszero(maximum(free.Q))
                 @test maximum(packed.Q) < 1.0e-9 * maximum(free.Q)
             end
 
@@ -2117,7 +2117,7 @@ using JLD2
                     end
                 end
                 release = pe_start - potential(body.Xfe)
-                @test release > 0.0
+                @test !iszero(release)
                 @test 0.5 < heat / release < 1.5
             end
         end

@@ -147,6 +147,7 @@ function run_core_formation_sim(
         eta_matrix = zeros(Float64, Nr)
         v_seg = zeros(Float64, Nr)
         Q_seg = zeros(Float64, Nr)
+        drho_shell = zeros(Float64, Nr)
         rho_bulk = zeros(Float64, Nr)
 
         for i in 1:Nr
@@ -208,11 +209,7 @@ function run_core_formation_sim(
             )
             v_seg[i] = v_s
 
-            if segregation_heating
-                q_d = segregation_dissipation_heating(min(phi_m[i], 1.0), drho, g_r[i], v_s)
-                Q_seg[i] = q_d
-                total_diss_energy += q_d * vol_shells[i] * dt_sec
-            end
+            drho_shell[i] = drho
 
             # Bulk density blending
             rho_sil_local = Fm[i] * RHO_SIL_MELT + (1.0 - Fm[i]) * RHO_SIL_SOLID
@@ -243,6 +240,16 @@ function run_core_formation_sim(
                     avail = phi_mob * vol_shells[donor]
                     req_vol = areas[i] * vf * phi_mob * dt_sub
                     F_flux[i] = min(req_vol, cap * 0.95, avail * 0.95)
+                end
+
+                if segregation_heating
+                    # Heat follows the metal volume that crosses each shell in this substep.
+                    for i in 1:Nr
+                        moved = 0.5 * (F_flux[i] + F_flux[i + 1])
+                        q_d = drho_shell[i] * g_r[i] * moved * dr / vol_shells[i] / dt_sec
+                        Q_seg[i] += q_d
+                        total_diss_energy += q_d * vol_shells[i] * dt_sec
+                    end
                 end
 
                 for i in 1:Nr
@@ -457,13 +464,13 @@ res_drop_turb = run_core_formation_sim(
 
 println("4. Running Energetics Sweep: Segregation Dissipation Heating ON vs OFF...")
 res_no_heating = run_core_formation_sim(
-    64;
+    128;
     percolation_active=true,
     settling_active=true,
     droplet_mode=:capillary_mean,
     segregation_heating=false,
     t_end_yr=3.5e6,
-    dt_yr=1000.0,
+    dt_yr=500.0,
     save_snapshots=false,
 )
 

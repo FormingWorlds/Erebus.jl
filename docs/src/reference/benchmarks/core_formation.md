@@ -13,7 +13,7 @@ The Fe-FeS binary system has a low eutectic temperature ($T_{\text{eutectic}} \a
 1. **Porous Percolation Regime ($F_m \le 0.40$)**: In crystalline silicate rock, liquid Fe-FeS melt percolates along mineral grain boundaries under gravity once the liquid metal fraction exceeds the percolation threshold ($\phi_{\text{crit}} \approx 0.05$). The flow is governed by porous Darcy dynamics with Kozeny-Carman permeability.
 2. **Magma Ocean Stokes Settling Regime ($F_m \ge 0.50$)**: When silicate melting exceeds the rheological transition threshold ($\phi_{\text{rheo}} \approx 0.40$), the rigid crystalline framework breaks down into a low-viscosity crystal suspension. Dense liquid metal emulsifies into droplets whose diameter is governed by capillary-hydrodynamic balance. Droplets sink rapidly through the magma ocean following Stokes drag with hindered settling corrections.
 3. **Continuous Mush Handover**: In the transition mush zone ($F_m \in [0.40, 0.50]$), segregation velocity blends smoothly between porous percolation and droplet settling via a cubic Hermite polynomial.
-4. **Dissipation Energetics**: Sinking metal releases gravitational potential energy. This gravitational energy is dissipated as frictional heat, accelerating interior warming and thermal runaway during runaway core formation.
+4. **Dissipation Energetics**: Sinking metal releases gravitational potential energy. This gravitational energy is dissipated as frictional heat. In a body of this size the heat is small against radiogenic heating.
 5. **Property Blending**: Bulk density, thermal conductivity, and volumetric heat capacity update dynamically in space as metal migrates toward the planetary center.
 
 ---
@@ -33,7 +33,9 @@ Key constitutive formulations validated on this page include:
 - **Continuous Hermite Handover ($v_{\text{seg}}$):** Smooth $C^1$ transition across the rheological breakdown interval $F_m \in [F_{\text{settle,start}}, F_{\text{perc,end}}]$:
   $$v_{\text{seg}} = (1 - w) v_{\text{perc}} + w v_{\text{settle}}, \quad w = 3\xi^2 - 2\xi^3$$
 - **Gravitational Dissipation Heating ($Q_{\text{seg}}$):**
-  $$Q_{\text{seg}} = \phi_{m,\text{curr}} \Delta\rho \, g \, v_{\text{seg}}$$
+  $$Q_{\text{seg}} = \Delta\rho \, g \, J$$
+
+  where $J$ is the volume flux density of metal that moves through the cell. Without limits on the flux, $J = \phi_{m,\text{curr}} v_{\text{seg}}$.
 - **Volume-Weighted Material Property Blending:**
   $$\rho = (1 - X_{\text{fe}}) \rho_{\text{silicate}} + X_{\text{fe}} \rho_{\text{metal}}$$
   $$\rho c_p = (1 - X_{\text{fe}}) (\rho c_p)_{\text{silicate}} + X_{\text{fe}} (\rho c_p)_{\text{metal}}$$

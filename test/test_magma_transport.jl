@@ -776,7 +776,7 @@ Random.seed!(42)
 
         # Melt at its packing limit cannot move, so it releases no heat.
         q_free = maximum(Q_seg_grid)
-        @test q_free > 0.0
+        @test !iszero(q_free)
         Fm_packed = [tm[m] < 3 ? cfg_magma.phi_pack : 0.0 for m in 1:marknum]
         Q_seg_packed = zeros(Float64, Ny, Nx)
         res_packed = apply_silicate_melt_segregation!(
@@ -815,7 +815,7 @@ Random.seed!(42)
             T_liquidus_silicate=1800.0,
             L_melt=4.0e5,
         )
-        @test res_packed.max_v_seg > 0.0
+        @test !iszero(res_packed.max_v_seg)
         @test maximum(Q_seg_packed) < 1.0e-9 * q_free
         @test maximum(Q_seg_grid) > 0.0
 

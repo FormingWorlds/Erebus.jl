@@ -193,7 +193,7 @@ Cell-averaged dissipation is accumulated onto the corresponding staggered pressu
 
 $$\rho C_p \frac{DT}{dt} = \nabla \cdot (K \nabla T) + H_{\text{radio}} + Q_{\text{seg}} + Q_{\text{shear}}$$
 
-The total release follows the gravitational energy of the body, which scales with $R^2$ at fixed density. It is small in a planetesimal: a rough estimate gives mean heating of order 0.1 K at $R = 50\text{ km}$ and of order 10 K at $R = 500\text{ km}$. Local heating along the path of the metal can be larger.
+The total release follows the gravitational energy of the body, which scales with $R^2$ at fixed density. It is small in a planetesimal: the mean heating is about 0.01 to 0.1 K at $R = 50\text{ km}$, and a rough estimate gives of order 10 K at $R = 500\text{ km}$. Local heating along the path of the metal can be larger.
 
 ---
 
