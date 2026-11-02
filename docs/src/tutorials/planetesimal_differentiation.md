@@ -31,7 +31,7 @@ We model a planetesimal with radius $R_{\text{planet}} = 50\,000\text{ m}$ ($100
 
 Heating is driven by the short-lived radionuclides $^{26}\text{Al}$ ($t_{1/2} = 0.717\text{ Ma}$) and $^{60}\text{Fe}$ ($t_{1/2} = 2.6\text{ Ma}$):
 - Rock matrix heating: $^{26}\text{Al}$ decay power deposits directly into the solid rock matrix.
-- Metallic phase heating: $^{60}\text{Fe}$ decay power deposits into the metallic iron phase ($X_{\text{fe,bulk}}$).
+- Metallic phase heating: $^{60}\text{Fe}$ decay power follows the iron, which here is all in the metallic phase ($X_{\text{fe,bulk}}$) because the metal holds more iron than CI chondrite.
 
 Because the interior is thermally insulating ($k_{\text{rock}} \approx 2.5\text{ W/(m}\cdot\text{K)}$), internal temperatures rise rapidly while the surface radiates to space.
 

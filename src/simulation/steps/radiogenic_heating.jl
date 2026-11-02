@@ -28,7 +28,15 @@ function radiogenic_heating!(
     tau_fe = cfg.thermodynamics.t_half_fe / log(2.0)
 
     has_metal = haskey(state.markers.groups, :metal)
-    X_fe_ref_val = has_metal ? cfg.coreformation.Xfe_bulk : X_FE_REF_CHONDRITE
+    w_metal_ref = if has_metal
+        metal_volume_to_mass_fraction(
+            cfg.coreformation.Xfe_bulk,
+            cfg.coreformation.rho_metal,
+            cfg.materials.rhosolidm[1],
+        )
+    else
+        X_FE_REF_CHONDRITE
+    end
 
     hrsolidm, hrfluidm, hrmetalm = calculate_radioactive_heating(
         hr_al,
@@ -46,7 +54,7 @@ function radiogenic_heating!(
         rho_metal=cfg.coreformation.rho_metal,
         rhosolidm=cfg.materials.rhosolidm,
         rhofluidm=cfg.materials.rhofluidm,
-        X_fe_ref=X_fe_ref_val,
+        w_metal_ref=w_metal_ref,
     )
 
     core = state.markers.core

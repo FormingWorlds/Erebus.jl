@@ -437,8 +437,8 @@ end
             marknum=1, r_marker=0.0, tm_val=1, phi_val=0.0, has_metal=true, Xfe_bulk_val=0.2
         )
         radiogenic_heating!(state_metal, coords, cfg_metal)
-        # With has_metal=true and Xfe_bulk=0.2, silicate power is Q_al / (1 - 0.2)
-        Q_al_silicate_metal = Q_al_analytic / (1.0 - cfg_metal.coreformation.Xfe_bulk)
+        # Xfe_bulk = 0.2 holds more iron than CI, so silicate power is Q_al / (1 - 0.182)
+        Q_al_silicate_metal = Q_al_analytic / (1.0 - X_FE_REF_CHONDRITE)
         hr_expected_metal = (1.0 - 0.2) * Q_al_silicate_metal * rho_rock
         @test isapprox(state_metal.markers.core.hrtotalm[1], hr_expected_metal; rtol=1e-12)
 
@@ -473,11 +473,19 @@ end
                 radiogenic_heating!(st, cr, c)
                 th = c.thermodynamics
                 q_al = Erebus.Q_radiogenic(
-                    th.f_al, th.ratio_al, th.E_al, th.t_half_al / log(2.0), st.timesum;
+                    th.f_al,
+                    th.ratio_al,
+                    th.E_al,
+                    th.t_half_al / log(2.0),
+                    st.timesum;
                     dt=st.dt,
                 )
                 q_fe = Erebus.Q_radiogenic(
-                    th.f_fe, th.ratio_fe, th.E_fe, th.t_half_fe / log(2.0), st.timesum;
+                    th.f_fe,
+                    th.ratio_fe,
+                    th.E_fe,
+                    th.t_half_fe / log(2.0),
+                    st.timesum;
                     dt=st.dt,
                 )
                 return st.markers.core.hrtotalm[1], q_al, q_fe, c
@@ -531,7 +539,8 @@ end
             hr_fe_rock, _, _, _ = fe_only(; phi_marker=0.0, phi_body=phi_body)
             @test isapprox(hr_al_rock, rho_s * q_al / (1.0 - w_body); rtol=1e-12)
             @test isapprox(
-                hr_fe_rock, rho_s * q_fe * (0.182 - w_body) / (0.182 * (1.0 - w_body));
+                hr_fe_rock,
+                rho_s * q_fe * (0.182 - w_body) / (0.182 * (1.0 - w_body));
                 rtol=1e-12,
             )
 
@@ -1285,7 +1294,7 @@ end
             cfg_cut.thermodynamics.E_fe / tau_fe
         fac_al_cut = -expm1(-dt_cut / tau_al) / (dt_cut / tau_al)
         fac_fe_cut = -expm1(-dt_cut / tau_fe) / (dt_cut / tau_fe)
-        X_fe_cfg = cfg_cut.coreformation.Xfe_bulk
+        X_fe_cfg = X_FE_REF_CHONDRITE
         hr_sol_cut =
             (Q_al_t0 * fac_al_cut / (1.0 - X_fe_cfg)) * cfg_cut.materials.rhosolidm[t_mc]
         hr_met_cut = (Q_fe_t0 * fac_fe_cut / X_fe_cfg) * cfg_cut.coreformation.rho_metal
@@ -1606,7 +1615,7 @@ end
                 cfg_acc.thermodynamics.f_fe *
                 cfg_acc.thermodynamics.ratio_fe *
                 cfg_acc.thermodynamics.E_fe / tau_fe_acc
-            X_fe_ref_acc = cfg_acc.coreformation.Xfe_bulk
+            X_fe_ref_acc = X_FE_REF_CHONDRITE
             fac_al_final = -expm1(-dt_acc_final / tau_al_acc) / (dt_acc_final / tau_al_acc)
             fac_fe_final = -expm1(-dt_acc_final / tau_fe_acc) / (dt_acc_final / tau_fe_acc)
             hrs_crust =

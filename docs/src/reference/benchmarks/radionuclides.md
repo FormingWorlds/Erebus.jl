@@ -16,11 +16,13 @@ $$q_0 = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\t
 
 where $f_{\text{al}}$ is the atomic abundance of $^{27}\text{Al}$ per unit mass of bulk chondrite [atoms/kg], $E_{\text{al}}$ is decay energy per atom [J], and $(^{26}\text{Al}/^{27}\text{Al})_0$ is the canonical initial isotope ratio.
 
-Because aluminium is lithophile, $^{26}\text{Al}$ concentrates exclusively into the silicate phase. The initial specific power of the silicate phase is scaled by:
+Because aluminium is lithophile, $^{26}\text{Al}$ concentrates into the silicate phase. The initial specific power of the silicate phase is scaled by:
 
-$$q_{0,\text{silicate}} = \frac{q_0}{1 - X_{\text{fe,ref}}}$$
+$$q_{0,\text{silicate}} = \frac{q_0}{1 - \min(w_{\text{m}}, X_{\text{CI}})}$$
 
-where $X_{\text{fe,ref}}$ is the reference iron fraction used to normalize phase-specific decay power. Similarly, siderophile $^{60}\text{Fe}$ deposits into the metallic iron phase with specific power scaled by $q_0 / X_{\text{fe,ref}}$. Without a `:metal` marker group (`!haskey(state.markers.groups, :metal)`), `radiogenic_heating!` passes `X_fe_ref = X_FE_REF_CHONDRITE = 0.182` (the reference total iron mass fraction in bulk CI chondrite) and derives the metallic volume fraction $\phi_{\text{fe}}$ from `X_FE_REF_CHONDRITE` via `chondritic_phi_fe(rho_solid, rho_metal)`; on this path, solid volume fraction weighting over silicate and metal phases preserves the bulk planetary thermal power budget. When a `:metal` marker group is present, `radiogenic_heating!` passes `X_fe_ref = cfg.coreformation.Xfe_bulk` (default `0.20`, the initial bulk metal volume fraction in the planet interior) and weights silicate and metal volumetric heating by the marker's volume fraction `Xfe_bulk[m]` (so when `Xfe_bulk[m] == cfg.coreformation.Xfe_bulk`, the solid-matrix heating rate evaluates to $\rho_s q_{\text{al}} + \rho_{\text{metal}} q_{\text{fe}}$). Over a discrete timestep $[t_n, t_n + \Delta t]$, `Q_radiogenic` multiplies the step-start power $q(t_n)$ by `radiogenic_step_average_factor(dt, tau)` $= (1 - \exp(-\Delta t / \tau)) / (\Delta t / \tau)$ so that multiplying volumetric heating $Q = \rho \overline{q}$ [$\text{W/m}^3$] by $\Delta t$ deposits the exact step integral $\int_{t_n}^{t_n + \Delta t} Q(t)\,\mathrm{d}t$.
+where $w_{\text{m}}$ is the metal mass fraction of the body and $X_{\text{CI}} = 0.182$ (`X_FE_REF_CHONDRITE`) is the total iron mass fraction of bulk CI chondrite. Iron-60 follows the iron atoms, with specific power $q_0 / X_{\text{CI}}$ per kg of metal. If $w_{\text{m}} < X_{\text{CI}}$, the rest of the iron stays in the silicate and carries the rest of the $^{60}\text{Fe}$. Without a `:metal` marker group, $w_{\text{m}} = X_{\text{CI}}$. With the group, $w_{\text{m}}$ comes from `cfg.coreformation.Xfe_bulk`, a volume fraction. See [Governing Equations](../../explanations/governing_equations.md) for the full budget.
+
+Over a discrete timestep $[t_n, t_n + \Delta t]$, `Q_radiogenic` multiplies the step-start power $q(t_n)$ by `radiogenic_step_average_factor(dt, tau)` $= (1 - \exp(-\Delta t / \tau)) / (\Delta t / \tau)$ so that multiplying volumetric heating $Q = \rho \overline{q}$ [$\text{W/m}^3$] by $\Delta t$ deposits the exact step integral $\int_{t_n}^{t_n + \Delta t} Q(t)\,\mathrm{d}t$.
 
 ---
 

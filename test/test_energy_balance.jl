@@ -291,6 +291,7 @@ using Test
         rho_silicate = cfg.materials.rhosolidm[1]
         rho_metal = cfg.coreformation.rho_metal
         Xfe_val = cfg.coreformation.Xfe_bulk # 0.2
+        w_metal_val = Erebus.metal_volume_to_mass_fraction(Xfe_val, rho_metal, rho_silicate)
 
         hrsolidm, hrfluidm, hrmetalm = Erebus.calculate_radioactive_heating(
             true,
@@ -303,12 +304,11 @@ using Test
             rho_metal=rho_metal,
             rhosolidm=cfg.materials.rhosolidm,
             rhofluidm=cfg.materials.rhofluidm,
-            X_fe_ref=Xfe_val,
+            w_metal_ref=w_metal_val,
         )
 
-        # Case 1: With metal group
-        phi_fe_ref =
-            (Xfe_val / rho_metal) / ((Xfe_val / rho_metal) + (1.0 - Xfe_val) / rho_silicate)
+        # Case 1: With metal group; 20 vol% metal holds more iron than CI
+        phi_fe_ref = Xfe_val
         Xfe_bulk = fill(phi_fe_ref, marknum)
         rho_marker = (1.0 - phi_fe_ref) * rho_silicate + phi_fe_ref * rho_metal
         M_bulk_1 = marknum * Vm * rho_marker
@@ -320,10 +320,10 @@ using Test
             hrtotalm_1[m] = (1.0 - phim[m]) * hr_solid + phim[m] * hrfluidm[tm[m]]
         end
         total_power_1 = sum(hrtotalm_1 .* Vm)
-        expected_power_1 = M_bulk_1 * Q_al
+        # Al per kg silicate stays at the CI value above the CI iron content
+        expected_power_1 = M_bulk_1 * (1.0 - w_metal_val) * Q_al / 0.818
         ratio_1 = total_power_1 / expected_power_1
-        # Must equal bulk power within 0.2%
-        @test isapprox(ratio_1, 1.0; atol=0.005)
+        @test isapprox(ratio_1, 1.0; rtol=1e-3)
 
         # Case 2: Without metal group (chondritic reference mixture)
         hr_sol_chon, _, hr_met_chon = Erebus.calculate_radioactive_heating(
@@ -337,7 +337,7 @@ using Test
             rho_metal=rho_metal,
             rhosolidm=cfg.materials.rhosolidm,
             rhofluidm=cfg.materials.rhofluidm,
-            X_fe_ref=Erebus.X_FE_REF_CHONDRITE,
+            w_metal_ref=Erebus.X_FE_REF_CHONDRITE,
         )
         phi_fe_2 = Erebus.chondritic_phi_fe(rho_silicate, rho_metal)
         hr_rock_2 = (1.0 - phi_fe_2) * hr_sol_chon[1] + phi_fe_2 * hr_met_chon[1]

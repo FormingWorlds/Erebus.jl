@@ -149,13 +149,21 @@ $$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\r
 
 $$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_{\text{metal}}$$
 
-where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is metallic iron density ($5450\text{ kg/m}^3$). Siderophile $^{60}\text{Fe}$ heat deposits directly into the metallic phase, while lithophile $^{26}\text{Al}$ partitions into the silicate phase:
+where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is the density of the metallic phase ($5450\text{ kg/m}^3$). The abundances $f_{\text{al}}$ and $f_{\text{fe}}$ are given per kg of bulk CI chondrite, which holds a total iron mass fraction $X_{\text{CI}} = 0.182$ (`X_FE_REF_CHONDRITE`). Aluminium stays in the silicate. Iron-60 follows the iron atoms, so it sits in the metal and in any oxidised iron that stays in the silicate.
 
-$$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{fe,ref}}}$$
+The split between the phases depends on how much metal the body holds. Let $w_{\text{m}}$ be the metal mass fraction of the body and $X_{\text{m}} = \min(w_{\text{m}}, X_{\text{CI}})$. With a `:metal` marker group, $w_{\text{m}}$ comes from `cfg.coreformation.Xfe_bulk` (a volume fraction, default `0.20`) through `metal_volume_to_mass_fraction`. Without the group, $w_{\text{m}} = X_{\text{CI}}$ and the metallic volume fraction comes from `chondritic_phi_fe`. The specific powers per kg of each phase are:
 
-$$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{fe,ref}}}$$
+$$Q_{\text{al,silicate}}(t) = \frac{Q_{\text{al}}(t)}{1 - X_{\text{m}}}$$
 
-where $X_{\text{fe,ref}}$ is the reference iron fraction: without a `:metal` marker group, `radiogenic_heating!` uses `X_FE_REF_CHONDRITE = 0.182` (the reference total iron mass fraction in bulk CI chondrite) and derives the metallic volume fraction $\phi_{\text{fe}}$ via `chondritic_phi_fe`, where phase volume weighting over silicate and metal components preserves total bulk radiogenic power; when a `:metal` marker group is present, `radiogenic_heating!` passes `X_fe_ref = cfg.coreformation.Xfe_bulk` (default `0.20`, the initial bulk metal volume fraction in the planet interior) and weights silicate and metal volumetric heating by the marker's volume fraction `Xfe_bulk[m]` (evaluating to $Q_{\text{al}}(t) + Q_{\text{fe}}(t)$ when `Xfe_bulk[m] == cfg.coreformation.Xfe_bulk`). Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $f_{\text{avg}}(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
+$$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}}$$
+
+$$Q_{\text{fe,silicate}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}} \frac{X_{\text{CI}} - X_{\text{m}}}{1 - X_{\text{m}}}$$
+
+This gives two regimes. If the metal holds no more iron than CI ($w_{\text{m}} \le X_{\text{CI}}$), the body is CI: the total power per kg of bulk rock is $Q_{\text{al}} + Q_{\text{fe}}$, and the rest of the iron stays in the silicate. If the metal holds more iron than CI, the silicate has no iron left and the body holds extra metal, so the $^{60}\text{Fe}$ power grows with the metal while the power per kg of each phase stays at its CI value.
+
+These concentrations belong to the body, not to a marker. Each marker weights them by its own metal volume fraction `Xfe_bulk[m]`, so the total power does not change when metal moves between markers. Accreted markers use the same concentrations as the body.
+
+Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $f_{\text{avg}}(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
 
 $$\overline{Q}_i(t_n, \Delta t) = \frac{1}{\Delta t} \int_{t_n}^{t_n + \Delta t} Q_i(t)\,\mathrm{d}t = Q_i(t_n)\,\frac{1 - \exp(-\Delta t / \tau_i)}{\Delta t / \tau_i}$$
 

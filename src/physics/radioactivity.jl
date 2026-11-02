@@ -101,11 +101,13 @@ $(SIGNATURES)
     - rhosolidm: density vector of solid silicate phases [kg/m^3]
     - rhofluidm: density vector of pore fluid phases [kg/m^3]
     - rho_metal: density of metallic phase [kg/m^3] (default 5450.0)
-    - X_fe_ref: reference Fe mass fraction in bulk rock (default 0.182 for CI chondrite)
+    - w_metal_ref: metal mass fraction of the body at its initial composition (default
+      `X_FE_REF_CHONDRITE`, which places all CI iron in the metal)
 
 # Returns
 
-    - hrsolidm: radiogenic heat production of 26Al in silicate rock [W/m^3]
+    - hrsolidm: radiogenic heat production of 26Al, and of 60Fe in oxidised iron, in silicate
+      rock [W/m^3]
     - hrfluidm: radiogenic heat production in pore fluid [W/m^3] (zero: pore water carries no 26Al/60Fe)
     - hrmetalm: radiogenic heat production of 60Fe in metallic iron phase [W/m^3]
 """
@@ -125,33 +127,38 @@ function calculate_radioactive_heating(
     rhosolidm=rhosolidm,
     rhofluidm=rhofluidm,
     rho_metal=5450.0,
-    X_fe_ref=X_FE_REF_CHONDRITE,
+    w_metal_ref=X_FE_REF_CHONDRITE,
 )
+    (isfinite(w_metal_ref) && 0.0 <= w_metal_ref <= 1.0) ||
+        throw(DomainError(w_metal_ref, "Reference metal mass fraction must be in [0, 1]"))
+    # f_al and f_fe are CI abundances per kg bulk rock. Metal up to the CI iron content comes
+    # out of a CI bulk; metal above it adds iron to a body with CI silicate.
+    w_ci = X_FE_REF_CHONDRITE
+    w_metal_ci = min(w_metal_ref, w_ci)
+    w_silicate_ci = 1.0 - w_metal_ci
     # 26Al: planet ✓, crust ✓, space × (lithophile, in silicate rock phase)
+    # Concentrating lithophile 26Al into silicate phase [W/kg silicate]
+    Q_silicate = 0.0
     if al
-        # 26Al radiogenic heat production [W/kg]
-        Q_al = Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum; dt=dt)
-        # Concentrating lithophile 26Al into silicate phase: Q_al / (1 - X_fe_ref) [W/kg silicate]
-        Q_al_silicate = (1.0 - X_fe_ref) > 0.0 ? Q_al / (1.0 - X_fe_ref) : Q_al
-        # Solid phase 26Al radiogenic heat production [W/m^3]
-        @inbounds hrsolidm = @SVector [
-            Q_al_silicate * rhosolidm[1], Q_al_silicate * rhosolidm[2], 0.0
-        ]
-    else
-        hrsolidm = @SVector zeros(3)
+        Q_silicate +=
+            Q_radiogenic(f_al, ratio_al, E_al, tau_al, timesum; dt=dt) / w_silicate_ci
     end
     # Fluid phase: pore fluid (water/ice) carries no radiogenic isotopes
     hrfluidm = @SVector zeros(3)
-    # 60Fe: planet ✓, crust ✓, space × (siderophile, resides in metallic iron phase)
+    # 60Fe: planet ✓, crust ✓, space × (follows iron atoms: metal, and oxidised iron in silicate)
     if fe
         # 60Fe radiogenic heat production [W/kg bulk rock]
         Q_fe = Q_radiogenic(f_fe, ratio_fe, E_fe, tau_fe, timesum; dt=dt)
-        # f_fe is 56Fe atoms/kg bulk CI chondrite (18.2 wt% Fe); divide by X_fe_ref (0.182 mass
-        # fraction without :metal, or Xfe_bulk volume fraction with :metal) and scale by rho_metal.
-        Q_fe_metal = X_fe_ref > 0.0 ? Q_fe / X_fe_ref : 0.0
+        # f_fe counts 56Fe per kg bulk CI, so one kg of iron holds f_fe / w_ci.
+        Q_fe_metal = Q_fe / w_ci
+        Q_silicate += Q_fe_metal * (w_ci - w_metal_ci) / w_silicate_ci
         @inbounds hrmetalm = @SVector [Q_fe_metal * rho_metal, Q_fe_metal * rho_metal, 0.0]
     else
         hrmetalm = @SVector zeros(3)
     end
+    # Solid silicate heat production [W/m^3]
+    @inbounds hrsolidm = @SVector [
+        Q_silicate * rhosolidm[1], Q_silicate * rhosolidm[2], 0.0
+    ]
     return hrsolidm, hrfluidm, hrmetalm
 end
