@@ -1,11 +1,5 @@
-if Base.find_package("SHA") === nothing && !("@stdlib" in LOAD_PATH)
-    push!(LOAD_PATH, "@stdlib")
-end
-
 using TOML
-using SHA
 using Printf
-using Dates
 
 const DEFAULT_RECORDS_DIR = normpath(joinpath(@__DIR__, "..", "benchmarks", "records"))
 const VALIDATION_DOCS_DIR = normpath(joinpath(@__DIR__, "..", "docs", "src"))
@@ -13,7 +7,7 @@ const VALIDATION_DOCS_DIR = normpath(joinpath(@__DIR__, "..", "docs", "src"))
 const REQUIRED_METADATA_KEYS = (
     "id",
     "title",
-    "git_commit",
+    "src_commit",
     "timestamp_utc",
     "julia_version",
     "config_sha256",
@@ -27,10 +21,12 @@ const REQUIRED_CONFIG_KEYS = (
     "n_steps",
     "dt_yr",
     "R_planet_m",
+    "L_box_m",
     "k_W_mK",
     "rho_kg_m3",
     "cp_J_kgK",
     "T_surf_K",
+    "H_steady_W_m3",
     "spherical_metric",
     "reg_cells",
     "disk_enabled",
@@ -68,11 +64,11 @@ String
 function render_validation_markdown_block(data::Dict{String,Any})::String
     meta = data["metadata"]
     rec_id = String(meta["id"])
-    commit_short = first(String(meta["git_commit"]), 8)
+    commit_short = first(String(meta["src_commit"]), 8)
     cfg_short = first(String(meta["config_sha256"]), 12)
     lines = String[
         "<!-- VALIDATION_RECORD_START: $(rec_id) -->",
-        "**Validation record**: `benchmarks/records/$(rec_id).toml` (commit `$(commit_short)`, config SHA-256 `$(cfg_short)`)",
+        "**Validation record**: `benchmarks/records/$(rec_id).toml` (Source commit `$(commit_short)`, config SHA-256 `$(cfg_short)`)",
         "",
         "| Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |",
         "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |",
@@ -104,6 +100,8 @@ end
     validate_record_dict(data::Dict{String,Any}; docs_dir::String=VALIDATION_DOCS_DIR, require_doc_pages::Bool=false) -> Tuple{Bool,Vector{String}}
 
 Validate the schema, metric tolerances, and optional documentation block of a validation record.
+Metrics using `comparison = "le_atol"` represent upper-bound magnitude checks and must store
+`reference = 0.0`.
 
 Parameters
 ----------
@@ -144,9 +142,9 @@ function validate_record_dict(
             meta_keys_ok = false
         end
     end
-    if haskey(meta, "git_commit") &&
-        !occursin(r"^[0-9a-f]{40}$", String(meta["git_commit"]))
-        push!(errors, "metadata.git_commit must be a 40-character lowercase hex SHA-1")
+    if haskey(meta, "src_commit") &&
+        !occursin(r"^[0-9a-f]{40}$", String(meta["src_commit"]))
+        push!(errors, "metadata.src_commit must be a 40-character lowercase hex SHA-1")
     end
     if haskey(meta, "config_sha256") &&
         !occursin(r"^[0-9a-f]{64}$", String(meta["config_sha256"]))
@@ -209,6 +207,12 @@ function validate_record_dict(
         passed = if comp == "isapprox"
             isapprox(val, ref; atol=atol, rtol=rtol)
         elseif comp == "le_atol"
+            if ref != 0.0
+                push!(
+                    errors,
+                    "Metric '$mid' with comparison 'le_atol' must have reference = 0.0 (got $ref)",
+                )
+            end
             isfinite(val) && val <= atol
         else
             push!(errors, "Metric '$mid' has unsupported comparison '$comp'")

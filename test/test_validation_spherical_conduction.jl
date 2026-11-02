@@ -324,7 +324,8 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             p_m = 1.0 / (1.0 + mu_m * SphericalConductionValidation.DT_S)
             return abs(p_m - q_be) / q_be
         end
-        @test min_pq_rel > 1.0e-6
+        min_pq_separation_tol = 1.0e-6
+        @test min_pq_rel >= min_pq_separation_tol
 
         # Mode truncation convergence: 500 modes vs 1000 modes <= 1e-7.
         dT_500 =
@@ -452,8 +453,10 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         dT_band_tol = 0.01 * t65.dT_center
         dT_102_margin = abs(t65_f_al_102.dT_center - t65.dT_center) / dT_band_tol
         l2_102_margin = abs(t65_f_al_102.l2_rel - t65.l2_rel) / 0.005
-        @test dT_102_margin >= 2.0 - 1.0e-9
-        @test l2_102_margin >= 2.0
+        min_dT_margin_factor = 2.0 - 1.0e-9
+        min_l2_margin_factor = 2.0
+        @test dT_102_margin >= min_dT_margin_factor
+        @test l2_102_margin >= min_l2_margin_factor
 
         # Sensitivity test 2 (simulation physics path): disabling spherical metric breaks centre, L2, and convergence by >= 2x.
         t33_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
