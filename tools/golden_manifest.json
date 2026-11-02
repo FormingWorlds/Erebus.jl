@@ -1,6 +1,6 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "0be31ce0c8c9809bc9a8b65384ba32d962bf8f2d",
+    "commit": "78757b14608e81c65d1d095910b1e70845b42230",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
@@ -17,7 +17,7 @@
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "77f06c192b7194b78f1b5a773d40377b7b7e8b3659b3b54b98fa412031e2cc60",
+            "sha256": "3f25dce8822746c8fe11460f9750fb42b929bb1c145de7de53c05e0edba71a17",
             "size_bytes": 24727536
         },
         "magma_ocean_cooling_turb_on_32": {
@@ -33,7 +33,7 @@
             "size_bytes": 4397686
         }
     },
-    "generated_at": "2026-11-02T20:18:31Z",
+    "generated_at": "2026-11-02T21:03:20Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }
