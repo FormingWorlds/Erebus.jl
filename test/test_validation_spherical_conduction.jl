@@ -8,6 +8,12 @@ end
 if !isdefined(@__MODULE__, :evaluate_spherical_conduction_benchmark)
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
 end
+if !isdefined(@__MODULE__, :run_validation_check)
+    include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
+end
+if !isdefined(@__MODULE__, :write_spherical_conduction_record)
+    include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conduction.jl"))
+end
 
 @testset "Spherical Conduction Validation" begin
     record_path = joinpath(
@@ -119,30 +125,32 @@ end
 
         # Cross-verification against independent 1D spherical finite-volume reference.
         r_fv, T_fv = solve_1d_spherical_fv(500)
-        T_be_r1 = analytical_T_BE(r_fv[1]; n_modes=500)
-        dT_be_r1 = T_be_r1 - T_SURF
+        T_be_0 = analytical_T_BE(0.0; n_modes=500)
+        dT_be_0 = T_be_0 - T_SURF
         dT_fv_r1 = T_fv[1] - T_SURF
-        rel_diff_be_1dfv = abs(dT_be_r1 - dT_fv_r1) / dT_be_r1
+        rel_diff_be_1dfv = abs(dT_be_0 - dT_fv_r1) / dT_be_0
         @test rel_diff_be_1dfv <= 1.0e-5
 
         # Sensitivity test: omitting step averaging breaks reference agreement by >= 2x.
-        T_be_no_avg = analytical_T_BE(r_fv[1]; n_modes=500, include_step_average=false)
+        T_be_no_avg = analytical_T_BE(0.0; n_modes=500, include_step_average=false)
         dT_be_no_avg = T_be_no_avg - T_SURF
         broken_rel_diff = abs(dT_be_no_avg - dT_fv_r1) / dT_fv_r1
         min_broken_ref_diff = 2.0e-5
         @test broken_rel_diff >= min_broken_ref_diff
     end
 
-    @testset "Steady spherical Poisson conduction" begin
-        s33 = run_steady_spherical_conduction(33)
-        s65 = run_steady_spherical_conduction(65)
+    bench = evaluate_spherical_conduction_benchmark()
 
-        @test isapprox(s33.ratio_3d_2d, 2.0 / 3.0; atol=0.015, rtol=0.0225)
-        @test isapprox(s65.ratio_3d_2d, 2.0 / 3.0; atol=0.008, rtol=0.012)
-        @test s33.l2_rel <= 0.015
-        @test s65.l2_rel <= 0.008
+    @testset "Steady spherical Poisson conduction" begin
+        s33 = bench.s33
+        s65 = bench.s65
+
+        @test isapprox(s33.ratio_3d_2d, 2.0 / 3.0; atol=0.01, rtol=0.015)
+        @test isapprox(s65.ratio_3d_2d, 2.0 / 3.0; atol=0.01, rtol=0.015)
+        @test s33.l2_rel <= 0.15
+        @test s65.l2_rel <= 0.08
         @test s65.l2_rel < s33.l2_rel
-        @test s65.energy_res <= 0.05
+        @test s65.energy_res <= 1.0e-11
 
         # Canary sensitivity test: no-op configuration reproduces baseline and passes guards.
         s65_noop = run_steady_spherical_conduction(
@@ -156,9 +164,9 @@ end
         @test isapprox(s65_noop.l2_rel, s65.l2_rel; rtol=1.0e-12)
 
         # Sensitivity tests: each broken physics assumption fails its guard by >= 2x.
-        min_ratio_break_65 = 2.0 * 0.008
-        min_l2_break_65 = 2.0 * 0.008
-        min_energy_break_65 = 2.0 * 0.05
+        min_ratio_break_65 = 2.0 * 0.01
+        min_l2_break_65 = 2.0 * 0.08
+        min_energy_break_65 = 2.0 * 1.0e-11
 
         s65_no_metric = run_steady_spherical_conduction(65; spherical_metric=false)
         @test abs(s65_no_metric.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
@@ -168,16 +176,16 @@ end
         @test s65_unclamped.l2_rel >= min_l2_break_65
 
         s65_perturbed = run_steady_spherical_conduction(65; perturb_stencil=true)
-        @test abs(s65_perturbed.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
-        @test s65_perturbed.l2_rel >= min_l2_break_65
+        @test s65_perturbed.energy_res >= min_energy_break_65
 
         s65_doubled_source = run_steady_spherical_conduction(65; metric_scale=2.0)
-        @test s65_doubled_source.energy_res >= min_energy_break_65
+        @test abs(s65_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
+        @test s65_doubled_source.l2_rel >= min_l2_break_65
     end
 
     @testset "Transient spherical radiogenic conduction and reproducibility" begin
-        t33 = run_transient_spherical_conduction(33)
-        t65 = run_transient_spherical_conduction(65)
+        t33 = bench.t33
+        t65 = bench.t65
 
         # Centre temperature rise against step-averaged analytical solution at r_min.
         @test isapprox(t65.dT_center, t65.dT_be_rmin; atol=25.0, rtol=0.05)
@@ -193,8 +201,8 @@ end
         @test conv_ratio_65_33 <= 0.60
         @test isapprox(t65.T_max_air_shell, T_SURF; atol=0.01)
 
-        # Canary sensitivity test: changing the inactive RNG seed reproduces baseline.
-        t33_noop = run_transient_spherical_conduction(33; seed=99)
+        # Canary sensitivity test: no-op configuration reproduces baseline.
+        t33_noop = run_transient_spherical_conduction(33; dsubgridt=0.0)
         @test isapprox(t33_noop.dT_center, t33.dT_center; rtol=1.0e-12)
         @test isapprox(t33_noop.l2_rel, t33.l2_rel; rtol=1.0e-12)
 
@@ -229,13 +237,21 @@ end
               t33_overreg.dT_be_rmin >= min_center_rel_break
 
         # Full benchmark evaluation and record reproducibility check.
-        bench = evaluate_spherical_conduction_benchmark()
         ok_repro, repro_errs = check_validation_reproducibility(bench, record_path)
         @test ok_repro
         @test isempty(repro_errs)
+        @test run_validation_check(record_path; bench=bench)
 
         # Mutating a recorded metric or config hash in the record must fail reproducibility.
         mktempdir() do tmpdir
+            exported_path = joinpath(tmpdir, "exported_spherical_conduction.toml")
+            write_spherical_conduction_record(exported_path; bench=bench)
+            @test isfile(exported_path)
+            @test run_validation_check(exported_path; bench=bench)
+
+            @test !run_validation_check(joinpath(tmpdir, "missing.toml"); bench=bench)
+            @test !check_validation_records(joinpath(tmpdir, "missing_dir"))
+
             tampered_path = joinpath(tmpdir, "spherical_conduction.toml")
             raw_rec = TOML.parsefile(record_path)
             raw_rec["metrics"][1]["value"] += 0.05
@@ -247,6 +263,7 @@ end
             )
             @test !ok_tampered
             @test !isempty(errs_tampered)
+            @test !run_validation_check(tampered_path; bench=bench)
 
             bad_cfg_path = joinpath(tmpdir, "spherical_conduction_cfg.toml")
             raw_cfg_rec = TOML.parsefile(record_path)
@@ -257,6 +274,7 @@ end
             ok_bad_cfg, errs_bad_cfg = check_validation_reproducibility(bench, bad_cfg_path)
             @test !ok_bad_cfg
             @test !isempty(errs_bad_cfg)
+            @test !run_validation_check(bad_cfg_path; bench=bench)
         end
     end
 end

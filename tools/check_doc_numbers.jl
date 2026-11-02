@@ -3,6 +3,10 @@
 
 using TOML
 
+if !isdefined(@__MODULE__, :check_validation_records)
+    include(joinpath(@__DIR__, "validation_records.jl"))
+end
+
 const ROOT_DIR = normpath(joinpath(@__DIR__, ".."))
 const DEFAULT_MAP_PATH = joinpath(
     ROOT_DIR, "docs", "src", "reference", "benchmarks", "number_map.toml"
@@ -90,7 +94,11 @@ function main()
         end
         exit(1)
     end
-    println("check_doc_numbers: all entries verified successfully.")
+    if !check_validation_records()
+        println(stderr, "check_doc_numbers: validation records check failed.")
+        exit(1)
+    end
+    println("check_doc_numbers: all entries and validation records verified successfully.")
     return exit(0)
 end
 
