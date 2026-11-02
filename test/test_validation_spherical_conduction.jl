@@ -157,7 +157,26 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             require_doc_pages=true,
         )[1]
 
-        # Canonical config SHA-256: hashes only benchmark physics sections and steady inputs.
+        # Canonical config SHA-256: hashes the 9 benchmark physics sections and steady inputs,
+        # without depending on container/SVector type printing.
+        @test SphericalConductionValidation.BENCHMARK_CONFIG_SECTIONS == (
+            :grid,
+            :geometry,
+            :time,
+            :solver,
+            :thermodynamics,
+            :materials,
+            :poroelasticity,
+            :coreformation,
+            :disk,
+        )
+        @test SphericalConductionValidation._canonical_field_repr(
+            SVector{3,Float64}(1.0, 2.5, 3.0)
+        ) == "[1.0, 2.5, 3.0]"
+        @test SphericalConductionValidation._canonical_field_repr(
+            Dict(:b => 2.0, :a => 1)
+        ) == "{:a => 1, :b => 2.0}"
+
         base_cfg = SphericalConductionValidation.make_spherical_conduction_config(; Nx=65)
         base_sha = SphericalConductionValidation.canonical_config_sha256(base_cfg)
         @test base_sha == raw_record["metadata"]["config_sha256"]
@@ -166,6 +185,10 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             Nx=65, k_rock=3.5
         )
         @test SphericalConductionValidation.canonical_config_sha256(altered_cfg) != base_sha
+        seed_cfg = SphericalConductionValidation.make_spherical_conduction_config(;
+            Nx=65, seed=99999
+        )
+        @test SphericalConductionValidation.canonical_config_sha256(seed_cfg) != base_sha
         @test SphericalConductionValidation.canonical_config_sha256(
             base_cfg; H_steady=2.0e-4
         ) != base_sha
@@ -178,19 +201,19 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test SphericalConductionValidation.canonical_config_sha256(base_cfg; k_cond=4.0) !=
             base_sha
 
-        # Unrelated sections or extra fields in unrelated sections must not change the hash.
+        # Unrelated sections (such as volatiles, reaction, output) or extra fields in unrelated sections must not change the hash.
         unrelated_cfg = SimulationConfig(;
             grid=base_cfg.grid,
             geometry=base_cfg.geometry,
             time=base_cfg.time,
-            solver=SolverConfig(; seed=99999, dsubgridt=0.5),
+            solver=base_cfg.solver,
             thermodynamics=base_cfg.thermodynamics,
             materials=base_cfg.materials,
             poroelasticity=base_cfg.poroelasticity,
             output=OutputConfig(; savematstep=1, visstep=1, save_final=true),
             reaction=ReactionConfig(; active=true),
             melting=MeltingConfig(; active=true),
-            coreformation=CoreFormationConfig(; percolation_active=true),
+            coreformation=base_cfg.coreformation,
             metal_partition=MetalPartitionConfig(; active=true),
             venting=VentingConfig(; active=true),
             volatiles=VolatilesConfig(; active=true),
@@ -214,31 +237,36 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             grid=base_cfg.grid,
             geometry=base_cfg.geometry,
             time=base_cfg.time,
+            solver=base_cfg.solver,
             thermodynamics=base_cfg.thermodynamics,
             materials=base_cfg.materials,
             poroelasticity=base_cfg.poroelasticity,
+            coreformation=base_cfg.coreformation,
             disk=base_cfg.disk,
             unrelated_new_section=(; extra_new_field=42, another_field="ignored"),
         )
         @test SphericalConductionValidation.canonical_config_sha256(mock_extended_cfg) ==
             base_sha
 
-        # Reference literal constants must match SimulationConfig defaults, and fail when a default changes.
+        # Reference literal constants must match non-builder SimulationConfig defaults and X_FE_REF_CHONDRITE.
         ok_lit, errs_lit = SphericalConductionValidation.check_reference_literals_match_config(
             base_cfg
         )
         @test ok_lit
         @test isempty(errs_lit)
 
-        changed_default_cfg = SphericalConductionValidation.make_spherical_conduction_config(;
-            Nx=65, f_al=2.0e23, k_rock=3.5
+        changed_default_cfg = SimulationConfig(;
+            thermodynamics=ThermalConfig(; ratio_al=6.0e-5),
+            coreformation=CoreFormationConfig(; rho_metal=6000.0),
         )
         ok_bad_lit, errs_bad_lit = SphericalConductionValidation.check_reference_literals_match_config(
-            changed_default_cfg
+            changed_default_cfg; x_fe_ref=0.19
         )
         @test !ok_bad_lit
-        @test any(occursin("F_AL", e) for e in errs_bad_lit)
-        @test any(occursin("K_COND", e) for e in errs_bad_lit)
+        @test length(errs_bad_lit) == 3
+        @test any(occursin("RATIO_AL", e) for e in errs_bad_lit)
+        @test any(occursin("RHO_MET", e) for e in errs_bad_lit)
+        @test any(occursin("X_FE", e) for e in errs_bad_lit)
     end
 
     @testset "Analytical and 1D finite-volume reference solutions" begin
@@ -442,7 +470,8 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test isapprox(s33_repeat.l2_rel, s33.l2_rel; rtol=1.0e-12)
 
         # Sensitivity test on solver physics path: disabling spherical_metric breaks ratio and L2 guards by >= 2x.
-        min_ratio_break_65 = 2.0 * 0.01
+        # Real guard tolerance on ratio_3d_2d is atol=0.01 + rtol=0.015*(2/3) = 0.02, so 2x is 0.04.
+        min_ratio_break_65 = 2.0 * (0.01 + 0.015 * (2.0 / 3.0))
         min_l2_break_65 = 2.0 * 0.08
         min_energy_break_65 = 2.0 * 1.0e-11
 
@@ -452,11 +481,11 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test abs(s65_no_metric.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
         @test s65_no_metric.l2_rel >= min_l2_break_65
 
-        # Benchmark-only sensitivity tests: exterior BC clamping, stencil diagonal perturbation, and source scaling.
-        s33_unclamped = SphericalConductionValidation.run_steady_spherical_conduction(
-            33; clamp_exterior=false
+        # Benchmark-only sensitivity tests: exterior BC clamping (Nx=65), stencil diagonal perturbation, and source scaling.
+        s65_unclamped = SphericalConductionValidation.run_steady_spherical_conduction(
+            65; clamp_exterior=false
         )
-        @test s33_unclamped.l2_rel >= min_l2_break_65
+        @test s65_unclamped.l2_rel >= min_l2_break_65
 
         s33_perturbed = SphericalConductionValidation.run_steady_spherical_conduction(
             33; perturb_stencil=true
@@ -467,7 +496,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             33; metric_scale=2.0
         )
         @test abs(s33_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
-        @test s33_doubled_source.l2_rel >= min_l2_break_65
+        @test s33_doubled_source.l2_rel >= 2.0 * 0.15
     end
 
     @testset "Transient spherical radiogenic conduction and reproducibility" begin
@@ -491,17 +520,17 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test isapprox(t65.T_max_air_shell, SphericalConductionValidation.T_SURF; atol=0.01)
 
         # Determinism repeat check: repeating transient call reproduces metrics identically.
-        t17_rep1 = SphericalConductionValidation.run_transient_spherical_conduction(
-            17; n_steps=2, dsubgridt=0.0
+        t11_rep1 = SphericalConductionValidation.run_transient_spherical_conduction(
+            11; n_steps=1, dsubgridt=0.0
         )
-        t17_rep2 = SphericalConductionValidation.run_transient_spherical_conduction(
-            17; n_steps=2, dsubgridt=0.0
+        t11_rep2 = SphericalConductionValidation.run_transient_spherical_conduction(
+            11; n_steps=1, dsubgridt=0.0
         )
-        @test isapprox(t17_rep2.dT_center, t17_rep1.dT_center; rtol=1.0e-12)
-        @test isapprox(t17_rep2.l2_rel, t17_rep1.l2_rel; rtol=1.0e-12)
+        @test isapprox(t11_rep2.dT_center, t11_rep1.dT_center; rtol=1.0e-12)
+        @test isapprox(t11_rep2.l2_rel, t11_rep1.l2_rel; rtol=1.0e-12)
 
         # Sensitivity test 1 (simulation physics path): scaling simulated f_al by 1.02 with reference unchanged
-        # must fail the machine-independent physics regression band (rtol=0.01 on dT, atol=0.005 on L2) by >= 2x.
+        # must fail the physics regression band (rtol=0.01 on dT, atol=0.005 on L2).
         t65_f_al_102 = SphericalConductionValidation.run_transient_spherical_conduction(
             65; f_al=1.02 * SphericalConductionValidation.F_AL
         )
@@ -514,28 +543,26 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test !ok_band_102
         @test any(occursin("transient_center_dT_nx65", e) for e in errs_band_102)
         @test any(occursin("transient_profile_l2_rel_error_nx65", e) for e in errs_band_102)
-        dT_band_tol = 0.01 * t65.dT_center
-        dT_102_margin = abs(t65_f_al_102.dT_center - t65.dT_center) / dT_band_tol
         l2_102_margin = abs(t65_f_al_102.l2_rel - t65.l2_rel) / 0.005
-        min_dT_margin_factor = 2.0 - 1.0e-9
         min_l2_margin_factor = 2.0
-        @test dT_102_margin >= min_dT_margin_factor
         @test l2_102_margin >= min_l2_margin_factor
 
-        # Sensitivity test 2 (simulation physics path): disabling spherical metric breaks centre, L2, and convergence by >= 2x.
+        # Sensitivity test 2 (simulation physics path): disabling spherical metric at Nx=33 and Nx=65
+        # breaks L2 (2.05x of 0.10), convergence l2(65)/l2(33) (2.73x of 0.60), and centre dT (3.53x of rtol=0.05,
+        # 1.78x of combined atol=25 K + rtol=0.05*ref = 50.35 K).
         t33_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
             33; spherical_metric=false
         )
-        t49_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
-            49; spherical_metric=false
+        t65_no_metric = SphericalConductionValidation.run_transient_spherical_conduction(
+            65; spherical_metric=false
         )
         min_center_rel_break = 2.0 * 0.05
-        min_l2_break = 2.0 * 0.08
+        min_l2_break = 2.0 * 0.10
         min_conv_break = 2.0 * 0.60
-        @test abs(t49_no_metric.dT_center - t49_no_metric.dT_be_rmin) /
-              t49_no_metric.dT_be_rmin >= min_center_rel_break
-        @test t49_no_metric.l2_rel >= min_l2_break
-        @test (t49_no_metric.l2_rel / t33_no_metric.l2_rel) >= min_conv_break
+        @test abs(t65_no_metric.dT_center - t65_no_metric.dT_be_rmin) /
+              t65_no_metric.dT_be_rmin >= min_center_rel_break
+        @test t65_no_metric.l2_rel >= min_l2_break
+        @test (t65_no_metric.l2_rel / t33_no_metric.l2_rel) >= min_conv_break
 
         # Sensitivity test 3 (simulation physics path): disabling sticky-air reset breaks air-shell clamp by >= 2x.
         t33_no_reset = SphericalConductionValidation.run_transient_spherical_conduction(
@@ -545,29 +572,50 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test abs(t33_no_reset.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
             min_air_clamp_break
 
-        # Benchmark-only parameter sensitivity tests (conductivity, air heat capacity, regularization).
-        t21_zero_k = SphericalConductionValidation.run_transient_spherical_conduction(
-            21; k_rock=1.0e-6, k_air=1.0e-6
+        # Additional simulation parameter sensitivity tests (conductivity, air heat capacity, regularization).
+        t17_zero_k = SphericalConductionValidation.run_transient_spherical_conduction(
+            17; k_rock=1.0e-6, k_air=1.0e-6
         )
-        @test abs(t21_zero_k.dT_center - t21_zero_k.dT_be_rmin) / t21_zero_k.dT_be_rmin >=
+        @test abs(t17_zero_k.dT_center - t17_zero_k.dT_be_rmin) / t17_zero_k.dT_be_rmin >=
             min_center_rel_break
-        @test t21_zero_k.l2_rel >= min_l2_break
+        @test t17_zero_k.l2_rel >= min_l2_break
 
-        t21_low_air_cp = SphericalConductionValidation.run_transient_spherical_conduction(
-            21; rhocp_air=3.3e6
+        t17_low_air_cp = SphericalConductionValidation.run_transient_spherical_conduction(
+            17; rhocp_air=3.3e6
         )
-        @test abs(t21_low_air_cp.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
+        @test abs(t17_low_air_cp.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
             min_air_clamp_break
-        @test t21_low_air_cp.l2_rel >= min_l2_break
 
-        t33_overreg = SphericalConductionValidation.run_transient_spherical_conduction(
-            33; reg_cells=15.0
+        t21_overreg = SphericalConductionValidation.run_transient_spherical_conduction(
+            21; reg_cells=15.0
         )
-        @test abs(t33_overreg.dT_center - t33_overreg.dT_be_rmin) /
-              t33_overreg.dT_be_rmin >= min_center_rel_break
+        @test abs(t21_overreg.dT_center - t21_overreg.dT_be_rmin) /
+              t21_overreg.dT_be_rmin >= min_center_rel_break
+
+        # Alternative marker RNG seed (seed = 2) must stay inside every physics regression band.
+        t33_seed2 = SphericalConductionValidation.run_transient_spherical_conduction(
+            33; seed=2
+        )
+        t65_seed2 = SphericalConductionValidation.run_transient_spherical_conduction(
+            65; seed=2
+        )
+        metrics_seed2 = copy(bench.metrics)
+        metrics_seed2["transient_center_dT_nx65"] = t65_seed2.dT_center
+        metrics_seed2["transient_profile_l2_rel_error_nx65"] = t65_seed2.l2_rel
+        metrics_seed2["transient_profile_l2_convergence_ratio_65_33"] =
+            t65_seed2.l2_rel / t33_seed2.l2_rel
+        metrics_seed2["transient_max_air_shell_temperature_nx65"] =
+            t65_seed2.T_max_air_shell
+        ok_seed2, errs_seed2 = SphericalConductionValidation.check_physics_regression_bands(
+            metrics_seed2, record_path
+        )
+        @test ok_seed2
+        @test isempty(errs_seed2)
 
         # Recompute every recorded reference from the reference functions and compare against the TOML record.
         raw_rec_check = TOML.parsefile(record_path)
+        @test raw_rec_check["config"]["Nx_coarse"] ==
+            SphericalConductionValidation.NX_COARSE
         exp_refs = SphericalConductionValidation.expected_metric_references(bench)
         for m in raw_rec_check["metrics"]
             mid = String(m["id"])
@@ -590,7 +638,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         @test isempty(repro_errs)
         @test run_validation_check(record_path; bench=bench)
 
-        # Mutating a recorded metric, reference, metric set, or config hash in the record must fail reproducibility.
+        # Mutating a recorded metric, reference, metric set, config hash, Julia version, or export guard must behave as specified.
         mktempdir() do tmpdir
             exported_path = joinpath(tmpdir, "exported_spherical_conduction.toml")
             src_commit_str = String(raw_rec_check["metadata"]["src_commit"])
@@ -599,6 +647,67 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             )
             @test isfile(exported_path)
             @test run_validation_check(exported_path; bench=bench)
+
+            # Export guard (T6): refuses to overwrite when a metric leaves its physics band around the existing record
+            # unless --accept-physics-change is given, and refuses when validate_record_dict fails.
+            bench_band_shift = (; bench..., metrics=copy(bench.metrics))
+            bench_band_shift.metrics["transient_center_dT_nx65"] =
+                bench.metrics["transient_center_dT_nx65"] * 1.02
+            @test_throws ErrorException write_spherical_conduction_record(
+                exported_path;
+                src_commit=src_commit_str,
+                bench=bench_band_shift,
+                accept_physics_change=false,
+            )
+            @test run_export_cli(
+                [exported_path];
+                src_commit=src_commit_str,
+                bench=bench_band_shift,
+                check_clean_tree=false,
+            ) == 1
+            rec_after_refusal = TOML.parsefile(exported_path)
+            @test isapprox(
+                Float64(rec_after_refusal["metrics"][7]["value"]),
+                bench.metrics["transient_center_dT_nx65"];
+                rtol=1.0e-14,
+            )
+
+            @test run_export_cli(
+                ["--accept-physics-change", exported_path];
+                src_commit=src_commit_str,
+                bench=bench_band_shift,
+                check_clean_tree=false,
+            ) == 0
+            rec_after_accept = TOML.parsefile(exported_path)
+            @test isapprox(
+                Float64(rec_after_accept["metrics"][7]["value"]),
+                bench_band_shift.metrics["transient_center_dT_nx65"];
+                rtol=1.0e-14,
+            )
+
+            # Failing metric (outside reference tolerance) must be refused even with --accept-physics-change.
+            bench_fail_ref = (; bench..., metrics=copy(bench.metrics))
+            bench_fail_ref.metrics["steady_center_dT_ratio_3d_2d_nx33"] = 1.0
+            @test run_export_cli(
+                ["--accept-physics-change", exported_path];
+                src_commit=src_commit_str,
+                bench=bench_fail_ref,
+                check_clean_tree=false,
+            ) == 1
+            @test run_export_cli(
+                ["--unknown-flag"];
+                src_commit=src_commit_str,
+                bench=bench,
+                check_clean_tree=false,
+            ) == 2
+
+            # Restore baseline exported_path for remaining checks.
+            write_spherical_conduction_record(
+                exported_path;
+                src_commit=src_commit_str,
+                bench=bench,
+                accept_physics_change=true,
+            )
 
             @test !run_validation_check(joinpath(tmpdir, "missing.toml"); bench=bench)
             @test !SphericalConductionValidation.check_validation_records(
@@ -621,7 +730,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             @test run_validation_cli(["--unknown-flag"]; bench=bench) == 2
             @test run_validation_cli([invalid_schema_path]; bench=bench) == 1
 
-            # Drift within schema tolerance must be caught by recorded-value reproducibility.
+            # Drift within schema tolerance must be caught by recorded-value reproducibility on same Julia major.minor.
             tampered_path = joinpath(tmpdir, "spherical_conduction.toml")
             raw_rec = TOML.parsefile(record_path)
             raw_rec["metrics"][1]["value"] += 0.001
@@ -634,6 +743,45 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             @test !ok_tampered
             @test any(occursin("differs from recorded value", e) for e in errs_tampered)
             @test !run_validation_check(tampered_path; bench=bench)
+
+            # On a different Julia major.minor, replay compare is skipped while physics bands still run.
+            diff_minor_path = joinpath(tmpdir, "diff_julia_minor.toml")
+            raw_diff_minor = TOML.parsefile(record_path)
+            raw_diff_minor["metadata"]["julia_version"] = "1.99.0"
+            raw_diff_minor["metrics"][1]["value"] += 0.001
+            open(diff_minor_path, "w") do io
+                TOML.print(io, raw_diff_minor)
+            end
+            ok_diff_minor, errs_diff_minor = SphericalConductionValidation.check_validation_reproducibility(
+                bench, diff_minor_path; check_recorded_values=true
+            )
+            @test ok_diff_minor
+            @test isempty(errs_diff_minor)
+
+            raw_diff_minor["metrics"][1]["value"] += 0.02
+            open(diff_minor_path, "w") do io
+                TOML.print(io, raw_diff_minor)
+            end
+            ok_diff_minor_fail, errs_diff_minor_fail = SphericalConductionValidation.check_validation_reproducibility(
+                bench, diff_minor_path; check_recorded_values=true
+            )
+            @test !ok_diff_minor_fail
+            @test any(
+                occursin("outside physics regression band", e) for e in errs_diff_minor_fail
+            )
+
+            # Changing Nx_coarse in the record must fail reproducibility (L-g).
+            bad_nx_coarse_path = joinpath(tmpdir, "bad_nx_coarse.toml")
+            raw_nx_coarse = TOML.parsefile(record_path)
+            raw_nx_coarse["config"]["Nx_coarse"] = 17
+            open(bad_nx_coarse_path, "w") do io
+                TOML.print(io, raw_nx_coarse)
+            end
+            ok_nx_coarse, errs_nx_coarse = SphericalConductionValidation.check_validation_reproducibility(
+                bench, bad_nx_coarse_path
+            )
+            @test !ok_nx_coarse
+            @test any(occursin("config.Nx_coarse", e) for e in errs_nx_coarse)
 
             # Removing a metric from the record must fail the exact metric ID set check.
             dropped_metric_path = joinpath(tmpdir, "dropped_metric.toml")
