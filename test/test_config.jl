@@ -167,6 +167,8 @@ include("test_helpers.jl")
 
         # Invalid gravity parameters
         @reject_config geometry=GeometryConfig(gravity_mode=:unknown_mode)
+        @test GeometryConfig().spherical_metric
+        @test GeometryConfig().gravity_mode === :enclosed_mass
         @reject_config geometry=GeometryConfig(gravity_nr_factor=0)
         @reject_config geometry=GeometryConfig(gravity_nr_factor=-1)
 

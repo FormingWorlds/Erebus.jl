@@ -479,6 +479,43 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
         )
     end
 
+    @testset "Spherical metric source across a conductivity jump" begin
+        # The radial flux H r / 3 is continuous, so the term is -H / 3 on both sides of the jump.
+        cfg_jump = Erebus.override_config(
+            default_config(), Dict{String,Any}("grid.Nx" => 65, "grid.Ny" => 65)
+        )
+        coords = GridCoordinates(cfg_jump.grid)
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        xc, yc = coords.xcenter, coords.ycenter
+        R, R0, H, k_in, k_out = 50.0e3, 30.0e3, 1.0e-4, 1.0e6, 3.0
+        radius(i, j) = hypot(coords.xp[j] - xc, coords.yp[i] - yc)
+        rise(r) = if r >= R0
+            H * (R^2 - r^2) / (6.0 * k_out)
+        else
+            H * (R^2 - R0^2) / (6.0 * k_out) + H * (R0^2 - r^2) / (6.0 * k_in)
+        end
+        tk = [rise(radius(i, j)) for i in 1:Ny1, j in 1:Nx1]
+        k = [radius(i, j) < R0 ? k_in : k_out for i in 1:Ny1, j in 1:Nx1]
+        KX = zeros(Ny1, Nx1)
+        KY = zeros(Ny1, Nx1)
+        for j in 1:(Nx1 - 1), i in 1:Ny1
+            KX[i, j] = 2.0 * k[i, j] * k[i, j + 1] / (k[i, j] + k[i, j + 1])
+        end
+        for j in 1:Nx1, i in 1:(Ny1 - 1)
+            KY[i, j] = 2.0 * k[i, j] * k[i + 1, j] / (k[i, j] + k[i + 1, j])
+        end
+        Q = zeros(Ny1, Nx1)
+        compute_spherical_metric_heat_source!(
+            Q, tk, KX, KY, coords; xcenter=xc, ycenter=yc, rplanet=R
+        )
+        near_jump = [
+            abs(Q[i, j] + H / 3.0) / (H / 3.0) for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1) if
+            abs(radius(i, j) - R0) < 3.0 * coords.dx
+        ]
+        @test !isempty(near_jump)
+        @test maximum(near_jump) < 0.6
+    end
+
     @testset "Spherical Geometric Metric Divergence" begin
         coords = default_grid_coordinates()
         Ny1, Nx1 = coords.Ny1, coords.Nx1
@@ -792,7 +829,9 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
             )
             cfg_b = SimulationConfig(
                 time=TimeConfig(n_steps=2),
-                geometry=GeometryConfig(spherical_metric=false),
+                geometry=GeometryConfig(
+                    spherical_metric=true, gravity_mode=:enclosed_mass
+                ),
                 thermodynamics=ThermalConfig(surface_radiation=false),
                 disk=DiskConfig(enabled=false),
                 output=OutputConfig(output_dir=output_dir_b, savematstep=1),
