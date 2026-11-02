@@ -4,7 +4,7 @@
 
 This page checks how `Erebus.jl` moves heat through a sphere and how it adds radiogenic heat in the time loop. Validation means that we run the code on a case where we know the right answer from another source, and we check that the code gives that answer. If this part were wrong, interior temperatures would be wrong, and with them the melting, the hydrothermal circulation and the core formation that depend on temperature. Each case below gives the reason for the check, the setup, the reference, a figure and the test details.
 
-All cases use a sphere of radius 50 km with a fixed surface temperature of 170 K. The rock has a uniform conductivity of 3 W/(m K). Melting, fluid flow and reactions are off, so that heat conduction and the heat source are the only processes.
+All cases use a sphere of radius 50 km with a fixed surface temperature of 170 K. `Nx` is the number of grid intervals on each side of the square box. The rock has a uniform conductivity of 3 W/(m K). Melting, fluid flow and reactions are off, so that heat conduction and the heat source are the only processes.
 
 The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D grid behave like a 3-D sphere. This term is `Q_metric`, and the option `geometry.spherical_metric` switches it on. The default is off, which gives a 2-D disk, so set this option when you want a sphere. All cases on this page switch it on.
 
@@ -12,7 +12,7 @@ The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D g
 
 **Why this check exists.** The geometry term could have a wrong sign or a wrong size. The centre of the sphere would then have the wrong temperature. Without the term, it would be 50 % too hot.
 
-**What it tests.** A constant heat source $H = 10^{-4}$ W/m³ heats the sphere, and we solve the heat equation directly for the temperature that no longer changes. This case calls the heat solver and not the time loop. We compare the temperature rise $\Delta T(r)$ above the surface with the exact solution. We also compare the centre rise in the sphere with the centre rise in a 2-D disk.
+**What it tests.** A constant heat source $H = 10^{-4}$ W/m³ heats the sphere, and we solve for the temperature that no longer changes. The solve repeats 50 times, because the geometry term uses the temperature of the last repeat. This case calls the heat solver and not the time loop. We compare the temperature rise $\Delta T(r)$ above the surface with the exact solution. We also compare the centre rise in the sphere with the centre rise in a 2-D disk.
 
 **How we know the right answer.** The steady heat equation in a sphere has the exact solution $\Delta T(r) = H (R^2 - r^2) / (6 k)$, where $R$ is the radius and $k$ the conductivity. A 2-D disk has $H (R^2 - r^2) / (4 k)$, so the ratio of the centre rises is exactly 2/3.
 
@@ -76,7 +76,7 @@ The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D g
 
 ## A small change in heating against the recorded result
 
-**Why this check exists.** The reference check above allows 5 %, because of the spatial difference. The simulation already sits below the reference, so an excess of heat of up to about 8 % would pass it. An excess of 2 % fails this tighter check, and so does a change of the step average to a midpoint rule, a 1 % heating error at this step size.
+**Why this check exists.** The reference check above allows 5 %, because of the spatial difference. The simulation already sits below the reference, so an excess of heat of up to about 9 % would pass its centre check. An excess of 2 % fails this tighter check, and so does a change of the step average to a midpoint rule, a 1 % heating error at this step size.
 
 **What it tests.** We compare the result with the recorded value of the same case. The allowed range around the recorded value is the regression band. It is 0.5 % on the centre rise and 0.005 on the L2 error.
 
@@ -99,7 +99,7 @@ The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D g
 
 **How to read the plot.** The shaded area is the band around the recorded value, the solid line. The points are runs that differ only in the marker seed, and a pass means that they stay inside the band. The dashed line is a run with 2 % more heating, which must lie outside the band. In panel (b) this run has a smaller error, because more heat moves the temperature toward the reference, but it still leaves the band.
 
-**Known limit.** A heating error below about 0.5 % stays inside the bands. On the Julia version of the record, the exact compare still catches it, with a tolerance of $10^{-6}$. On other Julia versions only the bands run.
+**Known limit.** A heating error below about 0.5 % stays inside the bands. On the Julia version of the record, the exact compare still catches it, with a tolerance of $10^{-6}$. On other Julia versions the exact compare is skipped, and the bands and the reference tolerances still run.
 
 !!! details "Test details"
     - Reference: the recorded values in `benchmarks/records/spherical_conduction.toml`.
