@@ -32,9 +32,9 @@ Base.@kwdef struct GeometryConfig
     xcenter::Float64 = 70_000.0
     ycenter::Float64 = 70_000.0
     psurface::Float64 = 1.0e+3
-    spherical_metric::Bool = false
+    spherical_metric::Bool = true
     metric_regularization_cells::Float64 = 0.5
-    gravity_mode::Symbol = :poisson2d
+    gravity_mode::Symbol = :enclosed_mass
     gravity_nr_factor::Int = 4
 end
 
