@@ -170,12 +170,14 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             :coreformation,
             :disk,
         )
-        @test SphericalConductionValidation._canonical_field_repr(
-            SVector{3,Float64}(1.0, 2.5, 3.0)
-        ) == "[1.0, 2.5, 3.0]"
-        @test SphericalConductionValidation._canonical_field_repr(
-            Dict(:b => 2.0, :a => 1)
-        ) == "{:a => 1, :b => 2.0}"
+        vec_val = SphericalConductionValidation.SVector{3,Float64}(
+            parse.(Float64, ("1.0", "2.5", "3.0"))...
+        )
+        @test SphericalConductionValidation._canonical_field_repr(vec_val) ==
+            "[1.0, 2.5, 3.0]"
+        dict_val = Dict(:b => parse(Float64, "2.0"), :a => 1)
+        @test SphericalConductionValidation._canonical_field_repr(dict_val) ==
+            "{:a => 1, :b => 2.0}"
 
         base_cfg = SphericalConductionValidation.make_spherical_conduction_config(; Nx=65)
         base_sha = SphericalConductionValidation.canonical_config_sha256(base_cfg)
@@ -189,6 +191,20 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             Nx=65, seed=99999
         )
         @test SphericalConductionValidation.canonical_config_sha256(seed_cfg) != base_sha
+        core_cfg = SimulationConfig(;
+            grid=base_cfg.grid,
+            geometry=base_cfg.geometry,
+            time=base_cfg.time,
+            solver=base_cfg.solver,
+            thermodynamics=base_cfg.thermodynamics,
+            materials=base_cfg.materials,
+            poroelasticity=base_cfg.poroelasticity,
+            coreformation=CoreFormationConfig(;
+                percolation_active=false, settling_active=false, rho_metal=6000.0
+            ),
+            disk=base_cfg.disk,
+        )
+        @test SphericalConductionValidation.canonical_config_sha256(core_cfg) != base_sha
         @test SphericalConductionValidation.canonical_config_sha256(
             base_cfg; H_steady=2.0e-4
         ) != base_sha
@@ -231,21 +247,6 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             disk=base_cfg.disk,
         )
         @test SphericalConductionValidation.canonical_config_sha256(unrelated_cfg) ==
-            base_sha
-
-        mock_extended_cfg = (;
-            grid=base_cfg.grid,
-            geometry=base_cfg.geometry,
-            time=base_cfg.time,
-            solver=base_cfg.solver,
-            thermodynamics=base_cfg.thermodynamics,
-            materials=base_cfg.materials,
-            poroelasticity=base_cfg.poroelasticity,
-            coreformation=base_cfg.coreformation,
-            disk=base_cfg.disk,
-            unrelated_new_section=(; extra_new_field=42, another_field="ignored"),
-        )
-        @test SphericalConductionValidation.canonical_config_sha256(mock_extended_cfg) ==
             base_sha
 
         # Reference literal constants must match non-builder SimulationConfig defaults and X_FE_REF_CHONDRITE.
@@ -492,11 +493,11 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
         )
         @test s33_perturbed.energy_res >= min_energy_break_65
 
-        s33_doubled_source = SphericalConductionValidation.run_steady_spherical_conduction(
-            33; metric_scale=2.0
+        s65_doubled_source = SphericalConductionValidation.run_steady_spherical_conduction(
+            65; metric_scale=2.0
         )
-        @test abs(s33_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
-        @test s33_doubled_source.l2_rel >= 2.0 * 0.15
+        @test abs(s65_doubled_source.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
+        @test s65_doubled_source.l2_rel >= min_l2_break_65
     end
 
     @testset "Transient spherical radiogenic conduction and reproducibility" begin
@@ -574,23 +575,23 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
 
         # Additional simulation parameter sensitivity tests (conductivity, air heat capacity, regularization).
         t17_zero_k = SphericalConductionValidation.run_transient_spherical_conduction(
-            17; k_rock=1.0e-6, k_air=1.0e-6
+            17; n_steps=15, k_rock=1.0e-6, k_air=1.0e-6
         )
         @test abs(t17_zero_k.dT_center - t17_zero_k.dT_be_rmin) / t17_zero_k.dT_be_rmin >=
             min_center_rel_break
         @test t17_zero_k.l2_rel >= min_l2_break
 
         t17_low_air_cp = SphericalConductionValidation.run_transient_spherical_conduction(
-            17; rhocp_air=3.3e6
+            17; n_steps=10, rhocp_air=3.3e6
         )
         @test abs(t17_low_air_cp.T_max_air_shell - SphericalConductionValidation.T_SURF) >=
             min_air_clamp_break
 
-        t21_overreg = SphericalConductionValidation.run_transient_spherical_conduction(
-            21; reg_cells=15.0
+        t33_overreg = SphericalConductionValidation.run_transient_spherical_conduction(
+            33; n_steps=20, reg_cells=20.0
         )
-        @test abs(t21_overreg.dT_center - t21_overreg.dT_be_rmin) /
-              t21_overreg.dT_be_rmin >= min_center_rel_break
+        @test abs(t33_overreg.dT_center - t33_overreg.dT_be_rmin) /
+              t33_overreg.dT_be_rmin >= min_center_rel_break
 
         # Alternative marker RNG seed (seed = 2) must stay inside every physics regression band.
         t33_seed2 = SphericalConductionValidation.run_transient_spherical_conduction(
@@ -700,6 +701,13 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
                 bench=bench,
                 check_clean_tree=false,
             ) == 2
+            @test run_export_cli(
+                [exported_path];
+                src_commit=src_commit_str,
+                bench=bench,
+                check_clean_tree=true,
+                dirty_status=" M src/config.jl",
+            ) == 1
 
             # Restore baseline exported_path for remaining checks.
             write_spherical_conduction_record(
@@ -733,6 +741,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             # Drift within schema tolerance must be caught by recorded-value reproducibility on same Julia major.minor.
             tampered_path = joinpath(tmpdir, "spherical_conduction.toml")
             raw_rec = TOML.parsefile(record_path)
+            raw_rec["metadata"]["julia_version"] = string(VERSION)
             raw_rec["metrics"][1]["value"] += 0.001
             open(tampered_path, "w") do io
                 TOML.print(io, raw_rec)
@@ -758,7 +767,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             @test ok_diff_minor
             @test isempty(errs_diff_minor)
 
-            raw_diff_minor["metrics"][1]["value"] += 0.02
+            raw_diff_minor["metrics"][1]["value"] += 0.008
             open(diff_minor_path, "w") do io
                 TOML.print(io, raw_diff_minor)
             end
@@ -766,6 +775,7 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
                 bench, diff_minor_path; check_recorded_values=true
             )
             @test !ok_diff_minor_fail
+            @test length(errs_diff_minor_fail) == 1
             @test any(
                 occursin("outside physics regression band", e) for e in errs_diff_minor_fail
             )

@@ -43,8 +43,20 @@ const DT_S = DT_YR * YEARLENGTH_S
 const Q_AL_0 = F_AL * RATIO_AL * E_AL * exp(-T0_S / TAU_AL) / TAU_AL
 const H0_2MYR = (1.0 - PHIM0) * RHO_BULK * Q_AL_0
 
+const NX_COARSE = 33
+const NX_FINE = 65
+const SEED_DEFAULT = 42
+
 const BENCHMARK_CONFIG_SECTIONS = (
-    :grid, :geometry, :time, :thermodynamics, :materials, :poroelasticity, :disk
+    :grid,
+    :geometry,
+    :time,
+    :solver,
+    :thermodynamics,
+    :materials,
+    :poroelasticity,
+    :coreformation,
+    :disk,
 )
 
 const EXPECTED_METRIC_IDS = (
@@ -75,13 +87,13 @@ const PHYSICS_REGRESSION_BANDS = Dict{
 )
 
 const REPLAY_RTOL = 1.0e-6
-const REPLAY_NOISE_ATOLS = Dict{String,Float64}(
+const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
     "steady_energy_conservation_residual_nx65" => 1.0e-12,
     "transient_be_vs_1dfv_rel_diff" => 5.0e-7,
 )
 
 """
-    make_spherical_conduction_config(; Nx=33, n_steps=N_STEPS_TRANSIENT, start_time=START_TIME_YR, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, disk_enabled=true, k_rock=K_COND, k_air=K_COND, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL) -> SimulationConfig
+    make_spherical_conduction_config(; Nx=NX_COARSE, n_steps=N_STEPS_TRANSIENT, start_time=START_TIME_YR, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, disk_enabled=true, k_rock=K_COND, k_air=K_COND, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL, seed=SEED_DEFAULT) -> SimulationConfig
 
 Construct a pure-conduction spherical planetesimal configuration with all non-conductive physics disabled.
 
@@ -111,6 +123,8 @@ dsubgridt : Float64, optional
     Subgrid thermal diffusion coefficient (default `0.0`).
 f_al : Float64, optional
     Chondritic Al abundance in atoms/kg (default `1.9e23`).
+seed : Int, optional
+    Marker placement RNG seed in `SolverConfig` (default 42).
 
 Returns
 -------
@@ -123,7 +137,7 @@ DomainError
     If `Nx < 5`, `n_steps < 1`, `dt_yr <= 0`, `reg_cells < 0`, `k_rock <= 0`, `k_air <= 0`, `rhocp_air <= 0`, or `f_al <= 0`.
 """
 function make_spherical_conduction_config(;
-    Nx::Int=33,
+    Nx::Int=NX_COARSE,
     n_steps::Int=N_STEPS_TRANSIENT,
     start_time::Float64=START_TIME_YR,
     dt_yr::Float64=DT_YR,
@@ -135,6 +149,7 @@ function make_spherical_conduction_config(;
     rhocp_air::Float64=RHOCP_AIR,
     dsubgridt::Float64=0.0,
     f_al::Float64=F_AL,
+    seed::Int=SEED_DEFAULT,
 )::SimulationConfig
     Nx < 5 && throw(DomainError(Nx, "Grid resolution Nx must be >= 5"))
     n_steps < 1 && throw(DomainError(n_steps, "Number of steps n_steps must be >= 1"))
@@ -168,7 +183,7 @@ function make_spherical_conduction_config(;
             DTmax=500.0,
             n_steps=n_steps,
         ),
-        solver=SolverConfig(; dsubgridt=dsubgridt),
+        solver=SolverConfig(; seed=seed, dsubgridt=dsubgridt),
         thermodynamics=ThermalConfig(;
             hr_al=true,
             hr_fe=false,
@@ -218,16 +233,20 @@ function make_spherical_conduction_config(;
 end
 
 """
-    check_reference_literals_match_config(cfg::SimulationConfig=make_spherical_conduction_config(; Nx=65)) -> Tuple{Bool,Vector{String}}
+    check_reference_literals_match_config(cfg::SimulationConfig=make_spherical_conduction_config(; Nx=NX_FINE); x_fe_ref::Float64=Erebus.X_FE_REF_CHONDRITE) -> Tuple{Bool,Vector{String}}
 
-Compare every literal physical constant used by the analytical and 1D finite-volume reference
-solutions against the corresponding `SimulationConfig` fields so that a changed default fails
-with an explicit diagnostic message.
+Compare the 7 benchmark reference literals that are not set by `make_spherical_conduction_config`
+against their source defaults: `YEARLENGTH_S` (`cfg.time.yearlength`), `RHO_SOL` (`cfg.materials.rhosolidm[1]`),
+`RHO_MET` (`cfg.coreformation.rho_metal`), `T_HALF_AL` (`cfg.thermodynamics.t_half_al`),
+`RATIO_AL` (`cfg.thermodynamics.ratio_al`), `E_AL` (`cfg.thermodynamics.E_al`), and `X_FE` (`x_fe_ref`,
+defaulting to `Erebus.X_FE_REF_CHONDRITE`).
 
 Parameters
 ----------
 cfg : SimulationConfig, optional
     Simulation configuration to compare against the benchmark literal constants.
+x_fe_ref : Float64, optional
+    Chondritic iron mass fraction constant (default `Erebus.X_FE_REF_CHONDRITE`).
 
 Returns
 -------
@@ -235,28 +254,17 @@ Tuple{Bool,Vector{String}}
     Boolean pass flag and list of mismatch descriptions.
 """
 function check_reference_literals_match_config(
-    cfg::SimulationConfig=make_spherical_conduction_config(; Nx=65)
+    cfg::SimulationConfig=make_spherical_conduction_config(; Nx=NX_FINE);
+    x_fe_ref::Float64=Erebus.X_FE_REF_CHONDRITE,
 )::Tuple{Bool,Vector{String}}
     checks = (
-        ("R_PLANET", R_PLANET, cfg.geometry.rplanet),
-        ("L_BOX", L_BOX, cfg.grid.xsize),
-        ("T_SURF", T_SURF, cfg.disk.t_ambient),
-        ("K_COND", K_COND, cfg.materials.ksolidm[1]),
-        ("PHIM0", PHIM0, cfg.thermodynamics.phim0),
-        ("REG_CELLS_DEFAULT", REG_CELLS_DEFAULT, cfg.geometry.metric_regularization_cells),
-        ("N_STEPS_TRANSIENT", Float64(N_STEPS_TRANSIENT), Float64(cfg.time.n_steps)),
-        ("DT_YR", DT_YR, cfg.time.dt_initial),
-        ("START_TIME_YR", START_TIME_YR, cfg.time.start_time),
         ("YEARLENGTH_S", YEARLENGTH_S, cfg.time.yearlength),
         ("RHO_SOL", RHO_SOL, cfg.materials.rhosolidm[1]),
         ("RHO_MET", RHO_MET, cfg.coreformation.rho_metal),
-        ("RHOCP_SOL", RHOCP_SOL, cfg.materials.rhocpsolidm[1]),
-        ("RHOCP_FLU", RHOCP_FLU, cfg.materials.rhocpfluidm[1]),
-        ("RHOCP_AIR", RHOCP_AIR, cfg.materials.rhocpsolidm[3]),
         ("T_HALF_AL", T_HALF_AL, cfg.thermodynamics.t_half_al),
-        ("F_AL", F_AL, cfg.thermodynamics.f_al),
         ("RATIO_AL", RATIO_AL, cfg.thermodynamics.ratio_al),
         ("E_AL", E_AL, cfg.thermodynamics.E_al),
+        ("X_FE", X_FE, x_fe_ref),
     )
     errors = String[]
     for (name, lit_val, cfg_val) in checks
@@ -271,25 +279,44 @@ function check_reference_literals_match_config(
 end
 
 function _canonical_field_repr(val)::String
-    if val isa AbstractDict
-        isempty(val) && return repr(val)
+    if val isa Bool
+        return val ? "true" : "false"
+    elseif val isa Integer
+        return string(Int64(val))
+    elseif val isa AbstractFloat
+        return repr(Float64(val))
+    elseif val isa Symbol
+        return ":" * String(val)
+    elseif val isa AbstractString
+        return repr(String(val))
+    elseif val === nothing
+        return "nothing"
+    elseif val isa Tuple || val isa AbstractVector
+        return "[" * join((_canonical_field_repr(x) for x in val), ", ") * "]"
+    elseif val isa AbstractDict
+        isempty(val) && return "{}"
         sorted_pairs = sort!(collect(pairs(val)); by=p -> string(first(p)))
         inner = join(
-            ["$(repr(k)) => $(_canonical_field_repr(v))" for (k, v) in sorted_pairs], ", "
+            [
+                "$(_canonical_field_repr(k)) => $(_canonical_field_repr(v))" for
+                (k, v) in sorted_pairs
+            ],
+            ", ",
         )
-        return "$(typeof(val))($inner)"
+        return "{$inner}"
     end
-    return repr(val)
+    return string(val)
 end
 
 """
     canonical_config_sha256(cfg; H_steady=H_STEADY, L_box=L_BOX, reg_cells=REG_CELLS_DEFAULT, k_cond=K_COND) -> String
 
 Compute a deterministic 64-character lowercase hex SHA-256 digest of the configuration sections
-read by the spherical conduction benchmark (`:grid`, `:geometry`, `:time`, `:thermodynamics`,
-`:materials`, `:poroelasticity`, `:disk`) together with the steady-state parameters `H_steady`,
-`L_box`, `reg_cells`, and `k_cond`. Unrelated configuration sections are excluded so that adding
-a field to an unused physics module does not invalidate the benchmark hash.
+read by the spherical conduction benchmark (`:grid`, `:geometry`, `:time`, `:solver`,
+`:thermodynamics`, `:materials`, `:poroelasticity`, `:coreformation`, `:disk`) together with the
+steady-state parameters `H_steady`, `L_box`, `reg_cells`, and `k_cond`. Unrelated configuration
+sections (such as `:volatiles`, `:reaction`, `:output`) are excluded so that adding a field to an
+unused physics module does not invalidate the benchmark hash.
 
 Parameters
 ----------
@@ -360,6 +387,7 @@ Dict{String,Any}
 """
 function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
     return Dict{String,Any}(
+        "Nx_coarse" => NX_COARSE,
         "Nx_fine" => cfg.grid.Nx,
         "n_steps" => cfg.time.n_steps,
         "dt_yr" => cfg.time.dt_initial,
@@ -752,7 +780,7 @@ function run_steady_spherical_conduction(
 end
 
 """
-    run_transient_spherical_conduction(Nx::Int; n_steps=N_STEPS_TRANSIENT, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, k_rock=K_COND, k_air=K_COND, disk_enabled=true, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL) -> NamedTuple
+    run_transient_spherical_conduction(Nx::Int; n_steps=N_STEPS_TRANSIENT, dt_yr=DT_YR, spherical_metric=true, reg_cells=REG_CELLS_DEFAULT, k_rock=K_COND, k_air=K_COND, disk_enabled=true, rhocp_air=RHOCP_AIR, dsubgridt=0.0, f_al=F_AL, seed=SEED_DEFAULT) -> NamedTuple
 
 Run the transient 2D spherical radiogenic conduction simulation through `simulation_loop` and compare against `analytical_T_BE`.
 
@@ -780,6 +808,8 @@ dsubgridt : Float64, optional
     Subgrid thermal diffusion coefficient (default `0.0`).
 f_al : Float64, optional
     Simulated chondritic Al abundance in atoms/kg (default `F_AL`).
+seed : Int, optional
+    Marker placement RNG seed in `SolverConfig` (default 42).
 
 Returns
 -------
@@ -803,6 +833,7 @@ function run_transient_spherical_conduction(
     rhocp_air::Float64=RHOCP_AIR,
     dsubgridt::Float64=0.0,
     f_al::Float64=F_AL,
+    seed::Int=SEED_DEFAULT,
 )
     cfg = make_spherical_conduction_config(;
         Nx=Nx,
@@ -816,6 +847,7 @@ function run_transient_spherical_conduction(
         rhocp_air=rhocp_air,
         dsubgridt=dsubgridt,
         f_al=f_al,
+        seed=seed,
     )
     st = mktempdir() do tmpdir
         redirect_stdout(devnull) do
@@ -879,20 +911,26 @@ function run_transient_spherical_conduction(
 end
 
 """
-    evaluate_spherical_conduction_benchmark() -> NamedTuple
+    evaluate_spherical_conduction_benchmark(; seed::Int=SEED_DEFAULT) -> NamedTuple
 
-Run the steady and transient spherical conduction benchmarks and return all 10 validation metrics.
+Run the steady (`Nx = NX_COARSE` and `NX_FINE`) and transient (`Nx = NX_COARSE` and `NX_FINE`)
+spherical conduction benchmarks and return all 10 validation metrics.
+
+Parameters
+----------
+seed : Int, optional
+    Marker placement RNG seed in `SolverConfig` (default 42).
 
 Returns
 -------
 NamedTuple
     Steady and transient benchmark outputs, 1D finite-volume comparison at `r_fv[1]`, mode-truncation residual, and `metrics` dictionary.
 """
-function evaluate_spherical_conduction_benchmark()
-    s33 = run_steady_spherical_conduction(33)
-    s65 = run_steady_spherical_conduction(65)
-    t33 = run_transient_spherical_conduction(33)
-    t65 = run_transient_spherical_conduction(65)
+function evaluate_spherical_conduction_benchmark(; seed::Int=SEED_DEFAULT)
+    s33 = run_steady_spherical_conduction(NX_COARSE)
+    s65 = run_steady_spherical_conduction(NX_FINE)
+    t33 = run_transient_spherical_conduction(NX_COARSE; seed=seed)
+    t65 = run_transient_spherical_conduction(NX_FINE; seed=seed)
 
     r_fv, T_fv = solve_1d_spherical_fv(500)
     dT_be_r1 = analytical_T_BE(r_fv[1]; n_modes=500) - T_SURF
@@ -955,7 +993,7 @@ end
 """
     check_physics_regression_bands(metrics::Dict{String,Float64}, record_path::String) -> Tuple{Bool,Vector{String}}
 
-Check that each steady and transient physics metric lies within its machine-independent regression
+Check that each steady and transient physics metric lies within its regression
 band (`PHYSICS_REGRESSION_BANDS`) around the recorded value in `record_path`.
 
 Parameters
@@ -1018,11 +1056,23 @@ function check_physics_regression_bands(
     return (isempty(errors), errors)
 end
 
+function _same_julia_major_minor(
+    recorded_ver::AbstractString, current_ver::VersionNumber=VERSION
+)::Bool
+    m = match(r"^v?(\d+)\.(\d+)(?:\.|\b|$)", strip(recorded_ver))
+    m === nothing && return false
+    return parse(Int, m.captures[1]) == current_ver.major &&
+           parse(Int, m.captures[2]) == current_ver.minor
+end
+
 """
     check_validation_reproducibility(bench, record_path::String; check_recorded_values::Bool=true) -> Tuple{Bool,Vector{String}}
 
 Compare freshly evaluated benchmark metrics, reference values, physics regression bands, and
-section-scoped configuration hashes against a committed TOML validation record.
+section-scoped configuration hashes against a committed TOML validation record. Recorded-value
+replay (`rtol = 1e-6`, `atol` bounds from `REPLAY_ATOL_BOUNDS`) runs when `check_recorded_values`
+is `true` and `VERSION` major.minor matches `metadata.julia_version`; physics regression bands
+(`PHYSICS_REGRESSION_BANDS`) always run.
 
 Parameters
 ----------
@@ -1031,7 +1081,7 @@ bench : NamedTuple
 record_path : String
     Path to the TOML validation record file.
 check_recorded_values : Bool, optional
-    Whether to check replay tolerance (`rtol = 1e-6`, `atol` from `REPLAY_NOISE_ATOLS`) against recorded values (default `true`).
+    Whether to check replay tolerance (`rtol = 1e-6`, `atol` from `REPLAY_ATOL_BOUNDS`) when Julia major.minor matches (default `true`).
 
 Returns
 -------
@@ -1054,20 +1104,28 @@ function check_validation_reproducibility(
     ok_schema, errs = validate_record_dict(raw; require_doc_pages=false)
     errors = copy(errs)
 
-    cfg65 = make_spherical_conduction_config(; Nx=65)
+    cfg65 = make_spherical_conduction_config(; Nx=NX_FINE)
     ok_lit, lit_errs = check_reference_literals_match_config(cfg65)
     if !ok_lit
         append!(errors, lit_errs)
     end
 
+    meta_sec = if raw isa AbstractDict && get(raw, "metadata", nothing) isa AbstractDict
+        raw["metadata"]
+    else
+        Dict{String,Any}()
+    end
     expected_sha = canonical_config_sha256(cfg65)
-    recorded_sha = String(get(get(raw, "metadata", Dict()), "config_sha256", ""))
+    recorded_sha = string(get(meta_sec, "config_sha256", ""))
     if recorded_sha != expected_sha
         push!(
             errors,
             "Recorded config_sha256 ($recorded_sha) does not match canonical config SHA-256 ($expected_sha)",
         )
     end
+
+    recorded_julia_ver = string(get(meta_sec, "julia_version", ""))
+    run_replay = check_recorded_values && _same_julia_major_minor(recorded_julia_ver)
 
     expected_cfg = expected_config_summary(cfg65)
     rec_cfg = get(raw, "config", Dict{String,Any}())
@@ -1135,8 +1193,8 @@ function check_validation_reproducibility(
                 "Measured metric '$mid' = $measured fails tolerance ($comp, ref=$ref, atol=$atol, rtol=$rtol)",
             )
         end
-        if check_recorded_values
-            replay_atol = get(REPLAY_NOISE_ATOLS, mid, 1.0e-12)
+        if run_replay
+            replay_atol = get(REPLAY_ATOL_BOUNDS, mid, 1.0e-12)
             if !isapprox(measured, recorded; rtol=REPLAY_RTOL, atol=replay_atol)
                 push!(
                     errors,

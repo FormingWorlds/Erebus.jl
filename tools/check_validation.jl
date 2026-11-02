@@ -11,7 +11,9 @@ const DEFAULT_SPHERICAL_RECORD = normpath(
 """
     run_validation_check(record_path::String=DEFAULT_SPHERICAL_RECORD; bench=nothing) -> Bool
 
-Execute the spherical conduction validation benchmark and verify schema and metric reproducibility against `record_path`.
+Execute the spherical conduction validation benchmark and verify schema and metric reproducibility
+against `record_path`. Requires `SphericalConductionValidation` (`benchmarks/validation_spherical_conduction.jl`)
+to be loaded in `Main` before calling (loaded automatically when `tools/check_validation.jl` is run as a script).
 
 Parameters
 ----------
@@ -70,7 +72,9 @@ end
 """
     run_validation_cli(args::Vector{String}=ARGS; bench=nothing) -> Int
 
-Run the command-line validation check for the spherical conduction record.
+Run the command-line validation check for the spherical conduction record. Requires
+`SphericalConductionValidation` (`benchmarks/validation_spherical_conduction.jl`) to be loaded
+in `Main` before calling.
 
 Parameters
 ----------
