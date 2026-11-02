@@ -53,7 +53,7 @@ flux_w, flux_e, flux_n, flux_s : Float64
 dx, dy : Float64
     Cell sizes [m].
 w_cell : Float64
-    Sum of the marker weights in the cell. Must be positive.
+    Sum of the marker weights of a full cell. Must be positive.
 dt_sub : Float64
     Substep length [s]. Must be positive.
 
@@ -472,6 +472,8 @@ function apply_metal_segregation!(
         end
     end
 
+    # The grid node takes the heat over the whole cell, also where a rim cell is part air.
+    markers_full_cell = (dx_val * dy_val) / (coords.dxm * coords.dym)
     # Normalize cell averages
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
         w_c = W_cell[i, j]
@@ -943,7 +945,7 @@ function apply_metal_segregation!(
                     F_s,
                     dx_val,
                     dy_val,
-                    w_c,
+                    w_c * max(1.0, markers_full_cell / max(M_rock_markers[i, j], 1)),
                     dt_sub,
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
@@ -1387,6 +1389,8 @@ function apply_silicate_melt_segregation!(
         end
     end
 
+    # The grid node takes the heat over the whole cell, also where a rim cell is part air.
+    markers_full_cell = (dx_val * dy_val) / (coords.dxm * coords.dym)
     # Normalize cell averages
     @inbounds for j in 1:Nx_val, i in 1:Ny_val
         w_c = W_cell[i, j]
@@ -1891,7 +1895,7 @@ function apply_silicate_melt_segregation!(
                     F_s,
                     dx_val,
                     dy_val,
-                    w_c,
+                    w_c * max(1.0, markers_full_cell / max(M_rock_markers[i, j], 1)),
                     dt_sub,
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub

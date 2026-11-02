@@ -187,13 +187,13 @@ Core formation releases gravitational potential energy as heavy iron drops towar
 
 $$Q_{\text{seg}} = \Delta\rho \, g \, J$$
 
-Without limits on the flux, $J = \phi_m v_{\text{seg}}$. The code takes $J$ from the realised face fluxes of each substep, so metal that cannot move, for example in a packed core, releases no heat.
+Without limits on the flux, $J$ is the mobile metal fraction, which excludes the trapped residual metal, times $v_{\text{seg}}$. The code takes $J$ from the realised face fluxes of each substep, so metal that cannot move, for example in a packed core, releases no heat.
 
 Cell-averaged dissipation is accumulated onto the corresponding staggered pressure node $(i+1, j+1)$ of `Q_seg_grid` and acts as a thermal source in the planetary energy balance:
 
 $$\rho C_p \frac{DT}{dt} = \nabla \cdot (K \nabla T) + H_{\text{radio}} + Q_{\text{seg}} + Q_{\text{shear}}$$
 
-The total release follows the gravitational energy of the body, which scales with $R^2$ at fixed density. It is small in a planetesimal: the mean heating is about 0.01 to 0.1 K at $R = 50\text{ km}$, and a rough estimate gives of order 10 K at $R = 500\text{ km}$. Local heating along the path of the metal can be larger.
+The release per kg of rock scales with $R^2$ at fixed density. It is small in a planetesimal: the mean heating is about 0.01 to 0.1 K at $R = 50\text{ km}$, and a rough estimate gives of order 10 K at $R = 500\text{ km}$. Local heating along the path of the metal can be larger.
 
 ---
 

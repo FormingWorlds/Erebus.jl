@@ -2031,7 +2031,7 @@ using JLD2
         @testset "Segregation heat follows the moved metal" begin
             function metal_body(; X0, rplanet=50000.0)
                 coords_e = GridCoordinates(
-                    GridConfig(; Nx=33, Ny=33, xsize=140000.0, ysize=140000.0)
+                    GridConfig(; Nx=33, Ny=49, xsize=140000.0, ysize=140000.0)
                 )
                 nm = coords_e.Nxm * coords_e.Nym
                 xm_e, ym_e = zeros(nm), zeros(nm)
@@ -2118,7 +2118,7 @@ using JLD2
                 end
                 release = pe_start - potential(body.Xfe)
                 @test !iszero(release)
-                @test 0.5 < heat / release < 1.5
+                @test 0.9 < heat / release < 1.15
             end
         end
 
