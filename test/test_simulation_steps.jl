@@ -553,7 +553,7 @@ end
             w_body = w_of(phi_body)
             hr_al_metal, _, _, _ = al_only(; phi_marker=1.0, phi_body=phi_body)
             hr_fe_metal, _, q_fe, _ = fe_only(; phi_marker=1.0, phi_body=phi_body)
-            @test hr_al_metal == 0.0
+            @test iszero(hr_al_metal)
             @test isapprox(hr_fe_metal, rho_m * q_fe / 0.182; rtol=1e-12)
             hr_al_rock, q_al, _, _ = al_only(; phi_marker=0.0, phi_body=phi_body)
             hr_fe_rock, _, _, _ = fe_only(; phi_marker=0.0, phi_body=phi_body)
