@@ -361,14 +361,20 @@ function compute_spherical_metric_heat_source!(
             r2 = dx_c^2 + dy_c^2
             if r2 <= rplanet2
                 # Face fluxes keep the term finite across a conductivity jump.
-                q_x = 0.5 * (
-                    KX[i, j] * (tk[i, j + 1] - tk[i, j]) +
-                    KX[i, j - 1] * (tk[i, j] - tk[i, j - 1])
-                ) * inv_dx
-                q_y = 0.5 * (
-                    KY[i, j] * (tk[i + 1, j] - tk[i, j]) +
-                    KY[i - 1, j] * (tk[i, j] - tk[i - 1, j])
-                ) * inv_dy
+                q_x =
+                    0.5 *
+                    (
+                        KX[i, j] * (tk[i, j + 1] - tk[i, j]) +
+                        KX[i, j - 1] * (tk[i, j] - tk[i, j - 1])
+                    ) *
+                    inv_dx
+                q_y =
+                    0.5 *
+                    (
+                        KY[i, j] * (tk[i + 1, j] - tk[i, j]) +
+                        KY[i - 1, j] * (tk[i, j] - tk[i - 1, j])
+                    ) *
+                    inv_dy
                 Q_metric[i, j] = (dx_c * q_x + dy_c * q_y) / (r2 + eps_r2)
             end
         end
