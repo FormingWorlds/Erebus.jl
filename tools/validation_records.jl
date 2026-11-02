@@ -67,7 +67,10 @@ function render_validation_markdown_block(data::Dict{String,Any})::String
     commit_short = first(String(meta["src_commit"]), 8)
     cfg_short = first(String(meta["config_sha256"]), 12)
     lines = String[
+        "```@raw html",
         "<!-- VALIDATION_RECORD_START: $(rec_id) -->",
+        "```",
+        "",
         "**Validation record**: `benchmarks/records/$(rec_id).toml` (Source commit `$(commit_short)`, config SHA-256 `$(cfg_short)`)",
         "",
         "| Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |",
@@ -92,12 +95,52 @@ function render_validation_markdown_block(data::Dict{String,Any})::String
             "| `$(case_str)` | $(desc_str) | $(nx_str) | `$(val_str)` | `$(ref_str)` | `$(tol_str)` | $(unit_str) | **$(stat_str)** |",
         )
     end
-    push!(lines, "<!-- VALIDATION_RECORD_END: $(rec_id) -->")
+    append!(lines, ["", "```@raw html", "<!-- VALIDATION_RECORD_END: $(rec_id) -->", "```"])
     return join(lines, "\n")
 end
 
 """
-    validate_record_dict(data::Dict{String,Any}; docs_dir::String=VALIDATION_DOCS_DIR, require_doc_pages::Bool=false) -> Tuple{Bool,Vector{String}}
+    update_record_doc_block!(data::Dict{String,Any}; docs_dir::String=VALIDATION_DOCS_DIR) -> Bool
+
+Replace the record table on the documentation page of a validation record.
+
+Parameters
+----------
+data : Dict{String,Any}
+    Parsed TOML dictionary of a validation record.
+docs_dir : String, optional
+    Root directory of documentation markdown files.
+
+Returns
+-------
+Bool
+    `true` if the page holds the rendered table afterwards, `false` if the page or its markers
+    do not exist.
+"""
+function update_record_doc_block!(
+    data::Dict{String,Any}; docs_dir::String=VALIDATION_DOCS_DIR
+)::Bool
+    rec_id = String(data["metadata"]["id"])
+    doc_path = joinpath(docs_dir, String(data["metadata"]["page"]))
+    isfile(doc_path) || return false
+    doc_text = read(doc_path, String)
+    start_mark = "```@raw html\n<!-- VALIDATION_RECORD_START: $(rec_id) -->"
+    end_mark = "<!-- VALIDATION_RECORD_END: $(rec_id) -->\n```"
+    first_at = findfirst(start_mark, doc_text)
+    last_at = findfirst(end_mark, doc_text)
+    (first_at === nothing || last_at === nothing) && return false
+    block = render_validation_markdown_block(data)
+    write(
+        doc_path,
+        doc_text[1:prevind(doc_text, first(first_at))] *
+        block *
+        doc_text[nextind(doc_text, last(last_at)):end],
+    )
+    return true
+end
+
+"""
+    validate_record_dict(data::Dict{String,Any}; docs_dir::String=VALIDATION_DOCS_DIR, require_doc_pages::Bool=false, check_doc_sync::Bool=true) -> Tuple{Bool,Vector{String}}
 
 Validate the schema, metric tolerances, and optional documentation block of a validation record.
 Metrics using `comparison = "le_atol"` represent upper-bound magnitude checks and must store
@@ -111,6 +154,9 @@ docs_dir : String, optional
     Root directory of documentation markdown files.
 require_doc_pages : Bool, optional
     Whether a missing target documentation page is treated as an error.
+check_doc_sync : Bool, optional
+    Whether to compare the page with the record. A candidate record that is not yet the
+    committed one passes `false`.
 
 Returns
 -------
@@ -121,6 +167,7 @@ function validate_record_dict(
     data::Dict{String,Any};
     docs_dir::String=VALIDATION_DOCS_DIR,
     require_doc_pages::Bool=false,
+    check_doc_sync::Bool=true,
 )::Tuple{Bool,Vector{String}}
     errors = String[]
     for section in ("metadata", "config", "metrics")
@@ -237,7 +284,7 @@ function validate_record_dict(
         end
     end
 
-    if meta_keys_ok && all_metric_keys_ok && haskey(meta, "page")
+    if check_doc_sync && isempty(errors) && haskey(meta, "page")
         doc_path = joinpath(docs_dir, String(meta["page"]))
         if isfile(doc_path)
             doc_text = read(doc_path, String)

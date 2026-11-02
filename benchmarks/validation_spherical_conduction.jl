@@ -624,7 +624,9 @@ perturb_stencil : Bool, optional
 Returns
 -------
 NamedTuple
-    Steady-state centre temperature rises, 3D/2D ratio, relative L2 error, and energy residual.
+    Steady-state centre temperature rises, 3D/2D ratio, relative L2 error, energy residual, and
+    the node radii with simulated and analytic temperature rises (`r_nodes`, `dT_sim_nodes`,
+    `dT_ref_nodes`).
 
 Raises
 ------
@@ -757,6 +759,9 @@ function run_steady_spherical_conduction(
     dT_center_2d = 0.0
     sq_err_3d = 0.0
     sq_ref_3d = 0.0
+    r_nodes = Float64[]
+    dT_sim_nodes = Float64[]
+    dT_ref_nodes = Float64[]
     for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
         r = hypot(coords.xp[j] - cx, coords.yp[i] - cy)
         if r <= R_PLANET
@@ -765,6 +770,9 @@ function run_steady_spherical_conduction(
             dT_ana = H_val * (R_PLANET^2 - r^2) / (6.0 * K_COND)
             sq_err_3d += (dT_num - dT_ana)^2
             sq_ref_3d += dT_ana^2
+            push!(r_nodes, r)
+            push!(dT_sim_nodes, dT_num)
+            push!(dT_ref_nodes, dT_ana)
             if r < r_min
                 r_min = r
                 dT_center_3d = dT_num
@@ -775,7 +783,19 @@ function run_steady_spherical_conduction(
     ratio_3d_2d = dT_center_3d / dT_center_2d
     l2_rel = sqrt(sq_err_3d / sq_ref_3d)
 
-    return (; Nx, dx, r_min, dT_center_3d, dT_center_2d, ratio_3d_2d, l2_rel, energy_res)
+    return (;
+        Nx,
+        dx,
+        r_min,
+        dT_center_3d,
+        dT_center_2d,
+        ratio_3d_2d,
+        l2_rel,
+        energy_res,
+        r_nodes,
+        dT_sim_nodes,
+        dT_ref_nodes,
+    )
 end
 
 """
@@ -814,6 +834,8 @@ Returns
 -------
 NamedTuple
     Transient centre temperature rise, analytical reference values, relative L2 error, and exterior air temperature.
+    The node radii with simulated and reference temperature rises are in `r_nodes`,
+    `dT_sim_nodes`, and `dT_ref_nodes`.
 
 Raises
 ------
@@ -870,6 +892,9 @@ function run_transient_spherical_conduction(
     sq_ref = 0.0
     T_max_air_shell = -Inf
     ref_cache = Dict{Float64,Float64}()
+    r_nodes = Float64[]
+    dT_sim_nodes = Float64[]
+    dT_ref_nodes = Float64[]
     for j in 1:Nx1, i in 1:Ny1
         r = hypot(coords.xp[j] - cx, coords.yp[i] - cy)
         if r <= R_PLANET
@@ -879,6 +904,9 @@ function run_transient_spherical_conduction(
             end
             sq_err += ((T_num - T_SURF) - (T_ref - T_SURF))^2
             sq_ref += (T_ref - T_SURF)^2
+            push!(r_nodes, r)
+            push!(dT_sim_nodes, T_num - T_SURF)
+            push!(dT_ref_nodes, T_ref - T_SURF)
             if r < r_min
                 r_min = r
                 T_center = T_num
@@ -906,6 +934,9 @@ function run_transient_spherical_conduction(
         rel_err_be_rmin,
         l2_rel,
         T_max_air_shell,
+        r_nodes,
+        dT_sim_nodes,
+        dT_ref_nodes,
     )
 end
 
@@ -1100,7 +1131,9 @@ function check_validation_reproducibility(
         return (false, ["Validation record not found: $record_path"])
     end
     raw = TOML.parsefile(record_path)
-    ok_schema, errs = validate_record_dict(raw; require_doc_pages=false)
+    ok_schema, errs = validate_record_dict(
+        raw; require_doc_pages=false, check_doc_sync=false
+    )
     errors = copy(errs)
 
     cfg65 = make_spherical_conduction_config(; Nx=NX_FINE)

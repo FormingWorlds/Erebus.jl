@@ -262,7 +262,7 @@ To simulate the complete 0 to 3.5 Ma sequence from a primordial cold start:
 ## Related Documentation
 
 - [Iron Core Formation & Metal Segregation (Explanations)](../explanations/core_formation.md)
-- [Iron Core Formation Verification (Physical Benchmarks)](../reference/benchmarks/core_formation.md)
+- [Iron Core Formation Verification (Physics Function Reference)](../reference/benchmarks/core_formation.md)
 - [Silicate Melting & Soft Turbulence (Explanations)](../explanations/rock_melting.md)
 - [Degassing & Cold Venting (Explanations)](../explanations/degassing_and_venting.md)
 - [Configuration Schema Reference](../reference/config_schema.md)

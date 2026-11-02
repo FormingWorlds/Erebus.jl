@@ -330,7 +330,7 @@ function write_spherical_conduction_record(
     toml_str = String(take!(io))
     candidate_dict = TOML.parse(toml_str)
     ok_valid, valid_errs = SphericalConductionValidation.validate_record_dict(
-        candidate_dict; require_doc_pages=false
+        candidate_dict; require_doc_pages=false, check_doc_sync=false
     )
     if !ok_valid
         error(
@@ -341,6 +341,10 @@ function write_spherical_conduction_record(
 
     mkpath(dirname(record_path))
     write(record_path, toml_str)
+    if abspath(record_path) == abspath(DEFAULT_EXPORT_RECORD_PATH)
+        SphericalConductionValidation.update_record_doc_block!(candidate_dict) ||
+            @warn "Documentation page has no record table to update"
+    end
     return bench_res
 end
 

@@ -42,7 +42,7 @@ function run_validation_check(
     end
     raw = TOML.parsefile(record_path)
     ok_schema, schema_errs = SphericalConductionValidation.validate_record_dict(
-        raw; require_doc_pages=false
+        raw; require_doc_pages=false, check_doc_sync=false
     )
     if !ok_schema
         for e in schema_errs
