@@ -1,23 +1,23 @@
 {
   "core_formation_benchmark": {
     "degassed_mass": 0.0,
-    "max_temperature": 1372.5388304544706,
+    "max_temperature": 1350.1020810724065,
     "core_radius": 0.0,
-    "total_mass": 2.4208799449342562e13,
-    "total_energy": 3.745972228121388e19
+    "total_mass": 2.4211526898705465e13,
+    "total_energy": 3.736177750669473e19
   },
   "magma_ocean_cooling_turb_on_32": {
     "degassed_mass": 0.0,
-    "max_temperature": 1850.0000038420173,
+    "max_temperature": 1850.0000038420176,
     "core_radius": 0.0,
     "total_mass": 2.23999757274049e13,
-    "total_energy": 6.577884652670231e19
+    "total_energy": 6.5778846526702305e19
   },
   "test_quick": {
     "degassed_mass": 0.0,
-    "max_temperature": 173.36023751453806,
+    "max_temperature": 173.35509304201628,
     "core_radius": 0.0,
     "total_mass": 1.960285900598855e13,
-    "total_energy": 1.1147418769243193e19
+    "total_energy": 1.1147303277855175e19
   }
 }
