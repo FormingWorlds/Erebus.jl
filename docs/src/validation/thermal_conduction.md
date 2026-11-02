@@ -122,7 +122,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_conduction -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `1a3fa734`, config SHA-256 `333cd88874b1`)
+**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `3e0f0b7e`, config SHA-256 `385b473b7ebe`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -130,11 +130,11 @@ The second command needs NumPy and Matplotlib.
 | `steady` | Steady 3D-to-2D centre warming ratio (Nx=65) | 65 | `6.6856e-01` | `6.6667e-01` | `atol=1.00e-02, rtol=1.50e-02` | dimensionless | **PASS** |
 | `steady` | Steady radial profile L2 relative error (r <= R, Nx=33) | 33 | `1.1413e-01` | `0.0000e+00` | `<= 1.50e-01` | dimensionless | **PASS** |
 | `steady` | Steady radial profile L2 relative error (r <= R, Nx=65) | 65 | `6.4513e-02` | `0.0000e+00` | `<= 8.00e-02` | dimensionless | **PASS** |
-| `steady` | Steady discrete energy conservation residual (Nx=65) | 65 | `3.7492e-14` | `0.0000e+00` | `<= 1.00e-11` | dimensionless | **PASS** |
+| `steady` | Steady discrete energy conservation residual (Nx=65) | 65 | `3.7796e-14` | `0.0000e+00` | `<= 1.00e-11` | dimensionless | **PASS** |
 | `transient` | Step-averaged analytical BE series vs 1D spherical FV relative difference | 1D | `3.9330e-08` | `0.0000e+00` | `<= 1.00e-05` | dimensionless | **PASS** |
 | `transient` | Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65) | 65 | `4.9084e+02` | `5.0708e+02` | `atol=2.50e+01, rtol=5.00e-02` | K | **PASS** |
-| `transient` | Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65) | 65 | `8.2867e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
-| `transient` | Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33) | 65 | `4.2047e-01` | `0.0000e+00` | `<= 6.00e-01` | dimensionless | **PASS** |
+| `transient` | Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65) | 65 | `8.2830e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `transient` | Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33) | 65 | `4.2028e-01` | `0.0000e+00` | `<= 6.00e-01` | dimensionless | **PASS** |
 | `transient` | Maximum sticky-air temperature in r >= R + dx (Nx=65) | 65 | `1.7000e+02` | `1.7000e+02` | `atol=1.00e-02, rtol=0.00e+00` | K | **PASS** |
 
 ```@raw html
