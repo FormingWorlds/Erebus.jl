@@ -1,12 +1,12 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "882be97fb4696c1b53803ce18365333412772ceb",
+    "commit": "0be31ce0c8c9809bc9a8b65384ba32d962bf8f2d",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "b1cc6fbef25911c8137bc24a2720d2a9fea79c8e97657590d8b28cbcd4f49931",
-            "size_bytes": 5306691
+            "sha256": "58f4a63fd82fe3667a514a050b2a22a7d442a22704108beece4c6ba2a731891f",
+            "size_bytes": 5316075
         },
         "hydrothermal_benchmark": {
             "config_path": "configs/hydrothermal_benchmark.toml",
@@ -17,23 +17,23 @@
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "a12ed8297f5e3771b87e3d97dad8da07d617856c800c8ab636ffcc611b07a454",
-            "size_bytes": 24692552
+            "sha256": "77f06c192b7194b78f1b5a773d40377b7b7e8b3659b3b54b98fa412031e2cc60",
+            "size_bytes": 24727536
         },
         "magma_ocean_cooling_turb_on_32": {
             "config_path": "configs/magma_ocean_cooling_turb_on_32.toml",
             "filename": "magma_ocean_cooling_turb_on_32.jld2",
-            "sha256": "6fee3f78db9d6a51e750a6546bd654a62af03e30556a2639b7b410cb98566a37",
-            "size_bytes": 4388302
+            "sha256": "ccfd1bab8f823bce5111529e997ec8318ebbe9bad048e78435c1a77dcdea097d",
+            "size_bytes": 4397686
         },
         "test_quick": {
             "config_path": "configs/test_quick.toml",
             "filename": "test_quick.jld2",
-            "sha256": "32e13c69a4c92b328b84e53b08006a437fb29f0c2122bac9e9c70e7f2c2f15dd",
-            "size_bytes": 4388302
+            "sha256": "7692bd2e67e2cca0f4d862dba7c35a13037ae885b40e9ff7ccaeecdda8780851",
+            "size_bytes": 4397686
         }
     },
-    "generated_at": "2026-11-02T19:54:28Z",
+    "generated_at": "2026-11-02T20:18:31Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }
