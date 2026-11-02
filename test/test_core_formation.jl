@@ -2028,6 +2028,96 @@ using JLD2
             @test all(isfinite, Q_seg_grid)
         end
 
+        @testset "Segregation heat follows the moved metal" begin
+            function metal_body(; X0, rplanet=50000.0)
+                coords_e = GridCoordinates(
+                    GridConfig(; Nx=33, Ny=33, xsize=140000.0, ysize=140000.0)
+                )
+                nm = coords_e.Nxm * coords_e.Nym
+                xm_e, ym_e = zeros(nm), zeros(nm)
+                k = 0
+                for j in 1:(coords_e.Nxm), i in 1:(coords_e.Nym)
+                    k += 1
+                    xm_e[k] = (j - 0.5) * coords_e.xsize / coords_e.Nxm
+                    ym_e[k] = (i - 0.5) * coords_e.ysize / coords_e.Nym
+                end
+                r_e = hypot.(xm_e .- coords_e.xcenter, ym_e .- coords_e.ycenter)
+                tm_e = [r <= rplanet ? 1 : 3 for r in r_e]
+                Xfe_e = [r <= rplanet ? X0 : 0.0 for r in r_e]
+                return (;
+                    coords=coords_e,
+                    nm,
+                    xm=xm_e,
+                    ym=ym_e,
+                    r=r_e,
+                    tm=tm_e,
+                    tk=[r <= rplanet ? 1350.0 : 200.0 for r in r_e],
+                    phi=[r <= rplanet ? 0.05 : 1.0 for r in r_e],
+                    Xfe=Xfe_e,
+                    Xfem=[r <= rplanet ? 1.0 : 0.0 for r in r_e],
+                    Q=zeros(coords_e.Ny1, coords_e.Nx1),
+                )
+            end
+            cfg_e = CoreFormationConfig(;
+                percolation_active=true, settling_active=false, segregation_heating=true
+            )
+            run_body!(b, cfg, dt; spherical) = apply_metal_segregation!(
+                b.xm,
+                b.ym,
+                b.tm,
+                b.tk,
+                b.phi,
+                b.Xfe,
+                b.Xfem,
+                b.nm,
+                dt,
+                cfg;
+                coords=b.coords,
+                rplanet=50000.0,
+                Q_seg_grid=b.Q,
+                spherical_metric=spherical,
+            )
+
+            # A packed body cannot move metal, so it releases no heat.
+            for spherical in (false, true)
+                packed = metal_body(; X0=cfg_e.phi_pack)
+                res_packed = run_body!(packed, cfg_e, 1.0e9; spherical=spherical)
+                @test res_packed.max_v_seg > 0.0
+                @test iszero(res_packed.total_dissipation_energy)
+                @test all(iszero, packed.Q)
+            end
+
+            # Over a long time the heat equals the potential energy released.
+            for spherical in (false, true)
+                body = metal_body(; X0=0.20)
+                weight = spherical ? 2.0 .* body.r : ones(body.nm)
+                Am = body.coords.dxm * body.coords.dym
+                drho = cfg_e.rho_metal - 3000.0
+                potential(X) = sum(
+                    X[m] * weight[m] * Am * drho * 0.1 * body.r[m]^2 / (2.0 * 50000.0) for
+                    m in 1:(body.nm) if body.tm[m] < 3
+                )
+                pe_start = potential(body.Xfe)
+                heat = 0.0
+                dt_e = 1.0e10
+                xp = body.coords.xp
+                yp = body.coords.yp
+                for _ in 1:200
+                    fill!(body.Q, 0.0)
+                    run_body!(body, cfg_e, dt_e; spherical=spherical)
+                    for j in 2:(body.coords.Nx1 - 1), i in 2:(body.coords.Ny1 - 1)
+                        r_node = hypot(xp[j] - body.coords.xcenter, yp[i] - body.coords.ycenter)
+                        w_node = spherical ? 2.0 * r_node : 1.0
+                        heat += body.Q[i, j] * w_node * body.coords.dx * body.coords.dy * dt_e
+                    end
+                end
+                release = pe_start - potential(body.Xfe)
+                @test release > 0.0
+                println("PROBE spherical=", spherical, " heat/release=", heat / release, " moved=", sum(abs, body.Xfe .- 0.2 .* (body.tm .< 3)))
+                @test 0.5 < heat / release < 1.5
+            end
+        end
+
         @testset "Dynamic Convective Velocity and Rouse Number Coupling" begin
             # Flow field: convective velocity ~ 1e-4 m/s, settling velocity ~ 1e-5 m/s -> R ~ 0.1
             u_conv = 1.0e-4
