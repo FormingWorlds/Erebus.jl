@@ -173,6 +173,7 @@ function make_spherical_conduction_config(;
             ycenter=L_BOX / 2.0,
             spherical_metric=spherical_metric,
             metric_regularization_cells=reg_cells,
+            gravity_mode=:enclosed_mass,
         ),
         time=TimeConfig(;
             start_time=start_time,
