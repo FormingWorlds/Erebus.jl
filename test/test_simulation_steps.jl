@@ -455,12 +455,19 @@ end
         # fixed concentrations per kg silicate and per kg metal above it.
         @testset "Radionuclide budget with a metal group" begin
             function marker_heating(;
-                phi_marker, phi_body, al, fe, phim=0.0, has_metal=true
+                phi_marker,
+                phi_body,
+                al,
+                fe,
+                phim=0.0,
+                has_metal=true,
+                tm=1,
+                rho_crust=nothing,
             )
                 st, cr, c = create_mock_simulation_state(;
                     marknum=1,
                     r_marker=0.0,
-                    tm_val=1,
+                    tm_val=tm,
                     phi_val=phim,
                     has_metal=has_metal,
                     Xfe_bulk_val=phi_marker,
@@ -470,6 +477,19 @@ end
                         "thermodynamics.hr_fe" => fe,
                     ),
                 )
+                if rho_crust !== nothing
+                    with_field(x, name, value) = typeof(x)(
+                        (
+                            n == name ? value : getfield(x, n) for
+                            n in fieldnames(typeof(x))
+                        )...,
+                    )
+                    rho = c.materials.rhosolidm
+                    densities = SVector{3,Float64}(rho[1], rho_crust, rho[3])
+                    c = with_field(
+                        c, :materials, with_field(c.materials, :rhosolidm, densities)
+                    )
+                end
                 radiogenic_heating!(st, cr, c)
                 th = c.thermodynamics
                 q_al = Erebus.Q_radiogenic(
@@ -557,6 +577,31 @@ end
                 )
                 @test isapprox(hr_low + hr_high, 2.0 * hr_uniform; rtol=1e-12)
             end
+
+            # Both nuclides together add up, below and above the CI iron content.
+            for phi in (0.015, 0.20)
+                hr_both, _, _, _ = marker_heating(;
+                    phi_marker=phi, phi_body=phi, al=true, fe=true
+                )
+                hr_al, _, _, _ = al_only(; phi_marker=phi, phi_body=phi)
+                hr_fe, _, _, _ = fe_only(; phi_marker=phi, phi_body=phi)
+                @test isapprox(hr_both, hr_al + hr_fe; rtol=1e-12)
+            end
+
+            # A marker above the CI iron content in a body above it: only the weights change.
+            hr_al_m, q_al, _, _ = al_only(; phi_marker=0.3, phi_body=0.2)
+            hr_fe_m, _, q_fe, _ = fe_only(; phi_marker=0.3, phi_body=0.2)
+            @test isapprox(hr_al_m, 0.7 * rho_s * q_al / 0.818; rtol=1e-12)
+            @test isapprox(hr_fe_m, 0.3 * rho_m * q_fe / 0.182; rtol=1e-12)
+
+            # The body reference uses the mantle density; crust keeps its own silicate density.
+            rho_crust = 2800.0
+            hr_al_c, q_al, _, _ = al_only(;
+                phi_marker=0.05, phi_body=0.05, tm=2, rho_crust=rho_crust
+            )
+            @test isapprox(
+                hr_al_c, 0.95 * rho_crust * q_al / (1.0 - w_of(0.05)); rtol=1e-12
+            )
 
             # Porosity scales the whole solid.
             hr_dry, _, _, _ = fe_only(; phi_marker=0.05, phi_body=0.05)
@@ -1294,10 +1339,10 @@ end
             cfg_cut.thermodynamics.E_fe / tau_fe
         fac_al_cut = -expm1(-dt_cut / tau_al) / (dt_cut / tau_al)
         fac_fe_cut = -expm1(-dt_cut / tau_fe) / (dt_cut / tau_fe)
-        X_fe_cfg = X_FE_REF_CHONDRITE
+        x_ci = X_FE_REF_CHONDRITE
         hr_sol_cut =
-            (Q_al_t0 * fac_al_cut / (1.0 - X_fe_cfg)) * cfg_cut.materials.rhosolidm[t_mc]
-        hr_met_cut = (Q_fe_t0 * fac_fe_cut / X_fe_cfg) * cfg_cut.coreformation.rho_metal
+            (Q_al_t0 * fac_al_cut / (1.0 - x_ci)) * cfg_cut.materials.rhosolidm[t_mc]
+        hr_met_cut = (Q_fe_t0 * fac_fe_cut / x_ci) * cfg_cut.coreformation.rho_metal
         pf_mc = clamp(xfe_ref[m_c], 0.0, 1.0)
         hr_cut_oracle =
             (1.0 - phim_ref[m_c]) * ((1.0 - pf_mc) * hr_sol_cut + pf_mc * hr_met_cut)
@@ -1615,14 +1660,12 @@ end
                 cfg_acc.thermodynamics.f_fe *
                 cfg_acc.thermodynamics.ratio_fe *
                 cfg_acc.thermodynamics.E_fe / tau_fe_acc
-            X_fe_ref_acc = X_FE_REF_CHONDRITE
+            x_ci_acc = X_FE_REF_CHONDRITE
             fac_al_final = -expm1(-dt_acc_final / tau_al_acc) / (dt_acc_final / tau_al_acc)
             fac_fe_final = -expm1(-dt_acc_final / tau_fe_acc) / (dt_acc_final / tau_fe_acc)
             hrs_crust =
-                (Q_al_0 * fac_al_final / (1.0 - X_fe_ref_acc)) *
-                cfg_acc.materials.rhosolidm[2]
-            hrm_crust =
-                (Q_fe_0 * fac_fe_final / X_fe_ref_acc) * cfg_acc.coreformation.rho_metal
+                (Q_al_0 * fac_al_final / (1.0 - x_ci_acc)) * cfg_acc.materials.rhosolidm[2]
+            hrm_crust = (Q_fe_0 * fac_fe_final / x_ci_acc) * cfg_acc.coreformation.rho_metal
             phi_acc = cfg_acc.accretion.phi_accreted
             xfe_acc = cfg_acc.accretion.Xfe_bulk_accreted
             hr_acc_oracle =
@@ -1634,10 +1677,10 @@ end
             fac_al_pre_cut = -expm1(-dt_attempt1 / tau_al_acc) / (dt_attempt1 / tau_al_acc)
             fac_fe_pre_cut = -expm1(-dt_attempt1 / tau_fe_acc) / (dt_attempt1 / tau_fe_acc)
             hrs_crust_pre_cut =
-                (Q_al_0 * fac_al_pre_cut / (1.0 - X_fe_ref_acc)) *
+                (Q_al_0 * fac_al_pre_cut / (1.0 - x_ci_acc)) *
                 cfg_acc.materials.rhosolidm[2]
             hrm_crust_pre_cut =
-                (Q_fe_0 * fac_fe_pre_cut / X_fe_ref_acc) * cfg_acc.coreformation.rho_metal
+                (Q_fe_0 * fac_fe_pre_cut / x_ci_acc) * cfg_acc.coreformation.rho_metal
             hr_acc_attempt2_pre_cut =
                 (1.0 - phi_acc) *
                 ((1.0 - xfe_acc) * hrs_crust_pre_cut + xfe_acc * hrm_crust_pre_cut)

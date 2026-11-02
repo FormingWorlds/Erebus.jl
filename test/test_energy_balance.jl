@@ -323,7 +323,7 @@ using Test
         # Al per kg silicate stays at the CI value above the CI iron content
         expected_power_1 = M_bulk_1 * (1.0 - w_metal_val) * Q_al / 0.818
         ratio_1 = total_power_1 / expected_power_1
-        @test isapprox(ratio_1, 1.0; rtol=1e-3)
+        @test isapprox(ratio_1, 1.0; rtol=1e-12)
 
         # Case 2: Without metal group (chondritic reference mixture)
         hr_sol_chon, _, hr_met_chon = Erebus.calculate_radioactive_heating(

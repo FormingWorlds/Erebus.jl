@@ -138,18 +138,18 @@ $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla
 | $Q_{\text{adiabatic}}$ | Adiabatic compression/decompression heating | $\text{W/m}^3$ |
 | $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
 | $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |
-| $Q_{\text{radiogenic}}$ | Total radiogenic heat production rate: $Q_{\text{al}} + Q_{\text{fe}}$ | $\text{W/m}^3$ |
+| $Q_{\text{radiogenic}}$ | Total radiogenic heat production rate, from the phase powers in [Radiogenic Decay Kinetics](#Radiogenic-Decay-Kinetics) | $\text{W/m}^3$ |
 | $Q_{\text{seg}}$ | Gravitational dissipation heating from metal segregation | $\text{W/m}^3$ |
 | $Q_{\text{lat}}$ | Latent cooling rate from surface volatile sublimation | $\text{W/m}^3$ |
 
 ### Radiogenic Decay Kinetics
-Volumetric heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay is computed with the decay rate constant $\lambda = 1/\tau = \ln(2)/t_{1/2}$:
+Specific heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay, per kg of bulk CI chondrite, is computed with the decay rate constant $\lambda = 1/\tau = \ln(2)/t_{1/2}$:
 
-$$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}} \exp\left(-\frac{t}{\tau_{\text{al}}}\right) \rho_s$$
+$$Q_{\text{al}}(t) = f_{\text{al}} \left(\frac{^{26}\text{Al}}{^{27}\text{Al}}\right)_0 E_{\text{al}} \frac{1}{\tau_{\text{al}}} \exp\left(-\frac{t}{\tau_{\text{al}}}\right)$$
 
-$$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right) \rho_{\text{metal}}$$
+$$Q_{\text{fe}}(t) = f_{\text{fe}} \left(\frac{^{60}\text{Fe}}{^{56}\text{Fe}}\right)_0 E_{\text{fe}} \frac{1}{\tau_{\text{fe}}} \exp\left(-\frac{t}{\tau_{\text{fe}}}\right)$$
 
-where $\tau$ is the mean lifetime of each radioactive isotope, $\rho_s$ is solid silicate density, and $\rho_{\text{metal}}$ is the density of the metallic phase ($5450\text{ kg/m}^3$). The abundances $f_{\text{al}}$ and $f_{\text{fe}}$ are given per kg of bulk CI chondrite, which holds a total iron mass fraction $X_{\text{CI}} = 0.182$ (`X_FE_REF_CHONDRITE`). Aluminium stays in the silicate. Iron-60 follows the iron atoms, so it sits in the metal and in any oxidised iron that stays in the silicate.
+where $\tau$ is the mean lifetime of each radioactive isotope. The abundances $f_{\text{al}}$ and $f_{\text{fe}}$ are given per kg of bulk CI chondrite, which holds a total iron mass fraction $X_{\text{CI}} = 0.182$ (`X_FE_REF_CHONDRITE`). Aluminium stays in the silicate. Iron-60 follows the iron atoms, so it sits in the metal and in any oxidised iron that stays in the silicate.
 
 The split between the phases depends on how much metal the body holds. Let $w_{\text{m}}$ be the metal mass fraction of the body and $X_{\text{m}} = \min(w_{\text{m}}, X_{\text{CI}})$. With a `:metal` marker group, $w_{\text{m}}$ comes from `cfg.coreformation.Xfe_bulk` (a volume fraction, default `0.20`) through `metal_volume_to_mass_fraction`. Without the group, $w_{\text{m}} = X_{\text{CI}}$ and the metallic volume fraction comes from `chondritic_phi_fe`. The specific powers per kg of each phase are:
 
@@ -159,9 +159,15 @@ $$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}}$$
 
 $$Q_{\text{fe,silicate}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}} \frac{X_{\text{CI}} - X_{\text{m}}}{1 - X_{\text{m}}}$$
 
-This gives two regimes. If the metal holds no more iron than CI ($w_{\text{m}} \le X_{\text{CI}}$), the body is CI: the total power per kg of bulk rock is $Q_{\text{al}} + Q_{\text{fe}}$, and the rest of the iron stays in the silicate. If the metal holds more iron than CI, the silicate has no iron left and the body holds extra metal, so the $^{60}\text{Fe}$ power grows with the metal while the power per kg of each phase stays at its CI value.
+This gives two regimes. If the metal holds no more iron than CI ($w_{\text{m}} \le X_{\text{CI}}$), the body is CI: the power per kg of bulk rock is $Q_{\text{al}} + Q_{\text{fe}}$, and the rest of the iron stays in the silicate. If the metal holds more iron than CI, the silicate has no iron left and the body holds extra metal, so the $^{60}\text{Fe}$ power grows with the metal while the power per kg of each phase stays at its CI value.
 
-These concentrations belong to the body, not to a marker. Each marker weights them by its own metal volume fraction `Xfe_bulk[m]`, so the total power does not change when metal moves between markers. Accreted markers use the same concentrations as the body.
+A marker with porosity $\phi$ and metal volume fraction $\phi_{\text{fe}}$ (`Xfe_bulk[m]`) has the volumetric heating
+
+$$Q_{\text{radiogenic}} = (1 - \phi) \left[ (1 - \phi_{\text{fe}}) \rho_s \left(Q_{\text{al,silicate}} + Q_{\text{fe,silicate}}\right) + \phi_{\text{fe}} \rho_{\text{metal}} Q_{\text{fe,metal}} \right]$$
+
+where $\rho_s$ is solid silicate density and $\rho_{\text{metal}}$ is `cfg.coreformation.rho_metal`.
+
+These concentrations belong to the body, not to a marker, so the power does not change when metal moves between equal marker volumes. The value of $w_{\text{m}}$ comes from `Xfe_bulk` only. Accreted markers use the same concentrations with their own `Xfe_bulk_accreted`, so an accreted shell whose metal fraction differs from `Xfe_bulk` does not follow the CI bulk budget. Set the two values equal to keep the CI budget during accretion.
 
 Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $f_{\text{avg}}(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
 

@@ -454,7 +454,7 @@ Parameters controlling iron core formation, porous metal percolation, Stokes dro
 | `eta_metal` | `Float64` | `1.0e-2` | Pa s | Dynamic viscosity of liquid metal phase | $> 0$ |
 | `k_metal` | `Float64` | `40.0` | W/(m K) | Thermal conductivity of metallic phase | $> 0$ |
 | `rhocp_metal` | `Float64` | `4.0e6` | $\text{J/(m}^3\text{ K)}$ | Volumetric heat capacity of metallic phase | $> 0$ |
-| `Xfe_bulk` | `Float64` | `0.20` | - | Initial bulk metal volume fraction in planet interior | $\in [0, \phi_{\text{pack}}]$ |
+| `Xfe_bulk` | `Float64` | `0.20` | - | Initial bulk metal volume fraction in planet interior; also sets the radionuclide concentrations per phase | $\in [0, \phi_{\text{pack}}]$ |
 | `phi_pack` | `Float64` | `0.65` | - | Maximum packing fraction of segregated core metal | $\in (0, 1]$ |
 | `T_eutectic` | `Float64` | `1213.0` | K | Fe-FeS binary eutectic melting temperature | $> 0$ |
 | `dT_metal` | `Float64` | `50.0` | K | Temperature range for complete metal melting | $> 0$ |
@@ -701,7 +701,7 @@ transition_width = 0.10
 | `v_inf` | `Float64` | `0.0` | m/s | Impactor approach velocity at infinity | $\ge 0$ |
 | `cp_rock` | `Float64` | `1000.0` | $\text{J/(kg K)}$ | Rock specific heat capacity | $> 0$ |
 | `phi_accreted` | `Float64` | `0.35` | - | Initial porosity of accreted rock shell | $\in [0, 1]$ |
-| `Xfe_bulk_accreted` | `Float64` | `0.10` | - | Bulk metallic volume fraction of accreted shell | $\in [0, 1]$ |
+| `Xfe_bulk_accreted` | `Float64` | `0.10` | - | Bulk metallic volume fraction of accreted shell; radionuclide concentrations per phase come from `Xfe_bulk` | $\in [0, 1]$ |
 | `snowline_coupling` | `Bool` | `true` | - | Couple accreted volatiles to disk water snowline | `true` / `false` |
 | `T_snowline_cond` | `Float64` | `160.0` | K | Water condensation temperature threshold | $> 0$ |
 | `XWsolid_wet` | `Float64` | `0.40` | - | Hydrated silicate fraction outside snowline | $\in [0, 1]$ |
