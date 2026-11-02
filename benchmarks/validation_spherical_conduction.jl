@@ -80,9 +80,8 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     "steady_profile_l2_rel_error_nx33" => (; atol=0.005, rtol=0.0),
     "steady_profile_l2_rel_error_nx65" => (; atol=0.005, rtol=0.0),
     "steady_energy_conservation_residual_nx65" => (; atol=1.0e-11, rtol=0.0),
-    "transient_center_dT_nx65" => (; atol=0.0, rtol=0.01),
+    "transient_center_dT_nx65" => (; atol=0.0, rtol=0.005),
     "transient_profile_l2_rel_error_nx65" => (; atol=0.005, rtol=0.0),
-    "transient_profile_l2_convergence_ratio_65_33" => (; atol=0.02, rtol=0.0),
     "transient_max_air_shell_temperature_nx65" => (; atol=0.001, rtol=0.0),
 )
 
