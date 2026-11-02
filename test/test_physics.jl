@@ -407,6 +407,13 @@ include("test_helpers.jl")
         @test isapprox(heat_m_fe[1], Q_fe_metal_ref * 5450.0; rtol=1e-10)
         @test isapprox(heat_m_fe[2], Q_fe_metal_ref * 5450.0; rtol=1e-10)
 
+        # Reference metal mass fraction must be a fraction
+        for bad in (-0.1, 1.5, NaN)
+            @test_throws DomainError Erebus.calculate_radioactive_heating(
+                true, false, 0.0; w_metal_ref=bad
+            )
+        end
+
         # Custom rho_metal keyword argument
         _, _, heat_m_custom = Erebus.calculate_radioactive_heating(
             false, true, 0.0; rho_metal=7200.0
