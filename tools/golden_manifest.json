@@ -1,11 +1,11 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "f2684fa7037590f9f24e1a050036f785c0eaee98",
+    "commit": "0e5ef54e05c07a23b19189782d56ffa34bc6b856",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "4730408ce1d8f57d28af7ba389b5b9c699488c9b5cf0e2ed3f7349b5b756cb2b",
+            "sha256": "9464f8c0947ee2b6947268382b08954328b627696ba517846e42d6ad7c960aa4",
             "size_bytes": 5306691
         },
         "hydrothermal_benchmark": {
@@ -33,7 +33,7 @@
             "size_bytes": 4388302
         }
     },
-    "generated_at": "2026-11-02T18:06:44Z",
+    "generated_at": "2026-11-02T19:38:16Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }
