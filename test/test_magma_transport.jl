@@ -773,6 +773,50 @@ Random.seed!(42)
 
         # Energy dissipation heating occurred and populated Q_seg_grid
         @test res.total_dissipation_energy > 0.0
+
+        # Melt at its packing limit cannot move, so it releases no heat.
+        q_free = maximum(Q_seg_grid)
+        @test q_free > 0.0
+        Fm_packed = [tm[m] < 3 ? cfg_magma.phi_pack : 0.0 for m in 1:marknum]
+        Q_seg_packed = zeros(Float64, Ny, Nx)
+        res_packed = apply_silicate_melt_segregation!(
+            xm,
+            ym,
+            tm,
+            fill(1700.0, marknum),
+            Fm_packed,
+            marknum,
+            dt,
+            MagmaTransportConfig(;
+                active=true,
+                k_melt_ref=1.0e-10,
+                phi0=0.05,
+                phi_residual=0.005,
+                phi_crit=0.38,
+                F_perc_end=0.32,
+                F_settle_start=0.42,
+                phi_pack=0.60,
+                eta_melt=1.0,
+                cfl_melt=0.4,
+                max_subcycles=20,
+                segregation_heating=true,
+                latent_crystallization=false,
+                track_depletion=false,
+            );
+            coords=coords,
+            xcenter=xcenter,
+            ycenter=ycenter,
+            rplanet=rplanet,
+            g_surf=g_surf,
+            Q_seg_grid=Q_seg_packed,
+            rho_silicate=3300.0,
+            rho_melt=2800.0,
+            T_solidus_silicate=1400.0,
+            T_liquidus_silicate=1800.0,
+            L_melt=4.0e5,
+        )
+        @test res_packed.max_v_seg > 0.0
+        @test maximum(Q_seg_packed) < 1.0e-9 * q_free
         @test maximum(Q_seg_grid) > 0.0
 
         # Latent heat release populated Q_lat_grid

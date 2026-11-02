@@ -38,6 +38,48 @@ Float64
 end
 
 """
+Compute the volumetric heat released by the flux that a segregation substep moved through a cell.
+
+$(SIGNATURES)
+
+Parameters
+----------
+drho : Float64
+    Density contrast between the sinking phase and the matrix [kg/m^3].
+g_acc : Float64
+    Gravity magnitude [m/s^2].
+flux_w, flux_e, flux_n, flux_s : Float64
+    Realised face fluxes of one substep, in the same weighted units as `w_cell`.
+dx, dy : Float64
+    Cell sizes [m].
+w_cell : Float64
+    Sum of the marker weights in the cell. Must be positive.
+dt_sub : Float64
+    Substep length [s]. Must be positive.
+
+Returns
+-------
+Float64
+    Heat release rate [W/m^3]: the density contrast times gravity times the volume flux density.
+"""
+@inline function _realised_flux_heating(
+    drho::Float64,
+    g_acc::Float64,
+    flux_w::Float64,
+    flux_e::Float64,
+    flux_n::Float64,
+    flux_s::Float64,
+    dx::Float64,
+    dy::Float64,
+    w_cell::Float64,
+    dt_sub::Float64,
+)
+    volume_flux_x = 0.5 * (abs(flux_w) + abs(flux_e)) * dx / (w_cell * dt_sub)
+    volume_flux_y = 0.5 * (abs(flux_n) + abs(flux_s)) * dy / (w_cell * dt_sub)
+    return drho * g_acc * hypot(volume_flux_x, volume_flux_y)
+end
+
+"""
 Evaluate the gravitational acceleration magnitude at cell center `(i, j)`.
 
 $(SIGNATURES)
@@ -887,11 +929,22 @@ function apply_metal_segregation!(
         # 6. Gravitational potential energy dissipation heating
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
             w_c = W_cell[i, j]
-            v_s = v_seg_cell[i, j]
-            if w_c > 0.0 && v_s > 0.0
-                phi_m_curr = (m_fe[i, j] / w_c) * Xfem_cell[i, j]
-                Q_diss = segregation_dissipation_heating(
-                    min(phi_m_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
+            if w_c > 0.0
+                F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
+                F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
+                F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
+                F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
+                Q_diss = _realised_flux_heating(
+                    drho_cell[i, j],
+                    g_acc_cell[i, j],
+                    F_w,
+                    F_e,
+                    F_n,
+                    F_s,
+                    dx_val,
+                    dy_val,
+                    w_c,
+                    dt_sub,
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing
@@ -1824,16 +1877,22 @@ function apply_silicate_melt_segregation!(
         # 6. Gravitational potential energy dissipation heating
         @inbounds for j in 1:Nx_val, i in 1:Ny_val
             w_c = W_cell[i, j]
-            v_s = v_seg_cell[i, j]
             F_w = (j > 1) ? flux_x[i, j - 1] : 0.0
             F_e = (j < Nx_val) ? flux_x[i, j] : 0.0
             F_n = (i > 1) ? flux_y[i - 1, j] : 0.0
             F_s = (i < Ny_val) ? flux_y[i, j] : 0.0
-            flux_thru = 0.5 * (abs(F_w) + abs(F_e) + abs(F_n) + abs(F_s))
-            if w_c > 0.0 && v_s > 0.0 && flux_thru > 0.0
-                F_curr = m_melt[i, j] / w_c
-                Q_diss = silicate_melt_dissipation_heating(
-                    min(F_curr, 1.0), drho_cell[i, j], g_acc_cell[i, j], v_s
+            if w_c > 0.0
+                Q_diss = _realised_flux_heating(
+                    drho_cell[i, j],
+                    g_acc_cell[i, j],
+                    F_w,
+                    F_e,
+                    F_n,
+                    F_s,
+                    dx_val,
+                    dy_val,
+                    w_c,
+                    dt_sub,
                 )
                 total_diss_energy += Q_diss * (dx_val * dy_val) * dt_sub
                 if Q_seg_grid !== nothing && cfg_magma.segregation_heating

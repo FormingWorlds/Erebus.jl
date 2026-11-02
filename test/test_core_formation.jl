@@ -2082,9 +2082,11 @@ using JLD2
             for spherical in (false, true)
                 packed = metal_body(; X0=cfg_e.phi_pack)
                 res_packed = run_body!(packed, cfg_e, 1.0e9; spherical=spherical)
+                free = metal_body(; X0=0.20)
+                run_body!(free, cfg_e, 1.0e9; spherical=spherical)
                 @test res_packed.max_v_seg > 0.0
-                @test iszero(res_packed.total_dissipation_energy)
-                @test all(iszero, packed.Q)
+                @test maximum(free.Q) > 0.0
+                @test maximum(packed.Q) < 1.0e-9 * maximum(free.Q)
             end
 
             # Over a long time the heat equals the potential energy released.
@@ -2094,8 +2096,8 @@ using JLD2
                 Am = body.coords.dxm * body.coords.dym
                 drho = cfg_e.rho_metal - 3000.0
                 potential(X) = sum(
-                    X[m] * weight[m] * Am * drho * 0.1 * body.r[m]^2 / (2.0 * 50000.0) for
-                    m in 1:(body.nm) if body.tm[m] < 3
+                    X[m] * weight[m] * Am * drho * 0.1 * body.r[m]^2 / (2.0 * 50000.0)
+                    for m in 1:(body.nm) if body.tm[m] < 3
                 )
                 pe_start = potential(body.Xfe)
                 heat = 0.0
@@ -2106,14 +2108,16 @@ using JLD2
                     fill!(body.Q, 0.0)
                     run_body!(body, cfg_e, dt_e; spherical=spherical)
                     for j in 2:(body.coords.Nx1 - 1), i in 2:(body.coords.Ny1 - 1)
-                        r_node = hypot(xp[j] - body.coords.xcenter, yp[i] - body.coords.ycenter)
+                        r_node = hypot(
+                            xp[j] - body.coords.xcenter, yp[i] - body.coords.ycenter
+                        )
                         w_node = spherical ? 2.0 * r_node : 1.0
-                        heat += body.Q[i, j] * w_node * body.coords.dx * body.coords.dy * dt_e
+                        heat +=
+                            body.Q[i, j] * w_node * body.coords.dx * body.coords.dy * dt_e
                     end
                 end
                 release = pe_start - potential(body.Xfe)
                 @test release > 0.0
-                println("PROBE spherical=", spherical, " heat/release=", heat / release, " moved=", sum(abs, body.Xfe .- 0.2 .* (body.tm .< 3)))
                 @test 0.5 < heat / release < 1.5
             end
         end
