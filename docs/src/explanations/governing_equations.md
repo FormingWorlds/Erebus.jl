@@ -159,7 +159,7 @@ $$Q_{\text{fe,metal}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}}$$
 
 $$Q_{\text{fe,silicate}}(t) = \frac{Q_{\text{fe}}(t)}{X_{\text{CI}}} \frac{X_{\text{CI}} - X_{\text{m}}}{1 - X_{\text{m}}}$$
 
-This gives two regimes. If the metal holds no more iron than CI ($w_{\text{m}} \le X_{\text{CI}}$), the body is CI: the power per kg of bulk rock is $Q_{\text{al}} + Q_{\text{fe}}$, and the rest of the iron stays in the silicate. If the metal holds more iron than CI, the silicate has no iron left and the body holds extra metal, so the $^{60}\text{Fe}$ power grows with the metal while the power per kg of each phase stays at its CI value.
+This gives two regimes. If the metal holds no more iron than CI ($w_{\text{m}} \le X_{\text{CI}}$), the body is CI: the power per kg of bulk rock is $Q_{\text{al}} + Q_{\text{fe}}$, and the rest of the iron stays in the silicate. If the metal holds more iron than CI, the silicate carries no $^{60}\text{Fe}$ and the body holds extra metal, so the $^{60}\text{Fe}$ power grows with the metal while the power per kg of each phase stays at its CI value.
 
 A marker with porosity $\phi$ and metal volume fraction $\phi_{\text{fe}}$ (`Xfe_bulk[m]`) has the volumetric heating
 
@@ -167,7 +167,11 @@ $$Q_{\text{radiogenic}} = (1 - \phi) \left[ (1 - \phi_{\text{fe}}) \rho_s \left(
 
 where $\rho_s$ is solid silicate density and $\rho_{\text{metal}}$ is `cfg.coreformation.rho_metal`.
 
-These concentrations belong to the body, not to a marker, so the power does not change when metal moves between equal marker volumes. The value of $w_{\text{m}}$ comes from `Xfe_bulk` only. Accreted markers use the same concentrations with their own `Xfe_bulk_accreted`, so an accreted shell whose metal fraction differs from `Xfe_bulk` does not follow the CI bulk budget. Set the two values equal to keep the CI budget during accretion.
+These concentrations belong to the body, not to a marker. For markers of equal volume, porosity and silicate density, the power does not change when metal moves between them. Three limits apply:
+
+- The value of $w_{\text{m}}$ comes from `Xfe_bulk` only. Accreted markers use the same concentrations with their own `Xfe_bulk_accreted`, so an accreted shell whose metal fraction differs from `Xfe_bulk` does not follow the CI bulk budget.
+- The metal mass fraction uses the density of the first solid phase, `rhosolidm[1]`.
+- Redox and smelting change `Xfe_bulk[m]` from silicate iron. The metal then gains $^{60}\text{Fe}$ at the metal concentration, so these paths do not conserve the nuclide.
 
 Over a discrete computational timestep $[t_n, t_n + \Delta t]$, each nuclide's heating rate is averaged over the step duration using the dimensionless factor $f_{\text{avg}}(\Delta t / \tau_i) = (1 - \exp(-\Delta t / \tau_i)) / (\Delta t / \tau_i)$:
 

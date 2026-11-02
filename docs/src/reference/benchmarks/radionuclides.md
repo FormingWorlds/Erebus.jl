@@ -6,7 +6,7 @@ This module validates the radiogenic heating rate calculations from short-lived 
 
 ## Governing Formulation
 
-Radioactive decay generates specific heating power $q(t)$ [W/kg] (or volumetric heating $Q(t) = \rho q(t)$ [W/m$^3$]) in the solid rock ($^{26}\text{Al}$) and metallic iron ($^{60}\text{Fe}$) phases:
+Radioactive decay generates specific heating power $q(t)$ [W/kg] (or volumetric heating $Q(t) = \rho q(t)$ [W/m$^3$]) in the solid rock ($^{26}\text{Al}$) and in the iron ($^{60}\text{Fe}$, in the metallic phase and in any oxidised iron in the rock):
 
 $$q(t) = q_0 \exp\left(-\frac{t}{\tau}\right) = q_0 \left(\frac{1}{2}\right)^{t / t_{1/2}}$$
 
@@ -110,5 +110,6 @@ The table below tabulates theoretical cumulative energy release fractions $f(n)$
 - `test/test_physics.jl`:
   - `@testset "Q_radiogenic(): half-life and conservation closure"`: Verifies initial heating $Q(0) = Q_0$, half-life decay $Q(t_{1/2}) = 0.5 Q_0$, two half-lives $Q(2 t_{1/2}) = 0.25 Q_0$, and total integrated energy closure $\int_0^\infty Q(t) \, dt = Q_0 \tau$ within $10^{-12}$ relative tolerance.
   - `@testset "calculate_radioactive_heating(): isotope activity and density scaling"`: Verifies volumetric heating scaling and phase assignment.
+  - `@testset "Radionuclide budget with a metal group"` (in `test/test_simulation_steps.jl`): Verifies the budget per phase below and above the CI iron content, for markers that match and differ from the body.
   - `@testset "Radiogenic Step-Average Factor and Step-Integrated Heating"`: Verifies `radiogenic_step_average_factor` and `Q_radiogenic(...; dt=dt)` against 256-bit `BigFloat` for $\log_{10}(\Delta t / \tau) \in [-12, 2]$ and checks that step-integrated heating over consecutive partition intervals `t_edges` matches 5-point Gauss-Legendre quadrature of instantaneous `Q_radiogenic(...; dt=0.0)`.
 
