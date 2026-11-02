@@ -6,7 +6,7 @@ This page checks how `Erebus.jl` moves heat through a sphere and how it adds rad
 
 All cases use a sphere of radius 50 km with a fixed surface temperature of 170 K. `Nx` is the number of grid intervals on each side of the square box. The rock has a uniform conductivity of 3 W/(m K). Melting, fluid flow and reactions are off, so that heat conduction and the heat source are the only processes.
 
-The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D grid behave like a 3-D sphere. This term is `Q_metric`, and the option `geometry.spherical_metric` switches it on. The default is off, which gives a 2-D disk, so set this option when you want a sphere. All cases on this page switch it on.
+The code solves a 2-D grid. A geometry term in the heat equation makes the 2-D grid behave like a 3-D sphere. This term is `Q_metric`, and the option `geometry.spherical_metric` switches it on. The default is on. Setting it to false gives a 2-D disk.
 
 ## The steady temperature of a heated sphere
 

@@ -427,6 +427,22 @@ using Erebus
         @test haskey(res_post, :aphimax)
         @test haskey(res_post, :n_flips_iter)
 
+        # A state without the metric array cannot run with the option on.
+        grids_no_metric = Erebus.GridArrays(
+            (
+                fn === :Q_metric ? nothing : getfield(state.grids, fn) for
+                fn in fieldnames(Erebus.GridArrays)
+            )...,
+        )
+        state_no_metric = SimulationState(
+            (
+                fn === :grids ? grids_no_metric : getfield(state, fn) for
+                fn in fieldnames(typeof(state))
+            )...,
+        )
+        @test_throws ArgumentError Erebus.solve_thermal_energy!(
+            state_no_metric, coords_actual, cfg, ws; titer=1, DHP_pyro=nothing
+        )
         res_therm = Erebus.solve_thermal_energy!(
             state, coords_actual, cfg, ws; titer=1, DHP_pyro=nothing
         )
