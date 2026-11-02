@@ -13,7 +13,9 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
 
     @testset "Validation record schema and drift guards" begin
         @test isfile(record_path)
-        @test SphericalConductionValidation.check_validation_records()
+        @test SphericalConductionValidation.check_validation_records(;
+            require_doc_pages=true
+        )
 
         raw_record = TOML.parsefile(record_path)
         valid_ok, valid_errors = SphericalConductionValidation.validate_record_dict(
@@ -64,6 +66,42 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
             )
             @test ok_sync
             @test isempty(errs_sync)
+
+            # A candidate record skips the page compare; a changed table is written back.
+            changed_record = deepcopy(doc_record)
+            changed_record["metrics"][1]["value"] =
+                Float64(changed_record["metrics"][1]["value"]) + 1.0e-3
+            ok_candidate, _ = SphericalConductionValidation.validate_record_dict(
+                changed_record; docs_dir=tmpdir, check_doc_sync=false
+            )
+            @test ok_candidate
+            @test !first(
+                SphericalConductionValidation.validate_record_dict(
+                    changed_record; docs_dir=tmpdir
+                ),
+            )
+            @test SphericalConductionValidation.update_record_doc_block!(
+                changed_record; docs_dir=tmpdir
+            )
+            @test first(
+                SphericalConductionValidation.validate_record_dict(
+                    changed_record; docs_dir=tmpdir
+                ),
+            )
+            @test SphericalConductionValidation.update_record_doc_block!(
+                doc_record; docs_dir=tmpdir
+            )
+            no_page = deepcopy(doc_record)
+            no_page["metadata"]["page"] = "validation/absent.md"
+            @test !SphericalConductionValidation.update_record_doc_block!(
+                no_page; docs_dir=tmpdir
+            )
+            write(joinpath(tmpdir, "validation", "no_table.md"), "# No table\n")
+            no_table = deepcopy(doc_record)
+            no_table["metadata"]["page"] = "validation/no_table.md"
+            @test !SphericalConductionValidation.update_record_doc_block!(
+                no_table; docs_dir=tmpdir
+            )
 
             # Mutating one metric within schema tolerance must still fail markdown synchronization.
             drifted_record = deepcopy(doc_record)
@@ -465,10 +503,14 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
     end
 
     bench = SphericalConductionValidation.evaluate_spherical_conduction_benchmark()
+    l2_from_nodes(c) =
+        sqrt(sum(abs2, c.dT_sim_nodes .- c.dT_ref_nodes) / sum(abs2, c.dT_ref_nodes))
 
     @testset "Steady spherical Poisson conduction" begin
         s33 = bench.s33
         s65 = bench.s65
+        @test length(s65.r_nodes) == length(s65.dT_sim_nodes) == length(s65.dT_ref_nodes)
+        @test isapprox(l2_from_nodes(s65), s65.l2_rel; rtol=1e-12)
 
         @test isapprox(s33.ratio_3d_2d, 2.0 / 3.0; atol=0.01, rtol=0.015)
         @test isapprox(s65.ratio_3d_2d, 2.0 / 3.0; atol=0.01, rtol=0.015)
@@ -521,6 +563,8 @@ include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conductio
     @testset "Transient spherical radiogenic conduction and reproducibility" begin
         t33 = bench.t33
         t65 = bench.t65
+        @test length(t65.r_nodes) == length(t65.dT_sim_nodes) == length(t65.dT_ref_nodes)
+        @test isapprox(l2_from_nodes(t65), t65.l2_rel; rtol=1e-12)
 
         # Coarse and fine centre temperature rise and L2 bounds against step-averaged reference.
         @test abs(t33.center_err_K) <= 60.0

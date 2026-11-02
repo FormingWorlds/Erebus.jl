@@ -1,4 +1,6 @@
-# Validation and Physical Benchmarks
+# Physics Function Reference
+
+These pages mostly check individual physics functions. For checks of the full simulation against an independent solution, see [Validation](../../validation/index.md).
 
 The physical formulations in `Erebus.jl` are anchored against peer-reviewed literature, analytical limits, and laboratory measurements. This section documents the verification hierarchy, numerical consistency checks, conservation audits, and physical benchmarks governing simulation fidelity.
 

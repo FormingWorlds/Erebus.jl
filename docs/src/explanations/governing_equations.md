@@ -142,6 +142,8 @@ $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla
 | $Q_{\text{seg}}$ | Gravitational dissipation heating from metal segregation | $\text{W/m}^3$ |
 | $Q_{\text{lat}}$ | Latent cooling rate from surface volatile sublimation | $\text{W/m}^3$ |
 
+**Where this is checked.** [Spherical Heat Conduction](../validation/thermal_conduction.md) compares the temperature and radiogenic heating terms of this system with independent solutions.
+
 ### Radiogenic Decay Kinetics
 Specific heat production from $^{26}\text{Al}$ and $^{60}\text{Fe}$ decay, per kg of bulk CI chondrite, is computed with the decay rate constant $\lambda = 1/\tau = \ln(2)/t_{1/2}$:
 

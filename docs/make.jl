@@ -16,7 +16,8 @@ makedocs(;
         edit_link="main",
         size_threshold_warn=800 * 1024,
         size_threshold=1200 * 1024,
-        search_size_threshold_warn=1200 * 1024,
+        search_size_threshold_warn=1300 * 1024,
+        assets=["assets/validation_theme.css"],
     ),
     pages=[
         "Home" => "index.md",
@@ -46,10 +47,14 @@ makedocs(;
             "Telescoping Domain Dynamics" => "explanations/telescoping_domain.md",
             "Magma Ascent & Matrix Compaction" => "explanations/magma_compaction.md",
         ],
+        "Validation" => [
+            "Overview" => "validation/index.md",
+            "Spherical Heat Conduction" => "validation/thermal_conduction.md",
+        ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",
             "API Reference" => "reference/api.md",
-            "Physical Benchmarks" => [
+            "Physics Function Reference" => [
                 "Overview" => "reference/benchmarks/index.md",
                 "1D Terzaghi Consolidation" => "reference/benchmarks/terzaghi_consolidation.md",
                 "Thermal Conduction & Geometry" => "reference/benchmarks/thermal_conduction.md",

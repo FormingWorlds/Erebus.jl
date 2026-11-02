@@ -119,7 +119,7 @@ function run_doc_numbers_cli(
         end
         return 1
     end
-    if !check_validation_records(records_dir)
+    if !check_validation_records(records_dir; require_doc_pages=true)
         println(stderr, "check_doc_numbers: validation records check failed.")
         return 1
     end
