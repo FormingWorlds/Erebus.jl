@@ -341,7 +341,7 @@ Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phas
 
 - **2-D Geometry Proxy**:
   The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
-  The out-of-plane length $w_{\text{3D}} = 2r$ enters volume integrals rather than spatial derivatives, except when `cfg.geometry.spherical_metric` activates radial metric conduction.
+  The defaults make the model as close to a sphere as the code allows. `geometry.spherical_metric = true` adds the radial conduction term of a sphere and weights metal and melt inventories by the out-of-plane length $w_{\text{3D}} = 2r$. `geometry.gravity_mode = :enclosed_mass` gives the radial gravity of the enclosed mass. Set `spherical_metric = false` and `gravity_mode = :poisson2d` for a 2-D disk, as the hydrothermal benchmark configs do.
   Flow patterns represent 2-D slab flow rather than 3-D spherical convection.
 
 - **Gravity Field Approximations**:

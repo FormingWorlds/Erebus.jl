@@ -314,6 +314,8 @@ where $m_{\text{melt,in}}$ is the incoming melt mass. Melt departs the donor cel
 
 ### 1. 2D Poisson Formulation (`:poisson2d`)
 
+This mode is not the default. Use it with `geometry.spherical_metric = false` for a 2-D disk.
+
 The standard 2D Cartesian solver solves the Poisson equation for gravitational potential $\Phi$:
 
 $$\nabla^2 \Phi = 4 \pi G \rho_{\text{scaled}}$$
@@ -329,6 +331,8 @@ $$\frac{g_{\text{poisson2d}}(R)}{g_{3D}(R)} \approx \frac{\rho_m R + (\rho_c - \
 For a planetesimal with $r_c = 0.5 R$, $\rho_c = 7000\text{ kg/m}^3$, and $\rho_m = 3000\text{ kg/m}^3$, this overpredicts core-excess surface gravity by a factor of 2.0 and total surface gravity by 14.3%.
 
 ### 2. 3D Enclosed-Mass Formulation (`:enclosed_mass`)
+
+This is the default mode.
 
 To eliminate cylindrical artifacts in differentiated bodies, the enclosed-mass mode calculates the true spherically symmetric 3D mass distribution from Lagrangian markers. The domain is divided into $N_r = \text{gravity\_nr\_factor} \times N_x$ radial bins centered at $(x_c, y_c)$ up to the planet radius $R$:
 
