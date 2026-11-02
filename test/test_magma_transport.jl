@@ -773,6 +773,121 @@ Random.seed!(42)
 
         # Energy dissipation heating occurred and populated Q_seg_grid
         @test res.total_dissipation_energy > 0.0
+
+        # Over a long time the heat equals the potential energy released by rising melt.
+        coords_e = GridCoordinates(GridConfig(; Nx=33, Ny=49, xsize=80000.0, ysize=80000.0))
+        nm_e = coords_e.Nxm * coords_e.Nym
+        xm_e, ym_e = zeros(nm_e), zeros(nm_e)
+        let k = 0
+            for jm in 1:(coords_e.Nxm), im in 1:(coords_e.Nym)
+                k += 1
+                xm_e[k] = (jm - 0.5) * coords_e.xsize / coords_e.Nxm
+                ym_e[k] = (im - 0.5) * coords_e.ysize / coords_e.Nym
+            end
+        end
+        r_e = hypot.(xm_e .- coords_e.xcenter, ym_e .- coords_e.ycenter)
+        tm_e = [r <= rplanet ? 1 : 3 for r in r_e]
+        F_energy = [r <= rplanet ? 0.10 : 0.0 for r in r_e]
+        tk_energy = fill(1700.0, nm_e)
+        marker_area = coords_e.dxm * coords_e.dym
+        potential_energy(F) = sum(
+            F[m] * 2.0 * r_e[m] * marker_area * 500.0 * g_surf * r_e[m]^2 / (2.0 * rplanet) for m in 1:nm_e if tm_e[m] < 3
+        )
+        cfg_energy = MagmaTransportConfig(;
+            active=true,
+            k_melt_ref=1.0e-10,
+            phi0=0.05,
+            phi_residual=0.005,
+            phi_crit=0.38,
+            F_perc_end=0.32,
+            F_settle_start=0.42,
+            phi_pack=0.60,
+            eta_melt=1.0,
+            cfl_melt=0.4,
+            max_subcycles=20,
+            segregation_heating=true,
+            latent_crystallization=false,
+            track_depletion=false,
+            sensible_heat_transport=false,
+        )
+        pe_start = potential_energy(F_energy)
+        heat_energy = 0.0
+        Q_energy = zeros(Float64, coords_e.Ny1, coords_e.Nx1)
+        for _ in 1:20
+            fill!(Q_energy, 0.0)
+            apply_silicate_melt_segregation!(
+                xm_e,
+                ym_e,
+                tm_e,
+                tk_energy,
+                F_energy,
+                nm_e,
+                1.0e8,
+                cfg_energy;
+                coords=coords_e,
+                rplanet=rplanet,
+                g_surf=g_surf,
+                Q_seg_grid=Q_energy,
+                rho_silicate=3300.0,
+                rho_melt=2800.0,
+                T_solidus_silicate=1400.0,
+                T_liquidus_silicate=1800.0,
+                L_melt=4.0e5,
+            )
+            for jn in 2:(coords_e.Nx1 - 1), in_ in 2:(coords_e.Ny1 - 1)
+                r_node = hypot(
+                    coords_e.xp[jn] - coords_e.xcenter, coords_e.yp[in_] - coords_e.ycenter
+                )
+                heat_energy +=
+                    Q_energy[in_, jn] * 2.0 * r_node * coords_e.dx * coords_e.dy * 1.0e8
+            end
+        end
+        release_energy = potential_energy(F_energy) - pe_start
+        @test 0.8 < heat_energy / release_energy < 1.2
+
+        # Melt at its packing limit cannot move, so it releases no heat.
+        q_free = maximum(Q_seg_grid)
+        @test !iszero(q_free)
+        Fm_packed = [tm[m] < 3 ? cfg_magma.phi_pack : 0.0 for m in 1:marknum]
+        Q_seg_packed = zeros(Float64, Ny, Nx)
+        res_packed = apply_silicate_melt_segregation!(
+            xm,
+            ym,
+            tm,
+            fill(1700.0, marknum),
+            Fm_packed,
+            marknum,
+            dt,
+            MagmaTransportConfig(;
+                active=true,
+                k_melt_ref=1.0e-10,
+                phi0=0.05,
+                phi_residual=0.005,
+                phi_crit=0.38,
+                F_perc_end=0.32,
+                F_settle_start=0.42,
+                phi_pack=0.60,
+                eta_melt=1.0,
+                cfl_melt=0.4,
+                max_subcycles=20,
+                segregation_heating=true,
+                latent_crystallization=false,
+                track_depletion=false,
+            );
+            coords=coords,
+            xcenter=xcenter,
+            ycenter=ycenter,
+            rplanet=rplanet,
+            g_surf=g_surf,
+            Q_seg_grid=Q_seg_packed,
+            rho_silicate=3300.0,
+            rho_melt=2800.0,
+            T_solidus_silicate=1400.0,
+            T_liquidus_silicate=1800.0,
+            L_melt=4.0e5,
+        )
+        @test !iszero(res_packed.max_v_seg)
+        @test maximum(Q_seg_packed) < 1.0e-9 * q_free
         @test maximum(Q_seg_grid) > 0.0
 
         # Latent heat release populated Q_lat_grid

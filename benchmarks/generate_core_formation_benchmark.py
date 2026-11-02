@@ -156,7 +156,7 @@ def generate_benchmark_figure(data_path=DATA_PATH, assets_dir=ASSETS_DIR, output
     ax_b.set_ylim(100, 2500)
     ax_b.set_xlabel('Time [Ma]', fontsize=9.5)
     ax_b.set_ylabel(r'Central Temperature $T_\mathrm{core}$ [K]', fontsize=9.5)
-    ax_b.set_title('Core Thermal Runaway and Dissipation', fontsize=11, fontweight='bold')
+    ax_b.set_title('Core Temperature and Dissipation', fontsize=11, fontweight='bold')
     ax_b.grid(True)
     ax_b.legend(loc='lower right', fontsize=8.0)
 

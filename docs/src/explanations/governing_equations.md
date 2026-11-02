@@ -293,7 +293,9 @@ where $\xi(F_m)$ is a $C^1$-continuous cubic Hermite polynomial weight based on 
 ### Gravitational Dissipation Heating
 The irreversible dissipation of gravitational potential energy during metal descent produces a local thermal source:
 
-$$Q_{\text{seg}} = \Delta\rho \, g \, v_{\text{seg}} \, \phi_m$$
+$$Q_{\text{seg}} = \Delta\rho \, g \, J$$
+
+where $J$ is the volume flux density of metal that moves through the cell.
 
 where $\Delta\rho = \rho_{\text{metal}} - \rho_{\text{silicate}}$ is the density contrast, $g$ is local gravity, and $\phi_m$ is the molten metal fraction. This source directly enters the thermal energy equation.
 

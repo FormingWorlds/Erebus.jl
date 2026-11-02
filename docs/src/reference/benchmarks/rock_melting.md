@@ -159,7 +159,7 @@ The two-phase silicate melt segregation, porous percolation, hindered settling, 
    - Clamping prevents donor cell melt fraction from becoming negative ($F_m \ge 0$) and receiver cells from exceeding the packing ceiling ($F_m \le \phi_{\text{pack}}$).
 
 3. **Thermal and Depletion Coupling:**
-   - Gravitational shear dissipation heating rates satisfy $\Psi = \Delta\rho g F_m v_{\text{seg}}$ and accumulate non-negative thermal energy into the energy solver.
+   - Gravitational shear dissipation heating rates satisfy $\Psi = \Delta\rho g J$, with $J$ the volume flux density of melt that moves through the cell, and accumulate non-negative thermal energy into the energy solver.
    - Subsolidus crystallization latent heat releases $Q_{\text{lat}} = \dot{M}_{\text{cryst}} L_m$, buffering temperature drops when buoyant melt rises into subsolidus crustal regions.
    - Mantle depletion tracking accurately records cumulative extracted melt on Lagrangian markers and prevents remelting of depleted residues.
 
