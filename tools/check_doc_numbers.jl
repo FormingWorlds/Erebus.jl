@@ -84,24 +84,26 @@ function check_doc_numbers(
     return isempty(errors), errors
 end
 
-function main()
-    map_path = length(ARGS) >= 1 ? ARGS[1] : DEFAULT_MAP_PATH
+function run_doc_numbers_cli(
+    args::Vector{String}=ARGS; records_dir::String=DEFAULT_RECORDS_DIR
+)::Int
+    map_path = length(args) >= 1 ? args[1] : DEFAULT_MAP_PATH
     valid, errors = check_doc_numbers(map_path)
     if !valid
         println(stderr, "check_doc_numbers failed with $(length(errors)) error(s):")
         for err in errors
             println(stderr, "  - ", err)
         end
-        exit(1)
+        return 1
     end
-    if !check_validation_records()
+    if !check_validation_records(records_dir)
         println(stderr, "check_doc_numbers: validation records check failed.")
-        exit(1)
+        return 1
     end
     println("check_doc_numbers: all entries and validation records verified successfully.")
-    return exit(0)
+    return 0
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    exit(run_doc_numbers_cli(ARGS))
 end

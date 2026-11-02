@@ -60,9 +60,9 @@ function run_validation_check(
     return true
 end
 
-function main()
+function run_validation_cli(args::Vector{String}=ARGS; bench=nothing)::Int
     record_path = DEFAULT_SPHERICAL_RECORD
-    for arg in ARGS
+    for arg in args
         if arg == "--check"
             continue
         elseif startswith(arg, "--")
@@ -70,15 +70,15 @@ function main()
                 stderr,
                 "Usage: julia --project=. tools/check_validation.jl [--check] [record_path]",
             )
-            exit(2)
+            return 2
         else
             record_path = arg
         end
     end
-    ok = run_validation_check(record_path)
-    return exit(ok ? 0 : 1)
+    ok = run_validation_check(record_path; bench=bench)
+    return ok ? 0 : 1
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    exit(run_validation_cli(ARGS))
 end

@@ -8,7 +8,7 @@ page = "validation/thermal_conduction.md"
 git_commit = "575e0b79954c8d730fdb1392bc8467b1b246935f"
 timestamp_utc = "2026-11-02T06:58:26Z"
 julia_version = "1.12.7"
-config_sha256 = "556dd2c8ba40fd9b83341b279532634462199bae1ceabcb8ebecfeccfade7d0c"
+config_sha256 = "9cee9bb912be2b01eee9b343939af14d05bcce7fb101b5187b40844470679893"
 reference_type = "analytical_and_1d_fv"
 reference_citation = "Exact spherical Poisson solution and step-averaged backward-Euler Dirichlet eigenmode series cross-verified against a 1D spherical finite-volume solver"
 

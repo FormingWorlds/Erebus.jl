@@ -1,6 +1,10 @@
 #!/usr/bin/env julia
 # Export the spherical conduction validation record TOML from live benchmark measurements.
 
+if Base.find_package("Printf") === nothing && !("@stdlib" in LOAD_PATH)
+    push!(LOAD_PATH, "@stdlib")
+end
+
 using Dates
 using Printf
 using TOML
@@ -13,6 +17,11 @@ if !isdefined(@__MODULE__, :evaluate_spherical_conduction_benchmark)
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
 end
 
+function _current_git_commit()::String
+    repo_root = normpath(joinpath(@__DIR__, ".."))
+    return readchomp(`git -C $repo_root rev-parse HEAD`)
+end
+
 """
     write_spherical_conduction_record(record_path::String; git_commit::String, bench=nothing)
 
@@ -22,7 +31,7 @@ function write_spherical_conduction_record(
     record_path::String=joinpath(
         @__DIR__, "..", "benchmarks", "records", "spherical_conduction.toml"
     );
-    git_commit::String="575e0b79954c8d730fdb1392bc8467b1b246935f",
+    git_commit::String=_current_git_commit(),
     bench=nothing,
 )
     bench_res = bench === nothing ? evaluate_spherical_conduction_benchmark() : bench
@@ -210,7 +219,7 @@ function write_spherical_conduction_record(
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    commit_arg = length(ARGS) >= 1 ? ARGS[1] : "575e0b79954c8d730fdb1392bc8467b1b246935f"
+    commit_arg = length(ARGS) >= 1 ? ARGS[1] : _current_git_commit()
     write_spherical_conduction_record(; git_commit=commit_arg)
     println("Wrote benchmarks/records/spherical_conduction.toml")
 end

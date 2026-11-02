@@ -1,3 +1,7 @@
+if Base.find_package("SHA") === nothing && !("@stdlib" in LOAD_PATH)
+    push!(LOAD_PATH, "@stdlib")
+end
+
 using TOML
 using SHA
 using Printf
@@ -129,9 +133,15 @@ function validate_record_dict(
     !isempty(errors) && return (false, errors)
 
     meta = data["metadata"]
+    if !(meta isa AbstractDict)
+        push!(errors, "Section 'metadata' must be a table")
+        return (false, errors)
+    end
+    meta_keys_ok = true
     for k in REQUIRED_METADATA_KEYS
         if !haskey(meta, k) || isempty(strip(string(meta[k])))
             push!(errors, "Metadata missing non-empty key '$k'")
+            meta_keys_ok = false
         end
     end
     if haskey(meta, "git_commit") &&
@@ -144,6 +154,10 @@ function validate_record_dict(
     end
 
     cfg = data["config"]
+    if !(cfg isa AbstractDict)
+        push!(errors, "Section 'config' must be a table")
+        return (false, errors)
+    end
     for k in REQUIRED_CONFIG_KEYS
         if !haskey(cfg, k)
             push!(errors, "Config section missing required key '$k'")
@@ -157,13 +171,24 @@ function validate_record_dict(
     end
 
     seen_ids = Set{String}()
+    all_metric_keys_ok = true
     for (idx, m) in enumerate(metrics)
+        if !(m isa AbstractDict)
+            push!(errors, "Metric #$idx must be a table")
+            all_metric_keys_ok = false
+            continue
+        end
+        missing_key = false
         for k in REQUIRED_METRIC_KEYS
             if !haskey(m, k)
                 push!(errors, "Metric #$idx missing key '$k'")
+                missing_key = true
             end
         end
-        !isempty(errors) && continue
+        if missing_key
+            all_metric_keys_ok = false
+            continue
+        end
 
         mid = String(m["id"])
         if mid in seen_ids
@@ -197,7 +222,7 @@ function validate_record_dict(
         end
     end
 
-    if isempty(errors) && haskey(meta, "page")
+    if meta_keys_ok && all_metric_keys_ok && haskey(meta, "page")
         doc_path = joinpath(docs_dir, String(meta["page"]))
         if isfile(doc_path)
             doc_text = read(doc_path, String)

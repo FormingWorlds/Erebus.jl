@@ -1,3 +1,7 @@
+if Base.find_package("SHA") === nothing && !("@stdlib" in LOAD_PATH)
+    push!(LOAD_PATH, "@stdlib")
+end
+
 using Erebus
 using StaticArrays
 using LinearAlgebra
@@ -5,6 +9,10 @@ using Printf
 using Logging
 using TOML
 using SHA
+
+if !isdefined(@__MODULE__, :validate_record_dict)
+    include(joinpath(@__DIR__, "..", "tools", "validation_records.jl"))
+end
 
 const R_PLANET = 50_000.0
 const L_BOX = 140_000.0
@@ -16,7 +24,7 @@ const DT_YR = 500_000.0
 const START_TIME_YR = 2.0e6
 
 """
-    make_spherical_conduction_config(; kwargs...) -> SimulationConfig
+    make_spherical_conduction_config(; Nx=33, n_steps=N_STEPS_TRANSIENT, start_time=START_TIME_YR, dt_yr=DT_YR, spherical_metric=true, reg_cells=0.5, disk_enabled=true, k_rock=K_COND, k_air=K_COND, rhocp_air=3.0e10, dsubgridt=0.0) -> SimulationConfig
 
 Construct a pure-conduction spherical planetesimal configuration with all non-conductive physics disabled.
 
@@ -132,6 +140,18 @@ function make_spherical_conduction_config(;
     )
 end
 
+function _canonical_field_repr(val)::String
+    if val isa AbstractDict
+        isempty(val) && return repr(val)
+        sorted_pairs = sort!(collect(pairs(val)); by=p -> string(first(p)))
+        inner = join(
+            ["$(repr(k)) => $(_canonical_field_repr(v))" for (k, v) in sorted_pairs], ", "
+        )
+        return "$(typeof(val))($inner)"
+    end
+    return repr(val)
+end
+
 """
     canonical_config_sha256(cfg::SimulationConfig) -> String
 
@@ -153,7 +173,7 @@ function canonical_config_sha256(cfg::SimulationConfig)::String
         sec = getfield(cfg, sec_sym)
         for f_sym in sort(collect(fieldnames(typeof(sec))))
             val = getfield(sec, f_sym)
-            println(io, sec_sym, ".", f_sym, "=", repr(val))
+            println(io, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
         end
     end
     return bytes2hex(sha256(take!(io)))
@@ -272,7 +292,11 @@ function analytical_T_BE(
     for m in 1:n_modes
         mu_m = KAPPA * (m * pi / R_b)^2
         p = 1.0 / (1.0 + mu_m * dt_s)
-        I_m = S0 * p * (p^n_steps - q^n_steps) / (p - q)
+        I_m = if abs(p - q) < 1.0e-12
+            S0 * p * n_steps * (0.5 * (p + q))^(n_steps - 1)
+        else
+            S0 * p * (p^n_steps - q^n_steps) / (p - q)
+        end
         phi_m = if r == 0.0
             (-1.0)^(m + 1) * 2.0
         else
@@ -322,7 +346,11 @@ function analytical_T_continuous(
     total = 0.0
     for m in 1:n_modes
         mu_m = KAPPA * (m * pi / R_b)^2
-        I_m = S_c * (exp(-LAMBDA_AL * t_tot_s) - exp(-mu_m * t_tot_s)) / (mu_m - LAMBDA_AL)
+        I_m = if abs(mu_m - LAMBDA_AL) < 1.0e-12 * max(mu_m, LAMBDA_AL)
+            S_c * t_tot_s * exp(-0.5 * (mu_m + LAMBDA_AL) * t_tot_s)
+        else
+            S_c * (exp(-LAMBDA_AL * t_tot_s) - exp(-mu_m * t_tot_s)) / (mu_m - LAMBDA_AL)
+        end
         phi_m = if r == 0.0
             (-1.0)^(m + 1) * 2.0
         else
@@ -561,7 +589,7 @@ function run_steady_spherical_conduction(
 end
 
 """
-    run_transient_spherical_conduction(Nx::Int; kwargs...)
+    run_transient_spherical_conduction(Nx::Int; n_steps=N_STEPS_TRANSIENT, dt_yr=DT_YR, spherical_metric=true, reg_cells=0.5, k_rock=K_COND, k_air=K_COND, disk_enabled=true, rhocp_air=3.0e10, dsubgridt=0.0)
 
 Run the transient 2D spherical radiogenic conduction simulation through `simulation_loop` and compare against `analytical_T_BE`.
 """
@@ -610,11 +638,14 @@ function run_transient_spherical_conduction(
     sq_err = 0.0
     sq_ref = 0.0
     T_max_air_shell = -Inf
+    ref_cache = Dict{Float64,Float64}()
     for j in 1:Nx1, i in 1:Ny1
         r = hypot(coords.xp[j] - cx, coords.yp[i] - cy)
         if r <= R_PLANET
             T_num = st.grids.tk2[i, j]
-            T_ref = analytical_T_BE(r; n_steps=n_steps, dt_s=dt_s_local)
+            T_ref = get!(ref_cache, r) do
+                return analytical_T_BE(r; n_steps=n_steps, dt_s=dt_s_local)
+            end
             sq_err += ((T_num - T_SURF) - (T_ref - T_SURF))^2
             sq_ref += (T_ref - T_SURF)^2
             if r < r_min
@@ -628,7 +659,7 @@ function run_transient_spherical_conduction(
 
     dT_center = T_center - T_SURF
     dT_be_0 = analytical_T_BE(0.0; n_steps=n_steps, dt_s=dt_s_local) - T_SURF
-    dT_be_rmin = analytical_T_BE(r_min; n_steps=n_steps, dt_s=dt_s_local) - T_SURF
+    dT_be_rmin = ref_cache[r_min] - T_SURF
     center_err_K = dT_center - dT_be_rmin
     rel_err_be_rmin = abs(center_err_K) / dT_be_rmin
     l2_rel = sqrt(sq_err / sq_ref)
@@ -685,12 +716,12 @@ function evaluate_spherical_conduction_benchmark()
 end
 
 """
-    check_validation_reproducibility(bench, record_path::String; check_recorded_values::Bool=(Threads.nthreads() == 1)) -> Tuple{Bool,Vector{String}}
+    check_validation_reproducibility(bench, record_path::String; check_recorded_values::Bool=true) -> Tuple{Bool,Vector{String}}
 
 Compare freshly evaluated benchmark metrics and configuration hashes against a committed TOML validation record.
 """
 function check_validation_reproducibility(
-    bench, record_path::String; check_recorded_values::Bool=(Threads.nthreads() == 1)
+    bench, record_path::String; check_recorded_values::Bool=true
 )::Tuple{Bool,Vector{String}}
     if !isfile(record_path)
         return (false, ["Validation record not found: $record_path"])
@@ -712,11 +743,19 @@ function check_validation_reproducibility(
     expected_cfg = expected_config_summary(cfg65)
     rec_cfg = get(raw, "config", Dict{String,Any}())
     for (k, v_exp) in expected_cfg
-        if !haskey(rec_cfg, k) || rec_cfg[k] != v_exp
-            push!(
-                errors,
-                "Recorded config.$k ($(get(rec_cfg, k, nothing))) does not match expected ($v_exp)",
-            )
+        if !haskey(rec_cfg, k)
+            push!(errors, "Recorded config missing key '$k'")
+            continue
+        end
+        v_rec = rec_cfg[k]
+        matches = if v_rec isa AbstractFloat || v_exp isa AbstractFloat
+            (v_rec isa Real && v_exp isa Real) &&
+                isapprox(Float64(v_rec), Float64(v_exp); rtol=1.0e-12, atol=1.0e-12)
+        else
+            v_rec == v_exp
+        end
+        if !matches
+            push!(errors, "Recorded config.$k ($v_rec) does not match expected ($v_exp)")
         end
     end
 
