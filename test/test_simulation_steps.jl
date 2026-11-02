@@ -450,6 +450,110 @@ end
         @test isapprox(
             state_nometal.markers.core.hrtotalm[1], hr_expected_nometal; rtol=1e-12
         )
+
+        # 7. Radionuclide budget of a body with metal: CI bulk up to the CI iron content,
+        # fixed concentrations per kg silicate and per kg metal above it.
+        @testset "Radionuclide budget with a metal group" begin
+            function marker_heating(;
+                phi_marker, phi_body, al, fe, phim=0.0, has_metal=true
+            )
+                st, cr, c = create_mock_simulation_state(;
+                    marknum=1,
+                    r_marker=0.0,
+                    tm_val=1,
+                    phi_val=phim,
+                    has_metal=has_metal,
+                    Xfe_bulk_val=phi_marker,
+                    custom_overrides=Dict{String,Any}(
+                        "coreformation.Xfe_bulk" => phi_body,
+                        "thermodynamics.hr_al" => al,
+                        "thermodynamics.hr_fe" => fe,
+                    ),
+                )
+                radiogenic_heating!(st, cr, c)
+                th = c.thermodynamics
+                q_al = Erebus.Q_radiogenic(
+                    th.f_al, th.ratio_al, th.E_al, th.t_half_al / log(2.0), st.timesum;
+                    dt=st.dt,
+                )
+                q_fe = Erebus.Q_radiogenic(
+                    th.f_fe, th.ratio_fe, th.E_fe, th.t_half_fe / log(2.0), st.timesum;
+                    dt=st.dt,
+                )
+                return st.markers.core.hrtotalm[1], q_al, q_fe, c
+            end
+            al_only(; kw...) = marker_heating(; al=true, fe=false, kw...)
+            fe_only(; kw...) = marker_heating(; al=false, fe=true, kw...)
+            w_ci = 0.182
+            _, _, _, c0 = al_only(; phi_marker=0.1, phi_body=0.1)
+            rho_s = c0.materials.rhosolidm[1]
+            rho_m = c0.coreformation.rho_metal
+            rho_b(phi) = phi * rho_m + (1.0 - phi) * rho_s
+            w_of(phi) = phi * rho_m / rho_b(phi)
+
+            # At the CI metal fraction the group changes nothing.
+            phi_ci = (w_ci / rho_m) / (w_ci / rho_m + (1.0 - w_ci) / rho_s)
+            for (al, fe) in ((true, false), (false, true), (true, true))
+                hr_metal, _, _, _ = marker_heating(;
+                    phi_marker=phi_ci, phi_body=phi_ci, al=al, fe=fe
+                )
+                hr_plain, _, _, _ = marker_heating(;
+                    phi_marker=0.0, phi_body=phi_ci, al=al, fe=fe, has_metal=false
+                )
+                @test isapprox(hr_metal, hr_plain; rtol=1e-12)
+            end
+
+            # Up to the CI iron content the body is CI: both nuclides follow the bulk mass.
+            for phi in (0.0, 0.015, 0.10)
+                @test w_of(phi) < w_ci
+                hr_al, q_al, _, _ = al_only(; phi_marker=phi, phi_body=phi)
+                hr_fe, _, q_fe, _ = fe_only(; phi_marker=phi, phi_body=phi)
+                @test isapprox(hr_al, rho_b(phi) * q_al; rtol=1e-12)
+                @test isapprox(hr_fe, rho_b(phi) * q_fe; rtol=1e-12)
+            end
+
+            # Above the CI iron content the concentrations per phase stay at the CI value.
+            phi_rich = 0.20
+            @test w_of(phi_rich) > w_ci
+            hr_al, q_al, _, _ = al_only(; phi_marker=phi_rich, phi_body=phi_rich)
+            hr_fe, _, q_fe, _ = fe_only(; phi_marker=phi_rich, phi_body=phi_rich)
+            @test isapprox(hr_al, (1.0 - phi_rich) * rho_s * q_al / 0.818; rtol=1e-12)
+            @test isapprox(hr_fe, phi_rich * rho_m * q_fe / 0.182; rtol=1e-12)
+
+            # Segregated markers keep the concentrations set by the body.
+            phi_body = 0.05
+            w_body = w_of(phi_body)
+            hr_al_metal, _, _, _ = al_only(; phi_marker=1.0, phi_body=phi_body)
+            hr_fe_metal, _, q_fe, _ = fe_only(; phi_marker=1.0, phi_body=phi_body)
+            @test hr_al_metal == 0.0
+            @test isapprox(hr_fe_metal, rho_m * q_fe / 0.182; rtol=1e-12)
+            hr_al_rock, q_al, _, _ = al_only(; phi_marker=0.0, phi_body=phi_body)
+            hr_fe_rock, _, _, _ = fe_only(; phi_marker=0.0, phi_body=phi_body)
+            @test isapprox(hr_al_rock, rho_s * q_al / (1.0 - w_body); rtol=1e-12)
+            @test isapprox(
+                hr_fe_rock, rho_s * q_fe * (0.182 - w_body) / (0.182 * (1.0 - w_body));
+                rtol=1e-12,
+            )
+
+            # Moving metal between 2 equal volumes keeps the total power of the pair.
+            for (al, fe) in ((true, false), (false, true))
+                hr_uniform, _, _, _ = marker_heating(;
+                    phi_marker=phi_body, phi_body=phi_body, al=al, fe=fe
+                )
+                hr_low, _, _, _ = marker_heating(;
+                    phi_marker=0.0, phi_body=phi_body, al=al, fe=fe
+                )
+                hr_high, _, _, _ = marker_heating(;
+                    phi_marker=2.0 * phi_body, phi_body=phi_body, al=al, fe=fe
+                )
+                @test isapprox(hr_low + hr_high, 2.0 * hr_uniform; rtol=1e-12)
+            end
+
+            # Porosity scales the whole solid.
+            hr_dry, _, _, _ = fe_only(; phi_marker=0.05, phi_body=0.05)
+            hr_wet, _, _, _ = fe_only(; phi_marker=0.05, phi_body=0.05, phim=0.25)
+            @test isapprox(hr_wet, 0.75 * hr_dry; rtol=1e-12)
+        end
     end
 
     @testset "Step 3: interpolate_markers_to_grid! Contract and Invariance" begin
