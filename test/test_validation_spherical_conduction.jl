@@ -1,0 +1,262 @@
+using Test
+using TOML
+using Erebus
+
+if !isdefined(@__MODULE__, :validate_record_dict)
+    include(joinpath(@__DIR__, "..", "tools", "validation_records.jl"))
+end
+if !isdefined(@__MODULE__, :evaluate_spherical_conduction_benchmark)
+    include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
+end
+
+@testset "Spherical Conduction Validation" begin
+    record_path = joinpath(
+        @__DIR__, "..", "benchmarks", "records", "spherical_conduction.toml"
+    )
+
+    @testset "Validation record schema and drift guards" begin
+        @test isfile(record_path)
+        @test check_validation_records()
+
+        raw_record = TOML.parsefile(record_path)
+        valid_ok, valid_errors = validate_record_dict(raw_record; require_doc_pages=false)
+        @test valid_ok
+        @test isempty(valid_errors)
+
+        rendered = render_validation_markdown_block(raw_record)
+        @test occursin("<!-- VALIDATION_RECORD_START: spherical_conduction -->", rendered)
+        @test occursin("<!-- VALIDATION_RECORD_END: spherical_conduction -->", rendered)
+
+        mktempdir() do tmpdir
+            rel_page = "validation/thermal_conduction.md"
+            full_page = joinpath(tmpdir, rel_page)
+            mkpath(dirname(full_page))
+            doc_Record = deepcopy(raw_record)
+            doc_Record["metadata"]["page"] = rel_page
+            write(full_page, "# Spherical Conduction\n\n" * rendered * "\n")
+
+            ok_sync, errs_sync = validate_record_dict(
+                doc_Record; docs_dir=tmpdir, require_doc_pages=true
+            )
+            @test ok_sync
+            @test isempty(errs_sync)
+
+            # Mutating one metric by 1% in the record must fail markdown synchronization.
+            drifted_record = deepcopy(doc_Record)
+            drifted_record["metrics"][1]["value"] *= 1.01
+            ok_drift, errs_drift = validate_record_dict(
+                drifted_record; docs_dir=tmpdir, require_doc_pages=true
+            )
+            @test !ok_drift
+            @test !isempty(errs_drift)
+
+            # Removing the markdown markers from the page must fail synchronization.
+            write(full_page, "# Spherical Conduction\n\nNo fenced block here.\n")
+            ok_missing, errs_missing = validate_record_dict(
+                doc_Record; docs_dir=tmpdir, require_doc_pages=true
+            )
+            @test !ok_missing
+            @test !isempty(errs_missing)
+        end
+
+        # Invalid commit and config hashes and failing metric statuses must be rejected.
+        bad_commit = deepcopy(raw_record)
+        bad_commit["metadata"]["git_commit"] = "not-a-40-char-sha"
+        ok_commit, _ = validate_record_dict(bad_commit; require_doc_pages=false)
+        @test !ok_commit
+
+        bad_sha = deepcopy(raw_record)
+        bad_sha["metadata"]["config_sha256"] = "short"
+        ok_sha, _ = validate_record_dict(bad_sha; require_doc_pages=false)
+        @test !ok_sha
+
+        bad_status = deepcopy(raw_record)
+        bad_status["metrics"][1]["status"] = "FAIL"
+        ok_status, _ = validate_record_dict(bad_status; require_doc_pages=false)
+        @test !ok_status
+
+        bad_value = deepcopy(raw_record)
+        bad_value["metrics"][1]["value"] = bad_value["metrics"][1]["reference"] + 10.0
+        ok_val, _ = validate_record_dict(bad_value; require_doc_pages=false)
+        @test !ok_val
+
+        bad_comp = deepcopy(raw_record)
+        bad_comp["metrics"][1]["comparison"] = "unknown_mode"
+        ok_comp, _ = validate_record_dict(bad_comp; require_doc_pages=false)
+        @test !ok_comp
+
+        # Canonical config SHA-256 must match the committed record and detect changes.
+        base_cfg = make_spherical_conduction_config(; Nx=65)
+        @test canonical_config_sha256(base_cfg) == raw_record["metadata"]["config_sha256"]
+        altered_cfg = make_spherical_conduction_config(; Nx=65, k_rock=3.5)
+        @test canonical_config_sha256(altered_cfg) !=
+            raw_record["metadata"]["config_sha256"]
+    end
+
+    @testset "Analytical and 1D finite-volume reference solutions" begin
+        @test_throws DomainError analytical_T_BE(-1.0)
+        @test_throws DomainError analytical_T_BE(0.0; R_b=0.0)
+        @test_throws DomainError analytical_T_BE(0.0; dt_s=0.0)
+        @test_throws DomainError analytical_T_BE(0.0; n_modes=0)
+        @test_throws DomainError analytical_T_continuous(-1.0)
+        @test_throws DomainError analytical_T_continuous(0.0; t_tot_s=0.0)
+        @test_throws DomainError solve_1d_spherical_fv(1)
+        @test_throws DomainError solve_1d_spherical_fv(10; dt_s=0.0)
+
+        # Isothermal surface boundary and radial monotonicity from centre to surface.
+        T_center = analytical_T_BE(0.0; n_modes=500)
+        T_mid = analytical_T_BE(0.5 * R_PLANET; n_modes=500)
+        T_bound = analytical_T_BE(R_PLANET; n_modes=500)
+        @test isapprox(T_bound, T_SURF; atol=1.0e-10)
+        @test isapprox(analytical_T_continuous(R_PLANET; n_modes=500), T_SURF; atol=1.0e-10)
+        @test T_bound < T_mid < T_center
+
+        # Mode truncation convergence between 500 and 1000 eigenmodes.
+        dT_500 = T_center - T_SURF
+        dT_1000 = analytical_T_BE(0.0; n_modes=1000) - T_SURF
+        mode_rel_diff = abs(dT_500 - dT_1000) / dT_1000
+        @test mode_rel_diff <= 1.0e-7
+
+        # Cross-verification against independent 1D spherical finite-volume reference.
+        r_fv, T_fv = solve_1d_spherical_fv(500)
+        T_be_r1 = analytical_T_BE(r_fv[1]; n_modes=500)
+        dT_be_r1 = T_be_r1 - T_SURF
+        dT_fv_r1 = T_fv[1] - T_SURF
+        rel_diff_be_1dfv = abs(dT_be_r1 - dT_fv_r1) / dT_be_r1
+        @test rel_diff_be_1dfv <= 1.0e-5
+
+        # Sensitivity test: omitting step averaging breaks reference agreement by >= 2x.
+        T_be_no_avg = analytical_T_BE(r_fv[1]; n_modes=500, include_step_average=false)
+        dT_be_no_avg = T_be_no_avg - T_SURF
+        broken_rel_diff = abs(dT_be_no_avg - dT_fv_r1) / dT_fv_r1
+        min_broken_ref_diff = 2.0e-5
+        @test broken_rel_diff >= min_broken_ref_diff
+    end
+
+    @testset "Steady spherical Poisson conduction" begin
+        s33 = run_steady_spherical_conduction(33)
+        s65 = run_steady_spherical_conduction(65)
+
+        @test isapprox(s33.ratio_3d_2d, 2.0 / 3.0; atol=0.015, rtol=0.0225)
+        @test isapprox(s65.ratio_3d_2d, 2.0 / 3.0; atol=0.008, rtol=0.012)
+        @test s33.l2_rel <= 0.015
+        @test s65.l2_rel <= 0.008
+        @test s65.l2_rel < s33.l2_rel
+        @test s65.energy_res <= 0.05
+
+        # Canary sensitivity test: no-op configuration reproduces baseline and passes guards.
+        s65_noop = run_steady_spherical_conduction(
+            65;
+            spherical_metric=true,
+            metric_scale=1.0,
+            clamp_exterior=true,
+            perturb_stencil=false,
+        )
+        @test isapprox(s65_noop.ratio_3d_2d, s65.ratio_3d_2d; rtol=1.0e-12)
+        @test isapprox(s65_noop.l2_rel, s65.l2_rel; rtol=1.0e-12)
+
+        # Sensitivity tests: each broken physics assumption fails its guard by >= 2x.
+        min_ratio_break_65 = 2.0 * 0.008
+        min_l2_break_65 = 2.0 * 0.008
+        min_energy_break_65 = 2.0 * 0.05
+
+        s65_no_metric = run_steady_spherical_conduction(65; spherical_metric=false)
+        @test abs(s65_no_metric.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
+        @test s65_no_metric.l2_rel >= min_l2_break_65
+
+        s65_unclamped = run_steady_spherical_conduction(65; clamp_exterior=false)
+        @test s65_unclamped.l2_rel >= min_l2_break_65
+
+        s65_perturbed = run_steady_spherical_conduction(65; perturb_stencil=true)
+        @test abs(s65_perturbed.ratio_3d_2d - 2.0 / 3.0) >= min_ratio_break_65
+        @test s65_perturbed.l2_rel >= min_l2_break_65
+
+        s65_doubled_source = run_steady_spherical_conduction(65; metric_scale=2.0)
+        @test s65_doubled_source.energy_res >= min_energy_break_65
+    end
+
+    @testset "Transient spherical radiogenic conduction and reproducibility" begin
+        t33 = run_transient_spherical_conduction(33)
+        t65 = run_transient_spherical_conduction(65)
+
+        # Centre temperature rise against step-averaged analytical solution at r_min.
+        @test isapprox(t65.dT_center, t65.dT_be_rmin; atol=25.0, rtol=0.05)
+
+        # Centre error magnitude |sim - T_BE| in K falls by a factor >= 2 from Nx=33 to Nx=65.
+        center_err_reduction = abs(t33.center_err_K) / abs(t65.center_err_K)
+        min_reduction_factor = 2.0
+        @test center_err_reduction >= min_reduction_factor
+
+        # Interior profile L2 error, mesh convergence ratio, and sticky-air isothermal clamp.
+        conv_ratio_65_33 = t65.l2_rel / t33.l2_rel
+        @test t65.l2_rel <= 0.10
+        @test conv_ratio_65_33 <= 0.60
+        @test isapprox(t65.T_max_air_shell, T_SURF; atol=0.01)
+
+        # Canary sensitivity test: changing the inactive RNG seed reproduces baseline.
+        t33_noop = run_transient_spherical_conduction(33; seed=99)
+        @test isapprox(t33_noop.dT_center, t33.dT_center; rtol=1.0e-12)
+        @test isapprox(t33_noop.l2_rel, t33.l2_rel; rtol=1.0e-12)
+
+        # Sensitivity test 1: disabling spherical metric breaks centre, L2, and convergence by >= 2x.
+        t33_no_metric = run_transient_spherical_conduction(33; spherical_metric=false)
+        t65_no_metric = run_transient_spherical_conduction(65; spherical_metric=false)
+        min_center_rel_break = 2.0 * 0.05
+        min_l2_break = 2.0 * 0.10
+        min_conv_break = 2.0 * 0.60
+        @test abs(t65_no_metric.dT_center - t65_no_metric.dT_be_rmin) /
+              t65_no_metric.dT_be_rmin >= min_center_rel_break
+        @test t65_no_metric.l2_rel >= min_l2_break
+        @test (t65_no_metric.l2_rel / t33_no_metric.l2_rel) >= min_conv_break
+
+        # Sensitivity test 2: disabling sticky-air reset breaks air-shell clamp by >= 2x.
+        t65_no_reset = run_transient_spherical_conduction(65; disk_enabled=false)
+        min_air_clamp_break = 2.0 * 0.01
+        @test abs(t65_no_reset.T_max_air_shell - T_SURF) >= min_air_clamp_break
+
+        # Additional physics sensitivity tests at Nx=33 (conductivity, air heat capacity, regularization).
+        t33_zero_k = run_transient_spherical_conduction(33; k_rock=1.0e-6, k_air=1.0e-6)
+        @test abs(t33_zero_k.dT_center - t33_zero_k.dT_be_rmin) / t33_zero_k.dT_be_rmin >=
+            min_center_rel_break
+        @test t33_zero_k.l2_rel >= min_l2_break
+
+        t33_low_air_cp = run_transient_spherical_conduction(33; rhocp_air=3.3e6)
+        @test abs(t33_low_air_cp.T_max_air_shell - T_SURF) >= min_air_clamp_break
+        @test t33_low_air_cp.l2_rel >= min_l2_break
+
+        t33_overreg = run_transient_spherical_conduction(33; reg_cells=15.0)
+        @test abs(t33_overreg.dT_center - t33_overreg.dT_be_rmin) /
+              t33_overreg.dT_be_rmin >= min_center_rel_break
+
+        # Full benchmark evaluation and record reproducibility check.
+        bench = evaluate_spherical_conduction_benchmark()
+        ok_repro, repro_errs = check_validation_reproducibility(bench, record_path)
+        @test ok_repro
+        @test isempty(repro_errs)
+
+        # Mutating a recorded metric or config hash in the record must fail reproducibility.
+        mktempdir() do tmpdir
+            tampered_path = joinpath(tmpdir, "spherical_conduction.toml")
+            raw_rec = TOML.parsefile(record_path)
+            raw_rec["metrics"][1]["value"] += 0.05
+            open(tampered_path, "w") do io
+                TOML.print(io, raw_rec)
+            end
+            ok_tampered, errs_tampered = check_validation_reproducibility(
+                bench, tampered_path; check_recorded_values=true
+            )
+            @test !ok_tampered
+            @test !isempty(errs_tampered)
+
+            bad_cfg_path = joinpath(tmpdir, "spherical_conduction_cfg.toml")
+            raw_cfg_rec = TOML.parsefile(record_path)
+            raw_cfg_rec["metadata"]["config_sha256"] = repeat("0", 64)
+            open(bad_cfg_path, "w") do io
+                TOML.print(io, raw_cfg_rec)
+            end
+            ok_bad_cfg, errs_bad_cfg = check_validation_reproducibility(bench, bad_cfg_path)
+            @test !ok_bad_cfg
+            @test !isempty(errs_bad_cfg)
+        end
+    end
+end
