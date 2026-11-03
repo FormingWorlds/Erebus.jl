@@ -140,6 +140,7 @@ function diffuse_and_update_markers!(
         core.xm, core.ym, core.sxxm, core.sxym, g.DSXX, g.DSXY, marknum; coords=coords
     )
 
+    tkm_start = cfg.solver.dsubgridt > 0.0 ? copy(core.tkm) : core.tkm
     apply_subgrid_temperature_diffusion!(
         core.xm,
         core.ym,
@@ -171,6 +172,8 @@ function diffuse_and_update_markers!(
             RHOCPSUM,
             marknum;
             coords=coords,
+            tkm_bound=tkm_start,
+            volume=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
         )
     end
 

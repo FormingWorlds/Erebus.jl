@@ -1399,6 +1399,98 @@ include("test_helpers.jl")
         # Marker 1 rejects 5 K of cooling; the receivers can give up only 0.2 K of it.
         expected_lost = 5.0 * capacity_l[1] - 0.2 * sum(capacity_l[2:end])
         @test result_last.heat_lost ≈ expected_lost rtol = 1.0e-10
+
+        # With more passes the same heat moves on, so it counts once as rejected.
+        tkm_more = fill(500.2, n_l)
+        tkm_more[1] = 20.0
+        result_more = limit!(tkm_more, tm_l, DT_l, tk2_l)
+        @test result_more.heat_rejected ≈ 5.0 * capacity_l[1] rtol = 1.0e-10
+        @test result_more.heat_lost ≈ expected_lost rtol = 1.0e-10
+        @test result_more.n_limited == n_l
+
+        # A receiver that runs out of range passes its share on to the others.
+        tkm_pass = fill(570.0, n_l)
+        tkm_pass[1] = 20.0
+        tkm_pass[2] = 500.2
+        tkm_pass_0 = copy(tkm_pass)
+        result_pass = limit!(tkm_pass, tm_l, DT_l, tk2_l)
+        @test tkm_pass[2] - 5.0 ≈ 495.0 rtol = 1.0e-12
+        @test sum(capacity_l .* (tkm_pass .- tkm_pass_0)) ≈ 0.0 atol = 1.0e-3
+        @test result_pass.heat_lost ≈ 0.0 atol = 1.0e-3
+        @test result_pass.heat_rejected ≈ 5.0 * capacity_l[1] rtol = 1.0e-10
+        @test result_pass.n_limited == 2
+
+        # Under the spherical metric a marker stands for a volume, so the heat closes
+        # with that weight and not without it.
+        volume_l = 1.0e5 .* collect(1:n_l) .^ 2
+        tkm_vol = copy(tkm_0)
+        result_vol = Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            tkm_vol,
+            capacity_l,
+            DT_l,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+            volume=volume_l,
+        )
+        @test tkm_vol[1] - 5.0 ≈ 20.0 rtol = 1.0e-12
+        @test sum(volume_l .* capacity_l .* (tkm_vol .- tkm_0)) ≈ 0.0 atol = 1.0
+        @test result_vol.heat_rejected ≈ 5.0 * capacity_l[1] * volume_l[1] rtol = 1.0e-10
+
+        # The bound can come from before the subgrid relaxation of this step.
+        tkm_rel = fill(570.0, n_l)
+        tkm_rel[1] = 30.0
+        tkm_rel_0 = copy(tkm_rel)
+        tkm_start = copy(tkm_rel)
+        tkm_start[1] = 20.0
+        result_rel = Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            tkm_rel,
+            capacity_l,
+            DT_l,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+            tkm_bound=tkm_start,
+        )
+        @test tkm_rel == tkm_rel_0
+        @test result_rel.n_limited == 0
+        @test result_rel.heat_rejected ≈ 0.0 atol = 1.0e-12
+
+        # An undefined marker temperature stays with that marker.
+        tkm_nan = copy(tkm_0)
+        tkm_nan[3] = NaN
+        limit!(tkm_nan, tm_l, DT_l, tk2_l)
+        @test isnan(tkm_nan[3])
+        @test count(isfinite, tkm_nan) == n_l - 1
+
+        limit_args(n, passes, cap, dt) = Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            copy(tkm_0),
+            cap,
+            dt,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n;
+            coords=coords_l,
+            max_passes=passes,
+        )
+        @test_throws DomainError limit_args(-1, 4, capacity_l, DT_l)
+        @test_throws DomainError limit_args(n_l, 0, capacity_l, DT_l)
+        @test_throws ArgumentError limit_args(n_l, 4, capacity_l[1:(n_l - 1)], DT_l)
+        @test_throws ArgumentError limit_args(n_l, 4, capacity_l, zeros(2, 2))
     end
 
     @testset "apply_subgrid_stress_diffusion!(): Maxwell viscoelastic relaxation" begin

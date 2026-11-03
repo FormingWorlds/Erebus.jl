@@ -4722,7 +4722,7 @@ $(SIGNATURES)
 A marker takes the temperature change of the four nodes around it. A rock marker must not
 fall below `min(T_m, min(T_nodes))`, because conduction creates no local minimum. The
 rejected cooling goes to the other rock markers at the same nodes, weighted by their heat
-capacity, so the heat of the step is unchanged. Heating has no such bound, because a heat
+capacity and volume, so the heat of the step is unchanged. Heating has no such bound, because a heat
 source can raise a marker above its nodes. Sticky-air markers take the plain increment and
 take no share, because the next step resets them to the ambient temperature. This function
 writes the correction into `tkm`, and the marker update then adds the grid increment.
@@ -4737,12 +4737,20 @@ writes the correction into `tkm`, and the marker update then adds the grid incre
     - DEFICIT: scratch array at P nodes for the rejected heat
     - CAPACITY: scratch array at P nodes for the heat capacity of the receiving markers
     - marknum: total number of markers in use
+    - tkm_bound: marker temperature for the bound, the value at the start of the step when
+      subgrid diffusion has already changed `tkm`
+    - volume: marker volume weight under the spherical metric, or `nothing` for equal weights
 
 # Returns
 
     - named tuple: `n_limited`, the number of markers limited, and `heat_rejected` and
       `heat_lost`, the sums of absolute rejected and undelivered heat per unit volume and
-      weight [J/m^3]
+      weight [J/m^3], times the `volume` weight when one is given
+
+# Throws
+
+    - `DomainError`: if `marknum` is negative or `max_passes` is below 1
+    - `ArgumentError`: if an array is too short or a grid array has the wrong size
 """
 function limit_marker_temperature_increment!(
     xm,
@@ -4757,8 +4765,21 @@ function limit_marker_temperature_increment!(
     marknum;
     coords::GridCoordinates=default_grid_coordinates(),
     max_passes::Int=4,
+    tkm_bound=tkm,
+    volume=nothing,
 )
+    marknum >= 0 || throw(DomainError(marknum, "marknum must be non-negative"))
+    max_passes >= 1 || throw(DomainError(max_passes, "max_passes must be at least 1"))
+    marker_arrays = (xm, ym, tm, tkm, rhocptotalm, tkm_bound)
+    all(a -> length(a) >= marknum, marker_arrays) ||
+        throw(ArgumentError("marker arrays must hold at least marknum entries"))
+    (volume === nothing || length(volume) >= marknum) ||
+        throw(ArgumentError("volume must hold at least marknum entries"))
+    size(DT) == size(tk2) == size(DEFICIT) == size(CAPACITY) ||
+        throw(ArgumentError("DT, tk2, DEFICIT and CAPACITY must have the same size"))
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
+    size(DT) == (coords.Ny1, coords.Nx1) ||
+        throw(ArgumentError("DT must have the size of the P grid"))
     limited = falses(marknum)
     correction = zeros(marknum)
     n_limited = 0
@@ -4776,29 +4797,35 @@ function limit_marker_temperature_increment!(
         imin_p_val,
         imax_p_val,
     )
+    @inline marker_heat(m) = rhocptotalm[m] * (volume === nothing ? 1.0 : volume[m])
+    @inline function marker_range(m, i, j, weights)
+        T_new = tkm[m] + correction[m] + dot4(grid_vector(i, j, DT), weights)
+        return T_new, min(tkm_bound[m], minimum(grid_vector(i, j, tk2)))
+    end
 
-    for _ in 1:max_passes
+    for pass in 1:max_passes
         DEFICIT .= 0.0
         CAPACITY .= 0.0
         any_limited = false
         @inbounds for m in 1:marknum
             (limited[m] || tm[m] >= 3) && continue
             i, j, weights = marker_weights(m)
-            T_new = tkm[m] + correction[m] + dot4(grid_vector(i, j, DT), weights)
-            T_limited = max(T_new, min(tkm[m], minimum(grid_vector(i, j, tk2))))
-            if T_limited == T_new
-                interpolate_add_to_grid!(i, j, weights, rhocptotalm[m], CAPACITY)
-            else
-                excess = T_new - T_limited
-                rejected = excess * rhocptotalm[m]
+            T_new, T_bound = marker_range(m, i, j, weights)
+            if T_new < T_bound
+                excess = T_new - T_bound
+                rejected = excess * marker_heat(m)
                 interpolate_add_to_grid!(i, j, weights, rejected, DEFICIT)
                 correction[m] -= excess
                 limited[m] = true
                 n_limited += 1
-                heat_rejected += abs(rejected)
+                # Later passes only move on the heat that the first pass rejected.
+                pass == 1 && (heat_rejected += abs(rejected))
                 any_limited = true
+            else
+                interpolate_add_to_grid!(i, j, weights, marker_heat(m), CAPACITY)
             end
         end
+        n_limited == 0 && return (; n_limited, heat_rejected, heat_lost)
         any_limited || break
         @inbounds for j in axes(DEFICIT, 2), i in axes(DEFICIT, 1)
             if CAPACITY[i, j] > 0.0
@@ -4818,12 +4845,12 @@ function limit_marker_temperature_increment!(
     @inbounds for m in 1:marknum
         (limited[m] || tm[m] >= 3) && continue
         i, j, weights = marker_weights(m)
-        T_new = tkm[m] + correction[m] + dot4(grid_vector(i, j, DT), weights)
-        excess = T_new - max(T_new, min(tkm[m], minimum(grid_vector(i, j, tk2))))
-        if excess != 0.0
+        T_new, T_bound = marker_range(m, i, j, weights)
+        if T_new < T_bound
+            excess = T_new - T_bound
             correction[m] -= excess
             n_limited += 1
-            heat_lost += abs(excess * rhocptotalm[m])
+            heat_lost += abs(excess * marker_heat(m))
         end
     end
     @inbounds for m in 1:marknum
