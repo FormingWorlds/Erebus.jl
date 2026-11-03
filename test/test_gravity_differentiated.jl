@@ -684,7 +684,7 @@ using Erebus
                 M_core + (4.0 / 3.0) * π * rho_m * (r_node^3 - rc^3)
             end
             g_shell = const_G * M_enc / r_node^2
-            @test abs(gx[i_mid, j]) ≈ g_shell rtol = 0.03
+            @test abs(gx[i_mid, j]) ≈ g_shell rtol = 0.02
         end
         # The field does not depend on a caller that asks for the potential.
         gx_nofi = zeros(size(gx))
