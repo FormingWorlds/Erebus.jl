@@ -1396,7 +1396,9 @@ include("test_helpers.jl")
             max_passes=1,
         )
         @test all(tkm_last[2:end] .- 5.0 .≈ 495.0)
-        @test result_last.heat_lost > 0.0
+        # Marker 1 rejects 5 K of cooling; the receivers can give up only 0.2 K of it.
+        expected_lost = 5.0 * capacity_l[1] - 0.2 * sum(capacity_l[2:end])
+        @test result_last.heat_lost ≈ expected_lost rtol = 1.0e-10
     end
 
     @testset "apply_subgrid_stress_diffusion!(): Maxwell viscoelastic relaxation" begin
