@@ -157,5 +157,24 @@ function diffuse_and_update_markers!(
         dsubgridt=cfg.solver.dsubgridt,
     )
 
+    # The first step sets markers from the grid, without an increment.
+    if state.timestep > 1
+        limit_marker_temperature_increment!(
+            core.xm,
+            core.ym,
+            core.tm,
+            core.tkm,
+            core.rhocptotalm,
+            g.DT,
+            g.tk2,
+            TKSUM,
+            RHOCPSUM,
+            marknum;
+            coords=coords,
+            DT_conduction=cfg.solver.dsubgridt > 0.0 ? g.DT0 : g.DT,
+            w3d=cfg.geometry.spherical_metric ? core.w3d_m : nothing,
+        )
+    end
+
     return nothing
 end

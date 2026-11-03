@@ -162,6 +162,81 @@ using Erebus
         @test all(>(0.0), state.markers.core.etavpm)
     end
 
+    @testset "Marker Temperature Range in the Post-Convergence Update" begin
+        cfg = default_config()
+        state, coords_actual, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        rock = findfirst(<(3), core.tm)
+        core.tkm[rock] = 20.0
+        state.grids.tk2 .= 300.0
+        state.grids.DT .= -5.0
+
+        # The first step sets markers from the grid, so it takes no correction.
+        state.timestep = 1
+        tkm_first = copy(core.tkm)
+        diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+        @test core.tkm ≈ tkm_first rtol = 1.0e-14
+
+        # The projection of a real step sets the heat capacity of each rock marker.
+        rocks = findall(<(3), core.tm)
+        core.rhocptotalm[rocks] .= 3.0e6
+        core.tkm[rocks] .= 500.0
+        core.tkm[rock] = 20.0
+        tkm_before = copy(core.tkm)
+        state.timestep = 2
+        state.grids.DT .= -5.0
+        diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+        @test core.tkm[rock] ≈ 25.0 atol = 1.0e-9
+        # The other rock markers take the cooling that this marker rejects.
+        @test sum(core.tkm[rocks] .- tkm_before[rocks]) ≈ 0.0 atol = 1.0e-9
+        @test sum(min.(core.tkm[rocks] .- tkm_before[rocks], 0.0)) ≈ -5.0 atol = 1.0e-9
+    end
+
+    @testset "Marker Temperature Range with Subgrid Relaxation" begin
+        cfg = override_config(default_config(), Dict{String,Any}("solver.dsubgridt" => 1.0))
+        # With no conduction in the increment the limit must not act: the first step skips
+        # the limit, and the later step must give the same marker temperatures.
+        function relaxed_tkm(timestep)
+            state, coords_actual, ws, _, _ = init_simulation(cfg)
+            core = state.markers.core
+            rocks = findall(<(3), core.tm)
+            core.rhocptotalm[rocks] .= 3.0e6
+            core.tkm[rocks] .= 100.0
+            state.grids.tk1 .= 300.0
+            state.grids.tk2 .= 300.0
+            state.grids.DT .= 0.0
+            state.timestep = timestep
+            diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+            return copy(core.tkm)
+        end
+        tkm_free = relaxed_tkm(1)
+        @test relaxed_tkm(2) ≈ tkm_free rtol = 1.0e-12
+        # The relaxation moved the markers, so the comparison holds a real change.
+        @test !isapprox(tkm_free[tkm_free .< 200.0], fill(100.0, count(tkm_free .< 200.0)))
+    end
+
+    @testset "Marker Temperature Range under the Spherical Metric" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => true)
+        )
+        state, coords_actual, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        rocks = findall(<(3), core.tm)
+        core.rhocptotalm[rocks] .= 3.0e6
+        core.tkm[rocks] .= 500.0
+        rock = rocks[argmin(abs.(core.w3d_m[rocks] .- 0.5 * maximum(core.w3d_m[rocks])))]
+        core.tkm[rock] = 20.0
+        tkm_before = copy(core.tkm)
+        state.grids.tk2 .= 300.0
+        state.grids.DT .= -5.0
+        state.timestep = 2
+        diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+        change = core.tkm[rocks] .- tkm_before[rocks]
+        @test core.tkm[rock] ≈ 25.0 atol = 1.0e-9
+        # The heat closes only when each marker counts with its out-of-plane length.
+        @test sum(core.w3d_m[rocks] .* change) ≈ 0.0 atol = 1.0e-9 * 5.0 * core.w3d_m[rock]
+    end
+
     @testset "Telescoping Trigger Evaluation" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)
