@@ -314,9 +314,10 @@ end # function compute_kfluidm
 Compute geometric metric volumetric heat source Q_metric [W/m³] on P-nodes
 to account for 3D spherical divergence on a 2D Cartesian grid:
 
-    Q_metric = (k / r_eff²) * [ (x - xc) * (∂T/∂x) + (y - yc) * (∂T/∂y) ]
+    Q_metric = (1 / r_eff²) * [ (x - xc) * q_x + (y - yc) * q_y ]
 
-inside r <= rplanet, and 0 in sticky air.
+inside r <= rplanet, and 0 in sticky air. Here `q_x` and `q_y` are the means of the conductive
+fluxes `k ∂T/∂x` and `k ∂T/∂y` on the 2 neighbouring faces.
 
 # Arguments
 - `Q_metric`: Output matrix [W/m³] of size (Ny1, Nx1)
@@ -343,8 +344,8 @@ function compute_spherical_metric_heat_source!(
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx = coords.dx
     dy = coords.dy
-    inv_2dx = inv(2.0 * dx)
-    inv_2dy = inv(2.0 * dy)
+    inv_dx = inv(dx)
+    inv_dy = inv(dy)
     eps_r = reg_cells * min(dx, dy)
     eps_r2 = eps_r^2
     rplanet2 = rplanet^2
@@ -359,11 +360,22 @@ function compute_spherical_metric_heat_source!(
             dy_c = yi - ycenter
             r2 = dx_c^2 + dy_c^2
             if r2 <= rplanet2
-                k_node = 0.25 * (KX[i, j - 1] + KX[i, j] + KY[i - 1, j] + KY[i, j])
-                dT_dx = (tk[i, j + 1] - tk[i, j - 1]) * inv_2dx
-                dT_dy = (tk[i + 1, j] - tk[i - 1, j]) * inv_2dy
-                r_eff2 = r2 + eps_r2
-                Q_metric[i, j] = (k_node / r_eff2) * (dx_c * dT_dx + dy_c * dT_dy)
+                # Face fluxes keep the term finite across a conductivity jump.
+                q_x =
+                    0.5 *
+                    (
+                        KX[i, j] * (tk[i, j + 1] - tk[i, j]) +
+                        KX[i, j - 1] * (tk[i, j] - tk[i, j - 1])
+                    ) *
+                    inv_dx
+                q_y =
+                    0.5 *
+                    (
+                        KY[i, j] * (tk[i + 1, j] - tk[i, j]) +
+                        KY[i - 1, j] * (tk[i, j] - tk[i - 1, j])
+                    ) *
+                    inv_dy
+                Q_metric[i, j] = (dx_c * q_x + dy_c * q_y) / (r2 + eps_r2)
             end
         end
     end

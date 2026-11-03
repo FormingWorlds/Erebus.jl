@@ -1043,7 +1043,9 @@ function load_simulation_state(
                     CheckpointError(
                         "Unsupported grid geometry override: " *
                         join(grid_diffs, ", ") *
-                        ". Grid dimensions and geometry cannot be changed on restart.",
+                        ". Grid dimensions and geometry cannot be changed on restart. " *
+                        "A checkpoint of a 2-D disk needs geometry.spherical_metric = false " *
+                        "and geometry.gravity_mode = \"poisson2d\" in its config.",
                     ),
                 )
             end

@@ -111,7 +111,7 @@ Grid doubling alters the sparsity structure and dimensions of discrete different
 
 ### Gravitational Poisson Equation and Enclosed-Mass Mode
 
-Under `geometry.gravity_mode = :poisson2d`, the self-gravitational potential $\Phi$ satisfies the 2D Poisson equation with cylindrical/spherical geometric correction factor $2/3$ (Gerya, 2019):
+The default `geometry.gravity_mode = :enclosed_mass` needs no gravity matrix, so grid doubling factorizes nothing for gravity. Under `geometry.gravity_mode = :poisson2d`, the self-gravitational potential $\Phi$ satisfies the 2D Poisson equation with cylindrical/spherical geometric correction factor $2/3$ (Gerya, 2019):
 
 $$\nabla^2 \Phi = \frac{8}{3} \pi G \rho_{\text{total}}$$
 

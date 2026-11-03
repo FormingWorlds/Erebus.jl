@@ -314,6 +314,8 @@ where $m_{\text{melt,in}}$ is the incoming melt mass. Melt departs the donor cel
 
 ### 1. 2D Poisson Formulation (`:poisson2d`)
 
+This mode is not the default. Use it with `geometry.spherical_metric = false` for a 2-D disk.
+
 The standard 2D Cartesian solver solves the Poisson equation for gravitational potential $\Phi$:
 
 $$\nabla^2 \Phi = 4 \pi G \rho_{\text{scaled}}$$
@@ -330,6 +332,8 @@ For a planetesimal with $r_c = 0.5 R$, $\rho_c = 7000\text{ kg/m}^3$, and $\rho_
 
 ### 2. 3D Enclosed-Mass Formulation (`:enclosed_mass`)
 
+This is the default mode.
+
 To eliminate cylindrical artifacts in differentiated bodies, the enclosed-mass mode calculates the true spherically symmetric 3D mass distribution from Lagrangian markers. The domain is divided into $N_r = \text{gravity\_nr\_factor} \times N_x$ radial bins centered at $(x_c, y_c)$ up to the planet radius $R$:
 
 $$M_{3D}(<r) = \sum_{r_m < r, \, \mathrm{tm}_m < 3} \rho_{(m)} A_m 2 r_m$$
@@ -342,17 +346,15 @@ g(r_1) \frac{r}{r_1}, & r < r_1 \\
 \frac{G M_{\text{total}}}{r^2}, & r > R
 \end{cases}$$
 
-where $r_1 = R / N_r$ is the radius of the first radial bin. Inside the first bin ($r < r_1$), linear core regularisation guarantees $g(0) = 0$ without numerical singularity. The radial acceleration is applied vectorially to staggered velocity nodes:
-
-$$g_x(x, y) = -g(r) \frac{x - x_c}{r}, \qquad g_y(x, y) = -g(r) \frac{y - y_c}{r}$$
-
-with $g_x = 0, g_y = 0$ at $r = 0$.
-
-When the potential array $\Phi$ (`FI`) is requested at P nodes, the potential is reconstructed by radial integration inward from the boundary condition $\Phi(r_{\max}) = -G M_{\text{total}} / r_{\max}$:
+where $r_1 = R / N_r$ is the radius of the first radial bin. Inside the first bin ($r < r_1$), linear core regularisation guarantees $g(0) = 0$ without numerical singularity. The potential at the P nodes follows from radial integration inward from the boundary condition $\Phi(r_{\max}) = -G M_{\text{total}} / r_{\max}$:
 
 $$\Phi(r) = \Phi(r_{\max}) - \int_r^{r_{\max}} g(r')\,dr'$$
 
-satisfying $\nabla\Phi = -g(r)\mathbf{\hat{r}}$ and forming a potential well with minimum $\Phi(0) \approx -1.5 G M_{\text{total}} / R$ for a uniform sphere.
+This gives a potential well with minimum $\Phi(0) \approx -1.5 G M_{\text{total}} / R$ for a uniform sphere. Gravity at the staggered velocity nodes is the discrete gradient of this potential:
+
+$$g_{x,(i,j)} = -\frac{\Phi_{(i,j+1)} - \Phi_{(i,j)}}{\Delta x}, \qquad g_{y,(i,j)} = -\frac{\Phi_{(i+1,j)} - \Phi_{(i,j)}}{\Delta y}$$
+
+The discrete curl of this field is zero. Pressure can therefore balance gravity in a body with a radial density profile, and gravity alone drives no flow in such a body. A radial vector evaluated directly at the staggered nodes has a discrete curl of a few percent of $g / \Delta x$ near the surface, and this curl drives a false circulation.
 
 ![Two-layer differentiated body self-gravity benchmark](../assets/gravity_two_layer_benchmark.png)
 

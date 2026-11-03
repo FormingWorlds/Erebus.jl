@@ -10,6 +10,7 @@ Verifies:
 6. Regularisation at the origin: finite node values and |g| < g(r_1) near center.
 7. Shell-averaged response for off-center core markers.
 8. Validation and rejection of invalid gravity configuration options.
+9. A gravity field that is the gradient of a potential, with zero discrete curl.
 """
 
 using Test
@@ -623,5 +624,83 @@ using Erebus
             @test all(isfinite, res.grids.gy)
             @test all(isfinite, res.grids.FI)
         end
+    end
+
+    @testset "Enclosed Mass Gravity has Zero Discrete Curl" begin
+        # A two-layer body at rest: a metal core below a rock mantle.
+        R = 50_000.0
+        rc = 25_000.0
+        rho_c = 7000.0
+        rho_m = 3000.0
+        Nx = 33
+        coords = GridCoordinates(Nx, Nx; xsize=140_000.0, ysize=140_000.0)
+        dxm = coords.xsize / ((Nx - 1) * 4)
+        xc = coords.xcenter
+        yc = coords.ycenter
+        xm = Float64[]
+        ym = Float64[]
+        rhototalm = Float64[]
+        tm = Int[]
+        for j in 1:((Nx - 1) * 4), i in 1:((Nx - 1) * 4)
+            x = (j - 0.5) * dxm
+            y = (i - 0.5) * dxm
+            r = hypot(x - xc, y - yc)
+            push!(xm, x)
+            push!(ym, y)
+            push!(rhototalm, r <= rc ? rho_c : (r <= R ? rho_m : 1.0))
+            push!(tm, r <= rc ? 1 : (r <= R ? 2 : 3))
+        end
+        gx = zeros(coords.Ny1, coords.Nx1)
+        gy = zeros(coords.Ny1, coords.Nx1)
+        FI = zeros(coords.Ny1, coords.Nx1)
+        Erebus.compute_gravity_enclosed_mass!(
+            gx,
+            gy;
+            xm=xm,
+            ym=ym,
+            rhototalm=rhototalm,
+            tm=tm,
+            coords=coords,
+            gravity_nr_factor=4,
+            rplanet=R,
+            FI=FI,
+        )
+        curl = [
+            (gy[i, j + 1] - gy[i, j]) / coords.dx - (gx[i + 1, j] - gx[i, j]) / coords.dy
+            for i in 1:Nx, j in 1:Nx
+        ]
+        # A field with curl has no pressure balance, so a body at rest would start to flow.
+        @test maximum(abs, curl) < 1.0e-12 * maximum(abs, gx) / coords.dx
+        @test gx[10, 12] ≈ -(FI[10, 13] - FI[10, 12]) / coords.dx rtol = 1.0e-12
+        # The discrete gradient stays close to the shell theorem in both layers.
+        i_mid = argmin(abs.(coords.yvx .- yc))
+        M_core = (4.0 / 3.0) * π * rho_c * rc^3
+        for r_target in (15_000.0, 40_000.0)
+            j = argmin(abs.(coords.xvx .- (xc + r_target)))
+            r_node = hypot(coords.xvx[j] - xc, coords.yvx[i_mid] - yc)
+            M_enc = if r_node <= rc
+                (4.0 / 3.0) * π * rho_c * r_node^3
+            else
+                M_core + (4.0 / 3.0) * π * rho_m * (r_node^3 - rc^3)
+            end
+            g_shell = const_G * M_enc / r_node^2
+            @test abs(gx[i_mid, j]) ≈ g_shell rtol = 0.02
+        end
+        # The field does not depend on a caller that asks for the potential.
+        gx_nofi = zeros(size(gx))
+        gy_nofi = zeros(size(gy))
+        Erebus.compute_gravity_enclosed_mass!(
+            gx_nofi,
+            gy_nofi;
+            xm=xm,
+            ym=ym,
+            rhototalm=rhototalm,
+            tm=tm,
+            coords=coords,
+            gravity_nr_factor=4,
+            rplanet=R,
+        )
+        @test gx_nofi ≈ gx rtol = 1.0e-14
+        @test gy_nofi ≈ gy rtol = 1.0e-14
     end
 end

@@ -6,10 +6,10 @@
 id = "spherical_conduction"
 title = "Spherical Conduction and Radiogenic Heating Validation"
 page = "validation/thermal_conduction.md"
-src_commit = "1a3fa734ecfa5ebd9838036ac1bbee96175aaf3c"
-timestamp_utc = "2026-11-03T05:30:01Z"
+src_commit = "24e6ce6dea97cc1b9b27ff42b27e662593164d64"
+timestamp_utc = "2026-11-03T19:12:14Z"
 julia_version = "1.12.7"
-config_sha256 = "333cd88874b10beada2473d9bc9cfd20aa9c16601d914a926d15ca14276f2132"
+config_sha256 = "385b473b7ebece0f819a9bb392d6288441414611e279436dae7918482293313c"
 reference_type = "analytical_and_1d_fv"
 reference_citation = "Exact spherical Poisson solution and step-averaged backward-Euler Dirichlet eigenmode series cross-verified against a 1D spherical finite-volume solver"
 
@@ -34,7 +34,7 @@ id = "steady_center_dT_ratio_3d_2d_nx33"
 case = "steady"
 description = "Steady 3D-to-2D centre warming ratio (Nx=33)"
 nx = 33
-value = 6.7242188109707790e-01
+value = 6.7242188109707779e-01
 reference = 6.6666666666666663e-01
 atol = 1.0000000000000000e-02
 rtol = 1.4999999999999999e-02
@@ -47,7 +47,7 @@ id = "steady_center_dT_ratio_3d_2d_nx65"
 case = "steady"
 description = "Steady 3D-to-2D centre warming ratio (Nx=65)"
 nx = 65
-value = 6.6856168562265716e-01
+value = 6.6856168562265705e-01
 reference = 6.6666666666666663e-01
 atol = 1.0000000000000000e-02
 rtol = 1.4999999999999999e-02
@@ -60,7 +60,7 @@ id = "steady_profile_l2_rel_error_nx33"
 case = "steady"
 description = "Steady radial profile L2 relative error (r <= R, Nx=33)"
 nx = 33
-value = 1.1412817064825223e-01
+value = 1.1412817064825222e-01
 reference = 0.0000000000000000e+00
 atol = 1.4999999999999999e-01
 rtol = 0.0000000000000000e+00
@@ -73,7 +73,7 @@ id = "steady_profile_l2_rel_error_nx65"
 case = "steady"
 description = "Steady radial profile L2 relative error (r <= R, Nx=65)"
 nx = 65
-value = 6.4513475434717360e-02
+value = 6.4513475434717318e-02
 reference = 0.0000000000000000e+00
 atol = 8.0000000000000002e-02
 rtol = 0.0000000000000000e+00
@@ -86,7 +86,7 @@ id = "steady_energy_conservation_residual_nx65"
 case = "steady"
 description = "Steady discrete energy conservation residual (Nx=65)"
 nx = 65
-value = 3.7491997530608797e-14
+value = 3.7795576457982143e-14
 reference = 0.0000000000000000e+00
 atol = 9.9999999999999994e-12
 rtol = 0.0000000000000000e+00
@@ -112,7 +112,7 @@ id = "transient_center_dT_nx65"
 case = "transient"
 description = "Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65)"
 nx = 65
-value = 4.9084251282115281e+02
+value = 4.9084277064111450e+02
 reference = 5.0707692944959467e+02
 atol = 2.5000000000000000e+01
 rtol = 5.0000000000000003e-02
@@ -125,7 +125,7 @@ id = "transient_profile_l2_rel_error_nx65"
 case = "transient"
 description = "Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65)"
 nx = 65
-value = 8.2866605603855475e-02
+value = 8.2866233482989340e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
@@ -138,7 +138,7 @@ id = "transient_profile_l2_convergence_ratio_65_33"
 case = "transient"
 description = "Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33)"
 nx = 65
-value = 4.2046710676389570e-01
+value = 4.2046482521281836e-01
 reference = 0.0000000000000000e+00
 atol = 5.9999999999999998e-01
 rtol = 0.0000000000000000e+00
@@ -151,7 +151,7 @@ id = "transient_max_air_shell_temperature_nx65"
 case = "transient"
 description = "Maximum sticky-air temperature in r >= R + dx (Nx=65)"
 nx = 65
-value = 1.7000000145193684e+02
+value = 1.7000000145234679e+02
 reference = 1.7000000000000000e+02
 atol = 1.0000000000000000e-02
 rtol = 0.0000000000000000e+00

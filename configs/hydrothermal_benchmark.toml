@@ -9,6 +9,8 @@ Nx = 33                  # basic grid resolution in x
 Ny = 33                  # basic grid resolution in y
 
 [geometry]
+spherical_metric = false # this benchmark and its figures use a 2-D disk
+gravity_mode = "poisson2d"
 rplanet = 50000.0       # planetesimal radius [m]
 rcrust = 50000.0        # crust radius [m] (single planet phase)
 xcenter = 70000.0       # horizontal center [m]

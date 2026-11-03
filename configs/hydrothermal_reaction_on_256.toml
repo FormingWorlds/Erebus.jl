@@ -5,6 +5,8 @@ Nx = 257
 Ny = 257
 
 [geometry]
+spherical_metric = false # this benchmark and its figures use a 2-D disk
+gravity_mode = "poisson2d"
 rplanet = 50000.0
 rcrust = 50000.0
 xcenter = 70000.0

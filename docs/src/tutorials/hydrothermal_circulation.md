@@ -51,6 +51,8 @@ Nx    = 33        # Grid points in x
 Ny    = 33        # Grid points in y
 
 [geometry]
+spherical_metric = false  # This benchmark uses a 2-D disk
+gravity_mode = "poisson2d"
 rplanet  = 50000.0  # Radius [m]
 rcrust   = 50000.0  # Crust radius [m]
 xcenter  = 70000.0  # Center x [m]

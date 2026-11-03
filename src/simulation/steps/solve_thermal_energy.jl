@@ -175,7 +175,13 @@ function solve_thermal_energy!(
         coords=coords,
     )
 
-    if cfg.geometry.spherical_metric && g.Q_metric !== nothing
+    if cfg.geometry.spherical_metric
+        g.Q_metric === nothing && throw(
+            ArgumentError(
+                "geometry.spherical_metric is true but this state has no Q_metric array. " *
+                "A checkpoint made with the option off must set it to false.",
+            ),
+        )
         compute_spherical_metric_heat_source!(
             g.Q_metric,
             g.tk1,
