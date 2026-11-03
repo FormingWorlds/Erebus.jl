@@ -346,17 +346,15 @@ g(r_1) \frac{r}{r_1}, & r < r_1 \\
 \frac{G M_{\text{total}}}{r^2}, & r > R
 \end{cases}$$
 
-where $r_1 = R / N_r$ is the radius of the first radial bin. Inside the first bin ($r < r_1$), linear core regularisation guarantees $g(0) = 0$ without numerical singularity. The radial acceleration is applied vectorially to staggered velocity nodes:
-
-$$g_x(x, y) = -g(r) \frac{x - x_c}{r}, \qquad g_y(x, y) = -g(r) \frac{y - y_c}{r}$$
-
-with $g_x = 0, g_y = 0$ at $r = 0$.
-
-When the potential array $\Phi$ (`FI`) is requested at P nodes, the potential is reconstructed by radial integration inward from the boundary condition $\Phi(r_{\max}) = -G M_{\text{total}} / r_{\max}$:
+where $r_1 = R / N_r$ is the radius of the first radial bin. Inside the first bin ($r < r_1$), linear core regularisation guarantees $g(0) = 0$ without numerical singularity. The potential at the P nodes follows from radial integration inward from the boundary condition $\Phi(r_{\max}) = -G M_{\text{total}} / r_{\max}$:
 
 $$\Phi(r) = \Phi(r_{\max}) - \int_r^{r_{\max}} g(r')\,dr'$$
 
-satisfying $\nabla\Phi = -g(r)\mathbf{\hat{r}}$ and forming a potential well with minimum $\Phi(0) \approx -1.5 G M_{\text{total}} / R$ for a uniform sphere.
+This gives a potential well with minimum $\Phi(0) \approx -1.5 G M_{\text{total}} / R$ for a uniform sphere. Gravity at the staggered velocity nodes is the discrete gradient of this potential:
+
+$$g_{x,(i,j)} = -\frac{\Phi_{(i,j+1)} - \Phi_{(i,j)}}{\Delta x}, \qquad g_{y,(i,j)} = -\frac{\Phi_{(i+1,j)} - \Phi_{(i,j)}}{\Delta y}$$
+
+The discrete curl of this field is zero. Pressure can therefore balance gravity in a body with a radial density profile, and gravity alone drives no flow in such a body. A radial vector evaluated directly at the staggered nodes has a discrete curl of a few percent of $g / \Delta x$ near the surface, and this curl drives a false circulation.
 
 ![Two-layer differentiated body self-gravity benchmark](../assets/gravity_two_layer_benchmark.png)
 
