@@ -1436,23 +1436,18 @@ include("test_helpers.jl")
             RHOCPSUM_l,
             n_l;
             coords=coords_l,
-            volume=volume_l,
+            w3d=volume_l,
         )
         @test tkm_vol[1] - 5.0 ≈ 20.0 rtol = 1.0e-12
         @test sum(volume_l .* capacity_l .* (tkm_vol .- tkm_0)) ≈ 0.0 atol = 1.0
         @test result_vol.heat_rejected ≈ 5.0 * capacity_l[1] * volume_l[1] rtol = 1.0e-10
 
-        # The bound can come from before the subgrid relaxation of this step.
-        tkm_rel = fill(570.0, n_l)
-        tkm_rel[1] = 30.0
-        tkm_rel_0 = copy(tkm_rel)
-        tkm_start = copy(tkm_rel)
-        tkm_start[1] = 20.0
-        result_rel = Erebus.limit_marker_temperature_increment!(
+        # The bound acts on the conduction part of the increment only.
+        relax!(tkm, dt_conduction) = Erebus.limit_marker_temperature_increment!(
             xm_l,
             ym_l,
             tm_l,
-            tkm_rel,
+            tkm,
             capacity_l,
             DT_l,
             tk2_l,
@@ -1460,18 +1455,27 @@ include("test_helpers.jl")
             RHOCPSUM_l,
             n_l;
             coords=coords_l,
-            tkm_bound=tkm_start,
+            DT_conduction=dt_conduction,
         )
-        @test tkm_rel == tkm_rel_0
+        tkm_rel = copy(tkm_0)
+        result_rel = relax!(tkm_rel, zeros(Ny1_l, Nx1_l))
+        @test tkm_rel ≈ tkm_0 rtol = 1.0e-14
         @test result_rel.n_limited == 0
         @test result_rel.heat_rejected ≈ 0.0 atol = 1.0e-12
+        tkm_mix = copy(tkm_0)
+        result_mix = relax!(tkm_mix, fill(-1.0, Ny1_l, Nx1_l))
+        @test tkm_mix[1] ≈ 21.0 rtol = 1.0e-12
+        @test result_mix.heat_rejected ≈ capacity_l[1] rtol = 1.0e-10
 
         # An undefined marker temperature stays with that marker.
         tkm_nan = copy(tkm_0)
         tkm_nan[3] = NaN
         limit!(tkm_nan, tm_l, DT_l, tk2_l)
         @test isnan(tkm_nan[3])
-        @test count(isfinite, tkm_nan) == n_l - 1
+        finite_l = setdiff(1:n_l, 3)
+        @test all(isfinite, tkm_nan[finite_l])
+        @test sum(capacity_l[finite_l] .* (tkm_nan[finite_l] .- tkm_0[finite_l])) ≈ 0.0 atol =
+            1.0e-3
 
         limit_args(n, passes, cap, dt) = Erebus.limit_marker_temperature_increment!(
             xm_l,
@@ -1491,6 +1495,34 @@ include("test_helpers.jl")
         @test_throws DomainError limit_args(n_l, 0, capacity_l, DT_l)
         @test_throws ArgumentError limit_args(n_l, 4, capacity_l[1:(n_l - 1)], DT_l)
         @test_throws ArgumentError limit_args(n_l, 4, capacity_l, zeros(2, 2))
+        small = zeros(2, 2)
+        @test_throws ArgumentError Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            copy(tkm_0),
+            capacity_l,
+            small,
+            small,
+            small,
+            small,
+            n_l;
+            coords=coords_l,
+        )
+        @test_throws ArgumentError Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            copy(tkm_0),
+            capacity_l,
+            DT_l,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+            w3d=ones(n_l - 1),
+        )
     end
 
     @testset "apply_subgrid_stress_diffusion!(): Maxwell viscoelastic relaxation" begin

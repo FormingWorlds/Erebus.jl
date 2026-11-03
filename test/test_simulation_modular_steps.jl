@@ -194,31 +194,47 @@ using Erebus
 
     @testset "Marker Temperature Range with Subgrid Relaxation" begin
         cfg = override_config(default_config(), Dict{String,Any}("solver.dsubgridt" => 1.0))
+        # With no conduction in the increment the limit must not act: the first step skips
+        # the limit, and the later step must give the same marker temperatures.
+        function relaxed_tkm(timestep)
+            state, coords_actual, ws, _, _ = init_simulation(cfg)
+            core = state.markers.core
+            rocks = findall(<(3), core.tm)
+            core.rhocptotalm[rocks] .= 3.0e6
+            core.tkm[rocks] .= 100.0
+            state.grids.tk1 .= 300.0
+            state.grids.tk2 .= 300.0
+            state.grids.DT .= 0.0
+            state.timestep = timestep
+            diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+            return copy(core.tkm)
+        end
+        tkm_free = relaxed_tkm(1)
+        @test relaxed_tkm(2) ≈ tkm_free rtol = 1.0e-12
+        # The relaxation moved the markers, so the comparison holds a real change.
+        @test !isapprox(tkm_free[tkm_free .< 200.0], fill(100.0, count(tkm_free .< 200.0)))
+    end
+
+    @testset "Marker Temperature Range under the Spherical Metric" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => true)
+        )
         state, coords_actual, ws, _, _ = init_simulation(cfg)
         core = state.markers.core
-        g = state.grids
-        marknum = length(state.markers)
         rocks = findall(<(3), core.tm)
         core.rhocptotalm[rocks] .= 3.0e6
-        core.tkm[rocks] .= 100.0
-        g.tk1 .= 300.0
-        g.tk2 .= 300.0
-        g.DT .= 0.0
+        core.tkm[rocks] .= 500.0
+        rock = rocks[argmin(abs.(core.w3d_m[rocks] .- 0.5 * maximum(core.w3d_m[rocks])))]
+        core.tkm[rock] = 20.0
+        tkm_before = copy(core.tkm)
+        state.grids.tk2 .= 300.0
+        state.grids.DT .= -5.0
         state.timestep = 2
         diffuse_and_update_markers!(state, coords_actual, cfg, ws)
-        Erebus.update_marker_temperature!(
-            core.xm,
-            core.ym,
-            core.tkm,
-            g.DT,
-            g.tk2,
-            state.timestep,
-            marknum;
-            coords=coords_actual,
-        )
-        # The increment holds the counterpart of the relaxation, so the heat is unchanged.
-        @test sum(core.tkm[rocks]) / length(rocks) ≈ 100.0 atol = 0.1
-        @test minimum(core.tkm[rocks]) ≈ 100.0 atol = 1.0e-9
+        change = core.tkm[rocks] .- tkm_before[rocks]
+        @test core.tkm[rock] ≈ 25.0 atol = 1.0e-9
+        # The heat closes only when each marker counts with its out-of-plane length.
+        @test sum(core.w3d_m[rocks] .* change) ≈ 0.0 atol = 1.0e-9 * 5.0 * core.w3d_m[rock]
     end
 
     @testset "Telescoping Trigger Evaluation" begin
