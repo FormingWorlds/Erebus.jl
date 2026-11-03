@@ -6,8 +6,8 @@
 id = "spherical_conduction"
 title = "Spherical Conduction and Radiogenic Heating Validation"
 page = "validation/thermal_conduction.md"
-src_commit = "5947a5b45b903f4c3e7bfbc53dc1a42b46b244f9"
-timestamp_utc = "2026-11-03T06:20:08Z"
+src_commit = "24e6ce6dea97cc1b9b27ff42b27e662593164d64"
+timestamp_utc = "2026-11-03T19:12:14Z"
 julia_version = "1.12.7"
 config_sha256 = "385b473b7ebece0f819a9bb392d6288441414611e279436dae7918482293313c"
 reference_type = "analytical_and_1d_fv"
@@ -112,7 +112,7 @@ id = "transient_center_dT_nx65"
 case = "transient"
 description = "Transient centre temperature rise dT(r_min) vs step-averaged BE reference (Nx=65)"
 nx = 65
-value = 4.9084277301625207e+02
+value = 4.9084277064111450e+02
 reference = 5.0707692944959467e+02
 atol = 2.5000000000000000e+01
 rtol = 5.0000000000000003e-02
@@ -125,7 +125,7 @@ id = "transient_profile_l2_rel_error_nx65"
 case = "transient"
 description = "Transient radial profile L2 relative error vs step-averaged BE reference (r <= R, Nx=65)"
 nx = 65
-value = 8.2866230493778892e-02
+value = 8.2866233482989340e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00
@@ -138,7 +138,7 @@ id = "transient_profile_l2_convergence_ratio_65_33"
 case = "transient"
 description = "Transient radial profile L2 convergence ratio L2(Nx=65) / L2(Nx=33)"
 nx = 65
-value = 4.2046482840282612e-01
+value = 4.2046482521281836e-01
 reference = 0.0000000000000000e+00
 atol = 5.9999999999999998e-01
 rtol = 0.0000000000000000e+00
@@ -151,7 +151,7 @@ id = "transient_max_air_shell_temperature_nx65"
 case = "transient"
 description = "Maximum sticky-air temperature in r >= R + dx (Nx=65)"
 nx = 65
-value = 1.7000000145235134e+02
+value = 1.7000000145234679e+02
 reference = 1.7000000000000000e+02
 atol = 1.0000000000000000e-02
 rtol = 0.0000000000000000e+00

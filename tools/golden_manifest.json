@@ -1,11 +1,11 @@
 {
     "blas_config": "LBTConfig([ILP64] libopenblas64_.dylib, [LP64] Accelerate, [ILP64] Accelerate)",
-    "commit": "5947a5b45b903f4c3e7bfbc53dc1a42b46b244f9",
+    "commit": "6c379705115abc952a4b5a08a8471047d148e6bf",
     "files": {
         "core_formation_benchmark": {
             "config_path": "configs/core_formation_benchmark.toml",
             "filename": "core_formation_benchmark.jld2",
-            "sha256": "58f4a63fd82fe3667a514a050b2a22a7d442a22704108beece4c6ba2a731891f",
+            "sha256": "fef0df02b2bbe589e044dd43caf2250600ff95e015271cfd0add293974304f8a",
             "size_bytes": 5316075
         },
         "hydrothermal_benchmark": {
@@ -17,23 +17,23 @@
         "lunar_growth_tutorial": {
             "config_path": "configs/lunar_growth_tutorial.toml",
             "filename": "lunar_growth_tutorial.jld2",
-            "sha256": "b98c71a8d41073faf79d201375317a7e152646eaac1d986296638e5ffb523c16",
+            "sha256": "ff7eb1be1d44346af7ab70a240f4419073f7e8e9d5353f507727f0502a94f09c",
             "size_bytes": 24727536
         },
         "magma_ocean_cooling_turb_on_32": {
             "config_path": "configs/magma_ocean_cooling_turb_on_32.toml",
             "filename": "magma_ocean_cooling_turb_on_32.jld2",
-            "sha256": "b4175804a11994f332546443af21a680435425818587ac537b93f1207577b47b",
+            "sha256": "eb7b2a8264823a878360bb30734f0e85582101739dc34b8aeee657cc555f1253",
             "size_bytes": 4397686
         },
         "test_quick": {
             "config_path": "configs/test_quick.toml",
             "filename": "test_quick.jld2",
-            "sha256": "de5441e94bc98ef9cf2e9779e8a907de66d80ba7b49d46617da416fd97822a21",
+            "sha256": "b249ff7b7612fb645b847ce7daf4285136627da7f059be83e42c158c1d507b90",
             "size_bytes": 4397686
         }
     },
-    "generated_at": "2026-11-03T06:21:27Z",
+    "generated_at": "2026-11-03T19:13:38Z",
     "hostname": "Tims-Mac-Studio.localdomain",
     "julia_version": "1.12.7"
 }
