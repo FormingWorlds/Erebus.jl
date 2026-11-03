@@ -4713,6 +4713,126 @@ function apply_subgrid_temperature_diffusion!(
 end # function apply_subgrid_temperature_diffusion! 
 
 """
+Stop a rock marker that is colder than its nodes from cooling further with the increment.
+
+$(SIGNATURES)
+
+# Details
+
+A marker takes the temperature change of the four nodes around it. A rock marker must not
+fall below `min(T_m, min(T_nodes))`, because conduction creates no local minimum. The
+rejected cooling goes to the other rock markers at the same nodes, weighted by their heat
+capacity, so the heat of the step is unchanged. Heating has no such bound, because a heat
+source can raise a marker above its nodes. Sticky-air markers take the plain increment and
+take no share, because the next step resets them to the ambient temperature. This function
+writes the correction into `tkm`, and the marker update then adds the grid increment.
+
+    - xm: x-coordinates of markers
+    - ym: y-coordinates of markers
+    - tm: marker type
+    - tkm: marker temperature before the grid increment
+    - rhocptotalm: marker volumetric heat capacity
+    - DT: temperature change at P nodes
+    - tk2: next temperature at P nodes
+    - DEFICIT: scratch array at P nodes for the rejected heat
+    - CAPACITY: scratch array at P nodes for the heat capacity of the receiving markers
+    - marknum: total number of markers in use
+
+# Returns
+
+    - named tuple: `n_limited`, the number of markers limited, and `heat_rejected` and
+      `heat_lost`, the sums of absolute rejected and undelivered heat per unit volume and
+      weight [J/m^3]
+"""
+function limit_marker_temperature_increment!(
+    xm,
+    ym,
+    tm,
+    tkm,
+    rhocptotalm,
+    DT,
+    tk2,
+    DEFICIT,
+    CAPACITY,
+    marknum;
+    coords::GridCoordinates=default_grid_coordinates(),
+    max_passes::Int=4,
+)
+    @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
+    limited = falses(marknum)
+    correction = zeros(marknum)
+    n_limited = 0
+    heat_rejected = 0.0
+    heat_lost = 0.0
+    @inline marker_weights(m) = fix_weights(
+        xm[m],
+        ym[m],
+        xp_val,
+        yp_val,
+        dx_val,
+        dy_val,
+        jmin_p_val,
+        jmax_p_val,
+        imin_p_val,
+        imax_p_val,
+    )
+
+    for _ in 1:max_passes
+        DEFICIT .= 0.0
+        CAPACITY .= 0.0
+        any_limited = false
+        @inbounds for m in 1:marknum
+            (limited[m] || tm[m] >= 3) && continue
+            i, j, weights = marker_weights(m)
+            T_new = tkm[m] + correction[m] + dot4(grid_vector(i, j, DT), weights)
+            T_limited = max(T_new, min(tkm[m], minimum(grid_vector(i, j, tk2))))
+            if T_limited == T_new
+                interpolate_add_to_grid!(i, j, weights, rhocptotalm[m], CAPACITY)
+            else
+                excess = T_new - T_limited
+                rejected = excess * rhocptotalm[m]
+                interpolate_add_to_grid!(i, j, weights, rejected, DEFICIT)
+                correction[m] -= excess
+                limited[m] = true
+                n_limited += 1
+                heat_rejected += abs(rejected)
+                any_limited = true
+            end
+        end
+        any_limited || break
+        @inbounds for j in axes(DEFICIT, 2), i in axes(DEFICIT, 1)
+            if CAPACITY[i, j] > 0.0
+                DEFICIT[i, j] /= CAPACITY[i, j]
+            else
+                heat_lost += abs(DEFICIT[i, j])
+                DEFICIT[i, j] = 0.0
+            end
+        end
+        @inbounds for m in 1:marknum
+            (limited[m] || tm[m] >= 3) && continue
+            i, j, weights = marker_weights(m)
+            correction[m] += dot4(grid_vector(i, j, DEFICIT), weights)
+        end
+    end
+    # A marker that the last pass moved out of range stays at its bound.
+    @inbounds for m in 1:marknum
+        (limited[m] || tm[m] >= 3) && continue
+        i, j, weights = marker_weights(m)
+        T_new = tkm[m] + correction[m] + dot4(grid_vector(i, j, DT), weights)
+        excess = T_new - max(T_new, min(tkm[m], minimum(grid_vector(i, j, tk2))))
+        if excess != 0.0
+            correction[m] -= excess
+            n_limited += 1
+            heat_lost += abs(excess * rhocptotalm[m])
+        end
+    end
+    @inbounds for m in 1:marknum
+        tkm[m] += correction[m]
+    end
+    return (; n_limited, heat_rejected, heat_lost)
+end # function limit_marker_temperature_increment!
+
+"""
 Update marker temperature based on P grid temperature changes.
 
 $(SIGNATURES)

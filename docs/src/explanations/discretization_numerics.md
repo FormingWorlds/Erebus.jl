@@ -34,16 +34,19 @@ Material properties, temperature, hydration state, and porosity are carried on t
    $$w_{ij} = \left(1 - \frac{|\Delta x|}{\Delta x_{\text{cell}}}\right) \left(1 - \frac{|\Delta y|}{\Delta y_{\text{cell}}}\right)$$
    By default (`solver.p2m_mode = :tiled`), `interpolate_markers_to_grid!` executes a two-phase 4-color tiled scatter (`bin_markers_into_tiles!` and `_scatter_tiled_p2m_tile!`). Markers are binned into coarse tiles of $T \times T$ cells (`solver.tile_size`, default $T = 4$) and processed in four independent color passes ($2 \times 2$ stride) so adjacent tiles never share staggered boundary nodes, scattering directly into the master grid arrays without thread-local grid duplication.
 
-2. **Subgrid Diffusion**:
+2. **Marker Temperature Update**:
+   Each marker takes the temperature change of the four nodes around it. A cold rock marker in a cell where flow brings in hotter rock can take this cooling step after step while the node stays warm, because the next projection warms the node and not the marker. Conduction creates no local minimum, so `limit_marker_temperature_increment!` keeps each rock marker at or above $\min(T_m, T_\text{nodes})$. The rejected cooling goes to the other rock markers at the same nodes, weighted by their heat capacity, so the heat of the step does not change. Where no other rock marker can take it, the heat is not delivered. Heating has no such bound, because a heat source can raise a marker above its nodes. Sticky-air markers take the plain increment, because the next step resets them to the ambient temperature.
+
+3. **Subgrid Diffusion**:
    Subgrid diffusion damping for temperature and stress is available as a configurable option (`dsubgridt`, `dsubgrids`), set to zero (disabled) by default.
    When `dsubgrids > 0`, `apply_subgrid_stress_diffusion!` relaxes marker deviatoric stresses ($\sigma_{xx,m}, \sigma_{xy,m}$) toward interpolated staggered-grid stresses over the local Maxwell viscoelastic relaxation timescale $\tau_{\text{Maxwell},m} = \eta_{vp,m} / G_m$:
    $$\Delta \sigma_{\text{subgrid},m} = \left(\sigma_{\text{grid}}(x_m, y_m) - \sigma_m\right) \left[1 - \exp\left(-d_{\text{subgrids}} \frac{\Delta t \, G_m}{\eta_{vp,m}}\right)\right]$$
    where $\eta_{vp,m}$ is the marker viscoelastic viscosity (`etavpm`, falling back to the phase viscosity `etasolidm[tm]`) and $1 / G_m$ is the inverse marker shear modulus (`inv_gggtotalm[m]`, initialized from `gggsolidm[tm]`).
 
-3. **Marker Advection**:
+4. **Marker Advection**:
    Markers move with the solid velocity field using a 4th-order Runge-Kutta scheme (`move_markers_rk4!`) with 2nd-order continuity-based parabolic spatial velocity corrections.
 
-4. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
+5. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
    At simulation initialization (`setup_simulation_markers_and_state`), interior planetesimal markers ($\mathrm{tm} < 3$) are initialized with an analytical hydrostatic pressure profile in `pfm0`:
    $$P_{\text{hydro}}(r) = P_{\text{amb}} + c_{\text{grav}} \pi G \rho_s^2 \left(R_p^2 - r^2\right)$$
    with $c_{\text{grav}} = 2/3$ for `:enclosed_mass` spherical gravity and $c_{\text{grav}} = 1$ for unscaled `:poisson2d` cylindrical initialization, where $\rho_s = \rho_{\text{grain},m}(1 - \phi_m)$ is the local marker bulk solid density (`rhosolidm[tm[m]] * (1 - phim[m])`).

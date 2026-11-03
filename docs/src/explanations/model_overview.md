@@ -120,6 +120,7 @@ The simulation loop advances physical time in 10 sequential stages:
    When `solver.dsubgrids` > 0, it relaxes marker stress toward grid stress (Maxwell time $\tau_\mathrm{M}$).
    When `solver.dsubgridt` > 0, it does the same for temperature.
    Both are 0 by default.
+   A rock marker that is colder than its nodes does not cool further with the grid increment (see the [numerics page](discretization_numerics.md)).
 
 8. **Fluid Venting & Atmosphere (`vent_and_degas!`, `advance_marker_thermo_porosity_venting!`, `evolve_atmosphere!`)**:
    The code computes hydrofracture fluid venting and volatile exsolution from magma.

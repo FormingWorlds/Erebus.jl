@@ -162,6 +162,27 @@ using Erebus
         @test all(>(0.0), state.markers.core.etavpm)
     end
 
+    @testset "Marker Temperature Range in the Post-Convergence Update" begin
+        cfg = default_config()
+        state, coords_actual, ws, _, _ = init_simulation(cfg)
+        core = state.markers.core
+        rock = findfirst(<(3), core.tm)
+        core.tkm[rock] = 20.0
+        state.grids.tk2 .= 300.0
+        state.grids.DT .= -5.0
+
+        # The first step sets markers from the grid, so it takes no correction.
+        state.timestep = 1
+        tkm_first = copy(core.tkm)
+        diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+        @test core.tkm ≈ tkm_first rtol = 1.0e-14
+
+        state.timestep = 2
+        state.grids.DT .= -5.0
+        diffuse_and_update_markers!(state, coords_actual, cfg, ws)
+        @test core.tkm[rock] ≈ 25.0 atol = 1.0e-9
+    end
+
     @testset "Telescoping Trigger Evaluation" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)

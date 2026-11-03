@@ -1276,6 +1276,109 @@ include("test_helpers.jl")
         @test all(isfinite, DT_p)
     end
 
+    @testset "limit_marker_temperature_increment!(): cold bound and heat budget" begin
+        coords_l = GridCoordinates(GridConfig(Nx=10, Ny=10, xsize=100000.0, ysize=100000.0))
+        Ny1_l, Nx1_l = coords_l.Ny1, coords_l.Nx1
+        TKSUM_l = zeros(Ny1_l, Nx1_l)
+        RHOCPSUM_l = zeros(Ny1_l, Nx1_l)
+        n_l = 8
+        xm_l = 0.5 * coords_l.xsize .+ collect(1:n_l) .* 150.0
+        ym_l = 0.5 * coords_l.ysize .+ collect(1:n_l) .* 110.0
+        tm_l = fill(1, n_l)
+        # Receivers differ in heat capacity, so the share depends on the weighting.
+        capacity_l = 3.0e6 .+ collect(1:n_l) .* 1.0e5
+        limit!(tkm, tm, DT, tk2) = Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm,
+            tkm,
+            capacity_l,
+            DT,
+            tk2,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+        )
+
+        # Nodes cool from 500 K to 495 K. Marker 1 is colder than every node.
+        tk2_l = fill(495.0, Ny1_l, Nx1_l)
+        DT_l = fill(-5.0, Ny1_l, Nx1_l)
+        tkm_0 = fill(570.0, n_l)
+        tkm_0[1] = 20.0
+        tkm_l = copy(tkm_0)
+        result = limit!(tkm_l, tm_l, DT_l, tk2_l)
+        after = tkm_l .- 5.0
+        @test result.n_limited == 1
+        @test result.heat_lost ≈ 0.0 atol = 1.0e-6
+        # The cold marker keeps its temperature after the grid increment.
+        @test after[1] ≈ 20.0 atol = 1.0e-9
+        # The other markers take its share of the cooling, so the total stays equal.
+        @test all(after[2:end] .< tkm_0[2:end] .- 5.0)
+        @test all(after[2:end] .> 495.0)
+        @test sum(capacity_l .* (after .- tkm_0)) ≈ sum(capacity_l .* -5.0) rtol = 1.0e-10
+
+        # A marker that would fall below every node stops at the coldest node.
+        tkm_u = fill(570.0, n_l)
+        tkm_u[1] = 497.0
+        limit!(tkm_u, tm_l, DT_l, tk2_l)
+        @test tkm_u[1] - 5.0 ≈ 495.0 atol = 1.0e-9
+
+        # A sticky-air marker neither limits nor receives: the next step resets it.
+        tm_a = copy(tm_l)
+        tm_a[2] = 3
+        tm_a[3] = 3
+        tkm_a = copy(tkm_0)
+        tkm_a[3] = 20.0
+        limit!(tkm_a, tm_a, DT_l, tk2_l)
+        @test tkm_a[2] ≈ tkm_0[2] rtol = 1.0e-14
+        @test tkm_a[3] ≈ 20.0 rtol = 1.0e-14
+        rock = tm_a .< 3
+        @test sum(capacity_l[rock] .* (tkm_a[rock] .- 5.0 .- tkm_0[rock])) ≈
+            sum(capacity_l[rock] .* -5.0) rtol = 1.0e-10
+
+        # A marker hotter than every node still takes heating from a source.
+        tkm_h = fill(440.0, n_l)
+        tkm_h[1] = 900.0
+        tkm_h_0 = copy(tkm_h)
+        limit!(tkm_h, tm_l, fill(5.0, Ny1_l, Nx1_l), fill(505.0, Ny1_l, Nx1_l))
+        @test tkm_h ≈ tkm_h_0 rtol = 1.0e-14
+
+        # With no marker out of range the temperatures do not change.
+        tkm_in = fill(500.0, n_l)
+        result_in = limit!(tkm_in, tm_l, DT_l, tk2_l)
+        @test result_in.n_limited == 0
+        @test tkm_in ≈ fill(500.0, n_l) rtol = 1.0e-14
+
+        # With every marker colder than the nodes no marker can take the share. The
+        # markers stay at their temperature, and the undelivered heat is reported.
+        tkm_all = fill(20.0, n_l)
+        result_all = limit!(tkm_all, tm_l, DT_l, tk2_l)
+        @test all(tkm_all .- 5.0 .≈ 20.0)
+        @test result_all.heat_lost ≈ sum(capacity_l .* 5.0) rtol = 1.0e-10
+
+        # A share that takes receivers out of range on the last pass ends at their
+        # bound, and the undelivered heat is reported.
+        tkm_last = fill(500.2, n_l)
+        tkm_last[1] = 20.0
+        result_last = Erebus.limit_marker_temperature_increment!(
+            xm_l,
+            ym_l,
+            tm_l,
+            tkm_last,
+            capacity_l,
+            DT_l,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+            max_passes=1,
+        )
+        @test all(tkm_last[2:end] .- 5.0 .≈ 495.0)
+        @test result_last.heat_lost > 0.0
+    end
+
     @testset "apply_subgrid_stress_diffusion!(): Maxwell viscoelastic relaxation" begin
         coords_s = GridCoordinates(GridConfig(Nx=10, Ny=10, xsize=100000.0, ysize=100000.0))
         Ny1_s, Nx1_s = coords_s.Ny1, coords_s.Nx1
