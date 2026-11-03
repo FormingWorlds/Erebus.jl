@@ -1923,16 +1923,15 @@ using JLD2
                 @test all(x -> 0.0 <= x <= 1.0, final_state["Xfem"])
 
                 # Conservation of initial state metal inventory
-                # The inventory of a sphere weights each marker by its out-of-plane length.
-                # Marker motion changes these lengths, so the sum is close to exact only.
-                weight = initial_state["w3d_m"]
-                @test length(weight) == length(Xfe_init)
-                sum_init = sum(Xfe_init .* weight)
-                sum_final = sum(Xfe_final .* weight)
+                # The transfer conserves the sum at fixed marker lengths; marker motion
+                # changes these out-of-plane lengths, so the current sum is close only.
+                w_init = initial_state["w3d_m"]
+                sum_init = sum(Xfe_init .* w_init)
                 @test sum_init > 0.0
-                @test sum_final > 0.0
-                rel_diff = abs(sum_final - sum_init) / sum_init
-                @test rel_diff < 1.0e-7
+                @test abs(sum(Xfe_final .* w_init) - sum_init) / sum_init < 1.0e-7
+                sum_final = sum(Xfe_final .* final_state["w3d_m"])
+                @test abs(sum_final - sum_init) / sum_init < 1.0e-4
+                @test maximum(abs, Xfe_final .- Xfe_init) > 0.1
 
                 # Physical core segregation assertions:
                 # 1. Interior was preheated to 1350 K, exceeding Fe-FeS eutectic (1213 K)

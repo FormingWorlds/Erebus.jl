@@ -586,7 +586,12 @@ using Test
             cfg = SimulationConfig(;
                 grid=GridConfig(; Nx=9, Ny=9, xsize=200_000.0, ysize=200_000.0),
                 geometry=GeometryConfig(;
-                    rplanet=90_000.0, rcrust=90_000.0, xcenter=100_000.0, ycenter=100_000.0
+                    rplanet=90_000.0,
+                    rcrust=90_000.0,
+                    xcenter=100_000.0,
+                    ycenter=100_000.0,
+                    spherical_metric=false,
+                    gravity_mode=:poisson2d,
                 ),
                 time=TimeConfig(;
                     n_steps=nsteps,

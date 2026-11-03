@@ -284,10 +284,12 @@ function compute_gravity_enclosed_mass!(
     coords::GridCoordinates=default_grid_coordinates(),
     gravity_nr_factor::Int=4,
     rplanet::Union{Nothing,Real}=nothing,
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
     FI::Union{Nothing,AbstractMatrix{Float64}}=nothing,
 )
-    xc = coords.xcenter
-    yc = coords.ycenter
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
     Nx_val = coords.Nx
     dxm_val = coords.dxm
     dym_val = coords.dym

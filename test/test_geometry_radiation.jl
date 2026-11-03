@@ -820,7 +820,7 @@ import Erebus.Numerics: assemble_thermal_lse!, perform_thermal_iterations!
             rm(output_dir3, recursive=true, force=true)
         end
 
-        # 4. Bit-for-bit regression: default configuration produces identical fields
+        # 4. The default configuration gives the same fields as the explicit sphere settings
         output_dir_a = mktempdir()
         output_dir_b = mktempdir()
         try

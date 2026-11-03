@@ -23,6 +23,8 @@ rcrust   = 50000.0  # Crustal boundary radius [m]
 xcenter  = 70000.0  # Center x-coordinate [m]
 ycenter  = 70000.0  # Center y-coordinate [m]
 psurface = 1000.0   # Surface pressure anchor [Pa]
+spherical_metric = false       # A 2-D disk, as in this benchmark
+gravity_mode     = "poisson2d" # Gravity of the disk
 
 [time]
 dt_initial = 3168.80878  # Initial timestep [Julian yr] (1e11 s)

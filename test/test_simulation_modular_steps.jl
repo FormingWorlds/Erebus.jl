@@ -240,6 +240,49 @@ using Erebus
         @test sum(core.w3d_m[rocks] .* change) ≈ 0.0 atol = 1.0e-9 * 5.0 * core.w3d_m[rock]
     end
 
+    @testset "Enclosed Mass Gravity around an Off-Centre Planet" begin
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.xcenter" => 60_000.0)
+        )
+        state, coords_actual, ws, _, _ = init_simulation(cfg)
+        @test cfg.geometry.gravity_mode === :enclosed_mass
+        core = state.markers.core
+        # The projection of a real step sets the density of each rock marker.
+        core.rhototalm[core.tm .< 3] .= 3000.0
+        solve_gravity!(state, coords_actual, cfg)
+        # The result must match a grid whose own centre is the planet centre.
+        coords_planet = GridCoordinates(cfg.grid; xcenter=60_000.0, ycenter=70_000.0)
+        gx = zeros(size(state.grids.gx))
+        gy = zeros(size(state.grids.gy))
+        Erebus.compute_gravity_enclosed_mass!(
+            gx,
+            gy;
+            xm=core.xm,
+            ym=core.ym,
+            rhototalm=core.rhototalm,
+            tm=core.tm,
+            coords=coords_planet,
+            gravity_nr_factor=cfg.geometry.gravity_nr_factor,
+            rplanet=state.accumulators.rplanet,
+        )
+        @test state.grids.gx ≈ gx rtol = 1.0e-12
+        @test state.grids.gy ≈ gy rtol = 1.0e-12
+        # The grid centre alone gives another field, so the comparison can fail.
+        gx_grid = zeros(size(gx))
+        Erebus.compute_gravity_enclosed_mass!(
+            gx_grid,
+            zeros(size(gy));
+            xm=core.xm,
+            ym=core.ym,
+            rhototalm=core.rhototalm,
+            tm=core.tm,
+            coords=coords_actual,
+            gravity_nr_factor=cfg.geometry.gravity_nr_factor,
+            rplanet=state.accumulators.rplanet,
+        )
+        @test !isapprox(gx_grid, gx; rtol=1.0e-3)
+    end
+
     @testset "Telescoping Trigger Evaluation" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)

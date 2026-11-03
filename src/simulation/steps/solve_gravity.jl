@@ -38,6 +38,8 @@ function solve_gravity!(
             coords=coords,
             gravity_nr_factor=cfg.geometry.gravity_nr_factor,
             rplanet=state.accumulators.rplanet,
+            xcenter=state.accumulators.xcenter,
+            ycenter=state.accumulators.ycenter,
             FI=FI,
         )
     elseif mode === :poisson2d
