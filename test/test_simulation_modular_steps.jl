@@ -163,7 +163,10 @@ using Erebus
     end
 
     @testset "Marker Temperature Range in the Post-Convergence Update" begin
-        cfg = default_config()
+        # Equal marker weights, so the heat budget below is a plain sum.
+        cfg = override_config(
+            default_config(), Dict{String,Any}("geometry.spherical_metric" => false)
+        )
         state, coords_actual, ws, _, _ = init_simulation(cfg)
         core = state.markers.core
         rock = findfirst(<(3), core.tm)
