@@ -1,0 +1,11 @@
+/* Show the figure version that matches the page theme. */
+.validation-fig-dark { display: none; }
+.validation-fig-light { display: block; }
+html.theme--documenter-dark .validation-fig-light,
+html.theme--catppuccin-frappe .validation-fig-light,
+html.theme--catppuccin-macchiato .validation-fig-light,
+html.theme--catppuccin-mocha .validation-fig-light { display: none; }
+html.theme--documenter-dark .validation-fig-dark,
+html.theme--catppuccin-frappe .validation-fig-dark,
+html.theme--catppuccin-macchiato .validation-fig-dark,
+html.theme--catppuccin-mocha .validation-fig-dark { display: block; }
