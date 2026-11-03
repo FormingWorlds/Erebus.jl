@@ -1357,6 +1357,26 @@ include("test_helpers.jl")
         @test all(tkm_all .- 5.0 .≈ 20.0)
         @test result_all.heat_lost ≈ sum(capacity_l .* 5.0) rtol = 1.0e-10
 
+        # The rejected cooling stays at the nodes of the limited marker.
+        xm_far = copy(xm_l)
+        xm_far[end] = 0.2 * coords_l.xsize
+        tkm_far = copy(tkm_0)
+        Erebus.limit_marker_temperature_increment!(
+            xm_far,
+            ym_l,
+            tm_l,
+            tkm_far,
+            capacity_l,
+            DT_l,
+            tk2_l,
+            TKSUM_l,
+            RHOCPSUM_l,
+            n_l;
+            coords=coords_l,
+        )
+        @test tkm_far[end] ≈ tkm_0[end] rtol = 1.0e-14
+        @test tkm_far[2] < tkm_0[2]
+
         # A share that takes receivers out of range on the last pass ends at their
         # bound, and the undelivered heat is reported.
         tkm_last = fill(500.2, n_l)
