@@ -293,6 +293,21 @@ function solve_thermal_energy!(
             nothing
         end
 
+    # Pore fluid advection heat, from the Darcy fluxes of this iteration.
+    compute_fluid_advection_heat!(
+        g.Q_fluid_grid,
+        g.tk1,
+        g.qxD,
+        g.qyD,
+        T -> compute_rhocpfluidm(
+            T,
+            marker_property_mode;
+            rhocpfluidm=cfg.materials.rhocpfluidm,
+            tmfluidphase=cfg.thermodynamics.tmfluidphase,
+        );
+        coords=coords,
+    )
+
     LT = assemble_thermal_lse!(
         g.tk1,
         g.RHOCP,
@@ -309,6 +324,7 @@ function solve_thermal_energy!(
         Q_metric=g.Q_metric,
         Q_lat=g.Q_lat_grid,
         Q_seg=Q_seg_val,
+        Q_fluid=g.Q_fluid_grid,
         workspace=ws.thermal,
     )
 

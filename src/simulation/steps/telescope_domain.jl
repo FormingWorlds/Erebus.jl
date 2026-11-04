@@ -158,6 +158,7 @@ function telescope_domain!(
     S_vent_grid = remap_staggered_grid_array(g.S_vent_grid, dim_node)
     Q_lat_grid = remap_staggered_grid_array(g.Q_lat_grid, dim_node)
     Q_seg_grid = remap_staggered_grid_array(g.Q_seg_grid, dim_node)
+    Q_fluid_grid = remap_staggered_grid_array(g.Q_fluid_grid, dim_node)
 
     state.grids = GridArrays(
         ETA,
@@ -239,6 +240,7 @@ function telescope_domain!(
         S_vent_grid,
         Q_lat_grid,
         Q_seg_grid,
+        Q_fluid_grid,
         Q_metric,
     )
 

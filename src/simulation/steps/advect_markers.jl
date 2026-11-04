@@ -1,7 +1,7 @@
 # Marker advection and pressure backtracking step
 
 """
-    advect_markers!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; XWSSUM=nothing, WTPSUM=nothing, marker_property_mode::Int=9)::Nothing
+    advect_markers!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; XWSSUM=nothing, WTPSUM=nothing)::Nothing
 
 Advect Lagrangian markers with 4th-order Runge-Kutta scheme and backtrace nodal pressures.
 
@@ -33,7 +33,6 @@ function advect_markers!(
     cfg::SimulationConfig;
     XWSSUM=nothing,
     WTPSUM=nothing,
-    marker_property_mode::Int=9,
 )::Nothing
     marknum = length(state.markers)
     marknum == 0 && return nothing
@@ -60,7 +59,6 @@ function advect_markers!(
     vxpf = grids.vxpf
     vypf = grids.vypf
     wyx = grids.wyx
-    tk2 = grids.tk2
     pr = grids.pr
     pr0 = grids.pr0
     ps = grids.ps
@@ -98,13 +96,9 @@ function advect_markers!(
         sxxm,
         vx,
         vy,
-        vxf,
-        vyf,
         wyx,
-        tk2,
         marknum,
-        dt,
-        marker_property_mode;
+        dt;
         coords=coords,
     )
 

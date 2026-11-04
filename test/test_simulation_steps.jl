@@ -1068,6 +1068,19 @@ end
         @test isfinite(state_esc_ss.accumulators.M_escaped_total)
     end
 
+    @testset "Marker advection keeps marker temperature under fluid flow" begin
+        state, coords, cfg = create_mock_simulation_state(;
+            marknum=1, r_marker=0.0, tm_val=1, phi_val=0.7, tkm_val=1300.0, dt_val=1.0e9
+        )
+        core = state.markers.core
+        state.grids.tk2 .= [200.0 + 0.02 * coords.xp[j] for i in 1:(coords.Ny1), j in 1:(coords.Nx1)]
+        state.grids.vxf .= 1.0e-6
+        state.grids.vyf .= 1.0e-6
+        T_before = copy(core.tkm)
+        advect_markers!(state, coords, cfg)
+        @test isapprox(core.tkm, T_before; rtol=1e-14)
+    end
+
     @testset "Step 9: advect_markers! Contract and Closed-Form RK4 Verification" begin
         # 1. Empty marker contract: returns nothing, state bitwise unchanged
         state_empty, coords, cfg = create_mock_simulation_state(; marknum=0)

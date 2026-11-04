@@ -931,13 +931,9 @@ include("test_helpers.jl")
             sxxm,
             zeros(Ny1, Nx1),
             zeros(Ny1, Nx1),
-            zeros(Ny1, Nx1),
-            zeros(Ny1, Nx1),
             wyx,
-            tk2,
             marknum,
             dt_adv,
-            1,
         )
         @test isapprox(xm, xm_init; rtol=1e-12)
         @test isapprox(ym, ym_init; rtol=1e-12)
@@ -958,13 +954,9 @@ include("test_helpers.jl")
             sxxm,
             vx_uniform,
             vy_uniform,
-            vx_uniform,
-            vy_uniform,
             wyx,
-            tk2,
             marknum,
             dt_adv,
-            1,
         )
         expected_xm = xm_init .+ U_val * dt_adv
         expected_ym = ym_init .+ V_val * dt_adv
@@ -1001,13 +993,9 @@ include("test_helpers.jl")
             sxxm_sym,
             vx_grad,
             vy_grad,
-            vx_grad,
-            vy_grad,
             wyx,
-            tk2,
             1,
             dt_rk4,
-            1,
         )
 
         dx_disp = xm_sym[1] - x0_sym

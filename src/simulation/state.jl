@@ -92,6 +92,7 @@ struct GridArrays
     S_vent_grid::Matrix{Float64}
     Q_lat_grid::Matrix{Float64}
     Q_seg_grid::Matrix{Float64}
+    Q_fluid_grid::Matrix{Float64}
     Q_metric::Union{Nothing,Matrix{Float64}}
 end
 

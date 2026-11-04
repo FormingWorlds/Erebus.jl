@@ -571,13 +571,9 @@ using StaticArrays
             sxxm,
             vx,
             vy,
-            vxf,
-            vyf,
             wyx,
-            tk2,
             marknum,
-            1.0e8,
-            9;
+            1.0e8;
             coords=coords,
         )
         @test all(xm .!= xm_orig)
