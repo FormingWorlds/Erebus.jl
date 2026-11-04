@@ -87,19 +87,7 @@ function advect_markers!(
 
     # 5. Move markers with 4th-order Runge-Kutta scheme
     move_markers_rk4!(
-        xm,
-        ym,
-        tm,
-        tkm,
-        phim,
-        sxym,
-        sxxm,
-        vx,
-        vy,
-        wyx,
-        marknum,
-        dt;
-        coords=coords,
+        xm, ym, tm, tkm, phim, sxym, sxxm, vx, vy, wyx, marknum, dt; coords=coords
     )
 
     # 6. Backtrack nodal total and fluid pressures

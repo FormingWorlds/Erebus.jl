@@ -562,19 +562,7 @@ using StaticArrays
         xm_orig = copy(xm)
         ym_orig = copy(ym)
         Erebus.Particles.move_markers_rk4!(
-            xm,
-            ym,
-            tm,
-            tkm,
-            phim,
-            sxym,
-            sxxm,
-            vx,
-            vy,
-            wyx,
-            marknum,
-            1.0e8;
-            coords=coords,
+            xm, ym, tm, tkm, phim, sxym, sxxm, vx, vy, wyx, marknum, 1.0e8; coords=coords
         )
         @test all(xm .!= xm_orig)
         @test all(ym .!= ym_orig)

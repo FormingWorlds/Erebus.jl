@@ -945,18 +945,7 @@ include("test_helpers.jl")
         vy_uniform = fill(V_val, Ny1, Nx1)
 
         Erebus.move_markers_rk4!(
-            xm,
-            ym,
-            tm,
-            tkm,
-            phim,
-            sxym,
-            sxxm,
-            vx_uniform,
-            vy_uniform,
-            wyx,
-            marknum,
-            dt_adv,
+            xm, ym, tm, tkm, phim, sxym, sxxm, vx_uniform, vy_uniform, wyx, marknum, dt_adv
         )
         expected_xm = xm_init .+ U_val * dt_adv
         expected_ym = ym_init .+ V_val * dt_adv

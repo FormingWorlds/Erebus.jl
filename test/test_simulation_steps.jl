@@ -1073,7 +1073,9 @@ end
             marknum=1, r_marker=0.0, tm_val=1, phi_val=0.7, tkm_val=1300.0, dt_val=1.0e9
         )
         core = state.markers.core
-        state.grids.tk2 .= [200.0 + 0.02 * coords.xp[j] for i in 1:(coords.Ny1), j in 1:(coords.Nx1)]
+        state.grids.tk2 .= [
+            200.0 + 0.02 * coords.xp[j] for i in 1:(coords.Ny1), j in 1:(coords.Nx1)
+        ]
         state.grids.vxf .= 1.0e-6
         state.grids.vyf .= 1.0e-6
         T_before = copy(core.tkm)

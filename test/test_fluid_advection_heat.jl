@@ -5,7 +5,9 @@ using Erebus.Numerics: assemble_thermal_lse!, compute_fluid_advection_heat!
 
 """Build a P grid temperature field that is linear in x and y."""
 function _linear_temperature(coords, T0, gx, gy)
-    return [T0 + gx * coords.xp[j] + gy * coords.yp[i] for i in 1:coords.Ny1, j in 1:coords.Nx1]
+    return [
+        T0 + gx * coords.xp[j] + gy * coords.yp[i] for i in 1:coords.Ny1, j in 1:coords.Nx1
+    ]
 end
 
 """Max error of the steady advection-conduction profile, march in time to steady state."""
@@ -27,7 +29,9 @@ function _steady_profile_error(n, Pe)
         Tnew = copy(T)
         for j in 3:n, i in axes(T, 1)
             i_q = clamp(i, 2, coords.Ny)
-            Tnew[i, j] = T[i, j] + dt * (Q[i_q, j] + kappa * (T[i, j - 1] - 2.0 * T[i, j] + T[i, j + 1]) / h^2)
+            Tnew[i, j] =
+                T[i, j] +
+                dt * (Q[i_q, j] + kappa * (T[i, j - 1] - 2.0 * T[i, j] + T[i, j + 1]) / h^2)
         end
         T = Tnew
     end
@@ -59,10 +63,14 @@ end
 
     @testset "zero flux and uniform temperature give zero heat" begin
         T = _linear_temperature(coords, 500.0, 0.05, 0.02)
-        compute_fluid_advection_heat!(Q, T, zeros(size(Q)), zeros(size(Q)), _ -> f; coords=coords)
+        compute_fluid_advection_heat!(
+            Q, T, zeros(size(Q)), zeros(size(Q)), _ -> f; coords=coords
+        )
         @test all(iszero, Q)
         qx = fill(1.0e-8, size(Q))
-        compute_fluid_advection_heat!(Q, fill(500.0, size(Q)), qx, qx, _ -> f; coords=coords)
+        compute_fluid_advection_heat!(
+            Q, fill(500.0, size(Q)), qx, qx, _ -> f; coords=coords
+        )
         @test all(iszero, Q)
     end
 
@@ -84,7 +92,9 @@ end
         T = fill(300.0, size(Q))
         T[8, 9] = 400.0
         qx = fill(1.0e-8, size(Q))
-        compute_fluid_advection_heat!(Q, T, qx, zeros(size(Q)), t -> t * 1.0e4; coords=coords)
+        compute_fluid_advection_heat!(
+            Q, T, qx, zeros(size(Q)), t -> t * 1.0e4; coords=coords
+        )
         @test isapprox(Q[8, 10], 400.0e4 * 1.0e-8 * 100.0 / coords.dx; rtol=1e-12)
         # The next node downstream takes 300 K fluid at the capacity of 300 K.
         @test isapprox(Q[8, 9], 300.0e4 * 1.0e-8 * (300.0 - 400.0) / coords.dx; rtol=1e-12)
@@ -98,8 +108,12 @@ end
         qy = 1.0e-8 .* randn(rng, size(Q)...)
         C = 3.0e6
         # Courant sum over at most 4 inflow faces stays below 1 with this step.
-        dt = 0.2 * C * min(coords.dx, coords.dy) / (f * maximum(abs, vcat(vec(qx), vec(qy))))
-        T[1, :] .= 800.0; T[end, :] .= 800.0; T[:, 1] .= 800.0; T[:, end] .= 800.0
+        dt =
+            0.2 * C * min(coords.dx, coords.dy) / (f * maximum(abs, vcat(vec(qx), vec(qy))))
+        T[1, :] .= 800.0
+        T[end, :] .= 800.0
+        T[:, 1] .= 800.0
+        T[:, end] .= 800.0
         for _ in 1:200
             compute_fluid_advection_heat!(Q, T, qx, qy, _ -> f; coords=coords)
             T .+= dt .* Q ./ C
@@ -127,7 +141,9 @@ end
         RHOCP = fill(3.3e6, size(Q))
         dt = 1.0e9
         RT = zeros(coords.Ny1 * coords.Nx1)
-        LT = assemble_thermal_lse!(T, RHOCP, Z, Z, Z, Z, Z, Z, RT, dt; coords=coords, Q_fluid=Q)
+        LT = assemble_thermal_lse!(
+            T, RHOCP, Z, Z, Z, Z, Z, Z, RT, dt; coords=coords, Q_fluid=Q
+        )
         T2 = reshape(LT.cscmatrix \ RT, size(Q))
         I2 = 2:(coords.Ny1 - 1)
         J2 = 2:(coords.Nx1 - 1)
@@ -166,14 +182,18 @@ end
     # The domain can telescope to more nodes at the configured spacing.
     base = Erebus.GridCoordinates(cfg.grid)
     Ny, Nx = size(g.tk1) .- 1
-    coords = Erebus.GridCoordinates(Nx, Ny; xsize=base.dx * (Nx - 1), ysize=base.dy * (Ny - 1))
+    coords = Erebus.GridCoordinates(
+        Nx, Ny; xsize=base.dx * (Nx - 1), ysize=base.dy * (Ny - 1)
+    )
     Q = zeros(size(g.Q_fluid_grid))
     compute_fluid_advection_heat!(
         Q,
         g.tk1,
         g.qxD,
         g.qyD,
-        t -> Erebus.compute_rhocpfluidm(t, Erebus.marker_property_mode; rhocpfluidm=cfg.materials.rhocpfluidm);
+        t -> Erebus.compute_rhocpfluidm(
+            t, Erebus.marker_property_mode; rhocpfluidm=cfg.materials.rhocpfluidm
+        );
         coords=coords,
     )
     @test !all(iszero, Q)
