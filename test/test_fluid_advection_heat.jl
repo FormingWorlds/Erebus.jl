@@ -179,3 +179,45 @@ end
     @test !all(iszero, Q)
     @test isapprox(g.Q_fluid_grid, Q; rtol=1e-12)
 end
+
+@testset "Thermal solve right side holds the fluid term once" begin
+    cfg = load_config(joinpath(@__DIR__, "..", "configs", "lunar_growth_tutorial.toml"))
+    st, coords, ws, _, _ = init_simulation(cfg; output_path=mktempdir())
+    Erebus.interpolate_markers_to_grid!(
+        st,
+        coords,
+        cfg;
+        p2m_workspace=ws.p2m,
+        thread_buffers=ws.thread_buffers,
+        interp_arrays=ws.interp_arrays,
+    )
+    Erebus.recompute_bulk_viscosity!(
+        st.grids.ETA, st.grids.ETAP, st.grids.ETAPHI, st.grids.PHI, cfg.solver.etaphikoef
+    )
+    Erebus.snapshot_step_start_inventories!(ws, st, cfg)
+    g = st.grids
+    g.tk1 .= [300.0 + 0.002 * coords.xp[j] for i in 1:(coords.Ny1), j in 1:(coords.Nx1)]
+    g.qxD .= 1.0e-10
+    fill!(g.qyD, 0.0)
+    dt_solve = st.dt
+    Erebus.solve_thermal_energy!(st, coords, cfg, ws; titer=1, DHP_pyro=nothing)
+    @test !all(iszero, g.Q_fluid_grid)
+    RT_without = zeros(length(ws.RT))
+    assemble_thermal_lse!(
+        g.tk1,
+        g.RHOCP,
+        g.KX,
+        g.KY,
+        g.HR,
+        g.HA,
+        g.HS,
+        g.DHP,
+        RT_without,
+        dt_solve;
+        coords=coords,
+        Q_metric=g.Q_metric,
+        Q_lat=g.Q_lat_grid,
+        Q_seg=g.Q_seg_grid,
+    )
+    @test isapprox(ws.RT .- RT_without, vec(g.Q_fluid_grid); rtol=1e-4)
+end
