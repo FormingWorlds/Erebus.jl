@@ -53,6 +53,7 @@ end
             qy = fill(qyv, coords.Ny1, coords.Nx1)
             compute_fluid_advection_heat!(Q, T, qx, qy, _ -> f; coords=coords)
             @test isapprox(Q[8, 10], -f * (qxv * gx + qyv * gy); rtol=1e-10)
+            @test isapprox(Q[3, 17], Q[8, 10]; rtol=1e-10)
         end
     end
 
@@ -85,6 +86,8 @@ end
         qx = fill(1.0e-8, size(Q))
         compute_fluid_advection_heat!(Q, T, qx, zeros(size(Q)), t -> t * 1.0e4; coords=coords)
         @test isapprox(Q[8, 10], 400.0e4 * 1.0e-8 * 100.0 / coords.dx; rtol=1e-12)
+        # The next node downstream takes 300 K fluid at the capacity of 300 K.
+        @test isapprox(Q[8, 9], 300.0e4 * 1.0e-8 * (300.0 - 400.0) / coords.dx; rtol=1e-12)
     end
 
     @testset "rough flow with div q: no new extremum over 200 steps" begin
@@ -102,8 +105,8 @@ end
             T .+= dt .* Q ./ C
         end
         Tmin, Tmax = extrema(T[2:(end - 1), 2:(end - 1)])
-        @test Tmax - T0max == min(Tmax - T0max, 0.0)
-        @test T0min - Tmin == min(T0min - Tmin, 0.0)
+        @test isapprox(max(Tmax - T0max, 0.0), 0.0; atol=1e-9)
+        @test isapprox(max(T0min - Tmin, 0.0), 0.0; atol=1e-9)
         # A rough field with div q must change: guards a term that does nothing.
         @test !isapprox(Tmax - Tmin, T0max - T0min; rtol=1e-3)
     end
@@ -131,6 +134,10 @@ end
         @test isapprox(
             sum(RHOCP[I2, J2] .* (T2[I2, J2] .- T[I2, J2])), sum(Q[I2, J2]) * dt; rtol=1e-8
         )
+        # The same system without the term leaves temperature unchanged.
+        RT0 = zeros(length(RT))
+        LT0 = assemble_thermal_lse!(T, RHOCP, Z, Z, Z, Z, Z, Z, RT0, dt; coords=coords)
+        @test isapprox(reshape(LT0.cscmatrix \ RT0, size(Q))[I2, J2], T[I2, J2]; rtol=1e-10)
     end
 
     @testset "input contracts" begin

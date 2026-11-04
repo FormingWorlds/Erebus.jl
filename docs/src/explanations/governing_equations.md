@@ -129,12 +129,13 @@ where $\eta_{\text{eff}} = \frac{\eta G \Delta t}{\eta + G \Delta t}$ is the eff
 
 Heat transport across the planetesimal is governed by the energy conservation equation:
 
-$$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q_{\text{radiogenic}} + Q_{\text{adiabatic}} + Q_{\text{shear}} + \text{DHP} + Q_{\text{seg}} + Q_{\text{lat}}$$
+$$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q_{\text{fluid}} + Q_{\text{radiogenic}} + Q_{\text{adiabatic}} + Q_{\text{shear}} + \text{DHP} + Q_{\text{seg}} + Q_{\text{lat}}$$
 
 | Symbol | Description | Units |
 |:---|:---|:---|
 | $c_p$ | Specific heat capacity (with melting latent heat buffer) | $\text{J}/(\text{kg}\cdot\text{K})$ |
 | $k$ | Bulk thermal conductivity | $\text{W}/(\text{m}\cdot\text{K})$ |
+| $Q_{\text{fluid}}$ | Pore fluid advection in the frame of the solid, $-\rho c_{p,f}\,\mathbf{q}_D \cdot \nabla T$, first-order upwind | $\text{W/m}^3$ |
 | $Q_{\text{adiabatic}}$ | Adiabatic compression/decompression heating | $\text{W/m}^3$ |
 | $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
 | $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |

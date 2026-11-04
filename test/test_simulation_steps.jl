@@ -1077,8 +1077,11 @@ end
         state.grids.vxf .= 1.0e-6
         state.grids.vyf .= 1.0e-6
         T_before = copy(core.tkm)
+        x_before = core.xm[1]
         advect_markers!(state, coords, cfg)
         @test isapprox(core.tkm, T_before; rtol=1e-14)
+        # Solid velocity is zero: fluid velocity must not move the marker.
+        @test isapprox(core.xm[1], x_before; rtol=1e-14)
     end
 
     @testset "Step 9: advect_markers! Contract and Closed-Form RK4 Verification" begin

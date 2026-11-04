@@ -109,8 +109,8 @@ The simulation loop advances physical time in 10 sequential stages:
    It updates matrix compaction and plastic yielding.
 
 6. **Thermal & Segregation (`solve_thermal_energy!`, `apply_metal_segregation!`, `apply_silicate_melt_segregation!`, outer iteration)**:
-   The code solves the thermal energy equation with conduction and latent heat.
-   In Stage 9, marker advection transports matrix and Darcy pore fluid heat.
+   The code solves the thermal energy equation with conduction, latent heat, and pore fluid advection built from the Darcy flux.
+   In Stage 9, marker advection transports matrix heat.
    Turbulent convection and optional hydrothermal circulation enter through effective thermal conductivity $k_\mathrm{eff}$.
    The code computes downward iron drainage (`apply_metal_segregation!`, `src/numerics/segregation.jl`) and upward silicate melt ascent (`apply_silicate_melt_segregation!`, `src/numerics/segregation.jl`) using conservative drift-flux transport.
    Segregation releases gravitational dissipation heating $H_\mathrm{seg}$.

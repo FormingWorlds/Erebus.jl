@@ -45,6 +45,11 @@ Material properties, temperature, hydration state, and porosity are carried on t
 
 4. **Marker Advection**:
    Markers move with the solid velocity field using a 4th-order Runge-Kutta scheme (`move_markers_rk4!`) with 2nd-order continuity-based parabolic spatial velocity corrections.
+   Marker temperature does not change in this step.
+   Pore fluid heat transport enters the thermal solve as a source at each pressure node (`compute_fluid_advection_heat!`).
+   Each face with inflow adds $\rho c_{p,f}(T_\mathrm{up})\,|q_D|\,(T_\mathrm{up} - T)/h$, the first-order upwind form of $-\rho c_{p,f}\,\mathbf{q}_D \cdot \nabla T$ in the frame of the solid.
+   The form creates no new temperature extremum while the sum of the inflow Courant numbers at a node stays at or below 1.
+   It adds a numerical diffusivity of about $|q_D| h / 2$, scaled by the ratio of fluid to bulk heat capacity.
 
 5. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
    At simulation initialization (`setup_simulation_markers_and_state`), interior planetesimal markers ($\mathrm{tm} < 3$) are initialized with an analytical hydrostatic pressure profile in `pfm0`:
