@@ -3406,8 +3406,8 @@ $(SIGNATURES)
 
     - xm: x-coordinate of markers
     - ym: y-coordinate of markers
-    - sxxm: marker σ′xx
     - sxym: marker σxy
+    - sxxm: marker σ′xx
     - vx: solid vx-velocity at Vx nodes
     - vy: solid vy-velocity at Vy nodes
     - wyx: rotation rate at basic nodes

@@ -145,10 +145,11 @@ end # function assemble_thermal_lse!
 Compute the volumetric heat rate from pore fluid advection at interior P nodes.
 
 Each face with inflow adds `rhocpf(T_up) * |q| * (T_up - T) / h`, the first-order upwind
-form of `-rhocp_f q . grad(T)` in the frame of the solid. Outflow faces add nothing, so the
-result carries no new temperature extremum while the sum over inflow faces of
-`rhocpf(T_up) * |q| * dt / (RHOCP * h)` at a node stays at or below 1. The form is first order and adds a numerical diffusivity of about
-`|q| h / 2` scaled by the fluid to bulk heat capacity ratio. Ghost nodes hold zero.
+form of `-rhocp_f q . grad(T)` in the frame of the solid. Outflow faces add nothing. An
+explicit step with this source alone brings a node no further than its upstream nodes while
+the sum over inflow faces of `rhocpf(T_up) * |q| * dt / (RHOCP * h)` stays at or below 1. The
+form is first order and adds a numerical diffusivity of about `|q_x| dx / 2` in x and
+`|q_y| dy / 2` in y, scaled by the fluid to bulk heat capacity ratio. Ghost nodes hold zero.
 
 # Parameters
 - `Q`: output heat rate at P nodes [W/m^3]

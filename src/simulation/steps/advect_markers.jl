@@ -39,6 +39,7 @@ function advect_markers!(
 
     xm = markers.core.xm
     ym = markers.core.ym
+    phim = markers.core.phim
     phinewm = markers.core.phinewm
     sxym = markers.core.sxym
     sxxm = markers.core.sxxm
@@ -46,7 +47,6 @@ function advect_markers!(
 
     vx = grids.vx
     vy = grids.vy
-    phim = markers.core.phim
     vxf = grids.vxf
     vyf = grids.vyf
     vxp = grids.vxp

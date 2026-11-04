@@ -549,9 +549,6 @@ using StaticArrays
         end
 
         # Test move_markers_rk4! with multi-threading
-        tm = fill(1, marknum)
-        tkm = fill(300.0, marknum)
-        phim = fill(0.1, marknum)
         sxxm = zeros(marknum)
         vx = fill(1.0e-9, 18, 18)
         vy = fill(-1.0e-9, 18, 18)
