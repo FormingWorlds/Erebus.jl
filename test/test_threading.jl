@@ -555,14 +555,11 @@ using StaticArrays
         sxxm = zeros(marknum)
         vx = fill(1.0e-9, 18, 18)
         vy = fill(-1.0e-9, 18, 18)
-        vxf = copy(vx)
-        vyf = copy(vy)
         wyx = zeros(17, 17)
-        tk2 = fill(300.0, 18, 18)
         xm_orig = copy(xm)
         ym_orig = copy(ym)
         Erebus.Particles.move_markers_rk4!(
-            xm, ym, tm, tkm, phim, sxym, sxxm, vx, vy, wyx, marknum, 1.0e8; coords=coords
+            xm, ym, sxym, sxxm, vx, vy, wyx, marknum, 1.0e8; coords=coords
         )
         @test all(xm .!= xm_orig)
         @test all(ym .!= ym_orig)

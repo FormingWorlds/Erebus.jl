@@ -88,16 +88,26 @@ end
         @test all(iszero, (Q[1, :], Q[end, :], Q[:, 1], Q[:, end]))
     end
 
-    @testset "heat capacity is read at the upstream temperature" begin
+    @testset "heat capacity is read at the upstream temperature on each face" begin
+        rhocpf = t -> t * 1.0e4
         T = fill(300.0, size(Q))
         T[8, 9] = 400.0
-        qx = fill(1.0e-8, size(Q))
-        compute_fluid_advection_heat!(
-            Q, T, qx, zeros(size(Q)), t -> t * 1.0e4; coords=coords
+        q = 1.0e-8
+        # (flux x, flux y, node downstream of the hot node, grid spacing)
+        for (qx0, qy0, down, h) in (
+            (q, 0.0, (8, 10), coords.dx),
+            (-q, 0.0, (8, 8), coords.dx),
+            (0.0, q, (9, 9), coords.dy),
+            (0.0, -q, (7, 9), coords.dy),
         )
-        @test isapprox(Q[8, 10], 400.0e4 * 1.0e-8 * 100.0 / coords.dx; rtol=1e-12)
-        # The next node downstream takes 300 K fluid at the capacity of 300 K.
-        @test isapprox(Q[8, 9], 300.0e4 * 1.0e-8 * (300.0 - 400.0) / coords.dx; rtol=1e-12)
+            compute_fluid_advection_heat!(
+                Q, T, fill(qx0, size(Q)), fill(qy0, size(Q)), rhocpf; coords=coords
+            )
+            # The downstream node takes 400 K fluid at the capacity of 400 K.
+            @test isapprox(Q[down...], 400.0e4 * q * 100.0 / h; rtol=1e-12)
+            # The hot node takes 300 K fluid at the capacity of 300 K.
+            @test isapprox(Q[8, 9], 300.0e4 * q * (300.0 - 400.0) / h; rtol=1e-12)
+        end
     end
 
     @testset "rough flow with div q: no new extremum over 200 steps" begin
@@ -132,28 +142,50 @@ end
         @test isapprox(errs[3], 0.0; atol=0.012)
     end
 
-    @testset "assembled thermal system adds the term once and closes its heat sum" begin
-        T = _linear_temperature(coords, 500.0, 0.05, 0.02)
-        qx = fill(2.0e-8, size(Q))
-        qy = fill(-1.0e-8, size(Q))
+    @testset "heat sum: div-free flow gives zero, a source gives T times div q" begin
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        rng = Random.MersenneTwister(4)
+        T = 500.0 .+ 300.0 .* rand(rng, Ny1, Nx1)
+        # Closed flow from a stream function: zero normal flux at the walls, zero divergence.
+        psi = zeros(Ny1, Nx1)
+        psi[3:(end - 3), 3:(end - 3)] .= rand(rng, Ny1 - 5, Nx1 - 5)
+        qx = zeros(Ny1, Nx1)
+        qy = zeros(Ny1, Nx1)
+        for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+            qx[i, j] = 1.0e-8 * (psi[i, j] - psi[i - 1, j]) / coords.dy
+            qy[i, j] = -1.0e-8 * (psi[i, j] - psi[i, j - 1]) / coords.dx
+        end
         compute_fluid_advection_heat!(Q, T, qx, qy, _ -> f; coords=coords)
+        @test any(!iszero, Q)
+        total = sum(abs, Q)
+        @test isapprox(sum(Q) / total, 0.0; atol=1e-12)
+        # A flux added on one face is a source at node (8, 9) and a sink at node (8, 10).
+        S = 3.0e-9
+        qx[8, 9] += S * coords.dx
+        compute_fluid_advection_heat!(Q, T, qx, qy, _ -> f; coords=coords)
+        @test isapprox(sum(Q), f * S * (T[8, 9] - T[8, 10]); rtol=1e-9)
+    end
+
+    @testset "assembled thermal system adds the term once" begin
+        T = _linear_temperature(coords, 500.0, 0.05, 0.02)
+        compute_fluid_advection_heat!(
+            Q, T, fill(2.0e-8, size(Q)), fill(-1.0e-8, size(Q)), _ -> f; coords=coords
+        )
         Z = zeros(size(Q))
+        K = fill(3.0, size(Q))
         RHOCP = fill(3.3e6, size(Q))
         dt = 1.0e9
         RT = zeros(coords.Ny1 * coords.Nx1)
         LT = assemble_thermal_lse!(
-            T, RHOCP, Z, Z, Z, Z, Z, Z, RT, dt; coords=coords, Q_fluid=Q
+            T, RHOCP, K, K, Z, Z, Z, Z, RT, dt; coords=coords, Q_fluid=Q
         )
-        T2 = reshape(LT.cscmatrix \ RT, size(Q))
+        RT0 = zeros(length(RT))
+        LT0 = assemble_thermal_lse!(T, RHOCP, K, K, Z, Z, Z, Z, RT0, dt; coords=coords)
+        @test LT.cscmatrix == LT0.cscmatrix
         I2 = 2:(coords.Ny1 - 1)
         J2 = 2:(coords.Nx1 - 1)
-        @test isapprox(
-            sum(RHOCP[I2, J2] .* (T2[I2, J2] .- T[I2, J2])), sum(Q[I2, J2]) * dt; rtol=1e-8
-        )
-        # The same system without the term leaves temperature unchanged.
-        RT0 = zeros(length(RT))
-        LT0 = assemble_thermal_lse!(T, RHOCP, Z, Z, Z, Z, Z, Z, RT0, dt; coords=coords)
-        @test isapprox(reshape(LT0.cscmatrix \ RT0, size(Q))[I2, J2], T[I2, J2]; rtol=1e-10)
+        Ly = LinearIndices(size(Q))
+        @test isapprox(vec(RT[Ly[I2, J2]] .- RT0[Ly[I2, J2]]), vec(Q[I2, J2]); rtol=1e-8)
     end
 
     @testset "input contracts" begin

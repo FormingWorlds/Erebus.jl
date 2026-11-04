@@ -9,9 +9,6 @@ Advect Lagrangian markers with 4th-order Runge-Kutta scheme and backtrace nodal 
 - `state.markers.core.phinewm`
 - `state.markers.core.xm`
 - `state.markers.core.ym`
-- `state.markers.core.tm`
-- `state.markers.core.tkm`
-- `state.markers.core.phim`
 - `state.markers.core.sxym`
 - `state.markers.core.sxxm`
 - `state.grids.XWS`
@@ -42,9 +39,6 @@ function advect_markers!(
 
     xm = markers.core.xm
     ym = markers.core.ym
-    tm = markers.core.tm
-    tkm = markers.core.tkm
-    phim = markers.core.phim
     phinewm = markers.core.phinewm
     sxym = markers.core.sxym
     sxxm = markers.core.sxxm
@@ -52,6 +46,7 @@ function advect_markers!(
 
     vx = grids.vx
     vy = grids.vy
+    phim = markers.core.phim
     vxf = grids.vxf
     vyf = grids.vyf
     vxp = grids.vxp
@@ -86,9 +81,7 @@ function advect_markers!(
     compute_rotation_rate!(vx, vy, wyx; coords=coords)
 
     # 5. Move markers with 4th-order Runge-Kutta scheme
-    move_markers_rk4!(
-        xm, ym, tm, tkm, phim, sxym, sxxm, vx, vy, wyx, marknum, dt; coords=coords
-    )
+    move_markers_rk4!(xm, ym, sxym, sxxm, vx, vy, wyx, marknum, dt; coords=coords)
 
     # 6. Backtrack nodal total and fluid pressures
     backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords)

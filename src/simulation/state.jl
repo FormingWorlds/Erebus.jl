@@ -10,7 +10,7 @@ end
 Base.showerror(io::IO, e::CheckpointError) = print(io, "CheckpointError: ", e.msg)
 
 """
-Unified container for all 80 staggered Eulerian mesh arrays.
+Unified container for all 81 staggered Eulerian mesh arrays.
 """
 struct GridArrays
     ETA::Matrix{Float64}

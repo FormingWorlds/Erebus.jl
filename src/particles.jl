@@ -3406,9 +3406,6 @@ $(SIGNATURES)
 
     - xm: x-coordinate of markers
     - ym: y-coordinate of markers
-    - tm: type of markers 
-    - tkm: temperature of markers
-    - phim: porosity of markers  
     - sxxm: marker σ′xx
     - sxym: marker σxy
     - vx: solid vx-velocity at Vx nodes
@@ -3424,9 +3421,6 @@ $(SIGNATURES)
 function move_markers_rk4!(
     xm,
     ym,
-    tm,
-    tkm,
-    phim,
     sxym,
     sxxm,
     vx,
@@ -3436,25 +3430,13 @@ function move_markers_rk4!(
     dt;
     coords::GridCoordinates=default_grid_coordinates(),
 )
-    @unpack_coords coords xp yp x y xvx yvx xvy yvy dx dy
-    @unpack_coords coords jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
+    @unpack_coords coords x y xvx yvx xvy yvy dx dy
+    @unpack_coords coords jmin_basic jmax_basic imin_basic imax_basic
     @unpack_coords coords jmin_vx jmax_vx imin_vx imax_vx jmin_vy jmax_vy imin_vy imax_vy Nx Ny
     @inbounds begin
         Threads.@threads :dynamic for m in 1:1:marknum
             xmm = xmrk4 = xm[m]
             ymm = ymrk4 = ym[m]
-            i, j, weights = fix_weights(
-                xmrk4,
-                ymrk4,
-                xp_val,
-                yp_val,
-                dx_val,
-                dy_val,
-                jmin_p_val,
-                jmax_p_val,
-                imin_p_val,
-                imax_p_val,
-            )
             i, j, weights = fix_weights(
                 xmrk4,
                 ymrk4,

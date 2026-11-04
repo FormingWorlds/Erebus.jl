@@ -135,7 +135,7 @@ $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla
 |:---|:---|:---|
 | $c_p$ | Specific heat capacity (with melting latent heat buffer) | $\text{J}/(\text{kg}\cdot\text{K})$ |
 | $k$ | Bulk thermal conductivity | $\text{W}/(\text{m}\cdot\text{K})$ |
-| $Q_{\text{fluid}}$ | Pore fluid advection in the frame of the solid, $-\rho c_{p,f}\,\mathbf{q}_D \cdot \nabla T$, first-order upwind | $\text{W/m}^3$ |
+| $Q_{\text{fluid}}$ | Pore fluid advection in the frame of the solid, $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$, first-order upwind | $\text{W/m}^3$ |
 | $Q_{\text{adiabatic}}$ | Adiabatic compression/decompression heating | $\text{W/m}^3$ |
 | $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
 | $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |

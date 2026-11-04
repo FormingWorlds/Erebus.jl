@@ -146,8 +146,8 @@ Compute the volumetric heat rate from pore fluid advection at interior P nodes.
 
 Each face with inflow adds `rhocpf(T_up) * |q| * (T_up - T) / h`, the first-order upwind
 form of `-rhocp_f q . grad(T)` in the frame of the solid. Outflow faces add nothing, so the
-result carries no new temperature extremum while the sum of the inflow Courant numbers at a
-node stays at or below 1. The form is first order and adds a numerical diffusivity of about
+result carries no new temperature extremum while the sum over inflow faces of
+`rhocpf(T_up) * |q| * dt / (RHOCP * h)` at a node stays at or below 1. The form is first order and adds a numerical diffusivity of about
 `|q| h / 2` scaled by the fluid to bulk heat capacity ratio. Ghost nodes hold zero.
 
 # Parameters

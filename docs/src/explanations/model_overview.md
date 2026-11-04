@@ -131,7 +131,7 @@ The simulation loop advances physical time in 10 sequential stages:
 
 9. **Marker Advection & Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)**:
    The code advects markers with a 4th-order Runge-Kutta scheme (RK4).
-   It transports matrix heat and Darcy pore fluid heat along marker paths.
+   It transports matrix heat along marker paths.
    It updates nodal total and fluid pressures.
    It replenishes markers in empty cells.
    The code doubles domain size when the body radius exceeds 70% of domain half-width ($0.70 \cdot x_\mathrm{size}/2$; see [Telescoping Domain](telescoping_domain.md)).
@@ -273,6 +273,7 @@ Module: `src/simulation/steps/solve_thermal_energy.jl`, `src/numerics/thermal.jl
 | $H_\mathrm{s}$ | Viscous shear, compaction and Darcy friction dissipation | $\text{W/m}^3$ | `compute_shear_heating!` (`src/physics/dissipation.jl`) |
 | $H_\mathrm{a}$ | Adiabatic heating from solid and fluid pressure change | $\text{W/m}^3$ | `compute_adiabatic_heating!` (`src/physics/dissipation.jl`) |
 | $H_\mathrm{seg}$ | Gravitational dissipation from metal and melt segregation | $\text{W/m}^3$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
+| $Q_\mathrm{fluid}$ | Pore fluid advection in the frame of the solid, $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$, first-order upwind | $\text{W/m}^3$ | `compute_fluid_advection_heat!` (`src/numerics/thermal.jl`) |
 | $H_\mathrm{L}$ | Latent heat of reactions, melting, and phase changes | $\text{W/m}^3$ | `solve_thermal_energy!` (`src/simulation/steps/solve_thermal_energy.jl`) |
 | $\mathbf{J}_\mathrm{Fe}$ | Metal segregation volume flux vector | $\text{m/s}$ | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
 | $X_\mathrm{Fe}$ | Bulk metal volume fraction | dimensionless | `apply_metal_segregation!` (`src/numerics/segregation.jl`) |
