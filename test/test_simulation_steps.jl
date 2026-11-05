@@ -1090,7 +1090,7 @@ end
         # Solid flow moves the marker through the gradient, with no temperature change.
         state.grids.vx .= 1.0e-9
         advect_markers!(state, coords, cfg)
-        @test abs(core.xm[1] - x_before) > 1.0
+        @test isapprox(core.xm[1] - x_before, 1.0e-9 * 1.0e9; rtol=1e-9)
         @test isapprox(core.tkm, T_before; rtol=1e-14)
     end
 

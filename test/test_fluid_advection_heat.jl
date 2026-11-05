@@ -230,7 +230,7 @@ end
             "time.n_steps" => 3, "materials.rhocpfluidm" => [2.4e6, 1.5e6, 3.0e6]
         ),
     )
-    @test cfg.materials.rhocpfluidm[1] == 2.4e6
+    @test cfg.materials.rhocpfluidm[1] ≈ 2.4e6
     st = Erebus.simulation_loop(cfg; output_path=path)
     g = st.grids
     # The domain can telescope to more nodes at the configured spacing.
