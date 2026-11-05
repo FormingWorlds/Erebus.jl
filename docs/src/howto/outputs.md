@@ -134,7 +134,7 @@ Single-threaded runs and multi-threaded runs guarantee bitwise reproducibility u
 ### Checkpoint Contents and Schema v2
 
 Binary checkpoint files (`.jld2`) use `schema_version = 2` and store the complete `SimulationState`:
-- Staggered grid fields (`GridArrays`): all 80 mesh arrays including pressure, velocities, Darcy fluxes, stresses, temperatures, and source terms.
+- Staggered grid fields (`GridArrays`): all 81 mesh arrays including pressure, velocities, Darcy fluxes, stresses, temperatures, and source terms.
 - Marker arrays (`MarkerArrays`): core arrays (positions, temperatures, stresses, properties) and all optional chemical/mineral groups.
 - Accumulators (`SimulationAccumulators`): volatile inventories, planetary mass and radius, and core budgets.
 - Atmospheric state (`AtmosphereState`), volatile transfer log (`TransferRecord` vector), exact `rng` generator state, and execution `timer`.

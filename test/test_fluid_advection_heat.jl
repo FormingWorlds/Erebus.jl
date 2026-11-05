@@ -79,6 +79,7 @@ end
         i0, j0 = 8, 10
         T[i0, j0 + 1] = 1300.0
         qx = fill(1.0e-8, size(Q))
+        fill!(Q, 99.0)
         # Flow runs from j toward j+1: the hot downstream node changes nothing upstream.
         compute_fluid_advection_heat!(Q, T, qx, zeros(size(Q)), _ -> f; coords=coords)
         @test isapprox(Q[i0, j0], 0.0; atol=1e-20)
@@ -181,7 +182,9 @@ end
         )
         RT0 = zeros(length(RT))
         LT0 = assemble_thermal_lse!(T, RHOCP, K, K, Z, Z, Z, Z, RT0, dt; coords=coords)
-        @test LT.cscmatrix == LT0.cscmatrix
+        @test LT.cscmatrix.colptr == LT0.cscmatrix.colptr
+        @test LT.cscmatrix.rowval == LT0.cscmatrix.rowval
+        @test isapprox(LT.cscmatrix.nzval, LT0.cscmatrix.nzval; rtol=1e-14)
         I2 = 2:(coords.Ny1 - 1)
         J2 = 2:(coords.Nx1 - 1)
         Ly = LinearIndices(size(Q))
@@ -197,9 +200,25 @@ end
         @test_throws ArgumentError compute_fluid_advection_heat!(
             Q, T, zeros(3, 3), qx, _ -> f; coords=coords
         )
+        @test_throws ArgumentError compute_fluid_advection_heat!(
+            Q, zeros(3, 3), qx, qx, _ -> f; coords=coords
+        )
+        @test_throws ArgumentError compute_fluid_advection_heat!(
+            Q, T, qx, zeros(3, 3), _ -> f; coords=coords
+        )
         @test_throws DomainError compute_fluid_advection_heat!(
             Q, T, fill(1.0e-8, size(Q)), qx, _ -> -1.0; coords=coords
         )
+        # A fluid without heat capacity carries no heat.
+        compute_fluid_advection_heat!(
+            Q,
+            _linear_temperature(coords, 500.0, 0.05, 0.02),
+            fill(1.0e-8, size(Q)),
+            qx,
+            _ -> 0.0;
+            coords=coords,
+        )
+        @test all(iszero, Q)
     end
 end
 
@@ -207,8 +226,11 @@ end
     path = mktempdir()
     cfg = override_config(
         load_config(joinpath(@__DIR__, "..", "configs", "lunar_growth_tutorial.toml")),
-        Dict{String,Any}("time.n_steps" => 3),
+        Dict{String,Any}(
+            "time.n_steps" => 3, "materials.rhocpfluidm" => [2.4e6, 1.5e6, 3.0e6]
+        ),
     )
+    @test cfg.materials.rhocpfluidm[1] == 2.4e6
     st = Erebus.simulation_loop(cfg; output_path=path)
     g = st.grids
     # The domain can telescope to more nodes at the configured spacing.

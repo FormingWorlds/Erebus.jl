@@ -4557,7 +4557,9 @@ $(SIGNATURES)
 # Details
 
 A marker takes the temperature change of the four nodes around it. A rock marker must not
-fall below `min(T_m, min(T_nodes))`, because conduction creates no local minimum. The
+fall below `min(T_m, min(T_nodes))`, because conduction creates no local minimum and the
+pore fluid source lowers a node only toward an upstream node while its inflow sum stays at or
+below 1. The
 rejected cooling goes to the other rock markers at the same nodes, weighted by their heat
 capacity and out-of-plane length, so the heat of the step is unchanged. Heating has no such bound, because a heat
 source can raise a marker above its nodes. Sticky-air markers take the plain increment and

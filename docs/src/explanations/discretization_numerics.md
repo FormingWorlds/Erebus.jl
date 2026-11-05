@@ -35,7 +35,7 @@ Material properties, temperature, hydration state, and porosity are carried on t
    By default (`solver.p2m_mode = :tiled`), `interpolate_markers_to_grid!` executes a two-phase 4-color tiled scatter (`bin_markers_into_tiles!` and `_scatter_tiled_p2m_tile!`). Markers are binned into coarse tiles of $T \times T$ cells (`solver.tile_size`, default $T = 4$) and processed in four independent color passes ($2 \times 2$ stride) so adjacent tiles never share staggered boundary nodes, scattering directly into the master grid arrays without thread-local grid duplication.
 
 2. **Marker Temperature Update**:
-   Each marker takes the temperature change of the four nodes around it. A cold rock marker in a cell where flow brings in hotter rock can take this cooling step after step while the node stays warm, because the next projection warms the node and not the marker. Conduction creates no local minimum. The pore fluid term can bring a node down only toward an upstream node. So `limit_marker_temperature_increment!` keeps each rock marker at or above $\min(T_m, T_\text{nodes})$.
+   Each marker takes the temperature change of the four nodes around it. A cold rock marker in a cell where flow brings in hotter rock can take this cooling step after step while the node stays warm, because the next projection warms the node and not the marker. Conduction creates no local minimum. The pore fluid term can bring a node down only toward an upstream node, while the sum in item 5 stays at or below 1. So `limit_marker_temperature_increment!` keeps each rock marker at or above $\min(T_m, T_\text{nodes})$.
 
    The rejected cooling goes to the other rock markers at the same nodes, weighted by their heat capacity and, under the spherical metric, their out-of-plane length, so the heat of the step does not change. Where no other rock marker can take it, the heat is not delivered.
 
@@ -52,10 +52,10 @@ Material properties, temperature, hydration state, and porosity are carried on t
    Markers keep their temperature in this step.
 
 5. **Pore Fluid Heat**:
-   Pore fluid heat transport enters the thermal solve as a source at each pressure node (`compute_fluid_advection_heat!`), at the temperature of the start of the step.
+   Pore fluid heat transport enters the thermal solve as a source at each interior pressure node (`compute_fluid_advection_heat!`), at the temperature of the start of the step.
    Each face with inflow adds $(\rho c_p)_f(T_\mathrm{up})\,|q_D|\,(T_\mathrm{up} - T)/h$, the first-order upwind form of $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$ in the frame of the solid, where $(\rho c_p)_f$ is the volumetric heat capacity of the pore fluid.
    Taken alone, this source brings a node no lower or higher than its upstream nodes while the sum over inflow faces of $(\rho c_p)_f(T_\mathrm{up}) |q_D| \Delta t / (\rho c_p\, h)$, with the bulk $\rho c_p$ of the node, stays at or below 1. The time step control does not enforce this sum.
-   The form adds a numerical diffusivity of about $|q_x| \Delta x / 2$ in $x$ and $|q_y| \Delta y / 2$ in $y$, scaled by the ratio of fluid to bulk heat capacity.
+   The form adds a numerical diffusivity of about $|q_{xD}| \Delta x / 2$ in $x$ and $|q_{yD}| \Delta y / 2$ in $y$, scaled by the ratio of fluid to bulk heat capacity.
 
 6. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
    At simulation initialization (`setup_simulation_markers_and_state`), interior planetesimal markers ($\mathrm{tm} < 3$) are initialized with an analytical hydrostatic pressure profile in `pfm0`:
