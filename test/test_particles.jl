@@ -911,33 +911,14 @@ include("test_helpers.jl")
         ym_init = fill(ysize / 2.0, marknum)
         xm = copy(xm_init)
         ym = copy(ym_init)
-        tm = fill(1, marknum)
-        tkm = fill(300.0, marknum)
-        phim = fill(0.1, marknum)
         sxym = zeros(marknum)
         sxxm = zeros(marknum)
-        tk2 = fill(300.0, Ny1, Nx1)
         wyx = zeros(Ny, Nx)
         dt_adv = 100.0
 
         # 1. Zero velocity field: markers must remain stationary
         Erebus.move_markers_rk4!(
-            xm,
-            ym,
-            tm,
-            tkm,
-            phim,
-            sxym,
-            sxxm,
-            zeros(Ny1, Nx1),
-            zeros(Ny1, Nx1),
-            zeros(Ny1, Nx1),
-            zeros(Ny1, Nx1),
-            wyx,
-            tk2,
-            marknum,
-            dt_adv,
-            1,
+            xm, ym, sxym, sxxm, zeros(Ny1, Nx1), zeros(Ny1, Nx1), wyx, marknum, dt_adv
         )
         @test isapprox(xm, xm_init; rtol=1e-12)
         @test isapprox(ym, ym_init; rtol=1e-12)
@@ -949,22 +930,7 @@ include("test_helpers.jl")
         vy_uniform = fill(V_val, Ny1, Nx1)
 
         Erebus.move_markers_rk4!(
-            xm,
-            ym,
-            tm,
-            tkm,
-            phim,
-            sxym,
-            sxxm,
-            vx_uniform,
-            vy_uniform,
-            vx_uniform,
-            vy_uniform,
-            wyx,
-            tk2,
-            marknum,
-            dt_adv,
-            1,
+            xm, ym, sxym, sxxm, vx_uniform, vy_uniform, wyx, marknum, dt_adv
         )
         expected_xm = xm_init .+ U_val * dt_adv
         expected_ym = ym_init .+ V_val * dt_adv
@@ -985,29 +951,11 @@ include("test_helpers.jl")
         y0_sym = 70_000.0
         xm_sym = [x0_sym]
         ym_sym = [y0_sym]
-        tm_sym = [1]
-        tkm_sym = [300.0]
-        phim_sym = [0.1]
         sxym_sym = [0.0]
         sxxm_sym = [0.0]
 
         Erebus.move_markers_rk4!(
-            xm_sym,
-            ym_sym,
-            tm_sym,
-            tkm_sym,
-            phim_sym,
-            sxym_sym,
-            sxxm_sym,
-            vx_grad,
-            vy_grad,
-            vx_grad,
-            vy_grad,
-            wyx,
-            tk2,
-            1,
-            dt_rk4,
-            1,
+            xm_sym, ym_sym, sxym_sym, sxxm_sym, vx_grad, vy_grad, wyx, 1, dt_rk4
         )
 
         dx_disp = xm_sym[1] - x0_sym

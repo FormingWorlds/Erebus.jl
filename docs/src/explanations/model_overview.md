@@ -109,8 +109,8 @@ The simulation loop advances physical time in 10 sequential stages:
    It updates matrix compaction and plastic yielding.
 
 6. **Thermal & Segregation (`solve_thermal_energy!`, `apply_metal_segregation!`, `apply_silicate_melt_segregation!`, outer iteration)**:
-   The code solves the thermal energy equation with conduction and latent heat.
-   In Stage 9, marker advection transports matrix and Darcy pore fluid heat.
+   The code solves the thermal energy equation with conduction, latent heat, and pore fluid advection built from the Darcy flux.
+   In Stage 9, marker advection moves the bulk heat of rock and pore fluid with the solid.
    Turbulent convection and optional hydrothermal circulation enter through effective thermal conductivity $k_\mathrm{eff}$.
    The code computes downward iron drainage (`apply_metal_segregation!`, `src/numerics/segregation.jl`) and upward silicate melt ascent (`apply_silicate_melt_segregation!`, `src/numerics/segregation.jl`) using conservative drift-flux transport.
    Segregation releases gravitational dissipation heating $H_\mathrm{seg}$.
@@ -131,7 +131,7 @@ The simulation loop advances physical time in 10 sequential stages:
 
 9. **Marker Advection & Doubling (`advect_markers!`, `replenish!`, `telescope_domain!`)**:
    The code advects markers with a 4th-order Runge-Kutta scheme (RK4).
-   It transports matrix heat and Darcy pore fluid heat along marker paths.
+   It moves the bulk heat of rock and pore fluid along marker paths.
    It updates nodal total and fluid pressures.
    It replenishes markers in empty cells.
    The code doubles domain size when the body radius exceeds 70% of domain half-width ($0.70 \cdot x_\mathrm{size}/2$; see [Telescoping Domain](telescoping_domain.md)).

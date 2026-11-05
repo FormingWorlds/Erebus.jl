@@ -1079,6 +1079,9 @@ function load_simulation_state(
         if !haskey(data, sfn)
             if fn === :Q_metric
                 push!(grid_vals, nothing)
+            elseif fn === :Q_fluid_grid
+                # Every thermal solve rebuilds this array, so an older file can leave it out.
+                push!(grid_vals, zeros(size(data["tk1"])))
             else
                 throw(CheckpointError("Missing required grid array in checkpoint: '$sfn'"))
             end

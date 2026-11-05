@@ -238,6 +238,7 @@ function setup_simulation_markers_and_state(
         S_vent_grid = zeros(Float64, coords.Ny1, coords.Nx1)
         Q_lat_grid = zeros(Float64, coords.Ny1, coords.Nx1)
         Q_seg_grid = zeros(Float64, coords.Ny1, coords.Nx1)
+        Q_fluid_grid = zeros(Float64, coords.Ny1, coords.Nx1)
 
         grids = GridArrays(
             ETA,
@@ -319,6 +320,7 @@ function setup_simulation_markers_and_state(
             S_vent_grid,
             Q_lat_grid,
             Q_seg_grid,
+            Q_fluid_grid,
             Q_metric,
         )
 

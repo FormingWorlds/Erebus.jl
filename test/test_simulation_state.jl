@@ -232,6 +232,31 @@ using Erebus
         end
     end
 
+    @testset "Checkpoint without the fluid heat array loads with zeros" begin
+        mktempdir() do tmpdir
+            cfg_base = Erebus.override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict(
+                    "grid.Nx" => 17,
+                    "grid.Ny" => 17,
+                    "time.n_steps" => 1,
+                    "output.output_dir" => tmpdir,
+                    "output.savematstep" => 1,
+                    "output.mode" => :snapshots,
+                ),
+            )
+            simulation_loop(cfg_base)
+            data = JLD2.load(joinpath(tmpdir, "output_00001.jld2"))
+            @test haskey(data, "Q_fluid_grid")
+            delete!(data, "Q_fluid_grid")
+            older = joinpath(tmpdir, "older.jld2")
+            JLD2.save(older, data)
+            (state, _, _) = Erebus.load_simulation_state(older)
+            @test size(state.grids.Q_fluid_grid) == size(state.grids.tk1)
+            @test all(iszero, state.grids.Q_fluid_grid)
+        end
+    end
+
     @testset "Force Restart Rejects Grid Geometry Override" begin
         mktempdir() do tmpdir
             cfg_base = Erebus.override_config(

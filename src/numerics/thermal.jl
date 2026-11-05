@@ -13,6 +13,7 @@ $(SIGNATURES)
 	- HR: radioactive heating at P nodes
 	- HA: adiabatic heating at P nodes 
 	- HS: shear heating at P nodes
+	- Q_fluid: optional fluid advection heat at P nodes, from `compute_fluid_advection_heat!`
     - DHP: latent heating (HL) at P nodes
     - RT: thermal RHS coefficient vector
     - dt: current time step length
@@ -39,6 +40,7 @@ function assemble_thermal_lse!(
     Q_metric=nothing,
     Q_lat=nothing,
     Q_seg=nothing,
+    Q_fluid=nothing,
     workspace=nothing,
 )
     Ny1, Nx1 = size(tk1)
@@ -126,6 +128,9 @@ function assemble_thermal_lse!(
                 if Q_seg !== nothing
                     RT[gk] += Q_seg[i, j]
                 end
+                if Q_fluid !== nothing
+                    RT[gk] += Q_fluid[i, j]
+                end
             end
         end
     end # @inbounds
@@ -133,6 +138,61 @@ function assemble_thermal_lse!(
     _finalize_assembled_lse!(LT, workspace, Ny1, Nx1)
     return LT
 end # function assemble_thermal_lse!
+
+"""
+    compute_fluid_advection_heat!(Q, tk, qxD, qyD, rhocpf; coords)
+
+Compute the volumetric heat rate from pore fluid advection at interior P nodes.
+
+Each face with inflow adds `rhocpf(T_up) * |q| * (T_up - T) / h`, the first-order upwind
+form of `-rhocp_f q . grad(T)` in the frame of the solid. Outflow faces add nothing. An
+explicit step with this source alone brings a node no further than its upstream nodes while
+the sum over inflow faces of `rhocpf(T_up) * |q| * dt / (RHOCP * h)` stays at or below 1. The
+form is first order and adds a numerical diffusivity of about `|q_x| dx / 2` in x and
+`|q_y| dy / 2` in y, scaled by the fluid to bulk heat capacity ratio. Ghost nodes hold zero.
+
+# Parameters
+- `Q`: output heat rate at P nodes [W/m^3]
+- `tk`: temperature at P nodes [K]
+- `qxD`, `qyD`: Darcy flux at Vx and Vy nodes [m/s]
+- `rhocpf`: function of temperature that returns the fluid heat capacity [J/(m^3 K)]
+- `coords`: grid coordinates
+
+# Returns
+- `nothing`
+
+# Raises
+- `ArgumentError`: when the array sizes differ from the P grid
+- `DomainError`: when `rhocpf` returns a negative value on an inflow face
+"""
+function compute_fluid_advection_heat!(
+    Q, tk, qxD, qyD, rhocpf; coords::GridCoordinates=default_grid_coordinates()
+)
+    @unpack_coords coords dx dy
+    grid_size = (coords.Ny1, coords.Nx1)
+    if size(Q) != grid_size ||
+        size(tk) != grid_size ||
+        size(qxD) != grid_size ||
+        size(qyD) != grid_size
+        throw(ArgumentError("Q, tk, qxD and qyD must have the P grid size $grid_size"))
+    end
+    fill!(Q, 0.0)
+    inflow_heat(q, T_up, T, h) = begin
+        q > 0.0 || return 0.0
+        c = rhocpf(T_up)
+        c >= 0.0 || throw(DomainError(c, "fluid heat capacity must not be negative"))
+        return c * q * (T_up - T) / h
+    end
+    @inbounds for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny1 - 1)
+        T = tk[i, j]
+        Q[i, j] =
+            inflow_heat(qxD[i, j - 1], tk[i, j - 1], T, dx_val) +
+            inflow_heat(-qxD[i, j], tk[i, j + 1], T, dx_val) +
+            inflow_heat(qyD[i - 1, j], tk[i - 1, j], T, dy_val) +
+            inflow_heat(-qyD[i, j], tk[i + 1, j], T, dy_val)
+    end
+    return nothing
+end
 
 """
     apply_radiative_surface_boundary!(

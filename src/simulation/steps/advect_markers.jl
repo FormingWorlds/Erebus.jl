@@ -1,7 +1,7 @@
 # Marker advection and pressure backtracking step
 
 """
-    advect_markers!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; XWSSUM=nothing, WTPSUM=nothing, marker_property_mode::Int=9)::Nothing
+    advect_markers!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; XWSSUM=nothing, WTPSUM=nothing)::Nothing
 
 Advect Lagrangian markers with 4th-order Runge-Kutta scheme and backtrace nodal pressures.
 
@@ -9,9 +9,6 @@ Advect Lagrangian markers with 4th-order Runge-Kutta scheme and backtrace nodal 
 - `state.markers.core.phinewm`
 - `state.markers.core.xm`
 - `state.markers.core.ym`
-- `state.markers.core.tm`
-- `state.markers.core.tkm`
-- `state.markers.core.phim`
 - `state.markers.core.sxym`
 - `state.markers.core.sxxm`
 - `state.grids.XWS`
@@ -33,7 +30,6 @@ function advect_markers!(
     cfg::SimulationConfig;
     XWSSUM=nothing,
     WTPSUM=nothing,
-    marker_property_mode::Int=9,
 )::Nothing
     marknum = length(state.markers)
     marknum == 0 && return nothing
@@ -43,8 +39,6 @@ function advect_markers!(
 
     xm = markers.core.xm
     ym = markers.core.ym
-    tm = markers.core.tm
-    tkm = markers.core.tkm
     phim = markers.core.phim
     phinewm = markers.core.phinewm
     sxym = markers.core.sxym
@@ -60,7 +54,6 @@ function advect_markers!(
     vxpf = grids.vxpf
     vypf = grids.vypf
     wyx = grids.wyx
-    tk2 = grids.tk2
     pr = grids.pr
     pr0 = grids.pr0
     ps = grids.ps
@@ -88,25 +81,7 @@ function advect_markers!(
     compute_rotation_rate!(vx, vy, wyx; coords=coords)
 
     # 5. Move markers with 4th-order Runge-Kutta scheme
-    move_markers_rk4!(
-        xm,
-        ym,
-        tm,
-        tkm,
-        phim,
-        sxym,
-        sxxm,
-        vx,
-        vy,
-        vxf,
-        vyf,
-        wyx,
-        tk2,
-        marknum,
-        dt,
-        marker_property_mode;
-        coords=coords,
-    )
+    move_markers_rk4!(xm, ym, sxym, sxxm, vx, vy, wyx, marknum, dt; coords=coords)
 
     # 6. Backtrack nodal total and fluid pressures
     backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords)
