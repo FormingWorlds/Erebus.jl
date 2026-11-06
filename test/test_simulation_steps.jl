@@ -813,7 +813,8 @@ end
                 dx = xs[j] - c.xcenter
                 dy = ys[i] - c.ycenter
                 rock = hypot(dx, dy) <= rp ? 3000.0 : 1.0
-                blob = 4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
+                blob =
+                    4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
                 R[i, j] = rock + (rock > 1.0 ? blob : 0.0)
             end
             return R
@@ -977,7 +978,9 @@ end
         good = (g.gx, g.gy, g.FI, g.RHOX, g.RHOY)
         for k in 1:5
             bad = ntuple(m -> m == k ? zeros(3, 3) : copy(good[m]), 5)
-            @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(bad..., coords)
+            @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(
+                bad..., coords
+            )
         end
     end
 
