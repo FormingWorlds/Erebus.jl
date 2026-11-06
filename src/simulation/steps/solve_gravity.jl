@@ -42,6 +42,16 @@ function solve_gravity!(
             ycenter=state.accumulators.ycenter,
             FI=FI,
         )
+        remove_net_body_acceleration!(
+            gx,
+            gy,
+            FI,
+            grids.RHOX,
+            grids.RHOY,
+            coords;
+            xcenter=state.accumulators.xcenter,
+            ycenter=state.accumulators.ycenter,
+        )
     elseif mode === :poisson2d
         RP_vec, SP_vec = if RP !== nothing && SP !== nothing
             RP, SP

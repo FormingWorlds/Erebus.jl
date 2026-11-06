@@ -338,3 +338,67 @@ function compute_gravity_enclosed_mass!(
 
     return r_bins, g_bins
 end
+
+"""
+    remove_net_body_acceleration!(gx, gy, FI, RHOX, RHOY, coords; xcenter, ycenter) -> (ax, ay)
+
+Subtract the uniform acceleration that gives zero net body force on the Stokes momentum nodes.
+
+The net force is summed over the nodes that carry a momentum equation: Vx at `i in 2:Ny`,
+`j in 2:Nx-1`, Vy at `i in 2:Ny-1`, `j in 2:Nx`, with the 2-D area weight the flow solve uses.
+`a = sum(RHO g) / sum(RHO)` per component is subtracted from every node of `gx`, `gy`, and `FI`
+gains the matching linear term `a_x (x - xcenter) + a_y (y - ycenter)`, so `g = -grad FI` holds.
+`FI` is then the potential in the frame of the body. A component with zero summed density is
+left unchanged.
+
+# Arguments
+- `gx`, `gy`: gravity at Vx and Vy nodes [m/s²], mutated.
+- `FI`: gravitational potential at P nodes [J/kg], mutated.
+- `RHOX`, `RHOY`: density at Vx and Vy nodes [kg/m³].
+- `coords::GridCoordinates`: grid geometry.
+
+# Keywords
+- `xcenter`, `ycenter`: origin of the linear potential term [m].
+
+# Returns
+- `Tuple{Float64,Float64}`: the subtracted acceleration `(ax, ay)` [m/s²].
+
+# Throws
+- `DimensionMismatch`: when the array sizes differ from `(Ny1, Nx1)`.
+"""
+function remove_net_body_acceleration!(
+    gx::AbstractMatrix{Float64},
+    gy::AbstractMatrix{Float64},
+    FI::AbstractMatrix{Float64},
+    RHOX::AbstractMatrix{Float64},
+    RHOY::AbstractMatrix{Float64},
+    coords::GridCoordinates;
+    xcenter::Real=coords.xcenter,
+    ycenter::Real=coords.ycenter,
+)
+    Nx, Ny, Nx1, Ny1 = coords.Nx, coords.Ny, coords.Nx1, coords.Ny1
+    for A in (gx, gy, FI, RHOX, RHOY)
+        size(A) == (Ny1, Nx1) ||
+            throw(DimensionMismatch("expected size $((Ny1, Nx1)), got $(size(A))"))
+    end
+    fx = mx = fy = my = 0.0
+    @inbounds for j in 2:(Nx - 1), i in 2:Ny
+        fx += RHOX[i, j] * gx[i, j]
+        mx += RHOX[i, j]
+    end
+    @inbounds for j in 2:Nx, i in 2:(Ny - 1)
+        fy += RHOY[i, j] * gy[i, j]
+        my += RHOY[i, j]
+    end
+    ax = mx > 0.0 ? fx / mx : 0.0
+    ay = my > 0.0 ? fy / my : 0.0
+    (ax == 0.0 && ay == 0.0) && return (ax, ay)
+    gx .-= ax
+    gy .-= ay
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
+    @inbounds for j in 1:Nx1, i in 1:Ny1
+        FI[i, j] += ax * (coords.xp[j] - xc) + ay * (coords.yp[i] - yc)
+    end
+    return (ax, ay)
+end
