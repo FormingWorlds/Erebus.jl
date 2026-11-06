@@ -5,6 +5,9 @@
 
 Solve gravitational potential and acceleration on staggered grid nodes.
 
+For `:enclosed_mass`, the net body force on the momentum nodes is removed afterwards
+(`remove_net_body_acceleration!`), using the grid densities `RHOX` and `RHOY`.
+
 # Mutates:
 - `state.grids.FI`
 - `state.grids.gx`
