@@ -797,6 +797,94 @@ end
         @test any(!iszero, state_fgrav.grids.FI)
     end
 
+    @testset "Step 4b: solve_gravity! zero net body force (enclosed_mass)" begin
+        # Net force on the active momentum DOFs of the Stokes system (Vx: i 2:Ny, j 2:Nx-1;
+        # Vy: i 2:Ny-1, j 2:Nx), and the matching scale sum |rho g|.
+        function net_force(RHOX, RHOY, gx, gy, c)
+            Fx = sum(RHOX[i, j] * gx[i, j] for j in 2:(c.Nx - 1), i in 2:(c.Ny1 - 1))
+            Fy = sum(RHOY[i, j] * gy[i, j] for j in 2:(c.Nx1 - 1), i in 2:(c.Ny - 1))
+            Sx = sum(abs(RHOX[i, j] * gx[i, j]) for j in 2:(c.Nx - 1), i in 2:(c.Ny1 - 1))
+            Sy = sum(abs(RHOY[i, j] * gy[i, j]) for j in 2:(c.Nx1 - 1), i in 2:(c.Ny - 1))
+            return Fx, Fy, Sx + Sy
+        end
+        # Dense blob off centre in x AND y inside a rock disc, light air outside.
+        function fill_density!(R, xs, ys, c, rp)
+            for j in axes(R, 2), i in axes(R, 1)
+                dx = xs[j] - c.xcenter
+                dy = ys[i] - c.ycenter
+                rock = hypot(dx, dy) <= rp ? 3000.0 : 1.0
+                blob = 4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
+                R[i, j] = rock + (rock > 1.0 ? blob : 0.0)
+            end
+            return R
+        end
+
+        state, coords, cfg = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:enclosed_mass
+        )
+        interpolate_markers_to_grid!(state, coords, cfg)
+        rp = 0.35 * coords.xsize
+        fill_density!(state.grids.RHOX, coords.xvx, coords.yvx, coords, rp)
+        fill_density!(state.grids.RHOY, coords.xvy, coords.yvy, coords, rp)
+
+        # Uncorrected field from the same markers, for the frame checks.
+        gx0 = zeros(size(state.grids.gx))
+        gy0 = zeros(size(state.grids.gy))
+        FI0 = zeros(size(state.grids.FI))
+        Erebus.compute_gravity_enclosed_mass!(
+            gx0,
+            gy0;
+            xm=state.markers.xm,
+            ym=state.markers.ym,
+            rhototalm=state.markers.rhototalm,
+            tm=state.markers.tm,
+            coords=coords,
+            gravity_nr_factor=cfg.geometry.gravity_nr_factor,
+            rplanet=state.accumulators.rplanet,
+            xcenter=state.accumulators.xcenter,
+            ycenter=state.accumulators.ycenter,
+            FI=FI0,
+        )
+        Fx0, Fy0, S0 = net_force(state.grids.RHOX, state.grids.RHOY, gx0, gy0, coords)
+        # Precondition: the uncorrected field has a net force well above round-off.
+        @test hypot(Fx0, Fy0) / S0 > 1e-3
+
+        solve_gravity!(state, coords, cfg)
+        g = state.grids
+        Fx, Fy, S = net_force(g.RHOX, g.RHOY, g.gx, g.gy, coords)
+        @test hypot(Fx, Fy) / S < 1e-12
+
+        # The correction is one uniform acceleration (a body frame change).
+        dgx = [g.gx[i, j] - gx0[i, j] for j in 1:coords.Nx1, i in 1:coords.Ny1]
+        dgy = [g.gy[i, j] - gy0[i, j] for j in 1:coords.Nx1, i in 1:coords.Ny1]
+        gscale = maximum(abs, gx0)
+        @test maximum(abs, dgx) > 1e-6 * gscale
+        @test maximum(dgx) - minimum(dgx) < 1e-12 * gscale
+        @test maximum(dgy) - minimum(dgy) < 1e-12 * gscale
+        ax = -dgx[1]
+        ay = -dgy[1]
+        # FI carries the matching linear term, so g = -grad FI still holds.
+        fiscale = maximum(abs, FI0)
+        lin_err = maximum(
+            abs(
+                g.FI[i, j] - FI0[i, j] - ax * (coords.xp[j] - state.accumulators.xcenter) -
+                ay * (coords.yp[i] - state.accumulators.ycenter),
+            ) for j in 1:coords.Nx1, i in 1:coords.Ny1
+        )
+        @test lin_err < 1e-12 * fiscale
+
+        # Zero density (no interpolation yet): no correction, no NaN.
+        state_z, coords_z, cfg_z = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:enclosed_mass
+        )
+        fill!(state_z.grids.RHOX, 0.0)
+        fill!(state_z.grids.RHOY, 0.0)
+        solve_gravity!(state_z, coords_z, cfg_z)
+        @test all(isfinite, state_z.grids.gx)
+        @test all(isfinite, state_z.grids.gy)
+        @test all(isfinite, state_z.grids.FI)
+    end
+
     @testset "Step 7: vent_and_degas! Contract and Invariance" begin
         # 1. Empty marker contract: returns zero vented mass, state bitwise unchanged
         state_empty, coords, cfg = create_mock_simulation_state(; marknum=0)
