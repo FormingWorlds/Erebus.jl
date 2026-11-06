@@ -883,6 +883,49 @@ end
         @test all(isfinite, state_z.grids.gx)
         @test all(isfinite, state_z.grids.gy)
         @test all(isfinite, state_z.grids.FI)
+        gxz = zeros(size(state_z.grids.gx))
+        Erebus.compute_gravity_enclosed_mass!(
+            gxz,
+            zeros(size(state_z.grids.gy));
+            xm=state_z.markers.xm,
+            ym=state_z.markers.ym,
+            rhototalm=state_z.markers.rhototalm,
+            tm=state_z.markers.tm,
+            coords=coords_z,
+            gravity_nr_factor=cfg_z.geometry.gravity_nr_factor,
+            rplanet=state_z.accumulators.rplanet,
+            xcenter=state_z.accumulators.xcenter,
+            ycenter=state_z.accumulators.ycenter,
+        )
+        @test isequal(state_z.grids.gx, gxz)
+
+        # poisson2d is not corrected: same RHOX/RHOY, result equals the plain Poisson solve.
+        state_p, coords_p, cfg_p = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:poisson2d
+        )
+        interpolate_markers_to_grid!(state_p, coords_p, cfg_p)
+        fill_density!(state_p.grids.RHOX, coords_p.xvx, coords_p.yvx, coords_p, rp)
+        fill_density!(state_p.grids.RHOY, coords_p.xvy, coords_p.yvy, coords_p, rp)
+        RPp, SPp = Erebus.setup_gravitational_lse(coords_p)
+        LPp = Erebus.assemble_gravitational_lse!(
+            zeros(coords_p.Ny1, coords_p.Nx1), RPp; coords=coords_p
+        )
+        Erebus.assemble_gravitational_rhs!(state_p.grids.RHO, RPp; coords=coords_p)
+        SPp = lu(LPp.cscmatrix) \ RPp
+        gxp = zeros(size(state_p.grids.gx))
+        gyp = zeros(size(state_p.grids.gy))
+        FIp = zeros(size(state_p.grids.FI))
+        Erebus.process_gravitational_solution!(SPp, FIp, gxp, gyp; coords=coords_p)
+        solve_gravity!(state_p, coords_p, cfg_p)
+        @test isapprox(state_p.grids.gx, gxp; rtol=1e-12)
+        @test isapprox(state_p.grids.gy, gyp; rtol=1e-12)
+        Fxp, Fyp, Sp = net_force(state_p.grids.RHOX, state_p.grids.RHOY, gxp, gyp, coords_p)
+        @test hypot(Fxp, Fyp) / Sp > 1e-6
+
+        # Error contract: wrong array size.
+        @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(
+            zeros(3, 3), g.gy, g.FI, g.RHOX, g.RHOY, coords
+        )
     end
 
     @testset "Step 7: vent_and_degas! Contract and Invariance" begin
