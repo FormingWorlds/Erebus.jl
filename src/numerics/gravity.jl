@@ -349,7 +349,7 @@ The net force is summed over the nodes that carry a momentum equation: Vx at `i 
 `a = sum(RHO g) / sum(RHO)` per component is subtracted from every node of `gx`, `gy`, and `FI`
 gains the matching linear term `a_x (x - xcenter) + a_y (y - ycenter)`, so `g = -grad FI` holds.
 `FI` is then the potential in the frame of the body. A component with zero summed density is
-left unchanged.
+left unchanged; a NaN density gives a NaN acceleration.
 
 # Arguments
 - `gx`, `gy`: gravity at Vx and Vy nodes [m/s²], mutated.
@@ -390,8 +390,8 @@ function remove_net_body_acceleration!(
         fy += RHOY[i, j] * gy[i, j]
         my += RHOY[i, j]
     end
-    ax = mx > 0.0 ? fx / mx : 0.0
-    ay = my > 0.0 ? fy / my : 0.0
+    ax = iszero(mx) ? 0.0 : fx / mx
+    ay = iszero(my) ? 0.0 : fy / my
     (ax == 0.0 && ay == 0.0) && return (ax, ay)
     gx .-= ax
     gy .-= ay

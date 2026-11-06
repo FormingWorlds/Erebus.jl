@@ -357,7 +357,7 @@ $$g_{x,(i,j)} = -\frac{\Phi_{(i,j+1)} - \Phi_{(i,j)}}{\Delta x}, \qquad g_{y,(i,
 
 The discrete curl of this field is zero. Pressure can therefore balance gravity in a body with a radial density profile, and gravity alone drives no flow in such a body. A radial vector evaluated directly at the staggered nodes has a discrete curl of a few percent of $g / \Delta x$ near the surface, and this curl drives a false circulation.
 
-The radial field is centred at the fixed point $(x_c, y_c)$. When the density is not radially symmetric about that point, for example a dense region on one side, the sum of $\rho \mathbf{g}$ over the body is not zero. The self-gravity of an isolated body exerts no net force on it, so this sum comes from the fixed centre alone; left in place, it moves the body as a whole. After each gravity solve, `remove_net_body_acceleration!` subtracts the uniform acceleration
+The field uses only the enclosed mass $M_{3D}(<r)$ about the fixed point $(x_c, y_c)$ and leaves out the non-radial part of the mass distribution. When the density is not radially symmetric, for example a dense region on one side, the discrete sum of $\rho \mathbf{g}$ over the domain is therefore not zero. The self-gravity of an isolated body exerts no net force on it; left in place, this sum moves the body as a whole. After each gravity solve, `remove_net_body_acceleration!` subtracts the uniform acceleration
 
 $$a_x = \frac{\sum_{V_x} \rho_x g_x}{\sum_{V_x} \rho_x}, \qquad a_y = \frac{\sum_{V_y} \rho_y g_y}{\sum_{V_y} \rho_y}$$
 

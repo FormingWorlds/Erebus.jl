@@ -846,8 +846,34 @@ end
             FI=FI0,
         )
         Fx0, Fy0, S0 = net_force(state.grids.RHOX, state.grids.RHOY, gx0, gy0, coords)
-        # Precondition: the uncorrected field has a net force well above round-off.
-        @test hypot(Fx0, Fy0) / S0 > 1e-3
+        # Precondition: the uncorrected field carries the net force measured on main (0.0977).
+        @test isapprox(hypot(Fx0, Fy0) / S0, 0.0977; rtol=0.01)
+
+        # Direct call: returned acceleration equals the net force over the summed density.
+        mX = sum(state.grids.RHOX[i, j] for j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1))
+        mY = sum(state.grids.RHOY[i, j] for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny - 1))
+        gxd, gyd, FId = copy(gx0), copy(gy0), copy(FI0)
+        ax_ret, ay_ret = Erebus.remove_net_body_acceleration!(
+            gxd, gyd, FId, state.grids.RHOX, state.grids.RHOY, coords
+        )
+        @test isapprox(ax_ret, Fx0 / mX; rtol=1e-12)
+        @test isapprox(ay_ret, Fy0 / mY; rtol=1e-12)
+        # Origin of the linear term: a shifted centre changes FI by a constant only.
+        FIs = copy(FI0)
+        shift = 0.1 * coords.xsize
+        Erebus.remove_net_body_acceleration!(
+            copy(gx0),
+            copy(gy0),
+            FIs,
+            state.grids.RHOX,
+            state.grids.RHOY,
+            coords;
+            xcenter=coords.xcenter + shift,
+            ycenter=coords.ycenter - shift,
+        )
+        dFI = FIs .- FId
+        @test isapprox(dFI[1, 1], -ax_ret * shift + ay_ret * shift; rtol=1e-10)
+        @test maximum(dFI) - minimum(dFI) < 1e-10 * maximum(abs, FI0)
 
         solve_gravity!(state, coords, cfg)
         g = state.grids
@@ -863,15 +889,19 @@ end
         @test maximum(dgy) - minimum(dgy) < 1e-12 * gscale
         ax = -dgx[1]
         ay = -dgy[1]
-        # FI carries the matching linear term, so g = -grad FI still holds.
-        fiscale = maximum(abs, FI0)
-        lin_err = maximum(
-            abs(
-                g.FI[i, j] - FI0[i, j] - ax * (coords.xp[j] - state.accumulators.xcenter) -
-                ay * (coords.yp[i] - state.accumulators.ycenter),
-            ) for j in 1:coords.Nx1, i in 1:coords.Ny1
+        @test isapprox(ax, ax_ret; rtol=1e-12)
+        @test isapprox(ay, ay_ret; rtol=1e-12)
+        # g = -grad FI still holds on the grid after the correction.
+        gerr_x = maximum(
+            abs(g.gx[i, j] + (g.FI[i, j + 1] - g.FI[i, j]) / coords.dx) for
+            j in 1:coords.Nx, i in 1:coords.Ny1
         )
-        @test lin_err < 1e-12 * fiscale
+        gerr_y = maximum(
+            abs(g.gy[i, j] + (g.FI[i + 1, j] - g.FI[i, j]) / coords.dy) for
+            j in 1:coords.Nx1, i in 1:coords.Ny
+        )
+        @test gerr_x < 1e-9 * gscale
+        @test gerr_y < 1e-9 * gscale
 
         # Zero density (no interpolation yet): no correction, no NaN.
         state_z, coords_z, cfg_z = create_mock_simulation_state(;
@@ -920,12 +950,35 @@ end
         @test isapprox(state_p.grids.gx, gxp; rtol=1e-12)
         @test isapprox(state_p.grids.gy, gyp; rtol=1e-12)
         Fxp, Fyp, Sp = net_force(state_p.grids.RHOX, state_p.grids.RHOY, gxp, gyp, coords_p)
-        @test hypot(Fxp, Fyp) / Sp > 1e-6
+        # No correction in poisson2d: the net force stays at its measured value (0.0492).
+        @test isapprox(hypot(Fxp, Fyp) / Sp, 0.0492; rtol=0.01)
 
-        # Error contract: wrong array size.
-        @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(
-            zeros(3, 3), g.gy, g.FI, g.RHOX, g.RHOY, coords
+        # Zero density in one component only: that component is unchanged.
+        RX0 = zeros(size(g.RHOX))
+        ax1, ay1 = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), RX0, state.grids.RHOY, coords
         )
+        @test iszero(ax1)
+        @test isapprox(ay1, ay_ret; rtol=1e-12)
+        ax2, ay2 = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), state.grids.RHOX, zeros(size(g.RHOY)), coords
+        )
+        @test isapprox(ax2, ax_ret; rtol=1e-12)
+        @test iszero(ay2)
+        # A NaN density propagates into the acceleration instead of a silent zero.
+        RXn = copy(state.grids.RHOX)
+        RXn[3, 3] = NaN
+        axn, _ = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), RXn, state.grids.RHOY, coords
+        )
+        @test isnan(axn)
+
+        # Error contract: wrong size of each array argument.
+        good = (g.gx, g.gy, g.FI, g.RHOX, g.RHOY)
+        for k in 1:5
+            bad = ntuple(m -> m == k ? zeros(3, 3) : copy(good[m]), 5)
+            @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(bad..., coords)
+        end
     end
 
     @testset "Step 7: vent_and_degas! Contract and Invariance" begin
