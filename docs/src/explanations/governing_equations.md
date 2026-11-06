@@ -361,7 +361,7 @@ The field uses only the enclosed mass $M_{3D}(<r)$ about the fixed point $(x_c, 
 
 $$a_x = \frac{\sum_{V_x} \rho_x g_x}{\sum_{V_x} \rho_x}, \qquad a_y = \frac{\sum_{V_y} \rho_y g_y}{\sum_{V_y} \rho_y}$$
 
-where the sums run over the $V_x$ and $V_y$ nodes that carry a momentum equation, with the same area weight as the momentum balance. The discrete net body force is then zero. The potential gains the matching linear term $a_x (x - x_c) + a_y (y - y_c)$, so $\mathbf{g} = -\nabla \Phi$ still holds on the grid; $\Phi$ is then the potential in the frame of the body. The `:poisson2d` mode does not apply this correction.
+where the sums run over the $V_x$ and $V_y$ nodes that carry a momentum equation, with the same area weight as the momentum balance. The net body force in the 2-D momentum balance, which drives a rigid drift, is then zero. The same sum with the 3-D shell weight $2r$ used for $M_{3D}$ is not zero in general. The potential gains the matching linear term $a_x (x - x_c) + a_y (y - y_c)$, so $\mathbf{g} = -\nabla \Phi$ still holds on the grid; $\Phi$ is then the potential in the frame of the body. The `:poisson2d` mode does not apply this correction.
 
 ![Two-layer differentiated body self-gravity benchmark](../assets/gravity_two_layer_benchmark.png)
 

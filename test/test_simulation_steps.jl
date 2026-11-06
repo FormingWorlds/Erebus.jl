@@ -808,21 +808,42 @@ end
             return Fx, Fy, Sx + Sy
         end
         # Dense blob off centre in x AND y inside a rock disc, light air outside.
+        function body_density(dx, dy, rp)
+            hypot(dx, dy) <= rp || return 1.0
+            return 3000.0 +
+                   4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
+        end
         function fill_density!(R, xs, ys, c, rp)
             for j in axes(R, 2), i in axes(R, 1)
-                dx = xs[j] - c.xcenter
-                dy = ys[i] - c.ycenter
-                rock = hypot(dx, dy) <= rp ? 3000.0 : 1.0
-                blob =
-                    4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
-                R[i, j] = rock + (rock > 1.0 ? blob : 0.0)
+                R[i, j] = body_density(xs[j] - c.xcenter, ys[i] - c.ycenter, rp)
             end
             return R
+        end
+        # Markers on the marker lattice sample the same body, so g and RHOX/RHOY agree.
+        function seed_body_markers!(state, c, rp)
+            xs = (c.x[1] + c.dxm / 2):(c.dxm):(c.x[end])
+            ys = (c.y[1] + c.dym / 2):(c.dym):(c.y[end])
+            n = length(xs) * length(ys)
+            resize!(state.markers, n)
+            for (_, v) in pairs(state.markers)
+                v[2:end] .= v[1]
+            end
+            m = 0
+            for x in xs, y in ys
+                m += 1
+                dx, dy = x - c.xcenter, y - c.ycenter
+                state.markers.xm[m] = x
+                state.markers.ym[m] = y
+                state.markers.rhototalm[m] = body_density(dx, dy, rp)
+                state.markers.tm[m] = hypot(dx, dy) <= rp ? 1 : 3
+            end
+            return state
         end
 
         state, coords, cfg = create_mock_simulation_state(;
             marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:enclosed_mass
         )
+        seed_body_markers!(state, coords, 0.35 * coords.xsize)
         interpolate_markers_to_grid!(state, coords, cfg)
         rp = 0.35 * coords.xsize
         fill_density!(state.grids.RHOX, coords.xvx, coords.yvx, coords, rp)
@@ -847,8 +868,8 @@ end
             FI=FI0,
         )
         Fx0, Fy0, S0 = net_force(state.grids.RHOX, state.grids.RHOY, gx0, gy0, coords)
-        # Precondition: the uncorrected field carries the net force measured on main (0.0977).
-        @test isapprox(hypot(Fx0, Fy0) / S0, 0.0977; rtol=0.01)
+        # Precondition: the uncorrected field of this body carries a net force (measured 0.0321).
+        @test isapprox(hypot(Fx0, Fy0) / S0, 0.0321; rtol=0.01)
 
         # Direct call: returned acceleration equals the net force over the summed density.
         mX = sum(state.grids.RHOX[i, j] for j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1))
@@ -880,6 +901,21 @@ end
         g = state.grids
         Fx, Fy, S = net_force(g.RHOX, g.RHOY, g.gx, g.gy, coords)
         @test hypot(Fx, Fy) / S < 1e-12
+        # The 3-D shell weight 2r is not balanced by the 2-D correction (measured value).
+        w3(x, y) = 2 * hypot(x - coords.xcenter, y - coords.ycenter)
+        Fx3 = sum(
+            w3(coords.xvx[j], coords.yvx[i]) * g.RHOX[i, j] * g.gx[i, j] for
+            j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1)
+        )
+        Fy3 = sum(
+            w3(coords.xvy[j], coords.yvy[i]) * g.RHOY[i, j] * g.gy[i, j] for
+            j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny - 1)
+        )
+        S3 = sum(
+            w3(coords.xvx[j], coords.yvx[i]) * abs(g.RHOX[i, j] * g.gx[i, j]) for
+            j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1)
+        )
+        @test isapprox(hypot(Fx3, Fy3) / S3, 0.0156; rtol=0.01)
 
         # The correction is one uniform acceleration (a body frame change).
         dgx = [g.gx[i, j] - gx0[i, j] for j in 1:coords.Nx1, i in 1:coords.Ny1]
@@ -934,6 +970,7 @@ end
         state_p, coords_p, cfg_p = create_mock_simulation_state(;
             marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:poisson2d
         )
+        seed_body_markers!(state_p, coords_p, rp)
         interpolate_markers_to_grid!(state_p, coords_p, cfg_p)
         fill_density!(state_p.grids.RHOX, coords_p.xvx, coords_p.yvx, coords_p, rp)
         fill_density!(state_p.grids.RHOY, coords_p.xvy, coords_p.yvy, coords_p, rp)
@@ -951,8 +988,8 @@ end
         @test isapprox(state_p.grids.gx, gxp; rtol=1e-12)
         @test isapprox(state_p.grids.gy, gyp; rtol=1e-12)
         Fxp, Fyp, Sp = net_force(state_p.grids.RHOX, state_p.grids.RHOY, gxp, gyp, coords_p)
-        # No correction in poisson2d: the net force stays at its measured value (0.0492).
-        @test isapprox(hypot(Fxp, Fyp) / Sp, 0.0492; rtol=0.01)
+        # No correction in poisson2d: the net force stays at its measured value (0.0321).
+        @test isapprox(hypot(Fxp, Fyp) / Sp, 0.0321; rtol=0.01)
 
         # Zero density in one component only: that component is unchanged.
         RX0 = zeros(size(g.RHOX))
