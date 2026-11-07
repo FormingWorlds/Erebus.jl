@@ -42,6 +42,7 @@ $(SIGNATURES)
 - `cfg`: Simulation configuration struct.
 - `ws`: Preallocated simulation workspaces.
 - `titer`: Current outer thermomechanical iteration index.
+- `dt_prev`: Time step of the previous reaction call; the previous iterate is scaled to `state.dt`.
 
 # Returns
 - `Nothing`: Mutates `state.grids.DMP`, `state.grids.DHP`, and `state.grids.DQPF` in place.
@@ -51,7 +52,8 @@ function _step_thermochemical_reaction!(
     coords::GridCoordinates,
     cfg::SimulationConfig,
     ws::SimulationWorkspaces,
-    titer::Int,
+    titer::Int;
+    dt_prev::Real=state.dt,
 )::Nothing
     if cfg.reaction.active
         core = state.markers.core
@@ -83,6 +85,7 @@ function _step_thermochemical_reaction!(
             DQPF=state.grids.DQPF,
             DQPFSUM=state.grids.DQPFSUM,
             cfg=cfg.reaction,
+            dt_prev=dt_prev,
         )
     else
         fill!(state.grids.DMP, 0.0)
@@ -289,9 +292,13 @@ function solve_thermomechanical_iterations!(
     n_flips_step_total = 0
 
     max_iters = cfg.solver.max_plastic_iterations
+    dt_rx = state.dt
+    n_titers = 0
     for titer in 1:max_iters
+        n_titers = titer
         titer > 1 && _restore_step_start_redox!(state, cfg, ws)
-        _step_thermochemical_reaction!(state, coords, cfg, ws, titer)
+        _step_thermochemical_reaction!(state, coords, cfg, ws, titer; dt_prev=dt_rx)
+        dt_rx = state.dt
         if DHP_pyro !== nothing && size(DHP_pyro) == size(state.grids.DHP)
             state.grids.DHP .+= DHP_pyro
         end
@@ -319,7 +326,9 @@ function solve_thermomechanical_iterations!(
         dt_next = th_res.dt_next
         dt_reduced_by_maxDT = dt_reduced_by_maxDT || th_res.dt_reduced_by_maxDT
 
-        if th_res.thermochemical_converged
+        # A reaction from before a large dt cut must be recomputed before the step is accepted
+        reaction_stale = cfg.reaction.active && dt_rx > 2.0 * state.dt
+        if th_res.thermochemical_converged && !reaction_stale
             thermochemical_converged = true
             break
         elseif titer == max_iters
@@ -354,5 +363,6 @@ function solve_thermomechanical_iterations!(
         dt_aphimax_step_max=dt_aphimax_step_max,
         n_flips_last=n_flips_last,
         n_flips_step_total=n_flips_step_total,
+        n_titers=n_titers,
     )
 end

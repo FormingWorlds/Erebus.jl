@@ -267,6 +267,8 @@ $(SIGNATURES)
     - pfm₀: previous marker fluid pressure
     - marknum: current total number of markers
     - Δt: current time step length
+    - dt_prev: time step of the previous iterate `XWˢm`; for `titer > 1` its progress is
+      scaled by `Δt / dt_prev` before the under-relaxation (default `Δt`, no scaling)
     - timestep: current time step
     - titer: current thermochemical iteration number
 
@@ -299,6 +301,7 @@ function perform_thermochemical_reaction!(
     DQPFSUM=nothing,
     cfg=nothing,
     backload_step1::Bool=true,
+    dt_prev::Real=Δt,
 )
     react_cfg = if cfg === nothing
         ReactionConfig()
@@ -309,6 +312,11 @@ function perform_thermochemical_reaction!(
     else
         ReactionConfig()
     end
+
+    (isfinite(dt_prev) && dt_prev > 0.0) ||
+        throw(DomainError(dt_prev, "dt_prev must be positive and finite"))
+    # The previous iterate holds progress over dt_prev; scale it to this Δt before the blend
+    iterate_scale = Δt / dt_prev
 
     if !react_cfg.active
         DMP .= zero(0.0)
@@ -445,7 +453,8 @@ function perform_thermochemical_reaction!(
 
                 # Picard under-relaxation on reacted wet silicate fraction across iterations
                 XWˢm₁_rel = if titer > 1
-                    alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XWˢm[m]
+                    XW_prev = XWˢm₀_cl + (XWˢm[m] - XWˢm₀_cl) * iterate_scale
+                    alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XW_prev
                 else
                     XWˢm₁
                 end

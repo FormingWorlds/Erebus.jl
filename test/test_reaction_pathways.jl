@@ -1138,5 +1138,7 @@ _mean(x) = sum(x) / length(x)
         react!(mk_b, dt2, 1)
         DMP_b = react!(mk_b, dt2, 2; dt_prev=dt2 * (1.0 + 1.0e-15))
         @test isapprox(DMP_b, DMP_a; rtol=1e-10)
+        @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=0.0)
+        @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=NaN)
     end
 end
