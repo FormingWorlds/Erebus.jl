@@ -1175,15 +1175,15 @@ _mean(x) = sum(x) / length(x)
             XW .= XWstart
             return (; xm, ym, tm, phim, phinewm, pfm0, XW, XW0)
         end
-        function react!(mk, dt, titer; rcfg=ReactionConfig(), kw...)
+        function react!(mk, dt, titer; rcfg=ReactionConfig(), T=500.0, dhp=grid(), kw...)
             perform_thermochemical_reaction!(
                 grid(),
-                grid(),
+                dhp,
                 grid(),
                 grid(),
                 grid(),
                 pf,
-                tk2,
+                fill(T, c17.Ny1, c17.Nx1),
                 mk.tm,
                 mk.xm,
                 mk.ym,
@@ -1218,6 +1218,48 @@ _mean(x) = sum(x) / length(x)
             cut = react!(markers(XWstart, 0.45), dt_long * dtr, 1)
             react!(cut, dt_short * dtr, 2; dt_prev=dt_long * dtr)
             @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # At and below the pore-water ceiling the scale uses the time at which the clamped path stops
+        for T in (300.0, 500.0),
+            phi in (0.20, 0.05),
+            (dt_long, dt_short) in ((0.5, 0.01), (1.0, 0.1), (1.0, 0.5), (2.0, 0.5))
+
+            dtr_T = compute_Δtreaction(
+                T, phi, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+            )
+            fresh = react!(markers(0.05, phi), dt_short * dtr_T, 1; T)
+            cut = react!(markers(0.05, phi), dt_long * dtr_T, 1; T)
+            react!(cut, dt_short * dtr_T, 2; T, dt_prev=dt_long * dtr_T)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # Dehydration: the scaled iterate also equals a fresh call
+        dtr_d = compute_Δtreaction(
+            800.0, 0.45, rcfg.dehydration_mode; cfg=rcfg, is_hydration=false
+        )
+        for (dt_long, dt_short) in ((0.5, 0.01), (2.0, 0.5))
+            fresh = react!(markers(0.9, 0.45), dt_short * dtr_d, 1; T=800.0)
+            @test fresh.XW[1] < 0.9
+            cut = react!(markers(0.9, 0.45), dt_long * dtr_d, 1; T=800.0)
+            react!(cut, dt_short * dtr_d, 2; T=800.0, dt_prev=dt_long * dtr_d)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # Without a reaction, a later iteration keeps the start fraction exactly and no latent heat
+        for XWstart in (0.32, 0.05, 1.0e-3, 0.9)
+            dhp = grid()
+            mk0 = react!(
+                markers(XWstart, 0.05),
+                1.0,
+                1;
+                rcfg=ReactionConfig(; hydration_active=false),
+            )
+            react!(
+                mk0, 1.0, 2; rcfg=ReactionConfig(; hydration_active=false), dt_prev=1.0, dhp
+            )
+            @test mk0.XW == mk0.XW0
+            @test all(iszero, dhp)
         end
 
         # A pathway that is off leaves the composition at its start value at every iteration
