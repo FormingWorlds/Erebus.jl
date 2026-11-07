@@ -581,7 +581,7 @@ using Erebus
             cfg=cfg.reaction,
         )
         p_fresh = maximum(abs, XW .- start.XW0)
-        @test p_fresh / 3.0 <= p_loop <= 3.0 * p_fresh
+        @test 0.8 * p_fresh <= p_loop <= 1.25 * p_fresh
     end
 
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin

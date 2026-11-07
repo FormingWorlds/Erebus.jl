@@ -270,6 +270,11 @@ end
 Coordinate thermochemical iterations, Stokes-Darcy iterations, and thermal energy updates.
 
 $(SIGNATURES)
+
+Each iteration passes the time step of its previous reaction call as `dt_prev`, and with the
+reaction active an iteration whose Stokes-Darcy solve cut the time step by more than 1 % does
+not end the loop. Returns a `NamedTuple` with the convergence flags, `dt_next` and
+`n_titers`, the number of iterations run.
 """
 function solve_thermomechanical_iterations!(
     state::SimulationState,
@@ -326,8 +331,8 @@ function solve_thermomechanical_iterations!(
         dt_next = th_res.dt_next
         dt_reduced_by_maxDT = dt_reduced_by_maxDT || th_res.dt_reduced_by_maxDT
 
-        # A reaction from before a large dt cut must be recomputed before the step is accepted
-        reaction_stale = cfg.reaction.active && dt_rx > 2.0 * state.dt
+        # A reaction from before a dt cut must be recomputed before the step is accepted
+        reaction_stale = cfg.reaction.active && dt_rx > 1.01 * state.dt
         if th_res.thermochemical_converged && !reaction_stale
             thermochemical_converged = true
             break

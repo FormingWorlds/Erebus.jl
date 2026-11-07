@@ -1122,7 +1122,7 @@ _mean(x) = sum(x) / length(x)
         react!(mk, dt1, 1)
         @test progress(mk) > 100.0 * p_fresh
         react!(mk, dt2, 2; dt_prev=dt1)
-        @test 0.5 * p_fresh <= progress(mk) <= 2.0 * p_fresh
+        @test 0.9 * p_fresh <= progress(mk) <= 1.1 * p_fresh
 
         # Without dt_prev the old blend with the dt1 iterate stays (default for direct callers)
         mk_old = fresh_markers()
