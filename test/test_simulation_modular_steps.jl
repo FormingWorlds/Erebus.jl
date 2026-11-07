@@ -427,6 +427,64 @@ using Erebus
         @test any(>(0.0), vols_grp.X_graphite_m)
     end
 
+    @testset "Post-processing time step reads the fluid displacement limit" begin
+        cfg0 = default_config()
+        state0, coords0, ws0, _, _ = init_simulation(cfg0)
+        interpolate_markers_to_grid!(
+            state0,
+            coords0,
+            cfg0;
+            p2m_workspace=ws0.p2m,
+            thread_buffers=ws0.thread_buffers,
+            interp_arrays=ws0.interp_arrays,
+        )
+        solve_gravity!(state0, coords0, cfg0; F_grav=ws0.F_grav, RP=ws0.RP, SP=ws0.SP)
+        apply_surface_radiation!(state0, coords0, cfg0)
+        snapshot_step_start_inventories!(ws0, state0, cfg0)
+        Erebus.snapshot_radiogenic_step_start!(ws0, state0, cfg0)
+        update_step_start_pressures!(state0)
+        Erebus.assemble_and_solve_hydromechanical!(
+            state0,
+            coords0,
+            cfg0,
+            ws0;
+            titer=1,
+            iplast=1,
+            cur_betasolid=0.0,
+            cur_betafluid=0.0,
+        )
+
+        # Same state and solution, only time.dxymax_fluid differs
+        function dt_after_postprocess(dxymax_fluid)
+            tkw = (; (fn => getfield(cfg0.time, fn) for fn in fieldnames(TimeConfig))...)
+            tcfg = TimeConfig(; merge(tkw, (; dxymax_fluid=dxymax_fluid))...)
+            cfg = SimulationConfig(
+                (
+                    fn === :time ? tcfg : getfield(cfg0, fn) for
+                    fn in fieldnames(SimulationConfig)
+                )...,
+            )
+            st = deepcopy(state0)
+            w = deepcopy(ws0)
+            Erebus.postprocess_hydromechanical_solution!(
+                st,
+                coords0,
+                cfg,
+                w;
+                titer=1,
+                iplast=1,
+                dt_step_initial=st.dt,
+                cur_betasolid=0.0,
+                cur_betafluid=0.0,
+            )
+            return st.dt, max(maximum(abs, st.grids.vxf), maximum(abs, st.grids.vyf))
+        end
+        dt_strict, vf_max = dt_after_postprocess(1.0e-4)
+        dt_loose, _ = dt_after_postprocess(1.0)
+        @test vf_max > 0.0
+        @test dt_strict < 0.5 * dt_loose
+    end
+
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)

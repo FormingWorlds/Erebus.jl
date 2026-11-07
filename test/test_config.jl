@@ -110,6 +110,15 @@ include("test_helpers.jl")
         @test cfg.poroelasticity.betafluid ≈ 4.0e-10 rtol=1e-12 # default preserved
         @test cfg.time.n_steps == 5
         @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12 # default preserved
+
+        # The fluid displacement limit is its own key; the solid limit keeps its default
+        cfg_fl = load_config("""
+        [time]
+        dxymax_fluid = 0.2
+        """)
+        @test cfg_fl.time.dxymax_fluid ≈ 0.2 rtol=1e-12
+        @test cfg_fl.time.dxymax ≈ 0.05 rtol=1e-12
+        @test default_config().time.dxymax_fluid ≈ 0.15 rtol=1e-12
     end
 
     @testset "validate_config() schema and physical bounds enforcement" begin
