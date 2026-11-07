@@ -141,6 +141,7 @@ end # function assemble_thermal_lse!
 
 # Upwind inflow rate rhocpf(T_up) * q / h of one face [W/(m^3 K)]; 0 for outflow.
 @inline function _upwind_face_rate(q, T_up, h, rhocpf)
+    isnan(q) && throw(DomainError(q, "Darcy flux must not be NaN"))
     q > 0.0 || return 0.0
     c = rhocpf(T_up)
     (isfinite(c) && c >= 0.0) ||

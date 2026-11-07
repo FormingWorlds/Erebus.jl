@@ -299,7 +299,9 @@ end
         for (i, j) in ((2, 2), (Ny1 - 1, Nx1 - 1), (2, Nx1 - 1), (Ny1 - 1, 2))
             qx = zeros(Ny1, Nx1)
             qx[i, j - 1] = 5.0e-6
-            rate = fluid_advection_inflow_rate(T, qx, zeros(Ny1, Nx1), RHOCP, rhocpf; coords=coords)
+            rate = fluid_advection_inflow_rate(
+                T, qx, zeros(Ny1, Nx1), RHOCP, rhocpf; coords=coords
+            )
             @test rate ≈ rhocpf(300.0) * 5.0e-6 / (RHOCP[i, j] * dx) rtol=1e-12
         end
         qx = zeros(Ny1, Nx1)
