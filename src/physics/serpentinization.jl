@@ -428,8 +428,6 @@ function perform_thermochemical_reaction!(
                             tknm, phim[m], mode; cfg=react_cfg, is_hydration=false
                         )
                     end
-                else
-                    Δtr = 1.0e30
                 end
 
                 if skip_rx
@@ -455,12 +453,24 @@ function perform_thermochemical_reaction!(
 
                 # Picard under-relaxation on reacted wet silicate fraction across iterations
                 XWˢm₁_rel = if titer > 1
-                    # The log-odds ln(XD/XW) move linearly in min(dt, Δtr) / Δtr: scale them to Δt
-                    scale = min(Δt, Δtr) / min(dt_prev, Δtr)
+                    # ln(XD/XW) moves linearly in time until Δtr or the clamp stops it at t_c:
+                    # scale the previous log-odds by min(dt, t_c) / min(dt_prev, t_c)
                     XW_p = clamp(XWˢm[m], eps_comp, 1.0 - eps_comp)
+                    XW_c = clamp(
+                        XW_eq,
+                        eps_comp,
+                        ifelse(XW_eq > XWˢm₀_cl, XW_max, 1.0 - eps_comp),
+                    )
                     L0 = log((1.0 - XWˢm₀_cl) / XWˢm₀_cl)
-                    L_s = L0 + (log((1.0 - XW_p) / XW_p) - L0) * scale
-                    XW_prev_s = inv(exp(L_s) + 1.0)
+                    t_c = Δtr * (log((1.0 - XW_c) / XW_c) - L0) / (log(KWD_eq) - L0)
+                    scale = min(Δt, t_c) / min(dt_prev, t_c)
+                    XW_prev_s =
+                        if skip_rx || XW_p == XWˢm₀_cl || !(t_c > 0.0) || scale == 1.0
+                            XW_p
+                        else
+                            L_s = L0 + (log((1.0 - XW_p) / XW_p) - L0) * scale
+                            inv(exp(L_s) + 1.0)
+                        end
                     XW_prev = clamp(
                         XW_prev_s,
                         eps_comp,
