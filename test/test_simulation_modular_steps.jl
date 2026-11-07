@@ -477,12 +477,14 @@ using Erebus
                 cur_betasolid=0.0,
                 cur_betafluid=0.0,
             )
-            return st.dt, max(maximum(abs, st.grids.vxf), maximum(abs, st.grids.vyf))
+            return st.dt
         end
-        dt_strict, vf_max = dt_after_postprocess(1.0e-4)
-        dt_loose, _ = dt_after_postprocess(1.0)
-        @test vf_max > 0.0
+        dt_strict = dt_after_postprocess(1.0e-4)
+        dt_double = dt_after_postprocess(2.0e-4)
+        dt_loose = dt_after_postprocess(1.0)
         @test dt_strict < 0.5 * dt_loose
+        # While the fluid limit binds, dt is linear in it
+        @test dt_double ≈ 2.0 * dt_strict rtol=1e-10
     end
 
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
