@@ -1262,6 +1262,29 @@ _mean(x) = sum(x) / length(x)
             @test all(iszero, dhp)
         end
 
+        # Each guard of the scale has a case only it covers
+        # A pathway that is off blends with the unscaled previous iterate
+        mk = markers(0.05, 0.45)
+        mk.XW .= 0.3
+        react!(mk, 0.5, 2; rcfg=ReactionConfig(; hydration_active=false), dt_prev=1.0)
+        @test all(x -> isapprox(x, 0.175; rtol=1e-12), mk.XW)
+        # No pore water: the clamped path does not move and the iterate stays at the ceiling
+        mk = markers(0.05, 0.5e-4)
+        mk.XW .= 0.3
+        react!(mk, 0.5 * dtr, 2; dt_prev=dtr)
+        @test mk.XW == mk.XW0
+        # A previous iterate at the start value enters the blend exactly
+        x1 = react!(markers(0.32, 0.45), 0.3 * dtr, 1).XW[1]
+        mk = react!(markers(0.32, 0.45), 0.3 * dtr, 2; dt_prev=0.6 * dtr)
+        @test all(==(0.5 * x1 + 0.5 * 0.32), mk.XW)
+        # Without a cut the previous iterate enters the blend exactly
+        for f in 0.05:0.05:0.95
+            mk = react!(markers(0.05, 0.45), f * dtr, 1)
+            x1 = mk.XW[1]
+            react!(mk, f * dtr, 2; dt_prev=f * dtr)
+            @test all(==(x1), mk.XW)
+        end
+
         # A pathway that is off leaves the composition at its start value at every iteration
         off = ReactionConfig(; hydration_active=false)
         mk_off = react!(markers(0.05, 0.45), 0.5 * dtr, 1; rcfg=off)
