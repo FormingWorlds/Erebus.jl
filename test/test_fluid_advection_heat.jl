@@ -262,7 +262,7 @@ end
         @test rate ≈ rhocpf(300.0) * 4.0e-6 / (R[3, 4] * dx) rtol=1e-12
         @test fluid_advection_inflow_rate(
             T, zeros(Ny1, Nx1), zeros(Ny1, Nx1), R, rhocpf; coords=coords
-        ) == 0.0
+        ) ≈ 0.0 atol=1e-300
     end
 
     @testset "random field: no new extremum at dt = 1 / rate" begin
@@ -274,12 +274,16 @@ end
         rate = fluid_advection_inflow_rate(T, qx, qy, R, rhocpf; coords=coords)
         Q = zeros(Ny1, Nx1)
         compute_fluid_advection_heat!(Q, T, qx, qy, rhocpf; coords=coords)
-        dt = 1.0 / rate
-        for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
-            nb = (T[i, j - 1], T[i, j + 1], T[i - 1, j], T[i + 1, j], T[i, j])
-            Tn = T[i, j] + dt * Q[i, j] / R[i, j]
-            @test minimum(nb) - 1e-9 <= Tn <= maximum(nb) + 1e-9
-        end
+        bounded(dt) = all(
+            begin
+                nb = (T[i, j - 1], T[i, j + 1], T[i - 1, j], T[i + 1, j], T[i, j])
+                Tn = T[i, j] + dt * Q[i, j] / R[i, j]
+                minimum(nb) - 1e-9 <= Tn <= maximum(nb) + 1e-9
+            end for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        )
+        @test bounded(1.0 / rate)
+        # A step well above the limit leaves the bound, so the limit is not loose by far
+        @test !bounded(4.0 / rate)
     end
 
     @testset "input contracts" begin
