@@ -842,8 +842,16 @@ include("test_helpers.jl")
         @test dxymax_fluid ≈ 0.15 rtol=1e-12
         V_fast = 200.0 * (dxymax_fluid * dx / dt)
         vxf_fast = fill(V_fast, Ny1, Nx1)
+        # dx != dy, so a line that uses the wrong spacing fails
         dt_vxf = Erebus.compute_displacement_timestep(
-            zeros(Ny1, Nx1), zeros(Ny1, Nx1), vxf_fast, zeros(Ny1, Nx1), dt, 0.0
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            vxf_fast,
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            dx_val=dx,
+            dy_val=2.0 * dx,
         )
         @test dt_vxf * V_fast ≈ dxymax_fluid * dx rtol=1e-12
         @test dt_vxf < dt
@@ -854,9 +862,11 @@ include("test_helpers.jl")
             zeros(Ny1, Nx1),
             dt,
             0.0;
-            dxymax_fluid_val=0.05,
+            dx_val=dx,
+            dy_val=2.0 * dx,
+            dxymax_fluid_val=0.07,
         )
-        @test dt_vxf_strict * V_fast ≈ 0.05 * dx rtol=1e-12
+        @test dt_vxf_strict * V_fast ≈ 0.07 * dx rtol=1e-12
 
         # 3b. The y fluid line uses dy and the fluid limit; the solid limit does not change it
         vyf_fast = fill(V_fast, Ny1, Nx1)
@@ -899,10 +909,10 @@ include("test_helpers.jl")
             zeros(Ny1, Nx1),
             dt,
             0.0;
-            dxymax_fluid_val=0.05,
+            dxymax_fluid_val=0.07,
             dt_min=0.0,
         )
-        @test dt_adapt_strict * V_fast ≈ 0.05 * dx rtol=1e-12
+        @test dt_adapt_strict * V_fast ≈ 0.07 * dx rtol=1e-12
 
         # 4. Porosity rate constraint: dt * aphimax <= dphimax
         aphi_fast = 50.0 * (dphimax / dt)

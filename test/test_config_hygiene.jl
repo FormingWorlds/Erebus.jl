@@ -158,7 +158,8 @@ using StaticArrays
                 SimulationConfig(time=TimeConfig(dxymax_fluid=bad))
             )
         end
-        @test validate_config(SimulationConfig(time=TimeConfig(dxymax_fluid=1.0))) === nothing
+        @test validate_config(SimulationConfig(time=TimeConfig(dxymax_fluid=1.0))) ===
+            nothing
 
         # DTmax bounds: > 0 and finite
         @test_throws ArgumentError validate_config(

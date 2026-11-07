@@ -318,6 +318,7 @@ include("test_helpers.jl")
                 dtcoefup=1.2,
                 dtstep=200,
                 dxymax=0.05,
+                dxymax_fluid=0.2,
                 vpratio=0.33,
                 DTmax=20.0,
                 yearlength=3.15e7,
@@ -344,6 +345,7 @@ include("test_helpers.jl")
             @test cfg_loaded.poroelasticity.phimin ≈ cfg_orig.poroelasticity.phimin
             @test cfg_loaded.poroelasticity.phimax ≈ cfg_orig.poroelasticity.phimax
             @test cfg_loaded.time.n_steps == cfg_orig.time.n_steps
+            @test cfg_loaded.time.dxymax_fluid ≈ 0.2 rtol=1e-12
             @test cfg_loaded.output.output_dir == cfg_orig.output.output_dir
             @test cfg_loaded.materials.rhosolidm ≈ cfg_orig.materials.rhosolidm
         finally
