@@ -797,6 +797,230 @@ end
         @test any(!iszero, state_fgrav.grids.FI)
     end
 
+    @testset "Step 4b: solve_gravity! zero net body force (enclosed_mass)" begin
+        # Net force on the active momentum DOFs of the Stokes system (Vx: i 2:Ny, j 2:Nx-1;
+        # Vy: i 2:Ny-1, j 2:Nx), and the matching scale sum |rho g|.
+        function net_force(RHOX, RHOY, gx, gy, c)
+            Fx = sum(RHOX[i, j] * gx[i, j] for j in 2:(c.Nx - 1), i in 2:(c.Ny1 - 1))
+            Fy = sum(RHOY[i, j] * gy[i, j] for j in 2:(c.Nx1 - 1), i in 2:(c.Ny - 1))
+            Sx = sum(abs(RHOX[i, j] * gx[i, j]) for j in 2:(c.Nx - 1), i in 2:(c.Ny1 - 1))
+            Sy = sum(abs(RHOY[i, j] * gy[i, j]) for j in 2:(c.Nx1 - 1), i in 2:(c.Ny - 1))
+            return Fx, Fy, Sx + Sy
+        end
+        # Dense blob off centre in x AND y inside a rock disc, light air outside.
+        function body_density(dx, dy, rp)
+            hypot(dx, dy) <= rp || return 1.0
+            return 3000.0 +
+                   4000.0 * exp(-((dx - 0.3 * rp)^2 + (dy + 0.2 * rp)^2) / (0.25 * rp)^2)
+        end
+        function fill_density!(R, xs, ys, c, rp)
+            for j in axes(R, 2), i in axes(R, 1)
+                R[i, j] = body_density(xs[j] - c.xcenter, ys[i] - c.ycenter, rp)
+            end
+            return R
+        end
+        # Markers on the marker lattice sample the same body, so g and RHOX/RHOY agree.
+        function seed_body_markers!(state, c, rp)
+            xs = (c.x[1] + c.dxm / 2):(c.dxm):(c.x[end])
+            ys = (c.y[1] + c.dym / 2):(c.dym):(c.y[end])
+            n = length(xs) * length(ys)
+            resize!(state.markers, n)
+            for (_, v) in pairs(state.markers)
+                v[2:end] .= v[1]
+            end
+            m = 0
+            for x in xs, y in ys
+                m += 1
+                dx, dy = x - c.xcenter, y - c.ycenter
+                state.markers.xm[m] = x
+                state.markers.ym[m] = y
+                state.markers.rhototalm[m] = body_density(dx, dy, rp)
+                state.markers.tm[m] = hypot(dx, dy) <= rp ? 1 : 3
+            end
+            return state
+        end
+
+        state, coords, cfg = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:enclosed_mass
+        )
+        seed_body_markers!(state, coords, 0.35 * coords.xsize)
+        interpolate_markers_to_grid!(state, coords, cfg)
+        rp = 0.35 * coords.xsize
+        fill_density!(state.grids.RHOX, coords.xvx, coords.yvx, coords, rp)
+        fill_density!(state.grids.RHOY, coords.xvy, coords.yvy, coords, rp)
+
+        # Uncorrected field from the same markers, for the frame checks.
+        gx0 = zeros(size(state.grids.gx))
+        gy0 = zeros(size(state.grids.gy))
+        FI0 = zeros(size(state.grids.FI))
+        Erebus.compute_gravity_enclosed_mass!(
+            gx0,
+            gy0;
+            xm=state.markers.xm,
+            ym=state.markers.ym,
+            rhototalm=state.markers.rhototalm,
+            tm=state.markers.tm,
+            coords=coords,
+            gravity_nr_factor=cfg.geometry.gravity_nr_factor,
+            rplanet=state.accumulators.rplanet,
+            xcenter=state.accumulators.xcenter,
+            ycenter=state.accumulators.ycenter,
+            FI=FI0,
+        )
+        Fx0, Fy0, S0 = net_force(state.grids.RHOX, state.grids.RHOY, gx0, gy0, coords)
+        # Precondition: the uncorrected field of this body carries a net force (measured 0.0321).
+        @test isapprox(hypot(Fx0, Fy0) / S0, 0.0321; rtol=0.01)
+
+        # Direct call: returned acceleration equals the net force over the summed density.
+        mX = sum(state.grids.RHOX[i, j] for j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1))
+        mY = sum(state.grids.RHOY[i, j] for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny - 1))
+        gxd, gyd, FId = copy(gx0), copy(gy0), copy(FI0)
+        ax_ret, ay_ret = Erebus.remove_net_body_acceleration!(
+            gxd, gyd, FId, state.grids.RHOX, state.grids.RHOY, coords
+        )
+        @test isapprox(ax_ret, Fx0 / mX; rtol=1e-12)
+        @test isapprox(ay_ret, Fy0 / mY; rtol=1e-12)
+        # Origin of the linear term: a shifted centre changes FI by a constant only.
+        FIs = copy(FI0)
+        shift = 0.1 * coords.xsize
+        Erebus.remove_net_body_acceleration!(
+            copy(gx0),
+            copy(gy0),
+            FIs,
+            state.grids.RHOX,
+            state.grids.RHOY,
+            coords;
+            xcenter=coords.xcenter + shift,
+            ycenter=coords.ycenter - shift,
+        )
+        dFI = FIs .- FId
+        @test isapprox(dFI[1, 1], -ax_ret * shift + ay_ret * shift; rtol=1e-10)
+        @test maximum(dFI) - minimum(dFI) < 1e-10 * maximum(abs, FI0)
+
+        solve_gravity!(state, coords, cfg)
+        g = state.grids
+        Fx, Fy, S = net_force(g.RHOX, g.RHOY, g.gx, g.gy, coords)
+        @test hypot(Fx, Fy) / S < 1e-12
+        # The 3-D shell weight 2r is not balanced by the 2-D correction (measured value).
+        w3(x, y) = 2 * hypot(x - coords.xcenter, y - coords.ycenter)
+        Fx3 = sum(
+            w3(coords.xvx[j], coords.yvx[i]) * g.RHOX[i, j] * g.gx[i, j] for
+            j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1)
+        )
+        Fy3 = sum(
+            w3(coords.xvy[j], coords.yvy[i]) * g.RHOY[i, j] * g.gy[i, j] for
+            j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny - 1)
+        )
+        S3 = sum(
+            w3(coords.xvx[j], coords.yvx[i]) * abs(g.RHOX[i, j] * g.gx[i, j]) for
+            j in 2:(coords.Nx - 1), i in 2:(coords.Ny1 - 1)
+        )
+        @test isapprox(hypot(Fx3, Fy3) / S3, 0.0156; rtol=0.01)
+
+        # The correction is one uniform acceleration (a body frame change).
+        dgx = [g.gx[i, j] - gx0[i, j] for j in 1:coords.Nx1, i in 1:coords.Ny1]
+        dgy = [g.gy[i, j] - gy0[i, j] for j in 1:coords.Nx1, i in 1:coords.Ny1]
+        gscale = maximum(abs, gx0)
+        @test maximum(abs, dgx) > 1e-6 * gscale
+        @test maximum(dgx) - minimum(dgx) < 1e-12 * gscale
+        @test maximum(dgy) - minimum(dgy) < 1e-12 * gscale
+        ax = -dgx[1]
+        ay = -dgy[1]
+        @test isapprox(ax, ax_ret; rtol=1e-12)
+        @test isapprox(ay, ay_ret; rtol=1e-12)
+        # g = -grad FI still holds on the grid after the correction.
+        gerr_x = maximum(
+            abs(g.gx[i, j] + (g.FI[i, j + 1] - g.FI[i, j]) / coords.dx) for
+            j in 1:coords.Nx, i in 1:coords.Ny1
+        )
+        gerr_y = maximum(
+            abs(g.gy[i, j] + (g.FI[i + 1, j] - g.FI[i, j]) / coords.dy) for
+            j in 1:coords.Nx1, i in 1:coords.Ny
+        )
+        @test gerr_x < 1e-9 * gscale
+        @test gerr_y < 1e-9 * gscale
+
+        # Zero density (no interpolation yet): no correction, no NaN.
+        state_z, coords_z, cfg_z = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:enclosed_mass
+        )
+        fill!(state_z.grids.RHOX, 0.0)
+        fill!(state_z.grids.RHOY, 0.0)
+        solve_gravity!(state_z, coords_z, cfg_z)
+        @test all(isfinite, state_z.grids.gx)
+        @test all(isfinite, state_z.grids.gy)
+        @test all(isfinite, state_z.grids.FI)
+        gxz = zeros(size(state_z.grids.gx))
+        Erebus.compute_gravity_enclosed_mass!(
+            gxz,
+            zeros(size(state_z.grids.gy));
+            xm=state_z.markers.xm,
+            ym=state_z.markers.ym,
+            rhototalm=state_z.markers.rhototalm,
+            tm=state_z.markers.tm,
+            coords=coords_z,
+            gravity_nr_factor=cfg_z.geometry.gravity_nr_factor,
+            rplanet=state_z.accumulators.rplanet,
+            xcenter=state_z.accumulators.xcenter,
+            ycenter=state_z.accumulators.ycenter,
+        )
+        @test isequal(state_z.grids.gx, gxz)
+
+        # poisson2d is not corrected: same RHOX/RHOY, result equals the plain Poisson solve.
+        state_p, coords_p, cfg_p = create_mock_simulation_state(;
+            marknum=1, r_marker=10000.0, tm_val=1, phi_val=0.1, gravity_mode=:poisson2d
+        )
+        seed_body_markers!(state_p, coords_p, rp)
+        interpolate_markers_to_grid!(state_p, coords_p, cfg_p)
+        fill_density!(state_p.grids.RHOX, coords_p.xvx, coords_p.yvx, coords_p, rp)
+        fill_density!(state_p.grids.RHOY, coords_p.xvy, coords_p.yvy, coords_p, rp)
+        RPp, SPp = Erebus.setup_gravitational_lse(coords_p)
+        LPp = Erebus.assemble_gravitational_lse!(
+            zeros(coords_p.Ny1, coords_p.Nx1), RPp; coords=coords_p
+        )
+        Erebus.assemble_gravitational_rhs!(state_p.grids.RHO, RPp; coords=coords_p)
+        SPp = lu(LPp.cscmatrix) \ RPp
+        gxp = zeros(size(state_p.grids.gx))
+        gyp = zeros(size(state_p.grids.gy))
+        FIp = zeros(size(state_p.grids.FI))
+        Erebus.process_gravitational_solution!(SPp, FIp, gxp, gyp; coords=coords_p)
+        solve_gravity!(state_p, coords_p, cfg_p)
+        @test isapprox(state_p.grids.gx, gxp; rtol=1e-12)
+        @test isapprox(state_p.grids.gy, gyp; rtol=1e-12)
+        Fxp, Fyp, Sp = net_force(state_p.grids.RHOX, state_p.grids.RHOY, gxp, gyp, coords_p)
+        # No correction in poisson2d: the net force stays at its measured value (0.0321).
+        @test isapprox(hypot(Fxp, Fyp) / Sp, 0.0321; rtol=0.01)
+
+        # Zero density in one component only: that component is unchanged.
+        RX0 = zeros(size(g.RHOX))
+        ax1, ay1 = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), RX0, state.grids.RHOY, coords
+        )
+        @test iszero(ax1)
+        @test isapprox(ay1, ay_ret; rtol=1e-12)
+        ax2, ay2 = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), state.grids.RHOX, zeros(size(g.RHOY)), coords
+        )
+        @test isapprox(ax2, ax_ret; rtol=1e-12)
+        @test iszero(ay2)
+        # A NaN density propagates into the acceleration instead of a silent zero.
+        RXn = copy(state.grids.RHOX)
+        RXn[3, 3] = NaN
+        axn, _ = Erebus.remove_net_body_acceleration!(
+            copy(gx0), copy(gy0), copy(FI0), RXn, state.grids.RHOY, coords
+        )
+        @test isnan(axn)
+
+        # Error contract: wrong size of each array argument.
+        good = (g.gx, g.gy, g.FI, g.RHOX, g.RHOY)
+        for k in 1:5
+            bad = ntuple(m -> m == k ? zeros(3, 3) : copy(good[m]), 5)
+            @test_throws DimensionMismatch Erebus.remove_net_body_acceleration!(
+                bad..., coords
+            )
+        end
+    end
+
     @testset "Step 7: vent_and_degas! Contract and Invariance" begin
         # 1. Empty marker contract: returns zero vented mass, state bitwise unchanged
         state_empty, coords, cfg = create_mock_simulation_state(; marknum=0)

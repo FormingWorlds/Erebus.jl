@@ -357,6 +357,12 @@ $$g_{x,(i,j)} = -\frac{\Phi_{(i,j+1)} - \Phi_{(i,j)}}{\Delta x}, \qquad g_{y,(i,
 
 The discrete curl of this field is zero. Pressure can therefore balance gravity in a body with a radial density profile, and gravity alone drives no flow in such a body. A radial vector evaluated directly at the staggered nodes has a discrete curl of a few percent of $g / \Delta x$ near the surface, and this curl drives a false circulation.
 
+The field uses only the enclosed mass $M_{3D}(<r)$ about the fixed point $(x_c, y_c)$ and leaves out the non-radial part of the mass distribution. When the density is not radially symmetric, for example a dense region on one side, the discrete sum of $\rho \mathbf{g}$ over the domain is therefore not zero. The self-gravity of an isolated body exerts no net force on it; left in place, this sum moves the body as a whole. After each gravity solve, `remove_net_body_acceleration!` subtracts the uniform acceleration
+
+$$a_x = \frac{\sum_{V_x} \rho_x g_x}{\sum_{V_x} \rho_x}, \qquad a_y = \frac{\sum_{V_y} \rho_y g_y}{\sum_{V_y} \rho_y}$$
+
+where the sums run over the $V_x$ and $V_y$ nodes that carry a momentum equation, with the same area weight as the momentum balance. The net body force in the 2-D momentum balance, which drives a rigid drift, is then zero. The same sum with the 3-D shell weight $2r$ used for $M_{3D}$ is not zero in general. The potential gains the matching linear term $a_x (x - x_c) + a_y (y - y_c)$, so $\mathbf{g} = -\nabla \Phi$ still holds on the grid; $\Phi$ is then the potential in the frame of the body. The `:poisson2d` mode does not apply this correction.
+
 ![Two-layer differentiated body self-gravity benchmark](../assets/gravity_two_layer_benchmark.png)
 
 *Figure 1: Self-gravity radial acceleration and core-excess anomaly profiles for a differentiated two-layer body ($R = 50\text{ km}$, $r_c = 25\text{ km}$, $\rho_c = 7000\text{ kg/m}^3$, $\rho_m = 3000\text{ kg/m}^3$). (a) Total radial acceleration $g(r)$ comparing the analytical 3D spherical profile, the discrete marker enclosed-mass formulation (`:enclosed_mass`), and the 2D Cartesian Poisson solution (`:poisson2d`). (b) Core-excess gravity anomaly $g_{\text{excess}}(r) = g(r) - \frac{4}{3}\pi G \rho_m r$ outside the core ($r_c \le r \le R$), showing the 3D $1/r^2$ attenuation versus the 2D cylindrical $1/r$ excess.*

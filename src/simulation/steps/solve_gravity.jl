@@ -5,6 +5,9 @@
 
 Solve gravitational potential and acceleration on staggered grid nodes.
 
+For `:enclosed_mass`, the net body force on the momentum nodes is removed afterwards
+(`remove_net_body_acceleration!`), using the grid densities `RHOX` and `RHOY`.
+
 # Mutates:
 - `state.grids.FI`
 - `state.grids.gx`
@@ -41,6 +44,16 @@ function solve_gravity!(
             xcenter=state.accumulators.xcenter,
             ycenter=state.accumulators.ycenter,
             FI=FI,
+        )
+        remove_net_body_acceleration!(
+            gx,
+            gy,
+            FI,
+            grids.RHOX,
+            grids.RHOY,
+            coords;
+            xcenter=state.accumulators.xcenter,
+            ycenter=state.accumulators.ycenter,
         )
     elseif mode === :poisson2d
         RP_vec, SP_vec = if RP !== nothing && SP !== nothing
