@@ -84,7 +84,7 @@ jobs:
                       if line.startswith('+++ '):
                           name, header = line[4:].rstrip('\t'), False
                           f = name[2:] if name.startswith('b/') and name.endswith('.jl') else None
-                          if name.startswith('"'):
+                          if name.startswith('"') and name.rstrip('"').endswith('.jl'):
                               out.append(f'not linted (quoted name): {name}')
                   elif m := re.match(r'@@ -\S+ \+(\d+)', line):
                       n = int(m[1])
@@ -98,8 +98,11 @@ jobs:
                   run = []
                   with open(f, encoding='utf-8', errors='replace') as fh:
                       lines = fh.read().splitlines()
+                  in_str = False
                   for i, text in enumerate(lines + [''], 1):
-                      if text.lstrip().startswith('#'):
+                      if text.count('"""') % 2:
+                          in_str = not in_str
+                      elif not in_str and text.lstrip().startswith('#') and not text.startswith('#!'):
                           run.append(i)
                           continue
                       if len(run) > 3 and added[f] & set(run):
@@ -132,8 +135,8 @@ jobs:
             evolution, hydrothermal circulation and core formation of planetesimals.
             First read AGENTS.md of the repository: its testing, code style and
             documentation rules apply to this review. Tests must check physical laws
-            (conservation, positivity, limits, analytic solutions) with inputs that tell
-            a correct formula from a plausible wrong one. Then read the diff with
+            (conservation, bounds, limits, analytic solutions) with inputs that tell a
+            correct formula from a plausible wrong one. Then read the diff with
             `gh pr diff ${{ env.PR_NUMBER }}` and the files it touches.
 
             Section 1, "Findings": report only real items:
@@ -143,8 +146,8 @@ jobs:
             - a test or guard that the change removes or weakens;
             - a doc or docstring that states wrong behaviour;
             - a doc change that breaks the documentation rules of AGENTS.md: a citation
-              with no bibliography entry or with a wrong DOI, a number with no source,
-              or change history in a page.
+              with no bibliography entry, or with no DOI link where the work has one; a
+              number with no source; change history in a page.
             At most 5 findings, each with the file, the line and a concrete input or
             state that fails.
 
@@ -163,7 +166,8 @@ jobs:
 
             Section 2 also lists breaks of the code style rules of AGENTS.md that no
             tool checks: a mutating function without `!`, a new function without a
-            docstring, change history in a comment. Apart from these rules, do not
+            docstring, change history in a comment, and in new or edited doc prose more
+            than one sentence on a line or an em or en dash. Apart from these rules, do not
             comment on style, naming, formatting or comment length; the BlueStyle CI job
             checks formatting. Put an item on its line with the inline comment tool when the line
             is in the diff. Return the summary with the 2 sections as the `summary` field of
