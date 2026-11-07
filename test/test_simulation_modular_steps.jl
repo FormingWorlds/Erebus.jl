@@ -580,9 +580,9 @@ using Erebus
             cfg=cfg.reaction,
         )
         p_fresh = maximum(abs, XW .- start.XW0)
-        # The last iteration may still cut dt after its reaction; the blend with the unscaled
-        # iterate of the first (1e11 s) step gives several hundred times more
-        @test p_fresh <= p_loop <= 20.0 * p_fresh
+        # Measured 3.8: the cut of the last iteration after its reaction. An unscaled blend gives
+        # about 500, a dt_prev that is not updated about 1.9
+        @test 2.5 * p_fresh <= p_loop <= 6.0 * p_fresh
     end
 
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
