@@ -63,6 +63,7 @@ end # function compute_displacement_timestep
         dxymax_val::Real=0.05,
         dxymax_fluid_val::Real=0.15,
         dphimax_val::Real=0.1,
+        fluid_heat_rate::Real=0.0,
         maxDTcurrent=0.0,
         DTmax_val::Real=20.0,
         dt_longest_val::Real=1.0e11,
@@ -70,7 +71,8 @@ end # function compute_displacement_timestep
     )
 
 Compute multi-criterion adaptive timestep constrained by velocity CFL, porosity compaction,
-thermal variation, and stability bounds.
+thermal variation, and stability bounds. A positive `fluid_heat_rate` [1/s] limits the step
+to its inverse (see `fluid_advection_inflow_rate`).
 """
 function compute_adaptive_timestep(
     vx,

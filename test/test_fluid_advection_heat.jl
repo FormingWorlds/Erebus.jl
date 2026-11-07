@@ -275,13 +275,23 @@ end
             (:y, (i - 1, j), 3.0e-6, (i - 1, j), dy),
             (:y, (i, j), -3.0e-6, (i + 1, j), dy),
         )
+        qx_all = zeros(Ny1, Nx1)
+        qy_all = zeros(Ny1, Nx1)
+        rates = Float64[]
         for (dir, idx, q, up, h) in faces
             qx = zeros(Ny1, Nx1)
             qy = zeros(Ny1, Nx1)
             (dir === :x ? qx : qy)[idx...] = q
+            (dir === :x ? qx_all : qy_all)[idx...] = q
             rate = fluid_advection_inflow_rate(T, qx, qy, RHOCP, rhocpf; coords=coords)
             @test rate ≈ rhocpf(T[up...]) * abs(q) / (RHOCP[i, j] * h) rtol=1e-12
+            push!(rates, rate)
         end
+        # With all 4 faces open, the node sums its face rates
+        all_open = fluid_advection_inflow_rate(
+            T, qx_all, qy_all, RHOCP, rhocpf; coords=coords
+        )
+        @test all_open ≈ sum(rates) rtol=1e-12
     end
 
     @testset "random field: no new extremum at dt = 1 / rate" begin
@@ -319,6 +329,12 @@ end
         )
         @test_throws DomainError fluid_advection_inflow_rate(
             T, qx, zeros(Ny1, Nx1), RHOCP, _ -> -1.0; coords=coords
+        )
+        @test_throws DomainError fluid_advection_inflow_rate(
+            T, qx, zeros(Ny1, Nx1), RHOCP, _ -> Inf; coords=coords
+        )
+        @test_throws DomainError compute_fluid_advection_heat!(
+            zeros(Ny1, Nx1), T, qx, zeros(Ny1, Nx1), _ -> NaN; coords=coords
         )
     end
 end

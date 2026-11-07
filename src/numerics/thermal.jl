@@ -139,6 +139,15 @@ function assemble_thermal_lse!(
     return LT
 end # function assemble_thermal_lse!
 
+# Upwind inflow rate rhocpf(T_up) * q / h of one face [W/(m^3 K)]; 0 for outflow.
+@inline function _upwind_face_rate(q, T_up, h, rhocpf)
+    q > 0.0 || return 0.0
+    c = rhocpf(T_up)
+    (isfinite(c) && c >= 0.0) ||
+        throw(DomainError(c, "fluid heat capacity must be finite and not negative"))
+    return c * q / h
+end
+
 """
     compute_fluid_advection_heat!(Q, tk, qxD, qyD, rhocpf; coords)
 
@@ -163,7 +172,7 @@ form is first order and adds a numerical diffusivity of about `|q_x| dx / 2` in 
 
 # Raises
 - `ArgumentError`: when the array sizes differ from the P grid
-- `DomainError`: when `rhocpf` returns a negative value on an inflow face
+- `DomainError`: when `rhocpf` returns a negative or non-finite value on an inflow face
 """
 function compute_fluid_advection_heat!(
     Q, tk, qxD, qyD, rhocpf; coords::GridCoordinates=default_grid_coordinates()
@@ -177,12 +186,7 @@ function compute_fluid_advection_heat!(
         throw(ArgumentError("Q, tk, qxD and qyD must have the P grid size $grid_size"))
     end
     fill!(Q, 0.0)
-    inflow_heat(q, T_up, T, h) = begin
-        q > 0.0 || return 0.0
-        c = rhocpf(T_up)
-        c >= 0.0 || throw(DomainError(c, "fluid heat capacity must not be negative"))
-        return c * q * (T_up - T) / h
-    end
+    inflow_heat(q, T_up, T, h) = _upwind_face_rate(q, T_up, h, rhocpf) * (T_up - T)
     @inbounds for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny1 - 1)
         T = tk[i, j]
         Q[i, j] =
@@ -215,7 +219,8 @@ explicit step with `dt * rate <= 1` keeps the node between its upstream temperat
 
 # Raises
 - `ArgumentError`: when the array sizes differ from the P grid
-- `DomainError`: when `rhocpf` is negative or `RHOCP` is not positive at a node with inflow
+- `DomainError`: when `rhocpf` is negative or not finite on an inflow face, or `RHOCP` is
+  not positive at a node with a positive inflow rate
 """
 function fluid_advection_inflow_rate(
     tk, qxD, qyD, RHOCP, rhocpf; coords::GridCoordinates=default_grid_coordinates()
@@ -228,12 +233,7 @@ function fluid_advection_inflow_rate(
         size(RHOCP) != grid_size
         throw(ArgumentError("tk, qxD, qyD and RHOCP must have the P grid size $grid_size"))
     end
-    inflow_rate(q, T_up, h) = begin
-        q > 0.0 || return 0.0
-        c = rhocpf(T_up)
-        c >= 0.0 || throw(DomainError(c, "fluid heat capacity must not be negative"))
-        return c * q / h
-    end
+    inflow_rate(q, T_up, h) = _upwind_face_rate(q, T_up, h, rhocpf)
     rate = 0.0
     @inbounds for j in 2:(coords.Nx1 - 1), i in 2:(coords.Ny1 - 1)
         r =
@@ -242,8 +242,12 @@ function fluid_advection_inflow_rate(
             inflow_rate(qyD[i - 1, j], tk[i - 1, j], dy_val) +
             inflow_rate(-qyD[i, j], tk[i + 1, j], dy_val)
         r > 0.0 || continue
-        RHOCP[i, j] > 0.0 ||
-            throw(DomainError(RHOCP[i, j], "RHOCP must be positive at a node with inflow"))
+        RHOCP[i, j] > 0.0 || throw(
+            DomainError(
+                RHOCP[i, j],
+                "RHOCP must be positive at a node with a positive inflow rate",
+            ),
+        )
         rate = max(rate, r / RHOCP[i, j])
     end
     return rate
