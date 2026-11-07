@@ -548,6 +548,7 @@ using Erebus
         )
         @test state.dt < 1.0e-3 * dt_start
         @test res.n_titers in 2:(cfg.solver.max_plastic_iterations)
+        @test res.thermochemical_converged
         p_loop = maximum(abs, core.XWsolidm .- core.XWsolidm0)
 
         # Fresh reaction from the step-start markers at the accepted dt
