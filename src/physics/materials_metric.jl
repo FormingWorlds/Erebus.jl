@@ -432,3 +432,62 @@ Validate that `v` is in unit interval [0, 1] and finite, otherwise throw `Domain
         throw(DomainError(v, string(name, " must be in [0, 1] and finite")))
     return v
 end
+
+"""
+    flow_metric_face_weights(XW, XE, XP, YN, YS, YP, dx, dy) -> (mW, mE, mN, mS, wP)
+    flow_metric_face_weights(i, j, coords; xcenter, ycenter) -> (mW, mE, mN, mS, wP)
+
+Face multipliers of the flux-form spherical divergence on one P cell:
+
+    div_sph(u) = div2D(w u) / w_P,  w = r = hypot(x - xc, y - yc),
+
+so that `(mE uE - mW uW) / dx + (mS uS - mN uN) / dy` adds the out-of-plane term `u_r / r` of a sphere to the
+2-D divergence. The face weights are `wF = r` at the face midpoints, and
+
+    w_P = ((wE XE - wW XW) / dx + (wS YS - wN YN) / dy) / 3,
+
+which is the discrete form of `div2D(r x) = 3 r`. With this `w_P` a uniform dilation `u = (X, Y)` gives
+`div_sph = 3` to round-off, and a face shared by 2 cells carries one weight, so `w_P div_sph` telescopes.
+The constant factor of the volume element (`2r`) cancels in `mF = wF / w_P`.
+
+# Arguments
+- `XW`, `XE`: x of the west and east faces relative to the centre [m]
+- `XP`, `YP`: position of the P node relative to the centre [m]
+- `YN`, `YS`: y of the north (`i - 1`) and south (`i`) faces relative to the centre [m]
+- `dx`, `dy`: grid spacing [m]
+- `i`, `j`, `coords`: P cell index and grid; the faces are `xvx[j-1]`, `xvx[j]`, `yvy[i-1]`, `yvy[i]`
+- `xcenter`, `ycenter`: centre of the body [m]
+
+# Returns
+- `(mW, mE, mN, mS, wP)`: the 4 face multipliers (dimensionless) and `w_P` [m]
+
+# Throws
+- `DomainError`: if `w_P` is not positive and finite (only for inconsistent face coordinates; on a
+  regular grid `w_P >= 0.33 min(dx, dy)`).
+"""
+function flow_metric_face_weights(XW, XE, XP, YN, YS, YP, dx, dy)
+    wW = hypot(XW, YP)
+    wE = hypot(XE, YP)
+    wN = hypot(XP, YN)
+    wS = hypot(XP, YS)
+    wP = ((wE * XE - wW * XW) / dx + (wS * YS - wN * YN) / dy) / 3
+    (isfinite(wP) && wP > 0) || throw(DomainError(wP, "w_P must be positive and finite"))
+    return (wW / wP, wE / wP, wN / wP, wS / wP, wP)
+end
+
+function flow_metric_face_weights(
+    i::Integer, j::Integer, coords::GridCoordinates; xcenter::Real, ycenter::Real
+)
+    xc = Float64(xcenter)
+    yc = Float64(ycenter)
+    return flow_metric_face_weights(
+        coords.xvx[j - 1] - xc,
+        coords.xvx[j] - xc,
+        coords.xp[j] - xc,
+        coords.yvy[i - 1] - yc,
+        coords.yvy[i] - yc,
+        coords.yp[i] - yc,
+        coords.dx,
+        coords.dy,
+    )
+end
