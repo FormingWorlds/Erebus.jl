@@ -477,6 +477,10 @@ function postprocess_hydromechanical_solution!(
     compute_fluid_velocities!(
         g.PHIX, g.PHIY, g.qxD, g.qyD, g.vx, g.vy, g.vxf, g.vyf; coords=coords
     )
+    # The explicit fluid heat term of the thermal step stays bounded for dt <= 1 / rate
+    fluid_heat_rate = fluid_advection_inflow_rate(
+        g.tk1, g.qxD, g.qyD, g.RHOCP, fluid_heat_capacity(cfg); coords=coords
+    )
 
     dt_solve = state.dt
     maxDTcurrent = maximum(abs, g.DT0)
@@ -490,6 +494,7 @@ function postprocess_hydromechanical_solution!(
         coords=coords,
         dxymax_val=cfg.time.dxymax,
         dxymax_fluid_val=cfg.time.dxymax_fluid,
+        fluid_heat_rate=fluid_heat_rate,
         dphimax_val=cfg.solver.dphimax,
         dt_ref=dt_step_initial,
         maxDTcurrent=maxDTcurrent,

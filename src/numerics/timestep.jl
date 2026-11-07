@@ -96,6 +96,7 @@ function compute_adaptive_timestep(
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
     cfl_reaction::Real=0.5,
     dphi_reaction_max::Real=0.01,
+    fluid_heat_rate::Real=0.0,
 )
     dt_cand = compute_displacement_timestep(
         vx,
@@ -127,6 +128,9 @@ function compute_adaptive_timestep(
             dt_rxn = Float64(cfl_reaction) * Float64(dphi_reaction_max) / max_dqpf
             dt_cand = min(dt_cand, dt_rxn)
         end
+    end
+    if fluid_heat_rate > 0.0
+        dt_cand = min(dt_cand, inv(Float64(fluid_heat_rate)))
     end
     dt_cand = clamp(dt_cand, dt_min, dt_longest_val)
     return dt_cand

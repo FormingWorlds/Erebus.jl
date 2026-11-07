@@ -1,3 +1,18 @@
+"""
+    fluid_heat_capacity(cfg::SimulationConfig)
+
+Return the function of temperature that gives the pore fluid heat capacity [J/(m^3 K)] of the
+fluid heat term, for the thermal solve and for its time step limit.
+"""
+function fluid_heat_capacity(cfg::SimulationConfig)
+    return T -> compute_rhocpfluidm(
+        T,
+        marker_property_mode;
+        rhocpfluidm=cfg.materials.rhocpfluidm,
+        tmfluidphase=cfg.thermodynamics.tmfluidphase,
+    )
+end
+
 # Thermal energy equation assembly, solve, and convergence assessment step
 
 """
@@ -299,12 +314,7 @@ function solve_thermal_energy!(
         g.tk1,
         g.qxD,
         g.qyD,
-        T -> compute_rhocpfluidm(
-            T,
-            marker_property_mode;
-            rhocpfluidm=cfg.materials.rhocpfluidm,
-            tmfluidphase=cfg.thermodynamics.tmfluidphase,
-        );
+        fluid_heat_capacity(cfg);
         coords=coords,
     )
 
