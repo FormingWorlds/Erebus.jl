@@ -286,7 +286,21 @@ with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_
 
 If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
 
-### 2. Porosity Change Rate Limiter and Adaptive Timestep Consistency
+### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency
+
+The displacement limit bounds the distance that solid and pore fluid move in one step:
+
+```math
+\Delta t \max|v_{x}| \le \texttt{dxymax}\,\Delta x, \quad \Delta t \max|v_{y}| \le \texttt{dxymax}\,\Delta y, \quad \Delta t \max|v_{x,f}| \le \texttt{dxymax\_fluid}\,\Delta x, \quad \Delta t \max|v_{y,f}| \le \texttt{dxymax\_fluid}\,\Delta y,
+```
+
+with the solid velocity $(v_x, v_y)$ and the pore fluid velocity $v_f = q_D / \phi + v_s$.
+The defaults are `dxymax = 0.05` and `dxymax_fluid = 0.15` grid units.
+Markers move with the solid velocity, so `dxymax` bounds the marker advection; `dxymax_fluid` bounds the step through the pore fluid velocity.
+Since $|q_D| \le \phi\,(|v_f| + |v_s|)$ per component, the defaults give $|q_D| \Delta t / h \le 0.2\,\phi$ for the upwind fluid heat term above, with $h$ the grid spacing in that direction.
+Both keys stay in $(0, 1]$; with both at 1 this bound is $2\,\phi$ and no longer keeps the inflow sum of that term below 1 at a porosity near `phimax`.
+A checkpoint stores the full configuration, so a checkpoint written by a version without `dxymax_fluid` does not load.
+
 
 Rapid pore collapse or opening can destabilize Darcy fluid flow. The maximum displacement timestep limits relative porosity change per step:
 

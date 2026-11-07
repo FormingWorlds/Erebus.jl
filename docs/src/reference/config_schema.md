@@ -45,7 +45,8 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `dtcoefdn` | `Float64` | `0.5` | - | Factor to reduce timestep on non-convergence | $\in (0, 1)$ |
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
-| `dxymax` | `Float64` | `0.05` | grid units | Maximum marker displacement per timestep | $> 0$ |
+| `dxymax` | `Float64` | `0.05` | grid units | Maximum solid (marker) displacement per timestep | $\in (0, 1]$ |
+| `dxymax_fluid` | `Float64` | `0.15` | grid units | Maximum pore fluid displacement per timestep | $\in (0, 1]$ |
 | `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting parameter | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
 | `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
