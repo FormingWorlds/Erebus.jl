@@ -268,9 +268,9 @@ $(SIGNATURES)
     - marknum: current total number of markers
     - Δt: current time step length
     - dt_prev: time step of the previous iterate `XWˢm`; for `titer > 1` its log-odds
-      `ln(XD/XW)` relative to the start value are scaled by `min(Δt, Δtr) / min(dt_prev, Δtr)`
-      before the under-relaxation, with the reaction time `Δtr` of the marker (default `Δt`,
-      no scaling)
+      `ln(XD/XW)` relative to the start value are scaled by `min(Δt, t_c) / min(dt_prev, t_c)`
+      before the under-relaxation, where `t_c ≤ Δtr` is the time at which the reaction time
+      or the pore-water ceiling stops the clamped path (default `Δt`, no scaling)
     - timestep: current time step
     - titer: current thermochemical iteration number
 
