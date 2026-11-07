@@ -1059,4 +1059,84 @@ _mean(x) = sum(x) / length(x)
             (rho_s0_u * 0.95 + 1000.0 * 0.05)
         @test isapprox(minimum(DMP), (1.0 - RV_unc) / dt; rtol=1e-12)
     end
+
+    @testset "Under-relaxation scales the previous iterate to a new dt" begin
+        c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
+        marknum = 100
+        tk2 = fill(500.0, c17.Ny1, c17.Nx1)
+        pf = fill(1.0e7, c17.Ny1, c17.Nx1)
+        grid() = zeros(Float64, c17.Ny1, c17.Nx1)
+        function fresh_markers()
+            props = setup_marker_properties(marknum, c17)
+            xm, ym, tm, _, _, _, _, phim, phinewm, pfm0, XW, XW0, _ = props
+            tm .= 1
+            xm .= 5000.0
+            ym .= 5000.0
+            phim .= 0.20
+            phinewm .= 0.20
+            pfm0 .= 1.0e7
+            XW0 .= 0.05
+            XW .= 0.05
+            return (; xm, ym, tm, phim, phinewm, pfm0, XW, XW0)
+        end
+        function react!(mk, dt, titer; kw...)
+            DMP = grid()
+            perform_thermochemical_reaction!(
+                DMP,
+                grid(),
+                grid(),
+                grid(),
+                grid(),
+                pf,
+                tk2,
+                mk.tm,
+                mk.xm,
+                mk.ym,
+                mk.XW0,
+                mk.XW,
+                mk.phim,
+                mk.phinewm,
+                mk.pfm0,
+                marknum,
+                dt,
+                2,
+                titer;
+                coords=c17,
+                DQPF=grid(),
+                DQPFSUM=grid(),
+                kw...,
+            )
+            return DMP
+        end
+        progress(mk) = maximum(abs, mk.XW .- mk.XW0)
+        dt1 = 1.0e8
+        dt2 = dt1 / 1.0e4
+
+        # Fresh titer-1 reaction at the small step
+        mk_fresh = fresh_markers()
+        react!(mk_fresh, dt2, 1)
+        p_fresh = progress(mk_fresh)
+
+        # Titer 1 at dt1, then a cut: titer 2 at dt2 with the previous iterate from dt1
+        mk = fresh_markers()
+        react!(mk, dt1, 1)
+        @test progress(mk) > 100.0 * p_fresh
+        react!(mk, dt2, 2; dt_prev=dt1)
+        @test 0.5 * p_fresh <= progress(mk) <= 2.0 * p_fresh
+
+        # Without dt_prev the old blend with the dt1 iterate stays (default for direct callers)
+        mk_old = fresh_markers()
+        react!(mk_old, dt1, 1)
+        react!(mk_old, dt2, 2)
+        @test progress(mk_old) > 50.0 * p_fresh
+
+        # A dt_prev 1 ULP away leaves the rates unchanged
+        mk_a = fresh_markers()
+        react!(mk_a, dt2, 1)
+        DMP_a = react!(mk_a, dt2, 2)
+        mk_b = fresh_markers()
+        react!(mk_b, dt2, 1)
+        DMP_b = react!(mk_b, dt2, 2; dt_prev=dt2 * (1.0 + 1.0e-15))
+        @test isapprox(DMP_b, DMP_a; rtol=1e-10)
+    end
 end
