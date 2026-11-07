@@ -430,6 +430,8 @@ using Erebus
     @testset "Post-processing time step reads the fluid displacement limit" begin
         cfg0 = default_config()
         state0, coords0, ws0, _, _ = init_simulation(cfg0)
+        # Liquid pore water (above 273 K), so the fluid moves faster than the solid
+        state0.markers.core.tkm .= 300.0
         interpolate_markers_to_grid!(
             state0,
             coords0,
@@ -454,10 +456,10 @@ using Erebus
             cur_betafluid=0.0,
         )
 
-        # Same state and solution, only time.dxymax_fluid differs
-        function dt_after_postprocess(dxymax_fluid)
+        # Same state and solution, only the 2 displacement limits differ
+        function postprocess_with_limits(dxymax, dxymax_fluid)
             tkw = (; (fn => getfield(cfg0.time, fn) for fn in fieldnames(TimeConfig))...)
-            tcfg = TimeConfig(; merge(tkw, (; dxymax_fluid=dxymax_fluid))...)
+            tcfg = TimeConfig(; merge(tkw, (; dxymax=dxymax, dxymax_fluid=dxymax_fluid))...)
             cfg = SimulationConfig(
                 (
                     fn === :time ? tcfg : getfield(cfg0, fn) for
@@ -477,14 +479,16 @@ using Erebus
                 cur_betasolid=0.0,
                 cur_betafluid=0.0,
             )
-            return st.dt
+            return st
         end
-        dt_strict = dt_after_postprocess(1.0e-4)
-        dt_double = dt_after_postprocess(2.0e-4)
-        dt_loose = dt_after_postprocess(1.0)
-        @test dt_strict < 0.5 * dt_loose
-        # While the fluid limit binds, dt is linear in it
-        @test dt_double ≈ 2.0 * dt_strict rtol=1e-10
+        # Loose limits do not cut dt, so these are the velocities of the solution
+        loose = postprocess_with_limits(1.0, 1.0)
+        g = loose.grids
+        @test maximum(abs, g.vxf) > 1.2 * maximum(abs, g.vx)
+        dt_fluid = min(coords0.dx / maximum(abs, g.vxf), coords0.dy / maximum(abs, g.vyf))
+        strict = postprocess_with_limits(0.05, 1.0e-4)
+        @test strict.dt ≈ 1.0e-4 * dt_fluid rtol=1e-10
+        @test postprocess_with_limits(0.05, 2.0e-4).dt ≈ 2.0e-4 * dt_fluid rtol=1e-10
     end
 
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
