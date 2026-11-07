@@ -152,6 +152,15 @@ using StaticArrays
             SimulationConfig(time=TimeConfig(dxymax=NaN))
         )
 
+        # dxymax_fluid bounds: (0, 1]
+        for bad in (0.0, -0.1, 1.0 + eps(1.0), 1.5, NaN, Inf)
+            @test_throws ArgumentError validate_config(
+                SimulationConfig(time=TimeConfig(dxymax_fluid=bad))
+            )
+        end
+        @test validate_config(SimulationConfig(time=TimeConfig(dxymax_fluid=1.0))) ===
+            nothing
+
         # DTmax bounds: > 0 and finite
         @test_throws ArgumentError validate_config(
             SimulationConfig(time=TimeConfig(DTmax=0.0))

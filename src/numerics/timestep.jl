@@ -11,6 +11,8 @@ $(SIGNATURES)
     - vyf: fluid vy velocity at Vy nodes
     - dt: current time step
     - aphimax: maximum observed porosity coefficient
+    - dxymax_val: largest solid displacement per step, in grid units
+    - dxymax_fluid_val: largest pore fluid displacement per step, in grid units
    
 # Returns
 
@@ -27,6 +29,7 @@ function compute_displacement_timestep(
     dx_val=coords.dx,
     dy_val=coords.dy,
     dxymax_val::Real=0.05,
+    dxymax_fluid_val::Real=0.15,
     dphimax_val::Real=0.1,
 )
     maxvx = maximum(abs, vx)
@@ -38,9 +41,13 @@ function compute_displacement_timestep(
     @info "dt after vx limitation = $dt s"
     dt = ifelse(dt*maxvy > dxymax_val*dy_val, dxymax_val*dy_val*inv(maxvy), dt)
     @info "dt after vy limitation = $dt s"
-    dt = ifelse(dt*maxvxf > dxymax_val*dx_val, dxymax_val*dx_val*inv(maxvxf), dt)
+    dt = ifelse(
+        dt*maxvxf > dxymax_fluid_val*dx_val, dxymax_fluid_val*dx_val*inv(maxvxf), dt
+    )
     @info "dt after vxf limitation = $dt s"
-    dt = ifelse(dt*maxvyf > dxymax_val*dy_val, dxymax_val*dy_val*inv(maxvyf), dt)
+    dt = ifelse(
+        dt*maxvyf > dxymax_fluid_val*dy_val, dxymax_fluid_val*dy_val*inv(maxvyf), dt
+    )
     @info "dt after vyf limitation = $dt s"
     dt = ifelse(dt*aphimax > dphimax_val, dphimax_val*inv(aphimax), dt)
     @info "dt after aphimax limitation = $dt s"
@@ -54,7 +61,9 @@ end # function compute_displacement_timestep
         dx_val=coords.dx,
         dy_val=coords.dy,
         dxymax_val::Real=0.05,
+        dxymax_fluid_val::Real=0.15,
         dphimax_val::Real=0.1,
+        fluid_heat_rate::Real=0.0,
         maxDTcurrent=0.0,
         DTmax_val::Real=20.0,
         dt_longest_val::Real=1.0e11,
@@ -62,7 +71,8 @@ end # function compute_displacement_timestep
     )
 
 Compute multi-criterion adaptive timestep constrained by velocity CFL, porosity compaction,
-thermal variation, and stability bounds.
+thermal variation, and stability bounds. A positive `fluid_heat_rate` [1/s] limits the step
+to its inverse (see `fluid_advection_inflow_rate`).
 """
 function compute_adaptive_timestep(
     vx,
@@ -75,6 +85,7 @@ function compute_adaptive_timestep(
     dx_val=coords.dx,
     dy_val=coords.dy,
     dxymax_val::Real=0.05,
+    dxymax_fluid_val::Real=0.15,
     dphimax_val::Real=0.1,
     dt_ref=nothing,
     maxDTcurrent=0.0,
@@ -87,6 +98,7 @@ function compute_adaptive_timestep(
     DQPF::Union{AbstractMatrix{<:Real},Nothing}=nothing,
     cfl_reaction::Real=0.5,
     dphi_reaction_max::Real=0.01,
+    fluid_heat_rate::Real=0.0,
 )
     dt_cand = compute_displacement_timestep(
         vx,
@@ -99,6 +111,7 @@ function compute_adaptive_timestep(
         dx_val=dx_val,
         dy_val=dy_val,
         dxymax_val=dxymax_val,
+        dxymax_fluid_val=dxymax_fluid_val,
         dphimax_val=dphimax_val,
     )
     ref_dt = dt_ref === nothing ? dt : dt_ref
@@ -117,6 +130,9 @@ function compute_adaptive_timestep(
             dt_rxn = Float64(cfl_reaction) * Float64(dphi_reaction_max) / max_dqpf
             dt_cand = min(dt_cand, dt_rxn)
         end
+    end
+    if fluid_heat_rate > 0.0
+        dt_cand = min(dt_cand, inv(Float64(fluid_heat_rate)))
     end
     dt_cand = clamp(dt_cand, dt_min, dt_longest_val)
     return dt_cand

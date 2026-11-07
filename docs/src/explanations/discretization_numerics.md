@@ -54,7 +54,7 @@ Material properties, temperature, hydration state, and porosity are carried on t
 5. **Pore Fluid Heat**:
    Pore fluid heat transport enters the thermal solve as a source at each interior pressure node (`compute_fluid_advection_heat!`), at the temperature of the start of the step.
    Each face with inflow adds $(\rho c_p)_f(T_\mathrm{up})\,|q_D|\,(T_\mathrm{up} - T)/h$, the first-order upwind form of $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$ in the frame of the solid, where $(\rho c_p)_f$ is the volumetric heat capacity of the pore fluid.
-   Taken alone, this source brings a node no lower or higher than its upstream nodes while the sum over inflow faces of $(\rho c_p)_f(T_\mathrm{up}) |q_D| \Delta t / (\rho c_p\, h)$, with the bulk $\rho c_p$ of the node, stays at or below 1. The time step control does not enforce this sum.
+   Taken alone, this source brings a node no lower or higher than its upstream nodes while the sum over inflow faces of $(\rho c_p)_f(T_\mathrm{up}) |q_D| \Delta t / (\rho c_p\, h)$, with the bulk $\rho c_p$ of the node, stays at or below 1. The adaptive time step enforces this sum: it limits $\Delta t$ to the inverse of the largest inflow rate over the nodes (`fluid_advection_inflow_rate`), from the Darcy fluxes that set the step.
    The form adds a numerical diffusivity of about $|q_{xD}| \Delta x / 2$ in $x$ and $|q_{yD}| \Delta y / 2$ in $y$, scaled by the ratio of fluid to bulk heat capacity.
 
 6. **Grid-to-Marker Pressure Interpolation and Hydrostatic Initialization**:
@@ -286,7 +286,22 @@ with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_
 
 If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
 
-### 2. Porosity Change Rate Limiter and Adaptive Timestep Consistency
+### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency
+
+The displacement limit bounds the distance that solid and pore fluid move in one step:
+
+```math
+\Delta t \max|v_{x}| \le \texttt{dxymax}\,\Delta x, \quad \Delta t \max|v_{y}| \le \texttt{dxymax}\,\Delta y, \quad \Delta t \max|v_{x,f}| \le \texttt{dxymax\_fluid}\,\Delta x, \quad \Delta t \max|v_{y,f}| \le \texttt{dxymax\_fluid}\,\Delta y,
+```
+
+with the solid velocity $(v_x, v_y)$ and the pore fluid velocity $v_f = q_D / \phi + v_s$.
+The defaults are `dxymax = 0.05` and `dxymax_fluid = 0.15` grid units.
+Markers move with the solid velocity, so `dxymax` bounds the marker advection; `dxymax_fluid` bounds the step through the pore fluid velocity.
+Since $|q_D| \le \phi\,(|v_f| + |v_s|)$ per component, the defaults give $|q_D| \Delta t / h \le 0.2\,\phi$ for the upwind fluid heat term above, with $h$ the grid spacing in that direction and the velocities that set the step.
+This bounds each face only; the inflow sum of that term adds up to 4 faces and carries the ratio $(\rho c_p)_f / (\rho c_p)$, and the separate limit above keeps the sum at or below 1.
+Both keys must be in $(0, 1]$.
+A checkpoint stores the full configuration, so a checkpoint written by a version without `dxymax_fluid` does not load.
+
 
 Rapid pore collapse or opening can destabilize Darcy fluid flow. The maximum displacement timestep limits relative porosity change per step:
 

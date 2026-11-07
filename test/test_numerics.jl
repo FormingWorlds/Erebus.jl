@@ -837,14 +837,106 @@ include("test_helpers.jl")
         @test dt_vx * U_fast ≈ dxymax * dx rtol=1e-12
         @test dt_vx < dt
 
-        # 3. Fluid velocity CFL constraint: dt * max(|vxf|) <= dxymax * dx
-        V_fast = 200.0 * (dxymax * dx / dt)
+        # 3. Fluid velocity CFL constraint: dt * max(|vxf|) <= dxymax_fluid * dx
+        dxymax_fluid = TimeConfig().dxymax_fluid
+        @test dxymax_fluid ≈ 0.15 rtol=1e-12
+        V_fast = 200.0 * (dxymax_fluid * dx / dt)
         vxf_fast = fill(V_fast, Ny1, Nx1)
+        # dx != dy, so a line that uses the wrong spacing fails
         dt_vxf = Erebus.compute_displacement_timestep(
-            zeros(Ny1, Nx1), zeros(Ny1, Nx1), vxf_fast, zeros(Ny1, Nx1), dt, 0.0
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            vxf_fast,
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            dx_val=dx,
+            dy_val=2.0 * dx,
         )
-        @test dt_vxf * V_fast ≈ dxymax * dx rtol=1e-12
+        @test dt_vxf * V_fast ≈ dxymax_fluid * dx rtol=1e-12
         @test dt_vxf < dt
+        dt_vxf_strict = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            vxf_fast,
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            dx_val=dx,
+            dy_val=2.0 * dx,
+            dxymax_fluid_val=0.07,
+        )
+        @test dt_vxf_strict * V_fast ≈ 0.07 * dx rtol=1e-12
+
+        # 3b. The y fluid line uses dy and the fluid limit; the solid limit does not change it
+        vyf_fast = fill(V_fast, Ny1, Nx1)
+        dt_vyf = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            vyf_fast,
+            dt,
+            0.0;
+            dx_val=2.0 * dy,
+            dy_val=dy,
+            dxymax_val=0.9,
+        )
+        @test dt_vyf * V_fast ≈ dxymax_fluid * dy rtol=1e-12
+
+        # 3c. Solid limit binds alone: the fluid limit does not change it
+        dt_vy_solid = Erebus.compute_displacement_timestep(
+            zeros(Ny1, Nx1),
+            vxf_fast,
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            dx_val=2.0 * dy,
+            dy_val=dy,
+            dxymax_fluid_val=1.0e-3,
+        )
+        @test dt_vy_solid * V_fast ≈ dxymax * dy rtol=1e-12
+
+        # 3d. The adaptive step passes the fluid limit on, with the config default as its default
+        dt_adapt = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1), zeros(Ny1, Nx1), vxf_fast, zeros(Ny1, Nx1), dt, 0.0; dt_min=0.0
+        )
+        @test dt_adapt * V_fast ≈ dxymax_fluid * dx rtol=1e-12
+        dt_adapt_strict = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            vxf_fast,
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            dxymax_fluid_val=0.07,
+            dt_min=0.0,
+        )
+        @test dt_adapt_strict * V_fast ≈ 0.07 * dx rtol=1e-12
+
+        # 3e. The fluid heat inflow rate limits dt to 1 / rate; 0 (the default) adds no limit
+        dt_heat = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            fluid_heat_rate=4.0 / dt,
+            dt_min=0.0,
+        )
+        @test dt_heat ≈ 0.25 * dt rtol=1e-12
+        dt_heat_loose = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            fluid_heat_rate=0.5 / dt,
+            dt_min=0.0,
+        )
+        @test dt_heat_loose ≈ dt rtol=1e-12
 
         # 4. Porosity rate constraint: dt * aphimax <= dphimax
         aphi_fast = 50.0 * (dphimax / dt)
@@ -887,14 +979,16 @@ include("test_helpers.jl")
         aphimax = rand(rng)
         vx = rand(rng, Ny1, Nx1)
         vy = rand(rng, Ny1, Nx1)
-        vxf = rand(rng, Ny1, Nx1)
-        vyf = rand(rng, Ny1, Nx1)
+        vxf = 1.0e5 .* rand(rng, Ny1, Nx1)
+        vyf = 1.0e5 .* rand(rng, Ny1, Nx1)
         dtm = Erebus.compute_displacement_timestep(vx, vy, vxf, vyf, dt, aphimax)
         @test 0.0 < dtm <= dt
         @test dtm * maximum(abs, vx) <= dxymax * dx + 1e-12
         @test dtm * maximum(abs, vy) <= dxymax * dy + 1e-12
-        @test dtm * maximum(abs, vxf) <= dxymax * dx + 1e-12
-        @test dtm * maximum(abs, vyf) <= dxymax * dy + 1e-12
+        @test dtm * maximum(abs, vxf) <= dxymax_fluid * dx * (1 + 1e-12)
+        @test dtm * maximum(abs, vyf) <= dxymax_fluid * dy * (1 + 1e-12)
+        # The fluid limit binds in this field
+        @test dtm ≈ dxymax_fluid * min(dx / maximum(abs, vxf), dy / maximum(abs, vyf)) rtol=1e-12
         @test dtm * aphimax <= dphimax + 1e-12
     end # testset "compute_displacement_timestep()"
 
@@ -2236,6 +2330,7 @@ include("test_helpers.jl")
                 dtcoefup=cfg_base.time.dtcoefup,
                 dtstep=cfg_base.time.dtstep,
                 dxymax=cfg_base.time.dxymax,
+                dxymax_fluid=cfg_base.time.dxymax_fluid,
                 vpratio=cfg_base.time.vpratio,
                 DTmax=cfg_base.time.DTmax,
                 start_time=cfg_base.time.start_time,

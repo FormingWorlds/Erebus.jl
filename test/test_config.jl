@@ -110,6 +110,15 @@ include("test_helpers.jl")
         @test cfg.poroelasticity.betafluid ≈ 4.0e-10 rtol=1e-12 # default preserved
         @test cfg.time.n_steps == 5
         @test cfg.geometry.rplanet ≈ 50000.0 rtol=1e-12 # default preserved
+
+        # The fluid displacement limit is its own key; the solid limit keeps its default
+        cfg_fl = load_config("""
+        [time]
+        dxymax_fluid = 0.2
+        """)
+        @test cfg_fl.time.dxymax_fluid ≈ 0.2 rtol=1e-12
+        @test cfg_fl.time.dxymax ≈ 0.05 rtol=1e-12
+        @test default_config().time.dxymax_fluid ≈ 0.15 rtol=1e-12
     end
 
     @testset "validate_config() schema and physical bounds enforcement" begin
@@ -309,6 +318,7 @@ include("test_helpers.jl")
                 dtcoefup=1.2,
                 dtstep=200,
                 dxymax=0.05,
+                dxymax_fluid=0.2,
                 vpratio=0.33,
                 DTmax=20.0,
                 yearlength=3.15e7,
@@ -335,6 +345,7 @@ include("test_helpers.jl")
             @test cfg_loaded.poroelasticity.phimin ≈ cfg_orig.poroelasticity.phimin
             @test cfg_loaded.poroelasticity.phimax ≈ cfg_orig.poroelasticity.phimax
             @test cfg_loaded.time.n_steps == cfg_orig.time.n_steps
+            @test cfg_loaded.time.dxymax_fluid ≈ 0.2 rtol=1e-12
             @test cfg_loaded.output.output_dir == cfg_orig.output.output_dir
             @test cfg_loaded.materials.rhosolidm ≈ cfg_orig.materials.rhosolidm
         finally
@@ -830,7 +841,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("487 configuration fields", out)
+        @test occursin("488 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin

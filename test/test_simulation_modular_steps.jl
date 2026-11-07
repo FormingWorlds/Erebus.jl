@@ -427,6 +427,96 @@ using Erebus
         @test any(>(0.0), vols_grp.X_graphite_m)
     end
 
+    @testset "Post-processing time step reads the fluid displacement limit" begin
+        cfg0 = default_config()
+        state0, coords0, ws0, _, _ = init_simulation(cfg0)
+        # Liquid pore water (above 273 K), so the fluid moves faster than the solid
+        state0.markers.core.tkm .= 300.0
+        interpolate_markers_to_grid!(
+            state0,
+            coords0,
+            cfg0;
+            p2m_workspace=ws0.p2m,
+            thread_buffers=ws0.thread_buffers,
+            interp_arrays=ws0.interp_arrays,
+        )
+        solve_gravity!(state0, coords0, cfg0; F_grav=ws0.F_grav, RP=ws0.RP, SP=ws0.SP)
+        apply_surface_radiation!(state0, coords0, cfg0)
+        snapshot_step_start_inventories!(ws0, state0, cfg0)
+        Erebus.snapshot_radiogenic_step_start!(ws0, state0, cfg0)
+        update_step_start_pressures!(state0)
+        Erebus.assemble_and_solve_hydromechanical!(
+            state0,
+            coords0,
+            cfg0,
+            ws0;
+            titer=1,
+            iplast=1,
+            cur_betasolid=0.0,
+            cur_betafluid=0.0,
+        )
+
+        # Same state and solution, only the 2 displacement limits differ
+        function postprocess_with_limits(dxymax, dxymax_fluid; rhocpfluid=nothing)
+            tkw = (; (fn => getfield(cfg0.time, fn) for fn in fieldnames(TimeConfig))...)
+            tcfg = TimeConfig(; merge(tkw, (; dxymax=dxymax, dxymax_fluid=dxymax_fluid))...)
+            mat = cfg0.materials
+            if rhocpfluid !== nothing
+                MC = typeof(mat)
+                mat = MC(
+                    (
+                        fn === :rhocpfluidm ? rhocpfluid : getfield(mat, fn) for
+                        fn in fieldnames(MC)
+                    )...,
+                )
+            end
+            cfg = SimulationConfig(
+                (
+                    if fn === :time
+                        tcfg
+                    elseif fn === :materials
+                        mat
+                    else
+                        getfield(cfg0, fn)
+                    end for fn in fieldnames(SimulationConfig)
+                )...
+            )
+            st = deepcopy(state0)
+            w = deepcopy(ws0)
+            Erebus.postprocess_hydromechanical_solution!(
+                st,
+                coords0,
+                cfg,
+                w;
+                titer=1,
+                iplast=1,
+                dt_step_initial=st.dt,
+                cur_betasolid=0.0,
+                cur_betafluid=0.0,
+            )
+            return st
+        end
+        # Loose limits do not cut dt, so these are the velocities of the solution
+        loose = postprocess_with_limits(1.0, 1.0)
+        g = loose.grids
+        @test maximum(abs, g.vxf) > 1.2 * maximum(abs, g.vx)
+        dt_fluid = min(coords0.dx / maximum(abs, g.vxf), coords0.dy / maximum(abs, g.vyf))
+        strict = postprocess_with_limits(0.05, 1.0e-4)
+        @test strict.dt ≈ 1.0e-4 * dt_fluid rtol=1e-10
+        @test postprocess_with_limits(0.05, 2.0e-4).dt ≈ 2.0e-4 * dt_fluid rtol=1e-10
+
+        # A large fluid heat capacity in the step (the grid RHOCP stays): the heat limit binds
+        cf = 1.0e13
+        rate = Erebus.Numerics.fluid_advection_inflow_rate(
+            g.tk1, g.qxD, g.qyD, g.RHOCP, _ -> cf; coords=coords0
+        )
+        @test 1.0 / rate < 0.1 * loose.dt
+        heat = postprocess_with_limits(
+            1.0, 1.0; rhocpfluid=typeof(cfg0.materials.rhocpfluidm)((cf, cf, cf))
+        )
+        @test heat.dt ≈ 1.0 / rate rtol=1e-10
+    end
+
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)
