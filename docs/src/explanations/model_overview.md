@@ -147,7 +147,7 @@ Stages 4, 5, and 6 form an outer iteration loop that repeats up to $n_\mathrm{it
   1. The fluid pressure error is below `reaction.pferrmax`.
   2. The loop ran more than 2 iterations, or the reaction rate is zero (`DMP == 0`).
   3. The maximum temperature change is at most $\Delta T_\mathrm{max}$ (`time.DTmax`).
-  From the second iteration on, the reaction scales the progress of the previous iterate by $\min(\Delta t, \Delta t_r) / \min(\Delta t_\mathrm{prev}, \Delta t_r)$, with the reaction time $\Delta t_r$, before the under-relaxation, so a cut does not carry progress from the longer step.
+  From the second iteration on, the reaction scales the log-odds $\ln(X_D / X_W)$ of the previous iterate, relative to the start value, by $\min(\Delta t, \Delta t_r) / \min(\Delta t_\mathrm{prev}, \Delta t_r)$, with the reaction time $\Delta t_r$, before the under-relaxation, so a cut does not carry progress from the longer step.
   The reaction of the last iteration uses the $\Delta t$ before the Stokes-Darcy solve of that iteration; a cut in that solve is not applied to it.
   If the loop does not converge within `solver.max_plastic_iterations`, the step continues with `thermochemical_converged = false`.
 - **Plastic convergence and retries**: The code saves a snapshot (a copy of the state at the start of the step) before the outer loop. If plastic iterations fail to converge, the step restores the snapshot, sets $\Delta t = \min(\Delta t/2, \Delta t_\mathrm{next})$, and restarts from Stage 1. The simulation stops after `solver.max_dt_reductions` reductions.

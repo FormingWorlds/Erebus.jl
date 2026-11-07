@@ -267,9 +267,10 @@ $(SIGNATURES)
     - pfm₀: previous marker fluid pressure
     - marknum: current total number of markers
     - Δt: current time step length
-    - dt_prev: time step of the previous iterate `XWˢm`; for `titer > 1` its progress is
-      scaled by `min(Δt, Δtr) / min(dt_prev, Δtr)` before the under-relaxation, with the
-      reaction time `Δtr` of the marker (default `Δt`, no scaling)
+    - dt_prev: time step of the previous iterate `XWˢm`; for `titer > 1` its log-odds
+      `ln(XD/XW)` relative to the start value are scaled by `min(Δt, Δtr) / min(dt_prev, Δtr)`
+      before the under-relaxation, with the reaction time `Δtr` of the marker (default `Δt`,
+      no scaling)
     - timestep: current time step
     - titer: current thermochemical iteration number
 
@@ -408,6 +409,7 @@ function perform_thermochemical_reaction!(
                 is_dehydration = XW_eq < XWˢm₀_cl
 
                 skip_rx = false
+                Δtr = 1.0e30
                 if is_hydration
                     if !react_cfg.hydration_active
                         skip_rx = true
@@ -453,9 +455,12 @@ function perform_thermochemical_reaction!(
 
                 # Picard under-relaxation on reacted wet silicate fraction across iterations
                 XWˢm₁_rel = if titer > 1
-                    # The previous iterate progressed over dt_prev; reaction stops at Δtr
+                    # The log-odds ln(XD/XW) move linearly in min(dt, Δtr) / Δtr: scale them to Δt
                     scale = min(Δt, Δtr) / min(dt_prev, Δtr)
-                    XW_prev_s = XWˢm₀_cl + (XWˢm[m] - XWˢm₀_cl) * scale
+                    XW_p = clamp(XWˢm[m], eps_comp, 1.0 - eps_comp)
+                    L0 = log((1.0 - XWˢm₀_cl) / XWˢm₀_cl)
+                    L_s = L0 + (log((1.0 - XW_p) / XW_p) - L0) * scale
+                    XW_prev_s = inv(exp(L_s) + 1.0)
                     XW_prev = clamp(
                         XW_prev_s,
                         eps_comp,

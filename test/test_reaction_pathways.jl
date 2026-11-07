@@ -1205,13 +1205,18 @@ _mean(x) = sum(x) / length(x)
             return mk
         end
         rcfg = ReactionConfig()
-        dtr = compute_Δtreaction(500.0, 0.45, rcfg.hydration_mode; cfg=rcfg, is_hydration=true)
+        dtr = compute_Δtreaction(
+            500.0, 0.45, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+        )
 
         # Below the pore-water ceiling the scaled iterate equals a fresh call: the blend is exact
-        for XWstart in (0.05, 1.0e-3)
-            fresh = react!(markers(XWstart, 0.45), 0.01 * dtr, 1)
-            cut = react!(markers(XWstart, 0.45), 0.5 * dtr, 1)
-            react!(cut, 0.01 * dtr, 2; dt_prev=0.5 * dtr)
+        # Step pairs (long, short) below, across and above the reaction time
+        for XWstart in (0.05, 1.0e-3),
+            (dt_long, dt_short) in ((0.5, 0.01), (2.0, 0.5), (100.0, 2.0))
+
+            fresh = react!(markers(XWstart, 0.45), dt_short * dtr, 1)
+            cut = react!(markers(XWstart, 0.45), dt_long * dtr, 1)
+            react!(cut, dt_short * dtr, 2; dt_prev=dt_long * dtr)
             @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
         end
 
