@@ -521,6 +521,7 @@ module Physics
         compute_snowline_radius,
         compute_radiation_htc,
         compute_spherical_metric_heat_source!,
+        flow_metric_face_weights,
         compute_melt_fraction,
         rhocp_apparent_silicate,
         compute_melt_weakened_viscosity,
