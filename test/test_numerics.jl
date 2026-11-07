@@ -2296,6 +2296,7 @@ include("test_helpers.jl")
                 dtcoefup=cfg_base.time.dtcoefup,
                 dtstep=cfg_base.time.dtstep,
                 dxymax=cfg_base.time.dxymax,
+                dxymax_fluid=cfg_base.time.dxymax_fluid,
                 vpratio=cfg_base.time.vpratio,
                 DTmax=cfg_base.time.DTmax,
                 start_time=cfg_base.time.start_time,

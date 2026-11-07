@@ -489,6 +489,7 @@ function postprocess_hydromechanical_solution!(
         aphimax;
         coords=coords,
         dxymax_val=cfg.time.dxymax,
+        dxymax_fluid_val=cfg.time.dxymax_fluid,
         dphimax_val=cfg.solver.dphimax,
         dt_ref=dt_step_initial,
         maxDTcurrent=maxDTcurrent,

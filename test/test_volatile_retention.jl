@@ -726,6 +726,7 @@ using TOML
                     dtcoefup=cfg.time.dtcoefup,
                     dtstep=cfg.time.dtstep,
                     dxymax=cfg.time.dxymax,
+                    dxymax_fluid=cfg.time.dxymax_fluid,
                     vpratio=cfg.time.vpratio,
                     DTmax=cfg.time.DTmax,
                     start_time=cfg.time.start_time,

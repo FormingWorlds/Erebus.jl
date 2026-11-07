@@ -53,6 +53,7 @@ struct TimeConfig
     dtcoefup::Float64
     dtstep::Int
     dxymax::Float64
+    dxymax_fluid::Float64
     vpratio::Float64
     DTmax::Float64
     yearlength::Float64
@@ -69,6 +70,7 @@ function TimeConfig(;
     dtcoefup::Real=1.2,
     dtstep::Integer=200,
     dxymax::Real=0.05,
+    dxymax_fluid::Real=0.15,
     vpratio::Real=1.0 / 3.0,
     DTmax::Real=20.0,
     yearlength::Real=SECONDS_PER_YEAR,
@@ -84,6 +86,7 @@ function TimeConfig(;
         Float64(dtcoefup),
         Int(dtstep),
         Float64(dxymax),
+        Float64(dxymax_fluid),
         Float64(vpratio),
         Float64(DTmax),
         Float64(yearlength),
@@ -1504,6 +1507,11 @@ function _validate_time_config(cfg::TimeConfig)
     @check_ge cfg.dtstep 1
     (0.0 < cfg.dxymax <= 1.0 && isfinite(cfg.dxymax)) ||
         throw(ArgumentError("time.dxymax must be in (0, 1] and finite, got $(cfg.dxymax)"))
+    (0.0 < cfg.dxymax_fluid <= 1.0 && isfinite(cfg.dxymax_fluid)) || throw(
+        ArgumentError(
+            "time.dxymax_fluid must be in (0, 1] and finite, got $(cfg.dxymax_fluid)"
+        ),
+    )
     @check_positive_finite cfg.DTmax
     return nothing
 end

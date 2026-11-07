@@ -839,7 +839,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("487 configuration fields", out)
+        @test occursin("488 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin
