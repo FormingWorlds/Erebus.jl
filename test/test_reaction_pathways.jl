@@ -1155,4 +1155,71 @@ _mean(x) = sum(x) / length(x)
         react!(mk_long, 2.0 * dtr, 2; dt_prev=100.0 * dtr)
         @test 0.9 * p_eq <= progress(mk_long) <= 1.1 * p_eq
     end
+
+    @testset "Scaled iterate follows the log-odds kinetics" begin
+        c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
+        marknum = 100
+        tk2 = fill(500.0, c17.Ny1, c17.Nx1)
+        pf = fill(1.0e7, c17.Ny1, c17.Nx1)
+        grid() = zeros(Float64, c17.Ny1, c17.Nx1)
+        function markers(XWstart, phi)
+            props = setup_marker_properties(marknum, c17)
+            xm, ym, tm, _, _, _, _, phim, phinewm, pfm0, XW, XW0, _ = props
+            tm .= 1
+            xm .= 5000.0
+            ym .= 5000.0
+            phim .= phi
+            phinewm .= phi
+            pfm0 .= 1.0e7
+            XW0 .= XWstart
+            XW .= XWstart
+            return (; xm, ym, tm, phim, phinewm, pfm0, XW, XW0)
+        end
+        function react!(mk, dt, titer; rcfg=ReactionConfig(), kw...)
+            perform_thermochemical_reaction!(
+                grid(),
+                grid(),
+                grid(),
+                grid(),
+                grid(),
+                pf,
+                tk2,
+                mk.tm,
+                mk.xm,
+                mk.ym,
+                mk.XW0,
+                mk.XW,
+                mk.phim,
+                mk.phinewm,
+                mk.pfm0,
+                marknum,
+                dt,
+                2,
+                titer;
+                coords=c17,
+                DQPF=grid(),
+                DQPFSUM=grid(),
+                cfg=rcfg,
+                kw...,
+            )
+            return mk
+        end
+        rcfg = ReactionConfig()
+        dtr = compute_Δtreaction(500.0, 0.45, rcfg.hydration_mode; cfg=rcfg, is_hydration=true)
+
+        # Below the pore-water ceiling the scaled iterate equals a fresh call: the blend is exact
+        for XWstart in (0.05, 1.0e-3)
+            fresh = react!(markers(XWstart, 0.45), 0.01 * dtr, 1)
+            cut = react!(markers(XWstart, 0.45), 0.5 * dtr, 1)
+            react!(cut, 0.01 * dtr, 2; dt_prev=0.5 * dtr)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # A pathway that is off leaves the composition at its start value at every iteration
+        off = ReactionConfig(; hydration_active=false)
+        mk_off = react!(markers(0.05, 0.45), 0.5 * dtr, 1; rcfg=off)
+        react!(mk_off, 0.01 * dtr, 2; rcfg=off, dt_prev=0.5 * dtr)
+        @test isapprox(mk_off.XW, mk_off.XW0; rtol=1e-12)
+        @test all(isfinite, mk_off.phinewm)
+    end
 end
