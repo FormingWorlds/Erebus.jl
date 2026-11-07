@@ -1,7 +1,8 @@
 using Test
 using Random
 using Erebus
-using Erebus.Numerics: assemble_thermal_lse!, compute_fluid_advection_heat!
+using Erebus.Numerics:
+    assemble_thermal_lse!, compute_fluid_advection_heat!, fluid_advection_inflow_rate
 
 """Build a P grid temperature field that is linear in x and y."""
 function _linear_temperature(coords, T0, gx, gy)
@@ -219,6 +220,83 @@ end
             coords=coords,
         )
         @test all(iszero, Q)
+    end
+end
+
+@testset "Fluid advection inflow rate bounds the explicit step" begin
+    coords = Erebus.GridCoordinates(6, 5; xsize=6.0, ysize=2.0)
+    dx, dy = coords.dx, coords.dy
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    rhocpf(T) = 2.0e6 + 1.0e3 * T
+    RHOCP = fill(3.0e6, Ny1, Nx1)
+
+    @testset "4 inflow faces: dt = 1 / rate reaches the upstream temperature exactly" begin
+        i, j = 3, 4
+        T = fill(300.0, Ny1, Nx1)
+        T[i, j] = 280.0
+        qx = zeros(Ny1, Nx1)
+        qy = zeros(Ny1, Nx1)
+        qx[i, j - 1] = 2.0e-6
+        qx[i, j] = -1.0e-6
+        qy[i - 1, j] = 3.0e-6
+        qy[i, j] = -0.5e-6
+        RHOCP[i, j] = 2.5e6
+        rate = fluid_advection_inflow_rate(T, qx, qy, RHOCP, rhocpf; coords=coords)
+        Q = zeros(Ny1, Nx1)
+        compute_fluid_advection_heat!(Q, T, qx, qy, rhocpf; coords=coords)
+        explicit(dt) = T[i, j] + dt * Q[i, j] / RHOCP[i, j]
+        @test explicit(1.0 / rate) ≈ 300.0 rtol=1e-12
+        @test explicit(1.2 / rate) > 300.0 + 1.0
+        RHOCP[i, j] = 3.0e6
+    end
+
+    @testset "outflow faces add nothing" begin
+        T = fill(300.0, Ny1, Nx1)
+        qx = zeros(Ny1, Nx1)
+        qy = zeros(Ny1, Nx1)
+        # Flow from (3, 3) into (3, 4); the upstream cell has the smaller RHOCP
+        qx[3, 3] = 4.0e-6
+        R = copy(RHOCP)
+        R[3, 3] = 1.0e5
+        rate = fluid_advection_inflow_rate(T, qx, qy, R, rhocpf; coords=coords)
+        @test rate ≈ rhocpf(300.0) * 4.0e-6 / (R[3, 4] * dx) rtol=1e-12
+        @test fluid_advection_inflow_rate(
+            T, zeros(Ny1, Nx1), zeros(Ny1, Nx1), R, rhocpf; coords=coords
+        ) == 0.0
+    end
+
+    @testset "random field: no new extremum at dt = 1 / rate" begin
+        rng = MersenneTwister(7)
+        T = 250.0 .+ 100.0 .* rand(rng, Ny1, Nx1)
+        qx = 1.0e-6 .* (rand(rng, Ny1, Nx1) .- 0.5)
+        qy = 1.0e-6 .* (rand(rng, Ny1, Nx1) .- 0.5)
+        R = 2.0e6 .+ 2.0e6 .* rand(rng, Ny1, Nx1)
+        rate = fluid_advection_inflow_rate(T, qx, qy, R, rhocpf; coords=coords)
+        Q = zeros(Ny1, Nx1)
+        compute_fluid_advection_heat!(Q, T, qx, qy, rhocpf; coords=coords)
+        dt = 1.0 / rate
+        for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+            nb = (T[i, j - 1], T[i, j + 1], T[i - 1, j], T[i + 1, j], T[i, j])
+            Tn = T[i, j] + dt * Q[i, j] / R[i, j]
+            @test minimum(nb) - 1e-9 <= Tn <= maximum(nb) + 1e-9
+        end
+    end
+
+    @testset "input contracts" begin
+        T = fill(300.0, Ny1, Nx1)
+        qx = zeros(Ny1, Nx1)
+        qx[3, 3] = 1.0e-6
+        @test_throws ArgumentError fluid_advection_inflow_rate(
+            T, qx, zeros(Ny1, Nx1), zeros(Ny1, Nx1 + 1), rhocpf; coords=coords
+        )
+        R = copy(RHOCP)
+        R[3, 4] = 0.0
+        @test_throws DomainError fluid_advection_inflow_rate(
+            T, qx, zeros(Ny1, Nx1), R, rhocpf; coords=coords
+        )
+        @test_throws DomainError fluid_advection_inflow_rate(
+            T, qx, zeros(Ny1, Nx1), RHOCP, _ -> -1.0; coords=coords
+        )
     end
 end
 

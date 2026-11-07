@@ -914,6 +914,30 @@ include("test_helpers.jl")
         )
         @test dt_adapt_strict * V_fast ≈ 0.07 * dx rtol=1e-12
 
+        # 3e. The fluid heat inflow rate limits dt to 1 / rate; 0 (the default) adds no limit
+        dt_heat = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            fluid_heat_rate=4.0 / dt,
+            dt_min=0.0,
+        )
+        @test dt_heat ≈ 0.25 * dt rtol=1e-12
+        dt_heat_loose = Erebus.compute_adaptive_timestep(
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            dt,
+            0.0;
+            fluid_heat_rate=0.5 / dt,
+            dt_min=0.0,
+        )
+        @test dt_heat_loose ≈ dt rtol=1e-12
+
         # 4. Porosity rate constraint: dt * aphimax <= dphimax
         aphi_fast = 50.0 * (dphimax / dt)
         dt_phi = Erebus.compute_displacement_timestep(
