@@ -1,0 +1,210 @@
+name: Claude PR review
+
+# Reviews a pull request when it opens, reopens or becomes ready for review, and again on
+# a PR comment with "@claude" ("@claude deep-review" runs the larger model). The job can
+# read the repository and write PR comments; it cannot push or commit.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  review:
+    name: Claude PR review
+    if: >-
+      (github.event_name == 'pull_request'
+        && !github.event.pull_request.draft
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.user.type != 'Bot')
+      || (github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && contains(github.event.comment.body, '@claude')
+        && github.event.comment.user.type != 'Bot'
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
+      MODEL: ${{ (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude deep-review')) && 'claude-opus-5-5' || 'claude-sonnet-5-5' }}
+    steps:
+      - name: Skip closed, draft and fork pull requests
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state,isDraft,isCrossRepository)
+          echo "$pr"
+          if [ "$(jq -r '.state != "OPEN" or .isDraft or .isCrossRepository' <<<"$pr")" = true ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No review: the pull request is closed, a draft or from a fork." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if ! sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/pull/$PR_NUMBER/merge" --jq .object.sha); then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No review: GitHub has no merge commit for this pull request (merge conflict, or not yet computed); comment @claude to retry." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the merge commit of the pull request
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          ref: ${{ steps.gate.outputs.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Check comment blocks in the changed lines
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          added, out = {}, []
+          try:
+              diff = subprocess.run(['git', 'diff', 'HEAD^1', 'HEAD'],
+                                    capture_output=True, check=True).stdout
+              f, n, header = None, 0, False
+              for line in diff.decode('utf-8', 'replace').splitlines():
+                  if line.startswith('diff --git '):
+                      f, header = None, True
+                  elif header:
+                      if line.startswith('+++ '):
+                          name, header = line[4:].rstrip('\t'), False
+                          f = name[2:] if name.startswith('b/') and name.endswith('.jl') else None
+                          if name.startswith('"') and name.rstrip('"').endswith('.jl'):
+                              out.append(f'not linted (quoted name): {name}')
+                  elif m := re.match(r'@@ -\S+ \+(\d+)', line):
+                      n = int(m[1])
+                  elif f and line.startswith('+'):
+                      added.setdefault(f, set()).add(n)
+                      n += 1
+                  elif line.startswith(' '):
+                      n += 1
+              files = [f for f in added if os.path.isfile(f)]
+              for f in files:
+                  run = []
+                  with open(f, encoding='utf-8', errors='replace') as fh:
+                      lines = fh.read().splitlines()
+                  in_str = False
+                  for i, text in enumerate(lines + [''], 1):
+                      if text.count('"""') % 2:
+                          in_str = not in_str
+                      elif not in_str and text.lstrip().startswith('#') and not text.startswith('#!'):
+                          run.append(i)
+                          continue
+                      if len(run) > 3 and added[f] & set(run):
+                          out.append(f'comment block {f}:{run[0]}-{run[-1]}: {len(run)} lines')
+                      run = []
+          except Exception as err:
+              out.append(f'lint step failed: {err!r}')
+          text = '\n'.join(out) or 'no comment block items in the changed lines'
+          with open('.review_lint.txt', 'w') as fh:
+              fh.write(text + '\n')
+          print(text)
+          PY
+
+      - name: Install the sandbox of the agent's shell
+        if: steps.gate.outputs.run == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends bubblewrap socat
+
+      - name: Review the pull request
+        id: claude
+        if: steps.gate.outputs.run == 'true'
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe  # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ env.PR_NUMBER }}
+
+            Review this pull request of Erebus.jl, a Julia code for the 2-D thermochemical
+            evolution, hydrothermal circulation and core formation of planetesimals.
+            First read AGENTS.md of the repository: its testing, code style and
+            documentation rules apply to this review. Tests must check physical laws
+            (conservation, bounds, limits, analytic solutions) with inputs that tell a
+            correct formula from a plausible wrong one. Then read the diff with
+            `gh pr diff ${{ env.PR_NUMBER }}` and the files it touches.
+
+            Section 1, "Findings": report only real items:
+            - a wrong result or a crash if the change is merged, with the input or state
+              that triggers it;
+            - a physics or unit error;
+            - a test or guard that the change removes or weakens;
+            - a doc or docstring that states wrong behaviour;
+            - a doc change that breaks the documentation rules of AGENTS.md: a citation
+              with no bibliography entry, or with no DOI link where the work has one; a
+              number with no source; change history in a page.
+            At most 5 findings, each with the file, the line and a concrete input or
+            state that fails.
+
+            Section 2, "Code quality": reliability and maintainability items in the lines
+            the pull request adds or changes only, for example an unused import or
+            variable, unreachable or dead code, duplicated logic, a function that grew too
+            complex, or an error-prone pattern (a non-const global in a hot path, a type
+            instability in a loop, a function that mutates an argument without a `!`
+            name, a float compared with `==`, a comparison that is always true or false). At most 5 items, each
+            with the file, the line and the concrete risk. Keep them apart from section 1.
+
+            Section 2 also lists each line of ./.review_lint.txt: inline comment blocks
+            longer than 3 lines that touch the changed lines of Julia files. These count toward the 5 items; if there are more, list the
+            5 most important and give the total count. If the file is missing or reports a
+            failure, say that the lint did not run.
+
+            Section 2 also lists breaks of the code style rules of AGENTS.md that no
+            tool checks: a mutating function without `!`, a new function without a
+            docstring, change history in a comment, and in new or edited doc prose more
+            than one sentence on a line or an em or en dash. Apart from these rules, do not
+            comment on style, naming, formatting or comment length; the BlueStyle CI job
+            checks formatting. Put an item on its line with the inline comment tool when the line
+            is in the diff. Return the summary with the 2 sections as the `summary` field of
+            your structured output, in GitHub markdown; the workflow posts it as one PR
+            comment. If a section has nothing real, say so in one line. Write in plain,
+            short sentences.
+          claude_args: |
+            --model ${{ env.MODEL }}
+            --max-turns 30
+            --allowedTools "Read(./**),Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "Edit,Write,NotebookEdit"
+            --json-schema '{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"]}'
+
+      - name: Post the review summary
+        if: steps.claude.outputs.structured_output != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ fromJSON(steps.claude.outputs.structured_output).summary }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          parts = re.split(r'(```.*?```|`[^`\n]*`)', os.environ['SUMMARY'], flags=re.S)
+          text = ''.join(
+              p if k % 2 else re.sub(r'(?<![\w.])@(?=[A-Za-z0-9_-])', '@\u200d', p) for k, p in enumerate(parts)
+          )
+          if len(text) > 20000:
+              text = text[:20000] + '\n\n(summary cut at 20000 characters)'
+          repo, pr = os.environ['GITHUB_REPOSITORY'], os.environ['PR_NUMBER']
+          subprocess.run(['gh', 'pr', 'comment', pr, '--repo', repo, '--body', text], check=True)
+          PY
+
+      - name: Report model, turns and time
+        if: always() && steps.claude.outputs.execution_file != ''
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          jq -r --arg m "$MODEL" '[.[] | select(.type == "result")] | last
+            | "model \($m), turns \(.num_turns), wall \(.duration_ms / 1000) s, API \(.duration_api_ms / 1000) s"' "$EXEC" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
