@@ -31,6 +31,7 @@ unit_tests = [
     "test_workspace.jl",
     "test_numerical_accelerations.jl",
     "test_geometry_radiation.jl",
+    "test_flow_metric.jl",
     "test_gravity_differentiated.jl",
     "test_reaction_pathways.jl",
     "test_stefan_benchmark.jl",
