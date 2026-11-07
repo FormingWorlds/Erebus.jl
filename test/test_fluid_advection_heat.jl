@@ -265,6 +265,25 @@ end
         ) ≈ 0.0 atol=1e-300
     end
 
+    @testset "each face reads its own upstream temperature" begin
+        # A distinct temperature in every node, so a swapped neighbour gives another value
+        T = [250.0 + 7.0 * i + 13.0 * j for i in 1:Ny1, j in 1:Nx1]
+        i, j = 3, 4
+        faces = (
+            (:x, (i, j - 1), 2.0e-6, (i, j - 1), dx),
+            (:x, (i, j), -2.0e-6, (i, j + 1), dx),
+            (:y, (i - 1, j), 3.0e-6, (i - 1, j), dy),
+            (:y, (i, j), -3.0e-6, (i + 1, j), dy),
+        )
+        for (dir, idx, q, up, h) in faces
+            qx = zeros(Ny1, Nx1)
+            qy = zeros(Ny1, Nx1)
+            (dir === :x ? qx : qy)[idx...] = q
+            rate = fluid_advection_inflow_rate(T, qx, qy, RHOCP, rhocpf; coords=coords)
+            @test rate ≈ rhocpf(T[up...]) * abs(q) / (RHOCP[i, j] * h) rtol=1e-12
+        end
+    end
+
     @testset "random field: no new extremum at dt = 1 / rate" begin
         rng = MersenneTwister(7)
         T = 250.0 .+ 100.0 .* rand(rng, Ny1, Nx1)
