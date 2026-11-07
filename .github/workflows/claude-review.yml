@@ -130,16 +130,21 @@ jobs:
 
             Review this pull request of Erebus.jl, a Julia code for the 2-D thermochemical
             evolution, hydrothermal circulation and core formation of planetesimals.
-            First read AGENTS.md and .github/.claude/rules/erebus-tests.md of the
-            repository. Then read the diff with `gh pr diff ${{ env.PR_NUMBER }}` and the
-            files it touches.
+            First read AGENTS.md of the repository: its testing, code style and
+            documentation rules apply to this review. Tests must check physical laws
+            (conservation, positivity, limits, analytic solutions) with inputs that tell
+            a correct formula from a plausible wrong one. Then read the diff with
+            `gh pr diff ${{ env.PR_NUMBER }}` and the files it touches.
 
             Section 1, "Findings": report only real items:
             - a wrong result or a crash if the change is merged, with the input or state
               that triggers it;
             - a physics or unit error;
             - a test or guard that the change removes or weakens;
-            - a doc or docstring that states wrong behaviour.
+            - a doc or docstring that states wrong behaviour;
+            - a doc change that breaks the documentation rules of AGENTS.md: a citation
+              with no bibliography entry or with a wrong DOI, a number with no source,
+              or change history in a page.
             At most 5 findings, each with the file, the line and a concrete input or
             state that fails.
 
@@ -156,8 +161,11 @@ jobs:
             5 most important and give the total count. If the file is missing or reports a
             failure, say that the lint did not run.
 
-            Apart from those 2 rules, do not comment on style, naming, formatting or
-            comment length. Put an item on its line with the inline comment tool when the line
+            Section 2 also lists breaks of the code style rules of AGENTS.md that no
+            tool checks: a mutating function without `!`, a new function without a
+            docstring, change history in a comment. Apart from these rules, do not
+            comment on style, naming, formatting or comment length; the BlueStyle CI job
+            checks formatting. Put an item on its line with the inline comment tool when the line
             is in the diff. Return the summary with the 2 sections as the `summary` field of
             your structured output, in GitHub markdown; the workflow posts it as one PR
             comment. If a section has nothing real, say so in one line. Write in plain,
