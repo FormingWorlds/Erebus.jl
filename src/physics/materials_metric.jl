@@ -448,7 +448,12 @@ so that `(mE uE - mW uW) / dx + (mS uS - mN uN) / dy` adds the out-of-plane term
 
 which is the discrete form of `div2D(r x) = 3 r`. With this `w_P` a uniform dilation `u = (X, Y)` gives
 `div_sph = 3` to round-off, and a face shared by 2 cells carries one weight, so `w_P div_sph` telescopes.
-The constant factor of the volume element (`2r`) cancels in `mF = wF / w_P`.
+The constant factor of the volume element (`2r`) cancels in `mF = wF / w_P`. On a regular grid
+`w_P >= (dx + dy) / 6`, with equality when the centre is on the P node.
+
+Away from the centre the operator is second order. Within a few cells of the centre its truncation error does
+not fall with the grid spacing, and a flow through the centre (`u(0) != 0`) gives a term `u_r / r` that grows
+as the cell size falls.
 
 # Arguments
 - `XW`, `XE`: x of the west and east faces relative to the centre [m]
@@ -462,20 +467,24 @@ The constant factor of the volume element (`2r`) cancels in `mF = wF / w_P`.
 - `(mW, mE, mN, mS, wP)`: the 4 face multipliers (dimensionless) and `w_P` [m]
 
 # Throws
-- `DomainError`: if `w_P` is not positive and finite (only for inconsistent face coordinates; on a
-  regular grid `w_P >= 0.33 min(dx, dy)`).
+- `DomainError`: if an input is not finite, `dx <= 0`, `dy <= 0`, `XE <= XW` or `YS <= YN`.
 """
-function flow_metric_face_weights(XW, XE, XP, YN, YS, YP, dx, dy)
+@inline function flow_metric_face_weights(XW, XE, XP, YN, YS, YP, dx, dy)
+    all(isfinite, (XW, XE, XP, YN, YS, YP, dx, dy)) || throw(
+        DomainError((XW, XE, XP, YN, YS, YP, dx, dy), "face coordinates must be finite")
+    )
+    (dx > 0 && dy > 0) || throw(DomainError((dx, dy), "dx and dy must be positive"))
+    (XE > XW && YS > YN) ||
+        throw(DomainError((XW, XE, YN, YS), "faces must satisfy XE > XW and YS > YN"))
     wW = hypot(XW, YP)
     wE = hypot(XE, YP)
     wN = hypot(XP, YN)
     wS = hypot(XP, YS)
     wP = ((wE * XE - wW * XW) / dx + (wS * YS - wN * YN) / dy) / 3
-    (isfinite(wP) && wP > 0) || throw(DomainError(wP, "w_P must be positive and finite"))
     return (wW / wP, wE / wP, wN / wP, wS / wP, wP)
 end
 
-function flow_metric_face_weights(
+@inline function flow_metric_face_weights(
     i::Integer, j::Integer, coords::GridCoordinates; xcenter::Real, ycenter::Real
 )
     xc = Float64(xcenter)

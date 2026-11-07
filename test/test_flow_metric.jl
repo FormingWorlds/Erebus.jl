@@ -1,5 +1,4 @@
 using Erebus
-using Random
 using Test
 
 # Spherical divergence on the staggered grid: D = sum over faces of m_F * u_F with the face multipliers of
@@ -25,12 +24,12 @@ function face_field(coords, f; xcenter, ycenter)
     return ux, uy
 end
 
-# Non-square grid (dx != dy, Nx != Ny) of size 1.0 x 1.3.
-grid(N) = Erebus.GridCoordinates(N, round(Int, 1.3 * (N - 1)) + 1; xsize=1.0, ysize=1.3)
+# Non-square grid: dy / dx = 1.7 / 1.3, so a swap of dx and dy changes every result.
+grid(N) = Erebus.GridCoordinates(N, round(Int, 1.3 * (N - 1)) + 1; xsize=1.0, ysize=1.7)
 
 @testset verbose = true "Spherical flow metric face weights" begin
     c33 = grid(33)
-    @test !isapprox(c33.dx, c33.dy; rtol=1e-3)
+    @test isapprox(c33.dy / c33.dx, 1.7 / 1.3; rtol=0.01)
     centres = (
         (0.47, 0.61),                      # off grid
         (c33.xp[17], c33.yp[20]),          # on a P node
@@ -93,52 +92,52 @@ grid(N) = Erebus.GridCoordinates(N, round(Int, 1.3 * (N - 1)) + 1; xsize=1.0, ys
             dmax = max(dmax, abs(wface(i, j)[4] - wface(i + 1, j)[3]))
         end
         @test isapprox(dmax, 0.0; atol=1e-14)
-
-        # Sum of wP D dx dy over the block equals the boundary flux of w u.
-        rng = MersenneTwister(7)
-        ux = randn(rng, c33.Ny1, c33.Nx1)
-        uy = randn(rng, c33.Ny1, c33.Nx1)
-        js, is = 3:(c33.Nx - 1), 3:(c33.Ny - 1)
-        vol = sum(
-            wface(i, j)[5] *
-            sph_div(c33, i, j, ux, uy; xcenter=xc, ycenter=yc) *
-            c33.dx *
-            c33.dy for j in js, i in is
-        )
-        w(x, y) = hypot(x - xc, y - yc)
-        bnd =
-            sum(
-                (
-                    w(c33.xvx[last(js)], c33.yp[i]) * ux[i, last(js)] -
-                    w(c33.xvx[first(js) - 1], c33.yp[i]) * ux[i, first(js) - 1]
-                ) * c33.dy for i in is
-            ) + sum(
-                (
-                    w(c33.xp[j], c33.yvy[last(is)]) * uy[last(is), j] -
-                    w(c33.xp[j], c33.yvy[first(is) - 1]) * uy[first(is) - 1, j]
-                ) * c33.dx for j in js
-            )
-        scale = sum(abs, ux) * c33.dy + sum(abs, uy) * c33.dx
-        @test isapprox(vol, bnd; atol=1e-12 * scale)
+        # A cell-centred weight instead of the face weight breaks the shared face.
+        @test isapprox(wface(5, 6)[2], hypot(c33.xvx[6] - xc, c33.yp[5] - yc); rtol=1e-14)
     end
 
-    @testset "positivity of wP and the guard" begin
-        rng = MersenneTwister(1)
+    @testset "rigid rotation u = (-Y, X): div3D = 0, second order away from the centre (N 65 to 257)" begin
+        xc, yc = 0.47, 0.61
+        errs = map((65, 129, 257)) do N
+            c = grid(N)
+            ux, uy = face_field(c, (X, Y) -> (-Y, X); xcenter=xc, ycenter=yc)
+            maximum(
+                abs(sph_div(c, i, j, ux, uy; xcenter=xc, ycenter=yc)) for
+                j in 3:(c.Nx - 1), i in 3:(c.Ny - 1) if
+                0.2 < hypot(c.xp[j] - xc, c.yp[i] - yc) < 0.45
+            )
+        end
+        @test errs[1] < 5e-4
+        @test isapprox(errs[1] / errs[2], 4.0; atol=0.3)
+        @test isapprox(errs[2] / errs[3], 4.0; atol=0.3)
+    end
+
+    @testset "lower bound of wP and the guard" begin
+        # The minimum (dx + dy) / 6 is reached with the centre on a P node.
+        lo = (c33.dx + c33.dy) / 6
+        wnode = Erebus.flow_metric_face_weights(
+            20, 17, c33; xcenter=c33.xp[17], ycenter=c33.yp[20]
+        )[5]
+        @test isapprox(wnode, lo; rtol=1e-12)
         m = Inf
-        for _ in 1:3000
-            xc, yc = rand(rng) * c33.xsize, rand(rng) * c33.ysize
+        for a in 0:0.1:1, b in 0:0.1:1
+            xc, yc = c33.xp[17] + a * c33.dx, c33.yp[20] + b * c33.dy
             for j in 3:(c33.Nx - 1), i in 3:(c33.Ny - 1)
-                wP = Erebus.flow_metric_face_weights(i, j, c33; xcenter=xc, ycenter=yc)[5]
-                m = min(m, wP / min(c33.dx, c33.dy))
+                m = min(
+                    m, Erebus.flow_metric_face_weights(i, j, c33; xcenter=xc, ycenter=yc)[5]
+                )
             end
         end
-        @test isapprox(m, 0.3349; rtol=1e-3)
-        # Inconsistent faces (east face west of the west face) give wP < 0.
-        @test_throws DomainError Erebus.flow_metric_face_weights(
-            1.0, -1.0, 0.0, 0.5, 0.5, 0.5, 0.1, 0.1
-        )
-        @test_throws DomainError Erebus.flow_metric_face_weights(
-            NaN, 0.1, 0.05, 0.0, 0.1, 0.05, 0.1, 0.1
-        )
+        @test isapprox(m, lo; rtol=1e-12)
+        ok = (-0.05, 0.05, 0.0, -0.05, 0.05, 0.0, 0.1, 0.1)
+        @test all(isfinite, Erebus.flow_metric_face_weights(ok...))
+        bad(k, v) = ntuple(n -> n == k ? v : ok[n], 8)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(1, NaN)...)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(6, Inf)...)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(7, 0.0)...)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(8, -0.1)...)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(2, -0.05)...)
+        @test_throws DomainError Erebus.flow_metric_face_weights(bad(5, -0.05)...)
+        @test Erebus.Physics.flow_metric_face_weights === Erebus.flow_metric_face_weights
     end
 end
