@@ -479,7 +479,7 @@ using Erebus
                     else
                         getfield(cfg0, fn)
                     end for fn in fieldnames(SimulationConfig)
-                )...,
+                )...
             )
             st = deepcopy(state0)
             w = deepcopy(ws0)
@@ -511,7 +511,9 @@ using Erebus
             g.tk1, g.qxD, g.qyD, g.RHOCP, _ -> cf; coords=coords0
         )
         @test 1.0 / rate < 0.1 * loose.dt
-        heat = postprocess_with_limits(1.0, 1.0; rhocpfluid=typeof(cfg0.materials.rhocpfluidm)((cf, cf, cf)))
+        heat = postprocess_with_limits(
+            1.0, 1.0; rhocpfluid=typeof(cfg0.materials.rhocpfluidm)((cf, cf, cf))
+        )
         @test heat.dt ≈ 1.0 / rate rtol=1e-10
     end
 

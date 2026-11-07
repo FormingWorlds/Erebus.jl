@@ -310,12 +310,7 @@ function solve_thermal_energy!(
 
     # Pore fluid advection heat, from the Darcy fluxes of this iteration.
     compute_fluid_advection_heat!(
-        g.Q_fluid_grid,
-        g.tk1,
-        g.qxD,
-        g.qyD,
-        fluid_heat_capacity(cfg);
-        coords=coords,
+        g.Q_fluid_grid, g.tk1, g.qxD, g.qyD, fluid_heat_capacity(cfg); coords=coords
     )
 
     LT = assemble_thermal_lse!(
