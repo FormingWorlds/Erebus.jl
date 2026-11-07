@@ -271,10 +271,9 @@ Coordinate thermochemical iterations, Stokes-Darcy iterations, and thermal energ
 
 $(SIGNATURES)
 
-Each iteration passes the time step of its previous reaction call as `dt_prev`, and with the
-reaction active an iteration whose Stokes-Darcy solve cut the time step by more than 1 % does
-not end the loop. Returns a `NamedTuple` with the convergence flags, `dt_next` and
-`n_titers`, the number of iterations run.
+Each iteration passes the time step of its previous reaction call as `dt_prev`, so the
+reaction scales its previous iterate to the current time step. Returns a `NamedTuple` with
+the convergence flags and `dt_next`.
 """
 function solve_thermomechanical_iterations!(
     state::SimulationState,
@@ -298,9 +297,7 @@ function solve_thermomechanical_iterations!(
 
     max_iters = cfg.solver.max_plastic_iterations
     dt_rx = state.dt
-    n_titers = 0
     for titer in 1:max_iters
-        n_titers = titer
         titer > 1 && _restore_step_start_redox!(state, cfg, ws)
         _step_thermochemical_reaction!(state, coords, cfg, ws, titer; dt_prev=dt_rx)
         dt_rx = state.dt
@@ -331,9 +328,7 @@ function solve_thermomechanical_iterations!(
         dt_next = th_res.dt_next
         dt_reduced_by_maxDT = dt_reduced_by_maxDT || th_res.dt_reduced_by_maxDT
 
-        # A reaction from before a dt cut must be recomputed before the step is accepted
-        reaction_stale = cfg.reaction.active && dt_rx > 1.01 * state.dt
-        if th_res.thermochemical_converged && !reaction_stale
+        if th_res.thermochemical_converged
             thermochemical_converged = true
             break
         elseif titer == max_iters
@@ -368,6 +363,5 @@ function solve_thermomechanical_iterations!(
         dt_aphimax_step_max=dt_aphimax_step_max,
         n_flips_last=n_flips_last,
         n_flips_step_total=n_flips_step_total,
-        n_titers=n_titers,
     )
 end

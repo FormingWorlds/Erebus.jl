@@ -1140,5 +1140,19 @@ _mean(x) = sum(x) / length(x)
         @test isapprox(DMP_b, DMP_a; rtol=1e-10)
         @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=0.0)
         @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=NaN)
+        @test_throws DomainError react!(fresh_markers(), 0.0, 2; dt_prev=dt2)
+
+        # Both steps longer than the reaction time: both reach equilibrium, so the scale is 1
+        rcfg = ReactionConfig()
+        dtr = compute_Δtreaction(
+            500.0, 0.20, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+        )
+        mk_eq = fresh_markers()
+        react!(mk_eq, 2.0 * dtr, 1)
+        p_eq = progress(mk_eq)
+        mk_long = fresh_markers()
+        react!(mk_long, 100.0 * dtr, 1)
+        react!(mk_long, 2.0 * dtr, 2; dt_prev=100.0 * dtr)
+        @test 0.9 * p_eq <= progress(mk_long) <= 1.1 * p_eq
     end
 end
