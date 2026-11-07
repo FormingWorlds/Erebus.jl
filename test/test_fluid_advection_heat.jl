@@ -294,6 +294,21 @@ end
         @test all_open ≈ sum(rates) rtol=1e-12
     end
 
+    @testset "the first and last interior nodes count" begin
+        T = fill(300.0, Ny1, Nx1)
+        for (i, j) in ((2, 2), (Ny1 - 1, Nx1 - 1), (2, Nx1 - 1), (Ny1 - 1, 2))
+            qx = zeros(Ny1, Nx1)
+            qx[i, j - 1] = 5.0e-6
+            rate = fluid_advection_inflow_rate(T, qx, zeros(Ny1, Nx1), RHOCP, rhocpf; coords=coords)
+            @test rate ≈ rhocpf(300.0) * 5.0e-6 / (RHOCP[i, j] * dx) rtol=1e-12
+        end
+        qx = zeros(Ny1, Nx1)
+        qx[3, 3] = NaN
+        @test_throws DomainError fluid_advection_inflow_rate(
+            T, qx, zeros(Ny1, Nx1), RHOCP, rhocpf; coords=coords
+        )
+    end
+
     @testset "random field: no new extremum at dt = 1 / rate" begin
         rng = MersenneTwister(7)
         T = 250.0 .+ 100.0 .* rand(rng, Ny1, Nx1)
