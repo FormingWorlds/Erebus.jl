@@ -150,4 +150,5 @@ When you resume from a checkpoint:
 - Configuration comparison verifies configuration compatibility:
   - Differences in `[output]` settings and time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`) are permitted.
   - Differences in physics or solver sections raise a typed `CheckpointError` unless `--force-restart-config` is provided.
+- The checkpoint stores the configuration as a `SimulationConfig` struct, so a checkpoint written by a version with different configuration fields (for example, one without `time.dxymax_fluid`) raises a `CheckpointError` on load.
 
