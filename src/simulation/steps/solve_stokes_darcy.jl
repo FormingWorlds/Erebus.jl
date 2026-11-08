@@ -703,7 +703,8 @@ function solve_stokes_darcy!(
             plastic_converged = true
             break
         end
-        plastic_residual_cycled(ws.YERRNOD, iplast, cfg.solver.plastic_cycle_window) && break
+        plastic_residual_cycled(ws.YERRNOD, iplast, cfg.solver.plastic_cycle_window) &&
+            break
     end
 
     if !plastic_converged

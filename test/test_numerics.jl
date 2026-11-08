@@ -2321,6 +2321,9 @@ include("test_helpers.jl")
         @test cyc(p2, length(p2), 10)
         @test cyc(p1, length(p1), 10)
         @test !cyc(p2, length(p2), 0)
+        # Fewer than window + 2 passes: false even for a constant residual.
+        @test !cyc(fill(4.0, 30), 11, 10)
+        @test cyc(fill(4.0, 30), 12, 10)
         # The tail repeats from pass 3, so a lag-2 window of 10 first closes at pass 14.
         @test !cyc(p2, 13, 10)
         @test cyc(p2, 14, 10)
