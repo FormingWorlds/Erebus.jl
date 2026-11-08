@@ -278,7 +278,7 @@ The plastic loop iterates until the RMS dimensional stress error drops below `ye
 
 $$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \left(\sigma_{\text{II}, i} - \sigma_{\text{yield}, i}\right)^2} < \text{yerrmax}$$
 
-with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
+with default `yerrmax = 100.0 Pa`. The loop also ends as not converged when the residual repeats exactly, with period 1 or 2, over the last `plastic_cycle_window` passes (default: `10`; `0` disables the check). In the cases measured with `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), such a residual stays periodic until `max_plastic_iterations` and the attempt fails anyway. Ending the loop at that point leaves the step sequence and the time steps unchanged: the failed attempt is discarded in either case, and only its diagnostics (the last residual and the flip counts) refer to the passes run. If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the residual cycles:
 - The solver rejects the candidate timestep.
 - The system restores grid, marker, and workspace state in place (`restore_step_state!`) from a preallocated start-of-step `StepSnapshot` updated via `snapshot_step_state!`.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).

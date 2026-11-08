@@ -670,6 +670,7 @@ function solve_stokes_darcy!(
     n_flips_step_total = 0
     plastic_converged = false
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
+    n_plastic_passes = 0
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
@@ -696,22 +697,25 @@ function solve_stokes_darcy!(
         dt_aphimax_step_max = max(dt_aphimax_step_max, state.dt * res.aphimax)
         n_flips_last = res.n_flips_iter
         n_flips_step_total += res.n_flips_iter
+        n_plastic_passes = iplast
 
         if res.adjustment_ok
             plastic_converged = true
             break
         end
+        plastic_residual_cycled(ws.YERRNOD, iplast, cfg.solver.plastic_cycle_window) && break
     end
 
     if !plastic_converged
-        last_plastic_residual = if max_plastic_iterations_val > 0
-            ws.YERRNOD[min(max_plastic_iterations_val, length(ws.YERRNOD))]
+        last_plastic_residual = if 1 <= n_plastic_passes <= length(ws.YERRNOD)
+            ws.YERRNOD[n_plastic_passes]
         else
             0.0
         end
         return (;
             plastic_converged=false,
             last_plastic_residual=last_plastic_residual,
+            n_plastic_passes=n_plastic_passes,
             dt_aphimax_step_max=dt_aphimax_step_max,
             n_flips_last=n_flips_last,
             n_flips_step_total=n_flips_step_total,
@@ -771,6 +775,7 @@ function solve_stokes_darcy!(
     return (;
         plastic_converged=true,
         last_plastic_residual=0.0,
+        n_plastic_passes=n_plastic_passes,
         dt_aphimax_step_max=dt_aphimax_step_max,
         n_flips_last=n_flips_last,
         n_flips_step_total=n_flips_step_total,

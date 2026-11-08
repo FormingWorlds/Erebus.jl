@@ -411,6 +411,23 @@ function compute_nodal_adjustment!(
 end # function compute_nodal_adjustment!
 
 """
+    plastic_residual_cycled(YERRNOD, iplast, window) -> Bool
+
+Return true when the plastic residuals of the last `window` passes repeat exactly with
+period 1 or 2, i.e. `YERRNOD[k] == YERRNOD[k - p]` for every `k` in
+`iplast - window + 1:iplast` and one `p` in (1, 2). Exact equality means a residual that
+still falls, even by one unit in the last place, never matches. A repeating residual with
+the viscosity update unchanged cannot reach `yerrmax` in later passes, so the caller ends
+the plastic loop as not converged. Returns false for `window <= 0`, for
+`iplast < window + 2` and for `iplast > length(YERRNOD)`.
+"""
+function plastic_residual_cycled(YERRNOD::AbstractVector{<:Real}, iplast::Integer, window::Integer)
+    (window > 0 && window + 2 <= iplast <= length(YERRNOD)) || return false
+    ks = (iplast - window + 1):iplast
+    return any(p -> all(k -> YERRNOD[k] == YERRNOD[k - p], ks), (1, 2))
+end # function plastic_residual_cycled
+
+"""
 Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.
 
 $(SIGNATURES)

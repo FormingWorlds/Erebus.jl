@@ -74,6 +74,8 @@ include("test_helpers.jl")
         @test cfg_q.grid.Nx == 33
         @test cfg_q.solver.max_plastic_iterations == 10000
         @test cfg_q.solver.max_dt_reductions == 5
+        @test cfg_q.solver.plastic_cycle_window == 10
+        @test SolverConfig(plastic_cycle_window=0).plastic_cycle_window == 0
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
@@ -257,6 +259,9 @@ include("test_helpers.jl")
 
         # Invalid solver parameters: max_dt_reductions must be >= 1
         @reject_config solver=SolverConfig(max_dt_reductions=0)
+        # plastic_cycle_window: 0 (off) or at least 4 passes
+        @reject_config solver=SolverConfig(plastic_cycle_window=-1)
+        @reject_config solver=SolverConfig(plastic_cycle_window=2)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)
@@ -841,7 +846,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("488 configuration fields", out)
+        @test occursin("489 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin

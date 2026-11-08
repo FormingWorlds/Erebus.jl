@@ -766,6 +766,59 @@ using Erebus
         @test res_noconv.plastic_converged == false
         @test iszero(res_noconv.last_plastic_residual)
         @test res_noconv.n_flips_step_total == 0
+        @test res_noconv.n_plastic_passes == 0
+    end
+
+    @testset "Stokes-Darcy plastic loop stops on a cycled residual" begin
+        function cycling_case(window)
+            cfg = override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "solver.max_plastic_iterations" => 200,
+                    "solver.yerrmax" => 1.0e-20,
+                    "solver.etamin" => 1.0e21,
+                    "solver.plastic_cycle_window" => window,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            Erebus.accrete!(state, coords, cfg)
+            Erebus.radiogenic_heating!(state, coords, cfg)
+            Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+            Erebus.update_pyrolysis!(state, coords, cfg)
+            Erebus.interpolate_markers_to_grid!(
+                state,
+                coords,
+                cfg;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(state, coords, cfg)
+            Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+            Erebus.update_step_start_pressures!(state)
+            # Unit cohesion and tensile strength with a high etamin: the yield update cycles.
+            fill!(state.grids.COH, 1.0)
+            fill!(state.grids.TEN, 1.0)
+            res = Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            return res, ws
+        end
+
+        res, ws = cycling_case(10)
+        @test res.plastic_converged == false
+        @test 12 <= res.n_plastic_passes < 200
+        @test res.last_plastic_residual === ws.YERRNOD[res.n_plastic_passes]
+        @test Erebus.plastic_residual_cycled(ws.YERRNOD, res.n_plastic_passes, 10)
+
+        res0, ws0 = cycling_case(0)
+        @test res0.plastic_converged == false
+        @test res0.n_plastic_passes == 200
+        @test res0.last_plastic_residual === ws0.YERRNOD[200]
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin

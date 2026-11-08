@@ -106,6 +106,7 @@ Base.@kwdef struct SolverConfig
     max_plastic_iterations::Int = 10_000
     max_dt_reductions::Int = 5
     yerrmax::Float64 = 1.0e+2
+    plastic_cycle_window::Int = 10
     etawt::Float64 = 0.0
     dphimax::Float64 = 0.1
     seed::Int = 42
@@ -1527,6 +1528,11 @@ function _validate_solver_config(
     @check_nonneg_finite cfg.dsubgrids
     @check_ge cfg.max_plastic_iterations 1
     @check_ge cfg.max_dt_reductions 1
+    (cfg.plastic_cycle_window == 0 || cfg.plastic_cycle_window >= 4) || throw(
+        ArgumentError(
+            "solver.plastic_cycle_window must be 0 (off) or >= 4, got $(cfg.plastic_cycle_window)",
+        ),
+    )
     @check_positive cfg.etamin
     cfg.etamax >= cfg.etamin || throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.etaphikoef

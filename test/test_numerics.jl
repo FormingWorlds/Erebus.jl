@@ -2314,6 +2314,26 @@ include("test_helpers.jl")
         @test isapprox(ETA, ETA5; rtol=1e-12)
     end
 
+    @testset "plastic_residual_cycled(): exact period-1 and period-2 tails" begin
+        cyc = Erebus.plastic_residual_cycled
+        p2 = vcat([9.0, 7.0], repeat([3.0, 5.0], 10))
+        p1 = vcat([9.0, 7.0], fill(4.0, 12))
+        @test cyc(p2, length(p2), 10)
+        @test cyc(p1, length(p1), 10)
+        @test !cyc(p2, length(p2), 0)
+        # The tail repeats from pass 3, so a lag-2 window of 10 first closes at pass 14.
+        @test !cyc(p2, 13, 10)
+        @test cyc(p2, 14, 10)
+        # A strictly falling residual never matches.
+        @test !cyc(collect(range(100.0, 1.0; length=30)), 30, 10)
+        # One entry off by 1 ULP inside the window breaks the match.
+        q = copy(p2)
+        q[end - 3] = nextfloat(q[end - 3])
+        @test !cyc(q, length(q), 10)
+        # A pass index beyond the residual vector returns false.
+        @test !cyc(p2, length(p2) + 1, 10)
+    end
+
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
         cfg_path = joinpath(
             @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"
