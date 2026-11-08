@@ -441,6 +441,20 @@ function plastic_residual_cycled(
 end # function plastic_residual_cycled
 
 """
+    plastic_loop_cycled(YERRNOD, eta_trace, iplast, window) -> Bool
+
+Return true when both the plastic residual `YERRNOD` and the viscosity trace `eta_trace`
+(one scalar per pass, `sum(log, ETA)` over the basic nodes) are periodic in the sense of
+[`plastic_residual_cycled`](@ref). The trace guard keeps a flat residual over a viscosity
+that still relaxes (stress insensitive to viscosity at high Deborah number) from ending a
+loop that would converge.
+"""
+function plastic_loop_cycled(YERRNOD, eta_trace, iplast::Integer, window::Integer)
+    return plastic_residual_cycled(YERRNOD, iplast, window) &&
+           plastic_residual_cycled(eta_trace, iplast, window)
+end # function plastic_loop_cycled
+
+"""
 Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.
 
 $(SIGNATURES)

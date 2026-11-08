@@ -2343,6 +2343,18 @@ include("test_helpers.jl")
         @test !cyc(p5, length(p5) + 1, 10)
     end
 
+    @testset "plastic_loop_cycled(): residual and viscosity trace both periodic" begin
+        loopcyc = Erebus.plastic_loop_cycled
+        y = vcat([9.0, 7.0], repeat([3.0, 5.0], 20))
+        eta_cycle = vcat([50.0, 49.0], repeat([48.0, 47.5], 20))
+        eta_relaxing = [50.0 - 0.01 * k for k in 1:42]
+        @test loopcyc(y, eta_cycle, 42, 10)
+        # A flat residual while the viscosity still relaxes is not a cycle.
+        @test !loopcyc(fill(5.0e5, 42), eta_relaxing, 42, 10)
+        @test !loopcyc(y, eta_relaxing, 42, 10)
+        @test !loopcyc(y, eta_cycle, 42, 0)
+    end
+
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
         cfg_path = joinpath(
             @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"

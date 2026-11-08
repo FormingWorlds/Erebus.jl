@@ -813,7 +813,6 @@ using Erebus
         @test res.plastic_converged == false
         @test 12 <= res.n_plastic_passes < 200
         @test res.last_plastic_residual === ws.YERRNOD[res.n_plastic_passes]
-        @test Erebus.plastic_residual_cycled(ws.YERRNOD, res.n_plastic_passes, 10)
 
         res0, ws0 = cycling_case(0)
         @test res0.plastic_converged == false

@@ -671,6 +671,8 @@ function solve_stokes_darcy!(
     plastic_converged = false
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
     n_plastic_passes = 0
+    window = cfg.solver.plastic_cycle_window
+    eta_trace = zeros(window > 0 ? max_plastic_iterations_val : 0)
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
@@ -703,8 +705,8 @@ function solve_stokes_darcy!(
             plastic_converged = true
             break
         end
-        plastic_residual_cycled(ws.YERRNOD, iplast, cfg.solver.plastic_cycle_window) &&
-            break
+        window > 0 && (eta_trace[iplast] = sum(log, g.ETA))
+        plastic_loop_cycled(ws.YERRNOD, eta_trace, iplast, window) && break
     end
 
     if !plastic_converged
