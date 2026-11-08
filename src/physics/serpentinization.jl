@@ -267,6 +267,10 @@ $(SIGNATURES)
     - pfm₀: previous marker fluid pressure
     - marknum: current total number of markers
     - Δt: current time step length
+    - dt_prev: time step of the previous iterate `XWˢm`; for `titer > 1` its log-odds
+      `ln(XD/XW)` relative to the start value are scaled by `min(Δt, t_c) / min(dt_prev, t_c)`
+      before the under-relaxation, where `t_c ≤ Δtr` is the time at which the reaction time
+      or the pore-water ceiling stops the clamped path (default `Δt`, no scaling)
     - timestep: current time step
     - titer: current thermochemical iteration number
 
@@ -299,6 +303,7 @@ function perform_thermochemical_reaction!(
     DQPFSUM=nothing,
     cfg=nothing,
     backload_step1::Bool=true,
+    dt_prev::Real=Δt,
 )
     react_cfg = if cfg === nothing
         ReactionConfig()
@@ -309,6 +314,10 @@ function perform_thermochemical_reaction!(
     else
         ReactionConfig()
     end
+
+    (isfinite(Δt) && Δt > 0.0) || throw(DomainError(Δt, "Δt must be positive and finite"))
+    (isfinite(dt_prev) && dt_prev > 0.0) ||
+        throw(DomainError(dt_prev, "dt_prev must be positive and finite"))
 
     if !react_cfg.active
         DMP .= zero(0.0)
@@ -400,6 +409,7 @@ function perform_thermochemical_reaction!(
                 is_dehydration = XW_eq < XWˢm₀_cl
 
                 skip_rx = false
+                Δtr = 1.0e30
                 if is_hydration
                     if !react_cfg.hydration_active
                         skip_rx = true
@@ -418,8 +428,6 @@ function perform_thermochemical_reaction!(
                             tknm, phim[m], mode; cfg=react_cfg, is_hydration=false
                         )
                     end
-                else
-                    Δtr = 1.0e30
                 end
 
                 if skip_rx
@@ -445,7 +453,30 @@ function perform_thermochemical_reaction!(
 
                 # Picard under-relaxation on reacted wet silicate fraction across iterations
                 XWˢm₁_rel = if titer > 1
-                    alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XWˢm[m]
+                    # ln(XD/XW) moves linearly in time until Δtr or the clamp stops it at t_c:
+                    # scale the previous log-odds by min(dt, t_c) / min(dt_prev, t_c)
+                    XW_p = clamp(XWˢm[m], eps_comp, 1.0 - eps_comp)
+                    XW_c = clamp(
+                        XW_eq,
+                        eps_comp,
+                        ifelse(XW_eq > XWˢm₀_cl, XW_max, 1.0 - eps_comp),
+                    )
+                    L0 = log((1.0 - XWˢm₀_cl) / XWˢm₀_cl)
+                    t_c = Δtr * (log((1.0 - XW_c) / XW_c) - L0) / (log(KWD_eq) - L0)
+                    scale = min(Δt, t_c) / min(dt_prev, t_c)
+                    XW_prev_s =
+                        if skip_rx || XW_p == XWˢm₀_cl || !(t_c > 0.0) || scale == 1.0
+                            XW_p
+                        else
+                            L_s = L0 + (log((1.0 - XW_p) / XW_p) - L0) * scale
+                            inv(exp(L_s) + 1.0)
+                        end
+                    XW_prev = clamp(
+                        XW_prev_s,
+                        eps_comp,
+                        ifelse(XW_prev_s > XWˢm₀_cl, XW_max, 1.0 - eps_comp),
+                    )
+                    alpha_rel * XWˢm₁ + (1.0 - alpha_rel) * XW_prev
                 else
                     XWˢm₁
                 end

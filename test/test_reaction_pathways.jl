@@ -1059,4 +1059,237 @@ _mean(x) = sum(x) / length(x)
             (rho_s0_u * 0.95 + 1000.0 * 0.05)
         @test isapprox(minimum(DMP), (1.0 - RV_unc) / dt; rtol=1e-12)
     end
+
+    @testset "Under-relaxation scales the previous iterate to a new dt" begin
+        c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
+        marknum = 100
+        tk2 = fill(500.0, c17.Ny1, c17.Nx1)
+        pf = fill(1.0e7, c17.Ny1, c17.Nx1)
+        grid() = zeros(Float64, c17.Ny1, c17.Nx1)
+        function fresh_markers()
+            props = setup_marker_properties(marknum, c17)
+            xm, ym, tm, _, _, _, _, phim, phinewm, pfm0, XW, XW0, _ = props
+            tm .= 1
+            xm .= 5000.0
+            ym .= 5000.0
+            phim .= 0.20
+            phinewm .= 0.20
+            pfm0 .= 1.0e7
+            XW0 .= 0.05
+            XW .= 0.05
+            return (; xm, ym, tm, phim, phinewm, pfm0, XW, XW0)
+        end
+        function react!(mk, dt, titer; kw...)
+            DMP = grid()
+            perform_thermochemical_reaction!(
+                DMP,
+                grid(),
+                grid(),
+                grid(),
+                grid(),
+                pf,
+                tk2,
+                mk.tm,
+                mk.xm,
+                mk.ym,
+                mk.XW0,
+                mk.XW,
+                mk.phim,
+                mk.phinewm,
+                mk.pfm0,
+                marknum,
+                dt,
+                2,
+                titer;
+                coords=c17,
+                DQPF=grid(),
+                DQPFSUM=grid(),
+                kw...,
+            )
+            return DMP
+        end
+        progress(mk) = maximum(abs, mk.XW .- mk.XW0)
+        dt1 = 1.0e8
+        dt2 = dt1 / 1.0e4
+
+        # Fresh titer-1 reaction at the small step
+        mk_fresh = fresh_markers()
+        react!(mk_fresh, dt2, 1)
+        p_fresh = progress(mk_fresh)
+
+        # Titer 1 at dt1, then a cut: titer 2 at dt2 with the previous iterate from dt1
+        mk = fresh_markers()
+        react!(mk, dt1, 1)
+        @test progress(mk) > 100.0 * p_fresh
+        react!(mk, dt2, 2; dt_prev=dt1)
+        @test 0.9 * p_fresh <= progress(mk) <= 1.1 * p_fresh
+
+        # Without dt_prev the old blend with the dt1 iterate stays (default for direct callers)
+        mk_old = fresh_markers()
+        react!(mk_old, dt1, 1)
+        react!(mk_old, dt2, 2)
+        @test progress(mk_old) > 50.0 * p_fresh
+
+        # A dt_prev 1 ULP away leaves the rates unchanged
+        mk_a = fresh_markers()
+        react!(mk_a, dt2, 1)
+        DMP_a = react!(mk_a, dt2, 2)
+        mk_b = fresh_markers()
+        react!(mk_b, dt2, 1)
+        DMP_b = react!(mk_b, dt2, 2; dt_prev=dt2 * (1.0 + 1.0e-15))
+        @test isapprox(DMP_b, DMP_a; rtol=1e-10)
+        @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=0.0)
+        @test_throws DomainError react!(fresh_markers(), dt2, 2; dt_prev=NaN)
+        @test_throws DomainError react!(fresh_markers(), 0.0, 2; dt_prev=dt2)
+
+        # Both steps longer than the reaction time: both reach equilibrium, so the scale is 1
+        rcfg = ReactionConfig()
+        dtr = compute_Δtreaction(
+            500.0, 0.20, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+        )
+        mk_eq = fresh_markers()
+        react!(mk_eq, 2.0 * dtr, 1)
+        p_eq = progress(mk_eq)
+        mk_long = fresh_markers()
+        react!(mk_long, 100.0 * dtr, 1)
+        react!(mk_long, 2.0 * dtr, 2; dt_prev=100.0 * dtr)
+        @test 0.9 * p_eq <= progress(mk_long) <= 1.1 * p_eq
+    end
+
+    @testset "Scaled iterate follows the log-odds kinetics" begin
+        c17 = GridCoordinates(GridConfig(; Nx=17, Ny=17, xsize=10_000.0, ysize=10_000.0))
+        marknum = 100
+        tk2 = fill(500.0, c17.Ny1, c17.Nx1)
+        pf = fill(1.0e7, c17.Ny1, c17.Nx1)
+        grid() = zeros(Float64, c17.Ny1, c17.Nx1)
+        function markers(XWstart, phi)
+            props = setup_marker_properties(marknum, c17)
+            xm, ym, tm, _, _, _, _, phim, phinewm, pfm0, XW, XW0, _ = props
+            tm .= 1
+            xm .= 5000.0
+            ym .= 5000.0
+            phim .= phi
+            phinewm .= phi
+            pfm0 .= 1.0e7
+            XW0 .= XWstart
+            XW .= XWstart
+            return (; xm, ym, tm, phim, phinewm, pfm0, XW, XW0)
+        end
+        function react!(mk, dt, titer; rcfg=ReactionConfig(), T=500.0, dhp=grid(), kw...)
+            perform_thermochemical_reaction!(
+                grid(),
+                dhp,
+                grid(),
+                grid(),
+                grid(),
+                pf,
+                fill(T, c17.Ny1, c17.Nx1),
+                mk.tm,
+                mk.xm,
+                mk.ym,
+                mk.XW0,
+                mk.XW,
+                mk.phim,
+                mk.phinewm,
+                mk.pfm0,
+                marknum,
+                dt,
+                2,
+                titer;
+                coords=c17,
+                DQPF=grid(),
+                DQPFSUM=grid(),
+                cfg=rcfg,
+                kw...,
+            )
+            return mk
+        end
+        rcfg = ReactionConfig()
+        dtr = compute_Δtreaction(
+            500.0, 0.45, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+        )
+
+        # Below the pore-water ceiling the scaled iterate equals a fresh call: the blend is exact
+        # Step pairs (long, short) below, across and above the reaction time
+        for XWstart in (0.05, 1.0e-3),
+            (dt_long, dt_short) in ((0.5, 0.01), (2.0, 0.5), (100.0, 2.0))
+
+            fresh = react!(markers(XWstart, 0.45), dt_short * dtr, 1)
+            cut = react!(markers(XWstart, 0.45), dt_long * dtr, 1)
+            react!(cut, dt_short * dtr, 2; dt_prev=dt_long * dtr)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # At and below the pore-water ceiling the scale uses the time at which the clamped path stops
+        for T in (300.0, 500.0),
+            phi in (0.20, 0.05),
+            (dt_long, dt_short) in ((0.5, 0.01), (1.0, 0.1), (1.0, 0.5), (2.0, 0.5))
+
+            dtr_T = compute_Δtreaction(
+                T, phi, rcfg.hydration_mode; cfg=rcfg, is_hydration=true
+            )
+            fresh = react!(markers(0.05, phi), dt_short * dtr_T, 1; T)
+            cut = react!(markers(0.05, phi), dt_long * dtr_T, 1; T)
+            react!(cut, dt_short * dtr_T, 2; T, dt_prev=dt_long * dtr_T)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # Dehydration: the scaled iterate also equals a fresh call
+        dtr_d = compute_Δtreaction(
+            800.0, 0.45, rcfg.dehydration_mode; cfg=rcfg, is_hydration=false
+        )
+        for (dt_long, dt_short) in ((0.5, 0.01), (2.0, 0.5))
+            fresh = react!(markers(0.9, 0.45), dt_short * dtr_d, 1; T=800.0)
+            @test fresh.XW[1] < 0.9
+            cut = react!(markers(0.9, 0.45), dt_long * dtr_d, 1; T=800.0)
+            react!(cut, dt_short * dtr_d, 2; T=800.0, dt_prev=dt_long * dtr_d)
+            @test isapprox(cut.XW, fresh.XW; rtol=1e-8)
+        end
+
+        # Without a reaction, a later iteration keeps the start fraction exactly and no latent heat
+        for XWstart in (0.32, 0.05, 1.0e-3, 0.9)
+            dhp = grid()
+            mk0 = react!(
+                markers(XWstart, 0.05),
+                1.0,
+                1;
+                rcfg=ReactionConfig(; hydration_active=false),
+            )
+            react!(
+                mk0, 1.0, 2; rcfg=ReactionConfig(; hydration_active=false), dt_prev=1.0, dhp
+            )
+            @test mk0.XW == mk0.XW0
+            @test all(iszero, dhp)
+        end
+
+        # Each guard of the scale has a case only it covers
+        # A pathway that is off blends with the unscaled previous iterate
+        mk = markers(0.05, 0.45)
+        mk.XW .= 0.3
+        react!(mk, 0.5, 2; rcfg=ReactionConfig(; hydration_active=false), dt_prev=1.0)
+        @test all(x -> isapprox(x, 0.175; rtol=1e-12), mk.XW)
+        # No pore water: the clamped path does not move and the iterate stays at the ceiling
+        mk = markers(0.05, 0.5e-4)
+        mk.XW .= 0.3
+        react!(mk, 0.5 * dtr, 2; dt_prev=dtr)
+        @test mk.XW == mk.XW0
+        # A previous iterate at the start value enters the blend exactly
+        x1 = react!(markers(0.32, 0.45), 0.3 * dtr, 1).XW[1]
+        mk = react!(markers(0.32, 0.45), 0.3 * dtr, 2; dt_prev=0.6 * dtr)
+        @test all(==(0.5 * x1 + 0.5 * 0.32), mk.XW)
+        # Without a cut the previous iterate enters the blend exactly
+        for f in 0.05:0.05:0.95
+            mk = react!(markers(0.05, 0.45), f * dtr, 1)
+            x1 = mk.XW[1]
+            react!(mk, f * dtr, 2; dt_prev=f * dtr)
+            @test all(==(x1), mk.XW)
+        end
+
+        # A pathway that is off leaves the composition at its start value at every iteration
+        off = ReactionConfig(; hydration_active=false)
+        mk_off = react!(markers(0.05, 0.45), 0.5 * dtr, 1; rcfg=off)
+        react!(mk_off, 0.01 * dtr, 2; rcfg=off, dt_prev=0.5 * dtr)
+        @test isapprox(mk_off.XW, mk_off.XW0; rtol=1e-12)
+        @test all(isfinite, mk_off.phinewm)
+    end
 end

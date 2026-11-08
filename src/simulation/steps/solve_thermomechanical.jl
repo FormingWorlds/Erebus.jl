@@ -42,6 +42,7 @@ $(SIGNATURES)
 - `cfg`: Simulation configuration struct.
 - `ws`: Preallocated simulation workspaces.
 - `titer`: Current outer thermomechanical iteration index.
+- `dt_prev`: Time step of the previous reaction call; the previous iterate is scaled to `state.dt`.
 
 # Returns
 - `Nothing`: Mutates `state.grids.DMP`, `state.grids.DHP`, and `state.grids.DQPF` in place.
@@ -51,7 +52,8 @@ function _step_thermochemical_reaction!(
     coords::GridCoordinates,
     cfg::SimulationConfig,
     ws::SimulationWorkspaces,
-    titer::Int,
+    titer::Int;
+    dt_prev::Real=state.dt,
 )::Nothing
     if cfg.reaction.active
         core = state.markers.core
@@ -83,6 +85,7 @@ function _step_thermochemical_reaction!(
             DQPF=state.grids.DQPF,
             DQPFSUM=state.grids.DQPFSUM,
             cfg=cfg.reaction,
+            dt_prev=dt_prev,
         )
     else
         fill!(state.grids.DMP, 0.0)
@@ -267,6 +270,10 @@ end
 Coordinate thermochemical iterations, Stokes-Darcy iterations, and thermal energy updates.
 
 $(SIGNATURES)
+
+Each iteration passes the time step of its previous reaction call as `dt_prev`, so the
+reaction scales its previous iterate to the current time step. Returns a `NamedTuple` with
+the convergence flags and `dt_next`.
 """
 function solve_thermomechanical_iterations!(
     state::SimulationState,
@@ -289,9 +296,11 @@ function solve_thermomechanical_iterations!(
     n_flips_step_total = 0
 
     max_iters = cfg.solver.max_plastic_iterations
+    dt_rx = state.dt
     for titer in 1:max_iters
         titer > 1 && _restore_step_start_redox!(state, cfg, ws)
-        _step_thermochemical_reaction!(state, coords, cfg, ws, titer)
+        _step_thermochemical_reaction!(state, coords, cfg, ws, titer; dt_prev=dt_rx)
+        dt_rx = state.dt
         if DHP_pyro !== nothing && size(DHP_pyro) == size(state.grids.DHP)
             state.grids.DHP .+= DHP_pyro
         end

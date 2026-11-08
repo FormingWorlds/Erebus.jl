@@ -517,6 +517,74 @@ using Erebus
         @test heat.dt ≈ 1.0 / rate rtol=1e-10
     end
 
+    @testset "Outer iterations scale the reaction iterate after a dt cut" begin
+        # The fluid limit cuts dt in the first iteration; liquid pore water at 300 K
+        cfg = Erebus.override_config(
+            default_config(), Dict{String,Any}("time.dxymax_fluid" => 1.0e-4)
+        )
+        state, coords, ws, _, _ = init_simulation(cfg)
+        @test cfg.reaction.active
+        state.timestep = 2
+        state.markers.core.tkm .= 300.0
+        interpolate_markers_to_grid!(
+            state,
+            coords,
+            cfg;
+            p2m_workspace=ws.p2m,
+            thread_buffers=ws.thread_buffers,
+            interp_arrays=ws.interp_arrays,
+        )
+        solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+        apply_surface_radiation!(state, coords, cfg)
+        snapshot_step_start_inventories!(ws, state, cfg)
+        Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+        update_step_start_pressures!(state)
+        core = state.markers.core
+        start = (; XW0=copy(core.XWsolidm0), XW=copy(core.XWsolidm), phim=copy(core.phim))
+        dt_start = state.dt
+
+        res = Erebus.solve_thermomechanical_iterations!(
+            state, coords, cfg, ws; DHP_pyro=nothing, dt_step_initial=dt_start
+        )
+        @test state.dt < 1.0e-3 * dt_start
+        @test res.thermochemical_converged
+        p_loop = maximum(abs, core.XWsolidm .- core.XWsolidm0)
+
+        # Fresh reaction from the step-start markers at the accepted dt
+        g = state.grids
+        XW = copy(start.XW)
+        perform = Erebus.perform_thermochemical_reaction!
+        perform(
+            zeros(size(g.DMP)),
+            zeros(size(g.DMP)),
+            zeros(size(g.DMP)),
+            zeros(size(g.DMP)),
+            zeros(size(g.DMP)),
+            g.pf,
+            g.tk2,
+            core.tm,
+            core.xm,
+            core.ym,
+            copy(start.XW0),
+            XW,
+            copy(start.phim),
+            copy(start.phim),
+            copy(core.pfm0),
+            length(state.markers),
+            state.dt,
+            state.timestep,
+            1;
+            coords=coords,
+            DQPF=zeros(size(g.DMP)),
+            DQPFSUM=zeros(size(g.DMP)),
+            cfg=cfg.reaction,
+        )
+        p_fresh = maximum(abs, XW .- start.XW0)
+        # Measured 3.8: the cut of the last iteration after its reaction. An unscaled blend gives
+        # about 500, a dt_prev that is not updated about 1.9
+        @test 2.5 * p_fresh <= p_loop <= 6.0 * p_fresh
+    end
+
     @testset "Hydromechanical Assembly, Postprocessing, and Outer Iterations" begin
         cfg = default_config()
         coords = GridCoordinates(cfg.grid)
