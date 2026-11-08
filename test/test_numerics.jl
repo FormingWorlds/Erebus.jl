@@ -2314,27 +2314,33 @@ include("test_helpers.jl")
         @test isapprox(ETA, ETA5; rtol=1e-12)
     end
 
-    @testset "plastic_residual_cycled(): exact period-1 and period-2 tails" begin
+    @testset "plastic_residual_cycled(): periodic tails within the relative tolerance" begin
         cyc = Erebus.plastic_residual_cycled
-        p2 = vcat([9.0, 7.0], repeat([3.0, 5.0], 10))
-        p1 = vcat([9.0, 7.0], fill(4.0, 12))
-        @test cyc(p2, length(p2), 10)
-        @test cyc(p1, length(p1), 10)
-        @test !cyc(p2, length(p2), 0)
-        # Fewer than window + 2 passes: false even for a constant residual.
-        @test !cyc(fill(4.0, 30), 11, 10)
-        @test cyc(fill(4.0, 30), 12, 10)
-        # The tail repeats from pass 3, so a lag-2 window of 10 first closes at pass 14.
-        @test !cyc(p2, 13, 10)
-        @test cyc(p2, 14, 10)
-        # A strictly falling residual never matches.
-        @test !cyc(collect(range(100.0, 1.0; length=30)), 30, 10)
-        # One entry off by 1 ULP inside the window breaks the match.
-        q = copy(p2)
-        q[end - 3] = nextfloat(q[end - 3])
-        @test !cyc(q, length(q), 10)
+        # Period-5 tail with 1e-12 relative noise, as in hydrothermal_benchmark.
+        base = [3449.88, 803.96, 2415.1, 2574.79, 1006.14]
+        noise = [1.0 + 1.0e-12 * (-1)^k for k in 1:60]
+        p5 = vcat([5000.0, 4000.0], repeat(base, 12) .* noise)
+        @test cyc(p5, length(p5), 10)
+        @test !cyc(p5, length(p5), 0)
+        # The tail starts at pass 3; period 5 needs max(10, 15) passes plus the lag: pass 22.
+        @test !cyc(p5, 21, 10)
+        @test cyc(p5, 22, 10)
+        # Noise above the tolerance does not match.
+        loud = vcat(
+            [5000.0, 4000.0], repeat(base, 12) .* [1.0 + 1.0e-7 * (-1)^k for k in 1:60]
+        )
+        @test !cyc(loud, length(loud), 10)
+        # A slowly falling residual (1e-6 per pass) does not match.
+        @test !cyc([1.0e4 * (1 - 1.0e-6)^k for k in 1:60], 60, 10)
+        # A constant tail is period 1: window 10 plus lag 1 from pass 3, so pass 13.
+        c1 = vcat([9.0, 7.0], fill(4.0, 30))
+        @test !cyc(c1, 12, 10)
+        @test cyc(c1, 13, 10)
+        # Period 9 lies beyond the longest period checked.
+        p9 = vcat([5000.0], repeat(collect(1.0:9.0) .* 100, 8))
+        @test !cyc(p9, length(p9), 10)
         # A pass index beyond the residual vector returns false.
-        @test !cyc(p2, length(p2) + 1, 10)
+        @test !cyc(p5, length(p5) + 1, 10)
     end
 
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin

@@ -411,22 +411,33 @@ function compute_nodal_adjustment!(
 end # function compute_nodal_adjustment!
 
 """
-    plastic_residual_cycled(YERRNOD, iplast, window) -> Bool
+    plastic_residual_cycled(YERRNOD, iplast, window; rtol=1.0e-9, max_period=8) -> Bool
 
-Return true when the plastic residuals of the last `window` passes repeat exactly with
-period 1 or 2, i.e. `YERRNOD[k] == YERRNOD[k - p]` for every `k` in
-`iplast - window + 1:iplast` and one `p` in (1, 2). Exact equality means a residual that
-still falls, even by one unit in the last place, never matches. In the measured cases a
-residual that repeats this way stays periodic until `max_plastic_iterations`, so the
-caller ends the plastic loop as not converged. Returns false for `window <= 0`, for
-`iplast < window + 2` and for `iplast > length(YERRNOD)`.
+Return true when the plastic residuals end in a cycle: for one period `p` in
+`1:max_period`, every pass `k` of the last `max(window, 3p)` passes up to `iplast` has
+`abs(YERRNOD[k] - YERRNOD[k - p]) <= rtol * abs(YERRNOD[k])`. The tolerance admits the
+round-off noise of a repeating yield update; a residual that still falls by more than
+`rtol` per period does not match. In the measured cases such a cycle lasts until
+`max_plastic_iterations`, so the caller ends the plastic loop as not converged. Returns
+false for `window <= 0` and for `iplast > length(YERRNOD)`.
 """
 function plastic_residual_cycled(
-    YERRNOD::AbstractVector{<:Real}, iplast::Integer, window::Integer
+    YERRNOD::AbstractVector{<:Real},
+    iplast::Integer,
+    window::Integer;
+    rtol::Real=1.0e-9,
+    max_period::Integer=8,
 )
-    (window > 0 && window + 2 <= iplast <= length(YERRNOD)) || return false
-    ks = (iplast - window + 1):iplast
-    return any(p -> all(k -> YERRNOD[k] == YERRNOD[k - p], ks), (1, 2))
+    (window > 0 && iplast <= length(YERRNOD)) || return false
+    for p in 1:max_period
+        n = max(window, 3 * p)
+        iplast >= n + p || continue
+        all(
+            k -> abs(YERRNOD[k] - YERRNOD[k - p]) <= rtol * abs(YERRNOD[k]),
+            (iplast - n + 1):iplast,
+        ) && return true
+    end
+    return false
 end # function plastic_residual_cycled
 
 """
