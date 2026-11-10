@@ -673,8 +673,7 @@ Reset `ws.plastic_cycle` before the first plastic pass and return the tracked ar
 """
 function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
     tracked = _plastic_cycle_fields(g, cfg, ws)
-    sized = cfg.solver.plastic_cycle_window > 0 ? tracked : ((), ())
-    reset_plastic_cycle!(ws.plastic_cycle, sized...)
+    reset_plastic_cycle!(ws.plastic_cycle, tracked..., cfg.solver.plastic_cycle_window)
     return tracked
 end
 

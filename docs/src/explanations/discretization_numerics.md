@@ -291,10 +291,9 @@ If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic 
 
 The loop also ends as not converged when its state is periodic.
 The state of a pass is the viscosity $\eta$ and the yield flags on the basic nodes, the effective Darcy resistances (with hydrofracture on), the velocities, pressures and Darcy fluxes, the residual and the time step.
-For one period $p$ from 1 to 16, each value of each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must equal its value $p$ passes earlier within a relative tolerance of $10^{-9}$ (default window: `10`; `0` disables the check).
-The test runs node by node and at one common period for all quantities.
-Each pass must also match the earliest pass of the same phase in the run, at most 16 passes back, and the residual, the time step and the sums of the viscosity, yield flag and resistance arrays must match at the start of the run, at most 64 passes back.
-A drift below the tolerance per pass therefore cannot add up to a false stop, except a drift on single nodes slower than $10^{-9}$ per 16 passes that the array sums dilute.
+For one period $p$ from 1 to 10, each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must match, value by value to a relative tolerance of $10^{-9}$, both the pass $p$ earlier and the earliest pass of the same phase in the run (default window: `10`; `0` disables the check).
+Every pass of a phase thus differs from one fixed pass by less than the tolerance, so a slow drift cannot add up to a false stop.
+The record keeps $\max(\texttt{plastic\_cycle\_window}, 30) + 11$ copies of the state, 41 at the default window (about 55 MB on a $129 \times 129$ grid with hydrofracture).
 The velocities, pressures and Darcy fluxes are tested relative to the largest finite magnitude of their field in the two passes, because values near zero carry round-off far above $10^{-9}$ of themselves; a value below about $10^{-5}$ of its field maximum can thus change by $10^{-4}$ of itself per pass unseen.
 The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
 In `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the measured cycles last until `max_plastic_iterations`, so the attempt fails anyway.

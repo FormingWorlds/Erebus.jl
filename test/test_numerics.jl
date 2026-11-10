@@ -2319,7 +2319,7 @@ include("test_helpers.jl")
         # return the tuples of per-node and field-scaled arrays.
         function first_flag(fields, Y, dt, npass; window=10, scaled=k -> ())
             tr = Erebus.PlasticCycleTracker()
-            Erebus.reset_plastic_cycle!(tr, fields(1), scaled(1))
+            Erebus.reset_plastic_cycle!(tr, fields(1), scaled(1), window)
             for k in 1:npass
                 Erebus.plastic_cycle_record!(
                     tr, fields(k), scaled(k), Y(k), dt(k), window
@@ -2394,12 +2394,19 @@ include("test_helpers.jl")
         @test n28 == 0
         n29 = first_flag(k -> ([1.0e5 * (1.0 - 1.05e-10)^k],), flat(1.0), flat(1.0), 80)
         @test n29 == 0
+        # Drift in a scaled array, and beside an Inf in a per-node array.
+        sdrift = k -> (fill(1.0e3 * (1.0 - 1.05e-10)^k, 4),)
+        n31 = first_flag(one_v, flat(1.0), flat(1.0), 80; scaled=sdrift)
+        @test n31 == 0
+        inf_drift = k -> ([Inf, 1.0e5 * (1.0 - 1.05e-10)^k],)
+        n32 = first_flag(inf_drift, flat(1.0), flat(1.0), 80)
+        @test n32 == 0
         n30 = first_flag(one_v, k -> 1.0e5 * (1.0 - 6.2e-11)^k, flat(1.0), 80; window=20)
         @test n30 == 0
-        # Period 10: max(10, 30) + 10 = pass 40; period 17 lies beyond the longest period.
+        # Period 10: max(10, 30) + 10 = pass 40; period 11 lies beyond the longest period.
         n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
         @test n13 == 40
-        n14 = first_flag(k -> ([Float64(mod1(k, 17))],), flat(1.0), flat(1.0), 120)
+        n14 = first_flag(k -> ([Float64(mod1(k, 11))],), flat(1.0), flat(1.0), 120)
         @test n14 == 0
         # Inf never matches a finite value, in a per-node or a field-scaled array.
         inf_odd = k -> ([isodd(k) ? Inf : Float64(k)],)
@@ -2436,18 +2443,28 @@ include("test_helpers.jl")
         # A reset clears the run counters; a state of the wrong length is refused.
         tr = Erebus.PlasticCycleTracker()
         one = ([1.0],)
-        Erebus.reset_plastic_cycle!(tr, one, ())
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
         hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
         @test hits == [false, false, false, false, true]
-        Erebus.reset_plastic_cycle!(tr, one, ())
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
         @test !Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         @test_throws ArgumentError Erebus.plastic_cycle_record!(
             tr, ([1.0, 2.0],), (), 1.0, 1.0, 4
         )
         @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, (), one, 1.0, 1.0, 4)
-        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],))
+        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],), 4)
         @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, one, 1.0, 1.0, 4)
         @test_throws DomainError Erebus.PlasticCycleTracker(; max_period=0)
+        # A window larger than the one the ring was sized for is refused.
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        @test length(tr.ring) == 41
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 31)
+        # Recording on after a stop never compares a pass with itself.
+        for _ in 1:45
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        end
+        @test !Erebus.plastic_cycle_record!(tr, ([999.0],), (), 1.0, 1.0, 4)
+        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],), 4)
         @test_throws DomainError Erebus.plastic_cycle_record!(
             tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=-1.0
         )
@@ -2458,11 +2475,11 @@ include("test_helpers.jl")
             tr, one, ([1.0, 2.0],), 1.0, 1.0, -1
         )
         # A reset loop does not compare with states left from the previous loop.
-        Erebus.reset_plastic_cycle!(tr, one, ())
-        for _ in 1:20
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        for _ in 1:45
             Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         end
-        Erebus.reset_plastic_cycle!(tr, one, ())
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
         hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
         @test hits == [false, false, false, false, true]
         # The scale of a scaled array comes from that array, not from the per-node arrays.
@@ -2474,7 +2491,7 @@ include("test_helpers.jl")
         eta = fill(1.0e21, 33, 33)
         yny = fill(false, 33, 33)
         vel = fill(1.0e-9, 33, 33)
-        Erebus.reset_plastic_cycle!(tr, (eta, yny), (vel, vel))
+        Erebus.reset_plastic_cycle!(tr, (eta, yny), (vel, vel), 10)
         Erebus.plastic_cycle_record!(tr, (eta, yny), (vel, vel), 1.0, 1.0, 10)
         bytes = @allocated Erebus.plastic_cycle_record!(
             tr, (eta, yny), (vel, vel), 1.0, 1.0, 10

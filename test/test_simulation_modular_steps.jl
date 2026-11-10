@@ -796,6 +796,7 @@ using Erebus
         nstate = sum(length, fields) + sum(length, scaled)
         @test all(slot -> length(slot) == nstate, ws.plastic_cycle.ring)
         @test size(ws.plastic_cycle.scale, 1) == 6
+        @test length(ws.plastic_cycle.ring) == 41
         fields, scaled, state, ws, cfg = tracked(false, 10)
         @test length(fields) == 2
         @test fields[1] === state.grids.ETA
@@ -810,7 +811,7 @@ using Erebus
         @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
         _, _, _, ws, _ = tracked(false, 0)
         @test all(isempty, ws.plastic_cycle.ring)
-        @test size(ws.plastic_cycle.scale, 1) == 0
+        @test isempty(ws.plastic_cycle.scale)
     end
 
     @testset "Stokes-Darcy plastic loop stops on a cycled residual" begin

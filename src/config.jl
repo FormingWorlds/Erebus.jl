@@ -1528,9 +1528,9 @@ function _validate_solver_config(
     @check_nonneg_finite cfg.dsubgrids
     @check_ge cfg.max_plastic_iterations 1
     @check_ge cfg.max_dt_reductions 1
-    (cfg.plastic_cycle_window == 0 || cfg.plastic_cycle_window >= 4) || throw(
+    (cfg.plastic_cycle_window == 0 || 4 <= cfg.plastic_cycle_window <= 100) || throw(
         ArgumentError(
-            "solver.plastic_cycle_window must be 0 (off) or >= 4, got $(cfg.plastic_cycle_window)",
+            "solver.plastic_cycle_window must be 0 (off) or 4 to 100, got $(cfg.plastic_cycle_window)",
         ),
     )
     @check_positive cfg.etamin
