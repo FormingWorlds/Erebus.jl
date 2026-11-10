@@ -2394,6 +2394,11 @@ include("test_helpers.jl")
         @test n28 == 0
         n29 = first_flag(k -> ([1.0e5 * (1.0 - 1.05e-10)^k],), flat(1.0), flat(1.0), 80)
         @test n29 == 0
+        # Blocks of 4 passes at 1, 1 + 0.99e-9 and 1 - 0.99e-9: every pass is within rtol
+        # of pass 1, but the step at pass 9 (1.98e-9) breaks the match with the pass before.
+        blocks = k -> ([1.0 + 0.99e-9 * (0.0, 1.0, -1.0)[(k - 1) ÷ 4 + 1]],)
+        n33 = first_flag(blocks, flat(1.0), flat(1.0), 12)
+        @test n33 == 0
         # Drift in a scaled array, and beside an Inf in a per-node array.
         sdrift = k -> (fill(1.0e3 * (1.0 - 1.05e-10)^k, 4),)
         n31 = first_flag(one_v, flat(1.0), flat(1.0), 80; scaled=sdrift)
@@ -2437,8 +2442,8 @@ include("test_helpers.jl")
         pr_relax = k -> (fill(1.0e3, 9), fill(1.0e6, 9) .- 100.0 * k)
         n20 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=pr_relax)
         @test n20 == 0
-        small_relax = k -> (fill(1.0e6, 9), fill(1.0 - 1.0e-4 * k, 9))
-        n22 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=small_relax)
+        small_noise = k -> (fill(1.0e6, 9), fill(1.0 + 1.0e-5 * sin(sqrt(2.0) * k), 9))
+        n22 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=small_noise)
         @test n22 == 0
         # A reset clears the run counters; a state of the wrong length is refused.
         tr = Erebus.PlasticCycleTracker()
