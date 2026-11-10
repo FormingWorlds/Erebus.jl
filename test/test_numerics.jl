@@ -2427,6 +2427,10 @@ include("test_helpers.jl")
         tiny(k) = [-1.0, 1.0e-6 * (1.0 + 1.0e-7 * sin(sqrt(2.0) * k))]
         n17 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (tiny(k),))
         @test n17 == 11
+        n17b = first_flag(
+            k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (reverse(tiny(k)),)
+        )
+        @test n17b == 11
         n18 = first_flag(k -> (tiny(k),), flat(1.0), flat(1.0), 40)
         @test n18 == 0
         # A yielding node at 1e15 Pa s in a 1e23 Pa s background relaxing by 1e-4 per pass.
@@ -2469,7 +2473,26 @@ include("test_helpers.jl")
         @test_throws DomainError Erebus.plastic_cycle_record!(
             tr, one, (), 1.0, 1.0, 4; rtol=NaN
         )
-        @test !Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4; rtol=0.0)
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        hits0 = [
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4; rtol=0.0) for _ in 1:5
+        ]
+        @test hits0 == [false, false, false, false, true]
+        # A drift below rtol per pass in the time step adds up over the run.
+        n34 = first_flag(one_v, flat(1.0), k -> 1.0e5 * (1.0 + 1.05e-10 * k), 80)
+        @test n34 == 0
+        # One period only: a constant tail stops, a period-2 tail does not.
+        tr1 = Erebus.PlasticCycleTracker(; max_period=1)
+        Erebus.reset_plastic_cycle!(tr1, one, (), 10)
+        @test length(tr1.ring) == 12
+        hits1 = [Erebus.plastic_cycle_record!(tr1, one, (), 1.0, 1.0, 10) for _ in 1:11]
+        @test findfirst(hits1) == 11
+        Erebus.reset_plastic_cycle!(tr1, one, (), 10)
+        alt1 = [
+            Erebus.plastic_cycle_record!(tr1, ([Float64(isodd(k))],), (), 1.0, 1.0, 10) for
+            k in 1:30
+        ]
+        @test !any(alt1)
         # A used tracker grows for a larger window.
         Erebus.reset_plastic_cycle!(tr, one, (), 50)
         @test length(tr.ring) == 61
@@ -2481,6 +2504,17 @@ include("test_helpers.jl")
             Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         end
         @test !Erebus.plastic_cycle_record!(tr, ([999.0],), (), 1.0, 1.0, 4)
+        # After a stop, a ramp of 3e-11 per pass matches the pass before but leaves the
+        # anchor 40 passes back by more than rtol at pass 34 of the ramp.
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        for _ in 1:45
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        end
+        ramp = [
+            Erebus.plastic_cycle_record!(tr, ([1.0 + 3.0e-11 * j],), (), 1.0, 1.0, 4) for
+            j in 1:40
+        ]
+        @test !ramp[34]
         Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],), 4)
         @test_throws DomainError Erebus.plastic_cycle_record!(
             tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=-1.0

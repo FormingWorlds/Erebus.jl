@@ -80,7 +80,7 @@ include("test_helpers.jl")
         @test SolverConfig(plastic_cycle_window=100).plastic_cycle_window == 100
         for w in (4, 100)
             cfg_w = SimulationConfig(; solver=SolverConfig(plastic_cycle_window=w))
-            @test cfg_w.solver.plastic_cycle_window == w
+            @test validate_config(cfg_w) === nothing
         end
 
         # Missing file error check

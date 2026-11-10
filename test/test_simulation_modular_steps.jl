@@ -814,6 +814,16 @@ using Erebus
             Erebus._plastic_cycle_stop!(ws, (fields, scaled), state, cfg, i)
         end
         @test !any(stops)
+        # It also reads the time step: a changing time step is no cycle.
+        Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+        dt0 = state.dt
+        stops_dt = map(1:14) do i
+            ws.YERRNOD[i] = 100.0
+            state.dt = dt0 * (1.0 + 0.01 * i)
+            Erebus._plastic_cycle_stop!(ws, (fields, scaled), state, cfg, i)
+        end
+        state.dt = dt0
+        @test !any(stops_dt)
         @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
         _, _, _, ws, _ = tracked(false, 0)
         @test all(isempty, ws.plastic_cycle.ring)

@@ -697,8 +697,9 @@ stored in ring slot `j`.
 # Arguments
 
     - tr: [`PlasticCycleTracker`](@ref)
-    - cur: ring slot of the current pass, index `ic`
-    - j: ring slot of the earlier pass
+    - cur: ring slot of the current pass
+    - ic: index of the slot of the current pass
+    - j: index of the slot of the earlier pass
     - Y: plastic residual of the current pass (Pa)
     - dt: time step of the current pass (s)
     - rtol: relative tolerance
