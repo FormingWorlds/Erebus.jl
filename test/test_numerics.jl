@@ -2420,12 +2420,17 @@ include("test_helpers.jl")
         @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, (), one, 1.0, 1.0, 4)
         # A reset loop does not compare with states left from the previous loop.
         Erebus.reset_plastic_cycle!(tr, one, ())
-        for _ in 1:10
+        for _ in 1:20
             Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         end
         Erebus.reset_plastic_cycle!(tr, one, ())
         hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
         @test hits == [false, false, false, false, true]
+        # The scale of a scaled array comes from that array, not from the per-node arrays.
+        big = (fill(1.0e20, 2),)
+        drift = k -> ([1.0 - 1.0e-4 * k],)
+        n21 = first_flag(k -> big, flat(1.0), flat(1.0), 40; scaled=drift)
+        @test n21 == 0
         # No allocation per pass once the ring is sized.
         eta = fill(1.0e21, 33, 33)
         vel = fill(1.0e-9, 33, 33)
