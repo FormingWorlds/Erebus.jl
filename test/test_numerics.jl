@@ -2383,6 +2383,8 @@ include("test_helpers.jl")
         inf_odd = k -> ([isodd(k) ? Inf : Float64(k)],)
         n15 = first_flag(inf_odd, flat(1.0), flat(1.0), 40)
         @test n15 == 0
+        @test !Erebus._cycle_match(Inf, -Inf, 1.0e-9, 1.0)
+        @test Erebus._cycle_match(-Inf, -Inf, 1.0e-9)
         inf_scaled = k -> ([Inf, 1.0 + 0.01 * k],)
         n16 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=inf_scaled)
         @test n16 == 0
@@ -2427,6 +2429,12 @@ include("test_helpers.jl")
         @test_throws DomainError Erebus.plastic_cycle_record!(
             tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=-1.0
         )
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=Inf
+        )
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, -1
+        )
         # A reset loop does not compare with states left from the previous loop.
         Erebus.reset_plastic_cycle!(tr, one, ())
         for _ in 1:20
@@ -2440,13 +2448,14 @@ include("test_helpers.jl")
         drift = k -> ([1.0 - 1.0e-4 * k],)
         n21 = first_flag(k -> big, flat(1.0), flat(1.0), 40; scaled=drift)
         @test n21 == 0
-        # No allocation per pass once the ring is sized.
+        # No allocation per pass once the ring is sized, also with Bool yield flags.
         eta = fill(1.0e21, 33, 33)
+        yny = fill(false, 33, 33)
         vel = fill(1.0e-9, 33, 33)
-        Erebus.reset_plastic_cycle!(tr, (eta,), (vel, vel))
-        Erebus.plastic_cycle_record!(tr, (eta,), (vel, vel), 1.0, 1.0, 10)
+        Erebus.reset_plastic_cycle!(tr, (eta, yny), (vel, vel))
+        Erebus.plastic_cycle_record!(tr, (eta, yny), (vel, vel), 1.0, 1.0, 10)
         bytes = @allocated Erebus.plastic_cycle_record!(
-            tr, (eta,), (vel, vel), 1.0, 1.0, 10
+            tr, (eta, yny), (vel, vel), 1.0, 1.0, 10
         )
         @test bytes == 0
         # A mismatch restarts the run: 9 equal passes, 1 change, 5 equal passes is no cycle.

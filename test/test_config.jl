@@ -262,6 +262,7 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(max_dt_reductions=0)
         # plastic_cycle_window: 0 (off) or at least 4 passes
         @reject_config solver=SolverConfig(plastic_cycle_window=-1)
+        @reject_config solver=SolverConfig(plastic_cycle_window=1)
         @reject_config solver=SolverConfig(plastic_cycle_window=2)
         @reject_config solver=SolverConfig(plastic_cycle_window=3)
 

@@ -544,12 +544,11 @@ Copy the arrays of `fields` one after the other into `cur`, starting after index
 
     - the number of values in `cur` after the copy
 """
-function _pack_cycle_state!(cur, off, fields)
-    for f in fields
-        copyto!(cur, off + 1, f, 1, length(f))
-        off += length(f)
-    end
-    return off
+_pack_cycle_state!(cur, off, ::Tuple{}) = off
+function _pack_cycle_state!(cur, off, fields::Tuple)
+    f = first(fields)
+    copyto!(cur, off + 1, f, 1, length(f))
+    return _pack_cycle_state!(cur, off + length(f), Base.tail(fields))
 end
 
 """
@@ -589,8 +588,9 @@ end
     plastic_cycle_record!(tr, fields, scaled, Y, dt, window; rtol=1.0e-9) -> Bool
 
 Record one plastic pass and return true when the loop state is periodic. The state of a
-pass is the arrays in `fields` (viscosity, Darcy resistances), the arrays in `scaled`
-(velocities, pressures, Darcy fluxes), the residual `Y` and the time step `dt`. A value `a`
+pass is the arrays in `fields` (viscosity, yield flags, Darcy resistances), the arrays in
+`scaled` (velocities, pressures, Darcy fluxes), the residual `Y` and the time step `dt`. A
+value `a`
 of `fields`, `Y` or `dt` matches its value `b` of `p` passes before as `a == b` or
 `abs(a - b) <= rtol * max(abs(a), abs(b))`. A value of an array in `scaled` matches as
 `a == b` or `abs(a - b) <= rtol * max(abs(a), abs(b), s)`, with `s` the largest finite
@@ -618,7 +618,7 @@ the array scale can change by 1e-4 of itself per pass without breaking the match
 # Throws
 
     - ArgumentError: the arrays do not hold the lengths set by [`reset_plastic_cycle!`](@ref)
-    - DomainError: `rtol < 0` or NaN
+    - DomainError: `rtol` negative or not finite, or `window < 0`
 """
 function plastic_cycle_record!(
     tr::PlasticCycleTracker,
@@ -629,8 +629,10 @@ function plastic_cycle_record!(
     window::Integer;
     rtol::Real=1.0e-9,
 )
+    (isfinite(rtol) && rtol >= 0) ||
+        throw(DomainError(rtol, "rtol must be finite and >= 0"))
+    window >= 0 || throw(DomainError(window, "window must be >= 0"))
     window > 0 || return false
-    rtol >= 0 || throw(DomainError(rtol, "rtol must be non-negative"))
     nslot = length(tr.ring)
     _cycle_lengths_match(tr, fields, scaled) || throw(
         ArgumentError("plastic cycle state does not match the arrays set at the reset")
@@ -680,12 +682,28 @@ True when `fields` and `scaled` hold the number of arrays and the array lengths 
 function _cycle_lengths_match(tr::PlasticCycleTracker, fields::Tuple, scaled::Tuple)
     length(fields) + length(scaled) == length(tr.lens) || return false
     length(scaled) == size(tr.scale, 1) || return false
-    i = 0
-    for f in (fields..., scaled...)
-        i += 1
-        length(f) == tr.lens[i] || return false
-    end
-    return true
+    return _lengths_from(tr.lens, 1, fields) &&
+           _lengths_from(tr.lens, length(fields) + 1, scaled)
+end
+
+"""
+    _lengths_from(lens, i, t) -> Bool
+
+True when the arrays of tuple `t` have the lengths `lens[i]`, `lens[i + 1]`, and so on.
+
+# Arguments
+
+    - lens: array lengths set at the reset
+    - i: index in `lens` of the first array of `t`
+    - t: tuple of arrays
+
+# Returns
+
+    - true when every length matches
+"""
+_lengths_from(lens, i, ::Tuple{}) = true
+function _lengths_from(lens, i, t::Tuple)
+    return length(first(t)) == lens[i] && _lengths_from(lens, i + 1, Base.tail(t))
 end
 
 """

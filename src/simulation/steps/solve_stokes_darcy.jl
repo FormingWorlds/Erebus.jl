@@ -633,7 +633,7 @@ end
 
 State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref).
 `fields` holds the arrays tested node by node: viscosity `g.ETA`, the yield flags `g.YNY`
-of the previous pass, and the effective Darcy resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
+that the next pass reads, and the effective Darcy resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
 each array tested against its own scale: `g.vx`, `g.vy`, `g.pr`, `g.pf`, `g.qxD`, `g.qyD`.
 
 # Arguments
