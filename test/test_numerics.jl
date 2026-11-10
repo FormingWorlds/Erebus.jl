@@ -2374,6 +2374,12 @@ include("test_helpers.jl")
         @test n11 == 11
         n12 = first_flag(k -> ([NaN, 1.0],), flat(1.0), flat(1.0), 30)
         @test n12 == 0
+        # A drift below rtol per pass that adds up above rtol over the run is not a cycle.
+        decay = k -> 1.0e5 * (1.0 - 0.9e-9)^k
+        n24 = first_flag(k -> ([1.0],), decay, flat(1.0), 60)
+        @test n24 == 0
+        n25 = first_flag(k -> ([decay(k)],), flat(1.0), flat(1.0), 60)
+        @test n25 == 0
         # Period 10: max(10, 30) + 10 = pass 40; period 17 lies beyond the longest period.
         n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
         @test n13 == 40

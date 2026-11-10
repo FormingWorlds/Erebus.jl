@@ -596,7 +596,9 @@ of `fields`, `Y` or `dt` matches its value `b` of `p` passes before as `a == b` 
 `a == b` or `abs(a - b) <= rtol * max(abs(a), abs(b), s)`, with `s` the largest finite
 magnitude of that array in the two passes, so round-off on values near zero does not break
 the match. NaN never matches; Inf matches only itself. The result is true when, for one
-period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag `p`.
+period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag `p` and
+at the oldest lag of the run that is a multiple of `p` and at most `max_period`, so a
+drift that adds up over the run breaks the match.
 Every quantity is tested at the same period and node by node, so a slow change on one
 node is not hidden by the rest of the grid; a value of a scaled array below about 1e-5 of
 the array scale can change by 1e-4 of itself per pass without breaking the match.
@@ -653,16 +655,43 @@ function plastic_cycle_record!(
     cycled = false
     for p in eachindex(tr.run)
         k <= p && continue
-        ip = mod1(k - p, nslot)
-        ok =
-            _cycle_match(Y, tr.Y[ip], rtol) &&
-            _cycle_match(dt, tr.dt[ip], rtol) &&
-            _cycle_lag_match(tr, cur, tr.ring[ip], ic, ip, rtol)
+        ok = _cycle_slot_match(tr, cur, ic, mod1(k - p, nslot), Y, dt, rtol)
+        # Also match the oldest kept pass of the same phase in the run, so drift cannot
+        # add up over the run.
+        m = min(length(tr.run) ÷ p, (tr.run[p] + p) ÷ p, (k - 1) ÷ p)
+        if ok && m > 1
+            ok = _cycle_slot_match(tr, cur, ic, mod1(k - m * p, nslot), Y, dt, rtol)
+        end
         tr.run[p] = ok ? tr.run[p] + 1 : 0
         cycled |= tr.run[p] >= max(window, 3 * p)
     end
     return cycled
 end # function plastic_cycle_record!
+
+"""
+    _cycle_slot_match(tr, cur, ic, j, Y, dt, rtol) -> Bool
+
+True when the residual, the time step and the arrays of the current pass match those
+stored in ring slot `j`.
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - cur: ring slot of the current pass, index `ic`
+    - j: ring slot of the earlier pass
+    - Y: plastic residual of the current pass (Pa)
+    - dt: time step of the current pass (s)
+    - rtol: relative tolerance
+
+# Returns
+
+    - true when the two passes match
+"""
+function _cycle_slot_match(tr::PlasticCycleTracker, cur, ic, j, Y, dt, rtol)
+    return _cycle_match(Y, tr.Y[j], rtol) &&
+           _cycle_match(dt, tr.dt[j], rtol) &&
+           _cycle_lag_match(tr, cur, tr.ring[j], ic, j, rtol)
+end
 
 """
     _cycle_lengths_match(tr, fields, scaled) -> Bool
