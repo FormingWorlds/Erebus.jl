@@ -629,43 +629,47 @@ function postprocess_hydromechanical_solution!(
 end
 
 """
-    _plastic_cycle_fields(g, cfg, ws) -> Tuple
+    _plastic_cycle_fields(g, cfg, ws) -> (fields, scaled)
 
-State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref):
-viscosity `g.ETA`, the solution vector `ws.S`, and the effective Darcy resistances when
-hydrofracture is on.
+State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref).
+`fields` holds the arrays tested node by node: viscosity `g.ETA`, and the effective Darcy
+resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
+each array tested against its own scale: `g.vx`, `g.vy`, `g.pr`, `g.pf`, `g.qxD`, `g.qyD`.
 """
 function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
     hm = ws.hydromech
+    scaled = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
     if cfg.poroelasticity.hydrofracture && hm.rx_eff !== nothing && hm.ry_eff !== nothing
-        return (g.ETA, ws.S, hm.rx_eff, hm.ry_eff)
+        return ((g.ETA, hm.rx_eff, hm.ry_eff), scaled)
     end
-    return (g.ETA, ws.S)
+    return ((g.ETA,), scaled)
 end
 
 """
-    _start_plastic_cycle!(g, cfg, ws) -> Tuple
+    _start_plastic_cycle!(g, cfg, ws) -> (fields, scaled)
 
-Reset `ws.plastic_cycle` before the first plastic pass and return the tracked fields of
+Reset `ws.plastic_cycle` before the first plastic pass and return the tracked arrays of
 [`_plastic_cycle_fields`](@ref); the ring holds no values when the cycle stop is off.
 """
 function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
-    fields = _plastic_cycle_fields(g, cfg, ws)
-    nstate = cfg.solver.plastic_cycle_window > 0 ? sum(length, fields) : 0
-    reset_plastic_cycle!(ws.plastic_cycle, nstate)
-    return fields
+    tracked = _plastic_cycle_fields(g, cfg, ws)
+    sized = cfg.solver.plastic_cycle_window > 0 ? tracked : ((), ())
+    reset_plastic_cycle!(ws.plastic_cycle, sized...)
+    return tracked
 end
 
 """
-    _plastic_cycle_stop!(ws, fields, state, cfg, iplast) -> Bool
+    _plastic_cycle_stop!(ws, tracked, state, cfg, iplast) -> Bool
 
 Record plastic pass `iplast` in `ws.plastic_cycle` and return true when the loop state is
 periodic ([`plastic_cycle_record!`](@ref)), so the loop ends as not converged.
 """
-function _plastic_cycle_stop!(ws::SimulationWorkspaces, fields, state, cfg, iplast::Integer)
+function _plastic_cycle_stop!(
+    ws::SimulationWorkspaces, tracked, state, cfg, iplast::Integer
+)
     Y = ws.YERRNOD[iplast]
     return plastic_cycle_record!(
-        ws.plastic_cycle, fields, Y, state.dt, cfg.solver.plastic_cycle_window
+        ws.plastic_cycle, tracked..., Y, state.dt, cfg.solver.plastic_cycle_window
     )
 end
 

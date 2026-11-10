@@ -411,12 +411,13 @@ function compute_nodal_adjustment!(
 end # function compute_nodal_adjustment!
 
 """
-    PlasticCycleTracker(; max_period=8)
+    PlasticCycleTracker(; max_period=16)
 
 Per-pass record of the plastic loop state for the cycle stop of the plastic loop. A ring of
-`max_period + 1` state copies, the residual and the time step of each pass, and one run
-counter per period `p`: the number of consecutive passes whose state matches the state `p`
-passes before. Allocated once per workspace; [`reset_plastic_cycle!`](@ref) sizes it.
+`max_period + 1` state copies, the scale of each field-scaled array, the residual and the
+time step of each pass, and one run counter per period `p`: the number of consecutive passes
+whose state matches the state `p` passes before. Allocated once per workspace;
+[`reset_plastic_cycle!`](@ref) sizes it.
 
 # Arguments
 
@@ -424,60 +425,117 @@ passes before. Allocated once per workspace; [`reset_plastic_cycle!`](@ref) size
 """
 mutable struct PlasticCycleTracker
     ring::Vector{Vector{Float64}}
+    scale::Matrix{Float64}
+    lens::Vector{Int}
+    nnode::Int
     Y::Vector{Float64}
     dt::Vector{Float64}
     run::Vector{Int}
     npass::Int
 end
-function PlasticCycleTracker(; max_period::Integer=8)
+function PlasticCycleTracker(; max_period::Integer=16)
     nslot = max_period + 1
     return PlasticCycleTracker(
-        [Float64[] for _ in 1:nslot], zeros(nslot), zeros(nslot), zeros(Int, max_period), 0
+        [Float64[] for _ in 1:nslot],
+        zeros(0, nslot),
+        Int[],
+        0,
+        zeros(nslot),
+        zeros(nslot),
+        zeros(Int, max_period),
+        0,
     )
 end
 
 """
-    reset_plastic_cycle!(tr, nstate) -> tr
+    reset_plastic_cycle!(tr, fields, scaled) -> tr
 
-Clear the pass count and the run counters of `tr` and size each ring slot to `nstate`
-values, before the first pass of a plastic loop.
+Clear the pass count and the run counters of `tr` and size its ring for the arrays of a
+plastic loop, before the first pass of the loop.
 
 # Arguments
 
     - tr: [`PlasticCycleTracker`](@ref)
-    - nstate: total number of state values recorded per pass
+    - fields: tuple of arrays tested node by node
+    - scaled: tuple of arrays tested against their field scale
 
 # Returns
 
     - tr
 """
-function reset_plastic_cycle!(tr::PlasticCycleTracker, nstate::Integer)
+function reset_plastic_cycle!(tr::PlasticCycleTracker, fields::Tuple, scaled::Tuple)
+    lens = Int[length(f) for f in (fields..., scaled...)]
+    nstate = sum(lens; init=0)
     for slot in tr.ring
         length(slot) == nstate || resize!(slot, nstate)
     end
+    size(tr.scale, 1) == length(scaled) ||
+        (tr.scale = zeros(length(scaled), length(tr.ring)))
+    tr.lens = lens
+    tr.nnode = sum(length, fields; init=0)
     fill!(tr.run, 0)
     tr.npass = 0
     return tr
 end
 
-_cycle_match(a, b, rtol) = a == b || abs(a - b) <= rtol * max(abs(a), abs(b))
+function _cycle_match(a, b, rtol, s=0.0)
+    return a == b ||
+           (isfinite(a) && isfinite(b) && abs(a - b) <= rtol * max(abs(a), abs(b), s))
+end
+
+function _finite_absmax(v, r)
+    m = 0.0
+    @inbounds for i in r
+        isfinite(v[i]) && (m = max(m, abs(v[i])))
+    end
+    return m
+end
+
+function _pack_cycle_state!(cur, off, fields)
+    for f in fields
+        copyto!(cur, off + 1, f, 1, length(f))
+        off += length(f)
+    end
+    return off
+end
+
+function _cycle_lag_match(tr::PlasticCycleTracker, cur, prev, ic, ip, rtol)
+    @inbounds for i in 1:tr.nnode
+        _cycle_match(cur[i], prev[i], rtol) || return false
+    end
+    off = tr.nnode
+    nfield = length(tr.lens) - size(tr.scale, 1)
+    @inbounds for q in axes(tr.scale, 1)
+        s = max(tr.scale[q, ic], tr.scale[q, ip])
+        for i in (off + 1):(off + tr.lens[nfield + q])
+            _cycle_match(cur[i], prev[i], rtol, s) || return false
+        end
+        off += tr.lens[nfield + q]
+    end
+    return true
+end
 
 """
-    plastic_cycle_record!(tr, fields, Y, dt, window; rtol=1.0e-9) -> Bool
+    plastic_cycle_record!(tr, fields, scaled, Y, dt, window; rtol=1.0e-9) -> Bool
 
 Record one plastic pass and return true when the loop state is periodic. The state of a
-pass is the arrays in `fields` (viscosity, solution vector, Darcy resistances), the
-residual `Y` and the time step `dt`. It matches the state `p` passes before when every
-value `a` agrees with its earlier value `b` as `a == b` or
-`abs(a - b) <= rtol * max(abs(a), abs(b))`; NaN never matches. The result is true when,
-for one period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag
-`p`. Every quantity is tested at the same period, and node by node, so a slow change on
-one node is not hidden by the rest of the grid.
+pass is the arrays in `fields` (viscosity, Darcy resistances), the arrays in `scaled`
+(velocities, pressures, Darcy fluxes), the residual `Y` and the time step `dt`. A value `a`
+of `fields`, `Y` or `dt` matches its value `b` of `p` passes before as `a == b` or
+`abs(a - b) <= rtol * max(abs(a), abs(b))`. A value of an array in `scaled` matches as
+`a == b` or `abs(a - b) <= rtol * max(abs(a), abs(b), s)`, with `s` the largest finite
+magnitude of that array in the two passes, so round-off on values near zero does not break
+the match. NaN never matches; Inf matches only itself. The result is true when, for one
+period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag `p`.
+Every quantity is tested at the same period and node by node, so a slow change on one
+node is not hidden by the rest of the grid; a value of a scaled array below about 1e-5 of
+the array scale can change by 1e-4 of itself per pass without breaking the match.
 
 # Arguments
 
     - tr: [`PlasticCycleTracker`](@ref), reset for this loop
-    - fields: tuple of arrays, `sum(length, fields)` values per pass
+    - fields: tuple of arrays tested node by node
+    - scaled: tuple of arrays tested against their field scale
     - Y: plastic residual of the pass (Pa)
     - dt: time step of the pass (s)
     - window: minimum run length in passes; 0 disables the test
@@ -489,11 +547,12 @@ one node is not hidden by the rest of the grid.
 
 # Throws
 
-    - ArgumentError: the fields do not hold the length set by [`reset_plastic_cycle!`](@ref)
+    - ArgumentError: the arrays do not hold the lengths set by [`reset_plastic_cycle!`](@ref)
 """
 function plastic_cycle_record!(
     tr::PlasticCycleTracker,
     fields::Tuple,
+    scaled::Tuple,
     Y::Real,
     dt::Real,
     window::Integer;
@@ -501,37 +560,46 @@ function plastic_cycle_record!(
 )
     window > 0 || return false
     nslot = length(tr.ring)
+    _cycle_lengths_match(tr, fields, scaled) || throw(
+        ArgumentError("plastic cycle state does not match the arrays set at the reset")
+    )
     tr.npass += 1
     k = tr.npass
-    cur = tr.ring[mod1(k, nslot)]
-    sum(length, fields) == length(cur) || throw(
-        ArgumentError(
-            "plastic cycle state has $(sum(length, fields)) values, tracker holds $(length(cur))",
-        ),
-    )
-    off = 0
-    for f in fields
-        copyto!(cur, off + 1, vec(f), 1, length(f))
-        off += length(f)
+    ic = mod1(k, nslot)
+    cur = tr.ring[ic]
+    off = _pack_cycle_state!(cur, _pack_cycle_state!(cur, 0, fields), scaled)
+    off = tr.nnode
+    for q in axes(tr.scale, 1)
+        n = tr.lens[length(fields) + q]
+        tr.scale[q, ic] = _finite_absmax(cur, (off + 1):(off + n))
+        off += n
     end
-    tr.Y[mod1(k, nslot)] = Y
-    tr.dt[mod1(k, nslot)] = dt
+    tr.Y[ic] = Y
+    tr.dt[ic] = dt
     cycled = false
     for p in eachindex(tr.run)
-        if k <= p
-            continue
-        end
-        j = mod1(k - p, nslot)
-        prev = tr.ring[j]
+        k <= p && continue
+        ip = mod1(k - p, nslot)
         ok =
-            _cycle_match(Y, tr.Y[j], rtol) &&
-            _cycle_match(dt, tr.dt[j], rtol) &&
-            all(i -> _cycle_match(cur[i], prev[i], rtol), eachindex(cur))
+            _cycle_match(Y, tr.Y[ip], rtol) &&
+            _cycle_match(dt, tr.dt[ip], rtol) &&
+            _cycle_lag_match(tr, cur, tr.ring[ip], ic, ip, rtol)
         tr.run[p] = ok ? tr.run[p] + 1 : 0
         cycled |= tr.run[p] >= max(window, 3 * p)
     end
     return cycled
 end # function plastic_cycle_record!
+
+function _cycle_lengths_match(tr::PlasticCycleTracker, fields::Tuple, scaled::Tuple)
+    length(fields) + length(scaled) == length(tr.lens) || return false
+    length(scaled) == size(tr.scale, 1) || return false
+    i = 0
+    for f in (fields..., scaled...)
+        i += 1
+        length(f) == tr.lens[i] || return false
+    end
+    return true
+end
 
 """
 Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.

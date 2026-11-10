@@ -781,22 +781,27 @@ using Erebus
                 ),
             )
             state, coords, ws, _, _ = init_simulation(cfg)
-            fields = Erebus._start_plastic_cycle!(state.grids, cfg, ws)
-            return fields, state, ws
+            fields, scaled = Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+            return fields, scaled, state, ws
         end
-        fields, state, ws = tracked(true, 10)
-        @test length(fields) == 4
+        solution(g) = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
+        fields, scaled, state, ws = tracked(true, 10)
+        @test length(fields) == 3
         @test fields[1] === state.grids.ETA
-        @test fields[2] === ws.S
-        @test fields[3] === ws.hydromech.rx_eff
-        @test fields[4] === ws.hydromech.ry_eff
-        @test all(slot -> length(slot) == sum(length, fields), ws.plastic_cycle.ring)
-        fields, state, ws = tracked(false, 10)
-        @test length(fields) == 2
+        @test fields[2] === ws.hydromech.rx_eff
+        @test fields[3] === ws.hydromech.ry_eff
+        @test length(scaled) == 6
+        @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
+        nstate = sum(length, fields) + sum(length, scaled)
+        @test all(slot -> length(slot) == nstate, ws.plastic_cycle.ring)
+        @test size(ws.plastic_cycle.scale, 1) == 6
+        fields, scaled, state, ws = tracked(false, 10)
+        @test length(fields) == 1
         @test fields[1] === state.grids.ETA
-        @test fields[2] === ws.S
-        _, _, ws = tracked(false, 0)
+        @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
+        _, _, _, ws = tracked(false, 0)
         @test all(isempty, ws.plastic_cycle.ring)
+        @test size(ws.plastic_cycle.scale, 1) == 0
     end
 
     @testset "Stokes-Darcy plastic loop stops on a cycled residual" begin

@@ -2315,21 +2315,24 @@ include("test_helpers.jl")
     end
 
     @testset "PlasticCycleTracker: one common period over every tracked quantity" begin
-        # First pass at which the tracker flags a cycle, or 0; fields(k) returns a tuple.
-        function first_flag(fields, Y, dt, npass; window=10)
+        # First pass at which the tracker flags a cycle, or 0; fields(k) and scaled(k)
+        # return the tuples of per-node and field-scaled arrays.
+        function first_flag(fields, Y, dt, npass; window=10, scaled=k -> ())
             tr = Erebus.PlasticCycleTracker()
-            Erebus.reset_plastic_cycle!(tr, sum(length, fields(1)))
+            Erebus.reset_plastic_cycle!(tr, fields(1), scaled(1))
             for k in 1:npass
-                Erebus.plastic_cycle_record!(tr, fields(k), Y(k), dt(k), window) && return k
+                Erebus.plastic_cycle_record!(
+                    tr, fields(k), scaled(k), Y(k), dt(k), window
+                ) && return k
             end
             return 0
         end
         flat(v) = k -> v
         base = [3449.88, 803.96, 2415.1, 2574.79, 1006.14]
-        tail5(k, amp) = base[mod1(k, 5)] * (1.0 + amp * (-1)^k)
+        tail5(k, amp) = base[mod1(k, 5)] * (1.0 + amp * sin(sqrt(2.0) * k))
         y5(amp) = k -> k <= 2 ? 5000.0 * k : tail5(k, amp)
         f5(amp) = k -> (fill(k <= 2 ? 1.0e21 : 1.0e19 * tail5(k, amp), 3, 3),)
-        # Period-5 tail from pass 3 with 1e-12 noise: max(10, 15) passes plus lag 5, pass 22.
+        # Period-5 tail from pass 3 with 1e-12 aperiodic noise: max(10, 15) passes plus lag 5, pass 22.
         n1 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60)
         @test n1 == 22
         n2 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60; window=0)
@@ -2371,27 +2374,67 @@ include("test_helpers.jl")
         @test n11 == 11
         n12 = first_flag(k -> ([NaN, 1.0],), flat(1.0), flat(1.0), 30)
         @test n12 == 0
-        # Period 9 lies beyond the longest period checked.
-        n13 = first_flag(k -> ([Float64(mod1(k, 9))],), flat(1.0), flat(1.0), 80)
-        @test n13 == 0
+        # Period 10: max(10, 30) + 10 = pass 40; period 17 lies beyond the longest period.
+        n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
+        @test n13 == 40
+        n14 = first_flag(k -> ([Float64(mod1(k, 17))],), flat(1.0), flat(1.0), 120)
+        @test n14 == 0
+        # Inf never matches a finite value, in a per-node or a field-scaled array.
+        inf_odd = k -> ([isodd(k) ? Inf : Float64(k)],)
+        n15 = first_flag(inf_odd, flat(1.0), flat(1.0), 40)
+        @test n15 == 0
+        inf_scaled = k -> ([Inf, 1.0 + 0.01 * k],)
+        n16 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=inf_scaled)
+        @test n16 == 0
+        # 1e-7 noise on a node at 1e-6 of its field maximum: a cycle when the array is
+        # field-scaled, not when it is tested node by node.
+        tiny(k) = [1.0, 1.0e-6 * (1.0 + 1.0e-7 * sin(sqrt(2.0) * k))]
+        n17 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (tiny(k),))
+        @test n17 == 11
+        n18 = first_flag(k -> (tiny(k),), flat(1.0), flat(1.0), 40)
+        @test n18 == 0
+        # A yielding node at 1e15 Pa s in a 1e23 Pa s background relaxing by 1e-4 per pass.
+        yielding = k -> begin
+            e = fill(1.0e23, 65, 65)
+            e[33, 33] = 1.0e15 * (1.0 - 1.0e-4)^k
+            (e,)
+        end
+        n19 = first_flag(yielding, flat(1.0e5), flat(1.0), 60)
+        @test n19 == 0
+        # Each scaled array has its own scale: a pressure relaxing by 100 Pa per pass is
+        # seen beside a large flux array.
+        pr_relax = k -> (fill(1.0e3, 9), fill(1.0e6, 9) .- 100.0 * k)
+        n20 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=pr_relax)
+        @test n20 == 0
         # A reset clears the run counters; a state of the wrong length is refused.
         tr = Erebus.PlasticCycleTracker()
-        Erebus.reset_plastic_cycle!(tr, 1)
-        hits = [Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4) for _ in 1:5]
+        one = ([1.0],)
+        Erebus.reset_plastic_cycle!(tr, one, ())
+        hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
         @test hits == [false, false, false, false, true]
-        Erebus.reset_plastic_cycle!(tr, 1)
-        @test !Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4)
+        Erebus.reset_plastic_cycle!(tr, one, ())
+        @test !Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         @test_throws ArgumentError Erebus.plastic_cycle_record!(
-            tr, ([1.0, 2.0],), 1.0, 1.0, 4
+            tr, ([1.0, 2.0],), (), 1.0, 1.0, 4
         )
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, (), one, 1.0, 1.0, 4)
         # A reset loop does not compare with states left from the previous loop.
-        Erebus.reset_plastic_cycle!(tr, 1)
+        Erebus.reset_plastic_cycle!(tr, one, ())
         for _ in 1:10
-            Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4)
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
         end
-        Erebus.reset_plastic_cycle!(tr, 1)
-        hits = [Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4) for _ in 1:5]
+        Erebus.reset_plastic_cycle!(tr, one, ())
+        hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
         @test hits == [false, false, false, false, true]
+        # No allocation per pass once the ring is sized.
+        eta = fill(1.0e21, 33, 33)
+        vel = fill(1.0e-9, 33, 33)
+        Erebus.reset_plastic_cycle!(tr, (eta,), (vel, vel))
+        Erebus.plastic_cycle_record!(tr, (eta,), (vel, vel), 1.0, 1.0, 10)
+        bytes = @allocated Erebus.plastic_cycle_record!(
+            tr, (eta,), (vel, vel), 1.0, 1.0, 10
+        )
+        @test bytes == 0
         # A mismatch restarts the run: 9 equal passes, 1 change, 5 equal passes is no cycle.
         steps = vcat(fill(1.0, 9), [2.0], fill(2.0, 5))
         n_restart = first_flag(k -> ([steps[k]],), flat(1.0), flat(1.0), length(steps))
