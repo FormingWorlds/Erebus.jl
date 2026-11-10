@@ -2380,6 +2380,10 @@ include("test_helpers.jl")
         @test n24 == 0
         n25 = first_flag(k -> ([decay(k)],), flat(1.0), flat(1.0), 60)
         @test n25 == 0
+        # Period 8 drifting by 1e-10 per pass: 8e-10 per period, 1.6e-9 over 2 periods.
+        drift8 = k -> ([Float64(mod1(k, 8)) * (1.0 + 1.0e-10 * k)],)
+        n26 = first_flag(drift8, flat(1.0), flat(1.0), 80)
+        @test n26 == 0
         # Period 10: max(10, 30) + 10 = pass 40; period 17 lies beyond the longest period.
         n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
         @test n13 == 40
