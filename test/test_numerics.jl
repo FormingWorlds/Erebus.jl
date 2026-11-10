@@ -2384,6 +2384,18 @@ include("test_helpers.jl")
         drift8 = k -> ([Float64(mod1(k, 8)) * (1.0 + 1.0e-10 * k)],)
         n26 = first_flag(drift8, flat(1.0), flat(1.0), 80)
         @test n26 == 0
+        # Drift slower than rtol over 16 passes but above rtol over the run: in the residual
+        # (period 1 and period 9), in a per-node array, and with a 20-pass window.
+        one_v = k -> ([1.0],)
+        n27 = first_flag(one_v, k -> 1.0e5 * (1.0 - 1.05e-10)^k, flat(1.0), 80)
+        @test n27 == 0
+        y9 = k -> (1.0 + 0.1 * mod1(k, 9)) * (1.0 - 0.9e-9)^((k - 1) ÷ 9)
+        n28 = first_flag(one_v, y9, flat(1.0), 80)
+        @test n28 == 0
+        n29 = first_flag(k -> ([1.0e5 * (1.0 - 1.05e-10)^k],), flat(1.0), flat(1.0), 80)
+        @test n29 == 0
+        n30 = first_flag(one_v, k -> 1.0e5 * (1.0 - 6.2e-11)^k, flat(1.0), 80; window=20)
+        @test n30 == 0
         # Period 10: max(10, 30) + 10 = pass 40; period 17 lies beyond the longest period.
         n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
         @test n13 == 40

@@ -434,6 +434,7 @@ whose state matches the state `p` passes before. Allocated once per workspace;
 mutable struct PlasticCycleTracker
     ring::Vector{Vector{Float64}}
     scale::Matrix{Float64}
+    hist::Matrix{Float64}
     lens::Vector{Int}
     nnode::Int
     Y::Vector{Float64}
@@ -447,6 +448,7 @@ function PlasticCycleTracker(; max_period::Integer=16)
     return PlasticCycleTracker(
         [Float64[] for _ in 1:nslot],
         zeros(0, nslot),
+        zeros(2, 4 * max_period + 1),
         Int[],
         0,
         zeros(nslot),
@@ -480,6 +482,8 @@ function reset_plastic_cycle!(tr::PlasticCycleTracker, fields::Tuple, scaled::Tu
     end
     size(tr.scale, 1) == length(scaled) ||
         (tr.scale = zeros(length(scaled), length(tr.ring)))
+    nhist = 2 + length(fields)
+    size(tr.hist, 1) == nhist || (tr.hist = zeros(nhist, size(tr.hist, 2)))
     tr.lens = lens
     tr.nnode = sum(length, fields; init=0)
     fill!(tr.run, 0)
@@ -597,8 +601,11 @@ of `fields`, `Y` or `dt` matches its value `b` of `p` passes before as `a == b` 
 magnitude of that array in the two passes, so round-off on values near zero does not break
 the match. NaN never matches; Inf matches only itself. The result is true when, for one
 period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag `p` and
-at the oldest lag of the run that is a multiple of `p` and at most `max_period`, so a
-drift that adds up over the run breaks the match.
+at the oldest lag of the run that is a multiple of `p` and at most `max_period`. The
+residual, the time step and the sum of each array of `fields` also match at the start of
+the run, up to `4 max_period` passes back, so a drift that adds up over the run breaks the
+match; a drift on single nodes below `rtol` per `max_period` passes that the array sum
+dilutes is not seen.
 Every quantity is tested at the same period and node by node, so a slow change on one
 node is not hidden by the rest of the grid; a value of a scaled array below about 1e-5 of
 the array scale can change by 1e-4 of itself per pass without breaking the match.
@@ -652,6 +659,9 @@ function plastic_cycle_record!(
     end
     tr.Y[ic] = Y
     tr.dt[ic] = dt
+    nhc = size(tr.hist, 2)
+    hc = mod1(k, nhc)
+    _record_cycle_history!(tr, cur, hc, Y, dt)
     cycled = false
     for p in eachindex(tr.run)
         k <= p && continue
@@ -662,11 +672,73 @@ function plastic_cycle_record!(
         if ok && m > 1
             ok = _cycle_slot_match(tr, cur, ic, mod1(k - m * p, nslot), Y, dt, rtol)
         end
+        # The residual, the time step and the per-node array sums also match at the start
+        # of the run, up to 4 max_period passes back.
+        mh = min((tr.run[p] + p) ÷ p, (nhc - 1) ÷ p, (k - 1) ÷ p)
+        if ok && mh > m
+            ok = _cycle_history_match(tr, hc, mod1(k - mh * p, nhc), rtol)
+        end
         tr.run[p] = ok ? tr.run[p] + 1 : 0
         cycled |= tr.run[p] >= max(window, 3 * p)
     end
     return cycled
 end # function plastic_cycle_record!
+
+"""
+    _record_cycle_history!(tr, cur, hc, Y, dt) -> tr
+
+Store the residual, the time step and the sum of each per-node array of the current pass
+in column `hc` of the scalar history of `tr`.
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - cur: ring slot of the current pass
+    - hc: history column of the current pass
+    - Y: plastic residual of the pass (Pa)
+    - dt: time step of the pass (s)
+
+# Returns
+
+    - tr
+"""
+function _record_cycle_history!(tr::PlasticCycleTracker, cur, hc, Y, dt)
+    tr.hist[1, hc] = Y
+    tr.hist[2, hc] = dt
+    off = 0
+    @inbounds for q in 1:(size(tr.hist, 1) - 2)
+        acc = 0.0
+        for i in (off + 1):(off + tr.lens[q])
+            acc += cur[i]
+        end
+        tr.hist[2 + q, hc] = acc
+        off += tr.lens[q]
+    end
+    return tr
+end
+
+"""
+    _cycle_history_match(tr, hc, ja, rtol) -> Bool
+
+True when every scalar of history column `hc` matches column `ja` as in
+[`_cycle_match`](@ref).
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - hc, ja: history columns of the current and of the earlier pass
+    - rtol: relative tolerance
+
+# Returns
+
+    - true when the two columns match
+"""
+function _cycle_history_match(tr::PlasticCycleTracker, hc, ja, rtol)
+    @inbounds for q in axes(tr.hist, 1)
+        _cycle_match(tr.hist[q, hc], tr.hist[q, ja], rtol) || return false
+    end
+    return true
+end
 
 """
     _cycle_slot_match(tr, cur, ic, j, Y, dt, rtol) -> Bool
