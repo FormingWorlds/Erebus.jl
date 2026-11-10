@@ -766,6 +766,124 @@ using Erebus
         @test res_noconv.plastic_converged == false
         @test iszero(res_noconv.last_plastic_residual)
         @test res_noconv.n_flips_step_total == 0
+        @test res_noconv.n_plastic_passes == 0
+    end
+
+    @testset "Stokes-Darcy plastic cycle stop tracks the carried loop state" begin
+        function tracked(hydrofracture, window)
+            cfg = override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "poroelasticity.hydrofracture" => hydrofracture,
+                    "solver.plastic_cycle_window" => window,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            fields, scaled = Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+            return fields, scaled, state, ws, cfg
+        end
+        solution(g) = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
+        fields, scaled, state, ws, cfg = tracked(true, 10)
+        @test length(fields) == 4
+        @test fields[1] === state.grids.ETA
+        @test fields[2] === state.grids.YNY
+        @test fields[3] === ws.hydromech.rx_eff
+        @test fields[4] === ws.hydromech.ry_eff
+        @test length(scaled) == 6
+        @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
+        nstate = sum(length, fields) + sum(length, scaled)
+        @test all(slot -> length(slot) == nstate, ws.plastic_cycle.ring)
+        @test size(ws.plastic_cycle.scale, 1) == 6
+        @test length(ws.plastic_cycle.ring) == 41
+        fields, scaled, state, ws, cfg = tracked(false, 10)
+        @test length(fields) == 2
+        @test fields[1] === state.grids.ETA
+        @test fields[2] === state.grids.YNY
+        # A new plastic loop starts with an empty run on the same workspace.
+        for _ in 1:12
+            Erebus.plastic_cycle_record!(ws.plastic_cycle, fields, scaled, 1.0, 1.0, 10)
+        end
+        Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+        @test ws.plastic_cycle.npass == 0
+        @test all(iszero, ws.plastic_cycle.run)
+        # The stop reads the residual of each pass: a changing residual is no cycle.
+        stops = map(1:14) do i
+            ws.YERRNOD[i] = 100.0 * i
+            Erebus._plastic_cycle_stop!(ws, (fields, scaled), state, cfg, i)
+        end
+        @test !any(stops)
+        # It also reads the time step: a changing time step is no cycle.
+        Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+        dt0 = state.dt
+        stops_dt = map(1:14) do i
+            ws.YERRNOD[i] = 100.0
+            state.dt = dt0 * (1.0 + 0.01 * i)
+            Erebus._plastic_cycle_stop!(ws, (fields, scaled), state, cfg, i)
+        end
+        state.dt = dt0
+        @test !any(stops_dt)
+        @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
+        _, _, _, ws, _ = tracked(false, 0)
+        @test all(isempty, ws.plastic_cycle.ring)
+        @test isempty(ws.plastic_cycle.scale)
+    end
+
+    @testset "Stokes-Darcy plastic loop stops on a cycled residual" begin
+        function cycling_case(window)
+            cfg = override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "solver.max_plastic_iterations" => 200,
+                    "solver.yerrmax" => 1.0e-20,
+                    "solver.etamin" => 1.0e21,
+                    "solver.plastic_cycle_window" => window,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            Erebus.accrete!(state, coords, cfg)
+            Erebus.radiogenic_heating!(state, coords, cfg)
+            Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+            Erebus.update_pyrolysis!(state, coords, cfg)
+            Erebus.interpolate_markers_to_grid!(
+                state,
+                coords,
+                cfg;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(state, coords, cfg)
+            Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+            Erebus.update_step_start_pressures!(state)
+            # Unit cohesion and tensile strength with a high etamin: the yield update cycles.
+            fill!(state.grids.COH, 1.0)
+            fill!(state.grids.TEN, 1.0)
+            res = Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            return res, ws
+        end
+
+        # The state cycles with period 2 from pass 3, so the stop comes at pass
+        # 4 + max(window, 6).
+        res, ws = cycling_case(10)
+        @test res.plastic_converged == false
+        @test res.n_plastic_passes == 14
+        @test res.last_plastic_residual === ws.YERRNOD[res.n_plastic_passes]
+        res14, ws14 = cycling_case(14)
+        @test res14.plastic_converged == false
+        @test res14.n_plastic_passes == 18
+
+        res0, ws0 = cycling_case(0)
+        @test res0.plastic_converged == false
+        @test res0.n_plastic_passes == 200
+        @test res0.last_plastic_residual === ws0.YERRNOD[200]
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin

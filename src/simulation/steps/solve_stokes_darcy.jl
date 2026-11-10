@@ -629,6 +629,82 @@ function postprocess_hydromechanical_solution!(
 end
 
 """
+    _plastic_cycle_fields(g, cfg, ws) -> (fields, scaled)
+
+State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref).
+`fields` holds the arrays tested node by node: viscosity `g.ETA`, the yield flags `g.YNY`
+that the next pass reads, and the effective Darcy resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
+each array tested against its own scale: `g.vx`, `g.vy`, `g.pr`, `g.pf`, `g.qxD`, `g.qyD`.
+
+# Arguments
+
+    - g: grid fields of the simulation state
+    - cfg: simulation configuration
+    - ws: simulation workspaces
+
+# Returns
+
+    - the tuples `(fields, scaled)` of tracked arrays
+"""
+function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
+    hm = ws.hydromech
+    scaled = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
+    if cfg.poroelasticity.hydrofracture && hm.rx_eff !== nothing && hm.ry_eff !== nothing
+        return ((g.ETA, g.YNY, hm.rx_eff, hm.ry_eff), scaled)
+    end
+    return ((g.ETA, g.YNY), scaled)
+end
+
+"""
+    _start_plastic_cycle!(g, cfg, ws) -> (fields, scaled)
+
+Reset `ws.plastic_cycle` before the first plastic pass and return the tracked arrays of
+[`_plastic_cycle_fields`](@ref); the ring holds no values when the cycle stop is off.
+
+# Arguments
+
+    - g: grid fields of the simulation state
+    - cfg: simulation configuration
+    - ws: simulation workspaces, holds the tracker
+
+# Returns
+
+    - the tuples `(fields, scaled)` of tracked arrays
+"""
+function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
+    tracked = _plastic_cycle_fields(g, cfg, ws)
+    reset_plastic_cycle!(ws.plastic_cycle, tracked..., cfg.solver.plastic_cycle_window)
+    return tracked
+end
+
+"""
+    _plastic_cycle_stop!(ws, tracked, state, cfg, iplast) -> Bool
+
+Record plastic pass `iplast` in `ws.plastic_cycle` and return true when the loop state is
+periodic ([`plastic_cycle_record!`](@ref)), so the loop ends as not converged.
+
+# Arguments
+
+    - ws: simulation workspaces, holds the tracker and the residuals `YERRNOD`
+    - tracked: the tuples `(fields, scaled)` of [`_start_plastic_cycle!`](@ref)
+    - state: simulation state, gives the time step (s)
+    - cfg: simulation configuration, gives `solver.plastic_cycle_window`
+    - iplast: index of the plastic pass
+
+# Returns
+
+    - true when the loop state is periodic, else false
+"""
+function _plastic_cycle_stop!(
+    ws::SimulationWorkspaces, tracked, state, cfg, iplast::Integer
+)
+    Y = ws.YERRNOD[iplast]
+    return plastic_cycle_record!(
+        ws.plastic_cycle, tracked..., Y, state.dt, cfg.solver.plastic_cycle_window
+    )
+end
+
+"""
 Solve Stokes-Darcy fluid-solid equations with non-linear plastic iterations.
 
 $(SIGNATURES)
@@ -670,6 +746,8 @@ function solve_stokes_darcy!(
     n_flips_step_total = 0
     plastic_converged = false
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
+    n_plastic_passes = 0
+    cycle_fields = _start_plastic_cycle!(g, cfg, ws)
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
@@ -696,22 +774,25 @@ function solve_stokes_darcy!(
         dt_aphimax_step_max = max(dt_aphimax_step_max, state.dt * res.aphimax)
         n_flips_last = res.n_flips_iter
         n_flips_step_total += res.n_flips_iter
+        n_plastic_passes = iplast
 
         if res.adjustment_ok
             plastic_converged = true
             break
         end
+        _plastic_cycle_stop!(ws, cycle_fields, state, cfg, iplast) && break
     end
 
     if !plastic_converged
-        last_plastic_residual = if max_plastic_iterations_val > 0
-            ws.YERRNOD[min(max_plastic_iterations_val, length(ws.YERRNOD))]
+        last_plastic_residual = if 1 <= n_plastic_passes <= length(ws.YERRNOD)
+            ws.YERRNOD[n_plastic_passes]
         else
             0.0
         end
         return (;
             plastic_converged=false,
             last_plastic_residual=last_plastic_residual,
+            n_plastic_passes=n_plastic_passes,
             dt_aphimax_step_max=dt_aphimax_step_max,
             n_flips_last=n_flips_last,
             n_flips_step_total=n_flips_step_total,
@@ -771,6 +852,7 @@ function solve_stokes_darcy!(
     return (;
         plastic_converged=true,
         last_plastic_residual=0.0,
+        n_plastic_passes=n_plastic_passes,
         dt_aphimax_step_max=dt_aphimax_step_max,
         n_flips_last=n_flips_last,
         n_flips_step_total=n_flips_step_total,

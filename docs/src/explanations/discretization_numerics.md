@@ -278,13 +278,26 @@ The plastic loop iterates until the RMS dimensional stress error drops below `ye
 
 $$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \left(\sigma_{\text{II}, i} - \sigma_{\text{yield}, i}\right)^2} < \text{yerrmax}$$
 
-with default `yerrmax = 100.0 Pa`. If yielding nodes persist after `max_plastic_iterations` (default: `10000`):
+with default `yerrmax = 100.0 Pa`.
+If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the state is periodic (below):
 - The solver rejects the candidate timestep.
 - The system restores grid, marker, and workspace state in place (`restore_step_state!`) from a preallocated start-of-step `StepSnapshot` updated via `snapshot_step_state!`.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).
 - The step retries from the restored state.
 
 If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
+
+#### Stop of a Periodic Plastic Loop
+
+The loop also ends as not converged when its state is periodic.
+The state of a pass is the viscosity $\eta$ and the yield flags on the basic nodes, the effective Darcy resistances (with hydrofracture on), the velocities, pressures and Darcy fluxes, the residual and the time step.
+For one period $p$ from 1 to 10, each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must match, value by value to a relative tolerance of $10^{-9}$, both the pass $p$ earlier and the earliest pass of the same phase in the run (default window: `10`; `0` disables the check).
+Every pass of a phase thus differs from one fixed pass by less than the tolerance, so a slow drift cannot add up to a false stop.
+The record keeps $\max(\texttt{plastic\_cycle\_window}, 30) + 11$ copies of the state, 41 at the default window (about 55 MB on a $129 \times 129$ grid with hydrofracture).
+The velocities, pressures and Darcy fluxes are tested relative to the largest finite magnitude of their field in the two passes, because values near zero carry round-off far above $10^{-9}$ of themselves; a value below about $10^{-5}$ of its field maximum can thus differ from the anchor pass by $10^{-4}$ of itself unseen.
+The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
+In `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the measured cycles last until `max_plastic_iterations`, so the attempt fails anyway.
+Ending the loop early leaves the step sequence and the time steps unchanged; only the diagnostics of the failed attempt (the last residual and the flip counts) refer to the passes run.
 
 ### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency
 

@@ -271,6 +271,7 @@ mutable struct SimulationWorkspaces
     phim_hr_step_start::Union{Nothing,Vector{Float64}}
     Xfe_bulk_hr_step_start::Union{Nothing,Vector{Float64}}
     hr_step_start_timestep::Int
+    plastic_cycle::PlasticCycleTracker
 end
 
 """

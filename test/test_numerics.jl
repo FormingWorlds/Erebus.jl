@@ -2314,6 +2314,246 @@ include("test_helpers.jl")
         @test isapprox(ETA, ETA5; rtol=1e-12)
     end
 
+    @testset "PlasticCycleTracker: one common period over every tracked quantity" begin
+        # First pass at which the tracker flags a cycle, or 0; fields(k) and scaled(k)
+        # return the tuples of per-node and field-scaled arrays.
+        function first_flag(fields, Y, dt, npass; window=10, scaled=k -> ())
+            tr = Erebus.PlasticCycleTracker()
+            Erebus.reset_plastic_cycle!(tr, fields(1), scaled(1), window)
+            for k in 1:npass
+                Erebus.plastic_cycle_record!(
+                    tr, fields(k), scaled(k), Y(k), dt(k), window
+                ) && return k
+            end
+            return 0
+        end
+        flat(v) = k -> v
+        base = [3449.88, 803.96, 2415.1, 2574.79, 1006.14]
+        tail5(k, amp) = base[mod1(k, 5)] * (1.0 + amp * sin(sqrt(2.0) * k))
+        y5(amp) = k -> k <= 2 ? 5000.0 * k : tail5(k, amp)
+        f5(amp) = k -> (fill(k <= 2 ? 1.0e21 : 1.0e19 * tail5(k, amp), 3, 3),)
+        # Period-5 tail from pass 3 with 1e-12 aperiodic noise: max(10, 15) passes plus lag 5, pass 22.
+        n1 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60)
+        @test n1 == 22
+        n2 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60; window=0)
+        @test n2 == 0
+        # Noise above the tolerance, in the residual or in the field, is not a cycle.
+        n3 = first_flag(f5(1.0e-12), y5(1.0e-7), flat(1.0e3), 60)
+        @test n3 == 0
+        n4 = first_flag(f5(1.0e-7), y5(1.0e-12), flat(1.0e3), 60)
+        @test n4 == 0
+        # A constant tail from pass 3 is period 1: window 10 plus lag 1, pass 13.
+        c1 = k -> k <= 2 ? 9.0 - k : 4.0
+        n5 = first_flag(k -> ([c1(k)],), c1, flat(1.0), 30)
+        @test n5 == 13
+        # One node of 65x65 relaxing by 1e-4 per pass under a flat residual is not a cycle.
+        function relax(amp)
+            return k -> begin
+                e = fill(1.0e21, 65, 65)
+                e[33, 33] = 1.0e19 * (1.0 - amp)^k
+                (e,)
+            end
+        end
+        n6 = first_flag(relax(1.0e-4), flat(1.0e5), flat(1.0), 60)
+        @test n6 == 0
+        n7 = first_flag(relax(1.0e-12), flat(1.0e5), flat(1.0), 60)
+        @test n7 == 11
+        # Residual period 3 and field period 2: joint period 6, max(10, 18) + 6 = pass 24.
+        y3 = k -> [1.0, 2.0, 3.0][mod1(k, 3)]
+        f2 = k -> ([[5.0, 7.0][mod1(k, 2)]],)
+        n8 = first_flag(f2, y3, flat(1.0), 40)
+        @test n8 == 24
+        # A second field or the time step that still relaxes blocks the stop.
+        hidden = k -> (fill(1.0e19, 2, 2), fill(1.0 + 0.01 * k, 2, 2))
+        n9 = first_flag(hidden, flat(1.0e5), flat(1.0), 60)
+        @test n9 == 0
+        n10 = first_flag(k -> (fill(1.0e19, 2),), flat(1.0e5), k -> 1.0 + 0.01 * k, 60)
+        @test n10 == 0
+        # Zero and Inf entries repeat exactly; NaN never matches.
+        n11 = first_flag(k -> ([0.0, Inf, 1.0],), flat(1.0), flat(1.0), 30)
+        @test n11 == 11
+        n12 = first_flag(k -> ([NaN, 1.0],), flat(1.0), flat(1.0), 30)
+        @test n12 == 0
+        # A drift below rtol per pass that adds up above rtol over the run is not a cycle.
+        decay = k -> 1.0e5 * (1.0 - 0.9e-9)^k
+        n24 = first_flag(k -> ([1.0],), decay, flat(1.0), 60)
+        @test n24 == 0
+        n25 = first_flag(k -> ([decay(k)],), flat(1.0), flat(1.0), 60)
+        @test n25 == 0
+        # Period 8 drifting by 1e-10 per pass: 8e-10 per period, 1.6e-9 over 2 periods.
+        drift8 = k -> ([Float64(mod1(k, 8)) * (1.0 + 1.0e-10 * k)],)
+        n26 = first_flag(drift8, flat(1.0), flat(1.0), 80)
+        @test n26 == 0
+        # Drift slower than rtol over 16 passes but above rtol over the run: in the residual
+        # (period 1 and period 9), in a per-node array, and with a 20-pass window.
+        one_v = k -> ([1.0],)
+        n27 = first_flag(one_v, k -> 1.0e5 * (1.0 - 1.05e-10)^k, flat(1.0), 80)
+        @test n27 == 0
+        y9 = k -> (1.0 + 0.1 * mod1(k, 9)) * (1.0 - 0.9e-9)^((k - 1) ÷ 9)
+        n28 = first_flag(one_v, y9, flat(1.0), 80)
+        @test n28 == 0
+        n29 = first_flag(k -> ([1.0e5 * (1.0 - 1.05e-10)^k],), flat(1.0), flat(1.0), 80)
+        @test n29 == 0
+        # Blocks of 4 passes at 1, 1 + 0.99e-9 and 1 - 0.99e-9: every pass is within rtol
+        # of pass 1, but the step at pass 9 (1.98e-9) breaks the match with the pass before.
+        blocks = k -> ([1.0 + 0.99e-9 * (0.0, 1.0, -1.0)[(k - 1) ÷ 4 + 1]],)
+        n33 = first_flag(blocks, flat(1.0), flat(1.0), 12)
+        @test n33 == 0
+        # Drift in a scaled array, and beside an Inf in a per-node array.
+        sdrift = k -> (fill(1.0e3 * (1.0 - 1.05e-10)^k, 4),)
+        n31 = first_flag(one_v, flat(1.0), flat(1.0), 80; scaled=sdrift)
+        @test n31 == 0
+        inf_drift = k -> ([Inf, 1.0e5 * (1.0 - 1.05e-10)^k],)
+        n32 = first_flag(inf_drift, flat(1.0), flat(1.0), 80)
+        @test n32 == 0
+        n30 = first_flag(one_v, k -> 1.0e5 * (1.0 - 6.2e-11)^k, flat(1.0), 80; window=20)
+        @test n30 == 0
+        # Period 10: max(10, 30) + 10 = pass 40; period 11 lies beyond the longest period.
+        n13 = first_flag(k -> ([Float64(mod1(k, 10))],), flat(1.0), flat(1.0), 80)
+        @test n13 == 40
+        n14 = first_flag(k -> ([Float64(mod1(k, 11))],), flat(1.0), flat(1.0), 120)
+        @test n14 == 0
+        # Inf never matches a finite value, in a per-node or a field-scaled array.
+        inf_odd = k -> ([isodd(k) ? Inf : Float64(k)],)
+        n15 = first_flag(inf_odd, flat(1.0), flat(1.0), 40)
+        @test n15 == 0
+        @test !Erebus._cycle_match(Inf, -Inf, 1.0e-9, 1.0)
+        @test Erebus._cycle_match(-Inf, -Inf, 1.0e-9)
+        inf_scaled = k -> ([Inf, 1.0 + 0.01 * k],)
+        n16 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=inf_scaled)
+        @test n16 == 0
+        # 1e-7 noise on a node at 1e-6 of its field maximum: a cycle when the array is
+        # field-scaled, not when it is tested node by node.
+        tiny(k) = [-1.0, 1.0e-6 * (1.0 + 1.0e-7 * sin(sqrt(2.0) * k))]
+        n17 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (tiny(k),))
+        @test n17 == 11
+        n17b = first_flag(
+            k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (reverse(tiny(k)),)
+        )
+        @test n17b == 11
+        n18 = first_flag(k -> (tiny(k),), flat(1.0), flat(1.0), 40)
+        @test n18 == 0
+        # A yielding node at 1e15 Pa s in a 1e23 Pa s background relaxing by 1e-4 per pass.
+        yielding = k -> begin
+            e = fill(1.0e23, 65, 65)
+            e[33, 33] = 1.0e15 * (1.0 - 1.0e-4)^k
+            (e,)
+        end
+        n19 = first_flag(yielding, flat(1.0e5), flat(1.0), 60)
+        @test n19 == 0
+        # Each scaled array has its own scale: a pressure relaxing by 100 Pa per pass is
+        # seen beside a large flux array.
+        pr_relax = k -> (fill(1.0e3, 9), fill(1.0e6, 9) .- 100.0 * k)
+        n20 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=pr_relax)
+        @test n20 == 0
+        small_noise = k -> (fill(1.0e6, 9), fill(1.0 + 1.0e-5 * sin(sqrt(2.0) * k), 9))
+        n22 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=small_noise)
+        @test n22 == 0
+        # A reset clears the run counters; a state of the wrong length is refused.
+        tr = Erebus.PlasticCycleTracker()
+        one = ([1.0],)
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
+        @test hits == [false, false, false, false, true]
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        @test !Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(
+            tr, ([1.0, 2.0],), (), 1.0, 1.0, 4
+        )
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, (), one, 1.0, 1.0, 4)
+        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],), 4)
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, one, 1.0, 1.0, 4)
+        @test_throws DomainError Erebus.PlasticCycleTracker(; max_period=0)
+        # A window larger than the one the ring was sized for is refused.
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        @test length(tr.ring) == 41
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 31)
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 5)
+        @test_throws DomainError Erebus.reset_plastic_cycle!(tr, one, (), -1)
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, (), 1.0, 1.0, 4; rtol=NaN
+        )
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        hits0 = [
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4; rtol=0.0) for _ in 1:5
+        ]
+        @test hits0 == [false, false, false, false, true]
+        # A drift below rtol per pass in the time step adds up over the run.
+        n34 = first_flag(one_v, flat(1.0), k -> 1.0e5 * (1.0 + 1.05e-10 * k), 80)
+        @test n34 == 0
+        # One period only: a constant tail stops, a period-2 tail does not.
+        tr1 = Erebus.PlasticCycleTracker(; max_period=1)
+        Erebus.reset_plastic_cycle!(tr1, one, (), 10)
+        @test length(tr1.ring) == 12
+        hits1 = [Erebus.plastic_cycle_record!(tr1, one, (), 1.0, 1.0, 10) for _ in 1:11]
+        @test findfirst(hits1) == 11
+        Erebus.reset_plastic_cycle!(tr1, one, (), 10)
+        alt1 = [
+            Erebus.plastic_cycle_record!(tr1, ([Float64(isodd(k))],), (), 1.0, 1.0, 10) for
+            k in 1:30
+        ]
+        @test !any(alt1)
+        # A used tracker grows for a larger window.
+        Erebus.reset_plastic_cycle!(tr, one, (), 50)
+        @test length(tr.ring) == 61
+        hits50 = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 50) for _ in 1:51]
+        @test findfirst(hits50) == 51
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        # Recording on after a stop never compares a pass with itself.
+        for _ in 1:45
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        end
+        @test !Erebus.plastic_cycle_record!(tr, ([999.0],), (), 1.0, 1.0, 4)
+        # After a stop, a ramp of 3e-11 per pass matches the pass before but leaves the
+        # anchor 40 passes back by more than rtol at pass 34 of the ramp.
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        for _ in 1:45
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        end
+        ramp = [
+            Erebus.plastic_cycle_record!(tr, ([1.0 + 3.0e-11 * j],), (), 1.0, 1.0, 4) for
+            j in 1:40
+        ]
+        @test !ramp[34]
+        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],), 4)
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=-1.0
+        )
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=Inf
+        )
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, -1
+        )
+        # A reset loop does not compare with states left from the previous loop.
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        for _ in 1:45
+            Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)
+        end
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
+        hits = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4) for _ in 1:5]
+        @test hits == [false, false, false, false, true]
+        # The scale of a scaled array comes from that array, not from the per-node arrays.
+        big = (fill(1.0e20, 2),)
+        drift = k -> ([1.0 - 1.0e-4 * k],)
+        n21 = first_flag(k -> big, flat(1.0), flat(1.0), 40; scaled=drift)
+        @test n21 == 0
+        # No allocation per pass once the ring is sized, also with Bool yield flags.
+        eta = fill(1.0e21, 33, 33)
+        yny = fill(false, 33, 33)
+        vel = fill(1.0e-9, 33, 33)
+        Erebus.reset_plastic_cycle!(tr, (eta, yny), (vel, vel), 10)
+        Erebus.plastic_cycle_record!(tr, (eta, yny), (vel, vel), 1.0, 1.0, 10)
+        bytes = @allocated Erebus.plastic_cycle_record!(
+            tr, (eta, yny), (vel, vel), 1.0, 1.0, 10
+        )
+        @test bytes == 0
+        # A mismatch restarts the run: 9 equal passes, 1 change, 5 equal passes is no cycle.
+        steps = vcat(fill(1.0, 9), [2.0], fill(2.0, 5))
+        n_restart = first_flag(k -> ([steps[k]],), flat(1.0), flat(1.0), length(steps))
+        @test n_restart == 0
+    end
+
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
         cfg_path = joinpath(
             @__DIR__, "..", "configs", "magma_ocean_cooling_turb_on_32.toml"
