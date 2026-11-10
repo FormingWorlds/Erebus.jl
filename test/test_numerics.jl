@@ -2464,6 +2464,18 @@ include("test_helpers.jl")
         Erebus.reset_plastic_cycle!(tr, one, (), 4)
         @test length(tr.ring) == 41
         @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 31)
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 5)
+        @test_throws DomainError Erebus.reset_plastic_cycle!(tr, one, (), -1)
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, (), 1.0, 1.0, 4; rtol=NaN
+        )
+        @test !Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4; rtol=0.0)
+        # A used tracker grows for a larger window.
+        Erebus.reset_plastic_cycle!(tr, one, (), 50)
+        @test length(tr.ring) == 61
+        hits50 = [Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 50) for _ in 1:51]
+        @test findfirst(hits50) == 51
+        Erebus.reset_plastic_cycle!(tr, one, (), 4)
         # Recording on after a stop never compares a pass with itself.
         for _ in 1:45
             Erebus.plastic_cycle_record!(tr, one, (), 1.0, 1.0, 4)

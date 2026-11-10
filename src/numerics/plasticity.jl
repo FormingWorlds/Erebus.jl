@@ -612,8 +612,8 @@ value `a` of `fields`, `Y` or `dt` matches its value `b` of an earlier pass as `
 `abs(a - b) <= rtol * max(abs(a), abs(b))`. A value of an array in `scaled` matches as
 `a == b` or `abs(a - b) <= rtol * max(abs(a), abs(b), s)`, with `s` the largest finite
 magnitude of that array in the two passes, so round-off on values near zero does not break
-the match; a value below about 1e-5 of the array scale can change by 1e-4 of itself per
-pass without breaking it. NaN never matches; Inf matches only itself.
+the match; a value below about 1e-5 of the array scale can differ from the anchor pass by
+1e-4 of itself without breaking it. NaN never matches; Inf matches only itself.
 
 For each period `p` in `1:max_period`, a pass counts towards the run of `p` when it matches
 the earliest pass of the same phase in the run and the pass `p` before. Every pass of a
@@ -677,7 +677,7 @@ function plastic_cycle_record!(
         k <= p && continue
         r = tr.run[p]
         # Earliest pass of the same phase in the run, kept in the ring.
-        L = p * min((r + p) ÷ p, (nslot - 1) ÷ p, (k - 1) ÷ p)
+        L = p * min((r + p) ÷ p, (nslot - 1) ÷ p)
         ok = _cycle_slot_match(tr, cur, ic, mod1(k - L, nslot), Y, dt, rtol)
         if ok && L > p
             ok = _cycle_slot_match(tr, cur, ic, mod1(k - p, nslot), Y, dt, rtol)

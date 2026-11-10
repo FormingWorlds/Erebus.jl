@@ -78,6 +78,10 @@ include("test_helpers.jl")
         @test SolverConfig(plastic_cycle_window=0).plastic_cycle_window == 0
         @test SolverConfig(plastic_cycle_window=4).plastic_cycle_window == 4
         @test SolverConfig(plastic_cycle_window=100).plastic_cycle_window == 100
+        for w in (4, 100)
+            cfg_w = SimulationConfig(; solver=SolverConfig(plastic_cycle_window=w))
+            @test cfg_w.solver.plastic_cycle_window == w
+        end
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")

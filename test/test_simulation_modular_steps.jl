@@ -808,6 +808,12 @@ using Erebus
         Erebus._start_plastic_cycle!(state.grids, cfg, ws)
         @test ws.plastic_cycle.npass == 0
         @test all(iszero, ws.plastic_cycle.run)
+        # The stop reads the residual of each pass: a changing residual is no cycle.
+        stops = map(1:14) do i
+            ws.YERRNOD[i] = 100.0 * i
+            Erebus._plastic_cycle_stop!(ws, (fields, scaled), state, cfg, i)
+        end
+        @test !any(stops)
         @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
         _, _, _, ws, _ = tracked(false, 0)
         @test all(isempty, ws.plastic_cycle.ring)
