@@ -632,17 +632,27 @@ end
     _plastic_cycle_fields(g, cfg, ws) -> (fields, scaled)
 
 State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref).
-`fields` holds the arrays tested node by node: viscosity `g.ETA`, and the effective Darcy
-resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
+`fields` holds the arrays tested node by node: viscosity `g.ETA`, the yield flags `g.YNY`
+of the previous pass, and the effective Darcy resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
 each array tested against its own scale: `g.vx`, `g.vy`, `g.pr`, `g.pf`, `g.qxD`, `g.qyD`.
+
+# Arguments
+
+    - g: grid fields of the simulation state
+    - cfg: simulation configuration
+    - ws: simulation workspaces
+
+# Returns
+
+    - the tuples `(fields, scaled)` of tracked arrays
 """
 function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
     hm = ws.hydromech
     scaled = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
     if cfg.poroelasticity.hydrofracture && hm.rx_eff !== nothing && hm.ry_eff !== nothing
-        return ((g.ETA, hm.rx_eff, hm.ry_eff), scaled)
+        return ((g.ETA, g.YNY, hm.rx_eff, hm.ry_eff), scaled)
     end
-    return ((g.ETA,), scaled)
+    return ((g.ETA, g.YNY), scaled)
 end
 
 """
@@ -650,6 +660,16 @@ end
 
 Reset `ws.plastic_cycle` before the first plastic pass and return the tracked arrays of
 [`_plastic_cycle_fields`](@ref); the ring holds no values when the cycle stop is off.
+
+# Arguments
+
+    - g: grid fields of the simulation state
+    - cfg: simulation configuration
+    - ws: simulation workspaces, holds the tracker
+
+# Returns
+
+    - the tuples `(fields, scaled)` of tracked arrays
 """
 function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
     tracked = _plastic_cycle_fields(g, cfg, ws)
@@ -663,6 +683,18 @@ end
 
 Record plastic pass `iplast` in `ws.plastic_cycle` and return true when the loop state is
 periodic ([`plastic_cycle_record!`](@ref)), so the loop ends as not converged.
+
+# Arguments
+
+    - ws: simulation workspaces, holds the tracker and the residuals `YERRNOD`
+    - tracked: the tuples `(fields, scaled)` of [`_start_plastic_cycle!`](@ref)
+    - state: simulation state, gives the time step (s)
+    - cfg: simulation configuration, gives `solver.plastic_cycle_window`
+    - iplast: index of the plastic pass
+
+# Returns
+
+    - true when the loop state is periodic, else false
 """
 function _plastic_cycle_stop!(
     ws::SimulationWorkspaces, tracked, state, cfg, iplast::Integer

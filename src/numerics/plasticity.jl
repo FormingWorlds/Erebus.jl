@@ -422,6 +422,14 @@ whose state matches the state `p` passes before. Allocated once per workspace;
 # Arguments
 
     - max_period: longest period checked, in passes
+
+# Returns
+
+    - an empty tracker; [`reset_plastic_cycle!`](@ref) sizes it
+
+# Throws
+
+    - DomainError: `max_period < 1`
 """
 mutable struct PlasticCycleTracker
     ring::Vector{Vector{Float64}}
@@ -434,6 +442,7 @@ mutable struct PlasticCycleTracker
     npass::Int
 end
 function PlasticCycleTracker(; max_period::Integer=16)
+    max_period >= 1 || throw(DomainError(max_period, "max_period must be at least 1"))
     nslot = max_period + 1
     return PlasticCycleTracker(
         [Float64[] for _ in 1:nslot],
@@ -478,11 +487,40 @@ function reset_plastic_cycle!(tr::PlasticCycleTracker, fields::Tuple, scaled::Tu
     return tr
 end
 
+"""
+    _cycle_match(a, b, rtol, s=0.0) -> Bool
+
+True when `a == b`, or when both are finite and `abs(a - b) <= rtol * max(abs(a), abs(b), s)`.
+
+# Arguments
+
+    - a, b: values of one quantity at two passes
+    - rtol: relative tolerance
+    - s: scale of the field the values belong to (same unit as `a`); 0 for a per-node test
+
+# Returns
+
+    - true when the values match
+"""
 function _cycle_match(a, b, rtol, s=0.0)
     return a == b ||
            (isfinite(a) && isfinite(b) && abs(a - b) <= rtol * max(abs(a), abs(b), s))
 end
 
+"""
+    _finite_absmax(v, r) -> Float64
+
+Largest finite magnitude of `v[r]`, or 0 when `r` is empty or holds no finite value.
+
+# Arguments
+
+    - v: vector
+    - r: index range into `v`
+
+# Returns
+
+    - the largest `abs(v[i])` over finite `v[i]`, `i in r`
+"""
 function _finite_absmax(v, r)
     m = 0.0
     @inbounds for i in r
@@ -491,6 +529,21 @@ function _finite_absmax(v, r)
     return m
 end
 
+"""
+    _pack_cycle_state!(cur, off, fields) -> Int
+
+Copy the arrays of `fields` one after the other into `cur`, starting after index `off`.
+
+# Arguments
+
+    - cur: ring slot of the current pass
+    - off: number of values already in `cur`
+    - fields: tuple of arrays
+
+# Returns
+
+    - the number of values in `cur` after the copy
+"""
 function _pack_cycle_state!(cur, off, fields)
     for f in fields
         copyto!(cur, off + 1, f, 1, length(f))
@@ -499,6 +552,23 @@ function _pack_cycle_state!(cur, off, fields)
     return off
 end
 
+"""
+    _cycle_lag_match(tr, cur, prev, ic, ip, rtol) -> Bool
+
+True when every per-node value of `cur` matches `prev` node by node and every value of a
+field-scaled array matches with the larger scale of that array in slots `ic` and `ip`.
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - cur, prev: ring slots of the current pass and of the pass `p` before
+    - ic, ip: slot indices of `cur` and `prev`
+    - rtol: relative tolerance
+
+# Returns
+
+    - true when the two states match
+"""
 function _cycle_lag_match(tr::PlasticCycleTracker, cur, prev, ic, ip, rtol)
     @inbounds for i in 1:tr.nnode
         _cycle_match(cur[i], prev[i], rtol) || return false
@@ -548,6 +618,7 @@ the array scale can change by 1e-4 of itself per pass without breaking the match
 # Throws
 
     - ArgumentError: the arrays do not hold the lengths set by [`reset_plastic_cycle!`](@ref)
+    - DomainError: `rtol < 0` or NaN
 """
 function plastic_cycle_record!(
     tr::PlasticCycleTracker,
@@ -559,6 +630,7 @@ function plastic_cycle_record!(
     rtol::Real=1.0e-9,
 )
     window > 0 || return false
+    rtol >= 0 || throw(DomainError(rtol, "rtol must be non-negative"))
     nslot = length(tr.ring)
     _cycle_lengths_match(tr, fields, scaled) || throw(
         ArgumentError("plastic cycle state does not match the arrays set at the reset")
@@ -590,6 +662,21 @@ function plastic_cycle_record!(
     return cycled
 end # function plastic_cycle_record!
 
+"""
+    _cycle_lengths_match(tr, fields, scaled) -> Bool
+
+True when `fields` and `scaled` hold the number of arrays and the array lengths set by
+[`reset_plastic_cycle!`](@ref).
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - fields, scaled: tuples of arrays of the pass
+
+# Returns
+
+    - true when the lengths match
+"""
 function _cycle_lengths_match(tr::PlasticCycleTracker, fields::Tuple, scaled::Tuple)
     length(fields) + length(scaled) == length(tr.lens) || return false
     length(scaled) == size(tr.scale, 1) || return false

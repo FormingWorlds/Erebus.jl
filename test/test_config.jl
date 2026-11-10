@@ -76,6 +76,7 @@ include("test_helpers.jl")
         @test cfg_q.solver.max_dt_reductions == 5
         @test cfg_q.solver.plastic_cycle_window == 10
         @test SolverConfig(plastic_cycle_window=0).plastic_cycle_window == 0
+        @test SolverConfig(plastic_cycle_window=4).plastic_cycle_window == 4
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
@@ -262,6 +263,7 @@ include("test_helpers.jl")
         # plastic_cycle_window: 0 (off) or at least 4 passes
         @reject_config solver=SolverConfig(plastic_cycle_window=-1)
         @reject_config solver=SolverConfig(plastic_cycle_window=2)
+        @reject_config solver=SolverConfig(plastic_cycle_window=3)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)

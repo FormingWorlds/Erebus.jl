@@ -66,7 +66,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `max_plastic_iterations` | `Int` | `10000` | - | Maximum plastic yielding iterations | $\ge 1$ |
 | `max_dt_reductions` | `Int` | `5` | - | Maximum timestep reductions on plastic non-convergence | $\ge 1$ |
 | `yerrmax` | `Float64` | `100.0` | Pa | Plastic yielding tolerance: RMS of $\sigma_{\text{II}} - \sigma_{\text{yield}}$ over yielding nodes | $(0, 10^6]$ |
-| `plastic_cycle_window` | `Int` | `10` | - | Minimum passes of a periodic plastic loop state (viscosity, Darcy resistances, velocities, pressures, Darcy fluxes, residual, time step; period 1 to 16, relative tolerance $10^{-9}$ per value, at least 3 periods) that end the plastic loop as not converged; 0 disables | $0$ or $\ge 4$ |
+| `plastic_cycle_window` | `Int` | `10` | - | Minimum passes of a periodic plastic loop state (viscosity, Darcy resistances, velocities, pressures, Darcy fluxes, residual, time step; period 1 to 16, relative tolerance $10^{-9}$ per value, at least 3 repetitions of the period) that end the plastic loop as not converged; 0 disables | $0$ or $\ge 4$ |
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
 | `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
 | `seed` | `Int` | `42` | - | Random seed for marker initialization | $\ge 0$ |

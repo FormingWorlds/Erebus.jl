@@ -297,7 +297,7 @@ For the velocities, pressures and Darcy fluxes the tolerance is relative to the 
 A value below about $10^{-5}$ of its field maximum can therefore change by $10^{-4}$ of itself per pass without breaking the match.
 The viscosity and the Darcy resistances, which span many orders of magnitude, are tested against their own values only.
 The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
-In `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the measured cycles have periods between 2 and 10 passes and last until `max_plastic_iterations`, so the attempt fails anyway.
+In `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the measured cycles last until `max_plastic_iterations`, so the attempt fails anyway.
 Ending the loop early leaves the step sequence and the time steps unchanged; only the diagnostics of the failed attempt (the last residual and the flip counts) refer to the passes run.
 
 ### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency

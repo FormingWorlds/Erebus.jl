@@ -782,24 +782,33 @@ using Erebus
             )
             state, coords, ws, _, _ = init_simulation(cfg)
             fields, scaled = Erebus._start_plastic_cycle!(state.grids, cfg, ws)
-            return fields, scaled, state, ws
+            return fields, scaled, state, ws, cfg
         end
         solution(g) = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
-        fields, scaled, state, ws = tracked(true, 10)
-        @test length(fields) == 3
+        fields, scaled, state, ws, cfg = tracked(true, 10)
+        @test length(fields) == 4
         @test fields[1] === state.grids.ETA
-        @test fields[2] === ws.hydromech.rx_eff
-        @test fields[3] === ws.hydromech.ry_eff
+        @test fields[2] === state.grids.YNY
+        @test fields[3] === ws.hydromech.rx_eff
+        @test fields[4] === ws.hydromech.ry_eff
         @test length(scaled) == 6
         @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
         nstate = sum(length, fields) + sum(length, scaled)
         @test all(slot -> length(slot) == nstate, ws.plastic_cycle.ring)
         @test size(ws.plastic_cycle.scale, 1) == 6
-        fields, scaled, state, ws = tracked(false, 10)
-        @test length(fields) == 1
+        fields, scaled, state, ws, cfg = tracked(false, 10)
+        @test length(fields) == 2
         @test fields[1] === state.grids.ETA
+        @test fields[2] === state.grids.YNY
+        # A new plastic loop starts with an empty run on the same workspace.
+        for _ in 1:12
+            Erebus.plastic_cycle_record!(ws.plastic_cycle, fields, scaled, 1.0, 1.0, 10)
+        end
+        Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+        @test ws.plastic_cycle.npass == 0
+        @test all(iszero, ws.plastic_cycle.run)
         @test all(i -> scaled[i] === solution(state.grids)[i], 1:6)
-        _, _, _, ws = tracked(false, 0)
+        _, _, _, ws, _ = tracked(false, 0)
         @test all(isempty, ws.plastic_cycle.ring)
         @test size(ws.plastic_cycle.scale, 1) == 0
     end
@@ -844,10 +853,15 @@ using Erebus
             return res, ws
         end
 
+        # The state cycles with period 2 from pass 3, so the stop comes at pass
+        # 4 + max(window, 6).
         res, ws = cycling_case(10)
         @test res.plastic_converged == false
-        @test 12 <= res.n_plastic_passes < 200
+        @test res.n_plastic_passes == 14
         @test res.last_plastic_residual === ws.YERRNOD[res.n_plastic_passes]
+        res14, ws14 = cycling_case(14)
+        @test res14.plastic_converged == false
+        @test res14.n_plastic_passes == 18
 
         res0, ws0 = cycling_case(0)
         @test res0.plastic_converged == false

@@ -2388,7 +2388,7 @@ include("test_helpers.jl")
         @test n16 == 0
         # 1e-7 noise on a node at 1e-6 of its field maximum: a cycle when the array is
         # field-scaled, not when it is tested node by node.
-        tiny(k) = [1.0, 1.0e-6 * (1.0 + 1.0e-7 * sin(sqrt(2.0) * k))]
+        tiny(k) = [-1.0, 1.0e-6 * (1.0 + 1.0e-7 * sin(sqrt(2.0) * k))]
         n17 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=k -> (tiny(k),))
         @test n17 == 11
         n18 = first_flag(k -> (tiny(k),), flat(1.0), flat(1.0), 40)
@@ -2406,6 +2406,9 @@ include("test_helpers.jl")
         pr_relax = k -> (fill(1.0e3, 9), fill(1.0e6, 9) .- 100.0 * k)
         n20 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=pr_relax)
         @test n20 == 0
+        small_relax = k -> (fill(1.0e6, 9), fill(1.0 - 1.0e-4 * k, 9))
+        n22 = first_flag(k -> (), flat(1.0), flat(1.0), 40; scaled=small_relax)
+        @test n22 == 0
         # A reset clears the run counters; a state of the wrong length is refused.
         tr = Erebus.PlasticCycleTracker()
         one = ([1.0],)
@@ -2418,6 +2421,12 @@ include("test_helpers.jl")
             tr, ([1.0, 2.0],), (), 1.0, 1.0, 4
         )
         @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, (), one, 1.0, 1.0, 4)
+        Erebus.reset_plastic_cycle!(tr, one, ([1.0, 2.0],))
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(tr, one, one, 1.0, 1.0, 4)
+        @test_throws DomainError Erebus.PlasticCycleTracker(; max_period=0)
+        @test_throws DomainError Erebus.plastic_cycle_record!(
+            tr, one, ([1.0, 2.0],), 1.0, 1.0, 4; rtol=-1.0
+        )
         # A reset loop does not compare with states left from the previous loop.
         Erebus.reset_plastic_cycle!(tr, one, ())
         for _ in 1:20
