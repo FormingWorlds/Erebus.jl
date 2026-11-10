@@ -769,6 +769,36 @@ using Erebus
         @test res_noconv.n_plastic_passes == 0
     end
 
+    @testset "Stokes-Darcy plastic cycle stop tracks the carried loop state" begin
+        function tracked(hydrofracture, window)
+            cfg = override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml")),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "poroelasticity.hydrofracture" => hydrofracture,
+                    "solver.plastic_cycle_window" => window,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            fields = Erebus._start_plastic_cycle!(state.grids, cfg, ws)
+            return fields, state, ws
+        end
+        fields, state, ws = tracked(true, 10)
+        @test length(fields) == 4
+        @test fields[1] === state.grids.ETA
+        @test fields[2] === ws.S
+        @test fields[3] === ws.hydromech.rx_eff
+        @test fields[4] === ws.hydromech.ry_eff
+        @test all(slot -> length(slot) == sum(length, fields), ws.plastic_cycle.ring)
+        fields, state, ws = tracked(false, 10)
+        @test length(fields) == 2
+        @test fields[1] === state.grids.ETA
+        @test fields[2] === ws.S
+        _, _, ws = tracked(false, 0)
+        @test all(isempty, ws.plastic_cycle.ring)
+    end
+
     @testset "Stokes-Darcy plastic loop stops on a cycled residual" begin
         function cycling_case(window)
             cfg = override_config(
