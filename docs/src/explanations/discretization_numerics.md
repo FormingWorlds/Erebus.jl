@@ -279,22 +279,26 @@ The plastic loop iterates until the RMS dimensional stress error drops below `ye
 $$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \left(\sigma_{\text{II}, i} - \sigma_{\text{yield}, i}\right)^2} < \text{yerrmax}$$
 
 with default `yerrmax = 100.0 Pa`.
-The loop also ends as not converged when its state is periodic.
-The state of a pass is the viscosity $\eta$ on the basic nodes, the effective Darcy resistances (with hydrofracture on), the velocities, pressures and Darcy fluxes, the residual and the time step.
-For one period $p$ from 1 to 16, each value of each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must equal its value $p$ passes earlier within a relative tolerance of $10^{-9}$ (default window: `10`; `0` disables the check).
-The test runs node by node and at one common period for all quantities, so a slow change of the viscosity on one node, where the stress hardly depends on the viscosity at a high Deborah number, keeps the loop running.
-For the velocities, pressures and Darcy fluxes the tolerance is relative to the larger of the two values or to the largest magnitude of that field, whichever is larger, because values near zero carry round-off far above $10^{-9}$ of themselves.
-A value below about $10^{-5}$ of its field maximum can therefore change by $10^{-4}$ of itself per pass without breaking the match; the viscosity and the Darcy resistances, which span many orders of magnitude, are tested against their own values only.
-The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
-In the cases measured with `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the state settles into a cycle with a period between 2 and 10 passes, stays there until `max_plastic_iterations`, and the attempt fails anyway.
-Ending the loop at that point leaves the step sequence and the time steps unchanged: the failed attempt is discarded in either case, and only its diagnostics (the last residual and the flip counts) refer to the passes run.
-If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the state cycles:
+If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the state is periodic (below):
 - The solver rejects the candidate timestep.
 - The system restores grid, marker, and workspace state in place (`restore_step_state!`) from a preallocated start-of-step `StepSnapshot` updated via `snapshot_step_state!`.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).
 - The step retries from the restored state.
 
 If the run reaches `max_dt_reductions` (default: `5`) step cuts without plastic balance, the code throws a `PlasticConvergenceError`.
+
+#### Stop of a Periodic Plastic Loop
+
+The loop also ends as not converged when its state is periodic.
+The state of a pass is the viscosity $\eta$ on the basic nodes, the effective Darcy resistances (with hydrofracture on), the velocities, pressures and Darcy fluxes, the residual and the time step.
+For one period $p$ from 1 to 16, each value of each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must equal its value $p$ passes earlier within a relative tolerance of $10^{-9}$ (default window: `10`; `0` disables the check).
+The test runs node by node and at one common period for all quantities, so a slow change of the viscosity on one node keeps the loop running.
+For the velocities, pressures and Darcy fluxes the tolerance is relative to the largest finite magnitude of that field in the two passes, because values near zero carry round-off far above $10^{-9}$ of themselves.
+A value below about $10^{-5}$ of its field maximum can therefore change by $10^{-4}$ of itself per pass without breaking the match.
+The viscosity and the Darcy resistances, which span many orders of magnitude, are tested against their own values only.
+The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
+In `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the measured cycles have periods between 2 and 10 passes and last until `max_plastic_iterations`, so the attempt fails anyway.
+Ending the loop early leaves the step sequence and the time steps unchanged; only the diagnostics of the failed attempt (the last residual and the flip counts) refer to the passes run.
 
 ### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency
 
