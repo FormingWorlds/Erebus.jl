@@ -2384,6 +2384,18 @@ include("test_helpers.jl")
         @test_throws ArgumentError Erebus.plastic_cycle_record!(
             tr, ([1.0, 2.0],), 1.0, 1.0, 4
         )
+        # A reset loop does not compare with states left from the previous loop.
+        Erebus.reset_plastic_cycle!(tr, 1)
+        for _ in 1:10
+            Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4)
+        end
+        Erebus.reset_plastic_cycle!(tr, 1)
+        hits = [Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4) for _ in 1:5]
+        @test hits == [false, false, false, false, true]
+        # A mismatch restarts the run: 9 equal passes, 1 change, 5 equal passes is no cycle.
+        steps = vcat(fill(1.0, 9), [2.0], fill(2.0, 5))
+        n_restart = first_flag(k -> ([steps[k]],), flat(1.0), flat(1.0), length(steps))
+        @test n_restart == 0
     end
 
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin
