@@ -2314,45 +2314,76 @@ include("test_helpers.jl")
         @test isapprox(ETA, ETA5; rtol=1e-12)
     end
 
-    @testset "plastic_residual_cycled(): periodic tails within the relative tolerance" begin
-        cyc = Erebus.plastic_residual_cycled
-        # Period-5 tail with 1e-12 relative noise, as in hydrothermal_benchmark.
+    @testset "PlasticCycleTracker: one common period over every tracked quantity" begin
+        # First pass at which the tracker flags a cycle, or 0; fields(k) returns a tuple.
+        function first_flag(fields, Y, dt, npass; window=10)
+            tr = Erebus.PlasticCycleTracker()
+            Erebus.reset_plastic_cycle!(tr, sum(length, fields(1)))
+            for k in 1:npass
+                Erebus.plastic_cycle_record!(tr, fields(k), Y(k), dt(k), window) && return k
+            end
+            return 0
+        end
+        flat(v) = k -> v
         base = [3449.88, 803.96, 2415.1, 2574.79, 1006.14]
-        noise = [1.0 + 1.0e-12 * (-1)^k for k in 1:60]
-        p5 = vcat([5000.0, 4000.0], repeat(base, 12) .* noise)
-        @test cyc(p5, length(p5), 10)
-        @test !cyc(p5, length(p5), 0)
-        # The tail starts at pass 3; period 5 needs max(10, 15) passes plus the lag: pass 22.
-        @test !cyc(p5, 21, 10)
-        @test cyc(p5, 22, 10)
-        # Noise above the tolerance does not match.
-        loud = vcat(
-            [5000.0, 4000.0], repeat(base, 12) .* [1.0 + 1.0e-7 * (-1)^k for k in 1:60]
-        )
-        @test !cyc(loud, length(loud), 10)
-        # A slowly falling residual (1e-6 per pass) does not match.
-        @test !cyc([1.0e4 * (1 - 1.0e-6)^k for k in 1:60], 60, 10)
-        # A constant tail is period 1: window 10 plus lag 1 from pass 3, so pass 13.
-        c1 = vcat([9.0, 7.0], fill(4.0, 30))
-        @test !cyc(c1, 12, 10)
-        @test cyc(c1, 13, 10)
+        tail5(k, amp) = base[mod1(k, 5)] * (1.0 + amp * (-1)^k)
+        y5(amp) = k -> k <= 2 ? 5000.0 * k : tail5(k, amp)
+        f5(amp) = k -> (fill(k <= 2 ? 1.0e21 : 1.0e19 * tail5(k, amp), 3, 3),)
+        # Period-5 tail from pass 3 with 1e-12 noise: max(10, 15) passes plus lag 5, pass 22.
+        n1 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60)
+        @test n1 == 22
+        n2 = first_flag(f5(1.0e-12), y5(1.0e-12), flat(1.0e3), 60; window=0)
+        @test n2 == 0
+        # Noise above the tolerance, in the residual or in the field, is not a cycle.
+        n3 = first_flag(f5(1.0e-12), y5(1.0e-7), flat(1.0e3), 60)
+        @test n3 == 0
+        n4 = first_flag(f5(1.0e-7), y5(1.0e-12), flat(1.0e3), 60)
+        @test n4 == 0
+        # A constant tail from pass 3 is period 1: window 10 plus lag 1, pass 13.
+        c1 = k -> k <= 2 ? 9.0 - k : 4.0
+        n5 = first_flag(k -> ([c1(k)],), c1, flat(1.0), 30)
+        @test n5 == 13
+        # One node of 65x65 relaxing by 1e-4 per pass under a flat residual is not a cycle.
+        function relax(amp)
+            return k -> begin
+                e = fill(1.0e21, 65, 65)
+                e[33, 33] = 1.0e19 * (1.0 - amp)^k
+                (e,)
+            end
+        end
+        n6 = first_flag(relax(1.0e-4), flat(1.0e5), flat(1.0), 60)
+        @test n6 == 0
+        n7 = first_flag(relax(1.0e-12), flat(1.0e5), flat(1.0), 60)
+        @test n7 == 11
+        # Residual period 3 and field period 2: joint period 6, max(10, 18) + 6 = pass 24.
+        y3 = k -> [1.0, 2.0, 3.0][mod1(k, 3)]
+        f2 = k -> ([[5.0, 7.0][mod1(k, 2)]],)
+        n8 = first_flag(f2, y3, flat(1.0), 40)
+        @test n8 == 24
+        # A second field or the time step that still relaxes blocks the stop.
+        hidden = k -> (fill(1.0e19, 2, 2), fill(1.0 + 0.01 * k, 2, 2))
+        n9 = first_flag(hidden, flat(1.0e5), flat(1.0), 60)
+        @test n9 == 0
+        n10 = first_flag(k -> (fill(1.0e19, 2),), flat(1.0e5), k -> 1.0 + 0.01 * k, 60)
+        @test n10 == 0
+        # Zero and Inf entries repeat exactly; NaN never matches.
+        n11 = first_flag(k -> ([0.0, Inf, 1.0],), flat(1.0), flat(1.0), 30)
+        @test n11 == 11
+        n12 = first_flag(k -> ([NaN, 1.0],), flat(1.0), flat(1.0), 30)
+        @test n12 == 0
         # Period 9 lies beyond the longest period checked.
-        p9 = vcat([5000.0], repeat(collect(1.0:9.0) .* 100, 8))
-        @test !cyc(p9, length(p9), 10)
-        # A pass index beyond the residual vector returns false.
-        @test !cyc(p5, length(p5) + 1, 10)
-    end
-
-    @testset "plastic_loop_cycled(): residual and viscosity trace both periodic" begin
-        loopcyc = Erebus.plastic_loop_cycled
-        y = vcat([9.0, 7.0], repeat([3.0, 5.0], 20))
-        eta_cycle = vcat([50.0, 49.0], repeat([48.0, 47.5], 20))
-        eta_relaxing = [50.0 - 0.01 * k for k in 1:42]
-        @test loopcyc(y, eta_cycle, 42, 10)
-        # A flat residual while the viscosity still relaxes is not a cycle.
-        @test !loopcyc(fill(5.0e5, 42), eta_relaxing, 42, 10)
-        @test !loopcyc(y, eta_relaxing, 42, 10)
-        @test !loopcyc(y, eta_cycle, 42, 0)
+        n13 = first_flag(k -> ([Float64(mod1(k, 9))],), flat(1.0), flat(1.0), 80)
+        @test n13 == 0
+        # A reset clears the run counters; a state of the wrong length is refused.
+        tr = Erebus.PlasticCycleTracker()
+        Erebus.reset_plastic_cycle!(tr, 1)
+        hits = [Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4) for _ in 1:5]
+        @test hits == [false, false, false, false, true]
+        Erebus.reset_plastic_cycle!(tr, 1)
+        @test !Erebus.plastic_cycle_record!(tr, ([1.0],), 1.0, 1.0, 4)
+        @test_throws ArgumentError Erebus.plastic_cycle_record!(
+            tr, ([1.0, 2.0],), 1.0, 1.0, 4
+        )
     end
 
     @testset "simulation_loop: plastic non-convergence retry and PlasticConvergenceError (N1)" begin

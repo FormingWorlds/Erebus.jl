@@ -278,7 +278,15 @@ The plastic loop iterates until the RMS dimensional stress error drops below `ye
 
 $$\text{YERRNOD} = \sqrt{\frac{1}{N_{\text{yield}}} \sum_{i \in \text{yield}} \left(\sigma_{\text{II}, i} - \sigma_{\text{yield}, i}\right)^2} < \text{yerrmax}$$
 
-with default `yerrmax = 100.0 Pa`. The loop also ends as not converged when the residual is periodic: for a period $p$ from 1 to 8, each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes equals the residual $p$ passes earlier within a relative tolerance of $10^{-9}$, and the viscosity trace $\sum \ln \eta$ over the basic nodes is periodic in the same sense (default window: `10`; `0` disables the check). The trace condition keeps a flat residual over a viscosity that still relaxes, where the stress hardly depends on the viscosity at a high Deborah number, from ending a loop that would converge. In the cases measured with `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the residual settles within about 40 passes into a period-5 cycle with $10^{-12}$ relative round-off noise, stays there until `max_plastic_iterations`, and the attempt fails anyway. Ending the loop at that point leaves the step sequence and the time steps unchanged: the failed attempt is discarded in either case, and only its diagnostics (the last residual and the flip counts) refer to the passes run. If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the residual cycles:
+with default `yerrmax = 100.0 Pa`.
+The loop also ends as not converged when its state is periodic.
+The state of a pass is the viscosity $\eta$ on the basic nodes, the solution vector, the effective Darcy resistances (with hydrofracture on), the residual and the time step.
+For one period $p$ from 1 to 8, each value of each of the last $\max(\texttt{plastic\_cycle\_window}, 3p)$ passes must equal its value $p$ passes earlier within a relative tolerance of $10^{-9}$ (default window: `10`; `0` disables the check).
+The test runs node by node and at one common period for all quantities, so a slow change of the viscosity on one node, where the stress hardly depends on the viscosity at a high Deborah number, keeps the loop running.
+The tolerance lies far below the default Krylov tolerance `krylov_rtol = 1e-6`, so the check acts in practice with the direct solver.
+In the cases measured with `hydrothermal_benchmark` (a few nodes in tensile yield under fluid overpressure), the residual settles within about 40 passes into a period-5 cycle with $10^{-12}$ relative round-off noise, stays there until `max_plastic_iterations`, and the attempt fails anyway.
+Ending the loop at that point leaves the step sequence and the time steps unchanged: the failed attempt is discarded in either case, and only its diagnostics (the last residual and the flip counts) refer to the passes run.
+If yielding nodes persist after `max_plastic_iterations` (default: `10000`) or the state cycles:
 - The solver rejects the candidate timestep.
 - The system restores grid, marker, and workspace state in place (`restore_step_state!`) from a preallocated start-of-step `StepSnapshot` updated via `snapshot_step_state!`.
 - The computational timestep halves ($dt \leftarrow 0.5 dt$).

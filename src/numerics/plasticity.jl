@@ -411,48 +411,127 @@ function compute_nodal_adjustment!(
 end # function compute_nodal_adjustment!
 
 """
-    plastic_residual_cycled(YERRNOD, iplast, window; rtol=1.0e-9, max_period=8) -> Bool
+    PlasticCycleTracker(; max_period=8)
 
-Return true when the plastic residuals end in a cycle: for one period `p` in
-`1:max_period`, every pass `k` of the last `max(window, 3p)` passes up to `iplast` has
-`abs(YERRNOD[k] - YERRNOD[k - p]) <= rtol * abs(YERRNOD[k])`. The tolerance admits the
-round-off noise of a repeating yield update; a residual that still falls by more than
-`rtol` per period does not match. In the measured cases such a cycle lasts until
-`max_plastic_iterations`, so the caller ends the plastic loop as not converged. Returns
-false for `window <= 0` and for `iplast > length(YERRNOD)`.
+Per-pass record of the plastic loop state for the cycle stop of the plastic loop. A ring of
+`max_period + 1` state copies, the residual and the time step of each pass, and one run
+counter per period `p`: the number of consecutive passes whose state matches the state `p`
+passes before. Allocated once per workspace; [`reset_plastic_cycle!`](@ref) sizes it.
+
+# Arguments
+
+    - max_period: longest period checked, in passes
 """
-function plastic_residual_cycled(
-    YERRNOD::AbstractVector{<:Real},
-    iplast::Integer,
+mutable struct PlasticCycleTracker
+    ring::Vector{Vector{Float64}}
+    Y::Vector{Float64}
+    dt::Vector{Float64}
+    run::Vector{Int}
+    npass::Int
+end
+function PlasticCycleTracker(; max_period::Integer=8)
+    nslot = max_period + 1
+    return PlasticCycleTracker(
+        [Float64[] for _ in 1:nslot], zeros(nslot), zeros(nslot), zeros(Int, max_period), 0
+    )
+end
+
+"""
+    reset_plastic_cycle!(tr, nstate) -> tr
+
+Clear the pass count and the run counters of `tr` and size each ring slot to `nstate`
+values, before the first pass of a plastic loop.
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref)
+    - nstate: total number of state values recorded per pass
+
+# Returns
+
+    - tr
+"""
+function reset_plastic_cycle!(tr::PlasticCycleTracker, nstate::Integer)
+    for slot in tr.ring
+        length(slot) == nstate || resize!(slot, nstate)
+    end
+    fill!(tr.run, 0)
+    tr.npass = 0
+    return tr
+end
+
+_cycle_match(a, b, rtol) = a == b || abs(a - b) <= rtol * max(abs(a), abs(b))
+
+"""
+    plastic_cycle_record!(tr, fields, Y, dt, window; rtol=1.0e-9) -> Bool
+
+Record one plastic pass and return true when the loop state is periodic. The state of a
+pass is the arrays in `fields` (viscosity, solution vector, Darcy resistances), the
+residual `Y` and the time step `dt`. It matches the state `p` passes before when every
+value `a` agrees with its earlier value `b` as `a == b` or
+`abs(a - b) <= rtol * max(abs(a), abs(b))`; NaN never matches. The result is true when,
+for one period `p` in `1:max_period`, the last `max(window, 3p)` passes all match at lag
+`p`. Every quantity is tested at the same period, and node by node, so a slow change on
+one node is not hidden by the rest of the grid.
+
+# Arguments
+
+    - tr: [`PlasticCycleTracker`](@ref), reset for this loop
+    - fields: tuple of arrays, `sum(length, fields)` values per pass
+    - Y: plastic residual of the pass (Pa)
+    - dt: time step of the pass (s)
+    - window: minimum run length in passes; 0 disables the test
+    - rtol: relative tolerance per value
+
+# Returns
+
+    - true when the state is periodic, else false
+
+# Throws
+
+    - ArgumentError: the fields do not hold the length set by [`reset_plastic_cycle!`](@ref)
+"""
+function plastic_cycle_record!(
+    tr::PlasticCycleTracker,
+    fields::Tuple,
+    Y::Real,
+    dt::Real,
     window::Integer;
     rtol::Real=1.0e-9,
-    max_period::Integer=8,
 )
-    (window > 0 && iplast <= length(YERRNOD)) || return false
-    for p in 1:max_period
-        n = max(window, 3 * p)
-        iplast >= n + p || continue
-        all(
-            k -> abs(YERRNOD[k] - YERRNOD[k - p]) <= rtol * abs(YERRNOD[k]),
-            (iplast - n + 1):iplast,
-        ) && return true
+    window > 0 || return false
+    nslot = length(tr.ring)
+    tr.npass += 1
+    k = tr.npass
+    cur = tr.ring[mod1(k, nslot)]
+    sum(length, fields) == length(cur) || throw(
+        ArgumentError(
+            "plastic cycle state has $(sum(length, fields)) values, tracker holds $(length(cur))",
+        ),
+    )
+    off = 0
+    for f in fields
+        copyto!(cur, off + 1, vec(f), 1, length(f))
+        off += length(f)
     end
-    return false
-end # function plastic_residual_cycled
-
-"""
-    plastic_loop_cycled(YERRNOD, eta_trace, iplast, window) -> Bool
-
-Return true when both the plastic residual `YERRNOD` and the viscosity trace `eta_trace`
-(one scalar per pass, `sum(log, ETA)` over the basic nodes) are periodic in the sense of
-[`plastic_residual_cycled`](@ref). The trace guard keeps a flat residual over a viscosity
-that still relaxes (stress insensitive to viscosity at high Deborah number) from ending a
-loop that would converge.
-"""
-function plastic_loop_cycled(YERRNOD, eta_trace, iplast::Integer, window::Integer)
-    return plastic_residual_cycled(YERRNOD, iplast, window) &&
-           plastic_residual_cycled(eta_trace, iplast, window)
-end # function plastic_loop_cycled
+    tr.Y[mod1(k, nslot)] = Y
+    tr.dt[mod1(k, nslot)] = dt
+    cycled = false
+    for p in eachindex(tr.run)
+        if k <= p
+            continue
+        end
+        j = mod1(k - p, nslot)
+        prev = tr.ring[j]
+        ok =
+            _cycle_match(Y, tr.Y[j], rtol) &&
+            _cycle_match(dt, tr.dt[j], rtol) &&
+            all(i -> _cycle_match(cur[i], prev[i], rtol), eachindex(cur))
+        tr.run[p] = ok ? tr.run[p] + 1 : 0
+        cycled |= tr.run[p] >= max(window, 3 * p)
+    end
+    return cycled
+end # function plastic_cycle_record!
 
 """
 Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.

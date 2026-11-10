@@ -629,6 +629,47 @@ function postprocess_hydromechanical_solution!(
 end
 
 """
+    _plastic_cycle_fields(g, cfg, ws) -> Tuple
+
+State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref):
+viscosity `g.ETA`, the solution vector `ws.S`, and the effective Darcy resistances when
+hydrofracture is on.
+"""
+function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
+    hm = ws.hydromech
+    if cfg.poroelasticity.hydrofracture && hm.rx_eff !== nothing && hm.ry_eff !== nothing
+        return (g.ETA, ws.S, hm.rx_eff, hm.ry_eff)
+    end
+    return (g.ETA, ws.S)
+end
+
+"""
+    _start_plastic_cycle!(g, cfg, ws) -> Tuple
+
+Reset `ws.plastic_cycle` before the first plastic pass and return the tracked fields of
+[`_plastic_cycle_fields`](@ref); the ring holds no values when the cycle stop is off.
+"""
+function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
+    fields = _plastic_cycle_fields(g, cfg, ws)
+    nstate = cfg.solver.plastic_cycle_window > 0 ? sum(length, fields) : 0
+    reset_plastic_cycle!(ws.plastic_cycle, nstate)
+    return fields
+end
+
+"""
+    _plastic_cycle_stop!(ws, fields, state, cfg, iplast) -> Bool
+
+Record plastic pass `iplast` in `ws.plastic_cycle` and return true when the loop state is
+periodic ([`plastic_cycle_record!`](@ref)), so the loop ends as not converged.
+"""
+function _plastic_cycle_stop!(ws::SimulationWorkspaces, fields, state, cfg, iplast::Integer)
+    Y = ws.YERRNOD[iplast]
+    return plastic_cycle_record!(
+        ws.plastic_cycle, fields, Y, state.dt, cfg.solver.plastic_cycle_window
+    )
+end
+
+"""
 Solve Stokes-Darcy fluid-solid equations with non-linear plastic iterations.
 
 $(SIGNATURES)
@@ -671,8 +712,7 @@ function solve_stokes_darcy!(
     plastic_converged = false
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
     n_plastic_passes = 0
-    window = cfg.solver.plastic_cycle_window
-    eta_trace = zeros(window > 0 ? max_plastic_iterations_val : 0)
+    cycle_fields = _start_plastic_cycle!(g, cfg, ws)
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
@@ -705,8 +745,7 @@ function solve_stokes_darcy!(
             plastic_converged = true
             break
         end
-        window > 0 && (eta_trace[iplast] = sum(log, g.ETA))
-        plastic_loop_cycled(ws.YERRNOD, eta_trace, iplast, window) && break
+        _plastic_cycle_stop!(ws, cycle_fields, state, cfg, iplast) && break
     end
 
     if !plastic_converged
