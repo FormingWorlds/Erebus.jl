@@ -118,6 +118,15 @@ using Erebus
         # 3. Solver seed difference is allowed on restart
         cfg_seed = Erebus.override_config(cfg_saved, Dict("solver.seed" => 99999))
         @test isempty(Erebus.compare_restart_configs(cfg_saved, cfg_seed))
+
+        # 4. Plastic loop iteration settings may change on restart
+        cfg_aa = Erebus.override_config(
+            cfg_saved,
+            Dict("solver.anderson_depth" => 0, "solver.plastic_stall_passes" => 50),
+        )
+        @test isempty(Erebus.compare_restart_configs(cfg_saved, cfg_aa))
+        cfg_yerr = Erebus.override_config(cfg_saved, Dict("solver.yerrmax" => 50.0))
+        @test Erebus.compare_restart_configs(cfg_saved, cfg_yerr) == ["solver.yerrmax"]
     end
 
     @testset "Missing Checkpoint File Throws CheckpointError" begin
