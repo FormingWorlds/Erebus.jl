@@ -531,6 +531,7 @@ function setup_simulation_workspaces(
         alloc_if(has_hr && has_metal),
         -1,
         PlasticCycleTracker(),
+        AndersonHistory(0, 0),
     )
 end
 

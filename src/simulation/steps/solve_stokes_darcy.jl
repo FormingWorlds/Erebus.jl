@@ -705,6 +705,183 @@ function _plastic_cycle_stop!(
 end
 
 """
+    _anderson_depth(cfg) -> Int
+
+Depth of the Anderson acceleration of the plastic loop: `solver.anderson_depth`, or 0 when
+`poroelasticity.theta_frac` is below 1.
+
+# Arguments
+
+    - cfg: simulation configuration
+
+# Returns
+
+    - the depth in use
+"""
+function _anderson_depth(cfg::SimulationConfig)
+    return cfg.poroelasticity.theta_frac < 1.0 ? 0 : cfg.solver.anderson_depth
+end
+
+"""
+    _start_anderson!(ws, state, cfg) -> nothing
+
+Reset `ws.anderson` before the first plastic pass, sized for the packed state
+(pressures `pr`, `pf` and the viscosity ratio of [`anderson_pack_viscosity!`](@ref)), and
+pack the first iterate.
+
+# Arguments
+
+    - ws: simulation workspaces, holds the history
+    - state: simulation state, gives the grids and the time step (s)
+    - cfg: simulation configuration
+
+# Returns
+
+    - nothing
+"""
+function _start_anderson!(ws::SimulationWorkspaces, state, cfg::SimulationConfig)
+    d = _anderson_depth(cfg)
+    d == 0 && return nothing
+    g = state.grids
+    n = length(g.pr) + length(g.pf) + length(g.ETA)
+    if ws.anderson.depth != d || length(ws.anderson.f) != n
+        ws.anderson = AndersonHistory(d, n)
+    end
+    reset_anderson!(ws.anderson)
+    ws.anderson.dt = state.dt
+    _anderson_pack!(ws.anderson.x, g)
+    return nothing
+end
+
+"""
+    _anderson_pack!(v, g) -> v
+
+Pack `pr`, `pf` and the viscosity ratio of the grids into `v`.
+
+# Arguments
+
+    - v: packed state, overwritten
+    - g: grid fields
+
+# Returns
+
+    - v
+"""
+function _anderson_pack!(v::Vector{Float64}, g)
+    np, nf = length(g.pr), length(g.pf)
+    copyto!(v, 1, g.pr, 1, np)
+    copyto!(v, np + 1, g.pf, 1, nf)
+    anderson_pack_viscosity!(view(v, (np + nf + 1):length(v)), g.ETA, g.ETA0)
+    return v
+end
+
+"""
+    _anderson_unpack!(g, v, cfg) -> g
+
+Write the packed state `v` back to `pr`, `pf`, `ETA`, `YNY` and `YNY_inv_ETA` of the grids
+([`anderson_unpack_viscosity!`](@ref)).
+
+# Arguments
+
+    - g: grid fields, overwritten
+    - v: packed state
+    - cfg: simulation configuration, gives `solver.etamin` and `solver.etamax` (Pa s)
+
+# Returns
+
+    - g
+"""
+function _anderson_unpack!(g, v::Vector{Float64}, cfg::SimulationConfig)
+    np, nf = length(g.pr), length(g.pf)
+    copyto!(g.pr, 1, v, 1, np)
+    copyto!(g.pf, 1, v, np + 1, nf)
+    anderson_unpack_viscosity!(
+        g.ETA,
+        g.YNY,
+        g.YNY_inv_ETA,
+        view(v, (np + nf + 1):length(v)),
+        g.ETA0,
+        cfg.solver.etamin,
+        cfg.solver.etamax,
+    )
+    return g
+end
+
+"""
+    _anderson_weights!(w, g) -> w
+
+Least-squares weights of the packed state: `1 / max(RMS, 1)` of `pr` and of `pf` over the
+interior P-nodes (Pa), 0 on the ghost P-nodes, 1 on the viscosity ratio.
+
+# Arguments
+
+    - w: weights, overwritten
+    - g: grid fields
+
+# Returns
+
+    - w
+"""
+function _anderson_weights!(w::Vector{Float64}, g)
+    off = 0
+    for P in (g.pr, g.pf)
+        Ny1, Nx1 = size(P)
+        inner = view(P, 2:(Ny1 - 1), 2:(Nx1 - 1))
+        wt = 1.0 / max(sqrt(sum(abs2, inner) / max(length(inner), 1)), 1.0)
+        for j in 1:Nx1, i in 1:Ny1
+            w[off + (j - 1) * Ny1 + i] = (1 < i < Ny1 && 1 < j < Nx1) ? wt : 0.0
+        end
+        off += length(P)
+    end
+    w[(off + 1):end] .= 1.0
+    return w
+end
+
+"""
+    _plastic_pass_stop!(ws, tracked, state, cfg, iplast) -> Bool
+
+End of a plastic pass that did not converge: the cycle stop
+([`_plastic_cycle_stop!`](@ref)) reads the state of the pass; with Anderson acceleration on,
+the stagnation stop ([`anderson_stall_record!`](@ref)) follows, then the state of the next
+pass is set by [`anderson_mix!`](@ref). A time step change inside the loop restarts the
+history from the state of the pass.
+
+# Arguments
+
+    - ws: simulation workspaces, holds the trackers and the residuals `YERRNOD`
+    - tracked: the tuples `(fields, scaled)` of [`_start_plastic_cycle!`](@ref)
+    - state: simulation state, gives the grids and the time step (s)
+    - cfg: simulation configuration
+    - iplast: index of the plastic pass
+
+# Returns
+
+    - true when the loop must stop as not converged
+"""
+function _plastic_pass_stop!(ws::SimulationWorkspaces, tracked, state, cfg, iplast::Integer)
+    _plastic_cycle_stop!(ws, tracked, state, cfg, iplast) && return true
+    _anderson_depth(cfg) == 0 && return false
+    h = ws.anderson
+    g = state.grids
+    _anderson_pack!(h.g, g)
+    if !isequal(state.dt, h.dt)
+        _clear_anderson_columns!(h)
+        h.wset = false
+        copyto!(h.x, h.g)
+    end
+    Y = ws.YERRNOD[iplast]
+    anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
+    if !h.wset
+        _anderson_weights!(h.w, g)
+        h.wset = true
+    end
+    anderson_mix!(h.xn, h.x, h.g, h, h.w)
+    _anderson_unpack!(g, h.xn, cfg)
+    _anderson_pack!(h.x, g)
+    return false
+end
+
+"""
 Solve Stokes-Darcy fluid-solid equations with non-linear plastic iterations.
 
 $(SIGNATURES)
@@ -748,6 +925,7 @@ function solve_stokes_darcy!(
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
     n_plastic_passes = 0
     cycle_fields = _start_plastic_cycle!(g, cfg, ws)
+    _start_anderson!(ws, state, cfg)
 
     for iplast in 1:max_plastic_iterations_val
         assemble_and_solve_hydromechanical!(
@@ -780,7 +958,7 @@ function solve_stokes_darcy!(
             plastic_converged = true
             break
         end
-        _plastic_cycle_stop!(ws, cycle_fields, state, cfg, iplast) && break
+        _plastic_pass_stop!(ws, cycle_fields, state, cfg, iplast) && break
     end
 
     if !plastic_converged

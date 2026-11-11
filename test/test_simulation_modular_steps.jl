@@ -892,7 +892,9 @@ using Erebus
         # passes cycle at a fracture face.
         function overpressure_case(depth; theta=1.0, stall=1000, yerrmax=100.0)
             cfg = override_config(
-                load_config(joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")),
+                load_config(
+                    joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")
+                ),
                 Dict{String,Any}(
                     "grid.Nx" => 9,
                     "grid.Ny" => 9,

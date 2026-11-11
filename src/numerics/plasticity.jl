@@ -761,7 +761,9 @@ end
 
 History of the type II Anderson acceleration of the plastic loop (Walker and Ni, 2011):
 ring buffers with the last `depth` differences of the packed state `x` and of the
-fixed-point residual `f = G(x) - x`, and the counters of the stagnation stop.
+fixed-point residual `f = G(x) - x`, the work vectors of the plastic loop (iterate `x`, map
+value `g`, next iterate `xn`, least-squares weights `w`, set when `wset`), and the counters of
+the stagnation stop.
 
 # Arguments
 
@@ -784,6 +786,11 @@ mutable struct AndersonHistory
     xprev::Vector{Float64}
     fprev::Vector{Float64}
     f::Vector{Float64}
+    x::Vector{Float64}
+    g::Vector{Float64}
+    xn::Vector{Float64}
+    w::Vector{Float64}
+    wset::Bool
     ncol::Int
     head::Int
     hasprev::Bool
@@ -804,6 +811,11 @@ function AndersonHistory(depth::Integer, n::Integer)
         zeros(m),
         zeros(m),
         zeros(m),
+        zeros(m),
+        zeros(m),
+        zeros(m),
+        zeros(m),
+        false,
         0,
         1,
         false,
@@ -828,6 +840,7 @@ Clear the difference columns and the stagnation counters of an [`AndersonHistory
 """
 function reset_anderson!(h::AndersonHistory)
     _clear_anderson_columns!(h)
+    h.wset = false
     h.best = Inf
     h.nstall = 0
     h.dt = NaN

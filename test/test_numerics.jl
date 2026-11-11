@@ -2675,7 +2675,7 @@ include("test_helpers.jl")
         @test Erebus.anderson_mix!(xn, x, c .- x, h, ones(3))
         @test isapprox(xn, c ./ 2; atol=1.0e-12)
         # Plain Picard stays on the 2-cycle: x and c - x never meet c / 2.
-        @test abs(x[1] - c[1] / 2) > 1.0
+        @test !isapprox(x, c ./ 2; atol=1.0)
 
         # Linear contraction, 3 unknowns, depth 3: exact at update 4 (Walker and Ni 2011).
         A = [0.8 0.1 0.0; 0.0 0.5 0.1; 0.0 0.0 -0.7]
@@ -2690,7 +2690,7 @@ include("test_helpers.jl")
             xp .= A * xp + b
         end
         @test norm(x - xstar) < 1.0e-12
-        @test norm(xp - xstar) > 0.4
+        @test !isapprox(xp, xstar; atol=0.4)
         @test 1.0 < norm(xstar) < 10.0
     end
 
@@ -2716,7 +2716,7 @@ include("test_helpers.jl")
         @test isapprox(xn, ref; rtol=1.0e-10)
         # The weights change the answer: unit weights give a different update.
         gam1 = dF \ f[5]
-        @test norm(Gmap(xs[5]) - (dX + dF) * gam1 - ref) > 1.0e-8
+        @test !isapprox(Gmap(xs[5]) - (dX + dF) * gam1, ref; atol=1.0e-8)
         # All-zero history column: the update falls back to G and keeps the iteration going.
         h = Erebus.AndersonHistory(2, 2)
         x0 = [1.0, 1.0]
@@ -2785,7 +2785,10 @@ include("test_helpers.jl")
         # Round-off jitter below the relative threshold does not count as progress.
         Erebus.reset_anderson!(h)
         jit = [1.0, 1.0 - 1.0e-15, 1.0 - 2.0e-15, 1.0 - 3.0e-15]
-        @test [Erebus.anderson_stall_record!(h, Y, 1.0, 3) for Y in jit] == [false, false, false, true]
+        @test isequal(
+            [Erebus.anderson_stall_record!(h, Y, 1.0, 3) for Y in jit],
+            [false, false, false, true],
+        )
         # A time step change restarts the count; NaN is no progress.
         Erebus.reset_anderson!(h)
         @test !Erebus.anderson_stall_record!(h, 1.0, 1.0, 2)
@@ -2804,7 +2807,7 @@ include("test_helpers.jl")
         # Unyielded nodes pack to exactly 0, yielded nodes below 0.
         @test count(iszero, s) == 2
         @test isapprox(s[3], log(1.0e15 / 1.0e21); rtol=1.0e-12)
-        @test s[2] < 0.0
+        @test isapprox(s[2], log(2.0e18 / 1.0e20); rtol=1.0e-12)
         E = similar(ETA)
         Y = zeros(Bool, 2, 2)
         Yi = zeros(2, 2)
