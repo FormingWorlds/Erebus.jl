@@ -930,7 +930,7 @@ using Erebus
             g = state.grids
             fill!(g.TEN, 5.0e4)
             fill!(g.COH, 2.0e5)
-            g.pf0[5, 5] = g.pr0[5, 5] + 5.0e4 + 1.0e6
+            g.pf0[5, 5] = g.pr0[5, 5] + 5.0e4 + 2.0e5
             g.pf .= g.pf0
             g.pr .= g.pr0
             res = Erebus.solve_stokes_darcy!(
