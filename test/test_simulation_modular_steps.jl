@@ -841,6 +841,7 @@ using Erebus
                     "solver.yerrmax" => 1.0e-20,
                     "solver.etamin" => 1.0e21,
                     "solver.plastic_cycle_window" => window,
+                    "solver.anderson_depth" => 0,
                 ),
             )
             state, coords, ws, _, _ = init_simulation(cfg)
@@ -884,6 +885,84 @@ using Erebus
         @test res0.plastic_converged == false
         @test res0.n_plastic_passes == 200
         @test res0.last_plastic_residual === ws0.YERRNOD[200]
+    end
+
+    @testset "Stokes-Darcy plastic loop with Anderson acceleration" begin
+        # Fluid overpressure in one cell of a 9 x 9 benchmark grid makes plain Picard
+        # passes cycle at a fracture face.
+        function overpressure_case(depth; theta=1.0, stall=1000, yerrmax=100.0)
+            cfg = override_config(
+                load_config(joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "solver.max_plastic_iterations" => 200,
+                    "solver.yerrmax" => yerrmax,
+                    "solver.anderson_depth" => depth,
+                    "solver.plastic_stall_passes" => stall,
+                    "poroelasticity.theta_frac" => theta,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            for m in 1:length(state.markers)
+                state.markers.core.tm[m] != 3 && (state.markers.core.tkm[m] = 350.0)
+            end
+            Erebus.radiogenic_heating!(state, coords, cfg)
+            Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+            Erebus.interpolate_markers_to_grid!(
+                state,
+                coords,
+                cfg;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(state, coords, cfg)
+            Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+            Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            Erebus.update_step_start_pressures!(state)
+            state.timestep = 2
+            state.dt = 2.0e4
+            g = state.grids
+            fill!(g.TEN, 5.0e4)
+            fill!(g.COH, 2.0e5)
+            g.pf0[5, 5] = g.pr0[5, 5] + 5.0e4 + 1.0e6
+            g.pf .= g.pf0
+            g.pr .= g.pr0
+            res = Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            return res, state, ws
+        end
+
+        # Plain Picard ends at the cycle stop, the accelerated loop converges.
+        r0, _, _ = overpressure_case(0)
+        @test !r0.plastic_converged
+        @test 1 < r0.n_plastic_passes < 200
+        r5, s5, _ = overpressure_case(5)
+        @test r5.plastic_converged
+        @test r5.n_plastic_passes < 200
+        # The accepted state keeps viscosity and yield flags consistent.
+        g = s5.grids
+        @test !any(g.ETA .> g.ETA0 .* (1.0 + 1.0e-12))
+        @test !any((g.ETA .< g.ETA0 .* (1.0 - 1.0e-12)) .& (g.YNY .== 0))
+
+        # A loop that cannot converge stops 10 passes after its smallest residual.
+        rs, _, wss = overpressure_case(5; stall=10, yerrmax=1.0e-20)
+        @test !rs.plastic_converged
+        n = rs.n_plastic_passes
+        @test n < 200
+        @test n - argmin(wss.YERRNOD[1:n]) == 10
+
+        # With theta_frac below 1 the loop runs plain Picard passes.
+        rt5, st5, _ = overpressure_case(5; theta=0.5)
+        rt0, st0, _ = overpressure_case(0; theta=0.5)
+        @test rt5.n_plastic_passes == rt0.n_plastic_passes
+        @test isequal(st5.grids.pr, st0.grids.pr) && isequal(st5.grids.ETA, st0.grids.ETA)
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin
