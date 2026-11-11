@@ -722,8 +722,9 @@ function compare_restart_configs(
         s_curr = get(d_curr, sec, Dict{String,Any}())
         all_flds = sort(collect(union(keys(s_saved), keys(s_curr))))
         for fld in all_flds
-            if (sec == "time" && fld in ("n_steps", "endtime", "start_step")) ||
-                (sec == "solver" && fld == "seed")
+            if (sec == "time" && fld in ("n_steps", "endtime", "start_step")) || (
+                sec == "solver" && fld in ("seed", "anderson_depth", "plastic_stall_passes")
+            )
                 continue
             end
             val_saved = get(s_saved, fld, nothing)

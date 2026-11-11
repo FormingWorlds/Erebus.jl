@@ -107,6 +107,8 @@ Base.@kwdef struct SolverConfig
     max_dt_reductions::Int = 5
     yerrmax::Float64 = 1.0e+2
     plastic_cycle_window::Int = 10
+    anderson_depth::Int = 5
+    plastic_stall_passes::Int = 1000
     etawt::Float64 = 0.0
     dphimax::Float64 = 0.1
     seed::Int = 42
@@ -1533,6 +1535,10 @@ function _validate_solver_config(
             "solver.plastic_cycle_window must be 0 (off) or 4 to 100, got $(cfg.plastic_cycle_window)",
         ),
     )
+    0 <= cfg.anderson_depth <= 20 || throw(
+        ArgumentError("solver.anderson_depth must be 0 to 20, got $(cfg.anderson_depth)"),
+    )
+    @check_ge cfg.plastic_stall_passes 10
     @check_positive cfg.etamin
     cfg.etamax >= cfg.etamin || throw(ArgumentError("etamax must be >= etamin"))
     @check_positive cfg.etaphikoef

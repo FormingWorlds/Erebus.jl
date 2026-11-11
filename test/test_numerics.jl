@@ -2760,10 +2760,18 @@ include("test_helpers.jl")
         # Contracts.
         @test_throws DomainError Erebus.AndersonHistory(-1, 3)
         @test_throws DomainError Erebus.AndersonHistory(4, 3)
-        @test_throws DimensionMismatch Erebus.anderson_mix!(zeros(2), ones(3), ones(3), h, ones(3))
-        @test_throws DimensionMismatch Erebus.anderson_mix!(xn, ones(3), ones(3), h, ones(2))
-        @test_throws DomainError Erebus.anderson_mix!(xn, ones(3), ones(3), h, [1.0, -1.0, 1.0])
-        @test_throws DomainError Erebus.anderson_mix!(xn, ones(3), ones(3), h, [1.0, Inf, 1.0])
+        @test_throws DimensionMismatch Erebus.anderson_mix!(
+            zeros(2), ones(3), ones(3), h, ones(3)
+        )
+        @test_throws DimensionMismatch Erebus.anderson_mix!(
+            xn, ones(3), ones(3), h, ones(2)
+        )
+        @test_throws DomainError Erebus.anderson_mix!(
+            xn, ones(3), ones(3), h, [1.0, -1.0, 1.0]
+        )
+        @test_throws DomainError Erebus.anderson_mix!(
+            xn, ones(3), ones(3), h, [1.0, Inf, 1.0]
+        )
     end
 
     @testset "Anderson acceleration: stagnation stop of the plastic loop" begin
@@ -2777,8 +2785,7 @@ include("test_helpers.jl")
         # Round-off jitter below the relative threshold does not count as progress.
         Erebus.reset_anderson!(h)
         jit = [1.0, 1.0 - 1.0e-15, 1.0 - 2.0e-15, 1.0 - 3.0e-15]
-        @test [Erebus.anderson_stall_record!(h, Y, 1.0, 3) for Y in jit] ==
-            [false, false, false, true]
+        @test [Erebus.anderson_stall_record!(h, Y, 1.0, 3) for Y in jit] == [false, false, false, true]
         # A time step change restarts the count; NaN is no progress.
         Erebus.reset_anderson!(h)
         @test !Erebus.anderson_stall_record!(h, 1.0, 1.0, 2)
@@ -2814,7 +2821,9 @@ include("test_helpers.jl")
         @test !Y[1, 2] && isapprox(E[1, 2], 1.0e21; rtol=0)
         @test Y[2, 2] && isapprox(E[2, 2], 1.0e12; rtol=0)
         # etamax below ETA0: unyielded nodes keep ETA0, yielded nodes cap at etamax.
-        Erebus.anderson_unpack_viscosity!(E, Y, Yi, [0.0, -1.0, 0.0, -1.0], ETA0, 1.0e12, 1.0e19)
+        Erebus.anderson_unpack_viscosity!(
+            E, Y, Yi, [0.0, -1.0, 0.0, -1.0], ETA0, 1.0e12, 1.0e19
+        )
         @test isapprox(E[1, 2], 1.0e21; rtol=0) && !Y[1, 2]
         @test isapprox(E[2, 2], 1.0e19; rtol=0) && Y[2, 2]
         # Invariants: no ETA above ETA0, no ETA below ETA0 without a yield flag.
