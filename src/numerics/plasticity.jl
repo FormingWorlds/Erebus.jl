@@ -757,6 +757,321 @@ function _lengths_from(lens, i, t::Tuple)
 end
 
 """
+    AndersonHistory(depth, n)
+
+History of the type II Anderson acceleration of the plastic loop (Walker and Ni, 2011):
+ring buffers with the last `depth` differences of the packed state `x` and of the
+fixed-point residual `f = G(x) - x`, and the counters of the stagnation stop.
+
+# Arguments
+
+    - depth: number of difference columns kept; 0 gives plain Picard updates
+    - n: length of the packed state
+
+# Returns
+
+    - an empty history
+
+# Throws
+
+    - DomainError: `depth < 0`, `n < 0` or `depth > n`
+"""
+mutable struct AndersonHistory
+    depth::Int
+    dX::Matrix{Float64}
+    dF::Matrix{Float64}
+    A::Matrix{Float64}
+    xprev::Vector{Float64}
+    fprev::Vector{Float64}
+    f::Vector{Float64}
+    ncol::Int
+    head::Int
+    hasprev::Bool
+    best::Float64
+    nstall::Int
+    dt::Float64
+end
+function AndersonHistory(depth::Integer, n::Integer)
+    depth >= 0 || throw(DomainError(depth, "depth must be at least 0"))
+    n >= 0 || throw(DomainError(n, "state length must be at least 0"))
+    depth <= n || throw(DomainError(depth, "depth must not exceed the state length $n"))
+    m = depth == 0 ? 0 : n
+    return AndersonHistory(
+        depth,
+        zeros(m, depth),
+        zeros(m, depth),
+        zeros(m, depth),
+        zeros(m),
+        zeros(m),
+        zeros(m),
+        0,
+        1,
+        false,
+        Inf,
+        0,
+        NaN,
+    )
+end
+
+"""
+    reset_anderson!(h) -> h
+
+Clear the difference columns and the stagnation counters of an [`AndersonHistory`](@ref).
+
+# Arguments
+
+    - h: history
+
+# Returns
+
+    - the history
+"""
+function reset_anderson!(h::AndersonHistory)
+    _clear_anderson_columns!(h)
+    h.best = Inf
+    h.nstall = 0
+    h.dt = NaN
+    return h
+end
+
+"""
+    _clear_anderson_columns!(h) -> h
+
+Drop the difference columns and the previous iterate of an [`AndersonHistory`](@ref).
+
+# Arguments
+
+    - h: history
+
+# Returns
+
+    - the history
+"""
+function _clear_anderson_columns!(h::AndersonHistory)
+    h.ncol = 0
+    h.head = 1
+    h.hasprev = false
+    return h
+end
+
+"""
+    anderson_mix!(xnext, x, G, h, w) -> Bool
+
+Type II Anderson update of a fixed-point iteration (Walker and Ni, 2011, eq. 3.1):
+`xnext = G - (dX + dF) gamma` with `gamma` the minimiser of `|| w .* (f - dF gamma) ||`,
+`f = G - x`, solved by column-pivoted QR. Columns with a diagonal of `R` below `1e-12`
+of the largest are dropped. The update falls back to `xnext = G` without history, when
+all columns vanish, and (clearing the history) when `f`, `gamma` or `xnext` is not finite
+or `maximum(abs, gamma) >= 1e3`.
+
+# Arguments
+
+    - xnext: next iterate, overwritten
+    - x: current iterate
+    - G: map value `G(x)`
+    - h: [`AndersonHistory`](@ref) of this iteration, updated with `x` and `f`
+    - w: non-negative weight of each entry in the least-squares problem
+
+# Returns
+
+    - true when the Anderson update was applied, false for the fallback `xnext = G`
+
+# Throws
+
+    - DimensionMismatch: arrays of different lengths, or a history of another length
+    - DomainError: a negative or non-finite weight
+"""
+function anderson_mix!(
+    xnext::AbstractVector{Float64},
+    x::AbstractVector{Float64},
+    G::AbstractVector{Float64},
+    h::AndersonHistory,
+    w::AbstractVector{Float64},
+)
+    n = length(x)
+    length(xnext) == n && length(G) == n && length(w) == n ||
+        throw(DimensionMismatch("xnext, x, G and w must have the same length"))
+    all(wi -> isfinite(wi) && wi >= 0.0, w) ||
+        throw(DomainError(w, "weights must be finite and non-negative"))
+    copyto!(xnext, G)
+    h.depth == 0 && return false
+    length(h.f) == n ||
+        throw(DimensionMismatch("history length $(length(h.f)) differs from state $n"))
+    f = h.f
+    @. f = G - x
+    if !all(isfinite, f)
+        _clear_anderson_columns!(h)
+        return false
+    end
+    if h.hasprev
+        j = h.head
+        @views @. h.dX[:, j] = x - h.xprev
+        @views @. h.dF[:, j] = f - h.fprev
+        h.head = j % h.depth + 1
+        h.ncol = min(h.ncol + 1, h.depth)
+    end
+    copyto!(h.xprev, x)
+    copyto!(h.fprev, f)
+    h.hasprev = true
+    return h.ncol > 0 && _anderson_apply!(xnext, G, h, w)
+end
+
+"""
+    _anderson_apply!(xnext, G, h, w) -> Bool
+
+Solve the weighted least-squares problem of [`anderson_mix!`](@ref) on the columns of `h`
+and apply the update to `xnext`, which holds `G` on entry.
+
+# Arguments
+
+    - xnext: next iterate, holds `G` on entry
+    - G: map value
+    - h: history with at least one column and the residual in `h.f`
+    - w: least-squares weights
+
+# Returns
+
+    - true when the update was applied, false for the fallback `xnext = G`
+"""
+function _anderson_apply!(xnext, G, h::AndersonHistory, w)
+    m = h.ncol
+    A = view(h.A, :, 1:m)
+    @views @. A = w * h.dF[:, 1:m]
+    F = qr!(A, ColumnNorm())
+    r11 = abs(F.R[1, 1])
+    r11 > 0.0 || return false
+    k = count(j -> abs(F.R[j, j]) > 1.0e-12 * r11, 1:m)
+    b = F.Q' * (w .* h.f)
+    gamma = zeros(m)
+    gamma[F.p[1:k]] .= UpperTriangular(F.R[1:k, 1:k]) \ b[1:k]
+    if !all(isfinite, gamma) || maximum(abs, gamma) >= 1.0e3
+        _clear_anderson_columns!(h)
+        return false
+    end
+    for j in 1:m
+        @views @. xnext -= gamma[j] * (h.dX[:, j] + h.dF[:, j])
+    end
+    if !all(isfinite, xnext)
+        copyto!(xnext, G)
+        _clear_anderson_columns!(h)
+        return false
+    end
+    return true
+end
+
+"""
+    anderson_stall_record!(h, Y, dt, npasses) -> Bool
+
+Stagnation stop of the accelerated plastic loop: count the passes since the yield residual
+`Y` last fell below `(1 - 1e-12)` times its smallest value. A change of the time step `dt`
+restarts the count.
+
+# Arguments
+
+    - h: [`AndersonHistory`](@ref) of this loop
+    - Y: RMS yield residual of the pass (Pa)
+    - dt: time step of the pass (s)
+    - npasses: number of passes without progress that stops the loop
+
+# Returns
+
+    - true when the loop must stop
+
+# Throws
+
+    - DomainError: `npasses < 1`
+"""
+function anderson_stall_record!(h::AndersonHistory, Y::Real, dt::Real, npasses::Integer)
+    npasses >= 1 || throw(DomainError(npasses, "npasses must be at least 1"))
+    if !isequal(dt, h.dt)
+        h.dt = dt
+        h.best = Inf
+        h.nstall = 0
+    end
+    if Y < h.best * (1.0 - 1.0e-12)
+        h.best = Y
+        h.nstall = 0
+        return false
+    end
+    h.nstall += 1
+    return h.nstall >= npasses
+end
+
+"""
+    anderson_pack_viscosity!(s, ETA, ETA0) -> s
+
+Pack nodal viscosities as `s = log(min(1, ETA / ETA0))`: exactly 0 on a node that does
+not yield, negative on a yielding node.
+
+# Arguments
+
+    - s: packed values, overwritten
+    - ETA: viscosity (Pa s)
+    - ETA0: viscosity without yielding (Pa s)
+
+# Returns
+
+    - s
+
+# Throws
+
+    - DimensionMismatch: arrays of different lengths
+"""
+function anderson_pack_viscosity!(s::AbstractVector{Float64}, ETA, ETA0)
+    length(s) == length(ETA) == length(ETA0) ||
+        throw(DimensionMismatch("s, ETA and ETA0 must have the same length"))
+    @inbounds for k in 1:length(s)
+        s[k] = ETA[k] < ETA0[k] ? log(ETA[k] / ETA0[k]) : 0.0
+    end
+    return s
+end
+
+"""
+    anderson_unpack_viscosity!(ETA, YNY, YNY_inv_ETA, s, ETA0, etamin, etamax) -> ETA
+
+Inverse of [`anderson_pack_viscosity!`](@ref) with the yield rule of the plastic loop: a node
+with `s >= -1e-12` does not yield and gets `ETA0`; any other node yields, with
+`ETA = clamp(ETA0 exp(s), etamin, min(etamax, ETA0))`.
+
+# Arguments
+
+    - ETA: viscosity (Pa s), overwritten
+    - YNY: yield flag, overwritten
+    - YNY_inv_ETA: `YNY / ETA` (1 / (Pa s)), overwritten
+    - s: packed values
+    - ETA0: viscosity without yielding (Pa s)
+    - etamin: lower viscosity limit (Pa s)
+    - etamax: upper viscosity limit (Pa s)
+
+# Returns
+
+    - ETA
+
+# Throws
+
+    - DimensionMismatch: arrays of different lengths
+"""
+function anderson_unpack_viscosity!(ETA, YNY, YNY_inv_ETA, s, ETA0, etamin, etamax)
+    n = length(s)
+    length(ETA) == n && length(YNY) == n && length(YNY_inv_ETA) == n && length(ETA0) == n ||
+        throw(DimensionMismatch("viscosity arrays must have the length of s"))
+    @inbounds for k in 1:n
+        if s[k] < -1.0e-12
+            hi = min(etamax, ETA0[k])
+            e = clamp(ETA0[k] * exp(s[k]), min(etamin, hi), hi)
+            ETA[k] = e
+            YNY[k] = true
+            YNY_inv_ETA[k] = 1.0 / e
+        else
+            ETA[k] = ETA0[k]
+            YNY[k] = false
+            YNY_inv_ETA[k] = 0.0
+        end
+    end
+    return ETA
+end
+
+"""
 Compare two arrays of identical sizes element-wise and fill a third array with the larger value if positive and zero otherwise.
 
 $(SIGNATURES)
