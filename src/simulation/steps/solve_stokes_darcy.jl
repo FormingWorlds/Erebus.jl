@@ -771,7 +771,7 @@ function _anderson_pack!(v::Vector{Float64}, g)
     np, nf = length(g.pr), length(g.pf)
     copyto!(v, 1, g.pr, 1, np)
     copyto!(v, np + 1, g.pf, 1, nf)
-    anderson_pack_viscosity!(view(v, (np + nf + 1):length(v)), g.ETA, g.ETA0)
+    anderson_pack_viscosity!(view(v, (np + nf + 1):length(v)), g.ETA, g.ETA0, g.YNY)
     return v
 end
 
@@ -811,7 +811,8 @@ end
     _anderson_weights!(w, g) -> w
 
 Least-squares weights of the packed state: `1 / max(RMS, 1)` of `pr` and of `pf` over the
-interior P-nodes (Pa), 0 on the ghost P-nodes, 1 on the viscosity ratio.
+interior P-nodes (Pa), 0 on the ghost P-nodes, 1 on the viscosity ratio; 1 for a pressure
+field that is not finite, so the mixing step falls back to the plain pass.
 
 # Arguments
 
@@ -827,7 +828,8 @@ function _anderson_weights!(w::Vector{Float64}, g)
     for P in (g.pr, g.pf)
         Ny1, Nx1 = size(P)
         inner = view(P, 2:(Ny1 - 1), 2:(Nx1 - 1))
-        wt = 1.0 / max(sqrt(sum(abs2, inner) / max(length(inner), 1)), 1.0)
+        rms = norm(inner) / sqrt(max(length(inner), 1))
+        wt = isfinite(rms) ? 1.0 / max(rms, 1.0) : 1.0
         for j in 1:Nx1, i in 1:Ny1
             w[off + (j - 1) * Ny1 + i] = (1 < i < Ny1 && 1 < j < Nx1) ? wt : 0.0
         end
@@ -864,13 +866,16 @@ function _plastic_pass_stop!(ws::SimulationWorkspaces, tracked, state, cfg, ipla
     h = ws.anderson
     g = state.grids
     _anderson_pack!(h.g, g)
-    if !isequal(state.dt, h.dt)
+    restart = anderson_dt_changed(state.dt, h.dt)
+    Y = ws.YERRNOD[iplast]
+    anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
+    if restart
+        # The pass state starts a new history, as at the start of the loop.
         _clear_anderson_columns!(h)
         h.wset = false
         copyto!(h.x, h.g)
+        return false
     end
-    Y = ws.YERRNOD[iplast]
-    anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
     if !h.wset
         _anderson_weights!(h.w, g)
         h.wset = true

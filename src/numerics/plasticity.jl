@@ -871,11 +871,11 @@ end
     anderson_mix!(xnext, x, G, h, w) -> Bool
 
 Type II Anderson update of a fixed-point iteration (Walker and Ni, 2011, Section 3):
-`xnext = G - (dX + dF) gamma` with `gamma` the minimiser of `|| w .* (f - dF gamma) ||`,
-`f = G - x`, solved by column-pivoted QR. Columns with a diagonal of `R` below `1e-12`
-of the largest are dropped. The update falls back to `xnext = G` without history, when
+`xnext = G - (dX + dF) gamma` with `f = G - x` and `gamma` the minimiser of
+`|| w .* (f - dF gamma) ||`. The weights `w`, the column-pivoted QR solve and the drop of
+columns with a diagonal of `R` below `1e-12` of the largest are choices of this code. The update falls back to `xnext = G` without history, when
 all columns vanish, and (clearing the history) when `f`, `gamma` or `xnext` is not finite
-or `maximum(abs, gamma) >= 1e3`.
+or `maximum(abs, gamma) >= 1e3`. A difference column that overflows clears the history.
 
 # Arguments
 
@@ -906,6 +906,8 @@ function anderson_mix!(
         throw(DimensionMismatch("xnext, x, G and w must have the same length"))
     all(wi -> isfinite(wi) && wi >= 0.0, w) ||
         throw(DomainError(w, "weights must be finite and non-negative"))
+    (Base.mightalias(xnext, x) || Base.mightalias(xnext, G)) &&
+        throw(ArgumentError("xnext must not share memory with x or G"))
     copyto!(xnext, G)
     h.depth == 0 && return false
     length(h.f) == n ||
@@ -920,8 +922,12 @@ function anderson_mix!(
         j = h.head
         @views @. h.dX[:, j] = x - h.xprev
         @views @. h.dF[:, j] = f - h.fprev
-        h.head = j % h.depth + 1
-        h.ncol = min(h.ncol + 1, h.depth)
+        if all(isfinite, view(h.dX, :, j)) && all(isfinite, view(h.dF, :, j))
+            h.head = j % h.depth + 1
+            h.ncol = min(h.ncol + 1, h.depth)
+        else
+            _clear_anderson_columns!(h)
+        end
     end
     copyto!(h.xprev, x)
     copyto!(h.fprev, f)
@@ -973,11 +979,31 @@ function _anderson_apply!(xnext, G, h::AndersonHistory, w)
 end
 
 """
+    anderson_dt_changed(dt, dtref) -> Bool
+
+True when the time step `dt` differs from `dtref` by more than `1e-12` of the larger, or
+either is not finite; the plastic loop re-solves only for such a change.
+
+# Arguments
+
+    - dt: time step of the pass (s)
+    - dtref: time step of the history (s)
+
+# Returns
+
+    - true for a changed time step
+"""
+function anderson_dt_changed(dt::Real, dtref::Real)
+    isfinite(dt) && isfinite(dtref) || return true
+    return abs(dt - dtref) > 1.0e-12 * max(abs(dt), abs(dtref))
+end
+
+"""
     anderson_stall_record!(h, Y, dt, npasses) -> Bool
 
 Stagnation stop of the accelerated plastic loop: count the passes since the yield residual
 `Y` last fell below `(1 - 1e-12)` times its smallest value. A change of the time step `dt`
-restarts the count.
+([`anderson_dt_changed`](@ref)) restarts the count.
 
 # Arguments
 
@@ -996,7 +1022,7 @@ restarts the count.
 """
 function anderson_stall_record!(h::AndersonHistory, Y::Real, dt::Real, npasses::Integer)
     npasses >= 1 || throw(DomainError(npasses, "npasses must be at least 1"))
-    if !isequal(dt, h.dt)
+    if anderson_dt_changed(dt, h.dt)
         h.dt = dt
         h.best = Inf
         h.nstall = 0
@@ -1011,16 +1037,18 @@ function anderson_stall_record!(h::AndersonHistory, Y::Real, dt::Real, npasses::
 end
 
 """
-    anderson_pack_viscosity!(s, ETA, ETA0) -> s
+    anderson_pack_viscosity!(s, ETA, ETA0, YNY) -> s
 
 Pack nodal viscosities as `s = log(min(1, ETA / ETA0))`: exactly 0 on a node that does
-not yield, negative on a yielding node.
+not yield, at most `-2e-12` on a yielding node (also where the yield viscosity is clamped
+to `etamin` at or above `ETA0`).
 
 # Arguments
 
     - s: packed values, overwritten
     - ETA: viscosity (Pa s)
     - ETA0: viscosity without yielding (Pa s)
+    - YNY: yield flag
 
 # Returns
 
@@ -1030,11 +1058,12 @@ not yield, negative on a yielding node.
 
     - DimensionMismatch: arrays of different lengths
 """
-function anderson_pack_viscosity!(s::AbstractVector{Float64}, ETA, ETA0)
-    length(s) == length(ETA) == length(ETA0) ||
-        throw(DimensionMismatch("s, ETA and ETA0 must have the same length"))
+function anderson_pack_viscosity!(s::AbstractVector{Float64}, ETA, ETA0, YNY)
+    length(s) == length(ETA) == length(ETA0) == length(YNY) ||
+        throw(DimensionMismatch("s, ETA, ETA0 and YNY must have the same length"))
     @inbounds for k in 1:length(s)
-        s[k] = ETA[k] < ETA0[k] ? log(ETA[k] / ETA0[k]) : 0.0
+        sk = ETA[k] < ETA0[k] ? log(ETA[k] / ETA0[k]) : 0.0
+        s[k] = YNY[k] != 0 ? min(sk, -2.0e-12) : sk
     end
     return s
 end
@@ -1044,7 +1073,8 @@ end
 
 Inverse of [`anderson_pack_viscosity!`](@ref) with the yield rule of the plastic loop: a node
 with `s >= -1e-12` does not yield and gets `ETA0`; any other node yields, with
-`ETA = clamp(ETA0 exp(s), etamin, min(etamax, ETA0))`.
+`ETA = clamp(ETA0 exp(s), etamin, max(etamin, min(etamax, ETA0)))`, so a yielding node
+reaches `etamin` also where `ETA0 <= etamin`.
 
 # Arguments
 
@@ -1070,8 +1100,7 @@ function anderson_unpack_viscosity!(ETA, YNY, YNY_inv_ETA, s, ETA0, etamin, etam
         throw(DimensionMismatch("viscosity arrays must have the length of s"))
     @inbounds for k in 1:n
         if s[k] < -1.0e-12
-            hi = min(etamax, ETA0[k])
-            e = clamp(ETA0[k] * exp(s[k]), min(etamin, hi), hi)
+            e = clamp(ETA0[k] * exp(s[k]), etamin, max(etamin, min(etamax, ETA0[k])))
             ETA[k] = e
             YNY[k] = true
             YNY_inv_ETA[k] = 1.0 / e

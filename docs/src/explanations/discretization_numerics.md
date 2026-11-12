@@ -301,30 +301,40 @@ Ending the loop early leaves the step sequence and the time steps unchanged; onl
 
 #### Anderson Acceleration of the Plastic Loop
 
-Each plastic pass is a fixed-point map $G$: from the pressures and viscosities of one pass, the solve and the yield update give those of the next.
-Under fluid overpressure this map is not a contraction, and plain passes can cycle between two states until `max_plastic_iterations`.
-With `solver.anderson_depth = m` above 0 (default `5`), the next state is a combination of the last $m + 1$ map values (type II Anderson acceleration in the form of Section 3 of Walker and Ni, 2011; [bibliography](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations)):
+Why does the plastic loop need acceleration?
+Under fluid overpressure, plain plastic passes can jump between two states and never settle.
+Anderson acceleration combines the last few passes into a better next state, so the loop settles in fewer passes.
 
-$$x_{k+1} = G(x_k) - \sum_{j=1}^{m_k} \gamma_j \left(\Delta x_j + \Delta f_j\right), \qquad f_k = G(x_k) - x_k,$$
+Each plastic pass is a fixed-point map $G$: the solve and the yield update turn the state $x_k$ of pass $k$ into $G(x_k)$.
+The state $x$ holds the total pressure $P_t$ [Pa], the fluid pressure $P_f$ [Pa] and, on the basic nodes, $s = \ln \min(1, \eta / \eta_0)$, with $\eta$ [Pa s] the viscosity and $\eta_0$ [Pa s] the viscosity without yielding.
+With `solver.anderson_depth` $= m > 0$ (default `5`), the next state is the type II Anderson update of Section 3 of [Walker & Ni (2011)](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations):
 
-where $\Delta x_j$ and $\Delta f_j$ are the differences of successive iterates and residuals, $m_k = \min(k, m)$, and $\gamma$ minimises $\lVert W (f_k - \Delta F \gamma) \rVert_2$.
-The acceleration acts only on the iterates, so the solve and the yield update of a pass do not change.
-For coupled flow and mechanics, Both et al. 2019 ([bibliography](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations)) show that this post-processing makes a non-contractive fixed-point iteration converge in a special linear case, and in their first numerical test the Picard-type iterations gain the most at the largest depth tested ($m = 10$).
+$$x_{k+1} = G(x_k) - \sum_{j=1}^{m_k} \gamma_j \left(\Delta x_j + \Delta f_j\right), \qquad f_k = G(x_k) - x_k, \qquad m_k = \min(k, m).$$
 
-The state $x$ holds the total pressure $P_t$, the fluid pressure $P_f$ and, on the basic nodes, $s = \ln \min(1, \eta / \eta_0)$, with $\eta_0$ the viscosity without yielding.
-After the update, a node with $s \ge -10^{-12}$ takes $\eta = \eta_0$ and does not yield; any other node yields with $\eta = \eta_0 e^{s}$, limited to `etamin` and $\min(\texttt{etamax}, \eta_0)$.
-The weights $W$ are $1 / \max(\mathrm{RMS}, 1\,\mathrm{Pa})$ of each pressure over the interior nodes (0 on the ghost nodes) and 1 on $s$, set at the first pass after the start of the loop or a time step change.
-The least-squares problem is solved by QR with column pivoting, and columns with a diagonal of $R$ below $10^{-12}$ of the largest are dropped.
-The pass falls back to $x_{k+1} = G(x_k)$ and clears the history when $\gamma$ or the new state is not finite, or when $\max |\gamma_j| \ge 10^3$.
-A change of the time step inside the loop restarts the history.
+Here $\Delta x_j$ and $\Delta f_j$ are the differences of successive states and residuals $f$, and the columns $\Delta f_j$ form the matrix $\Delta F$.
+The coefficients $\gamma$ minimise $\lVert W (f_k - \Delta F \gamma) \rVert_2$, with the diagonal weights $W$ below.
+The update changes only the state between passes; the solve and the yield update stay the same.
+For coupled flow and mechanics, [Both et al. (2019)](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations) prove convergence with this update in a special linear case where the plain passes are not a contraction.
+In their first numerical test, the iteration count of Picard-type passes falls most at the largest depth they test ($m = 10$).
+
+##### How the Update Keeps a Valid State
+
+- A yielding node packs to $s \le -2 \times 10^{-12}$, also where its viscosity is clamped to `etamin` at or above $\eta_0$.
+- After the update, a node with $s \ge -10^{-12}$ takes $\eta = \eta_0$ and does not yield.
+- Any other node yields with $\eta = \eta_0 e^{s}$, limited to `etamin` and $\max(\texttt{etamin}, \min(\texttt{etamax}, \eta_0))$, as in the plain loop.
+- The weights are 1 divided by the root mean square of each pressure over the interior nodes (at least 1 Pa), 0 on the ghost nodes, and 1 on $s$.
+- The least-squares problem uses a QR factorization with column pivoting; a column whose diagonal entry of the triangular factor is below $10^{-12}$ of the largest is dropped.
+- When $\gamma$ or the new state is not finite, or $\max_j |\gamma_j| \ge 10^3$, the pass takes $x_{k+1} = G(x_k)$ and clears the history.
+- When the time step changes by more than $10^{-12}$ of its value inside the loop, the history restarts from the state of that pass.
 
 ##### Stagnation Stop and Settings
 
-The loop ends as not converged when the yield residual YERRNOD has not fallen below $(1 - 10^{-12})$ times its smallest value for `solver.plastic_stall_passes` passes (default `1000`); the time step then halves as for the other stops.
-An accelerated loop does not repeat its states, so the cycle stop does not end it; a lower pass limit is not safe either, because converged calls in the runs below need up to 4753 passes.
-With `poroelasticity.theta_frac` below 1 the acceleration is off.
-Set `solver.anderson_depth = 0` to run plain passes.
-Both fields can change on a restart from a checkpoint.
+An accelerated loop does not repeat its states, so the cycle stop above does not end it.
+The loop therefore ends as not converged when YERRNOD has not fallen below $(1 - 10^{-12})$ times its smallest value for `solver.plastic_stall_passes` passes (default `1000`).
+The time step then halves, as for the other stops.
+A lower limit on the passes is not safe: converged calls in the runs below need up to 4753 passes.
+With `poroelasticity.theta_frac` below 1 (under-relaxed Darcy resistances), the loop runs plain passes; `solver.anderson_depth = 0` does the same.
+Both settings can change on a restart from a checkpoint.
 
 ##### Measured Effect
 
@@ -337,7 +347,9 @@ Measured with the direct solver (the iterative solver needs `solver.experimental
 | `hydrothermal_reaction_on_128`, 200 steps | 0 | aborts at step 110 (`PlasticConvergenceError`) | | |
 | | 5 | 14 | 52 700 | 1.6014 Myr |
 
-On `hydrothermal_benchmark` at matched times, the two depths differ by at most $1.7 \times 10^{-4}$ K in temperature and 0.22 % and 0.094 % of the field maximum in $P_f$ and $P_t$.
+On `hydrothermal_benchmark` at matched times, the two depths differ by at most $1.7 \times 10^{-4}$ K in temperature, and by 0.22 % and 0.094 % of the field maximum in $P_f$ and $P_t$.
+
+**Where this is checked.** `test/test_numerics.jl` (Anderson testsets) and `test/test_simulation_modular_steps.jl` ("Stokes-Darcy plastic loop with Anderson acceleration").
 
 ### 2. Displacement Limits, Porosity Change Rate Limiter and Adaptive Timestep Consistency
 

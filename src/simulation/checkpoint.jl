@@ -705,7 +705,8 @@ end
     compare_restart_configs(cfg_saved::SimulationConfig, cfg_current::SimulationConfig)::Vector{String}
 
 Compare configuration of saved checkpoint against restart configuration.
-Differences in `[output]`, `time.{n_steps, endtime, start_step}`, and `solver.seed` are allowed.
+Differences in `[output]`, `time.{n_steps, endtime, start_step}` and
+`solver.{seed, anderson_depth, plastic_stall_passes}` are allowed.
 All other differences return as `\"section.field\"` strings.
 """
 function compare_restart_configs(
