@@ -303,13 +303,13 @@ Ending the loop early leaves the step sequence and the time steps unchanged; onl
 
 Each plastic pass is a fixed-point map $G$: from the pressures and viscosities of one pass, the solve and the yield update give those of the next.
 Under fluid overpressure this map is not a contraction, and plain passes can cycle between two states until `max_plastic_iterations`.
-With `solver.anderson_depth = m` above 0 (default `5`), the next state is a combination of the last $m + 1$ map values (type II Anderson acceleration in the form of Section 3 of Walker and Ni (2011)[^cite-walkerni2011]):
+With `solver.anderson_depth = m` above 0 (default `5`), the next state is a combination of the last $m + 1$ map values (type II Anderson acceleration in the form of Section 3 of Walker and Ni, 2011; [bibliography](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations)):
 
 $$x_{k+1} = G(x_k) - \sum_{j=1}^{m_k} \gamma_j \left(\Delta x_j + \Delta f_j\right), \qquad f_k = G(x_k) - x_k,$$
 
 where $\Delta x_j$ and $\Delta f_j$ are the differences of successive iterates and residuals, $m_k = \min(k, m)$, and $\gamma$ minimises $\lVert W (f_k - \Delta F \gamma) \rVert_2$.
 The acceleration acts only on the iterates, so the solve and the yield update of a pass do not change.
-For coupled flow and mechanics, Both et al. (2019)[^cite-both2019] show that this post-processing makes a non-contractive fixed-point iteration converge in a special linear case, and in their first numerical test the Picard-type iterations gain the most at the largest depth tested ($m = 10$).
+For coupled flow and mechanics, Both et al. 2019 ([bibliography](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations)) show that this post-processing makes a non-contractive fixed-point iteration converge in a special linear case, and in their first numerical test the Picard-type iterations gain the most at the largest depth tested ($m = 10$).
 
 The state $x$ holds the total pressure $P_t$, the fluid pressure $P_f$ and, on the basic nodes, $s = \ln \min(1, \eta / \eta_0)$, with $\eta_0$ the viscosity without yielding.
 After the update, a node with $s \ge -10^{-12}$ takes $\eta = \eta_0$ and does not yield; any other node yields with $\eta = \eta_0 e^{s}$, limited to `etamin` and $\min(\texttt{etamax}, \eta_0)$.
@@ -450,7 +450,3 @@ Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phas
 - **Benchmark Provenance**:
   Documentation figures state their provenance class as defined in the benchmark suite (Class A for 2-D simulation output, Class B for Julia library exports, Class C for analytical references, and Class D for schematic diagrams).
   Automated unit and integration tests in `test/` verify solver components.
-
-[^cite-walkerni2011]: Walker, H. F., & Ni, P. (2011). *[Anderson acceleration for fixed-point iterations](https://doi.org/10.1137/10078356X)*. SIAM Journal on Numerical Analysis, 49(4), 1715-1735.
-
-[^cite-both2019]: Both, J. W., Kumar, K., Nordbotten, J. M., & Radu, F. A. (2019). *[Anderson accelerated fixed-stress splitting schemes for consolidation of unsaturated porous media](https://doi.org/10.1016/j.camwa.2018.07.033)*. Computers & Mathematics with Applications, 77(6), 1479-1502.
