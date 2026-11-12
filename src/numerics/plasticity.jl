@@ -870,7 +870,7 @@ end
 """
     anderson_mix!(xnext, x, G, h, w) -> Bool
 
-Type II Anderson update of a fixed-point iteration (Walker and Ni, 2011, eq. 3.1):
+Type II Anderson update of a fixed-point iteration (Walker and Ni, 2011, Section 3):
 `xnext = G - (dX + dF) gamma` with `gamma` the minimiser of `|| w .* (f - dF gamma) ||`,
 `f = G - x`, solved by column-pivoted QR. Columns with a diagonal of `R` below `1e-12`
 of the largest are dropped. The update falls back to `xnext = G` without history, when

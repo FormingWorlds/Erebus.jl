@@ -2695,7 +2695,7 @@ include("test_helpers.jl")
     end
 
     @testset "Anderson acceleration: weighted least squares and history ring" begin
-        # Reference: eq. 3.1 of Walker and Ni (2011) solved directly on the stored iterates.
+        # Reference: Walker and Ni (2011, Section 3) update, solved on the stored iterates.
         n, depth = 5, 2
         Gmap(x) = 0.5 .* sin.(x) .+ [1.0, 2.0, 3.0, 4.0, 5.0] .+ 0.3 .* circshift(x, 1)
         w = [1.0, 2.0, 0.5, 1.0, 3.0]
