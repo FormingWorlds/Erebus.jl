@@ -316,6 +316,8 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.3133/b2131](https://doi.org/10.3133/b2131)
   *Standard state thermodynamic data for minerals and gas species.*
 
+---
+
 ## Numerical Methods for Nonlinear Iterations
 
 - **Walker, H. F., & Ni, P. (2011)**. Anderson acceleration for fixed-point iterations. *SIAM Journal on Numerical Analysis*, 49(4), 1715-1735.  

@@ -893,6 +893,7 @@ or `maximum(abs, gamma) >= 1e3`. A difference column that overflows clears the h
 
     - DimensionMismatch: arrays of different lengths, or a history of another length
     - DomainError: a negative or non-finite weight
+    - ArgumentError: `xnext` shares memory with `x`, `G` or `w`
 """
 function anderson_mix!(
     xnext::AbstractVector{Float64},
@@ -906,8 +907,8 @@ function anderson_mix!(
         throw(DimensionMismatch("xnext, x, G and w must have the same length"))
     all(wi -> isfinite(wi) && wi >= 0.0, w) ||
         throw(DomainError(w, "weights must be finite and non-negative"))
-    (Base.mightalias(xnext, x) || Base.mightalias(xnext, G)) &&
-        throw(ArgumentError("xnext must not share memory with x or G"))
+    (Base.mightalias(xnext, x) || Base.mightalias(xnext, G) || Base.mightalias(xnext, w)) &&
+        throw(ArgumentError("xnext must not share memory with x, G or w"))
     copyto!(xnext, G)
     h.depth == 0 && return false
     length(h.f) == n ||
@@ -982,7 +983,7 @@ end
     anderson_dt_changed(dt, dtref) -> Bool
 
 True when the time step `dt` differs from `dtref` by more than `1e-12` of the larger, or
-either is not finite; the plastic loop re-solves only for such a change.
+the two differ and one is not finite; the plastic loop re-solves only for such a change.
 
 # Arguments
 
@@ -994,6 +995,7 @@ either is not finite; the plastic loop re-solves only for such a change.
     - true for a changed time step
 """
 function anderson_dt_changed(dt::Real, dtref::Real)
+    isequal(dt, dtref) && return false
     isfinite(dt) && isfinite(dtref) || return true
     return abs(dt - dtref) > 1.0e-12 * max(abs(dt), abs(dtref))
 end
@@ -1003,7 +1005,7 @@ end
 
 Stagnation stop of the accelerated plastic loop: count the passes since the yield residual
 `Y` last fell below `(1 - 1e-12)` times its smallest value. A change of the time step `dt`
-([`anderson_dt_changed`](@ref)) restarts the count.
+from the previous pass ([`anderson_dt_changed`](@ref)) restarts the count.
 
 # Arguments
 
@@ -1023,10 +1025,10 @@ Stagnation stop of the accelerated plastic loop: count the passes since the yiel
 function anderson_stall_record!(h::AndersonHistory, Y::Real, dt::Real, npasses::Integer)
     npasses >= 1 || throw(DomainError(npasses, "npasses must be at least 1"))
     if anderson_dt_changed(dt, h.dt)
-        h.dt = dt
         h.best = Inf
         h.nstall = 0
     end
+    h.dt = dt
     if Y < h.best * (1.0 - 1.0e-12)
         h.best = Y
         h.nstall = 0

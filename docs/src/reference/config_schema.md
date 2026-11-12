@@ -68,7 +68,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `yerrmax` | `Float64` | `100.0` | Pa | Plastic yielding tolerance: RMS of $\sigma_{\text{II}} - \sigma_{\text{yield}}$ over yielding nodes | $(0, 10^6]$ |
 | `plastic_cycle_window` | `Int` | `10` | - | Minimum passes of a periodic plastic loop state (viscosity, yield flags, Darcy resistances, velocities, pressures, Darcy fluxes, residual, time step; period 1 to 10, relative tolerance $10^{-9}$ per value, at least 3 repetitions of the period) that end the plastic loop as not converged; 0 disables; the cycle record keeps $\max(w, 30) + 11$ state copies | $0$ or $4$ to $100$ |
 | `anderson_depth` | `Int` | `5` | - | Number of previous passes in the Anderson acceleration of the plastic loop (pressures and the yield viscosity ratio); 0 gives plain Picard passes; runs as 0 when `poroelasticity.theta_frac` is below 1 | $0$ to $20$ |
-| `plastic_stall_passes` | `Int` | `1000` | - | Passes without a new minimum of the yield residual (relative improvement $10^{-12}$) that end the accelerated plastic loop as not converged; used when `anderson_depth` is above 0 | $\geq 10$ |
+| `plastic_stall_passes` | `Int` | `1000` | - | Passes without a new minimum of the yield residual (relative improvement $10^{-12}$) that end the accelerated plastic loop as not converged; used when the acceleration runs (`anderson_depth` above 0 and `poroelasticity.theta_frac` equal to 1) | $\geq 10$ |
 | `etawt` | `Float64` | `0.0` | - | Viscosity relaxation weight | $\in [0, 1)$ |
 | `dphimax` | `Float64` | `0.1` | - | Maximum porosity change ratio per step | $> 0$ |
 | `seed` | `Int` | `42` | - | Random seed for marker initialization | $\ge 0$ |

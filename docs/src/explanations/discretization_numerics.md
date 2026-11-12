@@ -332,9 +332,9 @@ In their first numerical test, the iteration count of Picard-type passes falls m
 An accelerated loop does not repeat its states, so the cycle stop above does not end it.
 The loop therefore ends as not converged when YERRNOD has not fallen below $(1 - 10^{-12})$ times its smallest value for `solver.plastic_stall_passes` passes (default `1000`).
 The time step then halves, as for the other stops.
-A lower limit on the passes is not safe: converged calls in the runs below need up to 3095 passes.
+A plain cap on the total passes of a call does not work here: converged calls in the runs below take up to 3095 passes, while the stall count above counts only the passes since the last new minimum.
 With `poroelasticity.theta_frac` below 1 (under-relaxed Darcy resistances), the loop runs plain passes; `solver.anderson_depth = 0` does the same.
-Both settings can change on a restart from a checkpoint.
+`solver.anderson_depth` and `solver.plastic_stall_passes` can change on a restart from a checkpoint.
 
 ##### Measured Effect
 

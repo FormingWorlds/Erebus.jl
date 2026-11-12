@@ -846,7 +846,7 @@ End of a plastic pass that did not converge: the cycle stop
 ([`_plastic_cycle_stop!`](@ref)) reads the state of the pass; with Anderson acceleration on,
 the stagnation stop ([`anderson_stall_record!`](@ref)) follows, then the state of the next
 pass is set by [`anderson_mix!`](@ref). A time step change inside the loop restarts the
-history from the state of the pass.
+history and the stall count from the state of the pass.
 
 # Arguments
 
@@ -866,16 +866,15 @@ function _plastic_pass_stop!(ws::SimulationWorkspaces, tracked, state, cfg, ipla
     h = ws.anderson
     g = state.grids
     _anderson_pack!(h.g, g)
-    restart = anderson_dt_changed(state.dt, h.dt)
-    Y = ws.YERRNOD[iplast]
-    anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
-    if restart
-        # The pass state starts a new history, as at the start of the loop.
-        _clear_anderson_columns!(h)
-        h.wset = false
+    if anderson_dt_changed(state.dt, h.dt)
+        # The pass state starts a new history and stall count, as at the start of the loop.
+        reset_anderson!(h)
+        h.dt = state.dt
         copyto!(h.x, h.g)
         return false
     end
+    Y = ws.YERRNOD[iplast]
+    anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
     if !h.wset
         _anderson_weights!(h.w, g)
         h.wset = true
