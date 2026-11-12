@@ -2878,7 +2878,8 @@ include("test_helpers.jl")
         # The same non-finite time step on every pass still counts toward the stop.
         @test !Erebus.anderson_dt_changed(NaN, NaN)
         Erebus.reset_anderson!(h)
-        @test [Erebus.anderson_stall_record!(h, 500.0, NaN, 3) for _ in 1:4] == [false, false, false, true]
+        nan_stops = [Erebus.anderson_stall_record!(h, 500.0, NaN, 3) for _ in 1:4]
+        @test findfirst(nan_stops) == 4
         # A drift below 1e-12 per pass that adds up over passes does not restart the count.
         Erebus.reset_anderson!(h)
         dt = 1.0e10
