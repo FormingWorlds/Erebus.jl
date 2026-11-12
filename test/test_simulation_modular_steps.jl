@@ -984,7 +984,7 @@ using Erebus
         Q[3, 3] = 1.0e200
         w = zeros(40 + 9)
         Erebus._anderson_weights!(w, (pr=P, pf=Q))
-        @test w[6] == 0.25 && w[1] == 0.0 && w[20] == 0.0
+        @test isapprox(w[6], 0.25; rtol=0) && iszero(w[1]) && iszero(w[20])
         @test isapprox(w[20 + 11], 1.0 / (1.0e200 / sqrt(6)); rtol=1.0e-12)
         @test all(==(1.0), w[41:end])
         Q[3, 3] = NaN

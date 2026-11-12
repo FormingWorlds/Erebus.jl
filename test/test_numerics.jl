@@ -2850,7 +2850,7 @@ include("test_helpers.jl")
         Erebus.anderson_unpack_viscosity!(E, Y, Yi, s, ETA0, etamin, etamax)
         @test Y == YNY
         @test E == ETA
-        @test Yi[1] == 1.0 / etamin && Yi[2] == 1.0 / etamin && iszero(Yi[3])
+        @test isapprox(Yi[1:2], [1.0, 1.0] ./ etamin; rtol=0) && iszero(Yi[3])
         # A mixed value below ETA0 < etamin still yields at etamin.
         Erebus.anderson_unpack_viscosity!(
             E, Y, Yi, [-3.0, -3.0, -3.0, -3.0], ETA0, etamin, etamax
