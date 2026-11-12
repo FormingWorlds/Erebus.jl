@@ -307,15 +307,15 @@ Anderson acceleration combines the last few passes into a better next state, so 
 
 Each plastic pass is a fixed-point map $G$: the solve and the yield update turn the state $x_k$ of pass $k$ into $G(x_k)$.
 The state $x$ holds the total pressure $P_t$ [Pa], the fluid pressure $P_f$ [Pa] and, on the basic nodes, $s = \ln \min(1, \eta / \eta_0)$, with $\eta$ [Pa s] the viscosity and $\eta_0$ [Pa s] the viscosity without yielding.
-With `solver.anderson_depth` $= m > 0$ (default `5`), the next state is the type II Anderson update of Section 3 of [Walker & Ni (2011)](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations):
+With `solver.anderson_depth` $= m > 0$ (default `5`), the next state is the type II Anderson update ([Walker and Ni, 2011](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations), Section 3):
 
 $$x_{k+1} = G(x_k) - \sum_{j=1}^{m_k} \gamma_j \left(\Delta x_j + \Delta f_j\right), \qquad f_k = G(x_k) - x_k, \qquad m_k = \min(k, m).$$
 
 Here $\Delta x_j$ and $\Delta f_j$ are the differences of successive states and residuals $f$, and the columns $\Delta f_j$ form the matrix $\Delta F$.
 The coefficients $\gamma$ minimise $\lVert W (f_k - \Delta F \gamma) \rVert_2$, with the diagonal weights $W$ below.
 The update changes only the state between passes; the solve and the yield update stay the same.
-For coupled flow and mechanics, [Both et al. (2019)](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations) prove convergence with this update in a special linear case where the plain passes are not a contraction.
-In their first numerical test, the iteration count of Picard-type passes falls most at the largest depth they test ($m = 10$).
+In a special linear case where the plain passes are not a contraction, a restarted variant of this update with depth 1 converges ([Both et al., 2019](../reference/bibliography.md#Numerical-Methods-for-Nonlinear-Iterations)).
+In their first numerical test on coupled flow and mechanics, the iteration count of Picard-type passes falls most at the largest depth they test ($m = 10$).
 
 ##### How the Update Keeps a Valid State
 
@@ -338,7 +338,8 @@ With `poroelasticity.theta_frac` below 1 (under-relaxed Darcy resistances), the 
 
 ##### Measured Effect
 
-Measured with the direct solver (the iterative solver needs `solver.experimental = true` and is not measured here):
+Measured with the direct solver (the iterative solver needs `solver.experimental = true` and is not measured here).
+Each row is one run of the named file in `configs/` for the stated number of steps, with a counter of the passes of each loop call; no test checks these numbers:
 
 | Case | Depth | Failed calls | Plastic passes | Simulated time |
 |---|---|---|---|---|

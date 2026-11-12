@@ -2838,7 +2838,7 @@ include("test_helpers.jl")
     end
 
     @testset "Anderson acceleration: yield flags at the viscosity limits" begin
-        # Yielding nodes clamped to etamin at or above ETA0 keep their flag (main's rule).
+        # Yielding nodes clamped to etamin at or above ETA0 keep their flag, as in the plain loop.
         etamin, etamax = 1.0e12, 1.0e23
         ETA0 = [1.0e12, 1.0e11, 1.0e19, 1.0e12]
         ETA = [1.0e12, 1.0e12, 1.0e19, 1.0e12]
