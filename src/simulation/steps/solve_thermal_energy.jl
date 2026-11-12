@@ -136,7 +136,20 @@ Return the face resistances that the Darcy fluxes in `g.qxD`, `g.qyD` were solve
 $(SIGNATURES)
 
 With hydrofracture these are `ws.hydromech.rx_eff`, `ry_eff` from the last Stokes-Darcy
-assembly; before the first assembly, or without hydrofracture, `g.RX`, `g.RY`.
+assembly; before the first assembly, or without hydrofracture, `g.RX`, `g.RY`. The
+workspace arrays belong to `g.qxD`, `g.qyD` when `solve_stokes_darcy!` ran last in the
+same step, as in `solve_thermomechanical_iterations!`; a restored step, a checkpoint
+restart or a regridding keeps the fluxes but not these arrays.
+
+# Arguments
+
+    - `g`: grid arrays of the state
+    - `ws`: simulation workspaces
+    - `cfg`: simulation configuration
+
+# Returns
+
+    - `(RX, RY)`: face resistances at Vx and Vy nodes [Pa s m⁻²]
 """
 function _darcy_heating_resistances(g, ws::SimulationWorkspaces, cfg::SimulationConfig)
     hm = ws.hydromech

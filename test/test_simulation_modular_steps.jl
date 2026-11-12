@@ -1035,7 +1035,7 @@ using Erebus
     @testset "Darcy heating uses the resistances of the Stokes-Darcy solve" begin
         # Fluid overpressure in one cell opens fracture faces; the heating must use the
         # face resistances the Darcy fluxes were solved with.
-        function fractured_state(elim)
+        function fractured_state(elim, theta=1.0)
             cfg = override_config(
                 load_config(
                     joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")
@@ -1045,6 +1045,7 @@ using Erebus
                     "grid.Ny" => 9,
                     "solver.max_plastic_iterations" => 200,
                     "solver.darcy_elimination" => elim,
+                    "poroelasticity.theta_frac" => theta,
                 ),
             )
             state, coords, ws, _, _ = init_simulation(cfg)
@@ -1083,9 +1084,12 @@ using Erebus
             return res, state, coords, ws, cfg
         end
 
-        for elim in (false, true)
-            res, state, coords, ws, cfg = fractured_state(elim)
-            @test res.plastic_converged
+        # Relaxed resistances (theta_frac < 1) differ from a recompute at any pressure.
+        for (elim, theta) in ((false, 1.0), (true, 1.0), (false, 0.5))
+            res, state, coords, ws, cfg = fractured_state(elim, theta)
+            # With theta_frac < 1 the plain loop does not converge; each pass still solves
+            # the Darcy law with the resistances it stores.
+            theta == 1.0 && @test res.plastic_converged
             g = state.grids
             Ny, Nx = size(g.HS) .- 1
             # Canary: fracture faces are open, so the solve resistances differ from RX.

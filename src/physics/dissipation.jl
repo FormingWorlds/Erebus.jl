@@ -10,14 +10,17 @@ $(SIGNATURES)
     - SXY: σ₀xy XY stress at basic nodes
     - ETAP: viscosity at P nodes
     - SXX: normal stress at P nodes
-    - RX: face resistance ηfluid/Kϕ at Vx nodes that `qxD` was solved with
-    - RY: face resistance ηfluid/Kϕ at Vy nodes that `qyD` was solved with
+    - RX: face resistance ηfluid/Kϕ at Vx nodes that `qxD` was solved with [Pa s m⁻²]
+    - RY: face resistance ηfluid/Kϕ at Vy nodes that `qyD` was solved with [Pa s m⁻²]
     - qxD: qx-Darcy flux at Vx nodes
     - qyD: qy-Darcy flux at Vy nodes
     - PHI: porosity at P nodes
     - ETAPHI: bulk viscosity at P nodes
     - pr: total pressure at P nodes
     - pf: fluid pressure at P nodes
+
+All P-node arrays and `RX`, `RY`, `qxD`, `qyD` must have the size of `HS`, and `ETA`,
+`SXY` one row and column less; otherwise an `ArgumentError` is thrown.
 
 # Returns
 
@@ -26,11 +29,27 @@ $(SIGNATURES)
 function compute_shear_heating!(
     HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf
 )
-    size(RX) == size(qxD) ||
-        throw(ArgumentError("RX has size $(size(RX)), qxD has size $(size(qxD))"))
-    size(RY) == size(qyD) ||
-        throw(ArgumentError("RY has size $(size(RY)), qyD has size $(size(qyD))"))
     Ny1, Nx1 = size(HS)
+    for (name, A) in (
+        ("ETAP", ETAP),
+        ("SXX", SXX),
+        ("RX", RX),
+        ("RY", RY),
+        ("qxD", qxD),
+        ("qyD", qyD),
+        ("PHI", PHI),
+        ("ETAPHI", ETAPHI),
+        ("pr", pr),
+        ("pf", pf),
+    )
+        size(A) == (Ny1, Nx1) ||
+            throw(ArgumentError("$name has size $(size(A)), HS has size $((Ny1, Nx1))"))
+    end
+    for (name, A) in (("ETA", ETA), ("SXY", SXY))
+        size(A) == (Ny1 - 1, Nx1 - 1) || throw(
+            ArgumentError("$name has size $(size(A)), expected $((Ny1 - 1, Nx1 - 1))")
+        )
+    end
     Nx = Nx1 - 1
     Ny = Ny1 - 1
     for j in 2:1:Nx, i in 2:1:Ny

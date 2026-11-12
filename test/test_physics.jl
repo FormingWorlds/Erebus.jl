@@ -974,60 +974,42 @@ include("test_helpers.jl")
         PHI = fill(0.1, Ny1, Nx1)
         ETAPHI = fill(1.0e20, Ny1, Nx1)
         p = fill(1.0e6, Ny1, Nx1)
+        S0 = zeros(Ny, Nx)
+        P0 = zeros(Ny1, Nx1)
         RX = fill(2.0e9, Ny1, Nx1)
         RY = fill(3.0e9, Ny1, Nx1)
-        RX[3, 3] = 5.0e9
-        RY[3, 3] = 7.0e9
+        # Faces at the edge of the interior, at positions that differ from their transpose.
+        RX[2, 4] = 5.0e9
+        RY[4, Nx] = 7.0e9
         qx = zeros(Ny1, Nx1)
         qy = zeros(Ny1, Nx1)
-        qx[3, 3] = 2.0e-6
+        qx[2, 4] = 2.0e-6
         Erebus.compute_shear_heating!(
-            HS, ETA, zeros(Ny, Nx), ETAP, zeros(Ny1, Nx1), RX, RY, qx, qy, PHI, ETAPHI, p, p
+            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
         )
-        # The x face between nodes (3, 3) and (3, 4) heats both by half of r q^2.
-        @test isapprox(HS[3, 3], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
-        @test isapprox(HS[3, 4], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
+        # The x face between nodes (2, 4) and (2, 5) heats both by half of r q^2.
+        @test isapprox(HS[2, 4], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
+        @test isapprox(HS[2, 5], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
         @test count(!iszero, HS) == 2
         fill!(HS, 0.0)
         fill!(qx, 0.0)
-        qy[3, 3] = 3.0e-6
+        qy[4, Nx] = 3.0e-6
         Erebus.compute_shear_heating!(
-            HS, ETA, zeros(Ny, Nx), ETAP, zeros(Ny1, Nx1), RX, RY, qx, qy, PHI, ETAPHI, p, p
+            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
         )
-        # The y face between nodes (3, 3) and (4, 3) heats both by half of r q^2.
-        @test isapprox(HS[3, 3], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
-        @test isapprox(HS[4, 3], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
+        # The y face between nodes (4, Nx) and (5, Nx) heats both by half of r q^2.
+        @test isapprox(HS[4, Nx], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
+        @test isapprox(HS[5, Nx], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
         @test count(!iszero, HS) == 2
-        # Resistances must have the size of the fluxes they belong to.
+        # Every array must have the size of HS, or one less for basic-node arrays.
         @test_throws ArgumentError Erebus.compute_shear_heating!(
-            HS,
-            ETA,
-            zeros(Ny, Nx),
-            ETAP,
-            zeros(Ny1, Nx1),
-            RX[1:Ny, :],
-            RY,
-            qx,
-            qy,
-            PHI,
-            ETAPHI,
-            p,
-            p,
+            HS, ETA, S0, ETAP, P0, RX[1:Ny, :], RY, qx, qy, PHI, ETAPHI, p, p
         )
         @test_throws ArgumentError Erebus.compute_shear_heating!(
-            HS,
-            ETA,
-            zeros(Ny, Nx),
-            ETAP,
-            zeros(Ny1, Nx1),
-            RX,
-            RY[:, 1:Nx],
-            qx,
-            qy,
-            PHI,
-            ETAPHI,
-            p,
-            p,
+            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p[:, 1:Nx]
+        )
+        @test_throws ArgumentError Erebus.compute_shear_heating!(
+            HS, zeros(Ny1, Nx1), S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
         )
     end
 

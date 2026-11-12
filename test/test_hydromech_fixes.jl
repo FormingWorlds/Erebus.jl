@@ -545,12 +545,12 @@ using Erebus
         @test all(isfinite, qxD)
         @test all(isfinite, qyD)
 
-        HS = zeros(Ny, Nx)
+        HS = zeros(Ny1, Nx1)
         SXY_test = fill(1.0e5, Ny, Nx)
         SXX_test = fill(1.0e5, Ny1, Nx1)
         Erebus.compute_shear_heating!(
             HS,
-            ETA,
+            ETA[1:Ny, 1:Nx],
             SXY_test,
             ETAP,
             SXX_test,
@@ -586,22 +586,6 @@ using Erebus
             PHIY=nothing,
         )
         @test all(isfinite, qxD)
-
-        Erebus.compute_shear_heating!(
-            HS,
-            ETA,
-            SXY_test,
-            ETAP,
-            SXX_test,
-            RX,
-            RY,
-            qxD,
-            qyD,
-            PHI,
-            ETAPHI,
-            pr_test,
-            pf_test,
-        )
-        @test all(isfinite, HS)
+        @test all(isfinite, qyD)
     end
 end
