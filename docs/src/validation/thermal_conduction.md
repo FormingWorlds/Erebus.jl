@@ -122,7 +122,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_conduction -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `b07ad444`, config SHA-256 `00da716daf60`)
+**Validation record**: `benchmarks/records/spherical_conduction.toml` (Source commit `2daed72f`, config SHA-256 `bbe1652d1bd3`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
