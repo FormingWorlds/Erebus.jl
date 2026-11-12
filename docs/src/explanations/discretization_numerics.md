@@ -325,7 +325,7 @@ In their first numerical test, the iteration count of Picard-type passes falls m
 - The weights are 1 divided by the root mean square of each pressure over the interior nodes (at least 1 Pa), 0 on the ghost nodes, and 1 on $s$.
 - The least-squares problem uses a QR factorization with column pivoting; a column whose diagonal entry of the triangular factor is below $10^{-12}$ of the largest is dropped.
 - When $\gamma$ or the new state is not finite, or $\max_j |\gamma_j| \ge 10^3$, the pass takes $x_{k+1} = G(x_k)$ and clears the history.
-- When the time step changes by more than $10^{-12}$ of its value inside the loop, the history restarts from the state of that pass.
+- When the time step changes by more than $10^{-12}$ of its value inside the loop, the history restarts from the state of that pass, and the stall count below starts again at the next pass.
 
 ##### Stagnation Stop and Settings
 
