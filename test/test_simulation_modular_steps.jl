@@ -941,7 +941,7 @@ using Erebus
             res = Erebus.solve_stokes_darcy!(
                 state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
             )
-            return res, state, ws
+            return res, state, ws, cfg
         end
 
         # Plain Picard ends at the cycle stop, the accelerated loop converges.
@@ -989,7 +989,35 @@ using Erebus
         @test all(==(1.0), w[41:end])
         Q[3, 3] = NaN
         Erebus._anderson_weights!(w, (pr=P, pf=Q))
-        @test all(isfinite, w)
+        @test all(isapprox(1.0; rtol=0), w[21:40][[6, 7, 10, 11, 14, 15]])
+        Q[3, 3] = Inf
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test all(isapprox(1.0; rtol=0), w[21:40][[6, 7, 10, 11, 14, 15]])
+
+        # Pass end: a round-off change of the time step keeps the history; a time step
+        # cut clears it and starts the stall count at the next pass.
+        _, sp, wsp, cfgp = overpressure_case(5)
+        gp = sp.grids
+        tr = Erebus._start_plastic_cycle!(gp, cfgp, wsp)
+        Erebus._start_anderson!(wsp, sp, cfgp)
+        h = wsp.anderson
+        for k in 1:3
+            gp.pr .+= 1.0e3 * k
+            wsp.YERRNOD[k] = 1000.0 - k
+            @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, k)
+        end
+        @test h.ncol == 2 && h.wset
+        sp.dt = prevfloat(sp.dt)
+        gp.pr .+= 4.0e3
+        wsp.YERRNOD[4] = 990.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 4)
+        @test h.ncol == 3 && h.wset
+        sp.dt *= 0.5
+        gp.pr .+= 5.0e3
+        wsp.YERRNOD[5] = 1.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 5)
+        @test h.ncol == 0 && !h.hasprev && !h.wset
+        @test isinf(h.best) && h.nstall == 0 && isequal(h.dt, sp.dt)
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin
