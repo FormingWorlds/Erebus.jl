@@ -890,7 +890,9 @@ using Erebus
     @testset "Stokes-Darcy plastic loop with Anderson acceleration" begin
         # Fluid overpressure in one cell of a 9 x 9 benchmark grid makes plain Picard
         # passes cycle at a fracture face.
-        function overpressure_case(depth; theta=1.0, stall=1000, yerrmax=100.0)
+        function overpressure_case(
+            depth; theta=1.0, stall=1000, yerrmax=100.0, dt=2.0e4, window=10
+        )
             cfg = override_config(
                 load_config(
                     joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")
@@ -903,6 +905,7 @@ using Erebus
                     "solver.anderson_depth" => depth,
                     "solver.plastic_stall_passes" => stall,
                     "poroelasticity.theta_frac" => theta,
+                    "solver.plastic_cycle_window" => window,
                 ),
             )
             state, coords, ws, _, _ = init_simulation(cfg)
@@ -928,7 +931,7 @@ using Erebus
             )
             Erebus.update_step_start_pressures!(state)
             state.timestep = 2
-            state.dt = 2.0e4
+            state.dt = dt
             g = state.grids
             fill!(g.TEN, 5.0e4)
             fill!(g.COH, 2.0e5)
@@ -965,6 +968,28 @@ using Erebus
         rt0, st0, _ = overpressure_case(0; theta=0.5)
         @test rt5.n_plastic_passes == rt0.n_plastic_passes
         @test isequal(st5.grids.pr, st0.grids.pr) && isequal(st5.grids.ETA, st0.grids.ETA)
+
+        # A time step cut inside the loop restarts the history without repeating a pass.
+        rd, sd, wsd = overpressure_case(5; dt=1.0e12, window=4)
+        @test sd.dt < 1.0e12
+        nd = rd.n_plastic_passes
+        Yd = wsd.YERRNOD[1:nd]
+        @test !any(Yd[k + 1] == Yd[k] for k in 1:(nd - 1))
+        @test rd.plastic_converged
+
+        # Weights: 1 / RMS of each pressure over interior nodes, finite for any input.
+        P = fill(2.0, 4, 5)
+        P[2:3, 2:4] .= 4.0
+        Q = zeros(4, 5)
+        Q[3, 3] = 1.0e200
+        w = zeros(40 + 9)
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test w[6] == 0.25 && w[1] == 0.0 && w[20] == 0.0
+        @test isapprox(w[20 + 11], 1.0 / (1.0e200 / sqrt(6)); rtol=1.0e-12)
+        @test all(==(1.0), w[41:end])
+        Q[3, 3] = NaN
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test all(isfinite, w)
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin

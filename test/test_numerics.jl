@@ -2803,7 +2803,7 @@ include("test_helpers.jl")
         ETA0 = [1.0e19 1.0e21; 1.0e20 3.3e19]
         ETA = [1.0e19 1.0e15; 2.0e18 3.3e19]
         s = zeros(4)
-        Erebus.anderson_pack_viscosity!(s, ETA, ETA0)
+        Erebus.anderson_pack_viscosity!(s, ETA, ETA0, ETA .< ETA0)
         # Unyielded nodes pack to exactly 0, yielded nodes below 0.
         @test count(iszero, s) == 2
         @test isapprox(s[3], log(1.0e15 / 1.0e21); rtol=1.0e-12)
@@ -2832,6 +2832,62 @@ include("test_helpers.jl")
         # Invariants: no ETA above ETA0, no ETA below ETA0 without a yield flag.
         @test !any(E .> ETA0)
         @test !any((E .< ETA0) .& .!Y)
-        @test_throws DimensionMismatch Erebus.anderson_pack_viscosity!(zeros(3), ETA, ETA0)
+        @test_throws DimensionMismatch Erebus.anderson_pack_viscosity!(
+            zeros(3), ETA, ETA0, ETA .< ETA0
+        )
+    end
+
+    @testset "Anderson acceleration: yield flags at the viscosity limits" begin
+        # Yielding nodes clamped to etamin at or above ETA0 keep their flag (main's rule).
+        etamin, etamax = 1.0e12, 1.0e23
+        ETA0 = [1.0e12, 1.0e11, 1.0e19, 1.0e12]
+        ETA = [1.0e12, 1.0e12, 1.0e19, 1.0e12]
+        YNY = [true, true, false, false]
+        s = zeros(4)
+        Erebus.anderson_pack_viscosity!(s, ETA, ETA0, YNY)
+        @test all(<(-1.0e-12), s[1:2]) && iszero(s[3]) && iszero(s[4])
+        E, Y, Yi = zeros(4), falses(4), zeros(4)
+        Erebus.anderson_unpack_viscosity!(E, Y, Yi, s, ETA0, etamin, etamax)
+        @test Y == YNY
+        @test E == ETA
+        @test Yi[1] == 1.0 / etamin && Yi[2] == 1.0 / etamin && iszero(Yi[3])
+        # A mixed value below ETA0 < etamin still yields at etamin.
+        Erebus.anderson_unpack_viscosity!(
+            E, Y, Yi, [-3.0, -3.0, -3.0, -3.0], ETA0, etamin, etamax
+        )
+        @test E[2] == etamin && Y[2]
+        @test_throws DimensionMismatch Erebus.anderson_pack_viscosity!(
+            s, ETA, ETA0, YNY[1:3]
+        )
+    end
+
+    @testset "Anderson acceleration: time step round-off and argument checks" begin
+        # A time step drift far below 1e-12 does not restart the stall count.
+        h = Erebus.AndersonHistory(2, 3)
+        Erebus.reset_anderson!(h)
+        dt = 1.0e10
+        stops = Bool[]
+        for _ in 1:6
+            push!(stops, Erebus.anderson_stall_record!(h, 500.0, dt, 3))
+            dt = prevfloat(dt)
+        end
+        @test stops == [false, false, false, true, true, true]
+        @test !Erebus.anderson_dt_changed(prevfloat(1.0e10), 1.0e10)
+        @test Erebus.anderson_dt_changed(0.5e10, 1.0e10)
+        @test Erebus.anderson_dt_changed(1.0e10, NaN)
+        # The next iterate must not share memory with the iterate or the map value.
+        x, G, w = [1.0, 2.0, 3.0], [2.0, 2.0, 2.0], ones(3)
+        @test_throws ArgumentError Erebus.anderson_mix!(x, x, G, h, w)
+        @test_throws ArgumentError Erebus.anderson_mix!(G, x, G, h, w)
+        # An overflowing difference column is dropped, not kept for the next pass.
+        Erebus.reset_anderson!(h)
+        xn = zeros(3)
+        wz = [0.0, 1.0, 1.0]
+        Erebus.anderson_mix!(xn, zeros(3), [-1.0e308, 1.0, 1.0], h, wz)
+        @test !Erebus.anderson_mix!(xn, [0.0, 1.0, 1.0], [1.0e308, 3.0, 2.5], h, wz)
+        @test h.ncol == 0
+        Erebus.anderson_mix!(xn, [0.0, 3.0, 2.5], [0.0, 3.5, 2.6], h, wz)
+        @test h.ncol == 1 && all(isfinite, view(h.dF, :, 1:h.ncol))
+        @test all(isfinite, xn)
     end
 end
