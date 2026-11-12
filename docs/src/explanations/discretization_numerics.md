@@ -403,6 +403,8 @@ $$R_{\text{eff}} = R_{\text{base}} \frac{k_\phi(\phi_f, k_{\phi 0})}{k_{\text{ef
 
 Matrix permeability $k_\phi$ is calculated from local face porosity $\phi_f$ and reference permeability $k_{\phi 0}$ via Kozeny-Carman scaling. This ensures that Darcy drag resistance couples to local porosity rather than grid thermal properties.
 
+The Darcy friction term of the shear heating uses the same face resistances that the Darcy fluxes were solved with, so that each face adds $R_{\text{eff}}\, q_D^2$, split equally between its two pressure nodes, which is the work of the discrete Darcy law on that face.
+
 ### 5. Single-Cell Venting Corner Drainage Budget
 
 Boundary cells with multiple exposed faces (such as domain corners) can drain through multiple faces simultaneously. In the discrete fluid continuity equation, surface venting operates as a volumetric divergence sink $S_{\text{vent}}$ [$\text{s}^{-1}$]. To prevent unphysical over-drainage exceeding available pore fluid, the solver enforces a single shared cell drainage budget:

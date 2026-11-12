@@ -131,6 +131,22 @@ function _run_magma_segregation_step!(
 end
 
 """
+Return the face resistances that the Darcy fluxes in `g.qxD`, `g.qyD` were solved with.
+
+$(SIGNATURES)
+
+With hydrofracture these are `ws.hydromech.rx_eff`, `ry_eff` from the last Stokes-Darcy
+assembly; before the first assembly, or without hydrofracture, `g.RX`, `g.RY`.
+"""
+function _darcy_heating_resistances(g, ws::SimulationWorkspaces, cfg::SimulationConfig)
+    hm = ws.hydromech
+    if cfg.poroelasticity.hydrofracture && hm.is_initialized
+        return hm.rx_eff, hm.ry_eff
+    end
+    return g.RX, g.RY
+end
+
+"""
 Solve the thermal energy conservation equation with segregation sources and convection.
 
 $(SIGNATURES)
@@ -147,32 +163,21 @@ function solve_thermal_energy!(
     core = state.markers.core
     marknum = length(state.markers)
 
+    rx_heat, ry_heat = _darcy_heating_resistances(g, ws, cfg)
     compute_shear_heating!(
         g.HS,
         g.ETA,
         g.SXY,
         g.ETAP,
         g.SXX,
-        g.RX,
-        g.RY,
+        rx_heat,
+        ry_heat,
         g.qxD,
         g.qyD,
         g.PHI,
         g.ETAPHI,
         g.pr,
-        g.pf;
-        hydrofracture=cfg.poroelasticity.hydrofracture,
-        TEN=g.TEN,
-        KX=g.KX,
-        KY=g.KY,
-        PHIX=g.PHIX,
-        PHIY=g.PHIY,
-        kphim0=cfg.materials.kphim0,
-        phim0_val=cfg.thermodynamics.phim0,
-        kappa_frac=cfg.poroelasticity.kappa_frac,
-        gamma_frac=cfg.poroelasticity.gamma_frac,
-        k_frac_max=cfg.poroelasticity.k_frac_max,
-        coords=coords,
+        g.pf,
     )
 
     compute_adiabatic_heating!(

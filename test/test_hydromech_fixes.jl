@@ -561,11 +561,7 @@ using Erebus
             PHI,
             ETAPHI,
             pr_test,
-            pf_test;
-            hydrofracture=true,
-            TEN=TEN_test,
-            PHIX=PHIX,
-            PHIY=PHIY,
+            pf_test,
         )
         @test all(isfinite, HS)
         @test all(HS .>= 0.0)
@@ -604,11 +600,7 @@ using Erebus
             PHI,
             ETAPHI,
             pr_test,
-            pf_test;
-            hydrofracture=true,
-            TEN=TEN_test,
-            PHIX=nothing,
-            PHIY=nothing,
+            pf_test,
         )
         @test all(isfinite, HS)
     end

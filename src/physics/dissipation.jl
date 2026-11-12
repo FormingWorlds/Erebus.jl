@@ -10,8 +10,8 @@ $(SIGNATURES)
     - SXY: σ₀xy XY stress at basic nodes
     - ETAP: viscosity at P nodes
     - SXX: normal stress at P nodes
-    - RX: ηfluid/Kϕ at Vx nodes
-    - RY: ηfluid/Kϕ at Vy nodes
+    - RX: face resistance ηfluid/Kϕ at Vx nodes that `qxD` was solved with
+    - RY: face resistance ηfluid/Kϕ at Vy nodes that `qyD` was solved with
     - qxD: qx-Darcy flux at Vx nodes
     - qyD: qy-Darcy flux at Vy nodes
     - PHI: porosity at P nodes
@@ -24,33 +24,12 @@ $(SIGNATURES)
     - nothing
 """
 function compute_shear_heating!(
-    HS,
-    ETA,
-    SXY,
-    ETAP,
-    SXX,
-    RX,
-    RY,
-    qxD,
-    qyD,
-    PHI,
-    ETAPHI,
-    pr,
-    pf;
-    hydrofracture::Bool=false,
-    TEN=nothing,
-    KX=nothing,
-    KY=nothing,
-    PHIX=nothing,
-    PHIY=nothing,
-    kphim0=nothing,
-    phim0_val=nothing,
-    phimin_val::Real=1.0e-4,
-    kappa_frac::Real=1.0e3,
-    gamma_frac::Real=1.0,
-    k_frac_max::Real=1.0e-9,
-    coords::GridCoordinates=default_grid_coordinates(),
+    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf
 )
+    size(RX) == size(qxD) ||
+        throw(ArgumentError("RX has size $(size(RX)), qxD has size $(size(qxD))"))
+    size(RY) == size(qyD) ||
+        throw(ArgumentError("RY has size $(size(RY)), qyD has size $(size(qyD))"))
     Ny1, Nx1 = size(HS)
     Nx = Nx1 - 1
     Ny = Ny1 - 1
@@ -61,95 +40,6 @@ function compute_shear_heating!(
         rx_j = RX[i, j]
         ry_im1 = RY[i - 1, j]
         ry_i = RY[i, j]
-        if hydrofracture && TEN !== nothing
-            Peff_x1 = 0.5 * (pr[i, j - 1] + pr[i, j] - pf[i, j - 1] - pf[i, j])
-            sigma_tx1 = 0.5 * (TEN[i, j - 1] + TEN[i - 1, j - 1])
-            phi_x1 = if PHIX !== nothing
-                PHIX[i, j - 1]
-            elseif PHI !== nothing
-                0.5 * (PHI[i, j - 1] + PHI[i, j])
-            else
-                phimin_val
-            end
-            rx_jm1 = evaluate_hydrofracture_resistance(
-                RX[i, j - 1],
-                Peff_x1,
-                sigma_tx1,
-                phi_x1;
-                kphim0=kphim0,
-                phim0_val=phim0_val,
-                phimin_val=phimin_val,
-                kappa_frac=kappa_frac,
-                gamma_frac=gamma_frac,
-                k_frac_max=k_frac_max,
-            )
-
-            Peff_x2 = 0.5 * (pr[i, j] + pr[i, j + 1] - pf[i, j] - pf[i, j + 1])
-            sigma_tx2 = 0.5 * (TEN[i, j] + TEN[i - 1, j])
-            phi_x2 = if PHIX !== nothing
-                PHIX[i, j]
-            elseif PHI !== nothing
-                0.5 * (PHI[i, j] + PHI[i, j + 1])
-            else
-                phimin_val
-            end
-            rx_j = evaluate_hydrofracture_resistance(
-                RX[i, j],
-                Peff_x2,
-                sigma_tx2,
-                phi_x2;
-                kphim0=kphim0,
-                phim0_val=phim0_val,
-                phimin_val=phimin_val,
-                kappa_frac=kappa_frac,
-                gamma_frac=gamma_frac,
-                k_frac_max=k_frac_max,
-            )
-
-            Peff_y1 = 0.5 * (pr[i - 1, j] + pr[i, j] - pf[i - 1, j] - pf[i, j])
-            sigma_ty1 = 0.5 * (TEN[i - 1, j] + TEN[i - 1, j - 1])
-            phi_y1 = if PHIY !== nothing
-                PHIY[i - 1, j]
-            elseif PHI !== nothing
-                0.5 * (PHI[i - 1, j] + PHI[i, j])
-            else
-                phimin_val
-            end
-            ry_im1 = evaluate_hydrofracture_resistance(
-                RY[i - 1, j],
-                Peff_y1,
-                sigma_ty1,
-                phi_y1;
-                kphim0=kphim0,
-                phim0_val=phim0_val,
-                phimin_val=phimin_val,
-                kappa_frac=kappa_frac,
-                gamma_frac=gamma_frac,
-                k_frac_max=k_frac_max,
-            )
-
-            Peff_y2 = 0.5 * (pr[i, j] + pr[i + 1, j] - pf[i, j] - pf[i + 1, j])
-            sigma_ty2 = 0.5 * (TEN[i, j] + TEN[i, j - 1])
-            phi_y2 = if PHIY !== nothing
-                PHIY[i, j]
-            elseif PHI !== nothing
-                0.5 * (PHI[i, j] + PHI[i + 1, j])
-            else
-                phimin_val
-            end
-            ry_i = evaluate_hydrofracture_resistance(
-                RY[i, j],
-                Peff_y2,
-                sigma_ty2,
-                phi_y2;
-                kphim0=kphim0,
-                phim0_val=phim0_val,
-                phimin_val=phimin_val,
-                kappa_frac=kappa_frac,
-                gamma_frac=gamma_frac,
-                k_frac_max=k_frac_max,
-            )
-        end
         # compute shear heating HS
         @inbounds HS[i, j] = (
             SXX[i, j]^2 / ETAP[i, j] +
