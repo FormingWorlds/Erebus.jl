@@ -6,10 +6,10 @@
 id = "spherical_conduction"
 title = "Spherical Conduction and Radiogenic Heating Validation"
 page = "validation/thermal_conduction.md"
-src_commit = "b07ad444e2223dda64d5cb80c0a6b8eb696bd95b"
-timestamp_utc = "2026-11-10T14:06:17Z"
+src_commit = "2daed72fbb00599f53b38b3c8b52d2bd45188161"
+timestamp_utc = "2026-11-12T06:08:57Z"
 julia_version = "1.12.7"
-config_sha256 = "00da716daf60ab923fe368701ce79bbe27ae72351d57c105ec216ef895ce8d20"
+config_sha256 = "bbe1652d1bd38125f1f95348ec06db8381defbaca9702bc1acdfec0cb3832a1b"
 reference_type = "analytical_and_1d_fv"
 reference_citation = "Exact spherical Poisson solution and step-averaged backward-Euler Dirichlet eigenmode series cross-verified against a 1D spherical finite-volume solver"
 

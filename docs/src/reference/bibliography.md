@@ -315,3 +315,15 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Robie, R. A., & Hemingway, B. S. (1995)**. *Thermodynamic Properties of Minerals and Related Substances at 298.15 K and 1 Bar (10^5 Pascals) Pressure and at Higher Temperatures*. U.S. Geological Survey Bulletin 2131.
   [https://doi.org/10.3133/b2131](https://doi.org/10.3133/b2131)
   *Standard state thermodynamic data for minerals and gas species.*
+
+---
+
+## Numerical Methods for Nonlinear Iterations
+
+- **Walker, H. F., & Ni, P. (2011)**. Anderson acceleration for fixed-point iterations. *SIAM Journal on Numerical Analysis*, 49(4), 1715-1735.  
+  [https://doi.org/10.1137/10078356X](https://doi.org/10.1137/10078356X)  
+  *Type II Anderson update and its least-squares solution by QR factorization, used in the plastic loop.*
+
+- **Both, J. W., Kumar, K., Nordbotten, J. M., & Radu, F. A. (2019)**. Anderson accelerated fixed-stress splitting schemes for consolidation of unsaturated porous media. *Computers & Mathematics with Applications*, 77(6), 1479-1502.  
+  [https://doi.org/10.1016/j.camwa.2018.07.033](https://doi.org/10.1016/j.camwa.2018.07.033)  
+  *Anderson acceleration of coupled flow and mechanics iterations, including non-contractive fixed-point maps.*

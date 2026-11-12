@@ -272,6 +272,7 @@ mutable struct SimulationWorkspaces
     Xfe_bulk_hr_step_start::Union{Nothing,Vector{Float64}}
     hr_step_start_timestep::Int
     plastic_cycle::PlasticCycleTracker
+    anderson::AndersonHistory
 end
 
 """

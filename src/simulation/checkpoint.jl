@@ -705,7 +705,8 @@ end
     compare_restart_configs(cfg_saved::SimulationConfig, cfg_current::SimulationConfig)::Vector{String}
 
 Compare configuration of saved checkpoint against restart configuration.
-Differences in `[output]`, `time.{n_steps, endtime, start_step}`, and `solver.seed` are allowed.
+Differences in `[output]`, `time.{n_steps, endtime, start_step}` and
+`solver.{seed, anderson_depth, plastic_stall_passes}` are allowed.
 All other differences return as `\"section.field\"` strings.
 """
 function compare_restart_configs(
@@ -722,8 +723,9 @@ function compare_restart_configs(
         s_curr = get(d_curr, sec, Dict{String,Any}())
         all_flds = sort(collect(union(keys(s_saved), keys(s_curr))))
         for fld in all_flds
-            if (sec == "time" && fld in ("n_steps", "endtime", "start_step")) ||
-                (sec == "solver" && fld == "seed")
+            if (sec == "time" && fld in ("n_steps", "endtime", "start_step")) || (
+                sec == "solver" && fld in ("seed", "anderson_depth", "plastic_stall_passes")
+            )
                 continue
             end
             val_saved = get(s_saved, fld, nothing)

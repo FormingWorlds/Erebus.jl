@@ -841,6 +841,7 @@ using Erebus
                     "solver.yerrmax" => 1.0e-20,
                     "solver.etamin" => 1.0e21,
                     "solver.plastic_cycle_window" => window,
+                    "solver.anderson_depth" => 0,
                 ),
             )
             state, coords, ws, _, _ = init_simulation(cfg)
@@ -884,6 +885,151 @@ using Erebus
         @test res0.plastic_converged == false
         @test res0.n_plastic_passes == 200
         @test res0.last_plastic_residual === ws0.YERRNOD[200]
+    end
+
+    @testset "Stokes-Darcy plastic loop with Anderson acceleration" begin
+        # Fluid overpressure in one cell of a 9 x 9 benchmark grid makes plain Picard
+        # passes cycle at a fracture face.
+        function overpressure_case(
+            depth; theta=1.0, stall=1000, yerrmax=100.0, dt=2.0e4, window=10
+        )
+            cfg = override_config(
+                load_config(
+                    joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")
+                ),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "solver.max_plastic_iterations" => 200,
+                    "solver.yerrmax" => yerrmax,
+                    "solver.anderson_depth" => depth,
+                    "solver.plastic_stall_passes" => stall,
+                    "poroelasticity.theta_frac" => theta,
+                    "solver.plastic_cycle_window" => window,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            for m in 1:length(state.markers)
+                state.markers.core.tm[m] != 3 && (state.markers.core.tkm[m] = 350.0)
+            end
+            Erebus.radiogenic_heating!(state, coords, cfg)
+            Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+            Erebus.interpolate_markers_to_grid!(
+                state,
+                coords,
+                cfg;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(state, coords, cfg)
+            Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+            Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            Erebus.update_step_start_pressures!(state)
+            state.timestep = 2
+            state.dt = dt
+            g = state.grids
+            fill!(g.TEN, 5.0e4)
+            fill!(g.COH, 2.0e5)
+            g.pf0[5, 5] = g.pr0[5, 5] + 5.0e4 + 2.0e5
+            g.pf .= g.pf0
+            g.pr .= g.pr0
+            res = Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            return res, state, ws, cfg
+        end
+
+        # Plain Picard ends at the cycle stop, the accelerated loop converges.
+        r0, _, _ = overpressure_case(0)
+        @test !r0.plastic_converged
+        @test 1 < r0.n_plastic_passes < 200
+        r5, s5, _ = overpressure_case(5)
+        @test r5.plastic_converged
+        @test r5.n_plastic_passes < 200
+        # The accepted state keeps viscosity and yield flags consistent.
+        g = s5.grids
+        @test !any(g.ETA .> g.ETA0 .* (1.0 + 1.0e-12))
+        @test !any((g.ETA .< g.ETA0 .* (1.0 - 1.0e-12)) .& (g.YNY .== 0))
+
+        # A loop that cannot converge stops 10 passes after its smallest residual.
+        rs, _, wss = overpressure_case(5; stall=10, yerrmax=1.0e-20)
+        @test !rs.plastic_converged
+        n = rs.n_plastic_passes
+        @test n < 200
+        @test n - argmin(wss.YERRNOD[1:n]) == 10
+
+        # With theta_frac below 1 the loop runs plain Picard passes.
+        rt5, st5, _ = overpressure_case(5; theta=0.5)
+        rt0, st0, _ = overpressure_case(0; theta=0.5)
+        @test rt5.n_plastic_passes == rt0.n_plastic_passes
+        @test isequal(st5.grids.pr, st0.grids.pr) && isequal(st5.grids.ETA, st0.grids.ETA)
+
+        # A time step cut inside the loop restarts the history without repeating a pass.
+        rd, sd, wsd = overpressure_case(5; dt=1.0e12, window=4)
+        @test sd.dt < 1.0e12
+        nd = rd.n_plastic_passes
+        Yd = wsd.YERRNOD[1:nd]
+        @test !any(Yd[k + 1] == Yd[k] for k in 1:(nd - 1))
+        @test rd.plastic_converged
+
+        # Weights: 1 / RMS of each pressure over interior nodes, finite for any input.
+        P = fill(2.0, 4, 5)
+        P[2:3, 2:4] .= 4.0
+        Q = zeros(4, 5)
+        Q[3, 3] = 1.0e200
+        w = zeros(40 + 9)
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test isapprox(w[6], 0.25; rtol=0) && iszero(w[1]) && iszero(w[20])
+        @test isapprox(w[20 + 11], 1.0 / (1.0e200 / sqrt(6)); rtol=1.0e-12)
+        @test all(==(1.0), w[41:end])
+        Q[3, 3] = NaN
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test all(isapprox(1.0; rtol=0), w[21:40][[6, 7, 10, 11, 14, 15]])
+        Q[3, 3] = Inf
+        Erebus._anderson_weights!(w, (pr=P, pf=Q))
+        @test all(isapprox(1.0; rtol=0), w[21:40][[6, 7, 10, 11, 14, 15]])
+
+        # Pass end: a round-off change of the time step keeps the history; a time step
+        # cut clears it and starts the stall count at the next pass.
+        _, sp, wsp, cfgp = overpressure_case(5)
+        gp = sp.grids
+        tr = Erebus._start_plastic_cycle!(gp, cfgp, wsp)
+        Erebus._start_anderson!(wsp, sp, cfgp)
+        h = wsp.anderson
+        for k in 1:3
+            gp.pr .+= 1.0e3 * k
+            wsp.YERRNOD[k] = 1000.0 - k
+            @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, k)
+        end
+        @test h.ncol == 2 && h.wset
+        sp.dt = prevfloat(sp.dt)
+        gp.pr .+= 4.0e3
+        wsp.YERRNOD[4] = 990.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 4)
+        @test h.ncol == 3 && h.wset
+        sp.dt *= 0.5
+        gp.pr .+= 5.0e3
+        wsp.YERRNOD[5] = 1.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 5)
+        @test h.ncol == 0 && !h.hasprev && !h.wset
+        @test isinf(h.best) && h.nstall == 0 && isequal(h.dt, sp.dt)
+        @test isequal(h.x, h.g)
+        # The next passes start the history from the state of the cut pass.
+        g5 = copy(h.g)
+        gp.pr .+= 6.0e3
+        wsp.YERRNOD[6] = 500.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 6)
+        @test isequal(h.xprev, g5) && isapprox(h.best, 500.0; rtol=0, atol=0)
+        @test h.nstall == 0 && h.ncol == 0
+        gp.pr .+= 7.0e3
+        wsp.YERRNOD[7] = 500.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 7)
+        @test h.nstall == 1 && h.ncol == 1
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin

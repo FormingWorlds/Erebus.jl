@@ -82,6 +82,15 @@ include("test_helpers.jl")
             cfg_w = SimulationConfig(; solver=SolverConfig(plastic_cycle_window=w))
             @test validate_config(cfg_w) === nothing
         end
+        # Anderson acceleration of the plastic loop: depth 5 and a 1000-pass stall stop.
+        @test cfg_q.solver.anderson_depth == 5
+        @test cfg_q.solver.plastic_stall_passes == 1000
+        for (d, n) in ((0, 10), (20, 1000), (5, 100_000))
+            cfg_a = SimulationConfig(;
+                solver=SolverConfig(; anderson_depth=d, plastic_stall_passes=n)
+            )
+            @test validate_config(cfg_a) === nothing
+        end
 
         # Missing file error check
         @test_throws SystemError load_config("nonexistent_path_to_config.toml")
@@ -271,6 +280,11 @@ include("test_helpers.jl")
         @reject_config solver=SolverConfig(plastic_cycle_window=2)
         @reject_config solver=SolverConfig(plastic_cycle_window=3)
         @reject_config solver=SolverConfig(plastic_cycle_window=101)
+        # anderson_depth: 0 (plain Picard) to 20; plastic_stall_passes: at least 10
+        @reject_config solver=SolverConfig(anderson_depth=-1)
+        @reject_config solver=SolverConfig(anderson_depth=21)
+        @reject_config solver=SolverConfig(plastic_stall_passes=9)
+        @reject_config solver=SolverConfig(plastic_stall_passes=0)
 
         # Invalid output parameters: savematstep and visstep must be >= 1
         @reject_config output=OutputConfig(savematstep=0, visstep=1)
@@ -855,7 +869,7 @@ include("test_helpers.jl")
         cmd = `$(Base.julia_cmd()) --project=$(normpath(joinpath(@__DIR__, "..", "tools"))) $(joinpath(@__DIR__, "..", "tools", "check_config_schema.jl")) --check`
         out = read(cmd, String)
         @test occursin("Schema verification passed", out)
-        @test occursin("489 configuration fields", out)
+        @test occursin("491 configuration fields", out)
     end
 
     @testset "Materials config overrides constants in marker initialization" begin
