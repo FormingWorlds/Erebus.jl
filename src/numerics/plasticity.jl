@@ -983,7 +983,8 @@ end
     anderson_dt_changed(dt, dtref) -> Bool
 
 True when the time step `dt` differs from `dtref` by more than `1e-12` of the larger, or
-the two differ and one is not finite; the plastic loop re-solves only for such a change.
+the two differ and one is not finite; this is the relative threshold of the re-solve after
+a time step cut.
 
 # Arguments
 

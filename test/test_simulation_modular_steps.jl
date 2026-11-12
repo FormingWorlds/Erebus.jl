@@ -1018,6 +1018,18 @@ using Erebus
         @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 5)
         @test h.ncol == 0 && !h.hasprev && !h.wset
         @test isinf(h.best) && h.nstall == 0 && isequal(h.dt, sp.dt)
+        @test isequal(h.x, h.g)
+        # The next passes start the history from the state of the cut pass.
+        g5 = copy(h.g)
+        gp.pr .+= 6.0e3
+        wsp.YERRNOD[6] = 500.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 6)
+        @test isequal(h.xprev, g5) && isapprox(h.best, 500.0; rtol=0, atol=0)
+        @test h.nstall == 0 && h.ncol == 0
+        gp.pr .+= 7.0e3
+        wsp.YERRNOD[7] = 500.0
+        @test !Erebus._plastic_pass_stop!(wsp, tr, sp, cfgp, 7)
+        @test h.nstall == 1 && h.ncol == 1
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin
