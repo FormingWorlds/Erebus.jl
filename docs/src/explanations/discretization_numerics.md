@@ -332,7 +332,7 @@ In their first numerical test, the iteration count of Picard-type passes falls m
 An accelerated loop does not repeat its states, so the cycle stop above does not end it.
 The loop therefore ends as not converged when YERRNOD has not fallen below $(1 - 10^{-12})$ times its smallest value for `solver.plastic_stall_passes` passes (default `1000`).
 The time step then halves, as for the other stops.
-A lower limit on the passes is not safe: converged calls in the runs below need up to 4753 passes.
+A lower limit on the passes is not safe: converged calls in the runs below need up to 3095 passes.
 With `poroelasticity.theta_frac` below 1 (under-relaxed Darcy resistances), the loop runs plain passes; `solver.anderson_depth = 0` does the same.
 Both settings can change on a restart from a checkpoint.
 
@@ -343,11 +343,13 @@ Measured with the direct solver (the iterative solver needs `solver.experimental
 | Case | Depth | Failed calls | Plastic passes | Simulated time |
 |---|---|---|---|---|
 | `hydrothermal_benchmark`, 400 steps | 0 | 104 | 57 059 | 0.02535 Myr |
-| | 5 | 23 | 110 293 | 0.02906 Myr |
+| | 5 | 23 | 110 339 | 0.02904 Myr |
+| `hydrothermal_reaction_on_64`, 200 steps | 0 | 44 | 85 433 | 1.601402 Myr |
+| | 5 | 31 | 125 186 | 1.601476 Myr |
 | `hydrothermal_reaction_on_128`, 200 steps | 0 | aborts at step 110 (`PlasticConvergenceError`) | | |
-| | 5 | 14 | 52 700 | 1.6014 Myr |
+| | 5 | 16 | 56 077 | 1.60144 Myr |
 
-On `hydrothermal_benchmark` at matched times, the two depths differ by at most $1.7 \times 10^{-4}$ K in temperature, and by 0.22 % and 0.094 % of the field maximum in $P_f$ and $P_t$.
+On `hydrothermal_benchmark` at matched times, the two depths differ by at most $1.2 \times 10^{-4}$ K in temperature, and by 0.22 % and 0.094 % of the field maximum in $P_f$ and $P_t$.
 
 **Where this is checked.** `test/test_numerics.jl` (Anderson testsets) and `test/test_simulation_modular_steps.jl` ("Stokes-Darcy plastic loop with Anderson acceleration").
 
