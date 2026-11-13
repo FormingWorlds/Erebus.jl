@@ -403,7 +403,8 @@ $$R_{\text{eff}} = R_{\text{base}} \frac{k_\phi(\phi_f, k_{\phi 0})}{k_{\text{ef
 
 Matrix permeability $k_\phi$ is calculated from local face porosity $\phi_f$ and reference permeability $k_{\phi 0}$ via Kozeny-Carman scaling. This ensures that Darcy drag resistance couples to local porosity rather than grid thermal properties.
 
-The Darcy friction term of the shear heating uses the same face resistances that the Darcy fluxes were solved with, so that each face adds $R_{\text{eff}}\, q_D^2$, split equally between its two pressure nodes, which is the work of the discrete Darcy law on that face.
+The Darcy friction term of the shear heating uses the same face resistances that the Darcy fluxes were solved with.
+Each face then adds $R_{\text{eff}}\, q_D^2$, which is the work of the discrete Darcy law on that face, split equally between its two pressure nodes.
 
 ### 5. Single-Cell Venting Corner Drainage Budget
 
