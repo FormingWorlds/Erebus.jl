@@ -130,7 +130,7 @@ end
         # Momentum rows are unchanged.
         kvx = ((j_c - 1) * Ny1 + i_c - 1) * 6 + 1
         @test isequal(L1[kvx, :], L0[kvx, :])
-        @test isequal(L1[kvx + 4, :], L0[kvx + 4, :])
+        @test isequal(L1[kvx + 1, :], L0[kvx + 1, :])
     end
 
     @testset "4-variable rows and the gravity part of the right-hand side" begin
@@ -181,6 +181,9 @@ end
         @test_throws ArgumentError _sfr_assemble(4, coords, f; spherical_flow=true)
         @test_throws ArgumentError _sfr_assemble(
             6, coords, f; spherical_flow=true, xcenter=xc
+        )
+        @test_throws ArgumentError _sfr_assemble(
+            6, coords, f; spherical_flow=true, ycenter=yc
         )
     end
 
@@ -286,8 +289,9 @@ end
         push!(errs4, e4)
         push!(errsk, ek)
     end
-    @test errs4[1] / errs4[2] > 3.6 && errs4[2] / errs4[3] > 3.6
-    @test errsk[1] / errsk[2] > 3.6 && errsk[2] / errsk[3] > 3.6
+    for e in (errs4, errsk), k in 1:2
+        @test 3.6 < e[k] / e[k + 1] < 4.4
+    end
     # Measured at N 129 (r > 15 km): 1.93e-3 and 2.36e-4; ratios 3.95, 4.01 and 3.93, 4.01.
     @test errs4[3] < 2.5e-3
     @test errsk[3] < 3.0e-4
@@ -311,28 +315,35 @@ end
     for kw in bad
         cfg = SimulationConfig(; kw...)
         @test_throws ArgumentError Erebus._validate_spherical_flow(cfg)
+        @test_throws ArgumentError validate_config(cfg)
     end
     @test_throws ArgumentError init_simulation(SimulationConfig(; bad[end]...))
 end
 
 @testset "solve_stokes_darcy! passes spherical_flow to the assembly" begin
     base = load_config("configs/test_quick.toml")
-    res = Dict{Bool,Any}()
-    for sf in (false, true)
+    res = Dict{Tuple{Bool,Bool},Any}()
+    for elim in (false, true), sf in (false, true)
         cfg = override_config(
             base,
             Dict{String,Any}(
                 "geometry.spherical_metric" => true,
                 "geometry.spherical_flow" => sf,
+                "solver.darcy_elimination" => elim,
                 "time.n_steps" => 1,
                 "output.savematstep" => 1,
             ),
         )
         out = mktempdir()
         simulation_loop(cfg; output_path=out)
-        res[sf] = load_state(joinpath(out, "output_00001.jld2"))
+        res[(elim, sf)] = load_state(joinpath(out, "output_00001.jld2"))
     end
-    @test all(isfinite, res[true]["pf"])
-    @test norm(res[true]["pf"] - res[false]["pf"]) > 1.0e-6 * norm(res[false]["pf"])
-    @test norm(res[true]["vx"] - res[false]["vx"]) > 1.0e-6 * norm(res[false]["vx"])
+    for elim in (false, true)
+        on, off = res[(elim, true)], res[(elim, false)]
+        @test all(isfinite, on["pf"])
+        @test !isapprox(on["pf"], off["pf"]; rtol=1.0e-6)
+        @test !isapprox(on["vx"], off["vx"]; rtol=1.0e-6)
+    end
+    # Both solver forms solve the same weighted system.
+    @test isapprox(res[(true, true)]["pf"], res[(false, true)]["pf"]; rtol=1.0e-6)
 end

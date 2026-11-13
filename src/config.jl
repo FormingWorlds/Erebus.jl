@@ -1627,6 +1627,12 @@ Check that `geometry.spherical_flow` runs only with the parts that use its face 
 
 $(SIGNATURES)
 
+# Arguments
+- `cfg`: the simulation configuration
+
+# Returns
+- `nothing`
+
 The weights enter the continuity rows of the direct solver only. The venting surface
 term is a face flux without the weight, so venting is refused with the option.
 

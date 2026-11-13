@@ -3,6 +3,13 @@ Resolve the planet centre for an assembly; the weighted rows need an explicit ce
 
 $(SIGNATURES)
 
+# Arguments
+- `xcenter`, `ycenter`: planet centre [m], or `nothing`
+- `spherical_flow`: whether the continuity rows take the spherical face weights
+
+# Returns
+- `(xc, yc)`: the centre [m]; 70000.0 for a `nothing` entry with the option off
+
 # Raises
 - `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing`.
 """
@@ -17,6 +24,18 @@ end
 Face multipliers (W, E, N, S) of one continuity row; all 1.0 when `spherical_flow` is off.
 
 $(SIGNATURES)
+
+# Arguments
+- `i`, `j`: P-cell indices of a continuity row
+- `coords`: grid coordinates
+- `spherical_flow`: whether the weights apply
+- `xc`, `yc`: planet centre [m]
+
+# Returns
+- `(mW, mE, mN, mS)`: dimensionless face multipliers
+
+# Raises
+- `DomainError` from `flow_metric_face_weights` for invalid face coordinates.
 """
 @inline function _continuity_face_weights(i, j, coords, spherical_flow::Bool, xc, yc)
     spherical_flow || return (1.0, 1.0, 1.0, 1.0)
