@@ -545,12 +545,12 @@ using Erebus
         @test all(isfinite, qxD)
         @test all(isfinite, qyD)
 
-        HS = zeros(Ny, Nx)
+        HS = zeros(Ny1, Nx1)
         SXY_test = fill(1.0e5, Ny, Nx)
         SXX_test = fill(1.0e5, Ny1, Nx1)
         Erebus.compute_shear_heating!(
             HS,
-            ETA,
+            ETA[1:Ny, 1:Nx],
             SXY_test,
             ETAP,
             SXX_test,
@@ -561,14 +561,36 @@ using Erebus
             PHI,
             ETAPHI,
             pr_test,
-            pf_test;
-            hydrofracture=true,
-            TEN=TEN_test,
-            PHIX=PHIX,
-            PHIY=PHIY,
+            pf_test,
         )
         @test all(isfinite, HS)
         @test all(HS .>= 0.0)
+        HS_dry = zeros(Ny1, Nx1)
+        Erebus.compute_shear_heating!(
+            HS_dry,
+            ETA[1:Ny, 1:Nx],
+            SXY_test,
+            ETAP,
+            SXX_test,
+            RX,
+            RY,
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            PHI,
+            ETAPHI,
+            pr_test,
+            pf_test,
+        )
+        darcy =
+            0.5 * (
+                RX[3, 2] * qxD[3, 2]^2 +
+                RX[3, 3] * qxD[3, 3]^2 +
+                RY[2, 3] * qyD[2, 3]^2 +
+                RY[3, 3] * qyD[3, 3]^2
+            )
+        # Canary: the fluxes at the node change the heating.
+        @test !isapprox(HS[3, 3], HS_dry[3, 3]; rtol=1.0e-6)
+        @test isapprox(HS[3, 3] - HS_dry[3, 3], darcy; rtol=1.0e-10)
 
         # Call with PHIX === nothing and PHI === nothing (fallback to phimin_val)
         Erebus.reconstruct_darcy_fluxes!(
@@ -590,26 +612,6 @@ using Erebus
             PHIY=nothing,
         )
         @test all(isfinite, qxD)
-
-        Erebus.compute_shear_heating!(
-            HS,
-            ETA,
-            SXY_test,
-            ETAP,
-            SXX_test,
-            RX,
-            RY,
-            qxD,
-            qyD,
-            PHI,
-            ETAPHI,
-            pr_test,
-            pf_test;
-            hydrofracture=true,
-            TEN=TEN_test,
-            PHIX=nothing,
-            PHIY=nothing,
-        )
-        @test all(isfinite, HS)
+        @test all(isfinite, qyD)
     end
 end

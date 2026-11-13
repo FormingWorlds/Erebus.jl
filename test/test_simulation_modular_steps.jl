@@ -1032,6 +1032,146 @@ using Erebus
         @test h.nstall == 1 && h.ncol == 1
     end
 
+    @testset "Darcy heating uses the resistances of the Stokes-Darcy solve" begin
+        # Fluid overpressure in one cell opens fracture faces; the heating must use the
+        # face resistances the Darcy fluxes were solved with.
+        function fractured_state(elim, theta=1.0)
+            cfg = override_config(
+                load_config(
+                    joinpath(@__DIR__, "..", "configs", "hydrothermal_benchmark.toml")
+                ),
+                Dict{String,Any}(
+                    "grid.Nx" => 9,
+                    "grid.Ny" => 9,
+                    "solver.max_plastic_iterations" => 200,
+                    "solver.darcy_elimination" => elim,
+                    "poroelasticity.theta_frac" => theta,
+                ),
+            )
+            state, coords, ws, _, _ = init_simulation(cfg)
+            Erebus.prepare_step_ambient!(state, coords, cfg, ws)
+            for m in 1:length(state.markers)
+                state.markers.core.tm[m] != 3 && (state.markers.core.tkm[m] = 350.0)
+            end
+            Erebus.radiogenic_heating!(state, coords, cfg)
+            Erebus.snapshot_radiogenic_step_start!(ws, state, cfg)
+            Erebus.interpolate_markers_to_grid!(
+                state,
+                coords,
+                cfg;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(state, coords, cfg; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(state, coords, cfg)
+            Erebus.snapshot_step_start_inventories!(ws, state, cfg)
+            Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            Erebus.update_step_start_pressures!(state)
+            state.timestep = 2
+            state.dt = 2.0e4
+            g = state.grids
+            fill!(g.TEN, 5.0e4)
+            fill!(g.COH, 2.0e5)
+            g.pf0[5, 5] = g.pr0[5, 5] + 5.0e4 + 2.0e5
+            g.pf .= g.pf0
+            g.pr .= g.pr0
+            res = Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+            return res, state, coords, ws, cfg
+        end
+
+        # Relaxed resistances (theta_frac < 1) differ from a recompute at any pressure.
+        for (elim, theta) in ((false, 1.0), (true, 1.0), (false, 0.5), (true, 0.5))
+            res, state, coords, ws, cfg = fractured_state(elim, theta)
+            # With theta_frac < 1 the plain loop does not converge; each pass still solves
+            # the Darcy law with the resistances it stores.
+            theta == 1.0 && @test res.plastic_converged
+            g = state.grids
+            Ny, Nx = size(g.HS) .- 1
+            # Canary: fracture faces are open, so the solve resistances differ from RX.
+            hm = ws.hydromech
+            @test any(
+                !isapprox(hm.rx_eff[i, j], g.RX[i, j]; rtol=1.0e-3) for i in 2:Ny, j in 1:Nx
+            )
+            Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+            HS0 = zeros(size(g.HS))
+            Erebus.compute_shear_heating!(
+                HS0,
+                g.ETA,
+                g.SXY,
+                g.ETAP,
+                g.SXX,
+                hm.rx_eff,
+                hm.ry_eff,
+                zeros(size(g.qxD)),
+                zeros(size(g.qyD)),
+                g.PHI,
+                g.ETAPHI,
+                g.pr,
+                g.pf,
+            )
+            heat = sum(g.HS[2:Ny, 2:Nx] .- HS0[2:Ny, 2:Nx])
+            # Work of the discrete Darcy law r q + grad pf = rho_f g on each face.
+            work = 0.0
+            for i in 2:Ny, j in 1:Nx
+                gradp = j < Nx ? (g.pf[i, j + 1] - g.pf[i, j]) / coords.dx : 0.0
+                work += g.qxD[i, j] * (g.RHOFX[i, j] * g.gx[i, j] - gradp)
+            end
+            for i in 1:Ny, j in 2:Nx
+                gradp = i < Ny ? (g.pf[i + 1, j] - g.pf[i, j]) / coords.dy : 0.0
+                work += g.qyD[i, j] * (g.RHOFY[i, j] * g.gy[i, j] - gradp)
+            end
+            @test isapprox(heat, work; rtol=1.0e-8)
+        end
+
+        # Before any solve the heating uses the base resistances, after it the solve ones.
+        res, state, coords, ws, cfg = fractured_state(false)
+        g = state.grids
+        rx, ry = Erebus._darcy_heating_resistances(state.grids, ws, cfg)
+        @test rx === ws.hydromech.rx_eff && ry === ws.hydromech.ry_eff
+        ws.hydromech.is_initialized = false
+        rx, ry = Erebus._darcy_heating_resistances(g, ws, cfg)
+        @test rx === g.RX && ry === g.RY
+        ws.hydromech.is_initialized = true
+        cfg_nf = override_config(
+            cfg, Dict{String,Any}("poroelasticity.hydrofracture" => false)
+        )
+        rx, ry = Erebus._darcy_heating_resistances(g, ws, cfg_nf)
+        @test rx === g.RX && ry === g.RY
+        # In both fallback cases the thermal step heats with RX and RY; NaN in the solve
+        # resistances fails a step that reads them.
+        HS_base = zeros(size(g.HS))
+        Erebus.compute_shear_heating!(
+            HS_base,
+            g.ETA,
+            g.SXY,
+            g.ETAP,
+            g.SXX,
+            g.RX,
+            g.RY,
+            g.qxD,
+            g.qyD,
+            g.PHI,
+            g.ETAPHI,
+            g.pr,
+            g.pf,
+        )
+        Ny, Nx = size(g.HS) .- 1
+        @test any(!iszero, g.qxD) && any(!iszero, g.qyD)
+        fill!(ws.hydromech.rx_eff, NaN)
+        fill!(ws.hydromech.ry_eff, NaN)
+        for (init, c) in ((false, cfg), (true, cfg_nf))
+            ws.hydromech.is_initialized = init
+            fill!(g.HS, 0.0)
+            Erebus.solve_thermal_energy!(state, coords, c, ws; titer=1)
+            @test isapprox(g.HS[2:Ny, 2:Nx], HS_base[2:Ny, 2:Nx]; rtol=1.0e-12)
+        end
+    end
+
     @testset "Setup Simulation Checkpoint Error Handling" begin
         cfg = default_config()
         @test_throws Erebus.CheckpointError init_simulation(

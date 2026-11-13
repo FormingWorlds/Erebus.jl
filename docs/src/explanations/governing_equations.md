@@ -137,7 +137,7 @@ $$\rho_{\text{total}} c_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla
 | $k$ | Bulk thermal conductivity | $\text{W}/(\text{m}\cdot\text{K})$ |
 | $Q_{\text{fluid}}$ | Pore fluid advection in the frame of the solid, $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$, first-order upwind | $\text{W/m}^3$ |
 | $Q_{\text{adiabatic}}$ | Adiabatic compression/decompression heating | $\text{W/m}^3$ |
-| $Q_{\text{shear}}$ | Viscous shear and compaction dissipation | $\text{W/m}^3$ |
+| $Q_{\text{shear}}$ | Viscous shear, compaction and Darcy friction dissipation | $\text{W/m}^3$ |
 | $\text{DHP}$ | Mineral dehydration reaction enthalpy transfer rate | $\text{W/m}^3$ |
 | $Q_{\text{radiogenic}}$ | Total radiogenic heat production rate, from the phase powers in [Radiogenic Decay Kinetics](#Radiogenic-Decay-Kinetics) | $\text{W/m}^3$ |
 | $Q_{\text{seg}}$ | Gravitational dissipation heating from metal segregation | $\text{W/m}^3$ |

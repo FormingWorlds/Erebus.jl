@@ -154,7 +154,8 @@ This volumetric sink is incorporated into the right-hand side of the thermal ene
 
 $$\rho C_p \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + H_R + H_A + H_S + Q_{\text{lat}}$$
 
-where $H_R$ is radiogenic heating, $H_A$ is adiabatic work, and $H_S$ is shear heating. Sublimation cooling acts as a strong thermostatic buffer, stabilizing surface crust against runaway heating while venting continues.
+where $H_R$ is radiogenic heating, $H_A$ is adiabatic work, and $H_S$ is shear, compaction and Darcy friction heating.
+Sublimation cooling acts as a strong thermostatic buffer, stabilizing surface crust against runaway heating while venting continues.
 
 ---
 
