@@ -1833,8 +1833,9 @@ include("test_helpers.jl")
         HS_frac = zeros(Ny1, Nx1)
         SXY_test = fill(1e5, Ny, Nx)
         SXX_test = fill(1e5, Ny1, Nx1)
-        qxD_test = fill(1e-6, Ny1, Nx1)
-        qyD_test = fill(1e-6, Ny1, Nx1)
+        # Distinct x and y fluxes that vary along the faces, so a swap of the axes fails.
+        qxD_test = [1e-6 * (1 + 0.1 * i + 0.01 * j) for i in 1:Ny1, j in 1:Nx1]
+        qyD_test = [2e-6 * (1 + 0.01 * i + 0.1 * j) for i in 1:Ny1, j in 1:Nx1]
         Erebus.compute_shear_heating!(
             HS_intact,
             ETA,
@@ -1866,6 +1867,33 @@ include("test_helpers.jl")
             pf_frac,
         )
         @test HS_frac[5, 5] < HS_intact[5, 5]
+        # The Darcy part of the heating is half of r q^2 of the four faces of the node.
+        HS_dry = zeros(Ny1, Nx1)
+        Erebus.compute_shear_heating!(
+            HS_dry,
+            ETA,
+            SXY_test,
+            ETAP,
+            SXX_test,
+            rx_frac,
+            ry_frac,
+            zeros(Ny1, Nx1),
+            zeros(Ny1, Nx1),
+            PHI,
+            ETAPHI,
+            pr,
+            pf_frac,
+        )
+        darcy =
+            0.5 * (
+                rx_frac[5, 4] * qxD_test[5, 4]^2 +
+                rx_frac[5, 5] * qxD_test[5, 5]^2 +
+                ry_frac[4, 5] * qyD_test[4, 5]^2 +
+                ry_frac[5, 5] * qyD_test[5, 5]^2
+            )
+        # Canary: the fluxes at the node change the heating.
+        @test !isapprox(HS_frac[5, 5], HS_dry[5, 5]; rtol=1e-6)
+        @test isapprox(HS_frac[5, 5] - HS_dry[5, 5], darcy; rtol=1e-10)
     end # testset "assemble_hydromechanical_lse!() dynamic hydrofracture integration"
 
     @testset "assemble_hydromechanical_lse!() Darcy thermal buoyancy integration" begin

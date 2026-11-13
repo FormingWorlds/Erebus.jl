@@ -968,49 +968,59 @@ include("test_helpers.jl")
     end # testset "compute_shear_heating!()"
 
     @testset "compute_shear_heating!(): Darcy heating of one face goes to its two nodes" begin
-        HS = zeros(Ny1, Nx1)
-        ETA = fill(1.0e20, Ny, Nx)
-        ETAP = fill(1.0e20, Ny1, Nx1)
-        PHI = fill(0.1, Ny1, Nx1)
-        ETAPHI = fill(1.0e20, Ny1, Nx1)
-        p = fill(1.0e6, Ny1, Nx1)
-        S0 = zeros(Ny, Nx)
-        P0 = zeros(Ny1, Nx1)
-        RX = fill(2.0e9, Ny1, Nx1)
-        RY = fill(3.0e9, Ny1, Nx1)
-        # Faces at the edge of the interior, at positions that differ from their transpose.
+        # Non-square grid, so that a swap of the two axes indexes a wrong node.
+        ny1, nx1 = 7, 10
+        ny, nx = ny1 - 1, nx1 - 1
+        ETA = fill(1.0e20, ny, nx)
+        ETAP = fill(1.0e20, ny1, nx1)
+        PHI = fill(0.1, ny1, nx1)
+        ETAPHI = fill(1.0e20, ny1, nx1)
+        p = fill(1.0e6, ny1, nx1)
+        S0 = zeros(ny, nx)
+        P0 = zeros(ny1, nx1)
+        RX = fill(2.0e9, ny1, nx1)
+        RY = fill(3.0e9, ny1, nx1)
+        # Interior faces at positions that differ from their transpose, and the two faces
+        # on the first row and column, which heat one interior node only.
         RX[2, 4] = 5.0e9
-        RY[4, Nx] = 7.0e9
-        qx = zeros(Ny1, Nx1)
-        qy = zeros(Ny1, Nx1)
-        qx[2, 4] = 2.0e-6
-        Erebus.compute_shear_heating!(
-            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
+        RY[4, nx] = 7.0e9
+        RX[3, 1] = 11.0e9
+        RY[1, 5] = 13.0e9
+        cases = (
+            (:x, (2, 4), 2.0e-6, 5.0e9, ((2, 4), (2, 5))),
+            (:y, (4, nx), 3.0e-6, 7.0e9, ((4, nx), (5, nx))),
+            (:x, (3, 1), 4.0e-6, 11.0e9, ((3, 2),)),
+            (:y, (1, 5), 5.0e-6, 13.0e9, ((2, 5),)),
         )
-        # The x face between nodes (2, 4) and (2, 5) heats both by half of r q^2.
-        @test isapprox(HS[2, 4], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
-        @test isapprox(HS[2, 5], 0.5 * 5.0e9 * 4.0e-12; rtol=1.0e-14)
-        @test count(!iszero, HS) == 2
-        fill!(HS, 0.0)
-        fill!(qx, 0.0)
-        qy[4, Nx] = 3.0e-6
-        Erebus.compute_shear_heating!(
-            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
-        )
-        # The y face between nodes (4, Nx) and (5, Nx) heats both by half of r q^2.
-        @test isapprox(HS[4, Nx], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
-        @test isapprox(HS[5, Nx], 0.5 * 7.0e9 * 9.0e-12; rtol=1.0e-14)
-        @test count(!iszero, HS) == 2
+        for (axis, face, q, r, nodes) in cases
+            # NaN in HS fails a kernel that adds to HS instead of setting it.
+            HS = fill(NaN, ny1, nx1)
+            qx = zeros(ny1, nx1)
+            qy = zeros(ny1, nx1)
+            (axis == :x ? qx : qy)[face...] = q
+            Erebus.compute_shear_heating!(
+                HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
+            )
+            interior = HS[2:ny, 2:nx]
+            @test all(isfinite, interior)
+            for node in nodes
+                @test isapprox(HS[node...], 0.5 * r * q^2; rtol=1.0e-14)
+            end
+            @test count(!iszero, interior) == length(nodes)
+        end
         # Every array must have the size of HS, or one less for basic-node arrays.
-        @test_throws ArgumentError Erebus.compute_shear_heating!(
-            HS, ETA, S0, ETAP, P0, RX[1:Ny, :], RY, qx, qy, PHI, ETAPHI, p, p
-        )
-        @test_throws ArgumentError Erebus.compute_shear_heating!(
-            HS, ETA, S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p[:, 1:Nx]
-        )
-        @test_throws ArgumentError Erebus.compute_shear_heating!(
-            HS, zeros(Ny1, Nx1), S0, ETAP, P0, RX, RY, qx, qy, PHI, ETAPHI, p, p
-        )
+        HS = zeros(ny1, nx1)
+        args = [
+            ETA, S0, ETAP, P0, RX, RY, zeros(ny1, nx1), zeros(ny1, nx1), PHI, ETAPHI, p, p
+        ]
+        for k in eachindex(args)
+            m, n = size(args[k])
+            for bad in (zeros(m - 1, n), zeros(m, n + 1), zeros(n, m))
+                wrong = copy(args)
+                wrong[k] = bad
+                @test_throws ArgumentError Erebus.compute_shear_heating!(HS, wrong...)
+            end
+        end
     end
 
     @testset "compute_adiabatic_heating!(): thermodynamic work and linearity" begin

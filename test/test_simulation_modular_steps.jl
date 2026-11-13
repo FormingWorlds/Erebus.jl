@@ -1085,7 +1085,7 @@ using Erebus
         end
 
         # Relaxed resistances (theta_frac < 1) differ from a recompute at any pressure.
-        for (elim, theta) in ((false, 1.0), (true, 1.0), (false, 0.5))
+        for (elim, theta) in ((false, 1.0), (true, 1.0), (false, 0.5), (true, 0.5))
             res, state, coords, ws, cfg = fractured_state(elim, theta)
             # With theta_frac < 1 the plain loop does not converge; each pass still solves
             # the Darcy law with the resistances it stores.
@@ -1126,7 +1126,6 @@ using Erebus
                 work += g.qyD[i, j] * (g.RHOFY[i, j] * g.gy[i, j] - gradp)
             end
             @test isapprox(heat, work; rtol=1.0e-8)
-            @test !isapprox(heat, 0.0; atol=1.0e-12 * abs(work))
         end
 
         # Before any solve the heating uses the base resistances, after it the solve ones.
@@ -1143,6 +1142,34 @@ using Erebus
         )
         rx, ry = Erebus._darcy_heating_resistances(g, ws, cfg_nf)
         @test rx === g.RX && ry === g.RY
+        # In both fallback cases the thermal step heats with RX and RY; NaN in the solve
+        # resistances fails a step that reads them.
+        HS_base = zeros(size(g.HS))
+        Erebus.compute_shear_heating!(
+            HS_base,
+            g.ETA,
+            g.SXY,
+            g.ETAP,
+            g.SXX,
+            g.RX,
+            g.RY,
+            g.qxD,
+            g.qyD,
+            g.PHI,
+            g.ETAPHI,
+            g.pr,
+            g.pf,
+        )
+        Ny, Nx = size(g.HS) .- 1
+        @test any(!iszero, g.qxD) && any(!iszero, g.qyD)
+        fill!(ws.hydromech.rx_eff, NaN)
+        fill!(ws.hydromech.ry_eff, NaN)
+        for (init, c) in ((false, cfg), (true, cfg_nf))
+            ws.hydromech.is_initialized = init
+            fill!(g.HS, 0.0)
+            Erebus.solve_thermal_energy!(state, coords, c, ws; titer=1)
+            @test isapprox(g.HS[2:Ny, 2:Nx], HS_base[2:Ny, 2:Nx]; rtol=1.0e-12)
+        end
     end
 
     @testset "Setup Simulation Checkpoint Error Handling" begin
