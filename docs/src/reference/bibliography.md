@@ -327,3 +327,13 @@ The mathematical foundations, constitutive formulations, and numerical technique
 - **Both, J. W., Kumar, K., Nordbotten, J. M., & Radu, F. A. (2019)**. Anderson accelerated fixed-stress splitting schemes for consolidation of unsaturated porous media. *Computers & Mathematics with Applications*, 77(6), 1479-1502.  
   [https://doi.org/10.1016/j.camwa.2018.07.033](https://doi.org/10.1016/j.camwa.2018.07.033)  
   *Anderson acceleration of coupled flow and mechanics iterations, including non-contractive fixed-point maps.*
+
+## Spherical Geometry in 2-D Models
+
+- **Hernlund, J. W., & Tackley, P. J. (2008)**. Modeling mantle convection in the spherical annulus. *Physics of the Earth and Planetary Interiors*, 171, 48-54.  
+  [https://doi.org/10.1016/j.pepi.2008.07.037](https://doi.org/10.1016/j.pepi.2008.07.037)  
+  *Continuity equation of the spherical annulus, used in the flux form of the spherical continuity rows.*
+
+- **Fleury, A., Plesa, A.-C., Hüttig, C., & Breuer, D. (2024)**. Assessing the accuracy of 2-D planetary evolution models against the 3-D sphere. *Geochemistry, Geophysics, Geosystems*, 25, e2023GC011114.  
+  [https://doi.org/10.1029/2023GC011114](https://doi.org/10.1029/2023GC011114)  
+  *Comparison of 2-D geometries, including the spherical annulus, with 3-D spherical convection.*

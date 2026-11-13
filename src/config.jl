@@ -33,6 +33,7 @@ Base.@kwdef struct GeometryConfig
     ycenter::Float64 = 70_000.0
     psurface::Float64 = 1.0e+3
     spherical_metric::Bool = true
+    spherical_flow::Bool = false
     metric_regularization_cells::Float64 = 0.5
     gravity_mode::Symbol = :enclosed_mass
     gravity_nr_factor::Int = 4
@@ -1622,6 +1623,40 @@ function _validate_solver_config(
 end
 
 """
+Check that `geometry.spherical_flow` runs only with the parts that use its face weights.
+
+$(SIGNATURES)
+
+The weights enter the continuity rows of the direct solver only. The venting surface
+term is a face flux without the weight, so venting is refused with the option.
+
+# Raises
+- `ArgumentError` if `geometry.spherical_flow = true` with `geometry.spherical_metric = false`,
+  `solver.hydromech_solver != :direct`, `mpi.enable = true` or `venting.active = true`.
+"""
+function _validate_spherical_flow(cfg::SimulationConfig)
+    cfg.geometry.spherical_flow || return nothing
+    cfg.geometry.spherical_metric || throw(
+        ArgumentError(
+            "geometry.spherical_flow = true requires geometry.spherical_metric = true"
+        ),
+    )
+    cfg.solver.hydromech_solver == :direct || throw(
+        ArgumentError(
+            "geometry.spherical_flow = true requires solver.hydromech_solver = :direct, got :$(cfg.solver.hydromech_solver)",
+        ),
+    )
+    !cfg.mpi.enable ||
+        throw(ArgumentError("geometry.spherical_flow = true requires mpi.enable = false"))
+    !cfg.venting.active || throw(
+        ArgumentError(
+            "geometry.spherical_flow = true does not support venting.active = true"
+        ),
+    )
+    return nothing
+end
+
+"""
 Validates physical bounds and numerical consistency of a `SimulationConfig`.
 
 $(SIGNATURES)
@@ -2760,6 +2795,7 @@ function validate_config(cfg::SimulationConfig)
             "escape.r_xuv_ratio must be >= 1.0 and finite, got $(cfg.escape.r_xuv_ratio)",
         ),
     )
+    _validate_spherical_flow(cfg)
 
     return nothing
 end
