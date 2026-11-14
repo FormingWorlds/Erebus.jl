@@ -1230,8 +1230,19 @@ Divergence of the solid velocity at the cells of the segregation grid; cell `(i,
 P node `(i + 1, j + 1)`. With `spherical_flow = true` the 4 face terms are multiplied by the
 face multipliers of `flow_metric_face_weights`, the divergence of the continuity rows.
 
+# Arguments
+- `div_v_cell`: output divergence at the `(Ny, Nx)` cells [1/s]
+- `vx`, `vy`: solid velocity at the Vx and Vy nodes [m/s]
+- `coords`: grid coordinates
+- `spherical_flow`: whether to use the face multipliers
+- `xcenter`, `ycenter`: planet centre [m]
+
+# Returns
+- `nothing`
+
 # Raises
 - `ArgumentError` if `spherical_flow = true` and `vx` or `vy` does not have the P grid size.
+- `DomainError` from `flow_metric_face_weights` for a non-finite centre.
 """
 function _solid_divergence_cell!(
     div_v_cell, vx, vy, coords, spherical_flow::Bool, xcenter, ycenter

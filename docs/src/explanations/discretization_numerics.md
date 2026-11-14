@@ -230,10 +230,13 @@ The following parts stay on the 2-D disk with the option on:
 
 Two other face-flux terms take the same multipliers $m_F$ of the P cell:
 
-- The venting surface flux: the conductance $C_F$ of each open surface face of a rock cell becomes $m_F C_F$, as the other faces of its fluid continuity row. The rate $m_F C_F (P_f - P_{vent})$ is a loss per 3-D volume, so the drain limit $(\phi - \phi_{min}) / \Delta t$ and the marker porosity update use it unchanged.
+- The venting surface flux: the conductance $C_F$ of each open surface face of a rock cell becomes $m_F C_F$, as the other faces of its fluid continuity row.
+  The rate $m_F C_F (P_f - P_{vent})$ is a loss per 3-D volume, so the drain limit $(\phi - \phi_{min}) / \Delta t$ and the marker porosity update use it unchanged.
 - The solid divergence of the compaction pressure in the melt segregation: $\nabla \cdot \mathbf{v}_s$ is the weighted divergence of the continuity rows.
 
-The fluid heat advection keeps the 2-D form. Its upwind term is the advective form $\rho c_{p,f} \mathbf{q} \cdot \nabla T$, which has no divergence; with $m_F$ on its inflow faces it has the error $(m_W - 1)\, q\, \partial_x T$, which does not fall with the grid spacing near the centre.
+The fluid heat advection keeps the 2-D form.
+Its upwind term is the advective form $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$, which has no divergence.
+With $m_F$ on its inflow faces, a flow $q_{xD} > 0$ in $x$ gives the term $-m_W (\rho c_p)_f\, q_{xD}\, \partial_x T$, an error of $(m_W - 1)$ times the term that does not fall with the grid spacing near the centre.
 
 The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true`.
 The config validation and the hydromechanical solve both check this.
@@ -491,7 +494,7 @@ Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phas
 - **2-D Geometry Proxy**:
   The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
   The defaults bring heat conduction, inventories and gravity close to a sphere.
-  Flow is 2-D by default; `geometry.spherical_flow = true` makes the continuity rows ([Spherical Face Weights in the Continuity Rows](#Spherical-Face-Weights-in-the-Continuity-Rows)) and the momentum rows ([Spherical Momentum and the Out-of-Plane Stress](#Spherical-Momentum-and-the-Out-of-Plane-Stress)) spherical.
+  Flow is 2-D by default; `geometry.spherical_flow = true` makes the continuity rows ([Spherical Face Weights in the Continuity Rows](#Spherical-Face-Weights-in-the-Continuity-Rows)), the momentum rows, the venting surface flux and the compaction divergence ([Spherical Momentum and the Out-of-Plane Stress](#Spherical-Momentum-and-the-Out-of-Plane-Stress)) spherical.
   `geometry.spherical_metric = true` adds the radial conduction term of a sphere and weights metal and melt inventories by the out-of-plane length $w_{\text{3D}} = 2r$.
   `geometry.gravity_mode = :enclosed_mass` gives the radial gravity of the enclosed mass.
   Set `spherical_metric = false` and `gravity_mode = :poisson2d` for a 2-D disk, as the hydrothermal benchmark configs do.

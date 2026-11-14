@@ -68,6 +68,7 @@ end
         @test any(==(2), nf)
         L0, R0, S0 = _sff_vent(coords, rp, xc, yc)
         L1, R1, S1 = _sff_vent(coords, rp, xc, yc; spherical_flow=true)
+        @test_throws ArgumentError _sff_vent(coords, rp, NaN, yc; spherical_flow=true)
         k(i, j) = ((j - 1) * coords.Ny1 + i - 1) * 6 + 6
         for j in 1:coords.Nx1, i in 1:coords.Ny1
             if nf[i, j] == 0
@@ -153,24 +154,40 @@ end
         @test_throws ArgumentError div!(
             zeros(coords.Ny, coords.Nx), vx[1:(end - 1), :], vy, coords, true, xc, yc
         )
+        @test_throws ArgumentError div!(
+            zeros(coords.Ny, coords.Nx), vx, vy[:, 1:(end - 1)], coords, true, xc, yc
+        )
+        @test_throws DomainError div!(
+            zeros(coords.Ny, coords.Nx), vx, vy, coords, true, NaN, yc
+        )
+
+        # Option off: smaller arrays take the one-sided and central differences.
+        Ny, Nx = coords.Ny, coords.Nx
+        for (sx, sy) in (((Ny, Nx + 1), (Ny + 1, Nx)), ((Ny, Nx), (Ny, Nx)))
+            ux = [a * j * coords.dx for i in 1:sx[1], j in 1:sx[2]]
+            uy = [a * i * coords.dy for i in 1:sy[1], j in 1:sy[2]]
+            D = fill(NaN, Ny, Nx)
+            div!(D, ux, uy, coords, false, xc, yc)
+            @test all(d -> isapprox(d, 2a; rtol=1e-10), D)
+        end
     end
 
     @testset "segregation step uses the weighted divergence" begin
         coords = Erebus.GridCoordinates(17, 17; xsize=100_000.0, ysize=100_000.0)
         xc, yc = 51_300.0, 48_700.0
-        a = 3.0e-14
+        a = -3.0e-14
         Ny1, Nx1 = coords.Ny1, coords.Nx1
         vx = [a * (coords.xvx[j] - xc) for i in 1:Ny1, j in 1:Nx1]
         vy = [a * (coords.yvy[i] - yc) for i in 1:Ny1, j in 1:Nx1]
         cfg = MagmaTransportConfig(; active=true, compaction_active=true)
         function run(on)
             ws = Erebus.MagmaSegregationWorkspace(coords.Ny, coords.Nx)
-            Erebus.apply_silicate_melt_segregation!(
+            out = Erebus.apply_silicate_melt_segregation!(
                 [xc],
                 [yc],
                 [1],
-                [300.0],
-                [0.0],
+                [1500.0],
+                [0.2],
                 1,
                 1.0e10,
                 cfg;
@@ -183,10 +200,14 @@ end
                 spherical_flow=on,
                 workspace=ws,
             )
-            return copy(ws.div_v)
+            return copy(ws.div_v), out.max_compaction_pressure
         end
-        @test all(d -> isapprox(d, 3a; rtol=1e-10), run(true))
-        @test all(d -> isapprox(d, 2a; rtol=1e-10), run(false))
+        (d1, p1), (d0, p0) = run(true), run(false)
+        @test all(d -> isapprox(d, 3a; rtol=1e-10), d1)
+        @test all(d -> isapprox(d, 2a; rtol=1e-10), d0)
+        # P_comp = -zeta div_v at the melt cell.
+        @assert p0 > 0
+        @test p1 ≈ 1.5 * p0 rtol = 1e-10
         @test_throws ArgumentError Erebus.apply_silicate_melt_segregation!(
             [xc],
             [yc],
@@ -223,5 +244,54 @@ end
         S = st.grids.S_vent_grid
         @test all(isfinite, S)
         @test any(>(0), S)
+    end
+
+    @testset "simulation steps pass spherical_flow" begin
+        base = load_config(joinpath(@__DIR__, "..", "configs", "test_quick.toml"))
+        on = Dict{String,Any}(
+            "geometry.spherical_metric" => true,
+            "geometry.spherical_flow" => true,
+            "venting.active" => true,
+            "melting.active" => true,
+            "magma_transport.active" => true,
+            "magma_transport.compaction_active" => true,
+        )
+        cfg1 = override_config(base, on)
+        cfg0 = override_config(cfg1, Dict{String,Any}("geometry.spherical_flow" => false))
+        state, coords, ws, tio, _ = Erebus.init_simulation(cfg1; output_path=mktempdir())
+        tio === nothing || close(tio)
+        g = state.grids
+        acc = state.accumulators
+        xc, yc, rp = acc.xcenter, acc.ycenter, acc.rplanet
+
+        # Venting rate after the solve.
+        g.tk1 .= 250.0
+        # pf above P_vent, but low enough to stay below the drain limit.
+        g.pf .= 2.0e3
+        g.pr .= 2.5e6
+        g.TEN .= 6.0e7
+        g.PHI .= 0.5
+        Erebus._refresh_venting_rate!(state, coords, cfg1)
+        S1 = copy(g.S_vent_grid)
+        Erebus._refresh_venting_rate!(state, coords, cfg0)
+        S0 = copy(g.S_vent_grid)
+        msum, nf = _sff_face_sums(coords, rp, xc, yc)
+        open_ = nf .> 0
+        @test count(open_) > 20
+        @test all(S0[open_] .< (0.5 - cfg1.poroelasticity.phimin) / state.dt)
+        @test all(iszero, S1[.!open_])
+        @test S1[open_] ≈ (msum[open_] ./ nf[open_]) .* S0[open_] rtol = 1e-12
+
+        # Segregation step: the compaction divergence of a uniform dilation.
+        a = 3.0e-14
+        for i in 1:coords.Ny1, j in 1:coords.Nx1
+            g.vx[i, j] = a * (coords.xvx[j] - xc)
+            g.vy[i, j] = a * (coords.yvy[i] - yc)
+        end
+        n = length(state.markers)
+        Erebus._run_magma_segregation_step!(state, coords, cfg1, ws, n)
+        @test all(d -> isapprox(d, 3a; rtol=1e-10), ws.magma_segregation.div_v)
+        Erebus._run_magma_segregation_step!(state, coords, cfg0, ws, n)
+        @test all(d -> isapprox(d, 2a; rtol=1e-10), ws.magma_segregation.div_v)
     end
 end

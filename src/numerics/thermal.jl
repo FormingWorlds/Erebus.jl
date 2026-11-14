@@ -458,7 +458,8 @@ function compute_face_venting_permeability(
     end
 end
 
-# Face multiplier `mF` (side 1 to 4: W, E, N, S) of rock cell (i, j) with `spherical_flow`, else 1.
+# Face multiplier `mF` (dimensionless; side 1 to 4: W, E, N, S) of rock cell (i, j) with
+# `spherical_flow`, else 1; `flow_metric_face_weights` throws for a non-finite centre.
 @inline function _venting_face_weight(on::Bool, i, j, side::Int, coords, xc, yc)
     on || return 1.0
     return flow_metric_face_weights(i, j, coords; xcenter=xc, ycenter=yc)[side]
@@ -489,7 +490,8 @@ When overpressure breaches the lid (`Peff <= -sigma_t` and `hydrofracture === tr
 `mode === :hydrofracture_gated`), enhanced hydrofracture permeability opens.
 Only outward venting is permitted (`pf > P_vent`), and venting is fluid-limited (`phi > phimin`).
 With `spherical_flow = true` the conductance of each face is multiplied by the face multiplier
-`mF` of the rock cell (`flow_metric_face_weights`), as the other faces of its continuity row.
+`mF` of the rock cell (`flow_metric_face_weights`), as the other faces of its continuity row;
+it throws an `ArgumentError` for a non-finite `xcenter` or `ycenter`.
 """
 function apply_venting_surface_boundary!(
     L,
@@ -526,6 +528,9 @@ function apply_venting_surface_boundary!(
     dof_stride::Int=6,
     spherical_flow::Bool=false,
 )
+    spherical_flow &&
+        !(isfinite(xcenter) && isfinite(ycenter)) &&
+        throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx = coords.dx
     dy = coords.dy

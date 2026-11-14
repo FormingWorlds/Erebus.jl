@@ -6,8 +6,8 @@ Assemble and solve the coupled Stokes-Darcy linear system of equations.
 $(SIGNATURES)
 
 # Raises
-- `ArgumentError` if `cfg.geometry.spherical_flow = true` with a solver, metric, MPI or
-  venting setting that `_validate_spherical_flow` refuses.
+- `ArgumentError` if `cfg.geometry.spherical_flow = true` with a solver, metric or MPI
+  setting that `_validate_spherical_flow` refuses.
 """
 function assemble_and_solve_hydromechanical!(
     state::SimulationState,
@@ -1014,41 +1014,7 @@ function solve_stokes_darcy!(
         )
     end
 
-    if cfg.venting.active
-        apply_venting_surface_boundary!(
-            nothing,
-            nothing,
-            g.tk1,
-            coords,
-            state.accumulators.rplanet,
-            state.accumulators.xcenter,
-            state.accumulators.ycenter,
-            state.accumulators.P_amb;
-            species=cfg.venting.species,
-            k_vent=cfg.venting.k_vent,
-            conductance_factor=cfg.venting.conductance_factor,
-            mode=cfg.venting.mode,
-            hydrofracture=cfg.poroelasticity.hydrofracture,
-            ice_sealing=cfg.venting.ice_sealing,
-            t_freeze=cfg.venting.t_freeze,
-            dt_seal=cfg.venting.dt_seal,
-            k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
-            kappa_frac=cfg.poroelasticity.kappa_frac,
-            gamma_frac=cfg.poroelasticity.gamma_frac,
-            k_frac_max=cfg.poroelasticity.k_frac_max,
-            ramp_width=cfg.poroelasticity.ramp_width,
-            pr=g.pr,
-            pf=g.pf,
-            TEN=g.TEN,
-            PHI=g.PHI,
-            phimin=cfg.poroelasticity.phimin,
-            dt=state.dt,
-            eta_fluid_surf=cfg.materials.etafluidmm[2],
-            L_sub=cfg.venting.L_sublimation,
-            S_vent_out=g.S_vent_grid,
-            spherical_flow=cfg.geometry.spherical_flow,
-        )
-    end
+    cfg.venting.active && _refresh_venting_rate!(state, coords, cfg)
 
     return (;
         plastic_converged=true,
@@ -1058,4 +1024,51 @@ function solve_stokes_darcy!(
         n_flips_last=n_flips_last,
         n_flips_step_total=n_flips_step_total,
     )
+end
+
+"""
+    _refresh_venting_rate!(state, coords, cfg)
+
+Recompute the venting loss rate `state.grids.S_vent_grid` [1/s] from the solved pressures,
+with the face multipliers of `geometry.spherical_flow` as in the assembly.
+
+# Returns
+- `nothing`
+"""
+function _refresh_venting_rate!(state, coords, cfg)
+    g = state.grids
+    apply_venting_surface_boundary!(
+        nothing,
+        nothing,
+        g.tk1,
+        coords,
+        state.accumulators.rplanet,
+        state.accumulators.xcenter,
+        state.accumulators.ycenter,
+        state.accumulators.P_amb;
+        species=cfg.venting.species,
+        k_vent=cfg.venting.k_vent,
+        conductance_factor=cfg.venting.conductance_factor,
+        mode=cfg.venting.mode,
+        hydrofracture=cfg.poroelasticity.hydrofracture,
+        ice_sealing=cfg.venting.ice_sealing,
+        t_freeze=cfg.venting.t_freeze,
+        dt_seal=cfg.venting.dt_seal,
+        k_seal_min_ratio=cfg.venting.k_seal_min_ratio,
+        kappa_frac=cfg.poroelasticity.kappa_frac,
+        gamma_frac=cfg.poroelasticity.gamma_frac,
+        k_frac_max=cfg.poroelasticity.k_frac_max,
+        ramp_width=cfg.poroelasticity.ramp_width,
+        pr=g.pr,
+        pf=g.pf,
+        TEN=g.TEN,
+        PHI=g.PHI,
+        phimin=cfg.poroelasticity.phimin,
+        dt=state.dt,
+        eta_fluid_surf=cfg.materials.etafluidmm[2],
+        L_sub=cfg.venting.L_sublimation,
+        S_vent_out=g.S_vent_grid,
+        spherical_flow=cfg.geometry.spherical_flow,
+    )
+    return nothing
 end

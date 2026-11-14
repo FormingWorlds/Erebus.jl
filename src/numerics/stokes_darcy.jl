@@ -106,7 +106,7 @@ $(SIGNATURES)
 
 # Raises
 
-    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - ArgumentError: `spherical_flow = true` without a finite centre
     - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_lse!(
@@ -914,7 +914,7 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
 
 # Raises
 
-    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - ArgumentError: `spherical_flow = true` without a finite centre
     - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_4var_lse!(
