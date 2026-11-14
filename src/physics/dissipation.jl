@@ -42,6 +42,7 @@ function compute_shear_heating!(
         ("ETAPHI", ETAPHI),
         ("pr", pr),
         ("pf", pf),
+        ("S33", something(S33, HS)),
     )
         size(A) == (Ny1, Nx1) ||
             throw(ArgumentError("$name has size $(size(A)), HS has size $((Ny1, Nx1))"))

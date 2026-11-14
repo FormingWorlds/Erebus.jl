@@ -733,11 +733,17 @@ the 2-D terms already; this function adds the difference, so `P_t` stays unweigh
 
 # Returns
 - `nothing`
+
+# Throws
+- `DimensionMismatch` if `S330` is not of the P-node size `(Ny1, Nx1)`
 """
 function _add_spherical_momentum!(
     L, R, nv::Int, coords, xc, yc, ETA, ETAP, GGG, GGGP, dt; SXX0, SXY0, S330=nothing
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
+    S330 === nothing ||
+        size(S330) == (Ny1, Nx1) ||
+        throw(DimensionMismatch("S330 has size $(size(S330)), expected $((Ny1, Nx1))"))
     dx, dy = coords.dx, coords.dy
     col(i, j, c) = ((j - 1) * Ny1 + i - 1) * nv + c
     ve(e, g) = e * g * dt / (g * dt + e)

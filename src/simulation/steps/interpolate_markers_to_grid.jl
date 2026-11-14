@@ -147,7 +147,7 @@ function interpolate_markers_to_grid!(
     inv_gggtotalm = core.inv_gggtotalm
     sxym = core.sxym
     sxxm = core.sxxm
-    s33m = core.s33m
+    s33m = cfg.geometry.spherical_flow ? core.s33m : nothing
     cohestotalm = core.cohestotalm
     tenstotalm = core.tenstotalm
     fricttotalm = core.fricttotalm
@@ -836,8 +836,8 @@ function interpolate_markers_to_grid!(
         grids.tk1,
         grids.PHI,
         grids.BETAPHI;
-        S33SUM=S33SUM,
-        S330=grids.S330,
+        S33SUM=cfg.geometry.spherical_flow ? S33SUM : nothing,
+        S330=cfg.geometry.spherical_flow ? grids.S330 : nothing,
     )
 
     # Boundary conditions
@@ -903,7 +903,7 @@ function _scatter_tiled_p2m_tile!(
     inv_gggtotalm = core.inv_gggtotalm
     sxym = core.sxym
     sxxm = core.sxxm
-    s33m = core.s33m
+    s33m = cfg.geometry.spherical_flow ? core.s33m : nothing
     cohestotalm = core.cohestotalm
     tenstotalm = core.tenstotalm
     fricttotalm = core.fricttotalm

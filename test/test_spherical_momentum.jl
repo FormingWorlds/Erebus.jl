@@ -285,8 +285,8 @@ end
     )
     @test isapprox(g.EII[i, j], sqrt(g.EXX[i, j]^2 + eavg^2); rtol=1.0e-9)
     # Ghost rows copy the interior like SXX.
-    @test g.S33[1, 5] == g.S33[2, 5]
-    @test g.S33[5, Nx1] == g.S33[5, Nx1 - 1]
+    @test isequal(g.S33[1, 5], g.S33[2, 5])
+    @test isequal(g.S33[5, Nx1], g.S33[5, Nx1 - 1])
     # Radial flow C r_hat / r^2: tau_33 = 2 eta C / r^3 (viscous limit).
     C = 1.0e-9 * 40000.0^3
     vel(x, y) =
@@ -349,7 +349,8 @@ end
     Erebus.compute_shear_heating!(args(H0)...)
     Erebus.compute_shear_heating!(args(H1)...; S33=s33)
     @test isapprox(H1[3, 4] - H0[3, 4], 0.75 * s33[3, 4]^2 / 2.0e19; rtol=1.0e-9)
-    @test H1[1, 1] == H0[1, 1]
+    @test isequal(H1[1, 1], H0[1, 1])
+    @test_throws ArgumentError Erebus.compute_shear_heating!(args(H1)...; S33=zeros(2, 2))
 end
 
 @testset "Out-of-plane stress history in the momentum right-hand side" begin
@@ -401,4 +402,61 @@ end
     @test all(iszero, res[false]["S33"])
     @test all(isfinite, res[true]["S33"])
     @test maximum(abs, res[true]["S33"]) > 1.0e-3 * maximum(abs, res[true]["SXX"])
+end
+
+@testset "Stress history of all components in both momentum rows" begin
+    eta, dt, A, L0 = 1.0e19, 1.0e10, 1.0e6, 40000.0
+    errs = Dict(1 => Float64[], 2 => Float64[])
+    for N in (33, 65)
+        coords, xc, yc = _smo_grid(N)
+        Ny1, Nx1 = coords.Ny1, coords.Nx1
+        sxx(x, y) = A * (1 + (x - xc) / L0)
+        sxy(x, y) = A * (0.2 + 0.7 * (y - yc) / L0)
+        s33(x, y) = A * (0.5 + (x - xc) * (y - yc) / L0^2)
+        f = merge(
+            _smo_fields(coords, fill(eta, Ny1, Nx1), fill(eta, Ny1, Nx1)),
+            (
+                GGG=fill(eta / dt, Ny1, Nx1),
+                GGGP=fill(eta / dt, Ny1, Nx1),
+                SXX0=[sxx(coords.xp[j], coords.yp[i]) for i in 1:Ny1, j in 1:Nx1],
+                SXY0=[sxy(coords.xvx[j], coords.yvy[i]) for i in 1:Ny1, j in 1:Nx1],
+            ),
+        )
+        S330 = [s33(coords.xp[j], coords.yp[i]) for i in 1:Ny1, j in 1:Nx1]
+        _, R = _smo_assemble(
+            6, coords, f; spherical_flow=true, xcenter=xc, ycenter=yc, S330=S330
+        )
+        # Continuum force of the history stress; R holds -chi times it (chi = 1/2).
+        function force(x, y, c; h=1.0)
+            txx(x, y) = sxx(x, y) - s33(x, y) / 2
+            tyy(x, y) = -sxx(x, y) - s33(x, y) / 2
+            X, Y = x - xc, y - yc
+            r2 = X^2 + Y^2
+            if c == 1
+                return (txx(x + h, y) - txx(x - h, y)) / (2h) +
+                       (sxy(x, y + h) - sxy(x, y - h)) / (2h) +
+                       (txx(x, y) * X + sxy(x, y) * Y) / r2 - s33(x, y) * X / r2
+            end
+            return (sxy(x + h, y) - sxy(x - h, y)) / (2h) +
+                   (tyy(x, y + h) - tyy(x, y - h)) / (2h) +
+                   (sxy(x, y) * X + tyy(x, y) * Y) / r2 - s33(x, y) * Y / r2
+        end
+        for c in (1, 2)
+            num, den = 0.0, 0.0
+            for j in 2:(Nx1 - 2), i in 2:(Ny1 - 2)
+                k = ((j - 1) * Ny1 + i - 1) * 6 + c
+                x, y =
+                    c == 1 ? (coords.xvx[j], coords.yvx[i]) : (coords.xvy[j], coords.yvy[i])
+                15000.0 < hypot(x - xc, y - yc) < 50000.0 || continue
+                ref = -0.5 * force(x, y, c)
+                num += (R[k] - ref)^2
+                den += ref^2
+            end
+            push!(errs[c], sqrt(num / den))
+        end
+    end
+    for c in (1, 2)
+        @test 3.6 < errs[c][1] / errs[c][2] < 4.4
+        @test isapprox(errs[c][2], 0.0; atol=1.0e-2)
+    end
 end

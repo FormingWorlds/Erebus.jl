@@ -662,7 +662,9 @@ function save_state(
         DQPF,
         XWS,
         XWsolidm0,
-        (S33 !== nothing ? (; S33, S330, DS33) : (;))...,
+        (S33 !== nothing ? (; S33) : (;))...,
+        (S330 !== nothing ? (; S330) : (;))...,
+        (DS33 !== nothing ? (; DS33) : (;))...,
         marker_props...,
         (transfer_log !== nothing ? (; transfer_log) : (;))...,
         (

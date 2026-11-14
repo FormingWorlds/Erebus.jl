@@ -9,6 +9,7 @@ $(SIGNATURES)
 - `core`: `CoreGroup` holding the marker τ33 vector `s33m` [Pa]
 - `g`: `GridArrays` holding `S330` and `DS33` at P nodes [Pa]
 - `interp_arrays`: 34-tuple of interpolation accumulators from `setup_interpolated_properties`
+- `on`: `cfg.geometry.spherical_flow`; with `false` every entry is `nothing`
 
 # Returns
 - `NamedTuple` with `s33m`, `S330`, `DS33` and `S33SUM`
@@ -16,7 +17,8 @@ $(SIGNATURES)
 # Throws
 - `BoundsError` if `interp_arrays` has fewer than 34 elements
 """
-function s33_stress_kwargs(core::CoreGroup, g::GridArrays, interp_arrays::Tuple)
+function s33_stress_kwargs(core::CoreGroup, g::GridArrays, interp_arrays::Tuple, on::Bool)
+    on || return (; s33m=nothing, S330=nothing, DS33=nothing, S33SUM=nothing)
     return (; s33m=core.s33m, S330=g.S330, DS33=g.DS33, S33SUM=interp_arrays[34])
 end
 
@@ -133,7 +135,7 @@ function diffuse_and_update_markers!(
         WTPSUM,
     ) = interp_arrays
 
-    s33_kw = s33_stress_kwargs(core, g, interp_arrays)
+    s33_kw = s33_stress_kwargs(core, g, interp_arrays, cfg.geometry.spherical_flow)
     apply_subgrid_stress_diffusion!(
         core.xm,
         core.ym,

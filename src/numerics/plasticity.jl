@@ -316,7 +316,7 @@ $(SIGNATURES)
     - YNY5: plastic iterations plastic yielding status at basic nodes
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
     - DSY: (SIIB-syield) at basic nodes
-    - S33: out-of-plane deviatoric stress at P nodes (keyword), or `nothing`
+    - S33: out-of-plane deviatoric stress at P nodes (keyword), or `nothing`; a size other than that of SXX throws `DimensionMismatch`
     - dt: time set
     - iplast: plastic iteration step 
 
@@ -350,6 +350,9 @@ function compute_nodal_adjustment!(
     max_plastic_iterations::Int=10_000,
     nplast::Union{Int,Nothing}=nothing,
 )
+    S33 === nothing ||
+        size(S33) == size(SXX) ||
+        throw(DimensionMismatch("S33 has size $(size(S33)), SXX has size $(size(SXX))"))
     # reset / setup
     Ny, Nx = size(ETA)
     ETA5 .= ETA0

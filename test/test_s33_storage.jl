@@ -26,8 +26,10 @@ end
 
     @testset "marker to grid interpolation gives S330 = c" begin
         c = 3.7e5
-        for mode in (:buffered, :tiled)
-            cfg, state, coords, ws = _s33_state(Dict{String,Any}("solver.p2m_mode" => mode))
+        for mode in (:buffered, :tiled), on in (true, false)
+            cfg, state, coords, ws = _s33_state(
+                Dict{String,Any}("solver.p2m_mode" => mode, "geometry.spherical_flow" => on)
+            )
             state.markers.core.s33m .= c
             state.grids.S330 .= -1.0
             interpolate_markers_to_grid!(
@@ -41,8 +43,13 @@ end
             WTPSUM = ws.interp_arrays[33]
             filled = WTPSUM .> 0.0
             @test any(filled)
-            @test all(isapprox.(state.grids.S330[filled], c; rtol=1.0e-12))
-            @test all(iszero, state.grids.S330[.!filled])
+            if on
+                @test all(isapprox.(state.grids.S330[filled], c; rtol=1.0e-12))
+                @test all(iszero, state.grids.S330[.!filled])
+            else
+                # With the option off the S33 transfer does not run.
+                @test all(isequal(-1.0), state.grids.S330)
+            end
         end
     end
 
