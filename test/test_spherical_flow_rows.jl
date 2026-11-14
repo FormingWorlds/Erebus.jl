@@ -355,6 +355,33 @@ end
     end
 end
 
+@testset "spherical_flow restart refusal" begin
+    cfg = override_config(
+        load_config("configs/test_quick.toml"),
+        Dict{String,Any}(
+            "geometry.spherical_metric" => true,
+            "geometry.spherical_flow" => false,
+            "time.n_steps" => 1,
+            "output.savematstep" => 1,
+        ),
+    )
+    out = mktempdir()
+    simulation_loop(cfg; output_path=out)
+    path = joinpath(out, "output_00001.jld2")
+    @test Erebus.load_simulation_state(path; cfg=cfg)[1].timestep == 1
+    cfg_on = override_config(cfg, Dict{String,Any}("geometry.spherical_flow" => true))
+    for force in (false, true)
+        err = try
+            Erebus.load_simulation_state(path; cfg=cfg_on, force_restart_config=force)
+            nothing
+        catch e
+            e
+        end
+        @test err isa Erebus.CheckpointError
+        @test occursin("geometry.spherical_flow", sprint(showerror, err))
+    end
+end
+
 @testset "solve_stokes_darcy! passes spherical_flow to the assembly" begin
     base = load_config("configs/test_quick.toml")
     res = Dict{Tuple{Bool,Bool},Any}()
