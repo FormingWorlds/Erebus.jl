@@ -147,10 +147,10 @@ end
                 @test isequal(R1[k], R0[k])
             end
         end
-        # Momentum rows are unchanged.
+        # Momentum rows take the spherical terms (test/test_spherical_momentum.jl).
         kvx = ((j_c - 1) * Ny1 + i_c - 1) * 6 + 1
-        @test isequal(L1[kvx, :], L0[kvx, :])
-        @test isequal(L1[kvx + 1, :], L0[kvx + 1, :])
+        @test !isequal(L1[kvx, :], L0[kvx, :])
+        @test !isequal(L1[kvx + 1, :], L0[kvx + 1, :])
     end
 
     @testset "4-variable rows and the gravity part of the right-hand side" begin
