@@ -560,6 +560,7 @@ function init_simulation(
             ),
         )
     end
+    _validate_spherical_flow(cfg)
     coords, formatted_output_path = setup_simulation_grid_and_coords(
         cfg; output_path=output_path
     )

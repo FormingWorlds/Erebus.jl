@@ -1,4 +1,73 @@
 """
+Resolve the planet centre for an assembly; the weighted rows need an explicit centre.
+
+$(SIGNATURES)
+
+# Arguments
+- `xcenter`, `ycenter`: planet centre [m], or `nothing`
+- `spherical_flow`: whether the continuity rows take the spherical face weights
+- `venting`: whether the assembly adds the venting surface term
+- `coords`: grid coordinates
+- `gridsize`: `(Ny1, Nx1)` of the field arrays
+
+# Returns
+- `(xc, yc)`: the centre [m]; 70000.0 for a `nothing` entry with the option off
+
+# Raises
+- `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing` or not
+  finite, or `venting = true`.
+- `DimensionMismatch` if `spherical_flow = true` and `coords` or the lengths of its `yvy`,
+  `yp`, `xvx` and `xp` do not match `gridsize`.
+"""
+function _assembly_centre(
+    xcenter, ycenter, spherical_flow::Bool, venting::Bool, coords, gridsize
+)
+    if spherical_flow
+        (xcenter === nothing || ycenter === nothing) &&
+            throw(ArgumentError("spherical_flow = true needs xcenter and ycenter"))
+        (isfinite(xcenter) && isfinite(ycenter)) ||
+            throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
+        venting && throw(ArgumentError("spherical_flow = true does not support venting"))
+        lens = (
+            length(coords.yvy), length(coords.yp), length(coords.xvx), length(coords.xp)
+        )
+        (
+            gridsize == (coords.Ny1, coords.Nx1) &&
+            lens == (gridsize[1], gridsize[1], gridsize[2], gridsize[2])
+        ) || throw(
+            DimensionMismatch(
+                "field size $gridsize does not match coords $((coords.Ny1, coords.Nx1)) " *
+                "with yvy, yp, xvx, xp lengths $lens",
+            ),
+        )
+    end
+    return (something(xcenter, 70000.0), something(ycenter, 70000.0))
+end
+
+"""
+Face multipliers (W, E, N, S) of one continuity row; all 1.0 when `spherical_flow` is off.
+
+$(SIGNATURES)
+
+# Arguments
+- `i`, `j`: P-cell indices of a continuity row
+- `coords`: grid coordinates
+- `spherical_flow`: whether the weights apply
+- `xc`, `yc`: planet centre [m]
+
+# Returns
+- `(mW, mE, mN, mS)`: dimensionless face multipliers
+
+# Raises
+- `DomainError` from `flow_metric_face_weights` for invalid face coordinates.
+"""
+@inline function _continuity_face_weights(i, j, coords, spherical_flow::Bool, xc, yc)
+    spherical_flow || return (1.0, 1.0, 1.0, 1.0)
+    mW, mE, mN, mS, _ = flow_metric_face_weights(i, j, coords; xcenter=xc, ycenter=yc)
+    return (mW, mE, mN, mS)
+end
+
+"""
 Assemble hydromechanical system of equations.
 
 $(SIGNATURES)
@@ -30,10 +99,17 @@ $(SIGNATURES)
     - coords: grid coordinates
     - L: optional ExtendableSparseMatrix buffer to reuse
     - psurface: surface pressure boundary condition [Pa]
+    - spherical_flow: multiply the 4 face terms of each continuity row by the
+      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
 
 # Returns
 
     - L: LHS coefficient matrix (SparseMatrixCSC)
+
+# Raises
+
+    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_lse!(
     ETA,
@@ -94,8 +170,9 @@ function assemble_hydromechanical_lse!(
     dt_seal::Real=10.0,
     k_seal_min_ratio::Real=1.0e-6,
     rplanet::Real=50000.0,
-    xcenter::Real=70000.0,
-    ycenter::Real=70000.0,
+    xcenter::Union{Real,Nothing}=nothing,
+    ycenter::Union{Real,Nothing}=nothing,
+    spherical_flow::Bool=false,
     P_amb::Real=10.0,
     venting_species::Symbol=:H2O,
     tk=nothing,
@@ -110,6 +187,9 @@ function assemble_hydromechanical_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
+    xc_val, yc_val = _assembly_centre(
+        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
+    )
     @unpack_coords coords dx dy
 
     # initialize or reuse LHS sparse coefficient matrix
@@ -378,11 +458,14 @@ function assemble_hydromechanical_lse!(
                 updateindex!(L, +, Kcont, kpm, kpm)
                 R[kpm] = psurface
             else
-                # Solid continuity internal stencil: ∂Vx/∂x + ∂Vy/∂y = 0
-                updateindex!(L, +, -1.0/dx_val, kpm, kvx-6*Ny1) # Vx₁
-                updateindex!(L, +, 1.0/dx_val, kpm, kvx) # Vx₂
-                updateindex!(L, +, -1.0/dy_val, kpm, kvy-6) # Vy₁
-                updateindex!(L, +, 1.0/dy_val, kpm, kvy) # Vy₂
+                # Solid continuity internal stencil: ∂Vx/∂x + ∂Vy/∂y = 0 (face weights: flux form)
+                mW, mE, mN, mS = _continuity_face_weights(
+                    i, j, coords, spherical_flow, xc_val, yc_val
+                )
+                updateindex!(L, +, -mW/dx_val, kpm, kvx-6*Ny1) # Vx₁
+                updateindex!(L, +, mE/dx_val, kpm, kvx) # Vx₂
+                updateindex!(L, +, -mN/dy_val, kpm, kvy-6) # Vy₁
+                updateindex!(L, +, mS/dy_val, kpm, kvy) # Vy₂
                 # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
                 betadrained = compute_drained_compressibility(
                     BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -547,11 +630,13 @@ function assemble_hydromechanical_lse!(
                 R[kpf] = psurface
             else
                 # Fluid continuity internal stencil: ∂qxD/∂x + ∂qyD/∂y - (Pt - Pf)/η_ϕ = 0
-                # LHS coefficient matrix
-                updateindex!(L, +, -inv(dx_val), kpf, kqx-6*Ny1) # qxD₁
-                updateindex!(L, +, inv(dx_val), kpf, kqx) # qxD₂
-                updateindex!(L, +, -inv(dy_val), kpf, kqy-6) # qyD₁
-                updateindex!(L, +, inv(dy_val), kpf, kqy) # qyD₂
+                mW, mE, mN, mS = _continuity_face_weights(
+                    i, j, coords, spherical_flow, xc_val, yc_val
+                )
+                updateindex!(L, +, -mW*inv(dx_val), kpf, kqx-6*Ny1) # qxD₁
+                updateindex!(L, +, mE*inv(dx_val), kpf, kqx) # qxD₂
+                updateindex!(L, +, -mN*inv(dy_val), kpf, kqy-6) # qyD₁
+                updateindex!(L, +, mS*inv(dy_val), kpf, kqy) # qyD₂
 
                 # LHS coefficient matrix
                 updateindex!(
@@ -586,8 +671,8 @@ function assemble_hydromechanical_lse!(
             tk,
             coords,
             rplanet,
-            xcenter,
-            ycenter,
+            xc_val,
+            yc_val,
             P_amb;
             species=venting_species,
             k_vent=k_vent,
@@ -697,6 +782,14 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
 # Details
 
     - psurface: surface pressure boundary condition [Pa]
+    - xcenter, ycenter: planet centre [m], or `nothing` (70 km for the venting term)
+    - spherical_flow: multiply the 4 face terms of each continuity row by the
+      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+
+# Raises
+
+    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_4var_lse!(
     ETA,
@@ -757,8 +850,9 @@ function assemble_hydromechanical_4var_lse!(
     dt_seal::Real=10.0,
     k_seal_min_ratio::Real=1.0e-6,
     rplanet::Real=50000.0,
-    xcenter::Real=70000.0,
-    ycenter::Real=70000.0,
+    xcenter::Union{Real,Nothing}=nothing,
+    ycenter::Union{Real,Nothing}=nothing,
+    spherical_flow::Bool=false,
     P_amb::Real=10.0,
     venting_species::Symbol=:H2O,
     tk=nothing,
@@ -773,6 +867,9 @@ function assemble_hydromechanical_4var_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
+    xc_val, yc_val = _assembly_centre(
+        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
+    )
     @unpack_coords coords dx dy
 
     L_target =
@@ -1137,10 +1234,13 @@ function assemble_hydromechanical_4var_lse!(
                 updateindex!(L, +, Kcont, kpm, kpm)
                 R[kpm] = psurface
             else
-                updateindex!(L, +, -1.0 / dx_val, kpm, kvx - 4 * Ny1)
-                updateindex!(L, +, 1.0 / dx_val, kpm, kvx)
-                updateindex!(L, +, -1.0 / dy_val, kpm, kvy - 4)
-                updateindex!(L, +, 1.0 / dy_val, kpm, kvy)
+                mW, mE, mN, mS = _continuity_face_weights(
+                    i, j, coords, spherical_flow, xc_val, yc_val
+                )
+                updateindex!(L, +, -mW / dx_val, kpm, kvx - 4 * Ny1)
+                updateindex!(L, +, mE / dx_val, kpm, kvx)
+                updateindex!(L, +, -mN / dy_val, kpm, kvy - 4)
+                updateindex!(L, +, mS / dy_val, kpm, kvy)
 
                 betadrained = compute_drained_compressibility(
                     BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -1206,38 +1306,43 @@ function assemble_hydromechanical_4var_lse!(
                     rhs_pf += DQPF[i, j]
                 end
 
+                # Face weights of the flux form; E, W, S, N blocks below.
+                mW, mE, mN, mS = _continuity_face_weights(
+                    i, j, coords, spherical_flow, xc_val, yc_val
+                )
+
                 # qxD divergence elimination: (qxD[i, j] - qxD[i, j-1]) / dx
                 if 1 < i < Ny1 && 1 < j < Nx_val
                     rx2 = rx_eff_calc[i, j]
-                    coeff_x2 = Kcont / (dx_val^2 * rx2)
+                    coeff_x2 = mE * (Kcont / (dx_val^2 * rx2))
                     diag_pf += coeff_x2
                     updateindex!(L, +, -coeff_x2, kpf, kpf + 4 * Ny1)
-                    rhs_pf -= (RHOFX[i, j] * gx[i, j]) / (dx_val * rx2)
+                    rhs_pf -= mE * ((RHOFX[i, j] * gx[i, j]) / (dx_val * rx2))
                 end
 
                 if 1 < i < Ny1 && 2 < j <= Nx_val
                     rx1 = rx_eff_calc[i, j - 1]
-                    coeff_x1 = Kcont / (dx_val^2 * rx1)
+                    coeff_x1 = mW * (Kcont / (dx_val^2 * rx1))
                     diag_pf += coeff_x1
                     updateindex!(L, +, -coeff_x1, kpf, kpf - 4 * Ny1)
-                    rhs_pf += (RHOFX[i, j - 1] * gx[i, j - 1]) / (dx_val * rx1)
+                    rhs_pf += mW * ((RHOFX[i, j - 1] * gx[i, j - 1]) / (dx_val * rx1))
                 end
 
                 # qyD divergence elimination: (qyD[i, j] - qyD[i-1, j]) / dy
                 if 1 < j < Nx1 && 1 < i < Ny_val
                     ry2 = ry_eff_calc[i, j]
-                    coeff_y2 = Kcont / (dy_val^2 * ry2)
+                    coeff_y2 = mS * (Kcont / (dy_val^2 * ry2))
                     diag_pf += coeff_y2
                     updateindex!(L, +, -coeff_y2, kpf, kpf + 4)
-                    rhs_pf -= (RHOFY[i, j] * gy[i, j]) / (dy_val * ry2)
+                    rhs_pf -= mS * ((RHOFY[i, j] * gy[i, j]) / (dy_val * ry2))
                 end
 
                 if 1 < j < Nx1 && 2 < i <= Ny_val
                     ry1 = ry_eff_calc[i - 1, j]
-                    coeff_y1 = Kcont / (dy_val^2 * ry1)
+                    coeff_y1 = mN * (Kcont / (dy_val^2 * ry1))
                     diag_pf += coeff_y1
                     updateindex!(L, +, -coeff_y1, kpf, kpf - 4)
-                    rhs_pf += (RHOFY[i - 1, j] * gy[i - 1, j]) / (dy_val * ry1)
+                    rhs_pf += mN * ((RHOFY[i - 1, j] * gy[i - 1, j]) / (dy_val * ry1))
                 end
 
                 updateindex!(L, +, diag_pf, kpf, kpf)
@@ -1253,8 +1358,8 @@ function assemble_hydromechanical_4var_lse!(
             tk,
             coords,
             rplanet,
-            xcenter,
-            ycenter,
+            xc_val,
+            yc_val,
             P_amb;
             species=venting_species,
             k_vent=k_vent,

@@ -189,6 +189,36 @@ The sparse system is assembled into a preallocated `ExtendableSparseMatrix` work
        P₂  kpf+6
 ```
 
+### Spherical Face Weights in the Continuity Rows
+
+With `geometry.spherical_flow = true`, the solid and fluid continuity rows use the divergence of a 2-D flow through a gap of width $w = 2r$, where $r$ is the distance from the planet centre:
+
+$$\nabla_{\text{sph}} \cdot \mathbf{u} = \frac{1}{w_P} \nabla_{\text{2D}} \cdot (w \mathbf{u})$$
+
+For a radial flow this adds $u_r / r$ to the 2-D divergence, which gives the divergence $\frac{1}{r^2} \partial_r (r^2 u_r)$ of a sphere.
+This is the continuity equation of the spherical annulus ([Hernlund and Tackley, 2008](../reference/bibliography.md#Spherical-Geometry-in-2-D-Models), Eq. 1 with $d = 2$).
+Each of the 4 face terms of a continuity row (velocity $v_x$, $v_y$ in the total pressure row, Darcy flux $q_x^D$, $q_y^D$ in the fluid pressure row) is multiplied by $m_F = w_F / w_P$, with $w_F$ the weight at the face position; the factor 2 of $w$ cancels in $m_F$.
+The cell weight $w_P$ is chosen so that the discrete divergence of $(x - x_c, y - y_c)$ is 3 to round-off on every weighted cell.
+The weighted rows are the continuity rows inside the anchor rows of the domain edge; anchor and ghost rows keep their form.
+Neighbouring cells evaluate $w_F$ at the same face, so the sum of $w_P$ times the discrete divergence over the weighted cells telescopes to the flux through their outer faces.
+In the 4-variable system the gravity part of each eliminated Darcy flux takes the weight of its face.
+Compaction, compressibility and source terms are volumetric and keep their unweighted form.
+
+The following parts stay on the 2-D disk with the option on:
+
+- Momentum: the solver keeps 2-D plane strain without the hoop stress term.
+  For uniform viscosity, a radial flow $v_r \propto 1/r^2$, which is divergence free in a sphere, gives a total pressure that varies as $1/r^3$ in the solver, where a sphere has a uniform $P_t$.
+  This pressure enters the effective pressure $P_t - P_f$ of compaction and hydrofracture.
+- Near the centre: a uniform flow across the centre leaves a residual $u_0 \cos\phi / r$ that the out-of-plane terms of a sphere would cancel.
+- The strain rate of plasticity and of the shear heating is the 2-D deviatoric strain rate, without the out-of-plane part $u_r / r$.
+- Other terms that read the flow keep the 2-D form: the venting surface flux, the segregation divergence, the fluid heat advection, the face split of the Darcy friction heating, and the marker area.
+  Venting is refused with the option, since its surface flux enters the weighted fluid continuity rows.
+
+The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true` or `venting.active = true`.
+The config validation and the hydromechanical solve both check this.
+A direct call of an assembly with the option on needs a finite `xcenter` and `ycenter` and grid coordinates that match the field arrays.
+A restart cannot change the option, and `load_simulation_state` does not resume from a checkpoint whose configuration has no field `geometry.spherical_flow`.
+
 ---
 
 ## Analytical Darcy Elimination (4-Variable System)
@@ -438,8 +468,12 @@ Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phas
 
 - **2-D Geometry Proxy**:
   The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
-  The defaults bring heat conduction, inventories and gravity close to a sphere. Flow stays 2-D, as stated below. `geometry.spherical_metric = true` adds the radial conduction term of a sphere and weights metal and melt inventories by the out-of-plane length $w_{\text{3D}} = 2r$. `geometry.gravity_mode = :enclosed_mass` gives the radial gravity of the enclosed mass. Set `spherical_metric = false` and `gravity_mode = :poisson2d` for a 2-D disk, as the hydrothermal benchmark configs do.
-  Flow patterns represent 2-D slab flow rather than 3-D spherical convection.
+  The defaults bring heat conduction, inventories and gravity close to a sphere.
+  Flow is 2-D by default; `geometry.spherical_flow = true` makes the continuity rows spherical ([Spherical Face Weights in the Continuity Rows](#Spherical-Face-Weights-in-the-Continuity-Rows)) and keeps 2-D momentum.
+  `geometry.spherical_metric = true` adds the radial conduction term of a sphere and weights metal and melt inventories by the out-of-plane length $w_{\text{3D}} = 2r$.
+  `geometry.gravity_mode = :enclosed_mass` gives the radial gravity of the enclosed mass.
+  Set `spherical_metric = false` and `gravity_mode = :poisson2d` for a 2-D disk, as the hydrothermal benchmark configs do.
+  Flow patterns represent 2-D slab flow rather than 3-D spherical convection; convection cells keep a 2-D topology also with `spherical_flow = true` ([Fleury et al., 2024](../reference/bibliography.md#Spherical-Geometry-in-2-D-Models)).
 
 - **Gravity Field Approximations**:
   The 2-D Poisson solver computes the potential of an infinite cylinder with the source scaled to $\frac{8}{3}\pi G \rho$, which yields exact gravity for uniform spherical bodies ($r \le R$).
