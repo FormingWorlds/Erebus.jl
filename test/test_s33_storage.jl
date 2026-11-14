@@ -205,10 +205,10 @@ end
             state.markers.core.s33m .= 6.25e4
             path = Erebus.save_state(dir, state, coords, cfg)
             loaded, _, _ = Erebus.load_simulation_state(path)
-            @test loaded.grids.S33 == g.S33
-            @test loaded.grids.S330 == g.S330
-            @test loaded.grids.DS33 == g.DS33
-            @test loaded.markers.core.s33m == state.markers.core.s33m
+            @test isequal(loaded.grids.S33, g.S33)
+            @test isequal(loaded.grids.S330, g.S330)
+            @test isequal(loaded.grids.DS33, g.DS33)
+            @test isequal(loaded.markers.core.s33m, state.markers.core.s33m)
             @test all(isapprox.(loaded.markers.core.s33m, 6.25e4; rtol=1.0e-12))
         end
     end

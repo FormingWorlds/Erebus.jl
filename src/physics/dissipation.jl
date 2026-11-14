@@ -42,11 +42,13 @@ function compute_shear_heating!(
         ("ETAPHI", ETAPHI),
         ("pr", pr),
         ("pf", pf),
-        ("S33", something(S33, HS)),
     )
         size(A) == (Ny1, Nx1) ||
             throw(ArgumentError("$name has size $(size(A)), HS has size $((Ny1, Nx1))"))
     end
+    S33 === nothing ||
+        size(S33) == (Ny1, Nx1) ||
+        throw(ArgumentError("S33 has size $(size(S33)), HS has size $((Ny1, Nx1))"))
     for (name, A) in (("ETA", ETA), ("SXY", SXY))
         size(A) == (Ny1 - 1, Nx1 - 1) || throw(
             ArgumentError("$name has size $(size(A)), expected $((Ny1 - 1, Nx1 - 1))")
