@@ -4,6 +4,10 @@
 Assemble and solve the coupled Stokes-Darcy linear system of equations.
 
 $(SIGNATURES)
+
+# Raises
+- `ArgumentError` if `cfg.geometry.spherical_flow = true` with a solver, metric, MPI or
+  venting setting that `_validate_spherical_flow` refuses.
 """
 function assemble_and_solve_hydromechanical!(
     state::SimulationState,
@@ -15,6 +19,7 @@ function assemble_and_solve_hydromechanical!(
     cur_betasolid::Float64,
     cur_betafluid::Float64,
 )
+    _validate_spherical_flow(cfg)
     recompute_bulk_viscosity!(
         state.grids.ETA,
         state.grids.ETAP,

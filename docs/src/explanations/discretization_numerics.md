@@ -213,7 +213,11 @@ The following parts stay on the 2-D disk with the option on:
 - The strain rate of plasticity and of the shear heating is the 2-D deviatoric strain rate, without the out-of-plane part $u_r / r$.
 - Other terms that read the flow keep the 2-D form: the venting surface flux, the segregation divergence, the fluid heat advection, the face split of the Darcy friction heating, and the marker area.
   Venting is refused with the option, since its surface flux enters the weighted fluid continuity rows.
-- Checkpoints whose configuration has no field `geometry.spherical_flow` do not load, and a restart cannot change the option.
+
+The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true` or `venting.active = true`.
+The config validation and the hydromechanical solve both check this.
+A direct call of an assembly with the option on needs a finite `xcenter` and `ycenter` and grid coordinates that match the field arrays.
+A restart cannot change the option, and `load_simulation_state` does not resume from a checkpoint whose configuration has no field `geometry.spherical_flow`.
 
 ---
 

@@ -16,7 +16,8 @@ $(SIGNATURES)
 # Raises
 - `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing` or not
   finite, or `venting = true`.
-- `DimensionMismatch` if `spherical_flow = true` and `coords` does not match `gridsize`.
+- `DimensionMismatch` if `spherical_flow = true` and `coords` or the lengths of its `yvy`,
+  `yp`, `xvx` and `xp` do not match `gridsize`.
 """
 function _assembly_centre(
     xcenter, ycenter, spherical_flow::Bool, venting::Bool, coords, gridsize
@@ -27,9 +28,16 @@ function _assembly_centre(
         (isfinite(xcenter) && isfinite(ycenter)) ||
             throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
         venting && throw(ArgumentError("spherical_flow = true does not support venting"))
-        gridsize == (coords.Ny1, coords.Nx1) || throw(
+        lens = (
+            length(coords.yvy), length(coords.yp), length(coords.xvx), length(coords.xp)
+        )
+        (
+            gridsize == (coords.Ny1, coords.Nx1) &&
+            lens == (gridsize[1], gridsize[1], gridsize[2], gridsize[2])
+        ) || throw(
             DimensionMismatch(
-                "field size $gridsize does not match coords $((coords.Ny1, coords.Nx1))"
+                "field size $gridsize does not match coords $((coords.Ny1, coords.Nx1)) " *
+                "with yvy, yp, xvx, xp lengths $lens",
             ),
         )
     end

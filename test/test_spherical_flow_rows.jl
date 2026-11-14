@@ -72,11 +72,20 @@ end
 _sfr_rowsum(L, k, cols, x) = sum(L[k, c] * x[c] for c in cols)
 _sfr_diffsum(L, k, cols, x) = sum(L[k, c] * (x[c] - x[k]) for c in cols)
 
-# One anchor row on each side of the P grid and one ghost row on each side.
+# Every anchor and ghost cell of the P grid, corners included.
 function _sfr_edge_cells(Ny1, Nx1)
-    anchors = ((2, 6), (Ny1 - 1, 6), (6, 2), (6, Nx1 - 1))
-    ghosts = ((1, 6), (Ny1, 6), (6, 1), (6, Nx1))
-    return (anchors..., ghosts...)
+    return [(i, j) for j in 1:Nx1, i in 1:Ny1 if !(3 <= i <= Ny1 - 2 && 3 <= j <= Nx1 - 2)]
+end
+
+# Copy of cfg with fields of one section replaced, without config validation.
+function _sfr_with(cfg, sec, kv)
+    _nt(x) = NamedTuple{fieldnames(typeof(x))}(
+        Tuple(getfield(x, f) for f in fieldnames(typeof(x)))
+    )
+    s = getfield(cfg, sec)
+    return typeof(cfg)(;
+        merge(_nt(cfg), NamedTuple{(sec,)}((typeof(s)(; merge(_nt(s), kv)...),)))...
+    )
 end
 
 function _sfr_grid(N; aspect=1.17)
@@ -213,8 +222,36 @@ end
             @test_throws ArgumentError _sfr_assemble(
                 nvar, coords, f; sf..., xcenter=xc, ycenter=Inf
             )
+            for v in (NaN, Inf, -Inf)
+                @test_throws ArgumentError _sfr_assemble(
+                    nvar, coords, f; sf..., xcenter=v, ycenter=yc
+                )
+                @test_throws ArgumentError _sfr_assemble(
+                    nvar, coords, f; sf..., xcenter=xc, ycenter=v
+                )
+            end
+            # Option off ignores the centre without venting.
+            Lc, Rc = _sfr_assemble(nvar, coords, f; off..., xcenter=NaN, ycenter=Inf)
+            Ld, Rd = _sfr_assemble(nvar, coords, f; off...)
+            @test isequal(Lc, Ld)
+            @test isequal(Rc, Rd)
             c2, _, _ = _sfr_grid(13)
             @test_throws DimensionMismatch _sfr_assemble(nvar, c2, f; on...)
+            kw = (xsize=coords.xsize, ysize=coords.ysize)
+            for c3 in (
+                GridCoordinates(coords.Nx, coords.Ny + 2; kw...),
+                GridCoordinates(coords.Nx + 2, coords.Ny; kw...),
+            )
+                @test_throws DimensionMismatch _sfr_assemble(nvar, c3, f; on...)
+            end
+            for name in (:xvx, :xp, :yvy, :yp), n in (2, length(getfield(coords, name)) - 2)
+                c4 = deepcopy(coords)
+                resize!(getfield(c4, name), n)
+                @test_throws DimensionMismatch _sfr_assemble(nvar, c4, f; on...)
+                Le, Re = _sfr_assemble(nvar, c4, f; off...)
+                @test isequal(Le, Ld)
+                @test isequal(Re, Rd)
+            end
         end
     end
 
@@ -385,6 +422,7 @@ end
 @testset "solve_stokes_darcy! passes spherical_flow to the assembly" begin
     base = load_config("configs/test_quick.toml")
     res = Dict{Tuple{Bool,Bool},Any}()
+    run = Dict{Tuple{Bool,Bool},Any}()
     for elim in (false, true), sf in (false, true)
         cfg = override_config(
             base,
@@ -399,6 +437,7 @@ end
         out = mktempdir()
         simulation_loop(cfg; output_path=out)
         res[(elim, sf)] = load_state(joinpath(out, "output_00001.jld2"))
+        run[(elim, sf)] = (cfg, joinpath(out, "output_00001.jld2"))
     end
     for elim in (false, true)
         on, off = res[(elim, true)], res[(elim, false)]
@@ -409,5 +448,28 @@ end
     # Both solver forms solve the same weighted system.
     for k in ("pf", "pr", "vx", "vy")
         @test isapprox(res[(true, true)][k], res[(false, true)][k]; rtol=1.0e-6)
+    end
+    # A checkpoint with the option on resumes with it on and refuses it off.
+    (cfg_on, path_on), (cfg_off, _) = run[(false, true)], run[(false, false)]
+    @test Erebus.load_simulation_state(path_on; cfg=cfg_on)[1].timestep == 1
+    for force in (false, true)
+        @test_throws Erebus.CheckpointError Erebus.load_simulation_state(
+            path_on; cfg=cfg_off, force_restart_config=force
+        )
+    end
+    # A config that skipped validation is refused at the solve.
+    state, coords, ws, _, _ = init_simulation(cfg_on)
+    for (sec, kv) in (
+        (:solver, (hydromech_solver=:iterative, experimental=true)),
+        (
+            :solver,
+            (hydromech_solver=:matrix_free, experimental=true, darcy_elimination=true),
+        ),
+        (:geometry, (spherical_metric=false,)),
+    )
+        bad = _sfr_with(cfg_on, sec, kv)
+        @test_throws ArgumentError Erebus.solve_stokes_darcy!(
+            state, coords, bad, ws; titer=1, dt_step_initial=state.dt
+        )
     end
 end
