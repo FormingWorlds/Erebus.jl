@@ -29,7 +29,8 @@ function _sfr_fields(coords)
         gy=[1.0 + 0.02 * i for i in 1:Ny1, j in 1:Nx1],
         pr0=fill(1.0e6, Ny1, Nx1),
         pf0=fill(1.0e6, Ny1, Nx1),
-        DMP=zeros(Ny1, Nx1),
+        DMP=[1.0e-12 * (1.0 + 0.2 * sin(i + 2 * j)) for i in 1:Ny1, j in 1:Nx1],
+        DQPF=[1.0e-13 * (1.0 + 0.3 * cos(2 * i + j)) for i in 1:Ny1, j in 1:Nx1],
     )
 end
 
@@ -71,6 +72,13 @@ end
 _sfr_rowsum(L, k, cols, x) = sum(L[k, c] * x[c] for c in cols)
 _sfr_diffsum(L, k, cols, x) = sum(L[k, c] * (x[c] - x[k]) for c in cols)
 
+# One anchor row on each side of the P grid and one ghost row on each side.
+function _sfr_edge_cells(Ny1, Nx1)
+    anchors = ((2, 6), (Ny1 - 1, 6), (6, 2), (6, Nx1 - 1))
+    ghosts = ((1, 6), (Ny1, 6), (6, 1), (6, Nx1))
+    return (anchors..., ghosts...)
+end
+
 function _sfr_grid(N; aspect=1.17)
     Ny = round(Int, N * aspect)
     coords = GridCoordinates(
@@ -86,8 +94,9 @@ end
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx, dy = coords.dx, coords.dy
     f = _sfr_fields(coords)
-    on = (spherical_flow=true, xcenter=xc, ycenter=yc)
-    off = (xcenter=xc, ycenter=yc)
+    src = (DQPF=f.DQPF, fluid_overpressure_coupling=true)
+    on = (spherical_flow=true, xcenter=xc, ycenter=yc, src...)
+    off = (xcenter=xc, ycenter=yc, src...)
     @test !isapprox(dx, dy; rtol=1.0e-3)
 
     # Continuity cells: near the centre and far from it; one anchor row; one ghost row.
@@ -122,10 +131,12 @@ end
             @test isapprox(R1[kpm], R0[kpm]; rtol=1.0e-14, atol=0.0)
             @test isapprox(R1[kpf], R0[kpf]; rtol=1.0e-14, atol=0.0)
         end
-        for (i, j) in ((2, 6), (1, 6))
+        for (i, j) in _sfr_edge_cells(Ny1, Nx1)
             kpm = ((j - 1) * Ny1 + i - 1) * 6 + 3
-            @test isequal(L1[kpm, :], L0[kpm, :])
-            @test isequal(L1[kpm + 3, :], L0[kpm + 3, :])
+            for k in (kpm, kpm + 3)
+                @test isequal(L1[k, :], L0[k, :])
+                @test isequal(R1[k], R0[k])
+            end
         end
         # Momentum rows are unchanged.
         kvx = ((j_c - 1) * Ny1 + i_c - 1) * 6 + 1
@@ -166,9 +177,13 @@ end
             @test isapprox(R1[kpf] - R0[kpf], dR; rtol=1.0e-9)
             @test isapprox(R1[kpm], R0[kpm]; rtol=1.0e-14, atol=0.0)
         end
-        i, j = 2, 6
-        kpf = ((j - 1) * Ny1 + i - 1) * 4 + 4
-        @test isequal(L1[kpf, :], L0[kpf, :])
+        for (i, j) in _sfr_edge_cells(Ny1, Nx1)
+            kpm = ((j - 1) * Ny1 + i - 1) * 4 + 3
+            for k in (kpm, kpm + 1)
+                @test isequal(L1[k, :], L0[k, :])
+                @test isequal(R1[k], R0[k])
+            end
+        end
     end
 
     @testset "Option off leaves the system unchanged" begin
@@ -178,13 +193,29 @@ end
             @test isequal(La, Lb)
             @test isequal(Ra, Rb)
         end
-        @test_throws ArgumentError _sfr_assemble(4, coords, f; spherical_flow=true)
-        @test_throws ArgumentError _sfr_assemble(
-            6, coords, f; spherical_flow=true, xcenter=xc
-        )
-        @test_throws ArgumentError _sfr_assemble(
-            6, coords, f; spherical_flow=true, ycenter=yc
-        )
+        # The 70 km default centre of the venting term stays with the option off.
+        tk = fill(500.0, Ny1, Nx1)
+        vent = (venting=true, tk=tk, rplanet=40000.0)
+        cdef = (xcenter=70000.0, ycenter=70000.0)
+        for nvar in (6, 4)
+            La, Ra = _sfr_assemble(nvar, coords, f; vent...)
+            Lb, Rb = _sfr_assemble(nvar, coords, f; vent..., cdef...)
+            @test isequal(La, Lb)
+            @test isequal(Ra, Rb)
+            sf = (spherical_flow=true,)
+            @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf...)
+            @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf..., xcenter=xc)
+            @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf..., ycenter=yc)
+            @test_throws ArgumentError _sfr_assemble(nvar, coords, f; on..., vent...)
+            @test_throws ArgumentError _sfr_assemble(
+                nvar, coords, f; sf..., xcenter=NaN, ycenter=yc
+            )
+            @test_throws ArgumentError _sfr_assemble(
+                nvar, coords, f; sf..., xcenter=xc, ycenter=Inf
+            )
+            c2, _, _ = _sfr_grid(13)
+            @test_throws DimensionMismatch _sfr_assemble(nvar, c2, f; on...)
+        end
     end
 
     @testset "6-variable and 4-variable solutions agree with the option on" begin
@@ -299,6 +330,10 @@ end
 
 @testset "spherical_flow refusals" begin
     base = (geometry=GeometryConfig(spherical_flow=true),)
+    # A restart that changes the option is a geometry change, which load_simulation_state refuses.
+    cfg_on = SimulationConfig(; base...)
+    cfg_off = override_config(cfg_on, Dict{String,Any}("geometry.spherical_flow" => false))
+    @test Erebus.compare_restart_configs(cfg_off, cfg_on) == ["geometry.spherical_flow"]
     @test Erebus._validate_spherical_flow(SimulationConfig(; base...)) === nothing
     bad = (
         (geometry=GeometryConfig(spherical_flow=true, spherical_metric=false),),
@@ -316,8 +351,8 @@ end
         cfg = SimulationConfig(; kw...)
         @test_throws ArgumentError Erebus._validate_spherical_flow(cfg)
         @test_throws ArgumentError validate_config(cfg)
+        @test_throws ArgumentError init_simulation(cfg)
     end
-    @test_throws ArgumentError init_simulation(SimulationConfig(; bad[end]...))
 end
 
 @testset "solve_stokes_darcy! passes spherical_flow to the assembly" begin
@@ -345,5 +380,7 @@ end
         @test !isapprox(on["vx"], off["vx"]; rtol=1.0e-6)
     end
     # Both solver forms solve the same weighted system.
-    @test isapprox(res[(true, true)]["pf"], res[(false, true)]["pf"]; rtol=1.0e-6)
+    for k in ("pf", "pr", "vx", "vy")
+        @test isapprox(res[(true, true)][k], res[(false, true)][k]; rtol=1.0e-6)
+    end
 end

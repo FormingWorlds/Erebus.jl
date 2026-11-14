@@ -1633,8 +1633,8 @@ $(SIGNATURES)
 # Returns
 - `nothing`
 
-The weights enter the continuity rows of the direct solver only. The venting surface
-term is a face flux without the weight, so venting is refused with the option.
+The weights enter the continuity rows of the direct solver only.
+The venting surface term is a face flux without the weight, so venting is refused with the option.
 
 # Raises
 - `ArgumentError` if `geometry.spherical_flow = true` with `geometry.spherical_metric = false`,

@@ -6,16 +6,32 @@ $(SIGNATURES)
 # Arguments
 - `xcenter`, `ycenter`: planet centre [m], or `nothing`
 - `spherical_flow`: whether the continuity rows take the spherical face weights
+- `venting`: whether the assembly adds the venting surface term
+- `coords`: grid coordinates
+- `gridsize`: `(Ny1, Nx1)` of the field arrays
 
 # Returns
 - `(xc, yc)`: the centre [m]; 70000.0 for a `nothing` entry with the option off
 
 # Raises
-- `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing`.
+- `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing` or not
+  finite, or `venting = true`.
+- `DimensionMismatch` if `spherical_flow = true` and `coords` does not match `gridsize`.
 """
-function _assembly_centre(xcenter, ycenter, spherical_flow::Bool)
-    if spherical_flow && (xcenter === nothing || ycenter === nothing)
-        throw(ArgumentError("spherical_flow = true needs xcenter and ycenter"))
+function _assembly_centre(
+    xcenter, ycenter, spherical_flow::Bool, venting::Bool, coords, gridsize
+)
+    if spherical_flow
+        (xcenter === nothing || ycenter === nothing) &&
+            throw(ArgumentError("spherical_flow = true needs xcenter and ycenter"))
+        (isfinite(xcenter) && isfinite(ycenter)) ||
+            throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
+        venting && throw(ArgumentError("spherical_flow = true does not support venting"))
+        gridsize == (coords.Ny1, coords.Nx1) || throw(
+            DimensionMismatch(
+                "field size $gridsize does not match coords $((coords.Ny1, coords.Nx1))"
+            ),
+        )
     end
     return (something(xcenter, 70000.0), something(ycenter, 70000.0))
 end
@@ -81,6 +97,11 @@ $(SIGNATURES)
 # Returns
 
     - L: LHS coefficient matrix (SparseMatrixCSC)
+
+# Raises
+
+    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_lse!(
     ETA,
@@ -158,7 +179,9 @@ function assemble_hydromechanical_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    xc_val, yc_val = _assembly_centre(xcenter, ycenter, spherical_flow)
+    xc_val, yc_val = _assembly_centre(
+        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
+    )
     @unpack_coords coords dx dy
 
     # initialize or reuse LHS sparse coefficient matrix
@@ -751,6 +774,14 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
 # Details
 
     - psurface: surface pressure boundary condition [Pa]
+    - xcenter, ycenter: planet centre [m], or `nothing` (70 km for the venting term)
+    - spherical_flow: multiply the 4 face terms of each continuity row by the
+      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+
+# Raises
+
+    - ArgumentError: `spherical_flow = true` without a finite centre, or with `venting`
+    - DimensionMismatch: `spherical_flow = true` with `coords` of another grid size
 """
 function assemble_hydromechanical_4var_lse!(
     ETA,
@@ -828,7 +859,9 @@ function assemble_hydromechanical_4var_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    xc_val, yc_val = _assembly_centre(xcenter, ycenter, spherical_flow)
+    xc_val, yc_val = _assembly_centre(
+        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
+    )
     @unpack_coords coords dx dy
 
     L_target =
