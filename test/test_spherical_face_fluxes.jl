@@ -9,10 +9,12 @@ function _sff_m(i, j, coords, xc, yc)
     return Erebus.flow_metric_face_weights(i, j, coords; xcenter=xc, ycenter=yc)
 end
 
-# Open surface faces of each rock node: sum of mF and face count, written from the grid.
+# Open surface faces of each rock node, written from the grid: the ratio of the weighted to the
+# unweighted conductance sum (a face conductance scales as 1/h^2) and the face count.
 function _sff_face_sums(coords, rplanet, xc, yc)
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     msum = zeros(Ny1, Nx1)
+    csum = zeros(Ny1, Nx1)
     nf = zeros(Int, Ny1, Nx1)
     rock(i, j) = hypot(coords.xp[j] - xc, coords.yp[i] - yc) <= rplanet
     inner(i, j) = 2 <= i <= Ny1 - 1 && 2 <= j <= Nx1 - 1
@@ -23,13 +25,15 @@ function _sff_face_sums(coords, rplanet, xc, yc)
         m = _sff_m(i, j, coords, xc, yc)
         for (s, di, dj) in ((:W, 0, -1), (:E, 0, 1), (:N, -1, 0), (:S, 1, 0))
             rock(i + di, j + dj) && continue
-            msum[i, j] += m[side[s]]
+            c = s in (:W, :E) ? 1 / coords.dx^2 : 1 / coords.dy^2
+            msum[i, j] += m[side[s]] * c
+            csum[i, j] += c
             nf[i, j] += 1
             push!(seen, s)
         end
     end
     @assert seen == Set((:W, :E, :N, :S))
-    return msum, nf
+    return msum ./ max.(csum, eps()), nf
 end
 
 function _sff_vent(coords, rplanet, xc, yc; kw...)
@@ -61,14 +65,17 @@ end
 
 @testset "Spherical face fluxes" begin
     @testset "venting face weights" begin
-        coords = Erebus.GridCoordinates(21, 21; xsize=140_000.0, ysize=140_000.0)
-        rp, xc, yc = 50_000.0, 71_300.0, 68_900.0
-        msum, nf = _sff_face_sums(coords, rp, xc, yc)
+        coords = Erebus.GridCoordinates(21, 27; xsize=140_000.0, ysize=150_000.0)
+        rp, xc, yc = 50_000.0, 71_300.0, 74_100.0
+        fac, nf = _sff_face_sums(coords, rp, xc, yc)
         @test count(>(0), nf) > 20
         @test any(==(2), nf)
         L0, R0, S0 = _sff_vent(coords, rp, xc, yc)
         L1, R1, S1 = _sff_vent(coords, rp, xc, yc; spherical_flow=true)
-        @test_throws ArgumentError _sff_vent(coords, rp, NaN, yc; spherical_flow=true)
+        @test coords.dx != coords.dy
+        for (x, y) in ((NaN, yc), (xc, NaN), (Inf, yc), (xc, -Inf))
+            @test_throws ArgumentError _sff_vent(coords, rp, x, y; spherical_flow=true)
+        end
         k(i, j) = ((j - 1) * coords.Ny1 + i - 1) * 6 + 6
         for j in 1:coords.Nx1, i in 1:coords.Ny1
             if nf[i, j] == 0
@@ -76,7 +83,7 @@ end
                 @test iszero(S1[i, j])
                 continue
             end
-            f = msum[i, j] / nf[i, j]
+            f = fac[i, j]
             @test S1[i, j] ≈ f * S0[i, j] rtol = 1e-12
             @test L1[k(i, j), k(i, j)] ≈ f * L0[k(i, j), k(i, j)] rtol = 1e-12
             @test R1[k(i, j)] ≈ f * R0[k(i, j)] rtol = 1e-12
@@ -88,9 +95,9 @@ end
     end
 
     @testset "venting drain limit uses the weighted rate" begin
-        coords = Erebus.GridCoordinates(21, 21; xsize=140_000.0, ysize=140_000.0)
-        rp, xc, yc = 50_000.0, 71_300.0, 68_900.0
-        msum, nf = _sff_face_sums(coords, rp, xc, yc)
+        coords = Erebus.GridCoordinates(21, 27; xsize=140_000.0, ysize=150_000.0)
+        rp, xc, yc = 50_000.0, 71_300.0, 74_100.0
+        fac, nf = _sff_face_sums(coords, rp, xc, yc)
         _, _, S0 = _sff_vent(coords, rp, xc, yc)
         _, _, S1 = _sff_vent(coords, rp, xc, yc; spherical_flow=true)
         # A limit between the unweighted and the weighted rate of each node.
@@ -110,7 +117,7 @@ end
         div!(D, vx, vy, coords, on, xc, yc) =
             Erebus._solid_divergence_cell!(D, vx, vy, coords, on, xc, yc)
         function fields(N, f)
-            coords = Erebus.GridCoordinates(N, N; xsize=100_000.0, ysize=96_000.0)
+            coords = Erebus.GridCoordinates(N, 3N ÷ 4; xsize=100_000.0, ysize=75_000.0)
             xc, yc = 51_300.0, 47_900.0
             Ny1, Nx1 = coords.Ny1, coords.Nx1
             vx = [f(coords.xvx[j] - xc, coords.yvx[i] - yc)[1] for i in 1:Ny1, j in 1:Nx1]
@@ -140,7 +147,7 @@ end
                 hypot(coords.xp[j + 1] - xc, coords.yp[i + 1] - yc) for
                 i in 1:coords.Ny, j in 1:coords.Nx
             ]
-            band = (r .> 15_000.0) .& (r .< 40_000.0)
+            band = (r .> 15_000.0) .& (r .< 30_000.0)
             ref = sqrt(sum(abs2, C ./ r[band] .^ 3) / count(band))
             push!(err, sqrt(sum(abs2, D1[band]) / count(band)) / ref)
             e0 = sqrt(sum(abs2, D0[band] .+ C ./ r[band] .^ 3) / count(band)) / ref
@@ -239,11 +246,16 @@ end
         @test Erebus._validate_spherical_flow(cfg) === nothing
         out = mktempdir()
         simulation_loop(cfg; output_path=out)
-        st = Erebus.load_simulation_state(joinpath(out, "output_00002.jld2"); cfg=cfg)[1]
+        st, co, _ = Erebus.load_simulation_state(
+            joinpath(out, "output_00002.jld2"); cfg=cfg
+        )
         @test st.timestep == 2
-        S = st.grids.S_vent_grid
+        S = copy(st.grids.S_vent_grid)
         @test all(isfinite, S)
-        @test any(>(0), S)
+        @test count(>(0), S) > 20
+        # The stored rate is the one of the solved pressures (the step refreshes it).
+        Erebus._refresh_venting_rate!(st, co, cfg)
+        @test st.grids.S_vent_grid ≈ S rtol = 1e-10
     end
 
     @testset "simulation steps pass spherical_flow" begin
@@ -255,6 +267,8 @@ end
             "melting.active" => true,
             "magma_transport.active" => true,
             "magma_transport.compaction_active" => true,
+            "geometry.xcenter" => 71_300.0,
+            "geometry.ycenter" => 68_900.0,
         )
         cfg1 = override_config(base, on)
         cfg0 = override_config(cfg1, Dict{String,Any}("geometry.spherical_flow" => false))
@@ -263,6 +277,7 @@ end
         g = state.grids
         acc = state.accumulators
         xc, yc, rp = acc.xcenter, acc.ycenter, acc.rplanet
+        @test xc != yc
 
         # Venting rate after the solve.
         g.tk1 .= 250.0
@@ -275,12 +290,12 @@ end
         S1 = copy(g.S_vent_grid)
         Erebus._refresh_venting_rate!(state, coords, cfg0)
         S0 = copy(g.S_vent_grid)
-        msum, nf = _sff_face_sums(coords, rp, xc, yc)
+        fac, nf = _sff_face_sums(coords, rp, xc, yc)
         open_ = nf .> 0
         @test count(open_) > 20
         @test all(S0[open_] .< (0.5 - cfg1.poroelasticity.phimin) / state.dt)
         @test all(iszero, S1[.!open_])
-        @test S1[open_] ≈ (msum[open_] ./ nf[open_]) .* S0[open_] rtol = 1e-12
+        @test S1[open_] ≈ fac[open_] .* S0[open_] rtol = 1e-12
 
         # Segregation step: the compaction divergence of a uniform dilation.
         a = 3.0e-14

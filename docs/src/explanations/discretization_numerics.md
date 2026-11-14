@@ -236,7 +236,7 @@ Two other face-flux terms take the same multipliers $m_F$ of the P cell:
 
 The fluid heat advection keeps the 2-D form.
 Its upwind term is the advective form $-(\rho c_p)_f\,\mathbf{q}_D \cdot \nabla T$, which has no divergence.
-With $m_F$ on its inflow faces, a flow $q_{xD} > 0$ in $x$ gives the term $-m_W (\rho c_p)_f\, q_{xD}\, \partial_x T$, an error of $(m_W - 1)$ times the term that does not fall with the grid spacing near the centre.
+With $m_F$ on its inflow faces, a flow $q_{xD} > 0$ in $x$ gives the term $-m_W (\rho c_p)_f\, q_{xD}\, \partial_x T$, an error of $(m_W - 1)$ times the term; near the centre this error does not fall with the grid spacing.
 
 The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true`.
 The config validation and the hydromechanical solve both check this.
