@@ -254,9 +254,9 @@ function _smo_stress_grids(coords, vel; eta=1.0e19, chi=0.0, s330=0.0, dt=1.0e10
         S330=fill(s330, Ny1, Nx1),
         S33=P(),
         DS33=P(),
-        EXX=[0.1 * i + 0.2 * j for i in 1:Ny1, j in 1:Nx1],
+        EXX=[1.0e-13 * (0.1 * i + 0.2 * j) for i in 1:Ny1, j in 1:Nx1],
         SXX=[1.0e5 * (i - j) for i in 1:Ny1, j in 1:Nx1],
-        EXY=[0.3 * i * j for i in 1:(Ny1 - 1), j in 1:(Nx1 - 1)],
+        EXY=[1.0e-14 * (0.3 * i * j) for i in 1:(Ny1 - 1), j in 1:(Nx1 - 1)],
         SXY=[2.0e5 * (i + j) for i in 1:(Ny1 - 1), j in 1:(Nx1 - 1)],
         EII=P(),
         SII=P(),
@@ -287,7 +287,8 @@ end
     # Ghost rows copy the interior like SXX.
     @test isequal(g.S33[1, 5], g.S33[2, 5])
     @test isequal(g.S33[5, Nx1], g.S33[5, Nx1 - 1])
-    # Radial flow C r_hat / r^2: tau_33 = 2 eta C / r^3 (viscous limit).
+    # Radial flow C r_hat / r^2: tau_33 = 2 eta C / r^3 (viscous limit), and with chi = 1/2
+    # S33 = 2 (eta / 2) E33' + S330 / 2.
     C = 1.0e-9 * 40000.0^3
     vel(x, y) =
         (C * (x - xc) / hypot(x - xc, y - yc)^3, C * (y - yc) / hypot(x - xc, y - yc)^3)
@@ -297,6 +298,9 @@ end
         r = hypot(coords.xp[j] - xc, coords.yp[i] - yc)
         @assert r > 20000.0
         @test isapprox(g.S33[i, j], 2 * 1.0e19 * C / r^3; rtol=0.03)
+        gh, _ = _smo_stress_grids(coords, vel; chi=0.5, s330=2.0e6)
+        Erebus._spherical_stress_update!(gh, coords, dt; xcenter=xc, ycenter=yc)
+        @test isapprox(gh.S33[i, j], 0.5 * g.S33[i, j] + 0.5 * 2.0e6; rtol=1.0e-9)
         E33 = g.S33[i, j] / (2 * 1.0e19)
         @test isapprox(
             g.EII[i, j]^2 - g.EXX[i, j]^2,
@@ -406,12 +410,12 @@ end
 
 @testset "Stress history of all components in both momentum rows" begin
     eta, dt, A, L0 = 1.0e19, 1.0e10, 1.0e6, 40000.0
-    errs = Dict(1 => Float64[], 2 => Float64[])
+    errs = Dict((nv, c) => Float64[] for nv in (6, 4), c in (1, 2))
     for N in (33, 65)
         coords, xc, yc = _smo_grid(N)
         Ny1, Nx1 = coords.Ny1, coords.Nx1
-        sxx(x, y) = A * (1 + (x - xc) / L0)
-        sxy(x, y) = A * (0.2 + 0.7 * (y - yc) / L0)
+        sxx(x, y) = A * (1 + (x - xc) / L0 + 0.4 * (y - yc) / L0)
+        sxy(x, y) = A * (0.2 + 0.7 * (y - yc) / L0 - 0.5 * (x - xc) / L0)
         s33(x, y) = A * (0.5 + (x - xc) * (y - yc) / L0^2)
         f = merge(
             _smo_fields(coords, fill(eta, Ny1, Nx1), fill(eta, Ny1, Nx1)),
@@ -423,8 +427,10 @@ end
             ),
         )
         S330 = [s33(coords.xp[j], coords.yp[i]) for i in 1:Ny1, j in 1:Nx1]
-        _, R = _smo_assemble(
-            6, coords, f; spherical_flow=true, xcenter=xc, ycenter=yc, S330=S330
+        Rs = Dict(
+            nv => _smo_assemble(
+                nv, coords, f; spherical_flow=true, xcenter=xc, ycenter=yc, S330=S330
+            )[2] for nv in (6, 4)
         )
         # Continuum force of the history stress; R holds -chi times it (chi = 1/2).
         function force(x, y, c; h=1.0)
@@ -441,10 +447,11 @@ end
                    (tyy(x, y + h) - tyy(x, y - h)) / (2h) +
                    (sxy(x, y) * X + tyy(x, y) * Y) / r2 - s33(x, y) * Y / r2
         end
-        for c in (1, 2)
+        for nv in (6, 4), c in (1, 2)
+            R = Rs[nv]
             num, den = 0.0, 0.0
             for j in 2:(Nx1 - 2), i in 2:(Ny1 - 2)
-                k = ((j - 1) * Ny1 + i - 1) * 6 + c
+                k = ((j - 1) * Ny1 + i - 1) * nv + c
                 x, y =
                     c == 1 ? (coords.xvx[j], coords.yvx[i]) : (coords.xvy[j], coords.yvy[i])
                 15000.0 < hypot(x - xc, y - yc) < 50000.0 || continue
@@ -452,11 +459,49 @@ end
                 num += (R[k] - ref)^2
                 den += ref^2
             end
-            push!(errs[c], sqrt(num / den))
+            push!(errs[(nv, c)], sqrt(num / den))
         end
     end
-    for c in (1, 2)
-        @test 3.6 < errs[c][1] / errs[c][2] < 4.4
-        @test isapprox(errs[c][2], 0.0; atol=1.0e-2)
+    for nv in (6, 4), c in (1, 2)
+        e = errs[(nv, c)]
+        @test 3.6 < e[1] / e[2] < 4.4
+        @test isapprox(e[2], 0.0; atol=1.0e-2)
+    end
+end
+
+@testset "Pressure stays unweighted and the visco-elastic factor scales the stress" begin
+    coords, xc, yc = _smo_grid(33)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    eta, dt = 1.0e19, 1.0e10
+    fv = _smo_fields(coords, fill(eta, Ny1, Nx1), fill(eta, Ny1, Nx1))
+    fe = merge(fv, (GGG=fill(eta / dt, Ny1, Nx1), GGGP=fill(eta / dt, Ny1, Nx1)))
+    on = (spherical_flow=true, xcenter=xc, ycenter=yc)
+    vel(x, y) = (1.0e-9 * sin(x / 20000.0), 1.0e-9 * cos(y / 30000.0))
+    for nv in (6, 4)
+        L0, _ = _smo_assemble(nv, coords, fv; xcenter=xc, ycenter=yc)
+        L1, _ = _smo_assemble(nv, coords, fv; on...)
+        Le, _ = _smo_assemble(nv, coords, fe; on...)
+        u = zeros(size(L1, 1))
+        for j in 1:Nx1, i in 1:Ny1
+            k = ((j - 1) * Ny1 + i - 1) * nv
+            u[k + 1] = vel(coords.xvx[j], coords.yvx[i])[1]
+            u[k + 2] = vel(coords.xvy[j], coords.yvy[i])[2]
+        end
+        r1, re = L1 * u, Le * u
+        for (i, j) in ((8, 9), (20, 14))
+            k = ((j - 1) * Ny1 + i - 1) * nv
+            pcols = [
+                ((jj - 1) * Ny1 + ii - 1) * nv + 3 for
+                ii in (i - 1, i, i + 1), jj in (j - 1, j, j + 1)
+            ]
+            for row in (k + 1, k + 2)
+                @test isequal(L1[row, pcols], L0[row, pcols])
+                # G dt = eta halves eta_ve, so every stress term of the row halves.
+                @test isapprox(re[row], 0.5 * r1[row]; rtol=1.0e-10)
+            end
+        end
+        @test_throws DimensionMismatch _smo_assemble(
+            nv, coords, fv; on..., S330=zeros(3, 3)
+        )
     end
 end

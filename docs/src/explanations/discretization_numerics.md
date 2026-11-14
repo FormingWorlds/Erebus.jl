@@ -212,7 +212,8 @@ $$\frac{1}{w} \partial_j (w \tau_{ij}) - \tau_{33} \frac{\partial_i w}{w} - \par
 
 This is the momentum equation of the spherical annulus ([Hernlund and Tackley, 2008](../reference/bibliography.md#Spherical-Geometry-in-2-D-Models)) with $d = 2$.
 The pressure part of the weighted stress divergence cancels against the pressure part of $\sigma_{33}$, so $P_t$ enters as $-\partial_i P_t$ without a weight.
-For a radial flow the equation becomes $\partial_r \sigma_{rr} + (2\sigma_{rr} - \sigma_{\phi\phi} - \sigma_{33}) / r$, the radial momentum balance of a sphere, and the flow $v_r \propto 1/r^2$ has a uniform $P_t$.
+For a radial flow the equation becomes $\partial_r \sigma_{rr} + (2\sigma_{rr} - \sigma_{\phi\phi} - \sigma_{33}) / r + \rho g_r = 0$, the radial momentum balance of a sphere.
+With uniform viscosity, no gravity and no stress history, the flow $v_r \propto 1/r^2$ then has a uniform $P_t$.
 
 The deviatoric stress is the 3-D one, $\tau_{ij} = 2 \eta (\dot\varepsilon_{ij} - \delta_{ij} \nabla_3 \cdot \mathbf{u} / 3)$, with the out-of-plane strain rate $\dot\varepsilon_{33} = \mathbf{u} \cdot \nabla w / w$.
 The solver stores 2 normal components: $S_{xx} = (\tau_{xx} - \tau_{yy}) / 2$, the component of the 2-D code, and $S_{33} = \tau_{33}$.

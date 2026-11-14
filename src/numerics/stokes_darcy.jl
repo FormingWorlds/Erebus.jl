@@ -99,8 +99,10 @@ $(SIGNATURES)
     - coords: grid coordinates
     - L: optional ExtendableSparseMatrix buffer to reuse
     - psurface: surface pressure boundary condition [Pa]
-    - spherical_flow: multiply the 4 face terms of each continuity row by the
-      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+    - spherical_flow: use the spherical slice: weighted continuity rows
+      (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
+      needs `xcenter`, `ycenter`
+    - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
 
 # Returns
 
@@ -910,8 +912,10 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
 
     - psurface: surface pressure boundary condition [Pa]
     - xcenter, ycenter: planet centre [m], or `nothing` (70 km for the venting term)
-    - spherical_flow: multiply the 4 face terms of each continuity row by the
-      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+    - spherical_flow: use the spherical slice: weighted continuity rows
+      (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
+      needs `xcenter`, `ycenter`
+    - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
 
 # Raises
 
