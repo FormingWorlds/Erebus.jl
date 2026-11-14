@@ -127,6 +127,9 @@ end
     scatter_marker_to_master_grids!(m, xm, ym, coords, ...)
 
 Scatter properties of marker `m` to Basic, Vx, Vy, and P master nodes.
+
+The keywords `s33m` (marker τ33 [Pa]) and `S33SUM` (P-node τ33 sum) are scattered
+together and skipped when either is `nothing`.
 """
 @inline function scatter_marker_to_master_grids!(
     m::Int,
@@ -180,7 +183,9 @@ Scatter properties of marker `m` to Basic, Vx, Vy, and P master nodes.
     HRSUM,
     PHISUM,
     TKSUM,
-    WTPSUM,
+    WTPSUM;
+    s33m=nothing,
+    S33SUM=nothing,
 )
     @inbounds marker_to_basic_nodes!(
         m,
@@ -261,6 +266,8 @@ Scatter properties of marker `m` to Basic, Vx, Vy, and P master nodes.
         TKSUM,
         WTPSUM;
         coords=coords,
+        s33m=s33m,
+        S33SUM=S33SUM,
     )
     return nothing
 end

@@ -332,7 +332,7 @@ The mathematical foundations, constitutive formulations, and numerical technique
 
 - **Hernlund, J. W., & Tackley, P. J. (2008)**. Modeling mantle convection in the spherical annulus. *Physics of the Earth and Planetary Interiors*, 171, 48-54.  
   [https://doi.org/10.1016/j.pepi.2008.07.037](https://doi.org/10.1016/j.pepi.2008.07.037)  
-  *Continuity equation of the spherical annulus, used in the flux form of the spherical continuity rows.*
+  *Continuity and momentum equations of the spherical annulus (Eqs. 1 to 3), used in the spherical continuity and momentum rows.*
 
 - **Fleury, A., Plesa, A.-C., Hüttig, C., & Breuer, D. (2024)**. Assessing the accuracy of 2-D planetary evolution models against the 3-D sphere. *Geochemistry, Geophysics, Geosystems*, 25, e2023GC011114.  
   [https://doi.org/10.1029/2023GC011114](https://doi.org/10.1029/2023GC011114)  

@@ -236,7 +236,7 @@ mutable struct SimulationWorkspaces
     magma_segregation::Union{Nothing,MagmaSegregationWorkspace}
     p2m::Union{Nothing,P2MTiledWorkspace}
     thread_buffers::Union{Nothing,Vector{ThreadInterpolationBuffers}}
-    interp_arrays::NTuple{33,Matrix{Float64}}
+    interp_arrays::NTuple{34,Matrix{Float64}}
     hydromech_cache::Any
     thermal_cache::Any
     R::Vector{Float64}

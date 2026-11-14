@@ -228,6 +228,7 @@ function _collect_checkpoint_marker_dict(
     M_planet_val=nothing,
     hcnspo_props=nothing,
     redox_props=nothing,
+    s33m=nothing,
 )
     dict = Dict{Symbol,Any}()
     if markers !== nothing
@@ -246,6 +247,7 @@ function _collect_checkpoint_marker_dict(
         dict[:tkm] = tkm
         dict[:sxxm] = sxxm
         dict[:sxym] = sxym
+        s33m !== nothing && (dict[:s33m] = s33m)
         dict[:etavpm] = etavpm
         dict[:phim] = phim
         dict[:rhototalm] = rhototalm
@@ -469,6 +471,10 @@ function save_state(
     markers::Union{Nothing,MarkerArrays}=nothing,
     cfg::Union{Nothing,SimulationConfig}=nothing,
     transfer_log=nothing,
+    S33=nothing,
+    S330=nothing,
+    DS33=nothing,
+    s33m=nothing,
 )
     marker_props = _collect_checkpoint_marker_dict(
         markers;
@@ -523,6 +529,7 @@ function save_state(
         M_planet_val=M_planet_val,
         hcnspo_props=hcnspo_props,
         redox_props=redox_props,
+        s33m=s33m,
     )
 
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -655,6 +662,9 @@ function save_state(
         DQPF,
         XWS,
         XWsolidm0,
+        (S33 !== nothing ? (; S33) : (;))...,
+        (S330 !== nothing ? (; S330) : (;))...,
+        (DS33 !== nothing ? (; DS33) : (;))...,
         marker_props...,
         (transfer_log !== nothing ? (; transfer_log) : (;))...,
         (
@@ -990,6 +1000,33 @@ function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::Simula
 end
 
 """
+    _missing_s33_array(path, name, like, cfg)
+
+Return zeros shaped like `like` for an out-of-plane stress array that a checkpoint lacks.
+
+# Arguments
+- `path`: checkpoint file path, used in the error message
+- `name`: name of the missing array (`S33`, `S330`, `DS33` or `s33m`)
+- `like`: array whose size the zeros copy (`SXX` at P nodes or `xm` for markers)
+- `cfg`: effective `SimulationConfig`; `cfg.geometry.spherical_flow` selects the behaviour
+
+# Returns
+- `Array{Float64}`: zeros with `size(like)`
+
+# Throws
+- `CheckpointError`: if `cfg.geometry.spherical_flow` is true, since the stress history cannot be rebuilt
+"""
+function _missing_s33_array(path, name, like, cfg::SimulationConfig)
+    cfg.geometry.spherical_flow && throw(
+        CheckpointError(
+            "Checkpoint '$path' has no S33 stress history ('$name' is missing), " *
+            "which geometry.spherical_flow = true requires",
+        ),
+    )
+    return zeros(Float64, size(like))
+end
+
+"""
     load_simulation_state(path::AbstractString; force_restart_config::Bool=false, current_cfg::Union{Nothing,SimulationConfig}=nothing)
 
 Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
@@ -1081,6 +1118,8 @@ function load_simulation_state(
         if !haskey(data, sfn)
             if fn === :Q_metric
                 push!(grid_vals, nothing)
+            elseif fn in (:S33, :S330, :DS33)
+                push!(grid_vals, _missing_s33_array(path, sfn, data["SXX"], effective_cfg))
             elseif fn === :Q_fluid_grid
                 # Every thermal solve rebuilds this array, so an older file can leave it out.
                 push!(grid_vals, zeros(size(data["tk1"])))
@@ -1096,6 +1135,10 @@ function load_simulation_state(
     core_vals = Any[]
     for fn in fieldnames(CoreGroup)
         sfn = string(fn)
+        if fn === :s33m && !haskey(data, sfn)
+            push!(core_vals, _missing_s33_array(path, sfn, data["xm"], effective_cfg))
+            continue
+        end
         haskey(data, sfn) || throw(
             CheckpointError("Missing required core marker array in checkpoint: '$sfn'")
         )

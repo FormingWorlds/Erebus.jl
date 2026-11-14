@@ -102,6 +102,7 @@ Interpolate marker properties to staggered Eulerian mesh and normalize nodal pro
 - `state.grids.HR`
 - `state.grids.GGGP`
 - `state.grids.SXX0`
+- `state.grids.S330`
 - `state.grids.tk1`
 - `state.grids.tk2`
 - `state.grids.PHI`
@@ -146,6 +147,7 @@ function interpolate_markers_to_grid!(
     inv_gggtotalm = core.inv_gggtotalm
     sxym = core.sxym
     sxxm = core.sxxm
+    s33m = cfg.geometry.spherical_flow ? core.s33m : nothing
     cohestotalm = core.cohestotalm
     tenstotalm = core.tenstotalm
     fricttotalm = core.fricttotalm
@@ -186,6 +188,7 @@ function interpolate_markers_to_grid!(
         DHPSUM,
         XWSSUM,
         WTPSUM,
+        S33SUM,
     ) = if interp_arrays !== nothing
         interp_arrays
     else
@@ -223,7 +226,8 @@ function interpolate_markers_to_grid!(
             SXXSUM,
             TKSUM,
             PHISUM,
-            WTPSUM,
+            WTPSUM;
+            S33SUM=S33SUM,
         )
     end
 
@@ -328,6 +332,7 @@ function interpolate_markers_to_grid!(
             DHPSUM,
             XWSSUM,
             WTPSUM,
+            S33SUM,
         )
         for color in 1:4
             tiles = ws_p2m.tiles_by_color[color]
@@ -543,6 +548,8 @@ function interpolate_markers_to_grid!(
                     buf.TKSUM,
                     buf.WTPSUM;
                     coords=coords,
+                    s33m=s33m,
+                    S33SUM=buf.S33SUM,
                 )
             end
         end
@@ -577,7 +584,8 @@ function interpolate_markers_to_grid!(
             TKSUM,
             PHISUM,
             WTPSUM,
-            thread_buffers,
+            thread_buffers;
+            S33SUM=S33SUM,
         )
     else
         # Single-threaded serial scatter
@@ -745,7 +753,9 @@ function interpolate_markers_to_grid!(
                 HRSUM,
                 PHISUM,
                 TKSUM,
-                WTPSUM,
+                WTPSUM;
+                s33m=s33m,
+                S33SUM=S33SUM,
             )
         end
     end
@@ -825,7 +835,9 @@ function interpolate_markers_to_grid!(
         grids.SXX0,
         grids.tk1,
         grids.PHI,
-        grids.BETAPHI,
+        grids.BETAPHI;
+        S33SUM=cfg.geometry.spherical_flow ? S33SUM : nothing,
+        S330=cfg.geometry.spherical_flow ? grids.S330 : nothing,
     )
 
     # Boundary conditions
@@ -846,7 +858,7 @@ $(SIGNATURES)
 - `state`: `SimulationState` holding markers and master grids
 - `coords`: `GridCoordinates`
 - `cfg`: `SimulationConfig`
-- `interp_arrays`: 33-tuple of master grid accumulation arrays
+- `interp_arrays`: 34-tuple of master grid accumulation arrays
 - `hr_rates`: tuple of precomputed radiogenic heating rates [W/kg]
 
 # Returns
@@ -858,7 +870,7 @@ function _scatter_tiled_p2m_tile!(
     state::SimulationState{G},
     coords::GridCoordinates,
     cfg::SimulationConfig,
-    interp_arrays::NTuple{33,Matrix{Float64}},
+    interp_arrays::NTuple{34,Matrix{Float64}},
     hr_rates::HR,
 )::Nothing where {G,HR<:Tuple}
     lo = @inbounds ws.tile_offsets[t]
@@ -891,6 +903,7 @@ function _scatter_tiled_p2m_tile!(
     inv_gggtotalm = core.inv_gggtotalm
     sxym = core.sxym
     sxxm = core.sxxm
+    s33m = cfg.geometry.spherical_flow ? core.s33m : nothing
     cohestotalm = core.cohestotalm
     tenstotalm = core.tenstotalm
     fricttotalm = core.fricttotalm
@@ -930,6 +943,7 @@ function _scatter_tiled_p2m_tile!(
         DHPSUM,
         XWSSUM,
         WTPSUM,
+        S33SUM,
     ) = interp_arrays
 
     (hrsolidm, hrfluidm, hrmetalm) = hr_rates
@@ -1135,7 +1149,9 @@ function _scatter_tiled_p2m_tile!(
             HRSUM,
             PHISUM,
             TKSUM,
-            WTPSUM,
+            WTPSUM;
+            s33m=s33m,
+            S33SUM=S33SUM,
         )
     end
     return nothing

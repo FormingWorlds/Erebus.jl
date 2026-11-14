@@ -833,6 +833,7 @@ function _init_accreted_marker_core!(
     @inbounds core.etavpm[m] = mat_eta
     @inbounds core.sxxm[m] = 0.0
     @inbounds core.sxym[m] = 0.0
+    @inbounds core.s33m[m] = 0.0
     @inbounds core.inv_gggtotalm[m] = inv(mat_ggg)
     @inbounds core.fricttotalm[m] = mat_frict
     @inbounds core.cohestotalm[m] = mat_cohes

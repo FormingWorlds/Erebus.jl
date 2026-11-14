@@ -117,6 +117,7 @@ function create_test_degas_state(;
         fill(1e20, marknum),
         zeros(Float64, marknum),
         zeros(Float64, marknum),
+        zeros(Float64, marknum),
         fill(1.0 / 1e10, marknum),
         fill(0.6, marknum),
         fill(1e7, marknum),

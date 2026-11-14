@@ -10,6 +10,7 @@ $(SIGNATURES)
     - SXY: σ₀xy XY stress at basic nodes
     - ETAP: viscosity at P nodes
     - SXX: normal stress at P nodes
+    - S33: out-of-plane deviatoric stress at P nodes (keyword), or `nothing`
     - RX: face resistance ηfluid/Kϕ at Vx nodes that `qxD` was solved with [Pa s m⁻²]
     - RY: face resistance ηfluid/Kϕ at Vy nodes that `qyD` was solved with [Pa s m⁻²]
     - qxD: qx-Darcy flux at Vx nodes
@@ -27,7 +28,7 @@ All P-node arrays and `RX`, `RY`, `qxD`, `qyD` must have the size of `HS`, and `
     - nothing
 """
 function compute_shear_heating!(
-    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf
+    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf; S33=nothing
 )
     Ny1, Nx1 = size(HS)
     for (name, A) in (
@@ -45,6 +46,9 @@ function compute_shear_heating!(
         size(A) == (Ny1, Nx1) ||
             throw(ArgumentError("$name has size $(size(A)), HS has size $((Ny1, Nx1))"))
     end
+    S33 === nothing ||
+        size(S33) == (Ny1, Nx1) ||
+        throw(ArgumentError("S33 has size $(size(S33)), HS has size $((Ny1, Nx1))"))
     for (name, A) in (("ETA", ETA), ("SXY", SXY))
         size(A) == (Ny1 - 1, Nx1 - 1) || throw(
             ArgumentError("$name has size $(size(A)), expected $((Ny1 - 1, Nx1 - 1))")
@@ -67,6 +71,8 @@ function compute_shear_heating!(
             0.5 * (rx_jm1*qxD[i, j - 1]^2 + rx_j*qxD[i, j]^2) +
             0.5 * (ry_im1*qyD[i - 1, j]^2 + ry_i*qyD[i, j]^2)
         )
+        # Out-of-plane stress of the spherical slice: (3/4) S33^2 / eta.
+        S33 === nothing || (HS[i, j] += 0.75 * S33[i, j]^2 / ETAP[i, j])
     end
     return nothing
 end # function compute_shear_heating!

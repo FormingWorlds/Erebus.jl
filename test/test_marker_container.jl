@@ -67,6 +67,7 @@ make_test_coordinates(Nx=33, Ny=33) = default_grid_coordinates()
             :rhocptotalm,
             :rhofluidcur,
             :rhototalm,
+            :s33m,
             :sxxm,
             :sxym,
             :t_accreted,
@@ -99,7 +100,7 @@ make_test_coordinates(Nx=33, Ny=33) = default_grid_coordinates()
 
         container_fields = Set(all_marker_array_names(markers))
         @test container_fields == expected_fields
-        @test length(container_fields) == 69
+        @test length(container_fields) == 70
     end
 
     @testset "Deep Copy Isolation" begin

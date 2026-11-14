@@ -1910,6 +1910,7 @@ $(SIGNATURES)
     - DHPSUM: interpolation of DHP at P nodes
     - XWSSUM: interpolation of XWS at P nodes
     - WTPSUM: interpolation weights at P nodes
+    - S33SUM: interpolation of S33 at P nodes (last element)
 """
 function setup_interpolated_properties(Nx::Int, Ny::Int)
     Nx1 = Nx + 1
@@ -1951,6 +1952,7 @@ function setup_interpolated_properties(Nx::Int, Ny::Int)
     DHPSUM = zeros(Ny1, Nx1)
     XWSSUM = zeros(Ny1, Nx1)
     WTPSUM = zeros(Ny1, Nx1)
+    S33SUM = zeros(Ny1, Nx1)
     return (
         ETA0SUM,
         ETASUM,
@@ -1985,6 +1987,7 @@ function setup_interpolated_properties(Nx::Int, Ny::Int)
         DHPSUM,
         XWSSUM,
         WTPSUM,
+        S33SUM,
     )
 end
 function setup_interpolated_properties(coords::GridCoordinates)
@@ -2025,6 +2028,7 @@ struct ThreadInterpolationBuffers
     TKSUM::Matrix{Float64}
     PHISUM::Matrix{Float64}
     WTPSUM::Matrix{Float64}
+    S33SUM::Matrix{Float64}
 end
 
 """
@@ -2043,6 +2047,7 @@ function allocate_thread_interpolation_buffers(nthreads::Int, Nx::Int, Ny::Int)
             zeros(Ny, Nx),
             zeros(Ny, Nx),
             zeros(Ny, Nx),
+            zeros(Ny1, Nx1),
             zeros(Ny1, Nx1),
             zeros(Ny1, Nx1),
             zeros(Ny1, Nx1),
@@ -2110,12 +2115,26 @@ function reset_thread_buffers!(buffers::Vector{ThreadInterpolationBuffers})
         b.TKSUM .= 0.0
         b.PHISUM .= 0.0
         b.WTPSUM .= 0.0
+        b.S33SUM .= 0.0
     end
     return nothing
 end
 
 """
 Reduce (accumulate) per-thread interpolation buffers into the master grid arrays.
+
+# Arguments
+
+    - the positional master arrays and `buffers`: per-thread buffers to accumulate
+    - S33SUM: keyword, master array for the τ33 sum [Pa], skipped when `nothing`
+
+# Returns
+
+    - nothing
+
+# Throws
+
+    - `DimensionMismatch` if a master array and its buffer differ in size
 """
 function reduce_thread_buffers!(
     ETA0SUM,
@@ -2148,7 +2167,8 @@ function reduce_thread_buffers!(
     TKSUM,
     PHISUM,
     WTPSUM,
-    buffers::Vector{ThreadInterpolationBuffers},
+    buffers::Vector{ThreadInterpolationBuffers};
+    S33SUM=nothing,
 )
     for b in buffers
         ETA0SUM .+= b.ETA0SUM
@@ -2181,6 +2201,9 @@ function reduce_thread_buffers!(
         TKSUM .+= b.TKSUM
         PHISUM .+= b.PHISUM
         WTPSUM .+= b.WTPSUM
+        if S33SUM !== nothing
+            S33SUM .+= b.S33SUM
+        end
     end
     return nothing
 end
@@ -2222,6 +2245,7 @@ $(SIGNATURES)
     - TKSUM: interpolation of TK at P nodes
     - PHISUM: interpolation of PHI at P nodes
     - WTPSUM: interpolation weights at P nodes
+    - S33SUM: keyword, interpolation of S33 at P nodes, skipped when `nothing`
 
 # Returns
 
@@ -2257,7 +2281,8 @@ function reset_interpolated_properties!(
     SXXSUM,
     TKSUM,
     PHISUM,
-    WTPSUM,
+    WTPSUM;
+    S33SUM=nothing,
 )
     # basic nodes
     ETA0SUM .= zero(0.0)
@@ -2293,6 +2318,9 @@ function reset_interpolated_properties!(
     TKSUM .= zero(0.0)
     PHISUM .= zero(0.0)
     WTPSUM .= zero(0.0)
+    if S33SUM !== nothing
+        S33SUM .= zero(0.0)
+    end
     return nothing
 end
 
@@ -2784,6 +2812,8 @@ $(SIGNATURES)
     - PHISUM: porosity interpolated to P nodes
     - TKSUM: heat capacity interpolated to P nodes
     - WTPSUM: weight for bilinear interpolation to P nodes
+    - s33m: keyword, marker τ33 [Pa]; used with `S33SUM`, skipped when either is `nothing`
+    - S33SUM: keyword, τ33 interpolated to P nodes
 
 # Returns
 
@@ -2813,6 +2843,8 @@ function marker_to_p_nodes!(
     TKSUM,
     WTPSUM;
     coords::GridCoordinates=default_grid_coordinates(),
+    s33m=nothing,
+    S33SUM=nothing,
 )
     @unpack_coords coords xp yp dx dy jmin_p jmax_p imin_p imax_p
     i, j, weights = fix_weights(
@@ -2838,6 +2870,9 @@ function marker_to_p_nodes!(
         interpolate_add_to_grid!(i, j, weights, phim[m], PHISUM)
         interpolate_add_to_grid!(i, j, weights, tkm_rhocptotalm[m], TKSUM)
         interpolate_add_to_grid!(i, j, weights, one(1.0), WTPSUM)
+        if s33m !== nothing && S33SUM !== nothing
+            interpolate_add_to_grid!(i, j, weights, s33m[m], S33SUM)
+        end
     end # @inbounds
     return nothing
 end
@@ -3165,6 +3200,8 @@ $(SIGNATURES)
     - PHI: PHI P node array
     - BETAPHI: BETAPHI P node array
     - tk1: tk1 P node array
+    - S33SUM: keyword, S33 interpolation array
+    - S330: keyword, S330 P node array; both are skipped when either is `nothing`
 
 # Returns
 
@@ -3191,7 +3228,9 @@ function compute_p_node_properties!(
     SXX0,
     tk1,
     PHI,
-    BETAPHI,
+    BETAPHI;
+    S33SUM=nothing,
+    S330=nothing,
 )
     Ny1, Nx1 = size(WTPSUM)
     @inbounds begin
@@ -3210,6 +3249,9 @@ function compute_p_node_properties!(
             end
         end
     end # @inbounds
+    if S33SUM !== nothing && S330 !== nothing
+        scale_p_node_sum!(S330, S33SUM, WTPSUM)
+    end
     fill_zero_weight_nodes!(RHO, WTPSUM; background_val=1.0)
     fill_zero_weight_nodes!(RHOCP, WTPSUM; background_val=3.3e6)
     fill_zero_weight_nodes!(ALPHA, WTPSUM; background_val=3.0e-5)
@@ -3220,8 +3262,41 @@ function compute_p_node_properties!(
     fill_zero_weight_nodes!(tk1, WTPSUM; background_val=300.0)
     fill_zero_weight_nodes!(PHI, WTPSUM; background_val=0.0)
     fill_zero_weight_nodes!(BETAPHI, WTPSUM; background_val=0.0)
+    if S330 !== nothing
+        fill_zero_weight_nodes!(S330, WTPSUM; background_val=0.0)
+    end
     return nothing
 end # function compute_p_node_properties!
+
+"""
+Divide an interpolation sum by the interpolation weights at nodes with non-zero weight.
+
+$(SIGNATURES)
+
+# Arguments
+
+    - dst: P node array receiving `sum / weight`
+    - sum_arr: interpolation sum at P nodes
+    - weights: interpolation weights at P nodes [-]
+
+# Returns
+
+    - nothing
+
+# Throws
+
+    - `DimensionMismatch` if the three arrays differ in size
+"""
+function scale_p_node_sum!(dst, sum_arr, weights)
+    size(dst) == size(sum_arr) == size(weights) ||
+        throw(DimensionMismatch("dst, sum_arr and weights must have the same size"))
+    @inbounds for k in eachindex(weights)
+        if weights[k] > 0.0
+            dst[k] = sum_arr[k] * inv(weights[k])
+        end
+    end
+    return nothing
+end
 
 """
 Compute wet solid molar fraction at P nodes based on interpolation arrays.
@@ -3936,6 +4011,7 @@ $(SIGNATURES)
     - etafluidcur_inv_kphim: fluid viscosity over permeability of markers
 	- mdis: minimum distance of marker launch anchor points to nearest marker 
 	- mnum: number of marker nearest to marker launch anchor positions
+    - s33m: keyword, marker out-of-plane deviatoric stress τ33 [Pa], copied from the source marker when given (default `nothing`)
 
 # Returns
 
@@ -3996,6 +4072,7 @@ function replenish_markers!(
     X_graphite_m=nothing,
     redox_props=nothing,
     rng::AbstractRNG=Random.default_rng(),
+    s33m=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     @unpack_coords coords xxm yym dxm dym jmin_m jmax_m imin_m imax_m Nxmc Nymc
@@ -4056,6 +4133,9 @@ function replenish_markers!(
                     push!(phim, phim[m])
                     push!(sxxm, sxxm[m])
                     push!(sxym, sxym[m])
+                    if s33m !== nothing
+                        push!(s33m, s33m[m])
+                    end
                     push!(etavpm, etavpm[m])
                     push!(phinewm, phinewm[m])
                     push!(pfm0, pfm0[m])
@@ -4261,6 +4341,7 @@ function replenish_markers!(
         X_graphite_m=X_graphite_m,
         redox_props=redox_props,
         rng=rng,
+        s33m=markers.s33m,
     )
 
     if marknum_new > old_len
@@ -4302,6 +4383,10 @@ $(SIGNATURES)
     - dsubgrids: subgrid stress diffusion damping coefficient
     - etavpm: optional marker viscoelastic viscosity vector [Pa s]
     - etasolidm: phase solid viscosity vector [Pa s]
+    - s33m: keyword, marker τ33 [Pa]; relaxed like `sxxm` when `s33m`, `S330`, `DS33` and `S33SUM` are all given
+    - S330: keyword, τ33 at P nodes [Pa]
+    - DS33: keyword, τ33 change at P nodes [Pa], corrected like `DSXX`
+    - S33SUM: keyword, interpolation of the τ33 correction at P nodes
 
 # Returns
     
@@ -4328,11 +4413,17 @@ function apply_subgrid_stress_diffusion!(
     dsubgrids::Real=dsubgrids,
     etavpm=nothing,
     etasolidm=etasolidm,
+    s33m=nothing,
+    S330=nothing,
+    DS33=nothing,
+    S33SUM=nothing,
 )
     # only perform subgrid stress diffusion if enabled by dsubgrids > 0
     if dsubgrids == 0.0
         return nothing
     end
+    do_s33 = s33m !== nothing && S330 !== nothing && DS33 !== nothing && S33SUM !== nothing
+    do_s33 && (S33SUM .= 0.0)
     Ny, Nx = size(SXYSUM)
     @unpack_coords coords xp yp x y dx dy jmin_p jmax_p imin_p imax_p jmin_basic jmax_basic imin_basic imax_basic
     # reset interpolation arrays
@@ -4381,6 +4472,8 @@ function apply_subgrid_stress_diffusion!(
         # update subgrid diffusion on P nodes
         interpolate_add_to_grid!(i_p, j_p, weights_p, δσxxm₀, SXXSUM)
         interpolate_add_to_grid!(i_p, j_p, weights_p, 1.0, WTPSUM)
+        do_s33 &&
+            relax_marker_s33!(m, i_p, j_p, weights_p, relax_factor, s33m, S330, S33SUM)
         # σ₀xy at basic nodes
         # compute marker-node σxy difference
         @inbounds δσxy₀ = sxym[m] - dot4(grid_vector(i_basic, j_basic, SXY0), weights_basic)
@@ -4400,8 +4493,46 @@ function apply_subgrid_stress_diffusion!(
     # compute DSXYsubgrid and update DSXY at all basic nodes
     @views @. DSXY[WTSUM[:, :] > 0.0] -=
         SXYSUM[:, :][WTSUM[:, :] > 0.0] / WTSUM[:, :][WTSUM[:, :] > 0.0]
+    if do_s33
+        @views @. DS33[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx] > 0.0] -= (
+            S33SUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx] > 0.0] /
+            WTPSUM[2:Ny, 2:Nx][WTPSUM[2:Ny, 2:Nx] > 0.0]
+        )
+    end
     return nothing
 end # function apply_subgrid_stress_diffusion!
+
+"""
+Relax the out-of-plane stress of one marker toward the P-node value and scatter the correction.
+
+$(SIGNATURES)
+
+# Arguments
+
+    - m: marker index
+    - i_p: top P-node row index of the marker cell
+    - j_p: left P-node column index of the marker cell
+    - weights_p: bilinear weights of the four surrounding P nodes [-]
+    - relax_factor: `exp(-dsubgrids * dt / (eta / G)) - 1` [-]
+    - s33m: marker τ33 [Pa], corrected in place
+    - S330: τ33 at P nodes [Pa]
+    - S33SUM: accumulator receiving the weighted correction at P nodes [Pa]
+
+# Returns
+
+    - nothing
+
+# Throws
+
+    - `BoundsError` if the indices lie outside the arrays
+"""
+function relax_marker_s33!(m, i_p, j_p, weights_p, relax_factor, s33m, S330, S33SUM)
+    @inbounds δσ33₀ = s33m[m] - dot4(grid_vector(i_p, j_p, S330), weights_p)
+    @inbounds δσ33₀ *= relax_factor
+    @inbounds s33m[m] += δσ33₀
+    interpolate_add_to_grid!(i_p, j_p, weights_p, δσ33₀, S33SUM)
+    return nothing
+end
 
 """
 Update marker stress based on xy (basic grid) and xx (P grid) stress changes.
@@ -4417,6 +4548,8 @@ $(SIGNATURES)
     - DSXX: stress change Δσ′xx at P nodes
     - DSXY: stress change Δσxy at basic nodes
     - marknum: total number of markers in use
+    - s33m: keyword, marker τ33 [Pa]; updated with `DS33` when both are given
+    - DS33: keyword, τ33 change at P nodes [Pa]
 
 # Returns
 
@@ -4431,9 +4564,12 @@ function update_marker_stress!(
     DSXY,
     marknum;
     coords::GridCoordinates=default_grid_coordinates(),
+    s33m=nothing,
+    DS33=nothing,
 )
     Ny, Nx = size(DSXY)
     @unpack_coords coords xp yp x y dx dy
+    do_s33 = s33m !== nothing && DS33 !== nothing
     @threads :dynamic for m in 1:1:marknum
         @inbounds i_p, j_p, weights_p = fix_weights(
             xm[m], ym[m], xp_val, yp_val, dx_val, dy_val, 2, Nx-1, 2, Ny-1
@@ -4444,6 +4580,7 @@ function update_marker_stress!(
         # interpolate updated DSXX, DSXY back to markers
         interpolate_add_to_marker!(m, i_p, j_p, weights_p, sxxm, DSXX)
         interpolate_add_to_marker!(m, i_basic, j_basic, weights_basic, sxym, DSXY)
+        do_s33 && interpolate_add_to_marker!(m, i_p, j_p, weights_p, s33m, DS33)
     end
     return nothing
 end # function update_marker_stress!

@@ -99,8 +99,10 @@ $(SIGNATURES)
     - coords: grid coordinates
     - L: optional ExtendableSparseMatrix buffer to reuse
     - psurface: surface pressure boundary condition [Pa]
-    - spherical_flow: multiply the 4 face terms of each continuity row by the
-      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+    - spherical_flow: use the spherical slice: weighted continuity rows
+      (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
+      needs `xcenter`, `ycenter`
+    - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
 
 # Returns
 
@@ -173,6 +175,7 @@ function assemble_hydromechanical_lse!(
     xcenter::Union{Real,Nothing}=nothing,
     ycenter::Union{Real,Nothing}=nothing,
     spherical_flow::Bool=false,
+    S330=nothing,
     P_amb::Real=10.0,
     venting_species::Symbol=:H2O,
     tk=nothing,
@@ -700,8 +703,134 @@ function assemble_hydromechanical_lse!(
         )
     end
 
+    spherical_flow && _add_spherical_momentum!(
+        L, R, 6, coords, xc_val, yc_val, ETA, ETAP, GGG, GGGP, dt; SXX0, SXY0, S330
+    )
     return _finalize_assembled_lse!(L, workspace, Ny1, Nx1)
 end # function assemble_hydromechanical_lse!
+
+"""
+Add the pseudo-3-D terms of the spherical slice to the interior momentum rows.
+
+$(SIGNATURES)
+
+The x-row becomes `(1/w) d_j (w tau_xj) - tau_33 d_x w / w - d_x P_t` with `w = 2r`, and
+the y-row the same. The 3-D deviatoric stress is `tau_xx = SXX - S33/2`,
+`tau_yy = -SXX - S33/2`, with `SXX = eta (eps_xx - eps_yy)` from the 2-D rows and
+`S33 = 2 eta (2 eps_33 - eps_xx - eps_yy) / 3`. `eps_33` at a P node is the weighted
+divergence of the continuity row minus the 2-D divergence. The face multipliers of a
+velocity node come from `flow_metric_face_weights` on its control volume. The rows hold
+the 2-D terms already; this function adds the difference, so `P_t` stays unweighted.
+
+# Arguments
+- `L`, `R`: system matrix and right-hand side, updated in place
+- `nv`: unknowns per node (6 or 4)
+- `coords`: grid coordinates
+- `xc`, `yc`: planet centre [m]
+- `ETA`, `GGG`: viscosity [Pa s] and shear modulus [Pa] at basic nodes
+- `ETAP`, `GGGP`: viscosity [Pa s] and shear modulus [Pa] at P nodes
+- `dt`: time step [s]
+- `SXX0`, `SXY0`: stress history at P and basic nodes [Pa]
+- `S330`: out-of-plane stress history at P nodes [Pa], or `nothing` for zero
+
+# Returns
+- `nothing`
+
+# Throws
+- `DimensionMismatch` if `S330` is not of the P-node size `(Ny1, Nx1)`
+"""
+function _add_spherical_momentum!(
+    L, R, nv::Int, coords, xc, yc, ETA, ETAP, GGG, GGGP, dt; SXX0, SXY0, S330=nothing
+)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    S330 === nothing ||
+        size(S330) == (Ny1, Nx1) ||
+        throw(DimensionMismatch("S330 has size $(size(S330)), expected $((Ny1, Nx1))"))
+    dx, dy = coords.dx, coords.dy
+    col(i, j, c) = ((j - 1) * Ny1 + i - 1) * nv + c
+    ve(e, g) = e * g * dt / (g * dt + e)
+    chi(e, g) = e / (g * dt + e)
+    # P node (p, q): coefficients of tau_xx2D and S33 on vx[p,q-1], vx[p,q], vy[p-1,q], vy[p,q].
+    function pnode(p, q)
+        mW, mE, mN, mS, _ = flow_metric_face_weights(p, q, coords; xcenter=xc, ycenter=yc)
+        e = ve(ETAP[p, q], GGGP[p, q])
+        exx = (-1 / dx, 1 / dx, 0.0, 0.0)
+        eyy = (0.0, 0.0, -1 / dy, 1 / dy)
+        e33 = (-(mW - 1) / dx, (mE - 1) / dx, -(mN - 1) / dy, (mS - 1) / dy)
+        txx = e .* (exx .- eyy)
+        s33 = (2e / 3) .* (2 .* e33 .- exx .- eyy)
+        cols = (col(p, q - 1, 1), col(p, q, 1), col(p - 1, q, 2), col(p, q, 2))
+        c = chi(ETAP[p, q], GGGP[p, q])
+        hs = S330 === nothing ? 0.0 : c * S330[p, q]
+        return cols, txx, s33, c * SXX0[p, q], hs
+    end
+    # Basic node (a, b): coefficients of tau_xy on vx[a,b], vx[a+1,b], vy[a,b], vy[a,b+1].
+    function bnode(a, b)
+        e = ve(ETA[a, b], GGG[a, b])
+        cols = (col(a, b, 1), col(a + 1, b, 1), col(a, b, 2), col(a, b + 1, 2))
+        return cols,
+        (-e / dy, e / dy, -e / dx, e / dx),
+        chi(ETA[a, b], GGG[a, b]) * SXY0[a, b]
+    end
+    add!(row, cols, coef, f) =
+        foreach((c, v) -> updateindex!(L, +, f * v, row, c), cols, coef)
+    for j in 2:(Nx1 - 2), i in 2:(Ny1 - 1)
+        row = col(i, j, 1)
+        mW, mE, mN, mS, _ = flow_metric_face_weights(
+            coords.xp[j] - xc,
+            coords.xp[j + 1] - xc,
+            coords.xvx[j] - xc,
+            coords.yvy[i - 1] - yc,
+            coords.yvy[i] - yc,
+            coords.yp[i] - yc,
+            dx,
+            dy,
+        )
+        hoop = (mE - mW) / dx
+        cW, tW, sW, hW, gW = pnode(i, j)
+        cE, tE, sE, hE, gE = pnode(i, j + 1)
+        cN, xN, hN = bnode(i - 1, j)
+        cS, xS, hS = bnode(i, j)
+        add!(row, cE, tE, (mE - 1) / dx)
+        add!(row, cW, tW, -(mW - 1) / dx)
+        add!(row, cS, xS, (mS - 1) / dy)
+        add!(row, cN, xN, -(mN - 1) / dy)
+        add!(row, cE, sE, -mE / (2dx) - hoop / 2)
+        add!(row, cW, sW, mW / (2dx) - hoop / 2)
+        R[row] -=
+            ((mE - 1) * hE - (mW - 1) * hW) / dx + ((mS - 1) * hS - (mN - 1) * hN) / dy
+        R[row] += (mE * gE - mW * gW) / (2dx) + (gW + gE) * hoop / 2
+    end
+    for j in 2:(Nx1 - 1), i in 2:(Ny1 - 2)
+        row = col(i, j, 2)
+        mW, mE, mN, mS, _ = flow_metric_face_weights(
+            coords.xvx[j - 1] - xc,
+            coords.xvx[j] - xc,
+            coords.xp[j] - xc,
+            coords.yp[i] - yc,
+            coords.yp[i + 1] - yc,
+            coords.yvy[i] - yc,
+            dx,
+            dy,
+        )
+        hoop = (mS - mN) / dy
+        cN, tN, sN, hN, gN = pnode(i, j)
+        cS, tS, sS, hS, gS = pnode(i + 1, j)
+        cW, xW, hW = bnode(i, j - 1)
+        cE, xE, hE = bnode(i, j)
+        # tau_yy2D = -tau_xx2D
+        add!(row, cS, tS, -(mS - 1) / dy)
+        add!(row, cN, tN, (mN - 1) / dy)
+        add!(row, cE, xE, (mE - 1) / dx)
+        add!(row, cW, xW, -(mW - 1) / dx)
+        add!(row, cS, sS, -mS / (2dy) - hoop / 2)
+        add!(row, cN, sN, mN / (2dy) - hoop / 2)
+        R[row] -=
+            (-(mS - 1) * hS + (mN - 1) * hN) / dy + ((mE - 1) * hE - (mW - 1) * hW) / dx
+        R[row] += (mS * gS - mN * gN) / (2dy) + (gN + gS) * hoop / 2
+    end
+    return nothing
+end
 
 """
 Flush `ExtendableSparseMatrix` into CSC format and prune structural zeros so the CSC pattern depends only on the current state.
@@ -783,8 +912,10 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
 
     - psurface: surface pressure boundary condition [Pa]
     - xcenter, ycenter: planet centre [m], or `nothing` (70 km for the venting term)
-    - spherical_flow: multiply the 4 face terms of each continuity row by the
-      flux-form spherical weights (`flow_metric_face_weights`); needs `xcenter`, `ycenter`
+    - spherical_flow: use the spherical slice: weighted continuity rows
+      (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
+      needs `xcenter`, `ycenter`
+    - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
 
 # Raises
 
@@ -853,6 +984,7 @@ function assemble_hydromechanical_4var_lse!(
     xcenter::Union{Real,Nothing}=nothing,
     ycenter::Union{Real,Nothing}=nothing,
     spherical_flow::Bool=false,
+    S330=nothing,
     P_amb::Real=10.0,
     venting_species::Symbol=:H2O,
     tk=nothing,
@@ -1386,7 +1518,9 @@ function assemble_hydromechanical_4var_lse!(
             dof_stride=4,
         )
     end
-
+    spherical_flow && _add_spherical_momentum!(
+        L, R, 4, coords, xc_val, yc_val, ETA, ETAP, GGG, GGGP, dt; SXX0, SXY0, S330
+    )
     return _finalize_assembled_lse!(L, workspace, Ny1, Nx1)
 end
 

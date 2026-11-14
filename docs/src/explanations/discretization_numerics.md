@@ -204,13 +204,28 @@ Neighbouring cells evaluate $w_F$ at the same face, so the sum of $w_P$ times th
 In the 4-variable system the gravity part of each eliminated Darcy flux takes the weight of its face.
 Compaction, compressibility and source terms are volumetric and keep their unweighted form.
 
+### Spherical Momentum and the Out-of-Plane Stress
+
+With `geometry.spherical_flow = true` the momentum rows take the same slice form:
+
+$$\frac{1}{w} \partial_j (w \tau_{ij}) - \tau_{33} \frac{\partial_i w}{w} - \partial_i P_t + \rho g_i = 0, \quad i, j \in \{x, y\}$$
+
+This is the momentum equation of the spherical annulus ([Hernlund and Tackley, 2008](../reference/bibliography.md#Spherical-Geometry-in-2-D-Models)) with $d = 2$.
+The pressure part of the weighted stress divergence cancels against the pressure part of $\sigma_{33}$, so $P_t$ enters as $-\partial_i P_t$ without a weight.
+For a radial flow the equation becomes $\partial_r \sigma_{rr} + (2\sigma_{rr} - \sigma_{\phi\phi} - \sigma_{33}) / r + \rho g_r = 0$, the radial momentum balance of a sphere.
+With uniform viscosity, no gravity and no stress history, the flow $v_r \propto 1/r^2$ then has a uniform $P_t$.
+
+The deviatoric stress is the 3-D one, $\tau_{ij} = 2 \eta (\dot\varepsilon_{ij} - \delta_{ij} \nabla_3 \cdot \mathbf{u} / 3)$, with the out-of-plane strain rate $\dot\varepsilon_{33} = \mathbf{u} \cdot \nabla w / w$.
+The solver stores 2 normal components: $S_{xx} = (\tau_{xx} - \tau_{yy}) / 2$, the component of the 2-D code, and $S_{33} = \tau_{33}$.
+Then $\tau_{xx} = S_{xx} - S_{33} / 2$ and $\tau_{yy} = -S_{xx} - S_{33} / 2$.
+$S_{33}$ has the visco-elastic update of $S_{xx}$ and its own history on the markers (`s33m`) and the grid (`S330`); an in-plane rotation does not change it.
+At a P node $\dot\varepsilon_{33}$ is the weighted divergence of the continuity row minus the 2-D divergence, so a uniform dilation gives $\dot\varepsilon_{xx} = \dot\varepsilon_{yy} = \dot\varepsilon_{33}$ to round-off and no deviatoric stress.
+The momentum rows of a velocity node use the face multipliers $m_F = w_F / w_V$ of its own control volume (the construction of $w_P$ above) for the stress fluxes and $\partial_x w / w = (m_E - m_W) / \Delta x$ for the hoop term; $\tau_{33}$ at the node is the mean of the 2 neighbouring P nodes.
+The second invariant is $J_2 = S_{xx}^2 + S_{xy}^2 + \frac{3}{4} S_{33}^2$ in the stress update, the yield check and the shear heating $\tau : \tau / (2\eta)$.
+
 The following parts stay on the 2-D disk with the option on:
 
-- Momentum: the solver keeps 2-D plane strain without the hoop stress term.
-  For uniform viscosity, a radial flow $v_r \propto 1/r^2$, which is divergence free in a sphere, gives a total pressure that varies as $1/r^3$ in the solver, where a sphere has a uniform $P_t$.
-  This pressure enters the effective pressure $P_t - P_f$ of compaction and hydrofracture.
 - Near the centre: a uniform flow across the centre leaves a residual $u_0 \cos\phi / r$ that the out-of-plane terms of a sphere would cancel.
-- The strain rate of plasticity and of the shear heating is the 2-D deviatoric strain rate, without the out-of-plane part $u_r / r$.
 - Other terms that read the flow keep the 2-D form: the venting surface flux, the segregation divergence, the fluid heat advection, the face split of the Darcy friction heating, and the marker area.
   Venting is refused with the option, since its surface flux enters the weighted fluid continuity rows.
 
@@ -218,6 +233,7 @@ The option requires `geometry.spherical_metric = true` and `solver.hydromech_sol
 The config validation and the hydromechanical solve both check this.
 A direct call of an assembly with the option on needs a finite `xcenter` and `ycenter` and grid coordinates that match the field arrays.
 A restart cannot change the option, and `load_simulation_state` does not resume from a checkpoint whose configuration has no field `geometry.spherical_flow`.
+A checkpoint without the out-of-plane stress (`S33`, `S330`, `DS33`, `s33m`) loads with zeros when the option is off and is refused when it is on.
 
 ---
 
@@ -469,7 +485,7 @@ Erebus uses a 2-D grid, a sticky-air top boundary, and 1 aqueous pore fluid phas
 - **2-D Geometry Proxy**:
   The solver computes momentum and mass conservation in 2-D Cartesian coordinates.
   The defaults bring heat conduction, inventories and gravity close to a sphere.
-  Flow is 2-D by default; `geometry.spherical_flow = true` makes the continuity rows spherical ([Spherical Face Weights in the Continuity Rows](#Spherical-Face-Weights-in-the-Continuity-Rows)) and keeps 2-D momentum.
+  Flow is 2-D by default; `geometry.spherical_flow = true` makes the continuity rows ([Spherical Face Weights in the Continuity Rows](#Spherical-Face-Weights-in-the-Continuity-Rows)) and the momentum rows ([Spherical Momentum and the Out-of-Plane Stress](#Spherical-Momentum-and-the-Out-of-Plane-Stress)) spherical.
   `geometry.spherical_metric = true` adds the radial conduction term of a sphere and weights metal and melt inventories by the out-of-plane length $w_{\text{3D}} = 2r$.
   `geometry.gravity_mode = :enclosed_mass` gives the radial gravity of the enclosed mass.
   Set `spherical_metric = false` and `gravity_mode = :poisson2d` for a 2-D disk, as the hydrothermal benchmark configs do.
