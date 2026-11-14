@@ -122,6 +122,7 @@ function _run_magma_segregation_step!(
         spherical_metric=cfg.geometry.spherical_metric,
         w3d_m=core.w3d_m,
         workspace=ws.magma_segregation,
+        spherical_flow=cfg.geometry.spherical_flow,
     )
 
     if exsolve_vols && !cfg.reaction.active

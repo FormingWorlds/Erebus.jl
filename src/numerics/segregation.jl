@@ -1224,6 +1224,62 @@ function exsolve_magma_volatiles!(
 end
 
 """
+    _solid_divergence_cell!(div_v_cell, vx, vy, coords, spherical_flow, xcenter, ycenter)
+
+Divergence of the solid velocity at the cells of the segregation grid; cell `(i, j)` is
+P node `(i + 1, j + 1)`. With `spherical_flow = true` the 4 face terms are multiplied by the
+face multipliers of `flow_metric_face_weights`, the divergence of the continuity rows.
+
+# Raises
+- `ArgumentError` if `spherical_flow = true` and `vx` or `vy` does not have the P grid size.
+"""
+function _solid_divergence_cell!(
+    div_v_cell, vx, vy, coords, spherical_flow::Bool, xcenter, ycenter
+)
+    Ny_val, Nx_val = coords.Ny, coords.Nx
+    dx_val, dy_val = coords.dx, coords.dy
+    if spherical_flow
+        grid = (coords.Ny1, coords.Nx1)
+        (size(vx) == grid && size(vy) == grid) ||
+            throw(ArgumentError("spherical_flow = true needs vx and vy of size $grid"))
+        @inbounds for j in 1:Nx_val, i in 1:Ny_val
+            mW, mE, mN, mS, _ = flow_metric_face_weights(
+                i + 1, j + 1, coords; xcenter=xcenter, ycenter=ycenter
+            )
+            div_v_cell[i, j] =
+                (mE * vx[i + 1, j + 1] - mW * vx[i + 1, j]) / dx_val +
+                (mS * vy[i + 1, j + 1] - mN * vy[i, j + 1]) / dy_val
+        end
+        return nothing
+    end
+    @inbounds for j in 1:Nx_val, i in 1:Ny_val
+        # Cell (i, j) center is at P-node (i+1, j+1); Vx faces at j and j+1, Vy faces at i and i+1.
+        dvx = if size(vx, 2) >= Nx_val + 1 && size(vx, 1) >= Ny_val + 1
+            (vx[i + 1, j + 1] - vx[i + 1, j]) / dx_val
+        elseif size(vx, 2) >= Nx_val + 1
+            (vx[min(i, size(vx, 1)), j + 1] - vx[min(i, size(vx, 1)), j]) / dx_val
+        else
+            j_l = max(j - 1, 1)
+            j_r = min(j + 1, size(vx, 2))
+            (vx[min(i, size(vx, 1)), j_r] - vx[min(i, size(vx, 1)), j_l]) /
+            (max(j_r - j_l, 1) * dx_val)
+        end
+        dvy = if size(vy, 1) >= Ny_val + 1 && size(vy, 2) >= Nx_val + 1
+            (vy[i + 1, j + 1] - vy[i, j + 1]) / dy_val
+        elseif size(vy, 1) >= Ny_val + 1
+            (vy[i + 1, min(j, size(vy, 2))] - vy[i, min(j, size(vy, 2))]) / dy_val
+        else
+            i_b = max(i - 1, 1)
+            i_t = min(i + 1, size(vy, 1))
+            (vy[i_t, min(j, size(vy, 2))] - vy[i_b, min(j, size(vy, 2))]) /
+            (max(i_t - i_b, 1) * dy_val)
+        end
+        div_v_cell[i, j] = dvx + dvy
+    end
+    return nothing
+end
+
+"""
 Apply silicate melt segregation via sub-cycled conservative drift-flux transport.
 
 $(SIGNATURES)
@@ -1316,7 +1372,11 @@ function apply_silicate_melt_segregation!(
     spherical_metric::Bool=true,
     w3d_m::Union{Nothing,AbstractVector{<:Real}}=nothing,
     workspace=nothing,
+    spherical_flow::Bool=false,
 )
+    spherical_flow &&
+        div_v !== nothing &&
+        throw(ArgumentError("spherical_flow = true does not take a div_v field"))
     if !cfg_magma.active || dt <= 0.0 || marknum <= 0
         return (;
             max_v_seg=0.0,
@@ -1442,30 +1502,9 @@ function apply_silicate_melt_segregation!(
                 div_v_cell[i, j] = div_v[min(i, size(div_v, 1)), min(j, size(div_v, 2))]
             end
         elseif vx !== nothing && vy !== nothing
-            @inbounds for j in 1:Nx_val, i in 1:Ny_val
-                # Cell (i, j) center is at P-node (i+1, j+1); Vx faces at j and j+1, Vy faces at i and i+1.
-                dvx = if size(vx, 2) >= Nx_val + 1 && size(vx, 1) >= Ny_val + 1
-                    (vx[i + 1, j + 1] - vx[i + 1, j]) / dx_val
-                elseif size(vx, 2) >= Nx_val + 1
-                    (vx[min(i, size(vx, 1)), j + 1] - vx[min(i, size(vx, 1)), j]) / dx_val
-                else
-                    j_l = max(j - 1, 1)
-                    j_r = min(j + 1, size(vx, 2))
-                    (vx[min(i, size(vx, 1)), j_r] - vx[min(i, size(vx, 1)), j_l]) /
-                    (max(j_r - j_l, 1) * dx_val)
-                end
-                dvy = if size(vy, 1) >= Ny_val + 1 && size(vy, 2) >= Nx_val + 1
-                    (vy[i + 1, j + 1] - vy[i, j + 1]) / dy_val
-                elseif size(vy, 1) >= Ny_val + 1
-                    (vy[i + 1, min(j, size(vy, 2))] - vy[i, min(j, size(vy, 2))]) / dy_val
-                else
-                    i_b = max(i - 1, 1)
-                    i_t = min(i + 1, size(vy, 1))
-                    (vy[i_t, min(j, size(vy, 2))] - vy[i_b, min(j, size(vy, 2))]) /
-                    (max(i_t - i_b, 1) * dy_val)
-                end
-                div_v_cell[i, j] = dvx + dvy
-            end
+            _solid_divergence_cell!(
+                div_v_cell, vx, vy, coords, spherical_flow, xcenter, ycenter
+            )
         end
 
         @inbounds for j in 1:Nx_val, i in 1:Ny_val

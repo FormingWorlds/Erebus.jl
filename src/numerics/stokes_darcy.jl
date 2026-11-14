@@ -6,7 +6,6 @@ $(SIGNATURES)
 # Arguments
 - `xcenter`, `ycenter`: planet centre [m], or `nothing`
 - `spherical_flow`: whether the continuity rows take the spherical face weights
-- `venting`: whether the assembly adds the venting surface term
 - `coords`: grid coordinates
 - `gridsize`: `(Ny1, Nx1)` of the field arrays
 
@@ -15,19 +14,16 @@ $(SIGNATURES)
 
 # Raises
 - `ArgumentError` if `spherical_flow = true` and `xcenter` or `ycenter` is `nothing` or not
-  finite, or `venting = true`.
+  finite.
 - `DimensionMismatch` if `spherical_flow = true` and `coords` or the lengths of its `yvy`,
   `yp`, `xvx` and `xp` do not match `gridsize`.
 """
-function _assembly_centre(
-    xcenter, ycenter, spherical_flow::Bool, venting::Bool, coords, gridsize
-)
+function _assembly_centre(xcenter, ycenter, spherical_flow::Bool, coords, gridsize)
     if spherical_flow
         (xcenter === nothing || ycenter === nothing) &&
             throw(ArgumentError("spherical_flow = true needs xcenter and ycenter"))
         (isfinite(xcenter) && isfinite(ycenter)) ||
             throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
-        venting && throw(ArgumentError("spherical_flow = true does not support venting"))
         lens = (
             length(coords.yvy), length(coords.yp), length(coords.xvx), length(coords.xp)
         )
@@ -190,9 +186,7 @@ function assemble_hydromechanical_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    xc_val, yc_val = _assembly_centre(
-        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
-    )
+    xc_val, yc_val = _assembly_centre(xcenter, ycenter, spherical_flow, coords, (Ny1, Nx1))
     @unpack_coords coords dx dy
 
     # initialize or reuse LHS sparse coefficient matrix
@@ -700,6 +694,7 @@ function assemble_hydromechanical_lse!(
             L_sub=L_sub,
             Kcont=Kcont,
             S_vent_out=S_vent_out,
+            spherical_flow=spherical_flow,
         )
     end
 
@@ -999,9 +994,7 @@ function assemble_hydromechanical_4var_lse!(
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
     Ny_val = Ny1 - 1
-    xc_val, yc_val = _assembly_centre(
-        xcenter, ycenter, spherical_flow, venting, coords, (Ny1, Nx1)
-    )
+    xc_val, yc_val = _assembly_centre(xcenter, ycenter, spherical_flow, coords, (Ny1, Nx1))
     @unpack_coords coords dx dy
 
     L_target =
@@ -1516,6 +1509,7 @@ function assemble_hydromechanical_4var_lse!(
             L_sub=L_sub,
             S_vent_out=S_vent_out,
             dof_stride=4,
+            spherical_flow=spherical_flow,
         )
     end
     spherical_flow && _add_spherical_momentum!(

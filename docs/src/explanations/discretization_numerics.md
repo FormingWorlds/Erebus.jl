@@ -226,10 +226,16 @@ The second invariant is $J_2 = S_{xx}^2 + S_{xy}^2 + \frac{3}{4} S_{33}^2$ in th
 The following parts stay on the 2-D disk with the option on:
 
 - Near the centre: a uniform flow across the centre leaves a residual $u_0 \cos\phi / r$ that the out-of-plane terms of a sphere would cancel.
-- Other terms that read the flow keep the 2-D form: the venting surface flux, the segregation divergence, the fluid heat advection, the face split of the Darcy friction heating, and the marker area.
-  Venting is refused with the option, since its surface flux enters the weighted fluid continuity rows.
+- The face split of the Darcy friction heating and the marker area keep the 2-D form.
 
-The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true` or `venting.active = true`.
+Two other face-flux terms take the same multipliers $m_F$ of the P cell:
+
+- The venting surface flux: the conductance $C_F$ of each open surface face of a rock cell becomes $m_F C_F$, as the other faces of its fluid continuity row. The rate $m_F C_F (P_f - P_{vent})$ is a loss per 3-D volume, so the drain limit $(\phi - \phi_{min}) / \Delta t$ and the marker porosity update use it unchanged.
+- The solid divergence of the compaction pressure in the melt segregation: $\nabla \cdot \mathbf{v}_s$ is the weighted divergence of the continuity rows.
+
+The fluid heat advection keeps the 2-D form. Its upwind term is the advective form $\rho c_{p,f} \mathbf{q} \cdot \nabla T$, which has no divergence; with $m_F$ on its inflow faces it has the error $(m_W - 1)\, q\, \partial_x T$, which does not fall with the grid spacing near the centre.
+
+The option requires `geometry.spherical_metric = true` and `solver.hydromech_solver = :direct`, and it is refused with `mpi.enable = true`.
 The config validation and the hydromechanical solve both check this.
 A direct call of an assembly with the option on needs a finite `xcenter` and `ycenter` and grid coordinates that match the field arrays.
 A restart cannot change the option, and `load_simulation_state` does not resume from a checkpoint whose configuration has no field `geometry.spherical_flow`.

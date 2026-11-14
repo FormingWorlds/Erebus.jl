@@ -215,7 +215,18 @@ end
             @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf...)
             @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf..., xcenter=xc)
             @test_throws ArgumentError _sfr_assemble(nvar, coords, f; sf..., ycenter=yc)
-            @test_throws ArgumentError _sfr_assemble(nvar, coords, f; on..., vent...)
+            # Venting with the option: the surface conductance takes the face weights.
+            dv(kw) = diag(
+                _sfr_assemble(nvar, coords, f; kw..., vent...)[1] -
+                _sfr_assemble(nvar, coords, f; kw...)[1],
+            )
+            d1 = dv(on)
+            d0 = dv((xcenter=xc, ycenter=yc))
+            vrows = d0 .!= 0
+            @test count(vrows) == count(!iszero, d1) >= 8
+            @test all(iszero, d1[.!vrows])
+            # Outer faces have mF > 1.
+            @test all(d0[vrows] .< d1[vrows] .< 2 .* d0[vrows])
             @test_throws ArgumentError _sfr_assemble(
                 nvar, coords, f; sf..., xcenter=NaN, ycenter=yc
             )
@@ -382,7 +393,6 @@ end
             ),
         ),
         (base..., mpi=MPIConfig(enable=true)),
-        (base..., venting=VentingConfig(active=true)),
     )
     for kw in bad
         cfg = SimulationConfig(; kw...)

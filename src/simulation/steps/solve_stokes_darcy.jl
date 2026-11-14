@@ -1046,6 +1046,7 @@ function solve_stokes_darcy!(
             eta_fluid_surf=cfg.materials.etafluidmm[2],
             L_sub=cfg.venting.L_sublimation,
             S_vent_out=g.S_vent_grid,
+            spherical_flow=cfg.geometry.spherical_flow,
         )
     end
 
