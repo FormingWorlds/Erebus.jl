@@ -316,6 +316,7 @@ $(SIGNATURES)
     - YNY5: plastic iterations plastic yielding status at basic nodes
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
     - DSY: (SIIB-syield) at basic nodes
+    - S33: out-of-plane deviatoric stress at P nodes (keyword), or `nothing`
     - dt: time set
     - iplast: plastic iteration step 
 
@@ -341,6 +342,7 @@ function compute_nodal_adjustment!(
     DSY,
     dt,
     iplast;
+    S33=nothing,
     etawt::Real=0.0,
     etamax::Real=1e23,
     etamin::Real=1e12,
@@ -358,7 +360,7 @@ function compute_nodal_adjustment!(
     @inbounds begin
         for j in 1:1:Nx, i in 1:1:Ny
             # second stress invariant at basic nodes
-            SIIB = sqrt(SXY[i, j]^2 + grid_average(i, j, SXX)^2)
+            SIIB = _basic_node_sii(i, j, SXX, SXY, S33)
             # second invariant for purely elastic stress buildup at basic nodes
             siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
             # interpolate total and fluid pressure at basic nodes
@@ -1178,3 +1180,76 @@ function finalize_plastic_iteration_pass!(
     @views @. YNY_inv_ETA = YNY / ETA
     return dt
 end # function finalize_plastic_iteration_pass
+
+"""
+Second stress invariant at basic node `(i, j)` from the P-node stresses around it.
+
+$(SIGNATURES)
+
+`J2 = SXY^2 + avg(SXX)^2 + (3/4) avg(S33)^2`, the 3-D form for `tau_xx = SXX - S33/2`,
+`tau_yy = -SXX - S33/2`, `tau_33 = S33`.
+
+# Arguments
+- `i`, `j`: basic node index
+- `SXX`, `S33`: P-node stresses [Pa]; `S33 = nothing` drops the out-of-plane part
+- `SXY`: basic-node shear stress [Pa]
+
+# Returns
+- `sqrt(J2)` [Pa]
+"""
+@inline function _basic_node_sii(i, j, SXX, SXY, S33)
+    j2 = SXY[i, j]^2 + grid_average(i, j, SXX)^2
+    S33 === nothing || (j2 += 0.75 * grid_average(i, j, S33)^2)
+    return sqrt(j2)
+end
+
+"""
+Out-of-plane deviatoric stress `S33` of the spherical slice and the 3-D invariants.
+
+$(SIGNATURES)
+
+At each interior P node, `eps_33` is the weighted divergence of the continuity row minus
+the 2-D divergence, `E33' = (2 eps_33 - eps_xx - eps_yy) / 3`, and
+`S33 = 2 eta_ve E33' + chi S330` with the visco-elastic factors of `SXX`. `EII` and `SII`
+get the term `(3/4) E33'^2` and `(3/4) S33^2`. Ghost rows of `S33` copy the interior.
+
+# Arguments
+- `g`: grid arrays with `vx`, `vy`, `ETAP`, `GGGP`, `S330`, `S33`, `DS33`, `EXX`, `EXY`,
+  `SXX`, `SXY`, `EII`, `SII` (P and basic nodes); `S33`, `DS33`, `EII`, `SII` are written
+- `coords`: grid coordinates
+- `dt`: time step [s]
+- `xcenter`, `ycenter`: planet centre [m]
+
+# Returns
+- `nothing`
+"""
+function _spherical_stress_update!(g, coords, dt; xcenter, ycenter)
+    Ny1, Nx1 = size(g.S33)
+    dx, dy = coords.dx, coords.dy
+    vx, vy = g.vx, g.vy
+    @inbounds for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        mW, mE, mN, mS, _ = flow_metric_face_weights(i, j, coords; xcenter, ycenter)
+        exx = (vx[i, j] - vx[i, j - 1]) / dx
+        eyy = (vy[i, j] - vy[i - 1, j]) / dy
+        e33 =
+            ((mE - 1) * vx[i, j] - (mW - 1) * vx[i, j - 1]) / dx +
+            ((mS - 1) * vy[i, j] - (mN - 1) * vy[i - 1, j]) / dy
+        e33d = (2 * e33 - exx - eyy) / 3
+        eta, G = g.ETAP[i, j], g.GGGP[i, j]
+        g.S33[i, j] =
+            2 * eta * e33d * G * dt / (G * dt + eta) + g.S330[i, j] * eta / (G * dt + eta)
+        g.DS33[i, j] = g.S33[i, j] - g.S330[i, j]
+        g.EII[i, j] = sqrt(
+            g.EXX[i, j]^2 + grid_average(i - 1, j - 1, g.EXY)^2 + 0.75 * e33d^2
+        )
+        g.SII[i, j] = sqrt(
+            g.SXX[i, j]^2 + grid_average(i - 1, j - 1, g.SXY)^2 + 0.75 * g.S33[i, j]^2
+        )
+    end
+    S33 = g.S33
+    @views S33[1, 2:(Nx1 - 1)] .= S33[2, 2:(Nx1 - 1)]
+    @views S33[Ny1, 2:(Nx1 - 1)] .= S33[Ny1 - 1, 2:(Nx1 - 1)]
+    @views S33[:, 1] .= S33[:, 2]
+    @views S33[:, Nx1] .= S33[:, Nx1 - 1]
+    return nothing
+end

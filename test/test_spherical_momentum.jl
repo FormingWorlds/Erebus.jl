@@ -237,3 +237,168 @@ end
         @test isapprox(e_on, 0.0; atol=0.05)
     end
 end
+
+# Grid fields for the stress update on velocity fields vel(x, y).
+function _smo_stress_grids(coords, vel; eta=1.0e19, chi=0.0, s330=0.0, dt=1.0e10)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    G = chi == 0.0 ? 1.0e40 : eta * (1 - chi) / (chi * dt)
+    P() = zeros(Ny1, Nx1)
+    B() = zeros(Ny1 - 1, Nx1 - 1)
+    vx = [vel(coords.xvx[j], coords.yvx[i])[1] for i in 1:Ny1, j in 1:Nx1]
+    vy = [vel(coords.xvy[j], coords.yvy[i])[2] for i in 1:Ny1, j in 1:Nx1]
+    g = (
+        vx=vx,
+        vy=vy,
+        ETAP=fill(eta, Ny1, Nx1),
+        GGGP=fill(G, Ny1, Nx1),
+        S330=fill(s330, Ny1, Nx1),
+        S33=P(),
+        DS33=P(),
+        EXX=[0.1 * i + 0.2 * j for i in 1:Ny1, j in 1:Nx1],
+        SXX=[1.0e5 * (i - j) for i in 1:Ny1, j in 1:Nx1],
+        EXY=[0.3 * i * j for i in 1:(Ny1 - 1), j in 1:(Nx1 - 1)],
+        SXY=[2.0e5 * (i + j) for i in 1:(Ny1 - 1), j in 1:(Nx1 - 1)],
+        EII=P(),
+        SII=P(),
+    )
+    return g, dt
+end
+
+@testset "Out-of-plane stress update" begin
+    coords, xc, yc = _smo_grid(65)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    a = 1.0e-15
+    # Uniform dilation: eps_xx = eps_yy = eps_33, so the deviatoric S33 is the history part.
+    g, dt = _smo_stress_grids(
+        coords, (x, y) -> (a * (x - xc), a * (y - yc)); chi=0.4, s330=3.0e6
+    )
+    Erebus._spherical_stress_update!(g, coords, dt; xcenter=xc, ycenter=yc)
+    @test isapprox(
+        g.S33[2:(Ny1 - 1), 2:(Nx1 - 1)], fill(0.4 * 3.0e6, Ny1 - 2, Nx1 - 2); rtol=1.0e-9
+    )
+    @test isapprox(g.DS33[5, 5], (0.4 - 1) * 3.0e6; rtol=1.0e-9)
+    i, j = 7, 9
+    eavg = 0.25 * (g.EXY[i - 1, j - 1] + g.EXY[i, j - 1] + g.EXY[i - 1, j] + g.EXY[i, j])
+    savg = 0.25 * (g.SXY[i - 1, j - 1] + g.SXY[i, j - 1] + g.SXY[i - 1, j] + g.SXY[i, j])
+    @test isapprox(
+        g.SII[i, j], sqrt(g.SXX[i, j]^2 + savg^2 + 0.75 * g.S33[i, j]^2); rtol=1.0e-12
+    )
+    @test isapprox(g.EII[i, j], sqrt(g.EXX[i, j]^2 + eavg^2); rtol=1.0e-9)
+    # Ghost rows copy the interior like SXX.
+    @test g.S33[1, 5] == g.S33[2, 5]
+    @test g.S33[5, Nx1] == g.S33[5, Nx1 - 1]
+    # Radial flow C r_hat / r^2: tau_33 = 2 eta C / r^3 (viscous limit).
+    C = 1.0e-9 * 40000.0^3
+    vel(x, y) =
+        (C * (x - xc) / hypot(x - xc, y - yc)^3, C * (y - yc) / hypot(x - xc, y - yc)^3)
+    g, dt = _smo_stress_grids(coords, vel)
+    Erebus._spherical_stress_update!(g, coords, dt; xcenter=xc, ycenter=yc)
+    for (i, j) in ((10, 12), (Ny1 - 12, Nx1 - 15))
+        r = hypot(coords.xp[j] - xc, coords.yp[i] - yc)
+        @assert r > 20000.0
+        @test isapprox(g.S33[i, j], 2 * 1.0e19 * C / r^3; rtol=0.03)
+        E33 = g.S33[i, j] / (2 * 1.0e19)
+        @test isapprox(
+            g.EII[i, j]^2 - g.EXX[i, j]^2,
+            0.75 * E33^2 +
+            (
+                0.25 *
+                (g.EXY[i - 1, j - 1] + g.EXY[i, j - 1] + g.EXY[i - 1, j] + g.EXY[i, j])
+            )^2;
+            rtol=1.0e-9,
+        )
+    end
+end
+
+@testset "Second invariant at basic nodes and heating with S33" begin
+    SXX = [1.0e5 * (i + 2j) for i in 1:5, j in 1:5]
+    SXY = [3.0e5 * (i - j) for i in 1:4, j in 1:4]
+    S33 = [2.0e5 * (i * j) for i in 1:5, j in 1:5]
+    i, j = 2, 3
+    avg(A) = 0.25 * (A[i, j] + A[i + 1, j] + A[i, j + 1] + A[i + 1, j + 1])
+    @test isapprox(
+        Erebus._basic_node_sii(i, j, SXX, SXY, nothing),
+        sqrt(SXY[i, j]^2 + avg(SXX)^2);
+        rtol=1.0e-14,
+    )
+    @test isapprox(
+        Erebus._basic_node_sii(i, j, SXX, SXY, S33),
+        sqrt(SXY[i, j]^2 + avg(SXX)^2 + 0.75 * avg(S33)^2);
+        rtol=1.0e-14,
+    )
+    Ny1, Nx1 = 6, 7
+    P(v) = fill(v, Ny1, Nx1)
+    B(v) = fill(v, Ny1 - 1, Nx1 - 1)
+    args(HS) = (
+        HS,
+        B(1.0e19),
+        B(1.0e6),
+        P(2.0e19),
+        [1.0e5 * i for i in 1:Ny1, j in 1:Nx1],
+        P(1.0e8),
+        P(1.0e8),
+        P(1.0e-9),
+        P(1.0e-9),
+        P(0.1),
+        P(1.0e19),
+        P(2.0e6),
+        P(1.0e6),
+    )
+    H0, H1 = zeros(Ny1, Nx1), zeros(Ny1, Nx1)
+    s33 = [3.0e5 * (i + j) for i in 1:Ny1, j in 1:Nx1]
+    Erebus.compute_shear_heating!(args(H0)...)
+    Erebus.compute_shear_heating!(args(H1)...; S33=s33)
+    @test isapprox(H1[3, 4] - H0[3, 4], 0.75 * s33[3, 4]^2 / 2.0e19; rtol=1.0e-9)
+    @test H1[1, 1] == H0[1, 1]
+end
+
+@testset "Out-of-plane stress history in the momentum right-hand side" begin
+    coords, xc, yc = _smo_grid(65)
+    Ny1, Nx1 = coords.Ny1, coords.Nx1
+    eta, dt, s = 1.0e19, 1.0e10, 4.0e6
+    f = merge(
+        _smo_fields(coords, fill(eta, Ny1, Nx1), fill(eta, Ny1, Nx1)),
+        (GGG=fill(eta / dt, Ny1, Nx1), GGGP=fill(eta / dt, Ny1, Nx1)),
+    )
+    on = (spherical_flow=true, xcenter=xc, ycenter=yc)
+    for nvar in (6, 4)
+        _, R0 = _smo_assemble(nvar, coords, f; on...)
+        _, R1 = _smo_assemble(nvar, coords, f; on..., S330=fill(s, Ny1, Nx1))
+        # Uniform tau_33 history s (chi = 1/2): R gains 1.5 chi s (x - x_c) / r^2.
+        num, den = 0.0, 0.0
+        for j in 2:(Nx1 - 2), i in 2:(Ny1 - 2)
+            k = ((j - 1) * Ny1 + i - 1) * nvar
+            X, Y = coords.xvx[j] - xc, coords.yvx[i] - yc
+            15000.0 < hypot(X, Y) < 50000.0 || continue
+            ref = 1.5 * 0.5 * s * X / (X^2 + Y^2)
+            num += (R1[k + 1] - R0[k + 1] - ref)^2
+            den += ref^2
+        end
+        @test isapprox(sqrt(num / den), 0.0; atol=1.0e-2)
+        # The continuity rows do not read the stress history.
+        kc = ((20 - 1) * Ny1 + 20 - 1) * nvar + 3
+        @test isequal(R1[kc], R0[kc])
+    end
+end
+
+@testset "Simulation step computes S33 only with the option on" begin
+    base = load_config("configs/test_quick.toml")
+    res = Dict{Bool,Any}()
+    for sf in (false, true)
+        cfg = override_config(
+            base,
+            Dict{String,Any}(
+                "geometry.spherical_metric" => true,
+                "geometry.spherical_flow" => sf,
+                "time.n_steps" => 1,
+                "output.savematstep" => 1,
+            ),
+        )
+        out = mktempdir()
+        simulation_loop(cfg; output_path=out)
+        res[sf] = load_state(joinpath(out, "output_00001.jld2"))
+    end
+    @test all(iszero, res[false]["S33"])
+    @test all(isfinite, res[true]["S33"])
+    @test maximum(abs, res[true]["S33"]) > 1.0e-3 * maximum(abs, res[true]["SXX"])
+end

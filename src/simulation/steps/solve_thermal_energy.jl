@@ -190,7 +190,8 @@ function solve_thermal_energy!(
         g.PHI,
         g.ETAPHI,
         g.pr,
-        g.pf,
+        g.pf;
+        S33=cfg.geometry.spherical_flow ? g.S33 : nothing,
     )
 
     compute_adiabatic_heating!(

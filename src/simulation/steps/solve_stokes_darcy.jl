@@ -95,6 +95,7 @@ function assemble_and_solve_hydromechanical!(
             xcenter=state.accumulators.xcenter,
             ycenter=state.accumulators.ycenter,
             spherical_flow=cfg.geometry.spherical_flow,
+            S330=cfg.geometry.spherical_flow ? state.grids.S330 : nothing,
             P_amb=state.accumulators.P_amb,
             venting_species=cfg.venting.species,
             tk=state.grids.tk1,
@@ -168,6 +169,7 @@ function assemble_and_solve_hydromechanical!(
             xcenter=state.accumulators.xcenter,
             ycenter=state.accumulators.ycenter,
             spherical_flow=cfg.geometry.spherical_flow,
+            S330=cfg.geometry.spherical_flow ? state.grids.S330 : nothing,
             P_amb=state.accumulators.P_amb,
             venting_species=cfg.venting.species,
             tk=state.grids.tk1,
@@ -572,6 +574,14 @@ function postprocess_hydromechanical_solution!(
         state.dt;
         coords=coords,
     )
+    sph = cfg.geometry.spherical_flow
+    sph && _spherical_stress_update!(
+        g,
+        coords,
+        state.dt;
+        xcenter=state.accumulators.xcenter,
+        ycenter=state.accumulators.ycenter,
+    )
 
     aphimax = compute_Aϕ!(
         g.APHI,
@@ -609,6 +619,7 @@ function postprocess_hydromechanical_solution!(
         g.DSY,
         state.dt,
         iplast;
+        S33=sph ? g.S33 : nothing,
         etawt=cfg.solver.etawt,
         etamax=cfg.solver.etamax,
         etamin=cfg.solver.etamin,
