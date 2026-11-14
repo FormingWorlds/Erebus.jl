@@ -150,6 +150,9 @@ function telescope_domain!(
     EII = remap_staggered_grid_array(g.EII, dim_node)
     SII = remap_staggered_grid_array(g.SII, dim_node)
     DSXX = remap_staggered_grid_array(g.DSXX, dim_node)
+    S33 = remap_staggered_grid_array(g.S33, dim_node)
+    S330 = remap_staggered_grid_array(g.S330, dim_node)
+    DS33 = remap_staggered_grid_array(g.DS33, dim_node)
     tk0 = remap_staggered_grid_array(g.tk0, dim_node; background_val=cfg.materials.tkm0[3])
     Q_metric =
         g.Q_metric !== nothing ? remap_staggered_grid_array(g.Q_metric, dim_node) : nothing
@@ -234,6 +237,9 @@ function telescope_domain!(
         EII,
         SII,
         DSXX,
+        S33,
+        S330,
+        DS33,
         tk0,
         DQPF,
         DQPFSUM,

@@ -121,6 +121,7 @@ function create_mock_simulation_state(;
             Float64[],
             Float64[],
             Float64[],
+            Float64[],
         )
     else
         xm_val = coords.xcenter + r_marker
@@ -138,6 +139,7 @@ function create_mock_simulation_state(;
             [0.0],
             [Fm_val],
             [1e20],
+            [0.0],
             [0.0],
             [0.0],
             [1.0 / 1e10],

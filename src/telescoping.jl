@@ -162,6 +162,7 @@ end
         Xmin_nitride_m=nothing,
         Xmin_metal_matrix_m=nothing,
         t_accreted=nothing,
+        s33m=nothing,
     )::Int
 
 Translates existing markers by the domain offset `(shift_x, shift_y)` to preserve
@@ -230,6 +231,7 @@ function telescope_marker_arrays!(
     redox_props=nothing,
     deltaIW_ambient::Real=0.0,
     cfg::Union{Nothing,SimulationConfig}=nothing,
+    s33m::Union{Nothing,AbstractVector{<:Real}}=nothing,
 )::Int
     if iseven(old_coords.Nx) || iseven(old_coords.Ny)
         throw(
@@ -363,6 +365,7 @@ function telescope_marker_arrays!(
                         push_if_not_nothing!(Xmin_metal_matrix_m)
                         push_if_not_nothing!(t_accreted)
                         push_if_not_nothing!(F_extract_m)
+                        push_if_not_nothing!(s33m)
                         if w3d_m !== nothing
                             push!(
                                 w3d_m,
@@ -501,6 +504,7 @@ function telescope_marker_arrays!(
         buffer_markers_per_cell=buffer_markers_per_cell,
         materials=mats,
         w3d_m=c.w3d_m,
+        s33m=c.s33m,
         Xfem=Xfem,
         Xfem0=Xfem0,
         Xfe_bulk=Xfe_bulk,

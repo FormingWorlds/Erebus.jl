@@ -231,7 +231,9 @@ end
         grad(x, y) = (U / L0, 0.0, -U / L0, 0.0)
         eta(x, y) = 1.0e19
         # The pseudo-3-D operator differs from the 2-D one by O(1) for a flow through the centre.
-        @test _smo_error(6, 65, vel, grad, eta; on=false)[1] > 0.1
-        @test _smo_error(6, 65, vel, grad, eta; on=true)[1] < 0.05
+        e_off = _smo_error(6, 65, vel, grad, eta; on=false)[1]
+        e_on = _smo_error(6, 65, vel, grad, eta; on=true)[1]
+        @test e_off > 10 * e_on
+        @test isapprox(e_on, 0.0; atol=0.05)
     end
 end

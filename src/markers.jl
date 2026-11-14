@@ -18,6 +18,7 @@ struct CoreGroup
     etavpm::Vector{Float64}
     sxxm::Vector{Float64}
     sxym::Vector{Float64}
+    s33m::Vector{Float64}
     inv_gggtotalm::Vector{Float64}
     fricttotalm::Vector{Float64}
     cohestotalm::Vector{Float64}
@@ -404,6 +405,7 @@ function init_marker_arrays(
         etavpm,
         sxxm,
         sxym,
+        zeros(marknum),
         inv_gggtotalm,
         fricttotalm,
         cohestotalm,

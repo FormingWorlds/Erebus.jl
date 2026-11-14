@@ -1,6 +1,26 @@
 # Marker viscoplastic viscosity updates and subgrid stress/thermal diffusion step
 
 """
+Collect the out-of-plane stress arrays that the subgrid stress routines take as keywords.
+
+$(SIGNATURES)
+
+# Arguments
+- `core`: `CoreGroup` holding the marker τ33 vector `s33m` [Pa]
+- `g`: `GridArrays` holding `S330` and `DS33` at P nodes [Pa]
+- `interp_arrays`: 34-tuple of interpolation accumulators from `setup_interpolated_properties`
+
+# Returns
+- `NamedTuple` with `s33m`, `S330`, `DS33` and `S33SUM`
+
+# Throws
+- `BoundsError` if `interp_arrays` has fewer than 34 elements
+"""
+function s33_stress_kwargs(core::CoreGroup, g::GridArrays, interp_arrays::Tuple)
+    return (; s33m=core.s33m, S330=g.S330, DS33=g.DS33, S33SUM=interp_arrays[34])
+end
+
+"""
 Interpolate viscoplastic viscosity to markers and diffuse subgrid stress and thermal increments.
 
 $(SIGNATURES)
@@ -113,6 +133,7 @@ function diffuse_and_update_markers!(
         WTPSUM,
     ) = interp_arrays
 
+    s33_kw = s33_stress_kwargs(core, g, interp_arrays)
     apply_subgrid_stress_diffusion!(
         core.xm,
         core.ym,
@@ -134,10 +155,20 @@ function diffuse_and_update_markers!(
         dsubgrids=cfg.solver.dsubgrids,
         etavpm=core.etavpm,
         etasolidm=cfg.materials.etasolidm,
+        s33_kw...,
     )
 
     update_marker_stress!(
-        core.xm, core.ym, core.sxxm, core.sxym, g.DSXX, g.DSXY, marknum; coords=coords
+        core.xm,
+        core.ym,
+        core.sxxm,
+        core.sxym,
+        g.DSXX,
+        g.DSXY,
+        marknum;
+        coords=coords,
+        s33m=s33_kw.s33m,
+        DS33=s33_kw.DS33,
     )
 
     apply_subgrid_temperature_diffusion!(
