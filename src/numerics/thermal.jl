@@ -458,6 +458,13 @@ function compute_face_venting_permeability(
     end
 end
 
+# Face multiplier `mF` (dimensionless; side 1 to 4: W, E, N, S) of rock cell (i, j) with
+# `spherical_flow`, else 1; `flow_metric_face_weights` throws for a non-finite centre.
+@inline function _venting_face_weight(on::Bool, i, j, side::Int, coords, xc, yc)
+    on || return 1.0
+    return flow_metric_face_weights(i, j, coords; xcenter=xc, ycenter=yc)[side]
+end
+
 """
     apply_venting_surface_boundary!(
         L, R, tk, coords, rplanet, xcenter, ycenter, P_amb;
@@ -466,7 +473,8 @@ end
         ice_sealing=false, t_freeze=273.15, dt_seal=10.0, k_seal_min_ratio=1.0e-6,
         kappa_frac=1.0e3, gamma_frac=1.0, k_frac_max=1.0e-9, ramp_width=0.0,
         pr=nothing, pf=nothing, TEN=nothing, PHI=nothing, phimin=1.0e-4, dt=1.0e10,
-        eta_fluid_surf=1.0e-3, L_sub=2.83e6, Kcont=1.0e20, S_vent_out=nothing
+        eta_fluid_surf=1.0e-3, L_sub=2.83e6, Kcont=1.0e20, S_vent_out=nothing,
+        spherical_flow=false
     )
 
 Apply permeable venting sink boundary condition at rock-air interface faces (`r = rplanet`).
@@ -481,6 +489,9 @@ pore ice permeability sealing during unbreached porous flow (`:darcy_sink` mode)
 When overpressure breaches the lid (`Peff <= -sigma_t` and `hydrofracture === true` or
 `mode === :hydrofracture_gated`), enhanced hydrofracture permeability opens.
 Only outward venting is permitted (`pf > P_vent`), and venting is fluid-limited (`phi > phimin`).
+With `spherical_flow = true` the conductance of each face is multiplied by the face multiplier
+`mF` of the rock cell (`flow_metric_face_weights`), as the other faces of its continuity row;
+it throws an `ArgumentError` for a non-finite `xcenter` or `ycenter`.
 """
 function apply_venting_surface_boundary!(
     L,
@@ -515,7 +526,11 @@ function apply_venting_surface_boundary!(
     Kcont::Real=1.0e20,
     S_vent_out::Union{AbstractMatrix{Float64},Nothing}=nothing,
     dof_stride::Int=6,
+    spherical_flow::Bool=false,
 )
+    spherical_flow &&
+        !(isfinite(xcenter) && isfinite(ycenter)) &&
+        throw(ArgumentError("spherical_flow = true needs a finite xcenter and ycenter"))
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx = coords.dx
     dy = coords.dy
@@ -621,6 +636,15 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dx^2)) * c_factor
+                    C_face *= _venting_face_weight(
+                        spherical_flow,
+                        i_rock,
+                        j_rock,
+                        is_rock1 ? 2 : 1,
+                        coords,
+                        xcenter,
+                        ycenter,
+                    )
                     S_darcy = pf !== nothing ? C_face * (pf[i_rock, j_rock] - P_vent) : 0.0
                     push!(faces, (i_rock, j_rock, C_face, P_vent, S_darcy))
                     if S_darcy > 0.0
@@ -710,6 +734,15 @@ function apply_venting_surface_boundary!(
                     )
 
                     C_face = (k_face / (eta_f * dy^2)) * c_factor
+                    C_face *= _venting_face_weight(
+                        spherical_flow,
+                        i_rock,
+                        j_rock,
+                        is_rock1 ? 4 : 3,
+                        coords,
+                        xcenter,
+                        ycenter,
+                    )
                     S_darcy = pf !== nothing ? C_face * (pf[i_rock, j_rock] - P_vent) : 0.0
                     push!(faces, (i_rock, j_rock, C_face, P_vent, S_darcy))
                     if S_darcy > 0.0

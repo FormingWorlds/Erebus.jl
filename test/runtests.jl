@@ -35,6 +35,7 @@ unit_tests = [
     "test_spherical_flow_rows.jl",
     "test_s33_storage.jl",
     "test_spherical_momentum.jl",
+    "test_spherical_face_fluxes.jl",
     "test_gravity_differentiated.jl",
     "test_reaction_pathways.jl",
     "test_stefan_benchmark.jl",

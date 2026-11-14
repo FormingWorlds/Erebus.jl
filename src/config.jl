@@ -1633,12 +1633,12 @@ $(SIGNATURES)
 # Returns
 - `nothing`
 
-The weights enter the continuity and momentum rows of the direct solver only.
-The venting surface term is a face flux without the weight, so venting is refused with the option.
+The weights enter the continuity and momentum rows, the venting surface flux and the compaction
+divergence of the direct solver only.
 
 # Raises
 - `ArgumentError` if `geometry.spherical_flow = true` with `geometry.spherical_metric = false`,
-  `solver.hydromech_solver != :direct`, `mpi.enable = true` or `venting.active = true`.
+  `solver.hydromech_solver != :direct` or `mpi.enable = true`.
 """
 function _validate_spherical_flow(cfg::SimulationConfig)
     cfg.geometry.spherical_flow || return nothing
@@ -1654,11 +1654,6 @@ function _validate_spherical_flow(cfg::SimulationConfig)
     )
     !cfg.mpi.enable ||
         throw(ArgumentError("geometry.spherical_flow = true requires mpi.enable = false"))
-    !cfg.venting.active || throw(
-        ArgumentError(
-            "geometry.spherical_flow = true does not support venting.active = true"
-        ),
-    )
     return nothing
 end
 
