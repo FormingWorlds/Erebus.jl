@@ -19,10 +19,10 @@ Each case on a page has the same layout:
 | Page | Part of the model | Reference |
 |---|---|---|
 | [Spherical Heat Conduction](thermal_conduction.md) | Heat conduction, the spherical geometry term, radiogenic heating in the time loop | Exact solution, backward-Euler series, 1-D finite-volume solver |
-| [Spherical Darcy Flow](spherical_darcy_flow.md) | Darcy flow, the spherical face weights of the fluid continuity rows, surface venting | Exact steady pressure of a uniform source in a sphere and a disk |
+| [Spherical Darcy Flow](spherical_darcy_flow.md) | Darcy pressure and flux, the spherical face weights of the fluid continuity rows, the closure of the vented rate | Exact steady pressure and flux of a uniform source in a sphere and a disk |
 
 ## How the results are stored
 
 Each validation page has a record file in `benchmarks/records/`. The record holds the measured values, the tolerances, a hash of the configuration, and the last commit that changed `src/`. The table on the page comes from the record, and `tools/check_doc_numbers.jl` fails if the two differ.
 
-`Pkg.test` runs each case again and compares it with its record. To write a new record after an intended physics change, run the export tool for that record. The tool also writes the table on the page. It refuses to run with uncommitted changes in `src/` or `benchmarks/`. It also refuses to write a value that leaves its regression band (the allowed range around the recorded value), unless you pass `--accept-physics-change`, and a value that fails its reference tolerance in all cases.
+`Pkg.test` runs each case again and compares it with its record (the Darcy flow test skips the finest grid and uses its recorded values; `tools/check_validation.jl` runs every grid). To write a new record after an intended physics change, run the export tool for that record. The tool also writes the table on the page. It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow tool also checks `tools/`). It also refuses to write a value that leaves its regression band (the allowed range around the recorded value), unless you pass `--accept-physics-change`, and a value that fails its reference tolerance in all cases.

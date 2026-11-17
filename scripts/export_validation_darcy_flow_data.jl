@@ -12,6 +12,25 @@ const SDF = SphericalDarcyFlowValidation
     write_columns(path, header, columns)
 
 Write equal-length numeric `columns` to the CSV file `path` with the given `header` names.
+
+Parameters
+----------
+path : String
+    Output file path.
+header : Vector{String}
+    One name per column.
+columns : Vector{<:AbstractVector}
+    Numeric columns of equal length, one per name in `header`.
+
+Returns
+-------
+String
+    `path`.
+
+Raises
+------
+BoundsError
+    If a column is shorter than the first one.
 """
 function write_columns(
     path::String, header::Vector{String}, columns::Vector{<:AbstractVector}
@@ -30,6 +49,18 @@ end
 
 Return the exact excess fluid pressure `p - P_AMB` [Pa] at radius `r` [m]: `d = 3` for
 `spherical_flow = true` and `d = 2` otherwise.
+
+Parameters
+----------
+r : Real
+    Radius [m].
+spherical_flow : Bool
+    Value of `geometry.spherical_flow`.
+
+Returns
+-------
+Float64
+    Exact excess pressure [Pa].
 """
 function exact_excess_pressure(r::Real, spherical_flow::Bool)::Float64
     d = spherical_flow ? 3.0 : 2.0
@@ -41,6 +72,23 @@ end
 
 Solve the case as `SDF.run_case` does and return the radius [m] and the computed and exact
 excess pressure `p - P_AMB` [Pa] of the P nodes inside the planet that `SDF.run_case` compares.
+
+Parameters
+----------
+N : Int
+    Basic grid resolution in x and y, at least `SDF.NX_MIN`.
+spherical_flow : Bool
+    Value of `geometry.spherical_flow`.
+
+Returns
+-------
+NamedTuple
+    `r`, `dp` and `dp_exact`: vectors over the P nodes inside the planet.
+
+Raises
+------
+ArgumentError
+    If `N < SDF.NX_MIN`.
 """
 function node_profile(N::Int; spherical_flow::Bool)
     cfg = SDF.make_config(N; spherical_flow=spherical_flow)
@@ -72,6 +120,17 @@ end
 
 Run the node profiles at `Nx = 65`, the profile error at every grid in `SDF.NX_LIST`, and the
 exact curves, and write the data.
+
+Parameters
+----------
+outdir : String
+    Output folder, created if missing.
+
+Returns
+-------
+String
+    `outdir`, holding `profile_off_65.csv`, `profile_on_65.csv`, `reference_curves.csv` and
+    `convergence.csv`.
 """
 function export_all(outdir::String)
     mkpath(outdir)

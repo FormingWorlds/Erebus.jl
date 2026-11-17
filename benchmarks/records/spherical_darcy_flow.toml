@@ -7,9 +7,9 @@ id = "spherical_darcy_flow"
 title = "Spherical Darcy Flow Validation"
 page = "validation/spherical_darcy_flow.md"
 src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-17T07:51:20Z"
+timestamp_utc = "2026-11-17T08:55:29Z"
 julia_version = "1.12.7"
-config_sha256 = "45d1a29b001185ce4cd6bec8a6625d784daac83deb1994bd933d812c6b528945"
+config_sha256 = "36c4b75422d3ce94fbe3f2631a72ae8ae3ad4be66a5ed118f1e89c2dff5b893d"
 reference_type = "analytical"
 reference_citation = "Exact steady Darcy pressure of a uniform fluid source in a sphere (d = 3) and a disk (d = 2) with fixed surface pressure"
 
@@ -149,11 +149,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_off_nx33"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=33)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=33)"
 nx = 33
-value = 6.4710240457240858e-02
+value = 9.8929741789948539e-02
 reference = 0.0000000000000000e+00
-atol = 1.3000000000000000e-01
+atol = 2.0999999999999999e-01
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"
@@ -162,11 +162,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_off_nx65"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=65)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=65)"
 nx = 65
-value = 1.4197759519594112e-02
+value = 1.9439915059171368e-02
 reference = 0.0000000000000000e+00
-atol = 2.9999999999999999e-02
+atol = 4.1000000000000002e-02
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"
@@ -175,11 +175,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_off_nx129"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=129)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=129)"
 nx = 129
-value = 6.2621275954817084e-03
+value = 8.8213542986763458e-03
 reference = 0.0000000000000000e+00
-atol = 1.2999999999999999e-02
+atol = 1.9000000000000000e-02
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"
@@ -188,11 +188,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_on_nx33"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=33)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=33)"
 nx = 33
-value = 6.4074016116367635e-02
+value = 1.0111078869539650e-01
 reference = 0.0000000000000000e+00
-atol = 1.3000000000000000e-01
+atol = 2.0999999999999999e-01
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"
@@ -201,11 +201,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_on_nx65"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=65)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=65)"
 nx = 65
-value = 1.4439095390275540e-02
+value = 2.0182050038769866e-02
 reference = 0.0000000000000000e+00
-atol = 2.9999999999999999e-02
+atol = 4.1000000000000002e-02
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"
@@ -214,11 +214,11 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_on_nx129"
 case = "flux"
-description = "Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=129)"
+description = "Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=129)"
 nx = 129
-value = 6.3022345167073821e-03
+value = 9.2389042360172657e-03
 reference = 0.0000000000000000e+00
-atol = 1.2999999999999999e-02
+atol = 1.9000000000000000e-02
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
 units = "dimensionless"

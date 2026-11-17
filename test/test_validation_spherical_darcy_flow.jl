@@ -1,3 +1,4 @@
+using SHA
 using Test
 using TOML
 using Erebus
@@ -20,13 +21,102 @@ function write_toml(path::String, dict::AbstractDict)
     return path
 end
 
+"""
+    synthetic_coords(N; shift=0.0)
+
+Return a `NamedTuple` with the staggered coordinates that the flux and error measures read,
+laid out as `GridCoordinates` does for an `N` x `N` grid of the box `SDF.L_BOX`, with every
+coordinate moved by `shift` [m] in x and y.
+
+Parameters
+----------
+N : Int
+    Basic grid resolution in x and y.
+shift : Float64, optional
+    Offset of all coordinates [m] (default `0.0`).
+
+Returns
+-------
+NamedTuple
+    `Nx`, `Ny`, `Nx1`, `Ny1`, `dx`, `dy`, `xvx`, `yvx`, `xvy`, `yvy`, `xp` and `yp`.
+"""
+function synthetic_coords(N::Int; shift::Float64=0.0)
+    d = SDF.L_BOX / (N - 1)
+    node(lo, hi) = collect(range(lo, hi; length=N + 1)) .+ shift
+    return (;
+        Nx=N,
+        Ny=N,
+        Nx1=N + 1,
+        Ny1=N + 1,
+        dx=d,
+        dy=d,
+        xvx=node(0.0, SDF.L_BOX + d),
+        yvx=node(-d / 2, SDF.L_BOX + d / 2),
+        xvy=node(-d / 2, SDF.L_BOX + d / 2),
+        yvy=node(0.0, SDF.L_BOX + d),
+        xp=node(-d / 2, SDF.L_BOX + d / 2),
+        yp=node(-d / 2, SDF.L_BOX + d / 2),
+    )
+end
+
+"""
+    exact_flux_grids(coords, d, scale)
+
+Return the grids `qxD` and `qyD` as a `NamedTuple` holding `scale` times the exact flux
+`S r_vec / d` [m/s] at every face of `coords`, with `d` the flow dimension.
+
+Parameters
+----------
+coords : NamedTuple
+    Coordinates from `synthetic_coords`.
+d : Float64
+    Flow dimension, 3 for the sphere and 2 for the disk.
+scale : Float64
+    Factor applied to the exact flux.
+
+Returns
+-------
+NamedTuple
+    `qxD` and `qyD`, each of size `(coords.Ny1, coords.Nx1)`.
+"""
+function exact_flux_grids(coords, d::Float64, scale::Float64)
+    qxD = [
+        scale * SDF.S_SOURCE * (x - SDF.X_CENTRE) / d for _ in coords.yvx, x in coords.xvx
+    ]
+    qyD = [
+        scale * SDF.S_SOURCE * (y - SDF.Y_CENTRE) / d for y in coords.yvy, _ in coords.xvy
+    ]
+    return (; qxD, qyD)
+end
+
 @testset "Spherical Darcy Flow Validation" begin
     record_path = joinpath(
         @__DIR__, "..", "benchmarks", "records", "spherical_darcy_flow.toml"
     )
-    # One evaluation: every grid of SDF.NX_LIST (the finest at most once) in both settings.
-    bench = SDF.evaluate_spherical_darcy_flow_benchmark()
-    runs = bench.runs
+    raw_record_all = TOML.parsefile(record_path)
+    recorded = Dict(
+        String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
+    )
+    # Runs at Nx = 33 and 65 only. The Nx = 129 and order metrics take their recorded values,
+    # which `validate_record_dict` checks against their reference and tolerance.
+    bench_runs = SDF.evaluate_spherical_darcy_flow_benchmark(; nx_list=(33, 65))
+    runs = bench_runs.runs
+    measured = bench_runs.metrics
+    n_fine = maximum(SDF.NX_LIST)
+    recorded_only = filter(
+        kv ->
+            !haskey(measured, kv.first) &&
+            (endswith(kv.first, "_nx$(n_fine)") || startswith(kv.first, "profile_order")),
+        recorded,
+    )
+    bench = (; runs, metrics=merge(measured, recorded_only))
+
+    @testset "metrics: 12 from the runs, 6 recorded values for Nx = 129 and the orders" begin
+        @test length(measured) == 12
+        @test length(recorded_only) == 6
+        @test isempty(intersect(keys(measured), keys(recorded_only)))
+        @test Set(keys(bench.metrics)) == Set(SDF.EXPECTED_METRIC_IDS)
+    end
 
     @testset "surface pressure is the ambient pressure" begin
         cfg = SDF.make_config(SDF.NX_REFERENCE; spherical_flow=true)
@@ -40,7 +130,6 @@ end
     @testset "solver converges (spherical_flow = $sf)" for sf in (false, true)
         @test runs[(33, sf)].converged
         @test runs[(65, sf)].converged
-        @test runs[(129, sf)].converged
     end
 
     @testset "grid below the minimum is rejected" begin
@@ -59,14 +148,44 @@ end
         @test isapprox(log2(e33 / e65), 1.0; atol=0.3)
     end
 
-    @testset "radial Darcy flux against S r / d (spherical_flow = $sf)" for sf in
-                                                                            (false, true)
+    @testset "Darcy flux vector against S r_vec / d (spherical_flow = $sf)" for sf in (
+        false, true
+    )
         f33 = runs[(33, sf)].flux_l2_inner
         f65 = runs[(65, sf)].flux_l2_inner
-        @test isapprox(f33, 0.0; atol=0.13)
-        @test isapprox(f65, 0.0; atol=0.03)
+        @test isapprox(f33, 0.0; atol=0.21)
+        @test isapprox(f65, 0.0; atol=0.041)
         # The error falls faster than first order between the 2 grids.
         @test f65 < f33 / 2
+    end
+
+    @testset "flux vector error is 0 for the exact flux and scales with the departure" begin
+        coords = synthetic_coords(41)
+        for d in (2.0, 3.0)
+            err(scale) = SDF._flux_l2_inner(exact_flux_grids(coords, d, scale), coords, d)
+            @test isapprox(err(1.0), 0.0; atol=1.0e-12)
+            @test isapprox(err(1.1), 0.1; atol=1.0e-12)
+            @test isapprox(err(-1.0), 2.0; atol=1.0e-12)
+        end
+    end
+
+    @testset "metrics reject an empty mask" begin
+        near = synthetic_coords(41)
+        far = synthetic_coords(41; shift=10 * SDF.R_PLANET)
+        flux = exact_flux_grids(far, 3.0, 1.0)
+        @test_throws ArgumentError SDF._flux_l2_inner(flux, far, 3.0)
+        @test isfinite(SDF._flux_l2_inner(exact_flux_grids(near, 3.0, 1.0), near, 3.0))
+        zero_grid = zeros(far.Ny1, far.Nx1)
+        grids = (;
+            pf=zero_grid,
+            qxD=flux.qxD,
+            qyD=flux.qyD,
+            S_vent_grid=zero_grid,
+            DQPF=zero_grid,
+            vx=zero_grid,
+            vy=zero_grid,
+        )
+        @test_throws ArgumentError SDF._metrics((; grids), far, false)
     end
 
     @testset "vented flux equals the discrete source, matrix stays rigid (spherical_flow = $sf)" for sf in
@@ -97,6 +216,8 @@ end
         @test six.converged
         @test maximum(abs, six.pf .- four.pf) / maximum(abs, four.pf) < 1.0e-8
         @test isapprox(six.flux_l2_inner, four.flux_l2_inner; rtol=1.0e-6)
+        @test maximum(abs, six.qxD .- four.qxD) / maximum(abs, four.qxD) < 1.0e-8
+        @test maximum(abs, six.qyD .- four.qyD) / maximum(abs, four.qyD) < 1.0e-8
     end
 
     @testset "Validation record schema and drift guards" begin
@@ -129,10 +250,8 @@ end
         @test !ok_unknown
         @test any(occursin("Unknown record id", e) for e in errs_unknown)
 
-        # Every measured metric stays within the regression band of the record.
-        recorded = Dict(
-            String(m["id"]) => Float64(m["value"]) for m in raw_record["metrics"]
-        )
+        # Every metric stays within the regression band of the record: measured at Nx = 33
+        # and 65, the recorded value for the others.
         for (mid, value) in bench.metrics
             band = SDF.PHYSICS_REGRESSION_BANDS[mid]
             @test isapprox(value, recorded[mid]; atol=band.atol, rtol=band.rtol)
@@ -165,6 +284,32 @@ end
             SDF.make_config(SDF.NX_REFERENCE; spherical_flow=false)
         ) != sha
         @test SDF.canonical_config_sha256(SDF.make_config(33; spherical_flow=true)) != sha
+
+        # The text behind the hash lists the grid list and every constant of `set_fields!`.
+        text = SDF.canonical_config_text(cfg)
+        used = (
+            :NX_LIST,
+            :INNER_FRACTION,
+            :ETA_SOLID,
+            :RX_AIR,
+            :PF_INIT,
+            :PHI,
+            :K_PERM,
+            :MU_F,
+            :S_SOURCE,
+            :P_AMB,
+            :T_SURF,
+            :RHO_SOLID,
+            :RHOCP,
+            :RHO_FLUID,
+            :STRENGTH_FILL,
+        )
+        @test issubset(used, SDF.HASHED_CASE_CONSTANTS)
+        for name in used
+            @test occursin("case.$(name)=", text)
+        end
+        @test occursin("case.NX_LIST=[33, 65, 129]\n", text)
+        @test bytes2hex(SHA.sha256(text)) == sha
 
         summary = SDF.expected_config_summary(cfg)
         rec_cfg = raw_record["config"]

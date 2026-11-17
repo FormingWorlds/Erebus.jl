@@ -14,7 +14,7 @@ The rock has a uniform permeability $k = 10^{-13}$ m² and a uniform porosity of
 The fluid has a viscosity $\mu = 10^{-3}$ Pa s.
 The rock is rigid, gravity is off, and every cell inside the sphere produces fluid at the same rate $S = 10^{-11}$ 1/s.
 The surface temperature is 200 K and the ambient pressure is $P_\mathrm{amb} = 100$ Pa.
-The ice vapour pressure at 200 K (0.17 Pa) is lower than $P_\mathrm{amb}$, so the surface pressure is $P_\mathrm{vent} = P_\mathrm{amb} = 100$ Pa.
+The ice vapour pressure at 200 K is lower than $P_\mathrm{amb}$, so the surface pressure is $P_\mathrm{vent} = P_\mathrm{amb} = 100$ Pa.
 The surface is held at this pressure.
 The case does not check the venting conductance (see "Known limit").
 
@@ -41,15 +41,17 @@ The profile error is the relative L2 error over the nodes with $r \le 0.9 R$:
 \epsilon = \sqrt{\frac{\sum_i \left(\Delta p_i - \Delta p_i^\mathrm{exact}\right)^2}{\sum_i \left(\Delta p_i^\mathrm{exact}\right)^2}}, \qquad \Delta p = p - P_\mathrm{amb}.
 ```
 
-We compare the radial Darcy flux $q_r$ with the exact flux in the same way, on the faces with $r \le 0.9 R$:
+We compare the Darcy flux with the exact flux $\mathbf{q} = S \mathbf{r} / d$ on the faces with $r \le 0.9 R$, where $\mathbf{r}$ points from the centre to the face.
+The grid stores the x component of the flux on the vertical faces and the y component on the horizontal faces.
+At each face the error is the stored component minus the same component of the exact flux.
+The flux error is the relative L2 error over all stored x components and all stored y components:
 
 ```math
-\epsilon_q = \sqrt{\frac{\sum_f \left(q_{r,f} - S r_f / d\right)^2}{\sum_f \left(S r_f / d\right)^2}}.
+\epsilon_q = \sqrt{\frac{\sum_c \left(q_c - q_c^\mathrm{exact}\right)^2}{\sum_c \left(q_c^\mathrm{exact}\right)^2}}, \qquad q_c^\mathrm{exact} = \frac{S \, r_c}{d},
 ```
 
-The grid stores the x flux on the vertical faces and the y flux on the horizontal faces.
-At each face, $q_r$ is the stored flux times its direction cosine plus the other flux component times its direction cosine.
-The other component is the mean of the 4 faces around the face.
+where $c$ runs over the stored components and $r_c$ is the coordinate of the face that the component belongs to, measured from the centre (x for an x component, y for a y component).
+The error does not average the components of neighbouring faces.
 We also compare the centre excess pressure with the option on and off, the vented rate with the produced rate, and the speed of the solid.
 
 **How we know the right answer.**
@@ -61,7 +63,8 @@ p - P_\mathrm{amb} = \frac{\mu S \left(R^2 - r^2\right)}{2 d k},
 ```
 
 with $d = 3$ for `spherical_flow = true` and $d = 2$ for `spherical_flow = false`.
-The radial flux is $q_r = S r / d$, because all fluid that the cells inside radius $r$ produce crosses the surface of radius $r$.
+The flux is radial with the size $S r / d$, because all fluid that the cells inside radius $r$ produce crosses the surface of radius $r$.
+Its components are $S x / d$ and $S y / d$ with $x$ and $y$ measured from the centre.
 The centre values are $\mu S R^2 / (6 k)$ and $\mu S R^2 / (4 k)$, so the ratio of the sphere to the disk is exactly 2/3.
 All fluid that the cells produce leaves through the surface, so the vented rate equals the produced rate.
 The rock is rigid, so the solid speed is zero.
@@ -107,10 +110,17 @@ The surface pressure is then $P_\mathrm{amb}$ for any value of the venting condu
 The case therefore does not check the venting conductance or its face weight.
 
 !!! details "Test details"
-    - Reference: exact solution, $\mu S (R^2 - r^2) / (2 d k)$, the exact radial flux $S r / d$, the centre ratio 2/3, a vented rate equal to the produced rate, and a solid speed of zero.
-    - Tolerance: L2 error at most 0.20 at `Nx = 33`, at most 0.08 at `Nx = 65` and at most 0.05 at `Nx = 129`; order of the error between `Nx = 65` and `Nx = 129` equal to 1 within 0.3; flux L2 error at most 0.13 at `Nx = 33`, at most 0.03 at `Nx = 65` and at most 0.013 at `Nx = 129`; centre ratio equal to 2/3 within 0.01; vented rate equal to the produced rate within $10^{-8}$ of the rate; solid speed at most $10^{-12}$ m/s.
-    - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_darcy_flow.jl`, which is 0.005 on each L2 error of the pressure, 0.005, 0.002 and 0.001 on the flux error at `Nx = 33`, 65 and 129, 0.05 on each order and 0.002 on the centre ratio.
-    - Test id: `profile_l2_inner_off_nx33`, `profile_l2_inner_off_nx65`, `profile_l2_inner_off_nx129`, `profile_l2_inner_on_nx33`, `profile_l2_inner_on_nx65`, `profile_l2_inner_on_nx129`, `profile_order_off_65_129`, `profile_order_on_65_129`, `centre_ratio_on_off_nx65`, `flux_l2_inner_off_nx33`, `flux_l2_inner_off_nx65`, `flux_l2_inner_off_nx129`, `flux_l2_inner_on_nx33`, `flux_l2_inner_on_nx65`, `flux_l2_inner_on_nx129`, `vent_closure_off_nx65`, `vent_closure_on_nx65`, `solid_speed_max_nx65`. A `flux_l2_inner` value is the relative L2 error $\epsilon_q$. A `vent_closure` value is the absolute difference between the ratio of the vented to the produced rate and 1.
+    - Reference: exact solution, $\mu S (R^2 - r^2) / (2 d k)$, the exact flux $S \mathbf{r} / d$, the centre ratio 2/3, a vented rate equal to the produced rate, and a solid speed of zero.
+    - Tolerance: L2 error at most 0.20 at `Nx = 33`, at most 0.08 at `Nx = 65` and at most 0.05 at `Nx = 129`; order of the error between `Nx = 65` and `Nx = 129` equal to 1 within 0.3; flux L2 error at most 0.21 at `Nx = 33`, at most 0.041 at `Nx = 65` and at most 0.019 at `Nx = 129`; centre ratio equal to 2/3 within 0.01; vented rate equal to the produced rate within $10^{-8}$ of the rate; solid speed at most $10^{-12}$ m/s.
+    - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_darcy_flow.jl`.
+      It is 0.005 on each L2 error of the pressure.
+      It is 0.05 on each order.
+      It is 0.008, 0.003 and 0.0015 on the flux error at `Nx = 33`, 65 and 129.
+      It is 0.002 on the centre ratio.
+      It is $10^{-8}$ on each vented-rate closure and $10^{-12}$ m/s on the solid speed.
+    - Test id: `profile_l2_inner_off_nx33`, `profile_l2_inner_off_nx65`, `profile_l2_inner_off_nx129`, `profile_l2_inner_on_nx33`, `profile_l2_inner_on_nx65`, `profile_l2_inner_on_nx129`, `profile_order_off_65_129`, `profile_order_on_65_129`, `centre_ratio_on_off_nx65`, `flux_l2_inner_off_nx33`, `flux_l2_inner_off_nx65`, `flux_l2_inner_off_nx129`, `flux_l2_inner_on_nx33`, `flux_l2_inner_on_nx65`, `flux_l2_inner_on_nx129`, `vent_closure_off_nx65`, `vent_closure_on_nx65`, `solid_speed_max_nx65`.
+      A `flux_l2_inner` value is the relative L2 vector error $\epsilon_q$.
+      A `vent_closure` value is the absolute difference between the ratio of the vented to the produced rate and 1.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ## All recorded values
@@ -129,7 +139,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_darcy_flow -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `b80632a7`, config SHA-256 `45d1a29b0011`)
+**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `b80632a7`, config SHA-256 `36c4b75422d3`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -142,12 +152,12 @@ The second command needs NumPy and Matplotlib.
 | `profile` | Convergence order log2(L2(Nx=65) / L2(Nx=129)), 2-D disk | 129 | `9.0854e-01` | `1.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `profile` | Convergence order log2(L2(Nx=65) / L2(Nx=129)), 3-D sphere | 129 | `9.0623e-01` | `1.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `profile` | Centre excess pressure ratio, sphere to disk (Nx=65) | 65 | `6.6676e-01` | `6.6667e-01` | `atol=1.00e-02, rtol=0.00e+00` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=33) | 33 | `6.4710e-02` | `0.0000e+00` | `<= 1.30e-01` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=65) | 65 | `1.4198e-02` | `0.0000e+00` | `<= 3.00e-02` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 2-D disk (Nx=129) | 129 | `6.2621e-03` | `0.0000e+00` | `<= 1.30e-02` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=33) | 33 | `6.4074e-02` | `0.0000e+00` | `<= 1.30e-01` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `1.4439e-02` | `0.0000e+00` | `<= 3.00e-02` | dimensionless | **PASS** |
-| `flux` | Radial Darcy flux L2 relative error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `6.3022e-03` | `0.0000e+00` | `<= 1.30e-02` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=33) | 33 | `9.8930e-02` | `0.0000e+00` | `<= 2.10e-01` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=65) | 65 | `1.9440e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=129) | 129 | `8.8214e-03` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=33) | 33 | `1.0111e-01` | `0.0000e+00` | `<= 2.10e-01` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `2.0182e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `flux` | Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `9.2389e-03` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
 | `closure` | Vented to produced fluid rate, abs(ratio - 1), 2-D disk (Nx=65) | 65 | `7.1170e-11` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
 | `closure` | Vented to produced fluid rate, abs(ratio - 1), 3-D sphere (Nx=65) | 65 | `3.7067e-11` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
 | `closure` | Largest solid velocity component, both settings (Nx=65) | 65 | `1.9465e-17` | `0.0000e+00` | `<= 1.00e-12` | m/s | **PASS** |

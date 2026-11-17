@@ -8,7 +8,7 @@ viscosity `mu`, with the surface held at the vent pressure (Dirichlet limit of t
 venting condition), is `p - P_vent = mu S (R^2 - r^2) / (2 d k)`, with `d = 3` for the
 sphere (`geometry.spherical_flow = true`) and `d = 2` for the disk (`false`).
 The ice saturation pressure at `T_SURF` is below `P_AMB`, so `P_vent = P_AMB`.
-The exact radial Darcy flux is `q_r = S r / d`.
+The exact Darcy flux is `q = S r_vec / d`, with `r_vec` pointing from the centre.
 The case builds the state with `init_simulation`, sets the grid fields directly and calls
 `solve_stokes_darcy!` once on timestep 1, where the poroelastic compressibilities are off.
 """
@@ -37,6 +37,10 @@ const ETA_SOLID = 1.0e28
 const RX_AIR = 1.0e30
 const K_VENT = 1.0e-6
 const PF_INIT = 1.0e5
+const RHO_SOLID = 3000.0
+const RHOCP = 3.0e6
+const RHO_FLUID = 1000.0
+const STRENGTH_FILL = 1.0e20
 const DT_YR = 1.0e-10
 const INNER_FRACTION = 0.9
 const NX_LIST = (33, 65, 129)
@@ -120,6 +124,17 @@ _inside(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) 
 
 Set the grid fields of a rigid, uniformly permeable sphere with a uniform fluid source:
 impermeable faces outside the sphere, no gravity, uniform porosity and fluid pressure.
+
+Parameters
+----------
+state : SimulationState
+    State from `init_simulation`; its grid fields are overwritten.
+coords : GridCoordinates
+    Staggered grid coordinates of `state`.
+
+Returns
+-------
+Nothing
 """
 function set_fields!(state, coords)
     g = state.grids
@@ -129,7 +144,7 @@ function set_fields!(state, coords)
     end
     fill!(g.FRI, 0.0)
     for f in (g.COH, g.TEN, g.GGG, g.GGGP)
-        fill!(f, 1.0e20)
+        fill!(f, STRENGTH_FILL)
     end
     fill!(g.tk1, T_SURF)
     fill!(g.tk2, T_SURF)
@@ -137,11 +152,11 @@ function set_fields!(state, coords)
         fill!(f, PHI)
     end
     for f in (g.RHO, g.RHOX, g.RHOY)
-        fill!(f, 3000.0)
+        fill!(f, RHO_SOLID)
     end
-    fill!(g.RHOCP, 3.0e6)
-    fill!(g.RHOFX, 1000.0)
-    fill!(g.RHOFY, 1000.0)
+    fill!(g.RHOCP, RHOCP)
+    fill!(g.RHOFX, RHO_FLUID)
+    fill!(g.RHOFY, RHO_FLUID)
     fill!(g.pr, P_AMB)
     fill!(g.pr0, P_AMB)
     fill!(g.pf, PF_INIT)
@@ -161,7 +176,7 @@ end
 """
     run_case(N; spherical_flow, darcy_elimination=true)
 
-Solve the case once and compare the fluid pressure and the radial Darcy flux with the exact
+Solve the case once and compare the fluid pressure and the Darcy flux with the exact
 solution.
 
 Parameters
@@ -178,9 +193,10 @@ Returns
 NamedTuple
     `converged`: `plastic_converged` flag returned by `solve_stokes_darcy!`;
     `pf`: fluid pressure grid [Pa];
+    `qxD`, `qyD`: Darcy flux grids [m/s];
     `l2_inner`: relative L2 error of `p - P_AMB` over P nodes with `r <= 0.9 R`;
-    `flux_l2_inner`: relative L2 error of the radial Darcy flux over faces with
-    `r <= 0.9 R`;
+    `flux_l2_inner`: relative L2 vector error of the Darcy flux over the faces with
+    `r <= 0.9 R` (see `_flux_l2_inner`);
     `dp_centre`: computed `p - P_AMB` at the P node nearest the centre;
     `dp_centre_exact`: exact value at that node;
     `vent_flux`, `source_flux`: vented and produced fluid volume rate [m^3/s per slice
@@ -211,15 +227,15 @@ function run_case(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
 end
 
 """
-    _radial_flux_l2_inner(g, coords, d)
+    _flux_l2_inner(g, coords, d)
 
-Return the relative L2 error of the radial Darcy flux against the exact `S r / d` over the
-faces with `r <= INNER_FRACTION * R_PLANET`.
+Return the relative L2 vector error of the Darcy flux against the exact flux
+`S r_vec / d` over the faces with `r <= INNER_FRACTION * R_PLANET`.
 
-At each `qxD` face the radial flux is `qxD cos(theta) + qy sin(theta)` with `qy` the mean of
-the 4 surrounding `qyD` faces, and likewise at each `qyD` face with `qx` the mean of the 4
-surrounding `qxD` faces. The `qxD[i, j]` face lies at `(coords.xvx[j], coords.yvx[i])` and the
-`qyD[i, j]` face at `(coords.xvy[j], coords.yvy[i])`.
+At each face the error is the stored component minus the same component of the exact flux,
+with `r_vec` pointing from the centre to the face. The `qxD[i, j]` face lies at
+`(coords.xvx[j], coords.yvx[i])` and the `qyD[i, j]` face at `(coords.xvy[j], coords.yvy[i])`.
+The result is `sqrt(sum(err^2) / sum(exact^2))` over all selected `qxD` and `qyD` faces.
 
 Parameters
 ----------
@@ -234,49 +250,82 @@ Returns
 -------
 Float64
     Relative L2 error, dimensionless.
+
+Raises
+------
+ArgumentError
+    If no face lies within `INNER_FRACTION * R_PLANET` of the centre, or the exact flux
+    is zero on all selected faces.
 """
-function _radial_flux_l2_inner(g, coords, d::Float64)
+function _flux_l2_inner(g, coords, d::Float64)
     sq_err = sq_ref = 0.0
+    n_faces = 0
     r_max = INNER_FRACTION * R_PLANET
-    # x faces: i in 2:Ny, j in 2:(Nx - 1); the 4 qyD neighbours are (i - 1:i, j:(j + 1)).
-    for j in 2:(coords.Nx - 1), i in 2:coords.Ny
+    for j in 1:(coords.Nx), i in 2:(coords.Ny)
         dxf = coords.xvx[j] - X_CENTRE
-        dyf = coords.yvx[i] - Y_CENTRE
-        r = hypot(dxf, dyf)
-        (0.0 < r <= r_max) || continue
-        qy = 0.25 * (g.qyD[i - 1, j] + g.qyD[i - 1, j + 1] + g.qyD[i, j] + g.qyD[i, j + 1])
-        q_r = (g.qxD[i, j] * dxf + qy * dyf) / r
-        sq_err += (q_r - S_SOURCE * r / d)^2
-        sq_ref += (S_SOURCE * r / d)^2
+        hypot(dxf, coords.yvx[i] - Y_CENTRE) <= r_max || continue
+        exact = S_SOURCE * dxf / d
+        sq_err += (g.qxD[i, j] - exact)^2
+        sq_ref += exact^2
+        n_faces += 1
     end
-    # y faces: i in 2:(Ny - 1), j in 2:Nx; the 4 qxD neighbours are (i:(i + 1), j - 1:j).
-    for j in 2:coords.Nx, i in 2:(coords.Ny - 1)
-        dxf = coords.xvy[j] - X_CENTRE
+    for j in 2:(coords.Nx), i in 1:(coords.Ny)
         dyf = coords.yvy[i] - Y_CENTRE
-        r = hypot(dxf, dyf)
-        (0.0 < r <= r_max) || continue
-        qx = 0.25 * (g.qxD[i, j - 1] + g.qxD[i, j] + g.qxD[i + 1, j - 1] + g.qxD[i + 1, j])
-        q_r = (qx * dxf + g.qyD[i, j] * dyf) / r
-        sq_err += (q_r - S_SOURCE * r / d)^2
-        sq_ref += (S_SOURCE * r / d)^2
+        hypot(coords.xvy[j] - X_CENTRE, dyf) <= r_max || continue
+        exact = S_SOURCE * dyf / d
+        sq_err += (g.qyD[i, j] - exact)^2
+        sq_ref += exact^2
+        n_faces += 1
     end
+    n_faces > 0 ||
+        throw(ArgumentError("no flux face lies within $(INNER_FRACTION) R of the centre"))
+    sq_ref > 0.0 || throw(ArgumentError("the exact flux is zero on every selected face"))
     return sqrt(sq_err / sq_ref)
 end
 
+"""
+    _metrics(state, coords, spherical_flow)
+
+Return the error measures of a solved case: the pressure and flux errors against the exact
+solution, the centre pressure, the vented and produced rates and the largest solid speed.
+
+Parameters
+----------
+state : SimulationState
+    Solved state; only `state.grids` is read.
+coords : GridCoordinates
+    Staggered grid coordinates.
+spherical_flow : Bool
+    Value of `geometry.spherical_flow`; sets the flow dimension and the cell weights.
+
+Returns
+-------
+NamedTuple
+    The fields of `run_case` from `pf` onward.
+
+Raises
+------
+ArgumentError
+    If no P node lies inside the planet or none within `INNER_FRACTION * R_PLANET`, or if
+    `_flux_l2_inner` finds no face.
+"""
 function _metrics(state, coords, spherical_flow)
     g = state.grids
     d = spherical_flow ? 3.0 : 2.0
     sq_err = sq_ref = 0.0
     vent_flux = source_flux = 0.0
+    n_inside = n_inner = 0
     r_min, dp_c, dp_c_exact = Inf, NaN, NaN
     for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2)
         r = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE)
         r <= R_PLANET || continue
+        n_inside += 1
         dp = g.pf[i, j] - P_AMB
         dp_exact = MU_F * S_SOURCE * (R_PLANET^2 - r^2) / (2d * K_PERM)
         if r <= INNER_FRACTION * R_PLANET
             sq_err += (dp - dp_exact)^2
             sq_ref += dp_exact^2
+            n_inner += 1
         end
         if r < r_min
             r_min, dp_c, dp_c_exact = r, dp, dp_exact
@@ -291,10 +340,15 @@ function _metrics(state, coords, spherical_flow)
         vent_flux += g.S_vent_grid[i, j] * w * coords.dx * coords.dy
         source_flux += g.DQPF[i, j] * w * coords.dx * coords.dy
     end
+    n_inside > 0 || throw(ArgumentError("no P node lies inside the planet"))
+    n_inner > 0 ||
+        throw(ArgumentError("no P node lies within $(INNER_FRACTION) R of the centre"))
     return (;
         pf=copy(g.pf),
+        qxD=copy(g.qxD),
+        qyD=copy(g.qyD),
         l2_inner=sqrt(sq_err / sq_ref),
-        flux_l2_inner=_radial_flux_l2_inner(g, coords, d),
+        flux_l2_inner=_flux_l2_inner(g, coords, d),
         dp_centre=dp_c,
         dp_centre_exact=dp_c_exact,
         vent_flux,
@@ -302,6 +356,25 @@ function _metrics(state, coords, spherical_flow)
         max_solid_speed=max(maximum(abs, g.vx), maximum(abs, g.vy)),
     )
 end
+
+const HASHED_CASE_CONSTANTS = (
+    :L_BOX,
+    :NX_LIST,
+    :INNER_FRACTION,
+    :S_SOURCE,
+    :MU_F,
+    :K_PERM,
+    :PHI,
+    :ETA_SOLID,
+    :RX_AIR,
+    :PF_INIT,
+    :P_AMB,
+    :T_SURF,
+    :RHO_SOLID,
+    :RHOCP,
+    :RHO_FLUID,
+    :STRENGTH_FILL,
+)
 
 const BENCHMARK_CONFIG_SECTIONS = (
     :grid,
@@ -348,12 +421,12 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     "profile_l2_inner_on_nx129" => (; atol=0.005, rtol=0.0),
     "profile_order_off_65_129" => (; atol=0.05, rtol=0.0),
     "profile_order_on_65_129" => (; atol=0.05, rtol=0.0),
-    "flux_l2_inner_off_nx33" => (; atol=0.005, rtol=0.0),
-    "flux_l2_inner_off_nx65" => (; atol=0.002, rtol=0.0),
-    "flux_l2_inner_off_nx129" => (; atol=0.001, rtol=0.0),
-    "flux_l2_inner_on_nx33" => (; atol=0.005, rtol=0.0),
-    "flux_l2_inner_on_nx65" => (; atol=0.002, rtol=0.0),
-    "flux_l2_inner_on_nx129" => (; atol=0.001, rtol=0.0),
+    "flux_l2_inner_off_nx33" => (; atol=0.008, rtol=0.0),
+    "flux_l2_inner_off_nx65" => (; atol=0.003, rtol=0.0),
+    "flux_l2_inner_off_nx129" => (; atol=0.0015, rtol=0.0),
+    "flux_l2_inner_on_nx33" => (; atol=0.008, rtol=0.0),
+    "flux_l2_inner_on_nx65" => (; atol=0.003, rtol=0.0),
+    "flux_l2_inner_on_nx129" => (; atol=0.0015, rtol=0.0),
     "centre_ratio_on_off_nx65" => (; atol=0.002, rtol=0.0),
     "vent_closure_off_nx65" => (; atol=1.0e-8, rtol=0.0),
     "vent_closure_on_nx65" => (; atol=1.0e-8, rtol=0.0),
@@ -368,40 +441,85 @@ const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
 )
 
 """
-    evaluate_spherical_darcy_flow_benchmark()
+    metrics_from_runs(runs)
 
-Run the case at every grid in `NX_LIST` with `spherical_flow` off and on and return the 18
-validation metrics.
+Return the validation metrics that the `run_case` results in `runs` determine.
+
+The profile and flux errors exist for each grid present in `runs`. The convergence order
+of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`. The centre
+ratio, the closure and the solid speed need the `NX_REFERENCE` grid of both settings.
+
+Parameters
+----------
+runs : AbstractDict
+    Map from `(N, spherical_flow)` to the `run_case` result.
+
+Returns
+-------
+Dict{String,Float64}
+    Metric values by id (see `EXPECTED_METRIC_IDS`); an id whose runs are missing is
+    absent.
+"""
+function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
+    n_fine = maximum(NX_LIST)
+    metrics = Dict{String,Float64}()
+    for (sf, tag) in ((false, "off"), (true, "on"))
+        for n in NX_LIST
+            haskey(runs, (n, sf)) || continue
+            metrics["profile_l2_inner_$(tag)_nx$(n)"] = runs[(n, sf)].l2_inner
+            metrics["flux_l2_inner_$(tag)_nx$(n)"] = runs[(n, sf)].flux_l2_inner
+        end
+        if haskey(runs, (NX_REFERENCE, sf)) && haskey(runs, (n_fine, sf))
+            metrics["profile_order_$(tag)_$(NX_REFERENCE)_$(n_fine)"] = log2(
+                runs[(NX_REFERENCE, sf)].l2_inner / runs[(n_fine, sf)].l2_inner
+            )
+        end
+        if haskey(runs, (NX_REFERENCE, sf))
+            m = runs[(NX_REFERENCE, sf)]
+            metrics["vent_closure_$(tag)_nx$(NX_REFERENCE)"] = abs(
+                m.vent_flux / m.source_flux - 1.0
+            )
+        end
+    end
+    if haskey(runs, (NX_REFERENCE, true)) && haskey(runs, (NX_REFERENCE, false))
+        on, off = runs[(NX_REFERENCE, true)], runs[(NX_REFERENCE, false)]
+        metrics["centre_ratio_on_off_nx$(NX_REFERENCE)"] = on.dp_centre / off.dp_centre
+        metrics["solid_speed_max_nx$(NX_REFERENCE)"] = max(
+            on.max_solid_speed, off.max_solid_speed
+        )
+    end
+    return metrics
+end
+
+"""
+    evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
+
+Run the case at every grid in `nx_list` with `spherical_flow` off and on and return the runs
+and the validation metrics they determine.
+
+Parameters
+----------
+nx_list : Tuple{Vararg{Int}}, optional
+    Grids to run, each at least `NX_MIN` (default `NX_LIST`). With the default the result
+    holds all 18 metrics.
 
 Returns
 -------
 NamedTuple
     `runs`: `Dict` from `(N, spherical_flow)` to the `run_case` result;
-    `metrics`: `Dict{String,Float64}` from metric id (see `EXPECTED_METRIC_IDS`) to value.
+    `metrics`: `Dict{String,Float64}` from metric id (see `EXPECTED_METRIC_IDS`) to value,
+    from `metrics_from_runs`.
+
+Raises
+------
+ArgumentError
+    If a grid in `nx_list` is below `NX_MIN`.
 """
-function evaluate_spherical_darcy_flow_benchmark()
+function evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
     runs = Dict(
-        (n, sf) => run_case(n; spherical_flow=sf) for n in NX_LIST, sf in (false, true)
+        (n, sf) => run_case(n; spherical_flow=sf) for n in nx_list, sf in (false, true)
     )
-    metrics = Dict{String,Float64}()
-    for (sf, tag) in ((false, "off"), (true, "on"))
-        for n in NX_LIST
-            metrics["profile_l2_inner_$(tag)_nx$(n)"] = runs[(n, sf)].l2_inner
-            metrics["flux_l2_inner_$(tag)_nx$(n)"] = runs[(n, sf)].flux_l2_inner
-        end
-        metrics["profile_order_$(tag)_65_129"] = log2(
-            runs[(65, sf)].l2_inner / runs[(129, sf)].l2_inner
-        )
-        m = runs[(NX_REFERENCE, sf)]
-        metrics["vent_closure_$(tag)_nx65"] = abs(m.vent_flux / m.source_flux - 1.0)
-    end
-    metrics["centre_ratio_on_off_nx65"] =
-        runs[(NX_REFERENCE, true)].dp_centre / runs[(NX_REFERENCE, false)].dp_centre
-    metrics["solid_speed_max_nx65"] = max(
-        runs[(NX_REFERENCE, false)].max_solid_speed,
-        runs[(NX_REFERENCE, true)].max_solid_speed,
-    )
-    return (; runs, metrics)
+    return (; runs, metrics=metrics_from_runs(runs))
 end
 
 """
@@ -445,15 +563,47 @@ function _canonical_field_repr(val)::String
 end
 
 """
+    canonical_config_text(cfg)
+
+Return the text that `canonical_config_sha256` hashes: for each section in
+`BENCHMARK_CONFIG_SECTIONS` in that order, one line `section.field=value` per field of the
+section with the fields sorted by name, followed by one line `case.NAME=value` for each
+module constant in `HASHED_CASE_CONSTANTS` in that order. Booleans, integers, floats
+(`repr` of the `Float64`), symbols, strings, `nothing`, tuples and vectors have a fixed text
+form. The sections not in `BENCHMARK_CONFIG_SECTIONS` and the module constants not in
+`HASHED_CASE_CONSTANTS` do not enter the text.
+
+Parameters
+----------
+cfg : Union{SimulationConfig,NamedTuple}
+    Simulation configuration (or section container) of the case, from `make_config`.
+
+Returns
+-------
+String
+    The canonical text.
+"""
+function canonical_config_text(cfg)::String
+    io = IOBuffer()
+    for sec_sym in BENCHMARK_CONFIG_SECTIONS
+        sec = getproperty(cfg, sec_sym)
+        for f_sym in sort(collect(fieldnames(typeof(sec))))
+            val = getfield(sec, f_sym)
+            println(io, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
+        end
+    end
+    for name in HASHED_CASE_CONSTANTS
+        println(io, "case.", name, "=", _canonical_field_repr(getfield(@__MODULE__, name)))
+    end
+    return String(take!(io))
+end
+
+"""
     canonical_config_sha256(cfg)
 
-Return the SHA-256 digest of a text that lists, for each section in
-`BENCHMARK_CONFIG_SECTIONS` in that order, one line `section.field=value` per field of the
-section with the fields sorted by name, followed by the 5 lines `case.NAME=value` for the
-module constants `S_SOURCE`, `L_BOX`, `INNER_FRACTION`, `RX_AIR` and `PF_INIT`. Booleans,
-integers, floats (`repr` of the `Float64`), symbols, strings, `nothing` and vectors have a
-fixed text form. The sections not in `BENCHMARK_CONFIG_SECTIONS` and the other module
-constants do not enter the digest.
+Return the SHA-256 digest of `canonical_config_text(cfg)`, which covers the configuration
+sections of the case, the grid list `NX_LIST` and every constant that `set_fields!` and the
+error measures use (`HASHED_CASE_CONSTANTS`).
 
 Parameters
 ----------
@@ -466,20 +616,7 @@ String
     64-character lowercase hexadecimal SHA-256 digest.
 """
 function canonical_config_sha256(cfg)::String
-    io = IOBuffer()
-    for sec_sym in BENCHMARK_CONFIG_SECTIONS
-        sec = getproperty(cfg, sec_sym)
-        for f_sym in sort(collect(fieldnames(typeof(sec))))
-            val = getfield(sec, f_sym)
-            println(io, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
-        end
-    end
-    println(io, "case.S_SOURCE=", _canonical_field_repr(S_SOURCE))
-    println(io, "case.L_BOX=", _canonical_field_repr(L_BOX))
-    println(io, "case.INNER_FRACTION=", _canonical_field_repr(INNER_FRACTION))
-    println(io, "case.RX_AIR=", _canonical_field_repr(RX_AIR))
-    println(io, "case.PF_INIT=", _canonical_field_repr(PF_INIT))
-    return bytes2hex(sha256(take!(io)))
+    return bytes2hex(sha256(canonical_config_text(cfg)))
 end
 
 """

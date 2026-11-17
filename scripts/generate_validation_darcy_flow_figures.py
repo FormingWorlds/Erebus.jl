@@ -164,8 +164,13 @@ def main(data_dir, assets_dir, preview_dir=None):
         Folder for the SVG figures.
     preview_dir : str or Path, optional
         Folder for PNG previews.
+
+    Both output folders are created when they are missing.
     """
     data_dir, assets_dir = Path(data_dir), Path(assets_dir)
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    if preview_dir is not None:
+        Path(preview_dir).mkdir(parents=True, exist_ok=True)
     data = {
         "curves": load(data_dir / "reference_curves.csv"),
         "conv": load(data_dir / "convergence.csv"),

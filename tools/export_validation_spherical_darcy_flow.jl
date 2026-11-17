@@ -42,7 +42,7 @@ end
 """
     check_clean_source_tree(repo_root::String=normpath(joinpath(@__DIR__, ".."))) -> Tuple{Bool,String}
 
-Verify that `src/` and `benchmarks/` have no uncommitted modifications before exporting a validation record.
+Verify that `src/`, `benchmarks/` and `tools/` have no uncommitted modifications before exporting a validation record.
 The record file itself is excluded.
 
 Parameters
@@ -53,14 +53,14 @@ repo_root : String, optional
 Returns
 -------
 Tuple{Bool,String}
-    `true` and empty string when `src/` and `benchmarks/` are clean; `false` and `git status --porcelain` output otherwise.
+    `true` and empty string when `src/`, `benchmarks/` and `tools/` are clean; `false` and `git status --porcelain` output otherwise.
 """
 function check_clean_source_tree(
     repo_root::String=normpath(joinpath(@__DIR__, ".."))
 )::Tuple{Bool,String}
     dirty = strip(
         readchomp(
-            `git -C $repo_root status --porcelain -- src benchmarks ":(exclude)benchmarks/records/spherical_darcy_flow.toml"`,
+            `git -C $repo_root status --porcelain -- src benchmarks tools ":(exclude)benchmarks/records/spherical_darcy_flow.toml"`,
         ),
     )
     return (isempty(dirty), String(dirty))
@@ -173,13 +173,13 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         "isapprox",
         "dimensionless",
     )
-    flux_atol = Dict(33 => 0.13, 65 => 0.03, 129 => 0.013)
+    flux_atol = Dict(33 => 0.21, 65 => 0.041, 129 => 0.019)
     for (tag, label) in (("off", "2-D disk"), ("on", "3-D sphere"))
         for nx in (33, 65, 129)
             add!(
                 "flux_l2_inner_$(tag)_nx$(nx)",
                 "flux",
-                "Radial Darcy flux L2 relative error for r <= 0.9 R, $(label) (Nx=$(nx))",
+                "Darcy flux L2 relative vector error for r <= 0.9 R, $(label) (Nx=$(nx))",
                 nx,
                 flux_atol[nx],
                 "le_atol",
@@ -384,11 +384,11 @@ src_commit : Union{String,Nothing}, optional
 bench : Any, optional
     Pre-evaluated benchmark tuple, or `nothing` to evaluate on demand.
 check_clean_tree : Bool, optional
-    Refuse to export when `src/` or `benchmarks/` has uncommitted changes (default `true`).
+    Refuse to export when `src/`, `benchmarks/` or `tools/` has uncommitted changes (default `true`).
 dirty_status : Union{String,Nothing}, optional
     Replacement for the `git status --porcelain` output of the clean-tree check.
 repo_root : String, optional
-    Repository root directory checked for `src/` and `benchmarks/` cleanliness.
+    Repository root directory checked for `src/`, `benchmarks/` and `tools/` cleanliness.
 
 Returns
 -------
@@ -433,7 +433,7 @@ function run_export_cli(
         if !ok_clean
             println(
                 stderr,
-                "Refusing to export validation record with uncommitted changes in src/ or benchmarks/:\n$dirty_out",
+                "Refusing to export validation record with uncommitted changes in src/, benchmarks/ or tools/:\n$dirty_out",
             )
             return 1
         end
