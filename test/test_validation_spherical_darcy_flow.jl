@@ -139,6 +139,12 @@ end
         @test_throws ArgumentError SDF.make_config(SDF.NX_MIN - 1; spherical_flow=true)
         @test_throws ArgumentError SDF.run_case(SDF.NX_MIN - 1; spherical_flow=false)
         @test SDF.make_config(SDF.NX_MIN; spherical_flow=true).grid.Nx == SDF.NX_MIN
+        @test_throws ArgumentError SDF.evaluate_spherical_darcy_flow_benchmark(;
+            nx_list=(17,)
+        )
+        @test_throws ArgumentError SDF.evaluate_spherical_darcy_flow_benchmark(;
+            nx_list=(33.0,)
+        )
     end
 
     @testset "excess pressure profile against the exact solution (spherical_flow = $sf)" for sf in
@@ -288,9 +294,14 @@ end
         ) != sha
         @test SDF.canonical_config_sha256(SDF.make_config(33; spherical_flow=true)) != sha
 
-        # The text behind the hash lists the grid list and every constant of `set_fields!`.
+        # The hashed text lists the geometry, the grid list and the constants of `set_fields!`.
         text = SDF.canonical_config_text(cfg)
         used = (
+            :L_BOX,
+            :R_PLANET,
+            :X_CENTRE,
+            :Y_CENTRE,
+            :NX_REFERENCE,
             :NX_LIST,
             :INNER_FRACTION,
             :ETA_SOLID,
@@ -307,7 +318,7 @@ end
             :RHO_FLUID,
             :STRENGTH_FILL,
         )
-        @test issubset(used, SDF.HASHED_CASE_CONSTANTS)
+        @test Set(used) == Set(SDF.HASHED_CASE_CONSTANTS)
         for name in used
             @test occursin("case.$(name)=", text)
         end
@@ -341,6 +352,12 @@ end
         @test isempty(errs_repro)
         @test run_darcy_validation_check(record_path; bench=bench)
         @test run_validation_cli(["--check", record_path]; darcy_bench=bench) == 0
+
+        status = SphericalDarcyFlowExport.metric_status
+        # (value, reference) pairs: only a finite value within atol of a zero reference passes.
+        cases = ((0.01, 0.0), (0.01, 1.0), (0.01, NaN), (NaN, 0.0), (0.06, 0.0))
+        statuses = [status(v, ref, 0.05, 0.0, "le_atol") for (v, ref) in cases]
+        @test statuses == ["PASS", "FAIL", "FAIL", "FAIL", "FAIL"]
 
         mktempdir() do tmpdir
             exported = joinpath(tmpdir, "exported_spherical_darcy_flow.toml")

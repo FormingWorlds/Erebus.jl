@@ -93,17 +93,20 @@ ArgumentError
 """
 function node_profile(N::Int; spherical_flow::Bool)
     cfg = SDF.make_config(N; spherical_flow=spherical_flow)
-    state, coords, ws, tio, _ = with_logger(NullLogger()) do
-        return Erebus.init_simulation(cfg; output_path=mktempdir())
-    end
-    tio === nothing || close(tio)
-    state.timestep = 1
-    state.accumulators.P_amb = SDF.P_AMB
-    SDF.set_fields!(state, coords)
-    with_logger(NullLogger()) do
-        return Erebus.solve_stokes_darcy!(
-            state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
-        )
+    state, coords = mktempdir() do out
+        state, coords, ws, tio, _ = with_logger(NullLogger()) do
+            return Erebus.init_simulation(cfg; output_path=out)
+        end
+        tio === nothing || close(tio)
+        state.timestep = 1
+        state.accumulators.P_amb = SDF.P_AMB
+        SDF.set_fields!(state, coords)
+        with_logger(NullLogger()) do
+            return Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+        end
+        return state, coords
     end
     r, dp, dp_exact = Float64[], Float64[], Float64[]
     for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2)

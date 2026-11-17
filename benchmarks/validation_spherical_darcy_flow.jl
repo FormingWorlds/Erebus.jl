@@ -121,6 +121,18 @@ end
     _inside(coords, i, j)
 
 Return whether the P node `(i, j)` lies inside the sphere, `r <= R_PLANET`.
+
+Parameters
+----------
+coords : GridCoordinates
+    Grid coordinates of the case.
+i, j : Int
+    Row and column index of the P node.
+
+Returns
+-------
+Bool
+    `true` when the node distance from the centre is at most `R_PLANET`.
 """
 _inside(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) <= R_PLANET
 
@@ -205,8 +217,8 @@ NamedTuple
     `dp_centre`: computed `p - P_AMB` at the P node nearest the centre;
     `dp_centre_exact`: exact value at that node;
     `vent_flux`, `source_flux`: vented and produced fluid volume rate, summed with the
-    cell weights of the continuity rows ([m^3/s] with `spherical_flow = true`, [m^2/s]
-    per unit depth with `false`);
+    cell weights of the continuity rows ([m^3/s] with `spherical_flow = true`; [m^2/s],
+    that is [m^3/s] per metre of depth, with `false`);
     `max_solid_speed`: largest solid velocity component [m/s].
 
 Raises
@@ -459,8 +471,9 @@ const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
 Return the validation metrics that the `run_case` results in `runs` determine.
 
 The profile and flux errors exist for each grid of `NX_LIST` present in `runs`. The convergence order
-of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`. The centre
-ratio, the closure and the solid speed need the `NX_REFERENCE` grid of both settings.
+of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`, and its closure
+needs the `NX_REFERENCE` grid. The centre ratio and the solid speed need the `NX_REFERENCE`
+grid of both settings.
 
 Parameters
 ----------
@@ -529,7 +542,7 @@ ArgumentError
     If a grid in `nx_list` is not in `NX_LIST`.
 """
 function evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
-    all(in(NX_LIST), nx_list) ||
+    all(n -> n isa Integer && n in NX_LIST, nx_list) ||
         throw(ArgumentError("nx_list must be a subset of $NX_LIST, got $nx_list"))
     runs = Dict(
         (n, sf) => run_case(n; spherical_flow=sf) for n in nx_list, sf in (false, true)
@@ -562,8 +575,23 @@ end
     _canonical_field_repr(val)
 
 Return a fixed text form of a config value for the config hash: Bool, integer, float,
-Symbol, String and `nothing` in fixed forms, tuples and vectors element by element, and any
-other value by `string(val)`.
+Symbol, String and `nothing` in fixed forms, tuples and vectors element by element,
+dictionaries with their pairs sorted by key, and any other value by `string(val)`.
+
+Parameters
+----------
+val : Any
+    Value of a config field or of a hashed module constant.
+
+Returns
+-------
+String
+    Text form of `val`.
+
+Raises
+------
+InexactError
+    If `val` is an integer outside the `Int64` range.
 """
 function _canonical_field_repr(val)::String
     if val isa Bool
@@ -580,6 +608,17 @@ function _canonical_field_repr(val)::String
         return "nothing"
     elseif val isa Tuple || val isa AbstractVector
         return "[" * join((_canonical_field_repr(x) for x in val), ", ") * "]"
+    elseif val isa AbstractDict
+        isempty(val) && return "{}"
+        sorted_pairs = sort!(collect(pairs(val)); by=p -> string(first(p)))
+        inner = join(
+            [
+                "$(_canonical_field_repr(k)) => $(_canonical_field_repr(v))" for
+                (k, v) in sorted_pairs
+            ],
+            ", ",
+        )
+        return "{$inner}"
     end
     return string(val)
 end
@@ -736,6 +775,19 @@ end
     _same_julia_major_minor(recorded_ver, current_ver=VERSION)
 
 Return whether the Julia version of a record and the running version share major and minor.
+
+Parameters
+----------
+recorded_ver : AbstractString
+    Julia version stored in the record, for example `"1.12.1"`.
+current_ver : VersionNumber, optional
+    Running Julia version.
+
+Returns
+-------
+Bool
+    `true` when major and minor agree; `false` when they differ or `recorded_ver` does not
+    start with a version.
 """
 function _same_julia_major_minor(
     recorded_ver::AbstractString, current_ver::VersionNumber=VERSION
