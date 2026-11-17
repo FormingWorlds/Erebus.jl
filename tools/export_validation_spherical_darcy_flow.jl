@@ -356,6 +356,8 @@ function write_spherical_darcy_flow_record(
         "L_box_m",
         "mu_f_Pa_s",
         "k_m2",
+        "k_core_m2",
+        "a_jump_m",
         "S_source_per_s",
         "phi",
         "eta_solid_Pa_s",
