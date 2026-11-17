@@ -130,6 +130,9 @@ end
     @testset "solver converges (spherical_flow = $sf)" for sf in (false, true)
         @test runs[(33, sf)].converged
         @test runs[(65, sf)].converged
+        @test all(isfinite, runs[(65, sf)].pf) &&
+            all(isfinite, runs[(65, sf)].qxD) &&
+            all(isfinite, runs[(65, sf)].qyD)
     end
 
     @testset "grid below the minimum is rejected" begin

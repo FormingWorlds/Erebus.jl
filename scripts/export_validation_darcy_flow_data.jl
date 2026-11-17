@@ -71,7 +71,8 @@ end
     node_profile(N; spherical_flow) -> NamedTuple
 
 Solve the case as `SDF.run_case` does and return the radius [m] and the computed and exact
-excess pressure `p - P_AMB` [Pa] of the P nodes inside the planet that `SDF.run_case` compares.
+excess pressure `p - P_AMB` [Pa] of all P nodes with `r <= R_PLANET` (`SDF.run_case` compares
+the nodes with `r <= 0.9 R_PLANET`).
 
 Parameters
 ----------

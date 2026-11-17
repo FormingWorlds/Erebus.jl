@@ -199,8 +199,9 @@ NamedTuple
     `r <= 0.9 R` (see `_flux_l2_inner`);
     `dp_centre`: computed `p - P_AMB` at the P node nearest the centre;
     `dp_centre_exact`: exact value at that node;
-    `vent_flux`, `source_flux`: vented and produced fluid volume rate [m^3/s per slice
-    weight], summed with the cell weights of the continuity rows;
+    `vent_flux`, `source_flux`: vented and produced fluid volume rate, summed with the
+    cell weights of the continuity rows ([m^3/s] with `spherical_flow = true`, [m^2/s]
+    per unit depth with `false`);
     `max_solid_speed`: largest solid velocity component [m/s].
 
 Raises
@@ -359,6 +360,10 @@ end
 
 const HASHED_CASE_CONSTANTS = (
     :L_BOX,
+    :R_PLANET,
+    :X_CENTRE,
+    :Y_CENTRE,
+    :NX_REFERENCE,
     :NX_LIST,
     :INNER_FRACTION,
     :S_SOURCE,
@@ -445,7 +450,7 @@ const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
 
 Return the validation metrics that the `run_case` results in `runs` determine.
 
-The profile and flux errors exist for each grid present in `runs`. The convergence order
+The profile and flux errors exist for each grid of `NX_LIST` present in `runs`. The convergence order
 of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`. The centre
 ratio, the closure and the solid speed need the `NX_REFERENCE` grid of both settings.
 
@@ -500,7 +505,7 @@ and the validation metrics they determine.
 Parameters
 ----------
 nx_list : Tuple{Vararg{Int}}, optional
-    Grids to run, each at least `NX_MIN` (default `NX_LIST`). With the default the result
+    Grids to run, a subset of `NX_LIST` (default `NX_LIST`). With the default the result
     holds all 18 metrics.
 
 Returns
@@ -513,9 +518,11 @@ NamedTuple
 Raises
 ------
 ArgumentError
-    If a grid in `nx_list` is below `NX_MIN`.
+    If a grid in `nx_list` is not in `NX_LIST`.
 """
 function evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
+    all(in(NX_LIST), nx_list) ||
+        throw(ArgumentError("nx_list must be a subset of $NX_LIST, got $nx_list"))
     runs = Dict(
         (n, sf) => run_case(n; spherical_flow=sf) for n in nx_list, sf in (false, true)
     )
