@@ -19,6 +19,7 @@ Each case on a page has the same layout:
 | Page | Part of the model | Reference |
 |---|---|---|
 | [Spherical Heat Conduction](thermal_conduction.md) | Heat conduction, the spherical geometry term, radiogenic heating in the time loop | Exact solution, backward-Euler series, 1-D finite-volume solver |
+| [Spherical Darcy Flow](spherical_darcy_flow.md) | Darcy flow, the spherical face weights of the fluid continuity rows, surface venting | Exact steady pressure of a uniform source in a sphere and a disk |
 
 ## How the results are stored
 

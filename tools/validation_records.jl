@@ -15,21 +15,39 @@ const REQUIRED_METADATA_KEYS = (
     "reference_citation",
 )
 
-const REQUIRED_CONFIG_KEYS = (
-    "Nx_coarse",
-    "Nx_fine",
-    "n_steps",
-    "dt_yr",
-    "R_planet_m",
-    "L_box_m",
-    "k_W_mK",
-    "rho_kg_m3",
-    "cp_J_kgK",
-    "T_surf_K",
-    "H_steady_W_m3",
-    "spherical_metric",
-    "reg_cells",
-    "disk_enabled",
+const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
+    "spherical_conduction" => (
+        "Nx_coarse",
+        "Nx_fine",
+        "n_steps",
+        "dt_yr",
+        "R_planet_m",
+        "L_box_m",
+        "k_W_mK",
+        "rho_kg_m3",
+        "cp_J_kgK",
+        "T_surf_K",
+        "H_steady_W_m3",
+        "spherical_metric",
+        "reg_cells",
+        "disk_enabled",
+    ),
+    "spherical_darcy_flow" => (
+        "Nx",
+        "R_planet_m",
+        "L_box_m",
+        "mu_f_Pa_s",
+        "k_m2",
+        "S_source_per_s",
+        "phi",
+        "eta_solid_Pa_s",
+        "k_vent_m2",
+        "T_surf_K",
+        "P_amb_Pa",
+        "inner_fraction",
+        "spherical_metric",
+        "darcy_elimination",
+    ),
 )
 
 const REQUIRED_METRIC_KEYS = (
@@ -144,7 +162,8 @@ end
 
 Validate the schema, metric tolerances, and optional documentation block of a validation record.
 Metrics using `comparison = "le_atol"` represent upper-bound magnitude checks and must store
-`reference = 0.0`.
+`reference = 0.0`. The required `[config]` keys come from `REQUIRED_CONFIG_KEYS` under
+`metadata.id`; a record id without an entry is an error.
 
 Parameters
 ----------
@@ -203,10 +222,18 @@ function validate_record_dict(
         push!(errors, "Section 'config' must be a table")
         return (false, errors)
     end
-    for k in REQUIRED_CONFIG_KEYS
-        if !haskey(cfg, k)
-            push!(errors, "Config section missing required key '$k'")
+    rec_id = haskey(meta, "id") ? String(meta["id"]) : ""
+    if haskey(REQUIRED_CONFIG_KEYS, rec_id)
+        for k in REQUIRED_CONFIG_KEYS[rec_id]
+            if !haskey(cfg, k)
+                push!(errors, "Config section missing required key '$k'")
+            end
         end
+    else
+        push!(
+            errors,
+            "Unknown record id '$rec_id' has no required config keys in REQUIRED_CONFIG_KEYS",
+        )
     end
 
     metrics = data["metrics"]
