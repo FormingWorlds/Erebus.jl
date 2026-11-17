@@ -70,7 +70,7 @@ function generate_readme_ci_sentence(ci_info)
     groups_str = join(ci_info.groups, ", ")
     versions_str = join(ci_info.versions, " and ")
 
-    return "3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `$groups_str`) on Julia $versions_str (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), and test quality standards (`test-quality`)."
+    return "3. Open a pull request against `main`. Continuous Integration verifies the test suite (group `$groups_str`) on Julia $versions_str (`ubuntu-latest`), quick simulation on `macos-latest` (`macos-test`), coverage, documentation (`docs`), code style formatting (`format`), and dedicated checks for architecture ratchet (`check_architecture`), performance budget (`check_budget`), bitwise determinism (`check_determinism`), validation records (`check_validation`), and test quality standards (`test-quality`)."
 end
 
 function check_readme_ci(; rewrite::Bool=false)
@@ -120,7 +120,9 @@ function check_readme_ci(; rewrite::Bool=false)
     end
 
     # 3. Assert required jobs are mentioned
-    required_jobs = ["check_architecture", "check_budget", "check_determinism"]
+    required_jobs = [
+        "check_architecture", "check_budget", "check_determinism", "check_validation"
+    ]
     for j in required_jobs
         if !(j in ci_info.jobs)
             println(stderr, "FAIL: Required job '$j' missing from CI.yml")
