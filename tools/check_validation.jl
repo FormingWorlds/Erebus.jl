@@ -1,11 +1,14 @@
 #!/usr/bin/env julia
-# Re-run the spherical conduction validation benchmark and verify reproducibility against the committed TOML record.
+# Re-run the spherical conduction and spherical Darcy flow validation benchmarks and verify reproducibility against the committed TOML records.
 
 using Erebus
 using TOML
 
 const DEFAULT_SPHERICAL_RECORD = normpath(
     joinpath(@__DIR__, "..", "benchmarks", "records", "spherical_conduction.toml")
+)
+const DEFAULT_DARCY_RECORD = normpath(
+    joinpath(@__DIR__, "..", "benchmarks", "records", "spherical_darcy_flow.toml")
 )
 
 """
@@ -70,26 +73,95 @@ function run_validation_check(
 end
 
 """
-    run_validation_cli(args::Vector{String}=ARGS; bench=nothing) -> Int
+    run_darcy_validation_check(record_path::String=DEFAULT_DARCY_RECORD; bench=nothing) -> Bool
 
-Run the command-line validation check for the spherical conduction record. Requires
-`SphericalConductionValidation` (`benchmarks/validation_spherical_conduction.jl`) to be loaded
-in `Main` before calling.
+Execute the spherical Darcy flow validation benchmark and verify schema and metric reproducibility
+against `record_path`. Requires `SphericalDarcyFlowValidation` (`benchmarks/validation_spherical_darcy_flow.jl`)
+to be loaded in `Main` before calling (loaded automatically when `tools/check_validation.jl` is run as a script).
+
+Parameters
+----------
+record_path : String, optional
+    Path to the TOML validation record file.
+bench : Any, optional
+    Pre-evaluated benchmark tuple, or `nothing` to run `SphericalDarcyFlowValidation.evaluate_spherical_darcy_flow_benchmark()`.
+
+Returns
+-------
+Bool
+    `true` when all validation and reproducibility checks pass.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+"""
+function run_darcy_validation_check(
+    record_path::String=DEFAULT_DARCY_RECORD; bench=nothing
+)::Bool
+    isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
+    if !isfile(record_path)
+        println(stderr, "Validation record file not found: $record_path")
+        return false
+    end
+    raw = TOML.parsefile(record_path)
+    ok_schema, schema_errs = SphericalDarcyFlowValidation.validate_record_dict(
+        raw; require_doc_pages=false, check_doc_sync=false
+    )
+    if !ok_schema
+        for e in schema_errs
+            println(stderr, "[schema] $e")
+        end
+        return false
+    end
+
+    bench_res = if bench === nothing
+        SphericalDarcyFlowValidation.evaluate_spherical_darcy_flow_benchmark()
+    else
+        bench
+    end
+    ok_repro, repro_errs = SphericalDarcyFlowValidation.check_validation_reproducibility(
+        bench_res, record_path
+    )
+    if !ok_repro
+        for e in repro_errs
+            println(stderr, "[reproducibility] $e")
+        end
+        return false
+    end
+    println("check_validation: all metrics reproduced and verified against $record_path")
+    return true
+end
+
+"""
+    run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing) -> Int
+
+Run the command-line validation check. Without a record path it checks the spherical
+conduction record and then the spherical Darcy flow record. With a record path it checks that
+record only, as the Darcy flow check when `metadata.id` is `spherical_darcy_flow` and as the
+conduction check otherwise. Requires `SphericalConductionValidation` and
+`SphericalDarcyFlowValidation` (`benchmarks/validation_spherical_conduction.jl`,
+`benchmarks/validation_spherical_darcy_flow.jl`) to be loaded in `Main` for the records that
+are checked.
 
 Parameters
 ----------
 args : Vector{String}, optional
     Command-line arguments (`--check` and optional `record_path`).
 bench : Any, optional
-    Pre-evaluated benchmark tuple, or `nothing` to evaluate on demand.
+    Pre-evaluated conduction benchmark tuple, or `nothing` to evaluate on demand.
+darcy_bench : Any, optional
+    Pre-evaluated Darcy flow benchmark tuple, or `nothing` to evaluate on demand.
 
 Returns
 -------
 Int
     Exit code (`0` on pass, `1` on validation failure, `2` on invalid CLI flag).
 """
-function run_validation_cli(args::Vector{String}=ARGS; bench=nothing)::Int
-    record_path = DEFAULT_SPHERICAL_RECORD
+function run_validation_cli(
+    args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing
+)::Int
+    record_path = nothing
     for arg in args
         if arg == "--check"
             continue
@@ -103,11 +175,25 @@ function run_validation_cli(args::Vector{String}=ARGS; bench=nothing)::Int
             record_path = arg
         end
     end
-    ok = run_validation_check(record_path; bench=bench)
+    if record_path === nothing
+        ok_conduction = run_validation_check(DEFAULT_SPHERICAL_RECORD; bench=bench)
+        ok_darcy = run_darcy_validation_check(DEFAULT_DARCY_RECORD; bench=darcy_bench)
+        return ok_conduction && ok_darcy ? 0 : 1
+    end
+    is_darcy =
+        isfile(record_path) &&
+        get(get(TOML.parsefile(record_path), "metadata", Dict()), "id", "") ==
+        "spherical_darcy_flow"
+    ok = if is_darcy
+        run_darcy_validation_check(record_path; bench=darcy_bench)
+    else
+        run_validation_check(record_path; bench=bench)
+    end
     return ok ? 0 : 1
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
+    include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_darcy_flow.jl"))
     exit(Base.invokelatest(run_validation_cli, ARGS))
 end
