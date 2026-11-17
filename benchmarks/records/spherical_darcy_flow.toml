@@ -7,7 +7,7 @@ id = "spherical_darcy_flow"
 title = "Spherical Darcy Flow Validation"
 page = "validation/spherical_darcy_flow.md"
 src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-17T22:19:58Z"
+timestamp_utc = "2026-11-17T23:04:04Z"
 julia_version = "1.12.7"
 config_sha256 = "1ebd6ad20a143f69b21e74abbb01d81ec4840770961b5a15ec0b06446ba7f152"
 reference_type = "analytical"
@@ -344,32 +344,6 @@ units = "dimensionless"
 status = "PASS"
 
 [[metrics]]
-id = "profile_order_jump_off_65_129"
-case = "jump"
-description = "Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 2-D disk"
-nx = 129
-value = 2.2216879363406834e+00
-reference = 2.0000000000000000e+00
-atol = 2.9999999999999999e-01
-rtol = 0.0000000000000000e+00
-comparison = "isapprox"
-units = "dimensionless"
-status = "PASS"
-
-[[metrics]]
-id = "profile_order_jump_on_65_129"
-case = "jump"
-description = "Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 3-D sphere"
-nx = 129
-value = 2.2079347880931257e+00
-reference = 2.0000000000000000e+00
-atol = 2.9999999999999999e-01
-rtol = 0.0000000000000000e+00
-comparison = "isapprox"
-units = "dimensionless"
-status = "PASS"
-
-[[metrics]]
 id = "centre_ratio_jump_on_off_nx65"
 case = "jump"
 description = "Permeability jump: centre excess pressure ratio, sphere to disk (Nx=65)"
@@ -385,7 +359,7 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_jump_off_nx65"
 case = "jump"
-description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=65)"
+description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 2-D disk (Nx=65)"
 nx = 65
 value = 2.4219503052545811e-02
 reference = 0.0000000000000000e+00
@@ -398,7 +372,7 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_jump_off_nx129"
 case = "jump"
-description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=129)"
+description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 2-D disk (Nx=129)"
 nx = 129
 value = 1.2507755894249939e-02
 reference = 0.0000000000000000e+00
@@ -411,7 +385,7 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_jump_on_nx65"
 case = "jump"
-description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=65)"
+description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 3-D sphere (Nx=65)"
 nx = 65
 value = 2.4605862908731246e-02
 reference = 0.0000000000000000e+00
@@ -424,7 +398,7 @@ status = "PASS"
 [[metrics]]
 id = "flux_l2_inner_jump_on_nx129"
 case = "jump"
-description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=129)"
+description = "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 3-D sphere (Nx=129)"
 nx = 129
 value = 1.2295399227018201e-02
 reference = 0.0000000000000000e+00

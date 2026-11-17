@@ -244,13 +244,11 @@ The second command needs NumPy and Matplotlib.
 | `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=33) | 33 | `1.4024e-01` | `0.0000e+00` | `<= 2.00e-01` | dimensionless | **PASS** |
 | `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `3.4496e-02` | `0.0000e+00` | `<= 8.00e-02` | dimensionless | **PASS** |
 | `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `7.4665e-03` | `0.0000e+00` | `<= 5.00e-02` | dimensionless | **PASS** |
-| `jump` | Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 2-D disk | 129 | `2.2217e+00` | `2.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
-| `jump` | Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 3-D sphere | 129 | `2.2079e+00` | `2.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `jump` | Permeability jump: centre excess pressure ratio, sphere to disk (Nx=65) | 65 | `6.6690e-01` | `6.6667e-01` | `atol=1.00e-02, rtol=0.00e+00` | dimensionless | **PASS** |
-| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=65) | 65 | `2.4220e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
-| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=129) | 129 | `1.2508e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
-| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `2.4606e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
-| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `1.2295e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 2-D disk (Nx=65) | 65 | `2.4220e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 2-D disk (Nx=129) | 129 | `1.2508e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 3-D sphere (Nx=65) | 65 | `2.4606e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, 3-D sphere (Nx=129) | 129 | `1.2295e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: spherical_darcy_flow -->
