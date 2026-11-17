@@ -173,6 +173,20 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         "isapprox",
         "dimensionless",
     )
+    flux_atol = Dict(33 => 0.13, 65 => 0.03, 129 => 0.013)
+    for (tag, label) in (("off", "2-D disk"), ("on", "3-D sphere"))
+        for nx in (33, 65, 129)
+            add!(
+                "flux_l2_inner_$(tag)_nx$(nx)",
+                "flux",
+                "Radial Darcy flux L2 relative error for r <= 0.9 R, $(label) (Nx=$(nx))",
+                nx,
+                flux_atol[nx],
+                "le_atol",
+                "dimensionless",
+            )
+        end
+    end
     for (tag, label) in (("off", "2-D disk"), ("on", "3-D sphere"))
         add!(
             "vent_closure_$(tag)_nx65",

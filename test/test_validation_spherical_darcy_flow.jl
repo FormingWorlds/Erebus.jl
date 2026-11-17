@@ -3,13 +3,51 @@ using TOML
 using Erebus
 
 include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_darcy_flow.jl"))
+include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
+include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_darcy_flow.jl"))
 
 const SDF = SphericalDarcyFlowValidation
 
+"""
+    write_toml(path, dict)
+
+Write `dict` as TOML to `path` and return `path`.
+"""
+function write_toml(path::String, dict::AbstractDict)
+    open(path, "w") do io
+        return TOML.print(io, dict)
+    end
+    return path
+end
+
 @testset "Spherical Darcy Flow Validation" begin
-    runs = Dict(
-        (n, sf) => SDF.run_case(n; spherical_flow=sf) for n in (33, 65), sf in (false, true)
+    record_path = joinpath(
+        @__DIR__, "..", "benchmarks", "records", "spherical_darcy_flow.toml"
     )
+    # One evaluation: every grid of SDF.NX_LIST (the finest at most once) in both settings.
+    bench = SDF.evaluate_spherical_darcy_flow_benchmark()
+    runs = bench.runs
+
+    @testset "surface pressure is the ambient pressure" begin
+        cfg = SDF.make_config(SDF.NX_REFERENCE; spherical_flow=true)
+        p_vent = Erebus.compute_venting_pressure(
+            SDF.T_SURF, SDF.P_AMB; species=:H2O, L_sub=cfg.venting.L_sublimation
+        )
+        @test isapprox(p_vent, SDF.P_AMB; rtol=1.0e-14, atol=0.0)
+        @test Erebus.compute_water_vapor_pressure(SDF.T_SURF) < SDF.P_AMB
+    end
+
+    @testset "solver converges (spherical_flow = $sf)" for sf in (false, true)
+        @test runs[(33, sf)].converged
+        @test runs[(65, sf)].converged
+        @test runs[(129, sf)].converged
+    end
+
+    @testset "grid below the minimum is rejected" begin
+        @test_throws ArgumentError SDF.make_config(SDF.NX_MIN - 1; spherical_flow=true)
+        @test_throws ArgumentError SDF.run_case(SDF.NX_MIN - 1; spherical_flow=false)
+        @test SDF.make_config(SDF.NX_MIN; spherical_flow=true).grid.Nx == SDF.NX_MIN
+    end
 
     @testset "excess pressure profile against the exact solution (spherical_flow = $sf)" for sf in
                                                                                              (
@@ -19,6 +57,16 @@ const SDF = SphericalDarcyFlowValidation
         e65 = runs[(65, sf)].l2_inner
         @test isapprox(e65, 0.0; atol=0.08)
         @test isapprox(log2(e33 / e65), 1.0; atol=0.3)
+    end
+
+    @testset "radial Darcy flux against S r / d (spherical_flow = $sf)" for sf in
+                                                                            (false, true)
+        f33 = runs[(33, sf)].flux_l2_inner
+        f65 = runs[(65, sf)].flux_l2_inner
+        @test isapprox(f33, 0.0; atol=0.13)
+        @test isapprox(f65, 0.0; atol=0.03)
+        # The error falls faster than first order between the 2 grids.
+        @test f65 < f33 / 2
     end
 
     @testset "vented flux equals the discrete source, matrix stays rigid (spherical_flow = $sf)" for sf in
@@ -41,10 +89,17 @@ const SDF = SphericalDarcyFlowValidation
         )
     end
 
+    @testset "6-variable path equals the 4-variable path (spherical_flow = $sf)" for sf in (
+        false, true
+    )
+        four = runs[(33, sf)]
+        six = SDF.run_case(33; spherical_flow=sf, darcy_elimination=false)
+        @test six.converged
+        @test maximum(abs, six.pf .- four.pf) / maximum(abs, four.pf) < 1.0e-8
+        @test isapprox(six.flux_l2_inner, four.flux_l2_inner; rtol=1.0e-6)
+    end
+
     @testset "Validation record schema and drift guards" begin
-        record_path = joinpath(
-            @__DIR__, "..", "benchmarks", "records", "spherical_darcy_flow.toml"
-        )
         @test isfile(record_path)
         raw_record = TOML.parsefile(record_path)
         valid_ok, valid_errors = SDF.validate_record_dict(
@@ -56,6 +111,7 @@ const SDF = SphericalDarcyFlowValidation
         rec_ids = [String(m["id"]) for m in raw_record["metrics"]]
         @test rec_ids == collect(SDF.EXPECTED_METRIC_IDS)
         @test Set(keys(SDF.PHYSICS_REGRESSION_BANDS)) == Set(SDF.EXPECTED_METRIC_IDS)
+        @test Set(keys(bench.metrics)) == Set(SDF.EXPECTED_METRIC_IDS)
 
         # The record needs the config keys of its own id, and an unknown id is an error.
         missing_key = deepcopy(raw_record)
@@ -73,34 +129,117 @@ const SDF = SphericalDarcyFlowValidation
         @test !ok_unknown
         @test any(occursin("Unknown record id", e) for e in errs_unknown)
 
-        # Rerun values at Nx = 33 and 65 stay within the regression band of the record.
-        measured = Dict{String,Float64}()
-        for (sf, tag) in ((false, "off"), (true, "on"))
-            for n in (33, 65)
-                measured["profile_l2_inner_$(tag)_nx$(n)"] = runs[(n, sf)].l2_inner
-            end
-            m65 = runs[(65, sf)]
-            measured["vent_closure_$(tag)_nx65"] = abs(m65.vent_flux / m65.source_flux - 1)
-        end
-        measured["centre_ratio_on_off_nx65"] =
-            runs[(65, true)].dp_centre / runs[(65, false)].dp_centre
-        measured["solid_speed_max_nx65"] = max(
-            runs[(65, false)].max_solid_speed, runs[(65, true)].max_solid_speed
-        )
+        # Every measured metric stays within the regression band of the record.
         recorded = Dict(
             String(m["id"]) => Float64(m["value"]) for m in raw_record["metrics"]
         )
-        for (mid, value) in measured
+        for (mid, value) in bench.metrics
             band = SDF.PHYSICS_REGRESSION_BANDS[mid]
             @test isapprox(value, recorded[mid]; atol=band.atol, rtol=band.rtol)
         end
+        ok_full, errs_full = SDF.check_physics_regression_bands(bench.metrics, record_path)
+        @test ok_full
+        @test isempty(errs_full)
 
-        # A value moved by more than its band is reported with its metric id.
-        moved = copy(measured)
-        moved["profile_l2_inner_on_nx65"] +=
-            2 * SDF.PHYSICS_REGRESSION_BANDS["profile_l2_inner_on_nx65"].atol
+        # A value moved by more than its band is the only one reported, with its metric id.
+        target = "profile_l2_inner_on_nx65"
+        moved = copy(bench.metrics)
+        moved[target] += 2 * SDF.PHYSICS_REGRESSION_BANDS[target].atol
+        @test Set(keys(moved)) == Set(SDF.EXPECTED_METRIC_IDS)
         ok_moved, errs_moved = SDF.check_physics_regression_bands(moved, record_path)
         @test !ok_moved
-        @test any(occursin("profile_l2_inner_on_nx65", e) for e in errs_moved)
+        @test length(errs_moved) == 1
+        @test occursin(target, only(errs_moved))
+        @test occursin("outside physics regression band", only(errs_moved))
+    end
+
+    @testset "Record matches the configuration and the reference values" begin
+        raw_record = TOML.parsefile(record_path)
+        cfg = SDF.make_config(SDF.NX_REFERENCE; spherical_flow=true)
+
+        sha = SDF.canonical_config_sha256(cfg)
+        @test sha == raw_record["metadata"]["config_sha256"]
+        @test length(sha) == 64
+        @test SDF.canonical_config_sha256(cfg) == sha
+        @test SDF.canonical_config_sha256(
+            SDF.make_config(SDF.NX_REFERENCE; spherical_flow=false)
+        ) != sha
+        @test SDF.canonical_config_sha256(SDF.make_config(33; spherical_flow=true)) != sha
+
+        summary = SDF.expected_config_summary(cfg)
+        rec_cfg = raw_record["config"]
+        @test Set(keys(summary)) == Set(keys(rec_cfg))
+        for (key, expected) in summary
+            if expected isa AbstractFloat
+                @test isapprox(Float64(rec_cfg[key]), expected; rtol=1.0e-12, atol=0.0)
+            else
+                @test rec_cfg[key] == expected
+            end
+        end
+
+        refs = SDF.expected_metric_references()
+        @test Set(keys(refs)) == Set(String(m["id"]) for m in raw_record["metrics"])
+        for m in raw_record["metrics"]
+            @test isapprox(
+                Float64(m["reference"]), refs[String(m["id"])]; rtol=1.0e-12, atol=1.0e-12
+            )
+        end
+    end
+
+    @testset "Reproducibility check and export round trip" begin
+        raw_record = TOML.parsefile(record_path)
+        ok_repro, errs_repro = SDF.check_validation_reproducibility(bench, record_path)
+        @test ok_repro
+        @test isempty(errs_repro)
+        @test run_darcy_validation_check(record_path; bench=bench)
+        @test run_validation_cli(["--check", record_path]; darcy_bench=bench) == 0
+
+        mktempdir() do tmpdir
+            exported = joinpath(tmpdir, "exported_spherical_darcy_flow.toml")
+            @test SphericalDarcyFlowExport.run_export_cli(
+                [exported];
+                src_commit=String(raw_record["metadata"]["src_commit"]),
+                bench=bench,
+                check_clean_tree=false,
+            ) == 0
+            @test isfile(exported)
+            raw_exported = TOML.parsefile(exported)
+            ok_valid, errs_valid = SDF.validate_record_dict(
+                raw_exported; require_doc_pages=false, check_doc_sync=false
+            )
+            @test ok_valid
+            @test isempty(errs_valid)
+            @test run_darcy_validation_check(exported; bench=bench)
+            @test [String(m["id"]) for m in raw_exported["metrics"]] == [String(m["id"]) for m in raw_record["metrics"]]
+
+            # A value moved beyond its band is rejected with its metric id.
+            target = "flux_l2_inner_on_nx65"
+            band = SDF.PHYSICS_REGRESSION_BANDS[target]
+            moved_value = deepcopy(raw_record)
+            entry = only(filter(m -> m["id"] == target, moved_value["metrics"]))
+            entry["value"] += 2 * band.atol
+            moved_path = write_toml(joinpath(tmpdir, "moved_value.toml"), moved_value)
+            ok_moved, errs_moved = SDF.check_validation_reproducibility(bench, moved_path)
+            @test !ok_moved
+            @test any(occursin(target, e) for e in errs_moved)
+            @test !run_darcy_validation_check(moved_path; bench=bench)
+
+            # A changed configuration value is rejected with its key.
+            changed_cfg = deepcopy(raw_record)
+            changed_cfg["config"]["k_m2"] *= 2
+            cfg_path = write_toml(joinpath(tmpdir, "changed_config.toml"), changed_cfg)
+            ok_cfg, errs_cfg = SDF.check_validation_reproducibility(bench, cfg_path)
+            @test !ok_cfg
+            @test any(occursin("config.k_m2", e) for e in errs_cfg)
+            @test !run_darcy_validation_check(cfg_path; bench=bench)
+
+            # A changed configuration hash is rejected.
+            changed_sha = deepcopy(raw_record)
+            changed_sha["metadata"]["config_sha256"] = repeat("0", 64)
+            sha_path = write_toml(joinpath(tmpdir, "changed_sha.toml"), changed_sha)
+            ok_sha, errs_sha = SDF.check_validation_reproducibility(bench, sha_path)
+            @test !ok_sha
+            @test any(occursin("config_sha256", e) for e in errs_sha)
+        end
     end
 end

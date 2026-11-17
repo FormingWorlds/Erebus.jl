@@ -28,7 +28,7 @@ end
 """
     exact_excess_pressure(r, spherical_flow) -> Float64
 
-Return the exact excess fluid pressure `p - P_vent` [Pa] at radius `r` [m]: `d = 3` for
+Return the exact excess fluid pressure `p - P_AMB` [Pa] at radius `r` [m]: `d = 3` for
 `spherical_flow = true` and `d = 2` otherwise.
 """
 function exact_excess_pressure(r::Real, spherical_flow::Bool)::Float64
@@ -40,7 +40,7 @@ end
     node_profile(N; spherical_flow) -> NamedTuple
 
 Solve the case as `SDF.run_case` does and return the radius [m] and the computed and exact
-excess pressure [Pa] of the P nodes inside the planet that `SDF.run_case` compares.
+excess pressure `p - P_AMB` [Pa] of the P nodes inside the planet that `SDF.run_case` compares.
 """
 function node_profile(N::Int; spherical_flow::Bool)
     cfg = SDF.make_config(N; spherical_flow=spherical_flow)
@@ -56,15 +56,12 @@ function node_profile(N::Int; spherical_flow::Bool)
             state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
         )
     end
-    P_vent = Erebus.compute_venting_pressure(
-        SDF.T_SURF, SDF.P_AMB; species=:H2O, L_sub=cfg.venting.L_sublimation
-    )
     r, dp, dp_exact = Float64[], Float64[], Float64[]
     for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2)
         ri = hypot(coords.xp[j] - SDF.X_CENTRE, coords.yp[i] - SDF.Y_CENTRE)
         ri <= SDF.R_PLANET || continue
         push!(r, ri)
-        push!(dp, state.grids.pf[i, j] - P_vent)
+        push!(dp, state.grids.pf[i, j] - SDF.P_AMB)
         push!(dp_exact, exact_excess_pressure(ri, spherical_flow))
     end
     return (; r, dp, dp_exact)
