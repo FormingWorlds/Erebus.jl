@@ -7,6 +7,8 @@ It also checks the face weights of the fluid continuity rows, and that the vente
 Validation means that we run the code on a case where we know the right answer from another source, and we check that the code gives that answer.
 If this part were wrong, fluid pressures and fluxes would be wrong, and with them the venting, the fracturing and the loss of volatiles that depend on pressure.
 Each case below gives the reason for the check, the setup, the reference, a figure and the test details.
+Case 1 has a uniform permeability.
+Case 2 has a core with a permeability 100 times lower than the shell.
 
 The case uses a sphere of radius 50 km in a square box of 140 km.
 `Nx` is the number of grid nodes on each side of the box.
@@ -123,6 +125,79 @@ The case therefore does not check the venting conductance or its face weight.
       A `vent_closure` value is the absolute difference between the ratio of the vented to the produced rate and 1.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
+## The steady pressure of a sphere with a low-permeability core
+
+**Why this check exists.**
+In a real body the permeability changes with depth.
+Where the permeability jumps, the solver must carry the same flux through the jump, and the pressure must stay continuous.
+A wrong mean of the face resistance, or a face weight that the jump makes visible, gives a wrong pressure in the core.
+
+**What it tests.**
+The case is case 1 with one change: the core $r < a = R/2$ has the permeability $k_\mathrm{core} = 10^{-15}$ m², and the shell $a \le r \le R$ keeps $k = 10^{-13}$ m².
+The resistance $\mu / k$ of a face between 2 nodes is the mean of the 2 node values.
+We compare the excess pressure with the exact solution at `Nx = 33`, 65 and 129, for both settings, with the profile error $\epsilon$ of case 1.
+The flux error $\epsilon_q$ leaves out the faces less than 2 cells from $r = a$, because there the faces cut the circle $r = a$ as a staircase.
+We also compare the centre excess pressure with the option on and off.
+
+**How we know the right answer.**
+The flux is the same as in case 1, $S r / d$, because it depends only on the fluid that the cells inside radius $r$ produce.
+Darcy's law then gives the pressure gradient $\mu S r / (d k)$, with the $k$ of the layer.
+With $p = P_\mathrm{amb}$ at $r = R$ and a continuous pressure at $r = a$, the exact solution is
+
+```math
+p - P_\mathrm{amb} =
+\begin{cases}
+\dfrac{\mu S \left(R^2 - r^2\right)}{2 d k}, & a \le r \le R, \\[2ex]
+\dfrac{\mu S \left(R^2 - a^2\right)}{2 d k} + \dfrac{\mu S \left(a^2 - r^2\right)}{2 d k_\mathrm{core}}, & r < a.
+\end{cases}
+```
+
+Both terms are proportional to $1/d$, so the ratio of the centre values of the sphere and the disk is again exactly 2/3.
+
+**Why it matters.**
+The permeability of a planetesimal changes with porosity, temperature and alteration.
+This case checks that the continuity rows with the face weights of the sphere keep the exact solution when the permeability changes by a factor of 100 at a curved surface.
+
+```@raw html
+<div class="validation-fig-light">
+```
+![Excess fluid pressure against radius for the low-permeability core with the exact curves for the sphere and the disk and the Erebus nodes at Nx = 65, and the L2 profile error against Nx for both settings.](../assets/validation_darcy_flow_jump_light.svg)
+```@raw html
+</div>
+<div class="validation-fig-dark">
+```
+![Excess fluid pressure against radius for the low-permeability core with the exact curves for the sphere and the disk and the Erebus nodes at Nx = 65, and the L2 profile error against Nx for both settings.](../assets/validation_darcy_flow_jump_dark.svg)
+```@raw html
+</div>
+```
+
+**How to read the plot.**
+Panel (a) shows the excess pressure against $r / R$ at `Nx = 65`.
+The solid line is the exact solution for the sphere and the dashed line is the exact solution for the disk.
+The dotted vertical line is the jump at $r = a$.
+The points are grid nodes.
+A pass means that the points with the option on follow the solid line and the points with the option off follow the dashed line, also in the core.
+Panel (b) shows the L2 profile error against `Nx` on logarithmic axes, with a dotted line of second order.
+A pass means that the error stays below its limit and falls along the dotted line as the grid gets finer.
+The order between `Nx = 65` and `Nx = 129` is about 2.2 for both settings.
+
+**Known limit.**
+The jump surface $r = a$ is a staircase of grid cells, as the outer surface is.
+The flux error leaves out the faces less than 2 cells from $r = a$, so it does not test the flux through the jump at the face level.
+The pressure error includes all nodes with $r \le 0.9 R$.
+The order of about 2 is measured between `Nx = 65` and `Nx = 129` only; the case does not show the first-order offset of case 1 at these grids, and finer grids were not run.
+
+!!! details "Test details"
+    - Reference: exact solution above, the exact flux $S \mathbf{r} / d$, and the centre ratio 2/3.
+    - Tolerance: L2 error at most 0.20 at `Nx = 33`, at most 0.08 at `Nx = 65` and at most 0.05 at `Nx = 129`; order of the error between `Nx = 65` and `Nx = 129` equal to 2 within 0.3; flux L2 error at most 0.041 at `Nx = 65` and at most 0.019 at `Nx = 129`; centre ratio equal to 2/3 within 0.01.
+    - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_darcy_flow.jl`.
+      It is 0.005 on each L2 error of the pressure.
+      It is 0.05 on each order.
+      It is 0.003 and 0.0015 on the flux error at `Nx = 65` and 129.
+      It is 0.002 on the centre ratio.
+    - Test id: `profile_l2_inner_jump_off_nx33`, `profile_l2_inner_jump_off_nx65`, `profile_l2_inner_jump_off_nx129`, `profile_l2_inner_jump_on_nx33`, `profile_l2_inner_jump_on_nx65`, `profile_l2_inner_jump_on_nx129`, `profile_order_jump_off_65_129`, `profile_order_jump_on_65_129`, `centre_ratio_jump_on_off_nx65`, `flux_l2_inner_jump_off_nx65`, `flux_l2_inner_jump_off_nx129`, `flux_l2_inner_jump_on_nx65`, `flux_l2_inner_jump_on_nx129`.
+    - Command: `julia --project=. tools/check_validation.jl --check`.
+
 ## All recorded values
 
 The table comes from the record and must match it.
@@ -139,7 +214,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_darcy_flow -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `b80632a7`, config SHA-256 `3e9c7722f4e3`)
+**Validation record**: `benchmarks/records/spherical_darcy_flow.toml` (Source commit `b80632a7`, config SHA-256 `1ebd6ad20a14`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -161,6 +236,19 @@ The second command needs NumPy and Matplotlib.
 | `closure` | Vented to produced fluid rate, abs(ratio - 1), 2-D disk (Nx=65) | 65 | `7.1170e-11` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
 | `closure` | Vented to produced fluid rate, abs(ratio - 1), 3-D sphere (Nx=65) | 65 | `3.7067e-11` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
 | `closure` | Largest solid velocity component, both settings (Nx=65) | 65 | `1.9465e-17` | `0.0000e+00` | `<= 1.00e-12` | m/s | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 2-D disk (Nx=33) | 33 | `1.3780e-01` | `0.0000e+00` | `<= 2.00e-01` | dimensionless | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 2-D disk (Nx=65) | 65 | `3.4339e-02` | `0.0000e+00` | `<= 8.00e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 2-D disk (Nx=129) | 129 | `7.3619e-03` | `0.0000e+00` | `<= 5.00e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=33) | 33 | `1.4024e-01` | `0.0000e+00` | `<= 2.00e-01` | dimensionless | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `3.4496e-02` | `0.0000e+00` | `<= 8.00e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: excess pressure L2 relative error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `7.4665e-03` | `0.0000e+00` | `<= 5.00e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 2-D disk | 129 | `2.2217e+00` | `2.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `jump` | Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), 3-D sphere | 129 | `2.2079e+00` | `2.0000e+00` | `atol=3.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `jump` | Permeability jump: centre excess pressure ratio, sphere to disk (Nx=65) | 65 | `6.6690e-01` | `6.6667e-01` | `atol=1.00e-02, rtol=0.00e+00` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=65) | 65 | `2.4220e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 2-D disk (Nx=129) | 129 | `1.2508e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=65) | 65 | `2.4606e-02` | `0.0000e+00` | `<= 4.10e-02` | dimensionless | **PASS** |
+| `jump` | Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, 3-D sphere (Nx=129) | 129 | `1.2295e-02` | `0.0000e+00` | `<= 1.90e-02` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: spherical_darcy_flow -->
