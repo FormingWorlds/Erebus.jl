@@ -233,7 +233,7 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             add!(
                 "flux_l2_inner_jump_$(tag)_nx$(nx)",
                 "jump",
-                "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, $(label) (Nx=$(nx))",
+                "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and abs(r - a) > 2 dx, $(label) (Nx=$(nx))",
                 nx,
                 flux_atol[nx],
                 "le_atol",

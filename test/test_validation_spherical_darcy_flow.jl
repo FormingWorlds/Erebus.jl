@@ -288,6 +288,10 @@ end
             @test isapprox(
                 SDF._flux_l2_inner(bad, coords, 3.0; jump=true), 0.0; atol=1.0e-12
             )
+            # A face outside the band still counts with the jump.
+            far = exact_flux_grids(coords, 3.0, 1.0)
+            getfield(far, field)[.!mask] .*= 3.0
+            @test !isapprox(SDF._flux_l2_inner(far, coords, 3.0; jump=true), 0.0; atol=0.1)
         end
     end
 
