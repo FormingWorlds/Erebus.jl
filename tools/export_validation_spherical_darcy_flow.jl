@@ -219,17 +219,6 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             )
         end
     end
-    for (tag, label) in (("off", "2-D disk"), ("on", "3-D sphere"))
-        add!(
-            "profile_order_jump_$(tag)_65_129",
-            "jump",
-            "Permeability jump: convergence order log2(L2(Nx=65) / L2(Nx=129)), $(label)",
-            129,
-            0.3,
-            "isapprox",
-            "dimensionless",
-        )
-    end
     add!(
         "centre_ratio_jump_on_off_nx65",
         "jump",
@@ -244,7 +233,7 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             add!(
                 "flux_l2_inner_jump_$(tag)_nx$(nx)",
                 "jump",
-                "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R, $(label) (Nx=$(nx))",
+                "Permeability jump: Darcy flux L2 relative vector error for r <= 0.9 R and |r - a| > 2 dx, $(label) (Nx=$(nx))",
                 nx,
                 flux_atol[nx],
                 "le_atol",

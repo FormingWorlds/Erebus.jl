@@ -181,7 +181,7 @@ def jump_figure(data, t):
         curves["dp_exact_on_Pa"] / PA_PER_GPA,
         color=t["ref"],
         lw=2.2,
-        label="Exact, sphere (d = 3)",
+        label="Exact, sphere",
     )
     a.plot(
         x,
@@ -189,11 +189,11 @@ def jump_figure(data, t):
         color=t["cont"],
         lw=2.0,
         ls="--",
-        label="Exact, disk (d = 2)",
+        label="Exact, disk",
     )
     for key, col, mk, label in (
-        ("on", t["c65"], "o", "Erebus, spherical_flow = true"),
-        ("off", t["c33"], "D", "Erebus, spherical_flow = false"),
+        ("on", t["c65"], "o", "Erebus, sphere"),
+        ("off", t["c33"], "D", "Erebus, disk"),
     ):
         d = data[key]
         a.plot(
@@ -207,7 +207,7 @@ def jump_figure(data, t):
             label=label,
             rasterized=True,
         )
-    a.axvline(A_JUMP_OVER_R, color=t["fg"], lw=1.2, ls=":", label="Jump, r = a = R/2")
+    a.axvline(A_JUMP_OVER_R, color=t["fg"], lw=1.2, ls=":", label="Jump, r = R/2")
     a.set_xlabel("Radius r / R")
     a.set_ylabel("Excess fluid pressure p - P_vent (GPa)")
     a.set_title(f"(a) Pressure profile, Nx = {NX_PROFILE}")
@@ -234,14 +234,6 @@ def jump_figure(data, t):
         ms=5,
         lw=1.2,
         label="spherical_flow = true",
-    )
-    b.loglog(
-        nx,
-        conv["l2_on"][0] * (nx[0] / nx) ** 2,
-        color=t["fg"],
-        lw=1.2,
-        ls=":",
-        label="Second order, 1/Nx$^2$",
     )
     b.set_xticks(nx, [str(int(n)) for n in nx])
     b.minorticks_off()

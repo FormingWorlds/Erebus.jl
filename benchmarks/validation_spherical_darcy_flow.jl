@@ -541,8 +541,6 @@ const EXPECTED_METRIC_IDS = (
     "profile_l2_inner_jump_on_nx33",
     "profile_l2_inner_jump_on_nx65",
     "profile_l2_inner_jump_on_nx129",
-    "profile_order_jump_off_65_129",
-    "profile_order_jump_on_65_129",
     "centre_ratio_jump_on_off_nx65",
     "flux_l2_inner_jump_off_nx65",
     "flux_l2_inner_jump_off_nx129",
@@ -577,8 +575,6 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     "profile_l2_inner_jump_on_nx33" => (; atol=0.005, rtol=0.0),
     "profile_l2_inner_jump_on_nx65" => (; atol=0.005, rtol=0.0),
     "profile_l2_inner_jump_on_nx129" => (; atol=0.005, rtol=0.0),
-    "profile_order_jump_off_65_129" => (; atol=0.05, rtol=0.0),
-    "profile_order_jump_on_65_129" => (; atol=0.05, rtol=0.0),
     "flux_l2_inner_jump_off_nx65" => (; atol=0.003, rtol=0.0),
     "flux_l2_inner_jump_off_nx129" => (; atol=0.0015, rtol=0.0),
     "flux_l2_inner_jump_on_nx65" => (; atol=0.003, rtol=0.0),
@@ -603,8 +599,9 @@ of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`, and
 needs the `NX_REFERENCE` grid. The centre ratio and the solid speed need the `NX_REFERENCE`
 grid of both settings. The permeability-jump runs have the keys `(N, spherical_flow, :jump)`
 and give the ids with `jump_` after the error name, in the same way, except that the flux
-error exists for the grids `NX_REFERENCE` and finer only and there is no closure or solid
-speed.
+error exists for the grids `NX_REFERENCE` and finer only and there is no order, closure or
+solid speed. The jump error depends on how the grid cuts the circle `r = A_JUMP` (0.0075 at
+`Nx = 129`, 0.023 at `Nx = 127`), so an order between 2 grids has no meaning there.
 
 Parameters
 ----------
@@ -646,12 +643,6 @@ function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
                     runs[(n, sf, :jump)].flux_l2_inner
             end
         end
-        if haskey(runs, (NX_REFERENCE, sf, :jump)) && haskey(runs, (n_fine, sf, :jump))
-            metrics["profile_order_jump_$(tag)_$(NX_REFERENCE)_$(n_fine)"] = log2(
-                runs[(NX_REFERENCE, sf, :jump)].l2_inner /
-                runs[(n_fine, sf, :jump)].l2_inner,
-            )
-        end
     end
     if haskey(runs, (NX_REFERENCE, true)) && haskey(runs, (NX_REFERENCE, false))
         on, off = runs[(NX_REFERENCE, true)], runs[(NX_REFERENCE, false)]
@@ -679,7 +670,7 @@ Parameters
 ----------
 nx_list : Tuple{Vararg{Int}}, optional
     Grids to run, a subset of `NX_LIST` (default `NX_LIST`). With the default the result
-    holds all 31 metrics.
+    holds all 29 metrics.
 
 Returns
 -------
@@ -710,8 +701,7 @@ end
     expected_metric_references()
 
 Return the reference value of each validation metric: exact profile and flux error `0.0`,
-first-order convergence `1.0` (`2.0`, the measured order, for the permeability jump),
-centre ratio `2/3` (also with the permeability jump), and
+first-order convergence `1.0`, centre ratio `2/3` (also with the permeability jump), and
 `0.0` for the closure and solid-speed bounds.
 
 Returns
@@ -724,9 +714,7 @@ function expected_metric_references()::Dict{String,Float64}
     for mid in EXPECTED_METRIC_IDS
         refs[mid] = startswith(mid, "profile_order") ? 1.0 : 0.0
     end
-    # Measured order of the jump case; the core term dominates the profile.
-    refs["profile_order_jump_off_65_129"] = 2.0
-    refs["profile_order_jump_on_65_129"] = 2.0
+
     refs["centre_ratio_on_off_nx65"] = 2.0 / 3.0
     refs["centre_ratio_jump_on_off_nx65"] = 2.0 / 3.0
     return refs

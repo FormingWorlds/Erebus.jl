@@ -111,9 +111,9 @@ end
     )
     bench = (; runs, metrics=merge(measured, recorded_only))
 
-    @testset "metrics: 19 from the runs, 12 recorded values for Nx = 129 and the orders" begin
+    @testset "metrics: 19 from the runs, 10 recorded values for Nx = 129 and the orders" begin
         @test length(measured) == 19
-        @test length(recorded_only) == 12
+        @test length(recorded_only) == 10
         @test isempty(intersect(keys(measured), keys(recorded_only)))
         @test Set(keys(bench.metrics)) == Set(SDF.EXPECTED_METRIC_IDS)
     end
@@ -250,9 +250,10 @@ end
             r33, r65 = runs[(33, sf, :jump)], runs[(65, sf, :jump)]
             @test r33.converged && r65.converged
             @test all(isfinite, r65.pf) && all(isfinite, r65.qxD) && all(isfinite, r65.qyD)
-            # Measured 0.034 at Nx = 65 and 0.138 at Nx = 33: second-order decay.
+            # Measured 0.034 at Nx = 65 and 0.138 at Nx = 33; the error depends on how the
+            # grid cuts the circle r = A_JUMP, so the test asserts limits and no order.
             @test isapprox(r65.l2_inner, 0.0; atol=0.06)
-            @test isapprox(log2(r33.l2_inner / r65.l2_inner), 2.0; atol=0.5)
+            @test r65.l2_inner < r33.l2_inner
             # Measured 0.024; the faces near the jump are excluded.
             @test isfinite(r65.flux_l2_inner) && r65.flux_l2_inner < 0.04
             # Measured 0.983: the centre value is below the exact one at Nx = 65.
@@ -270,22 +271,34 @@ end
 
     @testset "jump flux error leaves out the faces within 2 cells of the jump" begin
         coords = synthetic_coords(41)
-        flux = exact_flux_grids(coords, 3.0, 1.0)
         near = [
             abs(hypot(x - SDF.X_CENTRE, y - SDF.Y_CENTRE) - SDF.A_JUMP) <=
             SDF.JUMP_EXCLUDE_CELLS * coords.dx for y in coords.yvx, x in coords.xvx
         ]
-        @test any(near)
-        flux.qxD[near] .*= 3.0
-        @test !isapprox(SDF._flux_l2_inner(flux, coords, 3.0), 0.0; atol=0.1)
-        @test isapprox(SDF._flux_l2_inner(flux, coords, 3.0; jump=true), 0.0; atol=1.0e-12)
+        near_y = [
+            abs(hypot(x - SDF.X_CENTRE, y - SDF.Y_CENTRE) - SDF.A_JUMP) <=
+            SDF.JUMP_EXCLUDE_CELLS * coords.dx for y in coords.yvy, x in coords.xvy
+        ]
+        @test any(near) && any(near_y)
+        # Each component on its own: both loops must leave out the faces near the jump.
+        for (field, mask) in ((:qxD, near), (:qyD, near_y))
+            bad = exact_flux_grids(coords, 3.0, 1.0)
+            getfield(bad, field)[mask] .*= 3.0
+            @test !isapprox(SDF._flux_l2_inner(bad, coords, 3.0), 0.0; atol=0.1)
+            @test isapprox(
+                SDF._flux_l2_inner(bad, coords, 3.0; jump=true), 0.0; atol=1.0e-12
+            )
+        end
     end
 
-    @testset "6-variable path equals the 4-variable path (spherical_flow = $sf)" for sf in (
-        false, true
-    )
-        four = runs[(33, sf)]
-        six = SDF.run_case(33; spherical_flow=sf, darcy_elimination=false)
+    @testset "6-variable path equals the 4-variable path (spherical_flow = $sf, jump = $jump)" for sf in
+                                                                                                   (
+            false, true
+        ),
+        jump in (false, true)
+
+        four = jump ? runs[(33, sf, :jump)] : runs[(33, sf)]
+        six = SDF.run_case(33; spherical_flow=sf, darcy_elimination=false, jump=jump)
         @test six.converged
         @test maximum(abs, six.pf .- four.pf) / maximum(abs, four.pf) < 1.0e-8
         @test isapprox(six.flux_l2_inner, four.flux_l2_inner; rtol=1.0e-6)

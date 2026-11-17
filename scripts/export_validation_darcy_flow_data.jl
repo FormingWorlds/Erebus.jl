@@ -107,7 +107,8 @@ end
     export_all(outdir)
 
 Run the node profiles at `Nx = 65`, the profile error at every grid in `SDF.NX_LIST`, and the
-exact curves, and write the data.
+exact curves, and write the data. The permeability-jump case runs its node profiles at
+`Nx = 65` and copies its profile errors from the record (`export_jump`).
 
 Parameters
 ----------

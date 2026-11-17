@@ -12,7 +12,8 @@ Case 2 has a core with a permeability 100 times lower than the shell.
 
 The case uses a sphere of radius 50 km in a square box of 140 km.
 `Nx` is the number of grid nodes on each side of the box.
-The rock has a uniform permeability $k = 10^{-13}$ m² and a uniform porosity of 0.2.
+In case 1 the rock has a uniform permeability $k = 10^{-13}$ m².
+The rock has a uniform porosity of 0.2.
 The fluid has a viscosity $\mu = 10^{-3}$ Pa s.
 The rock is rigid, gravity is off, and every cell inside the sphere produces fluid at the same rate $S = 10^{-11}$ 1/s.
 The surface temperature is 200 K and the ambient pressure is $P_\mathrm{amb} = 100$ Pa.
@@ -130,14 +131,15 @@ The case therefore does not check the venting conductance or its face weight.
 **Why this check exists.**
 In a real body the permeability changes with depth.
 Where the permeability jumps, the solver must carry the same flux through the jump, and the pressure must stay continuous.
-A wrong mean of the face resistance, or a face weight that the jump makes visible, gives a wrong pressure in the core.
+A resistance that the solver reads from the wrong face, or a wrong face weight, gives a wrong pressure in the core or a wrong flux.
 
 **What it tests.**
 The case is case 1 with one change: the core $r < a = R/2$ has the permeability $k_\mathrm{core} = 10^{-15}$ m², and the shell $a \le r \le R$ keeps $k = 10^{-13}$ m².
-The resistance $\mu / k$ of a face between 2 nodes is the mean of the 2 node values.
+The case sets the face resistances directly: the resistance $\mu / k$ of a face between 2 nodes is the mean of the 2 node values.
 We compare the excess pressure with the exact solution at `Nx = 33`, 65 and 129, for both settings, with the profile error $\epsilon$ of case 1.
-The flux error $\epsilon_q$ leaves out the faces less than 2 cells from $r = a$, because there the faces cut the circle $r = a$ as a staircase.
+The flux error $\epsilon_q$ leaves out the faces at most 2 cells from $r = a$, because there the faces cut the circle $r = a$ as a staircase.
 We also compare the centre excess pressure with the option on and off.
+At `Nx = 33` we compare the pressure and the flux of the 6-variable and the 4-variable solver paths on all faces.
 
 **How we know the right answer.**
 The flux is the same as in case 1, $S r / d$, because it depends only on the fluid that the cells inside radius $r$ produce.
@@ -177,25 +179,25 @@ The solid line is the exact solution for the sphere and the dashed line is the e
 The dotted vertical line is the jump at $r = a$.
 The points are grid nodes.
 A pass means that the points with the option on follow the solid line and the points with the option off follow the dashed line, also in the core.
-Panel (b) shows the L2 profile error against `Nx` on logarithmic axes, with a dotted line of second order.
-A pass means that the error stays below its limit and falls along the dotted line as the grid gets finer.
-The order between `Nx = 65` and `Nx = 129` is about 2.2 for both settings.
+Panel (b) shows the L2 profile error against `Nx` on logarithmic axes.
+A pass means that the error stays below its limit at each grid.
 
 **Known limit.**
 The jump surface $r = a$ is a staircase of grid cells, as the outer surface is.
-The flux error leaves out the faces less than 2 cells from $r = a$, so it does not test the flux through the jump at the face level.
-The pressure error includes all nodes with $r \le 0.9 R$.
-The order of about 2 is measured between `Nx = 65` and `Nx = 129` only; the case does not show the first-order offset of case 1 at these grids, and finer grids were not run.
+The error therefore depends on how the grid cuts the circle $r = a$, and it does not fall at a fixed order.
+With the option on it is 0.0075 at `Nx = 129` and 0.023 at `Nx = 127`.
+The test therefore asserts a limit at each grid and no order.
+The flux error leaves out the faces at most 2 cells from $r = a$; the comparison of the 6-variable and the 4-variable solver paths includes these faces.
+The case sets the face resistances directly, so it does not test how the code computes them from the markers.
 
 !!! details "Test details"
     - Reference: exact solution above, the exact flux $S \mathbf{r} / d$, and the centre ratio 2/3.
-    - Tolerance: L2 error at most 0.20 at `Nx = 33`, at most 0.08 at `Nx = 65` and at most 0.05 at `Nx = 129`; order of the error between `Nx = 65` and `Nx = 129` equal to 2 within 0.3; flux L2 error at most 0.041 at `Nx = 65` and at most 0.019 at `Nx = 129`; centre ratio equal to 2/3 within 0.01.
+    - Tolerance: L2 error at most 0.20 at `Nx = 33`, at most 0.08 at `Nx = 65` and at most 0.05 at `Nx = 129`; flux L2 error at most 0.041 at `Nx = 65` and at most 0.019 at `Nx = 129`; centre ratio equal to 2/3 within 0.01.
     - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_darcy_flow.jl`.
       It is 0.005 on each L2 error of the pressure.
-      It is 0.05 on each order.
       It is 0.003 and 0.0015 on the flux error at `Nx = 65` and 129.
       It is 0.002 on the centre ratio.
-    - Test id: `profile_l2_inner_jump_off_nx33`, `profile_l2_inner_jump_off_nx65`, `profile_l2_inner_jump_off_nx129`, `profile_l2_inner_jump_on_nx33`, `profile_l2_inner_jump_on_nx65`, `profile_l2_inner_jump_on_nx129`, `profile_order_jump_off_65_129`, `profile_order_jump_on_65_129`, `centre_ratio_jump_on_off_nx65`, `flux_l2_inner_jump_off_nx65`, `flux_l2_inner_jump_off_nx129`, `flux_l2_inner_jump_on_nx65`, `flux_l2_inner_jump_on_nx129`.
+    - Test id: `profile_l2_inner_jump_off_nx33`, `profile_l2_inner_jump_off_nx65`, `profile_l2_inner_jump_off_nx129`, `profile_l2_inner_jump_on_nx33`, `profile_l2_inner_jump_on_nx65`, `profile_l2_inner_jump_on_nx129`, `centre_ratio_jump_on_off_nx65`, `flux_l2_inner_jump_off_nx65`, `flux_l2_inner_jump_off_nx129`, `flux_l2_inner_jump_on_nx65`, `flux_l2_inner_jump_on_nx129`.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ## All recorded values
