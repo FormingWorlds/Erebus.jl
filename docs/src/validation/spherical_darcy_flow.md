@@ -33,9 +33,9 @@ The case then calls `solve_stokes_darcy!` once, on timestep 1.
 We compare the excess pressure $p - P_\mathrm{vent}$ at the grid nodes with the exact solution, for `spherical_flow = true` and for `spherical_flow = false`, at `Nx = 33`, 65 and 129.
 The profile error is the relative L2 error over the nodes with $r \le 0.9 R$:
 
-$$
+```math
 \epsilon = \sqrt{\frac{\sum_i \left(\Delta p_i - \Delta p_i^\mathrm{exact}\right)^2}{\sum_i \left(\Delta p_i^\mathrm{exact}\right)^2}}, \qquad \Delta p = p - P_\mathrm{vent}.
-$$
+```
 
 We also compare the centre excess pressure with the option on and off, the vented rate with the produced rate, and the speed of the solid.
 
@@ -43,9 +43,9 @@ We also compare the centre excess pressure with the option on and off, the vente
 Darcy's law and the balance of fluid volume give $\nabla^2 p = -\mu S / k$ inside the sphere, with $p = P_\mathrm{vent}$ at $r = R$.
 The solution of this equation in $d$ dimensions is
 
-$$
+```math
 p - P_\mathrm{vent} = \frac{\mu S \left(R^2 - r^2\right)}{2 d k},
-$$
+```
 
 with $d = 3$ for `spherical_flow = true` and $d = 2$ for `spherical_flow = false`.
 The centre values are $\mu S R^2 / (6 k)$ and $\mu S R^2 / (4 k)$, so the ratio of the sphere to the disk is exactly 2/3.
