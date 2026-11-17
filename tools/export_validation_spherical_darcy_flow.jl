@@ -6,7 +6,6 @@ module SphericalDarcyFlowExport
 using Dates
 using Printf
 using TOML
-using Erebus
 
 const DEFAULT_EXPORT_RECORD_PATH = normpath(
     joinpath(@__DIR__, "..", "benchmarks", "records", "spherical_darcy_flow.toml")
@@ -95,7 +94,7 @@ function metric_status(
     passed = if comparison == "isapprox"
         isapprox(value, reference; atol=atol, rtol=rtol)
     elseif comparison == "le_atol"
-        reference == 0.0 && isfinite(value) && 0.0 <= value <= atol
+        iszero(reference) && isfinite(value) && 0.0 <= value <= atol
     else
         false
     end

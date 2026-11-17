@@ -117,6 +117,11 @@ function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
     )
 end
 
+"""
+    _inside(coords, i, j)
+
+Return whether the P node `(i, j)` lies inside the sphere, `r <= R_PLANET`.
+"""
 _inside(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) <= R_PLANET
 
 """
@@ -211,20 +216,23 @@ ArgumentError
 """
 function run_case(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
     cfg = make_config(N; spherical_flow=spherical_flow, darcy_elimination=darcy_elimination)
-    out = mktempdir()
-    state, coords, ws, tio, _ = with_logger(NullLogger()) do
-        return Erebus.init_simulation(cfg; output_path=out)
-    end
-    tio === nothing || close(tio)
-    state.timestep = 1
-    state.accumulators.P_amb = P_AMB
-    set_fields!(state, coords)
-    res = with_logger(NullLogger()) do
-        return Erebus.solve_stokes_darcy!(
-            state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+    return mktempdir() do out
+        state, coords, ws, tio, _ = with_logger(NullLogger()) do
+            return Erebus.init_simulation(cfg; output_path=out)
+        end
+        tio === nothing || close(tio)
+        state.timestep = 1
+        state.accumulators.P_amb = P_AMB
+        set_fields!(state, coords)
+        res = with_logger(NullLogger()) do
+            return Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+        end
+        return (;
+            converged=res.plastic_converged, _metrics(state, coords, spherical_flow)...
         )
     end
-    return (; converged=res.plastic_converged, _metrics(state, coords, spherical_flow)...)
 end
 
 """
@@ -550,6 +558,13 @@ function expected_metric_references()::Dict{String,Float64}
     return refs
 end
 
+"""
+    _canonical_field_repr(val)
+
+Return a fixed text form of a config value for the config hash: Bool, integer, float,
+Symbol, String and `nothing` in fixed forms, tuples and vectors element by element, and any
+other value by `string(val)`.
+"""
 function _canonical_field_repr(val)::String
     if val isa Bool
         return val ? "true" : "false"
@@ -717,6 +732,11 @@ function check_physics_regression_bands(
     return (isempty(errors), errors)
 end
 
+"""
+    _same_julia_major_minor(recorded_ver, current_ver=VERSION)
+
+Return whether the Julia version of a record and the running version share major and minor.
+"""
 function _same_julia_major_minor(
     recorded_ver::AbstractString, current_ver::VersionNumber=VERSION
 )::Bool
