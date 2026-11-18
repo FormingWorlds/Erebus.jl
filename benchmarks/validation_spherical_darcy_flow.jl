@@ -600,8 +600,8 @@ needs the `NX_REFERENCE` grid. The centre ratio and the solid speed need the `NX
 grid of both settings. The permeability-jump runs have the keys `(N, spherical_flow, :jump)`
 and give the ids with `jump_` after the error name, in the same way, except that the flux
 error exists for the grids `NX_REFERENCE` and finer only and there is no order, closure or
-solid speed. The jump error depends on how the grid cuts the circle `r = A_JUMP` (0.0075 at
-`Nx = 129`, 0.023 at `Nx = 127`), so an order between 2 grids has no meaning there.
+solid speed. The jump error depends on how the grid cuts the circle `r = A_JUMP` (with the option on
+0.025 at `Nx = 63` and 0.034 at `Nx = 65`), so an order between 2 grids has no meaning there.
 
 Parameters
 ----------

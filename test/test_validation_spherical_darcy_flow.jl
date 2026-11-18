@@ -261,6 +261,10 @@ end
             @test r65.dp_centre < r65.dp_centre_exact
             @test isapprox(r65.vent_flux, r65.source_flux; rtol=1.0e-8)
         end
+        # The grid cut of r = A_JUMP sets the error: the finer grid Nx = 65 has a larger
+        # error than Nx = 63 (measured 0.034 and 0.025), so the record keeps no order.
+        r63 = SDF.run_case(63; spherical_flow=true, jump=true)
+        @test r63.l2_inner < runs[(65, true, :jump)].l2_inner
         # The centre value scales with the flow dimension d as 1 / d.
         on, off = runs[(65, true, :jump)], runs[(65, false, :jump)]
         @test isapprox(on.dp_centre / off.dp_centre, 2 / 3; atol=0.005)

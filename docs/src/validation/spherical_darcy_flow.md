@@ -185,7 +185,7 @@ A pass means that the error stays below its limit at each grid.
 **Known limit.**
 The jump surface $r = a$ is a staircase of grid cells, as the outer surface is.
 The error therefore depends on how the grid cuts the circle $r = a$, and it does not fall at a fixed order.
-With the option on it is 0.0075 at `Nx = 129` and 0.023 at `Nx = 127`.
+With the option on it is 0.025 at `Nx = 63` and 0.034 at `Nx = 65`, so the finer grid has the larger error; the test checks this.
 The test therefore asserts a limit at each grid and no order.
 The flux error leaves out the faces at most 2 cells from $r = a$; the comparison of the 6-variable and the 4-variable solver paths includes these faces.
 The case sets the face resistances directly, so it does not test how the code computes them from the markers.
