@@ -21,15 +21,16 @@ Each case on a page has the same layout:
 | [Spherical Heat Conduction](thermal_conduction.md) | Heat conduction, the spherical geometry term, radiogenic heating in the time loop | Exact solution, backward-Euler series, 1-D finite-volume solver |
 | [Spherical Darcy Flow](spherical_darcy_flow.md) | Darcy pressure and flux, the spherical face weights of the fluid continuity rows, the closure of the vented rate | Exact steady pressure and flux of a uniform source in a sphere and a disk, with uniform permeability and with a low-permeability core |
 | [Spherical Compaction](spherical_compaction.md) | The compaction term of the solid and the fluid continuity rows, their spherical face weights, the closure of the vented rate | Exact compaction-length profile of the effective pressure and the solid velocity in a sphere and a disk |
+| [Spherical Pressure Diffusion](spherical_pressure_diffusion.md) | The poroelastic storage terms of the solid and the fluid continuity rows over 20 time steps, the spherical face weights of the fluid row | Backward-Euler series of pore pressure diffusion in a rigid sphere and disk with a vented surface |
 
 ## How the results are stored
 
 Each validation page has a record file in `benchmarks/records/`. The record holds the measured values, the tolerances, a hash of the configuration, and the last commit that changed `src/`. The table on the page comes from the record, and `tools/check_doc_numbers.jl` fails if the two differ.
 
 `Pkg.test` runs each case again and compares it with its record.
-The Darcy flow and the compaction tests skip the finest grid and use its recorded values.
+The Darcy flow, the compaction and the pressure diffusion tests skip the finest grid and use its recorded values.
 `tools/check_validation.jl` runs every case of its table on every grid and compares it with its record, and the CI job `check_validation` runs it on every pull request.
 To write a new record after an intended physics change, run the export tool for that record.
 The tool also writes the table on the page.
-It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow and the compaction tools also check `tools/`).
+It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow, the compaction and the pressure diffusion tools also check `tools/`).
 It also refuses to write a value that leaves its regression band (the allowed range around the recorded value), unless you pass `--accept-physics-change`, and a value that fails its reference tolerance in all cases.
