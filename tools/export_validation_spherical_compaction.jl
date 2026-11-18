@@ -244,10 +244,16 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
 end
 
 """
-    compaction_validation_module() -> Module
+    compaction_validation_module(hosts=(parentmodule(@__MODULE__), Main)) -> Module
 
 Return the `SphericalCompactionValidation` module (`benchmarks/validation_spherical_compaction.jl`)
-of the module that includes this file, or of `Main` when that module has none.
+of the first module in `hosts` that defines it: by default the module that includes this
+file, or `Main` when that module has none.
+
+Parameters
+----------
+hosts : Tuple, optional
+    Modules searched in order (default: the module that includes this file, then `Main`).
 
 Returns
 -------
@@ -257,10 +263,12 @@ Module
 Raises
 ------
 ErrorException
-    If neither module defines `SphericalCompactionValidation`.
+    If no module of `hosts` defines `SphericalCompactionValidation`.
 """
-function compaction_validation_module()::Module
-    for host in (parentmodule(@__MODULE__), Main)
+function compaction_validation_module(
+    hosts::Tuple=(parentmodule(@__MODULE__), Main)
+)::Module
+    for host in hosts
         if Base.invokelatest(isdefined, host, :SphericalCompactionValidation)
             return Base.invokelatest(getfield, host, :SphericalCompactionValidation)
         end
@@ -443,7 +451,8 @@ Run the command-line export tool for the spherical compaction validation record.
 `SphericalCompactionValidation` (`benchmarks/validation_spherical_compaction.jl`), see
 `compaction_validation_module`. An argument other than `--accept-physics-change` that
 starts with `-`, and a second record path, are usage errors. An error of the export other
-than a `DomainError` is printed with its stack trace.
+than a `DomainError`, including a failed `git status` of the clean-tree check, is printed
+with its stack trace and gives the exit code `1`.
 
 Parameters
 ----------
@@ -498,22 +507,21 @@ function run_export_cli(
     end
     record_path = something(record_path, DEFAULT_EXPORT_RECORD_PATH)
 
-    if check_clean_tree
-        ok_clean, dirty_out = if dirty_status === nothing
-            check_clean_source_tree(repo_root)
-        else
-            (isempty(strip(dirty_status)), String(strip(dirty_status)))
-        end
-        if !ok_clean
-            println(
-                stderr,
-                "Refusing to export validation record with uncommitted changes in src/, benchmarks/ or tools/:\n$dirty_out",
-            )
-            return 1
-        end
-    end
-
     try
+        if check_clean_tree
+            ok_clean, dirty_out = if dirty_status === nothing
+                check_clean_source_tree(repo_root)
+            else
+                (isempty(strip(dirty_status)), String(strip(dirty_status)))
+            end
+            if !ok_clean
+                println(
+                    stderr,
+                    "Refusing to export validation record with uncommitted changes in src/, benchmarks/ or tools/:\n$dirty_out",
+                )
+                return 1
+            end
+        end
         commit_val = src_commit === nothing ? last_src_commit(repo_root) : src_commit
         write_spherical_compaction_record(
             record_path;

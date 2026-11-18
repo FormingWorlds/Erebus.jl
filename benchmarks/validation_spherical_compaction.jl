@@ -1002,10 +1002,35 @@ function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
 end
 
 """
+    _parse_record(record_path)
+
+Parse the validation record `record_path`.
+
+Parameters
+----------
+record_path : String
+    Path to an existing TOML validation record file.
+
+Returns
+-------
+Union{Dict{String,Any},String}
+    The parsed record, or the message of the parser error when the file is not valid TOML.
+"""
+function _parse_record(record_path::String)
+    return try
+        TOML.parsefile(record_path)
+    catch err
+        err isa TOML.ParserError || rethrow()
+        "Cannot parse validation record $record_path: $(sprint(showerror, err))"
+    end
+end
+
+"""
     check_physics_regression_bands(metrics, record_path)
 
 Check that each metric lies within its regression band (`PHYSICS_REGRESSION_BANDS`) around
-the recorded value in `record_path`.
+the recorded value in `record_path`. A file that is not valid TOML returns the message of
+the parser error.
 
 Parameters
 ----------
@@ -1029,10 +1054,13 @@ function check_physics_regression_bands(
 )::Tuple{Bool,Vector{String}}
     isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
     isfile(record_path) || return (false, ["Validation record not found: $record_path"])
-    raw = TOML.parsefile(record_path)
+    raw = _parse_record(record_path)
+    raw isa String && return (false, [raw])
     recorded_by_id = Dict{String,Float64}()
     for m in get(raw, "metrics", Any[])
-        if m isa AbstractDict && haskey(m, "id") && get(m, "value", nothing) isa Real
+        if m isa AbstractDict &&
+            get(m, "id", nothing) isa AbstractString &&
+            get(m, "value", nothing) isa Real
             recorded_by_id[String(m["id"])] = Float64(m["value"])
         end
     end
@@ -1065,7 +1093,8 @@ Compare freshly evaluated metrics, reference values, regression bands and the co
 hash and summary with a committed validation record. The replay of recorded values
 (`REPLAY_RTOL`, `REPLAY_ATOL_BOUNDS`) runs when `check_recorded_values` is `true` and the
 Julia major.minor version matches `metadata.julia_version`; the regression bands always run.
-A record that fails `validate_record_dict` returns its schema errors only.
+A record that fails `validate_record_dict` returns its schema errors only, and a file that is
+not valid TOML the message of the parser error.
 
 Parameters
 ----------
@@ -1091,7 +1120,8 @@ function check_validation_reproducibility(
 )::Tuple{Bool,Vector{String}}
     isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
     isfile(record_path) || return (false, ["Validation record not found: $record_path"])
-    raw = TOML.parsefile(record_path)
+    raw = _parse_record(record_path)
+    raw isa String && return (false, [raw])
     ok_schema, errs = validate_record_dict(
         raw; require_doc_pages=false, check_doc_sync=false
     )

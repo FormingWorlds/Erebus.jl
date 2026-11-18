@@ -463,14 +463,18 @@ end
         @test r3.pt_spread > 3 * r4.pt_spread
     end
 
-    @testset "a long time step reaches the vent drain cap and breaks the closure" begin
-        long = SCV.run_case(33; spherical_flow=true, dt_yr=1.0e-2)
+    @testset "a long time step reaches the vent drain cap and breaks the closure (spherical_flow = $sf)" for (
+        sf, factor
+    ) in (
+        (true, 114.2), (false, 108.9)
+    )
+        long = SCV.run_case(33; spherical_flow=sf, dt_yr=1.0e-2)
         @test long.converged
         @test !isapprox(long.vent_closure, 0.0; atol=1.0e-3)
-        @test runs[(33, true)].vent_closure < 1.0e-8
+        @test runs[(33, sf)].vent_closure < 1.0e-8
         # The matrix holds the cap from the pressure before the solve; S_vent_grid is
         # recomputed from the solved pressure without it, so it exceeds the compaction rate.
-        @test isapprox(long.vent_flux / long.comp_flux, 114.2; rtol=0.01)
+        @test isapprox(long.vent_flux / long.comp_flux, factor; rtol=0.01)
     end
 
     @testset "6-variable path equals the 4-variable path (spherical_flow = $sf)" for sf in (
@@ -484,9 +488,20 @@ end
         @test six.converged
         @test rel_diff(:pf) < 1.0e-10
         @test rel_diff(:pe) < 1.0e-8
-        # Every face of the solid velocity and the Darcy flux, also outside 0.9 R.
-        @test rel_diff(:vx) < 1.0e-6
-        @test rel_diff(:vy) < 1.0e-6
+        # Every face, also in the sticky air, where eta_air / zeta = 1.3e-7 turns the
+        # round-off of the total pressure into velocity: measured 3.7e-7 at Nx = 33.
+        @test rel_diff(:vx) < 2.0e-5
+        @test rel_diff(:vy) < 2.0e-5
+        # The faces with r <= R: measured 6.7e-8 at Nx = 33.
+        coords = compaction_coords(33)
+        @test isapprox(coords.xp, four.xp; rtol=1.0e-14)
+        rock(xs, ys) =
+            [hypot(x - SCV.X_CENTRE, y - SCV.Y_CENTRE) <= SCV.R_PLANET for y in ys, x in xs]
+        rock_diff(field, mask) =
+            maximum(abs, (getfield(six, field) .- getfield(four, field))[mask]) /
+            maximum(abs, getfield(four, field))
+        @test rock_diff(:vx, rock(coords.xvx, coords.yvx)) < 2.0e-6
+        @test rock_diff(:vy, rock(coords.xvy, coords.yvy)) < 2.0e-6
         @test rel_diff(:qxD) < 1.0e-10
         @test rel_diff(:qyD) < 1.0e-10
         @test isapprox(six.vs_l2_inner, four.vs_l2_inner; rtol=1.0e-6)
@@ -576,20 +591,38 @@ end
             s_vent[i, j] = 1.0e-12
         end
         @test length(cells) > 50
+        @test sort([
+            (i, j) for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2) if
+            SCV._surface_rock(coords, i, j)
+        ]) == sort(cells)
         m_all = SCV._metrics((; grids=grids(pf, s_vent)), coords, false)
         @test isapprox(m_all.pf_vent_dev, 0.0; atol=1.0e-15)
-        # A surface cell 0.3 Pe_R above P_vent sets the deviation.
-        i0, j0 = cells[1]
-        pf_high = copy(pf)
-        pf_high[i0, j0] = SCV.P_AMB + 0.3 * SCV.PE_R
-        m_high = SCV._metrics((; grids=grids(pf_high, s_vent)), coords, false)
-        @test isapprox(m_high.pf_vent_dev, 0.3; rtol=1.0e-12)
-        # A surface cell that does not vent makes the deviation infinite, whatever its Pf.
-        s_closed = copy(s_vent)
-        s_closed[cells[end]...] = 0.0
-        m_closed = SCV._metrics((; grids=grids(pf, s_closed)), coords, false)
-        @test isequal(m_closed.pf_vent_dev, Inf)
         @test isequal(m_all.pf_vent_dev, 0.0)
+        inside(i, j) =
+            hypot(coords.xp[j] - SCV.X_CENTRE, coords.yp[i] - SCV.Y_CENTRE) <= SCV.R_PLANET
+        # For each side, a surface cell whose only outside neighbour lies on that side:
+        # the cells next to the poles have y-facing exterior faces only.
+        sides = ((-1, 0), (1, 0), (0, -1), (0, 1))
+        only_outside(side) = filter(cells) do (i, j)
+            outside = [!inside(i + di, j + dj) for (di, dj) in sides]
+            return count(outside) == 1 && !inside(i + side[1], j + side[2])
+        end
+        # The grid is symmetric under reflection and x <-> y: each side has as many cells.
+        n_side = [length(only_outside(side)) for side in sides]
+        @test all(==(n_side[1]), n_side)
+        @test 1 <= n_side[1] < length(cells) / 4
+        for side in sides, (i0, j0) in only_outside(side)
+            # A surface cell 0.3 Pe_R above P_vent sets the deviation.
+            pf_high = copy(pf)
+            pf_high[i0, j0] = SCV.P_AMB + 0.3 * SCV.PE_R
+            m_high = SCV._metrics((; grids=grids(pf_high, s_vent)), coords, false)
+            @test isapprox(m_high.pf_vent_dev, 0.3; rtol=1.0e-12)
+            # A surface cell that does not vent makes the deviation infinite, whatever its Pf.
+            s_closed = copy(s_vent)
+            s_closed[i0, j0] = 0.0
+            m_closed = SCV._metrics((; grids=grids(pf, s_closed)), coords, false)
+            @test isequal(m_closed.pf_vent_dev, Inf)
+        end
     end
 
     @testset "metrics reject an empty mask" begin
@@ -672,6 +705,10 @@ end
         @test validation_module(case) !== loaded
         # The export tool reads the validation module of the module that includes it.
         @test SphericalCompactionExport.compaction_validation_module() === SCV
+        @test SphericalCompactionExport.compaction_validation_module((@__MODULE__,)) === SCV
+        @test_throws ErrorException SphericalCompactionExport.compaction_validation_module((
+            Module(:Empty),
+        ))
         Base.include(
             host,
             joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_compaction.jl"),
@@ -965,6 +1002,28 @@ end
             @test failed.value == 1
             @test occursin("Stacktrace", failed.err)
             @test !isfile(target)
+            # A clean-tree check whose `git status` fails is reported and gives exit code 1.
+            not_repo = mkpath(joinpath(tmpdir, "not_a_repo"))
+            withenv("GIT_DIR" => joinpath(not_repo, "absent.git")) do
+                for cli in (
+                    SphericalCompactionExport.run_export_cli,
+                    SphericalCompactionExport.export_main,
+                )
+                    no_git = capture_stdio(
+                        () -> cli(
+                            [target];
+                            src_commit=commit,
+                            bench=bench,
+                            check_clean_tree=true,
+                            repo_root=not_repo,
+                        ),
+                    )
+                    @test no_git.value == 1
+                    @test occursin("failed process", no_git.err)
+                    @test occursin("status --porcelain", no_git.err)
+                    @test !isfile(target)
+                end
+            end
         end
     end
 
@@ -1031,6 +1090,59 @@ end
             )
             @test !ok_value
             @test any(occursin("numeric", e) for e in errs_value)
+            # A record that is not TOML fails the direct checks with a message.
+            for check in (
+                () -> SCV.check_validation_reproducibility(bench, broken),
+                () -> SCV.check_physics_regression_bands(bench.metrics, broken),
+            )
+                ok_parse, errs_parse = check()
+                @test !ok_parse
+                @test occursin("Cannot parse", only(errs_parse))
+            end
+            # Valid TOML with a number or a Bool where the schema has a string (or an integer
+            # for `nx`) gives schema errors in every check, not a MethodError.
+            wrong_types = (
+                ("metadata", "src_commit", 123),
+                ("metadata", "config_sha256", 123),
+                ("metadata", "id", 123),
+                ("metadata", "title", true),
+                ("metadata", "page", 7),
+                ("metric", "id", 123),
+                ("metric", "case", 1),
+                ("metric", "description", false),
+                ("metric", "comparison", 1),
+                ("metric", "units", 1),
+                ("metric", "status", true),
+                ("metric", "nx", "33"),
+            )
+            for (section, key, value) in wrong_types
+                rec = deepcopy(raw_record_all)
+                table = section == "metadata" ? rec["metadata"] : rec["metrics"][1]
+                table[key] = value
+                path = write_compaction_toml(joinpath(tmpdir, "$(section)_$key.toml"), rec)
+                ok_dict, errs_dict = SCV.validate_record_dict(TOML.parsefile(path))
+                @test !ok_dict
+                @test any(occursin("'$key' must be", e) for e in errs_dict)
+                ok_rep, errs_rep = SCV.check_validation_reproducibility(bench, path)
+                @test !ok_rep
+                @test errs_rep == errs_dict
+                checked = capture_stdio(
+                    () -> run_compaction_validation_check(path; bench=bench)
+                )
+                @test checked.value === false
+                @test occursin("[schema]", checked.err)
+                cli = capture_stdio(
+                    () -> run_validation_cli([path]; compaction_bench=bench)
+                )
+                @test cli.value == 1
+                @test occursin("[schema]", cli.err)
+            end
+            # A missing metric key is reported once, without the type checks of that metric.
+            no_units = deepcopy(raw_record_all)
+            delete!(no_units["metrics"][1], "units")
+            ok_units, errs_units = SCV.validate_record_dict(no_units)
+            @test !ok_units
+            @test errs_units == ["Metric #1 missing key 'units'"]
         end
     end
 

@@ -142,8 +142,8 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
   The assembly of the fluid row checks this cap with the fluid pressure before the solve, $P_\mathrm{amb} + P_{e,R}$, and scales the vent conductance of a capped cell down.
   After the solve the code recomputes the vent rate `S_vent_grid` from the solved fluid pressure, which lies close to $P_\mathrm{amb}$, and there the cap does not act.
   With a time step of $10^{-2}$ yr the cap acts on every vent cell in the assembly.
-  The solved fluid row still vents the compaction rate, but `S_vent_grid` is no longer the rate of the solve: it exceeds the compaction rate by a factor of 114.2 at `Nx = 33`.
-  The test checks that the closure then fails and checks this factor.
+  The solved fluid row still vents the compaction rate, but `S_vent_grid` is no longer the rate of the solve: at `Nx = 33` it exceeds the compaction rate by a factor of 114.2 for the sphere and 108.9 for the disk.
+  The test checks for both settings that the closure then fails and checks these factors.
 
 !!! details "Test details"
     - Reference: exact solution $P_e(r)$ above, the exact solid velocity $-(k / \mu) P_e'(r) \, \hat{\mathbf{r}}$, and the centre ratio $2 I_0(2) / \sinh 2$.

@@ -185,7 +185,10 @@ end
 Validate the schema, metric tolerances, and optional documentation block of a validation record.
 Metrics using `comparison = "le_atol"` represent upper-bound magnitude checks and must store
 `reference = 0.0`. The required `[config]` keys come from `REQUIRED_CONFIG_KEYS` under
-`metadata.id`; a record id without an entry is an error.
+`metadata.id`; a record id without an entry is an error. The `REQUIRED_METADATA_KEYS`,
+`metadata.page` and the metric keys `id`, `case`, `description`, `comparison`, `units` and
+`status` must hold strings, and the metric key `nx` an integer; another TOML type is a
+schema error.
 
 Parameters
 ----------
@@ -228,14 +231,20 @@ function validate_record_dict(
         if !haskey(meta, k) || isempty(strip(string(meta[k])))
             push!(errors, "Metadata missing non-empty key '$k'")
             meta_keys_ok = false
+        elseif !(meta[k] isa AbstractString)
+            push!(errors, "Metadata key '$k' must be a string")
+            meta_keys_ok = false
         end
     end
-    if haskey(meta, "src_commit") &&
-        !occursin(r"^[0-9a-f]{40}$", String(meta["src_commit"]))
+    if haskey(meta, "page") && !(meta["page"] isa AbstractString)
+        push!(errors, "Metadata key 'page' must be a string")
+    end
+    src_commit = get(meta, "src_commit", nothing)
+    if src_commit isa AbstractString && !occursin(r"^[0-9a-f]{40}$", src_commit)
         push!(errors, "metadata.src_commit must be a 40-character lowercase hex SHA-1")
     end
-    if haskey(meta, "config_sha256") &&
-        !occursin(r"^[0-9a-f]{64}$", String(meta["config_sha256"]))
+    config_sha = get(meta, "config_sha256", nothing)
+    if config_sha isa AbstractString && !occursin(r"^[0-9a-f]{64}$", config_sha)
         push!(errors, "metadata.config_sha256 must be a 64-character lowercase hex SHA-256")
     end
 
@@ -244,7 +253,7 @@ function validate_record_dict(
         push!(errors, "Section 'config' must be a table")
         return (false, errors)
     end
-    rec_id = haskey(meta, "id") ? String(meta["id"]) : ""
+    rec_id = get(meta, "id", nothing) isa AbstractString ? String(meta["id"]) : ""
     if haskey(REQUIRED_CONFIG_KEYS, rec_id)
         for k in REQUIRED_CONFIG_KEYS[rec_id]
             if !haskey(cfg, k)
@@ -280,6 +289,21 @@ function validate_record_dict(
             end
         end
         if missing_key
+            all_metric_keys_ok = false
+            continue
+        end
+        bad_type = false
+        for k in ("id", "case", "description", "comparison", "units", "status")
+            if !(m[k] isa AbstractString)
+                push!(errors, "Metric #$idx key '$k' must be a string")
+                bad_type = true
+            end
+        end
+        if !(m["nx"] isa Integer) || m["nx"] isa Bool
+            push!(errors, "Metric #$idx key 'nx' must be an integer")
+            bad_type = true
+        end
+        if bad_type
             all_metric_keys_ok = false
             continue
         end

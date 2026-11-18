@@ -79,3 +79,8 @@ test_name = "test_validation_spherical_compaction.jl"
 page = "validation/spherical_compaction.md"
 number = "114.2"
 test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_compaction.md"
+number = "108.9"
+test_name = "test_validation_spherical_compaction.jl"
