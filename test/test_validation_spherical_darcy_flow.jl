@@ -3,7 +3,8 @@ using Test
 using TOML
 using Erebus
 
-include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_darcy_flow.jl"))
+isdefined(@__MODULE__, :SphericalDarcyFlowValidation) ||
+    include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_darcy_flow.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
 include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_darcy_flow.jl"))
 

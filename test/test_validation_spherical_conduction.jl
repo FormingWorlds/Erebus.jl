@@ -2,7 +2,8 @@ using Test
 using TOML
 using Erebus
 
-include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
+isdefined(@__MODULE__, :SphericalConductionValidation) ||
+    include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_conduction.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
 include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_conduction.jl"))
 
