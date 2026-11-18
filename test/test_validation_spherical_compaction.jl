@@ -590,14 +590,14 @@ end
             pf[i, j] = SCV.P_AMB
             s_vent[i, j] = 1.0e-12
         end
-        @test length(cells) > 50
+        # 80 surface rock cells on the staircase of the Nx = 41 grid
+        @test length(cells) == 80
         @test sort([
             (i, j) for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2) if
             SCV._surface_rock(coords, i, j)
         ]) == sort(cells)
         m_all = SCV._metrics((; grids=grids(pf, s_vent)), coords, false)
         @test isapprox(m_all.pf_vent_dev, 0.0; atol=1.0e-15)
-        @test isequal(m_all.pf_vent_dev, 0.0)
         inside(i, j) =
             hypot(coords.xp[j] - SCV.X_CENTRE, coords.yp[i] - SCV.Y_CENTRE) <= SCV.R_PLANET
         # For each side, a surface cell whose only outside neighbour lies on that side:

@@ -151,33 +151,24 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         )
     end
     labels = (("off", "2-D disk"), ("on", "3-D sphere"))
+    # Bounds of the centre, profile and velocity errors per setting and grid
+    error_bounds = Dict(
+        "off" => Dict(33 => 0.105, 65 => 0.044, 129 => 0.023),
+        "on" => Dict(33 => 0.08, 65 => 0.034, 129 => 0.018),
+    )
     error_rows = (
-        (
-            "centre_err",
-            "centre",
-            "Centre effective pressure relative error",
-            Dict(
-                "off" => Dict(33 => 0.105, 65 => 0.044, 129 => 0.023),
-                "on" => Dict(33 => 0.08, 65 => 0.034, 129 => 0.018),
-            ),
-        ),
+        ("centre_err", "centre", "Centre effective pressure relative error", error_bounds),
         (
             "profile_l2_inner",
             "profile",
             "Effective pressure L2 relative error for r <= 0.9 R",
-            Dict(
-                "off" => Dict(33 => 0.105, 65 => 0.044, 129 => 0.023),
-                "on" => Dict(33 => 0.08, 65 => 0.034, 129 => 0.018),
-            ),
+            error_bounds,
         ),
         (
             "vs_l2_inner",
             "velocity",
             "Solid velocity L2 relative vector error for r <= 0.9 R",
-            Dict(
-                "off" => Dict(33 => 0.105, 65 => 0.044, 129 => 0.023),
-                "on" => Dict(33 => 0.08, 65 => 0.034, 129 => 0.018),
-            ),
+            error_bounds,
         ),
     )
     for (prefix, case, text, bounds) in error_rows,

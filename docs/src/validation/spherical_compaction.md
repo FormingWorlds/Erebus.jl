@@ -47,7 +47,6 @@ The case builds the state with `init_simulation`, sets the grid fields directly 
 The compressibilities of the rock and the fluid are 0.
 The time step enters through the vent (see "Conditions of the case") and through the elastic term of the momentum rows, which replaces the shear viscosity $\eta$ by $\eta G \Delta t / (G \Delta t + \eta)$ with the shear modulus $G$.
 The time step is $10^{-10}$ yr and the case sets $G = 10^{20}$ Pa, so the rock shear viscosity in the momentum rows is 0.25 % below $\eta$.
-With $G = 10^{40}$ Pa the results at `Nx = 65` do not change between time steps of $10^{-14}$ and $10^{-10}$ yr.
 
 ## The exact solution
 
@@ -131,8 +130,8 @@ The test asserts limits on the errors and on the order and not an exact match.
 The exact solution holds only if the case meets 4 conditions.
 Each condition is a test assertion, so a change of the set-up that breaks one fails the test and not only the comparison.
 
-- Uniform total pressure: the spread of $P_t$ over the rock cells is below $3 \times 10^{-4} P_{e,R}$ (measured $8 \times 10^{-5}$ to $9 \times 10^{-5} P_{e,R}$).
-  With a shear viscosity of $10^{-3} \zeta$ the spread grows about tenfold, and the centre error at `Nx = 65` changes by 2 % of its value; the test checks that the spread stays below $3 \times 10^{-3} P_{e,R}$ and that the change stays below 10 %.
+- Uniform total pressure: the spread of $P_t$ over the rock cells is below $3 \times 10^{-4} P_{e,R}$.
+  With a shear viscosity of $10^{-3} \zeta$ the test checks that the spread stays below $3 \times 10^{-3} P_{e,R}$ and that the centre error at `Nx = 65` changes by less than 10 % of its value.
 - Compaction viscosity: `ETAPHI` equals $\zeta$ within a relative $10^{-12}$ on every rock cell.
   The case gives the rock viscosity to every basic node next to a rock cell; without this, cells next to the surface get a smaller compaction viscosity.
 - Vent pressure: the vent cells are the rock cells with a side neighbour outside the sphere.
@@ -158,7 +157,7 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
 
 - The spherical terms of the momentum rows.
   The radial solid flow of this case reaches them, but the shear viscosity of $10^{-4} \zeta$ makes their effect small.
-  With these terms switched off, the velocity error of the sphere at `Nx = 65` changes from 0.02337 to 0.02333.
+  With these terms switched off, the velocity error of the sphere at `Nx = 65` changes from 0.02337 to 0.02333 (one run by hand, not recorded).
 - The venting conductance and its face weight: the case uses the Dirichlet limit, in which the vent cells keep $P_\mathrm{vent}$ for any large conductance.
 - The poroelastic compressibilities and gravity: they are off.
 - Elasticity and plasticity: the shear modulus and the yield strength are $10^{20}$ Pa, so the elastic term changes the rock shear viscosity by 0.25 % and no cell reaches its yield stress.

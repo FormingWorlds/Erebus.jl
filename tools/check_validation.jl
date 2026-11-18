@@ -219,7 +219,9 @@ InterruptException
 function run_validation_check(
     record_path::String=DEFAULT_SPHERICAL_RECORD; bench=nothing
 )::Bool
-    return run_record_check(VALIDATION_CASES[1], record_path; bench=bench)
+    return run_record_check(
+        validation_case("spherical_conduction"), record_path; bench=bench
+    )
 end
 
 """
@@ -251,7 +253,9 @@ InterruptException
 function run_darcy_validation_check(
     record_path::String=DEFAULT_DARCY_RECORD; bench=nothing
 )::Bool
-    return run_record_check(VALIDATION_CASES[2], record_path; bench=bench)
+    return run_record_check(
+        validation_case("spherical_darcy_flow"), record_path; bench=bench
+    )
 end
 
 """
@@ -283,7 +287,9 @@ InterruptException
 function run_compaction_validation_check(
     record_path::String=DEFAULT_COMPACTION_RECORD; bench=nothing
 )::Bool
-    return run_record_check(VALIDATION_CASES[3], record_path; bench=bench)
+    return run_record_check(
+        validation_case("spherical_compaction"), record_path; bench=bench
+    )
 end
 
 """
