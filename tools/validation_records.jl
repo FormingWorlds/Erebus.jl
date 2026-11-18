@@ -38,6 +38,8 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
         "L_box_m",
         "mu_f_Pa_s",
         "k_m2",
+        "k_core_m2",
+        "a_jump_m",
         "S_source_per_s",
         "phi",
         "eta_solid_Pa_s",

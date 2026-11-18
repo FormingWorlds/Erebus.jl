@@ -11,6 +11,11 @@ The ice saturation pressure at `T_SURF` is below `P_AMB`, so `P_vent = P_AMB`.
 The exact Darcy flux is `q = S r_vec / d`, with `r_vec` pointing from the centre.
 The case builds the state with `init_simulation`, sets the grid fields directly and calls
 `solve_stokes_darcy!` once on timestep 1, where the poroelastic compressibilities are off.
+
+A second case, the permeability jump, gives the core `r < A_JUMP` the permeability `K_CORE`
+and keeps `K_PERM` outside. The flux `q = S r_vec / d` is unchanged, and the excess pressure
+is `mu S (R^2 - a^2) / (2 d K_PERM) + mu S (a^2 - r^2) / (2 d K_CORE)` for `r < a`, with
+`a = A_JUMP`, and the uniform-permeability form for `a <= r <= R`.
 """
 module SphericalDarcyFlowValidation
 
@@ -29,6 +34,8 @@ const X_CENTRE = 70_000.0
 const Y_CENTRE = 70_000.0
 const MU_F = 1.0e-3
 const K_PERM = 1.0e-13
+const K_CORE = K_PERM / 100
+const A_JUMP = R_PLANET / 2
 const S_SOURCE = 1.0e-11
 const T_SURF = 200.0
 const P_AMB = 100.0
@@ -43,6 +50,7 @@ const RHO_FLUID = 1000.0
 const STRENGTH_FILL = 1.0e20
 const DT_YR = 1.0e-10
 const INNER_FRACTION = 0.9
+const JUMP_EXCLUDE_CELLS = 2.0
 const NX_LIST = (33, 65, 129)
 const NX_REFERENCE = 65
 const NX_MIN = 17
@@ -137,10 +145,71 @@ Bool
 _inside(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) <= R_PLANET
 
 """
-    set_fields!(state, coords)
+    exact_excess_pressure(r, d; jump=false)
 
-Set the grid fields of a rigid, uniformly permeable sphere with a uniform fluid source:
-impermeable faces outside the sphere, no gravity, uniform porosity and fluid pressure.
+Return the exact excess fluid pressure `p - P_AMB` of the steady radial flow at distance `r`
+from the centre, with the surface `r = R_PLANET` at the ambient pressure.
+
+For uniform permeability `K_PERM` the value is `mu S (R^2 - r^2) / (2 d K_PERM)`. With
+`jump = true` the core `r < A_JUMP` has the permeability `K_CORE` and the value there is
+`mu S (R^2 - a^2) / (2 d K_PERM) + mu S (a^2 - r^2) / (2 d K_CORE)`, with `a = A_JUMP`.
+The pressure is continuous at `a`; the flux `S r / d` is the same in both settings.
+
+Parameters
+----------
+r : Real
+    Distance from the centre [m], within `0 <= r <= R_PLANET`.
+d : Real
+    Flow dimension, 3 for the sphere (`geometry.spherical_flow = true`) and 2 for the disk.
+jump : Bool, optional
+    Whether the core has the permeability `K_CORE` (default `false`).
+
+Returns
+-------
+Float64
+    Excess pressure [Pa].
+
+Raises
+------
+DomainError
+    If `r` lies outside `[0, R_PLANET]` or `d` is neither 2 nor 3.
+"""
+function exact_excess_pressure(r::Real, d::Real; jump::Bool=false)
+    0 <= r <= R_PLANET || throw(DomainError(r, "r must lie within [0, R_PLANET]"))
+    d in (2, 3) || throw(DomainError(d, "the flow dimension must be 2 or 3"))
+    if jump && r < A_JUMP
+        return MU_F * S_SOURCE * (R_PLANET^2 - A_JUMP^2) / (2d * K_PERM) +
+               MU_F * S_SOURCE * (A_JUMP^2 - r^2) / (2d * K_CORE)
+    end
+    return MU_F * S_SOURCE * (R_PLANET^2 - r^2) / (2d * K_PERM)
+end
+
+"""
+    _core(coords, i, j)
+
+Return whether the P node `(i, j)` lies in the core, `r < A_JUMP`.
+
+Parameters
+----------
+coords : GridCoordinates
+    Grid coordinates of the case.
+i, j : Int
+    Row and column index of the P node.
+
+Returns
+-------
+Bool
+    `true` when the node distance from the centre is below `A_JUMP`.
+"""
+_core(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) < A_JUMP
+
+"""
+    set_fields!(state, coords; jump=false)
+
+Set the grid fields of a rigid sphere with a uniform fluid source: impermeable faces outside
+the sphere, no gravity, uniform porosity and fluid pressure. The node permeability is
+`K_PERM`, or `K_CORE` for `r < A_JUMP` when `jump` is `true`. The resistance `mu / k` of a
+face between 2 inside nodes is the mean of the 2 node values.
 
 Parameters
 ----------
@@ -148,12 +217,14 @@ state : SimulationState
     State from `init_simulation`; its grid fields are overwritten.
 coords : GridCoordinates
     Staggered grid coordinates of `state`.
+jump : Bool, optional
+    Whether the core `r < A_JUMP` has the permeability `K_CORE` (default `false`).
 
 Returns
 -------
 Nothing
 """
-function set_fields!(state, coords)
+function set_fields!(state, coords; jump::Bool=false)
     g = state.grids
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     for f in (g.ETA, g.ETA0, g.ETAP)
@@ -180,18 +251,27 @@ function set_fields!(state, coords)
     fill!(g.pf0, PF_INIT)
     fill!(g.gx, 0.0)
     fill!(g.gy, 0.0)
-    rx_rock = MU_F / K_PERM
+    node_k(i, j) = jump && _core(coords, i, j) ? K_CORE : K_PERM
+    face_rx(i1, j1, i2, j2) = 0.5 * (MU_F / node_k(i1, j1) + MU_F / node_k(i2, j2))
     for j in 1:Nx1, i in 1:Ny1
         inside = _inside(coords, i, j)
-        g.RX[i, j] = (j < Nx1 && inside && _inside(coords, i, j + 1)) ? rx_rock : RX_AIR
-        g.RY[i, j] = (i < Ny1 && inside && _inside(coords, i + 1, j)) ? rx_rock : RX_AIR
+        g.RX[i, j] = if (j < Nx1 && inside && _inside(coords, i, j + 1))
+            face_rx(i, j, i, j + 1)
+        else
+            RX_AIR
+        end
+        g.RY[i, j] = if (i < Ny1 && inside && _inside(coords, i + 1, j))
+            face_rx(i, j, i + 1, j)
+        else
+            RX_AIR
+        end
         g.DQPF[i, j] = inside ? S_SOURCE : 0.0
     end
     return nothing
 end
 
 """
-    run_case(N; spherical_flow, darcy_elimination=true)
+    run_case(N; spherical_flow, darcy_elimination=true, jump=false)
 
 Solve the case once and compare the fluid pressure and the Darcy flux with the exact
 solution.
@@ -204,6 +284,8 @@ spherical_flow : Bool
     Value of `geometry.spherical_flow`.
 darcy_elimination : Bool, optional
     Value of `solver.darcy_elimination` (default `true`).
+jump : Bool, optional
+    Whether the core `r < A_JUMP` has the permeability `K_CORE` (default `false`).
 
 Returns
 -------
@@ -213,7 +295,8 @@ NamedTuple
     `qxD`, `qyD`: Darcy flux grids [m/s];
     `l2_inner`: relative L2 error of `p - P_AMB` over P nodes with `r <= 0.9 R`;
     `flux_l2_inner`: relative L2 vector error of the Darcy flux over the faces with
-    `r <= 0.9 R` (see `_flux_l2_inner`);
+    `r <= 0.9 R`, without the faces near `A_JUMP` when `jump` is `true` (see
+    `_flux_l2_inner`);
     `dp_centre`: computed `p - P_AMB` at the P node nearest the centre;
     `dp_centre_exact`: exact value at that node;
     `vent_flux`, `source_flux`: vented and produced fluid volume rate, summed with the
@@ -226,7 +309,9 @@ Raises
 ArgumentError
     If `N < NX_MIN`.
 """
-function run_case(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
+function run_case(
+    N::Int; spherical_flow::Bool, darcy_elimination::Bool=true, jump::Bool=false
+)
     cfg = make_config(N; spherical_flow=spherical_flow, darcy_elimination=darcy_elimination)
     return mktempdir() do out
         state, coords, ws, tio, _ = with_logger(NullLogger()) do
@@ -235,23 +320,25 @@ function run_case(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
         tio === nothing || close(tio)
         state.timestep = 1
         state.accumulators.P_amb = P_AMB
-        set_fields!(state, coords)
+        set_fields!(state, coords; jump=jump)
         res = with_logger(NullLogger()) do
             return Erebus.solve_stokes_darcy!(
                 state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
             )
         end
         return (;
-            converged=res.plastic_converged, _metrics(state, coords, spherical_flow)...
+            converged=res.plastic_converged,
+            _metrics(state, coords, spherical_flow; jump=jump)...,
         )
     end
 end
 
 """
-    _flux_l2_inner(g, coords, d)
+    _flux_l2_inner(g, coords, d; jump=false)
 
 Return the relative L2 vector error of the Darcy flux against the exact flux
-`S r_vec / d` over the faces with `r <= INNER_FRACTION * R_PLANET`.
+`S r_vec / d` over the faces with `r <= INNER_FRACTION * R_PLANET`. With `jump` the faces with
+`|r - A_JUMP| <= JUMP_EXCLUDE_CELLS * dx` are left out.
 
 At each face the error is the stored component minus the same component of the exact flux,
 with `r_vec` pointing from the centre to the face. The `qxD[i, j]` face lies at
@@ -266,6 +353,9 @@ coords : GridCoordinates
     Staggered grid coordinates.
 d : Float64
     Flow dimension, 3 for the sphere and 2 for the disk.
+jump : Bool, optional
+    Whether to leave out the faces within `JUMP_EXCLUDE_CELLS * dx` of `r = A_JUMP`
+    (default `false`).
 
 Returns
 -------
@@ -275,16 +365,19 @@ Float64
 Raises
 ------
 ArgumentError
-    If no face lies within `INNER_FRACTION * R_PLANET` of the centre, or the exact flux
-    is zero on all selected faces.
+    If no face is selected within `INNER_FRACTION * R_PLANET` of the centre, or the exact
+    flux is zero on all selected faces.
 """
-function _flux_l2_inner(g, coords, d::Float64)
+function _flux_l2_inner(g, coords, d::Float64; jump::Bool=false)
     sq_err = sq_ref = 0.0
     n_faces = 0
     r_max = INNER_FRACTION * R_PLANET
+    r_skip = JUMP_EXCLUDE_CELLS * coords.dx
     for j in 1:(coords.Nx), i in 2:(coords.Ny)
         dxf = coords.xvx[j] - X_CENTRE
-        hypot(dxf, coords.yvx[i] - Y_CENTRE) <= r_max || continue
+        rf = hypot(dxf, coords.yvx[i] - Y_CENTRE)
+        rf <= r_max || continue
+        jump && abs(rf - A_JUMP) <= r_skip && continue
         exact = S_SOURCE * dxf / d
         sq_err += (g.qxD[i, j] - exact)^2
         sq_ref += exact^2
@@ -292,20 +385,23 @@ function _flux_l2_inner(g, coords, d::Float64)
     end
     for j in 2:(coords.Nx), i in 1:(coords.Ny)
         dyf = coords.yvy[i] - Y_CENTRE
-        hypot(coords.xvy[j] - X_CENTRE, dyf) <= r_max || continue
+        rf = hypot(coords.xvy[j] - X_CENTRE, dyf)
+        rf <= r_max || continue
+        jump && abs(rf - A_JUMP) <= r_skip && continue
         exact = S_SOURCE * dyf / d
         sq_err += (g.qyD[i, j] - exact)^2
         sq_ref += exact^2
         n_faces += 1
     end
-    n_faces > 0 ||
-        throw(ArgumentError("no flux face lies within $(INNER_FRACTION) R of the centre"))
+    n_faces > 0 || throw(
+        ArgumentError("no flux face is selected within $(INNER_FRACTION) R of the centre"),
+    )
     sq_ref > 0.0 || throw(ArgumentError("the exact flux is zero on every selected face"))
     return sqrt(sq_err / sq_ref)
 end
 
 """
-    _metrics(state, coords, spherical_flow)
+    _metrics(state, coords, spherical_flow; jump=false)
 
 Return the error measures of a solved case: the pressure and flux errors against the exact
 solution, the centre pressure, the vented and produced rates and the largest solid speed.
@@ -318,6 +414,9 @@ coords : GridCoordinates
     Staggered grid coordinates.
 spherical_flow : Bool
     Value of `geometry.spherical_flow`; sets the flow dimension and the cell weights.
+jump : Bool, optional
+    Whether the case has the permeability jump (default `false`); selects the exact
+    profile and the faces of `_flux_l2_inner`.
 
 Returns
 -------
@@ -330,7 +429,7 @@ ArgumentError
     If no P node lies inside the planet or none within `INNER_FRACTION * R_PLANET`, or if
     `_flux_l2_inner` finds no face.
 """
-function _metrics(state, coords, spherical_flow)
+function _metrics(state, coords, spherical_flow; jump::Bool=false)
     g = state.grids
     d = spherical_flow ? 3.0 : 2.0
     sq_err = sq_ref = 0.0
@@ -342,7 +441,7 @@ function _metrics(state, coords, spherical_flow)
         r <= R_PLANET || continue
         n_inside += 1
         dp = g.pf[i, j] - P_AMB
-        dp_exact = MU_F * S_SOURCE * (R_PLANET^2 - r^2) / (2d * K_PERM)
+        dp_exact = exact_excess_pressure(r, d; jump=jump)
         if r <= INNER_FRACTION * R_PLANET
             sq_err += (dp - dp_exact)^2
             sq_ref += dp_exact^2
@@ -369,7 +468,7 @@ function _metrics(state, coords, spherical_flow)
         qxD=copy(g.qxD),
         qyD=copy(g.qyD),
         l2_inner=sqrt(sq_err / sq_ref),
-        flux_l2_inner=_flux_l2_inner(g, coords, d),
+        flux_l2_inner=_flux_l2_inner(g, coords, d; jump=jump),
         dp_centre=dp_c,
         dp_centre_exact=dp_c_exact,
         vent_flux,
@@ -389,6 +488,9 @@ const HASHED_CASE_CONSTANTS = (
     :S_SOURCE,
     :MU_F,
     :K_PERM,
+    :K_CORE,
+    :A_JUMP,
+    :JUMP_EXCLUDE_CELLS,
     :PHI,
     :ETA_SOLID,
     :RX_AIR,
@@ -433,6 +535,17 @@ const EXPECTED_METRIC_IDS = (
     "vent_closure_off_nx65",
     "vent_closure_on_nx65",
     "solid_speed_max_nx65",
+    "profile_l2_inner_jump_off_nx33",
+    "profile_l2_inner_jump_off_nx65",
+    "profile_l2_inner_jump_off_nx129",
+    "profile_l2_inner_jump_on_nx33",
+    "profile_l2_inner_jump_on_nx65",
+    "profile_l2_inner_jump_on_nx129",
+    "centre_ratio_jump_on_off_nx65",
+    "flux_l2_inner_jump_off_nx65",
+    "flux_l2_inner_jump_off_nx129",
+    "flux_l2_inner_jump_on_nx65",
+    "flux_l2_inner_jump_on_nx129",
 )
 
 const PHYSICS_REGRESSION_BANDS = Dict{
@@ -456,6 +569,17 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     "vent_closure_off_nx65" => (; atol=1.0e-8, rtol=0.0),
     "vent_closure_on_nx65" => (; atol=1.0e-8, rtol=0.0),
     "solid_speed_max_nx65" => (; atol=1.0e-12, rtol=0.0),
+    "profile_l2_inner_jump_off_nx33" => (; atol=0.005, rtol=0.0),
+    "profile_l2_inner_jump_off_nx65" => (; atol=0.005, rtol=0.0),
+    "profile_l2_inner_jump_off_nx129" => (; atol=0.005, rtol=0.0),
+    "profile_l2_inner_jump_on_nx33" => (; atol=0.005, rtol=0.0),
+    "profile_l2_inner_jump_on_nx65" => (; atol=0.005, rtol=0.0),
+    "profile_l2_inner_jump_on_nx129" => (; atol=0.005, rtol=0.0),
+    "flux_l2_inner_jump_off_nx65" => (; atol=0.003, rtol=0.0),
+    "flux_l2_inner_jump_off_nx129" => (; atol=0.0015, rtol=0.0),
+    "flux_l2_inner_jump_on_nx65" => (; atol=0.003, rtol=0.0),
+    "flux_l2_inner_jump_on_nx129" => (; atol=0.0015, rtol=0.0),
+    "centre_ratio_jump_on_off_nx65" => (; atol=0.002, rtol=0.0),
 )
 
 const REPLAY_RTOL = 1.0e-6
@@ -473,12 +597,17 @@ Return the validation metrics that the `run_case` results in `runs` determine.
 The profile and flux errors exist for each grid of `NX_LIST` present in `runs`. The convergence order
 of a setting needs both the `NX_REFERENCE` and the finest grid of `NX_LIST`, and its closure
 needs the `NX_REFERENCE` grid. The centre ratio and the solid speed need the `NX_REFERENCE`
-grid of both settings.
+grid of both settings. The permeability-jump runs have the keys `(N, spherical_flow, :jump)`
+and give the ids with `jump_` after the error name, in the same way, except that the flux
+error exists for the grids `NX_REFERENCE` and finer only and there is no order, closure or
+solid speed. The jump error depends on how the grid cuts the circle `r = A_JUMP` (with the option on
+0.025 at `Nx = 63` and 0.034 at `Nx = 65`), so an order between 2 grids has no meaning there.
 
 Parameters
 ----------
 runs : AbstractDict
-    Map from `(N, spherical_flow)` to the `run_case` result.
+    Map from `(N, spherical_flow)` and `(N, spherical_flow, :jump)` to the `run_case`
+    result.
 
 Returns
 -------
@@ -506,6 +635,14 @@ function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
                 m.vent_flux / m.source_flux - 1.0
             )
         end
+        for n in NX_LIST
+            haskey(runs, (n, sf, :jump)) || continue
+            metrics["profile_l2_inner_jump_$(tag)_nx$(n)"] = runs[(n, sf, :jump)].l2_inner
+            if n >= NX_REFERENCE
+                metrics["flux_l2_inner_jump_$(tag)_nx$(n)"] =
+                    runs[(n, sf, :jump)].flux_l2_inner
+            end
+        end
     end
     if haskey(runs, (NX_REFERENCE, true)) && haskey(runs, (NX_REFERENCE, false))
         on, off = runs[(NX_REFERENCE, true)], runs[(NX_REFERENCE, false)]
@@ -514,25 +651,32 @@ function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
             on.max_solid_speed, off.max_solid_speed
         )
     end
+    if haskey(runs, (NX_REFERENCE, true, :jump)) &&
+        haskey(runs, (NX_REFERENCE, false, :jump))
+        on, off = runs[(NX_REFERENCE, true, :jump)], runs[(NX_REFERENCE, false, :jump)]
+        metrics["centre_ratio_jump_on_off_nx$(NX_REFERENCE)"] = on.dp_centre / off.dp_centre
+    end
     return metrics
 end
 
 """
     evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
 
-Run the case at every grid in `nx_list` with `spherical_flow` off and on and return the runs
-and the validation metrics they determine.
+Run the uniform-permeability case and the permeability-jump case at every grid in `nx_list`
+with `spherical_flow` off and on and return the runs and the validation metrics they
+determine.
 
 Parameters
 ----------
 nx_list : Tuple{Vararg{Int}}, optional
     Grids to run, a subset of `NX_LIST` (default `NX_LIST`). With the default the result
-    holds all 18 metrics.
+    holds all 29 metrics.
 
 Returns
 -------
 NamedTuple
-    `runs`: `Dict` from `(N, spherical_flow)` to the `run_case` result;
+    `runs`: `Dict` from `(N, spherical_flow)` and `(N, spherical_flow, :jump)` to the
+    `run_case` result;
     `metrics`: `Dict{String,Float64}` from metric id (see `EXPECTED_METRIC_IDS`) to value,
     from `metrics_from_runs`.
 
@@ -544,9 +688,12 @@ ArgumentError
 function evaluate_spherical_darcy_flow_benchmark(; nx_list=NX_LIST)
     all(n -> n isa Integer && n in NX_LIST, nx_list) ||
         throw(ArgumentError("nx_list must be a subset of $NX_LIST, got $nx_list"))
-    runs = Dict(
-        (n, sf) => run_case(n; spherical_flow=sf) for n in nx_list, sf in (false, true)
-    )
+    runs = Dict{Tuple,Any}()
+    for n in nx_list, sf in (false, true)
+        runs[(n, sf)] = run_case(n; spherical_flow=sf)
+        runs[(n, sf, :jump)] = run_case(n; spherical_flow=sf, jump=true)
+        n == maximum(NX_LIST) && GC.gc()
+    end
     return (; runs, metrics=metrics_from_runs(runs))
 end
 
@@ -554,8 +701,8 @@ end
     expected_metric_references()
 
 Return the reference value of each validation metric: exact profile and flux error `0.0`,
-first-order convergence `1.0`, centre ratio `2/3`, and `0.0` for the closure and
-solid-speed bounds.
+first-order convergence `1.0`, centre ratio `2/3` (also with the permeability jump), and
+`0.0` for the closure and solid-speed bounds.
 
 Returns
 -------
@@ -567,7 +714,9 @@ function expected_metric_references()::Dict{String,Float64}
     for mid in EXPECTED_METRIC_IDS
         refs[mid] = startswith(mid, "profile_order") ? 1.0 : 0.0
     end
+
     refs["centre_ratio_on_off_nx65"] = 2.0 / 3.0
+    refs["centre_ratio_jump_on_off_nx65"] = 2.0 / 3.0
     return refs
 end
 
@@ -702,6 +851,8 @@ function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
         "L_box_m" => cfg.grid.xsize,
         "mu_f_Pa_s" => cfg.materials.etafluidm[1],
         "k_m2" => cfg.materials.kphim0[1],
+        "k_core_m2" => K_CORE,
+        "a_jump_m" => A_JUMP,
         "S_source_per_s" => S_SOURCE,
         "phi" => cfg.thermodynamics.phim0,
         "eta_solid_Pa_s" => cfg.materials.etasolidm[1],

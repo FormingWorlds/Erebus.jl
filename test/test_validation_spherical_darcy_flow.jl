@@ -111,9 +111,9 @@ end
     )
     bench = (; runs, metrics=merge(measured, recorded_only))
 
-    @testset "metrics: 12 from the runs, 6 recorded values for Nx = 129 and the orders" begin
-        @test length(measured) == 12
-        @test length(recorded_only) == 6
+    @testset "metrics: 19 from the runs, 10 recorded values for Nx = 129 and the orders" begin
+        @test length(measured) == 19
+        @test length(recorded_only) == 10
         @test isempty(intersect(keys(measured), keys(recorded_only)))
         @test Set(keys(bench.metrics)) == Set(SDF.EXPECTED_METRIC_IDS)
     end
@@ -217,11 +217,96 @@ end
         )
     end
 
-    @testset "6-variable path equals the 4-variable path (spherical_flow = $sf)" for sf in (
-        false, true
-    )
-        four = runs[(33, sf)]
-        six = SDF.run_case(33; spherical_flow=sf, darcy_elimination=false)
+    @testset "permeability jump: exact profile and solver against the piecewise solution" begin
+        a, R = SDF.A_JUMP, SDF.R_PLANET
+        for d in (2.0, 3.0)
+            pref = SDF.MU_F * SDF.S_SOURCE / (2d)
+            # The excess pressure vanishes at the surface and is continuous across the jump.
+            @test isapprox(SDF.exact_excess_pressure(R, d; jump=true), 0.0; atol=1.0e-9)
+            p_out = SDF.exact_excess_pressure(a, d; jump=true)
+            @test isapprox(p_out, pref * (R^2 - a^2) / SDF.K_PERM; rtol=1.0e-12)
+            @test isapprox(
+                SDF.exact_excess_pressure(a * (1 - 1.0e-9), d; jump=true),
+                p_out;
+                rtol=1.0e-6,
+            )
+            # The centre value adds the core drop mu S a^2 / (2 d K_CORE).
+            @test isapprox(
+                SDF.exact_excess_pressure(0.0, d; jump=true),
+                p_out + pref * a^2 / SDF.K_CORE;
+                rtol=1.0e-12,
+            )
+            # Without the jump the profile is the uniform one and the exponent is not 1.
+            @test isapprox(
+                SDF.exact_excess_pressure(0.0, d), pref * R^2 / SDF.K_PERM; rtol=1.0e-12
+            )
+            @test SDF.exact_excess_pressure(0.0, d; jump=true) >
+                10 * SDF.exact_excess_pressure(0.0, d)
+        end
+        @test SDF.K_CORE ≈ SDF.K_PERM / 100 rtol = 1.0e-12
+        @test SDF.A_JUMP ≈ SDF.R_PLANET / 2 rtol = 1.0e-12
+
+        for sf in (false, true)
+            r33, r65 = runs[(33, sf, :jump)], runs[(65, sf, :jump)]
+            @test r33.converged && r65.converged
+            @test all(isfinite, r65.pf) && all(isfinite, r65.qxD) && all(isfinite, r65.qyD)
+            # Measured 0.034 at Nx = 65 and 0.138 at Nx = 33; the error depends on how the
+            # grid cuts the circle r = A_JUMP, so the test asserts limits and no order.
+            @test isapprox(r65.l2_inner, 0.0; atol=0.06)
+            @test r65.l2_inner < r33.l2_inner
+            # Measured 0.024; the faces near the jump are excluded.
+            @test isfinite(r65.flux_l2_inner) && r65.flux_l2_inner < 0.04
+            # Measured 0.983: the centre value is below the exact one at Nx = 65.
+            @test isapprox(r65.dp_centre / r65.dp_centre_exact, 1.0; atol=0.03)
+            @test r65.dp_centre < r65.dp_centre_exact
+            @test isapprox(r65.vent_flux, r65.source_flux; rtol=1.0e-8)
+        end
+        # The grid cut of r = A_JUMP sets the error: the finer grid Nx = 65 has a larger
+        # error than Nx = 63 (measured 0.034 and 0.025), so the record keeps no order.
+        r63 = SDF.run_case(63; spherical_flow=true, jump=true)
+        @test r63.l2_inner < runs[(65, true, :jump)].l2_inner
+        # The centre value scales with the flow dimension d as 1 / d.
+        on, off = runs[(65, true, :jump)], runs[(65, false, :jump)]
+        @test isapprox(on.dp_centre / off.dp_centre, 2 / 3; atol=0.005)
+        @test_throws DomainError SDF.exact_excess_pressure(-1.0, 3.0; jump=true)
+        @test_throws DomainError SDF.exact_excess_pressure(SDF.R_PLANET * 1.01, 3.0)
+        @test_throws DomainError SDF.exact_excess_pressure(0.0, 1.0)
+    end
+
+    @testset "jump flux error leaves out the faces within 2 cells of the jump" begin
+        coords = synthetic_coords(41)
+        near = [
+            abs(hypot(x - SDF.X_CENTRE, y - SDF.Y_CENTRE) - SDF.A_JUMP) <=
+            SDF.JUMP_EXCLUDE_CELLS * coords.dx for y in coords.yvx, x in coords.xvx
+        ]
+        near_y = [
+            abs(hypot(x - SDF.X_CENTRE, y - SDF.Y_CENTRE) - SDF.A_JUMP) <=
+            SDF.JUMP_EXCLUDE_CELLS * coords.dx for y in coords.yvy, x in coords.xvy
+        ]
+        @test any(near) && any(near_y)
+        # Each component on its own: both loops must leave out the faces near the jump.
+        for (field, mask) in ((:qxD, near), (:qyD, near_y))
+            bad = exact_flux_grids(coords, 3.0, 1.0)
+            getfield(bad, field)[mask] .*= 3.0
+            @test !isapprox(SDF._flux_l2_inner(bad, coords, 3.0), 0.0; atol=0.1)
+            @test isapprox(
+                SDF._flux_l2_inner(bad, coords, 3.0; jump=true), 0.0; atol=1.0e-12
+            )
+            # A face outside the band still counts with the jump.
+            far = exact_flux_grids(coords, 3.0, 1.0)
+            getfield(far, field)[.!mask] .*= 3.0
+            @test !isapprox(SDF._flux_l2_inner(far, coords, 3.0; jump=true), 0.0; atol=0.1)
+        end
+    end
+
+    @testset "6-variable path equals the 4-variable path (spherical_flow = $sf, jump = $jump)" for sf in
+                                                                                                   (
+            false, true
+        ),
+        jump in (false, true)
+
+        four = jump ? runs[(33, sf, :jump)] : runs[(33, sf)]
+        six = SDF.run_case(33; spherical_flow=sf, darcy_elimination=false, jump=jump)
         @test six.converged
         @test maximum(abs, six.pf .- four.pf) / maximum(abs, four.pf) < 1.0e-8
         @test isapprox(six.flux_l2_inner, four.flux_l2_inner; rtol=1.0e-6)
@@ -309,6 +394,9 @@ end
             :PF_INIT,
             :PHI,
             :K_PERM,
+            :K_CORE,
+            :A_JUMP,
+            :JUMP_EXCLUDE_CELLS,
             :MU_F,
             :S_SOURCE,
             :P_AMB,
