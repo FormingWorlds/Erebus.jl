@@ -7,7 +7,7 @@ id = "spherical_pressure_diffusion"
 title = "Spherical Pressure Diffusion Validation"
 page = "validation/spherical_pressure_diffusion.md"
 src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-18T22:25:14Z"
+timestamp_utc = "2026-11-18T23:05:55Z"
 julia_version = "1.12.7"
 config_sha256 = "23a36fb69593998b74dea7e0b91bdb34db8ee85be35e7f9c17b00c3b2a26f0b6"
 reference_type = "analytical"
@@ -200,7 +200,7 @@ id = "l2_m20_off_nx33"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 2-D disk (Nx=33)"
 nx = 33
-value = 1.2567990669567730e-01
+value = 1.2567990669568682e-01
 reference = 0.0000000000000000e+00
 atol = 1.7999999999999999e-01
 rtol = 0.0000000000000000e+00
@@ -213,7 +213,7 @@ id = "l2_m20_off_nx65"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 2-D disk (Nx=65)"
 nx = 65
-value = 5.3112517267461280e-02
+value = 5.3112517267375696e-02
 reference = 0.0000000000000000e+00
 atol = 7.4999999999999997e-02
 rtol = 0.0000000000000000e+00
@@ -226,7 +226,7 @@ id = "l2_m20_off_nx129"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 2-D disk (Nx=129)"
 nx = 129
-value = 2.8102059415507617e-02
+value = 2.8102059415522605e-02
 reference = 0.0000000000000000e+00
 atol = 4.0000000000000001e-02
 rtol = 0.0000000000000000e+00
@@ -239,7 +239,7 @@ id = "l2_m20_on_nx33"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 3-D sphere (Nx=33)"
 nx = 33
-value = 1.7827485888150410e-01
+value = 1.7827485888151598e-01
 reference = 0.0000000000000000e+00
 atol = 2.5000000000000000e-01
 rtol = 0.0000000000000000e+00
@@ -252,7 +252,7 @@ id = "l2_m20_on_nx65"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 3-D sphere (Nx=65)"
 nx = 65
-value = 7.7034527455052015e-02
+value = 7.7034527454942769e-02
 reference = 0.0000000000000000e+00
 atol = 1.0800000000000000e-01
 rtol = 0.0000000000000000e+00
@@ -265,7 +265,7 @@ id = "l2_m20_on_nx129"
 case = "profile"
 description = "Fluid overpressure L2 relative error for r <= 0.9 R, m = 20, 3-D sphere (Nx=129)"
 nx = 129
-value = 4.1104199143847595e-02
+value = 4.1104199143867849e-02
 reference = 0.0000000000000000e+00
 atol = 5.8000000000000003e-02
 rtol = 0.0000000000000000e+00
@@ -304,7 +304,7 @@ id = "l2_order_m20_off_65_129"
 case = "profile"
 description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the L2 profile error at m = 20, 2-D disk"
 nx = 129
-value = 9.1837604760274993e-01
+value = 9.1837604759965574e-01
 reference = 1.0000000000000000e+00
 atol = 3.4999999999999998e-01
 rtol = 0.0000000000000000e+00
@@ -317,7 +317,7 @@ id = "l2_order_m20_on_65_129"
 case = "profile"
 description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the L2 profile error at m = 20, 3-D sphere"
 nx = 129
-value = 9.0621943252370774e-01
+value = 9.0621943252095094e-01
 reference = 1.0000000000000000e+00
 atol = 3.4999999999999998e-01
 rtol = 0.0000000000000000e+00
@@ -543,7 +543,7 @@ reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-15
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
-units = "dimensionless"
+units = "m/s"
 status = "PASS"
 
 [[metrics]]
@@ -556,5 +556,5 @@ reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-15
 rtol = 0.0000000000000000e+00
 comparison = "le_atol"
-units = "dimensionless"
+units = "m/s"
 status = "PASS"

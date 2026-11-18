@@ -65,7 +65,8 @@ With $\beta_d K_{BW} = \beta_d - \beta_s$ the storage coefficient is
 $$S = \phi \beta_f + (1 - \phi) \frac{\beta_\phi \beta_s}{\beta_\phi + \beta_s}, \qquad K_{BW} = \frac{\beta_\phi + \phi \beta_s}{\beta_\phi + \beta_s}.$$
 
 The case has $S = 1.3 \times 10^{-10}$ Pa⁻¹ and $K_{BW} = 0.6$.
-The solver clamps the porosity to $[\phi_\mathrm{min}, \phi_\mathrm{max}]$ and $K_{BW}$ and $B$ to $[0, 1]$; with $\beta_f \ge \beta_s$, $\beta_\phi + \beta_s > 0$ and $\phi_\mathrm{min} < \phi < \phi_\mathrm{max}$ no clamp acts.
+The solver clamps $\beta_\phi$ and $\beta_s$ to non-negative values, the porosity to $[\phi_\mathrm{min}, \phi_\mathrm{max}]$ and $K_{BW}$ and $B$ to $[0, 1]$.
+With $\beta_\phi \ge 0$, $\beta_s \ge 0$, $\beta_\phi + \beta_s > 0$, $\beta_f \ge \beta_s$ and $\phi_\mathrm{min} < \phi < \phi_\mathrm{max}$ no clamp acts.
 The test checks the formula of $S$ against the coefficients of the 2 rows.
 
 ## The exact solution
@@ -97,8 +98,10 @@ $$p(x, m) = 2 \sum_{n \ge 1} \frac{J_0(j_n x)}{j_n J_1(j_n)} \left(1 + j_n^2 \De
 
 where $J_0$ and $J_1$ are the Bessel functions of the first kind and $j_n$ are the zeros of $J_0$.
 The case compares with this backward-Euler form, because the solver steps in time by backward Euler.
-The continuous solution, with the factor $e^{-\lambda_n m \Delta\tau}$, gives at the centre 0.707101 for the sphere and 0.84836 for the disk at $\tau = 0.1$; the backward-Euler form gives 0.70998 and 0.84486, 0.4 % more for the sphere.
-The sums stop at the first mode whose factor is below $10^{-14}$; after 1 step that needs more modes than the tables hold, and the code throws an error, so the case records 5 and 20 steps only.
+The continuous solution, with the factor $e^{-\lambda_n m \Delta\tau}$, gives at the centre 0.70710 for the sphere and 0.84836 for the disk at $\tau = 0.1$; the backward-Euler form gives 0.70998 and 0.84486, 0.4 % more for the sphere.
+The sums stop at the first mode whose factor is below $10^{-14}$.
+With $\Delta\tau = 0.005$ the disk table of 200 modes reaches that bound from 5 steps on and the sphere table of 4000 modes from 3 steps on; with fewer steps the code throws an error.
+The case records 5 and 20 steps.
 The test computes $J_0$ and $J_1$ from their integral forms and checks them against tabulated values, and checks both sums against a 1-D radial backward-Euler finite-volume solve with 4000 cells to $10^{-4}$.
 The sphere drains faster than the disk.
 At the centre node of `Nx = 65` the exact ratio of the 2 centre values after 20 steps is 0.8401398, and at `Nx = 129` it is 0.8403029.
@@ -146,9 +149,9 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
 - No vent drain cap: the vent removes at most the fluid that a cell holds in one time step, $(\phi - \phi_\mathrm{min}) / \Delta t$ per unit volume and time.
   For every vent cell of every grid, with both values of $\beta_s$, the vent conductance summed over the vent faces of the cell times $P_0 \Delta t$ is at most a tenth of $\phi - \phi_\mathrm{min}$, so the cap does not act.
 - Fixed time step: the time step after each solve equals $\Delta t$ to a relative $10^{-12}$.
-- Rigid matrix: after the first solve, on every interior cell, the compaction term $1 / (\zeta (1 - \phi))$ is at most $10^{-6}$ of the storage term $\beta_d / \Delta t$; on every node the shear viscosity is at least $10^{27}$ Pa s and the shear modulus times $\Delta t$ is at least $10^6$ times the viscosity.
+- Rigid matrix: after the first solve of each run of the test, on every interior cell, the compaction term $1 / (\zeta (1 - \phi))$ is at most $10^{-6}$ of the storage term $\beta_d / \Delta t$, with $\beta_d$ from the pore compressibility and the porosity of the solved fields and the solid compressibility of the solve; on every node the shear viscosity is at least $10^{27}$ Pa s and the shear modulus times $\Delta t$ is at least $10^6$ times the viscosity.
   The largest solid velocity over the 20 steps stays below $10^{-15}$ m/s.
-- Domain of the storage formula: $\beta_f \ge \beta_s$, $\beta_\phi + \beta_s > 0$ and $\phi_\mathrm{min} < \phi < \phi_\mathrm{max}$.
+- Domain of the storage formula: $\beta_\phi \ge 0$, $\beta_s \ge 0$, $\beta_\phi + \beta_s > 0$, $\beta_f \ge \beta_s$, and the porosity of every grid cell lies within $(\phi_\mathrm{min}, \phi_\mathrm{max})$.
 
 Two further checks test the storage terms directly.
 The total pressure follows $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$ with $K_{BW}$ from the formula above, within $10^{-9} P_0$ on every rock cell.
@@ -159,7 +162,8 @@ This holds only when the solver diffuses with the storage coefficient $S$ of the
     - Reference: the backward-Euler series $p(x, m)$ above after 5 and 20 steps; the centre ratio of the series at the centre node of the grid; $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$; equal nondimensional pressure for the 2 values of $\beta_s$; equal fields of the 6-variable and the 4-variable solver paths.
     - Tolerance: the centre error after 5 steps at most 0.0064, 0.0018 and 0.00079 for the sphere and 0.0027, 0.00073 and 0.00032 for the disk at `Nx = 33`, 65 and 129; the centre error after 20 steps at most 0.12, 0.048 and 0.025 for the sphere and 0.069, 0.027 and 0.014 for the disk; the L2 profile error after 20 steps at most 0.25, 0.108 and 0.058 for the sphere and 0.18, 0.075 and 0.04 for the disk; order of each error between `Nx = 65` and `Nx = 129` equal to 1 within 0.35; centre ratio equal to the series ratio within a relative 0.022 at `Nx = 65` and 0.012 at `Nx = 129`; the total pressure check and the $\beta_s$ check at most $10^{-9}$; the difference of the 2 solver paths at most $10^{-10}$; the fluid pressure of every vent cell within $9 \times 10^{-4} P_0$ (sphere) and $1.4 \times 10^{-3} P_0$ (disk) of $P_\mathrm{amb}$, and an infinite deviation when a vent cell does not vent; the vented fluid volume rate equal to the rate of fluid released from storage within $10^{-8}$ of the rate; solid velocity at most $10^{-15}$ m/s.
     - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_pressure_diffusion.jl`.
-      It is 0.002 on each error and on each centre ratio, 0.05 on each order, $10^{-9}$ on the total pressure and $\beta_s$ checks, $10^{-10}$ on the solver path difference, $10^{-4}$ on each vent pressure, $10^{-8}$ on each vented-rate closure and $10^{-15}$ m/s on the solid velocity.
+      It is $9 \times 10^{-5}$ on each centre error after 5 steps, 0.002 on each other error and on each centre ratio, 0.05 on each order, $10^{-9}$ on the total pressure and $\beta_s$ checks, $10^{-10}$ on the solver path difference, $10^{-4}$ on each vent pressure, $10^{-8}$ on each vented-rate closure and $10^{-15}$ m/s on the solid velocity.
+      A storage coefficient 2 % too large or too small moves the centre error after 5 steps at `Nx = 65` by $1.98 \times 10^{-4}$ or more for the disk and $4.89 \times 10^{-4}$ or more for the sphere, so it leaves the band.
     - Test id: `centre_err_m5_{off,on}_nx{33,65,129}`, `centre_err_m20_{off,on}_nx{33,65,129}`, `l2_m20_{off,on}_nx{33,65,129}`, `{centre,l2}_order_m20_{off,on}_65_129`, `centre_ratio_m20_nx65`, `centre_ratio_m20_nx129`, `pt_kbw_{off,on}_nx{33,65,129}`, `s_invariance_{off,on}_nx33`, `elim_{off,on}_nx33`, `vent_dev_{off,on}_nx65`, `vent_closure_{off,on}_nx65`, `v_max_{off,on}_nx65`.
       `Pkg.test` runs `test/test_validation_spherical_pressure_diffusion.jl` at `Nx = 33` and 65 and pins the centre value after 20 steps at `Nx = 65` to a relative $10^{-6}$.
     - Command: `julia --project=. tools/check_validation.jl --check`.
@@ -167,7 +171,7 @@ This holds only when the solver diffuses with the storage coefficient $S$ of the
 ## What this case does not test
 
 - The deformation of the matrix: it is rigid, so the compaction and the elastic terms of the solid do not enter, and neither do the momentum rows.
-- The accuracy of the reference after fewer than 5 steps: the series needs more modes than its tables hold.
+- The accuracy of the reference after fewer than 5 steps for the disk and fewer than 3 steps for the sphere: the series needs more modes than its tables hold.
 - The venting conductance and its face weight: the vent cells keep $P_f$ within $2 \times 10^{-3} P_0$ of $P_\mathrm{vent}$, close to the Dirichlet limit.
 - Gravity, buoyancy, reactions and hydrofracture: they are off.
 - The change of porosity, permeability and time step during a run: the case keeps them fixed.
@@ -231,8 +235,8 @@ The second command needs NumPy and Matplotlib.
 | `vent` | Largest abs(Pf - P_amb) / P0 over the vent cells, m = 20, 3-D sphere (Nx=65) | 65 | `6.4047e-04` | `0.0000e+00` | `<= 9.00e-04` | dimensionless | **PASS** |
 | `vent` | Vented to stored fluid volume rate, abs(ratio - 1), m = 20, 2-D disk (Nx=65) | 65 | `2.0527e-10` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
 | `vent` | Vented to stored fluid volume rate, abs(ratio - 1), m = 20, 3-D sphere (Nx=65) | 65 | `1.5960e-10` | `0.0000e+00` | `<= 1.00e-08` | dimensionless | **PASS** |
-| `rigid` | Largest solid velocity component [m/s] over the 20 steps, 2-D disk (Nx=65) | 65 | `1.2859e-20` | `0.0000e+00` | `<= 1.00e-15` | dimensionless | **PASS** |
-| `rigid` | Largest solid velocity component [m/s] over the 20 steps, 3-D sphere (Nx=65) | 65 | `7.7990e-21` | `0.0000e+00` | `<= 1.00e-15` | dimensionless | **PASS** |
+| `rigid` | Largest solid velocity component [m/s] over the 20 steps, 2-D disk (Nx=65) | 65 | `1.2859e-20` | `0.0000e+00` | `<= 1.00e-15` | m/s | **PASS** |
+| `rigid` | Largest solid velocity component [m/s] over the 20 steps, 3-D sphere (Nx=65) | 65 | `7.7990e-21` | `0.0000e+00` | `<= 1.00e-15` | m/s | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: spherical_pressure_diffusion -->

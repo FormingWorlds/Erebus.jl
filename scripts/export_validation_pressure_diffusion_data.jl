@@ -87,11 +87,11 @@ function cell_profile(run)
 end
 
 """
-    export_all(outdir; record_path=DEFAULT_RECORD, runs=nothing)
+    export_all(outdir; record_path=DEFAULT_RECORD, runs=nothing, nx=SPDV.NX_REFERENCE)
 
-Write the cell profiles at `Nx = SPDV.NX_REFERENCE` after 5 and 20 steps, the
-backward-Euler series curves, and the absolute centre and profile errors at 20 steps of the
-record at every grid in `SPDV.NX_LIST`.
+Write the cell profiles at `Nx = nx` after 5 and 20 steps, the backward-Euler series
+curves, and the absolute centre and profile errors at 20 steps of the record at every grid
+in `SPDV.NX_LIST`.
 
 Parameters
 ----------
@@ -101,31 +101,41 @@ record_path : String, optional
     Validation record TOML file with the ids `l2_m20_{off,on}_nx<N>` and
     `centre_err_m20_{off,on}_nx<N>`.
 runs : Union{AbstractDict,Nothing}, optional
-    `run_case` results keyed by `(N, spherical_flow, :base)` with the `NX_REFERENCE` runs,
-    or `nothing` to run them here (default).
+    `run_case` results keyed by `(N, spherical_flow, :base)` with the runs at `nx`, or
+    `nothing` to run them here (default).
+nx : Int, optional
+    Grid of the cell profiles (default `SPDV.NX_REFERENCE`, the grid of the figure).
 
 Returns
 -------
 String
-    `outdir`, holding `profile_off_65.csv`, `profile_on_65.csv`, `reference_curves.csv` and
-    `convergence.csv`.
+    `outdir`, holding `profile_off_<nx>.csv`, `profile_on_<nx>.csv`,
+    `reference_curves.csv` and `convergence.csv`.
 
 Raises
 ------
 KeyError
-    If the record lacks an error id for a grid in `SPDV.NX_LIST`.
+    If the record lacks an error id for a grid in `SPDV.NX_LIST`, or `runs` lacks a run
+    at `nx`.
+ArgumentError
+    If `runs` is `nothing` and `SPDV.run_case` rejects `nx`.
 """
-function export_all(outdir::String; record_path::String=DEFAULT_RECORD, runs=nothing)
+function export_all(
+    outdir::String;
+    record_path::String=DEFAULT_RECORD,
+    runs=nothing,
+    nx::Int=SPDV.NX_REFERENCE,
+)
     mkpath(outdir)
     for (sf, tag) in ((false, "off"), (true, "on"))
         run = if runs === nothing
-            SPDV.run_case(SPDV.NX_REFERENCE; spherical_flow=sf)
+            SPDV.run_case(nx; spherical_flow=sf)
         else
-            runs[(SPDV.NX_REFERENCE, sf, :base)]
+            runs[(nx, sf, :base)]
         end
         p = cell_profile(run)
         write_columns(
-            joinpath(outdir, "profile_$(tag)_$(SPDV.NX_REFERENCE).csv"),
+            joinpath(outdir, "profile_$(tag)_$(nx).csv"),
             ["x", "p_m5", "p_m20"],
             [p.x, p.p_m5, p.p_m20],
         )
@@ -145,23 +155,50 @@ function export_all(outdir::String; record_path::String=DEFAULT_RECORD, runs=not
     values = Dict(
         m["id"] => Float64(m["value"]) for m in TOML.parsefile(record_path)["metrics"]
     )
-    nx = collect(SPDV.NX_LIST)
+    grids = collect(SPDV.NX_LIST)
     write_columns(
         joinpath(outdir, "convergence.csv"),
         ["nx", "l2_off", "l2_on", "centre_off", "centre_on"],
         [
-            nx,
-            [values["l2_m20_off_nx$(n)"] for n in nx],
-            [values["l2_m20_on_nx$(n)"] for n in nx],
-            [values["centre_err_m20_off_nx$(n)"] for n in nx],
-            [values["centre_err_m20_on_nx$(n)"] for n in nx],
+            grids,
+            [values["l2_m20_off_nx$(n)"] for n in grids],
+            [values["l2_m20_on_nx$(n)"] for n in grids],
+            [values["centre_err_m20_off_nx$(n)"] for n in grids],
+            [values["centre_err_m20_on_nx$(n)"] for n in grids],
         ],
     )
     return outdir
 end
 
+"""
+    export_data_main(args=ARGS; kwargs...)
+
+Run the script: write the figure data into the one output folder that `args` names.
+
+Parameters
+----------
+args : Vector{String}, optional
+    Command-line arguments, exactly one output folder (default `ARGS`).
+kwargs
+    Keyword arguments passed on to `export_all`.
+
+Returns
+-------
+String
+    The output folder.
+
+Raises
+------
+ArgumentError
+    If `args` does not hold exactly one entry.
+"""
+function export_data_main(args::Vector{String}=ARGS; kwargs...)
+    length(args) == 1 || throw(
+        ArgumentError("Usage: export_validation_pressure_diffusion_data.jl <output_dir>"),
+    )
+    return export_all(args[1]; kwargs...)
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
-    length(ARGS) == 1 ||
-        error("Usage: export_validation_pressure_diffusion_data.jl <output_dir>")
-    export_all(ARGS[1])
+    export_data_main(ARGS)
 end

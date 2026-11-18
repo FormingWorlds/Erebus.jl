@@ -111,7 +111,8 @@ end
 
 Return the record entry of every metric, in the order of `EXPECTED_METRIC_IDS`. The bounds
 of the centre and profile errors and of the vent pressure are about 1.4 times the values
-measured on the committed solver.
+measured on the committed solver. The solid velocity metrics are in m/s; every other
+metric is dimensionless.
 
 Parameters
 ----------
@@ -133,7 +134,9 @@ KeyError
 """
 function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
     specs = NamedTuple[]
-    function add!(id, case, description, nx, atol, comparison; rtol=0.0)
+    function add!(
+        id, case, description, nx, atol, comparison; rtol=0.0, units="dimensionless"
+    )
         return push!(
             specs,
             (;
@@ -146,7 +149,7 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
                 atol,
                 rtol,
                 comparison,
-                units="dimensionless",
+                units,
             ),
         )
     end
@@ -266,7 +269,8 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             "Largest solid velocity component [m/s] over the 20 steps, $(label) (Nx=65)",
             65,
             1.0e-15,
-            "le_atol",
+            "le_atol";
+            units="m/s",
         )
     end
     return specs

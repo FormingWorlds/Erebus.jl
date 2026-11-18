@@ -16,7 +16,7 @@ makedocs(;
         edit_link="main",
         size_threshold_warn=800 * 1024,
         size_threshold=1200 * 1024,
-        search_size_threshold_warn=1300 * 1024,
+        search_size_threshold_warn=1400 * 1024,
         assets=["assets/validation_theme.css"],
     ),
     pages=[

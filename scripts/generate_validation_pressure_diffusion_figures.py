@@ -123,7 +123,7 @@ def profile_panel(a, data, t):
                 label=label if m == STEPS[0] else None,
                 rasterized=True,
             )
-    a.text(0.03, 0.9, "m = 5", transform=a.transAxes, color=t["fg"], fontsize=9)
+    a.text(0.03, 1.04, "m = 5", color=t["fg"], fontsize=9)
     a.text(0.03, 0.42, "m = 20", transform=a.transAxes, color=t["fg"], fontsize=9)
     a.set_xlabel("Radius r / R")
     a.set_ylabel("Fluid overpressure (Pf - P_amb) / P0")
@@ -178,7 +178,7 @@ def error_panel(b, data, t):
     b.minorticks_off()
     b.set_ylim(3.0e-3, 1.5)
     b.set_xlabel("Grid nodes per side, Nx")
-    b.set_ylabel("Error of (Pf - P_amb) / P0 after 20 steps")
+    b.set_ylabel("Relative error of (Pf - P_amb) / P0 after 20 steps")
     b.set_title("(b) Errors against grid size")
     legend(b, t, loc="upper right", fontsize=8)
 

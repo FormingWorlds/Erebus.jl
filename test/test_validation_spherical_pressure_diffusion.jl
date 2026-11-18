@@ -1,4 +1,5 @@
 using LinearAlgebra: Tridiagonal
+using Logging: NullLogger, with_logger
 using SHA
 using Test
 using TOML
@@ -200,18 +201,21 @@ end
 
     @testset "exact pressure series: limits, time stepping form and input contracts" begin
         for d in (2, 3)
-            # The surface holds p = 0, and the pressure falls from the centre outwards.
-            @test isapprox(SPDV.exact_p(1.0, d, 20), 0.0; atol=1.0e-12)
+            # The surface holds p = 0 exactly, and the pressure falls from the centre outwards.
+            for m in (5, 20)
+                @test iszero(SPDV.exact_p(1.0, d, m))
+                @test iszero(SPDV.exact_p(1.0, d, m; be=false))
+            end
             xs = range(0.0, 1.0; length=41)
             @test all(diff([SPDV.exact_p(x, d, 20) for x in xs]) .< 0)
             for m in (5, 20)
                 @test all(0.0 < SPDV.exact_p(x, d, m) < 1.0 for x in xs[1:(end - 1)])
             end
         end
-        # Continuum centre values at tau = 0.1 from the first 4 modes summed by hand:
-        # 0.707101 for the sphere and 0.84836 for the disk.
+        # Continuum centre values at tau = 0.1: 0.70710 (0.7071003) for the sphere and
+        # 0.84836 for the disk.
         cont3 = SPDV.exact_p(0.0, 3, 20; be=false)
-        @test isapprox(cont3, 0.707101; atol=2.0e-6)
+        @test isapprox(cont3, 0.7071003; atol=1.0e-6)
         @test isapprox(SPDV.exact_p(0.0, 2, 20; be=false), 0.84836; atol=1.0e-5)
         # Backward Euler lags the continuum: the centre values differ by 0.4 %.
         be3 = SPDV.exact_p(0.0, 3, 20)
@@ -228,9 +232,49 @@ end
         @test_throws DomainError SPDV.exact_p(0.5, 3, 2.5)
         @test_throws DomainError SPDV.exact_p(0.5, 3, 20; dtau=0.0)
         @test_throws DomainError SPDV.exact_p(0.5, 3, 20; dtau=Inf)
-        # One step needs more modes than the tables hold: an error, not a truncated sum.
+        @test_throws DomainError SPDV.exact_p(0.5, 3, 20; dtau=-1)
+        @test_throws DomainError SPDV.exact_p(0.5, 3, true)
+        @test_throws DomainError SPDV.exact_p(0.5, true, 20)
+        @test_throws DomainError SPDV.n_modes(3, true, SPDV.DTAU, false)
+        # A time step of any real type: 1 // 200 is DTAU.
+        @test isapprox(
+            SPDV.exact_p(0.5, 3, 20; dtau=1 // 200), SPDV.exact_p(0.5, 3, 20); rtol=1.0e-12
+        )
+        # At DTAU the disk table (200 modes) needs at least 5 steps and the sphere table
+        # (4000 modes) at least 3: fewer steps are an error, not a truncated sum.
+        for m in 1:4
+            @test_throws ErrorException SPDV.exact_p(0.5, 2, m)
+        end
         @test_throws ErrorException SPDV.exact_p(0.5, 3, 1)
-        @test_throws ErrorException SPDV.exact_p(0.5, 2, 1)
+        @test_throws ErrorException SPDV.exact_p(0.5, 3, 2)
+        @test_throws ErrorException SPDV.exact_p(1.0, 2, 4)
+        @test 0.97 < SPDV.exact_p(0.5, 3, 3) < 0.99
+        @test SPDV.exact_p(0.5, 3, 4) < SPDV.exact_p(0.5, 3, 3)
+        @test 0.0 < SPDV.exact_p(0.5, 2, 5) < 1.0
+    end
+
+    @testset "exact pressure at the cells: argument checks and the rounded radius" begin
+        # Every radius is checked, also one that rounds to 1 at 12 decimals.
+        @test_throws DomainError SPDV.exact_p_cells([1.0, 1.0 + 4.0e-13], 3, 20)
+        @test_throws DomainError SPDV.exact_p_cells([0.5, -1.0e-13], 3, 20)
+        # The arguments are checked also when there is no radius.
+        @test isempty(SPDV.exact_p_cells(Float64[], 3, 20))
+        @test_throws DomainError SPDV.exact_p_cells(Float64[], 99, 20)
+        @test_throws DomainError SPDV.exact_p_cells(Float64[], 3, 0)
+        @test_throws DomainError SPDV.exact_p_cells(Float64[], 3, true)
+        @test_throws DomainError SPDV.exact_p_cells(Float64[], 3, 20; dtau=-1.0)
+        @test_throws ErrorException SPDV.exact_p_cells(Float64[], 2, 4)
+        # Radii that agree to 12 decimals share the value at the rounded radius, whatever
+        # their order.
+        fwd = SPDV.exact_p_cells([0.5, 0.5 + 4.0e-13], 3, 20)
+        rev = SPDV.exact_p_cells([0.5 + 4.0e-13, 0.5], 3, 20)
+        @test isequal(fwd, rev)
+        @test isequal(fwd, fill(SPDV.exact_p(0.5, 3, 20), 2))
+        @test isapprox(
+            SPDV.exact_p_cells([1 // 2], 2, 20; dtau=1 // 200)[1],
+            SPDV.exact_p(0.5, 2, 20);
+            rtol=1.0e-12,
+        )
     end
 
     @testset "series against a 1-D radial backward-Euler finite-volume solve (d = $d)" for d in
@@ -291,6 +335,20 @@ end
         @test_throws DomainError SPDV.storage_coefficient(0.0, 0.0)
         @test_throws DomainError SPDV.storage_coefficient(bphi, NaN)
         @test_throws DomainError SPDV.biot_willis_closed_form(bphi, -bs)
+        # C5 edge bf = bs: 1/B = 1, S = phi bs + (1 - phi) bphi bs / (bphi + bs) = 6e-11,
+        # the value of the solver helpers.
+        s_edge = SPDV.storage_coefficient(bphi, bs; beta_f=bs)
+        @test isapprox(s_edge, 6.0e-11; rtol=1.0e-14)
+        ksk_edge = Erebus.compute_skempton_coefficient(bd_src, phi, bs, bs)
+        @test isapprox(bd_src * kbw_src * (1 / ksk_edge - kbw_src), s_edge; rtol=1.0e-12)
+        # Outside the domain of the formula: phi not in (0, 1), bf not finite or below bs.
+        for phi_bad in (NaN, Inf, -0.5, 0.0, 1.0, 1.5)
+            @test_throws DomainError SPDV.storage_coefficient(bphi, bs; phi=phi_bad)
+            @test_throws DomainError SPDV.biot_willis_closed_form(bphi, bs; phi=phi_bad)
+        end
+        for bf_bad in (NaN, Inf, -1.0, 0.0, 0.5 * bs)
+            @test_throws DomainError SPDV.storage_coefficient(bphi, bs; beta_f=bf_bad)
+        end
     end
 
     @testset "time step: tau = 0.1 in 20 steps, from the year length of the solver" begin
@@ -313,10 +371,12 @@ end
     @testset "case set-up: configuration, domain of the storage formula, input contracts" begin
         cfg = SPDV.make_config(SPDV.NX_REFERENCE; spherical_flow=false)
         pe = cfg.poroelasticity
-        # C5: bf >= bs, bphi + bs > 0 and phimin < phi < phimax, so no clamp acts.
+        # C5: bf >= bs, bphi >= 0, bs >= 0 and bphi + bs > 0, so no clamp acts on the
+        # compressibilities (the porosity of C5 is checked on the grid in set_fields!).
         @test pe.betafluid >= pe.betasolid
+        @test 0.0 <= SPDV.BETA_PHI < 1.0e-9
+        @test 0.0 <= pe.betasolid < 1.0e-9
         @test 0.0 < SPDV.BETA_PHI + pe.betasolid < 1.0e-9
-        @test pe.phimin < cfg.thermodynamics.phim0 < pe.phimax
         @test !cfg.geometry.spherical_flow
         @test cfg.solver.darcy_elimination
         @test isapprox(cfg.venting.k_vent, SPDV.K_VENT; rtol=1.0e-15)
@@ -325,6 +385,18 @@ end
         )
         @test isapprox(p_vent, SPDV.P_AMB; rtol=1.0e-12)
         @test_throws ArgumentError SPDV.make_config(SPDV.NX_MIN - 1; spherical_flow=true)
+        # An even N puts a P node on the centre: the case needs an odd N.
+        x_even = minimum(c[3] for c in SPDV._rock_cells(diffusion_coords(18)))
+        @test isapprox(x_even, 0.0; atol=1.0e-12)
+        for n_even in (18, 34, 64)
+            @test_throws ArgumentError SPDV.make_config(n_even; spherical_flow=true)
+            @test_throws ArgumentError SPDV.centre_radius(n_even)
+        end
+        # For an odd N it is the radius of the rock P nodes nearest the centre.
+        for n_odd in (SPDV.NX_MIN, 33)
+            x_min = minimum(c[3] for c in SPDV._rock_cells(diffusion_coords(n_odd)))
+            @test isapprox(SPDV.centre_radius(n_odd), x_min; rtol=1.0e-12)
+        end
         @test_throws ArgumentError SPDV.make_config(33; spherical_flow=true, beta_s=0.0)
         @test_throws ArgumentError SPDV.make_config(33; spherical_flow=true, beta_s=NaN)
         @test_throws ArgumentError SPDV.make_config(
@@ -385,7 +457,19 @@ end
             )
             @test count(x -> isapprox(x, SPDV.MU_F / SPDV.K_PERM; rtol=1.0e-15), g.RX) ==
                 n_rock_faces
+            n_rock_faces_y = count(
+                i < coords.Ny1 && inside(i, j) && inside(i + 1, j) for (i, j) in cells
+            )
+            @test count(x -> isapprox(x, SPDV.MU_F / SPDV.K_PERM; rtol=1.0e-15), g.RY) ==
+                n_rock_faces_y
+            # The grid is symmetric under x <-> y, so it has as many y faces as x faces.
+            @test n_rock_faces_y == n_rock_faces
+            @test all(x -> isapprox(x, SPDV.RX_AIR; rtol=1.0e-15), g.RY[end, :])
             @test all(x -> isapprox(x, SPDV.BETA_PHI; rtol=1.0e-15), g.BETAPHI)
+            # C5 on the porosity of the grid: phimin < phi < phimax, so no clamp acts.
+            pe = cfg.poroelasticity
+            @test all(x -> isapprox(x, SPDV.PHI; rtol=1.0e-15), g.PHI)
+            @test pe.phimin < minimum(g.PHI) <= maximum(g.PHI) < pe.phimax
             # C4 before the solve, on the basic nodes: ETA >= 1e27 and G dt >= 1e6 ETA.
             dt = SPDV.time_step_s(SPDV.BETA_S)
             @test maximum(inv, g.ETA) <= 1.0e-27
@@ -422,16 +506,42 @@ end
                                                                                                (
         false, true
     )
-        for n in (33, 65)
-            r = runs[(n, sf, :base)]
+        for key in
+            ((33, sf, :base), (65, sf, :base), (33, sf, :elim_off), (33, sf, :beta_alt))
+            r = runs[key]
             # 1/(ETAPHI (1 - phi)) <= 1e-6 bd/dt on the interior P cells after the first solve.
             @test r.c4_compaction <= 1.0e-6
             # G dt >= 1e6 eta on the basic nodes (GGG, ETA) and the P cells (GGGP, ETAP).
             @test r.c4_elastic <= 1.0e-6
             @test r.c4_elastic_p <= 1.0e-6
             @test r.eta_inv_max <= 1.0e-27
-            # The solid does not move: measured below 1e-18 m/s.
+            # The solid does not move: the record holds 1.3e-20 m/s (disk) and 7.8e-21 m/s
+            # (sphere) at Nx = 65.
             @test r.v_max <= 1.0e-15
+        end
+    end
+
+    @testset "C4: the storage term of timestep 1 is 0, so the compaction ratio fails" begin
+        cfg = SPDV.make_config(SPDV.NX_MIN; spherical_flow=true)
+        mktempdir() do out
+            state, coords, ws, tio, _ = SPDV._init_case(cfg, out)
+            tio === nothing || close(tio)
+            state.timestep = 1
+            res = with_logger(NullLogger()) do
+                return Erebus.solve_stokes_darcy!(
+                    state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+                )
+            end
+            @test res.plastic_converged
+            g = state.grids
+            # The solve of timestep 1 sets the pore compressibility to 0.
+            @test all(iszero, g.BETAPHI)
+            c4 = SPDV._c4_ratios(g, coords, state.dt, SPDV.BETA_S, state.timestep)
+            @test isequal(c4.c4_compaction, Inf)
+            # The same fields with the solid compressibility of timestep 2 meet C4.
+            c4_on = SPDV._c4_ratios(g, coords, state.dt, SPDV.BETA_S, 2)
+            @test c4_on.c4_compaction <= 1.0e-6
+            @test c4_on.c4_elastic <= 1.0e-6
         end
     end
 
@@ -445,14 +555,15 @@ end
         # centre pressure falls below the exact value.
         @test -0.1 < e33 < 0.0
         @test -0.04 < e65 < 0.0
-        # Measured order 1.36 (disk) and 1.31 (sphere) from Nx = 33 to 65; the record
-        # checks the order from Nx = 65 to 129.
+        # The order from Nx = 33 to 65 is 1.36 (disk) and 1.31 (sphere); the record checks
+        # the order from Nx = 65 to 129.
         @test 0.7 < log2(e33 / e65) < 1.6
         @test isapprox(
             measured["centre_err_m20_$(sf ? "on" : "off")_nx65"], abs(e65); rtol=1.0e-14
         )
+        # After 5 steps the error is negative and within the le_atol of the record at Nx = 65.
         e5 = runs[(65, sf, :base)].centre_err_m5
-        @test -0.01 < e5 < 0.0
+        @test -(sf ? 1.8e-3 : 7.3e-4) < e5 < 0.0
         # The L2 error over x <= 0.9 falls at first order.
         l33, l65 = runs[(33, sf, :base)].l2_m20, runs[(65, sf, :base)].l2_m20
         @test isapprox(log2(l33 / l65), 1.0; atol=0.35)
@@ -489,7 +600,7 @@ end
     )
         for n in (33, 65)
             r = runs[(n, sf, :base)]
-            # Measured 1.2e-3 to 1.9e-3 at Nx = 33 and 6.4e-4 to 1.0e-3 at Nx = 65.
+            # The vent deviation is 1.2e-3 to 1.9e-3 at Nx = 33 and 6.4e-4 to 1.0e-3 at Nx = 65.
             @test r.vent_dev < 3.0e-3
             @test r.vent_closure <= 1.0e-8
             @test isapprox(r.vent_flux, -r.storage_flux; rtol=1.0e-8)
@@ -534,7 +645,9 @@ end
         six, four = runs[(33, sf, :elim_off)], runs[(33, sf, :base)]
         @test measured["elim_$(sf ? "on" : "off")_nx33"] <= 1.0e-10
         @test maximum(abs, six.pf .- four.pf) / SPDV.P0 <= 1.0e-10
+        @test maximum(abs, six.pr .- four.pr) / SPDV.P0 <= 1.0e-10
         @test maximum(abs, six.qxD .- four.qxD) / maximum(abs, four.qxD) <= 1.0e-10
+        @test maximum(abs, six.qyD .- four.qyD) / maximum(abs, four.qyD) <= 1.0e-10
     end
 
     record_path = joinpath(
@@ -578,27 +691,87 @@ end
         @test isapprox(m.vent_dev, 0.0; atol=1.0e-15)
         @test isapprox(m.pt_kbw, 0.0; atol=1.0e-12)
         @test m.n_rock == length(cells)
-        # A surface cell 0.3 P0 above P_amb sets the deviation; a closed one makes it Inf.
-        i0, j0 = first(surface)
-        pf_high = copy(pf)
-        pf_high[i0, j0] = SPDV.P_AMB + 0.3 * SPDV.P0
-        m_high = SPDV._final_metrics(
-            grids(pf_high, pr, s_vent), coords, false, dt, SPDV.BETA_S
-        )
-        @test isapprox(m_high.vent_dev, 0.3; rtol=1.0e-12)
-        # Pf raised by 0.3 P0 with Pt kept gives the total pressure check 0.3 kbw.
-        @test isapprox(m_high.pt_kbw, 0.3 * kbw; rtol=1.0e-12)
-        s_closed = copy(s_vent)
-        s_closed[i0, j0] = 0.0
-        m_closed = SPDV._final_metrics(
-            grids(pf, pr, s_closed), coords, false, dt, SPDV.BETA_S
-        )
-        @test isequal(m_closed.vent_dev, Inf)
+        # For each side, the surface cells whose only outside neighbour lies on that side.
+        sides = ((-1, 0), (1, 0), (0, -1), (0, 1))
+        only_outside(side) = filter(surface) do (i, j)
+            outside = [!SPDV._inside(coords, i + di, j + dj) for (di, dj) in sides]
+            return count(outside) == 1 && !SPDV._inside(coords, i + side[1], j + side[2])
+        end
+        # The grid is symmetric under reflection and x <-> y: each side has as many cells.
+        n_side = [length(only_outside(side)) for side in sides]
+        @test all(==(n_side[1]), n_side)
+        @test 1 <= n_side[1] < length(surface) / 4
+        for side in sides, (i0, j0) in only_outside(side)
+            # A surface cell 0.3 P0 above P_amb sets the deviation.
+            pf_high = copy(pf)
+            pf_high[i0, j0] = SPDV.P_AMB + 0.3 * SPDV.P0
+            m_high = SPDV._final_metrics(
+                grids(pf_high, pr, s_vent), coords, false, dt, SPDV.BETA_S
+            )
+            @test isapprox(m_high.vent_dev, 0.3; rtol=1.0e-12)
+            # Pf raised by 0.3 P0 with Pt kept gives the total pressure check 0.3 kbw.
+            @test isapprox(m_high.pt_kbw, 0.3 * kbw; rtol=1.0e-12)
+            # A surface cell that does not vent makes the deviation infinite.
+            s_closed = copy(s_vent)
+            s_closed[i0, j0] = 0.0
+            m_closed = SPDV._final_metrics(
+                grids(pf, pr, s_closed), coords, false, dt, SPDV.BETA_S
+            )
+            @test isequal(m_closed.vent_dev, Inf)
+        end
         # Cells away from the sphere: no rock, no error measure.
         far = diffusion_coords(41; shift=10 * SPDV.R_PLANET)
         @test isempty(SPDV._rock_cells(far))
         @test_throws ArgumentError SPDV._l2_inner((; pf), far, 3, 20)
         @test_throws ArgumentError SPDV.centre_radius(SPDV.NX_MIN - 1)
+    end
+
+    @testset "elimination difference: the largest of the 4 field differences" begin
+        base_fields(n) = (;
+            pf=fill(SPDV.P_AMB + SPDV.P0, n, n),
+            pr=fill(SPDV.P_AMB + SPDV.P0, n, n),
+            qxD=fill(-2.0, n, n),
+            qyD=fill(4.0, n, n),
+        )
+        four = base_fields(3)
+        @test iszero(SPDV.elimination_difference(base_fields(3), four))
+        # One field moved at one node: pf by 0.3 P0, pr by 0.2 P0, qxD by 0.3 of its
+        # scale 2 (0.15) and qyD by 0.4 of its scale 4 (0.1).
+        for (field, delta, expected) in (
+            (:pf, 0.3 * SPDV.P0, 0.3),
+            (:pr, -0.2 * SPDV.P0, 0.2),
+            (:qxD, 0.3, 0.15),
+            (:qyD, -0.4, 0.1),
+        )
+            six = base_fields(3)
+            getfield(six, field)[2, 3] += delta
+            @test isapprox(SPDV.elimination_difference(six, four), expected; rtol=1.0e-12)
+        end
+        # All 4 moved: the largest sets the value.
+        six = base_fields(3)
+        six.pf[1, 1] += 0.3 * SPDV.P0
+        six.pr[1, 2] += 0.2 * SPDV.P0
+        six.qxD[2, 1] += 0.3
+        six.qyD[3, 3] += 0.4
+        @test isapprox(SPDV.elimination_difference(six, four), 0.3; rtol=1.0e-12)
+    end
+
+    @testset "solid compressibility invariance reads the rock P nodes only" begin
+        coords = diffusion_coords(17)
+        n = coords.Ny1
+        base = (; xp=coords.xp, yp=coords.yp, pf=fill(SPDV.P_AMB + SPDV.P0, n, n))
+        rock = first(SPDV._rock_cells(coords))
+        outside = first(
+            (i, j) for
+            j in 1:(coords.Nx1), i in 1:(coords.Ny1) if !SPDV._inside(coords, i, j)
+        )
+        @test iszero(SPDV.s_invariance(base, base))
+        moved_rock = (; base..., pf=copy(base.pf))
+        moved_rock.pf[rock[1], rock[2]] -= 0.25 * SPDV.P0
+        @test isapprox(SPDV.s_invariance(base, moved_rock), 0.25; rtol=1.0e-12)
+        moved_out = (; base..., pf=copy(base.pf))
+        moved_out.pf[outside...] += 0.5 * SPDV.P0
+        @test iszero(SPDV.s_invariance(base, moved_out))
     end
 
     @testset "metrics_from_runs with every grid of NX_LIST" begin
@@ -655,6 +828,10 @@ end
         @test isempty(valid_errors)
         rec_ids = [String(m["id"]) for m in raw_record["metrics"]]
         @test rec_ids == collect(SPDV.EXPECTED_METRIC_IDS)
+        # The solid velocity is in m/s; every other metric is a ratio.
+        units = Dict(String(m["id"]) => String(m["units"]) for m in raw_record["metrics"])
+        @test units["v_max_off_nx65"] == units["v_max_on_nx65"] == "m/s"
+        @test all(u == "dimensionless" for (k, u) in units if !startswith(k, "v_max"))
         @test Set(keys(SPDV.PHYSICS_REGRESSION_BANDS)) == Set(SPDV.EXPECTED_METRIC_IDS)
         missing_key = deepcopy(raw_record)
         delete!(missing_key["config"], "storage_per_Pa")
@@ -664,21 +841,34 @@ end
         @test !ok_missing
         @test any(occursin("storage_per_Pa", e) for e in errs_missing)
 
-        for (mid, value) in bench.metrics
+        # The 27 measured metrics lie within their bands around the recorded values.
+        for (mid, value) in measured
             band = SPDV.PHYSICS_REGRESSION_BANDS[mid]
             @test isapprox(value, recorded[mid]; atol=band.atol, rtol=band.rtol)
         end
         ok_full, errs_full = SPDV.check_physics_regression_bands(bench.metrics, record_path)
         @test ok_full
         @test isempty(errs_full)
-        # A storage coefficient 2 % too large moves the centre error at Nx = 65 by about
-        # 0.016 for the sphere (measured with RX, RY scaled by 1.02): outside the band.
+        # A metric moved by twice its band is rejected.
         target = "centre_err_m20_on_nx65"
         moved = copy(bench.metrics)
         moved[target] += 2 * SPDV.PHYSICS_REGRESSION_BANDS[target].atol
         ok_moved, errs_moved = SPDV.check_physics_regression_bands(moved, record_path)
         @test !ok_moved
         @test occursin(target, only(errs_moved))
+        # A storage coefficient 2 % off moves the centre error after 5 steps at Nx = 65 by
+        # at least 1.98e-4 (disk) and 4.89e-4 (sphere); either shift leaves the band.
+        for (mid, shift) in
+            (("centre_err_m5_off_nx65", 1.98e-4), ("centre_err_m5_on_nx65", 4.89e-4))
+            @test SPDV.PHYSICS_REGRESSION_BANDS[mid].atol <= shift / 2
+            for sgn in (-1, 1)
+                shifted = copy(bench.metrics)
+                shifted[mid] += sgn * shift
+                ok_s, errs_s = SPDV.check_physics_regression_bands(shifted, record_path)
+                @test !ok_s
+                @test occursin(mid, only(errs_s))
+            end
+        end
         missing_metric = copy(bench.metrics)
         delete!(missing_metric, target)
         ok_gone, errs_gone = SPDV.check_physics_regression_bands(
@@ -781,6 +971,10 @@ end
             @test isempty(errs_valid)
             @test run_diffusion_validation_check(exported; bench=bench)
             @test [String(m["id"]) for m in raw_exported["metrics"]] == collect(SPDV.EXPECTED_METRIC_IDS)
+            @test [
+                String(m["units"]) for
+                m in raw_exported["metrics"] if startswith(m["id"], "v_max")
+            ] == ["m/s", "m/s"]
 
             # A moved value is refused without the flag and written with it.
             target = "centre_err_m20_on_nx65"
@@ -844,6 +1038,16 @@ end
             @test SPDV._config_mismatches(
                 no_kbw, SPDV.make_config(65; spherical_flow=true)
             ) == ["Recorded config missing key 'kbw'"]
+            # A config key that the case does not set is rejected.
+            extra = deepcopy(raw_record)
+            extra["config"]["extra_key"] = 1.0
+            @test SPDV._config_mismatches(
+                extra, SPDV.make_config(65; spherical_flow=true)
+            ) == ["Recorded config has unexpected key 'extra_key'"]
+            extra_path = write_diffusion_toml(joinpath(tmpdir, "extra.toml"), extra)
+            ok_extra, errs_extra = SPDV.check_validation_reproducibility(bench, extra_path)
+            @test !ok_extra
+            @test any(occursin("unexpected key 'extra_key'", e) for e in errs_extra)
             odd = deepcopy(raw_record)
             odd["metrics"][23]["reference"] = 0.5
             odd["metrics"][23]["value"] = 0.5
@@ -1005,6 +1209,7 @@ end
         )
         write_columns = getfield(script_host, :write_columns)
         export_all = getfield(script_host, :export_all)
+        export_data_main = getfield(script_host, :export_data_main)
         mktempdir() do tmpdir
             path = joinpath(tmpdir, "columns.csv")
             write(path, "kept\n")
@@ -1047,6 +1252,20 @@ end
             @test length(vals) == runs[(65, true, :base)].n_rock
             # The cell values stay within 0.1 of the series at m = 20.
             @test all(abs(v[3] - SPDV.exact_p(v[1], 3, 20)) < 0.1 for v in vals)
+            # The command line takes exactly one output folder.
+            for bad in (String[], ["a", "b"])
+                @test_throws ArgumentError Base.invokelatest(export_data_main, bad)
+            end
+            # Without runs the script runs the case itself, here on the coarsest grid.
+            small = joinpath(tmpdir, "small")
+            @test Base.invokelatest(export_data_main, [small]; nx=SPDV.NX_MIN) == small
+            n_min = SPDV.NX_MIN
+            @test isfile(joinpath(small, "profile_off_$(n_min).csv"))
+            prof_small = readlines(joinpath(small, "profile_on_$(n_min).csv"))
+            @test length(prof_small) - 1 ==
+                length(SPDV._rock_cells(diffusion_coords(n_min)))
+            p_small = [parse.(Float64, split(l, ",")) for l in prof_small[2:end]]
+            @test all(-0.01 < v[3] <= v[2] < 1.0 for v in p_small)
         end
     end
 end

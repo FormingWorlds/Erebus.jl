@@ -167,13 +167,14 @@ Nothing
 Raises
 ------
 DomainError
-    If `x` is not finite or lies outside `[0, 1]`, `d` is neither 2 nor 3, `m` is not an
-    integer of at least 1, or `dtau` is not finite and positive.
+    If `x` is not finite or lies outside `[0, 1]`, `d` is a `Bool` or neither 2 nor 3, `m`
+    is a `Bool` or not an integer of at least 1, or `dtau` is not finite and positive.
 """
 function _check_series_args(x::Real, d::Real, m::Real, dtau::Real)
     (isfinite(x) && 0 <= x <= 1) || throw(DomainError(x, "x must lie within [0, 1]"))
-    d in (2, 3) || throw(DomainError(d, "the flow dimension must be 2 or 3"))
-    (m isa Integer && m >= 1) ||
+    (!(d isa Bool) && d in (2, 3)) ||
+        throw(DomainError(d, "the flow dimension must be 2 or 3"))
+    (m isa Integer && !(m isa Bool) && m >= 1) ||
         throw(DomainError(m, "the number of steps must be an integer of at least 1"))
     (isfinite(dtau) && dtau > 0) ||
         throw(DomainError(dtau, "the time step must be finite and positive"))
@@ -222,7 +223,7 @@ d : Int
     Flow dimension, 2 or 3.
 m : Int
     Number of time steps, at least 1.
-dtau : Float64
+dtau : Real
     Nondimensional time step, positive.
 be : Bool
     `true` for the backward-Euler factors, `false` for the continuum.
@@ -241,7 +242,7 @@ DomainError
 ErrorException
     If `tail > 0` and the table ends before a time factor falls below `tail`.
 """
-function _series_sum(x::Real, d, m, dtau, be::Bool; tail::Float64=TAIL_BOUND)
+function _series_sum(x::Real, d, m, dtau::Real, be::Bool; tail::Float64=TAIL_BOUND)
     _check_series_args(x, d, m, dtau)
     xf = Float64(x)
     total = 0.0
@@ -275,7 +276,7 @@ d : Int
     Flow dimension, 2 or 3.
 m : Int
     Number of time steps, at least 1.
-dtau : Float64
+dtau : Real
     Nondimensional time step, positive.
 be : Bool
     `true` for the backward-Euler factors, `false` for the continuum.
@@ -309,7 +310,8 @@ Return the exact nondimensional fluid overpressure `(Pf - P_AMB) / P0` at `x = r
 `m` time steps of the nondimensional length `dtau = D dt / R^2`, `D = k / (mu S)`, for the
 initial value 1 inside and 0 on the surface (`_series_sum`). With `be = true` each mode
 decays by the backward-Euler factor `(1 + lam dtau)^(-m)`, as the solver steps; with
-`false` by the continuum factor `exp(-lam m dtau)`.
+`false` by the continuum factor `exp(-lam m dtau)`. At `x = 1` every mode vanishes and the
+result is `0.0`, after the same argument and table checks.
 
 Parameters
 ----------
@@ -319,7 +321,7 @@ d : Int
     Flow dimension, 3 for the sphere (`geometry.spherical_flow = true`) and 2 for the disk.
 m : Int
     Number of time steps, at least 1.
-dtau : Float64, optional
+dtau : Real, optional
     Nondimensional time step, positive (default `DTAU`).
 be : Bool, optional
     Backward-Euler (`true`, default) or continuum (`false`) time factors.
@@ -332,12 +334,19 @@ Float64
 Raises
 ------
 DomainError
-    If `x` lies outside `[0, 1]`, `d` is neither 2 nor 3, `m` is not an integer of at least
-    1, or `dtau` is not finite and positive.
+    If `x` lies outside `[0, 1]`, `d` is a `Bool` or neither 2 nor 3, `m` is a `Bool` or
+    not an integer of at least 1, or `dtau` is not finite and positive.
 ErrorException
-    If the series needs more modes than its table holds (backward Euler with `m < 5`).
+    If the series needs more modes than its table holds. At `dtau = DTAU` with backward
+    Euler the disk table (`DISK_MODES`) needs `m >= 5` and the sphere table
+    (`SPHERE_MODES`) `m >= 3`.
 """
-function exact_p(x::Real, d, m; dtau::Float64=DTAU, be::Bool=true)
+function exact_p(x::Real, d, m; dtau::Real=DTAU, be::Bool=true)
+    _check_series_args(x, d, m, dtau)
+    if isone(x)
+        n_modes(d, m, dtau, be)
+        return 0.0
+    end
     return _series_sum(x, d, m, dtau, be)
 end
 
@@ -345,8 +354,11 @@ end
     exact_p_cells(xs, d, m; dtau=DTAU)
 
 Return the backward-Euler `exact_p` at each radius of `xs`, with one series evaluation per
-distinct radius (radii that agree to 12 decimals share it). The cells of the grid repeat
-their radii 8 times by symmetry, which makes the disk series affordable on the finest grid.
+distinct radius: each radius is rounded to 12 decimals and the series is evaluated at the
+rounded radius, so radii that agree to 12 decimals share one value in any order. The cells
+of the grid repeat their radii 8 times by symmetry, which makes the disk series affordable
+on the finest grid. The arguments and every radius are checked before any evaluation, also
+when `xs` is empty.
 
 Parameters
 ----------
@@ -355,26 +367,35 @@ xs : AbstractVector{<:Real}
 d : Int
     Flow dimension, 2 or 3.
 m : Int
-    Number of time steps, at least 5.
-dtau : Float64, optional
-    Nondimensional time step (default `DTAU`).
+    Number of time steps, at least 1 (at `DTAU`, at least 5 for the disk and 3 for the
+    sphere, see `exact_p`).
+dtau : Real, optional
+    Nondimensional time step, positive (default `DTAU`).
 
 Returns
 -------
 Vector{Float64}
-    `exact_p` at each radius of `xs`.
+    `exact_p` at each rounded radius of `xs`.
 
 Raises
 ------
-DomainError, ErrorException
-    From `exact_p`.
+DomainError
+    If `d`, `m` or `dtau` fails `_check_series_args`, or a radius of `xs` lies outside
+    `[0, 1]` or is not finite.
+ErrorException
+    If the series needs more modes than its table holds (`n_modes`).
 """
-function exact_p_cells(xs::AbstractVector{<:Real}, d, m; dtau::Float64=DTAU)
+function exact_p_cells(xs::AbstractVector{<:Real}, d, m; dtau::Real=DTAU)
+    _check_series_args(0.0, d, m, dtau)
+    n_modes(d, m, dtau, true)
+    for x in xs
+        _check_series_args(x, d, m, dtau)
+    end
     cache = Dict{Float64,Float64}()
-    return [
-        get!(() -> exact_p(x, d, m; dtau=dtau), cache, round(Float64(x); digits=12)) for
-        x in xs
-    ]
+    return map(xs) do x
+        xr = round(Float64(x); digits=12) + 0.0
+        return get!(() -> exact_p(xr, d, m; dtau=dtau), cache, xr)
+    end
 end
 
 """
@@ -409,6 +430,31 @@ function _check_compressibilities(beta_phi::Real, beta_s::Real)
 end
 
 """
+    _check_porosity(phi)
+
+Check the porosity of the closed forms.
+
+Parameters
+----------
+phi : Real
+    Porosity, dimensionless.
+
+Returns
+-------
+Nothing
+
+Raises
+------
+DomainError
+    If `phi` is not finite or lies outside `(0, 1)`.
+"""
+function _check_porosity(phi::Real)
+    (isfinite(phi) && 0 < phi < 1) ||
+        throw(DomainError(phi, "the porosity must be finite and lie within (0, 1)"))
+    return nothing
+end
+
+"""
     storage_coefficient(beta_phi, beta_s; phi=PHI, beta_f=BETA_F)
 
 Return the storage coefficient `S = phi bf + (1 - phi) bphi bs / (bphi + bs)` of the fluid
@@ -424,9 +470,9 @@ beta_phi : Real
 beta_s : Real
     Solid compressibility [1/Pa], non-negative, `beta_phi + beta_s > 0`.
 phi : Real, optional
-    Porosity (default `PHI`).
+    Porosity, within `(0, 1)` (default `PHI`).
 beta_f : Real, optional
-    Fluid compressibility [1/Pa] (default `BETA_F`).
+    Fluid compressibility [1/Pa], at least `beta_s` (default `BETA_F`).
 
 Returns
 -------
@@ -436,10 +482,15 @@ Float64
 Raises
 ------
 DomainError
-    If a compressibility is negative or not finite, or `beta_phi + beta_s = 0`.
+    If a compressibility is negative or not finite, `beta_phi + beta_s = 0`, `phi` is not
+    finite or lies outside `(0, 1)`, or `beta_f` is not finite or below `beta_s` (where the
+    solver clamps the Skempton coefficient to 1, condition C5).
 """
 function storage_coefficient(beta_phi::Real, beta_s::Real; phi=PHI, beta_f=BETA_F)
     _check_compressibilities(beta_phi, beta_s)
+    _check_porosity(phi)
+    (isfinite(beta_f) && beta_f >= beta_s) ||
+        throw(DomainError(beta_f, "beta_f must be finite and at least beta_s = $beta_s"))
     return phi * beta_f + (1 - phi) * beta_phi * beta_s / (beta_phi + beta_s)
 end
 
@@ -456,7 +507,7 @@ beta_phi : Real
 beta_s : Real
     Solid compressibility [1/Pa], non-negative, `beta_phi + beta_s > 0`.
 phi : Real, optional
-    Porosity (default `PHI`).
+    Porosity, within `(0, 1)` (default `PHI`).
 
 Returns
 -------
@@ -466,10 +517,12 @@ Float64
 Raises
 ------
 DomainError
-    If a compressibility is negative or not finite, or `beta_phi + beta_s = 0`.
+    If a compressibility is negative or not finite, `beta_phi + beta_s = 0`, or `phi` is
+    not finite or lies outside `(0, 1)`.
 """
 function biot_willis_closed_form(beta_phi::Real, beta_s::Real; phi=PHI)
     _check_compressibilities(beta_phi, beta_s)
+    _check_porosity(phi)
     return (beta_phi + phi * beta_s) / (beta_phi + beta_s)
 end
 
@@ -507,7 +560,8 @@ Return the `SimulationConfig` of the case on an `N` x `N` grid, with the time st
 Parameters
 ----------
 N : Int
-    Basic grid resolution in x and y, at least `NX_MIN`.
+    Basic grid resolution in x and y, odd and at least `NX_MIN`, so that the centre lies on
+    a basic node (see `centre_radius`).
 spherical_flow : Bool
     Value of `geometry.spherical_flow`.
 darcy_elimination : Bool, optional
@@ -523,13 +577,16 @@ SimulationConfig
 Raises
 ------
 ArgumentError
-    If `N < NX_MIN` or `beta_s` lies outside `(0, BETA_F]`.
+    If `N < NX_MIN`, `N` is even or `beta_s` lies outside `(0, BETA_F]`.
 """
 function make_config(
     N::Int; spherical_flow::Bool, darcy_elimination::Bool=true, beta_s::Float64=BETA_S
 )
     N >= NX_MIN ||
         throw(ArgumentError("N must be at least $NX_MIN to resolve the sphere, got $N"))
+    isodd(N) || throw(
+        ArgumentError("N must be odd so that the centre lies on a basic node, got $N")
+    )
     0 < beta_s <= BETA_F ||
         throw(ArgumentError("beta_s must lie within (0, BETA_F], got $beta_s"))
     eta3 = SVector{3,Float64}(ETA_ROCK, ETA_ROCK, ETA_ROCK)
@@ -816,13 +873,14 @@ end
     centre_radius(N)
 
 Return the nondimensional radius `r / R_PLANET` of the P nodes nearest the centre on an
-`N` x `N` grid: the centre lies on a basic node, so the 4 nearest P nodes sit at
-`dx / sqrt(2)` with `dx = L_BOX / (N - 1)`.
+`N` x `N` grid: for an odd `N` the centre lies on a basic node, so the 4 nearest P nodes
+sit at `dx / sqrt(2)` with `dx = L_BOX / (N - 1)`. For an even `N` a P node sits on the
+centre, which the case does not use.
 
 Parameters
 ----------
 N : Int
-    Basic grid resolution in x and y, at least `NX_MIN`.
+    Basic grid resolution in x and y, odd and at least `NX_MIN`.
 
 Returns
 -------
@@ -832,10 +890,11 @@ Float64
 Raises
 ------
 ArgumentError
-    If `N < NX_MIN`.
+    If `N < NX_MIN` or `N` is even.
 """
 function centre_radius(N::Int)
     N >= NX_MIN || throw(ArgumentError("N must be at least $NX_MIN, got $N"))
+    isodd(N) || throw(ArgumentError("N must be odd, got $N"))
     return L_BOX / (sqrt(2.0) * (N - 1) * R_PLANET)
 end
 
@@ -866,8 +925,9 @@ end
 """
     _cell_weight(coords, i, j, spherical_flow)
 
-Return the volume weight of the continuity row of P node `(i, j)`: `2 m_P` from
-`flow_metric_face_weights` with `spherical_flow = true`, else 1.
+Return the volume weight of the continuity row of P node `(i, j)`: `2 w_P` [m] from
+`flow_metric_face_weights` with `spherical_flow = true`, else 1 (dimensionless). Times
+`dx dy` it gives the cell volume [m^3] of the sphere or the cell area [m^2] of the disk.
 
 Parameters
 ----------
@@ -881,7 +941,7 @@ spherical_flow : Bool
 Returns
 -------
 Float64
-    Weight, dimensionless.
+    Weight: `2 w_P` [m] with `spherical_flow = true`, `1.0` (dimensionless) with `false`.
 """
 function _cell_weight(coords, i, j, spherical_flow)
     spherical_flow || return 1.0
@@ -890,12 +950,15 @@ function _cell_weight(coords, i, j, spherical_flow)
 end
 
 """
-    _c4_ratios(g, coords, dt, beta_s)
+    _c4_ratios(g, coords, dt, beta_s, timestep)
 
-Return the ratios of the rigid-matrix condition C4 after a solve: the compaction rate
-coefficient `1 / (ETAPHI (1 - PHI))` over the storage rate coefficient `bd / dt`,
-`bd = (BETA_PHI + beta_s) / (1 - PHI)`, on the interior P nodes; `ETA / (GGG dt)` on the
-basic nodes and `ETAP / (GGGP dt)` on the interior P nodes; and the largest `1 / ETA`.
+Return the ratios of the rigid-matrix condition C4 after a solve: the largest ratio of
+the compaction rate coefficient `1 / (ETAPHI (1 - PHI))` to the storage rate coefficient
+`bd / dt` on the interior P nodes, with the drained compressibility
+`bd = (BETAPHI + bs) / (1 - PHI)` of the solved fields and the solid compressibility
+`bs` of the solve (0 on timestep 1, where `BETAPHI` is also 0, so the ratio is `Inf`);
+`ETA / (GGG dt)` on the basic nodes and `ETAP / (GGGP dt)` on the interior P nodes; and
+the largest `1 / ETA`.
 
 Parameters
 ----------
@@ -906,7 +969,9 @@ coords : GridCoordinates
 dt : Float64
     Time step [s].
 beta_s : Float64
-    Solid compressibility [1/Pa].
+    Solid compressibility of the configuration [1/Pa].
+timestep : Int
+    Timestep of the solve; the solver uses no solid compressibility on timestep 1.
 
 Returns
 -------
@@ -914,11 +979,12 @@ NamedTuple
     `c4_compaction`, `c4_elastic`, `c4_elastic_p` (dimensionless) and `eta_inv_max`
     [1/(Pa s)].
 """
-function _c4_ratios(g, coords, dt, beta_s)
+function _c4_ratios(g, coords, dt, beta_s, timestep)
     inner = (2:(coords.Ny1 - 1), 2:(coords.Nx1 - 1))
-    bd = (BETA_PHI + beta_s) / (1 - PHI)
-    etaphi = g.ETAPHI[inner...]
-    c4_compaction = maximum(@. inv(etaphi * (1 - g.PHI[inner...]))) / (bd / dt)
+    bs = timestep == 1 ? 0.0 : beta_s
+    phi = g.PHI[inner...]
+    storage = @. (g.BETAPHI[inner...] + bs) / (1 - phi) / dt
+    c4_compaction = maximum(@. inv(g.ETAPHI[inner...] * (1 - phi)) / storage)
     c4_elastic = maximum(g.ETA ./ (g.GGG .* dt))
     c4_elastic_p = maximum(g.ETAP[inner...] ./ (g.GGGP[inner...] .* dt))
     return (; c4_compaction, c4_elastic, c4_elastic_p, eta_inv_max=maximum(inv, g.ETA))
@@ -1086,8 +1152,9 @@ NamedTuple
     `converged`: every solve returned `plastic_converged`; `timestep`: timestep of the
     solves; `dt`: time step [s]; `dt_dev`: largest `abs(state.dt / dt - 1)` after a solve;
     `xp`, `yp`: P node coordinates [m]; `pf`, `pr`, `qxD`, `qyD`: copies of the fields after
-    the last step [Pa, m/s]; `pf_m5`: copy of `pf` after step 5 [Pa]; `v_max`: largest solid speed component over all steps [m/s];
-    the fields of `_c4_ratios` after the first solve; `p_centre_m<m>`,
+    the last step [Pa, m/s]; `pf_m5`: copy of `pf` after step 5 [Pa]; `v_max`: largest
+    solid speed component over all steps [m/s]; the fields of `_c4_ratios` after the
+    first solve; `p_centre_m<m>`,
     `p_exact_m<m>`, `centre_err_m<m>` (`p / p_exact - 1`) for `m` in `M_RECORD`;
     `pt_centre_m20`, `x_centre`, `l2_m20` (`_l2_inner`); and the fields of
     `_final_metrics`.
@@ -1123,7 +1190,7 @@ function run_case(
             converged &= res.plastic_converged
             dt_dev = max(dt_dev, abs(state.dt / dt - 1))
             v_max = max(v_max, maximum(abs, g.vx), maximum(abs, g.vy))
-            m == 1 && (c4 = _c4_ratios(g, coords, dt, beta_s))
+            m == 1 && (c4 = _c4_ratios(g, coords, dt, beta_s, state.timestep))
             m in M_RECORD && (centres[m] = _centre_values(g, coords, d, m))
             m == first(M_RECORD) && (pf_m5 .= g.pf)
             m == N_STEPS && (final = _final_metrics(g, coords, spherical_flow, dt, beta_s))
@@ -1323,8 +1390,12 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     String,NamedTuple{(:atol, :rtol),Tuple{Float64,Float64}}
 }(
     (
+        mid => (; atol=9.0e-5, rtol=0.0) for
+        mid in EXPECTED_METRIC_IDS if startswith(mid, "centre_err_m5")
+    )...,
+    (
         mid => (; atol=0.002, rtol=0.0) for mid in EXPECTED_METRIC_IDS if
-        startswith(mid, "centre_err") || startswith(mid, "l2_m20")
+        startswith(mid, "centre_err_m20") || startswith(mid, "l2_m20")
     )...,
     (
         mid => (; atol=0.05, rtol=0.0) for
@@ -1692,8 +1763,8 @@ end
 """
     _config_mismatches(raw, cfg)
 
-Return the messages for the `[config]` entries of a record that are missing or differ from
-`expected_config_summary(cfg)`; floats compare with `rtol = 1e-12`.
+Return the messages for the `[config]` entries of a record that are missing, differ from
+`expected_config_summary(cfg)` or are not part of it; floats compare with `rtol = 1e-12`.
 
 Parameters
 ----------
@@ -1705,12 +1776,16 @@ cfg : SimulationConfig
 Returns
 -------
 Vector{String}
-    One message per missing or differing key.
+    One message per missing, differing or unexpected key.
 """
 function _config_mismatches(raw, cfg)
     errors = String[]
     rec_cfg = get(raw, "config", Dict{String,Any}())
-    for (k, v_exp) in expected_config_summary(cfg)
+    exp_cfg = expected_config_summary(cfg)
+    for k in sort!(collect(setdiff(keys(rec_cfg), keys(exp_cfg))))
+        push!(errors, "Recorded config has unexpected key '$k'")
+    end
+    for (k, v_exp) in exp_cfg
         if !haskey(rec_cfg, k)
             push!(errors, "Recorded config missing key '$k'")
             continue
