@@ -32,6 +32,26 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
         "reg_cells",
         "disk_enabled",
     ),
+    "spherical_compaction" => (
+        "Nx",
+        "R_planet_m",
+        "L_box_m",
+        "mu_f_Pa_s",
+        "k_m2",
+        "phi",
+        "delta_m",
+        "zeta_Pa_s",
+        "eta_ratio",
+        "eta_air_Pa_s",
+        "Pe_R_Pa",
+        "k_vent_m2",
+        "T_surf_K",
+        "P_amb_Pa",
+        "dt_yr",
+        "inner_fraction",
+        "spherical_metric",
+        "darcy_elimination",
+    ),
     "spherical_darcy_flow" => (
         "Nx",
         "R_planet_m",
@@ -381,4 +401,83 @@ function check_validation_records(
         end
     end
     return all_ok
+end
+
+"""
+    _canonical_field_repr(val)
+
+Return a fixed text form of a config value for the config hash: Bool, integer, float,
+Symbol, String and `nothing` in fixed forms, tuples and vectors element by element,
+dictionaries with their pairs sorted by key, and any other value by `string(val)`.
+
+Parameters
+----------
+val : Any
+    Value of a config field or of a hashed module constant.
+
+Returns
+-------
+String
+    Text form of `val`.
+
+Raises
+------
+InexactError
+    If `val` is an integer outside the `Int64` range.
+"""
+function _canonical_field_repr(val)::String
+    if val isa Bool
+        return val ? "true" : "false"
+    elseif val isa Integer
+        return string(Int64(val))
+    elseif val isa AbstractFloat
+        return repr(Float64(val))
+    elseif val isa Symbol
+        return ":" * String(val)
+    elseif val isa AbstractString
+        return repr(String(val))
+    elseif val === nothing
+        return "nothing"
+    elseif val isa Tuple || val isa AbstractVector
+        return "[" * join((_canonical_field_repr(x) for x in val), ", ") * "]"
+    elseif val isa AbstractDict
+        isempty(val) && return "{}"
+        sorted_pairs = sort!(collect(pairs(val)); by=p -> string(first(p)))
+        inner = join(
+            [
+                "$(_canonical_field_repr(k)) => $(_canonical_field_repr(v))" for
+                (k, v) in sorted_pairs
+            ],
+            ", ",
+        )
+        return "{$inner}"
+    end
+    return string(val)
+end
+
+"""
+    _same_julia_major_minor(recorded_ver, current_ver=VERSION)
+
+Return whether the Julia version of a record and the running version share major and minor.
+
+Parameters
+----------
+recorded_ver : AbstractString
+    Julia version stored in the record, for example `"1.12.1"`.
+current_ver : VersionNumber, optional
+    Running Julia version.
+
+Returns
+-------
+Bool
+    `true` when major and minor agree; `false` when they differ or `recorded_ver` does not
+    start with a version.
+"""
+function _same_julia_major_minor(
+    recorded_ver::AbstractString, current_ver::VersionNumber=VERSION
+)::Bool
+    m = match(r"^v?(\d+)\.(\d+)(?:\.|\b|$)", strip(recorded_ver))
+    m === nothing && return false
+    return parse(Int, m.captures[1]) == current_ver.major &&
+           parse(Int, m.captures[2]) == current_ver.minor
 end
