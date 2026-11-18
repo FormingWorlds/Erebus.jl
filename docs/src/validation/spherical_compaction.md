@@ -32,7 +32,9 @@ The compaction viscosity is set so that the compaction length $\delta$ (defined 
 This gives $\zeta = 7.8125 \times 10^{18}$ Pa s.
 The code computes the compaction viscosity of a cell from its shear viscosity as `ETAPHI = etaphikoef ETAP / phi`.
 The case sets `solver.etaphikoef` to $\phi / 10^{-4}$ and the shear viscosity of the rock to $10^{-4} \zeta$, so that the ratio of the shear to the compaction viscosity is $10^{-4}$.
-The cells outside the sphere have a shear viscosity of $10^{12}$ Pa s and no permeable faces.
+The basic nodes that touch no rock cell have a shear viscosity of $10^{12}$ Pa s.
+The shear viscosity of a cell is the harmonic mean of its 4 corner nodes, so an outside cell that shares a corner node with a rock cell has $1.33 \times 10^{12}$, $2.00 \times 10^{12}$ or $3.98 \times 10^{12}$ Pa s.
+The faces of the outside cells are impermeable.
 
 At the start the total and the fluid pressure are both $P_\mathrm{amb} + P_{e,R}$ everywhere, with $P_\mathrm{amb} = 100$ Pa and $P_{e,R} = 10^6$ Pa.
 The total pressure is held at $P_\mathrm{amb} + P_{e,R}$ on the box edge.
@@ -42,8 +44,10 @@ The rock cells next to the outside vent their fluid, and the venting conductance
 The effective pressure at the surface is then $P_{e,R}$.
 
 The case builds the state with `init_simulation`, sets the grid fields directly and calls `solve_stokes_darcy!` once, on timestep 1.
-The compressibilities of the rock and the fluid are 0, so the time step enters only through the vent (see "Conditions of the case").
-The time step is $10^{-10}$ yr.
+The compressibilities of the rock and the fluid are 0.
+The time step enters through the vent (see "Conditions of the case") and through the elastic term of the momentum rows, which replaces the shear viscosity $\eta$ by $\eta G \Delta t / (G \Delta t + \eta)$ with the shear modulus $G$.
+The time step is $10^{-10}$ yr and the case sets $G = 10^{20}$ Pa, so the rock shear viscosity in the momentum rows is 0.25 % below $\eta$.
+With $G = 10^{40}$ Pa the results at `Nx = 65` do not change between time steps of $10^{-14}$ and $10^{-10}$ yr.
 
 ## The exact solution
 
@@ -131,18 +135,23 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
   With a shear viscosity of $10^{-3} \zeta$ the spread grows about tenfold, and the centre error at `Nx = 65` changes by 2 % of its value; the test checks that the spread stays below $3 \times 10^{-3} P_{e,R}$ and that the change stays below 10 %.
 - Compaction viscosity: `ETAPHI` equals $\zeta$ within a relative $10^{-12}$ on every rock cell.
   The case gives the rock viscosity to every basic node next to a rock cell; without this, cells next to the surface get a smaller compaction viscosity.
-- Vent pressure: the fluid pressure of every vent cell equals $P_\mathrm{vent}$ within $10^{-6} P_{e,R}$, and $P_\mathrm{vent} = P_\mathrm{amb}$ within a relative $10^{-12}$.
+- Vent pressure: the vent cells are the rock cells with a side neighbour outside the sphere.
+  Every vent cell vents, and its fluid pressure equals $P_\mathrm{vent}$ within $10^{-6} P_{e,R}$ at `Nx = 33` and 65; $P_\mathrm{vent} = P_\mathrm{amb}$ within a relative $10^{-12}$.
 - Fluid volume: the vented fluid volume rate equals the volume rate that the compaction squeezes out, within a relative $10^{-8}$.
-  The vent removes at most the fluid that a cell holds in one time step.
-  With a time step of $10^{-2}$ yr this cap is reached, the vented rate no longer equals the compaction rate, and the test checks that the closure then fails.
+  The vent removes at most the fluid that a cell holds in one time step, $(\phi - \phi_\mathrm{min}) / \Delta t$ per unit volume and time.
+  The assembly of the fluid row checks this cap with the fluid pressure before the solve, $P_\mathrm{amb} + P_{e,R}$, and scales the vent conductance of a capped cell down.
+  After the solve the code recomputes the vent rate `S_vent_grid` from the solved fluid pressure, which lies close to $P_\mathrm{amb}$, and there the cap does not act.
+  With a time step of $10^{-2}$ yr the cap acts on every vent cell in the assembly.
+  The solved fluid row still vents the compaction rate, but `S_vent_grid` is no longer the rate of the solve: it exceeds the compaction rate by a factor of 114.2 at `Nx = 33`.
+  The test checks that the closure then fails and checks this factor.
 
 !!! details "Test details"
     - Reference: exact solution $P_e(r)$ above, the exact solid velocity $-(k / \mu) P_e'(r) \, \hat{\mathbf{r}}$, and the centre ratio $2 I_0(2) / \sinh 2$.
-    - Tolerance: centre error, L2 profile error and L2 velocity error at most 0.08, 0.034 and 0.018 for the sphere and at most 0.105, 0.044 and 0.023 for the disk at `Nx = 33`, 65 and 129; order of each error between `Nx = 65` and `Nx = 129` equal to 1 within 0.35; centre ratio equal to $2 I_0(2) / \sinh 2$ within a relative 0.012 at `Nx = 65` and 0.006 at `Nx = 129`; vented rate equal to the compaction rate within $10^{-8}$ of the rate; vent fluid pressure within $10^{-6} P_{e,R}$ of $P_\mathrm{amb}$.
+    - Tolerance: centre error, L2 profile error and L2 velocity error at most 0.08, 0.034 and 0.018 for the sphere and at most 0.105, 0.044 and 0.023 for the disk at `Nx = 33`, 65 and 129; order of each error between `Nx = 65` and `Nx = 129` equal to 1 within 0.35; centre ratio equal to $2 I_0(2) / \sinh 2$ within a relative 0.012 at `Nx = 65` and 0.006 at `Nx = 129`; vented rate equal to the compaction rate within $10^{-8}$ of the rate; fluid pressure of every vent cell within $10^{-6} P_{e,R}$ of $P_\mathrm{amb}$, and an infinite deviation when a vent cell does not vent.
     - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_compaction.jl`.
       It is 0.002 on each error and on each centre ratio, 0.05 on each order, $10^{-8}$ on each vented-rate closure and $10^{-6}$ on each vent pressure.
     - Test id: `centre_err_{off,on}_nx{33,65,129}`, `profile_l2_inner_{off,on}_nx{33,65,129}`, `vs_l2_inner_{off,on}_nx{33,65,129}`, `{centre,profile,vs}_order_{off,on}_65_129`, `centre_ratio_on_off_nx65`, `centre_ratio_on_off_nx129`, `vent_closure_{off,on}_nx65`, `pf_vent_dev_{off,on}_nx65`.
-      `Pkg.test` runs `test/test_validation_spherical_compaction.jl` at `Nx = 33` and 65, and also compares the 6-variable and the 4-variable solver paths at `Nx = 33`.
+      `Pkg.test` runs `test/test_validation_spherical_compaction.jl` at `Nx = 33` and 65, and also compares the pressures, the solid velocity and the Darcy flux of the 6-variable and the 4-variable solver paths at `Nx = 33` on every node.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ## What this case does not test
@@ -151,7 +160,8 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
   The radial solid flow of this case reaches them, but the shear viscosity of $10^{-4} \zeta$ makes their effect small.
   With these terms switched off, the velocity error of the sphere at `Nx = 65` changes from 0.02337 to 0.02333.
 - The venting conductance and its face weight: the case uses the Dirichlet limit, in which the vent cells keep $P_\mathrm{vent}$ for any large conductance.
-- The poroelastic compressibilities, gravity, elasticity and plasticity: they are off.
+- The poroelastic compressibilities and gravity: they are off.
+- Elasticity and plasticity: the shear modulus and the yield strength are $10^{20}$ Pa, so the elastic term changes the rock shear viscosity by 0.25 % and no cell reaches its yield stress.
 - The porosity change in time: the case solves one step.
 - How the code computes the shear viscosity, the permeability and the face resistances from the markers: the case sets the grid fields directly.
 

@@ -53,6 +53,11 @@ Returns
 -------
 Tuple{Bool,String}
     `true` and empty string when `src/`, `benchmarks/` and `tools/` are clean; `false` and `git status --porcelain` output otherwise.
+
+Raises
+------
+ProcessFailedException
+    If `git status` fails, for example because `repo_root` is not a git repository.
 """
 function check_clean_source_tree(
     repo_root::String=normpath(joinpath(@__DIR__, ".."))
@@ -120,6 +125,11 @@ Returns
 Vector{NamedTuple}
     One entry per metric with `id`, `case`, `description`, `nx`, `value`, `reference`,
     `atol`, `rtol`, `comparison` and `units`.
+
+Raises
+------
+KeyError
+    If `metrics` or `refs` lacks one of the metric ids.
 """
 function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
     specs = NamedTuple[]
@@ -234,12 +244,40 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
 end
 
 """
+    compaction_validation_module() -> Module
+
+Return the `SphericalCompactionValidation` module (`benchmarks/validation_spherical_compaction.jl`)
+of the module that includes this file, or of `Main` when that module has none.
+
+Returns
+-------
+Module
+    The validation module.
+
+Raises
+------
+ErrorException
+    If neither module defines `SphericalCompactionValidation`.
+"""
+function compaction_validation_module()::Module
+    for host in (parentmodule(@__MODULE__), Main)
+        if Base.invokelatest(isdefined, host, :SphericalCompactionValidation)
+            return Base.invokelatest(getfield, host, :SphericalCompactionValidation)
+        end
+    end
+    return error(
+        "SphericalCompactionValidation is not loaded; include benchmarks/validation_spherical_compaction.jl first",
+    )
+end
+
+"""
     write_spherical_compaction_record(record_path::String=DEFAULT_EXPORT_RECORD_PATH; src_commit=nothing, bench=nothing, accept_physics_change=false) -> NamedTuple
 
 Run the spherical compaction benchmark (or use a pre-evaluated `bench`), validate the candidate
 record with `validate_record_dict`, verify that no metric leaves its physics regression band around
 the existing `record_path` (unless `accept_physics_change=true`), and write `record_path`.
-Requires `SphericalCompactionValidation` (`benchmarks/validation_spherical_compaction.jl`) in `Main`.
+Requires `SphericalCompactionValidation` (`benchmarks/validation_spherical_compaction.jl`), see
+`compaction_validation_module`.
 
 Parameters
 ----------
@@ -262,7 +300,9 @@ Raises
 DomainError
     If `isempty(record_path)` or `src_commit` is not a 40-character lowercase hex SHA-1.
 ErrorException
-    If a metric leaves its regression band around the existing record without `accept_physics_change=true`, or if `validate_record_dict` fails.
+    If a metric leaves its regression band around the existing record without `accept_physics_change=true`, if `validate_record_dict` fails, or if `SphericalCompactionValidation` is not loaded.
+KeyError
+    If `bench.metrics` lacks one of the metric ids.
 """
 function write_spherical_compaction_record(
     record_path::String=DEFAULT_EXPORT_RECORD_PATH;
@@ -270,7 +310,7 @@ function write_spherical_compaction_record(
     bench=nothing,
     accept_physics_change::Bool=false,
 )
-    SCV = Main.SphericalCompactionValidation
+    SCV = compaction_validation_module()
     isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
     commit_str = src_commit === nothing ? last_src_commit() : src_commit
     !occursin(r"^[0-9a-f]{40}$", commit_str) && throw(
@@ -400,13 +440,15 @@ end
     run_export_cli(args::Vector{String}=ARGS; src_commit=nothing, bench=nothing, check_clean_tree=true, dirty_status=nothing, repo_root=normpath(joinpath(@__DIR__, ".."))) -> Int
 
 Run the command-line export tool for the spherical compaction validation record. Requires
-`SphericalCompactionValidation` (`benchmarks/validation_spherical_compaction.jl`) to be loaded
-in `Main` before calling.
+`SphericalCompactionValidation` (`benchmarks/validation_spherical_compaction.jl`), see
+`compaction_validation_module`. An argument other than `--accept-physics-change` that
+starts with `-`, and a second record path, are usage errors. An error of the export other
+than a `DomainError` is printed with its stack trace.
 
 Parameters
 ----------
 args : Vector{String}, optional
-    Command-line arguments (`[--accept-physics-change]` and optional `[record_path]`).
+    Command-line arguments (`[--accept-physics-change]` and at most one `[record_path]`).
 src_commit : Union{String,Nothing}, optional
     Explicit `src/` commit SHA-1, or `nothing` to query `last_src_commit(repo_root)`.
 bench : Any, optional
@@ -421,12 +463,14 @@ repo_root : String, optional
 Returns
 -------
 Int
-    Exit code (`0` on success, `1` on export refusal, `2` on invalid CLI flag).
+    Exit code (`0` on success, `1` on export refusal, `2` on invalid command line).
 
 Raises
 ------
 DomainError
     If the record path is empty or `src_commit` is not a 40-character lowercase hex SHA-1.
+InterruptException
+    If the run is interrupted.
 """
 function run_export_cli(
     args::Vector{String}=ARGS;
@@ -437,20 +481,22 @@ function run_export_cli(
     repo_root::String=normpath(joinpath(@__DIR__, "..")),
 )::Int
     accept_physics_change = false
-    record_path = DEFAULT_EXPORT_RECORD_PATH
+    record_path = nothing
     for arg in args
         if arg == "--accept-physics-change"
             accept_physics_change = true
-        elseif startswith(arg, "--")
+            continue
+        end
+        if startswith(arg, "-") || record_path !== nothing
             println(
                 stderr,
                 "Usage: julia --project=. tools/export_validation_spherical_compaction.jl [--accept-physics-change] [record_path]",
             )
             return 2
-        else
-            record_path = arg
         end
+        record_path = arg
     end
+    record_path = something(record_path, DEFAULT_EXPORT_RECORD_PATH)
 
     if check_clean_tree
         ok_clean, dirty_out = if dirty_status === nothing
@@ -478,9 +524,42 @@ function run_export_cli(
         println("Wrote $record_path")
         return 0
     catch err
-        err isa DomainError && rethrow(err)
-        println(stderr, sprint(showerror, err))
+        (err isa DomainError || err isa InterruptException) && rethrow()
+        println(stderr, sprint(showerror, err, catch_backtrace()))
         return 1
+    end
+end
+
+"""
+    export_main(args::Vector{String}=ARGS; kwargs...) -> Int
+
+Run `run_export_cli` as the script does: a `DomainError` (an empty record path or an invalid
+`src_commit`) is printed and gives the exit code `1`.
+
+Parameters
+----------
+args : Vector{String}, optional
+    Command-line arguments, as for `run_export_cli`.
+kwargs
+    Keyword arguments passed on to `run_export_cli`.
+
+Returns
+-------
+Int
+    Exit code of `run_export_cli`, or `1` after a `DomainError`.
+
+Raises
+------
+InterruptException
+    If the run is interrupted.
+"""
+function export_main(args::Vector{String}=ARGS; kwargs...)::Int
+    return try
+        run_export_cli(args; kwargs...)
+    catch err
+        err isa DomainError || rethrow()
+        println(stderr, sprint(showerror, err))
+        1
     end
 end
 
@@ -488,5 +567,5 @@ end # module
 
 if abspath(PROGRAM_FILE) == @__FILE__
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_compaction.jl"))
-    exit(Base.invokelatest(SphericalCompactionExport.run_export_cli, ARGS))
+    exit(Base.invokelatest(SphericalCompactionExport.export_main, ARGS))
 end

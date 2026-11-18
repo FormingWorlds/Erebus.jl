@@ -32,12 +32,20 @@ String
 
 Raises
 ------
-BoundsError
-    If a column is shorter than the first one.
+ArgumentError
+    If `columns` is empty, `header` and `columns` differ in length, or the columns differ in
+    length. The file is then left as it was.
 """
 function write_columns(
     path::String, header::Vector{String}, columns::Vector{<:AbstractVector}
 )
+    isempty(columns) && throw(ArgumentError("at least one column is needed"))
+    length(header) == length(columns) || throw(
+        ArgumentError("$(length(header)) names for $(length(columns)) columns in $path")
+    )
+    n = length(columns[1])
+    all(c -> length(c) == n, columns) ||
+        throw(ArgumentError("the columns of $path differ in length"))
     open(path, "w") do io
         println(io, join(header, ","))
         for i in eachindex(columns[1])

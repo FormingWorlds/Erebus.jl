@@ -3,22 +3,111 @@ using Test
 using TOML
 using Erebus
 
-include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_compaction.jl"))
+isdefined(@__MODULE__, :SphericalCompactionValidation) ||
+    include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_compaction.jl"))
 include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
-include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_compaction.jl"))
+isdefined(@__MODULE__, :SphericalCompactionExport) ||
+    include(joinpath(@__DIR__, "..", "tools", "export_validation_spherical_compaction.jl"))
 
 const SCV = SphericalCompactionValidation
+
+"""
+    InterruptingBench
+
+Benchmark stand-in whose every property access throws `InterruptException`, as a Ctrl-C
+during the benchmark does.
+"""
+struct InterruptingBench end
+Base.getproperty(::InterruptingBench, ::Symbol) = throw(InterruptException())
+
+"""
+    CrashingBench
+
+Benchmark stand-in whose every property access throws an `ErrorException`, as a solver
+failure during the benchmark does.
+"""
+struct CrashingBench end
+Base.getproperty(::CrashingBench, ::Symbol) = error("solver failure inside the benchmark")
 
 """
     write_compaction_toml(path, dict)
 
 Write `dict` as TOML to `path` and return `path`.
+
+Parameters
+----------
+path : String
+    Output file path.
+dict : AbstractDict
+    Table to write.
+
+Returns
+-------
+String
+    `path`.
 """
 function write_compaction_toml(path::String, dict::AbstractDict)
     open(path, "w") do io
         return TOML.print(io, dict)
     end
     return path
+end
+
+"""
+    capture_stdio(f)
+
+Call `f()` with standard output and standard error redirected to files and return the
+result with the captured text.
+
+Parameters
+----------
+f : Function
+    Function of no arguments.
+
+Returns
+-------
+NamedTuple
+    `value`: the return value of `f`; `out`, `err`: the captured standard output and
+    standard error.
+"""
+function capture_stdio(f)
+    return mktempdir() do dir
+        out_path, err_path = joinpath(dir, "out.txt"), joinpath(dir, "err.txt")
+        value = open(out_path, "w") do out
+            open(err_path, "w") do err
+                return redirect_stdio(f; stdout=out, stderr=err)
+            end
+        end
+        return (; value, out=read(out_path, String), err=read(err_path, String))
+    end
+end
+
+"""
+    surface_rock_cells(coords)
+
+Return the P cells `(i, j)` inside the sphere with at least one of their 4 neighbours
+outside it, over the rows and columns that `_metrics` reads.
+
+Parameters
+----------
+coords : NamedTuple
+    Coordinates from `compaction_coords`.
+
+Returns
+-------
+Vector{Tuple{Int,Int}}
+    Indices of the surface rock cells.
+"""
+function surface_rock_cells(coords)
+    inside(i, j) =
+        hypot(coords.xp[j] - SCV.X_CENTRE, coords.yp[i] - SCV.Y_CENTRE) <= SCV.R_PLANET
+    cells = Tuple{Int,Int}[]
+    for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2)
+        inside(i, j) || continue
+        neighbours = ((i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1))
+        any(!inside(a, b) for (a, b) in neighbours) && push!(cells, (i, j))
+    end
+    return cells
 end
 
 """
@@ -146,6 +235,28 @@ end
             @test_throws DomainError f(Inf)
             @test_throws DomainError f(SCV.BESSEL_X_MAX * 1.01)
         end
+        @test_throws DomainError SCV._bessel_series(2.0, -1)
+        @test_throws DomainError SCV._bessel_series(2.0, 2)
+    end
+
+    @testset "Bessel functions and exact profile sum in Float64 for any real input" begin
+        # Float32 and Float16 arguments that are exact in Float64 give the Float64 value.
+        for x in (100.0f0, 700.0f0, Float16(20.0), 2, BigFloat(2.0))
+            for f in (SCV._i0, SCV._i1)
+                v = f(x)
+                @test v isa Float64
+                @test isapprox(v, f(Float64(x)); rtol=1.0e-15)
+            end
+        end
+        @test isapprox(SCV._i1(100.0f0), trapezoid_bessel(100.0, 1); rtol=1.0e-12)
+        r_big = BigFloat(1.0e4)
+        for d in (2, 3)
+            @test SCV.exact_pe(r_big, d) isa Float64
+            @test SCV.exact_pe_derivative(r_big, d) isa Float64
+            @test isapprox(
+                SCV.exact_pe(Float32(1.0e4), d), SCV.exact_pe(1.0e4, d); rtol=1.0e-15
+            )
+        end
     end
 
     @testset "exact effective pressure: surface value, centre limit, Helmholtz equation" begin
@@ -270,9 +381,13 @@ end
     @testset "solver converges and the fields are finite (spherical_flow = $sf)" for sf in (
         false, true
     )
-        @test runs[(33, sf)].converged
-        @test runs[(65, sf)].converged
-        @test all(isfinite, runs[(65, sf)].pe) && all(isfinite, runs[(65, sf)].vx)
+        for n in (33, 65)
+            r = runs[(n, sf)]
+            @test r.converged
+            for field in (:pe, :pf, :vx, :vy, :qxD, :qyD)
+                @test all(isfinite, getfield(r, field))
+            end
+        end
     end
 
     @testset "ETAPHI equals zeta on every rock P cell (spherical_flow = $sf)" for sf in (
@@ -301,7 +416,7 @@ end
     )
         for n in (33, 65)
             m = runs[(n, sf)]
-            @test m.pf_vent_dev < 1.0e-5
+            @test m.pf_vent_dev < 1.0e-6
             @test m.vent_closure < 1.0e-8
             @test isapprox(m.vent_flux, m.comp_flux; rtol=1.0e-8)
         end
@@ -353,6 +468,9 @@ end
         @test long.converged
         @test !isapprox(long.vent_closure, 0.0; atol=1.0e-3)
         @test runs[(33, true)].vent_closure < 1.0e-8
+        # The matrix holds the cap from the pressure before the solve; S_vent_grid is
+        # recomputed from the solved pressure without it, so it exceeds the compaction rate.
+        @test isapprox(long.vent_flux / long.comp_flux, 114.2; rtol=0.01)
     end
 
     @testset "6-variable path equals the 4-variable path (spherical_flow = $sf)" for sf in (
@@ -360,9 +478,17 @@ end
     )
         four = runs[(33, sf)]
         six = SCV.run_case(33; spherical_flow=sf, darcy_elimination=false)
+        rel_diff(field) =
+            maximum(abs, getfield(six, field) .- getfield(four, field)) /
+            maximum(abs, getfield(four, field))
         @test six.converged
-        @test maximum(abs, six.pf .- four.pf) / maximum(abs, four.pf) < 1.0e-10
-        @test maximum(abs, six.pe .- four.pe) / maximum(abs, four.pe) < 1.0e-8
+        @test rel_diff(:pf) < 1.0e-10
+        @test rel_diff(:pe) < 1.0e-8
+        # Every face of the solid velocity and the Darcy flux, also outside 0.9 R.
+        @test rel_diff(:vx) < 1.0e-6
+        @test rel_diff(:vy) < 1.0e-6
+        @test rel_diff(:qxD) < 1.0e-10
+        @test rel_diff(:qyD) < 1.0e-10
         @test isapprox(six.vs_l2_inner, four.vs_l2_inner; rtol=1.0e-6)
     end
 
@@ -375,6 +501,95 @@ end
             @test isapprox(err(1.1), 0.1; atol=1.0e-12)
             @test isapprox(err(-1.0), 2.0; atol=1.0e-12)
         end
+    end
+
+    @testset "solid velocity error counts each component and only faces within 0.9 R" begin
+        coords = compaction_coords(41)
+        rx(i, j) = hypot(coords.xvx[j] - SCV.X_CENTRE, coords.yvx[i] - SCV.Y_CENTRE)
+        ry(i, j) = hypot(coords.xvy[j] - SCV.X_CENTRE, coords.yvy[i] - SCV.Y_CENTRE)
+        r_in = SCV.INNER_FRACTION * SCV.R_PLANET
+        for d in (2, 3)
+            exact = exact_solid_velocity_grids(coords, d, 1.0)
+            # The grid is symmetric under x <-> y, so each component holds half of the
+            # norm: flipping one component gives sqrt(4 / 2).
+            @test isapprox(
+                SCV._vs_l2_inner((; vx=(-exact.vx), vy=exact.vy), coords, d),
+                sqrt(2.0);
+                rtol=1.0e-12,
+            )
+            @test isapprox(
+                SCV._vs_l2_inner((; vx=exact.vx, vy=(-exact.vy)), coords, d),
+                sqrt(2.0);
+                rtol=1.0e-12,
+            )
+            # Faces with 0.9 R < r do not enter; the faces within 0.9 R do.
+            outer_x = [
+                r_in < rx(i, j) ? 5.0 : 1.0 for
+                i in axes(exact.vx, 1), j in axes(exact.vx, 2)
+            ]
+            outer_y = [
+                r_in < ry(i, j) ? 5.0 : 1.0 for
+                i in axes(exact.vy, 1), j in axes(exact.vy, 2)
+            ]
+            @test any(
+                r_in < rx(i, j) <= SCV.R_PLANET for
+                i in axes(exact.vx, 1), j in axes(exact.vx, 2)
+            )
+            @test isapprox(
+                SCV._vs_l2_inner(
+                    (; vx=exact.vx .* outer_x, vy=exact.vy .* outer_y), coords, d
+                ),
+                0.0;
+                atol=1.0e-12,
+            )
+            inner_x = [
+                rx(i, j) <= r_in ? 5.0 : 1.0 for
+                i in axes(exact.vx, 1), j in axes(exact.vx, 2)
+            ]
+            @test isapprox(
+                SCV._vs_l2_inner((; vx=exact.vx .* inner_x, vy=exact.vy), coords, d),
+                sqrt(16 / 2);
+                rtol=1.0e-12,
+            )
+        end
+    end
+
+    @testset "vent pressure deviation covers every surface rock cell" begin
+        coords = compaction_coords(41)
+        cells = surface_rock_cells(coords)
+        n = coords.Ny1
+        grids(pf, s_vent) = (;
+            pr=fill(SCV.P_AMB + SCV.PE_R, n, n),
+            pf,
+            ETAPHI=fill(SCV.ZETA, n, n),
+            PHI=fill(SCV.PHI, n, n),
+            S_vent_grid=s_vent,
+            vx=zeros(n, n),
+            vy=zeros(n, n),
+            qxD=zeros(n, n),
+            qyD=zeros(n, n),
+        )
+        pf = fill(SCV.P_AMB + SCV.PE_R, n, n)
+        s_vent = zeros(n, n)
+        for (i, j) in cells
+            pf[i, j] = SCV.P_AMB
+            s_vent[i, j] = 1.0e-12
+        end
+        @test length(cells) > 50
+        m_all = SCV._metrics((; grids=grids(pf, s_vent)), coords, false)
+        @test isapprox(m_all.pf_vent_dev, 0.0; atol=1.0e-15)
+        # A surface cell 0.3 Pe_R above P_vent sets the deviation.
+        i0, j0 = cells[1]
+        pf_high = copy(pf)
+        pf_high[i0, j0] = SCV.P_AMB + 0.3 * SCV.PE_R
+        m_high = SCV._metrics((; grids=grids(pf_high, s_vent)), coords, false)
+        @test isapprox(m_high.pf_vent_dev, 0.3; rtol=1.0e-12)
+        # A surface cell that does not vent makes the deviation infinite, whatever its Pf.
+        s_closed = copy(s_vent)
+        s_closed[cells[end]...] = 0.0
+        m_closed = SCV._metrics((; grids=grids(pf, s_closed)), coords, false)
+        @test isequal(m_closed.pf_vent_dev, Inf)
+        @test isequal(m_all.pf_vent_dev, 0.0)
     end
 
     @testset "metrics reject an empty mask" begin
@@ -443,6 +658,32 @@ end
         @test isequal(conduction._canonical_field_repr((1, 2.0)), "[1, 2.0]")
         @test darcy._same_julia_major_minor("1.12.0", v"1.12.3")
         @test validation_case("not_a_record") === nothing
+    end
+
+    @testset "validation modules load into the given host module" begin
+        host = Module(:ValidationHost)
+        case = validation_case("spherical_darcy_flow")
+        @test !isdefined(host, case.module_name)
+        loaded = validation_module(case; host=host)
+        @test isdefined(host, case.module_name)
+        @test loaded === getfield(host, case.module_name)
+        # A second call returns the same module and loads nothing new.
+        @test validation_module(case; host=host) === loaded
+        @test validation_module(case) !== loaded
+        # The export tool reads the validation module of the module that includes it.
+        @test SphericalCompactionExport.compaction_validation_module() === SCV
+        Base.include(
+            host,
+            joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_compaction.jl"),
+        )
+        Base.include(
+            host,
+            joinpath(@__DIR__, "..", "tools", "export_validation_spherical_compaction.jl"),
+        )
+        host_scv = getfield(host, :SphericalCompactionValidation)
+        host_export = getfield(host, :SphericalCompactionExport)
+        @test Base.invokelatest(host_export.compaction_validation_module) === host_scv
+        @test host_scv !== SCV
     end
 
     @testset "Validation record schema and drift guards" begin
@@ -684,6 +925,172 @@ end
             @test !ok_cfg
             @test any(occursin("config.k_m2", e) for e in errs_cfg)
             @test any(occursin("config_sha256", e) for e in errs_cfg)
+        end
+    end
+
+    @testset "checks stop on an interrupt and report other errors with a stack trace" begin
+        commit = String(raw_record_all["metadata"]["src_commit"])
+        empty_bench = (; runs=Dict{Tuple,Any}(), metrics=Dict{String,Float64}())
+        @test_throws InterruptException run_validation_cli(
+            ["--check"];
+            bench=InterruptingBench(),
+            darcy_bench=empty_bench,
+            compaction_bench=bench,
+        )
+        @test_throws InterruptException run_compaction_validation_check(
+            record_path; bench=InterruptingBench()
+        )
+        crash = capture_stdio(
+            () -> run_compaction_validation_check(record_path; bench=CrashingBench())
+        )
+        @test crash.value === false
+        @test occursin("solver failure inside the benchmark", crash.err)
+        @test occursin("Stacktrace", crash.err)
+        mktempdir() do tmpdir
+            target = joinpath(tmpdir, "record.toml")
+            @test_throws InterruptException SphericalCompactionExport.run_export_cli(
+                [target];
+                src_commit=commit,
+                bench=InterruptingBench(),
+                check_clean_tree=false,
+            )
+            failed = capture_stdio(
+                () -> SphericalCompactionExport.run_export_cli(
+                    [target];
+                    src_commit=commit,
+                    bench=CrashingBench(),
+                    check_clean_tree=false,
+                ),
+            )
+            @test failed.value == 1
+            @test occursin("Stacktrace", failed.err)
+            @test !isfile(target)
+        end
+    end
+
+    @testset "command lines: one record path, unknown flags and an empty path" begin
+        commit = String(raw_record_all["metadata"]["src_commit"])
+        mktempdir() do tmpdir
+            missing_path = joinpath(tmpdir, "missing.toml")
+            two = capture_stdio(
+                () ->
+                    run_validation_cli([missing_path, record_path]; compaction_bench=bench),
+            )
+            @test two.value == 2
+            @test occursin("Usage", two.err)
+            @test run_validation_cli(["-h"]) == 2
+            @test run_validation_cli(["--check", "-x", record_path]) == 2
+            cd(tmpdir) do
+                code = SphericalCompactionExport.run_export_cli(
+                    ["-h"]; src_commit=commit, bench=bench, check_clean_tree=false
+                )
+                @test code == 2
+                @test !isfile(joinpath(tmpdir, "-h"))
+            end
+            p1, p2 = joinpath(tmpdir, "first.toml"), joinpath(tmpdir, "second.toml")
+            @test SphericalCompactionExport.run_export_cli(
+                [p1, p2]; src_commit=commit, bench=bench, check_clean_tree=false
+            ) == 2
+            @test !isfile(p1) && !isfile(p2)
+            # The script entry point reports an empty path and exits with 1.
+            empty_run = capture_stdio(
+                () -> SphericalCompactionExport.export_main(
+                    [""]; src_commit=commit, bench=bench, check_clean_tree=false
+                ),
+            )
+            @test empty_run.value == 1
+            @test occursin("Record path must be non-empty", empty_run.err)
+            @test SphericalCompactionExport.export_main(
+                [p2]; src_commit=commit, bench=bench, check_clean_tree=false
+            ) == 0
+            @test isfile(p2)
+        end
+    end
+
+    @testset "malformed records are reported, not thrown" begin
+        mktempdir() do tmpdir
+            broken = joinpath(tmpdir, "broken.toml")
+            write(broken, "[metadata\nid = ")
+            parsed = capture_stdio(
+                () -> run_compaction_validation_check(broken; bench=bench)
+            )
+            @test parsed.value === false
+            @test occursin("[schema] Cannot parse", parsed.err)
+            bad_meta = joinpath(tmpdir, "bad_meta.toml")
+            write(bad_meta, "metadata = 1\n[config]\n[[metrics]]\n")
+            ok_meta, errs_meta = SCV.check_validation_reproducibility(bench, bad_meta)
+            @test !ok_meta
+            @test any(occursin("metadata", e) for e in errs_meta)
+            bad_value = deepcopy(raw_record_all)
+            bad_value["metrics"][1]["value"] = "not a number"
+            bad_value_path = write_compaction_toml(
+                joinpath(tmpdir, "bad_value.toml"), bad_value
+            )
+            ok_value, errs_value = SCV.check_validation_reproducibility(
+                bench, bad_value_path
+            )
+            @test !ok_value
+            @test any(occursin("numeric", e) for e in errs_value)
+        end
+    end
+
+    @testset "figure data export: CSV columns and the exported files" begin
+        script_host = Module(:CompactionFigureData)
+        # A bare `Module` has no `include`; the script calls it at top level.
+        Core.eval(script_host, :(include(path) = Base.include($script_host, path)))
+        Base.include(
+            script_host,
+            joinpath(@__DIR__, "..", "scripts", "export_validation_compaction_data.jl"),
+        )
+        write_columns = getfield(script_host, :write_columns)
+        export_all = getfield(script_host, :export_all)
+        mktempdir() do tmpdir
+            path = joinpath(tmpdir, "columns.csv")
+            write(path, "kept\n")
+            for (header, columns) in (
+                (["a"], Vector{Float64}[]),
+                (["a", "b", "c"], [[1.0, 2.0], [3.0, 4.0]]),
+                (["a", "b"], [[1.0, 2.0], [3.0, 4.0, 5.0]]),
+            )
+                @test_throws ArgumentError Base.invokelatest(
+                    write_columns, path, header, columns
+                )
+            end
+            # A rejected call leaves the file as it was.
+            @test read(path, String) == "kept\n"
+            Base.invokelatest(write_columns, path, ["a", "b"], [[1.0, 2.0], [3, 4]])
+            @test readlines(path) == ["a,b", "1.0,3.0", "2.0,4.0"]
+
+            outdir = joinpath(tmpdir, "data")
+            @test Base.invokelatest(export_all, outdir) == outdir
+            files = sort(readdir(outdir))
+            @test files == sort([
+                "convergence.csv",
+                "profile_off_65.csv",
+                "profile_on_65.csv",
+                "reference_curves.csv",
+            ])
+            conv = readlines(joinpath(outdir, "convergence.csv"))
+            @test conv[1] == "nx,l2_off,l2_on,centre_off,centre_on"
+            @test length(conv) == 1 + length(SCV.NX_LIST)
+            # The Nx = 65 row carries the recorded errors.
+            row65 = parse.(Float64, split(conv[3], ","))
+            @test isapprox(row65[2], recorded["profile_l2_inner_off_nx65"]; rtol=1.0e-15)
+            @test isapprox(row65[5], recorded["centre_err_on_nx65"]; rtol=1.0e-15)
+            # The exact curves end at Pe_R on the surface for both settings.
+            last_curve = parse.(
+                Float64,
+                split(readlines(joinpath(outdir, "reference_curves.csv"))[end], ","),
+            )
+            @test isapprox(last_curve[1], SCV.R_PLANET; rtol=1.0e-15)
+            @test isapprox(last_curve[2], SCV.PE_R; rtol=1.0e-12)
+            @test isapprox(last_curve[3], SCV.PE_R; rtol=1.0e-12)
+            # The node profile of the sphere follows the exact curve within the profile bound.
+            prof = readlines(joinpath(outdir, "profile_on_65.csv"))
+            @test prof[1] == "r_m,pe_Pa,pe_exact_Pa"
+            vals = [parse.(Float64, split(l, ",")) for l in prof[2:end]]
+            @test length(vals) == runs[(65, true)].n_rock
+            @test all(abs(v[2] / v[3] - 1) < 0.1 for v in vals)
         end
     end
 end

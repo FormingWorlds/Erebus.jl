@@ -75,15 +75,19 @@ Float64
 Raises
 ------
 DomainError
-    If `x` is not finite or lies outside `[0, BESSEL_X_MAX]`.
+    If `x` is not finite or lies outside `[0, BESSEL_X_MAX]`, or `order` is neither 0
+    nor 1.
 ErrorException
     If the series has not converged after 10 000 terms.
 """
 function _bessel_series(x::Real, order::Int)
     (isfinite(x) && 0 <= x <= BESSEL_X_MAX) ||
         throw(DomainError(x, "the argument must lie within [0, $BESSEL_X_MAX]"))
-    q = (x / 2)^2
-    term = order == 0 ? 1.0 : x / 2
+    order in (0, 1) || throw(DomainError(order, "the order must be 0 or 1"))
+    # The sum runs in Float64 for every real input, so a Float32 term cannot overflow.
+    xf = Float64(x)
+    q = (xf / 2)^2
+    term = order == 0 ? 1.0 : xf / 2
     total = 0.0
     for m in 0:9_999
         total += term
@@ -196,7 +200,7 @@ DomainError
 """
 function exact_pe(r::Real, d::Real)
     _check_radius(r, d)
-    x = r / DELTA
+    x = Float64(r) / DELTA
     xr = R_PLANET / DELTA
     d == 2 && return PE_R * _i0(x) / _i0(xr)
     sinhc = x < SERIES_SWITCH ? 1 + x^2 / 6 + x^4 / 120 : sinh(x) / x
@@ -232,12 +236,13 @@ DomainError
 """
 function exact_pe_derivative(r::Real, d::Real)
     _check_radius(r, d)
-    x = r / DELTA
+    rf = Float64(r)
+    x = rf / DELTA
     xr = R_PLANET / DELTA
     d == 2 && return PE_R * _i1(x) / (DELTA * _i0(xr))
     pe_centre = PE_R * xr / sinh(xr)
-    x < SERIES_SWITCH && return pe_centre * r / (3 * DELTA^2) * (1 + x^2 / 10)
-    return PE_R * R_PLANET * (x * cosh(x) - sinh(x)) / (r^2 * sinh(xr))
+    x < SERIES_SWITCH && return pe_centre * rf / (3 * DELTA^2) * (1 + x^2 / 10)
+    return PE_R * R_PLANET * (x * cosh(x) - sinh(x)) / (rf^2 * sinh(xr))
 end
 
 """
@@ -353,13 +358,46 @@ Bool
 _inside(coords, i, j) = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE) <= R_PLANET
 
 """
+    _surface_rock(coords, i, j)
+
+Return whether the P node `(i, j)` is a surface rock cell: it lies inside the sphere and at
+least one of its 4 neighbours `(i +- 1, j)`, `(i, j +- 1)` lies outside. These are the cells
+whose faces to the outside carry the vent.
+
+Parameters
+----------
+coords : GridCoordinates
+    Grid coordinates of the case.
+i, j : Int
+    Row and column index of the P node, with `2 <= i <= coords.Ny` and
+    `2 <= j <= coords.Nx`.
+
+Returns
+-------
+Bool
+    `true` for a surface rock cell.
+"""
+function _surface_rock(coords, i, j)
+    _inside(coords, i, j) || return false
+    return !(
+        _inside(coords, i - 1, j) &&
+        _inside(coords, i + 1, j) &&
+        _inside(coords, i, j - 1) &&
+        _inside(coords, i, j + 1)
+    )
+end
+
+"""
     set_fields!(state, coords; eta_ratio=ETA_RATIO)
 
 Set the grid fields of the compacting sphere: no gravity, uniform porosity, total and fluid
 pressure `P_AMB + PE_R`, impermeable faces outside the sphere and the face resistance
 `MU_F / K_PERM` between 2 inside nodes. Every basic node next to an inside P node has the
 rock viscosity `eta_ratio ZETA`, so that each inside P node has `ETAP = eta_ratio ZETA` and
-`ETAPHI = ZETA`; the other basic nodes have `ETA_AIR`. Elasticity and plasticity are off.
+`ETAPHI = ZETA`; the other basic nodes have `ETA_AIR`. The shear moduli `GGG`, `GGGP` and
+the strengths `COH`, `TEN` are `STRENGTH_FILL`, with no friction: the time step enters the
+momentum rows through the viscoelastic viscosity `eta G dt / (G dt + eta)`, which differs from
+`eta` by the relative `eta / (G dt + eta)`, and no node reaches its yield stress.
 
 Parameters
 ----------
@@ -563,15 +601,16 @@ spherical_flow : Bool
 Returns
 -------
 NamedTuple
-    `pe`, `pf`, `vx`, `vy`: copies of `pr - pf` [Pa], `pf` [Pa] and the solid velocity
-    [m/s];
+    `pe`, `pf`, `vx`, `vy`, `qxD`, `qyD`: copies of `pr - pf` [Pa], `pf` [Pa], the solid
+    velocity [m/s] and the Darcy flux [m/s];
     `pe_centre`, `pe_centre_exact`: computed and exact `Pe` at the P node nearest the centre
     [Pa]; `centre_err`: `pe_centre / pe_centre_exact - 1`;
     `l2_inner`: relative L2 error of `Pe` over the rock nodes with `r <= 0.9 R`;
     `vs_l2_inner`: solid velocity error from `_vs_l2_inner`;
     `pt_spread`: `(max(Pt) - min(Pt)) / PE_R` over the rock nodes;
-    `pf_vent_dev`: largest `abs(Pf - P_AMB) / PE_R` over the vent cells (`S_vent_grid > 0`),
-    `Inf` when no cell vents;
+    `pf_vent_dev`: largest `abs(Pf - P_AMB) / PE_R` over the surface rock cells
+    (`_surface_rock`), `Inf` when one of them does not vent (`S_vent_grid <= 0`) or there is
+    none;
     `vent_flux`, `comp_flux`: vented and compaction volume rate ([m^3/s] with
     `spherical_flow = true`; [m^2/s], per metre of depth, with `false`);
     `vent_closure`: `abs(vent_flux / comp_flux - 1)`;
@@ -591,6 +630,7 @@ function _metrics(state, coords, spherical_flow)
     vent_flux = comp_flux = 0.0
     n_rock = n_inner = n_bad_etaphi = 0
     pt_min, pt_max, pf_vent_dev = Inf, -Inf, -Inf
+    vent_closed = false
     r_min, pe_c, pe_c_exact = Inf, NaN, NaN
     for j in 3:(coords.Nx1 - 2), i in 3:(coords.Ny1 - 2)
         r = hypot(coords.xp[j] - X_CENTRE, coords.yp[i] - Y_CENTRE)
@@ -609,7 +649,8 @@ function _metrics(state, coords, spherical_flow)
         pt_min = min(pt_min, g.pr[i, j])
         pt_max = max(pt_max, g.pr[i, j])
         isapprox(g.ETAPHI[i, j], ZETA; rtol=1.0e-12) || (n_bad_etaphi += 1)
-        if g.S_vent_grid[i, j] > 0.0
+        if _surface_rock(coords, i, j)
+            vent_closed |= !(g.S_vent_grid[i, j] > 0.0)
             pf_vent_dev = max(pf_vent_dev, abs(g.pf[i, j] - P_AMB) / PE_R)
         end
         w = if spherical_flow
@@ -630,13 +671,15 @@ function _metrics(state, coords, spherical_flow)
         pf=copy(g.pf),
         vx=copy(g.vx),
         vy=copy(g.vy),
+        qxD=copy(g.qxD),
+        qyD=copy(g.qyD),
         pe_centre=pe_c,
         pe_centre_exact=pe_c_exact,
         centre_err=pe_c / pe_c_exact - 1,
         l2_inner=sqrt(sq_err / sq_ref),
         vs_l2_inner=_vs_l2_inner(g, coords, d),
         pt_spread=(pt_max - pt_min) / PE_R,
-        pf_vent_dev=isfinite(pf_vent_dev) ? pf_vent_dev : Inf,
+        pf_vent_dev=(vent_closed || !isfinite(pf_vent_dev)) ? Inf : pf_vent_dev,
         vent_flux,
         comp_flux,
         vent_closure=abs(vent_flux / comp_flux - 1),
@@ -1022,6 +1065,7 @@ Compare freshly evaluated metrics, reference values, regression bands and the co
 hash and summary with a committed validation record. The replay of recorded values
 (`REPLAY_RTOL`, `REPLAY_ATOL_BOUNDS`) runs when `check_recorded_values` is `true` and the
 Julia major.minor version matches `metadata.julia_version`; the regression bands always run.
+A record that fails `validate_record_dict` returns its schema errors only.
 
 Parameters
 ----------
@@ -1051,6 +1095,8 @@ function check_validation_reproducibility(
     ok_schema, errs = validate_record_dict(
         raw; require_doc_pages=false, check_doc_sync=false
     )
+    # The checks below read the sections and metric fields that a schema error leaves invalid.
+    ok_schema || return (false, errs)
     errors = copy(errs)
 
     cfg = make_config(NX_REFERENCE; spherical_flow=true)

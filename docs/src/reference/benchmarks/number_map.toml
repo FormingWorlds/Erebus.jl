@@ -74,3 +74,8 @@ test_name = "test_volatile_retention.jl"
 page = "validation/spherical_compaction.md"
 number = "1.257057"
 test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_compaction.md"
+number = "114.2"
+test_name = "test_validation_spherical_compaction.jl"
