@@ -1205,6 +1205,27 @@ end
                 bench, record_path; check_recorded_values=false
             )
             @test ok_norep
+            # A recorded value moved beyond REPLAY_RTOL but inside every tolerance fails
+            # only the replay, and only for the Julia minor version of the record.
+            tampered = deepcopy(raw_exported)
+            tmid = findfirst(m -> m["id"] == "centre_err_m20_on_nx65", tampered["metrics"])
+            tampered["metrics"][tmid]["value"] += 1.0e-4
+            tampered_path = write_diffusion_toml(
+                joinpath(tmpdir, "tampered.toml"), tampered
+            )
+            ok_rep, errs_rep = SPDV.check_validation_reproducibility(bench, tampered_path)
+            @test !ok_rep
+            @test occursin("differs from recorded value", only(errs_rep))
+            @test first(
+                SPDV.check_validation_reproducibility(
+                    bench, tampered_path; check_recorded_values=false
+                ),
+            )
+            tampered["metadata"]["julia_version"] = "1.0.0"
+            tampered_other = write_diffusion_toml(
+                joinpath(tmpdir, "tampered_other.toml"), tampered
+            )
+            @test first(SPDV.check_validation_reproducibility(bench, tampered_other))
         end
     end
 
