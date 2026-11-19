@@ -1267,7 +1267,8 @@ NamedTuple
     `converged`: every solve returned `plastic_converged`; `centre_err_m5`:
     `p / p_exact - 1` at the P node nearest the centre after the steps; `pt_kbw`: the total
     pressure check of `_final_metrics` with the Biot-Willis coefficient of the case;
-    `storage`: `S` of the run [1/Pa]; `beta_f` [1/Pa]; `dt`: time step [s].
+    `storage`: `S` of the run [1/Pa]; `beta_f` [1/Pa]; `dt`: time step [s]; `dt_dev`:
+    largest `abs(state.dt / dt - 1)` after a solve.
 
 Raises
 ------
@@ -1290,18 +1291,23 @@ function storage_defect_run(N::Int; spherical_flow::Bool, factor::Real)
         g = state.grids
         dt = state.dt
         converged = true
-        for _ in 1:m
+        dt_dev = 0.0
+        pt_kbw = NaN
+        for step in 1:m
             res = with_logger(NullLogger()) do
                 return Erebus.solve_stokes_darcy!(
                     state, coords, cfg, ws; titer=1, dt_step_initial=dt
                 )
             end
             converged &= res.plastic_converged
+            dt_dev = max(dt_dev, abs(state.dt / dt - 1))
+            if step == m
+                pt_kbw = _final_metrics(g, coords, spherical_flow, dt, BETA_S).pt_kbw
+            end
             g.pr0 .= g.pr
             g.pf0 .= g.pf
         end
         c = _centre_values(g, coords, spherical_flow ? 3 : 2, m)
-        pt_kbw = _final_metrics(g, coords, spherical_flow, dt, BETA_S).pt_kbw
         return (;
             converged,
             centre_err_m5=c.p / c.p_exact - 1,
@@ -1309,6 +1315,7 @@ function storage_defect_run(N::Int; spherical_flow::Bool, factor::Real)
             storage=storage_coefficient(BETA_PHI, BETA_S; beta_f=beta_f),
             beta_f,
             dt,
+            dt_dev,
         )
     end
 end
@@ -1745,8 +1752,11 @@ function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
         "beta_s_per_Pa" => pe.betasolid,
         "beta_s_alt_per_Pa" => BETA_S_ALT,
         "beta_f_per_Pa" => pe.betafluid,
-        "storage_per_Pa" => storage_coefficient(BETA_PHI, pe.betasolid),
-        "kbw" => biot_willis_closed_form(BETA_PHI, pe.betasolid),
+        "storage_per_Pa" => storage_coefficient(
+            BETA_PHI, pe.betasolid; phi=cfg.thermodynamics.phim0, beta_f=pe.betafluid
+        ),
+        "kbw" =>
+            biot_willis_closed_form(BETA_PHI, pe.betasolid; phi=cfg.thermodynamics.phim0),
         "P0_Pa" => P0,
         "P_amb_Pa" => cfg.disk.p_amb_disk,
         "k_vent_m2" => cfg.venting.k_vent,

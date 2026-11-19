@@ -959,6 +959,7 @@ end
                 # and the Pt row still follows the kbw of the case, which has no beta_f.
                 @test isapprox(defect.storage, factor * s0; rtol=1.0e-12)
                 @test isapprox(defect.dt, base.dt; rtol=1.0e-15)
+                @test defect.dt_dev <= 1.0e-12
                 @test defect.pt_kbw <= 1.0e-9
                 @test defect.beta_f > SPDV.BETA_S
                 # A larger S diffuses slower: the centre keeps more pressure.
@@ -972,6 +973,18 @@ end
                 @test !ok_s
                 @test occursin(mid, only(errs_s))
             end
+        end
+        # The config summary follows the beta_f of a defect config.
+        for factor in (0.98, 1.02)
+            bf = SPDV.BETA_F + (factor - 1) * s0 / SPDV.PHI
+            summ = SPDV.expected_config_summary(
+                SPDV.make_config(33; spherical_flow=true, beta_f=bf)
+            )
+            @test isapprox(summ["storage_per_Pa"], factor * s0; rtol=1.0e-12)
+            @test isapprox(summ["kbw"], 0.6; rtol=1.0e-12)
+        end
+        for bad in (NaN, Inf)
+            @test_throws ArgumentError SPDV.make_config(33; spherical_flow=true, beta_f=bad)
         end
         # With the factor 1 the run repeats the first 5 steps of the case.
         for sf in (false, true)
