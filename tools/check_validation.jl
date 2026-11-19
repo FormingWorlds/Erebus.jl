@@ -13,6 +13,9 @@ const DEFAULT_DARCY_RECORD = joinpath(VALIDATION_RECORDS_DIR, "spherical_darcy_f
 const DEFAULT_COMPACTION_RECORD = joinpath(
     VALIDATION_RECORDS_DIR, "spherical_compaction.toml"
 )
+const DEFAULT_DIFFUSION_RECORD = joinpath(
+    VALIDATION_RECORDS_DIR, "spherical_pressure_diffusion.toml"
+)
 
 # Ordered table of the validation records: the no-argument run checks them in this order.
 const VALIDATION_CASES = (
@@ -39,6 +42,14 @@ const VALIDATION_CASES = (
         record=DEFAULT_COMPACTION_RECORD,
         evaluate=:evaluate_spherical_compaction_benchmark,
         bench_keyword=:compaction_bench,
+    ),
+    (;
+        id="spherical_pressure_diffusion",
+        module_name=:SphericalPressureDiffusionValidation,
+        file="validation_spherical_pressure_diffusion.jl",
+        record=DEFAULT_DIFFUSION_RECORD,
+        evaluate=:evaluate_spherical_pressure_diffusion_benchmark,
+        bench_keyword=:diffusion_bench,
     ),
 )
 
@@ -293,7 +304,41 @@ function run_compaction_validation_check(
 end
 
 """
-    run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing) -> Int
+    run_diffusion_validation_check(record_path::String=DEFAULT_DIFFUSION_RECORD; bench=nothing) -> Bool
+
+Execute the spherical pressure diffusion validation benchmark and verify schema and metric
+reproducibility against `record_path` (see `run_record_check`).
+
+Parameters
+----------
+record_path : String, optional
+    Path to the TOML validation record file.
+bench : Any, optional
+    Pre-evaluated benchmark tuple, or `nothing` to run
+    `SphericalPressureDiffusionValidation.evaluate_spherical_pressure_diffusion_benchmark()`.
+
+Returns
+-------
+Bool
+    `true` when all validation and reproducibility checks pass.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+InterruptException
+    If the run is interrupted.
+"""
+function run_diffusion_validation_check(
+    record_path::String=DEFAULT_DIFFUSION_RECORD; bench=nothing
+)::Bool
+    return run_record_check(
+        validation_case("spherical_pressure_diffusion"), record_path; bench=bench
+    )
+end
+
+"""
+    run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing, diffusion_bench=nothing) -> Int
 
 Run the command-line validation check. Without a record path it checks every record of
 `VALIDATION_CASES` in order and collects garbage after each case. With a record path it
@@ -312,6 +357,8 @@ darcy_bench : Any, optional
     Pre-evaluated Darcy flow benchmark tuple, or `nothing` to evaluate on demand.
 compaction_bench : Any, optional
     Pre-evaluated compaction benchmark tuple, or `nothing` to evaluate on demand.
+diffusion_bench : Any, optional
+    Pre-evaluated pressure diffusion benchmark tuple, or `nothing` to evaluate on demand.
 
 Returns
 -------
@@ -324,9 +371,13 @@ InterruptException
     If the run is interrupted.
 """
 function run_validation_cli(
-    args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing
+    args::Vector{String}=ARGS;
+    bench=nothing,
+    darcy_bench=nothing,
+    compaction_bench=nothing,
+    diffusion_bench=nothing,
 )::Int
-    benches = (; bench, darcy_bench, compaction_bench)
+    benches = (; bench, darcy_bench, compaction_bench, diffusion_bench)
     record_path = nothing
     for arg in args
         arg == "--check" && continue

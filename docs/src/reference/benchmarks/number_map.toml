@@ -84,3 +84,93 @@ test_name = "test_validation_spherical_compaction.jl"
 page = "validation/spherical_compaction.md"
 number = "108.9"
 test_name = "test_validation_spherical_compaction.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.70710"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.84836"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.70998"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.84486"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.8401398"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.8403029"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.68482"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "0.82793"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "9.7273"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "1.625"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "1.99"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "2.21"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "4.90"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "5.41"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "3.00"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "3.30"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "7.01"
+test_name = "test_validation_spherical_pressure_diffusion.jl"
+
+[[entry]]
+page = "validation/spherical_pressure_diffusion.md"
+number = "7.67"
+test_name = "test_validation_spherical_pressure_diffusion.jl"

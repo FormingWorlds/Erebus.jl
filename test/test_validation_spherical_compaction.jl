@@ -864,8 +864,9 @@ end
             schema_path = write_compaction_toml(joinpath(tmpdir, "schema.toml"), schema_bad)
             @test !run_compaction_validation_check(schema_path; bench=bench)
 
-            # The no-argument run checks every record of the table in order; the conduction
-            # and Darcy benches here are empty, so only the compaction record passes.
+            # The no-argument run checks every record of the table in order; the conduction,
+            # Darcy and pressure diffusion benches here are empty, so only the compaction
+            # record passes.
             empty_bench = (; runs=Dict{Tuple,Any}(), metrics=Dict{String,Float64}())
             out_path = joinpath(tmpdir, "cli_out.txt")
             err_path = joinpath(tmpdir, "cli_err.txt")
@@ -877,6 +878,7 @@ end
                             bench=empty_bench,
                             darcy_bench=empty_bench,
                             compaction_bench=bench,
+                            diffusion_bench=empty_bench,
                         )
                     end
                 end
@@ -886,7 +888,12 @@ end
             err_text = read(err_path, String)
             @test occursin("spherical_compaction.toml", out_text)
             @test occursin("[reproducibility]", err_text)
-            @test [c.id for c in VALIDATION_CASES] == ["spherical_conduction", "spherical_darcy_flow", "spherical_compaction"]
+            @test [c.id for c in VALIDATION_CASES] == [
+                "spherical_conduction",
+                "spherical_darcy_flow",
+                "spherical_compaction",
+                "spherical_pressure_diffusion",
+            ]
 
             # Export round trip.
             exported = joinpath(tmpdir, "exported_spherical_compaction.toml")
@@ -973,6 +980,7 @@ end
             bench=InterruptingBench(),
             darcy_bench=empty_bench,
             compaction_bench=bench,
+            diffusion_bench=empty_bench,
         )
         @test_throws InterruptException run_compaction_validation_check(
             record_path; bench=InterruptingBench()
