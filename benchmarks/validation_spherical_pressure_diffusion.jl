@@ -244,12 +244,12 @@ ErrorException
 """
 function _series_sum(x::Real, d, m, dtau::Real, be::Bool; tail::Float64=TAIL_BOUND)
     _check_series_args(x, d, m, dtau)
-    xf = Float64(x)
+    xf, mi, dtauf = Float64(x), Int(m), Float64(dtau)
     total = 0.0
     n_max = d == 3 ? SPHERE_MODES : DISK_MODES
     for n in 1:n_max
         z = d == 3 ? n * pi : J0_ZEROS[n]
-        f = _mode_factor(z^2, m, dtau, be)
+        f = _mode_factor(z^2, mi, dtauf, be)
         f < tail && return total
         if d == 3
             shape = iszero(xf) ? 1.0 : sin(z * xf) / (z * xf)
@@ -295,10 +295,11 @@ ErrorException
 """
 function n_modes(d, m, dtau, be::Bool)
     _check_series_args(0.0, d, m, dtau)
+    mi, dtauf = Int(m), Float64(dtau)
     n_max = d == 3 ? SPHERE_MODES : DISK_MODES
     for n in 1:n_max
         z = d == 3 ? n * pi : J0_ZEROS[n]
-        _mode_factor(z^2, m, dtau, be) < TAIL_BOUND && return n - 1
+        _mode_factor(z^2, mi, dtauf, be) < TAIL_BOUND && return n - 1
     end
     return error("the series for d = $d, m = $m needs more than $n_max modes")
 end
@@ -491,7 +492,8 @@ function storage_coefficient(beta_phi::Real, beta_s::Real; phi=PHI, beta_f=BETA_
     _check_porosity(phi)
     (isfinite(beta_f) && beta_f >= beta_s) ||
         throw(DomainError(beta_f, "beta_f must be finite and at least beta_s = $beta_s"))
-    return phi * beta_f + (1 - phi) * beta_phi * beta_s / (beta_phi + beta_s)
+    bphi, bs, bf, ph = Float64.((beta_phi, beta_s, beta_f, phi))
+    return ph * bf + (1 - ph) * bphi * bs / (bphi + bs)
 end
 
 """
@@ -523,7 +525,8 @@ DomainError
 function biot_willis_closed_form(beta_phi::Real, beta_s::Real; phi=PHI)
     _check_compressibilities(beta_phi, beta_s)
     _check_porosity(phi)
-    return (beta_phi + phi * beta_s) / (beta_phi + beta_s)
+    bphi, bs, ph = Float64.((beta_phi, beta_s, phi))
+    return (bphi + ph * bs) / (bphi + bs)
 end
 
 """
@@ -535,7 +538,7 @@ steps with the storage coefficient `S = storage_coefficient(BETA_PHI, beta_s)`.
 Parameters
 ----------
 beta_s : Real
-    Solid compressibility [1/Pa].
+    Solid compressibility [1/Pa], within `[0, BETA_F]`.
 
 Returns
 -------
@@ -545,14 +548,17 @@ Float64
 Raises
 ------
 DomainError
-    If `beta_s` is negative or not finite.
+    If `beta_s` is not finite or lies outside `[0, BETA_F]`, with `beta_s` as the value.
 """
 function time_step_s(beta_s::Real)
+    (isfinite(beta_s) && 0 <= beta_s <= BETA_F) || throw(
+        DomainError(beta_s, "beta_s must be finite and lie within [0, BETA_F = $BETA_F]"),
+    )
     return DTAU * R_PLANET^2 * MU_F * storage_coefficient(BETA_PHI, beta_s) / K_PERM
 end
 
 """
-    make_config(N; spherical_flow, darcy_elimination=true, beta_s=BETA_S)
+    make_config(N; spherical_flow, darcy_elimination=true, beta_s=BETA_S, beta_f=BETA_F)
 
 Return the `SimulationConfig` of the case on an `N` x `N` grid, with the time step
 `time_step_s(beta_s)` in years of `Erebus.SECONDS_PER_YEAR`.
@@ -569,6 +575,9 @@ darcy_elimination : Bool, optional
     6-variable system with the Darcy fluxes as unknowns (default `true`).
 beta_s : Float64, optional
     Solid compressibility [1/Pa], within `(0, BETA_F]` (default `BETA_S`).
+beta_f : Float64, optional
+    Fluid compressibility `poroelasticity.betafluid` [1/Pa], finite and at least `beta_s`
+    (default `BETA_F`). The time step does not depend on it.
 
 Returns
 -------
@@ -577,10 +586,15 @@ SimulationConfig
 Raises
 ------
 ArgumentError
-    If `N < NX_MIN`, `N` is even or `beta_s` lies outside `(0, BETA_F]`.
+    If `N < NX_MIN`, `N` is even, `beta_s` lies outside `(0, BETA_F]` or `beta_f` is not
+    finite or below `beta_s`.
 """
 function make_config(
-    N::Int; spherical_flow::Bool, darcy_elimination::Bool=true, beta_s::Float64=BETA_S
+    N::Int;
+    spherical_flow::Bool,
+    darcy_elimination::Bool=true,
+    beta_s::Float64=BETA_S,
+    beta_f::Float64=BETA_F,
 )
     N >= NX_MIN ||
         throw(ArgumentError("N must be at least $NX_MIN to resolve the sphere, got $N"))
@@ -589,6 +603,8 @@ function make_config(
     )
     0 < beta_s <= BETA_F ||
         throw(ArgumentError("beta_s must lie within (0, BETA_F], got $beta_s"))
+    (isfinite(beta_f) && beta_f >= beta_s) ||
+        throw(ArgumentError("beta_f must be finite and at least beta_s, got $beta_f"))
     eta3 = SVector{3,Float64}(ETA_ROCK, ETA_ROCK, ETA_ROCK)
     mu3 = SVector{3,Float64}(MU_F, MU_F, MU_F)
     return SimulationConfig(;
@@ -627,7 +643,7 @@ function make_config(
             thermal_buoyancy=false,
         ),
         poroelasticity=PoroelasticConfig(;
-            hydrofracture=false, betasolid=beta_s, betafluid=BETA_F
+            hydrofracture=false, betasolid=beta_s, betafluid=beta_f
         ),
         venting=VentingConfig(;
             active=true, mode=:darcy_sink, species=:H2O, k_vent=K_VENT, ice_sealing=false
@@ -812,7 +828,7 @@ a cell when the ratio exceeds 1; the case keeps it at most 0.1.
 Parameters
 ----------
 N : Int
-    Basic grid resolution in x and y, at least `NX_MIN`.
+    Basic grid resolution in x and y, odd and at least `NX_MIN`.
 spherical_flow : Bool
     Value of `geometry.spherical_flow` (face weights of the conductance).
 beta_s : Float64, optional
@@ -1138,7 +1154,7 @@ series. After each step `pr0` and `pf0` take the solved pressures; the time step
 Parameters
 ----------
 N : Int
-    Basic grid resolution in x and y, at least `NX_MIN`.
+    Basic grid resolution in x and y, odd and at least `NX_MIN`.
 spherical_flow : Bool
     Value of `geometry.spherical_flow`.
 darcy_elimination : Bool, optional
@@ -1222,6 +1238,77 @@ function run_case(
             x_centre=c20.x,
             l2_m20=_l2_inner(g, coords, d, N_STEPS),
             final...,
+        )
+    end
+end
+
+"""
+    storage_defect_run(N; spherical_flow, factor)
+
+Run the first `first(M_RECORD)` steps of the case with the storage coefficient `S` of the
+fluid pressure row scaled by `factor` at the time step of the case. Only the fluid
+compressibility moves, `beta_f = BETA_F + (factor - 1) S0 / PHI` with
+`S0 = storage_coefficient(BETA_PHI, BETA_S)`, so the drained compressibility, the
+Biot-Willis coefficient and the time step `time_step_s(BETA_S)` keep their values. The
+series keeps `DTAU`, so the centre error after the steps measures the storage defect.
+
+Parameters
+----------
+N : Int
+    Basic grid resolution in x and y, odd and at least `NX_MIN`.
+spherical_flow : Bool
+    Value of `geometry.spherical_flow`.
+factor : Real
+    Ratio of the storage coefficient of the run to `S0`, finite and positive.
+
+Returns
+-------
+NamedTuple
+    `converged`: every solve returned `plastic_converged`; `centre_err_m5`:
+    `p / p_exact - 1` at the P node nearest the centre after the steps; `pt_kbw`: the total
+    pressure check of `_final_metrics` with the Biot-Willis coefficient of the case;
+    `storage`: `S` of the run [1/Pa]; `beta_f` [1/Pa]; `dt`: time step [s].
+
+Raises
+------
+DomainError
+    If `factor` is not finite or not positive.
+ArgumentError
+    If `make_config` rejects `N` or `beta_f`; `beta_f < BETA_S` for
+    `factor < 1 - PHI (BETA_F - BETA_S) / S0`.
+"""
+function storage_defect_run(N::Int; spherical_flow::Bool, factor::Real)
+    (isfinite(factor) && factor > 0) ||
+        throw(DomainError(factor, "the storage factor must be finite and positive"))
+    s0 = storage_coefficient(BETA_PHI, BETA_S)
+    beta_f = BETA_F + (Float64(factor) - 1) * s0 / PHI
+    cfg = make_config(N; spherical_flow=spherical_flow, beta_f=beta_f)
+    m = first(M_RECORD)
+    return mktempdir() do out
+        state, coords, ws, tio, _ = _init_case(cfg, out)
+        tio === nothing || close(tio)
+        g = state.grids
+        dt = state.dt
+        converged = true
+        for _ in 1:m
+            res = with_logger(NullLogger()) do
+                return Erebus.solve_stokes_darcy!(
+                    state, coords, cfg, ws; titer=1, dt_step_initial=dt
+                )
+            end
+            converged &= res.plastic_converged
+            g.pr0 .= g.pr
+            g.pf0 .= g.pf
+        end
+        c = _centre_values(g, coords, spherical_flow ? 3 : 2, m)
+        pt_kbw = _final_metrics(g, coords, spherical_flow, dt, BETA_S).pt_kbw
+        return (;
+            converged,
+            centre_err_m5=c.p / c.p_exact - 1,
+            pt_kbw,
+            storage=storage_coefficient(BETA_PHI, BETA_S; beta_f=beta_f),
+            beta_f,
+            dt,
         )
     end
 end

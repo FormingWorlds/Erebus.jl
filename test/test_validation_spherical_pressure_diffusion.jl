@@ -240,6 +240,22 @@ end
         @test isapprox(
             SPDV.exact_p(0.5, 3, 20; dtau=1 // 200), SPDV.exact_p(0.5, 3, 20); rtol=1.0e-12
         )
+        # An unsigned step count gives the value of the same Int count, not a wrapped -m.
+        for m_u in (UInt(20), UInt8(20))
+            @test isapprox(
+                SPDV.exact_p(0.5, 3, m_u), SPDV.exact_p(0.5, 3, 20); rtol=1.0e-15
+            )
+            @test isapprox(
+                SPDV.exact_p(0.5, 2, m_u), SPDV.exact_p(0.5, 2, 20); rtol=1.0e-15
+            )
+            @test SPDV.n_modes(3, m_u, SPDV.DTAU, true) ==
+                SPDV.n_modes(3, 20, SPDV.DTAU, true)
+        end
+        @test isapprox(
+            SPDV._series_sum(0.5, 3, UInt(20), SPDV.DTAU, true; tail=0.0),
+            SPDV.exact_p(0.5, 3, 20);
+            atol=1.0e-12,
+        )
         # At DTAU the disk table (200 modes) needs at least 5 steps and the sphere table
         # (4000 modes) at least 3: fewer steps are an error, not a truncated sum.
         for m in 1:4
@@ -351,6 +367,33 @@ end
         end
     end
 
+    @testset "closed forms and the series return Float64 for any real input" begin
+        s64 = SPDV.storage_coefficient(SPDV.BETA_PHI, SPDV.BETA_S)
+        kbw64 = SPDV.biot_willis_closed_form(SPDV.BETA_PHI, SPDV.BETA_S)
+        p64 = SPDV.exact_p(0.5, 3, 20)
+        # BigInt rationals: the products of compressibilities overflow Int64.
+        to_rational(v) = rationalize(BigInt, v)
+        for conv in (Float32, to_rational, BigFloat)
+            bphi, bs, bf, phi = conv.((SPDV.BETA_PHI, SPDV.BETA_S, SPDV.BETA_F, SPDV.PHI))
+            s = SPDV.storage_coefficient(bphi, bs; phi=phi, beta_f=bf)
+            @test s isa Float64
+            @test isapprox(s, s64; rtol=1.0e-6)
+            kbw = SPDV.biot_willis_closed_form(bphi, bs; phi=phi)
+            @test kbw isa Float64
+            @test isapprox(kbw, kbw64; rtol=1.0e-6)
+            # Inside the sphere and on its surface, where every mode vanishes.
+            p = SPDV.exact_p(conv(0.5), 3, 20; dtau=conv(SPDV.DTAU))
+            @test p isa Float64
+            @test isapprox(p, p64; rtol=1.0e-6)
+            p_surf = SPDV.exact_p(conv(1.0), 3, 20; dtau=conv(SPDV.DTAU))
+            @test p_surf isa Float64
+            @test iszero(p_surf)
+            cells = SPDV.exact_p_cells([conv(0.5)], 2, 20; dtau=conv(SPDV.DTAU))
+            @test only(cells) isa Float64
+            @test isapprox(only(cells), SPDV.exact_p(0.5, 2, 20); rtol=1.0e-6)
+        end
+    end
+
     @testset "time step: tau = 0.1 in 20 steps, from the year length of the solver" begin
         dt = SPDV.time_step_s(SPDV.BETA_S)
         @test isapprox(dt, 1.625e7; rtol=1.0e-12)
@@ -366,6 +409,23 @@ end
         @test isapprox(
             alt.time.dt_initial / cfg.time.dt_initial, 9.7273e-11 / 1.3e-10; rtol=1.0e-4
         )
+        # The edges of [0, BETA_F]: an incompressible solid stores phi bf only.
+        @test isapprox(
+            SPDV.time_step_s(0.0),
+            SPDV.DTAU * SPDV.R_PLANET^2 * SPDV.MU_F * SPDV.PHI * SPDV.BETA_F / SPDV.K_PERM;
+            rtol=1.0e-14,
+        )
+        @test SPDV.time_step_s(SPDV.BETA_F) > dt
+        # A solid compressibility outside [0, BETA_F] is reported as itself.
+        for bs_bad in (-1.0e-10, NaN, Inf, 1.0e-9)
+            err = try
+                SPDV.time_step_s(bs_bad)
+            catch e
+                e
+            end
+            @test err isa DomainError
+            @test isequal(err.val, bs_bad)
+        end
     end
 
     @testset "case set-up: configuration, domain of the storage formula, input contracts" begin
@@ -856,19 +916,6 @@ end
         ok_moved, errs_moved = SPDV.check_physics_regression_bands(moved, record_path)
         @test !ok_moved
         @test occursin(target, only(errs_moved))
-        # A storage coefficient 2 % off moves the centre error after 5 steps at Nx = 65 by
-        # at least 1.98e-4 (disk) and 4.89e-4 (sphere); either shift leaves the band.
-        for (mid, shift) in
-            (("centre_err_m5_off_nx65", 1.98e-4), ("centre_err_m5_on_nx65", 4.89e-4))
-            @test SPDV.PHYSICS_REGRESSION_BANDS[mid].atol <= shift / 2
-            for sgn in (-1, 1)
-                shifted = copy(bench.metrics)
-                shifted[mid] += sgn * shift
-                ok_s, errs_s = SPDV.check_physics_regression_bands(shifted, record_path)
-                @test !ok_s
-                @test occursin(mid, only(errs_s))
-            end
-        end
         missing_metric = copy(bench.metrics)
         delete!(missing_metric, target)
         ok_gone, errs_gone = SPDV.check_physics_regression_bands(
@@ -886,6 +933,64 @@ end
         end
         @test_throws DomainError SPDV.check_physics_regression_bands(bench.metrics, "")
         @test !first(SPDV.check_physics_regression_bands(bench.metrics, record_path * ".x"))
+    end
+
+    @testset "a storage coefficient 2 % off leaves the band of the centre error after 5 steps" begin
+        s0 = SPDV.storage_coefficient(SPDV.BETA_PHI, SPDV.BETA_S)
+        # The shifts of the centre error after 5 steps that the page states.
+        expected_shift = Dict(
+            (33, false, 0.98) => 3.30e-4,
+            (33, false, 1.02) => 3.00e-4,
+            (33, true, 0.98) => 7.67e-4,
+            (33, true, 1.02) => 7.01e-4,
+            (65, false, 0.98) => 2.21e-4,
+            (65, false, 1.02) => 1.99e-4,
+            (65, true, 0.98) => 5.41e-4,
+            (65, true, 1.02) => 4.90e-4,
+        )
+        for n in (33, 65), sf in (false, true)
+            mid = "centre_err_m5_$(sf ? "on" : "off")_nx$(n)"
+            band = SPDV.PHYSICS_REGRESSION_BANDS[mid].atol
+            base = runs[(n, sf, :base)]
+            for factor in (0.98, 1.02)
+                defect = SPDV.storage_defect_run(n; spherical_flow=sf, factor=factor)
+                @test defect.converged
+                # Only beta_f moves: S scales by the factor at the time step of the case,
+                # and the Pt row still follows the kbw of the case, which has no beta_f.
+                @test isapprox(defect.storage, factor * s0; rtol=1.0e-12)
+                @test isapprox(defect.dt, base.dt; rtol=1.0e-15)
+                @test defect.pt_kbw <= 1.0e-9
+                @test defect.beta_f > SPDV.BETA_S
+                # A larger S diffuses slower: the centre keeps more pressure.
+                shift = defect.centre_err_m5 - base.centre_err_m5
+                @test (shift > 0) == (factor > 1)
+                @test isapprox(abs(shift), expected_shift[(n, sf, factor)]; rtol=5.0e-3)
+                @test band <= abs(shift) / 2
+                shifted = copy(bench.metrics)
+                shifted[mid] = abs(defect.centre_err_m5)
+                ok_s, errs_s = SPDV.check_physics_regression_bands(shifted, record_path)
+                @test !ok_s
+                @test occursin(mid, only(errs_s))
+            end
+        end
+        # With the factor 1 the run repeats the first 5 steps of the case.
+        for sf in (false, true)
+            same = SPDV.storage_defect_run(33; spherical_flow=sf, factor=1)
+            @test isapprox(
+                same.centre_err_m5, runs[(33, sf, :base)].centre_err_m5; rtol=1.0e-12
+            )
+            @test isapprox(same.storage, s0; rtol=1.0e-15)
+        end
+        @test_throws DomainError SPDV.storage_defect_run(
+            33; spherical_flow=true, factor=0.0
+        )
+        @test_throws DomainError SPDV.storage_defect_run(
+            33; spherical_flow=true, factor=NaN
+        )
+        # A factor below 1 - (bf - bs) phi / S makes bf < bs, outside C5.
+        @test_throws ArgumentError SPDV.storage_defect_run(
+            33; spherical_flow=true, factor=0.4
+        )
     end
 
     @testset "Record matches the configuration and the reference values" begin
@@ -1252,10 +1357,16 @@ end
             @test length(vals) == runs[(65, true, :base)].n_rock
             # The cell values stay within 0.1 of the series at m = 20.
             @test all(abs(v[3] - SPDV.exact_p(v[1], 3, 20)) < 0.1 for v in vals)
-            # The command line takes exactly one output folder.
-            for bad in (String[], ["a", "b"])
-                @test_throws ArgumentError Base.invokelatest(export_data_main, bad)
+            # The command line takes exactly one output folder, not empty and not a flag.
+            cd(tmpdir) do
+                for bad in (String[], ["a", "b"], [""], ["  "], ["-h"], ["--out"])
+                    @test_throws ArgumentError Base.invokelatest(
+                        export_data_main, bad; nx=SPDV.NX_MIN
+                    )
+                end
             end
+            @test !ispath(joinpath(tmpdir, "-h"))
+            @test !isfile(joinpath(tmpdir, "convergence.csv"))
             # Without runs the script runs the case itself, here on the coarsest grid.
             small = joinpath(tmpdir, "small")
             @test Base.invokelatest(export_data_main, [small]; nx=SPDV.NX_MIN) == small

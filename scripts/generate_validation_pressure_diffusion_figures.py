@@ -123,8 +123,9 @@ def profile_panel(a, data, t):
                 label=label if m == STEPS[0] else None,
                 rasterized=True,
             )
+    # Both labels in data coordinates: above the m = 5 curves and below the m = 20 curves.
     a.text(0.03, 1.04, "m = 5", color=t["fg"], fontsize=9)
-    a.text(0.03, 0.42, "m = 20", transform=a.transAxes, color=t["fg"], fontsize=9)
+    a.text(0.03, 0.53, "m = 20", color=t["fg"], fontsize=9)
     a.set_xlabel("Radius r / R")
     a.set_ylabel("Fluid overpressure (Pf - P_amb) / P0")
     a.set_title(f"(a) Pressure after 5 and 20 steps, Nx = {NX_PROFILE}")

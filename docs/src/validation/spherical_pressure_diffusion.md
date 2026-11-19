@@ -11,7 +11,7 @@ If these terms were wrong, the time that a pore overpressure needs to drain from
 
 The page checks 3 parts of the solve:
 
-- the compressibility terms of the continuity row of the solid (the $P_t$ row) and of the fluid (the $P_f$ row): the drained compressibility, the Biot-Willis coefficient and the Skempton coefficient;
+- the compressibility terms of the continuity rows of the solid (the $P_t$ row) and of the fluid (the $P_f$ row) in a rigid matrix: the Biot-Willis coefficient $K_{BW}$ of the $P_t$ row through $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$, and the full storage coefficient $S = \beta_d K_{BW} (1 / B - K_{BW})$ of the $P_f$ row with the drained compressibility $\beta_d$, $K_{BW}$ and the Skempton coefficient $B$, while the prefactor $\beta_d / \Delta t$ of the storage term of the $P_t$ row cancels and is not tested;
 - the right-hand sides of both rows, which carry the pressures of the previous time step;
 - the spherical face weights of the $P_f$ row, which the option `geometry.spherical_flow` turns on, in a transient problem.
 
@@ -56,7 +56,8 @@ The coefficients are the drained compressibility $\beta_d$, the Biot-Willis coef
 $$\beta_d = \frac{\beta_\phi + \beta_s}{1 - \phi}, \qquad K_{BW} = 1 - \frac{\beta_s}{\beta_d}, \qquad \frac{1}{B} = 1 + \frac{\phi (\beta_f - \beta_s)}{\beta_d - \beta_s}.$$
 
 In a rigid matrix $\nabla \cdot \mathbf{v}_s$ and $1 / \zeta$ go to 0.
-The $P_t$ row then gives $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$, and the $P_f$ row becomes
+The $P_t$ row then gives $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$ for any nonzero prefactor $\beta_d / \Delta t$, so this prefactor drops out.
+With this relation the $P_f$ row becomes
 
 $$S \frac{P_f - P_f^0}{\Delta t} = \nabla \cdot \left( \frac{k}{\mu} \nabla P_f \right), \qquad S = \beta_d K_{BW} \left( \frac{1}{B} - K_{BW} \right).$$
 
@@ -72,7 +73,7 @@ The test checks the formula of $S$ against the coefficients of the 2 rows.
 ## The exact solution
 
 **Why this check exists.**
-The compressibility terms could be missing from one of the 2 rows, use the wrong coefficient ($B$ or $K_{BW}$ set to 1, or $\beta_d$ without the factor $1 / (1 - \phi)$), or drop the pressures of the previous step from the right-hand side.
+The compressibility terms could be missing from one of the 2 rows, use the wrong coefficient ($B$ or $K_{BW}$ set to 1, or $\beta_d$ without the factor $1 / (1 - \phi)$ in $K_{BW}$ or in the $P_f$ row), or drop the pressures of the previous step from the right-hand side.
 The face weights of the $P_f$ row could have the wrong size.
 Each of these faults changes the storage coefficient or the shape of the pressure profile, and with it the pressure that remains after 20 steps.
 
@@ -163,7 +164,10 @@ This holds only when the solver diffuses with the storage coefficient $S$ of the
     - Tolerance: the centre error after 5 steps at most 0.0064, 0.0018 and 0.00079 for the sphere and 0.0027, 0.00073 and 0.00032 for the disk at `Nx = 33`, 65 and 129; the centre error after 20 steps at most 0.12, 0.048 and 0.025 for the sphere and 0.069, 0.027 and 0.014 for the disk; the L2 profile error after 20 steps at most 0.25, 0.108 and 0.058 for the sphere and 0.18, 0.075 and 0.04 for the disk; order of each error between `Nx = 65` and `Nx = 129` equal to 1 within 0.35; centre ratio equal to the series ratio within a relative 0.022 at `Nx = 65` and 0.012 at `Nx = 129`; the total pressure check and the $\beta_s$ check at most $10^{-9}$; the difference of the 2 solver paths at most $10^{-10}$; the fluid pressure of every vent cell within $9 \times 10^{-4} P_0$ (sphere) and $1.4 \times 10^{-3} P_0$ (disk) of $P_\mathrm{amb}$, and an infinite deviation when a vent cell does not vent; the vented fluid volume rate equal to the rate of fluid released from storage within $10^{-8}$ of the rate; solid velocity at most $10^{-15}$ m/s.
     - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_pressure_diffusion.jl`.
       It is $9 \times 10^{-5}$ on each centre error after 5 steps, 0.002 on each other error and on each centre ratio, 0.05 on each order, $10^{-9}$ on the total pressure and $\beta_s$ checks, $10^{-10}$ on the solver path difference, $10^{-4}$ on each vent pressure, $10^{-8}$ on each vented-rate closure and $10^{-15}$ m/s on the solid velocity.
-      A storage coefficient 2 % too large or too small moves the centre error after 5 steps at `Nx = 65` by $1.98 \times 10^{-4}$ or more for the disk and $4.89 \times 10^{-4}$ or more for the sphere, so it leaves the band.
+      The test makes the storage coefficient 2 % too large or too small with $\beta_f$ moved by $\pm 0.02 S / \phi$ at the time step of the case, so that $\beta_d$, $K_{BW}$ and $\Delta t$ keep their values.
+      This moves the centre error after 5 steps at `Nx = 65` by $1.99 \times 10^{-4}$ (too large) and $2.21 \times 10^{-4}$ (too small) for the disk and by $4.90 \times 10^{-4}$ and $5.41 \times 10^{-4}$ for the sphere.
+      At `Nx = 33` the shifts are $3.00 \times 10^{-4}$ and $3.30 \times 10^{-4}$ for the disk and $7.01 \times 10^{-4}$ and $7.67 \times 10^{-4}$ for the sphere.
+      Each shift is at least twice the band, so the defect leaves it.
     - Test id: `centre_err_m5_{off,on}_nx{33,65,129}`, `centre_err_m20_{off,on}_nx{33,65,129}`, `l2_m20_{off,on}_nx{33,65,129}`, `{centre,l2}_order_m20_{off,on}_65_129`, `centre_ratio_m20_nx65`, `centre_ratio_m20_nx129`, `pt_kbw_{off,on}_nx{33,65,129}`, `s_invariance_{off,on}_nx33`, `elim_{off,on}_nx33`, `vent_dev_{off,on}_nx65`, `vent_closure_{off,on}_nx65`, `v_max_{off,on}_nx65`.
       `Pkg.test` runs `test/test_validation_spherical_pressure_diffusion.jl` at `Nx = 33` and 65 and pins the centre value after 20 steps at `Nx = 65` to a relative $10^{-6}$.
     - Command: `julia --project=. tools/check_validation.jl --check`.
@@ -171,6 +175,7 @@ This holds only when the solver diffuses with the storage coefficient $S$ of the
 ## What this case does not test
 
 - The deformation of the matrix: it is rigid, so the compaction and the elastic terms of the solid do not enter, and neither do the momentum rows.
+- The prefactor $\beta_d / \Delta t$ of the storage term of the $P_t$ row: with $\nabla \cdot \mathbf{v}_s$ and $1 / \zeta$ at 0 the row gives $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$ for any nonzero prefactor, so the case checks $K_{BW}$ in this row and the full $S$ of the $P_f$ row, but a wrong prefactor of the $P_t$ row passes.
 - The accuracy of the reference after fewer than 5 steps for the disk and fewer than 3 steps for the sphere: the series needs more modes than its tables hold.
 - The venting conductance and its face weight: the vent cells keep $P_f$ within $2 \times 10^{-3} P_0$ of $P_\mathrm{vent}$, close to the Dirichlet limit.
 - Gravity, buoyancy, reactions and hydrofracture: they are off.

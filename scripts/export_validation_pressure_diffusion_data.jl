@@ -178,7 +178,8 @@ Run the script: write the figure data into the one output folder that `args` nam
 Parameters
 ----------
 args : Vector{String}, optional
-    Command-line arguments, exactly one output folder (default `ARGS`).
+    Command-line arguments, exactly one output folder that is not empty or blank and does
+    not start with `-` (default `ARGS`).
 kwargs
     Keyword arguments passed on to `export_all`.
 
@@ -190,12 +191,15 @@ String
 Raises
 ------
 ArgumentError
-    If `args` does not hold exactly one entry.
+    If `args` does not hold exactly one entry, or the entry is empty, blank or starts with
+    `-`, before any file is written.
 """
 function export_data_main(args::Vector{String}=ARGS; kwargs...)
-    length(args) == 1 || throw(
-        ArgumentError("Usage: export_validation_pressure_diffusion_data.jl <output_dir>"),
-    )
+    usage = "Usage: export_validation_pressure_diffusion_data.jl <output_dir>"
+    length(args) == 1 || throw(ArgumentError(usage))
+    isempty(strip(args[1])) &&
+        throw(ArgumentError("the output folder must be non-empty. $usage"))
+    startswith(args[1], "-") && throw(ArgumentError("unknown option '$(args[1])'. $usage"))
     return export_all(args[1]; kwargs...)
 end
 
