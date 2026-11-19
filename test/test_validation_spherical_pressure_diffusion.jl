@@ -1183,8 +1183,14 @@ end
             @test !ok_comp
             @test any(occursin("unsupported comparison", e) for e in errs_comp)
             failing_bench = (; runs=bench.runs, metrics=failing)
+            # The replay of recorded values runs only for the Julia minor version of the record.
+            this_julia = deepcopy(raw_record)
+            this_julia["metadata"]["julia_version"] = string(VERSION)
+            this_julia_path = write_diffusion_toml(
+                joinpath(tmpdir, "this_julia.toml"), this_julia
+            )
             ok_fail, errs_fail = SPDV.check_validation_reproducibility(
-                failing_bench, record_path
+                failing_bench, this_julia_path
             )
             @test !ok_fail
             @test any(occursin("fails tolerance", e) for e in errs_fail)
