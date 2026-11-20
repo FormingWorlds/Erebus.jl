@@ -7,9 +7,9 @@ id = "spherical_momentum"
 title = "Spherical Momentum Validation"
 page = "validation/spherical_momentum.md"
 src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-20T14:43:10Z"
+timestamp_utc = "2026-11-20T16:45:18Z"
 julia_version = "1.12.7"
-config_sha256 = "139902f98ce5eae735f7ccde1afcf0325926c3a3e5063e6be5c8b890ced61f5e"
+config_sha256 = "2b1b6a1006acb69f384fd2c274c002efe69a24389a038108bb5ab6b7283fe0a2"
 reference_type = "analytical"
 reference_citation = "Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation, and a radial compaction flow u = U0 R grad (1 - rho^2)^5 with q = -u for the 3-D sphere equations of a compressible matrix"
 
@@ -471,7 +471,7 @@ status = "PASS"
 [[metrics]]
 id = "pt_c_nx33"
 case = "C"
-description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=33)"
+description = "Total pressure L2 error over the L2 norm of P_t - P_amb for r < R, case C, option on (Nx=33)"
 nx = 33
 value = 7.3627175424674516e-03
 reference = 0.0000000000000000e+00
@@ -484,7 +484,7 @@ status = "PASS"
 [[metrics]]
 id = "pt_c_nx65"
 case = "C"
-description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=65)"
+description = "Total pressure L2 error over the L2 norm of P_t - P_amb for r < R, case C, option on (Nx=65)"
 nx = 65
 value = 1.8200244850428149e-03
 reference = 0.0000000000000000e+00
@@ -497,7 +497,7 @@ status = "PASS"
 [[metrics]]
 id = "pt_c_nx129"
 case = "C"
-description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=129)"
+description = "Total pressure L2 error over the L2 norm of P_t - P_amb for r < R, case C, option on (Nx=129)"
 nx = 129
 value = 4.5473517120430865e-04
 reference = 0.0000000000000000e+00
@@ -510,7 +510,7 @@ status = "PASS"
 [[metrics]]
 id = "pf_c_nx33"
 case = "C"
-description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=33)"
+description = "Fluid pressure L2 error over the L2 norm of P_f - P_amb for r < R, case C, option on (Nx=33)"
 nx = 33
 value = 1.6639981113225805e-02
 reference = 0.0000000000000000e+00
@@ -523,7 +523,7 @@ status = "PASS"
 [[metrics]]
 id = "pf_c_nx65"
 case = "C"
-description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=65)"
+description = "Fluid pressure L2 error over the L2 norm of P_f - P_amb for r < R, case C, option on (Nx=65)"
 nx = 65
 value = 3.9680137791267616e-03
 reference = 0.0000000000000000e+00
@@ -536,7 +536,7 @@ status = "PASS"
 [[metrics]]
 id = "pf_c_nx129"
 case = "C"
-description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=129)"
+description = "Fluid pressure L2 error over the L2 norm of P_f - P_amb for r < R, case C, option on (Nx=129)"
 nx = 129
 value = 1.0029141267763775e-03
 reference = 0.0000000000000000e+00
@@ -913,9 +913,9 @@ status = "PASS"
 [[metrics]]
 id = "elim_a_nx33"
 case = "solver"
-description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case A, option on (Nx=33)"
+description = "Largest relative difference of vx, vy, pr, pf, qxD, qyD between the 6- and 4-variable paths, case A, option on (Nx=33)"
 nx = 33
-value = 1.3014081588985147e-10
+value = 5.4787868976686445e-10
 reference = 0.0000000000000000e+00
 atol = 9.9999999999999995e-08
 rtol = 0.0000000000000000e+00
@@ -926,9 +926,9 @@ status = "PASS"
 [[metrics]]
 id = "elim_b_nx33"
 case = "solver"
-description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case B, option on (Nx=33)"
+description = "Largest relative difference of vx, vy, pr, pf, qxD, qyD between the 6- and 4-variable paths, case B, option on (Nx=33)"
 nx = 33
-value = 2.1993954889038689e-10
+value = 4.2118569267536380e-09
 reference = 0.0000000000000000e+00
 atol = 9.9999999999999995e-08
 rtol = 0.0000000000000000e+00
@@ -939,9 +939,9 @@ status = "PASS"
 [[metrics]]
 id = "elim_c_nx33"
 case = "solver"
-description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case C, option on (Nx=33)"
+description = "Largest relative difference of vx, vy, pr, pf, qxD, qyD between the 6- and 4-variable paths, case C, option on (Nx=33)"
 nx = 33
-value = 3.7252902984619144e-14
+value = 5.1367916039543019e-13
 reference = 0.0000000000000000e+00
 atol = 9.9999999999999995e-08
 rtol = 0.0000000000000000e+00

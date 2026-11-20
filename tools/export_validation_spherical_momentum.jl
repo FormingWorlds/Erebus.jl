@@ -216,12 +216,12 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         (
             "pt_c",
             "C",
-            "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on",
+            "Total pressure L2 error over the L2 norm of P_t - P_amb for r < R, case C, option on",
         ),
         (
             "pf_c",
             "C",
-            "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on",
+            "Fluid pressure L2 error over the L2 norm of P_f - P_amb for r < R, case C, option on",
         ),
         (
             "eii_c",
@@ -302,7 +302,7 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         add!(
             "elim_$(tag)_nx33",
             "solver",
-            "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case $(case), option on (Nx=33)",
+            "Largest relative difference of vx, vy, pr, pf, qxD, qyD between the 6- and 4-variable paths, case $(case), option on (Nx=33)",
             33,
             1.0e-7,
             "le_atol",

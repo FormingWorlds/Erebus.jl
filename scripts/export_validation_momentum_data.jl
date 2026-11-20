@@ -103,7 +103,9 @@ half a cell next to the axes through the centre, with `0 < r < R`: `u_r = vx r /
 on the vx nodes of the row `y = yc + dy / 2` and `u_r = vy r / (y - yc)` on the vy nodes of
 the column `x = xc + dx / 2`, exact for a radial flow, in units of `U0`; and `S33` on the P
 nodes of the row `y = yc + dy / 2` and the column `x = xc + dx / 2` in units of
-`SMV.stress_scale(:C)`.
+`SMV.stress_scale(:C)`. The velocity leaves out the vx node with `x = xc` and the vy node
+with `y = yc`, where `u_r` has no such form. The P node where the row and the column cross
+counts once.
 
 Parameters
 ----------
@@ -141,7 +143,7 @@ function radial_profiles(run)
         push_u!(run.vy[i, jv], x, y, y)
     end
     for (i, j) in Iterators.flatten((
-        ((ip, j) for j in 2:(g.Nx1 - 1)), ((i, jp) for i in 2:(g.Ny1 - 1))
+        ((ip, j) for j in 2:(g.Nx1 - 1)), ((i, jp) for i in 2:(g.Ny1 - 1) if i != ip)
     ))
         rho = hypot(g.xp[j] - xc, g.yp[i] - yc) / R
         rho < 1 || continue

@@ -556,5 +556,78 @@ end
         share = extra[k] / g.HS[inner...][k]
         @test 0.15 < share < 0.35
         @test 5.0e6 < maximum(abs, g.S33) < 2.0e7
+        # The heating reaches the temperature: against the same step with S33 = 0, the
+        # step raises T by the extra heating times dt / (rho c_p) on the interior nodes.
+        DT_on = copy(g.DT)
+        s33 = copy(g.S33)
+        fill!(g.S33, 0.0)
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        DT_zero = copy(g.DT)
+        copyto!(g.S33, s33)
+        rise = extra .* state.dt ./ g.RHOCP[inner...]
+        # The case has no heat conduction, so the rise is local (measured to 6e-12).
+        @test isapprox(DT_on[inner...] .- DT_zero[inner...], rise; rtol=1.0e-10)
+        @test 1.0e-4 < maximum(rise) < 1.0e-1
+        # With the option off the step leaves out the S33 heating of the same state.
+        geo = cfg.geometry
+        geo_off = typeof(geo)(;
+            (
+                f => getfield(geo, f) for
+                f in fieldnames(typeof(geo)) if f != :spherical_flow
+            )...,
+            spherical_flow=false,
+        )
+        cfg_off = SimulationConfig(;
+            (
+                f => getfield(cfg, f) for
+                f in fieldnames(SimulationConfig) if f != :geometry
+            )...,
+            geometry=geo_off,
+        )
+        Erebus.solve_thermal_energy!(state, coords, cfg_off, ws; titer=1)
+        @test isapprox(g.HS[inner...], heating(nothing)[inner...]; rtol=1.0e-12)
+        @test !isapprox(g.HS[inner...], heating(g.S33)[inner...]; rtol=1.0e-3)
     end
+end
+
+@testset "Plastic yield check reads S33 at the basic nodes" begin
+    # SXX^2 + SXY^2 = (5e6 Pa)^2 < COH^2 < SXX^2 + SXY^2 + 0.75 S33^2 = (6.08e6 Pa)^2:
+    # only the out-of-plane stress takes the nodes past the strength.
+    Ny, Nx, eta, dt = 4, 5, 1.0e20, 1.0e10
+    B(v) = fill(v, Ny, Nx)
+    P(v) = fill(v, Ny + 1, Nx + 1)
+    function adjust(s33)
+        ETA5, YNY5, DSY, YERR = B(0.0), zeros(Bool, Ny, Nx), B(0.0), zeros(10)
+        ok = Erebus.compute_nodal_adjustment!(
+            B(eta),
+            B(eta),
+            ETA5,
+            B(eta / dt),
+            P(3.0e6),
+            B(4.0e6),
+            P(1.0e7),
+            P(1.0e7),
+            B(5.5e6),
+            B(1.0e20),
+            B(0.0),
+            zeros(Bool, Ny, Nx),
+            YNY5,
+            YERR,
+            DSY,
+            dt,
+            1;
+            S33=s33,
+        )
+        return (; ok, ETA5, YNY5, DSY)
+    end
+    with, without = adjust(P(4.0e6)), adjust(nothing)
+    @test all(isone, with.YNY5)
+    @test all(<(eta), with.ETA5)
+    @test !with.ok
+    # sqrt(25 + 12) - 5.5 = 0.58 MPa above the strength at every node.
+    @test isapprox(with.DSY[2, 3], (sqrt(37.0) - 5.5) * 1.0e6; rtol=1.0e-12)
+    @test all(iszero, without.YNY5)
+    @test all(x -> isapprox(x, eta; rtol=1.0e-15), without.ETA5)
+    @test without.ok
+    @test_throws DimensionMismatch adjust(zeros(2, 2))
 end

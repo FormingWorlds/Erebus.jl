@@ -722,9 +722,9 @@ _min_degree(a::XYPoly) = isempty(a) ? typemax(Int) : minimum(sum(k) for k in key
 """
     _case_b_polynomials(power)
 
-Return the exact polynomials of case `:B`: the potential `phi = X Y (1 - rho^2)^power`, the
-velocity `u` with `r u = curl(r^3 phi e_z)`, that is
-`ux = 3 Y phi + rho^2 d_Y phi`, `uy = -(3 X phi + rho^2 d_X phi)`, the force `f = -D(u)`
+Return the exact polynomials of case `:B`: the potential `psi = X Y (1 - rho^2)^power`, the
+velocity `u` with `r u = curl(r^3 psi e_z)`, that is
+`ux = 3 Y psi + rho^2 d_Y psi`, `uy = -(3 X psi + rho^2 d_X psi)`, the force `f = -D(u)`
 (`_stress_divergence`) as a polynomial plus a remainder over `rho^2`, and `tau_33`, in
 units of `U0`, `eta U0 / R^2` and `eta U0 / R`. Every remainder term has a total degree of
 at least 3, so the remainder over `rho^2` is at most a constant times `rho` and the force
@@ -2206,9 +2206,9 @@ end
     _condition_ratios(g, dt)
 
 Return the condition ratios of the case after a solve: the largest and the smallest
-`ETAP / ETAPHI` (`eta / zeta`, condition C1) on the interior P nodes, and the largest
-`ETA / (GGG dt)` on the basic nodes and `ETAP / (GGGP dt)` on the interior P nodes
-(condition C2).
+`ETAP / ETAPHI` (`eta / zeta`, condition C1) on the interior P nodes, and the largest and
+the smallest `ETA / (GGG dt)` on the basic nodes and `ETAP / (GGGP dt)` on the interior P
+nodes (condition C2). A negative smallest ratio flags a negative shear modulus.
 
 Parameters
 ----------
@@ -2220,16 +2220,21 @@ dt : Float64
 Returns
 -------
 NamedTuple
-    `eta_zeta`, `eta_zeta_min`, `elastic`, `elastic_p`, dimensionless.
+    `eta_zeta`, `eta_zeta_min`, `elastic`, `elastic_min`, `elastic_p`, `elastic_p_min`,
+    dimensionless.
 """
 function _condition_ratios(g, dt)
     inner = (2:(size(g.ETAP, 1) - 1), 2:(size(g.ETAP, 2) - 1))
     ratio = g.ETAP[inner...] ./ g.ETAPHI[inner...]
+    basic = g.ETA ./ (g.GGG .* dt)
+    pnode = g.ETAP[inner...] ./ (g.GGGP[inner...] .* dt)
     return (;
         eta_zeta=maximum(ratio),
         eta_zeta_min=minimum(ratio),
-        elastic=maximum(g.ETA ./ (g.GGG .* dt)),
-        elastic_p=maximum(g.ETAP[inner...] ./ (g.GGGP[inner...] .* dt)),
+        elastic=maximum(basic),
+        elastic_min=minimum(basic),
+        elastic_p=maximum(pnode),
+        elastic_p_min=minimum(pnode),
     )
 end
 
@@ -2256,10 +2261,12 @@ Returns
 NamedTuple
     `case`, `spherical_flow`, `N`; `converged` (`plastic_converged`), `n_plastic_passes`,
     `dt` [s] and `dt_dev` (`abs(state.dt / dt - 1)` after the solve, condition C6);
-    `eta_zeta`, `eta_zeta_min`, `elastic`, `elastic_p` (`_condition_ratios`, C1 and C2);
-    `g_dev`: largest change of `gx` and `gy` by the solve [m/s^2] (C3); `rhof_max`: largest
-    `abs(RHOFX)` and `abs(RHOFY)` after the solve [kg/m^3]; `anchor_dev`
-    (`anchor_deviation`); copies of `vx`, `vy` [m/s], `pr`, `pf` [Pa] and `S33` [Pa];
+    `n_yielding`: number of basic nodes that yield in the last plastic pass (`YNY5`, C6);
+    the ratios of `_condition_ratios` (C1 and C2); `g_dev`: largest change of `gx` and
+    `gy` by the solve [m/s^2] (C3); `rhof_max`: largest `abs(RHOFX)` and `abs(RHOFY)` after
+    the solve [kg/m^3]; `anchor_dev` (`anchor_deviation`); copies of `vx`, `vy` [m/s],
+    `qxD`, `qyD` (Darcy flux at the vx and vy nodes) [m/s], `pr`, `pf` [Pa], `S33` and
+    its increment `DS33` [Pa];
     `grid` (`grid_of`); the fields of `velocity_errors`; `centre_node` and `centre_fit`:
     rotation rate at the centre from `centre_node_rotation` and `centre_fit_rotation` in
     units of `F0 R / eta` (`NaN` for cases `:B` and `:C`); `s33_l2` (`s33_error`, `NaN`
@@ -2306,15 +2313,19 @@ function run_case(
             n_plastic_passes=res.n_plastic_passes,
             dt,
             dt_dev=abs(state.dt / dt - 1),
+            n_yielding=count(!iszero, g.YNY5),
             _condition_ratios(g, dt)...,
             g_dev=max(maximum(abs, g.gx .- gx_in), maximum(abs, g.gy .- gy_in)),
             rhof_max=max(maximum(abs, g.RHOFX), maximum(abs, g.RHOFY)),
             anchor_dev=anchor_deviation(g.pr, g.pf, grid, ambient_pressure(case)),
             vx,
             vy,
+            qxD=copy(g.qxD),
+            qyD=copy(g.qyD),
             pr=copy(g.pr),
             pf=copy(g.pf),
             S33=copy(g.S33),
+            DS33=copy(g.DS33),
             grid,
             errs...,
             centre_node=azimuthal ? centre_node_rotation(vx, vy, grid; scale=v) : NaN,
@@ -2393,15 +2404,16 @@ end
 
 Return the largest difference between the 6-variable and the 4-variable solve of one case:
 `max(|vx6 - vx4| / max|vx4|, |vy6 - vy4| / max|vy4|, |pr6 - pr4| / stress_scale(case),
-|pf6 - pf4| / stress_scale(case))` over all nodes. The exact pressures of cases `:A` and
-`:B` are uniform, so both pressure differences are scaled by the stress unit of the case and
-not by the pressure.
+|pf6 - pf4| / stress_scale(case), |qxD6 - qxD4| / velocity_scale(case),
+|qyD6 - qyD4| / velocity_scale(case))` over all nodes. The exact pressures of cases `:A`
+and `:B` are uniform and their Darcy fluxes 0, so the pressure differences are scaled by
+the stress unit and the flux differences by the velocity unit of the case.
 
 Parameters
 ----------
 six, four : NamedTuple
     `run_case` results with `darcy_elimination` off and on, or any `NamedTuple` with
-    `case`, `vx`, `vy`, `pr` and `pf`.
+    `case`, `vx`, `vy`, `pr`, `pf`, `qxD` and `qyD`.
 
 Returns
 -------
@@ -2421,6 +2433,8 @@ function elimination_difference(six, four)
         rel(:vy, maximum(abs, four.vy)),
         rel(:pr, stress_scale(four.case)),
         rel(:pf, stress_scale(four.case)),
+        rel(:qxD, velocity_scale(four.case)),
+        rel(:qyD, velocity_scale(four.case)),
     )
 end
 
@@ -2779,30 +2793,36 @@ function expected_metric_references()::Dict{String,Float64}
 end
 
 """
-    canonical_config_text(cfg)
+    canonical_config_text(cfg; cfg_c=make_config(cfg.grid.Nx; spherical_flow=true, case=:C))
 
 Return the text that `canonical_config_sha256` hashes: for each section in
 `BENCHMARK_CONFIG_SECTIONS` in that order, one line `section.field=value` per field of the
-section with the fields sorted by name, followed by one line `case.NAME=value` for each
-module constant in `HASHED_CASE_CONSTANTS` in that order (see `_canonical_field_repr`).
+section of `cfg` with the fields sorted by name, then the same lines of `cfg_c` with the
+prefix `case_c.`, followed by one line `case.NAME=value` for each module constant in
+`HASHED_CASE_CONSTANTS` in that order (see `_canonical_field_repr`).
 
 Parameters
 ----------
 cfg : Union{SimulationConfig,NamedTuple}
     Simulation configuration (or section container) of the case, from `make_config`.
+cfg_c : Union{SimulationConfig,NamedTuple}, optional
+    Configuration of case `:C`, which sets its own pressures, viscosity ratio and time
+    step (default: `make_config` of case `:C` at the grid of `cfg`).
 
 Returns
 -------
 String
     The canonical text.
 """
-function canonical_config_text(cfg)::String
+function canonical_config_text(
+    cfg; cfg_c=make_config(cfg.grid.Nx; spherical_flow=true, case=:C)
+)::String
     io = IOBuffer()
-    for sec_sym in BENCHMARK_CONFIG_SECTIONS
-        sec = getproperty(cfg, sec_sym)
+    for (prefix, c) in (("", cfg), ("case_c.", cfg_c)), sec_sym in BENCHMARK_CONFIG_SECTIONS
+        sec = getproperty(c, sec_sym)
         for f_sym in sort(collect(fieldnames(typeof(sec))))
             val = getfield(sec, f_sym)
-            println(io, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
+            println(io, prefix, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
         end
     end
     for name in HASHED_CASE_CONSTANTS
@@ -2812,24 +2832,29 @@ function canonical_config_text(cfg)::String
 end
 
 """
-    canonical_config_sha256(cfg)
+    canonical_config_sha256(cfg; cfg_c=make_config(cfg.grid.Nx; spherical_flow=true, case=:C))
 
-Return the SHA-256 digest of `canonical_config_text(cfg)`, which covers the configuration
-sections of the case, the grid list `NX_LIST` and every constant that `set_fields!`, the
-closed forms and the error measures use (`HASHED_CASE_CONSTANTS`).
+Return the SHA-256 digest of `canonical_config_text(cfg; cfg_c)`, which covers the
+configuration sections of the case and of case `:C`, the grid list `NX_LIST` and every
+constant that `set_fields!`, the closed forms and the error measures use
+(`HASHED_CASE_CONSTANTS`).
 
 Parameters
 ----------
 cfg : Union{SimulationConfig,NamedTuple}
     Simulation configuration (or section container) of the case, from `make_config`.
+cfg_c : Union{SimulationConfig,NamedTuple}, optional
+    Configuration of case `:C` (default: `make_config` of case `:C` at the grid of `cfg`).
 
 Returns
 -------
 String
     64-character lowercase hexadecimal SHA-256 digest.
 """
-function canonical_config_sha256(cfg)::String
-    return bytes2hex(sha256(canonical_config_text(cfg)))
+function canonical_config_sha256(
+    cfg; cfg_c=make_config(cfg.grid.Nx; spherical_flow=true, case=:C)
+)::String
+    return bytes2hex(sha256(canonical_config_text(cfg; cfg_c=cfg_c)))
 end
 
 """
