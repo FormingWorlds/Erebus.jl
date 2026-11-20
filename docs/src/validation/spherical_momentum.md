@@ -10,7 +10,7 @@ The test then checks that the code gives that answer.
 If the metric terms were wrong, the flow inside a planetesimal and the stresses that break its rock would be wrong.
 
 The page checks 3 groups of terms.
-Each group changes the result by an amount of order 1, so a fault in any of them shows in the result.
+A fault in any group changes the result by many times the grid error, so it shows in the result.
 
 - The weights on the stress, which act on every flow that shears (case A).
 - The out-of-plane stress $S_{33}$ and its hoop term, which act only on a flow that moves towards or away from the centre (case B).
@@ -361,9 +361,10 @@ So a missing trace changes the flow by at most 1/3, for any $\eta / \zeta$.
 With $\eta / \zeta = 1$ a run without the trace in the momentum rows has the velocity error 0.10 at `Nx = 65`, 24 times the grid error.
 The same run has the errors 0.22 in $P_t$ and 0.22 in $S_{33}$, and a stress update without the trace has the $S_{33}$ error 1.5.
 
-Near the centre the $S_{33}$ error falls slowly on each node, because the weight $w = 2r$ has a cone there.
+The largest $S_{33}$ errors sit near the centre.
 At `Nx = 33` the 32 pressure nodes within 3 cells of the centre carry 0.57 of the squared $S_{33}$ error inside $R$.
-At `Nx = 65` the same 32 nodes carry 0.22, so the L2 error still falls at second order.
+At `Nx = 65` the same 32 nodes carry 0.22.
+The number of these nodes stays 32 on every grid, so their share falls when the grid is refined.
 
 The case has a uniform viscosity, a square grid, a shear modulus of $10^{35}$ Pa and no stress history `S330`.
 It tests only $\eta / \zeta = 1$.
