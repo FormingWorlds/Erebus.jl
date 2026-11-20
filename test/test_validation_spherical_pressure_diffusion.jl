@@ -1069,12 +1069,13 @@ end
                     darcy_bench=empty_bench,
                     compaction_bench=empty_bench,
                     diffusion_bench=bench,
+                    momentum_bench=empty_bench,
                 ),
             )
             @test no_arg.value == 1
             @test occursin("spherical_pressure_diffusion.toml", no_arg.out)
             @test occursin("[reproducibility]", no_arg.err)
-            @test last(VALIDATION_CASES).id == "spherical_pressure_diffusion"
+            @test VALIDATION_CASES[end - 1].id == "spherical_pressure_diffusion"
 
             exported = joinpath(tmpdir, "exported.toml")
             commit = String(raw_record["metadata"]["src_commit"])

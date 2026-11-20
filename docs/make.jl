@@ -53,6 +53,7 @@ makedocs(;
             "Spherical Darcy Flow" => "validation/spherical_darcy_flow.md",
             "Spherical Compaction" => "validation/spherical_compaction.md",
             "Spherical Pressure Diffusion" => "validation/spherical_pressure_diffusion.md",
+            "Spherical Momentum" => "validation/spherical_momentum.md",
         ],
         "Reference" => [
             "Configuration Schema" => "reference/config_schema.md",

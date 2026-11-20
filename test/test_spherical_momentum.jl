@@ -286,6 +286,8 @@ end
     @test isapprox(g.EII[i, j], sqrt(g.EXX[i, j]^2 + eavg^2); rtol=1.0e-9)
     # Ghost rows copy the interior like SXX.
     @test isequal(g.S33[1, 5], g.S33[2, 5])
+    @test isequal(g.S33[Ny1, 5], g.S33[Ny1 - 1, 5])
+    @test isequal(g.S33[5, 1], g.S33[5, 2])
     @test isequal(g.S33[5, Nx1], g.S33[5, Nx1 - 1])
     # Radial flow C r_hat / r^2: tau_33 = 2 eta C / r^3 (viscous limit), and with chi = 1/2
     # S33 = 2 (eta / 2) E33' + S330 / 2.

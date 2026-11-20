@@ -865,8 +865,8 @@ end
             @test !run_compaction_validation_check(schema_path; bench=bench)
 
             # The no-argument run checks every record of the table in order; the conduction,
-            # Darcy and pressure diffusion benches here are empty, so only the compaction
-            # record passes.
+            # Darcy, pressure diffusion and momentum benches here are empty, so only the
+            # compaction record passes.
             empty_bench = (; runs=Dict{Tuple,Any}(), metrics=Dict{String,Float64}())
             out_path = joinpath(tmpdir, "cli_out.txt")
             err_path = joinpath(tmpdir, "cli_err.txt")
@@ -879,6 +879,7 @@ end
                             darcy_bench=empty_bench,
                             compaction_bench=bench,
                             diffusion_bench=empty_bench,
+                            momentum_bench=empty_bench,
                         )
                     end
                 end
@@ -893,6 +894,7 @@ end
                 "spherical_darcy_flow",
                 "spherical_compaction",
                 "spherical_pressure_diffusion",
+                "spherical_momentum",
             ]
 
             # Export round trip.
@@ -981,6 +983,7 @@ end
             darcy_bench=empty_bench,
             compaction_bench=bench,
             diffusion_bench=empty_bench,
+            momentum_bench=empty_bench,
         )
         @test_throws InterruptException run_compaction_validation_check(
             record_path; bench=InterruptingBench()
