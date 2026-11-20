@@ -9,26 +9,31 @@ Validation here means that we run the code on a case where another source gives 
 The test then checks that the code gives that answer.
 If the metric terms were wrong, the flow inside a planetesimal and the stresses that break its rock would be wrong.
 
-The page checks 3 groups of metric terms.
-Each group changes the flow by an amount of order 1, so a fault in any of them shows in the result.
+The page checks 2 groups of metric terms.
+Each group changes the flow by an amount of order 1, so a fault in either of them shows in the result.
 
 - The weights on the stress, which act on every flow that shears (case A).
 - The out-of-plane stress $S_{33}$ and its hoop term, which act only on a flow that moves towards or away from the centre (case B).
-- The stress update that stores $S_{33}$ in `grids.S33` after the solve (case B).
+
+The page also checks the stress update that stores $S_{33}$ in `grids.S33` after the solve (case B).
+A fault in this update does not change the flow, but it changes the stored stress.
 
 Each case below says why the check exists, what it tests, how we know the right answer and why it matters.
 The box "Test details" at the end of each case gives the reference, the tolerance, the test ids and the command.
 
 **How the option enters the momentum equation.**
 The momentum equation says that the forces on each piece of rock balance: the stress, the pressure and the body force.
-With the option on, the momentum rows solve
+The momentum rows are the rows of the linear system that hold this equation.
+With the option on, they solve the momentum equation of the spherical annulus (Hernlund and Tackley, 2008):
 
 $$\frac{1}{w} \partial_j (w \tau_{ij}) - \tau_{33} \frac{\partial_i w}{w} - \partial_i P_t + f_i = 0, \qquad i, j \in \{x, y\}, \qquad w = 2r.$$
 
-Here $\tau_{ij}$ is the deviatoric stress, $P_t$ the total pressure, $f_i = \rho g_i$ the body force and $r$ the distance from the centre of the sphere.
+Here $\tau_{ij}$ is the deviatoric stress in Pa, $P_t$ the total pressure in Pa and $r$ the distance from the centre of the sphere in m.
+The body force $f_i = \rho g_i$, in N/m³, is the density $\rho$ times the gravity $g_i$.
 The weight $w$ in the first term makes the stress balance that of a sphere.
 The second term is the hoop term: the out-of-plane stress $\tau_{33}$ acts on the rock where $w$ changes.
-With the option off, the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D}_{ij} - \partial_i P_t + f_i = 0$.
+The code stores $\tau_{33}$ as $S_{33}$.
+With the option off, the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D}_{ij} - \partial_i P_t + f_i = 0$, with the 2-D deviatoric stress $\tau^\mathrm{2D}_{ij}$.
 
 !!! details "The equation in full and where the code adds each term"
     The stress is the 3-D deviatoric stress $\tau_{ij} = 2 \eta (\dot\varepsilon_{ij} - \delta_{ij} \nabla_3 \cdot \mathbf{u} / 3)$, with the viscosity $\eta$, the strain rate $\dot\varepsilon_{ij}$ and the out-of-plane strain rate $\dot\varepsilon_{33} = \mathbf{u} \cdot \nabla w / w$.
@@ -39,11 +44,11 @@ With the option off, the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D
 
     The 2-D rows hold the 2-D terms.
     The function `_add_spherical_momentum!` in `src/numerics/stokes_darcy.jl` adds the difference, and both assembly paths of the solver call it.
-    It does 4 steps, with the face multipliers $m_F = w_F / w_P$ of each cell face $F$ around a pressure node $P$:
+    It does 4 steps:
 
-    1. It computes $\dot\varepsilon_{33}$ at a pressure node as the weighted divergence of the continuity row minus the 2-D divergence.
+    1. It computes $\dot\varepsilon_{33}$ at a pressure node $P$ as the weighted divergence of the continuity row minus the 2-D divergence, with the face multipliers $m_F = w_F / w_P$ of the cell faces $F$ around $P$.
     2. It computes $S_{33} = \tau_{33} = \frac{2\eta}{3} (2 \dot\varepsilon_{33} - \dot\varepsilon_{xx} - \dot\varepsilon_{yy})$.
-    3. It adds $(m_F - 1)$ times the stress flux through each face, which is the difference between $\frac{1}{w} \partial_j (w \tau_{ij})$ and $\partial_j \tau_{ij}$.
+    3. It adds $(m_F - 1)$ times the stress flux through each face, with the face multipliers $m_F = w_F / w_V$ of the control volume around each velocity node $V$ (`vx` in the x row, `vy` in the y row). This is the difference between $\frac{1}{w} \partial_j (w \tau_{ij})$ and $\partial_j \tau_{ij}$.
     4. It adds the $S_{33}$ part of the weighted divergence, with $\tau_{xx} = S_{xx} - S_{33} / 2$ and $\tau_{yy} = -S_{xx} - S_{33} / 2$, and the hoop term $\tau_{33} \partial_i w / w$, with $\partial_x w / w = (m_E - m_W) / \Delta x$ and $\partial_y w / w = (m_S - m_N) / \Delta y$.
 
     After the solve, `_spherical_stress_update!` in `src/numerics/plasticity.jl` writes `grids.S33` from the solved velocity.
@@ -52,54 +57,49 @@ With the option off, the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D
 Both cases use the same set-up.
 
 - A sphere of radius $R = 50$ km sits in the middle of a square box of 140 km.
-- `Nx` is the number of grid nodes on each side of the box. It is odd, so a grid node lies on the centre.
-- The viscosity is $\eta = 10^{20}$ Pa s in the whole box, with no air layer.
+- `Nx` is the number of basic nodes (the cell corners of the staggered grid) on each side of the box.
+  It is odd, so a basic node lies on the centre.
+- The shear viscosity is $\eta = 10^{20}$ Pa s in the whole box, with no air layer.
 - The rock is nearly incompressible: the shear viscosity is $10^{-6}$ times the compaction viscosity $\zeta$.
 - The shear modulus is $10^{35}$ Pa, so elasticity does not change the viscosity, and the stress history is 0.
 - The fluid density is 0, and the case sets the body force $f = \rho g$ directly in the gravity fields `gx` and `gy`.
 - The total pressure is held at $P_\mathrm{amb} = 100$ Pa on the box edge.
-- Every exact flow is 0 outside the sphere ($r \ge R$), so the walls of the box see the exact solution.
+- Every exact flow is 0 outside the sphere ($r \ge R$), so the free-slip walls and the pressure ring on the box edge see the exact solution.
 
 The case builds the state with `init_simulation`, sets the grid fields directly and calls `solve_stokes_darcy!` once, on timestep 1.
 With the force scale $F_0 = 100$ N/m³, the velocity unit of case A is $F_0 R^2 / \eta = 2.5 \times 10^{-9}$ m/s.
 The largest velocity of case A is a few $10^{-12}$ m/s.
 
-!!! details "The 6 conditions that the test asserts"
-    The exact solutions and the solve rest on 6 conditions.
-    Each condition is a test assertion, so a change of the set-up that breaks one fails the test.
-
-    - C1, nearly incompressible rock: after the solve, on every interior pressure node, $\eta / \zeta \le 10^{-6}$.
-      The exact flows have $\nabla_3 \cdot \mathbf{u} = 0$ and $P_t = P_f = P_\mathrm{amb}$, so they solve the continuum equations for any $\zeta > 0$.
-      C1 makes the solve a nearly incompressible Stokes problem.
-    - C2, viscous limit: on every basic node and every pressure node, the shear modulus times $\Delta t$ is at least $10^6$ times the viscosity.
-    - C3, body force: the solve leaves `gx` and `gy` unchanged.
-    - C4, force moments: the moments $\int s^2 f_\theta$ and $\int s^3 f_\theta$ of the case A force are 0 in exact rational arithmetic.
-    - C5, compact flow: the exact velocity of every case is 0 on $r = R$, checked in rational arithmetic at rational points of the circle and to round-off in Float64.
-    - C6, one solve: the time step after the solve equals $\Delta t$ to a relative $10^{-12}$, with one plastic pass that converges.
-
 ## Case A: shear flow around the centre, with and without the option
 
 **Why this check exists.**
-The weights on the stress, the factors $(m_F - 1)$, could be missing, have the wrong sign or use the weight of the wrong cell face.
+Each cell face $F$ has a face multiplier $m_F$, the weight $w$ at the face divided by the weight at the node.
+The code adds $(m_F - 1)$ times the stress flux through each face.
+These weights could be missing, have the wrong sign or use the weight of the wrong cell face.
 In a flow around the centre, these weights change the balance of the shear stress by an amount of order 1.
 So each of these faults changes the flow.
 
 **What it tests.**
 A body force $f_\theta$ pushes the rock around the centre.
-It drives the flow $\mathbf{u} = r \Omega(r) \mathbf{e}_\theta$, where $\Omega$ is the rotation rate and changes with $r$.
+It drives the flow $\mathbf{u} = r \Omega(r) \mathbf{e}_\theta$, with the velocity $\mathbf{u}$ in m/s and the unit vector $\mathbf{e}_\theta$ around the centre.
+The rotation rate $\Omega$, in 1/s, changes with $r$.
 The force is $f_\theta = F_0 \rho (1 - \rho^2)^2 (1 - 32 \rho^2 / 5 + 39 \rho^4 / 5)$, where $\rho = r / R$ is the scaled radius (not the density).
 The test runs the case with the option on and with the option off, at `Nx = 33`, 65 and 129.
 It measures 4 things:
 
-- the L2 error of the velocity, which is the relative error over all interior velocity nodes of the box, with equal weights;
+- the L2 error of the velocity: the root-mean-square error over all interior velocity nodes of the box, divided by the root-mean-square of the exact velocity;
 - the rotation rate at the centre, from a fit and at the centre node;
-- the ratio of the L2 norms of the velocity profiles with and without the option;
-- the difference between the 2 solver paths (6 and 4 variables), which must give the same fields.
+- the ratio of the L2 norms of the velocity profiles with and without the option, at `Nx = 65` and 129;
+- the difference between the 2 solver paths, with the option on at `Nx = 33` only.
+
+The 2 solver paths are the solve with 6 unknowns per node (`solver.darcy_elimination = false`) and the solve with 4 (`true`).
+They must give the same $v_x$, $v_y$ and $P_t$.
 
 **How we know the right answer.**
 For this flow, the momentum equation has an exact solution with the option on and another exact solution with the option off.
-The flow does not compress the rock, so $\tau_{33} = 0$, the pressure is uniform and the only stress is the shear stress $\tau_{r\theta} = \eta r \Omega'$.
-With the option on, the equation of Hernlund and Tackley (2008) then becomes
+The flow and the force point only around the centre ($u_r = 0$) and do not change with the angle.
+So the flow does not compress the rock, $\tau_{33} = 0$, the pressure is uniform and the only stress is the shear stress $\tau_{r\theta} = \eta r \Omega'$.
+With the option on, the momentum equation above then becomes
 
 $$\frac{1}{r^3} \frac{d}{dr} \left( r^3 \tau_{r\theta} \right) + f_\theta = 0.$$
 
@@ -143,11 +143,13 @@ Every run with `spherical_flow = true` uses the weights on the stress in each mo
 Panel (a) shows the velocity of case A against the scaled radius $r / R$ at `Nx = 65`, on the 2 axes through the centre.
 On these axes the flow is purely azimuthal.
 The solid line is the exact solution with the option on, and the dashed line is the exact solution with the option off.
+The y-axis is the velocity in units of $F_0 R^2 / \eta$.
 The points are the values of the code at the grid nodes.
 A pass means that the points with the option on lie on the solid line.
 The points with the option off must lie on the dashed line.
 Panel (b) shows the errors against `Nx` on logarithmic axes, with a dotted line of second order.
-A pass means that the errors fall along the dotted line, except the error at the centre node (see the known limit below).
+A pass means that the errors stay below their limits and fall along the dotted line.
+The error at the centre node only has to stay below its limit (see the known limit below).
 
 **Known limit.**
 With the option on, the error of the rotation rate at the centre node falls slowly when the grid gets finer.
@@ -199,7 +201,7 @@ The error stays near the centre: the L2 error over the box and the fitted rotati
 **Why this check exists.**
 In case A the out-of-plane stress $S_{33}$ and its hoop term are 0, so case A cannot find a fault in them.
 Several factors in these terms could be wrong.
-These are the $2/3$ of $S_{33}$, the 2 of $\dot\varepsilon_{33}$, the $1/2$ of the hoop term and the $1/2$ of the $S_{33}$ flux.
+These are the $2/3$ of $S_{33}$, the 2 of the out-of-plane strain rate $\dot\varepsilon_{33}$, the $1/2$ of the hoop term and the $1/2$ of the $S_{33}$ flux.
 The stress update could also store a wrong `grids.S33`.
 
 **What it tests.**
@@ -211,7 +213,7 @@ The test runs the case with the option on, at `Nx = 33`, 65 and 129, and compare
 
 - the velocity with the exact flow, over the whole box and over the nodes with $r < R$;
 - `grids.S33` with the exact $\tau_{33}$, over the pressure nodes with $r < R$;
-- the fields of the 2 solver paths (6 and 4 variables).
+- the velocity and the pressure of the 2 solver paths, at `Nx = 33` only.
 
 Case B has no exact solution with the option off.
 
@@ -219,8 +221,8 @@ Case B has no exact solution with the option off.
 The flow is a formula, so its exact stress divergence follows by differentiation.
 The body force is minus this stress divergence, computed from the exact polynomials in rational arithmetic and not from the code.
 The test computes the force 2 more times.
-The first time uses finite differences of the exact velocity.
-The second time uses Eqs. (2) to (7) of Hernlund and Tackley (2008) with $d = 2$ in polar coordinates.
+The first time uses finite differences of the exact velocity in the slice equation in Cartesian components.
+The second time uses finite differences in Eqs. (2) to (7) of Hernlund and Tackley (2008) with $d = 2$ in polar coordinates.
 Both agree with the force to a relative $10^{-6}$, and the 2-D form with $d = 1$ does not agree.
 Case B therefore checks the slice against the documented equation of the spherical annulus, and not against the full 3-D equations of a sphere.
 
@@ -239,7 +241,7 @@ Every flow with a radial part, such as the compaction of a planetesimal interior
 
 **How to read the plot.**
 Panel (b) of the figure in case A also shows case B: the velocity L2 error (squares) and the $S_{33}$ L2 error (downward triangles).
-A pass means that both errors fall along the dotted line of second order.
+A pass means that both errors stay below their limits and fall along the dotted line of second order.
 
 !!! details "Test details"
     - Reference: the manufactured flow of case B, with its force from the polynomials of the option-on equation; $\tau_{33} = 2 \eta u_r / r$; equal fields of the 6-variable and the 4-variable solver paths.
@@ -251,6 +253,23 @@ A pass means that both errors fall along the dotted line of second order.
     - Test id: `l2_b_nx{33,65,129}`, `l2_inside_b_nx{33,65,129}`, `s33_b_nx{33,65,129}`, `l2_order_b_65_129`, `l2_inside_order_b_65_129`, `s33_order_b_65_129`, `elim_b_nx33`.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
+## Conditions of both cases
+
+Both cases rest on 6 conditions, and the test asserts each of them.
+
+!!! details "The 6 conditions that the test asserts"
+    The exact solutions and the solve rest on 6 conditions.
+    Each condition is a test assertion, so a change of the set-up that breaks one fails the test.
+
+    - C1, nearly incompressible rock: after the solve, on every interior pressure node, $\eta / \zeta \le 10^{-6}$.
+      The exact flows have $\nabla_3 \cdot \mathbf{u} = 0$ and $P_t = P_f = P_\mathrm{amb}$, with the fluid pressure $P_f$, so they solve the continuum equations for any $\zeta > 0$.
+      C1 makes the solve a nearly incompressible Stokes problem.
+    - C2, viscous limit: on every basic node and every pressure node, the shear modulus times the time step $\Delta t$ is at least $10^6$ times the viscosity.
+    - C3, body force: the solve leaves `gx` and `gy` unchanged.
+    - C4, force moments: the moments $\int s^2 f_\theta$ and $\int s^3 f_\theta$ of the case A force are 0 in exact rational arithmetic.
+    - C5, compact flow: the exact velocity of every case is 0 on $r = R$, checked in rational arithmetic at rational points of the circle and to round-off in Float64.
+    - C6, one solve: the time step after the solve equals $\Delta t$ to a relative $10^{-12}$, with one plastic pass that converges.
+
 ## What these cases do not test
 
 - The volumetric trace $\nabla_3 \cdot \mathbf{u} / 3$ in $S_{33}$.
@@ -260,14 +279,16 @@ A pass means that both errors fall along the dotted line of second order.
   The operator test `Smooth non-radial flow with variable viscosity` in `test/test_spherical_momentum.jl` uses a flow with a nonzero divergence.
   It checks the rows against the continuum stress divergence with the trace.
 - Elasticity and the stress history `SXX0`, `SXY0` and `S330`: the shear modulus is $10^{35}$ Pa and the history is 0.
-  3 tests in `test/test_spherical_momentum.jl` cover them: `Out-of-plane stress history in the momentum right-hand side`, `Stress history of all components in both momentum rows` and `Pressure stays unweighted and the visco-elastic factor scales the stress`.
-- A variable viscosity `ETA` and `ETAP`, a grid with $\Delta x \ne \Delta y$ and a centre between the grid nodes.
-  The case has a uniform viscosity, a square grid and the centre on a grid node.
+  3 tests in `test/test_spherical_momentum.jl` cover them.
+  Their names are `Out-of-plane stress history in the momentum right-hand side`, `Stress history of all components in both momentum rows` and `Pressure stays unweighted and the visco-elastic factor scales the stress`.
+- A variable viscosity `ETA` and `ETAP`, grid spacings $\Delta x \ne \Delta y$ and a centre between the grid nodes.
+  The case has a uniform viscosity, a square grid and the centre on a basic node.
   The operator tests of `test/test_spherical_momentum.jl` use a variable viscosity, $\Delta x \ne \Delta y$ and a centre between the nodes.
 - A compressible rock: no case has a large $\eta / \zeta$.
 - Gravity of the planet, buoyancy, Darcy flow, plasticity and the time loop.
   The case sets the force directly, has no fluid density and solves once.
-- How the code computes the viscosity and the force from the markers: the case sets the grid fields directly.
+- How the code computes the viscosity and the force from the markers, the material points that carry the rock properties.
+  The case sets the grid fields directly.
 
 ## All recorded values
 
