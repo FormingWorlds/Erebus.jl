@@ -386,7 +386,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         # is evaluated, and on rational points of the circle exactly.
         r_in = 1.0 - 1.0e-12
         for t in range(0.0, 2pi; length=13)
-            @test r_in^2 * (cos(t)^2 + sin(t)^2) < 1
+            @assert (r_in * cos(t))^2 + (r_in * sin(t))^2 < 1
             vx, vy = SMV.exact_velocity(:B, r_in * cos(t), r_in * sin(t))
             @test hypot(vx, vy) <= 1.0e-13
         end
@@ -1294,9 +1294,11 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test occursin(r"^[0-9a-f]{40}$", SMVE.last_src_commit())
             # Outside a git repository git log fails.
             no_repo = mkpath(joinpath(tmpdir, "no_repo"))
-            @test_throws ProcessFailedException redirect_stdio(
-                () -> SMVE.last_src_commit(no_repo); stderr=devnull
-            )
+            withenv("GIT_DIR" => joinpath(no_repo, "absent.git")) do
+                @test_throws ProcessFailedException redirect_stdio(
+                    () -> SMVE.last_src_commit(no_repo); stderr=devnull
+                )
+            end
             @test first(SMVE.check_clean_source_tree()) isa Bool
 
             # A changed configuration value and hash are rejected.

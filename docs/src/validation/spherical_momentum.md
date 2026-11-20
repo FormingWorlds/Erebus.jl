@@ -155,7 +155,7 @@ The weight $w = 2 \sqrt{x^2 + y^2}$ has a cone at $r = 0$, and within a few cell
 A flow with $\Omega(0) \ne 0$ is a rigid rotation near the centre, which has no strain in the continuum.
 On the grid this rotation has the out-of-plane strain rate $\dot\varepsilon_{33} = \pm 0.011 \, \Omega$ at the 8 P nodes at $r = \sqrt{2.5} \, \Delta x \approx 1.58 \Delta x$, the same on every grid, while away from the centre it falls at second order.
 Its sign changes from one of these nodes to the next around the centre, as $\sin 4\theta$ does, so the 8 values sum to 0.
-The continuity rows and the momentum rows use this discrete $\dot\varepsilon_{33}$ in the solve, and the stress update writes the same value into `grids.S33` after the solve.
+The continuity rows and the momentum rows use this discrete $\dot\varepsilon_{33}$ in the solve, and the stress update uses the same discrete $\dot\varepsilon_{33}$ when it writes $S_{33}$ into `grids.S33` after the solve.
 Case A has a total pressure error of about 1100 Pa next to the centre with the option on that does not fall with the grid, against a stress scale $F_0 R = 5 \times 10^6$ Pa.
 Case A0, with $\Omega(0) = 0$, converges at second order in the L2 error, in the largest velocity error and in the largest pressure error.
 The error stays near the centre: the L2 error of case A, which sums over the whole box, and the fitted centre value, which reads the nodes with $\rho \ge 0.18$, converge at second order.
