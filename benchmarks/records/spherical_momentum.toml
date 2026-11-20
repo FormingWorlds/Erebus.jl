@@ -7,11 +7,11 @@ id = "spherical_momentum"
 title = "Spherical Momentum Validation"
 page = "validation/spherical_momentum.md"
 src_commit = "b80632a72404a380a8715d56c63f1be34c945a43"
-timestamp_utc = "2026-11-19T22:40:56Z"
+timestamp_utc = "2026-11-20T14:43:10Z"
 julia_version = "1.12.7"
-config_sha256 = "f31389014dd1e856e491aa2e8e02a5a04dcaf38ecbde060b1127e1a512eb0fab"
+config_sha256 = "139902f98ce5eae735f7ccde1afcf0325926c3a3e5063e6be5c8b890ced61f5e"
 reference_type = "analytical"
-reference_citation = "Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, and a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation"
+reference_citation = "Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation, and a radial compaction flow u = U0 R grad (1 - rho^2)^5 with q = -u for the 3-D sphere equations of a compressible matrix"
 
 [config]
 Nx = [33, 65, 129]
@@ -31,7 +31,10 @@ dt_yr = 1000.0
 P_amb_Pa = 100.0
 fit_rho_min = 0.18
 fit_rho_max = 0.85
+eta_zeta_ratio_c = 1.0
+P_amb_c_Pa = 1.0e7
 b_power = 6
+c_power = 5
 fit_degree = 5
 spherical_metric = true
 darcy_elimination = true
@@ -349,6 +352,318 @@ units = "dimensionless"
 status = "PASS"
 
 [[metrics]]
+id = "l2_c_nx33"
+case = "C"
+description = "Velocity L2 relative error over the box, case C, option on (Nx=33)"
+nx = 33
+value = 1.7620788196151781e-02
+reference = 0.0000000000000000e+00
+atol = 2.5000000000000001e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_c_nx65"
+case = "C"
+description = "Velocity L2 relative error over the box, case C, option on (Nx=65)"
+nx = 65
+value = 4.3593120010171817e-03
+reference = 0.0000000000000000e+00
+atol = 6.1999999999999998e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_c_nx129"
+case = "C"
+description = "Velocity L2 relative error over the box, case C, option on (Nx=129)"
+nx = 129
+value = 1.0883045621131416e-03
+reference = 0.0000000000000000e+00
+atol = 1.6000000000000001e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_inside_c_nx33"
+case = "C"
+description = "Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.7615618581398977e-02
+reference = 0.0000000000000000e+00
+atol = 2.5000000000000001e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_inside_c_nx65"
+case = "C"
+description = "Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=65)"
+nx = 65
+value = 4.3581222816481647e-03
+reference = 0.0000000000000000e+00
+atol = 6.1999999999999998e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_inside_c_nx129"
+case = "C"
+description = "Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=129)"
+nx = 129
+value = 1.0881219609719152e-03
+reference = 0.0000000000000000e+00
+atol = 1.6000000000000001e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "s33_c_nx33"
+case = "C"
+description = "S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.7184437319397883e-02
+reference = 0.0000000000000000e+00
+atol = 2.5000000000000001e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "s33_c_nx65"
+case = "C"
+description = "S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 4.2575165489635077e-03
+reference = 0.0000000000000000e+00
+atol = 6.0000000000000001e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "s33_c_nx129"
+case = "C"
+description = "S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 1.0628902598776250e-03
+reference = 0.0000000000000000e+00
+atol = 1.5000000000000000e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pt_c_nx33"
+case = "C"
+description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 7.3627175424674516e-03
+reference = 0.0000000000000000e+00
+atol = 1.0999999999999999e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pt_c_nx65"
+case = "C"
+description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 1.8200244850428149e-03
+reference = 0.0000000000000000e+00
+atol = 2.5999999999999999e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pt_c_nx129"
+case = "C"
+description = "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 4.5473517120430865e-04
+reference = 0.0000000000000000e+00
+atol = 6.4000000000000005e-04
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pf_c_nx33"
+case = "C"
+description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.6639981113225805e-02
+reference = 0.0000000000000000e+00
+atol = 2.4000000000000000e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pf_c_nx65"
+case = "C"
+description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 3.9680137791267616e-03
+reference = 0.0000000000000000e+00
+atol = 5.5999999999999999e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pf_c_nx129"
+case = "C"
+description = "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 1.0029141267763775e-03
+reference = 0.0000000000000000e+00
+atol = 1.5000000000000000e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "eii_c_nx33"
+case = "C"
+description = "EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.2802941002488489e-02
+reference = 0.0000000000000000e+00
+atol = 1.7999999999999999e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "eii_c_nx65"
+case = "C"
+description = "EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 3.2081298628555922e-03
+reference = 0.0000000000000000e+00
+atol = 4.4999999999999997e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "eii_c_nx129"
+case = "C"
+description = "EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 7.9976875469799037e-04
+reference = 0.0000000000000000e+00
+atol = 1.1999999999999999e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "sii_c_nx33"
+case = "C"
+description = "SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.2802941002488480e-02
+reference = 0.0000000000000000e+00
+atol = 1.7999999999999999e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "sii_c_nx65"
+case = "C"
+description = "SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 3.2081298628555957e-03
+reference = 0.0000000000000000e+00
+atol = 4.4999999999999997e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "sii_c_nx129"
+case = "C"
+description = "SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 7.9976875469799568e-04
+reference = 0.0000000000000000e+00
+atol = 1.1999999999999999e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "hs_c_nx33"
+case = "C"
+description = "HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=33)"
+nx = 33
+value = 1.6480081900641819e-02
+reference = 0.0000000000000000e+00
+atol = 2.4000000000000000e-02
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "hs_c_nx65"
+case = "C"
+description = "HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=65)"
+nx = 65
+value = 4.0820767131859352e-03
+reference = 0.0000000000000000e+00
+atol = 5.7999999999999996e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "hs_c_nx129"
+case = "C"
+description = "HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=129)"
+nx = 129
+value = 1.0231613080267082e-03
+reference = 0.0000000000000000e+00
+atol = 1.5000000000000000e-03
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
 id = "l2_order_a_on_65_129"
 case = "A"
 description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case A, option on"
@@ -440,6 +755,110 @@ units = "dimensionless"
 status = "PASS"
 
 [[metrics]]
+id = "l2_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case C, option on"
+nx = 129
+value = 2.0020181113378586e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "l2_inside_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error for r < R, case C, option on"
+nx = 129
+value = 2.0018664080774715e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "s33_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the S33 L2 error, case C, option on"
+nx = 129
+value = 2.0020194868991252e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pt_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the total pressure L2 error, case C, option on"
+nx = 129
+value = 2.0008593614854804e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "pf_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the fluid pressure L2 error, case C, option on"
+nx = 129
+value = 1.9842189532210495e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "eii_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the EII L2 error, case C, option on"
+nx = 129
+value = 2.0040777179955152e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "sii_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the SII L2 error, case C, option on"
+nx = 129
+value = 2.0040777179955072e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "hs_order_c_65_129"
+case = "C"
+description = "Convergence order log2(e(Nx=65) / e(Nx=129)) of the HS L2 error, case C, option on"
+nx = 129
+value = 1.9962696814806673e+00
+reference = 2.0000000000000000e+00
+atol = 3.4999999999999998e-01
+rtol = 0.0000000000000000e+00
+comparison = "isapprox"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
 id = "centre_fit_ratio_nx65"
 case = "A"
 description = "Fitted centre rotation ratio, option on to off, case A (Nx=65)"
@@ -494,7 +913,7 @@ status = "PASS"
 [[metrics]]
 id = "elim_a_nx33"
 case = "solver"
-description = "Largest relative difference of vx, vy, pr between the 6- and 4-variable paths, case A, option on (Nx=33)"
+description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case A, option on (Nx=33)"
 nx = 33
 value = 1.3014081588985147e-10
 reference = 0.0000000000000000e+00
@@ -507,9 +926,22 @@ status = "PASS"
 [[metrics]]
 id = "elim_b_nx33"
 case = "solver"
-description = "Largest relative difference of vx, vy, pr between the 6- and 4-variable paths, case B, option on (Nx=33)"
+description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case B, option on (Nx=33)"
 nx = 33
 value = 2.1993954889038689e-10
+reference = 0.0000000000000000e+00
+atol = 9.9999999999999995e-08
+rtol = 0.0000000000000000e+00
+comparison = "le_atol"
+units = "dimensionless"
+status = "PASS"
+
+[[metrics]]
+id = "elim_c_nx33"
+case = "solver"
+description = "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case C, option on (Nx=33)"
+nx = 33
+value = 3.7252902984619144e-14
 reference = 0.0000000000000000e+00
 atol = 9.9999999999999995e-08
 rtol = 0.0000000000000000e+00

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Plot the spherical momentum validation figure in a light and a dark version.
+"""Plot the spherical momentum validation figures in a light and a dark version.
 
-Panel (a) compares the azimuthal velocity of case A on the axes through the centre with
-the exact profiles with and without the spherical metric terms; panel (b) shows the
-errors of the record against the grid size with a second-order guide.
+The first figure has 2 panels. Panel (a) compares the azimuthal velocity of case A on the
+axes through the centre with the exact profiles with and without the spherical metric
+terms; panel (b) shows the errors of the record against the grid size with a second-order
+guide. The second figure shows case C: the radial velocity and the out-of-plane stress
+next to the axes against their exact profiles, and the errors of case C against the grid
+size with a second-order guide.
 
 Usage: python3 scripts/generate_validation_momentum_figures.py <data_dir> [assets_dir] [preview_dir]
 
@@ -155,6 +158,124 @@ def error_panel(b, data, t):
     legend(b, t, loc="upper right", fontsize=7.5)
 
 
+def compaction_profile_panel(ax, data, t, key, column, ylabel, title):
+    """Plot one radial profile of case C against its exact curve.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Panel to draw on.
+    data : dict
+        Structured arrays ``curves_c`` and the profile ``key``.
+    t : dict
+        Colours of the theme.
+    key : str
+        Key of the profile in ``data``.
+    column : str
+        Column of the profile and of the exact curves.
+    ylabel, title : str
+        Axis label and panel title.
+    """
+    curves = data["curves_c"]
+    ax.plot(curves["rho"], curves[column], color=t["ref"], lw=2.2, label="Exact")
+    d = data[key]
+    ax.plot(
+        d["rho"],
+        d[column],
+        ls="none",
+        marker="o",
+        ms=3.0,
+        color=t["c65"],
+        label=f"Erebus, Nx = {NX_PROFILE}",
+    )
+    ax.axhline(0.0, color=t["fg"], lw=0.6)
+    ax.set_xlabel("Radius r / R")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.set_xlim(0.0, 1.0)
+    legend(ax, t, loc="lower right", fontsize=8)
+
+
+def compaction_error_panel(ax, data, t):
+    """Plot the errors of case C against the grid size.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Panel to draw on.
+    data : dict
+        Structured array ``conv_c``.
+    t : dict
+        Colours of the theme.
+    """
+    conv = data["conv_c"]
+    nx = conv["nx"]
+    rows = (
+        ("l2_inside_c", t["c65"], "o", "-", "Velocity L2, r < R"),
+        ("s33_c", t["cb"], "v", "--", "S33 L2"),
+        ("pt_c", t["ref"], "s", "-", "P_t L2"),
+        ("pf_c", t["cont"], "D", "--", "P_f L2"),
+        ("eii_c", t["c33"], "^", ":", "E_II L2"),
+        ("hs_c", t["fg"], "x", "-.", "Heating L2"),
+    )
+    for key, col, mk, ls, label in rows:
+        ax.loglog(nx, conv[key], color=col, marker=mk, ms=6, lw=1.4, ls=ls, label=label)
+    ax.loglog(
+        nx,
+        0.5 * conv["pt_c"][0] * (nx[0] / nx) ** 2,
+        color=t["fg"],
+        lw=1.2,
+        ls=":",
+        label="Second order, 1/Nx^2",
+    )
+    ax.set_xticks(nx, [str(int(n)) for n in nx])
+    ax.minorticks_off()
+    ax.set_ylim(1.0e-4, 0.1)
+    ax.set_xlabel("Grid nodes per side, Nx")
+    ax.set_ylabel("Relative error")
+    ax.set_title("(c) Case C errors against grid size")
+    legend(ax, t, loc="upper right", fontsize=7.5)
+
+
+def compaction_figure(data, t):
+    """Plot the case C profiles of u_r and S33 and the case C errors against Nx.
+
+    Parameters
+    ----------
+    data : dict
+        Structured arrays ``curves_c``, ``conv_c``, ``u_c`` and ``s33_c``.
+    t : dict
+        Colours of the theme.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure with the 2 profiles and the errors.
+    """
+    fig, (a, b, c) = plt.subplots(1, 3, figsize=(14.0, 4.2), constrained_layout=True)
+    compaction_profile_panel(
+        a,
+        data,
+        t,
+        "u_c",
+        "u_r",
+        "Radial velocity u_r / U0",
+        f"(a) Case C radial velocity, Nx = {NX_PROFILE}",
+    )
+    compaction_profile_panel(
+        b,
+        data,
+        t,
+        "s33_c",
+        "tau33",
+        "Out-of-plane stress tau_33 R / (eta U0)",
+        f"(b) Case C stress S33, Nx = {NX_PROFILE}",
+    )
+    compaction_error_panel(c, data, t)
+    style(fig, (a, b, c), t)
+    return fig
+
+
 def figure(data, t):
     """Plot the case A profiles and the errors against the grid size.
 
@@ -200,21 +321,29 @@ def main(data_dir, assets_dir, preview_dir=None):
         "conv": load(data_dir / "convergence.csv"),
         "on": load(data_dir / f"profile_on_{NX_PROFILE}.csv"),
         "off": load(data_dir / f"profile_off_{NX_PROFILE}.csv"),
+        "curves_c": load(data_dir / "reference_curves_c.csv"),
+        "conv_c": load(data_dir / "convergence_c.csv"),
+        "u_c": load(data_dir / f"profile_c_u_{NX_PROFILE}.csv"),
+        "s33_c": load(data_dir / f"profile_c_s33_{NX_PROFILE}.csv"),
     }
     for name, t in THEMES.items():
-        fig = figure(data, t)
-        fig.savefig(
-            assets_dir / f"validation_momentum_profile_{name}.svg",
-            facecolor=fig.get_facecolor(),
-            dpi=200,
-        )
-        if preview_dir is not None:
+        for stem, make in (
+            ("validation_momentum_profile", figure),
+            ("validation_momentum_compaction", compaction_figure),
+        ):
+            fig = make(data, t)
             fig.savefig(
-                Path(preview_dir) / f"momentum_profile_{name}.png",
-                dpi=90,
+                assets_dir / f"{stem}_{name}.svg",
                 facecolor=fig.get_facecolor(),
+                dpi=200,
             )
-        plt.close(fig)
+            if preview_dir is not None:
+                fig.savefig(
+                    Path(preview_dir) / f"{stem}_{name}.png",
+                    dpi=90,
+                    facecolor=fig.get_facecolor(),
+                )
+            plt.close(fig)
 
 
 if __name__ == "__main__":

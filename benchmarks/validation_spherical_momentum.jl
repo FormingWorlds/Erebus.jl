@@ -1,8 +1,8 @@
 """
     SphericalMomentumValidation
 
-Steady Stokes flow of a uniform, nearly incompressible viscous matrix driven by a body force
-inside a sphere, against exact solutions of the momentum equation of the spherical slice.
+Steady Stokes flow of a uniform viscous matrix driven by a body force inside a sphere,
+against exact solutions of the momentum equation of the spherical slice.
 
 With `geometry.spherical_flow = true` the momentum rows solve
 `(1 / w) d_j (w tau_ij) - tau_33 d_i w / w - d_i P + f_i = 0` with `w = 2 r` and the 3-D
@@ -13,9 +13,14 @@ compares the solved velocity with 3 exact flows that vanish for `r >= R_PLANET`:
 
 - case `:A`, azimuthal shear `u = r Omega(r) e_theta` with a closed form for both settings;
 - case `:A0`, azimuthal shear with `Omega(0) = 0`, for the option on;
-- case `:B`, a manufactured flow with `u_r != 0` and `tau_33 = O(1)`, for the option on.
+- case `:B`, a manufactured flow with `u_r != 0` and `tau_33 = O(1)`, for the option on;
+- case `:C`, a radial compaction flow `u = U0 R grad (1 - rho^2)^5` of a compressible
+  matrix with `eta / zeta = 1` and the Darcy flux `q = -u`, for the option on. For a radial
+  flow the slice equations are those of a 3-D sphere, with the volumetric trace
+  `-2 eta div3 / 3` in `tau_ij` and `tau_33` of order 1.
 
-The case builds the state with `init_simulation`, sets the grid fields directly and calls
+Cases `:A`, `:A0` and `:B` have `eta / zeta = ETA_RATIO`; case `:C` has `ETA_RATIO_C` and
+the ambient pressure `P_AMB_C`. The case builds the state with `init_simulation`, sets the grid fields directly and calls
 `solve_stokes_darcy!` once on timestep 1.
 """
 module SphericalMomentumValidation
@@ -51,13 +56,16 @@ const DT_YR = 1.0e3
 const F0 = 100.0
 const U0 = 1.0e-9
 const B_POWER = 6
+const C_POWER = 5
+const ETA_RATIO_C = 1.0
+const P_AMB_C = 1.0e7
 const FIT_RHO_MIN = 0.18
 const FIT_RHO_MAX = 0.85
 const FIT_DEGREE = 5
 const NX_LIST = (33, 65, 129)
 const NX_REFERENCE = 65
 const NX_MIN = 29
-const CASES = (:A, :A0, :B)
+const CASES = (:A, :A0, :B, :C)
 
 const QB = Rational{BigInt}
 
@@ -127,7 +135,7 @@ setting `spherical_flow`.
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 spherical_flow : Bool, optional
     Value of `geometry.spherical_flow` (default `true`).
 
@@ -138,7 +146,7 @@ Nothing
 Raises
 ------
 ArgumentError
-    If `case` is not in `CASES`, or `case` is `:A0` or `:B` and `spherical_flow` is
+    If `case` is not in `CASES`, or `case` is `:A0`, `:B` or `:C` and `spherical_flow` is
     `false` (only case `:A` has an exact solution without the option).
 """
 function _check_case(case::Symbol; spherical_flow::Bool=true)
@@ -147,6 +155,57 @@ function _check_case(case::Symbol; spherical_flow::Bool=true)
         ArgumentError("case :$case has an exact solution only with spherical_flow = true"),
     )
     return nothing
+end
+
+"""
+    eta_zeta_ratio(case)
+
+Return the ratio `eta / zeta` of the shear to the compaction viscosity of `case`:
+`ETA_RATIO_C` for case `:C` and `ETA_RATIO` for the others.
+
+Parameters
+----------
+case : Symbol
+    `:A`, `:A0`, `:B` or `:C`.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not in `CASES`.
+"""
+function eta_zeta_ratio(case::Symbol)
+    _check_case(case)
+    return case == :C ? ETA_RATIO_C : ETA_RATIO
+end
+
+"""
+    ambient_pressure(case)
+
+Return the ambient pressure `p_s` [Pa] of `case`, held on the anchor rings of `P_t` and
+`P_f`: `P_AMB_C` for case `:C`, where it keeps `P_t > 0`, and `P_AMB` for the others.
+
+Parameters
+----------
+case : Symbol
+    `:A`, `:A0`, `:B` or `:C`.
+
+Returns
+-------
+Float64
+    Pressure [Pa].
+
+Raises
+------
+ArgumentError
+    If `case` is not in `CASES`.
+"""
+function ambient_pressure(case::Symbol)
+    _check_case(case)
+    return case == :C ? P_AMB_C : P_AMB
 end
 
 """
@@ -226,7 +285,7 @@ ArgumentError
 """
 function omega_coefficients(case::Symbol; spherical_flow::Bool)
     _check_case(case; spherical_flow=spherical_flow)
-    case == :B && throw(ArgumentError("case :B is not azimuthal"))
+    case in (:B, :C) && throw(ArgumentError("case :$case is not azimuthal"))
     case == :A0 && return copy(OMEGA_A0)
     return copy(spherical_flow ? OMEGA_A_ON : OMEGA_A_OFF)
 end
@@ -255,7 +314,7 @@ ArgumentError
 """
 function force_coefficients(case::Symbol)
     _check_case(case)
-    case == :B && throw(ArgumentError("case :B is not azimuthal"))
+    case in (:B, :C) && throw(ArgumentError("case :$case is not azimuthal"))
     return copy(case == :A ? FORCE_A : FORCE_A0)
 end
 
@@ -724,6 +783,96 @@ const CASE_B_TERMS = (
 )
 
 """
+    _case_c_polynomials(power, lam, zr)
+
+Return the exact polynomials of case `:C`, the radial compaction flow `u = grad Phi` with
+`Phi = (1 - rho^2)^power`, in units of `U0` (velocity), `U0 / R` (strain rate),
+`eta U0 / R` (stress and pressure), `eta U0 / R^2` (force) and `eta U0^2 / R^2` (heating).
+The fields follow the continuum equations of the rows with `spherical_flow = true`:
+
+- `e33 = (X ux + Y uy) / rho^2`, an exact polynomial (`_xy_div_rho2`), and
+  `div3 = d_X ux + d_Y uy + e33`;
+- `tau_ij = d_i u_j + d_j u_i - (2 / 3) delta_ij div3` and `tau33 = 2 (e33 - div3 / 3)`;
+- `pf = lam Phi`, so that the Darcy flux `-(k / mu) grad P_f` is `-u`, and
+  `pt = pf - zr div3` from the solid continuity `div3 + (P_t - P_f) / Z = 0`;
+- the force `f = -(d_j tau_ij + (tau_ij X_j - tau33 X_i) / rho^2 - d_i pt)`, where `rho^2`
+  divides the hoop numerator exactly for a radial flow;
+- `eii2 = EXX^2 + EXY^2 + (3 / 4) e33d^2` with `EXX = (d_X ux - d_Y uy) / 2`,
+  `EXY = (d_Y ux + d_X uy) / 2` and `e33d = (2 e33 - d_X ux - d_Y uy) / 3`, the square of
+  the second invariant as the stress update defines it;
+- `hs = 4 eii2 + zr div3^2 + lam |u|^2`, the deviatoric, compaction and Darcy heating of
+  `compute_shear_heating!` with `S33 = tau33`.
+
+Parameters
+----------
+power : Int
+    Power of `(1 - rho^2)` in `Phi`, at least 4, so that the force is 0 on `rho = 1`.
+lam : Rational{BigInt}
+    `mu R^2 / (k eta)`, the fluid pressure unit `mu U0 R / k` over `eta U0 / R`.
+zr : Rational{BigInt}
+    `Z / eta = (1 - phi) zeta / eta`.
+
+Returns
+-------
+NamedTuple
+    `ux`, `uy`, `e33`, `div3`, `tau33`, `pf`, `pt`, `fx`, `fy`, `eii2`, `hs`, each a
+    `Dict{Tuple{Int,Int},Rational{BigInt}}`.
+
+Raises
+------
+ArgumentError
+    If `power < 4`, or a division by `rho^2` leaves a remainder.
+"""
+function _case_c_polynomials(power::Int, lam::QB, zr::QB)
+    power >= 4 || throw(ArgumentError("the power must be at least 4, got $power"))
+    w = _xy_add(XYPoly((0, 0) => QB(1)), _xy_scale(XY_RHO2, -1))
+    phi = XYPoly((0, 0) => QB(1))
+    for _ in 1:power
+        phi = _xy_mul(phi, w)
+    end
+    ux, uy = _xy_dx(phi), _xy_dy(phi)
+    dxux, dyuy = _xy_dx(ux), _xy_dy(uy)
+    e33 = _xy_div_rho2(_xy_add(_xy_mul(ux, XY_X), _xy_mul(uy, XY_Y)))
+    div3 = _xy_add(_xy_add(dxux, dyuy), e33)
+    trace = _xy_scale(div3, -2 // 3)
+    txx = _xy_add(_xy_scale(dxux, 2), trace)
+    tyy = _xy_add(_xy_scale(dyuy, 2), trace)
+    txy = _xy_add(_xy_dy(ux), _xy_dx(uy))
+    tau33 = _xy_add(_xy_scale(e33, 2), trace)
+    pf = _xy_scale(phi, lam)
+    pt = _xy_add(pf, _xy_scale(div3, -zr))
+    hx = _xy_add(
+        _xy_add(_xy_mul(txx, XY_X), _xy_mul(txy, XY_Y)), _xy_scale(_xy_mul(tau33, XY_X), -1)
+    )
+    hy = _xy_add(
+        _xy_add(_xy_mul(txy, XY_X), _xy_mul(tyy, XY_Y)), _xy_scale(_xy_mul(tau33, XY_Y), -1)
+    )
+    dx = _xy_add(_xy_add(_xy_dx(txx), _xy_dy(txy)), _xy_div_rho2(hx))
+    dy = _xy_add(_xy_add(_xy_dx(txy), _xy_dy(tyy)), _xy_div_rho2(hy))
+    fx = _xy_scale(_xy_add(dx, _xy_scale(_xy_dx(pt), -1)), -1)
+    fy = _xy_scale(_xy_add(dy, _xy_scale(_xy_dy(pt), -1)), -1)
+    exx = _xy_scale(_xy_add(dxux, _xy_scale(dyuy, -1)), 1 // 2)
+    exy = _xy_scale(txy, 1 // 2)
+    e33d = _xy_scale(_xy_add(_xy_scale(e33, 2), _xy_scale(_xy_add(dxux, dyuy), -1)), 1 // 3)
+    eii2 = _xy_add(
+        _xy_add(_xy_mul(exx, exx), _xy_mul(exy, exy)),
+        _xy_scale(_xy_mul(e33d, e33d), 3 // 4),
+    )
+    u2 = _xy_add(_xy_mul(ux, ux), _xy_mul(uy, uy))
+    hs = _xy_add(
+        _xy_add(_xy_scale(eii2, 4), _xy_scale(_xy_mul(div3, div3), zr)), _xy_scale(u2, lam)
+    )
+    return (; ux, uy, e33, div3, tau33, pf, pt, fx, fy, eii2, hs)
+end
+
+const CASE_C_EXACT = _case_c_polynomials(
+    C_POWER,
+    rationalize(BigInt, MU_F * R_PLANET^2 / (K_PERM * ETA_ROCK)),
+    rationalize(BigInt, (1 - PHI) / ETA_RATIO_C),
+)
+const CASE_C_TERMS = NamedTuple{keys(CASE_C_EXACT)}(map(_xy_terms, values(CASE_C_EXACT)))
+
+"""
     spherical_divergence_is_zero(power=B_POWER)
 
 Return whether the case `:B` velocity has the spherical divergence 0 exactly:
@@ -762,7 +911,7 @@ exactly at the rational points `(3/5, 4/5)`, `(-5/13, 12/13)`, `(8/17, -15/17)` 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 
 Returns
 -------
@@ -777,6 +926,8 @@ function velocity_vanishes_on_circle(case::Symbol)
     _check_case(case)
     ux, uy = if case == :B
         (CASE_B_EXACT.ux, CASE_B_EXACT.uy)
+    elseif case == :C
+        (CASE_C_EXACT.ux, CASE_C_EXACT.uy)
     else
         om = _xy_from_s(omega_coefficients(case; spherical_flow=true))
         (_xy_scale(_xy_mul(XY_Y, om), -1), _xy_mul(XY_X, om))
@@ -803,7 +954,7 @@ Return the exact velocity of `case` at `(X, Y) = (x - xc, y - yc) / R_PLANET` in
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 X, Y : Real
     Nondimensional coordinates, finite.
 spherical_flow : Bool, optional
@@ -828,8 +979,9 @@ function exact_velocity(case::Symbol, X::Real, Y::Real; spherical_flow::Bool=tru
     x, y = Float64(X), Float64(Y)
     s = x^2 + y^2
     s >= 1 && return (0.0, 0.0)
-    if case == :B
-        return (_xy_eval(CASE_B_TERMS.ux, x, y), _xy_eval(CASE_B_TERMS.uy, x, y))
+    if case in (:B, :C)
+        t = case == :B ? CASE_B_TERMS : CASE_C_TERMS
+        return (_xy_eval(t.ux, x, y), _xy_eval(t.uy, x, y))
     end
     om = _seval(omega_coefficients(case; spherical_flow=spherical_flow), s)
     return (-y * om, x * om)
@@ -841,12 +993,13 @@ end
 Return the body force of `case` at `(X, Y)` in units of `force_scale(case)`, `(0, 0)` for
 `X^2 + Y^2 >= 1`. The azimuthal cases have `(fx, fy) = g(s) (-Y, X)` with
 `g = force_coefficients`; case `:B` has `-D(u)` of `_case_b_polynomials`, a polynomial
-plus a remainder over `rho^2` that tends to 0 at the centre, where the force is `(0, 0)`.
+plus a remainder over `rho^2` that tends to 0 at the centre, where the force is `(0, 0)`;
+case `:C` has the polynomial force of `_case_c_polynomials`, `(0, 0)` at the centre.
 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 X, Y : Real
     Nondimensional coordinates, finite.
 spherical_flow : Bool, optional
@@ -881,6 +1034,7 @@ function exact_force(case::Symbol, X::Real, Y::Real; spherical_flow::Bool=true)
             fy + _xy_eval(CASE_B_TERMS.fy_rem, x, y) / s,
         )
     end
+    case == :C && return (_xy_eval(CASE_C_TERMS.fx, x, y), _xy_eval(CASE_C_TERMS.fy, x, y))
     g = _seval(force_coefficients(case), s)
     return (-y * g, x * g)
 end
@@ -888,14 +1042,15 @@ end
 """
     exact_tau33(case, X, Y)
 
-Return the exact out-of-plane deviatoric stress `tau_33 = 2 eta u_r / r` of `case` with the
-option on at `(X, Y)`, in units of `stress_scale(:B) = eta U0 / R` for case `:B`; 0 for the
-azimuthal cases and for `X^2 + Y^2 >= 1`.
+Return the exact out-of-plane deviatoric stress `tau_33 = 2 eta (u_r / r - div3 / 3)` of
+`case` with the option on at `(X, Y)`, in units of `stress_scale(case) = eta U0 / R` for
+cases `:B` (with `div3 = 0`) and `:C`; 0 for the azimuthal cases and for `X^2 + Y^2 >= 1`.
+Case `:C` evaluates an exact polynomial, finite at the centre.
 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 X, Y : Real
     Nondimensional coordinates, finite.
 
@@ -914,9 +1069,203 @@ function exact_tau33(case::Symbol, X::Real, Y::Real)
     _check_case(case)
     _check_point(X, Y)
     x, y = Float64(X), Float64(Y)
-    (case != :B || x^2 + y^2 >= 1) && return 0.0
-    return _xy_eval(CASE_B_TERMS.tau33, x, y)
+    (case in (:B, :C) && x^2 + y^2 < 1) || return 0.0
+    return _xy_eval((case == :B ? CASE_B_TERMS : CASE_C_TERMS).tau33, x, y)
 end
+
+"""
+    _check_case_c(case)
+
+Check that `case` is case `:C`, the only case with a nonzero divergence and pressures.
+
+Parameters
+----------
+case : Symbol
+    Case to check.
+
+Returns
+-------
+Nothing
+
+Raises
+------
+ArgumentError
+    If `case` is not in `CASES` or not `:C`.
+"""
+function _check_case_c(case::Symbol)
+    _check_case(case)
+    case == :C || throw(ArgumentError("only case :C has this field, got :$case"))
+    return nothing
+end
+
+"""
+    _case_c_eval(case, field, X, Y)
+
+Evaluate the case `:C` polynomial `field` of `_case_c_polynomials` at `(X, Y)`, 0 for
+`X^2 + Y^2 >= 1`.
+
+Parameters
+----------
+case : Symbol
+    Must be `:C`.
+field : Symbol
+    Name of the polynomial in `CASE_C_TERMS`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not in `CASES` or not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+function _case_c_eval(case::Symbol, field::Symbol, X::Real, Y::Real)
+    _check_case_c(case)
+    _check_point(X, Y)
+    x, y = Float64(X), Float64(Y)
+    x^2 + y^2 >= 1 && return 0.0
+    return _xy_eval(getfield(CASE_C_TERMS, field), x, y)
+end
+
+"""
+    exact_div3(case, X, Y)
+
+Return the exact 3-D divergence `div3 = d_x ux + d_y uy + u_r / r` of case `:C` at `(X, Y)`
+in units of `U0 / R`; `-30` at the centre and 0 for `X^2 + Y^2 >= 1`.
+
+Parameters
+----------
+case : Symbol
+    `:C`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+exact_div3(case::Symbol, X::Real, Y::Real) = _case_c_eval(case, :div3, X, Y)
+
+"""
+    exact_pressures(case, X, Y)
+
+Return the exact total and fluid pressure of case `:C` at `(X, Y)` relative to the ambient
+pressure, `(P_t - p_s, P_f - p_s)`, in units of `stress_scale(:C)`; `(0, 0)` for
+`X^2 + Y^2 >= 1`.
+
+Parameters
+----------
+case : Symbol
+    `:C`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Tuple{Float64,Float64}
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+function exact_pressures(case::Symbol, X::Real, Y::Real)
+    return (_case_c_eval(case, :pt, X, Y), _case_c_eval(case, :pf, X, Y))
+end
+
+"""
+    exact_eii(case, X, Y)
+
+Return the exact second invariant `E_II = sqrt(EXX^2 + EXY^2 + 0.75 e33d^2)` of the
+strain rate of case `:C` at `(X, Y)`, as the stress update defines it, in units of
+`U0 / R`; 0 at the centre and for `X^2 + Y^2 >= 1`.
+
+Parameters
+----------
+case : Symbol
+    `:C`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+exact_eii(case::Symbol, X::Real, Y::Real) = sqrt(max(_case_c_eval(case, :eii2, X, Y), 0.0))
+
+"""
+    exact_sii(case, X, Y)
+
+Return the exact second invariant `S_II = 2 eta E_II` of the deviatoric stress of case `:C`
+in the viscous limit at `(X, Y)`, in units of `stress_scale(:C)`.
+
+Parameters
+----------
+case : Symbol
+    `:C`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+exact_sii(case::Symbol, X::Real, Y::Real) = 2 * exact_eii(case, X, Y)
+
+"""
+    exact_hs(case, X, Y)
+
+Return the exact heating of `compute_shear_heating!` for case `:C` at `(X, Y)`: the
+deviatoric part `4 eta E_II^2`, the compaction part `(P_t - P_f)^2 / Z` and the Darcy part
+`(mu / k) |q|^2`, in units of `eta U0^2 / R^2`; 0 for `X^2 + Y^2 >= 1`.
+
+Parameters
+----------
+case : Symbol
+    `:C`.
+X, Y : Real
+    Nondimensional coordinates, finite.
+
+Returns
+-------
+Float64
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+DomainError
+    If `X` or `Y` is not finite.
+"""
+exact_hs(case::Symbol, X::Real, Y::Real) = _case_c_eval(case, :hs, X, Y)
 
 """
     _check_positive(name, v)
@@ -948,16 +1297,16 @@ end
     velocity_scale(case; f0=F0, u0=U0, r_planet=R_PLANET, eta=ETA_ROCK)
 
 Return the velocity unit of `exact_velocity`: `f0 r_planet^2 / eta` for the azimuthal
-cases and `u0` for case `:B`.
+cases and `u0` for cases `:B` and `:C`.
 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 f0 : Real, optional
     Force scale [N/m^3], finite (default `F0`).
 u0 : Real, optional
-    Velocity scale of case `:B` [m/s], finite (default `U0`).
+    Velocity scale of cases `:B` and `:C` [m/s], finite (default `U0`).
 r_planet : Real, optional
     Radius [m], finite and positive (default `R_PLANET`).
 eta : Real, optional
@@ -983,19 +1332,19 @@ function velocity_scale(
     isfinite(u0) || throw(DomainError(u0, "U0 must be finite"))
     _check_positive("r_planet", r_planet)
     _check_positive("eta", eta)
-    return case == :B ? Float64(u0) : Float64(f0) * Float64(r_planet)^2 / Float64(eta)
+    return case in (:B, :C) ? Float64(u0) : Float64(f0) * Float64(r_planet)^2 / Float64(eta)
 end
 
 """
     force_scale(case; f0=F0, u0=U0, r_planet=R_PLANET, eta=ETA_ROCK)
 
 Return the force unit of `exact_force`: `f0` for the azimuthal cases and
-`eta u0 / r_planet^2` for case `:B`.
+`eta u0 / r_planet^2` for cases `:B` and `:C`.
 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 f0, u0, r_planet, eta : Real, optional
     As for `velocity_scale`.
 
@@ -1022,12 +1371,12 @@ end
     stress_scale(case; f0=F0, u0=U0, r_planet=R_PLANET, eta=ETA_ROCK)
 
 Return the stress unit of the case, `eta velocity_scale / r_planet`: `f0 r_planet` for the
-azimuthal cases and `eta u0 / r_planet` for case `:B`.
+azimuthal cases and `eta u0 / r_planet` for cases `:B` and `:C`.
 
 Parameters
 ----------
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 f0, u0, r_planet, eta : Real, optional
     As for `velocity_scale`.
 
@@ -1081,11 +1430,13 @@ Float64
 profile_norm_ratio() = Float64(sqrt(BigFloat(profile_ratio_squared())))
 
 """
-    make_config(N; spherical_flow, darcy_elimination=true)
+    make_config(N; spherical_flow, darcy_elimination=true, case=:A)
 
 Return the `SimulationConfig` of the case on an `N` x `N` grid: uniform viscosity
-`ETA_ROCK`, `eta / zeta = ETA_RATIO` through `solver.etaphikoef = PHI / ETA_RATIO`, the
-time step `DT_YR`, the surface pressure `P_AMB` and no venting.
+`ETA_ROCK`, `eta / zeta = eta_zeta_ratio(case)` through
+`solver.etaphikoef = PHI / eta_zeta_ratio(case)`, the time step `DT_YR`, the surface
+pressure `ambient_pressure(case)` and no venting. Cases `:A`, `:A0` and `:B` share one
+configuration.
 
 Parameters
 ----------
@@ -1098,6 +1449,8 @@ spherical_flow : Bool
 darcy_elimination : Bool, optional
     Value of `solver.darcy_elimination`: `true` solves the 4-variable system, `false` the
     6-variable system (default `true`).
+case : Symbol, optional
+    `:A`, `:A0`, `:B` or `:C` (default `:A`).
 
 Returns
 -------
@@ -1106,9 +1459,13 @@ SimulationConfig
 Raises
 ------
 ArgumentError
-    If `N < NX_MIN` or `N` is even.
+    If `N < NX_MIN` or `N` is even, `case` is not in `CASES`, or `case` has no exact
+    solution for `spherical_flow`.
 """
-function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
+function make_config(
+    N::Int; spherical_flow::Bool, darcy_elimination::Bool=true, case::Symbol=:A
+)
+    _check_case(case; spherical_flow=spherical_flow)
     N >= NX_MIN ||
         throw(ArgumentError("N must be at least $NX_MIN to resolve the centre fit, got $N"))
     isodd(N) || throw(
@@ -1123,7 +1480,7 @@ function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
             rcrust=R_PLANET,
             xcenter=X_CENTRE,
             ycenter=Y_CENTRE,
-            psurface=P_AMB,
+            psurface=ambient_pressure(case),
             spherical_metric=true,
             spherical_flow=spherical_flow,
             gravity_mode=:enclosed_mass,
@@ -1133,7 +1490,7 @@ function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
             darcy_elimination=darcy_elimination,
             etamax=ETA_MAX,
             etamin=ETA_MIN,
-            etaphikoef=PHI / ETA_RATIO,
+            etaphikoef=PHI / eta_zeta_ratio(case),
         ),
         materials=MaterialConfig(;
             etasolidm=eta3,
@@ -1157,7 +1514,9 @@ function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
             active=false, mode=:darcy_sink, species=:H2O, k_vent=1.0e-6, ice_sealing=false
         ),
         reaction=ReactionConfig(; active=false, fluid_overpressure_coupling=true),
-        disk=DiskConfig(; enabled=true, model=:fixed, t_ambient=T_SURF, p_amb_disk=P_AMB),
+        disk=DiskConfig(;
+            enabled=true, model=:fixed, t_ambient=T_SURF, p_amb_disk=ambient_pressure(case)
+        ),
         output=OutputConfig(; save_final=false, savematstep=100, visstep=100),
     )
 end
@@ -1214,9 +1573,9 @@ _nd(x, y) = ((x - X_CENTRE) / R_PLANET, (y - Y_CENTRE) / R_PLANET)
 Set the grid fields of the case: uniform viscosity `ETA_ROCK` (basic nodes `ETA`, `ETA0`
 and P nodes `ETAP`), shear modulus `SHEAR_MODULUS`, strengths `STRENGTH_FILL` without
 friction, porosity `PHI`, no compressibility, no stress history (`SXX0`, `SXY0`, `S330`),
-density `RHO_SOLID` and fluid density `RHO_FLUID`, pressures `P_AMB`, the face resistance
-`MU_F / K_PERM`, and the body force of `case` as `gx = fx / RHOX` and `gy = fy / RHOY` at
-the vx and vy nodes.
+density `RHO_SOLID` and fluid density `RHO_FLUID`, pressures `ambient_pressure(case)`, the
+face resistance `MU_F / K_PERM`, and the body force of `case` as `gx = fx / RHOX` and
+`gy = fy / RHOY` at the vx and vy nodes.
 
 Parameters
 ----------
@@ -1225,7 +1584,7 @@ state : SimulationState
 coords : GridCoordinates
     Staggered grid coordinates of `state`.
 case : Symbol
-    `:A`, `:A0` or `:B`. Case `:A` has the same force with and without the option.
+    `:A`, `:A0`, `:B` or `:C`. Case `:A` has the same force with and without the option.
 
 Returns
 -------
@@ -1264,7 +1623,7 @@ function set_fields!(state, coords, case::Symbol)
     fill!(g.RHOFX, RHO_FLUID)
     fill!(g.RHOFY, RHO_FLUID)
     for f in (g.pr, g.pr0, g.pf, g.pf0)
-        fill!(f, P_AMB)
+        fill!(f, ambient_pressure(case))
     end
     fill!(g.RX, MU_F / K_PERM)
     fill!(g.RY, MU_F / K_PERM)
@@ -1282,7 +1641,7 @@ end
     _init_case(cfg, out, case)
 
 Build the state of the case with `init_simulation`, set timestep 1, the ambient pressure
-`P_AMB`, the time step of `cfg` in seconds and the grid fields of `set_fields!`.
+`ambient_pressure(case)`, the time step of `cfg` in seconds and the grid fields of `set_fields!`.
 
 Parameters
 ----------
@@ -1291,7 +1650,7 @@ cfg : SimulationConfig
 out : String
     Output folder of `init_simulation`.
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 
 Returns
 -------
@@ -1309,7 +1668,7 @@ function _init_case(cfg, out, case::Symbol)
         return Erebus.init_simulation(cfg; output_path=out)
     end
     state.timestep = 1
-    state.accumulators.P_amb = P_AMB
+    state.accumulators.P_amb = ambient_pressure(case)
     state.dt = cfg.time.dt_initial * cfg.time.yearlength
     set_fields!(state, coords, case)
     return (state, coords, ws, tio, rest)
@@ -1358,7 +1717,7 @@ Parameters
 grid : NamedTuple
     Grid from `grid_of`.
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 spherical_flow : Bool, optional
     Value of `geometry.spherical_flow` (default `true`).
 
@@ -1397,7 +1756,7 @@ Parameters
 grid : NamedTuple
     Grid from `grid_of`.
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 
 Returns
 -------
@@ -1434,7 +1793,7 @@ vx, vy : AbstractMatrix{Float64}
 grid : NamedTuple
     Grid from `grid_of`.
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 spherical_flow : Bool, optional
     Setting of the exact flow (default `true`).
 
@@ -1614,7 +1973,7 @@ S33 : AbstractMatrix{Float64}
 grid : NamedTuple
     Grid from `grid_of`.
 case : Symbol, optional
-    Case with a nonzero `tau_33` (default `:B`).
+    Case with a nonzero `tau_33`, `:B` or `:C` (default `:B`).
 
 Returns
 -------
@@ -1624,19 +1983,169 @@ Float64
 Raises
 ------
 ArgumentError
-    If `case` is not `:B` (the azimuthal cases have `tau_33 = 0`).
+    If `case` is not `:B` or `:C` (the azimuthal cases have `tau_33 = 0`).
 """
 function s33_error(S33, grid; case::Symbol=:B)
-    case == :B || throw(ArgumentError("only case :B has a nonzero tau_33"))
-    ex = exact_s33(grid, case)
-    se = sr = 0.0
+    case in (:B, :C) || throw(ArgumentError("only cases :B and :C have a nonzero tau_33"))
+    return pnode_errors(S33, exact_s33(grid, case), grid).l2_inside
+end
+
+"""
+    pnode_errors(field, exact, grid; offset=0.0)
+
+Return the errors of a field at the P nodes against its exact values over the interior P
+nodes: `l2_inside = sqrt(sum (field - offset - exact)^2 / sum exact^2)` over the nodes with
+`r < R`, and `out = max |field - offset - exact| / max |exact|` with the numerator over the
+nodes with `r >= R` and the denominator over the nodes with `r < R`.
+
+Parameters
+----------
+field : AbstractMatrix{Float64}
+    Solved field at the P nodes, size `(Ny1, Nx1)`.
+exact : AbstractMatrix{Float64}
+    Exact field relative to `offset`, same size and units.
+grid : NamedTuple
+    Grid from `grid_of`.
+offset : Float64, optional
+    Value subtracted from `field`, for example the ambient pressure (default `0.0`).
+
+Returns
+-------
+NamedTuple
+    `l2_inside`, `out`, dimensionless.
+
+Raises
+------
+ArgumentError
+    If `exact` is 0 on every node with `r < R`.
+"""
+function pnode_errors(field, exact, grid; offset::Float64=0.0)
+    se = sr = emax_out = vmax = 0.0
     for j in 2:(grid.Nx1 - 1), i in 2:(grid.Ny1 - 1)
         X, Y = _nd(grid.xp[j], grid.yp[i])
-        X^2 + Y^2 < 1 || continue
-        se += (S33[i, j] - ex[i, j])^2
-        sr += ex[i, j]^2
+        d = field[i, j] - offset - exact[i, j]
+        if X^2 + Y^2 < 1
+            se += d^2
+            sr += exact[i, j]^2
+            vmax = max(vmax, abs(exact[i, j]))
+        else
+            emax_out = max(emax_out, abs(d))
+        end
     end
-    return sqrt(se / sr)
+    sr > 0 || throw(ArgumentError("the exact field is 0 inside R"))
+    return (; l2_inside=sqrt(se / sr), out=emax_out / vmax)
+end
+
+"""
+    exact_pnode_fields(grid, case)
+
+Return the exact fields of case `:C` at the P nodes of `grid`: `tau_33` [Pa], `P_t - p_s`
+and `P_f - p_s` [Pa], `E_II` [1/s], `S_II` [Pa] and the heating `H_S` [W/m^3].
+
+Parameters
+----------
+grid : NamedTuple
+    Grid from `grid_of`.
+case : Symbol
+    `:C`.
+
+Returns
+-------
+NamedTuple
+    `s33`, `pt`, `pf`, `eii`, `sii`, `hs`: matrices of size `(Ny1, Nx1)`.
+
+Raises
+------
+ArgumentError
+    If `case` is not `:C`.
+"""
+function exact_pnode_fields(grid, case::Symbol)
+    _check_case_c(case)
+    sc = stress_scale(case)
+    rate = velocity_scale(case) / R_PLANET
+    at(f) =
+        [f(case, _nd(grid.xp[j], grid.yp[i])...) for i in 1:(grid.Ny1), j in 1:(grid.Nx1)]
+    p = at(exact_pressures)
+    return (;
+        s33=sc .* at(exact_tau33),
+        pt=sc .* first.(p),
+        pf=sc .* last.(p),
+        eii=rate .* at(exact_eii),
+        sii=sc .* at(exact_sii),
+        hs=(sc * rate) .* at(exact_hs),
+    )
+end
+
+"""
+    anchor_deviation(pr, pf, grid, p_s)
+
+Return the largest relative deviation of `P_t` and `P_f` from the ambient pressure on the
+anchor rings, the P nodes `i in (2, Ny1 - 1)` or `j in (2, Nx1 - 1)` where the solver sets
+both pressures to `geometry.psurface`.
+
+Parameters
+----------
+pr, pf : AbstractMatrix{Float64}
+    Total and fluid pressure [Pa].
+grid : NamedTuple
+    Grid from `grid_of`.
+p_s : Float64
+    Ambient pressure [Pa], finite and positive.
+
+Returns
+-------
+Float64
+    `max |P - p_s| / p_s` over both rings, dimensionless.
+
+Raises
+------
+DomainError
+    If `p_s` is not finite or not positive.
+"""
+function anchor_deviation(pr, pf, grid, p_s::Float64)
+    _check_positive("p_s", p_s)
+    Ny1, Nx1 = grid.Ny1, grid.Nx1
+    dev = 0.0
+    for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        (i in (2, Ny1 - 1) || j in (2, Nx1 - 1)) || continue
+        dev = max(dev, abs(pr[i, j] - p_s), abs(pf[i, j] - p_s))
+    end
+    return dev / p_s
+end
+
+"""
+    _case_c_heating!(g)
+
+Compute the heating `g.HS` of `compute_shear_heating!` from the solved fields, with
+`S33 = g.S33` as `solve_thermal_energy!` passes it with `spherical_flow = true`.
+
+Parameters
+----------
+g : Grids
+    Grid fields after the solve; `g.HS` is overwritten.
+
+Returns
+-------
+Nothing
+"""
+function _case_c_heating!(g)
+    Erebus.compute_shear_heating!(
+        g.HS,
+        g.ETA,
+        g.SXY,
+        g.ETAP,
+        g.SXX,
+        g.RX,
+        g.RY,
+        g.qxD,
+        g.qyD,
+        g.PHI,
+        g.ETAPHI,
+        g.pr,
+        g.pf;
+        S33=g.S33,
+    )
+    return nothing
 end
 
 """
@@ -1696,9 +2205,10 @@ end
 """
     _condition_ratios(g, dt)
 
-Return the condition ratios of the case after a solve: the largest `ETAP / ETAPHI`
-(`eta / zeta`, condition C1) on the interior P nodes, and the largest `ETA / (GGG dt)` on
-the basic nodes and `ETAP / (GGGP dt)` on the interior P nodes (condition C2).
+Return the condition ratios of the case after a solve: the largest and the smallest
+`ETAP / ETAPHI` (`eta / zeta`, condition C1) on the interior P nodes, and the largest
+`ETA / (GGG dt)` on the basic nodes and `ETAP / (GGGP dt)` on the interior P nodes
+(condition C2).
 
 Parameters
 ----------
@@ -1710,12 +2220,14 @@ dt : Float64
 Returns
 -------
 NamedTuple
-    `eta_zeta`, `elastic`, `elastic_p`, dimensionless.
+    `eta_zeta`, `eta_zeta_min`, `elastic`, `elastic_p`, dimensionless.
 """
 function _condition_ratios(g, dt)
     inner = (2:(size(g.ETAP, 1) - 1), 2:(size(g.ETAP, 2) - 1))
+    ratio = g.ETAP[inner...] ./ g.ETAPHI[inner...]
     return (;
-        eta_zeta=maximum(g.ETAP[inner...] ./ g.ETAPHI[inner...]),
+        eta_zeta=maximum(ratio),
+        eta_zeta_min=minimum(ratio),
         elastic=maximum(g.ETA ./ (g.GGG .* dt)),
         elastic_p=maximum(g.ETAP[inner...] ./ (g.GGGP[inner...] .* dt)),
     )
@@ -1724,14 +2236,16 @@ end
 """
     run_case(N; case, spherical_flow=true, darcy_elimination=true)
 
-Run one solve of the case and compare the velocity with the exact flow of `case`.
+Run one solve of the case and compare the velocity with the exact flow of `case`; for case
+`:C` also compare `S33`, `P_t`, `P_f`, `EII`, `SII` and the heating `HS` of
+`compute_shear_heating!` with their exact fields.
 
 Parameters
 ----------
 N : Int
     Basic grid resolution in x and y, odd and at least `NX_MIN`.
 case : Symbol
-    `:A`, `:A0` or `:B`.
+    `:A`, `:A0`, `:B` or `:C`.
 spherical_flow : Bool, optional
     Value of `geometry.spherical_flow` (default `true`); `false` only for case `:A`.
 darcy_elimination : Bool, optional
@@ -1742,14 +2256,17 @@ Returns
 NamedTuple
     `case`, `spherical_flow`, `N`; `converged` (`plastic_converged`), `n_plastic_passes`,
     `dt` [s] and `dt_dev` (`abs(state.dt / dt - 1)` after the solve, condition C6);
-    `eta_zeta`, `elastic`, `elastic_p` (`_condition_ratios`, C1 and C2); `g_dev`: largest
-    change of `gx` and `gy` by the solve [m/s^2] (C3); copies of `vx`, `vy` [m/s], `pr`
-    [Pa] and `S33` [Pa]; `grid` (`grid_of`); the fields of `velocity_errors`;
-    `centre_node` and `centre_fit`: rotation rate at the centre from
-    `centre_node_rotation` and `centre_fit_rotation` in units of `F0 R / eta` (`NaN` for
-    case `:B`); `s33_l2` (`s33_error`, `NaN` for the azimuthal cases); `dp_max`
-    (`pressure_deviation`) [Pa]; `v_max`: largest velocity component [m/s]; `norm`
-    (`profile_norm`) [m/s].
+    `eta_zeta`, `eta_zeta_min`, `elastic`, `elastic_p` (`_condition_ratios`, C1 and C2);
+    `g_dev`: largest change of `gx` and `gy` by the solve [m/s^2] (C3); `rhof_max`: largest
+    `abs(RHOFX)` and `abs(RHOFY)` after the solve [kg/m^3]; `anchor_dev`
+    (`anchor_deviation`); copies of `vx`, `vy` [m/s], `pr`, `pf` [Pa] and `S33` [Pa];
+    `grid` (`grid_of`); the fields of `velocity_errors`; `centre_node` and `centre_fit`:
+    rotation rate at the centre from `centre_node_rotation` and `centre_fit_rotation` in
+    units of `F0 R / eta` (`NaN` for cases `:B` and `:C`); `s33_l2` (`s33_error`, `NaN`
+    for the azimuthal cases); `pt_l2`, `pf_l2`, `eii_l2`, `sii_l2`, `hs_l2`: L2 errors for
+    `r < R` of `pnode_errors`, and `s33_out`, `pt_out`, `pf_out`: its errors for
+    `r >= R` (`NaN` except for case `:C`); `dp_max` (`pressure_deviation`) [Pa];
+    `v_max`: largest velocity component [m/s]; `norm` (`profile_norm`) [m/s].
 
 Raises
 ------
@@ -1761,7 +2278,9 @@ function run_case(
     N::Int; case::Symbol, spherical_flow::Bool=true, darcy_elimination::Bool=true
 )
     _check_case(case; spherical_flow=spherical_flow)
-    cfg = make_config(N; spherical_flow=spherical_flow, darcy_elimination=darcy_elimination)
+    cfg = make_config(
+        N; spherical_flow=spherical_flow, darcy_elimination=darcy_elimination, case=case
+    )
     return mktempdir() do out
         state, coords, ws, tio, _ = _init_case(cfg, out, case)
         tio === nothing || close(tio)
@@ -1776,8 +2295,9 @@ function run_case(
         grid = grid_of(coords)
         vx, vy = copy(g.vx), copy(g.vy)
         errs = velocity_errors(vx, vy, grid, case; spherical_flow=spherical_flow)
-        azimuthal = case != :B
+        azimuthal = case in (:A, :A0)
         v = velocity_scale(case)
+        c = case == :C ? _case_c_errors(g, grid) : _no_case_c_errors()
         return (;
             case,
             spherical_flow,
@@ -1788,15 +2308,19 @@ function run_case(
             dt_dev=abs(state.dt / dt - 1),
             _condition_ratios(g, dt)...,
             g_dev=max(maximum(abs, g.gx .- gx_in), maximum(abs, g.gy .- gy_in)),
+            rhof_max=max(maximum(abs, g.RHOFX), maximum(abs, g.RHOFY)),
+            anchor_dev=anchor_deviation(g.pr, g.pf, grid, ambient_pressure(case)),
             vx,
             vy,
             pr=copy(g.pr),
+            pf=copy(g.pf),
             S33=copy(g.S33),
             grid,
             errs...,
             centre_node=azimuthal ? centre_node_rotation(vx, vy, grid; scale=v) : NaN,
             centre_fit=azimuthal ? centre_fit_rotation(vx, vy, grid; scale=v) : NaN,
-            s33_l2=azimuthal ? NaN : s33_error(g.S33, grid),
+            s33_l2=azimuthal ? NaN : s33_error(g.S33, grid; case=case),
+            c...,
             dp_max=pressure_deviation(g.pr, grid),
             v_max=max(maximum(abs, vx), maximum(abs, vy)),
             norm=profile_norm(vx, vy, grid),
@@ -1805,18 +2329,79 @@ function run_case(
 end
 
 """
+    _case_c_errors(g, grid)
+
+Return the errors of case `:C` at the P nodes after the solve (`pnode_errors`): `P_t` and
+`P_f` against their exact values relative to `P_AMB_C`, `grids.EII` and `grids.SII` of the
+stress update, and the heating `grids.HS` of `_case_c_heating!` (which overwrites
+`g.HS`).
+
+Parameters
+----------
+g : Grids
+    Grid fields after the solve of case `:C`.
+grid : NamedTuple
+    Grid from `grid_of`.
+
+Returns
+-------
+NamedTuple
+    `pt_l2`, `pf_l2`, `eii_l2`, `sii_l2`, `hs_l2`, `s33_out`, `pt_out`, `pf_out`,
+    dimensionless.
+"""
+function _case_c_errors(g, grid)
+    ex = exact_pnode_fields(grid, :C)
+    _case_c_heating!(g)
+    pt = pnode_errors(g.pr, ex.pt, grid; offset=P_AMB_C)
+    pf = pnode_errors(g.pf, ex.pf, grid; offset=P_AMB_C)
+    return (;
+        pt_l2=pt.l2_inside,
+        pf_l2=pf.l2_inside,
+        eii_l2=pnode_errors(g.EII, ex.eii, grid).l2_inside,
+        sii_l2=pnode_errors(g.SII, ex.sii, grid).l2_inside,
+        hs_l2=pnode_errors(g.HS, ex.hs, grid).l2_inside,
+        s33_out=pnode_errors(g.S33, ex.s33, grid).out,
+        pt_out=pt.out,
+        pf_out=pf.out,
+    )
+end
+
+"""
+    _no_case_c_errors()
+
+Return the fields of `_case_c_errors` set to `NaN`, for the cases other than `:C`.
+
+Returns
+-------
+NamedTuple
+"""
+function _no_case_c_errors()
+    return (;
+        pt_l2=NaN,
+        pf_l2=NaN,
+        eii_l2=NaN,
+        sii_l2=NaN,
+        hs_l2=NaN,
+        s33_out=NaN,
+        pt_out=NaN,
+        pf_out=NaN,
+    )
+end
+
+"""
     elimination_difference(six, four)
 
 Return the largest difference between the 6-variable and the 4-variable solve of one case:
-`max(|vx6 - vx4| / max|vx4|, |vy6 - vy4| / max|vy4|, |pr6 - pr4| / stress_scale(case))`
-over all nodes. The exact pressure is uniform, so the pressure difference is scaled by the
-stress unit of the case and not by the pressure.
+`max(|vx6 - vx4| / max|vx4|, |vy6 - vy4| / max|vy4|, |pr6 - pr4| / stress_scale(case),
+|pf6 - pf4| / stress_scale(case))` over all nodes. The exact pressures of cases `:A` and
+`:B` are uniform, so both pressure differences are scaled by the stress unit of the case and
+not by the pressure.
 
 Parameters
 ----------
 six, four : NamedTuple
     `run_case` results with `darcy_elimination` off and on, or any `NamedTuple` with
-    `case`, `vx`, `vy` and `pr`.
+    `case`, `vx`, `vy`, `pr` and `pf`.
 
 Returns
 -------
@@ -1835,6 +2420,7 @@ function elimination_difference(six, four)
         rel(:vx, maximum(abs, four.vx)),
         rel(:vy, maximum(abs, four.vy)),
         rel(:pr, stress_scale(four.case)),
+        rel(:pf, stress_scale(four.case)),
     )
 end
 
@@ -1854,6 +2440,18 @@ Returns
 Float64
 """
 _order(coarse, fine) = log2(coarse / fine)
+
+# Record rows of case C: metric name and the field of the `run_case` result.
+const CASE_C_ROWS = (
+    ("l2", :l2),
+    ("l2_inside", :l2_inside),
+    ("s33", :s33_l2),
+    ("pt", :pt_l2),
+    ("pf", :pf_l2),
+    ("eii", :eii_l2),
+    ("sii", :sii_l2),
+    ("hs", :hs_l2),
+)
 
 """
     metrics_from_runs(runs)
@@ -1921,7 +2519,22 @@ function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
             metrics["profile_ratio_nx$(n)"] = on.norm / off.norm
         end
     end
-    for (case, tag) in ((:A, "a"), (:B, "b"))
+    for n in NX_LIST
+        r = base(n, :C, true)
+        r === nothing && continue
+        for (name, f) in CASE_C_ROWS
+            metrics["$(name)_c_nx$(n)"] = getfield(r, f)
+        end
+    end
+    mid, fine = base(NX_REFERENCE, :C, true), base(n_fine, :C, true)
+    if mid !== nothing && fine !== nothing
+        for (name, f) in CASE_C_ROWS
+            metrics["$(name)_order_c_$(NX_REFERENCE)_$(n_fine)"] = _order(
+                getfield(mid, f), getfield(fine, f)
+            )
+        end
+    end
+    for (case, tag) in ((:A, "a"), (:B, "b"), (:C, "c"))
         four = base(n_coarse, case, true)
         six = get(runs, (n_coarse, case, true, :elim_off), nothing)
         if four !== nothing && six !== nothing
@@ -1934,10 +2547,10 @@ end
 """
     evaluate_spherical_momentum_benchmark(; nx_list=NX_LIST)
 
-Run case `:A` with `spherical_flow` on and off and case `:B` with it on at every grid in
-`nx_list`, and at the coarsest grid of `NX_LIST` (when in `nx_list`) cases `:A` and `:B`
-with `darcy_elimination = false`, and return the runs and the validation metrics they
-determine.
+Run case `:A` with `spherical_flow` on and off and cases `:B` and `:C` with it on at every
+grid in `nx_list`, and at the coarsest grid of `NX_LIST` (when in `nx_list`) cases `:A`,
+`:B` and `:C` with `darcy_elimination = false`, and return the runs and the validation
+metrics they determine.
 
 Parameters
 ----------
@@ -1961,12 +2574,12 @@ function evaluate_spherical_momentum_benchmark(; nx_list=NX_LIST)
         throw(ArgumentError("nx_list must be a subset of $NX_LIST, got $nx_list"))
     runs = Dict{Tuple,Any}()
     for n in nx_list
-        for (case, sf) in ((:A, true), (:A, false), (:B, true))
+        for (case, sf) in ((:A, true), (:A, false), (:B, true), (:C, true))
             runs[(n, case, sf, :base)] = run_case(n; case=case, spherical_flow=sf)
             n == maximum(NX_LIST) && GC.gc()
         end
         if n == minimum(NX_LIST)
-            for case in (:A, :B)
+            for case in (:A, :B, :C)
                 runs[(n, case, true, :elim_off)] = run_case(
                     n; case=case, darcy_elimination=false
                 )
@@ -2001,6 +2614,9 @@ const HASHED_CASE_CONSTANTS = (
     :F0,
     :U0,
     :B_POWER,
+    :C_POWER,
+    :ETA_RATIO_C,
+    :P_AMB_C,
     :FIT_RHO_MIN,
     :FIT_RHO_MAX,
     :FIT_DEGREE,
@@ -2048,6 +2664,30 @@ const EXPECTED_METRIC_IDS = (
     "centre_node_a_on_nx33",
     "centre_node_a_on_nx65",
     "centre_node_a_on_nx129",
+    "l2_c_nx33",
+    "l2_c_nx65",
+    "l2_c_nx129",
+    "l2_inside_c_nx33",
+    "l2_inside_c_nx65",
+    "l2_inside_c_nx129",
+    "s33_c_nx33",
+    "s33_c_nx65",
+    "s33_c_nx129",
+    "pt_c_nx33",
+    "pt_c_nx65",
+    "pt_c_nx129",
+    "pf_c_nx33",
+    "pf_c_nx65",
+    "pf_c_nx129",
+    "eii_c_nx33",
+    "eii_c_nx65",
+    "eii_c_nx129",
+    "sii_c_nx33",
+    "sii_c_nx65",
+    "sii_c_nx129",
+    "hs_c_nx33",
+    "hs_c_nx65",
+    "hs_c_nx129",
     "l2_order_a_on_65_129",
     "l2_order_a_off_65_129",
     "l2_order_b_65_129",
@@ -2055,24 +2695,39 @@ const EXPECTED_METRIC_IDS = (
     "s33_order_b_65_129",
     "centre_fit_order_a_on_65_129",
     "centre_fit_order_a_off_65_129",
+    "l2_order_c_65_129",
+    "l2_inside_order_c_65_129",
+    "s33_order_c_65_129",
+    "pt_order_c_65_129",
+    "pf_order_c_65_129",
+    "eii_order_c_65_129",
+    "sii_order_c_65_129",
+    "hs_order_c_65_129",
     "centre_fit_ratio_nx65",
     "centre_fit_ratio_nx129",
     "profile_ratio_nx65",
     "profile_ratio_nx129",
     "elim_a_nx33",
     "elim_b_nx33",
+    "elim_c_nx33",
 )
 
-# Regression band of an error row by its grid: about 5 to 20 % of the recorded value.
+# Regression band of an error row by its grid: about 5 to 20 % of the recorded value. The
+# P_t rows of case C have errors 4 times smaller than the others and half the band.
 const ERROR_BAND_BY_GRID = (nx33=2.0e-3, nx65=5.0e-4, nx129=1.5e-4)
+const ERROR_BAND_PT_C = (nx33=1.0e-3, nx65=2.5e-4, nx129=7.5e-5)
 
 const PHYSICS_REGRESSION_BANDS = Dict{
     String,NamedTuple{(:atol, :rtol),Tuple{Float64,Float64}}
 }(
     (
-        mid =>
-            (; atol=getfield(ERROR_BAND_BY_GRID, Symbol(last(split(mid, "_")))), rtol=0.0)
-        for mid in EXPECTED_METRIC_IDS if
+        mid => (;
+            atol=getfield(
+                startswith(mid, "pt_c_") ? ERROR_BAND_PT_C : ERROR_BAND_BY_GRID,
+                Symbol(last(split(mid, "_"))),
+            ),
+            rtol=0.0,
+        ) for mid in EXPECTED_METRIC_IDS if
         !occursin("_order_", mid) && !occursin("_ratio_", mid) && !startswith(mid, "elim")
     )...,
     (
@@ -2085,11 +2740,12 @@ const PHYSICS_REGRESSION_BANDS = Dict{
     "profile_ratio_nx129" => (; atol=1.0e-4, rtol=0.0),
     "elim_a_nx33" => (; atol=1.0e-7, rtol=0.0),
     "elim_b_nx33" => (; atol=1.0e-7, rtol=0.0),
+    "elim_c_nx33" => (; atol=1.0e-7, rtol=0.0),
 )
 
 const REPLAY_RTOL = 1.0e-6
 const REPLAY_ATOL_BOUNDS = Dict{String,Float64}(
-    "elim_a_nx33" => 1.0e-7, "elim_b_nx33" => 1.0e-7
+    "elim_a_nx33" => 1.0e-7, "elim_b_nx33" => 1.0e-7, "elim_c_nx33" => 1.0e-7
 )
 
 """
@@ -2184,7 +2840,9 @@ Return the configuration summary stored in the `[config]` section of the validat
 Parameters
 ----------
 cfg : SimulationConfig
-    Configuration of the case with `spherical_flow = true`, from `make_config`.
+    Configuration of the case with `spherical_flow = true`, from `make_config`. The keys
+    `eta_zeta_ratio_c` and `P_amb_c_Pa` come from the configuration of case `:C` at the
+    same grid.
 
 Returns
 -------
@@ -2192,6 +2850,7 @@ Dict{String,Any}
     Physical and numerical parameters of the case, keyed as in `REQUIRED_CONFIG_KEYS`.
 """
 function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
+    cfg_c = make_config(cfg.grid.Nx; spherical_flow=true, case=:C)
     return Dict{String,Any}(
         "Nx" => collect(NX_LIST),
         "R_planet_m" => cfg.geometry.rplanet,
@@ -2207,6 +2866,9 @@ function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
         "F0_N_m3" => F0,
         "U0_m_s" => U0,
         "b_power" => B_POWER,
+        "c_power" => C_POWER,
+        "eta_zeta_ratio_c" => cfg_c.thermodynamics.phim0 / cfg_c.solver.etaphikoef,
+        "P_amb_c_Pa" => cfg_c.geometry.psurface,
         "dt_yr" => cfg.time.dt_initial,
         "P_amb_Pa" => cfg.geometry.psurface,
         "fit_rho_min" => FIT_RHO_MIN,

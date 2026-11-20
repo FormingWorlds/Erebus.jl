@@ -112,8 +112,8 @@ end
     metric_specs(metrics, refs) -> Vector{NamedTuple}
 
 Return the record entry of every metric, in the order of `EXPECTED_METRIC_IDS`. The bounds
-of the errors are about 1.4 times the values measured on the committed solver, the order
-rows accept `2 +- 0.35`, the ratio rows a relative deviation of about 1.4 times the
+of the errors are about 1.4 times the values measured on the committed solver (case `:C`:
+1.4 times rounded up to 2 significant digits), the order rows accept `2 +- 0.35`, the ratio rows a relative deviation of about 1.4 times the
 measured one, and the elimination rows the fixed bound `1e-7`. Every metric is
 dimensionless.
 
@@ -164,6 +164,14 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         "centre_fit_a_on" => Dict(33 => 0.05, 65 => 0.012, 129 => 0.0031),
         "centre_fit_a_off" => Dict(33 => 0.047, 65 => 0.0112, 129 => 0.0028),
         "centre_node_a_on" => Dict(33 => 0.0136, 65 => 0.01, 129 => 0.006),
+        "l2_c" => Dict(33 => 0.025, 65 => 0.0062, 129 => 0.0016),
+        "l2_inside_c" => Dict(33 => 0.025, 65 => 0.0062, 129 => 0.0016),
+        "s33_c" => Dict(33 => 0.025, 65 => 0.006, 129 => 0.0015),
+        "pt_c" => Dict(33 => 0.011, 65 => 0.0026, 129 => 0.00064),
+        "pf_c" => Dict(33 => 0.024, 65 => 0.0056, 129 => 0.0015),
+        "eii_c" => Dict(33 => 0.018, 65 => 0.0045, 129 => 0.0012),
+        "sii_c" => Dict(33 => 0.018, 65 => 0.0045, 129 => 0.0012),
+        "hs_c" => Dict(33 => 0.024, 65 => 0.0058, 129 => 0.0015),
     )
     error_rows = (
         ("l2_a_on", "A", "Velocity L2 relative error over the box, case A, option on"),
@@ -194,6 +202,42 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             "A",
             "abs(Omega_node / Omega(0) - 1) at the centre basic node, case A, option on",
         ),
+        ("l2_c", "C", "Velocity L2 relative error over the box, case C, option on"),
+        (
+            "l2_inside_c",
+            "C",
+            "Velocity L2 relative error from the nodes with r < R, case C, option on",
+        ),
+        (
+            "s33_c",
+            "C",
+            "S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on",
+        ),
+        (
+            "pt_c",
+            "C",
+            "Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on",
+        ),
+        (
+            "pf_c",
+            "C",
+            "Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on",
+        ),
+        (
+            "eii_c",
+            "C",
+            "EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on",
+        ),
+        (
+            "sii_c",
+            "C",
+            "SII L2 relative error against 2 eta E_II for r < R, case C, option on",
+        ),
+        (
+            "hs_c",
+            "C",
+            "HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on",
+        ),
     )
     for (prefix, case, text) in error_rows, nx in (33, 65, 129)
         add!(
@@ -213,6 +257,14 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
         ("s33_order_b", "B", "S33 L2 error, case B, option on"),
         ("centre_fit_order_a_on", "A", "fitted centre rotation error, case A, option on"),
         ("centre_fit_order_a_off", "A", "fitted centre rotation error, case A, option off"),
+        ("l2_order_c", "C", "velocity L2 error, case C, option on"),
+        ("l2_inside_order_c", "C", "velocity L2 error for r < R, case C, option on"),
+        ("s33_order_c", "C", "S33 L2 error, case C, option on"),
+        ("pt_order_c", "C", "total pressure L2 error, case C, option on"),
+        ("pf_order_c", "C", "fluid pressure L2 error, case C, option on"),
+        ("eii_order_c", "C", "EII L2 error, case C, option on"),
+        ("sii_order_c", "C", "SII L2 error, case C, option on"),
+        ("hs_order_c", "C", "HS L2 error, case C, option on"),
     )
     for (prefix, case, text) in order_rows
         add!(
@@ -246,11 +298,11 @@ function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
             rtol=rtol,
         )
     end
-    for (tag, case) in (("a", "A"), ("b", "B"))
+    for (tag, case) in (("a", "A"), ("b", "B"), ("c", "C"))
         add!(
             "elim_$(tag)_nx33",
             "solver",
-            "Largest relative difference of vx, vy, pr between the 6- and 4-variable paths, case $(case), option on (Nx=33)",
+            "Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case $(case), option on (Nx=33)",
             33,
             1.0e-7,
             "le_atol",
@@ -388,7 +440,7 @@ function write_spherical_momentum_record(
     println(io, "reference_type = \"analytical\"")
     println(
         io,
-        "reference_citation = \"Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, and a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation\"",
+        "reference_citation = \"Closed forms of azimuthal shear u = r Omega(r) e_theta for the momentum equation with and without the spherical metric terms, a manufactured flow r u = curl(r^3 X Y (1 - rho^2)^6 e_z) for the documented spherical-slice momentum equation, and a radial compaction flow u = U0 R grad (1 - rho^2)^5 with q = -u for the 3-D sphere equations of a compressible matrix\"",
     )
     println(io)
     cfg_sum = SMV.expected_config_summary(cfg)
@@ -411,10 +463,13 @@ function write_spherical_momentum_record(
         "P_amb_Pa",
         "fit_rho_min",
         "fit_rho_max",
+        "eta_zeta_ratio_c",
+        "P_amb_c_Pa",
     )
         println(io, "$(key) = $(repr(Float64(cfg_sum[key])))")
     end
     println(io, "b_power = $(cfg_sum["b_power"])")
+    println(io, "c_power = $(cfg_sum["c_power"])")
     println(io, "fit_degree = $(cfg_sum["fit_degree"])")
     println(io, "spherical_metric = $(cfg_sum["spherical_metric"])")
     println(io, "darcy_elimination = $(cfg_sum["darcy_elimination"])")

@@ -96,11 +96,69 @@ function axis_profile(run)
 end
 
 """
+    radial_profiles(run) -> NamedTuple
+
+Return the radial velocity and `S33` of a case `:C` run on the row and the column of nodes
+half a cell next to the axes through the centre, with `0 < r < R`: `u_r = vx r / (x - xc)`
+on the vx nodes of the row `y = yc + dy / 2` and `u_r = vy r / (y - yc)` on the vy nodes of
+the column `x = xc + dx / 2`, exact for a radial flow, in units of `U0`; and `S33` on the P
+nodes of the row `y = yc + dy / 2` and the column `x = xc + dx / 2` in units of
+`SMV.stress_scale(:C)`.
+
+Parameters
+----------
+run : NamedTuple
+    Result of `SMV.run_case` for case `:C` with `vx`, `vy`, `S33` and `grid`; the centre
+    lies on a basic node.
+
+Returns
+-------
+NamedTuple
+    `rho_u`, `u_r`: radius `r / R` and radial velocity, sorted by radius; `rho_s`, `s33`:
+    radius and `S33`, sorted by radius.
+"""
+function radial_profiles(run)
+    g = run.grid
+    xc, yc, R = SMV.X_CENTRE, SMV.Y_CENTRE, SMV.R_PLANET
+    iv = argmin(abs.(g.yvx .- (yc + g.dy / 2)))
+    jv = argmin(abs.(g.xvy .- (xc + g.dx / 2)))
+    ip = argmin(abs.(g.yp .- (yc + g.dy / 2)))
+    jp = argmin(abs.(g.xp .- (xc + g.dx / 2)))
+    rho_u, u_r, rho_s, s33 = Float64[], Float64[], Float64[], Float64[]
+    function push_u!(v, x, y, along)
+        rho = hypot(x, y) / R
+        (0 < rho < 1 && abs(along) > 0.5 * g.dx) || return nothing
+        push!(rho_u, rho)
+        push!(u_r, v * rho * R / along / SMV.velocity_scale(:C))
+        return nothing
+    end
+    for j in 2:(g.Nx1 - 2)
+        x, y = g.xvx[j] - xc, g.yvx[iv] - yc
+        push_u!(run.vx[iv, j], x, y, x)
+    end
+    for i in 2:(g.Ny1 - 2)
+        x, y = g.xvy[jv] - xc, g.yvy[i] - yc
+        push_u!(run.vy[i, jv], x, y, y)
+    end
+    for (i, j) in Iterators.flatten((
+        ((ip, j) for j in 2:(g.Nx1 - 1)), ((i, jp) for i in 2:(g.Ny1 - 1))
+    ))
+        rho = hypot(g.xp[j] - xc, g.yp[i] - yc) / R
+        rho < 1 || continue
+        push!(rho_s, rho)
+        push!(s33, run.S33[i, j] / SMV.stress_scale(:C))
+    end
+    ou, os = sortperm(rho_u), sortperm(rho_s)
+    return (; rho_u=rho_u[ou], u_r=u_r[ou], rho_s=rho_s[os], s33=s33[os])
+end
+
+"""
     export_all(outdir; record_path=DEFAULT_RECORD, runs=nothing, nx=SMV.NX_REFERENCE)
 
 Write the case `:A` axis profiles at `Nx = nx` with the option on and off, the exact
-profiles `u_theta = rho Omega(rho)`, and the errors of the record at every grid in
-`SMV.NX_LIST`.
+profiles `u_theta = rho Omega(rho)`, the case `:C` radial profiles of `u_r` and `S33` at
+`Nx = nx` (`radial_profiles`) with their exact curves, and the errors of the record at
+every grid in `SMV.NX_LIST`.
 
 Parameters
 ----------
@@ -108,10 +166,11 @@ outdir : String
     Output folder, created if missing.
 record_path : String, optional
     Validation record TOML file with the ids `l2_a_on_nx<N>`, `l2_a_off_nx<N>`,
-    `l2_b_nx<N>`, `s33_b_nx<N>`, `centre_fit_a_on_nx<N>` and `centre_node_a_on_nx<N>`.
+    `l2_b_nx<N>`, `s33_b_nx<N>`, `centre_fit_a_on_nx<N>`, `centre_node_a_on_nx<N>` and the
+    case `:C` ids `<name>_c_nx<N>`.
 runs : Union{AbstractDict,Nothing}, optional
-    `run_case` results keyed by `(N, :A, spherical_flow, :base)` with the runs at `nx`, or
-    `nothing` to run them here (default).
+    `run_case` results keyed by `(N, :A, spherical_flow, :base)` and `(N, :C, true, :base)`
+    with the runs at `nx`, or `nothing` to run them here (default).
 nx : Int, optional
     Grid of the profiles (default `SMV.NX_REFERENCE`, the grid of the figure).
 
@@ -119,7 +178,8 @@ Returns
 -------
 String
     `outdir`, holding `profile_on_<nx>.csv`, `profile_off_<nx>.csv`,
-    `reference_curves.csv` and `convergence.csv`.
+    `reference_curves.csv`, `convergence.csv`, `profile_c_u_<nx>.csv`,
+    `profile_c_s33_<nx>.csv`, `reference_curves_c.csv` and `convergence_c.csv`.
 
 Raises
 ------
@@ -166,6 +226,29 @@ function export_all(
         joinpath(outdir, "convergence.csv"),
         ["nx", names...],
         [grids, ([values["$(name)_nx$(n)"] for n in grids] for name in names)...],
+    )
+    run_c = runs === nothing ? SMV.run_case(nx; case=:C) : runs[(nx, :C, true, :base)]
+    pc = radial_profiles(run_c)
+    write_columns(
+        joinpath(outdir, "profile_c_u_$(nx).csv"), ["rho", "u_r"], [pc.rho_u, pc.u_r]
+    )
+    write_columns(
+        joinpath(outdir, "profile_c_s33_$(nx).csv"), ["rho", "tau33"], [pc.rho_s, pc.s33]
+    )
+    write_columns(
+        joinpath(outdir, "reference_curves_c.csv"),
+        ["rho", "u_r", "tau33"],
+        [
+            rhos,
+            [SMV.exact_velocity(:C, r, 0.0)[1] for r in rhos],
+            [SMV.exact_tau33(:C, r, 0.0) for r in rhos],
+        ],
+    )
+    names_c = Tuple("$(name)_c" for (name, _) in SMV.CASE_C_ROWS)
+    write_columns(
+        joinpath(outdir, "convergence_c.csv"),
+        ["nx", names_c...],
+        [grids, ([values["$(name)_nx$(n)"] for n in grids] for name in names_c)...],
     )
     return outdir
 end

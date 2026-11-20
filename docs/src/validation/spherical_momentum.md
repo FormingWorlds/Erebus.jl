@@ -9,14 +9,16 @@ Validation here means that we run the code on a case where another source gives 
 The test then checks that the code gives that answer.
 If the metric terms were wrong, the flow inside a planetesimal and the stresses that break its rock would be wrong.
 
-The page checks 2 groups of metric terms.
-Each group changes the flow by an amount of order 1, so a fault in either of them shows in the result.
+The page checks 3 groups of terms.
+Each group changes the result by an amount of order 1, so a fault in any of them shows in the result.
 
 - The weights on the stress, which act on every flow that shears (case A).
 - The out-of-plane stress $S_{33}$ and its hoop term, which act only on a flow that moves towards or away from the centre (case B).
+- The volumetric trace of the stress, which acts only on a flow that compresses or dilates the rock (case C).
 
-The page also checks the stress update that stores $S_{33}$ in `grids.S33` after the solve (case B).
+The page also checks the stress update that stores $S_{33}$ in `grids.S33` after the solve (cases B and C).
 A fault in this update does not change the flow, but it changes the stored stress.
+Case C also checks the second invariants and the heating that the code computes from $S_{33}$.
 
 Each case below says why the check exists, what it tests, how we know the right answer and why it matters.
 The box "Test details" at the end of each case gives the reference, the tolerance, the test ids and the command.
@@ -54,16 +56,16 @@ With the option off, the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D
     After the solve, `_spherical_stress_update!` in `src/numerics/plasticity.jl` writes `grids.S33` from the solved velocity.
 
 **The test set-up.**
-Both cases use the same set-up.
+All cases use the same set-up, except for 2 values of case C that its section gives.
 
 - A sphere of radius $R = 50$ km sits in the middle of a square box of 140 km.
 - `Nx` is the number of basic nodes (the cell corners of the staggered grid) on each side of the box.
   It is odd, so a basic node lies on the centre.
 - The shear viscosity is $\eta = 10^{20}$ Pa s in the whole box, with no air layer.
-- The rock is nearly incompressible: the shear viscosity is $10^{-6}$ times the compaction viscosity $\zeta$.
+- In cases A and B the rock is nearly incompressible: the shear viscosity is $10^{-6}$ times the compaction viscosity $\zeta$.
 - The shear modulus is $10^{35}$ Pa, so elasticity does not change the viscosity, and the stress history is 0.
 - The fluid density is 0, and the case sets the body force $f = \rho g$ directly in the gravity fields `gx` and `gy`.
-- The total pressure is held at $P_\mathrm{amb} = 100$ Pa on the box edge.
+- The total pressure is held at $P_\mathrm{amb} = 100$ Pa on the box edge in cases A and B.
 - Every exact flow is 0 outside the sphere ($r \ge R$), so the free-slip walls and the pressure ring on the box edge see the exact solution.
 
 The case builds the state with `init_simulation`, sets the grid fields directly and calls `solve_stokes_darcy!` once, on timestep 1.
@@ -253,40 +255,169 @@ A pass means that both errors stay below their limits and fall along the dotted 
     - Test id: `l2_b_nx{33,65,129}`, `l2_inside_b_nx{33,65,129}`, `s33_b_nx{33,65,129}`, `l2_order_b_65_129`, `l2_inside_order_b_65_129`, `s33_order_b_65_129`, `elim_b_nx33`.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
-## Conditions of both cases
+## Case C: compaction towards the centre, and the volumetric trace of the stress
 
-Both cases rest on 6 conditions, and the test asserts each of them.
+**Why this check exists.**
+The 3-D deviatoric stress holds the volumetric trace $-\frac{2}{3} \eta \nabla_3 \cdot \mathbf{u}$, with the 3-D divergence $\nabla_3 \cdot \mathbf{u}$ of the velocity in 1/s.
+Cases A and B have $\nabla_3 \cdot \mathbf{u} = 0$, so a fault in the trace changes their flow far less than the grid error does.
+Case C fails when one of these terms is missing or has a wrong factor:
 
-!!! details "The 6 conditions that the test asserts"
-    The exact solutions and the solve rest on 6 conditions.
+- the trace in $S_{33}$ of the momentum rows, in the $S_{33}$ flux or in the hoop term;
+- the factor 2 of $\dot\varepsilon_{33}$ in $S_{33}$, in the momentum rows and in the stress update;
+- the trace in the stress update that writes `grids.S33` and the second invariant `grids.EII`;
+- the out-of-plane part $\frac{3}{4} S_{33}^2$ of the second invariant `grids.SII`;
+- the out-of-plane heating $\frac{3}{4} S_{33}^2 / \eta$ in `compute_shear_heating!`;
+- the compaction term of the fluid continuity row.
+
+**What it tests.**
+Case C is a manufactured flow of a compressible rock.
+We choose the flow and the 2 pressures, and then compute the body force that makes them an exact solution.
+The rock moves towards the centre with the radial velocity $u_r = -10 \, U_0 \, \rho (1 - \rho^2)^4$, with $U_0 = 10^{-9}$ m/s and the scaled radius $\rho = r / R$.
+The flow compresses the rock near the centre and dilates it in the outer shell.
+So $\nabla_3 \cdot \mathbf{u}$ is of order $U_0 / R$, and the trace is of the same order as the rest of the stress.
+The pore fluid flows the other way, with the Darcy flux $\mathbf{q} = -\mathbf{u}$ in m/s, so the rock and its fluid together keep their volume.
+The case sets the compaction viscosity equal to the shear viscosity, $\zeta = \eta$, through `solver.etaphikoef` $= \phi$.
+It holds both pressures at $p_s = 10^7$ Pa on the box edge, which keeps the total pressure positive everywhere.
+The test runs the case with the option on at `Nx = 33`, 65 and 129, and compares these fields with their exact values:
+
+- the velocity, over the whole box and over the nodes with $r < R$;
+- `grids.S33` with the exact $\tau_{33}$;
+- the total pressure $P_t$ and the fluid pressure $P_f$;
+- `grids.EII` and `grids.SII`, the second invariants of the strain rate and of the stress;
+- the heating `grids.HS` that `compute_shear_heating!` computes with `S33 = grids.S33`, as the thermal step does with the option on;
+- the velocity and both pressures of the 2 solver paths, at `Nx = 33` only.
+
+Each error at the pressure nodes is the L2 norm of the difference over the nodes with $r < R$, divided by the L2 norm of the exact field there.
+For the 2 pressures the exact field is $P - p_s$.
+The test also bounds the errors of $S_{33}$, $P_t$ and $P_f$ at the pressure nodes with $r \ge R$, where the exact fields are 0.
+
+**How we know the right answer.**
+For a flow that points only towards the centre, the momentum equation of the slice is the radial momentum equation of a 3-D sphere:
+
+$$\partial_r \sigma_{rr} + \frac{2 (\sigma_{rr} - \sigma_{\theta\theta})}{r} + f_r = 0.$$
+
+Here $\sigma_{rr} = \tau_{rr} - P_t$ and $\sigma_{\theta\theta} = \tau_{\theta\theta} - P_t$ are the radial and the out-of-plane total stress in Pa, and $f_r$ is the radial body force in N/m³.
+The deviatoric stresses are $\tau_{rr} = 2 \eta (\partial_r u_r - \nabla_3 \cdot \mathbf{u} / 3)$ and $\tau_{\theta\theta} = \tau_{33} = 2 \eta (u_r / r - \nabla_3 \cdot \mathbf{u} / 3)$, with $\nabla_3 \cdot \mathbf{u} = \partial_r u_r + 2 u_r / r$.
+This $\tau_{\theta\theta}$ is Eq. (6) of Hernlund and Tackley (2008) with $d = 2$ and the bulk viscosity $k_0 = 0$.
+The test computes $f_r$ from these equations by finite differences in $r$ in 256-bit arithmetic.
+It agrees with the force of the case to a relative $10^{-6}$ on the x axis and on the diagonal.
+The same equations without the trace need a force that differs by more than 10 % of the largest force.
+Case C therefore checks the slice against the 3-D equations of a sphere, and not only against the documented slice equation.
+
+!!! details "The exact fields of case C"
+    The velocity is $\mathbf{u} = U_0 R \nabla \Phi$ with the potential $\Phi = (1 - \rho^2)^5$.
+    The solid continuity row holds $\nabla_3 \cdot \mathbf{u} + (P_t - P_f) / Z = 0$, with $Z = \zeta (1 - \phi)$ in Pa s and the porosity $\phi = 0.2$.
+    So $P_t = P_f - Z \nabla_3 \cdot \mathbf{u}$.
+    The Darcy rows hold $\mathbf{q} = -(k / \mu) \nabla P_f$, with the permeability $k = 10^{-13}$ m², the fluid viscosity $\mu = 10^{-3}$ Pa s and no fluid density.
+    The fluid pressure $P_f - p_s = (\mu U_0 R / k) \Phi$ gives $\mathbf{q} = -\mathbf{u}$.
+    The fluid continuity row holds $\nabla_3 \cdot \mathbf{q} - (P_t - P_f) / Z = 0$, which then follows from the solid continuity.
+    The test checks the 3 rows with finite differences of the exact fields.
+
+    At the centre the rock compacts in all 3 directions alike, with $\nabla_3 \cdot \mathbf{u} = -30 \, U_0 / R$ and $\tau_{33} = 0$.
+    There $P_t - p_s = 24.25 \, \eta U_0 / R$, about 48.5 MPa, and $P_f - p_s = 0.25 \, \eta U_0 / R$.
+    In the outer shell the rock dilates and $P_t < p_s$; with $p_s = 100$ Pa the total pressure there would be a tension of more than 1 MPa.
+
+    The second invariant of the strain rate is $E_{II} = \sqrt{E_{xx}^2 + E_{xy}^2 + \frac{3}{4} \dot\varepsilon'^2_{33}}$, as the stress update defines it, with the deviatoric out-of-plane strain rate $\dot\varepsilon'_{33} = \dot\varepsilon_{33} - \nabla_3 \cdot \mathbf{u} / 3$.
+    For case C it is $\frac{80}{\sqrt{3}} \frac{U_0}{R} \rho^2 (1 - \rho^2)^3$, which is 0 at the centre.
+    The test checks it against $\sqrt{(\dot\varepsilon'^2_{rr} + 2 \dot\varepsilon'^2_{\theta\theta}) / 2}$ of the 3-D strain rate.
+    In the viscous limit $S_{II} = 2 \eta E_{II}$.
+    The heating is $H_S = 4 \eta E_{II}^2 + Z (\nabla_3 \cdot \mathbf{u})^2 + (\mu / k) |\mathbf{q}|^2$: the deviatoric, the compaction and the Darcy part.
+
+    The case builds the fields as polynomials in $X = (x - x_c) / R$ and $Y = (y - y_c) / R$ with exact rational coefficients.
+    The terms $u_r / r$ and $\tau_{33}$, and the hoop numerator of the force, are divided by $\rho^2$ exactly, so every field is finite at the centre.
+    The force there is 0.
+    Every field is 0 for $r \ge R$, and the force is 0 on $r = R$.
+
+**Why it matters.**
+Every run with `spherical_flow = true` in which the rock compacts or dilates uses the trace.
+The compaction of a porous planetesimal interior and the flow of its pore fluid are such runs.
+
+```@raw html
+<div class="validation-fig-light">
+```
+![Radial velocity and out-of-plane stress of case C against radius next to the axes at Nx = 65 with their exact profiles, and the errors of case C against Nx with a second-order guide.](../assets/validation_momentum_compaction_light.svg)
+```@raw html
+</div>
+<div class="validation-fig-dark">
+```
+![Radial velocity and out-of-plane stress of case C against radius next to the axes at Nx = 65 with their exact profiles, and the errors of case C against Nx with a second-order guide.](../assets/validation_momentum_compaction_dark.svg)
+```@raw html
+</div>
+```
+
+**How to read the plot.**
+Panel (a) shows the radial velocity $u_r$ against the scaled radius $r / R$ at `Nx = 65`, in units of $U_0$.
+The points are the velocity nodes on the row and the column half a cell next to the axes through the centre.
+Panel (b) shows `grids.S33` on the pressure nodes of the same row and column, in units of $\eta U_0 / R$.
+In both panels the line is the exact solution and the points are the values of the code.
+A pass means that the points lie on the line.
+Panel (c) shows the errors of case C against `Nx` on logarithmic axes, with a dotted line of second order.
+A pass means that the errors stay below their limits and fall along the dotted line.
+
+**Known limit.**
+The trace changes the flow of this case by about 10 %, not by an amount of order 1.
+For a flow without rotation, the trace changes the coefficient of $\nabla (\nabla_3 \cdot \mathbf{u})$ in the momentum equation from $Z + 4 \eta / 3$ to $Z + 2 \eta$.
+So a missing trace changes the flow by at most 1/3, for any $\eta / \zeta$.
+With $\eta / \zeta = 1$ a run without the trace in the momentum rows has the velocity error 0.10 at `Nx = 65`, 24 times the grid error.
+The same run has the errors 0.22 in $P_t$ and 0.22 in $S_{33}$, and a stress update without the trace has the $S_{33}$ error 1.5.
+
+Near the centre the $S_{33}$ error falls slowly on each node, because the weight $w = 2r$ has a cone there.
+At `Nx = 33` the 32 pressure nodes within 3 cells of the centre carry 0.57 of the squared $S_{33}$ error inside $R$.
+At `Nx = 65` the same 32 nodes carry 0.22, so the L2 error still falls at second order.
+
+The case has a uniform viscosity, a square grid, a shear modulus of $10^{35}$ Pa and no stress history `S330`.
+It tests only $\eta / \zeta = 1$.
+
+!!! details "Test details"
+    - Reference: the exact fields of case C, from polynomials with exact rational coefficients; the force checked against the radial momentum equation of a 3-D sphere; equal fields of the 6-variable and the 4-variable solver paths.
+    - Tolerance:
+        - each error: at most about 1.4 times its recorded value (the table at the end of the page);
+        - each order between `Nx = 65` and `Nx = 129`: 2 within 0.35;
+        - the difference of the 2 solver paths: at most $10^{-7}$, with both pressure differences scaled by $\eta U_0 / R$.
+    - Regression band: as for case A, except the $P_t$ errors, with $10^{-3}$, $2.5 \times 10^{-4}$ and $7.5 \times 10^{-5}$ at `Nx = 33`, 65 and 129.
+    - Test id: `l2_c_nx{33,65,129}`, `l2_inside_c_nx{33,65,129}`, `s33_c_nx{33,65,129}`, `pt_c_nx{33,65,129}`, `pf_c_nx{33,65,129}`, `eii_c_nx{33,65,129}`, `sii_c_nx{33,65,129}`, `hs_c_nx{33,65,129}`, the order of each as `l2_order_c_65_129` to `hs_order_c_65_129`, and `elim_c_nx33`.
+      `Pkg.test` pins the velocity error of case C for $r < R$ at `Nx = 65`, 4.3581222816e-3, to a relative $10^{-6}$.
+      The test `Thermal step adds the S33 heating with the option on` in `test/test_spherical_momentum.jl` checks that the thermal step passes `grids.S33` to `compute_shear_heating!`.
+    - Command: `julia --project=. tools/check_validation.jl --check`.
+
+## Conditions of the cases
+
+The cases rest on 8 conditions, and the test asserts each of them.
+
+!!! details "The 8 conditions that the test asserts"
+    The exact solutions and the solve rest on 8 conditions.
     Each condition is a test assertion, so a change of the set-up that breaks one fails the test.
 
-    - C1, nearly incompressible rock: after the solve, on every interior pressure node, $\eta / \zeta \le 10^{-6}$.
-      The exact flows have $\nabla_3 \cdot \mathbf{u} = 0$ and $P_t = P_f = P_\mathrm{amb}$, with the fluid pressure $P_f$, so they solve the continuum equations for any $\zeta > 0$.
-      C1 makes the solve a nearly incompressible Stokes problem.
+    - C1, compaction viscosity: after the solve, on every interior pressure node, $\eta / \zeta = 10^{-6}$ in cases A and B and $\eta / \zeta = 1$ in case C, to a relative $10^{-12}$.
+      The exact flows of cases A and B have $\nabla_3 \cdot \mathbf{u} = 0$ and $P_t = P_f = P_\mathrm{amb}$, with the fluid pressure $P_f$, so they solve the continuum equations for any $\zeta > 0$.
+      For these cases C1 makes the solve a nearly incompressible Stokes problem.
+      The exact fields of case C hold for $\zeta = \eta$ only.
     - C2, viscous limit: on every basic node and every pressure node, the shear modulus times the time step $\Delta t$ is at least $10^6$ times the viscosity.
     - C3, body force: the solve leaves `gx` and `gy` unchanged.
     - C4, force moments: the moments $\int s^2 f_\theta$ and $\int s^3 f_\theta$ of the case A force are 0 in exact rational arithmetic.
     - C5, compact flow: the exact velocity of every case is 0 on $r = R$, checked in rational arithmetic at rational points of the circle and to round-off in Float64.
     - C6, one solve: the time step after the solve equals $\Delta t$ to a relative $10^{-12}$, with one plastic pass that converges.
+      The strengths are $10^{20}$ Pa, so no node yields.
+    - C7, no fluid body force: the fluid density `RHOFX` and `RHOFY` is at most $10^{-30}$ kg/m³ before and after the solve.
+      With a fluid density, the Darcy flux of case C would not be $-\mathbf{u}$.
+    - C8, anchor rings: after the solve, $P_t$ and $P_f$ equal the ambient pressure on the anchor rings to a relative $10^{-9}$.
+      The anchor rings are the pressure nodes next to the box edge, where the solver sets both pressures to `geometry.psurface`.
 
 ## What these cases do not test
 
-- The volumetric trace $\nabla_3 \cdot \mathbf{u} / 3$ in $S_{33}$.
-  The exact flows have $\nabla_3 \cdot \mathbf{u} = 0$, and $\eta / \zeta = 10^{-6}$ keeps the discrete divergence close to 0.
-  A fault in the trace therefore changes the flow far less than the grid error does.
-  A test of the trace needs a compressible flow.
-  The operator test `Smooth non-radial flow with variable viscosity` in `test/test_spherical_momentum.jl` uses a flow with a nonzero divergence.
-  It checks the rows against the continuum stress divergence with the trace.
+- The volumetric trace $\nabla_3 \cdot \mathbf{u} / 3$ in a flow that also rotates or shears.
+  Cases A and B have $\nabla_3 \cdot \mathbf{u} = 0$, so they do not test the trace.
+  Case C tests the trace, in a flow that points only towards the centre.
 - Elasticity and the stress history `SXX0`, `SXY0` and `S330`: the shear modulus is $10^{35}$ Pa and the history is 0.
   3 tests in `test/test_spherical_momentum.jl` cover them.
   Their names are `Out-of-plane stress history in the momentum right-hand side`, `Stress history of all components in both momentum rows` and `Pressure stays unweighted and the visco-elastic factor scales the stress`.
 - A variable viscosity `ETA` and `ETAP`, grid spacings $\Delta x \ne \Delta y$ and a centre between the grid nodes.
   The case has a uniform viscosity, a square grid and the centre on a basic node.
   The operator tests of `test/test_spherical_momentum.jl` use a variable viscosity, $\Delta x \ne \Delta y$ and a centre between the nodes.
-- A compressible rock: no case has a large $\eta / \zeta$.
-- Gravity of the planet, buoyancy, Darcy flow, plasticity and the time loop.
-  The case sets the force directly, has no fluid density and solves once.
+- A compressible rock with $\eta / \zeta \ne 1$: case C has $\eta / \zeta = 1$ only.
+- Gravity of the planet, buoyancy, a fluid density, plasticity and the time loop.
+  The cases set the force directly, have no fluid density and solve once.
+  Case C has a Darcy flow of the pore fluid, without a fluid body force.
 - How the code computes the viscosity and the force from the markers, the material points that carry the rock properties.
   The case sets the grid fields directly.
 
@@ -306,7 +437,7 @@ The second command needs NumPy and Matplotlib.
 <!-- VALIDATION_RECORD_START: spherical_momentum -->
 ```
 
-**Validation record**: `benchmarks/records/spherical_momentum.toml` (Source commit `b80632a7`, config SHA-256 `f31389014dd1`)
+**Validation record**: `benchmarks/records/spherical_momentum.toml` (Source commit `b80632a7`, config SHA-256 `139902f98ce5`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -334,6 +465,30 @@ The second command needs NumPy and Matplotlib.
 | `A` | abs(Omega_node / Omega(0) - 1) at the centre basic node, case A, option on (Nx=33) | 33 | `9.7009e-03` | `0.0000e+00` | `<= 1.36e-02` | dimensionless | **PASS** |
 | `A` | abs(Omega_node / Omega(0) - 1) at the centre basic node, case A, option on (Nx=65) | 65 | `7.0838e-03` | `0.0000e+00` | `<= 1.00e-02` | dimensionless | **PASS** |
 | `A` | abs(Omega_node / Omega(0) - 1) at the centre basic node, case A, option on (Nx=129) | 129 | `4.2314e-03` | `0.0000e+00` | `<= 6.00e-03` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error over the box, case C, option on (Nx=33) | 33 | `1.7621e-02` | `0.0000e+00` | `<= 2.50e-02` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error over the box, case C, option on (Nx=65) | 65 | `4.3593e-03` | `0.0000e+00` | `<= 6.20e-03` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error over the box, case C, option on (Nx=129) | 129 | `1.0883e-03` | `0.0000e+00` | `<= 1.60e-03` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=33) | 33 | `1.7616e-02` | `0.0000e+00` | `<= 2.50e-02` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=65) | 65 | `4.3581e-03` | `0.0000e+00` | `<= 6.20e-03` | dimensionless | **PASS** |
+| `C` | Velocity L2 relative error from the nodes with r < R, case C, option on (Nx=129) | 129 | `1.0881e-03` | `0.0000e+00` | `<= 1.60e-03` | dimensionless | **PASS** |
+| `C` | S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=33) | 33 | `1.7184e-02` | `0.0000e+00` | `<= 2.50e-02` | dimensionless | **PASS** |
+| `C` | S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=65) | 65 | `4.2575e-03` | `0.0000e+00` | `<= 6.00e-03` | dimensionless | **PASS** |
+| `C` | S33 L2 relative error against tau_33 = 2 eta (u_r / r - div3 / 3) for r < R, case C, option on (Nx=129) | 129 | `1.0629e-03` | `0.0000e+00` | `<= 1.50e-03` | dimensionless | **PASS** |
+| `C` | Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=33) | 33 | `7.3627e-03` | `0.0000e+00` | `<= 1.10e-02` | dimensionless | **PASS** |
+| `C` | Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=65) | 65 | `1.8200e-03` | `0.0000e+00` | `<= 2.60e-03` | dimensionless | **PASS** |
+| `C` | Total pressure L2 error over the L2 norm of P_t - p_s for r < R, case C, option on (Nx=129) | 129 | `4.5474e-04` | `0.0000e+00` | `<= 6.40e-04` | dimensionless | **PASS** |
+| `C` | Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=33) | 33 | `1.6640e-02` | `0.0000e+00` | `<= 2.40e-02` | dimensionless | **PASS** |
+| `C` | Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=65) | 65 | `3.9680e-03` | `0.0000e+00` | `<= 5.60e-03` | dimensionless | **PASS** |
+| `C` | Fluid pressure L2 error over the L2 norm of P_f - p_s for r < R, case C, option on (Nx=129) | 129 | `1.0029e-03` | `0.0000e+00` | `<= 1.50e-03` | dimensionless | **PASS** |
+| `C` | EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=33) | 33 | `1.2803e-02` | `0.0000e+00` | `<= 1.80e-02` | dimensionless | **PASS** |
+| `C` | EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=65) | 65 | `3.2081e-03` | `0.0000e+00` | `<= 4.50e-03` | dimensionless | **PASS** |
+| `C` | EII L2 relative error against the exact second strain rate invariant for r < R, case C, option on (Nx=129) | 129 | `7.9977e-04` | `0.0000e+00` | `<= 1.20e-03` | dimensionless | **PASS** |
+| `C` | SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=33) | 33 | `1.2803e-02` | `0.0000e+00` | `<= 1.80e-02` | dimensionless | **PASS** |
+| `C` | SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=65) | 65 | `3.2081e-03` | `0.0000e+00` | `<= 4.50e-03` | dimensionless | **PASS** |
+| `C` | SII L2 relative error against 2 eta E_II for r < R, case C, option on (Nx=129) | 129 | `7.9977e-04` | `0.0000e+00` | `<= 1.20e-03` | dimensionless | **PASS** |
+| `C` | HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=33) | 33 | `1.6480e-02` | `0.0000e+00` | `<= 2.40e-02` | dimensionless | **PASS** |
+| `C` | HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=65) | 65 | `4.0821e-03` | `0.0000e+00` | `<= 5.80e-03` | dimensionless | **PASS** |
+| `C` | HS L2 relative error against the exact deviatoric, compaction and Darcy heating for r < R, case C, option on (Nx=129) | 129 | `1.0232e-03` | `0.0000e+00` | `<= 1.50e-03` | dimensionless | **PASS** |
 | `A` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case A, option on | 129 | `2.0084e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `A` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case A, option off | 129 | `2.0129e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `B` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case B, option on | 129 | `2.0094e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
@@ -341,12 +496,21 @@ The second command needs NumPy and Matplotlib.
 | `B` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the S33 L2 error, case B, option on | 129 | `1.9853e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `A` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the fitted centre rotation error, case A, option on | 129 | `1.9783e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `A` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the fitted centre rotation error, case A, option off | 129 | `2.0010e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error, case C, option on | 129 | `2.0020e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the velocity L2 error for r < R, case C, option on | 129 | `2.0019e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the S33 L2 error, case C, option on | 129 | `2.0020e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the total pressure L2 error, case C, option on | 129 | `2.0009e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the fluid pressure L2 error, case C, option on | 129 | `1.9842e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the EII L2 error, case C, option on | 129 | `2.0041e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the SII L2 error, case C, option on | 129 | `2.0041e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
+| `C` | Convergence order log2(e(Nx=65) / e(Nx=129)) of the HS L2 error, case C, option on | 129 | `1.9963e+00` | `2.0000e+00` | `atol=3.50e-01, rtol=0.00e+00` | dimensionless | **PASS** |
 | `A` | Fitted centre rotation ratio, option on to off, case A (Nx=65) | 65 | `6.6703e-01` | `6.6667e-01` | `atol=0.00e+00, rtol=8.00e-04` | dimensionless | **PASS** |
 | `A` | Fitted centre rotation ratio, option on to off, case A (Nx=129) | 129 | `6.6678e-01` | `6.6667e-01` | `atol=0.00e+00, rtol=2.50e-04` | dimensionless | **PASS** |
 | `A` | Velocity L2 norm ratio over r < R, option on to off, case A (Nx=65) | 65 | `8.5235e-01` | `8.5280e-01` | `atol=0.00e+00, rtol=7.50e-04` | dimensionless | **PASS** |
 | `A` | Velocity L2 norm ratio over r < R, option on to off, case A (Nx=129) | 129 | `8.5268e-01` | `8.5280e-01` | `atol=0.00e+00, rtol=2.10e-04` | dimensionless | **PASS** |
-| `solver` | Largest relative difference of vx, vy, pr between the 6- and 4-variable paths, case A, option on (Nx=33) | 33 | `1.3014e-10` | `0.0000e+00` | `<= 1.00e-07` | dimensionless | **PASS** |
-| `solver` | Largest relative difference of vx, vy, pr between the 6- and 4-variable paths, case B, option on (Nx=33) | 33 | `2.1994e-10` | `0.0000e+00` | `<= 1.00e-07` | dimensionless | **PASS** |
+| `solver` | Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case A, option on (Nx=33) | 33 | `1.3014e-10` | `0.0000e+00` | `<= 1.00e-07` | dimensionless | **PASS** |
+| `solver` | Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case B, option on (Nx=33) | 33 | `2.1994e-10` | `0.0000e+00` | `<= 1.00e-07` | dimensionless | **PASS** |
+| `solver` | Largest relative difference of vx, vy, pr, pf between the 6- and 4-variable paths, case C, option on (Nx=33) | 33 | `3.7253e-14` | `0.0000e+00` | `<= 1.00e-07` | dimensionless | **PASS** |
 
 ```@raw html
 <!-- VALIDATION_RECORD_END: spherical_momentum -->

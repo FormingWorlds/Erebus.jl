@@ -1,5 +1,6 @@
 using Erebus
 using LinearAlgebra
+using Logging: NullLogger, with_logger
 using SparseArrays
 using Test
 
@@ -505,5 +506,55 @@ end
         @test_throws DimensionMismatch _smo_assemble(
             nv, coords, fv; on..., S330=zeros(3, 3)
         )
+    end
+end
+
+@testset "Thermal step adds the S33 heating with the option on" begin
+    isdefined(@__MODULE__, :SphericalMomentumValidation) ||
+        include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_momentum.jl"))
+    V = SphericalMomentumValidation
+    cfg = V.make_config(33; spherical_flow=true, case=:C)
+    mktempdir() do out
+        state, coords, ws, tio, _ = V._init_case(cfg, out, :C)
+        tio === nothing || close(tio)
+        g = state.grids
+        with_logger(NullLogger()) do
+            return Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+        end
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        function heating(s33)
+            H = zeros(size(g.HS))
+            Erebus.compute_shear_heating!(
+                H,
+                g.ETA,
+                g.SXY,
+                g.ETAP,
+                g.SXX,
+                g.RX,
+                g.RY,
+                g.qxD,
+                g.qyD,
+                g.PHI,
+                g.ETAPHI,
+                g.pr,
+                g.pf;
+                S33=s33,
+            )
+            return H
+        end
+        inner = (2:(size(g.HS, 1) - 1), 2:(size(g.HS, 2) - 1))
+        extra = 0.75 .* g.S33[inner...] .^ 2 ./ g.ETAP[inner...]
+        # The step heats with (3/4) S33^2 / eta on top of the 2-D terms at every P node.
+        @test isapprox(g.HS[inner...], heating(g.S33)[inner...]; rtol=1.0e-12)
+        @test isapprox(g.HS[inner...] .- heating(nothing)[inner...], extra; rtol=1.0e-10)
+        # Where S33 peaks (r = R / 2) the term is 1/4 of the heating: 0.75 tau_33^2 over
+        # 4 eta E_II^2 + Z div3^2 + (mu / k) u_r^2 of the exact flow. A step that passed
+        # S33 = nothing would lose it.
+        k = argmax(extra)
+        share = extra[k] / g.HS[inner...][k]
+        @test 0.15 < share < 0.35
+        @test 5.0e6 < maximum(abs, g.S33) < 2.0e7
     end
 end
