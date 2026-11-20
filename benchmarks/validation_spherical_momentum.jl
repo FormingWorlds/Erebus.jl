@@ -2806,8 +2806,8 @@ Parameters
 cfg : Union{SimulationConfig,NamedTuple}
     Simulation configuration (or section container) of the case, from `make_config`.
 cfg_c : Union{SimulationConfig,NamedTuple}, optional
-    Configuration of case `:C`, which sets its own pressures, viscosity ratio and time
-    step (default: `make_config` of case `:C` at the grid of `cfg`).
+    Configuration of case `:C`, which sets its own ambient pressure and viscosity ratio
+    (default: `make_config` of case `:C` at the grid of `cfg`).
 
 Returns
 -------

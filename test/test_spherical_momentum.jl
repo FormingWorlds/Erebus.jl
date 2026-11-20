@@ -304,6 +304,8 @@ end
         gh, _ = _smo_stress_grids(coords, vel; chi=0.5, s330=2.0e6)
         Erebus._spherical_stress_update!(gh, coords, dt; xcenter=xc, ycenter=yc)
         @test isapprox(gh.S33[i, j], 0.5 * g.S33[i, j] + 0.5 * 2.0e6; rtol=1.0e-9)
+        # DS33 holds the strain-rate part as well as the history change.
+        @test isapprox(gh.DS33[i, j], gh.S33[i, j] - 2.0e6; rtol=1.0e-9)
         E33 = g.S33[i, j] / (2 * 1.0e19)
         @test isapprox(
             g.EII[i, j]^2 - g.EXX[i, j]^2,
@@ -630,4 +632,35 @@ end
     @test all(x -> isapprox(x, eta; rtol=1.0e-15), without.ETA5)
     @test without.ok
     @test_throws DimensionMismatch adjust(zeros(2, 2))
+end
+
+@testset "Plastic pass of the solve reads S33 only with the option on" begin
+    isdefined(@__MODULE__, :SphericalMomentumValidation) ||
+        include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_momentum.jl"))
+    V = SphericalMomentumValidation
+    function yielding(case, sph; coh=nothing, s33_fill=nothing)
+        cfg = V.make_config(33; spherical_flow=sph, case=case)
+        mktempdir() do out
+            state, coords, ws, tio, _ = V._init_case(cfg, out, case)
+            tio === nothing || close(tio)
+            g = state.grids
+            coh === nothing || fill!(g.COH, coh)
+            s33_fill === nothing || fill!(g.S33, s33_fill)
+            with_logger(NullLogger()) do
+                return Erebus.solve_stokes_darcy!(
+                    state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+                )
+            end
+            return count(!iszero, g.YNY5), minimum(g.ETA)
+        end
+    end
+    # Case C with cohesion 1.8e7 Pa: the 2-D stress stays below it (1.57e7 Pa), the
+    # stress with (3/4) S33^2 exceeds it, so nodes yield only if the pass reads S33.
+    n_on, eta_on = yielding(:C, true; coh=1.8e7)
+    @test 10 < n_on < 200
+    @test 0.5 * V.ETA_ROCK < eta_on < 0.99 * V.ETA_ROCK
+    # With the option off a stored S33 of 1e30 Pa must not reach the yield check.
+    n_off, eta_off = yielding(:A, false; s33_fill=1.0e30)
+    @test iszero(n_off)
+    @test isapprox(eta_off, V.ETA_ROCK; rtol=1.0e-12)
 end

@@ -119,7 +119,8 @@ The test checks both formulas against their equation in exact rational arithmeti
 
 !!! details "How the exact solution follows, and why it is also a flow of the full sphere"
     Hernlund and Tackley (2008) give the angular part of the momentum equation of the annulus as their Eq. (3), which has no body force.
-    We add an azimuthal body force $f_\theta$ as in their Eq. (14), with no change along the angle $\theta$ around the centre and the radial velocity $v_r = 0$.
+    We add an azimuthal body force $f_\theta$ as in their Eq. (14).
+    Nothing changes along the angle $\theta$ around the centre, and the radial velocity is $v_r = 0$.
     The equation then reduces to the form above with $d = 2$ (the sphere, option on), and to the cylinder form with $d = 1$ (the 2-D equation of the option off for this flow).
     The force has $\int_0^R s^2 f_\theta \, ds = \int_0^R s^3 f_\theta \, ds = 0$, so $\Omega' = 0$ at $r = R$ in both forms and the flow is 0 outside.
     The test checks both formulas against their equation and the 2 moments of the force with exact rational arithmetic, and the Float64 formulas against finite differences.
@@ -372,18 +373,20 @@ Panel (c) shows the errors of case C against `Nx` on logarithmic axes, with a do
 A pass means that the errors stay below their limits and fall along the dotted line.
 
 **Known limit.**
-A fault in the trace changes the flow of this case by less than 1/3, not by an amount of order 1.
-The size depends on the fault, so we describe 2 faults.
+A missing trace changes the flow of this case by less than 1/3, not by an amount of order 1.
+The size depends on where the trace is missing, so we describe 2 faults.
 
 The first fault drops the trace from every stress component.
 For a flow without rotation, this fault changes the coefficient of $\nabla (\nabla_3 \cdot \mathbf{u})$ in the momentum equation from $Z + 4 \eta / 3$ to $Z + 2 \eta$.
 Here $Z = \zeta (1 - \phi)$, in Pa s, is $0.8 \, \eta$ in this case.
 So the fault changes the flow by about $(2/3) / (Z / \eta + 2)$.
 This fraction is 5/21, about 0.24, for this case and at most 1/3 for any $\eta / \zeta$.
-These values follow from the equation alone; we quote no run for this fault.
+These values follow from the equation alone.
+We quote no run for this fault.
 
 The second fault drops the trace from $S_{33}$ of the momentum rows only.
 The code adds the trace to the in-plane stress through $S_{33}$ alone, with $\tau_{xx} = S_{xx} - S_{33} / 2$.
+Here $S_{xx} = \eta (\dot\varepsilon_{xx} - \dot\varepsilon_{yy})$, in Pa, is the deviatoric normal stress of the 2-D rows.
 Without the trace in $S_{33}$, the in-plane trace is 1.5 times too large and the out-of-plane trace is 0.
 A run by hand with this fault at `Nx = 65` has the velocity error 0.10, 24 times the grid error.
 The same run by hand has the error 0.22 in $P_t$ and the error 0.22 in $S_{33}$.
@@ -414,7 +417,8 @@ It tests only $\eta / \zeta = 1$.
       The test `Thermal step adds the S33 heating with the option on` in `test/test_spherical_momentum.jl` checks 2 things.
       First, the thermal step passes `grids.S33` to `compute_shear_heating!` with the option on and not with it off.
       Second, the extra heating raises the temperature of the step by the heating times $\Delta t$ over the heat capacity per volume `grids.RHOCP`.
-      The test `Plastic yield check reads S33 at the basic nodes` checks that the yield check of the plastic pass uses $S_{33}$.
+      The test `Plastic yield check reads S33 at the basic nodes` checks that the yield check uses $S_{33}$ when it gets it.
+      The test `Plastic pass of the solve reads S33 only with the option on` checks that the solve passes $S_{33}$ to the yield check with the option on and not with it off.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ## Conditions of the cases
@@ -431,7 +435,8 @@ The cases rest on 8 conditions, and the test asserts each of them.
       So they solve the continuum equations for any $\zeta > 0$.
       For these cases C1 makes the solve a nearly incompressible Stokes problem.
       The exact fields of case C hold for $\zeta = \eta$ only.
-    - C2, viscous limit: on every basic node and every pressure node, the shear modulus times the time step $\Delta t$ is positive and at least $10^6$ times the viscosity.
+    - C2, viscous limit: on every basic and pressure node, the shear modulus times the time step $\Delta t$ is positive.
+      It is also at least $10^6$ times the viscosity.
     - C3, body force: the solve leaves `gx` and `gy` unchanged.
     - C4, force moments: the moments $\int s^2 f_\theta$ and $\int s^3 f_\theta$ of the case A force are 0 in exact rational arithmetic.
     - C5, compact flow: the exact velocity of every case is 0 on $r = R$, checked in rational arithmetic at rational points of the circle and to round-off in Float64.
