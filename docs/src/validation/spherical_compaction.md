@@ -61,7 +61,7 @@ The page [Spherical Darcy Flow](spherical_darcy_flow.md) shows how the face weig
   The venting conductance is much larger than the rock conductance, so these cells keep $P_f = P_\mathrm{vent}$.
   The effective pressure at the surface is then $P_{e,R}$.
 - The compressibilities of the rock and the fluid are 0.
-- The time step is $10^{-10}$ yr, and the shear modulus is $G = 10^{20}$ Pa (see the box below).
+- The time step is $\Delta t = 10^{-10}$ yr, and the shear modulus is $G = 10^{20}$ Pa (see the box below).
 
 The case builds the state with `init_simulation`, sets the grid fields directly and calls `solve_stokes_darcy!` once, on timestep 1.
 
@@ -74,7 +74,7 @@ The case builds the state with `init_simulation`, sets the grid fields directly 
 
 !!! details "How the time step enters"
     The time step enters through the vent (see "Conditions of the case") and through the elastic term of the momentum rows.
-    The elastic term replaces the shear viscosity $\eta$ by $\eta G \Delta t / (G \Delta t + \eta)$ with the shear modulus $G$ and the time step $\Delta t$.
+    The elastic term replaces the shear viscosity $\eta$, in Pa s, by $\eta G \Delta t / (G \Delta t + \eta)$ with the shear modulus $G$ and the time step $\Delta t$.
     The time step is $10^{-10}$ yr and the case sets $G = 10^{20}$ Pa, so the rock shear viscosity in the momentum rows is 0.25 % below $\eta$.
 
 ## The effective pressure and the solid velocity of a compacting sphere
@@ -89,7 +89,7 @@ Each of these faults changes the profile of the effective pressure or the solid 
 We compare the effective pressure $P_e$ at the grid nodes with the exact solution.
 We do this for `spherical_flow = true` and for `spherical_flow = false`, at `Nx = 33`, 65 and 129.
 The centre error is $P_e / P_e^\mathrm{exact} - 1$ at the node nearest the centre.
-The profile error is the relative L2 error over the nodes with $r \le 0.9 R$, where $r$ is the distance from the centre:
+The profile error is the relative L2 error over the nodes with $r \le 0.9 R$, where $r$ is the distance from the centre in m:
 
 $$\epsilon = \sqrt{\frac{\sum_i \left(P_{e,i} - P_{e,i}^\mathrm{exact}\right)^2}{\sum_i \left(P_{e,i}^\mathrm{exact}\right)^2}}.$$
 

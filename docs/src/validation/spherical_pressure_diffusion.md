@@ -105,7 +105,7 @@ Each of these faults changes the storage coefficient or the shape of the pressur
 We compare the nondimensional fluid overpressure $p = (P_f - P_\mathrm{amb}) / P_0$ at the grid nodes with the exact solution after 5 and 20 steps.
 We do this for `spherical_flow = true` and for `spherical_flow = false`, at `Nx = 33`, 65 and 129.
 The centre error is $|p / p^\mathrm{exact} - 1|$ at the node nearest the centre.
-The profile error is the relative L2 error over the nodes with $x = r / R \le 0.9$, where $r$ is the distance from the centre.
+The profile error is the relative L2 error over the nodes with $x = r / R \le 0.9$, where $r$ is the distance from the centre in m.
 It uses the weight $w_i = x_i$ for the sphere and $w_i = 1$ for the disk:
 
 $$\epsilon = \sqrt{\frac{\sum_i w_i \left(p_i - p_i^\mathrm{exact}\right)^2}{\sum_i w_i \left(p_i^\mathrm{exact}\right)^2}}.$$

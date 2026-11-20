@@ -33,17 +33,17 @@ The option `geometry.spherical_flow` gives the continuity rows of the fluid the 
 With these weights the 2-D grid behaves like a 3-D sphere.
 A face weight is a factor on the flux through a cell face.
 The default is off, which gives a 2-D disk.
-With the option on, the row takes the divergence of a 2-D flow through a gap of width $w = 2r$.
+With the option on, the row takes the divergence of a 2-D flow through a gap of width $w = 2r$, in m.
 Here $r$ is the distance from the centre in m.
 The weighted divergence is
 
 $$\nabla_\mathrm{sph} \cdot \mathbf{q} = \frac{1}{w_P} \nabla_\mathrm{2D} \cdot (w \mathbf{q}).$$
 
-Here $\nabla_\mathrm{2D} \cdot$ is the divergence in the 2 grid directions and $w_P$ the weight of the cell.
-For a radial flux $q_r$ this gives the divergence of a sphere, $\frac{1}{r^2} \partial_r (r^2 q_r)$.
+Here $\nabla_\mathrm{2D} \cdot$ is the divergence in the 2 grid directions and $w_P$ the weight of the cell, in m.
+For a radial flux $q_r$, in m/s, this gives the divergence of a sphere, $\frac{1}{r^2} \partial_r (r^2 q_r)$, with $\partial_r = \partial / \partial r$.
 
 !!! details "How the code applies the face weights"
-    Each of the 4 face terms of the fluid continuity row, the Darcy flux $q_x^D$ and $q_y^D$, is multiplied by $m_F = w_F / w_P$, with $w_F$ the weight at the face position.
+    Each of the 4 face terms of the fluid continuity row, the Darcy flux $q_x^D$ and $q_y^D$ in m/s, is multiplied by the dimensionless factor $m_F = w_F / w_P$, with $w_F$ the weight at the face position, in m.
     The factor 2 of $w$ cancels in $m_F$.
     The source term is volumetric and keeps its unweighted form.
     [Discretization and Numerics](../explanations/discretization_numerics.md#Spherical-Face-Weights-in-the-Continuity-Rows) gives the choice of the cell weight $w_P$ and the weights of the solid continuity rows.
@@ -86,7 +86,7 @@ The profile error is the relative L2 error over the nodes with $r \le 0.9 R$:
 ```
 
 We compare the Darcy flux with the exact flux $\mathbf{q} = S \mathbf{r} / d$ on the faces with $r \le 0.9 R$.
-Here $\mathbf{r}$ points from the centre to the face, and $d$ is the number of dimensions of the exact solution below.
+Here $\mathbf{r}$, in m, points from the centre to the face, and $d$ is the number of dimensions of the exact solution below.
 The flux error $\epsilon_q$ is the relative L2 error over the stored flux components on those faces (see the box below).
 
 !!! details "How the flux error is computed"
@@ -98,7 +98,7 @@ The flux error $\epsilon_q$ is the relative L2 error over the stored flux compon
     \epsilon_q = \sqrt{\frac{\sum_c \left(q_c - q_c^\mathrm{exact}\right)^2}{\sum_c \left(q_c^\mathrm{exact}\right)^2}}, \qquad q_c^\mathrm{exact} = \frac{S \, r_c}{d},
     ```
 
-    where $c$ runs over the stored components on the faces with $r \le 0.9 R$ and $r_c$ is the coordinate of the face that the component belongs to, measured from the centre (x for an x component, y for a y component).
+    where $c$ runs over the stored components on the faces with $r \le 0.9 R$ and $r_c$ is the coordinate, in m, of the face that the component belongs to, measured from the centre (x for an x component, y for a y component).
     The error does not average the components of neighbouring faces.
 
 We also compare the centre excess pressure with the option on and off.
@@ -114,7 +114,7 @@ p - P_\mathrm{amb} = \frac{\mu S \left(R^2 - r^2\right)}{2 d k},
 
 with $d = 3$ for `spherical_flow = true` and $d = 2$ for `spherical_flow = false`.
 The flux is radial with the size $S r / d$, because all fluid that the cells inside radius $r$ produce crosses the surface of radius $r$.
-Its components are $S x / d$ and $S y / d$ with $x$ and $y$ measured from the centre.
+Its components are $S x / d$ and $S y / d$ with $x$ and $y$ in m, measured from the centre.
 The centre values are $\mu S R^2 / (6 k)$ and $\mu S R^2 / (4 k)$, so the ratio of the sphere to the disk is exactly 2/3.
 All fluid that the cells produce leaves through the surface, so the vented rate equals the produced rate.
 The rock is rigid, so the solid speed is zero.
