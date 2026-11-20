@@ -1,5 +1,6 @@
 using Erebus
 using LinearAlgebra
+using Logging: NullLogger, with_logger
 using SparseArrays
 using Test
 
@@ -303,6 +304,8 @@ end
         gh, _ = _smo_stress_grids(coords, vel; chi=0.5, s330=2.0e6)
         Erebus._spherical_stress_update!(gh, coords, dt; xcenter=xc, ycenter=yc)
         @test isapprox(gh.S33[i, j], 0.5 * g.S33[i, j] + 0.5 * 2.0e6; rtol=1.0e-9)
+        # DS33 holds the strain-rate part as well as the history change.
+        @test isapprox(gh.DS33[i, j], gh.S33[i, j] - 2.0e6; rtol=1.0e-9)
         E33 = g.S33[i, j] / (2 * 1.0e19)
         @test isapprox(
             g.EII[i, j]^2 - g.EXX[i, j]^2,
@@ -506,4 +509,158 @@ end
             nv, coords, fv; on..., S330=zeros(3, 3)
         )
     end
+end
+
+@testset "Thermal step adds the S33 heating with the option on" begin
+    isdefined(@__MODULE__, :SphericalMomentumValidation) ||
+        include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_momentum.jl"))
+    V = SphericalMomentumValidation
+    cfg = V.make_config(33; spherical_flow=true, case=:C)
+    mktempdir() do out
+        state, coords, ws, tio, _ = V._init_case(cfg, out, :C)
+        tio === nothing || close(tio)
+        g = state.grids
+        with_logger(NullLogger()) do
+            return Erebus.solve_stokes_darcy!(
+                state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+            )
+        end
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        function heating(s33)
+            H = zeros(size(g.HS))
+            Erebus.compute_shear_heating!(
+                H,
+                g.ETA,
+                g.SXY,
+                g.ETAP,
+                g.SXX,
+                g.RX,
+                g.RY,
+                g.qxD,
+                g.qyD,
+                g.PHI,
+                g.ETAPHI,
+                g.pr,
+                g.pf;
+                S33=s33,
+            )
+            return H
+        end
+        inner = (2:(size(g.HS, 1) - 1), 2:(size(g.HS, 2) - 1))
+        extra = 0.75 .* g.S33[inner...] .^ 2 ./ g.ETAP[inner...]
+        # The step heats with (3/4) S33^2 / eta on top of the 2-D terms at every P node.
+        @test isapprox(g.HS[inner...], heating(g.S33)[inner...]; rtol=1.0e-12)
+        @test isapprox(g.HS[inner...] .- heating(nothing)[inner...], extra; rtol=1.0e-10)
+        # Where S33 peaks (r = R / 2) the term is 1/4 of the heating: 0.75 tau_33^2 over
+        # 4 eta E_II^2 + Z div3^2 + (mu / k) u_r^2 of the exact flow. A step that passed
+        # S33 = nothing would lose it.
+        k = argmax(extra)
+        share = extra[k] / g.HS[inner...][k]
+        @test 0.15 < share < 0.35
+        @test 5.0e6 < maximum(abs, g.S33) < 2.0e7
+        # The heating reaches the temperature: against the same step with S33 = 0, the
+        # step raises T by the extra heating times dt / (rho c_p) on the interior nodes.
+        DT_on = copy(g.DT)
+        s33 = copy(g.S33)
+        fill!(g.S33, 0.0)
+        Erebus.solve_thermal_energy!(state, coords, cfg, ws; titer=1)
+        DT_zero = copy(g.DT)
+        copyto!(g.S33, s33)
+        rise = extra .* state.dt ./ g.RHOCP[inner...]
+        # The case has no heat conduction, so the rise is local (measured to 6e-12).
+        @test isapprox(DT_on[inner...] .- DT_zero[inner...], rise; rtol=1.0e-10)
+        @test 1.0e-4 < maximum(rise) < 1.0e-1
+        # With the option off the step leaves out the S33 heating of the same state.
+        geo = cfg.geometry
+        geo_off = typeof(geo)(;
+            (
+                f => getfield(geo, f) for
+                f in fieldnames(typeof(geo)) if f != :spherical_flow
+            )...,
+            spherical_flow=false,
+        )
+        cfg_off = SimulationConfig(;
+            (
+                f => getfield(cfg, f) for
+                f in fieldnames(SimulationConfig) if f != :geometry
+            )...,
+            geometry=geo_off,
+        )
+        Erebus.solve_thermal_energy!(state, coords, cfg_off, ws; titer=1)
+        @test isapprox(g.HS[inner...], heating(nothing)[inner...]; rtol=1.0e-12)
+        @test !isapprox(g.HS[inner...], heating(g.S33)[inner...]; rtol=1.0e-3)
+    end
+end
+
+@testset "Plastic yield check reads S33 at the basic nodes" begin
+    # SXX^2 + SXY^2 = (5e6 Pa)^2 < COH^2 < SXX^2 + SXY^2 + 0.75 S33^2 = (6.08e6 Pa)^2:
+    # only the out-of-plane stress takes the nodes past the strength.
+    Ny, Nx, eta, dt = 4, 5, 1.0e20, 1.0e10
+    B(v) = fill(v, Ny, Nx)
+    P(v) = fill(v, Ny + 1, Nx + 1)
+    function adjust(s33)
+        ETA5, YNY5, DSY, YERR = B(0.0), zeros(Bool, Ny, Nx), B(0.0), zeros(10)
+        ok = Erebus.compute_nodal_adjustment!(
+            B(eta),
+            B(eta),
+            ETA5,
+            B(eta / dt),
+            P(3.0e6),
+            B(4.0e6),
+            P(1.0e7),
+            P(1.0e7),
+            B(5.5e6),
+            B(1.0e20),
+            B(0.0),
+            zeros(Bool, Ny, Nx),
+            YNY5,
+            YERR,
+            DSY,
+            dt,
+            1;
+            S33=s33,
+        )
+        return (; ok, ETA5, YNY5, DSY)
+    end
+    with, without = adjust(P(4.0e6)), adjust(nothing)
+    @test all(isone, with.YNY5)
+    @test all(<(eta), with.ETA5)
+    @test !with.ok
+    # sqrt(25 + 12) - 5.5 = 0.58 MPa above the strength at every node.
+    @test isapprox(with.DSY[2, 3], (sqrt(37.0) - 5.5) * 1.0e6; rtol=1.0e-12)
+    @test all(iszero, without.YNY5)
+    @test all(x -> isapprox(x, eta; rtol=1.0e-15), without.ETA5)
+    @test without.ok
+    @test_throws DimensionMismatch adjust(zeros(2, 2))
+end
+
+@testset "Plastic pass of the solve reads S33 only with the option on" begin
+    isdefined(@__MODULE__, :SphericalMomentumValidation) ||
+        include(joinpath(@__DIR__, "..", "benchmarks", "validation_spherical_momentum.jl"))
+    V = SphericalMomentumValidation
+    function yielding(case, sph; coh=nothing, s33_fill=nothing)
+        cfg = V.make_config(33; spherical_flow=sph, case=case)
+        mktempdir() do out
+            state, coords, ws, tio, _ = V._init_case(cfg, out, case)
+            tio === nothing || close(tio)
+            g = state.grids
+            coh === nothing || fill!(g.COH, coh)
+            s33_fill === nothing || fill!(g.S33, s33_fill)
+            with_logger(NullLogger()) do
+                return Erebus.solve_stokes_darcy!(
+                    state, coords, cfg, ws; titer=1, dt_step_initial=state.dt
+                )
+            end
+            return count(!iszero, g.YNY5), minimum(g.ETA)
+        end
+    end
+    # Case C with cohesion 1.8e7 Pa: the 2-D stress stays below it (1.57e7 Pa), the
+    # stress with (3/4) S33^2 exceeds it, so nodes yield only if the pass reads S33.
+    n_on, eta_on = yielding(:C, true; coh=1.8e7)
+    @test 10 < n_on < 200
+    @test 0.5 * V.ETA_ROCK < eta_on < 0.99 * V.ETA_ROCK
+    # With the option off a stored S33 of 1e30 Pa must not reach the yield check.
+    n_off, eta_off = yielding(:A, false; s33_fill=1.0e30)
+    @test iszero(n_off)
+    @test isapprox(eta_off, V.ETA_ROCK; rtol=1.0e-12)
 end

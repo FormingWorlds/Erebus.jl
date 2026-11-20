@@ -283,6 +283,43 @@ end
 
 const ONE_MINUS_RHO2 = QB[1, 0, -1]
 
+"""
+    with_setting(cfg, key, value)
+
+Return a copy of the configuration `cfg` with the one field `key` (`"section.field"`) set
+to `value`. Unlike `override_config`, it keeps the material arrays of the case.
+
+Parameters
+----------
+cfg : SimulationConfig
+    Configuration to copy.
+key : AbstractString
+    `"section.field"`, for example `"time.dt_initial"`.
+value
+    New value of the field, in the units of the field.
+
+Returns
+-------
+SimulationConfig
+
+Raises
+------
+ArgumentError
+    If `key` is not of the form `"section.field"`.
+"""
+function with_setting(cfg::SimulationConfig, key::AbstractString, value)
+    parts = split(key, ".")
+    length(parts) == 2 || throw(ArgumentError("key must be section.field, got $key"))
+    sec, fld = Symbol(parts[1]), Symbol(parts[2])
+    s = getfield(cfg, sec)
+    T = typeof(s)
+    new_sec = T(; (f => getfield(s, f) for f in fieldnames(T) if f != fld)..., fld => value)
+    return SimulationConfig(;
+        (f => getfield(cfg, f) for f in fieldnames(SimulationConfig) if f != sec)...,
+        sec => new_sec,
+    )
+end
+
 @testset "Spherical Momentum Validation" begin
     @testset "case A: closed forms solve the radial momentum equation with and without the option" begin
         # The closed forms written out: Omega in units of F0 R / eta, f in units of F0.
@@ -493,6 +530,162 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test !isapprox(-d_r1, f_r; rtol=0.05)
     end
 
+    # Case C in units of U0, U0 / R and eta U0 / R: u_r = -10 rho (1 - rho^2)^4 from the
+    # potential (1 - rho^2)^5, P_f - p_s = lam (1 - rho^2)^5 and Z / eta = zr.
+    lam_c = SMV.MU_F * SMV.R_PLANET^2 / (SMV.K_PERM * SMV.ETA_ROCK)
+    zr_c = (1 - SMV.PHI) / SMV.ETA_RATIO_C
+    ur_c(rho) = -10 * rho * (1 - rho^2)^4
+    points_c = ((0.3, 0.2), (-0.5, 0.35), (0.12, -0.7), (-0.25, -0.25), (0.6, 0.05))
+
+    @testset "case C: divergence, solid and fluid continuity and Darcy of the compaction flow" begin
+        h = 1.0e-3
+        d4(g, x) = (g(x - 2h) - 8g(x - h) + 8g(x + h) - g(x + 2h)) / (12h)
+        u(X, Y) = SMV.exact_velocity(:C, X, Y)
+        p(X, Y) = SMV.exact_pressures(:C, X, Y)
+        @test isapprox(lam_c, 0.25; rtol=1.0e-12)
+        @test isapprox(zr_c, 0.8; rtol=1.0e-12)
+        for (X, Y) in points_c
+            rho = hypot(X, Y)
+            vx, vy = u(X, Y)
+            @test isapprox(vx, ur_c(rho) * X / rho; rtol=1.0e-12)
+            @test isapprox(vy, ur_c(rho) * Y / rho; rtol=1.0e-12)
+            # div3 = d_x ux + d_y uy + (X ux + Y uy) / rho^2 by finite differences.
+            div_fd =
+                d4(x -> u(x, Y)[1], X) + d4(y -> u(X, y)[2], Y) + (X * vx + Y * vy) / rho^2
+            div = SMV.exact_div3(:C, X, Y)
+            @test isapprox(div, div_fd; rtol=1.0e-8)
+            pt, pf = p(X, Y)
+            # Solid continuity: div3 u + (P_t - P_f) / Z = 0.
+            @test isapprox(div + (pt - pf) / zr_c, 0.0; atol=1.0e-12 * abs(div))
+            # Darcy with rho_f = 0: q = -(k / mu) grad P_f = -grad(P_f) / lam = -u.
+            qx(x, y) = -d4(s -> p(s, y)[2], x) / lam_c
+            qy(x, y) = -d4(s -> p(x, s)[2], y) / lam_c
+            @test isapprox(qx(X, Y), -vx; rtol=1.0e-8)
+            @test isapprox(qy(X, Y), -vy; rtol=1.0e-8)
+            # Fluid continuity: div3 q - (P_t - P_f) / Z = 0, from second differences.
+            div_q =
+                d4(x -> qx(x, Y), X) +
+                d4(y -> qy(X, y), Y) +
+                (X * qx(X, Y) + Y * qy(X, Y)) / rho^2
+            @test isapprox(div_q - (pt - pf) / zr_c, 0.0; atol=1.0e-6 * abs(div))
+        end
+        # Centre: isotropic compaction with div3 = -30 and e_33 = -10, tau_33 = 0, P_t - p_s
+        # = lam + 30 zr = 24.25 and the force 0.
+        @test isapprox(SMV.exact_div3(:C, 0.0, 0.0), -30.0; rtol=1.0e-14)
+        @test isapprox(SMV.exact_tau33(:C, 0.0, 0.0), 0.0; atol=1.0e-14)
+        @test isapprox(collect(SMV.exact_force(:C, 0.0, 0.0)), [0.0, 0.0]; atol=1.0e-14)
+        @test isapprox(
+            collect(SMV.exact_pressures(:C, 0.0, 0.0)), [24.25, 0.25]; rtol=1.0e-14
+        )
+        @test isapprox(SMV.exact_tau33(:C, 1.0e-9, 0.0), 0.0; atol=1.0e-14)
+        # Outside R every field is 0, and just inside it vanishes to round-off.
+        for f in (
+            SMV.exact_velocity(:C, 0.9, 0.6),
+            SMV.exact_force(:C, 0.9, 0.6),
+            SMV.exact_pressures(:C, 0.9, 0.6),
+        )
+            @test all(iszero, f)
+        end
+        @test iszero(SMV.exact_tau33(:C, 0.9, 0.6)) && iszero(SMV.exact_div3(:C, 0.9, 0.6))
+        r_in = 1.0 - 1.0e-12
+        for t in range(0.0, 2pi; length=13)
+            X, Y = r_in * cos(t), r_in * sin(t)
+            @test hypot(SMV.exact_velocity(:C, X, Y)...) <= 1.0e-12
+            @test maximum(abs, SMV.exact_pressures(:C, X, Y)) <= 1.0e-10
+            @test hypot(SMV.exact_force(:C, X, Y)...) <= 1.0e-9
+        end
+        @test SMV.velocity_vanishes_on_circle(:C)
+        # P_t > 0 everywhere with p_s = 1e7 Pa; with p_s = 100 Pa the outer shell, where the
+        # rock dilates, would have P_t < 0 (tension).
+        sc = SMV.stress_scale(:C)
+        pt_min = minimum(
+            SMV.exact_pressures(:C, rho, 0.0)[1] for rho in range(0.0, 1.0; length=2001)
+        )
+        @test -5.0 < pt_min < 0.0
+        @test 0.0 < SMV.P_AMB_C + sc * pt_min < SMV.P_AMB_C
+        @test SMV.P_AMB + sc * pt_min < -1.0e6
+        @test isapprox(SMV.P_AMB_C, 1.0e7; rtol=1.0e-15)
+        # P_f - p_s >= 0: the fluid pressure peaks at the centre.
+        @test all(
+            SMV.exact_pressures(:C, rho, 0.0)[2] >= 0.0 for
+            rho in range(0.0, 1.0; length=101)
+        )
+    end
+
+    @testset "case C force against the radial momentum balance of a 3-D sphere" begin
+        # sigma_rr = -P_t + 2 (u_r' - div3 / 3), sigma_thth = sigma_phph = -P_t +
+        # 2 (u_r / r - div3 / 3), div3 = u_r' + 2 u_r / r and P_t = P_f - zr div3, eta = 1;
+        # f_r = -(d_r sigma_rr + 2 (sigma_rr - sigma_thth) / r), BigFloat differences in r.
+        fr_max, worst, no_trace_gap = 0.0, 0.0, 0.0
+        setprecision(BigFloat, 256) do
+            h = BigFloat(10)^-25
+            urb(r) = -10 * r * (1 - r^2)^4
+            function sig(r, trace)
+                du = (urb(r + h) - urb(r - h)) / (2h)
+                div = du + 2 * urb(r) / r
+                pt = BigFloat(lam_c) * (1 - r^2)^5 - BigFloat(zr_c) * div
+                t = trace ? div / 3 : zero(div)
+                return (-pt + 2 * (du - t), -pt + 2 * (urb(r) / r - t))
+            end
+            function f_r(r, trace)
+                srr, stt = sig(r, trace)
+                dsrr = (sig(r + h, trace)[1] - sig(r - h, trace)[1]) / (2h)
+                return Float64(-(dsrr + 2 * (srr - stt) / r))
+            end
+            for r in 0.05:0.05:0.95
+                fr = f_r(BigFloat(r), true)
+                fx, fy = SMV.exact_force(:C, r, 0.0)
+                gx, gy = SMV.exact_force(:C, r / sqrt(2), r / sqrt(2))
+                worst = max(
+                    worst,
+                    abs(fx - fr),
+                    abs(fy),
+                    abs((gx + gy) / sqrt(2) - fr),
+                    abs(gx - gy),
+                )
+                fr_max = max(fr_max, abs(fr))
+                no_trace_gap = max(no_trace_gap, abs(f_r(BigFloat(r), false) - fx))
+            end
+        end
+        @test worst <= 1.0e-6 * fr_max
+        # Scale guard: max |f_r| is O(100) in units of eta U0 / R^2.
+        @test 10.0 < fr_max < 1.0e3
+        # Without the trace, tau_ij = 2 eps_ij, the balance needs a force that differs by
+        # more than 10 % of the largest force.
+        @test no_trace_gap > 0.1 * fr_max
+    end
+
+    @testset "case C second invariants and dissipation against the 3-D strain rate" begin
+        h = 1.0e-3
+        d4(g, x) = (g(x - 2h) - 8g(x - h) + 8g(x + h) - g(x + 2h)) / (12h)
+        for (X, Y) in points_c
+            rho = hypot(X, Y)
+            du = d4(ur_c, rho)
+            div = du + 2 * ur_c(rho) / rho
+            # Radial flow: e'_rr = u_r' - div3 / 3, e'_thth = e'_phph = u_r / r - div3 / 3.
+            err, ett = du - div / 3, ur_c(rho) / rho - div / 3
+            eii = sqrt((err^2 + 2 * ett^2) / 2)
+            @test isapprox(SMV.exact_eii(:C, X, Y), eii; rtol=1.0e-8)
+            @test isapprox(
+                SMV.exact_eii(:C, X, Y), 80 / sqrt(3) * rho^2 * (1 - rho^2)^3; rtol=1.0e-12
+            )
+            # S_II = 2 eta E_II in the viscous limit, eta = 1.
+            @test isapprox(SMV.exact_sii(:C, X, Y), 2 * eii; rtol=1.0e-8)
+            # Dissipation: tau : eps = 4 E_II^2, compaction (P_t - P_f)^2 / Z, Darcy
+            # (mu / k) |q|^2 = lam u_r^2.
+            pt, pf = SMV.exact_pressures(:C, X, Y)
+            hs = 4 * eii^2 + (pt - pf)^2 / zr_c + lam_c * ur_c(rho)^2
+            @test isapprox(SMV.exact_hs(:C, X, Y), hs; rtol=1.0e-8)
+        end
+        # The centre compacts isotropically: E_II = S_II = 0 there. Without the trace the
+        # out-of-plane part 0.75 e_33^2 would give E_II(0) = sqrt(0.75) 10.
+        @test isapprox(SMV.exact_eii(:C, 0.0, 0.0), 0.0; atol=1.0e-12)
+        @test isapprox(SMV.exact_sii(:C, 0.0, 0.0), 0.0; atol=1.0e-12)
+        @test isapprox(SMV.exact_hs(:C, 0.0, 0.0), zr_c * 900; rtol=1.0e-12)
+        @test 1.0 < SMV.exact_eii(:C, 0.5, 0.0) < 10.0
+        @test all(iszero, (SMV.exact_eii(:C, 0.9, 0.6), SMV.exact_hs(:C, 0.9, 0.6)))
+    end
+
     @testset "scales, guards and the case list" begin
         @test isapprox(
             SMV.velocity_scale(:A), SMV.F0 * SMV.R_PLANET^2 / SMV.ETA_ROCK; rtol=1.0e-15
@@ -508,13 +701,48 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         )
         # Velocity scale 2.5e-9 m/s for A: the flow stays far below the time step limit.
         @test 1.0e-9 < SMV.velocity_scale(:A) < 1.0e-8
-        for bad in (:C, :a, :B0)
+        for bad in (:D, :a, :B0)
             @test_throws ArgumentError SMV.velocity_scale(bad)
             @test_throws ArgumentError SMV.exact_velocity(bad, 0.1, 0.1)
             @test_throws ArgumentError SMV.omega_coefficients(bad; spherical_flow=true)
         end
         @test_throws ArgumentError SMV.force_coefficients(:B)
         @test_throws ArgumentError SMV.omega_hat(:B, 0.5; spherical_flow=true)
+        # Case C: a radial compaction flow, with the option on only.
+        @test SMV.CASES == (:A, :A0, :B, :C)
+        @test isapprox(SMV.velocity_scale(:C), SMV.U0; rtol=1.0e-15)
+        @test isapprox(SMV.stress_scale(:C), SMV.stress_scale(:B); rtol=1.0e-15)
+        @test_throws ArgumentError SMV.force_coefficients(:C)
+        @test_throws ArgumentError SMV.omega_coefficients(:C; spherical_flow=true)
+        @test_throws ArgumentError SMV.exact_velocity(:C, 0.1, 0.2; spherical_flow=false)
+        @test_throws ArgumentError SMV.make_config(33; spherical_flow=false, case=:C)
+        for f in (
+            SMV.exact_pressures, SMV.exact_div3, SMV.exact_eii, SMV.exact_sii, SMV.exact_hs
+        )
+            @test_throws ArgumentError f(:B, 0.1, 0.2)
+            @test_throws ArgumentError f(:D, 0.1, 0.2)
+            @test_throws DomainError f(:C, NaN, 0.2)
+            @test_throws DomainError f(:C, 0.1, Inf)
+        end
+        @test_throws DomainError SMV.exact_force(:C, Inf, 0.0)
+        # The force vanishes on r = R only for a power of at least 4 in the potential.
+        @test_throws ArgumentError SMV._case_c_polynomials(3, QB(1, 4), QB(4, 5))
+        grid33 = SMV.grid_of(
+            Erebus.GridCoordinates(33, 33; xsize=SMV.L_BOX, ysize=SMV.L_BOX)
+        )
+        @test_throws ArgumentError SMV.exact_pnode_fields(grid33, :B)
+        @test_throws ArgumentError SMV.pnode_errors(
+            ones(grid33.Ny1, grid33.Nx1), zeros(grid33.Ny1, grid33.Nx1), grid33
+        )
+        @test_throws DomainError SMV.anchor_deviation(
+            ones(3, 3), ones(3, 3), (; Ny1=3, Nx1=3), 0.0
+        )
+        @test isapprox(SMV.ambient_pressure(:C), 1.0e7; rtol=1.0e-15)
+        @test isapprox(SMV.ambient_pressure(:B), SMV.P_AMB; rtol=1.0e-15)
+        @test isapprox(SMV.eta_zeta_ratio(:C), 1.0; rtol=1.0e-15)
+        @test isapprox(SMV.eta_zeta_ratio(:A0), 1.0e-6; rtol=1.0e-15)
+        @test_throws ArgumentError SMV.ambient_pressure(:D)
+        @test_throws ArgumentError SMV.eta_zeta_ratio(:D)
         for bad in (0.0, -1.0, NaN, Inf)
             @test_throws DomainError SMV.velocity_scale(:A; r_planet=bad)
             @test_throws DomainError SMV.velocity_scale(:A; eta=bad)
@@ -569,7 +797,22 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test_throws ArgumentError SMV.make_config(n_even; spherical_flow=true)
         end
         @test_throws ArgumentError SMV.run_case(SMV.NX_MIN - 2; case=:A)
-        @test_throws ArgumentError SMV.run_case(33; case=:C)
+        @test_throws ArgumentError SMV.run_case(33; case=:D)
+        @test_throws ArgumentError SMV.run_case(33; case=:C, spherical_flow=false)
+        # Case C: eta / zeta = 1 through etaphikoef = phi, and p_s = 1e7 Pa.
+        cfg_c = SMV.make_config(33; spherical_flow=true, case=:C)
+        @test isapprox(SMV.PHI / cfg_c.solver.etaphikoef, 1.0; rtol=1.0e-12)
+        @test isapprox(cfg_c.geometry.psurface, 1.0e7; rtol=1.0e-15)
+        @test isapprox(cfg_c.disk.p_amb_disk, 1.0e7; rtol=1.0e-15)
+        @test isapprox(cfg_c.materials.kphim0[1], 1.0e-13; rtol=1.0e-15)
+        @test isapprox(cfg_c.materials.etafluidm[1], 1.0e-3; rtol=1.0e-15)
+        @test isapprox(cfg_c.thermodynamics.phim0, 0.2; rtol=1.0e-15)
+        @test !cfg_c.poroelasticity.hydrofracture && !cfg_c.venting.active
+        @test isapprox(
+            cfg.solver.etaphikoef,
+            SMV.make_config(65; spherical_flow=true, case=:B).solver.etaphikoef;
+            rtol=1.0e-15,
+        )
         @test_throws ArgumentError SMV.run_case(33; case=:B, spherical_flow=false)
         @test_throws ArgumentError SMV.run_case(33; case=:A0, spherical_flow=false)
         @test_throws ArgumentError SMV.evaluate_spherical_momentum_benchmark(;
@@ -583,7 +826,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
     @testset "set_fields!: uniform matrix, body force and C2 before the solve (case $case)" for case in
                                                                                                 SMV.CASES
 
-        cfg = SMV.make_config(33; spherical_flow=true)
+        cfg = SMV.make_config(33; spherical_flow=true, case=case)
         mktempdir() do out
             state, coords, _, tio, _ = SMV._init_case(cfg, out, case)
             tio === nothing || close(tio)
@@ -591,10 +834,16 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test state.timestep == 1
             @test isapprox(state.dt, SMV.DT_YR * cfg.time.yearlength; rtol=1.0e-15)
             @test all(x -> isapprox(x, SMV.ETA_ROCK; rtol=1.0e-15), g.ETA)
-            # C2: G dt >= 1e6 eta on the basic and the P nodes.
+            # C2: G dt >= 1e6 eta > 0 on the basic and the P nodes.
             @test maximum(g.ETA ./ (g.GGG .* state.dt)) <= 1.0e-6
             @test maximum(g.ETAP ./ (g.GGGP .* state.dt)) <= 1.0e-6
+            @test 0.0 < minimum(g.GGG) <= maximum(g.GGG) < Inf
+            @test 0.0 < minimum(g.GGGP) <= maximum(g.GGGP) < Inf
             @test all(iszero, g.S330) && all(iszero, g.SXX0) && all(iszero, g.SXY0)
+            # C6: strengths of 1e20 Pa and no friction, so no node yields.
+            @test all(x -> isapprox(x, SMV.STRENGTH_FILL; rtol=1.0e-15), g.COH)
+            @test all(x -> isapprox(x, SMV.STRENGTH_FILL; rtol=1.0e-15), g.TEN)
+            @test all(iszero, g.FRI)
             # rho g = f at every vx and vy node, 0 outside R.
             fs = SMV.force_scale(case)
             grid = SMV.grid_of(coords)
@@ -614,6 +863,12 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
                 g.RHOY[i, j] * g.gy[i, j], fs * SMV.exact_force(case, X, Y)[2]; rtol=1.0e-14
             )
             @test isapprox(grid.dx, SMV.L_BOX / 32; rtol=1.0e-15)
+            # C7: no fluid body force; the pressures start at the ambient pressure.
+            @test maximum(abs, g.RHOFX) <= 1.0e-30 && maximum(abs, g.RHOFY) <= 1.0e-30
+            p_s = SMV.ambient_pressure(case)
+            @test all(x -> isapprox(x, p_s; rtol=1.0e-15), g.pr)
+            @test all(x -> isapprox(x, p_s; rtol=1.0e-15), g.pf)
+            @test isapprox(state.accumulators.P_amb, p_s; rtol=1.0e-15)
         end
     end
 
@@ -743,6 +998,45 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         py = SMV.profile_norm(zero(va.vx), va.vy, grid)
         @test isapprox(px^2 + py^2, pa^2; rtol=1.0e-14)
         @test isapprox(px, py; rtol=1.0e-12)
+        # Case C fields at the P nodes: the exact fields have the error 0, a field 1 % too
+        # large the error 0.01, and a value outside R counts only in the outside error.
+        ex = SMV.exact_pnode_fields(grid, :C)
+        for f in (:s33, :pt, :pf, :eii, :sii, :hs)
+            e0 = SMV.pnode_errors(getfield(ex, f), getfield(ex, f), grid)
+            @test isapprox(e0.l2_inside, 0.0; atol=1.0e-15) &&
+                isapprox(e0.out, 0.0; atol=1.0e-15)
+            e1 = SMV.pnode_errors(1.01 .* getfield(ex, f), getfield(ex, f), grid)
+            @test isapprox(e1.l2_inside, 0.01; rtol=1.0e-10)
+        end
+        p_s = SMV.P_AMB_C
+        pt = p_s .+ ex.pt
+        pt[2, 2] += 1.0e-3 * maximum(abs, ex.pt)
+        e_out = SMV.pnode_errors(pt, ex.pt, grid; offset=p_s)
+        @test isapprox(e_out.l2_inside, 0.0; atol=1.0e-12)
+        @test isapprox(e_out.out, 1.0e-3; rtol=1.0e-6)
+        # The heating peaks at the centre with 720 eta U0^2 / R^2, about 3e-5 W/m^3.
+        @test 1.0e-5 < maximum(ex.hs) < 1.0e-4
+        # The anchor rings read both pressures on the P nodes next to the box edge only:
+        # inside the rings and on the ghost rows a change does not count.
+        ny, nx = grid.Ny1, grid.Nx1
+        pr0 = fill(p_s, ny, nx)
+        pf0 = fill(p_s, ny, nx)
+        pr0[17, 17] += 1.0e6
+        pf0[17, 17] -= 5.0e5
+        pf0[1, 17] += 1.0e6
+        pr0[17, nx] += 1.0e6
+        @test isapprox(SMV.anchor_deviation(pr0, pf0, grid, p_s), 0.0; atol=1.0e-15)
+        for (k, (i, j)) in enumerate(((2, 17), (ny - 1, 17), (17, 2), (17, nx - 1)))
+            for on_pr in (true, false)
+                pr, pf = copy(pr0), copy(pf0)
+                d = (on_pr ? 1.0e3 : -2.0e3) * k
+                (on_pr ? pr : pf)[i, j] += d
+                @test isapprox(
+                    SMV.anchor_deviation(pr, pf, grid, p_s), abs(d) / p_s; rtol=1.0e-9
+                )
+            end
+        end
+        @test_throws DomainError SMV.anchor_deviation(pr0, pf0, grid, 0.0)
     end
 
     @testset "a rigid rotation has a discrete out-of-plane strain rate next to the centre" begin
@@ -834,26 +1128,38 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test r.converged
         @test r.n_plastic_passes == 1
         @test r.dt_dev <= 1.0e-12
-        # C1: eta / zeta <= 1e-6 on the interior P nodes.
-        @test r.eta_zeta <= 1.0e-6 * (1 + 1.0e-12)
-        @test isapprox(r.eta_zeta, 1.0e-6; rtol=1.0e-12)
-        # C2: G dt >= 1e6 eta on the basic and the P nodes.
-        @test r.elastic <= 1.0e-6
-        @test r.elastic_p <= 1.0e-6
+        # C1: eta / zeta = 1e-6 (case C: 1) on every interior P node.
+        ratio = SMV.eta_zeta_ratio(key[2])
+        @test isapprox(r.eta_zeta, ratio; rtol=1.0e-12)
+        @test isapprox(r.eta_zeta_min, ratio; rtol=1.0e-12)
+        # C2: G dt >= 1e6 eta > 0 on the basic and the P nodes.
+        @test 0.0 < r.elastic_min <= r.elastic <= 1.0e-6
+        @test 0.0 < r.elastic_p_min <= r.elastic_p <= 1.0e-6
         # C3: the solve keeps the body force.
         @test iszero(r.g_dev)
         @test all(isfinite, r.vx) && all(isfinite, r.vy) && all(isfinite, r.pr)
-        @test all(isfinite, r.S33)
+        @test all(isfinite, r.S33) && all(isfinite, r.pf)
+        # C6: no node yields. C7: no fluid body force after the solve. C8: the anchor
+        # rings of P_t and P_f hold the ambient pressure.
+        @test r.n_yielding == 0
+        @test r.rhof_max <= 1.0e-30
+        @test r.anchor_dev <= 1.0e-9
     end
 
     @testset "conditions hold for the A0 runs (Nx = $n)" for n in (33, 65)
         r = a0[n]
         @test r.converged && r.n_plastic_passes == 1
         @test r.dt_dev <= 1.0e-12
-        @test r.eta_zeta <= 1.0e-6 * (1 + 1.0e-12)
-        @test r.elastic <= 1.0e-6 && r.elastic_p <= 1.0e-6
+        @test isapprox(r.eta_zeta, 1.0e-6; rtol=1.0e-12)
+        @test isapprox(r.eta_zeta_min, 1.0e-6; rtol=1.0e-12)
+        @test 0.0 < r.elastic_min <= r.elastic <= 1.0e-6
+        @test 0.0 < r.elastic_p_min <= r.elastic_p <= 1.0e-6
         @test iszero(r.g_dev)
         @test all(isfinite, r.vx) && all(isfinite, r.vy) && all(isfinite, r.pr)
+        @test all(isfinite, r.S33) && all(isfinite, r.pf)
+        @test r.n_yielding == 0
+        @test r.rhof_max <= 1.0e-30
+        @test r.anchor_dev <= 1.0e-9
     end
 
     @testset "case A velocity converges at second order (spherical_flow = $sf)" for sf in (
@@ -983,6 +1289,130 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test !iszero(S[Ny1 - 1, 2:(Nx1 - 1)]) && !iszero(S[2:(Ny1 - 1), 2])
     end
 
+    @testset "case C conditions C1 to C8 after the solve (Nx = $n)" for n in (33, 65)
+        r = runs[(n, :C, true, :base)]
+        # C1: eta / zeta = 1 on every interior P node; C2: viscous limit.
+        @test isapprox(r.eta_zeta, 1.0; rtol=1.0e-12)
+        @test isapprox(r.eta_zeta_min, 1.0; rtol=1.0e-12)
+        @test 0.0 < r.elastic_min <= r.elastic <= 1.0e-6
+        @test 0.0 < r.elastic_p_min <= r.elastic_p <= 1.0e-6
+        # C3: the solve keeps g; C6: the time step and one plastic pass without yield.
+        @test iszero(r.g_dev)
+        @test r.dt_dev <= 1.0e-12
+        @test r.converged && r.n_plastic_passes == 1
+        @test r.n_yielding == 0
+        # With no stress history S330 the stress increment DS33 equals S33.
+        inner = (2:(size(r.S33, 1) - 1), 2:(size(r.S33, 2) - 1))
+        @test isapprox(r.DS33[inner...], r.S33[inner...]; rtol=1.0e-12)
+        @test 5.0e6 < maximum(abs, r.DS33[inner...]) < 2.0e7
+        # C7: no fluid body force; C8: the anchor rings hold p_s = 1e7 Pa.
+        @test r.rhof_max <= 1.0e-30
+        @test r.anchor_dev <= 1.0e-9
+        # P_t > 0 everywhere in the solved field, as in the exact one.
+        @test 0.0 < minimum(r.pr[2:(end - 1), 2:(end - 1)]) < SMV.P_AMB_C
+        @test maximum(r.pr[2:(end - 1), 2:(end - 1)]) > 4 * SMV.P_AMB_C
+    end
+
+    @testset "case C velocity, stresses, pressures and heating converge at second order" begin
+        c33, c65 = runs[(33, :C, true, :base)], runs[(65, :C, true, :base)]
+        for f in (:l2, :l2_inside, :s33_l2, :pt_l2, :pf_l2, :eii_l2, :sii_l2, :hs_l2)
+            e33, e65 = getfield(c33, f), getfield(c65, f)
+            @test isapprox(log2(e33 / e65), 2.0; atol=0.35)
+            @test e65 <= 0.01
+        end
+        # The flow is 0 outside R: the full-box error is close to the error inside.
+        @test c65.l2_outside < 0.2 * c65.l2_inside
+        # S_II = 2 eta E_II in the viscous limit, so their errors agree closely.
+        @test isapprox(c65.sii_l2, c65.eii_l2; rtol=0.05)
+        # Sign and scale guards: S33 has the sign of tau_33 where it peaks, and tau_33
+        # peaks at r = R / 2 with -5.6 eta U0 / R = -1.1e7 Pa.
+        exact = SMV.exact_s33(c65.grid, :C)
+        i, j = argmax(abs.(exact)).I
+        @test sign(c65.S33[i, j]) == sign(exact[i, j])
+        @test isapprox(c65.S33[i, j], exact[i, j]; rtol=0.05)
+        @test isapprox(SMV.exact_tau33(:C, 0.5, 0.0), -45 / 8; rtol=1.0e-12)
+        @test 5.0e6 < maximum(abs, c65.S33) < 2.0e7
+        @test 1.0e-10 < maximum(abs, c65.vx) < 1.0e-8
+    end
+
+    @testset "case C: the S33 error next to the centre falls in share with the grid" begin
+        # Share of the squared S33 error inside R on the 32 P nodes with r <= 3 dx.
+        function near_share(r)
+            g = r.grid
+            ex = SMV.exact_s33(g, :C)
+            near = total = 0.0
+            n_near = 0
+            for j in 2:(g.Nx1 - 1), i in 2:(g.Ny1 - 1)
+                X, Y = SMV._nd(g.xp[j], g.yp[i])
+                X^2 + Y^2 < 1 || continue
+                d2 = (r.S33[i, j] - ex[i, j])^2
+                total += d2
+                if hypot(X, Y) * SMV.R_PLANET <= 3 * g.dx
+                    near += d2
+                    n_near += 1
+                end
+            end
+            return near / total, n_near
+        end
+        s33, n33 = near_share(runs[(33, :C, true, :base)])
+        s65, n65 = near_share(runs[(65, :C, true, :base)])
+        @test n33 == 32 && n65 == 32
+        @test isapprox(s33, 0.57; atol=0.01)
+        @test isapprox(s65, 0.22; atol=0.01)
+    end
+
+    @testset "case C at Nx = 65: pinned errors" begin
+        c65 = runs[(65, :C, true, :base)]
+        @test isapprox(c65.l2_inside, 4.3581222816e-3; rtol=1.0e-6)
+        @test isapprox(c65.l2, 4.3593120010e-3; rtol=1.0e-5)
+        @test isapprox(c65.s33_l2, 4.2575165490e-3; rtol=1.0e-5)
+        @test isapprox(c65.pt_l2, 1.8200244850e-3; rtol=1.0e-5)
+        @test isapprox(c65.pf_l2, 3.9680137791e-3; rtol=1.0e-5)
+        @test isapprox(c65.eii_l2, 3.2081298629e-3; rtol=1.0e-5)
+        @test isapprox(c65.sii_l2, 3.2081298629e-3; rtol=1.0e-5)
+        @test isapprox(c65.hs_l2, 4.0820767132e-3; rtol=1.0e-5)
+        # A run by hand with the trace dropped from S33 of the momentum rows only, so that
+        # tau_xx = SXX - S33 / 2 has 1.5 times the in-plane trace, has the error 0.10.
+        @test c65.l2_inside < 0.05 * 0.10
+        @test isapprox(measured["l2_inside_c_nx65"], c65.l2_inside; rtol=1.0e-14)
+    end
+
+    @testset "case C: the Darcy flux is -u and converges at second order" begin
+        c33, c65 = runs[(33, :C, true, :base)], runs[(65, :C, true, :base)]
+        flux_error(r; sign=-1.0) =
+            SMV.velocity_errors(sign .* r.qxD, sign .* r.qyD, r.grid, :C).l2_inside
+        # The bounds are about 1.4 times the measured 1.73e-2 and 4.26e-3.
+        q33, q65 = flux_error(c33), flux_error(c65)
+        @test q33 <= 0.025
+        @test q65 <= 0.0060
+        @test isapprox(log2(q33 / q65), 2.0; atol=0.35)
+        # A flux with the sign of u, or no flux, misses the exact flux by 2 or by 1.
+        @test isapprox(flux_error(c65; sign=1.0), 2.0; atol=0.01)
+        @test isapprox(flux_error(c65; sign=0.0), 1.0; atol=1.0e-12)
+    end
+
+    @testset "case C outside R: S33, P_t and P_f stay at the grid error (Nx = $n)" for (
+        n, bounds
+    ) in (
+        (33, (1.5e-3, 2.1e-4, 1.1e-3)), (65, (3.7e-4, 6.3e-5, 3.0e-4))
+    )
+        # Largest error for r >= R over the largest exact value inside, about 1.4 times
+        # the measured value.
+        r = runs[(n, :C, true, :base)]
+        @test r.s33_out <= bounds[1]
+        @test r.pt_out <= bounds[2]
+        @test r.pf_out <= bounds[3]
+        @test all(isfinite, (r.s33_out, r.pt_out, r.pf_out))
+    end
+
+    @testset "case C outside R: the errors fall with the grid" begin
+        c33, c65 = runs[(33, :C, true, :base)], runs[(65, :C, true, :base)]
+        for f in (:s33_out, :pt_out, :pf_out)
+            @test getfield(c65, f) < getfield(c33, f) / 3
+            @test getfield(c65, f) < 1.0e-3
+        end
+    end
+
     @testset "on/off L2-norm ratio of the case A profile against its exact value" begin
         exact = SMV.profile_norm_ratio()
         @test isapprox(exact, sqrt(8 / 11); rtol=1.0e-15)
@@ -996,12 +1426,17 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         )
     end
 
-    @testset "6-variable path equals the 4-variable path (case $case)" for case in (:A, :B)
-        tag = case == :A ? "a" : "b"
+    @testset "6-variable path equals the 4-variable path (case $case)" for case in
+                                                                           (:A, :B, :C)
+        tag = lowercase(String(case))
         six, four = runs[(33, case, true, :elim_off)], runs[(33, case, true, :base)]
         @test measured["elim_$(tag)_nx33"] <= 1.0e-7
         @test maximum(abs, six.vx .- four.vx) / maximum(abs, four.vx) <= 1.0e-7
         @test maximum(abs, six.pr .- four.pr) / SMV.stress_scale(case) <= 1.0e-7
+        @test maximum(abs, six.pf .- four.pf) / SMV.stress_scale(case) <= 1.0e-7
+        v = SMV.velocity_scale(case)
+        @test maximum(abs, six.qxD .- four.qxD) / v <= 1.0e-7
+        @test maximum(abs, six.qyD .- four.qyD) / v <= 1.0e-7
         other = case == :A ? :B : :A
         @test_throws ArgumentError SMV.elimination_difference(
             six, runs[(33, other, true, :base)]
@@ -1011,16 +1446,16 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
     recorded_only = filter(kv -> !haskey(measured, kv.first), recorded)
     bench = (; runs, metrics=merge(measured, recorded_only))
 
-    @testset "metrics: 20 from the runs, 17 recorded values for Nx = 129 and the orders" begin
-        @test length(measured) == 20
-        @test length(recorded_only) == 17
+    @testset "metrics: 37 from the runs, 33 recorded values for Nx = 129 and the orders" begin
+        @test length(measured) == 37
+        @test length(recorded_only) == 33
         @test all(endswith(k, "129") for k in keys(recorded_only))
         @test Set(keys(bench.metrics)) == Set(SMV.EXPECTED_METRIC_IDS)
     end
 
     @testset "recorded orders from Nx = 65 to 129 match their recorded errors" begin
         order_ids = filter(k -> occursin("_order_", k), SMV.EXPECTED_METRIC_IDS)
-        @test length(order_ids) == 7
+        @test length(order_ids) == 15
         for oid in order_ids
             base_id = replace(oid, "_order" => "", "_65_129" => "")
             e65, e129 = recorded[base_id * "_nx65"], recorded[base_id * "_nx129"]
@@ -1035,20 +1470,29 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             l2=e,
             l2_inside=0.9e,
             s33_l2=1.1e,
+            pt_l2=1.2e,
+            pf_l2=1.3e,
+            eii_l2=1.4e,
+            sii_l2=1.5e,
+            hs_l2=1.6e,
             centre_fit=case == :A ? om0(sf) * (1 + e) : NaN,
             centre_node=case == :A ? om0(sf) * (1 - e / 2) : NaN,
             norm=sf ? 0.85 : 1.0,
             vx=fill(1.0, 2, 2),
             vy=fill(-2.0, 2, 2),
             pr=fill(SMV.P_AMB, 2, 2),
+            pf=fill(SMV.P_AMB, 2, 2),
+            qxD=fill(-1.0, 2, 2),
+            qyD=fill(2.0, 2, 2),
         )
         fake_runs = Dict{Tuple,Any}()
         for (n, e) in ((33, 0.04), (65, 0.01), (129, 0.0025))
             fake_runs[(n, :A, true, :base)] = fake(:A, true, e)
             fake_runs[(n, :A, false, :base)] = fake(:A, false, 1.5e)
             fake_runs[(n, :B, true, :base)] = fake(:B, true, 2e)
+            fake_runs[(n, :C, true, :base)] = fake(:C, true, 3e)
         end
-        for case in (:A, :B)
+        for case in (:A, :B, :C)
             fake_runs[(33, case, true, :elim_off)] = fake(case, true, 0.04)
         end
         all_metrics = SMV.metrics_from_runs(fake_runs)
@@ -1066,6 +1510,10 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test isapprox(all_metrics["profile_ratio_nx65"], 0.85; rtol=1.0e-14)
         @test isapprox(all_metrics["elim_b_nx33"], 0.0; atol=1.0e-15)
         @test isapprox(all_metrics["s33_b_nx65"], 0.022; rtol=1.0e-14)
+        @test isapprox(all_metrics["pf_c_nx65"], 0.039; rtol=1.0e-14)
+        @test isapprox(all_metrics["hs_c_nx129"], 0.012; rtol=1.0e-14)
+        @test isapprox(all_metrics["l2_inside_c_nx33"], 0.108; rtol=1.0e-14)
+        @test isapprox(all_metrics["elim_c_nx33"], 0.0; atol=1.0e-15)
         delete!(fake_runs, (129, :A, true, :base))
         delete!(fake_runs, (33, :B, true, :elim_off))
         partial = SMV.metrics_from_runs(fake_runs)
@@ -1075,14 +1523,30 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test haskey(partial, "l2_order_a_off_65_129")
     end
 
-    @testset "elimination difference: the largest of the 3 field differences" begin
-        base_fields(case) =
-            (; case, vx=fill(2.0, 3, 3), vy=fill(-4.0, 3, 3), pr=fill(SMV.P_AMB, 3, 3))
+    @testset "elimination difference: the largest of the 6 field differences" begin
+        base_fields(case) = (;
+            case,
+            vx=fill(2.0, 3, 3),
+            vy=fill(-4.0, 3, 3),
+            pr=fill(SMV.P_AMB, 3, 3),
+            pf=fill(SMV.P_AMB, 3, 3),
+            qxD=zeros(3, 3),
+            qyD=zeros(3, 3),
+        )
         four = base_fields(:B)
         @test iszero(SMV.elimination_difference(base_fields(:B), four))
         sigma = SMV.stress_scale(:B)
-        for (field, delta, expected) in
-            ((:vx, 0.3, 0.15), (:vy, -0.4, 0.1), (:pr, 0.2 * sigma, 0.2))
+        vel = SMV.velocity_scale(:B)
+        # P_f is scaled by the stress unit as P_t, not by P_f - P_amb, which is 0 in A, B.
+        # The Darcy fluxes are scaled by the velocity unit: they are 0 in A and B.
+        for (field, delta, expected) in (
+            (:vx, 0.3, 0.15),
+            (:vy, -0.4, 0.1),
+            (:pr, 0.2 * sigma, 0.2),
+            (:pf, 0.3 * sigma, 0.3),
+            (:qxD, 0.25 * vel, 0.25),
+            (:qyD, -0.35 * vel, 0.35),
+        )
             six = base_fields(:B)
             getfield(six, field)[2, 3] += delta
             @test isapprox(SMV.elimination_difference(six, four), expected; rtol=1.0e-12)
@@ -1136,7 +1600,14 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         )
         @test !ok_missing
         @test any(occursin("eta_zeta_ratio", e) for e in errs_missing)
-        # The 20 measured metrics lie within their bands around the recorded values.
+        missing_c = deepcopy(raw_record)
+        delete!(missing_c["config"], "eta_zeta_ratio_c")
+        ok_missing_c, errs_missing_c = SMV.validate_record_dict(
+            missing_c; require_doc_pages=false, check_doc_sync=false
+        )
+        @test !ok_missing_c
+        @test any(occursin("eta_zeta_ratio_c", e) for e in errs_missing_c)
+        # The 37 measured metrics lie within their bands around the recorded values.
         for (mid, value) in measured
             band = SMV.PHYSICS_REGRESSION_BANDS[mid]
             @test isapprox(value, recorded[mid]; atol=band.atol, rtol=band.rtol)
@@ -1180,8 +1651,28 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         for name in SMV.HASHED_CASE_CONSTANTS
             @test occursin("case.$(name)=", text)
         end
-        @test length(SMV.HASHED_CASE_CONSTANTS) == 31
+        @test length(SMV.HASHED_CASE_CONSTANTS) == 34
+        @test all(
+            n in SMV.HASHED_CASE_CONSTANTS for n in (:ETA_RATIO_C, :P_AMB_C, :C_POWER)
+        )
         @test bytes2hex(SHA.sha256(text)) == sha
+        # The hash also covers every section of the case C configuration.
+        cfg_c = SMV.make_config(SMV.NX_REFERENCE; spherical_flow=true, case=:C)
+        for sec in SMV.BENCHMARK_CONFIG_SECTIONS
+            @test occursin("case_c.$(sec).", text)
+        end
+        @test occursin("case_c.disk.p_amb_disk=1.0e7", text)
+        @test SMV.canonical_config_text(cfg; cfg_c=cfg_c) == text
+        for (key, value) in (
+            "time.dt_initial" => 10.0,
+            "disk.p_amb_disk" => 100.0,
+            "materials.kphim0" => Erebus.SVector(1.0e-18, 1.0e-18, 1.0e-30),
+            "solver.etaphikoef" => 0.2e-6,
+        )
+            changed = with_setting(cfg_c, key, value)
+            @test SMV.canonical_config_sha256(cfg; cfg_c=changed) != sha
+        end
+        @test_throws ArgumentError with_setting(cfg_c, "dt_initial", 10.0)
         summary = SMV.expected_config_summary(cfg)
         rec_cfg = raw_record["config"]
         @test Set(keys(summary)) == Set(keys(rec_cfg))
@@ -1193,6 +1684,9 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             end
         end
         @test isapprox(summary["eta_zeta_ratio"], 1.0e-6; rtol=1.0e-12)
+        @test isapprox(summary["eta_zeta_ratio_c"], 1.0; rtol=1.0e-12)
+        @test isapprox(summary["P_amb_c_Pa"], 1.0e7; rtol=1.0e-15)
+        @test summary["c_power"] == 5
         refs = SMV.expected_metric_references()
         @test Set(keys(refs)) == Set(SMV.EXPECTED_METRIC_IDS)
         @test isapprox(refs["centre_fit_ratio_nx65"], 2 / 3; rtol=1.0e-15)
@@ -1310,6 +1804,19 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test !ok_cfg
             @test any(occursin("config.eta_Pa_s", e) for e in errs_cfg)
             @test any(occursin("config_sha256", e) for e in errs_cfg)
+            # A record made with another case C setting has another hash and fails.
+            cfg65 = SMV.make_config(SMV.NX_REFERENCE; spherical_flow=true)
+            cfg_c = SMV.make_config(SMV.NX_REFERENCE; spherical_flow=true, case=:C)
+            for (key, value) in ("time.dt_initial" => 10.0, "disk.p_amb_disk" => 100.0)
+                other_c = deepcopy(raw_record)
+                other_c["metadata"]["config_sha256"] = SMV.canonical_config_sha256(
+                    cfg65; cfg_c=with_setting(cfg_c, key, value)
+                )
+                c_path = write_momentum_toml(joinpath(tmpdir, "other_c.toml"), other_c)
+                ok_c, errs_c = SMV.check_validation_reproducibility(bench, c_path)
+                @test !ok_c
+                @test occursin("config_sha256", only(errs_c))
+            end
             no_key = deepcopy(raw_record)
             delete!(no_key["config"], "F0_N_m3")
             @test SMV._config_mismatches(
@@ -1511,10 +2018,54 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test Base.invokelatest(export_all, outdir; runs=runs) == outdir
             @test sort(readdir(outdir)) == sort([
                 "convergence.csv",
+                "convergence_c.csv",
+                "profile_c_s33_65.csv",
+                "profile_c_u_65.csv",
                 "profile_off_65.csv",
                 "profile_on_65.csv",
                 "reference_curves.csv",
+                "reference_curves_c.csv",
             ])
+            conv_c = readlines(joinpath(outdir, "convergence_c.csv"))
+            @test conv_c[1] == "nx,l2_c,l2_inside_c,s33_c,pt_c,pf_c,eii_c,sii_c,hs_c"
+            @test length(conv_c) == 1 + length(SMV.NX_LIST)
+            row65_c = parse.(Float64, split(conv_c[3], ","))
+            @test isapprox(row65_c[3], recorded["l2_inside_c_nx65"]; rtol=1.0e-15)
+            @test isapprox(row65_c[9], recorded["hs_c_nx65"]; rtol=1.0e-15)
+            curves_c = readlines(joinpath(outdir, "reference_curves_c.csv"))
+            @test curves_c[1] == "rho,u_r,tau33"
+            ref_c = [parse.(Float64, split(l, ",")) for l in curves_c[2:end]]
+            @test all(isapprox(v, 0.0; atol=1.0e-15) for v in ref_c[1])
+            @test all(isapprox(v, 0.0; atol=1.0e-12) for v in ref_c[end][2:end])
+            # u_r = -10 rho (1 - rho^2)^4 is most negative at rho = 1/3, -2.6.
+            @test isapprox(minimum(v[2] for v in ref_c), -10 / 3 * (8 / 9)^4; rtol=1.0e-4)
+            for (file, col) in (("profile_c_u_65.csv", 2), ("profile_c_s33_65.csv", 3))
+                lines = readlines(joinpath(outdir, file))
+                @test lines[1] == (col == 2 ? "rho,u_r" : "rho,tau33")
+                vals_c = [parse.(Float64, split(l, ",")) for l in lines[2:end]]
+                # The row and the column of nodes half a cell off the axes, 4 half-axes
+                # with r < R: 22 vx or vy nodes and 23 P nodes per half-axis at Nx = 65.
+                # The P node where the row and the column cross counts once.
+                @test length(vals_c) == (col == 2 ? 4 * 22 : 4 * 23 - 1)
+                # 3 P nodes lie at the smallest radius dx / sqrt(2): the crossing node and
+                # its neighbours on the row and on the column.
+                if col == 3
+                    rho_min = minimum(v[1] for v in vals_c)
+                    @test isapprox(
+                        rho_min * SMV.R_PLANET, sqrt(0.5) * SMV.L_BOX / 64; rtol=1.0e-12
+                    )
+                    @test count(v -> isapprox(v[1], rho_min; rtol=1.0e-12), vals_c) == 3
+                end
+                peak = maximum(abs(v[col]) for v in ref_c)
+                exact_c(rho) =
+                    if col == 2
+                        SMV.exact_velocity(:C, rho, 0.0)[1]
+                    else
+                        SMV.exact_tau33(:C, rho, 0.0)
+                    end
+                @test all(abs(v[2] - exact_c(v[1])) < 0.05 * peak for v in vals_c)
+                @test all(0.0 < v[1] < 1.0 for v in vals_c)
+            end
             conv = readlines(joinpath(outdir, "convergence.csv"))
             @test conv[1] ==
                 "nx,l2_a_on,l2_a_off,l2_b,s33_b,centre_fit_a_on,centre_node_a_on"
