@@ -5,10 +5,11 @@ Steady Stokes flow of a uniform, nearly incompressible viscous matrix driven by 
 inside a sphere, against exact solutions of the momentum equation of the spherical slice.
 
 With `geometry.spherical_flow = true` the momentum rows solve
-`(1 / w) d_j (w tau_ij) - tau_33 d_i w / w - d_i P + f_i = 0` with `w = 2 r`, and with
-`false` the 2-D rows `d_j tau_ij - d_i P + f_i = 0`. The case sets the body force
-`f = rho g` in `gx` and `gy` and compares the solved velocity with 3 exact flows that
-vanish for `r >= R_PLANET`:
+`(1 / w) d_j (w tau_ij) - tau_33 d_i w / w - d_i P + f_i = 0` with `w = 2 r` and the 3-D
+deviatoric stress `tau_ij`, and with `false` the 2-D rows `d_j tau2D_ij - d_i P + f_i = 0`
+with the 2-D deviatoric stress `tau2D_xx = -tau2D_yy = S_xx = eta (eps_xx - eps_yy)` and
+`tau2D_xy = 2 eta eps_xy`. The case sets the body force `f = rho g` in `gx` and `gy` and
+compares the solved velocity with 3 exact flows that vanish for `r >= R_PLANET`:
 
 - case `:A`, azimuthal shear `u = r Omega(r) e_theta` with a closed form for both settings;
 - case `:A0`, azimuthal shear with `Omega(0) = 0`, for the option on;
@@ -55,7 +56,7 @@ const FIT_RHO_MAX = 0.85
 const FIT_DEGREE = 5
 const NX_LIST = (33, 65, 129)
 const NX_REFERENCE = 65
-const NX_MIN = 17
+const NX_MIN = 29
 const CASES = (:A, :A0, :B)
 
 const QB = Rational{BigInt}
@@ -731,11 +732,16 @@ Return whether the case `:B` velocity has the spherical divergence 0 exactly:
 Parameters
 ----------
 power : Int, optional
-    Power of `(1 - rho^2)` in the potential (default `B_POWER`).
+    Power of `(1 - rho^2)` in the potential, at least 2 (default `B_POWER`).
 
 Returns
 -------
 Bool
+
+Raises
+------
+ArgumentError
+    From `_case_b_polynomials` if `power < 2`.
 """
 function spherical_divergence_is_zero(power::Int=B_POWER)
     p = power == B_POWER ? CASE_B_EXACT : _case_b_polynomials(power)
@@ -1084,8 +1090,9 @@ time step `DT_YR`, the surface pressure `P_AMB` and no venting.
 Parameters
 ----------
 N : Int
-    Basic grid resolution in x and y, odd and at least `NX_MIN`, so that the centre lies on
-    a basic node.
+    Basic grid resolution in x and y, odd so that the centre lies on a basic node, and at
+    least `NX_MIN`, the smallest grid with `FIT_DEGREE + 2` distinct radii in the window
+    of `centre_fit_rotation`.
 spherical_flow : Bool
     Value of `geometry.spherical_flow`.
 darcy_elimination : Bool, optional
@@ -1103,7 +1110,7 @@ ArgumentError
 """
 function make_config(N::Int; spherical_flow::Bool, darcy_elimination::Bool=true)
     N >= NX_MIN ||
-        throw(ArgumentError("N must be at least $NX_MIN to resolve the sphere, got $N"))
+        throw(ArgumentError("N must be at least $NX_MIN to resolve the centre fit, got $N"))
     isodd(N) || throw(
         ArgumentError("N must be odd so that the centre lies on a basic node, got $N")
     )
@@ -1479,7 +1486,7 @@ vx, vy : AbstractMatrix{Float64}
 grid : NamedTuple
     Grid from `grid_of`; the centre must lie on a basic node (odd `N`).
 scale : Float64, optional
-    Velocity unit [m/s] (default `velocity_scale(:A)`).
+    Velocity unit [m/s] (default `velocity_scale(:A)`), finite and positive.
 
 Returns
 -------
@@ -1488,10 +1495,13 @@ Float64
 
 Raises
 ------
+DomainError
+    If `scale` is not finite or not positive.
 ArgumentError
     If no basic node lies on the centre.
 """
 function centre_node_rotation(vx, vy, grid; scale::Float64=velocity_scale(:A))
+    _check_positive("scale", scale)
     bx = argmin(abs.(grid.xvx .- X_CENTRE))
     ay = argmin(abs.(grid.yvy .- Y_CENTRE))
     a = searchsortedlast(grid.yvx, Y_CENTRE)
@@ -1513,8 +1523,9 @@ Return `Omega(0)` from a least-squares fit of `Omega(rho) = sum_{k=0..degree} c_
 to the velocity nodes on the 2 axes through the centre with `rho_min <= rho <= rho_max`:
 `Omega = vy / (x - xc)` on the vy nodes of the row `y = yc` and `-vx / (y - yc)` on the vx
 nodes of the column `x = xc`, where the velocity is purely azimuthal for an azimuthal flow.
-The exact `Omega` of the azimuthal cases has degree 5 in `rho^2`, so the fit with the
-default degree has no bias.
+The 2 axes sample the same radii, so the fit needs at least `degree + 2` distinct radii in
+the range. The exact `Omega` of the azimuthal cases has degree 5 in `rho^2`, so the fit
+with the default degree has no bias.
 
 Parameters
 ----------
@@ -1523,12 +1534,12 @@ vx, vy : AbstractMatrix{Float64}
 grid : NamedTuple
     Grid from `grid_of`; the centre must lie on a basic node (odd `N`).
 scale : Float64, optional
-    Velocity unit [m/s] (default `velocity_scale(:A)`).
+    Velocity unit [m/s] (default `velocity_scale(:A)`), finite and positive.
 rho_min, rho_max : Float64, optional
-    Radius range of the nodes, `0 < rho_min < rho_max` (defaults `FIT_RHO_MIN`,
-    `FIT_RHO_MAX`).
+    Radius range of the nodes, finite with `0 < rho_min < rho_max <= 1` (defaults
+    `FIT_RHO_MIN`, `FIT_RHO_MAX`).
 degree : Int, optional
-    Degree of the fit in `rho^2` (default `FIT_DEGREE`).
+    Degree of the fit in `rho^2`, non-negative (default `FIT_DEGREE`).
 
 Returns
 -------
@@ -1537,9 +1548,11 @@ Float64
 
 Raises
 ------
+DomainError
+    If `scale` is not finite or not positive.
 ArgumentError
-    If `rho_min >= rho_max`, no basic node lies on the centre, or fewer than
-    `degree + 2` nodes lie in the range.
+    If the range is not finite with `0 < rho_min < rho_max <= 1`, `degree < 0`, no basic
+    node lies on the centre, or fewer than `degree + 2` distinct radii lie in the range.
 """
 function centre_fit_rotation(
     vx,
@@ -1550,8 +1563,11 @@ function centre_fit_rotation(
     rho_max::Float64=FIT_RHO_MAX,
     degree::Int=FIT_DEGREE,
 )
-    0 < rho_min < rho_max ||
-        throw(ArgumentError("need 0 < rho_min < rho_max, got $rho_min, $rho_max"))
+    _check_positive("scale", scale)
+    (isfinite(rho_min) && isfinite(rho_max) && 0 < rho_min < rho_max <= 1) || throw(
+        ArgumentError("need finite 0 < rho_min < rho_max <= 1, got $rho_min, $rho_max")
+    )
+    degree >= 0 || throw(ArgumentError("degree must be non-negative, got $degree"))
     bx = argmin(abs.(grid.xvx .- X_CENTRE))
     ay = argmin(abs.(grid.yvy .- Y_CENTRE))
     (
@@ -1576,8 +1592,9 @@ function centre_fit_rotation(
             push!(oms, -vx[i, bx] / y)
         end
     end
-    length(rhos) >= degree + 2 || throw(
-        ArgumentError("$(length(rhos)) nodes lie in the fit range, need $(degree + 2)")
+    n_radii = length(unique(round.(rhos; sigdigits=12)))
+    n_radii >= degree + 2 || throw(
+        ArgumentError("$n_radii distinct radii lie in the fit range, need $(degree + 2)"),
     )
     A = [rho^(2k) for rho in rhos, k in 0:degree]
     return (A \ oms)[1] * R_PLANET / scale
@@ -2143,7 +2160,7 @@ end
 
 Return the SHA-256 digest of `canonical_config_text(cfg)`, which covers the configuration
 sections of the case, the grid list `NX_LIST` and every constant that `set_fields!`, the
-series and the error measures use (`HASHED_CASE_CONSTANTS`).
+closed forms and the error measures use (`HASHED_CASE_CONSTANTS`).
 
 Parameters
 ----------

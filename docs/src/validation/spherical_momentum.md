@@ -22,15 +22,17 @@ $$\frac{1}{w} \partial_j (w \tau_{ij}) - \tau_{33} \frac{\partial_i w}{w} - \par
 
 with the body force $f_i = \rho g_i$ and the distance $r$ from the centre of the sphere.
 The stress is the 3-D deviatoric stress $\tau_{ij} = 2 \eta (\dot\varepsilon_{ij} - \delta_{ij} \nabla_3 \cdot \mathbf{u} / 3)$ with the out-of-plane strain rate $\dot\varepsilon_{33} = \mathbf{u} \cdot \nabla w / w$.
-This is the momentum equation of the spherical annulus of Hernlund and Tackley (2008), their Eqs. (2) and (3) with $d = 2$, written in Cartesian components (see [Discretization and Numerics](../explanations/discretization_numerics.md)).
-With the option off the rows solve the 2-D equation $\partial_j \tau_{ij} - \partial_i P_t + f_i = 0$.
+This is the momentum equation of the spherical annulus of Hernlund and Tackley (2008), their Eqs. (2) to (7) with $d = 2$ and the bulk viscosity $k_0 = 0$, written in Cartesian components (see [Discretization and Numerics](../explanations/discretization_numerics.md)).
+Their Eq. (2) has a radial gravity only and their Eq. (3) no body force; the force $f_i$ here takes the place of the general body force $\rho g^i$ of their Eq. (14).
+With the option off the rows solve the 2-D equation $\partial_j \tau^\mathrm{2D}_{ij} - \partial_i P_t + f_i = 0$.
+Its stress is the 2-D deviatoric stress $\tau^\mathrm{2D}_{xx} = -\tau^\mathrm{2D}_{yy} = S_{xx} = \eta (\dot\varepsilon_{xx} - \dot\varepsilon_{yy})$ and $\tau^\mathrm{2D}_{xy} = 2 \eta \dot\varepsilon_{xy}$, with the trace $\nabla_2 \cdot \mathbf{u} / 2$ in place of $\nabla_3 \cdot \mathbf{u} / 3$.
 
 The 2-D rows hold the 2-D terms, and `_add_spherical_momentum!` adds the difference:
 
 - line 754 computes $\dot\varepsilon_{33}$ at a P node as the weighted divergence of the continuity row minus the 2-D divergence, with the face multipliers $m_F = w_F / w_P$;
 - line 756 computes $S_{33} = \tau_{33} = \frac{2\eta}{3} (2 \dot\varepsilon_{33} - \dot\varepsilon_{xx} - \dot\varepsilon_{yy})$;
 - lines 789 to 792 (x row) and 817 to 820 (y row) add $(m_F - 1)$ times the stress flux through each face, the difference between $\frac{1}{w} \partial_j (w \tau_{ij})$ and $\partial_j \tau_{ij}$;
-- lines 793 and 794 (x row) and 821 and 822 (y row) add the $S_{33}$ part of the weighted divergence, with $\tau_{xx} = S_{xx} - S_{33} / 2$, and the hoop term $\tau_{33} \partial_i w / w$ with $\partial_x w / w = (m_E - m_W) / \Delta x$ from lines 784 and 811.
+- lines 793 and 794 (x row) and 821 and 822 (y row) add the $S_{33}$ part of the weighted divergence, with $\tau_{xx} = S_{xx} - S_{33} / 2$ and $\tau_{yy} = -S_{xx} - S_{33} / 2$, and the hoop term $\tau_{33} \partial_i w / w$ with $\partial_x w / w = (m_E - m_W) / \Delta x$ from line 784 in the x row and $\partial_y w / w = (m_S - m_N) / \Delta y$ from line 811 in the y row.
 
 After the solve, `_spherical_stress_update!` in `src/numerics/plasticity.jl` (line 1229) writes `grids.S33` from the solved velocity.
 
@@ -62,8 +64,8 @@ We also compare the rotation rate at the centre and the L2 norms of the 2 profil
 
 **How we know the right answer.**
 For an azimuthal flow the divergence is 0, $\tau_{33} = 0$, the pressure is uniform and the only stress is $\tau_{r\theta} = \eta r \Omega'$.
-Hernlund and Tackley (2008) give the angular momentum equation of the annulus as their Eq. (3).
-With $\partial_\phi = 0$ and $v_r = 0$ it reduces with $d = 2$ (the sphere, option on) to
+Hernlund and Tackley (2008) give the angular component of the momentum equation of the annulus as their Eq. (3), which has no body force.
+With an azimuthal body force $f_\theta$ added as in their Eq. (14), $\partial_\phi = 0$ and $v_r = 0$, it reduces with $d = 2$ (the sphere, option on) to
 
 $$\frac{1}{r^3} \frac{d}{dr} \left( r^3 \tau_{r\theta} \right) + f_\theta = 0,$$
 
@@ -151,22 +153,26 @@ The record therefore holds the centre node error as a bound only, with no order 
 The cause is the centre of the slice.
 The weight $w = 2 \sqrt{x^2 + y^2}$ has a cone at $r = 0$, and within a few cells of the centre the truncation error of the weighted divergence does not fall with the grid spacing, as the docstring of `flow_metric_face_weights` states.
 A flow with $\Omega(0) \ne 0$ is a rigid rotation near the centre, which has no strain in the continuum.
-On the grid the stress update gives this rotation the out-of-plane strain rate $\dot\varepsilon_{33} = 0.011 \, \Omega$ at the P nodes at $r = 1.58 \Delta x$, the same on every grid, while away from the centre it falls at second order.
+On the grid this rotation has the out-of-plane strain rate $\dot\varepsilon_{33} = \pm 0.011 \, \Omega$ at the 8 P nodes at $r = \sqrt{2.5} \, \Delta x \approx 1.58 \Delta x$, the same on every grid, while away from the centre it falls at second order.
+Its sign changes from one of these nodes to the next around the centre, as $\sin 4\theta$ does, so the 8 values sum to 0.
+The continuity rows and the momentum rows use this discrete $\dot\varepsilon_{33}$ in the solve, and the stress update writes the same value into `grids.S33` after the solve.
 Case A has a total pressure error of about 1100 Pa next to the centre with the option on that does not fall with the grid, against a stress scale $F_0 R = 5 \times 10^6$ Pa.
 Case A0, with $\Omega(0) = 0$, converges at second order in the L2 error, in the largest velocity error and in the largest pressure error.
 The error stays near the centre: the L2 error of case A, which sums over the whole box, and the fitted centre value, which reads the nodes with $\rho \ge 0.18$, converge at second order.
 
 ## The L2 norms of the 2 profiles
 
-The ratio of the L2 norms of the case A profiles with and without the option, $\sqrt{\int_0^1 \rho \, u_\mathrm{on}^2 \, d\rho / \int_0^1 \rho \, u_\mathrm{off}^2 \, d\rho}$, is exactly $\sqrt{8 / 11} = 0.853$, from the closed forms in rational arithmetic.
+The ratio of the L2 norms of the case A profiles with and without the option, $\sqrt{\int_0^1 \rho \, u_\mathrm{on}^2 \, d\rho / \int_0^1 \rho \, u_\mathrm{off}^2 \, d\rho}$, is $\sqrt{8 / 11} \approx 0.853$, from the closed forms in rational arithmetic.
 The discrete ratio over the velocity nodes with $r < R$ is compared with it.
 
 ## Conditions of the case
 
-The exact solutions hold only if the case meets 6 conditions.
+The exact solutions and the solve of the case rest on 6 conditions.
 Each condition is a test assertion, so a change of the set-up that breaks one fails the test and not only the comparison.
 
-- C1, incompressible matrix: after the solve, on every interior P node, $\eta / \zeta \le 10^{-6}$.
+- C1, nearly incompressible matrix: after the solve, on every interior P node, $\eta / \zeta \le 10^{-6}$.
+  The exact flows have $\nabla_3 \cdot \mathbf{u} = 0$ and $P_t = P_f = P_\mathrm{amb}$, so they solve the continuum equations for any $\zeta > 0$.
+  C1 sets the regime of the solve, a nearly incompressible Stokes problem.
 - C2, viscous limit: on every basic node and every P node the shear modulus times $\Delta t$ is at least $10^6$ times the viscosity.
 - C3, body force: the solve leaves `gx` and `gy` unchanged.
 - C4, force moments: the moments $\int s^2 f_\theta$ and $\int s^3 f_\theta$ of the case A force are 0 in exact rational arithmetic.
@@ -185,7 +191,8 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
 
 ## What this case does not test
 
-- The volumetric trace $\nabla_3 \cdot \mathbf{u} / 3$ in $S_{33}$: with $\eta / \zeta = 10^{-6}$ the divergence is close to 0, so a fault in the trace changes the flow far less than the grid error does.
+- The volumetric trace $\nabla_3 \cdot \mathbf{u} / 3$ in $S_{33}$: the exact flows have $\nabla_3 \cdot \mathbf{u} = 0$, and $\eta / \zeta = 10^{-6}$ keeps the discrete divergence close to 0, so a fault in the trace changes the flow far less than the grid error does.
+  A test of the trace needs a compressible flow with $\nabla_3 \cdot \mathbf{u} \ne 0$.
   The operator test `Smooth non-radial flow with variable viscosity` in `test/test_spherical_momentum.jl` uses a flow with a nonzero divergence and checks the rows against the continuum stress divergence that includes the trace.
 - The visco-elastic factors and the stress history `SXX0`, `SXY0` and `S330`: the shear modulus is $10^{35}$ Pa and the history is 0.
   The tests `Out-of-plane stress history in the momentum right-hand side`, `Stress history of all components in both momentum rows` and `Pressure stays unweighted and the visco-elastic factor scales the stress` in `test/test_spherical_momentum.jl` cover them.

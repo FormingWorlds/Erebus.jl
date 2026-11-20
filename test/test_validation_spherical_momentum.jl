@@ -257,9 +257,10 @@ end
 
 Return the coefficients of `(rho^(k + 1) Omega')' + rho^k f` in `rho`. The on form
 (`k = 3`) is the stress divergence `(1 / r^3) (r^3 tau)'` and the off form (`k = 2`)
-`(1 / r^2) (r^2 tau)'` of `tau = eta r Omega'`, both times `rho^k`: the angular momentum
-equation, Eq. (3) of Hernlund and Tackley (2008), for an azimuthal flow with `d = 2`
-(sphere) and `d = 1` (cylinder, the 2-D form).
+`(1 / r^2) (r^2 tau)'` of `tau = eta r Omega'`, both times `rho^k`: the angular component
+of the momentum equation, Eq. (3) of Hernlund and Tackley (2008), for an azimuthal flow
+with `d = 2` (sphere) and `d = 1` (cylinder, the 2-D form) and the azimuthal body force
+`f` added as in their Eq. (14).
 
 Parameters
 ----------
@@ -368,6 +369,8 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
     @testset "case B: spherical divergence 0, polynomial force finite at the centre" begin
         # rho^2 div_sph u = rho^2 (d_x ux + d_y uy) + X ux + Y uy, exactly 0.
         @test SMV.spherical_divergence_is_zero()
+        @test SMV.spherical_divergence_is_zero(3)
+        @test_throws ArgumentError SMV.spherical_divergence_is_zero(1)
         # The force is a polynomial plus q / rho^2 with q of degree >= 3: rho^2 does not
         # divide q, but q / rho^2 <= C rho, so the force is finite and 0 at the centre.
         @test !isempty(SMV.CASE_B_EXACT.fx_rem) && !isempty(SMV.CASE_B_EXACT.fy_rem)
@@ -379,13 +382,20 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             @test all(isfinite, f)
             @test hypot(f...) <= 100 * eps
         end
-        # C5: u = 0 for r >= R; on the circle to round-off, on rational points exactly.
+        # C5: u = 0 for r >= R; just inside the circle to round-off, where the polynomial
+        # is evaluated, and on rational points of the circle exactly.
+        r_in = 1.0 - 1.0e-12
         for t in range(0.0, 2pi; length=13)
-            vx, vy = SMV.exact_velocity(:B, cos(t), sin(t))
+            @test r_in^2 * (cos(t)^2 + sin(t)^2) < 1
+            vx, vy = SMV.exact_velocity(:B, r_in * cos(t), r_in * sin(t))
             @test hypot(vx, vy) <= 1.0e-13
         end
         @test SMV.velocity_vanishes_on_circle(:B)
         @test SMV.velocity_vanishes_on_circle(:A)
+        @test SMV.velocity_vanishes_on_circle(:A0)
+        @test isapprox(
+            SMV.omega_hat(:A0, 1.0 - 1.0e-12; spherical_flow=true), 0.0; atol=1.0e-15
+        )
         @test all(iszero, SMV.exact_velocity(:B, 0.9, 0.6))
         @test all(iszero, SMV.exact_force(:B, 0.9, 0.6))
         # u_r != 0 and tau_33 = 2 u_r / r: O(1) inside.
@@ -538,6 +548,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test isapprox(ratio, sqrt(q(true) / q(false)); rtol=1.0e-8)
         # The option slows the flow: the profile norm drops to 0.853 of the 2-D value.
         @test 0.8 < ratio < 0.9
+        @test isapprox(ratio, 0.853; atol=5.0e-4)
         @test !isapprox(ratio, 2 / 3; rtol=0.05)
     end
 
@@ -649,11 +660,60 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             v.vx, v.vy, grid; scale=SMV.velocity_scale(:A), degree=2
         )
         @test !isapprox(fit2, 0.01; rtol=1.0e-3)
+        # Each axis carries half of Omega(0): the vy row alone gives half the rotation.
+        vs = SMV.velocity_scale(:A)
+        @test isapprox(
+            SMV.centre_fit_rotation(zero(v.vx), v.vy, grid; scale=vs), 0.005; atol=1.0e-12
+        )
+        @test isapprox(
+            SMV.centre_fit_rotation(v.vx, zero(v.vy), grid; scale=vs), 0.005; atol=1.0e-12
+        )
+        node_vy = SMV.centre_node_rotation(zero(v.vx), v.vy, grid; scale=vs)
+        node_all = SMV.centre_node_rotation(v.vx, v.vy, grid; scale=vs)
+        @test isapprox(node_vy, 0.5 * node_all; rtol=1.0e-12)
         @test_throws ArgumentError SMV.centre_fit_rotation(
             v.vx, v.vy, grid; rho_min=0.8, rho_max=0.85
         )
         @test_throws ArgumentError SMV.centre_fit_rotation(
             v.vx, v.vy, grid; rho_min=0.5, rho_max=0.4
+        )
+        # The window must lie in [0, 1], finite, and the degree must be non-negative.
+        for (lo, hi) in ((0.0, 0.85), (0.18, 1.3), (0.18, Inf), (NaN, 0.85))
+            @test_throws ArgumentError SMV.centre_fit_rotation(
+                v.vx, v.vy, grid; rho_min=lo, rho_max=hi
+            )
+        end
+        @test_throws ArgumentError SMV.centre_fit_rotation(v.vx, v.vy, grid; degree=-1)
+        @test_throws ArgumentError SMV.centre_fit_rotation(v.vx, v.vy, grid; degree=-3)
+        # The 2 axes sample the same radii: 16 nodes on 4 radii cannot fit 6 coefficients.
+        @test_throws ArgumentError SMV.centre_fit_rotation(
+            v.vx, v.vy, grid; rho_min=0.55, rho_max=0.85
+        )
+        coarse = SMV.grid_of(
+            Erebus.GridCoordinates(17, 17; xsize=SMV.L_BOX, ysize=SMV.L_BOX)
+        )
+        vc = SMV.exact_fields(coarse, :A)
+        @test_throws ArgumentError SMV.centre_fit_rotation(vc.vx, vc.vy, coarse; scale=vs)
+        # The velocity unit must be finite and positive.
+        for s in (0.0, -1.0, Inf, NaN)
+            @test_throws DomainError SMV.centre_fit_rotation(v.vx, v.vy, grid; scale=s)
+            @test_throws DomainError SMV.centre_node_rotation(v.vx, v.vy, grid; scale=s)
+        end
+        # The smallest grid of the case resolves the default window with no bias.
+        nmin = SMV.NX_MIN
+        gmin = SMV.grid_of(
+            Erebus.GridCoordinates(nmin, nmin; xsize=SMV.L_BOX, ysize=SMV.L_BOX)
+        )
+        vmin = SMV.exact_fields(gmin, :A)
+        @test isapprox(
+            SMV.centre_fit_rotation(vmin.vx, vmin.vy, gmin; scale=vs), 0.01; atol=1.0e-12
+        )
+        gbelow = SMV.grid_of(
+            Erebus.GridCoordinates(nmin - 2, nmin - 2; xsize=SMV.L_BOX, ysize=SMV.L_BOX)
+        )
+        vbelow = SMV.exact_fields(gbelow, :A)
+        @test_throws ArgumentError SMV.centre_fit_rotation(
+            vbelow.vx, vbelow.vy, gbelow; scale=vs
         )
         # The centre of an even grid lies on a P node: no basic node at the centre.
         even = SMV.grid_of(Erebus.GridCoordinates(34, 34; xsize=SMV.L_BOX, ysize=SMV.L_BOX))
@@ -672,16 +732,23 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test isapprox(SMV.pressure_deviation(pr, grid), 250.0; rtol=1.0e-12)
         # The profile norm counts the nodes inside R.
         va = SMV.exact_fields(grid, :A)
-        @test isapprox(
-            SMV.profile_norm(2 .* va.vx, 2 .* va.vy, grid),
-            2 * SMV.profile_norm(va.vx, va.vy, grid);
-            rtol=1.0e-14,
-        )
+        pa = SMV.profile_norm(va.vx, va.vy, grid)
+        @test isapprox(SMV.profile_norm(2 .* va.vx, 2 .* va.vy, grid), 2 * pa; rtol=1.0e-14)
+        # A velocity outside R leaves it unchanged.
+        vx_out = copy(va.vx)
+        vx_out[2, 2] = 10 * maximum(abs, va.vx)
+        @test isapprox(SMV.profile_norm(vx_out, va.vy, grid), pa; rtol=1.0e-14)
+        # The vx and vy parts add in quadrature, and each carries half of the flow.
+        px = SMV.profile_norm(va.vx, zero(va.vy), grid)
+        py = SMV.profile_norm(zero(va.vx), va.vy, grid)
+        @test isapprox(px^2 + py^2, pa^2; rtol=1.0e-14)
+        @test isapprox(px, py; rtol=1.0e-12)
     end
 
     @testset "a rigid rotation has a discrete out-of-plane strain rate next to the centre" begin
         # Omega(0) != 0 is a rigid rotation near the centre: no strain in the continuum, but
-        # the stress update gives eps_33 = 0.011 Omega at r = 1.58 dx on every grid.
+        # the discrete eps_33 of the continuity and momentum rows and of the stress update
+        # is +-0.011 Omega at the 8 P nodes at r = sqrt(2.5) dx = 1.58 dx on every grid.
         function rotation_eps33(n)
             coords = Erebus.GridCoordinates(n, n; xsize=SMV.L_BOX, ysize=SMV.L_BOX)
             Ny1, Nx1 = coords.Ny1, coords.Nx1
@@ -708,21 +775,40 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             )
             # S33 = (2 eta / 3) (2 eps_33 - eps_xx - eps_yy) with eps_xx = eps_yy = 0.
             near, r_near, far = 0.0, 0.0, 0.0
+            inner = Tuple{Float64,Float64}[]
+            e33_all = g.S33 ./ (4 / 3 * eta * om)
             for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
-                e33 = abs(g.S33[i, j]) / (4 / 3 * eta * om)
-                r = hypot(coords.xp[j] - SMV.X_CENTRE, coords.yp[i] - SMV.Y_CENTRE)
+                e33 = abs(e33_all[i, j])
+                dxp, dyp = coords.xp[j] - SMV.X_CENTRE, coords.yp[i] - SMV.Y_CENTRE
+                r = hypot(dxp, dyp)
                 e33 > near && ((near, r_near) = (e33, r / coords.dx))
                 r > 0.5 * SMV.R_PLANET && (far = max(far, e33))
+                isapprox(r / coords.dx, sqrt(2.5); rtol=1.0e-9) &&
+                    push!(inner, (atan(dyp, dxp), e33_all[i, j]))
             end
-            return (; near, r_near, far)
+            return (; near, r_near, far, inner=sort!(inner), e33_all)
         end
         e33, e65 = rotation_eps33(33), rotation_eps33(65)
         @test isapprox(e33.near, 0.011; rtol=0.01)
         @test isapprox(e65.near, e33.near; rtol=1.0e-10)
         @test isapprox(e33.r_near, sqrt(2.5); rtol=1.0e-12)
         @test isapprox(e65.r_near, sqrt(2.5); rtol=1.0e-12)
+        # The 8 nodes at r = sqrt(2.5) dx carry +-0.011, alternating around the centre
+        # as sin(4 theta) does, so they sum to 0.
+        vals = last.(e33.inner)
+        @test length(vals) == 8
+        @test all(isapprox(abs(v), e33.near; rtol=1.0e-10) for v in vals)
+        @test all(vals[k] * vals[mod1(k + 1, 8)] < 0 for k in 1:8)
+        @test isapprox(sum(vals), 0.0; atol=1.0e-12 * e33.near)
         # Away from the centre it falls at second order.
         @test isapprox(log2(e33.far / e65.far), 2.0; atol=0.35)
+        # The rotation is linear, so eps_33 depends only on the offset from the centre in
+        # cells: every interior P node of Nx = 33, the edge ring included, matches Nx = 65.
+        a33 = e33.e33_all
+        n33 = size(a33, 1)
+        a65_mid = e65.e33_all[(2:(n33 - 1)) .+ 16, (2:(n33 - 1)) .+ 16]
+        @test isapprox(a33[2:(n33 - 1), 2:(n33 - 1)], a65_mid; rtol=1.0e-10)
+        @test maximum(abs, a33[2, 2:(n33 - 1)]) > 1.0e-3 * e33.near
     end
 
     # Runs at Nx = 33 and 65 only. The Nx = 129 and order metrics take their recorded
@@ -731,6 +817,13 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
     runs = bench_runs.runs
     measured = bench_runs.metrics
     a0 = Dict(n => SMV.run_case(n; case=:A0) for n in (33, 65))
+    record_path = joinpath(
+        @__DIR__, "..", "benchmarks", "records", "spherical_momentum.toml"
+    )
+    raw_record_all = TOML.parsefile(record_path)
+    recorded = Dict(
+        String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
+    )
 
     @testset "conditions C1, C2, C3 and C6 after the solve ($(key[2]), on = $(key[3]), $(key[4]), Nx = $(key[1]))" for key in
                                                                                                                        sort!(
@@ -750,6 +843,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         # C3: the solve keeps the body force.
         @test iszero(r.g_dev)
         @test all(isfinite, r.vx) && all(isfinite, r.vy) && all(isfinite, r.pr)
+        @test all(isfinite, r.S33)
     end
 
     @testset "conditions hold for the A0 runs (Nx = $n)" for n in (33, 65)
@@ -757,7 +851,9 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test r.converged && r.n_plastic_passes == 1
         @test r.dt_dev <= 1.0e-12
         @test r.eta_zeta <= 1.0e-6 * (1 + 1.0e-12)
+        @test r.elastic <= 1.0e-6 && r.elastic_p <= 1.0e-6
         @test iszero(r.g_dev)
+        @test all(isfinite, r.vx) && all(isfinite, r.vy) && all(isfinite, r.pr)
     end
 
     @testset "case A velocity converges at second order (spherical_flow = $sf)" for sf in (
@@ -792,11 +888,17 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             # The fit lies above Omega(0) and falls at order 2.06 in both settings.
             @test 0.0 < e65 < e33 < 0.05
             @test isapprox(log2(e33 / e65), 2.0; atol=0.35)
+            @test isapprox(log2(e33 / e65), 2.06; atol=0.01)
         end
-        # The basic-node value with the option falls at order 0.45 from Nx = 33 to 65; the
-        # same value without the option falls at order 2.
+        # The basic-node value with the option falls at order 0.45 from Nx = 33 to 65 and
+        # at order 0.74 from 65 to 129 in the record; without the option it falls at order 2.
         n33, n65 = abs(node(33, true) / om_on - 1), abs(node(65, true) / om_on - 1)
         @test 0.2 < log2(n33 / n65) < 1.0
+        @test isapprox(log2(n33 / n65), 0.45; atol=0.01)
+        rec_node_order = log2(
+            recorded["centre_node_a_on_nx65"] / recorded["centre_node_a_on_nx129"]
+        )
+        @test isapprox(rec_node_order, 0.74; atol=0.01)
         @test n65 <= 0.01
         d33, d65 = abs(node(33, false) / om_off - 1), abs(node(65, false) / om_off - 1)
         @test 1.65 < log2(d33 / d65) < 2.5
@@ -816,6 +918,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         a33, a65 = runs[(33, :A, true, :base)].dp_max, runs[(65, :A, true, :base)].dp_max
         @test 0.0 < log2(a33 / a65) < 0.5
         @test 900.0 < a65 < 1300.0
+        @test isapprox(a65, 1100.0; atol=20.0)
         @test r65.dp_max < 0.15 * a65
         # Without the option the same pressure error falls with the grid.
         o33, o65 = runs[(33, :A, false, :base)].dp_max, runs[(65, :A, false, :base)].dp_max
@@ -837,6 +940,47 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test isapprox(b65.S33[i, j], exact[i, j]; rtol=0.05)
         # Scale guard: tau_33 is O(eta U0 / R) = 2e6 Pa times 0.11.
         @test 1.0e5 < maximum(abs, b65.S33) < 1.0e6
+    end
+
+    @testset "case B at Nx = 65: pinned errors and the S33 projection" begin
+        b65 = runs[(65, :B, true, :base)]
+        @test isapprox(b65.l2, 9.828284022e-3; rtol=1.0e-5)
+        @test isapprox(b65.s33_l2, 1.0838697880e-2; rtol=1.0e-5)
+        # The projection of S33 on tau_33 inside R moves linearly with a wrong prefactor.
+        exact = SMV.exact_s33(b65.grid, :B)
+        num = den = 0.0
+        for j in 2:(b65.grid.Nx1 - 1), i in 2:(b65.grid.Ny1 - 1)
+            X, Y = SMV._nd(b65.grid.xp[j], b65.grid.yp[i])
+            X^2 + Y^2 < 1 || continue
+            num += b65.S33[i, j] * exact[i, j]
+            den += exact[i, j]^2
+        end
+        @test isapprox(num / den, 0.99846; rtol=5.0e-4)
+        @test !isapprox(num / den, 1.0; rtol=1.0e-3)
+    end
+
+    @testset "S33 outside R, on the ghost rows and finite (case B, Nx = $n)" for (
+        n, bound
+    ) in (
+        (33, 2.5e-3), (65, 5.4e-4)
+    )
+        r = runs[(n, :B, true, :base)]
+        S = r.S33
+        Ny1, Nx1 = size(S)
+        peak = maximum(abs, SMV.exact_s33(r.grid, :B))
+        @test all(isfinite, S)
+        # tau_33 = 0 for r >= R; the solved S33 there is a grid error that falls with Nx.
+        s_out = maximum(
+            abs(S[i, j]) for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1) if
+            sum(abs2, SMV._nd(r.grid.xp[j], r.grid.yp[i])) >= 1
+        )
+        @test s_out <= bound * peak
+        # The ghost rows and columns copy their interior neighbours.
+        @test isequal(S[1, 2:(Nx1 - 1)], S[2, 2:(Nx1 - 1)])
+        @test isequal(S[Ny1, 2:(Nx1 - 1)], S[Ny1 - 1, 2:(Nx1 - 1)])
+        @test isequal(S[:, 1], S[:, 2])
+        @test isequal(S[:, Nx1], S[:, Nx1 - 1])
+        @test !iszero(S[Ny1 - 1, 2:(Nx1 - 1)]) && !iszero(S[2:(Ny1 - 1), 2])
     end
 
     @testset "on/off L2-norm ratio of the case A profile against its exact value" begin
@@ -864,13 +1008,6 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         )
     end
 
-    record_path = joinpath(
-        @__DIR__, "..", "benchmarks", "records", "spherical_momentum.toml"
-    )
-    raw_record_all = TOML.parsefile(record_path)
-    recorded = Dict(
-        String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
-    )
     recorded_only = filter(kv -> !haskey(measured, kv.first), recorded)
     bench = (; runs, metrics=merge(measured, recorded_only))
 
@@ -879,6 +1016,16 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         @test length(recorded_only) == 17
         @test all(endswith(k, "129") for k in keys(recorded_only))
         @test Set(keys(bench.metrics)) == Set(SMV.EXPECTED_METRIC_IDS)
+    end
+
+    @testset "recorded orders from Nx = 65 to 129 match their recorded errors" begin
+        order_ids = filter(k -> occursin("_order_", k), SMV.EXPECTED_METRIC_IDS)
+        @test length(order_ids) == 7
+        for oid in order_ids
+            base_id = replace(oid, "_order" => "", "_65_129" => "")
+            e65, e129 = recorded[base_id * "_nx65"], recorded[base_id * "_nx129"]
+            @test isapprox(recorded[oid], log2(e65 / e129); rtol=1.0e-12)
+        end
     end
 
     @testset "metrics_from_runs with every grid of NX_LIST" begin
@@ -966,6 +1113,7 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
         end
         # Against the solution with the option the off run has the L2 error 0.63.
         @test 0.5 < as_on.l2 < 0.8
+        @test isapprox(as_on.l2, 0.63; atol=0.01)
         @test 0.4 < abs(off.centre_fit / om_on - 1) < 0.6
     end
 
@@ -1144,6 +1292,11 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             )
             @test isequal(SMVE.metric_status(1.0, 1.0, 0.0, 0.0, "other"), "FAIL")
             @test occursin(r"^[0-9a-f]{40}$", SMVE.last_src_commit())
+            # Outside a git repository git log fails.
+            no_repo = mkpath(joinpath(tmpdir, "no_repo"))
+            @test_throws ProcessFailedException redirect_stdio(
+                () -> SMVE.last_src_commit(no_repo); stderr=devnull
+            )
             @test first(SMVE.check_clean_source_tree()) isa Bool
 
             # A changed configuration value and hash are rejected.
@@ -1395,7 +1548,9 @@ const ONE_MINUS_RHO2 = QB[1, 0, -1]
             small = joinpath(tmpdir, "small")
             @test Base.invokelatest(export_data_main, [small]; nx=SMV.NX_MIN) == small
             off_small = readlines(joinpath(small, "profile_off_$(SMV.NX_MIN).csv"))
-            @test length(off_small) - 1 == 4 * 6
+            # 4 half-axes with the nodes inside R: 4 x 10 at Nx = 29.
+            @test SMV.NX_MIN == 29
+            @test length(off_small) - 1 == 4 * 10
             u_off = [parse.(Float64, split(l, ","))[2] for l in off_small[2:end]]
             @test 0.0 < maximum(u_off) < 3.0e-3
         end

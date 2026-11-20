@@ -28,6 +28,8 @@ String
 
 Raises
 ------
+ProcessFailedException
+    If `git log` fails, for example because `repo_root` is not a git repository.
 ErrorException
     If git does not return a 40-character lowercase hex SHA-1.
 """
@@ -323,6 +325,8 @@ ErrorException
     If a metric leaves its regression band around the existing record without `accept_physics_change=true`, if `validate_record_dict` fails, or if `SphericalMomentumValidation` is not loaded.
 KeyError
     If `bench.metrics` lacks one of the metric ids.
+ProcessFailedException
+    From `last_src_commit` when `src_commit` is `nothing` and `git log` fails.
 """
 function write_spherical_momentum_record(
     record_path::String=DEFAULT_EXPORT_RECORD_PATH;
