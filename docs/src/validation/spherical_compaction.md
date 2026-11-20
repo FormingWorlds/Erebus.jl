@@ -11,9 +11,11 @@ The venting and the fracturing that depend on the pore pressure would then be wr
 
 The page checks 3 parts of the solve:
 
-- the compaction term $P_e / (\zeta (1 - \phi))$ in the continuity row of the solid (the $P_t$ row);
-- the same term in the continuity row of the fluid (the $P_f$ row);
+- the compaction term in the continuity row of the solid;
+- the same term in the continuity row of the fluid;
 - the spherical face weights of both continuity rows, which the option `geometry.spherical_flow` turns on.
+
+The text below defines the compaction term, the continuity rows and the face weights.
 
 The page has one case, which it runs with the option on and off.
 The case says why the check exists, what it tests, how we know the right answer and why it matters.
@@ -50,7 +52,8 @@ The page [Spherical Darcy Flow](spherical_darcy_flow.md) shows how the face weig
   This gives $\zeta = 7.8125 \times 10^{18}$ Pa s.
 - The ratio of the shear viscosity to the compaction viscosity of the rock is $10^{-4}$ (see the box below).
 - The faces of the outside cells are impermeable.
-- At the start the total and the fluid pressure are both $P_\mathrm{amb} + P_{e,R}$ everywhere, with $P_\mathrm{amb} = 100$ Pa and $P_{e,R} = 10^6$ Pa.
+- At the start the total and the fluid pressure are both $P_\mathrm{amb} + P_{e,R}$ everywhere.
+  Here $P_\mathrm{amb} = 100$ Pa is the ambient pressure and $P_{e,R} = 10^6$ Pa the surface effective pressure.
 - The total pressure is held at $P_\mathrm{amb} + P_{e,R}$ on the box edge.
 - The surface temperature is 200 K.
   The ice vapour pressure at 200 K is lower than $P_\mathrm{amb}$, so the vent pressure is $P_\mathrm{vent} = P_\mathrm{amb}$.
@@ -94,9 +97,10 @@ We compare the solid velocity with the exact velocity on the faces with $0 < r \
 The grid stores the x component of the velocity on the vertical faces and the y component on the horizontal faces.
 The velocity error is the relative L2 error over all stored components, as for the Darcy flux on the [Spherical Darcy Flow](spherical_darcy_flow.md) page.
 We also compare the centre effective pressure of the sphere with that of the disk.
+We compare the vented fluid volume rate with the volume rate that the compaction squeezes out.
 
 **How we know the right answer.**
-When the shear viscosity is much smaller than $\zeta$, the continuity rows above reduce to one equation for $P_e$ (see the box below).
+When the shear viscosity is much smaller than $\zeta$, the total pressure is uniform inside the sphere, and the fluid continuity row becomes one equation for $P_e$ (see the box below).
 This equation has an exact solution.
 The solution for the sphere ($d = 3$, `spherical_flow = true`) is
 
@@ -164,7 +168,7 @@ The test asserts limits on the errors and on the order and not an exact match.
         - the centre error, the L2 profile error and the L2 velocity error: each at most 0.08, 0.034 and 0.018 for the sphere and at most 0.105, 0.044 and 0.023 for the disk at `Nx = 33`, 65 and 129;
         - the order of each error between `Nx = 65` and `Nx = 129`: 1 within 0.35;
         - the centre ratio: $2 I_0(2) / \sinh 2$ within a relative 0.012 at `Nx = 65` and 0.006 at `Nx = 129`;
-        - the vented rate: the compaction rate within $10^{-8}$ of the rate;
+        - the vented fluid volume rate: the volume rate that the compaction squeezes out, within $10^{-8}$ of the rate;
         - the fluid pressure of every vent cell: within $10^{-6} P_{e,R}$ of $P_\mathrm{amb}$, and an infinite deviation when a vent cell does not vent.
     - Regression band: the allowed range around the recorded value is `PHYSICS_REGRESSION_BANDS` in `benchmarks/validation_spherical_compaction.jl`.
       It is 0.002 on each error and on each centre ratio, 0.05 on each order, $10^{-8}$ on each vented-rate closure and $10^{-6}$ on each vent pressure.

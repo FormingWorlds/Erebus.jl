@@ -35,22 +35,26 @@ The default is on.
 Setting it to false gives a 2-D disk.
 
 !!! details "Where the geometry term comes from and how the code computes it"
-    In a sphere, the heat flux divergence is $\frac{1}{r^2} \partial_r (r^2 q_r) = \partial_r q_r + 2 q_r / r$, with the distance $r$ from the centre and the radial flux $q_r$.
+    In a sphere, the heat flux divergence is $\frac{1}{r^2} \partial_r (r^2 q_r) = \partial_r q_r + 2 q_r / r$.
+    Here $r$ is the distance from the centre in m, $q_r$ the radial heat flux in W/m², and $\partial_r = \partial / \partial r$.
     On the 2-D grid, the divergence of a radial flux is $\partial_r q_r + q_r / r$.
-    The difference is $q_r / r = -(k / r) \, \partial T / \partial r$, and $Q_\mathrm{metric}$ adds it back:
+    The sphere has the extra term $q_r / r$ in the divergence.
+    $Q_\mathrm{metric}$ is minus this term, $-q_r / r = (k / r) \, \partial T / \partial r$:
 
     $$Q_\mathrm{metric} = \frac{k}{r_\mathrm{eff}^2} \left[ (x - x_c) \frac{\partial T}{\partial x} + (y - y_c) \frac{\partial T}{\partial y} \right].$$
 
-    Here $(x_c, y_c)$ is the centre of the sphere, and $r_\mathrm{eff} = \sqrt{(x - x_c)^2 + (y - y_c)^2 + \epsilon_r^2}$ is the distance from the centre with a small regularization $\epsilon_r$.
+    Here $x$ and $y$ are the grid coordinates in m, and $(x_c, y_c)$ is the centre of the sphere in m.
+    The distance $r_\mathrm{eff} = \sqrt{(x - x_c)^2 + (y - y_c)^2 + \epsilon_r^2}$, in m, is the distance from the centre with a small regularization $\epsilon_r$ in m.
     The regularization is $\epsilon_r$ = `geometry.metric_regularization_cells` times the smaller grid spacing $\min(\Delta x, \Delta y)$.
+    Here $\Delta x$ and $\Delta y$ are the grid spacings in m.
     The function `compute_spherical_metric_heat_source!` in `src/physics/materials_metric.jl` computes $Q_\mathrm{metric}$ on the pressure nodes inside the sphere and sets it to 0 outside.
-    It uses the mean of the conductive fluxes on the 2 neighbouring faces in each direction.
+    It uses the mean of $k \, \partial T / \partial x$ on the 2 neighbouring faces in x, and the same in y, with the face conductivities `KX` and `KY`.
     The derivation is in [Governing Equations](../explanations/governing_equations.md).
 
 **The test set-up.**
 
 - All cases use a sphere of radius $R = 50$ km with a fixed surface temperature of 170 K.
-- `Nx` is the number of grid intervals on each side of the square box.
+- `Nx` is the number of grid nodes on each side of the square box.
 - The rock has a uniform conductivity $k = 3$ W/(m K).
 - Melting, fluid flow and reactions are off, so that heat conduction and the heat source are the only processes.
 
@@ -132,7 +136,7 @@ We compare the temperature rise after 10 Myr with a reference at the same time s
 The reference is a sum over the cooling modes of the sphere.
 A cooling mode is a pattern of temperature that fades away at a fixed rate.
 The reference uses the same time stepping as the code, backward Euler, where each step solves for the temperature at the end of the step.
-It also uses the exact heat of each step, $Q(t_0) (1 - e^{-\Delta t / \tau}) / (\Delta t / \tau)$.
+It also uses the exact mean heating rate of each step, $Q(t_0) (1 - e^{-\Delta t / \tau}) / (\Delta t / \tau)$.
 Here $Q(t_0)$ is the decay heating rate in W/m³ at the start $t_0$ of the step.
 The step is $\Delta t$ in s, and $\tau$ is the mean lifetime of $^{26}$Al in s.
 A separate 1-D finite-volume solver with 500 radial shells gives the same centre temperature, to $10^{-5}$ of the rise.
@@ -171,7 +175,8 @@ At `Nx = 65` the centre is 16 K below the reference, about 3 % of the rise.
 This difference is mostly spatial.
 It is 50 K at `Nx = 33`.
 The L2 error at `Nx = 65` is 0.42 times the error at `Nx = 33`.
-A 5 times smaller time step moves it to 24 K, so a smaller step alone does not remove it.
+At `Nx = 65`, a 5 times smaller time step moves the centre difference to 24 K below the reference.
+So a smaller step alone does not remove it.
 Near the edge, nodes inside the radius can stay at the surface temperature, because they lie on the staircase.
 
 !!! details "Test details"

@@ -4,7 +4,7 @@
 
 This page checks the poroelastic storage terms of the hydromechanical solve of `Erebus.jl` in a time-dependent problem.
 When the pore fluid pressure $P_f$, in Pa, of a porous rock changes, the fluid and the solid grains compress or expand.
-The pore space then opens or closes.
+The pore space also opens or closes.
 The amount of fluid that a unit volume of rock takes up per unit change of $P_f$ is the storage coefficient $S$, in Pa⁻¹.
 With the storage the pore pressure does not settle at once: it diffuses, at the rate $D = k / (\mu S)$, in m²/s.
 Here $k$ is the permeability in m² and $\mu$ the fluid viscosity in Pa s.
@@ -15,13 +15,16 @@ The venting rate and the pore pressure at which the rock fractures would then be
 
 The page checks 3 parts of the solve:
 
-- the compressibility terms of the continuity rows of the solid (the $P_t$ row) and of the fluid (the $P_f$ row) in a rigid matrix;
+- the compressibility terms of the continuity rows of the solid and of the fluid in a rigid matrix;
 - the right-hand sides of both rows, which carry the pressures of the previous time step;
-- the spherical face weights of the $P_f$ row, which the option `geometry.spherical_flow` turns on, in a transient problem.
+- the spherical face weights of the continuity row of the fluid, which the option `geometry.spherical_flow` turns on, in a transient problem.
 
+The continuity row of the solid is the $P_t$ row, with the total pressure $P_t$ in Pa.
+The continuity row of the fluid is the $P_f$ row.
 In the $P_t$ row the case checks the Biot-Willis coefficient $K_{BW}$.
 In the $P_f$ row it checks the full storage coefficient $S$.
 The prefactor $\beta_d / \Delta t$ of the storage term of the $P_t$ row cancels and is not tested.
+Here $\beta_d$ is the drained compressibility in Pa⁻¹ and $\Delta t$ the time step in s.
 The other validation cases run with all compressibilities 0 or on the first time step, where the solver sets them to 0.
 This case runs from the second time step on, so the compressibilities enter both rows.
 
@@ -37,10 +40,10 @@ $$\nabla \cdot \mathbf{v}_s + \frac{P_t - P_f}{\zeta (1 - \phi)} + \frac{\beta_d
 
 $$\nabla \cdot \mathbf{q} - \frac{P_t - P_f}{\zeta (1 - \phi)} - \frac{\beta_d K_{BW}}{\Delta t} \left[ (P_t - P_t^0) - \frac{P_f - P_f^0}{B} \right] = 0.$$
 
-Here $\mathbf{v}_s$ is the solid velocity in m/s, $P_t$ the total pressure in Pa, $\zeta$ the compaction viscosity in Pa s and $\phi$ the porosity.
+Here $\mathbf{v}_s$ is the solid velocity in m/s, $\zeta$ the compaction viscosity in Pa s and $\phi$ the porosity.
 The Darcy flux is $\mathbf{q} = -(k / \mu) \nabla P_f$, in m/s.
-The time step is $\Delta t$ in s, and $P_t^0$ and $P_f^0$ are the pressures of the previous step.
-The coefficients are the drained compressibility $\beta_d$ in Pa⁻¹, the Biot-Willis coefficient $K_{BW}$ and the Skempton coefficient $B$:
+The pressures of the previous step are $P_t^0$ and $P_f^0$.
+The coefficients are the drained compressibility $\beta_d$, the Biot-Willis coefficient $K_{BW}$ and the Skempton coefficient $B$:
 
 $$\beta_d = \frac{\beta_\phi + \beta_s}{1 - \phi}, \qquad K_{BW} = 1 - \frac{\beta_s}{\beta_d}, \qquad \frac{1}{B} = 1 + \frac{\phi (\beta_f - \beta_s)}{\beta_d - \beta_s}.$$
 
@@ -61,6 +64,7 @@ The case has $S = 1.3 \times 10^{-10}$ Pa⁻¹ and $K_{BW} = 0.6$.
     $$S = \phi \beta_f + (1 - \phi) \frac{\beta_\phi \beta_s}{\beta_\phi + \beta_s}, \qquad K_{BW} = \frac{\beta_\phi + \phi \beta_s}{\beta_\phi + \beta_s}.$$
 
     The solver clamps $\beta_\phi$ and $\beta_s$ to non-negative values, the porosity to $[\phi_\mathrm{min}, \phi_\mathrm{max}]$ and $K_{BW}$ and $B$ to $[0, 1]$.
+    Here $\phi_\mathrm{min}$ and $\phi_\mathrm{max}$ are the lower and upper porosity bounds.
     With $\beta_\phi \ge 0$, $\beta_s \ge 0$, $\beta_\phi + \beta_s > 0$, $\beta_f \ge \beta_s$ and $\phi_\mathrm{min} < \phi < \phi_\mathrm{max}$ no clamp acts.
     The test checks the formula of $S$ against the coefficients of the 2 rows.
 
@@ -77,7 +81,8 @@ The case has $S = 1.3 \times 10^{-10}$ Pa⁻¹ and $K_{BW} = 0.6$.
   So the compaction viscosity is of the same size.
 - The shear modulus is $10^{35}$ Pa, so the elastic term of the momentum rows leaves the viscosity unchanged.
 - The faces of the outside cells are impermeable.
-- At the start the total and the fluid pressure are $P_\mathrm{amb} + P_0$ inside the sphere and $P_\mathrm{amb}$ outside, with $P_\mathrm{amb} = 100$ Pa and $P_0 = 10^4$ Pa.
+- At the start the total and the fluid pressure are $P_\mathrm{amb} + P_0$ inside the sphere and $P_\mathrm{amb}$ outside.
+  Here $P_\mathrm{amb} = 100$ Pa is the ambient pressure and $P_0 = 10^4$ Pa the initial overpressure.
 - The total pressure is held at $P_\mathrm{amb}$ on the box edge.
 - The surface temperature is 200 K.
   The ice vapour pressure at 200 K is lower than $P_\mathrm{amb}$, so the vent pressure is $P_\mathrm{vent} = P_\mathrm{amb}$.
@@ -106,13 +111,17 @@ It uses the weight $w_i = x_i$ for the sphere and $w_i = 1$ for the disk:
 $$\epsilon = \sqrt{\frac{\sum_i w_i \left(p_i - p_i^\mathrm{exact}\right)^2}{\sum_i w_i \left(p_i^\mathrm{exact}\right)^2}}.$$
 
 We also compare the centre pressure of the sphere with that of the disk.
-We compare the total pressure with $K_{BW}$ times the fluid pressure change.
-We compare the fluid pressure of 2 runs with different $\beta_s$.
+Two further checks test the storage terms directly.
+The total pressure follows $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$ with $K_{BW}$ from the formula above, within $10^{-9} P_0$ on every rock cell.
+A run with $\beta_s = 10^{-11}$ Pa⁻¹ has $S = 9.7273 \times 10^{-11}$ Pa⁻¹ and a shorter time step for the same $\tau$.
+Its nondimensional fluid pressure equals that of the case to $10^{-9}$ on every rock cell.
+This holds only when the solver diffuses with the storage coefficient $S$ of the formula.
 
 **How we know the right answer.**
 The diffusion equation above, with $p = 1$ inside at $\tau = 0$ and $p = 0$ at $x = 1$, has a solution as a sum of modes.
 In backward Euler, the time stepping of the solver, each step solves for the pressure at the end of the step.
-Each mode $n$ decays by the factor $(1 + \lambda_n \Delta\tau)^{-1}$ per backward-Euler step, with $\Delta\tau = 0.005$.
+Each mode $n$, with the nondimensional decay rate $\lambda_n$, decays by the factor $(1 + \lambda_n \Delta\tau)^{-1}$ per backward-Euler step.
+Here $\Delta\tau = D \Delta t / R^2 = 0.005$ is the nondimensional time step.
 After $m$ steps the sphere ($d = 3$, `spherical_flow = true`) has
 
 $$p(x, m) = 2 \sum_{n \ge 1} (-1)^{n+1} \frac{\sin(n \pi x)}{n \pi x} \left(1 + n^2 \pi^2 \Delta\tau\right)^{-m}$$
@@ -122,7 +131,7 @@ and the disk ($d = 2$, `spherical_flow = false`) has
 $$p(x, m) = 2 \sum_{n \ge 1} \frac{J_0(j_n x)}{j_n J_1(j_n)} \left(1 + j_n^2 \Delta\tau\right)^{-m},$$
 
 where $J_0$ and $J_1$ are the Bessel functions of the first kind and $j_n$ are the zeros of $J_0$.
-The nondimensional decay rate $\lambda_n$ of mode $n$ is $n^2 \pi^2$ for the sphere and $j_n^2$ for the disk.
+Here $\lambda_n = n^2 \pi^2$ for the sphere and $\lambda_n = j_n^2$ for the disk.
 The case compares with this backward-Euler form, because the solver steps in time by backward Euler.
 The continuous solution, with the factor $e^{-\lambda_n m \Delta\tau}$, gives at the centre 0.70710 for the sphere and 0.84836 for the disk at $\tau = 0.1$.
 The backward-Euler form gives 0.70998 and 0.84486, 0.4 % more for the sphere.
@@ -177,14 +186,14 @@ The order between `Nx = 65` and `Nx = 129` lies between 0.90 and 0.97 for both e
 The test asserts limits on the errors and on the order and not an exact match.
 
 !!! details "Test details"
-    - Reference: the backward-Euler series $p(x, m)$ above after 5 and 20 steps; the centre ratio of the series at the centre node of the grid; $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$; equal nondimensional pressure for the 2 values of $\beta_s$; equal fields of the 6-variable and the 4-variable solver paths.
+    - Reference: the backward-Euler series $p(x, m)$ above after 5 and 20 steps; the centre ratio of the series at the centre node of the grid; $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$; equal nondimensional pressure at the same $\tau$ for $\beta_s = 10^{-10}$ and $10^{-11}$ Pa⁻¹; equal fields of the 6-variable and the 4-variable solver paths.
     - Tolerance:
         - the centre error after 5 steps: at most 0.0064, 0.0018 and 0.00079 for the sphere and 0.0027, 0.00073 and 0.00032 for the disk at `Nx = 33`, 65 and 129;
         - the centre error after 20 steps: at most 0.12, 0.048 and 0.025 for the sphere and 0.069, 0.027 and 0.014 for the disk;
         - the L2 profile error after 20 steps: at most 0.25, 0.108 and 0.058 for the sphere and 0.18, 0.075 and 0.04 for the disk;
         - the order of each error between `Nx = 65` and `Nx = 129`: 1 within 0.35;
         - the centre ratio: the series ratio within a relative 0.022 at `Nx = 65` and 0.012 at `Nx = 129`;
-        - the total pressure check and the $\beta_s$ check: at most $10^{-9}$;
+        - the total pressure check (scaled by $P_0$) and the $\beta_s$ check: at most $10^{-9}$;
         - the difference of the 2 solver paths: at most $10^{-10}$;
         - the fluid pressure of every vent cell: within $9 \times 10^{-4} P_0$ (sphere) and $1.4 \times 10^{-3} P_0$ (disk) of $P_\mathrm{amb}$, and an infinite deviation when a vent cell does not vent;
         - the vented fluid volume rate: the rate of fluid released from storage within $10^{-8}$ of the rate;
@@ -212,12 +221,6 @@ Each condition is a test assertion, so a change of the set-up that breaks one fa
     - Rigid matrix: after the first solve of each run of the test, on every interior cell, the compaction term $1 / (\zeta (1 - \phi))$ is at most $10^{-6}$ of the storage term $\beta_d / \Delta t$, with $\beta_d$ from the pore compressibility and the porosity of the solved fields and the solid compressibility of the solve; on every node the shear viscosity is at least $10^{27}$ Pa s and the shear modulus times $\Delta t$ is at least $10^6$ times the viscosity.
       The largest solid velocity over the 20 steps stays below $10^{-15}$ m/s.
     - Domain of the storage formula: $\beta_\phi \ge 0$, $\beta_s \ge 0$, $\beta_\phi + \beta_s > 0$, $\beta_f \ge \beta_s$, and the porosity of every grid cell lies within $(\phi_\mathrm{min}, \phi_\mathrm{max})$.
-
-Two further checks test the storage terms directly.
-The total pressure follows $P_t - P_t^0 = K_{BW} (P_f - P_f^0)$ with $K_{BW}$ from the formula above, within $10^{-9} P_0$ on every rock cell.
-A run with $\beta_s = 10^{-11}$ Pa⁻¹ has $S = 9.7273 \times 10^{-11}$ Pa⁻¹ and a shorter time step for the same $\tau$.
-Its nondimensional fluid pressure equals that of the case to $10^{-9}$ on every rock cell.
-This holds only when the solver diffuses with the storage coefficient $S$ of the formula.
 
 ## What this case does not test
 

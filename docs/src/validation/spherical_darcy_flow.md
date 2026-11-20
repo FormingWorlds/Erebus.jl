@@ -87,21 +87,22 @@ The profile error is the relative L2 error over the nodes with $r \le 0.9 R$:
 
 We compare the Darcy flux with the exact flux $\mathbf{q} = S \mathbf{r} / d$ on the faces with $r \le 0.9 R$.
 Here $\mathbf{r}$ points from the centre to the face, and $d$ is the number of dimensions of the exact solution below.
-The flux error $\epsilon_q$ is the relative L2 error over all stored flux components (see the box below).
-We also compare the centre excess pressure with the option on and off.
-We compare the vented rate with the produced rate and the speed of the solid with zero.
+The flux error $\epsilon_q$ is the relative L2 error over the stored flux components on those faces (see the box below).
 
 !!! details "How the flux error is computed"
     The grid stores the x component of the flux on the vertical faces and the y component on the horizontal faces.
     At each face the error is the stored component minus the same component of the exact flux.
-    The flux error is the relative L2 error over all stored x components and all stored y components:
+    The flux error is the relative L2 error over all stored x components and all stored y components on the faces with $r \le 0.9 R$:
 
     ```math
     \epsilon_q = \sqrt{\frac{\sum_c \left(q_c - q_c^\mathrm{exact}\right)^2}{\sum_c \left(q_c^\mathrm{exact}\right)^2}}, \qquad q_c^\mathrm{exact} = \frac{S \, r_c}{d},
     ```
 
-    where $c$ runs over the stored components and $r_c$ is the coordinate of the face that the component belongs to, measured from the centre (x for an x component, y for a y component).
+    where $c$ runs over the stored components on the faces with $r \le 0.9 R$ and $r_c$ is the coordinate of the face that the component belongs to, measured from the centre (x for an x component, y for a y component).
     The error does not average the components of neighbouring faces.
+
+We also compare the centre excess pressure with the option on and off.
+We compare the vented rate with the produced rate and the speed of the solid with zero.
 
 **How we know the right answer.**
 Darcy's law and the balance of fluid volume give $\nabla^2 p = -\mu S / k$ inside the sphere, with $p = P_\mathrm{vent} = P_\mathrm{amb}$ at $r = R$.
