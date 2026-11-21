@@ -682,15 +682,27 @@ function porosity_decrease_rate(
 end
 
 """
+Porosity decrease [-] below which a decrease is numerical, not sintering.
+
+Near the onset of sintering (X = 1) the rounding of 1 - φ moves φ by a few 1e-16, a
+decrease that the sintering law does not produce. A rock marker counts as sintered only
+once its cumulative sintering decrease `dphi_sinter` exceeds this value, and
+`sinter_porosity_step` needs a largest substep decrease `dphi_max` of at least this value.
+"""
+const DPHI_SINTERED = 1.0e-12
+
+"""
 Backward Euler porosity over one substep `h` [s]: the root of
 g(φ) = φ - φ_old + h r(φ) in (0, φ_old] by bisection; g(0) < 0 since r(0) = 0.
-The bisection keeps g(lo) < 0 <= g(hi) and returns `hi`, the end whose decrease
-φ_old - φ does not exceed h r(φ). A decrease below 1 ULP of φ_old therefore gives φ_old.
+The bisection keeps g(lo) < 0 <= g(hi) until lo and hi are adjacent floats (at most
+1100 halvings reach the smallest subnormal from 1) and returns `hi`, the end whose
+decrease φ_old - φ does not exceed h r(φ). A decrease below 1 ULP of φ_old therefore
+gives φ_old, and so does h <= 0.
 """
 function _backward_euler_porosity(phi_old::Float64, h::Float64, rate)
-    h * rate(phi_old) <= 0.0 && return phi_old
+    (h <= 0.0 || h * rate(phi_old) <= 0.0) && return phi_old
     lo, hi = 0.0, phi_old
-    for _ in 1:200
+    for _ in 1:1100
         mid = 0.5 * (lo + hi)
         (mid <= lo || mid >= hi) && break
         if mid - phi_old + h * rate(mid) < 0.0
@@ -724,7 +736,8 @@ reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
     - T: temperature [K], > 0
     - dt: time step [s], >= 0
     - R0, A, E_act, n: grain radius [m] and creep law constants (see `sintering_rate`)
-    - dphi_max: largest porosity decrease per substep [-], > 0
+    - dphi_max: largest porosity decrease per substep [-], >= `DPHI_SINTERED` (1e-12),
+      so that a substep can step over the rounding of 1 - φ near φ_0
     - max_substeps: largest number of substeps, >= 1
 
 # Returns
@@ -734,8 +747,9 @@ reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain, or a rate so large that a
-      rejected substep cannot shrink further (the value is a NamedTuple of the inputs)
+    - DomainError: an argument outside its physical domain, `dphi_max` below
+      `DPHI_SINTERED`, or a rate so large that a rejected substep cannot shrink further
+      (the value is a NamedTuple of the inputs)
     - ArgumentError: `max_substeps` < 1
 """
 function sinter_porosity_step(
@@ -752,7 +766,9 @@ function sinter_porosity_step(
     max_substeps::Integer=1000,
 )
     require_nonneg_finite(dt, "time step dt")
-    require_positive_finite(dphi_max, "substep porosity change dphi_max")
+    (isfinite(dphi_max) && dphi_max >= DPHI_SINTERED) || throw(
+        DomainError(dphi_max, "substep porosity change dphi_max must be >= DPHI_SINTERED"),
+    )
     max_substeps >= 1 || throw(ArgumentError("max_substeps must be >= 1"))
     rate(p) = porosity_decrease_rate(p, phi_0, P_bar, T; R0=R0, A=A, E_act=E_act, n=n)
     rate(phi_n)
@@ -848,11 +864,14 @@ before sintering starts.
 
 Once the marker has sintered (`sintered = true`), φ_0 stays at `phi0_prev` and cold
 pressing stops: φ_0 is the porosity of the initial packing of Henke et al. (2012, Eq. 37),
-at which the contact faces have zero radius. For a marker that starts to sinter at
+at which the contact faces have zero radius. The caller sets `sintered` once the
+cumulative sintering decrease exceeds `DPHI_SINTERED` (1e-12): a smaller decrease is the
+rounding of 1 - φ near the onset, not sintering. For a marker that starts to sinter at
 φ = φ_0, as every marker of the setup does, the cumulative sintering decrease then equals
-φ_0 - φ. For a marker that enters with φ < φ_0 (for example from `push_marker!`),
-φ_0 - φ exceeds the sintering decrease by the gap at entry. The i2elvis code instead
-recomputes φ_0 from the current pressure every step.
+φ_0 - φ to within `DPHI_SINTERED`. For a marker that is below its φ_0 at the onset of
+sintering (for example from `push_marker!`), φ_0 - φ exceeds the sintering decrease by
+the gap φ_0 - φ at the onset of sintering, after any cold pressing. The i2elvis code
+instead recomputes φ_0 from the current pressure every step.
 
 Sintering lowers φ with `sinter_porosity_step`. Porosity never increases: a marker that
 cools keeps its sintered porosity.
@@ -865,8 +884,9 @@ cools keeps its sintered porosity.
     - dt: time step [s], >= 0
     - pcfg: `PorosityConfig` with φ_init, φ_cap, R0, T_sinter, A, E_act, n
     - phi0_prev: φ_0 of the previous step [-], in [0, 1]; 1 means no pressure history,
-      so a sintered marker needs phi0_prev < 1
-    - sintered: `true` once an earlier step has lowered φ by sintering
+      so a sintered marker needs phi0_prev < 1 after conversion to Float64
+    - sintered: `true` once earlier steps have lowered φ by sintering by more than
+      `DPHI_SINTERED`
 
 # Returns
 
@@ -877,7 +897,8 @@ cools keeps its sintered porosity.
 # Throws
 
     - DomainError: an argument outside its physical domain (`dt` is checked at every
-      temperature), or `sintered` with `phi0_prev = 1` or `phi_d > phi0_prev`
+      temperature), or `sintered` with `phi0_prev` that is 1 in Float64 or
+      `phi_d > phi0_prev`
 """
 function dry_porosity_update(
     phi_d::Real,
@@ -893,7 +914,7 @@ function dry_porosity_update(
     require_positive_finite(T, "temperature T")
     require_nonneg_finite(dt, "time step dt")
     if sintered
-        phi0_prev < 1.0 ||
+        Float64(phi0_prev) < 1.0 ||
             throw(DomainError(phi0_prev, "a sintered marker needs phi0_prev < 1"))
         phi_d <= phi0_prev ||
             throw(DomainError(phi_d, "a sintered marker needs phi_d <= phi0_prev"))

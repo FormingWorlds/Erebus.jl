@@ -67,10 +67,17 @@ Once a marker has sintered, its $\phi_0$ stays fixed and cold pressing stops for
 Henke et al. (2012, Eq. 37) define $\phi_0$ through the relative density of the initial packing of the grains.
 In that packing the grains touch at points, before any sintering.
 A later rise of pressure therefore does not change $\phi_0$ and does not shrink the contact faces of sintered grains.
-For a marker that starts to sinter at $\phi_d = \phi_0$, the porosity lost by sintering then equals $\phi_0 - \phi_d$.
-Every marker of the setup starts this way.
-A marker added later with $\phi_d < \phi_0$ has a larger $\phi_0 - \phi_d$, by the gap it entered with.
 The i2elvis code differs here: it computes $\phi_0$ from the current pressure in every time step.
+
+A marker counts as sintered once its cumulative porosity loss by sintering exceeds $10^{-12}$ (`DPHI_SINTERED`).
+A smaller loss is numerical, not sintering.
+Near the onset of sintering, the rounding of $1 - \phi$ in floating point lowers $\phi$ by a few $10^{-16}$.
+A marker with such a small loss is still cold pressed when the pressure rises.
+
+For a marker that starts to sinter at $\phi_d = \phi_0$, the porosity lost by sintering equals $\phi_0 - \phi_d$ to within $10^{-12}$.
+Every marker of the setup starts this way.
+A marker added later can lie below its $\phi_0$ when it starts to sinter.
+For such a marker, $\phi_0 - \phi_d$ exceeds the porosity lost by sintering by the gap $\phi_0 - \phi_d$ at the onset of sintering, after any cold pressing.
 
 ---
 
@@ -151,7 +158,10 @@ $$\phi^{k+1} = \phi^{k} - h\, r(\phi^{k+1}),$$
 
 where $r \ge 0$ is the rate magnitude from the law above, in 1/s.
 A bisection finds $\phi^{k+1}$ in $\left(0, \phi^k\right]$.
+It halves the bracket until its 2 ends are adjacent floating-point numbers.
 The substep length adapts so that each substep lowers $\phi$ by at most 0.01.
+This limit (`dphi_max`) must be at least $10^{-12}$.
+A smaller limit could not step over the rounding of $1 - \phi$ near $\phi_0$.
 At most 1000 substeps run per marker and time step.
 The last one then takes the remaining time, and the run reports the number of markers that reached this cap.
 Let $\phi_{start}$ be the porosity at the start of the time step.
@@ -308,7 +318,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     order 1 convergence of the sub-stepped step to a fine BigFloat Runge-Kutta integration;
     the onset law $C t^{2/5}$ against a BigFloat quadrature;
     the 3 branches and the floor of the conductivity, pinned by hand;
-    a rate that overflows throws within 5 s instead of shrinking the substep forever.
+    a rate that overflows throws within 5 s instead of shrinking the substep forever;
+    a substep limit below 1e-12 throws;
+    1 substep at a rate far above $1/h$ ends at the smallest positive float.
     The testset `Replay of the i2elvis porosity block` compares 1 explicit step with the i2elvis code.
     It uses 8 marker states and a relative tolerance of 1e-6.
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
@@ -317,8 +329,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
     They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
     A 3-step run with melting checks that `pfm0` follows the total pressure, not the fluid pressure, to 1e-6.
+    A direct call of `solve_stokes_darcy!` at step 2 checks the same, to 1e-6.
     They check the memory of $\phi_0$ and its freeze at the onset of sintering.
-    A decrease below 1 unit in the last place of $\phi$ does not count as sintering.
+    A decrease below 1e-12 does not count as sintering, so a later cold pressing still lowers $\phi_0$.
     A 10-step run checks that the sintering decrease equals $\phi_0 - \phi_d$ to 1e-12 on every rock marker.
     They check the step in `vent_and_degas!` over 2 steps, the substep cap, the rock properties at every call site, and the marker lifecycle.
     A 2-step run checks that the Stokes pressure sinters hot rock.
