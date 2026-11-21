@@ -766,8 +766,12 @@ function sinter_porosity_step(
     max_substeps::Integer=1000,
 )
     require_nonneg_finite(dt, "time step dt")
+    dphi_max = Float64(dphi_max)
     (isfinite(dphi_max) && dphi_max >= DPHI_SINTERED) || throw(
-        DomainError(dphi_max, "substep porosity change dphi_max must be >= DPHI_SINTERED"),
+        DomainError(
+            dphi_max,
+            "substep porosity change dphi_max must be finite and >= DPHI_SINTERED",
+        ),
     )
     max_substeps >= 1 || throw(ArgumentError("max_substeps must be >= 1"))
     rate(p) = porosity_decrease_rate(p, phi_0, P_bar, T; R0=R0, A=A, E_act=E_act, n=n)

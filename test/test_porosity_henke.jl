@@ -359,6 +359,15 @@ end
                 @test occursin("dphi_max", e.msg)
                 @test !occursin("overflow", e.msg)
             end
+            # dphi_max must be finite; a BigFloat converts to Float64 first
+            for dm in (Inf, big"1e400")
+                @test_throws DomainError Erebus.sinter_porosity_step(
+                    0.3, 0.4, 1.0, 900.0, 1.0e10; dphi_max=dm
+                )
+            end
+            @test Erebus.sinter_porosity_step(
+                0.3, 0.4, 1.0, 900.0, 1.0e10; dphi_max=big(0.01)
+            ) == Erebus.sinter_porosity_step(0.3, 0.4, 1.0, 900.0, 1.0e10; dphi_max=0.01)
             # Edge case: dphi_max = DPHI_SINTERED steps over the rounding and sinters
             phi_m, nsub_m, _ = Erebus.sinter_porosity_step(
                 0.42, 0.42, 1.0, 900.0, 1.0e10; dphi_max=Erebus.DPHI_SINTERED
@@ -1272,6 +1281,33 @@ end
         # The invariant dphi_sinter = phi0 - phi_d then holds to within the threshold
         mismatch = mk.dphi_sinter[1] - (mk.phi0[1] - mk.phi_d[1])
         @test abs(mismatch) <= Erebus.DPHI_SINTERED
+    end
+
+    @testset "Marker sintered just above DPHI_SINTERED keeps phi_0 at 50 bar" begin
+        cfg = _hk_cfg()
+        coords = Erebus.GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        mk = Erebus.init_marker_arrays(0, cfg, coords)
+        Erebus.push_marker!(mk; xm=70_000.0, ym=70_000.0, tm=1, tkm=700.0, phi_d=0.75)
+        ps = cfg.geometry.psurface
+        for (P_pa, T, dt) in ((1.0e-3, 700.0, 1.0e4), (50.0e5, 500.0, 1.0))
+            mk.tkm[1] = T
+            Erebus.advance_marker_dry_porosity!(
+                mk.groups.porosity,
+                mk.xm,
+                mk.ym,
+                mk.tm,
+                mk.tkm,
+                fill(ps + P_pa, coords.Ny1, coords.Nx1),
+                dt;
+                coords=coords,
+                psurface=ps,
+                porosity=cfg.porosity,
+            )
+        end
+        # Guard: the first step sinters about 5.7e-12, past the threshold, far below 1e-6
+        @test Erebus.DPHI_SINTERED < mk.dphi_sinter[1] < 1.0e-9
+        @test mk.phi0[1] == 0.75
+        @test mk.phi_d[1] > 0.74
     end
 
     @testset "Ten-step run keeps dphi_sinter = phi0 - phi_d on every rock marker" begin
