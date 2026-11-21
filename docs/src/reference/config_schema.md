@@ -758,6 +758,38 @@ buffer_markers_per_cell = 16
 
 ---
 
+## `[porosity]`
+
+Dry rock porosity by cold pressing and hot sintering, after Henke et al. (2012) and Lichtenberg et al. (2016a).
+With `model = "none"` the porosity code of the other sections runs as before and no extra marker arrays exist.
+With `model = "henke2012"` every rock marker carries a dry porosity that cold pressing and hot sintering lower.
+The equations, units and limits are on the page [Porosity: cold pressing and hot sintering](../explanations/porosity_sintering.md).
+
+```toml
+[porosity]
+model = "henke2012"
+phi_init = 0.75
+grain_radius = 1.0e-6
+phi_cap = 0.85
+T_sinter = 700.0
+A = 4.0e-5
+E_act = 85000.0
+n = 1.5
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs reaction, venting, hydrothermal, accretion and telescoping off | `:none`, `:henke2012` |
+| `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
+| `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
+| `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |
+| `T_sinter` | `Float64` | `700.0` | K | Temperature at and above which hot sintering acts | $> 0$ |
+| `A` | `Float64` | `4.0e-5` | $\text{cm}^3\,\text{bar}^{-n}\,\text{s}^{-1}$ | Prefactor of the creep law of the sintering rate | $\ge 0$ |
+| `E_act` | `Float64` | `85000.0` | cal/mol | Activation energy of the sintering rate | $\ge 0$ |
+| `n` | `Float64` | `1.5` | - | Stress exponent of the sintering rate | $> 0$ |
+
+---
+
 ## `[refractory]`
 
 Configuration for refractory elemental budgets (carbon, nitrogen, sulfur, phosphorus, hydrogen) and thermal organic pyrolysis kinetics.

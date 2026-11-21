@@ -284,6 +284,7 @@ function interpolate_markers_to_grid!(
     coreformation_active_val =
         cfg.coreformation.percolation_active || cfg.coreformation.settling_active
 
+    phi_dry = dry_porosity(markers)
     use_tiled_p2m = cfg.solver.p2m_mode === :tiled
     use_threading =
         cfg.solver.p2m_mode === :buffered &&
@@ -468,6 +469,7 @@ function interpolate_markers_to_grid!(
                     ksolidm_val=cfg.materials.ksolidm,
                     kfluidm_val=cfg.materials.kfluidm,
                     phimax_val=cfg.poroelasticity.phimax,
+                    phi_dry=phi_dry,
                 )
                 @inbounds marker_to_basic_nodes!(
                     m,
@@ -700,6 +702,7 @@ function interpolate_markers_to_grid!(
                 ksolidm_val=cfg.materials.ksolidm,
                 kfluidm_val=cfg.materials.kfluidm,
                 phimax_val=cfg.poroelasticity.phimax,
+                phi_dry=phi_dry,
             )
             scatter_marker_to_master_grids!(
                 m,
@@ -973,6 +976,7 @@ function _scatter_tiled_p2m_tile!(
 
     has_redox = haskey(markers.groups, :redox)
     deltaIW_m = has_redox ? markers.groups.redox.deltaIW_m : nothing
+    phi_dry = dry_porosity(markers)
 
     thermal_buoyancy_val = cfg.thermodynamics.thermal_buoyancy
     alphafluid_val = cfg.materials.alphafluidm
@@ -1096,6 +1100,7 @@ function _scatter_tiled_p2m_tile!(
             ksolidm_val=cfg.materials.ksolidm,
             kfluidm_val=cfg.materials.kfluidm,
             phimax_val=cfg.poroelasticity.phimax,
+            phi_dry=phi_dry,
         )
         scatter_marker_to_master_grids!(
             m,

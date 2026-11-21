@@ -429,3 +429,441 @@ function evaluate_hydrofracture_resistance(
         return max(Float64(r_base) / ffrac, r_floor)
     end
 end
+
+"""
+    phi_cold(P_bar)
+
+Porosity of a granular silicate powder after cold isostatic pressing.
+
+# Details
+
+    φ_H(P) = 0.42 + 0.46 / ((P / 0.13 bar)^1.72 + 1)
+
+Henke et al. (2012) Eq. 15 with the relative density D = 1 - φ, as used by
+Lichtenberg et al. (2016a) Eq. 10. `P_bar` is the maximum pressure the powder has felt.
+
+# Arguments
+
+    - P_bar: pressure P [bar], >= 0
+
+# Returns
+
+    - φ_H: porosity [-], in (0.42, 0.88]
+
+# Throws
+
+    - DomainError: `P_bar` is negative or not finite
+"""
+function phi_cold(P_bar::Real)
+    require_nonneg_finite(P_bar, "pressure P_bar")
+    return 0.42 + 0.46 / ((P_bar / 0.13)^1.72 + 1.0)
+end
+
+"""
+    porosity_phi0(P_bar, phi_init; phi_cap=0.85)
+
+Porosity of a rock marker before hot sintering: the smallest of the initial porosity,
+the cold pressing porosity `phi_cold(P_bar)` and the upper cap `phi_cap`.
+
+# Arguments
+
+    - P_bar: pressure P [bar], >= 0
+    - phi_init: initial porosity φ_init [-], in [0, 1]
+    - phi_cap: upper porosity cap [-], in [0, 1] (i2elvis value 0.85)
+
+# Returns
+
+    - φ_0 = min(φ_init, φ_H(P), φ_cap) [-]
+
+# Throws
+
+    - DomainError: a porosity outside [0, 1] or an invalid pressure
+"""
+function porosity_phi0(P_bar::Real, phi_init::Real; phi_cap::Real=0.85)
+    require_unit_interval(phi_init, "initial porosity phi_init")
+    require_unit_interval(phi_cap, "porosity cap phi_cap")
+    return min(Float64(phi_init), phi_cold(P_bar), Float64(phi_cap))
+end
+
+"""
+    grain_geometry(phi, phi_0, R0)
+
+Radius of a truncated grain and radius of one of its contact faces after hot sintering
+from porosity `phi_0` to porosity `phi`, for 8 contacts per grain.
+
+# Details
+
+Volume conservation of a sphere of radius R0 with 8 cut caps (Henke et al. 2012
+Eqs. 34 to 37, Kakar and Chaklader geometry) gives, with X = (1 - φ_0) / (1 - φ),
+
+    R^3 - 3 R^2 R0 X^(1/3) + R0^3 X + R0^3 = 0,    a^2 = R^2 - R0^2 X^(2/3).
+
+The physical root is the one in [R0, 2 R0 X^(1/3)], where the cubic decreases. It is
+found by Newton iteration from R0 inside a bisection bracket. For X <= 1/3 the contact
+faces overlap and the geometry has no root; X is then held at 1/3 + 1e-12.
+
+# Arguments
+
+    - phi: porosity φ [-], in [0, φ_0]
+    - phi_0: porosity before sintering φ_0 [-], in [0, 1)
+    - R0: initial grain radius [m], > 0
+
+# Returns
+
+    - (R, a): grain radius R [m] and contact face radius a [m]; a = 0 at φ = φ_0
+
+# Throws
+
+    - DomainError: φ or φ_0 outside [0, 1), φ > φ_0, or R0 not positive and finite
+"""
+function grain_geometry(phi::Real, phi_0::Real, R0::Real)
+    require_positive_finite(R0, "grain radius R0")
+    (isfinite(phi) && 0.0 <= phi < 1.0) ||
+        throw(DomainError(phi, "porosity phi must be in [0, 1)"))
+    (isfinite(phi_0) && 0.0 <= phi_0 < 1.0) ||
+        throw(DomainError(phi_0, "porosity phi_0 must be in [0, 1)"))
+    phi <= phi_0 || throw(DomainError(phi, "porosity phi must not exceed phi_0"))
+    n_contacts = 8
+    X = max((1.0 - phi_0) / (1.0 - phi), 1.0 / 3.0 + 1.0e-12)
+    c = cbrt(X)
+    # Eq. 36 with Eqs. 34, 35, 37: R0^3 = R^3 - Z/8 (2 R^3 - 3 R^2 R0 c + R0^3 X)
+    f(R) = n_contacts / 8 * (2R^3 - 3R^2 * R0 * c + R0^3 * X) - R^3 + R0^3
+    df(R) = n_contacts / 8 * (6R^2 - 6R * R0 * c) - 3R^2
+    lo, hi = Float64(R0), 2.0 * R0 * c
+    R = lo
+    for _ in 1:200
+        fR = f(R)
+        iszero(fR) && break
+        fR > 0.0 ? (lo = R) : (hi = R)
+        dR = df(R)
+        R_new = R - fR / dR
+        if !(lo < R_new < hi) || dR >= 0.0
+            R_new = 0.5 * (lo + hi)
+        end
+        converged = abs(R_new - R) <= 4.0 * eps(R)
+        R = R_new
+        (converged || hi - lo <= 4.0 * eps(hi)) && break
+    end
+    return R, sqrt(max(R^2 - R0^2 * c^2, 0.0))
+end
+
+"""
+    contact_stress(P_bar, R, a)
+
+Effective stress on the contact faces of the grains (Henke et al. 2012 Eqs. 40, 41).
+
+# Details
+
+    C_av = 2 sqrt(3) (R^2 - a^2),    σ = C_av P / (π a^2)
+
+`C_av` is the mean cross-section of the cell of one grain in the hexagonal prismatic
+packing. Early in sintering a << R and σ >> P.
+
+# Arguments
+
+    - P_bar: applied pressure P [bar], >= 0
+    - R: grain radius [m], > 0
+    - a: contact face radius [m], in (0, R]
+
+# Returns
+
+    - σ: contact stress [bar]
+
+# Throws
+
+    - DomainError: P < 0, R <= 0, a <= 0, a > R, or a value that is not finite
+"""
+function contact_stress(P_bar::Real, R::Real, a::Real)
+    require_nonneg_finite(P_bar, "pressure P_bar")
+    require_positive_finite(R, "grain radius R")
+    require_positive_finite(a, "contact radius a")
+    a <= R || throw(DomainError(a, "contact radius a must not exceed the grain radius R"))
+    C_av = 2.0 * sqrt(3.0) * (R^2 - a^2)
+    return C_av * P_bar / (pi * a^2)
+end
+
+"""
+    sintering_rate(phi, sigma_bar, R, T; A=4.0e-5, E_act=85000.0, n=1.5)
+
+Rate of porosity decrease by hot sintering (power-law creep of Schwenn and Goetze,
+as used by Henke et al. 2012 Eqs. 39, 43, 44 and Lichtenberg et al. 2016a Eq. 13).
+
+# Details
+
+    r = F(φ) A (1 - φ) σ^n / (100 R)^3 exp(-E_act / (R_gas T)),    dφ/dt = -r
+
+with R in cm (100 R for R in m), σ in bar, R_gas = 1.9872 cal/(K mol) and
+F(φ) = 10 φ for φ <= 0.1, else 1 (Eq. 43, pore closure stage). The rate is >= 0.
+
+# Arguments
+
+    - phi: porosity φ [-], in [0, 1]
+    - sigma_bar: contact stress σ [bar], >= 0
+    - R: grain radius [m], > 0
+    - T: temperature [K], > 0
+    - A: creep prefactor [cm^3 bar^-n s^-1]
+    - E_act: activation energy [cal/mol]
+    - n: stress exponent [-], > 0
+
+# Returns
+
+    - r: porosity decrease rate [1/s], >= 0
+
+# Throws
+
+    - DomainError: an argument outside its physical domain
+"""
+function sintering_rate(
+    phi::Real,
+    sigma_bar::Real,
+    R::Real,
+    T::Real;
+    A::Real=4.0e-5,
+    E_act::Real=85000.0,
+    n::Real=1.5,
+)
+    require_unit_interval(phi, "porosity phi")
+    require_nonneg_finite(sigma_bar, "contact stress sigma_bar")
+    require_positive_finite(R, "grain radius R")
+    require_positive_finite(T, "temperature T")
+    require_nonneg_finite(A, "creep prefactor A")
+    require_nonneg_finite(E_act, "activation energy E_act")
+    require_positive_finite(n, "stress exponent n")
+    R_gas = 1.9872
+    F = phi <= 0.1 ? 10.0 * phi : 1.0
+    return F * A * (1.0 - phi) * sigma_bar^n / (100.0 * R)^3 * exp(-E_act / (R_gas * T))
+end
+
+"""
+    porosity_decrease_rate(phi, phi_0, P_bar, T; R0=1.0e-6, A=4.0e-5, E_act=85000.0, n=1.5)
+
+Hot sintering rate at porosity `phi` for a rock that started sintering at `phi_0`:
+`grain_geometry`, then `contact_stress`, then `sintering_rate`.
+
+# Arguments
+
+    - phi: porosity φ [-], in [0, φ_0]
+    - phi_0: porosity before sintering φ_0 [-], in [0, 1)
+    - P_bar: pressure P [bar], >= 0
+    - T: temperature [K], > 0
+    - R0: initial grain radius [m]
+    - A, E_act, n: creep law constants (see `sintering_rate`)
+
+# Returns
+
+    - r: porosity decrease rate [1/s], >= 0; 0 for P = 0 or φ = 0; Inf at φ = φ_0 > 0
+      with P > 0 (unsintered grains touch at points)
+
+# Throws
+
+    - DomainError: an argument outside its physical domain
+"""
+function porosity_decrease_rate(
+    phi::Real,
+    phi_0::Real,
+    P_bar::Real,
+    T::Real;
+    R0::Real=1.0e-6,
+    A::Real=4.0e-5,
+    E_act::Real=85000.0,
+    n::Real=1.5,
+)
+    require_nonneg_finite(P_bar, "pressure P_bar")
+    require_positive_finite(T, "temperature T")
+    R, a = grain_geometry(phi, phi_0, R0)
+    (iszero(P_bar) || iszero(phi)) && return 0.0
+    iszero(a) && return Inf
+    sigma = contact_stress(P_bar, R, a)
+    return sintering_rate(phi, sigma, R, T; A=A, E_act=E_act, n=n)
+end
+
+"""
+Backward Euler porosity over one substep `h` [s]: the root of
+g(φ) = φ - φ_old + h r(φ) in (0, φ_old] by bisection; g(0) < 0 since r(0) = 0.
+"""
+function _backward_euler_porosity(phi_old::Float64, h::Float64, rate)
+    h * rate(phi_old) <= 0.0 && return phi_old
+    lo, hi = 0.0, phi_old
+    for _ in 1:200
+        mid = 0.5 * (lo + hi)
+        (mid <= lo || mid >= hi) && break
+        if mid - phi_old + h * rate(mid) < 0.0
+            lo = mid
+        else
+            hi = mid
+        end
+    end
+    return 0.5 * (lo + hi)
+end
+
+"""
+    sinter_porosity_step(phi_n, phi_0, P_bar, T, dt; R0=1.0e-6, A=4.0e-5,
+                         E_act=85000.0, n=1.5, dphi_max=0.01, max_substeps=1000)
+
+Advance the porosity of one rock by hot sintering over a time step with sub-stepped
+backward Euler.
+
+# Details
+
+Each substep solves φ^{k+1} = φ^k - h r(φ^{k+1}) for φ^{k+1} in (0, φ^k] by bisection.
+The substep h adapts so that each substep lowers φ by at most `dphi_max`. After
+`max_substeps - 1` substeps the last substep takes the remaining time and the step is
+reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
+
+# Arguments
+
+    - phi_n: porosity at the start of the step [-], in [0, φ_0]
+    - phi_0: porosity before sintering [-], in [0, 1)
+    - P_bar: pressure [bar], >= 0
+    - T: temperature [K], > 0
+    - dt: time step [s], >= 0
+    - R0, A, E_act, n: grain radius [m] and creep law constants (see `sintering_rate`)
+    - dphi_max: largest porosity decrease per substep [-], > 0
+    - max_substeps: largest number of substeps, >= 1
+
+# Returns
+
+    - (phi, nsub, capped): porosity at the end of the step [-], number of substeps,
+      and `true` when the substep cap was reached before the end of the step
+
+# Throws
+
+    - DomainError: an argument outside its physical domain
+    - ArgumentError: `max_substeps` < 1
+"""
+function sinter_porosity_step(
+    phi_n::Real,
+    phi_0::Real,
+    P_bar::Real,
+    T::Real,
+    dt::Real;
+    R0::Real=1.0e-6,
+    A::Real=4.0e-5,
+    E_act::Real=85000.0,
+    n::Real=1.5,
+    dphi_max::Real=0.01,
+    max_substeps::Integer=1000,
+)
+    require_nonneg_finite(dt, "time step dt")
+    require_positive_finite(dphi_max, "substep porosity change dphi_max")
+    max_substeps >= 1 || throw(ArgumentError("max_substeps must be >= 1"))
+    rate(p) = porosity_decrease_rate(p, phi_0, P_bar, T; R0=R0, A=A, E_act=E_act, n=n)
+    rate(phi_n)
+    phi = Float64(phi_n)
+    (iszero(P_bar) || iszero(phi) || iszero(dt)) && return (phi, 0, false)
+    t_left = Float64(dt)
+    h = t_left
+    nsub = 0
+    capped = false
+    while t_left > 0.0
+        h = min(h, t_left)
+        last = nsub + 1 == max_substeps
+        capped = last && h < t_left
+        h = last ? t_left : h
+        phi_try = _backward_euler_porosity(phi, h, rate)
+        dphi = phi - phi_try
+        if !last && dphi > dphi_max
+            h *= max(0.1, 0.9 * dphi_max / dphi)
+            continue
+        end
+        phi = phi_try
+        t_left = h >= t_left ? 0.0 : t_left - h
+        nsub += 1
+        h *= min(2.0, 0.9 * dphi_max / max(dphi, floatmin(Float64)))
+    end
+    return (phi, nsub, capped)
+end
+
+"""
+    k_porous(k, phi)
+
+Thermal conductivity of porous silicate rock (Lichtenberg et al. 2016a Eq. 12, the
+3-branch form of the i2elvis code, fitted by Henke et al. 2012 Eqs. 28 and 29).
+
+# Details
+
+    k1 = k exp(-φ / 0.08),    k2 = k exp(-1.2 - φ / 0.167)
+    k_por = k1 (φ < 0.2),  (k1^4 + k2^4)^(1/4) (0.2 <= φ <= 0.4),  k2 (φ > 0.4)
+
+with a floor of 1e-3 W/(m K). The form is not continuous at φ = 0.2 and 0.4.
+
+# Arguments
+
+    - k: conductivity of the dense solid [W/(m K)], >= 0
+    - phi: porosity φ [-], in [0, 1]
+
+# Returns
+
+    - k_por: conductivity of the porous rock [W/(m K)], >= 1e-3
+
+# Throws
+
+    - DomainError: k negative or not finite, or φ outside [0, 1]
+"""
+function k_porous(k::Real, phi::Real)
+    require_nonneg_finite(k, "solid conductivity k")
+    require_unit_interval(phi, "porosity phi")
+    k1 = k * exp(-phi / 0.08)
+    k2 = k * exp(-1.2 - phi / 0.167)
+    k_eff = if phi < 0.2
+        k1
+    elseif phi <= 0.4
+        (k1^4 + k2^4)^0.25
+    else
+        k2
+    end
+    return max(k_eff, 1.0e-3)
+end
+
+"""
+    dry_porosity_update(phi_d, P_bar, T, dt, pcfg::PorosityConfig)
+
+Advance the dry porosity of one rock marker over one time step: cold pressing at every
+temperature, then hot sintering for `T >= pcfg.T_sinter`.
+
+# Details
+
+Cold pressing sets φ <- min(φ, φ_0) with φ_0 = min(φ_init, φ_H(P), φ_cap), so φ <= φ_0
+before sintering starts. Sintering then lowers φ with `sinter_porosity_step`. Porosity
+never increases: a marker that cools keeps its sintered porosity.
+
+# Arguments
+
+    - phi_d: dry porosity at the start of the step [-], in [0, 1]
+    - P_bar: pressure [bar], >= 0
+    - T: temperature [K], > 0
+    - dt: time step [s], >= 0
+    - pcfg: `PorosityConfig` with φ_init, φ_cap, R0, T_sinter, A, E_act, n
+
+# Returns
+
+    - NamedTuple `(phi, dphi_sinter, capped)`: dry porosity at the end of the step,
+      its decrease by sintering (not by cold pressing), and whether the substep cap of
+      `sinter_porosity_step` was reached
+
+# Throws
+
+    - DomainError: an argument outside its physical domain
+"""
+function dry_porosity_update(
+    phi_d::Real, P_bar::Real, T::Real, dt::Real, pcfg::PorosityConfig
+)
+    require_unit_interval(phi_d, "dry porosity phi_d")
+    require_positive_finite(T, "temperature T")
+    phi_0 = porosity_phi0(P_bar, pcfg.phi_init; phi_cap=pcfg.phi_cap)
+    phi_p = min(Float64(phi_d), phi_0)
+    T >= pcfg.T_sinter || return (phi=phi_p, dphi_sinter=0.0, capped=false)
+    phi_s, _, capped = sinter_porosity_step(
+        phi_p,
+        phi_0,
+        P_bar,
+        T,
+        dt;
+        R0=pcfg.grain_radius,
+        A=pcfg.A,
+        E_act=pcfg.E_act,
+        n=pcfg.n,
+    )
+    phi_s = clamp(phi_s, 0.0, 1.0)
+    return (phi=phi_s, dphi_sinter=phi_p - phi_s, capped=capped)
+end

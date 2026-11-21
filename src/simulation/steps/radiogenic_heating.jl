@@ -4,6 +4,7 @@
     radiogenic_heating!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig)::Nothing
 
 Compute short-lived radionuclide (26Al and 60Fe) decay power and update marker radiogenic heating.
+With `porosity.model = :henke2012` a rock marker heats as (1 - phi_d) solid rock with no pore fluid.
 
 # Mutates:
 - `state.markers.core.hrtotalm`
@@ -62,6 +63,8 @@ function radiogenic_heating!(
     phim = core.phim
     hrtotalm = core.hrtotalm
     Xfe_bulk = has_metal ? state.markers.groups.metal.Xfe_bulk : nothing
+    has_dry = haskey(state.markers.groups, :porosity)
+    phi_dry = has_dry ? state.markers.groups.porosity.phi_d : phim
 
     @inbounds for m in 1:length(tm)
         t_m = tm[m]
@@ -79,7 +82,11 @@ function radiogenic_heating!(
                 )
             end
             hr_solid_rock = (1.0 - phi_fe) * hrsolidm[t_m] + phi_fe * hrmetalm[t_m]
-            hrtotalm[m] = (1.0 - phim[m]) * hr_solid_rock + phim[m] * hrfluidm[t_m]
+            hrtotalm[m] = if has_dry
+                (1.0 - phi_dry[m]) * hr_solid_rock
+            else
+                (1.0 - phim[m]) * hr_solid_rock + phim[m] * hrfluidm[t_m]
+            end
         else
             # Sticky air / space
             hrtotalm[m] = 0.0

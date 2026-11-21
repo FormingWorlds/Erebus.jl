@@ -368,6 +368,7 @@ function setup_simulation_markers_and_state(
         _init_hydrostatic_marker_pressure!(
             core, cfg, marknum, xcenter_val, ycenter_val, rplanet_val
         )
+        init_dry_porosity_markers!(markers, cfg, xcenter_val, ycenter_val)
 
         M_atm_species =
             if cfg.escape.multi_species || cfg.atmosphere.active || cfg.escape.active
@@ -720,6 +721,117 @@ function _init_hydrostatic_marker_pressure!(
                 p_amb_init + c_grav * pi * G_GRAV * (rho_s^2) * max(0.0, rplanet_sq - r_sq)
         else
             core.pfm0[m] = 0.0
+        end
+    end
+    return nothing
+end
+
+"""
+    dry_hydrostatic_profile(cfg; nr=4001) -> (r, P)
+
+Hydrostatic pressure of a dry porous body whose porosity follows the cold pressing law.
+
+# Details
+
+Integrates dP/dr = -ρ(r) g(r) inward from P(R_p) = 0, with ρ = ρ_s (1 - φ_0(P)),
+φ_0 = min(φ_init, φ_H(P), φ_cap) and ρ_s = `materials.rhosolidm[2]`. The gravity is
+that of the enclosed mass of a sphere (`gravity_mode = :enclosed_mass`) or of an
+infinite cylinder (`:poisson2d`). The density and the pressure are iterated to a fixed
+point. Each cell holds the mean density of its 2 nodes, so a uniform density gives the
+analytic profile P = c π G ρ² (R_p² - r²), with c = 2/3 (sphere) or 1 (cylinder).
+
+# Arguments
+- `cfg`: simulation configuration (`geometry`, `materials`, `porosity`).
+- `nr`: number of radial nodes from the centre to the surface.
+
+# Returns
+- `(r, P)`: radii [m] and pressures [Pa] at the nodes.
+
+# Throws
+- `ArgumentError`: `nr < 2`.
+"""
+function dry_hydrostatic_profile(cfg::SimulationConfig; nr::Int=4001)
+    nr >= 2 || throw(ArgumentError("nr must be >= 2, got $nr"))
+    pc = cfg.porosity
+    rho_s = cfg.materials.rhosolidm[2]
+    w = cfg.geometry.gravity_mode === :enclosed_mass ? 2 : 1
+    r = collect(range(0.0, cfg.geometry.rplanet; length=nr))
+    rho_of(P) = rho_s * (1.0 - porosity_phi0(P * 1.0e-5, pc.phi_init; phi_cap=pc.phi_cap))
+    P = zeros(nr)
+    rho = rho_of.(P)
+    g = zeros(nr)
+    for _ in 1:200
+        enclosed = 0.0
+        for i in 2:nr
+            rho_cell = 0.5 * (rho[i - 1] + rho[i])
+            enclosed += rho_cell * (r[i]^(w + 1) - r[i - 1]^(w + 1)) / (w + 1)
+            g[i] = 4.0 * pi * G_GRAV * enclosed / r[i]^w
+        end
+        P_new = zeros(nr)
+        for i in (nr - 1):-1:1
+            P_new[i] =
+                P_new[i + 1] +
+                0.5 * (r[i + 1] - r[i]) * (rho[i] * g[i] + rho[i + 1] * g[i + 1])
+        end
+        change = maximum(abs.(P_new .- P))
+        P = P_new
+        rho = rho_of.(P)
+        change <= 1.0e-12 * max(P[1], 1.0) && break
+    end
+    return r, P
+end
+
+"""
+Linear interpolation of a radial profile `(r, P)` at radius `rm` [m]; 0 outside `r`.
+"""
+function _interp_profile(r::AbstractVector, P::AbstractVector, rm::Real)
+    rm >= r[end] && return 0.0
+    rm <= r[1] && return P[1]
+    i = searchsortedlast(r, rm)
+    t = (rm - r[i]) / (r[i + 1] - r[i])
+    return (1.0 - t) * P[i] + t * P[i + 1]
+end
+
+"""
+    init_dry_porosity_markers!(markers, cfg, xcenter, ycenter)
+
+Set the dry porosity group of fresh markers for `porosity.model = :henke2012`; does
+nothing when the group is absent.
+
+# Details
+
+Rock markers get the water porosity `phim = phinewm = phimin` and the dry porosity
+φ_d = min(φ_init, φ_H(P), φ_cap) at the pressure of `dry_hydrostatic_profile` (first cold
+pressing); `tkm_max = tkm` and `dphi_sinter = 0`. Sticky-air markers get φ_d = 0.
+
+# Arguments
+- `markers`: marker arrays, updated in place.
+- `cfg`: simulation configuration.
+- `xcenter`, `ycenter`: centre of the body [m].
+
+# Returns
+- `nothing`
+"""
+function init_dry_porosity_markers!(
+    markers::MarkerArrays, cfg::SimulationConfig, xcenter::Real, ycenter::Real
+)
+    haskey(markers.groups, :porosity) || return nothing
+    pg = markers.groups.porosity
+    core = markers.core
+    pc = cfg.porosity
+    r_prof, P_prof = dry_hydrostatic_profile(cfg)
+    phimin = cfg.poroelasticity.phimin
+    @inbounds for m in eachindex(core.tm)
+        pg.dphi_sinter[m] = 0.0
+        pg.tkm_max[m] = core.tkm[m]
+        if core.tm[m] < 3
+            core.phim[m] = phimin
+            core.phinewm[m] = phimin
+            rm = hypot(core.xm[m] - xcenter, core.ym[m] - ycenter)
+            P_bar = _interp_profile(r_prof, P_prof, rm) * 1.0e-5
+            pg.phi_d[m] = porosity_phi0(P_bar, pc.phi_init; phi_cap=pc.phi_cap)
+        else
+            pg.phi_d[m] = 0.0
         end
     end
     return nothing

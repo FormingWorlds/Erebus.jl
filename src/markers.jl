@@ -112,11 +112,29 @@ struct AccretionGroup
     t_accreted::Vector{Float64}
 end
 
+"""
+Marker arrays for the dry rock porosity of the Henke et al. (2012) laws: porosity
+`phi_d` [-], maximum temperature `tkm_max` [K], and the cumulative porosity decrease by
+hot sintering `dphi_sinter` [-] (cold pressing does not count).
+"""
+struct PorosityGroup
+    phi_d::Vector{Float64}
+    tkm_max::Vector{Float64}
+    dphi_sinter::Vector{Float64}
+end
+
 function Base.NamedTuple(
     g::T
 ) where {
     T<:Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 }
     return NamedTuple{fieldnames(T)}(Tuple(getfield(g, name) for name in fieldnames(T)))
@@ -125,7 +143,14 @@ end
 function Base.merge(
     a::NamedTuple,
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return merge(a, NamedTuple(g))
@@ -133,7 +158,14 @@ end
 
 function Base.keys(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return fieldnames(typeof(g))
@@ -141,7 +173,14 @@ end
 
 function Base.values(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return Tuple(getfield(g, fn) for fn in fieldnames(typeof(g)))
@@ -149,7 +188,14 @@ end
 
 function Base.iterate(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
     state...,
 )
@@ -165,6 +211,16 @@ struct MarkerArrays{G<:NamedTuple}
 end
 
 Base.length(m::MarkerArrays) = length(m.core.xm)
+
+"""
+    dry_porosity(m::MarkerArrays)
+
+Return the dry porosity array `phi_d` of the porosity group, or `nothing` when the
+group is absent (`porosity.model = :none`).
+"""
+function dry_porosity(m::MarkerArrays)
+    return haskey(m.groups, :porosity) ? m.groups.porosity.phi_d : nothing
+end
 
 @inline function Base.getproperty(m::MarkerArrays, sym::Symbol)
     if sym === :core
@@ -555,6 +611,14 @@ function init_marker_arrays(
         if t_acc !== nothing
             push!(group_pairs, :accretion => AccretionGroup(t_acc))
         end
+    end
+
+    # Dry porosity group (values are set in the simulation setup)
+    if cfg.porosity.model === :henke2012
+        push!(
+            group_pairs,
+            :porosity => PorosityGroup(zeros(marknum), zeros(marknum), zeros(marknum)),
+        )
     end
 
     groups = NamedTuple(group_pairs)

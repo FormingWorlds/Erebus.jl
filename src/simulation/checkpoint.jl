@@ -971,6 +971,16 @@ function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::Simula
         push!(group_pairs, :accretion => AccretionGroup(t_acc))
     end
 
+    if effective_cfg.porosity.model === :henke2012
+        haskey(data, "phi_d") || throw(
+            CheckpointError(
+                "Checkpoint has no dry porosity arrays (phi_d) for porosity.model = henke2012",
+            ),
+        )
+        pvals = [data[string(k)] for k in fieldnames(PorosityGroup)]
+        push!(group_pairs, :porosity => PorosityGroup(pvals...))
+    end
+
     markers = MarkerArrays(core, NamedTuple(group_pairs))
 
     for fn in fieldnames(CoreGroup)

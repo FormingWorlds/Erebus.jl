@@ -1348,6 +1348,7 @@ function compute_marker_properties!(
     kfluidm_val=kfluidm,
     compute_hr::Bool=true,
     phimax_val::Real=phimax,
+    phi_dry=nothing,
 )
     if tm[m] < 3
         # rocks
@@ -1475,6 +1476,16 @@ function compute_marker_properties!(
             phim[m],
         )
         ktotalm[m] = k_lattice
+        if phi_dry !== nothing
+            # Dry porous rock (Henke et al. 2012): no pore-fluid term
+            k_lattice = k_porous(
+                compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val), phi_dry[m]
+            )
+            ktotalm[m] = k_lattice
+            rhototalm[m] = rhosolid_eff * (1.0 - phi_dry[m])
+            rhocptotalm[m] = rhocpsolid_eff * (1.0 - phi_dry[m])
+            compute_hr && (hrtotalm[m] = hrsolidm[tm[m]] * (1.0 - phi_dry[m]))
+        end
         if melting_active && soft_turbulence
             eta_fluid = if F_melt <= F_turb_start_val
                 etasolidcur
@@ -1700,7 +1711,11 @@ function compute_marker_properties!(
                 rho_sol = tm[m] <= 2 ? rhosolidm_val[tm[m]] : 0.0
                 phi_fe = chondritic_phi_fe(rho_sol, rho_metal_val)
                 hr_rock = (1.0 - phi_fe) * hrsolidm[tm[m]] + phi_fe * hrmetalm[tm[m]]
-                hrtotalm[m] = (1.0 - phim[m]) * hr_rock + phim[m] * hrfluidm[tm[m]]
+                hrtotalm[m] = if phi_dry !== nothing
+                    (1.0 - phi_dry[m]) * hr_rock
+                else
+                    (1.0 - phim[m]) * hr_rock + phim[m] * hrfluidm[tm[m]]
+                end
             end
             Xfem !== nothing && (Xfem[m] = 0.0)
         elseif Xfem !== nothing
@@ -4073,6 +4088,7 @@ function replenish_markers!(
     redox_props=nothing,
     rng::AbstractRNG=Random.default_rng(),
     s33m=nothing,
+    porosity_props=nothing,
 )
     Nym_val, Nxm_val = size(mnum)
     @unpack_coords coords xxm yym dxm dym jmin_m jmax_m imin_m imax_m Nxmc Nymc
@@ -4228,6 +4244,11 @@ function replenish_markers!(
                             push!(prop, prop[m])
                         end
                     end
+                    if porosity_props !== nothing
+                        for prop in values(porosity_props)
+                            push!(prop, prop[m])
+                        end
+                    end
                 end
             end
         end
@@ -4284,6 +4305,7 @@ function replenish_markers!(
         haskey(markers.groups, :accretion) ? markers.groups.accretion.t_accreted : nothing
     hcnspo_props = haskey(markers.groups, :hcnspo) ? markers.groups.hcnspo : nothing
     redox_props = haskey(markers.groups, :redox) ? markers.groups.redox : nothing
+    porosity_props = haskey(markers.groups, :porosity) ? markers.groups.porosity : nothing
 
     old_len = length(markers)
     marknum_new = replenish_markers!(
@@ -4342,6 +4364,7 @@ function replenish_markers!(
         redox_props=redox_props,
         rng=rng,
         s33m=markers.s33m,
+        porosity_props=porosity_props,
     )
 
     if marknum_new > old_len
@@ -4627,6 +4650,7 @@ function apply_subgrid_temperature_diffusion!(
     mode;
     coords::GridCoordinates=default_grid_coordinates(),
     dsubgridt::Real=dsubgridt,
+    phi_dry=nothing,
 )
     # only perform subgrid temperature diffusion if enabled by dsubgridt > 0
     if dsubgridt == 0.0
@@ -4654,7 +4678,11 @@ function apply_subgrid_temperature_diffusion!(
         # compute marker-node temperature difference
         @inbounds δtkm = tkm[m] - dot4(grid_vector(i, j, tk1), weights)
         # compute marker properties
-        @inbounds if tm[m] < 3
+        @inbounds if tm[m] < 3 && phi_dry !== nothing
+            # dry porous rock (Henke et al. 2012)
+            rhocptotalm = rhocpsolidm[tm[m]] * (1.0 - phi_dry[m])
+            ktotalm = k_porous(compute_ksolidm(tkm[m], mode), phi_dry[m])
+        elseif tm[m] < 3
             # rocks
             @inbounds rhocptotalm = total(
                 rhocpsolidm[tm[m]], compute_rhocpfluidm(tkm[m], mode), phim[m]
@@ -5338,6 +5366,7 @@ $(SIGNATURES)
 - `Fm`: Optional marker melt fraction array
 - `redox_props`: Optional redox volatile properties
 - `w3d_m`: Optional precomputed out-of-plane spherical integration lengths [m]
+- `aphi_active`: Apply the compaction rate APHI to rock porosity (false for henke2012)
 
 # Returns
 - Named tuple with `delta_m_vent` [kg/m], `delta_m_vent_2d` [kg/m], `delta_m_vent_3d` [kg], `vented_vols` NamedTuple or nothing, and `records::Vector{TransferRecord}`
@@ -5370,6 +5399,7 @@ function advance_marker_thermo_porosity_venting!(
     redox_props=nothing,
     w3d_m::Union{Nothing,AbstractVector{Float64}}=nothing,
     Xfe_bulk::Union{Nothing,AbstractVector{Float64}}=nothing,
+    aphi_active::Bool=true,
 )
     (w3d_m === nothing || length(w3d_m) >= marknum) || throw(
         DimensionMismatch(
@@ -5450,10 +5480,12 @@ function advance_marker_thermo_porosity_venting!(
 
             # Rock marker porosity and volatile updates
             if tm[m] < 3
-                # Porosity compaction
-                aphim = dot4(grid_vector(i, j, APHI), weights)
-                denom = (1.0 - phim[m]) * exp(aphim * dt_val) + phim[m]
-                phim[m] = max(phimin_val, min(phimax_val, phim[m] / denom))
+                # Porosity compaction (off for the dry porosity of henke2012)
+                if aphi_active
+                    aphim = dot4(grid_vector(i, j, APHI), weights)
+                    denom = (1.0 - phim[m]) * exp(aphim * dt_val) + phim[m]
+                    phim[m] = max(phimin_val, min(phimax_val, phim[m] / denom))
+                end
 
                 # Surface venting and volatile drainage
                 if venting_active
@@ -5721,4 +5753,71 @@ function advance_marker_thermo_porosity_venting!(
         vented_vols=vented_vols,
         records=total_records,
     )
+end
+
+"""
+    advance_marker_dry_porosity!(phi_d, tkm_max, dphi_sinter, xm, ym, tm, tkm, pr, dt;
+                                 coords, psurface, porosity)
+
+Advance the dry porosity of every rock marker over one time step with the laws of
+Henke et al. (2012): cold pressing, then hot sintering (`dry_porosity_update`).
+
+# Details
+
+The pressure of a marker is the total pressure `pr` interpolated from the P nodes, minus
+the surface anchor `psurface`, clipped at 0 and converted from Pa to bar. The marker
+temperature is `tkm` after the update of the step (T^{n+1}). `tkm_max` keeps the highest
+marker temperature; `dphi_sinter` adds the decrease by sintering.
+
+# Arguments
+- `phi_d`, `tkm_max`, `dphi_sinter`: dry porosity group arrays, updated in place.
+- `xm`, `ym`: marker coordinates [m].
+- `tm`: marker material type (rock < 3).
+- `tkm`: marker temperature [K].
+- `pr`: total pressure at P nodes [Pa].
+- `dt`: time step [s].
+- `coords`: grid coordinates.
+- `psurface`: surface pressure anchor of `pr` [Pa].
+- `porosity`: `PorosityConfig`.
+
+# Returns
+- Number of markers whose sintering step reached the substep cap.
+"""
+function advance_marker_dry_porosity!(
+    phi_d::AbstractVector{Float64},
+    tkm_max::AbstractVector{Float64},
+    dphi_sinter::AbstractVector{Float64},
+    xm::AbstractVector{Float64},
+    ym::AbstractVector{Float64},
+    tm::AbstractVector{<:Integer},
+    tkm::AbstractVector{Float64},
+    pr::AbstractMatrix{Float64},
+    dt::Real;
+    coords::GridCoordinates,
+    psurface::Real,
+    porosity::PorosityConfig,
+)
+    ncapped = Threads.Atomic{Int}(0)
+    @threads :dynamic for m in eachindex(tm)
+        @inbounds tm[m] < 3 || continue
+        i, j, weights = fix_weights(
+            xm[m],
+            ym[m],
+            coords.xp,
+            coords.yp,
+            coords.dx,
+            coords.dy,
+            coords.jmin_p,
+            coords.jmax_p,
+            coords.imin_p,
+            coords.imax_p,
+        )
+        P_bar = max(0.0, dot4(grid_vector(i, j, pr), weights) - psurface) * 1.0e-5
+        u = dry_porosity_update(phi_d[m], P_bar, tkm[m], dt, porosity)
+        @inbounds phi_d[m] = u.phi
+        @inbounds dphi_sinter[m] += u.dphi_sinter
+        @inbounds tkm_max[m] = max(tkm_max[m], tkm[m])
+        u.capped && Threads.atomic_add!(ncapped, 1)
+    end
+    return ncapped[]
 end

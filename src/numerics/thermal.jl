@@ -289,6 +289,8 @@ constant scalar `k_rock` when specified.
   (default: `nothing` for temperature-dependent calculation)
 - `marker_property_mode`: Marker property regime index (default: 1)
 - `tau_LW`: Infrared optical depth of atmosphere for greenhouse blanketing (default: 0.0)
+- `phi_dry_surface`: Dry porosity of the surface rock for `porosity.model = :henke2012`;
+  `k_bulk = k_porous(k_solid, phi_dry_surface)` (default: `nothing`, not used)
 """
 function apply_radiative_surface_boundary!(
     KX::AbstractMatrix{Float64},
@@ -306,6 +308,7 @@ function apply_radiative_surface_boundary!(
     phi::Real=0.0,
     kfluid::Real=50.0,
     tau_LW::Real=0.0,
+    phi_dry_surface::Union{Nothing,Real}=nothing,
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx = coords.dx
@@ -335,6 +338,8 @@ function apply_radiative_surface_boundary!(
                 k_rad = h_rad * dx
                 k_bulk = if k_rock !== nothing
                     Float64(k_rock)
+                elseif phi_dry_surface !== nothing
+                    k_porous(compute_ksolidm(T_surf, marker_property_mode), phi_dry_surface)
                 elseif phi > 0.0
                     ktotal(
                         compute_ksolidm(T_surf, marker_property_mode),
@@ -372,6 +377,8 @@ function apply_radiative_surface_boundary!(
                 k_rad = h_rad * dy
                 k_bulk = if k_rock !== nothing
                     Float64(k_rock)
+                elseif phi_dry_surface !== nothing
+                    k_porous(compute_ksolidm(T_surf, marker_property_mode), phi_dry_surface)
                 elseif phi > 0.0
                     ktotal(
                         compute_ksolidm(T_surf, marker_property_mode),

@@ -188,6 +188,7 @@ function diffuse_and_update_markers!(
         marker_property_mode;
         coords=coords,
         dsubgridt=cfg.solver.dsubgridt,
+        phi_dry=dry_porosity(state.markers),
     )
 
     # The first step sets markers from the grid, without an increment.

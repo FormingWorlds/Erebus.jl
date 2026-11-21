@@ -328,6 +328,18 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/j.camwa.2018.07.033](https://doi.org/10.1016/j.camwa.2018.07.033)  
   *Anderson acceleration of coupled flow and mechanics iterations, including non-contractive fixed-point maps.*
 
+## Porosity, Cold Pressing, and Sintering
+
+- **Henke, S., Gail, H.-P., Trieloff, M., Schwarz, W. H., & Kleine, T. (2012)**. Thermal evolution and sintering of chondritic planetesimals. *Astronomy & Astrophysics*, 537, A45.  
+  [https://doi.org/10.1051/0004-6361/201117177](https://doi.org/10.1051/0004-6361/201117177)  
+  *Cold pressing law, grain contact geometry, contact stress, hot sintering rate, and porous conductivity fits.*
+
+- **Lichtenberg, T., Golabek, G. J., Gerya, T. V., & Meyer, M. R. (2016)**. The effects of short-lived radionuclides and porosity on the early thermo-mechanical evolution of planetesimals. *Icarus*.  
+  [https://doi.org/10.1016/j.icarus.2016.03.004](https://doi.org/10.1016/j.icarus.2016.03.004)  
+  *Porosity laws in 2-D and 3-D planetesimal models: cold pressing, sintering above 700 K, porous density and 3-branch conductivity.*
+
+---
+
 ## Spherical Geometry in 2-D Models
 
 - **Hernlund, J. W., & Tackley, P. J. (2008)**. Modeling mantle convection in the spherical annulus. *Physics of the Earth and Planetary Interiors*, 171, 48-54.  

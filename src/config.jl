@@ -1356,6 +1356,27 @@ Base.@kwdef struct TelescopingConfig
 end
 
 """
+Dry rock porosity by cold pressing and hot sintering (Henke et al. 2012).
+
+`model = :none` keeps the present porosity treatment and allocates nothing. With
+`model = :henke2012` each rock marker carries a dry porosity that decreases by cold
+pressing at every temperature and by hot sintering at `T >= T_sinter`. Units: `grain_radius`
+in m, `T_sinter` in K, `A` in cm^3 bar^-n s^-1, `E_act` in cal/mol.
+
+$(FIELDS)
+"""
+Base.@kwdef struct PorosityConfig
+    model::Symbol = :none
+    phi_init::Float64 = 0.75
+    grain_radius::Float64 = 1.0e-6
+    phi_cap::Float64 = 0.85
+    T_sinter::Float64 = 700.0
+    A::Float64 = 4.0e-5
+    E_act::Float64 = 85000.0
+    n::Float64 = 1.5
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -1382,6 +1403,7 @@ Base.@kwdef struct SimulationConfig
     hydrothermal::HydrothermalConfig = HydrothermalConfig()
     accretion::AccretionConfig = AccretionConfig()
     telescoping::TelescopingConfig = TelescopingConfig()
+    porosity::PorosityConfig = PorosityConfig()
     refractory::RefractoryConfig = RefractoryConfig()
     volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
     atmosphere::AtmosphereConfig = AtmosphereConfig()
@@ -2797,7 +2819,50 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
     _validate_spherical_flow(cfg)
+    _validate_porosity_config(cfg)
 
+    return nothing
+end
+
+"""
+Validate the `[porosity]` section and the processes that `model = :henke2012` excludes.
+
+# Arguments
+- `cfg`: simulation configuration.
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: unknown model, a field outside its domain, or henke2012 together with
+  reaction, venting, hydrothermal convection, accretion or telescoping.
+"""
+function _validate_porosity_config(cfg::SimulationConfig)
+    p = cfg.porosity
+    p.model in (:none, :henke2012) ||
+        throw(ArgumentError("porosity.model must be :none or :henke2012, got $(p.model)"))
+    @check_unit_interval p.phi_init "porosity.phi_init"
+    (0.0 < p.phi_cap < 1.0) ||
+        throw(ArgumentError("porosity.phi_cap must be in (0, 1), got $(p.phi_cap)"))
+    @check_positive_finite p.grain_radius "porosity.grain_radius"
+    @check_positive_finite p.T_sinter "porosity.T_sinter"
+    @check_nonneg_finite p.A "porosity.A"
+    @check_nonneg_finite p.E_act "porosity.E_act"
+    @check_positive_finite p.n "porosity.n"
+    p.model === :henke2012 || return nothing
+    for (name, on) in (
+        ("reaction", cfg.reaction.active),
+        ("venting", cfg.venting.active),
+        ("hydrothermal", cfg.hydrothermal.active),
+        ("accretion", cfg.accretion.active),
+        ("telescoping", cfg.telescoping.active),
+    )
+        on && throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires [$name] active = false; the dry porosity is not coupled to $name",
+            ),
+        )
+    end
     return nothing
 end
 
@@ -2938,6 +3003,7 @@ const VALID_SECTIONS = (
     "hydrothermal",
     "accretion",
     "telescoping",
+    "porosity",
     "refractory",
     "volatile_mixture",
     "atmosphere",
@@ -3145,6 +3211,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.telescoping
     end
+    poros = if haskey(parsed, "porosity")
+        _dict_to_struct(PorosityConfig, parsed["porosity"], def.porosity)
+    else
+        def.porosity
+    end
     refr = if haskey(parsed, "refractory")
         _dict_to_struct(RefractoryConfig, parsed["refractory"], def.refractory)
     else
@@ -3205,6 +3276,7 @@ function load_config(source::AbstractString)::SimulationConfig
         hydrothermal=hydrotherm,
         accretion=acc,
         telescoping=tele,
+        porosity=poros,
         refractory=refr,
         volatile_mixture=volmix,
         atmosphere=atm,
@@ -3268,6 +3340,7 @@ function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
         "hydrothermal" => _struct_to_dict(cfg.hydrothermal),
         "accretion" => _struct_to_dict(cfg.accretion),
         "telescoping" => _struct_to_dict(cfg.telescoping),
+        "porosity" => _struct_to_dict(cfg.porosity),
         "refractory" => _struct_to_dict(cfg.refractory),
         "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
         "atmosphere" => _struct_to_dict(cfg.atmosphere),
