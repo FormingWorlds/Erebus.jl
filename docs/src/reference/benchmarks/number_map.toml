@@ -404,3 +404,13 @@ test_name = "test_porosity_henke.jl"
 page = "explanations/porosity_sintering.md"
 number = "factor 3"
 test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "37 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "46 %"
+test_name = "test_porosity_henke.jl"

@@ -25,8 +25,9 @@ The water porosity of a rock marker stays at its floor `phimin`.
 `phimin` is the smallest water porosity of the section `[poroelasticity]`, $10^{-4}$ by default.
 The compaction rate of the Stokes-Darcy solve does not change the water porosity.
 It therefore does not limit the time step either.
+The Darcy velocity of this pore water moves no marker, so the time step takes the solid velocity instead.
 The heat that pore water carries through the grid is 0.
-The configuration check rejects `phimin` above $10^{-3}$ with this model.
+The configuration check rejects a `phimin` of 0 or less, or above $10^{-3}$, with this model.
 The adiabatic heating and the compaction and Darcy terms of the Stokes-Darcy solve still use the water porosity of rock.
 In the adiabatic heating and the compaction term the bound keeps the solid fraction $1 - \phi$ within 0.1 % of 1.
 The columns `phi_max` and `phi_mean` of `telemetry.csv` give the maximum and the mean of $\phi_d$ over the rock markers, not the water porosity.
@@ -35,6 +36,7 @@ The configuration check rejects `henke2012` when reaction, venting, hydrothermal
 It also rejects volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, iron heating (`hr_fe`) and metal partitioning.
 It rejects the tracking of accessory metal phases (`phase_tracking`) and the volatile ice mixture (`volatile_mixture`) too.
 It rejects the redox model (`redox`) as well, because it tracks metallic iron and gas species.
+It rejects hydrofracture (`poroelasticity.hydrofracture`), because no pore fluid pressure can open a crack.
 The rock must be dry: `materials.XWsolidm_init = [0.0, 0.0, nan]`.
 
 ---
@@ -256,16 +258,41 @@ The fluid pressure is not used.
 The melting law also takes the total pressure of the Stokes solve at the marker, from the second step on.
 The step runs where the marker temperature becomes the new temperature of the step.
 
+The plastic yield stress of the rock needs a pore pressure as well.
+Its friction term grows with the effective pressure, the total pressure minus the pore pressure.
+The Stokes solve fixes both pressures to `psurface` at the edge of the domain, so they are absolute pressures.
+The dry pores hold only the gas at the surface, so their pressure is `psurface`.
+The effective pressure of the yield stress is therefore the total pressure minus `psurface`.
+The porosity step takes the same pressure.
+The fluid pressure of the water porosity `phimin` comes close to the total pressure.
+With it, the effective pressure would almost vanish, and rock of low cohesion would yield at a small shear stress.
+
 ---
 
 ## What does the model leave out?
 
-The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating and the Stokes-Darcy solve, the compaction work, a reset on melting and the sintered surface porosity.
+The short answer: it leaves out some density terms, the shrinking of the body, the dry porosity in the adiabatic heating and the Stokes-Darcy solve, the compaction work, a reset on melting and the sintered surface porosity.
 Its grid must also resolve the surface layer.
 
 The materials of `Erebus.jl` are fixed constants.
 The dense rock density is therefore 3300 $\text{kg/m}^3$ for dry rock (`XWsolidm_init = 0`), not the 3500 $\text{kg/m}^3$ of Lichtenberg et al. (2016a).
 The temperature and pressure terms of the density in the i2elvis code are not included.
+
+The body does not shrink when its pores close.
+Sintering lowers $\phi_d$, while the grid and the radius $R_p$ of the body stay fixed.
+The rock density $\rho_s (1 - \phi_d)$ then rises, where $\rho_s$ is the dense rock density in $\text{kg/m}^3$.
+The rock mass of the body therefore grows.
+The i2elvis code does the same: its density function also multiplies the dense rock density by $1 - \phi$.
+A 6-step run of a 50 km body at 900 K shows the size of the gain.
+With `:enclosed_mass` gravity the rock mass of the sphere rises by 37 % from the setup.
+With `:poisson2d` gravity the rock mass per unit length of the 2-D slice rises by 46 %.
+Henke et al. (2012, Sect. 7.1) instead keep the mass of each shell fixed and compute its radius from the porosity.
+Their body shrinks: in their porous model the radius falls by about 20 % (Henke et al., 2012, Sect. 7.2.2).
+In `Erebus.jl` the gravity and the pressure rise with the mass, not with the shrinking radius.
+For a body of uniform density, let the density rise by a factor $f$, without units.
+At fixed radius the centre pressure rises by $f^2$, at fixed mass by $f^{4/3}$.
+The radiogenic heating and the heat capacity per volume both scale with $1 - \phi_d$.
+The heating rate of the rock in K/s therefore does not change.
 
 The adiabatic heating does not use the dry porosity $\phi_d$.
 It weights the solid term with $1 - \phi$, where $\phi$ is the water porosity of the grid.
@@ -337,8 +364,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     It uses 8 marker states and a relative tolerance of 1e-6.
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
     Testsets of `Configuration section [porosity]` check the processes that `henke2012` excludes, also at `init_simulation`.
-    They check that `phimin` above 1e-3 is rejected with `henke2012`.
-    They check that the marker step rejects a field of a directly built `PorosityConfig` outside its domain, before it changes a marker.
+    They check that a `phimin` of 0 or less or above 1e-3, and hydrofracture, are rejected with `henke2012`.
+    They check that the marker step and `dry_porosity_update` reject a field of a directly built `PorosityConfig` outside its domain.
+    The marker step also rejects a bad `dt` or `psurface` before it changes a marker, also when no marker is rock.
     Testsets of `Dry porosity marker group and step` check the marker arrays and the setup pressure against the uniform-density limit.
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
     They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
@@ -353,7 +381,11 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     The setup profile and the radiative surface faces use `phi_cap` where it lies below `phi_init`.
     A 4-step run of a 200 km body at 900 K keeps the time step within a factor 3 of model none and the shear heating below 1e-6 $\text{W/m}^3$.
     The same run checks that the pore-water heat is 0 and that the telemetry porosity columns give $\phi_d$.
-    A restart that changes `porosity.model` is refused, also with `force_restart_config = true`.
+    The step stays within a factor 3 also with a water porosity `phim0` of 1e-4 and a permeability `kphim0` of 1e-12 $\text{m}^2$.
+    The telemetry porosity counts crust markers and is 0 without rock markers.
+    The plastic yield stress takes the pore pressure `psurface`: a 3-step run of a 200 km body with a cohesion of 1e4 Pa keeps the step of the default cohesion.
+    A 6-step run at 900 K checks the rise of the rock mass, 37 % (3-D) and 46 % (2-D).
+    A restart that changes `porosity.model` is refused, with `force_restart_config` false and true.
     A restart from the checkpoint of step 4 repeats an 8-step run bit for bit.
 
     Command: `julia --project -t 2 -e 'using Test; include("test/test_porosity_henke.jl")'`

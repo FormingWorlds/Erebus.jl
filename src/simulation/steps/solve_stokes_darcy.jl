@@ -465,14 +465,43 @@ function update_marker_pressures!(
 end
 
 """
+    _cell_fractured(g, i, j, pore_water) -> Bool
+
+Whether the basic cell `(i, j)` is hydrofractured: its effective pressure, the mean of
+`pr - pf` over its 4 P nodes, is at or below minus the tensile strength `TEN`
+(`is_hydrofracture_breached`). Without pore water (`porosity.model = :henke2012`) no fluid
+drives a fracture, so the cell is never fractured.
+
+# Arguments
+- `g`: grids with `pr`, `pf` [Pa] at the P nodes and `TEN` [Pa] at the basic nodes.
+- `i`, `j`: row and column of the basic cell.
+- `pore_water`: `has_pore_water` of the markers.
+
+# Returns
+- `Bool`: `true` for a fractured cell.
+"""
+function _cell_fractured(g, i::Int, j::Int, pore_water::Bool)
+    pore_water || return false
+    peff_c =
+        0.25 * (
+            g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] - g.pf[i, j] -
+            g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+        )
+    return is_hydrofracture_breached(peff_c, g.TEN[i, j])
+end
+
+"""
 Postprocess hydromechanical solution, adapt timestep, and check plastic convergence.
 
 $(SIGNATURES)
 
 Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the
-compaction rate `APHI` is still computed on the grid. The time step then has no `aphimax`
-and no fluid heat limit, and the returned `aphimax` (telemetry `dt_aphimax_max`) is 0,
-because neither changes a marker.
+compaction rate `APHI` and the Darcy fluxes are still computed on the grid, but they move
+no marker and carry no heat. The time step then has no `aphimax` and no fluid heat limit,
+its fluid displacement limit takes the solid velocities `vx`, `vy` instead of `vxf`,
+`vyf`, and the returned `aphimax` (telemetry `dt_aphimax_max`) is 0. The plastic yield
+check takes the pore pressure `geometry.psurface` instead of `pf`, and no cell is
+fractured (`_cell_fractured`).
 """
 function postprocess_hydromechanical_solution!(
     state::SimulationState,
@@ -512,8 +541,8 @@ function postprocess_hydromechanical_solution!(
     fluid_heat_rate = fluid_advection_inflow_rate(
         g.tk1, g.qxD, g.qyD, g.RHOCP, fluid_heat_capacity(cfg); coords=coords
     )
-    # Without pore water (henke2012) APHI and the pore-water heat change no marker, so
-    # neither limits the time step
+    # Without pore water (henke2012) APHI, the pore-water heat and the Darcy velocity
+    # change no marker, so none of them limits the time step
     pore_water = has_pore_water(state.markers)
     pore_water || (aphimax = 0.0)
     pore_water || (fluid_heat_rate = 0.0)
@@ -523,8 +552,8 @@ function postprocess_hydromechanical_solution!(
     state.dt = compute_adaptive_timestep(
         g.vx,
         g.vy,
-        g.vxf,
-        g.vyf,
+        ifelse(pore_water, g.vxf, g.vx),
+        ifelse(pore_water, g.vyf, g.vy),
         state.dt,
         aphimax;
         coords=coords,
@@ -566,12 +595,7 @@ function postprocess_hydromechanical_solution!(
 
     n_flips_iter = 0
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c =
-            0.25 * (
-                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-            )
-        is_breached = is_hydrofracture_breached(peff_c, g.TEN[i, j])
+        is_breached = _cell_fractured(g, i, j, pore_water)
         if is_breached != ws.fractured_cells_prev[i, j]
             n_flips_iter += 1
         end
@@ -648,6 +672,7 @@ function postprocess_hydromechanical_solution!(
         state.dt,
         iplast;
         S33=sph ? g.S33 : nothing,
+        pore_pressure=ifelse(pore_water, nothing, cfg.geometry.psurface),
         etawt=cfg.solver.etawt,
         etamax=cfg.solver.etamax,
         etamin=cfg.solver.etamin,
@@ -959,13 +984,9 @@ function solve_stokes_darcy!(
     ws.hydromech.rx_eff_prev .= g.RX
     ws.hydromech.ry_eff_prev .= g.RY
 
+    pore_water = has_pore_water(state.markers)
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c =
-            0.25 * (
-                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-            )
-        ws.fractured_cells_prev[i, j] = is_hydrofracture_breached(peff_c, g.TEN[i, j])
+        ws.fractured_cells_prev[i, j] = _cell_fractured(g, i, j, pore_water)
     end
 
     dt_aphimax_step_max = 0.0

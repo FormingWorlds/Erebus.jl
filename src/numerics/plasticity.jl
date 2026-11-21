@@ -317,6 +317,10 @@ $(SIGNATURES)
     - YERRNOD: vector of summed yielding errors of nodes over plastic iterations
     - DSY: (SIIB-syield) at basic nodes
     - S33: out-of-plane deviatoric stress at P nodes (keyword), or `nothing`; a size other than that of SXX throws `DimensionMismatch`
+    - pore_pressure: uniform pore pressure [Pa] (keyword) that replaces `pf` in the
+      effective pressure `pr - pf` of the yield stress, or `nothing` to use `pf`. Pores
+      without fluid (`porosity.model = :henke2012`) hold the surface pressure `psurface`.
+      A value that is not finite throws `DomainError`
     - dt: time set
     - iplast: plastic iteration step 
 
@@ -349,10 +353,14 @@ function compute_nodal_adjustment!(
     yerrmax::Real=1e2,
     max_plastic_iterations::Int=10_000,
     nplast::Union{Int,Nothing}=nothing,
+    pore_pressure::Union{Real,Nothing}=nothing,
 )
     S33 === nothing ||
         size(S33) == size(SXX) ||
         throw(DimensionMismatch("S33 has size $(size(S33)), SXX has size $(size(SXX))"))
+    pore_pressure === nothing ||
+        isfinite(pore_pressure) ||
+        throw(DomainError(pore_pressure, "pore_pressure must be finite"))
     # reset / setup
     Ny, Nx = size(ETA)
     ETA5 .= ETA0
@@ -368,7 +376,8 @@ function compute_nodal_adjustment!(
             siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
             # interpolate total and fluid pressure at basic nodes
             prB = grid_average(i, j, pr)
-            pfB = grid_average(i, j, pf)
+            pfB =
+                pore_pressure === nothing ? grid_average(i, j, pf) : Float64(pore_pressure)
             # Yielding stress: confined and tensile fracture.
             # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
             # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).

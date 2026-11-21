@@ -2827,7 +2827,8 @@ end
 
 """
 Validate the fields of a `PorosityConfig` on their own, without the rest of the
-configuration. `_validate_porosity_config` and `advance_marker_dry_porosity!` call it.
+configuration. `_validate_porosity_config`, `dry_porosity_update` and
+`advance_marker_dry_porosity!` call it.
 
 # Arguments
 - `p`: porosity configuration.
@@ -2869,8 +2870,8 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
   reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
   kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
   partitioning, the redox state with its metallic iron), accessory phase tracking, a
-  volatile ice mixture, a hydrous rock (`materials.XWsolidm_init[1:2]` not 0) or
-  `poroelasticity.phimin` above `1e-3`.
+  volatile ice mixture, hydrofracture (`poroelasticity.hydrofracture`), a hydrous rock
+  (`materials.XWsolidm_init[1:2]` not 0) or `poroelasticity.phimin` outside (0, 1e-3].
 """
 function _validate_porosity_config(cfg::SimulationConfig)
     p = cfg.porosity
@@ -2896,6 +2897,7 @@ function _validate_porosity_config(cfg::SimulationConfig)
         ("phase_tracking.active", cfg.phase_tracking.active),
         ("volatile_mixture.active", cfg.volatile_mixture.active),
         ("redox.active", cfg.redox.active),
+        ("poroelasticity.hydrofracture", cfg.poroelasticity.hydrofracture),
     )
         on && throw(
             ArgumentError(
@@ -2912,9 +2914,9 @@ function _validate_porosity_config(cfg::SimulationConfig)
     # Rock keeps the water porosity phimin, which the adiabatic heating, the bulk
     # viscosity and the Darcy terms still use; at most 1e-3 keeps rock dense there
     phimin = cfg.poroelasticity.phimin
-    phimin <= 1.0e-3 || throw(
+    0.0 < phimin <= 1.0e-3 || throw(
         ArgumentError(
-            "porosity.model = henke2012 requires poroelasticity.phimin <= 1e-3; got $phimin",
+            "porosity.model = henke2012 requires 0 < poroelasticity.phimin <= 1e-3; got $phimin",
         ),
     )
     return nothing

@@ -5789,6 +5789,10 @@ sintered.
 # Throws
 - `ArgumentError`: a field of `porosity` outside its domain, checked once per call with
   the checks of the configuration (`_validate_porosity_fields`).
+- `DomainError`: `dt` or `psurface` negative or not finite.
+
+All 3 checks run before the threaded marker loop, so a bad argument changes no marker,
+also when no marker is rock.
 """
 function advance_marker_dry_porosity!(
     pg::PorosityGroup,
@@ -5803,6 +5807,8 @@ function advance_marker_dry_porosity!(
     porosity::PorosityConfig,
 )
     _validate_porosity_fields(porosity)
+    require_nonneg_finite(dt, "time step dt")
+    require_nonneg_finite(psurface, "surface pressure psurface")
     (; phi_d, phi0, tkm_max, dphi_sinter) = pg
     ncapped = Threads.Atomic{Int}(0)
     @threads :dynamic for m in eachindex(tm)

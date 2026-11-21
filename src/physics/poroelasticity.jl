@@ -903,6 +903,7 @@ cools keeps its sintered porosity.
     - DomainError: an argument outside its physical domain (`dt` is checked at every
       temperature), or `sintered` with `phi0_prev` that is 1 in Float64 or
       `phi_d > phi0_prev`
+    - ArgumentError: a field of `pcfg` outside its domain (`_validate_porosity_fields`)
 """
 function dry_porosity_update(
     phi_d::Real,
@@ -913,6 +914,7 @@ function dry_porosity_update(
     phi0_prev::Real=1.0,
     sintered::Bool=false,
 )
+    _validate_porosity_fields(pcfg)
     require_unit_interval(phi_d, "dry porosity phi_d")
     require_unit_interval(phi0_prev, "porosity before sintering phi0_prev")
     require_positive_finite(T, "temperature T")

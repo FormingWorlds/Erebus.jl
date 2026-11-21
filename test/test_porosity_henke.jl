@@ -638,6 +638,11 @@ end
                 (; volatile_mixture=Erebus.VolatileMixtureConfig(; active=true)),
             ),
             ("redox", (; redox=Erebus.RedoxConfig(; active=true))),
+            # Hydrofracture opens cells on the pressure of a pore fluid that is not there
+            (
+                "hydrofracture",
+                (; poroelasticity=Erebus.PoroelasticConfig(; hydrofracture=true)),
+            ),
         )
             e = check(kw)
             @test e isa ArgumentError
@@ -748,7 +753,48 @@ end
         end
     end
 
-    @testset "henke2012 needs poroelasticity.phimin <= 1e-3" begin
+    @testset "The marker step checks dt and psurface before it changes a marker" begin
+        coords = Erebus.GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        pr = fill(1.0e5 + 2.0e5, coords.Ny1, coords.Nx1)
+        function step!(tm, dt, psurface)
+            n = length(tm)
+            pg = Erebus.PorosityGroup(fill(0.5, n), fill(0.75, n), zeros(n), zeros(n))
+            e = _hk_error(
+                () -> Erebus.advance_marker_dry_porosity!(
+                    pg,
+                    fill(70_000.0, n),
+                    fill(70_000.0, n),
+                    tm,
+                    fill(900.0, n),
+                    pr,
+                    dt;
+                    coords=coords,
+                    psurface=psurface,
+                    porosity=Erebus.PorosityConfig(; model=:henke2012),
+                ),
+            )
+            return e, pg
+        end
+        # Control: 2 hot rock markers at 2 bar sinter below 0.5
+        e_ok, pg_ok = step!([1, 2], 1.0e10, 1.0e5)
+        @test e_ok === nothing
+        @test all(p -> 0.0 < p < 0.49, pg_ok.phi_d)
+        # A DomainError, not a CompositeException from the threads, also for air only
+        for (tm, dt, psurface, name) in (
+            ([1, 2], -1.0, 1.0e5, "dt"),
+            ([3, 3], -1.0, 1.0e5, "dt"),
+            ([1, 2], NaN, 1.0e5, "dt"),
+            ([1, 2], 1.0e10, NaN, "psurface"),
+            ([3, 3], 1.0e10, -1.0, "psurface"),
+        )
+            e, pg = step!(tm, dt, psurface)
+            @test e isa DomainError
+            @test occursin(name, e.msg)
+            @test all(p -> isapprox(p, 0.5; rtol=0, atol=0), pg.phi_d)
+        end
+    end
+
+    @testset "henke2012 needs 0 < poroelasticity.phimin <= 1e-3" begin
         cfg_of(phimin) = Erebus.SimulationConfig(;
             porosity=Erebus.PorosityConfig(; model=:henke2012),
             reaction=Erebus.ReactionConfig(; active=false),
@@ -762,6 +808,13 @@ end
             @test e isa ArgumentError
             @test occursin("poroelasticity.phimin", e.msg)
         end
+        # A restart runs this check without validate_config: phimin <= 0 is rejected too
+        for bad in (0.0, -0.1, -Inf)
+            e = _hk_error(() -> Erebus._validate_porosity_config(cfg_of(bad)))
+            @test e isa ArgumentError
+            @test occursin("0 < poroelasticity.phimin", e.msg)
+        end
+        @test Erebus._validate_porosity_config(cfg_of(nextfloat(0.0))) === nothing
         # Model none keeps any phimin of the poroelastic section
         none_03 = Erebus.SimulationConfig(;
             poroelasticity=Erebus.PoroelasticConfig(; phimin=0.3)
@@ -1284,6 +1337,25 @@ end
             @test isapprox(z.phi, Erebus.phi_cold(1.0); rtol=1e-14)
             @test iszero(z.dphi_sinter)
         end
+    end
+
+    @testset "dry_porosity_update checks the fields of its PorosityConfig" begin
+        # NaN T_sinter would skip sintering (T >= NaN is false); 500 K is the cold branch
+        for (T, kw) in (
+            (900.0, (; T_sinter=NaN)),
+            (900.0, (; model=:henke2013)),
+            (500.0, (; A=-1.0)),
+            (900.0, (; phi_cap=1.0)),
+        )
+            pc = Erebus.PorosityConfig(; model=:henke2012, kw...)
+            e = _hk_error(() -> Erebus.dry_porosity_update(0.5, 1.0, T, 1.0e10, pc))
+            @test e isa ArgumentError
+            @test occursin("porosity.$(only(keys(kw)))", e.msg)
+        end
+        # Control: the default constants cold press at 1 bar to phi_H(1 bar) < 0.5
+        u = Erebus.dry_porosity_update(0.5, 1.0, 500.0, 1.0e10, _hk_cfg().porosity)
+        @test isapprox(u.phi, Erebus.phi_cold(1.0); rtol=1e-14)
+        @test iszero(u.dphi_sinter)
     end
 
     @testset "dry_porosity_update uses T_sinter, grain_radius, E_act and n of the config" begin
@@ -1929,13 +2001,14 @@ end
             data_n, st_n.markers.core, _hk_cfg("porosity.model" => :none)
         )
         @test !haskey(restored_n.groups, :porosity)
-        # porosity.model cannot change on restart, also with force_restart_config = true:
+        # porosity.model cannot change on restart, with or without force_restart_config:
         # henke2012 -> none would drop phi_d, none -> henke2012 has no phi_d to load
-        for (ckpt, cfg_to) in ((path, _hk_cfg("porosity.model" => :none)), (path_n, cfg))
+        cases = ((path, _hk_cfg("porosity.model" => :none)), (path_n, cfg))
+        for (ckpt, cfg_to) in cases, force in (false, true)
             e_m = _hk_error(
                 () -> Erebus.with_logger(Erebus.NullLogger()) do
                     Erebus.load_simulation_state(
-                        ckpt; current_cfg=cfg_to, force_restart_config=true
+                        ckpt; current_cfg=cfg_to, force_restart_config=force
                     )
                 end,
             )
@@ -2008,9 +2081,24 @@ end
         st_h, st_n = runs[1].st, runs[2].st
         yr = Erebus.SECONDS_PER_YEAR
         @test st_h.timestep == 4 && st_n.timestep == 4
-        # The step of henke2012 stays within a factor 3 of model none (1358 and 719 yr)
+        # The step of henke2012 stays within a factor 3 of model none (both 2073.6 yr)
         @test 1 / 3 < st_h.dt / st_n.dt < 3
         @test 100.0 * yr < st_h.dt <= 5000.0 * yr
+        # A water porosity phim0 = 1e-4 and kphim0 = 1e-12 m^2 raise the Darcy velocity
+        # qxD / phimin of the pore water, which cut the step to 18.5 yr; the step takes
+        # the solid velocity instead
+        st_t = Erebus.with_logger(Erebus.NullLogger()) do
+            Erebus.simulation_loop(
+                _hk_cfg(
+                    body...,
+                    "thermodynamics.phim0" => 1.0e-4,
+                    "materials.kphim0" => [1.0e-12, 1.0e-12, 1.0e-17],
+                );
+                output_path=mktempdir(),
+            )
+        end
+        @test st_t.timestep == 4
+        @test 1 / 3 < st_t.dt / st_h.dt < 3
         # Shear heating stays below 1e-6 W/m^3, far below the 1.7e-3 of a 800 s step
         @test maximum(abs, st_h.grids.HS) < 1.0e-6
         @test maximum(abs, st_h.grids.HS) < 0.1 * maximum(abs, st_h.grids.HR)
@@ -2034,6 +2122,149 @@ end
         @test isapprox(row_n[col("phi_max")], maximum(PHI); rtol=1e-14)
         @test isapprox(row_n[col("phi_mean")], sum(PHI) / length(PHI); rtol=1e-14)
         @test 1.0e-3 < row_n[col("dt_aphimax_max")] < 0.1
+    end
+
+    @testset "Without pore water the yield stress takes the pore pressure psurface" begin
+        # 1 bar of overburden at 3 x 3 basic nodes, shear stress 0.1 MPa, cohesion and
+        # tensile strength 1e4 Pa, friction 0.6. A pore fluid at 0.999 pr leaves 1e4 Pa
+        # of effective pressure, a yield stress of 1.6e4 Pa: every node yields.
+        Ny, Nx = 3, 3
+        ETA0 = fill(1.0e20, Ny, Nx)
+        function adjust(kw)
+            ETA5 = zeros(Ny, Nx)
+            YNY5 = zeros(Int, Ny, Nx)
+            ok = Erebus.compute_nodal_adjustment!(
+                copy(ETA0),
+                ETA0,
+                ETA5,
+                fill(1.0e10, Ny, Nx),
+                zeros(Ny + 1, Nx + 1),
+                fill(1.0e5, Ny, Nx),
+                fill(1.0e7, Ny + 1, Nx + 1),
+                fill(0.999e7, Ny + 1, Nx + 1),
+                fill(1.0e4, Ny, Nx),
+                fill(1.0e4, Ny, Nx),
+                fill(0.6, Ny, Nx),
+                zeros(Int, Ny, Nx),
+                YNY5,
+                zeros(10),
+                zeros(Ny, Nx),
+                1.0e10,
+                1;
+                kw...,
+            )
+            return (; ok, YNY5, ETA5)
+        end
+        wet = adjust((;))
+        @test !wet.ok && all(==(1), wet.YNY5)
+        # Dry pores at psurface = 1e3 Pa: yield stress 1e4 + 0.6 (1e7 - 1e3) = 6.0e6 Pa,
+        # above the elastic stress 2e5 Pa, so no node yields and ETA stays
+        dry = adjust((; pore_pressure=1.0e3))
+        @test dry.ok && all(iszero, dry.YNY5)
+        @test isapprox(dry.ETA5, ETA0; rtol=0, atol=0)
+        @test_throws DomainError adjust((; pore_pressure=NaN))
+        # Without pore water no cell fractures, even where pf - pr exceeds TEN
+        g = (pr=fill(1.0e6, 3, 3), pf=fill(1.0e6 + 2.0e4, 3, 3), TEN=fill(1.0e4, 2, 2))
+        @test Erebus._cell_fractured(g, 1, 1, true)
+        @test !Erebus._cell_fractured(g, 1, 1, false)
+        # 200 km body, 3 steps: a rock cohesion and tensile strength of 1e4 Pa yielded on
+        # the pore pressure pf of up to 0.999 pr (step 21.6 yr, SII 7.8e5 Pa); with dry
+        # pores it runs as with the default 1e8 Pa (step 172.8 yr, SII 2.8e5 Pa)
+        Rp = 200_000.0
+        body = (
+            "grid.xsize" => 2.8 * Rp,
+            "grid.ysize" => 2.8 * Rp,
+            "geometry.rplanet" => Rp,
+            "geometry.rcrust" => 0.7 * Rp,
+            "geometry.xcenter" => 1.4 * Rp,
+            "geometry.ycenter" => 1.4 * Rp,
+            "materials.tkm0" => [1100.0, 300.0, 170.0],
+            "time.n_steps" => 3,
+            "time.dt_initial" => 100.0,
+            "time.dt_longest" => 1000.0,
+        )
+        quiet(f) = Erebus.with_logger(f, Erebus.NullLogger())
+        st_s = quiet(
+            () -> Erebus.simulation_loop(_hk_cfg(body...); output_path=mktempdir())
+        )
+        st_w = quiet(
+            () -> Erebus.simulation_loop(
+                _hk_cfg(
+                    body...,
+                    "materials.cohessolidm" => [1.0e4, 1.0e4, 1.0e8],
+                    "materials.tenssolidm" => [1.0e4, 1.0e4, 6.0e7],
+                );
+                output_path=mktempdir(),
+            ),
+        )
+        @test st_s.timestep == 3 && st_w.timestep == 3
+        @test 1 / 2 < st_w.dt / st_s.dt < 2
+        @test isapprox(maximum(st_w.grids.SII), maximum(st_s.grids.SII); rtol=0.1)
+        # Scale guard: the shear stress of the strong run is a few 1e5 Pa
+        @test 1.0e5 < maximum(st_s.grids.SII) < 1.0e6
+    end
+
+    @testset "Telemetry porosity counts crust markers and is 0 without rock" begin
+        st, _, _ = _hk_state(_hk_cfg("geometry.rcrust" => 35_000.0))
+        mk = st.markers
+        mantle = findall(==(1), mk.tm)
+        crust = findall(==(2), mk.tm)
+        air = findall(==(3), mk.tm)
+        @test !isempty(mantle) && !isempty(crust) && !isempty(air)
+        # Distinct values per material: the crust holds the maximum, air does not count
+        mk.phi_d[mantle] .= 0.3
+        mk.phi_d[crust] .= 0.6
+        mk.phi_d[air] .= 0.9
+        phi_max, phi_mean = Erebus.telemetry_porosity(mk, st.grids.PHI)
+        n1, n2 = length(mantle), length(crust)
+        @test isapprox(phi_max, 0.6; rtol=1e-14)
+        @test isapprox(phi_mean, (0.3 * n1 + 0.6 * n2) / (n1 + n2); rtol=1e-12)
+        # Edge case: only air markers give (0, 0), not NaN
+        mk.tm .= 3
+        a_max, a_mean = Erebus.telemetry_porosity(mk, st.grids.PHI)
+        @test iszero(a_max) && iszero(a_mean)
+    end
+
+    @testset "Sintering at a fixed grid volume raises the rock mass" begin
+        # 50 km body at 900 K, 6 steps. Rock mass of the markers, rho_s (1 - phi_d) per
+        # marker area, weighted with 2 pi r for the 3-D body of :enclosed_mass. The body
+        # keeps its radius, so the mass rises by 37 % (3-D, :enclosed_mass) and by 46 %
+        # (2-D, :poisson2d) instead of the body shrinking
+        ratios = map(((:enclosed_mass, true), (:poisson2d, false))) do (mode, metric)
+            cfg = _hk_cfg(
+                "geometry.gravity_mode" => mode,
+                "geometry.spherical_metric" => metric,
+                "materials.tkm0" => [900.0, 900.0, 170.0],
+                "time.n_steps" => 6,
+                "time.dt_initial" => 1000.0,
+                "time.dt_longest" => 5000.0,
+            )
+            st0, _, _ = _hk_state(cfg)
+            st = Erebus.with_logger(Erebus.NullLogger()) do
+                Erebus.simulation_loop(cfg; output_path=mktempdir())
+            end
+            xc, yc = cfg.geometry.xcenter, cfg.geometry.ycenter
+            rho_s = cfg.materials.rhosolidm
+            function mass(mk, w)
+                rock = findall(<(3), mk.tm)
+                return sum(
+                    rho_s[mk.tm[m]] * (1 - mk.phi_d[m]) * w(mk.xm[m] - xc, mk.ym[m] - yc)
+                    for m in rock
+                )
+            end
+            w3(dx, dy) = 2pi * hypot(dx, dy)
+            w2(dx, dy) = 1.0
+            @test count(<(3), st.markers.tm) == count(<(3), st0.markers.tm)
+            (;
+                m3=mass(st.markers, w3) / mass(st0.markers, w3),
+                m2=mass(st.markers, w2) / mass(st0.markers, w2),
+            )
+        end
+        @test isapprox(ratios[1].m3, 1.366; rtol=2e-3)
+        @test isapprox(ratios[2].m2, 1.459; rtol=2e-3)
+        # The centre sinters most, so the 2-D mass rises more; both stay below the gain
+        # 1 / (1 - 0.43) of sintering the whole body from its setup mean phi_d 0.43 to 0
+        @test all(r -> 1.0 < r.m3 < r.m2 < 1 / (1 - 0.43), ratios)
     end
 
     @testset "Restart from a step-4 checkpoint repeats an 8-step sintering run exactly" begin

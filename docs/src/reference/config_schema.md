@@ -104,7 +104,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `betafluid` | `Float64` | `4.0e-10` | $\text{Pa}^{-1}$ | Pore fluid compressibility | $\ge 0$ |
 | `phimin` | `Float64` | `1.0e-4` | - | Minimum porosity floor threshold; the water porosity of rock with `porosity.model = henke2012` | $0 < \phi_{\text{min}} < \phi_{\text{max}}$; at most `1e-3` with `porosity.model = henke2012` |
 | `phimax` | `Float64` | `0.9999` | - | Maximum porosity ceiling threshold | $\phi_{\text{min}} < \phi_{\text{max}} < 1$ |
-| `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false` |
+| `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false`; `false` with `porosity.model = henke2012` |
 | `kappa_frac` | `Float64` | `1.0e+3` | - | Dimensionless hydrofracture permeability multiplier | $\ge 0$ |
 | `gamma_frac` | `Float64` | `1.0` | - | Power-law exponent for overpressure scaling | $> 0$ |
 | `k_frac_max` | `Float64` | `1.0e-9` | $\text{m}^2$ | Maximum fractured permeability ceiling | $> 0$ |
@@ -786,7 +786,7 @@ n = 1.5
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking and the volatile ice mixture off, and `poroelasticity.phimin <= 1e-3`; a restart cannot change it | `:none`, `:henke2012` |
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, and `0 < poroelasticity.phimin <= 1e-3`; a restart cannot change it | `:none`, `:henke2012` |
 | `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
 | `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
 | `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |
