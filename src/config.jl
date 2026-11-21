@@ -2826,23 +2826,21 @@ function validate_config(cfg::SimulationConfig)
 end
 
 """
-Validate the `[porosity]` section and the processes that `model = :henke2012` excludes.
+Validate the fields of a `PorosityConfig` on their own, without the rest of the
+configuration. `_validate_porosity_config` and `advance_marker_dry_porosity!` call it.
 
 # Arguments
-- `cfg`: simulation configuration.
+- `p`: porosity configuration.
 
 # Returns
 - `nothing`
 
 # Throws
-- `ArgumentError`: unknown model, a field outside its domain, or henke2012 together with
-  reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
-  kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
-  partitioning, the redox state with its metallic iron), accessory phase tracking, a
-  volatile ice mixture or a hydrous rock (`materials.XWsolidm_init[1:2]` not 0).
+- `ArgumentError`: unknown model, `phi_init` outside [0, 1], `phi_cap` outside (0, 1),
+  `grain_radius`, `T_sinter` or `n` not positive and finite, `A` or `E_act` negative or
+  not finite.
 """
-function _validate_porosity_config(cfg::SimulationConfig)
-    p = cfg.porosity
+function _validate_porosity_fields(p::PorosityConfig)
     p.model in (:none, :henke2012) ||
         throw(ArgumentError("porosity.model must be :none or :henke2012, got $(p.model)"))
     @check_unit_interval p.phi_init "porosity.phi_init"
@@ -2853,6 +2851,30 @@ function _validate_porosity_config(cfg::SimulationConfig)
     @check_nonneg_finite p.A "porosity.A"
     @check_nonneg_finite p.E_act "porosity.E_act"
     @check_positive_finite p.n "porosity.n"
+    return nothing
+end
+
+"""
+Validate the `[porosity]` section and the processes that `model = :henke2012` excludes.
+
+# Arguments
+- `cfg`: simulation configuration.
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: unknown model, a field outside its domain
+  (`_validate_porosity_fields`), or henke2012 together with
+  reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
+  kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
+  partitioning, the redox state with its metallic iron), accessory phase tracking, a
+  volatile ice mixture, a hydrous rock (`materials.XWsolidm_init[1:2]` not 0) or
+  `poroelasticity.phimin` above `1e-3`.
+"""
+function _validate_porosity_config(cfg::SimulationConfig)
+    p = cfg.porosity
+    _validate_porosity_fields(p)
     p.model === :henke2012 || return nothing
     for (name, on) in (
         ("reaction.active", cfg.reaction.active),
@@ -2885,6 +2907,14 @@ function _validate_porosity_config(cfg::SimulationConfig)
     (iszero(xw[1]) && iszero(xw[2])) || throw(
         ArgumentError(
             "porosity.model = henke2012 requires dry rock, materials.XWsolidm_init = [0, 0, NaN]; got $(xw[1]), $(xw[2])",
+        ),
+    )
+    # Rock keeps the water porosity phimin, which the adiabatic heating, the bulk
+    # viscosity and the Darcy terms still use; at most 1e-3 keeps rock dense there
+    phimin = cfg.poroelasticity.phimin
+    phimin <= 1.0e-3 || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires poroelasticity.phimin <= 1e-3; got $phimin",
         ),
     )
     return nothing

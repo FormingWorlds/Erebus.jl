@@ -150,5 +150,6 @@ When you resume from a checkpoint:
 - Configuration comparison verifies configuration compatibility:
   - Differences in `[output]` settings, time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`), `solver.seed` and the plastic loop acceleration settings (`solver.anderson_depth`, `solver.plastic_stall_passes`) are permitted.
   - Differences in other physics or solver fields raise a typed `CheckpointError` unless `--force-restart-config` is provided.
+  - A different `porosity.model` raises a `CheckpointError` also with `--force-restart-config`, because the dry porosity marker arrays of `henke2012` cannot be added or dropped on restart.
 - The checkpoint stores the configuration as a `SimulationConfig` struct, so a checkpoint written by a version with different configuration fields (for example, one without `time.dxymax_fluid`) raises a `CheckpointError` on load.
 

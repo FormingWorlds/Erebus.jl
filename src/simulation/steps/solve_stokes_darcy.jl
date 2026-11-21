@@ -468,6 +468,11 @@ end
 Postprocess hydromechanical solution, adapt timestep, and check plastic convergence.
 
 $(SIGNATURES)
+
+Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the
+compaction rate `APHI` is still computed on the grid. The time step then has no `aphimax`
+and no fluid heat limit, and the returned `aphimax` (telemetry `dt_aphimax_max`) is 0,
+because neither changes a marker.
 """
 function postprocess_hydromechanical_solution!(
     state::SimulationState,
@@ -507,6 +512,11 @@ function postprocess_hydromechanical_solution!(
     fluid_heat_rate = fluid_advection_inflow_rate(
         g.tk1, g.qxD, g.qyD, g.RHOCP, fluid_heat_capacity(cfg); coords=coords
     )
+    # Without pore water (henke2012) APHI and the pore-water heat change no marker, so
+    # neither limits the time step
+    pore_water = has_pore_water(state.markers)
+    pore_water || (aphimax = 0.0)
+    pore_water || (fluid_heat_rate = 0.0)
 
     dt_solve = state.dt
     maxDTcurrent = maximum(abs, g.DT0)
@@ -617,6 +627,7 @@ function postprocess_hydromechanical_solution!(
         S_vent=cfg.venting.active ? g.S_vent_grid : nothing,
     )
     symmetrize_p_node_observables!(g.SXX, g.APHI, g.PHI, g.pr, g.pf, g.ps)
+    pore_water || (aphimax = 0.0)
 
     adjustment_ok = compute_nodal_adjustment!(
         g.ETA,

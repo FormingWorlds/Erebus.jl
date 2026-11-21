@@ -1057,8 +1057,13 @@ end
 Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
 Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::SimulationConfig)`.
 
+`force_restart_config = true` allows a restart configuration that differs from the
+saved one, except in `grid.*`, `geometry.*` and `porosity.model`.
+
 # Throws
-- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration
+  mismatch; a different `grid.*`, `geometry.*` or `porosity.model` also with
+  `force_restart_config = true`.
 - `ArgumentError` if the `[porosity]` section of the effective configuration is invalid.
 """
 function load_simulation_state(
@@ -1111,6 +1116,16 @@ function load_simulation_state(
                         ". Grid dimensions and geometry cannot be changed on restart. " *
                         "A checkpoint of a 2-D disk needs geometry.spherical_metric = false " *
                         "and geometry.gravity_mode = \"poisson2d\" in its config.",
+                    ),
+                )
+            end
+            # The dry porosity group exists only with henke2012: no restart adds or drops it
+            if "porosity.model" in diffs
+                throw(
+                    CheckpointError(
+                        "porosity.model cannot change on restart, also not with " *
+                        "--force-restart-config: checkpoint has :$(cfg_saved.porosity.model), " *
+                        "restart config has :$(target_cfg.porosity.model)",
                     ),
                 )
             end

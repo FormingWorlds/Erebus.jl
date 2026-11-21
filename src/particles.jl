@@ -5785,6 +5785,10 @@ sintered.
 
 # Returns
 - Number of markers whose sintering step reached the substep cap.
+
+# Throws
+- `ArgumentError`: a field of `porosity` outside its domain, checked once per call with
+  the checks of the configuration (`_validate_porosity_fields`).
 """
 function advance_marker_dry_porosity!(
     pg::PorosityGroup,
@@ -5798,6 +5802,7 @@ function advance_marker_dry_porosity!(
     psurface::Real,
     porosity::PorosityConfig,
 )
+    _validate_porosity_fields(porosity)
     (; phi_d, phi0, tkm_max, dphi_sinter) = pg
     ncapped = Threads.Atomic{Int}(0)
     @threads :dynamic for m in eachindex(tm)

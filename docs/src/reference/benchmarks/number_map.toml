@@ -394,3 +394,13 @@ test_name = "test_porosity_henke.jl"
 page = "explanations/porosity_sintering.md"
 number = "5 s"
 test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-3"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "factor 3"
+test_name = "test_porosity_henke.jl"

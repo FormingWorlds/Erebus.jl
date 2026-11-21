@@ -217,7 +217,8 @@ $(SIGNATURES)
 # Details
 - `output_path`: Absolute path where to save simulation output files
 - `restart_from`: Optional path to checkpoint JLD2 file to resume from
-- `force_restart_config`: Allow configuration override on restart
+- `force_restart_config`: Allow configuration override on restart (not of `grid.*`,
+  `geometry.*` or `porosity.model`)
 
 # Returns
 - `SimulationState`: Complete simulation state container

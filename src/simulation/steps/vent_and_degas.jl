@@ -138,7 +138,7 @@ function vent_and_degas!(
         redox_props=redox_props,
         w3d_m=w3d_m,
         Xfe_bulk=Xfe_bulk,
-        aphi_active=(!haskey(markers.groups, :porosity)),
+        aphi_active=has_pore_water(markers),
     )
     append!(transfer_log, marker_results.records)
     if haskey(markers.groups, :porosity)

@@ -229,6 +229,22 @@ function dry_porosity(m::MarkerArrays)
     return haskey(m.groups, :porosity) ? m.groups.porosity.phi_d : nothing
 end
 
+"""
+    has_pore_water(m::MarkerArrays) -> Bool
+
+Return `false` when the dry porosity group exists (`porosity.model = :henke2012`), else
+`true`. With the group the pores hold no fluid: the water porosity of rock stays at
+`poroelasticity.phimin`, so the compaction rate `APHI`, its time step limit and the heat
+that pore water carries act on nothing.
+
+# Arguments
+- `m`: marker arrays.
+
+# Returns
+- `Bool`: `true` if the water porosity of rock evolves (model `:none`).
+"""
+has_pore_water(m::MarkerArrays) = !haskey(m.groups, :porosity)
+
 @inline function Base.getproperty(m::MarkerArrays, sym::Symbol)
     if sym === :core
         return getfield(m, :core)
@@ -627,12 +643,13 @@ function init_marker_arrays(
         end
     end
 
-    # Dry porosity group (values are set in the simulation setup)
+    # Dry porosity group (values are set in the simulation setup); phi0 = 1 means no
+    # pressure history, as in push_marker! and resize!
     if cfg.porosity.model === :henke2012
         push!(
             group_pairs,
             :porosity => PorosityGroup(
-                zeros(marknum), zeros(marknum), zeros(marknum), zeros(marknum)
+                zeros(marknum), ones(marknum), zeros(marknum), zeros(marknum)
             ),
         )
     end

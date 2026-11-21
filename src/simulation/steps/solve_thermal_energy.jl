@@ -328,10 +328,15 @@ function solve_thermal_energy!(
             nothing
         end
 
-    # Pore fluid advection heat, from the Darcy fluxes of this iteration.
-    compute_fluid_advection_heat!(
-        g.Q_fluid_grid, g.tk1, g.qxD, g.qyD, fluid_heat_capacity(cfg); coords=coords
-    )
+    # Pore fluid advection heat, from the Darcy fluxes of this iteration; 0 without
+    # pore water (henke2012)
+    if has_pore_water(state.markers)
+        compute_fluid_advection_heat!(
+            g.Q_fluid_grid, g.tk1, g.qxD, g.qyD, fluid_heat_capacity(cfg); coords=coords
+        )
+    else
+        fill!(g.Q_fluid_grid, 0.0)
+    end
 
     LT = assemble_thermal_lse!(
         g.tk1,

@@ -24,6 +24,12 @@ With `model = "henke2012"` the pores hold no fluid.
 The water porosity of a rock marker stays at its floor `phimin`.
 `phimin` is the smallest water porosity of the section `[poroelasticity]`, $10^{-4}$ by default.
 The compaction rate of the Stokes-Darcy solve does not change the water porosity.
+It therefore does not limit the time step either.
+The heat that pore water carries through the grid is 0.
+The configuration check rejects `phimin` above $10^{-3}$ with this model.
+The adiabatic heating and the compaction and Darcy terms of the Stokes-Darcy solve still use the water porosity of rock.
+In the adiabatic heating and the compaction term the bound keeps the solid fraction $1 - \phi$ within 0.1 % of 1.
+The columns `phi_max` and `phi_mean` of `telemetry.csv` give the maximum and the mean of $\phi_d$ over the rock markers, not the water porosity.
 The processes that need pore water, melt or metal are therefore not allowed together with this model.
 The configuration check rejects `henke2012` when reaction, venting, hydrothermal convection, accretion or telescoping is on.
 It also rejects volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, iron heating (`hr_fe`) and metal partitioning.
@@ -254,7 +260,7 @@ The step runs where the marker temperature becomes the new temperature of the st
 
 ## What does the model leave out?
 
-The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating, the compaction work, a reset on melting and the sintered surface porosity.
+The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating and the Stokes-Darcy solve, the compaction work, a reset on melting and the sintered surface porosity.
 Its grid must also resolve the surface layer.
 
 The materials of `Erebus.jl` are fixed constants.
@@ -266,6 +272,12 @@ It weights the solid term with $1 - \phi$, where $\phi$ is the water porosity of
 In this model that porosity stays at `phimin`, so the term counts the rock as dense.
 At the centre of the test body of 50 km, at the start, $1 - \phi_d = 0.58$.
 The adiabatic heating there is therefore 1.72 times the value with $1 - \phi_d$.
+
+The Stokes-Darcy solve does not use the dry porosity either.
+It keeps the water porosity `phimin` in rock, with its bulk viscosity and its Darcy flow.
+Their terms add to the shear heating, but they do not change $\phi_d$.
+The heat that this pore water would carry is set to 0, and its compaction rate does not limit the time step.
+In a 4-step test run of a 200 km body at 900 K the whole shear heating stays below 1e-6 $\text{W/m}^3$.
 
 The energy equation has no term for the work of compaction.
 Henke et al. (2012, Eqs. 20 to 23) add 2 heat sources that compaction causes.
@@ -325,6 +337,8 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     It uses 8 marker states and a relative tolerance of 1e-6.
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
     Testsets of `Configuration section [porosity]` check the processes that `henke2012` excludes, also at `init_simulation`.
+    They check that `phimin` above 1e-3 is rejected with `henke2012`.
+    They check that the marker step rejects a field of a directly built `PorosityConfig` outside its domain, before it changes a marker.
     Testsets of `Dry porosity marker group and step` check the marker arrays and the setup pressure against the uniform-density limit.
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
     They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
@@ -335,6 +349,12 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     A 10-step run checks that the sintering decrease equals $\phi_0 - \phi_d$ to 1e-12 on every rock marker.
     They check the step in `vent_and_degas!` over 2 steps, the substep cap, the rock properties at every call site, and the marker lifecycle.
     A 2-step run checks that the Stokes pressure sinters hot rock.
+    The marker step uses the `T_sinter`, `grain_radius`, `E_act` and `n` of the configuration.
+    The setup profile and the radiative surface faces use `phi_cap` where it lies below `phi_init`.
+    A 4-step run of a 200 km body at 900 K keeps the time step within a factor 3 of model none and the shear heating below 1e-6 $\text{W/m}^3$.
+    The same run checks that the pore-water heat is 0 and that the telemetry porosity columns give $\phi_d$.
+    A restart that changes `porosity.model` is refused, also with `force_restart_config = true`.
+    A restart from the checkpoint of step 4 repeats an 8-step run bit for bit.
 
     Command: `julia --project -t 2 -e 'using Test; include("test/test_porosity_henke.jl")'`
     With 2 threads the test also runs the threaded marker-to-grid mapping.
