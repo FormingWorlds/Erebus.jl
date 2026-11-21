@@ -27,6 +27,7 @@ The compaction rate of the Stokes-Darcy solve does not change the water porosity
 The processes that need pore water, melt or metal are therefore not allowed together with this model.
 The configuration check rejects `henke2012` when reaction, venting, hydrothermal convection, accretion or telescoping is on.
 It also rejects volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, iron heating (`hr_fe`) and metal partitioning.
+It rejects the tracking of accessory metal phases (`phase_tracking`) and the volatile ice mixture (`volatile_mixture`) too.
 The rock must be dry: `materials.XWsolidm_init = [0.0, 0.0, nan]`.
 
 ---
@@ -47,7 +48,7 @@ Here $P$ is the highest pressure the powder has felt, in bar.
 The model computes pressures in Pa and multiplies them by $10^{-5}$ bar/Pa for this law.
 Lichtenberg et al. (2016a) use the same law as their Eq. 10.
 The law gives $\phi_H = 0.88$ at $P = 0$ and $\phi_H = 0.65$ at $P = P_0$.
-At $P = 10\,P_0 = 1.3$ bar it gives $\phi_H = 0.4286013$, close to the limit 0.42 of a dense random packing.
+At $P = 10\,P_0 = 1.3$ bar it gives $\phi_H = 0.4286012$, close to the limit 0.42 of a dense random packing.
 
 The porosity of a rock before sintering is the smallest of 3 values.
 These are the initial porosity $\phi_{init}$ (`phi_init`), the pressing law $\phi_H(P)$, and an upper cap $\phi_{cap} = 0.85$ (`phi_cap`):
@@ -56,10 +57,17 @@ $$\phi_0 = \min\left(\phi_{init},\ \phi_H(P),\ \phi_{cap}\right).$$
 
 The cap of 0.85 comes from the i2elvis code that Lichtenberg et al. (2016a) ran.
 Each marker stores its $\phi_0$.
-Each time step replaces it by the smaller of the stored value and $\phi_0$ at the present pressure.
+Until the marker starts to sinter, each time step replaces it by the smaller of the stored value and $\phi_0$ at the present pressure.
 The stored $\phi_0$ therefore belongs to the highest pressure the marker has felt, because $\phi_H$ falls with pressure.
 The step then sets $\phi_d \leftarrow \min(\phi_d, \phi_0)$ at every temperature.
 The porosity therefore never rises when the pressure drops.
+
+Once a marker has sintered, its $\phi_0$ stays fixed and cold pressing stops for it.
+Henke et al. (2012, Eq. 37) define $\phi_0$ through the relative density of the initial packing of the grains.
+In that packing the grains touch at points, before any sintering.
+A later rise of pressure therefore does not change $\phi_0$ and does not shrink the contact faces of sintered grains.
+The porosity lost by sintering then equals $\phi_0 - \phi_d$ on every marker.
+The i2elvis code differs here: it computes $\phi_0$ from the current pressure in every time step.
 
 ---
 
@@ -72,7 +80,7 @@ This process is hot sintering.
 
 ### The grain geometry
 
-Henke et al. (2012) describe the rock as equal spheres of initial radius $R_0$ in a regular packing.
+Henke et al. (2012) describe the rock as equal spheres of initial radius $R_0$, in m, in a regular packing.
 Each sphere touches 8 neighbours.
 Sintering flattens each contact into a circular face of radius $a$, in m.
 The grain keeps its volume, so its radius $R$, in m, grows above $R_0$.
@@ -141,7 +149,8 @@ $$\phi^{k+1} = \phi^{k} - h\, r(\phi^{k+1}),$$
 where $r \ge 0$ is the rate magnitude from the law above, in 1/s.
 A bisection finds $\phi^{k+1}$ in $\left(0, \phi^k\right]$.
 The substep length adapts so that each substep lowers $\phi$ by at most 0.01.
-At most 1000 substeps run per marker and time step; the last one then takes the remaining time, and the run reports the count.
+At most 1000 substeps run per marker and time step.
+The last one then takes the remaining time, and the run reports the number of markers that reached this cap.
 Let $\phi_{start}$ be the porosity at the start of the time step.
 The step returns $\phi_{start}$ unchanged when $P = 0$, $\phi_{start} = 0$ or the time step is 0.
 
@@ -181,19 +190,19 @@ $$\rho = \rho_s (1 - \phi_d), \qquad \rho c_p = (\rho c_p)_s (1 - \phi_d), \qqua
 Here $\rho$ is the density in $\text{kg/m}^3$, $\rho c_p$ the volumetric heat capacity in $\text{J}/(\text{m}^3\,\text{K})$, and $H$ the radiogenic heating in $\text{W/m}^3$.
 Lichtenberg et al. (2016a) use the same density law as their Eq. 11.
 
-The thermal conductivity $k$, in W/(m K), follows the 3-branch form of Lichtenberg et al. (2016a, Eq. 12):
+The thermal conductivity of the porous rock, $k_{por}$ in W/(m K), follows the 3-branch form of Lichtenberg et al. (2016a, Eq. 12):
 
 $$k_{por} = \begin{cases} k_1 & \phi < 0.2 \\ \left(k_1^4 + k_2^4\right)^{1/4} & 0.2 \le \phi \le 0.4 \\ k_2 & \phi > 0.4 \end{cases} \qquad k_1 = k\, e^{-\phi/0.08}, \quad k_2 = k\, e^{-1.2 - \phi/0.167}.$$
 
-Here $k$ is the conductivity of the dense solid.
+Here $k$ is the conductivity of the dense solid, also in W/(m K).
 A floor of $10^{-3}$ W/(m K) applies.
 Henke et al. (2012) fit $k_1$ and $k_2$ to meteorite and powder data (their Eqs. 28 and 29).
 Their Eq. 30 joins the two fits into 1 smooth function for all porosities.
 The 3-branch form instead jumps at $\phi = 0.2$, by about 26 %, and very slightly at $\phi = 0.4$.
 The sign of the constant $-1.2$ follows Lichtenberg et al. (2016a) and the i2elvis code.
 
-These values replace the pore-fluid mixture of the other models at every place that sets rock properties.
-These places are the marker-to-grid mapping, the sub-grid temperature diffusion and the radiogenic heating.
+These values replace the pore-fluid mixture of the other models for the density, the heat capacity, the conductivity and the radiogenic heating of rock.
+The code sets these 4 values in the marker-to-grid mapping, the sub-grid temperature diffusion and the radiogenic heating.
 The radiative surface boundary uses $k_{por}$ too, at the porosity $\phi_0(P = 0)$ of unpressed powder.
 
 ---
@@ -210,9 +219,14 @@ The density $\rho = \rho_s (1 - \phi_0(P))$ depends on the pressure, so density 
 The porosity law takes the pressure in bar, $10^{-5}$ times the pressure in Pa.
 
 The gravity is that of the gravity mode of the Stokes solve, set by `gravity_mode`.
-For `:enclosed_mass` it is the gravity of a sphere, $g = G M(r)/r^2$, with $M(r)$ the mass inside radius $r$ and $G$ the gravitational constant.
-For `:poisson2d` the Stokes solve takes $g$ from the 2-D Poisson equation $\nabla^2 \Phi = (8/3)\pi G \rho$ for the potential $\Phi$.
-The profile uses the same source term, so $g = (8/3)\pi G\, m(r)/r$, with $m(r) = \int_0^r \rho\, r'\, dr'$.
+For `:enclosed_mass` it is the gravity of a sphere, $g = G M(r)/r^2$.
+Here $M(r)$ is the mass inside radius $r$, in kg.
+$G = 6.674 \times 10^{-11}$ $\text{m}^3\,\text{kg}^{-1}\,\text{s}^{-2}$ is the gravitational constant.
+For `:poisson2d` the Stokes solve takes $g$ from the 2-D Poisson equation $\nabla^2 \Phi = (8/3)\pi G \rho$.
+Here $\Phi$ is the gravitational potential, in J/kg.
+The profile uses the same source term, so $g = (8/3)\pi G\, m(r)/r$.
+Here $m(r) = \int_0^r \rho\, r'\, dr'$, in kg/m, integrates over the radius $r'$, in m, from the centre to $r$.
+The mass per unit length of a cylinder of radius $r$ is $2\pi\, m(r)$.
 A body of uniform density then has the central pressure $(2/3)\pi G \rho^2 R_p^2$ in both modes.
 At the first step the centre pressure of the profile and of the Stokes solve agree to within 5 %.
 The first cold pressing uses this profile.
@@ -226,18 +240,30 @@ The step runs where the marker temperature becomes the new temperature of the st
 
 ## What does the model leave out?
 
-The short answer: it leaves out some density terms, a reset on melting and the sintered surface porosity, and its grid must resolve the surface layer.
+The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating, the compaction work, a reset on melting and the sintered surface porosity, and its grid must resolve the surface layer.
 
 The materials of `Erebus.jl` are fixed constants.
 The dense rock density is therefore 3300 $\text{kg/m}^3$ for dry rock (`XWsolidm_init = 0`), not the 3500 $\text{kg/m}^3$ of Lichtenberg et al. (2016a).
 The temperature and pressure terms of the density in the i2elvis code are not included.
+
+The adiabatic heating does not use the dry porosity $\phi_d$.
+It weights the solid term with $1 - \phi$, where $\phi$ is the water porosity of the grid.
+In this model that porosity stays at `phimin`, so the term counts the rock as dense.
+At the centre of the test body of 50 km, at the start, $1 - \phi_d = 0.58$.
+The adiabatic heating there is therefore 1.72 times the value with $1 - \phi_d$.
+
+The energy equation has no term for the work of compaction.
+Henke et al. (2012, Eqs. 20 to 23) add 2 heat sources that compaction causes.
+These are the compressional work and the gravitational energy that a shrinking body releases.
+The heat sources of `Erebus.jl` are radiogenic, adiabatic, shear and latent heating, and none of them contains these 2 terms.
 
 For $X \le 1/3$ the contact faces of the geometry overlap and the cubic has no root.
 This happens only for $\phi_0 \ge 2/3$ once $\phi \le 3\phi_0 - 2$.
 `Erebus.jl` then holds the geometry at $X = 1/3 + 10^{-12}$.
 The rate still falls to 0 at $\phi = 0$ through the factor $F(\phi)$.
 
-Molten rock keeps its dry porosity; the model does not reset it on melting.
+Molten rock keeps its dry porosity.
+The model does not reset it on melting.
 
 The step needs the Stokes pressure.
 A run that skips the Stokes solve keeps the porosity of the first cold pressing.
@@ -250,11 +276,12 @@ The Stokes pressure lives on the grid, with cells of width $\Delta x$, in m.
 Near the surface the step interpolates the pressure between nodes inside the body and nodes in the sticky air.
 The top marker layer then feels a pressure of the order of the pressure at depth $\Delta x$.
 If $\Delta x$ exceeds the depth where $P$ reaches $P_0 = 0.13$ bar, the first step cold presses this layer below the profile value.
+In Pa, $P_0 = 1.3 \times 10^4$ Pa.
 A grid resolves the uncompacted surface layer only if
 
 $$\Delta x < \frac{P_0}{\rho\, g},$$
 
-with $\rho$ the density and $g$ the gravity at the surface.
+with $P_0$ in Pa, $\rho$ the density in $\text{kg/m}^3$ and $g$ the gravity at the surface in $\text{m/s}^2$.
 For $\phi_{init} = 0.75$ the surface density is $3300 \times 0.25 = 825$ $\text{kg/m}^3$.
 With `:enclosed_mass` gravity, $P$ reaches $P_0$ at a depth of 1667 m for $R_p = 20$ km and 564 m for $R_p = 50$ km.
 The test grids of 17 by 17 nodes have $\Delta x = 8.75$ km for $R_p = 50$ km and do not resolve this layer.
@@ -282,7 +309,11 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     Testsets of `Configuration section [porosity]` check the processes that `henke2012` excludes, also at `init_simulation`.
     Testsets of `Dry porosity marker group and step` check the marker arrays and the setup pressure against the uniform-density limit.
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
-    They check the memory of $\phi_0$, the step in `vent_and_degas!` over 2 steps, the rock properties at every call site, and the marker lifecycle.
+    They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
+    They check the memory of $\phi_0$ and its freeze at the onset of sintering.
+    A 10-step run checks that the sintering decrease equals $\phi_0 - \phi_d$ to 1e-12 on every rock marker.
+    They check the step in `vent_and_degas!` over 2 steps, the substep cap, the rock properties at every call site, and the marker lifecycle.
     A 2-step run checks that the Stokes pressure sinters hot rock.
 
-    Command: `julia --project -e 'using Test; include("test/test_porosity_henke.jl")'`
+    Command: `julia --project -t 2 -e 'using Test; include("test/test_porosity_henke.jl")'`
+    With 2 threads the test also runs the threaded marker-to-grid mapping.

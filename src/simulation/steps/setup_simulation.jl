@@ -745,10 +745,10 @@ Integrates dP/dr = -ρ(r) g(r) inward from P(R_p) = 0, with ρ = ρ_s (1 - φ_0(
 φ_0 = min(φ_init, φ_H(P), φ_cap) and ρ_s = `materials.rhosolidm[2]`. The gravity is
 that of the enclosed mass of a sphere (`gravity_mode = :enclosed_mass`) or that of the
 2-D Poisson equation ∇²Φ = (8/3) π G ρ of the Stokes solve (`:poisson2d`), which gives
-g = (8/3) π G m(r) / r for the mass per length m(r) = ∫ ρ r' dr'. The density and the
-pressure are iterated to a fixed point. Each cell holds the mean density of its 2 nodes,
-so a uniform density gives the analytic profile P = (2/3) π G ρ² (R_p² - r²) in both
-modes.
+g = (8/3) π G m(r) / r with m(r) = ∫_0^r ρ r' dr' [kg/m], so 2π m(r) is the mass per
+unit length of the cylinder of radius r. The density and the pressure are iterated to a
+fixed point. Each cell holds the mean density of its 2 nodes, so a uniform density gives
+the analytic profile P = (2/3) π G ρ² (R_p² - r²) in both modes.
 
 # Arguments
 - `cfg`: simulation configuration (`geometry`, `materials`, `porosity`).
@@ -758,13 +758,20 @@ modes.
 - `(r, P)`: radii [m] and pressures [Pa] at the nodes.
 
 # Throws
-- `ArgumentError`: `nr < 2`.
+- `ArgumentError`: `nr < 2`, or `geometry.gravity_mode` not `:enclosed_mass` or
+  `:poisson2d`.
 """
 function dry_hydrostatic_profile(cfg::SimulationConfig; nr::Int=4001)
     nr >= 2 || throw(ArgumentError("nr must be >= 2, got $nr"))
+    mode = cfg.geometry.gravity_mode
+    mode in (:enclosed_mass, :poisson2d) || throw(
+        ArgumentError(
+            "geometry.gravity_mode must be :enclosed_mass or :poisson2d, got :$mode"
+        ),
+    )
     pc = cfg.porosity
     rho_s = cfg.materials.rhosolidm[2]
-    w = cfg.geometry.gravity_mode === :enclosed_mass ? 2 : 1
+    w = mode === :enclosed_mass ? 2 : 1
     # 4 pi G for the sphere; (8/3) pi G, the source of the 2-D Poisson gravity solve
     g_coeff = w == 2 ? 4.0 * pi * G_GRAV : (8.0 / 3.0) * pi * G_GRAV
     r = collect(range(0.0, cfg.geometry.rplanet; length=nr))
@@ -813,8 +820,9 @@ nothing when the group is absent.
 # Details
 
 Rock markers get the water porosity `phim = phinewm = phimin` and the dry porosity
-φ_d = φ_0 = min(φ_init, φ_H(P), φ_cap) at the pressure of `dry_hydrostatic_profile`
-(first cold pressing); `phi0 = φ_0`, `tkm_max = tkm` and `dphi_sinter = 0`. Sticky-air
+φ_d = φ_0 = min(φ_init, φ_H(P), φ_cap) at the pressure P of `dry_hydrostatic_profile`
+(first cold pressing); `phi0 = φ_0`, `tkm_max = tkm` and `dphi_sinter = 0`. Their initial
+pressure `pfm0`, the melting pressure of the first step, is `psurface + P`. Sticky-air
 markers get φ_d = φ_0 = 0.
 
 # Arguments
@@ -841,8 +849,9 @@ function init_dry_porosity_markers!(
             core.phim[m] = phimin
             core.phinewm[m] = phimin
             rm = hypot(core.xm[m] - xcenter, core.ym[m] - ycenter)
-            P_bar = _interp_profile(r_prof, P_prof, rm) * 1.0e-5
-            pg.phi0[m] = porosity_phi0(P_bar, pc.phi_init; phi_cap=pc.phi_cap)
+            P_pa = _interp_profile(r_prof, P_prof, rm)
+            core.pfm0[m] = cfg.geometry.psurface + P_pa
+            pg.phi0[m] = porosity_phi0(P_pa * 1.0e-5, pc.phi_init; phi_cap=pc.phi_cap)
         else
             pg.phi0[m] = 0.0
         end

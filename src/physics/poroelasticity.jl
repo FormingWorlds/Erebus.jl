@@ -441,7 +441,8 @@ Porosity of a granular silicate powder after cold isostatic pressing.
 
 Eq. 15 of Henke et al. (2012), the laboratory fit of Güttler et al. (2009, in Henke et
 al. 2012), with the relative density D = 1 - φ, as used by Lichtenberg et al. (2016a)
-Eq. 10. The marker step applies it to the highest pressure the marker has felt.
+Eq. 10. The marker step applies it to the highest pressure the marker has felt before it
+starts to sinter.
 
 # Arguments
 
@@ -731,7 +732,8 @@ reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain
+    - DomainError: an argument outside its physical domain, or a rate so large that
+      the substep falls to 0
     - ArgumentError: `max_substeps` < 1
 """
 function sinter_porosity_step(
@@ -767,6 +769,7 @@ function sinter_porosity_step(
         dphi = phi - phi_try
         if !last && dphi > dphi_max
             h *= max(0.1, 0.9 * dphi_max / dphi)
+            h > 0.0 || throw(DomainError(A, "sintering rate overflows: the substep is 0"))
             continue
         end
         phi = phi_try
@@ -819,19 +822,27 @@ function k_porous(k::Real, phi::Real)
 end
 
 """
-    dry_porosity_update(phi_d, P_bar, T, dt, pcfg::PorosityConfig; phi0_prev=1.0)
+    dry_porosity_update(phi_d, P_bar, T, dt, pcfg::PorosityConfig; phi0_prev=1.0,
+                        sintered=false)
 
-Advance the dry porosity of one rock marker over one time step: cold pressing at every
-temperature, then hot sintering for `T >= pcfg.T_sinter`.
+Advance the dry porosity of one rock marker over one time step: cold pressing until the
+marker starts to sinter, then hot sintering for `T >= pcfg.T_sinter`.
 
 # Details
 
-The porosity before sintering is φ_0 = min(φ_0,prev, φ_init, φ_H(P), φ_cap). With
-`phi0_prev` the φ_0 of the previous step, φ_0 belongs to the highest pressure the marker
-has felt, because φ_H decreases with P; a pressure drop leaves it unchanged. Cold
-pressing sets φ <- min(φ, φ_0), so φ <= φ_0 before sintering starts. Sintering then
-lowers φ with `sinter_porosity_step`. Porosity never increases: a marker that cools keeps
-its sintered porosity.
+Before the onset of sintering (`sintered = false`), the porosity before sintering is
+φ_0 = min(φ_0,prev, φ_init, φ_H(P), φ_cap). With `phi0_prev` the φ_0 of the previous
+step, φ_0 belongs to the highest pressure the marker has felt, because φ_H decreases with
+P; a pressure drop leaves it unchanged. Cold pressing sets φ <- min(φ, φ_0), so φ <= φ_0
+before sintering starts.
+
+Once the marker has sintered (`sintered = true`), φ_0 stays at `phi0_prev` and cold
+pressing stops: φ_0 is the porosity of the initial packing of Henke et al. (2012, Eq. 37),
+at which the contact faces have zero radius. The cumulative sintering decrease then equals
+φ_0 - φ. The i2elvis code instead recomputes φ_0 from the current pressure every step.
+
+Sintering lowers φ with `sinter_porosity_step`. Porosity never increases: a marker that
+cools keeps its sintered porosity.
 
 # Arguments
 
@@ -841,6 +852,7 @@ its sintered porosity.
     - dt: time step [s], >= 0
     - pcfg: `PorosityConfig` with φ_init, φ_cap, R0, T_sinter, A, E_act, n
     - phi0_prev: φ_0 of the previous step [-], in [0, 1]; 1 means no pressure history
+    - sintered: `true` once an earlier step has lowered φ by sintering
 
 # Returns
 
@@ -850,17 +862,31 @@ its sintered porosity.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain
+    - DomainError: an argument outside its physical domain, or `sintered` with
+      `phi_d > phi0_prev`
 """
 function dry_porosity_update(
-    phi_d::Real, P_bar::Real, T::Real, dt::Real, pcfg::PorosityConfig; phi0_prev::Real=1.0
+    phi_d::Real,
+    P_bar::Real,
+    T::Real,
+    dt::Real,
+    pcfg::PorosityConfig;
+    phi0_prev::Real=1.0,
+    sintered::Bool=false,
 )
     require_unit_interval(phi_d, "dry porosity phi_d")
     require_unit_interval(phi0_prev, "porosity before sintering phi0_prev")
     require_positive_finite(T, "temperature T")
-    phi_0 = min(
-        Float64(phi0_prev), porosity_phi0(P_bar, pcfg.phi_init; phi_cap=pcfg.phi_cap)
-    )
+    if sintered
+        phi_d <= phi0_prev ||
+            throw(DomainError(phi_d, "a sintered marker needs phi_d <= phi0_prev"))
+        require_nonneg_finite(P_bar, "pressure P_bar")
+        phi_0 = Float64(phi0_prev)
+    else
+        phi_0 = min(
+            Float64(phi0_prev), porosity_phi0(P_bar, pcfg.phi_init; phi_cap=pcfg.phi_cap)
+        )
+    end
     phi_p = min(Float64(phi_d), phi_0)
     T >= pcfg.T_sinter || return (phi=phi_p, phi0=phi_0, dphi_sinter=0.0, capped=false)
     phi_s, _, capped = sinter_porosity_step(

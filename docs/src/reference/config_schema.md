@@ -786,7 +786,7 @@ n = 1.5
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe` and metal partitioning off | `:none`, `:henke2012` |
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, phase tracking and the volatile ice mixture off | `:none`, `:henke2012` |
 | `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
 | `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
 | `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |

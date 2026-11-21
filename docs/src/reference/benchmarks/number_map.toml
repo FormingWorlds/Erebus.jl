@@ -297,7 +297,7 @@ test_name = "test_validation_spherical_momentum.jl"
 
 [[entry]]
 page = "explanations/porosity_sintering.md"
-number = "0.4286013"
+number = "0.4286012"
 test_name = "test_porosity_henke.jl"
 
 [[entry]]
@@ -373,4 +373,19 @@ test_name = "test_porosity_henke.jl"
 [[entry]]
 page = "explanations/porosity_sintering.md"
 number = "1e-6"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "5 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.58"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.72"
 test_name = "test_porosity_henke.jl"

@@ -5766,8 +5766,9 @@ Henke et al. (2012): cold pressing, then hot sintering (`dry_porosity_update`).
 The pressure of a marker is the total pressure `pr` interpolated from the P nodes, minus
 the surface anchor `psurface`, clipped at 0 and converted from Pa to bar. The marker
 temperature is `tkm` after the update of the step (T^{n+1}). `phi0` keeps the porosity
-before sintering at the highest pressure felt, `tkm_max` the highest marker temperature;
-`dphi_sinter` adds the decrease by sintering.
+before sintering at the highest pressure felt and stays fixed once `dphi_sinter > 0`;
+`tkm_max` keeps the highest marker temperature; `dphi_sinter` adds the decrease by
+sintering, so it equals `phi0 - phi_d` for a marker pressed only before it sintered.
 
 # Arguments
 - `pg`: `PorosityGroup` (`phi_d`, `phi0`, `tkm_max`, `dphi_sinter`), updated in place.
@@ -5812,7 +5813,15 @@ function advance_marker_dry_porosity!(
             coords.imax_p,
         )
         P_bar = max(0.0, dot4(grid_vector(i, j, pr), weights) - psurface) * 1.0e-5
-        u = dry_porosity_update(phi_d[m], P_bar, tkm[m], dt, porosity; phi0_prev=phi0[m])
+        u = dry_porosity_update(
+            phi_d[m],
+            P_bar,
+            tkm[m],
+            dt,
+            porosity;
+            phi0_prev=phi0[m],
+            sintered=dphi_sinter[m] > 0.0,
+        )
         @inbounds phi_d[m] = u.phi
         @inbounds phi0[m] = u.phi0
         @inbounds dphi_sinter[m] += u.dphi_sinter

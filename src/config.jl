@@ -2838,7 +2838,8 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
 - `ArgumentError`: unknown model, a field outside its domain, or henke2012 together with
   reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
   kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
-  partitioning) or a hydrous rock (`materials.XWsolidm_init[1:2]` not 0).
+  partitioning), accessory phase tracking, a volatile ice mixture or a hydrous rock
+  (`materials.XWsolidm_init[1:2]` not 0).
 """
 function _validate_porosity_config(cfg::SimulationConfig)
     p = cfg.porosity
@@ -2870,6 +2871,8 @@ function _validate_porosity_config(cfg::SimulationConfig)
         ("coreformation.settling_active", cfg.coreformation.settling_active),
         ("thermodynamics.hr_fe", cfg.thermodynamics.hr_fe),
         ("metal_partition.active", cfg.metal_partition.active),
+        ("phase_tracking.active", cfg.phase_tracking.active),
+        ("volatile_mixture.active", cfg.volatile_mixture.active),
     )
         on && throw(
             ArgumentError(

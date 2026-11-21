@@ -321,6 +321,8 @@ $(SIGNATURES)
     - timesum: total simulation time
     - marknum: number of markers
     - ETA... : simulation state variables (at step 0 in `output_00000.jld2`, `HR` and `hrtotalm` of planet markers are zero while air markers hold `start_hrsolidm[3]`; for per-step saves with `timestep >= 1`, `HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`, except on steps where `replenish!` or `telescope_domain!` remaps markers or grids after the thermal solve)
+    - porosity_props (keyword): `PorosityGroup` of the dry porosity, written when the
+      keyword `markers` is `nothing`; `markers` already carries all of its groups
 
 # Returns
 
@@ -477,6 +479,7 @@ function save_state(
     S330=nothing,
     DS33=nothing,
     s33m=nothing,
+    porosity_props=nothing,
 )
     marker_props = _collect_checkpoint_marker_dict(
         markers;
@@ -532,6 +535,7 @@ function save_state(
         hcnspo_props=hcnspo_props,
         redox_props=redox_props,
         s33m=s33m,
+        porosity_props=porosity_props,
     )
 
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -981,6 +985,12 @@ function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::Simula
                     "Checkpoint has no dry porosity array $k for porosity.model = henke2012",
                 ),
             )
+            v = data[string(k)]
+            (v isa AbstractVector{<:Real} && length(v) == marknum) || throw(
+                CheckpointError(
+                    "Checkpoint dry porosity array $k must be a real vector of length $marknum",
+                ),
+            )
         end
         pvals = [data[string(k)] for k in fieldnames(PorosityGroup)]
         push!(group_pairs, :porosity => PorosityGroup(pvals...))
@@ -1049,6 +1059,7 @@ Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::Simulation
 
 # Throws
 - `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+- `ArgumentError` if the `[porosity]` section of the effective configuration is invalid.
 """
 function load_simulation_state(
     path::AbstractString;
@@ -1120,6 +1131,7 @@ function load_simulation_state(
     end
 
     effective_cfg = target_cfg !== nothing ? target_cfg : cfg_saved
+    _validate_porosity_config(effective_cfg)
 
     coords = if haskey(data, "coords") && data["coords"] isa GridCoordinates
         data["coords"]

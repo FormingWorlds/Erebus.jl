@@ -115,8 +115,9 @@ end
 """
 Marker arrays for the dry rock porosity of the Henke et al. (2012) laws: porosity
 `phi_d` [-], porosity before sintering `phi0` [-] at the highest pressure the marker has
-felt, maximum temperature `tkm_max` [K], and the cumulative porosity decrease by hot
-sintering `dphi_sinter` [-] (cold pressing does not count).
+felt before it sintered (fixed after that), maximum temperature `tkm_max` [K], and the
+cumulative porosity decrease by hot sintering `dphi_sinter` [-] (cold pressing does not
+count), equal to `phi0 - phi_d` once the marker has sintered.
 """
 struct PorosityGroup
     phi_d::Vector{Float64}
@@ -305,6 +306,7 @@ end
     Base.resize!(m::MarkerArrays, new_len::Integer)
 
 Resize all vectors in core and active groups to `new_len`, zero-initializing grown elements.
+Grown `phi0` entries of the dry porosity group are 1 (no pressure history).
 """
 function Base.resize!(m::MarkerArrays, new_len::Integer)
     for fn in fieldnames(CoreGroup)
@@ -312,7 +314,12 @@ function Base.resize!(m::MarkerArrays, new_len::Integer)
     end
     for grp in values(m.groups)
         for fn in fieldnames(typeof(grp))
-            _resize_zero_init!(getfield(grp, fn), new_len)
+            v = getfield(grp, fn)
+            old_len = length(v)
+            _resize_zero_init!(v, new_len)
+            if grp isa PorosityGroup && fn === :phi0 && new_len > old_len
+                fill!(view(v, (old_len + 1):new_len), 1.0)
+            end
         end
     end
     return m
@@ -387,7 +394,8 @@ end
 """
     push_marker!(m::MarkerArrays; kwargs...)
 
-Append a single marker entry to core and present groups.
+Append a single marker entry to core and present groups. A field without a keyword gets
+0 (`tm` gets 1, `phi0` of the dry porosity group 1, no pressure history).
 """
 function push_marker!(m::MarkerArrays; kwargs...)
     kw_dict = Dict{Symbol,Any}(kwargs)
@@ -399,7 +407,7 @@ function push_marker!(m::MarkerArrays; kwargs...)
     for grp in values(m.groups)
         for fn in fieldnames(typeof(grp))
             vec = getfield(grp, fn)
-            val = get(kw_dict, fn, 0.0)
+            val = get(kw_dict, fn, grp isa PorosityGroup && fn === :phi0 ? 1.0 : 0.0)
             push!(vec, val)
         end
     end
