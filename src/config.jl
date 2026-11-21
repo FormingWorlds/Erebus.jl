@@ -1358,9 +1358,10 @@ end
 """
 Dry rock porosity by cold pressing and hot sintering (Henke et al. 2012).
 
-`model = :none` keeps the present porosity treatment and allocates nothing. With
-`model = :henke2012` each rock marker carries a dry porosity that decreases by cold
-pressing at every temperature and by hot sintering at `T >= T_sinter`. Units: `grain_radius`
+`model = :none` leaves the porosity to the poroelastic compaction and allocates nothing.
+With `model = :henke2012` each rock marker carries a dry porosity that decreases by cold
+pressing at every temperature and by hot sintering at `T >= T_sinter`; the rock is then
+dry (`materials.XWsolidm_init = [0, 0, NaN]`). Units: `grain_radius`
 in m, `T_sinter` in K, `A` in cm^3 bar^-n s^-1, `E_act` in cal/mol.
 
 $(FIELDS)
@@ -2835,7 +2836,9 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
 
 # Throws
 - `ArgumentError`: unknown model, a field outside its domain, or henke2012 together with
-  reaction, venting, hydrothermal convection, accretion or telescoping.
+  reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
+  kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
+  partitioning) or a hydrous rock (`materials.XWsolidm_init[1:2]` not 0).
 """
 function _validate_porosity_config(cfg::SimulationConfig)
     p = cfg.porosity
@@ -2851,18 +2854,35 @@ function _validate_porosity_config(cfg::SimulationConfig)
     @check_positive_finite p.n "porosity.n"
     p.model === :henke2012 || return nothing
     for (name, on) in (
-        ("reaction", cfg.reaction.active),
-        ("venting", cfg.venting.active),
-        ("hydrothermal", cfg.hydrothermal.active),
-        ("accretion", cfg.accretion.active),
-        ("telescoping", cfg.telescoping.active),
+        ("reaction.active", cfg.reaction.active),
+        ("venting.active", cfg.venting.active),
+        ("hydrothermal.active", cfg.hydrothermal.active),
+        ("accretion.active", cfg.accretion.active),
+        ("telescoping.active", cfg.telescoping.active),
+        ("volatiles.active", cfg.volatiles.active),
+        (
+            "refractory.kinetics_active",
+            cfg.refractory.active && cfg.refractory.kinetics_active,
+        ),
+        ("magma_transport.active", cfg.magma_transport.active),
+        ("magma_degassing.active", cfg.magma_degassing.active),
+        ("coreformation.percolation_active", cfg.coreformation.percolation_active),
+        ("coreformation.settling_active", cfg.coreformation.settling_active),
+        ("thermodynamics.hr_fe", cfg.thermodynamics.hr_fe),
+        ("metal_partition.active", cfg.metal_partition.active),
     )
         on && throw(
             ArgumentError(
-                "porosity.model = henke2012 requires [$name] active = false; the dry porosity is not coupled to $name",
+                "porosity.model = henke2012 requires $name = false; the dry porosity is not coupled to it",
             ),
         )
     end
+    xw = cfg.materials.XWsolidm_init
+    (iszero(xw[1]) && iszero(xw[2])) || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires dry rock, materials.XWsolidm_init = [0, 0, NaN]; got $(xw[1]), $(xw[2])",
+        ),
+    )
     return nothing
 end
 

@@ -761,11 +761,18 @@ buffer_markers_per_cell = 16
 ## `[porosity]`
 
 Dry rock porosity by cold pressing and hot sintering, after Henke et al. (2012) and Lichtenberg et al. (2016a).
-With `model = "none"` the porosity code of the other sections runs as before and no extra marker arrays exist.
+With `model = "none"` the porosity code of the other sections runs unchanged and no extra marker arrays exist.
 With `model = "henke2012"` every rock marker carries a dry porosity that cold pressing and hot sintering lower.
+This model needs dry rock and switches off the processes that need pore water, melt or metal, as in the example below.
 The equations, units and limits are on the page [Porosity: cold pressing and hot sintering](../explanations/porosity_sintering.md).
 
 ```toml
+[reaction]
+active = false
+
+[materials]
+XWsolidm_init = [0.0, 0.0, nan]
+
 [porosity]
 model = "henke2012"
 phi_init = 0.75
@@ -779,7 +786,7 @@ n = 1.5
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs reaction, venting, hydrothermal, accretion and telescoping off | `:none`, `:henke2012` |
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe` and metal partitioning off | `:none`, `:henke2012` |
 | `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
 | `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
 | `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |

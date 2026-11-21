@@ -114,11 +114,13 @@ end
 
 """
 Marker arrays for the dry rock porosity of the Henke et al. (2012) laws: porosity
-`phi_d` [-], maximum temperature `tkm_max` [K], and the cumulative porosity decrease by
-hot sintering `dphi_sinter` [-] (cold pressing does not count).
+`phi_d` [-], porosity before sintering `phi0` [-] at the highest pressure the marker has
+felt, maximum temperature `tkm_max` [K], and the cumulative porosity decrease by hot
+sintering `dphi_sinter` [-] (cold pressing does not count).
 """
 struct PorosityGroup
     phi_d::Vector{Float64}
+    phi0::Vector{Float64}
     tkm_max::Vector{Float64}
     dphi_sinter::Vector{Float64}
 end
@@ -617,7 +619,9 @@ function init_marker_arrays(
     if cfg.porosity.model === :henke2012
         push!(
             group_pairs,
-            :porosity => PorosityGroup(zeros(marknum), zeros(marknum), zeros(marknum)),
+            :porosity => PorosityGroup(
+                zeros(marknum), zeros(marknum), zeros(marknum), zeros(marknum)
+            ),
         )
     end
 

@@ -439,8 +439,9 @@ Porosity of a granular silicate powder after cold isostatic pressing.
 
     φ_H(P) = 0.42 + 0.46 / ((P / 0.13 bar)^1.72 + 1)
 
-Henke et al. (2012) Eq. 15 with the relative density D = 1 - φ, as used by
-Lichtenberg et al. (2016a) Eq. 10. `P_bar` is the maximum pressure the powder has felt.
+Eq. 15 of Henke et al. (2012), the laboratory fit of Güttler et al. (2009, in Henke et
+al. 2012), with the relative density D = 1 - φ, as used by Lichtenberg et al. (2016a)
+Eq. 10. The marker step applies it to the highest pressure the marker has felt.
 
 # Arguments
 
@@ -469,7 +470,7 @@ the cold pressing porosity `phi_cold(P_bar)` and the upper cap `phi_cap`.
 
     - P_bar: pressure P [bar], >= 0
     - phi_init: initial porosity φ_init [-], in [0, 1]
-    - phi_cap: upper porosity cap [-], in [0, 1] (i2elvis value 0.85)
+    - phi_cap: upper porosity cap [-], in (0, 1) as `porosity.phi_cap` (i2elvis value 0.85)
 
 # Returns
 
@@ -477,11 +478,12 @@ the cold pressing porosity `phi_cold(P_bar)` and the upper cap `phi_cap`.
 
 # Throws
 
-    - DomainError: a porosity outside [0, 1] or an invalid pressure
+    - DomainError: φ_init outside [0, 1], φ_cap outside (0, 1) or an invalid pressure
 """
 function porosity_phi0(P_bar::Real, phi_init::Real; phi_cap::Real=0.85)
     require_unit_interval(phi_init, "initial porosity phi_init")
-    require_unit_interval(phi_cap, "porosity cap phi_cap")
+    (isfinite(phi_cap) && 0.0 < phi_cap < 1.0) ||
+        throw(DomainError(phi_cap, "porosity cap phi_cap must be in (0, 1)"))
     return min(Float64(phi_init), phi_cold(P_bar), Float64(phi_cap))
 end
 
@@ -494,7 +496,8 @@ from porosity `phi_0` to porosity `phi`, for 8 contacts per grain.
 # Details
 
 Volume conservation of a sphere of radius R0 with 8 cut caps (Henke et al. 2012
-Eqs. 34 to 37, Kakar and Chaklader geometry) gives, with X = (1 - φ_0) / (1 - φ),
+Eqs. 34 to 37, after Kakar and Chaklader 1967 in Henke et al. 2012) gives, with
+X = (1 - φ_0) / (1 - φ),
 
     R^3 - 3 R^2 R0 X^(1/3) + R0^3 X + R0^3 = 0,    a^2 = R^2 - R0^2 X^(2/3).
 
@@ -585,8 +588,8 @@ end
 """
     sintering_rate(phi, sigma_bar, R, T; A=4.0e-5, E_act=85000.0, n=1.5)
 
-Rate of porosity decrease by hot sintering (power-law creep of Schwenn and Goetze,
-as used by Henke et al. 2012 Eqs. 39, 43, 44 and Lichtenberg et al. 2016a Eq. 13).
+Rate of porosity decrease by hot sintering (power-law creep of olivine of Schwenn and
+Goetze 1978 in Henke et al. 2012, Eqs. 39, 43, 44, and Lichtenberg et al. 2016a Eq. 13).
 
 # Details
 
@@ -816,16 +819,19 @@ function k_porous(k::Real, phi::Real)
 end
 
 """
-    dry_porosity_update(phi_d, P_bar, T, dt, pcfg::PorosityConfig)
+    dry_porosity_update(phi_d, P_bar, T, dt, pcfg::PorosityConfig; phi0_prev=1.0)
 
 Advance the dry porosity of one rock marker over one time step: cold pressing at every
 temperature, then hot sintering for `T >= pcfg.T_sinter`.
 
 # Details
 
-Cold pressing sets φ <- min(φ, φ_0) with φ_0 = min(φ_init, φ_H(P), φ_cap), so φ <= φ_0
-before sintering starts. Sintering then lowers φ with `sinter_porosity_step`. Porosity
-never increases: a marker that cools keeps its sintered porosity.
+The porosity before sintering is φ_0 = min(φ_0,prev, φ_init, φ_H(P), φ_cap). With
+`phi0_prev` the φ_0 of the previous step, φ_0 belongs to the highest pressure the marker
+has felt, because φ_H decreases with P; a pressure drop leaves it unchanged. Cold
+pressing sets φ <- min(φ, φ_0), so φ <= φ_0 before sintering starts. Sintering then
+lowers φ with `sinter_porosity_step`. Porosity never increases: a marker that cools keeps
+its sintered porosity.
 
 # Arguments
 
@@ -834,25 +840,29 @@ never increases: a marker that cools keeps its sintered porosity.
     - T: temperature [K], > 0
     - dt: time step [s], >= 0
     - pcfg: `PorosityConfig` with φ_init, φ_cap, R0, T_sinter, A, E_act, n
+    - phi0_prev: φ_0 of the previous step [-], in [0, 1]; 1 means no pressure history
 
 # Returns
 
-    - NamedTuple `(phi, dphi_sinter, capped)`: dry porosity at the end of the step,
-      its decrease by sintering (not by cold pressing), and whether the substep cap of
-      `sinter_porosity_step` was reached
+    - NamedTuple `(phi, phi0, dphi_sinter, capped)`: dry porosity at the end of the step,
+      porosity before sintering φ_0, the decrease by sintering (not by cold pressing),
+      and whether the substep cap of `sinter_porosity_step` was reached
 
 # Throws
 
     - DomainError: an argument outside its physical domain
 """
 function dry_porosity_update(
-    phi_d::Real, P_bar::Real, T::Real, dt::Real, pcfg::PorosityConfig
+    phi_d::Real, P_bar::Real, T::Real, dt::Real, pcfg::PorosityConfig; phi0_prev::Real=1.0
 )
     require_unit_interval(phi_d, "dry porosity phi_d")
+    require_unit_interval(phi0_prev, "porosity before sintering phi0_prev")
     require_positive_finite(T, "temperature T")
-    phi_0 = porosity_phi0(P_bar, pcfg.phi_init; phi_cap=pcfg.phi_cap)
+    phi_0 = min(
+        Float64(phi0_prev), porosity_phi0(P_bar, pcfg.phi_init; phi_cap=pcfg.phi_cap)
+    )
     phi_p = min(Float64(phi_d), phi_0)
-    T >= pcfg.T_sinter || return (phi=phi_p, dphi_sinter=0.0, capped=false)
+    T >= pcfg.T_sinter || return (phi=phi_p, phi0=phi_0, dphi_sinter=0.0, capped=false)
     phi_s, _, capped = sinter_porosity_step(
         phi_p,
         phi_0,
@@ -865,5 +875,5 @@ function dry_porosity_update(
         n=pcfg.n,
     )
     phi_s = clamp(phi_s, 0.0, 1.0)
-    return (phi=phi_s, dphi_sinter=phi_p - phi_s, capped=capped)
+    return (phi=phi_s, phi0=phi_0, dphi_sinter=phi_p - phi_s, capped=capped)
 end

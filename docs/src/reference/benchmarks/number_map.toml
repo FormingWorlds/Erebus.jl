@@ -314,3 +314,63 @@ test_name = "test_porosity_henke.jl"
 page = "explanations/porosity_sintering.md"
 number = "0.85"
 test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.42"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "0.13"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "700"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "3300"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "85000"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.9872"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1.5"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "26 %"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1667"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "564"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-12"
+test_name = "test_porosity_henke.jl"
+
+[[entry]]
+page = "explanations/porosity_sintering.md"
+number = "1e-6"
+test_name = "test_porosity_henke.jl"

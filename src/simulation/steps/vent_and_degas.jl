@@ -144,9 +144,7 @@ function vent_and_degas!(
     if haskey(markers.groups, :porosity)
         pg = markers.groups.porosity
         ncap = advance_marker_dry_porosity!(
-            pg.phi_d,
-            pg.tkm_max,
-            pg.dphi_sinter,
+            pg,
             xm,
             ym,
             tm,

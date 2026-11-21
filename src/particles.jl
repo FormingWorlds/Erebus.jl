@@ -5756,8 +5756,7 @@ function advance_marker_thermo_porosity_venting!(
 end
 
 """
-    advance_marker_dry_porosity!(phi_d, tkm_max, dphi_sinter, xm, ym, tm, tkm, pr, dt;
-                                 coords, psurface, porosity)
+    advance_marker_dry_porosity!(pg, xm, ym, tm, tkm, pr, dt; coords, psurface, porosity)
 
 Advance the dry porosity of every rock marker over one time step with the laws of
 Henke et al. (2012): cold pressing, then hot sintering (`dry_porosity_update`).
@@ -5766,11 +5765,12 @@ Henke et al. (2012): cold pressing, then hot sintering (`dry_porosity_update`).
 
 The pressure of a marker is the total pressure `pr` interpolated from the P nodes, minus
 the surface anchor `psurface`, clipped at 0 and converted from Pa to bar. The marker
-temperature is `tkm` after the update of the step (T^{n+1}). `tkm_max` keeps the highest
-marker temperature; `dphi_sinter` adds the decrease by sintering.
+temperature is `tkm` after the update of the step (T^{n+1}). `phi0` keeps the porosity
+before sintering at the highest pressure felt, `tkm_max` the highest marker temperature;
+`dphi_sinter` adds the decrease by sintering.
 
 # Arguments
-- `phi_d`, `tkm_max`, `dphi_sinter`: dry porosity group arrays, updated in place.
+- `pg`: `PorosityGroup` (`phi_d`, `phi0`, `tkm_max`, `dphi_sinter`), updated in place.
 - `xm`, `ym`: marker coordinates [m].
 - `tm`: marker material type (rock < 3).
 - `tkm`: marker temperature [K].
@@ -5784,9 +5784,7 @@ marker temperature; `dphi_sinter` adds the decrease by sintering.
 - Number of markers whose sintering step reached the substep cap.
 """
 function advance_marker_dry_porosity!(
-    phi_d::AbstractVector{Float64},
-    tkm_max::AbstractVector{Float64},
-    dphi_sinter::AbstractVector{Float64},
+    pg::PorosityGroup,
     xm::AbstractVector{Float64},
     ym::AbstractVector{Float64},
     tm::AbstractVector{<:Integer},
@@ -5797,6 +5795,7 @@ function advance_marker_dry_porosity!(
     psurface::Real,
     porosity::PorosityConfig,
 )
+    (; phi_d, phi0, tkm_max, dphi_sinter) = pg
     ncapped = Threads.Atomic{Int}(0)
     @threads :dynamic for m in eachindex(tm)
         @inbounds tm[m] < 3 || continue
@@ -5813,8 +5812,9 @@ function advance_marker_dry_porosity!(
             coords.imax_p,
         )
         P_bar = max(0.0, dot4(grid_vector(i, j, pr), weights) - psurface) * 1.0e-5
-        u = dry_porosity_update(phi_d[m], P_bar, tkm[m], dt, porosity)
+        u = dry_porosity_update(phi_d[m], P_bar, tkm[m], dt, porosity; phi0_prev=phi0[m])
         @inbounds phi_d[m] = u.phi
+        @inbounds phi0[m] = u.phi0
         @inbounds dphi_sinter[m] += u.dphi_sinter
         @inbounds tkm_max[m] = max(tkm_max[m], tkm[m])
         u.capped && Threads.atomic_add!(ncapped, 1)

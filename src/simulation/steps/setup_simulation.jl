@@ -91,6 +91,7 @@ function _extract_optional_marker_arrays(
     t_accreted = accretion !== nothing ? accretion.t_accreted : nothing
     hcnspo_props = haskey(markers.groups, :hcnspo) ? markers.groups.hcnspo : nothing
     redox_props = haskey(markers.groups, :redox) ? markers.groups.redox : nothing
+    porosity_props = haskey(markers.groups, :porosity) ? markers.groups.porosity : nothing
 
     return (;
         Xfem,
@@ -123,6 +124,7 @@ function _extract_optional_marker_arrays(
         t_accreted,
         hcnspo_props,
         redox_props,
+        porosity_props,
     )
 end
 
@@ -565,6 +567,7 @@ function init_simulation(
         )
     end
     _validate_spherical_flow(cfg)
+    _validate_porosity_config(cfg)
     coords, formatted_output_path = setup_simulation_grid_and_coords(
         cfg; output_path=output_path
     )
@@ -589,7 +592,8 @@ Reconstruct marker arrays from a checkpoint tuple and core group.
 
 # Parameters
 - `core`: Core marker properties group.
-- `optional_tuple`: NamedTuple containing optional marker field arrays.
+- `optional_tuple`: NamedTuple containing optional marker field arrays; the optional
+  key `porosity_props` holds a `PorosityGroup`.
 - `marknum`: Number of markers.
 
 # Returns
@@ -680,6 +684,10 @@ function _reconstruct_checkpoint_marker_arrays(
     if o.t_accreted !== nothing
         push!(group_pairs, :accretion => AccretionGroup(o.t_accreted))
     end
+    porosity_props = get(o, :porosity_props, nothing)
+    if porosity_props !== nothing
+        push!(group_pairs, :porosity => porosity_props)
+    end
     return MarkerArrays(core, NamedTuple(group_pairs))
 end
 
@@ -735,10 +743,12 @@ Hydrostatic pressure of a dry porous body whose porosity follows the cold pressi
 
 Integrates dP/dr = -ρ(r) g(r) inward from P(R_p) = 0, with ρ = ρ_s (1 - φ_0(P)),
 φ_0 = min(φ_init, φ_H(P), φ_cap) and ρ_s = `materials.rhosolidm[2]`. The gravity is
-that of the enclosed mass of a sphere (`gravity_mode = :enclosed_mass`) or of an
-infinite cylinder (`:poisson2d`). The density and the pressure are iterated to a fixed
-point. Each cell holds the mean density of its 2 nodes, so a uniform density gives the
-analytic profile P = c π G ρ² (R_p² - r²), with c = 2/3 (sphere) or 1 (cylinder).
+that of the enclosed mass of a sphere (`gravity_mode = :enclosed_mass`) or that of the
+2-D Poisson equation ∇²Φ = (8/3) π G ρ of the Stokes solve (`:poisson2d`), which gives
+g = (8/3) π G m(r) / r for the mass per length m(r) = ∫ ρ r' dr'. The density and the
+pressure are iterated to a fixed point. Each cell holds the mean density of its 2 nodes,
+so a uniform density gives the analytic profile P = (2/3) π G ρ² (R_p² - r²) in both
+modes.
 
 # Arguments
 - `cfg`: simulation configuration (`geometry`, `materials`, `porosity`).
@@ -755,6 +765,8 @@ function dry_hydrostatic_profile(cfg::SimulationConfig; nr::Int=4001)
     pc = cfg.porosity
     rho_s = cfg.materials.rhosolidm[2]
     w = cfg.geometry.gravity_mode === :enclosed_mass ? 2 : 1
+    # 4 pi G for the sphere; (8/3) pi G, the source of the 2-D Poisson gravity solve
+    g_coeff = w == 2 ? 4.0 * pi * G_GRAV : (8.0 / 3.0) * pi * G_GRAV
     r = collect(range(0.0, cfg.geometry.rplanet; length=nr))
     rho_of(P) = rho_s * (1.0 - porosity_phi0(P * 1.0e-5, pc.phi_init; phi_cap=pc.phi_cap))
     P = zeros(nr)
@@ -765,7 +777,7 @@ function dry_hydrostatic_profile(cfg::SimulationConfig; nr::Int=4001)
         for i in 2:nr
             rho_cell = 0.5 * (rho[i - 1] + rho[i])
             enclosed += rho_cell * (r[i]^(w + 1) - r[i - 1]^(w + 1)) / (w + 1)
-            g[i] = 4.0 * pi * G_GRAV * enclosed / r[i]^w
+            g[i] = g_coeff * enclosed / r[i]^w
         end
         P_new = zeros(nr)
         for i in (nr - 1):-1:1
@@ -801,8 +813,9 @@ nothing when the group is absent.
 # Details
 
 Rock markers get the water porosity `phim = phinewm = phimin` and the dry porosity
-φ_d = min(φ_init, φ_H(P), φ_cap) at the pressure of `dry_hydrostatic_profile` (first cold
-pressing); `tkm_max = tkm` and `dphi_sinter = 0`. Sticky-air markers get φ_d = 0.
+φ_d = φ_0 = min(φ_init, φ_H(P), φ_cap) at the pressure of `dry_hydrostatic_profile`
+(first cold pressing); `phi0 = φ_0`, `tkm_max = tkm` and `dphi_sinter = 0`. Sticky-air
+markers get φ_d = φ_0 = 0.
 
 # Arguments
 - `markers`: marker arrays, updated in place.
@@ -829,10 +842,11 @@ function init_dry_porosity_markers!(
             core.phinewm[m] = phimin
             rm = hypot(core.xm[m] - xcenter, core.ym[m] - ycenter)
             P_bar = _interp_profile(r_prof, P_prof, rm) * 1.0e-5
-            pg.phi_d[m] = porosity_phi0(P_bar, pc.phi_init; phi_cap=pc.phi_cap)
+            pg.phi0[m] = porosity_phi0(P_bar, pc.phi_init; phi_cap=pc.phi_cap)
         else
-            pg.phi_d[m] = 0.0
+            pg.phi0[m] = 0.0
         end
+        pg.phi_d[m] = pg.phi0[m]
     end
     return nothing
 end

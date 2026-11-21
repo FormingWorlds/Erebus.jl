@@ -229,6 +229,7 @@ function _collect_checkpoint_marker_dict(
     hcnspo_props=nothing,
     redox_props=nothing,
     s33m=nothing,
+    porosity_props=nothing,
 )
     dict = Dict{Symbol,Any}()
     if markers !== nothing
@@ -290,9 +291,10 @@ function _collect_checkpoint_marker_dict(
                 dict[fn] = getfield(hcnspo_props, fn)
             end
         end
-        if redox_props !== nothing
-            for fn in fieldnames(typeof(redox_props))
-                dict[fn] = getfield(redox_props, fn)
+        for grp in (redox_props, porosity_props)
+            grp === nothing && continue
+            for fn in fieldnames(typeof(grp))
+                dict[fn] = getfield(grp, fn)
             end
         end
     end
@@ -881,7 +883,8 @@ Restore optional marker groups from checkpoint data and validate array lengths.
 - `MarkerArrays`: Restored marker arrays with validated array lengths.
 
 # Raises
-- `CheckpointError`: If any marker vector length does not match `marknum`.
+- `CheckpointError`: If any marker vector length does not match `marknum`, or if
+  `porosity.model = :henke2012` and an array of `PorosityGroup` is missing.
 """
 function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::SimulationConfig)
     group_pairs = Pair{Symbol,Any}[]
@@ -972,11 +975,13 @@ function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::Simula
     end
 
     if effective_cfg.porosity.model === :henke2012
-        haskey(data, "phi_d") || throw(
-            CheckpointError(
-                "Checkpoint has no dry porosity arrays (phi_d) for porosity.model = henke2012",
-            ),
-        )
+        for k in fieldnames(PorosityGroup)
+            haskey(data, string(k)) || throw(
+                CheckpointError(
+                    "Checkpoint has no dry porosity array $k for porosity.model = henke2012",
+                ),
+            )
+        end
         pvals = [data[string(k)] for k in fieldnames(PorosityGroup)]
         push!(group_pairs, :porosity => PorosityGroup(pvals...))
     end
