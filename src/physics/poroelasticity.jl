@@ -684,6 +684,8 @@ end
 """
 Backward Euler porosity over one substep `h` [s]: the root of
 g(φ) = φ - φ_old + h r(φ) in (0, φ_old] by bisection; g(0) < 0 since r(0) = 0.
+The bisection keeps g(lo) < 0 <= g(hi) and returns `hi`, the end whose decrease
+φ_old - φ does not exceed h r(φ). A decrease below 1 ULP of φ_old therefore gives φ_old.
 """
 function _backward_euler_porosity(phi_old::Float64, h::Float64, rate)
     h * rate(phi_old) <= 0.0 && return phi_old
@@ -697,7 +699,7 @@ function _backward_euler_porosity(phi_old::Float64, h::Float64, rate)
             hi = mid
         end
     end
-    return 0.5 * (lo + hi)
+    return hi
 end
 
 """
@@ -732,8 +734,8 @@ reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain, or a rate so large that
-      the substep falls to 0
+    - DomainError: an argument outside its physical domain, or a rate so large that a
+      rejected substep cannot shrink further (the value is a NamedTuple of the inputs)
     - ArgumentError: `max_substeps` < 1
 """
 function sinter_porosity_step(
@@ -768,8 +770,16 @@ function sinter_porosity_step(
         phi_try = _backward_euler_porosity(phi, h, rate)
         dphi = phi - phi_try
         if !last && dphi > dphi_max
-            h *= max(0.1, 0.9 * dphi_max / dphi)
-            h > 0.0 || throw(DomainError(A, "sintering rate overflows: the substep is 0"))
+            # A rejected substep must shrink; a subnormal h times a factor above 0.5
+            # rounds back to h, and an overflowing rate rejects every h
+            h_new = h * max(0.1, 0.9 * dphi_max / dphi)
+            (0.0 < h_new < h) || throw(
+                DomainError(
+                    (; phi_n, phi_0, P_bar, T, dt, R0, A, E_act, n),
+                    "sintering rate overflows: a rejected substep does not shrink",
+                ),
+            )
+            h = h_new
             continue
         end
         phi = phi_try
@@ -838,8 +848,11 @@ before sintering starts.
 
 Once the marker has sintered (`sintered = true`), φ_0 stays at `phi0_prev` and cold
 pressing stops: φ_0 is the porosity of the initial packing of Henke et al. (2012, Eq. 37),
-at which the contact faces have zero radius. The cumulative sintering decrease then equals
-φ_0 - φ. The i2elvis code instead recomputes φ_0 from the current pressure every step.
+at which the contact faces have zero radius. For a marker that starts to sinter at
+φ = φ_0, as every marker of the setup does, the cumulative sintering decrease then equals
+φ_0 - φ. For a marker that enters with φ < φ_0 (for example from `push_marker!`),
+φ_0 - φ exceeds the sintering decrease by the gap at entry. The i2elvis code instead
+recomputes φ_0 from the current pressure every step.
 
 Sintering lowers φ with `sinter_porosity_step`. Porosity never increases: a marker that
 cools keeps its sintered porosity.
@@ -851,7 +864,8 @@ cools keeps its sintered porosity.
     - T: temperature [K], > 0
     - dt: time step [s], >= 0
     - pcfg: `PorosityConfig` with φ_init, φ_cap, R0, T_sinter, A, E_act, n
-    - phi0_prev: φ_0 of the previous step [-], in [0, 1]; 1 means no pressure history
+    - phi0_prev: φ_0 of the previous step [-], in [0, 1]; 1 means no pressure history,
+      so a sintered marker needs phi0_prev < 1
     - sintered: `true` once an earlier step has lowered φ by sintering
 
 # Returns
@@ -862,8 +876,8 @@ cools keeps its sintered porosity.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain, or `sintered` with
-      `phi_d > phi0_prev`
+    - DomainError: an argument outside its physical domain (`dt` is checked at every
+      temperature), or `sintered` with `phi0_prev = 1` or `phi_d > phi0_prev`
 """
 function dry_porosity_update(
     phi_d::Real,
@@ -877,7 +891,10 @@ function dry_porosity_update(
     require_unit_interval(phi_d, "dry porosity phi_d")
     require_unit_interval(phi0_prev, "porosity before sintering phi0_prev")
     require_positive_finite(T, "temperature T")
+    require_nonneg_finite(dt, "time step dt")
     if sintered
+        phi0_prev < 1.0 ||
+            throw(DomainError(phi0_prev, "a sintered marker needs phi0_prev < 1"))
         phi_d <= phi0_prev ||
             throw(DomainError(phi_d, "a sintered marker needs phi_d <= phi0_prev"))
         require_nonneg_finite(P_bar, "pressure P_bar")

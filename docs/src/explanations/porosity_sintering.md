@@ -28,6 +28,7 @@ The processes that need pore water, melt or metal are therefore not allowed toge
 The configuration check rejects `henke2012` when reaction, venting, hydrothermal convection, accretion or telescoping is on.
 It also rejects volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, iron heating (`hr_fe`) and metal partitioning.
 It rejects the tracking of accessory metal phases (`phase_tracking`) and the volatile ice mixture (`volatile_mixture`) too.
+It rejects the redox model (`redox`) as well, because it tracks metallic iron and gas species.
 The rock must be dry: `materials.XWsolidm_init = [0.0, 0.0, nan]`.
 
 ---
@@ -66,7 +67,9 @@ Once a marker has sintered, its $\phi_0$ stays fixed and cold pressing stops for
 Henke et al. (2012, Eq. 37) define $\phi_0$ through the relative density of the initial packing of the grains.
 In that packing the grains touch at points, before any sintering.
 A later rise of pressure therefore does not change $\phi_0$ and does not shrink the contact faces of sintered grains.
-The porosity lost by sintering then equals $\phi_0 - \phi_d$ on every marker.
+For a marker that starts to sinter at $\phi_d = \phi_0$, the porosity lost by sintering then equals $\phi_0 - \phi_d$.
+Every marker of the setup starts this way.
+A marker added later with $\phi_d < \phi_0$ has a larger $\phi_0 - \phi_d$, by the gap it entered with.
 The i2elvis code differs here: it computes $\phi_0$ from the current pressure in every time step.
 
 ---
@@ -234,13 +237,15 @@ The first cold pressing uses this profile.
 In each time step the marker pressure is the total pressure of the Stokes solve, interpolated to the marker.
 The surface anchor `psurface` is subtracted, negative values are set to 0, and Pa are converted to bar.
 The fluid pressure is not used.
+The melting law also takes the total pressure of the Stokes solve at the marker, from the second step on.
 The step runs where the marker temperature becomes the new temperature of the step.
 
 ---
 
 ## What does the model leave out?
 
-The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating, the compaction work, a reset on melting and the sintered surface porosity, and its grid must resolve the surface layer.
+The short answer: it leaves out some density terms, the dry porosity in the adiabatic heating, the compaction work, a reset on melting and the sintered surface porosity.
+Its grid must also resolve the surface layer.
 
 The materials of `Erebus.jl` are fixed constants.
 The dense rock density is therefore 3300 $\text{kg/m}^3$ for dry rock (`XWsolidm_init = 0`), not the 3500 $\text{kg/m}^3$ of Lichtenberg et al. (2016a).
@@ -302,7 +307,8 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     the explicit rate against a BigFloat reference coded from the raw constants;
     order 1 convergence of the sub-stepped step to a fine BigFloat Runge-Kutta integration;
     the onset law $C t^{2/5}$ against a BigFloat quadrature;
-    the 3 branches and the floor of the conductivity, pinned by hand.
+    the 3 branches and the floor of the conductivity, pinned by hand;
+    a rate that overflows throws within 5 s instead of shrinking the substep forever.
     The testset `Replay of the i2elvis porosity block` compares 1 explicit step with the i2elvis code.
     It uses 8 marker states and a relative tolerance of 1e-6.
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
@@ -310,7 +316,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     Testsets of `Dry porosity marker group and step` check the marker arrays and the setup pressure against the uniform-density limit.
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
     They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
+    A 3-step run with melting checks that `pfm0` follows the total pressure, not the fluid pressure, to 1e-6.
     They check the memory of $\phi_0$ and its freeze at the onset of sintering.
+    A decrease below 1 unit in the last place of $\phi$ does not count as sintering.
     A 10-step run checks that the sintering decrease equals $\phi_0 - \phi_d$ to 1e-12 on every rock marker.
     They check the step in `vent_and_degas!` over 2 steps, the substep cap, the rock properties at every call site, and the marker lifecycle.
     A 2-step run checks that the Stokes pressure sinters hot rock.

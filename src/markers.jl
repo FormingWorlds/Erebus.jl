@@ -117,7 +117,9 @@ Marker arrays for the dry rock porosity of the Henke et al. (2012) laws: porosit
 `phi_d` [-], porosity before sintering `phi0` [-] at the highest pressure the marker has
 felt before it sintered (fixed after that), maximum temperature `tkm_max` [K], and the
 cumulative porosity decrease by hot sintering `dphi_sinter` [-] (cold pressing does not
-count), equal to `phi0 - phi_d` once the marker has sintered.
+count). Once a marker that started to sinter at `phi_d == phi0` has sintered,
+`dphi_sinter` equals `phi0 - phi_d`; a marker that entered with `phi_d < phi0` (for example
+from `push_marker!`) has `phi0 - phi_d` larger by the gap at entry.
 """
 struct PorosityGroup
     phi_d::Vector{Float64}

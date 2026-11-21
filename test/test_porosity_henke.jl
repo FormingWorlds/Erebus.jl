@@ -92,6 +92,18 @@ const _HK_I2ELVIS_REPLAY = (
     (0.4, 700.0, 200000.0, 0.42, 6.0e12, 0.3996112644672394, 0.0003887338021696076),
 )
 
+"""
+Return the error thrown by `f()`, or `nothing`.
+"""
+function _hk_error(f)
+    try
+        f()
+    catch e
+        return e
+    end
+    return nothing
+end
+
 @testset "Porosity laws of Henke et al. (2012)" begin
     setprecision(BigFloat, 128) do
         @testset "Cold pressing law phi_H(P), Henke Eq. 15 and L16 Eq. 10" begin
@@ -339,6 +351,32 @@ const _HK_I2ELVIS_REPLAY = (
             )
         end
 
+        @testset "An overflowing rate throws within 5 s, not a subnormal stall" begin
+            # With dphi_max < dphi < 1.8 dphi_max the shrink factor is above 0.5, so the
+            # smallest subnormal substep times it rounds back to itself
+            overflow_cases = (
+                (0.015, 0.6, 1.0, 950.0, 3.15576e10, (; A=1.0e300)),
+                (0.015, 0.015, 1.0, 950.0, 3.15576e10, (; A=1.0e305)),
+                (0.75, 0.75, 2.0, 1000.0, 3.0e15, (; A=1.0e300, dphi_max=0.5)),
+                (0.015, 0.6, 1.0, 950.0, 3.15576e10, (; R0=1.0e-110)),
+            )
+            for (phi_n, phi_0, P_bar, T, dt, kw) in overflow_cases
+                t_wall = @elapsed e = _hk_error(
+                    () -> Erebus.sinter_porosity_step(phi_n, phi_0, P_bar, T, dt; kw...)
+                )
+                @test e isa DomainError
+                @test occursin("overflow", e.msg)
+                @test isapprox(e.val.phi_n, phi_n; rtol=0, atol=0)
+                @test t_wall < 5.0
+            end
+            # The default constants never reach the guard: 1 kyr at 1 bar, 950 K sinters
+            phi, nsub, capped = Erebus.sinter_porosity_step(
+                0.015, 0.6, 1.0, 950.0, 3.15576e10
+            )
+            @test 0.0 < phi < 0.015
+            @test nsub >= 1 && !capped
+        end
+
         @testset "Porous conductivity, L16 Eq. 12 and markmart.c (3 branches, floor)" begin
             k = 4.3
             # Branch 1 (phi < 0.2): k exp(-phi / 0.08)
@@ -401,18 +439,6 @@ const _HK_I2ELVIS_REPLAY = (
             @test nsinter == 5
         end
     end
-end
-
-"""
-Return the error thrown by `f()`, or `nothing`.
-"""
-function _hk_error(f)
-    try
-        f()
-    catch e
-        return e
-    end
-    return nothing
 end
 
 """
@@ -566,6 +592,7 @@ end
                 "volatile_mixture",
                 (; volatile_mixture=Erebus.VolatileMixtureConfig(; active=true)),
             ),
+            ("redox", (; redox=Erebus.RedoxConfig(; active=true))),
         )
             e = check(kw)
             @test e isa ArgumentError
@@ -870,6 +897,48 @@ end
         end
     end
 
+    @testset "Melting pressure pfm0 follows the Stokes total pressure after step 1" begin
+        # Compressible pores (production beta values) make pf differ from pr after step 1
+        for n_steps in (2, 3)
+            cfg = _hk_cfg(
+                "time.n_steps" => n_steps,
+                "melting.active" => true,
+                "time.dt_initial" => 100.0,
+                "time.dt_longest" => 100.0,
+                "poroelasticity.betasolid" => 2.5e-11,
+                "poroelasticity.betafluid" => 4.0e-10,
+            )
+            _, coords, _ = _hk_state(cfg)
+            st = Erebus.with_logger(Erebus.NullLogger()) do
+                Erebus.simulation_loop(cfg; output_path=mktempdir())
+            end
+            mk = st.markers
+            rock = findall(<(3), mk.tm)
+            xc, yc = cfg.geometry.xcenter, cfg.geometry.ycenter
+            m = rock[argmin([hypot(mk.xm[k] - xc, mk.ym[k] - yc) for k in rock])]
+            i, j, w = Erebus.fix_weights(
+                mk.xm[m],
+                mk.ym[m],
+                coords.xp,
+                coords.yp,
+                coords.dx,
+                coords.dy,
+                coords.jmin_p,
+                coords.jmax_p,
+                coords.imin_p,
+                coords.imax_p,
+            )
+            pr_c = Erebus.dot4(Erebus.grid_vector(i, j, st.grids.pr), w)
+            pf_c = Erebus.dot4(Erebus.grid_vector(i, j, st.grids.pf), w)
+            @test st.timestep == n_steps
+            @test isapprox(mk.pfm0[m], pr_c; rtol=1e-6)
+            # Guard: the fluid pressure is 0.5 % to 1 % lower here, so pf would fail
+            @test 1.0e-3 < (pr_c - pf_c) / pr_c < 5.0e-2
+            # Scale guard: about 12.5 bar of overburden at the centre
+            @test 1.0e6 < mk.pfm0[m] - cfg.geometry.psurface < 1.4e6
+        end
+    end
+
     @testset "Marker update: cold pressing, threshold, hysteresis, P = 0" begin
         pc = _hk_cfg().porosity
         dt = 1.0e3 * 3.15576e7
@@ -996,6 +1065,74 @@ end
         @test_throws DomainError Erebus.dry_porosity_update(
             0.4, -1.0, 500.0, dt, pc; phi0_prev=0.5, sintered=true
         )
+        # Edge case phi_d = phi_0: a sintered marker may sit at its phi_0 (a decrease
+        # below 1 ULP), so it is accepted, keeps phi when cold and sinters when hot
+        e0 = Erebus.dry_porosity_update(
+            a1.phi0, 50.0, 500.0, dt, pc; phi0_prev=a1.phi0, sintered=true
+        )
+        @test isapprox(e0.phi, a1.phi0; rtol=1e-14)
+        @test isapprox(e0.phi0, a1.phi0; rtol=1e-14)
+        e1 = Erebus.dry_porosity_update(
+            a1.phi0, 0.15, 950.0, dt, pc; phi0_prev=a1.phi0, sintered=true
+        )
+        @test isapprox(e1.phi, a1.phi; rtol=1e-12)
+        @test isapprox(e1.dphi_sinter, a1.dphi_sinter; rtol=1e-12)
+    end
+
+    @testset "dry_porosity_update checks dt and phi0_prev below and above T_sinter" begin
+        pc = _hk_cfg().porosity
+        # 500 K takes the cold branch, 900 K the sintering branch
+        for T in (500.0, 900.0)
+            for bad_dt in (-10.0, NaN, Inf)
+                @test_throws DomainError Erebus.dry_porosity_update(0.5, 1.0, T, bad_dt, pc)
+            end
+            # A sintered marker has phi_0 < 1: 1 means no pressure history
+            e = _hk_error(
+                () -> Erebus.dry_porosity_update(
+                    0.5, 1.0, T, 1.0e10, pc; phi0_prev=1.0, sintered=true
+                ),
+            )
+            @test e isa DomainError
+            @test occursin("phi0_prev", e.msg)
+            # dt = 0 is a valid step: cold pressing only, no sintering
+            z = Erebus.dry_porosity_update(0.75, 1.0, T, 0.0, pc)
+            @test isapprox(z.phi, Erebus.phi_cold(1.0); rtol=1e-14)
+            @test iszero(z.dphi_sinter)
+        end
+    end
+
+    @testset "A porosity decrease below 1 ULP does not count as sintering" begin
+        pc = _hk_cfg().porosity
+        # A pushed marker (phi_d = 0.6 < phi_0 = 0.75) at 1e-12 bar for 1 s: h r(0.6)
+        # is 1.5e-27 ULP, so the backward Euler root rounds to 0.6 itself
+        u = Erebus.dry_porosity_update(0.6, 1.0e-12, 700.0, 1.0, pc)
+        @test isapprox(u.phi, 0.6; rtol=0, atol=0)
+        @test iszero(u.dphi_sinter)
+        # The marker is still unsintered: a later 50 bar, 500 K step cold presses it
+        u2 = Erebus.dry_porosity_update(
+            u.phi, 50.0, 500.0, 1.0, pc; phi0_prev=u.phi0, sintered=u.dphi_sinter > 0
+        )
+        @test isapprox(u2.phi, Erebus.porosity_phi0(50.0, 0.75); rtol=1e-14)
+        @test u2.phi < 0.45
+        # The root never over-sinters: phi_old - phi <= h r(phi), and the next float
+        # below phi does (the root is bracketed to 1 ULP)
+        for (phi_old, h, P_bar) in (
+            (0.6, 1.0, 1.0e-12),
+            (prevfloat(0.6), 1.0, 1.0e-12),
+            (0.7, 1.0e9, 1.0),
+            (0.3, 1.0e11, 1.0),
+        )
+            rate(p) = Erebus.porosity_decrease_rate(p, 0.75, P_bar, 950.0)
+            phi = Erebus._backward_euler_porosity(phi_old, h, rate)
+            @test phi_old - phi <= h * rate(phi)
+            @test phi_old - prevfloat(phi) > h * rate(prevfloat(phi))
+        end
+        # Edge case at the onset phi_d = phi_0 = 0.75: the exact backward Euler decrease
+        # is 5.69e-16 = 5.1 ULP (256-bit bisection of the reference rate), above 1 ULP, so
+        # it counts as sintering and the flag stays set
+        v = Erebus.dry_porosity_update(0.75, 1.0e-12, 700.0, 1.0, pc)
+        @test 3.0 <= v.dphi_sinter / eps(0.75) <= 6.0
+        @test isapprox(v.dphi_sinter, v.phi0 - v.phi; rtol=0, atol=0)
     end
 
     @testset "Ten-step run keeps dphi_sinter = phi0 - phi_d on every rock marker" begin
@@ -1100,7 +1237,9 @@ end
             porosity=cfg.porosity,
         )
         @test ncap == length(hot)
-        @test all(iszero, mk.phi_d[hot])
+        # The rock sinters to the smallest positive float, not 0: for phi <= 0.1 the rate
+        # is proportional to phi, so the backward Euler root stays above 0
+        @test all(p -> 0.0 <= p <= nextfloat(0.0), mk.phi_d[hot])
         # The step of the model warns with the number of capped markers
         st2, coords2, _ = _hk_state(cfg)
         hot2 = findall(<(3), st2.markers.tm)[1:300:1500]
@@ -1111,7 +1250,7 @@ end
         fill!(st2.grids.pr, cfg.geometry.psurface + 2.0e5)
         @test_logs (:warn, "Dry porosity: 5 markers reached the sintering substep cap") match_mode =
             :any Erebus.vent_and_degas!(st2, coords2, cfg)
-        @test all(iszero, st2.markers.phi_d[hot2])
+        @test all(p -> 0.0 <= p <= nextfloat(0.0), st2.markers.phi_d[hot2])
     end
 
     @testset "Rock properties use (1 - phi_d) and k_porous at every call site" begin
@@ -1413,14 +1552,17 @@ end
             @test isapprox(data_pos[string(fn)], getfield(pg, fn); rtol=0, atol=0)
         end
         # A porosity entry that is not a real vector of length marknum is a CheckpointError
-        for bad in (nothing, fill("x", nm), zeros(3), zeros(nm, 2))
+        # for each of the 4 fields; the message names the dry porosity array
+        for fn in fieldnames(Erebus.PorosityGroup),
+            bad in (nothing, fill("x", nm), zeros(3), zeros(nm + 1), zeros(nm, 2))
+
             partial = copy(data)
-            partial["phi0"] = bad
+            partial[string(fn)] = bad
             e = _hk_error(
                 () -> Erebus.restore_checkpoint_markers(partial, st.markers.core, cfg)
             )
             @test e isa Erebus.CheckpointError
-            @test occursin("phi0", e.msg)
+            @test occursin("dry porosity array $fn", e.msg)
         end
         # A restart checks [porosity] of the configuration it runs with
         bad_cfg = _hk_with(cfg; reaction=Erebus.ReactionConfig(; active=true))
@@ -1459,6 +1601,9 @@ end
         @test isapprox(mk_p.phi0[1], 0.75; rtol=1e-14)
         resize!(mk_p, 4)
         @test isapprox(mk_p.phi0[2:4], ones(3); rtol=1e-14)
+        # resize! keeps the phi_0 of the existing marker
+        @test isapprox(mk_p.phi0[1], 0.75; rtol=1e-14)
+        @test isapprox(mk_p.phi_d[1], 0.6; rtol=1e-14)
         @test all(iszero, mk_p.phi_d[2:4]) && all(iszero, mk_p.dphi_sinter[2:4])
         # A checkpoint of a model-none run cannot restart a henke2012 run silently
         st_n, coords_n, _ = _hk_state(_hk_cfg("porosity.model" => :none))

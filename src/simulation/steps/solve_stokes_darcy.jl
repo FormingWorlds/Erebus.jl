@@ -389,6 +389,23 @@ function _unpack_hydromechanical_solution!(
 end
 
 """
+    _marker_pressure_grid(state)
+
+Grid pressure that `update_marker_pressures!` reads as the fluid pressure of the markers.
+With the dry porosity group (`porosity.model = henke2012`) the pores hold no fluid, so
+the markers take the total pressure `grids.pr`; otherwise the fluid pressure `grids.pf`.
+
+# Arguments
+- `state`: Simulation state with the marker groups and the pressure grids.
+
+# Returns
+- `Matrix{Float64}`: `state.grids.pr` or `state.grids.pf` [Pa].
+"""
+function _marker_pressure_grid(state::SimulationState)
+    return haskey(state.markers.groups, :porosity) ? state.grids.pr : state.grids.pf
+end
+
+"""
 Interpolate P-node pressure field onto planetesimal markers.
 
 $(SIGNATURES)
@@ -1005,7 +1022,7 @@ function solve_stokes_darcy!(
             state.markers.core.xm,
             state.markers.core.ym,
             state.markers.core.tm,
-            g.pf,
+            _marker_pressure_grid(state),
             g.pr,
             length(state.markers);
             coords=coords,
