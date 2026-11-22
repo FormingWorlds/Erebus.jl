@@ -1829,6 +1829,33 @@ end
             @test isapprox(rho[1], 0.4 * rho_w[1]; rtol=1e-12)
         end
 
+        # Soft turbulence starts from the dry k_porous of the marker's own ksolidm
+        ks = [5.0, 5.0, 3000.0]
+        k_dry = Erebus.k_porous(Erebus.compute_ksolidm(300.0, 9; ksolidm=ks), 0.6)
+        rho, rhocp, eta, hr, k, tkrc, eik = arrs()
+        Erebus.compute_marker_properties!(
+            1,
+            [2],
+            [300.0],
+            rho,
+            rhocp,
+            eta,
+            hr,
+            k,
+            tkrc,
+            eik,
+            hrs,
+            hrf,
+            [1.0e-4],
+            [0.0],
+            9;
+            melting_active=true,
+            soft_turbulence=true,
+            ksolidm_val=ks,
+            phi_dry=phi_d,
+        )
+        @test isapprox(k[1], k_dry; rtol=1e-12)
+
         # The 3 particle-to-mesh paths give the same marker properties: tiled, buffered
         # without thread buffers (serial) and with them (threaded when nthreads > 1)
         for (mode, use_tb) in ((:tiled, true), (:buffered, false), (:buffered, true))
