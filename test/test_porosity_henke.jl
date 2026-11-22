@@ -973,6 +973,7 @@ end
         for bad in (
             ("materials.kphim0" => [1.0e-305, 1.0e-305, 1.0e-17],),
             ("materials.kphim0" => [1.0e-13, 1.0e-305, 1.0e-17],),
+            ("materials.kphim0" => [1.0e-13, 1.0e-13, 1.0e-305],),
         )
             e = _hk_error(() -> _hk_cfg(bad...))
             @test e isa ArgumentError && occursin("finite Darcy resistance", e.msg)
@@ -997,8 +998,8 @@ end
                 kphim0=typeof(cfg0.materials.kphim0)((k, 1.0e-13, 1.0e-17)),
             ),
         )
-        # A restart runs this check without validate_config: kphim0 <= 0 or NaN throws
-        for k in (0.0, -1.0e-13, NaN)
+        # A restart runs this check without validate_config: kphim0 <= 0, NaN or Inf throws
+        for k in (0.0, -1.0e-13, NaN, Inf)
             e = _hk_error(() -> Erebus._validate_porosity_config(with_k(k)))
             @test e isa ArgumentError && occursin("kphim0[1] > 0", e.msg)
         end
@@ -2440,9 +2441,11 @@ end
         @test_throws DomainError Erebus.dry_porosity_update(
             0.5, big"1e400", 900.0, 1.0, pcfg
         )
-        # A BigFloat dt or T of 1e400 is Inf in Float64 and throws, cold (300 K, no
-        # sintering) and hot (900 K); sinter_porosity_step too, also with 1 substep
-        for (T, dt) in ((300.0, big"1e400"), (900.0, big"1e400"), (big"1e400", 1.0))
+        # A BigFloat dt or T of 1e400 is Inf in Float64 and a T of 1e-400 is 0: both throw,
+        # cold (300 K) and hot (900 K); sinter_porosity_step too, also with 1 substep
+        for (T, dt) in (
+            (300.0, big"1e400"), (900.0, big"1e400"), (big"1e400", 1.0), (big"1e-400", 1.0)
+        )
             e = _hk_error(() -> Erebus.dry_porosity_update(0.5, 2.0, T, dt, pcfg))
             @test e isa DomainError
             @test occursin(T isa BigFloat ? "temperature" : "dt", e.msg)
@@ -2727,6 +2730,9 @@ end
             qx, qy, pf_r, g.RHOFX, g.RHOFY, g.RX, g.RY, g.gx, g.gy, coords; dry_nodes=rock
         )
         @test all(iszero, qx[rock]) && all(iszero, qy[rock])
+        # and on the faces to a flagged east or south neighbour
+        @test all(iszero, qx[circshift(rock, (0, -1))])
+        @test all(iszero, qy[circshift(rock, (-1, 0))])
         Erebus.reconstruct_darcy_fluxes!(
             qx, qy, pf_r, g.RHOFX, g.RHOFY, g.RX, g.RY, g.gx, g.gy, coords
         )
@@ -2981,6 +2987,14 @@ end
         @test !any(Erebus._cell_fractured(g, i, j, false) for j in 1:Nx, i in 1:Ny)
         @test !any(r.ws.fractured_cells) && !any(r.ws.fractured_cells_prev)
         @test r.res.n_flips_step_total == 0 && r.res.n_flips_last == 0
+        # A solve that starts with pf = pr + 2e5 Pa and a tensile strength of 1e-9 Pa, below
+        # the rounding of pr - pf, still records no fracture and no flip
+        g.TEN .= 1.0e-9
+        res2 = Erebus.solve_stokes_darcy!(
+            r.st, r.coords, cfg, r.ws; titer=1, dt_step_initial=r.st.dt
+        )
+        @test !any(r.ws.fractured_cells) && !any(r.ws.fractured_cells_prev)
+        @test res2.n_flips_step_total == 0 && res2.n_flips_last == 0
     end
 
     @testset "Active yielding of dry rock does not depend on psurface" begin

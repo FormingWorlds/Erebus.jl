@@ -2872,7 +2872,7 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
   partitioning, the redox state with its metallic iron), accessory phase tracking, a
   volatile ice mixture, hydrofracture (`poroelasticity.hydrofracture`), a hydrous rock
   (`materials.XWsolidm_init[1:2]` not 0), `poroelasticity.phimin` outside (0, 1e-3],
-  the matrix-free Stokes-Darcy operator (`solver.hydromech_solver = :matrix_free`), or a
+  a Stokes-Darcy solver other than the direct one (`solver.hydromech_solver = :direct`), or a
   `materials.kphim0` entry that is not positive and finite, or a water porosity whose
   Darcy resistance η_f / k(φ_min) is not finite (`_dry_water_resistances`).
 """

@@ -64,14 +64,15 @@ $$\nabla \cdot \mathbf{v}_s + \beta_s \frac{P_t - P_t^{0}}{\Delta t} = 0.$$
 
 Here $\mathbf{v}_s$ is the solid velocity in m/s, $P_t^{0}$ the total pressure of the previous step in Pa, and $\Delta t$ the time step in s.
 The first step takes $\beta_s = 0$, so the rock is incompressible there.
-The permeability `materials.kphim0`, the water viscosity, the water compressibility `poroelasticity.betafluid` and the water porosity therefore change no velocity, pressure or temperature.
+The permeability `materials.kphim0`, the water viscosity and the water compressibility `poroelasticity.betafluid` therefore change no velocity, pressure or temperature.
+The water porosity `phimin` enters only the adiabatic heating, through the solid fraction $1 - \phi$, and through it the temperature.
 A restart with another `phimin` or `kphim0` moves the rock as a restart with the values of the checkpoint.
 The markers still compute the Darcy resistance $\eta_f / k(\phi_{min})$, where $\eta_f$ is the water viscosity in Pa s and $k$ the permeability in $\text{m}^2$.
 Its largest value for the default mantle is the ice viscosity $10^{12}$ Pa s over $k = 8.0 \times 10^{-24}$ $\text{m}^2$.
 The configuration check rejects a `kphim0` that is not positive, and a `phimin` or `kphim0` so small that this resistance overflows.
 It also rejects the matrix-free solver (`solver.hydromech_solver = "matrix_free"`), whose operator has no dry cells, and the iterative solver, which no test runs with dry cells.
 
-The tests of the section *Which tests check this?* run a 200 km body for 4 steps with the rock permeability from $10^{-30}$ to $10^{-18}$ $\text{m}^2$ and `betafluid` from 0 to $10^{-5}$ $\text{Pa}^{-1}$.
+The tests of the section *Which tests check this?* run a 200 km body for 4 steps with the rock reference permeability `kphim0` from $10^{-30}$ to $10^{-18}$ $\text{m}^2$ and `betafluid` from 0 to $10^{-5}$ $\text{Pa}^{-1}$.
 The solid velocity, the temperature and $\phi_d$ change by less than 1e-10 of their size.
 
 ---
@@ -299,8 +300,8 @@ The Stokes solve fixes both pressures to `psurface` at the edge of the domain, s
 The dry pores hold only the gas at the surface, so their pressure is `psurface`.
 The effective pressure of the yield stress is therefore the total pressure minus `psurface`.
 The porosity step takes the same pressure.
-The fluid pressure of the water porosity `phimin` comes close to the total pressure.
-With it, the effective pressure would almost vanish, and rock of low cohesion would yield at a small shear stress.
+The fluid pressure of the dry solve equals the total pressure.
+With it, the effective pressure would vanish, and rock of low cohesion would yield at a small shear stress.
 
 ---
 
@@ -397,7 +398,7 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
     Testsets of `Configuration section [porosity]` check the processes that `henke2012` excludes, also at `init_simulation`.
     They check that a `phimin` of 0 or less or above 1e-3, and hydrofracture, are rejected with `henke2012`.
-    A rock permeability of 1e-6 $\text{m}^2$ passes.
+    A rock reference permeability `kphim0` of 1e-6 $\text{m}^2$ passes.
     A `kphim0` of 0, below 0 or NaN is rejected, and so are a `kphim0` of 1e-305 $\text{m}^2$ and a `phimin` of the smallest positive float, whose Darcy resistance overflows.
     The matrix-free and the iterative solver are rejected with `henke2012`; the direct solver passes.
     They check that the marker step and `dry_porosity_update` reject a field of a directly built `PorosityConfig` outside its domain.
@@ -422,9 +423,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     A test helper repeats the step functions of `simulation_loop`, bit for bit.
     With `phimin` = 1e-3 and `kphim0` of 1e-9 or 1e-12 $\text{m}^2$, a 4-step run keeps the time step and the temperature to 1e-12, the shear and adiabatic heating stay below 1e-6 $\text{W/m}^3$, and each step takes 1 outer iteration.
     A 4-step run of a 200 km body changes the solid velocity, the temperature and $\phi_d$ by less than 1e-10 between 2 values of a water parameter.
-    These are a rock permeability of 1e-30 and 1e-18 $\text{m}^2$, an air permeability of 1e-17 and 1e-9 $\text{m}^2$, and `betafluid` of 0 and 1e-5 $\text{Pa}^{-1}$.
+    These are a rock `kphim0` of 1e-30 and 1e-18 $\text{m}^2$, an air `kphim0` of 1e-17 and 1e-9 $\text{m}^2$, and `betafluid` of 0 and 1e-5 $\text{Pa}^{-1}$.
     The runs use the direct 6-variable solve, the 4-variable solve with eliminated Darcy fluxes and the spherical slice.
-    A rock permeability of 1e-6 $\text{m}^2$ runs without a warning.
+    A rock `kphim0` of 1e-6 $\text{m}^2$ runs without a warning.
     With model none `betafluid` changes the solid velocity by more than 1e-6.
     Assembled alone, the dry rows give $P_f = P_t$ and zero Darcy flux on the faces of a dry cell, and the water of a dry cell changes no velocity.
     A mask without a dry cell gives the matrix of model none bit for bit.
