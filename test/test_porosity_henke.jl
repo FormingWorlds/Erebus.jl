@@ -2524,11 +2524,9 @@ end
     end
 
     @testset "Without pore water the water porosity moves no marker" begin
-        # 200 km body at 900 K, 4 steps, water porosity phimin = 1e-3. Rock and sticky air
-        # hold no water, so neither the permeability kphim0 of the water porosity (rock
-        # 1e-30 to 1e-18 m^2, air 1e-17 or 1e-9 m^2) nor the water compressibility
-        # betafluid (0 to 1e-5 1/Pa) may change the solid velocity, the temperature or the
-        # dry porosity
+        # 200 km body at 900 K, 4 steps, phimin = 1e-3: without water, kphim0 (rock 1e-30 to
+        # 1e-18 m^2, air 1e-17 or 1e-9 m^2) and betafluid (0 to 1e-5 1/Pa) must not change
+        # the solid velocity, the temperature or the dry porosity
         Rp = 200_000.0
         cfg_of(extra...) = _hk_cfg(
             "grid.xsize" => 2.8 * Rp,
@@ -2602,10 +2600,9 @@ end
     end
 
     @testset "Dry P nodes: no compaction row, pf = pr, closed Darcy faces" begin
-        # 50 km body at 900 K after 1 step; the system of step 2 assembled with and
-        # without dry flags. The Darcy resistance, the bulk viscosity and the previous
-        # fluid pressure of a flagged node leave the solution unchanged; with every node
-        # flagged (henke2012) the water compressibility does too
+        # 50 km body at 900 K, the system of step 2 with and without dry flags: the Darcy
+        # resistance, bulk viscosity and previous pf of a flagged node change no solution;
+        # with every node flagged (henke2012) the water compressibility changes none either
         cfg = _hk_cfg(
             "materials.tkm0" => [900.0, 900.0, 170.0], "time.dt_initial" => 1000.0
         )
@@ -3057,10 +3054,9 @@ end
     end
 
     @testset "Sintering at a fixed grid volume raises the rock mass" begin
-        # 50 km body at 900 K, 6 steps. Rock mass of the markers, rho_s (1 - phi_d) per
-        # marker area, weighted with 2 pi r for the 3-D body of :enclosed_mass. The body
-        # keeps its radius, so the mass rises by 37 % (3-D, :enclosed_mass) and by 46 %
-        # (2-D, :poisson2d) instead of the body shrinking
+        # 50 km body at 900 K, 6 steps; rock mass rho_s (1 - phi_d) per marker area, times
+        # 2 pi r for the 3-D body of :enclosed_mass. The body keeps its radius, so the mass
+        # rises by 37 % (3-D, :enclosed_mass) and by 46 % (2-D, :poisson2d)
         ratios = map(((:enclosed_mass, true), (:poisson2d, false))) do (mode, metric)
             cfg = _hk_cfg(
                 "geometry.gravity_mode" => mode,

@@ -527,6 +527,7 @@ function grain_geometry(phi::Real, phi_0::Real, R0::Real)
     (isfinite(phi_0) && 0.0 <= phi_0 < 1.0) ||
         throw(DomainError(phi_0, "porosity phi_0 must be in [0, 1)"))
     phi <= phi_0 || throw(DomainError(phi, "porosity phi must not exceed phi_0"))
+    # Contacts per grain, Z of Henke et al. (2012) Eq. 36
     n_contacts = 8
     X = max((1.0 - phi_0) / (1.0 - phi), 1.0 / 3.0 + 1.0e-12)
     c = cbrt(X)
@@ -777,6 +778,7 @@ function sinter_porosity_step(
     )
     max_substeps >= 1 || throw(ArgumentError("max_substeps must be >= 1"))
     rate(p) = porosity_decrease_rate(p, phi_0, P_bar, T; R0=R0, A=A, E_act=E_act, n=n)
+    # Checks the arguments before the early return below
     rate(phi_n)
     phi = Float64(phi_n)
     (iszero(P_bar) || iszero(phi) || iszero(dt_s)) && return (phi, 0, false)
@@ -786,12 +788,12 @@ function sinter_porosity_step(
     capped = false
     while t_left > 0.0
         h = min(h, t_left)
-        last = nsub + 1 == max_substeps
-        capped = last && h < t_left
-        h = last ? t_left : h
+        is_last = nsub + 1 == max_substeps
+        capped = is_last && h < t_left
+        h = is_last ? t_left : h
         phi_try = _backward_euler_porosity(phi, h, rate)
         dphi = phi - phi_try
-        if !last && dphi > dphi_max
+        if !is_last && dphi > dphi_max
             # A rejected substep must shrink; a subnormal h times a factor above 0.5
             # rounds back to h, and an overflowing rate rejects every h
             h_new = h * max(0.1, 0.9 * dphi_max / dphi)

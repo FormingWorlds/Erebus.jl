@@ -1468,20 +1468,21 @@ function compute_marker_properties!(
         )
         etatotalm[m] = max(etamin, etasolidcur, etafluidcur)
         compute_hr && (hrtotalm[m] = total(hrsolidm[tm[m]], hrfluidm[tm[m]], phim[m]))
-        k_lattice = ktotal(
-            compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val),
-            compute_kfluidm(
-                tkm[m], mode; kfluidm=kfluidm_val, tmfluidphase=tmfluidphase_val
-            ),
-            phim[m],
-        )
+        k_solid = compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val)
+        k_lattice = if phi_dry === nothing
+            ktotal(
+                k_solid,
+                compute_kfluidm(
+                    tkm[m], mode; kfluidm=kfluidm_val, tmfluidphase=tmfluidphase_val
+                ),
+                phim[m],
+            )
+        else
+            # Dry porous rock (Henke et al. 2012): no pore-fluid term
+            k_porous(k_solid, phi_dry[m])
+        end
         ktotalm[m] = k_lattice
         if phi_dry !== nothing
-            # Dry porous rock (Henke et al. 2012): no pore-fluid term
-            k_lattice = k_porous(
-                compute_ksolidm(tkm[m], mode; ksolidm=ksolidm_val), phi_dry[m]
-            )
-            ktotalm[m] = k_lattice
             rhototalm[m] = rhosolid_eff * (1.0 - phi_dry[m])
             rhocptotalm[m] = rhocpsolid_eff * (1.0 - phi_dry[m])
             compute_hr && (hrtotalm[m] = hrsolidm[tm[m]] * (1.0 - phi_dry[m]))
@@ -5763,6 +5764,9 @@ Henke et al. (2012): cold pressing, then hot sintering (`dry_porosity_update`).
 
 # Details
 
+All 3 checks of `# Throws` run before the threaded marker loop, so a bad argument changes
+no marker, also when no marker is rock.
+
 The pressure of a marker is the total pressure `pr` interpolated from the P nodes, minus
 the surface anchor `psurface`, clipped at 0 and converted from Pa to bar. The marker
 temperature is `tkm` after the update of the step (T^{n+1}). `phi0` keeps the porosity
@@ -5791,9 +5795,6 @@ sintered.
   the checks of the configuration (`_validate_porosity_fields`).
 - `DomainError`: `dt` or `psurface` negative or not finite after conversion to
   `Float64`.
-
-All 3 checks run before the threaded marker loop, so a bad argument changes no marker,
-also when no marker is rock.
 """
 function advance_marker_dry_porosity!(
     pg::PorosityGroup,

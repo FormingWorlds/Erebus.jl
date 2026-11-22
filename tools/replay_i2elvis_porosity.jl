@@ -1,13 +1,7 @@
 #!/usr/bin/env julia
-# tools/replay_i2elvis_porosity.jl
-# Replays the cold pressing and hot sintering block of the i2elvis code (markmart.c)
-# at a set of marker states and prints the table that test/test_porosity_henke.jl
-# compares with the Erebus functions.
-#
-# Usage: julia tools/replay_i2elvis_porosity.jl <path to i2elvis clone> [C compiler]
-#
-# The i2elvis source is GPL-3, so it is not copied into this repository. The script
-# reads the lines from a local clone, wraps them in a C function and compiles it.
+# Replays the porosity block of i2elvis (markmart.c) and prints the table that
+# test/test_porosity_henke.jl compares with. The GPL-3 source is read from a local clone:
+# julia tools/replay_i2elvis_porosity.jl <path to i2elvis clone> [C compiler]
 
 """
     REPLAY_STATES
