@@ -31,10 +31,11 @@ The heat that pore water carries through the grid is 0.
 The shear heating has no compaction and Darcy terms, and the adiabatic heating has no pore-water term.
 The fluid pressure moves with the rock from one step to the next.
 It does not decide when the outer iteration of a time step has converged.
+The plastic iteration does not weigh it either.
 The configuration check rejects a `phimin` of 0 or less, or above $10^{-3}$, with this model.
-The adiabatic heating and the compaction term of the Stokes-Darcy solve still use the water porosity of rock.
+The adiabatic heating still uses the water porosity of rock.
 There the bound keeps the solid fraction $1 - \phi$ within 0.1 % of 1.
-The configuration check also bounds the permeability of this water, as the next section explains.
+The Stokes-Darcy solve holds no water at all, as the next section explains.
 The columns `phi_max` and `phi_mean` of `telemetry.csv` give the maximum and the mean of $\phi_d$ over the rock markers, not the water porosity.
 The processes that need pore water, melt or metal are therefore not allowed together with this model.
 The configuration check rejects `henke2012` when reaction, venting, hydrothermal convection, accretion or telescoping is on.
@@ -46,55 +47,32 @@ The rock must be dry: `materials.XWsolidm_init = [0.0, 0.0, nan]`.
 
 ---
 
-## Why does the configuration bound the permeability of rock?
+## How does the Stokes-Darcy solve treat rock without pore water?
 
-The short answer: the Stokes-Darcy solve still lets the water porosity of rock drain, and a small permeability keeps this drainage from moving the rock.
+The short answer: with `model = "henke2012"` the solve holds no water, so no value of the water can move the rock.
 
-Every pore-water term that heats rock, moves a marker or limits the time step is off with `model = "henke2012"`.
-One coupling stays: the compaction term of the solid momentum and continuity equations.
-Through it the solid compacts where the water of the porosity `phimin` drains.
-The water drains faster for a larger Darcy mobility $M$, in $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$.
-$M$ is the permeability $k$ at the water porosity $\phi_{min}$, divided by the smallest water viscosity $\eta_f$ of rock:
+The Stokes-Darcy solve has 2 pressures at each cell centre, the total pressure $P_t$ and the fluid pressure $P_f$, both in Pa.
+With pore water, the solid continuity equation has a compaction term, and a second equation moves the water by Darcy flow.
+Without pore water every cell centre is dry, in rock and in the sticky air around the body.
+The pores of the sticky air hold no water either: their water porosity is also `phimin`.
+A dry cell has no compaction term and no fluid pressure in its solid continuity equation.
+Its drained compressibility is the solid compressibility $\beta_s$ (`poroelasticity.betasolid`), in $\text{Pa}^{-1}$, and its Biot-Willis coefficient is 0.
+Its fluid equation is $P_f = P_t$, and no Darcy flux crosses its faces.
+The solid continuity equation of a dry cell is then
 
-$$M = \frac{k(\phi_{min})}{\eta_f}, \qquad k(\phi) = k_0 \left(\frac{\phi}{\phi_{ref}}\right)^3 \left(\frac{1 - \phi}{1 - \phi_{ref}}\right)^{-2}.$$
+$$\nabla \cdot \mathbf{v}_s + \beta_s \frac{P_t - P_t^{0}}{\Delta t} = 0.$$
 
-Here $\phi_{min}$ is `poroelasticity.phimin`, $k_0$ is `materials.kphim0` of mantle and crust, in $\text{m}^2$, and $\phi_{ref}$ is `thermodynamics.phim0`.
-$\eta_f$ is in Pa s.
-The Arrhenius law of the water viscosity has a floor of $10^{-5}$ Pa s, so this floor is $\eta_f$ by default.
-The default configuration has $k(\phi_{min}) = 8.0 \times 10^{-24}$ $\text{m}^2$ and $M$ = 8.0e-19 $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$.
-With `phimin` = 1e-3, the largest allowed value, it has $M$ = 8.0e-16 $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$.
+Here $\mathbf{v}_s$ is the solid velocity in m/s, $P_t^{0}$ the total pressure of the previous step in Pa, and $\Delta t$ the time step in s.
+The first step takes $\beta_s = 0$, so the rock is incompressible there.
+The permeability `materials.kphim0`, the water viscosity, the water compressibility `poroelasticity.betafluid` and the water porosity therefore change no velocity, pressure or temperature.
+A restart with another `phimin` or `kphim0` moves the rock as a restart with the values of the checkpoint.
+The markers still compute the Darcy resistance $\eta_f / k(\phi_{min})$, where $\eta_f$ is the water viscosity in Pa s and $k$ the permeability in $\text{m}^2$.
+Its largest value for the default mantle is the ice viscosity $10^{12}$ Pa s over $k = 8.0 \times 10^{-24}$ $\text{m}^2$.
+The configuration check rejects a `kphim0` that is not positive, and a `phimin` or `kphim0` so small that this resistance overflows.
+It also rejects the matrix-free solver (`solver.hydromech_solver = "matrix_free"`), whose operator has no dry cells.
 
-We measured the effect of $M$ with runs of 4 time steps at `phimin` = 1e-3.
-Each pair of runs differs only in $M$, by a factor of $10^6$.
-The temperature and $\phi_d$ change little.
-Over the whole range of $M$ in the 200 km and 50 km bodies, the temperature changes by at most $5.1 \times 10^{-5}$ of its own change over the 4 steps.
-$\phi_d$ changes by at most $3.4 \times 10^{-4}$ of its change.
-The solid velocity changes most.
-At small $M$ its change grows in proportion to $M$.
-At large $M$ the water drains completely, and more $M$ changes nothing.
-A 200 km body at 900 K then moves 1.2 % faster than at $M = 0$.
-
-The configuration check therefore rejects $M$ above 1e-15 $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$ with `henke2012`.
-At $\eta_f = 10^{-5}$ Pa s this bound is $k(\phi_{min}) \le 10^{-20}$ $\text{m}^2$.
-The table gives the change between $k(\phi_{min}) = 10^{-20}$ $\text{m}^2$ and $10^{-26}$ $\text{m}^2$.
-The velocity column is relative to the largest solid speed.
-The temperature and $\phi_d$ columns are relative to their largest change over the 4 steps.
-The water viscosity of these runs is $1.6 \times 10^{-5}$ Pa s at 900 K and $1.1 \times 10^{-5}$ Pa s at 1100 K.
-
-| Body radius | Temperature | Solid velocity | Temperature change | $\phi_d$ change |
-|:------------|:------------|:---------------|:-------------------|:-----------------|
-| 200 km | 900 K | $1.6 \times 10^{-5}$ | $2.4 \times 10^{-8}$ | $1.0 \times 10^{-6}$ |
-| 50 km | 900 K | $1.4 \times 10^{-4}$ | $1.6 \times 10^{-8}$ | $2.6 \times 10^{-6}$ |
-| 20 km | 900 K | $4.4 \times 10^{-4}$ | $1.9 \times 10^{-6}$ | $2.4 \times 10^{-4}$ |
-| 200 km | 1100 K mantle, 300 K crust | $1.7 \times 10^{-5}$ | $7.9 \times 10^{-9}$ | $6.8 \times 10^{-7}$ |
-| 20 km | 1100 K | $3.7 \times 10^{-4}$ | $8.3 \times 10^{-7}$ | $3.5 \times 10^{-5}$ |
-| 200 km, yielding, `:enclosed_mass` | 1100 K mantle, 300 K crust | $5.4 \times 10^{-5}$ | $3.8 \times 10^{-9}$ | $3.5 \times 10^{-6}$ |
-| 200 km, yielding, `:poisson2d` | 1100 K mantle, 300 K crust | $3.6 \times 10^{-5}$ | $3.1 \times 10^{-9}$ | $1.7 \times 10^{-6}$ |
-
-The 2 yielding runs have a friction coefficient of 0.005 and a cohesion of $10^4$ Pa, and 38 and 30 basic nodes yield in both runs of each pair.
-
-The 20 km body at 900 K reaches a velocity change of $10^{-3}$ at $k(\phi_{min}) = 3 \times 10^{-20}$ $\text{m}^2$, where $M = 1.9 \times 10^{-15}$ $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$.
-Smaller bodies respond more strongly, so the bound is measured for radii of 20 km and more.
+The tests of the section *Which tests check this?* run a 200 km body for 4 steps with the rock permeability from $10^{-30}$ to $10^{-18}$ $\text{m}^2$ and `betafluid` from 0 to $10^{-5}$ $\text{Pa}^{-1}$.
+The solid velocity, the temperature and $\phi_d$ change by less than 1e-10 of their size.
 
 ---
 
@@ -328,7 +306,7 @@ With it, the effective pressure would almost vanish, and rock of low cohesion wo
 
 ## What does the model leave out?
 
-The short answer: it leaves out some density terms, the shrinking of the body, the dry porosity in the adiabatic heating and the Stokes-Darcy solve, the compaction work, a reset on melting and the sintered surface porosity.
+The short answer: it leaves out some density terms, the shrinking of the body, the dry porosity in the adiabatic heating, the compaction work, a reset on melting and the sintered surface porosity.
 Its grid must also resolve the surface layer.
 
 The materials of `Erebus.jl` are fixed constants.
@@ -359,13 +337,6 @@ It weights the solid term with $1 - \phi$, where $\phi$ is the water porosity of
 In this model that porosity stays at `phimin`, so the term counts the rock as dense.
 At the centre of the test body of 50 km, at the start, $1 - \phi_d = 0.58$.
 The adiabatic heating there is therefore 1.72 times the value with $1 - \phi_d$.
-
-The Stokes-Darcy solve does not use the dry porosity either.
-It keeps the water porosity `phimin` in rock, with its bulk viscosity and its Darcy flow.
-Their compaction and Darcy terms do not enter the shear heating, and the pore-water term does not enter the adiabatic heating.
-The heat that this pore water would carry is set to 0, and its compaction rate does not limit the time step.
-In a 4-step test run of a 200 km body at 900 K the whole shear heating stays below 1e-6 $\text{W/m}^3$.
-Only the compaction term of the solid equations still feels this water, within the bound on its mobility.
 
 The energy equation has no term for the work of compaction.
 Henke et al. (2012, Eqs. 20 to 23) add 2 heat sources that compaction causes.
@@ -426,7 +397,9 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     `tools/replay_i2elvis_porosity.jl` compiles that block from a local i2elvis clone and prints the recorded table.
     Testsets of `Configuration section [porosity]` check the processes that `henke2012` excludes, also at `init_simulation`.
     They check that a `phimin` of 0 or less or above 1e-3, and hydrofracture, are rejected with `henke2012`.
-    A Darcy mobility of rock above 1e-15 $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$ is rejected, also from the crust permeability, a constant water viscosity or the viscosity below the freezing point; the default 8.0e-19 and 8.0e-16 at `phimin` = 1e-3 pass.
+    A rock permeability of 1e-6 $\text{m}^2$ passes.
+    A `kphim0` of 0, below 0 or NaN is rejected, and so are a `kphim0` of 1e-305 $\text{m}^2$ and a `phimin` of the smallest positive float, whose Darcy resistance overflows.
+    The matrix-free solver is rejected with `henke2012`; the direct and the iterative solver pass.
     They check that the marker step and `dry_porosity_update` reject a field of a directly built `PorosityConfig` outside its domain.
     The marker step also rejects a bad `dt` or `psurface` before it changes a marker, also when no marker is rock.
     It checks `dt` and `psurface` in Float64, so a BigFloat of 1e400 is rejected and a BigFloat of 1e5 gives the Float64 result.
@@ -434,7 +407,7 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     Testsets of `Dry porosity marker group and step` check the marker arrays and the setup pressure against the uniform-density limit.
     They check the residual of the hydrostatic balance and the setup pressure against the Stokes pressure of the first step, to 5 %.
     They check the setup pressure `pfm0` of the melting law and the 2-D Poisson profile of compressible powder.
-    A 3-step run with melting checks that `pfm0` follows the total pressure, not the fluid pressure, to 1e-6.
+    A 3-step run with melting checks that `pfm0` follows the total pressure, to 1e-6, and that the dry solve gives $P_f = P_t$.
     A direct call of `solve_stokes_darcy!` at step 2 checks the same, to 1e-6.
     They check the memory of $\phi_0$ and its freeze at the onset of sintering.
     A decrease below 1e-12 does not count as sintering, so a later cold pressing still lowers $\phi_0$.
@@ -445,10 +418,18 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     The setup profile and the radiative surface faces use `phi_cap` where it lies below `phi_init`.
     A 4-step run of a 200 km body at 900 K keeps the time step within a factor 3 of model none and the shear heating below 1e-6 $\text{W/m}^3$.
     The same run checks that the pore-water heat is 0 and that the telemetry porosity columns give $\phi_d$.
-    The step stays within a factor 3 also with a water porosity `phim0` of 1e-4 and a permeability `kphim0` of 1e-12 $\text{m}^2$.
-    This and the next runs lie above the mobility bound; a test helper sets them past the configuration check and repeats the step functions of `simulation_loop`, bit for bit at a valid configuration.
-    With `phimin` = 1e-3 and `kphim0` of 1e-9 or 1e-12 $\text{m}^2$, a 4-step run keeps the time step, the shear and adiabatic heating stay below 1e-6 $\text{W/m}^3$, and each step takes 1 outer iteration.
-    No cell fractures and no fracture flag flips where the fictitious fluid pressure exceeds the total pressure plus the tensile strength.
+    A water porosity `phim0` of 1e-4 and a permeability `kphim0` of 1e-12 $\text{m}^2$ give the same step, to 1e-10.
+    A test helper repeats the step functions of `simulation_loop`, bit for bit.
+    With `phimin` = 1e-3 and `kphim0` of 1e-9 or 1e-12 $\text{m}^2$, a 4-step run keeps the time step and the temperature to 1e-12, the shear and adiabatic heating stay below 1e-6 $\text{W/m}^3$, and each step takes 1 outer iteration.
+    A 4-step run of a 200 km body changes the solid velocity, the temperature and $\phi_d$ by less than 1e-10 between 2 values of a water parameter.
+    These are a rock permeability of 1e-30 and 1e-18 $\text{m}^2$, an air permeability of 1e-17 and 1e-9 $\text{m}^2$, and `betafluid` of 0 and 1e-5 $\text{Pa}^{-1}$.
+    The runs use the direct 6-variable solve, the 4-variable solve with eliminated Darcy fluxes and the spherical slice.
+    A rock permeability of 1e-6 $\text{m}^2$ runs without a warning.
+    With model none `betafluid` changes the solid velocity by more than 1e-6.
+    Assembled alone, the dry rows give $P_f = P_t$ and zero Darcy flux on the faces of a dry cell, and the water of a dry cell changes no velocity.
+    A mask without a dry cell gives the matrix of model none bit for bit.
+    The plastic iteration gives $P_f$ the weight 0 in its Anderson mixing and leaves $P_f$ and the Darcy fluxes out of its cycle stop.
+    The dry solve gives $P_f = P_t$, so no cell fractures and no fracture flag flips; a fluid pressure 2e5 Pa above $P_t$ fractures cells only with pore water.
     Without pore water the fluid pressure is carried with the solid velocity, and `time.dxymax_fluid` does not change the step of a melting run.
     Fluid and solid pressures 1 MPa per column off the solution leave the heating, the temperature and the convergence of a dry thermal step unchanged; with pore water they change them.
     Active yielding gives the same yielding nodes and step at `psurface` of 1e3 Pa and 1e8 Pa, in both gravity modes.
@@ -457,6 +438,7 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     A 6-step run at 900 K checks the rise of the rock mass, 37 % (3-D) and 46 % (2-D).
     A restart that changes `porosity.model` is refused, with `force_restart_config` false and true.
     A restart from the checkpoint of step 4 repeats an 8-step run bit for bit.
+    A forced restart with `phimin` = 1e-8 and `kphim0` = 1e-9 $\text{m}^2$ gives the velocity, the step and $\phi_d$ of a restart with the checkpoint values, to 1e-10.
 
     Command: `julia --project -t 2 -e 'using Test; include("test/test_porosity_henke.jl")'`
     With 2 threads the test also runs the threaded marker-to-grid mapping.

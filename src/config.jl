@@ -2871,9 +2871,10 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
   kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
   partitioning, the redox state with its metallic iron), accessory phase tracking, a
   volatile ice mixture, hydrofracture (`poroelasticity.hydrofracture`), a hydrous rock
-  (`materials.XWsolidm_init[1:2]` not 0), `poroelasticity.phimin` outside (0, 1e-3], or
-  a Darcy mobility of the water porosity of rock (`_dry_rock_darcy_mobility`) above
-  `DRY_ROCK_MOBILITY_MAX` = 1e-15 m² Pa⁻¹ s⁻¹ (k = 1e-20 m² at η_f = 1e-5 Pa s).
+  (`materials.XWsolidm_init[1:2]` not 0), `poroelasticity.phimin` outside (0, 1e-3],
+  the matrix-free Stokes-Darcy operator (`solver.hydromech_solver = :matrix_free`), or a
+  `materials.kphim0` entry that is not positive and finite, or a water porosity whose
+  Darcy resistance η_f / k(φ_min) is not finite (`_dry_water_resistances`).
 """
 function _validate_porosity_config(cfg::SimulationConfig)
     p = cfg.porosity
@@ -2907,66 +2908,82 @@ function _validate_porosity_config(cfg::SimulationConfig)
             ),
         )
     end
+    # The matrix-free operator has no rows for dry material (keyword dry_nodes)
+    cfg.solver.hydromech_solver === :matrix_free && throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires solver.hydromech_solver = :direct or :iterative; got :matrix_free",
+        ),
+    )
     xw = cfg.materials.XWsolidm_init
     (iszero(xw[1]) && iszero(xw[2])) || throw(
         ArgumentError(
             "porosity.model = henke2012 requires dry rock, materials.XWsolidm_init = [0, 0, NaN]; got $(xw[1]), $(xw[2])",
         ),
     )
-    # Rock keeps the water porosity phimin, which the adiabatic heating and the bulk
-    # viscosity still use; at most 1e-3 keeps rock dense there
+    # Rock keeps the water porosity phimin, which the adiabatic heating still uses; at
+    # most 1e-3 keeps rock dense there
     phimin = cfg.poroelasticity.phimin
     0.0 < phimin <= 1.0e-3 || throw(
         ArgumentError(
             "porosity.model = henke2012 requires 0 < poroelasticity.phimin <= 1e-3; got $phimin",
         ),
     )
-    # The compaction rows still drain this water; a small mobility keeps rock at the limit
-    # of no drainage (DRY_ROCK_MOBILITY_MAX)
-    mobility = _dry_rock_darcy_mobility(cfg)
-    mobility <= DRY_ROCK_MOBILITY_MAX || throw(
-        ArgumentError(
-            "porosity.model = henke2012 requires a Darcy mobility k(phimin) / eta_f of rock <= $DRY_ROCK_MOBILITY_MAX m^2/(Pa s); got $mobility (lower materials.kphim0[1:2])",
-        ),
-    )
+    # The solve holds no water, but the marker properties still divide by k(phimin)
+    for (t, k) in enumerate(cfg.materials.kphim0)
+        (isfinite(k) && k > 0.0) || throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires materials.kphim0[$t] > 0 and finite; got $k",
+            ),
+        )
+    end
+    for (t, r) in enumerate(_dry_water_resistances(cfg))
+        isfinite(r) || throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires a finite Darcy resistance eta_f / k(phimin) of material $t; got $r (raise materials.kphim0[$t] or poroelasticity.phimin)",
+            ),
+        )
+    end
     return nothing
 end
 
 """
-Largest Darcy mobility k(φ_min) / η_f of the water porosity φ_min of rock: the
-permeability `kphi` of `materials.kphim0[1:2]` at `poroelasticity.phimin` over the
-smallest water viscosity of rock, the high-temperature limit of `compute_fluid_viscosity`
-or `materials.etafluidm[1:2]` (below `thermodynamics.tmfluidphase`).
+Largest Darcy resistance η_f / k(φ_min) [Pa s m⁻²] that the markers of mantle, crust and
+sticky air (`tm` = 1, 2, 3) can take at the water porosity φ_min
+(`poroelasticity.phimin`): `ηᶠcur_inv_kᵠ` of `materials.kphim0[t]` with the largest water
+viscosity of the material, `materials.etafluidm[t]` (ice, air) or the liquid value just
+above `thermodynamics.tmfluidphase` (`compute_fluid_viscosity` falls with T). An
+underflowing k or an overflowing geometric factor gives `Inf`.
 
 # Arguments
 - `cfg`: simulation configuration.
 
 # Returns
-- Mobility [m² Pa⁻¹ s⁻¹].
+- `NTuple{3,Float64}`: the resistances [Pa s m⁻²].
 
 # Throws
-- `DomainError`: from `kphi` for `phimin` outside [0, 1), `phim0` outside (0, 1) or a
-  negative `kphim0`.
+- `DomainError`: from `ηᶠcur_inv_kᵠ` for `phimin` outside (0, 1), `phim0` outside
+  (0, 1), a `kphim0` that is not positive or a negative viscosity.
 """
-function _dry_rock_darcy_mobility(cfg::SimulationConfig)
+function _dry_water_resistances(cfg::SimulationConfig)
     th = cfg.thermodynamics
-    # The water viscosity falls with T; floatmax gives its high-temperature limit
-    eta_hot = compute_fluid_viscosity(
-        floatmax(Float64),
-        1;
-        mode=th.fluid_viscosity_mode,
-        eta0=th.fluid_viscosity_eta0,
-        Ea=th.fluid_viscosity_Ea,
-        T0=th.fluid_viscosity_T0,
-        tmfluidphase=th.tmfluidphase,
-    )
-    eta_min = min(eta_hot, cfg.materials.etafluidm[1], cfg.materials.etafluidm[2])
     phimin = cfg.poroelasticity.phimin
-    k = max(
-        kphi(cfg.materials.kphim0[1], phimin; phim0=th.phim0),
-        kphi(cfg.materials.kphim0[2], phimin; phim0=th.phim0),
-    )
-    return k / eta_min
+    return ntuple(3) do t
+        eta_f = cfg.materials.etafluidm[t]
+        eta_liquid = compute_fluid_viscosity(
+            nextfloat(Float64(th.tmfluidphase)),
+            t;
+            mode=th.fluid_viscosity_mode,
+            eta0=th.fluid_viscosity_eta0,
+            eta_ice=eta_f,
+            eta_air=eta_f,
+            Ea=th.fluid_viscosity_Ea,
+            T0=th.fluid_viscosity_T0,
+            tmfluidphase=th.tmfluidphase,
+        )
+        return ηᶠcur_inv_kᵠ(
+            cfg.materials.kphim0[t], phimin, max(eta_f, eta_liquid); phim0=th.phim0
+        )
+    end
 end
 
 @inline function _is_removed_config_field(::Type{MeltingConfig}, k::AbstractString)::Bool

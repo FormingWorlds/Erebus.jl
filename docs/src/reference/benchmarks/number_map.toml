@@ -417,15 +417,5 @@ test_name = "test_porosity_henke.jl"
 
 [[entry]]
 page = "explanations/porosity_sintering.md"
-number = "1e-15"
-test_name = "test_porosity_henke.jl"
-
-[[entry]]
-page = "explanations/porosity_sintering.md"
-number = "8.0e-19"
-test_name = "test_porosity_henke.jl"
-
-[[entry]]
-page = "explanations/porosity_sintering.md"
-number = "8.0e-16"
+number = "1e-10"
 test_name = "test_porosity_henke.jl"

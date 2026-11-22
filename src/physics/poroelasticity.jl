@@ -692,29 +692,6 @@ once its cumulative sintering decrease `dphi_sinter` exceeds this value, and
 const DPHI_SINTERED = 1.0e-12
 
 """
-Largest Darcy mobility k(φ_min) / η_f [m² Pa⁻¹ s⁻¹] of the water porosity of rock that
-`_validate_porosity_config` accepts with `porosity.model = :henke2012`.
-
-The dry rock keeps the water porosity φ_min (`poroelasticity.phimin`). The compaction
-term of the solid momentum and continuity rows of the Stokes-Darcy solve still couples
-the rock to this fictitious water, through the permeability
-k(φ_min) = k_0 (φ_min/φ_ref)³ ((1 - φ_min)/(1 - φ_ref))⁻² (`kphi`, with k_0 =
-`materials.kphim0` and φ_ref = `thermodynamics.phim0`) and the smallest water viscosity
-η_f of rock. While it is small, the effect on the rock grows in proportion to the
-mobility. From a mobility of about 6e-8 (k = 1e-12 m² at 900 K) it no longer grows;
-there the solid speed of a 200 km body differs by 1.2 % from that at zero mobility.
-
-Measured basis, 4 steps at φ_min = 1e-3, change between a mobility and a mobility 1e6
-times smaller, relative to the largest solid speed (for the velocity) and to the largest
-change over the 4 steps (for T and φ_d): at k = 1e-20 m², η_f = 1.6e-5 Pa s (900 K), the
-velocity changes by 1.6e-5 (200 km body), 1.4e-4 (50 km) and 4.4e-4 (20 km), at 1100 K
-by 1.7e-5 (200 km) and 3.7e-4 (20 km); T by at most 2e-6 and φ_d by at most 2.4e-4.
-The 20 km body reaches 1.0e-3 at k = 3e-20 m², a mobility of 1.9e-15. The default
-configuration has a mobility of 8e-19.
-"""
-const DRY_ROCK_MOBILITY_MAX = 1.0e-15
-
-"""
 Backward Euler porosity over one substep `h` [s]: the root of
 g(φ) = φ - φ_old + h r(φ) in (0, φ_old] by bisection; g(0) < 0 since r(0) = 0.
 The bisection keeps g(lo) < 0 <= g(hi) until lo and hi are adjacent floats (at most
@@ -770,9 +747,10 @@ reported as capped. P = 0, φ^n = 0 or dt = 0 return φ^n. φ never increases.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain, `dphi_max` below
-      `DPHI_SINTERED`, or a rate so large that a rejected substep cannot shrink further
-      (the value is a NamedTuple of the inputs)
+    - DomainError: an argument outside its physical domain (`dt` checked in Float64, so
+      a BigFloat above `floatmax` throws), `dphi_max` below `DPHI_SINTERED`, or a rate so
+      large that a rejected substep cannot shrink further (the value is a NamedTuple of
+      the inputs)
     - ArgumentError: `max_substeps` < 1
 """
 function sinter_porosity_step(
@@ -788,7 +766,8 @@ function sinter_porosity_step(
     dphi_max::Real=0.01,
     max_substeps::Integer=1000,
 )
-    require_nonneg_finite(dt, "time step dt")
+    # A BigFloat dt above floatmax is Inf in Float64, where the step runs
+    dt_s = require_nonneg_finite(Float64(dt), "time step dt")
     dphi_max = Float64(dphi_max)
     (isfinite(dphi_max) && dphi_max >= DPHI_SINTERED) || throw(
         DomainError(
@@ -800,8 +779,8 @@ function sinter_porosity_step(
     rate(p) = porosity_decrease_rate(p, phi_0, P_bar, T; R0=R0, A=A, E_act=E_act, n=n)
     rate(phi_n)
     phi = Float64(phi_n)
-    (iszero(P_bar) || iszero(phi) || iszero(dt)) && return (phi, 0, false)
-    t_left = Float64(dt)
+    (iszero(P_bar) || iszero(phi) || iszero(dt_s)) && return (phi, 0, false)
+    t_left = dt_s
     h = t_left
     nsub = 0
     capped = false
@@ -923,9 +902,9 @@ cools keeps its sintered porosity.
 
 # Throws
 
-    - DomainError: an argument outside its physical domain (`dt` and `P_bar`, the latter
-      in Float64, are checked at every temperature), or `sintered` with `phi0_prev` that
-      is 1 in Float64 or `phi_d > phi0_prev`
+    - DomainError: an argument outside its physical domain (`T`, `dt` and `P_bar` are
+      checked in Float64 at every temperature, so a BigFloat above `floatmax` throws), or
+      `sintered` with `phi0_prev` that is 1 in Float64 or `phi_d > phi0_prev`
     - ArgumentError: a field of `pcfg` outside its domain (`_validate_porosity_fields`)
 """
 function dry_porosity_update(
@@ -940,9 +919,9 @@ function dry_porosity_update(
     _validate_porosity_fields(pcfg)
     require_unit_interval(phi_d, "dry porosity phi_d")
     require_unit_interval(phi0_prev, "porosity before sintering phi0_prev")
-    require_positive_finite(T, "temperature T")
-    require_nonneg_finite(dt, "time step dt")
     # The step runs in Float64; a BigFloat pressure would give a BigFloat phi_0
+    Tk = require_positive_finite(Float64(T), "temperature T")
+    dt_s = require_nonneg_finite(Float64(dt), "time step dt")
     P = require_nonneg_finite(Float64(P_bar), "pressure P_bar")
     if sintered
         Float64(phi0_prev) < 1.0 ||
@@ -956,9 +935,17 @@ function dry_porosity_update(
         )
     end
     phi_p = min(Float64(phi_d), phi_0)
-    T >= pcfg.T_sinter || return (phi=phi_p, phi0=phi_0, dphi_sinter=0.0, capped=false)
+    Tk >= pcfg.T_sinter || return (phi=phi_p, phi0=phi_0, dphi_sinter=0.0, capped=false)
     phi_s, _, capped = sinter_porosity_step(
-        phi_p, phi_0, P, T, dt; R0=pcfg.grain_radius, A=pcfg.A, E_act=pcfg.E_act, n=pcfg.n
+        phi_p,
+        phi_0,
+        P,
+        Tk,
+        dt_s;
+        R0=pcfg.grain_radius,
+        A=pcfg.A,
+        E_act=pcfg.E_act,
+        n=pcfg.n,
     )
     phi_s = clamp(phi_s, 0.0, 1.0)
     return (phi=phi_s, phi0=phi_0, dphi_sinter=phi_p - phi_s, capped=capped)
