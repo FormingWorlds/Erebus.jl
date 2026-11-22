@@ -825,8 +825,8 @@ end
     end
 
     @testset "henke2012 needs an assembled Stokes-Darcy solve" begin
-        # The matrix-free operator has no dry rock rows; :direct and :iterative solve
-        # the assembled system that has them
+        # The matrix-free operator has no dry rock rows; the Krylov solver has no tested
+        # convergence with them; :direct solves the assembled system
         cfg_of(solver; model=:henke2012) = Erebus.SimulationConfig(;
             porosity=Erebus.PorosityConfig(; model=model),
             reaction=Erebus.ReactionConfig(; active=false),
@@ -841,7 +841,11 @@ end
         @test occursin("hydromech_solver", e.msg) && occursin("henke2012", e.msg)
         @test _hk_error(() -> Erebus._validate_porosity_config(cfg_of(:matrix_free))) isa
             ArgumentError
-        @test Erebus.validate_config(cfg_of(:iterative)) === nothing
+        e = _hk_error(() -> Erebus.validate_config(cfg_of(:iterative)))
+        @test e isa ArgumentError
+        @test occursin("hydromech_solver", e.msg) && occursin(":iterative", e.msg)
+        # Model none keeps the iterative solver
+        @test Erebus.validate_config(cfg_of(:iterative; model=:none)) === nothing
         @test Erebus.validate_config(cfg_of(:direct)) === nothing
         # Model none keeps the matrix-free solver
         @test Erebus.validate_config(cfg_of(:matrix_free; model=:none)) === nothing

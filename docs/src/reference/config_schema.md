@@ -78,7 +78,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
 | `etamin` | `Float64` | `1.0e+12` | Pa s | Lower shear viscosity cutoff | $> 0$ |
 | `etamax` | `Float64` | `1.0e+23` | Pa s | Upper shear viscosity cutoff | $\ge \text{etamin}$ |
-| `hydromech_solver` | `String` / `Symbol` | `"direct"` | - | Hydromechanical linear solver module; `porosity.model = henke2012` needs `"direct"` or `"iterative"`, whose assembled system holds no water | `"direct"`, `"iterative"`, `"matrix_free"` |
+| `hydromech_solver` | `String` / `Symbol` | `"direct"` | - | Hydromechanical linear solver module; `porosity.model = henke2012` needs `"direct"`, whose assembled system holds no water | `"direct"`, `"iterative"`, `"matrix_free"` |
 | `krylov_method` | `String` / `Symbol` | `"fgmres"` | - | Krylov iterative solver method | `"fgmres"`, `"gmres"`, `"bicgstab"` |
 | `krylov_rtol` | `Float64` | `1.0e-6` | - | Relative convergence tolerance for Krylov iterations | $> 0$ |
 | `krylov_atol` | `Float64` | `1.0e-10` | - | Absolute convergence tolerance for Krylov iterations | $\ge 0$ |
@@ -786,7 +786,7 @@ n = 1.5
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, `0 < poroelasticity.phimin <= 1e-3`, a finite Darcy resistance $\eta_f / k$ at `phimin` and `solver.hydromech_solver` `"direct"` or `"iterative"`; the Stokes-Darcy solve then holds no water; a restart cannot change it | `:none`, `:henke2012` |
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, `0 < poroelasticity.phimin <= 1e-3`, a finite Darcy resistance $\eta_f / k$ at `phimin` and `solver.hydromech_solver = "direct"`; the Stokes-Darcy solve then holds no water; a restart cannot change it | `:none`, `:henke2012` |
 | `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
 | `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
 | `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |

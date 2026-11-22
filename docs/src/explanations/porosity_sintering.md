@@ -69,7 +69,7 @@ A restart with another `phimin` or `kphim0` moves the rock as a restart with the
 The markers still compute the Darcy resistance $\eta_f / k(\phi_{min})$, where $\eta_f$ is the water viscosity in Pa s and $k$ the permeability in $\text{m}^2$.
 Its largest value for the default mantle is the ice viscosity $10^{12}$ Pa s over $k = 8.0 \times 10^{-24}$ $\text{m}^2$.
 The configuration check rejects a `kphim0` that is not positive, and a `phimin` or `kphim0` so small that this resistance overflows.
-It also rejects the matrix-free solver (`solver.hydromech_solver = "matrix_free"`), whose operator has no dry cells.
+It also rejects the matrix-free solver (`solver.hydromech_solver = "matrix_free"`), whose operator has no dry cells, and the iterative solver, which no test runs with dry cells.
 
 The tests of the section *Which tests check this?* run a 200 km body for 4 steps with the rock permeability from $10^{-30}$ to $10^{-18}$ $\text{m}^2$ and `betafluid` from 0 to $10^{-5}$ $\text{Pa}^{-1}$.
 The solid velocity, the temperature and $\phi_d$ change by less than 1e-10 of their size.
@@ -399,7 +399,7 @@ The unit tests in `test/test_porosity_henke.jl` check each law and each place in
     They check that a `phimin` of 0 or less or above 1e-3, and hydrofracture, are rejected with `henke2012`.
     A rock permeability of 1e-6 $\text{m}^2$ passes.
     A `kphim0` of 0, below 0 or NaN is rejected, and so are a `kphim0` of 1e-305 $\text{m}^2$ and a `phimin` of the smallest positive float, whose Darcy resistance overflows.
-    The matrix-free solver is rejected with `henke2012`; the direct and the iterative solver pass.
+    The matrix-free and the iterative solver are rejected with `henke2012`; the direct solver passes.
     They check that the marker step and `dry_porosity_update` reject a field of a directly built `PorosityConfig` outside its domain.
     The marker step also rejects a bad `dt` or `psurface` before it changes a marker, also when no marker is rock.
     It checks `dt` and `psurface` in Float64, so a BigFloat of 1e400 is rejected and a BigFloat of 1e5 gives the Float64 result.

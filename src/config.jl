@@ -2908,10 +2908,11 @@ function _validate_porosity_config(cfg::SimulationConfig)
             ),
         )
     end
-    # The matrix-free operator has no rows for dry material (keyword dry_nodes)
-    cfg.solver.hydromech_solver === :matrix_free && throw(
+    # The matrix-free operator has no rows for dry material (keyword dry_nodes); the
+    # Krylov solver has no tested convergence with them
+    cfg.solver.hydromech_solver === :direct || throw(
         ArgumentError(
-            "porosity.model = henke2012 requires solver.hydromech_solver = :direct or :iterative; got :matrix_free",
+            "porosity.model = henke2012 requires solver.hydromech_solver = :direct; got :$(cfg.solver.hydromech_solver)",
         ),
     )
     xw = cfg.materials.XWsolidm_init
