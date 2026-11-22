@@ -499,7 +499,8 @@ Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the
 compaction rate `APHI` and the Darcy fluxes are still computed on the grid, but they move
 no marker and carry no heat. The time step then has no `aphimax` and no fluid heat limit,
 its fluid displacement limit takes the solid velocities `vx`, `vy` instead of `vxf`,
-`vyf`, and the returned `aphimax` (telemetry `dt_aphimax_max`) is 0. The plastic yield
+`vyf` and the solid limit `time.dxymax` instead of `time.dxymax_fluid`, and the returned
+`aphimax` (telemetry `dt_aphimax_max`) is 0. The plastic yield
 check takes the pore pressure `geometry.psurface` instead of `pf`, and no cell is
 fractured (`_cell_fractured`).
 """
@@ -558,7 +559,7 @@ function postprocess_hydromechanical_solution!(
         aphimax;
         coords=coords,
         dxymax_val=cfg.time.dxymax,
-        dxymax_fluid_val=cfg.time.dxymax_fluid,
+        dxymax_fluid_val=ifelse(pore_water, cfg.time.dxymax_fluid, cfg.time.dxymax),
         fluid_heat_rate=fluid_heat_rate,
         dphimax_val=cfg.solver.dphimax,
         dt_ref=dt_step_initial,

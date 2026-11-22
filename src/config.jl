@@ -2871,7 +2871,9 @@ Validate the `[porosity]` section and the processes that `model = :henke2012` ex
   kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
   partitioning, the redox state with its metallic iron), accessory phase tracking, a
   volatile ice mixture, hydrofracture (`poroelasticity.hydrofracture`), a hydrous rock
-  (`materials.XWsolidm_init[1:2]` not 0) or `poroelasticity.phimin` outside (0, 1e-3].
+  (`materials.XWsolidm_init[1:2]` not 0), `poroelasticity.phimin` outside (0, 1e-3], or
+  a Darcy mobility of the water porosity of rock (`_dry_rock_darcy_mobility`) above
+  `DRY_ROCK_MOBILITY_MAX` = 1e-15 m² Pa⁻¹ s⁻¹ (k = 1e-20 m² at η_f = 1e-5 Pa s).
 """
 function _validate_porosity_config(cfg::SimulationConfig)
     p = cfg.porosity
@@ -2911,15 +2913,60 @@ function _validate_porosity_config(cfg::SimulationConfig)
             "porosity.model = henke2012 requires dry rock, materials.XWsolidm_init = [0, 0, NaN]; got $(xw[1]), $(xw[2])",
         ),
     )
-    # Rock keeps the water porosity phimin, which the adiabatic heating, the bulk
-    # viscosity and the Darcy terms still use; at most 1e-3 keeps rock dense there
+    # Rock keeps the water porosity phimin, which the adiabatic heating and the bulk
+    # viscosity still use; at most 1e-3 keeps rock dense there
     phimin = cfg.poroelasticity.phimin
     0.0 < phimin <= 1.0e-3 || throw(
         ArgumentError(
             "porosity.model = henke2012 requires 0 < poroelasticity.phimin <= 1e-3; got $phimin",
         ),
     )
+    # The compaction rows still drain this water; a small mobility keeps rock at the limit
+    # of no drainage (DRY_ROCK_MOBILITY_MAX)
+    mobility = _dry_rock_darcy_mobility(cfg)
+    mobility <= DRY_ROCK_MOBILITY_MAX || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires a Darcy mobility k(phimin) / eta_f of rock <= $DRY_ROCK_MOBILITY_MAX m^2/(Pa s); got $mobility (lower materials.kphim0[1:2])",
+        ),
+    )
     return nothing
+end
+
+"""
+Largest Darcy mobility k(φ_min) / η_f of the water porosity φ_min of rock: the
+permeability `kphi` of `materials.kphim0[1:2]` at `poroelasticity.phimin` over the
+smallest water viscosity of rock, the high-temperature limit of `compute_fluid_viscosity`
+or `materials.etafluidm[1:2]` (below `thermodynamics.tmfluidphase`).
+
+# Arguments
+- `cfg`: simulation configuration.
+
+# Returns
+- Mobility [m² Pa⁻¹ s⁻¹].
+
+# Throws
+- `DomainError`: from `kphi` for `phimin` outside [0, 1), `phim0` outside (0, 1) or a
+  negative `kphim0`.
+"""
+function _dry_rock_darcy_mobility(cfg::SimulationConfig)
+    th = cfg.thermodynamics
+    # The water viscosity falls with T; floatmax gives its high-temperature limit
+    eta_hot = compute_fluid_viscosity(
+        floatmax(Float64),
+        1;
+        mode=th.fluid_viscosity_mode,
+        eta0=th.fluid_viscosity_eta0,
+        Ea=th.fluid_viscosity_Ea,
+        T0=th.fluid_viscosity_T0,
+        tmfluidphase=th.tmfluidphase,
+    )
+    eta_min = min(eta_hot, cfg.materials.etafluidm[1], cfg.materials.etafluidm[2])
+    phimin = cfg.poroelasticity.phimin
+    k = max(
+        kphi(cfg.materials.kphim0[1], phimin; phim0=th.phim0),
+        kphi(cfg.materials.kphim0[2], phimin; phim0=th.phim0),
+    )
+    return k / eta_min
 end
 
 @inline function _is_removed_config_field(::Type{MeltingConfig}, k::AbstractString)::Bool

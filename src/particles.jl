@@ -5789,7 +5789,8 @@ sintered.
 # Throws
 - `ArgumentError`: a field of `porosity` outside its domain, checked once per call with
   the checks of the configuration (`_validate_porosity_fields`).
-- `DomainError`: `dt` or `psurface` negative or not finite.
+- `DomainError`: `dt` or `psurface` negative or not finite after conversion to
+  `Float64`.
 
 All 3 checks run before the threaded marker loop, so a bad argument changes no marker,
 also when no marker is rock.
@@ -5807,8 +5808,9 @@ function advance_marker_dry_porosity!(
     porosity::PorosityConfig,
 )
     _validate_porosity_fields(porosity)
-    require_nonneg_finite(dt, "time step dt")
-    require_nonneg_finite(psurface, "surface pressure psurface")
+    # Check in Float64, the precision of the step: a BigFloat 1e400 is Inf there
+    dt_s = require_nonneg_finite(Float64(dt), "time step dt")
+    psurface_pa = require_nonneg_finite(Float64(psurface), "surface pressure psurface")
     (; phi_d, phi0, tkm_max, dphi_sinter) = pg
     ncapped = Threads.Atomic{Int}(0)
     @threads :dynamic for m in eachindex(tm)
@@ -5825,12 +5827,12 @@ function advance_marker_dry_porosity!(
             coords.imin_p,
             coords.imax_p,
         )
-        P_bar = max(0.0, dot4(grid_vector(i, j, pr), weights) - psurface) * 1.0e-5
+        P_bar = max(0.0, dot4(grid_vector(i, j, pr), weights) - psurface_pa) * 1.0e-5
         u = dry_porosity_update(
             phi_d[m],
             P_bar,
             tkm[m],
-            dt,
+            dt_s,
             porosity;
             phi0_prev=phi0[m],
             sintered=dphi_sinter[m] > DPHI_SINTERED,

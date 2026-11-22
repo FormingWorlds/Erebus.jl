@@ -47,7 +47,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
 | `dxymax` | `Float64` | `0.05` | grid units | Maximum solid (marker) displacement per timestep | $\in (0, 1]$ |
-| `dxymax_fluid` | `Float64` | `0.15` | grid units | Maximum pore fluid displacement per timestep | $\in (0, 1]$ |
+| `dxymax_fluid` | `Float64` | `0.15` | grid units | Maximum pore fluid displacement per timestep; not used with `porosity.model = henke2012`, where the step takes `dxymax` | $\in (0, 1]$ |
 | `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting parameter | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
 | `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
@@ -168,7 +168,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Compiled Constant / Telescoping | All $\ge 0$ | Internal friction coefficient |
 | `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Cohesion |
 | `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Tensile strength |
-| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Compiled Constant / Telescoping | All $> 0$ | Reference permeability |
+| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Compiled Constant / Telescoping | All $> 0$; with `porosity.model = henke2012` the Darcy mobility of rock at `poroelasticity.phimin` at most `1e-15` $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$ | Reference permeability |
 | `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Compiled Constant / Telescoping | All $> 0$ | Initial temperature |
 | `XWsolidm_init` | `SVector{3}` | `[0.5, 0.5, NaN]` | - | Compiled Constant / Telescoping | All $\ge 0$ or `NaN` | Initial solid water fraction |
 
@@ -786,7 +786,7 @@ n = 1.5
 
 | Parameter | Type | Default | Units | Description | Bounds / Options |
 |:----------|:-----|:--------|:------|:------------|:-----------------|
-| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, and `0 < poroelasticity.phimin <= 1e-3`; a restart cannot change it | `:none`, `:henke2012` |
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, and `0 < poroelasticity.phimin <= 1e-3` with a Darcy mobility of rock at most `1e-15` $\text{m}^2\,\text{Pa}^{-1}\,\text{s}^{-1}$; a restart cannot change it | `:none`, `:henke2012` |
 | `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
 | `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
 | `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |

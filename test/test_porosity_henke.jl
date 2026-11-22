@@ -855,7 +855,138 @@ function _hk_state(cfg)
     return st, coords, ws
 end
 
+"""
+Number of outer thermochemical iterations in the log records of `lg`.
+"""
+function _hk_outer_iterations(lg)
+    return count(r -> startswith(string(r.message), "end thermochemical iter"), lg.logs)
+end
+
+"""
+`cfg` with the reference permeability `k` [m^2] of rock (`materials.kphim0[1:2]`), built
+without the checks of the configuration, which reject a Darcy mobility above
+`DRY_ROCK_MOBILITY_MAX`.
+"""
+function _hk_wet_rock(cfg, k)
+    kphim0 = typeof(cfg.materials.kphim0)((k, k, cfg.materials.kphim0[3]))
+    return _hk_with(cfg; materials=_hk_with(cfg.materials; kphim0=kphim0))
+end
+
+"""
+Run `nsteps` time steps of `simulation_loop` (without marker replenishment and output) on
+a state set up from `cfg_init`, with the step functions called with `cfg_run`. Returns the
+state, the grid coordinates, the workspaces, the result of the last `solve_thermomechanical_iterations!` and the
+number of outer iterations of all steps.
+"""
+function _hk_steps(cfg_init, cfg_run, nsteps)
+    st, coords, ws = _hk_state(cfg_init)
+    lg = Test.TestLogger()
+    tm = cfg_run.time
+    res = Erebus.with_logger(lg) do
+        r = nothing
+        for step in 1:nsteps
+            st.timestep = step
+            grow = r === nothing || !r.dt_reduced_by_maxDT
+            st.dt = min(grow ? st.dt * tm.dtcoefup : st.dt, tm.dt_longest * tm.yearlength)
+            dt0 = st.dt
+            Erebus.prepare_step_ambient!(st, coords, cfg_run, ws)
+            Erebus.radiogenic_heating!(st, coords, cfg_run)
+            Erebus.snapshot_radiogenic_step_start!(ws, st, cfg_run)
+            Erebus.interpolate_markers_to_grid!(
+                st,
+                coords,
+                cfg_run;
+                p2m_workspace=ws.p2m,
+                thread_buffers=ws.thread_buffers,
+                interp_arrays=ws.interp_arrays,
+            )
+            Erebus.solve_gravity!(st, coords, cfg_run; F_grav=ws.F_grav, RP=ws.RP, SP=ws.SP)
+            Erebus.apply_surface_radiation!(st, coords, cfg_run)
+            Erebus.snapshot_step_start_inventories!(ws, st, cfg_run)
+            Erebus.update_step_start_pressures!(st)
+            r = Erebus.solve_thermomechanical_iterations!(
+                st, coords, cfg_run, ws; dt_step_initial=dt0
+            )
+            r.plastic_converged || error("plastic iterations did not converge")
+            Erebus.diffuse_and_update_markers!(st, coords, cfg_run, ws)
+            Erebus.vent_and_degas!(st, coords, cfg_run; Fm_step_start=ws.Fm_step_start)
+            Erebus.advect_markers!(
+                st,
+                coords,
+                cfg_run;
+                XWSSUM=ws.interp_arrays[32],
+                WTPSUM=ws.interp_arrays[33],
+            )
+            st.timesum += st.dt
+            r.dt_reduced_by_maxDT && (st.dt = r.dt_next)
+        end
+        return r
+    end
+    return (; st, coords, ws, res, nit=_hk_outer_iterations(lg))
+end
+
 @testset "Dry porosity marker group and step (model henke2012)" begin
+    @testset "henke2012 bounds the Darcy mobility of the rock water porosity" begin
+        mobility(cfg) = Erebus._dry_rock_darcy_mobility(cfg)
+        # Default: k(1e-4) = 1e-13 (1e-4 / 0.2)^3 (0.9999 / 0.8)^-2 = 8.0e-24 m^2 over the
+        # 1e-5 Pa s floor of the water viscosity (Arrhenius law, high-T limit). The bound
+        # DRY_ROCK_MOBILITY_MAX is 1e-15 m^2/(Pa s)
+        @test isapprox(mobility(_hk_cfg()), 8.0e-19; rtol=1e-3)
+        @test isapprox(
+            mobility(_hk_cfg("poroelasticity.phimin" => 1.0e-3)), 8.0e-16; rtol=3e-3
+        )
+        @test Erebus.DRY_ROCK_MOBILITY_MAX >
+            mobility(_hk_cfg("poroelasticity.phimin" => 1.0e-3))
+        # At phimin = 1e-3 and phim0 = 1e-4: k = 1e3 (0.999 / 0.9999)^-2 kphim0
+        kref(K) = K / (1.0e3 * (0.999 / 0.9999)^-2)
+        wet(K, extra...) = _hk_cfg(
+            "poroelasticity.phimin" => 1.0e-3,
+            "thermodynamics.phim0" => 1.0e-4,
+            "materials.kphim0" => [kref(K), kref(K), 1.0e-17],
+            extra...,
+        )
+        @test isapprox(mobility(wet(0.9e-20)), 0.9e-15; rtol=1e-9)
+        e = _hk_error(() -> wet(1.1e-20))
+        @test e isa ArgumentError && occursin("Darcy mobility", e.msg)
+        # The crust kphim0[2] counts too; air kphim0[3] does not
+        e2 = _hk_error(
+            () -> _hk_cfg(
+                "poroelasticity.phimin" => 1.0e-3,
+                "thermodynamics.phim0" => 1.0e-4,
+                "materials.kphim0" => [kref(1.0e-21), kref(1.1e-20), 1.0e-17],
+            ),
+        )
+        @test e2 isa ArgumentError
+        @test mobility(
+            wet(1.0e-21, "materials.kphim0" => [kref(1e-21), kref(1e-21), 1.0])
+        ) < Erebus.DRY_ROCK_MOBILITY_MAX
+        # A constant water viscosity eta0 has no floor: 8e-24 m^2 / 1e-8 Pa s passes,
+        # / 1e-9 Pa s fails; the Arrhenius law keeps its 1e-5 Pa s floor at eta0 = 1e-9
+        cst(eta, mode=:constant) = _hk_error(
+            () -> _hk_cfg(
+                "thermodynamics.fluid_viscosity_mode" => mode,
+                "thermodynamics.fluid_viscosity_eta0" => eta,
+            ),
+        )
+        @test cst(1.0e-8) === nothing
+        @test cst(1.0e-9) isa ArgumentError
+        @test cst(1.0e-9, :arrhenius) === nothing
+        # Rock below tmfluidphase takes materials.etafluidm: 1e-9 Pa s fails (the field is
+        # fixed in a parsed configuration, so set it on a keyword-built one)
+        cfg0 = _hk_cfg()
+        eta = typeof(cfg0.materials.etafluidm)((1.0e-9, 1.0e12, 1.0e-3))
+        c3 = _hk_with(cfg0; materials=_hk_with(cfg0.materials; etafluidm=eta))
+        e3 = _hk_error(() -> Erebus._validate_porosity_config(c3))
+        @test e3 isa ArgumentError && occursin("Darcy mobility", e3.msg)
+        @test isapprox(mobility(c3), 8.001e-15; rtol=1e-3)
+        # The model none run keeps any permeability
+        @test _hk_error(
+            () -> _hk_cfg(
+                "porosity.model" => :none, "materials.kphim0" => [1e-9, 1e-9, 1e-17]
+            ),
+        ) === nothing
+    end
+
     @testset "Group exists only with henke2012 and draws no random numbers" begin
         coords = Erebus.GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
         rng_a = Erebus.Random.MersenneTwister(3)
@@ -2084,21 +2215,17 @@ end
         # The step of henke2012 stays within a factor 3 of model none (both 2073.6 yr)
         @test 1 / 3 < st_h.dt / st_n.dt < 3
         @test 100.0 * yr < st_h.dt <= 5000.0 * yr
-        # A water porosity phim0 = 1e-4 and kphim0 = 1e-12 m^2 raise the Darcy velocity
-        # qxD / phimin of the pore water, which cut the step to 18.5 yr; the step takes
-        # the solid velocity instead
-        st_t = Erebus.with_logger(Erebus.NullLogger()) do
-            Erebus.simulation_loop(
-                _hk_cfg(
-                    body...,
-                    "thermodynamics.phim0" => 1.0e-4,
-                    "materials.kphim0" => [1.0e-12, 1.0e-12, 1.0e-17],
-                );
-                output_path=mktempdir(),
-            )
-        end
-        @test st_t.timestep == 4
-        @test 1 / 3 < st_t.dt / st_h.dt < 3
+        # A water porosity phim0 = 1e-4 and kphim0 = 1e-12 m^2 (a Darcy mobility above the
+        # bound of the configuration) raise the Darcy velocity qxD / phimin of the pore
+        # water, which cut the step to 18.5 yr; the step takes the solid velocity instead
+        cfg_t = _hk_cfg(
+            body...,
+            "thermodynamics.phim0" => 1.0e-4,
+            "materials.kphim0" => [1.0e-24, 1.0e-24, 1.0e-17],
+        )
+        r_t = _hk_steps(cfg_t, _hk_wet_rock(cfg_t, 1.0e-12), 4)
+        @test r_t.st.timestep == 4
+        @test 1 / 3 < r_t.st.dt / st_h.dt < 3
         # Shear heating stays below 1e-6 W/m^3, far below the 1.7e-3 of a 800 s step
         @test maximum(abs, st_h.grids.HS) < 1.0e-6
         @test maximum(abs, st_h.grids.HS) < 0.1 * maximum(abs, st_h.grids.HR)
@@ -2202,6 +2329,369 @@ end
         @test isapprox(maximum(st_w.grids.SII), maximum(st_s.grids.SII); rtol=0.1)
         # Scale guard: the shear stress of the strong run is a few 1e5 Pa
         @test 1.0e5 < maximum(st_s.grids.SII) < 1.0e6
+    end
+
+    @testset "Pore pressure, dt and psurface are checked as Float64" begin
+        # compute_nodal_adjustment!: a BigFloat 1e400 is Inf in Float64 and throws; a
+        # BigFloat 1e3 acts as 1e3
+        Ny, Nx = 3, 3
+        ETA0 = fill(1.0e20, Ny, Nx)
+        function adjust(pp)
+            ETA5 = zeros(Ny, Nx)
+            YNY5 = zeros(Int, Ny, Nx)
+            ok = Erebus.compute_nodal_adjustment!(
+                copy(ETA0),
+                ETA0,
+                ETA5,
+                fill(1.0e10, Ny, Nx),
+                zeros(Ny + 1, Nx + 1),
+                fill(1.0e5, Ny, Nx),
+                fill(1.0e7, Ny + 1, Nx + 1),
+                fill(0.999e7, Ny + 1, Nx + 1),
+                fill(1.0e4, Ny, Nx),
+                fill(1.0e4, Ny, Nx),
+                fill(0.6, Ny, Nx),
+                zeros(Int, Ny, Nx),
+                YNY5,
+                zeros(10),
+                zeros(Ny, Nx),
+                1.0e10,
+                1;
+                pore_pressure=pp,
+            )
+            return (; ok, YNY5, ETA5)
+        end
+        @test_throws DomainError adjust(Inf)
+        @test_throws DomainError adjust(-Inf)
+        @test_throws DomainError adjust(big"1e400")
+        a_big, a_f64 = adjust(big(1.0e3)), adjust(1.0e3)
+        @test a_big.ok && all(iszero, a_big.YNY5)
+        @test isapprox(a_big.ETA5, a_f64.ETA5; rtol=0, atol=0)
+        # advance_marker_dry_porosity!: the same for dt and psurface
+        coords = Erebus.GridCoordinates(17, 17; xsize=140_000.0, ysize=140_000.0)
+        pr = fill(1.0e5 + 2.0e5, coords.Ny1, coords.Nx1)
+        function step!(tm, dt, psurface)
+            n = length(tm)
+            pg = Erebus.PorosityGroup(fill(0.5, n), fill(0.75, n), zeros(n), zeros(n))
+            e = _hk_error(
+                () -> Erebus.advance_marker_dry_porosity!(
+                    pg,
+                    fill(70_000.0, n),
+                    fill(70_000.0, n),
+                    tm,
+                    fill(900.0, n),
+                    pr,
+                    dt;
+                    coords=coords,
+                    psurface=psurface,
+                    porosity=Erebus.PorosityConfig(; model=:henke2012),
+                ),
+            )
+            return e, pg
+        end
+        for (tm, dt, psurface, name) in (
+            ([1, 2], big"1e400", 1.0e5, "dt"),
+            ([3, 3], big"1e400", 1.0e5, "dt"),
+            ([1, 2], 1.0e10, big"1e400", "psurface"),
+            ([3, 3], 1.0e10, big"1e400", "psurface"),
+        )
+            e, pg = step!(tm, dt, psurface)
+            @test e isa DomainError
+            @test occursin(name, e.msg)
+            @test all(p -> isapprox(p, 0.5; rtol=0, atol=0), pg.phi_d)
+        end
+        # BigFloat 1e5 Pa and 1e10 s give the Float64 result: 2 bar, sintered below 0.5
+        e_f, pg_f = step!([1, 2], 1.0e10, 1.0e5)
+        e_b, pg_b = step!([1, 2], big(1.0e10), big(1.0e5))
+        @test e_f === nothing && e_b === nothing
+        @test isapprox(pg_b.phi_d, pg_f.phi_d; rtol=0, atol=0)
+        @test all(p -> 0.0 < p < 0.49, pg_b.phi_d)
+        # dry_porosity_update: a BigFloat pressure gives the Float64 step
+        pcfg = Erebus.PorosityConfig(; model=:henke2012)
+        u_f = Erebus.dry_porosity_update(0.5, 2.0, 900.0, 1.0e10, pcfg)
+        u_b = Erebus.dry_porosity_update(0.5, big(2.0), 900.0, 1.0e10, pcfg)
+        @test isapprox(u_b.phi, u_f.phi; rtol=0, atol=0)
+        @test u_b.phi isa Float64 && u_b.phi0 isa Float64
+        @test_throws DomainError Erebus.dry_porosity_update(
+            0.5, big"1e400", 900.0, 1.0, pcfg
+        )
+        # phi_cold: Eq. 15 at P = P_0 = 0.13 bar gives 0.42 + 0.46 / 2 = 0.65 in Float64
+        @test Erebus.phi_cold(big"0.13") isa Float64
+        @test isapprox(Erebus.phi_cold(big"0.13"), 0.65; rtol=1e-14)
+        @test_throws DomainError Erebus.phi_cold(big"1e400")
+    end
+
+    @testset "Without pore water the Darcy flux heats no rock and pf sets no iteration" begin
+        # 200 km body at 900 K, 4 steps, water porosity phimin = 1e-3 and phim0 = 1e-4 with
+        # kphim0 = 1e-24 m^2: a rock permeability of 1e-21 m^2, below the bound
+        Rp = 200_000.0
+        cfg = _hk_cfg(
+            "grid.xsize" => 2.8 * Rp,
+            "grid.ysize" => 2.8 * Rp,
+            "geometry.rplanet" => Rp,
+            "geometry.rcrust" => Rp,
+            "geometry.xcenter" => 1.4 * Rp,
+            "geometry.ycenter" => 1.4 * Rp,
+            "materials.tkm0" => [900.0, 900.0, 170.0],
+            "time.n_steps" => 4,
+            "time.dt_initial" => 1000.0,
+            "time.dt_longest" => 5000.0,
+            "poroelasticity.phimin" => 1.0e-3,
+            "thermodynamics.phim0" => 1.0e-4,
+            "materials.kphim0" => [1.0e-24, 1.0e-24, 1.0e-17],
+        )
+        lg = Test.TestLogger()
+        st = Erebus.with_logger(
+            () -> Erebus.simulation_loop(cfg; output_path=mktempdir()), lg
+        )
+        @test st.timestep == 4
+        # The fictitious pf changes by more than reaction.pferrmax = 1e5 Pa between outer
+        # iterations; it forced a second one in every step
+        @test _hk_outer_iterations(lg) == 4
+        # _hk_steps repeats simulation_loop bit for bit
+        ref = _hk_steps(cfg, cfg, 4)
+        @test ref.nit == 4
+        @test isapprox(ref.st.grids.tk2, st.grids.tk2; rtol=0, atol=0)
+        @test isapprox(ref.st.markers.phi_d, st.markers.phi_d; rtol=0, atol=0)
+        # kphim0 = 1e-9 or 1e-12 m^2 (rock permeability 1e-6 or 1e-9 m^2, above the bound):
+        # the Darcy flux qxD = phimin vxf heated rock by 22.5 K through the fluid terms of
+        # HA and HS and cut the step from 2073.6 to 379.9 yr
+        for k in (1.0e-9, 1.0e-12)
+            r = _hk_steps(cfg, _hk_wet_rock(cfg, k), 4)
+            @test r.nit == 4
+            @test isapprox(r.st.dt, ref.st.dt; rtol=1e-3)
+            # 0.2 K remain from the compaction rows, which the bound of the configuration
+            # removes (DRY_ROCK_MOBILITY_MAX)
+            @test maximum(abs, r.st.grids.tk2 .- ref.st.grids.tk2) < 0.5
+            @test maximum(abs, r.st.grids.HA) < 1.0e-6
+            @test maximum(abs, r.st.grids.HS) < 1.0e-6
+        end
+    end
+
+    @testset "Without pore water HS and HA keep only the solid terms" begin
+        # 4 x 4 P nodes, interior nodes (2:3, 2:3). Solid terms: SXX^2 / ETAP = 1e10 / 1e20
+        # = 1e-10 and SXY^2 / ETA = 1e-10 W/m^3. A Darcy flux of 1e-6 m/s through a
+        # resistance of 1e12 Pa s/m^2 adds 1 W/m^3 per direction, pr - pf = 1e6 Pa 1e-2.
+        n = 4
+        HS = zeros(n, n)
+        args(qD, pf) = (
+            fill(1.0e20, n - 1, n - 1),
+            fill(1.0e5, n - 1, n - 1),
+            fill(1.0e20, n, n),
+            fill(1.0e5, n, n),
+            fill(1.0e12, n, n),
+            fill(1.0e12, n, n),
+            fill(qD, n, n),
+            fill(qD, n, n),
+            fill(1.0e-3, n, n),
+            fill(1.0e14, n, n),
+            fill(2.0e6, n, n),
+            fill(pf, n, n),
+        )
+        Erebus.compute_shear_heating!(HS, args(1.0e-6, 1.0e6)...; pore_water=false)
+        HS_dry = HS[2:3, 2:3]
+        @test all(h -> isapprox(h, 2.0e-10; rtol=1e-12), HS_dry)
+        # The dry value is the wet value without Darcy flux and with pf = pr
+        Erebus.compute_shear_heating!(HS, args(0.0, 2.0e6)...)
+        @test isapprox(HS[2:3, 2:3], HS_dry; rtol=0, atol=0)
+        Erebus.compute_shear_heating!(HS, args(1.0e-6, 1.0e6)...)
+        @test all(h -> 2.0 < h < 2.1, HS[2:3, 2:3])
+        # HA: fluid velocity 1 m/s along a fluid pressure gradient; dry gives 0
+        coords = Erebus.GridCoordinates(3, 3; xsize=2.0, ysize=2.0)
+        HA = zeros(n, n)
+        ramp = [1.0e6 * j for i in 1:n, j in 1:n]
+        ha_args(ALPHAF) = (
+            fill(1000.0, n, n),
+            zeros(n, n),
+            fill(ALPHAF, n, n),
+            fill(1.0e-3, n, n),
+            zeros(n, n),
+            zeros(n, n),
+            ones(n, n),
+            zeros(n, n),
+            zeros(n, n),
+            ramp,
+        )
+        Erebus.compute_adiabatic_heating!(HA, ha_args(1.0e-4)...; coords=coords)
+        @test all(h -> h > 1.0e-3, HA[2:3, 2:3])
+        Erebus.compute_adiabatic_heating!(
+            HA, ha_args(1.0e-4)...; coords=coords, pore_water=false
+        )
+        @test all(iszero, HA)
+    end
+
+    @testset "Without pore water the thermal step reads neither pf nor ps" begin
+        # 50 km body at 900 K after 1 step. A fluid pressure and a solid pressure 1 MPa
+        # per column off the solution change HS, HA and the convergence of a wet run;
+        # without pore water HS, HA, the temperature and the convergence stay
+        function thermal(model)
+            cfg = _hk_cfg(
+                "porosity.model" => model,
+                "materials.tkm0" => [900.0, 900.0, 170.0],
+                "time.dt_initial" => 1000.0,
+            )
+            r = _hk_steps(cfg, cfg, 1)
+            st, ws, g = r.st, r.ws, r.st.grids
+            solve() = Erebus.with_logger(Erebus.NullLogger()) do
+                ws.hydromech.pf_prev_iter .= g.pf
+                out = Erebus.solve_thermal_energy!(st, r.coords, cfg, ws; titer=3)
+                (;
+                    out.thermochemical_converged,
+                    HA=copy(g.HA),
+                    HS=copy(g.HS),
+                    T=copy(g.tk2),
+                )
+            end
+            a = solve()
+            ramp = [1.0e6 * j for i in axes(g.pf, 1), j in axes(g.pf, 2)]
+            g.pf .+= ramp
+            g.ps .+= ramp
+            b = Erebus.with_logger(Erebus.NullLogger()) do
+                out = Erebus.solve_thermal_energy!(st, r.coords, cfg, ws; titer=3)
+                (;
+                    out.thermochemical_converged,
+                    HA=copy(g.HA),
+                    HS=copy(g.HS),
+                    T=copy(g.tk2),
+                )
+            end
+            return a, b
+        end
+        a, b = thermal(:henke2012)
+        @test a.thermochemical_converged && b.thermochemical_converged
+        @test isapprox(b.HA, a.HA; rtol=0, atol=0) && isapprox(b.HS, a.HS; rtol=0, atol=0)
+        @test isapprox(b.T, a.T; rtol=0, atol=0)
+        # Control: with pore water the same offsets change HA and HS and stop convergence
+        aw, bw = thermal(:none)
+        @test aw.thermochemical_converged && !bw.thermochemical_converged
+        @test maximum(abs, bw.HA .- aw.HA) > 1.0e-3 * maximum(abs, bw.HA)
+        @test maximum(abs, bw.HS .- aw.HS) > 1.0e-3 * maximum(abs, bw.HS)
+    end
+
+    @testset "Without pore water the fluid pressure is backtraced with the rock" begin
+        # A fluid velocity 1e-6 m/s off the solid velocity moves pf0 by up to 8.6 MPa
+        # along vxf; dry pf0 is backtraced along vx, vy, so pf = pr gives pf0 = pr0
+        function backtrace(model)
+            cfg = _hk_cfg("porosity.model" => model, "time.n_steps" => 1)
+            st = Erebus.with_logger(Erebus.NullLogger()) do
+                Erebus.simulation_loop(cfg; output_path=mktempdir())
+            end
+            _, coords, _ = _hk_state(cfg)
+            g = st.grids
+            g.pf .= g.pr
+            g.vxf .= g.vx .+ 1.0e-6
+            g.vyf .= g.vy .- 1.0e-6
+            Erebus.advect_markers!(st, coords, cfg)
+            return g
+        end
+        g_dry = backtrace(:henke2012)
+        @test isapprox(g_dry.pf0, g_dry.pr0; rtol=0, atol=0)
+        @test 1.0e5 < maximum(g_dry.pr0) < 1.0e8
+        # Control: pore water moves along vxf, vyf
+        g_wet = backtrace(:none)
+        @test 1.0e3 < maximum(abs, g_wet.pf0 .- g_wet.pr0) < 1.0e8
+    end
+
+    @testset "Without pore water the solid step takes the solid limit time.dxymax" begin
+        # 200 km body with a 1600 K mantle that melts, 2 steps. The solid displacement limit
+        # dxymax = 0.25 sets the step; the fluid limit dxymax_fluid = 0.15 capped it at 0.15
+        Rp = 200_000.0
+        runs = map((0.15, 0.5)) do dxf
+            cfg = _hk_cfg(
+                "grid.xsize" => 2.8 * Rp,
+                "grid.ysize" => 2.8 * Rp,
+                "geometry.rplanet" => Rp,
+                "geometry.rcrust" => 0.7 * Rp,
+                "geometry.xcenter" => 1.4 * Rp,
+                "geometry.ycenter" => 1.4 * Rp,
+                "melting.active" => true,
+                "materials.tkm0" => [1600.0, 300.0, 170.0],
+                "time.n_steps" => 2,
+                "time.dt_initial" => 1.0e5,
+                "time.dt_longest" => 1.0e5,
+                "time.DTmax" => 1.0e6,
+                "time.dxymax" => 0.25,
+                "time.dxymax_fluid" => dxf,
+            )
+            st = Erebus.with_logger(Erebus.NullLogger()) do
+                Erebus.simulation_loop(cfg; output_path=mktempdir())
+            end
+            dx = cfg.grid.xsize / (cfg.grid.Nx - 1)
+            (;
+                st,
+                disp=max(maximum(abs, st.grids.vx), maximum(abs, st.grids.vy)) * st.dt / dx,
+            )
+        end
+        @test all(r -> r.st.timestep == 2, runs)
+        @test isapprox(runs[1].disp, 0.25; rtol=1e-2)
+        # dxymax_fluid changes no step without pore water (20636 yr against 35554 yr)
+        @test isapprox(runs[1].st.dt, runs[2].st.dt; rtol=1e-12)
+    end
+
+    @testset "Without pore water no fictitious fracture and no fracture flip" begin
+        # 200 km body at 900 K, 4 steps, water porosity phim0 = 1e-4 and kphim0 = 1e-12 m^2
+        # (above the bound of the configuration), rock tensile strength 1e5 Pa. The
+        # fictitious pf exceeds pr + TEN in 5 cells
+        Rp = 200_000.0
+        cfg = _hk_cfg(
+            "grid.xsize" => 2.8 * Rp,
+            "grid.ysize" => 2.8 * Rp,
+            "geometry.rplanet" => Rp,
+            "geometry.rcrust" => Rp,
+            "geometry.xcenter" => 1.4 * Rp,
+            "geometry.ycenter" => 1.4 * Rp,
+            "materials.tkm0" => [900.0, 900.0, 170.0],
+            "time.dt_initial" => 1000.0,
+            "time.dt_longest" => 5000.0,
+            "thermodynamics.phim0" => 1.0e-4,
+            "materials.kphim0" => [1.0e-24, 1.0e-24, 1.0e-17],
+            "materials.tenssolidm" => [1.0e5, 1.0e5, 6.0e7],
+        )
+        r = _hk_steps(cfg, _hk_wet_rock(cfg, 1.0e-12), 4)
+        g = r.st.grids
+        Ny, Nx = size(g.TEN)
+        n_wet = count(Erebus._cell_fractured(g, i, j, true) for j in 1:Nx, i in 1:Ny)
+        @test 1 <= n_wet <= 20
+        @test !any(r.ws.fractured_cells) && !any(r.ws.fractured_cells_prev)
+        @test r.res.n_flips_step_total == 0 && r.res.n_flips_last == 0
+    end
+
+    @testset "Active yielding of dry rock does not depend on psurface" begin
+        # 200 km body, friction 0.005 and cohesion 1e4 Pa: 30 to 40 basic nodes yield in
+        # both gravity modes. With pore pressure psurface the yield stress depends on
+        # pr - psurface only; at psurface = 1e8 Pa a pore pressure 0 would add 5e5 Pa
+        Rp = 200_000.0
+        for mode in (:enclosed_mass, :poisson2d)
+            runs = map((1.0e3, 1.0e8)) do ps
+                cfg = _hk_cfg(
+                    "grid.xsize" => 2.8 * Rp,
+                    "grid.ysize" => 2.8 * Rp,
+                    "geometry.rplanet" => Rp,
+                    "geometry.rcrust" => 0.7 * Rp,
+                    "geometry.xcenter" => 1.4 * Rp,
+                    "geometry.ycenter" => 1.4 * Rp,
+                    "geometry.gravity_mode" => mode,
+                    "geometry.psurface" => ps,
+                    "materials.tkm0" => [1100.0, 300.0, 170.0],
+                    "materials.cohessolidm" => [1.0e4, 1.0e4, 1.0e8],
+                    "materials.frictsolidm" => [0.005, 0.005, 0.0],
+                    "time.n_steps" => 3,
+                    "time.dt_initial" => 100.0,
+                    "time.dt_longest" => 1000.0,
+                )
+                Erebus.with_logger(Erebus.NullLogger()) do
+                    Erebus.simulation_loop(cfg; output_path=mktempdir())
+                end
+            end
+            ny = [count(>(0), st.grids.YNY) for st in runs]
+            @test all(st -> st.timestep == 3, runs)
+            @test 20 <= ny[1] <= 50
+            @test ny[2] == ny[1]
+            @test isapprox(runs[2].dt, runs[1].dt; rtol=1e-12)
+            @test isapprox(
+                maximum(runs[2].grids.SII), maximum(runs[1].grids.SII); rtol=1e-3
+            )
+        end
     end
 
     @testset "Telemetry porosity counts crust markers and is 0 without rock" begin

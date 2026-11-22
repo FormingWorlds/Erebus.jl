@@ -358,8 +358,10 @@ function compute_nodal_adjustment!(
     S33 === nothing ||
         size(S33) == size(SXX) ||
         throw(DimensionMismatch("S33 has size $(size(S33)), SXX has size $(size(SXX))"))
-    pore_pressure === nothing ||
-        isfinite(pore_pressure) ||
+    # Check in Float64, the precision of the yield stress: a BigFloat 1e400 is Inf there
+    pore_p = pore_pressure === nothing ? nothing : Float64(pore_pressure)
+    pore_p === nothing ||
+        isfinite(pore_p) ||
         throw(DomainError(pore_pressure, "pore_pressure must be finite"))
     # reset / setup
     Ny, Nx = size(ETA)
@@ -376,8 +378,7 @@ function compute_nodal_adjustment!(
             siiel = SIIB * (GGG[i, j]*dt+ETA[i, j]) / ETA[i, j]
             # interpolate total and fluid pressure at basic nodes
             prB = grid_average(i, j, pr)
-            pfB =
-                pore_pressure === nothing ? grid_average(i, j, pf) : Float64(pore_pressure)
+            pfB = pore_p === nothing ? grid_average(i, j, pf) : pore_p
             # Yielding stress: confined and tensile fracture.
             # Note: uses Terzaghi effective stress (prB - pfB) for frictional shear and tensile failure,
             # following standard rock mechanics (Terzaghi 1943, Handin et al. 1963).
