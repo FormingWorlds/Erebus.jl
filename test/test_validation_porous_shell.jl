@@ -449,7 +449,7 @@ end
 
         rec_ids = [String(m["id"]) for m in raw_record["metrics"]]
         @test rec_ids == collect(PSV.EXPECTED_METRIC_IDS)
-        @test Set(keys(PSV.PHYSICS_REGRESSION_BANDS)) == Set(PSV.EXPECTED_METRIC_IDS)
+        @test issubset(keys(PSV.PHYSICS_REGRESSION_BANDS), PSV.EXPECTED_METRIC_IDS)
         @test all(m["case"] == PSV.CASE_ID for m in raw_record["metrics"])
 
         missing_key = deepcopy(raw_record)

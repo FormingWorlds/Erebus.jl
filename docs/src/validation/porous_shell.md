@@ -6,7 +6,7 @@ Page text follows.
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `d7f75b66`, config SHA-256 `d3d57425a447`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `f6c7f29a`, config SHA-256 `d3d57425a447`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
