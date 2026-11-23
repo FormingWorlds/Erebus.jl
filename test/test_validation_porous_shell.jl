@@ -129,6 +129,64 @@ const PSV = PorousShellValidation
         @test all(iszero, res.phi) && all(iszero, res.dphi_sinter)
     end
 
+    @testset "Case configuration" begin
+        kw = (; Nx=33, phi_init=0.25, t_form_yr=2.5e6, n_steps=3, dt_yr=1.0e4)
+        cfg = PSV.make_porous_shell_config(; kw...)
+        @test cfg.porosity.model === :henke2012
+        @test isapprox(cfg.porosity.phi_init, 0.25; rtol=1e-14)
+        @test isapprox(cfg.thermodynamics.ratio_al, 5.85e-5; rtol=1e-14)
+        @test isapprox(cfg.time.start_time, 2.5e6; rtol=1e-14)
+        @test isapprox(cfg.time.dt_initial, cfg.time.dt_longest; rtol=1e-14)
+        # Matched air: the conductivity of the cold-pressed surface rock (phi 0.25)
+        @test isapprox(cfg.materials.ksolidm[3], Erebus.k_porous(3.0, 0.25); rtol=1e-12)
+        @test isapprox(
+            PSV.make_porous_shell_config(; kw..., k_air=3000.0).materials.ksolidm[3],
+            3000.0;
+            rtol=1e-14,
+        )
+        # phi_init above the cold-pressed surface value 0.85: air as rock at 0.85
+        hi = PSV.make_porous_shell_config(; kw..., phi_init=0.9)
+        @test isapprox(hi.materials.ksolidm[3], Erebus.k_porous(3.0, 0.85); rtol=1e-12)
+        # The reference constants are those of the configuration and of the code
+        @test isapprox(PSV.T_HALF_AL_S, cfg.thermodynamics.t_half_al; rtol=1e-14)
+        @test isapprox(PSV.F_AL, cfg.thermodynamics.f_al; rtol=1e-14)
+        @test isapprox(PSV.E_AL, cfg.thermodynamics.E_al; rtol=1e-14)
+        @test isapprox(PSV.RHO_SOL, cfg.materials.rhosolidm[1]; rtol=1e-14)
+        @test isapprox(PSV.RHO_MET, cfg.coreformation.rho_metal; rtol=1e-14)
+        @test isapprox(PSV.X_FE, Erebus.X_FE_REF_CHONDRITE; rtol=1e-14)
+        @test isapprox(PSV.G_GRAV, Erebus.G_GRAV; rtol=1e-14)
+        @test isapprox(PSV.T_SINTER, cfg.porosity.T_sinter; rtol=1e-14)
+        @test isapprox(PSV.PHI_CAP, cfg.porosity.phi_cap; rtol=1e-14)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., Nx=4)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., n_steps=0)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., dt_yr=0.0)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., dt_yr=NaN)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., t_form_yr=-1.0)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., phi_init=1.5)
+        @test_throws DomainError PSV.make_porous_shell_config(; kw..., k_air=0.0)
+    end
+
+    @testset "Radial bin medians" begin
+        r = [0.5, 0.6, 0.7, 2.5, 2.6, 9.9, 10.5]
+        v = [1.0, 5.0, 2.0, 4.0, 8.0, 7.0, 99.0]
+        c, m = PSV.radial_bin_medians(r, v, 10.0, 1.0)
+        @test isapprox(c, [0.5, 2.5, 9.5]; atol=1e-12)
+        @test isapprox(m, [2.0, 6.0, 7.0]; atol=1e-12)
+    end
+
+    @testset "Erebus and the reference heat alike before sintering" begin
+        res = PSV.run_porous_shell_case(;
+            Nx=33, phi_init=0.25, t_form_yr=2.5e6, n_steps=3, dt_yr=1.0e4, Nr=400
+        )
+        # The adiabatic centre: the same heat and heat capacity in both codes
+        @test 300.0 < res.T_peak_ref < 310.0
+        @test isapprox(res.T_peak, res.T_peak_ref; rtol=1e-8)
+        @test isapprox(res.d_shell, PSV.R_PLANET; atol=1e-9)
+        @test isapprox(res.d_shell_ref, PSV.R_PLANET; atol=1e-9)
+        @test isapprox(res.dx, 1500.0; rtol=1e-14)
+        @test res.phi_rms < 1e-12
+    end
+
     @testset "Porous run: energy per step, time and radial convergence" begin
         run(Nr, dt_yr) = PSV.solve_porous_sphere(;
             R=20_000.0,

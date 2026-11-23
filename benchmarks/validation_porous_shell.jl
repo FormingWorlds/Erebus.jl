@@ -5,6 +5,10 @@ module PorousShellValidation
 # Lichtenberg et al. (2016a, Eq. 12), 26Al heating, cold pressing and hot sintering.
 # The laws are coded here from the raw constants; nothing calls the Erebus porosity code.
 
+using Erebus
+using StaticArrays
+using Logging
+
 const YEARLENGTH_S = 31_557_600.0
 const T_HALF_AL_S = 717_000.0 * 31_540_000.0
 const TAU_AL_S = T_HALF_AL_S / log(2.0)
@@ -191,14 +195,14 @@ end
 
 """
     solve_porous_sphere(; R, phi_init, t_form_yr, t_end_yr, dt_yr, Nr=2000,
-                        ratio_al=RATIO_AL_L16, T0=T_SPACE) -> NamedTuple
+                        ratio_al=RATIO_AL_L16, T0=T_SPACE, stop_cold=true) -> NamedTuple
 
 One-dimensional spherical finite-volume run: backward Euler conduction with k, rho cp and
 heat from the porosity at the start of the step, Dirichlet `T_SPACE` at `R`, then the dry
 porosity step at the new temperature and the pressure of the old porosity (the order of
 an Erebus step). At the start the porosity is cold pressed on the hydrostatic profile.
-The run stops at `t_end_yr` after formation, or once the peak has passed and every cell
-is below `T_SINTER` (no further sintering).
+The run stops at `t_end_yr` after formation, or with `stop_cold` once the peak has passed
+and every cell is below `T_SINTER` (no further sintering).
 
 Returns `(; r, phi, phi0, dphi_sinter, T, T_max, d_shell, d_phi04, t_peak_yr, T_peak,
 t_stop_yr, energy_residual, n_steps)`: profiles at the cell centres, the depth [m] of the
@@ -215,6 +219,7 @@ function solve_porous_sphere(;
     Nr::Int=2000,
     ratio_al::Float64=RATIO_AL_L16,
     T0::Float64=T_SPACE,
+    stop_cold::Bool=true,
 )
     dr = R / Nr
     rf = [(i - 1) * dr for i in 1:(Nr + 1)]
@@ -273,7 +278,7 @@ function solve_porous_sphere(;
         nstep = n
         Tm = maximum(T)
         Tm > T_peak && ((T_peak, t_peak) = (Tm, t))
-        (t > t_peak + dt && Tm < T_SINTER && T_peak >= T_SINTER) && break
+        (stop_cold && t > t_peak + dt && Tm < T_SINTER && T_peak >= T_SINTER) && break
     end
     return (;
         r=rc,
@@ -337,6 +342,219 @@ function eigenmode_T(
         s += a * (r > 0 ? sin(m * pi * r / R) / r : m * pi / R)
     end
     return T_surf + s
+end
+
+const R_PLANET = 20_000.0
+const L_BOX = 2.4 * R_PLANET
+const RHOCP_AIR = 3.0e10
+const PHIM0 = 1.0e-4
+const SEED_DEFAULT = 42
+
+"""
+    make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr,
+                             k_air=nothing, seed=42) -> SimulationConfig
+
+Erebus configuration of the porous shell case: a dry planetesimal of radius `R_PLANET`
+in a box of `L_BOX`, spherical metric, 26Al heating from the CAI ratio `RATIO_AL_L16`,
+`porosity.model = :henke2012`, a fixed time step, no melting, reactions or pore water.
+The sticky air stays at `T_SPACE` (fixed disk temperature, heat capacity `RHOCP_AIR`).
+`k_air = nothing` gives the air the conductivity of the cold-pressed surface rock, so
+that the face between air and rock conducts as the rock; pass 3000.0 for the value that
+a configuration file gives.
+"""
+function make_porous_shell_config(;
+    Nx::Int,
+    phi_init::Float64,
+    t_form_yr::Float64,
+    n_steps::Int,
+    dt_yr::Float64,
+    k_air::Union{Nothing,Float64}=nothing,
+    seed::Int=SEED_DEFAULT,
+)::SimulationConfig
+    Nx >= 5 || throw(DomainError(Nx, "Grid resolution Nx must be >= 5"))
+    n_steps >= 1 || throw(DomainError(n_steps, "Number of steps n_steps must be >= 1"))
+    (isfinite(dt_yr) && dt_yr > 0.0) ||
+        throw(DomainError(dt_yr, "Timestep dt_yr must be positive and finite"))
+    (isfinite(t_form_yr) && t_form_yr >= 0.0) ||
+        throw(DomainError(t_form_yr, "Formation time t_form_yr must be >= 0 and finite"))
+    0.0 <= phi_init <= 1.0 ||
+        throw(DomainError(phi_init, "Initial porosity phi_init must be in [0, 1]"))
+    k_a = if k_air === nothing
+        k_porous_ref(K_SOL, min(phi_init, phi_cold(0.0), PHI_CAP))
+    else
+        k_air
+    end
+    (isfinite(k_a) && k_a > 0.0) ||
+        throw(DomainError(k_a, "Air conductivity k_air must be positive and finite"))
+    return SimulationConfig(;
+        grid=GridConfig(; xsize=L_BOX, ysize=L_BOX, Nx=Nx, Ny=Nx),
+        geometry=GeometryConfig(;
+            rplanet=R_PLANET,
+            rcrust=R_PLANET,
+            xcenter=L_BOX / 2.0,
+            ycenter=L_BOX / 2.0,
+            spherical_metric=true,
+            metric_regularization_cells=0.5,
+            gravity_mode=:enclosed_mass,
+        ),
+        time=TimeConfig(;
+            start_time=t_form_yr,
+            endtime=t_form_yr + 3.0e7,
+            dt_initial=dt_yr,
+            dt_longest=dt_yr,
+            DTmax=500.0,
+            n_steps=n_steps,
+        ),
+        solver=SolverConfig(; seed=seed, hydromech_solver=:direct),
+        thermodynamics=ThermalConfig(;
+            hr_al=true,
+            hr_fe=false,
+            ratio_al=RATIO_AL_L16,
+            phim0=PHIM0,
+            thermal_buoyancy=false,
+            surface_radiation=false,
+        ),
+        materials=MaterialConfig(;
+            ksolidm=SVector{3,Float64}([K_SOL, K_SOL, k_a]),
+            rhocpsolidm=SVector{3,Float64}([RHOCP_SOL, RHOCP_SOL, RHOCP_AIR]),
+            rhocpfluidm=SVector{3,Float64}([1.0e6, 1.0e6, RHOCP_AIR]),
+            alphasolidm=SVector{3,Float64}([0.0, 0.0, 0.0]),
+            alphafluidm=SVector{3,Float64}([0.0, 0.0, 0.0]),
+            tkm0=SVector{3,Float64}([T_SPACE, T_SPACE, T_SPACE]),
+            XWsolidm_init=SVector{3,Float64}([0.0, 0.0, NaN]),
+        ),
+        poroelasticity=PoroelasticConfig(; phimin=PHIM0, hydrofracture=false),
+        porosity=PorosityConfig(; model=:henke2012, phi_init=phi_init),
+        output=OutputConfig(;
+            savematstep=n_steps + 10, visstep=n_steps + 10, save_final=false
+        ),
+        reaction=ReactionConfig(; active=false),
+        melting=MeltingConfig(; active=false, soft_turbulence=false),
+        coreformation=CoreFormationConfig(;
+            percolation_active=false, settling_active=false
+        ),
+        metal_partition=MetalPartitionConfig(; active=false),
+        venting=VentingConfig(; active=false),
+        volatiles=VolatilesConfig(; active=false),
+        retention=RetentionConfig(; active=false),
+        escape=EscapeConfig(; active=false),
+        atmosphere=AtmosphereConfig(; active=false),
+        hydrothermal=HydrothermalConfig(; active=false),
+        accretion=AccretionConfig(; active=false),
+        telescoping=TelescopingConfig(; active=false),
+        refractory=RefractoryConfig(; active=false),
+        volatile_mixture=VolatileMixtureConfig(; active=false),
+        magma_transport=MagmaTransportConfig(; active=false),
+        redox=RedoxConfig(; active=false),
+        magma_degassing=MagmaOceanDegassingConfig(; active=false),
+        disk=DiskConfig(;
+            enabled=true, model=:fixed, t_ambient=T_SPACE, dispersal_active=false
+        ),
+    )
+end
+
+# Median of a non-empty vector (sorted copy).
+function _median(v::AbstractVector{Float64})
+    s = sort(v)
+    n = length(s)
+    return isodd(n) ? s[(n + 1) ÷ 2] : 0.5 * (s[n ÷ 2] + s[n ÷ 2 + 1])
+end
+
+"""
+    radial_bin_medians(r, values, R, dr) -> (centres, medians)
+
+Medians of `values` in radial bins `[(b - 1) dr, b dr)` below `R`; empty bins are left out.
+"""
+function radial_bin_medians(
+    r::AbstractVector{Float64}, values::AbstractVector{Float64}, R::Float64, dr::Float64
+)
+    nb = floor(Int, R / dr)
+    bins = [Float64[] for _ in 1:nb]
+    for (ri, v) in zip(r, values)
+        b = floor(Int, ri / dr) + 1
+        1 <= b <= nb && push!(bins[b], v)
+    end
+    keep = findall(!isempty, bins)
+    return [(b - 0.5) * dr for b in keep], [_median(bins[b]) for b in keep]
+end
+
+"""
+    run_porous_shell_case(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air=nothing,
+                          seed=42, Nr=2000) -> NamedTuple
+
+Run the Erebus case and the 1-D reference with the same time step and number of steps,
+and compare them. The shell depth of Erebus is `Erebus.porous_shell_depth` with radial
+bins of half a cell. The profiles of the maximum temperature and of the porosity are
+medians of the rock markers in radial bins of half a cell, compared with the 1-D cell at
+the bin centre.
+
+Returns `(; dx, d_shell, d_shell_q25, d_shell_q75, d_shell_ref, d_shell_error_cells,
+tmax_rel_l2, phi_rms, T_peak, T_peak_ref, r, tmax, tmax_ref, phi, phi_ref, reference)`:
+depths [m], the relative L2 norm of `T_max - T_SPACE`, the rms porosity difference [-],
+peak temperatures [K], the binned profiles and the full 1-D result.
+"""
+function run_porous_shell_case(;
+    Nx::Int,
+    phi_init::Float64,
+    t_form_yr::Float64,
+    n_steps::Int,
+    dt_yr::Float64,
+    k_air::Union{Nothing,Float64}=nothing,
+    seed::Int=SEED_DEFAULT,
+    Nr::Int=2000,
+)
+    cfg = make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air, seed)
+    st = mktempdir() do tmpdir
+        redirect_stdout(devnull) do
+            redirect_stderr(devnull) do
+                with_logger(NullLogger()) do
+                    return simulation_loop(cfg; output_path=tmpdir)
+                end
+            end
+        end
+    end
+    ref = solve_porous_sphere(;
+        R=R_PLANET,
+        phi_init,
+        t_form_yr,
+        t_end_yr=n_steps * dt_yr,
+        dt_yr,
+        Nr,
+        stop_cold=false,
+    )
+    mk = st.markers
+    pg = mk.groups.porosity
+    xm, ym, tm = mk.core.xm, mk.core.ym, mk.core.tm
+    dx = L_BOX / (Nx - 1)
+    xc = yc = L_BOX / 2.0
+    sh = Erebus.porous_shell_depth(
+        xm, ym, tm, pg; xcenter=xc, ycenter=yc, rplanet=R_PLANET, dr=dx / 2
+    )
+    rock = findall(t -> t == 1 || t == 2, tm)
+    r = hypot.(xm[rock] .- xc, ym[rock] .- yc)
+    rc, tmax = radial_bin_medians(r, pg.tkm_max[rock], R_PLANET, dx / 2)
+    _, phi = radial_bin_medians(r, pg.phi_d[rock], R_PLANET, dx / 2)
+    cell = [clamp(floor(Int, x / (R_PLANET / Nr)) + 1, 1, Nr) for x in rc]
+    tmax_ref = ref.T_max[cell]
+    phi_ref = ref.phi[cell]
+    return (;
+        dx,
+        d_shell=sh.median,
+        d_shell_q25=sh.q25,
+        d_shell_q75=sh.q75,
+        d_shell_ref=ref.d_shell,
+        d_shell_error_cells=(sh.median - ref.d_shell) / dx,
+        tmax_rel_l2=sqrt(sum(abs2, tmax .- tmax_ref) / sum(abs2, tmax_ref .- T_SPACE)),
+        phi_rms=sqrt(sum(abs2, phi .- phi_ref) / length(phi)),
+        T_peak=maximum(pg.tkm_max[rock]),
+        T_peak_ref=ref.T_peak,
+        r=rc,
+        tmax,
+        tmax_ref,
+        phi,
+        phi_ref,
+        reference=ref,
+    )
 end
 
 end # module
