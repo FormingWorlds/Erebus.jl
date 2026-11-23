@@ -32,6 +32,111 @@ function telemetry_porosity(markers::MarkerArrays, PHI::AbstractMatrix)
     return n_rock == 0 ? (0.0, 0.0) : (phi_max, phi_sum / n_rock)
 end
 
+# Type-7 quantile (linear between order statistics) of a sorted, non-empty vector.
+function _sorted_quantile(v::AbstractVector{Float64}, p::Float64)
+    h = 1.0 + p * (length(v) - 1)
+    lo = floor(Int, h)
+    hi = min(lo + 1, length(v))
+    return v[lo] + (h - lo) * (v[hi] - v[lo])
+end
+
+"""
+    porous_shell_depth(xm, ym, tm, pg; xcenter, ycenter, rplanet, dr, nsector=16,
+                       measure=:unsintered) -> (; median, q25, q75, nsector_used)
+
+Depth [m] of the outer porous shell of a planetesimal, measured on the rock markers (`tm`
+1 or 2) of the dry porosity group `pg` of `porosity.model = :henke2012`.
+
+The slice is split into `nsector` equal angular sectors about `(xcenter, ycenter)`, and
+each sector into radial bins of width `dr`, `(rplanet - k dr, rplanet - (k - 1) dr]`; rock
+markers above `rplanet` count in bin 1. From the surface inward, the first non-empty bin
+whose median marker is sintered ends the shell, and the depth of the sector is the outer
+edge of that bin, `(k - 1) dr`. A sector without a sintered bin has the depth `rplanet`.
+
+A marker is sintered for `measure = :unsintered` when `dphi_sinter >= 1e-3`, the porosity
+decrease by hot sintering (cold pressing does not count). For `measure = :phi_gt_04` it is
+sintered when `phi_d <= 0.4`, so that the depth is that of the region with `phi_d > 0.4`;
+this measure is meaningful only when the cold-pressed porosity at the surface exceeds 0.4.
+
+# Arguments
+- `xm`, `ym`: marker coordinates [m].
+- `tm`: marker material (1 mantle, 2 crust, 3 air).
+- `pg`: dry porosity group (`phi_d`, `dphi_sinter` are read), or `nothing`.
+- `xcenter`, `ycenter`: centre of the planetesimal [m].
+- `rplanet`: planetesimal radius [m].
+- `dr`: width of the radial bins [m].
+- `nsector`: number of angular sectors.
+- `measure`: `:unsintered` or `:phi_gt_04`.
+
+# Returns
+- `(; median, q25, q75, nsector_used)`: median and type-7 quartiles of the sector depths
+  [m] over the `nsector_used` sectors that hold rock markers; NaN depths and 0 sectors
+  without rock markers.
+
+# Throws
+- `ArgumentError`: `pg` is `nothing` (`porosity.model = :none`), `nsector < 1`, an unknown
+  `measure`, or marker arrays of different lengths.
+- `DomainError`: `rplanet` or `dr` not positive and finite, or a centre not finite.
+"""
+function porous_shell_depth(
+    xm::AbstractVector{<:Real},
+    ym::AbstractVector{<:Real},
+    tm::AbstractVector{<:Integer},
+    pg::Union{PorosityGroup,Nothing};
+    xcenter::Real,
+    ycenter::Real,
+    rplanet::Real,
+    dr::Real,
+    nsector::Integer=16,
+    measure::Symbol=:unsintered,
+)
+    pg === nothing &&
+        throw(ArgumentError("porous_shell_depth needs the dry porosity group of henke2012"))
+    nsector >= 1 || throw(ArgumentError("nsector must be >= 1, got $nsector"))
+    measure in (:unsintered, :phi_gt_04) ||
+        throw(ArgumentError("measure must be :unsintered or :phi_gt_04, got $measure"))
+    n = length(xm)
+    lengths = (length(ym), length(tm), length(pg.phi_d), length(pg.dphi_sinter))
+    all(==(n), lengths) || throw(ArgumentError("marker arrays differ in length"))
+    R = Float64(require_positive_finite(rplanet, "rplanet"))
+    h = Float64(require_positive_finite(dr, "dr"))
+    isfinite(xcenter) || throw(DomainError(xcenter, "xcenter must be finite"))
+    isfinite(ycenter) || throw(DomainError(ycenter, "ycenter must be finite"))
+    nbin = max(1, ceil(Int, R / h))
+    vals = [Float64[] for _ in 1:nbin, _ in 1:nsector]
+    for m in 1:n
+        (tm[m] == 1 || tm[m] == 2) || continue
+        dx = xm[m] - xcenter
+        dy = ym[m] - ycenter
+        s = min(floor(Int, (atan(dy, dx) + pi) / (2pi) * nsector) + 1, nsector)
+        k = clamp(floor(Int, (R - hypot(dx, dy)) / h) + 1, 1, nbin)
+        push!(vals[k, s], measure === :unsintered ? pg.dphi_sinter[m] : pg.phi_d[m])
+    end
+    depths = Float64[]
+    for s in 1:nsector
+        all(isempty, view(vals, :, s)) && continue
+        d = R
+        for k in 1:nbin
+            v = vals[k, s]
+            isempty(v) && continue
+            med = _sorted_quantile(sort!(v), 0.5)
+            if (measure === :unsintered ? med >= 1.0e-3 : med <= 0.4)
+                d = (k - 1) * h
+                break
+            end
+        end
+        push!(depths, d)
+    end
+    isempty(depths) && return (; median=NaN, q25=NaN, q75=NaN, nsector_used=0)
+    sort!(depths)
+    return (;
+        median=_sorted_quantile(depths, 0.5),
+        q25=_sorted_quantile(depths, 0.25),
+        q75=_sorted_quantile(depths, 0.75),
+        nsector_used=length(depths),
+    )
+end
+
 """
 Evaluate diagnostics, write telemetry rows, and serialize simulation checkpoints.
 
