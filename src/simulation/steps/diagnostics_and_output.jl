@@ -142,6 +142,40 @@ function porous_shell_depth(
 end
 
 """
+    porous_shell_depth(st::SimulationState, coords::GridCoordinates, geometry::GeometryConfig;
+                       nsector=16, measure=:unsintered) -> (; median, q25, q75, nsector_used)
+
+Porous shell depth of a simulation state: the marker method with the planet centre and
+radius of `geometry` and radial bins of half the smaller grid spacing.
+
+# Throws
+- `ArgumentError`: the state has no dry porosity group (`porosity.model = :none`).
+"""
+function porous_shell_depth(
+    st::SimulationState,
+    coords::GridCoordinates,
+    geometry::GeometryConfig;
+    nsector::Integer=16,
+    measure::Symbol=:unsintered,
+)
+    groups = st.markers.groups
+    pg = haskey(groups, :porosity) ? groups.porosity : nothing
+    core = st.markers.core
+    return porous_shell_depth(
+        core.xm,
+        core.ym,
+        core.tm,
+        pg;
+        xcenter=geometry.xcenter,
+        ycenter=geometry.ycenter,
+        rplanet=geometry.rplanet,
+        dr=0.5 * min(coords.dx, coords.dy),
+        nsector=nsector,
+        measure=measure,
+    )
+end
+
+"""
 Evaluate diagnostics, write telemetry rows, and serialize simulation checkpoints.
 
 $(SIGNATURES)

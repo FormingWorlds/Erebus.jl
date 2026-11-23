@@ -3363,6 +3363,31 @@ end
         @test isnan(r.median) && isnan(r.q25) && isnan(r.q75)
         @test r.nsector_used == 0
     end
+    @testset "Method on a simulation state" begin
+        cfg = _hk_cfg()
+        st, coords, _ = _hk_state(cfg)
+        mk = st.markers
+        # Mark the rock below half the radius as sintered: the shell is about R / 2
+        g = cfg.geometry
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< 0.5 * g.rplanet, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        direct = Erebus.porous_shell_depth(
+            mk.xm,
+            mk.ym,
+            mk.tm,
+            mk.groups.porosity;
+            xcenter=g.xcenter,
+            ycenter=g.ycenter,
+            rplanet=g.rplanet,
+            dr=0.5 * min(coords.dx, coords.dy),
+        )
+        @test isapprox(res.median, direct.median; rtol=1e-14)
+        @test res.nsector_used == direct.nsector_used == 16
+        @test 0.4 * g.rplanet < res.median < 0.6 * g.rplanet
+        st0, coords0, _ = _hk_state(_hk_cfg("porosity.model" => :none))
+        @test_throws ArgumentError Erebus.porous_shell_depth(st0, coords0, g)
+    end
     @testset "Argument guards" begin
         xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
         @test_throws ArgumentError _shell(xm, ym, tm, nothing)
