@@ -357,6 +357,13 @@ end
         @test isapprox(cp, [1.5, 9.5]; atol=1e-12)
         @test isapprox(mp, [3.0, 4.0]; atol=1e-12)
         @test length(cp) == 2
+        # One value per radius, and a positive, finite radius and bin width
+        @test_throws ArgumentError PSV.radial_bin_medians(r, v[1:(end - 1)], 10.0, 1.0)
+        @test_throws ArgumentError PSV.radial_bin_medians(r[1:(end - 1)], v, 10.0, 1.0)
+        for bad in (0.0, -1.0, NaN, Inf)
+            @test_throws DomainError PSV.radial_bin_medians(r, v, bad, 1.0)
+            @test_throws DomainError PSV.radial_bin_medians(r, v, 10.0, bad)
+        end
     end
 
     @testset "Run clock: the last step and the final time of the case" begin
@@ -575,6 +582,39 @@ end
             ok_v, errs_v = static_errors(r -> (r["metrics"][3]["value"] += 1.0e4))
             @test !ok_v
             @test any(occursin("fails comparison", e) for e in errs_v)
+            # A 1-D depth other than the pinned one fails, also when the value passes it
+            ok_r, errs_r = static_errors(r -> (r["metrics"][1]["reference"] = 4660.0))
+            @test !ok_r
+            @test any(
+                occursin("shell_depth_s65_25_025", e) && occursin("pinned 1-D depth", e) for
+                e in errs_r
+            )
+            # A shell depth outside [0, R_PLANET] fails, also within its own tolerance
+            function out_of_body(value, ref)
+                return r -> begin
+                    m = r["metrics"][1]
+                    m["reference"], m["value"] = ref, value
+                    m["atol"] = PSV.shell_depth_atol(65, ref)
+                end
+            end
+            for (value, ref) in ((20_500.0, 19_900.0), (-300.0, 100.0))
+                ok_o, errs_o = static_errors(out_of_body(value, ref))
+                @test !ok_o
+                @test any(occursin("outside [0, 20000.0]", e) for e in errs_o)
+            end
+            @test !first(static_errors(out_of_body(NaN, 4560.0)))
+            # The pinned depths cover the cases, lie inside the body and enter the hash
+            pinned_tags = [t for (t, _) in PSV.SUITE_REFERENCE_DEPTHS]
+            @test pinned_tags == [String(c[1]) for c in PSV.SUITE_CASES]
+            @test all(0.0 < d < PSV.R_PLANET for (_, d) in PSV.SUITE_REFERENCE_DEPTHS)
+            @test occursin("case.SUITE_REFERENCE_DEPTHS=", PSV.suite_config_text())
+            for m in raw_suite["metrics"]
+                startswith(m["id"], "shell_depth_") || continue
+                @test isapprox(
+                    m["reference"], PSV.suite_reference_depth(m["case"]); atol=1e-9
+                )
+            end
+            @test_throws ArgumentError PSV.suite_reference_depth("s33_other")
             @test !first(PSV.check_suite_record_static(suite_path * ".missing"))
             @test_throws DomainError PSV.check_suite_record_static("")
 
@@ -598,7 +638,9 @@ end
             out = joinpath(tmpdir, "exported_suite.toml")
             commit = String(raw_suite["metadata"]["src_commit"])
             SE = PorousShellSuiteExport
-            @test SE.run_suite_export_cli([folder, out]; src_commit=commit) == 0
+            @test SE.run_suite_export_cli(
+                [folder, out]; src_commit=commit, check_clean_tree=false
+            ) == 0
             raw_out = TOML.parsefile(out)
             @test first(PSV.check_suite_record_static(out; check_doc_sync=false))
             @test PSV.render_validation_markdown_block(raw_out) ==
@@ -613,11 +655,71 @@ end
             @test_throws ArgumentError SE.read_suite_results(bad)
             err_run = capture_porous_shell_stdio(
                 () -> SE.run_suite_export_cli(
-                    [bad, joinpath(tmpdir, "x.toml")]; src_commit=commit
+                    [bad, joinpath(tmpdir, "x.toml")];
+                    src_commit=commit,
+                    check_clean_tree=false,
                 ),
             )
             @test err_run.value == 1
             @test !isfile(joinpath(tmpdir, "x.toml"))
+            # Uncommitted changes in src/, benchmarks/ or tools/ stop the export
+            dirty = capture_porous_shell_stdio(
+                () -> SE.run_suite_export_cli(
+                    [folder, joinpath(tmpdir, "dirty.toml")];
+                    src_commit=commit,
+                    dirty_status=" M benchmarks/validation_porous_shell.jl",
+                ),
+            )
+            @test dirty.value == 1
+            @test occursin("uncommitted changes", dirty.err)
+            @test !isfile(joinpath(tmpdir, "dirty.toml"))
+            @test first(
+                PorousShellExport.check_clean_source_tree(;
+                    record="benchmarks/records/porous_shell_suite.toml"
+                ),
+            ) isa Bool
+            # An energy residual above ENERGY_RESIDUAL_LIMIT (1e-9) is refused
+            hot = write_suite_folder(
+                mkpath(joinpath(tmpdir, "hot")),
+                raw_suite;
+                tamper=Dict("s129_25_050" => ("energy_res", 2.0e-9)),
+            )
+            e_hot = try
+                SE.read_suite_results(hot)
+            catch err
+                err
+            end
+            @test e_hot isa ArgumentError
+            @test occursin("energy_res", e_hot.msg)
+            nan_e = write_suite_folder(
+                mkpath(joinpath(tmpdir, "nan_e")),
+                raw_suite;
+                tamper=Dict("s65_25_025" => ("energy_res", NaN)),
+            )
+            @test_throws ArgumentError SE.read_suite_results(nan_e)
+            # A 1-D depth other than the pinned depth of the case is refused
+            moved_ref = write_suite_folder(
+                mkpath(joinpath(tmpdir, "moved_ref")),
+                raw_suite;
+                tamper=Dict("s129_225_025" => ("d_ref", 2400.0)),
+            )
+            e_ref = try
+                SE.read_suite_results(moved_ref)
+            catch err
+                err
+            end
+            @test e_ref isa ArgumentError
+            @test occursin("pinned", e_ref.msg)
+            # A result file of a tag outside SUITE_CASES is refused
+            stray = write_suite_folder(mkpath(joinpath(tmpdir, "stray")), raw_suite)
+            cp(joinpath(stray, "result_s65_25_025.csv"), joinpath(stray, "result_s33.csv"))
+            e_stray = try
+                SE.read_suite_results(stray)
+            catch err
+                err
+            end
+            @test e_stray isa ArgumentError
+            @test occursin("s33", e_stray.msg)
             rm(joinpath(folder, "result_s129_25_025_k.csv"))
             @test_throws ArgumentError SE.read_suite_results(folder)
             usage = capture_porous_shell_stdio(() -> SE.run_suite_export_cli(String[]))
@@ -634,6 +736,37 @@ end
     recorded = Dict(
         String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
     )
+
+    @testset "Reproducibility check: a metric without a limit or a reference fails" begin
+        # A shell depth at Nx = 129, outside NX_LIST: the code has no limit and no
+        # reference for it, so its recorded tolerance cannot be checked
+        extra_rec = deepcopy(raw_record_all)
+        extra = deepcopy(extra_rec["metrics"][1])
+        extra["id"], extra["nx"] = "shell_depth_nx129", 129
+        push!(extra_rec["metrics"], extra)
+        vals = Dict(String(m["id"]) => Float64(m["value"]) for m in extra_rec["metrics"])
+        fake_bench = (; runs=Dict{Int,Any}(), metrics=vals)
+        mktempdir() do tmpdir
+            path = write_porous_shell_toml(joinpath(tmpdir, "extra.toml"), extra_rec)
+            ok_x, errs_x = PSV.check_validation_reproducibility(
+                fake_bench, path; check_recorded_values=false, d_shell_ref=4590.0
+            )
+            @test !ok_x
+            @test any(
+                occursin("'shell_depth_nx129'", e) && occursin("no limit", e) for
+                e in errs_x
+            )
+            @test any(
+                occursin("'shell_depth_nx129'", e) &&
+                    occursin("no recomputed reference", e) for e in errs_x
+            )
+            # The 3 metrics of the code raise neither error
+            @test !any(
+                occursin("nx65", e) && occursin(r"no (limit|recomputed)", e) for e in errs_x
+            )
+        end
+    end
+
     bench = PSV.evaluate_porous_shell_benchmark()
 
     @testset "Benchmark run: every metric, physical bounds of the runs" begin
@@ -650,6 +783,11 @@ end
         r65 = bench.runs[65]
         @test abs(r65.d_shell - r65.d_shell_ref) <= max(750.0, 0.15 * r65.d_shell_ref)
         @test bench.metrics["energy_lse_residual_nx65"] <= 1.0e-9
+        # The 1-D shell of the CI case is 4590 m deep (459 cells of 10 m), and the
+        # recorded Erebus shell is 5250 m deep (14 bins of 375 m from the surface)
+        @test isapprox(r65.d_shell_ref, 4590.0; atol=1e-6)
+        @test isapprox(recorded["shell_depth_nx65"], 5250.0; atol=1e-9)
+        @test isapprox(r65.d_shell, recorded["shell_depth_nx65"]; atol=375.0)
     end
 
     @testset "Validation record schema and drift guards" begin

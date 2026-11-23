@@ -10,11 +10,13 @@ module PorousShellSuiteExport
 using Dates
 using Printf
 using TOML
-using ..PorousShellExport: last_src_commit, metric_status, porous_shell_validation_module
+using ..PorousShellExport:
+    check_clean_source_tree, last_src_commit, metric_status, porous_shell_validation_module
 
 const DEFAULT_SUITE_RECORD_PATH = normpath(
     joinpath(@__DIR__, "..", "benchmarks", "records", "porous_shell_suite.toml")
 )
+const SUITE_RECORD_RELPATH = "benchmarks/records/porous_shell_suite.toml"
 
 """
     read_suite_results(suite_dir) -> Vector{NamedTuple}
@@ -23,7 +25,10 @@ Read the result rows of the full runs from `suite_dir`, as written by
 `scripts/run_validation_porous_shell_suite.jl`: `header.csv` and one `result_<tag>.csv`
 per case of `SUITE_CASES`. Each row must describe its case: the tag, `Nx`, the formation
 time, the initial porosity, the number of steps, the air conductivity (`-1` for the
-matched air) and the cell size `L_BOX / (Nx - 1)`.
+matched air) and the cell size `L_BOX / (Nx - 1)`. The energy residual `energy_res` of
+each row must be finite and in `[0, ENERGY_RESIDUAL_LIMIT]`, its 1-D depth `d_ref` must
+equal the pinned depth of its case (`suite_reference_depth`), and the folder must hold no
+`result_<tag>.csv` of a tag outside `SUITE_CASES`.
 
 Parameters
 ----------
@@ -40,7 +45,9 @@ Raises
 ------
 ArgumentError
     If the header differs from `SUITE_RESULT_HEADER`, a result file is missing or does not
-    hold one row of the header length, or a row does not match its case.
+    hold one row of the header length, a row does not match its case or has an energy
+    residual above `ENERGY_RESIDUAL_LIMIT`, or a result file has a tag outside
+    `SUITE_CASES`.
 ErrorException
     If `PorousShellValidation` is not loaded.
 """
@@ -53,6 +60,15 @@ function read_suite_results(suite_dir::String)
     header == collect(PSV.SUITE_RESULT_HEADER) ||
         throw(ArgumentError("$header_path has columns $header"))
     col(name) = findfirst(==(name), header)
+    tags = Set(String(c[1]) for c in PSV.SUITE_CASES)
+    for f in readdir(suite_dir)
+        mt = match(r"^result_(.*)\.csv$", f)
+        (mt === nothing || mt.captures[1] in tags) || throw(
+            ArgumentError(
+                "$(joinpath(suite_dir, f)) has the tag '$(mt.captures[1])', not in SUITE_CASES",
+            ),
+        )
+    end
     out = NamedTuple[]
     for (tag, nx, tf, phi, n, k_air) in PSV.SUITE_CASES
         path = joinpath(suite_dir, "result_$(tag).csv")
@@ -72,6 +88,13 @@ function read_suite_results(suite_dir::String)
             isapprox(num("dx"), PSV.L_BOX / (nx - 1); rtol=1.0e-12) &&
             (k_air === nothing ? k_rec < 0.0 : isapprox(k_rec, k_air; rtol=1.0e-12))
         matches || throw(ArgumentError("$path does not match the case $tag of SUITE_CASES"))
+        e_res, e_lim = num("energy_res"), PSV.ENERGY_RESIDUAL_LIMIT
+        (isfinite(e_res) && 0.0 <= e_res <= e_lim) ||
+            throw(ArgumentError("$path has energy_res $e_res outside [0, $e_lim]"))
+        d_ref, d_pin = num("d_ref"), PSV.suite_reference_depth(tag)
+        isapprox(d_ref, d_pin; rtol=1.0e-12) || throw(
+            ArgumentError("$path has the 1-D depth $d_ref m, not the pinned $d_pin m")
+        )
         push!(
             out,
             (;
@@ -311,9 +334,11 @@ function write_suite_record(
 end
 
 """
-    run_suite_export_cli(args::Vector{String}=ARGS; src_commit=nothing) -> Int
+    run_suite_export_cli(args::Vector{String}=ARGS; src_commit=nothing, check_clean_tree=true, dirty_status=nothing, repo_root=normpath(joinpath(@__DIR__, ".."))) -> Int
 
-Run the command-line export of the suite record: `<suite_dir> [record_path]`. An error of
+Run the command-line export of the suite record: `<suite_dir> [record_path]`. Uncommitted
+changes in `src/`, `benchmarks/` or `tools/` (other than the suite record) refuse the
+export, as in `run_export_cli` of `tools/export_validation_porous_shell.jl`. An error of
 the export is printed and gives the exit code `1`.
 
 Parameters
@@ -321,7 +346,14 @@ Parameters
 args : Vector{String}, optional
     Command-line arguments: the folder of the result files and at most one record path.
 src_commit : Union{String,Nothing}, optional
-    Explicit `src/` commit SHA-1, or `nothing` to query `last_src_commit()`.
+    Explicit `src/` commit SHA-1, or `nothing` to query `last_src_commit(repo_root)`.
+check_clean_tree : Bool, optional
+    Refuse to export when `src/`, `benchmarks/` or `tools/` has uncommitted changes
+    (default `true`).
+dirty_status : Union{String,Nothing}, optional
+    Replacement for the `git status --porcelain` output of the clean-tree check.
+repo_root : String, optional
+    Repository root directory checked for `src/`, `benchmarks/` and `tools/` cleanliness.
 
 Returns
 -------
@@ -334,7 +366,11 @@ InterruptException
     If the run is interrupted.
 """
 function run_suite_export_cli(
-    args::Vector{String}=ARGS; src_commit::Union{String,Nothing}=nothing
+    args::Vector{String}=ARGS;
+    src_commit::Union{String,Nothing}=nothing,
+    check_clean_tree::Bool=true,
+    dirty_status::Union{String,Nothing}=nothing,
+    repo_root::String=normpath(joinpath(@__DIR__, "..")),
 )::Int
     if !(1 <= length(args) <= 2) || any(startswith("-"), args)
         println(
@@ -345,7 +381,22 @@ function run_suite_export_cli(
     end
     record_path = length(args) == 2 ? args[2] : DEFAULT_SUITE_RECORD_PATH
     try
-        write_suite_record(args[1]; record_path, src_commit)
+        if check_clean_tree
+            ok_clean, dirty_out = if dirty_status === nothing
+                check_clean_source_tree(repo_root; record=SUITE_RECORD_RELPATH)
+            else
+                (isempty(strip(dirty_status)), String(strip(dirty_status)))
+            end
+            if !ok_clean
+                println(
+                    stderr,
+                    "Refusing to export the suite record with uncommitted changes in src/, benchmarks/ or tools/:\n$dirty_out",
+                )
+                return 1
+            end
+        end
+        commit = something(src_commit, last_src_commit(repo_root))
+        write_suite_record(args[1]; record_path, src_commit=commit)
         println("Wrote $record_path")
         return 0
     catch err

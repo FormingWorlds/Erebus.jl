@@ -377,6 +377,8 @@ The test grids of 17 by 17 nodes have $\Delta x = 8.75$ km for $R_p = 50$ km and
 
 ## How deep is the porous shell?
 
+The short answer: the shell ends where the peak temperature of the rock reached the sintering temperature of 700 K, and `porous_shell_depth` measures its depth on the rock markers.
+
 The porous shell is the outer layer of a planetesimal where the rock never sintered.
 Its markers keep the porosity of cold pressing, because they did not stay hot enough for long enough.
 The function `porous_shell_depth` measures the depth of this layer on the rock markers.
@@ -394,8 +396,7 @@ The result is the median of the 16 sector depths, with the 25 % and 75 % quartil
 - A sector without a sintered bin has the depth $R_p$: the whole sector is porous.
 - With `measure = :phi_gt_04`, a marker counts as sintered when `phi_d` $\leq 0.4$. The depth is then that of the region with $\phi > 0.4$, the measure of Fig. 8 of Lichtenberg et al. (2016a). This measure gives a result only when the cold-pressed porosity at the surface is above 0.4.
 
-On a simulation state, the bins are half the smaller grid spacing:
-
+On a simulation state, the bins are half the smaller grid spacing.
 Here `cfg` is a configuration with `porosity.model = "henke2012"`:
 
 ```julia

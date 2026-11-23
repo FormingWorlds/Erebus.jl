@@ -487,10 +487,24 @@ Returns
 -------
 Tuple{Vector{Float64},Vector{Float64}}
     Bin centres [m] and the median of `values` in each non-empty bin.
+
+Raises
+------
+ArgumentError
+    If `r` and `values` differ in length.
+DomainError
+    If `R` or `dr` is not positive and finite.
 """
 function radial_bin_medians(
     r::AbstractVector{Float64}, values::AbstractVector{Float64}, R::Float64, dr::Float64
 )
+    length(r) == length(values) || throw(
+        ArgumentError("r and values differ in length: $(length(r)) and $(length(values))"),
+    )
+    (isfinite(R) && R > 0.0) ||
+        throw(DomainError(R, "the outer radius R must be positive and finite"))
+    (isfinite(dr) && dr > 0.0) ||
+        throw(DomainError(dr, "the bin width dr must be positive and finite"))
     nb = ceil(Int, R / dr)
     bins = [Float64[] for _ in 1:nb]
     for (ri, v) in zip(r, values)
@@ -1291,9 +1305,11 @@ end
 Compare freshly evaluated metrics, reference values, regression bands, the reference
 literals and the configuration hash and summary with a committed validation record. The
 recorded `atol`, `rtol` and `comparison` of each metric must equal the limit of the code
-(`expected_metric_limits`), so that a widened tolerance in the record fails. The
-replay of recorded values (`REPLAY_RTOL`, `REPLAY_ATOL_BOUNDS`) runs when
-`check_recorded_values` is `true` and the Julia major.minor version matches
+(`expected_metric_limits`), so that a widened tolerance in the record fails. A recorded
+metric without a reference in `expected_metric_references` or without a limit in
+`expected_metric_limits` is an error. The replay of recorded values (`REPLAY_RTOL`,
+`REPLAY_ATOL_BOUNDS`) runs when `check_recorded_values` is `true` and the Julia
+major.minor version matches
 `metadata.julia_version`; the regression bands always run. A record that fails
 `validate_record_dict` returns its schema errors only, and a file that is not valid TOML
 the message of the parser error.
@@ -1401,24 +1417,32 @@ function check_validation_reproducibility(
         atol = Float64(m["atol"])
         rtol = Float64(m["rtol"])
         comp = String(m["comparison"])
-        if haskey(exp_refs, mid) &&
-            !isapprox(ref, exp_refs[mid]; rtol=1.0e-12, atol=1.0e-12)
+        # A metric that the code does not define has no reference or limit to check
+        # its recorded values against, so it is an error.
+        if !haskey(exp_refs, mid)
+            push!(errors, "Recorded metric '$mid' has no recomputed reference in the code")
+        elseif !isapprox(ref, exp_refs[mid]; rtol=1.0e-12, atol=1.0e-12)
             push!(
                 errors,
                 "Recorded reference for '$mid' ($ref) does not match recomputed reference ($(exp_refs[mid]))",
             )
         end
-        if haskey(exp_limits, mid)
-            lim = exp_limits[mid]
-            same_limit =
-                comp == lim.comparison &&
-                isapprox(atol, lim.atol; rtol=1.0e-12, atol=0.0) &&
-                isapprox(rtol, lim.rtol; rtol=1.0e-12, atol=0.0)
-            same_limit || push!(
+        if !haskey(exp_limits, mid)
+            push!(
                 errors,
-                "Recorded tolerance of '$mid' ($comp, atol=$atol, rtol=$rtol) differs from the limit of the code ($(lim.comparison), atol=$(lim.atol), rtol=$(lim.rtol))",
+                "Recorded metric '$mid' has no limit in expected_metric_limits of the code",
             )
+            continue
         end
+        lim = exp_limits[mid]
+        same_limit =
+            comp == lim.comparison &&
+            isapprox(atol, lim.atol; rtol=1.0e-12, atol=0.0) &&
+            isapprox(rtol, lim.rtol; rtol=1.0e-12, atol=0.0)
+        same_limit || push!(
+            errors,
+            "Recorded tolerance of '$mid' ($comp, atol=$atol, rtol=$rtol) differs from the limit of the code ($(lim.comparison), atol=$(lim.atol), rtol=$(lim.rtol))",
+        )
         tol_ok = if comp == "isapprox"
             isapprox(measured, ref; atol=atol, rtol=rtol)
         elseif comp == "le_atol"
@@ -1456,6 +1480,17 @@ const SUITE_CASES = (
     ("s129_25_050", 129, 2.5, 0.5, 1580, nothing),
     ("s129_25_025_k", 129, 2.5, 0.25, 750, 3000.0),
 )
+# Shell depth [m] of the 1-D reference of each case of SUITE_CASES, by tag:
+# solve_porous_sphere with NR_REFERENCE cells and the steps of the case, no stop once the
+# rock cools.
+const SUITE_REFERENCE_DEPTHS = (
+    ("s65_25_025", 4560.0),
+    ("s129_25_025", 4560.0),
+    ("s129_225_025", 2340.0),
+    ("s129_175_010", 2170.0),
+    ("s129_25_050", 2440.0),
+    ("s129_25_025_k", 4560.0),
+)
 const SUITE_DT_YR = 1.0e4
 const SUITE_TMAX_NX_MIN = 65
 const SUITE_RECORD_ID = "porous_shell_suite"
@@ -1480,6 +1515,7 @@ const SUITE_RESULT_HEADER = (
     "wall_s",
 )
 const SUITE_HASHED_CONSTANTS = (
+    :SUITE_REFERENCE_DEPTHS,
     :SUITE_DT_YR,
     :SUITE_TMAX_NX_MIN,
     :R_PLANET,
@@ -1518,6 +1554,34 @@ function suite_case_config(case::Tuple)
     return make_porous_shell_config(;
         Nx=nx, phi_init=phi, t_form_yr=tf_myr * 1.0e6, n_steps=n, dt_yr=SUITE_DT_YR, k_air
     )
+end
+
+"""
+    suite_reference_depth(tag)
+
+Return the pinned shell depth of the 1-D reference of the suite case `tag`, from
+`SUITE_REFERENCE_DEPTHS`.
+
+Parameters
+----------
+tag : AbstractString
+    Tag of a case of `SUITE_CASES`.
+
+Returns
+-------
+Float64
+    Shell depth of the 1-D reference [m].
+
+Raises
+------
+ArgumentError
+    If `tag` has no entry in `SUITE_REFERENCE_DEPTHS`.
+"""
+function suite_reference_depth(tag::AbstractString)::Float64
+    for (t, d) in SUITE_REFERENCE_DEPTHS
+        t == tag && return d
+    end
+    return throw(ArgumentError("suite case '$tag' has no pinned 1-D shell depth"))
 end
 
 """
@@ -1678,7 +1742,9 @@ Check the suite record `path` without a rerun: the schema of `validate_record_di
 record id, the configuration hash of the case set (`suite_config_sha256`), the `[config]`
 summary, the case list against `SUITE_CASES`, the metric ids (`suite_metric_ids`), the
 grid of each metric, the tolerance of each metric against `suite_metric_limit` and that
-each value passes it. A file that is not valid TOML returns the parser error.
+each value passes it. The reference of a shell depth must equal the pinned 1-D depth of
+its case (`suite_reference_depth`), which also sets its rule, and the shell depth must be
+finite and in `[0, R_PLANET]`. A file that is not valid TOML returns the parser error.
 
 Parameters
 ----------
@@ -1747,6 +1813,19 @@ function check_suite_record_static(
         nx = nx_of[tag]
         Int(m["nx"]) == nx || push!(errors, "Metric '$mid' has nx $(m["nx"]), not $nx")
         value, ref = Float64(m["value"]), Float64(m["reference"])
+        if startswith(mid, "shell_depth_")
+            (isfinite(value) && 0.0 <= value <= R_PLANET) || push!(
+                errors,
+                "Shell depth '$mid' = $value is not finite or outside [0, $R_PLANET]",
+            )
+            pinned = suite_reference_depth(tag)
+            isapprox(ref, pinned; rtol=1.0e-12, atol=0.0) || push!(
+                errors,
+                "Recorded reference of '$mid' ($ref) differs from the pinned 1-D depth ($pinned) of case '$tag'",
+            )
+            # The rule below uses the pinned depth, so a changed reference cannot move it
+            ref = pinned
+        end
         lim = try
             suite_metric_limit(mid, nx, ref)
         catch err

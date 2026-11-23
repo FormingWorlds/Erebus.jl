@@ -53,8 +53,8 @@ Its own tests compare it with a backward-Euler eigenmode series of a sphere with
 In this case its shell is 4590 m deep.
 
 **Why it matters.**
-The case runs the complete `simulation_loop`: the heat solve, the geometry term of the sphere, the pressure from the Stokes solve, and the sintering step of each marker.
-A shell depth from a planetesimal run depends on all of them.
+The case runs the complete `simulation_loop`: the heat solve, the geometry term of the sphere and the sintering step of each marker.
+The shell depth of a planetesimal run depends on all 3.
 
 ```@raw html
 <div class="validation-fig-light">
@@ -76,7 +76,8 @@ The line is the 1-D model, and the points are the medians of the Erebus markers 
 The dotted line is 700 K: below it the rock does not sinter.
 Panel (b) shows the final porosity $\phi$ against the radius.
 The short vertical marks at the top show the inner edge of the shell, $R_p$ minus its depth.
-A pass means that the marks of Erebus lie within 1 cell of the mark of the 1-D model, and that they move closer as the grid gets finer.
+A pass means that the mark of Erebus at `Nx = 65` lies within 1 cell of the mark of the 1-D model.
+The mark at `Nx = 129` shows the difference on a finer grid; the next case records it.
 
 **Known limit.**
 With the matched air, Erebus gives a shell that is deeper than in the 1-D model by 0.7 to 1.0 cells, in every case on this page.
@@ -86,7 +87,6 @@ Near the surface the Erebus rock stays colder than in the 1-D model (panel a).
 The cause is the sticky air: its large heat capacity holds the grid nodes that mix rock and air at 290 K, so the cold surface lies inside $R_p$.
 With an air heat capacity equal to that of rock, the shell at `Nx = 65` is 0.62 cells too thin instead of 0.88 cells too deep.
 
-**What the depth can and cannot detect.**
 At the edge of the shell the 1-D model has a peak temperature of 700.4 K in the last sintered cell and 699.998 K in the next one.
 The depth of the shell is therefore the depth where the peak temperature reached 700 K.
 It depends on the heat, the conductivity and the surface, but hardly on the pressure: a pressure 10 times too low moves it by 30 m in the 1-D model.
@@ -171,13 +171,15 @@ A configuration file gives the sticky air a conductivity of 3000 W/(m K), and it
 The air then draws heat out of the outer cells of the rock.
 In the main case the outermost 3 bins reached only 290.0 to 303.8 K, against 309.4 to 348.4 K with the matched air and 327.6 to 386.8 K in the 1-D model.
 With this value the shell of the main case is 5062.5 m deep, 1.34 cells deeper than in the 1-D model, against 0.84 cells with the matched air.
-The pass rows of this page therefore give the air the conductivity of the porous surface rock.
+The CI case and 5 of the 6 runs therefore give the air the conductivity of the porous surface rock.
 In a run from a configuration file, expect the shell to be about 1.3 cells deeper than in the 1-D model.
 
 !!! details "Test details"
     - Reference: `solve_porous_sphere`, through `run_porous_shell_case` in `benchmarks/validation_porous_shell.jl`.
-    - Tolerance: the shell depth within 1 cell or 15 % of the 1-D depth, as in the short case. CI does not run these cases; the table holds the values of one run of each.
-    - Command: `julia --project=. scripts/run_validation_porous_shell_suite.jl <out_dir>` (9 to 71 min per case at `Nx = 129` on one core), then `scripts/export_validation_porous_shell_data.jl` and `scripts/generate_validation_porous_shell_figures.py` for the figures.
+    - Tolerance: the shell depth within 1 cell or 15 % of the 1-D depth, as in the short case; the relative L2 error of $T_{max} - 290$ K at most 0.10.
+    - Test id: `shell_depth_<run>` and `tmax_rel_l2_<run>` in `benchmarks/records/porous_shell_suite.toml`, one pair per run.
+    - CI does not run these cases. `tools/check_validation.jl --check` checks the record without a run: the case list, the 1-D references, the tolerances and that each value passes.
+    - Command: `julia --project=. scripts/run_validation_porous_shell_suite.jl <out_dir>` (9 to 71 min per case at `Nx = 129` on one core), then `tools/export_validation_porous_shell_suite.jl <out_dir>` for the record, and `scripts/export_validation_porous_shell_data.jl` and `scripts/generate_validation_porous_shell_figures.py` for the figures.
 
 ---
 

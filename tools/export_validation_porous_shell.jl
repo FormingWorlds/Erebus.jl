@@ -39,7 +39,7 @@ function last_src_commit(repo_root::String=normpath(joinpath(@__DIR__, "..")))::
 end
 
 """
-    check_clean_source_tree(repo_root::String=normpath(joinpath(@__DIR__, ".."))) -> Tuple{Bool,String}
+    check_clean_source_tree(repo_root::String=normpath(joinpath(@__DIR__, "..")); record="benchmarks/records/porous_shell.toml") -> Tuple{Bool,String}
 
 Verify that `src/`, `benchmarks/` and `tools/` have no uncommitted modifications before exporting a validation record.
 The record file itself is excluded.
@@ -48,6 +48,9 @@ Parameters
 ----------
 repo_root : String, optional
     Path to the repository root directory.
+record : String, optional
+    Path of the record file relative to `repo_root`, left out of the check (default
+    `benchmarks/records/porous_shell.toml`).
 
 Returns
 -------
@@ -60,11 +63,12 @@ ProcessFailedException
     If `git status` fails, for example because `repo_root` is not a git repository.
 """
 function check_clean_source_tree(
-    repo_root::String=normpath(joinpath(@__DIR__, ".."))
+    repo_root::String=normpath(joinpath(@__DIR__, ".."));
+    record::String="benchmarks/records/porous_shell.toml",
 )::Tuple{Bool,String}
     dirty = strip(
         readchomp(
-            `git -C $repo_root status --porcelain -- src benchmarks tools ":(exclude)benchmarks/records/porous_shell.toml"`,
+            `git -C $repo_root status --porcelain -- src benchmarks tools ":(exclude)$record"`,
         ),
     )
     return (isempty(dirty), String(dirty))

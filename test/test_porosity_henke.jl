@@ -3409,6 +3409,35 @@ end
         st0, coords0, _ = _hk_state(_hk_cfg("porosity.model" => :none))
         @test_throws ArgumentError Erebus.porous_shell_depth(st0, coords0, g)
     end
+    @testset "Method on a state with dx != dy: smaller spacing, nsector and measure" begin
+        # 17 x 33 nodes: dx 8750 m, dy 4375 m, bins of min(dx, dy) / 2 = 2187.5 m. Rock
+        # below R - 2187.5 m is sintered, so each sector depth is 2187.5 m
+        cfg = _hk_cfg("grid.Ny" => 33)
+        st, coords, _ = _hk_state(cfg)
+        g = cfg.geometry
+        @test isapprox(coords.dx, 8750.0; rtol=1e-14)
+        @test isapprox(coords.dy, 4375.0; rtol=1e-14)
+        mk = st.markers
+        r = hypot.(mk.xm .- g.xcenter, mk.ym .- g.ycenter)
+        mk.dphi_sinter .= ifelse.(r .< g.rplanet - 2187.5, 0.02, 0.0)
+        res = Erebus.porous_shell_depth(st, coords, g)
+        @test res.nsector_used == 16
+        # Bins of max(dx, dy) / 2 give sector depths of 0 or 4375 m: neither type-7
+        # quartile of those is 2187.5 m
+        @test isapprox(res.q25, 2187.5; atol=1e-9)
+        @test isapprox(res.median, 2187.5; atol=1e-9)
+        @test isapprox(res.q75, 2187.5; atol=1e-9)
+        # nsector reaches the marker method
+        four = Erebus.porous_shell_depth(st, coords, g; nsector=4)
+        @test four.nsector_used == 4
+        @test isapprox(four.median, 2187.5; atol=1e-9)
+        # measure reaches it: phi_d > 0.4 down to R - 4375 m gives 4375 m
+        mk.phi_d .= ifelse.(r .< g.rplanet - 4375.0, 0.3, 0.45)
+        phi = Erebus.porous_shell_depth(st, coords, g; measure=:phi_gt_04)
+        @test isapprox(phi.median, 4375.0; atol=1e-9)
+        @test isapprox(phi.q25, 4375.0; atol=1e-9)
+        @test isapprox(Erebus.porous_shell_depth(st, coords, g).median, 2187.5; atol=1e-9)
+    end
     @testset "Argument guards" begin
         xm, ym, tm, pg = _shell_markers(_shell_sharp(2.25dr))
         @test_throws ArgumentError _shell(xm, ym, tm, nothing)
