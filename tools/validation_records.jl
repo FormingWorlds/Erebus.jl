@@ -143,6 +143,25 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
         "seed",
         "spherical_metric",
     ),
+    "porous_shell_suite" => (
+        "tags",
+        "Nx",
+        "t_form_myr",
+        "phi_init",
+        "n_steps",
+        "air_matched",
+        "k_air_W_mK",
+        "dt_yr",
+        "Nr_reference",
+        "R_planet_m",
+        "L_box_m",
+        "seed",
+        "porosity_model",
+        "shell_dphi",
+        "shell_depth_rel_bound",
+        "tmax_rel_l2_limit",
+        "tmax_nx_min",
+    ),
 )
 
 const REQUIRED_METRIC_KEYS = (

@@ -396,6 +396,8 @@ The result is the median of the 16 sector depths, with the 25 % and 75 % quartil
 
 On a simulation state, the bins are half the smaller grid spacing:
 
+Here `cfg` is a configuration with `porosity.model = "henke2012"`:
+
 ```julia
 using Erebus
 st = simulation_loop(cfg; output_path=mktempdir())
@@ -408,9 +410,9 @@ A model without the dry porosity group (`porosity.model = "none"`) gives an `Arg
 **Why the shell can be thin.**
 The porous layer conducts heat much less well than compact rock.
 At $\phi = 0.25$ the conductivity is 0.21 W/(m K), against 3 W/(m K) at $\phi = 0$.
-A thin layer can therefore hold most of the temperature drop between the hot interior and the cold surface.
+A thin layer can therefore hold the drop from the sintering temperature of 700 K to the cold surface.
 Below it, the rock is above the sintering temperature of 700 K and sinters.
-In the 1-D reference of the validation case, a body with $R_p = 20$ km and $\phi_{init} = 0.25$ keeps a shell of 380 m when it forms 1.5 Myr after the first solids.
+In the 1-D reference model with steps of 2 kyr, a body with $R_p = 20$ km and $\phi_{init} = 0.25$ keeps a shell of 380 m when it forms 1.5 Myr after the first solids.
 It keeps a shell of 4.55 km when it forms at 2.5 Myr, because it has less $^{26}$Al and stays cooler.
 
 ---

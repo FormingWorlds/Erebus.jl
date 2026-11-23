@@ -5,19 +5,12 @@
 # A case takes 13 to 45 min at Nx 129 on one core; run at most a few at once.
 
 include(joinpath(@__DIR__, "..", "benchmarks", "validation_porous_shell.jl"))
-using .PorousShellValidation: run_porous_shell_case
+using .PorousShellValidation:
+    run_porous_shell_case, NR_REFERENCE, SUITE_CASES, SUITE_DT_YR, SUITE_RESULT_HEADER
 
-const RESULT_HEADER = "tag,Nx,t_form_myr,phi_init,n_steps,k_air,dx,d_shell,q25,q75,d_ref,err_cells,tmax_rel_l2,phi_rms,T_peak,T_peak_ref,energy_res,wall_s"
-
-# (tag, Nx, t_form [Myr], phi_init, steps of 10 kyr to the shell freeze, air conductivity)
-const SUITE_CASES = (
-    ("s65_25_025", 65, 2.5, 0.25, 750, nothing),
-    ("s129_25_025", 129, 2.5, 0.25, 750, nothing),
-    ("s129_225_025", 129, 2.25, 0.25, 700, nothing),
-    ("s129_175_010", 129, 1.75, 0.1, 490, nothing),
-    ("s129_25_050", 129, 2.5, 0.5, 1580, nothing),
-    ("s129_25_025_k", 129, 2.5, 0.25, 750, 3000.0),
-)
+# The case list is `SUITE_CASES` of the validation module: (tag, Nx, t_form [Myr],
+# phi_init, steps of `SUITE_DT_YR` to the shell freeze, air conductivity).
+const RESULT_HEADER = join(SUITE_RESULT_HEADER, ",")
 
 """
     run_suite_case(outdir, case) -> String
@@ -28,7 +21,13 @@ Run one entry of `SUITE_CASES`, write `result_<tag>.csv` (one row) and `prof_<ta
 function run_suite_case(outdir::String, case)
     tag, Nx, tf, ph, n, kair = case
     t = @elapsed r = run_porous_shell_case(;
-        Nx=Nx, phi_init=ph, t_form_yr=tf * 1.0e6, n_steps=n, dt_yr=1.0e4, k_air=kair
+        Nx=Nx,
+        phi_init=ph,
+        t_form_yr=tf * 1.0e6,
+        n_steps=n,
+        dt_yr=SUITE_DT_YR,
+        k_air=kair,
+        Nr=NR_REFERENCE,
     )
     open(joinpath(outdir, "prof_$tag.csv"), "w") do io
         println(io, "r_m,tmax_K,tmax_ref_K,phi,phi_ref")

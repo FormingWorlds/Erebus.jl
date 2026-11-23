@@ -8,6 +8,8 @@ isdefined(@__MODULE__, :PorousShellValidation) ||
 include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
 isdefined(@__MODULE__, :PorousShellExport) ||
     include(joinpath(@__DIR__, "..", "tools", "export_validation_porous_shell.jl"))
+isdefined(@__MODULE__, :PorousShellSuiteExport) ||
+    include(joinpath(@__DIR__, "..", "tools", "export_validation_porous_shell_suite.jl"))
 const PSV = PorousShellValidation
 
 """
@@ -81,6 +83,62 @@ function capture_porous_shell_stdio(f)
         end
         return (; value, out=read(out_path, String), err=read(err_path, String))
     end
+end
+
+"""
+    write_suite_folder(dir, raw; tamper=Dict())
+
+Write a folder of suite result files, as `scripts/run_validation_porous_shell_suite.jl`
+writes them, with the depths and temperature errors of the suite record `raw`.
+
+Parameters
+----------
+dir : String
+    Output folder.
+raw : AbstractDict
+    Parsed suite record.
+tamper : AbstractDict, optional
+    Map from a tag to a `(column, text)` pair that replaces one field of its row.
+
+Returns
+-------
+String
+    `dir`.
+"""
+function write_suite_folder(dir::String, raw::AbstractDict; tamper=Dict())
+    PSVm = PorousShellValidation
+    value(id) = only(m["value"] for m in raw["metrics"] if m["id"] == id)
+    reference(id) = only(m["reference"] for m in raw["metrics"] if m["id"] == id)
+    write(joinpath(dir, "header.csv"), join(PSVm.SUITE_RESULT_HEADER, ",") * "\n")
+    for (tag, nx, tf, phi, n, k_air) in PSVm.SUITE_CASES
+        d, dref = value("shell_depth_$tag"), reference("shell_depth_$tag")
+        row = Any[
+            tag,
+            nx,
+            tf,
+            phi,
+            n,
+            something(k_air, -1.0),
+            48_000.0 / (nx - 1),
+            d,
+            d,
+            d,
+            dref,
+            0.0,
+            value("tmax_rel_l2_$tag"),
+            0.0,
+            800.0,
+            800.0,
+            1.0e-10,
+            1.0,
+        ]
+        if haskey(tamper, tag)
+            col, text = tamper[tag]
+            row[findfirst(==(col), PSVm.SUITE_RESULT_HEADER)] = text
+        end
+        write(joinpath(dir, "result_$tag.csv"), join(row, ",") * "\n")
+    end
+    return dir
 end
 
 """
@@ -291,6 +349,37 @@ end
         c, m = PSV.radial_bin_medians(r, v, 10.0, 1.0)
         @test isapprox(c, [0.5, 2.5, 9.5]; atol=1e-12)
         @test isapprox(m, [2.0, 6.0, 7.0]; atol=1e-12)
+        # R / dr = 10 / 3: the partial bin [9, 10) keeps the marker at 9.5, within dr of R,
+        # with its centre at 9.5; markers at R, above R and below 0 are left out
+        rp = [1.0, 9.5, 10.0, 10.5, 11.9, -0.5]
+        vp = [3.0, 4.0, 50.0, 60.0, 70.0, 80.0]
+        cp, mp = PSV.radial_bin_medians(rp, vp, 10.0, 3.0)
+        @test isapprox(cp, [1.5, 9.5]; atol=1e-12)
+        @test isapprox(mp, [3.0, 4.0]; atol=1e-12)
+        @test length(cp) == 2
+    end
+
+    @testset "Run clock: the last step and the final time of the case" begin
+        cfg = PSV.make_porous_shell_config(;
+            Nx=33, phi_init=0.25, t_form_yr=2.5e6, n_steps=80, dt_yr=5.0e4
+        )
+        dt_s = 5.0e4 * 31_557_600.0
+        t_end = 2.5e6 * 31_557_600.0 + 80 * dt_s
+        # 4.0 Myr after a start at 2.5 Myr: 6.5 Myr, about 2.05e14 s
+        @test 2.0e14 < t_end < 2.1e14
+        @test PSV.check_run_clock((; dt=dt_s, timesum=t_end), cfg) === nothing
+        @test PSV.check_run_clock((; dt=dt_s, timesum=t_end * (1 + 1e-13)), cfg) === nothing
+        # One step missing, a run in years and a last step cut by DTmax fail
+        @test_throws ErrorException PSV.check_run_clock(
+            (; dt=dt_s, timesum=t_end - dt_s), cfg
+        )
+        @test_throws ErrorException PSV.check_run_clock((; dt=dt_s, timesum=6.5e6), cfg)
+        @test_throws ErrorException PSV.check_run_clock(
+            (; dt=0.5 * dt_s, timesum=t_end), cfg
+        )
+        @test_throws ErrorException PSV.check_run_clock(
+            (; dt=dt_s, timesum=t_end * (1 + 1e-11)), cfg
+        )
     end
 
     @testset "Erebus and the reference heat alike before sintering" begin
@@ -373,26 +462,32 @@ end
         @test_throws DomainError PSV.shell_depth_atol(1, 4000.0)
         @test_throws DomainError PSV.shell_depth_atol(33, -1.0)
         @test_throws DomainError PSV.shell_depth_atol(33, NaN)
+        # The CI case runs at Nx = 65 only: 3 metrics
+        @test PSV.NX_LIST == (65,)
         refs = PSV.expected_metric_references(; d_shell_ref=4321.0)
         @test Set(keys(refs)) == Set(PSV.EXPECTED_METRIC_IDS)
-        @test isapprox(refs["shell_depth_nx33"], 4321.0; rtol=1e-14)
-        @test isapprox(refs["shell_error_convergence_ratio_33_65"], 2.0; rtol=1e-14)
+        @test isapprox(refs["shell_depth_nx65"], 4321.0; rtol=1e-14)
         @test iszero(refs["tmax_rel_l2_nx65"]) && iszero(refs["energy_lse_residual_nx65"])
-        # Errors of 2 and 1 cells: ratio 2; a missing grid drops the dependent metrics
+        lim = PSV.expected_metric_limits(; d_shell_ref=6000.0)
+        @test Set(keys(lim)) == Set(PSV.EXPECTED_METRIC_IDS)
+        @test isapprox(lim["shell_depth_nx65"].atol, 900.0; rtol=1e-14)
+        @test lim["shell_depth_nx65"].comparison == "isapprox"
+        @test isapprox(lim["tmax_rel_l2_nx65"].atol, 0.10; rtol=1e-14)
+        @test isapprox(lim["energy_lse_residual_nx65"].atol, 1.0e-9; rtol=1e-14)
+        @test all(l -> iszero(l.rtol), values(lim))
+        @test_throws DomainError PSV.expected_metric_limits(; d_shell_ref=-1.0)
         fake(d, ref) =
             (; d_shell=d, d_shell_ref=ref, tmax_rel_l2=0.05, energy_lse_residual=1e-12)
-        runs = Dict{Int,Any}(33 => fake(7000.0, 4000.0), 65 => fake(5500.0, 4000.0))
+        runs = Dict{Int,Any}(65 => fake(5500.0, 4000.0))
         m = PSV.metrics_from_runs(runs)
         @test Set(keys(m)) == Set(PSV.EXPECTED_METRIC_IDS)
-        @test isapprox(m["shell_error_convergence_ratio_33_65"], 2.0; rtol=1e-14)
+        @test isapprox(m["shell_depth_nx65"], 5500.0; rtol=1e-14)
         @test isapprox(PSV.bench_shell_reference((; runs, metrics=m)), 4000.0; rtol=1e-14)
-        bad = Dict{Int,Any}(33 => fake(7000.0, 4000.0), 65 => fake(5500.0, 4100.0))
+        bad = Dict{Int,Any}(65 => fake(5500.0, 4000.0), 129 => fake(5000.0, 4100.0))
         @test_throws ArgumentError PSV.bench_shell_reference((; runs=bad))
-        delete!(runs, 65)
-        partial = PSV.metrics_from_runs(runs)
-        @test Set(keys(partial)) == Set(["shell_depth_nx33"])
-        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(17,))
-        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(33.0,))
+        @test isempty(PSV.metrics_from_runs(Dict{Int,Any}()))
+        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(33,))
+        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(65.0,))
     end
 
     @testset "Reference literals match the configuration and the code" begin
@@ -414,6 +509,126 @@ end
         @test any(occursin("X_FE", e) for e in errs_bad)
     end
 
+    @testset "Suite record of the 6 full runs: static check and export" begin
+        suite_path = joinpath(
+            @__DIR__, "..", "benchmarks", "records", "porous_shell_suite.toml"
+        )
+        raw_suite = TOML.parsefile(suite_path)
+        ok_suite, errs_suite = PSV.check_suite_record_static(suite_path)
+        @test ok_suite
+        @test isempty(errs_suite)
+        @test raw_suite["metadata"]["config_sha256"] == PSV.suite_config_sha256()
+        @test Set(keys(raw_suite["config"])) ==
+            Set(PSV.REQUIRED_CONFIG_KEYS["porous_shell_suite"])
+        # 6 runs, a shell depth each and a temperature error at Nx >= 65 each: 12 metrics
+        @test raw_suite["config"]["tags"] == [String(c[1]) for c in PSV.SUITE_CASES]
+        @test length(PSV.SUITE_CASES) == 6
+        @test length(raw_suite["metrics"]) == 12
+        for m in raw_suite["metrics"]
+            nx, ref = m["nx"], Float64(m["reference"])
+            if startswith(m["id"], "shell_depth_")
+                # One cell of 48 km / (Nx - 1) or 15 % of the 1-D depth
+                @test isapprox(m["atol"], max(48_000.0 / (nx - 1), 0.15 * ref); rtol=1e-14)
+                @test 0.0 < ref < 20_000.0
+                @test abs(m["value"] - ref) <= m["atol"]
+            else
+                @test isapprox(m["atol"], 0.10; rtol=1e-14) && m["comparison"] == "le_atol"
+                @test 0.0 <= m["value"] <= 0.10
+            end
+        end
+        # The suite has no run below Nx = 65; a run at Nx = 33 would have no tmax metric
+        @test all(c -> c[2] >= 65, PSV.SUITE_CASES)
+        @test PSV.suite_metric_ids()[1:2] ==
+            ["shell_depth_s65_25_025", "tmax_rel_l2_s65_25_025"]
+        @test_throws ArgumentError PSV.suite_metric_limit("other_s65", 65, 4000.0)
+        mktempdir() do tmpdir
+            # Tampered records fail the static check
+            function static_errors(f)
+                raw = deepcopy(raw_suite)
+                f(raw)
+                path = write_porous_shell_toml(joinpath(tmpdir, "suite.toml"), raw)
+                return PSV.check_suite_record_static(path; check_doc_sync=false)
+            end
+            ok_same, errs_same = static_errors(identity)
+            @test ok_same && isempty(errs_same)
+            ok_w, errs_w = static_errors(r -> (r["metrics"][1]["atol"] *= 2.0))
+            @test !ok_w
+            @test any(occursin("differs from the rule", e) for e in errs_w)
+            ok_t, errs_t = static_errors(r -> (r["metrics"][2]["atol"] = 0.5))
+            @test !ok_t
+            @test any(occursin("tmax_rel_l2_s65_25_025", e) for e in errs_t)
+            ok_c, errs_c = static_errors(r -> deleteat!(r["metrics"], 11:12))
+            @test !ok_c
+            @test any(occursin("case list", e) for e in errs_c)
+            @test any(occursin("SUITE_CASES", e) for e in errs_c)
+            ok_h, errs_h = static_errors(
+                r -> (r["metadata"]["config_sha256"] = repeat("0", 64))
+            )
+            @test !ok_h
+            @test any(occursin("config_sha256", e) for e in errs_h)
+            ok_n, errs_n = static_errors(r -> (r["config"]["n_steps"][2] = 740))
+            @test !ok_n
+            @test any(occursin("config.n_steps", e) for e in errs_n)
+            ok_x, errs_x = static_errors(r -> (r["metrics"][3]["nx"] = 65))
+            @test !ok_x
+            @test any(occursin("has nx 65", e) for e in errs_x)
+            ok_v, errs_v = static_errors(r -> (r["metrics"][3]["value"] += 1.0e4))
+            @test !ok_v
+            @test any(occursin("fails comparison", e) for e in errs_v)
+            @test !first(PSV.check_suite_record_static(suite_path * ".missing"))
+            @test_throws DomainError PSV.check_suite_record_static("")
+
+            # Static branch of the command line
+            cli = capture_porous_shell_stdio(
+                () -> run_validation_cli(["--check", suite_path])
+            )
+            @test cli.value == 0
+            @test occursin("static check", cli.out)
+            @test static_validation_case("porous_shell_suite").record ==
+                normpath(suite_path)
+            wide = deepcopy(raw_suite)
+            wide["metrics"][1]["atol"] *= 2.0
+            bad_path = write_porous_shell_toml(joinpath(tmpdir, "bad_suite.toml"), wide)
+            cli_bad = capture_porous_shell_stdio(() -> run_validation_cli([bad_path]))
+            @test cli_bad.value == 1
+            @test occursin("[static]", cli_bad.err)
+
+            # Export from a folder of result files reproduces the record
+            folder = write_suite_folder(mkpath(joinpath(tmpdir, "suite")), raw_suite)
+            out = joinpath(tmpdir, "exported_suite.toml")
+            commit = String(raw_suite["metadata"]["src_commit"])
+            SE = PorousShellSuiteExport
+            @test SE.run_suite_export_cli([folder, out]; src_commit=commit) == 0
+            raw_out = TOML.parsefile(out)
+            @test first(PSV.check_suite_record_static(out; check_doc_sync=false))
+            @test PSV.render_validation_markdown_block(raw_out) ==
+                PSV.render_validation_markdown_block(raw_suite)
+            @test raw_out["config"] == raw_suite["config"]
+            # A row of another case, a missing file and a bad command line are refused
+            bad = write_suite_folder(
+                mkpath(joinpath(tmpdir, "bad")),
+                raw_suite;
+                tamper=Dict("s129_25_050" => ("Nx", 65)),
+            )
+            @test_throws ArgumentError SE.read_suite_results(bad)
+            err_run = capture_porous_shell_stdio(
+                () -> SE.run_suite_export_cli(
+                    [bad, joinpath(tmpdir, "x.toml")]; src_commit=commit
+                ),
+            )
+            @test err_run.value == 1
+            @test !isfile(joinpath(tmpdir, "x.toml"))
+            rm(joinpath(folder, "result_s129_25_025_k.csv"))
+            @test_throws ArgumentError SE.read_suite_results(folder)
+            usage = capture_porous_shell_stdio(() -> SE.run_suite_export_cli(String[]))
+            @test usage.value == 2
+            @test SE.run_suite_export_cli(["--x", folder]; src_commit=commit) == 2
+            @test_throws DomainError SE.write_suite_record(
+                folder; record_path=out, src_commit="abc"
+            )
+        end
+    end
+
     record_path = joinpath(@__DIR__, "..", "benchmarks", "records", "porous_shell.toml")
     raw_record_all = TOML.parsefile(record_path)
     recorded = Dict(
@@ -431,10 +646,9 @@ end
             @test PSV.T_SINTER < r.T_peak < 1500.0
             @test isapprox(r.T_peak, r.T_peak_ref; rtol=0.02)
         end
-        # The finer grid lies closer to the 1-D shell depth
-        e33 = abs(bench.runs[33].d_shell - bench.runs[33].d_shell_ref)
-        e65 = abs(bench.runs[65].d_shell - bench.runs[65].d_shell_ref)
-        @test e65 < e33
+        # The shell lies within one cell of 750 m or 15 % of the 1-D depth
+        r65 = bench.runs[65]
+        @test abs(r65.d_shell - r65.d_shell_ref) <= max(750.0, 0.15 * r65.d_shell_ref)
         @test bench.metrics["energy_lse_residual_nx65"] <= 1.0e-9
     end
 
@@ -460,9 +674,9 @@ end
         @test !ok_missing
         @test any(occursin("phi_init", e) for e in errs_missing)
 
-        # The ratio and the energy residual have no band
+        # The energy residual has no band
         @test sort!(collect(keys(PSV.PHYSICS_REGRESSION_BANDS))) ==
-            ["shell_depth_nx33", "shell_depth_nx65", "tmax_rel_l2_nx65"]
+            ["shell_depth_nx65", "tmax_rel_l2_nx65"]
         for (mid, value) in bench.metrics
             haskey(PSV.PHYSICS_REGRESSION_BANDS, mid) || continue
             band = PSV.PHYSICS_REGRESSION_BANDS[mid]
@@ -520,9 +734,7 @@ end
         d_ref = PSV.bench_shell_reference(bench)
         refs = PSV.expected_metric_references(; d_shell_ref=d_ref)
         limits = Dict(
-            "shell_depth_nx33" => (PSV.shell_depth_atol(33, d_ref), "isapprox"),
-            "shell_depth_nx65" => (PSV.shell_depth_atol(65, d_ref), "isapprox"),
-            "shell_error_convergence_ratio_33_65" => (0.5, "isapprox"),
+            "shell_depth_nx65" => (max(750.0, 0.15 * d_ref), "isapprox"),
             "tmax_rel_l2_nx65" => (0.10, "le_atol"),
             "energy_lse_residual_nx65" => (1.0e-9, "le_atol"),
         )
@@ -567,7 +779,8 @@ end
 
             # A tampered record: a moved value, a changed configuration and its hash
             tampered = deepcopy(raw_record)
-            tampered["metrics"][4]["value"] += 0.01
+            i_tmax = findfirst(m -> m["id"] == "tmax_rel_l2_nx65", tampered["metrics"])
+            tampered["metrics"][i_tmax]["value"] += 0.01
             tampered["config"]["phi_init"] = 0.3
             tampered["metadata"]["config_sha256"] = repeat("0", 64)
             t_path = write_porous_shell_toml(joinpath(tmpdir, "tampered.toml"), tampered)
@@ -588,6 +801,29 @@ end
             ok_w, errs_w = PSV.check_validation_reproducibility(bench, w_path)
             @test !ok_w
             @test any(occursin("recomputed reference", e) for e in errs_w)
+
+            # A record whose tolerance is wider than the limit of the code fails
+            for (key, widened) in (("atol", 0.5), ("rtol", 0.1), ("comparison", "isapprox"))
+                wide = deepcopy(raw_record)
+                wide["metrics"][i_tmax][key] = widened
+                wide["metrics"][i_tmax]["reference"] = 0.0
+                wide_path = write_porous_shell_toml(joinpath(tmpdir, "wide.toml"), wide)
+                ok_wide, errs_wide = PSV.check_validation_reproducibility(bench, wide_path)
+                @test !ok_wide
+                @test any(
+                    occursin("differs from the limit of the code", e) for e in errs_wide
+                )
+            end
+            i_d = findfirst(m -> m["id"] == "shell_depth_nx65", raw_record["metrics"])
+            wide_d = deepcopy(raw_record)
+            wide_d["metrics"][i_d]["atol"] = 2.0 * wide_d["metrics"][i_d]["atol"]
+            wd_path = write_porous_shell_toml(joinpath(tmpdir, "wide_d.toml"), wide_d)
+            ok_wd, errs_wd = PSV.check_validation_reproducibility(bench, wd_path)
+            @test !ok_wd
+            @test any(
+                occursin("shell_depth_nx65", e) && occursin("limit of the code", e) for
+                e in errs_wd
+            )
 
             # Export round trip
             exported = joinpath(tmpdir, "exported_porous_shell.toml")

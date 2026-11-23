@@ -53,6 +53,8 @@ markers above `rplanet` are not counted (the pressure there is 0, so they never 
 From the surface inward, the first non-empty bin
 whose median marker is sintered ends the shell, and the depth of the sector is the outer
 edge of that bin, `(k - 1) dr`. A sector without a sintered bin has the depth `rplanet`.
+A sector with few markers per bin skips empty outer bins and can give a deeper shell, so
+keep `nsector` well below the number of rock markers per ring of width `dr`.
 
 A marker is sintered for `measure = :unsintered` when `dphi_sinter >= 1e-3`, the porosity
 decrease by hot sintering (cold pressing does not count). For `measure = :phi_gt_04` it is

@@ -245,7 +245,7 @@ def depth_panel(data, t):
             mfc="none",
             mew=2.0,
             color=t["air"],
-            label="air k = 3000 W/(m K)",
+            label="air k = 3000 W/(m K), Nx = 129",
         )
     ax.set_xlim(0.0, top)
     ax.set_ylim(0.0, top)

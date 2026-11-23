@@ -18,6 +18,9 @@ const DEFAULT_DIFFUSION_RECORD = joinpath(
 )
 const DEFAULT_MOMENTUM_RECORD = joinpath(VALIDATION_RECORDS_DIR, "spherical_momentum.toml")
 const DEFAULT_POROUS_SHELL_RECORD = joinpath(VALIDATION_RECORDS_DIR, "porous_shell.toml")
+const DEFAULT_POROUS_SHELL_SUITE_RECORD = joinpath(
+    VALIDATION_RECORDS_DIR, "porous_shell_suite.toml"
+)
 
 # Ordered table of the validation records: the no-argument run checks them in this order.
 const VALIDATION_CASES = (
@@ -70,6 +73,81 @@ const VALIDATION_CASES = (
         bench_keyword=:porous_shell_bench,
     ),
 )
+
+# Records of runs too long for CI: a static check verifies them without a rerun, after
+# the cases of VALIDATION_CASES.
+const STATIC_VALIDATION_CASES = ((;
+    id="porous_shell_suite",
+    module_name=:PorousShellValidation,
+    file="validation_porous_shell.jl",
+    record=DEFAULT_POROUS_SHELL_SUITE_RECORD,
+    check=:check_suite_record_static,
+),)
+
+"""
+    static_validation_case(id::AbstractString) -> Union{NamedTuple,Nothing}
+
+Return the entry of `STATIC_VALIDATION_CASES` with the record id `id`.
+
+Parameters
+----------
+id : AbstractString
+    Record id, the `metadata.id` of a validation record.
+
+Returns
+-------
+Union{NamedTuple,Nothing}
+    The table entry, or `nothing` when no entry has this id.
+"""
+function static_validation_case(id::AbstractString)
+    idx = findfirst(c -> c.id == id, STATIC_VALIDATION_CASES)
+    return idx === nothing ? nothing : STATIC_VALIDATION_CASES[idx]
+end
+
+"""
+    run_static_record_check(case::NamedTuple, record_path::String) -> Bool
+
+Verify the record `record_path` of a `STATIC_VALIDATION_CASES` entry with the static check
+of its module, without a rerun. The errors are printed with the prefix `[static]`; an
+exception in the check is reported with its stack trace as a failed check.
+
+Parameters
+----------
+case : NamedTuple
+    Entry of `STATIC_VALIDATION_CASES`.
+record_path : String
+    Path to the TOML record file.
+
+Returns
+-------
+Bool
+    `true` when the static check passes.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+InterruptException
+    If the run is interrupted.
+"""
+function run_static_record_check(case::NamedTuple, record_path::String)::Bool
+    isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
+    mod = validation_module(case)
+    ok, errs = try
+        Base.invokelatest(Base.invokelatest(getfield, mod, case.check), record_path)
+    catch err
+        err isa InterruptException && rethrow()
+        (false, ["$(case.id) check stopped: $(_error_report(err, catch_backtrace()))"])
+    end
+    if !ok
+        for e in errs
+            println(stderr, "[static] $e")
+        end
+        return false
+    end
+    println("check_validation: static check of $record_path passed")
+    return true
+end
 
 """
     validation_case(id::AbstractString) -> Union{NamedTuple,Nothing}
@@ -423,10 +501,11 @@ end
     run_validation_cli(args::Vector{String}=ARGS; bench=nothing, darcy_bench=nothing, compaction_bench=nothing, diffusion_bench=nothing, momentum_bench=nothing, porous_shell_bench=nothing) -> Int
 
 Run the command-line validation check. Without a record path it checks every record of
-`VALIDATION_CASES` in order and collects garbage after each case. With a record path it
-checks that record only, with the entry of `VALIDATION_CASES` whose id is the
-`metadata.id` of the record; a missing or unreadable file and an id outside the table are
-reported as errors. An argument other than `--check` that starts with `-`, and a second
+`VALIDATION_CASES` in order and collects garbage after each case, then runs the static
+check of every record of `STATIC_VALIDATION_CASES`. With a record path it checks that
+record only, with the entry of `VALIDATION_CASES` or `STATIC_VALIDATION_CASES` whose id is
+the `metadata.id` of the record; a missing or unreadable file and an id outside both tables
+are reported as errors. An argument other than `--check` that starts with `-`, and a second
 record path, are usage errors.
 
 Parameters
@@ -494,6 +573,9 @@ function run_validation_cli(
             all_ok &= ok
             GC.gc()
         end
+        for case in STATIC_VALIDATION_CASES
+            all_ok &= run_static_record_check(case, case.record)
+        end
         return all_ok ? 0 : 1
     end
     if !isfile(record_path)
@@ -511,8 +593,12 @@ function run_validation_cli(
     rec_id = meta isa AbstractDict ? string(get(meta, "id", "")) : ""
     case = validation_case(rec_id)
     if case === nothing
-        println(stderr, "[schema] Unknown record id '$rec_id' in $record_path")
-        return 1
+        static_case = static_validation_case(rec_id)
+        if static_case === nothing
+            println(stderr, "[schema] Unknown record id '$rec_id' in $record_path")
+            return 1
+        end
+        return run_static_record_check(static_case, record_path) ? 0 : 1
     end
     ok = run_record_check(
         case, record_path; bench=getfield(benches, case.bench_keyword), raw=raw

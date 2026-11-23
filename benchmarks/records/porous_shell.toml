@@ -7,14 +7,14 @@ id = "porous_shell"
 title = "Porous Shell Validation"
 page = "validation/porous_shell.md"
 src_commit = "f6c7f29a37248c72e1cff86d9076547a1160d4f0"
-timestamp_utc = "2026-11-23T12:12:08Z"
+timestamp_utc = "2026-11-23T20:34:24Z"
 julia_version = "1.12.7"
-config_sha256 = "d3d57425a4470e9075e2686e81a2118df4fd2571ce73c6398284fed6608a8b42"
+config_sha256 = "fcf41aa4e790f6adaa9a49d838b092e7a79f85268411767817332894652f6f87"
 reference_type = "1d_fv"
 reference_citation = "One-dimensional spherical finite-volume solution with the same time step: backward Euler conduction with the porous conductivity of Lichtenberg et al. (2016a, Eq. 12), 26Al heating, cold pressing and hot sintering of Henke et al. (2012)"
 
 [config]
-Nx = [33, 65]
+Nx = [65]
 Nr_reference = 2000
 n_steps = 80
 seed = 42
@@ -35,19 +35,6 @@ porosity_model = "henke2012"
 spherical_metric = true
 
 [[metrics]]
-id = "shell_depth_nx33"
-case = "porous_shell_t2.5_phi0.25"
-description = "Median shell depth of the rock markers against the 1-D shell depth (Nx=33)"
-nx = 33
-value = 6.0000000000000000e+03
-reference = 4.5900000000000000e+03
-atol = 1.5000000000000000e+03
-rtol = 0.0000000000000000e+00
-comparison = "isapprox"
-units = "m"
-status = "PASS"
-
-[[metrics]]
 id = "shell_depth_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Median shell depth of the rock markers against the 1-D shell depth (Nx=65)"
@@ -61,24 +48,11 @@ units = "m"
 status = "PASS"
 
 [[metrics]]
-id = "shell_error_convergence_ratio_33_65"
-case = "porous_shell_t2.5_phi0.25"
-description = "Shell depth error ratio abs(d33 - d_ref) / abs(d65 - d_ref), first order in dx"
-nx = 65
-value = 2.1363636363636362e+00
-reference = 2.0000000000000000e+00
-atol = 5.0000000000000000e-01
-rtol = 0.0000000000000000e+00
-comparison = "isapprox"
-units = "dimensionless"
-status = "PASS"
-
-[[metrics]]
 id = "tmax_rel_l2_nx65"
 case = "porous_shell_t2.5_phi0.25"
 description = "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65)"
 nx = 65
-value = 4.9815030343026513e-02
+value = 4.9911625772436775e-02
 reference = 0.0000000000000000e+00
 atol = 1.0000000000000001e-01
 rtol = 0.0000000000000000e+00

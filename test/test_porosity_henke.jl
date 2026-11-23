@@ -3385,6 +3385,27 @@ end
         @test isapprox(res.median, direct.median; rtol=1e-14)
         @test res.nsector_used == direct.nsector_used == 16
         @test 0.4 * g.rplanet < res.median < 0.6 * g.rplanet
+        # Off-centre body (62, 78) km, R 50 km, crust from 40 km, dx 8750 m. Rock below
+        # R - 4375 m is sintered: in bins of dx / 2 bin 1 is unsintered and bin 2 sintered
+        # in every sector, so each sector depth is 4375 m
+        cfg_o = _hk_cfg(
+            "geometry.xcenter" => 62_000.0,
+            "geometry.ycenter" => 78_000.0,
+            "geometry.rcrust" => 40_000.0,
+        )
+        st_o, coords_o, _ = _hk_state(cfg_o)
+        mo = st_o.markers
+        @test isapprox(coords_o.dx, 8750.0; rtol=1e-14)
+        @test isapprox(cfg_o.geometry.rplanet, 50_000.0; rtol=1e-14)
+        r_o = hypot.(mo.xm .- 62_000.0, mo.ym .- 78_000.0)
+        mo.dphi_sinter .= ifelse.(r_o .< 50_000.0 - 4375.0, 0.02, 0.0)
+        off = Erebus.porous_shell_depth(st_o, coords_o, cfg_o.geometry)
+        @test off.nsector_used == 16
+        # Bins of dx give sector depths of 0 or 8750 m, swapped centres scatter them and a
+        # surface at rcrust gives 0: none of these has both quartiles at 4375 m
+        @test isapprox(off.q25, 4375.0; atol=1e-9)
+        @test isapprox(off.median, 4375.0; atol=1e-9)
+        @test isapprox(off.q75, 4375.0; atol=1e-9)
         st0, coords0, _ = _hk_state(_hk_cfg("porosity.model" => :none))
         @test_throws ArgumentError Erebus.porous_shell_depth(st0, coords0, g)
     end

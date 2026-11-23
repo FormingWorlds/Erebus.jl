@@ -109,10 +109,10 @@ end
 """
     metric_specs(metrics, refs) -> Vector{NamedTuple}
 
-Return the record entry of every metric, in the order of `EXPECTED_METRIC_IDS`. The shell
-depth bound is `shell_depth_atol`: one cell or 15 % of the 1-D depth, whichever is larger.
-The convergence ratio has the bound 0.5 around 2, the maximum temperature error the bound
-0.10 and the energy residual the bound 1e-9; all are fixed before any run.
+Return the record entry of every metric, in the order of `EXPECTED_METRIC_IDS`, with the
+limits of `PorousShellValidation.expected_metric_limits`: the shell depth within one cell
+or 15 % of the 1-D depth, whichever is larger, the maximum temperature error at most 0.10
+and the energy residual at most 1e-9; all are fixed before any run.
 
 Parameters
 ----------
@@ -136,60 +136,34 @@ ErrorException
 """
 function metric_specs(metrics::Dict{String,Float64}, refs::Dict{String,Float64})
     PSV = porous_shell_validation_module()
-    specs = NamedTuple[]
-    function add!(id, description, nx, atol, comparison, units)
-        return push!(
-            specs,
-            (;
-                id,
-                case=PSV.CASE_ID,
-                description,
-                nx,
-                value=metrics[id],
-                reference=refs[id],
-                atol,
-                rtol=0.0,
-                comparison,
-                units,
-            ),
-        )
-    end
-    for nx in PSV.NX_LIST
-        id = "shell_depth_nx$(nx)"
-        add!(
-            id,
+    nx = PSV.NX_REFERENCE
+    limits = PSV.expected_metric_limits(; d_shell_ref=refs["shell_depth_nx$(nx)"])
+    texts = Dict(
+        "shell_depth_nx$(nx)" => (
             "Median shell depth of the rock markers against the 1-D shell depth (Nx=$(nx))",
-            nx,
-            PSV.shell_depth_atol(nx, refs[id]),
-            "isapprox",
             "m",
-        )
-    end
-    add!(
-        "shell_error_convergence_ratio_33_65",
-        "Shell depth error ratio abs(d33 - d_ref) / abs(d65 - d_ref), first order in dx",
-        65,
-        0.5,
-        "isapprox",
-        "dimensionless",
+        ),
+        "tmax_rel_l2_nx$(nx)" => (
+            "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=$(nx))",
+            "dimensionless",
+        ),
+        "energy_lse_residual_nx$(nx)" =>
+            ("Scaled energy residual of the last thermal step (Nx=$(nx))", "dimensionless"),
     )
-    add!(
-        "tmax_rel_l2_nx65",
-        "Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65)",
-        65,
-        0.10,
-        "le_atol",
-        "dimensionless",
-    )
-    add!(
-        "energy_lse_residual_nx65",
-        "Scaled energy residual of the last thermal step (Nx=65)",
-        65,
-        1.0e-9,
-        "le_atol",
-        "dimensionless",
-    )
-    return specs
+    return [
+        (;
+            id,
+            case=PSV.CASE_ID,
+            description=texts[id][1],
+            nx,
+            value=metrics[id],
+            reference=refs[id],
+            atol=limits[id].atol,
+            rtol=limits[id].rtol,
+            comparison=limits[id].comparison,
+            units=texts[id][2],
+        ) for id in PSV.EXPECTED_METRIC_IDS
+    ]
 end
 
 """

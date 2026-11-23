@@ -34,5 +34,5 @@ The Darcy flow, the compaction, the pressure diffusion and the momentum tests sk
 `tools/check_validation.jl` runs every case of its table on every grid and compares it with its record, and the CI job `check_validation` runs it on every pull request.
 To write a new record after an intended physics change, run the export tool for that record.
 The tool also writes the table on the page.
-It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow, the compaction, the pressure diffusion and the momentum tools also check `tools/`).
+It refuses to run with uncommitted changes in `src/` or `benchmarks/` (the Darcy flow, the compaction, the pressure diffusion, the momentum and the porous shell tools also check `tools/`).
 It also refuses to write a value that leaves its regression band (the allowed range around the recorded value), unless you pass `--accept-physics-change`, and a value that fails its reference tolerance in all cases.

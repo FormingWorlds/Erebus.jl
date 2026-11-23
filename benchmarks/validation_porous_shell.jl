@@ -467,19 +467,40 @@ end
 """
     radial_bin_medians(r, values, R, dr) -> (centres, medians)
 
-Medians of `values` in radial bins `[(b - 1) dr, b dr)` below `R`; empty bins are left out.
+Medians of `values` in the radial bins `[(b - 1) dr, min(b dr, R))` below `R`, for
+`b = 1, ..., ceil(R / dr)`: the outermost bin is partial when `R / dr` is not a whole
+number. The centre of a bin is the midpoint of its part below `R`. Values at `r >= R` and
+`r < 0`, and empty bins, are left out.
+
+Parameters
+----------
+r : AbstractVector{Float64}
+    Radius of each value [m].
+values : AbstractVector{Float64}
+    Values to bin, one per radius.
+R : Float64
+    Outer radius [m].
+dr : Float64
+    Bin width [m].
+
+Returns
+-------
+Tuple{Vector{Float64},Vector{Float64}}
+    Bin centres [m] and the median of `values` in each non-empty bin.
 """
 function radial_bin_medians(
     r::AbstractVector{Float64}, values::AbstractVector{Float64}, R::Float64, dr::Float64
 )
-    nb = floor(Int, R / dr)
+    nb = ceil(Int, R / dr)
     bins = [Float64[] for _ in 1:nb]
     for (ri, v) in zip(r, values)
-        b = floor(Int, ri / dr) + 1
-        1 <= b <= nb && push!(bins[b], v)
+        0.0 <= ri < R || continue
+        b = min(floor(Int, ri / dr) + 1, nb)
+        push!(bins[b], v)
     end
     keep = findall(!isempty, bins)
-    return [(b - 0.5) * dr for b in keep], [_median(bins[b]) for b in keep]
+    centres = [0.5 * ((b - 1) * dr + min(b * dr, R)) for b in keep]
+    return centres, [_median(bins[b]) for b in keep]
 end
 
 """
@@ -542,6 +563,41 @@ function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
 end
 
 """
+    check_run_clock(st, cfg)
+
+Check that a finished run took `cfg.time.n_steps` steps of the fixed step
+`cfg.time.dt_initial`: the time step of the last step equals the case step, and the final
+model time `st.timesum` equals `start_time + n_steps dt`, both in seconds and within a
+relative `1e-12`.
+
+Parameters
+----------
+st : SimulationState or NamedTuple
+    Final state of `simulation_loop`; `dt` [s] and `timesum` [s] are read.
+cfg : SimulationConfig
+    Configuration of the run, from `make_porous_shell_config`.
+
+Returns
+-------
+Nothing
+
+Raises
+------
+ErrorException
+    If the last time step or the final time differs from the case clock.
+"""
+function check_run_clock(st, cfg::SimulationConfig)
+    yl = cfg.time.yearlength
+    dt_s = cfg.time.dt_initial * yl
+    isapprox(st.dt, dt_s; rtol=1.0e-12) ||
+        error("the last time step is $(st.dt) s, not the case step $dt_s s")
+    t_end_s = cfg.time.start_time * yl + cfg.time.n_steps * dt_s
+    isapprox(st.timesum, t_end_s; rtol=1.0e-12) ||
+        error("the final time is $(st.timesum) s, not start_time + n_steps dt = $t_end_s s")
+    return nothing
+end
+
+"""
     run_porous_shell_case(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air=nothing,
                           seed=42, Nr=2000, reference=nothing) -> NamedTuple
 
@@ -561,7 +617,8 @@ porosity difference [-], peak temperatures [K], the relative energy residual of 
 thermal step [-], the binned profiles and the full 1-D result.
 
 Raises `DomainError` for the arguments that `make_porous_shell_config` rejects, and an
-`ErrorException` when the time step of the last step differs from `dt_yr`.
+`ErrorException` from `check_run_clock` when the run did not take `n_steps` steps of
+`dt_yr`.
 """
 function run_porous_shell_case(;
     Nx::Int,
@@ -584,9 +641,7 @@ function run_porous_shell_case(;
             end
         end
     end
-    dt_s = dt_yr * cfg.time.yearlength
-    isapprox(st.dt, dt_s; rtol=1.0e-12) ||
-        error("the last time step is $(st.dt) s, not the case step $dt_s s")
+    check_run_clock(st, cfg)
     ref = if reference === nothing
         solve_porous_sphere(;
             R=R_PLANET,
@@ -641,24 +696,15 @@ const PHI_INIT_CASE = 0.25
 const T_FORM_YR_CASE = 2.5e6
 const N_STEPS_CASE = 80
 const DT_YR_CASE = 5.0e4
-const NX_LIST = (33, 65)
+const NX_LIST = (65,)
 const NX_REFERENCE = 65
 const NR_REFERENCE = 2000
 const SHELL_DEPTH_REL_BOUND = 0.15
+const TMAX_REL_L2_LIMIT = 0.10
+const ENERGY_RESIDUAL_LIMIT = 1.0e-9
 
-const HASHED_CASE_CONSTANTS = (
-    :R_PLANET,
-    :L_BOX,
-    :RHOCP_AIR,
-    :PHIM0,
-    :NX_LIST,
-    :NX_REFERENCE,
-    :NR_REFERENCE,
-    :PHI_INIT_CASE,
-    :T_FORM_YR_CASE,
-    :N_STEPS_CASE,
-    :DT_YR_CASE,
-    :SHELL_DEPTH_REL_BOUND,
+# Constants of the laws and of the 1-D reference, hashed in both records.
+const REFERENCE_LAW_CONSTANTS = (
     :YEARLENGTH_S,
     :T_HALF_AL_S,
     :F_AL,
@@ -683,6 +729,24 @@ const HASHED_CASE_CONSTANTS = (
     :DPHI_SINTERED,
 )
 
+const HASHED_CASE_CONSTANTS = (
+    :R_PLANET,
+    :L_BOX,
+    :RHOCP_AIR,
+    :PHIM0,
+    :NX_LIST,
+    :NX_REFERENCE,
+    :NR_REFERENCE,
+    :PHI_INIT_CASE,
+    :T_FORM_YR_CASE,
+    :N_STEPS_CASE,
+    :DT_YR_CASE,
+    :SHELL_DEPTH_REL_BOUND,
+    :TMAX_REL_L2_LIMIT,
+    :ENERGY_RESIDUAL_LIMIT,
+    REFERENCE_LAW_CONSTANTS...,
+)
+
 const BENCHMARK_CONFIG_SECTIONS = (
     :grid,
     :geometry,
@@ -702,20 +766,15 @@ const BENCHMARK_CONFIG_SECTIONS = (
 )
 
 const EXPECTED_METRIC_IDS = (
-    "shell_depth_nx33",
-    "shell_depth_nx65",
-    "shell_error_convergence_ratio_33_65",
-    "tmax_rel_l2_nx65",
-    "energy_lse_residual_nx65",
+    "shell_depth_nx65", "tmax_rel_l2_nx65", "energy_lse_residual_nx65"
 )
 
 # A shell depth changes only by whole radial bins of dx / 2: its band is one bin. The
-# temperature band is 3 times its spread over the marker seeds 42, 1 and 2. The ratio and
-# the energy residual (round-off) have no band; their pass limits apply.
+# temperature band is 3 times its spread over the marker seeds 42, 1 and 2. The energy
+# residual (round-off) has no band; its pass limit applies.
 const PHYSICS_REGRESSION_BANDS = Dict{
     String,NamedTuple{(:atol, :rtol),Tuple{Float64,Float64}}
 }(
-    "shell_depth_nx33" => (; atol=750.0, rtol=0.0),
     "shell_depth_nx65" => (; atol=375.0, rtol=0.0),
     "tmax_rel_l2_nx65" => (; atol=1.29e-3, rtol=1.0e-12),
 )
@@ -816,9 +875,8 @@ end
 
 Return the validation metrics that the `run_porous_shell_case` results in `runs` determine.
 
-The shell depth exists for each grid of `NX_LIST` present in `runs`. The convergence ratio
-`abs(d33 - d_ref) / abs(d65 - d_ref)` needs both grids; the maximum temperature error and
-the energy residual need the `NX_REFERENCE` grid.
+The shell depth exists for each grid of `NX_LIST` present in `runs`. The maximum
+temperature error and the energy residual need the `NX_REFERENCE` grid.
 
 Parameters
 ----------
@@ -835,12 +893,6 @@ function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
     metrics = Dict{String,Float64}()
     for n in NX_LIST
         haskey(runs, n) && (metrics["shell_depth_nx$(n)"] = runs[n].d_shell)
-    end
-    n_lo, n_hi = NX_LIST
-    if haskey(runs, n_lo) && haskey(runs, n_hi)
-        e_lo = abs(runs[n_lo].d_shell - runs[n_lo].d_shell_ref)
-        e_hi = abs(runs[n_hi].d_shell - runs[n_hi].d_shell_ref)
-        metrics["shell_error_convergence_ratio_$(n_lo)_$(n_hi)"] = e_lo / e_hi
     end
     if haskey(runs, NX_REFERENCE)
         m = runs[NX_REFERENCE]
@@ -862,7 +914,7 @@ seed : Int, optional
     Seed of the marker positions (default `SEED_DEFAULT`).
 nx_list : Tuple{Vararg{Int}}, optional
     Grids to run, a subset of `NX_LIST` (default `NX_LIST`). With the default the result
-    holds all 5 metrics.
+    holds all 3 metrics.
 
 Returns
 -------
@@ -901,8 +953,7 @@ end
     expected_metric_references(; d_shell_ref=reference_solution().d_shell)
 
 Return the reference value of each validation metric: the 1-D shell depth for the shell
-depths, `2.0` (first order in `dx`) for the convergence ratio and `0.0` for the maximum
-temperature error and the energy residual.
+depths and `0.0` for the maximum temperature error and the energy residual.
 
 Parameters
 ----------
@@ -919,15 +970,50 @@ function expected_metric_references(;
 )::Dict{String,Float64}
     refs = Dict{String,Float64}()
     for mid in EXPECTED_METRIC_IDS
-        refs[mid] = if startswith(mid, "shell_depth")
-            d_shell_ref
-        elseif startswith(mid, "shell_error_convergence_ratio")
-            2.0
-        else
-            0.0
-        end
+        refs[mid] = startswith(mid, "shell_depth") ? d_shell_ref : 0.0
     end
     return refs
+end
+
+"""
+    expected_metric_limits(; d_shell_ref=reference_solution().d_shell)
+
+Return the pass limit of each validation metric, fixed before any run: the shell depth
+within `shell_depth_atol(nx, d_shell_ref)` of the 1-D depth (`isapprox`), the maximum
+temperature error at most `TMAX_REL_L2_LIMIT` and the energy residual at most
+`ENERGY_RESIDUAL_LIMIT` (`le_atol`). Every limit has `rtol = 0`.
+
+Parameters
+----------
+d_shell_ref : Float64, optional
+    Shell depth of the 1-D reference [m] (default: computed by `reference_solution`).
+
+Returns
+-------
+Dict{String,NamedTuple}
+    Mapping from metric id to `(; atol, rtol, comparison)`.
+
+Raises
+------
+DomainError
+    If `d_shell_ref` is negative or not finite (from `shell_depth_atol`).
+"""
+function expected_metric_limits(; d_shell_ref::Float64=reference_solution().d_shell)
+    limits = Dict{
+        String,NamedTuple{(:atol, :rtol, :comparison),Tuple{Float64,Float64,String}}
+    }()
+    for n in NX_LIST
+        limits["shell_depth_nx$(n)"] = (;
+            atol=shell_depth_atol(n, d_shell_ref), rtol=0.0, comparison="isapprox"
+        )
+    end
+    limits["tmax_rel_l2_nx$(NX_REFERENCE)"] = (;
+        atol=TMAX_REL_L2_LIMIT, rtol=0.0, comparison="le_atol"
+    )
+    limits["energy_lse_residual_nx$(NX_REFERENCE)"] = (;
+        atol=ENERGY_RESIDUAL_LIMIT, rtol=0.0, comparison="le_atol"
+    )
+    return limits
 end
 
 """
@@ -1204,6 +1290,8 @@ end
 
 Compare freshly evaluated metrics, reference values, regression bands, the reference
 literals and the configuration hash and summary with a committed validation record. The
+recorded `atol`, `rtol` and `comparison` of each metric must equal the limit of the code
+(`expected_metric_limits`), so that a widened tolerance in the record fails. The
 replay of recorded values (`REPLAY_RTOL`, `REPLAY_ATOL_BOUNDS`) runs when
 `check_recorded_values` is `true` and the Julia major.minor version matches
 `metadata.julia_version`; the regression bands always run. A record that fails
@@ -1294,6 +1382,7 @@ function check_validation_reproducibility(
     end
 
     exp_refs = nothing
+    exp_limits = nothing
     for m in raw_metrics
         !(m isa AbstractDict && haskey(m, "id")) && continue
         mid = String(m["id"])
@@ -1304,6 +1393,7 @@ function check_validation_reproducibility(
         if exp_refs === nothing
             d_ref = d_shell_ref === nothing ? bench_shell_reference(bench) : d_shell_ref
             exp_refs = expected_metric_references(; d_shell_ref=d_ref)
+            exp_limits = expected_metric_limits(; d_shell_ref=d_ref)
         end
         measured = bench.metrics[mid]
         recorded = Float64(m["value"])
@@ -1316,6 +1406,17 @@ function check_validation_reproducibility(
             push!(
                 errors,
                 "Recorded reference for '$mid' ($ref) does not match recomputed reference ($(exp_refs[mid]))",
+            )
+        end
+        if haskey(exp_limits, mid)
+            lim = exp_limits[mid]
+            same_limit =
+                comp == lim.comparison &&
+                isapprox(atol, lim.atol; rtol=1.0e-12, atol=0.0) &&
+                isapprox(rtol, lim.rtol; rtol=1.0e-12, atol=0.0)
+            same_limit || push!(
+                errors,
+                "Recorded tolerance of '$mid' ($comp, atol=$atol, rtol=$rtol) differs from the limit of the code ($(lim.comparison), atol=$(lim.atol), rtol=$(lim.rtol))",
             )
         end
         tol_ok = if comp == "isapprox"
@@ -1343,6 +1444,333 @@ function check_validation_reproducibility(
     ok_bands, band_errs = check_physics_regression_bands(bench.metrics, record_path)
     ok_bands || append!(errors, band_errs)
     return (ok_schema && isempty(errors), errors)
+end
+
+# Full runs of the suite: (tag, Nx, t_form [Myr], phi_init, steps of SUITE_DT_YR to the
+# shell freeze, air conductivity [W/(m K)] or `nothing` for the matched air).
+const SUITE_CASES = (
+    ("s65_25_025", 65, 2.5, 0.25, 750, nothing),
+    ("s129_25_025", 129, 2.5, 0.25, 750, nothing),
+    ("s129_225_025", 129, 2.25, 0.25, 700, nothing),
+    ("s129_175_010", 129, 1.75, 0.1, 490, nothing),
+    ("s129_25_050", 129, 2.5, 0.5, 1580, nothing),
+    ("s129_25_025_k", 129, 2.5, 0.25, 750, 3000.0),
+)
+const SUITE_DT_YR = 1.0e4
+const SUITE_TMAX_NX_MIN = 65
+const SUITE_RECORD_ID = "porous_shell_suite"
+const SUITE_RESULT_HEADER = (
+    "tag",
+    "Nx",
+    "t_form_myr",
+    "phi_init",
+    "n_steps",
+    "k_air",
+    "dx",
+    "d_shell",
+    "q25",
+    "q75",
+    "d_ref",
+    "err_cells",
+    "tmax_rel_l2",
+    "phi_rms",
+    "T_peak",
+    "T_peak_ref",
+    "energy_res",
+    "wall_s",
+)
+const SUITE_HASHED_CONSTANTS = (
+    :SUITE_DT_YR,
+    :SUITE_TMAX_NX_MIN,
+    :R_PLANET,
+    :L_BOX,
+    :RHOCP_AIR,
+    :PHIM0,
+    :NR_REFERENCE,
+    :SHELL_DEPTH_REL_BOUND,
+    :TMAX_REL_L2_LIMIT,
+    REFERENCE_LAW_CONSTANTS...,
+)
+
+"""
+    suite_case_config(case)
+
+Return the `SimulationConfig` of one entry of `SUITE_CASES`.
+
+Parameters
+----------
+case : Tuple
+    Entry `(tag, Nx, t_form_myr, phi_init, n_steps, k_air)` of `SUITE_CASES`; `t_form_myr`
+    in Myr after the first solids, `k_air` in W/(m K) or `nothing`.
+
+Returns
+-------
+SimulationConfig
+    `make_porous_shell_config` with the step `SUITE_DT_YR`.
+
+Raises
+------
+DomainError
+    For the arguments that `make_porous_shell_config` rejects.
+"""
+function suite_case_config(case::Tuple)
+    _, nx, tf_myr, phi, n, k_air = case
+    return make_porous_shell_config(;
+        Nx=nx, phi_init=phi, t_form_yr=tf_myr * 1.0e6, n_steps=n, dt_yr=SUITE_DT_YR, k_air
+    )
+end
+
+"""
+    suite_metric_ids()
+
+Return the metric ids of the suite record in record order: for each case of `SUITE_CASES`
+the shell depth `shell_depth_<tag>`, then `tmax_rel_l2_<tag>` when `Nx >= SUITE_TMAX_NX_MIN`.
+
+Returns
+-------
+Vector{String}
+    Metric ids.
+"""
+function suite_metric_ids()::Vector{String}
+    ids = String[]
+    for (tag, nx) in SUITE_CASES
+        push!(ids, "shell_depth_$(tag)")
+        nx >= SUITE_TMAX_NX_MIN && push!(ids, "tmax_rel_l2_$(tag)")
+    end
+    return ids
+end
+
+"""
+    suite_metric_limit(id, nx, d_shell_ref)
+
+Return the pass limit of a suite metric: the shell depth within
+`shell_depth_atol(nx, d_shell_ref)`, that is `max(dx, 0.15 d_shell_ref)`, of the 1-D depth
+(`isapprox`), and the maximum temperature error at most `TMAX_REL_L2_LIMIT` (`le_atol`).
+
+Parameters
+----------
+id : AbstractString
+    Metric id, `shell_depth_<tag>` or `tmax_rel_l2_<tag>`.
+nx : Int
+    Grid resolution of the run.
+d_shell_ref : Float64
+    Shell depth of the 1-D reference of the run [m].
+
+Returns
+-------
+NamedTuple
+    `(; atol, rtol, comparison)`.
+
+Raises
+------
+ArgumentError
+    If `id` is neither a shell depth nor a maximum temperature error.
+DomainError
+    From `shell_depth_atol`.
+"""
+function suite_metric_limit(id::AbstractString, nx::Int, d_shell_ref::Float64)
+    startswith(id, "shell_depth_") &&
+        return (; atol=shell_depth_atol(nx, d_shell_ref), rtol=0.0, comparison="isapprox")
+    startswith(id, "tmax_rel_l2_") &&
+        return (; atol=TMAX_REL_L2_LIMIT, rtol=0.0, comparison="le_atol")
+    return throw(ArgumentError("unknown suite metric id '$id'"))
+end
+
+"""
+    suite_config_text()
+
+Return the text that `suite_config_sha256` hashes: per case of `SUITE_CASES` one line with
+the case tuple and one line `suite.<tag>.section.field=value` per field of the sections in
+`BENCHMARK_CONFIG_SECTIONS` of `suite_case_config`, then one line `case.NAME=value` per
+constant of `SUITE_HASHED_CONSTANTS`.
+
+Returns
+-------
+String
+    The canonical text of the case set.
+"""
+function suite_config_text()::String
+    io = IOBuffer()
+    for case in SUITE_CASES
+        tag = case[1]
+        println(io, "suite.", tag, "=", _canonical_field_repr(collect(Any, case)))
+        cfg = suite_case_config(case)
+        for sec_sym in BENCHMARK_CONFIG_SECTIONS
+            sec = getproperty(cfg, sec_sym)
+            for f_sym in sort(collect(fieldnames(typeof(sec))))
+                val = _canonical_field_repr(getfield(sec, f_sym))
+                println(io, "suite.", tag, ".", sec_sym, ".", f_sym, "=", val)
+            end
+        end
+    end
+    for name in SUITE_HASHED_CONSTANTS
+        println(io, "case.", name, "=", _canonical_field_repr(getfield(@__MODULE__, name)))
+    end
+    return String(take!(io))
+end
+
+"""
+    suite_config_sha256()
+
+Return the SHA-256 digest of `suite_config_text()`, the configuration hash of the case set.
+
+Returns
+-------
+String
+    64-character lowercase hexadecimal SHA-256 digest.
+"""
+suite_config_sha256()::String = bytes2hex(sha256(suite_config_text()))
+
+"""
+    expected_suite_config_summary()
+
+Return the configuration summary stored in the `[config]` section of the suite record:
+the case list as parallel arrays and the shared settings.
+
+Returns
+-------
+Dict{String,Any}
+    Keyed as in `REQUIRED_CONFIG_KEYS["porous_shell_suite"]`; `k_air_W_mK` holds the air
+    conductivity of each run, `air_matched` whether it is the matched air.
+"""
+function expected_suite_config_summary()::Dict{String,Any}
+    cfgs = [suite_case_config(c) for c in SUITE_CASES]
+    return Dict{String,Any}(
+        "tags" => [String(c[1]) for c in SUITE_CASES],
+        "Nx" => [c[2] for c in SUITE_CASES],
+        "t_form_myr" => [Float64(c[3]) for c in SUITE_CASES],
+        "phi_init" => [Float64(c[4]) for c in SUITE_CASES],
+        "n_steps" => [c[5] for c in SUITE_CASES],
+        "air_matched" => [c[6] === nothing for c in SUITE_CASES],
+        "k_air_W_mK" => [cfg.materials.ksolidm[3] for cfg in cfgs],
+        "dt_yr" => SUITE_DT_YR,
+        "Nr_reference" => NR_REFERENCE,
+        "R_planet_m" => R_PLANET,
+        "L_box_m" => L_BOX,
+        "seed" => SEED_DEFAULT,
+        "porosity_model" => "henke2012",
+        "shell_dphi" => DPHI_SHELL,
+        "shell_depth_rel_bound" => SHELL_DEPTH_REL_BOUND,
+        "tmax_rel_l2_limit" => TMAX_REL_L2_LIMIT,
+        "tmax_nx_min" => SUITE_TMAX_NX_MIN,
+    )
+end
+
+# Whether a recorded config value equals the expected one: floats (also in arrays) within
+# a relative 1e-12, other values exactly.
+function _summary_value_matches(v_rec, v_exp)::Bool
+    if v_exp isa AbstractVector
+        return v_rec isa AbstractVector &&
+               length(v_rec) == length(v_exp) &&
+               all(_summary_value_matches(a, b) for (a, b) in zip(v_rec, v_exp))
+    elseif v_exp isa AbstractFloat
+        return v_rec isa Real &&
+               !(v_rec isa Bool) &&
+               isapprox(Float64(v_rec), v_exp; rtol=1.0e-12, atol=0.0)
+    end
+    return typeof(v_rec) == typeof(v_exp) && v_rec == v_exp
+end
+
+"""
+    check_suite_record_static(path; check_doc_sync=true)
+
+Check the suite record `path` without a rerun: the schema of `validate_record_dict`, the
+record id, the configuration hash of the case set (`suite_config_sha256`), the `[config]`
+summary, the case list against `SUITE_CASES`, the metric ids (`suite_metric_ids`), the
+grid of each metric, the tolerance of each metric against `suite_metric_limit` and that
+each value passes it. A file that is not valid TOML returns the parser error.
+
+Parameters
+----------
+path : String
+    Path to the suite record TOML file.
+check_doc_sync : Bool, optional
+    Whether the documentation page must hold the table of the record (default `true`).
+
+Returns
+-------
+Tuple{Bool,Vector{String}}
+    Pass flag and diagnostic error messages.
+
+Raises
+------
+DomainError
+    If `isempty(path)`.
+"""
+function check_suite_record_static(
+    path::String; check_doc_sync::Bool=true
+)::Tuple{Bool,Vector{String}}
+    isempty(path) && throw(DomainError(path, "Record path must be non-empty"))
+    isfile(path) || return (false, ["Suite record not found: $path"])
+    raw = _parse_record(path)
+    raw isa String && return (false, [raw])
+    ok_schema, errs = validate_record_dict(raw; require_doc_pages=true, check_doc_sync)
+    ok_schema || return (false, errs)
+    errors = String[]
+    meta = raw["metadata"]
+    rec_id = String(meta["id"])
+    rec_id == SUITE_RECORD_ID ||
+        push!(errors, "Record id '$rec_id' is not '$SUITE_RECORD_ID'")
+    expected_sha = suite_config_sha256()
+    String(meta["config_sha256"]) == expected_sha || push!(
+        errors,
+        "Recorded config_sha256 ($(meta["config_sha256"])) does not match the case set ($expected_sha)",
+    )
+    rec_cfg = raw["config"]
+    for (k, v_exp) in expected_suite_config_summary()
+        if !haskey(rec_cfg, k)
+            push!(errors, "Recorded config missing key '$k'")
+        elseif !_summary_value_matches(rec_cfg[k], v_exp)
+            push!(
+                errors,
+                "Recorded config.$k ($(rec_cfg[k])) does not match expected ($v_exp)",
+            )
+        end
+    end
+    metrics = raw["metrics"]
+    ids = [String(m["id"]) for m in metrics]
+    ids == suite_metric_ids() || push!(
+        errors,
+        "Recorded metric ids $ids do not match the case list $(suite_metric_ids())",
+    )
+    nx_of = Dict(String(c[1]) => c[2] for c in SUITE_CASES)
+    cases = Set(String(m["case"]) for m in metrics)
+    cases == Set(keys(nx_of)) || push!(
+        errors,
+        "Recorded cases $(sort!(collect(cases))) do not match SUITE_CASES $(sort!(collect(keys(nx_of))))",
+    )
+    for m in metrics
+        mid, tag = String(m["id"]), String(m["case"])
+        haskey(nx_of, tag) || continue
+        endswith(mid, "_" * tag) ||
+            push!(errors, "Metric '$mid' does not belong to case '$tag'")
+        nx = nx_of[tag]
+        Int(m["nx"]) == nx || push!(errors, "Metric '$mid' has nx $(m["nx"]), not $nx")
+        value, ref = Float64(m["value"]), Float64(m["reference"])
+        lim = try
+            suite_metric_limit(mid, nx, ref)
+        catch err
+            err isa Union{ArgumentError,DomainError} || rethrow()
+            push!(errors, "Metric '$mid' has no limit: $(sprint(showerror, err))")
+            continue
+        end
+        atol, rtol, comp = Float64(m["atol"]), Float64(m["rtol"]), String(m["comparison"])
+        same_limit =
+            comp == lim.comparison &&
+            isapprox(atol, lim.atol; rtol=1.0e-12, atol=0.0) &&
+            isapprox(rtol, lim.rtol; rtol=1.0e-12, atol=0.0)
+        same_limit || push!(
+            errors,
+            "Recorded tolerance of '$mid' ($comp, atol=$atol, rtol=$rtol) differs from the rule ($(lim.comparison), atol=$(lim.atol), rtol=$(lim.rtol))",
+        )
+        passes = if lim.comparison == "isapprox"
+            0.0 < ref < R_PLANET && isapprox(value, ref; atol=lim.atol, rtol=lim.rtol)
+        else
+            iszero(ref) && isfinite(value) && 0.0 <= value <= lim.atol
+        end
+        passes || push!(errors, "Metric '$mid' = $value fails the rule around $ref")
+    end
+    return (isempty(errors), errors)
 end
 
 end # module

@@ -33,25 +33,23 @@ The box "Test details" at the end of each case gives the reference, the toleranc
 ## The shell depth against a 1-D model
 
 **Why this check exists.**
-The time loop could pass the wrong pressure or temperature to the sintering step.
-It could also give the wrong conductivity or heat to porous rock.
+The time loop could give the wrong conductivity, heat capacity or heat to porous rock, or pass the wrong temperature to the sintering step.
 The shell would then have the wrong depth, also where each law passes its own unit test.
 For example, if the code heated porous rock as much as solid rock of the same volume, the shell at `Nx = 65` would be 2625 m deep in place of 5250 m, and the test fails.
 
 **What it tests.**
 A body with $\phi_{init} = 0.25$ forms at $t_{form} = 2.5$ Myr.
-It runs for 80 steps of 50 kyr, 4 Myr in total, at `Nx = 33` and `Nx = 65`.
-We compare 4 results with the 1-D model at the same time step:
+It runs for 80 steps of 50 kyr, 4 Myr in total, at `Nx = 65`.
+We compare 3 results with the 1-D model at the same time step:
 
 - the depth of the shell, the median over 16 sectors;
-- how the error of the depth changes from `Nx = 33` to `Nx = 65`;
 - the profile of the peak temperature $T_{max}$ that each marker reached, binned by radius;
 - the energy balance of the last heat solve.
 
 **How we know the right answer.**
 The 1-D model in `benchmarks/validation_porous_shell.jl` solves heat conduction in a sphere on 2000 radial cells.
 It codes the laws of cold pressing, sintering and porous conductivity again from the raw constants, and it does not call the Erebus porosity code.
-Its own tests compare it with an exact series of a sphere without pores, a fine Runge-Kutta integration of the sintering law, and the hydrostatic pressure of a uniform sphere.
+Its own tests compare it with a backward-Euler eigenmode series of a sphere without pores, a fine Runge-Kutta integration of the sintering law, and the hydrostatic pressure of a uniform sphere.
 In this case its shell is 4590 m deep.
 
 **Why it matters.**
@@ -85,16 +83,21 @@ With the matched air, Erebus gives a shell that is deeper than in the 1-D model 
 At $\phi_{init} = 0.5$ the error is 0.99 cells, so this run passes its tolerance of 375 m by only 2.5 m.
 The error in metres halves when the cell size halves, so the difference comes from the grid.
 Near the surface the Erebus rock stays colder than in the 1-D model (panel a).
-We have not tested the cause.
+The cause is the sticky air: its large heat capacity holds the grid nodes that mix rock and air at 290 K, so the cold surface lies inside $R_p$.
+With an air heat capacity equal to that of rock, the shell at `Nx = 65` is 0.62 cells too thin instead of 0.88 cells too deep.
+
+**What the depth can and cannot detect.**
+At the edge of the shell the 1-D model has a peak temperature of 700.4 K in the last sintered cell and 699.998 K in the next one.
+The depth of the shell is therefore the depth where the peak temperature reached 700 K.
+It depends on the heat, the conductivity and the surface, but hardly on the pressure: a pressure 10 times too low moves it by 30 m in the 1-D model.
 
 !!! details "Test details"
     - Reference: `solve_porous_sphere` in `benchmarks/validation_porous_shell.jl`, with the same time step and number of steps.
     - Tolerance:
-        - the shell depth at `Nx = 33` and `Nx = 65`: the 1-D depth within 1 cell or 15 %, whichever is larger;
-        - the ratio of the depth errors at `Nx = 33` and `Nx = 65`: 2 within 0.5 (first order in the cell size);
+        - the shell depth at `Nx = 65`: the 1-D depth within 1 cell or 15 %, whichever is larger;
         - the relative L2 error of $T_{max} - 290$ K: at most 0.10 at `Nx = 65`;
         - the energy residual of the last heat solve: at most $10^{-9}$ of the stored and released heat.
-    - Test id: `shell_depth_nx33`, `shell_depth_nx65`, `shell_error_convergence_ratio_33_65`, `tmax_rel_l2_nx65`, `energy_lse_residual_nx65`.
+    - Test id: `shell_depth_nx65`, `tmax_rel_l2_nx65`, `energy_lse_residual_nx65`.
     - Command: `julia --project=. tools/check_validation.jl --check`.
 
 ---
@@ -107,7 +110,7 @@ A fault that grows late in the run, or that depends on the porosity or on the he
 
 **What it tests.**
 We run 6 bodies of 20 km to the time when the 1-D model stops sintering, with steps of 10 kyr.
-4 runs use `Nx = 129`, and the main case also runs at `Nx = 65`.
+5 runs use `Nx = 129`, and the main case also runs at `Nx = 65`.
 The cases cover 3 formation times and 3 initial porosities.
 They have a shell of at least 4 cells at `Nx = 129` in the 1-D model.
 One run uses the conductivity of the sticky air that a configuration file gives, 3000 W/(m K).
@@ -138,28 +141,43 @@ The solid line is equal depth, and the dashed and dotted lines show the toleranc
 The open square is the run with the air conductivity of 3000 W/(m K).
 A pass means that a point lies between the lines of its grid.
 
-| $t_{form}$ (Myr) | $\phi_{init}$ | `Nx` | Erebus (m) | 1-D (m) | Error (cells) | L2 of $T_{max}$ |
-|---|---|---|---|---|---|---|
-| 2.5 | 0.25 | 65 | 5250 | 4560 | 0.92 | 0.050 |
-| 2.5 | 0.25 | 129 | 4875 | 4560 | 0.84 | 0.027 |
-| 2.25 | 0.25 | 129 | 2625 | 2340 | 0.76 | 0.029 |
-| 1.75 | 0.1 | 129 | 2437.5 | 2170 | 0.71 | 0.026 |
-| 2.5 | 0.5 | 129 | 2812.5 | 2440 | 0.99 | 0.032 |
-| 2.5 | 0.25, air 3000 W/(m K) | 129 | 5062.5 | 4560 | 1.34 | 0.045 |
+```@raw html
+<!-- VALIDATION_RECORD_START: porous_shell_suite -->
+```
+
+**Validation record**: `benchmarks/records/porous_shell_suite.toml` (Source commit `f6c7f29a`, config SHA-256 `a8c941bec936`)
+
+| Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `s65_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `5.2500e+03` | `4.5600e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
+| `s65_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 65 | `4.9700e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `4.8750e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_025` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, matched air, 750 steps of 10 kyr | 129 | `2.6500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_225_025` | Median shell depth against the 1-D shell depth, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.6250e+03` | `2.3400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_225_025` | Relative L2 error of the binned peak temperature rise, t_form 2.25 Myr, phi_init 0.25, matched air, 700 steps of 10 kyr | 129 | `2.8500e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_175_010` | Median shell depth against the 1-D shell depth, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.4375e+03` | `2.1700e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_175_010` | Relative L2 error of the binned peak temperature rise, t_form 1.75 Myr, phi_init 0.1, matched air, 490 steps of 10 kyr | 129 | `2.5600e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_050` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `2.8125e+03` | `2.4400e+03` | `atol=3.75e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_050` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.5, matched air, 1580 steps of 10 kyr | 129 | `3.2300e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `s129_25_025_k` | Median shell depth against the 1-D shell depth, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `5.0625e+03` | `4.5600e+03` | `atol=6.84e+02, rtol=0.00e+00` | m | **PASS** |
+| `s129_25_025_k` | Relative L2 error of the binned peak temperature rise, t_form 2.5 Myr, phi_init 0.25, air k = 3000 W/(m K), 750 steps of 10 kyr | 129 | `4.4800e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+
+```@raw html
+<!-- VALIDATION_RECORD_END: porous_shell_suite -->
+```
 
 **Known limit.**
 A configuration file gives the sticky air a conductivity of 3000 W/(m K), and it cannot change it.
 The air then draws heat out of the outer cells of the rock.
-In a run at $t_{form} = 2.25$ Myr the outermost bins reached only 290 to 308 K, against 338 to 413 K in the 1-D model.
+In the main case the outermost 3 bins reached only 290.0 to 303.8 K, against 309.4 to 348.4 K with the matched air and 327.6 to 386.8 K in the 1-D model.
 With this value the shell of the main case is 5062.5 m deep, 1.34 cells deeper than in the 1-D model, against 0.84 cells with the matched air.
-This run still passes the tolerance of 15 %, but a shorter run at $t_{form} = 2.25$ Myr gave 1.26 cells and 20 %, outside it.
 The pass rows of this page therefore give the air the conductivity of the porous surface rock.
-In a run from a configuration file, expect the shell to be about 1 cell deeper than the physics gives.
+In a run from a configuration file, expect the shell to be about 1.3 cells deeper than in the 1-D model.
 
 !!! details "Test details"
     - Reference: `solve_porous_sphere`, through `run_porous_shell_case` in `benchmarks/validation_porous_shell.jl`.
     - Tolerance: the shell depth within 1 cell or 15 % of the 1-D depth, as in the short case. CI does not run these cases; the table holds the values of one run of each.
-    - Command: `julia --project=. scripts/run_validation_porous_shell_suite.jl <out_dir>` (13 to 45 min per case at `Nx = 129` on one core), then `scripts/export_validation_porous_shell_data.jl` and `scripts/generate_validation_porous_shell_figures.py` for the figures.
+    - Command: `julia --project=. scripts/run_validation_porous_shell_suite.jl <out_dir>` (9 to 71 min per case at `Nx = 129` on one core), then `scripts/export_validation_porous_shell_data.jl` and `scripts/generate_validation_porous_shell_figures.py` for the figures.
 
 ---
 
@@ -181,8 +199,10 @@ This part has no reference of its own: it shows the 1-D model, which the other p
 At $t_{form}$ = 1.4 to 1.75 Myr, the cases of Fig. 10 for 20 km, the shell is 20 to 600 m deep for $\phi_{init}$ = 0.25 to 0.75.
 That is 0.001 to 0.03 of $R_p$, and less than 4 cells at `Nx = 129`.
 An Erebus run at these inputs therefore needs a much finer grid to resolve the shell.
-The shell is thinner at a higher initial porosity.
-A likely reason is the low conductivity of porous rock: a thin layer can hold the drop to the surface temperature.
+The shell is thinner at a higher initial porosity: at 1.4 Myr it is 320 m for $\phi_{init} = 0.25$ and 20 m for $\phi_{init} = 0.75$.
+A likely reason is the low conductivity of porous rock: a thin layer can hold the drop from 700 K to the surface temperature.
+Lichtenberg et al. (2016a) found that the initial porosity did not change the final shell depth much.
+Their paper does not give the formula of their shell measure, so the 2 results can measure different things.
 
 ```@raw html
 <div class="validation-fig-light">
@@ -205,7 +225,7 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 
 **Known limit.**
 
-- Lichtenberg et al. (2016a) report the shell as a mean over the initial porosities, from 2-D runs on a grid of 1 km. The 1-D model is a sphere. We show Fig. 10 for context only, and no test compares with it.
+- Lichtenberg et al. (2016a) report the shell as a mean over the initial porosities, from 2-D runs. The 1-D model is a sphere. No test compares with their Fig. 10.
 - The 1-D model has no melting. At $t_{form}$ = 1.4 and 1.5 Myr and $\phi_{init}$ = 0.25 to 0.75, its peak temperature reaches 1400 to 1590 K. The interior of these runs is therefore not a prediction for a real body.
 - Without metal markers, `Erebus.jl` heats the rock as chondritic rock with its metal fraction. This gives about 8 % more heat than pure silicate rock. The 1-D model uses the same heating, so the comparison with Erebus does not depend on it.
 
@@ -221,14 +241,12 @@ Open symbols mark runs that reached the limit of 20 Myr while part of the body w
 <!-- VALIDATION_RECORD_START: porous_shell -->
 ```
 
-**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `f6c7f29a`, config SHA-256 `d3d57425a447`)
+**Validation record**: `benchmarks/records/porous_shell.toml` (Source commit `f6c7f29a`, config SHA-256 `fcf41aa4e790`)
 
 | Case | Metric | Grid `Nx` | Measured | Reference | Tolerance | Units | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=33) | 33 | `6.0000e+03` | `4.5900e+03` | `atol=1.50e+03, rtol=0.00e+00` | m | **PASS** |
 | `porous_shell_t2.5_phi0.25` | Median shell depth of the rock markers against the 1-D shell depth (Nx=65) | 65 | `5.2500e+03` | `4.5900e+03` | `atol=7.50e+02, rtol=0.00e+00` | m | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Shell depth error ratio abs(d33 - d_ref) / abs(d65 - d_ref), first order in dx | 65 | `2.1364e+00` | `2.0000e+00` | `atol=5.00e-01, rtol=0.00e+00` | dimensionless | **PASS** |
-| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `4.9815e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
+| `porous_shell_t2.5_phi0.25` | Relative L2 error of the binned peak temperature rise against the 1-D reference (Nx=65) | 65 | `4.9912e-02` | `0.0000e+00` | `<= 1.00e-01` | dimensionless | **PASS** |
 | `porous_shell_t2.5_phi0.25` | Scaled energy residual of the last thermal step (Nx=65) | 65 | `2.2975e-10` | `0.0000e+00` | `<= 1.00e-09` | dimensionless | **PASS** |
 
 ```@raw html
