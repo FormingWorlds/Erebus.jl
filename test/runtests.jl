@@ -80,6 +80,7 @@ unit_tests = [
     "test_volatile_init.jl",
     "test_degassing_budgets.jl",
     "test_hydromech_fixes.jl",
+    "test_porosity_henke.jl",
     "test_redox_metal.jl",
     "test_config_hygiene.jl",
     "test_mutation.jl",

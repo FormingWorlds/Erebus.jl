@@ -6,6 +6,7 @@
 Advance marker thermal state, porosity compaction, hydrofracture venting, and magma ocean volatile degassing.
 
 # Mutates:
+- `state.markers.groups.porosity` (if `porosity.model = :henke2012`)
 - `state.markers.core.XWsolidm0`
 - `state.markers.core.phim`
 - `state.markers.core.tkm`
@@ -137,8 +138,25 @@ function vent_and_degas!(
         redox_props=redox_props,
         w3d_m=w3d_m,
         Xfe_bulk=Xfe_bulk,
+        aphi_active=has_pore_water(markers),
     )
     append!(transfer_log, marker_results.records)
+    if haskey(markers.groups, :porosity)
+        pg = markers.groups.porosity
+        ncap = advance_marker_dry_porosity!(
+            pg,
+            xm,
+            ym,
+            tm,
+            tkm,
+            grids.pr,
+            dt;
+            coords=coords,
+            psurface=cfg.geometry.psurface,
+            porosity=cfg.porosity,
+        )
+        ncap > 0 && @warn "Dry porosity: $ncap markers reached the sintering substep cap"
+    end
 
     delta_m_vent_3d = marker_results.delta_m_vent_3d
     vented_vols = marker_results.vented_vols

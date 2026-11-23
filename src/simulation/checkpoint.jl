@@ -229,6 +229,7 @@ function _collect_checkpoint_marker_dict(
     hcnspo_props=nothing,
     redox_props=nothing,
     s33m=nothing,
+    porosity_props=nothing,
 )
     dict = Dict{Symbol,Any}()
     if markers !== nothing
@@ -290,9 +291,10 @@ function _collect_checkpoint_marker_dict(
                 dict[fn] = getfield(hcnspo_props, fn)
             end
         end
-        if redox_props !== nothing
-            for fn in fieldnames(typeof(redox_props))
-                dict[fn] = getfield(redox_props, fn)
+        for grp in (redox_props, porosity_props)
+            grp === nothing && continue
+            for fn in fieldnames(typeof(grp))
+                dict[fn] = getfield(grp, fn)
             end
         end
     end
@@ -319,6 +321,8 @@ $(SIGNATURES)
     - timesum: total simulation time
     - marknum: number of markers
     - ETA... : simulation state variables (at step 0 in `output_00000.jld2`, `HR` and `hrtotalm` of planet markers are zero while air markers hold `start_hrsolidm[3]`; for per-step saves with `timestep >= 1`, `HR` and `hrtotalm` store the step-averaged volumetric radiogenic heating rate [W/m^3] over `[timesum - dt, timesum]`, except on steps where `replenish!` or `telescope_domain!` remaps markers or grids after the thermal solve)
+    - porosity_props (keyword): `PorosityGroup` of the dry porosity, written when the
+      keyword `markers` is `nothing`; `markers` already carries all of its groups
 
 # Returns
 
@@ -475,6 +479,7 @@ function save_state(
     S330=nothing,
     DS33=nothing,
     s33m=nothing,
+    porosity_props=nothing,
 )
     marker_props = _collect_checkpoint_marker_dict(
         markers;
@@ -530,6 +535,7 @@ function save_state(
         hcnspo_props=hcnspo_props,
         redox_props=redox_props,
         s33m=s33m,
+        porosity_props=porosity_props,
     )
 
     fid = output_path * "output_" * lpad(timestep, 5, "0") * ".jld2"
@@ -881,7 +887,8 @@ Restore optional marker groups from checkpoint data and validate array lengths.
 - `MarkerArrays`: Restored marker arrays with validated array lengths.
 
 # Raises
-- `CheckpointError`: If any marker vector length does not match `marknum`.
+- `CheckpointError`: If any marker vector length does not match `marknum`, or if
+  `porosity.model = :henke2012` and an array of `PorosityGroup` is missing.
 """
 function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::SimulationConfig)
     group_pairs = Pair{Symbol,Any}[]
@@ -971,6 +978,24 @@ function restore_checkpoint_markers(data, core::CoreGroup, effective_cfg::Simula
         push!(group_pairs, :accretion => AccretionGroup(t_acc))
     end
 
+    if effective_cfg.porosity.model === :henke2012
+        for k in fieldnames(PorosityGroup)
+            haskey(data, string(k)) || throw(
+                CheckpointError(
+                    "Checkpoint has no dry porosity array $k for porosity.model = henke2012",
+                ),
+            )
+            v = data[string(k)]
+            (v isa AbstractVector{<:Real} && length(v) == marknum) || throw(
+                CheckpointError(
+                    "Checkpoint dry porosity array $k must be a real vector of length $marknum",
+                ),
+            )
+        end
+        pvals = [data[string(k)] for k in fieldnames(PorosityGroup)]
+        push!(group_pairs, :porosity => PorosityGroup(pvals...))
+    end
+
     markers = MarkerArrays(core, NamedTuple(group_pairs))
 
     for fn in fieldnames(CoreGroup)
@@ -1032,8 +1057,14 @@ end
 Load simulation state, coordinates, and saved configuration from a schema version 2 checkpoint archive.
 Returns `(state::SimulationState, coords::GridCoordinates, cfg_saved::SimulationConfig)`.
 
+`force_restart_config = true` allows a restart configuration that differs from the
+saved one, except in `grid.*`, `geometry.*` and `porosity.model`.
+
 # Throws
-- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration mismatch.
+- `CheckpointError` on missing file, `schema_version < 2`, missing keys, or configuration
+  mismatch; a different `grid.*`, `geometry.*` or `porosity.model` also with
+  `force_restart_config = true`.
+- `ArgumentError` if the `[porosity]` section of the effective configuration is invalid.
 """
 function load_simulation_state(
     path::AbstractString;
@@ -1088,6 +1119,16 @@ function load_simulation_state(
                     ),
                 )
             end
+            # The dry porosity group exists only with henke2012: no restart adds or drops it
+            if "porosity.model" in diffs
+                throw(
+                    CheckpointError(
+                        "porosity.model cannot change on restart, also not with " *
+                        "--force-restart-config: checkpoint has :$(cfg_saved.porosity.model), " *
+                        "restart config has :$(target_cfg.porosity.model)",
+                    ),
+                )
+            end
             if !force_restart_config
                 throw(
                     CheckpointError(
@@ -1105,6 +1146,7 @@ function load_simulation_state(
     end
 
     effective_cfg = target_cfg !== nothing ? target_cfg : cfg_saved
+    _validate_porosity_config(effective_cfg)
 
     coords = if haskey(data, "coords") && data["coords"] isa GridCoordinates
         data["coords"]

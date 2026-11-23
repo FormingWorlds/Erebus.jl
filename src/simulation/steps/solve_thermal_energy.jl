@@ -164,6 +164,11 @@ end
 Solve the thermal energy conservation equation with segregation sources and convection.
 
 $(SIGNATURES)
+
+Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the shear
+heating has no compaction and Darcy terms, the adiabatic heating has no fluid term and
+takes the total pressure `pr` as the solid pressure, and the convergence check of the
+outer iteration ignores the fluid pressure `pf`, since none of them moves rock or heat.
 """
 function solve_thermal_energy!(
     state::SimulationState,
@@ -177,6 +182,7 @@ function solve_thermal_energy!(
     core = state.markers.core
     marknum = length(state.markers)
 
+    pore_water = has_pore_water(state.markers)
     rx_heat, ry_heat = _darcy_heating_resistances(g, ws, cfg)
     compute_shear_heating!(
         g.HS,
@@ -193,6 +199,7 @@ function solve_thermal_energy!(
         g.pr,
         g.pf;
         S33=cfg.geometry.spherical_flow ? g.S33 : nothing,
+        pore_water=pore_water,
     )
 
     compute_adiabatic_heating!(
@@ -205,9 +212,10 @@ function solve_thermal_energy!(
         g.vy,
         g.vxf,
         g.vyf,
-        g.ps,
+        ifelse(pore_water, g.ps, g.pr),
         g.pf;
         coords=coords,
+        pore_water=pore_water,
     )
 
     if cfg.geometry.spherical_metric
@@ -328,10 +336,15 @@ function solve_thermal_energy!(
             nothing
         end
 
-    # Pore fluid advection heat, from the Darcy fluxes of this iteration.
-    compute_fluid_advection_heat!(
-        g.Q_fluid_grid, g.tk1, g.qxD, g.qyD, fluid_heat_capacity(cfg); coords=coords
-    )
+    # Pore fluid advection heat, from the Darcy fluxes of this iteration; 0 without
+    # pore water (henke2012)
+    if has_pore_water(state.markers)
+        compute_fluid_advection_heat!(
+            g.Q_fluid_grid, g.tk1, g.qxD, g.qyD, fluid_heat_capacity(cfg); coords=coords
+        )
+    else
+        fill!(g.Q_fluid_grid, 0.0)
+    end
 
     LT = assemble_thermal_lse!(
         g.tk1,
@@ -399,7 +412,7 @@ function solve_thermal_energy!(
     thermochemical_converged = compute_thermochemical_iteration_outcome(
         g.DMP,
         g.pf,
-        ws.hydromech.pf_prev_iter,
+        ifelse(pore_water, ws.hydromech.pf_prev_iter, g.pf),
         titer;
         pferrmax=cfg.reaction.pferrmax,
         maxDTcurrent=maxDTcurrent,

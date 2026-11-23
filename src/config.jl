@@ -1356,6 +1356,28 @@ Base.@kwdef struct TelescopingConfig
 end
 
 """
+Dry rock porosity by cold pressing and hot sintering (Henke et al. 2012).
+
+`model = :none` leaves the porosity to the poroelastic compaction and allocates nothing.
+With `model = :henke2012` each rock marker carries a dry porosity that decreases by cold
+pressing at every temperature and by hot sintering at `T >= T_sinter`; the rock is then
+dry (`materials.XWsolidm_init = [0, 0, NaN]`). Units: `grain_radius`
+in m, `T_sinter` in K, `A` in cm^3 bar^-n s^-1, `E_act` in cal/mol.
+
+$(FIELDS)
+"""
+Base.@kwdef struct PorosityConfig
+    model::Symbol = :none
+    phi_init::Float64 = 0.75
+    grain_radius::Float64 = 1.0e-6
+    phi_cap::Float64 = 0.85
+    T_sinter::Float64 = 700.0
+    A::Float64 = 4.0e-5
+    E_act::Float64 = 85000.0
+    n::Float64 = 1.5
+end
+
+"""
 Top-level simulation configuration struct containing all parameter groups.
 
 $(FIELDS)
@@ -1382,6 +1404,7 @@ Base.@kwdef struct SimulationConfig
     hydrothermal::HydrothermalConfig = HydrothermalConfig()
     accretion::AccretionConfig = AccretionConfig()
     telescoping::TelescopingConfig = TelescopingConfig()
+    porosity::PorosityConfig = PorosityConfig()
     refractory::RefractoryConfig = RefractoryConfig()
     volatile_mixture::VolatileMixtureConfig = VolatileMixtureConfig()
     atmosphere::AtmosphereConfig = AtmosphereConfig()
@@ -2797,8 +2820,171 @@ function validate_config(cfg::SimulationConfig)
         ),
     )
     _validate_spherical_flow(cfg)
+    _validate_porosity_config(cfg)
 
     return nothing
+end
+
+"""
+Validate the fields of a `PorosityConfig` on their own, without the rest of the
+configuration. `_validate_porosity_config`, `dry_porosity_update` and
+`advance_marker_dry_porosity!` call it.
+
+# Arguments
+- `p`: porosity configuration.
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: unknown model, `phi_init` outside [0, 1], `phi_cap` outside (0, 1),
+  `grain_radius`, `T_sinter` or `n` not positive and finite, `A` or `E_act` negative or
+  not finite.
+"""
+function _validate_porosity_fields(p::PorosityConfig)
+    p.model in (:none, :henke2012) ||
+        throw(ArgumentError("porosity.model must be :none or :henke2012, got $(p.model)"))
+    @check_unit_interval p.phi_init "porosity.phi_init"
+    (0.0 < p.phi_cap < 1.0) ||
+        throw(ArgumentError("porosity.phi_cap must be in (0, 1), got $(p.phi_cap)"))
+    @check_positive_finite p.grain_radius "porosity.grain_radius"
+    @check_positive_finite p.T_sinter "porosity.T_sinter"
+    @check_nonneg_finite p.A "porosity.A"
+    @check_nonneg_finite p.E_act "porosity.E_act"
+    @check_positive_finite p.n "porosity.n"
+    return nothing
+end
+
+"""
+Validate the `[porosity]` section and the processes that `model = :henke2012` excludes.
+
+# Arguments
+- `cfg`: simulation configuration.
+
+# Returns
+- `nothing`
+
+# Throws
+- `ArgumentError`: unknown model, a field outside its domain
+  (`_validate_porosity_fields`), or henke2012 together with
+  reaction, venting, hydrothermal convection, accretion, telescoping, volatiles, pyrolysis
+  kinetics, magma transport, magma degassing, iron (core formation, `hr_fe`, metal
+  partitioning, the redox state with its metallic iron), accessory phase tracking, a
+  volatile ice mixture, hydrofracture (`poroelasticity.hydrofracture`), a hydrous rock
+  (`materials.XWsolidm_init[1:2]` not 0), `poroelasticity.phimin` outside (0, 1e-3],
+  a Stokes-Darcy solver other than the direct one (`solver.hydromech_solver = :direct`), or a
+  `materials.kphim0` entry that is not positive and finite, or a water porosity whose
+  Darcy resistance η_f / k(φ_min) is not finite (`_dry_water_resistances`).
+"""
+function _validate_porosity_config(cfg::SimulationConfig)
+    p = cfg.porosity
+    _validate_porosity_fields(p)
+    p.model === :henke2012 || return nothing
+    for (name, on) in (
+        ("reaction.active", cfg.reaction.active),
+        ("venting.active", cfg.venting.active),
+        ("hydrothermal.active", cfg.hydrothermal.active),
+        ("accretion.active", cfg.accretion.active),
+        ("telescoping.active", cfg.telescoping.active),
+        ("volatiles.active", cfg.volatiles.active),
+        (
+            "refractory.kinetics_active",
+            cfg.refractory.active && cfg.refractory.kinetics_active,
+        ),
+        ("magma_transport.active", cfg.magma_transport.active),
+        ("magma_degassing.active", cfg.magma_degassing.active),
+        ("coreformation.percolation_active", cfg.coreformation.percolation_active),
+        ("coreformation.settling_active", cfg.coreformation.settling_active),
+        ("thermodynamics.hr_fe", cfg.thermodynamics.hr_fe),
+        ("metal_partition.active", cfg.metal_partition.active),
+        ("phase_tracking.active", cfg.phase_tracking.active),
+        ("volatile_mixture.active", cfg.volatile_mixture.active),
+        ("redox.active", cfg.redox.active),
+        ("poroelasticity.hydrofracture", cfg.poroelasticity.hydrofracture),
+    )
+        on && throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires $name = false; the dry porosity is not coupled to it",
+            ),
+        )
+    end
+    # The matrix-free operator has no rows for dry material (keyword dry_nodes); the
+    # Krylov solver has no tested convergence with them
+    cfg.solver.hydromech_solver === :direct || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires solver.hydromech_solver = :direct; got :$(cfg.solver.hydromech_solver)",
+        ),
+    )
+    xw = cfg.materials.XWsolidm_init
+    (iszero(xw[1]) && iszero(xw[2])) || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires dry rock, materials.XWsolidm_init = [0, 0, NaN]; got $(xw[1]), $(xw[2])",
+        ),
+    )
+    # Rock keeps the water porosity phimin, which the adiabatic heating still uses; at
+    # most 1e-3 keeps rock dense there
+    phimin = cfg.poroelasticity.phimin
+    0.0 < phimin <= 1.0e-3 || throw(
+        ArgumentError(
+            "porosity.model = henke2012 requires 0 < poroelasticity.phimin <= 1e-3; got $phimin",
+        ),
+    )
+    # The solve holds no water, but the marker properties still divide by k(phimin)
+    for (t, k) in enumerate(cfg.materials.kphim0)
+        (isfinite(k) && k > 0.0) || throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires materials.kphim0[$t] > 0 and finite; got $k",
+            ),
+        )
+    end
+    for (t, r) in enumerate(_dry_water_resistances(cfg))
+        isfinite(r) || throw(
+            ArgumentError(
+                "porosity.model = henke2012 requires a finite Darcy resistance eta_f / k(phimin) of material $t; got $r (raise materials.kphim0[$t] or poroelasticity.phimin)",
+            ),
+        )
+    end
+    return nothing
+end
+
+"""
+Largest Darcy resistance η_f / k(φ_min) [Pa s m⁻²] that the markers of mantle, crust and
+sticky air (`tm` = 1, 2, 3) can take at the water porosity φ_min
+(`poroelasticity.phimin`): `ηᶠcur_inv_kᵠ` of `materials.kphim0[t]` with the largest water
+viscosity of the material, `materials.etafluidm[t]` (ice, air) or the liquid value just
+above `thermodynamics.tmfluidphase` (`compute_fluid_viscosity` falls with T). An
+underflowing k or an overflowing geometric factor gives `Inf`.
+
+# Arguments
+- `cfg`: simulation configuration.
+
+# Returns
+- `NTuple{3,Float64}`: the resistances [Pa s m⁻²].
+
+# Throws
+- `DomainError`: from `ηᶠcur_inv_kᵠ` for `phimin` outside (0, 1), `phim0` outside
+  (0, 1), a `kphim0` that is not positive or a negative viscosity.
+"""
+function _dry_water_resistances(cfg::SimulationConfig)
+    th = cfg.thermodynamics
+    phimin = cfg.poroelasticity.phimin
+    return ntuple(3) do t
+        eta_f = cfg.materials.etafluidm[t]
+        eta_liquid = compute_fluid_viscosity(
+            nextfloat(Float64(th.tmfluidphase)),
+            t;
+            mode=th.fluid_viscosity_mode,
+            eta0=th.fluid_viscosity_eta0,
+            eta_ice=eta_f,
+            eta_air=eta_f,
+            Ea=th.fluid_viscosity_Ea,
+            T0=th.fluid_viscosity_T0,
+            tmfluidphase=th.tmfluidphase,
+        )
+        return ηᶠcur_inv_kᵠ(
+            cfg.materials.kphim0[t], phimin, max(eta_f, eta_liquid); phim0=th.phim0
+        )
+    end
 end
 
 @inline function _is_removed_config_field(::Type{MeltingConfig}, k::AbstractString)::Bool
@@ -2938,6 +3124,7 @@ const VALID_SECTIONS = (
     "hydrothermal",
     "accretion",
     "telescoping",
+    "porosity",
     "refractory",
     "volatile_mixture",
     "atmosphere",
@@ -3145,6 +3332,11 @@ function load_config(source::AbstractString)::SimulationConfig
     else
         def.telescoping
     end
+    poros = if haskey(parsed, "porosity")
+        _dict_to_struct(PorosityConfig, parsed["porosity"], def.porosity)
+    else
+        def.porosity
+    end
     refr = if haskey(parsed, "refractory")
         _dict_to_struct(RefractoryConfig, parsed["refractory"], def.refractory)
     else
@@ -3205,6 +3397,7 @@ function load_config(source::AbstractString)::SimulationConfig
         hydrothermal=hydrotherm,
         accretion=acc,
         telescoping=tele,
+        porosity=poros,
         refractory=refr,
         volatile_mixture=volmix,
         atmosphere=atm,
@@ -3268,6 +3461,7 @@ function config_to_dict(cfg::SimulationConfig)::Dict{String,Any}
         "hydrothermal" => _struct_to_dict(cfg.hydrothermal),
         "accretion" => _struct_to_dict(cfg.accretion),
         "telescoping" => _struct_to_dict(cfg.telescoping),
+        "porosity" => _struct_to_dict(cfg.porosity),
         "refractory" => _struct_to_dict(cfg.refractory),
         "volatile_mixture" => _struct_to_dict(cfg.volatile_mixture),
         "atmosphere" => _struct_to_dict(cfg.atmosphere),

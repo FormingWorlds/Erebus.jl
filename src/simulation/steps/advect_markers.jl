@@ -4,6 +4,8 @@
     advect_markers!(state::SimulationState, coords::GridCoordinates, cfg::SimulationConfig; XWSSUM=nothing, WTPSUM=nothing)::Nothing
 
 Advect Lagrangian markers with 4th-order Runge-Kutta scheme and backtrace nodal pressures.
+Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the fluid
+pressure is backtraced along the solid velocities `vx`, `vy` instead of `vxf`, `vyf`.
 
 # Mutates:
 - `state.markers.core.phinewm`
@@ -83,8 +85,14 @@ function advect_markers!(
     # 5. Move markers with 4th-order Runge-Kutta scheme
     move_markers_rk4!(xm, ym, sxym, sxxm, vx, vy, wyx, marknum, dt; coords=coords)
 
-    # 6. Backtrack nodal total and fluid pressures
-    backtrace_pressures_rk4!(pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf, vyf, dt; coords=coords)
+    # 6. Backtrack nodal total and fluid pressures; without pore water (henke2012) the
+    # fluid pressure moves with the rock
+    pore_water = has_pore_water(markers)
+    vxf_bt = ifelse(pore_water, vxf, vx)
+    vyf_bt = ifelse(pore_water, vyf, vy)
+    backtrace_pressures_rk4!(
+        pr, pr0, ps, ps0, pf, pf0, vx, vy, vxf_bt, vyf_bt, dt; coords=coords
+    )
 
     return nothing
 end

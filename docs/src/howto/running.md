@@ -46,7 +46,12 @@ julia --project=. launch.jl configs/default.toml --show_timer
 
 ### Forcing Restart Configuration Overrides
 
-When you resume execution from a checkpoint with `--restart`, Erebus compares the current configuration against the configuration saved in the checkpoint. Differences in `[output]` settings and time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`) are allowed. Fundamental discretization properties (grid resolution `[grid]` and domain geometry `[geometry]`) are invariant across restarts and cannot be overridden. Other parameter differences raise a `CheckpointError` unless `--force-restart-config` is provided to allow the override:
+When you resume execution from a checkpoint with `--restart`, Erebus compares the current configuration against the configuration saved in the checkpoint.
+Differences in `[output]` settings and time progression settings (`time.n_steps`, `time.endtime`, `time.start_step`) are allowed.
+Differences in `solver.seed` and the plastic loop acceleration settings (`solver.anderson_depth`, `solver.plastic_stall_passes`) are allowed too.
+Fundamental discretization properties (grid resolution `[grid]` and domain geometry `[geometry]`) are invariant across restarts and cannot be overridden.
+The porosity model (`porosity.model`) cannot be overridden either, because a restart cannot add or drop the dry porosity marker arrays.
+Other parameter differences raise a `CheckpointError` unless `--force-restart-config` is provided to allow the override:
 
 ```bash
 julia --project=. launch.jl configs/default.toml --restart output/output_00010.jld2 --force-restart-config

@@ -47,7 +47,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `dtcoefup` | `Float64` | `1.2` | - | Factor to increase timestep on convergence | $> 1$ |
 | `dtstep` | `Int` | `200` | - | Steps between increasing timestep | $\ge 1$ |
 | `dxymax` | `Float64` | `0.05` | grid units | Maximum solid (marker) displacement per timestep | $\in (0, 1]$ |
-| `dxymax_fluid` | `Float64` | `0.15` | grid units | Maximum pore fluid displacement per timestep | $\in (0, 1]$ |
+| `dxymax_fluid` | `Float64` | `0.15` | grid units | Maximum pore fluid displacement per timestep; not used with `porosity.model = henke2012`, where the step takes `dxymax` | $\in (0, 1]$ |
 | `vpratio` | `Float64` | `0.333333333333` | - | Velocity weighting parameter | $\in [0, 1]$ |
 | `DTmax` | `Float64` | `20.0` | K | Maximum allowed temperature change per step | $> 0$ |
 | `yearlength` | `Float64` | `31557600.0` | s | Length of one Julian year ($365.25 \times 86400\text{ s}$) | $> 0$ |
@@ -78,7 +78,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `etaphikoef` | `Float64` | `1.0` | - | Bulk viscosity scaling factor | $> 0$ |
 | `etamin` | `Float64` | `1.0e+12` | Pa s | Lower shear viscosity cutoff | $> 0$ |
 | `etamax` | `Float64` | `1.0e+23` | Pa s | Upper shear viscosity cutoff | $\ge \text{etamin}$ |
-| `hydromech_solver` | `String` / `Symbol` | `"direct"` | - | Hydromechanical linear solver module | `"direct"`, `"iterative"`, `"matrix_free"` |
+| `hydromech_solver` | `String` / `Symbol` | `"direct"` | - | Hydromechanical linear solver module; `porosity.model = henke2012` needs `"direct"`, whose assembled system holds no water | `"direct"`, `"iterative"`, `"matrix_free"` |
 | `krylov_method` | `String` / `Symbol` | `"fgmres"` | - | Krylov iterative solver method | `"fgmres"`, `"gmres"`, `"bicgstab"` |
 | `krylov_rtol` | `Float64` | `1.0e-6` | - | Relative convergence tolerance for Krylov iterations | $> 0$ |
 | `krylov_atol` | `Float64` | `1.0e-10` | - | Absolute convergence tolerance for Krylov iterations | $\ge 0$ |
@@ -101,10 +101,10 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | Parameter | Type | Default | Units | Description | Bounds |
 |:---|:---|:---|:---|:---|:---|
 | `betasolid` | `Float64` | `2.5e-11` | $\text{Pa}^{-1}$ | Solid silicate matrix compressibility | $\ge 0$ |
-| `betafluid` | `Float64` | `4.0e-10` | $\text{Pa}^{-1}$ | Pore fluid compressibility | $\ge 0$ |
-| `phimin` | `Float64` | `1.0e-4` | - | Minimum porosity floor threshold | $0 < \phi_{\text{min}} < \phi_{\text{max}}$ |
+| `betafluid` | `Float64` | `4.0e-10` | $\text{Pa}^{-1}$ | Pore fluid compressibility; not used with `porosity.model = henke2012`, which holds no pore water | $\ge 0$ |
+| `phimin` | `Float64` | `1.0e-4` | - | Minimum porosity floor threshold; the water porosity of rock with `porosity.model = henke2012` | $0 < \phi_{\text{min}} < \phi_{\text{max}}$; at most `1e-3` with `porosity.model = henke2012` |
 | `phimax` | `Float64` | `0.9999` | - | Maximum porosity ceiling threshold | $\phi_{\text{min}} < \phi_{\text{max}} < 1$ |
-| `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false` |
+| `hydrofracture` | `Bool` | `false` | - | Enable dynamic hydrofracturing permeability enhancement | `true` / `false`; `false` with `porosity.model = henke2012` |
 | `kappa_frac` | `Float64` | `1.0e+3` | - | Dimensionless hydrofracture permeability multiplier | $\ge 0$ |
 | `gamma_frac` | `Float64` | `1.0` | - | Power-law exponent for overpressure scaling | $> 0$ |
 | `k_frac_max` | `Float64` | `1.0e-9` | $\text{m}^2$ | Maximum fractured permeability ceiling | $> 0$ |
@@ -168,7 +168,7 @@ Grid resolution and domain dimensions are configured per simulation run and cons
 | `frictsolidm` | `SVector{3}` | `[0.6, 0.6, 0.0]` | - | Compiled Constant / Telescoping | All $\ge 0$ | Internal friction coefficient |
 | `cohessolidm` | `SVector{3}` | `[1.0e8, 1.0e8, 1.0e8]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Cohesion |
 | `tenssolidm` | `SVector{3}` | `[6.0e7, 6.0e7, 6.0e7]` | Pa | Compiled Constant / Telescoping | All $> 0$ | Tensile strength |
-| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Compiled Constant / Telescoping | All $> 0$ | Reference permeability |
+| `kphim0` | `SVector{3}` | `[1.0e-13, 1.0e-13, 1.0e-17]` | $\text{m}^2$ | Compiled Constant / Telescoping | All $> 0$; with `porosity.model = henke2012` the Darcy resistance $\eta_f / k$ at `poroelasticity.phimin` must be finite for each material | Reference permeability; with `porosity.model = henke2012` it changes no velocity, pressure or temperature |
 | `tkm0` | `SVector{3}` | `[170.0, 170.0, 170.0]` | K | Compiled Constant / Telescoping | All $> 0$ | Initial temperature |
 | `XWsolidm_init` | `SVector{3}` | `[0.5, 0.5, NaN]` | - | Compiled Constant / Telescoping | All $\ge 0$ or `NaN` | Initial solid water fraction |
 
@@ -755,6 +755,45 @@ buffer_markers_per_cell = 16
 | `r_threshold_fraction` | `Float64` | `0.70` | - | Radius fraction of domain half-width triggering doubling | $\in (0, 1)$ |
 | `max_telescope_levels` | `Int` | `10` | - | Maximum permitted domain doubling levels | $\ge 1$ |
 | `buffer_markers_per_cell` | `Int` | `16` | - | Sticky-air markers injected per outer buffer cell | $\ge 1$ |
+
+---
+
+## `[porosity]`
+
+Dry rock porosity by cold pressing and hot sintering, after Henke et al. (2012) and Lichtenberg et al. (2016a).
+With `model = "none"` the porosity code of the other sections runs unchanged and no extra marker arrays exist.
+With `model = "henke2012"` every rock marker carries a dry porosity that cold pressing and hot sintering lower.
+This model needs dry rock and switches off the processes that need pore water, melt or metal, as in the example below.
+The equations, units and limits are on the page [Porosity: cold pressing and hot sintering](../explanations/porosity_sintering.md).
+
+```toml
+[reaction]
+active = false
+
+[materials]
+XWsolidm_init = [0.0, 0.0, nan]
+
+[porosity]
+model = "henke2012"
+phi_init = 0.75
+grain_radius = 1.0e-6
+phi_cap = 0.85
+T_sinter = 700.0
+A = 4.0e-5
+E_act = 85000.0
+n = 1.5
+```
+
+| Parameter | Type | Default | Units | Description | Bounds / Options |
+|:----------|:-----|:--------|:------|:------------|:-----------------|
+| `model` | `Symbol` | `:none` | - | Dry porosity model; `henke2012` needs `materials.XWsolidm_init = [0, 0, NaN]` and reaction, venting, hydrothermal, accretion, telescoping, volatiles, pyrolysis kinetics, magma transport, magma degassing, core formation, `hr_fe`, metal partitioning, redox, phase tracking, the volatile ice mixture and `poroelasticity.hydrofracture` off, `0 < poroelasticity.phimin <= 1e-3`, a finite Darcy resistance $\eta_f / k$ at `phimin` and `solver.hydromech_solver = "direct"`; the Stokes-Darcy solve then holds no water; a restart cannot change it | `:none`, `:henke2012` |
+| `phi_init` | `Float64` | `0.75` | - | Initial porosity of the rock powder before cold pressing | $\in [0, 1]$ |
+| `grain_radius` | `Float64` | `1.0e-6` | m | Initial grain radius $R_0$ of the sintering geometry | $> 0$ |
+| `phi_cap` | `Float64` | `0.85` | - | Upper cap of the porosity before sintering | $\in (0, 1)$ |
+| `T_sinter` | `Float64` | `700.0` | K | Temperature at and above which hot sintering acts | $> 0$ |
+| `A` | `Float64` | `4.0e-5` | $\text{cm}^3\,\text{bar}^{-n}\,\text{s}^{-1}$ | Prefactor of the creep law of the sintering rate | $\ge 0$ |
+| `E_act` | `Float64` | `85000.0` | cal/mol | Activation energy of the sintering rate | $\ge 0$ |
+| `n` | `Float64` | `1.5` | - | Stress exponent of the sintering rate | $> 0$ |
 
 ---
 

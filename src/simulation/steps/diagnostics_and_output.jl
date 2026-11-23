@@ -1,6 +1,38 @@
 # Diagnostics, streaming telemetry, checkpoint serialization, and progress reporting
 
 """
+    telemetry_porosity(markers::MarkerArrays, PHI::AbstractMatrix) -> (phi_max, phi_mean)
+
+Porosity of the `phi_max` and `phi_mean` columns of `telemetry.csv`. With pore water
+(`porosity.model = :none`) these are the maximum and the node mean of the water porosity
+`PHI` at the P nodes. Without it (`:henke2012`) they are the maximum and the marker mean
+of the dry porosity `phi_d` over the rock markers (`tm < 3`), since `PHI` stays at
+`poroelasticity.phimin` there.
+
+# Arguments
+- `markers`: marker arrays.
+- `PHI`: water porosity at the P nodes [-].
+
+# Returns
+- `(phi_max, phi_mean)` [-]; `(0.0, 0.0)` for `:henke2012` without rock markers.
+"""
+function telemetry_porosity(markers::MarkerArrays, PHI::AbstractMatrix)
+    has_pore_water(markers) && return (maximum(PHI), sum(PHI) / length(PHI))
+    phi_d = markers.groups.porosity.phi_d
+    tm = markers.core.tm
+    phi_max = 0.0
+    phi_sum = 0.0
+    n_rock = 0
+    @inbounds for m in eachindex(tm)
+        tm[m] < 3 || continue
+        phi_max = max(phi_max, phi_d[m])
+        phi_sum += phi_d[m]
+        n_rock += 1
+    end
+    return n_rock == 0 ? (0.0, 0.0) : (phi_max, phi_sum / n_rock)
+end
+
+"""
 Evaluate diagnostics, write telemetry rows, and serialize simulation checkpoints.
 
 $(SIGNATURES)
@@ -72,7 +104,7 @@ function advance_step_diagnostics!(
     if need_telemetry
         core_radius_current = state.accumulators.rcore
         tk2 = state.grids.tk2
-        PHI = state.grids.PHI
+        phi_max, phi_mean = telemetry_porosity(state.markers, state.grids.PHI)
         Fm = state.markers.Fm
         M_vent_all = (
             state.accumulators.M_vent_H2O_total +
@@ -89,8 +121,8 @@ function advance_step_diagnostics!(
             core_radius_current,
             maximum(tk2),
             sum(tk2) / length(tk2),
-            maximum(PHI),
-            sum(PHI) / length(PHI),
+            phi_max,
+            phi_mean,
             M_vent_all,
             state.accumulators.M_vent_H2O_total,
             state.accumulators.M_atm_total,

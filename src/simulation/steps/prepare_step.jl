@@ -161,6 +161,11 @@ function apply_surface_radiation!(
             phi=cfg.thermodynamics.phim0,
             kfluid=cfg.materials.kfluidm[2],
             tau_LW=tau_LW_val,
+            phi_dry_surface=if cfg.porosity.model === :henke2012
+                porosity_phi0(0.0, cfg.porosity.phi_init; phi_cap=cfg.porosity.phi_cap)
+            else
+                nothing
+            end,
         )
     end
     return nothing

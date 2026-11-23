@@ -112,11 +112,36 @@ struct AccretionGroup
     t_accreted::Vector{Float64}
 end
 
+"""
+Marker arrays for the dry rock porosity of the Henke et al. (2012) laws: porosity
+`phi_d` [-], porosity before sintering `phi0` [-] at the highest pressure the marker has
+felt before it sintered (fixed after that), maximum temperature `tkm_max` [K], and the
+cumulative porosity decrease by hot sintering `dphi_sinter` [-] (cold pressing does not
+count). A marker counts as sintered once `dphi_sinter` exceeds `DPHI_SINTERED` (1e-12).
+Once a marker that started to sinter at `phi_d == phi0` has sintered, `dphi_sinter`
+equals `phi0 - phi_d` to within `DPHI_SINTERED`; for a marker below its `phi0` at the onset
+of sintering (for example from `push_marker!`), `phi0 - phi_d` exceeds `dphi_sinter` by
+the gap `phi0 - phi_d` at the onset of sintering, after any cold pressing.
+"""
+struct PorosityGroup
+    phi_d::Vector{Float64}
+    phi0::Vector{Float64}
+    tkm_max::Vector{Float64}
+    dphi_sinter::Vector{Float64}
+end
+
 function Base.NamedTuple(
     g::T
 ) where {
     T<:Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 }
     return NamedTuple{fieldnames(T)}(Tuple(getfield(g, name) for name in fieldnames(T)))
@@ -125,7 +150,14 @@ end
 function Base.merge(
     a::NamedTuple,
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return merge(a, NamedTuple(g))
@@ -133,7 +165,14 @@ end
 
 function Base.keys(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return fieldnames(typeof(g))
@@ -141,7 +180,14 @@ end
 
 function Base.values(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
 )
     return Tuple(getfield(g, fn) for fn in fieldnames(typeof(g)))
@@ -149,7 +195,14 @@ end
 
 function Base.iterate(
     g::Union{
-        CoreGroup,MetalGroup,VolatilesGroup,RedoxGroup,HcnspoGroup,PhaseGroup,AccretionGroup
+        CoreGroup,
+        MetalGroup,
+        VolatilesGroup,
+        RedoxGroup,
+        HcnspoGroup,
+        PhaseGroup,
+        AccretionGroup,
+        PorosityGroup,
     },
     state...,
 )
@@ -165,6 +218,32 @@ struct MarkerArrays{G<:NamedTuple}
 end
 
 Base.length(m::MarkerArrays) = length(m.core.xm)
+
+"""
+    dry_porosity(m::MarkerArrays)
+
+Return the dry porosity array `phi_d` of the porosity group, or `nothing` when the
+group is absent (`porosity.model = :none`).
+"""
+function dry_porosity(m::MarkerArrays)
+    return haskey(m.groups, :porosity) ? m.groups.porosity.phi_d : nothing
+end
+
+"""
+    has_pore_water(m::MarkerArrays) -> Bool
+
+Return `false` when the dry porosity group exists (`porosity.model = :henke2012`), else
+`true`. With the group the pores hold no fluid: the water porosity of rock stays at
+`poroelasticity.phimin`, so the compaction rate `APHI`, its time step limit and the heat
+that pore water carries act on nothing.
+
+# Arguments
+- `m`: marker arrays.
+
+# Returns
+- `Bool`: `true` if the water porosity of rock evolves (model `:none`).
+"""
+has_pore_water(m::MarkerArrays) = !haskey(m.groups, :porosity)
 
 @inline function Base.getproperty(m::MarkerArrays, sym::Symbol)
     if sym === :core
@@ -247,6 +326,7 @@ end
     Base.resize!(m::MarkerArrays, new_len::Integer)
 
 Resize all vectors in core and active groups to `new_len`, zero-initializing grown elements.
+Grown `phi0` entries of the dry porosity group are 1 (no pressure history).
 """
 function Base.resize!(m::MarkerArrays, new_len::Integer)
     for fn in fieldnames(CoreGroup)
@@ -254,7 +334,12 @@ function Base.resize!(m::MarkerArrays, new_len::Integer)
     end
     for grp in values(m.groups)
         for fn in fieldnames(typeof(grp))
-            _resize_zero_init!(getfield(grp, fn), new_len)
+            v = getfield(grp, fn)
+            old_len = length(v)
+            _resize_zero_init!(v, new_len)
+            if grp isa PorosityGroup && fn === :phi0 && new_len > old_len
+                fill!(view(v, (old_len + 1):new_len), 1.0)
+            end
         end
     end
     return m
@@ -329,7 +414,8 @@ end
 """
     push_marker!(m::MarkerArrays; kwargs...)
 
-Append a single marker entry to core and present groups.
+Append a single marker entry to core and present groups. A field without a keyword gets
+0 (`tm` gets 1, `phi0` of the dry porosity group 1, no pressure history).
 """
 function push_marker!(m::MarkerArrays; kwargs...)
     kw_dict = Dict{Symbol,Any}(kwargs)
@@ -341,7 +427,7 @@ function push_marker!(m::MarkerArrays; kwargs...)
     for grp in values(m.groups)
         for fn in fieldnames(typeof(grp))
             vec = getfield(grp, fn)
-            val = get(kw_dict, fn, 0.0)
+            val = get(kw_dict, fn, grp isa PorosityGroup && fn === :phi0 ? 1.0 : 0.0)
             push!(vec, val)
         end
     end
@@ -555,6 +641,17 @@ function init_marker_arrays(
         if t_acc !== nothing
             push!(group_pairs, :accretion => AccretionGroup(t_acc))
         end
+    end
+
+    # Dry porosity group (values are set in the simulation setup); phi0 = 1 means no
+    # pressure history, as in push_marker! and resize!
+    if cfg.porosity.model === :henke2012
+        push!(
+            group_pairs,
+            :porosity => PorosityGroup(
+                zeros(marknum), ones(marknum), zeros(marknum), zeros(marknum)
+            ),
+        )
     end
 
     groups = NamedTuple(group_pairs)

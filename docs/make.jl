@@ -46,6 +46,7 @@ makedocs(;
             "Planetesimal Accretion Mechanics" => "explanations/accretion_mechanics.md",
             "Telescoping Domain Dynamics" => "explanations/telescoping_domain.md",
             "Magma Ascent & Matrix Compaction" => "explanations/magma_compaction.md",
+            "Porosity: Cold Pressing & Hot Sintering" => "explanations/porosity_sintering.md",
         ],
         "Validation" => [
             "Overview" => "validation/index.md",

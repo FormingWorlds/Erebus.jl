@@ -345,7 +345,7 @@ function solve_thermomechanical_iterations!(
             state.markers.core.xm,
             state.markers.core.ym,
             state.markers.core.tm,
-            state.grids.pf,
+            _marker_pressure_grid(state),
             state.grids.pr,
             length(state.markers);
             coords=coords,

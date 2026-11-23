@@ -174,6 +174,7 @@ mutable struct HydromechanicalLSEWorkspace
     rx_eff_prev::Matrix{Float64}
     ry_eff_prev::Matrix{Float64}
     pf_prev_iter::Matrix{Float64}
+    dry_nodes::Matrix{Bool}
 
     function HydromechanicalLSEWorkspace(
         Ny1::Integer, Nx1::Integer; dof_per_node::Integer=6
@@ -196,6 +197,7 @@ mutable struct HydromechanicalLSEWorkspace
             zeros(Float64, Ny1_val, Nx1_val),
             zeros(Float64, Ny1_val, Nx1_val),
             zeros(Float64, Ny1_val, Nx1_val),
+            zeros(Bool, Ny1_val, Nx1_val),
         )
     end
 end

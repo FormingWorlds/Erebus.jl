@@ -64,6 +64,37 @@ $(SIGNATURES)
 end
 
 """
+    _dry_node(dry_nodes, i, j) -> Bool
+
+Whether P node `(i, j)` holds dry material: `dry_nodes[i, j]`, or `false` for
+`dry_nodes = nothing` (a run with pore water).
+
+# Arguments
+- `dry_nodes`: P-node flags of dry material, or `nothing`.
+- `i`, `j`: P-node indices.
+
+# Returns
+- `Bool`.
+"""
+@inline _dry_node(dry_nodes, i, j) = dry_nodes !== nothing && @inbounds dry_nodes[i, j]
+
+"""
+    _dry_face(dry_nodes, i1, j1, i2, j2) -> Bool
+
+Whether the Darcy face between P nodes `(i1, j1)` and `(i2, j2)` is closed: one of the 2
+holds dry material, which carries no Darcy flux.
+
+# Arguments
+- `dry_nodes`: P-node flags of dry material, or `nothing`.
+- `i1`, `j1`, `i2`, `j2`: indices of the 2 P nodes of the face.
+
+# Returns
+- `Bool`.
+"""
+@inline _dry_face(dry_nodes, i1, j1, i2, j2) =
+    _dry_node(dry_nodes, i1, j1) || _dry_node(dry_nodes, i2, j2)
+
+"""
 Assemble hydromechanical system of equations.
 
 $(SIGNATURES)
@@ -99,6 +130,11 @@ $(SIGNATURES)
       (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
       needs `xcenter`, `ycenter`
     - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
+    - dry_nodes: P-node flags of dry material, or `nothing` with pore water
+      (`porosity.model = :henke2012` flags every node). A flagged node holds no water:
+      its solid continuity row has no compaction term and no fluid pressure, with the
+      drained compressibility `betasolid` (Biot-Willis coefficient 0); its fluid row is
+      `pf = pr`; and the Darcy faces next to it carry no flux (`qxD = 0`, `qyD = 0`)
 
 # Returns
 
@@ -182,6 +218,7 @@ function assemble_hydromechanical_lse!(
     fluid_overpressure_coupling::Bool=true,
     psurface::Real=psurface,
     workspace=nothing,
+    dry_nodes::Union{Nothing,AbstractMatrix{Bool}}=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -463,38 +500,44 @@ function assemble_hydromechanical_lse!(
                 updateindex!(L, +, mE/dx_val, kpm, kvx) # Vx₂
                 updateindex!(L, +, -mN/dy_val, kpm, kvy-6) # Vy₁
                 updateindex!(L, +, mS/dy_val, kpm, kvy) # Vy₂
-                # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
-                betadrained = compute_drained_compressibility(
-                    BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
-                )
-                kbw = compute_biot_willis_coefficient(betadrained, betasolid)
-                ksk = compute_skempton_coefficient(
-                    betadrained,
-                    PHI[i, j],
-                    betasolid,
-                    betafluid;
-                    phimin=phimin,
-                    phimax=phimax,
-                )
+                if _dry_node(dry_nodes, i, j)
+                    # Dry material holds no water: no compaction, drained compressibility βs
+                    updateindex!(L, +, Kcont * betasolid / dt, kpm, kpm)
+                    R[kpm] = betasolid * pr0[i, j] / dt + DMP[i, j]
+                else
+                    # Poroelastic continuity stencils based on simple3anpfl.m (Taras Gerya, pers. comm.)
+                    betadrained = compute_drained_compressibility(
+                        BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+                    )
+                    kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+                    ksk = compute_skempton_coefficient(
+                        betadrained,
+                        PHI[i, j],
+                        betasolid,
+                        betafluid;
+                        phimin=phimin,
+                        phimax=phimax,
+                    )
 
-                # LHS coefficient matrix
-                updateindex!(
-                    L,
-                    +,
-                    Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
-                    kpm,
-                    kpm,
-                ) # P: Ptotal
-                updateindex!(
-                    L,
-                    +,
-                    -Kcont *
-                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
-                    kpm,
-                    kpf,
-                ) # P: Pfluid
-                # RHS coefficient vector
-                R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+                    # LHS coefficient matrix
+                    updateindex!(
+                        L,
+                        +,
+                        Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
+                        kpm,
+                        kpm,
+                    ) # P: Ptotal
+                    updateindex!(
+                        L,
+                        +,
+                        -Kcont *
+                        (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                        kpm,
+                        kpf,
+                    ) # P: Pfluid
+                    # RHS coefficient vector
+                    R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+                end
             end # P equation
             # qxDarcy equation
             if i==1 || i==Ny1 || j==1 || j==Nx_val || j==Nx1
@@ -510,6 +553,9 @@ function assemble_hydromechanical_lse!(
                 if i==Ny1 && 1<j<Nx_val
                     updateindex!(L, +, bcfbottom, kqx, kqx-6)
                 end
+            elseif _dry_face(dry_nodes, i, j, i, j + 1)
+                # No Darcy flux next to dry material
+                updateindex!(L, +, 1.0, kqx, kqx)
             else
                 # x-Darcy flux internal stencil: (η_f/k_ϕx) * qxD + ∂P/∂x = ρ_f * gx
                 # See Stencil Topologies in docs/src/explanations/discretization_numerics.md
@@ -567,6 +613,8 @@ function assemble_hydromechanical_lse!(
                 if j==Nx1 && 1<i<Ny_val
                     updateindex!(L, +, bcfright, kqy, kqy-6*Ny1)
                 end
+            elseif _dry_face(dry_nodes, i, j, i + 1, j)
+                updateindex!(L, +, 1.0, kqy, kqy)
             else
                 # y-Darcy flux internal stencil: (η_f/k_ϕy) * qyD + ∂P/∂y = ρ_f * gy
                 # LHS coefficient matrix
@@ -625,6 +673,10 @@ function assemble_hydromechanical_lse!(
                 # Ptotal/Pfluid real pressure boundary condition 'anchor'
                 updateindex!(L, +, Kcont, kpf, kpf)
                 R[kpf] = psurface
+            elseif _dry_node(dry_nodes, i, j)
+                # Dry material: the fluid pressure is the total pressure
+                updateindex!(L, +, Kcont, kpf, kpf)
+                updateindex!(L, +, -Kcont, kpf, kpm)
             else
                 # Fluid continuity internal stencil: ∂qxD/∂x + ∂qyD/∂y - (Pt - Pf)/η_ϕ = 0
                 mW, mE, mN, mS = _continuity_face_weights(
@@ -911,6 +963,9 @@ from 6 to 4 unknowns per node: [vx_solid, vy_solid, P_total, P_fluid].
       (`flow_metric_face_weights`) and momentum rows with `tau_33` (`_add_spherical_momentum!`);
       needs `xcenter`, `ycenter`
     - S330: out-of-plane stress history at P nodes [Pa] for `spherical_flow`, or `nothing`
+    - dry_nodes: P-node flags of dry material, or `nothing`; rows
+      as in `assemble_hydromechanical_lse!`, and the eliminated Darcy flux of a face next
+      to a flagged node is 0
 
 # Raises
 
@@ -990,6 +1045,7 @@ function assemble_hydromechanical_4var_lse!(
     fluid_overpressure_coupling::Bool=true,
     psurface::Real=psurface,
     workspace=nothing,
+    dry_nodes::Union{Nothing,AbstractMatrix{Bool}}=nothing,
 )
     Ny1, Nx1 = size(ETAP)
     Nx_val = Nx1 - 1
@@ -1367,27 +1423,33 @@ function assemble_hydromechanical_4var_lse!(
                 updateindex!(L, +, -mN / dy_val, kpm, kvy - 4)
                 updateindex!(L, +, mS / dy_val, kpm, kvy)
 
-                betadrained = compute_drained_compressibility(
-                    BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
-                )
-                kbw = compute_biot_willis_coefficient(betadrained, betasolid)
+                if _dry_node(dry_nodes, i, j)
+                    # Dry material holds no water: no compaction, drained compressibility βs
+                    updateindex!(L, +, Kcont * betasolid / dt, kpm, kpm)
+                    R[kpm] = betasolid * pr0[i, j] / dt + DMP[i, j]
+                else
+                    betadrained = compute_drained_compressibility(
+                        BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
+                    )
+                    kbw = compute_biot_willis_coefficient(betadrained, betasolid)
 
-                updateindex!(
-                    L,
-                    +,
-                    Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
-                    kpm,
-                    kpm,
-                )
-                updateindex!(
-                    L,
-                    +,
-                    -Kcont *
-                    (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
-                    kpm,
-                    kpf,
-                )
-                R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+                    updateindex!(
+                        L,
+                        +,
+                        Kcont * (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained / dt),
+                        kpm,
+                        kpm,
+                    )
+                    updateindex!(
+                        L,
+                        +,
+                        -Kcont *
+                        (inv(ETAPHI[i, j]) / (1.0 - PHI[i, j]) + betadrained * kbw / dt),
+                        kpm,
+                        kpf,
+                    )
+                    R[kpm] = (betadrained * (pr0[i, j] - kbw * pf0[i, j]) / dt + DMP[i, j])
+                end
             end
 
             # P fluid equation (condensed with Darcy elimination)
@@ -1401,6 +1463,10 @@ function assemble_hydromechanical_4var_lse!(
             )
                 updateindex!(L, +, Kcont, kpf, kpf)
                 R[kpf] = psurface
+            elseif _dry_node(dry_nodes, i, j)
+                # Dry material: the fluid pressure is the total pressure
+                updateindex!(L, +, Kcont, kpf, kpf)
+                updateindex!(L, +, -Kcont, kpf, kpm)
             else
                 betadrained = compute_drained_compressibility(
                     BETAPHI[i, j], PHI[i, j], betasolid; phimin=phimin, phimax=phimax
@@ -1437,7 +1503,8 @@ function assemble_hydromechanical_4var_lse!(
                 )
 
                 # qxD divergence elimination: (qxD[i, j] - qxD[i, j-1]) / dx
-                if 1 < i < Ny1 && 1 < j < Nx_val
+                # A face next to dry material carries no Darcy flux
+                if 1 < i < Ny1 && 1 < j < Nx_val && !_dry_node(dry_nodes, i, j + 1)
                     rx2 = rx_eff_calc[i, j]
                     coeff_x2 = mE * (Kcont / (dx_val^2 * rx2))
                     diag_pf += coeff_x2
@@ -1445,7 +1512,7 @@ function assemble_hydromechanical_4var_lse!(
                     rhs_pf -= mE * ((RHOFX[i, j] * gx[i, j]) / (dx_val * rx2))
                 end
 
-                if 1 < i < Ny1 && 2 < j <= Nx_val
+                if 1 < i < Ny1 && 2 < j <= Nx_val && !_dry_node(dry_nodes, i, j - 1)
                     rx1 = rx_eff_calc[i, j - 1]
                     coeff_x1 = mW * (Kcont / (dx_val^2 * rx1))
                     diag_pf += coeff_x1
@@ -1454,7 +1521,7 @@ function assemble_hydromechanical_4var_lse!(
                 end
 
                 # qyD divergence elimination: (qyD[i, j] - qyD[i-1, j]) / dy
-                if 1 < j < Nx1 && 1 < i < Ny_val
+                if 1 < j < Nx1 && 1 < i < Ny_val && !_dry_node(dry_nodes, i + 1, j)
                     ry2 = ry_eff_calc[i, j]
                     coeff_y2 = mS * (Kcont / (dy_val^2 * ry2))
                     diag_pf += coeff_y2
@@ -1462,7 +1529,7 @@ function assemble_hydromechanical_4var_lse!(
                     rhs_pf -= mS * ((RHOFY[i, j] * gy[i, j]) / (dy_val * ry2))
                 end
 
-                if 1 < j < Nx1 && 2 < i <= Ny_val
+                if 1 < j < Nx1 && 2 < i <= Ny_val && !_dry_node(dry_nodes, i - 1, j)
                     ry1 = ry_eff_calc[i - 1, j]
                     coeff_y1 = mN * (Kcont / (dy_val^2 * ry1))
                     diag_pf += coeff_y1
@@ -1522,6 +1589,9 @@ end
 Reconstruct Darcy fluxes qxD and qyD from fluid pressure Pf and fluid body forces.
 
 $(SIGNATURES)
+
+The keyword `dry_nodes` takes the P-node flags of dry material or `nothing`; a face next to
+a flagged node keeps the flux 0, as in the assembly.
 """
 function reconstruct_darcy_fluxes!(
     qxD::AbstractMatrix{Float64},
@@ -1553,6 +1623,7 @@ function reconstruct_darcy_fluxes!(
     rx_floor_prefactor::Real=1.0e-5,
     rx_eff::Union{AbstractMatrix{<:Real},Nothing}=nothing,
     ry_eff::Union{AbstractMatrix{<:Real},Nothing}=nothing,
+    dry_nodes::Union{Nothing,AbstractMatrix{Bool}}=nothing,
 )
     Ny1, Nx1 = coords.Ny1, coords.Nx1
     dx_val = coords.dx
@@ -1567,7 +1638,8 @@ function reconstruct_darcy_fluxes!(
 
     @inbounds for j in 1:Nx1, i in 1:Ny1
         # Internal qxD nodes: 1 < i < Ny1 and 1 < j < Nx_val
-        if !(i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1)
+        if !(i == 1 || i == Ny1 || j == 1 || j == Nx_val || j == Nx1) &&
+            !_dry_face(dry_nodes, i, j, i, j + 1)
             rx_val = if rx_eff !== nothing
                 rx_eff[i, j]
             else
@@ -1608,7 +1680,8 @@ function reconstruct_darcy_fluxes!(
         end
 
         # Internal qyD nodes: 1 < j < Nx1 and 1 < i < Ny_val
-        if !(i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1)
+        if !(i == 1 || i == Ny_val || i == Ny1 || j == 1 || j == Nx1) &&
+            !_dry_face(dry_nodes, i, j, i + 1, j)
             ry_val = if ry_eff !== nothing
                 ry_eff[i, j]
             else

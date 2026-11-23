@@ -23,12 +23,30 @@ $(SIGNATURES)
 All P-node arrays and `RX`, `RY`, `qxD`, `qyD` must have the size of `HS`, and `ETA`,
 `SXY` one row and column less; otherwise an `ArgumentError` is thrown.
 
+With `pore_water = false` (keyword, `has_pore_water` of the markers false under
+`porosity.model = :henke2012`) the compaction term `(pr - pf)^2` and the Darcy terms
+`RX qxD^2`, `RY qyD^2` are left out: no pore water flows, so only the solid terms heat.
+
 # Returns
 
     - nothing
 """
 function compute_shear_heating!(
-    HS, ETA, SXY, ETAP, SXX, RX, RY, qxD, qyD, PHI, ETAPHI, pr, pf; S33=nothing
+    HS,
+    ETA,
+    SXY,
+    ETAP,
+    SXX,
+    RX,
+    RY,
+    qxD,
+    qyD,
+    PHI,
+    ETAPHI,
+    pr,
+    pf;
+    S33=nothing,
+    pore_water::Bool=true,
 )
     Ny1, Nx1 = size(HS)
     for (name, A) in (
@@ -63,14 +81,19 @@ function compute_shear_heating!(
         rx_j = RX[i, j]
         ry_im1 = RY[i - 1, j]
         ry_i = RY[i, j]
-        # compute shear heating HS
-        @inbounds HS[i, j] = (
-            SXX[i, j]^2 / ETAP[i, j] +
-            SXYEXY +
-            (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j] +
-            0.5 * (rx_jm1*qxD[i, j - 1]^2 + rx_j*qxD[i, j]^2) +
-            0.5 * (ry_im1*qyD[i - 1, j]^2 + ry_i*qyD[i, j]^2)
-        )
+        # compute shear heating HS; the compaction and Darcy terms need pore water
+        @inbounds begin
+            hs = SXX[i, j]^2 / ETAP[i, j] + SXYEXY
+            if pore_water
+                hs = (
+                    hs +
+                    (pr[i, j]-pf[i, j])^2 / (1-PHI[i, j]) / ETAPHI[i, j] +
+                    0.5 * (rx_jm1*qxD[i, j - 1]^2 + rx_j*qxD[i, j]^2) +
+                    0.5 * (ry_im1*qyD[i - 1, j]^2 + ry_i*qyD[i, j]^2)
+                )
+            end
+            HS[i, j] = hs
+        end
         # Out-of-plane stress of the spherical slice: (3/4) S33^2 / eta.
         S33 === nothing || (HS[i, j] += 0.75 * S33[i, j]^2 / ETAP[i, j])
     end
@@ -95,6 +118,9 @@ $(SIGNATURES)
     - vyf: fluid vy-velocity at Vy nodes
     - ps: solid pressure at P nodes
     - pf: fluid pressure at P nodes
+    - pore_water: keyword, `has_pore_water` of the markers. With `false`
+      (`porosity.model = :henke2012`) the fluid term ϕTαᶠ⋅DPᶠ/Dt is 0: no pore water
+      moves with `vxf`, `vyf`.
 
 # Returns
 
@@ -113,6 +139,7 @@ function compute_adiabatic_heating!(
     ps,
     pf;
     coords::GridCoordinates=default_grid_coordinates(),
+    pore_water::Bool=true,
 )
     Ny1, Nx1 = size(HA)
     Nx = Nx1 - 1
@@ -155,9 +182,11 @@ function compute_adiabatic_heating!(
             end
             dpfdt = VXFP*dpfdx + VYFP*dpfdy
             # Hₐ = (1-ϕ)Tαˢ⋅DPˢ/Dt + ϕTαᶠ⋅DPᶠ/Dt (eq. 9.23)
-            HA[i, j] = (
+            HA[i, j] = ifelse(
+                pore_water,
                 (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt +
-                PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt
+                PHI[i, j] * tk1[i, j] * ALPHAF[i, j] * dpfdt,
+                (1-PHI[i, j]) * tk1[i, j] * ALPHA[i, j] * dpsdt,
             )
         end
     end # @inbounds

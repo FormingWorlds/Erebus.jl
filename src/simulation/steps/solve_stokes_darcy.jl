@@ -5,6 +5,13 @@ Assemble and solve the coupled Stokes-Darcy linear system of equations.
 
 $(SIGNATURES)
 
+Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) every P node,
+of rock and of sticky air, is flagged in `ws.hydromech.dry_nodes` and holds no water in the
+system: its solid continuity row has no compaction term and no fluid pressure, with the
+drained compressibility `betasolid`; its fluid row is `pf = pr`; and no Darcy flux
+crosses its faces. The water porosity, permeability and compressibility then change no
+velocity and no pressure.
+
 # Raises
 - `ArgumentError` if `cfg.geometry.spherical_flow = true` with a solver, metric or MPI
   setting that `_validate_spherical_flow` refuses.
@@ -20,6 +27,7 @@ function assemble_and_solve_hydromechanical!(
     cur_betafluid::Float64,
 )
     _validate_spherical_flow(cfg)
+    dry_nodes = _dry_p_nodes!(ws, state)
     recompute_bulk_viscosity!(
         state.grids.ETA,
         state.grids.ETAP,
@@ -106,6 +114,7 @@ function assemble_and_solve_hydromechanical!(
             fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
             psurface=cfg.geometry.psurface,
             workspace=ws.hydromech,
+            dry_nodes=dry_nodes,
         )
     else
         L = assemble_hydromechanical_lse!(
@@ -180,6 +189,7 @@ function assemble_and_solve_hydromechanical!(
             fluid_overpressure_coupling=cfg.reaction.fluid_overpressure_coupling,
             psurface=cfg.geometry.psurface,
             workspace=ws.hydromech,
+            dry_nodes=dry_nodes,
         )
     end
 
@@ -263,6 +273,25 @@ function assemble_and_solve_hydromechanical!(
     end
 
     return nothing
+end
+
+"""
+    _dry_p_nodes!(ws, state) -> Union{Nothing,Matrix{Bool}}
+
+P-node flags of dry material for the Stokes-Darcy assembly (keyword `dry_nodes`):
+`nothing` with pore water; without it (`porosity.model = :henke2012`) no material holds
+water, rock and sticky air alike, so `ws.hydromech.dry_nodes` is set to `true` everywhere.
+
+# Arguments
+- `ws`: simulation workspaces, hold the flags.
+- `state`: simulation state with the markers.
+
+# Returns
+- `nothing` or the flags `ws.hydromech.dry_nodes`.
+"""
+function _dry_p_nodes!(ws::SimulationWorkspaces, state)
+    has_pore_water(state.markers) && return nothing
+    return fill!(ws.hydromech.dry_nodes, true)
 end
 
 """
@@ -379,6 +408,7 @@ function _unpack_hydromechanical_solution!(
             rx_floor_prefactor=cfg.poroelasticity.rx_floor_prefactor,
             rx_eff=ws.hydromech.rx_eff,
             ry_eff=ws.hydromech.ry_eff,
+            dry_nodes=has_pore_water(state.markers) ? nothing : ws.hydromech.dry_nodes,
         )
     else
         process_hydromechanical_solution!(
@@ -386,6 +416,23 @@ function _unpack_hydromechanical_solution!(
         )
     end
     return nothing
+end
+
+"""
+    _marker_pressure_grid(state)
+
+Grid pressure that `update_marker_pressures!` reads as the fluid pressure of the markers.
+With the dry porosity group (`porosity.model = henke2012`) the pores hold no fluid, so
+the markers take the total pressure `grids.pr`; otherwise the fluid pressure `grids.pf`.
+
+# Arguments
+- `state`: Simulation state with the marker groups and the pressure grids.
+
+# Returns
+- `Matrix{Float64}`: `state.grids.pr` or `state.grids.pf` [Pa].
+"""
+function _marker_pressure_grid(state::SimulationState)
+    return haskey(state.markers.groups, :porosity) ? state.grids.pr : state.grids.pf
 end
 
 """
@@ -448,9 +495,45 @@ function update_marker_pressures!(
 end
 
 """
+    _cell_fractured(g, i, j, pore_water) -> Bool
+
+Whether the basic cell `(i, j)` is hydrofractured: its effective pressure, the mean of
+`pr - pf` over its 4 P nodes, is at or below minus the tensile strength `TEN`
+(`is_hydrofracture_breached`). Without pore water (`porosity.model = :henke2012`) no fluid
+drives a fracture, so the cell is never fractured.
+
+# Arguments
+- `g`: grids with `pr`, `pf` [Pa] at the P nodes and `TEN` [Pa] at the basic nodes.
+- `i`, `j`: row and column of the basic cell.
+- `pore_water`: `has_pore_water` of the markers.
+
+# Returns
+- `Bool`: `true` for a fractured cell.
+"""
+function _cell_fractured(g, i::Int, j::Int, pore_water::Bool)
+    pore_water || return false
+    peff_c =
+        0.25 * (
+            g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] - g.pf[i, j] -
+            g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
+        )
+    return is_hydrofracture_breached(peff_c, g.TEN[i, j])
+end
+
+"""
 Postprocess hydromechanical solution, adapt timestep, and check plastic convergence.
 
 $(SIGNATURES)
+
+Without pore water (`has_pore_water` false, `porosity.model = :henke2012`) the solve holds
+no water (`assemble_and_solve_hydromechanical!`): `pf = pr` and the Darcy fluxes are 0.
+The compaction rate `APHI` is still computed on the grid, but it moves no marker. The
+time step then has no `aphimax` and no fluid heat limit,
+its fluid displacement limit takes the solid velocities `vx`, `vy` instead of `vxf`,
+`vyf` and the solid limit `time.dxymax` instead of `time.dxymax_fluid`, and the returned
+`aphimax` (telemetry `dt_aphimax_max`) is 0. The plastic yield
+check takes the pore pressure `geometry.psurface` instead of `pf`, and no cell is
+fractured (`_cell_fractured`).
 """
 function postprocess_hydromechanical_solution!(
     state::SimulationState,
@@ -490,19 +573,24 @@ function postprocess_hydromechanical_solution!(
     fluid_heat_rate = fluid_advection_inflow_rate(
         g.tk1, g.qxD, g.qyD, g.RHOCP, fluid_heat_capacity(cfg); coords=coords
     )
+    # Without pore water (henke2012) APHI, the pore-water heat and the Darcy velocity
+    # change no marker, so none of them limits the time step
+    pore_water = has_pore_water(state.markers)
+    pore_water || (aphimax = 0.0)
+    pore_water || (fluid_heat_rate = 0.0)
 
     dt_solve = state.dt
     maxDTcurrent = maximum(abs, g.DT0)
     state.dt = compute_adaptive_timestep(
         g.vx,
         g.vy,
-        g.vxf,
-        g.vyf,
+        ifelse(pore_water, g.vxf, g.vx),
+        ifelse(pore_water, g.vyf, g.vy),
         state.dt,
         aphimax;
         coords=coords,
         dxymax_val=cfg.time.dxymax,
-        dxymax_fluid_val=cfg.time.dxymax_fluid,
+        dxymax_fluid_val=ifelse(pore_water, cfg.time.dxymax_fluid, cfg.time.dxymax),
         fluid_heat_rate=fluid_heat_rate,
         dphimax_val=cfg.solver.dphimax,
         dt_ref=dt_step_initial,
@@ -539,12 +627,7 @@ function postprocess_hydromechanical_solution!(
 
     n_flips_iter = 0
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c =
-            0.25 * (
-                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-            )
-        is_breached = is_hydrofracture_breached(peff_c, g.TEN[i, j])
+        is_breached = _cell_fractured(g, i, j, pore_water)
         if is_breached != ws.fractured_cells_prev[i, j]
             n_flips_iter += 1
         end
@@ -600,6 +683,7 @@ function postprocess_hydromechanical_solution!(
         S_vent=cfg.venting.active ? g.S_vent_grid : nothing,
     )
     symmetrize_p_node_observables!(g.SXX, g.APHI, g.PHI, g.pr, g.pf, g.ps)
+    pore_water || (aphimax = 0.0)
 
     adjustment_ok = compute_nodal_adjustment!(
         g.ETA,
@@ -620,6 +704,7 @@ function postprocess_hydromechanical_solution!(
         state.dt,
         iplast;
         S33=sph ? g.S33 : nothing,
+        pore_pressure=ifelse(pore_water, nothing, cfg.geometry.psurface),
         etawt=cfg.solver.etawt,
         etamax=cfg.solver.etamax,
         etamin=cfg.solver.etamin,
@@ -647,26 +732,31 @@ function postprocess_hydromechanical_solution!(
 end
 
 """
-    _plastic_cycle_fields(g, cfg, ws) -> (fields, scaled)
+    _plastic_cycle_fields(g, cfg, ws; pore_water=true) -> (fields, scaled)
 
 State carried from one plastic pass to the next, for [`plastic_cycle_record!`](@ref).
 `fields` holds the arrays tested node by node: viscosity `g.ETA`, the yield flags `g.YNY`
-that the next pass reads, and the effective Darcy resistances when hydrofracture is on. `scaled` holds the solution unpacked on the grid,
-each array tested against its own scale: `g.vx`, `g.vy`, `g.pr`, `g.pf`, `g.qxD`, `g.qyD`.
+that the next pass reads, and the effective Darcy resistances when hydrofracture is on.
+`scaled` holds the solution unpacked on the grid, each array tested against its own
+scale: `g.vx`, `g.vy`, `g.pr`, and with pore water `g.pf`, `g.qxD`, `g.qyD`.
 
 # Arguments
 
     - g: grid fields of the simulation state
     - cfg: simulation configuration
     - ws: simulation workspaces
+    - pore_water: keyword, `has_pore_water` of the markers; without pore water the
+      fluid pressure and the Darcy fluxes are left out
 
 # Returns
 
     - the tuples `(fields, scaled)` of tracked arrays
 """
-function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
+function _plastic_cycle_fields(
+    g, cfg::SimulationConfig, ws::SimulationWorkspaces; pore_water::Bool=true
+)
     hm = ws.hydromech
-    scaled = (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD)
+    scaled = pore_water ? (g.vx, g.vy, g.pr, g.pf, g.qxD, g.qyD) : (g.vx, g.vy, g.pr)
     if cfg.poroelasticity.hydrofracture && hm.rx_eff !== nothing && hm.ry_eff !== nothing
         return ((g.ETA, g.YNY, hm.rx_eff, hm.ry_eff), scaled)
     end
@@ -674,7 +764,7 @@ function _plastic_cycle_fields(g, cfg::SimulationConfig, ws::SimulationWorkspace
 end
 
 """
-    _start_plastic_cycle!(g, cfg, ws) -> (fields, scaled)
+    _start_plastic_cycle!(g, cfg, ws; pore_water=true) -> (fields, scaled)
 
 Reset `ws.plastic_cycle` before the first plastic pass and return the tracked arrays of
 [`_plastic_cycle_fields`](@ref); the ring holds no values when the cycle stop is off.
@@ -684,13 +774,16 @@ Reset `ws.plastic_cycle` before the first plastic pass and return the tracked ar
     - g: grid fields of the simulation state
     - cfg: simulation configuration
     - ws: simulation workspaces, holds the tracker
+    - pore_water: keyword, `has_pore_water` of the markers
 
 # Returns
 
     - the tuples `(fields, scaled)` of tracked arrays
 """
-function _start_plastic_cycle!(g, cfg::SimulationConfig, ws::SimulationWorkspaces)
-    tracked = _plastic_cycle_fields(g, cfg, ws)
+function _start_plastic_cycle!(
+    g, cfg::SimulationConfig, ws::SimulationWorkspaces; pore_water::Bool=true
+)
+    tracked = _plastic_cycle_fields(g, cfg, ws; pore_water=pore_water)
     reset_plastic_cycle!(ws.plastic_cycle, tracked..., cfg.solver.plastic_cycle_window)
     return tracked
 end
@@ -826,28 +919,36 @@ function _anderson_unpack!(g, v::Vector{Float64}, cfg::SimulationConfig)
 end
 
 """
-    _anderson_weights!(w, g) -> w
+    _anderson_weights!(w, g; pore_water=true) -> w
 
 Least-squares weights of the packed state: `1 / max(RMS, 1)` of `pr` and of `pf` over the
 interior P-nodes (Pa), 0 on the ghost P-nodes, 1 on the viscosity ratio; 1 for a pressure
-field that is not finite, so the mixing step falls back to the plain pass.
+field that is not finite, so the mixing step falls back to the plain pass. Without pore
+water `pf` has weight 0: its residual steers no mixing step.
 
 # Arguments
 
     - w: weights, overwritten
     - g: grid fields
+    - pore_water: keyword, `has_pore_water` of the markers
 
 # Returns
 
     - w
 """
-function _anderson_weights!(w::Vector{Float64}, g)
+function _anderson_weights!(w::Vector{Float64}, g; pore_water::Bool=true)
     off = 0
-    for P in (g.pr, g.pf)
+    for (P, weighed) in ((g.pr, true), (g.pf, pore_water))
         Ny1, Nx1 = size(P)
         inner = view(P, 2:(Ny1 - 1), 2:(Nx1 - 1))
         rms = norm(inner) / sqrt(max(length(inner), 1))
-        wt = isfinite(rms) ? 1.0 / max(rms, 1.0) : 1.0
+        wt = if !weighed
+            0.0
+        elseif isfinite(rms)
+            1.0 / max(rms, 1.0)
+        else
+            1.0
+        end
         for j in 1:Nx1, i in 1:Ny1
             w[off + (j - 1) * Ny1 + i] = (1 < i < Ny1 && 1 < j < Nx1) ? wt : 0.0
         end
@@ -894,7 +995,7 @@ function _plastic_pass_stop!(ws::SimulationWorkspaces, tracked, state, cfg, ipla
     Y = ws.YERRNOD[iplast]
     anderson_stall_record!(h, Y, state.dt, cfg.solver.plastic_stall_passes) && return true
     if !h.wset
-        _anderson_weights!(h.w, g)
+        _anderson_weights!(h.w, g; pore_water=has_pore_water(state.markers))
         h.wset = true
     end
     anderson_mix!(h.xn, h.x, h.g, h, h.w)
@@ -931,13 +1032,9 @@ function solve_stokes_darcy!(
     ws.hydromech.rx_eff_prev .= g.RX
     ws.hydromech.ry_eff_prev .= g.RY
 
+    pore_water = has_pore_water(state.markers)
     for j in 1:coords.Nx, i in 1:coords.Ny
-        peff_c =
-            0.25 * (
-                g.pr[i, j] + g.pr[i + 1, j] + g.pr[i, j + 1] + g.pr[i + 1, j + 1] -
-                g.pf[i, j] - g.pf[i + 1, j] - g.pf[i, j + 1] - g.pf[i + 1, j + 1]
-            )
-        ws.fractured_cells_prev[i, j] = is_hydrofracture_breached(peff_c, g.TEN[i, j])
+        ws.fractured_cells_prev[i, j] = _cell_fractured(g, i, j, pore_water)
     end
 
     dt_aphimax_step_max = 0.0
@@ -946,7 +1043,7 @@ function solve_stokes_darcy!(
     plastic_converged = false
     max_plastic_iterations_val = cfg.solver.max_plastic_iterations
     n_plastic_passes = 0
-    cycle_fields = _start_plastic_cycle!(g, cfg, ws)
+    cycle_fields = _start_plastic_cycle!(g, cfg, ws; pore_water=pore_water)
     _start_anderson!(ws, state, cfg)
 
     for iplast in 1:max_plastic_iterations_val
@@ -1005,7 +1102,7 @@ function solve_stokes_darcy!(
             state.markers.core.xm,
             state.markers.core.ym,
             state.markers.core.tm,
-            g.pf,
+            _marker_pressure_grid(state),
             g.pr,
             length(state.markers);
             coords=coords,

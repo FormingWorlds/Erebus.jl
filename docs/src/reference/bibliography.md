@@ -328,6 +328,32 @@ The mathematical foundations, constitutive formulations, and numerical technique
   [https://doi.org/10.1016/j.camwa.2018.07.033](https://doi.org/10.1016/j.camwa.2018.07.033)  
   *Anderson acceleration of coupled flow and mechanics iterations, including non-contractive fixed-point maps.*
 
+---
+
+## Porosity, Cold Pressing, and Sintering
+
+- **Güttler, C., Krause, M., Geretshauser, R. J., Speith, R., & Blum, J. (2009)**. The physics of protoplanetesimal dust agglomerates. IV. Toward a dynamical collision model. *The Astrophysical Journal*, 701(1), 130-141.  
+  [https://doi.org/10.1088/0004-637X/701/1/130](https://doi.org/10.1088/0004-637X/701/1/130)  
+  *Static compression of fine dust powders; the relation between pressure and filling factor that Henke et al. (2012) use as their Eq. 15.*
+
+- **Henke, S., Gail, H.-P., Trieloff, M., Schwarz, W. H., & Kleine, T. (2012)**. Thermal evolution and sintering of chondritic planetesimals. *Astronomy & Astrophysics*, 537, A45.  
+  [https://doi.org/10.1051/0004-6361/201117177](https://doi.org/10.1051/0004-6361/201117177)  
+  *Cold pressing law (the laboratory fit of Güttler et al. 2009), grain contact geometry (after Kakar & Chaklader 1967), contact stress, hot sintering rate (olivine creep data of Schwenn & Goetze 1978), and porous conductivity fits.*
+
+- **Kakar, A. K., & Chaklader, A. C. D. (1967)**. Deformation theory of hot-pressing. *Journal of Applied Physics*, 38(8), 3223-3230.  
+  [https://doi.org/10.1063/1.1710093](https://doi.org/10.1063/1.1710093)  
+  *Deformation theory of hot pressing; its contact geometry (a cap cut off each grain at each contact) is the basis of Eqs. 34 to 37 of Henke et al. (2012).*
+
+- **Lichtenberg, T., Golabek, G. J., Gerya, T. V., & Meyer, M. R. (2016a)**. The effects of short-lived radionuclides and porosity on the early thermo-mechanical evolution of planetesimals. *Icarus*, 274, 350-365.  
+  [https://doi.org/10.1016/j.icarus.2016.03.004](https://doi.org/10.1016/j.icarus.2016.03.004)  
+  *Porosity laws in 2-D and 3-D planetesimal models: cold pressing, sintering above 700 K, porous density and 3-branch conductivity.*
+
+- **Schwenn, M. B., & Goetze, C. (1978)**. Creep of olivine during hot-pressing. *Tectonophysics*, 48(1), 41-60.  
+  [https://doi.org/10.1016/0040-1951(78)90085-9](https://doi.org/10.1016/0040-1951(78)90085-9)  
+  *Hot pressing experiments on olivine; the creep constants of the sintering rate in Henke et al. (2012).*
+
+---
+
 ## Spherical Geometry in 2-D Models
 
 - **Hernlund, J. W., & Tackley, P. J. (2008)**. Modeling mantle convection in the spherical annulus. *Physics of the Earth and Planetary Interiors*, 171, 48-54.  
