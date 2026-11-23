@@ -23,6 +23,7 @@ Each case on a page has the same layout:
 | [Spherical Compaction](spherical_compaction.md) | The compaction term of the solid and the fluid continuity rows, their spherical face weights, a vented rate equal to the rate that compaction squeezes out | Exact compaction-length profile of the effective pressure and the solid velocity in a sphere and a disk |
 | [Spherical Pressure Diffusion](spherical_pressure_diffusion.md) | The poroelastic storage terms of the solid and the fluid continuity rows over 20 time steps, the spherical face weights of the fluid row | Backward-Euler series of pore pressure diffusion in a rigid sphere and disk with a vented surface |
 | [Spherical Momentum](spherical_momentum.md) | How the flow of the solid changes in a slice of a sphere: the weights on the stress, the out-of-plane stress $S_{33}$ and its hoop term, the volumetric trace of the stress, and the stored `S33`, `EII`, `SII` and heating | Exact shear flow around the centre with and without `spherical_flow`, a manufactured flow towards and away from the centre for the momentum equation of the spherical annulus, and a radial compaction flow of a compressible rock for the 3-D equations of a sphere |
+| [Porous Shell](porous_shell.md) | The dry porosity model in the time loop: cold pressing, sintering, the porous conductivity and heat, and the depth of the porous shell | Independent 1-D finite-volume model of a sphere with the same laws, at the same time step |
 
 ## How the results are stored
 
