@@ -122,6 +122,27 @@ const REQUIRED_CONFIG_KEYS = Dict{String,NTuple{N,String} where N}(
         "spherical_metric",
         "darcy_elimination",
     ),
+    "porous_shell" => (
+        "Nx",
+        "Nr_reference",
+        "n_steps",
+        "dt_yr",
+        "t_form_yr",
+        "phi_init",
+        "porosity_model",
+        "R_planet_m",
+        "L_box_m",
+        "ratio_al",
+        "k_rock_W_mK",
+        "k_air_W_mK",
+        "rhocp_rock_J_m3K",
+        "rhocp_air_J_m3K",
+        "T_space_K",
+        "shell_dphi",
+        "shell_depth_rel_bound",
+        "seed",
+        "spherical_metric",
+    ),
 )
 
 const REQUIRED_METRIC_KEYS = (

@@ -8,6 +8,10 @@ module PorousShellValidation
 using Erebus
 using StaticArrays
 using Logging
+using SHA
+using TOML
+
+include(joinpath(@__DIR__, "..", "tools", "validation_records.jl"))
 
 const YEARLENGTH_S = 31_557_600.0
 const T_HALF_AL_S = 717_000.0 * 31_540_000.0
@@ -479,19 +483,85 @@ function radial_bin_medians(
 end
 
 """
+    thermal_step_energy_residual(g, dt, dx, dy)
+
+Return the relative residual of the energy identity of the last thermal step held in the
+grid fields `g`. Over the interior P nodes the stored heat is
+`sum(RHOCP (tk2 - tk1)) dx dy` and the heat from the sources is `dt sum(Q) dx dy`, with
+`Q = HR + HA + HS + DHP + Q_metric + Q_lat_grid + Q_seg_grid + Q_fluid_grid`, the terms of
+the right-hand side of `assemble_thermal_lse!`. The boundary nodes copy their neighbour
+(zero flux), so the conduction terms cancel in the sum and the 2 heats agree. The scale is
+`sum(abs(RHOCP (tk2 - tk1))) dx dy + dt sum(abs(Q)) dx dy`: an air node with a large
+`RHOCP` changes the stored heat of a node by more than the whole planet, so a scale from
+the sums alone would cancel.
+
+Parameters
+----------
+g : Grids or NamedTuple
+    Grid fields after a thermal solve: `tk1`, `tk2` [K], `RHOCP` [J/(m^3 K)], `HR`, `HA`,
+    `HS`, `DHP`, `Q_metric` (or `nothing`), `Q_lat_grid`, `Q_seg_grid`, `Q_fluid_grid`
+    [W/m^3].
+dt : Float64
+    Time step of the thermal solve [s].
+dx, dy : Float64
+    Grid spacing [m].
+
+Returns
+-------
+Float64
+    `abs(stored - source) / scale`, dimensionless.
+
+Raises
+------
+ArgumentError
+    If the scale is not positive and finite (no temperature change and no heat).
+"""
+function thermal_step_energy_residual(g, dt::Float64, dx::Float64, dy::Float64)
+    Ny1, Nx1 = size(g.tk1)
+    stored = source = stored_abs = source_abs = 0.0
+    for j in 2:(Nx1 - 1), i in 2:(Ny1 - 1)
+        de = g.RHOCP[i, j] * (g.tk2[i, j] - g.tk1[i, j])
+        q =
+            g.HR[i, j] +
+            g.HA[i, j] +
+            g.HS[i, j] +
+            g.DHP[i, j] +
+            (g.Q_metric === nothing ? 0.0 : g.Q_metric[i, j]) +
+            g.Q_lat_grid[i, j] +
+            g.Q_seg_grid[i, j] +
+            g.Q_fluid_grid[i, j]
+        stored += de
+        source += q
+        stored_abs += abs(de)
+        source_abs += abs(q)
+    end
+    scale = (stored_abs + dt * source_abs) * dx * dy
+    (isfinite(scale) && scale > 0.0) ||
+        throw(ArgumentError("the energy scale must be positive and finite, got $scale"))
+    return abs(stored - dt * source) * dx * dy / scale
+end
+
+"""
     run_porous_shell_case(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air=nothing,
-                          seed=42, Nr=2000) -> NamedTuple
+                          seed=42, Nr=2000, reference=nothing) -> NamedTuple
 
 Run the Erebus case and the 1-D reference with the same time step and number of steps,
 and compare them. The shell depth of Erebus is `Erebus.porous_shell_depth` with radial
 bins of half a cell. The profiles of the maximum temperature and of the porosity are
 medians of the rock markers in radial bins of half a cell, compared with the 1-D cell at
-the bin centre.
+the bin centre. The energy residual is `thermal_step_energy_residual` of the last step.
+
+`reference` is a `solve_porous_sphere` result of the same case (`stop_cold = false`),
+or `nothing` to compute it here with `Nr` cells.
 
 Returns `(; dx, d_shell, d_shell_q25, d_shell_q75, d_shell_ref, d_shell_error_cells,
-tmax_rel_l2, phi_rms, T_peak, T_peak_ref, r, tmax, tmax_ref, phi, phi_ref, reference)`:
-depths [m], the relative L2 norm of `T_max - T_SPACE`, the rms porosity difference [-],
-peak temperatures [K], the binned profiles and the full 1-D result.
+tmax_rel_l2, phi_rms, T_peak, T_peak_ref, energy_lse_residual, r, tmax, tmax_ref, phi,
+phi_ref, reference)`: depths [m], the relative L2 norm of `T_max - T_SPACE`, the rms
+porosity difference [-], peak temperatures [K], the relative energy residual of the last
+thermal step [-], the binned profiles and the full 1-D result.
+
+Raises `DomainError` for the arguments that `make_porous_shell_config` rejects, and an
+`ErrorException` when the time step of the last step differs from `dt_yr`.
 """
 function run_porous_shell_case(;
     Nx::Int,
@@ -502,6 +572,7 @@ function run_porous_shell_case(;
     k_air::Union{Nothing,Float64}=nothing,
     seed::Int=SEED_DEFAULT,
     Nr::Int=2000,
+    reference=nothing,
 )
     cfg = make_porous_shell_config(; Nx, phi_init, t_form_yr, n_steps, dt_yr, k_air, seed)
     st = mktempdir() do tmpdir
@@ -513,15 +584,22 @@ function run_porous_shell_case(;
             end
         end
     end
-    ref = solve_porous_sphere(;
-        R=R_PLANET,
-        phi_init,
-        t_form_yr,
-        t_end_yr=n_steps * dt_yr,
-        dt_yr,
-        Nr,
-        stop_cold=false,
-    )
+    dt_s = dt_yr * cfg.time.yearlength
+    isapprox(st.dt, dt_s; rtol=1.0e-12) ||
+        error("the last time step is $(st.dt) s, not the case step $dt_s s")
+    ref = if reference === nothing
+        solve_porous_sphere(;
+            R=R_PLANET,
+            phi_init,
+            t_form_yr,
+            t_end_yr=n_steps * dt_yr,
+            dt_yr,
+            Nr,
+            stop_cold=false,
+        )
+    else
+        reference
+    end
     mk = st.markers
     pg = mk.groups.porosity
     xm, ym, tm = mk.core.xm, mk.core.ym, mk.core.tm
@@ -548,6 +626,7 @@ function run_porous_shell_case(;
         phi_rms=sqrt(sum(abs2, phi .- phi_ref) / length(phi)),
         T_peak=maximum(pg.tkm_max[rock]),
         T_peak_ref=ref.T_peak,
+        energy_lse_residual=thermal_step_energy_residual(st.grids, st.dt, dx, dx),
         r=rc,
         tmax,
         tmax_ref,
@@ -555,6 +634,715 @@ function run_porous_shell_case(;
         phi_ref,
         reference=ref,
     )
+end
+
+const CASE_ID = "porous_shell_t2.5_phi0.25"
+const PHI_INIT_CASE = 0.25
+const T_FORM_YR_CASE = 2.5e6
+const N_STEPS_CASE = 80
+const DT_YR_CASE = 5.0e4
+const NX_LIST = (33, 65)
+const NX_REFERENCE = 65
+const NR_REFERENCE = 2000
+const SHELL_DEPTH_REL_BOUND = 0.15
+
+const HASHED_CASE_CONSTANTS = (
+    :R_PLANET,
+    :L_BOX,
+    :RHOCP_AIR,
+    :PHIM0,
+    :NX_LIST,
+    :NX_REFERENCE,
+    :NR_REFERENCE,
+    :PHI_INIT_CASE,
+    :T_FORM_YR_CASE,
+    :N_STEPS_CASE,
+    :DT_YR_CASE,
+    :SHELL_DEPTH_REL_BOUND,
+    :YEARLENGTH_S,
+    :T_HALF_AL_S,
+    :F_AL,
+    :E_AL,
+    :RATIO_AL_L16,
+    :G_GRAV,
+    :RHO_SOL,
+    :RHO_MET,
+    :X_FE,
+    :RHOCP_SOL,
+    :K_SOL,
+    :K_FLOOR,
+    :T_SPACE,
+    :PHI_CAP,
+    :T_SINTER,
+    :GRAIN_R0,
+    :CREEP_A,
+    :E_ACT_CAL,
+    :R_GAS_CAL,
+    :CREEP_N,
+    :DPHI_SHELL,
+    :DPHI_SINTERED,
+)
+
+const BENCHMARK_CONFIG_SECTIONS = (
+    :grid,
+    :geometry,
+    :time,
+    :solver,
+    :thermodynamics,
+    :materials,
+    :poroelasticity,
+    :porosity,
+    :reaction,
+    :melting,
+    :coreformation,
+    :metal_partition,
+    :venting,
+    :magma_transport,
+    :disk,
+)
+
+const EXPECTED_METRIC_IDS = (
+    "shell_depth_nx33",
+    "shell_depth_nx65",
+    "shell_error_convergence_ratio_33_65",
+    "tmax_rel_l2_nx65",
+    "energy_lse_residual_nx65",
+)
+
+# A shell depth changes only by whole radial bins of dx / 2: its band is one bin. The
+# temperature band is 3 times its spread over the marker seeds 42, 1 and 2. The ratio and
+# the energy residual (round-off) have no band; their pass limits apply.
+const PHYSICS_REGRESSION_BANDS = Dict{
+    String,NamedTuple{(:atol, :rtol),Tuple{Float64,Float64}}
+}(
+    "shell_depth_nx33" => (; atol=750.0, rtol=0.0),
+    "shell_depth_nx65" => (; atol=375.0, rtol=0.0),
+    "tmax_rel_l2_nx65" => (; atol=1.29e-3, rtol=1.0e-12),
+)
+
+const REPLAY_RTOL = 1.0e-6
+const REPLAY_ATOL_BOUNDS = Dict{String,Float64}("energy_lse_residual_nx65" => 1.0e-9)
+
+"""
+    make_case_config(; Nx=NX_REFERENCE, seed=SEED_DEFAULT)
+
+Return the `SimulationConfig` of the recorded case on an `Nx` x `Nx` grid.
+
+Parameters
+----------
+Nx : Int, optional
+    Basic grid resolution in x and y, at least 5 (default `NX_REFERENCE`).
+seed : Int, optional
+    Seed of the marker positions (default `SEED_DEFAULT`).
+
+Returns
+-------
+SimulationConfig
+    `make_porous_shell_config` with `PHI_INIT_CASE`, `T_FORM_YR_CASE`, `N_STEPS_CASE`,
+    `DT_YR_CASE` and matched air (`k_air = nothing`).
+
+Raises
+------
+DomainError
+    If `Nx < 5`.
+"""
+function make_case_config(; Nx::Int=NX_REFERENCE, seed::Int=SEED_DEFAULT)
+    return make_porous_shell_config(;
+        Nx,
+        phi_init=PHI_INIT_CASE,
+        t_form_yr=T_FORM_YR_CASE,
+        n_steps=N_STEPS_CASE,
+        dt_yr=DT_YR_CASE,
+        k_air=nothing,
+        seed,
+    )
+end
+
+"""
+    reference_solution()
+
+Return the 1-D reference of the recorded case: `solve_porous_sphere` with `NR_REFERENCE`
+cells, the case time step and number of steps, and no stop once the rock cools.
+
+Returns
+-------
+NamedTuple
+    The `solve_porous_sphere` result.
+"""
+function reference_solution()
+    return solve_porous_sphere(;
+        R=R_PLANET,
+        phi_init=PHI_INIT_CASE,
+        t_form_yr=T_FORM_YR_CASE,
+        t_end_yr=N_STEPS_CASE * DT_YR_CASE,
+        dt_yr=DT_YR_CASE,
+        Nr=NR_REFERENCE,
+        stop_cold=false,
+    )
+end
+
+"""
+    shell_depth_atol(nx, d_shell_ref)
+
+Return the bound of the shell depth error on an `nx` x `nx` grid: one cell `dx = L_BOX /
+(nx - 1)` or `SHELL_DEPTH_REL_BOUND` of the reference depth, whichever is larger.
+
+Parameters
+----------
+nx : Int
+    Basic grid resolution, at least 2.
+d_shell_ref : Float64
+    Shell depth of the 1-D reference [m], at least 0.
+
+Returns
+-------
+Float64
+    Absolute tolerance [m].
+
+Raises
+------
+DomainError
+    If `nx < 2` or `d_shell_ref` is negative or not finite.
+"""
+function shell_depth_atol(nx::Int, d_shell_ref::Float64)
+    nx >= 2 || throw(DomainError(nx, "the grid resolution must be at least 2"))
+    (isfinite(d_shell_ref) && d_shell_ref >= 0.0) ||
+        throw(DomainError(d_shell_ref, "the reference shell depth must be finite and >= 0"))
+    return max(L_BOX / (nx - 1), SHELL_DEPTH_REL_BOUND * d_shell_ref)
+end
+
+"""
+    metrics_from_runs(runs)
+
+Return the validation metrics that the `run_porous_shell_case` results in `runs` determine.
+
+The shell depth exists for each grid of `NX_LIST` present in `runs`. The convergence ratio
+`abs(d33 - d_ref) / abs(d65 - d_ref)` needs both grids; the maximum temperature error and
+the energy residual need the `NX_REFERENCE` grid.
+
+Parameters
+----------
+runs : AbstractDict
+    Map from `Nx` to the `run_porous_shell_case` result.
+
+Returns
+-------
+Dict{String,Float64}
+    Metric values by id (see `EXPECTED_METRIC_IDS`); an id whose runs are missing is
+    absent.
+"""
+function metrics_from_runs(runs::AbstractDict)::Dict{String,Float64}
+    metrics = Dict{String,Float64}()
+    for n in NX_LIST
+        haskey(runs, n) && (metrics["shell_depth_nx$(n)"] = runs[n].d_shell)
+    end
+    n_lo, n_hi = NX_LIST
+    if haskey(runs, n_lo) && haskey(runs, n_hi)
+        e_lo = abs(runs[n_lo].d_shell - runs[n_lo].d_shell_ref)
+        e_hi = abs(runs[n_hi].d_shell - runs[n_hi].d_shell_ref)
+        metrics["shell_error_convergence_ratio_$(n_lo)_$(n_hi)"] = e_lo / e_hi
+    end
+    if haskey(runs, NX_REFERENCE)
+        m = runs[NX_REFERENCE]
+        metrics["tmax_rel_l2_nx$(NX_REFERENCE)"] = m.tmax_rel_l2
+        metrics["energy_lse_residual_nx$(NX_REFERENCE)"] = m.energy_lse_residual
+    end
+    return metrics
+end
+
+"""
+    evaluate_porous_shell_benchmark(; seed=SEED_DEFAULT, nx_list=NX_LIST)
+
+Run the case at every grid in `nx_list` against one 1-D reference and return the runs and
+the validation metrics they determine.
+
+Parameters
+----------
+seed : Int, optional
+    Seed of the marker positions (default `SEED_DEFAULT`).
+nx_list : Tuple{Vararg{Int}}, optional
+    Grids to run, a subset of `NX_LIST` (default `NX_LIST`). With the default the result
+    holds all 5 metrics.
+
+Returns
+-------
+NamedTuple
+    `runs`: `Dict` from `Nx` to the `run_porous_shell_case` result;
+    `metrics`: `Dict{String,Float64}` from metric id (see `EXPECTED_METRIC_IDS`) to value,
+    from `metrics_from_runs`.
+
+Raises
+------
+ArgumentError
+    If a grid in `nx_list` is not in `NX_LIST`.
+"""
+function evaluate_porous_shell_benchmark(; seed::Int=SEED_DEFAULT, nx_list=NX_LIST)
+    all(n -> n isa Integer && n in NX_LIST, nx_list) ||
+        throw(ArgumentError("nx_list must be a subset of $NX_LIST, got $nx_list"))
+    ref = reference_solution()
+    runs = Dict{Int,Any}()
+    for n in nx_list
+        runs[n] = run_porous_shell_case(;
+            Nx=n,
+            phi_init=PHI_INIT_CASE,
+            t_form_yr=T_FORM_YR_CASE,
+            n_steps=N_STEPS_CASE,
+            dt_yr=DT_YR_CASE,
+            seed,
+            Nr=NR_REFERENCE,
+            reference=ref,
+        )
+        GC.gc()
+    end
+    return (; runs, metrics=metrics_from_runs(runs))
+end
+
+"""
+    expected_metric_references(; d_shell_ref=reference_solution().d_shell)
+
+Return the reference value of each validation metric: the 1-D shell depth for the shell
+depths, `2.0` (first order in `dx`) for the convergence ratio and `0.0` for the maximum
+temperature error and the energy residual.
+
+Parameters
+----------
+d_shell_ref : Float64, optional
+    Shell depth of the 1-D reference [m] (default: computed by `reference_solution`).
+
+Returns
+-------
+Dict{String,Float64}
+    Mapping from metric id to its reference value.
+"""
+function expected_metric_references(;
+    d_shell_ref::Float64=reference_solution().d_shell
+)::Dict{String,Float64}
+    refs = Dict{String,Float64}()
+    for mid in EXPECTED_METRIC_IDS
+        refs[mid] = if startswith(mid, "shell_depth")
+            d_shell_ref
+        elseif startswith(mid, "shell_error_convergence_ratio")
+            2.0
+        else
+            0.0
+        end
+    end
+    return refs
+end
+
+"""
+    bench_shell_reference(bench)
+
+Return the 1-D shell depth of the runs in `bench`, the reference of the shell depth
+metrics, or compute it with `reference_solution` when `bench` holds no run.
+
+Parameters
+----------
+bench : NamedTuple
+    Result of `evaluate_porous_shell_benchmark`, or a tuple with `metrics` only.
+
+Returns
+-------
+Float64
+    Shell depth of the 1-D reference [m].
+
+Raises
+------
+ArgumentError
+    If the runs of `bench` disagree on the 1-D shell depth.
+"""
+function bench_shell_reference(bench)::Float64
+    runs = hasproperty(bench, :runs) ? bench.runs : Dict{Int,Any}()
+    depths = [r.d_shell_ref for r in values(runs) if hasproperty(r, :d_shell_ref)]
+    isempty(depths) && return reference_solution().d_shell
+    all(d -> isapprox(d, first(depths); rtol=1.0e-14, atol=0.0), depths) ||
+        throw(ArgumentError("the runs disagree on the 1-D shell depth: $depths"))
+    return first(depths)
+end
+
+"""
+    check_reference_literals_match_config(cfg=make_case_config(); x_fe_ref=Erebus.X_FE_REF_CHONDRITE, g_grav=Erebus.G_GRAV)
+
+Compare the constants of the 1-D reference with the configuration and the Erebus
+constants they stand for: `YEARLENGTH_S` (`cfg.time.yearlength`), `T_HALF_AL_S`, `F_AL`,
+`E_AL`, `RATIO_AL_L16` (`cfg.thermodynamics`), `RHO_SOL`, `RHOCP_SOL`, `K_SOL`
+(`cfg.materials`, rock), `RHO_MET` (`cfg.coreformation.rho_metal`), `X_FE` (`x_fe_ref`),
+`G_GRAV` (`g_grav`), `T_SPACE` (`cfg.disk.t_ambient`) and `PHI_CAP`, `T_SINTER`,
+`GRAIN_R0`, `CREEP_A`, `E_ACT_CAL`, `CREEP_N` (`cfg.porosity`).
+
+Parameters
+----------
+cfg : SimulationConfig, optional
+    Configuration to compare with (default `make_case_config()`).
+x_fe_ref : Float64, optional
+    Iron mass fraction of the chondritic rock (default `Erebus.X_FE_REF_CHONDRITE`).
+g_grav : Float64, optional
+    Gravitational constant [m^3/(kg s^2)] (default `Erebus.G_GRAV`).
+
+Returns
+-------
+Tuple{Bool,Vector{String}}
+    Pass flag and list of mismatch descriptions.
+"""
+function check_reference_literals_match_config(
+    cfg::SimulationConfig=make_case_config();
+    x_fe_ref::Float64=Erebus.X_FE_REF_CHONDRITE,
+    g_grav::Float64=Erebus.G_GRAV,
+)::Tuple{Bool,Vector{String}}
+    checks = (
+        ("YEARLENGTH_S", YEARLENGTH_S, cfg.time.yearlength),
+        ("T_HALF_AL_S", T_HALF_AL_S, cfg.thermodynamics.t_half_al),
+        ("F_AL", F_AL, cfg.thermodynamics.f_al),
+        ("E_AL", E_AL, cfg.thermodynamics.E_al),
+        ("RATIO_AL_L16", RATIO_AL_L16, cfg.thermodynamics.ratio_al),
+        ("RHO_SOL", RHO_SOL, cfg.materials.rhosolidm[1]),
+        ("RHOCP_SOL", RHOCP_SOL, cfg.materials.rhocpsolidm[1]),
+        ("K_SOL", K_SOL, cfg.materials.ksolidm[1]),
+        ("RHO_MET", RHO_MET, cfg.coreformation.rho_metal),
+        ("X_FE", X_FE, x_fe_ref),
+        ("G_GRAV", G_GRAV, g_grav),
+        ("T_SPACE", T_SPACE, cfg.disk.t_ambient),
+        ("PHI_CAP", PHI_CAP, cfg.porosity.phi_cap),
+        ("T_SINTER", T_SINTER, cfg.porosity.T_sinter),
+        ("GRAIN_R0", GRAIN_R0, cfg.porosity.grain_radius),
+        ("CREEP_A", CREEP_A, cfg.porosity.A),
+        ("E_ACT_CAL", E_ACT_CAL, cfg.porosity.E_act),
+        ("CREEP_N", CREEP_N, cfg.porosity.n),
+    )
+    errors = String[]
+    for (name, lit_val, cfg_val) in checks
+        if !isapprox(lit_val, cfg_val; rtol=1.0e-14, atol=0.0)
+            push!(
+                errors,
+                "Reference literal $name ($lit_val) does not match config value ($cfg_val)",
+            )
+        end
+    end
+    return (isempty(errors), errors)
+end
+
+"""
+    canonical_config_text(cfg)
+
+Return the text that `canonical_config_sha256` hashes: for each section in
+`BENCHMARK_CONFIG_SECTIONS` in that order, one line `section.field=value` per field of the
+section with the fields sorted by name, followed by one line `case.NAME=value` for each
+module constant in `HASHED_CASE_CONSTANTS` in that order (see `_canonical_field_repr`).
+
+Parameters
+----------
+cfg : Union{SimulationConfig,NamedTuple}
+    Simulation configuration (or section container) of the case, from `make_case_config`.
+
+Returns
+-------
+String
+    The canonical text.
+"""
+function canonical_config_text(cfg)::String
+    io = IOBuffer()
+    for sec_sym in BENCHMARK_CONFIG_SECTIONS
+        sec = getproperty(cfg, sec_sym)
+        for f_sym in sort(collect(fieldnames(typeof(sec))))
+            val = getfield(sec, f_sym)
+            println(io, sec_sym, ".", f_sym, "=", _canonical_field_repr(val))
+        end
+    end
+    for name in HASHED_CASE_CONSTANTS
+        println(io, "case.", name, "=", _canonical_field_repr(getfield(@__MODULE__, name)))
+    end
+    return String(take!(io))
+end
+
+"""
+    canonical_config_sha256(cfg)
+
+Return the SHA-256 digest of `canonical_config_text(cfg)`, which covers the configuration
+sections of the case, the grid list `NX_LIST`, the case run and every constant of the 1-D
+reference (`HASHED_CASE_CONSTANTS`).
+
+Parameters
+----------
+cfg : Union{SimulationConfig,NamedTuple}
+    Simulation configuration (or section container) of the case, from `make_case_config`.
+
+Returns
+-------
+String
+    64-character lowercase hexadecimal SHA-256 digest.
+"""
+function canonical_config_sha256(cfg)::String
+    return bytes2hex(sha256(canonical_config_text(cfg)))
+end
+
+"""
+    expected_config_summary(cfg)
+
+Return the configuration summary stored in the `[config]` section of the validation record.
+
+Parameters
+----------
+cfg : SimulationConfig
+    Configuration of the case on the `NX_REFERENCE` grid, from `make_case_config`.
+
+Returns
+-------
+Dict{String,Any}
+    Physical and numerical parameters of the case, keyed as in `REQUIRED_CONFIG_KEYS`.
+"""
+function expected_config_summary(cfg::SimulationConfig)::Dict{String,Any}
+    return Dict{String,Any}(
+        "Nx" => collect(NX_LIST),
+        "Nr_reference" => NR_REFERENCE,
+        "n_steps" => cfg.time.n_steps,
+        "dt_yr" => cfg.time.dt_initial,
+        "t_form_yr" => cfg.time.start_time,
+        "phi_init" => cfg.porosity.phi_init,
+        "porosity_model" => String(cfg.porosity.model),
+        "R_planet_m" => cfg.geometry.rplanet,
+        "L_box_m" => cfg.grid.xsize,
+        "ratio_al" => cfg.thermodynamics.ratio_al,
+        "k_rock_W_mK" => cfg.materials.ksolidm[1],
+        "k_air_W_mK" => cfg.materials.ksolidm[3],
+        "rhocp_rock_J_m3K" => cfg.materials.rhocpsolidm[1],
+        "rhocp_air_J_m3K" => cfg.materials.rhocpsolidm[3],
+        "T_space_K" => cfg.disk.t_ambient,
+        "shell_dphi" => DPHI_SHELL,
+        "shell_depth_rel_bound" => SHELL_DEPTH_REL_BOUND,
+        "seed" => cfg.solver.seed,
+        "spherical_metric" => cfg.geometry.spherical_metric,
+    )
+end
+
+"""
+    _parse_record(record_path)
+
+Parse the validation record `record_path`.
+
+Parameters
+----------
+record_path : String
+    Path to an existing TOML validation record file.
+
+Returns
+-------
+Union{Dict{String,Any},String}
+    The parsed record, or the message of the parser error when the file is not valid TOML.
+"""
+function _parse_record(record_path::String)
+    return try
+        TOML.parsefile(record_path)
+    catch err
+        err isa TOML.ParserError || rethrow()
+        "Cannot parse validation record $record_path: $(sprint(showerror, err))"
+    end
+end
+
+"""
+    check_physics_regression_bands(metrics, record_path)
+
+Check that each metric lies within its regression band (`PHYSICS_REGRESSION_BANDS`) around
+the recorded value in `record_path`. A file that is not valid TOML returns the message of
+the parser error.
+
+Parameters
+----------
+metrics : Dict{String,Float64}
+    Measured metric dictionary.
+record_path : String
+    Path to the validation record TOML file.
+
+Returns
+-------
+Tuple{Bool,Vector{String}}
+    Pass flag and list of regression-band failure messages.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+"""
+function check_physics_regression_bands(
+    metrics::Dict{String,Float64}, record_path::String
+)::Tuple{Bool,Vector{String}}
+    isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
+    isfile(record_path) || return (false, ["Validation record not found: $record_path"])
+    raw = _parse_record(record_path)
+    raw isa String && return (false, [raw])
+    recorded_by_id = Dict{String,Float64}()
+    for m in get(raw, "metrics", Any[])
+        if m isa AbstractDict &&
+            get(m, "id", nothing) isa AbstractString &&
+            get(m, "value", nothing) isa Real
+            recorded_by_id[String(m["id"])] = Float64(m["value"])
+        end
+    end
+    errors = String[]
+    for mid in sort!(collect(keys(PHYSICS_REGRESSION_BANDS)))
+        if !haskey(recorded_by_id, mid)
+            push!(
+                errors,
+                "Validation record missing metric '$mid' for physics regression band",
+            )
+        elseif !haskey(metrics, mid)
+            push!(errors, "Measured metrics missing '$mid' for physics regression band")
+        else
+            band = PHYSICS_REGRESSION_BANDS[mid]
+            if !isapprox(metrics[mid], recorded_by_id[mid]; atol=band.atol, rtol=band.rtol)
+                push!(
+                    errors,
+                    "Metric '$mid' = $(metrics[mid]) outside physics regression band around recorded $(recorded_by_id[mid]) (atol=$(band.atol), rtol=$(band.rtol))",
+                )
+            end
+        end
+    end
+    return (isempty(errors), errors)
+end
+
+"""
+    check_validation_reproducibility(bench, record_path; check_recorded_values=true, d_shell_ref=nothing)
+
+Compare freshly evaluated metrics, reference values, regression bands, the reference
+literals and the configuration hash and summary with a committed validation record. The
+replay of recorded values (`REPLAY_RTOL`, `REPLAY_ATOL_BOUNDS`) runs when
+`check_recorded_values` is `true` and the Julia major.minor version matches
+`metadata.julia_version`; the regression bands always run. A record that fails
+`validate_record_dict` returns its schema errors only, and a file that is not valid TOML
+the message of the parser error.
+
+Parameters
+----------
+bench : NamedTuple
+    Result of `evaluate_porous_shell_benchmark`.
+record_path : String
+    Path to the TOML validation record file.
+check_recorded_values : Bool, optional
+    Whether to replay the recorded values (default `true`).
+d_shell_ref : Union{Float64,Nothing}, optional
+    Shell depth of the 1-D reference [m], or `nothing` to take it from the runs of
+    `bench` with `bench_shell_reference` (default).
+
+Returns
+-------
+Tuple{Bool,Vector{String}}
+    Pass flag and diagnostic error messages.
+
+Raises
+------
+DomainError
+    If `isempty(record_path)`.
+"""
+function check_validation_reproducibility(
+    bench,
+    record_path::String;
+    check_recorded_values::Bool=true,
+    d_shell_ref::Union{Float64,Nothing}=nothing,
+)::Tuple{Bool,Vector{String}}
+    isempty(record_path) && throw(DomainError(record_path, "Record path must be non-empty"))
+    isfile(record_path) || return (false, ["Validation record not found: $record_path"])
+    raw = _parse_record(record_path)
+    raw isa String && return (false, [raw])
+    ok_schema, errs = validate_record_dict(
+        raw; require_doc_pages=false, check_doc_sync=false
+    )
+    # The checks below read the sections and metric fields that a schema error leaves invalid.
+    ok_schema || return (false, errs)
+    errors = copy(errs)
+
+    cfg = make_case_config()
+    ok_lit, lit_errs = check_reference_literals_match_config(cfg)
+    ok_lit || append!(errors, lit_errs)
+    meta_sec = get(raw, "metadata", Dict{String,Any}())
+    expected_sha = canonical_config_sha256(cfg)
+    recorded_sha = string(get(meta_sec, "config_sha256", ""))
+    if recorded_sha != expected_sha
+        push!(
+            errors,
+            "Recorded config_sha256 ($recorded_sha) does not match canonical config SHA-256 ($expected_sha)",
+        )
+    end
+    run_replay =
+        check_recorded_values &&
+        _same_julia_major_minor(string(get(meta_sec, "julia_version", "")))
+
+    rec_cfg = get(raw, "config", Dict{String,Any}())
+    for (k, v_exp) in expected_config_summary(cfg)
+        if !haskey(rec_cfg, k)
+            push!(errors, "Recorded config missing key '$k'")
+            continue
+        end
+        v_rec = rec_cfg[k]
+        matches = if v_rec isa AbstractFloat || v_exp isa AbstractFloat
+            (v_rec isa Real && v_exp isa Real) &&
+                isapprox(Float64(v_rec), Float64(v_exp); rtol=1.0e-12, atol=0.0)
+        else
+            v_rec == v_exp
+        end
+        matches ||
+            push!(errors, "Recorded config.$k ($v_rec) does not match expected ($v_exp)")
+    end
+
+    raw_metrics = get(raw, "metrics", Any[])
+    recorded_ids = Set{String}(
+        String(m["id"]) for m in raw_metrics if m isa AbstractDict && haskey(m, "id")
+    )
+    if recorded_ids != Set{String}(EXPECTED_METRIC_IDS)
+        push!(
+            errors,
+            "Recorded metric IDs ($(sort!(collect(recorded_ids)))) do not match expected metric IDs ($(sort!(collect(EXPECTED_METRIC_IDS))))",
+        )
+    end
+
+    exp_refs = nothing
+    for m in raw_metrics
+        !(m isa AbstractDict && haskey(m, "id")) && continue
+        mid = String(m["id"])
+        if !haskey(bench.metrics, mid)
+            push!(errors, "Benchmark output missing metric '$mid'")
+            continue
+        end
+        if exp_refs === nothing
+            d_ref = d_shell_ref === nothing ? bench_shell_reference(bench) : d_shell_ref
+            exp_refs = expected_metric_references(; d_shell_ref=d_ref)
+        end
+        measured = bench.metrics[mid]
+        recorded = Float64(m["value"])
+        ref = Float64(m["reference"])
+        atol = Float64(m["atol"])
+        rtol = Float64(m["rtol"])
+        comp = String(m["comparison"])
+        if haskey(exp_refs, mid) &&
+            !isapprox(ref, exp_refs[mid]; rtol=1.0e-12, atol=1.0e-12)
+            push!(
+                errors,
+                "Recorded reference for '$mid' ($ref) does not match recomputed reference ($(exp_refs[mid]))",
+            )
+        end
+        tol_ok = if comp == "isapprox"
+            isapprox(measured, ref; atol=atol, rtol=rtol)
+        elseif comp == "le_atol"
+            isfinite(measured) && 0.0 <= measured <= atol
+        else
+            false
+        end
+        tol_ok || push!(
+            errors,
+            "Measured metric '$mid' = $measured fails tolerance ($comp, ref=$ref, atol=$atol, rtol=$rtol)",
+        )
+        if run_replay
+            replay_atol = get(REPLAY_ATOL_BOUNDS, mid, 1.0e-12)
+            if !isapprox(measured, recorded; rtol=REPLAY_RTOL, atol=replay_atol)
+                push!(
+                    errors,
+                    "Measured metric '$mid' = $measured differs from recorded value $recorded (rtol=$REPLAY_RTOL, atol=$replay_atol)",
+                )
+            end
+        end
+    end
+
+    ok_bands, band_errs = check_physics_regression_bands(bench.metrics, record_path)
+    ok_bands || append!(errors, band_errs)
+    return (ok_schema && isempty(errors), errors)
 end
 
 end # module

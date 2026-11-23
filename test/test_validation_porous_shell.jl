@@ -1,9 +1,128 @@
+using SHA
 using Test
+using TOML
 using Erebus
 
 isdefined(@__MODULE__, :PorousShellValidation) ||
     include(joinpath(@__DIR__, "..", "benchmarks", "validation_porous_shell.jl"))
+include(joinpath(@__DIR__, "..", "tools", "check_validation.jl"))
+isdefined(@__MODULE__, :PorousShellExport) ||
+    include(joinpath(@__DIR__, "..", "tools", "export_validation_porous_shell.jl"))
 const PSV = PorousShellValidation
+
+"""
+    PorousShellInterruptingBench
+
+Benchmark stand-in whose every property access throws `InterruptException`, as a Ctrl-C
+during the benchmark does.
+"""
+struct PorousShellInterruptingBench end
+Base.getproperty(::PorousShellInterruptingBench, ::Symbol) = throw(InterruptException())
+
+"""
+    PorousShellCrashingBench
+
+Benchmark stand-in whose every property access throws an `ErrorException`, as a solver
+failure during the benchmark does.
+"""
+struct PorousShellCrashingBench end
+function Base.getproperty(::PorousShellCrashingBench, ::Symbol)
+    return error("solver failure inside the benchmark")
+end
+
+"""
+    write_porous_shell_toml(path, dict)
+
+Write `dict` as TOML to `path` and return `path`.
+
+Parameters
+----------
+path : String
+    Output file path.
+dict : AbstractDict
+    Table to write.
+
+Returns
+-------
+String
+    `path`.
+"""
+function write_porous_shell_toml(path::String, dict::AbstractDict)
+    open(path, "w") do io
+        return TOML.print(io, dict)
+    end
+    return path
+end
+
+"""
+    capture_porous_shell_stdio(f)
+
+Call `f()` with standard output and standard error redirected to files and return the
+result with the captured text.
+
+Parameters
+----------
+f : Function
+    Function of no arguments.
+
+Returns
+-------
+NamedTuple
+    `value`: the return value of `f`; `out`, `err`: the captured standard output and
+    standard error.
+"""
+function capture_porous_shell_stdio(f)
+    return mktempdir() do dir
+        out_path, err_path = joinpath(dir, "out.txt"), joinpath(dir, "err.txt")
+        value = open(out_path, "w") do out
+            open(err_path, "w") do err
+                return redirect_stdio(f; stdout=out, stderr=err)
+            end
+        end
+        return (; value, out=read(out_path, String), err=read(err_path, String))
+    end
+end
+
+"""
+    energy_test_grids(rhocp, dT, q; q_metric=true)
+
+Return 4 x 4 grid fields whose 2 x 2 interior has the heat capacity `rhocp` [J/(m^3 K)],
+the temperature change `dT` [K] from 300 K and the heat source `q` [W/m^3], split over
+the 8 source terms of the thermal right-hand side. The boundary nodes hold values that
+`thermal_step_energy_residual` must ignore.
+
+Parameters
+----------
+rhocp, dT, q : Matrix{Float64}
+    2 x 2 interior values.
+q_metric : Bool, optional
+    Whether `Q_metric` is an array (`true`) or `nothing` (default `true`).
+
+Returns
+-------
+NamedTuple
+    Fields `tk1`, `tk2`, `RHOCP`, `HR`, `HA`, `HS`, `DHP`, `Q_metric`, `Q_lat_grid`,
+    `Q_seg_grid`, `Q_fluid_grid`.
+"""
+function energy_test_grids(rhocp, dT, q; q_metric::Bool=true)
+    field(inner, edge) = (a=fill(edge, 4, 4); a[2:3, 2:3].=inner; a)
+    tk1 = fill(300.0, 4, 4)
+    names = q_metric ? 8 : 7
+    part = q ./ names
+    return (;
+        tk1,
+        tk2=field(300.0 .+ dT, 1.0e4),
+        RHOCP=field(rhocp, 3.0e10),
+        HR=field(part, 1.0e9),
+        HA=field(part, 1.0e9),
+        HS=field(part, 1.0e9),
+        DHP=field(part, 1.0e9),
+        Q_metric=q_metric ? field(part, 1.0e9) : nothing,
+        Q_lat_grid=field(part, 1.0e9),
+        Q_seg_grid=field(part, 1.0e9),
+        Q_fluid_grid=field(part, 1.0e9),
+    )
+end
 
 @testset "Porous Shell Validation" begin
     @testset "Reference laws agree with the Erebus porosity code" begin
@@ -210,5 +329,411 @@ const PSV = PorousShellValidation
         r1, r2, r3 = run(100, 2.0e4), run(200, 2.0e4), a
         @test abs(r2.T[1] - r3.T[1]) < abs(r1.T[1] - r2.T[1])
         @test abs(r2.T[1] - r3.T[1]) < 1e-3 * (a.T[1] - PSV.T_SPACE)
+    end
+
+    @testset "Energy residual of a thermal step: balance, imbalance and scale guard" begin
+        dt = 1.0e10
+        rhocp = [1.0e6 2.0e6; 3.0e6 4.0e6]
+        q = [1.0e-3 2.0e-3; 3.0e-3 4.0e-3]
+        balanced = energy_test_grids(rhocp, dt .* q ./ rhocp, q)
+        res = PSV.thermal_step_energy_residual(balanced, dt, 750.0, 750.0)
+        @test isapprox(res, 0.0; atol=1.0e-15)
+        # The boundary nodes (large RHOCP, tk2 and sources) do not enter.
+        @test isapprox(balanced.RHOCP[1, 1], 3.0e10; rtol=1e-14)
+        # Stored heat twice the source heat: |2S - S| / (2S + S) = 1/3
+        doubled = energy_test_grids(rhocp, 2 .* dt .* q ./ rhocp, q)
+        r2 = PSV.thermal_step_energy_residual(doubled, dt, 750.0, 750.0)
+        @test isapprox(r2, 1 / 3; rtol=1e-12)
+        # dx dy cancel; a missing Q_metric counts as 0
+        @test isapprox(
+            PSV.thermal_step_energy_residual(doubled, dt, 1.0, 2.0), r2; rtol=1e-12
+        )
+        no_metric = energy_test_grids(rhocp, dt .* q ./ rhocp, q; q_metric=false)
+        @test isapprox(
+            PSV.thermal_step_energy_residual(no_metric, dt, 750.0, 750.0), 0.0; atol=1e-15
+        )
+        # Opposite changes cancel in the sum, not in the scale: residual 1, not NaN
+        swing = energy_test_grids(rhocp, [1.0 -0.5; 0.0 0.0], zeros(2, 2))
+        @test isapprox(
+            PSV.thermal_step_energy_residual(swing, dt, 750.0, 750.0), 0.0; atol=1e-15
+        )
+        lone = energy_test_grids(rhocp, [1.0 0.0; 0.0 0.0], zeros(2, 2))
+        @test isapprox(
+            PSV.thermal_step_energy_residual(lone, dt, 750.0, 750.0), 1.0; rtol=1e-14
+        )
+        still = energy_test_grids(rhocp, zeros(2, 2), zeros(2, 2))
+        @test_throws ArgumentError PSV.thermal_step_energy_residual(still, dt, 1.0, 1.0)
+    end
+
+    @testset "Shell depth tolerance, metric references and metrics from runs" begin
+        # One cell, or 15 % of the reference depth when that is larger
+        @test isapprox(PSV.shell_depth_atol(33, 4000.0), 1500.0; rtol=1e-14)
+        @test isapprox(PSV.shell_depth_atol(65, 4000.0), 750.0; rtol=1e-14)
+        @test isapprox(PSV.shell_depth_atol(65, 10_000.0), 1500.0; rtol=1e-14)
+        @test_throws DomainError PSV.shell_depth_atol(1, 4000.0)
+        @test_throws DomainError PSV.shell_depth_atol(33, -1.0)
+        @test_throws DomainError PSV.shell_depth_atol(33, NaN)
+        refs = PSV.expected_metric_references(; d_shell_ref=4321.0)
+        @test Set(keys(refs)) == Set(PSV.EXPECTED_METRIC_IDS)
+        @test isapprox(refs["shell_depth_nx33"], 4321.0; rtol=1e-14)
+        @test isapprox(refs["shell_error_convergence_ratio_33_65"], 2.0; rtol=1e-14)
+        @test iszero(refs["tmax_rel_l2_nx65"]) && iszero(refs["energy_lse_residual_nx65"])
+        # Errors of 2 and 1 cells: ratio 2; a missing grid drops the dependent metrics
+        fake(d, ref) =
+            (; d_shell=d, d_shell_ref=ref, tmax_rel_l2=0.05, energy_lse_residual=1e-12)
+        runs = Dict{Int,Any}(33 => fake(7000.0, 4000.0), 65 => fake(5500.0, 4000.0))
+        m = PSV.metrics_from_runs(runs)
+        @test Set(keys(m)) == Set(PSV.EXPECTED_METRIC_IDS)
+        @test isapprox(m["shell_error_convergence_ratio_33_65"], 2.0; rtol=1e-14)
+        @test isapprox(PSV.bench_shell_reference((; runs, metrics=m)), 4000.0; rtol=1e-14)
+        bad = Dict{Int,Any}(33 => fake(7000.0, 4000.0), 65 => fake(5500.0, 4100.0))
+        @test_throws ArgumentError PSV.bench_shell_reference((; runs=bad))
+        delete!(runs, 65)
+        partial = PSV.metrics_from_runs(runs)
+        @test Set(keys(partial)) == Set(["shell_depth_nx33"])
+        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(17,))
+        @test_throws ArgumentError PSV.evaluate_porous_shell_benchmark(; nx_list=(33.0,))
+    end
+
+    @testset "Reference literals match the configuration and the code" begin
+        ok_lit, errs_lit = PSV.check_reference_literals_match_config()
+        @test ok_lit
+        @test isempty(errs_lit)
+        base = PSV.make_case_config()
+        changed = SimulationConfig(;
+            thermodynamics=ThermalConfig(; ratio_al=6.0e-5),
+            porosity=PorosityConfig(; model=:henke2012, A=5.0e-5),
+            disk=base.disk,
+            materials=base.materials,
+        )
+        ok_bad, errs_bad = PSV.check_reference_literals_match_config(changed; x_fe_ref=0.19)
+        @test !ok_bad
+        @test length(errs_bad) == 3
+        @test any(occursin("RATIO_AL_L16", e) for e in errs_bad)
+        @test any(occursin("CREEP_A", e) for e in errs_bad)
+        @test any(occursin("X_FE", e) for e in errs_bad)
+    end
+
+    record_path = joinpath(@__DIR__, "..", "benchmarks", "records", "porous_shell.toml")
+    raw_record_all = TOML.parsefile(record_path)
+    recorded = Dict(
+        String(m["id"]) => Float64(m["value"]) for m in raw_record_all["metrics"]
+    )
+    bench = PSV.evaluate_porous_shell_benchmark()
+
+    @testset "Benchmark run: every metric, physical bounds of the runs" begin
+        @test Set(keys(bench.metrics)) == Set(PSV.EXPECTED_METRIC_IDS)
+        for n in PSV.NX_LIST
+            r = bench.runs[n]
+            # A sintered core under an unsintered shell, in both codes
+            @test 0.0 < r.d_shell_ref < PSV.R_PLANET
+            @test 0.0 < r.d_shell < PSV.R_PLANET
+            @test PSV.T_SINTER < r.T_peak < 1500.0
+            @test isapprox(r.T_peak, r.T_peak_ref; rtol=0.02)
+        end
+        # The finer grid lies closer to the 1-D shell depth
+        e33 = abs(bench.runs[33].d_shell - bench.runs[33].d_shell_ref)
+        e65 = abs(bench.runs[65].d_shell - bench.runs[65].d_shell_ref)
+        @test e65 < e33
+        @test bench.metrics["energy_lse_residual_nx65"] <= 1.0e-9
+    end
+
+    @testset "Validation record schema and drift guards" begin
+        @test isfile(record_path)
+        raw_record = TOML.parsefile(record_path)
+        valid_ok, valid_errors = PSV.validate_record_dict(
+            raw_record; require_doc_pages=true
+        )
+        @test valid_ok
+        @test isempty(valid_errors)
+
+        rec_ids = [String(m["id"]) for m in raw_record["metrics"]]
+        @test rec_ids == collect(PSV.EXPECTED_METRIC_IDS)
+        @test Set(keys(PSV.PHYSICS_REGRESSION_BANDS)) == Set(PSV.EXPECTED_METRIC_IDS)
+        @test all(m["case"] == PSV.CASE_ID for m in raw_record["metrics"])
+
+        missing_key = deepcopy(raw_record)
+        delete!(missing_key["config"], "phi_init")
+        ok_missing, errs_missing = PSV.validate_record_dict(
+            missing_key; require_doc_pages=false, check_doc_sync=false
+        )
+        @test !ok_missing
+        @test any(occursin("phi_init", e) for e in errs_missing)
+
+        # The ratio and the energy residual have no band
+        @test sort!(collect(keys(PSV.PHYSICS_REGRESSION_BANDS))) ==
+            ["shell_depth_nx33", "shell_depth_nx65", "tmax_rel_l2_nx65"]
+        for (mid, value) in bench.metrics
+            haskey(PSV.PHYSICS_REGRESSION_BANDS, mid) || continue
+            band = PSV.PHYSICS_REGRESSION_BANDS[mid]
+            @test isapprox(value, recorded[mid]; atol=band.atol, rtol=band.rtol)
+        end
+        ok_full, errs_full = PSV.check_physics_regression_bands(bench.metrics, record_path)
+        @test ok_full
+        @test isempty(errs_full)
+
+        target = "tmax_rel_l2_nx65"
+        moved = copy(bench.metrics)
+        moved[target] += 2 * PSV.PHYSICS_REGRESSION_BANDS[target].atol + 1.0e-6
+        ok_moved, errs_moved = PSV.check_physics_regression_bands(moved, record_path)
+        @test !ok_moved
+        @test length(errs_moved) == 1
+        @test occursin(target, only(errs_moved))
+        missing_metric = copy(bench.metrics)
+        delete!(missing_metric, target)
+        ok_gone, errs_gone = PSV.check_physics_regression_bands(missing_metric, record_path)
+        @test !ok_gone
+        @test any(occursin("Measured metrics missing '$target'", e) for e in errs_gone)
+        @test_throws DomainError PSV.check_physics_regression_bands(bench.metrics, "")
+        @test !first(PSV.check_physics_regression_bands(bench.metrics, record_path * ".x"))
+    end
+
+    @testset "Record matches the configuration, the tolerances and the references" begin
+        raw_record = TOML.parsefile(record_path)
+        cfg = PSV.make_case_config()
+        sha = PSV.canonical_config_sha256(cfg)
+        @test sha == raw_record["metadata"]["config_sha256"]
+        @test length(sha) == 64
+        @test PSV.canonical_config_sha256(PSV.make_case_config(; seed=1)) != sha
+        @test PSV.canonical_config_sha256(PSV.make_case_config(; Nx=33)) != sha
+
+        text = PSV.canonical_config_text(cfg)
+        for name in PSV.HASHED_CASE_CONSTANTS
+            @test occursin("case.$(name)=", text)
+        end
+        @test occursin("porosity.model=:henke2012", text)
+        @test bytes2hex(SHA.sha256(text)) == sha
+
+        summary = PSV.expected_config_summary(cfg)
+        rec_cfg = raw_record["config"]
+        @test Set(keys(summary)) == Set(keys(rec_cfg))
+        @test Set(keys(summary)) == Set(PSV.REQUIRED_CONFIG_KEYS["porous_shell"])
+        for (key, expected) in summary
+            if expected isa AbstractFloat
+                @test isapprox(Float64(rec_cfg[key]), expected; rtol=1.0e-12, atol=0.0)
+            else
+                @test rec_cfg[key] == expected
+            end
+        end
+
+        # The record holds the a priori limits and the 1-D reference of the same run
+        d_ref = PSV.bench_shell_reference(bench)
+        refs = PSV.expected_metric_references(; d_shell_ref=d_ref)
+        limits = Dict(
+            "shell_depth_nx33" => (PSV.shell_depth_atol(33, d_ref), "isapprox"),
+            "shell_depth_nx65" => (PSV.shell_depth_atol(65, d_ref), "isapprox"),
+            "shell_error_convergence_ratio_33_65" => (0.5, "isapprox"),
+            "tmax_rel_l2_nx65" => (0.10, "le_atol"),
+            "energy_lse_residual_nx65" => (1.0e-9, "le_atol"),
+        )
+        for m in raw_record["metrics"]
+            mid = String(m["id"])
+            @test isapprox(Float64(m["reference"]), refs[mid]; rtol=1.0e-12, atol=1.0e-12)
+            @test isapprox(Float64(m["atol"]), limits[mid][1]; rtol=1.0e-14)
+            @test iszero(Float64(m["rtol"]))
+            @test m["comparison"] == limits[mid][2]
+        end
+        @test isapprox(d_ref, PSV.reference_solution().d_shell; rtol=1e-14)
+    end
+
+    @testset "Reproducibility check, CLI table and export round trip" begin
+        raw_record = TOML.parsefile(record_path)
+        ok_repro, errs_repro = PSV.check_validation_reproducibility(bench, record_path)
+        @test ok_repro
+        @test isempty(errs_repro)
+        @test run_porous_shell_validation_check(record_path; bench=bench)
+        @test run_validation_cli(["--check", record_path]; porous_shell_bench=bench) == 0
+        @test !run_porous_shell_validation_check(record_path * ".missing"; bench=bench)
+        @test_throws DomainError run_porous_shell_validation_check(""; bench=bench)
+        @test validation_case("porous_shell").bench_keyword == :porous_shell_bench
+
+        mktempdir() do tmpdir
+            empty_bench = (; runs=Dict{Int,Any}(), metrics=Dict{String,Float64}())
+            no_arg = capture_porous_shell_stdio(
+                () -> run_validation_cli(
+                    ["--check"];
+                    bench=empty_bench,
+                    darcy_bench=empty_bench,
+                    compaction_bench=empty_bench,
+                    diffusion_bench=empty_bench,
+                    momentum_bench=empty_bench,
+                    porous_shell_bench=bench,
+                ),
+            )
+            @test no_arg.value == 1
+            @test occursin("porous_shell.toml", no_arg.out)
+            @test occursin("[reproducibility]", no_arg.err)
+            @test last(VALIDATION_CASES).id == "porous_shell"
+
+            # A tampered record: a moved value, a changed configuration and its hash
+            tampered = deepcopy(raw_record)
+            tampered["metrics"][4]["value"] += 0.01
+            tampered["config"]["phi_init"] = 0.3
+            tampered["metadata"]["config_sha256"] = repeat("0", 64)
+            t_path = write_porous_shell_toml(joinpath(tmpdir, "tampered.toml"), tampered)
+            ok_t, errs_t = PSV.check_validation_reproducibility(bench, t_path)
+            @test !ok_t
+            @test any(occursin("config.phi_init", e) for e in errs_t)
+            @test any(occursin("config_sha256", e) for e in errs_t)
+            @test any(occursin("differs from recorded value", e) for e in errs_t)
+            @test first(
+                PSV.check_validation_reproducibility(
+                    bench, record_path; check_recorded_values=false
+                ),
+            )
+            wrong_ref = deepcopy(raw_record)
+            wrong_ref["metrics"][1]["reference"] += 100.0
+            wrong_ref["metrics"][1]["value"] = wrong_ref["metrics"][1]["reference"]
+            w_path = write_porous_shell_toml(joinpath(tmpdir, "wrong_ref.toml"), wrong_ref)
+            ok_w, errs_w = PSV.check_validation_reproducibility(bench, w_path)
+            @test !ok_w
+            @test any(occursin("recomputed reference", e) for e in errs_w)
+
+            # Export round trip
+            exported = joinpath(tmpdir, "exported_porous_shell.toml")
+            commit = String(raw_record["metadata"]["src_commit"])
+            @test PorousShellExport.run_export_cli(
+                [exported]; src_commit=commit, bench=bench, check_clean_tree=false
+            ) == 0
+            raw_exported = TOML.parsefile(exported)
+            ok_valid, errs_valid = PSV.validate_record_dict(
+                raw_exported; require_doc_pages=false, check_doc_sync=false
+            )
+            @test ok_valid
+            @test isempty(errs_valid)
+            @test run_porous_shell_validation_check(exported; bench=bench)
+            @test [String(m["id"]) for m in raw_exported["metrics"]] == [String(m["id"]) for m in raw_record["metrics"]]
+
+            # A moved value is refused without the flag and written with it
+            target = "tmax_rel_l2_nx65"
+            band = PSV.PHYSICS_REGRESSION_BANDS[target]
+            moved_metrics = copy(bench.metrics)
+            moved_metrics[target] += 2 * band.atol + 1.0e-6
+            moved_bench = (; runs=bench.runs, metrics=moved_metrics)
+            @test PorousShellExport.run_export_cli(
+                [exported]; src_commit=commit, bench=moved_bench, check_clean_tree=false
+            ) == 1
+            @test PorousShellExport.run_export_cli(
+                ["--accept-physics-change", exported];
+                src_commit=commit,
+                bench=moved_bench,
+                check_clean_tree=false,
+            ) == 0
+            @test PorousShellExport.run_export_cli(
+                ["--bad-flag"]; src_commit=commit, bench=bench, check_clean_tree=false
+            ) == 2
+            @test PorousShellExport.run_export_cli(
+                [exported];
+                src_commit=commit,
+                bench=bench,
+                check_clean_tree=true,
+                dirty_status=" M src/config.jl",
+            ) == 1
+            @test_throws DomainError PorousShellExport.run_export_cli(
+                [exported]; src_commit="abc", bench=bench, check_clean_tree=false
+            )
+            # A value that fails its own tolerance is never written
+            failing = copy(bench.metrics)
+            failing["energy_lse_residual_nx65"] = 1.0e-6
+            @test PorousShellExport.run_export_cli(
+                ["--accept-physics-change", exported];
+                src_commit=commit,
+                bench=(; runs=bench.runs, metrics=failing),
+                check_clean_tree=false,
+            ) == 1
+
+            status = PorousShellExport.metric_status
+            cases = (
+                (0.01, 0.0, "le_atol"), (0.01, 1.0, "le_atol"), (1.0, 1.001, "isapprox")
+            )
+            @test isequal(
+                [status(v, ref, 0.05, 0.0, c) for (v, ref, c) in cases],
+                ["PASS", "FAIL", "PASS"],
+            )
+            @test isequal(status(1.0, 1.0, 0.0, 0.0, "other"), "FAIL")
+            @test occursin(r"^[0-9a-f]{40}$", PorousShellExport.last_src_commit())
+            @test first(PorousShellExport.check_clean_source_tree()) isa Bool
+            @test PorousShellExport.porous_shell_validation_module() === PSV
+            @test_throws ErrorException PorousShellExport.porous_shell_validation_module((
+                Module(:Empty),
+            ))
+        end
+    end
+
+    @testset "Checks stop on an interrupt and report other errors with a stack trace" begin
+        commit = String(raw_record_all["metadata"]["src_commit"])
+        @test_throws InterruptException run_porous_shell_validation_check(
+            record_path; bench=PorousShellInterruptingBench()
+        )
+        crash = capture_porous_shell_stdio(
+            () -> run_porous_shell_validation_check(
+                record_path; bench=PorousShellCrashingBench()
+            ),
+        )
+        @test crash.value === false
+        @test occursin("solver failure inside the benchmark", crash.err)
+        @test occursin("Stacktrace", crash.err)
+        mktempdir() do tmpdir
+            target = joinpath(tmpdir, "record.toml")
+            @test_throws InterruptException PorousShellExport.run_export_cli(
+                [target];
+                src_commit=commit,
+                bench=PorousShellInterruptingBench(),
+                check_clean_tree=false,
+            )
+            failed = capture_porous_shell_stdio(
+                () -> PorousShellExport.run_export_cli(
+                    [target];
+                    src_commit=commit,
+                    bench=PorousShellCrashingBench(),
+                    check_clean_tree=false,
+                ),
+            )
+            @test failed.value == 1
+            @test occursin("Stacktrace", failed.err)
+            @test !isfile(target)
+        end
+    end
+
+    @testset "Command lines and malformed records are reported, not thrown" begin
+        commit = String(raw_record_all["metadata"]["src_commit"])
+        mktempdir() do tmpdir
+            p1, p2 = joinpath(tmpdir, "first.toml"), joinpath(tmpdir, "second.toml")
+            @test PorousShellExport.run_export_cli(
+                [p1, p2]; src_commit=commit, bench=bench, check_clean_tree=false
+            ) == 2
+            @test !isfile(p1) && !isfile(p2)
+            empty_run = capture_porous_shell_stdio(
+                () -> PorousShellExport.export_main(
+                    [""]; src_commit=commit, bench=bench, check_clean_tree=false
+                ),
+            )
+            @test empty_run.value == 1
+            @test occursin("Record path must be non-empty", empty_run.err)
+            broken = joinpath(tmpdir, "broken.toml")
+            write(broken, "[metadata\nid = ")
+            for check in (
+                () -> PSV.check_validation_reproducibility(bench, broken),
+                () -> PSV.check_physics_regression_bands(bench.metrics, broken),
+            )
+                ok_parse, errs_parse = check()
+                @test !ok_parse
+                @test occursin("Cannot parse", only(errs_parse))
+            end
+            bad_value = deepcopy(raw_record_all)
+            bad_value["metrics"][1]["value"] = "not a number"
+            bad_path = write_porous_shell_toml(
+                joinpath(tmpdir, "bad_value.toml"), bad_value
+            )
+            ok_value, errs_value = PSV.check_validation_reproducibility(bench, bad_path)
+            @test !ok_value
+            @test any(occursin("numeric", e) for e in errs_value)
+            cli = capture_porous_shell_stdio(
+                () -> run_validation_cli([bad_path]; porous_shell_bench=bench)
+            )
+            @test cli.value == 1
+            @test occursin("[schema]", cli.err)
+            @test_throws DomainError PSV.check_validation_reproducibility(bench, "")
+        end
     end
 end
