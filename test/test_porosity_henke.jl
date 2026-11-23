@@ -3303,12 +3303,12 @@ end
             _shell(_shell_markers(cold)...; measure=:phi_gt_04).median, 1.0; atol=1e-12
         )
     end
-    @testset "Empty bins are skipped and markers above the surface count in bin 1" begin
+    @testset "Empty bins are skipped and markers above the surface do not count" begin
         xm, ym, tm, pg = _shell_markers(
             _shell_sharp(3.25dr); skip=(depth, s) -> dr <= depth < 2dr
         )
         @test isapprox(_shell(xm, ym, tm, pg).median, 3dr; atol=1e-12)
-        # 9 sintered markers just above the surface outweigh the 8 unsintered in bin 1
+        # 9 sintered markers above the surface (P = 0 there) leave bin 1 unsintered
         xa, ya, ta, pa = _shell_markers(_shell_sharp(3.25dr); n=1)
         for i in 1:9
             push!(xa, -(1.0 + 0.01i))
@@ -3322,7 +3322,7 @@ end
             [pa.dphi_sinter; fill(0.02, 9)],
         )
         ra = _shell(xa, ya, ta, pa; nsector=1)
-        @test isapprox(ra.median, 0.0; atol=1e-12)
+        @test isapprox(ra.median, 3dr; atol=1e-12)
         @test ra.nsector_used == 1
     end
     @testset "Angle pi, the centre and the material filter" begin

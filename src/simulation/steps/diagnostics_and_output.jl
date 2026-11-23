@@ -49,7 +49,8 @@ Depth [m] of the outer porous shell of a planetesimal, measured on the rock mark
 
 The slice is split into `nsector` equal angular sectors about `(xcenter, ycenter)`, and
 each sector into radial bins of width `dr`, `(rplanet - k dr, rplanet - (k - 1) dr]`; rock
-markers above `rplanet` count in bin 1. From the surface inward, the first non-empty bin
+markers above `rplanet` are not counted (the pressure there is 0, so they never sinter).
+From the surface inward, the first non-empty bin
 whose median marker is sintered ends the shell, and the depth of the sector is the outer
 edge of that bin, `(k - 1) dr`. A sector without a sintered bin has the depth `rplanet`.
 
@@ -108,8 +109,11 @@ function porous_shell_depth(
         (tm[m] == 1 || tm[m] == 2) || continue
         dx = xm[m] - xcenter
         dy = ym[m] - ycenter
+        r = hypot(dx, dy)
+        # Above the surface P = 0, so a rock marker there never sinters: not counted
+        r > R && continue
         s = min(floor(Int, (atan(dy, dx) + pi) / (2pi) * nsector) + 1, nsector)
-        k = clamp(floor(Int, (R - hypot(dx, dy)) / h) + 1, 1, nbin)
+        k = min(floor(Int, (R - r) / h) + 1, nbin)
         push!(vals[k, s], measure === :unsintered ? pg.dphi_sinter[m] : pg.phi_d[m])
     end
     depths = Float64[]
